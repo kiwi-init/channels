@@ -188,7 +188,7 @@ export function who(name: string, state?: ChannelState, me?: string): string {
 }
 
 /** Strip control and direction characters (terminal escapes, invisible text) but keep line breaks. */
-function cleanBody(s: string): string {
+export function cleanBody(s: string): string {
   return s.replace(/\r\n?/g, "\n").replace(/[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/g, "");
 }
 

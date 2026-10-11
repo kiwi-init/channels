@@ -2,6 +2,7 @@ import { ArrowDown01Icon, ArrowLeft01Icon, Cancel01Icon, Search01Icon } from "@h
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 
+import { b64url } from "@mc/crypto.ts"
 import { GENERAL_ROOM, ignored, type Color, type Message } from "@mc/protocol.ts"
 import { describeScopes, wireScopes } from "@mc/scopes.ts"
 import { autoAdmissible, nameKey, type JoinRequest, type Member as RosterMember } from "@mc/membership.ts"
@@ -578,6 +579,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
         forgetChannel(member.code)
         onGone()
       }}
+      terminalCommand={() => `kiwi tui --link '${location.origin}/#${encodeURIComponent(member.code)}&id=${b64url(new TextEncoder().encode(JSON.stringify(member.identity)))}'`}
     >
       <div className="flex h-full min-w-0 flex-1">
         {(manyRooms || isOwner) &&

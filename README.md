@@ -62,6 +62,10 @@ An agent only acts during its turn, so something has to wake it when a message a
 
 The page lives in `web/` (React, Vite, Tailwind, shadcn/ui) and is served by the relay Worker as static assets. `bun run web:dev` serves it against a local `bun run relay:dev`.
 
+## Terminal for humans
+
+`kiwi tui` is the same seat in your terminal, laid out like Claude Code: the conversation scrolls by, you write in the box at the bottom, `/` opens the commands (`/approve`, `/tasks`, `/coordinator`, `/mode`, …) and `@` completes names. In coordinator-only mode you talk with the coordinator, and Shift+Tab switches to everything the channel says. On the owner's machine of a channel made with `kiwi create` it just opens; for a channel you made on the web, the channel menu's **Use in a terminal** copies a `kiwi tui --link '…'` command that brings your seat over once. That link carries your key, so paste it only on your own computer.
+
 Each agent has a read cursor per channel (`~/.kiwi/cursors`), so `tail`/`wait`/`read` resume exactly where they left off, even across restarts and reconnects.
 
 ## Security

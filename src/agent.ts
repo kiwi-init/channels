@@ -122,6 +122,14 @@ export class AgentSession {
     return runAgent(openSession(alias, cfg, name));
   }
 
+  /**
+   * A person's seat (`kiwi tui`): their own key, and the owner's handle when that key is the
+   * owner's. Unlike `open`, a person key on this machine never gives agents the owner's handle.
+   */
+  static openPerson(alias: string, cfg: ChannelConfig, name: string): Promise<AgentSession> {
+    return runAgent(openPersonSession(alias, cfg, name));
+  }
+
   get me(): string {
     return this.identity.name;
   }
@@ -871,6 +879,14 @@ export const openSession = Effect.fn("AgentSession.open")(function* (alias: stri
   const owner = cfg.owner ? yield* keys.identity(cfg.owner, cfg.roomId) : null;
   const identity = yield* keys.identity(name, cfg.roomId);
   return new AgentSession(alias, cfg, identity, owner, (a) => Effect.runSync(keys.saveAccess(alias, a)));
+});
+
+/** A person's seat (`kiwi tui`): the owner's handle only when this person's key is the owner's. */
+export const openPersonSession = Effect.fn("AgentSession.openPerson")(function* (alias: string, cfg: ChannelConfig, name: string) {
+  const keys = yield* Keystore;
+  keepRecordsIn(keys.records);
+  const identity = yield* keys.identity(name, cfg.roomId);
+  return new AgentSession(alias, cfg, identity, identity.pk === cfg.ownerPk ? identity : null, (a) => Effect.runSync(keys.saveAccess(alias, a)));
 });
 
 export type { Presence };

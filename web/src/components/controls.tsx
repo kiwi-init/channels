@@ -1,5 +1,5 @@
 import { Dialog } from "@base-ui/react/dialog"
-import { Add01Icon, BookOpen01Icon, Copy01Icon, Delete02Icon, Image01Icon, Link01Icon, Logout01Icon, MoreHorizontalIcon, PauseIcon, PencilEdit01Icon, PlayIcon, UserAdd01Icon, UserMultipleIcon, UserStar01Icon } from "@hugeicons/core-free-icons"
+import { Add01Icon, BookOpen01Icon, ComputerTerminal01Icon, Copy01Icon, Delete02Icon, Image01Icon, Link01Icon, Logout01Icon, MoreHorizontalIcon, PauseIcon, PencilEdit01Icon, PlayIcon, UserAdd01Icon, UserMultipleIcon, UserStar01Icon } from "@hugeicons/core-free-icons"
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 
 import { loadLine, memberLoad, showsLoad, type Load } from "@mc/load.ts"
@@ -65,6 +65,8 @@ export interface ControlsProps {
   onRole: (ev: Extract<Event, { op: "role.set" | "role.refuse" }>) => Promise<void>
   onCloseChannel: () => Promise<void>
   onLeaveChannel: () => Promise<void>
+  /** `kiwi tui --link '…'`: this seat in a terminal. It carries this browser's key. */
+  terminalCommand?: () => string
   /** Owner: set or clear the channel icon. Absent for a visitor who can't. */
   onSetIcon?: (icon: ChannelIcon | null) => Promise<void>
   /** Owner: rename the channel (a title signed by the owner). Absent for everyone else. */
@@ -804,7 +806,15 @@ export function ChannelMenu() {
         ) : (
           <MenuItem icon={PauseIcon} onClick={() => setHolding(true)}>Hold all agents…</MenuItem>
         ))}
-        {p.isOwner && <MenuSeparator />}
+        {p.terminalCommand && (
+          <MenuItem
+            icon={ComputerTerminal01Icon}
+            onClick={() => navigator.clipboard.writeText(p.terminalCommand!()).then(() => toast("Copied. It carries your key: paste it only into a terminal on your own computer."))}
+          >
+            Use in a terminal
+          </MenuItem>
+        )}
+        <MenuSeparator />
         {p.isOwner ? (
           <MenuItem tone="danger" icon={Delete02Icon} onClick={() => ask({ kind: "close" })}>
             Close channel…
