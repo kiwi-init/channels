@@ -26,8 +26,11 @@ export interface MemberInfo {
   name: string;
   role?: string;
   about?: string;
-  /** People and agents are different kinds of member. Absent means agent (CLI-run channels). */
-  kind?: "human" | "agent";
+  /**
+   * People and agents are different kinds of member. Absent means agent (CLI-run channels). A
+   * "computer" is a person's linked computer, seated quietly so it can let its own agents in (admits).
+   */
+  kind?: "human" | "agent" | "computer";
   /** A person's full name from sign-in. */
   display?: string;
   /** For an agent: the person it acts for. For a person: themself. */
@@ -49,13 +52,20 @@ export interface MemberInfo {
   laterRole?: { role: string | null; about?: string | null; since: number };
   /** In a join request only: the requester means to take over the seat under this name with a new key. */
   reclaim?: boolean;
+  /**
+   * A computer's seat: since when, and until when, it may let its own agents in. The owner renews
+   * `until`; `since` stays the day it was first seated, so renewing keeps the agents it let in.
+   */
+  admits?: { since: number; until: number };
+  /** An agent a computer let in: that computer's key. Kept when the owner re-signs the record, so revoking the computer finds it. */
+  via?: string;
 }
 
 /** The member a request's name already belongs to: approving it would move their seat to the new key. */
 export interface ReclaimTarget {
   name: string;
   pk: string;
-  kind?: "human" | "agent";
+  kind?: "human" | "agent" | "computer";
   owner: boolean;
   sponsor?: Sponsor;
 }
@@ -94,6 +104,10 @@ export interface Member extends MemberInfo {
   unverified?: boolean;
   /** The relay refuses this key's posts (the one bit of member scopes it enforces). */
   readOnly?: boolean;
+  /** Who signed this record, when it wasn't the owner: the computer that let this agent in (see admitRoster). */
+  signedBy?: string;
+  /** For an agent a computer let in: that computer's name here ("mac-mini"). */
+  viaName?: string;
 }
 
 export const NAME_RE = /^[\p{L}\p{N}_.\-]{1,32}$/u;
@@ -138,6 +152,29 @@ export async function makeRecord(owner: Identity, room: string, m: MemberInfo & 
     ...(!m.owner && wireScopes(m.scopes) ? { scopes: wireScopes(m.scopes)! } : {}),
     ...(!m.owner && m.later ? { later: { scopes: wireScopes(m.later.scopes), since: m.later.since } } : {}),
     ...(!m.owner && m.laterRole ? { laterRole: m.laterRole } : {}),
+    ...(m.kind === "computer" && m.admits ? { admits: { since: m.admits.since, until: m.admits.until } } : {}),
+    ...(m.via ? { via: m.via } : {}),
+    at: Date.now(),
+  });
+}
+
+/** What a computer may put in a record it signs for one of its agents, and nothing else. */
+const ADMITTED_FIELDS = new Set(["room", "member", "mxpk", "name", "about", "kind", "sponsor", "via", "at", "pk", "sig"]);
+
+/**
+ * A linked computer lets one of its own agents in: the record is the computer's signature, not the
+ * owner's. It carries only a name, rules and whose agent it is (see admitRoster for what counts).
+ */
+export async function makeAdmittedRecord(machine: Identity, room: string, m: { pk: string; xpk: string; name: string; about?: string; sponsor?: Sponsor }): Promise<MemberRecord> {
+  return sign(machine, {
+    room,
+    member: m.pk,
+    mxpk: m.xpk,
+    name: m.name,
+    ...(m.about ? { about: m.about } : {}),
+    kind: "agent",
+    ...(m.sponsor ? { sponsor: m.sponsor } : {}),
+    via: machine.pk,
     at: Date.now(),
   });
 }
@@ -146,41 +183,123 @@ export async function sealRecord(key: string, rec: MemberRecord): Promise<string
   return sealWith(key, JSON.stringify(rec), ad(rec.room));
 }
 
-/** Open and verify a sealed record: it must be the owner's signature, for this room and this key. */
-export async function openRecord(key: string, sealed: string, room: string, ownerPk: string, pk: string): Promise<Member | null> {
+/**
+ * Open a sealed record and check its signature, whoever signed it (`signer`): for this room and this
+ * key. Whether that signer may admit anyone is admitRoster's call; openRecord takes only the owner's.
+ */
+export async function readRecord(key: string, sealed: string, room: string, pk: string): Promise<{ member: Member; signer: string; fields: string[] } | null> {
   const raw = await openWith(key, sealed, ad(room));
   if (!raw) return null;
   try {
     const rec = JSON.parse(raw) as MemberRecord;
-    if (rec.pk !== ownerPk || rec.room !== room || rec.member !== pk || !NAME_RE.test(rec.name)) return null;
+    if (typeof rec.pk !== "string" || rec.room !== room || rec.member !== pk || !NAME_RE.test(rec.name)) return null;
     if (!(await verify(rec))) return null;
-    const owner = !!rec.owner && rec.member === ownerPk;
+    const owner = !!rec.owner && rec.member === rec.pk;
     // Scopes the record can't be read as are none at all: a garbled grant gives nothing.
     const scopes = owner || rec.scopes === undefined ? undefined : (readScopes(rec.scopes) ?? []);
     const l = (rec as { later?: { scopes?: unknown; since?: unknown } }).later;
     // null is everything; anything unreadable is nothing.
     const later = !owner && l && Number.isInteger(l.since) ? { scopes: l.scopes === null ? [...SCOPES] : (readScopes(l.scopes) ?? []), since: l.since as number } : undefined;
     const laterRole = owner ? undefined : readLaterRole((rec as { laterRole?: unknown }).laterRole);
+    const a = (rec as { admits?: { since?: unknown; until?: unknown } }).admits;
+    const admits = rec.kind === "computer" && a && Number.isInteger(a.since) && Number.isInteger(a.until) ? { since: a.since as number, until: a.until as number } : undefined;
+    const via = typeof rec.via === "string" ? rec.via : undefined;
     return {
-      pk: rec.member,
-      xpk: rec.mxpk,
-      name: rec.name,
-      role: rec.role,
-      about: rec.about,
-      kind: rec.kind,
-      display: rec.display,
-      sponsor: rec.sponsor,
-      ...(isColor(rec.color) ? { color: rec.color } : {}),
-      ...(scopes ? { scopes } : {}),
-      ...(later ? { later } : {}),
-      ...(laterRole ? { laterRole } : {}),
-      owner,
-      at: rec.at,
-      active: true,
+      signer: rec.pk,
+      fields: Object.keys(rec),
+      member: {
+        pk: rec.member,
+        xpk: rec.mxpk,
+        name: rec.name,
+        role: rec.role,
+        about: rec.about,
+        kind: rec.kind,
+        display: rec.display,
+        sponsor: rec.sponsor,
+        ...(isColor(rec.color) ? { color: rec.color } : {}),
+        ...(scopes ? { scopes } : {}),
+        ...(later ? { later } : {}),
+        ...(laterRole ? { laterRole } : {}),
+        ...(admits ? { admits } : {}),
+        ...(via ? { via } : {}),
+        owner,
+        at: rec.at,
+        active: true,
+      },
     };
   } catch {
     return null;
   }
+}
+
+/** Open and verify a sealed record: it must be the owner's signature, for this room and this key. */
+export async function openRecord(key: string, sealed: string, room: string, ownerPk: string, pk: string): Promise<Member | null> {
+  const r = await readRecord(key, sealed, room, pk);
+  return r && r.signer === ownerPk ? r.member : null;
+}
+
+/** A record as read, with what the relay says about its key: still in, and in the order it was let in. */
+export interface ReadEntry {
+  read: { member: Member; signer: string; fields: string[] } | null;
+  active: boolean;
+}
+
+/**
+ * Which records count: every one the owner signed, and one a computer signed only when all of this holds.
+ * - The computer has a seat the owner signed (kind computer, admits), still in, and not past its `until`.
+ * - The record is dated within the seat's time, says `via` that computer, and is an agent's.
+ * - It carries nothing but a name, rules and the owner's own person as sponsor: no role, scopes, colour,
+ *   or anything else only the owner may grant.
+ * - Its name isn't reserved, and no member let in earlier (in the relay's order) holds it.
+ * Anything else a computer signed is dropped, as if the relay had never listed it. Entries come in the
+ * relay's order; the result keeps it, with `undefined` for a dropped one.
+ */
+export function admitRoster(entries: readonly ReadEntry[], ownerPk: string, now = Date.now()): (Member | undefined)[] {
+  const byOwner = entries.map((e) => (e.read && e.read.signer === ownerPk ? e.read.member : undefined));
+  const ownerSponsor = byOwner.find((m) => m?.owner)?.sponsor;
+  const seats = new Map<string, Member>();
+  entries.forEach((e, i) => {
+    const m = byOwner[i];
+    if (m && e.active && m.kind === "computer" && m.admits && m.admits.until >= now) seats.set(m.pk, m);
+  });
+  const held = new Set<string>();
+  return entries.map((e, i) => {
+    const own = byOwner[i];
+    if (own) {
+      if (e.active) held.add(nameKey(own.name));
+      return own;
+    }
+    const r = e.read;
+    if (!r) return undefined;
+    const seat = seats.get(r.signer);
+    const m = r.member;
+    const ok =
+      !!seat &&
+      !!seat.admits &&
+      m.via === r.signer &&
+      m.kind === "agent" &&
+      m.at >= seat.admits.since &&
+      m.at <= seat.admits.until &&
+      r.fields.every((f) => ADMITTED_FIELDS.has(f)) &&
+      !RESERVED_NAMES.has(nameKey(m.name)) &&
+      (m.sponsor?.user ?? null) === (ownerSponsor?.user ?? null) &&
+      !(e.active && held.has(nameKey(m.name)));
+    if (!ok) return undefined;
+    if (e.active) held.add(nameKey(m.name));
+    return { ...m, signedBy: r.signer, viaName: seat!.display ?? seat!.name };
+  });
+}
+
+/**
+ * A name for an agent nobody holds: `base`, else base-2, base-3… Taken is every current member's name
+ * and, so nobody new reads as someone who just left, every name that left in the last 30 days.
+ */
+export function freeAgentName(base: string, members: readonly Pick<Member, "name" | "active" | "at">[], now = Date.now()): string {
+  const recent = now - 30 * 86_400_000;
+  const taken = new Set(members.filter((m) => m.active || m.at >= recent).map((m) => nameKey(m.name)));
+  const stem = base.slice(0, 29);
+  if (!taken.has(nameKey(base)) && !RESERVED_NAMES.has(nameKey(base))) return base;
+  for (let n = 2; ; n++) if (!taken.has(nameKey(`${stem}-${n}`))) return `${stem}-${n}`;
 }
 
 /** A record's later role, if it reads as one: a role string (or null for none), rules likewise, and where it took effect. */
@@ -223,20 +342,11 @@ export interface JoinRequest extends MemberInfo {
   vouchedBy?: string;
 }
 
-/**
- * Whether a request can be let in without a person comparing codes: an agent (not a person, not a
- * RECLAIM of someone's seat) whose own computer signed for its key, where that computer is one the
- * owner trusts because they compared its code themselves. The code check exists so a relay can't slip
- * its own key in; a key signed by the owner's own computer is that same proof, made at link time.
- */
-export function autoAdmissible(r: JoinRequest, trusted: ReadonlySet<string>): boolean {
-  return r.kind === "agent" && !r.reclaims && !r.reclaim && !!r.vouchedBy && trusted.has(r.vouchedBy);
-}
-
 /** How a member reads in lists: "win · key QRskRn4Z · agent of @jonatas" / "Jonatas Walker (@jonatas)". */
-export function describeMember(m: { name: string; pk: string; kind?: string; display?: string; sponsor?: Sponsor; owner?: boolean }): string {
+export function describeMember(m: { name: string; pk: string; kind?: string; display?: string; sponsor?: Sponsor; owner?: boolean; viaName?: string }): string {
   const key = `key ${m.pk.slice(0, 8)}`;
   if (m.kind === "human") return `${m.display ?? m.name} (@${m.name})${m.owner ? " · owner" : ""} · ${key}`;
+  if (m.kind === "computer") return `${m.display ?? m.name} (a linked computer) · ${key}`;
   const sponsor = m.sponsor ? ` · agent of @${m.sponsor.handle ?? handleFor(m.sponsor.name)}` : "";
-  return `${m.name} · ${key}${sponsor}`;
+  return `${m.name} · ${key}${sponsor}${m.viaName ? ` · via ${inlineText(m.viaName, 40)}` : ""}`;
 }

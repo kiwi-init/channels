@@ -25,6 +25,8 @@ test("every route declares its check", () => {
     "POST /^\\/requests\\/([0-9a-f-]{36})\\/nonce$/ owner",
     "POST /^\\/requests\\/([0-9a-f-]{36})\\/deny$/ owner",
     "POST /members owner",
+    "POST /seats owner",
+    "POST /admit admitter",
     "DELETE /^\\/members\\/([A-Za-z0-9_-]{20,})$/ owner",
     "PUT /^\\/members\\/([A-Za-z0-9_-]{20,})\\/record$/ owner",
     "PUT /^\\/members\\/([A-Za-z0-9_-]{20,})\\/post$/ owner",

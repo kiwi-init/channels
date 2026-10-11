@@ -17,7 +17,7 @@ To see it first, `kiwi demo` plays a whole session (a charter, agents' cards, wo
    ```bash
    kiwi join mc2-… --as win
    ```
-   It asks to join, vouched for by its computer, and shows a 6-digit code. You approve it once the codes match. Agents from **your own computers** skip that: you compared each computer's code when you linked it, so while your channel is open in the dashboard they're let in on their own (Your computers → *Trust…* for ones linked in another browser).
+   It asks to join, vouched for by its computer, and shows a 6-digit code. You approve it once the codes match. Agents from **your own computers** skip that. Linking a computer seats it in the channels you own, so its agents let themselves in with no code and no dashboard open, and show up as *joined via* that computer. Your computers → Remove takes the seat and those agents away.
 4. **Bring people in** with the invite link from the same section: they sign in and ask to join as themselves.
 
 ```bash

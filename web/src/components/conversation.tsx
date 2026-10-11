@@ -5,9 +5,9 @@ import { createPortal } from "react-dom"
 import { b64url } from "@mc/crypto.ts"
 import { GENERAL_ROOM, ignored, type Color, type Message } from "@mc/protocol.ts"
 import { describeScopes, wireScopes } from "@mc/scopes.ts"
-import { autoAdmissible, nameKey, type JoinRequest, type Member as RosterMember } from "@mc/membership.ts"
-import { autoAdmitOn, trustedComputers } from "@/lib/computers"
-import { defaultScopes } from "./scopes"
+import type { Member as RosterMember } from "@mc/membership.ts"
+import type { HumanSession } from "@mc/client.ts"
+import { seatedComputers } from "@/lib/computers"
 import { newRoomId, colorOf, keptFromPeople, taskId, type Room } from "@mc/state.ts"
 import { useAuth } from "@/lib/auth"
 import { channelTitle, forgetChannel, LEFT_CHANNEL, loadMember, loadRecent, saveMember, saveRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
@@ -20,7 +20,7 @@ import { Composer } from "./composer"
 import { RoomDialog, RoomMenu, RoomRail, roomOfMessage, useRooms, useRoomsSlot } from "./rooms"
 import { ChannelControls, ChannelMenu, HoldBanner, InviteButton, People, RequestsBanner, type Filter } from "./controls"
 import { Icon } from "./icon"
-import { Button, IconButton, Spinner, Tabs, TextField, errorText, toast } from "./kit"
+import { Button, IconButton, Spinner, Tabs, TextField, toast } from "./kit"
 import { DayMark, EventGroup, EventRow, MessageRow, isAgent, standsAlone, type ThreadSummary } from "./message"
 import { TaskPage } from "./task-page"
 import { WorkOverview } from "./work"
@@ -65,59 +65,44 @@ function useChannelNews(room: string, top: number, arrivals: number, inOtherRoom
 }
 
 /**
- * Owner: let in agents from this person's own trusted computers without a code check (autoAdmissible).
- * Each goes through the same steps a person's clicks would: this browser signs its half of the check,
- * the agent reveals its own, and then it's approved under the name it asked for, with the channel's
- * default scopes. Only while this page is open: the owner key lives here.
+ * Owner: keep this channel's computer seats in order whenever it opens. Seats with under 60 days left
+ * are renewed; agents a computer let in get the owner's own signature on their record (keeping which
+ * computer it was), so every client, older ones too, reads them as the owner's; and computers already
+ * seated in this person's other channels get a seat here too (a new channel included).
  */
-function useAutoAdmit({ ch, isOwner, requests, roster, user, refreshRequests, refreshRoster }: {
+function useTendSeats({ ch, isOwner, roster, human, refreshRoster }: {
   ch: ReturnType<typeof useChannel>["ch"]
   isOwner: boolean
-  requests: JoinRequest[]
   roster: RosterMember[]
-  user: string | null
-  refreshRequests: () => Promise<void>
+  human: HumanSession | null
   refreshRoster: () => Promise<void>
 }) {
-  const busy = useRef(new Set<string>())
-  // Tried once and refused: left to a person, never retried in a loop.
-  const failed = useRef(new Set<string>())
-  // When this browser signed each one's half: the agent reveals its own within seconds, if it's still asking.
-  const checked = useRef(new Map<string, number>())
+  const seated = useRef(false)
+  const busy = useRef(false)
+  // Agents a computer let in, not yet re-signed: whenever one shows up, tend again.
+  const fresh = roster.filter((m) => m.active && m.signedBy).map((m) => m.pk).join(",")
   useEffect(() => {
-    if (!isOwner || !user || !autoAdmitOn(user)) return
-    const trusted = trustedComputers(user)
-    const taken = new Set(roster.filter((m) => m.active).map((m) => nameKey(m.name)))
-    const ours = requests.filter((r) => autoAdmissible(r, trusted) && !taken.has(nameKey(r.name)))
-    for (const r of ours) {
-      if (busy.current.has(r.id) || failed.current.has(r.id) || r.check === "waiting") continue
-      busy.current.add(r.id)
-      void (async () => {
-        try {
-          if (r.check === "unchecked") {
-            await ch.checkRequest(r)
-            checked.current.set(r.id, Date.now())
-          } else {
-            const scopes = defaultScopes(ch.roomId)
-            await ch.approve(r, wireScopes(scopes) ? { scopes } : undefined)
-            toast(`Let ${r.name} in: an agent from your own computer`)
-            await refreshRoster()
-          }
-        } catch (err) {
-          failed.current.add(r.id)
-          toast(`Couldn't let ${r.name} in on its own: ${errorText(err)}`, "error")
-        } finally {
-          busy.current.delete(r.id)
-          await refreshRequests()
-        }
-      })()
-    }
-    // The agent reveals its half within a couple of seconds; look again rather than wait for a nudge,
-    // but only for a minute: an agent that stopped asking shouldn't keep this page polling the relay.
-    if (!ours.some((r) => r.check === "waiting" && Date.now() - (checked.current.get(r.id) ?? 0) < 60_000)) return
-    const t = window.setTimeout(() => void refreshRequests(), 1500)
-    return () => window.clearTimeout(t)
-  }, [ch, isOwner, requests, roster, user, refreshRequests, refreshRoster])
+    if (!isOwner || !human || busy.current) return
+    const first = !seated.current
+    if (!first && !fresh) return
+    busy.current = true
+    void (async () => {
+      try {
+        const others = first ? await seatedComputers(human) : []
+        const done = await ch.tendSeats(others)
+        seated.current = true
+        // "2 agents joined via mac-mini", once per computer, rather than a line per agent.
+        const via = new Map<string, number>()
+        for (const m of roster) if (m.signedBy && done.resigned.includes(m.name)) via.set(m.viaName ?? "your computer", (via.get(m.viaName ?? "your computer") ?? 0) + 1)
+        for (const [name, n] of via) toast(`${n === 1 ? "An agent" : `${n} agents`} joined via ${name}`)
+        if (done.seated.length || done.resigned.length) await refreshRoster()
+      } catch {
+        // Tried again the next time the channel opens; nothing here is urgent.
+      } finally {
+        busy.current = false
+      }
+    })()
+  }, [ch, isOwner, human, fresh, roster, refreshRoster])
 }
 
 const sameDay = (a: number, b: number) => new Date(a).toDateString() === new Date(b).toDateString()
@@ -129,7 +114,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     member,
     auth.status === "loading" ? null : auth.token,
   )
-  useAutoAdmit({ ch, isOwner, requests, roster, user: auth.user?.id ?? null, refreshRequests, refreshRoster })
+  useTendSeats({ ch, isOwner, roster, human: auth.status === "loading" ? null : auth.token, refreshRoster })
   useLiveIcon(member)
   const icon = useIcons().get(member.access.roomId) ?? null
   const now = useNow()

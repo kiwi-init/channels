@@ -1,12 +1,22 @@
 // Linking a computer to your account (kiwi setup prints a #link=<key> page),
-// and the list of your linked computers.
+// the list of your linked computers, and their seats in the channels you own.
 
-import { RelayError } from "@mc/client.ts"
+import { Channel, RelayError, type HumanSession } from "@mc/client.ts"
+import { verifyText } from "@mc/identity.ts"
+import { xpkStatement } from "@mc/vouch.ts"
+import { allMembers, saveMember } from "./channel"
 
-/** `#link=<computer key>`: the page `kiwi setup` opens to link that computer. */
-export function parseLinkHash(hash: string): string | null {
-  const m = /^#link=([A-Za-z0-9_-]{20,})$/.exec(hash)
-  return m ? m[1]! : null
+/** What `#link=` carries: the computer's key, and (from kiwi 0.9.1) its exchange key with its signature over it. */
+export interface ParsedLink {
+  pk: string
+  xpk?: string
+  sig?: string
+}
+
+/** `#link=<computer key>[&x=<exchange key>&s=<signature>]`: the page `kiwi setup` opens to link that computer. */
+export function parseLinkHash(hash: string): ParsedLink | null {
+  const m = /^#link=([A-Za-z0-9_-]{20,})(?:&x=([A-Za-z0-9_-]{20,})&s=([A-Za-z0-9_-]{20,}))?$/.exec(hash)
+  return m ? { pk: m[1]!, ...(m[2] && m[3] ? { xpk: m[2], sig: m[3] } : {}) } : null
 }
 
 async function call<T>(path: string, init: RequestInit & { token?: string | null } = {}): Promise<T> {
@@ -38,53 +48,56 @@ export const myComputers = (token: string) => call<{ machines: Computer[] }>("/v
 
 export const removeComputer = (pk: string, token: string) => call<unknown>(`/v1/me/machines/${pk}`, { method: "DELETE", token })
 
-// ---------- computers this browser trusts to vouch on their own ----------
+// ---------- seats: your computers letting their own agents in ----------
 //
-// A computer is trusted here once its person compared its code in this browser: when linking it, or
-// later from Your computers. Only then may a channel this person owns let that computer's agents in
-// without a code check (autoAdmissible): the computer's signature on the agent's key is the proof
-// the code check gives, and the relay can't forge it. The list is per browser and per person.
+// Once its person compares a computer's code here, every channel they own gives that computer a quiet
+// seat (Channel.seatComputer): the owner's signature that it may let its own agents in for 90 days,
+// renewed while they use the channel. Agents started there then join with no request and no code.
+// Which computers to seat comes only from what the owner signed: a seat in a channel they own, or the
+// link just confirmed here. Never from the relay's list, which a relay could pad with a key of its own.
 
-const TRUST_KEY = (user: string) => `mc.trusted-computers.${user}`
-const AUTO_KEY = (user: string) => `mc.auto-admit.${user}`
+/** A computer as a seat needs it: its key, its exchange key (signed by that key), and its name. */
+export interface SeatableComputer {
+  pk: string
+  xpk: string
+  label: string
+}
 
-function read<T>(key: string, fallback: T): T {
-  try {
-    return (JSON.parse(localStorage.getItem(key) ?? "null") as T | null) ?? fallback
-  } catch {
-    return fallback
+/** The channels this browser owns, opened as their owner. */
+function owned(human: HumanSession): Channel[] {
+  return allMembers()
+    .filter((m) => m.identity.pk === m.access.ownerPk)
+    .map((m) => new Channel(m.access, location.origin, m.identity, (access) => saveMember({ ...m, access }), human))
+}
+
+/** Every computer already seated in a channel this browser owns: the owner signed each of those seats. */
+export async function seatedComputers(human: HumanSession): Promise<SeatableComputer[]> {
+  const out = new Map<string, SeatableComputer>()
+  for (const ch of owned(human)) {
+    const members = await ch.members().catch(() => [])
+    for (const m of members) if (m.active && m.kind === "computer" && !out.has(m.pk)) out.set(m.pk, { pk: m.pk, xpk: m.xpk, label: m.display ?? m.name })
   }
+  return [...out.values()]
 }
 
-function write(key: string, value: unknown): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(value))
-  } catch {
-    // Storage blocked (a private window): nothing is remembered, so every agent shows its code as before.
+/** Seat one computer in every channel this browser owns. How many it's now seated in. */
+export async function seatEverywhere(c: SeatableComputer, human: HumanSession): Promise<number> {
+  let n = 0
+  for (const ch of owned(human)) {
+    await ch.seatComputer(c).then(() => n++, () => undefined)
   }
+  return n
 }
 
-/** The keys of the computers this browser trusts, for this person. */
-export function trustedComputers(user: string): Set<string> {
-  const list = read<unknown>(TRUST_KEY(user), [])
-  return new Set(Array.isArray(list) ? list.filter((x): x is string => typeof x === "string") : [])
+/** Take a computer's seat away in every channel this browser owns, and remove the agents it let in. */
+export async function revokeEverywhere(pk: string, human: HumanSession): Promise<string[]> {
+  const removed: string[] = []
+  for (const ch of owned(human)) removed.push(...(await ch.revokeComputer(pk).catch(() => [])))
+  return removed
 }
 
-export function trustComputer(user: string, pk: string): void {
-  write(TRUST_KEY(user), [...trustedComputers(user).add(pk)])
-}
-
-export function untrustComputer(user: string, pk: string): void {
-  const s = trustedComputers(user)
-  s.delete(pk)
-  write(TRUST_KEY(user), [...s])
-}
-
-/** Whether this person lets their trusted computers' agents into their channels on their own. On unless turned off. */
-export function autoAdmitOn(user: string): boolean {
-  return read<boolean>(AUTO_KEY(user), true) !== false
-}
-
-export function setAutoAdmit(user: string, on: boolean): void {
-  write(AUTO_KEY(user), on)
+/** The exchange key in a link, if the computer's own key signed it. */
+export async function linkedXpk(link: ParsedLink): Promise<string | null> {
+  if (!link.xpk || !link.sig) return null
+  return (await verifyText(link.pk, link.sig, xpkStatement(link.pk, link.xpk)).catch(() => false)) ? link.xpk : null
 }

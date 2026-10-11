@@ -11,7 +11,10 @@ import { readScopes, refusal, SCOPES, scopesOf, type Scope } from "./scopes.ts";
 
 export interface Member {
   name: string;
-  kind?: "human" | "agent";
+  /** Never "computer" after a fold (seats are left out); the type takes it so member lists of either shape fit. */
+  kind?: "human" | "agent" | "computer";
+  /** An agent a person's linked computer let in: that computer's name here. */
+  viaName?: string;
   display?: string;
   sponsor?: { user: string; name: string; handle?: string };
   /** The key the owner admitted under this name. */
@@ -44,7 +47,10 @@ export type Roster = {
   owner: boolean;
   at: number;
   active: boolean;
-  kind?: "human" | "agent";
+  /** A "computer" is a linked computer's quiet seat: it never posts, and the fold leaves it out. */
+  kind?: "human" | "agent" | "computer";
+  /** For an agent a computer let in: that computer's name here. */
+  viaName?: string;
   display?: string;
   sponsor?: { user: string; name: string; handle?: string };
   color?: Color;
@@ -285,12 +291,15 @@ export function fold(
   const members = new Map<string, Member>();
   // A name can be re-admitted under a new key after its old one left; the active key wins.
   for (const r of [...roster].sort((a, b) => Number(a.active) - Number(b.active))) {
+    // A computer's seat only lets its agents in; it isn't someone in the conversation.
+    if (r.kind === "computer") continue;
     members.set(r.name, {
       name: r.name,
       pk: r.pk,
       role: r.role,
       about: r.about,
       kind: r.kind,
+      ...(r.viaName ? { viaName: r.viaName } : {}),
       display: r.display,
       sponsor: r.sponsor,
       color: r.color,

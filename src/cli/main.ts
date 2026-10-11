@@ -32,7 +32,7 @@ import { CHAT_KINDS, COLORS, ignored, isColor, TASK_STATES, type Kind, type Mess
 import { COORDINATOR, parseTaskId, similarOpenTasks, taskId, type ChannelState } from "../state.ts";
 import { VERSION } from "../version.ts";
 import { channelFiles, runSh, sessionViews } from "../sh.ts";
-import { forgetMachine, linkUrl, loadMachine, machineCode, machineFx, newMachine, saveMachine, vouchFor } from "../machine.ts";
+import { forgetMachine, linkUrl, loadMachine, machineCode, machineFx, newMachine, saveMachine, vouchFor, type MachineFile } from "../machine.ts";
 import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor, EXTRA_HARNESSES, extraInstalled, hooksInstalled, hooksStatus, installDetected, installExtra, installHooks, mcFor, runHook, uninstallDetected, uninstallExtra, uninstallHooks, type ExtraHarness } from "../hooks.ts";
 import { BadName } from "../refusals.ts";
 import { claimPlace } from "../where.ts";
@@ -355,6 +355,23 @@ const admitLocally = Effect.fn("kiwi.admitLocally")(function* (code: string, rel
   return true;
 });
 
+/**
+ * Let this agent in through this computer's seat, when its person seated it in the channel: the
+ * computer signs the agent in itself, with no request and no code (see Channel.admit). Null when this
+ * computer has no seat there; a refusal (the channel is on hold) says why, and the join asks instead.
+ */
+const admitHere = Effect.fn("kiwi.admitHere")(function* (code: string, relay: string, m: MachineFile, id: Identity, name: string, about?: string) {
+  const seatAccess = yield* Channel.fx.resume(relay, code, m.identity).pipe(Effect.catchCause(() => Effect.succeed(null)));
+  if (!seatAccess || !id.xpk) return null;
+  return yield* new Channel(seatAccess, relay, m.identity).fx.admit({ pk: id.pk, xpk: id.xpk, name, ...(about ? { about } : {}) }).pipe(
+    Effect.catchCause((cause) => {
+      const why = reason(Cause.squash(cause));
+      if (!/no seat in this channel/.test(why)) out(`This computer couldn't let you in itself (${why}); asking the owner instead.`);
+      return Effect.succeed(null);
+    }),
+  );
+});
+
 /** Bind this directory to the agent, and make sure Claude Code keeps it listening. */
 function settleIn(alias: string, name: string): void {
   const here = bindingFor(process.cwd());
@@ -510,6 +527,11 @@ const commands: Record<string, Command> = {
       const cfg = yield* keys.update((c) => {
         c.channels[alias] = { ...access, relay, code, as: name, owner: OWNER_NAME };
       });
+      // This computer, set up for this relay, gets a seat: agents started on it later let themselves in.
+      const machine = loadMachine();
+      if (machine?.relay === relay && machine.identity.xpk) {
+        yield* Effect.ignoreCause(new Channel(access, relay, owner).fx.seatComputer({ pk: machine.identity.pk, xpk: machine.identity.xpk, label: machine.label }));
+      }
       yield* (yield* Cursor).write(alias, name, 0);
       const s = yield* openSession(alias, cfg.channels[alias]!, name);
       yield* s.hello(opt.role, opt.about);
@@ -534,7 +556,7 @@ const commands: Record<string, Command> = {
       } catch {
         return yield* die("that isn't a join code (they look like mc2-…-…)");
       }
-      const name = yield* agentName();
+      let name = yield* agentName();
       if (name === OWNER_NAME) return yield* die(`"${OWNER_NAME}" is reserved for the channel owner; pick an agent name with --as`);
       const relay = relayUrl();
       const roomId = decodeJoinCode(code).roomId;
@@ -546,7 +568,7 @@ const commands: Record<string, Command> = {
       const signIn = yield* signInOn(relay);
 
       /** In: write the config, bind this folder, and print the instructions. */
-      const settle = (access: ChannelAccess, how: "approved" | "resumed") =>
+      const settle = (access: ChannelAccess, how: "approved" | "resumed" | "admitted") =>
         Effect.gen(function* () {
           // Members can read the channel's sealed name: use it to name the channel here.
           const title = yield* new Channel(access, relay, id).fx.title().pipe(Effect.catchCause(() => Effect.succeed(null)));
@@ -581,24 +603,43 @@ const commands: Record<string, Command> = {
           // Say what this agent runs on, so work that needs it finds it. Never worth failing a join over.
           if (canPost(scopes)) yield* Effect.ignoreCause(s.refreshCard(detectCard()));
           process.stderr.write(`${how === "resumed" ? "back in" : "joined"} "${alias}" as ${name} (key ${fingerprint(id.pk)})\n`);
-          out(how === "resumed" ? "this key is already a member: resumed, nothing new was granted.\n" : "approved.\n");
+          out(how === "resumed" ? "this key is already a member: resumed, nothing new was granted.\n" : how === "admitted" ? "let in by this computer, which its person linked and seated here: no code to compare.\n" : "approved.\n");
           if (signIn) out(`Your human can watch everything you do in this channel at ${relay}/#${encodeURIComponent(code)}\n`);
           out(agentPrompt(alias, name, { role: opt.role, about: opt.about, scopes }));
         });
 
       const machine = loadMachine();
       const linked = machine?.linked && machine.relay === relay ? machine : null;
+      const here = machine && machine.relay === relay ? machine : null;
+      // The same key, already a member (the config was lost, or this is a re-run): resume. Keys this
+      // computer signed count too: it's the one that let this agent in.
+      if (hadKey) {
+        const access = yield* Channel.fx
+          .resume(relay, code, id, here?.identity.pk)
+          .pipe(Effect.catchIf((err) => err instanceof RelayError && [401, 403, 404].includes(err.status), () => Effect.succeed(null)));
+        if (access) return yield* settle(access, "resumed");
+      }
+      // This computer's own seat in the channel lets it in at once, with no request and no code.
+      if (here && !opt.reclaim) {
+        const admitted = yield* admitHere(code, relay, here, id, name, opt.about);
+        if (admitted) {
+          if (admitted.name !== name) {
+            // Someone holds that name: this agent is in under the next free one, and its key moves with it.
+            out(`"${name}" is taken here; you're in as ${admitted.name}.`);
+            yield* keys.saveIdentity({ ...id, name: admitted.name }, roomId);
+            yield* keys.forgetIdentity(name, roomId);
+            name = admitted.name;
+            id = { ...id, name };
+          }
+          return yield* settle(admitted.access, "admitted");
+        }
+      }
       if (signIn && !linked) {
         return yield* die(
           "this computer isn't set up for Kiwi yet. Its person runs this once, in a terminal:\n" +
             "  kiwi setup\n" +
             "Then run this join again.",
         );
-      }
-      // The same key, already a member (the config was lost, or this is a re-run): resume.
-      if (hadKey) {
-        const access = yield* Channel.fx.resume(relay, code, id).pipe(Effect.catchIf((err) => err instanceof RelayError && [401, 403, 404].includes(err.status), () => Effect.succeed(null)));
-        if (access) return yield* settle(access, "resumed");
       }
       const vouch = () => (linked ? Effect.promise(() => vouchFor(linked, roomId, id.pk)) : Effect.succeed(null));
       // Asking again with the same key resumes the same request, so re-running this is always safe.
@@ -667,7 +708,7 @@ const commands: Record<string, Command> = {
         const st = yield* linkStatus(m);
         if (st?.status !== "linked") return out("This computer's link was removed. Run kiwi setup again.");
         out(`Linked to ${st.name ?? m.linked.name ?? "your account"} (${m.label}).`);
-        // What Your computers on the web asks you to compare before trusting this computer's agents on their own.
+        // What the link page shows, to compare before seating this computer in your channels.
         return out(`Its code: ${yield* Effect.promise(() => machineCode(m.identity.pk))}`);
       }
 
@@ -678,13 +719,16 @@ const commands: Record<string, Command> = {
       let m = loadMachine();
       const current = m?.linked && m.relay === relay ? yield* linkStatus(m) : null;
       if (m && current?.status === "linked") {
-        out(`2. This computer is already linked to ${current.name ?? m.linked?.name ?? "your account"}.\n`);
+        const linked = m;
+        out(`2. This computer is already linked to ${current.name ?? m.linked?.name ?? "your account"}.`);
+        out(`   To let agents you start here into your channels with no code to compare, open this page once and check it shows ${yield* Effect.promise(() => machineCode(linked.identity.pk))}:`);
+        out(`   ${yield* Effect.promise(() => linkUrl(linked))}\n`);
       } else {
         if (!m || m.relay !== relay || m.linked) m = yield* Effect.promise(() => newMachine(relay));
         const mine = m;
         saveMachine(mine);
         yield* machineFx.register(mine);
-        const url = linkUrl(mine);
+        const url = yield* Effect.promise(() => linkUrl(mine));
         out("2. Link this computer to your account, so agents you start here join as yours.");
         out(`   Open this page, sign in, and check it shows ${yield* Effect.promise(() => machineCode(mine.identity.pk))}:`);
         out(`   ${url}`);
@@ -696,7 +740,7 @@ const commands: Record<string, Command> = {
           if (st?.status === "linked") {
             mine.linked = { name: st.name, at: Date.now() };
             saveMachine(mine);
-            out(`   Linked to ${st.name ?? "your account"}. Channel owners still approve each agent you bring.\n`);
+            out(`   Linked to ${st.name ?? "your account"}. Agents you start here come into your own channels on their own; other owners approve each one.\n`);
             break;
           }
           if (st?.status === "expired" || Date.now() > deadline) return yield* die("the link expired before it was confirmed; run kiwi setup again");
@@ -855,6 +899,8 @@ const commands: Record<string, Command> = {
       yield* s.members(true);
       const { state } = yield* s.state();
       for (const m of yield* s.members()) {
+        // A linked computer's seat lets its agents in; it isn't someone here (kiwi setup status shows it).
+        if (m.kind === "computer") continue;
         const scopes = m.active ? state.members.get(m.name)?.scopes : undefined;
         const may = scopes && presetOf(scopes) !== "full" ? ` · may: ${describeScopes(scopes)}` : "";
         out(`${describeMember(m)}${m.name === s.me ? " (you)" : ""}${m.role ? ` — ${m.role}` : ""}${may}${m.active ? "" : "  (left)"}`);

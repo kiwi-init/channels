@@ -19,9 +19,11 @@ import { PAGE_LIMIT } from "../protocol.ts";
 import { ChannelGone, BadRequest, Forbidden, NotFound, NotOwner, SignInRequired, TooMany, Unauthorized, UpdateRequired, type Refusal } from "./failures.ts";
 import { answer, buildContext, describeRoutes, dispatch, incoming, json, Request_, type Route } from "./http.ts";
 import { Human, HUMAN_HEADER, profileOf } from "./human.ts";
-import { Machines, vouchedBy } from "./machines.ts";
+import { linkedUser, Machines, vouchedBy } from "./machines.ts";
 import { betaMessage, inBeta, Policy } from "./policy.ts";
 import {
+  admit,
+  admitsNow,
   allow,
   append,
   approve,
@@ -45,6 +47,7 @@ import {
   reveal,
   rotate,
   RoomStore,
+  seat,
   setCanPost,
   setIcon,
   setOwnerNonce,
@@ -87,7 +90,7 @@ export const runRoom = <A, E>(relay: Relay, db: RoomDb, effect: Effect.Effect<A,
  * The checks. Only GET /info is public; every other row names one of these, so
  * test/route-table.test.ts and the auth table can see what each route needs.
  */
-type Guard = "public" | "creator" | "joiner" | "ownerPerson" | "requester" | "member" | "owner";
+type Guard = "public" | "creator" | "joiner" | "ownerPerson" | "requester" | "member" | "owner" | "admitter";
 
 /** Who a check found: the key that signed, the signed-in person, the vouching person. */
 interface Who {
@@ -154,6 +157,22 @@ const owner = Effect.gen(function* () {
   return me;
 });
 
+/**
+ * A linked computer with a live seat, letting its own agents in: a member whose seat the owner gave an
+ * admitsUntil still ahead and, on relays that require sign-in, a computer still linked to the owner.
+ * Unlinking it in Your computers stops it here at once, before any channel is told.
+ */
+const admitter = Effect.gen(function* () {
+  const db = yield* RoomStore;
+  const human = yield* Human;
+  const machines = yield* Machines;
+  const me = yield* member;
+  if (!(yield* admitsNow(me))) return yield* new Forbidden({ message: "this key has no seat here that lets agents in" });
+  const want = db.ownerUser();
+  if (human && want && (yield* Effect.promise(() => linkedUser(machines, me))) !== want) return yield* new Forbidden({ message: "this computer isn't linked to the channel's owner any more" });
+  return me;
+});
+
 /** Creating a channel: the creator's signature (the room checks it is the owner key's) and, on sign-in relays, a session. */
 const creator = Effect.gen(function* () {
   const db = yield* RoomStore;
@@ -195,6 +214,7 @@ const guards: Record<Guard, Effect.Effect<Who, Refusal, Services>> = {
   requester: asKey(requester),
   member: asKey(member),
   owner: asKey(owner),
+  admitter: asKey(admitter),
 };
 
 // ---------- the routes ----------
@@ -412,6 +432,37 @@ const routes: RoomRoute[] = [
       }),
   },
   {
+    method: "POST",
+    path: "/seats",
+    guard: "owner",
+    run: () =>
+      Effect.gen(function* () {
+        const db = yield* RoomStore;
+        const human = yield* Human;
+        const machines = yield* Machines;
+        const b = yield* json<MemberBody>();
+        // On a sign-in relay, only a computer linked to the owner: the code they compared when linking it.
+        const want = db.ownerUser();
+        if (human && want && (yield* Effect.promise(() => linkedUser(machines, String(b.pk)))) !== want) {
+          return yield* new Forbidden({ message: "that computer isn't linked to your account: run kiwi setup on it first" });
+        }
+        yield* seat(b);
+        return { data: { seated: true }, fx: { broadcast: [frame({ t: "roster" })] } };
+      }),
+  },
+  {
+    method: "POST",
+    path: "/admit",
+    guard: "admitter",
+    run: (who) =>
+      Effect.gen(function* () {
+        const b = yield* json<MemberBody>();
+        yield* admit(who.me, b);
+        const updates = yield* directory;
+        return { data: { admitted: true }, fx: { broadcast: [frame({ t: "roster" })], directory: updates } };
+      }),
+  },
+  {
     method: "DELETE",
     path: /^\/members\/([A-Za-z0-9_-]{20,})$/,
     guard: "owner",
@@ -428,9 +479,10 @@ const routes: RoomRoute[] = [
     guard: "owner",
     run: (_, m) =>
       Effect.gen(function* () {
-        const b = yield* json<{ rec?: unknown; e?: unknown; post?: unknown }>();
+        const b = yield* json<{ rec?: unknown; e?: unknown; post?: unknown; admitsUntil?: unknown }>();
         if (typeof b.rec !== "string" || typeof b.e !== "number" || typeof b.post !== "boolean") return yield* new BadRequest({ message: "send the sealed record, its epoch, and whether they may post" });
-        yield* setRecord(m[1]!, b.rec, b.e, b.post);
+        if (b.admitsUntil !== undefined && b.admitsUntil !== null && typeof b.admitsUntil !== "number") return yield* new BadRequest({ message: "admitsUntil is a time or null" });
+        yield* setRecord(m[1]!, b.rec, b.e, b.post, b.admitsUntil as number | null | undefined);
         // Everyone re-reads the roster, so the new record (and what it lets them do) lands at once.
         return { data: { ok: true }, fx: { broadcast: [frame({ t: "roster" })] } };
       }),

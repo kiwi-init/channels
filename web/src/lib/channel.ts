@@ -716,8 +716,10 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
     () =>
       orGone(
         Effect.gen(function* () {
-          setRoster(yield* ch.fx.members())
-          if (ch.isOwner && (yield* ch.fx.rotateIfDue())) setRoster(yield* ch.fx.members())
+          // A linked computer's seat only lets its agents in: it isn't someone in this channel's lists.
+          const people = (all: Member[]) => all.filter((m) => m.kind !== "computer")
+          setRoster(people(yield* ch.fx.members()))
+          if (ch.isOwner && (yield* ch.fx.rotateIfDue())) setRoster(people(yield* ch.fx.members()))
         })
       ),
     [ch, orGone]

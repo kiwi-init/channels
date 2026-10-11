@@ -124,7 +124,7 @@ export default function App() {
         />
       ) : link ? (
         <LinkComputerPage
-          pk={link}
+          link={link}
           onDone={() => {
             history.replaceState(null, "", location.pathname)
             setLink(null)

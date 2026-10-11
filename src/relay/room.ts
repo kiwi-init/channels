@@ -255,7 +255,7 @@ export class RoomDb {
     this.sql.run("CREATE TABLE msgs (seq INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, iv TEXT NOT NULL, ct TEXT NOT NULL, e INTEGER NOT NULL)");
     // Former members keep their sealed record (so their history still verifies) but lose every key.
     this.sql.run(
-      "CREATE TABLE members (pk TEXT PRIMARY KEY, xpk TEXT NOT NULL, rec TEXT NOT NULL, rec_e INTEGER NOT NULL, since INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, read_only INTEGER NOT NULL DEFAULT 0)",
+      "CREATE TABLE members (pk TEXT PRIMARY KEY, xpk TEXT NOT NULL, rec TEXT NOT NULL, rec_e INTEGER NOT NULL, since INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, read_only INTEGER NOT NULL DEFAULT 0, admits_until INTEGER, admitted_by TEXT)",
     );
     this.sql.run("CREATE TABLE keys (pk TEXT NOT NULL, e INTEGER NOT NULL, wrapped TEXT NOT NULL, PRIMARY KEY (pk, e))");
     // Every column at once: each ALTER TABLE is a row written, and a new room paid eight of them.
@@ -267,9 +267,11 @@ export class RoomDb {
   /** A room from before a column existed gets it added (a new room is created with all of them). */
   migrate(): void {
     // A key the owner lets only read (member scopes): the one bit of them the relay knows.
-    if (!this.sql.all<{ name: string }>("PRAGMA table_info(members)").some((c) => c.name === "read_only")) {
-      this.sql.run("ALTER TABLE members ADD COLUMN read_only INTEGER NOT NULL DEFAULT 0");
-    }
+    const memberCols = new Set(this.sql.all<{ name: string }>("PRAGMA table_info(members)").map((c) => c.name));
+    if (!memberCols.has("read_only")) this.sql.run("ALTER TABLE members ADD COLUMN read_only INTEGER NOT NULL DEFAULT 0");
+    // A linked computer's seat: until when it may let its own agents in, and which computer let each one in.
+    if (!memberCols.has("admits_until")) this.sql.run("ALTER TABLE members ADD COLUMN admits_until INTEGER");
+    if (!memberCols.has("admitted_by")) this.sql.run("ALTER TABLE members ADD COLUMN admitted_by TEXT");
     const cols = new Set(this.sql.all<{ name: string }>("PRAGMA table_info(requests)").map((c) => c.name));
     for (const [col, def] of REQUEST_COLUMNS) {
       if (!cols.has(col)) this.sql.run(`ALTER TABLE requests ADD COLUMN ${col} ${def}`);
@@ -630,7 +632,7 @@ export const directory: Effect.Effect<DirectoryUpdate[], ChannelGone, RoomStore>
   return updates;
 });
 
-const putMember = Effect.fn("Room.putMember")(function* (m: MemberBody, epoch: number) {
+const putMember = Effect.fn("Room.putMember")(function* (m: MemberBody, epoch: number, admitsUntil: number | null = null) {
   const db = yield* RoomStore;
   if (!fits(MemberRecord, m)) return yield* new BadRequest({ message: "bad member" });
   db.sql.run(
@@ -645,6 +647,69 @@ const putMember = Effect.fn("Room.putMember")(function* (m: MemberBody, epoch: n
   for (const [e, wrapped] of Object.entries(m.keys ?? {})) {
     db.sql.run("INSERT OR REPLACE INTO keys (pk, e, wrapped) VALUES (?, ?, ?)", m.pk, Number(e), wrapped);
   }
+  db.migrate();
+  db.sql.run("UPDATE members SET admits_until = ?, admitted_by = NULL WHERE pk = ?", admitsUntil, m.pk);
+});
+
+/** The longest a seat's grant may run from now: the owner's client asks for 90 days. */
+const MAX_SEAT_MS = 100 * 86_400_000;
+/** Agents one computer may let in per channel per day. */
+export const ADMITS_PER_DAY = 20;
+
+/**
+ * Seat one of the owner's linked computers: a member with no join request (the owner checked the
+ * computer's code when linking it), read-only, whose `admitsUntil` lets it admit its own agents.
+ */
+export const seat = Effect.fn("Room.seat")(function* (body: MemberBody) {
+  const db = yield* RoomStore;
+  const policy = yield* Policy;
+  const { epoch, ownerPk } = yield* readMeta;
+  const until = body.admitsUntil;
+  if (typeof until !== "number" || !Number.isInteger(until) || until <= Date.now() || until > Date.now() + MAX_SEAT_MS) return yield* new BadRequest({ message: "a seat needs an admitsUntil within the next 100 days" });
+  if (body.post !== false) return yield* new BadRequest({ message: "a computer's seat is read-only" });
+  if (body.pk === ownerPk) return yield* new BadRequest({ message: "the owner's key can't be a computer's seat" });
+  const most = policy.membersPerChannel;
+  if (most && !db.isMember(body.pk) && db.activeMembers() >= most) {
+    return yield* new TooMany({ message: `this channel has ${most} members, the most this relay allows; remove someone to let another in` });
+  }
+  for (let e = 0; e <= epoch; e++) {
+    if (!body.keys?.[String(e)]) return yield* new BadRequest({ message: `missing wrapped key for epoch ${e}` });
+  }
+  yield* putMember(body, epoch, until);
+});
+
+/** Whether this member's seat lets it admit agents now. */
+export const admitsNow = Effect.fn("Room.admitsNow")(function* (pk: string) {
+  const db = yield* RoomStore;
+  db.migrate();
+  const r = db.sql.all<{ until: number | null }>("SELECT admits_until AS until FROM members WHERE pk = ? AND active = 1", pk)[0];
+  return !!r?.until && r.until > Date.now();
+});
+
+/**
+ * A seated computer lets one of its own agents in. Its record is the computer's signature (clients
+ * check it against the seat the owner signed); the relay checks the seat is live, that the key isn't
+ * anyone else's, and how many it let in today.
+ */
+export const admit = Effect.fn("Room.admit")(function* (admitter: string, body: MemberBody) {
+  const db = yield* RoomStore;
+  const policy = yield* Policy;
+  const { epoch, ownerPk } = yield* readMeta;
+  if (body.pk === ownerPk || body.pk === admitter) return yield* new BadRequest({ message: "a computer lets in its agents, not itself or the owner" });
+  const was = db.sql.all<{ active: number; by: string | null }>("SELECT active, admitted_by AS by FROM members WHERE pk = ?", body.pk)[0];
+  // Its own agent again (under another name, after a clash) is fine; anyone else's key, or a key that left, isn't.
+  if (was && (was.by !== admitter || !was.active)) return yield* new Conflict({ message: "that key isn't this computer's to let in" });
+  if (!was) {
+    const today = db.sql.all<{ n: number }>("SELECT COUNT(*) AS n FROM members WHERE admitted_by = ? AND since > ?", admitter, Date.now() - 86_400_000)[0]?.n ?? 0;
+    if (today >= ADMITS_PER_DAY) return yield* new TooMany({ message: `this computer let in ${ADMITS_PER_DAY} agents here today, the most it may; the owner can still approve more` });
+    const most = policy.membersPerChannel;
+    if (most && db.activeMembers() >= most) return yield* new TooMany({ message: `this channel has ${most} members, the most this relay allows; remove someone to let another in` });
+  }
+  for (let e = 0; e <= epoch; e++) {
+    if (!body.keys?.[String(e)]) return yield* new BadRequest({ message: `missing wrapped key for epoch ${e}` });
+  }
+  yield* putMember({ pk: body.pk, xpk: body.xpk, rec: body.rec, keys: body.keys }, epoch);
+  db.sql.run("UPDATE members SET admitted_by = ? WHERE pk = ?", admitter, body.pk);
 });
 
 // ---------- join requests ----------
@@ -819,13 +884,18 @@ export const keysFor = Effect.fn("Room.keysFor")(function* (pk: string) {
  * The owner re-signs a member's record when what they may do changes (sealed: the relay can't read
  * it), and sets the "can post" bit with it, in one step. `e` is the epoch whose key sealed it.
  */
-export const setRecord = Effect.fn("Room.setRecord")(function* (pk: string, rec: string, e: number, post: boolean) {
+export const setRecord = Effect.fn("Room.setRecord")(function* (pk: string, rec: string, e: number, post: boolean, admitsUntil?: number | null) {
   const db = yield* RoomStore;
   if (pk === (yield* readMeta).ownerPk) return yield* new BadRequest({ message: "the owner's record isn't changed this way" });
   if (!db.isMember(pk)) return yield* new NotFound({ message: "not a member" });
   if (!Number.isInteger(e) || e < 0 || e > (yield* readMeta).epoch) return yield* new BadRequest({ message: "no such epoch" });
   if (rec.length > 8_192) return yield* new TooLarge({ message: "record too large" });
   db.sql.run("UPDATE members SET rec = ?, rec_e = ?, read_only = ? WHERE pk = ?", rec, e, post ? 0 : 1, pk);
+  if (admitsUntil !== undefined) {
+    if (admitsUntil !== null && (!Number.isInteger(admitsUntil) || admitsUntil > Date.now() + MAX_SEAT_MS)) return yield* new BadRequest({ message: "admitsUntil runs at most 100 days" });
+    db.migrate();
+    db.sql.run("UPDATE members SET admits_until = ? WHERE pk = ?", admitsUntil, pk);
+  }
 });
 
 /** Whether a member may post (the owner's scope.set says what they may do; this is the bit the relay enforces). */
@@ -868,6 +938,8 @@ export interface MemberBody {
   keys?: Record<string, string>;
   /** False for a member the owner lets only read: the relay refuses their messages. */
   post?: boolean;
+  /** A linked computer's seat: until when it may admit its own agents. */
+  admitsUntil?: number;
 }
 
 export interface CreateBody {

@@ -82,6 +82,7 @@ const toRoster = (m: Member): Roster[number] => ({
   at: m.at,
   active: m.active,
   kind: m.kind,
+  ...(m.viaName ? { viaName: m.viaName } : {}),
   display: m.display,
   sponsor: m.sponsor,
   color: m.color,

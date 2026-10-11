@@ -36,11 +36,10 @@ import {
   type ChannelAccess,
 } from "./crypto.ts";
 import { sign, signText, verify, verifyText, type Identity } from "./identity.ts";
-import { vouchStatement } from "./vouch.ts";
 import { commitTo, joinCheckCode, joinNonce, ownerNonceStatement, spendAuto, type SigningBudget } from "./sas.ts";
 import { canPost, scopesOf, wireScopes, type Scope } from "./scopes.ts";
 import { COORDINATOR, type ChannelState, type GuardFloor } from "./state.ts";
-import { handleFor, inlineText, makeRecord, NAME_RE, nameKey, openRecord, RESERVED_NAMES, sealRecord, type JoinRequest, type Member, type MemberInfo } from "./membership.ts";
+import { admitRoster, freeAgentName, handleFor, inlineText, makeAdmittedRecord, makeRecord, NAME_RE, nameKey, readRecord, RESERVED_NAMES, sealRecord, type JoinRequest, type Member, type MemberInfo, type ReadEntry } from "./membership.ts";
 import {
   CLOSE_CLOSED,
   CLOSE_REMOVED,
@@ -367,6 +366,11 @@ export const eachLive = <E, R, R2>(live: Stream.Stream<Live, E, R>, handle: (ev:
 // ---------- keys and owners ----------
 
 const keyInfo = (room: string, e: number | string) => `mc/key\n${room}\n${e}`;
+const DAY = 86_400_000;
+/** How long a computer's seat lets its agents in before the owner's use of the channel renews it. */
+export const SEAT_DAYS = 90;
+/** A seat with less than this left is renewed the next time the owner opens the channel. */
+export const RENEW_DAYS = 60;
 const requestInfo = (room: string) => `mc/request\n${room}`;
 
 export interface Info {
@@ -456,8 +460,12 @@ async function wrapAllFor(owner: Identity, roomId: string, keys: Record<string, 
   return out;
 }
 
-/** Unwrap this member's keys, keeping only ones the owner signed (or, on older channels, unsigned ones). */
-async function unwrapKeys(id: Identity, roomId: string, wrapped: Record<string, string>, ownerPk: string, signedOnly: boolean): Promise<Record<string, string>> {
+/**
+ * Unwrap this member's keys, keeping only ones the owner signed (or, on older channels, unsigned ones).
+ * An agent a computer let in also takes keys that computer signed (`via`): it got its first keys from
+ * that same computer, on the same machine, so it trusts nothing new.
+ */
+async function unwrapKeys(id: Identity, roomId: string, wrapped: Record<string, string>, ownerPk: string, signedOnly: boolean, via?: string): Promise<Record<string, string>> {
   if (!id.xsk) throw new Error("identity has no exchange key");
   const out: Record<string, string> = {};
   for (const [e, w] of Object.entries(wrapped)) {
@@ -466,7 +474,8 @@ async function unwrapKeys(id: Identity, roomId: string, wrapped: Record<string, 
       try {
         const parsed = JSON.parse(w) as { box?: unknown; sig?: unknown };
         if (typeof parsed.box !== "string" || typeof parsed.sig !== "string") continue;
-        if (!(await verifyText(ownerPk, parsed.sig, keyStatement(roomId, e, id.pk, parsed.box)))) continue;
+        const statement = keyStatement(roomId, e, id.pk, parsed.box);
+        if (!(await verifyText(ownerPk, parsed.sig, statement)) && !(via && (await verifyText(via, parsed.sig, statement)))) continue;
         box = parsed.box;
       } catch {
         continue;
@@ -536,6 +545,21 @@ export interface ChannelFx {
   updateRole(m: Member, role: string | null, about: string | null | undefined, since: number): Effect.Effect<void, Refused, Relay>;
   reconcilePosting(state: Pick<ChannelState, "members" | "scopeSets" | "roleSets">, members?: Member[]): Effect.Effect<string[], Refused, Relay>;
   remove(pk: string): Effect.Effect<void, Refused, Relay>;
+  /** Owner: seat one of their linked computers, so it can let its own agents in until `until` (its key and exchange key as they linked it). */
+  seatComputer(c: { pk: string; xpk: string; label: string }, until?: number): Effect.Effect<Member, Refused, Relay>;
+  /** Owner: push a computer's seat out to `until` (a 90-day grant renewed while the owner uses the channel). */
+  renewSeat(seat: Member, until?: number): Effect.Effect<void, Refused, Relay>;
+  /** Owner: sign a record a computer signed (it has passed admitRoster), keeping its `via`, so every client reads it as the owner's. */
+  resignAdmitted(m: Member): Effect.Effect<void, Refused, Relay>;
+  /** Owner: take a computer's seat away and remove every agent it let in, then rotate the key once. Returns who was removed. */
+  revokeComputer(pk: string): Effect.Effect<string[], Refused, Relay>;
+  /** Owner: what keeping their computers' seats needs now (renewals, re-signing what they let in, seats for `computers` not seated yet). */
+  tendSeats(computers?: readonly { pk: string; xpk: string; label: string }[]): Effect.Effect<{ seated: string[]; renewed: string[]; resigned: string[] }, Refused, Relay>;
+  /**
+   * A computer with a seat here (this Channel's identity is its machine key) lets one of its own agents in:
+   * under `name`, or name-2… if that's taken. Refused when it has no live seat, or the channel is on hold.
+   */
+  admit(agent: { pk: string; xpk: string; name: string; about?: string }): Effect.Effect<{ name: string; access: ChannelAccess }, Refused, Relay>;
   rotate(): Effect.Effect<number, Refused, Relay>;
   rotateIfDue(): Effect.Effect<boolean, Refused, Relay>;
   close(): Effect.Effect<void, Refused, Relay>;
@@ -653,9 +677,7 @@ export class Channel {
       const { roomId, info: room } = yield* pinnedInfo(relay, code);
       if (!id.xpk) return yield* new MissingKey("identity has no exchange key");
       const xpk = id.xpk;
-      // The computer's vouch rides in the sealed box too, so the owner can check it against their own
-      // computers without taking the relay's word for who vouched (see autoAdmissible).
-      const box = yield* Effect.promise(() => sealTo(room.ownerXpk, JSON.stringify(machine ? { ...info, vouch: machine } : info), requestInfo(roomId)));
+      const box = yield* Effect.promise(() => sealTo(room.ownerXpk, JSON.stringify(info), requestInfo(roomId)));
       const commit = yield* Effect.promise(async () => commitTo(roomId, id.pk, await joinNonce(id, roomId)));
       const body = yield* Effect.promise(() => sign(id, { room: roomId, xpk, box, ts: Date.now(), commit }));
       const { id: requestId } = yield* callRelay<{ id: string }>(relay, roomId, "/requests", { method: "POST", human, body: JSON.stringify(machine ? { ...body, machine } : body) });
@@ -693,11 +715,11 @@ export class Channel {
      * the same key, e.g. after the config was lost): nothing new is granted.
      * Fails with a RelayError 403 when the key isn't a member.
      */
-    resume: Effect.fn("Channel.resume")(function* (relay: string, code: string, id: Identity) {
+    resume: Effect.fn("Channel.resume")(function* (relay: string, code: string, id: Identity, via?: string) {
       const { roomId, info, signedKeys } = yield* pinnedInfo(relay, code);
       const r = yield* callRelay<{ epoch: number; keys: Record<string, string> }>(relay, roomId, "/keys", { identity: id });
-      const keys = yield* Effect.promise(() => unwrapKeys(id, roomId, r.keys, info.ownerPk, signedKeys));
-      const access: ChannelAccess = { roomId, ownerPk: info.ownerPk, ownerXpk: info.ownerXpk, epoch: r.epoch, keys, signedKeys };
+      const keys = yield* Effect.promise(() => unwrapKeys(id, roomId, r.keys, info.ownerPk, signedKeys, via));
+      const access: ChannelAccess = { roomId, ownerPk: info.ownerPk, ownerXpk: info.ownerXpk, epoch: r.epoch, keys, signedKeys, ...(via ? { via } : {}) };
       return access;
     }),
   };
@@ -826,13 +848,19 @@ export class Channel {
 
     members: Effect.fn("Channel.members")({ self: this }, function* (this: Channel) {
       const { members } = yield* this.request<{ members: MemberRow[] }>("/members");
-      const out: Member[] = [];
+      const read: ReadEntry[] = [];
       for (const m of members) {
         if (!this.access.keys[String(m.e)]) yield* this.fx.refreshKeys();
         const key = this.access.keys[String(m.e)];
-        const opened = key ? yield* Effect.promise(() => openRecord(key, m.rec, this.roomId, this.access.ownerPk, m.pk)) : null;
+        read.push({ read: key ? yield* Effect.promise(() => readRecord(key, m.rec, this.roomId, m.pk)) : null, active: !!m.active });
+      }
+      // The owner's records, and the ones their computers' seats let in (admitRoster says which count).
+      const admitted = admitRoster(read, this.access.ownerPk);
+      const out: Member[] = [];
+      for (const [i, m] of members.entries()) {
+        const opened = admitted[i];
         // The newest record seen for this key wins: a relay can't hand back an older, broader one.
-        const member = opened && newestRecord(this.roomId, opened);
+        const member = opened && (opened.signedBy ? opened : newestRecord(this.roomId, opened));
         if (member) out.push({ ...member, active: !!m.active, ...(m.read_only ? { readOnly: true } : {}) });
         // A key the relay says is a member, with no record we can verify: show it, so the owner can remove it.
         else if (m.active) out.push({ name: `unverified-${m.pk.slice(0, 6)}`, pk: m.pk, xpk: m.xpk, owner: false, at: 0, active: true, unverified: true });
@@ -852,14 +880,10 @@ export class Channel {
       for (const r of requests) {
         if (!(yield* Effect.promise(() => verify({ room: this.roomId, pk: r.pk, xpk: r.xpk, box: r.box, ts: r.ts, commit: r.commit, sig: r.sig })))) continue;
         const raw = yield* Effect.promise(() => openFrom(this.identity.xsk!, r.box, requestInfo(this.roomId)));
-        let info: MemberInfo & { vouch?: { pk?: unknown; sig?: unknown } } = { name: "?" };
+        let info: MemberInfo = { name: "?" };
         try {
           info = JSON.parse(raw ?? "{}") as typeof info;
         } catch {}
-        // A computer's signature over this channel and this key: checked here, never taken from the relay.
-        const v = info.vouch;
-        const vouchedBy =
-          v && typeof v.pk === "string" && typeof v.sig === "string" && (yield* Effect.promise(() => verifyText(v.pk as string, v.sig as string, vouchStatement(this.roomId, r.pk)).catch(() => false))) ? v.pk : null;
         // An agent asking under a name a current member has: approving would move their seat, so a person
         // checks it, never the budget. (A person is admitted under their account's handle, whatever they typed.)
         const seat = r.kind === "human" ? undefined : seats.find((m) => nameKey(m.name) === nameKey(String(info.name ?? "")));
@@ -883,7 +907,6 @@ export class Channel {
           sponsoredBy: r.sponsorUser ? { user: r.sponsorUser, name: inlineText(r.sponsorName, 80) || r.sponsorUser, email: r.sponsorEmail ?? null } : null,
           ...(reclaims ? { reclaims } : {}),
           ...(info.reclaim === true ? { reclaim: true } : {}),
-          ...(vouchedBy ? { vouchedBy } : {}),
         });
       }
       return out;
@@ -1031,6 +1054,104 @@ export class Channel {
       yield* this.fx.rotate();
     }),
 
+    seatComputer: Effect.fn("Channel.seatComputer")({ self: this }, function* (this: Channel, c: { pk: string; xpk: string; label: string }, until: number = Date.now() + SEAT_DAYS * DAY) {
+      yield* this.ownerOnly();
+      const members = yield* this.fx.members();
+      const had = members.find((m) => m.pk === c.pk && m.active);
+      if (had && had.kind !== "computer") return yield* new Rejected(`${had.name} is already a member with that key`);
+      if (had?.kind === "computer") {
+        yield* this.fx.renewSeat(had, until);
+        return had;
+      }
+      const base = inlineText(c.label, 40).toLowerCase().replace(/[^\p{L}\p{N}_.-]+/gu, "-").replace(/^-+|-+$/g, "").slice(0, 28) || "computer";
+      const info: MemberInfo = { name: freeAgentName(base, members), kind: "computer", display: inlineText(c.label, 60) || base, scopes: [], admits: { since: Date.now(), until } };
+      const current = this.access.keys[String(this.access.epoch)]!;
+      const rec = yield* Effect.promise(() => makeRecord(this.identity, this.roomId, { ...info, pk: c.pk, xpk: c.xpk }));
+      const keys = yield* Effect.promise(() => wrapAllFor(this.identity, this.roomId, this.access.keys, c.pk, c.xpk));
+      const sealed = yield* Effect.promise(() => sealRecord(current, rec));
+      yield* this.request("/seats", { method: "POST", body: JSON.stringify({ pk: c.pk, xpk: c.xpk, rec: sealed, keys, post: false, admitsUntil: until }) });
+      return { pk: c.pk, xpk: c.xpk, ...info, owner: false, at: rec.at, active: true } satisfies Member;
+    }),
+
+    renewSeat: Effect.fn("Channel.renewSeat")({ self: this }, function* (this: Channel, seat: Member, until: number = Date.now() + SEAT_DAYS * DAY) {
+      yield* this.ownerOnly();
+      if (seat.kind !== "computer" || !seat.admits) return yield* new Rejected(`${seat.name} isn't a computer's seat`);
+      const e = this.access.epoch;
+      const key = this.access.keys[String(e)]!;
+      const { active: _a, readOnly: _r, unverified: _u, at: _at, signedBy: _s, viaName: _v, ...info } = seat;
+      const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.identity, this.roomId, { ...info, admits: { since: seat.admits!.since, until } })));
+      yield* this.request(`/members/${seat.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: false, admitsUntil: until }) });
+    }),
+
+    resignAdmitted: Effect.fn("Channel.resignAdmitted")({ self: this }, function* (this: Channel, m: Member) {
+      yield* this.ownerOnly();
+      // Only what admitRoster let through: a computer-signed record that failed it never reaches here.
+      if (!m.signedBy || !m.via || m.kind !== "agent") return yield* new Rejected(`${m.name}'s record isn't one a computer signed`);
+      const e = this.access.epoch;
+      const key = this.access.keys[String(e)]!;
+      const rec = yield* Effect.promise(async () =>
+        sealRecord(key, await makeRecord(this.identity, this.roomId, { name: m.name, pk: m.pk, xpk: m.xpk, kind: "agent", via: m.via, ...(m.about ? { about: m.about } : {}), ...(m.sponsor ? { sponsor: m.sponsor } : {}) })),
+      );
+      yield* this.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: true }) });
+    }),
+
+    revokeComputer: Effect.fn("Channel.revokeComputer")({ self: this }, function* (this: Channel, pk: string) {
+      yield* this.ownerOnly();
+      const gone = (yield* this.fx.members()).filter((m) => m.active && (m.pk === pk || m.via === pk));
+      for (const m of gone) yield* this.request(`/members/${m.pk}`, { method: "DELETE" });
+      if (gone.length) yield* this.fx.rotate();
+      return gone.map((m) => m.name);
+    }),
+
+    tendSeats: Effect.fn("Channel.tendSeats")({ self: this }, function* (this: Channel, computers: readonly { pk: string; xpk: string; label: string }[] = []) {
+      yield* this.ownerOnly();
+      const done = { seated: [] as string[], renewed: [] as string[], resigned: [] as string[] };
+      const members = yield* this.fx.members();
+      const now = Date.now();
+      for (const m of members) {
+        if (!m.active || m.unverified) continue;
+        if (m.kind === "computer" && m.admits && m.admits.until - now < RENEW_DAYS * DAY) {
+          yield* this.fx.renewSeat(m);
+          done.renewed.push(m.name);
+        } else if (m.signedBy) {
+          yield* this.fx.resignAdmitted(m);
+          done.resigned.push(m.name);
+        }
+      }
+      for (const c of computers) {
+        // A key that was here and left (removed, or its computer revoked) isn't seated again on its own.
+        if (members.some((m) => m.pk === c.pk)) continue;
+        done.seated.push((yield* this.fx.seatComputer(c)).name);
+      }
+      return done;
+    }),
+
+    admit: Effect.fn("Channel.admit")({ self: this }, function* (this: Channel, agent: { pk: string; xpk: string; name: string; about?: string }) {
+      const now = Date.now();
+      let members = yield* this.fx.members();
+      const seat = members.find((m) => m.pk === this.identity.pk && m.active && m.kind === "computer" && !!m.admits && m.admits.until >= now);
+      if (!seat) return yield* new Rejected("this computer has no seat in this channel, so it can't let agents in itself");
+      const hold = (yield* this.fx.guard())?.hold;
+      if (hold?.on) return yield* new Rejected(`the channel is ON HOLD${hold.note ? ` (${inlineText(hold.note, 120)})` : ""}: nobody new comes in until the owner lifts it`);
+      if (!NAME_RE.test(agent.name) || RESERVED_NAMES.has(nameKey(agent.name))) return yield* new BadName(`"${agent.name}" can't be a name here`);
+      const sponsor = members.find((m) => m.owner)?.sponsor;
+      // Every key up to the current epoch (a removal rotated it since this seat last looked).
+      yield* this.fx.refreshKeys();
+      const current = this.access.keys[String(this.access.epoch)]!;
+      const keys = yield* Effect.promise(() => wrapAllFor(this.identity, this.roomId, this.access.keys, agent.pk, agent.xpk));
+      // Two computers can pick the same free name at once: the first in the relay's order keeps it, so look again after.
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const name = freeAgentName(agent.name, members.filter((m) => m.pk !== agent.pk));
+        const rec = yield* Effect.promise(async () => sealRecord(current, await makeAdmittedRecord(this.identity, this.roomId, { pk: agent.pk, xpk: agent.xpk, name, ...(agent.about ? { about: agent.about } : {}), ...(sponsor ? { sponsor } : {}) })));
+        yield* this.request("/admit", { method: "POST", body: JSON.stringify({ pk: agent.pk, xpk: agent.xpk, rec, keys }) });
+        members = yield* this.fx.members();
+        if (members.some((m) => m.pk === agent.pk && m.active && m.name === name)) {
+          return { name, access: { ...this.access, keys: { ...this.access.keys }, via: this.identity.pk } };
+        }
+      }
+      return yield* new Rejected(`couldn't find a free name near "${agent.name}"; pick another`);
+    }),
+
     rotate: Effect.fn("Channel.rotate")({ self: this }, function* (this: Channel) {
       yield* this.ownerOnly();
       // The new key goes only to members whose admission the owner signed, under the exchange key in
@@ -1160,7 +1281,7 @@ export class Channel {
   private fetchKeys(): Effect.Effect<void, MemberRefusal, Relay> {
     return Effect.gen({ self: this }, function* () {
       const r = yield* this.request<{ epoch: number; keys: Record<string, string> }>("/keys");
-      const keys = yield* Effect.promise(() => unwrapKeys(this.identity, this.roomId, r.keys, this.access.ownerPk, !!this.access.signedKeys));
+      const keys = yield* Effect.promise(() => unwrapKeys(this.identity, this.roomId, r.keys, this.access.ownerPk, !!this.access.signedKeys, this.access.via));
       // A key this member already holds for an epoch never changes: nobody may swap it.
       this.access = { ...this.access, epoch: r.epoch, keys: { ...keys, ...this.access.keys } };
       this.onAccess?.(this.access);
@@ -1469,8 +1590,8 @@ export class Channel {
    * the same key, e.g. after the config was lost): nothing new is granted.
    * Throws a RelayError 403 when the key isn't a member.
    */
-  static resume(relay: string, code: string, id: Identity): Promise<ChannelAccess> {
-    return run(Channel.fx.resume(relay, code, id));
+  static resume(relay: string, code: string, id: Identity, via?: string): Promise<ChannelAccess> {
+    return run(Channel.fx.resume(relay, code, id, via));
   }
 
   /** Fetch this member's wrapped keys (after a rotation) and unwrap them. */
@@ -1636,6 +1757,30 @@ export class Channel {
   /** Remove a member and rotate the key so they can't read anything newer. */
   remove(pk: string): Promise<void> {
     return run(this.fx.remove(pk));
+  }
+
+  seatComputer(c: { pk: string; xpk: string; label: string }, until?: number): Promise<Member> {
+    return run(this.fx.seatComputer(c, until));
+  }
+
+  admit(agent: { pk: string; xpk: string; name: string; about?: string }): Promise<{ name: string; access: ChannelAccess }> {
+    return run(this.fx.admit(agent));
+  }
+
+  renewSeat(seat: Member, until?: number): Promise<void> {
+    return run(this.fx.renewSeat(seat, until));
+  }
+
+  resignAdmitted(m: Member): Promise<void> {
+    return run(this.fx.resignAdmitted(m));
+  }
+
+  revokeComputer(pk: string): Promise<string[]> {
+    return run(this.fx.revokeComputer(pk));
+  }
+
+  tendSeats(computers?: readonly { pk: string; xpk: string; label: string }[]): Promise<{ seated: string[]; renewed: string[]; resigned: string[] }> {
+    return run(this.fx.tendSeats(computers));
   }
 
   /** New channel key, wrapped to every remaining member. */

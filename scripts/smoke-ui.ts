@@ -266,21 +266,16 @@ try {
   const channel = page.url()
   const code = new URL(channel).hash.slice(1)
   let opened = false
+  let fullLink = ""
   const setup = kiwi(["setup", "--relay", BASE], (out) => {
     const link = /(http\S+#link=\S+)/.exec(out)?.[1]
-    if (link && !opened) (opened = true), void page.goto(link)
+    // Linked first without its exchange key, so it isn't seated: the first agent walks the requests sheet.
+    if (link && !opened) (opened = true), (fullLink = link), void page.goto(link.replace(/&x=.*$/, ""))
   })
   await page.getByRole("button", { name: "Yes, link it" }).click({ timeout: 20000 })
   await setup
   console.log(`ok  ${at}`)
   await page.goto(channel)
-  // Linking it here made this browser trust that computer, so its agents would come in on their own.
-  // Ask each time for this one, to walk the requests sheet; the next agent comes in by itself.
-  const autoAdmit = (on: boolean) =>
-    page.evaluate((on) => {
-      for (const k of Object.keys(localStorage)) if (k.startsWith("mc.trusted-computers.")) localStorage.setItem(`mc.auto-admit.${k.slice("mc.trusted-computers.".length)}`, JSON.stringify(on))
-    }, on)
-  await autoAdmit(false)
   const joining = kiwi(["join", code, "smoke", "--relay", BASE, "--as", "bot", "--role", "tester"])
   const review = page.getByRole("button", { name: "Review", exact: true })
   await review.waitFor({ timeout: 30000 })
@@ -295,10 +290,17 @@ try {
   if (await page.getByRole("dialog").count()) await page.keyboard.press("Escape")
   console.log(`ok  ${at}`)
 
-  at = "an agent from a trusted computer comes in on its own"
-  await autoAdmit(true)
+  // The same link with its exchange key seats the computer in this channel; its next agent lets itself in.
+  at = "seat the computer"
+  await page.goto(fullLink)
+  await page.getByRole("button", { name: "Yes, let its agents in" }).click({ timeout: 20000 })
+  await page.getByText(/now come into/).waitFor()
+  console.log(`ok  ${at}`)
+  at = "an agent from your own computer comes in on its own"
+  await page.goto(channel)
+  await page.getByText("smoke test", { exact: true }).first().waitFor()
   await kiwi(["join", code, "smoke", "--relay", BASE, "--as", "helper"])
-  await page.getByText("Let helper in: an agent from your own computer").waitFor({ timeout: 15000 })
+  await page.getByText(/joined via/).first().waitFor({ timeout: 15000 })
   console.log(`ok  ${at}`)
 
   await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke task", "--owner", "bot"])

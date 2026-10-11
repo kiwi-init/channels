@@ -67,6 +67,9 @@ export function looksLikeLine(ids: number[]): string {
  * The one-line meaning of a coordination event. Pass `state` to name tasks
  * by title as well as id.
  */
+/** " via mac-mini": the computer that let an agent in, as its join reads. */
+const via = (name: string | undefined) => (name ? ` via ${inlineText(name, 40)}` : "");
+
 export function describeEvent(m: Message, state?: ChannelState): string {
   const ev = m.ev;
   if (!ev) return m.body;
@@ -79,7 +82,7 @@ export function describeEvent(m: Message, state?: ChannelState): string {
     case "hello":
       // After joining, a hello that changes the role is a request the owner decides on.
       if (state?.members.get(m.from)?.roleRequest?.seq === m.seq) return `asks to be ${ev.role ?? "unassigned"}${ev.about ? ` (${ev.about})` : ""}; the owner decides`;
-      return `joined${ev.role ? ` as ${ev.role}` : ""}${ev.about ? ` (${ev.about})` : ""}`;
+      return `joined${ev.role ? ` as ${ev.role}` : ""}${ev.about ? ` (${ev.about})` : ""}${via(state?.members.get(m.from)?.viaName)}`;
     case "role.set":
       return ev.role ? `made ${ev.member} ${ev.role}${ev.about ? ` (${ev.about})` : ""}` : `cleared ${ev.member}'s role`;
     case "role.refuse":

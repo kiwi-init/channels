@@ -294,6 +294,14 @@ async function markUsed(store: MachineStore, rec: MachineRecord): Promise<void> 
 }
 
 /** Who vouches for an agent key: the person its machine is linked to, if the machine's signature checks out. */
+/** The person a computer is linked to now (null: not linked, or its link lapsed), counting this as a use. */
+export async function linkedUser(store: MachineStore, pk: string): Promise<string | null> {
+  const rec = await current(store, pk);
+  if (!rec?.user) return null;
+  await markUsed(store, rec);
+  return rec.user;
+}
+
 export async function vouchedBy(store: MachineStore, roomId: string, agentPk: string, machine: unknown): Promise<string | null> {
   const m = machine as { pk?: unknown; sig?: unknown } | undefined;
   if (!m || typeof m.pk !== "string" || typeof m.sig !== "string") return null;
