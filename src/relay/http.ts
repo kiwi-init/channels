@@ -1,29 +1,55 @@
 // What every relay route table shares: the request as a service, the tagged
-// refusal, and a dispatcher that runs a route's declared check before its
-// handler. The room's routes are in route.ts; a person's in people.ts.
+// refusals (failures.ts), and a dispatcher that runs a route's declared check
+// before its handler. The room's routes are in route.ts; a person's in
+// devices.ts, vault.ts and machines.ts.
 
+import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import * as Schema from "effect/Schema";
+import * as Layer from "effect/Layer";
+import * as References from "effect/References";
 import { tagForStatus, type ErrorTag } from "../errors.ts";
+import { BadRequest, refusalResponse, Refused, type Refusal } from "./failures.ts";
 import { HUMAN_HEADER, type HumanAuth } from "./human.ts";
-import { HttpError } from "./room.ts";
 
-/** A refusal, with the status, text and tag the client gets. */
-export class Refused extends Schema.TaggedError<Refused>()("Refused", {
-  status: Schema.Number,
-  message: Schema.String,
-  tag: Schema.String,
-}) {}
-
+/** Refuse with a status and text, and a tag when the status alone doesn't say what it means. */
 export const refuse = (status: number, message: string, tag?: ErrorTag) => Effect.fail(new Refused({ status, message, tag: tag ?? tagForStatus(status) }));
 
-/** Run plain code that throws HttpError: its refusals become Refused; anything else is a defect (a 500). */
-export const attempt = <A>(f: () => A | Promise<A>): Effect.Effect<A, Refused> =>
-  Effect.tryPromise({
-    try: async () => f(),
-    catch: (err) => (err instanceof HttpError ? new Refused({ status: err.status, message: err.message, tag: err.tag }) : (err as Refused)),
-  }).pipe(Effect.catch((e) => (e instanceof Refused ? Effect.fail(e) : Effect.die(e))));
+/** Plain async code (a store call): if it throws, that's a bug or an outage, so a defect (a 500), never a refusal. */
+export const attempt = <A>(f: () => A | Promise<A>): Effect.Effect<A> => Effect.promise(async () => f());
+
+// ---------- the relay's services, built once ----------
+
+/**
+ * An adapter's Layer, built once (per Bun relay, per Durable Object) into the
+ * context every request then runs with. The Layers are plain values, so this
+ * costs nothing per request.
+ *
+ * And the scheduler never slips other work in between two steps: a room reads,
+ * checks and writes with no await in between, which is what keeps a Durable
+ * Object's request atomic (it only interleaves at awaits), as it was before.
+ */
+export function buildContext<R>(layer: Layer.Layer<R>): Context.Context<R> {
+  return Effect.runSync(Effect.scoped(Layer.build(layer))).pipe(Context.add(References.PreventSchedulerYield, true));
+}
+
+/** Effect's clock reading `now`: the Bun relay's tests move it across midnight and past expiry. */
+function clockAt(now: () => number): Clock.Clock {
+  const real = Context.getUnsafe(Context.empty(), Clock.Clock);
+  const nanos = () => BigInt(now()) * 1_000_000n;
+  return {
+    currentTimeMillisUnsafe: now,
+    currentTimeMillis: Effect.sync(now),
+    currentTimeNanosUnsafe: nanos,
+    currentTimeNanos: Effect.sync(nanos),
+    monotonicTimeNanosUnsafe: () => real.monotonicTimeNanosUnsafe(),
+    monotonicTimeNanos: real.monotonicTimeNanos,
+    sleep: (d) => real.sleep(d),
+  };
+}
+
+/** The clock as a Layer: `now` when given, else Effect's own. */
+export const clockLayer = (now?: () => number) => (now ? Layer.succeed(Clock.Clock, clockAt(now)) : Layer.empty);
 
 /** The request, read once. */
 export interface Incoming {
@@ -45,7 +71,7 @@ export async function incoming(req: Request, path: string): Promise<Incoming> {
 export const json = <T>() =>
   Effect.gen(function* () {
     const { body } = yield* Request_;
-    return yield* Effect.try({ try: () => JSON.parse(body) as T, catch: () => new Refused({ status: 400, message: "bad json", tag: "BadRequest" }) });
+    return yield* Effect.try({ try: () => JSON.parse(body) as T, catch: () => new BadRequest({ message: "bad json" }) });
   });
 
 /** What a handler answers: data to send as JSON (with effects for the adapter), or a whole response. */
@@ -56,7 +82,7 @@ export interface Route<G extends string, W, Fx, R> {
   method: string;
   path: string | RegExp;
   guard: G;
-  run: (who: W, match: RegExpExecArray) => Effect.Effect<Reply<Fx>, Refused, R>;
+  run: (who: W, match: RegExpExecArray) => Effect.Effect<Reply<Fx>, Refusal, R>;
 }
 
 const matches = (r: { method: string; path: string | RegExp }, method: string, path: string): RegExpExecArray | null => {
@@ -68,9 +94,9 @@ const matches = (r: { method: string; path: string | RegExp }, method: string, p
 /** Find the route, run its check, then its handler; `otherwise` when no row matches. */
 export const dispatch = <G extends string, W, Fx, R>(
   routes: Route<G, W, Fx, R>[],
-  guards: Record<G, Effect.Effect<W, Refused, R>>,
-  otherwise: Effect.Effect<Reply<Fx>, Refused, R | Request_>,
-): Effect.Effect<Reply<Fx>, Refused, R | Request_> =>
+  guards: Record<G, Effect.Effect<W, Refusal, R>>,
+  otherwise: Effect.Effect<Reply<Fx>, Refusal, R | Request_>,
+): Effect.Effect<Reply<Fx>, Refusal, R | Request_> =>
   Effect.gen(function* () {
     const { method, path } = yield* Request_;
     for (const r of routes) {
@@ -83,11 +109,15 @@ export const dispatch = <G extends string, W, Fx, R>(
   });
 
 /** A reply as a response; a refusal as the same { error, tag } and status it has always been. */
-export const answer = <Fx, R>(program: Effect.Effect<Reply<Fx>, Refused, R>): Effect.Effect<{ res: Response; fx?: Fx }, never, R> =>
+export const answer = <Fx, R>(program: Effect.Effect<Reply<Fx>, Refusal, R>): Effect.Effect<{ res: Response; fx?: Fx }, never, R> =>
   program.pipe(
     Effect.map((reply) => ("res" in reply ? reply : { res: Response.json(reply.data), fx: reply.fx })),
-    Effect.catchTag("Refused", (r) => Effect.succeed({ res: Response.json({ error: r.message, tag: r.tag }, { status: r.status }) })),
+    Effect.catch((r) => Effect.succeed({ res: refusalResponse(r) })),
   );
+
+/** Run a handler that answers with a whole Response; a refusal becomes its response. */
+export const respond = (program: Effect.Effect<Response, Refusal>): Promise<Response> =>
+  Effect.runPromise(program.pipe(Effect.catch((r) => Effect.succeed(refusalResponse(r)))));
 
 /** A route table as plain rows (method, path, check), for tests. */
 export const describeRoutes = (routes: { method: string; path: string | RegExp; guard: string }[]) => routes.map(({ method, path, guard }) => ({ method, path: String(path), guard }));
@@ -115,8 +145,8 @@ export const signedInPerson = (noSignIn: string) =>
 export async function servePerson<G extends string, W, R>(
   req: Request,
   routes: Route<G, W, never, R | SignIn | Request_>[],
-  guards: Record<G, Effect.Effect<W, Refused, R | SignIn | Request_>>,
-  otherwise: Effect.Effect<Reply<never>, Refused, R | SignIn | Request_>,
+  guards: Record<G, Effect.Effect<W, Refusal, R | SignIn | Request_>>,
+  otherwise: Effect.Effect<Reply<never>, Refusal, R | SignIn | Request_>,
   provide: (e: Effect.Effect<{ res: Response }, never, R | SignIn | Request_>) => Effect.Effect<{ res: Response }, never, SignIn | Request_>,
   signIn: { human: HumanAuth | null; now: number },
 ): Promise<Response> {

@@ -5,8 +5,13 @@
 // Everything is off unless configured, except the safety caps a public
 // service can't do without (see SAFETY_*). The public relay turns the rest on
 // in wrangler.jsonc.
+//
+// The relay runs with its policy as a service, Policy, read once from the
+// adapter's settings (policyFrom).
 
-import type { HumanAuth } from "./human.ts";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import { profileOf } from "./human.ts";
 
 /** Stored ciphertext per channel when nothing else is configured: generous, but not unbounded. */
 export const SAFETY_BYTES_PER_CHANNEL = 1024 ** 3;
@@ -39,7 +44,10 @@ export const OPEN_POLICY: RelayPolicy = {
   expireAfterDays: null,
 };
 
-const positive = (v: string | undefined): number | null => {
+/** What this relay allows, as the room and its routes see it. */
+export class Policy extends Context.Service<Policy, RelayPolicy>()("kiwi/relay/Policy") {}
+
+const positive =(v: string | undefined): number | null => {
   const n = Number(v);
   return v !== undefined && v !== "" && Number.isFinite(n) && n > 0 ? n : null;
 };
@@ -68,14 +76,15 @@ export function policyFrom(env: Record<string, string | undefined>): RelayPolicy
  * Whether a signed-in person may create channels during the beta: listed by
  * user id, by email, or by the "@domain" of their email (looked up from sign-in).
  */
-export async function inBeta(policy: RelayPolicy, user: string, human: HumanAuth | null): Promise<boolean> {
+export const inBeta = Effect.fn("Policy.inBeta")(function* (user: string) {
+  const policy = yield* Policy;
   if (!policy.betaUsers) return true;
   const list = new Set(policy.betaUsers);
   if (list.has(user.toLowerCase())) return true;
-  const email = (await human?.profile?.(user).catch(() => null))?.email?.toLowerCase();
+  const email = (yield* profileOf(user))?.email?.toLowerCase();
   if (!email) return false;
   return list.has(email) || list.has(`@${email.split("@")[1]}`);
-}
+});
 
 /** The message for someone not in the beta. */
 export function betaMessage(policy: RelayPolicy): string {

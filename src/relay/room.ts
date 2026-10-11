@@ -15,13 +15,42 @@
 //
 // The relay stores public keys, opaque sealed blobs and ciphertext. Member
 // names, roles and every message stay end-to-end encrypted.
+//
+// On Effect: RoomDb is the room's tables and rows, nothing about who may do
+// what. The rules are the Effects below, which run with:
+//   - RoomStore: the room's RoomDb (the Durable Object's ctx.storage.sql, or a
+//     bun:sqlite file);
+//   - Policy: what this relay allows (policy.ts);
+//   - Clock: Effect's own, for message times, the daily count and idle expiry.
+// They refuse with the tagged failures in failures.ts.
 
-import { tagForStatus, type ErrorTag } from "../errors.ts";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
 import { fits, JoinRequest, MemberRecord, SealedIcon, StoredEnvelope } from "./schema.ts";
 import { verifyRequest } from "../auth.ts";
 import { encodeJoinCode, ownerFingerprint } from "../crypto.ts";
+import { respond } from "./http.ts";
 import { HUMAN_HEADER, type HumanAuth } from "./human.ts";
-import { betaMessage, inBeta, OPEN_POLICY, type RelayPolicy } from "./policy.ts";
+import { Policy, type RelayPolicy } from "./policy.ts";
+import {
+  BadRequest,
+  ChannelGone,
+  Conflict,
+  Denied,
+  isRefusal,
+  NotFound,
+  NotMember,
+  ReadOnly,
+  refusalResponse,
+  Removed,
+  SignInRequired,
+  TooLarge,
+  TooMany,
+  Unauthorized,
+  UpdateRequired,
+} from "./failures.ts";
 import { verify, verifyText } from "../identity.ts";
 import { commitTo, NONCE_RE, ownerNonceStatement } from "../sas.ts";
 import {
@@ -40,19 +69,6 @@ import {
 export interface Sql {
   run(query: string, ...params: (string | number | null)[]): void;
   all<T>(query: string, ...params: (string | number | null)[]): T[];
-}
-
-/** A refusal: its status, its text (API: clients show and match it), and what it means (src/errors.ts). */
-export class HttpError extends Error {
-  readonly tag: ErrorTag;
-  constructor(
-    readonly status: number,
-    message: string,
-    tag?: ErrorTag,
-  ) {
-    super(message);
-    this.tag = tag ?? tagForStatus(status);
-  }
 }
 
 /** What an adapter must do after handling a request or frame. */
@@ -99,6 +115,9 @@ export interface DirectoryUpdate {
   room: string;
   entry: DirectoryEntry | null;
 }
+
+/** Signed-in people's channel lists, as the adapter keeps them (an object per person, or people.sqlite). */
+export class Directory extends Context.Service<Directory, { list(user: string): Promise<DirectoryEntry[]> }>()("kiwi/relay/Directory") {}
 
 const utcDay = (ts: number) => new Date(ts).toISOString().slice(0, 10);
 
@@ -172,10 +191,11 @@ export const UPDATE_KIWI = "update kiwi to join or approve here: curl -fsSL http
  * owner key or the owner's name. A present but wrong fingerprint falls through
  * and is answered like a missing room.
  */
-export function requireInfoFingerprint(method: string, path: string, url: URL): void {
+export function missingFingerprint(method: string, path: string, url: URL): UpdateRequired | null {
   if (method.toUpperCase() === "GET" && path === "/info" && url.searchParams.get("fp") === null) {
-    throw new HttpError(426, UPDATE_KIWI);
+    return new UpdateRequired({ message: UPDATE_KIWI });
   }
+  return null;
 }
 
 export const frame = (f: ServerFrame) => JSON.stringify(f);
@@ -205,14 +225,14 @@ interface Meta {
 /** Storage handles whose room already has every column this version reads. */
 const migrated = new WeakSet<Sql>();
 
-export class RoomStore {
+/**
+ * A room's tables and rows. Reads and writes only: what a request may do is
+ * decided by the Effects below, which reach this through RoomStore.
+ */
+export class RoomDb {
   constructor(
-    private readonly sql: Sql,
+    readonly sql: Sql,
     readonly roomId: string,
-    /** What this relay allows (quotas, caps). */
-    readonly policy: RelayPolicy = OPEN_POLICY,
-    /** The clock, injectable so tests can cross midnight without waiting for it. */
-    private readonly now: () => number = Date.now,
   ) {
     // A room created by an older relay gets the columns this one reads before anything reads them,
     // once per storage handle (a Durable Object instance, a Bun relay's database), not per request.
@@ -232,7 +252,7 @@ export class RoomStore {
     return this.exists() && !this.get("owner_pk");
   }
 
-  private init(): void {
+  init(): void {
     this.sql.run("CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)");
     this.sql.run("CREATE TABLE msgs (seq INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, iv TEXT NOT NULL, ct TEXT NOT NULL, e INTEGER NOT NULL)");
     // Former members keep their sealed record (so their history still verifies) but lose every key.
@@ -247,7 +267,7 @@ export class RoomStore {
   }
 
   /** A room from before a column existed gets it added (a new room is created with all of them). */
-  private migrate(): void {
+  migrate(): void {
     // A key the owner lets only read (member scopes): the one bit of them the relay knows.
     if (!this.sql.all<{ name: string }>("PRAGMA table_info(members)").some((c) => c.name === "read_only")) {
       this.sql.run("ALTER TABLE members ADD COLUMN read_only INTEGER NOT NULL DEFAULT 0");
@@ -258,11 +278,11 @@ export class RoomStore {
     }
   }
 
-  private get(k: string): string | undefined {
+  get(k: string): string | undefined {
     return this.sql.all<{ v: string }>("SELECT v FROM meta WHERE k = ?", k)[0]?.v;
   }
 
-  private set(k: string, v: string | number): void {
+  set(k: string, v: string | number): void {
     this.sql.run("INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v", k, String(v));
   }
 
@@ -271,75 +291,19 @@ export class RoomStore {
     return this.get("owner_user");
   }
 
-  meta(): Meta {
-    if (!this.exists()) throw new HttpError(404, "no such channel", "ChannelGone");
-    return {
-      ownerPk: this.get("owner_pk")!,
-      ownerXpk: this.get("owner_xpk")!,
-      ownerSig: this.get("owner_sig")!,
-      epoch: Number(this.get("epoch") ?? 0),
-      rotate: this.get("rotate") === "1",
-    };
-  }
-
   isMember(pk: string): boolean {
     return this.sql.all("SELECT 1 FROM members WHERE pk = ? AND active = 1", pk).length > 0;
-  }
-
-  /** The member key that signed this request, or a 401/403. */
-  async authenticate(req: Request, method: string, path: string, body: string): Promise<string> {
-    // A closed channel has no tables at all: say so, so members forget it.
-    if (!this.exists()) throw new HttpError(404, "no such channel", "ChannelGone");
-    const pk = await verifyRequest(requestToken(req), this.roomId, method, path, body);
-    if (!pk) throw new HttpError(401, "bad or expired signature");
-    if (!this.isMember(pk)) throw new HttpError(403, "not a member of this channel", "NotMember");
-    return pk;
   }
 
   head(): number {
     return this.sql.all<{ s: number | null }>("SELECT MAX(seq) AS s FROM msgs")[0]?.s ?? 0;
   }
 
-  append(iv: string, ct: string, e: number, sender: string): Envelope {
-    // Every client refuses a read-only member's messages anyway; refusing them here keeps them out of storage.
-    if (this.sql.all("SELECT 1 FROM members WHERE pk = ? AND read_only = 1", sender).length) throw new HttpError(403, READ_ONLY, "ReadOnly");
-    if (!fits(StoredEnvelope, { iv, ct })) throw new HttpError(400, "bad envelope");
-    if (ct.length > MAX_CT_LENGTH) throw new HttpError(413, "message too large");
-    const epoch = this.meta().epoch;
-    // Sealed with a retired key: the sender must fetch the new one and resend.
-    if (e !== epoch) throw new HttpError(409, `stale key epoch ${e}; current is ${epoch}`);
-    const ts = this.now();
-
-    // Messages per channel per UTC day.
-    const day = utcDay(ts);
-    const today = this.messagesToday(ts);
-    const perDay = this.policy.messagesPerDay;
-    if (perDay && today >= perDay) {
-      throw new HttpError(429, `this channel has stored ${perDay} messages today, its daily limit; more can be sent after 00:00 UTC (in ${untilUtcMidnight(ts)})`);
-    }
-
-    // Stored bytes per channel: the oldest messages make room, the way the 10,000-message
-    // retention already works, so a busy channel never freezes. Only a message bigger than
-    // the whole allowance is refused.
-    const cap = this.policy.bytesPerChannel;
-    if (ct.length > cap) throw new HttpError(413, `that message is bigger than this channel may hold (${formatBytes(cap)})`);
-    let bytes = this.storedBytes();
-    if (bytes + ct.length > cap) bytes -= this.dropOldest(bytes + ct.length - cap);
-
-    this.sql.run("INSERT INTO msgs (ts, iv, ct, e) VALUES (?, ?, ?, ?)", ts, iv, ct, e);
-    const seq = this.head();
-    bytes += ct.length;
-    // Prune in batches so retention costs one extra write pass per 100 messages.
-    if (seq % 100 === 0) bytes -= this.dropThrough(seq - ROOM_RETENTION);
-    this.setCounters({ bytes, day, n: today + 1 });
-    return { seq, ts, iv, ct, e };
-  }
-
   /**
    * What the channel holds and has stored today, in one meta row, so a message pays one write for
    * both counters instead of three. Absent in rooms from before it: bytes are then counted once.
    */
-  private counters(): Counters | null {
+  counters(): Counters | null {
     const raw = this.get("usage");
     if (!raw) return null;
     try {
@@ -349,12 +313,12 @@ export class RoomStore {
     }
   }
 
-  private setCounters(u: Counters): void {
+  setCounters(u: Counters): void {
     this.set("usage", JSON.stringify(u));
   }
 
-  /** Messages stored today (UTC): the counter starts over when the date changes. */
-  messagesToday(now = this.now()): number {
+  /** Messages stored on the UTC day of `now`: the counter starts over when the date changes. */
+  messagesOn(now: number): number {
     const u = this.counters();
     return u?.day === utcDay(now) ? u.n : 0;
   }
@@ -369,7 +333,7 @@ export class RoomStore {
   }
 
   /** Delete messages through `seq`; returns the ciphertext bytes freed. */
-  private dropThrough(seq: number): number {
+  dropThrough(seq: number): number {
     if (seq <= 0) return 0;
     const freed = this.sql.all<{ n: number }>("SELECT COALESCE(SUM(LENGTH(ct)), 0) AS n FROM msgs WHERE seq <= ?", seq)[0]?.n ?? 0;
     if (freed) this.sql.run("DELETE FROM msgs WHERE seq <= ?", seq);
@@ -377,7 +341,7 @@ export class RoomStore {
   }
 
   /** Delete the oldest messages until at least `need` bytes are free; returns the bytes freed. */
-  private dropOldest(need: number): number {
+  dropOldest(need: number): number {
     let freed = 0;
     let through = 0;
     for (const r of this.sql.all<{ seq: number; n: number }>("SELECT seq, LENGTH(ct) AS n FROM msgs ORDER BY seq")) {
@@ -386,42 +350,6 @@ export class RoomStore {
       if (freed >= need) break;
     }
     return this.dropThrough(through);
-  }
-
-  // ---------- idle rooms expire ----------
-
-  /**
-   * Note activity (a stored message, a connection). On relays that expire idle rooms, returns
-   * when this room expires if nothing else happens. Written at most once an hour, so a busy
-   * room doesn't pay a write per message for it.
-   */
-  touch(): number | null {
-    const days = this.policy.expireAfterDays;
-    if (!days || !this.exists()) return null;
-    const now = this.now();
-    if (now - Number(this.get("active") ?? 0) < 3_600_000 && this.get("room")) return null;
-    this.set("active", now);
-    // The Worker's alarm runs without a request, so the room keeps its own id.
-    this.set("room", this.roomId);
-    return now + days * 86_400_000;
-  }
-
-  /** Whether the room has gone quiet for longer than the relay keeps idle rooms. */
-  idleExpired(): boolean {
-    const days = this.policy.expireAfterDays;
-    if (!days || !this.exists()) return false;
-    const last = Number(this.get("active") ?? this.get("created") ?? 0);
-    return this.now() - last >= days * 86_400_000;
-  }
-
-  /** Expire exactly as a close would: off everyone's channel list, then every row gone. */
-  expire(): Effects {
-    return { directory: this.unlinkAll(), wipe: true };
-  }
-
-  /** What this channel uses, for its owner's usage page. Counts only: nothing sealed. */
-  usage(): RoomUsage {
-    return { messagesToday: this.messagesToday(), bytes: this.storedBytes(), members: this.activeMembers() };
   }
 
   /** How many members (people and agents) are in the channel now. */
@@ -433,55 +361,13 @@ export class RoomStore {
     return this.sql.all<Envelope>("SELECT seq, ts, iv, ct, e FROM msgs WHERE seq > ? ORDER BY seq LIMIT ?", seq, Math.min(Math.max(limit, 1), PAGE_LIMIT));
   }
 
-  // ---------- lifecycle ----------
-
-  /**
-   * Create the room. The owner signs its own public keys; the request itself
-   * must be signed by the owner. `members` must include the owner and may
-   * include the creating agent.
-   */
-  async create(signer: string | null, body: CreateBody, ownerUser: string | null = null): Promise<void> {
-    if (this.exists()) throw new HttpError(409, "channel already exists");
-    const { owner, members } = body;
-    if (!owner || signer !== owner.pk) throw new HttpError(401, "create must be signed by the owner");
-    const signed =
-      (await verify({ room: this.roomId, pk: owner.pk, xpk: owner.xpk, v: 2, sig: owner.sig })) || (await verify({ room: this.roomId, pk: owner.pk, xpk: owner.xpk, sig: owner.sig }));
-    if (!signed) throw new HttpError(400, "bad owner signature");
-    if (!members?.some((m) => m.pk === owner.pk)) throw new HttpError(400, "the owner must be a member");
-    this.init();
-    this.set("owner_pk", owner.pk);
-    this.set("owner_xpk", owner.xpk);
-    this.set("owner_sig", owner.sig);
-    // Separate from owner_sig, so a 0.7 client still verifies the key statement. The relay can drop it.
-    if (typeof owner.titlesSig === "string" && owner.titlesSig.length > 0 && owner.titlesSig.length < 200) this.set("titles_sig", owner.titlesSig);
-    this.set("epoch", 0);
-    this.set("created", Date.now());
-    if (ownerUser) this.set("owner_user", ownerUser);
-    // The channel's name, sealed with its key: members can read it, the relay can't.
-    if (body.title && typeof body.title.iv === "string" && typeof body.title.ct === "string" && body.title.ct.length < 2048) this.set("title", JSON.stringify(body.title));
-    // The owner may always post, whatever the body says.
-    for (const m of members) this.putMember(m.pk === owner.pk ? { ...m, post: true } : m, 0);
-  }
-
-  /** The channel's sealed icon (owner-set; the relay can't read it), and when it last changed. */
+  /** The channel's sealed icon (owner-set; the relay can't read it). */
   icon(): { e: number; iv: string; ct: string } | null {
     const t = this.get("icon");
     return t ? (JSON.parse(t) as { e: number; iv: string; ct: string }) : null;
   }
 
-  setIcon(icon: unknown): number {
-    const at = Date.now();
-    if (icon === null) this.set("icon", "");
-    else {
-      // About a 32KB image, sealed and base64'd, with room to spare; nothing bigger; and a key this channel has.
-      if (!fits(SealedIcon, icon) || icon.e > this.meta().epoch) throw new HttpError(400, "bad icon (at most 32KB, sealed with a channel key)");
-      const i = icon;
-      this.set("icon", JSON.stringify({ e: i.e, iv: i.iv, ct: i.ct }));
-    }
-    this.set("icon_at", at);
-    return at;
-  }
-
+  /** When the icon last changed. */
   iconAt(): number | null {
     return Number(this.get("icon_at")) || null;
   }
@@ -497,30 +383,14 @@ export class RoomStore {
     return t ? (JSON.parse(t) as { iv: string; ct: string }) : null;
   }
 
-  /** Replace the sealed name. The caller has already checked that this is the owner. */
-  setTitle(title: unknown): void {
-    const t = title as { iv?: unknown; ct?: unknown };
-    if (typeof t?.iv !== "string" || typeof t.ct !== "string" || t.ct.length === 0 || t.ct.length >= 2048) throw new HttpError(400, "bad title");
-    this.set("title", JSON.stringify({ iv: t.iv, ct: t.ct }));
-  }
-
   /** The channel's sealed settings (its mode and rooms), signed by the owner. The relay can't read them. */
   settings(): { iv: string; ct: string } | null {
     const t = this.get("settings");
     return t ? (JSON.parse(t) as { iv: string; ct: string }) : null;
   }
 
-  /** Replace the sealed settings. The caller has already checked that this is the owner. */
-  setSettings(settings: unknown): void {
-    const t = settings as { iv?: unknown; ct?: unknown };
-    if (typeof t?.iv !== "string" || typeof t.ct !== "string" || t.ct.length === 0 || t.ct.length >= 16_384) throw new HttpError(400, "bad settings");
-    this.set("settings", JSON.stringify({ iv: t.iv, ct: t.ct }));
-  }
-
-  // ---------- who this channel is listed for ----------
-
   /** Signed-in people tied to this channel now: its owner, people in it, and people whose agents are in it. */
-  private links(): Map<string, { owner: boolean; member: boolean; agents: number }> {
+  links(): Map<string, { owner: boolean; member: boolean; agents: number }> {
     this.migrate();
     const links = new Map<string, { owner: boolean; member: boolean; agents: number }>();
     const owner = this.ownerUser();
@@ -537,20 +407,9 @@ export class RoomStore {
     return links;
   }
 
-  private linked(): string[] {
+  /** Who this channel is on the list of, as of the last directory update. */
+  linked(): string[] {
     return JSON.parse(this.get("linked") ?? "[]") as string[];
-  }
-
-  /** Bring everyone's channel list in line with who's tied to this channel now. */
-  async directory(): Promise<DirectoryUpdate[]> {
-    const meta = this.meta();
-    const code = encodeJoinCode({ roomId: this.roomId, ownerFp: await ownerFingerprint(meta.ownerPk) });
-    const at = Number(this.get("created") ?? Date.now());
-    const links = this.links();
-    const updates: DirectoryUpdate[] = [...links].map(([user, l]) => ({ user, room: this.roomId, entry: { room: this.roomId, code, ...l, at } }));
-    for (const user of this.linked()) if (!links.has(user)) updates.push({ user, room: this.roomId, entry: null });
-    this.set("linked", JSON.stringify([...links.keys()]));
-    return updates;
   }
 
   /** Before closing: drop this channel from every list it was on. */
@@ -559,91 +418,9 @@ export class RoomStore {
     return [...users].map((user) => ({ user, room: this.roomId, entry: null }));
   }
 
-  private putMember(m: MemberBody, epoch: number): void {
-    if (!fits(MemberRecord, m)) throw new HttpError(400, "bad member");
-    this.sql.run(
-      "INSERT INTO members (pk, xpk, rec, rec_e, since, active, read_only) VALUES (?, ?, ?, ?, ?, 1, ?) ON CONFLICT (pk) DO UPDATE SET xpk = excluded.xpk, rec = excluded.rec, rec_e = excluded.rec_e, active = 1, read_only = excluded.read_only",
-      m.pk,
-      m.xpk,
-      m.rec,
-      epoch,
-      Date.now(),
-      m.post === false ? 1 : 0,
-    );
-    for (const [e, wrapped] of Object.entries(m.keys ?? {})) {
-      this.sql.run("INSERT OR REPLACE INTO keys (pk, e, wrapped) VALUES (?, ?, ?)", m.pk, Number(e), wrapped);
-    }
-  }
-
-  // ---------- join requests ----------
-
-  /**
-   * File a join request. With `human` set, it's a signed-in person joining for
-   * themself (they are their own sponsor); otherwise it's an agent, which on a
-   * sign-in relay arrives vouched for by the person whose computer it joined from.
-   */
-  async request(body: RequestBody, human: { user: string; name: string } | null = null, vouchUser: string | null = null): Promise<{ id: string; fresh: boolean }> {
-    this.meta();
-    this.migrate();
-    const { pk, xpk, box, ts, sig, commit } = body ?? ({} as RequestBody);
-    if (typeof commit !== "string") throw new HttpError(426, UPDATE_KIWI);
-    if (!fits(JoinRequest, body)) throw new HttpError(400, "bad request");
-    if (box.length > 4096) throw new HttpError(413, "request too large");
-    if (!(await verify({ room: this.roomId, pk, xpk, box, ts, commit, sig }))) throw new HttpError(400, "bad request signature");
-    if (Math.abs(Date.now() - ts) > REQUEST_TTL_MS) throw new HttpError(400, "request timestamp out of range");
-    if (this.isMember(pk)) throw new HttpError(409, "already a member");
-    // Expiry and order use when the relay received a request, not the time the requester claims.
-    this.sql.run("DELETE FROM requests WHERE status = 'pending' AND COALESCE(received, ts) < ?", Date.now() - REQUEST_TTL_MS);
-    const existing = this.sql.all<{ id: string; status: string }>("SELECT id, status FROM requests WHERE pk = ?", pk)[0];
-    if (existing?.status === "denied") throw new HttpError(403, "this key was denied", "Denied");
-    if (this.sql.all("SELECT 1 FROM members WHERE pk = ? AND active = 0", pk).length) throw new HttpError(403, "this key was removed; join with a new identity", "Removed");
-    if (existing) {
-      // Asking again from a computer its person has since linked: the vouch applies now.
-      if (vouchUser && !human) this.sql.run("UPDATE requests SET sponsor_user = ? WHERE id = ? AND status = 'pending' AND sponsor_user IS NULL AND kind = 'agent'", vouchUser, existing.id);
-      // A joiner that lost its nonce starts the check over; the owner signs the new commit.
-      this.sql.run(
-        "UPDATE requests SET commit_to = ?, box = ?, sig = ?, ts = ?, owner_nonce = NULL, reveal = NULL WHERE id = ? AND status = 'pending' AND commit_to IS NOT ?",
-        commit,
-        box,
-        sig,
-        ts,
-        existing.id,
-        commit,
-      );
-      return { id: existing.id, fresh: false };
-    }
-    const pending = this.sql.all<{ n: number }>("SELECT COUNT(*) AS n FROM requests WHERE status = 'pending'")[0]!.n;
-    if (pending >= MAX_PENDING) throw new HttpError(429, "too many pending join requests");
-    const id = crypto.randomUUID();
-    this.sql.run(
-      "INSERT INTO requests (id, pk, xpk, box, sig, ts, status, kind, sponsor_user, sponsor_name, received, commit_to) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, NULL, ?, ?)",
-      id,
-      pk,
-      xpk,
-      box,
-      sig,
-      ts,
-      human ? "human" : "agent",
-      // Only the sign-in user id is kept; names are looked up when the owner reads requests.
-      // An agent from a computer its person linked arrives already vouched for by them.
-      human?.user ?? vouchUser ?? null,
-      Date.now(),
-      commit,
-    );
-    return { id, fresh: true };
-  }
-
-  requestStatus(id: string, pk: string): { status: string; sponsored: boolean; ownerNonce?: string | null; revealed?: boolean; epoch?: number; keys?: Record<string, string> } {
-    this.meta();
-    this.migrate();
-    const r = this.sql.all<{ pk: string; status: string; sponsor_user: string | null; owner_nonce: string | null; reveal: string | null }>(
-      "SELECT pk, status, sponsor_user, owner_nonce, reveal FROM requests WHERE id = ?",
-      id,
-    )[0];
-    if (!r || r.pk !== pk) throw new HttpError(404, "no such request");
-    if (r.status === "pending") return { status: r.status, sponsored: !!r.sponsor_user, ownerNonce: r.owner_nonce, revealed: !!r.reveal };
-    if (r.status !== "approved" || !this.isMember(pk)) return { status: r.status, sponsored: !!r.sponsor_user };
-    return { status: "approved", sponsored: !!r.sponsor_user, ...this.keysFor(pk) };
+  /** `read_only`: the relay refuses that key's posts, so the owner can check the bit matches what they set. */
+  members(): { pk: string; xpk: string; rec: string; e: number; active: number; read_only: number }[] {
+    return this.sql.all("SELECT pk, xpk, rec, rec_e AS e, active, read_only FROM members ORDER BY since");
   }
 
   pendingRequests(): (RequestBody & { kind: string; sponsorUser: string | null; sponsorName: string | null; ownerNonce: string | null; reveal: string | null })[] {
@@ -653,134 +430,436 @@ export class RoomStore {
     );
   }
 
-  private pendingCheck(id: string): { pk: string; commit: string; ownerNonce: string | null; reveal: string | null } {
-    this.migrate();
-    const r = this.sql.all<{ pk: string; commit: string | null; ownerNonce: string | null; reveal: string | null }>(
-      "SELECT pk, commit_to AS \"commit\", owner_nonce AS ownerNonce, reveal FROM requests WHERE id = ? AND status = 'pending'",
-      id,
-    )[0];
-    if (!r?.commit) throw new HttpError(404, "no such pending request");
-    return r as { pk: string; commit: string; ownerNonce: string | null; reveal: string | null };
-  }
-
-  /** The owner's half of the join check: its signature over the joiner's commit. Set once. */
-  async setOwnerNonce(id: string, nonce: unknown): Promise<void> {
-    const r = this.pendingCheck(id);
-    if (typeof nonce !== "string" || !(await verifyText(this.meta().ownerPk, nonce, ownerNonceStatement(this.roomId, r.pk, r.commit)))) {
-      throw new HttpError(400, "that isn't the owner's signature over this request");
-    }
-    if (r.ownerNonce && r.ownerNonce !== nonce) throw new HttpError(409, "this request already has the owner's nonce");
-    this.sql.run("UPDATE requests SET owner_nonce = ? WHERE id = ?", nonce, id);
-  }
-
-  /** The joiner's half, revealed once the owner's is in: it has to match the commit. */
-  async reveal(id: string, pk: string, nonce: unknown): Promise<boolean> {
-    const r = this.pendingCheck(id);
-    if (r.pk !== pk) throw new HttpError(404, "no such pending request");
-    if (!r.ownerNonce) throw new HttpError(409, "wait for the owner's half of the check");
-    if (typeof nonce !== "string" || !NONCE_RE.test(nonce) || (await commitTo(this.roomId, pk, nonce)) !== r.commit) throw new HttpError(400, "that nonce doesn't match the request");
-    if (r.reveal === nonce) return false;
-    this.sql.run("UPDATE requests SET reveal = ? WHERE id = ?", nonce, id);
-    return true;
-  }
-
-  /** Nobody is let in before both sides could compare the code. */
-  requireChecked(request: string | undefined, pk: string): void {
-    this.migrate();
-    const r = request ? this.sql.all<{ pk: string; reveal: string | null }>("SELECT pk, reveal FROM requests WHERE id = ? AND status = 'pending'", request)[0] : undefined;
-    if (!r || r.pk !== pk) throw new HttpError(400, "approve a pending request");
-    if (!r.reveal) throw new HttpError(409, "this request hasn't finished its code check yet");
-  }
-
-  /** On a sign-in relay, agents need their human's vouch before the owner can admit them. */
-  requireSponsor(request: string | undefined, pk: string): void {
-    this.migrate();
-    const r = request ? this.sql.all<{ pk: string; sponsor_user: string | null }>("SELECT pk, sponsor_user FROM requests WHERE id = ?", request)[0] : undefined;
-    if (!r || r.pk !== pk) throw new HttpError(400, "approve a pending request");
-    if (!r.sponsor_user) throw new HttpError(409, "this agent wasn't vouched for by a person's linked computer");
-  }
-
   deny(id: string): void {
     this.sql.run("UPDATE requests SET status = 'denied' WHERE id = ?", id);
   }
-
-  // ---------- members & keys ----------
-
-  /**
-   * Admit a member. With `replaces`, a new key takes over an existing member's
-   * seat (a reclaim): the old key is removed in the same step, so the two are
-   * never members at once, and the owner rotates next, as after any removal.
-   */
-  approve(body: MemberBody & { request?: string; replaces?: string }): void {
-    const { epoch, ownerPk } = this.meta();
-    if (body.replaces !== undefined) {
-      if (typeof body.replaces !== "string" || !this.isMember(body.replaces)) throw new HttpError(404, "the seat to reclaim isn't a member any more");
-      if (body.replaces === ownerPk) throw new HttpError(400, "the owner's seat can't be reclaimed");
-      if (body.replaces === body.pk) throw new HttpError(400, "a seat can't be reclaimed by its own key");
-    }
-    const most = this.policy.membersPerChannel;
-    if (most && !body.replaces && !this.isMember(body.pk) && this.activeMembers() >= most) {
-      throw new HttpError(429, `this channel has ${most} members, the most this relay allows; remove someone to let another in`);
-    }
-    for (let e = 0; e <= epoch; e++) {
-      if (!body.keys?.[String(e)]) throw new HttpError(400, `missing wrapped key for epoch ${e}`);
-    }
-    // Both in one synchronous step (nothing else runs in between), new key first so a bad record changes nothing.
-    this.putMember(body, epoch);
-    if (body.replaces) this.remove(body.replaces);
-    if (body.request) this.sql.run("UPDATE requests SET status = 'approved' WHERE id = ? AND pk = ?", body.request, body.pk);
-  }
-
-  /** `read_only`: the relay refuses that key's posts, so the owner can check the bit matches what they set. */
-  members(): { pk: string; xpk: string; rec: string; e: number; active: number; read_only: number }[] {
-    return this.sql.all("SELECT pk, xpk, rec, rec_e AS e, active, read_only FROM members ORDER BY since");
-  }
-
-  keysFor(pk: string): { epoch: number; keys: Record<string, string> } {
-    const rows = this.sql.all<{ e: number; wrapped: string }>("SELECT e, wrapped FROM keys WHERE pk = ?", pk);
-    return { epoch: this.meta().epoch, keys: Object.fromEntries(rows.map((r) => [String(r.e), r.wrapped])) };
-  }
-
-  /**
-   * The owner re-signs a member's record when what they may do changes (sealed: the relay can't read
-   * it), and sets the "can post" bit with it, in one step. `e` is the epoch whose key sealed it.
-   */
-  setRecord(pk: string, rec: string, e: number, post: boolean): void {
-    if (pk === this.meta().ownerPk) throw new HttpError(400, "the owner's record isn't changed this way");
-    if (!this.isMember(pk)) throw new HttpError(404, "not a member");
-    if (!Number.isInteger(e) || e < 0 || e > this.meta().epoch) throw new HttpError(400, "no such epoch");
-    if (rec.length > 8_192) throw new HttpError(413, "record too large");
-    this.sql.run("UPDATE members SET rec = ?, rec_e = ?, read_only = ? WHERE pk = ?", rec, e, post ? 0 : 1, pk);
-  }
-
-  /** Whether a member may post (the owner's scope.set says what they may do; this is the bit the relay enforces). */
-  setCanPost(pk: string, post: boolean): void {
-    if (pk === this.meta().ownerPk) throw new HttpError(400, "the owner may always post");
-    if (!this.isMember(pk)) throw new HttpError(404, "not a member");
-    this.sql.run("UPDATE members SET read_only = ? WHERE pk = ?", post ? 0 : 1, pk);
-  }
-
-  remove(pk: string): void {
-    const { ownerPk } = this.meta();
-    if (pk === ownerPk) throw new HttpError(400, "the owner can't leave; close the channel instead");
-    if (!this.isMember(pk)) throw new HttpError(404, "not a member");
-    this.sql.run("UPDATE members SET active = 0 WHERE pk = ?", pk);
-    this.sql.run("DELETE FROM keys WHERE pk = ?", pk);
-    this.sql.run("DELETE FROM requests WHERE pk = ?", pk);
-    // Its keys are revoked at the relay; the owner rotates so they also can't decrypt anything newer.
-    this.set("rotate", 1);
-  }
-
-  rotate(epoch: number, keys: Record<string, string>): void {
-    const meta = this.meta();
-    if (epoch !== meta.epoch + 1) throw new HttpError(409, `next epoch is ${meta.epoch + 1}`);
-    const members = this.members().filter((m) => m.active);
-    for (const m of members) if (!keys[m.pk]) throw new HttpError(400, `missing wrapped key for ${m.pk.slice(0, 8)}`);
-    for (const m of members) this.sql.run("INSERT OR REPLACE INTO keys (pk, e, wrapped) VALUES (?, ?, ?)", m.pk, epoch, keys[m.pk]!);
-    this.set("epoch", epoch);
-    this.set("rotate", 0);
-  }
 }
+
+/** The room a request, socket or alarm is for. */
+export class RoomStore extends Context.Service<RoomStore, RoomDb>()("kiwi/relay/RoomStore") {}
+
+/** What every room Effect may need besides the request. */
+export type RoomServices = RoomStore | Policy;
+
+// ---------- the room's rules ----------
+
+const gone = () => new ChannelGone({ message: "no such channel" });
+
+/** The owner's keys and the epoch; a room with no tables is gone. */
+export const readMeta = Effect.gen(function* () {
+  const db = yield* RoomStore;
+  if (!db.exists()) return yield* gone();
+  const m: Meta = {
+    ownerPk: db.get("owner_pk")!,
+    ownerXpk: db.get("owner_xpk")!,
+    ownerSig: db.get("owner_sig")!,
+    epoch: Number(db.get("epoch") ?? 0),
+    rotate: db.get("rotate") === "1",
+  };
+  return m;
+});
+
+/** The member key that signed this request, or a 401/403. */
+export const authenticate = Effect.fn("Room.authenticate")(function* (req: Request, method: string, path: string, body: string) {
+  const db = yield* RoomStore;
+  // A closed channel has no tables at all: say so, so members forget it.
+  if (!db.exists()) return yield* gone();
+  const pk = yield* Effect.promise(() => verifyRequest(requestToken(req), db.roomId, method, path, body));
+  if (!pk) return yield* new Unauthorized({ message: "bad or expired signature" });
+  if (!db.isMember(pk)) return yield* new NotMember({ message: "not a member of this channel" });
+  return pk;
+});
+
+/** Authenticate a WebSocket upgrade; returns the member key. */
+export const authenticateSocket = (req: Request) => authenticate(req, "GET", "/ws", "");
+
+export const append = Effect.fn("Room.append")(function* (iv: string, ct: string, e: number, sender: string) {
+  const db = yield* RoomStore;
+  const policy = yield* Policy;
+  // Every client refuses a read-only member's messages anyway; refusing them here keeps them out of storage.
+  if (db.sql.all("SELECT 1 FROM members WHERE pk = ? AND read_only = 1", sender).length) return yield* new ReadOnly({ message: READ_ONLY });
+  if (!fits(StoredEnvelope, { iv, ct })) return yield* new BadRequest({ message: "bad envelope" });
+  if (ct.length > MAX_CT_LENGTH) return yield* new TooLarge({ message: "message too large" });
+  const { epoch } = yield* readMeta;
+  // Sealed with a retired key: the sender must fetch the new one and resend.
+  if (e !== epoch) return yield* new Conflict({ message: `stale key epoch ${e}; current is ${epoch}` });
+  const ts = yield* Clock.currentTimeMillis;
+
+  // Messages per channel per UTC day.
+  const day = utcDay(ts);
+  const today = db.messagesOn(ts);
+  const perDay = policy.messagesPerDay;
+  if (perDay && today >= perDay) {
+    return yield* new TooMany({ message: `this channel has stored ${perDay} messages today, its daily limit; more can be sent after 00:00 UTC (in ${untilUtcMidnight(ts)})` });
+  }
+
+  // Stored bytes per channel: the oldest messages make room, the way the 10,000-message
+  // retention already works, so a busy channel never freezes. Only a message bigger than
+  // the whole allowance is refused.
+  const cap = policy.bytesPerChannel;
+  if (ct.length > cap) return yield* new TooLarge({ message: `that message is bigger than this channel may hold (${formatBytes(cap)})` });
+  let bytes = db.storedBytes();
+  if (bytes + ct.length > cap) bytes -= db.dropOldest(bytes + ct.length - cap);
+
+  db.sql.run("INSERT INTO msgs (ts, iv, ct, e) VALUES (?, ?, ?, ?)", ts, iv, ct, e);
+  const seq = db.head();
+  bytes += ct.length;
+  // Prune in batches so retention costs one extra write pass per 100 messages.
+  if (seq % 100 === 0) bytes -= db.dropThrough(seq - ROOM_RETENTION);
+  db.setCounters({ bytes, day, n: today + 1 });
+  const stored: Envelope = { seq, ts, iv, ct, e };
+  return stored;
+});
+
+// ---------- idle rooms expire ----------
+
+/**
+ * Note activity (a stored message, a connection). On relays that expire idle rooms, returns
+ * when this room expires if nothing else happens. Written at most once an hour, so a busy
+ * room doesn't pay a write per message for it.
+ */
+export const touch: Effect.Effect<number | null, never, RoomServices> = Effect.gen(function* () {
+  const db = yield* RoomStore;
+  const days = (yield* Policy).expireAfterDays;
+  if (!days || !db.exists()) return null;
+  const now = yield* Clock.currentTimeMillis;
+  if (now - Number(db.get("active") ?? 0) < 3_600_000 && db.get("room")) return null;
+  db.set("active", now);
+  // The Worker's alarm runs without a request, so the room keeps its own id.
+  db.set("room", db.roomId);
+  return now + days * 86_400_000;
+});
+
+/** Whether the room has gone quiet for longer than the relay keeps idle rooms. */
+export const idleExpired: Effect.Effect<boolean, never, RoomServices> = Effect.gen(function* () {
+  const db = yield* RoomStore;
+  const days = (yield* Policy).expireAfterDays;
+  if (!days || !db.exists()) return false;
+  const last = Number(db.get("active") ?? db.get("created") ?? 0);
+  return (yield* Clock.currentTimeMillis) - last >= days * 86_400_000;
+});
+
+/** Expire exactly as a close would: off everyone's channel list, then every row gone. */
+export const expire: Effect.Effect<Effects, never, RoomStore> = Effect.map(RoomStore, (db) => ({ directory: db.unlinkAll(), wipe: true }));
+
+/** What this channel uses, for its owner's usage page. Counts only: nothing sealed. */
+export const usage: Effect.Effect<RoomUsage, never, RoomStore> = Effect.gen(function* () {
+  const db = yield* RoomStore;
+  return { messagesToday: db.messagesOn(yield* Clock.currentTimeMillis), bytes: db.storedBytes(), members: db.activeMembers() };
+});
+
+// ---------- lifecycle ----------
+
+/**
+ * Create the room. The owner signs its own public keys; the request itself
+ * must be signed by the owner. `members` must include the owner and may
+ * include the creating agent.
+ */
+export const create = Effect.fn("Room.create")(function* (signer: string | null, body: CreateBody, ownerUser: string | null = null) {
+  const db = yield* RoomStore;
+  if (db.exists()) return yield* new Conflict({ message: "channel already exists" });
+  const { owner, members } = body;
+  if (!owner || signer !== owner.pk) return yield* new Unauthorized({ message: "create must be signed by the owner" });
+  const signed = yield* Effect.promise(
+    async () =>
+      (await verify({ room: db.roomId, pk: owner.pk, xpk: owner.xpk, v: 2, sig: owner.sig })) || (await verify({ room: db.roomId, pk: owner.pk, xpk: owner.xpk, sig: owner.sig })),
+  );
+  if (!signed) return yield* new BadRequest({ message: "bad owner signature" });
+  if (!members?.some((m) => m.pk === owner.pk)) return yield* new BadRequest({ message: "the owner must be a member" });
+  db.init();
+  db.set("owner_pk", owner.pk);
+  db.set("owner_xpk", owner.xpk);
+  db.set("owner_sig", owner.sig);
+  // Separate from owner_sig, so a 0.7 client still verifies the key statement. The relay can drop it.
+  if (typeof owner.titlesSig === "string" && owner.titlesSig.length > 0 && owner.titlesSig.length < 200) db.set("titles_sig", owner.titlesSig);
+  db.set("epoch", 0);
+  db.set("created", Date.now());
+  if (ownerUser) db.set("owner_user", ownerUser);
+  // The channel's name, sealed with its key: members can read it, the relay can't.
+  if (body.title && typeof body.title.iv === "string" && typeof body.title.ct === "string" && body.title.ct.length < 2048) db.set("title", JSON.stringify(body.title));
+  // The owner may always post, whatever the body says.
+  for (const m of members) yield* putMember(m.pk === owner.pk ? { ...m, post: true } : m, 0);
+});
+
+/** Replace the sealed icon, or clear it with null; returns when it changed. The caller has already checked that this is the owner. */
+export const setIcon = Effect.fn("Room.setIcon")(function* (icon: unknown) {
+  const db = yield* RoomStore;
+  const at = Date.now();
+  if (icon === null) db.set("icon", "");
+  else {
+    // About a 32KB image, sealed and base64'd, with room to spare; nothing bigger; and a key this channel has.
+    if (!fits(SealedIcon, icon) || icon.e > (yield* readMeta).epoch) return yield* new BadRequest({ message: "bad icon (at most 32KB, sealed with a channel key)" });
+    db.set("icon", JSON.stringify({ e: icon.e, iv: icon.iv, ct: icon.ct }));
+  }
+  db.set("icon_at", at);
+  return at;
+});
+
+/** A sealed blob the owner replaces (the title, the settings): an iv, and a ciphertext under `max`. */
+const sealedUnder = (x: unknown, max: number): { iv: string; ct: string } | null => {
+  const t = x as { iv?: unknown; ct?: unknown };
+  return typeof t?.iv !== "string" || typeof t.ct !== "string" || t.ct.length === 0 || t.ct.length >= max ? null : { iv: t.iv, ct: t.ct };
+};
+
+/** Replace the sealed name. The caller has already checked that this is the owner. */
+export const setTitle = Effect.fn("Room.setTitle")(function* (title: unknown) {
+  const db = yield* RoomStore;
+  const t = sealedUnder(title, 2048);
+  if (!t) return yield* new BadRequest({ message: "bad title" });
+  db.set("title", JSON.stringify(t));
+});
+
+/** Replace the sealed settings. The caller has already checked that this is the owner. */
+export const setSettings = Effect.fn("Room.setSettings")(function* (settings: unknown) {
+  const db = yield* RoomStore;
+  const t = sealedUnder(settings, 16_384);
+  if (!t) return yield* new BadRequest({ message: "bad settings" });
+  db.set("settings", JSON.stringify(t));
+});
+
+// ---------- who this channel is listed for ----------
+
+/** Bring everyone's channel list in line with who's tied to this channel now. */
+export const directory: Effect.Effect<DirectoryUpdate[], ChannelGone, RoomStore> = Effect.gen(function* () {
+  const db = yield* RoomStore;
+  const { ownerPk } = yield* readMeta;
+  const code = encodeJoinCode({ roomId: db.roomId, ownerFp: yield* Effect.promise(() => ownerFingerprint(ownerPk)) });
+  const at = Number(db.get("created") ?? Date.now());
+  const links = db.links();
+  const updates: DirectoryUpdate[] = [...links].map(([user, l]) => ({ user, room: db.roomId, entry: { room: db.roomId, code, ...l, at } }));
+  for (const user of db.linked()) if (!links.has(user)) updates.push({ user, room: db.roomId, entry: null });
+  db.set("linked", JSON.stringify([...links.keys()]));
+  return updates;
+});
+
+const putMember = Effect.fn("Room.putMember")(function* (m: MemberBody, epoch: number) {
+  const db = yield* RoomStore;
+  if (!fits(MemberRecord, m)) return yield* new BadRequest({ message: "bad member" });
+  db.sql.run(
+    "INSERT INTO members (pk, xpk, rec, rec_e, since, active, read_only) VALUES (?, ?, ?, ?, ?, 1, ?) ON CONFLICT (pk) DO UPDATE SET xpk = excluded.xpk, rec = excluded.rec, rec_e = excluded.rec_e, active = 1, read_only = excluded.read_only",
+    m.pk,
+    m.xpk,
+    m.rec,
+    epoch,
+    Date.now(),
+    m.post === false ? 1 : 0,
+  );
+  for (const [e, wrapped] of Object.entries(m.keys ?? {})) {
+    db.sql.run("INSERT OR REPLACE INTO keys (pk, e, wrapped) VALUES (?, ?, ?)", m.pk, Number(e), wrapped);
+  }
+});
+
+// ---------- join requests ----------
+
+/**
+ * File a join request. With `human` set, it's a signed-in person joining for
+ * themself (they are their own sponsor); otherwise it's an agent, which on a
+ * sign-in relay arrives vouched for by the person whose computer it joined from.
+ */
+export const request = Effect.fn("Room.request")(function* (body: RequestBody, human: { user: string; name: string } | null = null, vouchUser: string | null = null) {
+  const db = yield* RoomStore;
+  yield* readMeta;
+  db.migrate();
+  const { pk, xpk, box, ts, sig, commit } = body ?? ({} as RequestBody);
+  if (typeof commit !== "string") return yield* new UpdateRequired({ message: UPDATE_KIWI });
+  if (!fits(JoinRequest, body)) return yield* new BadRequest({ message: "bad request" });
+  if (box.length > 4096) return yield* new TooLarge({ message: "request too large" });
+  if (!(yield* Effect.promise(() => verify({ room: db.roomId, pk, xpk, box, ts, commit, sig })))) return yield* new BadRequest({ message: "bad request signature" });
+  // The requester signed `ts` by its own clock, so it's checked against the wall clock.
+  if (Math.abs(Date.now() - ts) > REQUEST_TTL_MS) return yield* new BadRequest({ message: "request timestamp out of range" });
+  if (db.isMember(pk)) return yield* new Conflict({ message: "already a member" });
+  // Expiry and order use when the relay received a request, not the time the requester claims.
+  db.sql.run("DELETE FROM requests WHERE status = 'pending' AND COALESCE(received, ts) < ?", Date.now() - REQUEST_TTL_MS);
+  const existing = db.sql.all<{ id: string; status: string }>("SELECT id, status FROM requests WHERE pk = ?", pk)[0];
+  if (existing?.status === "denied") return yield* new Denied({ message: "this key was denied" });
+  if (db.sql.all("SELECT 1 FROM members WHERE pk = ? AND active = 0", pk).length) return yield* new Removed({ message: "this key was removed; join with a new identity" });
+  if (existing) {
+    // Asking again from a computer its person has since linked: the vouch applies now.
+    if (vouchUser && !human) db.sql.run("UPDATE requests SET sponsor_user = ? WHERE id = ? AND status = 'pending' AND sponsor_user IS NULL AND kind = 'agent'", vouchUser, existing.id);
+    // A joiner that lost its nonce starts the check over; the owner signs the new commit.
+    db.sql.run(
+      "UPDATE requests SET commit_to = ?, box = ?, sig = ?, ts = ?, owner_nonce = NULL, reveal = NULL WHERE id = ? AND status = 'pending' AND commit_to IS NOT ?",
+      commit,
+      box,
+      sig,
+      ts,
+      existing.id,
+      commit,
+    );
+    return { id: existing.id, fresh: false };
+  }
+  const pending = db.sql.all<{ n: number }>("SELECT COUNT(*) AS n FROM requests WHERE status = 'pending'")[0]!.n;
+  if (pending >= MAX_PENDING) return yield* new TooMany({ message: "too many pending join requests" });
+  const id = crypto.randomUUID();
+  db.sql.run(
+    "INSERT INTO requests (id, pk, xpk, box, sig, ts, status, kind, sponsor_user, sponsor_name, received, commit_to) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, NULL, ?, ?)",
+    id,
+    pk,
+    xpk,
+    box,
+    sig,
+    ts,
+    human ? "human" : "agent",
+    // Only the sign-in user id is kept; names are looked up when the owner reads requests.
+    // An agent from a computer its person linked arrives already vouched for by them.
+    human?.user ?? vouchUser ?? null,
+    Date.now(),
+    commit,
+  );
+  return { id, fresh: true };
+});
+
+/** Where a request stands, for the key that made it: and its wrapped keys, once it's in. */
+export const requestStatus = Effect.fn("Room.requestStatus")(function* (id: string, pk: string) {
+  const db = yield* RoomStore;
+  yield* readMeta;
+  db.migrate();
+  const r = db.sql.all<{ pk: string; status: string; sponsor_user: string | null; owner_nonce: string | null; reveal: string | null }>(
+    "SELECT pk, status, sponsor_user, owner_nonce, reveal FROM requests WHERE id = ?",
+    id,
+  )[0];
+  if (!r || r.pk !== pk) return yield* new NotFound({ message: "no such request" });
+  if (r.status === "pending") return { status: r.status, sponsored: !!r.sponsor_user, ownerNonce: r.owner_nonce, revealed: !!r.reveal } satisfies RequestStatus;
+  if (r.status !== "approved" || !db.isMember(pk)) return { status: r.status, sponsored: !!r.sponsor_user } satisfies RequestStatus;
+  return { status: "approved", sponsored: !!r.sponsor_user, ...(yield* keysFor(pk)) } satisfies RequestStatus;
+});
+
+type RequestStatus = { status: string; sponsored: boolean; ownerNonce?: string | null; revealed?: boolean; epoch?: number; keys?: Record<string, string> };
+
+const pendingCheck = Effect.fn("Room.pendingCheck")(function* (id: string) {
+  const db = yield* RoomStore;
+  db.migrate();
+  const r = db.sql.all<{ pk: string; commit: string | null; ownerNonce: string | null; reveal: string | null }>(
+    "SELECT pk, commit_to AS \"commit\", owner_nonce AS ownerNonce, reveal FROM requests WHERE id = ? AND status = 'pending'",
+    id,
+  )[0];
+  if (!r?.commit) return yield* new NotFound({ message: "no such pending request" });
+  return r as { pk: string; commit: string; ownerNonce: string | null; reveal: string | null };
+});
+
+/** The owner's half of the join check: its signature over the joiner's commit. Set once. */
+export const setOwnerNonce = Effect.fn("Room.setOwnerNonce")(function* (id: string, nonce: unknown) {
+  const db = yield* RoomStore;
+  const r = yield* pendingCheck(id);
+  const { ownerPk } = yield* readMeta;
+  if (typeof nonce !== "string" || !(yield* Effect.promise(() => verifyText(ownerPk, nonce, ownerNonceStatement(db.roomId, r.pk, r.commit))))) {
+    return yield* new BadRequest({ message: "that isn't the owner's signature over this request" });
+  }
+  if (r.ownerNonce && r.ownerNonce !== nonce) return yield* new Conflict({ message: "this request already has the owner's nonce" });
+  db.sql.run("UPDATE requests SET owner_nonce = ? WHERE id = ?", nonce, id);
+});
+
+/** The joiner's half, revealed once the owner's is in: it has to match the commit. True when it's new. */
+export const reveal = Effect.fn("Room.reveal")(function* (id: string, pk: string, nonce: unknown) {
+  const db = yield* RoomStore;
+  const r = yield* pendingCheck(id);
+  if (r.pk !== pk) return yield* new NotFound({ message: "no such pending request" });
+  if (!r.ownerNonce) return yield* new Conflict({ message: "wait for the owner's half of the check" });
+  if (typeof nonce !== "string" || !NONCE_RE.test(nonce) || (yield* Effect.promise(() => commitTo(db.roomId, pk, nonce))) !== r.commit) {
+    return yield* new BadRequest({ message: "that nonce doesn't match the request" });
+  }
+  if (r.reveal === nonce) return false;
+  db.sql.run("UPDATE requests SET reveal = ? WHERE id = ?", nonce, id);
+  return true;
+});
+
+/** Nobody is let in before both sides could compare the code. */
+export const requireChecked = Effect.fn("Room.requireChecked")(function* (request: string | undefined, pk: string) {
+  const db = yield* RoomStore;
+  db.migrate();
+  const r = request ? db.sql.all<{ pk: string; reveal: string | null }>("SELECT pk, reveal FROM requests WHERE id = ? AND status = 'pending'", request)[0] : undefined;
+  if (!r || r.pk !== pk) return yield* new BadRequest({ message: "approve a pending request" });
+  if (!r.reveal) return yield* new Conflict({ message: "this request hasn't finished its code check yet" });
+});
+
+/** On a sign-in relay, agents need their human's vouch before the owner can admit them. */
+export const requireSponsor = Effect.fn("Room.requireSponsor")(function* (request: string | undefined, pk: string) {
+  const db = yield* RoomStore;
+  db.migrate();
+  const r = request ? db.sql.all<{ pk: string; sponsor_user: string | null }>("SELECT pk, sponsor_user FROM requests WHERE id = ?", request)[0] : undefined;
+  if (!r || r.pk !== pk) return yield* new BadRequest({ message: "approve a pending request" });
+  if (!r.sponsor_user) return yield* new Conflict({ message: "this agent wasn't vouched for by a person's linked computer" });
+});
+
+// ---------- members & keys ----------
+
+/**
+ * Admit a member. With `replaces`, a new key takes over an existing member's
+ * seat (a reclaim): the old key is removed in the same step, so the two are
+ * never members at once, and the owner rotates next, as after any removal.
+ */
+export const approve = Effect.fn("Room.approve")(function* (body: MemberBody & { request?: string; replaces?: string }) {
+  const db = yield* RoomStore;
+  const policy = yield* Policy;
+  const { epoch, ownerPk } = yield* readMeta;
+  if (body.replaces !== undefined) {
+    if (typeof body.replaces !== "string" || !db.isMember(body.replaces)) return yield* new NotFound({ message: "the seat to reclaim isn't a member any more" });
+    if (body.replaces === ownerPk) return yield* new BadRequest({ message: "the owner's seat can't be reclaimed" });
+    if (body.replaces === body.pk) return yield* new BadRequest({ message: "a seat can't be reclaimed by its own key" });
+  }
+  const most = policy.membersPerChannel;
+  if (most && !body.replaces && !db.isMember(body.pk) && db.activeMembers() >= most) {
+    return yield* new TooMany({ message: `this channel has ${most} members, the most this relay allows; remove someone to let another in` });
+  }
+  for (let e = 0; e <= epoch; e++) {
+    if (!body.keys?.[String(e)]) return yield* new BadRequest({ message: `missing wrapped key for epoch ${e}` });
+  }
+  // Both in one step with no await in between (nothing else runs there), new key first so a bad record changes nothing.
+  yield* putMember(body, epoch);
+  if (body.replaces) yield* remove(body.replaces);
+  if (body.request) db.sql.run("UPDATE requests SET status = 'approved' WHERE id = ? AND pk = ?", body.request, body.pk);
+});
+
+/** A member's wrapped channel keys, by epoch, and the current epoch. */
+export const keysFor = Effect.fn("Room.keysFor")(function* (pk: string) {
+  const db = yield* RoomStore;
+  const rows = db.sql.all<{ e: number; wrapped: string }>("SELECT e, wrapped FROM keys WHERE pk = ?", pk);
+  return { epoch: (yield* readMeta).epoch, keys: Object.fromEntries(rows.map((r) => [String(r.e), r.wrapped])) as Record<string, string> };
+});
+
+/**
+ * The owner re-signs a member's record when what they may do changes (sealed: the relay can't read
+ * it), and sets the "can post" bit with it, in one step. `e` is the epoch whose key sealed it.
+ */
+export const setRecord = Effect.fn("Room.setRecord")(function* (pk: string, rec: string, e: number, post: boolean) {
+  const db = yield* RoomStore;
+  if (pk === (yield* readMeta).ownerPk) return yield* new BadRequest({ message: "the owner's record isn't changed this way" });
+  if (!db.isMember(pk)) return yield* new NotFound({ message: "not a member" });
+  if (!Number.isInteger(e) || e < 0 || e > (yield* readMeta).epoch) return yield* new BadRequest({ message: "no such epoch" });
+  if (rec.length > 8_192) return yield* new TooLarge({ message: "record too large" });
+  db.sql.run("UPDATE members SET rec = ?, rec_e = ?, read_only = ? WHERE pk = ?", rec, e, post ? 0 : 1, pk);
+});
+
+/** Whether a member may post (the owner's scope.set says what they may do; this is the bit the relay enforces). */
+export const setCanPost = Effect.fn("Room.setCanPost")(function* (pk: string, post: boolean) {
+  const db = yield* RoomStore;
+  if (pk === (yield* readMeta).ownerPk) return yield* new BadRequest({ message: "the owner may always post" });
+  if (!db.isMember(pk)) return yield* new NotFound({ message: "not a member" });
+  db.sql.run("UPDATE members SET read_only = ? WHERE pk = ?", post ? 0 : 1, pk);
+});
+
+export const remove = Effect.fn("Room.remove")(function* (pk: string) {
+  const db = yield* RoomStore;
+  const { ownerPk } = yield* readMeta;
+  if (pk === ownerPk) return yield* new BadRequest({ message: "the owner can't leave; close the channel instead" });
+  if (!db.isMember(pk)) return yield* new NotFound({ message: "not a member" });
+  db.sql.run("UPDATE members SET active = 0 WHERE pk = ?", pk);
+  db.sql.run("DELETE FROM keys WHERE pk = ?", pk);
+  db.sql.run("DELETE FROM requests WHERE pk = ?", pk);
+  // Its keys are revoked at the relay; the owner rotates so they also can't decrypt anything newer.
+  db.set("rotate", 1);
+});
+
+export const rotate = Effect.fn("Room.rotate")(function* (epoch: number, keys: Record<string, string>) {
+  const db = yield* RoomStore;
+  const meta = yield* readMeta;
+  if (epoch !== meta.epoch + 1) return yield* new Conflict({ message: `next epoch is ${meta.epoch + 1}` });
+  const members = db.members().filter((m) => m.active);
+  for (const m of members) if (!keys[m.pk]) return yield* new BadRequest({ message: `missing wrapped key for ${m.pk.slice(0, 8)}` });
+  for (const m of members) db.sql.run("INSERT OR REPLACE INTO keys (pk, e, wrapped) VALUES (?, ?, ?)", m.pk, epoch, keys[m.pk]!);
+  db.set("epoch", epoch);
+  db.set("rotate", 0);
+});
 
 export interface MemberBody {
   pk: string;
@@ -812,43 +891,53 @@ export interface RequestBody {
   sig: string;
 }
 
+// ---------- sockets ----------
+
 export function msgFrame(e: Envelope): string {
   return frame({ t: "msg", ...e });
 }
 
 /** Frames to send a newly connected socket: the backlog after `since`, then ready. */
-export function welcomeFrames(store: RoomStore, since: number): string[] {
-  const backlog = store.since(since);
-  const head = store.head();
-  const last = backlog.at(-1)?.seq ?? since;
-  return [...backlog.map(msgFrame), frame({ t: "ready", head, more: last < head })];
-}
+export const welcomeFrames = (since: number): Effect.Effect<string[], never, RoomStore> =>
+  Effect.map(RoomStore, (db) => {
+    const backlog = db.since(since);
+    const head = db.head();
+    const last = backlog.at(-1)?.seq ?? since;
+    return [...backlog.map(msgFrame), frame({ t: "ready", head, more: last < head })];
+  });
 
-/** Handle one frame from an authenticated socket. */
-export function onClientFrame(store: RoomStore, raw: string, sender = ""): Effects {
+/** Handle one frame from an authenticated socket. It never fails: whatever goes wrong is the sender's err frame. */
+export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: string, sender = "") {
+  const db = yield* RoomStore;
   let f: ClientFrame;
   try {
     f = JSON.parse(raw);
   } catch {
-    return { reply: frame({ t: "err", error: "bad json" }) };
+    return { reply: frame({ t: "err", error: "bad json" }) } satisfies Effects;
   }
   if (f.t === "eph") {
     // Presence and other ephemeral signals: relayed, never stored, never acked.
-    if (!allow(`eph:${store.roomId}:${sender}`, EPHEMERAL_PER_MINUTE)) return { reply: frame({ t: "err", error: "too many ephemeral frames; slow down" }) };
+    if (!allow(`eph:${db.roomId}:${sender}`, EPHEMERAL_PER_MINUTE)) return { reply: frame({ t: "err", error: "too many ephemeral frames; slow down" }) } satisfies Effects;
     if (typeof f.iv !== "string" || typeof f.ct !== "string" || f.ct.length > MAX_EPH_LENGTH) {
-      return { reply: frame({ t: "err", error: "bad ephemeral frame" }) };
+      return { reply: frame({ t: "err", error: "bad ephemeral frame" }) } satisfies Effects;
     }
-    return { others: frame({ t: "eph", iv: f.iv, ct: f.ct }) };
+    return { others: frame({ t: "eph", iv: f.iv, ct: f.ct }) } satisfies Effects;
   }
-  if (f.t !== "send") return { reply: frame({ t: "err", error: "unknown frame" }) };
-  if (!allow(`${store.roomId}:${sender}`, MESSAGES_PER_MINUTE)) return { reply: frame({ t: "err", error: "too many messages; wait a minute", id: f.id }) };
-  try {
-    const e = store.append(f.iv, f.ct, Number(f.e ?? 0), sender);
-    return { broadcast: [msgFrame(e)], reply: frame({ t: "ack", id: f.id, seq: e.seq }), expireAt: store.touch() ?? undefined };
-  } catch (err) {
-    return { reply: frame({ t: "err", error: err instanceof Error ? err.message : String(err), id: f.id }) };
-  }
-}
+  if (f.t !== "send") return { reply: frame({ t: "err", error: "unknown frame" }) } satisfies Effects;
+  if (!allow(`${db.roomId}:${sender}`, MESSAGES_PER_MINUTE)) return { reply: frame({ t: "err", error: "too many messages; wait a minute", id: f.id }) } satisfies Effects;
+  const send = f;
+  return yield* Effect.gen(function* () {
+    const e = yield* append(send.iv, send.ct, Number(send.e ?? 0), sender);
+    const fx: Effects = { broadcast: [msgFrame(e)], reply: frame({ t: "ack", id: send.id, seq: e.seq }), expireAt: (yield* touch) ?? undefined };
+    return fx;
+  }).pipe(
+    // A refusal or a storage error alike: the sender hears what went wrong, as before.
+    Effect.catchCause((cause) => {
+      const err = Cause.squash(cause);
+      return Effect.succeed<Effects>({ reply: frame({ t: "err", error: err instanceof Error ? err.message : String(err), id: send.id }) });
+    }),
+  );
+});
 
 /**
  * The HTTP API (all under /v1/rooms/<room>):
@@ -873,14 +962,10 @@ export function onClientFrame(store: RoomStore, raw: string, sender = ""): Effec
  *   GET    /messages?since=N          member
  *   POST   /messages                  member: {iv, ct, e}
  */
-/** What an adapter hands the room logic besides the request: sign-in, vouching, and the relay's policy. */
-/** Authenticate a WebSocket upgrade; returns the member key. */
-export async function authenticateSocket(store: RoomStore, req: Request): Promise<string> {
-  return store.authenticate(req, "GET", "/ws", "");
-}
 
+/** A refusal as its response; anything else is a bug or an outage, logged without details, and a 500. */
 export function errorResponse(err: unknown): Response {
-  if (err instanceof HttpError) return Response.json({ error: err.message, tag: err.tag }, { status: err.status });
+  if (isRefusal(err)) return refusalResponse(err);
   // Never log request details: room ids and keys are nobody's business.
   console.error(err instanceof Error ? err.message : "error");
   return Response.json({ error: "internal error" }, { status: 500 });
@@ -894,20 +979,39 @@ export function parseRoomPath(pathname: string): { roomId: string; rest: string 
 
 export { CLOSE_CLOSED, CLOSE_REMOVED };
 
+// ---------- a signed-in person's channels ----------
+
+/** The signed-in user behind a /v1/me request; without one, the refusal each listing has always given. */
+const signedInAs = (req: Request, human: HumanAuth | null, signInFirst: SignInRequired) =>
+  Effect.gen(function* () {
+    if (!human) return yield* new NotFound({ message: "this relay has no sign-in" });
+    const user = yield* Effect.promise(() => human.verify(req.headers.get(HUMAN_HEADER) ?? ""));
+    if (!user) return yield* signInFirst;
+    return user;
+  });
+
 /** GET /v1/me/channels: the signed-in person's channel list, from whatever index the adapter keeps. */
-export async function myChannels(
-  req: Request,
-  human: HumanAuth | null,
-  list: (user: string) => Promise<DirectoryEntry[]>,
-  heads?: HeadSource,
-): Promise<Response> {
-  if (!human) throw new HttpError(404, "this relay has no sign-in");
-  const user = await human.verify(req.headers.get(HUMAN_HEADER) ?? "");
-  if (!user) throw new HttpError(401, "sign in to see your channels", "SignInRequired");
-  const sorted = (await list(user)).sort((a, b) => b.at - a.at);
-  if (!heads) return Response.json({ channels: sorted });
-  // Each channel's newest seq, so the sidebar can mark the closed ones with news: only for channels
-  // in this person's list, the newest HEADS_PER_LISTING of them, read at most once per cache period.
+export function myChannels(req: Request, human: HumanAuth | null, list: (user: string) => Promise<DirectoryEntry[]>, heads?: HeadSource): Promise<Response> {
+  return respond(
+    Effect.gen(function* () {
+      const user = yield* signedInAs(req, human, new SignInRequired({ message: "sign in to see your channels" }));
+      const sorted = (yield* Effect.promise(() => list(user))).sort((a, b) => b.at - a.at);
+      if (!heads) return Response.json({ channels: sorted });
+      // Each channel's newest seq, so the sidebar can mark the closed ones with news: only for channels
+      // in this person's list, the newest HEADS_PER_LISTING of them, read at most once per cache period.
+      const known = yield* Effect.promise(() => headsOf(user, sorted, heads));
+      const quiet = (heads.now ?? Date.now)() - QUIET_AFTER_MS;
+      const channels = sorted.map((c) => {
+        const h = known[c.room];
+        return h && h.last >= quiet ? { ...c, head: h.head } : c;
+      });
+      return Response.json({ channels });
+    }),
+  );
+}
+
+/** Each listed channel's head, from the cache when it has them. A read or cache that fails counts as no head. */
+async function headsOf(user: string, sorted: DirectoryEntry[], heads: HeadSource): Promise<Record<string, RoomHead>> {
   let known = await heads.cache?.get(user).catch(() => null);
   if (!known) {
     known = {};
@@ -915,12 +1019,7 @@ export async function myChannels(
     for (const [room, h] of read) if (h) known[room] = h;
     await heads.cache?.put(user, known).catch(() => {});
   }
-  const quiet = (heads.now ?? Date.now)() - QUIET_AFTER_MS;
-  const channels = sorted.map((c) => {
-    const h = known[c.room];
-    return h && h.last >= quiet ? { ...c, head: h.head } : c;
-  });
-  return Response.json({ channels });
+  return known;
 }
 
 /** A channel's newest message: its seq, and when it arrived. */
@@ -944,7 +1043,7 @@ export const HEADS_CACHE_SECONDS = 300;
 const QUIET_AFTER_MS = 7 * 86_400_000;
 
 /**
- * A channel's newest message, read without a RoomStore: no migration, nothing written, and a
+ * A channel's newest message, read without a RoomDb: no migration, nothing written, and a
  * channel with no tables (closed, or never made here) is null rather than a new empty room.
  */
 export function readHead(sql: Sql): RoomHead | null {
@@ -958,29 +1057,33 @@ export function readHead(sql: Sql): RoomHead | null {
  * GET /v1/me/usage: what a signed-in person uses of this relay's limits: channels owned against
  * the cap, and for each one messages today, stored bytes and members. Null limits are unlimited.
  */
-export async function myUsage(
+export function myUsage(
   req: Request,
   human: HumanAuth | null,
   policy: RelayPolicy,
   list: (user: string) => Promise<DirectoryEntry[]>,
   usageOf: (room: string) => Promise<RoomUsage | null>,
 ): Promise<Response> {
-  if (!human) throw new HttpError(404, "this relay has no sign-in");
-  const user = await human.verify(req.headers.get(HUMAN_HEADER) ?? "");
-  if (!user) throw new HttpError(401, "sign in to see your usage", "SignInRequired");
-  const owned = (await list(user)).filter((c) => c.owner);
-  const channels = await Promise.all(owned.map(async (c) => ({ room: c.room, code: c.code, ...((await usageOf(c.room)) ?? { messagesToday: 0, bytes: 0, members: 0 }) })));
-  return Response.json({
-    limits: {
-      channelsPerOwner: policy.channelsPerOwner,
-      membersPerChannel: policy.membersPerChannel,
-      messagesPerDay: policy.messagesPerDay,
-      bytesPerChannel: policy.bytesPerChannel,
-      expireAfterDays: policy.expireAfterDays,
-    },
-    owned: channels.length,
-    channels,
-  });
+  return respond(
+    Effect.gen(function* () {
+      const user = yield* signedInAs(req, human, new SignInRequired({ message: "sign in to see your usage" }));
+      const owned = (yield* Effect.promise(() => list(user))).filter((c) => c.owner);
+      const channels = yield* Effect.promise(() =>
+        Promise.all(owned.map(async (c) => ({ room: c.room, code: c.code, ...((await usageOf(c.room)) ?? { messagesToday: 0, bytes: 0, members: 0 }) }))),
+      );
+      return Response.json({
+        limits: {
+          channelsPerOwner: policy.channelsPerOwner,
+          membersPerChannel: policy.membersPerChannel,
+          messagesPerDay: policy.messagesPerDay,
+          bytesPerChannel: policy.bytesPerChannel,
+          expireAfterDays: policy.expireAfterDays,
+        },
+        owned: channels.length,
+        channels,
+      });
+    }),
+  );
 }
 
 /** Relay-wide settings the web app needs: which WorkOS client to sign in with, if any. */

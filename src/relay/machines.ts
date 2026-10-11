@@ -16,7 +16,8 @@ import { MACHINE_SCOPE, machineCode, vouchStatement } from "../vouch.ts";
 import { inlineText } from "../membership.ts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import { attempt, describeRoutes, json, refuse, Request_, servePerson, SignIn, signedInPerson, type Refused, type Route } from "./http.ts";
+import { attempt, describeRoutes, json, refuse, Request_, servePerson, SignIn, signedInPerson, type Route } from "./http.ts";
+import type { Refusal } from "./failures.ts";
 import type { HumanAuth } from "./human.ts";
 import { fits, SignedByMachine } from "./schema.ts";
 
@@ -37,6 +38,9 @@ export interface MachineStore {
   remove(rec: MachineRecord): Promise<void>;
   listFor(user: string): Promise<{ pk: string; label: string; linked: number }[]>;
 }
+
+/** Linked computers, as the adapter keeps them: a room asks them who vouches for an agent (vouchedBy). */
+export class Machines extends Context.Service<Machines, MachineStore>()("kiwi/relay/Machines") {}
 
 /** How long a pending link waits for its person to confirm. After that, an unlinked registration is deleted. */
 export const LINK_TTL_MS = 15 * 60_000;
@@ -330,7 +334,7 @@ const hasSignIn = Effect.gen(function* () {
 
 const nobody: Who = { user: null, registering: null };
 
-const guards: Record<MachineGuard, Effect.Effect<Who, Refused, SignIn | Request_>> = {
+const guards: Record<MachineGuard, Effect.Effect<Who, Refusal, SignIn | Request_>> = {
   public: Effect.map(hasSignIn, () => nobody),
   selfSigned: Effect.gen(function* () {
     yield* hasSignIn;
