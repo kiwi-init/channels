@@ -4,6 +4,9 @@ import { createPortal } from "react-dom"
 
 import { GENERAL_ROOM, ignored, type Color, type Message } from "@mc/protocol.ts"
 import { describeScopes, wireScopes } from "@mc/scopes.ts"
+import { autoAdmissible, nameKey, type JoinRequest, type Member as RosterMember } from "@mc/membership.ts"
+import { autoAdmitOn, trustedComputers } from "@/lib/computers"
+import { defaultScopes } from "./scopes"
 import { newRoomId, colorOf, keptFromPeople, taskId, type Room } from "@mc/state.ts"
 import { useAuth } from "@/lib/auth"
 import { channelTitle, forgetChannel, LEFT_CHANNEL, loadMember, loadRecent, saveMember, saveRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
@@ -16,7 +19,7 @@ import { Composer } from "./composer"
 import { RoomDialog, RoomMenu, RoomRail, roomOfMessage, useRooms, useRoomsSlot } from "./rooms"
 import { ChannelControls, ChannelMenu, HoldBanner, InviteButton, People, RequestsBanner, type Filter } from "./controls"
 import { Icon } from "./icon"
-import { Button, IconButton, Spinner, Tabs, TextField } from "./kit"
+import { Button, IconButton, Spinner, Tabs, TextField, errorText, toast } from "./kit"
 import { DayMark, EventGroup, EventRow, MessageRow, isAgent, standsAlone, type ThreadSummary } from "./message"
 import { TaskPage } from "./task-page"
 import { WorkOverview } from "./work"
@@ -60,6 +63,62 @@ function useChannelNews(room: string, top: number, arrivals: number, inOtherRoom
   )
 }
 
+/**
+ * Owner: let in agents from this person's own trusted computers without a code check (autoAdmissible).
+ * Each goes through the same steps a person's clicks would: this browser signs its half of the check,
+ * the agent reveals its own, and then it's approved under the name it asked for, with the channel's
+ * default scopes. Only while this page is open: the owner key lives here.
+ */
+function useAutoAdmit({ ch, isOwner, requests, roster, user, refreshRequests, refreshRoster }: {
+  ch: ReturnType<typeof useChannel>["ch"]
+  isOwner: boolean
+  requests: JoinRequest[]
+  roster: RosterMember[]
+  user: string | null
+  refreshRequests: () => Promise<void>
+  refreshRoster: () => Promise<void>
+}) {
+  const busy = useRef(new Set<string>())
+  // Tried once and refused: left to a person, never retried in a loop.
+  const failed = useRef(new Set<string>())
+  // When this browser signed each one's half: the agent reveals its own within seconds, if it's still asking.
+  const checked = useRef(new Map<string, number>())
+  useEffect(() => {
+    if (!isOwner || !user || !autoAdmitOn(user)) return
+    const trusted = trustedComputers(user)
+    const taken = new Set(roster.filter((m) => m.active).map((m) => nameKey(m.name)))
+    const ours = requests.filter((r) => autoAdmissible(r, trusted) && !taken.has(nameKey(r.name)))
+    for (const r of ours) {
+      if (busy.current.has(r.id) || failed.current.has(r.id) || r.check === "waiting") continue
+      busy.current.add(r.id)
+      void (async () => {
+        try {
+          if (r.check === "unchecked") {
+            await ch.checkRequest(r)
+            checked.current.set(r.id, Date.now())
+          } else {
+            const scopes = defaultScopes(ch.roomId)
+            await ch.approve(r, wireScopes(scopes) ? { scopes } : undefined)
+            toast(`Let ${r.name} in: an agent from your own computer`)
+            await refreshRoster()
+          }
+        } catch (err) {
+          failed.current.add(r.id)
+          toast(`Couldn't let ${r.name} in on its own: ${errorText(err)}`, "error")
+        } finally {
+          busy.current.delete(r.id)
+          await refreshRequests()
+        }
+      })()
+    }
+    // The agent reveals its half within a couple of seconds; look again rather than wait for a nudge,
+    // but only for a minute: an agent that stopped asking shouldn't keep this page polling the relay.
+    if (!ours.some((r) => r.check === "waiting" && Date.now() - (checked.current.get(r.id) ?? 0) < 60_000)) return
+    const t = window.setTimeout(() => void refreshRequests(), 1500)
+    return () => window.clearTimeout(t)
+  }, [ch, isOwner, requests, roster, user, refreshRequests, refreshRoster])
+}
+
 const sameDay = (a: number, b: number) => new Date(a).toDateString() === new Date(b).toDateString()
 
 export function Conversation({ member, onBack, onGone }: { member: StoredMember; onBack: () => void; onGone: () => void }) {
@@ -69,6 +128,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     member,
     auth.status === "loading" ? null : auth.token,
   )
+  useAutoAdmit({ ch, isOwner, requests, roster, user: auth.user?.id ?? null, refreshRequests, refreshRoster })
   useLiveIcon(member)
   const icon = useIcons().get(member.access.roomId) ?? null
   const now = useNow()

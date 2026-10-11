@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 import { machineCode } from "@mc/vouch.ts"
 import { displayName, useAuth } from "@/lib/auth"
 import { clockNow } from "@/lib/channel"
-import { computerInfo, confirmComputer, myComputers, removeComputer, type Computer } from "@/lib/computers"
+import { autoAdmitOn, computerInfo, confirmComputer, myComputers, removeComputer, setAutoAdmit, trustComputer, trustedComputers, untrustComputer, type Computer } from "@/lib/computers"
 import { formatAgo } from "@/lib/format"
 import { Button, Modal, Spinner, Wordmark, errorText, toast } from "./kit"
 
@@ -38,6 +38,8 @@ export function LinkComputerPage({ pk, onDone }: { pk: string; onDone: () => voi
       const token = await auth.token()
       if (!token) throw new Error("Sign in first.")
       await confirmComputer(pk, token)
+      // The person just compared this computer's code here: its agents may come in on their own.
+      if (auth.user) trustComputer(auth.user.id, pk)
       setState("done")
     } catch (err) {
       setError(errorText(err))
@@ -84,6 +86,7 @@ export function LinkComputerPage({ pk, onDone }: { pk: string; onDone: () => voi
           {state === "done" && (
             <>
               <p className="mt-6 text-body">Linked. Your terminal continues on its own; you can close this tab.</p>
+              <p className="mt-2 text-ui text-ink-2">Agents you start there now come into channels you own without a code check, while you have one of those channels open here.</p>
               <Button size="lg" variant="secondary" className="mt-4" onClick={onDone}>
                 Go to your channels
               </Button>
@@ -133,11 +136,25 @@ export function ComputersModal({ open, onClose }: { open: boolean; onClose: () =
     }
   }, [open, auth])
 
+  const user = auth.user?.id ?? null
+  const [trusted, setTrusted] = useState(() => (user ? trustedComputers(user) : new Set<string>()))
+  const [auto, setAuto] = useState(() => (user ? autoAdmitOn(user) : true))
+  const [checking, setChecking] = useState<{ pk: string; code: string } | null>(null)
+  const startTrust = async (c: Computer) => setChecking({ pk: c.pk, code: await machineCode(c.pk) })
+  const trust = (pk: string, on: boolean) => {
+    if (!user) return
+    if (on) trustComputer(user, pk)
+    else untrustComputer(user, pk)
+    setTrusted(trustedComputers(user))
+    setChecking(null)
+  }
+
   const remove = async (c: Computer) => {
     try {
       const t = await auth.token()
       if (!t) throw new Error("Sign in first.")
       await removeComputer(c.pk, t)
+      if (user) untrustComputer(user, c.pk)
       setList((l) => l?.filter((x) => x.pk !== c.pk) ?? null)
       toast(`Removed ${c.label}`)
     } catch (err) {
@@ -156,17 +173,64 @@ export function ComputersModal({ open, onClose }: { open: boolean; onClose: () =
           {list === null && <Spinner />}
           {list?.length === 0 && <p className="text-ui text-ink-3">None yet. Run kiwi setup on a computer to link it.</p>}
           {list?.map((c) => (
-            <div key={c.pk} className="flex items-center gap-3 rounded-ctl py-1.5">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-ui font-medium">{c.label}</p>
-                <p className="text-meta text-ink-3">{usage(c, clockNow())}</p>
+            <div key={c.pk} className="rounded-ctl py-1.5">
+              <div className="flex items-center gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-ui font-medium">{c.label}</p>
+                  <p className="text-meta text-ink-3">
+                    {usage(c, clockNow())}
+                    {trusted.has(c.pk) ? " · its agents come in on their own" : ""}
+                  </p>
+                </div>
+                {trusted.has(c.pk) ? (
+                  <Button size="sm" variant="secondary" onClick={() => trust(c.pk, false)}>
+                    Ask each time
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="secondary" onClick={() => void startTrust(c)}>
+                    Trust…
+                  </Button>
+                )}
+                <Button size="sm" variant="danger" onClick={() => void remove(c)}>
+                  Remove
+                </Button>
               </div>
-              <Button size="sm" variant="danger" onClick={() => void remove(c)}>
-                Remove
-              </Button>
+              {checking?.pk === c.pk && (
+                <div className="mt-2 rounded-ctl bg-wash p-3">
+                  <p className="text-ui leading-normal text-ink-2">
+                    On {c.label}, run <code className="font-mono text-meta">kiwi setup status</code>. Trust it only if it shows:
+                  </p>
+                  <p className="my-2 text-display leading-none font-semibold tracking-[0.04em] tabular-nums">{checking.code}</p>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={() => trust(c.pk, true)}>
+                      It matches
+                    </Button>
+                    <Button size="sm" variant="secondary" onClick={() => setChecking(null)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
+        {user && (
+          <label className="mt-4 flex items-start gap-2 text-ui leading-normal">
+            <input
+              type="checkbox"
+              checked={auto}
+              onChange={(e) => {
+                setAutoAdmit(user, e.target.checked)
+                setAuto(e.target.checked)
+              }}
+              className="mt-0.5 size-4 accent-[var(--accent)]"
+            />
+            <span>
+              Let agents from trusted computers into channels I own without a code check
+              <span className="block text-meta text-ink-3">Their computer’s signature stands in for the code; the relay can’t forge it. It happens while one of those channels is open in this browser.</span>
+            </span>
+          </label>
+        )}
         <div className="mt-5 flex justify-end">
           <Button variant="secondary" onClick={onClose}>
             Done

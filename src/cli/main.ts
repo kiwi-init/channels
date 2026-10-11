@@ -15,7 +15,7 @@ import { b64url, decodeJoinCode, newRoomId, type ChannelAccess } from "../crypto
 import { describeMember, handleFor, type JoinRequest } from "../membership.ts";
 import { ago, cardLine, describeEvent, fitsLine, holdLine, formatAdded, formatAfter, formatClaims, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, mayDo, modeLine, parseDuration, statusJson } from "../format.ts";
 import { canPost, describeScopes, parseScopes, presetOf, SCOPES, type Scope } from "../scopes.ts";
-import { fingerprint } from "../identity.ts";
+import { fingerprint, type Identity } from "../identity.ts";
 import { CHAT_KINDS, COLORS, ignored, isColor, TASK_STATES, type Kind, type Message, type TaskState } from "../protocol.ts";
 import { COORDINATOR, parseTaskId, similarOpenTasks, taskId, type ChannelState } from "../state.ts";
 import { VERSION } from "../version.ts";
@@ -29,6 +29,7 @@ const HELP = `kiwi ${VERSION} — Channels by Kiwi Init: real-time coordination 
 
 Start
   kiwi setup                                     set up this computer, once (link it to your account; Claude Code)
+  kiwi demo [--stay]                             watch agents coordinate in a throwaway local channel (touches nothing of yours)
   kiwi doctor                                    check the install, this computer's link, the relay, and hooks
   kiwi create [alias] --as NAME [--role R]       create a channel you own; prints the join code and your dashboard
   kiwi join <code> [alias] --as NAME [--role R]  ask to join; waits until the owner approves, then prints instructions
@@ -156,6 +157,7 @@ const { values: opt, positionals: args } = parseArgs({
     review: { type: "string" },
     model: { type: "string" },
     tools: { type: "string" },
+    stay: { type: "boolean" },
     room: { type: "string" },
     n: { type: "string", short: "n" },
     help: { type: "boolean", short: "h" },
@@ -303,6 +305,28 @@ async function findRequest(s: AgentSession, needle: string, opts: { byKey?: bool
   const r = matches[0];
   if (!r) die(reqs.length ? `no pending request shows code ${needle} yet (see: kiwi requests)` : "no pending join requests");
   return r;
+}
+
+/**
+ * The channel's owner key is on this machine (`kiwi create` made the channel here): let this request in
+ * with it. Whoever can run kiwi here can already read that key, so comparing codes would only be this
+ * machine checking itself. Never for a RECLAIM of someone's seat. Returns whether it let them in.
+ */
+async function admitLocally(code: string, relay: string, id: Identity, requestId: string, as: { name: string; role?: string; about?: string }): Promise<boolean> {
+  const { roomId } = decodeJoinCode(code);
+  const local = Object.values(loadConfig().channels).find((c) => c.roomId === roomId && c.owner && c.relay === relay);
+  if (!local?.owner || !identitiesIn(roomId).includes(local.owner)) return false;
+  const owner = new Channel(local, relay, await loadIdentity(local.owner, roomId));
+  const find = async () => (await owner.requests()).find((r) => r.id === requestId && r.pk === id.pk && !r.reclaims);
+  let r = await find();
+  if (!r) return false;
+  if (r.check === "unchecked") await owner.checkRequest(r);
+  // This side reveals its half as it checks its status; then the code exists on both.
+  await Channel.joinStatus(relay, code, id, requestId);
+  r = await find();
+  if (r?.check !== "ready") return false;
+  await owner.approve(r, { name: as.name, ...(as.role ? { role: as.role } : {}), ...(as.about ? { about: as.about } : {}) });
+  return true;
 }
 
 /** Bind this directory to the agent, and make sure Claude Code keeps it listening. */
@@ -483,7 +507,9 @@ const commands: Record<string, () => Promise<void>> = {
     });
     out(opt.reclaim ? `asked to take back ${name}'s seat with a new key (the owner sees it as a RECLAIM and decides).` : `asked to join as ${name}.`);
     if (linked) out(`Vouched for by this computer${linked.linked?.name ? `, linked to ${linked.linked.name}` : ""}.`);
-    out(`waiting for the owner to open your request…`);
+    if (!opt.reclaim && (await admitLocally(code, relay, id, req.requestId, { name, role: opt.role, about: opt.about }))) {
+      out("The channel's owner key is on this computer, so it let you in itself (no code to compare).");
+    } else out(`waiting for the owner to open your request…`);
     const deadline = Date.now() + parseDuration(opt.timeout ?? "30m") * 1000;
     let shown: string | null = null;
     for (;;) {
@@ -531,7 +557,10 @@ const commands: Record<string, () => Promise<void>> = {
       const m = loadMachine();
       if (!m?.linked) return out("This computer isn't linked to an account. Run kiwi setup.");
       const st = await machineStatus(m).catch(() => null);
-      return out(st?.status === "linked" ? `Linked to ${st.name ?? m.linked.name ?? "your account"} (${m.label}).` : "This computer's link was removed. Run kiwi setup again.");
+      if (st?.status !== "linked") return out("This computer's link was removed. Run kiwi setup again.");
+      out(`Linked to ${st.name ?? m.linked.name ?? "your account"} (${m.label}).`);
+      // What Your computers on the web asks you to compare before trusting this computer's agents on their own.
+      return out(`Its code: ${await machineCode(m.identity.pk)}`);
     }
 
     out("Setting up Kiwi on this computer.\n");
@@ -1297,6 +1326,13 @@ const commands: Record<string, () => Promise<void>> = {
     const { runRelay } = await import("../relay/bun.ts");
     runRelay(process.argv.slice(3), "kiwi relay");
     await new Promise(() => {});
+  },
+
+  async demo() {
+    const { runDemo } = await import("../demo.ts");
+    // A checkout with the dashboard built serves it too; the binary has the terminal tour.
+    const built = joinPath(import.meta.dir, "../../web/dist");
+    await runDemo({ stay: !!opt.stay, ...(existsSync(joinPath(built, "index.html")) ? { web: built } : {}), ...(opt.n ? { pace: Number(opt.n) } : {}) });
   },
 
   async doctor() {

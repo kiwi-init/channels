@@ -274,6 +274,13 @@ try {
   await setup
   console.log(`ok  ${at}`)
   await page.goto(channel)
+  // Linking it here made this browser trust that computer, so its agents would come in on their own.
+  // Ask each time for this one, to walk the requests sheet; the next agent comes in by itself.
+  const autoAdmit = (on: boolean) =>
+    page.evaluate((on) => {
+      for (const k of Object.keys(localStorage)) if (k.startsWith("mc.trusted-computers.")) localStorage.setItem(`mc.auto-admit.${k.slice("mc.trusted-computers.".length)}`, JSON.stringify(on))
+    }, on)
+  await autoAdmit(false)
   const joining = kiwi(["join", code, "smoke", "--relay", BASE, "--as", "bot", "--role", "tester"])
   const review = page.getByRole("button", { name: "Review", exact: true })
   await review.waitFor({ timeout: 30000 })
@@ -286,6 +293,12 @@ try {
   // The requests sheet closes on its own once it's empty (T281); before that, close it.
   await page.waitForTimeout(500)
   if (await page.getByRole("dialog").count()) await page.keyboard.press("Escape")
+  console.log(`ok  ${at}`)
+
+  at = "an agent from a trusted computer comes in on its own"
+  await autoAdmit(true)
+  await kiwi(["join", code, "smoke", "--relay", BASE, "--as", "helper"])
+  await page.getByText("Let helper in: an agent from your own computer").waitFor({ timeout: 15000 })
   console.log(`ok  ${at}`)
 
   await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke task", "--owner", "bot"])

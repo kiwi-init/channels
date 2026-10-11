@@ -216,6 +216,21 @@ export interface JoinRequest extends MemberInfo {
   reclaims?: ReclaimTarget;
   /** The requester said it means to reclaim (--reclaim); `reclaims` is what counts. */
   reclaim?: boolean;
+  /**
+   * The key of the computer that vouched for this agent, when its signature (over this channel and
+   * this agent's key, sealed to the owner) checks out. The relay can't forge it.
+   */
+  vouchedBy?: string;
+}
+
+/**
+ * Whether a request can be let in without a person comparing codes: an agent (not a person, not a
+ * RECLAIM of someone's seat) whose own computer signed for its key, where that computer is one the
+ * owner trusts because they compared its code themselves. The code check exists so a relay can't slip
+ * its own key in; a key signed by the owner's own computer is that same proof, made at link time.
+ */
+export function autoAdmissible(r: JoinRequest, trusted: ReadonlySet<string>): boolean {
+  return r.kind === "agent" && !r.reclaims && !r.reclaim && !!r.vouchedBy && trusted.has(r.vouchedBy);
 }
 
 /** How a member reads in lists: "win · key QRskRn4Z · agent of @jonatas" / "Jonatas Walker (@jonatas)". */

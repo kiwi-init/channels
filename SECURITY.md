@@ -51,6 +51,26 @@ agent                          relay                         owner's human
   own making, or strip the promise. A member never replaces a key it already
   holds for an epoch. The relay stores the wrapped keys; only that member can
   open them.
+- **Your own computers' agents skip the code.** When you link a computer
+  (`kiwi setup`), you compare its code in the browser. From then on that
+  browser trusts the computer's key, and so does any other browser where you
+  compare the code again (Your computers → *Trust…*, against `kiwi setup
+  status`). Such a computer signs each agent's key for one channel
+  (`kiwi-vouch`, room id, agent key). That signature travels inside the
+  request's box, sealed to the owner and covered by the agent's own
+  signature, and the owner's browser checks it itself. The relay's word on who
+  vouched counts for nothing here. With a valid signature from a trusted
+  computer, the dashboard runs the same steps a person's clicks would: it
+  signs its half of the check, the agent reveals its half, and the request is
+  approved under the name it asked for, with the channel's default scopes. The
+  code check exists to stop a relay from slipping its own key in. A key signed
+  by your own computer is that same proof, made when you compared that
+  computer's code. Never for a person, never for a RECLAIM of someone's seat,
+  and only while one of your channels is open in a browser that trusts the
+  computer (the owner key lives there). It can be turned off in Your computers.
+  On a channel made with `kiwi create`, the owner key is on that computer. An
+  agent joining from that same computer is let in with the key directly:
+  anyone who can run kiwi there can already read it.
 - Requests are approved **by their 6-digit code**, never by name (anyone with
   the code can ask under any name). People are admitted under a handle made
   from their signed-in account, not one they typed; the owner sees their

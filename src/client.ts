@@ -17,6 +17,7 @@ import {
   type ChannelAccess,
 } from "./crypto.ts";
 import { sign, signText, verify, verifyText, type Identity } from "./identity.ts";
+import { vouchStatement } from "./vouch.ts";
 import { commitTo, joinCheckCode, joinNonce, ownerNonceStatement, spendAuto, type SigningBudget } from "./sas.ts";
 import { canPost, scopesOf, wireScopes, type Scope } from "./scopes.ts";
 import { COORDINATOR, type ChannelState, type GuardFloor } from "./state.ts";
@@ -336,7 +337,9 @@ export class Channel {
   ): Promise<{ roomId: string; requestId: string }> {
     const { roomId, info: room } = await pinnedInfo(relay, code);
     if (!id.xpk) throw new Error("identity has no exchange key");
-    const box = await sealTo(room.ownerXpk, JSON.stringify(info), requestInfo(roomId));
+    // The computer's vouch rides in the sealed box too, so the owner can check it against their own
+    // computers without taking the relay's word for who vouched (see autoAdmissible).
+    const box = await sealTo(room.ownerXpk, JSON.stringify(machine ? { ...info, vouch: machine } : info), requestInfo(roomId));
     const commit = await commitTo(roomId, id.pk, await joinNonce(id, roomId));
     const body = await sign(id, { room: roomId, xpk: id.xpk, box, ts: Date.now(), commit });
     const { id: requestId } = await call<{ id: string }>(relay, roomId, "/requests", { method: "POST", human, body: JSON.stringify(machine ? { ...body, machine } : body) });
@@ -621,10 +624,13 @@ export class Channel {
     for (const r of requests) {
       if (!(await verify({ room: this.roomId, pk: r.pk, xpk: r.xpk, box: r.box, ts: r.ts, commit: r.commit, sig: r.sig }))) continue;
       const raw = await openFrom(this.identity.xsk!, r.box, requestInfo(this.roomId));
-      let info: MemberInfo = { name: "?" };
+      let info: MemberInfo & { vouch?: { pk?: unknown; sig?: unknown } } = { name: "?" };
       try {
-        info = JSON.parse(raw ?? "{}") as MemberInfo;
+        info = JSON.parse(raw ?? "{}") as typeof info;
       } catch {}
+      // A computer's signature over this channel and this key: checked here, never taken from the relay.
+      const v = info.vouch;
+      const vouchedBy = v && typeof v.pk === "string" && typeof v.sig === "string" && (await verifyText(v.pk, v.sig, vouchStatement(this.roomId, r.pk)).catch(() => false)) ? v.pk : null;
       // An agent asking under a name a current member has: approving would move their seat, so a person
       // checks it, never the budget. (A person is admitted under their account's handle, whatever they typed.)
       const seat = r.kind === "human" ? undefined : seats.find((m) => nameKey(m.name) === nameKey(String(info.name ?? "")));
@@ -648,6 +654,7 @@ export class Channel {
         sponsoredBy: r.sponsorUser ? { user: r.sponsorUser, name: inlineText(r.sponsorName, 80) || r.sponsorUser, email: r.sponsorEmail ?? null } : null,
         ...(reclaims ? { reclaims } : {}),
         ...(info.reclaim === true ? { reclaim: true } : {}),
+        ...(vouchedBy ? { vouchedBy } : {}),
       });
     }
     return out;
