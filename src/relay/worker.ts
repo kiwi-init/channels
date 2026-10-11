@@ -6,25 +6,30 @@
 // member key opened it, so removing a member disconnects exactly them.
 
 import { DurableObject } from "cloudflare:workers";
+import * as Layer from "effect/Layer";
 import { CLOSE_CLOSED, CLOSE_REMOVED, PING, PONG } from "../protocol.ts";
-import { workosHumanAuth, workosProfiles, type HumanAuth } from "./human.ts";
+import { ChannelGone, NotFound, Refused, UpdateRequired } from "./failures.ts";
+import { Human, workosHumanAuth, workosProfiles, type HumanAuth } from "./human.ts";
 import { onDeviceHttp, type DeviceStore, type DeviceTransfer } from "./devices.ts";
 import { onVaultHttp, vaultSwap, type VaultRecord, type VaultStore } from "./vault.ts";
-import { cloudflareClient, LINK_TTL_MS, onMachineHttp, vouchedBy, type MachineRecord, type MachineStore } from "./machines.ts";
-import { policyFrom } from "./policy.ts";
+import { cloudflareClient, LINK_TTL_MS, Machines, onMachineHttp, type MachineRecord, type MachineStore } from "./machines.ts";
+import { Policy, policyFrom, type RelayPolicy } from "./policy.ts";
 import {
-  HttpError,
-  RoomStore,
+  Directory as ChannelLists, // the service; the Durable Object below is also called Directory
+  RoomDb,
   relayConfig,
   authenticateSocket,
   errorResponse,
+  expire,
+  idleExpired,
   myChannels,
   myUsage,
   readHead,
   HEADS_CACHE_SECONDS,
+  missingFingerprint,
   onClientFrame,
   parseRoomPath,
-  requireInfoFingerprint,
+  touch,
   welcomeFrames,
   wsHeaders,
   type DirectoryEntry,
@@ -34,7 +39,7 @@ import {
   type RoomHead,
   type Sql,
 } from "./room.ts";
-import { onHttp } from "./route.ts";
+import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
 
 interface Env {
   CHANNELS: DurableObjectNamespace<Channel>;
@@ -63,8 +68,16 @@ function human(env: Env): HumanAuth | null {
   return humanAuth;
 }
 
+/** A person's channel list, from their Directory object. */
+async function channelsOf(env: Env, user: string): Promise<DirectoryEntry[]> {
+  return (await env.PEOPLE.get(env.PEOPLE.idFromName(user)).fetch("https://directory/list")).json();
+}
+
 export class Channel extends DurableObject<Env> {
   private readonly sql: Sql;
+  private readonly policy: RelayPolicy;
+  /** What this channel's room runs with: sign-in, policy, people's lists, linked computers. */
+  private readonly relay: Relay;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -72,11 +85,20 @@ export class Channel extends DurableObject<Env> {
       run: (q, ...p) => void ctx.storage.sql.exec(q, ...p),
       all: <T>(q: string, ...p: (string | number | null)[]) => ctx.storage.sql.exec(q, ...p).toArray() as T[],
     };
+    this.policy = policyFrom(env as unknown as Record<string, string | undefined>);
+    this.relay = makeRelay(
+      Layer.mergeAll(
+        Layer.succeed(Human, human(env)),
+        Layer.succeed(Policy, this.policy),
+        Layer.succeed(ChannelLists, { list: (user: string) => channelsOf(env, user) }),
+        Layer.succeed(Machines, machineStore(env)),
+      ),
+    );
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));
   }
 
-  private store(roomId: string): RoomStore {
-    return new RoomStore(this.sql, roomId, policyFrom(this.env as unknown as Record<string, string | undefined>));
+  private store(roomId: string): RoomDb {
+    return new RoomDb(this.sql, roomId);
   }
 
   /** RPC for the signed-in listing (no HTTP route reaches it): the newest message, a pure read. */
@@ -89,29 +111,24 @@ export class Channel extends DurableObject<Env> {
       const url = new URL(req.url);
       const route = parseRoomPath(url.pathname)!;
       // No fingerprint: 426 before this object reads the room.
-      requireInfoFingerprint(req.method, route.rest, url);
-      const store = this.store(route.roomId);
+      const early = missingFingerprint(req.method, route.rest, url);
+      if (early) return errorResponse(early);
+      const db = this.store(route.roomId);
       if (route.rest === "/ws") {
-        if (store.isLegacy()) {
+        if (db.isLegacy()) {
           await this.apply({ wipe: true });
-          throw new HttpError(404, "no such channel", "ChannelGone");
+          return errorResponse(new ChannelGone({ message: "no such channel" }));
         }
-        if (req.headers.get("upgrade") !== "websocket") throw new HttpError(426, "expected websocket");
-        const pk = await authenticateSocket(store, req);
+        if (req.headers.get("upgrade") !== "websocket") return errorResponse(new UpdateRequired({ message: "expected websocket" }));
+        const pk = await runRoom(this.relay, db, authenticateSocket(req));
         const { 0: client, 1: server } = new WebSocketPair();
         this.ctx.acceptWebSocket(server);
         server.serializeAttachment({ pk, room: route.roomId });
-        for (const f of welcomeFrames(store, Number(url.searchParams.get("since") ?? 0) || 0)) server.send(f);
-        await this.apply({ expireAt: store.touch() ?? undefined });
+        for (const f of runRoomSync(this.relay, db, welcomeFrames(Number(url.searchParams.get("since") ?? 0) || 0))) server.send(f);
+        await this.apply({ expireAt: runRoomSync(this.relay, db, touch) ?? undefined });
         return new Response(null, { status: 101, webSocket: client, headers: wsHeaders(req) });
       }
-      const { res, fx } = await onHttp(store, req, route.rest, {
-        human: human(this.env),
-        vouch: (pk, machine) => vouchedBy(machineStore(this.env), route.roomId, pk, machine),
-        policy: policyFrom(this.env as unknown as Record<string, string | undefined>),
-        ownedChannels: async (user) =>
-          ((await (await this.env.PEOPLE.get(this.env.PEOPLE.idFromName(user)).fetch("https://directory/list")).json()) as DirectoryEntry[]).filter((c) => c.owner).length,
-      });
+      const { res, fx } = await onHttp(this.relay, db, req, route.rest);
       if (fx) await this.apply(fx);
       return res;
     } catch (err) {
@@ -121,7 +138,7 @@ export class Channel extends DurableObject<Env> {
 
   override async webSocketMessage(ws: WebSocket, data: string | ArrayBuffer): Promise<void> {
     const { room, pk } = ws.deserializeAttachment() as { room: string; pk: string };
-    const fx = onClientFrame(this.store(room), typeof data === "string" ? data : new TextDecoder().decode(data), pk);
+    const fx = runRoomSync(this.relay, this.store(room), onClientFrame(typeof data === "string" ? data : new TextDecoder().decode(data), pk));
     if (fx.reply) ws.send(fx.reply);
     await this.apply(fx, ws);
   }
@@ -161,12 +178,12 @@ export class Channel extends DurableObject<Env> {
   override async alarm(): Promise<void> {
     const room = (this.sql.all<{ v: string }>("SELECT v FROM meta WHERE k = 'room'")[0] ?? null)?.v;
     if (!room) return;
-    const store = this.store(room);
-    const days = store.policy.expireAfterDays;
+    const db = this.store(room);
+    const days = this.policy.expireAfterDays;
     if (!days) return;
     // Someone's still connected: look again later rather than cut them off.
     if (this.ctx.getWebSockets().length) return void (await this.ctx.storage.setAlarm(Date.now() + days * 86_400_000));
-    if (store.idleExpired()) await this.apply(store.expire());
+    if (runRoomSync(this.relay, db, idleExpired)) await this.apply(runRoomSync(this.relay, db, expire));
     else await this.ctx.storage.setAlarm(Number(this.sql.all<{ v: string }>("SELECT v FROM meta WHERE k = 'active'")[0]?.v ?? Date.now()) + days * 86_400_000);
   }
 }
@@ -325,14 +342,14 @@ export default {
     if (url.pathname === "/v1/config") return relayConfig(human(env));
     if (url.pathname.startsWith("/v1/me/devices")) {
       try {
-        return (await onDeviceHttp(req, deviceStore(env), human(env))) ?? errorResponse(new HttpError(404, "not found"));
+        return (await onDeviceHttp(req, deviceStore(env), human(env))) ?? errorResponse(new NotFound({ message: "not found" }));
       } catch (err) {
         return errorResponse(err);
       }
     }
     if (url.pathname === "/v1/me/vault") {
       try {
-        return (await onVaultHttp(req, vaultStore(env), human(env))) ?? errorResponse(new HttpError(404, "not found"));
+        return (await onVaultHttp(req, vaultStore(env), human(env))) ?? errorResponse(new NotFound({ message: "not found" }));
       } catch (err) {
         return errorResponse(err);
       }
@@ -341,19 +358,18 @@ export default {
       try {
         const ip = cloudflareClient(req);
         const gate = ip ? { ip, allow: (key: string) => env.MACHINE_REGISTRATIONS.limit({ key }).then((r) => r.success) } : null;
-        return (await onMachineHttp(req, machineStore(env), human(env), gate)) ?? errorResponse(new HttpError(404, "not found"));
+        return (await onMachineHttp(req, machineStore(env), human(env), gate)) ?? errorResponse(new NotFound({ message: "not found" }));
       } catch (err) {
         return errorResponse(err);
       }
     }
     if (url.pathname === "/v1/me/usage" && req.method === "GET") {
       try {
-        const people = (user: string) => env.PEOPLE.get(env.PEOPLE.idFromName(user));
         return await myUsage(
           req,
           human(env),
           policyFrom(env as unknown as Record<string, string | undefined>),
-          async (user) => (await people(user).fetch("https://directory/list")).json(),
+          (user) => channelsOf(env, user),
           // Each channel answers for itself, to the same signed-in person.
           async (room) => {
             const res = await env.CHANNELS.get(env.CHANNELS.idFromName(room)).fetch(new Request(`https://relay/v1/rooms/${room}/usage`, { headers: req.headers }));
@@ -369,7 +385,7 @@ export default {
         return await myChannels(
           req,
           human(env),
-          async (user) => (await env.PEOPLE.get(env.PEOPLE.idFromName(user)).fetch("https://directory/list")).json(),
+          (user) => channelsOf(env, user),
           {
             read: async (room) => (await env.CHANNELS.get(env.CHANNELS.idFromName(room)).head()) ?? null,
             cache: headCache(url.origin),
@@ -380,13 +396,10 @@ export default {
       }
     }
     const route = parseRoomPath(url.pathname);
-    if (!route) return errorResponse(new HttpError(404, "not found"));
+    if (!route) return errorResponse(new NotFound({ message: "not found" }));
     // No fingerprint: 426 before the room's object is woken.
-    try {
-      requireInfoFingerprint(req.method, route.rest, url);
-    } catch (err) {
-      return errorResponse(err);
-    }
+    const early = missingFingerprint(req.method, route.rest, url);
+    if (early) return errorResponse(early);
     return toRoom(env, route.roomId, req);
   },
 } satisfies ExportedHandler<Env>;
@@ -414,6 +427,6 @@ async function toRoom(env: Env, roomId: string, req: Request): Promise<Response>
         console.error(JSON.stringify({ at: "room-stub-retry", method: req.method, error: (again as Error).message }));
       }
     }
-    return errorResponse(new HttpError(503, "the channel is busy or restarting; try again in a moment"));
+    return errorResponse(new Refused({ status: 503, message: "the channel is busy or restarting; try again in a moment", tag: "Internal" }));
   }
 }

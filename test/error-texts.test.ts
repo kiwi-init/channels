@@ -6,21 +6,29 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { STATUS } from "../src/relay/failures.ts";
 
 const dir = join(import.meta.dir, "../src/relay");
 
 /**
- * (status, text) for every refusal: HttpError thrown, refuse() in the router, and
- * error bodies written by hand. Which file a text lives in isn't API, so it isn't pinned.
+ * (status, text) for every refusal: a tagged failure (src/relay/failures.ts), refuse()
+ * in the person routes, and error bodies written by hand. Which file a text lives in
+ * isn't API, so it isn't pinned.
  */
 function errorTexts(): string[] {
   const out = new Set<string>();
   for (const f of readdirSync(dir).filter((f) => f.endsWith(".ts")).sort()) {
     const src = readFileSync(join(dir, f), "utf8");
-    for (const m of src.matchAll(/(?:new HttpError|refuse)\(\s*(\d{3}),\s*([`"'])((?:\\.|(?!\2).)*)\2/g)) out.add(`${m[1]} ${m[3]}`);
+    for (const m of src.matchAll(/refuse\(\s*(\d{3}),\s*([`"'])((?:\\.|(?!\2).)*)\2/g)) out.add(`${m[1]} ${m[3]}`);
     // A text kept in a string constant counts as that text.
     const consts = new Map([...src.matchAll(/const\s+(\w+)\s*=\s*"((?:\\.|[^"])*)"/g)].map((m) => [m[1]!, m[2]!]));
-    for (const m of src.matchAll(/(?:new HttpError|refuse)\(\s*(\d{3}),\s*([A-Za-z_][\w.]*(?:\([^)]*\))?)\s*(?:,\s*"\w+"\s*)?\)/g)) out.add(`${m[1]} ${consts.get(m[2]!) ?? `<${m[2]}>`}`);
+    for (const m of src.matchAll(/refuse\(\s*(\d{3}),\s*([A-Za-z_][\w.]*(?:\([^)]*\))?)\s*(?:,\s*"\w+"\s*)?\)/g)) out.add(`${m[1]} ${consts.get(m[2]!) ?? `<${m[2]}>`}`);
+    // A tagged failure answers with its tag's status (STATUS); a Refused names its own.
+    const status = (tag: string, own?: string) => own ?? (STATUS as Record<string, number>)[tag];
+    for (const m of src.matchAll(/new (\w+)\(\{\s*(?:status:\s*(\d{3}),\s*)?message:\s*([`"'])((?:\\.|(?!\3).)*)\3/g)) if (status(m[1]!, m[2])) out.add(`${status(m[1]!, m[2])} ${m[4]}`);
+    for (const m of src.matchAll(/new (\w+)\(\{\s*(?:status:\s*(\d{3}),\s*)?message:\s*([A-Za-z_][\w.]*(?:\([^)]*\))?)\s*[,}]/g)) {
+      if (status(m[1]!, m[2])) out.add(`${status(m[1]!, m[2])} ${consts.get(m[3]!) ?? `<${m[3]}>`}`);
+    }
     for (const m of src.matchAll(/signedInPerson\(\s*([A-Za-z_]\w*)\s*\)/g)) if (consts.has(m[1]!)) out.add(`404 ${consts.get(m[1]!)}`);
     for (const m of src.matchAll(/error:\s*([`"'])((?:\\.|(?!\1).)*)\1/g)) out.add(`body ${m[2]}`);
     // A person route's 404 on a relay without sign-in is passed to signedInPerson as its text.

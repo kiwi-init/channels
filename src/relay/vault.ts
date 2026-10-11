@@ -17,9 +17,9 @@ import { sha256Hex } from "../auth.ts";
 import { canonical, verify } from "../identity.ts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import { attempt, describeRoutes, json, refuse, Request_, servePerson, SignIn, signedInPerson, type Refused, type Route } from "./http.ts";
+import { attempt, describeRoutes, json, refuse, Request_, servePerson, SignIn, signedInPerson, type Route } from "./http.ts";
+import type { Refusal } from "./failures.ts";
 import type { HumanAuth } from "./human.ts";
-import { HttpError } from "./room.ts";
 import { fits, Present, VaultVersion } from "./schema.ts";
 
 export interface VaultRecord {
@@ -71,17 +71,15 @@ export interface VaultAuth {
 /** What a writer signs for a blob: its SHA-256, hex. */
 export const blobHash = sha256Hex;
 
-function version(v: unknown): number {
-  if (!fits(VaultVersion, v)) throw new HttpError(400, "version must be the vault version you read (0 for a new vault)");
-  return v;
-}
+const version = (v: unknown) => (fits(VaultVersion, v) ? Effect.succeed(v) : refuse(400, "version must be the vault version you read (0 for a new vault)"));
 
 /** The writer's signature over exactly this action, or a 403. */
-async function authorize(auth: unknown, want: Omit<VaultAuth, "pk" | "sig">, signer: string): Promise<void> {
-  const a = auth as Partial<VaultAuth> | null;
-  const same = a && typeof a === "object" && canonical({ ...a, pk: undefined, sig: undefined }) === canonical(want);
-  if (!same || a!.pk !== signer || !(await verify(a!))) throw new HttpError(403, "vault writes must be signed by the vault's writer key");
-}
+const authorize = (auth: unknown, want: Omit<VaultAuth, "pk" | "sig">, signer: string) =>
+  Effect.gen(function* () {
+    const a = auth as Partial<VaultAuth> | null;
+    const same = a && typeof a === "object" && canonical({ ...a, pk: undefined, sig: undefined }) === canonical(want);
+    if (!same || a!.pk !== signer || !(yield* Effect.promise(() => verify(a!)))) return yield* refuse(403, "vault writes must be signed by the vault's writer key");
+  });
 
 /** The record as it stands: a reset that has come due means there's no vault any more. */
 async function live(store: VaultStore, user: string, now: number): Promise<VaultRecord | null> {
@@ -142,7 +140,7 @@ const routes: VaultRoute[] = [
         const store = yield* Vaults;
         const { now } = yield* SignIn;
         const b = yield* vaultBody;
-        const expected = yield* attempt(() => version(b.version));
+        const expected = yield* version(b.version);
         if (!fits(Present, b.blob)) return yield* refuse(400, "missing blob");
         if (b.blob.length > MAX_VAULT) return yield* refuse(413, "the vault is larger than 1MB");
         if (b.writer !== undefined && !fits(Present, b.writer)) return yield* refuse(400, "bad writer");
@@ -156,7 +154,8 @@ const routes: VaultRoute[] = [
         if (!current && !handover) return yield* refuse(400, "a new vault names its writer key");
         const signer = current?.writer ?? handover!;
         const blob = b.blob;
-        yield* attempt(async () => authorize(b.auth, { user, expected, hash: await blobHash(blob), ...(handover ? { writer: handover } : {}) }, signer));
+        const hash = yield* attempt(() => blobHash(blob));
+        yield* authorize(b.auth, { user, expected, hash, ...(handover ? { writer: handover } : {}) }, signer);
         const recent = (current?.recent ?? []).filter((t) => now - t < VAULT_WINDOW_MS);
         if (recent.length >= VAULT_WRITES) return yield* refuse(429, "too many vault saves; try again in a few minutes");
         // A signed save is proof a device still holds the vault: it cancels any pending reset.
@@ -183,8 +182,8 @@ const routes: VaultRoute[] = [
           if (!current.resetAt && !(yield* attempt(() => store.put(user, current.version, { ...current, resetAt }))).ok) return yield* refuse(409, "the vault changed; try again");
           return { data: { resetAt } };
         }
-        const expected = yield* attempt(() => version(b.version));
-        yield* attempt(() => authorize(b.auth, { user, expected, op: "delete" }, current.writer));
+        const expected = yield* version(b.version);
+        yield* authorize(b.auth, { user, expected, op: "delete" }, current.writer);
         if (!(yield* attempt(() => store.remove(user, expected)))) {
           return { res: Response.json({ error: "the vault changed since you read it", tag: "VaultConflict", version: current.version }, { status: 409 }) };
         }
@@ -193,7 +192,7 @@ const routes: VaultRoute[] = [
   },
 ];
 
-const guards: Record<VaultGuard, Effect.Effect<string, Refused, SignIn | Request_>> = { person: signedInPerson("this relay has no sign-in") };
+const guards: Record<VaultGuard, Effect.Effect<string, Refusal, SignIn | Request_>> = { person: signedInPerson("this relay has no sign-in") };
 
 /** The vault's rows, for the route-table test. */
 export const vaultRouteTable = describeRoutes(routes);

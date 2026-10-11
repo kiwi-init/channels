@@ -7,31 +7,38 @@ import { Database } from "bun:sqlite";
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { basename, join, resolve, sep } from "node:path";
 import type { ServerWebSocket } from "bun";
+import * as Layer from "effect/Layer";
 import { CLOSE_CLOSED, CLOSE_REMOVED, PING, PONG } from "../protocol.ts";
-import { devHostOk, devHumanAuth, devRequestOk, HUMAN_HEADER, workosFromSettings, type HumanAuth } from "./human.ts";
+import { ChannelGone, NotFound, UpdateRequired } from "./failures.ts";
+import { clockLayer } from "./http.ts";
+import { devHostOk, devHumanAuth, devRequestOk, Human, HUMAN_HEADER, workosFromSettings, type HumanAuth } from "./human.ts";
 import { onDeviceHttp, type DeviceStore, type DeviceTransfer } from "./devices.ts";
 import { onVaultHttp, vaultSwap, type VaultRecord, type VaultStore } from "./vault.ts";
-import { onMachineHttp, parseTrustProxy, registrationAddress, registrationAllowed, sweepPending, trustProxyFromArgs, vouchedBy, type MachineRecord, type MachineStore, type TrustProxy } from "./machines.ts";
-import { policyFrom, type RelayPolicy } from "./policy.ts";
+import { Machines, onMachineHttp, parseTrustProxy, registrationAddress, registrationAllowed, sweepPending, trustProxyFromArgs, type MachineRecord, type MachineStore, type TrustProxy } from "./machines.ts";
+import { Policy, policyFrom, type RelayPolicy } from "./policy.ts";
 import {
-  HttpError,
-  RoomStore,
+  Directory,
+  RoomDb,
   relayConfig,
   authenticateSocket,
   errorResponse,
+  expire,
+  idleExpired,
   myChannels,
   readHead,
   myUsage,
+  missingFingerprint,
   onClientFrame,
   parseRoomPath,
-  requireInfoFingerprint,
+  touch,
+  usage as roomUsage,
   welcomeFrames,
   wsHeaders,
   type DirectoryEntry,
   type Sql,
   type Effects,
 } from "./room.ts";
-import { onHttp } from "./route.ts";
+import { makeRelay, onHttp, runRoom, runRoomSync } from "./route.ts";
 
 interface SocketData {
   roomId: string;
@@ -129,7 +136,19 @@ export function startRelay(
       all: <T>(q: string, ...p: (string | number | null)[]) => d.query(q).all(...p) as T[],
     };
   };
-  const storeFor = (roomId: string, creating: boolean): RoomStore => new RoomStore(sqlFor(roomId, creating), roomId, policy, opts.now);
+  const storeFor = (roomId: string, creating: boolean): RoomDb => new RoomDb(sqlFor(roomId, creating), roomId);
+  const listOf = (user: string) => (people.query("SELECT entry FROM entries WHERE user = ?").all(user) as { entry: string }[]).map((r) => JSON.parse(r.entry) as DirectoryEntry);
+
+  // What every room runs with. `now` (tests) is the clock the room reads.
+  const relay = makeRelay(
+    Layer.mergeAll(
+      Layer.succeed(Human, human),
+      Layer.succeed(Policy, policy),
+      Layer.succeed(Directory, { list: async (user: string) => listOf(user) }),
+      Layer.succeed(Machines, machines),
+      clockLayer(opts.now),
+    ),
+  );
 
   const apply = (roomId: string, fx: Effects, sender?: ServerWebSocket<SocketData>) => {
     const room = sockets.get(roomId) ?? new Set();
@@ -159,9 +178,9 @@ export function startRelay(
     for (const f of readdirSync(dataDir)) {
       const m = /^([0-9a-f]{32})\.sqlite$/.exec(f);
       if (!m || sockets.get(m[1]!)?.size) continue;
-      const store = storeFor(m[1]!, false);
-      if (!store.idleExpired()) continue;
-      apply(m[1]!, store.expire());
+      const db = storeFor(m[1]!, false);
+      if (!runRoomSync(relay, db, idleExpired)) continue;
+      apply(m[1]!, runRoomSync(relay, db, expire));
       expired++;
     }
     return expired;
@@ -191,49 +210,33 @@ export function startRelay(
         const machine = await onMachineHttp(req, machines, human, ip ? { ip, allow: registrationAllowed } : null);
         if (machine) return machine;
         if (url.pathname === "/v1/me/usage" && req.method === "GET") {
-          return await myUsage(
-            req,
-            human,
-            policy,
-            async (user) => (people.query("SELECT entry FROM entries WHERE user = ?").all(user) as { entry: string }[]).map((r) => JSON.parse(r.entry) as DirectoryEntry),
-            async (room) => (existsSync(file(room)) ? storeFor(room, false).usage() : null),
-          );
+          return await myUsage(req, human, policy, async (user) => listOf(user), async (room) => (existsSync(file(room)) ? runRoomSync(relay, storeFor(room, false), roomUsage) : null));
         }
         if (url.pathname === "/v1/me/channels" && req.method === "GET") {
-          return await myChannels(
-            req,
-            human,
-            async (user) => (people.query("SELECT entry FROM entries WHERE user = ?").all(user) as { entry: string }[]).map((r) => JSON.parse(r.entry) as DirectoryEntry),
-            { read: async (room) => (existsSync(file(room)) ? readHead(sqlFor(room, false)) : null), now: opts.now },
-          );
+          return await myChannels(req, human, async (user) => listOf(user), { read: async (room) => (existsSync(file(room)) ? readHead(sqlFor(room, false)) : null), now: opts.now });
         }
         const route = parseRoomPath(url.pathname);
-        if (!route) throw new HttpError(404, "not found");
+        if (!route) return errorResponse(new NotFound({ message: "not found" }));
         // No fingerprint: 426 before the room file is opened.
-        requireInfoFingerprint(req.method, route.rest, url);
-        const store = storeFor(route.roomId, route.rest === "/create");
+        const early = missingFingerprint(req.method, route.rest, url);
+        if (early) return errorResponse(early);
+        const db = storeFor(route.roomId, route.rest === "/create");
         if (route.rest === "/ws") {
-          if (store.isLegacy()) {
+          if (db.isLegacy()) {
             apply(route.roomId, { wipe: true });
-            throw new HttpError(404, "no such channel", "ChannelGone");
+            return errorResponse(new ChannelGone({ message: "no such channel" }));
           }
-          const pk = await authenticateSocket(store, req);
+          const pk = await runRoom(relay, db, authenticateSocket(req));
           const since = Number(url.searchParams.get("since") ?? 0) || 0;
           if (server.upgrade(req, { data: { roomId: route.roomId, pk, since }, headers: wsHeaders(req) })) return undefined;
-          throw new HttpError(426, "expected websocket");
+          return errorResponse(new UpdateRequired({ message: "expected websocket" }));
         }
         let result: Awaited<ReturnType<typeof onHttp>>;
         try {
-          result = await onHttp(store, req, route.rest, {
-            human,
-            vouch: (pk, m) => vouchedBy(machines, route.roomId, pk, m),
-            policy,
-            ownedChannels: async (user) =>
-              (people.query("SELECT entry FROM entries WHERE user = ?").all(user) as { entry: string }[]).filter((r) => (JSON.parse(r.entry) as DirectoryEntry).owner).length,
-          });
+          result = await onHttp(relay, db, req, route.rest);
         } catch (err) {
           // A create that failed leaves no file behind.
-          if (route.rest === "/create" && !store.exists()) {
+          if (route.rest === "/create" && !db.exists()) {
             dbs.get(route.roomId)?.close();
             dbs.delete(route.roomId);
             for (const suffix of ["", "-wal", "-shm"]) rmSync(file(route.roomId) + suffix, { force: true });
@@ -252,15 +255,15 @@ export function startRelay(
         let set = sockets.get(ws.data.roomId);
         if (!set) sockets.set(ws.data.roomId, (set = new Set()));
         set.add(ws);
-        const store = storeFor(ws.data.roomId, false);
-        for (const f of welcomeFrames(store, ws.data.since)) ws.send(f);
+        const db = storeFor(ws.data.roomId, false);
+        for (const f of runRoomSync(relay, db, welcomeFrames(ws.data.since))) ws.send(f);
         // A connection counts as activity for idle expiry.
-        store.touch();
+        runRoomSync(relay, db, touch);
       },
       message(ws, data) {
         const raw = typeof data === "string" ? data : new TextDecoder().decode(data);
         if (raw === PING) return void ws.send(PONG);
-        const fx = onClientFrame(storeFor(ws.data.roomId, false), raw, ws.data.pk);
+        const fx = runRoomSync(relay, storeFor(ws.data.roomId, false), onClientFrame(raw, ws.data.pk));
         if (fx.reply) ws.send(fx.reply);
         apply(ws.data.roomId, fx, ws);
       },

@@ -13,7 +13,8 @@
 
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import { attempt, describeRoutes, json, refuse, Request_, servePerson, SignIn, signedInPerson, type Refused, type Route } from "./http.ts";
+import { attempt, describeRoutes, json, refuse, Request_, servePerson, SignIn, signedInPerson, type Route } from "./http.ts";
+import type { Refusal } from "./failures.ts";
 import type { HumanAuth } from "./human.ts";
 import { fits, Present } from "./schema.ts";
 
@@ -119,7 +120,7 @@ const routes: DeviceRoute[] = [
   },
 ];
 
-const guards: Record<DeviceGuard, Effect.Effect<string, Refused, SignIn | Request_>> = { person: signedInPerson("this relay has no sign-in") };
+const guards: Record<DeviceGuard, Effect.Effect<string, Refusal, SignIn | Request_>> = { person: signedInPerson("this relay has no sign-in") };
 
 /** The handover rows, for the route-table test. */
 export const deviceRouteTable = describeRoutes(routes);

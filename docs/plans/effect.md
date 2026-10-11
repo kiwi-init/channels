@@ -108,6 +108,20 @@
 
 Each step is a few days, and each is shippable on its own.
 
+**Step 2 so far (code, not yet deployed):** the room is Effects over services:
+`RoomStore` (a `RoomDb` over the DO's SQL or bun:sqlite), `Policy`, `Human`,
+`Directory`, `Machines`, and Effect's `Clock` (the Bun relay's `now` option is
+now the clock it provides). Both adapters build one Layer per relay (per Durable
+Object) with `makeRelay`; DO hibernation, auto-responses and alarms stay in
+`worker.ts`. `HttpError` is gone: the room fails with the tagged failures in
+`src/relay/failures.ts`, whose `STATUS` table and `refusalResponse` are the one
+place a refusal becomes its status and `{ error, tag }`. The runtime never yields
+between steps (`PreventSchedulerYield`), so a room's check-then-write stays atomic
+in a Durable Object. Left for later: the person routes (`vault.ts`, `devices.ts`,
+`machines.ts`, `/v1/me/channels`, `/v1/me/usage`) still take their stores as
+arguments and refuse with `refuse(status, text)`; the canary deploy and the DO CPU
+numbers.
+
 ## Costs, measured
 
 - **Bundle**: a minimal program with a service, a Layer and a tagged error,

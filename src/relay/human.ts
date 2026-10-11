@@ -6,6 +6,14 @@
 // key's signature. An agent holding a copy of the owner key still can't let
 // anyone in. Tokens are checked against WorkOS's public keys (JWKS); the relay
 // holds no WorkOS secret.
+//
+// The relay runs with sign-in as a service, Human: WorkOS, dev sign-in, or none
+// (null), whichever its adapter provides. The verifiers below stay plain async
+// code: the routes call verify through Effect.promise, and names through
+// profileOf.
+
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
 
 export interface HumanAuth {
   /** The WorkOS client id the web app should sign in with. */
@@ -17,6 +25,13 @@ export interface HumanAuth {
   /** Development sign-in (devHumanAuth): anyone is whoever they say. Never on a reachable relay. */
   dev?: boolean;
 }
+
+/** Sign-in as this relay runs it: WorkOS, dev sign-in, or null for none. */
+export class Human extends Context.Service<Human, HumanAuth | null>()("kiwi/relay/HumanAuth") {}
+
+/** A user's name and email as sign-in knows them, or null: a failed lookup never fails the request. */
+export const profileOf = (user: string) =>
+  Effect.flatMap(Human, (human) => (human?.profile ? Effect.promise(async () => (await human.profile!(user).catch(() => null)) ?? null) : Effect.succeed(null)));
 
 /** The tokens dev sign-in takes: "dev:<name>" (letters, digits, _ and -). */
 const DEV_TOKEN = /^dev:([A-Za-z0-9_-]{1,64})$/;
