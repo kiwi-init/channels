@@ -1,19 +1,16 @@
 // What every relay route table shares: the request as a service, the tagged
 // refusals (failures.ts), and a dispatcher that runs a route's declared check
 // before its handler. The room's routes are in route.ts; a person's in
-// devices.ts, vault.ts and machines.ts.
+// devices.ts, vault.ts, machines.ts and me.ts, which run with the services the
+// adapter builds once (me.ts: makePeople).
 
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as References from "effect/References";
-import { tagForStatus, type ErrorTag } from "../errors.ts";
-import { BadRequest, refusalResponse, Refused, type Refusal } from "./failures.ts";
-import { HUMAN_HEADER, type HumanAuth } from "./human.ts";
-
-/** Refuse with a status and text, and a tag when the status alone doesn't say what it means. */
-export const refuse = (status: number, message: string, tag?: ErrorTag) => Effect.fail(new Refused({ status, message, tag: tag ?? tagForStatus(status) }));
+import { BadRequest, NotFound, refusalResponse, SignInRequired, type Refusal } from "./failures.ts";
+import { Human, HUMAN_HEADER } from "./human.ts";
 
 /** Plain async code (a store call): if it throws, that's a bug or an outage, so a defect (a 500), never a refusal. */
 export const attempt = <A>(f: () => A | Promise<A>): Effect.Effect<A> => Effect.promise(async () => f());
@@ -115,45 +112,42 @@ export const answer = <Fx, R>(program: Effect.Effect<Reply<Fx>, Refusal, R>): Ef
     Effect.catch((r) => Effect.succeed({ res: refusalResponse(r) })),
   );
 
-/** Run a handler that answers with a whole Response; a refusal becomes its response. */
-export const respond = (program: Effect.Effect<Response, Refusal>): Promise<Response> =>
-  Effect.runPromise(program.pipe(Effect.catch((r) => Effect.succeed(refusalResponse(r)))));
+/** Run a handler that answers with a whole Response, in the relay's context; a refusal becomes its response. */
+export const respond = <R>(context: Context.Context<R>, program: Effect.Effect<Response, Refusal, R>): Promise<Response> =>
+  Effect.runPromiseWith(context)(program.pipe(Effect.catch((r) => Effect.succeed(refusalResponse(r)))));
 
 /** A route table as plain rows (method, path, check), for tests. */
 export const describeRoutes = (routes: { method: string; path: string | RegExp; guard: string }[]) => routes.map(({ method, path, guard }) => ({ method, path: String(path), guard }));
 
 // ---------- a signed-in person's routes ----------
 
-/** Sign-in as the person routes see it: who verifies sessions (null: this relay has none), and the time. */
-export class SignIn extends Context.Service<SignIn, { human: HumanAuth | null; now: number }>()("kiwi/relay/SignIn") {}
-
 /**
- * The signed-in person behind a request. `noSignIn` is the 404 each area has
- * always given on a relay without sign-in (its text is API too).
+ * The signed-in person behind a request, by the relay's sign-in (Human).
+ * `noSignIn` is the 404 each area has always given on a relay without sign-in
+ * (its text is API too).
  */
 export const signedInPerson = (noSignIn: string) =>
   Effect.gen(function* () {
-    const { human } = yield* SignIn;
+    const human = yield* Human;
     const { req } = yield* Request_;
-    if (!human) return yield* refuse(404, noSignIn);
+    if (!human) return yield* new NotFound({ message: noSignIn });
     const user = yield* Effect.promise(() => human.verify(req.headers.get(HUMAN_HEADER) ?? ""));
-    if (!user) return yield* refuse(401, "sign in first", "SignInRequired");
+    if (!user) return yield* new SignInRequired({ message: "sign in first" });
     return user;
   });
 
-/** Run a person route table for one request; the answer as a Response. */
+/**
+ * Run a person route table for one request, in the context its adapter built
+ * once (the stores, sign-in and clock); the answer as a Response.
+ */
 export async function servePerson<G extends string, W, R>(
   req: Request,
-  routes: Route<G, W, never, R | SignIn | Request_>[],
-  guards: Record<G, Effect.Effect<W, Refusal, R | SignIn | Request_>>,
-  otherwise: Effect.Effect<Reply<never>, Refusal, R | SignIn | Request_>,
-  provide: (e: Effect.Effect<{ res: Response }, never, R | SignIn | Request_>) => Effect.Effect<{ res: Response }, never, SignIn | Request_>,
-  signIn: { human: HumanAuth | null; now: number },
+  routes: Route<G, W, never, R | Request_>[],
+  guards: Record<G, Effect.Effect<W, Refusal, R | Request_>>,
+  otherwise: Effect.Effect<Reply<never>, Refusal, R | Request_>,
+  context: Context.Context<R>,
 ): Promise<Response> {
-  const program = answer(dispatch(routes, guards, otherwise)).pipe(
-    provide,
-    Effect.provideService(SignIn, signIn),
-    Effect.provideService(Request_, await incoming(req, new URL(req.url).pathname)),
-  );
-  return (await Effect.runPromise(program)).res;
+  const request = await incoming(req, new URL(req.url).pathname);
+  return (await Effect.runPromiseWith(Context.add(context, Request_, request))(answer(dispatch(routes, guards, otherwise)))).res;
 }
+

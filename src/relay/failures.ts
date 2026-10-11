@@ -32,6 +32,8 @@ export class ReadOnly extends Schema.TaggedError<ReadOnly>()("ReadOnly", text) {
 export class ChannelGone extends Schema.TaggedError<ChannelGone>()("ChannelGone", text) {}
 /** No such request, member or route. */
 export class NotFound extends Schema.TaggedError<NotFound>()("NotFound", text) {}
+/** The path is right, the method isn't (the vault takes GET, PUT and DELETE). */
+export class MethodNotAllowed extends Schema.TaggedError<MethodNotAllowed>()("MethodNotAllowed", text) {}
 /** The room moved on (an epoch, a check, an existing member): read again and retry. */
 export class Conflict extends Schema.TaggedError<Conflict>()("Conflict", text) {}
 /** More than the relay stores at once. */
@@ -53,6 +55,7 @@ export type Failure =
   | ReadOnly
   | ChannelGone
   | NotFound
+  | MethodNotAllowed
   | Conflict
   | TooLarge
   | UpdateRequired
@@ -71,16 +74,14 @@ export const STATUS = {
   ReadOnly: 403,
   ChannelGone: 404,
   NotFound: 404,
+  MethodNotAllowed: 405,
   Conflict: 409,
   TooLarge: 413,
   UpdateRequired: 426,
   TooMany: 429,
 } as const satisfies Record<Failure["_tag"] & ErrorTag, number>;
 
-/**
- * A refusal whose status doesn't follow from a tag: the person routes'
- * refuse(status, text), and the Worker's 503 (tagged Internal, like a 500).
- */
+/** A refusal whose status doesn't follow from a tag: the Worker's 503 (tagged Internal, like a 500). */
 export class Refused extends Schema.TaggedError<Refused>()("Refused", {
   status: Schema.Number,
   message: Schema.String,

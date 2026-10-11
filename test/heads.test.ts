@@ -9,13 +9,20 @@ import { join } from "node:path";
 import { Channel } from "../src/client.ts";
 import { generateIdentity } from "../src/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { HEADS_PER_LISTING, myChannels, readHead, type DirectoryEntry, type RoomHead, type Sql } from "../src/relay/room.ts";
+import * as Layer from "effect/Layer";
+import { buildContext, clockLayer } from "../src/relay/http.ts";
+import { Human } from "../src/relay/human.ts";
+import { HEADS_PER_LISTING, myChannels } from "../src/relay/me.ts";
+import { Directory, readHead, type DirectoryEntry, type RoomHead, type Sql } from "../src/relay/room.ts";
 
 const DAY = 86_400_000;
 const NOW = 1_800_000_000_000;
 const human = { clientId: "c", verify: async (t: string) => (t === "ok" ? "user_a" : null) };
 const req = () => new Request("https://relay/v1/me/channels", { headers: { "x-human-token": "ok" } });
 const entry = (room: string, at: number): DirectoryEntry => ({ room, code: `code-${room}`, owner: true, member: true, agents: 0, at });
+/** The listing on its own: this sign-in, a channel list of `rooms`, and a clock stopped at NOW. */
+const listing = (rooms: DirectoryEntry[]) =>
+  buildContext(Layer.mergeAll(Layer.succeed(Human, human), Layer.succeed(Directory, { list: async () => rooms }), clockLayer(() => NOW)));
 const list = async (res: Response) => ((await res.json()) as { channels: (DirectoryEntry & { head?: number })[] }).channels;
 
 /** Reads go to a real database; any write fails the test. */
@@ -60,14 +67,13 @@ describe("myChannels heads", () => {
   test("only listed channels, newest first, up to the cap, quiet ones without a head", async () => {
     const rooms = Array.from({ length: HEADS_PER_LISTING + 5 }, (_, i) => entry(`r${i}`, NOW - i));
     const read: string[] = [];
-    const res = await myChannels(req(), human, async () => rooms, {
+    const res = await myChannels(req(), listing(rooms), {
       read: async (room) => {
         read.push(room);
         if (room === "r1") return { head: 9, last: NOW - 8 * DAY };
         if (room === "r2") throw new Error("gone");
         return { head: 7, last: NOW - DAY };
       },
-      now: () => NOW,
     });
     const out = await list(res);
     expect(read.length).toBe(HEADS_PER_LISTING);
@@ -82,10 +88,10 @@ describe("myChannels heads", () => {
     const cache = new Map<string, Record<string, RoomHead>>();
     const store = { get: async (u: string) => cache.get(u) ?? null, put: async (u: string, h: Record<string, RoomHead>) => void cache.set(u, h) };
     let reads = 0;
-    const heads = { read: async () => (reads++, { head: 3, last: NOW }), cache: store, now: () => NOW };
-    await myChannels(req(), human, async () => [entry("a", 2), entry("b", 1)], heads);
+    const heads = { read: async () => (reads++, { head: 3, last: NOW }), cache: store };
+    await myChannels(req(), listing([entry("a", 2), entry("b", 1)]), heads);
     expect(reads).toBe(2);
-    const out = await list(await myChannels(req(), human, async () => [entry("a", 2)], heads));
+    const out = await list(await myChannels(req(), listing([entry("a", 2)]), heads));
     expect(reads).toBe(2);
     expect(out).toEqual([{ ...entry("a", 2), head: 3 }]);
   });

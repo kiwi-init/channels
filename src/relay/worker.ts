@@ -10,8 +10,8 @@ import * as Layer from "effect/Layer";
 import { CLOSE_CLOSED, CLOSE_REMOVED, PING, PONG } from "../protocol.ts";
 import { ChannelGone, NotFound, Refused, UpdateRequired } from "./failures.ts";
 import { Human, workosHumanAuth, workosProfiles, type HumanAuth } from "./human.ts";
-import { onDeviceHttp, type DeviceStore, type DeviceTransfer } from "./devices.ts";
-import { onVaultHttp, vaultSwap, type VaultRecord, type VaultStore } from "./vault.ts";
+import { Handovers, onDeviceHttp, type DeviceStore, type DeviceTransfer } from "./devices.ts";
+import { onVaultHttp, Vaults, vaultSwap, type VaultRecord, type VaultStore } from "./vault.ts";
 import { cloudflareClient, LINK_TTL_MS, Machines, onMachineHttp, type MachineRecord, type MachineStore } from "./machines.ts";
 import { Policy, policyFrom, type RelayPolicy } from "./policy.ts";
 import {
@@ -22,10 +22,7 @@ import {
   errorResponse,
   expire,
   idleExpired,
-  myChannels,
-  myUsage,
   readHead,
-  HEADS_CACHE_SECONDS,
   missingFingerprint,
   onClientFrame,
   parseRoomPath,
@@ -35,10 +32,10 @@ import {
   type DirectoryEntry,
   type DirectoryUpdate,
   type Effects,
-  type HeadSource,
   type RoomHead,
   type Sql,
 } from "./room.ts";
+import { HEADS_CACHE_SECONDS, makePeople, myChannels, myUsage, type HeadSource, type People } from "./me.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
 
 interface Env {
@@ -66,6 +63,27 @@ function human(env: Env): HumanAuth | null {
     humanAuth = id ? { ...workosHumanAuth(id, jwks), ...(env.WORKOS_API_KEY ? { profile: workosProfiles(env.WORKOS_API_KEY) } : {}) } : null;
   }
   return humanAuth;
+}
+
+let peopleOf: { env: Env; people: People } | undefined;
+/**
+ * What a person's own routes run with: sign-in, policy, their lists, computers,
+ * vaults and handovers, each reached through their Directory objects. Built
+ * once per isolate, like the verifier above.
+ */
+function people(env: Env): People {
+  if (peopleOf?.env !== env) {
+    const layer = Layer.mergeAll(
+      Layer.succeed(Human, human(env)),
+      Layer.succeed(Policy, policyFrom(env as unknown as Record<string, string | undefined>)),
+      Layer.succeed(ChannelLists, { list: (user: string) => channelsOf(env, user) }),
+      Layer.succeed(Machines, machineStore(env)),
+      Layer.succeed(Vaults, vaultStore(env)),
+      Layer.succeed(Handovers, deviceStore(env)),
+    );
+    peopleOf = { env, people: makePeople(layer) };
+  }
+  return peopleOf.people;
 }
 
 /** A person's channel list, from their Directory object. */
@@ -342,14 +360,14 @@ export default {
     if (url.pathname === "/v1/config") return relayConfig(human(env));
     if (url.pathname.startsWith("/v1/me/devices")) {
       try {
-        return (await onDeviceHttp(req, deviceStore(env), human(env))) ?? errorResponse(new NotFound({ message: "not found" }));
+        return (await onDeviceHttp(req, people(env))) ?? errorResponse(new NotFound({ message: "not found" }));
       } catch (err) {
         return errorResponse(err);
       }
     }
     if (url.pathname === "/v1/me/vault") {
       try {
-        return (await onVaultHttp(req, vaultStore(env), human(env))) ?? errorResponse(new NotFound({ message: "not found" }));
+        return (await onVaultHttp(req, people(env))) ?? errorResponse(new NotFound({ message: "not found" }));
       } catch (err) {
         return errorResponse(err);
       }
@@ -358,39 +376,28 @@ export default {
       try {
         const ip = cloudflareClient(req);
         const gate = ip ? { ip, allow: (key: string) => env.MACHINE_REGISTRATIONS.limit({ key }).then((r) => r.success) } : null;
-        return (await onMachineHttp(req, machineStore(env), human(env), gate)) ?? errorResponse(new NotFound({ message: "not found" }));
+        return (await onMachineHttp(req, people(env), gate)) ?? errorResponse(new NotFound({ message: "not found" }));
       } catch (err) {
         return errorResponse(err);
       }
     }
     if (url.pathname === "/v1/me/usage" && req.method === "GET") {
       try {
-        return await myUsage(
-          req,
-          human(env),
-          policyFrom(env as unknown as Record<string, string | undefined>),
-          (user) => channelsOf(env, user),
-          // Each channel answers for itself, to the same signed-in person.
-          async (room) => {
-            const res = await env.CHANNELS.get(env.CHANNELS.idFromName(room)).fetch(new Request(`https://relay/v1/rooms/${room}/usage`, { headers: req.headers }));
-            return res.ok ? res.json() : null;
-          },
-        );
+        // Each channel answers for itself, to the same signed-in person.
+        return await myUsage(req, people(env), async (room) => {
+          const res = await env.CHANNELS.get(env.CHANNELS.idFromName(room)).fetch(new Request(`https://relay/v1/rooms/${room}/usage`, { headers: req.headers }));
+          return res.ok ? res.json() : null;
+        });
       } catch (err) {
         return errorResponse(err);
       }
     }
     if (url.pathname === "/v1/me/channels" && req.method === "GET") {
       try {
-        return await myChannels(
-          req,
-          human(env),
-          (user) => channelsOf(env, user),
-          {
-            read: async (room) => (await env.CHANNELS.get(env.CHANNELS.idFromName(room)).head()) ?? null,
-            cache: headCache(url.origin),
-          },
-        );
+        return await myChannels(req, people(env), {
+          read: async (room) => (await env.CHANNELS.get(env.CHANNELS.idFromName(room)).head()) ?? null,
+          cache: headCache(url.origin),
+        });
       } catch (err) {
         return errorResponse(err);
       }

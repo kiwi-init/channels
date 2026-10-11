@@ -10,8 +10,10 @@ import { b64url } from "../src/crypto.ts";
 import { generateIdentity } from "../src/identity.ts";
 import { offerLink, offerToDevice, offerWaiting, parseOfferHash, takeOffer, withdrawOffer } from "../src/devices.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { onDeviceHttp, TRANSFER_TTL_MS, type DeviceStore, type DeviceTransfer } from "../src/relay/devices.ts";
-import { workosHumanAuth } from "../src/relay/human.ts";
+import * as Layer from "effect/Layer";
+import { Handovers, onDeviceHttp, TRANSFER_TTL_MS, type DeviceStore, type DeviceTransfer } from "../src/relay/devices.ts";
+import { buildContext, clockLayer } from "../src/relay/http.ts";
+import { Human, workosHumanAuth } from "../src/relay/human.ts";
 import { checked, checkedByHand } from "./check.ts";
 
 setDefaultTimeout(30_000);
@@ -404,9 +406,11 @@ describe("bringing your channels to another device", () => {
     const at = (path: string, method = "GET", body?: string) =>
       token("user_alice").then((t) => new Request(`https://relay/v1/me/devices/transfers${path}`, { method, body, headers: { "x-human-token": t } }));
     const t0 = 1_000_000;
-    const { id } = (await (await onDeviceHttp(await at("", "POST", JSON.stringify({ box: "ct" })), store, human, t0))!.json()) as { id: string };
-    expect((await onDeviceHttp(await at(`/${id}`, "HEAD"), store, human, t0 + TRANSFER_TTL_MS))!.status).toBe(200);
-    expect((await onDeviceHttp(await at(`/${id}`, "HEAD"), store, human, t0 + TRANSFER_TTL_MS + 1))!.status).toBe(404);
+    // The handover routes on their own: this store, this sign-in, and a clock stopped at `now`.
+    const handoversAt = (now: number) => buildContext(Layer.mergeAll(Layer.succeed(Human, human), Layer.succeed(Handovers, store), clockLayer(() => now)));
+    const { id } = (await (await onDeviceHttp(await at("", "POST", JSON.stringify({ box: "ct" })), handoversAt(t0)))!.json()) as { id: string };
+    expect((await onDeviceHttp(await at(`/${id}`, "HEAD"), handoversAt(t0 + TRANSFER_TTL_MS)))!.status).toBe(200);
+    expect((await onDeviceHttp(await at(`/${id}`, "HEAD"), handoversAt(t0 + TRANSFER_TTL_MS + 1)))!.status).toBe(404);
     expect(rows.size).toBe(0);
   });
 });

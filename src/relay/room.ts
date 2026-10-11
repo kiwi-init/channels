@@ -31,9 +31,8 @@ import * as Effect from "effect/Effect";
 import { fits, JoinRequest, MemberRecord, SealedIcon, StoredEnvelope } from "./schema.ts";
 import { verifyRequest } from "../auth.ts";
 import { encodeJoinCode, ownerFingerprint } from "../crypto.ts";
-import { respond } from "./http.ts";
-import { HUMAN_HEADER, type HumanAuth } from "./human.ts";
-import { Policy, type RelayPolicy } from "./policy.ts";
+import type { HumanAuth } from "./human.ts";
+import { Policy } from "./policy.ts";
 import {
   BadRequest,
   ChannelGone,
@@ -45,7 +44,6 @@ import {
   ReadOnly,
   refusalResponse,
   Removed,
-  SignInRequired,
   TooLarge,
   TooMany,
   Unauthorized,
@@ -979,68 +977,11 @@ export function parseRoomPath(pathname: string): { roomId: string; rest: string 
 
 export { CLOSE_CLOSED, CLOSE_REMOVED };
 
-// ---------- a signed-in person's channels ----------
-
-/** The signed-in user behind a /v1/me request; without one, the refusal each listing has always given. */
-const signedInAs = (req: Request, human: HumanAuth | null, signInFirst: SignInRequired) =>
-  Effect.gen(function* () {
-    if (!human) return yield* new NotFound({ message: "this relay has no sign-in" });
-    const user = yield* Effect.promise(() => human.verify(req.headers.get(HUMAN_HEADER) ?? ""));
-    if (!user) return yield* signInFirst;
-    return user;
-  });
-
-/** GET /v1/me/channels: the signed-in person's channel list, from whatever index the adapter keeps. */
-export function myChannels(req: Request, human: HumanAuth | null, list: (user: string) => Promise<DirectoryEntry[]>, heads?: HeadSource): Promise<Response> {
-  return respond(
-    Effect.gen(function* () {
-      const user = yield* signedInAs(req, human, new SignInRequired({ message: "sign in to see your channels" }));
-      const sorted = (yield* Effect.promise(() => list(user))).sort((a, b) => b.at - a.at);
-      if (!heads) return Response.json({ channels: sorted });
-      // Each channel's newest seq, so the sidebar can mark the closed ones with news: only for channels
-      // in this person's list, the newest HEADS_PER_LISTING of them, read at most once per cache period.
-      const known = yield* Effect.promise(() => headsOf(user, sorted, heads));
-      const quiet = (heads.now ?? Date.now)() - QUIET_AFTER_MS;
-      const channels = sorted.map((c) => {
-        const h = known[c.room];
-        return h && h.last >= quiet ? { ...c, head: h.head } : c;
-      });
-      return Response.json({ channels });
-    }),
-  );
-}
-
-/** Each listed channel's head, from the cache when it has them. A read or cache that fails counts as no head. */
-async function headsOf(user: string, sorted: DirectoryEntry[], heads: HeadSource): Promise<Record<string, RoomHead>> {
-  let known = await heads.cache?.get(user).catch(() => null);
-  if (!known) {
-    known = {};
-    const read = await Promise.all(sorted.slice(0, HEADS_PER_LISTING).map(async (c) => [c.room, await heads.read(c.room).catch(() => null)] as const));
-    for (const [room, h] of read) if (h) known[room] = h;
-    await heads.cache?.put(user, known).catch(() => {});
-  }
-  return known;
-}
-
 /** A channel's newest message: its seq, and when it arrived. */
 export interface RoomHead {
   head: number;
   last: number;
 }
-
-/** Where myChannels gets heads: a pure read per channel, and (on the Worker) a per-person cache. */
-export interface HeadSource {
-  read: (room: string) => Promise<RoomHead | null>;
-  cache?: { get: (user: string) => Promise<Record<string, RoomHead> | null>; put: (user: string, heads: Record<string, RoomHead>) => Promise<void> };
-  now?: () => number;
-}
-
-/** How many channels in one listing get their head read: each read wakes that channel's storage. */
-export const HEADS_PER_LISTING = 50;
-/** How long a person's heads are reused before the channels are read again. */
-export const HEADS_CACHE_SECONDS = 300;
-/** A channel quiet this long gets no head: nothing new to mark. */
-const QUIET_AFTER_MS = 7 * 86_400_000;
 
 /**
  * A channel's newest message, read without a RoomDb: no migration, nothing written, and a
@@ -1051,39 +992,6 @@ export function readHead(sql: Sql): RoomHead | null {
   if (!sql.all("SELECT 1 FROM meta WHERE k = 'owner_pk'").length) return null;
   const top = sql.all<{ seq: number; ts: number }>("SELECT seq, ts FROM msgs ORDER BY seq DESC LIMIT 1")[0];
   return { head: top?.seq ?? 0, last: top?.ts ?? 0 };
-}
-
-/**
- * GET /v1/me/usage: what a signed-in person uses of this relay's limits: channels owned against
- * the cap, and for each one messages today, stored bytes and members. Null limits are unlimited.
- */
-export function myUsage(
-  req: Request,
-  human: HumanAuth | null,
-  policy: RelayPolicy,
-  list: (user: string) => Promise<DirectoryEntry[]>,
-  usageOf: (room: string) => Promise<RoomUsage | null>,
-): Promise<Response> {
-  return respond(
-    Effect.gen(function* () {
-      const user = yield* signedInAs(req, human, new SignInRequired({ message: "sign in to see your usage" }));
-      const owned = (yield* Effect.promise(() => list(user))).filter((c) => c.owner);
-      const channels = yield* Effect.promise(() =>
-        Promise.all(owned.map(async (c) => ({ room: c.room, code: c.code, ...((await usageOf(c.room)) ?? { messagesToday: 0, bytes: 0, members: 0 }) }))),
-      );
-      return Response.json({
-        limits: {
-          channelsPerOwner: policy.channelsPerOwner,
-          membersPerChannel: policy.membersPerChannel,
-          messagesPerDay: policy.messagesPerDay,
-          bytesPerChannel: policy.bytesPerChannel,
-          expireAfterDays: policy.expireAfterDays,
-        },
-        owned: channels.length,
-        channels,
-      });
-    }),
-  );
 }
 
 /** Relay-wide settings the web app needs: which WorkOS client to sign in with, if any. */

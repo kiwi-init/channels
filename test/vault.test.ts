@@ -7,8 +7,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { generateIdentity, sign } from "../src/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import type { HumanAuth } from "../src/relay/human.ts";
-import { blobHash, onVaultHttp, VAULT_RESET_MS, VAULT_WINDOW_MS, VAULT_WRITES, vaultSwap, type VaultRecord, type VaultStore } from "../src/relay/vault.ts";
+import { Human, type HumanAuth } from "../src/relay/human.ts";
+import * as Layer from "effect/Layer";
+import { buildContext, clockLayer } from "../src/relay/http.ts";
+import { blobHash, onVaultHttp, Vaults, VAULT_RESET_MS, VAULT_WINDOW_MS, VAULT_WRITES, vaultSwap, type VaultRecord, type VaultStore } from "../src/relay/vault.ts";
 import {
   addWrap,
   deleteVault,
@@ -40,6 +42,8 @@ setDefaultTimeout(30_000);
 // Sign-in stand-in: the token "tok:<user>" is that user.
 const human = { clientId: "test", verify: async (t: string) => (t.startsWith("tok:") ? t.slice(4) : null) } satisfies HumanAuth;
 const tok = (user: string) => `tok:${user}`;
+/** The vault routes on their own: this store, that sign-in, and a clock stopped at `now`. */
+const vaultsAt = (store: VaultStore, now: number) => buildContext(Layer.mergeAll(Layer.succeed(Human, human), Layer.succeed(Vaults, store), clockLayer(() => now)));
 
 const dataDir = mkdtempSync(join(tmpdir(), "kiwi-vault-relay-"));
 let server: ReturnType<typeof startRelay>;
@@ -140,7 +144,7 @@ describe("relay", () => {
     const save = async (v: number, now: number) => {
       const auth = await sign({ name: "w", ...w }, { user: "dave", expected: v, hash: await blobHash("b"), ...(v === 0 ? { writer: w.pk } : {}) });
       const req = new Request("http://r/v1/me/vault", { method: "PUT", headers: { "x-human-token": tok("dave") }, body: JSON.stringify({ version: v, blob: "b", auth, ...(v === 0 ? { writer: w.pk } : {}) }) });
-      return onVaultHttp(req, store, human, now).catch((e: { status: number }) => e);
+      return onVaultHttp(req, vaultsAt(store, now)).catch((e: { status: number }) => e);
     };
     let v = 0;
     for (; v < VAULT_WRITES; v++) expect(((await save(v, 1000 + v)) as Response).status).toBe(200);
@@ -157,7 +161,7 @@ describe("relay", () => {
     };
     recs.set("erin", { version: 5, blob: "b", updated: 0, writer: w.pk, recent: [] });
     const at = (method: string, body: unknown, now: number) =>
-      onVaultHttp(new Request("http://r/v1/me/vault", { method, headers: { "x-human-token": tok("erin") }, body: body === undefined ? undefined : JSON.stringify(body) }), store, human, now);
+      onVaultHttp(new Request("http://r/v1/me/vault", { method, headers: { "x-human-token": tok("erin") }, body: body === undefined ? undefined : JSON.stringify(body) }), vaultsAt(store, now));
     const asked = (await (await at("DELETE", { reset: true }, 1000))!.json()) as { resetAt: number };
     expect(asked.resetAt).toBe(1000 + VAULT_RESET_MS);
     expect(await (await at("GET", undefined, 2000))!.json()).toMatchObject({ version: 5, resetAt: asked.resetAt });

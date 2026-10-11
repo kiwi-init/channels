@@ -16,9 +16,9 @@ import { MACHINE_SCOPE, machineCode, vouchStatement } from "../vouch.ts";
 import { inlineText } from "../membership.ts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import { attempt, describeRoutes, json, refuse, Request_, servePerson, SignIn, signedInPerson, type Route } from "./http.ts";
-import type { Refusal } from "./failures.ts";
-import type { HumanAuth } from "./human.ts";
+import { attempt, describeRoutes, json, Request_, servePerson, signedInPerson, type Route } from "./http.ts";
+import { BadRequest, Conflict, NotFound, TooMany, Unauthorized, type Refusal } from "./failures.ts";
+import { Human } from "./human.ts";
 import { fits, SignedByMachine } from "./schema.ts";
 
 /** A computer as the relay knows it: its public key, the label its person sees, and whose it is. */
@@ -39,7 +39,7 @@ export interface MachineStore {
   listFor(user: string): Promise<{ pk: string; label: string; linked: number }[]>;
 }
 
-/** Linked computers, as the adapter keeps them: a room asks them who vouches for an agent (vouchedBy). */
+/** Linked computers, as the adapter keeps them: the link routes below, and a room asking who vouches for an agent (vouchedBy). */
 export class Machines extends Context.Service<Machines, MachineStore>()("kiwi/relay/Machines") {}
 
 /** How long a pending link waits for its person to confirm. After that, an unlinked registration is deleted. */
@@ -306,8 +306,10 @@ export async function vouchedBy(store: MachineStore, roomId: string, agentPk: st
 
 // ---------- the routes ----------
 
-class Computers extends Context.Service<Computers, MachineStore>()("kiwi/relay/Computers") {}
-/** Whether this address may register another computer (null: not limited here). */
+/**
+ * Whether this address may register another computer (null: not limited here).
+ * Per request, since the address is the request's; the store (Machines) is the relay's.
+ */
 class Registrations extends Context.Service<Registrations, RegistrationGate | null>()("kiwi/relay/Registrations") {}
 
 /**
@@ -322,25 +324,25 @@ interface Who {
   user: string | null;
   registering: { pk: string; label: unknown; ts: number } | null;
 }
-type MachineRoute = Route<MachineGuard, Who, never, Computers | Registrations | SignIn | Request_>;
+type MachineRoute = Route<MachineGuard, Who, never, Machines | Registrations | Human | Request_>;
 
 const NO_SIGN_IN = "this relay has no sign-in, so computers can't be linked";
 
 const hasSignIn = Effect.gen(function* () {
-  const { human } = yield* SignIn;
-  if (!human) return yield* refuse(404, NO_SIGN_IN);
+  const human = yield* Human;
+  if (!human) return yield* new NotFound({ message: NO_SIGN_IN });
   return human;
 });
 
 const nobody: Who = { user: null, registering: null };
 
-const guards: Record<MachineGuard, Effect.Effect<Who, Refusal, SignIn | Request_>> = {
+const guards: Record<MachineGuard, Effect.Effect<Who, Refusal, Human | Request_>> = {
   public: Effect.map(hasSignIn, () => nobody),
   selfSigned: Effect.gen(function* () {
     yield* hasSignIn;
     const b = yield* json<{ pk?: unknown; label?: unknown; ts?: unknown; sig?: unknown }>();
-    if (!fits(SignedByMachine, b) || !(yield* Effect.promise(() => verify(b)))) return yield* refuse(400, "bad signature");
-    if (Math.abs(Date.now() - b.ts) > 5 * 60_000) return yield* refuse(400, "clock is off by more than 5 minutes");
+    if (!fits(SignedByMachine, b) || !(yield* Effect.promise(() => verify(b)))) return yield* new BadRequest({ message: "bad signature" });
+    if (Math.abs(Date.now() - b.ts) > 5 * 60_000) return yield* new BadRequest({ message: "clock is off by more than 5 minutes" });
     return { ...nobody, registering: { pk: b.pk, label: b.label, ts: b.ts } };
   }),
   computer: Effect.gen(function* () {
@@ -348,7 +350,7 @@ const guards: Record<MachineGuard, Effect.Effect<Who, Refusal, SignIn | Request_
     const { req, method, path, body } = yield* Request_;
     const pk = /^\/v1\/machines\/([A-Za-z0-9_-]{20,})$/.exec(path)?.[1];
     const who = yield* Effect.promise(() => verifyRequest((req.headers.get("authorization") ?? "").replace(/^Bearer /, ""), MACHINE_SCOPE, method, path, body));
-    if (!pk || who !== pk) return yield* refuse(401, "not signed by this computer's key");
+    if (!pk || who !== pk) return yield* new Unauthorized({ message: "not signed by this computer's key" });
     return nobody;
   }),
   person: Effect.map(signedInPerson(NO_SIGN_IN), (user) => ({ ...nobody, user })),
@@ -359,7 +361,7 @@ const PK = "([A-Za-z0-9_-]{20,})";
 /** A computer's record, and whether its link is still good (linked, or pending and not expired). */
 const linkOf = (pk: string) =>
   Effect.gen(function* () {
-    const store = yield* Computers;
+    const store = yield* Machines;
     const rec = yield* attempt(() => current(store, pk));
     return { rec, fresh: !!rec && (!!rec.user || Date.now() - rec.created < LINK_TTL_MS) };
   });
@@ -372,12 +374,12 @@ const routes: MachineRoute[] = [
     guard: "selfSigned",
     run: ({ registering }) =>
       Effect.gen(function* () {
-        const store = yield* Computers;
+        const store = yield* Machines;
         const b = registering!;
         const prior = yield* attempt(() => current(store, b.pk));
         if (prior?.user) return { data: { status: "linked" } };
         const gate = yield* Registrations;
-        if (gate && !(yield* Effect.promise(async () => gate.allow(gate.ip)))) return yield* refuse(429, "too many computer registrations; try again in a few minutes");
+        if (gate && !(yield* Effect.promise(async () => gate.allow(gate.ip)))) return yield* new TooMany({ message: "too many computer registrations; try again in a few minutes" });
         yield* attempt(() => store.put({ pk: b.pk, label: inlineText(b.label, 60) || "A computer", user: null, created: prior?.created ?? Date.now() }));
         return { data: { status: "pending", code: yield* Effect.promise(() => machineCode(b.pk)) } };
       }),
@@ -390,7 +392,7 @@ const routes: MachineRoute[] = [
     run: (_, m) =>
       Effect.gen(function* () {
         const { rec, fresh } = yield* linkOf(m[1]!);
-        if (!fresh) return yield* refuse(404, "this link expired; run kiwi setup again");
+        if (!fresh) return yield* new NotFound({ message: "this link expired; run kiwi setup again" });
         return { data: { label: rec!.label, status: rec!.user ? "linked" : "pending", code: yield* Effect.promise(() => machineCode(m[1]!)), created: rec!.created } };
       }),
   },
@@ -401,10 +403,10 @@ const routes: MachineRoute[] = [
     guard: "person",
     run: ({ user }, m) =>
       Effect.gen(function* () {
-        const store = yield* Computers;
+        const store = yield* Machines;
         const { rec, fresh } = yield* linkOf(m[1]!);
-        if (!fresh) return yield* refuse(404, "this link expired; run kiwi setup again");
-        if (rec!.user && rec!.user !== user) return yield* refuse(409, "this computer is already linked to someone else");
+        if (!fresh) return yield* new NotFound({ message: "this link expired; run kiwi setup again" });
+        if (rec!.user && rec!.user !== user) return yield* new Conflict({ message: "this computer is already linked to someone else" });
         yield* attempt(() => store.put({ ...rec!, user: user!, linked: Date.now() }));
         return { data: { status: "linked", label: rec!.label } };
       }),
@@ -416,8 +418,8 @@ const routes: MachineRoute[] = [
     guard: "computer",
     run: (_, m) =>
       Effect.gen(function* () {
-        const store = yield* Computers;
-        const { human } = yield* SignIn;
+        const store = yield* Machines;
+        const human = yield* Human;
         const { rec, fresh } = yield* linkOf(m[1]!);
         if (!fresh) return { data: { status: "expired" } };
         if (rec!.user) yield* attempt(() => markUsed(store, rec!));
@@ -432,7 +434,7 @@ const routes: MachineRoute[] = [
     guard: "computer",
     run: (_, m) =>
       Effect.gen(function* () {
-        const store = yield* Computers;
+        const store = yield* Machines;
         const { rec } = yield* linkOf(m[1]!);
         if (rec) yield* attempt(() => store.remove(rec));
         return { data: { removed: true } };
@@ -445,7 +447,7 @@ const routes: MachineRoute[] = [
     guard: "person",
     run: ({ user }) =>
       Effect.gen(function* () {
-        const store = yield* Computers;
+        const store = yield* Machines;
         const records = yield* attempt(async () => Promise.all((await store.listFor(user!)).map((m) => current(store, m.pk))));
         const machines = records
           .filter((r): r is MachineRecord => r?.user === user)
@@ -460,9 +462,9 @@ const routes: MachineRoute[] = [
     guard: "person",
     run: ({ user }, m) =>
       Effect.gen(function* () {
-        const store = yield* Computers;
+        const store = yield* Machines;
         const rec = yield* attempt(() => store.get(m[1]!));
-        if (!rec || rec.user !== user) return yield* refuse(404, "not one of your computers");
+        if (!rec || rec.user !== user) return yield* new NotFound({ message: "not one of your computers" });
         yield* attempt(() => store.remove(rec));
         return { data: { removed: true } };
       }),
@@ -472,10 +474,11 @@ const routes: MachineRoute[] = [
 /** The computer-link rows, for the route-table test. */
 export const machineRouteTable = describeRoutes(routes);
 
+const otherwise = Effect.flatMap(hasSignIn, () => Effect.fail(new NotFound({ message: "not found" })));
+
 /** Routes under /v1/machines and /v1/me/machines; null when the path isn't one of them. */
-export async function onMachineHttp(req: Request, store: MachineStore, human: HumanAuth | null, gate: RegistrationGate | null = null): Promise<Response | null> {
+export async function onMachineHttp(req: Request, people: Context.Context<Machines | Human>, gate: RegistrationGate | null = null): Promise<Response | null> {
   const path = new URL(req.url).pathname;
   if (!path.startsWith("/v1/machines") && !path.startsWith("/v1/me/machines")) return null;
-  const otherwise = Effect.flatMap(hasSignIn, () => refuse(404, "not found"));
-  return servePerson(req, routes, guards, otherwise, (e) => e.pipe(Effect.provideService(Computers, store), Effect.provideService(Registrations, gate)), { human, now: Date.now() });
+  return servePerson(req, routes, guards, otherwise, Context.add(people, Registrations, gate));
 }

@@ -1,8 +1,10 @@
 import { afterAll, afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import { machineStatus, newMachine, registerMachine, vouchFor, type MachineFile } from "../src/machine.ts";
-import type { HumanAuth } from "../src/relay/human.ts";
+import * as Layer from "effect/Layer";
+import { buildContext } from "../src/relay/http.ts";
+import { Human, type HumanAuth } from "../src/relay/human.ts";
 import { sign } from "../src/identity.ts";
-import { LINK_TTL_MS, parseTrustProxy, registrationAddress, registrationAllowed, sweepPending, trustProxyFromArgs, UNUSED_LINK_TTL_MS, onMachineHttp, vouchedBy, type MachineRecord, type MachineStore } from "../src/relay/machines.ts";
+import { LINK_TTL_MS, parseTrustProxy, registrationAddress, registrationAllowed, sweepPending, trustProxyFromArgs, UNUSED_LINK_TTL_MS, Machines, onMachineHttp, vouchedBy, type MachineRecord, type MachineStore } from "../src/relay/machines.ts";
 import { errorResponse } from "../src/relay/room.ts";
 
 // The machine routes on their own: an in-memory store, and a "WorkOS" that trusts any user_ token.
@@ -15,6 +17,7 @@ const store: MachineStore = {
   listFor: async (user) => [...records.values()].filter((r) => r.user === user).map((r) => ({ pk: r.pk, label: r.label, linked: r.linked ?? r.created })),
 };
 const human: HumanAuth = { clientId: "client_test", verify: async (t) => (t.startsWith("user_") ? t : null) };
+const computers = buildContext(Layer.mergeAll(Layer.succeed(Human, human), Layer.succeed(Machines, store)));
 const server = Bun.serve({
   port: 0,
   hostname: "127.0.0.1",
@@ -22,7 +25,7 @@ const server = Bun.serve({
     try {
       // The route does not read client-address headers. The test passes the address the way Bun does, after it has decided.
       const ip = req.headers.get("x-client-address");
-      return (await onMachineHttp(req, store, human, ip ? { ip, allow: registrationAllowed } : null)) ?? new Response("not found", { status: 404 });
+      return (await onMachineHttp(req, computers, ip ? { ip, allow: registrationAllowed } : null)) ?? new Response("not found", { status: 404 });
     } catch (err) {
       return errorResponse(err);
     }

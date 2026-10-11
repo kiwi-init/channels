@@ -11,11 +11,12 @@
 // send, so the relay can't open the box or swap in one of its own; and only the
 // same signed-in person can fetch it.
 
+import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import { attempt, describeRoutes, json, refuse, Request_, servePerson, SignIn, signedInPerson, type Route } from "./http.ts";
-import type { Refusal } from "./failures.ts";
-import type { HumanAuth } from "./human.ts";
+import { attempt, describeRoutes, json, Request_, servePerson, signedInPerson, type Route } from "./http.ts";
+import { BadRequest, NotFound, TooLarge, type Refusal } from "./failures.ts";
+import type { Human } from "./human.ts";
 import { fits, Present } from "./schema.ts";
 
 export interface DeviceTransfer {
@@ -38,16 +39,17 @@ const MAX_BOX = 1024 * 1024;
 
 // ---------- the routes ----------
 
-class Handovers extends Context.Service<Handovers, DeviceStore>()("kiwi/relay/Handovers") {}
+/** Boxes waiting to be handed to another device, as the adapter keeps them. */
+export class Handovers extends Context.Service<Handovers, DeviceStore>()("kiwi/relay/Handovers") {}
 
 type DeviceGuard = "person";
-type DeviceRoute = Route<DeviceGuard, string, never, Handovers | SignIn | Request_>;
+type DeviceRoute = Route<DeviceGuard, string, never, Handovers | Human | Request_>;
 
 /** This person's transfers still waiting; expired ones go as soon as anyone looks. */
 const live = (user: string) =>
   Effect.gen(function* () {
     const store = yield* Handovers;
-    const { now } = yield* SignIn;
+    const now = yield* Clock.currentTimeMillis;
     return yield* attempt(async () => {
       const out: DeviceTransfer[] = [];
       for (const t of await store.list(user)) {
@@ -71,10 +73,10 @@ const routes: DeviceRoute[] = [
     run: (user) =>
       Effect.gen(function* () {
         const store = yield* Handovers;
-        const { now } = yield* SignIn;
+        const now = yield* Clock.currentTimeMillis;
         const { box } = yield* json<{ box?: unknown }>();
-        if (!fits(Present, box)) return yield* refuse(400, "missing box");
-        if (box.length > MAX_BOX) return yield* refuse(413, "too much to hand over at once");
+        if (!fits(Present, box)) return yield* new BadRequest({ message: "missing box" });
+        if (box.length > MAX_BOX) return yield* new TooLarge({ message: "too much to hand over at once" });
         // One code at a time: showing a new one retires the last.
         const t: DeviceTransfer = { id: crypto.randomUUID(), box, created: now };
         yield* attempt(async () => {
@@ -100,7 +102,7 @@ const routes: DeviceRoute[] = [
       Effect.gen(function* () {
         const store = yield* Handovers;
         const t = yield* waiting(user, m);
-        if (!t) return yield* refuse(404, "this code was already used or has expired: show a new one on your other device");
+        if (!t) return yield* new NotFound({ message: "this code was already used or has expired: show a new one on your other device" });
         yield* attempt(() => store.remove(user, t.id));
         return { data: { box: t.box } };
       }),
@@ -113,21 +115,22 @@ const routes: DeviceRoute[] = [
       Effect.gen(function* () {
         const store = yield* Handovers;
         const t = yield* waiting(user, m);
-        if (!t) return yield* refuse(404, "this code was already used or has expired: show a new one on your other device");
+        if (!t) return yield* new NotFound({ message: "this code was already used or has expired: show a new one on your other device" });
         yield* attempt(() => store.remove(user, t.id));
         return { data: { removed: true } };
       }),
   },
 ];
 
-const guards: Record<DeviceGuard, Effect.Effect<string, Refusal, SignIn | Request_>> = { person: signedInPerson("this relay has no sign-in") };
+const guards: Record<DeviceGuard, Effect.Effect<string, Refusal, Human | Request_>> = { person: signedInPerson("this relay has no sign-in") };
 
 /** The handover rows, for the route-table test. */
 export const deviceRouteTable = describeRoutes(routes);
 
-/** Routes under /v1/me/devices; null when the path isn't one of them. */
-export async function onDeviceHttp(req: Request, store: DeviceStore, human: HumanAuth | null, now = Date.now()): Promise<Response | null> {
+const otherwise = Effect.flatMap(guards.person, () => Effect.fail(new NotFound({ message: "not found" })));
+
+/** Routes under /v1/me/devices, run with the relay's people services; null when the path isn't one of them. */
+export async function onDeviceHttp(req: Request, people: Context.Context<Handovers | Human>): Promise<Response | null> {
   if (!new URL(req.url).pathname.startsWith("/v1/me/devices")) return null;
-  const otherwise = Effect.flatMap(guards.person, () => refuse(404, "not found"));
-  return servePerson(req, routes, guards, otherwise, (e) => Effect.provideService(e, Handovers, store), { human, now });
+  return servePerson(req, routes, guards, otherwise, people);
 }

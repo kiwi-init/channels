@@ -12,8 +12,8 @@ import { CLOSE_CLOSED, CLOSE_REMOVED, PING, PONG } from "../protocol.ts";
 import { ChannelGone, NotFound, UpdateRequired } from "./failures.ts";
 import { clockLayer } from "./http.ts";
 import { devHostOk, devHumanAuth, devRequestOk, Human, HUMAN_HEADER, workosFromSettings, type HumanAuth } from "./human.ts";
-import { onDeviceHttp, type DeviceStore, type DeviceTransfer } from "./devices.ts";
-import { onVaultHttp, vaultSwap, type VaultRecord, type VaultStore } from "./vault.ts";
+import { Handovers, onDeviceHttp, type DeviceStore, type DeviceTransfer } from "./devices.ts";
+import { onVaultHttp, Vaults, vaultSwap, type VaultRecord, type VaultStore } from "./vault.ts";
 import { Machines, onMachineHttp, parseTrustProxy, registrationAddress, registrationAllowed, sweepPending, trustProxyFromArgs, type MachineRecord, type MachineStore, type TrustProxy } from "./machines.ts";
 import { Policy, policyFrom, type RelayPolicy } from "./policy.ts";
 import {
@@ -24,9 +24,7 @@ import {
   errorResponse,
   expire,
   idleExpired,
-  myChannels,
   readHead,
-  myUsage,
   missingFingerprint,
   onClientFrame,
   parseRoomPath,
@@ -38,6 +36,7 @@ import {
   type Sql,
   type Effects,
 } from "./room.ts";
+import { makePeople, myChannels, myUsage } from "./me.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync } from "./route.ts";
 
 interface SocketData {
@@ -140,15 +139,16 @@ export function startRelay(
   const listOf = (user: string) => (people.query("SELECT entry FROM entries WHERE user = ?").all(user) as { entry: string }[]).map((r) => JSON.parse(r.entry) as DirectoryEntry);
 
   // What every room runs with. `now` (tests) is the clock the room reads.
-  const relay = makeRelay(
-    Layer.mergeAll(
-      Layer.succeed(Human, human),
-      Layer.succeed(Policy, policy),
-      Layer.succeed(Directory, { list: async (user: string) => listOf(user) }),
-      Layer.succeed(Machines, machines),
-      clockLayer(opts.now),
-    ),
+  const services = Layer.mergeAll(
+    Layer.succeed(Human, human),
+    Layer.succeed(Policy, policy),
+    Layer.succeed(Directory, { list: async (user: string) => listOf(user) }),
+    Layer.succeed(Machines, machines),
+    clockLayer(opts.now),
   );
+  const relay = makeRelay(services);
+  // And what a person's own routes run with: the same, plus their vaults and handovers.
+  const personal = makePeople(Layer.mergeAll(services, Layer.succeed(Vaults, vaults), Layer.succeed(Handovers, devices)));
 
   const apply = (roomId: string, fx: Effects, sender?: ServerWebSocket<SocketData>) => {
     const room = sockets.get(roomId) ?? new Set();
@@ -202,18 +202,18 @@ export function startRelay(
         if (web && !url.pathname.startsWith("/v1/") && (req.method === "GET" || req.method === "HEAD")) return web(url.pathname);
         if (url.pathname === "/") return new Response("Kiwi Channels relay (bun)\n");
         if (url.pathname === "/v1/config") return relayConfig(human);
-        const device = await onDeviceHttp(req, devices, human);
+        const device = await onDeviceHttp(req, personal);
         if (device) return device;
-        const vault = await onVaultHttp(req, vaults, human);
+        const vault = await onVaultHttp(req, personal);
         if (vault) return vault;
         const ip = registrationAddress(server.requestIP(req)?.address ?? null, req.headers.get("x-forwarded-for"), trustProxy);
-        const machine = await onMachineHttp(req, machines, human, ip ? { ip, allow: registrationAllowed } : null);
+        const machine = await onMachineHttp(req, personal, ip ? { ip, allow: registrationAllowed } : null);
         if (machine) return machine;
         if (url.pathname === "/v1/me/usage" && req.method === "GET") {
-          return await myUsage(req, human, policy, async (user) => listOf(user), async (room) => (existsSync(file(room)) ? runRoomSync(relay, storeFor(room, false), roomUsage) : null));
+          return await myUsage(req, personal, async (room) => (existsSync(file(room)) ? runRoomSync(relay, storeFor(room, false), roomUsage) : null));
         }
         if (url.pathname === "/v1/me/channels" && req.method === "GET") {
-          return await myChannels(req, human, async (user) => listOf(user), { read: async (room) => (existsSync(file(room)) ? readHead(sqlFor(room, false)) : null), now: opts.now });
+          return await myChannels(req, personal, { read: async (room) => (existsSync(file(room)) ? readHead(sqlFor(room, false)) : null) });
         }
         const route = parseRoomPath(url.pathname);
         if (!route) return errorResponse(new NotFound({ message: "not found" }));
