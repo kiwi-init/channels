@@ -126,6 +126,11 @@ try {
   await owner.getByRole("button", { name: "Yes, link it" }).click({ timeout: 20000 })
   await setup
   await owner.goto(channel)
+  // Linking it here made this browser trust that computer; ask each time instead, so the requests
+  // sheet and a pending request are there to shoot.
+  await owner.evaluate(() => {
+    for (const k of Object.keys(localStorage)) if (k.startsWith("mc.trusted-computers.")) localStorage.setItem(`mc.auto-admit.${k.slice("mc.trusted-computers.".length)}`, "false")
+  })
   const joining = kiwi(["join", code, "kiwi", "--relay", BASE, "--as", "atlas", "--role", "backend"])
   const review = owner.getByRole("button", { name: "Review", exact: true })
   await review.waitFor({ timeout: 30000 })
