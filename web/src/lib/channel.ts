@@ -1,16 +1,35 @@
+import * as Cause from "effect/Cause"
+import * as Effect from "effect/Effect"
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, useSyncExternalStore } from "react"
 
-import { Channel, ChannelGone, RelayError, keepRecordsIn, myChannels, ownerStatement, type HumanSession, type ModeSetting, type MyChannel, type RoomsSetting, type SendOptions } from "@mc/client.ts"
+import {
+  Channel,
+  ChannelGone,
+  RelayError,
+  eachLive,
+  fx as relayFx,
+  keepRecordsIn,
+  ownerStatement,
+  type HumanSession,
+  type Live,
+  type Relay,
+  type ModeSetting,
+  type MyChannel,
+  type RoomsSetting,
+  type SendOptions,
+} from "@mc/client.ts"
 import { decodeJoinCode, fromB64url, newRoomId, ownerFingerprint, type ChannelAccess } from "@mc/crypto.ts"
 import { generateIdentity, withExchangeKey, type Identity } from "@mc/identity.ts"
 import { handleFor, type JoinRequest, type Member } from "@mc/membership.ts"
-import type { Message, Presence } from "@mc/protocol.ts"
+import type { Message } from "@mc/protocol.ts"
 import type { Signed, SigningBudget } from "@mc/sas.ts"
 import { fold, type ChannelState, type GuardFloor, type Roster } from "@mc/state.ts"
 import { forgetHistory, readCached, rememberMessage } from "./history"
 import { wholeLog } from "./history-plan"
 import { ICON_LIVE } from "./icon-event"
+import { fork, run } from "./runtime"
 import { noteSignInGone } from "./session"
+import { Storage } from "./storage"
 
 /** How much history to load when the page opens. */
 const HISTORY = 2_000
@@ -268,13 +287,15 @@ function readListing(): { at: number; rows: MyChannel[] } | null {
   return v && typeof v.at === "number" && Array.isArray(v.rows) && v.at <= Date.now() ? v : null
 }
 
-function writeListing(rows: MyChannel[]) {
-  try {
-    localStorage.setItem(LISTING_KEY, JSON.stringify({ at: Date.now(), rows }))
-  } catch {
+/** Ask the relay for the signed-in listing, and keep it for the next reload (or another tab). */
+const fetchListing = (token: string) =>
+  Effect.gen(function* () {
+    const rows = yield* relayFx.myChannels(location.origin, token)
+    const storage = yield* Storage
     // A full disk asks again next time.
-  }
-}
+    yield* Effect.ignore(storage.set(LISTING_KEY, JSON.stringify({ at: Date.now(), rows })))
+    return rows
+  })
 
 const untitled = (room: string) => `Channel ${room.slice(0, 4).toUpperCase()}`
 
@@ -313,8 +334,7 @@ export function useChannelList(signedIn: boolean, token: () => Promise<string | 
       const t = await readToken()
       if (!t || cancelled) return
       try {
-        const rows = await myChannels(location.origin, t)
-        writeListing(rows)
+        const rows = await run(fetchListing(t))
         if (!cancelled) setRemote(rows)
       } catch (err) {
         // The relay didn't answer: keep the last list. (Unless the sign-in is gone: then say so.)
@@ -568,6 +588,46 @@ export interface ChannelHandle {
   head: number
 }
 
+/** What a channel view does with each step of opening and following a channel. */
+interface Viewer {
+  /** Read the member list and the join requests (each handles its own failure). */
+  refresh: Effect.Effect<void, never, Relay>
+  /** Messages from this browser's sealed cache, to paint before the relay answers. */
+  cached: (messages: Message[]) => void
+  /** Where this view starts: the relay's head, and whether the whole log fits in what it loads. */
+  started: (start: { head: number; whole: boolean }) => void
+  /** What the channel says live (ch.fx.live), in order. */
+  live: (ev: Live) => Effect.Effect<void>
+  /** A line about the connection (an outage, a dropped frame). */
+  status: (line: string) => Effect.Effect<void>
+}
+
+/**
+ * Open a channel and follow it: the member list and requests, then the sealed
+ * cache, then the relay's Stream from where the cache ends, for as long as it
+ * runs. It ends only by failing (ChannelGone: this member is out) or being
+ * interrupted, which closes the socket.
+ */
+const follow = (ch: Channel, view: Viewer) =>
+  Effect.gen(function* () {
+    yield* view.refresh
+    const head = yield* ch.fx.head()
+    // Paint the sealed cache, then ask the relay only for seqs after it.
+    // Anything unusable (private mode, a broken cache) falls back to the usual window.
+    const cached = yield* Effect.promise(() => readCached(ch.roomId, ch.identity.pk, ch.access.keys, head, HISTORY).catch(() => null))
+    const since = cached ? cached.since : Math.max(0, head - HISTORY)
+    const firstSeq = cached?.messages[0]?.seq
+    if (cached?.messages.length) view.cached(cached.messages)
+    view.started({ head, whole: wholeLog(head, HISTORY, firstSeq) })
+    yield* eachLive(ch.fx.live(since, { presence: true }), view.live, view.status)
+  })
+
+/** Merge messages into a view's list: each seq once, in order. */
+const merged = (prev: Message[], more: Message[]) => {
+  const seen = new Set(prev.map((p) => p.seq))
+  return [...prev, ...more.filter((m) => !seen.has(m.seq))].sort((a, b) => a.seq - b.seq)
+}
+
 /**
  * Stream a channel as a member: messages, presence, member list, and (for the owner) join requests.
  * Pass `null` while sign-in is still loading. Opening before that sends the owner's request list
@@ -610,8 +670,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
   // whenever the relay says the channel's info changed, so a rename reaches every member.
   const [infoAt, setInfoAt] = useState(0)
   useEffect(() => {
-    void ch
-      .title()
+    void run(ch.fx.title())
       .then((name) => {
         const stored = loadMember(member.code)
         if (name && stored && stored.name !== name) saveMember({ ...stored, name })
@@ -623,17 +682,17 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
   // may be older than that. Read again whenever the info changes, like the name.
   const [modeFloor, setModeFloor] = useState<ModeSetting | null>(null)
   useEffect(() => {
-    void ch.mode().then(setModeFloor, () => {})
+    void run(ch.fx.mode()).then(setModeFloor, () => {})
   }, [ch, infoAt])
   // The charter and the hold the same way: a hold set before this view's tail still stops every agent.
   const [guardFloor, setGuardFloor] = useState<GuardFloor | null>(null)
   useEffect(() => {
-    void ch.guard().then(setGuardFloor, () => {})
+    void run(ch.fx.guard()).then(setGuardFloor, () => {})
   }, [ch, infoAt])
   // The rooms the same way: a room.create older than this view's tail is still a room here.
   const [roomsFloor, setRoomsFloor] = useState<RoomsSetting | null>(null)
   useEffect(() => {
-    void ch.rooms().then(setRoomsFloor, () => {})
+    void run(ch.fx.rooms()).then(setRoomsFloor, () => {})
   }, [ch, infoAt])
 
   const onGone = useCallback(
@@ -647,28 +706,38 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
     [member.code]
   )
 
-  const refreshRoster = useCallback(async () => {
-    try {
-      setRoster(await ch.members())
-      if (ch.isOwner && (await ch.rotateIfDue())) setRoster(await ch.members())
-    } catch (err) {
-      onGone(err)
-    }
-  }, [ch, onGone])
+  /** A step that failed is reported to onGone; one that was stopped (the view closed) isn't. */
+  const orGone = useCallback(
+    <A, E, R>(step: Effect.Effect<A, E, R>) => step.pipe(Effect.asVoid, Effect.catchCause((cause) => (Cause.hasInterruptsOnly(cause) ? Effect.void : Effect.sync(() => void onGone(Cause.squash(cause)))))),
+    [onGone]
+  )
 
-  const refreshRequests = useCallback(async () => {
-    if (!ch.isOwner) return
-    try {
-      setRequests(await ch.requests({ budget: browserBudget }))
-    } catch (err) {
-      onGone(err)
-    }
-  }, [ch, onGone])
+  const rosterStep = useMemo(
+    () =>
+      orGone(
+        Effect.gen(function* () {
+          setRoster(yield* ch.fx.members())
+          if (ch.isOwner && (yield* ch.fx.rotateIfDue())) setRoster(yield* ch.fx.members())
+        })
+      ),
+    [ch, orGone]
+  )
+  const requestsStep = useMemo(
+    () =>
+      orGone(
+        Effect.gen(function* () {
+          if (!ch.isOwner) return
+          setRequests(yield* ch.fx.requests({ budget: browserBudget }))
+        })
+      ),
+    [ch, orGone]
+  )
+  const refreshRoster = useCallback(() => run(rosterStep), [rosterStep])
+  const refreshRequests = useCallback(() => run(requestsStep), [requestsStep])
 
+  // The channel, followed while this view is open: one subscription to its Stream, stopped on close.
   useEffect(() => {
     if (human === null) return
-    let cancelled = false
-    const ac = new AbortController()
     // Batch incoming messages so a history replay renders once, not thousands of times.
     let pending: Message[] = []
     let flush: number | undefined
@@ -678,10 +747,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
         const batch = pending
         pending = []
         flush = undefined
-        setMessages((prev) => {
-          const seen = new Set(prev.map((p) => p.seq))
-          return [...prev, ...batch.filter((b) => !seen.has(b.seq))].sort((a, b) => a.seq - b.seq)
-        })
+        setMessages((prev) => merged(prev, batch))
         // Seal after paint. A cache failure must not stop the stream.
         const key = ch.access.keys[String(ch.access.epoch)]
         if (key) {
@@ -689,64 +755,52 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
         }
       }, 30)
     }
-    const onPresence = (p: Presence & { sigOk: boolean }) => {
-      if (p.client === "probe" || !p.sigOk) return
-      setOnline((prev) => new Map(prev).set(p.from, { client: p.client, role: p.role, at: Date.now(), pk: p.pk }))
-    }
-
-    ;(async () => {
-      await Promise.all([refreshRoster(), refreshRequests()])
-      const head = await ch.head()
-      // Paint the sealed cache, then ask the relay only for seqs after it.
-      // Anything unusable falls back to the usual window.
-      let since = Math.max(0, head - HISTORY)
-      let firstSeq: number | undefined
-      try {
-        const cached = await readCached(ch.roomId, ch.identity.pk, ch.access.keys, head, HISTORY)
-        if (cancelled) return
-        since = cached.since
-        if (cached.messages.length) {
-          firstSeq = cached.messages[0]!.seq
-          setMessages((prev) => {
-            const seen = new Set(prev.map((p) => p.seq))
-            return [...prev, ...cached.messages.filter((m) => !seen.has(m.seq))].sort((a, b) => a.seq - b.seq)
-          })
+    const live = (ev: Live): Effect.Effect<void> =>
+      Effect.sync(() => {
+        switch (ev._tag) {
+          case "Open":
+            setConnection("live")
+            // Anything that happened while the stream was closed (its first open included) sent its frame
+            // to nobody: a join request in that gap would sit unseen. Read both again now that it's open.
+            void refreshRequests()
+            void refreshRoster()
+            // Ask every listening agent to announce itself right away.
+            void Effect.runFork(ev.presence({ client: "probe", query: true }))
+            return
+          case "Message":
+            return enqueue(ev.message)
+          case "Presence": {
+            const p = ev.presence
+            if (p.client === "probe" || !p.sigOk) return
+            setOnline((prev) => new Map(prev).set(p.from, { client: p.client, role: p.role, at: Date.now(), pk: p.pk }))
+            return
+          }
+          case "Roster":
+            return void refreshRoster()
+          case "Request":
+            return void refreshRequests()
+          case "Info":
+            setInfoAt(Date.now())
+            window.dispatchEvent(new CustomEvent(ICON_LIVE, { detail: member.code }))
+            return
         }
-      } catch {
-        // Private mode and a broken cache both load from the relay.
-      }
-      if (cancelled) return
-      setStart({ head, whole: wholeLog(head, HISTORY, firstSeq) })
-      await ch.stream(since, enqueue, {
-        signal: ac.signal,
-        onOpen: ({ presence }) => {
-          setConnection("live")
-          // Anything that happened while the stream was closed (its first open included) sent its frame
-          // to nobody: a join request in that gap would sit unseen. Read both again now that it's open.
-          void refreshRequests()
-          void refreshRoster()
-          // Ask every listening agent to announce itself right away.
-          void presence({ client: "probe", query: true })
-        },
-        onStatus: () => setConnection("reconnecting"),
-        onPresence,
-        onRoster: () => void refreshRoster(),
-        onRequest: () => void refreshRequests(),
-        onInfo: () => {
-          setInfoAt(Date.now())
-          window.dispatchEvent(new CustomEvent(ICON_LIVE, { detail: member.code }))
-        },
       })
-    })().catch((err: unknown) => {
-      if (!cancelled) onGone(err)
-    })
-
+    const stop = fork(
+      orGone(
+        follow(ch, {
+          refresh: Effect.all([rosterStep, requestsStep], { concurrency: "unbounded", discard: true }),
+          cached: (cached) => setMessages((prev) => merged(prev, cached)),
+          started: setStart,
+          live,
+          status: () => Effect.sync(() => setConnection("reconnecting")),
+        })
+      )
+    )
     return () => {
-      cancelled = true
-      ac.abort()
+      stop()
       clearTimeout(flush)
     }
-  }, [ch, refreshRoster, refreshRequests, onGone, human])
+  }, [ch, rosterStep, requestsStep, refreshRoster, refreshRequests, orGone, human, member.code])
 
   // Presence can only be trusted when it's signed by the key the owner admitted under that name.
   const keyOf = useMemo(() => new Map(roster.filter((r) => r.active).map((r) => [r.name, r.pk])), [roster])
@@ -780,7 +834,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
   const caughtUp = !!start?.whole && (messages.at(-1)?.seq ?? 0) >= start.head
   const reconcile = useEffectEvent(() => {
     if (!ch.isOwner || !caughtUp || roster.length === 0) return
-    ch.reconcilePosting(state, roster).then(
+    run(ch.fx.reconcilePosting(state, roster)).then(
       (changed) => {
         if (changed.length) void refreshRoster()
       },
@@ -796,16 +850,14 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
     chRef.current = ch
   }, [ch])
   const send = useCallback(
-    async (body: string, opts: SendOptions) => {
-      try {
-        return await chRef.current.send(body, opts)
-      } catch (err) {
+    (body: string, opts: SendOptions) =>
+      run(chRef.current.fx.send(body, opts)).catch((err: unknown) => {
         if (onGone(err)) throw new Error("you no longer have access to this channel", { cause: err })
         throw err
-      }
-    },
+      }),
     [onGone]
   )
 
   return { ch, connection, gone, messages, roster, state, online: live, isOwner, requests, send, refreshRequests, refreshRoster, head: start?.head ?? 0 }
 }
+
