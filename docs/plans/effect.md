@@ -155,6 +155,44 @@ Argument parsing stays `node:util` parseArgs and the help text is unchanged:
 person routes on the relay side (step 2's note), the web's move, and the Worker
 canary.
 
+**Step 2, the person routes (code):** the vault, device handovers, linked
+computers, `/v1/me/channels` and `/v1/me/usage` run with their stores as services
+(`Vaults`, `Handovers`, `Machines`, `Directory`, `Policy`, `Human`, and Effect's
+`Clock`), which each adapter builds once from a Layer (`me.ts`: `makePeople`), the
+way a room runs with `makeRelay`'s; the Worker builds it once per isolate. Only the
+computer registration limit (`Registrations`) is per request, since it's the
+request's address. `refuse(status, text)` is gone: every refusal is the tagged
+failure its status always meant (`MethodNotAllowed` is new, for the vault's 405),
+so `Refused` is left for the Worker's 503 alone. The vault's 409s still answer
+with a whole response, since they carry the version that's there now. The two
+listings moved out of `room.ts` into `me.ts`. Same statuses, texts and tags (the
+snapshot is unchanged); the tests that called the entry points directly
+(`onVaultHttp`, `onDeviceHttp`, `onMachineHttp`, `myChannels`) now hand them a
+context. The Bun relay's `now` option is now the clock the vault and handovers
+read too (before, only the rooms and the listing did).
+
+**The web (code):** one runtime for the page (`web/src/lib/runtime.ts`), with this
+browser's services as Layers: `Storage` (localStorage, `storage.ts`), `KeyStore`
+(the vault key in IndexedDB, `vault-store.ts`) and the client's `Relay`. React is
+the edge: components call the same functions with the same props, and those run
+Effects there (`run`) and reject with the step's tagged error, an Error with the
+text the page always showed. A channel view is one subscription (`fork`) to one
+Effect: the member list and requests, the sealed cache, then `ch.fx.live` through
+`eachLive`; closing the view interrupts it, which closes the socket. The passkey
+steps fail `PasskeyCancelled`, `PrfUnsupported`, `NoPasskey` or `PasskeyFailed`
+(the browser's DOMException names are read in one place); the vault's fail
+`SignInAgain`, `NoVault`, `VaultExists`, `NotSaved`, `WrongKey`,
+`NotARecoveryCode`, `VaultChanged`, `SamePasskey` or `VaultBroken`, besides the
+relay's `RelayError`; sign-in tells a spent session (`SessionEnded`) from a blip
+by tag. Bundle: 941KB raw / 299KB gzipped before, 949KB / 302KB after (Effect was
+already in through `client.ts`; this adds ~3KB gzipped). What render reads
+synchronously (membership, the channel list, the recent previews) stays plain
+calls on localStorage, like the pure core: wrapping a render-time read in an Effect
+buys nothing. Still on the client's Promise doors, and moving them is mechanical
+with what's here: the join and invite steps in `channel.ts` (`memberFromLink`,
+`createChannel`, `askToJoin`, `checkJoin`, `inviteInfo`), and `devices.ts`,
+`computers.ts`, `usage.ts`.
+
 ## Costs, measured
 
 - **Bundle**: a minimal program with a service, a Layer and a tagged error,
@@ -194,3 +232,12 @@ All of `src/` except the pure core runs on Effect; one error vocabulary; the
 Worker and Bun relays share one room implementation through Layers; the suite
 and the Worker test pass at every step; protocol, storage and the web's surface
 unchanged (or the web moved, if that's the call).
+
+**Status: done in code.** Every relay route, the client, the agent, the CLI and
+MCP run on Effect, and the web has moved (above); the suite passes, and so does
+the Worker test under a local `wrangler dev` (`KIWI_WORKER_E2E=1`). What's left is
+not code: the relay deploy with its canary (workers.dev first, the suite against
+it, then the custom domain) and the Durable Object CPU numbers before and after.
+Both need a deploy, which is the owner's call. `src/vault.ts` stays plain
+functions as part of the pure core, its two relay calls included (`fetchVault`,
+`putVault`): the web wraps them where it calls them.
