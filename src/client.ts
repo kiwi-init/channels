@@ -1,7 +1,25 @@
 // Client for one membership channel: create it, ask to join, approve, send
 // (signed), read history, stream live messages and presence, leave, close.
 // Runs in Bun and in the browser.
+//
+// On Effect inside (docs/plans/effect.md, step 3). Every request goes through the
+// Relay service; a refusal is a typed failure (RelayError, ChannelGone,
+// Unreachable), never a message to match. The live connection is a Stream that
+// reconnects on a Schedule, and interrupting it closes the socket. `ch.fx`,
+// `Channel.fx` and `fx` are those Effects. The Promise methods, which the CLI, the
+// agent and the dashboard call, run them and resolve or reject exactly as before.
 
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
+import * as Context from "effect/Context";
+import * as Data from "effect/Data";
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as Fiber from "effect/Fiber";
+import * as Queue from "effect/Queue";
+import * as Schedule from "effect/Schedule";
+import * as Stream from "effect/Stream";
 import { signRequest } from "./auth.ts";
 import { isErrorTag, tagForStatus, type ErrorTag } from "./errors.ts";
 import {
@@ -61,6 +79,12 @@ export interface SendOptions {
   esc?: boolean;
 }
 
+// ---------- what can go wrong ----------
+//
+// RelayError and ChannelGone stay the plain Errors callers have always caught
+// (instanceof, .status, .tag, .why, and the same text). Their `_tag` lives on the
+// prototype, for Effect's catchTag, so the errors themselves read as before.
+
 export class RelayError extends Error {
   /** What the refusal means; read from the relay's answer, or from the status for relays that don't say. */
   readonly tag: ErrorTag;
@@ -72,6 +96,9 @@ export class RelayError extends Error {
     super(message);
     this.tag = isErrorTag(tag) ? tag : tagForStatus(status);
   }
+  get _tag(): "RelayError" {
+    return "RelayError";
+  }
 }
 
 /** This member was removed, or the owner closed the channel. Local copies should be wiped. */
@@ -79,7 +106,123 @@ export class ChannelGone extends Error {
   constructor(readonly why: "removed" | "closed") {
     super(why === "closed" ? "the owner closed this channel" : "you are no longer a member of this channel");
   }
+  get _tag(): "ChannelGone" {
+    return "ChannelGone";
+  }
 }
+
+/** The relay couldn't be reached at all (fetch itself failed). The Promise methods reject with what fetch threw, as they always have. */
+export class Unreachable extends Data.TaggedError("Unreachable")<{ readonly cause: unknown }> {}
+
+/** A socket that closed for no reason that's an answer (not removed, not closed, not "more"): connect again. */
+class Dropped extends Data.TaggedError("Dropped")<{ readonly code: number; readonly reason: string }> {}
+
+/** What a request can fail with: the relay refused it, or never heard it. */
+export type Refusal = RelayError | Unreachable;
+/** What a member's request can fail with: those, or this member being out of the channel. */
+export type MemberRefusal = Refusal | ChannelGone;
+
+/** Map the relay errors that mean "you're out" to ChannelGone; leave everything else alone. */
+function gone<E>(err: E): E | ChannelGone {
+  if (!(err instanceof RelayError)) return err;
+  // By tag; by text too, for relays from before tags (0.7 and older).
+  if (err.tag === "NotMember" || (err.status === 403 && /not a member/.test(err.message))) return new ChannelGone("removed");
+  if (err.tag === "ChannelGone" || (err.status === 404 && /no such channel/.test(err.message))) return new ChannelGone("closed");
+  return err;
+}
+
+// ---------- the relay ----------
+
+/** Supplies the signed-in human's WorkOS access token (relays that require sign-in). */
+export type HumanSession = () => Promise<string | null>;
+
+/** One request to a channel's route. */
+export interface CallInit {
+  method?: string;
+  body?: string;
+  /** Signs the request: the key the relay sees. */
+  identity?: Identity;
+  /** The signed-in person's session, on relays that require one. */
+  human?: string | null;
+}
+
+export interface RelayApi {
+  /** A channel's route, signed when `init.identity` is given. A refusal is a RelayError with the relay's own text. */
+  readonly call: <T>(relay: string, roomId: string, path: string, init?: CallInit, params?: Record<string, string | number>) => Effect.Effect<T, Refusal>;
+  /** A signed-in person's route (/v1/me/…). */
+  readonly person: <T>(relay: string, path: string, human: string) => Effect.Effect<T, Refusal>;
+  /** Whether a relay requires a signed-in human, and with which WorkOS client. */
+  readonly config: (relay: string) => Effect.Effect<{ workosClientId: string | null }, Unreachable>;
+}
+
+/** The relay, as the client talks to it. `fetchRelay` is HTTP; a test or another transport provides its own. */
+export class Relay extends Context.Service<Relay, RelayApi>()("kiwi/client/Relay") {}
+
+/** What the relay answers a signature that's wrong or outside its time window. */
+const EXPIRED_SIGNATURE = "bad or expired signature";
+
+const reach = (url: URL, init: RequestInit) => Effect.tryPromise({ try: (signal) => fetch(url, { ...init, signal }), catch: (cause) => new Unreachable({ cause }) });
+
+/** The answer's JSON (an empty object when it has none), or the refusal it is. */
+const answered = <T>(res: Response) =>
+  Effect.flatMap(
+    Effect.promise(() => res.json().catch(() => ({})) as Promise<T & { error?: string; tag?: string }>),
+    (json): Effect.Effect<T, RelayError> => (res.ok ? Effect.succeed(json) : Effect.fail(new RelayError(res.status, json.error ?? `relay returned ${res.status}`, json.tag))),
+  );
+
+const expired = (err: Refusal) => err instanceof RelayError && err.status === 401 && err.message === EXPIRED_SIGNATURE;
+
+/** The relay over HTTP. */
+export const fetchRelay: RelayApi = {
+  call: <T>(relay: string, roomId: string, path: string, init: CallInit = {}, params: Record<string, string | number> = {}) =>
+    Effect.suspend(() => {
+      const u = new URL(`/v1/rooms/${roomId}${path}`, relay);
+      for (const [k, v] of Object.entries(params)) u.searchParams.set(k, String(v));
+      const method = (init.method ?? "GET").toUpperCase();
+      const body = init.body ?? "";
+      const { identity, human } = init;
+      const once = Effect.gen(function* () {
+        const headers: Record<string, string> = { "content-type": "application/json" };
+        // The signature covers the query too, so a captured token can't be replayed with other parameters.
+        if (identity) headers.authorization = `Bearer ${yield* Effect.promise(() => signRequest(identity, roomId, method, path + u.search, body))}`;
+        if (human) headers["x-human-token"] = human;
+        const res = yield* reach(u, { method, body: method === "GET" || method === "DELETE" ? undefined : body, headers });
+        return yield* answered<T>(res);
+      });
+      // Signed, then the machine slept past the signature's window before it was sent: sign again,
+      // once. The relay refused before doing anything, so even a write is safe to send twice.
+      return Effect.retry(once, { times: 1, while: (err) => !!identity && expired(err) });
+    }),
+  person: <T>(relay: string, path: string, human: string) =>
+    Effect.suspend(() => reach(new URL(path, relay), { headers: { "x-human-token": human } })).pipe(Effect.flatMap((res) => answered<T>(res))),
+  config: (relay) =>
+    Effect.suspend(() => reach(new URL("/v1/config", relay), {})).pipe(
+      Effect.flatMap((res) => (res.ok ? Effect.promise(() => res.json() as Promise<{ workosClientId: string | null }>) : Effect.succeed({ workosClientId: null }))),
+    ),
+};
+
+const callRelay = <T>(relay: string, roomId: string, path: string, init?: CallInit, params?: Record<string, string | number>) =>
+  Effect.gen(function* () {
+    return yield* (yield* Relay).call<T>(relay, roomId, path, init, params);
+  });
+
+/** An Effect's end as a Promise's: its value, or what it failed with (what fetch threw, for a relay out of reach). */
+function settle<A, E>(exit: Exit.Exit<A, E>): A {
+  if (Exit.isSuccess(exit)) return exit.value;
+  const err = Cause.squash(exit.cause);
+  throw err instanceof Unreachable ? err.cause : err;
+}
+
+/** Run a client Effect over HTTP, as the Promise callers have always had. */
+const run = <A, E>(effect: Effect.Effect<A, E, Relay>): Promise<A> => Effect.runPromiseExit(Effect.provideService(effect, Relay, fetchRelay)).then(settle);
+
+/** Run until `signal` aborts. Stopped that way, it resolves, as the loop that checked `signal.aborted` did. */
+const runUntil = <E>(effect: Effect.Effect<void, E, Relay>, signal?: AbortSignal): Promise<void> =>
+  Effect.runPromiseExit(Effect.provideService(effect, Relay, fetchRelay), { signal }).then((exit) =>
+    signal?.aborted && Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause) ? undefined : settle(exit),
+  );
+
+// ---------- the live connection ----------
 
 export interface StreamOptions {
   signal?: AbortSignal;
@@ -94,7 +237,7 @@ export interface StreamOptions {
    */
   now?: () => number;
   /** Called on every (re)connect with a way to send ephemeral presence. */
-  onOpen?: (live: { presence: (p: Omit<Presence, "v" | "type" | "from" | "ts">) => Promise<void> }) => void;
+  onOpen?: (live: { presence: (p: PresenceFields) => Promise<void> }) => void;
   onPresence?: (p: Presence & { sigOk: boolean }) => void;
   /** The channel's info changed (its icon): refetch it. */
   onInfo?: () => void;
@@ -104,41 +247,87 @@ export interface StreamOptions {
   onRequest?: () => void;
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const keyInfo = (room: string, e: number | string) => `mc/key\n${room}\n${e}`;
-const requestInfo = (room: string) => `mc/request\n${room}`;
+/** What a member says about itself in presence; the rest (version, name, time) is filled in. */
+export type PresenceFields = Omit<Presence, "v" | "type" | "from" | "ts">;
 
-/** Supplies the signed-in human's WorkOS access token (relays that require sign-in). */
-export type HumanSession = () => Promise<string | null>;
+/** What a live channel says, in order. */
+export type Live =
+  /**
+   * Connected, or connected again. `outage` is how long the relay was out of reach, when that
+   * was long enough to have said so (a Down came before); otherwise null.
+   */
+  | { readonly _tag: "Open"; readonly presence: (p: PresenceFields) => Effect.Effect<void>; readonly outage: number | null }
+  /** Caught up: the relay's head when this connection's replay ended. */
+  | { readonly _tag: "Ready"; readonly head: number }
+  | { readonly _tag: "Message"; readonly message: Message }
+  | { readonly _tag: "Presence"; readonly presence: Presence & { sigOk: boolean } }
+  /** The channel's info changed, the member list changed, someone asked to join. */
+  | { readonly _tag: "Info" | "Roster" | "Request" }
+  /** The relay has been out of reach for the quiet window (`after` ms); still retrying. Said once per outage. */
+  | { readonly _tag: "Down"; readonly after: number; readonly code: number; readonly reason: string }
+  /** A frame that couldn't be read (a bad payload): dropped, and the stream goes on. */
+  | { readonly _tag: "Skipped"; readonly frame: string; readonly error: unknown };
 
-async function call<T>(
-  relay: string,
-  roomId: string,
-  path: string,
-  init: RequestInit & { identity?: Identity; human?: string | null } = {},
-  params: Record<string, string | number> = {},
-): Promise<T> {
-  const u = new URL(`/v1/rooms/${roomId}${path}`, relay);
-  for (const [k, v] of Object.entries(params)) u.searchParams.set(k, String(v));
-  const method = (init.method ?? "GET").toUpperCase();
-  const body = typeof init.body === "string" ? init.body : "";
-  for (let attempt = 0; ; attempt++) {
-    const headers: Record<string, string> = { "content-type": "application/json" };
-    // The signature covers the query too, so a captured token can't be replayed with other parameters.
-    if (init.identity) headers.authorization = `Bearer ${await signRequest(init.identity, roomId, method, path + u.search, body)}`;
-    if (init.human) headers["x-human-token"] = init.human;
-    const res = await fetch(u, { method, body: method === "GET" || method === "DELETE" ? undefined : body, headers });
-    const json = (await res.json().catch(() => ({}))) as T & { error?: string; tag?: string };
-    // Signed, then the machine slept past the signature's window before it was sent: sign again,
-    // once. The relay refused before doing anything, so even a write is safe to send twice.
-    if (res.status === 401 && json.error === EXPIRED_SIGNATURE && init.identity && attempt === 0) continue;
-    if (!res.ok) throw new RelayError(res.status, json.error ?? `relay returned ${res.status}`, json.tag);
-    return json;
-  }
+export interface LiveOptions {
+  /** How long the relay may be out of reach before a Down (default QUIET_DROP_MS). */
+  quietMs?: number;
+  /** Open presence frames (default true). A listener that ignores presence skips the work. */
+  presence?: boolean;
 }
 
-/** What the relay answers a signature that's wrong or outside its time window. */
-const EXPIRED_SIGNATURE = "bad or expired signature";
+/** How long a dropped connection may stay down before listeners hear about it. */
+export const QUIET_DROP_MS = 30_000;
+
+/** The wait before connecting again: half a second, doubling, never more than 30s. */
+const backoff = Schedule.min([Schedule.exponential("500 millis"), Schedule.spaced("30 seconds")]);
+
+/** Whether this step of an outage is the one where it outlasted the quiet window (said once, so only the first). */
+const outlasted = ({ attempt, elapsed, elapsedSincePrevious }: Schedule.InputMetadata<unknown>, quietMs: number) =>
+  elapsed >= quietMs && (attempt === 1 || elapsed - elapsedSincePrevious < quietMs);
+
+/** A frame from the socket, or the socket opening (with a way to send presence on it). */
+type Incoming = ServerFrame | { t: "pong" } | { t: "open"; presence: (p: PresenceFields) => Effect.Effect<void> };
+
+/** A ping now and then keeps proxies from closing a quiet socket. */
+const keepAlive = (ws: WebSocket) =>
+  Effect.sleep("25 seconds").pipe(
+    Effect.andThen(Effect.sync(() => ws.readyState === WebSocket.OPEN && ws.send(PING))),
+    Effect.forever,
+  );
+
+/** A real 10ms wait, for polling a test's clock. */
+const tick = Effect.callback<void>((resume) => {
+  const t = setTimeout(() => resume(Effect.void), 10);
+  return Effect.sync(() => clearTimeout(t));
+});
+
+/**
+ * A Clock that reads `now` (a test's), and whose sleeps poll it: moving it forward
+ * ends a long wait early. The short real wait between polls keeps a clock that is
+ * Date.now from spinning.
+ */
+function clockFrom(now: () => number): Clock.Clock {
+  const nanos = () => BigInt(now()) * 1_000_000n;
+  const until = (end: number): Effect.Effect<void> => Effect.suspend(() => (now() >= end ? Effect.void : Effect.andThen(tick, until(end))));
+  return {
+    currentTimeMillisUnsafe: now,
+    currentTimeMillis: Effect.sync(now),
+    currentTimeNanosUnsafe: nanos,
+    currentTimeNanos: Effect.sync(nanos),
+    monotonicTimeNanosUnsafe: nanos,
+    monotonicTimeNanos: Effect.sync(nanos),
+    sleep: (d) => Effect.suspend(() => until(now() + Duration.toMillis(d))),
+  };
+}
+
+/** The frame each Live came from, for the line about one whose handling failed. */
+const FRAME: Record<Live["_tag"], string> = { Open: "open", Ready: "ready", Message: "msg", Presence: "eph", Info: "info", Roster: "roster", Request: "request", Down: "status", Skipped: "status" };
+const failedFrame = (frame: string, err: unknown) => `dropped a ${frame} frame whose handling failed: ${err instanceof Error ? err.message : String(err)}`;
+
+// ---------- keys and owners ----------
+
+const keyInfo = (room: string, e: number | string) => `mc/key\n${room}\n${e}`;
+const requestInfo = (room: string) => `mc/request\n${room}`;
 
 export interface Info {
   ownerPk: string;
@@ -202,15 +391,15 @@ export async function titlesSigned(roomId: string, ownerPk: string, titlesSig: s
 }
 
 /** Fetch a room's public info and check it against the owner pinned in the join code. */
-async function pinnedInfo(relay: string, code: string): Promise<{ roomId: string; info: Info; signedKeys: boolean }> {
+const pinnedInfo = Effect.fn("Channel.pinnedInfo")(function* (relay: string, code: string) {
   const { roomId, ownerFp } = decodeJoinCode(code);
   // Proving we hold the code (its fingerprint half) is what gets the owner's name, and keeps a bare room id from being a join code.
-  const info = await call<Info>(relay, roomId, "/info", {}, { fp: ownerFp });
-  if ((await ownerFingerprint(info.ownerPk)) !== ownerFp) throw new Error("this relay is serving a different owner than the join code names; refusing");
-  const statement = await ownerStatement(roomId, info);
+  const info = yield* callRelay<Info>(relay, roomId, "/info", {}, { fp: ownerFp });
+  if ((yield* Effect.promise(() => ownerFingerprint(info.ownerPk))) !== ownerFp) throw new Error("this relay is serving a different owner than the join code names; refusing");
+  const statement = yield* Effect.promise(() => ownerStatement(roomId, info));
   if (!statement) throw new Error("the channel owner's keys aren't signed; refusing");
   return { roomId, info, signedKeys: statement === "signed-keys" };
-}
+});
 
 const keyStatement = (room: string, e: number | string, memberPk: string, box: string) => `kiwi-key\n${room}\n${e}\n${memberPk}\n${box}`;
 
@@ -218,6 +407,13 @@ const keyStatement = (room: string, e: number | string, memberPk: string, box: s
 async function wrapFor(owner: Identity, roomId: string, e: number | string, memberPk: string, memberXpk: string, key: string): Promise<string> {
   const box = await sealTo(memberXpk, key, keyInfo(roomId, e));
   return JSON.stringify({ box, sig: await signText(owner, keyStatement(roomId, e, memberPk, box)) });
+}
+
+/** Wrap every key this owner holds for one member. */
+async function wrapAllFor(owner: Identity, roomId: string, keys: Record<string, string>, memberPk: string, memberXpk: string): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  for (const [e, k] of Object.entries(keys)) out[e] = await wrapFor(owner, roomId, e, memberPk, memberXpk, k);
+  return out;
 }
 
 /** Unwrap this member's keys, keeping only ones the owner signed (or, on older channels, unsigned ones). */
@@ -242,12 +438,84 @@ async function unwrapKeys(id: Identity, roomId: string, wrapped: Record<string, 
   return out;
 }
 
-/** How long a dropped connection may stay down before listeners hear about it. */
-export const QUIET_DROP_MS = 30_000;
+/** Where a join request stands, as joinStatus answers it. */
+export type JoinStatus =
+  | { status: "pending"; sponsored: boolean; code: string | null }
+  | { status: "denied"; sponsored: boolean }
+  | { status: "approved"; sponsored: boolean; access: ChannelAccess };
+
+/** A member list entry as the relay sends it. */
+type MemberRow = { pk: string; xpk: string; rec: string; e: number; active: number; read_only?: number };
+
+/** A pending join request as the relay sends it. */
+type RequestRow = {
+  id: string;
+  pk: string;
+  xpk: string;
+  box: string;
+  ts: number;
+  commit: string;
+  ownerNonce: string | null;
+  reveal: string | null;
+  sig: string;
+  kind?: string;
+  sponsorUser?: string | null;
+  sponsorName?: string | null;
+  sponsorEmail?: string | null;
+};
+
+/**
+ * Every Channel operation as an Effect: the Promise methods run these. Same
+ * arguments and results; failures typed. Local refusals (not the owner, a bad
+ * name, a key that's missing) are plain Errors, as they always were.
+ */
+export interface ChannelFx {
+  refreshKeys(): Effect.Effect<void, MemberRefusal, Relay>;
+  info(fp?: string): Effect.Effect<Info, Refusal, Relay>;
+  title(): Effect.Effect<string | null, Refusal, Relay>;
+  setTitle(name: string): Effect.Effect<void, MemberRefusal, Relay>;
+  mode(): Effect.Effect<ModeSetting | null, Refusal, Relay>;
+  rooms(): Effect.Effect<RoomsSetting | null, Refusal, Relay>;
+  setMode(mode: ModeSetting): Effect.Effect<void, MemberRefusal, Relay>;
+  setRooms(rooms: RoomsSetting): Effect.Effect<void, MemberRefusal, Relay>;
+  guard(): Effect.Effect<GuardFloor | null, Refusal, Relay>;
+  setCharter(charter: NonNullable<GuardFloor["charter"]>): Effect.Effect<void, MemberRefusal, Relay>;
+  setHold(hold: NonNullable<GuardFloor["hold"]>): Effect.Effect<void, MemberRefusal, Relay>;
+  icon(): Effect.Effect<ChannelIcon | null, MemberRefusal, Relay>;
+  setIcon(icon: ChannelIcon | null): Effect.Effect<void, MemberRefusal, Relay>;
+  members(): Effect.Effect<Member[], MemberRefusal, Relay>;
+  leave(): Effect.Effect<void, MemberRefusal, Relay>;
+  requests(opts?: { budget?: SigningBudget }): Effect.Effect<JoinRequest[], MemberRefusal, Relay>;
+  checkRequest(req: Pick<JoinRequest, "id" | "pk" | "commit">): Effect.Effect<void, MemberRefusal, Relay>;
+  approve(req: JoinRequest, as?: Partial<MemberInfo>): Effect.Effect<Member, MemberRefusal, Relay>;
+  reclaim(req: JoinRequest, opts: { online: boolean; force?: boolean; scopes?: Scope[] }): Effect.Effect<Member, MemberRefusal, Relay>;
+  deny(requestId: string): Effect.Effect<void, MemberRefusal, Relay>;
+  setCanPost(pk: string, post: boolean): Effect.Effect<void, MemberRefusal, Relay>;
+  updateScopes(m: Member, scopes: readonly Scope[], since: number): Effect.Effect<void, MemberRefusal, Relay>;
+  updateRole(m: Member, role: string | null, about: string | null | undefined, since: number): Effect.Effect<void, MemberRefusal, Relay>;
+  reconcilePosting(state: Pick<ChannelState, "members" | "scopeSets" | "roleSets">, members?: Member[]): Effect.Effect<string[], MemberRefusal, Relay>;
+  remove(pk: string): Effect.Effect<void, MemberRefusal, Relay>;
+  rotate(): Effect.Effect<number, MemberRefusal, Relay>;
+  rotateIfDue(): Effect.Effect<boolean, MemberRefusal, Relay>;
+  close(): Effect.Effect<void, MemberRefusal, Relay>;
+  head(): Effect.Effect<number, MemberRefusal, Relay>;
+  send(body: string, opts?: SendOptions): Effect.Effect<number, MemberRefusal, Relay>;
+  decrypt(env: Envelope): Effect.Effect<Message | null, never, Relay>;
+  history(since: number): Effect.Effect<{ head: number; messages: Message[] }, MemberRefusal, Relay>;
+  /**
+   * The channel live, from after `since`: replays anything missed, reconnects with backoff, and
+   * resumes from the last message handed on, so nothing is lost across drops. Fails ChannelGone
+   * when this member is removed or the channel closed; interrupting it closes the socket.
+   */
+  live(since: number, opts?: LiveOptions): Stream.Stream<Live, ChannelGone, Relay>;
+  /** live(), handed to StreamOptions' callbacks as stream() always has (`signal` is the Promise's; interrupt this instead). */
+  stream(since: number, onMessage: (m: Message) => void | Promise<void>, opts?: StreamOptions): Effect.Effect<void, ChannelGone, Relay>;
+}
 
 export class Channel {
   readonly name: string;
-  private refreshing: Promise<void> | null = null;
+  /** The key fetch in flight, shared by everyone who needs it meanwhile. */
+  private refreshing: Fiber.Fiber<void, MemberRefusal> | null = null;
 
   constructor(
     public access: ChannelAccess,
@@ -270,22 +538,870 @@ export class Channel {
     return this.identity.pk === this.access.ownerPk;
   }
 
-  private async request<T>(path: string, init: RequestInit = {}, params: Record<string, string | number> = {}): Promise<T> {
-    try {
-      const human = this.human && this.isOwner ? await this.human() : null;
-      return await call<T>(this.relay, this.roomId, path, { ...init, identity: this.identity, human }, params);
-    } catch (err) {
-      throw gone(err);
-    }
+  /** A member route, signed by this member (and the owner's person, on sign-in relays). "You're out" comes back as ChannelGone. */
+  private request<T>(path: string, init: CallInit = {}, params: Record<string, string | number> = {}): Effect.Effect<T, MemberRefusal, Relay> {
+    return Effect.gen({ self: this }, function* () {
+      const session = this.human;
+      const human = session && this.isOwner ? yield* Effect.promise(() => session()) : null;
+      return yield* callRelay<T>(this.relay, this.roomId, path, { ...init, identity: this.identity, human }, params);
+    }).pipe(Effect.mapError(gone));
   }
 
-  // ---------- lifecycle ----------
+  private ownerOnly(): void {
+    if (!this.isOwner) throw new Error("only the channel owner can do that");
+  }
+
+  // ---------- the operations, as Effects ----------
+
+  static readonly fx = {
+    /**
+     * Create a channel owned by `owner` (the human), with `agent` (the creating
+     * agent) admitted alongside. Returns the join code and the owner's access.
+     */
+    create: Effect.fn("Channel.create")(function* (
+      relay: string,
+      owner: Identity,
+      ownerInfo: MemberInfo,
+      agents: (Identity & { info: MemberInfo })[] = [],
+      roomId: string = newRoomId(),
+      human?: string | null,
+      /** A name for the channel; sealed, so only members can read it. */
+      title?: string,
+    ) {
+      if (!owner.xpk) throw new Error("owner identity has no exchange key");
+      const xpk = owner.xpk;
+      const key = newChannelKey();
+      const ownerSig = yield* Effect.promise(() => sign(owner, { room: roomId, xpk, v: 2 }));
+      const titlesSig = yield* Effect.promise(() => sign(owner, { room: roomId, titles: "signed" }));
+      const enroll = async (id: Identity, info: MemberInfo, isOwner: boolean) => ({
+        pk: id.pk,
+        xpk: id.xpk!,
+        rec: await sealRecord(key, await makeRecord(owner, roomId, { ...info, pk: id.pk, xpk: id.xpk!, owner: isOwner })),
+        keys: { "0": await wrapFor(owner, roomId, 0, id.pk, id.xpk!, key) },
+        // Read-only from the start: the relay refuses their posts from the first one.
+        ...(!isOwner && !canPost(scopesOf(info)) ? { post: false } : {}),
+      });
+      const members = yield* Effect.promise(async () => [await enroll(owner, ownerInfo, true), ...(await Promise.all(agents.map((a) => enroll(a, a.info, false))))]);
+      const sealedTitle = title ? yield* Effect.promise(async () => seal(key, roomId, await sign(owner, { what: "channel-title", room: roomId, name: title.slice(0, 80) }))) : undefined;
+      yield* callRelay(relay, roomId, "/create", {
+        method: "POST",
+        identity: owner,
+        human,
+        body: JSON.stringify({ owner: { pk: owner.pk, xpk, sig: ownerSig.sig, titlesSig: titlesSig.sig }, members, ...(sealedTitle ? { title: sealedTitle } : {}) }),
+      });
+      const access: ChannelAccess = { roomId, ownerPk: owner.pk, ownerXpk: xpk, epoch: 0, keys: { "0": key }, signedKeys: true };
+      return { code: encodeJoinCode({ roomId, ownerFp: yield* Effect.promise(() => ownerFingerprint(owner.pk)) }), access };
+    }),
+
+    /**
+     * Ask to join. Name and role are sealed to the owner, so the relay can't read
+     * them. The request commits to this key's half of the code check (sas.ts);
+     * the code itself appears in joinStatus once the owner has signed its half.
+     * Asking again with the same key resumes the same request.
+     */
+    requestJoin: Effect.fn("Channel.requestJoin")(function* (
+      relay: string,
+      code: string,
+      id: Identity,
+      info: MemberInfo,
+      /** A signed-in person joining as themself; agents leave this out. */
+      human?: string | null,
+      /** An agent on a computer its person linked: the computer's vouch for this key. */
+      machine?: { pk: string; sig: string } | null,
+    ) {
+      const { roomId, info: room } = yield* pinnedInfo(relay, code);
+      if (!id.xpk) throw new Error("identity has no exchange key");
+      const xpk = id.xpk;
+      // The computer's vouch rides in the sealed box too, so the owner can check it against their own
+      // computers without taking the relay's word for who vouched (see autoAdmissible).
+      const box = yield* Effect.promise(() => sealTo(room.ownerXpk, JSON.stringify(machine ? { ...info, vouch: machine } : info), requestInfo(roomId)));
+      const commit = yield* Effect.promise(async () => commitTo(roomId, id.pk, await joinNonce(id, roomId)));
+      const body = yield* Effect.promise(() => sign(id, { room: roomId, xpk, box, ts: Date.now(), commit }));
+      const { id: requestId } = yield* callRelay<{ id: string }>(relay, roomId, "/requests", { method: "POST", human, body: JSON.stringify(machine ? { ...body, machine } : body) });
+      return { roomId, requestId };
+    }),
+
+    /** Check a join request. Once approved, returns this member's access. */
+    joinStatus: Effect.fn("Channel.joinStatus")(function* (relay: string, code: string, id: Identity, requestId: string): Effect.fn.Return<JoinStatus, Refusal, Relay> {
+      const { roomId, info, signedKeys } = yield* pinnedInfo(relay, code);
+      const r = yield* callRelay<{ status: string; sponsored?: boolean; ownerNonce?: string | null; revealed?: boolean; epoch?: number; keys?: Record<string, string> }>(
+        relay,
+        roomId,
+        `/requests/${requestId}`,
+        { identity: id },
+      );
+      const sponsored = !!r.sponsored;
+      if (r.status === "denied") return { status: "denied", sponsored };
+      if (r.status !== "approved") {
+        // The code exists once the owner has signed its half; then this side reveals its own.
+        const ownerNonce = r.ownerNonce;
+        if (!ownerNonce) return { status: "pending", sponsored, code: null };
+        const nonce = yield* Effect.promise(() => joinNonce(id, roomId));
+        if (!(yield* Effect.promise(async () => verifyText(info.ownerPk, ownerNonce, ownerNonceStatement(roomId, id.pk, await commitTo(roomId, id.pk, nonce)))))) {
+          throw new Error("the relay passed on an owner signature that doesn't check out: don't let the owner approve this request, and tell them");
+        }
+        if (!r.revealed) yield* callRelay(relay, roomId, `/requests/${requestId}/reveal`, { method: "POST", identity: id, body: JSON.stringify({ nonce }) });
+        return { status: "pending", sponsored, code: yield* Effect.promise(() => joinCheckCode(roomId, id.pk, ownerNonce, nonce)) };
+      }
+      const keys = yield* Effect.promise(() => unwrapKeys(id, roomId, r.keys ?? {}, info.ownerPk, signedKeys));
+      return { status: "approved", sponsored, access: { roomId, ownerPk: info.ownerPk, ownerXpk: info.ownerXpk, epoch: r.epoch ?? 0, keys, signedKeys } };
+    }),
+
+    /**
+     * This key's access to a channel it's already a member of (re-running join with
+     * the same key, e.g. after the config was lost): nothing new is granted.
+     * Fails with a RelayError 403 when the key isn't a member.
+     */
+    resume: Effect.fn("Channel.resume")(function* (relay: string, code: string, id: Identity) {
+      const { roomId, info, signedKeys } = yield* pinnedInfo(relay, code);
+      const r = yield* callRelay<{ epoch: number; keys: Record<string, string> }>(relay, roomId, "/keys", { identity: id });
+      const keys = yield* Effect.promise(() => unwrapKeys(id, roomId, r.keys, info.ownerPk, signedKeys));
+      const access: ChannelAccess = { roomId, ownerPk: info.ownerPk, ownerXpk: info.ownerXpk, epoch: r.epoch, keys, signedKeys };
+      return access;
+    }),
+  };
+
+  readonly fx: ChannelFx = {
+    refreshKeys: Effect.fn("Channel.refreshKeys")({ self: this }, function* (this: Channel) {
+      // One fetch however many ask at once. It runs on its own, so a caller that stops waiting doesn't stop it for the rest.
+      let shared = this.refreshing;
+      if (!shared) {
+        const fiber = yield* Effect.forkDetach(this.fetchKeys());
+        shared = this.refreshing = fiber;
+        fiber.addObserver(() => {
+          if (this.refreshing === fiber) this.refreshing = null;
+        });
+      }
+      return yield* Fiber.join(shared);
+    }),
+
+    info: Effect.fn("Channel.info")({ self: this }, function* (this: Channel, fp?: string) {
+      const ownerPk = this.access.ownerPk;
+      const proof = fp ?? (ownerPk ? yield* Effect.promise(() => ownerFingerprint(ownerPk)) : undefined);
+      return yield* callRelay<Info>(this.relay, this.roomId, "/info", {}, proof ? { fp: proof } : {});
+    }),
+
+    title: Effect.fn("Channel.title")({ self: this }, function* (this: Channel) {
+      const info = yield* this.fx.info();
+      const t = info.title;
+      const key = this.access.keys["0"];
+      if (!t || !key) return null;
+      const opened = (yield* Effect.promise(() => open(key, this.roomId, t.iv, t.ct).catch(() => null))) as { what?: unknown; room?: unknown; name?: unknown; pk?: string; sig?: string } | null;
+      if (!opened || typeof opened.name !== "string") return null;
+      const name = opened.name.slice(0, 80);
+      if (!name) return null;
+      const ownerSigned = opened.what === "channel-title" && opened.room === this.roomId && opened.pk === this.access.ownerPk && (yield* Effect.promise(() => verify(opened)));
+      if (ownerSigned) {
+        this.noteSignedTitle();
+        return name;
+      }
+      // Anything beyond a plain { name } is a member's forgery, not an old title.
+      if (opened.what !== undefined || opened.room !== undefined || opened.pk !== undefined || opened.sig !== undefined) return null;
+      if ((yield* Effect.promise(() => titlesSigned(this.roomId, info.ownerPk, info.titlesSig))) || this.access.signedTitle) return null;
+      return name;
+    }),
+
+    setTitle: Effect.fn("Channel.setTitle")({ self: this }, function* (this: Channel, name: string) {
+      this.ownerOnly();
+      const title = name.trim().slice(0, 80);
+      if (!title) throw new Error("a channel title can't be empty");
+      const key = this.access.keys["0"];
+      if (!key) throw new Error("missing the channel key");
+      const sealed = yield* Effect.promise(async () => seal(key, this.roomId, await sign(this.identity, { what: "channel-title", room: this.roomId, name: title })));
+      yield* this.request("/title", { method: "PUT", body: JSON.stringify({ title: sealed }) });
+      this.noteSignedTitle();
+    }),
+
+    mode: Effect.fn("Channel.mode")({ self: this }, function* (this: Channel) {
+      const o = yield* this.settings();
+      if (!o || typeof o.coordinatorOnly !== "boolean" || typeof o.strict !== "boolean" || !Number.isInteger(o.since)) return null;
+      const mode: ModeSetting = { coordinatorOnly: o.coordinatorOnly, strict: o.coordinatorOnly && o.strict, since: o.since as number };
+      return mode;
+    }),
+
+    rooms: Effect.fn("Channel.rooms")({ self: this }, function* (this: Channel) {
+      const r = (yield* this.settings())?.rooms as Partial<RoomsSetting> | undefined;
+      if (!r || !Array.isArray(r.list) || !Number.isInteger(r.since)) return null;
+      const list = r.list.filter((x): x is RoomEntry => !!x && typeof x === "object" && ROOM_ID_RE.test((x as RoomEntry).id) && typeof (x as RoomEntry).name === "string");
+      const rooms: RoomsSetting = { list: list.map((x) => ({ id: x.id, name: x.name.slice(0, MAX_ROOM_NAME) })), since: r.since! };
+      return rooms;
+    }),
+
+    setMode: Effect.fn("Channel.setMode")({ self: this }, function* (this: Channel, mode: ModeSetting) {
+      const { coordinatorOnly, strict, since } = mode;
+      yield* this.putSettings({ coordinatorOnly, strict, since });
+    }),
+
+    setRooms: Effect.fn("Channel.setRooms")({ self: this }, function* (this: Channel, rooms: RoomsSetting) {
+      yield* this.putSettings({ rooms });
+    }),
+
+    /**
+     * The charter and the hold the owner last signed into the channel's settings, each as of the event
+     * at its `since`: the floor for a client holding only the log's tail, where those events may be gone.
+     */
+    guard: Effect.fn("Channel.guard")({ self: this }, function* (this: Channel) {
+      const o = yield* this.settings();
+      if (!o) return null;
+      const c = o.charter as { text?: unknown; since?: unknown } | undefined;
+      const h = o.hold as { on?: unknown; note?: unknown; since?: unknown } | undefined;
+      const charter = c && (c.text === null || typeof c.text === "string") && Number.isInteger(c.since) ? { text: c.text === null ? null : (c.text as string).slice(0, MAX_CHARTER), since: c.since as number } : null;
+      const hold = h && typeof h.on === "boolean" && Number.isInteger(h.since) ? { on: h.on, ...(typeof h.note === "string" ? { note: h.note.slice(0, 500) } : {}), since: h.since as number } : null;
+      const floor: GuardFloor | null = charter || hold ? { charter, hold } : null;
+      return floor;
+    }),
+
+    /** Owner: sign the charter into the channel's settings, after the charter.set at `since`. */
+    setCharter: Effect.fn("Channel.setCharter")({ self: this }, function* (this: Channel, charter: NonNullable<GuardFloor["charter"]>) {
+      yield* this.putSettings({ charter });
+    }),
+
+    /** Owner: sign the hold into the channel's settings, after the hold.set at `since`. */
+    setHold: Effect.fn("Channel.setHold")({ self: this }, function* (this: Channel, hold: NonNullable<GuardFloor["hold"]>) {
+      yield* this.putSettings({ hold });
+    }),
+
+    icon: Effect.fn("Channel.icon")({ self: this }, function* (this: Channel) {
+      const { icon } = yield* this.request<{ icon: { e: number; iv: string; ct: string } | null }>("/icon");
+      if (!icon) return null;
+      if (!this.access.keys[String(icon.e)]) yield* this.fx.refreshKeys();
+      const key = this.access.keys[String(icon.e)];
+      if (!key) return null;
+      const opened = (yield* Effect.promise(() => open(key, this.roomId, icon.iv, icon.ct).catch(() => null))) as { what?: unknown; room?: unknown; icon?: unknown; pk?: string; sig?: string } | null;
+      // Only an icon the owner signed, for this channel: a member holds the channel key too, and could
+      // otherwise seal one of their own for a colluding relay to serve. And only a sane emoji or raster image.
+      if (!opened || opened.what !== "channel-icon" || opened.room !== this.roomId || opened.pk !== this.access.ownerPk || !(yield* Effect.promise(() => verify(opened)))) return null;
+      return wellFormedIcon(opened.icon) ? opened.icon : null;
+    }),
+
+    setIcon: Effect.fn("Channel.setIcon")({ self: this }, function* (this: Channel, icon: ChannelIcon | null) {
+      this.ownerOnly();
+      if (icon !== null && !wellFormedIcon(icon)) throw new Error(`an icon is one emoji, or a png, jpg, gif or webp image of at most ${MAX_ICON_BYTES / 1024}KB`);
+      const e = this.access.epoch;
+      const signed = icon ? yield* Effect.promise(() => sign(this.identity, { what: "channel-icon", room: this.roomId, icon })) : null;
+      const sealed = signed ? { e, ...(yield* Effect.promise(() => seal(this.access.keys[String(e)]!, this.roomId, signed))) } : null;
+      yield* this.request("/icon", { method: "PUT", body: JSON.stringify({ icon: sealed }) });
+    }),
+
+    members: Effect.fn("Channel.members")({ self: this }, function* (this: Channel) {
+      const { members } = yield* this.request<{ members: MemberRow[] }>("/members");
+      const out: Member[] = [];
+      for (const m of members) {
+        if (!this.access.keys[String(m.e)]) yield* this.fx.refreshKeys();
+        const key = this.access.keys[String(m.e)];
+        const opened = key ? yield* Effect.promise(() => openRecord(key, m.rec, this.roomId, this.access.ownerPk, m.pk)) : null;
+        // The newest record seen for this key wins: a relay can't hand back an older, broader one.
+        const member = opened && newestRecord(this.roomId, opened);
+        if (member) out.push({ ...member, active: !!m.active, ...(m.read_only ? { readOnly: true } : {}) });
+        // A key the relay says is a member, with no record we can verify: show it, so the owner can remove it.
+        else if (m.active) out.push({ name: `unverified-${m.pk.slice(0, 6)}`, pk: m.pk, xpk: m.xpk, owner: false, at: 0, active: true, unverified: true });
+      }
+      return out;
+    }),
+
+    leave: Effect.fn("Channel.leave")({ self: this }, function* (this: Channel) {
+      yield* this.request("/members/me", { method: "DELETE" });
+    }),
+
+    requests: Effect.fn("Channel.requests")({ self: this }, function* (this: Channel, opts: { budget?: SigningBudget } = {}) {
+      this.ownerOnly();
+      const { requests } = yield* this.request<{ requests: RequestRow[] }>("/requests", {}, { v: 2 });
+      const out: JoinRequest[] = [];
+      const seats = requests.length ? (yield* this.fx.members()).filter((m) => m.active && !m.unverified) : [];
+      for (const r of requests) {
+        if (!(yield* Effect.promise(() => verify({ room: this.roomId, pk: r.pk, xpk: r.xpk, box: r.box, ts: r.ts, commit: r.commit, sig: r.sig })))) continue;
+        const raw = yield* Effect.promise(() => openFrom(this.identity.xsk!, r.box, requestInfo(this.roomId)));
+        let info: MemberInfo & { vouch?: { pk?: unknown; sig?: unknown } } = { name: "?" };
+        try {
+          info = JSON.parse(raw ?? "{}") as typeof info;
+        } catch {}
+        // A computer's signature over this channel and this key: checked here, never taken from the relay.
+        const v = info.vouch;
+        const vouchedBy =
+          v && typeof v.pk === "string" && typeof v.sig === "string" && (yield* Effect.promise(() => verifyText(v.pk as string, v.sig as string, vouchStatement(this.roomId, r.pk)).catch(() => false))) ? v.pk : null;
+        // An agent asking under a name a current member has: approving would move their seat, so a person
+        // checks it, never the budget. (A person is admitted under their account's handle, whatever they typed.)
+        const seat = r.kind === "human" ? undefined : seats.find((m) => nameKey(m.name) === nameKey(String(info.name ?? "")));
+        const reclaims = seat ? { name: seat.name, pk: seat.pk, kind: seat.kind, owner: seat.owner, ...(seat.sponsor ? { sponsor: seat.sponsor } : {}) } : undefined;
+        // A half that doesn't check out means the relay tampered with the request: leave it out.
+        const check = yield* this.codeCheck(r, reclaims ? undefined : opts.budget).pipe(Effect.catchCause(() => Effect.succeed(null)));
+        if (!check) continue;
+        // Whoever holds the join code chose these: keep them to one safe line each.
+        out.push({
+          name: inlineText(info.name, 40) || "?",
+          role: inlineText(info.role, 60) || undefined,
+          about: inlineText(info.about, 200) || undefined,
+          // The relay knows (from sign-in) whether a person or an agent asked; it's not up to the requester.
+          kind: r.kind === "human" ? "human" : "agent",
+          id: r.id,
+          pk: r.pk,
+          xpk: r.xpk,
+          ts: r.ts,
+          commit: r.commit,
+          ...check,
+          sponsoredBy: r.sponsorUser ? { user: r.sponsorUser, name: inlineText(r.sponsorName, 80) || r.sponsorUser, email: r.sponsorEmail ?? null } : null,
+          ...(reclaims ? { reclaims } : {}),
+          ...(info.reclaim === true ? { reclaim: true } : {}),
+          ...(vouchedBy ? { vouchedBy } : {}),
+        });
+      }
+      return out;
+    }),
+
+    checkRequest: Effect.fn("Channel.checkRequest")({ self: this }, function* (this: Channel, req: Pick<JoinRequest, "id" | "pk" | "commit">) {
+      this.ownerOnly();
+      yield* this.signHalf(req.id, ownerNonceStatement(this.roomId, req.pk, req.commit));
+    }),
+
+    approve: Effect.fn("Channel.approve")({ self: this }, function* (this: Channel, req: JoinRequest, as?: Partial<MemberInfo>) {
+      this.ownerOnly();
+      if (req.check !== "ready" || !req.code) throw new Error(`${req.name} hasn't shown its code yet: approve once you've both seen the same 6 digits`);
+      const kind = req.kind ?? "agent";
+      // An agent's person, by the handle they have here if they're in this channel.
+      const sponsorHandle =
+        kind === "agent" && req.sponsoredBy ? (yield* this.fx.members()).find((m) => m.active && m.kind === "human" && m.sponsor?.user === req.sponsoredBy!.user)?.name : undefined;
+      // A person is admitted under a handle made from their signed-in account, not one they typed, so
+      // nobody can ask to join as "bob-smith". (Their browser adopts it when it learns it's in.)
+      if (kind === "human" && req.sponsoredBy && !as?.name) as = { ...as, name: yield* this.freeHandle(handleFor(req.sponsoredBy.name, req.sponsoredBy.email ?? undefined)) };
+      yield* this.assertNamesFree([as?.name ?? req.name]);
+      const sponsor = req.sponsoredBy ? { ...req.sponsoredBy, ...(kind === "human" ? { handle: as?.name ?? req.name } : sponsorHandle ? { handle: sponsorHandle } : {}) } : undefined;
+      const info: MemberInfo = {
+        name: as?.name ?? req.name,
+        // A requested "coordinator" isn't granted on a plain confirm: the owner names that role themselves.
+        role: as?.role ?? (req.role?.trim().toLowerCase() === COORDINATOR ? undefined : req.role),
+        about: as?.about ?? req.about,
+        kind,
+        ...(kind === "human" && req.sponsoredBy ? { display: req.sponsoredBy.name } : {}),
+        ...(sponsor ? { sponsor } : {}),
+        // What they may do besides read; left out, everything (as before scopes).
+        ...(wireScopes(as?.scopes) ? { scopes: wireScopes(as?.scopes)! } : {}),
+      };
+      const current = this.access.keys[String(this.access.epoch)]!;
+      const rec = yield* Effect.promise(() => makeRecord(this.identity, this.roomId, { ...info, pk: req.pk, xpk: req.xpk }));
+      const keys = yield* Effect.promise(() => wrapAllFor(this.identity, this.roomId, this.access.keys, req.pk, req.xpk));
+      const post = canPost(scopesOf(info));
+      const sealed = yield* Effect.promise(() => sealRecord(current, rec));
+      yield* this.request("/members", { method: "POST", body: JSON.stringify({ pk: req.pk, xpk: req.xpk, rec: sealed, keys, request: req.id, ...(post ? {} : { post }) }) });
+      const member: Member = { pk: req.pk, xpk: req.xpk, ...info, owner: false, at: rec.at, active: true };
+      return member;
+    }),
+
+    reclaim: Effect.fn("Channel.reclaim")({ self: this }, function* (this: Channel, req: JoinRequest, opts: { online: boolean; force?: boolean; scopes?: Scope[] }) {
+      this.ownerOnly();
+      const target = req.reclaims;
+      if (!target) throw new Error(`${req.name} isn't anyone's seat yet: approve it as a new member`);
+      if (req.check !== "ready" || !req.code) throw new Error(`${req.name} hasn't shown its code yet: approve once you've both seen the same 6 digits`);
+      const seat = (yield* this.fx.members()).find((m) => m.active && m.pk === target.pk && !m.unverified);
+      if (!seat) throw new Error(`${target.name}'s seat changed since this request was read: read the requests again`);
+      if (seat.owner) throw new Error("the owner's seat can't be reclaimed");
+      if (seat.kind === "human") throw new Error(`${seat.name} is a person's own seat: they sign in again from their browser instead`);
+      if ((req.kind ?? "agent") !== "agent") throw new Error("only an agent can reclaim an agent's seat");
+      if ((req.sponsoredBy?.user ?? null) !== (seat.sponsor?.user ?? null)) {
+        throw new Error(`this request comes from ${req.sponsoredBy ? `${req.sponsoredBy.name}'s computer` : "a computer nobody vouched for"}, but ${seat.name} acts for ${seat.sponsor?.name ?? "nobody"}: refused`);
+      }
+      if (opts.online && !opts.force) throw new Error(`${seat.name} IS ONLINE NOW with its current key: this may be someone else taking its seat. Only go on if you're sure, with force`);
+      const info: MemberInfo = {
+        name: seat.name,
+        ...(seat.role ? { role: seat.role } : {}),
+        ...(seat.about ? { about: seat.about } : {}),
+        kind: "agent",
+        ...(seat.sponsor ? { sponsor: seat.sponsor } : {}),
+        ...(wireScopes(opts.scopes ?? seat.scopes) ? { scopes: wireScopes(opts.scopes ?? seat.scopes)! } : {}),
+      };
+      const current = this.access.keys[String(this.access.epoch)]!;
+      const rec = yield* Effect.promise(() => makeRecord(this.identity, this.roomId, { ...info, pk: req.pk, xpk: req.xpk }));
+      const keys = yield* Effect.promise(() => wrapAllFor(this.identity, this.roomId, this.access.keys, req.pk, req.xpk));
+      const post = canPost(scopesOf(info));
+      const sealed = yield* Effect.promise(() => sealRecord(current, rec));
+      yield* this.request("/members", {
+        method: "POST",
+        body: JSON.stringify({ pk: req.pk, xpk: req.xpk, rec: sealed, keys, request: req.id, replaces: seat.pk, ...(post ? {} : { post }) }),
+      });
+      yield* this.fx.rotate();
+      yield* this.fx.send(`moved ${seat.name}'s seat to a new key`, { ev: { op: "seat.reclaim", member: seat.name, from: seat.pk.slice(0, 8), to: req.pk.slice(0, 8) } });
+      const member: Member = { pk: req.pk, xpk: req.xpk, ...info, owner: false, at: rec.at, active: true };
+      return member;
+    }),
+
+    deny: Effect.fn("Channel.deny")({ self: this }, function* (this: Channel, requestId: string) {
+      this.ownerOnly();
+      yield* this.request(`/requests/${requestId}/deny`, { method: "POST", body: "{}" });
+    }),
+
+    setCanPost: Effect.fn("Channel.setCanPost")({ self: this }, function* (this: Channel, pk: string, post: boolean) {
+      this.ownerOnly();
+      yield* this.request(`/members/${pk}/post`, { method: "PUT", body: JSON.stringify({ post }) });
+    }),
+
+    updateScopes: Effect.fn("Channel.updateScopes")({ self: this }, function* (this: Channel, m: Member, scopes: readonly Scope[], since: number) {
+      this.ownerOnly();
+      if (m.owner) throw new Error("the owner may do everything");
+      const e = this.access.epoch;
+      const key = this.access.keys[String(e)]!;
+      const { active: _a, readOnly: _r, unverified: _u, at: _at, ...info } = m;
+      const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.identity, this.roomId, { ...info, later: { scopes: [...scopes], since } })));
+      yield* this.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(scopes) }) });
+    }),
+
+    updateRole: Effect.fn("Channel.updateRole")({ self: this }, function* (this: Channel, m: Member, role: string | null, about: string | null | undefined, since: number) {
+      this.ownerOnly();
+      if (m.owner) throw new Error("the owner's record isn't changed this way");
+      const e = this.access.epoch;
+      const key = this.access.keys[String(e)]!;
+      const { active: _a, readOnly: _r, unverified: _u, at: _at, ...info } = m;
+      const laterRole = { role, ...(about !== undefined ? { about } : {}), since };
+      const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.identity, this.roomId, { ...info, laterRole })));
+      const scopes = m.later?.scopes ?? scopesOf(m);
+      yield* this.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(scopes) }) });
+    }),
+
+    reconcilePosting: Effect.fn("Channel.reconcilePosting")({ self: this }, function* (this: Channel, state: Pick<ChannelState, "members" | "scopeSets" | "roleSets">, members?: Member[]) {
+      this.ownerOnly();
+      const changed: string[] = [];
+      for (let m of members ?? (yield* this.fx.members())) {
+        if (!m.active || m.owner || m.unverified) continue;
+        const folded = state.members.get(m.name);
+        // Only the key the log knows as this name's: a key the fold hasn't seen yet keeps its record's word.
+        if (!folded || folded.pk !== m.pk) continue;
+        // A role.set the record doesn't say yet (its second call failed, or it predates role floors).
+        const roleSet = state.roleSets.get(m.name);
+        if (roleSet && (m.laterRole?.since ?? -1) < roleSet.seq) {
+          yield* this.fx.updateRole(m, roleSet.role, roleSet.about, roleSet.seq);
+          changed.push(m.pk);
+          m = { ...m, laterRole: { role: roleSet.role, ...(roleSet.about !== undefined ? { about: roleSet.about } : {}), since: roleSet.seq } };
+        }
+        const set = state.scopeSets.get(m.pk);
+        if (set && (m.later?.since ?? -1) < set.seq) {
+          yield* this.fx.updateScopes(m, set.scopes, set.seq);
+          if (!changed.includes(m.pk)) changed.push(m.pk);
+          continue;
+        }
+        const want = canPost(folded.scopes);
+        if (want === !m.readOnly) continue;
+        yield* this.fx.setCanPost(m.pk, want);
+        if (!changed.includes(m.pk)) changed.push(m.pk);
+      }
+      return changed;
+    }),
+
+    remove: Effect.fn("Channel.remove")({ self: this }, function* (this: Channel, pk: string) {
+      this.ownerOnly();
+      yield* this.request(`/members/${pk}`, { method: "DELETE" });
+      yield* this.fx.rotate();
+    }),
+
+    rotate: Effect.fn("Channel.rotate")({ self: this }, function* (this: Channel) {
+      this.ownerOnly();
+      // The new key goes only to members whose admission the owner signed, under the exchange key in
+      // that record: never to whatever list or key the relay hands back.
+      const members = (yield* this.fx.members()).filter((m) => m.active && !m.unverified);
+      const { epoch } = yield* this.fx.info();
+      const next = epoch + 1;
+      const key = newChannelKey();
+      const keys = yield* Effect.promise(async () => {
+        const out: Record<string, string> = {};
+        for (const m of members) out[m.pk] = await wrapFor(this.identity, this.roomId, next, m.pk, m.xpk, key);
+        return out;
+      });
+      yield* this.request("/epochs", { method: "POST", body: JSON.stringify({ epoch: next, keys }) });
+      this.access = { ...this.access, epoch: next, keys: { ...this.access.keys, [String(next)]: key } };
+      this.onAccess?.(this.access);
+      return next;
+    }),
+
+    rotateIfDue: Effect.fn("Channel.rotateIfDue")({ self: this }, function* (this: Channel) {
+      if (!this.isOwner || !(yield* this.fx.info()).rotate) return false;
+      yield* this.fx.rotate();
+      return true;
+    }),
+
+    close: Effect.fn("Channel.close")({ self: this }, function* (this: Channel) {
+      this.ownerOnly();
+      yield* this.request("/", { method: "DELETE" });
+    }),
+
+    head: Effect.fn("Channel.head")({ self: this }, function* (this: Channel) {
+      return (yield* this.request<{ head: number }>("/")).head;
+    }),
+
+    send: Effect.fn("Channel.send")({ self: this }, function* (this: Channel, body: string, opts: SendOptions = {}) {
+      const imgs = opts.imgs?.slice(0, MAX_IMAGES);
+      // The same raster list as icons. A caller that skips the file picker still cannot attach SVG.
+      if (imgs?.some((i) => !isRasterMime(i.mime))) throw new Error("an image must be png, jpg, gif or webp");
+      const payload: Payload = {
+        v: PROTOCOL_VERSION,
+        id: crypto.randomUUID(),
+        from: this.name,
+        ...(opts.to?.length ? { to: opts.to } : {}),
+        kind: opts.kind ?? (opts.ev ? "event" : "msg"),
+        body,
+        ...(opts.re?.length ? { re: opts.re } : {}),
+        ...(opts.ev ? { ev: opts.ev } : {}),
+        ...(imgs?.length ? { imgs } : {}),
+        ...(opts.room && opts.room !== GENERAL_ROOM && !opts.ev ? { room: opts.room } : {}),
+        ...(opts.esc && !opts.ev ? { esc: true as const } : {}),
+        ts: Date.now(),
+      };
+      const signed = yield* Effect.promise(() => sign(this.identity, payload));
+      const post = Effect.gen({ self: this }, function* () {
+        if (!this.access.keys[String(this.access.epoch)]) yield* this.fx.refreshKeys();
+        const e = this.access.epoch;
+        const key = this.access.keys[String(e)];
+        if (!key) throw new Error(`no key for epoch ${e}`);
+        const sealed = yield* Effect.promise(() => seal(key, this.roomId, signed));
+        return (yield* this.request<{ seq: number }>("/messages", { method: "POST", body: JSON.stringify({ ...sealed, e }) })).seq;
+      });
+      // The key rotated under us: fetch the new one and resend once.
+      return yield* post.pipe(Effect.catchIf((err) => err instanceof RelayError && err.status === 409, () => Effect.andThen(this.fx.refreshKeys(), post)));
+    }),
+
+    decrypt: Effect.fn("Channel.decrypt")({ self: this }, function* (this: Channel, env: Envelope) {
+      const key = yield* this.keyFor(env.e ?? 0);
+      if (!key) return null;
+      const p = (yield* Effect.promise(() => open(key, this.roomId, env.iv, env.ct).catch(() => null))) as unknown;
+      // Anything that isn't a well-formed message is dropped here, before any client folds it.
+      if (!wellFormed(p)) return null;
+      // Drop anything that isn't a named raster image, including SVG, rather than the whole message.
+      const imgs = Array.isArray(p.imgs) ? p.imgs.filter(rasterAttachment) : undefined;
+      const message: Message = { ...p, ...(imgs?.length ? { imgs } : { imgs: undefined }), seq: env.seq, rts: env.ts, sigOk: yield* Effect.promise(() => verify(p)) };
+      return message;
+    }),
+
+    history: Effect.fn("Channel.history")({ self: this }, function* (this: Channel, since: number) {
+      const messages: Message[] = [];
+      let head = since;
+      for (;;) {
+        const page = yield* this.request<{ head: number; messages: Envelope[] }>("/messages", {}, { since });
+        head = page.head;
+        const decrypted = yield* Effect.forEach(page.messages, (e) => this.fx.decrypt(e), { concurrency: "unbounded" });
+        for (let i = 0; i < page.messages.length; i++) {
+          const m = decrypted[i];
+          if (m) messages.push(m);
+          since = page.messages[i]!.seq;
+        }
+        if (!page.messages.length || since >= head) break;
+      }
+      return { head, messages };
+    }),
+
+    live: (since: number, opts: LiveOptions = {}) => this.live(since, opts),
+
+    stream: Effect.fn("Channel.stream")({ self: this }, function* (this: Channel, since: number, onMessage: (m: Message) => void | Promise<void>, opts: StreamOptions = {}) {
+      const status = (s: string) => Effect.sync(() => opts.onStatus?.(s));
+      const handle = (ev: Live): Effect.Effect<void> => {
+        switch (ev._tag) {
+          case "Open":
+            return Effect.sync(() => {
+              if (ev.outage !== null) opts.onStatus?.(`reconnected after ${Math.round(ev.outage / 1000)}s; nothing was missed`);
+              opts.onOpen?.({ presence: (p) => Effect.runPromise(ev.presence(p)) });
+            });
+          case "Ready":
+            return Effect.sync(() => opts.onReady?.(ev.head));
+          case "Message":
+            return Effect.promise(async () => onMessage(ev.message));
+          case "Presence":
+            return Effect.sync(() => opts.onPresence?.(ev.presence));
+          case "Info":
+            return Effect.sync(() => opts.onInfo?.());
+          case "Roster":
+            return Effect.sync(() => opts.onRoster?.());
+          case "Request":
+            return Effect.sync(() => opts.onRequest?.());
+          case "Down":
+            return status(`can't reach the relay for ${Math.round(ev.after / 1000)}s (${ev.code}${ev.reason ? ` ${ev.reason}` : ""}); still retrying`);
+          case "Skipped":
+            return status(failedFrame(ev.frame, ev.error));
+        }
+      };
+      const listening = this.fx.live(since, { quietMs: opts.quietMs, presence: !!opts.onPresence }).pipe(
+        Stream.runForEach((ev) =>
+          handle(ev).pipe(
+            // A consumer that throws loses that one frame, never the stream.
+            Effect.catchCause((cause) => status(failedFrame(FRAME[ev._tag], Cause.squash(cause)))),
+            // Stopping waits for the frame in hand, rather than leaving its handler half done.
+            Effect.uninterruptible,
+          ),
+        ),
+      );
+      // A test's clock: the quiet window and the waits between retries follow it.
+      return yield* opts.now ? Effect.provideService(listening, Clock.Clock, clockFrom(opts.now)) : listening;
+    }),
+  };
+
+  // ---------- helpers behind the operations ----------
+
+  /** This member's wrapped keys, fetched and unwrapped (refreshKeys shares one of these). */
+  private fetchKeys(): Effect.Effect<void, MemberRefusal, Relay> {
+    return Effect.gen({ self: this }, function* () {
+      const r = yield* this.request<{ epoch: number; keys: Record<string, string> }>("/keys");
+      const keys = yield* Effect.promise(() => unwrapKeys(this.identity, this.roomId, r.keys, this.access.ownerPk, !!this.access.signedKeys));
+      // A key this member already holds for an epoch never changes: nobody may swap it.
+      this.access = { ...this.access, epoch: r.epoch, keys: { ...keys, ...this.access.keys } };
+      this.onAccess?.(this.access);
+    });
+  }
+
+  /** Remember that this room's title is owner-signed, and tell whoever persists access. */
+  private noteSignedTitle(): void {
+    if (this.access.signedTitle) return;
+    this.access = { ...this.access, signedTitle: true };
+    this.onAccess?.(this.access);
+  }
+
+  /** The channel's settings, opened and checked: sealed with the epoch-0 key and signed by the owner. */
+  private settings(): Effect.Effect<Record<string, unknown> | null, Refusal, Relay> {
+    return Effect.gen({ self: this }, function* () {
+      const s = (yield* this.fx.info()).settings;
+      const key = this.access.keys["0"];
+      if (!s || !key) return null;
+      const o = (yield* Effect.promise(() => open(key, this.roomId, s.iv, s.ct).catch(() => null))) as ({ what?: unknown; room?: unknown; pk?: string; sig?: string } & Record<string, unknown>) | null;
+      if (!o || o.what !== "channel-settings" || o.room !== this.roomId || o.pk !== this.access.ownerPk || !(yield* Effect.promise(() => verify(o as never)))) return null;
+      return o;
+    });
+  }
+
+  /** Owner: change some settings and keep the rest (the mode and the rooms share one signed record). */
+  private putSettings(change: Record<string, unknown>): Effect.Effect<void, MemberRefusal, Relay> {
+    return Effect.gen({ self: this }, function* () {
+      this.ownerOnly();
+      const key = this.access.keys["0"];
+      if (!key) throw new Error("missing the channel key");
+      const { what: _w, room: _r, pk: _p, sig: _s, ...kept } = (yield* this.settings()) ?? {};
+      const sealed = yield* Effect.promise(async () => seal(key, this.roomId, await sign(this.identity, { ...kept, ...change, what: "channel-settings", room: this.roomId })));
+      yield* this.request("/settings", { method: "PUT", body: JSON.stringify({ settings: sealed }) });
+    });
+  }
+
+  /** Where one request's code check stands, signing the owner's half if the budget allows. */
+  private codeCheck(
+    r: { id: string; pk: string; commit: string; ownerNonce: string | null; reveal: string | null },
+    budget?: SigningBudget,
+  ): Effect.Effect<Pick<JoinRequest, "code" | "check">, MemberRefusal, Relay> {
+    return Effect.gen({ self: this }, function* () {
+      const statement = ownerNonceStatement(this.roomId, r.pk, r.commit);
+      const served = r.ownerNonce;
+      if (served && !(yield* Effect.promise(() => verifyText(this.access.ownerPk, served, statement)))) throw new Error("not the owner's signature");
+      const ownerNonce = served ?? (budget && spendAuto(budget, this.roomId, r.commit) ? yield* this.signHalf(r.id, statement) : null);
+      if (!ownerNonce) return { code: null, check: "unchecked" as const };
+      const reveal = r.reveal;
+      if (!reveal) return { code: null, check: "waiting" as const };
+      if ((yield* Effect.promise(() => commitTo(this.roomId, r.pk, reveal))) !== r.commit) throw new Error("the reveal doesn't match the commit");
+      return { code: yield* Effect.promise(() => joinCheckCode(this.roomId, r.pk, ownerNonce, reveal)), check: "ready" as const };
+    });
+  }
+
+  private signHalf(requestId: string, statement: string): Effect.Effect<string, MemberRefusal, Relay> {
+    return Effect.gen({ self: this }, function* () {
+      const nonce = yield* Effect.promise(() => signText(this.identity, statement));
+      yield* this.request(`/requests/${requestId}/nonce`, { method: "POST", body: JSON.stringify({ nonce }) });
+      return nonce;
+    });
+  }
+
+  /**
+   * Refuse names that can't be admitted: invalid ones (every client would drop the record and the
+   * member would read invisibly), reserved ones, and any that matches a current member's, even
+   * when it only looks the same.
+   */
+  private assertNamesFree(names: string[]): Effect.Effect<void, MemberRefusal, Relay> {
+    return Effect.gen({ self: this }, function* () {
+      const taken = new Set((yield* this.fx.members()).filter((m) => m.active).map((m) => nameKey(m.name)));
+      const seen = new Set<string>();
+      for (const n of names) {
+        if (!NAME_RE.test(n)) throw new Error(`"${inlineText(n, 40)}" isn't a valid name (1-32 letters, digits, _ . or -); they need to ask again under another name`);
+        if (RESERVED_NAMES.has(nameKey(n))) throw new Error(`"${n}" is a reserved name; they need to ask again under another name`);
+        if (taken.has(nameKey(n)) || seen.has(nameKey(n))) throw new Error(`"${n}" is already someone's name in this channel; they need to ask again under another name`);
+        seen.add(nameKey(n));
+      }
+    });
+  }
+
+  /** A handle no current member has: "jonatas-walker", or "jonatas-walker-2" if that's taken. */
+  private freeHandle(base: string): Effect.Effect<string, MemberRefusal, Relay> {
+    return Effect.gen({ self: this }, function* () {
+      const taken = new Set((yield* this.fx.members()).filter((m) => m.active).map((m) => nameKey(m.name)));
+      let name = RESERVED_NAMES.has(nameKey(base)) ? `${base}-1` : base;
+      for (let i = 2; taken.has(nameKey(name)); i++) name = `${base.slice(0, 29)}-${i}`;
+      return name;
+    });
+  }
+
+  private keyFor(e: number): Effect.Effect<string | undefined, never, Relay> {
+    return Effect.gen({ self: this }, function* () {
+      if (!this.access.keys[String(e)]) yield* Effect.ignoreCause(this.fx.refreshKeys());
+      return this.access.keys[String(e)];
+    });
+  }
+
+  /** live(): connections one after another, each from where the last left off, fed to one queue. */
+  private live(since: number, { quietMs = QUIET_DROP_MS, presence = true }: LiveOptions): Stream.Stream<Live, ChannelGone, Relay> {
+    // The newest seq handed on: each (re)connect asks for what's after it, so nothing is lost across drops.
+    const at = { seq: since };
+    return Stream.callback<Live, ChannelGone, Relay>((out) =>
+      Stream.suspend(() => this.session(at, quietMs, presence)).pipe(
+        // A drop: connect again on the schedule. A connection that opens starts the schedule over.
+        Stream.retry(this.reconnect(out, quietMs)),
+        // The schedule never gives up on a drop; only an answer (ChannelGone) gets past it.
+        Stream.catchTag("Dropped", (d) => Stream.die(d)),
+        // The relay replays at most one page per connection, then closes it (4000): connect again at once.
+        Stream.forever,
+        Stream.runIntoQueue(out),
+      ),
+    );
+  }
+
+  /**
+   * When to connect again after a drop. Drops are routine (relay deploys, sleep, networks): say
+   * nothing unless the relay stays out of reach for the quiet window, then say it once. The
+   * schedule starts over when a connection opens, so its `elapsed` is how long the relay's been away.
+   */
+  private reconnect(out: Queue.Queue<Live, ChannelGone | Cause.Done>, quietMs: number) {
+    return backoff.pipe(
+      Schedule.setInputType<Dropped | ChannelGone>(),
+      // Removed or closed is an answer, not a drop.
+      Schedule.while(({ input }) => input instanceof Dropped),
+      Schedule.tap((meta) =>
+        meta.input instanceof Dropped && outlasted(meta, quietMs) ? Queue.offer(out, { _tag: "Down", after: meta.elapsed, code: meta.input.code, reason: meta.input.reason }) : Effect.void,
+      ),
+      // Upgrade failures (removed, closed) look like plain drops; check before retrying.
+      Schedule.tap(() => this.stillIn()),
+    );
+  }
+
+  /** Fails ChannelGone if this member is out; anything else (the relay still away) isn't an answer. */
+  private stillIn(): Effect.Effect<void, ChannelGone, Relay> {
+    return Effect.flatMap(Effect.exit(this.fx.head()), (exit) => {
+      const err = Exit.isFailure(exit) ? Cause.squash(exit.cause) : null;
+      return err instanceof ChannelGone ? Effect.fail(err) : Effect.void;
+    });
+  }
+
+  /**
+   * One connection, read: Open, then what the relay sends, strictly in order, until it closes. A
+   * frame whose reading fails is reported and dropped: one bad payload mustn't stop the rest.
+   */
+  private session(at: { seq: number }, quietMs: number, presence: boolean): Stream.Stream<Live, Dropped | ChannelGone, Relay> {
+    return Stream.callback<Incoming, Dropped | ChannelGone, Relay>((q) => this.socket(at.seq, q)).pipe(
+      Stream.mapEffect((f) =>
+        this.read(f, at, quietMs, presence).pipe(Effect.catchCause((cause) => Effect.succeed<Live>({ _tag: "Skipped", frame: f.t, error: Cause.squash(cause) }))),
+      ),
+      Stream.filter((x): x is Live => x !== null),
+    );
+  }
+
+  /** A socket for what's after `since`: its frames go to `q` as they arrive, then how it closed. Closing the scope closes it. */
+  private socket(since: number, q: Queue.Queue<Incoming, Dropped | ChannelGone | Cause.Done>) {
+    return Effect.gen({ self: this }, function* () {
+      const auth = yield* Effect.promise(() => signRequest(this.identity, this.roomId, "GET", "/ws"));
+      const u = new URL(`/v1/rooms/${this.roomId}/ws`, this.relay);
+      u.searchParams.set("since", String(since));
+      u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
+      const { ws, closed } = yield* Effect.acquireRelease(
+        Effect.sync(() => this.connect(u, auth, q)),
+        ({ ws }) => Effect.sync(() => ws.close(1000, "aborted")),
+      );
+      yield* Effect.forkScoped(keepAlive(ws));
+      const { code, reason } = yield* Effect.promise(() => closed);
+      if (code === 4000) return yield* Queue.end(q);
+      if (code === CLOSE_REMOVED) return yield* Queue.fail(q, new ChannelGone("removed"));
+      if (code === CLOSE_CLOSED) return yield* Queue.fail(q, new ChannelGone("closed"));
+      return yield* Queue.fail(q, new Dropped({ code, reason }));
+    });
+  }
+
+  /** Open the socket with every handler set at once, before any event can arrive. */
+  private connect(u: URL, auth: string, q: Queue.Queue<Incoming, Dropped | ChannelGone | Cause.Done>) {
+    const ws = new WebSocket(u, [WS_PROTOCOL, auth]);
+    const closed = new Promise<{ code: number; reason: string }>((resolve) => {
+      ws.onclose = (ev) => resolve({ code: ev.code, reason: ev.reason });
+    });
+    ws.onerror = () => {};
+    ws.onopen = () => void Queue.offerUnsafe(q, { t: "open", presence: this.presenceOn(ws) });
+    ws.onmessage = (ev) => {
+      let f: ServerFrame | { t: "pong" };
+      try {
+        f = JSON.parse(String(ev.data)) as ServerFrame | { t: "pong" };
+      } catch {
+        return; // not a frame: ignore it, keep listening
+      }
+      Queue.offerUnsafe(q, f);
+      // The relay replays at most one page on connect; reconnect for the rest.
+      if (f.t === "ready" && f.more) ws.close(4000, "more");
+    };
+    return { ws, closed };
+  }
+
+  /** Send ephemeral presence on `ws`, sealed with the current key (nothing, once it has closed). */
+  private presenceOn(ws: WebSocket) {
+    return (p: PresenceFields): Effect.Effect<void> =>
+      Effect.gen({ self: this }, function* () {
+        if (ws.readyState !== WebSocket.OPEN) return;
+        const full = yield* Effect.promise(() => sign(this.identity, { v: PROTOCOL_VERSION, type: "presence", from: this.name, ts: Date.now(), ...p } as Presence));
+        const e = this.access.epoch;
+        const sealed = yield* Effect.promise(() => seal(this.access.keys[String(e)]!, this.roomId, { ...full, e }));
+        ws.send(JSON.stringify({ t: "eph", ...sealed }));
+      });
+  }
+
+  /** What one frame means to a listener (null: nothing, like a message already handed on). */
+  private read(f: Incoming, at: { seq: number }, quietMs: number, presence: boolean): Effect.Effect<Live | null, never, Relay> {
+    return Effect.gen({ self: this }, function* () {
+      switch (f.t) {
+        case "open": {
+          // Back after an outage the listener was told about: say for how long. The schedule's metadata is that outage's.
+          const { attempt, elapsed, start } = yield* Schedule.CurrentMetadata;
+          const now = yield* Clock.currentTimeMillis;
+          return { _tag: "Open", presence: f.presence, outage: attempt > 0 && elapsed >= quietMs ? now - start : null } satisfies Live;
+        }
+        case "msg": {
+          if (f.seq <= at.seq) return null;
+          const m = yield* this.fx.decrypt(f);
+          at.seq = f.seq;
+          return m && ({ _tag: "Message", message: m } satisfies Live);
+        }
+        case "eph":
+          return presence ? yield* this.presenceIn(f) : null;
+        case "epoch":
+          yield* Effect.ignoreCause(this.fx.refreshKeys());
+          return null;
+        case "info":
+          return { _tag: "Info" } satisfies Live;
+        case "roster":
+          return { _tag: "Roster" } satisfies Live;
+        case "request":
+          return { _tag: "Request" } satisfies Live;
+        case "ready":
+          return { _tag: "Ready", head: f.head } satisfies Live;
+        default:
+          return null;
+      }
+    });
+  }
+
+  /** Presence, opened: it's sealed with whichever epoch key the sender had, so try the current one, then older. */
+  private presenceIn(f: { iv: string; ct: string }): Effect.Effect<Live | null> {
+    return Effect.gen({ self: this }, function* () {
+      for (const k of Object.values(this.access.keys).reverse()) {
+        const p = (yield* Effect.promise(() => open(k, this.roomId, f.iv, f.ct))) as (Presence & { e?: number }) | null;
+        if (p?.type === "presence" && typeof p.from === "string") {
+          const { e: _e, ...rest } = p;
+          const sigOk = yield* Effect.promise(() => verify(rest));
+          // role is self-reported. Flatten it before anyone renders status, so it can't invent a line.
+          const role = typeof rest.role === "string" ? inlineText(rest.role, 80) || undefined : undefined;
+          return { _tag: "Presence", presence: { ...rest, ...(typeof rest.role === "string" ? { role } : {}), sigOk } } satisfies Live;
+        }
+      }
+      return null;
+    });
+  }
+
+  // ---------- the same, as Promises ----------
 
   /**
    * Create a channel owned by `owner` (the human), with `agent` (the creating
    * agent) admitted alongside. Returns the join code and the owner's access.
    */
-  static async create(
+  static create(
     relay: string,
     owner: Identity,
     ownerInfo: MemberInfo,
@@ -295,28 +1411,7 @@ export class Channel {
     /** A name for the channel; sealed, so only members can read it. */
     title?: string,
   ): Promise<{ code: string; access: ChannelAccess }> {
-    if (!owner.xpk) throw new Error("owner identity has no exchange key");
-    const key = newChannelKey();
-    const ownerSig = await sign(owner, { room: roomId, xpk: owner.xpk, v: 2 });
-    const titlesSig = await sign(owner, { room: roomId, titles: "signed" });
-    const enroll = async (id: Identity, info: MemberInfo, isOwner: boolean) => ({
-      pk: id.pk,
-      xpk: id.xpk!,
-      rec: await sealRecord(key, await makeRecord(owner, roomId, { ...info, pk: id.pk, xpk: id.xpk!, owner: isOwner })),
-      keys: { "0": await wrapFor(owner, roomId, 0, id.pk, id.xpk!, key) },
-      // Read-only from the start: the relay refuses their posts from the first one.
-      ...(!isOwner && !canPost(scopesOf(info)) ? { post: false } : {}),
-    });
-    const members = [await enroll(owner, ownerInfo, true), ...(await Promise.all(agents.map((a) => enroll(a, a.info, false))))];
-    const sealedTitle = title ? await seal(key, roomId, await sign(owner, { what: "channel-title", room: roomId, name: title.slice(0, 80) })) : undefined;
-    await call(relay, roomId, "/create", {
-      method: "POST",
-      identity: owner,
-      human,
-      body: JSON.stringify({ owner: { pk: owner.pk, xpk: owner.xpk, sig: ownerSig.sig, titlesSig: titlesSig.sig }, members, ...(sealedTitle ? { title: sealedTitle } : {}) }),
-    });
-    const access: ChannelAccess = { roomId, ownerPk: owner.pk, ownerXpk: owner.xpk, epoch: 0, keys: { "0": key }, signedKeys: true };
-    return { code: encodeJoinCode({ roomId, ownerFp: await ownerFingerprint(owner.pk) }), access };
+    return run(Channel.fx.create(relay, owner, ownerInfo, agents, roomId, human, title));
   }
 
   /**
@@ -325,7 +1420,7 @@ export class Channel {
    * the code itself appears in joinStatus once the owner has signed its half.
    * Asking again with the same key resumes the same request.
    */
-  static async requestJoin(
+  static requestJoin(
     relay: string,
     code: string,
     id: Identity,
@@ -335,45 +1430,12 @@ export class Channel {
     /** An agent on a computer its person linked: the computer's vouch for this key. */
     machine?: { pk: string; sig: string } | null,
   ): Promise<{ roomId: string; requestId: string }> {
-    const { roomId, info: room } = await pinnedInfo(relay, code);
-    if (!id.xpk) throw new Error("identity has no exchange key");
-    // The computer's vouch rides in the sealed box too, so the owner can check it against their own
-    // computers without taking the relay's word for who vouched (see autoAdmissible).
-    const box = await sealTo(room.ownerXpk, JSON.stringify(machine ? { ...info, vouch: machine } : info), requestInfo(roomId));
-    const commit = await commitTo(roomId, id.pk, await joinNonce(id, roomId));
-    const body = await sign(id, { room: roomId, xpk: id.xpk, box, ts: Date.now(), commit });
-    const { id: requestId } = await call<{ id: string }>(relay, roomId, "/requests", { method: "POST", human, body: JSON.stringify(machine ? { ...body, machine } : body) });
-    return { roomId, requestId };
+    return run(Channel.fx.requestJoin(relay, code, id, info, human, machine));
   }
 
   /** Check a join request. Once approved, returns this member's access. */
-  static async joinStatus(
-    relay: string,
-    code: string,
-    id: Identity,
-    requestId: string,
-  ): Promise<{ status: "pending"; sponsored: boolean; code: string | null } | { status: "denied"; sponsored: boolean } | { status: "approved"; sponsored: boolean; access: ChannelAccess }> {
-    const { roomId, info, signedKeys } = await pinnedInfo(relay, code);
-    const r = await call<{ status: string; sponsored?: boolean; ownerNonce?: string | null; revealed?: boolean; epoch?: number; keys?: Record<string, string> }>(
-      relay,
-      roomId,
-      `/requests/${requestId}`,
-      { identity: id },
-    );
-    const sponsored = !!r.sponsored;
-    if (r.status === "denied") return { status: "denied", sponsored };
-    if (r.status !== "approved") {
-      // The code exists once the owner has signed its half; then this side reveals its own.
-      if (!r.ownerNonce) return { status: "pending", sponsored, code: null };
-      const nonce = await joinNonce(id, roomId);
-      if (!(await verifyText(info.ownerPk, r.ownerNonce, ownerNonceStatement(roomId, id.pk, await commitTo(roomId, id.pk, nonce))))) {
-        throw new Error("the relay passed on an owner signature that doesn't check out: don't let the owner approve this request, and tell them");
-      }
-      if (!r.revealed) await call(relay, roomId, `/requests/${requestId}/reveal`, { method: "POST", identity: id, body: JSON.stringify({ nonce }) });
-      return { status: "pending", sponsored, code: await joinCheckCode(roomId, id.pk, r.ownerNonce, nonce) };
-    }
-    const keys = await unwrapKeys(id, roomId, r.keys ?? {}, info.ownerPk, signedKeys);
-    return { status: "approved", sponsored, access: { roomId, ownerPk: info.ownerPk, ownerXpk: info.ownerXpk, epoch: r.epoch ?? 0, keys, signedKeys } };
+  static joinStatus(relay: string, code: string, id: Identity, requestId: string): Promise<JoinStatus> {
+    return run(Channel.fx.joinStatus(relay, code, id, requestId));
   }
 
   /**
@@ -381,29 +1443,13 @@ export class Channel {
    * the same key, e.g. after the config was lost): nothing new is granted.
    * Throws a RelayError 403 when the key isn't a member.
    */
-  static async resume(relay: string, code: string, id: Identity): Promise<ChannelAccess> {
-    const { roomId, info, signedKeys } = await pinnedInfo(relay, code);
-    const r = await call<{ epoch: number; keys: Record<string, string> }>(relay, roomId, "/keys", { identity: id });
-    const keys = await unwrapKeys(id, roomId, r.keys, info.ownerPk, signedKeys);
-    return { roomId, ownerPk: info.ownerPk, ownerXpk: info.ownerXpk, epoch: r.epoch, keys, signedKeys };
+  static resume(relay: string, code: string, id: Identity): Promise<ChannelAccess> {
+    return run(Channel.fx.resume(relay, code, id));
   }
 
   /** Fetch this member's wrapped keys (after a rotation) and unwrap them. */
   refreshKeys(): Promise<void> {
-    this.refreshing ??= (async () => {
-      try {
-        const r = await this.request<{ epoch: number; keys: Record<string, string> }>("/keys").catch((err) => {
-          throw gone(err);
-        });
-        const keys = await unwrapKeys(this.identity, this.roomId, r.keys, this.access.ownerPk, !!this.access.signedKeys);
-        // A key this member already holds for an epoch never changes: nobody may swap it.
-        this.access = { ...this.access, epoch: r.epoch, keys: { ...keys, ...this.access.keys } };
-        this.onAccess?.(this.access);
-      } finally {
-        this.refreshing = null;
-      }
-    })();
-    return this.refreshing;
+    return run(this.fx.refreshKeys());
   }
 
   /**
@@ -411,16 +1457,8 @@ export class Channel {
    * default it's the known owner key's. A probe that doesn't know the owner yet passes the code's.
    * (A 404 here is never read as "closed": only member routes decide that, see gone().)
    */
-  async info(fp?: string): Promise<Info> {
-    const proof = fp ?? (this.access.ownerPk ? await ownerFingerprint(this.access.ownerPk) : undefined);
-    return call<Info>(this.relay, this.roomId, "/info", {}, proof ? { fp: proof } : {});
-  }
-
-  /** Remember that this room's title is owner-signed, and tell whoever persists access. */
-  private noteSignedTitle(): void {
-    if (this.access.signedTitle) return;
-    this.access = { ...this.access, signedTitle: true };
-    this.onAccess?.(this.access);
+  info(fp?: string): Promise<Info> {
+    return run(this.fx.info(fp));
   }
 
   /**
@@ -431,167 +1469,71 @@ export class Channel {
    * signed; after that, unsigned is refused too. A title sealed by a member
    * (they hold the channel key) never shows.
    */
-  async title(): Promise<string | null> {
-    const info = await this.info();
-    const t = info.title;
-    const key = this.access.keys["0"];
-    if (!t || !key) return null;
-    const opened = (await open(key, this.roomId, t.iv, t.ct).catch(() => null)) as { what?: unknown; room?: unknown; name?: unknown; pk?: string; sig?: string } | null;
-    if (!opened || typeof opened.name !== "string") return null;
-    const name = opened.name.slice(0, 80);
-    if (!name) return null;
-    const ownerSigned = opened.what === "channel-title" && opened.room === this.roomId && opened.pk === this.access.ownerPk && (await verify(opened));
-    if (ownerSigned) {
-      this.noteSignedTitle();
-      return name;
-    }
-    // Anything beyond a plain { name } is a member's forgery, not an old title.
-    if (opened.what !== undefined || opened.room !== undefined || opened.pk !== undefined || opened.sig !== undefined) return null;
-    if ((await titlesSigned(this.roomId, info.ownerPk, info.titlesSig)) || this.access.signedTitle) return null;
-    return name;
+  title(): Promise<string | null> {
+    return run(this.fx.title());
   }
 
   /** Owner only: rename the channel. The new name is signed and sealed, like the icon. */
-  async setTitle(name: string): Promise<void> {
-    this.ownerOnly();
-    const title = name.trim().slice(0, 80);
-    if (!title) throw new Error("a channel title can't be empty");
-    const key = this.access.keys["0"];
-    if (!key) throw new Error("missing the channel key");
-    const sealed = await seal(key, this.roomId, await sign(this.identity, { what: "channel-title", room: this.roomId, name: title }));
-    await this.request("/title", { method: "PUT", body: JSON.stringify({ title: sealed }) });
-    this.noteSignedTitle();
+  setTitle(name: string): Promise<void> {
+    return run(this.fx.setTitle(name));
   }
 
   /**
    * The mode the owner last signed into the channel's settings: the floor for a client holding only
    * the tail of the log, where the mode.set itself may have scrolled out. Null if never set.
    */
-  async mode(): Promise<ModeSetting | null> {
-    const o = await this.settings();
-    if (!o || typeof o.coordinatorOnly !== "boolean" || typeof o.strict !== "boolean" || !Number.isInteger(o.since)) return null;
-    return { coordinatorOnly: o.coordinatorOnly, strict: o.coordinatorOnly && o.strict, since: o.since as number };
+  mode(): Promise<ModeSetting | null> {
+    return run(this.fx.mode());
   }
 
   /**
    * The rooms the owner last signed into the channel's settings, as they stood after log position
    * `since`: the floor for a client holding only the tail, where a room.create may have scrolled out.
    */
-  async rooms(): Promise<RoomsSetting | null> {
-    const r = (await this.settings())?.rooms as Partial<RoomsSetting> | undefined;
-    if (!r || !Array.isArray(r.list) || !Number.isInteger(r.since)) return null;
-    const list = r.list.filter((x): x is RoomEntry => !!x && typeof x === "object" && ROOM_ID_RE.test((x as RoomEntry).id) && typeof (x as RoomEntry).name === "string");
-    return { list: list.map((x) => ({ id: x.id, name: x.name.slice(0, MAX_ROOM_NAME) })), since: r.since! };
+  rooms(): Promise<RoomsSetting | null> {
+    return run(this.fx.rooms());
   }
 
   /** Owner: sign the mode into the channel's settings, after the mode.set at log position `since`. */
-  async setMode(mode: ModeSetting): Promise<void> {
-    const { coordinatorOnly, strict, since } = mode;
-    await this.putSettings({ coordinatorOnly, strict, since });
+  setMode(mode: ModeSetting): Promise<void> {
+    return run(this.fx.setMode(mode));
   }
 
   /** Owner: sign the room list into the channel's settings, as it stands after the room event at `since`. */
-  async setRooms(rooms: RoomsSetting): Promise<void> {
-    await this.putSettings({ rooms });
+  setRooms(rooms: RoomsSetting): Promise<void> {
+    return run(this.fx.setRooms(rooms));
   }
 
-  /**
-   * The charter and the hold the owner last signed into the channel's settings, each as of the event
-   * at its `since`: the floor for a client holding only the log's tail, where those events may be gone.
-   */
-  async guard(): Promise<GuardFloor | null> {
-    const o = await this.settings();
-    if (!o) return null;
-    const c = o.charter as { text?: unknown; since?: unknown } | undefined;
-    const h = o.hold as { on?: unknown; note?: unknown; since?: unknown } | undefined;
-    const charter = c && (c.text === null || typeof c.text === "string") && Number.isInteger(c.since) ? { text: c.text === null ? null : (c.text as string).slice(0, MAX_CHARTER), since: c.since as number } : null;
-    const hold = h && typeof h.on === "boolean" && Number.isInteger(h.since) ? { on: h.on, ...(typeof h.note === "string" ? { note: h.note.slice(0, 500) } : {}), since: h.since as number } : null;
-    return charter || hold ? { charter, hold } : null;
+  guard(): Promise<GuardFloor | null> {
+    return run(this.fx.guard());
   }
 
-  /** Owner: sign the charter into the channel's settings, after the charter.set at `since`. */
-  async setCharter(charter: NonNullable<GuardFloor["charter"]>): Promise<void> {
-    await this.putSettings({ charter });
+  setCharter(charter: NonNullable<GuardFloor["charter"]>): Promise<void> {
+    return run(this.fx.setCharter(charter));
   }
 
-  /** Owner: sign the hold into the channel's settings, after the hold.set at `since`. */
-  async setHold(hold: NonNullable<GuardFloor["hold"]>): Promise<void> {
-    await this.putSettings({ hold });
-  }
-
-  /** The channel's settings, opened and checked: sealed with the epoch-0 key and signed by the owner. */
-  private async settings(): Promise<Record<string, unknown> | null> {
-    const s = (await this.info()).settings;
-    const key = this.access.keys["0"];
-    if (!s || !key) return null;
-    const o = (await open(key, this.roomId, s.iv, s.ct).catch(() => null)) as ({ what?: unknown; room?: unknown; pk?: string; sig?: string } & Record<string, unknown>) | null;
-    if (!o || o.what !== "channel-settings" || o.room !== this.roomId || o.pk !== this.access.ownerPk || !(await verify(o as never))) return null;
-    return o;
-  }
-
-  /** Owner: change some settings and keep the rest (the mode and the rooms share one signed record). */
-  private async putSettings(change: Record<string, unknown>): Promise<void> {
-    this.ownerOnly();
-    const key = this.access.keys["0"];
-    if (!key) throw new Error("missing the channel key");
-    const { what: _w, room: _r, pk: _p, sig: _s, ...kept } = (await this.settings()) ?? {};
-    const sealed = await seal(key, this.roomId, await sign(this.identity, { ...kept, ...change, what: "channel-settings", room: this.roomId }));
-    await this.request("/settings", { method: "PUT", body: JSON.stringify({ settings: sealed }) });
+  setHold(hold: NonNullable<GuardFloor["hold"]>): Promise<void> {
+    return run(this.fx.setHold(hold));
   }
 
   /** The channel's icon, if the owner set one (only members can read it). */
-  async icon(): Promise<ChannelIcon | null> {
-    const { icon } = await this.request<{ icon: { e: number; iv: string; ct: string } | null }>("/icon");
-    if (!icon) return null;
-    if (!this.access.keys[String(icon.e)]) await this.refreshKeys();
-    const key = this.access.keys[String(icon.e)];
-    if (!key) return null;
-    const opened = (await open(key, this.roomId, icon.iv, icon.ct).catch(() => null)) as { what?: unknown; room?: unknown; icon?: unknown; pk?: string; sig?: string } | null;
-    // Only an icon the owner signed, for this channel: a member holds the channel key too, and could
-    // otherwise seal one of their own for a colluding relay to serve. And only a sane emoji or raster image.
-    if (!opened || opened.what !== "channel-icon" || opened.room !== this.roomId || opened.pk !== this.access.ownerPk || !(await verify(opened))) return null;
-    return wellFormedIcon(opened.icon) ? opened.icon : null;
+  icon(): Promise<ChannelIcon | null> {
+    return run(this.fx.icon());
   }
 
   /** Owner only: set the channel's icon (null clears it), signed by the owner and sealed with the current channel key. */
-  async setIcon(icon: ChannelIcon | null): Promise<void> {
-    this.ownerOnly();
-    if (icon !== null && !wellFormedIcon(icon)) throw new Error(`an icon is one emoji, or a png, jpg, gif or webp image of at most ${MAX_ICON_BYTES / 1024}KB`);
-    const e = this.access.epoch;
-    const signed = icon ? await sign(this.identity, { what: "channel-icon", room: this.roomId, icon }) : null;
-    const sealed = signed ? { e, ...(await seal(this.access.keys[String(e)]!, this.roomId, signed)) } : null;
-    await this.request("/icon", { method: "PUT", body: JSON.stringify({ icon: sealed }) });
+  setIcon(icon: ChannelIcon | null): Promise<void> {
+    return run(this.fx.setIcon(icon));
   }
 
   /** The verified member list. Records that fail verification are dropped. */
-  async members(): Promise<Member[]> {
-    const { members } = await this.request<{ members: { pk: string; xpk: string; rec: string; e: number; active: number; read_only?: number }[] }>("/members");
-    const out: Member[] = [];
-    for (const m of members) {
-      let key = this.access.keys[String(m.e)];
-      if (!key) {
-        await this.refreshKeys();
-        key = this.access.keys[String(m.e)];
-      }
-      const opened = key ? await openRecord(key, m.rec, this.roomId, this.access.ownerPk, m.pk) : null;
-      // The newest record seen for this key wins: a relay can't hand back an older, broader one.
-      const member = opened && newestRecord(this.roomId, opened);
-      if (member) out.push({ ...member, active: !!m.active, ...(m.read_only ? { readOnly: true } : {}) });
-      // A key the relay says is a member, with no record we can verify: show it, so the owner can remove it.
-      else if (m.active) out.push({ name: `unverified-${m.pk.slice(0, 6)}`, pk: m.pk, xpk: m.xpk, owner: false, at: 0, active: true, unverified: true });
-    }
-    return out;
+  members(): Promise<Member[]> {
+    return run(this.fx.members());
   }
 
   /** Leave the channel. Access is revoked at once; the owner rotates the key. */
-  async leave(): Promise<void> {
-    await this.request("/members/me", { method: "DELETE" });
-  }
-
-  // ---------- owner ----------
-
-  private ownerOnly(): void {
-    if (!this.isOwner) throw new Error("only the channel owner can do that");
+  leave(): Promise<void> {
+    return run(this.fx.leave());
   }
 
   /**
@@ -600,145 +1542,18 @@ export class Channel {
    * on its own, up to its day's share (sas.ts); past that, checkRequest() does
    * it for one request at a person's click.
    */
-  async requests(opts: { budget?: SigningBudget } = {}): Promise<JoinRequest[]> {
-    this.ownerOnly();
-    const { requests } = await this.request<{
-      requests: {
-        id: string;
-        pk: string;
-        xpk: string;
-        box: string;
-        ts: number;
-        commit: string;
-        ownerNonce: string | null;
-        reveal: string | null;
-        sig: string;
-        kind?: string;
-        sponsorUser?: string | null;
-        sponsorName?: string | null;
-        sponsorEmail?: string | null;
-      }[];
-    }>("/requests", {}, { v: 2 });
-    const out: JoinRequest[] = [];
-    const seats = requests.length ? (await this.members()).filter((m) => m.active && !m.unverified) : [];
-    for (const r of requests) {
-      if (!(await verify({ room: this.roomId, pk: r.pk, xpk: r.xpk, box: r.box, ts: r.ts, commit: r.commit, sig: r.sig }))) continue;
-      const raw = await openFrom(this.identity.xsk!, r.box, requestInfo(this.roomId));
-      let info: MemberInfo & { vouch?: { pk?: unknown; sig?: unknown } } = { name: "?" };
-      try {
-        info = JSON.parse(raw ?? "{}") as typeof info;
-      } catch {}
-      // A computer's signature over this channel and this key: checked here, never taken from the relay.
-      const v = info.vouch;
-      const vouchedBy = v && typeof v.pk === "string" && typeof v.sig === "string" && (await verifyText(v.pk, v.sig, vouchStatement(this.roomId, r.pk)).catch(() => false)) ? v.pk : null;
-      // An agent asking under a name a current member has: approving would move their seat, so a person
-      // checks it, never the budget. (A person is admitted under their account's handle, whatever they typed.)
-      const seat = r.kind === "human" ? undefined : seats.find((m) => nameKey(m.name) === nameKey(String(info.name ?? "")));
-      const reclaims = seat ? { name: seat.name, pk: seat.pk, kind: seat.kind, owner: seat.owner, ...(seat.sponsor ? { sponsor: seat.sponsor } : {}) } : undefined;
-      // A half that doesn't check out means the relay tampered with the request: leave it out.
-      const check = await this.codeCheck(r, reclaims ? undefined : opts.budget).catch(() => null);
-      if (!check) continue;
-      // Whoever holds the join code chose these: keep them to one safe line each.
-      out.push({
-        name: inlineText(info.name, 40) || "?",
-        role: inlineText(info.role, 60) || undefined,
-        about: inlineText(info.about, 200) || undefined,
-        // The relay knows (from sign-in) whether a person or an agent asked; it's not up to the requester.
-        kind: r.kind === "human" ? "human" : "agent",
-        id: r.id,
-        pk: r.pk,
-        xpk: r.xpk,
-        ts: r.ts,
-        commit: r.commit,
-        ...check,
-        sponsoredBy: r.sponsorUser ? { user: r.sponsorUser, name: inlineText(r.sponsorName, 80) || r.sponsorUser, email: r.sponsorEmail ?? null } : null,
-        ...(reclaims ? { reclaims } : {}),
-        ...(info.reclaim === true ? { reclaim: true } : {}),
-        ...(vouchedBy ? { vouchedBy } : {}),
-      });
-    }
-    return out;
-  }
-
-  /** Where one request's code check stands, signing the owner's half if the budget allows. */
-  private async codeCheck(r: { id: string; pk: string; commit: string; ownerNonce: string | null; reveal: string | null }, budget?: SigningBudget): Promise<Pick<JoinRequest, "code" | "check">> {
-    const statement = ownerNonceStatement(this.roomId, r.pk, r.commit);
-    let ownerNonce = r.ownerNonce;
-    if (ownerNonce && !(await verifyText(this.access.ownerPk, ownerNonce, statement))) throw new Error("not the owner's signature");
-    if (!ownerNonce && budget && spendAuto(budget, this.roomId, r.commit)) ownerNonce = await this.signHalf(r.id, statement);
-    if (!ownerNonce) return { code: null, check: "unchecked" };
-    if (!r.reveal) return { code: null, check: "waiting" };
-    if ((await commitTo(this.roomId, r.pk, r.reveal)) !== r.commit) throw new Error("the reveal doesn't match the commit");
-    return { code: await joinCheckCode(this.roomId, r.pk, ownerNonce, r.reveal), check: "ready" };
-  }
-
-  private async signHalf(requestId: string, statement: string): Promise<string> {
-    const nonce = await signText(this.identity, statement);
-    await this.request(`/requests/${requestId}/nonce`, { method: "POST", body: JSON.stringify({ nonce }) });
-    return nonce;
+  requests(opts: { budget?: SigningBudget } = {}): Promise<JoinRequest[]> {
+    return run(this.fx.requests(opts));
   }
 
   /** Sign the owner's half of one request's code check: a person's explicit go, outside the budget. */
-  async checkRequest(req: Pick<JoinRequest, "id" | "pk" | "commit">): Promise<void> {
-    this.ownerOnly();
-    await this.signHalf(req.id, ownerNonceStatement(this.roomId, req.pk, req.commit));
-  }
-
-  /**
-   * Refuse names that can't be admitted: invalid ones (every client would drop the record and the
-   * member would read invisibly), reserved ones, and any that matches a current member's, even
-   * when it only looks the same.
-   */
-  private async assertNamesFree(names: string[]): Promise<void> {
-    const taken = new Set((await this.members()).filter((m) => m.active).map((m) => nameKey(m.name)));
-    const seen = new Set<string>();
-    for (const n of names) {
-      if (!NAME_RE.test(n)) throw new Error(`"${inlineText(n, 40)}" isn't a valid name (1-32 letters, digits, _ . or -); they need to ask again under another name`);
-      if (RESERVED_NAMES.has(nameKey(n))) throw new Error(`"${n}" is a reserved name; they need to ask again under another name`);
-      if (taken.has(nameKey(n)) || seen.has(nameKey(n))) throw new Error(`"${n}" is already someone's name in this channel; they need to ask again under another name`);
-      seen.add(nameKey(n));
-    }
-  }
-
-  /** A handle no current member has: "jonatas-walker", or "jonatas-walker-2" if that's taken. */
-  private async freeHandle(base: string): Promise<string> {
-    const taken = new Set((await this.members()).filter((m) => m.active).map((m) => nameKey(m.name)));
-    let name = RESERVED_NAMES.has(nameKey(base)) ? `${base}-1` : base;
-    for (let i = 2; taken.has(nameKey(name)); i++) name = `${base.slice(0, 29)}-${i}`;
-    return name;
+  checkRequest(req: Pick<JoinRequest, "id" | "pk" | "commit">): Promise<void> {
+    return run(this.fx.checkRequest(req));
   }
 
   /** Admit a requester: sign its record, and wrap every epoch key to it. */
-  async approve(req: JoinRequest, as?: Partial<MemberInfo>): Promise<Member> {
-    this.ownerOnly();
-    if (req.check !== "ready" || !req.code) throw new Error(`${req.name} hasn't shown its code yet: approve once you've both seen the same 6 digits`);
-    const kind = req.kind ?? "agent";
-    // An agent's person, by the handle they have here if they're in this channel.
-    const sponsorHandle =
-      kind === "agent" && req.sponsoredBy ? (await this.members()).find((m) => m.active && m.kind === "human" && m.sponsor?.user === req.sponsoredBy!.user)?.name : undefined;
-    // A person is admitted under a handle made from their signed-in account, not one they typed, so
-    // nobody can ask to join as "bob-smith". (Their browser adopts it when it learns it's in.)
-    if (kind === "human" && req.sponsoredBy && !as?.name) as = { ...as, name: await this.freeHandle(handleFor(req.sponsoredBy.name, req.sponsoredBy.email ?? undefined)) };
-    await this.assertNamesFree([as?.name ?? req.name]);
-    const sponsor = req.sponsoredBy ? { ...req.sponsoredBy, ...(kind === "human" ? { handle: as?.name ?? req.name } : sponsorHandle ? { handle: sponsorHandle } : {}) } : undefined;
-    const info: MemberInfo = {
-      name: as?.name ?? req.name,
-      // A requested "coordinator" isn't granted on a plain confirm: the owner names that role themselves.
-      role: as?.role ?? (req.role?.trim().toLowerCase() === COORDINATOR ? undefined : req.role),
-      about: as?.about ?? req.about,
-      kind,
-      ...(kind === "human" && req.sponsoredBy ? { display: req.sponsoredBy.name } : {}),
-      ...(sponsor ? { sponsor } : {}),
-      // What they may do besides read; left out, everything (as before scopes).
-      ...(wireScopes(as?.scopes) ? { scopes: wireScopes(as?.scopes)! } : {}),
-    };
-    const current = this.access.keys[String(this.access.epoch)]!;
-    const rec = await makeRecord(this.identity, this.roomId, { ...info, pk: req.pk, xpk: req.xpk });
-    const keys: Record<string, string> = {};
-    for (const [e, k] of Object.entries(this.access.keys)) keys[e] = await wrapFor(this.identity, this.roomId, e, req.pk, req.xpk, k);
-    const post = canPost(scopesOf(info));
-    await this.request("/members", { method: "POST", body: JSON.stringify({ pk: req.pk, xpk: req.xpk, rec: await sealRecord(current, rec), keys, request: req.id, ...(post ? {} : { post }) }) });
-    return { pk: req.pk, xpk: req.xpk, ...info, owner: false, at: rec.at, active: true };
+  approve(req: JoinRequest, as?: Partial<MemberInfo>): Promise<Member> {
+    return run(this.fx.approve(req, as));
   }
 
   /**
@@ -752,51 +1567,17 @@ export class Channel {
    * key's record must carry them, or a reclaim would hand back whatever the old record said.
    * Without them, the old record's scopes carry over.
    */
-  async reclaim(req: JoinRequest, opts: { online: boolean; force?: boolean; scopes?: Scope[] }): Promise<Member> {
-    this.ownerOnly();
-    const target = req.reclaims;
-    if (!target) throw new Error(`${req.name} isn't anyone's seat yet: approve it as a new member`);
-    if (req.check !== "ready" || !req.code) throw new Error(`${req.name} hasn't shown its code yet: approve once you've both seen the same 6 digits`);
-    const seat = (await this.members()).find((m) => m.active && m.pk === target.pk && !m.unverified);
-    if (!seat) throw new Error(`${target.name}'s seat changed since this request was read: read the requests again`);
-    if (seat.owner) throw new Error("the owner's seat can't be reclaimed");
-    if (seat.kind === "human") throw new Error(`${seat.name} is a person's own seat: they sign in again from their browser instead`);
-    if ((req.kind ?? "agent") !== "agent") throw new Error("only an agent can reclaim an agent's seat");
-    if ((req.sponsoredBy?.user ?? null) !== (seat.sponsor?.user ?? null)) {
-      throw new Error(`this request comes from ${req.sponsoredBy ? `${req.sponsoredBy.name}'s computer` : "a computer nobody vouched for"}, but ${seat.name} acts for ${seat.sponsor?.name ?? "nobody"}: refused`);
-    }
-    if (opts.online && !opts.force) throw new Error(`${seat.name} IS ONLINE NOW with its current key: this may be someone else taking its seat. Only go on if you're sure, with force`);
-    const info: MemberInfo = {
-      name: seat.name,
-      ...(seat.role ? { role: seat.role } : {}),
-      ...(seat.about ? { about: seat.about } : {}),
-      kind: "agent",
-      ...(seat.sponsor ? { sponsor: seat.sponsor } : {}),
-      ...(wireScopes(opts.scopes ?? seat.scopes) ? { scopes: wireScopes(opts.scopes ?? seat.scopes)! } : {}),
-    };
-    const current = this.access.keys[String(this.access.epoch)]!;
-    const rec = await makeRecord(this.identity, this.roomId, { ...info, pk: req.pk, xpk: req.xpk });
-    const keys: Record<string, string> = {};
-    for (const [e, k] of Object.entries(this.access.keys)) keys[e] = await wrapFor(this.identity, this.roomId, e, req.pk, req.xpk, k);
-    const post = canPost(scopesOf(info));
-    await this.request("/members", {
-      method: "POST",
-      body: JSON.stringify({ pk: req.pk, xpk: req.xpk, rec: await sealRecord(current, rec), keys, request: req.id, replaces: seat.pk, ...(post ? {} : { post }) }),
-    });
-    await this.rotate();
-    await this.send(`moved ${seat.name}'s seat to a new key`, { ev: { op: "seat.reclaim", member: seat.name, from: seat.pk.slice(0, 8), to: req.pk.slice(0, 8) } });
-    return { pk: req.pk, xpk: req.xpk, ...info, owner: false, at: rec.at, active: true };
+  reclaim(req: JoinRequest, opts: { online: boolean; force?: boolean; scopes?: Scope[] }): Promise<Member> {
+    return run(this.fx.reclaim(req, opts));
   }
 
-  async deny(requestId: string): Promise<void> {
-    this.ownerOnly();
-    await this.request(`/requests/${requestId}/deny`, { method: "POST", body: "{}" });
+  deny(requestId: string): Promise<void> {
+    return run(this.fx.deny(requestId));
   }
 
   /** Whether a member may post: the one bit of their scopes the relay enforces (the scope.set event is the record). */
-  async setCanPost(pk: string, post: boolean): Promise<void> {
-    this.ownerOnly();
-    await this.request(`/members/${pk}/post`, { method: "PUT", body: JSON.stringify({ post }) });
+  setCanPost(pk: string, post: boolean): Promise<void> {
+    return run(this.fx.setCanPost(pk, post));
   }
 
   /**
@@ -804,14 +1585,8 @@ export class Channel {
    * that loads only the tail of the log learns it there) and set the relay's "can post" bit, in one
    * request. The record keeps what it said at approval; `later` is what holds from `since` on.
    */
-  async updateScopes(m: Member, scopes: readonly Scope[], since: number): Promise<void> {
-    this.ownerOnly();
-    if (m.owner) throw new Error("the owner may do everything");
-    const e = this.access.epoch;
-    const key = this.access.keys[String(e)]!;
-    const { active: _a, readOnly: _r, unverified: _u, at: _at, ...info } = m;
-    const rec = await makeRecord(this.identity, this.roomId, { ...info, later: { scopes: [...scopes], since } });
-    await this.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec: await sealRecord(key, rec), e, post: canPost(scopes) }) });
+  updateScopes(m: Member, scopes: readonly Scope[], since: number): Promise<void> {
+    return run(this.fx.updateScopes(m, scopes, since));
   }
 
   /**
@@ -819,16 +1594,8 @@ export class Channel {
    * rules), so a client holding only the tail of the log still knows it. Everything else the record
    * says, scopes included, stays as it was.
    */
-  async updateRole(m: Member, role: string | null, about: string | null | undefined, since: number): Promise<void> {
-    this.ownerOnly();
-    if (m.owner) throw new Error("the owner's record isn't changed this way");
-    const e = this.access.epoch;
-    const key = this.access.keys[String(e)]!;
-    const { active: _a, readOnly: _r, unverified: _u, at: _at, ...info } = m;
-    const laterRole = { role, ...(about !== undefined ? { about } : {}), since };
-    const rec = await makeRecord(this.identity, this.roomId, { ...info, laterRole });
-    const scopes = m.later?.scopes ?? scopesOf(m);
-    await this.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec: await sealRecord(key, rec), e, post: canPost(scopes) }) });
+  updateRole(m: Member, role: string | null, about: string | null | undefined, since: number): Promise<void> {
+    return run(this.fx.updateRole(m, role, about, since));
   }
 
   /**
@@ -836,157 +1603,45 @@ export class Channel {
    * first and the record (with the bit) follows in a second call; if that one failed, or the bit was
    * changed some other way, this puts it right. Returns the keys it changed.
    */
-  async reconcilePosting(state: Pick<ChannelState, "members" | "scopeSets" | "roleSets">, members?: Member[]): Promise<string[]> {
-    this.ownerOnly();
-    const changed: string[] = [];
-    for (let m of members ?? (await this.members())) {
-      if (!m.active || m.owner || m.unverified) continue;
-      const folded = state.members.get(m.name);
-      // Only the key the log knows as this name's: a key the fold hasn't seen yet keeps its record's word.
-      if (!folded || folded.pk !== m.pk) continue;
-      // A role.set the record doesn't say yet (its second call failed, or it predates role floors).
-      const roleSet = state.roleSets.get(m.name);
-      if (roleSet && (m.laterRole?.since ?? -1) < roleSet.seq) {
-        await this.updateRole(m, roleSet.role, roleSet.about, roleSet.seq);
-        changed.push(m.pk);
-        m = { ...m, laterRole: { role: roleSet.role, ...(roleSet.about !== undefined ? { about: roleSet.about } : {}), since: roleSet.seq } };
-      }
-      const set = state.scopeSets.get(m.pk);
-      if (set && (m.later?.since ?? -1) < set.seq) {
-        await this.updateScopes(m, set.scopes, set.seq);
-        if (!changed.includes(m.pk)) changed.push(m.pk);
-        continue;
-      }
-      const want = canPost(folded.scopes);
-      if (want === !m.readOnly) continue;
-      await this.setCanPost(m.pk, want);
-      if (!changed.includes(m.pk)) changed.push(m.pk);
-    }
-    return changed;
+  reconcilePosting(state: Pick<ChannelState, "members" | "scopeSets" | "roleSets">, members?: Member[]): Promise<string[]> {
+    return run(this.fx.reconcilePosting(state, members));
   }
 
   /** Remove a member and rotate the key so they can't read anything newer. */
-  async remove(pk: string): Promise<void> {
-    this.ownerOnly();
-    await this.request(`/members/${pk}`, { method: "DELETE" });
-    await this.rotate();
+  remove(pk: string): Promise<void> {
+    return run(this.fx.remove(pk));
   }
 
   /** New channel key, wrapped to every remaining member. */
-  async rotate(): Promise<number> {
-    this.ownerOnly();
-    // The new key goes only to members whose admission the owner signed, under the exchange key in
-    // that record: never to whatever list or key the relay hands back.
-    const members = (await this.members()).filter((m) => m.active && !m.unverified);
-    const { epoch } = await this.info();
-    const next = epoch + 1;
-    const key = newChannelKey();
-    const keys: Record<string, string> = {};
-    for (const m of members) keys[m.pk] = await wrapFor(this.identity, this.roomId, next, m.pk, m.xpk, key);
-    await this.request("/epochs", { method: "POST", body: JSON.stringify({ epoch: next, keys }) });
-    this.access = { ...this.access, epoch: next, keys: { ...this.access.keys, [String(next)]: key } };
-    this.onAccess?.(this.access);
-    return next;
+  rotate(): Promise<number> {
+    return run(this.fx.rotate());
   }
 
   /** Rotate if a member left since the last rotation. */
-  async rotateIfDue(): Promise<boolean> {
-    if (!this.isOwner || !(await this.info()).rotate) return false;
-    await this.rotate();
-    return true;
+  rotateIfDue(): Promise<boolean> {
+    return run(this.fx.rotateIfDue());
   }
 
   /** Delete the channel at the relay: messages, members, keys, everything. */
-  async close(): Promise<void> {
-    this.ownerOnly();
-    await this.request("/", { method: "DELETE" });
+  close(): Promise<void> {
+    return run(this.fx.close());
   }
 
-  // ---------- messages ----------
-
-  async head(): Promise<number> {
-    try {
-      return (await this.request<{ head: number }>("/")).head;
-    } catch (err) {
-      throw gone(err);
-    }
+  head(): Promise<number> {
+    return run(this.fx.head());
   }
 
-  async send(body: string, opts: SendOptions = {}): Promise<number> {
-    const imgs = opts.imgs?.slice(0, MAX_IMAGES);
-    // The same raster list as icons. A caller that skips the file picker still cannot attach SVG.
-    if (imgs?.some((i) => !isRasterMime(i.mime))) throw new Error("an image must be png, jpg, gif or webp");
-    const payload: Payload = {
-      v: PROTOCOL_VERSION,
-      id: crypto.randomUUID(),
-      from: this.name,
-      ...(opts.to?.length ? { to: opts.to } : {}),
-      kind: opts.kind ?? (opts.ev ? "event" : "msg"),
-      body,
-      ...(opts.re?.length ? { re: opts.re } : {}),
-      ...(opts.ev ? { ev: opts.ev } : {}),
-      ...(imgs?.length ? { imgs } : {}),
-      ...(opts.room && opts.room !== GENERAL_ROOM && !opts.ev ? { room: opts.room } : {}),
-      ...(opts.esc && !opts.ev ? { esc: true as const } : {}),
-      ts: Date.now(),
-    };
-    const signed = await sign(this.identity, payload);
-    for (let attempt = 0; ; attempt++) {
-      if (!this.access.keys[String(this.access.epoch)]) await this.refreshKeys();
-      const e = this.access.epoch;
-      const key = this.access.keys[String(e)];
-      if (!key) throw new Error(`no key for epoch ${e}`);
-      const sealed = await seal(key, this.roomId, signed);
-      try {
-        return (await this.request<{ seq: number }>("/messages", { method: "POST", body: JSON.stringify({ ...sealed, e }) })).seq;
-      } catch (err) {
-        // The key rotated under us: fetch the new one and resend once.
-        if (attempt === 0 && err instanceof RelayError && err.status === 409) {
-          await this.refreshKeys();
-          continue;
-        }
-        throw gone(err);
-      }
-    }
+  send(body: string, opts: SendOptions = {}): Promise<number> {
+    return run(this.fx.send(body, opts));
   }
 
-  private async keyFor(e: number): Promise<string | undefined> {
-    if (!this.access.keys[String(e)]) await this.refreshKeys().catch(() => {});
-    return this.access.keys[String(e)];
-  }
-
-  async decrypt(env: Envelope): Promise<Message | null> {
-    const key = await this.keyFor(env.e ?? 0);
-    if (!key) return null;
-    const p = (await open(key, this.roomId, env.iv, env.ct).catch(() => null)) as unknown;
-    // Anything that isn't a well-formed message is dropped here, before any client folds it.
-    if (!wellFormed(p)) return null;
-    // Drop anything that isn't a named raster image, including SVG, rather than the whole message.
-    const imgs = Array.isArray(p.imgs) ? p.imgs.filter(rasterAttachment) : undefined;
-    return { ...p, ...(imgs?.length ? { imgs } : { imgs: undefined }), seq: env.seq, rts: env.ts, sigOk: await verify(p) };
+  decrypt(env: Envelope): Promise<Message | null> {
+    return run(this.fx.decrypt(env));
   }
 
   /** Messages after `since`, oldest first, following pages to the head. */
-  async history(since: number): Promise<{ head: number; messages: Message[] }> {
-    const messages: Message[] = [];
-    let head = since;
-    for (;;) {
-      let page: { head: number; messages: Envelope[] };
-      try {
-        page = await this.request<{ head: number; messages: Envelope[] }>("/messages", {}, { since });
-      } catch (err) {
-        throw gone(err);
-      }
-      head = page.head;
-      const decrypted = await Promise.all(page.messages.map((e) => this.decrypt(e)));
-      for (let i = 0; i < page.messages.length; i++) {
-        const m = decrypted[i];
-        if (m) messages.push(m);
-        since = page.messages[i]!.seq;
-      }
-      if (!page.messages.length || since >= head) break;
-    }
-    return { head, messages };
+  history(since: number): Promise<{ head: number; messages: Message[] }> {
+    return run(this.fx.history(since));
   }
 
   /**
@@ -995,122 +1650,8 @@ export class Channel {
    * so nothing is lost across drops. `onMessage` runs strictly in order.
    * Throws ChannelGone if this member is removed or the channel is closed.
    */
-  async stream(since: number, onMessage: (m: Message) => void | Promise<void>, opts: StreamOptions = {}): Promise<void> {
-    let last = since;
-    let backoff = 500;
-    // Drops are routine (relay deploys, sleep, networks): say nothing unless the relay stays out of reach.
-    let downSince: number | null = null;
-    let reported = false;
-    const now = (): number => opts.now?.() ?? Date.now();
-    // Poll an injected clock so a test can skip the wait. The short sleep keeps
-    // a clock that is Date.now from spinning. Unset, this is one real sleep.
-    const waitBackoff = async (ms: number): Promise<void> => {
-      if (opts.now === undefined) {
-        await sleep(ms);
-        return;
-      }
-      const start = opts.now();
-      while (!opts.signal?.aborted && opts.now() - start < ms) await sleep(10);
-    };
-    while (!opts.signal?.aborted) {
-      const auth = await signRequest(this.identity, this.roomId, "GET", "/ws");
-      const closed = await new Promise<{ code: number; reason: string }>((resolve) => {
-        const u = new URL(`/v1/rooms/${this.roomId}/ws`, this.relay);
-        u.searchParams.set("since", String(last));
-        u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
-        const ws = new WebSocket(u, [WS_PROTOCOL, auth]);
-        let queue = Promise.resolve();
-        let ping: ReturnType<typeof setInterval> | undefined;
-        const abort = () => ws.close(1000, "aborted");
-        opts.signal?.addEventListener("abort", abort, { once: true });
-        ws.onopen = () => {
-          backoff = 500;
-          if (reported) opts.onStatus?.(`reconnected after ${Math.round((now() - downSince!) / 1000)}s; nothing was missed`);
-          downSince = null;
-          reported = false;
-          ping = setInterval(() => ws.readyState === WebSocket.OPEN && ws.send(PING), 25_000);
-          opts.onOpen?.({
-            presence: async (p) => {
-              if (ws.readyState !== WebSocket.OPEN) return;
-              const full = await sign(this.identity, { v: PROTOCOL_VERSION, type: "presence", from: this.name, ts: Date.now(), ...p } as Presence);
-              const e = this.access.epoch;
-              ws.send(JSON.stringify({ t: "eph", ...(await seal(this.access.keys[String(e)]!, this.roomId, { ...full, e })) }));
-            },
-          });
-        };
-        ws.onmessage = (ev) => {
-          let f: ServerFrame | { t: "pong" };
-          try {
-            f = JSON.parse(String(ev.data)) as ServerFrame | { t: "pong" };
-          } catch {
-            return; // not a frame: ignore it, keep listening
-          }
-          // Frames are handled strictly in order, one at a time. A frame whose handling throws
-          // (a consumer's bug, a bad payload) is reported and dropped: the chain must never break,
-          // or every later frame, and the reconnect after a close, would wait on it forever.
-          queue = queue.then(async () => {
-            if (f.t === "msg") {
-              if (f.seq <= last) return;
-              const m = await this.decrypt(f);
-              last = f.seq;
-              if (m) await onMessage(m);
-            } else if (f.t === "eph") {
-              if (!opts.onPresence) return;
-              // Presence is sealed with whichever epoch key the sender had; try current, then older.
-              for (const k of Object.values(this.access.keys).reverse()) {
-                const p = (await open(k, this.roomId, f.iv, f.ct)) as (Presence & { e?: number }) | null;
-                if (p?.type === "presence" && typeof p.from === "string") {
-                  const { e: _e, ...rest } = p;
-                  const sigOk = await verify(rest);
-                  // role is self-reported. Flatten it before anyone renders status, so it can't invent a line.
-                  const role = typeof rest.role === "string" ? inlineText(rest.role, 80) || undefined : undefined;
-                  opts.onPresence({ ...rest, ...(typeof rest.role === "string" ? { role } : {}), sigOk });
-                  break;
-                }
-              }
-            } else if (f.t === "epoch") {
-              await this.refreshKeys().catch(() => {});
-            } else if (f.t === "info") {
-              opts.onInfo?.();
-            } else if (f.t === "roster") {
-              opts.onRoster?.();
-            } else if (f.t === "request") {
-              opts.onRequest?.();
-            } else if (f.t === "ready") {
-              opts.onReady?.(f.head);
-              // The relay replays at most one page on connect; reconnect for the rest.
-              if (f.more) ws.close(4000, "more");
-            }
-          }).catch((err: unknown) => {
-            opts.onStatus?.(`dropped a ${f.t} frame whose handling failed: ${err instanceof Error ? err.message : String(err)}`);
-          });
-        };
-        ws.onclose = (ev) => {
-          clearInterval(ping);
-          opts.signal?.removeEventListener("abort", abort);
-          // After the frames already received are handled (the queue never rejects, see above).
-          void queue.finally(() => resolve({ code: ev.code, reason: ev.reason }));
-        };
-        ws.onerror = () => {};
-      });
-      if (opts.signal?.aborted) return;
-      if (closed.code === 4000) continue;
-      if (closed.code === CLOSE_REMOVED) throw new ChannelGone("removed");
-      if (closed.code === CLOSE_CLOSED) throw new ChannelGone("closed");
-      downSince ??= now();
-      if (!reported && now() - downSince >= (opts.quietMs ?? QUIET_DROP_MS)) {
-        reported = true;
-        opts.onStatus?.(`can't reach the relay for ${Math.round((now() - downSince) / 1000)}s (${closed.code}${closed.reason ? ` ${closed.reason}` : ""}); still retrying`);
-      }
-      // Upgrade failures (removed, closed) look like plain drops; check before retrying.
-      try {
-        await this.head();
-      } catch (err) {
-        if (err instanceof ChannelGone) throw err;
-      }
-      await waitBackoff(backoff);
-      backoff = Math.min(backoff * 2, 30_000);
-    }
+  stream(since: number, onMessage: (m: Message) => void | Promise<void>, opts: StreamOptions = {}): Promise<void> {
+    return runUntil(this.fx.stream(since, onMessage, opts), opts.signal);
   }
 }
 
@@ -1138,15 +1679,6 @@ function newestRecord(room: string, served: Member): Member {
   return served;
 }
 
-/** Map the relay errors that mean "you're out" to ChannelGone; leave everything else alone. */
-function gone(err: unknown): unknown {
-  if (!(err instanceof RelayError)) return err;
-  // By tag; by text too, for relays from before tags (0.7 and older).
-  if (err.tag === "NotMember" || (err.status === 403 && /not a member/.test(err.message))) return new ChannelGone("removed");
-  if (err.tag === "ChannelGone" || (err.status === 404 && /no such channel/.test(err.message))) return new ChannelGone("closed");
-  return err;
-}
-
 /** Whether a message is addressed to `agent` (directly, or as a broadcast). */
 export function isForAgent(m: Message, agent: string): boolean {
   return !m.to || m.to.includes(agent) || m.to.includes("*");
@@ -1171,14 +1703,6 @@ export interface MyChannel {
   head?: number;
 }
 
-/** Every channel the signed-in person owns, is in, or has agents in, across all their devices. */
-export async function myChannels(relay: string, human: string): Promise<MyChannel[]> {
-  const res = await fetch(new URL("/v1/me/channels", relay), { headers: { "x-human-token": human } });
-  const json = (await res.json().catch(() => ({}))) as { channels?: MyChannel[]; error?: string; tag?: string };
-  if (!res.ok) throw new RelayError(res.status, json.error ?? `relay returned ${res.status}`, json.tag);
-  return json.channels ?? [];
-}
-
 /** What a signed-in person uses of a relay's limits (null limits are unlimited). */
 export interface MyUsage {
   limits: { channelsPerOwner: number | null; membersPerChannel: number | null; messagesPerDay: number | null; bytesPerChannel: number; expireAfterDays: number | null };
@@ -1186,16 +1710,30 @@ export interface MyUsage {
   channels: { room: string; code: string; messagesToday: number; bytes: number; members: number }[];
 }
 
-export async function myUsage(relay: string, human: string): Promise<MyUsage> {
-  const res = await fetch(new URL("/v1/me/usage", relay), { headers: { "x-human-token": human } });
-  const json = (await res.json().catch(() => ({}))) as MyUsage & { error?: string; tag?: string };
-  if (!res.ok) throw new RelayError(res.status, json.error ?? `relay returned ${res.status}`, json.tag);
-  return json;
+/** The Effects behind myChannels, myUsage and relayConfig. */
+export const fx = {
+  myChannels: Effect.fn("myChannels")(function* (relay: string, human: string) {
+    const json = yield* (yield* Relay).person<{ channels?: MyChannel[] }>(relay, "/v1/me/channels", human);
+    return json.channels ?? [];
+  }),
+  myUsage: Effect.fn("myUsage")(function* (relay: string, human: string) {
+    return yield* (yield* Relay).person<MyUsage>(relay, "/v1/me/usage", human);
+  }),
+  relayConfig: Effect.fn("relayConfig")(function* (relay: string) {
+    return yield* (yield* Relay).config(relay);
+  }),
+};
+
+/** Every channel the signed-in person owns, is in, or has agents in, across all their devices. */
+export function myChannels(relay: string, human: string): Promise<MyChannel[]> {
+  return run(fx.myChannels(relay, human));
+}
+
+export function myUsage(relay: string, human: string): Promise<MyUsage> {
+  return run(fx.myUsage(relay, human));
 }
 
 /** Whether a relay requires a signed-in human to create and run channels, and with which WorkOS client. */
-export async function relayConfig(relay: string): Promise<{ workosClientId: string | null }> {
-  const res = await fetch(new URL("/v1/config", relay));
-  if (!res.ok) return { workosClientId: null };
-  return (await res.json()) as { workosClientId: string | null };
+export function relayConfig(relay: string): Promise<{ workosClientId: string | null }> {
+  return run(fx.relayConfig(relay));
 }
