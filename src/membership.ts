@@ -158,14 +158,17 @@ export async function makeRecord(owner: Identity, room: string, m: MemberInfo & 
   });
 }
 
-/** What a computer may put in a record it signs for one of its agents, and nothing else. */
-const ADMITTED_FIELDS = new Set(["room", "member", "mxpk", "name", "about", "kind", "sponsor", "via", "at", "pk", "sig"]);
+/**
+ * What a computer may put in a record it signs for one of its agents, and nothing else. Not even a
+ * sponsor: whose agent it is comes from the owner's own record, never from the computer's word.
+ */
+const ADMITTED_FIELDS = new Set(["room", "member", "mxpk", "name", "about", "kind", "via", "at", "pk", "sig"]);
 
 /**
  * A linked computer lets one of its own agents in: the record is the computer's signature, not the
  * owner's. It carries only a name, rules and whose agent it is (see admitRoster for what counts).
  */
-export async function makeAdmittedRecord(machine: Identity, room: string, m: { pk: string; xpk: string; name: string; about?: string; sponsor?: Sponsor }): Promise<MemberRecord> {
+export async function makeAdmittedRecord(machine: Identity, room: string, m: { pk: string; xpk: string; name: string; about?: string }): Promise<MemberRecord> {
   return sign(machine, {
     room,
     member: m.pk,
@@ -173,7 +176,6 @@ export async function makeAdmittedRecord(machine: Identity, room: string, m: { p
     name: m.name,
     ...(m.about ? { about: m.about } : {}),
     kind: "agent",
-    ...(m.sponsor ? { sponsor: m.sponsor } : {}),
     via: machine.pk,
     at: Date.now(),
   });
@@ -186,15 +188,16 @@ export async function sealRecord(key: string, rec: MemberRecord): Promise<string
 /**
  * Open a sealed record and check its signature, whoever signed it (`signer`): for this room and this
  * key. Whether that signer may admit anyone is admitRoster's call; openRecord takes only the owner's.
+ * Only the owner's own record, signed by the owner, is the owner's: never one that signs itself so.
  */
-export async function readRecord(key: string, sealed: string, room: string, pk: string): Promise<{ member: Member; signer: string; fields: string[] } | null> {
+export async function readRecord(key: string, sealed: string, room: string, pk: string, ownerPk: string): Promise<{ member: Member; signer: string; fields: string[] } | null> {
   const raw = await openWith(key, sealed, ad(room));
   if (!raw) return null;
   try {
     const rec = JSON.parse(raw) as MemberRecord;
     if (typeof rec.pk !== "string" || rec.room !== room || rec.member !== pk || !NAME_RE.test(rec.name)) return null;
     if (!(await verify(rec))) return null;
-    const owner = !!rec.owner && rec.member === rec.pk;
+    const owner = !!rec.owner && rec.pk === ownerPk && rec.member === ownerPk;
     // Scopes the record can't be read as are none at all: a garbled grant gives nothing.
     const scopes = owner || rec.scopes === undefined ? undefined : (readScopes(rec.scopes) ?? []);
     const l = (rec as { later?: { scopes?: unknown; since?: unknown } }).later;
@@ -234,7 +237,7 @@ export async function readRecord(key: string, sealed: string, room: string, pk: 
 
 /** Open and verify a sealed record: it must be the owner's signature, for this room and this key. */
 export async function openRecord(key: string, sealed: string, room: string, ownerPk: string, pk: string): Promise<Member | null> {
-  const r = await readRecord(key, sealed, room, pk);
+  const r = await readRecord(key, sealed, room, pk, ownerPk);
   return r && r.signer === ownerPk ? r.member : null;
 }
 
@@ -262,13 +265,15 @@ export function admitRoster(entries: readonly ReadEntry[], ownerPk: string, now 
     const m = byOwner[i];
     if (m && e.active && m.kind === "computer" && m.admits && m.admits.until >= now) seats.set(m.pk, m);
   });
+  // Every name the owner signed to a current member first: a computer's record never shadows one, wherever it sits.
   const held = new Set<string>();
+  entries.forEach((e, i) => {
+    const own = byOwner[i];
+    if (own && e.active) held.add(nameKey(own.name));
+  });
   return entries.map((e, i) => {
     const own = byOwner[i];
-    if (own) {
-      if (e.active) held.add(nameKey(own.name));
-      return own;
-    }
+    if (own) return own;
     const r = e.read;
     if (!r) return undefined;
     const seat = seats.get(r.signer);
@@ -282,21 +287,21 @@ export function admitRoster(entries: readonly ReadEntry[], ownerPk: string, now 
       m.at <= seat.admits.until &&
       r.fields.every((f) => ADMITTED_FIELDS.has(f)) &&
       !RESERVED_NAMES.has(nameKey(m.name)) &&
-      (m.sponsor?.user ?? null) === (ownerSponsor?.user ?? null) &&
       !(e.active && held.has(nameKey(m.name)));
     if (!ok) return undefined;
     if (e.active) held.add(nameKey(m.name));
-    return { ...m, signedBy: r.signer, viaName: seat!.display ?? seat!.name };
+    // Whose agent it is: the owner's own person, as the owner's record says.
+    const { sponsor: _ignored, ...rest } = m;
+    return { ...rest, ...(ownerSponsor ? { sponsor: ownerSponsor } : {}), signedBy: r.signer, viaName: seat!.display ?? seat!.name };
   });
 }
 
 /**
- * A name for an agent nobody holds: `base`, else base-2, base-3… Taken is every current member's name
- * and, so nobody new reads as someone who just left, every name that left in the last 30 days.
+ * A name for an agent nobody holds: `base`, else base-2, base-3… Pass every member, active or departed:
+ * a name anyone ever held stays taken, so nobody new reads as someone who left.
  */
-export function freeAgentName(base: string, members: readonly Pick<Member, "name" | "active" | "at">[], now = Date.now()): string {
-  const recent = now - 30 * 86_400_000;
-  const taken = new Set(members.filter((m) => m.active || m.at >= recent).map((m) => nameKey(m.name)));
+export function freeAgentName(base: string, members: readonly Pick<Member, "name">[]): string {
+  const taken = new Set(members.map((m) => nameKey(m.name)));
   const stem = base.slice(0, 29);
   if (!taken.has(nameKey(base)) && !RESERVED_NAMES.has(nameKey(base))) return base;
   for (let n = 2; ; n++) if (!taken.has(nameKey(`${stem}-${n}`))) return `${stem}-${n}`;

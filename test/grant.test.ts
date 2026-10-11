@@ -9,9 +9,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { signRequest } from "../src/auth.ts";
 import { Channel, RelayError } from "../src/client.ts";
-import { generateIdentity, sign, type Identity } from "../src/identity.ts";
+import { generateIdentity, sign, signText, type Identity } from "../src/identity.ts";
 import { newMachine, registerMachine } from "../src/machine.ts";
-import { admitRoster, describeMember, freeAgentName, openRecord, sealRecord, type Member, type ReadEntry } from "../src/membership.ts";
+import { Database } from "bun:sqlite";
+import { newChannelKey, sealTo } from "../src/crypto.ts";
+import { admitRoster, describeMember, freeAgentName, makeAdmittedRecord, openRecord, readRecord, sealRecord, type Member, type ReadEntry } from "../src/membership.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
 import { fold } from "../src/state.ts";
@@ -21,11 +23,14 @@ setDefaultTimeout(60_000);
 const DAY = 86_400_000;
 const dirs: string[] = [];
 const servers: ReturnType<typeof startRelay>[] = [];
+/** Each relay's data folder, by origin: a test that plays a dishonest relay edits its rows there. */
+const dataOf = new Map<string, string>();
 const relayAt = (human = false) => {
   const dataDir = mkdtempSync(join(tmpdir(), "kiwi-grant-"));
   dirs.push(dataDir);
   const server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir, ...(human ? { human: devHumanAuth() } : {}) });
   servers.push(server);
+  dataOf.set(server.url.origin, dataDir);
   return server.url.origin;
 };
 afterEach(() => setSystemTime());
@@ -95,7 +100,7 @@ describe("a seated computer lets its agents in", () => {
   test("the owner's client re-signs it, keeping via, so an older client reads it too", async () => {
     const { ownerCh, seat, machine } = await seated(relay);
     const bot = await agent("bot");
-    await seat.admit(bot.ask);
+    const { access } = await seat.admit(bot.ask);
     const row = async () => {
       const res = await fetch(`${relay}/v1/rooms/${ownerCh.roomId}/members`, {
         headers: { authorization: `Bearer ${await signRequest(machine, ownerCh.roomId, "GET", "/members", "")}` },
@@ -114,6 +119,10 @@ describe("a seated computer lets its agents in", () => {
     const now = (await ownerCh.members()).find((m) => m.pk === bot.id.pk)!;
     expect(now.signedBy).toBeUndefined();
     expect(now.via).toBe(machine.pk);
+    // The bot sees the owner's signature on itself: keys its computer signs count for nothing more.
+    const botCh = new Channel(access, relay, bot.id);
+    await botCh.members();
+    expect(botCh.access.via).toBeUndefined();
   });
 
   test("a clash takes the next name; a name that just left stays taken", async () => {
@@ -125,7 +134,9 @@ describe("a seated computer lets its agents in", () => {
     await ownerCh.remove(a.id.pk);
     const c = await agent("bot");
     expect((await seat.admit(c.ask)).name).toBe("bot-3");
-    expect(freeAgentName("bot", [{ name: "bot", active: false, at: Date.now() - 31 * DAY }])).toBe("bot");
+    // Any name anyone ever held, however long ago.
+    expect(freeAgentName("bot", [{ name: "bot" }])).toBe("bot-2");
+    expect(freeAgentName("bot", [])).toBe("bot");
   });
 
   test("nobody comes in while the channel is on hold", async () => {
@@ -207,6 +218,78 @@ describe("a seated computer lets its agents in", () => {
   });
 });
 
+describe("the review's holes, closed", () => {
+  let relay: string;
+  beforeAll(() => {
+    relay = relayAt();
+  });
+
+  const machineRow = async (ch: Channel, as: Identity, pk: string) => {
+    const res = await fetch(`${relay}/v1/rooms/${ch.roomId}/members`, { headers: { authorization: `Bearer ${await signRequest(as, ch.roomId, "GET", "/members", "")}` } });
+    return ((await res.json()) as { members: { pk: string; rec: string; e: number }[] }).members.find((m) => m.pk === pk)!;
+  };
+
+  test("once the owner signs anything for an agent, its computer can't let it in again over the top", async () => {
+    const { ownerCh, seat, machine } = await seated(relay);
+    const bot = await agent("bot");
+    await seat.admit(bot.ask);
+    // The owner makes it read-only; a re-admit would reset that.
+    await ownerCh.setCanPost(bot.id.pk, false);
+    await expect(seat.admit(bot.ask)).rejects.toThrow(/isn't this computer's/);
+    // Same after the owner re-signs its record.
+    const other = await agent("pal");
+    await seat.admit(other.ask);
+    await ownerCh.tendSeats();
+    expect(await call(relay, ownerCh.roomId, machine, "POST", "/admit", { pk: other.id.pk, xpk: other.id.xpk, rec: "r", keys: { "0": "k" } })).toBe(409);
+  });
+
+  test("a relay can't swap the owner's record back for the computer's", async () => {
+    const { ownerCh, seat, machine } = await seated(relay);
+    const bot = await agent("bot");
+    await seat.admit(bot.ask);
+    const computers = await machineRow(ownerCh, machine, bot.id.pk);
+    await ownerCh.tendSeats();
+    expect((await ownerCh.members()).find((m) => m.pk === bot.id.pk)!.signedBy).toBeUndefined();
+    // The relay serves the old, computer-signed record again.
+    const db = new Database(join(dataOf.get(relay)!, `${ownerCh.roomId}.sqlite`));
+    db.run("UPDATE members SET rec = ?, rec_e = ? WHERE pk = ?", [computers.rec, computers.e, bot.id.pk]);
+    db.close();
+    expect((await ownerCh.members()).find((m) => m.pk === bot.id.pk)!.signedBy).toBeUndefined();
+  });
+
+  test("a record that calls itself the owner's isn't, unless the owner signed it", async () => {
+    const { seat } = await seated(relay);
+    const eve = await generateIdentity("eve");
+    const key = seat.access.keys["0"]!;
+    const sealed = await sealRecord(key, await sign(eve, { room: seat.roomId, member: eve.pk, mxpk: eve.xpk!, name: "eve", owner: true, at: Date.now() }));
+    const r = await readRecord(key, sealed, seat.roomId, eve.pk, seat.access.ownerPk);
+    expect(r?.member.owner).toBe(false);
+  });
+
+  test("keys its computer signs count only up to the epoch it was let in at", async () => {
+    const { ownerCh, seat, machine } = await seated(relay);
+    const bot = await agent("bot");
+    const { access } = await seat.admit(bot.ask);
+    expect(access.viaUpTo).toBe(0);
+    // A removal moves the channel to epoch 1; the owner wraps it for the bot.
+    const gone = await agent("gone");
+    await seat.admit(gone.ask);
+    await ownerCh.remove(gone.id.pk);
+    // The computer then re-admits the bot with a key of its own for epoch 1.
+    await seat.refreshKeys();
+    const bogus = newChannelKey();
+    const wrap = async (e: number, k: string) => {
+      const box = await sealTo(bot.id.xpk!, k, `mc/key\n${seat.roomId}\n${e}`);
+      return JSON.stringify({ box, sig: await signText(machine, `kiwi-key\n${seat.roomId}\n${e}\n${bot.id.pk}\n${box}`) });
+    };
+    const rec = await sealRecord(seat.access.keys["1"]!, await makeAdmittedRecord(machine, seat.roomId, { pk: bot.id.pk, xpk: bot.id.xpk!, name: "bot" }));
+    expect(await call(relay, seat.roomId, machine, "POST", "/admit", { pk: bot.id.pk, xpk: bot.id.xpk, rec, keys: { "0": await wrap(0, seat.access.keys["0"]!), "1": await wrap(1, bogus) } })).toBe(200);
+    const botCh = new Channel(access, relay, bot.id);
+    await botCh.refreshKeys();
+    expect(botCh.access.keys["1"]).toBeUndefined();
+  });
+});
+
 describe("admitRoster: what a computer's signature counts for", () => {
   const OWNER = "owner-pk";
   const SEAT = "seat-pk";
@@ -247,17 +330,22 @@ describe("admitRoster: what a computer's signature counts for", () => {
     for (const extra of ["role", "scopes", "later", "laterRole", "admits", "color", "display", "owner"]) {
       expect(names([byOwner(ownerRec), byOwner(seatRec), bySeat({ name: "bot", pk: "b" }, { fields: [...BASE_FIELDS, extra] })])).toEqual(["human", "mac", null]);
     }
-    expect(names([byOwner(ownerRec), byOwner(seatRec), bySeat({ name: "bot", pk: "b" }, { fields: [...BASE_FIELDS, "about", "sponsor"] })])).toEqual(["human", "mac", "bot"]);
+    expect(names([byOwner(ownerRec), byOwner(seatRec), bySeat({ name: "bot", pk: "b" }, { fields: [...BASE_FIELDS, "about"] })])).toEqual(["human", "mac", "bot"]);
     for (const kind of ["human", "computer"] as const) expect(names([byOwner(ownerRec), byOwner(seatRec), bySeat({ name: "bot", pk: "b", kind })])).toEqual(["human", "mac", null]);
     expect(names([byOwner(ownerRec), byOwner(seatRec), bySeat({ name: "owner", pk: "b" })])).toEqual(["human", "mac", null]);
     expect(names([byOwner(ownerRec), byOwner(seatRec), bySeat({ name: "bot", pk: "b", via: "elsewhere" })])).toEqual(["human", "mac", null]);
   });
 
-  test("an agent of someone other than the owner's person", () => {
+  test("whose agent it is comes from the owner's record, never the computer's", () => {
     const owned = { ...ownerRec, sponsor: { user: "u_owner", name: "Owner" } };
-    expect(names([byOwner(owned), byOwner(seatRec), bySeat({ name: "bot", pk: "b", sponsor: { user: "u_owner", name: "Owner" } })])).toEqual(["human", "mac", "bot"]);
-    expect(names([byOwner(owned), byOwner(seatRec), bySeat({ name: "bot", pk: "b", sponsor: { user: "u_eve", name: "Eve" } })])).toEqual(["human", "mac", null]);
-    expect(names([byOwner(owned), byOwner(seatRec), bySeat({ name: "bot", pk: "b" })])).toEqual(["human", "mac", null]);
+    const out = admitRoster([byOwner(owned), byOwner(seatRec), bySeat({ name: "bot", pk: "b" })], OWNER, now);
+    expect(out[2]?.sponsor?.user).toBe("u_owner");
+    // A record that names a sponsor at all is dropped, whoever it names.
+    expect(names([byOwner(owned), byOwner(seatRec), bySeat({ name: "bot", pk: "b", sponsor: { user: "u_owner", name: "Owner" } }, { fields: [...BASE_FIELDS, "sponsor"] })])).toEqual(["human", "mac", null]);
+  });
+
+  test("a name the owner signed is never shadowed, even by a record listed before it", () => {
+    expect(names([byOwner(ownerRec), byOwner(seatRec), bySeat({ name: "bot", pk: "b1" }), byOwner({ ...ownerRec, owner: false, name: "bot", pk: "b2" })])).toEqual(["human", "mac", null, "bot"]);
   });
 
   test("the first in the relay's order keeps a name", () => {

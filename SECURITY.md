@@ -66,14 +66,23 @@ agent                          relay                         owner's human
     drops it unless all of these hold. Its signer has a seat you signed that
     is still in the channel and not past `until`. It is dated within the
     seat's `since`…`until`. It says `via` that computer. It is an agent's.
-    It carries nothing but a name, rules and your own person as sponsor (no
-    role, scopes, colour, display, `admits` or owner bit). Its name isn't
-    reserved, and nobody let in earlier (in the relay's order) holds it.
+    It carries nothing but a name and rules: no sponsor (whose agent it is
+    comes from your own record), no role, scopes, colour, display, `admits`
+    or owner bit. Its name isn't reserved, no current member you signed
+    holds it, and no computer-signed record earlier in the relay's order
+    holds it. Once a client has seen your signature on a key's record, a
+    computer's record for that key never counts again, whatever the relay
+    serves.
+  - **The agent's keys.** An agent trusts keys signed by its own computer
+    only for the epochs up to the one current when it was let in. It stops
+    trusting them entirely once it sees your signature on its record.
   - **The relay checks too.** `/admit` needs a live `admits_until` on the
     seat and, on a sign-in relay, a computer still linked to the channel's
     owner. Unlinking it in Your computers stops it at once. A computer can't
-    admit the owner, itself, or anyone else's key. At most 20 agents a day
-    per computer per channel.
+    admit the owner, itself, or anyone else's key. It can't re-admit even
+    its own agent once you've signed anything for that key, such as a
+    re-signed record or read-only. At most 20 agents a day per computer per
+    channel.
   - **A computer never admits while the channel is on hold.**
   - **Upkeep on open.** When you open a channel, your browser renews seats
     with under 60 days left. It re-signs what your computers let in with

@@ -462,10 +462,17 @@ async function wrapAllFor(owner: Identity, roomId: string, keys: Record<string, 
 
 /**
  * Unwrap this member's keys, keeping only ones the owner signed (or, on older channels, unsigned ones).
- * An agent a computer let in also takes keys that computer signed (`via`): it got its first keys from
- * that same computer, on the same machine, so it trusts nothing new.
+ * An agent a computer let in also takes keys that computer signed (`via`), for the epochs up to its
+ * admission only: it got those from that same computer, on the same machine, so it trusts nothing new.
  */
-async function unwrapKeys(id: Identity, roomId: string, wrapped: Record<string, string>, ownerPk: string, signedOnly: boolean, via?: string): Promise<Record<string, string>> {
+async function unwrapKeys(
+  id: Identity,
+  roomId: string,
+  wrapped: Record<string, string>,
+  ownerPk: string,
+  signedOnly: boolean,
+  via?: { pk: string; upTo: number },
+): Promise<Record<string, string>> {
   if (!id.xsk) throw new Error("identity has no exchange key");
   const out: Record<string, string> = {};
   for (const [e, w] of Object.entries(wrapped)) {
@@ -475,7 +482,8 @@ async function unwrapKeys(id: Identity, roomId: string, wrapped: Record<string, 
         const parsed = JSON.parse(w) as { box?: unknown; sig?: unknown };
         if (typeof parsed.box !== "string" || typeof parsed.sig !== "string") continue;
         const statement = keyStatement(roomId, e, id.pk, parsed.box);
-        if (!(await verifyText(ownerPk, parsed.sig, statement)) && !(via && (await verifyText(via, parsed.sig, statement)))) continue;
+        const byVia = via && Number(e) <= via.upTo && (await verifyText(via.pk, parsed.sig, statement));
+        if (!(await verifyText(ownerPk, parsed.sig, statement)) && !byVia) continue;
         box = parsed.box;
       } catch {
         continue;
@@ -715,11 +723,11 @@ export class Channel {
      * the same key, e.g. after the config was lost): nothing new is granted.
      * Fails with a RelayError 403 when the key isn't a member.
      */
-    resume: Effect.fn("Channel.resume")(function* (relay: string, code: string, id: Identity, via?: string) {
+    resume: Effect.fn("Channel.resume")(function* (relay: string, code: string, id: Identity) {
       const { roomId, info, signedKeys } = yield* pinnedInfo(relay, code);
       const r = yield* callRelay<{ epoch: number; keys: Record<string, string> }>(relay, roomId, "/keys", { identity: id });
-      const keys = yield* Effect.promise(() => unwrapKeys(id, roomId, r.keys, info.ownerPk, signedKeys, via));
-      const access: ChannelAccess = { roomId, ownerPk: info.ownerPk, ownerXpk: info.ownerXpk, epoch: r.epoch, keys, signedKeys, ...(via ? { via } : {}) };
+      const keys = yield* Effect.promise(() => unwrapKeys(id, roomId, r.keys, info.ownerPk, signedKeys));
+      const access: ChannelAccess = { roomId, ownerPk: info.ownerPk, ownerXpk: info.ownerXpk, epoch: r.epoch, keys, signedKeys };
       return access;
     }),
   };
@@ -852,7 +860,7 @@ export class Channel {
       for (const m of members) {
         if (!this.access.keys[String(m.e)]) yield* this.fx.refreshKeys();
         const key = this.access.keys[String(m.e)];
-        read.push({ read: key ? yield* Effect.promise(() => readRecord(key, m.rec, this.roomId, m.pk)) : null, active: !!m.active });
+        read.push({ read: key ? yield* Effect.promise(() => readRecord(key, m.rec, this.roomId, m.pk, this.access.ownerPk)) : null, active: !!m.active });
       }
       // The owner's records, and the ones their computers' seats let in (admitRoster says which count).
       const admitted = admitRoster(read, this.access.ownerPk);
@@ -860,7 +868,13 @@ export class Channel {
       for (const [i, m] of members.entries()) {
         const opened = admitted[i];
         // The newest record seen for this key wins: a relay can't hand back an older, broader one.
-        const member = opened && (opened.signedBy ? opened : newestRecord(this.roomId, opened));
+        const member = opened && newestRecord(this.roomId, opened);
+        // The owner signed this agent's own record now: keys its computer signs count for nothing more.
+        if (member && member.pk === this.identity.pk && !member.signedBy && this.access.via) {
+          const { via: _v, viaUpTo: _u, ...rest } = this.access;
+          this.access = rest;
+          this.onAccess?.(this.access);
+        }
         if (member) out.push({ ...member, active: !!m.active, ...(m.read_only ? { readOnly: true } : {}) });
         // A key the relay says is a member, with no record we can verify: show it, so the owner can remove it.
         else if (m.active) out.push({ name: `unverified-${m.pk.slice(0, 6)}`, pk: m.pk, xpk: m.xpk, owner: false, at: 0, active: true, unverified: true });
@@ -1134,7 +1148,6 @@ export class Channel {
       const hold = (yield* this.fx.guard())?.hold;
       if (hold?.on) return yield* new Rejected(`the channel is ON HOLD${hold.note ? ` (${inlineText(hold.note, 120)})` : ""}: nobody new comes in until the owner lifts it`);
       if (!NAME_RE.test(agent.name) || RESERVED_NAMES.has(nameKey(agent.name))) return yield* new BadName(`"${agent.name}" can't be a name here`);
-      const sponsor = members.find((m) => m.owner)?.sponsor;
       // Every key up to the current epoch (a removal rotated it since this seat last looked).
       yield* this.fx.refreshKeys();
       const current = this.access.keys[String(this.access.epoch)]!;
@@ -1142,11 +1155,11 @@ export class Channel {
       // Two computers can pick the same free name at once: the first in the relay's order keeps it, so look again after.
       for (let attempt = 0; attempt < 4; attempt++) {
         const name = freeAgentName(agent.name, members.filter((m) => m.pk !== agent.pk));
-        const rec = yield* Effect.promise(async () => sealRecord(current, await makeAdmittedRecord(this.identity, this.roomId, { pk: agent.pk, xpk: agent.xpk, name, ...(agent.about ? { about: agent.about } : {}), ...(sponsor ? { sponsor } : {}) })));
+        const rec = yield* Effect.promise(async () => sealRecord(current, await makeAdmittedRecord(this.identity, this.roomId, { pk: agent.pk, xpk: agent.xpk, name, ...(agent.about ? { about: agent.about } : {}) })));
         yield* this.request("/admit", { method: "POST", body: JSON.stringify({ pk: agent.pk, xpk: agent.xpk, rec, keys }) });
         members = yield* this.fx.members();
         if (members.some((m) => m.pk === agent.pk && m.active && m.name === name)) {
-          return { name, access: { ...this.access, keys: { ...this.access.keys }, via: this.identity.pk } };
+          return { name, access: { ...this.access, keys: { ...this.access.keys }, via: this.identity.pk, viaUpTo: this.access.epoch } };
         }
       }
       return yield* new Rejected(`couldn't find a free name near "${agent.name}"; pick another`);
@@ -1281,7 +1294,8 @@ export class Channel {
   private fetchKeys(): Effect.Effect<void, MemberRefusal, Relay> {
     return Effect.gen({ self: this }, function* () {
       const r = yield* this.request<{ epoch: number; keys: Record<string, string> }>("/keys");
-      const keys = yield* Effect.promise(() => unwrapKeys(this.identity, this.roomId, r.keys, this.access.ownerPk, !!this.access.signedKeys, this.access.via));
+      const via = this.access.via ? { pk: this.access.via, upTo: this.access.viaUpTo ?? 0 } : undefined;
+      const keys = yield* Effect.promise(() => unwrapKeys(this.identity, this.roomId, r.keys, this.access.ownerPk, !!this.access.signedKeys, via));
       // A key this member already holds for an epoch never changes: nobody may swap it.
       this.access = { ...this.access, epoch: r.epoch, keys: { ...keys, ...this.access.keys } };
       this.onAccess?.(this.access);
@@ -1590,8 +1604,8 @@ export class Channel {
    * the same key, e.g. after the config was lost): nothing new is granted.
    * Throws a RelayError 403 when the key isn't a member.
    */
-  static resume(relay: string, code: string, id: Identity, via?: string): Promise<ChannelAccess> {
-    return run(Channel.fx.resume(relay, code, id, via));
+  static resume(relay: string, code: string, id: Identity): Promise<ChannelAccess> {
+    return run(Channel.fx.resume(relay, code, id));
   }
 
   /** Fetch this member's wrapped keys (after a rotation) and unwrap them. */
@@ -1842,9 +1856,13 @@ let recordMemory: RecordMemory = {
 export function keepRecordsIn(memory: RecordMemory): void {
   recordMemory = memory;
 }
-/** The newer of `served` and what this client has seen for that key (by the owner-signed `at`). */
+/**
+ * The newer of `served` and what this client has seen for that key (by the record's `at`). Once the
+ * owner signed a record for a key, a computer's signature for that key never counts again.
+ */
 function newestRecord(room: string, served: Member): Member {
   const seen = recordMemory.get(room, served.pk);
+  if (served.signedBy && seen && !seen.signedBy) return seen;
   if (seen && seen.at > served.at) return seen;
   if (!seen || served.at > seen.at) recordMemory.set(room, served.pk, served);
   return served;

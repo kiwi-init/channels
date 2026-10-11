@@ -25,8 +25,13 @@ export interface ChannelAccess {
    * relay can't swap the signed one back for a member-sealed `{ name }`.
    */
   signedTitle?: boolean;
-  /** An agent a linked computer let in: that computer's key, which signed its first channel keys. */
+  /**
+   * An agent a linked computer let in: that computer's key, which signed its first channel keys, and
+   * the last epoch it may sign one for (the one current at admission). Dropped once the owner re-signs
+   * the agent's record: from then on, only the owner's signature counts.
+   */
   via?: string;
+  viaUpTo?: number;
 }
 
 // Plain implementations (no Buffer) so this module also runs in the browser.

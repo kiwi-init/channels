@@ -697,7 +697,8 @@ export const admit = Effect.fn("Room.admit")(function* (admitter: string, body: 
   const { epoch, ownerPk } = yield* readMeta;
   if (body.pk === ownerPk || body.pk === admitter) return yield* new BadRequest({ message: "a computer lets in its agents, not itself or the owner" });
   const was = db.sql.all<{ active: number; by: string | null }>("SELECT active, admitted_by AS by FROM members WHERE pk = ?", body.pk)[0];
-  // Its own agent again (under another name, after a clash) is fine; anyone else's key, or a key that left, isn't.
+  // Its own agent again (under another name, after a clash) is fine, until the owner signs anything for
+  // that key (setRecord, setCanPost clear admitted_by). Anyone else's key, or a key that left, never is.
   if (was && (was.by !== admitter || !was.active)) return yield* new Conflict({ message: "that key isn't this computer's to let in" });
   if (!was) {
     const today = db.sql.all<{ n: number }>("SELECT COUNT(*) AS n FROM members WHERE admitted_by = ? AND since > ?", admitter, Date.now() - 86_400_000)[0]?.n ?? 0;
@@ -890,7 +891,9 @@ export const setRecord = Effect.fn("Room.setRecord")(function* (pk: string, rec:
   if (!db.isMember(pk)) return yield* new NotFound({ message: "not a member" });
   if (!Number.isInteger(e) || e < 0 || e > (yield* readMeta).epoch) return yield* new BadRequest({ message: "no such epoch" });
   if (rec.length > 8_192) return yield* new TooLarge({ message: "record too large" });
-  db.sql.run("UPDATE members SET rec = ?, rec_e = ?, read_only = ? WHERE pk = ?", rec, e, post ? 0 : 1, pk);
+  // The owner's word on this key now: its computer can't let it in again over the top (admit refuses).
+  db.migrate();
+  db.sql.run("UPDATE members SET rec = ?, rec_e = ?, read_only = ?, admitted_by = NULL WHERE pk = ?", rec, e, post ? 0 : 1, pk);
   if (admitsUntil !== undefined) {
     if (admitsUntil !== null && (!Number.isInteger(admitsUntil) || admitsUntil > Date.now() + MAX_SEAT_MS)) return yield* new BadRequest({ message: "admitsUntil runs at most 100 days" });
     db.migrate();
@@ -903,7 +906,8 @@ export const setCanPost = Effect.fn("Room.setCanPost")(function* (pk: string, po
   const db = yield* RoomStore;
   if (pk === (yield* readMeta).ownerPk) return yield* new BadRequest({ message: "the owner may always post" });
   if (!db.isMember(pk)) return yield* new NotFound({ message: "not a member" });
-  db.sql.run("UPDATE members SET read_only = ? WHERE pk = ?", post ? 0 : 1, pk);
+  db.migrate();
+  db.sql.run("UPDATE members SET read_only = ?, admitted_by = NULL WHERE pk = ?", post ? 0 : 1, pk);
 });
 
 export const remove = Effect.fn("Room.remove")(function* (pk: string) {

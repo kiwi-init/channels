@@ -611,13 +611,12 @@ const commands: Record<string, Command> = {
       const machine = loadMachine();
       const linked = machine?.linked && machine.relay === relay ? machine : null;
       const here = machine && machine.relay === relay ? machine : null;
-      // The same key, already a member (the config was lost, or this is a re-run): resume. Keys this
-      // computer signed count too: it's the one that let this agent in.
+      // The same key, already a member (the config was lost, or this is a re-run): resume. Only keys the
+      // owner signed come back that way; one with no key for now goes on to this computer's seat below.
       if (hadKey) {
-        const access = yield* Channel.fx
-          .resume(relay, code, id, here?.identity.pk)
-          .pipe(Effect.catchIf((err) => err instanceof RelayError && [401, 403, 404].includes(err.status), () => Effect.succeed(null)));
-        if (access) return yield* settle(access, "resumed");
+        const access = yield* Channel.fx.resume(relay, code, id).pipe(Effect.catchIf((err) => err instanceof RelayError && [401, 403, 404].includes(err.status), () => Effect.succeed(null)));
+        const local = Object.values((yield* keys.config).channels).find((c) => c.roomId === roomId);
+        if (access && (access.keys[String(access.epoch)] ?? local?.keys[String(access.epoch)])) return yield* settle(access, "resumed");
       }
       // This computer's own seat in the channel lets it in at once, with no request and no code.
       if (here && !opt.reclaim) {
