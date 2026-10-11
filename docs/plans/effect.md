@@ -122,6 +122,24 @@ in a Durable Object. Left for later: the person routes (`vault.ts`, `devices.ts`
 arguments and refuse with `refuse(status, text)`; the canary deploy and the DO CPU
 numbers.
 
+**Step 4 (code):** `~/.kiwi` is three services in `config.ts` (`Keystore`: the
+config, identities, access, records and signing budget; `Cache`; `Cursor`), whose
+live Layer (`LocalFiles`) is the same file functions as before, same locks and
+layout. `AgentSession`'s operations are Effects over `ch.fx.*` and those services
+(`openSession` opens one; `AgentLive` is the relay over HTTP plus the files;
+`runAgent` and `AgentSession.open` are the Promise doors for tests and scripts).
+`listen` runs a handler over `ch.fx.live`, scoped: interrupting it closes the socket
+and the presence beacon. It stays an Effect that takes a handler, not a Stream of
+messages, because the cursor may move only once a message has been handled, which a
+pulled Stream can't promise. `who` and `ask --wait` race the same Stream against
+their windows. Local refusals are tagged (`refusals.ts`: `Rejected`, `OwnerOnly`,
+`BadName`, `MissingKey`), in the agent and in `client.ts`, with the texts they always
+had; signs that the relay tampered with something (a join code's owner, a forged
+code half) are still thrown, as defects. The hooks' runner, `kiwi demo` and `kiwi
+sh`'s views are Effects; the computer link's relay calls are `machineFx`, refused
+with `MachineRefused`. The Stop hook's listener record stays for the life of the
+process, as before (an MCP server between two waits still counts as listening).
+
 ## Costs, measured
 
 - **Bundle**: a minimal program with a service, a Layer and a tagged error,

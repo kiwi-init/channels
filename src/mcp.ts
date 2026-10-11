@@ -8,7 +8,11 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { join } from "node:path";
 import { z } from "zod";
-import { AgentSession, Rejected } from "./agent.ts";
+import { AgentSession, Rejected, runAgent } from "./agent.ts";
+import * as Effect from "effect/Effect";
+
+/** The session's Effects, run one at a time (until the tools run on Effect themselves). */
+const run = runAgent;
 import { loadImages, saveImages } from "./attach.ts";
 import { loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { forgetMember, home, identitiesIn, loadConfig, signingBudget, wipeChannel, writeCursor } from "./config.ts";
@@ -97,7 +101,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
         "Names are bound to keys by the owner, so they can't be faked. Example: call members.",
     },
     guard(async () => {
-      const [members, { state }] = await Promise.all([s.members(true), s.state()]);
+      const [members, { state }] = await Promise.all([run(s.members(true)), run(s.state())]);
       return members
         .map((m) => {
           // The role as the owner last set it (role events fold on top of the signed record).
@@ -163,7 +167,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
           return `denied ${r.name} (${r.code})`;
         }
         const finalName = name ?? r.name;
-        if ((await s.members(true)).some((m) => m.name === finalName && m.active)) throw new Rejected(`"${finalName}" is taken; pass name`);
+        if ((await run(s.members(true))).some((m) => m.name === finalName && m.active)) throw new Rejected(`"${finalName}" is taken; pass name`);
         // Asking to be the coordinator doesn't make it one: the owner gives that role with set role.
         await owner.approve(r, { name: finalName, role: r.role?.trim().toLowerCase() === COORDINATOR ? undefined : r.role, about: r.about, ...(scopes ? { scopes } : {}) });
         return `approved ${finalName} (${r.code})${scopes ? `; they may ${mayDo(scopes)}` : ""}`;
@@ -182,7 +186,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
       guard(async ({ name, scopes: given }) => {
         const scopes = parseScopes(given) ?? null;
         if (!scopes) throw new Rejected(`"${given}" isn't scopes: say read-only, contributor, full, or a list of ${SCOPES.join(",")}`);
-        await s.setScopes(name, scopes);
+        await run(s.setScopes(name, scopes));
         return `${name} may now ${mayDo(scopes)}`;
       }),
     );
@@ -193,7 +197,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
         inputSchema: { name: z.string().describe("the room's name, e.g. design") },
       },
       guard(async ({ name }) => {
-        const { id, state } = await s.createRoom(name);
+        const { id, state } = await run(s.createRoom(name));
         return `made #${state.rooms.get(id)?.name ?? name} (id ${id})`;
       }),
     );
@@ -204,7 +208,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
         inputSchema: { room: z.string().describe("the room's current name or id"), name: z.string().describe("its new name") },
       },
       guard(async ({ room, name }) => {
-        await s.renameRoom(room, name);
+        await run(s.renameRoom(room, name));
         return `renamed to #${name}`;
       }),
     );
@@ -215,7 +219,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
           "Turn coordinator-only on or off: people talk only with the member whose role is coordinator; strict (the default) has every client refuse other agents' messages to people. Only call this after your human explicitly told you to.",
         inputSchema: { coordinatorOnly: z.boolean(), strict: z.boolean().optional().describe("default true") },
       },
-      guard(async ({ coordinatorOnly, strict }) => modeLine(await s.setMode(coordinatorOnly, strict ?? true), s.me) ?? "mode: normal"),
+      guard(async ({ coordinatorOnly, strict }) => modeLine(await run(s.setMode(coordinatorOnly, strict ?? true)), s.me) ?? "mode: normal"),
     );
   }
 
@@ -223,9 +227,9 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
     "status",
     { description: "Whether the channel is ON HOLD, its charter (the owner's scope), your human, members (and who is online), open tasks, claims, facts, and questions waiting on you. Example: call status." },
     guard(async () => {
-      const [{ messages, state }, online] = await Promise.all([s.state(), s.who()]);
+      const [{ messages, state }, online] = await Promise.all([run(s.state()), run(s.who())]);
       const on = new Map([...online].map(([n, p]) => [n, { client: p.client, role: p.role }]));
-      return formatStatus({ alias: s.alias, me: s.me, state, online: on, unread: await s.unreadCount(state, messages) });
+      return formatStatus({ alias: s.alias, me: s.me, state, online: on, unread: await run(s.unreadCount(state, messages)) });
     }),
   );
 
@@ -240,7 +244,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
       const seconds = timeout_seconds ?? 50;
       // Remember where we started. listen marks each message read as it arrives, which is too early
       // when the client cancels the call before it sees the result.
-      const since = await s.cursor();
+      const since = await run(s.cursor());
       const ac = new AbortController();
       const onClientAbort = () => ac.abort();
       extra.signal.addEventListener("abort", onClientAbort, { once: true });
@@ -252,19 +256,23 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
         if (got++ === 0) linger = setTimeout(() => ac.abort(), 400);
       };
       try {
-        await s.listen(
-          (m, state) => {
-            lines.push(formatMessage(m, state.trust.get(m.seq), state, s.me));
-            woke();
-          },
-          {
-            client: "mcp-wait",
-            signal: ac.signal,
-            onNotice: (text) => {
-              lines.push(text);
-              woke();
+        await run(
+          s.listen(
+            (m, state) =>
+              Effect.sync(() => {
+                lines.push(formatMessage(m, state.trust.get(m.seq), state, s.me));
+                woke();
+              }),
+            {
+              client: "mcp-wait",
+              onNotice: (text) =>
+                Effect.sync(() => {
+                  lines.push(text);
+                  woke();
+                }),
             },
-          },
+          ),
+          ac.signal,
         );
       } finally {
         clearTimeout(timer);
@@ -290,7 +298,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
     },
     async ({ chat, all, thread }) => {
       try {
-        const { messages, state } = await s.read({ chat, all, ...(thread !== undefined ? { thread } : {}) });
+        const { messages, state } = await run(s.read({ chat, all, ...(thread !== undefined ? { thread } : {}) }));
         if (!messages.length) return ok("no unread messages.\nNext: call wait_for_messages.");
         return withImages(messages.map((m) => formatMessage(m, state.trust.get(m.seq), state, s.me)).join("\n"), messages);
       } catch (err) {
@@ -304,7 +312,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
     { description: "Recent channel history (doesn't mark anything read). Images come back as image blocks. Example: log {\"n\":30}.", inputSchema: { n: z.number().int().min(1).max(500).optional() } },
     async ({ n }) => {
       try {
-        const { messages, state } = await s.state();
+        const { messages, state } = await run(s.state());
         const shown = messages.slice(-(n ?? 30));
         if (!shown.length) return ok("no messages");
         return withImages(shown.map((m) => formatMessage(m, state.trust.get(m.seq), state, s.me)).join("\n"), shown);
@@ -326,7 +334,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
     },
     async ({ script }) => {
       try {
-        const r = await runSh(channelFiles(await sessionViews(s, script)), script);
+        const r = await runSh(channelFiles(await run(sessionViews(s, script))), script);
         const text = [r.stdout.trimEnd(), r.stderr.trimEnd() && `[stderr]\n${r.stderr.trimEnd()}`, r.exitCode && `[exit ${r.exitCode}]`].filter(Boolean).join("\n");
         return r.exitCode ? fail(text) : ok(text || "(no output)");
       } catch (err) {
@@ -338,7 +346,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
   server.registerTool(
     "rooms",
     { description: "The channel's rooms, with their ids. Messages say their room as [#name] once there's more than one. Example: call rooms." },
-    guard(async () => formatRooms((await s.state()).state)),
+    guard(async () => formatRooms((await run(s.state())).state)),
   );
 
   server.registerTool(
@@ -354,7 +362,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
         room: z.string().optional().describe("the room's name or id; general if omitted (a reply defaults to its parent's room)"),
       },
     },
-    guard(async ({ text, to, kind, re, images, room }) => `sent #${await s.send(text, { to, kind, re, room, imgs: images?.length ? loadImages(images) : undefined })}`),
+    guard(async ({ text, to, kind, re, images, room }) => `sent #${await run(s.send(text, { to, kind, re, room, imgs: images?.length ? loadImages(images) : undefined }))}`),
   );
 
   server.registerTool(
@@ -370,7 +378,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
       },
     },
     guard(async ({ text, to, wait_seconds, blocking, room }) => {
-      const { seq, replies } = await s.ask(text, { to, kind: blocking ? "blocking" : "ask", waitSec: wait_seconds, room });
+      const { seq, replies } = await run(s.ask(text, { to, kind: blocking ? "blocking" : "ask", waitSec: wait_seconds, room }));
       if (!wait_seconds) return `asked #${seq}`;
       if (!replies.length) return `no answer to #${seq} within ${wait_seconds}s; replies will still reach you`;
       return replies.map((r) => formatMessage(r)).join("\n");
@@ -388,7 +396,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
         images: z.array(z.string()).optional().describe("local image files to attach (png, jpg, gif, webp, ≤256KB each)"),
       },
     },
-    guard(async ({ seq, text, kind, images }) => `sent #${await s.reply(seq, text, kind, images?.length ? loadImages(images) : undefined)}`),
+    guard(async ({ seq, text, kind, images }) => `sent #${await run(s.reply(seq, text, kind, images?.length ? loadImages(images) : undefined))}`),
   );
 
   server.registerTool(
@@ -403,7 +411,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
       },
     },
     guard(async ({ text, re }) => {
-      const { seq, to } = await s.escalate(text, re);
+      const { seq, to } = await run(s.escalate(text, re));
       return `escalated #${seq} to ${to.join(" and ")}; wait for their answer before acting on it`;
     }),
   );
@@ -412,7 +420,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
     "who",
     { description: "Who is listening on the channel right now. Example: call who." },
     guard(async () => {
-      const [online, { state }] = await Promise.all([s.who(), s.state()]);
+      const [online, { state }] = await Promise.all([run(s.who()), run(s.state())]);
       if (!online.size) return "nobody else is listening right now";
       return [...online]
         .map(([name, p]) => {
@@ -434,7 +442,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
       inputSchema: { seq: z.number().int(), dir: z.string().optional().describe("defaults to ~/…/.kiwi/downloads") },
     },
     guard(async ({ seq, dir }) => {
-      const { messages } = await s.state();
+      const { messages } = await run(s.state());
       const m = messages.find((x) => x.seq === seq);
       if (!m) throw new Rejected(`no message #${seq}`);
       if (!m.imgs?.length) throw new Rejected(`message #${seq} has no images`);
@@ -451,7 +459,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
     },
     async ({ seq }) => {
       try {
-        const { messages, state } = await s.state();
+        const { messages, state } = await run(s.state());
         const m = messages.find((x) => x.seq === seq);
         if (!m) return fail(`no message #${seq}`);
         const saved = m.imgs?.length ? saveImages(seq, m.imgs, join(home(), "downloads", s.ch.roomId)) : [];
@@ -469,7 +477,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
       inputSchema: { mine: z.boolean().optional(), all: z.boolean().optional().describe("include done tasks"), global: z.boolean().optional() },
     },
     guard(async ({ mine, all, global }) => {
-      if (!global) return formatTasks((await s.state()).state, { all, owner: mine ? s.me : undefined });
+      if (!global) return formatTasks((await run(s.state())).state, { all, owner: mine ? s.me : undefined });
       const cfg = loadConfig();
       const aliases = Object.keys(cfg.channels).sort();
       if (!aliases.length) return "no channels";
@@ -479,7 +487,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
         // Only channels this agent is in itself: never read another local agent's channel with its key.
         if (!identitiesIn(c.roomId).includes(s.me)) continue;
         const sess = await AgentSession.open(alias, c, s.me);
-        const { state } = await sess.state();
+        const { state } = await run(sess.state());
         const owner = mine ? sess.me : undefined;
         const lines = formatTasks(state, { all, owner });
         out.push(`## ${alias}${lines === "no tasks" ? " — no tasks" : ""}`);
@@ -507,12 +515,12 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
     },
     guard(async ({ title, detail, owner, after, needs, review }) => {
       const ids = after?.map(task);
-      const { state } = await s.state();
-      const id = await s.taskAdd(title, { detail, owner, after: ids, needs, review });
+      const { state } = await run(s.state());
+      const id = await run(s.taskAdd(title, { detail, owner, after: ids, needs, review }));
       const like = similarOpenTasks(state, title).map((t) => t.id);
       const lines = [formatAdded(state, id, ids ?? [])];
       if (like.length) lines.push(looksLikeLine(like));
-      const now = (await s.state()).state;
+      const now = (await run(s.state())).state;
       const fit = !owner && now.tasks.get(id) ? fitsLine(now, now.tasks.get(id)!) : null;
       if (fit) lines.push(fit);
       return lines.join("\n");
@@ -538,7 +546,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
     guard(async ({ task: raw, action, note, owner, after }) => {
       const id = task(raw);
       if (action === "show") {
-        const { state } = await s.state();
+        const { state } = await run(s.state());
         const t = state.tasks.get(id);
         if (!t) throw new Rejected(`no task ${taskId(id)}`);
         return formatTask(state, t);
@@ -546,13 +554,13 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
       if (action === "after") {
         const deps = (after ?? []).map(task);
         if (!deps.length) throw new Rejected("after needs at least one task id");
-        const state = await s.taskAfter(id, deps);
+        const state = await run(s.taskAfter(id, deps));
         return formatAfter(state, id, deps);
       }
       if (action === "handoff") {
         if (!owner) throw new Rejected("handoff needs owner: who takes it over");
         const { handoff, pushed } = handoffHere();
-        const state = await s.taskHandoff(id, owner, note, handoff);
+        const state = await run(s.taskHandoff(id, owner, note, handoff));
         const t = state.tasks.get(id)!;
         const where = handoff.branch ? `: pick it up from ${handoff.branch}${handoff.commit ? ` @ ${handoff.commit}` : ""}` : "";
         return `${taskId(id)} is ${t.owner}'s now${where}${pushed === false && handoff.branch ? `. ${handoff.branch} isn't pushed: push it so ${t.owner} can fetch it` : ""}`;
@@ -561,14 +569,14 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
       const states = { start: "doing", block: "blocked", review: "review", approve: "done", reject: "doing", done: "done", cancel: "cancelled" } as const;
       const state =
         action === "claim"
-          ? await s.taskClaim(id)
+          ? await run(s.taskClaim(id))
           : action === "drop"
-            ? await s.taskUpdate(id, { owner: null, note })
+            ? await run(s.taskUpdate(id, { owner: null, note }))
             : action === "assign"
-              ? await s.taskUpdate(id, { owner: owner ?? s.me, note })
+              ? await run(s.taskUpdate(id, { owner: owner ?? s.me, note }))
               : action === "note"
-                ? await s.taskUpdate(id, { note: note ?? "" })
-                : await s.taskUpdate(id, { state: states[action], note });
+                ? await run(s.taskUpdate(id, { note: note ?? "" }))
+                : await run(s.taskUpdate(id, { state: states[action], note }));
       const t = state.tasks.get(id)!;
       return `${taskId(id)} ${t.state}${t.owner ? ` @${t.owner}` : ""}: ${t.title}`;
     }),
@@ -581,7 +589,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
       inputSchema: { paths: z.array(z.string()).min(1), ttl: z.string().optional().describe("like 30m or 2h (default 30m)"), note: z.string().optional() },
     },
     guard(async ({ paths, ttl, note }) => {
-      const state = await s.claim(paths, parseDuration(ttl ?? "30m"), note, claimPlace());
+      const state = await run(s.claim(paths, parseDuration(ttl ?? "30m"), note, claimPlace()));
       return formatClaims({ ...state, claims: state.claims.filter((c) => c.owner === s.me) });
     }),
   );
@@ -590,7 +598,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
     "release",
     { description: "Release your claims (all of them if no paths given). Example: call release.", inputSchema: { paths: z.array(z.string()).optional() } },
     guard(async ({ paths }) => {
-      await s.release(paths);
+      await run(s.release(paths));
       return paths?.length ? `released ${paths.join(", ")}` : "released all your claims";
     }),
   );
@@ -599,16 +607,16 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
     "facts",
     { description: "Shared key/value facts: read all, or set/unset one. Anyone may set or unset a key. ttl (like 7d) makes a fact expire on its own. Example: facts {\"set\":\"build.cmd\",\"value\":\"bun test\"}.", inputSchema: { set: z.string().optional(), value: z.string().optional(), unset: z.string().optional(), ttl: z.string().optional() } },
     guard(async ({ set, value, unset, ttl }) => {
-      if (set) await s.setFact(set, value ?? "", ttl ? parseDuration(ttl) : undefined);
-      if (unset) await s.delFact(unset);
-      const { facts } = (await s.state()).state;
+      if (set) await run(s.setFact(set, value ?? "", ttl ? parseDuration(ttl) : undefined));
+      if (unset) await run(s.delFact(unset));
+      const { facts } = (await run(s.state())).state;
       return [...facts.values()].map((f) => formatFact(f)).join("\n") || "no facts";
     }),
   );
 
   await server.connect(new StdioServerTransport());
   // Say what this agent runs on, so work that needs it finds it. In the background: the harness is waiting on the handshake.
-  void s.refreshCard(detectCard()).catch(() => {});
+  void run(s.refreshCard(detectCard())).catch(() => {});
   // An MCP server lives exactly as long as its client: exit when stdin closes,
   // so a crashed or killed agent never leaves an orphaned listener behind.
   const bye = () => process.exit(0);
@@ -617,19 +625,20 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
   server.server.onclose = bye;
 
   if (opts.push) {
-    await s.listen(
-      async (m, state) => {
-        await server.server.notification({
-          method: "notifications/claude/channel",
-          params: { content: formatMessage(m, state.trust.get(m.seq), state, s.me), meta: { seq: String(m.seq), from: m.from, kind: m.kind } },
-        });
-      },
-      {
-        client: "mcp",
-        onNotice: async (text) => {
-          await server.server.notification({ method: "notifications/claude/channel", params: { content: `* ${text}`, meta: { kind: "notice" } } });
+    await run(
+      s.listen(
+        (m, state) =>
+          Effect.promise(() =>
+            server.server.notification({
+              method: "notifications/claude/channel",
+              params: { content: formatMessage(m, state.trust.get(m.seq), state, s.me), meta: { seq: String(m.seq), from: m.from, kind: m.kind } },
+            }),
+          ),
+        {
+          client: "mcp",
+          onNotice: (text) => Effect.promise(() => server.server.notification({ method: "notifications/claude/channel", params: { content: `* ${text}`, meta: { kind: "notice" } } })),
         },
-      },
+      ),
     );
   } else {
     await new Promise(() => {});

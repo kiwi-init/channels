@@ -22,6 +22,7 @@ import * as Schedule from "effect/Schedule";
 import * as Stream from "effect/Stream";
 import { signRequest } from "./auth.ts";
 import { isErrorTag, tagForStatus, type ErrorTag } from "./errors.ts";
+import { BadName, MissingKey, OwnerOnly, Rejected, type LocalRefusal } from "./refusals.ts";
 import {
   decodeJoinCode,
   encodeJoinCode,
@@ -121,6 +122,8 @@ class Dropped extends Data.TaggedError("Dropped")<{ readonly code: number; reado
 export type Refusal = RelayError | Unreachable;
 /** What a member's request can fail with: those, or this member being out of the channel. */
 export type MemberRefusal = Refusal | ChannelGone;
+/** What a member's operation can fail with: the relay's refusals, or this client's own (refusals.ts). */
+export type Refused = MemberRefusal | LocalRefusal;
 
 /** Map the relay errors that mean "you're out" to ChannelGone; leave everything else alone. */
 function gone<E>(err: E): E | ChannelGone {
@@ -207,7 +210,7 @@ const callRelay = <T>(relay: string, roomId: string, path: string, init?: CallIn
   });
 
 /** An Effect's end as a Promise's: its value, or what it failed with (what fetch threw, for a relay out of reach). */
-function settle<A, E>(exit: Exit.Exit<A, E>): A {
+export function settle<A, E>(exit: Exit.Exit<A, E>): A {
   if (Exit.isSuccess(exit)) return exit.value;
   const err = Cause.squash(exit.cause);
   throw err instanceof Unreachable ? err.cause : err;
@@ -322,7 +325,41 @@ function clockFrom(now: () => number): Clock.Clock {
 
 /** The frame each Live came from, for the line about one whose handling failed. */
 const FRAME: Record<Live["_tag"], string> = { Open: "open", Ready: "ready", Message: "msg", Presence: "eph", Info: "info", Roster: "roster", Request: "request", Down: "status", Skipped: "status" };
-const failedFrame = (frame: string, err: unknown) => `dropped a ${frame} frame whose handling failed: ${err instanceof Error ? err.message : String(err)}`;
+const failedFrame = (frame: string, err: unknown) => `dropped a ${frame} frame whose handling failed: ${reason(err)}`;
+
+/** What went wrong, in words: a relay out of reach says what fetch said, as it always has. */
+export function reason(err: unknown): string {
+  const e = err instanceof Unreachable ? err.cause : err;
+  return e instanceof Error ? e.message : String(e);
+}
+
+/** The line a listener's status gets for `ev`, if any: back after an outage, the relay out of reach, a frame dropped. */
+export function statusLine(ev: Live): string | null {
+  switch (ev._tag) {
+    case "Open":
+      return ev.outage !== null ? `reconnected after ${Math.round(ev.outage / 1000)}s; nothing was missed` : null;
+    case "Down":
+      return `can't reach the relay for ${Math.round(ev.after / 1000)}s (${ev.code}${ev.reason ? ` ${ev.reason}` : ""}); still retrying`;
+    case "Skipped":
+      return failedFrame(ev.frame, ev.error);
+    default:
+      return null;
+  }
+}
+
+/**
+ * Hand each Live to `handle`, strictly in order, its status line (if any) to `status` first. A
+ * handler that fails loses that one frame, said on `status`, never the stream; stopping waits for
+ * the frame in hand, rather than leaving its handler half done.
+ */
+export const eachLive = <E, R, R2>(live: Stream.Stream<Live, E, R>, handle: (ev: Live) => Effect.Effect<void, unknown, R2>, status: (line: string) => Effect.Effect<void, never, R2>) =>
+  Stream.runForEach(live, (ev) => {
+    const line = statusLine(ev);
+    return (line === null ? handle(ev) : Effect.andThen(status(line), handle(ev))).pipe(
+      Effect.catchCause((cause) => status(failedFrame(FRAME[ev._tag], Cause.squash(cause)))),
+      Effect.uninterruptible,
+    );
+  });
 
 // ---------- keys and owners ----------
 
@@ -467,39 +504,40 @@ type RequestRow = {
 /**
  * Every Channel operation as an Effect: the Promise methods run these. Same
  * arguments and results; failures typed. Local refusals (not the owner, a bad
- * name, a key that's missing) are plain Errors, as they always were.
+ * name, a key that's missing) are tagged too (refusals.ts), with the texts they
+ * always had; a Promise caller still gets an Error with that message.
  */
 export interface ChannelFx {
   refreshKeys(): Effect.Effect<void, MemberRefusal, Relay>;
   info(fp?: string): Effect.Effect<Info, Refusal, Relay>;
   title(): Effect.Effect<string | null, Refusal, Relay>;
-  setTitle(name: string): Effect.Effect<void, MemberRefusal, Relay>;
+  setTitle(name: string): Effect.Effect<void, Refused, Relay>;
   mode(): Effect.Effect<ModeSetting | null, Refusal, Relay>;
   rooms(): Effect.Effect<RoomsSetting | null, Refusal, Relay>;
-  setMode(mode: ModeSetting): Effect.Effect<void, MemberRefusal, Relay>;
-  setRooms(rooms: RoomsSetting): Effect.Effect<void, MemberRefusal, Relay>;
+  setMode(mode: ModeSetting): Effect.Effect<void, Refused, Relay>;
+  setRooms(rooms: RoomsSetting): Effect.Effect<void, Refused, Relay>;
   guard(): Effect.Effect<GuardFloor | null, Refusal, Relay>;
-  setCharter(charter: NonNullable<GuardFloor["charter"]>): Effect.Effect<void, MemberRefusal, Relay>;
-  setHold(hold: NonNullable<GuardFloor["hold"]>): Effect.Effect<void, MemberRefusal, Relay>;
+  setCharter(charter: NonNullable<GuardFloor["charter"]>): Effect.Effect<void, Refused, Relay>;
+  setHold(hold: NonNullable<GuardFloor["hold"]>): Effect.Effect<void, Refused, Relay>;
   icon(): Effect.Effect<ChannelIcon | null, MemberRefusal, Relay>;
-  setIcon(icon: ChannelIcon | null): Effect.Effect<void, MemberRefusal, Relay>;
+  setIcon(icon: ChannelIcon | null): Effect.Effect<void, Refused, Relay>;
   members(): Effect.Effect<Member[], MemberRefusal, Relay>;
   leave(): Effect.Effect<void, MemberRefusal, Relay>;
-  requests(opts?: { budget?: SigningBudget }): Effect.Effect<JoinRequest[], MemberRefusal, Relay>;
-  checkRequest(req: Pick<JoinRequest, "id" | "pk" | "commit">): Effect.Effect<void, MemberRefusal, Relay>;
-  approve(req: JoinRequest, as?: Partial<MemberInfo>): Effect.Effect<Member, MemberRefusal, Relay>;
-  reclaim(req: JoinRequest, opts: { online: boolean; force?: boolean; scopes?: Scope[] }): Effect.Effect<Member, MemberRefusal, Relay>;
-  deny(requestId: string): Effect.Effect<void, MemberRefusal, Relay>;
-  setCanPost(pk: string, post: boolean): Effect.Effect<void, MemberRefusal, Relay>;
-  updateScopes(m: Member, scopes: readonly Scope[], since: number): Effect.Effect<void, MemberRefusal, Relay>;
-  updateRole(m: Member, role: string | null, about: string | null | undefined, since: number): Effect.Effect<void, MemberRefusal, Relay>;
-  reconcilePosting(state: Pick<ChannelState, "members" | "scopeSets" | "roleSets">, members?: Member[]): Effect.Effect<string[], MemberRefusal, Relay>;
-  remove(pk: string): Effect.Effect<void, MemberRefusal, Relay>;
-  rotate(): Effect.Effect<number, MemberRefusal, Relay>;
-  rotateIfDue(): Effect.Effect<boolean, MemberRefusal, Relay>;
-  close(): Effect.Effect<void, MemberRefusal, Relay>;
+  requests(opts?: { budget?: SigningBudget }): Effect.Effect<JoinRequest[], Refused, Relay>;
+  checkRequest(req: Pick<JoinRequest, "id" | "pk" | "commit">): Effect.Effect<void, Refused, Relay>;
+  approve(req: JoinRequest, as?: Partial<MemberInfo>): Effect.Effect<Member, Refused, Relay>;
+  reclaim(req: JoinRequest, opts: { online: boolean; force?: boolean; scopes?: Scope[] }): Effect.Effect<Member, Refused, Relay>;
+  deny(requestId: string): Effect.Effect<void, Refused, Relay>;
+  setCanPost(pk: string, post: boolean): Effect.Effect<void, Refused, Relay>;
+  updateScopes(m: Member, scopes: readonly Scope[], since: number): Effect.Effect<void, Refused, Relay>;
+  updateRole(m: Member, role: string | null, about: string | null | undefined, since: number): Effect.Effect<void, Refused, Relay>;
+  reconcilePosting(state: Pick<ChannelState, "members" | "scopeSets" | "roleSets">, members?: Member[]): Effect.Effect<string[], Refused, Relay>;
+  remove(pk: string): Effect.Effect<void, Refused, Relay>;
+  rotate(): Effect.Effect<number, Refused, Relay>;
+  rotateIfDue(): Effect.Effect<boolean, Refused, Relay>;
+  close(): Effect.Effect<void, Refused, Relay>;
   head(): Effect.Effect<number, MemberRefusal, Relay>;
-  send(body: string, opts?: SendOptions): Effect.Effect<number, MemberRefusal, Relay>;
+  send(body: string, opts?: SendOptions): Effect.Effect<number, Refused, Relay>;
   decrypt(env: Envelope): Effect.Effect<Message | null, never, Relay>;
   history(since: number): Effect.Effect<{ head: number; messages: Message[] }, MemberRefusal, Relay>;
   /**
@@ -547,8 +585,8 @@ export class Channel {
     }).pipe(Effect.mapError(gone));
   }
 
-  private ownerOnly(): void {
-    if (!this.isOwner) throw new Error("only the channel owner can do that");
+  private ownerOnly(): Effect.Effect<void, OwnerOnly> {
+    return this.isOwner ? Effect.void : Effect.fail(new OwnerOnly("only the channel owner can do that"));
   }
 
   // ---------- the operations, as Effects ----------
@@ -568,7 +606,7 @@ export class Channel {
       /** A name for the channel; sealed, so only members can read it. */
       title?: string,
     ) {
-      if (!owner.xpk) throw new Error("owner identity has no exchange key");
+      if (!owner.xpk) return yield* new MissingKey("owner identity has no exchange key");
       const xpk = owner.xpk;
       const key = newChannelKey();
       const ownerSig = yield* Effect.promise(() => sign(owner, { room: roomId, xpk, v: 2 }));
@@ -610,7 +648,7 @@ export class Channel {
       machine?: { pk: string; sig: string } | null,
     ) {
       const { roomId, info: room } = yield* pinnedInfo(relay, code);
-      if (!id.xpk) throw new Error("identity has no exchange key");
+      if (!id.xpk) return yield* new MissingKey("identity has no exchange key");
       const xpk = id.xpk;
       // The computer's vouch rides in the sealed box too, so the owner can check it against their own
       // computers without taking the relay's word for who vouched (see autoAdmissible).
@@ -702,11 +740,11 @@ export class Channel {
     }),
 
     setTitle: Effect.fn("Channel.setTitle")({ self: this }, function* (this: Channel, name: string) {
-      this.ownerOnly();
+      yield* this.ownerOnly();
       const title = name.trim().slice(0, 80);
-      if (!title) throw new Error("a channel title can't be empty");
+      if (!title) return yield* new Rejected("a channel title can't be empty");
       const key = this.access.keys["0"];
-      if (!key) throw new Error("missing the channel key");
+      if (!key) return yield* new MissingKey("missing the channel key");
       const sealed = yield* Effect.promise(async () => seal(key, this.roomId, await sign(this.identity, { what: "channel-title", room: this.roomId, name: title })));
       yield* this.request("/title", { method: "PUT", body: JSON.stringify({ title: sealed }) });
       this.noteSignedTitle();
@@ -775,8 +813,8 @@ export class Channel {
     }),
 
     setIcon: Effect.fn("Channel.setIcon")({ self: this }, function* (this: Channel, icon: ChannelIcon | null) {
-      this.ownerOnly();
-      if (icon !== null && !wellFormedIcon(icon)) throw new Error(`an icon is one emoji, or a png, jpg, gif or webp image of at most ${MAX_ICON_BYTES / 1024}KB`);
+      yield* this.ownerOnly();
+      if (icon !== null && !wellFormedIcon(icon)) return yield* new Rejected(`an icon is one emoji, or a png, jpg, gif or webp image of at most ${MAX_ICON_BYTES / 1024}KB`);
       const e = this.access.epoch;
       const signed = icon ? yield* Effect.promise(() => sign(this.identity, { what: "channel-icon", room: this.roomId, icon })) : null;
       const sealed = signed ? { e, ...(yield* Effect.promise(() => seal(this.access.keys[String(e)]!, this.roomId, signed))) } : null;
@@ -804,7 +842,7 @@ export class Channel {
     }),
 
     requests: Effect.fn("Channel.requests")({ self: this }, function* (this: Channel, opts: { budget?: SigningBudget } = {}) {
-      this.ownerOnly();
+      yield* this.ownerOnly();
       const { requests } = yield* this.request<{ requests: RequestRow[] }>("/requests", {}, { v: 2 });
       const out: JoinRequest[] = [];
       const seats = requests.length ? (yield* this.fx.members()).filter((m) => m.active && !m.unverified) : [];
@@ -849,13 +887,13 @@ export class Channel {
     }),
 
     checkRequest: Effect.fn("Channel.checkRequest")({ self: this }, function* (this: Channel, req: Pick<JoinRequest, "id" | "pk" | "commit">) {
-      this.ownerOnly();
+      yield* this.ownerOnly();
       yield* this.signHalf(req.id, ownerNonceStatement(this.roomId, req.pk, req.commit));
     }),
 
     approve: Effect.fn("Channel.approve")({ self: this }, function* (this: Channel, req: JoinRequest, as?: Partial<MemberInfo>) {
-      this.ownerOnly();
-      if (req.check !== "ready" || !req.code) throw new Error(`${req.name} hasn't shown its code yet: approve once you've both seen the same 6 digits`);
+      yield* this.ownerOnly();
+      if (req.check !== "ready" || !req.code) return yield* new Rejected(`${req.name} hasn't shown its code yet: approve once you've both seen the same 6 digits`);
       const kind = req.kind ?? "agent";
       // An agent's person, by the handle they have here if they're in this channel.
       const sponsorHandle =
@@ -887,19 +925,19 @@ export class Channel {
     }),
 
     reclaim: Effect.fn("Channel.reclaim")({ self: this }, function* (this: Channel, req: JoinRequest, opts: { online: boolean; force?: boolean; scopes?: Scope[] }) {
-      this.ownerOnly();
+      yield* this.ownerOnly();
       const target = req.reclaims;
-      if (!target) throw new Error(`${req.name} isn't anyone's seat yet: approve it as a new member`);
-      if (req.check !== "ready" || !req.code) throw new Error(`${req.name} hasn't shown its code yet: approve once you've both seen the same 6 digits`);
+      if (!target) return yield* new Rejected(`${req.name} isn't anyone's seat yet: approve it as a new member`);
+      if (req.check !== "ready" || !req.code) return yield* new Rejected(`${req.name} hasn't shown its code yet: approve once you've both seen the same 6 digits`);
       const seat = (yield* this.fx.members()).find((m) => m.active && m.pk === target.pk && !m.unverified);
-      if (!seat) throw new Error(`${target.name}'s seat changed since this request was read: read the requests again`);
-      if (seat.owner) throw new Error("the owner's seat can't be reclaimed");
-      if (seat.kind === "human") throw new Error(`${seat.name} is a person's own seat: they sign in again from their browser instead`);
-      if ((req.kind ?? "agent") !== "agent") throw new Error("only an agent can reclaim an agent's seat");
+      if (!seat) return yield* new Rejected(`${target.name}'s seat changed since this request was read: read the requests again`);
+      if (seat.owner) return yield* new Rejected("the owner's seat can't be reclaimed");
+      if (seat.kind === "human") return yield* new Rejected(`${seat.name} is a person's own seat: they sign in again from their browser instead`);
+      if ((req.kind ?? "agent") !== "agent") return yield* new Rejected("only an agent can reclaim an agent's seat");
       if ((req.sponsoredBy?.user ?? null) !== (seat.sponsor?.user ?? null)) {
-        throw new Error(`this request comes from ${req.sponsoredBy ? `${req.sponsoredBy.name}'s computer` : "a computer nobody vouched for"}, but ${seat.name} acts for ${seat.sponsor?.name ?? "nobody"}: refused`);
+        return yield* new Rejected(`this request comes from ${req.sponsoredBy ? `${req.sponsoredBy.name}'s computer` : "a computer nobody vouched for"}, but ${seat.name} acts for ${seat.sponsor?.name ?? "nobody"}: refused`);
       }
-      if (opts.online && !opts.force) throw new Error(`${seat.name} IS ONLINE NOW with its current key: this may be someone else taking its seat. Only go on if you're sure, with force`);
+      if (opts.online && !opts.force) return yield* new Rejected(`${seat.name} IS ONLINE NOW with its current key: this may be someone else taking its seat. Only go on if you're sure, with force`);
       const info: MemberInfo = {
         name: seat.name,
         ...(seat.role ? { role: seat.role } : {}),
@@ -924,18 +962,18 @@ export class Channel {
     }),
 
     deny: Effect.fn("Channel.deny")({ self: this }, function* (this: Channel, requestId: string) {
-      this.ownerOnly();
+      yield* this.ownerOnly();
       yield* this.request(`/requests/${requestId}/deny`, { method: "POST", body: "{}" });
     }),
 
     setCanPost: Effect.fn("Channel.setCanPost")({ self: this }, function* (this: Channel, pk: string, post: boolean) {
-      this.ownerOnly();
+      yield* this.ownerOnly();
       yield* this.request(`/members/${pk}/post`, { method: "PUT", body: JSON.stringify({ post }) });
     }),
 
     updateScopes: Effect.fn("Channel.updateScopes")({ self: this }, function* (this: Channel, m: Member, scopes: readonly Scope[], since: number) {
-      this.ownerOnly();
-      if (m.owner) throw new Error("the owner may do everything");
+      yield* this.ownerOnly();
+      if (m.owner) return yield* new Rejected("the owner may do everything");
       const e = this.access.epoch;
       const key = this.access.keys[String(e)]!;
       const { active: _a, readOnly: _r, unverified: _u, at: _at, ...info } = m;
@@ -944,8 +982,8 @@ export class Channel {
     }),
 
     updateRole: Effect.fn("Channel.updateRole")({ self: this }, function* (this: Channel, m: Member, role: string | null, about: string | null | undefined, since: number) {
-      this.ownerOnly();
-      if (m.owner) throw new Error("the owner's record isn't changed this way");
+      yield* this.ownerOnly();
+      if (m.owner) return yield* new Rejected("the owner's record isn't changed this way");
       const e = this.access.epoch;
       const key = this.access.keys[String(e)]!;
       const { active: _a, readOnly: _r, unverified: _u, at: _at, ...info } = m;
@@ -956,7 +994,7 @@ export class Channel {
     }),
 
     reconcilePosting: Effect.fn("Channel.reconcilePosting")({ self: this }, function* (this: Channel, state: Pick<ChannelState, "members" | "scopeSets" | "roleSets">, members?: Member[]) {
-      this.ownerOnly();
+      yield* this.ownerOnly();
       const changed: string[] = [];
       for (let m of members ?? (yield* this.fx.members())) {
         if (!m.active || m.owner || m.unverified) continue;
@@ -985,13 +1023,13 @@ export class Channel {
     }),
 
     remove: Effect.fn("Channel.remove")({ self: this }, function* (this: Channel, pk: string) {
-      this.ownerOnly();
+      yield* this.ownerOnly();
       yield* this.request(`/members/${pk}`, { method: "DELETE" });
       yield* this.fx.rotate();
     }),
 
     rotate: Effect.fn("Channel.rotate")({ self: this }, function* (this: Channel) {
-      this.ownerOnly();
+      yield* this.ownerOnly();
       // The new key goes only to members whose admission the owner signed, under the exchange key in
       // that record: never to whatever list or key the relay hands back.
       const members = (yield* this.fx.members()).filter((m) => m.active && !m.unverified);
@@ -1016,7 +1054,7 @@ export class Channel {
     }),
 
     close: Effect.fn("Channel.close")({ self: this }, function* (this: Channel) {
-      this.ownerOnly();
+      yield* this.ownerOnly();
       yield* this.request("/", { method: "DELETE" });
     }),
 
@@ -1027,7 +1065,7 @@ export class Channel {
     send: Effect.fn("Channel.send")({ self: this }, function* (this: Channel, body: string, opts: SendOptions = {}) {
       const imgs = opts.imgs?.slice(0, MAX_IMAGES);
       // The same raster list as icons. A caller that skips the file picker still cannot attach SVG.
-      if (imgs?.some((i) => !isRasterMime(i.mime))) throw new Error("an image must be png, jpg, gif or webp");
+      if (imgs?.some((i) => !isRasterMime(i.mime))) return yield* new Rejected("an image must be png, jpg, gif or webp");
       const payload: Payload = {
         v: PROTOCOL_VERSION,
         id: crypto.randomUUID(),
@@ -1047,7 +1085,7 @@ export class Channel {
         if (!this.access.keys[String(this.access.epoch)]) yield* this.fx.refreshKeys();
         const e = this.access.epoch;
         const key = this.access.keys[String(e)];
-        if (!key) throw new Error(`no key for epoch ${e}`);
+        if (!key) return yield* new MissingKey(`no key for epoch ${e}`);
         const sealed = yield* Effect.promise(() => seal(key, this.roomId, signed));
         return (yield* this.request<{ seq: number }>("/messages", { method: "POST", body: JSON.stringify({ ...sealed, e }) })).seq;
       });
@@ -1087,14 +1125,10 @@ export class Channel {
     live: (since: number, opts: LiveOptions = {}) => this.live(since, opts),
 
     stream: Effect.fn("Channel.stream")({ self: this }, function* (this: Channel, since: number, onMessage: (m: Message) => void | Promise<void>, opts: StreamOptions = {}) {
-      const status = (s: string) => Effect.sync(() => opts.onStatus?.(s));
       const handle = (ev: Live): Effect.Effect<void> => {
         switch (ev._tag) {
           case "Open":
-            return Effect.sync(() => {
-              if (ev.outage !== null) opts.onStatus?.(`reconnected after ${Math.round(ev.outage / 1000)}s; nothing was missed`);
-              opts.onOpen?.({ presence: (p) => Effect.runPromise(ev.presence(p)) });
-            });
+            return Effect.sync(() => opts.onOpen?.({ presence: (p) => Effect.runPromise(ev.presence(p)) }));
           case "Ready":
             return Effect.sync(() => opts.onReady?.(ev.head));
           case "Message":
@@ -1107,22 +1141,11 @@ export class Channel {
             return Effect.sync(() => opts.onRoster?.());
           case "Request":
             return Effect.sync(() => opts.onRequest?.());
-          case "Down":
-            return status(`can't reach the relay for ${Math.round(ev.after / 1000)}s (${ev.code}${ev.reason ? ` ${ev.reason}` : ""}); still retrying`);
-          case "Skipped":
-            return status(failedFrame(ev.frame, ev.error));
+          default:
+            return Effect.void;
         }
       };
-      const listening = this.fx.live(since, { quietMs: opts.quietMs, presence: !!opts.onPresence }).pipe(
-        Stream.runForEach((ev) =>
-          handle(ev).pipe(
-            // A consumer that throws loses that one frame, never the stream.
-            Effect.catchCause((cause) => status(failedFrame(FRAME[ev._tag], Cause.squash(cause)))),
-            // Stopping waits for the frame in hand, rather than leaving its handler half done.
-            Effect.uninterruptible,
-          ),
-        ),
-      );
+      const listening = eachLive(this.fx.live(since, { quietMs: opts.quietMs, presence: !!opts.onPresence }), handle, (s) => Effect.sync(() => opts.onStatus?.(s)));
       // A test's clock: the quiet window and the waits between retries follow it.
       return yield* opts.now ? Effect.provideService(listening, Clock.Clock, clockFrom(opts.now)) : listening;
     }),
@@ -1161,11 +1184,11 @@ export class Channel {
   }
 
   /** Owner: change some settings and keep the rest (the mode and the rooms share one signed record). */
-  private putSettings(change: Record<string, unknown>): Effect.Effect<void, MemberRefusal, Relay> {
+  private putSettings(change: Record<string, unknown>): Effect.Effect<void, Refused, Relay> {
     return Effect.gen({ self: this }, function* () {
-      this.ownerOnly();
+      yield* this.ownerOnly();
       const key = this.access.keys["0"];
-      if (!key) throw new Error("missing the channel key");
+      if (!key) return yield* new MissingKey("missing the channel key");
       const { what: _w, room: _r, pk: _p, sig: _s, ...kept } = (yield* this.settings()) ?? {};
       const sealed = yield* Effect.promise(async () => seal(key, this.roomId, await sign(this.identity, { ...kept, ...change, what: "channel-settings", room: this.roomId })));
       yield* this.request("/settings", { method: "PUT", body: JSON.stringify({ settings: sealed }) });
@@ -1203,14 +1226,14 @@ export class Channel {
    * member would read invisibly), reserved ones, and any that matches a current member's, even
    * when it only looks the same.
    */
-  private assertNamesFree(names: string[]): Effect.Effect<void, MemberRefusal, Relay> {
+  private assertNamesFree(names: string[]): Effect.Effect<void, Refused, Relay> {
     return Effect.gen({ self: this }, function* () {
       const taken = new Set((yield* this.fx.members()).filter((m) => m.active).map((m) => nameKey(m.name)));
       const seen = new Set<string>();
       for (const n of names) {
-        if (!NAME_RE.test(n)) throw new Error(`"${inlineText(n, 40)}" isn't a valid name (1-32 letters, digits, _ . or -); they need to ask again under another name`);
-        if (RESERVED_NAMES.has(nameKey(n))) throw new Error(`"${n}" is a reserved name; they need to ask again under another name`);
-        if (taken.has(nameKey(n)) || seen.has(nameKey(n))) throw new Error(`"${n}" is already someone's name in this channel; they need to ask again under another name`);
+        if (!NAME_RE.test(n)) return yield* new BadName(`"${inlineText(n, 40)}" isn't a valid name (1-32 letters, digits, _ . or -); they need to ask again under another name`);
+        if (RESERVED_NAMES.has(nameKey(n))) return yield* new BadName(`"${n}" is a reserved name; they need to ask again under another name`);
+        if (taken.has(nameKey(n)) || seen.has(nameKey(n))) return yield* new BadName(`"${n}" is already someone's name in this channel; they need to ask again under another name`);
         seen.add(nameKey(n));
       }
     });

@@ -4,10 +4,14 @@
 //   cursors/<ch>/<agent>   last sequence number each agent has consumed
 //   cache/<room>.jsonl     decrypted, verified messages (so state folds are fast)
 
+import * as Context from "effect/Context";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import { randomBytes } from "node:crypto";
 import { appendFileSync, chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { RecordMemory } from "./client.ts";
 import type { ChannelAccess } from "./crypto.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "./identity.ts";
 import type { Member } from "./membership.ts";
@@ -511,3 +515,83 @@ export function appendCache(roomId: string, messages: Message[]): void {
     writePrivate(`${path}.seq`, String(fresh.at(-1)!.seq));
   });
 }
+
+// ---------- the same files, as services ----------
+//
+// The agent session and the commands reach ~/.kiwi through these, so a test (or
+// any other store) can stand in for the disk. The live ones are the functions
+// above, unchanged: the same files, the same locks, the same layout.
+
+/** The config, the identities and what's kept per channel: config.json, identities/, records/, checks/. */
+export interface KeystoreApi {
+  readonly config: Effect.Effect<Config>;
+  /** Change the config under its lock (see updateConfig). */
+  readonly update: (change: (cfg: Config) => void) => Effect.Effect<Config>;
+  /** An agent's key for a channel, made the first time it's asked for. */
+  readonly identity: (name: string, roomId: string) => Effect.Effect<Identity>;
+  readonly identitiesIn: (roomId: string) => Effect.Effect<string[]>;
+  readonly forgetIdentity: (name: string, roomId: string) => Effect.Effect<void>;
+  readonly forgetIdentities: (roomId: string) => Effect.Effect<void>;
+  /** Persist a channel's keys after they change (a rotation). */
+  readonly saveAccess: (alias: string, access: ChannelAccess) => Effect.Effect<void>;
+  /** One agent left or was removed: forget what it held (and the channel, once nobody here is left). */
+  readonly forgetMember: (alias: string, name: string) => Effect.Effect<void>;
+  /** The channel is gone for everyone: forget all of it. */
+  readonly wipeChannel: (alias: string) => Effect.Effect<void>;
+  /** The join checks this computer signed as an owner. */
+  readonly budget: SigningBudget;
+  /** The newest member record seen per key. */
+  readonly records: RecordMemory;
+}
+
+export class Keystore extends Context.Service<Keystore, KeystoreApi>()("kiwi/Keystore") {}
+
+/** The decrypted, verified messages kept per room (cache/<room>.jsonl). */
+export class Cache extends Context.Service<
+  Cache,
+  {
+    readonly read: (roomId: string) => Effect.Effect<Message[]>;
+    readonly append: (roomId: string, messages: Message[]) => Effect.Effect<void>;
+  }
+>()("kiwi/Cache") {}
+
+/** How far each agent has read, and what reached it out of band (cursors/<ch>/<agent>, .seen). */
+export class Cursor extends Context.Service<
+  Cursor,
+  {
+    readonly read: (channel: string, agent: string) => Effect.Effect<number | null>;
+    readonly write: (channel: string, agent: string, seq: number) => Effect.Effect<void>;
+    readonly seen: (channel: string, agent: string) => Effect.Effect<Set<number>>;
+    readonly markSeen: (channel: string, agent: string, seqs: number[]) => Effect.Effect<void>;
+  }
+>()("kiwi/Cursor") {}
+
+/** ~/.kiwi (or KIWI_HOME, read at each call, as everything above does). */
+export const fileKeystore: KeystoreApi = {
+  config: Effect.sync(loadConfig),
+  update: (change) => Effect.sync(() => updateConfig(change)),
+  identity: (name, roomId) => Effect.promise(() => loadIdentity(name, roomId)),
+  identitiesIn: (roomId) => Effect.sync(() => identitiesIn(roomId)),
+  forgetIdentity: (name, roomId) => Effect.sync(() => forgetIdentity(name, roomId)),
+  forgetIdentities: (roomId) => Effect.sync(() => forgetIdentities(roomId)),
+  saveAccess: (alias, access) => Effect.sync(() => saveAccess(alias, access)),
+  forgetMember: (alias, name) => Effect.sync(() => forgetMember(alias, name)),
+  wipeChannel: (alias) => Effect.sync(() => wipeChannel(alias)),
+  budget: signingBudget,
+  records: fileRecordMemory,
+};
+
+/** The three, on this computer's disk. */
+export const LocalFiles: Layer.Layer<Keystore | Cache | Cursor> = Layer.mergeAll(
+  Layer.succeed(Keystore, fileKeystore),
+  Layer.succeed(Cache, {
+    read: (roomId) => Effect.sync(() => readCache(roomId)),
+    append: (roomId, messages) => Effect.sync(() => appendCache(roomId, messages)),
+  }),
+  Layer.succeed(Cursor, {
+    read: (channel, agent) => Effect.sync(() => readCursor(channel, agent)),
+    write: (channel, agent, seq) => Effect.sync(() => writeCursor(channel, agent, seq)),
+    seen: (channel, agent) => Effect.sync(() => readSeen(channel, agent)),
+    markSeen: (channel, agent, seqs) => Effect.sync(() => markSeen(channel, agent, seqs)),
+  }),
+);

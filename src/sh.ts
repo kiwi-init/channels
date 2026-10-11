@@ -15,9 +15,11 @@
 //     and output, so a bad script ends with an error instead of hanging.
 //   - just-bash's defense-in-depth stays on, with no exclusions.
 
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import { Bash, InMemoryFs, type CommandName, type IFileSystem } from "just-bash";
-import { identitiesIn, loadConfig, readCursor } from "./config.ts";
-import { AgentSession, wants } from "./agent.ts";
+import { Cursor, Keystore } from "./config.ts";
+import { openSession, runAgent, wants, type AgentSession } from "./agent.ts";
 import { describeEvent, formatClaims, formatMessage, formatStatus, formatTask, markedText, memberJson, statusJson } from "./format.ts";
 import { ignored, type Message } from "./protocol.ts";
 import { taskId, type ChannelState } from "./state.ts";
@@ -139,9 +141,16 @@ export function channelFiles(views: ChannelView[], now = Date.now()): Record<str
 }
 
 /** What one session contributes: its log, its folded state and its cursor. Reads only; marks nothing. */
-export async function channelView(s: AgentSession): Promise<ChannelView> {
-  const { messages, state } = await s.state();
-  return { alias: s.alias, me: s.me, messages, state, cursor: readCursor(s.alias, s.me) ?? state.head };
+export const viewOf = Effect.fn("sh.viewOf")(function* (s: AgentSession) {
+  const { messages, state } = yield* s.state();
+  const cursor = (yield* (yield* Cursor).read(s.alias, s.me)) ?? state.head;
+  const view: ChannelView = { alias: s.alias, me: s.me, messages, state, cursor };
+  return view;
+});
+
+/** viewOf, as a Promise: for callers outside Effect. */
+export function channelView(s: AgentSession): Promise<ChannelView> {
+  return runAgent(viewOf(s));
 }
 
 /**
@@ -149,21 +158,20 @@ export async function channelView(s: AgentSession): Promise<ChannelView> {
  * /channels, every other channel this same name is a member of on this machine
  * (never another local agent's: their keys aren't ours to use).
  */
-export async function sessionViews(s: AgentSession, script: string): Promise<ChannelView[]> {
-  const views = [await channelView(s)];
+export const sessionViews = Effect.fn("sh.sessionViews")(function* (s: AgentSession, script: string) {
+  const views = [yield* viewOf(s)];
   if (!script.includes("/channels")) return views;
-  const cfg = loadConfig();
+  const keys = yield* Keystore;
+  const cfg = yield* keys.config;
   for (const alias of Object.keys(cfg.channels).sort()) {
     const c = cfg.channels[alias]!;
-    if (alias === s.alias || !identitiesIn(c.roomId).includes(s.me)) continue;
-    try {
-      views.push(await channelView(await AgentSession.open(alias, c, s.me)));
-    } catch {
-      // A channel that's gone or unreachable just isn't there; the rest still are.
-    }
+    if (alias === s.alias || !(yield* keys.identitiesIn(c.roomId)).includes(s.me)) continue;
+    // A channel that's gone or unreachable just isn't there; the rest still are.
+    const other = yield* Effect.exit(Effect.flatMap(openSession(alias, c, s.me), viewOf));
+    if (Exit.isSuccess(other)) views.push(other.value);
   }
   return views;
-}
+});
 
 /** Run `script` against `files` (paths ending in "/" are empty directories). Never throws: every failure is a nonzero exit with a reason on stderr. */
 export async function runSh(files: Record<string, string>, script: string, opts: { cwd?: string } = {}): Promise<ShResult> {

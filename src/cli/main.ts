@@ -6,7 +6,11 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join as joinPath, join } from "node:path";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { AgentSession, Rejected, type Delivery } from "../agent.ts";
+import { AgentSession, Rejected, runAgent, type Delivery } from "../agent.ts";
+import * as Effect from "effect/Effect";
+
+/** The session's Effects, run one at a time (until the commands run on Effect themselves). */
+const run = runAgent;
 import { loadImages, saveImages } from "../attach.ts";
 import { Channel, ChannelGone, RelayError, relayConfig } from "../client.ts";
 import { TOO_MANY_REQUESTS } from "../sas.ts";
@@ -231,7 +235,7 @@ function render(m: Message, state?: ChannelState | null): string {
 /** Which messages tail/wait/read/watch hand over: --chat, --for-me, --all or --thread N (default: those for you), in every room unless --room. */
 async function delivery(s: AgentSession): Promise<Delivery> {
   const thread = opt.thread === undefined ? undefined : Number(opt.thread.replace(/^#/, "")) || die("--thread takes a message number");
-  const room = opt.room === undefined ? undefined : await s.roomId(opt.room);
+  const room = opt.room === undefined ? undefined : await run(s.roomId(opt.room));
   return { forMe: opt["for-me"], chat: opt.chat, all: opt.all, ...(thread !== undefined ? { thread } : {}), ...(room !== undefined ? { room } : {}) };
 }
 
@@ -289,7 +293,7 @@ async function ownerLink(c: ChannelConfig): Promise<string> {
 }
 
 async function findRequest(s: AgentSession, needle: string, opts: { byKey?: boolean } = {}): Promise<JoinRequest> {
-  const reqs = await s.requests();
+  const reqs = await run(s.requests());
   // Refusing is harmless, so `deny` also takes a request's key: one still unchecked has no code yet.
   if (opts.byKey && needle.replace(/\D/g, "").length !== 6) {
     const byKey = reqs.filter((x) => needle.length >= 6 && fingerprint(x.pk).startsWith(needle));
@@ -364,9 +368,9 @@ async function confirm(question: string): Promise<boolean> {
 async function reclaimSeat(s: AgentSession, r: JoinRequest): Promise<void> {
   const target = r.reclaims!;
   // Seen in the last ten minutes, or listening right now: the old key may still be in use.
-  const { state } = await s.state();
+  const { state } = await run(s.state());
   const seen = state.members.get(target.name)?.lastSeen ?? 0;
-  const online = Date.now() - seen < 10 * 60_000 || (await s.who()).has(target.name);
+  const online = Date.now() - seen < 10 * 60_000 || (await run(s.who())).has(target.name);
   if (online) process.stderr.write(`kiwi: ${target.name} IS ONLINE NOW with its current key (${fingerprint(target.pk)}): this may be someone else taking its seat\n`);
   const question = `Move ${target.name}'s seat from key ${fingerprint(target.pk)} to ${fingerprint(r.pk)}? Verification code ${r.code}. The old key is out for good.`;
   if (!(await confirm(question))) die(`reclaiming needs your human's go-ahead: once they confirm the joining agent shows ${r.code}, re-run with --yes${online ? " --force" : ""}`);
@@ -408,7 +412,7 @@ const commands: Record<string, () => Promise<void>> = {
     });
     writeCursor(alias, name, 0);
     const s = await AgentSession.open(alias, cfg.channels[alias]!, name);
-    await s.hello(opt.role, opt.about);
+    await run(s.hello(opt.role, opt.about));
     settleIn(alias, name);
     process.stderr.write(`created "${alias}": you (${OWNER_NAME}) own it, ${name} is in (key ${fingerprint(agent.pk)})\n`);
     out(`join code: ${code}`);
@@ -451,15 +455,15 @@ const commands: Record<string, () => Promise<void>> = {
       });
       const s = await AgentSession.open(alias, cfg.channels[alias]!, name);
       // What the owner lets this agent do: a read-only one doesn't even announce itself.
-      const scopes = (await s.state()).state.members.get(name)?.scopes ?? [...SCOPES];
-      const hello = (role?: string, about?: string) => (canPost(scopes) ? s.hello(role, about) : Promise.resolve(0));
+      const scopes = (await run(s.state())).state.members.get(name)?.scopes ?? [...SCOPES];
+      const hello = (role?: string, about?: string) => (canPost(scopes) ? run(s.hello(role, about)) : Promise.resolve(0));
       if (how === "resumed") {
         // Nothing new was granted: pick up where this agent left off.
         if (readCursor(alias, name) === null) writeCursor(alias, name, await s.ch.head());
         if (opt.role || opt.about) await hello(opt.role, opt.about);
       } else if (opt.reclaim) {
         // A reclaimed seat: what reached this name after its old key last spoke is unread for the new one.
-        const { messages, state } = await s.state();
+        const { messages, state } = await run(s.state());
         const last = messages.filter((m) => m.from === name && m.kind !== "event" && state.trust.get(m.seq) === "verified").at(-1)?.seq;
         writeCursor(alias, name, last ?? state.head);
       } else {
@@ -468,7 +472,7 @@ const commands: Record<string, () => Promise<void>> = {
       }
       settleIn(alias, name);
       // Say what this agent runs on, so work that needs it finds it. Never worth failing a join over.
-      if (canPost(scopes)) await s.refreshCard(detectCard()).catch(() => {});
+      if (canPost(scopes)) await run(s.refreshCard(detectCard())).catch(() => {});
       process.stderr.write(`${how === "resumed" ? "back in" : "joined"} "${alias}" as ${name} (key ${fingerprint(id.pk)})\n`);
       out(how === "resumed" ? "this key is already a member: resumed, nothing new was granted.\n" : "approved.\n");
       if (signIn) out(`Your human can watch everything you do in this channel at ${relay}/#${encodeURIComponent(code)}\n`);
@@ -536,7 +540,7 @@ const commands: Record<string, () => Promise<void>> = {
   },
 
   async hook() {
-    await runHook(args[1] ?? "");
+    await run(runHook(args[1] ?? ""));
   },
 
   /**
@@ -674,9 +678,9 @@ const commands: Record<string, () => Promise<void>> = {
 
   async requests() {
     const s = await session();
-    const reqs = await s.requests();
+    const reqs = await run(s.requests());
     if (!reqs.length) return out("no pending join requests");
-    const { state } = reqs.some((r) => r.reclaims) ? await s.state() : { state: null };
+    const { state } = reqs.some((r) => r.reclaims) ? await run(s.state()) : { state: null };
     for (const r of reqs) {
       const who = r.kind === "human" ? `person, signed in as ${r.sponsoredBy?.name ?? "?"}` : r.sponsoredBy ? `agent of ${r.sponsoredBy.name}` : "agent";
       const code = r.code ?? (r.check === "waiting" ? "waiting" : "unchecked");
@@ -694,7 +698,7 @@ const commands: Record<string, () => Promise<void>> = {
     const s = await session();
     if (!s.ownerCh) die("only the channel owner's machine checks join requests");
     const key = (args[1] ?? die("usage: kiwi check KEY (the request's key, from kiwi requests)")).trim();
-    const r = (await s.requests()).find((x) => x.check === "unchecked" && fingerprint(x.pk).startsWith(key));
+    const r = (await run(s.requests())).find((x) => x.check === "unchecked" && fingerprint(x.pk).startsWith(key));
     if (!r) die(`no unchecked request with key ${key} (see: kiwi requests)`);
     const what = r.reclaims ? `${r.reclaims.name}'s seat (RECLAIM, new key ${fingerprint(r.pk)})` : `${r.name} (key ${fingerprint(r.pk)})`;
     if (!(await confirm(`Start the code check for ${what}?`))) die("checking needs your human's go-ahead; re-run with --yes once they confirm");
@@ -712,7 +716,7 @@ const commands: Record<string, () => Promise<void>> = {
     }
     const name = opt.name ?? r.name;
     if (!NAME_RE.test(name) || name === OWNER_NAME) die(`"${name}" isn't an allowed name; approve with --name NAME`);
-    const taken = (await s.members(true)).find((m) => m.name === name && m.active);
+    const taken = (await run(s.members(true))).find((m) => m.name === name && m.active);
     if (taken) die(`"${name}" is already a member; approve under another name with --name`);
     // Asking to be the coordinator doesn't make you one: the owner says --role coordinator themselves.
     const askedCoordinator = r.role?.trim().toLowerCase() === COORDINATOR && opt.role?.trim().toLowerCase() !== COORDINATOR;
@@ -734,9 +738,9 @@ const commands: Record<string, () => Promise<void>> = {
 
   async members() {
     const s = await session();
-    await s.members(true);
-    const { state } = await s.state();
-    for (const m of await s.members()) {
+    await run(s.members(true));
+    const { state } = await run(s.state());
+    for (const m of await run(s.members())) {
       const scopes = m.active ? state.members.get(m.name)?.scopes : undefined;
       const may = scopes && presetOf(scopes) !== "full" ? ` · may: ${describeScopes(scopes)}` : "";
       out(`${describeMember(m)}${m.name === s.me ? " (you)" : ""}${m.role ? ` — ${m.role}` : ""}${may}${m.active ? "" : "  (left)"}`);
@@ -747,7 +751,7 @@ const commands: Record<string, () => Promise<void>> = {
   /** The channel's rooms: listed for anyone. */
   async rooms() {
     const s = await session();
-    out(formatRooms((await s.state()).state));
+    out(formatRooms((await run(s.state())).state));
   },
 
   /** Owner: make or rename a room. */
@@ -756,12 +760,12 @@ const commands: Record<string, () => Promise<void>> = {
     const [sub, a, b] = args.slice(1);
     if (sub === "create") {
       const name = a ?? die("usage: kiwi room create NAME");
-      const { id, state } = await s.createRoom(name);
+      const { id, state } = await run(s.createRoom(name));
       return out(`made #${state.rooms.get(id)?.name ?? name} (id ${id}); send there with --room ${state.rooms.get(id)?.name ?? id}`);
     }
     if (sub === "rename") {
       const room = a ?? die("usage: kiwi room rename NAME|ID NEWNAME");
-      await s.renameRoom(room, b ?? die("usage: kiwi room rename NAME|ID NEWNAME"));
+      await run(s.renameRoom(room, b ?? die("usage: kiwi room rename NAME|ID NEWNAME")));
       return out(`renamed #${room} to #${b}`);
     }
     die("usage: kiwi room create NAME | kiwi room rename NAME|ID NEWNAME (owner); kiwi rooms lists them");
@@ -770,7 +774,7 @@ const commands: Record<string, () => Promise<void>> = {
   async scope() {
     const s = await session();
     const [name, given] = args.slice(1);
-    const { state } = await s.state();
+    const { state } = await run(s.state());
     if (!name) {
       for (const m of [...state.members.values()].filter((x) => x.active).sort((a, b) => a.name.localeCompare(b.name))) {
         out(`${m.name}${m.name === s.me ? " (you)" : ""}: ${m.owner ? "everything (owner)" : mayDo(m.scopes)}`);
@@ -780,7 +784,7 @@ const commands: Record<string, () => Promise<void>> = {
     if (!s.ownerCh) die("only the channel owner's machine sets what members may do");
     const scopes = parseScopes(given ?? die("usage: kiwi scope NAME read-only|contributor|full|post,ask,tasks,claims,facts [--yes]")) ?? die(`"${given}" isn't scopes: say read-only, contributor, full, or a list of ${SCOPES.join(",")}`);
     if (!(await confirm(`Let ${name} ${mayDo(scopes)}?`))) die("changing what a member may do needs your human's go-ahead; re-run with --yes");
-    await s.setScopes(name, scopes);
+    await run(s.setScopes(name, scopes));
     out(`${name} may now ${mayDo(scopes)}`);
   },
 
@@ -789,7 +793,7 @@ const commands: Record<string, () => Promise<void>> = {
     const s = await session();
     if (!s.ownerCh) die("only the channel owner can remove members");
     const name = args[1] ?? die("usage: kiwi kick NAME");
-    const m = (await s.members(true)).find((x) => x.name === name && x.active) ?? die(`"${name}" isn't a member`);
+    const m = (await run(s.members(true))).find((x) => x.name === name && x.active) ?? die(`"${name}" isn't a member`);
     if (m.owner) die("the owner can't be removed; `kiwi close` deletes the channel");
     await s.ownerCh.remove(m.pk);
     out(`removed ${name}; rotated the channel key so they can't read anything new`);
@@ -836,15 +840,15 @@ const commands: Record<string, () => Promise<void>> = {
 
   async status() {
     const s = await session();
-    const [{ messages, state }, online] = await Promise.all([s.state(), s.who()]);
+    const [{ messages, state }, online] = await Promise.all([run(s.state()), run(s.who())]);
     const on = new Map([...online].map(([n, p]) => [n, { client: p.client, role: p.role }]));
-    const snap = { alias: s.alias, me: s.me, state, online: on, unread: await s.unreadCount(state, messages) };
+    const snap = { alias: s.alias, me: s.me, state, online: on, unread: await run(s.unreadCount(state, messages)) };
     out(opt.json ? JSON.stringify(statusJson(snap)) : formatStatus(snap));
   },
 
   async who() {
     const s = await session();
-    const [online, { state }] = await Promise.all([s.who(), s.state()]);
+    const [online, { state }] = await Promise.all([run(s.who()), run(s.state())]);
     if (!online.size) return out("nobody else is listening right now");
     for (const [name, p] of online) {
       const role = p.role ?? state.members.get(name)?.role;
@@ -859,7 +863,7 @@ const commands: Record<string, () => Promise<void>> = {
     const kind = (opt.kind ?? "msg") as Kind;
     if (!CHAT_KINDS.includes(kind)) die(`kind must be one of: ${CHAT_KINDS.join(", ")}`);
     const re = list(opt.re)?.map((x) => Number(x.replace(/^#/, ""))).filter((n) => n > 0);
-    out(`sent #${await s.send(body, { to: list(opt.to), kind, re, imgs: images(), room: opt.room })}`);
+    out(`sent #${await run(s.send(body, { to: list(opt.to), kind, re, imgs: images(), room: opt.room }))}`);
   },
 
   async ask() {
@@ -868,7 +872,7 @@ const commands: Record<string, () => Promise<void>> = {
     if (!body.trim()) die('usage: kiwi ask --to NAME "question" [--wait 10m]');
     const waitSec = opt.wait ? parseDuration(opt.wait) : 0;
     const kind = (opt.kind ?? "ask") as Kind;
-    const { seq, replies } = await s.ask(body, { to: list(opt.to), kind, waitSec, imgs: images(), room: opt.room });    if (!waitSec) return out(`asked #${seq}`);
+    const { seq, replies } = await run(s.ask(body, { to: list(opt.to), kind, waitSec, imgs: images(), room: opt.room }));    if (!waitSec) return out(`asked #${seq}`);
     if (!replies.length) die(`no answer to #${seq} within ${opt.wait}; replies will still arrive in tail/wait`, 2);
     for (const r of replies) out(render(r));
   },
@@ -878,13 +882,13 @@ const commands: Record<string, () => Promise<void>> = {
     const seq = Number((args[1] ?? "").replace(/^#/, "")) || die('usage: kiwi reply N "text"');
     const body = await text(2);
     if (!body.trim()) die("empty reply");
-    out(`sent #${await s.reply(seq, body, (opt.kind ?? "msg") as Kind, images())}`);
+    out(`sent #${await run(s.reply(seq, body, (opt.kind ?? "msg") as Kind, images()))}`);
   },
 
   async save() {
     const s = await session();
     const seq = Number((args[1] ?? "").replace(/^#/, "")) || die("usage: kiwi save N [dir]");
-    const { messages } = await s.state();
+    const { messages } = await run(s.state());
     const m = messages.find((x) => x.seq === seq) ?? die(`no message #${seq}`);
     if (!m.imgs?.length) die(`message #${seq} has no images`);
     for (const path of saveImages(seq, m.imgs, args[2] ?? ".")) out(path);
@@ -893,7 +897,7 @@ const commands: Record<string, () => Promise<void>> = {
   async show() {
     const s = await session();
     const seq = Number((args[1] ?? "").replace(/^#/, "")) || die("usage: kiwi show N [dir]");
-    const { messages, state } = await s.state();
+    const { messages, state } = await run(s.state());
     const m = messages.find((x) => x.seq === seq) ?? die(`no message #${seq}`);
     // Images land under the channel's own folder (closing it deletes them), or where asked.
     const saved = m.imgs?.length ? saveImages(seq, m.imgs, args[2] ?? joinPath(home(), "downloads", s.ch.roomId)) : [];
@@ -902,8 +906,8 @@ const commands: Record<string, () => Promise<void>> = {
 
   async log() {
     const s = await session();
-    const { messages, state } = await s.state();
-    const room = opt.room === undefined ? undefined : await s.roomId(opt.room, state);
+    const { messages, state } = await run(s.state());
+    const room = opt.room === undefined ? undefined : await run(s.roomId(opt.room, state));
     const shown = (opt.all ? messages : messages.filter((m) => m.kind !== "event" || m.ev?.op !== "hello")).filter(
       (m) => room === undefined || (m.kind !== "event" && state.roomOf.get(m.seq) === room),
     );
@@ -913,7 +917,7 @@ const commands: Record<string, () => Promise<void>> = {
   async sh() {
     const s = await session();
     const script = (await text(1)) || die("usage: kiwi sh 'SCRIPT' (start with: kiwi sh 'cat README')");
-    const r = await runSh(channelFiles(await sessionViews(s, script)), script);
+    const r = await runSh(channelFiles(await run(sessionViews(s, script))), script);
     process.stdout.write(r.stdout);
     process.stderr.write(r.stderr);
     process.exit(r.exitCode);
@@ -923,13 +927,13 @@ const commands: Record<string, () => Promise<void>> = {
     const s = await session();
     const [a, b] = args.slice(1);
     if (!a) {
-      const { state } = await s.state();
+      const { state } = await run(s.state());
       const held = new Map([...state.members.values()].filter((m) => m.active && m.color).map((m) => [m.color!, m.name]));
       return out(COLORS.map((c) => `${c.padEnd(7)} ${held.get(c) ?? "free"}`).join("\n"));
     }
     const [member, pick] = b === undefined ? [s.me, a] : [a, b];
     const color = pick === "none" ? null : isColor(pick) ? pick : die(`"${pick}" isn't a colour: ${COLORS.join(", ")} (or none)`);
-    await s.setColor(member, color);
+    await run(s.setColor(member, color));
     out(color ? `${member}'s colour is ${color}` : `cleared ${member}'s colour`);
   },
 
@@ -937,11 +941,11 @@ const commands: Record<string, () => Promise<void>> = {
     const s = await session();
     const [which, onOff] = args.slice(1);
     if (!which) {
-      const { state } = await s.state();
+      const { state } = await run(s.state());
       return out(modeLine(state, s.me) ?? "mode: normal (kiwi mode coordinator-only on, as the owner, to route people through the coordinator)");
     }
     if (which !== "coordinator-only" || (onOff !== "on" && onOff !== "off")) die("usage: kiwi mode [coordinator-only on|off] [--no-strict]");
-    const state = await s.setMode(onOff === "on", !opt["no-strict"]);
+    const state = await run(s.setMode(onOff === "on", !opt["no-strict"]));
     out(modeLine(state, s.me) ?? "mode: normal");
   },
 
@@ -949,12 +953,12 @@ const commands: Record<string, () => Promise<void>> = {
     const s = await session();
     const given = args.slice(1).join(" ").trim();
     if (!given && !opt.clear) {
-      const { state } = await s.state();
+      const { state } = await run(s.state());
       return out(state.charter ? state.charter.text : "no charter (the owner sets one: kiwi charter \"what this channel is for, and its limits\")");
     }
     if (!s.ownerCh) die("only the channel owner's machine sets the charter");
     if (!(await confirm(opt.clear ? "Clear the charter?" : `Set the charter to: ${given}?`))) die("changing the charter needs your human's go-ahead; re-run with --yes");
-    const state = await s.setCharter(opt.clear ? null : given);
+    const state = await run(s.setCharter(opt.clear ? null : given));
     out(state.charter ? `charter: ${state.charter.text}` : "cleared the charter");
   },
 
@@ -964,9 +968,9 @@ const commands: Record<string, () => Promise<void>> = {
     const off = args[1] === "off";
     if (!s.ownerCh) {
       if (args.length > 1) die("only the channel owner's machine puts the channel on hold; tell your human or the owner what you saw (kiwi escalate)");
-      return out(holdLine((await s.state()).state) ?? "not on hold");
+      return out(holdLine((await run(s.state())).state) ?? "not on hold");
     }
-    const state = await s.setHold(!off, off ? undefined : args.slice(1).join(" ") || opt.note);
+    const state = await run(s.setHold(!off, off ? undefined : args.slice(1).join(" ") || opt.note));
     out(holdLine(state) ?? "hold lifted: agents may carry on");
   },
 
@@ -976,7 +980,7 @@ const commands: Record<string, () => Promise<void>> = {
     const body = await text(1);
     if (!body.trim()) die('usage: kiwi escalate [--re N] "why this needs a person"');
     const re = opt.re === undefined ? undefined : Number(opt.re.replace(/^#/, "")) || die("--re takes a message number");
-    const { seq, to } = await s.escalate(body, re);
+    const { seq, to } = await run(s.escalate(body, re));
     out(`escalated #${seq} to ${to.join(" and ")}; wait for their answer before acting on it`);
   },
 
@@ -1003,7 +1007,7 @@ const commands: Record<string, () => Promise<void>> = {
   async thread() {
     const s = await session();
     const seq = Number((args[1] ?? "").replace(/^#/, "")) || die("usage: kiwi thread N");
-    const { messages, state } = await s.state();
+    const { messages, state } = await run(s.state());
     if (!messages.some((m) => m.seq === seq)) die(`no message #${seq}`);
     const root = state.threadOf.get(seq) ?? seq;
     for (const m of messages) if (state.threadOf.get(m.seq) === root && !ignored(state.trust.get(m.seq))) out(render(m, state));
@@ -1011,26 +1015,27 @@ const commands: Record<string, () => Promise<void>> = {
 
   async read() {
     const s = await session();
-    const { messages, state } = await s.read(await delivery(s));
+    const { messages, state } = await run(s.read(await delivery(s)));
     for (const m of messages) out(render(m, state));
   },
 
   async tail() {
     const s = await session();
     // Say what this agent runs on, so work that needs it finds it; never in the way of listening.
-    void s.refreshCard(detectCard()).catch(() => {});
-    await s.listen((m, state) => out(render(m, state)), {
+    void run(s.refreshCard(detectCard())).catch(() => {});
+    const d = await delivery(s);
+    await run(s.listen((m, state) => Effect.sync(() => out(render(m, state))), {
       client: "tail",
-      ...(await delivery(s)),
-      onStatus: (msg) => process.stderr.write(`kiwi: ${msg}\n`),
-      onNotice: (text) => out(`* ${text}`),
-    });
+      ...d,
+      onStatus: (msg) => Effect.sync(() => void process.stderr.write(`kiwi: ${msg}\n`)),
+      onNotice: (text) => Effect.sync(() => out(`* ${text}`)),
+    }));
   },
 
   async wait() {
     const s = await session();
     // Say what this agent runs on, so work that needs it finds it; never in the way of listening.
-    void s.refreshCard(detectCard()).catch(() => {});
+    void run(s.refreshCard(detectCard())).catch(() => {});
     const ac = new AbortController();
     let got = 0;
     const timeout = opt.timeout ? setTimeout(() => ac.abort(), parseDuration(opt.timeout) * 1000) : undefined;
@@ -1038,21 +1043,26 @@ const commands: Record<string, () => Promise<void>> = {
       // Linger briefly so a burst of messages is delivered as one wake-up.
       if (got++ === 0) setTimeout(() => ac.abort(), 400);
     };
-    await s.listen(
-      (m, state) => {
-        out(render(m, state));
-        woke();
-      },
-      {
-        client: "wait",
-        ...(await delivery(s)),
-        signal: ac.signal,
-        onStatus: (msg) => process.stderr.write(`kiwi: ${msg}\n`),
-        onNotice: (text) => {
-          out(`* ${text}`);
-          woke();
+    const d = await delivery(s);
+    await run(
+      s.listen(
+        (m, state) =>
+          Effect.sync(() => {
+            out(render(m, state));
+            woke();
+          }),
+        {
+          client: "wait",
+          ...d,
+          onStatus: (msg) => Effect.sync(() => void process.stderr.write(`kiwi: ${msg}\n`)),
+          onNotice: (text) =>
+            Effect.sync(() => {
+              out(`* ${text}`);
+              woke();
+            }),
         },
-      },
+      ),
+      ac.signal,
     );
     clearTimeout(timeout);
     if (!got) {
@@ -1067,8 +1077,9 @@ const commands: Record<string, () => Promise<void>> = {
     const secret = opt.secret ?? process.env.MC_WEBHOOK_SECRET;
     const s = await session();
     process.stderr.write(`kiwi: watching ${s.alias} as ${s.me}, POSTing to ${url}\n`);
-    await s.listen(
-      async (m, state) => {
+    const d = await delivery(s);
+    await run(s.listen(
+      (m, state) => Effect.promise(async () => {
         const body = JSON.stringify({
           channel: s.alias,
           seq: m.seq,
@@ -1091,21 +1102,21 @@ const commands: Record<string, () => Promise<void>> = {
         } catch (err) {
           process.stderr.write(`kiwi: webhook failed for #${m.seq}: ${err instanceof Error ? err.message : err}\n`);
         }
-      },
+      }),
       {
         client: "watch",
         // A webhook stands in for a person watching (a phone, CI): all chat unless narrowed.
-        ...(await delivery(s)),
+        ...d,
         ...(!opt["for-me"] && opt.thread === undefined ? { chat: true } : {}),
-        onStatus: (msg) => process.stderr.write(`kiwi: ${msg}\n`),
+        onStatus: (msg) => Effect.sync(() => void process.stderr.write(`kiwi: ${msg}\n`)),
         onNotice: (text) =>
-          void fetch(url, {
+          Effect.sync(() => void fetch(url, {
             method: "POST",
             headers: { "content-type": "application/json", ...(secret ? { "x-kiwi-secret": secret } : {}) },
             body: JSON.stringify({ channel: s.alias, kind: "notice", text, ts: Date.now() }),
-          }).catch(() => {}),
+          }).catch(() => {})),
       },
-    );
+    ));
   },
 
   async task() {
@@ -1116,12 +1127,12 @@ const commands: Record<string, () => Promise<void>> = {
       const title = await text(2);
       if (!title.trim()) die('usage: kiwi task add "title" [--owner NAME] [--after T3]');
       const after = list(opt.after)?.map((x) => parseTaskId(x) ?? die(`"${x}" isn't a task id`));
-      const { state: before } = await s.state();
-      const id = await s.taskAdd(title, { owner: opt.owner, after, detail: opt.detail, needs: list(opt.needs), ...(opt.review !== undefined ? { review: opt.review } : {}) });
+      const { state: before } = await run(s.state());
+      const id = await run(s.taskAdd(title, { owner: opt.owner, after, detail: opt.detail, needs: list(opt.needs), ...(opt.review !== undefined ? { review: opt.review } : {}) }));
       const like = similarOpenTasks(before, title).map((t) => t.id);
       const lines = [formatAdded(before, id, after ?? [])];
       if (like.length) lines.push(looksLikeLine(like));
-      const { state } = await s.state();
+      const { state } = await run(s.state());
       const fit = state.tasks.get(id) && fitsLine(state, state.tasks.get(id)!);
       if (fit && !opt.owner) lines.push(fit);
       return out(lines.join("\n"));
@@ -1129,11 +1140,11 @@ const commands: Record<string, () => Promise<void>> = {
     if (sub === "list") return commands.tasks!();
     const id = taskArg();
     if (sub === "show") {
-      const { state } = await s.state();
+      const { state } = await run(s.state());
       return out(formatTask(state, state.tasks.get(id) ?? die(`no task ${taskId(id)}`)));
     }
     if (sub === "match") {
-      const { state } = await s.state();
+      const { state } = await run(s.state());
       const t = state.tasks.get(id) ?? die(`no task ${taskId(id)}`);
       return out(fitsLine(state, t) ?? `${taskId(id)} needs nothing in particular: anyone free can take it (kiwi task add --needs, next time)`);
     }
@@ -1141,7 +1152,7 @@ const commands: Record<string, () => Promise<void>> = {
       const to = args[3] ?? die('usage: kiwi task handoff T7 NAME ["what\'s next"]');
       const next = args.slice(4).join(" ") || opt.note || undefined;
       const { handoff, pushed } = handoffHere();
-      const state = await s.taskHandoff(id, to, next, handoff);
+      const state = await run(s.taskHandoff(id, to, next, handoff));
       const t = state.tasks.get(id)!;
       out(`${taskId(id)} is ${t.owner}'s now${handoff.branch ? `: pick it up from ${handoff.branch}${handoff.commit ? ` @ ${handoff.commit}` : ""}` : ""}${handoff.files?.length ? ` (${handoff.files.length} file${handoff.files.length === 1 ? "" : "s"})` : ""}`);
       if (pushed === false && handoff.branch) process.stderr.write(`kiwi: ${handoff.branch} isn't pushed (or has unpushed commits): push it so ${t.owner} can fetch it\n`);
@@ -1154,19 +1165,19 @@ const commands: Record<string, () => Promise<void>> = {
         .filter(Boolean)
         .map((x) => parseTaskId(x) ?? die(`"${x}" isn't a task id`));
       if (!deps.length) die("usage: kiwi task after T69 T68");
-      const state = await s.taskAfter(id, deps);
+      const state = await run(s.taskAfter(id, deps));
       return out(formatAfter(state, id, deps));
     }
     const note = (sub === "assign" ? undefined : args.slice(3).join(" ")) || opt.note || undefined;
     let state: ChannelState;
-    if (sub === "claim") state = await s.taskClaim(id);
-    else if (sub === "review") state = await s.taskUpdate(id, { state: "review", note, ...(opt.review !== undefined ? { review: opt.review } : {}) });
-    else if (sub === "approve") state = await s.taskUpdate(id, { state: "done", note });
-    else if (sub === "reject") state = await s.taskUpdate(id, { state: "doing", note: note ?? die('usage: kiwi task reject T7 "what needs to change"') });
-    else if (sub in STATE_FOR) state = await s.taskUpdate(id, { state: STATE_FOR[sub], note });
-    else if (sub === "drop") state = await s.taskUpdate(id, { owner: null, note });
-    else if (sub === "assign") state = await s.taskUpdate(id, { owner: args[3] ?? die("usage: kiwi task assign T7 NAME") });
-    else if (sub === "note") state = await s.taskUpdate(id, { note: note ?? die('usage: kiwi task note T7 "…"') });
+    if (sub === "claim") state = await run(s.taskClaim(id));
+    else if (sub === "review") state = await run(s.taskUpdate(id, { state: "review", note, ...(opt.review !== undefined ? { review: opt.review } : {}) }));
+    else if (sub === "approve") state = await run(s.taskUpdate(id, { state: "done", note }));
+    else if (sub === "reject") state = await run(s.taskUpdate(id, { state: "doing", note: note ?? die('usage: kiwi task reject T7 "what needs to change"') }));
+    else if (sub in STATE_FOR) state = await run(s.taskUpdate(id, { state: STATE_FOR[sub], note }));
+    else if (sub === "drop") state = await run(s.taskUpdate(id, { owner: null, note }));
+    else if (sub === "assign") state = await run(s.taskUpdate(id, { owner: args[3] ?? die("usage: kiwi task assign T7 NAME") }));
+    else if (sub === "note") state = await run(s.taskUpdate(id, { note: note ?? die('usage: kiwi task note T7 "…"') }));
     else die(`unknown task command "${sub}"`);
     const t = state.tasks.get(id)!;
     out(`${taskId(id)} ${t.state}${t.owner ? ` @${t.owner}` : ""}: ${t.title}`);
@@ -1183,7 +1194,7 @@ const commands: Record<string, () => Promise<void>> = {
         const c = cfg.channels[alias]!;
         if (!identitiesIn(c.roomId).includes(me)) continue;
         const sess = await AgentSession.open(alias, c, me);
-        const { state } = await sess.state();
+        const { state } = await run(sess.state());
         const owner = opt.mine ? sess.me : opt.owner;
         const lines = formatTasks(state, { all: opt.all, owner });
         out(`## ${alias}${lines === "no tasks" ? " — no tasks" : ""}`);
@@ -1192,7 +1203,7 @@ const commands: Record<string, () => Promise<void>> = {
       return;
     }
     const s = await session();
-    const { state } = await s.state();
+    const { state } = await run(s.state());
     out(formatTasks(state, { all: opt.all, owner: opt.mine ? s.me : opt.owner }));
   },
 
@@ -1200,19 +1211,19 @@ const commands: Record<string, () => Promise<void>> = {
     const s = await session();
     const paths = args.slice(1);
     if (!paths.length) die('usage: kiwi claim PATH… [--ttl 30m] [--note "…"]');
-    const state = await s.claim(paths, parseDuration(opt.ttl ?? "30m"), opt.note, claimPlace());
+    const state = await run(s.claim(paths, parseDuration(opt.ttl ?? "30m"), opt.note, claimPlace()));
     out(formatClaims({ ...state, claims: state.claims.filter((c) => c.owner === s.me) }));
   },
 
   async release() {
     const s = await session();
-    await s.release(args.slice(1));
+    await run(s.release(args.slice(1)));
     out(args.length > 1 ? `released ${args.slice(1).join(", ")}` : "released all your claims");
   },
 
   async claims() {
     const s = await session();
-    out(formatClaims((await s.state()).state));
+    out(formatClaims((await run(s.state())).state));
   },
 
   async set() {
@@ -1221,26 +1232,26 @@ const commands: Record<string, () => Promise<void>> = {
     if (!key || !rest.length) die("usage: kiwi set KEY VALUE [--ttl 7d]");
     const value = rest.join(" ");
     const ttl = opt.ttl ? parseDuration(opt.ttl) : undefined;
-    await s.setFact(key, value, ttl);
+    await run(s.setFact(key, value, ttl));
     out(ttl ? `${key} = ${value} (for ${opt.ttl})` : `${key} = ${value}`);
   },
 
   async get() {
     const s = await session();
     const key = args[1] ?? die("usage: kiwi get KEY");
-    const f = (await s.state()).state.facts.get(key);
+    const f = (await run(s.state())).state.facts.get(key);
     if (!f) die(`no fact "${key}"`, 2);
     out(f.value);
   },
 
   async unset() {
     const s = await session();
-    await s.delFact(args[1] ?? die("usage: kiwi unset KEY"));
+    await run(s.delFact(args[1] ?? die("usage: kiwi unset KEY")));
   },
 
   async facts() {
     const s = await session();
-    const { facts } = (await s.state()).state;
+    const { facts } = (await run(s.state())).state;
     if (!facts.size) return out("no facts");
     for (const f of [...facts.values()].sort((a, b) => a.key.localeCompare(b.key))) out(formatFact(f));
   },
@@ -1248,14 +1259,14 @@ const commands: Record<string, () => Promise<void>> = {
   /** Say what this agent runs on and has, so work that needs it finds it. */
   async card() {
     const s = await session();
-    const { sent, card } = await s.refreshCard(detectCard(), { ...(opt.model ? { model: opt.model } : {}), ...(opt.note ? { note: opt.note } : {}), ...(opt.tools ? { tools: list(opt.tools) } : {}) });
+    const { sent, card } = await run(s.refreshCard(detectCard(), { ...(opt.model ? { model: opt.model } : {}), ...(opt.note ? { note: opt.note } : {}), ...(opt.tools ? { tools: list(opt.tools) } : {}) }));
     out(`${sent ? "card" : "card unchanged"}: ${cardLine(card)}`);
   },
 
   async hello() {
     const s = await session();
-    await s.hello(opt.role, opt.about);
-    const me = (await s.state()).state.members.get(s.me);
+    await run(s.hello(opt.role, opt.about));
+    const me = (await run(s.state())).state.members.get(s.me);
     if (me?.roleRequest) out(`asked the owner to make you ${me.roleRequest.role ?? "unassigned"}${me.roleRequest.about ? ` (${me.roleRequest.about})` : ""}; your role stays ${me.role ?? "unset"} until they decide`);
     else out(`announced ${s.me}${me?.role ? ` as ${me.role}` : ""}`);
   },
@@ -1265,7 +1276,7 @@ const commands: Record<string, () => Promise<void>> = {
     const s = await session();
     const [sub, a, b] = args.slice(1);
     if (!sub) {
-      const { state } = await s.state();
+      const { state } = await run(s.state());
       const asks = [...state.members.values()].filter((m) => m.active && m.roleRequest);
       if (!asks.length) return out("no role requests");
       for (const m of asks) out(`${m.name}: ${m.role ?? "no role"} → ${m.roleRequest!.role ?? "no role"}${m.roleRequest!.about ? ` (${m.roleRequest!.about})` : ""}`);
@@ -1273,14 +1284,14 @@ const commands: Record<string, () => Promise<void>> = {
     }
     if (!s.ownerCh) die("only the channel owner's machine decides roles; ask with: kiwi hello --role ROLE");
     if (sub === "refuse") {
-      await s.decideRole(a ?? die("usage: kiwi role refuse NAME"), "refuse");
+      await run(s.decideRole(a ?? die("usage: kiwi role refuse NAME"), "refuse"));
       return out(`kept ${a}'s role`);
     }
     const allowing = sub === "allow";
     const member = allowing ? (a ?? die("usage: kiwi role allow NAME [--yes]")) : sub;
     const role = allowing ? undefined : (a ?? die('usage: kiwi role NAME ROLE [--about "rules"] [--yes]'));
     if (!(await confirm(allowing ? `Give ${member} the role they asked for?` : `Make ${member} ${role}?`))) die("changing a role needs your human's go-ahead; re-run with --yes");
-    await s.decideRole(member, allowing ? "allow" : { role: role!, ...(opt.about !== undefined ? { about: opt.about } : {}) });
+    await run(s.decideRole(member, allowing ? "allow" : { role: role!, ...(opt.about !== undefined ? { about: opt.about } : {}) }));
     out(allowing ? `${member} has the role they asked for` : `made ${member} ${role}`);
   },
 
@@ -1310,7 +1321,7 @@ const commands: Record<string, () => Promise<void>> = {
     // What the owner lets it do, if the relay answers; the prompt doesn't wait on it otherwise.
     const scopes = cfg
       ? await AgentSession.open(alias, cfg, name)
-          .then((s) => s.state())
+          .then((s) => run(s.state()))
           .then(({ state }) => state.members.get(name)?.scopes)
           .catch(() => undefined)
       : undefined;
