@@ -1,10 +1,13 @@
 import { LoginRequiredError, NoSessionError, createClient, type User } from "@workos-inc/authkit-js"
+import * as Data from "effect/Data"
+import * as Effect from "effect/Effect"
 import { createContext, createElement, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 
-import { relayConfig } from "@mc/client.ts"
+import { fx as relayFx, type Relay } from "@mc/client.ts"
 
 import { DevSignIn } from "@/components/dev-sign-in"
 import { forgetAllHistory } from "@/lib/history"
+import { run } from "@/lib/runtime"
 import { SIGN_IN_GONE } from "@/lib/session"
 
 /**
@@ -14,6 +17,22 @@ import { SIGN_IN_GONE } from "@/lib/session"
  */
 
 type AuthClient = Awaited<ReturnType<typeof createClient>>
+
+/** The refresh token is spent: the session is over, not just slow. */
+class SessionEnded extends Data.TaggedError("SessionEnded")<{ readonly cause: unknown }> {}
+/** No token this time, for any other reason (offline, AuthKit busy): a blip. */
+class NoTokenNow extends Data.TaggedError("NoTokenNow")<{ readonly cause: unknown }> {}
+
+/** A fresh access token, or why there isn't one. */
+const accessToken = (client: AuthClient) =>
+  Effect.tryPromise({
+    try: () => client.getAccessToken(),
+    catch: (cause) => (cause instanceof LoginRequiredError || cause instanceof NoSessionError ? new SessionEnded({ cause }) : new NoTokenNow({ cause })),
+  })
+
+/** What the relay says about sign-in; a relay that doesn't answer has none. */
+const signInConfig = (relay: string): Effect.Effect<{ workosClientId: string | null; dev?: boolean }, never, Relay> =>
+  relayFx.relayConfig(relay).pipe(Effect.catchCause(() => Effect.succeed({ workosClientId: null })))
 
 export interface Auth {
   /** "off": the relay doesn't use sign-in. */
@@ -66,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false
     void (async () => {
-      const config: { workosClientId: string | null; dev?: boolean } = await relayConfig(location.origin).catch(() => ({ workosClientId: null }))
+      const config = await run(signInConfig(location.origin))
       const { workosClientId } = config
       if (config.dev) {
         if (cancelled) return
@@ -112,7 +131,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Local channels and keys stay; signing in again brings back the synced list.
   useEffect(() => {
     if (status !== "signed-in") return
-    const ended = (e: unknown) => e instanceof LoginRequiredError || e instanceof NoSessionError
     const expire = () => {
       setExpired(true)
       setUser(null)
@@ -125,10 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!dev.name) expire()
         return
       }
-      client?.getAccessToken().then(
-        () => {},
-        (e: unknown) => ended(e) && expire()
-      )
+      if (client) void run(accessToken(client).pipe(Effect.catchTag("SessionEnded", () => Effect.sync(expire)), Effect.ignore))
     }
     window.addEventListener(SIGN_IN_GONE, onGone)
     return () => window.removeEventListener(SIGN_IN_GONE, onGone)
@@ -164,13 +179,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             },
             token: async () => {
               if (!client || !client.getUser()) return null
-              try {
-                return await client.getAccessToken()
-              } catch (e) {
-                // The refresh token is spent: the session is over, not just slow.
-                if (e instanceof LoginRequiredError || e instanceof NoSessionError) window.dispatchEvent(new Event(SIGN_IN_GONE))
-                return null
-              }
+              return run(
+                accessToken(client).pipe(
+                  Effect.catchTags({
+                    // The session is over: say so, and the provider signs this browser out.
+                    SessionEnded: () =>
+                      Effect.sync(() => {
+                        window.dispatchEvent(new Event(SIGN_IN_GONE))
+                        return null
+                      }),
+                    NoTokenNow: () => Effect.succeed(null),
+                  })
+                )
+              )
             },
           },
     [client, status, expired, user, dev]

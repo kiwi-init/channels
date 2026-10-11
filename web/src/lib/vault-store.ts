@@ -2,6 +2,10 @@
 // non-extractable CryptoKey, so page script can use it to sync but never read
 // it out. One record per signed-in person.
 
+import * as Context from "effect/Context"
+import * as Data from "effect/Data"
+import * as Effect from "effect/Effect"
+
 const DB = "mc.vault"
 const STORE = "keys"
 
@@ -41,4 +45,31 @@ export async function loadVaultKey(user: string): Promise<CryptoKey | null> {
 
 export async function forgetVaultKey(user: string): Promise<void> {
   await run("readwrite", (s) => s.delete(user))
+}
+
+// ---------- the same, as a service ----------
+
+/** IndexedDB refused (private mode, a blocked or broken database): the text is the browser's. */
+export class KeyStoreFailed extends Data.TaggedError("KeyStoreFailed")<{ readonly cause: unknown }> {
+  override get message(): string {
+    return this.cause instanceof Error ? this.cause.message : String(this.cause)
+  }
+}
+
+export interface KeyStoreApi {
+  readonly keep: (user: string, key: CryptoKey) => Effect.Effect<void, KeyStoreFailed>
+  readonly load: (user: string) => Effect.Effect<CryptoKey | null, KeyStoreFailed>
+  readonly forget: (user: string) => Effect.Effect<void, KeyStoreFailed>
+}
+
+/** Where the vault key is kept between visits. */
+export class KeyStore extends Context.Service<KeyStore, KeyStoreApi>()("kiwi/web/KeyStore") {}
+
+const attempt = <A>(f: () => Promise<A>) => Effect.tryPromise({ try: f, catch: (cause) => new KeyStoreFailed({ cause }) })
+
+/** This browser's IndexedDB: the functions above. */
+export const indexedKeys: KeyStoreApi = {
+  keep: (user, key) => attempt(() => keepVaultKey(user, key)),
+  load: (user) => attempt(() => loadVaultKey(user)),
+  forget: (user) => attempt(() => forgetVaultKey(user)),
 }
