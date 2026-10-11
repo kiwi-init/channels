@@ -6,7 +6,7 @@ import { generateIdentity, withExchangeKey, type Identity } from "@mc/identity.t
 import { handleFor, type JoinRequest, type Member } from "@mc/membership.ts"
 import type { Message, Presence } from "@mc/protocol.ts"
 import type { Signed, SigningBudget } from "@mc/sas.ts"
-import { fold, type ChannelState, type Roster } from "@mc/state.ts"
+import { fold, type ChannelState, type GuardFloor, type Roster } from "@mc/state.ts"
 import { forgetHistory, readCached, rememberMessage } from "./history"
 import { wholeLog } from "./history-plan"
 import { ICON_LIVE } from "./icon-event"
@@ -625,6 +625,11 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
   useEffect(() => {
     void ch.mode().then(setModeFloor, () => {})
   }, [ch, infoAt])
+  // The charter and the hold the same way: a hold set before this view's tail still stops every agent.
+  const [guardFloor, setGuardFloor] = useState<GuardFloor | null>(null)
+  useEffect(() => {
+    void ch.guard().then(setGuardFloor, () => {})
+  }, [ch, infoAt])
   // The rooms the same way: a room.create older than this view's tail is still a room here.
   const [roomsFloor, setRoomsFloor] = useState<RoomsSetting | null>(null)
   useEffect(() => {
@@ -764,7 +769,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
       })),
     [roster]
   )
-  const state = useMemo(() => fold(messages, rosterForFold, now, modeFloor, roomsFloor), [messages, rosterForFold, now, modeFloor, roomsFloor])
+  const state = useMemo(() => fold(messages, rosterForFold, now, modeFloor, roomsFloor, guardFloor), [messages, rosterForFold, now, modeFloor, roomsFloor, guardFloor])
 
   // Owner: the relay's "can post" bit follows the scopes in the log, put right whenever either side
   // changes (a scope.set whose second step failed, here or on another device). Only with the whole

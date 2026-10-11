@@ -143,7 +143,20 @@ export type Event =
   /** Owner only: a room in this channel. Its id never changes; the name is a label (room.rename). */
   | { op: "room.create"; id: string; name: string }
   /** Owner only: a room's new name ("general" included; its id stays). */
-  | { op: "room.rename"; id: string; name: string };
+  | { op: "room.rename"; id: string; name: string }
+  /**
+   * Owner only: what this channel is for and where its limits are (null clears it). Every agent is
+   * shown it as the scope it works within; a request outside it is escalated to a person, not done.
+   */
+  | { op: "charter.set"; text: string | null }
+  /**
+   * Owner only: stop every agent (on) or let them carry on (off). While on hold, every client refuses
+   * an agent's work (tasks, claims, facts, messages to other agents); agents may still answer people.
+   */
+  | { op: "hold.set"; on: boolean; note?: string };
+
+/** Longest charter, in characters: it shares the sealed settings (about 16KB at the relay) with the room list. */
+export const MAX_CHARTER = 2000;
 
 /** The room every channel has, and where a message that names none belongs (every message from before rooms). */
 export const GENERAL_ROOM = "general";
@@ -196,6 +209,11 @@ export interface Payload {
   imgs?: ImageAttachment[];
   /** The room a chat message is in (a room id); absent is general. Events are channel-wide. */
   room?: string;
+  /**
+   * An agent handing a decision to people instead of acting (`kiwi escalate`): a blocking question to
+   * its own human and the owner. Older clients see it as the blocking question it also is.
+   */
+  esc?: true;
   ts: number;
   /** Sender's Ed25519 public key (raw, base64url) and signature over the rest. */
   pk?: string;
@@ -287,6 +305,10 @@ export function wellFormedEvent(ev: unknown): ev is Event {
     case "room.create":
     case "room.rename":
       return roomId(e.id) && str(e.name, MAX_ROOM_NAME * 4);
+    case "charter.set":
+      return e.text === null || str(e.text, MAX_CHARTER);
+    case "hold.set":
+      return typeof e.on === "boolean" && opt(e.note, (x): x is string => str(x, 500));
     default:
       return false;
   }
@@ -307,6 +329,7 @@ export function wellFormed(p: unknown): p is Payload {
     opt(m.to, (x): x is string[] => strs(x, 50)) &&
     opt(m.re, (x): x is number[] => nums(x, 20)) &&
     opt(m.room, roomId) &&
+    (m.esc === undefined || m.esc === true) &&
     (m.ev === undefined || wellFormedEvent(m.ev)) &&
     (m.kind !== "event" || m.ev !== undefined)
   );

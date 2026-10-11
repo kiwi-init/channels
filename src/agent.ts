@@ -9,8 +9,8 @@ import type { ChannelAccess } from "./crypto.ts";
 import { inlineText, type JoinRequest } from "./membership.ts";
 import type { Identity } from "./identity.ts";
 import { canPost, describeScopes, refusal, wireScopes, type Scope } from "./scopes.ts";
-import { GENERAL_ROOM, ignored, TASK_STATES, type Color, type Event, type ImageAttachment, type Kind, type Message, type Presence, type TaskState } from "./protocol.ts";
-import { claimConflict, findRoom, fold, keptFromPeople, newRoomId, overlaps, taskId, waitingOn, wouldCycle, type ChannelState, type Roster, type RoomsFloor } from "./state.ts";
+import { GENERAL_ROOM, ignored, MAX_CHARTER, TASK_STATES, type Color, type Event, type ImageAttachment, type Kind, type Message, type Presence, type TaskState } from "./protocol.ts";
+import { allowedOnHold, claimConflict, findRoom, fold, humanOf, isPerson, keptFromPeople, newRoomId, ON_HOLD, overlaps, ownerOf, taskId, waitingOn, wouldCycle, type ChannelState, type GuardFloor, type Roster, type RoomsFloor } from "./state.ts";
 
 /** How often a listening agent re-announces itself. Receivers treat 2.5x this as offline. */
 export const PRESENCE_EVERY_MS = 60_000;
@@ -130,16 +130,18 @@ export class AgentSession {
    */
   private async foldState(messages: Message[], roster: Roster): Promise<ChannelState> {
     this.roomsFloor ??= await this.ch.rooms().catch(() => null);
-    let state = fold(messages, roster, Date.now(), undefined, this.roomsFloor);
+    this.guardFloor ??= await this.ch.guard().catch(() => null);
+    let state = fold(messages, roster, Date.now(), undefined, this.roomsFloor, this.guardFloor);
     const unknown = [...state.rejected].some(([seq, why]) => seq > this.roomsCheckedAt && why.startsWith("no room "));
     if (unknown) {
       this.roomsCheckedAt = state.head;
       this.roomsFloor = await this.ch.rooms().catch(() => null);
-      state = fold(messages, roster, Date.now(), undefined, this.roomsFloor);
+      state = fold(messages, roster, Date.now(), undefined, this.roomsFloor, this.guardFloor);
     }
     return state;
   }
   private roomsFloor: RoomsFloor | null | undefined;
+  private guardFloor: GuardFloor | null | undefined;
   private roomsCheckedAt = 0;
 
   /** A room's id from its name or id (# optional); general when none is given. */
@@ -363,9 +365,9 @@ export class AgentSession {
 
   /** Send a message; `room` is a room's name or id (general if none). */
   async send(body: string, opts: SendOptions = {}): Promise<number> {
-    await this.mayI({ kind: opts.kind ?? "msg", ev: opts.ev });
     const to = await this.resolveTo(opts.to);
-    if (opts.kind !== "event") await this.mayTalkTo(to);
+    await this.mayI({ kind: opts.kind ?? "msg", ev: opts.ev, to });
+    if (opts.kind !== "event" && !opts.esc) await this.mayTalkTo(to);
     // A reply goes in its parent's room unless told otherwise (fold puts it there anyway).
     const parent = !opts.room && opts.re?.length ? (await this.state()).state.roomOf.get(opts.re[0]!) : undefined;
     const room = opts.ev ? undefined : (parent ?? (await this.roomId(opts.room)));
@@ -390,11 +392,13 @@ export class AgentSession {
    * Refuse here what the owner hasn't let this member send: every client would refuse it in fold
    * anyway, so sending it would only leave a dead message in the log.
    */
-  private async mayI(m: { kind: Kind; ev?: Event }): Promise<void> {
+  private async mayI(m: { kind: Kind; ev?: Event; to?: string[] }): Promise<void> {
     const { state } = await this.state();
     const me = state.members.get(this.me);
     const why = me && refusal(me.scopes, m);
     if (why) throw new Rejected(`the owner hasn't let you do that: you ${why} here (you may ${me.scopes.length ? describeScopes(me.scopes) : "only read"})`);
+    const person = (n: string) => { const p = state.members.get(n); return !!p && isPerson(p); };
+    if (state.hold && me && !isPerson(me) && !allowedOnHold(m, person)) throw new Rejected(`${ON_HOLD}${state.hold.note ? ` (${state.hold.note})` : ""}. Stop work and wait; answer people if they ask you something.`);
   }
 
   /**
@@ -444,7 +448,7 @@ export class AgentSession {
     const orig = messages.find((m) => m.seq === seq);
     if (!orig) throw new Rejected(`no message #${seq}`);
     const to = orig.from === this.me ? orig.to : [orig.from];
-    await this.mayI({ kind });
+    await this.mayI({ kind, to });
     await this.mayTalkTo(to);
     return this.ch.send(body, { to, kind, re: [seq], imgs, room: state.roomOf.get(seq) ?? orig.room });
   }
@@ -515,6 +519,49 @@ export class AgentSession {
     // Then the channel's settings say it too, for clients holding only the log's tail.
     await this.ownerCh.setMode({ coordinatorOnly, strict: ev.strict, since });
     return this.confirm(since);
+  }
+
+  /**
+   * Owner: what the channel is for and where its limits are (null clears it). Every agent is shown it,
+   * and told to escalate what falls outside it instead of doing it.
+   */
+  async setCharter(text: string | null): Promise<ChannelState> {
+    if (!this.ownerCh) throw new Rejected("only the channel owner's machine sets the charter");
+    const clean = text?.trim() || null;
+    if (clean && clean.length > MAX_CHARTER) throw new Rejected(`a charter is at most ${MAX_CHARTER} characters`);
+    const since = await this.ownerCh.send(clean ? `charter: ${clean}` : "cleared the charter", { kind: "event", ev: { op: "charter.set", text: clean } });
+    // Then the settings say it too, for clients holding only the log's tail.
+    await this.ownerCh.setCharter({ text: clean, since });
+    this.guardFloor = undefined;
+    return this.confirm(since);
+  }
+
+  /**
+   * Owner: stop every agent, or let them carry on. While on hold every client refuses an agent's work
+   * (tasks, claims, facts, messages to other agents); agents may still answer people.
+   */
+  async setHold(on: boolean, note?: string): Promise<ChannelState> {
+    if (!this.ownerCh) throw new Rejected("only the channel owner's machine puts the channel on hold");
+    const clean = note?.trim().slice(0, 500) || undefined;
+    const since = await this.ownerCh.send(on ? `on hold${clean ? `: ${clean}` : ""}` : "hold lifted", { kind: "event", ev: { op: "hold.set", on, ...(clean ? { note: clean } : {}) } });
+    await this.ownerCh.setHold({ on, ...(clean ? { note: clean } : {}), since });
+    this.guardFloor = undefined;
+    return this.confirm(since);
+  }
+
+  /**
+   * Hand a decision to people instead of acting: a blocking question to this agent's own human and
+   * the owner, about message #re when given. It reaches them in any mode, and on hold.
+   */
+  async escalate(body: string, re?: number): Promise<{ seq: number; to: string[] }> {
+    const { messages, state } = await this.state();
+    const me = state.members.get(this.me);
+    if (me && isPerson(me)) throw new Rejected("escalating is for agents: you're a person, so you decide");
+    if (re !== undefined && !messages.some((m) => m.seq === re)) throw new Rejected(`no message #${re}`);
+    const to = [...new Set([humanOf(state, this.me), ownerOf(state)].filter((n): n is string => !!n))];
+    if (!to.length) throw new Rejected("there's no person in this channel to escalate to");
+    const seq = await this.send(body, { to, kind: "blocking", esc: true, ...(re !== undefined ? { re: [re] } : {}) });
+    return { seq, to };
   }
 
   /**
@@ -655,7 +702,8 @@ export function wants(me: string, m: Message, state: ChannelState | null, d: Del
   const addressed = isDirectedAt(m, me) || !!m.to?.includes("*") || (!!role && !!m.to?.includes(`role:${role}`));
   // Everyone hears when the channel's mode changes: it changes who they may talk to.
   // Everyone hears about a new or renamed room: it's somewhere they can now talk.
-  if (m.kind === "event") return addressed || m.ev?.op === "hello" || m.ev?.op === "mode.set" || m.ev?.op === "room.create" || m.ev?.op === "room.rename";
+  // Everyone hears the charter and the hold: they change what anyone may do.
+  if (m.kind === "event") return addressed || m.ev?.op === "hello" || m.ev?.op === "mode.set" || m.ev?.op === "room.create" || m.ev?.op === "room.rename" || m.ev?.op === "charter.set" || m.ev?.op === "hold.set";
   if (d.chat) return true;
   // Coordinator-only (with a coordinator in place): what people say goes to the coordinator, who
   // relays it. Another agent gets a person's message only if it's addressed to that agent by name.

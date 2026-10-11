@@ -6,7 +6,7 @@
 // Conflicts resolve deterministically: the earlier sequence number wins.
 
 import { inlineText } from "./membership.ts";
-import { GENERAL_ROOM, ignored, MAX_ROOM_NAME, MAX_ROOMS, ROOM_ID_RE, type Color, type Message, type TaskState, type Trust } from "./protocol.ts";
+import { GENERAL_ROOM, ignored, MAX_CHARTER, MAX_ROOM_NAME, MAX_ROOMS, ROOM_ID_RE, type Color, type Message, type TaskState, type Trust } from "./protocol.ts";
 import { readScopes, refusal, SCOPES, scopesOf, type Scope } from "./scopes.ts";
 
 export interface Member {
@@ -127,8 +127,48 @@ export interface ChannelState {
   rooms: Map<string, Room>;
   /** Each counted chat message's room (an id). A reply is in its parent's room. */
   roomOf: Map<number, string>;
+  /** What the channel is for and where its limits are, as the owner last set it; null if never. */
+  charter: Charter | null;
+  /** Set while the owner has every agent stopped; null otherwise. */
+  hold: Hold | null;
   head: number;
 }
+
+/** The owner's word on what the channel is for. Agents work within it and escalate what falls outside. */
+export interface Charter {
+  text: string;
+  by: string;
+  /** When it was set (0 when known only from the signed settings). */
+  at: number;
+}
+
+/** The owner stopped every agent. */
+export interface Hold {
+  note?: string;
+  by: string;
+  at: number;
+}
+
+/**
+ * The charter and the hold the owner signed into the channel's settings, each as of log position
+ * `since`: a client holding only the log's tail may not have those events. Any later one still applies.
+ */
+export interface GuardFloor {
+  charter: { text: string | null; since: number } | null;
+  hold: { on: boolean; note?: string; since: number } | null;
+}
+
+/**
+ * What an agent may still send while the channel is on hold: answers to people (every recipient a
+ * person) and housekeeping that changes nothing (announcing itself, letting go of claims).
+ */
+export function allowedOnHold(m: Pick<Message, "kind" | "to" | "ev">, isPersonName: (name: string) => boolean): boolean {
+  if (m.kind === "event") return m.ev?.op === "hello" || m.ev?.op === "release";
+  return !!m.to?.length && !m.to.includes("*") && m.to.every(isPersonName);
+}
+
+/** Why a message from an agent is refused while on hold. */
+export const ON_HOLD = "the owner put the channel on hold: agents may only answer people until it's lifted";
 
 export interface Room {
   /** Never changes (see ROOM_ID_RE). */
@@ -151,7 +191,7 @@ export interface RoomsFloor {
  * reply). Events still do. The sender-side refusal in fold only catches messages that name a person.
  */
 export function keptFromPeople(state: ChannelState, m: Message): boolean {
-  if (!state.mode.coordinatorOnly || !state.mode.strict || !state.coordinator || m.kind === "event") return false;
+  if (!state.mode.coordinatorOnly || !state.mode.strict || !state.coordinator || m.kind === "event" || m.esc) return false;
   const from = state.members.get(m.from);
   return !!from && !isPerson(from) && m.from !== state.coordinator;
 }
@@ -228,6 +268,7 @@ export function fold(
   now = Date.now(),
   modeFloor?: { coordinatorOnly: boolean; strict: boolean; since: number } | null,
   roomsFloor?: RoomsFloor | null,
+  guardFloor?: GuardFloor | null,
 ): ChannelState {
   const members = new Map<string, Member>();
   // A name can be re-admitted under a new key after its old one left; the active key wins.
@@ -273,7 +314,25 @@ export function fold(
       floor = null;
     }
   };
+  // The charter and the hold, the same way: the owner's signed settings are the floor from `since` on.
+  const ownerName = [...members.values()].find((x) => x.owner)?.name ?? "owner";
+  let charter: Charter | null = null;
+  let hold: Hold | null = null;
+  let charterFloor = guardFloor?.charter ?? null;
+  let holdFloor = guardFloor?.hold ?? null;
+  const passGuard = (seq: number) => {
+    if (charterFloor && charterFloor.since < seq) {
+      charter = charterFloor.text ? { text: charterFloor.text, by: ownerName, at: charter?.at ?? 0 } : null;
+      charterFloor = null;
+    }
+    if (holdFloor && holdFloor.since < seq) {
+      hold = holdFloor.on ? { ...(holdFloor.note ? { note: holdFloor.note } : {}), by: ownerName, at: hold?.at ?? 0 } : null;
+      holdFloor = null;
+    }
+  };
   const direct = new Set<number>();
+  /** The person (a member here) whose account vouched for an agent. */
+  const humanFor = (a: Member) => (a.sponsor ? [...members.values()].find((x) => x.active && isPerson(x) && x.sponsor?.user === a.sponsor!.user)?.name : undefined);
   const keysByName = new Map<string, Set<string>>();
   for (const r of roster) {
     let set = keysByName.get(r.name);
@@ -349,6 +408,7 @@ export function fold(
     passFloors(m.seq);
     passRoleFloors(m.seq);
     passFloor(m.seq);
+    passGuard(m.seq);
     // One bad message must never take the whole channel down for everyone: skip it.
     try {
       head = Math.max(head, m.seq);
@@ -371,7 +431,17 @@ export function fold(
       }
       // Coordinator-only: an agent other than the coordinator messaging a person. Strict refuses it
       // (as if never sent); otherwise it stands, flagged as sent directly. No coordinator: normal.
-      if (mode.coordinatorOnly && coordinator && m.kind !== "event" && !isPerson(member) && m.from !== coordinator) {
+      // Escalations: an agent handing a decision to people always reaches them, coordinator or not, but
+      // only its own human and the owner, so the way past the coordinator can't become a way to anyone.
+      if (m.esc) {
+        const may = new Set([humanFor(member), [...members.values()].find((x) => x.owner)?.name].filter(Boolean));
+        if (isPerson(member) || m.kind === "event" || !m.to?.length || !m.to.every((n) => may.has(n))) {
+          trust.set(m.seq, "refused");
+          rejected.set(m.seq, "an escalation goes from an agent to its own human and the owner, no one else");
+          continue;
+        }
+      }
+      if (mode.coordinatorOnly && coordinator && m.kind !== "event" && !m.esc && !isPerson(member) && m.from !== coordinator) {
         const people = (m.to ?? []).filter((n) => { const p = members.get(n); return !!p && isPerson(p); });
         if (people.length) {
           if (mode.strict) {
@@ -381,6 +451,12 @@ export function fold(
           }
           direct.add(m.seq);
         }
+      }
+      // On hold: an agent's work counts for nothing, as if never sent. Answering people still does.
+      if (hold && !isPerson(member) && !allowedOnHold(m, (n) => { const p = members.get(n); return !!p && isPerson(p); })) {
+        trust.set(m.seq, "refused");
+        rejected.set(m.seq, ON_HOLD);
+        continue;
       }
       // Rooms: a thread lives in one room, so a reply is in its parent's; anything else is in the room it
       // names, or general. A room that doesn't exist (yet) can't be written in: nobody fills invisible rooms.
@@ -475,6 +551,25 @@ export function fold(
             break;
           }
           mode = { coordinatorOnly: ev.coordinatorOnly, strict: ev.coordinatorOnly && ev.strict };
+          break;
+        }
+
+        case "charter.set": {
+          if (!member.owner) {
+            reject("only the owner sets the charter");
+            break;
+          }
+          const text = ev.text?.trim().slice(0, MAX_CHARTER);
+          charter = text ? { text, by: m.from, at } : null;
+          break;
+        }
+
+        case "hold.set": {
+          if (!member.owner) {
+            reject("only the owner puts the channel on hold");
+            break;
+          }
+          hold = ev.on ? { ...(ev.note?.trim() ? { note: ev.note.trim().slice(0, 500) } : {}), by: m.from, at } : null;
           break;
         }
 
@@ -643,6 +738,7 @@ export function fold(
 
   // A floor past the end of what's loaded: the settings are newer than this tail.
   passFloor(Infinity);
+  passGuard(Infinity);
   return {
     members,
     tasks,
@@ -660,6 +756,8 @@ export function fold(
     direct,
     rooms,
     roomOf,
+    charter,
+    hold,
     head,
   };
 }
@@ -727,6 +825,21 @@ export function similarOpenTasks(state: ChannelState, title: string): Task[] {
 
 /** A person, as opposed to an agent: people sign in; the owner is always one. */
 export const isPerson = (m: { kind?: string; owner?: boolean }) => m.kind === "human" || !!m.owner;
+
+/**
+ * The person an agent acts for, when that person is a member here: the one whose signed-in account
+ * vouched for it. Null for a person, or an agent whose person isn't in the channel.
+ */
+export function humanOf(state: ChannelState, name: string): string | null {
+  const m = state.members.get(name);
+  if (!m || isPerson(m) || !m.sponsor) return null;
+  return [...state.members.values()].find((x) => x.active && isPerson(x) && x.sponsor?.user === m.sponsor!.user)?.name ?? null;
+}
+
+/** The channel owner's member name. */
+export function ownerOf(state: ChannelState): string | null {
+  return [...state.members.values()].find((x) => x.owner && x.active)?.name ?? null;
+}
 
 /** The colour someone shows: a person's own, an agent's person's (when that person is a member here), else null. */
 export function colorOf(state: ChannelState, name: string): Color | null {

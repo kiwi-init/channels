@@ -99,6 +99,8 @@ function phrase(m: Message, me: string, nameOf: (n: string) => string, repliedTo
   // "*" is how a broadcast to all is addressed; say it in words.
   const to = targets.map((t) => (t === "*" ? "everyone" : t === me ? "you" : nameOf(t)))
   const list = to.length > 1 ? `${to.slice(0, -1).join(", ")} and ${to[to.length - 1]}` : to[0]
+  // An agent handing a decision to people: as loud as a blocker, and named for what it is.
+  if (m.esc) return { text: list ? `escalated to ${list}` : "escalated", alert: true }
   switch (m.kind) {
     case "ask":
       return { text: list ? `asked ${list}` : "asked everyone" }

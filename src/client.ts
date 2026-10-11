@@ -19,13 +19,14 @@ import {
 import { sign, signText, verify, verifyText, type Identity } from "./identity.ts";
 import { commitTo, joinCheckCode, joinNonce, ownerNonceStatement, spendAuto, type SigningBudget } from "./sas.ts";
 import { canPost, scopesOf, wireScopes, type Scope } from "./scopes.ts";
-import { COORDINATOR, type ChannelState } from "./state.ts";
+import { COORDINATOR, type ChannelState, type GuardFloor } from "./state.ts";
 import { handleFor, inlineText, makeRecord, NAME_RE, nameKey, openRecord, RESERVED_NAMES, sealRecord, type JoinRequest, type Member, type MemberInfo } from "./membership.ts";
 import {
   CLOSE_CLOSED,
   CLOSE_REMOVED,
   GENERAL_ROOM,
   MAX_ICON_BYTES,
+  MAX_CHARTER,
   MAX_ROOM_NAME,
   ROOM_ID_RE,
   MAX_IMAGES,
@@ -55,6 +56,8 @@ export interface SendOptions {
   imgs?: ImageAttachment[];
   /** The room (an id) a chat message goes to; absent or "general" is general. */
   room?: string;
+  /** An escalation: a decision handed to people (see Payload.esc). */
+  esc?: boolean;
 }
 
 export class RelayError extends Error {
@@ -489,6 +492,30 @@ export class Channel {
     await this.putSettings({ rooms });
   }
 
+  /**
+   * The charter and the hold the owner last signed into the channel's settings, each as of the event
+   * at its `since`: the floor for a client holding only the log's tail, where those events may be gone.
+   */
+  async guard(): Promise<GuardFloor | null> {
+    const o = await this.settings();
+    if (!o) return null;
+    const c = o.charter as { text?: unknown; since?: unknown } | undefined;
+    const h = o.hold as { on?: unknown; note?: unknown; since?: unknown } | undefined;
+    const charter = c && (c.text === null || typeof c.text === "string") && Number.isInteger(c.since) ? { text: c.text === null ? null : (c.text as string).slice(0, MAX_CHARTER), since: c.since as number } : null;
+    const hold = h && typeof h.on === "boolean" && Number.isInteger(h.since) ? { on: h.on, ...(typeof h.note === "string" ? { note: h.note.slice(0, 500) } : {}), since: h.since as number } : null;
+    return charter || hold ? { charter, hold } : null;
+  }
+
+  /** Owner: sign the charter into the channel's settings, after the charter.set at `since`. */
+  async setCharter(charter: NonNullable<GuardFloor["charter"]>): Promise<void> {
+    await this.putSettings({ charter });
+  }
+
+  /** Owner: sign the hold into the channel's settings, after the hold.set at `since`. */
+  async setHold(hold: NonNullable<GuardFloor["hold"]>): Promise<void> {
+    await this.putSettings({ hold });
+  }
+
   /** The channel's settings, opened and checked: sealed with the epoch-0 key and signed by the owner. */
   private async settings(): Promise<Record<string, unknown> | null> {
     const s = (await this.info()).settings;
@@ -893,6 +920,7 @@ export class Channel {
       ...(opts.ev ? { ev: opts.ev } : {}),
       ...(imgs?.length ? { imgs } : {}),
       ...(opts.room && opts.room !== GENERAL_ROOM && !opts.ev ? { room: opts.room } : {}),
+      ...(opts.esc && !opts.ev ? { esc: true as const } : {}),
       ts: Date.now(),
     };
     const signed = await sign(this.identity, payload);

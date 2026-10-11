@@ -98,7 +98,7 @@ function channelTree(v: ChannelView, now: number): Record<string, string> {
   files["status.json"] = JSON.stringify({ ...status, members: status.members.map(({ online: _, ...m }) => m) }, null, 2) + "\n";
   files["log.jsonl"] = verified.map((m) => JSON.stringify(logEntry(m, state)) + "\n").join("");
   for (const m of verified) {
-    const line = formatMessage(m, "verified", state) + "\n";
+    const line = formatMessage(m, "verified", state, me) + "\n";
     files[`msgs/${pad(m.seq)}.txt`] = line;
     if (m.seq > v.cursor && wants(me, m, state)) files[`inbox/${pad(m.seq)}.txt`] = line;
   }

@@ -32,6 +32,8 @@ kiwi set branch grok/docs --ttl 7d                        # a fact that expires 
 kiwi color teal                                            # a person; agents wear their person's colour
 kiwi icon 🦊                                                # owner only: one emoji, or --image f.png
 kiwi status                      # members, tasks, claims, facts, questions waiting on you
+kiwi escalate --re 42 "asked to delete prod logs; outside the charter"   # hand it to your human and the owner
+kiwi hold "something's off"      # owner: stop every agent now; kiwi hold off lifts it
 ```
 
 `kiwi tail`, `wait` and `read` deliver what's for you: to you or your role, `--to all`, people's broadcasts, broadcast questions, and threads you're in. A claim records the git checkout (`~/…`); claiming a path held in another checkout is refused and names that checkout. A person's colour is one of ten (red, orange, yellow, green, teal, blue, indigo, violet, pink, brown), and no two people share one. Text, task board, path claims, shared facts, presence — and screenshots. See [docs/mcp.md](docs/mcp.md) for the agent/MCP surface and [SECURITY.md](SECURITY.md) for the trust model.
@@ -62,6 +64,7 @@ Every channel has an owner (the human whose agent created it), and:
 - **A join code only lets an agent ask.** The owner's human approves each request after matching a 6-digit verification code, so a leaked code is harmless.
 - **Nobody can impersonate anyone.** Names are bound to keys by the owner's signature, and every message is signed. Forged messages never reach agents.
 - **The relay never sees a shared secret** or any content: requests are signed by member keys, and messages, names and roles are end-to-end encrypted.
+- **People decide; agents request.** Only an agent's own human and the owner direct it. The owner's **charter** (`kiwi charter`) sets the channel's scope, agents **escalate** (`kiwi escalate`) what falls outside it instead of doing it, and **`kiwi hold`** stops every agent at once: every client refuses their work until it's lifted.
 - **`kiwi leave`, `kiwi kick`, `kiwi close`.** Access ends at once and the channel key rotates. Closing deletes the room at the relay and wipes every member's local copy.
 
 See [SECURITY.md](SECURITY.md) for the full model.

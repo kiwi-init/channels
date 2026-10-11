@@ -1,10 +1,10 @@
 import { Dialog } from "@base-ui/react/dialog"
-import { Add01Icon, Copy01Icon, Delete02Icon, Image01Icon, Link01Icon, Logout01Icon, MoreHorizontalIcon, PencilEdit01Icon, UserAdd01Icon, UserMultipleIcon, UserStar01Icon } from "@hugeicons/core-free-icons"
+import { Add01Icon, BookOpen01Icon, Copy01Icon, Delete02Icon, Image01Icon, Link01Icon, Logout01Icon, MoreHorizontalIcon, PauseIcon, PencilEdit01Icon, PlayIcon, UserAdd01Icon, UserMultipleIcon, UserStar01Icon } from "@hugeicons/core-free-icons"
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 
 import { loadLine, memberLoad, showsLoad, type Load } from "@mc/load.ts"
 import { NAME_RE, type JoinRequest, type Member as RosterMember } from "@mc/membership.ts"
-import { COLORS, type ChannelIcon, type Color, type Event } from "@mc/protocol.ts"
+import { COLORS, MAX_CHARTER, type ChannelIcon, type Color, type Event } from "@mc/protocol.ts"
 import { TOO_MANY_REQUESTS } from "@mc/sas.ts"
 import { SCOPES, type Scope } from "@mc/scopes.ts"
 import { colorOf, taskId, type ChannelState, type Member } from "@mc/state.ts"
@@ -72,6 +72,10 @@ export interface ControlsProps {
   onColor?: (color: Color | null) => Promise<void>
   /** Owner: coordinator-only on or off (an owner-signed mode.set). Absent for everyone else. */
   onMode?: (coordinatorOnly: boolean, strict: boolean) => Promise<void>
+  /** Owner: stop every agent, or let them carry on (an owner-signed hold.set). Absent for everyone else. */
+  onHold?: (on: boolean, note?: string) => Promise<void>
+  /** Owner: what the channel is for and its limits (an owner-signed charter.set; null clears it). */
+  onCharter?: (text: string | null) => Promise<void>
   /** The channel's name as this browser knows it, to start the rename from. */
   title?: string
   /** This channel's room, so the icon dialog can show what's there now. */
@@ -764,6 +768,8 @@ export function ChannelMenu() {
   const auth = useAuth()
   const [iconOpen, setIconOpen] = useState(false)
   const [renaming, setRenaming] = useState(false)
+  const [charterOpen, setCharterOpen] = useState(false)
+  const [holding, setHolding] = useState(false)
   return (
     <>
       <Menu
@@ -786,6 +792,12 @@ export function ChannelMenu() {
         {p.isOwner && p.onRename && <MenuItem icon={PencilEdit01Icon} onClick={() => setRenaming(true)}>Rename channel…</MenuItem>}
         {p.isOwner && p.onSetIcon && <MenuItem icon={Image01Icon} onClick={() => setIconOpen(true)}>Channel icon…</MenuItem>}
         {p.isOwner && p.onMode && <MenuItem icon={UserStar01Icon} onClick={openMode}>{p.state.mode.coordinatorOnly ? "Coordinator-only: on…" : "Coordinator-only…"}</MenuItem>}
+        {(p.isOwner || p.state.charter) && <MenuItem icon={BookOpen01Icon} onClick={() => setCharterOpen(true)}>{p.isOwner ? "Charter…" : "Charter"}</MenuItem>}
+        {p.isOwner && p.onHold && (p.state.hold ? (
+          <MenuItem icon={PlayIcon} onClick={() => void p.onHold!(false).then(() => toast("Agents may carry on"), (err) => toast(errorText(err), "error"))}>Lift the hold</MenuItem>
+        ) : (
+          <MenuItem icon={PauseIcon} onClick={() => setHolding(true)}>Hold all agents…</MenuItem>
+        ))}
         {p.isOwner && <MenuSeparator />}
         {p.isOwner ? (
           <MenuItem tone="danger" icon={Delete02Icon} onClick={() => ask({ kind: "close" })}>
@@ -799,7 +811,134 @@ export function ChannelMenu() {
       </Menu>
       {p.onSetIcon && <IconDialog open={iconOpen} onClose={() => setIconOpen(false)} icon={cachedIcon(p.roomId ?? "")} onSave={p.onSetIcon} />}
       {p.onRename && renaming && <RenameDialog title={p.title ?? ""} onClose={() => setRenaming(false)} onSave={p.onRename} />}
+      {charterOpen && <CharterDialog text={p.state.charter?.text ?? ""} onClose={() => setCharterOpen(false)} onSave={p.isOwner ? p.onCharter : undefined} />}
+      {holding && p.onHold && <HoldDialog onClose={() => setHolding(false)} onSave={(note) => p.onHold!(true, note)} />}
     </>
+  )
+}
+
+/**
+ * While the owner holds the channel: everyone sees it, agents' work is refused by every client, and
+ * the owner lifts it from here.
+ */
+export function HoldBanner() {
+  const { p } = useControls()
+  const hold = p.state.hold
+  if (!hold) return null
+  return (
+    <div role="status" className="flex shrink-0 items-center gap-3 bg-alert/10 px-5 py-2 text-ui text-ink">
+      <Icon icon={PauseIcon} size={16} className="shrink-0 text-alert" />
+      <span className="min-w-0 flex-1 truncate">
+        <span className="font-medium">Agents are on hold.</span> {hold.note ? hold.note : "Their work is refused until the owner lifts it; they may still answer people."}
+      </span>
+      {p.isOwner && p.onHold && (
+        <button type="button" onClick={() => void p.onHold!(false).then(() => toast("Agents may carry on"), (err) => toast(errorText(err), "error"))} className="shrink-0 font-medium hover:underline">
+          Lift the hold
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** The owner stops every agent at once, saying why. */
+function HoldDialog({ onClose, onSave }: { onClose: () => void; onSave: (note?: string) => Promise<void> }) {
+  const [note, setNote] = useState("")
+  const [busy, setBusy] = useState(false)
+  const save = async () => {
+    setBusy(true)
+    try {
+      await onSave(note.trim() || undefined)
+      toast("Every agent is on hold")
+      onClose()
+    } catch (err) {
+      toast(errorText(err), "error")
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Modal open onClose={onClose}>
+      <form
+        className="p-5"
+        onSubmit={(e) => {
+          e.preventDefault()
+          void save()
+        }}
+      >
+        <Dialog.Title className="text-title font-semibold tracking-[-0.01em]">Hold all agents</Dialog.Title>
+        <Dialog.Description className="mt-1 text-ui leading-normal text-ink-2">
+          Every agent is told to stop at once. Until you lift the hold, every member’s client refuses an agent’s tasks, claims, facts and messages to other agents. Agents may still answer people.
+        </Dialog.Description>
+        <TextField className="mt-4" autoFocus value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} placeholder="Why (optional): agents and people see it" aria-label="Why" />
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={busy}>
+            Hold all agents
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+/** The charter: what the channel is for and where its limits are. Agents escalate what falls outside it. */
+function CharterDialog({ text, onClose, onSave }: { text: string; onClose: () => void; onSave?: (text: string | null) => Promise<void> }) {
+  const [draft, setDraft] = useState(text)
+  const [busy, setBusy] = useState(false)
+  const next = draft.trim()
+  const save = async () => {
+    setBusy(true)
+    try {
+      await onSave!(next || null)
+      toast(next ? "Charter saved" : "Charter cleared")
+      onClose()
+    } catch (err) {
+      toast(errorText(err), "error")
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Modal open onClose={onClose}>
+      <form
+        className="p-5"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (onSave && next !== text) void save()
+        }}
+      >
+        <Dialog.Title className="text-title font-semibold tracking-[-0.01em]">Charter</Dialog.Title>
+        <Dialog.Description className="mt-1 text-ui leading-normal text-ink-2">
+          What this channel is for, and where its limits are. Every agent is shown it, and escalates a request that falls outside it to its person and you instead of doing it.
+        </Dialog.Description>
+        {onSave ? (
+          <textarea
+            autoFocus
+            value={draft}
+            maxLength={MAX_CHARTER}
+            rows={6}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Ship the Windows input driver. Only this repo; nothing in production; no new dependencies without asking."
+            aria-label="Charter"
+            className="mt-4 w-full resize-y rounded-ctl border border-edge bg-raised px-3 py-2 text-body outline-none placeholder:text-ink-3 focus:border-edge-strong"
+          />
+        ) : (
+          <p className="mt-4 whitespace-pre-wrap text-body text-ink">{text}</p>
+        )}
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>
+            {onSave ? "Cancel" : "Close"}
+          </Button>
+          {onSave && (
+            <Button type="submit" disabled={busy || next === text.trim()}>
+              {next || !text ? "Save" : "Clear"}
+            </Button>
+          )}
+        </div>
+      </form>
+    </Modal>
   )
 }
 

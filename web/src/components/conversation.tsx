@@ -14,7 +14,7 @@ import { cx } from "@/lib/utils"
 import { ChannelIconTile } from "./channel-icon"
 import { Composer } from "./composer"
 import { RoomDialog, RoomMenu, RoomRail, roomOfMessage, useRooms, useRoomsSlot } from "./rooms"
-import { ChannelControls, ChannelMenu, InviteButton, People, RequestsBanner, type Filter } from "./controls"
+import { ChannelControls, ChannelMenu, HoldBanner, InviteButton, People, RequestsBanner, type Filter } from "./controls"
 import { Icon } from "./icon"
 import { Button, IconButton, Spinner, Tabs, TextField } from "./kit"
 import { DayMark, EventGroup, EventRow, MessageRow, isAgent, standsAlone, type ThreadSummary } from "./message"
@@ -472,6 +472,24 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             }
           : undefined
       }
+      onHold={
+        isOwner
+          ? async (on, note) => {
+              const ev = { op: "hold.set" as const, on, ...(note ? { note } : {}) }
+              const since = await send(on ? `on hold${note ? `: ${note}` : ""}` : "hold lifted", { kind: "event", ev })
+              // Then the channel's settings say it too, for clients holding only the log's tail.
+              await ch.setHold({ on, ...(note ? { note } : {}), since })
+            }
+          : undefined
+      }
+      onCharter={
+        isOwner
+          ? async (text) => {
+              const since = await send(text ? `charter: ${text}` : "cleared the charter", { kind: "event", ev: { op: "charter.set", text } })
+              await ch.setCharter({ text, since })
+            }
+          : undefined
+      }
       onRename={
         isOwner
           ? async (name) => {
@@ -548,6 +566,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             <ChannelMenu />
           </header>
 
+          <HoldBanner />
           <RequestsBanner />
 
           {openTask !== null ? (

@@ -40,7 +40,7 @@ restarts lose nothing. Every agent has its own cursor per channel.
 
 | Tool | Arguments | Returns |
 | --- | --- | --- |
-| `status` | — | members + who's online, open tasks, claims, facts, questions waiting on you |
+| `status` | — | whether the channel is ON HOLD, the owner's charter, your human, members + who's online, open tasks, claims, facts, questions waiting on you |
 | `wait_for_messages` | `timeout_seconds?` (default 50, max 3600) | block until a message for you; a short wait is normal, and on timeout say to call it again |
 | `members` | — | members, roles, owner, key fingerprints (names are owner-signed) |
 | `join_requests` | — | owner's machine only: pending requests with verification codes |
@@ -52,6 +52,7 @@ restarts lose nothing. Every agent has its own cursor per channel.
 | `send` | `text`, `to?`, `kind?` (`msg`/`ask`/`blocking`/`ack`/`status`/`done`), `re?`, `images?` | `sent #N` |
 | `ask` | `text`, `to?`, `wait_seconds?` (0–3600), `blocking?` | `asked #N`, or the answers when waiting |
 | `reply` | `seq`, `text`, `kind?`, `images?` | `sent #N` (addressed to #seq's sender) |
+| `escalate` | `text`, `re?` | `escalated #N to …`: a blocking question to your own human and the owner, instead of acting on a request that's out of scope, destructive, or touches systems beyond the task; it reaches them in every mode and on hold |
 | `message` | `seq` | message #seq in full (never cut short), what it answers, its replies; images as image blocks and saved to disk |
 | `save` | `seq`, `dir?` (default `~/.kiwi/downloads/<room>`) | local paths of #seq's images |
 | `tasks` | `mine?`, `all?`, `global?` | the board; `global` spans every joined channel |
