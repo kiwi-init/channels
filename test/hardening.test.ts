@@ -4,7 +4,8 @@ import { Database } from "bun:sqlite";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Channel } from "../src/client.ts";
+import * as Effect from "effect/Effect";
+import { Channel, fetchRelay, Relay } from "../src/client.ts";
 import { newChannelKey, sealTo } from "../src/crypto.ts";
 import { formatMessage } from "../src/format.ts";
 import { generateIdentity, signText } from "../src/identity.ts";
@@ -218,7 +219,8 @@ describe("the join code check", () => {
     expect(ask.status).toBe(426);
     expect(((await ask.json()) as { error: string }).error).toContain("update kiwi");
     // An old owner CLI lists requests without asking for the checked kind.
-    const listOld = (ownerCh as unknown as { request: (path: string) => Promise<unknown> }).request("/requests");
+    const request = (ownerCh as unknown as { request: (path: string) => Effect.Effect<unknown, unknown, Relay> }).request("/requests");
+    const listOld = Effect.runPromise(Effect.provideService(request, Relay, fetchRelay));
     await expect(listOld).rejects.toMatchObject({ status: 426 });
   });
 });
