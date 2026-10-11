@@ -25,6 +25,11 @@ export interface ChannelConfig extends ChannelAccess {
   as?: string;
   /** This machine holds the owner key (the human who approves joins). */
   owner?: string;
+  /**
+   * A person's own seat, brought here from the web for `kiwi tui` (their key, the owner's
+   * included). Only `kiwi tui` acts with it: agent commands never pick it.
+   */
+  person?: string;
   /** The channel's name, as its owner set it (sealed: only members can read it). */
   title?: string;
 }
@@ -354,6 +359,13 @@ export async function loadIdentity(name: string, roomId: string): Promise<Identi
   return id;
 }
 
+/** Keep a key brought from elsewhere (a person's, for `kiwi tui`). Never replaces one this machine has. */
+export function saveIdentity(id: Identity, roomId: string): void {
+  const path = join(identityDir(roomId), `${safe(id.name)}.json`);
+  if (existsSync(path)) throw new Error(`this computer already has a key named ${id.name} in this channel`);
+  writePrivate(path, JSON.stringify(id, null, 2) + "\n");
+}
+
 function identityDir(roomId: string): string {
   return join(home(), "identities", safe(roomId));
 }
@@ -424,13 +436,15 @@ export function forgetMember(alias: string, name: string): void {
   forgetIdentity(name, c.roomId);
   rmSync(cursorPath(alias, name), { force: true });
   rmSync(seenPath(alias, name), { force: true });
-  const left = identitiesIn(c.roomId).filter((n) => n !== c.owner);
+  const left = identitiesIn(c.roomId).filter((n) => n !== c.owner && n !== c.person);
   // The owner key stays as long as the channel exists: without it, nobody can ever close it.
   const ownerHere = !!c.owner && identitiesIn(c.roomId).includes(c.owner);
-  if (!left.length && !ownerHere) return wipeChannel(alias);
+  const personHere = !!c.person && identitiesIn(c.roomId).includes(c.person);
+  if (!left.length && !ownerHere && !personHere) return wipeChannel(alias);
   updateConfig((cfg) => {
     for (const [dir, b] of Object.entries(cfg.bindings ?? {})) if (b.alias === alias && b.as === name) delete cfg.bindings![dir];
     const ch = cfg.channels[alias];
+    if (ch?.person === name) delete ch.person;
     if (ch?.as === name) ch.as = left[0] ?? ch.owner;
   });
 }

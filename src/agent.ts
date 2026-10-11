@@ -57,6 +57,16 @@ export class AgentSession {
     return new AgentSession(alias, cfg, await loadIdentity(name, cfg.roomId), owner);
   }
 
+  /**
+   * A person's seat (`kiwi tui`): their own key, and the owner's handle when that key is the
+   * owner's. Unlike `open`, a person key on this machine never gives agents the owner's handle.
+   */
+  static async openPerson(alias: string, cfg: ChannelConfig, name: string): Promise<AgentSession> {
+    keepRecordsIn(fileRecordMemory);
+    const id = await loadIdentity(name, cfg.roomId);
+    return new AgentSession(alias, cfg, id, id.pk === cfg.ownerPk ? id : null);
+  }
+
   /** The verified member list (owner-signed records). */
   async members(refresh = false): Promise<Roster> {
     if (!this.roster || refresh) {
