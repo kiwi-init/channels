@@ -140,6 +140,21 @@ sh`'s views are Effects; the computer link's relay calls are `machineFx`, refuse
 with `MachineRefused`. The Stop hook's listener record stays for the life of the
 process, as before (an MCP server between two waits still counts as listening).
 
+**Step 5 (code):** every `kiwi` command is an Effect, run by one `ManagedRuntime`
+on `AgentLive`. A command stops with `Quit` (its line and exit code) where it used
+to call `die`, and its value, when it has one, is its exit code (`sh`, `wait`,
+`doctor`); `fail` at the bottom of `main.ts` is the one place a failure becomes
+its line and code (gone: forget, 4; the relay's refusals: `relay: …`; the rest:
+their text). `kiwi join` tells a key that's out for good by the relay's `Removed`
+or `Denied` tag, and by text only when the relay sent no tag (`RelayError.tagged`,
+for relays from 0.7 and before). The MCP tools are Effects run in the runtime
+`kiwi mcp` started in, with one place (`tool`) for what a failure answers.
+`kiwi doctor`'s checks are Effects (`doctorChecks` stays a Promise for its test).
+Argument parsing stays `node:util` parseArgs and the help text is unchanged:
+`@effect/cli` would change both, so it isn't used. What's left of the plan: the
+person routes on the relay side (step 2's note), the web's move, and the Worker
+canary.
+
 ## Costs, measured
 
 - **Bundle**: a minimal program with a service, a Layer and a tagged error,

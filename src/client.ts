@@ -89,12 +89,15 @@ export interface SendOptions {
 export class RelayError extends Error {
   /** What the refusal means; read from the relay's answer, or from the status for relays that don't say. */
   readonly tag: ErrorTag;
+  /** Whether the relay said the tag itself. Relays from before tags (0.7 and older) don't: then only the text tells. */
+  readonly tagged: boolean;
   constructor(
     readonly status: number,
     message: string,
     tag?: unknown,
   ) {
     super(message);
+    this.tagged = isErrorTag(tag);
     this.tag = isErrorTag(tag) ? tag : tagForStatus(status);
   }
   get _tag(): "RelayError" {

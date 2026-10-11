@@ -1,20 +1,28 @@
 #!/usr/bin/env bun
 // kiwi: the Kiwi Init command line (Channels).
+//
+// Every command is an Effect, run by one ManagedRuntime on the relay over HTTP
+// and this computer's files (AgentLive). A command that can't go on fails with
+// Quit (its line and exit code) or with whatever refused it; `fail` at the
+// bottom turns that into the line on stderr and the exit code, in one place.
+// A command's value, when it has one, is its exit code.
 
+import * as Cause from "effect/Cause";
+import * as Data from "effect/Data";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
+import * as ManagedRuntime from "effect/ManagedRuntime";
 import { parseArgs } from "node:util";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join as joinPath, join } from "node:path";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { AgentSession, Rejected, runAgent, type Delivery } from "../agent.ts";
-import * as Effect from "effect/Effect";
-
-/** The session's Effects, run one at a time (until the commands run on Effect themselves). */
-const run = runAgent;
+import { AgentLive, openSession, type Agent, type AgentSession, type Delivery } from "../agent.ts";
 import { loadImages, saveImages } from "../attach.ts";
-import { Channel, ChannelGone, RelayError, relayConfig } from "../client.ts";
+import { Channel, ChannelGone, fx as relayFx, reason, RelayError } from "../client.ts";
 import { TOO_MANY_REQUESTS } from "../sas.ts";
-import { DEFAULT_RELAY, forgetIdentity, home, forgetMember, identitiesIn, loadConfig, loadIdentity, readCursor, updateConfig, wipeChannel, writeCursor, type ChannelConfig } from "../config.ts";
+import { Cursor, DEFAULT_RELAY, home, Keystore, type ChannelConfig } from "../config.ts";
 import { b64url, decodeJoinCode, newRoomId, type ChannelAccess } from "../crypto.ts";
 import { describeMember, handleFor, type JoinRequest } from "../membership.ts";
 import { ago, cardLine, describeEvent, fitsLine, holdLine, formatAdded, formatAfter, formatClaims, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, mayDo, modeLine, parseDuration, statusJson } from "../format.ts";
@@ -24,8 +32,9 @@ import { CHAT_KINDS, COLORS, ignored, isColor, TASK_STATES, type Kind, type Mess
 import { COORDINATOR, parseTaskId, similarOpenTasks, taskId, type ChannelState } from "../state.ts";
 import { VERSION } from "../version.ts";
 import { channelFiles, runSh, sessionViews } from "../sh.ts";
-import { forgetMachine, linkUrl, loadMachine, machineCode, machineStatus, newMachine, registerMachine, saveMachine, unlinkMachine, vouchFor } from "../machine.ts";
+import { forgetMachine, linkUrl, loadMachine, machineCode, machineFx, newMachine, saveMachine, vouchFor } from "../machine.ts";
 import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor, EXTRA_HARNESSES, extraInstalled, hooksInstalled, hooksStatus, installDetected, installExtra, installHooks, mcFor, runHook, uninstallDetected, uninstallExtra, uninstallHooks, type ExtraHarness } from "../hooks.ts";
+import { BadName } from "../refusals.ts";
 import { claimPlace } from "../where.ts";
 import { detectCard, handoffHere } from "../card.ts";
 
@@ -169,10 +178,10 @@ const { values: opt, positionals: args } = parseArgs({
   },
 });
 
-function die(msg: string, code = 1): never {
-  process.stderr.write(`kiwi: ${msg}\n`);
-  process.exit(code);
-}
+/** A command that stops here: `kiwi: <message>` on stderr, and this exit code. */
+class Quit extends Data.TaggedError("Quit")<{ readonly message: string; readonly code: number }> {}
+
+const die = (message: string, code = 1) => Effect.fail(new Quit({ message, code }));
 
 function out(line: string): void {
   process.stdout.write(line + "\n");
@@ -187,151 +196,160 @@ function relayUrl(): string {
 /** The channel (and agent) this command acts for, once resolved: the only ones it may ever forget. */
 const acting: { alias?: string; name?: string } = {};
 
-function channelAlias(): string {
-  const cfg = loadConfig();
+const config = Effect.gen(function* () {
+  return yield* (yield* Keystore).config;
+});
+
+const channelAlias = Effect.fn("kiwi.channelAlias")(function* () {
+  const cfg = yield* config;
   const all = Object.keys(cfg.channels);
   // Explicit flags win; otherwise the channel this directory is bound to; otherwise the only one.
   // Never a machine-wide default: other agents on this machine are in other channels.
   const alias = opt.channel ?? process.env.KIWI_CHANNEL ?? bindingFor(process.cwd())?.alias ?? (all.length === 1 ? all[0] : undefined);
   if (!alias) {
-    if (!all.length) die("no channel: create or join one first");
-    die(`this directory isn't bound to a channel, and this machine is in several (${all.join(", ")}); pass -c ALIAS --as NAME, or run kiwi from the directory you joined in`);
+    if (!all.length) return yield* die("no channel: create or join one first");
+    return yield* die(`this directory isn't bound to a channel, and this machine is in several (${all.join(", ")}); pass -c ALIAS --as NAME, or run kiwi from the directory you joined in`);
   }
-  if (!cfg.channels[alias]) die(`unknown channel "${alias}" (see: kiwi channels)`);
+  if (!cfg.channels[alias]) return yield* die(`unknown channel "${alias}" (see: kiwi channels)`);
   acting.alias = alias;
   return alias;
-}
+});
 
-function agentName(ch?: ChannelConfig): string {
+const agentName = Effect.fn("kiwi.agentName")(function* (ch?: ChannelConfig) {
+  const keys = yield* Keystore;
   const explicit = opt.as ?? process.env.KIWI_AS;
   let raw = explicit;
   if (!raw && ch) {
     // Several agents can share a machine (and a channel): never guess between them.
     const bound = bindingFor(process.cwd());
-    if (bound && ch.roomId === loadConfig().channels[bound.alias]?.roomId) raw = bound.as;
+    if (bound && ch.roomId === (yield* keys.config).channels[bound.alias]?.roomId) raw = bound.as;
     else {
-      const mine = identitiesIn(ch.roomId).filter((n) => n !== ch.owner);
-      if (mine.length > 1) die(`several agents on this machine are in this channel (${mine.join(", ")}); pass --as NAME`);
+      const mine = (yield* keys.identitiesIn(ch.roomId)).filter((n) => n !== ch.owner);
+      if (mine.length > 1) return yield* die(`several agents on this machine are in this channel (${mine.join(", ")}); pass --as NAME`);
       raw = mine[0] ?? ch.as;
     }
   }
   raw ??= process.env.USER ?? process.env.USERNAME ?? "human";
   const name = raw.trim() || "human";
-  if (!NAME_RE.test(name)) die(`agent name "${name}" is invalid (1-32 letters, digits, _ . or -); pass --as NAME`);
+  if (!NAME_RE.test(name)) return yield* new BadName(`agent name "${name}" is invalid (1-32 letters, digits, _ . or -); pass --as NAME`);
   return name;
-}
+});
 
-async function session(): Promise<AgentSession> {
-  const alias = channelAlias();
-  const cfg = loadConfig().channels[alias]!;
-  acting.name = agentName(cfg);
-  return AgentSession.open(alias, cfg, acting.name);
-}
+const session = Effect.fn("kiwi.session")(function* () {
+  const alias = yield* channelAlias();
+  const cfg = (yield* config).channels[alias]!;
+  acting.name = yield* agentName(cfg);
+  return yield* openSession(alias, cfg, acting.name);
+});
 
 function render(m: Message, state?: ChannelState | null): string {
   return opt.json ? JSON.stringify({ ...m, trust: state?.trust.get(m.seq) }) : formatMessage(m, state?.trust.get(m.seq), state ?? undefined, acting.name);
 }
 
 /** Which messages tail/wait/read/watch hand over: --chat, --for-me, --all or --thread N (default: those for you), in every room unless --room. */
-async function delivery(s: AgentSession): Promise<Delivery> {
-  const thread = opt.thread === undefined ? undefined : Number(opt.thread.replace(/^#/, "")) || die("--thread takes a message number");
-  const room = opt.room === undefined ? undefined : await run(s.roomId(opt.room));
-  return { forMe: opt["for-me"], chat: opt.chat, all: opt.all, ...(thread !== undefined ? { thread } : {}), ...(room !== undefined ? { room } : {}) };
-}
+const delivery = Effect.fn("kiwi.delivery")(function* (s: AgentSession) {
+  const thread = opt.thread === undefined ? undefined : Number(opt.thread.replace(/^#/, "")) || (yield* die("--thread takes a message number"));
+  const room = opt.room === undefined ? undefined : yield* s.roomId(opt.room);
+  const d: Delivery = { forMe: opt["for-me"], chat: opt.chat, all: opt.all, ...(thread !== undefined ? { thread } : {}), ...(room !== undefined ? { room } : {}) };
+  return d;
+});
 
 function list(s: string | undefined): string[] | undefined {
   const items = s?.split(",").map((x) => x.trim()).filter(Boolean);
   return items?.length ? items : undefined;
 }
 
-/** `--image a.png --image b.png` → attachments (dies with a clear reason). */
-function images(): { name: string; mime: string; data: string }[] | undefined {
+/** `--image a.png --image b.png` → attachments (stops with a clear reason). */
+const images = Effect.suspend(() => {
   const v = opt.image as string | string[] | undefined;
   const paths = Array.isArray(v) ? v : v ? [v] : [];
-  if (!paths.length) return undefined;
-  try {
-    return loadImages(paths);
-  } catch (err) {
-    die(err instanceof Error ? err.message : String(err));
-  }
-}
+  if (!paths.length) return Effect.succeed(undefined);
+  return Effect.try({ try: () => loadImages(paths), catch: (err) => new Quit({ message: err instanceof Error ? err.message : String(err), code: 1 }) });
+});
 
-function taskArg(i = 2): number {
-  const raw = args[i] ?? die(`usage: kiwi task ${args[1]} T<id>`);
-  return parseTaskId(raw) ?? die(`"${raw}" isn't a task id (like T12)`);
-}
+const taskArg = Effect.fn("kiwi.taskArg")(function* (i = 2) {
+  const raw = args[i] ?? (yield* die(`usage: kiwi task ${args[1]} T<id>`));
+  return parseTaskId(raw) ?? (yield* die(`"${raw}" isn't a task id (like T12)`));
+});
 
-async function text(from: number): Promise<string> {
-  if (args.length > from && args[from] !== "-") return args.slice(from).join(" ");
-  // Read stdin when it's piped in, or when "-" asks for it explicitly.
-  if (args[from] !== "-" && process.stdin.isTTY) return "";
-  return (await new Response(Bun.stdin.stream()).text()).replace(/\n$/, "");
-}
+/** A task id from the command line, or a stop naming it. */
+const taskIdOf = (x: string) => {
+  const id = parseTaskId(x);
+  return id === null ? die(`"${x}" isn't a task id`) : Effect.succeed(id);
+};
 
+const text = (from: number) =>
+  Effect.promise(async () => {
+    if (args.length > from && args[from] !== "-") return args.slice(from).join(" ");
+    // Read stdin when it's piped in, or when "-" asks for it explicitly.
+    if (args[from] !== "-" && process.stdin.isTTY) return "";
+    return (await new Response(Bun.stdin.stream()).text()).replace(/\n$/, "");
+  });
 
 /** The name the owner's human signs as. Agents can't use it. */
 const OWNER_NAME = "human";
 
-function joinedAlias(roomId: string, alias?: string, title?: string | null): string {
-  const channels = loadConfig().channels;
+const joinedAlias = Effect.fn("kiwi.joinedAlias")(function* (roomId: string, alias?: string, title?: string | null) {
+  const channels = (yield* config).channels;
   const free = (n: string) => !channels[n] || channels[n]!.roomId === roomId;
   if (alias) {
     // An alias names one channel. Reusing it for another would strand that channel's keys.
-    if (!free(alias)) die(`the alias "${alias}" is already another channel on this machine; pick a different one`);
+    if (!free(alias)) return yield* die(`the alias "${alias}" is already another channel on this machine; pick a different one`);
     return alias;
   }
   // Called by its name when it has one ("payments-refactor"), else by its id ("ch-77f5b1").
   const named = title ? handleFor(title).slice(0, 24) : "";
   const candidates = [named, named && `${named}-${roomId.slice(0, 4)}`, `ch-${roomId.slice(0, 6)}`].filter((n) => n && NAME_RE.test(n));
   return candidates.find(free) ?? `ch-${roomId.slice(0, 8)}`;
-}
+});
 
 /** Owner dashboard link: the code plus the owner key, so the page can approve and post as the human. */
-async function ownerLink(c: ChannelConfig): Promise<string> {
-  const id = await loadIdentity(c.owner!, c.roomId);
+const ownerLink = Effect.fn("kiwi.ownerLink")(function* (c: ChannelConfig) {
+  const id = yield* (yield* Keystore).identity(c.owner!, c.roomId);
   return `${c.relay}/#${encodeURIComponent(c.code)}&id=${b64url(new TextEncoder().encode(JSON.stringify(id)))}`;
-}
+});
 
-async function findRequest(s: AgentSession, needle: string, opts: { byKey?: boolean } = {}): Promise<JoinRequest> {
-  const reqs = await run(s.requests());
+const findRequest = Effect.fn("kiwi.findRequest")(function* (s: AgentSession, needle: string, opts: { byKey?: boolean } = {}) {
+  const reqs = yield* s.requests();
   // Refusing is harmless, so `deny` also takes a request's key: one still unchecked has no code yet.
   if (opts.byKey && needle.replace(/\D/g, "").length !== 6) {
     const byKey = reqs.filter((x) => needle.length >= 6 && fingerprint(x.pk).startsWith(needle));
     if (byKey.length === 1) return byKey[0]!;
-    die(byKey.length ? `several requests match key ${needle}` : `no pending request with key ${needle} (see: kiwi requests)`);
+    return yield* die(byKey.length ? `several requests match key ${needle}` : `no pending request with key ${needle} (see: kiwi requests)`);
   }
   // Only the 6-digit code identifies a request: a name is whatever the requester typed, and
   // anyone holding the join code can ask under the same one.
   const digits = needle.replace(/\D/g, "");
-  if (digits.length !== 6) die(`use the 6-digit verification code (see: kiwi requests), not a name`);
+  if (digits.length !== 6) return yield* die(`use the 6-digit verification code (see: kiwi requests), not a name`);
   const matches = reqs.filter((x) => x.code?.replace("-", "") === digits);
-  if (matches.length > 1) die(`several requests share code ${needle}; deny them all and ask the requester to try again`);
+  if (matches.length > 1) return yield* die(`several requests share code ${needle}; deny them all and ask the requester to try again`);
   const r = matches[0];
-  if (!r) die(reqs.length ? `no pending request shows code ${needle} yet (see: kiwi requests)` : "no pending join requests");
+  if (!r) return yield* die(reqs.length ? `no pending request shows code ${needle} yet (see: kiwi requests)` : "no pending join requests");
   return r;
-}
+});
 
 /**
  * The channel's owner key is on this machine (`kiwi create` made the channel here): let this request in
  * with it. Whoever can run kiwi here can already read that key, so comparing codes would only be this
  * machine checking itself. Never for a RECLAIM of someone's seat. Returns whether it let them in.
  */
-async function admitLocally(code: string, relay: string, id: Identity, requestId: string, as: { name: string; role?: string; about?: string }): Promise<boolean> {
+const admitLocally = Effect.fn("kiwi.admitLocally")(function* (code: string, relay: string, id: Identity, requestId: string, as: { name: string; role?: string; about?: string }) {
+  const keys = yield* Keystore;
   const { roomId } = decodeJoinCode(code);
-  const local = Object.values(loadConfig().channels).find((c) => c.roomId === roomId && c.owner && c.relay === relay);
-  if (!local?.owner || !identitiesIn(roomId).includes(local.owner)) return false;
-  const owner = new Channel(local, relay, await loadIdentity(local.owner, roomId));
-  const find = async () => (await owner.requests()).find((r) => r.id === requestId && r.pk === id.pk && !r.reclaims);
-  let r = await find();
+  const local = Object.values((yield* keys.config).channels).find((c) => c.roomId === roomId && c.owner && c.relay === relay);
+  if (!local?.owner || !(yield* keys.identitiesIn(roomId)).includes(local.owner)) return false;
+  const owner = new Channel(local, relay, yield* keys.identity(local.owner, roomId));
+  const find = Effect.map(owner.fx.requests(), (reqs) => reqs.find((r) => r.id === requestId && r.pk === id.pk && !r.reclaims));
+  let r = yield* find;
   if (!r) return false;
-  if (r.check === "unchecked") await owner.checkRequest(r);
+  if (r.check === "unchecked") yield* owner.fx.checkRequest(r);
   // This side reveals its half as it checks its status; then the code exists on both.
-  await Channel.joinStatus(relay, code, id, requestId);
-  r = await find();
+  yield* Channel.fx.joinStatus(relay, code, id, requestId);
+  r = yield* find;
   if (r?.check !== "ready") return false;
-  await owner.approve(r, { name: as.name, ...(as.role ? { role: as.role } : {}), ...(as.about ? { about: as.about } : {}) });
+  yield* owner.fx.approve(r, { name: as.name, ...(as.role ? { role: as.role } : {}), ...(as.about ? { about: as.about } : {}) });
   return true;
-}
+});
 
 /** Bind this directory to the agent, and make sure Claude Code keeps it listening. */
 function settleIn(alias: string, name: string): void {
@@ -356,1000 +374,1063 @@ function openBrowser(url: string): void {
   } catch {}
 }
 
-async function confirm(question: string): Promise<boolean> {
-  if (opt.yes) return true;
-  if (!process.stdin.isTTY) return false;
-  process.stdout.write(`${question} [y/N] `);
-  for await (const line of console) return /^y(es)?$/i.test(line.trim());
-  return false;
-}
+const confirm = (question: string) =>
+  Effect.promise(async () => {
+    if (opt.yes) return true;
+    if (!process.stdin.isTTY) return false;
+    process.stdout.write(`${question} [y/N] `);
+    for await (const line of console) return /^y(es)?$/i.test(line.trim());
+    return false;
+  });
+
+/** Whether a relay requires a signed-in person (one that can't say, doesn't). */
+const signInOn = (relay: string) =>
+  relayFx.relayConfig(relay).pipe(
+    Effect.map((c) => !!c.workosClientId),
+    Effect.catchCause(() => Effect.succeed(false)),
+  );
+
+/**
+ * This key can never come back: it was removed, or its request denied. By the relay's tag; by its
+ * text only for relays from before tags (0.7 and older), which send none.
+ */
+const outForGood = (err: unknown) =>
+  err instanceof RelayError && (err.tag === "Removed" || err.tag === "Denied" || (!err.tagged && err.status === 403 && /removed|denied/.test(err.message)));
 
 /** `kiwi approve` for a RECLAIM: the seat moves to the new key, with every guard the client enforces. */
-async function reclaimSeat(s: AgentSession, r: JoinRequest): Promise<void> {
+const reclaimSeat = Effect.fn("kiwi.reclaimSeat")(function* (s: AgentSession, r: JoinRequest) {
   const target = r.reclaims!;
   // Seen in the last ten minutes, or listening right now: the old key may still be in use.
-  const { state } = await run(s.state());
+  const { state } = yield* s.state();
   const seen = state.members.get(target.name)?.lastSeen ?? 0;
-  const online = Date.now() - seen < 10 * 60_000 || (await run(s.who())).has(target.name);
+  const online = Date.now() - seen < 10 * 60_000 || (yield* s.who()).has(target.name);
   if (online) process.stderr.write(`kiwi: ${target.name} IS ONLINE NOW with its current key (${fingerprint(target.pk)}): this may be someone else taking its seat\n`);
   const question = `Move ${target.name}'s seat from key ${fingerprint(target.pk)} to ${fingerprint(r.pk)}? Verification code ${r.code}. The old key is out for good.`;
-  if (!(await confirm(question))) die(`reclaiming needs your human's go-ahead: once they confirm the joining agent shows ${r.code}, re-run with --yes${online ? " --force" : ""}`);
-  if (online && !opt.force) die(`${target.name} is online: only if your human is sure the old key is lost, re-run with --force`);
-  await s.ownerCh!.reclaim(r, { online, force: opt.force, scopes: state.members.get(target.name)?.scopes ?? [] });
+  if (!(yield* confirm(question))) return yield* die(`reclaiming needs your human's go-ahead: once they confirm the joining agent shows ${r.code}, re-run with --yes${online ? " --force" : ""}`);
+  if (online && !opt.force) return yield* die(`${target.name} is online: only if your human is sure the old key is lost, re-run with --force`);
+  yield* s.ownerCh!.fx.reclaim(r, { online, force: opt.force, scopes: state.members.get(target.name)?.scopes ?? [] });
   out(`moved ${target.name}'s seat to key ${fingerprint(r.pk)} (${r.code}); the old key is out and the channel key rotated`);
-}
+});
 
-const commands: Record<string, () => Promise<void>> = {
-  async quick() {
-    return commands.create!();
-  },
+/** A command: its exit code, when it isn't 0. */
+type Command = () => Effect.Effect<void | number, unknown, Agent>;
 
-  async create() {
-    const name = agentName();
-    if (name === OWNER_NAME) die(`"${OWNER_NAME}" is reserved for the channel owner; pick an agent name with --as`);
-    const relay = relayUrl();
-    if ((await relayConfig(relay).catch(() => ({ workosClientId: null }))).workosClientId) {
-      die(
-        `channels on ${relay} are created and owned by a signed-in human, not an agent.\n` +
-          `  Ask your human to open ${relay}/ , sign in, create the channel, and give you its join line (kiwi join mc2-… --as ${name}).`,
-      );
-    }
-    const roomId = newRoomId();
-    const [owner, agent] = await Promise.all([loadIdentity(OWNER_NAME, roomId), loadIdentity(name, roomId)]);
-    const { code, access } = await Channel.create(
-      relay,
-      owner,
-      { name: OWNER_NAME, role: "owner" },
-      [{ ...agent, info: { name, ...(opt.role ? { role: opt.role } : {}), ...(opt.about ? { about: opt.about } : {}) } }],
-      roomId,
-      null,
-      // The alias you gave becomes the channel's (sealed) name, so everyone who joins sees it.
-      args[1],
-    );
-    const alias = joinedAlias(access.roomId, args[1]);
-    const cfg = updateConfig((c) => {
-      c.channels[alias] = { ...access, relay, code, as: name, owner: OWNER_NAME };
-    });
-    writeCursor(alias, name, 0);
-    const s = await AgentSession.open(alias, cfg.channels[alias]!, name);
-    await run(s.hello(opt.role, opt.about));
-    settleIn(alias, name);
-    process.stderr.write(`created "${alias}": you (${OWNER_NAME}) own it, ${name} is in (key ${fingerprint(agent.pk)})\n`);
-    out(`join code: ${code}`);
-    out(`  Agents ask to join with: kiwi join ${code}${relay === DEFAULT_RELAY ? "" : ` --relay ${relay}`} --as <name> [--role <role>] [--about "<rules>"]`);
-    out(`  The code only lets them ask. Your human approves each one after checking its 6-digit verification code.`);
-    // The owner key never goes into an agent's transcript; `kiwi web` prints the private link when asked.
-    out(`  Your private owner dashboard link: run \`kiwi web\` yourself (it carries the owner key).`);
-    out("");
-    out(agentPrompt(alias, name, { role: opt.role, about: opt.about }));
-  },
+const commands: Record<string, Command> = {
+  quick: () => commands.create!(),
 
-  async join() {
-    const code = (args[1] ?? die("usage: kiwi join <code> [alias] --as NAME [--role ROLE]")).trim();
-    try {
-      decodeJoinCode(code);
-    } catch {
-      die("that isn't a join code (they look like mc2-…-…)");
-    }
-    const name = agentName();
-    if (name === OWNER_NAME) die(`"${OWNER_NAME}" is reserved for the channel owner; pick an agent name with --as`);
-    const relay = relayUrl();
-    const roomId = decodeJoinCode(code).roomId;
-    const hadKey = identitiesIn(roomId).includes(name);
-    let id = await loadIdentity(name, roomId);
-    const info = { name, ...(opt.role ? { role: opt.role } : {}), ...(opt.about ? { about: opt.about } : {}), ...(opt.reclaim ? { reclaim: true } : {}) };
-
-    /** In: write the config, bind this folder, and print the instructions. */
-    const settle = async (access: ChannelAccess, how: "approved" | "resumed") => {
-      // Members can read the channel's sealed name: use it to name the channel here.
-      const title = await new Channel(access, relay, id).title().catch(() => null);
-      const existing = Object.entries(loadConfig().channels).find(([, c]) => c.roomId === access.roomId)?.[0];
-      const alias = existing && !args[2] ? existing : joinedAlias(access.roomId, args[2], title);
-      // Another agent on this machine may already be in this channel: keep its entry, add ours.
-      const cfg = updateConfig((c) => {
-        const prior = c.channels[alias];
-        c.channels[alias] =
-          prior?.roomId === access.roomId
-            ? { ...prior, ...access, keys: { ...prior.keys, ...access.keys }, as: prior.as ?? name, ...(title ? { title } : {}) }
-            : { ...access, relay, code, as: name, ...(title ? { title } : {}) };
-      });
-      const s = await AgentSession.open(alias, cfg.channels[alias]!, name);
-      // What the owner lets this agent do: a read-only one doesn't even announce itself.
-      const scopes = (await run(s.state())).state.members.get(name)?.scopes ?? [...SCOPES];
-      const hello = (role?: string, about?: string) => (canPost(scopes) ? run(s.hello(role, about)) : Promise.resolve(0));
-      if (how === "resumed") {
-        // Nothing new was granted: pick up where this agent left off.
-        if (readCursor(alias, name) === null) writeCursor(alias, name, await s.ch.head());
-        if (opt.role || opt.about) await hello(opt.role, opt.about);
-      } else if (opt.reclaim) {
-        // A reclaimed seat: what reached this name after its old key last spoke is unread for the new one.
-        const { messages, state } = await run(s.state());
-        const last = messages.filter((m) => m.from === name && m.kind !== "event" && state.trust.get(m.seq) === "verified").at(-1)?.seq;
-        writeCursor(alias, name, last ?? state.head);
-      } else {
-        writeCursor(alias, name, await s.ch.head());
-        await hello(opt.role, opt.about);
-      }
-      settleIn(alias, name);
-      // Say what this agent runs on, so work that needs it finds it. Never worth failing a join over.
-      if (canPost(scopes)) await run(s.refreshCard(detectCard())).catch(() => {});
-      process.stderr.write(`${how === "resumed" ? "back in" : "joined"} "${alias}" as ${name} (key ${fingerprint(id.pk)})\n`);
-      out(how === "resumed" ? "this key is already a member: resumed, nothing new was granted.\n" : "approved.\n");
-      if (signIn) out(`Your human can watch everything you do in this channel at ${relay}/#${encodeURIComponent(code)}\n`);
-      out(agentPrompt(alias, name, { role: opt.role, about: opt.about, scopes }));
-    };
-
-    // Agents join from a computer its person linked with `kiwi setup`; the computer vouches for them.
-    const signIn = !!(await relayConfig(relay).catch(() => ({ workosClientId: null }))).workosClientId;
-    const machine = loadMachine();
-    const linked = machine?.linked && machine.relay === relay ? machine : null;
-    if (signIn && !linked) {
-      die(
-        "this computer isn't set up for Kiwi yet. Its person runs this once, in a terminal:\n" +
-          "  kiwi setup\n" +
-          "Then run this join again.",
-      );
-    }
-    // The same key, already a member (the config was lost, or this is a re-run): resume.
-    if (hadKey) {
-      const access = await Channel.resume(relay, code, id).catch((err: unknown) => {
-        if (err instanceof RelayError && [401, 403, 404].includes(err.status)) return null;
-        throw err;
-      });
-      if (access) return settle(access, "resumed");
-    }
-    const vouch = async () => (linked ? vouchFor(linked, roomId, id.pk) : null);
-    // Asking again with the same key resumes the same request, so re-running this is always safe.
-    // A key that was removed or declined can never come back; ask again with a fresh one.
-    const req = await Channel.requestJoin(relay, code, id, info, null, await vouch()).catch(async (err: unknown) => {
-      // By tag; by text too, for relays from before tags (0.7 and older).
-      const refused = err instanceof RelayError && (err.tag === "Removed" || err.tag === "Denied" || (err.status === 403 && /removed|denied/.test(err.message)));
-      if (!refused) throw err;
-      forgetIdentity(name, roomId);
-      id = await loadIdentity(name, roomId);
-      return Channel.requestJoin(relay, code, id, info, null, await vouch());
-    });
-    out(opt.reclaim ? `asked to take back ${name}'s seat with a new key (the owner sees it as a RECLAIM and decides).` : `asked to join as ${name}.`);
-    if (linked) out(`Vouched for by this computer${linked.linked?.name ? `, linked to ${linked.linked.name}` : ""}.`);
-    if (!opt.reclaim && (await admitLocally(code, relay, id, req.requestId, { name, role: opt.role, about: opt.about }))) {
-      out("The channel's owner key is on this computer, so it let you in itself (no code to compare).");
-    } else out(`waiting for the owner to open your request…`);
-    const deadline = Date.now() + parseDuration(opt.timeout ?? "30m") * 1000;
-    let shown: string | null = null;
-    for (;;) {
-      const st = await Channel.joinStatus(relay, code, id, req.requestId);
-      if (st.status === "pending" && st.code && st.code !== shown) {
-        shown = st.code;
-        out(`verification code ${st.code}: the owner sees the same 6 digits next to your request, and approves once they match.`);
-      }
-      if (st.status === "denied") {
-        forgetIdentity(name, decodeJoinCode(code).roomId);
-        die("the owner denied this request");
-      }
-      if (st.status === "approved") return settle(st.access, "approved");
-      if (Date.now() > deadline) {
-        die(
-          shown
-            ? `still waiting for approval (code ${shown}); run the same command again to keep waiting (same request, same code)`
-            : "the owner hasn't opened your request yet; run the same command again to keep waiting (same request)",
-          3,
+  create: () =>
+    Effect.gen(function* () {
+      const keys = yield* Keystore;
+      const name = yield* agentName();
+      if (name === OWNER_NAME) return yield* die(`"${OWNER_NAME}" is reserved for the channel owner; pick an agent name with --as`);
+      const relay = relayUrl();
+      if (yield* signInOn(relay)) {
+        return yield* die(
+          `channels on ${relay} are created and owned by a signed-in human, not an agent.\n` +
+            `  Ask your human to open ${relay}/ , sign in, create the channel, and give you its join line (kiwi join mc2-… --as ${name}).`,
         );
       }
-      await Bun.sleep(1500);
-    }
-  },
+      const roomId = newRoomId();
+      const [owner, agent] = yield* Effect.all([keys.identity(OWNER_NAME, roomId), keys.identity(name, roomId)], { concurrency: "unbounded" });
+      const { code, access } = yield* Channel.fx.create(
+        relay,
+        owner,
+        { name: OWNER_NAME, role: "owner" },
+        [{ ...agent, info: { name, ...(opt.role ? { role: opt.role } : {}), ...(opt.about ? { about: opt.about } : {}) } }],
+        roomId,
+        null,
+        // The alias you gave becomes the channel's (sealed) name, so everyone who joins sees it.
+        args[1],
+      );
+      const alias = yield* joinedAlias(access.roomId, args[1]);
+      const cfg = yield* keys.update((c) => {
+        c.channels[alias] = { ...access, relay, code, as: name, owner: OWNER_NAME };
+      });
+      yield* (yield* Cursor).write(alias, name, 0);
+      const s = yield* openSession(alias, cfg.channels[alias]!, name);
+      yield* s.hello(opt.role, opt.about);
+      settleIn(alias, name);
+      process.stderr.write(`created "${alias}": you (${OWNER_NAME}) own it, ${name} is in (key ${fingerprint(agent.pk)})\n`);
+      out(`join code: ${code}`);
+      out(`  Agents ask to join with: kiwi join ${code}${relay === DEFAULT_RELAY ? "" : ` --relay ${relay}`} --as <name> [--role <role>] [--about "<rules>"]`);
+      out(`  The code only lets them ask. Your human approves each one after checking its 6-digit verification code.`);
+      // The owner key never goes into an agent's transcript; `kiwi web` prints the private link when asked.
+      out(`  Your private owner dashboard link: run \`kiwi web\` yourself (it carries the owner key).`);
+      out("");
+      out(agentPrompt(alias, name, { role: opt.role, about: opt.about }));
+    }),
 
-  async hook() {
-    await run(runHook(args[1] ?? ""));
-  },
+  join: () =>
+    Effect.gen(function* () {
+      const keys = yield* Keystore;
+      const cursor = yield* Cursor;
+      const code = (args[1] ?? (yield* die("usage: kiwi join <code> [alias] --as NAME [--role ROLE]"))).trim();
+      try {
+        decodeJoinCode(code);
+      } catch {
+        return yield* die("that isn't a join code (they look like mc2-…-…)");
+      }
+      const name = yield* agentName();
+      if (name === OWNER_NAME) return yield* die(`"${OWNER_NAME}" is reserved for the channel owner; pick an agent name with --as`);
+      const relay = relayUrl();
+      const roomId = decodeJoinCode(code).roomId;
+      const hadKey = (yield* keys.identitiesIn(roomId)).includes(name);
+      let id = yield* keys.identity(name, roomId);
+      const info = { name, ...(opt.role ? { role: opt.role } : {}), ...(opt.about ? { about: opt.about } : {}), ...(opt.reclaim ? { reclaim: true } : {}) };
+
+      // Agents join from a computer its person linked with `kiwi setup`; the computer vouches for them.
+      const signIn = yield* signInOn(relay);
+
+      /** In: write the config, bind this folder, and print the instructions. */
+      const settle = (access: ChannelAccess, how: "approved" | "resumed") =>
+        Effect.gen(function* () {
+          // Members can read the channel's sealed name: use it to name the channel here.
+          const title = yield* new Channel(access, relay, id).fx.title().pipe(Effect.catchCause(() => Effect.succeed(null)));
+          const existing = Object.entries((yield* keys.config).channels).find(([, c]) => c.roomId === access.roomId)?.[0];
+          const alias = existing && !args[2] ? existing : yield* joinedAlias(access.roomId, args[2], title);
+          // Another agent on this machine may already be in this channel: keep its entry, add ours.
+          const cfg = yield* keys.update((c) => {
+            const prior = c.channels[alias];
+            c.channels[alias] =
+              prior?.roomId === access.roomId
+                ? { ...prior, ...access, keys: { ...prior.keys, ...access.keys }, as: prior.as ?? name, ...(title ? { title } : {}) }
+                : { ...access, relay, code, as: name, ...(title ? { title } : {}) };
+          });
+          const s = yield* openSession(alias, cfg.channels[alias]!, name);
+          // What the owner lets this agent do: a read-only one doesn't even announce itself.
+          const scopes = (yield* s.state()).state.members.get(name)?.scopes ?? [...SCOPES];
+          const hello = (role?: string, about?: string) => (canPost(scopes) ? s.hello(role, about) : Effect.succeed(0));
+          if (how === "resumed") {
+            // Nothing new was granted: pick up where this agent left off.
+            if ((yield* cursor.read(alias, name)) === null) yield* cursor.write(alias, name, yield* s.ch.fx.head());
+            if (opt.role || opt.about) yield* hello(opt.role, opt.about);
+          } else if (opt.reclaim) {
+            // A reclaimed seat: what reached this name after its old key last spoke is unread for the new one.
+            const { messages, state } = yield* s.state();
+            const last = messages.filter((m) => m.from === name && m.kind !== "event" && state.trust.get(m.seq) === "verified").at(-1)?.seq;
+            yield* cursor.write(alias, name, last ?? state.head);
+          } else {
+            yield* cursor.write(alias, name, yield* s.ch.fx.head());
+            yield* hello(opt.role, opt.about);
+          }
+          settleIn(alias, name);
+          // Say what this agent runs on, so work that needs it finds it. Never worth failing a join over.
+          if (canPost(scopes)) yield* Effect.ignoreCause(s.refreshCard(detectCard()));
+          process.stderr.write(`${how === "resumed" ? "back in" : "joined"} "${alias}" as ${name} (key ${fingerprint(id.pk)})\n`);
+          out(how === "resumed" ? "this key is already a member: resumed, nothing new was granted.\n" : "approved.\n");
+          if (signIn) out(`Your human can watch everything you do in this channel at ${relay}/#${encodeURIComponent(code)}\n`);
+          out(agentPrompt(alias, name, { role: opt.role, about: opt.about, scopes }));
+        });
+
+      const machine = loadMachine();
+      const linked = machine?.linked && machine.relay === relay ? machine : null;
+      if (signIn && !linked) {
+        return yield* die(
+          "this computer isn't set up for Kiwi yet. Its person runs this once, in a terminal:\n" +
+            "  kiwi setup\n" +
+            "Then run this join again.",
+        );
+      }
+      // The same key, already a member (the config was lost, or this is a re-run): resume.
+      if (hadKey) {
+        const access = yield* Channel.fx.resume(relay, code, id).pipe(Effect.catchIf((err) => err instanceof RelayError && [401, 403, 404].includes(err.status), () => Effect.succeed(null)));
+        if (access) return yield* settle(access, "resumed");
+      }
+      const vouch = () => (linked ? Effect.promise(() => vouchFor(linked, roomId, id.pk)) : Effect.succeed(null));
+      // Asking again with the same key resumes the same request, so re-running this is always safe.
+      // A key that was removed or declined can never come back; ask again with a fresh one.
+      const req = yield* Channel.fx.requestJoin(relay, code, id, info, null, yield* vouch()).pipe(
+        Effect.catchIf(outForGood, () =>
+          Effect.gen(function* () {
+            yield* keys.forgetIdentity(name, roomId);
+            id = yield* keys.identity(name, roomId);
+            return yield* Channel.fx.requestJoin(relay, code, id, info, null, yield* vouch());
+          }),
+        ),
+      );
+      out(opt.reclaim ? `asked to take back ${name}'s seat with a new key (the owner sees it as a RECLAIM and decides).` : `asked to join as ${name}.`);
+      if (linked) out(`Vouched for by this computer${linked.linked?.name ? `, linked to ${linked.linked.name}` : ""}.`);
+      if (!opt.reclaim && (yield* admitLocally(code, relay, id, req.requestId, { name, role: opt.role, about: opt.about }))) {
+        out("The channel's owner key is on this computer, so it let you in itself (no code to compare).");
+      } else out(`waiting for the owner to open your request…`);
+      const deadline = Date.now() + parseDuration(opt.timeout ?? "30m") * 1000;
+      let shown: string | null = null;
+      for (;;) {
+        const st = yield* Channel.fx.joinStatus(relay, code, id, req.requestId);
+        if (st.status === "pending" && st.code && st.code !== shown) {
+          shown = st.code;
+          out(`verification code ${st.code}: the owner sees the same 6 digits next to your request, and approves once they match.`);
+        }
+        if (st.status === "denied") {
+          yield* keys.forgetIdentity(name, decodeJoinCode(code).roomId);
+          return yield* die("the owner denied this request");
+        }
+        if (st.status === "approved") return yield* settle(st.access, "approved");
+        if (Date.now() > deadline) {
+          return yield* die(
+            shown
+              ? `still waiting for approval (code ${shown}); run the same command again to keep waiting (same request, same code)`
+              : "the owner hasn't opened your request yet; run the same command again to keep waiting (same request)",
+            3,
+          );
+        }
+        yield* Effect.sleep(1500);
+      }
+    }),
+
+  hook: () => runHook(args[1] ?? ""),
 
   /**
    * Set up this computer, once, by its person: what Kiwi keeps and where, linking the computer to
    * their account (so agents started here join already vouched for as theirs), and whether Kiwi
    * may keep Claude Code agents reachable.
    */
-  async setup() {
-    const relay = relayUrl();
-    const sub = args[1];
-    if (sub === "unlink") {
-      const m = loadMachine() ?? die("this computer isn't linked");
-      await unlinkMachine(m).catch(() => {});
-      forgetMachine();
-      return out("This computer is unlinked. Agents started here now need their person to vouch for them from a link.");
-    }
-    if (sub === "status") {
-      const m = loadMachine();
-      if (!m?.linked) return out("This computer isn't linked to an account. Run kiwi setup.");
-      const st = await machineStatus(m).catch(() => null);
-      if (st?.status !== "linked") return out("This computer's link was removed. Run kiwi setup again.");
-      out(`Linked to ${st.name ?? m.linked.name ?? "your account"} (${m.label}).`);
-      // What Your computers on the web asks you to compare before trusting this computer's agents on their own.
-      return out(`Its code: ${await machineCode(m.identity.pk)}`);
-    }
-
-    out("Setting up Kiwi on this computer.\n");
-    out(`1. What Kiwi keeps: everything lives in ${home()}, readable only by you. That's your agents' keys and the`);
-    out("   channels they're in. Nothing else on this computer is touched.\n");
-
-    let m = loadMachine();
-    const current = m?.linked && m.relay === relay ? await machineStatus(m).catch(() => null) : null;
-    if (m && current?.status === "linked") {
-      out(`2. This computer is already linked to ${current.name ?? m.linked?.name ?? "your account"}.\n`);
-    } else {
-      if (!m || m.relay !== relay || m.linked) m = await newMachine(relay);
-      saveMachine(m);
-      await registerMachine(m);
-      const url = linkUrl(m);
-      out("2. Link this computer to your account, so agents you start here join as yours.");
-      out(`   Open this page, sign in, and check it shows ${await machineCode(m.identity.pk)}:`);
-      out(`   ${url}`);
-      openBrowser(url);
-      out("   Waiting for you to confirm in the browser…");
-      const deadline = Date.now() + 15 * 60_000;
-      for (;;) {
-        const st = await machineStatus(m).catch(() => null);
-        if (st?.status === "linked") {
-          m.linked = { name: st.name, at: Date.now() };
-          saveMachine(m);
-          out(`   Linked to ${st.name ?? "your account"}. Channel owners still approve each agent you bring.\n`);
-          break;
-        }
-        if (st?.status === "expired" || Date.now() > deadline) die("the link expired before it was confirmed; run kiwi setup again");
-        await Bun.sleep(2000);
+  setup: () =>
+    Effect.gen(function* () {
+      const keys = yield* Keystore;
+      const relay = relayUrl();
+      const sub = args[1];
+      const linkStatus = (m: Parameters<typeof machineFx.status>[0]) => machineFx.status(m).pipe(Effect.catchCause(() => Effect.succeed(null)));
+      if (sub === "unlink") {
+        const m = loadMachine() ?? (yield* die("this computer isn't linked"));
+        yield* Effect.ignoreCause(machineFx.unlink(m));
+        forgetMachine();
+        return out("This computer is unlinked. Agents started here now need their person to vouch for them from a link.");
       }
-    }
+      if (sub === "status") {
+        const m = loadMachine();
+        if (!m?.linked) return out("This computer isn't linked to an account. Run kiwi setup.");
+        const st = yield* linkStatus(m);
+        if (st?.status !== "linked") return out("This computer's link was removed. Run kiwi setup again.");
+        out(`Linked to ${st.name ?? m.linked.name ?? "your account"} (${m.label}).`);
+        // What Your computers on the web asks you to compare before trusting this computer's agents on their own.
+        return out(`Its code: ${yield* Effect.promise(() => machineCode(m.identity.pk))}`);
+      }
 
-    if (existsSync(join(process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude")))) {
-      if (hooksInstalled()) {
-        out("3. Claude Code: Kiwi keeps your agents reachable there (3 hooks). kiwi hooks uninstall removes them.\n");
+      out("Setting up Kiwi on this computer.\n");
+      out(`1. What Kiwi keeps: everything lives in ${home()}, readable only by you. That's your agents' keys and the`);
+      out("   channels they're in. Nothing else on this computer is touched.\n");
+
+      let m = loadMachine();
+      const current = m?.linked && m.relay === relay ? yield* linkStatus(m) : null;
+      if (m && current?.status === "linked") {
+        out(`2. This computer is already linked to ${current.name ?? m.linked?.name ?? "your account"}.\n`);
       } else {
-        out("3. Claude Code: Kiwi can keep agents reachable by adding 3 hooks to its settings. They only act in folders");
-        out("   where an agent joined a channel: they remind it to listen and hand it messages it missed.");
-        const yes = await confirm("   Add them?");
-        updateConfig((c) => {
-          c.claudeHooks = yes ? "on" : "off";
-        });
-        if (yes) installHooks();
-        out(yes ? "   Added.\n" : "   Skipped. kiwi hooks install adds them any time.\n");
+        if (!m || m.relay !== relay || m.linked) m = yield* Effect.promise(() => newMachine(relay));
+        const mine = m;
+        saveMachine(mine);
+        yield* machineFx.register(mine);
+        const url = linkUrl(mine);
+        out("2. Link this computer to your account, so agents you start here join as yours.");
+        out(`   Open this page, sign in, and check it shows ${yield* Effect.promise(() => machineCode(mine.identity.pk))}:`);
+        out(`   ${url}`);
+        openBrowser(url);
+        out("   Waiting for you to confirm in the browser…");
+        const deadline = Date.now() + 15 * 60_000;
+        for (;;) {
+          const st = yield* linkStatus(mine);
+          if (st?.status === "linked") {
+            mine.linked = { name: st.name, at: Date.now() };
+            saveMachine(mine);
+            out(`   Linked to ${st.name ?? "your account"}. Channel owners still approve each agent you bring.\n`);
+            break;
+          }
+          if (st?.status === "expired" || Date.now() > deadline) return yield* die("the link expired before it was confirmed; run kiwi setup again");
+          yield* Effect.sleep(2000);
+        }
       }
-    }
 
-    if (!Bun.which("kiwi")) out(`To type plain kiwi, add this line to your shell profile:\n  export PATH="${join(homedir(), ".kiwi", "bin")}:$PATH"\n`);
-    out("Done. To bring an agent into a channel, give it the channel's join command (in Details, on the web).");
-  },
-
-  async hooks() {
-    const sub = args[1] ?? "status";
-    const raw = args[2];
-    const usage = "usage: kiwi hooks install|uninstall|status [claude|codex|gemini|cursor|grok]";
-    let name: "claude" | ExtraHarness | undefined;
-    if (raw) {
-      if (raw !== "claude" && !EXTRA_HARNESSES.includes(raw as ExtraHarness)) die(usage);
-      name = raw as "claude" | ExtraHarness;
-    }
-    const allOn = () => Object.fromEntries(EXTRA_HARNESSES.map((h) => [h, "on" as const]));
-    const allOff = () => Object.fromEntries(EXTRA_HARNESSES.map((h) => [h, "off" as const]));
-    if (sub === "install") {
-      if (!name || name === "claude") {
-        updateConfig((c) => {
-          c.claudeHooks = "on";
-        });
+      if (existsSync(join(process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude")))) {
+        if (hooksInstalled()) {
+          out("3. Claude Code: Kiwi keeps your agents reachable there (3 hooks). kiwi hooks uninstall removes them.\n");
+        } else {
+          out("3. Claude Code: Kiwi can keep agents reachable by adding 3 hooks to its settings. They only act in folders");
+          out("   where an agent joined a channel: they remind it to listen and hand it messages it missed.");
+          const yes = yield* confirm("   Add them?");
+          yield* keys.update((c) => {
+            c.claudeHooks = yes ? "on" : "off";
+          });
+          if (yes) installHooks();
+          out(yes ? "   Added.\n" : "   Skipped. kiwi hooks install adds them any time.\n");
+        }
       }
-      if (!name) {
-        updateConfig((c) => {
-          c.harnessHooks = allOn();
-        });
-        return out(`installed hooks in ${installDetected().join(", ")}`);
+
+      if (!Bun.which("kiwi")) out(`To type plain kiwi, add this line to your shell profile:\n  export PATH="${join(homedir(), ".kiwi", "bin")}:$PATH"\n`);
+      out("Done. To bring an agent into a channel, give it the channel's join command (in Details, on the web).");
+    }),
+
+  hooks: () =>
+    Effect.gen(function* () {
+      const keys = yield* Keystore;
+      const sub = args[1] ?? "status";
+      const raw = args[2];
+      const usage = "usage: kiwi hooks install|uninstall|status [claude|codex|gemini|cursor|grok]";
+      let name: "claude" | ExtraHarness | undefined;
+      if (raw) {
+        if (raw !== "claude" && !EXTRA_HARNESSES.includes(raw as ExtraHarness)) return yield* die(usage);
+        name = raw as "claude" | ExtraHarness;
       }
-      if (name !== "claude") {
-        updateConfig((c) => {
-          c.harnessHooks = { ...c.harnessHooks, [name]: "on" };
-        });
-        return out(`installed hooks in ${installExtra(name)}`);
+      const allOn = () => Object.fromEntries(EXTRA_HARNESSES.map((h) => [h, "on" as const]));
+      const allOff = () => Object.fromEntries(EXTRA_HARNESSES.map((h) => [h, "off" as const]));
+      if (sub === "install") {
+        if (!name || name === "claude") {
+          yield* keys.update((c) => {
+            c.claudeHooks = "on";
+          });
+        }
+        if (!name) {
+          yield* keys.update((c) => {
+            c.harnessHooks = allOn();
+          });
+          return out(`installed hooks in ${installDetected().join(", ")}`);
+        }
+        if (name !== "claude") {
+          const h = name;
+          yield* keys.update((c) => {
+            c.harnessHooks = { ...c.harnessHooks, [h]: "on" };
+          });
+          return out(`installed hooks in ${installExtra(h)}`);
+        }
+        return out(`installed hooks in ${installHooks()}`);
       }
-      return out(`installed hooks in ${installHooks()}`);
-    }
-    if (sub === "uninstall") {
-      if (!name) {
-        updateConfig((c) => {
-          c.claudeHooks = "off";
-          c.harnessHooks = allOff();
+      if (sub === "uninstall") {
+        if (!name) {
+          yield* keys.update((c) => {
+            c.claudeHooks = "off";
+            c.harnessHooks = allOff();
+          });
+          return out(`removed hooks from ${uninstallDetected().join(", ")}`);
+        }
+        if (name === "claude") {
+          yield* keys.update((c) => {
+            c.claudeHooks = "off";
+          });
+          return out(`removed hooks from ${uninstallHooks()}`);
+        }
+        const h = name;
+        yield* keys.update((c) => {
+          c.harnessHooks = { ...c.harnessHooks, [h]: "off" };
         });
-        return out(`removed hooks from ${uninstallDetected().join(", ")}`);
+        return out(`removed hooks from ${uninstallExtra(h)}`);
       }
-      if (name === "claude") {
-        updateConfig((c) => {
-          c.claudeHooks = "off";
-        });
-        return out(`removed hooks from ${uninstallHooks()}`);
+      if (sub === "status") {
+        if (!name) return out(hooksStatus());
+        if (name === "claude") return out(hooksInstalled() ? "claude: installed" : "claude: not installed");
+        return out(`${name}: ${extraInstalled(name) ? "installed" : "not installed"}`);
       }
-      updateConfig((c) => {
-        c.harnessHooks = { ...c.harnessHooks, [name]: "off" };
-      });
-      return out(`removed hooks from ${uninstallExtra(name)}`);
-    }
-    if (sub === "status") {
-      if (!name) return out(hooksStatus());
-      if (name === "claude") return out(hooksInstalled() ? "claude: installed" : "claude: not installed");
-      return out(`${name}: ${extraInstalled(name) ? "installed" : "not installed"}`);
-    }
-    die(usage);
-  },
+      return yield* die(usage);
+    }),
 
-  async requests() {
-    const s = await session();
-    const reqs = await run(s.requests());
-    if (!reqs.length) return out("no pending join requests");
-    const { state } = reqs.some((r) => r.reclaims) ? await run(s.state()) : { state: null };
-    for (const r of reqs) {
-      const who = r.kind === "human" ? `person, signed in as ${r.sponsoredBy?.name ?? "?"}` : r.sponsoredBy ? `agent of ${r.sponsoredBy.name}` : "agent";
-      const code = r.code ?? (r.check === "waiting" ? "waiting" : "unchecked");
-      if (r.reclaims) {
-        const seen = state?.members.get(r.reclaims.name)?.lastSeen;
-        out(`${code.padEnd(8)} RECLAIMS ${r.reclaims.name}'s seat · old key ${fingerprint(r.reclaims.pk)}${seen ? `, last seen ${ago(seen)}` : ""} · new key ${fingerprint(r.pk)} · ${who} · ${ago(r.ts)}`);
-      } else out(`${code.padEnd(8)} ${r.name}${r.role ? ` (${r.role})` : ""} · ${who} · key ${fingerprint(r.pk)} · ${ago(r.ts)}`);
-    }
-    if (reqs.some((r) => r.check === "waiting")) out("waiting: the requester shows its code in a moment; run kiwi requests again");
-    if (reqs.some((r) => r.reclaims && r.check === "unchecked")) out("unchecked RECLAIM: a seat moves only at your human's word; once they confirm, run kiwi check <new key>");
-    if (reqs.some((r) => !r.reclaims && r.check === "unchecked")) out(`unchecked: ${TOO_MANY_REQUESTS}`);
-  },
+  requests: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const reqs = yield* s.requests();
+      if (!reqs.length) return out("no pending join requests");
+      const { state } = reqs.some((r) => r.reclaims) ? yield* s.state() : { state: null };
+      for (const r of reqs) {
+        const who = r.kind === "human" ? `person, signed in as ${r.sponsoredBy?.name ?? "?"}` : r.sponsoredBy ? `agent of ${r.sponsoredBy.name}` : "agent";
+        const code = r.code ?? (r.check === "waiting" ? "waiting" : "unchecked");
+        if (r.reclaims) {
+          const seen = state?.members.get(r.reclaims.name)?.lastSeen;
+          out(`${code.padEnd(8)} RECLAIMS ${r.reclaims.name}'s seat · old key ${fingerprint(r.reclaims.pk)}${seen ? `, last seen ${ago(seen)}` : ""} · new key ${fingerprint(r.pk)} · ${who} · ${ago(r.ts)}`);
+        } else out(`${code.padEnd(8)} ${r.name}${r.role ? ` (${r.role})` : ""} · ${who} · key ${fingerprint(r.pk)} · ${ago(r.ts)}`);
+      }
+      if (reqs.some((r) => r.check === "waiting")) out("waiting: the requester shows its code in a moment; run kiwi requests again");
+      if (reqs.some((r) => r.reclaims && r.check === "unchecked")) out("unchecked RECLAIM: a seat moves only at your human's word; once they confirm, run kiwi check <new key>");
+      if (reqs.some((r) => !r.reclaims && r.check === "unchecked")) out(`unchecked: ${TOO_MANY_REQUESTS}`);
+    }),
 
-  async check() {
-    const s = await session();
-    if (!s.ownerCh) die("only the channel owner's machine checks join requests");
-    const key = (args[1] ?? die("usage: kiwi check KEY (the request's key, from kiwi requests)")).trim();
-    const r = (await run(s.requests())).find((x) => x.check === "unchecked" && fingerprint(x.pk).startsWith(key));
-    if (!r) die(`no unchecked request with key ${key} (see: kiwi requests)`);
-    const what = r.reclaims ? `${r.reclaims.name}'s seat (RECLAIM, new key ${fingerprint(r.pk)})` : `${r.name} (key ${fingerprint(r.pk)})`;
-    if (!(await confirm(`Start the code check for ${what}?`))) die("checking needs your human's go-ahead; re-run with --yes once they confirm");
-    await s.ownerCh.checkRequest(r);
-    out(`checking ${what}: the requester shows its 6-digit code in a moment (kiwi requests)`);
-  },
+  check: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const owner = s.ownerCh ?? (yield* die("only the channel owner's machine checks join requests"));
+      const key = (args[1] ?? (yield* die("usage: kiwi check KEY (the request's key, from kiwi requests)"))).trim();
+      const r = (yield* s.requests()).find((x) => x.check === "unchecked" && fingerprint(x.pk).startsWith(key));
+      if (!r) return yield* die(`no unchecked request with key ${key} (see: kiwi requests)`);
+      const what = r.reclaims ? `${r.reclaims.name}'s seat (RECLAIM, new key ${fingerprint(r.pk)})` : `${r.name} (key ${fingerprint(r.pk)})`;
+      if (!(yield* confirm(`Start the code check for ${what}?`))) return yield* die("checking needs your human's go-ahead; re-run with --yes once they confirm");
+      yield* owner.fx.checkRequest(r);
+      out(`checking ${what}: the requester shows its 6-digit code in a moment (kiwi requests)`);
+    }),
 
-  async approve() {
-    const s = await session();
-    const r = await findRequest(s, args[1] ?? die("usage: kiwi approve CODE [--name NEWNAME] [--role ROLE] [--scopes S] [--yes] [--force]"));
-    const scopes = opt.scopes === undefined ? undefined : (parseScopes(opt.scopes) ?? die(`"${opt.scopes}" isn't scopes: say read-only, contributor, full, or a list of ${SCOPES.join(",")}`));
-    if (r.reclaims && !opt.name) {
-      if (scopes) die("a reclaimed seat keeps what it may do; change that after with: kiwi scope NAME SCOPES");
-      return reclaimSeat(s, r);
-    }
-    const name = opt.name ?? r.name;
-    if (!NAME_RE.test(name) || name === OWNER_NAME) die(`"${name}" isn't an allowed name; approve with --name NAME`);
-    const taken = (await run(s.members(true))).find((m) => m.name === name && m.active);
-    if (taken) die(`"${name}" is already a member; approve under another name with --name`);
-    // Asking to be the coordinator doesn't make you one: the owner says --role coordinator themselves.
-    const askedCoordinator = r.role?.trim().toLowerCase() === COORDINATOR && opt.role?.trim().toLowerCase() !== COORDINATOR;
-    const role = opt.role ?? (askedCoordinator ? undefined : r.role);
-    const may = scopes ? `, to ${mayDo(scopes)}` : "";
-    if (!(await confirm(`Let "${name}"${role ? ` (${role})` : ""} in${may}? Verification code ${r.code}`))) {
-      die(`approving needs your human's go-ahead: once they confirm the joining agent shows ${r.code}, re-run with --yes`);
-    }
-    const admitted = await s.ownerCh!.approve(r, { name, role, about: r.about, ...(scopes ? { scopes } : {}) });
-    out(`approved ${admitted.name} (${r.code})${scopes ? `; they may ${describeScopes(scopes)}` : ""}${askedCoordinator ? `; it asked to be the coordinator, which takes: kiwi approve ${r.code} --role coordinator` : ""}`);
-  },
+  approve: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const r = yield* findRequest(s, args[1] ?? (yield* die("usage: kiwi approve CODE [--name NEWNAME] [--role ROLE] [--scopes S] [--yes] [--force]")));
+      const scopes = opt.scopes === undefined ? undefined : (parseScopes(opt.scopes) ?? (yield* die(`"${opt.scopes}" isn't scopes: say read-only, contributor, full, or a list of ${SCOPES.join(",")}`)));
+      if (r.reclaims && !opt.name) {
+        if (scopes) return yield* die("a reclaimed seat keeps what it may do; change that after with: kiwi scope NAME SCOPES");
+        return yield* reclaimSeat(s, r);
+      }
+      const name = opt.name ?? r.name;
+      if (!NAME_RE.test(name) || name === OWNER_NAME) return yield* new BadName(`"${name}" isn't an allowed name; approve with --name NAME`);
+      const taken = (yield* s.members(true)).find((m) => m.name === name && m.active);
+      if (taken) return yield* new BadName(`"${name}" is already a member; approve under another name with --name`);
+      // Asking to be the coordinator doesn't make you one: the owner says --role coordinator themselves.
+      const askedCoordinator = r.role?.trim().toLowerCase() === COORDINATOR && opt.role?.trim().toLowerCase() !== COORDINATOR;
+      const role = opt.role ?? (askedCoordinator ? undefined : r.role);
+      const may = scopes ? `, to ${mayDo(scopes)}` : "";
+      if (!(yield* confirm(`Let "${name}"${role ? ` (${role})` : ""} in${may}? Verification code ${r.code}`))) {
+        return yield* die(`approving needs your human's go-ahead: once they confirm the joining agent shows ${r.code}, re-run with --yes`);
+      }
+      const admitted = yield* s.ownerCh!.fx.approve(r, { name, role, about: r.about, ...(scopes ? { scopes } : {}) });
+      out(`approved ${admitted.name} (${r.code})${scopes ? `; they may ${describeScopes(scopes)}` : ""}${askedCoordinator ? `; it asked to be the coordinator, which takes: kiwi approve ${r.code} --role coordinator` : ""}`);
+    }),
 
-  async deny() {
-    const s = await session();
-    const r = await findRequest(s, args[1] ?? die("usage: kiwi deny CODE|KEY"), { byKey: true });
-    await s.ownerCh!.deny(r.id);
-    out(`denied ${r.reclaims ? `the RECLAIM of ${r.reclaims.name}'s seat` : r.name} (${r.code ?? `key ${fingerprint(r.pk)}`})`);
-  },
+  deny: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const r = yield* findRequest(s, args[1] ?? (yield* die("usage: kiwi deny CODE|KEY")), { byKey: true });
+      yield* s.ownerCh!.fx.deny(r.id);
+      out(`denied ${r.reclaims ? `the RECLAIM of ${r.reclaims.name}'s seat` : r.name} (${r.code ?? `key ${fingerprint(r.pk)}`})`);
+    }),
 
-  async members() {
-    const s = await session();
-    await run(s.members(true));
-    const { state } = await run(s.state());
-    for (const m of await run(s.members())) {
-      const scopes = m.active ? state.members.get(m.name)?.scopes : undefined;
-      const may = scopes && presetOf(scopes) !== "full" ? ` · may: ${describeScopes(scopes)}` : "";
-      out(`${describeMember(m)}${m.name === s.me ? " (you)" : ""}${m.role ? ` — ${m.role}` : ""}${may}${m.active ? "" : "  (left)"}`);
-    }
-  },
+  members: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      yield* s.members(true);
+      const { state } = yield* s.state();
+      for (const m of yield* s.members()) {
+        const scopes = m.active ? state.members.get(m.name)?.scopes : undefined;
+        const may = scopes && presetOf(scopes) !== "full" ? ` · may: ${describeScopes(scopes)}` : "";
+        out(`${describeMember(m)}${m.name === s.me ? " (you)" : ""}${m.role ? ` — ${m.role}` : ""}${may}${m.active ? "" : "  (left)"}`);
+      }
+    }),
 
-  /** What each member may do besides read: listed for anyone, set by the owner. */
   /** The channel's rooms: listed for anyone. */
-  async rooms() {
-    const s = await session();
-    out(formatRooms((await run(s.state())).state));
-  },
+  rooms: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      out(formatRooms((yield* s.state()).state));
+    }),
 
   /** Owner: make or rename a room. */
-  async room() {
-    const s = await session();
-    const [sub, a, b] = args.slice(1);
-    if (sub === "create") {
-      const name = a ?? die("usage: kiwi room create NAME");
-      const { id, state } = await run(s.createRoom(name));
-      return out(`made #${state.rooms.get(id)?.name ?? name} (id ${id}); send there with --room ${state.rooms.get(id)?.name ?? id}`);
-    }
-    if (sub === "rename") {
-      const room = a ?? die("usage: kiwi room rename NAME|ID NEWNAME");
-      await run(s.renameRoom(room, b ?? die("usage: kiwi room rename NAME|ID NEWNAME")));
-      return out(`renamed #${room} to #${b}`);
-    }
-    die("usage: kiwi room create NAME | kiwi room rename NAME|ID NEWNAME (owner); kiwi rooms lists them");
-  },
-
-  async scope() {
-    const s = await session();
-    const [name, given] = args.slice(1);
-    const { state } = await run(s.state());
-    if (!name) {
-      for (const m of [...state.members.values()].filter((x) => x.active).sort((a, b) => a.name.localeCompare(b.name))) {
-        out(`${m.name}${m.name === s.me ? " (you)" : ""}: ${m.owner ? "everything (owner)" : mayDo(m.scopes)}`);
+  room: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const [sub, a, b] = args.slice(1);
+      if (sub === "create") {
+        const name = a ?? (yield* die("usage: kiwi room create NAME"));
+        const { id, state } = yield* s.createRoom(name);
+        return out(`made #${state.rooms.get(id)?.name ?? name} (id ${id}); send there with --room ${state.rooms.get(id)?.name ?? id}`);
       }
-      return;
-    }
-    if (!s.ownerCh) die("only the channel owner's machine sets what members may do");
-    const scopes = parseScopes(given ?? die("usage: kiwi scope NAME read-only|contributor|full|post,ask,tasks,claims,facts [--yes]")) ?? die(`"${given}" isn't scopes: say read-only, contributor, full, or a list of ${SCOPES.join(",")}`);
-    if (!(await confirm(`Let ${name} ${mayDo(scopes)}?`))) die("changing what a member may do needs your human's go-ahead; re-run with --yes");
-    await run(s.setScopes(name, scopes));
-    out(`${name} may now ${mayDo(scopes)}`);
-  },
+      if (sub === "rename") {
+        const room = a ?? (yield* die("usage: kiwi room rename NAME|ID NEWNAME"));
+        yield* s.renameRoom(room, b ?? (yield* die("usage: kiwi room rename NAME|ID NEWNAME")));
+        return out(`renamed #${room} to #${b}`);
+      }
+      return yield* die("usage: kiwi room create NAME | kiwi room rename NAME|ID NEWNAME (owner); kiwi rooms lists them");
+    }),
 
+  /** What each member may do besides read: listed for anyone, set by the owner. */
+  scope: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const [name, given] = args.slice(1);
+      const { state } = yield* s.state();
+      if (!name) {
+        for (const m of [...state.members.values()].filter((x) => x.active).sort((a, b) => a.name.localeCompare(b.name))) {
+          out(`${m.name}${m.name === s.me ? " (you)" : ""}: ${m.owner ? "everything (owner)" : mayDo(m.scopes)}`);
+        }
+        return;
+      }
+      if (!s.ownerCh) return yield* die("only the channel owner's machine sets what members may do");
+      const scopes =
+        parseScopes(given ?? (yield* die("usage: kiwi scope NAME read-only|contributor|full|post,ask,tasks,claims,facts [--yes]"))) ??
+        (yield* die(`"${given}" isn't scopes: say read-only, contributor, full, or a list of ${SCOPES.join(",")}`));
+      if (!(yield* confirm(`Let ${name} ${mayDo(scopes)}?`))) return yield* die("changing what a member may do needs your human's go-ahead; re-run with --yes");
+      yield* s.setScopes(name, scopes);
+      out(`${name} may now ${mayDo(scopes)}`);
+    }),
 
-  async kick() {
-    const s = await session();
-    if (!s.ownerCh) die("only the channel owner can remove members");
-    const name = args[1] ?? die("usage: kiwi kick NAME");
-    const m = (await run(s.members(true))).find((x) => x.name === name && x.active) ?? die(`"${name}" isn't a member`);
-    if (m.owner) die("the owner can't be removed; `kiwi close` deletes the channel");
-    await s.ownerCh.remove(m.pk);
-    out(`removed ${name}; rotated the channel key so they can't read anything new`);
-  },
+  kick: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const owner = s.ownerCh ?? (yield* die("only the channel owner can remove members"));
+      const name = args[1] ?? (yield* die("usage: kiwi kick NAME"));
+      const m = (yield* s.members(true)).find((x) => x.name === name && x.active) ?? (yield* die(`"${name}" isn't a member`));
+      if (m.owner) return yield* die("the owner can't be removed; `kiwi close` deletes the channel");
+      yield* owner.fx.remove(m.pk);
+      out(`removed ${name}; rotated the channel key so they can't read anything new`);
+    }),
 
-  async leave() {
-    const s = await session();
-    if (s.ownerCh) die("you own this channel; `kiwi close` deletes it for everyone");
-    await s.ch.leave();
-    forgetMember(s.alias, s.me);
-    out(`${s.me} left "${s.alias}"; its key is gone from this machine`);
-  },
+  leave: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      if (s.ownerCh) return yield* die("you own this channel; `kiwi close` deletes it for everyone");
+      yield* s.ch.fx.leave();
+      yield* (yield* Keystore).forgetMember(s.alias, s.me);
+      out(`${s.me} left "${s.alias}"; its key is gone from this machine`);
+    }),
 
-  async close() {
-    const s = await session();
-    if (!s.ownerCh) die("only the channel owner can close it");
-    if (!(await confirm(`Delete "${s.alias}" for everyone? Messages, members and keys are destroyed.`))) {
-      die("closing needs your human's go-ahead; re-run with --yes once they confirm");
-    }
-    await s.ownerCh.close();
-    wipeChannel(s.alias);
-    out(`closed "${s.alias}": deleted at the relay and on this machine`);
-  },
+  close: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const owner = s.ownerCh ?? (yield* die("only the channel owner can close it"));
+      if (!(yield* confirm(`Delete "${s.alias}" for everyone? Messages, members and keys are destroyed.`))) {
+        return yield* die("closing needs your human's go-ahead; re-run with --yes once they confirm");
+      }
+      yield* owner.fx.close();
+      yield* (yield* Keystore).wipeChannel(s.alias);
+      out(`closed "${s.alias}": deleted at the relay and on this machine`);
+    }),
 
-  async channels() {
-    const cfg = loadConfig();
-    const here = bindingFor(process.cwd());
-    for (const [alias, c] of Object.entries(cfg.channels)) {
-      const agents = identitiesIn(c.roomId).filter((n) => n !== c.owner);
-      out(`${here?.alias === alias ? "*" : " "} ${alias}${c.title && c.title !== alias ? ` (${c.title})` : ""}  ${agents.length ? `agents here: ${agents.join(", ")}` : "no agent keys"}  ${c.relay}`);
-    }
-  },
+  channels: () =>
+    Effect.gen(function* () {
+      const keys = yield* Keystore;
+      const cfg = yield* keys.config;
+      const here = bindingFor(process.cwd());
+      for (const [alias, c] of Object.entries(cfg.channels)) {
+        const agents = (yield* keys.identitiesIn(c.roomId)).filter((n) => n !== c.owner);
+        out(`${here?.alias === alias ? "*" : " "} ${alias}${c.title && c.title !== alias ? ` (${c.title})` : ""}  ${agents.length ? `agents here: ${agents.join(", ")}` : "no agent keys"}  ${c.relay}`);
+      }
+    }),
 
   /** Bind this directory to a channel and agent, so plain `kiwi` here acts as them. */
-  async use() {
-    const cfg = loadConfig();
-    const alias = args[1] ?? die("usage: kiwi use <alias> --as NAME");
-    const c = cfg.channels[alias] ?? die(`unknown channel "${alias}"`);
-    const name = agentName(c);
-    if (!identitiesIn(c.roomId).includes(name)) die(`${name} has no key in "${alias}" on this machine`);
-    if (!bindDirectory(process.cwd(), { alias, as: name })) die("won't bind your home folder or the filesystem root; cd into a project first");
-    out(`kiwi in ${process.cwd()} now acts as ${name} in "${alias}"`);
-  },
+  use: () =>
+    Effect.gen(function* () {
+      const keys = yield* Keystore;
+      const cfg = yield* keys.config;
+      const alias = args[1] ?? (yield* die("usage: kiwi use <alias> --as NAME"));
+      const c = cfg.channels[alias] ?? (yield* die(`unknown channel "${alias}"`));
+      const name = yield* agentName(c);
+      if (!(yield* keys.identitiesIn(c.roomId)).includes(name)) return yield* die(`${name} has no key in "${alias}" on this machine`);
+      if (!bindDirectory(process.cwd(), { alias, as: name })) return yield* die("won't bind your home folder or the filesystem root; cd into a project first");
+      out(`kiwi in ${process.cwd()} now acts as ${name} in "${alias}"`);
+    }),
 
-  async status() {
-    const s = await session();
-    const [{ messages, state }, online] = await Promise.all([run(s.state()), run(s.who())]);
-    const on = new Map([...online].map(([n, p]) => [n, { client: p.client, role: p.role }]));
-    const snap = { alias: s.alias, me: s.me, state, online: on, unread: await run(s.unreadCount(state, messages)) };
-    out(opt.json ? JSON.stringify(statusJson(snap)) : formatStatus(snap));
-  },
+  status: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const [{ messages, state }, online] = yield* Effect.all([s.state(), s.who()], { concurrency: "unbounded" });
+      const on = new Map([...online].map(([n, p]) => [n, { client: p.client, role: p.role }]));
+      const snap = { alias: s.alias, me: s.me, state, online: on, unread: yield* s.unreadCount(state, messages) };
+      out(opt.json ? JSON.stringify(statusJson(snap)) : formatStatus(snap));
+    }),
 
-  async who() {
-    const s = await session();
-    const [online, { state }] = await Promise.all([run(s.who()), run(s.state())]);
-    if (!online.size) return out("nobody else is listening right now");
-    for (const [name, p] of online) {
-      const role = p.role ?? state.members.get(name)?.role;
-      out(`${name}${role ? ` — ${role}` : ""} · ${p.client}`);
-    }
-  },
+  who: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const [online, { state }] = yield* Effect.all([s.who(), s.state()], { concurrency: "unbounded" });
+      if (!online.size) return out("nobody else is listening right now");
+      for (const [name, p] of online) {
+        const role = p.role ?? state.members.get(name)?.role;
+        out(`${name}${role ? ` — ${role}` : ""} · ${p.client}`);
+      }
+    }),
 
-  async send() {
-    const s = await session();
-    const body = await text(1);
-    if (!body.trim()) die("empty message");
-    const kind = (opt.kind ?? "msg") as Kind;
-    if (!CHAT_KINDS.includes(kind)) die(`kind must be one of: ${CHAT_KINDS.join(", ")}`);
-    const re = list(opt.re)?.map((x) => Number(x.replace(/^#/, ""))).filter((n) => n > 0);
-    out(`sent #${await run(s.send(body, { to: list(opt.to), kind, re, imgs: images(), room: opt.room }))}`);
-  },
+  send: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const body = yield* text(1);
+      if (!body.trim()) return yield* die("empty message");
+      const kind = (opt.kind ?? "msg") as Kind;
+      if (!CHAT_KINDS.includes(kind)) return yield* die(`kind must be one of: ${CHAT_KINDS.join(", ")}`);
+      const re = list(opt.re)?.map((x) => Number(x.replace(/^#/, ""))).filter((n) => n > 0);
+      const imgs = yield* images;
+      out(`sent #${yield* s.send(body, { to: list(opt.to), kind, re, imgs, room: opt.room })}`);
+    }),
 
-  async ask() {
-    const s = await session();
-    const body = await text(1);
-    if (!body.trim()) die('usage: kiwi ask --to NAME "question" [--wait 10m]');
-    const waitSec = opt.wait ? parseDuration(opt.wait) : 0;
-    const kind = (opt.kind ?? "ask") as Kind;
-    const { seq, replies } = await run(s.ask(body, { to: list(opt.to), kind, waitSec, imgs: images(), room: opt.room }));    if (!waitSec) return out(`asked #${seq}`);
-    if (!replies.length) die(`no answer to #${seq} within ${opt.wait}; replies will still arrive in tail/wait`, 2);
-    for (const r of replies) out(render(r));
-  },
+  ask: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const body = yield* text(1);
+      if (!body.trim()) return yield* die('usage: kiwi ask --to NAME "question" [--wait 10m]');
+      const waitSec = opt.wait ? parseDuration(opt.wait) : 0;
+      const kind = (opt.kind ?? "ask") as Kind;
+      const imgs = yield* images;
+      const { seq, replies } = yield* s.ask(body, { to: list(opt.to), kind, waitSec, imgs, room: opt.room });
+      if (!waitSec) return out(`asked #${seq}`);
+      if (!replies.length) return yield* die(`no answer to #${seq} within ${opt.wait}; replies will still arrive in tail/wait`, 2);
+      for (const r of replies) out(render(r));
+    }),
 
-  async reply() {
-    const s = await session();
-    const seq = Number((args[1] ?? "").replace(/^#/, "")) || die('usage: kiwi reply N "text"');
-    const body = await text(2);
-    if (!body.trim()) die("empty reply");
-    out(`sent #${await run(s.reply(seq, body, (opt.kind ?? "msg") as Kind, images()))}`);
-  },
+  reply: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die('usage: kiwi reply N "text"'));
+      const body = yield* text(2);
+      if (!body.trim()) return yield* die("empty reply");
+      const imgs = yield* images;
+      out(`sent #${yield* s.reply(seq, body, (opt.kind ?? "msg") as Kind, imgs)}`);
+    }),
 
-  async save() {
-    const s = await session();
-    const seq = Number((args[1] ?? "").replace(/^#/, "")) || die("usage: kiwi save N [dir]");
-    const { messages } = await run(s.state());
-    const m = messages.find((x) => x.seq === seq) ?? die(`no message #${seq}`);
-    if (!m.imgs?.length) die(`message #${seq} has no images`);
-    for (const path of saveImages(seq, m.imgs, args[2] ?? ".")) out(path);
-  },
+  save: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi save N [dir]"));
+      const { messages } = yield* s.state();
+      const m = messages.find((x) => x.seq === seq) ?? (yield* die(`no message #${seq}`));
+      if (!m.imgs?.length) return yield* die(`message #${seq} has no images`);
+      for (const path of saveImages(seq, m.imgs, args[2] ?? ".")) out(path);
+    }),
 
-  async show() {
-    const s = await session();
-    const seq = Number((args[1] ?? "").replace(/^#/, "")) || die("usage: kiwi show N [dir]");
-    const { messages, state } = await run(s.state());
-    const m = messages.find((x) => x.seq === seq) ?? die(`no message #${seq}`);
-    // Images land under the channel's own folder (closing it deletes them), or where asked.
-    const saved = m.imgs?.length ? saveImages(seq, m.imgs, args[2] ?? joinPath(home(), "downloads", s.ch.roomId)) : [];
-    out(formatShown(m, messages, state, saved, s.me));
-  },
+  show: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi show N [dir]"));
+      const { messages, state } = yield* s.state();
+      const m = messages.find((x) => x.seq === seq) ?? (yield* die(`no message #${seq}`));
+      // Images land under the channel's own folder (closing it deletes them), or where asked.
+      const saved = m.imgs?.length ? saveImages(seq, m.imgs, args[2] ?? joinPath(home(), "downloads", s.ch.roomId)) : [];
+      out(formatShown(m, messages, state, saved, s.me));
+    }),
 
-  async log() {
-    const s = await session();
-    const { messages, state } = await run(s.state());
-    const room = opt.room === undefined ? undefined : await run(s.roomId(opt.room, state));
-    const shown = (opt.all ? messages : messages.filter((m) => m.kind !== "event" || m.ev?.op !== "hello")).filter(
-      (m) => room === undefined || (m.kind !== "event" && state.roomOf.get(m.seq) === room),
-    );
-    for (const m of shown.slice(-Number(opt.n ?? 30))) out(render(m, state));
-  },
+  log: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const { messages, state } = yield* s.state();
+      const room = opt.room === undefined ? undefined : yield* s.roomId(opt.room, state);
+      const shown = (opt.all ? messages : messages.filter((m) => m.kind !== "event" || m.ev?.op !== "hello")).filter(
+        (m) => room === undefined || (m.kind !== "event" && state.roomOf.get(m.seq) === room),
+      );
+      for (const m of shown.slice(-Number(opt.n ?? 30))) out(render(m, state));
+    }),
 
-  async sh() {
-    const s = await session();
-    const script = (await text(1)) || die("usage: kiwi sh 'SCRIPT' (start with: kiwi sh 'cat README')");
-    const r = await runSh(channelFiles(await run(sessionViews(s, script))), script);
-    process.stdout.write(r.stdout);
-    process.stderr.write(r.stderr);
-    process.exit(r.exitCode);
-  },
+  sh: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const script = (yield* text(1)) || (yield* die("usage: kiwi sh 'SCRIPT' (start with: kiwi sh 'cat README')"));
+      const views = yield* sessionViews(s, script);
+      const r = yield* Effect.promise(() => runSh(channelFiles(views), script));
+      process.stdout.write(r.stdout);
+      process.stderr.write(r.stderr);
+      return r.exitCode;
+    }),
 
-  async color() {
-    const s = await session();
-    const [a, b] = args.slice(1);
-    if (!a) {
-      const { state } = await run(s.state());
-      const held = new Map([...state.members.values()].filter((m) => m.active && m.color).map((m) => [m.color!, m.name]));
-      return out(COLORS.map((c) => `${c.padEnd(7)} ${held.get(c) ?? "free"}`).join("\n"));
-    }
-    const [member, pick] = b === undefined ? [s.me, a] : [a, b];
-    const color = pick === "none" ? null : isColor(pick) ? pick : die(`"${pick}" isn't a colour: ${COLORS.join(", ")} (or none)`);
-    await run(s.setColor(member, color));
-    out(color ? `${member}'s colour is ${color}` : `cleared ${member}'s colour`);
-  },
+  color: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const [a, b] = args.slice(1);
+      if (!a) {
+        const { state } = yield* s.state();
+        const held = new Map([...state.members.values()].filter((m) => m.active && m.color).map((m) => [m.color!, m.name]));
+        return out(COLORS.map((c) => `${c.padEnd(7)} ${held.get(c) ?? "free"}`).join("\n"));
+      }
+      const [member, pick] = b === undefined ? [s.me, a] : [a, b];
+      const color = pick === "none" ? null : isColor(pick) ? pick : yield* die(`"${pick}" isn't a colour: ${COLORS.join(", ")} (or none)`);
+      yield* s.setColor(member, color);
+      out(color ? `${member}'s colour is ${color}` : `cleared ${member}'s colour`);
+    }),
 
-  async mode() {
-    const s = await session();
-    const [which, onOff] = args.slice(1);
-    if (!which) {
-      const { state } = await run(s.state());
-      return out(modeLine(state, s.me) ?? "mode: normal (kiwi mode coordinator-only on, as the owner, to route people through the coordinator)");
-    }
-    if (which !== "coordinator-only" || (onOff !== "on" && onOff !== "off")) die("usage: kiwi mode [coordinator-only on|off] [--no-strict]");
-    const state = await run(s.setMode(onOff === "on", !opt["no-strict"]));
-    out(modeLine(state, s.me) ?? "mode: normal");
-  },
+  mode: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const [which, onOff] = args.slice(1);
+      if (!which) {
+        const { state } = yield* s.state();
+        return out(modeLine(state, s.me) ?? "mode: normal (kiwi mode coordinator-only on, as the owner, to route people through the coordinator)");
+      }
+      if (which !== "coordinator-only" || (onOff !== "on" && onOff !== "off")) return yield* die("usage: kiwi mode [coordinator-only on|off] [--no-strict]");
+      const state = yield* s.setMode(onOff === "on", !opt["no-strict"]);
+      out(modeLine(state, s.me) ?? "mode: normal");
+    }),
 
-  async charter() {
-    const s = await session();
-    const given = args.slice(1).join(" ").trim();
-    if (!given && !opt.clear) {
-      const { state } = await run(s.state());
-      return out(state.charter ? state.charter.text : "no charter (the owner sets one: kiwi charter \"what this channel is for, and its limits\")");
-    }
-    if (!s.ownerCh) die("only the channel owner's machine sets the charter");
-    if (!(await confirm(opt.clear ? "Clear the charter?" : `Set the charter to: ${given}?`))) die("changing the charter needs your human's go-ahead; re-run with --yes");
-    const state = await run(s.setCharter(opt.clear ? null : given));
-    out(state.charter ? `charter: ${state.charter.text}` : "cleared the charter");
-  },
+  charter: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const given = args.slice(1).join(" ").trim();
+      if (!given && !opt.clear) {
+        const { state } = yield* s.state();
+        return out(state.charter ? state.charter.text : "no charter (the owner sets one: kiwi charter \"what this channel is for, and its limits\")");
+      }
+      if (!s.ownerCh) return yield* die("only the channel owner's machine sets the charter");
+      if (!(yield* confirm(opt.clear ? "Clear the charter?" : `Set the charter to: ${given}?`))) return yield* die("changing the charter needs your human's go-ahead; re-run with --yes");
+      const state = yield* s.setCharter(opt.clear ? null : given);
+      out(state.charter ? `charter: ${state.charter.text}` : "cleared the charter");
+    }),
 
   /** Owner: stop every agent at once, or let them carry on. */
-  async hold() {
-    const s = await session();
-    const off = args[1] === "off";
-    if (!s.ownerCh) {
-      if (args.length > 1) die("only the channel owner's machine puts the channel on hold; tell your human or the owner what you saw (kiwi escalate)");
-      return out(holdLine((await run(s.state())).state) ?? "not on hold");
-    }
-    const state = await run(s.setHold(!off, off ? undefined : args.slice(1).join(" ") || opt.note));
-    out(holdLine(state) ?? "hold lifted: agents may carry on");
-  },
+  hold: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const off = args[1] === "off";
+      if (!s.ownerCh) {
+        if (args.length > 1) return yield* die("only the channel owner's machine puts the channel on hold; tell your human or the owner what you saw (kiwi escalate)");
+        return out(holdLine((yield* s.state()).state) ?? "not on hold");
+      }
+      const state = yield* s.setHold(!off, off ? undefined : args.slice(1).join(" ") || opt.note);
+      out(holdLine(state) ?? "hold lifted: agents may carry on");
+    }),
 
   /** Hand a decision to people instead of acting on it. */
-  async escalate() {
-    const s = await session();
-    const body = await text(1);
-    if (!body.trim()) die('usage: kiwi escalate [--re N] "why this needs a person"');
-    const re = opt.re === undefined ? undefined : Number(opt.re.replace(/^#/, "")) || die("--re takes a message number");
-    const { seq, to } = await run(s.escalate(body, re));
-    out(`escalated #${seq} to ${to.join(" and ")}; wait for their answer before acting on it`);
-  },
+  escalate: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const body = yield* text(1);
+      if (!body.trim()) return yield* die('usage: kiwi escalate [--re N] "why this needs a person"');
+      const re = opt.re === undefined ? undefined : Number(opt.re.replace(/^#/, "")) || (yield* die("--re takes a message number"));
+      const { seq, to } = yield* s.escalate(body, re);
+      out(`escalated #${seq} to ${to.join(" and ")}; wait for their answer before acting on it`);
+    }),
 
-  async icon() {
-    const s = await session();
-    const emoji = args[1];
-    const file = images()?.[0];
-    if (!emoji && !file && !opt.clear) {
-      const icon = await s.ch.icon();
-      if (!icon) return out("no icon (the owner sets one with: kiwi icon 🦊)");
-      if (icon.kind === "emoji") return out(icon.emoji);
-      const dir = joinPath(home(), "downloads", s.ch.roomId);
-      mkdirSync(dir, { recursive: true });
-      const path = joinPath(dir, `icon.${icon.mime.split("/")[1]}`);
-      writeFileSync(path, Buffer.from(icon.data, "base64"));
-      return out(`an image (${icon.mime}), saved at ${path}`);
-    }
-    if (!s.ownerCh) die("only the channel owner sets its icon");
-    const icon = opt.clear ? null : file ? { kind: "image" as const, mime: file.mime as "image/png", data: file.data } : { kind: "emoji" as const, emoji: emoji! };
-    await s.ownerCh.setIcon(icon);
-    out(icon === null ? "cleared the channel's icon" : icon.kind === "emoji" ? `the channel's icon is ${icon.emoji}` : "the channel's icon is that image");
-  },
+  icon: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const emoji = args[1];
+      const file = (yield* images)?.[0];
+      if (!emoji && !file && !opt.clear) {
+        const icon = yield* s.ch.fx.icon();
+        if (!icon) return out("no icon (the owner sets one with: kiwi icon 🦊)");
+        if (icon.kind === "emoji") return out(icon.emoji);
+        const dir = joinPath(home(), "downloads", s.ch.roomId);
+        mkdirSync(dir, { recursive: true });
+        const path = joinPath(dir, `icon.${icon.mime.split("/")[1]}`);
+        writeFileSync(path, Buffer.from(icon.data, "base64"));
+        return out(`an image (${icon.mime}), saved at ${path}`);
+      }
+      const owner = s.ownerCh ?? (yield* die("only the channel owner sets its icon"));
+      const icon = opt.clear ? null : file ? { kind: "image" as const, mime: file.mime as "image/png", data: file.data } : { kind: "emoji" as const, emoji: emoji! };
+      yield* owner.fx.setIcon(icon);
+      out(icon === null ? "cleared the channel's icon" : icon.kind === "emoji" ? `the channel's icon is ${icon.emoji}` : "the channel's icon is that image");
+    }),
 
-  async thread() {
-    const s = await session();
-    const seq = Number((args[1] ?? "").replace(/^#/, "")) || die("usage: kiwi thread N");
-    const { messages, state } = await run(s.state());
-    if (!messages.some((m) => m.seq === seq)) die(`no message #${seq}`);
-    const root = state.threadOf.get(seq) ?? seq;
-    for (const m of messages) if (state.threadOf.get(m.seq) === root && !ignored(state.trust.get(m.seq))) out(render(m, state));
-  },
+  thread: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi thread N"));
+      const { messages, state } = yield* s.state();
+      if (!messages.some((m) => m.seq === seq)) return yield* die(`no message #${seq}`);
+      const root = state.threadOf.get(seq) ?? seq;
+      for (const m of messages) if (state.threadOf.get(m.seq) === root && !ignored(state.trust.get(m.seq))) out(render(m, state));
+    }),
 
-  async read() {
-    const s = await session();
-    const { messages, state } = await run(s.read(await delivery(s)));
-    for (const m of messages) out(render(m, state));
-  },
+  read: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const { messages, state } = yield* s.read(yield* delivery(s));
+      for (const m of messages) out(render(m, state));
+    }),
 
-  async tail() {
-    const s = await session();
-    // Say what this agent runs on, so work that needs it finds it; never in the way of listening.
-    void run(s.refreshCard(detectCard())).catch(() => {});
-    const d = await delivery(s);
-    await run(s.listen((m, state) => Effect.sync(() => out(render(m, state))), {
-      client: "tail",
-      ...d,
-      onStatus: (msg) => Effect.sync(() => void process.stderr.write(`kiwi: ${msg}\n`)),
-      onNotice: (text) => Effect.sync(() => out(`* ${text}`)),
-    }));
-  },
+  tail: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      // Say what this agent runs on, so work that needs it finds it; never in the way of listening.
+      yield* Effect.forkDetach(Effect.ignoreCause(s.refreshCard(detectCard())));
+      yield* s.listen((m, state) => Effect.sync(() => out(render(m, state))), {
+        client: "tail",
+        ...(yield* delivery(s)),
+        onStatus: (msg) => Effect.sync(() => void process.stderr.write(`kiwi: ${msg}\n`)),
+        onNotice: (text) => Effect.sync(() => out(`* ${text}`)),
+      });
+    }),
 
-  async wait() {
-    const s = await session();
-    // Say what this agent runs on, so work that needs it finds it; never in the way of listening.
-    void run(s.refreshCard(detectCard())).catch(() => {});
-    const ac = new AbortController();
-    let got = 0;
-    const timeout = opt.timeout ? setTimeout(() => ac.abort(), parseDuration(opt.timeout) * 1000) : undefined;
-    const woke = () => {
-      // Linger briefly so a burst of messages is delivered as one wake-up.
-      if (got++ === 0) setTimeout(() => ac.abort(), 400);
-    };
-    const d = await delivery(s);
-    await run(
-      s.listen(
-        (m, state) =>
-          Effect.sync(() => {
-            out(render(m, state));
-            woke();
-          }),
-        {
-          client: "wait",
-          ...d,
-          onStatus: (msg) => Effect.sync(() => void process.stderr.write(`kiwi: ${msg}\n`)),
-          onNotice: (text) =>
-            Effect.sync(() => {
-              out(`* ${text}`);
-              woke();
-            }),
-        },
-      ),
-      ac.signal,
-    );
-    clearTimeout(timeout);
-    if (!got) {
+  wait: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      // Say what this agent runs on, so work that needs it finds it; never in the way of listening.
+      yield* Effect.forkDetach(Effect.ignoreCause(s.refreshCard(detectCard())));
+      let got = 0;
+      const enough = yield* Deferred.make<void>();
+      const woke = Effect.suspend(() =>
+        // Linger briefly so a burst of messages is delivered as one wake-up.
+        got++ === 0 ? Effect.asVoid(Effect.forkScoped(Effect.andThen(Effect.sleep(400), Deferred.succeed(enough, undefined)))) : Effect.void,
+      );
+      const listening = s.listen((m, state) => Effect.andThen(Effect.sync(() => out(render(m, state))), woke), {
+        client: "wait",
+        ...(yield* delivery(s)),
+        onStatus: (msg) => Effect.sync(() => void process.stderr.write(`kiwi: ${msg}\n`)),
+        onNotice: (text) => Effect.andThen(Effect.sync(() => out(`* ${text}`)), woke),
+      });
+      const timeout = opt.timeout ? Effect.sleep(parseDuration(opt.timeout) * 1000) : Effect.never;
+      yield* Effect.raceFirst(listening, Effect.raceFirst(Deferred.await(enough), timeout)).pipe(Effect.scoped);
+      if (got) return;
       out(`no messages yet. Next: run this command again:\n  ${mcFor(s.alias, s.me)} wait --timeout 10m`);
-      process.exit(2);
-    }
-  },
+      return 2;
+    }),
 
-  async watch() {
-    const url = opt.webhook ?? die("usage: kiwi watch --webhook URL [--for-me|--all]");
-    if (!/^https?:\/\//.test(url)) die("--webhook must be an http(s) URL");
-    const secret = opt.secret ?? process.env.MC_WEBHOOK_SECRET;
-    const s = await session();
-    process.stderr.write(`kiwi: watching ${s.alias} as ${s.me}, POSTing to ${url}\n`);
-    const d = await delivery(s);
-    await run(s.listen(
-      (m, state) => Effect.promise(async () => {
-        const body = JSON.stringify({
-          channel: s.alias,
-          seq: m.seq,
-          from: m.from,
-          to: m.to ?? null,
-          kind: m.kind,
-          re: m.re ?? null,
-          text: m.kind === "event" ? describeEvent(m, state) : m.body,
-          images: m.imgs?.map((i) => i.name) ?? [],
-          trust: state.trust.get(m.seq) ?? null,
-          ts: m.ts,
-        });
-        try {
-          const res = await fetch(url, {
-            method: "POST",
-            headers: { "content-type": "application/json", ...(secret ? { "x-kiwi-secret": secret } : {}) },
-            body,
+  watch: () =>
+    Effect.gen(function* () {
+      const url = opt.webhook ?? (yield* die("usage: kiwi watch --webhook URL [--for-me|--all]"));
+      if (!/^https?:\/\//.test(url)) return yield* die("--webhook must be an http(s) URL");
+      const secret = opt.secret ?? process.env.MC_WEBHOOK_SECRET;
+      const s = yield* session();
+      process.stderr.write(`kiwi: watching ${s.alias} as ${s.me}, POSTing to ${url}\n`);
+      const headers = { "content-type": "application/json", ...(secret ? { "x-kiwi-secret": secret } : {}) };
+      const post = (m: Message, state: ChannelState) =>
+        Effect.promise(async () => {
+          const body = JSON.stringify({
+            channel: s.alias,
+            seq: m.seq,
+            from: m.from,
+            to: m.to ?? null,
+            kind: m.kind,
+            re: m.re ?? null,
+            text: m.kind === "event" ? describeEvent(m, state) : m.body,
+            images: m.imgs?.map((i) => i.name) ?? [],
+            trust: state.trust.get(m.seq) ?? null,
+            ts: m.ts,
           });
-          if (!res.ok) process.stderr.write(`kiwi: webhook ${res.status} for #${m.seq}\n`);
-        } catch (err) {
-          process.stderr.write(`kiwi: webhook failed for #${m.seq}: ${err instanceof Error ? err.message : err}\n`);
-        }
-      }),
-      {
+          try {
+            const res = await fetch(url, { method: "POST", headers, body });
+            if (!res.ok) process.stderr.write(`kiwi: webhook ${res.status} for #${m.seq}\n`);
+          } catch (err) {
+            process.stderr.write(`kiwi: webhook failed for #${m.seq}: ${err instanceof Error ? err.message : err}\n`);
+          }
+        });
+      yield* s.listen(post, {
         client: "watch",
         // A webhook stands in for a person watching (a phone, CI): all chat unless narrowed.
-        ...d,
+        ...(yield* delivery(s)),
         ...(!opt["for-me"] && opt.thread === undefined ? { chat: true } : {}),
         onStatus: (msg) => Effect.sync(() => void process.stderr.write(`kiwi: ${msg}\n`)),
         onNotice: (text) =>
-          Effect.sync(() => void fetch(url, {
-            method: "POST",
-            headers: { "content-type": "application/json", ...(secret ? { "x-kiwi-secret": secret } : {}) },
-            body: JSON.stringify({ channel: s.alias, kind: "notice", text, ts: Date.now() }),
-          }).catch(() => {})),
-      },
-    ));
-  },
+          Effect.sync(() => void fetch(url, { method: "POST", headers, body: JSON.stringify({ channel: s.alias, kind: "notice", text, ts: Date.now() }) }).catch(() => {})),
+      });
+    }),
 
-  async task() {
-    const s = await session();
-    const sub = args[1] ?? die("usage: kiwi task add|claim|start|block|review|approve|reject|done|cancel|drop|after|assign|handoff|match|note|show …");
-    const STATE_FOR: Record<string, TaskState> = { start: "doing", block: "blocked", review: "review", done: "done", cancel: "cancelled" };
-    if (sub === "add") {
-      const title = await text(2);
-      if (!title.trim()) die('usage: kiwi task add "title" [--owner NAME] [--after T3]');
-      const after = list(opt.after)?.map((x) => parseTaskId(x) ?? die(`"${x}" isn't a task id`));
-      const { state: before } = await run(s.state());
-      const id = await run(s.taskAdd(title, { owner: opt.owner, after, detail: opt.detail, needs: list(opt.needs), ...(opt.review !== undefined ? { review: opt.review } : {}) }));
-      const like = similarOpenTasks(before, title).map((t) => t.id);
-      const lines = [formatAdded(before, id, after ?? [])];
-      if (like.length) lines.push(looksLikeLine(like));
-      const { state } = await run(s.state());
-      const fit = state.tasks.get(id) && fitsLine(state, state.tasks.get(id)!);
-      if (fit && !opt.owner) lines.push(fit);
-      return out(lines.join("\n"));
-    }
-    if (sub === "list") return commands.tasks!();
-    const id = taskArg();
-    if (sub === "show") {
-      const { state } = await run(s.state());
-      return out(formatTask(state, state.tasks.get(id) ?? die(`no task ${taskId(id)}`)));
-    }
-    if (sub === "match") {
-      const { state } = await run(s.state());
-      const t = state.tasks.get(id) ?? die(`no task ${taskId(id)}`);
-      return out(fitsLine(state, t) ?? `${taskId(id)} needs nothing in particular: anyone free can take it (kiwi task add --needs, next time)`);
-    }
-    if (sub === "handoff") {
-      const to = args[3] ?? die('usage: kiwi task handoff T7 NAME ["what\'s next"]');
-      const next = args.slice(4).join(" ") || opt.note || undefined;
-      const { handoff, pushed } = handoffHere();
-      const state = await run(s.taskHandoff(id, to, next, handoff));
-      const t = state.tasks.get(id)!;
-      out(`${taskId(id)} is ${t.owner}'s now${handoff.branch ? `: pick it up from ${handoff.branch}${handoff.commit ? ` @ ${handoff.commit}` : ""}` : ""}${handoff.files?.length ? ` (${handoff.files.length} file${handoff.files.length === 1 ? "" : "s"})` : ""}`);
-      if (pushed === false && handoff.branch) process.stderr.write(`kiwi: ${handoff.branch} isn't pushed (or has unpushed commits): push it so ${t.owner} can fetch it\n`);
-      return;
-    }
-    if (sub === "after") {
-      const deps = args
-        .slice(3)
-        .flatMap((a) => a.split(","))
-        .filter(Boolean)
-        .map((x) => parseTaskId(x) ?? die(`"${x}" isn't a task id`));
-      if (!deps.length) die("usage: kiwi task after T69 T68");
-      const state = await run(s.taskAfter(id, deps));
-      return out(formatAfter(state, id, deps));
-    }
-    const note = (sub === "assign" ? undefined : args.slice(3).join(" ")) || opt.note || undefined;
-    let state: ChannelState;
-    if (sub === "claim") state = await run(s.taskClaim(id));
-    else if (sub === "review") state = await run(s.taskUpdate(id, { state: "review", note, ...(opt.review !== undefined ? { review: opt.review } : {}) }));
-    else if (sub === "approve") state = await run(s.taskUpdate(id, { state: "done", note }));
-    else if (sub === "reject") state = await run(s.taskUpdate(id, { state: "doing", note: note ?? die('usage: kiwi task reject T7 "what needs to change"') }));
-    else if (sub in STATE_FOR) state = await run(s.taskUpdate(id, { state: STATE_FOR[sub], note }));
-    else if (sub === "drop") state = await run(s.taskUpdate(id, { owner: null, note }));
-    else if (sub === "assign") state = await run(s.taskUpdate(id, { owner: args[3] ?? die("usage: kiwi task assign T7 NAME") }));
-    else if (sub === "note") state = await run(s.taskUpdate(id, { note: note ?? die('usage: kiwi task note T7 "…"') }));
-    else die(`unknown task command "${sub}"`);
-    const t = state.tasks.get(id)!;
-    out(`${taskId(id)} ${t.state}${t.owner ? ` @${t.owner}` : ""}: ${t.title}`);
-  },
-
-  async tasks() {
-    if (opt.global) {
-      const cfg = loadConfig();
-      const aliases = Object.keys(cfg.channels).sort();
-      if (!aliases.length) die("no channels yet (see: kiwi create, kiwi join)");
-      // Only channels the acting agent is in itself: another local agent's keys are not ours to use.
-      const me = opt.as ?? process.env.KIWI_AS ?? bindingFor(process.cwd())?.as ?? die("--global needs to know who you are: pass --as NAME, or run it from your bound folder");
-      for (const alias of aliases) {
-        const c = cfg.channels[alias]!;
-        if (!identitiesIn(c.roomId).includes(me)) continue;
-        const sess = await AgentSession.open(alias, c, me);
-        const { state } = await run(sess.state());
-        const owner = opt.mine ? sess.me : opt.owner;
-        const lines = formatTasks(state, { all: opt.all, owner });
-        out(`## ${alias}${lines === "no tasks" ? " — no tasks" : ""}`);
-        if (lines !== "no tasks") out(lines.split("\n").map((l) => `  ${l}`).join("\n"));
+  task: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const sub = args[1] ?? (yield* die("usage: kiwi task add|claim|start|block|review|approve|reject|done|cancel|drop|after|assign|handoff|match|note|show …"));
+      const STATE_FOR: Record<string, TaskState> = { start: "doing", block: "blocked", review: "review", done: "done", cancel: "cancelled" };
+      if (sub === "add") {
+        const title = yield* text(2);
+        if (!title.trim()) return yield* die('usage: kiwi task add "title" [--owner NAME] [--after T3]');
+        const after = opt.after === undefined ? undefined : yield* Effect.forEach(list(opt.after) ?? [], taskIdOf).pipe(Effect.map((ids) => (ids.length ? ids : undefined)));
+        const { state: before } = yield* s.state();
+        const id = yield* s.taskAdd(title, { owner: opt.owner, after, detail: opt.detail, needs: list(opt.needs), ...(opt.review !== undefined ? { review: opt.review } : {}) });
+        const like = similarOpenTasks(before, title).map((t) => t.id);
+        const lines = [formatAdded(before, id, after ?? [])];
+        if (like.length) lines.push(looksLikeLine(like));
+        const { state } = yield* s.state();
+        const fit = state.tasks.get(id) && fitsLine(state, state.tasks.get(id)!);
+        if (fit && !opt.owner) lines.push(fit);
+        return out(lines.join("\n"));
       }
-      return;
-    }
-    const s = await session();
-    const { state } = await run(s.state());
-    out(formatTasks(state, { all: opt.all, owner: opt.mine ? s.me : opt.owner }));
-  },
+      if (sub === "list") return yield* commands.tasks!();
+      const id = yield* taskArg();
+      if (sub === "show") {
+        const { state } = yield* s.state();
+        return out(formatTask(state, state.tasks.get(id) ?? (yield* die(`no task ${taskId(id)}`))));
+      }
+      if (sub === "match") {
+        const { state } = yield* s.state();
+        const t = state.tasks.get(id) ?? (yield* die(`no task ${taskId(id)}`));
+        return out(fitsLine(state, t) ?? `${taskId(id)} needs nothing in particular: anyone free can take it (kiwi task add --needs, next time)`);
+      }
+      if (sub === "handoff") {
+        const to = args[3] ?? (yield* die('usage: kiwi task handoff T7 NAME ["what\'s next"]'));
+        const next = args.slice(4).join(" ") || opt.note || undefined;
+        const { handoff, pushed } = handoffHere();
+        const state = yield* s.taskHandoff(id, to, next, handoff);
+        const t = state.tasks.get(id)!;
+        out(`${taskId(id)} is ${t.owner}'s now${handoff.branch ? `: pick it up from ${handoff.branch}${handoff.commit ? ` @ ${handoff.commit}` : ""}` : ""}${handoff.files?.length ? ` (${handoff.files.length} file${handoff.files.length === 1 ? "" : "s"})` : ""}`);
+        if (pushed === false && handoff.branch) process.stderr.write(`kiwi: ${handoff.branch} isn't pushed (or has unpushed commits): push it so ${t.owner} can fetch it\n`);
+        return;
+      }
+      if (sub === "after") {
+        const deps = yield* Effect.forEach(
+          args
+            .slice(3)
+            .flatMap((a) => a.split(","))
+            .filter(Boolean),
+          taskIdOf,
+        );
+        if (!deps.length) return yield* die("usage: kiwi task after T69 T68");
+        const state = yield* s.taskAfter(id, deps);
+        return out(formatAfter(state, id, deps));
+      }
+      const note = (sub === "assign" ? undefined : args.slice(3).join(" ")) || opt.note || undefined;
+      let state: ChannelState;
+      if (sub === "claim") state = yield* s.taskClaim(id);
+      else if (sub === "review") state = yield* s.taskUpdate(id, { state: "review", note, ...(opt.review !== undefined ? { review: opt.review } : {}) });
+      else if (sub === "approve") state = yield* s.taskUpdate(id, { state: "done", note });
+      else if (sub === "reject") state = yield* s.taskUpdate(id, { state: "doing", note: note ?? (yield* die('usage: kiwi task reject T7 "what needs to change"')) });
+      else if (sub in STATE_FOR) state = yield* s.taskUpdate(id, { state: STATE_FOR[sub], note });
+      else if (sub === "drop") state = yield* s.taskUpdate(id, { owner: null, note });
+      else if (sub === "assign") state = yield* s.taskUpdate(id, { owner: args[3] ?? (yield* die("usage: kiwi task assign T7 NAME")) });
+      else if (sub === "note") state = yield* s.taskUpdate(id, { note: note ?? (yield* die('usage: kiwi task note T7 "…"')) });
+      else return yield* die(`unknown task command "${sub}"`);
+      const t = state.tasks.get(id)!;
+      out(`${taskId(id)} ${t.state}${t.owner ? ` @${t.owner}` : ""}: ${t.title}`);
+    }),
 
-  async claim() {
-    const s = await session();
-    const paths = args.slice(1);
-    if (!paths.length) die('usage: kiwi claim PATH… [--ttl 30m] [--note "…"]');
-    const state = await run(s.claim(paths, parseDuration(opt.ttl ?? "30m"), opt.note, claimPlace()));
-    out(formatClaims({ ...state, claims: state.claims.filter((c) => c.owner === s.me) }));
-  },
+  tasks: () =>
+    Effect.gen(function* () {
+      if (opt.global) {
+        const keys = yield* Keystore;
+        const cfg = yield* keys.config;
+        const aliases = Object.keys(cfg.channels).sort();
+        if (!aliases.length) return yield* die("no channels yet (see: kiwi create, kiwi join)");
+        // Only channels the acting agent is in itself: another local agent's keys are not ours to use.
+        const me = opt.as ?? process.env.KIWI_AS ?? bindingFor(process.cwd())?.as ?? (yield* die("--global needs to know who you are: pass --as NAME, or run it from your bound folder"));
+        for (const alias of aliases) {
+          const c = cfg.channels[alias]!;
+          if (!(yield* keys.identitiesIn(c.roomId)).includes(me)) continue;
+          const sess = yield* openSession(alias, c, me);
+          const { state } = yield* sess.state();
+          const owner = opt.mine ? sess.me : opt.owner;
+          const lines = formatTasks(state, { all: opt.all, owner });
+          out(`## ${alias}${lines === "no tasks" ? " — no tasks" : ""}`);
+          if (lines !== "no tasks") out(lines.split("\n").map((l) => `  ${l}`).join("\n"));
+        }
+        return;
+      }
+      const s = yield* session();
+      const { state } = yield* s.state();
+      out(formatTasks(state, { all: opt.all, owner: opt.mine ? s.me : opt.owner }));
+    }),
 
-  async release() {
-    const s = await session();
-    await run(s.release(args.slice(1)));
-    out(args.length > 1 ? `released ${args.slice(1).join(", ")}` : "released all your claims");
-  },
+  claim: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const paths = args.slice(1);
+      if (!paths.length) return yield* die('usage: kiwi claim PATH… [--ttl 30m] [--note "…"]');
+      const state = yield* s.claim(paths, parseDuration(opt.ttl ?? "30m"), opt.note, claimPlace());
+      out(formatClaims({ ...state, claims: state.claims.filter((c) => c.owner === s.me) }));
+    }),
 
-  async claims() {
-    const s = await session();
-    out(formatClaims((await run(s.state())).state));
-  },
+  release: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      yield* s.release(args.slice(1));
+      out(args.length > 1 ? `released ${args.slice(1).join(", ")}` : "released all your claims");
+    }),
 
-  async set() {
-    const s = await session();
-    const [key, ...rest] = args.slice(1);
-    if (!key || !rest.length) die("usage: kiwi set KEY VALUE [--ttl 7d]");
-    const value = rest.join(" ");
-    const ttl = opt.ttl ? parseDuration(opt.ttl) : undefined;
-    await run(s.setFact(key, value, ttl));
-    out(ttl ? `${key} = ${value} (for ${opt.ttl})` : `${key} = ${value}`);
-  },
+  claims: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      out(formatClaims((yield* s.state()).state));
+    }),
 
-  async get() {
-    const s = await session();
-    const key = args[1] ?? die("usage: kiwi get KEY");
-    const f = (await run(s.state())).state.facts.get(key);
-    if (!f) die(`no fact "${key}"`, 2);
-    out(f.value);
-  },
+  set: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const [key, ...rest] = args.slice(1);
+      if (!key || !rest.length) return yield* die("usage: kiwi set KEY VALUE [--ttl 7d]");
+      const value = rest.join(" ");
+      const ttl = opt.ttl ? parseDuration(opt.ttl) : undefined;
+      yield* s.setFact(key, value, ttl);
+      out(ttl ? `${key} = ${value} (for ${opt.ttl})` : `${key} = ${value}`);
+    }),
 
-  async unset() {
-    const s = await session();
-    await run(s.delFact(args[1] ?? die("usage: kiwi unset KEY")));
-  },
+  get: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const key = args[1] ?? (yield* die("usage: kiwi get KEY"));
+      const f = (yield* s.state()).state.facts.get(key);
+      if (!f) return yield* die(`no fact "${key}"`, 2);
+      out(f.value);
+    }),
 
-  async facts() {
-    const s = await session();
-    const { facts } = (await run(s.state())).state;
-    if (!facts.size) return out("no facts");
-    for (const f of [...facts.values()].sort((a, b) => a.key.localeCompare(b.key))) out(formatFact(f));
-  },
+  unset: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      yield* s.delFact(args[1] ?? (yield* die("usage: kiwi unset KEY")));
+    }),
+
+  facts: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const { facts } = (yield* s.state()).state;
+      if (!facts.size) return out("no facts");
+      for (const f of [...facts.values()].sort((a, b) => a.key.localeCompare(b.key))) out(formatFact(f));
+    }),
 
   /** Say what this agent runs on and has, so work that needs it finds it. */
-  async card() {
-    const s = await session();
-    const { sent, card } = await run(s.refreshCard(detectCard(), { ...(opt.model ? { model: opt.model } : {}), ...(opt.note ? { note: opt.note } : {}), ...(opt.tools ? { tools: list(opt.tools) } : {}) }));
-    out(`${sent ? "card" : "card unchanged"}: ${cardLine(card)}`);
-  },
+  card: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const { sent, card } = yield* s.refreshCard(detectCard(), { ...(opt.model ? { model: opt.model } : {}), ...(opt.note ? { note: opt.note } : {}), ...(opt.tools ? { tools: list(opt.tools) } : {}) });
+      out(`${sent ? "card" : "card unchanged"}: ${cardLine(card)}`);
+    }),
 
-  async hello() {
-    const s = await session();
-    await run(s.hello(opt.role, opt.about));
-    const me = (await run(s.state())).state.members.get(s.me);
-    if (me?.roleRequest) out(`asked the owner to make you ${me.roleRequest.role ?? "unassigned"}${me.roleRequest.about ? ` (${me.roleRequest.about})` : ""}; your role stays ${me.role ?? "unset"} until they decide`);
-    else out(`announced ${s.me}${me?.role ? ` as ${me.role}` : ""}`);
-  },
+  hello: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      yield* s.hello(opt.role, opt.about);
+      const me = (yield* s.state()).state.members.get(s.me);
+      if (me?.roleRequest) out(`asked the owner to make you ${me.roleRequest.role ?? "unassigned"}${me.roleRequest.about ? ` (${me.roleRequest.about})` : ""}; your role stays ${me.role ?? "unset"} until they decide`);
+      else out(`announced ${s.me}${me?.role ? ` as ${me.role}` : ""}`);
+    }),
 
   /** Roles are the owner's to give: list requests, set one, allow or refuse what someone asked for. */
-  async role() {
-    const s = await session();
-    const [sub, a, b] = args.slice(1);
-    if (!sub) {
-      const { state } = await run(s.state());
-      const asks = [...state.members.values()].filter((m) => m.active && m.roleRequest);
-      if (!asks.length) return out("no role requests");
-      for (const m of asks) out(`${m.name}: ${m.role ?? "no role"} → ${m.roleRequest!.role ?? "no role"}${m.roleRequest!.about ? ` (${m.roleRequest!.about})` : ""}`);
-      return out(s.ownerCh ? "decide with: kiwi role allow NAME, or kiwi role refuse NAME" : "the owner decides these");
-    }
-    if (!s.ownerCh) die("only the channel owner's machine decides roles; ask with: kiwi hello --role ROLE");
-    if (sub === "refuse") {
-      await run(s.decideRole(a ?? die("usage: kiwi role refuse NAME"), "refuse"));
-      return out(`kept ${a}'s role`);
-    }
-    const allowing = sub === "allow";
-    const member = allowing ? (a ?? die("usage: kiwi role allow NAME [--yes]")) : sub;
-    const role = allowing ? undefined : (a ?? die('usage: kiwi role NAME ROLE [--about "rules"] [--yes]'));
-    if (!(await confirm(allowing ? `Give ${member} the role they asked for?` : `Make ${member} ${role}?`))) die("changing a role needs your human's go-ahead; re-run with --yes");
-    await run(s.decideRole(member, allowing ? "allow" : { role: role!, ...(opt.about !== undefined ? { about: opt.about } : {}) }));
-    out(allowing ? `${member} has the role they asked for` : `made ${member} ${role}`);
-  },
+  role: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const [sub, a] = args.slice(1);
+      if (!sub) {
+        const { state } = yield* s.state();
+        const asks = [...state.members.values()].filter((m) => m.active && m.roleRequest);
+        if (!asks.length) return out("no role requests");
+        for (const m of asks) out(`${m.name}: ${m.role ?? "no role"} → ${m.roleRequest!.role ?? "no role"}${m.roleRequest!.about ? ` (${m.roleRequest!.about})` : ""}`);
+        return out(s.ownerCh ? "decide with: kiwi role allow NAME, or kiwi role refuse NAME" : "the owner decides these");
+      }
+      if (!s.ownerCh) return yield* die("only the channel owner's machine decides roles; ask with: kiwi hello --role ROLE");
+      if (sub === "refuse") {
+        yield* s.decideRole(a ?? (yield* die("usage: kiwi role refuse NAME")), "refuse");
+        return out(`kept ${a}'s role`);
+      }
+      const allowing = sub === "allow";
+      const member = allowing ? (a ?? (yield* die("usage: kiwi role allow NAME [--yes]"))) : sub;
+      const role = allowing ? undefined : (a ?? (yield* die('usage: kiwi role NAME ROLE [--about "rules"] [--yes]')));
+      if (!(yield* confirm(allowing ? `Give ${member} the role they asked for?` : `Make ${member} ${role}?`))) return yield* die("changing a role needs your human's go-ahead; re-run with --yes");
+      yield* s.decideRole(member, allowing ? "allow" : { role: role!, ...(opt.about !== undefined ? { about: opt.about } : {}) });
+      out(allowing ? `${member} has the role they asked for` : `made ${member} ${role}`);
+    }),
 
-  async web() {
-    const alias = channelAlias();
-    const c = loadConfig().channels[alias]!;
-    if (c.owner && !opt["sign-in"]) {
-      out(await ownerLink(c));
-      process.stderr.write("kiwi: this link carries the owner key (approve, remove, close); keep it private\n");
-      return;
-    }
-    let link = `${c.relay}/#${encodeURIComponent(c.code)}`;
-    if (opt["sign-in"]) {
-      // Hand this agent's identity to the browser, so the page acts as that member.
-      const id = await loadIdentity(agentName(c), c.roomId);
-      link += `&id=${b64url(new TextEncoder().encode(JSON.stringify(id)))}`;
-    }
-    out(link);
-    if (opt["sign-in"]) process.stderr.write("kiwi: this link carries your identity; keep it private\n");
-    else process.stderr.write("kiwi: opening it asks to join; the owner approves the browser like any agent\n");
-  },
+  web: () =>
+    Effect.gen(function* () {
+      const alias = yield* channelAlias();
+      const c = (yield* config).channels[alias]!;
+      if (c.owner && !opt["sign-in"]) {
+        out(yield* ownerLink(c));
+        process.stderr.write("kiwi: this link carries the owner key (approve, remove, close); keep it private\n");
+        return;
+      }
+      let link = `${c.relay}/#${encodeURIComponent(c.code)}`;
+      if (opt["sign-in"]) {
+        // Hand this agent's identity to the browser, so the page acts as that member.
+        const id = yield* (yield* Keystore).identity(yield* agentName(c), c.roomId);
+        link += `&id=${b64url(new TextEncoder().encode(JSON.stringify(id)))}`;
+      }
+      out(link);
+      if (opt["sign-in"]) process.stderr.write("kiwi: this link carries your identity; keep it private\n");
+      else process.stderr.write("kiwi: opening it asks to join; the owner approves the browser like any agent\n");
+    }),
 
-  async prompt() {
-    const alias = channelAlias();
-    const cfg = loadConfig().channels[alias];
-    const name = agentName(cfg);
-    // What the owner lets it do, if the relay answers; the prompt doesn't wait on it otherwise.
-    const scopes = cfg
-      ? await AgentSession.open(alias, cfg, name)
-          .then((s) => run(s.state()))
-          .then(({ state }) => state.members.get(name)?.scopes)
-          .catch(() => undefined)
-      : undefined;
-    out(agentPrompt(alias, name, { scopes }));
-  },
+  prompt: () =>
+    Effect.gen(function* () {
+      const alias = yield* channelAlias();
+      const cfg = (yield* config).channels[alias];
+      const name = yield* agentName(cfg);
+      // What the owner lets it do, if the relay answers; the prompt doesn't wait on it otherwise.
+      const scopes = cfg
+        ? yield* Effect.flatMap(openSession(alias, cfg, name), (s) => s.state()).pipe(
+            Effect.map(({ state }) => state.members.get(name)?.scopes),
+            Effect.catchCause(() => Effect.succeed(undefined)),
+          )
+        : undefined;
+      out(agentPrompt(alias, name, { scopes }));
+    }),
 
-  async mcp() {
-    const { runMcp } = await import("../mcp.ts");
-    await runMcp(await session(), { push: opt.push });
-  },
+  mcp: () =>
+    Effect.gen(function* () {
+      const { runMcp } = yield* Effect.promise(() => import("../mcp.ts"));
+      yield* runMcp(yield* session(), { push: opt.push });
+    }),
 
-  async relay() {
-    const { runRelay } = await import("../relay/bun.ts");
-    runRelay(process.argv.slice(3), "kiwi relay");
-    await new Promise(() => {});
-  },
+  relay: () =>
+    Effect.gen(function* () {
+      const { runRelay } = yield* Effect.promise(() => import("../relay/bun.ts"));
+      runRelay(process.argv.slice(3), "kiwi relay");
+      return yield* Effect.never;
+    }),
 
-  async demo() {
-    const { runDemo } = await import("../demo.ts");
-    // A checkout with the dashboard built serves it too; the binary has the terminal tour.
-    const built = joinPath(import.meta.dir, "../../web/dist");
-    await runDemo({ stay: !!opt.stay, ...(existsSync(joinPath(built, "index.html")) ? { web: built } : {}), ...(opt.n ? { pace: Number(opt.n) } : {}) });
-  },
+  demo: () =>
+    Effect.gen(function* () {
+      const { demo } = yield* Effect.promise(() => import("../demo.ts"));
+      // A checkout with the dashboard built serves it too; the binary has the terminal tour.
+      const built = joinPath(import.meta.dir, "../../web/dist");
+      yield* demo({ stay: !!opt.stay, ...(existsSync(joinPath(built, "index.html")) ? { web: built } : {}), ...(opt.n ? { pace: Number(opt.n) } : {}) });
+    }),
 
-  async doctor() {
-    const { doctor } = await import("./doctor.ts");
-    await doctor();
-  },
+  doctor: () =>
+    Effect.gen(function* () {
+      const { doctor } = yield* Effect.promise(() => import("./doctor.ts"));
+      return yield* doctor();
+    }),
 };
 
 export function agentPrompt(alias: string, agent: string, as: { role?: string; about?: string; scopes?: readonly Scope[] } = {}): string {
@@ -1440,6 +1521,34 @@ If \`${mc} status\` says the channel is coordinator-only, people talk only with 
 - Never approve, deny, kick or close on your own. When a join request arrives, tell your human its name and verification code, and act only on their explicit answer.`;
 }
 
+
+/** Stop: `kiwi: <message>` on stderr, and this exit code. */
+function stop(message: string, code = 1): never {
+  process.stderr.write(`kiwi: ${message}\n`);
+  process.exit(code);
+}
+
+/**
+ * What a command failed with, as the line and exit code it has always been: a Quit says its own;
+ * gone (closed or removed) forgets what this command acted for and exits 4; the relay's refusals
+ * are prefixed `relay:`; anything else (this client's own refusals, a relay out of reach) is its text.
+ */
+const fail = (cause: Cause.Cause<unknown>) =>
+  Effect.gen(function* () {
+    const err = Cause.squash(cause);
+    if (err instanceof Quit) return stop(err.message, err.code);
+    if (err instanceof ChannelGone) {
+      // Forget only what this command was acting for. Closed: the channel is gone for
+      // everyone, so all of it goes. Removed: just this agent; others here keep theirs.
+      const keys = yield* Keystore;
+      if (acting.alias && err.why === "closed") yield* keys.wipeChannel(acting.alias);
+      else if (acting.alias && acting.name) yield* keys.forgetMember(acting.alias, acting.name);
+      return stop(`${err.message}; forgot it on this machine`, 4);
+    }
+    if (err instanceof RelayError) return stop(`relay: ${err.message}`);
+    return stop(reason(err));
+  });
+
 if (import.meta.main) {
   const cmd = opt.version ? "version" : args[0];
   if (cmd === "version") {
@@ -1451,20 +1560,10 @@ if (import.meta.main) {
     process.exit(0);
   }
   const shortcuts: Record<string, string> = { s: "status", t: "tasks" };
-  const run = commands[shortcuts[cmd] ?? cmd] ?? die(`unknown command "${cmd}" (see: kiwi help)`);
-  try {
-    await run();
-    if (cmd !== "mcp" && cmd !== "relay") process.exit(0);
-  } catch (err) {
-    if (err instanceof ChannelGone) {
-      // Forget only what this command was acting for. Closed: the channel is gone for
-      // everyone, so all of it goes. Removed: just this agent; others here keep theirs.
-      if (acting.alias && err.why === "closed") wipeChannel(acting.alias);
-      else if (acting.alias && acting.name) forgetMember(acting.alias, acting.name);
-      die(`${err.message}; forgot it on this machine`, 4);
-    }
-    if (err instanceof Rejected) die(err.message);
-    if (err instanceof RelayError) die(`relay: ${err.message}`);
-    die(err instanceof Error ? err.message : String(err));
-  }
+  const command = commands[shortcuts[cmd] ?? cmd];
+  // One runtime for the whole command: the relay over HTTP, and this computer's files.
+  const runtime = ManagedRuntime.make(AgentLive);
+  const exit = await runtime.runPromiseExit(command ? command() : die(`unknown command "${cmd}" (see: kiwi help)`));
+  if (Exit.isFailure(exit)) await runtime.runPromise(fail(exit.cause));
+  else if (cmd !== "mcp" && cmd !== "relay") process.exit(exit.value ?? 0);
 }

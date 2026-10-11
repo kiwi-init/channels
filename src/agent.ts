@@ -21,7 +21,7 @@ import { Channel, ChannelGone, eachLive, fetchRelay, isDirectedAt, isForAgent, k
 import { Cache, Cursor, Keystore, LocalFiles, type ChannelConfig } from "./config.ts";
 import { TOO_MANY_REQUESTS } from "./sas.ts";
 import type { ChannelAccess } from "./crypto.ts";
-import { inlineText, type JoinRequest, type Member } from "./membership.ts";
+import { inlineText, type Member } from "./membership.ts";
 import type { Identity } from "./identity.ts";
 import { isLocalRefusal, Rejected } from "./refusals.ts";
 import { canPost, describeScopes, refusal, wireScopes, type Scope } from "./scopes.ts";
@@ -67,12 +67,8 @@ export type Agent = Relay | Keystore | Cache | Cursor;
 /** The relay over HTTP and the files in ~/.kiwi: what the CLI, the MCP server and the hooks run on. */
 export const AgentLive: Layer.Layer<Agent> = Layer.mergeAll(Layer.succeed(Relay, fetchRelay), LocalFiles);
 
-/**
- * Run a session's Effect as a Promise, on AgentLive: for callers outside Effect (tests, scripts).
- * Stopped by `signal`, it resolves, as a listener that checked `signal.aborted` did.
- */
-export const runAgent = <A, E>(effect: Effect.Effect<A, E, Agent>, signal?: AbortSignal): Promise<A> =>
-  Effect.runPromiseExit(Effect.provide(effect, AgentLive), { signal }).then((exit) => (signal?.aborted && Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause) ? (undefined as A) : settle(exit)));
+/** Run a session's Effect as a Promise, on AgentLive: for callers outside Effect (tests, scripts). */
+export const runAgent = <A, E>(effect: Effect.Effect<A, E, Agent>): Promise<A> => Effect.runPromiseExit(Effect.provide(effect, AgentLive)).then(settle);
 
 /** A refusal that's an answer, not an outage: gone, refused here, or refused by the relay for good. */
 const isAnswer = (err: unknown) => err instanceof ChannelGone || isLocalRefusal(err) || (err instanceof RelayError && err.status < 500 && err.status !== 429);

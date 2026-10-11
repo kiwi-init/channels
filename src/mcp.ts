@@ -3,20 +3,23 @@
 // With --push (Claude Code channels), incoming messages are also pushed into
 // the session as they arrive. Push consumes the agent's read cursor, so use it
 // instead of, not alongside, a `kiwi tail` monitor.
+//
+// Each tool is an Effect on the session, run in the runtime `kiwi mcp` was
+// started in; what one fails with becomes its error result in one place (tool).
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import * as Cause from "effect/Cause";
+import * as Deferred from "effect/Deferred";
+import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import { join } from "node:path";
 import { z } from "zod";
-import { AgentSession, Rejected, runAgent } from "./agent.ts";
-import * as Effect from "effect/Effect";
-
-/** The session's Effects, run one at a time (until the tools run on Effect themselves). */
-const run = runAgent;
+import { openSession, Rejected, type Agent, type AgentSession } from "./agent.ts";
 import { loadImages, saveImages } from "./attach.ts";
 import { loadSummary, memberLoad, showsLoad } from "./load.ts";
-import { forgetMember, home, identitiesIn, loadConfig, signingBudget, wipeChannel, writeCursor } from "./config.ts";
-import { ChannelGone } from "./client.ts";
+import { Cursor, home, Keystore } from "./config.ts";
+import { ChannelGone, reason } from "./client.ts";
 import { cardLine, fitsLine, formatAdded, formatAfter, formatClaims, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, mayDo, modeLine, parseDuration } from "./format.ts";
 import { parseScopes, SCOPES } from "./scopes.ts";
 import { CHAT_KINDS, type Kind, type Message } from "./protocol.ts";
@@ -30,37 +33,16 @@ import { channelFiles, runSh, sessionViews } from "./sh.ts";
 
 type Content = { type: "text"; text: string } | { type: "image"; data: string; mimeType: string };
 type Result = { content: Content[]; isError?: boolean };
+type Extra = { signal: AbortSignal };
 
 const NEXT = "Next: call status, then call wait_for_messages.";
 const ok = (text: string): Result => ({ content: [{ type: "text", text }] });
 const fail = (text: string): Result => ({ content: [{ type: "text", text: text.includes("Next:") ? text : `${text}\n${NEXT}` }], isError: true });
 
-/** Set by runMcp: what to forget when the channel turns out to be gone. */
-let forget: ((err: ChannelGone) => void) | null = null;
-
-// Tools with an input schema are called as (args, extra). Tools with none are called as (extra) only.
-function guard<A>(fn: (a: A, extra: { signal: AbortSignal }) => Promise<string>) {
-  return async (a: A, extra?: { signal: AbortSignal }) => {
-    const ctx = extra?.signal ? extra : (a as { signal: AbortSignal });
-    try {
-      return ok(await fn(extra?.signal ? a : (undefined as A), ctx));
-    } catch (err) {
-      if (err instanceof ChannelGone) {
-        // Closed or removed: forget what this agent held here, answer once, then stop serving.
-        forget?.(err);
-        setTimeout(() => process.exit(4), 200);
-        return fail(`${err.message}; forgot it on this machine.\nNext: stop. Do not call any tool again.`);
-      }
-      return fail(err instanceof Error ? err.message : String(err));
-    }
-  };
-}
-
-function task(id: string): number {
+const task = (id: string): Effect.Effect<number, Rejected> => {
   const n = parseTaskId(id);
-  if (n === null) throw new Rejected(`"${id}" isn't a task id (like T12)`);
-  return n;
-}
+  return n === null ? Effect.fail(new Rejected(`"${id}" isn't a task id (like T12)`)) : Effect.succeed(n);
+};
 
 const kind = z.enum(CHAT_KINDS as [Kind, ...Kind[]]);
 
@@ -72,8 +54,48 @@ function withImages(text: string, messages: Message[]): Result {
   return { content };
 }
 
-export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Promise<void> {
-  forget = (err) => (err.why === "closed" ? wipeChannel(s.alias) : forgetMember(s.alias, s.me));
+/** Done once the MCP client cancels the call. */
+const cancelled = (signal: AbortSignal) =>
+  Effect.callback<void>((resume) => {
+    const done = () => resume(Effect.void);
+    if (signal.aborted) return done();
+    signal.addEventListener("abort", done, { once: true });
+    return Effect.sync(() => signal.removeEventListener("abort", done));
+  });
+
+/** Serve `s` as MCP tools over stdio, for as long as the client stays (with push, while the channel lasts). */
+export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { push?: boolean } = {}) {
+  const runExit = Effect.runPromiseExitWith(yield* Effect.context<Agent>());
+  const keys = yield* Keystore;
+
+  /** Run a tool's Effect: its value through `done`, or what stopped it through `failed`. */
+  const answer = <A>(effect: Effect.Effect<A, unknown, Agent>, done: (a: A) => Result, failed: (cause: Cause.Cause<unknown>) => Result) =>
+    runExit(effect).then((exit) => (Exit.isSuccess(exit) ? done(exit.value) : failed(exit.cause)));
+
+  /**
+   * A tool whose text is the answer. Gone (closed or removed): forget what this agent held here,
+   * answer once, then stop serving. Anything else is the tool's error, in words.
+   * Tools with an input schema are called as (args, extra); tools with none as (extra) only.
+   */
+  function tool<A>(fn: (a: A, extra: Extra) => Effect.Effect<string, unknown, Agent>) {
+    return (a: A, extra?: Extra) => {
+      const ctx = extra?.signal ? extra : (a as unknown as Extra);
+      return answer(fn(extra?.signal ? a : (undefined as A), ctx), ok, (cause) => {
+        const err = Cause.squash(cause);
+        if (!(err instanceof ChannelGone)) return fail(reason(err));
+        Effect.runSync(err.why === "closed" ? keys.wipeChannel(s.alias) : keys.forgetMember(s.alias, s.me));
+        setTimeout(() => process.exit(4), 200);
+        return fail(`${err.message}; forgot it on this machine.\nNext: stop. Do not call any tool again.`);
+      });
+    };
+  }
+
+  /** A tool that builds its own result (images, a script's exit): any failure is its error, in words. */
+  const shaped =
+    <A>(fn: (a: A) => Effect.Effect<Result, unknown, Agent>) =>
+    (a: A) =>
+      answer(fn(a), (r) => r, (cause) => fail(reason(Cause.squash(cause))));
+
   const server = new McpServer(
     { name: "kiwi-channels", version: VERSION },
     {
@@ -100,29 +122,31 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
         "Who's in the channel: names, roles, owner, key fingerprints, what each may do (when the owner limited it), and each member's load (free, busy or overloaded, with their current task, queue and claims). " +
         "Names are bound to keys by the owner, so they can't be faked. Example: call members.",
     },
-    guard(async () => {
-      const [members, { state }] = await Promise.all([run(s.members(true)), run(s.state())]);
-      return members
-        .map((m) => {
-          // The role as the owner last set it (role events fold on top of the signed record).
-          // Member-written fields are one line, so a newline cannot pose as another member.
-          const rec = state.members.get(m.name);
-          const role = inlineText(rec?.role ?? m.role, 80);
-          const about = inlineText(rec?.about ?? m.about, 200);
-          const sponsor = rec?.sponsor ?? m.sponsor;
-          const sponsorName = sponsor ? inlineText(sponsor.handle ?? sponsor.name, 80) : "";
-          const asked = rec?.roleRequest;
-          const askedRole = inlineText(asked?.role, 80);
-          const head = `${m.name}${m.name === s.me ? " (you)" : ""}${m.owner ? " — owner" : role ? ` — ${role}` : ""}${about ? ` (${about})` : ""}${sponsorName ? ` · agent of @${sponsorName}` : ""}${asked ? ` (asked to be ${askedRole || "unassigned"})` : ""}  key ${m.pk.slice(0, 8)}${m.active ? "" : "  (left)"}`;
-          const load = memberLoad(state, m.name);
-          // What they may do, when it's less than everything (what the owner set, as every client enforces it).
-          const scopes = m.active && !m.owner ? state.members.get(m.name)?.scopes : undefined;
-          const may = scopes && scopes.length < SCOPES.length ? `\n    may: ${mayDo(scopes)}` : "";
-          const card = m.active && rec?.card ? `\n    ${cardLine(rec.card)}` : "";
-          return (m.active && showsLoad(m, load) ? `${head}\n    ${loadSummary(load)}` : head) + may + card;
-        })
-        .join("\n");
-    }),
+    tool(() =>
+      Effect.gen(function* () {
+        const [members, { state }] = yield* Effect.all([s.members(true), s.state()], { concurrency: "unbounded" });
+        return members
+          .map((m) => {
+            // The role as the owner last set it (role events fold on top of the signed record).
+            // Member-written fields are one line, so a newline cannot pose as another member.
+            const rec = state.members.get(m.name);
+            const role = inlineText(rec?.role ?? m.role, 80);
+            const about = inlineText(rec?.about ?? m.about, 200);
+            const sponsor = rec?.sponsor ?? m.sponsor;
+            const sponsorName = sponsor ? inlineText(sponsor.handle ?? sponsor.name, 80) : "";
+            const asked = rec?.roleRequest;
+            const askedRole = inlineText(asked?.role, 80);
+            const head = `${m.name}${m.name === s.me ? " (you)" : ""}${m.owner ? " — owner" : role ? ` — ${role}` : ""}${about ? ` (${about})` : ""}${sponsorName ? ` · agent of @${sponsorName}` : ""}${asked ? ` (asked to be ${askedRole || "unassigned"})` : ""}  key ${m.pk.slice(0, 8)}${m.active ? "" : "  (left)"}`;
+            const load = memberLoad(state, m.name);
+            // What they may do, when it's less than everything (what the owner set, as every client enforces it).
+            const scopes = m.active && !m.owner ? state.members.get(m.name)?.scopes : undefined;
+            const may = scopes && scopes.length < SCOPES.length ? `\n    may: ${mayDo(scopes)}` : "";
+            const card = m.active && rec?.card ? `\n    ${cardLine(rec.card)}` : "";
+            return (m.active && showsLoad(m, load) ? `${head}\n    ${loadSummary(load)}` : head) + may + card;
+          })
+          .join("\n");
+      }),
+    ),
   );
 
   if (s.ownerCh) {
@@ -130,18 +154,20 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
     server.registerTool(
       "join_requests",
       { description: "Pending join requests with their verification codes. Show them to your human; never approve on your own. Example: call join_requests." },
-      guard(async () => {
-        const reqs = await owner.requests({ budget: signingBudget });
-        if (!reqs.length) return "no pending join requests";
-        const lines = reqs.map((r) =>
-          r.reclaims
-            ? `${r.code ?? r.check}  RECLAIMS ${r.reclaims.name}'s seat (old key ${r.reclaims.pk.slice(0, 8)}, new key ${r.pk.slice(0, 8)}): only your human decides, with kiwi approve or the dashboard`
-            : `${r.code ?? r.check}  ${r.name}${r.role ? ` (${r.role})` : ""}  key ${r.pk.slice(0, 8)}`,
-        );
-        if (reqs.some((r) => r.check === "waiting")) lines.push("waiting: the requester shows its code in a moment; ask again");
-        if (reqs.some((r) => r.check === "unchecked")) lines.push(`unchecked: ${TOO_MANY_REQUESTS}`);
-        return lines.join("\n");
-      }),
+      tool(() =>
+        Effect.gen(function* () {
+          const reqs = yield* owner.fx.requests({ budget: keys.budget });
+          if (!reqs.length) return "no pending join requests";
+          const lines = reqs.map((r) =>
+            r.reclaims
+              ? `${r.code ?? r.check}  RECLAIMS ${r.reclaims.name}'s seat (old key ${r.reclaims.pk.slice(0, 8)}, new key ${r.pk.slice(0, 8)}): only your human decides, with kiwi approve or the dashboard`
+              : `${r.code ?? r.check}  ${r.name}${r.role ? ` (${r.role})` : ""}  key ${r.pk.slice(0, 8)}`,
+          );
+          if (reqs.some((r) => r.check === "waiting")) lines.push("waiting: the requester shows its code in a moment; ask again");
+          if (reqs.some((r) => r.check === "unchecked")) lines.push(`unchecked: ${TOO_MANY_REQUESTS}`);
+          return lines.join("\n");
+        }),
+      ),
     );
     server.registerTool(
       "decide_join",
@@ -155,23 +181,25 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
           scopes: z.string().optional().describe(`what they may do besides read, if your human said: read-only, contributor, full (the default), or a list of ${SCOPES.join(",")}`),
         },
       },
-      guard(async ({ code, approve, name, scopes: given }) => {
-        const scopes = given === undefined ? undefined : (parseScopes(given) ?? undefined);
-        if (given !== undefined && !scopes) throw new Rejected(`"${given}" isn't scopes: say read-only, contributor, full, or a list of ${SCOPES.join(",")}`);
-        const digits = code.replace(/\D/g, "");
-        const r = (await owner.requests({ budget: signingBudget })).find((x) => x.code?.replace("-", "") === digits);
-        if (!r) throw new Rejected(`no pending request with code ${code}`);
-        if (r.reclaims && approve) throw new Rejected(`this request would move ${r.reclaims.name}'s seat to a new key: your human decides that with kiwi approve or the dashboard`);
-        if (!approve) {
-          await owner.deny(r.id);
-          return `denied ${r.name} (${r.code})`;
-        }
-        const finalName = name ?? r.name;
-        if ((await run(s.members(true))).some((m) => m.name === finalName && m.active)) throw new Rejected(`"${finalName}" is taken; pass name`);
-        // Asking to be the coordinator doesn't make it one: the owner gives that role with set role.
-        await owner.approve(r, { name: finalName, role: r.role?.trim().toLowerCase() === COORDINATOR ? undefined : r.role, about: r.about, ...(scopes ? { scopes } : {}) });
-        return `approved ${finalName} (${r.code})${scopes ? `; they may ${mayDo(scopes)}` : ""}`;
-      }),
+      tool(({ code, approve, name, scopes: given }) =>
+        Effect.gen(function* () {
+          const scopes = given === undefined ? undefined : (parseScopes(given) ?? undefined);
+          if (given !== undefined && !scopes) return yield* new Rejected(`"${given}" isn't scopes: say read-only, contributor, full, or a list of ${SCOPES.join(",")}`);
+          const digits = code.replace(/\D/g, "");
+          const r = (yield* owner.fx.requests({ budget: keys.budget })).find((x) => x.code?.replace("-", "") === digits);
+          if (!r) return yield* new Rejected(`no pending request with code ${code}`);
+          if (r.reclaims && approve) return yield* new Rejected(`this request would move ${r.reclaims.name}'s seat to a new key: your human decides that with kiwi approve or the dashboard`);
+          if (!approve) {
+            yield* owner.fx.deny(r.id);
+            return `denied ${r.name} (${r.code})`;
+          }
+          const finalName = name ?? r.name;
+          if ((yield* s.members(true)).some((m) => m.name === finalName && m.active)) return yield* new Rejected(`"${finalName}" is taken; pass name`);
+          // Asking to be the coordinator doesn't make it one: the owner gives that role with set role.
+          yield* owner.fx.approve(r, { name: finalName, role: r.role?.trim().toLowerCase() === COORDINATOR ? undefined : r.role, about: r.about, ...(scopes ? { scopes } : {}) });
+          return `approved ${finalName} (${r.code})${scopes ? `; they may ${mayDo(scopes)}` : ""}`;
+        }),
+      ),
     );
     server.registerTool(
       "set_scopes",
@@ -183,12 +211,14 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
           scopes: z.string().describe(`read-only, contributor, full, or a list of ${SCOPES.join(",")}`),
         },
       },
-      guard(async ({ name, scopes: given }) => {
-        const scopes = parseScopes(given) ?? null;
-        if (!scopes) throw new Rejected(`"${given}" isn't scopes: say read-only, contributor, full, or a list of ${SCOPES.join(",")}`);
-        await run(s.setScopes(name, scopes));
-        return `${name} may now ${mayDo(scopes)}`;
-      }),
+      tool(({ name, scopes: given }) =>
+        Effect.gen(function* () {
+          const scopes = parseScopes(given) ?? null;
+          if (!scopes) return yield* new Rejected(`"${given}" isn't scopes: say read-only, contributor, full, or a list of ${SCOPES.join(",")}`);
+          yield* s.setScopes(name, scopes);
+          return `${name} may now ${mayDo(scopes)}`;
+        }),
+      ),
     );
     server.registerTool(
       "create_room",
@@ -196,10 +226,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
         description: "Make a room in this channel (like a channel in a Discord server). Only call this after your human explicitly told you to.",
         inputSchema: { name: z.string().describe("the room's name, e.g. design") },
       },
-      guard(async ({ name }) => {
-        const { id, state } = await run(s.createRoom(name));
-        return `made #${state.rooms.get(id)?.name ?? name} (id ${id})`;
-      }),
+      tool(({ name }) => Effect.map(s.createRoom(name), ({ id, state }) => `made #${state.rooms.get(id)?.name ?? name} (id ${id})`)),
     );
     server.registerTool(
       "rename_room",
@@ -207,10 +234,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
         description: "Rename a room (general too; its id stays). Only call this after your human explicitly told you to.",
         inputSchema: { room: z.string().describe("the room's current name or id"), name: z.string().describe("its new name") },
       },
-      guard(async ({ room, name }) => {
-        await run(s.renameRoom(room, name));
-        return `renamed to #${name}`;
-      }),
+      tool(({ room, name }) => Effect.as(s.renameRoom(room, name), `renamed to #${name}`)),
     );
     server.registerTool(
       "set_mode",
@@ -219,18 +243,20 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
           "Turn coordinator-only on or off: people talk only with the member whose role is coordinator; strict (the default) has every client refuse other agents' messages to people. Only call this after your human explicitly told you to.",
         inputSchema: { coordinatorOnly: z.boolean(), strict: z.boolean().optional().describe("default true") },
       },
-      guard(async ({ coordinatorOnly, strict }) => modeLine(await run(s.setMode(coordinatorOnly, strict ?? true)), s.me) ?? "mode: normal"),
+      tool(({ coordinatorOnly, strict }) => Effect.map(s.setMode(coordinatorOnly, strict ?? true), (state) => modeLine(state, s.me) ?? "mode: normal")),
     );
   }
 
   server.registerTool(
     "status",
     { description: "Whether the channel is ON HOLD, its charter (the owner's scope), your human, members (and who is online), open tasks, claims, facts, and questions waiting on you. Example: call status." },
-    guard(async () => {
-      const [{ messages, state }, online] = await Promise.all([run(s.state()), run(s.who())]);
-      const on = new Map([...online].map(([n, p]) => [n, { client: p.client, role: p.role }]));
-      return formatStatus({ alias: s.alias, me: s.me, state, online: on, unread: await run(s.unreadCount(state, messages)) });
-    }),
+    tool(() =>
+      Effect.gen(function* () {
+        const [{ messages, state }, online] = yield* Effect.all([s.state(), s.who()], { concurrency: "unbounded" });
+        const on = new Map([...online].map(([n, p]) => [n, { client: p.client, role: p.role }]));
+        return formatStatus({ alias: s.alias, me: s.me, state, online: on, unread: yield* s.unreadCount(state, messages) });
+      }),
+    ),
   );
 
   server.registerTool(
@@ -240,49 +266,31 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
         "Block until a message for you arrives, then return it. If none arrives, return and call this again. A short wait is normal. Default 50 seconds, maximum 3600. Example: wait_for_messages {\"timeout_seconds\":50}.",
       inputSchema: { timeout_seconds: z.number().int().min(1).max(3600).optional().describe("seconds to wait. Default 50. A short wait is normal; call this again. Maximum 3600.") },
     },
-    guard(async ({ timeout_seconds }, extra) => {
-      const seconds = timeout_seconds ?? 50;
-      // Remember where we started. listen marks each message read as it arrives, which is too early
-      // when the client cancels the call before it sees the result.
-      const since = await run(s.cursor());
-      const ac = new AbortController();
-      const onClientAbort = () => ac.abort();
-      extra.signal.addEventListener("abort", onClientAbort, { once: true });
-      const timer = setTimeout(() => ac.abort(), seconds * 1000);
-      const lines: string[] = [];
-      let got = 0;
-      let linger: ReturnType<typeof setTimeout> | undefined;
-      const woke = () => {
-        if (got++ === 0) linger = setTimeout(() => ac.abort(), 400);
-      };
-      try {
-        await run(
-          s.listen(
-            (m, state) =>
-              Effect.sync(() => {
-                lines.push(formatMessage(m, state.trust.get(m.seq), state, s.me));
-                woke();
-              }),
-            {
-              client: "mcp-wait",
-              onNotice: (text) =>
-                Effect.sync(() => {
-                  lines.push(text);
-                  woke();
-                }),
-            },
-          ),
-          ac.signal,
+    tool(({ timeout_seconds }, extra) =>
+      Effect.gen(function* () {
+        const seconds = timeout_seconds ?? 50;
+        // Remember where we started. listen marks each message read as it arrives, which is too early
+        // when the client cancels the call before it sees the result.
+        const since = yield* s.cursor();
+        const cursor = yield* Cursor;
+        const lines: string[] = [];
+        const enough = yield* Deferred.make<void>();
+        const heard = (line: string) =>
+          Effect.suspend(() => {
+            lines.push(line);
+            // Linger briefly so a burst of messages is delivered as one wake-up.
+            return lines.length === 1 ? Effect.asVoid(Effect.forkScoped(Effect.andThen(Effect.sleep(400), Deferred.succeed(enough, undefined)))) : Effect.void;
+          });
+        const listening = s.listen((m, state) => heard(formatMessage(m, state.trust.get(m.seq), state, s.me)), { client: "mcp-wait", onNotice: heard });
+        const over = Effect.raceFirst(Deferred.await(enough), Effect.raceFirst(Effect.sleep(seconds * 1000), cancelled(extra.signal)));
+        yield* Effect.raceFirst(listening, over).pipe(
+          Effect.ensuring(Effect.suspend(() => (extra.signal.aborted ? cursor.write(s.alias, s.me, since) : Effect.void))),
+          Effect.scoped,
         );
-      } finally {
-        clearTimeout(timer);
-        clearTimeout(linger);
-        extra.signal.removeEventListener("abort", onClientAbort);
-        if (extra.signal.aborted) writeCursor(s.alias, s.me, since);
-      }
-      if (extra.signal.aborted || !lines.length) return "no messages yet, call wait_for_messages again.\nNext: call wait_for_messages.";
-      return `${lines.join("\n")}\nNext: handle these. If one needs an answer, call reply. Then call wait_for_messages.`;
-    }),
+        if (extra.signal.aborted || !lines.length) return "no messages yet, call wait_for_messages again.\nNext: call wait_for_messages.";
+        return `${lines.join("\n")}\nNext: handle these. If one needs an answer, call reply. Then call wait_for_messages.`;
+      }),
+    ),
   );
 
   server.registerTool(
@@ -296,30 +304,23 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
         thread: z.number().int().optional().describe("only the thread this message is in"),
       },
     },
-    async ({ chat, all, thread }) => {
-      try {
-        const { messages, state } = await run(s.read({ chat, all, ...(thread !== undefined ? { thread } : {}) }));
-        if (!messages.length) return ok("no unread messages.\nNext: call wait_for_messages.");
-        return withImages(messages.map((m) => formatMessage(m, state.trust.get(m.seq), state, s.me)).join("\n"), messages);
-      } catch (err) {
-        return fail(err instanceof Error ? err.message : String(err));
-      }
-    },
+    shaped(({ chat, all, thread }) =>
+      Effect.map(s.read({ chat, all, ...(thread !== undefined ? { thread } : {}) }), ({ messages, state }) =>
+        messages.length ? withImages(messages.map((m) => formatMessage(m, state.trust.get(m.seq), state, s.me)).join("\n"), messages) : ok("no unread messages.\nNext: call wait_for_messages."),
+      ),
+    ),
   );
 
   server.registerTool(
     "log",
     { description: "Recent channel history (doesn't mark anything read). Images come back as image blocks. Example: log {\"n\":30}.", inputSchema: { n: z.number().int().min(1).max(500).optional() } },
-    async ({ n }) => {
-      try {
-        const { messages, state } = await run(s.state());
+    shaped(({ n }) =>
+      Effect.map(s.state(), ({ messages, state }) => {
         const shown = messages.slice(-(n ?? 30));
         if (!shown.length) return ok("no messages");
         return withImages(shown.map((m) => formatMessage(m, state.trust.get(m.seq), state, s.me)).join("\n"), shown);
-      } catch (err) {
-        return fail(err instanceof Error ? err.message : String(err));
-      }
-    },
+      }),
+    ),
   );
 
   server.registerTool(
@@ -332,21 +333,20 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
         "Read-only: no disk, no network, no writes; use the other tools to send or change anything. Example: sh {\"script\":\"cat status\"}.",
       inputSchema: { script: z.string().describe("a bash script, e.g. jq -r 'select(.kind==\"ask\") | .body' log.jsonl") },
     },
-    async ({ script }) => {
-      try {
-        const r = await runSh(channelFiles(await run(sessionViews(s, script))), script);
+    shaped(({ script }) =>
+      Effect.gen(function* () {
+        const views = yield* sessionViews(s, script);
+        const r = yield* Effect.promise(() => runSh(channelFiles(views), script));
         const text = [r.stdout.trimEnd(), r.stderr.trimEnd() && `[stderr]\n${r.stderr.trimEnd()}`, r.exitCode && `[exit ${r.exitCode}]`].filter(Boolean).join("\n");
         return r.exitCode ? fail(text) : ok(text || "(no output)");
-      } catch (err) {
-        return fail(err instanceof Error ? err.message : String(err));
-      }
-    },
+      }),
+    ),
   );
 
   server.registerTool(
     "rooms",
     { description: "The channel's rooms, with their ids. Messages say their room as [#name] once there's more than one. Example: call rooms." },
-    guard(async () => formatRooms((await run(s.state())).state)),
+    tool(() => Effect.map(s.state(), ({ state }) => formatRooms(state))),
   );
 
   server.registerTool(
@@ -362,7 +362,9 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
         room: z.string().optional().describe("the room's name or id; general if omitted (a reply defaults to its parent's room)"),
       },
     },
-    guard(async ({ text, to, kind, re, images, room }) => `sent #${await run(s.send(text, { to, kind, re, room, imgs: images?.length ? loadImages(images) : undefined }))}`),
+    tool(({ text, to, kind, re, images, room }) =>
+      Effect.suspend(() => Effect.map(s.send(text, { to, kind, re, room, imgs: images?.length ? loadImages(images) : undefined }), (seq) => `sent #${seq}`)),
+    ),
   );
 
   server.registerTool(
@@ -377,12 +379,13 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
         room: z.string().optional().describe("the room's name or id; general if omitted"),
       },
     },
-    guard(async ({ text, to, wait_seconds, blocking, room }) => {
-      const { seq, replies } = await run(s.ask(text, { to, kind: blocking ? "blocking" : "ask", waitSec: wait_seconds, room }));
-      if (!wait_seconds) return `asked #${seq}`;
-      if (!replies.length) return `no answer to #${seq} within ${wait_seconds}s; replies will still reach you`;
-      return replies.map((r) => formatMessage(r)).join("\n");
-    }),
+    tool(({ text, to, wait_seconds, blocking, room }) =>
+      Effect.map(s.ask(text, { to, kind: blocking ? "blocking" : "ask", waitSec: wait_seconds, room }), ({ seq, replies }) => {
+        if (!wait_seconds) return `asked #${seq}`;
+        if (!replies.length) return `no answer to #${seq} within ${wait_seconds}s; replies will still reach you`;
+        return replies.map((r) => formatMessage(r)).join("\n");
+      }),
+    ),
   );
 
   server.registerTool(
@@ -396,7 +399,7 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
         images: z.array(z.string()).optional().describe("local image files to attach (png, jpg, gif, webp, ≤256KB each)"),
       },
     },
-    guard(async ({ seq, text, kind, images }) => `sent #${await run(s.reply(seq, text, kind, images?.length ? loadImages(images) : undefined))}`),
+    tool(({ seq, text, kind, images }) => Effect.suspend(() => Effect.map(s.reply(seq, text, kind, images?.length ? loadImages(images) : undefined), (n) => `sent #${n}`))),
   );
 
   server.registerTool(
@@ -410,29 +413,28 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
         re: z.number().int().optional().describe("the message this is about"),
       },
     },
-    guard(async ({ text, re }) => {
-      const { seq, to } = await run(s.escalate(text, re));
-      return `escalated #${seq} to ${to.join(" and ")}; wait for their answer before acting on it`;
-    }),
+    tool(({ text, re }) => Effect.map(s.escalate(text, re), ({ seq, to }) => `escalated #${seq} to ${to.join(" and ")}; wait for their answer before acting on it`)),
   );
 
   server.registerTool(
     "who",
     { description: "Who is listening on the channel right now. Example: call who." },
-    guard(async () => {
-      const [online, { state }] = await Promise.all([run(s.who()), run(s.state())]);
-      if (!online.size) return "nobody else is listening right now";
-      return [...online]
-        .map(([name, p]) => {
-          const rec = state.members.get(name);
-          const role = inlineText(p.role ?? rec?.role, 80);
-          const about = inlineText(rec?.about, 200);
-          const sponsorName = rec?.sponsor ? inlineText(rec.sponsor.handle ?? rec.sponsor.name, 80) : "";
-          const client = inlineText(p.client, 40);
-          return `${name}${role ? ` — ${role}` : ""}${about ? ` (${about})` : ""}${sponsorName ? ` · agent of @${sponsorName}` : ""} · ${client}`;
-        })
-        .join("\n");
-    }),
+    tool(() =>
+      Effect.gen(function* () {
+        const [online, { state }] = yield* Effect.all([s.who(), s.state()], { concurrency: "unbounded" });
+        if (!online.size) return "nobody else is listening right now";
+        return [...online]
+          .map(([name, p]) => {
+            const rec = state.members.get(name);
+            const role = inlineText(p.role ?? rec?.role, 80);
+            const about = inlineText(rec?.about, 200);
+            const sponsorName = rec?.sponsor ? inlineText(rec.sponsor.handle ?? rec.sponsor.name, 80) : "";
+            const client = inlineText(p.client, 40);
+            return `${name}${role ? ` — ${role}` : ""}${about ? ` (${about})` : ""}${sponsorName ? ` · agent of @${sponsorName}` : ""} · ${client}`;
+          })
+          .join("\n");
+      }),
+    ),
   );
 
   server.registerTool(
@@ -441,14 +443,16 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
       description: "Download message #seq's attached images to a local directory. Returns the file paths. Example: save {\"seq\":42}.",
       inputSchema: { seq: z.number().int(), dir: z.string().optional().describe("defaults to ~/…/.kiwi/downloads") },
     },
-    guard(async ({ seq, dir }) => {
-      const { messages } = await run(s.state());
-      const m = messages.find((x) => x.seq === seq);
-      if (!m) throw new Rejected(`no message #${seq}`);
-      if (!m.imgs?.length) throw new Rejected(`message #${seq} has no images`);
-      // Under the channel's own folder, so closing the channel deletes them too.
-      return saveImages(seq, m.imgs, dir ?? join(home(), "downloads", s.ch.roomId)).join("\n");
-    }),
+    tool(({ seq, dir }) =>
+      Effect.gen(function* () {
+        const { messages } = yield* s.state();
+        const m = messages.find((x) => x.seq === seq);
+        if (!m) return yield* new Rejected(`no message #${seq}`);
+        if (!m.imgs?.length) return yield* new Rejected(`message #${seq} has no images`);
+        // Under the channel's own folder, so closing the channel deletes them too.
+        return saveImages(seq, m.imgs, dir ?? join(home(), "downloads", s.ch.roomId)).join("\n");
+      }),
+    ),
   );
 
   server.registerTool(
@@ -457,17 +461,14 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
       description: "One message in full, never cut short: its text, the message it answers, its replies, and its images (as image blocks, also saved to disk). Example: message {\"seq\":42}.",
       inputSchema: { seq: z.number().int() },
     },
-    async ({ seq }) => {
-      try {
-        const { messages, state } = await run(s.state());
+    shaped(({ seq }) =>
+      Effect.map(s.state(), ({ messages, state }) => {
         const m = messages.find((x) => x.seq === seq);
         if (!m) return fail(`no message #${seq}`);
         const saved = m.imgs?.length ? saveImages(seq, m.imgs, join(home(), "downloads", s.ch.roomId)) : [];
         return withImages(formatShown(m, messages, state, saved, s.me), [m]);
-      } catch (err) {
-        return fail(err instanceof Error ? err.message : String(err));
-      }
-    },
+      }),
+    ),
   );
 
   server.registerTool(
@@ -476,25 +477,27 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
       description: "The shared task board. With global, every channel you joined. Example: tasks {\"mine\":true}.",
       inputSchema: { mine: z.boolean().optional(), all: z.boolean().optional().describe("include done tasks"), global: z.boolean().optional() },
     },
-    guard(async ({ mine, all, global }) => {
-      if (!global) return formatTasks((await run(s.state())).state, { all, owner: mine ? s.me : undefined });
-      const cfg = loadConfig();
-      const aliases = Object.keys(cfg.channels).sort();
-      if (!aliases.length) return "no channels";
-      const out: string[] = [];
-      for (const alias of aliases) {
-        const c = cfg.channels[alias]!;
-        // Only channels this agent is in itself: never read another local agent's channel with its key.
-        if (!identitiesIn(c.roomId).includes(s.me)) continue;
-        const sess = await AgentSession.open(alias, c, s.me);
-        const { state } = await run(sess.state());
-        const owner = mine ? sess.me : undefined;
-        const lines = formatTasks(state, { all, owner });
-        out.push(`## ${alias}${lines === "no tasks" ? " — no tasks" : ""}`);
-        if (lines !== "no tasks") out.push(lines.split("\n").map((l) => `  ${l}`).join("\n"));
-      }
-      return out.join("\n");
-    }),
+    tool(({ mine, all, global }) =>
+      Effect.gen(function* () {
+        if (!global) return formatTasks((yield* s.state()).state, { all, owner: mine ? s.me : undefined });
+        const cfg = yield* keys.config;
+        const aliases = Object.keys(cfg.channels).sort();
+        if (!aliases.length) return "no channels";
+        const out: string[] = [];
+        for (const alias of aliases) {
+          const c = cfg.channels[alias]!;
+          // Only channels this agent is in itself: never read another local agent's channel with its key.
+          if (!(yield* keys.identitiesIn(c.roomId)).includes(s.me)) continue;
+          const sess = yield* openSession(alias, c, s.me);
+          const { state } = yield* sess.state();
+          const owner = mine ? sess.me : undefined;
+          const lines = formatTasks(state, { all, owner });
+          out.push(`## ${alias}${lines === "no tasks" ? " — no tasks" : ""}`);
+          if (lines !== "no tasks") out.push(lines.split("\n").map((l) => `  ${l}`).join("\n"));
+        }
+        return out.join("\n");
+      }),
+    ),
   );
 
   server.registerTool(
@@ -513,18 +516,20 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
         review: z.string().optional().describe("who must approve it before it's done: a member's name, or any"),
       },
     },
-    guard(async ({ title, detail, owner, after, needs, review }) => {
-      const ids = after?.map(task);
-      const { state } = await run(s.state());
-      const id = await run(s.taskAdd(title, { detail, owner, after: ids, needs, review }));
-      const like = similarOpenTasks(state, title).map((t) => t.id);
-      const lines = [formatAdded(state, id, ids ?? [])];
-      if (like.length) lines.push(looksLikeLine(like));
-      const now = (await run(s.state())).state;
-      const fit = !owner && now.tasks.get(id) ? fitsLine(now, now.tasks.get(id)!) : null;
-      if (fit) lines.push(fit);
-      return lines.join("\n");
-    }),
+    tool(({ title, detail, owner, after, needs, review }) =>
+      Effect.gen(function* () {
+        const ids = after ? yield* Effect.forEach(after, task) : undefined;
+        const { state } = yield* s.state();
+        const id = yield* s.taskAdd(title, { detail, owner, after: ids, needs, review });
+        const like = similarOpenTasks(state, title).map((t) => t.id);
+        const lines = [formatAdded(state, id, ids ?? [])];
+        if (like.length) lines.push(looksLikeLine(like));
+        const now = (yield* s.state()).state;
+        const fit = !owner && now.tasks.get(id) ? fitsLine(now, now.tasks.get(id)!) : null;
+        if (fit) lines.push(fit);
+        return lines.join("\n");
+      }),
+    ),
   );
 
   server.registerTool(
@@ -543,43 +548,45 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
         after: z.array(z.string()).optional().describe("for after: task ids this one waits on"),
       },
     },
-    guard(async ({ task: raw, action, note, owner, after }) => {
-      const id = task(raw);
-      if (action === "show") {
-        const { state } = await run(s.state());
-        const t = state.tasks.get(id);
-        if (!t) throw new Rejected(`no task ${taskId(id)}`);
-        return formatTask(state, t);
-      }
-      if (action === "after") {
-        const deps = (after ?? []).map(task);
-        if (!deps.length) throw new Rejected("after needs at least one task id");
-        const state = await run(s.taskAfter(id, deps));
-        return formatAfter(state, id, deps);
-      }
-      if (action === "handoff") {
-        if (!owner) throw new Rejected("handoff needs owner: who takes it over");
-        const { handoff, pushed } = handoffHere();
-        const state = await run(s.taskHandoff(id, owner, note, handoff));
+    tool(({ task: raw, action, note, owner, after }) =>
+      Effect.gen(function* () {
+        const id = yield* task(raw);
+        if (action === "show") {
+          const { state } = yield* s.state();
+          const t = state.tasks.get(id);
+          if (!t) return yield* new Rejected(`no task ${taskId(id)}`);
+          return formatTask(state, t);
+        }
+        if (action === "after") {
+          const deps = yield* Effect.forEach(after ?? [], task);
+          if (!deps.length) return yield* new Rejected("after needs at least one task id");
+          const state = yield* s.taskAfter(id, deps);
+          return formatAfter(state, id, deps);
+        }
+        if (action === "handoff") {
+          if (!owner) return yield* new Rejected("handoff needs owner: who takes it over");
+          const { handoff, pushed } = handoffHere();
+          const state = yield* s.taskHandoff(id, owner, note, handoff);
+          const t = state.tasks.get(id)!;
+          const where = handoff.branch ? `: pick it up from ${handoff.branch}${handoff.commit ? ` @ ${handoff.commit}` : ""}` : "";
+          return `${taskId(id)} is ${t.owner}'s now${where}${pushed === false && handoff.branch ? `. ${handoff.branch} isn't pushed: push it so ${t.owner} can fetch it` : ""}`;
+        }
+        if (action === "reject" && !note) return yield* new Rejected("reject needs a note saying what to change");
+        const states = { start: "doing", block: "blocked", review: "review", approve: "done", reject: "doing", done: "done", cancel: "cancelled" } as const;
+        const state =
+          action === "claim"
+            ? yield* s.taskClaim(id)
+            : action === "drop"
+              ? yield* s.taskUpdate(id, { owner: null, note })
+              : action === "assign"
+                ? yield* s.taskUpdate(id, { owner: owner ?? s.me, note })
+                : action === "note"
+                  ? yield* s.taskUpdate(id, { note: note ?? "" })
+                  : yield* s.taskUpdate(id, { state: states[action], note });
         const t = state.tasks.get(id)!;
-        const where = handoff.branch ? `: pick it up from ${handoff.branch}${handoff.commit ? ` @ ${handoff.commit}` : ""}` : "";
-        return `${taskId(id)} is ${t.owner}'s now${where}${pushed === false && handoff.branch ? `. ${handoff.branch} isn't pushed: push it so ${t.owner} can fetch it` : ""}`;
-      }
-      if (action === "reject" && !note) throw new Rejected("reject needs a note saying what to change");
-      const states = { start: "doing", block: "blocked", review: "review", approve: "done", reject: "doing", done: "done", cancel: "cancelled" } as const;
-      const state =
-        action === "claim"
-          ? await run(s.taskClaim(id))
-          : action === "drop"
-            ? await run(s.taskUpdate(id, { owner: null, note }))
-            : action === "assign"
-              ? await run(s.taskUpdate(id, { owner: owner ?? s.me, note }))
-              : action === "note"
-                ? await run(s.taskUpdate(id, { note: note ?? "" }))
-                : await run(s.taskUpdate(id, { state: states[action], note }));
-      const t = state.tasks.get(id)!;
-      return `${taskId(id)} ${t.state}${t.owner ? ` @${t.owner}` : ""}: ${t.title}`;
-    }),
+        return `${taskId(id)} ${t.state}${t.owner ? ` @${t.owner}` : ""}: ${t.title}`;
+      }),
+    ),
   );
 
   server.registerTool(
@@ -588,35 +595,33 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
       description: "Reserve paths before editing them. A path#Symbol claim shares the file; a whole-file claim still locks it. Records this machine and git checkout. Fails if another agent holds an overlapping claim, and names their checkout. Example: claim {\"paths\":[\"src/net\"],\"ttl\":\"30m\"}.",
       inputSchema: { paths: z.array(z.string()).min(1), ttl: z.string().optional().describe("like 30m or 2h (default 30m)"), note: z.string().optional() },
     },
-    guard(async ({ paths, ttl, note }) => {
-      const state = await run(s.claim(paths, parseDuration(ttl ?? "30m"), note, claimPlace()));
-      return formatClaims({ ...state, claims: state.claims.filter((c) => c.owner === s.me) });
-    }),
+    tool(({ paths, ttl, note }) =>
+      Effect.suspend(() => Effect.map(s.claim(paths, parseDuration(ttl ?? "30m"), note, claimPlace()), (state) => formatClaims({ ...state, claims: state.claims.filter((c) => c.owner === s.me) }))),
+    ),
   );
 
   server.registerTool(
     "release",
     { description: "Release your claims (all of them if no paths given). Example: call release.", inputSchema: { paths: z.array(z.string()).optional() } },
-    guard(async ({ paths }) => {
-      await run(s.release(paths));
-      return paths?.length ? `released ${paths.join(", ")}` : "released all your claims";
-    }),
+    tool(({ paths }) => Effect.as(s.release(paths), paths?.length ? `released ${paths.join(", ")}` : "released all your claims")),
   );
 
   server.registerTool(
     "facts",
     { description: "Shared key/value facts: read all, or set/unset one. Anyone may set or unset a key. ttl (like 7d) makes a fact expire on its own. Example: facts {\"set\":\"build.cmd\",\"value\":\"bun test\"}.", inputSchema: { set: z.string().optional(), value: z.string().optional(), unset: z.string().optional(), ttl: z.string().optional() } },
-    guard(async ({ set, value, unset, ttl }) => {
-      if (set) await run(s.setFact(set, value ?? "", ttl ? parseDuration(ttl) : undefined));
-      if (unset) await run(s.delFact(unset));
-      const { facts } = (await run(s.state())).state;
-      return [...facts.values()].map((f) => formatFact(f)).join("\n") || "no facts";
-    }),
+    tool(({ set, value, unset, ttl }) =>
+      Effect.gen(function* () {
+        if (set) yield* s.setFact(set, value ?? "", ttl ? parseDuration(ttl) : undefined);
+        if (unset) yield* s.delFact(unset);
+        const { facts } = (yield* s.state()).state;
+        return [...facts.values()].map((f) => formatFact(f)).join("\n") || "no facts";
+      }),
+    ),
   );
 
-  await server.connect(new StdioServerTransport());
+  yield* Effect.promise(() => server.connect(new StdioServerTransport()));
   // Say what this agent runs on, so work that needs it finds it. In the background: the harness is waiting on the handshake.
-  void run(s.refreshCard(detectCard())).catch(() => {});
+  yield* Effect.forkDetach(Effect.ignoreCause(s.refreshCard(detectCard())));
   // An MCP server lives exactly as long as its client: exit when stdin closes,
   // so a crashed or killed agent never leaves an orphaned listener behind.
   const bye = () => process.exit(0);
@@ -624,23 +629,10 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
   process.stdin.on("close", bye);
   server.server.onclose = bye;
 
-  if (opts.push) {
-    await run(
-      s.listen(
-        (m, state) =>
-          Effect.promise(() =>
-            server.server.notification({
-              method: "notifications/claude/channel",
-              params: { content: formatMessage(m, state.trust.get(m.seq), state, s.me), meta: { seq: String(m.seq), from: m.from, kind: m.kind } },
-            }),
-          ),
-        {
-          client: "mcp",
-          onNotice: (text) => Effect.promise(() => server.server.notification({ method: "notifications/claude/channel", params: { content: `* ${text}`, meta: { kind: "notice" } } })),
-        },
-      ),
-    );
-  } else {
-    await new Promise(() => {});
-  }
-}
+  if (!opts.push) return yield* Effect.never;
+  const push = (content: string, meta: Record<string, string>) => Effect.promise(() => server.server.notification({ method: "notifications/claude/channel", params: { content, meta } }));
+  yield* s.listen((m, state) => push(formatMessage(m, state.trust.get(m.seq), state, s.me), { seq: String(m.seq), from: m.from, kind: m.kind }), {
+    client: "mcp",
+    onNotice: (text) => push(`* ${text}`, { kind: "notice" }),
+  });
+});
