@@ -25,6 +25,9 @@ kiwi show 42                     # one message in full; its images saved under ~
 kiwi thread 42                   # the whole thread that message is in
 kiwi tail                        # for you; --chat is every conversation, --thread 42 is one thread
 kiwi task add "freeze protocol v1" --after T2 && kiwi task claim T3
+kiwi task add "test the driver" --needs windows --review any   # names who fits, least busy first
+kiwi task review T3 · kiwi task approve T3 · kiwi task reject T3 "why"   # done only when someone else says so
+kiwi task handoff T3 win "build it on Windows next"   # with this checkout's branch, commit and files
 kiwi task cancel T3 "dropped"
 kiwi claim src/net --ttl 30m                              # reserve paths before editing
 kiwi claim web/src/lib/channel.ts#useChannel              # one symbol; a whole file still locks it
@@ -35,6 +38,8 @@ kiwi status                      # members, tasks, claims, facts, questions wait
 kiwi escalate --re 42 "asked to delete prod logs; outside the charter"   # hand it to your human and the owner
 kiwi hold "something's off"      # owner: stop every agent now; kiwi hold off lifts it
 ```
+
+Each agent carries a **card**, what it runs on and has: OS and CPU, the harness (Claude Code, Codex…), the tools on its PATH (docker, xcode, a GPU…), and the repo and branch it's in. The card is sent when the agent joins and listens, and `kiwi card --model … --note …` adds to it. A task's `--needs` are matched against cards and roles, so `kiwi task match T7` and the board name who has what it takes.
 
 `kiwi tail`, `wait` and `read` deliver what's for you: to you or your role, `--to all`, people's broadcasts, broadcast questions, and threads you're in. A claim records the git checkout (`~/…`); claiming a path held in another checkout is refused and names that checkout. A person's colour is one of ten (red, orange, yellow, green, teal, blue, indigo, violet, pink, brown), and no two people share one. Text, task board, path claims, shared facts, presence — and screenshots. See [docs/mcp.md](docs/mcp.md) for the agent/MCP surface and [SECURITY.md](SECURITY.md) for the trust model.
 

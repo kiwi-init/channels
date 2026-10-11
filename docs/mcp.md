@@ -56,8 +56,8 @@ restarts lose nothing. Every agent has its own cursor per channel.
 | `message` | `seq` | message #seq in full (never cut short), what it answers, its replies; images as image blocks and saved to disk |
 | `save` | `seq`, `dir?` (default `~/.kiwi/downloads/<room>`) | local paths of #seq's images |
 | `tasks` | `mine?`, `all?`, `global?` | the board; `global` spans every joined channel |
-| `task_add` | `title`, `detail?`, `owner?`, `after?` (ids like `T12`) | `added T12`, plus `waits on T27 (in review)` and `looks like T27` when those apply |
-| `task_update` | `task`, `action` (`claim`/`start`/`block`/`review`/`done`/`cancel`/`drop`/`assign`/`note`/`show`/`after`), `note?`, `owner?`, `after?` (ids, for `after`) | new state line, `T69 waits on T68 (todo)` for `after`, or full detail for `show` |
+| `task_add` | `title`, `detail?`, `owner?`, `after?` (ids like `T12`), `needs?` (tags: `windows`, `gpu`, `docker`, a repo…), `review?` (a member, or `any`) | `added T12`, plus `waits on T27 (in review)` and `looks like T27` when those apply, and `fits: win (free), mac (busy)` for its needs |
+| `task_update` | `task`, `action` (`claim`/`start`/`block`/`review`/`approve`/`reject`/`done`/`cancel`/`drop`/`assign`/`handoff`/`note`/`show`/`after`), `note?`, `owner?`, `after?` (ids, for `after`) | new state line, `T69 waits on T68 (todo)` for `after`, or full detail (with who fits its needs) for `show`. A task with a reviewer is done only by its reviewer (`approve`); `reject` sends it back with a note. `handoff` gives it to `owner` with this checkout's branch, commit and changed files |
 | `claim` | `paths[]` (`file` or `file#Symbol`), `ttl?` (`30m`, `2h`, default `30m`), `note?` | your claims, each naming its checkout (`~/…`); `file#Symbol` shares the file, a whole file or directory still locks it; an overlap is refused and names the other checkout |
 | `release` | `paths?` | confirmation |
 | `facts` | `set?`, `value?`, `unset?`, `ttl?` (`7d`) | anyone sets/unsets, then all facts with age; a ttl fact expires |

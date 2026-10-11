@@ -13,13 +13,14 @@ import { loadImages, saveImages } from "./attach.ts";
 import { loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { forgetMember, home, identitiesIn, loadConfig, signingBudget, wipeChannel, writeCursor } from "./config.ts";
 import { ChannelGone } from "./client.ts";
-import { formatAdded, formatAfter, formatClaims, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, mayDo, modeLine, parseDuration } from "./format.ts";
+import { cardLine, fitsLine, formatAdded, formatAfter, formatClaims, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, mayDo, modeLine, parseDuration } from "./format.ts";
 import { parseScopes, SCOPES } from "./scopes.ts";
 import { CHAT_KINDS, type Kind, type Message } from "./protocol.ts";
 import { inlineText } from "./membership.ts";
 import { TOO_MANY_REQUESTS } from "./sas.ts";
 import { COORDINATOR, parseTaskId, similarOpenTasks, taskId } from "./state.ts";
 import { claimPlace } from "./where.ts";
+import { detectCard, handoffHere } from "./card.ts";
 import { VERSION } from "./version.ts";
 import { channelFiles, runSh, sessionViews } from "./sh.ts";
 
@@ -113,7 +114,8 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
           // What they may do, when it's less than everything (what the owner set, as every client enforces it).
           const scopes = m.active && !m.owner ? state.members.get(m.name)?.scopes : undefined;
           const may = scopes && scopes.length < SCOPES.length ? `\n    may: ${mayDo(scopes)}` : "";
-          return (m.active && showsLoad(m, load) ? `${head}\n    ${loadSummary(load)}` : head) + may;
+          const card = m.active && rec?.card ? `\n    ${cardLine(rec.card)}` : "";
+          return (m.active && showsLoad(m, load) ? `${head}\n    ${loadSummary(load)}` : head) + may + card;
         })
         .join("\n");
     }),
@@ -490,26 +492,44 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
   server.registerTool(
     "task_add",
     {
-      description: "Add a task to the shared board. Returns its id (like T12). Warns when an open task has a near-identical title, and names deps that are still open (review reads as 'in review'). Example: task_add {\"title\":\"write docs\"}.",
-      inputSchema: { title: z.string(), detail: z.string().optional(), owner: z.string().optional(), after: z.array(z.string()).optional().describe("task ids that must be done first") },
+      description:
+        "Add a task to the shared board. Returns its id (like T12). Warns when an open task has a near-identical title, and names deps that are still open (review reads as 'in review'). " +
+        "`needs` are tags matched against members' cards (os, harness, tools, repo, role words: windows, gpu, docker…); the answer names who fits, least busy first. `review` is who must approve it before it's done (a member, or any). " +
+        'Example: task_add {"title":"test the driver on Windows","needs":["windows"],"review":"any"}.',
+      inputSchema: {
+        title: z.string(),
+        detail: z.string().optional(),
+        owner: z.string().optional(),
+        after: z.array(z.string()).optional().describe("task ids that must be done first"),
+        needs: z.array(z.string()).optional().describe("tags a member must have: windows, gpu, docker, a repo…"),
+        review: z.string().optional().describe("who must approve it before it's done: a member's name, or any"),
+      },
     },
-    guard(async ({ title, detail, owner, after }) => {
+    guard(async ({ title, detail, owner, after, needs, review }) => {
       const ids = after?.map(task);
       const { state } = await s.state();
-      const id = await s.taskAdd(title, { detail, owner, after: ids });
+      const id = await s.taskAdd(title, { detail, owner, after: ids, needs, review });
       const like = similarOpenTasks(state, title).map((t) => t.id);
-      const line = formatAdded(state, id, ids ?? []);
-      return like.length ? `${line}\n${looksLikeLine(like)}` : line;
+      const lines = [formatAdded(state, id, ids ?? [])];
+      if (like.length) lines.push(looksLikeLine(like));
+      const now = (await s.state()).state;
+      const fit = !owner && now.tasks.get(id) ? fitsLine(now, now.tasks.get(id)!) : null;
+      if (fit) lines.push(fit);
+      return lines.join("\n");
     }),
   );
 
   server.registerTool(
     "task_update",
     {
-      description: "Claim, progress, cancel, hand off or annotate a task. `claim` fails if someone else owns it. `after` appends dependencies. `cancel` is a distinct state, not an unassign. Example: task_update {\"task\":\"T12\",\"action\":\"claim\"}.",
+      description:
+        "Claim, progress, cancel, hand off or annotate a task. `claim` fails if someone else owns it. `after` appends dependencies. `cancel` is a distinct state, not an unassign. " +
+        "A task with a reviewer can't be marked done by whoever did it: send it for `review`; the reviewer then calls `approve` (done) or `reject` (back to doing, with a note saying what to change). " +
+        "`handoff` gives it to `owner` with this checkout's branch, commit and changed files, and `note` says what's next; push the branch first. `show` includes who fits its needs. " +
+        'Example: task_update {"task":"T12","action":"claim"}.',
       inputSchema: {
         task: z.string().describe("task id, like T12"),
-        action: z.enum(["claim", "start", "block", "review", "done", "cancel", "drop", "assign", "note", "show", "after"]),
+        action: z.enum(["claim", "start", "block", "review", "approve", "reject", "done", "cancel", "drop", "assign", "handoff", "note", "show", "after"]),
         note: z.string().optional(),
         owner: z.string().optional().describe("for assign"),
         after: z.array(z.string()).optional().describe("for after: task ids this one waits on"),
@@ -529,7 +549,16 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
         const state = await s.taskAfter(id, deps);
         return formatAfter(state, id, deps);
       }
-      const states = { start: "doing", block: "blocked", review: "review", done: "done", cancel: "cancelled" } as const;
+      if (action === "handoff") {
+        if (!owner) throw new Rejected("handoff needs owner: who takes it over");
+        const { handoff, pushed } = handoffHere();
+        const state = await s.taskHandoff(id, owner, note, handoff);
+        const t = state.tasks.get(id)!;
+        const where = handoff.branch ? `: pick it up from ${handoff.branch}${handoff.commit ? ` @ ${handoff.commit}` : ""}` : "";
+        return `${taskId(id)} is ${t.owner}'s now${where}${pushed === false && handoff.branch ? `. ${handoff.branch} isn't pushed: push it so ${t.owner} can fetch it` : ""}`;
+      }
+      if (action === "reject" && !note) throw new Rejected("reject needs a note saying what to change");
+      const states = { start: "doing", block: "blocked", review: "review", approve: "done", reject: "doing", done: "done", cancel: "cancelled" } as const;
       const state =
         action === "claim"
           ? await s.taskClaim(id)
@@ -578,6 +607,8 @@ export async function runMcp(s: AgentSession, opts: { push?: boolean } = {}): Pr
   );
 
   await server.connect(new StdioServerTransport());
+  // Say what this agent runs on, so work that needs it finds it. In the background: the harness is waiting on the handshake.
+  void s.refreshCard(detectCard()).catch(() => {});
   // An MCP server lives exactly as long as its client: exit when stdin closes,
   // so a crashed or killed agent never leaves an orphaned listener behind.
   const bye = () => process.exit(0);

@@ -3,6 +3,7 @@ import { Add01Icon, BookOpen01Icon, Copy01Icon, Delete02Icon, Image01Icon, Link0
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 
 import { loadLine, memberLoad, showsLoad, type Load } from "@mc/load.ts"
+import { cardLine } from "@mc/format.ts"
 import { NAME_RE, type JoinRequest, type Member as RosterMember } from "@mc/membership.ts"
 import { COLORS, MAX_CHARTER, type ChannelIcon, type Color, type Event } from "@mc/protocol.ts"
 import { TOO_MANY_REQUESTS } from "@mc/sas.ts"
@@ -435,6 +436,11 @@ export function People({ here, subtitle, live }: { here: Member[]; subtitle: str
                     {showLoad && load.level !== "free" ? loadLine(load) : memberLine(now ?? m)}
                     {now && !m.owner && scopesLine(now.scopes) && <span> · {scopesLine(now.scopes)}</span>}
                   </p>
+                  {now?.card && (
+                    <p className="truncate text-meta text-ink-3" title={cardLine(now.card)}>
+                      {cardLine(now.card)}
+                    </p>
+                  )}
                 </button>
                 {showLoad && (
                   <span

@@ -115,9 +115,15 @@ export type TaskState = (typeof TASK_STATES)[number];
 /** Coordination events. Clients fold these, in sequence order, into shared state. */
 export type Event =
   | { op: "hello"; role?: string; about?: string }
-  | { op: "task.add"; title: string; detail?: string; owner?: string; after?: number[] }
+  /**
+   * A task. `needs`: what doing it takes (tags matched against members' cards: "windows", "gpu", a tool,
+   * a repo). `review`: who must approve it before it's done (a member's name, or "*" for anyone but its owner).
+   */
+  | { op: "task.add"; title: string; detail?: string; owner?: string; after?: number[]; needs?: string[]; review?: string }
   | { op: "task.claim"; task: number }
-  | { op: "task.update"; task: number; state?: TaskState; owner?: string | null; title?: string; note?: string; after?: number[] }
+  | { op: "task.update"; task: number; state?: TaskState; owner?: string | null; title?: string; note?: string; after?: number[]; review?: string | null; handoff?: Handoff }
+  /** What a member is and has, said by itself: where it runs, what runs it, what it can use. Matched against tasks' needs. */
+  | ({ op: "card" } & Card)
   | { op: "claim"; paths: string[]; ttl: number; note?: string; machine?: string; checkout?: string }
   | { op: "release"; paths?: string[] }
   | { op: "fact.set"; key: string; value: string; ttl?: number }
@@ -154,6 +160,34 @@ export type Event =
    * an agent's work (tasks, claims, facts, messages to other agents); agents may still answer people.
    */
   | { op: "hold.set"; on: boolean; note?: string };
+
+/** What a member says about itself (see the card event). Every field is optional and short. */
+export interface Card {
+  /** macos, windows, linux. */
+  os?: string;
+  /** arm64, x64. */
+  arch?: string;
+  /** What runs the agent: claude-code, codex, gemini, cursor, grok, or anything else. */
+  harness?: string;
+  model?: string;
+  /** Tools and capabilities on its machine: docker, gpu, xcode, cargo… */
+  tools?: string[];
+  /** The repository it works in ("owner/repo") and the branch it's on. */
+  repo?: string;
+  branch?: string;
+  /** Anything else worth routing work by, in its own words. */
+  note?: string;
+}
+
+/** Where work being handed over stands: the branch and commit to pick it up from, and the files in play. */
+export interface Handoff {
+  branch?: string;
+  commit?: string;
+  files?: string[];
+}
+
+/** Most tags a task needs, or tools a card lists. */
+export const MAX_TAGS = 40;
 
 /** Longest charter, in characters: it shares the sealed settings (about 16KB at the relay) with the room list. */
 export const MAX_CHARTER = 2000;
@@ -268,6 +302,14 @@ const opt = <T>(x: unknown, ok: (v: unknown) => v is T): boolean => x === undefi
 
 const roomId = (x: unknown): x is string => typeof x === "string" && ROOM_ID_RE.test(x);
 
+const tags = (x: unknown): x is string[] => Array.isArray(x) && x.length <= MAX_TAGS && x.every((y) => str(y, 40));
+
+function wellFormedHandoff(x: unknown): x is Handoff {
+  if (!x || typeof x !== "object") return false;
+  const h = x as Record<string, unknown>;
+  return opt(h.branch, (y): y is string => str(y, 200)) && opt(h.commit, (y): y is string => str(y, 64)) && opt(h.files, (y): y is string[] => strs(y, 200));
+}
+
 /** Whether an event has the shape its op promises (anything else is dropped, not folded). */
 export function wellFormedEvent(ev: unknown): ev is Event {
   if (!ev || typeof ev !== "object") return false;
@@ -277,11 +319,33 @@ export function wellFormedEvent(ev: unknown): ev is Event {
     case "hello":
       return opt(e.role, (x): x is string => str(x, 200)) && opt(e.about, (x): x is string => str(x, 2000));
     case "task.add":
-      return str(e.title, 500) && opt(e.detail, (x): x is string => str(x)) && opt(e.owner, (x): x is string => str(x, 64)) && opt(e.after, (x): x is number[] => nums(x, 50));
+      return (
+        str(e.title, 500) &&
+        opt(e.detail, (x): x is string => str(x)) &&
+        opt(e.owner, (x): x is string => str(x, 64)) &&
+        opt(e.after, (x): x is number[] => nums(x, 50)) &&
+        opt(e.needs, (x): x is string[] => tags(x)) &&
+        opt(e.review, (x): x is string => str(x, 64))
+      );
     case "task.claim":
       return n(e.task);
     case "task.update":
-      return n(e.task) && opt(e.state, (x): x is string => typeof x === "string" && (TASK_STATES as readonly string[]).includes(x)) && (e.owner === undefined || e.owner === null || str(e.owner, 64)) && opt(e.title, (x): x is string => str(x, 500)) && opt(e.note, (x): x is string => str(x)) && opt(e.after, (x): x is number[] => nums(x, 50));
+      return (
+        n(e.task) &&
+        opt(e.state, (x): x is string => typeof x === "string" && (TASK_STATES as readonly string[]).includes(x)) &&
+        (e.owner === undefined || e.owner === null || str(e.owner, 64)) &&
+        opt(e.title, (x): x is string => str(x, 500)) &&
+        opt(e.note, (x): x is string => str(x)) &&
+        opt(e.after, (x): x is number[] => nums(x, 50)) &&
+        (e.review === undefined || e.review === null || str(e.review, 64)) &&
+        opt(e.handoff, wellFormedHandoff)
+      );
+    case "card":
+      return (
+        ["os", "arch", "harness", "model", "repo", "branch"].every((k) => opt(e[k], (x): x is string => str(x, 120))) &&
+        opt(e.tools, (x): x is string[] => tags(x)) &&
+        opt(e.note, (x): x is string => str(x, 500))
+      );
     case "claim":
       return strs(e.paths, 100) && (e.paths as string[]).length > 0 && Number.isFinite(e.ttl) && (e.ttl as number) > 0 && opt(e.note, (x): x is string => str(x, 500)) && opt(e.machine, (x): x is string => str(x, 80)) && opt(e.checkout, (x): x is string => str(x, 2000));
     case "release":

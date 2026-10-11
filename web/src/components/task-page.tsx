@@ -3,6 +3,7 @@ import { useMemo, useState, type ReactNode } from "react"
 import type { Message } from "@mc/protocol.ts"
 import { colorOf, taskId, type ChannelState, type Task } from "@mc/state.ts"
 import { taskFeed, taskPrs } from "@mc/work.ts"
+import { fitsLine } from "@mc/format.ts"
 import { formatAgo, formatFull, memberName } from "@/lib/format"
 import { Feed, PrLink } from "./feed"
 import { Icon } from "./icon"
@@ -116,6 +117,8 @@ function Properties({ task, state, now, items, onOpen }: { task: Task; state: Ch
   const prs = taskPrs(items)
   const claims = task.owner ? state.claims.filter((c) => c.owner === task.owner) : []
   const owner = task.owner ? state.members.get(task.owner) : undefined
+  // The latest handover that named a place to pick the work up from.
+  const handoff = task.notes.findLast((n) => n.handoff?.branch || n.handoff?.commit)?.handoff
   return (
     <dl className="grid grid-cols-2 gap-4 lg:block lg:space-y-4">
       <Prop label="Status">
@@ -132,6 +135,36 @@ function Properties({ task, state, now, items, onOpen }: { task: Task; state: Ch
           <span className="text-ink-3">Nobody yet</span>
         )}
       </Prop>
+      {task.needs.length > 0 && (
+        <Prop label="Needs">
+          <span className="grid gap-1">
+            <span className="flex flex-wrap gap-1">
+              {task.needs.map((n) => (
+                <span key={n} className="rounded-row bg-wash px-1.5 text-meta text-ink-2">
+                  {n}
+                </span>
+              ))}
+            </span>
+            {task.state !== "done" && task.state !== "cancelled" && <span className="text-meta text-ink-3">{fitsLine(state, task, now)}</span>}
+          </span>
+        </Prop>
+      )}
+      {task.review && (
+        <Prop label="Review">
+          <span className="text-ink-2">
+            {task.review === "*" ? "Anyone but its owner" : memberName(state.members.get(task.review), task.review)}
+            {task.approvedBy ? `, approved by ${memberName(state.members.get(task.approvedBy), task.approvedBy)}` : task.state === "review" ? ", waiting" : ""}
+          </span>
+        </Prop>
+      )}
+      {handoff && (
+        <Prop label="Pick it up from">
+          <span className="font-mono text-meta text-ink-2">
+            {handoff.branch ?? ""}
+            {handoff.commit ? ` @ ${handoff.commit}` : ""}
+          </span>
+        </Prop>
+      )}
       <Prop label="Waits on">{task.after.length ? <TaskLinks ids={task.after} state={state} onOpen={onOpen} /> : <span className="text-ink-3">Nothing</span>}</Prop>
       {unblocks.length > 0 && (
         <Prop label="Unblocks">

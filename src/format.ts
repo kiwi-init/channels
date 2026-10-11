@@ -3,9 +3,9 @@
 import { loadJson, loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { inlineText } from "./membership.ts";
 import { GENERAL_ROOM, ignored, imageMarker } from "./protocol.ts";
-import type { Message, TaskState, Trust } from "./protocol.ts";
+import type { Card, Handoff, Message, TaskState, Trust } from "./protocol.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
-import { colorOf, humanOf, taskId, waitingOn, type ChannelState, type Claim, type Fact, type Task } from "./state.ts";
+import { colorOf, fits, humanOf, isPerson, missingNeeds, taskId, waitingOn, type ChannelState, type Claim, type Fact, type Task } from "./state.ts";
 
 export function ago(ts: number, now = Date.now()): string {
   const s = Math.max(0, Math.round((now - ts) / 1000));
@@ -101,10 +101,15 @@ export function describeEvent(m: Message, state?: ChannelState): string {
     case "seat.reclaim":
       return `moved ${ev.member}'s seat to a new key (${ev.from} → ${ev.to}): the old key is out`;
     case "task.add":
-      return `added task ${taskId(m.seq)} “${ev.title}”${ev.owner ? ` for ${ev.owner}` : ""}${ev.after?.length ? ` after ${ev.after.map(taskId).join(", ")}` : ""}`;
+      return `added task ${taskId(m.seq)} “${ev.title}”${ev.owner ? ` for ${ev.owner}` : ""}${ev.after?.length ? ` after ${ev.after.map(taskId).join(", ")}` : ""}${ev.needs?.length ? `; needs ${ev.needs.join(", ")}` : ""}${ev.review ? `; ${reviewPhrase(ev.review)}` : ""}`;
+    case "card":
+      return `described itself: ${cardLine(ev) || "nothing"}`;
     case "task.claim":
       return `claimed ${task(ev.task)}`;
     case "task.update": {
+      if (ev.handoff) return `handed ${task(ev.task)} to ${ev.owner ?? "the board"}${handoffPhrase(ev.handoff)}${note(ev.note)}`;
+      if (ev.state === "done" && state?.tasks.get(ev.task)?.review && state.tasks.get(ev.task)?.approvedBy === m.from) return `approved ${task(ev.task)}${note(ev.note)}`;
+      if (ev.review !== undefined && !ev.state) return ev.review ? `asked for ${task(ev.task)} to be reviewed: ${reviewPhrase(ev.review)}` : `dropped the review on ${task(ev.task)}`;
       if (ev.state === "blocked") return `is blocked on ${task(ev.task)}${note(ev.note)}`;
       if (ev.state) return `${STATE_VERB[ev.state]} ${task(ev.task)}${note(ev.note)}`;
       if (ev.owner) return `assigned ${task(ev.task)} to ${ev.owner}${note(ev.note)}`;
@@ -126,6 +131,45 @@ export function describeEvent(m: Message, state?: ChannelState): string {
     case "hold.set":
       return ev.on ? `put the channel ON HOLD${note(ev.note)}. Agents: stop all work now and change nothing; only answer people until it's lifted` : "lifted the hold: agents may carry on";
   }
+}
+
+/** "review by mac" / "review by anyone but its owner". */
+function reviewPhrase(review: string): string {
+  return review === "*" ? "review by anyone but its owner" : `review by ${inlineText(review, 40)}`;
+}
+
+/** " (branch grok/x @ 3f9a2c1, 4 files)" for a handoff, or "". */
+function handoffPhrase(h: Handoff | undefined): string {
+  if (!h) return "";
+  const at = h.commit ? ` @ ${inlineText(h.commit, 12)}` : "";
+  const parts = [h.branch ? `branch ${inlineText(h.branch, 120)}${at}` : at.trim(), h.files?.length ? `${h.files.length} file${h.files.length === 1 ? "" : "s"}` : ""].filter(Boolean);
+  return parts.length ? ` (${parts.join(", ")})` : "";
+}
+
+/** "macos arm64 · claude-code · ojow/channels@main · tools: docker, gpu · note", one line. */
+export function cardLine(c: Card | undefined): string {
+  if (!c) return "";
+  const where = c.repo ? `${inlineText(c.repo, 80)}${c.branch ? `@${inlineText(c.branch, 80)}` : ""}` : "";
+  const parts = [
+    [c.os, c.arch].filter(Boolean).map((x) => inlineText(x, 40)).join(" "),
+    inlineText(c.harness, 40),
+    inlineText(c.model, 60),
+    where,
+    c.tools?.length ? `tools: ${c.tools.map((t) => inlineText(t, 40)).join(", ")}` : "",
+    inlineText(c.note, 200),
+  ];
+  return parts.filter(Boolean).join(" · ");
+}
+
+/** "fits: win (free), mac (busy)" / "nobody here has: gpu" for a task's needs; null when it needs nothing. */
+export function fitsLine(state: ChannelState, t: Pick<Task, "needs">, now = Date.now()): string | null {
+  if (!t.needs.length) return null;
+  const who = fits(state, t, (n) => memberLoad(state, n, now).level);
+  if (who.length) return `fits: ${who.map((w) => `${w.name} (${w.level})`).join(", ")}`;
+  // Nobody has all of it: say which needs nobody covers, so it's clear what's missing.
+  const agents = [...state.members.values()].filter((m) => m.active && !isPerson(m));
+  const uncovered = t.needs.filter((n) => !agents.some((m) => !missingNeeds(m, [n]).length));
+  return uncovered.length ? `nobody here has: ${uncovered.map((n) => inlineText(n, 40)).join(", ")}` : "no one agent has all of it";
 }
 
 /**
@@ -175,7 +219,9 @@ function taskLine(state: ChannelState, t: Task): string {
   const waits = waitingOn(state, t);
   const owner = t.owner ? ` @${inlineText(t.owner, 40)}` : "";
   const wait = waits.length ? ` (after ${waits.map(taskId).join(", ")})` : "";
-  return `  ${taskId(t.id).padEnd(5)} ${t.state.padEnd(7)}${owner} ${inlineText(t.title, 200)}${wait}`;
+  const needs = t.needs.length ? ` [needs ${t.needs.map((x) => inlineText(x, 40)).join(", ")}]` : "";
+  const review = t.review && t.state !== "done" && t.state !== "cancelled" ? ` [${reviewPhrase(t.review)}]` : "";
+  return `  ${taskId(t.id).padEnd(5)} ${t.state.padEnd(7)}${owner} ${inlineText(t.title, 200)}${wait}${needs}${review}`;
 }
 
 function claimLine(c: Claim, now: number): string {
@@ -216,6 +262,7 @@ export function memberJson(state: ChannelState, name: string, online: Snapshot["
     online: !!on,
     lastSeen: m?.lastSeen ?? null,
     load: loadJson(memberLoad(state, name, now)),
+    card: m?.card ? { ...m.card } : null,
   };
 }
 
@@ -305,6 +352,7 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
     // How busy they are, so work goes to whoever's free (people only when they hold tasks).
     const load = memberLoad(state, name, now);
     if (showsLoad(m, load)) out.push(`      ${loadSummary(load)}`);
+    if (m?.card) out.push(`      ${cardLine(m.card)}`);
   }
   if (left.length) out.push(`  left or removed: ${left.sort().join(", ")}`);
 
@@ -362,10 +410,20 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now()): stri
     });
     out.push(`  after: ${t.after.map((d) => `${taskId(d)} (${state.tasks.get(d)?.state ?? "?"})`).join(", ")}${waits.length ? "" : settled ? " — all done" : " — ready"}`);
   }
+  if (t.needs.length) {
+    out.push(`  needs: ${t.needs.map((x) => inlineText(x, 40)).join(", ")}`);
+    if (t.state !== "done" && t.state !== "cancelled") out.push(`  ${fitsLine(state, t, now)}`);
+  }
+  if (t.review) out.push(`  ${reviewPhrase(t.review)}${t.approvedBy ? `; approved by ${inlineText(t.approvedBy, 40)}` : t.state === "review" ? "; waiting for it" : ""}`);
   if (t.detail) out.push("", markedText(t.detail));
   if (t.notes.length) {
     out.push("", "notes:");
-    for (const n of t.notes) out.push(`  #${n.seq} ${inlineText(n.by, 40)}, ${ago(n.ts, now)}: ${markedText(n.text)}`);
+    for (const n of t.notes) {
+      const h = n.handoff ? `handed over${handoffPhrase(n.handoff)}${n.text ? ": " : ""}` : "";
+      out.push(`  #${n.seq} ${inlineText(n.by, 40)}, ${ago(n.ts, now)}: ${h}${markedText(n.text)}`);
+      const files = n.handoff?.files ?? [];
+      if (files.length) out.push(`    files: ${files.slice(0, 20).map((f) => inlineText(f, 200)).join(", ")}${files.length > 20 ? ` (+${files.length - 20})` : ""}`);
+    }
   }
   return out.join("\n");
 }

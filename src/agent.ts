@@ -9,8 +9,10 @@ import type { ChannelAccess } from "./crypto.ts";
 import { inlineText, type JoinRequest } from "./membership.ts";
 import type { Identity } from "./identity.ts";
 import { canPost, describeScopes, refusal, wireScopes, type Scope } from "./scopes.ts";
-import { GENERAL_ROOM, ignored, MAX_CHARTER, TASK_STATES, type Color, type Event, type ImageAttachment, type Kind, type Message, type Presence, type TaskState } from "./protocol.ts";
-import { allowedOnHold, claimConflict, findRoom, fold, humanOf, isPerson, keptFromPeople, newRoomId, ON_HOLD, overlaps, ownerOf, taskId, waitingOn, wouldCycle, type ChannelState, type GuardFloor, type Roster, type RoomsFloor } from "./state.ts";
+import { GENERAL_ROOM, ignored, MAX_CHARTER, TASK_STATES, type Card, type Color, type Event, type Handoff, type ImageAttachment, type Kind, type Message, type Presence, type TaskState } from "./protocol.ts";
+import { allowedOnHold, claimConflict, findRoom, fold, humanOf, isPerson, keptFromPeople, newRoomId, normTags, ON_HOLD, overlaps, ownerOf, taskId, waitingOn, wouldCycle, type ChannelState, type GuardFloor, type Roster, type RoomsFloor } from "./state.ts";
+import { mergeCard, sameCard } from "./card.ts";
+import { cardLine } from "./format.ts";
 
 /** How often a listening agent re-announces itself. Receivers treat 2.5x this as offline. */
 export const PRESENCE_EVERY_MS = 60_000;
@@ -592,15 +594,34 @@ export class AgentSession {
     return state;
   }
 
-  async taskAdd(title: string, opts: { detail?: string; owner?: string; after?: number[] } = {}): Promise<number> {
+  async taskAdd(title: string, opts: { detail?: string; owner?: string; after?: number[]; needs?: string[]; review?: string } = {}): Promise<number> {
     const { state } = await this.state();
     for (const d of opts.after ?? []) if (!state.tasks.has(d)) throw new Rejected(`no task ${taskId(d)}`);
     const owner = opts.owner && (await this.resolveTo([opts.owner], state))?.[0];
+    const review = opts.review === undefined ? undefined : this.reviewer(state, opts.review);
+    const needs = normTags(opts.needs);
     return this.event(
-      { op: "task.add", title, ...(opts.detail ? { detail: opts.detail } : {}), ...(owner ? { owner } : {}), ...(opts.after?.length ? { after: opts.after } : {}) },
+      {
+        op: "task.add",
+        title,
+        ...(opts.detail ? { detail: opts.detail } : {}),
+        ...(owner ? { owner } : {}),
+        ...(opts.after?.length ? { after: opts.after } : {}),
+        ...(needs.length ? { needs } : {}),
+        ...(review ? { review } : {}),
+      },
       `task: ${title}`,
-      owner ? [owner] : undefined,
+      [...(owner ? [owner] : []), ...(review && review !== "*" ? [review] : [])],
     );
+  }
+
+  /** "any" (or "*") is anyone but the task's owner; otherwise a current member, by name or role:x. */
+  private reviewer(state: ChannelState, who: string): string {
+    const w = who.trim();
+    if (w === "*" || w.toLowerCase() === "any") return "*";
+    const m = state.members.get(w);
+    if (!m?.active) throw new Rejected(`no member named ${w} to review it (or say any)`);
+    return w;
   }
 
   async taskClaim(id: number): Promise<ChannelState> {
@@ -617,24 +638,68 @@ export class AgentSession {
     return after;
   }
 
-  async taskUpdate(id: number, change: { state?: TaskState; owner?: string | null; title?: string; note?: string; after?: number[] }): Promise<ChannelState> {
+  async taskUpdate(id: number, change: { state?: TaskState; owner?: string | null; title?: string; note?: string; after?: number[]; review?: string | null; handoff?: Handoff }): Promise<ChannelState> {
     const { state } = await this.state();
     const t = state.tasks.get(id);
     if (!t) throw new Rejected(`no task ${taskId(id)}`);
     if (change.state && !TASK_STATES.includes(change.state)) throw new Rejected(`state must be one of ${TASK_STATES.join(", ")}`);
     if (change.after?.length) this.checkAfter(state, id, change.after);
     const owner = change.owner ? (await this.resolveTo([change.owner], state))?.[0] : change.owner;
+    const review = change.review ? this.reviewer(state, change.review) : change.review;
+    // Said here rather than left to every client's fold: the doer can't mark its own reviewed work done.
+    const me = state.members.get(this.me);
+    const gate = review === undefined ? t.review : review || undefined;
+    if (change.state === "done" && t.state !== "done" && gate && me && !isPerson(me) && (gate === "*" ? (owner ?? t.owner) === this.me : gate !== this.me)) {
+      throw new Rejected(`${taskId(id)} needs review by ${gate === "*" ? "someone other than its owner" : gate} before it's done: send it for review (kiwi task review ${taskId(id)})`);
+    }
     // Tell whoever this concerns: the new owner, the current owner if it isn't
     // us, the creator when it's done or cancelled, and owners of tasks it unblocks.
     const notify: string[] = [];
     if (owner) notify.push(owner);
     if (t.owner && t.owner !== this.me) notify.push(t.owner);
+    // In review: whoever must approve it hears; a named reviewer, or the one just named.
+    const reviewerName = (review ?? t.review) !== "*" ? (review ?? t.review) : undefined;
+    if ((change.state === "review" || review) && reviewerName) notify.push(reviewerName);
     if (change.state === "done" || change.state === "cancelled") {
       notify.push(t.createdBy);
       for (const other of state.tasks.values()) if (other.after.includes(id) && other.owner) notify.push(other.owner);
     }
-    const seq = await this.event({ op: "task.update", task: id, ...change, ...(owner !== undefined ? { owner } : {}) }, `${taskId(id)} ${change.state ?? "updated"}`, notify);
+    const seq = await this.event(
+      { op: "task.update", task: id, ...change, ...(owner !== undefined ? { owner } : {}), ...(review !== undefined ? { review } : {}) },
+      `${taskId(id)} ${change.handoff ? "handed over" : (change.state ?? "updated")}`,
+      notify,
+    );
     return this.confirm(seq);
+  }
+
+  /**
+   * Hand a task to someone else with where it stands: the branch and commit to pick it up from, the
+   * files in play, and what's next. This agent's claims on those files are let go, so the next owner
+   * can claim them.
+   */
+  async taskHandoff(id: number, to: string, next: string | undefined, handoff: Handoff): Promise<ChannelState> {
+    const { state: before } = await this.state();
+    const target = (await this.resolveTo([to], before))?.[0];
+    if (!target || !before.members.get(target)?.active) throw new Rejected(`no member named ${to}`);
+    if (target === this.me) throw new Rejected("hand it to someone else");
+    const state = await this.taskUpdate(id, { owner: target, ...(next ? { note: next } : {}), handoff, ...(before.tasks.get(id)?.state === "doing" ? { state: "todo" as const } : {}) });
+    const files = handoff.files ?? [];
+    const held = state.claims.filter((c) => c.owner === this.me && files.some((f) => overlaps(c.path, f))).map((c) => c.path);
+    if (held.length) await this.release(held);
+    return state;
+  }
+
+  /**
+   * Say what this agent is and has (see card.ts): what's detected here, keeping what was said by hand
+   * before unless `given` says it again. Sent only when it changed; people don't carry cards.
+   */
+  async refreshCard(detected: Card, given: { model?: string; note?: string; tools?: string[] } = {}): Promise<{ sent: boolean; card: Card }> {
+    const { state } = await this.state();
+    const me = state.members.get(this.me);
+    const card = mergeCard(detected, me?.card, given);
+    if (!me || isPerson(me) || !canPost(me.scopes) || state.hold || sameCard(me.card, card)) return { sent: false, card };
+    await this.event({ op: "card", ...card }, `card: ${cardLine(card)}`);
+    return { sent: true, card };
   }
 
   /** Append dependencies. Missing ids, self-deps and cycles are refused. */

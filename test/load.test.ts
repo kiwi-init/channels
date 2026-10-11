@@ -3,7 +3,7 @@ import { loadJson, loadLine, loadSummary, memberLoad, showsLoad } from "../src/l
 import type { ChannelState, Claim, Task } from "../src/state.ts";
 
 const now = 1_000_000;
-const task = (id: number, owner: string | undefined, state: Task["state"], title = `task ${id}`): Task => ({ id, title, state, owner, createdBy: "x", createdAt: 0, updatedAt: 0, after: [], notes: [] });
+const task = (id: number, owner: string | undefined, state: Task["state"], title = `task ${id}`): Task => ({ id, title, state, owner, createdBy: "x", createdAt: 0, updatedAt: 0, after: [], notes: [], needs: [] });
 const claim = (owner: string, path: string, expires = now + 60_000): Claim => ({ owner, path, seq: 1, since: 0, expires });
 const board = (tasks: Task[], claims: Claim[] = []): ChannelState =>
   ({ members: new Map(), tasks: new Map(tasks.map((t) => [t.id, t])), claims, facts: new Map(), trust: new Map(), scopeSets: new Map(), roleSets: new Map(), rejected: new Map(), openAsks: [], threadOf: new Map(), threadPeople: new Map(), mode: { coordinatorOnly: false, strict: false }, coordinator: null, direct: new Set(), rooms: new Map(), roomOf: new Map(), charter: null, hold: null, head: 0 }) as ChannelState;

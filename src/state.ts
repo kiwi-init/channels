@@ -6,7 +6,7 @@
 // Conflicts resolve deterministically: the earlier sequence number wins.
 
 import { inlineText } from "./membership.ts";
-import { GENERAL_ROOM, ignored, MAX_CHARTER, MAX_ROOM_NAME, MAX_ROOMS, ROOM_ID_RE, type Color, type Message, type TaskState, type Trust } from "./protocol.ts";
+import { GENERAL_ROOM, ignored, MAX_CHARTER, MAX_ROOM_NAME, MAX_ROOMS, MAX_TAGS, ROOM_ID_RE, type Card, type Color, type Handoff, type Message, type TaskState, type Trust } from "./protocol.ts";
 import { readScopes, refusal, SCOPES, scopesOf, type Scope } from "./scopes.ts";
 
 export interface Member {
@@ -24,6 +24,8 @@ export interface Member {
   color?: Color;
   /** What they may do besides read, after every scope.set so far (see scopes.ts). */
   scopes: Scope[];
+  /** What they last said about themselves: where they run, what runs them, what they can use. */
+  card?: Card & { at: number };
   owner: boolean;
   /** When the owner admitted them. */
   joined: number;
@@ -59,6 +61,8 @@ export interface TaskNote {
   by: string;
   ts: number;
   text: string;
+  /** Set when this note handed the task over: where to pick the work up. */
+  handoff?: Handoff;
 }
 
 export interface Task {
@@ -73,6 +77,12 @@ export interface Task {
   /** Tasks that must be done before this one. */
   after: number[];
   notes: TaskNote[];
+  /** What doing it takes, as tags matched against members' cards (lowercase). */
+  needs: string[];
+  /** Who must approve it before it's done: a member, or "*" for anyone but its owner. */
+  review?: string;
+  /** Who approved it, when a review let it be done. */
+  approvedBy?: string;
 }
 
 export interface Claim {
@@ -645,8 +655,16 @@ export function fold(
             updatedAt: at,
             after: (ev.after ?? []).filter((d) => tasks.has(d)),
             notes: [],
+            needs: normTags(ev.needs),
+            ...(ev.review?.trim() ? { review: ev.review.trim() } : {}),
           });
           break;
+
+        case "card": {
+          const { op: _op, ...card } = ev;
+          member.card = { ...card, ...(card.tools ? { tools: normTags(card.tools) } : {}), at };
+          break;
+        }
 
         case "task.claim": {
           const task = tasks.get(ev.task);
@@ -668,6 +686,22 @@ export function fold(
             reject(`no task ${taskId(ev.task)}`);
             break;
           }
+          // A review gate is set by whoever adds it; once set, only a person or the reviewer moves it,
+          // so the agent doing the work can't wave its own review away.
+          if (ev.review !== undefined && task.review && !isPerson(member) && m.from !== task.review) {
+            reject(`only a person or ${task.review === "*" ? "a reviewer" : task.review} changes who reviews ${taskId(task.id)}`);
+            break;
+          }
+          const review = ev.review === undefined ? task.review : ev.review?.trim() || undefined;
+          // Done, with a review: only the reviewer (or for "*", anyone but its owner) says so. People may always.
+          if (ev.state === "done" && task.state !== "done" && review) {
+            const owner = ev.owner === undefined ? task.owner : ev.owner || undefined;
+            const ok = isPerson(member) || (review === "*" ? m.from !== owner : m.from === review);
+            if (!ok) {
+              reject(`${taskId(task.id)} needs review by ${review === "*" ? "someone other than its owner" : review} before it's done (send it for review)`);
+              break;
+            }
+          }
           if (ev.after?.length) {
             const why = appendAfter(tasks, task, ev.after);
             if (why) {
@@ -675,10 +709,13 @@ export function fold(
               break;
             }
           }
+          if (ev.review !== undefined) task.review = review;
+          if (ev.state === "done" && task.state !== "done" && task.review) task.approvedBy = m.from;
+          if (ev.state && ev.state !== "done") task.approvedBy = undefined;
           if (ev.owner !== undefined) task.owner = ev.owner || undefined;
           if (ev.state) task.state = ev.state;
           if (ev.title) task.title = ev.title.slice(0, 200);
-          if (ev.note) task.notes.push({ seq: m.seq, by: m.from, ts: at, text: ev.note });
+          if (ev.note || ev.handoff) task.notes.push({ seq: m.seq, by: m.from, ts: at, text: ev.note ?? "", ...(ev.handoff ? { handoff: ev.handoff } : {}) });
           // Unassigning work in progress puts it back on the board.
           if (ev.owner === null && task.state === "doing") task.state = "todo";
           task.updatedAt = at;
@@ -848,4 +885,44 @@ export function colorOf(state: ChannelState, name: string): Color | null {
   if (isPerson(m)) return m.color ?? null;
   const person = m.sponsor && [...state.members.values()].find((x) => x.active && isPerson(x) && x.sponsor?.user === m.sponsor!.user);
   return person ? (person.color ?? null) : null;
+}
+
+/** Tags as matched: lowercase, trimmed, no empties or repeats. */
+export function normTags(tags: readonly string[] | undefined): string[] {
+  return [...new Set((tags ?? []).map((t) => String(t).trim().toLowerCase()).filter(Boolean))].slice(0, MAX_TAGS);
+}
+
+/**
+ * Everything a member can be matched by: its card (os, arch, harness, model, tools, the repo and its
+ * name alone, the branch) and its role's words. Lowercase.
+ */
+export function memberTags(m: Member): Set<string> {
+  const c = m.card;
+  const out = new Set<string>();
+  const add = (x: string | undefined) => x && out.add(x.trim().toLowerCase());
+  if (c) {
+    for (const x of [c.os, c.arch, c.harness, c.model, c.repo, c.branch]) add(x);
+    if (c.repo?.includes("/")) add(c.repo.split("/").pop());
+    for (const t of c.tools ?? []) add(t);
+  }
+  for (const w of (m.role ?? "").split(/[\s,/]+/)) add(w);
+  return out;
+}
+
+/** What `need` asks of a member that it doesn't have. */
+export function missingNeeds(m: Member, needs: readonly string[]): string[] {
+  const has = memberTags(m);
+  return needs.filter((n) => !has.has(n));
+}
+
+/**
+ * The agents that have everything a task needs, least busy first (then by name). People don't carry
+ * cards; they pick work up themselves.
+ */
+export function fits(state: ChannelState, task: Pick<Task, "needs">, load: (name: string) => "free" | "busy" | "overloaded"): { name: string; level: "free" | "busy" | "overloaded" }[] {
+  const order = { free: 0, busy: 1, overloaded: 2 };
+  return [...state.members.values()]
+    .filter((m) => m.active && !isPerson(m) && !missingNeeds(m, task.needs).length)
+    .map((m) => ({ name: m.name, level: load(m.name) }))
+    .sort((a, b) => order[a.level] - order[b.level] || a.name.localeCompare(b.name));
 }

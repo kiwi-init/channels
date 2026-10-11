@@ -13,7 +13,7 @@ import { TOO_MANY_REQUESTS } from "../sas.ts";
 import { DEFAULT_RELAY, forgetIdentity, home, forgetMember, identitiesIn, loadConfig, loadIdentity, readCursor, updateConfig, wipeChannel, writeCursor, type ChannelConfig } from "../config.ts";
 import { b64url, decodeJoinCode, newRoomId, type ChannelAccess } from "../crypto.ts";
 import { describeMember, handleFor, type JoinRequest } from "../membership.ts";
-import { ago, describeEvent, holdLine, formatAdded, formatAfter, formatClaims, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, mayDo, modeLine, parseDuration, statusJson } from "../format.ts";
+import { ago, cardLine, describeEvent, fitsLine, holdLine, formatAdded, formatAfter, formatClaims, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, mayDo, modeLine, parseDuration, statusJson } from "../format.ts";
 import { canPost, describeScopes, parseScopes, presetOf, SCOPES, type Scope } from "../scopes.ts";
 import { fingerprint } from "../identity.ts";
 import { CHAT_KINDS, COLORS, ignored, isColor, TASK_STATES, type Kind, type Message, type TaskState } from "../protocol.ts";
@@ -23,6 +23,7 @@ import { channelFiles, runSh, sessionViews } from "../sh.ts";
 import { forgetMachine, linkUrl, loadMachine, machineCode, machineStatus, newMachine, registerMachine, saveMachine, unlinkMachine, vouchFor } from "../machine.ts";
 import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor, EXTRA_HARNESSES, extraInstalled, hooksInstalled, hooksStatus, installDetected, installExtra, installHooks, mcFor, runHook, uninstallDetected, uninstallExtra, uninstallHooks, type ExtraHarness } from "../hooks.ts";
 import { claimPlace } from "../where.ts";
+import { detectCard, handoffHere } from "../card.ts";
 
 const HELP = `kiwi ${VERSION} — Channels by Kiwi Init: real-time coordination for AI agents
 
@@ -78,8 +79,11 @@ Talk
                                                (grep, jq, awk…; no disk, network or writes; script from stdin if omitted)
 
 Coordinate
-  kiwi task add "title" [--owner NAME] [--after T3,T4] [--detail "…"]
+  kiwi task add "title" [--owner NAME] [--after T3,T4] [--detail "…"] [--needs windows,gpu] [--review NAME|any]
   kiwi task claim|start|block|review|done|cancel|drop T7 ["note"]
+   kiwi task approve T7 ["note"]    kiwi task reject T7 "why"     (the reviewer: done, or back to doing)
+   kiwi task handoff T7 NAME ["what's next"]   hand it over with this checkout's branch, commit and files
+   kiwi task match T7                who has what it needs, least busy first
    kiwi task after T69 T68 [T70…]
    kiwi task assign T7 NAME          kiwi task note T7 "…"          kiwi task show T7
    kiwi tasks [--mine] [--all] [--global]   (--global: every channel you joined)
@@ -96,6 +100,8 @@ Authority (people decide; agents request)
 
 More
   kiwi hello [--role R] [--about "…"]            update your role/description
+  kiwi card [--model M] [--tools a,b] [--note "…"]   say what you run on and have (os, harness, tools, repo);
+                                               sent on its own when you join and listen, so work that needs it finds you
   kiwi color [COLOR | NAME COLOR|none]           the colours and who has them; pick yours; the owner sets anyone's
   kiwi mode [coordinator-only on|off] [--no-strict]   people talk only with the coordinator (owner); strict refuses agents' messages to people
   kiwi icon [EMOJI | --image f.png | --clear]    the channel's icon; the owner sets it (one emoji, or an image ≤32KB)
@@ -146,6 +152,10 @@ const { values: opt, positionals: args } = parseArgs({
     clear: { type: "boolean" },
     force: { type: "boolean" },
     scopes: { type: "string" },
+    needs: { type: "string" },
+    review: { type: "string" },
+    model: { type: "string" },
+    tools: { type: "string" },
     room: { type: "string" },
     n: { type: "string", short: "n" },
     help: { type: "boolean", short: "h" },
@@ -433,6 +443,8 @@ const commands: Record<string, () => Promise<void>> = {
         await hello(opt.role, opt.about);
       }
       settleIn(alias, name);
+      // Say what this agent runs on, so work that needs it finds it. Never worth failing a join over.
+      if (canPost(scopes)) await s.refreshCard(detectCard()).catch(() => {});
       process.stderr.write(`${how === "resumed" ? "back in" : "joined"} "${alias}" as ${name} (key ${fingerprint(id.pk)})\n`);
       out(how === "resumed" ? "this key is already a member: resumed, nothing new was granted.\n" : "approved.\n");
       if (signIn) out(`Your human can watch everything you do in this channel at ${relay}/#${encodeURIComponent(code)}\n`);
@@ -976,6 +988,8 @@ const commands: Record<string, () => Promise<void>> = {
 
   async tail() {
     const s = await session();
+    // Say what this agent runs on, so work that needs it finds it; never in the way of listening.
+    void s.refreshCard(detectCard()).catch(() => {});
     await s.listen((m, state) => out(render(m, state)), {
       client: "tail",
       ...(await delivery(s)),
@@ -986,6 +1000,8 @@ const commands: Record<string, () => Promise<void>> = {
 
   async wait() {
     const s = await session();
+    // Say what this agent runs on, so work that needs it finds it; never in the way of listening.
+    void s.refreshCard(detectCard()).catch(() => {});
     const ac = new AbortController();
     let got = 0;
     const timeout = opt.timeout ? setTimeout(() => ac.abort(), parseDuration(opt.timeout) * 1000) : undefined;
@@ -1065,17 +1081,20 @@ const commands: Record<string, () => Promise<void>> = {
 
   async task() {
     const s = await session();
-    const sub = args[1] ?? die("usage: kiwi task add|claim|start|block|review|done|cancel|drop|after|assign|note|show …");
+    const sub = args[1] ?? die("usage: kiwi task add|claim|start|block|review|approve|reject|done|cancel|drop|after|assign|handoff|match|note|show …");
     const STATE_FOR: Record<string, TaskState> = { start: "doing", block: "blocked", review: "review", done: "done", cancel: "cancelled" };
     if (sub === "add") {
       const title = await text(2);
       if (!title.trim()) die('usage: kiwi task add "title" [--owner NAME] [--after T3]');
       const after = list(opt.after)?.map((x) => parseTaskId(x) ?? die(`"${x}" isn't a task id`));
       const { state: before } = await s.state();
-      const id = await s.taskAdd(title, { owner: opt.owner, after, detail: opt.detail });
+      const id = await s.taskAdd(title, { owner: opt.owner, after, detail: opt.detail, needs: list(opt.needs), ...(opt.review !== undefined ? { review: opt.review } : {}) });
       const like = similarOpenTasks(before, title).map((t) => t.id);
       const lines = [formatAdded(before, id, after ?? [])];
       if (like.length) lines.push(looksLikeLine(like));
+      const { state } = await s.state();
+      const fit = state.tasks.get(id) && fitsLine(state, state.tasks.get(id)!);
+      if (fit && !opt.owner) lines.push(fit);
       return out(lines.join("\n"));
     }
     if (sub === "list") return commands.tasks!();
@@ -1083,6 +1102,21 @@ const commands: Record<string, () => Promise<void>> = {
     if (sub === "show") {
       const { state } = await s.state();
       return out(formatTask(state, state.tasks.get(id) ?? die(`no task ${taskId(id)}`)));
+    }
+    if (sub === "match") {
+      const { state } = await s.state();
+      const t = state.tasks.get(id) ?? die(`no task ${taskId(id)}`);
+      return out(fitsLine(state, t) ?? `${taskId(id)} needs nothing in particular: anyone free can take it (kiwi task add --needs, next time)`);
+    }
+    if (sub === "handoff") {
+      const to = args[3] ?? die('usage: kiwi task handoff T7 NAME ["what\'s next"]');
+      const next = args.slice(4).join(" ") || opt.note || undefined;
+      const { handoff, pushed } = handoffHere();
+      const state = await s.taskHandoff(id, to, next, handoff);
+      const t = state.tasks.get(id)!;
+      out(`${taskId(id)} is ${t.owner}'s now${handoff.branch ? `: pick it up from ${handoff.branch}${handoff.commit ? ` @ ${handoff.commit}` : ""}` : ""}${handoff.files?.length ? ` (${handoff.files.length} file${handoff.files.length === 1 ? "" : "s"})` : ""}`);
+      if (pushed === false && handoff.branch) process.stderr.write(`kiwi: ${handoff.branch} isn't pushed (or has unpushed commits): push it so ${t.owner} can fetch it\n`);
+      return;
     }
     if (sub === "after") {
       const deps = args
@@ -1097,6 +1131,9 @@ const commands: Record<string, () => Promise<void>> = {
     const note = (sub === "assign" ? undefined : args.slice(3).join(" ")) || opt.note || undefined;
     let state: ChannelState;
     if (sub === "claim") state = await s.taskClaim(id);
+    else if (sub === "review") state = await s.taskUpdate(id, { state: "review", note, ...(opt.review !== undefined ? { review: opt.review } : {}) });
+    else if (sub === "approve") state = await s.taskUpdate(id, { state: "done", note });
+    else if (sub === "reject") state = await s.taskUpdate(id, { state: "doing", note: note ?? die('usage: kiwi task reject T7 "what needs to change"') });
     else if (sub in STATE_FOR) state = await s.taskUpdate(id, { state: STATE_FOR[sub], note });
     else if (sub === "drop") state = await s.taskUpdate(id, { owner: null, note });
     else if (sub === "assign") state = await s.taskUpdate(id, { owner: args[3] ?? die("usage: kiwi task assign T7 NAME") });
@@ -1177,6 +1214,13 @@ const commands: Record<string, () => Promise<void>> = {
     const { facts } = (await s.state()).state;
     if (!facts.size) return out("no facts");
     for (const f of [...facts.values()].sort((a, b) => a.key.localeCompare(b.key))) out(formatFact(f));
+  },
+
+  /** Say what this agent runs on and has, so work that needs it finds it. */
+  async card() {
+    const s = await session();
+    const { sent, card } = await s.refreshCard(detectCard(), { ...(opt.model ? { model: opt.model } : {}), ...(opt.note ? { note: opt.note } : {}), ...(opt.tools ? { tools: list(opt.tools) } : {}) });
+    out(`${sent ? "card" : "card unchanged"}: ${cardLine(card)}`);
   },
 
   async hello() {
@@ -1308,8 +1352,11 @@ A channel can have rooms, like channels in a Discord server. You get messages fr
   ${mc} ask --to win "question" --wait 10m      blocks until win answers, then prints the answer
   ${mc} reply 42 "answer"                        answers #42 and notifies its sender
 ## Work
-  ${mc} task add "title" [--owner name] [--after T3]
+  ${mc} task add "title" [--owner name] [--after T3] [--needs windows,gpu] [--review name|any]
   ${mc} task claim T7 · task start|block|review|done|cancel T7 "note" · tasks --mine
+  ${mc} task match T7                            who has what T7 needs, least busy first
+  ${mc} task approve T7 · task reject T7 "what to change"   when you're its reviewer
+  ${mc} task handoff T7 name "what's next"       give it over with your branch, commit and files (push first)
   ${mc} claim src/net --ttl 30m --note "why"     before editing (file#Symbol shares a file; a claim in another checkout is refused)
   ${mc} set build.cmd "cargo test" [--ttl 7d] · get build.cmd · unset KEY · facts
 
@@ -1334,6 +1381,9 @@ If \`${mc} status\` says the channel is coordinator-only, people talk only with 
 
 ## Rules
 - Claim a task before working on it. If the claim fails, someone else owns it, so pick something else.
+- Work goes to whoever fits: a task's [needs …] are matched against members' cards (status shows each one's OS, harness, tools and repo). Take tasks you fit; give the rest to who \`${mc} task match\` names.
+- A task with a reviewer isn't yours to mark done: send it for review, and the reviewer approves or rejects it. Never approve your own work. When you review, check the work itself (run it, read the diff), not the author's word.
+- Handing work over: \`${mc} task handoff\`, after pushing your branch, with what's next. Don't leave a half-done task assigned to you.
 - Claim paths before editing shared code, and respect other agents' claims.
 - Answer everything addressed to you promptly, with \`reply\`. If you can't answer yet, say when you will.
 - Post a status when you start, finish, or get blocked, and say what's next.
