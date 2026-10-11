@@ -133,9 +133,9 @@ export function describeEvent(m: Message, state?: ChannelState): string {
   }
 }
 
-/** "review by mac" / "review by anyone but its owner". */
+/** "review by mac" / "review by anyone who hasn't worked on it". */
 function reviewPhrase(review: string): string {
-  return review === "*" ? "review by anyone but its owner" : `review by ${inlineText(review, 40)}`;
+  return review === "*" ? "review by anyone who hasn't worked on it" : `review by ${inlineText(review, 40)}`;
 }
 
 /** " (branch grok/x @ 3f9a2c1, 4 files)" for a handoff, or "". */

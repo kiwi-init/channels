@@ -83,7 +83,7 @@ describe("kiwi demo", () => {
     expect(all).toContain("set the charter");
     expect(all).toContain("described itself: windows x64");
     expect(all).toContain("fits: win (free)");
-    expect(all).toContain("needs review by someone other than its owner");
+    expect(all).toContain("needs review by someone who hasn't worked on it");
     expect(all).toContain("approved T");
     expect(all).toContain("handed T");
     expect(all).toContain("[escalation]");

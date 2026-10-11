@@ -152,7 +152,7 @@ function Properties({ task, state, now, items, onOpen }: { task: Task; state: Ch
       {task.review && (
         <Prop label="Review">
           <span className="text-ink-2">
-            {task.review === "*" ? "Anyone but its owner" : memberName(state.members.get(task.review), task.review)}
+            {task.review === "*" ? "Anyone who hasn’t worked on it" : memberName(state.members.get(task.review), task.review)}
             {task.approvedBy ? `, approved by ${memberName(state.members.get(task.approvedBy), task.approvedBy)}` : task.state === "review" ? ", waiting" : ""}
           </span>
         </Prop>

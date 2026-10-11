@@ -117,7 +117,7 @@ export type Event =
   | { op: "hello"; role?: string; about?: string }
   /**
    * A task. `needs`: what doing it takes (tags matched against members' cards: "windows", "gpu", a tool,
-   * a repo). `review`: who must approve it before it's done (a member's name, or "*" for anyone but its owner).
+   * a repo). `review`: who must approve it before it's done (a member's name, or "*" for anyone who hasn't worked on it).
    */
   | { op: "task.add"; title: string; detail?: string; owner?: string; after?: number[]; needs?: string[]; review?: string }
   | { op: "task.claim"; task: number }

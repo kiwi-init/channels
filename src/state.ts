@@ -79,10 +79,12 @@ export interface Task {
   notes: TaskNote[];
   /** What doing it takes, as tags matched against members' cards (lowercase). */
   needs: string[];
-  /** Who must approve it before it's done: a member, or "*" for anyone but its owner. */
+  /** Who must approve it before it's done: a member, or "*" for anyone who hasn't worked on it. */
   review?: string;
   /** Who approved it, when a review let it be done. */
   approvedBy?: string;
+  /** Everyone who has owned it or moved it along: none of them may approve it under a "*" review. */
+  workedBy: string[];
 }
 
 export interface Claim {
@@ -657,6 +659,7 @@ export function fold(
             notes: [],
             needs: normTags(ev.needs),
             ...(ev.review?.trim() ? { review: ev.review.trim() } : {}),
+            workedBy: ev.owner ? [ev.owner] : [],
           });
           break;
 
@@ -676,6 +679,7 @@ export function fold(
             task.owner = m.from;
             if (task.state === "todo") task.state = "doing";
             task.updatedAt = at;
+            worked(task, m.from);
           }
           break;
         }
@@ -693,12 +697,13 @@ export function fold(
             break;
           }
           const review = ev.review === undefined ? task.review : ev.review?.trim() || undefined;
-          // Done, with a review: only the reviewer (or for "*", anyone but its owner) says so. People may always.
+          // Done, with a review: only the reviewer (or for "*", anyone who hasn't worked on it) says so.
+          // People may always. Handing it to someone first doesn't make the doer a reviewer.
           if (ev.state === "done" && task.state !== "done" && review) {
             const owner = ev.owner === undefined ? task.owner : ev.owner || undefined;
-            const ok = isPerson(member) || (review === "*" ? m.from !== owner : m.from === review);
+            const ok = isPerson(member) || (review === "*" ? m.from !== owner && !task.workedBy.includes(m.from) : m.from === review);
             if (!ok) {
-              reject(`${taskId(task.id)} needs review by ${review === "*" ? "someone other than its owner" : review} before it's done (send it for review)`);
+              reject(`${taskId(task.id)} needs review by ${review === "*" ? "someone who hasn't worked on it" : review} before it's done (send it for review)`);
               break;
             }
           }
@@ -713,6 +718,9 @@ export function fold(
           if (ev.state === "done" && task.state !== "done" && task.review) task.approvedBy = m.from;
           if (ev.state && ev.state !== "done") task.approvedBy = undefined;
           if (ev.owner !== undefined) task.owner = ev.owner || undefined;
+          if (ev.owner) worked(task, ev.owner);
+          // Moving it along as its owner, or sending it for review, is working on it; a reviewer sending it back isn't.
+          if (ev.state && ev.state !== "done" && ev.state !== "cancelled" && (m.from === task.owner || ev.state === "review")) worked(task, m.from);
           if (ev.state) task.state = ev.state;
           if (ev.title) task.title = ev.title.slice(0, 200);
           if (ev.note || ev.handoff) task.notes.push({ seq: m.seq, by: m.from, ts: at, text: ev.note ?? "", ...(ev.handoff ? { handoff: ev.handoff } : {}) });
@@ -797,6 +805,10 @@ export function fold(
     hold,
     head,
   };
+}
+
+function worked(task: Task, name: string): void {
+  if (!task.workedBy.includes(name)) task.workedBy.push(name);
 }
 
 /** A dependency that no longer blocks: finished, in review, or cancelled. */

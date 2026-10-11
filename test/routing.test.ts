@@ -112,7 +112,7 @@ describe("review", () => {
     expect(p.tasks.get(t)!.state).toBe("done");
   });
 
-  test('"*": anyone but its owner, judged by who owns it then', async () => {
+  test("any: anyone who hasn't worked on it, judged by who owns it then", async () => {
     const add = await ev("jon", { op: "task.add", title: "docs", review: "*" });
     const t = add.seq;
     const claim = await ev("win", { op: "task.claim", task: t });
@@ -120,10 +120,26 @@ describe("review", () => {
     const reject = await ev("mac", { op: "task.update", task: t, state: "doing", note: "missing the Windows steps" });
     const approve = await ev("linux", { op: "task.update", task: t, state: "done" });
     const s = fold([add, claim, selfDone, reject, approve], roster);
-    expect(s.rejected.get(selfDone.seq)).toContain("someone other than its owner");
+    expect(s.rejected.get(selfDone.seq)).toContain("someone who hasn't worked on it");
     expect(s.tasks.get(t)!.notes.map((n) => n.text)).toEqual(["missing the Windows steps"]);
     expect(s.tasks.get(t)!.approvedBy).toBe("linux");
-    expect(formatTasks(fold([add, claim], roster))).toContain("[review by anyone but its owner]");
+    expect(formatTasks(fold([add, claim], roster))).toContain("[review by anyone who hasn't worked on it]");
+  });
+
+  test("handing it to someone first doesn't make the doer its reviewer", async () => {
+    const add = await ev("jon", { op: "task.add", title: "sneaky", review: "*" });
+    const t = add.seq;
+    const claim = await ev("win", { op: "task.claim", task: t });
+    const pass = await ev("win", { op: "task.update", task: t, owner: "mac" });
+    const selfDone = await ev("win", { op: "task.update", task: t, state: "done" });
+    const oneStep = await ev("win", { op: "task.update", task: t, owner: "linux", state: "done" });
+    const reject = await ev("linux", { op: "task.update", task: t, state: "doing", note: "not yet" });
+    const linuxDone = await ev("linux", { op: "task.update", task: t, state: "done" });
+    const s = fold([add, claim, pass, selfDone, oneStep, reject, linuxDone], roster);
+    for (const m of [selfDone, oneStep]) expect(s.rejected.get(m.seq)).toContain("someone who hasn't worked on it");
+    // linux sent it back as a reviewer (not its owner), so it hasn't worked on it, and may approve.
+    expect(s.tasks.get(t)!.workedBy).toEqual(["win", "mac"]);
+    expect(s.tasks.get(t)!.approvedBy).toBe("linux");
   });
 
   test("only a person or the reviewer moves a review gate once it's set", async () => {

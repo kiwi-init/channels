@@ -649,8 +649,8 @@ export class AgentSession {
     // Said here rather than left to every client's fold: the doer can't mark its own reviewed work done.
     const me = state.members.get(this.me);
     const gate = review === undefined ? t.review : review || undefined;
-    if (change.state === "done" && t.state !== "done" && gate && me && !isPerson(me) && (gate === "*" ? (owner ?? t.owner) === this.me : gate !== this.me)) {
-      throw new Rejected(`${taskId(id)} needs review by ${gate === "*" ? "someone other than its owner" : gate} before it's done: send it for review (kiwi task review ${taskId(id)})`);
+    if (change.state === "done" && t.state !== "done" && gate && me && !isPerson(me) && (gate === "*" ? (owner ?? t.owner) === this.me || t.workedBy.includes(this.me) : gate !== this.me)) {
+      throw new Rejected(`${taskId(id)} needs review by ${gate === "*" ? "someone who hasn't worked on it" : gate} before it's done: send it for review (kiwi task review ${taskId(id)})`);
     }
     // Tell whoever this concerns: the new owner, the current owner if it isn't
     // us, the creator when it's done or cancelled, and owners of tasks it unblocks.
