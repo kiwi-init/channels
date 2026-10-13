@@ -4,14 +4,14 @@ const REPO = "ojowwalker77/channels";
 const RELEASE = `https://github.com/${REPO}/releases/latest/download`;
 const INSTALL = `${location.origin}/install`;
 
-// Placeholder asset names. The desktop app's packaging (desktop/package.json,
-// electron-builder) decides the real ones; update these to match.
+// The app's download files, from desktop/package.json's
+// `artifactName: Kiwi-${version}-${os}-${arch}.${ext}` and the release workflow.
 const DOWNLOADS = [
-  { os: "macOS", detail: "Apple silicon", file: "Kiwi-0.11.0-arm64.dmg" },
-  { os: "macOS", detail: "Intel", file: "Kiwi-0.11.0-x64.dmg" },
-  { os: "Windows", detail: "x64 installer", file: "Kiwi Setup 0.11.0.exe" },
-  { os: "Linux", detail: "AppImage", file: "Kiwi-0.11.0.AppImage" },
-  { os: "Linux", detail: "Debian / Ubuntu (.deb)", file: "kiwi_0.11.0_amd64.deb" },
+  { os: "macOS", detail: "Apple silicon", file: "Kiwi-0.11.0-mac-arm64.dmg" },
+  { os: "macOS", detail: "Intel", file: "Kiwi-0.11.0-mac-x64.dmg" },
+  { os: "Windows", detail: "x64 installer", file: "Kiwi-0.11.0-win-x64.exe" },
+  { os: "Linux", detail: "AppImage", file: "Kiwi-0.11.0-linux-x64.AppImage" },
+  { os: "Linux", detail: "Debian / Ubuntu (.deb)", file: "Kiwi-0.11.0-linux-x64.deb" },
 ];
 
 function renderDownloads() {
@@ -32,8 +32,7 @@ function renderDownloads() {
   }
 }
 
-function showInvite(raw) {
-  const code = raw.replace(/[^A-Za-z0-9_-]/g, "");
+function showInvite(code) {
   const landing = document.getElementById("landing");
   const invite = document.getElementById("invite");
   if (!code || !landing || !invite) return;
@@ -43,6 +42,14 @@ function showInvite(raw) {
   if (open) open.href = `kiwi://join/${code}`;
   const cmd = document.getElementById("join-cmd");
   if (cmd) cmd.textContent = `curl -fsSL ${INSTALL} | sh -s -- join ${code}`;
+}
+
+// The renderer's invite link is `<relay>/#<code>`; `/join/<code>` also works.
+function inviteCode() {
+  const fromPath = /^\/join\/(.+)$/.exec(location.pathname);
+  if (fromPath) return decodeURIComponent(fromPath[1]).replace(/[^A-Za-z0-9_-]/g, "");
+  const hash = location.hash.replace(/^#/, "").trim();
+  return /^mc2-[A-Za-z0-9_-]+$/.test(hash) ? hash : "";
 }
 
 function wireCopy() {
@@ -69,7 +76,7 @@ function wireCopy() {
   }
 }
 
-const invite = /^\/join\/(.+)$/.exec(location.pathname);
-if (invite) showInvite(decodeURIComponent(invite[1]));
+const code = inviteCode();
+if (code) showInvite(code);
 else renderDownloads();
 wireCopy();

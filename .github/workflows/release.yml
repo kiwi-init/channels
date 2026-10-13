@@ -102,22 +102,32 @@ jobs:
           (cd web && bun install --frozen-lockfile)
           (cd desktop && bun install --frozen-lockfile)
 
-      - name: Build the renderer and the bundled kiwi CLI
-        shell: bash
-        run: |
-          bun run web:build
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            bun build src/cli/main.ts --compile --external node-liblzma --external @mongodb-js/zstd --outfile dist/kiwi.exe
-          else
-            bun run build
-          fi
+      - name: Build the renderer
+        run: bun run web:build
 
       - name: Package
         working-directory: desktop
+        shell: bash
         env:
           # No signing certificate in CI; build unsigned as the plan says.
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: bun run build && bunx electron-builder --publish never --config.directories.output=release
+        run: |
+          # The app bundles the kiwi binary through extraResources (`../dist/kiwi`);
+          # build it for the platform (and architecture) being packaged.
+          cli() { bun build ../src/cli/main.ts --compile --minify --external node-liblzma --external @mongodb-js/zstd --target="$1" --outfile "$2"; }
+          bun run build
+          case "${{ runner.os }}" in
+            macOS)
+              cli bun-darwin-arm64 ../dist/kiwi && bunx electron-builder --mac --arm64 --publish never
+              cli bun-darwin-x64 ../dist/kiwi && bunx electron-builder --mac --x64 --publish never
+              ;;
+            Windows)
+              cli bun-windows-x64 ../dist/kiwi.exe && bunx electron-builder --win --publish never
+              ;;
+            *)
+              cli bun-linux-x64 ../dist/kiwi && bunx electron-builder --linux --publish never
+              ;;
+          esac
 
       - name: Collect
         shell: bash
