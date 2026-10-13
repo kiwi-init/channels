@@ -120,13 +120,16 @@ jobs:
         run: bun run build && bunx electron-builder --publish never --config.directories.output=release
 
       - name: Collect
-        shell: bash
         run: |
-          mkdir -p out
-          find desktop/release -maxdepth 1 -type f \
-            \( -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' \) \
-            -exec cp {} out/ \;
-          ls -la out
+          bun -e '
+            const fs = require("fs");
+            fs.mkdirSync("out", { recursive: true });
+            const exts = [".dmg", ".zip", ".exe", ".appimage", ".deb"];
+            const dir = "desktop/release";
+            const names = fs.readdirSync(dir).filter((f) => exts.some((e) => f.toLowerCase().endsWith(e)));
+            for (const n of names) fs.copyFileSync(`${dir}/${n}`, `out/${n}`);
+            console.log(names.join("\n") || "(nothing collected)");
+          '
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v2
