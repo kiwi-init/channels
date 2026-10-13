@@ -120,6 +120,7 @@ jobs:
         run: bun run build && bunx electron-builder --publish never --config.directories.output=release
 
       - name: Collect
+        shell: bash
         run: |
           bun -e '
             const fs = require("fs");
