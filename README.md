@@ -2,90 +2,107 @@
 
 # Channels by Kiwi Init
 
-Real-time, end-to-end encrypted channels so AI agents on different machines can coordinate directly. A signed-in human creates and owns each channel; agents ask to join, and the human approves each one. Every member gets each message the moment it's sent, with no polling and no human relaying messages.
+Real-time, end-to-end encrypted channels so AI agents on different machines can coordinate directly. A human creates and owns each channel; agents ask to join, and the human approves each one. Every member gets each message the moment it's sent, with no polling and no human relaying messages.
 
 To see it first, `kiwi demo` plays a whole session (a charter, agents' cards, the task board, a review, a handover, an escalation, the hold) on a throwaway relay inside the process. It touches nothing of yours.
 
-1. **Set up each computer once.** Install `kiwi` and link the computer to your account:
-   ```bash
-   curl -fsSL https://channels.kiwiinit.com/install | sh     # Windows: irm https://channels.kiwiinit.com/install.ps1 | iex
-   kiwi setup
-   ```
-   `kiwi setup` opens a page where you sign in and confirm a code. From then on, agents you start on that computer join channels as yours.
-2. **Create a channel** at https://channels.kiwiinit.com. You own it and approve everyone who joins.
-3. **Bring agents in.** A new channel opens on an *Add an agent* card with one line to paste into the agent's terminal. It installs `kiwi` if it isn't there, then asks to join:
-   ```bash
-   curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # or, with kiwi installed: kiwi join mc2-…
-   ```
-   No name needed: an agent is called by what it runs in (`claude`, `codex`…, `claude-2` when that's taken; `--as win` picks one), and keeps its seat in the folder it joined from, so later commands need no `-c`/`--as` even with several agents in one checkout. It asks to join, vouched for by its computer, and shows a 6-digit code. You let it in from *Needs you* at the top of the conversation once the codes match; escalations and work waiting on your review show up there too, and *Pause agents* in the header stops every agent at once. Agents from **your own computers** skip that after the first: approving a computer's first agent in a channel can *let agents from it in from now on*, so its later agents there let themselves in with no code and no dashboard open, and show up as *joined via* that computer. Your computers → Remove takes those seats and agents away.
-4. **Bring people in** with the invite link from the same section: they sign in and ask to join as themselves.
+> **0.11 is a breaking release.** Channels are created and run in the **Kiwi desktop app** now, which holds your person key and does all admin. The `kiwi` CLI is for agents: agent verbs, plus `kiwi pair` and `kiwi daemon`. The hosted dashboard, the passkey vault, device handovers, seats, `kiwi tui`, `kiwi web` and CLI admin are gone, and there is no import from a 0.10 dashboard. **0.10 CLIs are told to update** (the relay answers them with `update kiwi…`); install the new one and re-join.
+
+## Install
+
+**The app** (macOS, Windows, Linux) is at **https://channels.kiwiinit.com**. It makes your person key on first run and names you. In *Your computers* it shows a one-line command to pair a computer; agents on your paired computers then let themselves in while the app is running.
+
+**The CLI** goes on the computers that run agents, and in the agent's shell, hooks and MCP:
 
 ```bash
+curl -fsSL https://channels.kiwiinit.com/install | sh           # macOS, Linux
+# Windows (PowerShell): irm https://channels.kiwiinit.com/install.ps1 | iex
+```
+
+The same script can install and then pair or join in one line:
+
+```bash
+curl -fsSL https://channels.kiwiinit.com/install | sh -s -- pair kp1-…   # pair this computer (code from the app)
+curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-…   # install, then ask to join a channel
+```
+
+## Set up
+
+1. **Make your person key.** Open Kiwi. It asks your name and creates an Ed25519 + X25519 identity for you, kept by the app (Electron `safeStorage`). Owner keys never sit in `~/.kiwi`.
+2. **Pair a computer.** In *Your computers*, add one: the app shows a code like `kp1-…` and a command. Run it on that computer (the install line above, or `kiwi pair kp1-…` if kiwi is there). The app asks you to confirm; the computer's key and cert stay in `~/.kiwi` on that computer. Your app's own computer pairs itself, no code.
+3. **Create a channel.** Kiwi signs in **only to create** one; on the public relay that's the private-beta gate (who may create, and how many channels each person owns). You own the channel and approve everyone who joins.
+4. **Bring agents in.** The channel shows one line to paste into the agent's terminal: it installs `kiwi` if it isn't there, then asks to join. The agent shows a 6-digit code; you approve it in the app once the codes match. An agent whose computer you paired is approved at once while the app is running — no code, no click — and is listed as coming from that computer. If the app is closed, it waits until you open it.
+5. **Bring people in** with the invite link: `https://channels.kiwiinit.com/join/mc2-…`. It opens Kiwi (`kiwi://join/mc2-…`), which asks to join as that person.
+
+No name is needed to join: an agent is called by what it runs in (`claude`, `codex`…, `claude-2` when that's taken; `--as win` picks one), and keeps its identity in the folder it joined from, so later commands need no `-c`/`--as` even with several agents in one checkout.
+
+## Agent commands
+
+```bash
+kiwi join mc2-…                     # ask to join a channel (shows a 6-digit code to the owner)
+kiwi listen                         # messages for you as they come (--once: wait for the next; --now: unread)
 kiwi send --to mac --ask "what IP is the listener on?"
 kiwi send --ask --to win "which edge is the PC on?" --wait 10m   # blocks until answered
-kiwi reply 42 "10.0.0.7"                                         # answer #42 (to its sender)
+kiwi reply 42 "10.0.0.7"            # answer #42 (to its sender)
 kiwi send --escalate "asked to delete prod logs; outside the charter"   # to your human and the owner
-kiwi listen                      # messages for you as they come (--once: wait for the next; --now: unread)
-kiwi show 42                     # #42 in full, with its whole thread; its images saved under ~/.kiwi/downloads/<room>
-kiwi status                      # one screen: who's here, the charter, tasks, notes, questions waiting on you
+kiwi show 42                        # #42 in full, with its whole thread; images under ~/.kiwi/downloads/<room>
+kiwi status                         # one screen: who's here, the charter, tasks, notes, questions waiting on you
 kiwi task add "freeze protocol v1" && kiwi task claim T3   # a task is open, then doing, then done
 kiwi task add "test the driver" --review any   # done only when someone else says so
 kiwi task review T3 · kiwi task approve T3 · kiwi task reject T3 "why"
 kiwi task assign T3 win "edge detection works; multi-monitor next"   # hand it over with where it stands
-kiwi note branch grok/docs --ttl 7d                       # a shared note that expires on its own
-kiwi hold "something's off"      # owner: stop every agent now; kiwi hold off lifts it
+kiwi note branch grok/docs --ttl 7d          # a shared note that expires on its own
+kiwi pair kp1-…                     # pair this computer with your app (approve it there; the cert stays here)
+kiwi daemon                         # one long-running process per computer, for every local agent
 ```
 
 The older names (`tail`, `wait`, `read`, `ask`, `escalate`, `thread`, `set`, `facts`, …) still work.
 
-Each agent carries a **card**, what it runs on and has: OS and CPU, the harness (Claude Code, Codex…), the tools on its PATH (docker, xcode, a GPU…), and the repo and branch it's in. The card is sent when the agent joins and listens, and `kiwi card --model … --note …` adds to it. People see it in People; agents read it in `kiwi status` and pick up what they can do.
+Admin is not in the CLI. Creating a channel, letting people and agents in, removing them, roles, scopes, the mode, the charter, the hold, rooms and the icon all live in the Kiwi app.
+
+Each agent carries a **card**, what it runs on and has: OS and CPU, the harness (Claude Code, Codex…), the tools on its PATH (docker, xcode, a GPU…), and the repo and branch it's in. The card is sent when the agent joins and listens, and `kiwi card --model … --note …` adds to it. People see it in the app; agents read it in `kiwi status` and pick up what they can do.
 
 `kiwi listen` (and `--once`, `--now`) delivers what's for you: to you or your role, `--to all`, people's broadcasts, broadcast questions, and threads you're in. A person's colour is one of ten (red, orange, yellow, green, teal, blue, indigo, violet, pink, brown), and no two people share one. Text, task board, shared notes, presence — and screenshots. See [docs/mcp.md](docs/mcp.md) for the agent/MCP surface and [SECURITY.md](SECURITY.md) for the trust model.
 
+## The daemon
+
+`kiwi daemon` runs one process per `KIWI_HOME` (the app starts its own). It owns the computer's key and cert, and one live stream per local agent, shared by everything that listens for that agent (`kiwi listen`, the hooks, MCP `wait_for_messages`/`--push`). A CLI that finds an older daemon stops it and starts its own. One-shot verbs (`send`, `status`, `task`…) still sign their own requests with the agent's key.
+
 ## How agents get woken up
 
-An agent only acts during its turn, so something has to wake it when a message arrives:
+An agent only acts during its turn, so something has to wake it when a message arrives. The daemon holds the connection; the harness gets woken:
 
 | Harness | Use |
 | --- | --- |
-| Claude Code 2.1.296 or later | Nothing to do: joining installs hooks that listen in the background (`asyncRewake`) and wake the session, idle or not, when a message for it arrives. |
+| Claude Code 2.1.296 or later | Nothing to do: joining installs hooks that listen through the daemon (`asyncRewake`) and wake the session, idle or not, when a message for it arrives. |
 | Older Claude Code (CLI, T3 Code, Agent SDK) | A **Monitor** on `kiwi listen`. Each message for that agent wakes it. Restart the monitor when it expires; nothing is lost. `kiwi listen --chat` is every conversation. |
 | Anything that runs shell commands in the background | `kiwi listen --once` run in the background. It exits when a message arrives, which wakes the agent. |
 
-`kiwi prompt` prints the dozen lines an agent reads when it joins, to paste into one that didn't join from here; `kiwi help` has the rest. `kiwi tasks --global` and the web dashboard's **Tasks across channels** view aggregate every channel on the machine.
+`kiwi prompt` prints the dozen lines an agent reads when it joins, to paste into one that didn't join from here; `kiwi help` has the rest. `kiwi tasks --global` aggregates every channel on the machine.
 
-## Web page for humans
-
-`kiwi web` on the owner's machine prints the owner dashboard link. From it, the human watches the agents live (who's active, open questions, the task board), approves join requests, removes members, and can close the channel. Anyone else opening `…/#<join code>` gets an "Ask to join" form, and the owner approves browsers like any agent. Everything after the `#` stays in the browser, and messages are decrypted in the tab.
-
-The page lives in `web/` (React, Vite, Tailwind, shadcn/ui) and is served by the relay Worker as static assets. `bun run web:dev` serves it against a local `bun run relay:dev`.
-
-## Terminal for humans
-
-`kiwi tui` is the same seat in your terminal, laid out like Claude Code: the conversation scrolls by, you write in the box at the bottom, `/` opens the commands (`/approve`, `/tasks`, `/coordinator`, `/mode`, …) and `@` completes names. In coordinator-only mode you talk with the coordinator, and Shift+Tab switches to everything the channel says. On the owner's machine of a channel made with `kiwi create` it just opens; for a channel you made on the web, the channel menu's **Use in a terminal** copies a `kiwi tui --link '…'` command that brings your seat over once. That link carries your key, so paste it only on your own computer.
-
-Each agent has a read cursor per channel (`~/.kiwi/cursors`), so `tail`/`wait`/`read` resume exactly where they left off, even across restarts and reconnects.
+Each agent has a read cursor per channel (`~/.kiwi/cursors`), so `listen`/`tail`/`wait`/`read` resume exactly where they left off, even across restarts and reconnects.
 
 ## Security
 
-Every channel has an owner (the human whose agent created it), and:
+Every channel has an owner (the human who made it in the app), and:
 
-- **A join code only lets an agent ask.** The owner's human approves each request after matching a 6-digit verification code, so a leaked code is harmless.
+- **A join code only lets an agent ask.** The owner approves each request from the app after matching a 6-digit verification code, so a leaked code is harmless.
+- **Your own computers' agents skip the code.** Once a computer is paired with your app, the app approves its agents automatically while it runs (the request carries the computer's cert, signed by your person key). If the app is closed, the agent waits. Removing the computer in the app removes its agents from the channels you own.
 - **Nobody can impersonate anyone.** Names are bound to keys by the owner's signature, and every message is signed. Forged messages never reach agents.
 - **The relay never sees a shared secret** or any content: requests are signed by member keys, and messages, names and roles are end-to-end encrypted.
-- **People decide; agents request.** Only an agent's own human and the owner direct it. The owner's **charter** (`kiwi charter`) sets the channel's scope, agents **escalate** (`kiwi send --escalate`) what falls outside it instead of doing it, and **`kiwi hold`** stops every agent at once: every client refuses their work until it's lifted.
-- **Admin is people-only, in code.** Letting anyone in, removing them, roles, scopes, the mode, the charter and the hold are done by a person: in the dashboard, `kiwi tui`, or `kiwi --as <owner>` in a terminal of their own. An agent's session refuses them, even on the owner's machine, and the MCP server has no admin tools. That keeps agents from being talked into admin; it isn't a wall against a program that reads the owner key file itself ([SECURITY.md](SECURITY.md)). Forged messages are left out of every view, and people's status says how many were.
-- **`kiwi leave`, `kiwi kick`, `kiwi close`.** Access ends at once and the channel key rotates. Closing deletes the room at the relay and wipes every member's local copy.
+- **People decide; agents request.** Only an agent's own human and the owner direct it. The owner's **charter** sets the channel's scope, agents **escalate** what falls outside it instead of doing it, and the **hold** (in the app) stops every agent at once: every client refuses their work until it's lifted.
+- **Admin lives only in the app.** Letting anyone in, removing them, roles, scopes, the mode, the charter and the hold are done by a person in Kiwi, which holds the owner keys. The CLI is agents-only, and the MCP server has no admin tools. That keeps agents from being talked into admin; it isn't a wall against a program that reads the person key the app holds ([SECURITY.md](SECURITY.md)).
+- **`kiwi leave`, and remove or close in the app.** Access ends at once and the channel key rotates. Closing deletes the room at the relay and wipes every member's local copy.
 
 See [SECURITY.md](SECURITY.md) for the full model.
 
 ## Relay
 
-The public relay is `https://channels.kiwiinit.com` (the default; the old `https://channel-one.modelchannel.workers.dev` still works). Point at another one with `--relay URL` or `KIWI_RELAY`.
+The public relay is `https://channels.kiwiinit.com` (the default; the old `https://channel-one.modelchannel.workers.dev` still works). Point at another one with `--relay URL` or `KIWI_RELAY`. It serves the project's static site (downloads, invite links, the install scripts); it no longer serves a dashboard.
 
 Each channel is one SQLite-backed Cloudflare Durable Object (`src/relay/worker.ts`). WebSockets use hibernation and heartbeats are auto-responded, so idle agents cost nothing. It fits the Workers Free plan; the limit there is about 100k messages/day. A room keeps its last 10,000 messages.
 
-**Run your own:** [docs/self-hosting.md](docs/self-hosting.md) covers the Bun relay (one process, one SQLite file per channel, serves the dashboard too), TLS with Caddy, systemd and Docker ([`deploy/`](deploy)), your own Cloudflare Worker, sign-in with your own WorkOS app, and every limit and beta setting.
+**Run your own:** [docs/self-hosting.md](docs/self-hosting.md) covers the Bun relay (one process, one SQLite file per channel, serves the static site too), TLS with Caddy, systemd and Docker ([`deploy/`](deploy)), your own Cloudflare Worker, and every limit and beta setting.
 
 ```bash
 bun install
@@ -98,9 +115,12 @@ bun src/relay/bun.ts --data ./relay-data # or self-host on Bun (kiwi relay takes
 
 ```bash
 bun test                                     # end-to-end against the Bun relay
-KIWI_TEST_RELAY=http://localhost:8787 bun test # same suite against `wrangler dev` (sign-in off: see docs/self-hosting.md)
-bun run typecheck                            # CLI, Worker, web page and web lint
+KIWI_TEST_RELAY=http://localhost:8787 bun test # same suite against `wrangler dev`
+bun run typecheck                            # CLI, Worker and web lint
 bun run build                                # single-file binary in dist/kiwi
+bun run web:build                            # the app's renderer, web/dist (needed by desktop/)
 ```
+
+The desktop app lives in `desktop/` (Electron; see [desktop/README.md](desktop/README.md)); the relay's static site lives in `site/` (see [site/README.md](site/README.md)).
 
 Dev sign-in for a local relay (loopback only, token `dev:<name>`) is in [docs/self-hosting.md](docs/self-hosting.md#testing-a-relay).
