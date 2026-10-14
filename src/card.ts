@@ -7,6 +7,7 @@ import { execFileSync } from "node:child_process";
 import { cpus, totalmem } from "node:os";
 
 import { harnessModel } from "./harness.ts";
+import type { Runs } from "./membership.ts";
 import type { Card } from "./protocol.ts";
 
 /** Tools worth showing, as the binary that shows each one is here. */
@@ -109,6 +110,17 @@ export function detectCard(env: Record<string, string | undefined> = process.env
 export async function detectModel(env: Record<string, string | undefined> = process.env): Promise<string | undefined> {
   const said = env.KIWI_MODEL?.trim();
   return said || (await harnessModel(env));
+}
+
+/**
+ * What runs this process, as `kiwi join` declares it for the owner to sign into its seat: the harness
+ * (given, KIWI_HARNESS, or detected) and the model (given, or detectModel). Undefined while either is
+ * unknown: a plain terminal names its harness with --harness.
+ */
+export async function detectRuns(env: Record<string, string | undefined> = process.env, given: { harness?: string; model?: string } = {}): Promise<Runs | undefined> {
+  const harness = given.harness?.trim().toLowerCase() || env.KIWI_HARNESS?.trim().toLowerCase() || detectHarness(env);
+  const model = given.model?.trim() || (await detectModel(env));
+  return harness && model ? { harness: harness.slice(0, 40), model: model.slice(0, 60) } : undefined;
 }
 
 /** Whether two cards say the same thing (tool order aside). */

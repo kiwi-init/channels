@@ -68,6 +68,33 @@ export interface MemberInfo {
    * one means "give me a free one like it", never a RECLAIM of that seat.
    */
   auto?: boolean;
+  /**
+   * What runs this agent: the harness and the model id, as the agent declared them when it asked to
+   * join and the owner signed them at approval. Only the owner's signature puts it in a record, so a
+   * seat's `runs` is the owner's word on what sits behind the key, not the agent's. An agent's later
+   * card may say another model; the record keeps what was approved.
+   */
+  runs?: Runs;
+}
+
+/** What runs an agent: its harness (claude-code, codex, opencode…) and the model id it answers with. */
+export interface Runs {
+  harness: string;
+  model: string;
+}
+
+/** `runs` as something sent or stored says it, if it reads as one: two short non-empty lines. */
+export function readRuns(x: unknown): Runs | undefined {
+  if (!x || typeof x !== "object") return undefined;
+  const r = x as { harness?: unknown; model?: unknown };
+  const harness = inlineText(r.harness, 40);
+  const model = inlineText(r.model, 60);
+  return harness && model ? { harness, model } : undefined;
+}
+
+/** "claude-code · claude-fable-5-1": what runs an agent, in one line. */
+export function runsLine(r: Runs | undefined): string {
+  return r ? `${r.harness} · ${r.model}` : "";
 }
 
 /** "jonatas" from "Jonatas Walker" or "jonatas@x.com": a channel handle for a signed-in person. */
@@ -157,6 +184,8 @@ export async function makeRecord(owner: Identity, room: string, m: MemberInfo & 
     ...(!m.owner && wireScopes(m.scopes) ? { scopes: wireScopes(m.scopes)! } : {}),
     ...(!m.owner && m.later ? { later: { scopes: wireScopes(m.later.scopes), since: m.later.since } } : {}),
     ...(!m.owner && m.laterRole ? { laterRole: m.laterRole } : {}),
+    // An agent's only: never the owner's or a person's record.
+    ...(!m.owner && m.kind !== "human" && m.runs ? { runs: { harness: m.runs.harness, model: m.runs.model } } : {}),
     at: Date.now(),
   });
 }
@@ -185,6 +214,8 @@ export async function readRecord(key: string, sealed: string, room: string, pk: 
     const later = !owner && l && Number.isInteger(l.since) ? { scopes: l.scopes === null ? [...SCOPES] : (readScopes(l.scopes) ?? []), since: l.since as number } : undefined;
     const laterRole = owner ? undefined : readLaterRole((rec as { laterRole?: unknown }).laterRole);
     const kind = rec.kind === "human" ? "human" : rec.kind === "agent" ? "agent" : undefined;
+    // What runs it is the owner's to attest, and only for an agent: kept from the owner's record alone.
+    const runs = owner || kind === "human" || rec.pk !== ownerPk ? undefined : readRuns((rec as { runs?: unknown }).runs);
     const person = typeof rec.person === "string" && rec.person.length <= 64 ? rec.person : undefined;
     const from = readFrom((rec as { from?: unknown }).from);
     return {
@@ -205,6 +236,7 @@ export async function readRecord(key: string, sealed: string, room: string, pk: 
         ...(scopes ? { scopes } : {}),
         ...(later ? { later } : {}),
         ...(laterRole ? { laterRole } : {}),
+        ...(runs ? { runs } : {}),
         owner,
         at: rec.at,
         active: true,

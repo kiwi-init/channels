@@ -21,7 +21,7 @@ import { loadImages, saveImages } from "./attach.ts";
 import { loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { Cursor, home, Keystore } from "./config.ts";
 import { ChannelGone, reason } from "./client.ts";
-import { cardLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, mayDo, parseDuration, stateWord, taskStateWord } from "./format.ts";
+import { cardLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, mayDo, parseDuration, runsStatus, stateWord, taskStateWord } from "./format.ts";
 import { SCOPES } from "./scopes.ts";
 import { CHAT_KINDS, ignored, type Kind, type Message } from "./protocol.ts";
 import { inlineText } from "./membership.ts";
@@ -128,7 +128,9 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
             const scopes = m.active && !m.owner ? state.members.get(m.name)?.scopes : undefined;
             const may = scopes && scopes.length < SCOPES.length ? `\n    may: ${mayDo(scopes)}` : "";
             const card = m.active && rec?.card ? `\n    ${cardLine(rec.card)}` : "";
-            return (m.active && showsLoad(m, load) ? `${head}\n    ${loadSummary(load)}` : head) + may + card;
+            // What the owner signed as running it: the line to trust when a review must come from another model.
+            const runs = m.active && rec?.runs ? `\n    ${runsStatus(rec.runs, rec.card)}` : "";
+            return (m.active && showsLoad(m, load) ? `${head}\n    ${loadSummary(load)}` : head) + may + card + runs;
           })
           .join("\n");
       }),

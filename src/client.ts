@@ -39,7 +39,7 @@ import { sign, signText, verify, verifyText, type Identity } from "./identity.ts
 import { commitTo, joinCheckCode, joinNonce, ownerNonceStatement, spendAuto, type SigningBudget } from "./sas.ts";
 import { canPost, scopesOf, wireScopes, type Scope } from "./scopes.ts";
 import { COORDINATOR, type ChannelState, type GuardFloor } from "./state.ts";
-import { freeAgentName, inlineText, makeRecord, NAME_RE, nameKey, readRecord, RESERVED_NAMES, sealRecord, verifiedComputer, verifiedPerson, type JoinClaims, type JoinRequest, type Member, type MemberInfo } from "./membership.ts";
+import { freeAgentName, inlineText, makeRecord, NAME_RE, nameKey, readRecord, readRuns, RESERVED_NAMES, sealRecord, verifiedComputer, verifiedPerson, type JoinClaims, type JoinRequest, type Member, type MemberInfo } from "./membership.ts";
 import {
   CLOSE_CLOSED,
   CLOSE_REMOVED,
@@ -957,6 +957,8 @@ export class Channel {
           ...(computer ? { computer: { ...computer, own: opts.person === computer.person } } : {}),
           ...(person ? { person } : {}),
           ...(cleanCard(info.card) ? { card: cleanCard(info.card)! } : {}),
+          // What the agent says runs it (harness and model); approving signs it into the record (MemberInfo.runs).
+          ...(kind !== "human" && readRuns(info.runs) ? { runs: readRuns(info.runs)! } : {}),
         });
       }
       return out;
@@ -1010,6 +1012,8 @@ export class Channel {
         // A person joins as themself; an agent carries which computer it runs on.
         ...(kind === "human" && req.person ? { person: req.person } : {}),
         ...(kind === "agent" && req.computer ? { from: { pk: req.computer.pk, label: req.computer.label } } : {}),
+        // What the agent said runs it, now with the owner's signature on it: the record's word from here on.
+        ...(kind === "agent" && req.runs ? { runs: req.runs } : {}),
         // What they may do besides read; left out, everything (as before scopes).
         ...(wireScopes(as?.scopes) ? { scopes: wireScopes(as?.scopes)! } : {}),
       };

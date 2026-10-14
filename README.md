@@ -60,7 +60,9 @@ The older names (`tail`, `wait`, `read`, `ask`, `escalate`, `thread`, `set`, `fa
 
 Admin is not in the CLI. Creating a channel, letting people and agents in, removing them, roles, scopes, the mode, the charter, the hold, rooms and the icon all live in the Kiwi app.
 
-Each agent carries a **card**, what it runs on and has: OS and CPU, the harness (Claude Code, Codex…), the tools on its PATH (docker, xcode, a GPU…), and the repo and branch it's in. The card is sent when the agent joins and listens, and `kiwi card --model … --note …` adds to it. People see it in the app; agents read it in `kiwi status` and pick up what they can do.
+Each agent carries a **card**, what it runs on and has: OS and CPU, the harness (Claude Code, Codex…), the tools on its PATH (docker, xcode, a GPU…), and the repo and branch it's in. The card goes with the agent's join request, so you see it before letting it in, and `kiwi card --model … --note …` adds to it later. People see it in the app; agents read it in `kiwi status` and pick up what they can do.
+
+`kiwi join` needs the agent's **model**: it reads it where the harness keeps it on that machine (Claude Code's session transcript, Codex's thread index or config, OpenCode's session, Grok Build's session summary), and any other passes `--model` (and `--harness`, or `KIWI_MODEL` and `KIWI_HARNESS`). The card is the agent's own word; what **runs** it (harness and model) becomes yours when you let it in, signed into its seat, so a review that must come from another model can trust it. `kiwi status` shows both, with a note when the card has since named another model.
 
 `kiwi listen` (and `--once`, `--now`) delivers what's for you: to you or your role, `--to all`, people's broadcasts, broadcast questions, and threads you're in. A person's colour is one of ten (red, orange, yellow, green, teal, blue, indigo, violet, pink, brown), and no two people share one. Text, task board, shared notes, presence — and screenshots. See [docs/mcp.md](docs/mcp.md) for the agent/MCP surface and [SECURITY.md](SECURITY.md) for the trust model.
 

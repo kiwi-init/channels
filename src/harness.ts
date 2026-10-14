@@ -5,7 +5,8 @@
 //
 //   Claude Code  CLAUDE_CODE_SESSION_ID (or ~/.claude/sessions/$CLAUDE_PID.json), then the newest
 //                assistant line's message.model in ~/.claude/projects/*/<session>.jsonl
-//   Codex        CODEX_THREAD_ID, then threads.model in $CODEX_HOME/state_*.sqlite
+//   Codex        CODEX_THREAD_ID, then threads.model in $CODEX_HOME/state_*.sqlite, else the
+//                model its config.toml starts sessions with
 //   OpenCode     OPENCODE_SESSION_ID, then session_v2.model ({id, providerID}) in opencode.db
 //   Grok Build   GROK_SESSION_ID, then summary.json's model under ~/.grok/sessions/*/<session>/
 //
@@ -86,11 +87,17 @@ async function codexModel(env: Env): Promise<string | undefined> {
     .filter((f) => /^state_\d+\.sqlite$/.test(f))
     .sort((a, b) => Number(b.match(/\d+/)![0]) - Number(a.match(/\d+/)![0]));
   for (const f of dbs) {
-    const row = (await sqliteOne(join(home, f), "SELECT model FROM threads WHERE id = ?", thread)) as { model?: unknown } | null;
+    // A table this Codex doesn't have: try the next index, then the config.
+    const row = (await sqliteOne(join(home, f), "SELECT model FROM threads WHERE id = ?", thread).catch(() => null)) as { model?: unknown } | null;
     const m = slug(row?.model);
     if (m) return m;
   }
-  return undefined;
+  // No index (or this thread isn't in it yet): the model its config starts sessions with.
+  try {
+    return slug(/^\s*model\s*=\s*"([^"]{1,80})"/m.exec(readFileSync(join(home, "config.toml"), "utf8"))?.[1]);
+  } catch {
+    return undefined;
+  }
 }
 
 async function opencodeModel(env: Env): Promise<string | undefined> {

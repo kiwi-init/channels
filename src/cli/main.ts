@@ -36,7 +36,7 @@ import { computerClaimFor } from "../machine.ts";
 import { briefText, COMMANDS } from "../brief.ts";
 import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor, EXTRA_HARNESSES, extraInstalled, hooksInstalled, hooksListen, hooksStatus, installDetected, installExtra, installHooks, mcFor, runHook, uninstallDetected, uninstallExtra, uninstallHooks, type ExtraHarness } from "../hooks.ts";
 import { BadName } from "../refusals.ts";
-import { detectCard, detectModel, mergeCard } from "../card.ts";
+import { detectCard, detectModel, detectRuns, mergeCard } from "../card.ts";
 
 const CLAIMS_GONE = "claims are gone: say what you're working on in the task, or post it";
 
@@ -46,7 +46,9 @@ Agents
   kiwi join <code>                               ask to join (named after what you run in: claude, codex…; --as NAME
                                                  picks one); waits for the owner, then says what to do
      --model ID                                  the model you run on (read from Claude Code, Codex, OpenCode or
-                                                 Grok when it can be; required when it can't, or set KIWI_MODEL)
+                                                 Grok when it can be; required when it can't, or set KIWI_MODEL);
+                                                 the owner signs it into your seat when they let you in
+     --harness NAME                              what runs you, when kiwi can't tell (or KIWI_HARNESS)
   kiwi listen                                    messages for you as they come, one per line (for a Monitor)
      --once [--timeout 10m]                      wait for the next message(s), then exit (2 and "no messages yet" on timeout)
      --now                                       unread messages, without waiting
@@ -133,6 +135,7 @@ const { values: opt, positionals: args } = parseArgs({
     dm: { type: "string" },
     main: { type: "boolean" },
     model: { type: "string" },
+    harness: { type: "string" },
     tools: { type: "string" },
     stay: { type: "boolean" },
     room: { type: "string" },
@@ -318,7 +321,7 @@ const commands: Record<string, Command> = {
     Effect.gen(function* () {
       const keys = yield* Keystore;
       const cursor = yield* Cursor;
-      const code = (args[1] ?? (yield* die("usage: kiwi join <code> [alias] --model MODEL [--as NAME] [--role ROLE]"))).trim();
+      const code = (args[1] ?? (yield* die("usage: kiwi join <code> [alias] --model MODEL [--harness NAME] [--as NAME] [--role ROLE]"))).trim();
       try {
         decodeJoinCode(code);
       } catch {
@@ -362,7 +365,7 @@ const commands: Record<string, Command> = {
         yield* doneAsking;
         return yield* die(
           [
-            "kiwi join needs your model: the owner sees it on your request, and the coordinator plans work with it.",
+            "say what model runs you: the owner sees it on your request and signs it into your seat, and the coordinator plans work with it.",
             "Run the same command again with --model and the id of the model you run on, for example:",
             `  kiwi join ${code} --model claude-opus-4-1`,
             "(or gpt-5-codex, grok-4, gemini-2.5-pro: the exact name your harness uses for your model. Setting KIWI_MODEL works too.)",
@@ -371,6 +374,11 @@ const commands: Record<string, Command> = {
         );
       }
       const card = mergeCard(detectCard(), undefined, { model });
+      // What runs it (harness and model) goes in the request too: approving signs it into the seat, so
+      // it becomes the owner's word (MemberInfo.runs), where the card stays the agent's. A harness kiwi
+      // can't tell (no marker) is named with --harness or KIWI_HARNESS.
+      const runs = yield* Effect.promise(() => detectRuns(process.env, { ...(opt.harness ? { harness: opt.harness } : {}), model }));
+      if (runs) Object.assign(info, { runs });
 
       /**
        * This agent's key goes by `to` from now on. Only ever this key's own files are removed: another

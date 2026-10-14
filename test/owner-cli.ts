@@ -12,6 +12,7 @@ import { Cursor, DEFAULT_RELAY, Keystore } from "../src/config.ts";
 import { newRoomId } from "../src/crypto.ts";
 import { bindDirectory } from "../src/hooks.ts";
 import { fingerprint } from "../src/identity.ts";
+import { runsLine } from "../src/membership.ts";
 import { openOwnerSession } from "../src/owner.ts";
 import { baseName, here } from "../src/seats.ts";
 import { join } from "node:path";
@@ -95,7 +96,9 @@ const verbs: Record<string, () => Effect.Effect<void, unknown, any>> = {
       if (!reqs.length) return out("no pending join requests");
       for (const r of reqs) {
         const asked = r.askedAs && r.askedAs !== r.name ? ` (asked as ${r.askedAs}, which is taken)` : "";
-        out(`${(r.code ?? (r.check === "waiting" ? "waiting" : "unchecked")).padEnd(8)} ${r.name}${asked}${r.role ? ` (${r.role})` : ""} · key ${fingerprint(r.pk)}`);
+        // What it says runs it, which approving signs into its seat; an agent that said nothing is worth a second look.
+        const runs = r.kind === "human" ? "" : r.runs ? ` · runs ${runsLine(r.runs)}` : " · says nothing about what runs it";
+        out(`${(r.code ?? (r.check === "waiting" ? "waiting" : "unchecked")).padEnd(8)} ${r.name}${asked}${r.role ? ` (${r.role})` : ""}${runs} · key ${fingerprint(r.pk)}`);
       }
     }),
   approve: () =>
