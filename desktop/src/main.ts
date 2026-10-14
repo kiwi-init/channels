@@ -16,13 +16,12 @@ import { generateIdentity, type Identity } from "../../src/identity.ts";
 import { answerPair, newSecret, openMailbox, pairCode, readPairAsk, type Mailbox, type PairAsk } from "../../src/mailbox.ts";
 import { certifyMachine } from "../../src/person.ts";
 import { compareVersions, ensureOnPath, keepCli } from "./cli.ts";
+import { APP_HOST, APP_SCHEME, externalUrl, isAppUrl, normalizeRelay } from "./guard.ts";
 import { applyUpdate, startUpdates, updateState } from "./updater.ts";
 import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, type HelloResult } from "./daemon-client.ts";
 import type { ChannelIdentityView, ComputerView, DaemonStatus, PairAskView, PendingItem, PersonView, SignInResult, StoreSnapshot } from "./bridge.ts";
 
 const PUBLIC_RELAY = "https://channels.kiwiinit.com";
-const APP_SCHEME = "kiwi-app";
-const APP_HOST = "app";
 const JOIN_SCHEME = "kiwi";
 
 let win: BrowserWindow | null = null;
@@ -73,17 +72,6 @@ const snapshot = (): StoreSnapshot => ({ relayUrl: store.relayUrl, person: store
 const broadcast = () => win?.webContents.send("kiwi:store", snapshot());
 const mutate = (fn: (s: StoreFile) => void) => (fn(store), saveStore(), broadcast());
 
-function normalizeRelay(url: string): string | null {
-  try {
-    const u = new URL(url.trim());
-    if (u.protocol === "https:") return u.origin;
-    if (u.protocol === "http:" && (u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "::1")) return u.origin;
-    return null;
-  } catch {
-    return null;
-  }
-}
-
 // ---------- renderer hosting ----------
 
 // Bun inlines __dirname at build time (desktop/src), so a packaged app finds dist/ through the app path.
@@ -123,6 +111,32 @@ function serveWebFallback(): Response {
 const entryUrl = () => `${APP_SCHEME}://${APP_HOST}/index.html?relay=${encodeURIComponent(store.relayUrl)}`;
 
 // ---------- window + tray ----------
+
+/** A link that may leave the app goes to the system browser (http(s) only); anything else goes nowhere. */
+function openOutside(url: string): void {
+  const ext = externalUrl(url);
+  if (ext) void shell.openExternal(ext);
+}
+
+/**
+ * Every page this app makes shows kiwi-app:// and nothing else: a page holding window.kiwi (the person's
+ * keys, the sign-in) must never become someone else's. A link that opens a window (target=_blank in a
+ * message) or navigates away goes to the system browser instead, with no window.kiwi there.
+ */
+function guardContents(wc: Electron.WebContents): void {
+  wc.setWindowOpenHandler(({ url }) => {
+    openOutside(url);
+    return { action: "deny" };
+  });
+  const stay = (e: Electron.Event, url: string) => {
+    if (isAppUrl(url)) return;
+    e.preventDefault();
+    openOutside(url);
+  };
+  wc.on("will-navigate", stay);
+  wc.on("will-redirect", stay);
+  wc.on("will-attach-webview", (e) => e.preventDefault());
+}
 
 function createWindow(): void {
   win = new BrowserWindow({
@@ -438,8 +452,9 @@ function wireIpc(): void {
     n.show();
   });
   ipcMain.handle("kiwi:open-external", (_e, url: string) => {
-    if (!/^https?:\/\//.test(url)) throw new Error("only http(s) links open outside");
-    return shell.openExternal(url);
+    const ext = externalUrl(url);
+    if (!ext) throw new Error("only http(s) links open outside");
+    return shell.openExternal(ext);
   });
   ipcMain.handle("kiwi:deep-link", () => deepLink);
 }
@@ -468,6 +483,7 @@ else {
   }
   if (process.defaultApp && process.argv.length >= 2) app.setAsDefaultProtocolClient(JOIN_SCHEME, process.execPath, [path.resolve(process.argv[1] as string)]);
 
+  app.on("web-contents-created", (_e, wc) => guardContents(wc));
   // Privileged schemes must be registered before the ready event (Electron ignores them after).
   protocol.registerSchemesAsPrivileged([{ scheme: APP_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
   void app.whenReady().then(async () => {
