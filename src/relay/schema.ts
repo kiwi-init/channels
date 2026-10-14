@@ -6,22 +6,32 @@
 import * as Schema from "effect/Schema";
 import { NONCE_RE } from "../sas.ts";
 
+/** A public key (Ed25519 or X25519): 32 bytes, base64url without padding. */
+const Key = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{43}$/));
+/** An Ed25519 signature: 64 bytes, base64url without padding. */
+const Sig = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{86}$/));
+/** The most a sealed member record may be (setRecord's limit too). */
+export const MAX_RECORD = 8_192;
+/** The most one wrapped channel key may be: a sealed key and the owner's signature, about 250 characters. */
+export const MAX_WRAPPED = 1_024;
+
 /** A join request: the requester's keys, its sealed name and role, and its commit to the code check. */
 export const JoinRequest = Schema.Struct({
-  pk: Schema.String,
-  xpk: Schema.String,
+  pk: Key,
+  xpk: Key,
   box: Schema.String,
-  sig: Schema.String,
+  sig: Sig,
   ts: Schema.Number,
   commit: Schema.String.check(Schema.isPattern(NONCE_RE)),
 });
 
 /** A member record as the owner sends it: keys, the sealed record, and wrapped channel keys by epoch. */
 export const MemberRecord = Schema.Struct({
-  pk: Schema.String,
-  xpk: Schema.String,
-  rec: Schema.String,
-  keys: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+  pk: Key,
+  xpk: Key,
+  rec: Schema.String.check(Schema.isMaxLength(MAX_RECORD)),
+  // By epoch. Record keys aren't checked by the schema: putMember checks them against the channel's epoch.
+  keys: Schema.optional(Schema.Record(Schema.String, Schema.String.check(Schema.isMaxLength(MAX_WRAPPED)))),
   post: Schema.optional(Schema.Boolean),
 });
 

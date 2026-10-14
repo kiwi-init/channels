@@ -5,7 +5,9 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Channel } from "../src/client.ts";
-import { generateIdentity } from "../src/identity.ts";
+import { signRequest } from "../src/auth.ts";
+import { newRoomId } from "../src/crypto.ts";
+import { generateIdentity, sign } from "../src/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { OPEN_POLICY, policyFrom, SAFETY_BYTES_PER_CHANNEL, type RelayPolicy } from "../src/relay/policy.ts";
 import { checked } from "./check.ts";
@@ -67,6 +69,36 @@ describe("members per channel", () => {
     await ownerCh.remove(a0.pk);
     await ownerCh.approve(r!);
     expect((await ownerCh.members()).filter((m) => m.active).map((m) => m.name).sort()).toEqual(["boss", "extra"]);
+  });
+});
+
+describe("members at create (T112)", () => {
+  test("a channel can't be created with more members than the quota", async () => {
+    const { relay } = relayWith({ membersPerChannel: 2 });
+    const owner = await generateIdentity("boss");
+    const agents = await Promise.all(["a", "b"].map(async (n) => ({ ...(await generateIdentity(n)), info: { name: n } })));
+    await expect(Channel.create(relay, owner, { name: "boss" }, agents)).rejects.toMatchObject({ status: 429, message: expect.stringContaining("at most 2 members") });
+    await Channel.create(relay, owner, { name: "boss" }, agents.slice(0, 1));
+  });
+
+  // The owner's own create, sent by hand, with one member changed.
+  async function createWith(relay: string, change: (m: Record<string, unknown>) => Record<string, unknown>) {
+    const owner = await generateIdentity("boss");
+    const room = newRoomId();
+    const ownerSig = await sign(owner, { room, xpk: owner.xpk!, v: 2 });
+    const me = { pk: owner.pk, xpk: owner.xpk!, rec: "sealed-record", keys: { "0": "wrapped-key" } };
+    const body = JSON.stringify({ owner: { pk: owner.pk, xpk: owner.xpk!, sig: ownerSig.sig }, members: [change(me)] });
+    const auth = await signRequest(owner, room, "POST", "/create", body);
+    return (await fetch(`${relay}/v1/rooms/${room}/create`, { method: "POST", headers: { authorization: `Bearer ${auth}`, "content-type": "application/json" }, body })).status;
+  }
+
+  test("member records and wrapped keys are capped, and keys only for epochs the channel has", async () => {
+    const { relay } = relayWith({});
+    expect(await createWith(relay, (m) => m)).toBe(200);
+    expect(await createWith(relay, (m) => ({ ...m, rec: "x".repeat(8_193) }))).toBe(400);
+    expect(await createWith(relay, (m) => ({ ...m, keys: { "0": "x".repeat(1_025) } }))).toBe(400);
+    expect(await createWith(relay, (m) => ({ ...m, keys: { "0": "k", "1": "k" } }))).toBe(400);
+    expect(await createWith(relay, (m) => ({ ...m, keys: { zero: "k" } }))).toBe(400);
   });
 });
 
