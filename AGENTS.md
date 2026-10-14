@@ -1,30 +1,41 @@
 # AGENTS.md
 
+Regras para todo agente neste repositório (Kiwi Channels: TypeScript com Bun e Effect; `src/` é o CLI, o relay e o núcleo; `web/` é o front em React; `desktop/` é o app Electron).
+
 ## Specs e labels
 
-- Desenvolvimento só guiado por spec. Nenhum código sem spec acordada na descrição da issue ou do PR, com escopo, critérios de aceite e gates de CI. A implementação segue a spec; mudar o escopo exige atualizar a spec antes, com o item em `needs-triage`.
+- Desenvolvimento só guiado por spec. Nenhum código sem spec acordada na descrição da issue, do PR ou da tarefa do Kiwi (`kiwi task`), com escopo, critérios de aceite e gates de CI. A implementação segue a spec; mudar o escopo exige atualizar a spec antes, com o item em `needs-triage`.
 - `needs-triage`: precisa do loop humano-agente. Agentes só discutem e escrevem spec; não commitam código. Item com pergunta aberta é `needs-triage`.
 - `agent-ready`: liberado para implementar. Só uma pessoa aplica esse label; o agente pode apenas propor.
 - Antes de commitar, confira o label da issue ou do PR: sem `agent-ready`, não commite código.
 
 ## Código
 
-- Comentários no código são proibidos, inclusive diretivas de ferramenta (`@ts-expect-error`, `@ts-ignore`, `oxlint-disable`, `eslint-disable`, `type: ignore`, `noqa`, `pragma` etc.). Única exceção: docstring Python estritamente necessária em tempo de execução, registrada na lista `ALLOWED_DOCSTRINGS` de `scripts/ci/no_comments.py` (hoje vazia) e justificada no PR; fora dela, o guard `repo / comments` reprova. O contexto vai no commit e no PR.
-- Tudo estritamente tipado. Nada de `any`, de `any` implícito ou de código sem tipo, em TypeScript e em Python. Em Python, toda função tem tipos de parâmetro e de retorno, sem `Any`.
-- Tipos compartilhados em `/shared`. Modelos Pydantic em `/shared` são a fonte única dos contratos; JSON Schema e os tipos TS/Effect Schema são gerados a partir deles. Código gerado não se edita à mão; a CI falha se estiver defasado.
-- Front: lint com oxlint e formatação com oxfmt (sem Biome nem Prettier).
-- Trabalho de UI segue o `DESIGN.md` (tema, cores, raio, tipografia, movimento).
+- Comentários no código são proibidos em código novo ou alterado, inclusive diretivas de ferramenta (`@ts-expect-error`, `@ts-ignore`, `eslint-disable` etc.). Hoje o repositório não tem nenhuma diretiva, e assim fica. Os comentários que já existem saem quando a função que eles explicam é alterada. O contexto vai no commit e no PR.
+- Tudo estritamente tipado. Nada de `any`, de `any` implícito ou de código sem tipo. Os `tsconfig` já usam `strict` e `noUncheckedIndexedAccess`; não os afrouxe.
+- Tipos compartilhados vivem em `src/` (`protocol.ts`, `state.ts`, `membership.ts`, `scopes.ts`) e são a fonte única dos contratos. O `web/` os importa pelo alias `@mc/`. Os contratos do relay são Effect Schema em `src/relay/schema.ts`. Não duplique um tipo do núcleo no `web/` nem no `desktop/`.
+- Front: lint com ESLint (`web/eslint.config.js`, job `web / lint`).
+- Trabalho de UI segue o `DESIGN.md` (tema, cores, raio, tipografia, movimento). Cores e medidas vêm dos tokens; `bun scripts/ui-tokens.ts` confere.
 
-## Streams, branches e CI
+## Tarefas, branches e CI
 
-- Um stream = uma branch = um PR, empilhados com `gh stack`. O plano, a ordem e os donos estão na checklist da descrição do PR #4.
-- Cada stream só edita os arquivos que possui. Lockfiles e manifests têm um único dono (S0 para o front, S9 para Python). Lockfile em conflito não se resolve à mão: aceite o remoto e regenere.
-- Commits pequenos com o prefixo do stream (`[S4-toast] ...`). Antes de todo push: `git pull --rebase`, rodar as checagens da área tocada e depois `git push` normal.
-- Proibido: force-push manual, `--no-verify`, `[skip ci]` e merge com o check `ci-ok` vermelho. Única exceção: o `--force-with-lease` que o próprio `gh stack sync`/`gh stack push` faz num restack.
-- Toda mudança chega com o seu gate de CI: um job próprio no `ci.yml`, nomeado `<área> / <checagem>` (ex.: `web / lint`), incluído no `needs` do `ci-ok` e registrado na checklist.
+- Uma tarefa = uma branch = um PR contra `main`, com squash merge. O título do PR começa pelo id da tarefa (`T123: ...`).
+- Cada tarefa só edita os arquivos do seu escopo. Lockfiles (`bun.lock`, `web/bun.lock`, `desktop/bun.lock`) e manifests (`package.json`) mudam só na tarefa que precisa da dependência. Lockfile em conflito não se resolve à mão: aceite o remoto e rode `bun install`.
+- Commits pequenos, com o id da tarefa no título e um corpo que diz o que mudou e por quê (o corpo vira a entrada do `CHANGELOG.md`, e o `ci-ok` reprova PR sem corpo). Antes de todo push: `git pull --rebase`, rodar as checagens da área tocada (`bun run typecheck`, `bun test`, e no desktop `cd desktop && bun run typecheck`) e depois `git push` normal.
+- Proibido: force-push em `main` ou na branch de outro agente, `--no-verify`, `[skip ci]` e merge com o check `ci-ok` vermelho. Única exceção: `git push --force-with-lease` na sua própria branch, depois de um rebase.
+- Toda mudança chega com o seu gate de CI: um job próprio em `.github/workflows/ci.yml`, nomeado `<área> / <checagem>` (ex.: `web / lint`), incluído no `needs` do `ci-ok` e com seus arquivos de entrada registrados em `.github/jev-ci.yml`.
 
 ## Autoria
 
 - Só agentes commitam; não há commit humano. Todo agente age em nome de uma pessoa e assina como `{model_slug} on behalf of {human_name}`:
-  - commits: trailer `Agent: {model_slug} on behalf of {human_name}` obrigatório em todo commit (a CI rejeita commit sem ele);
+  - commits: trailer `Agent: {model_slug} on behalf of {human_name}` obrigatório em todo commit;
   - comentários em PR: primeira linha de todo comentário, review, comentário de review (inline) e resposta em thread, e também da descrição do PR.
+
+## Ainda falta (tarefas abertas)
+
+Estas regras ainda não têm checagem automática:
+
+- os labels `needs-triage` e `agent-ready` no GitHub;
+- o job `repo / comments`, que reprova comentário e diretiva nas linhas novas de um PR;
+- o job `repo / agent-trailer`, que reprova commit sem o trailer `Agent:`;
+- `@typescript-eslint/no-explicit-any` como erro, também para `src/` e `desktop/`.
