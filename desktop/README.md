@@ -25,6 +25,8 @@ window says so. Closing the window keeps the app in the tray (background auto-ap
 - `src/daemon-client.ts` — the local socket client (`hello`, `adopt`) and the JSON wire
   shape the daemon side must match (documented at the top of the file).
 - `src/updater.ts` — checks GitHub releases for a newer app.
+- `src/move.ts` — moves a download over the file it replaces, across filesystems too (the
+  AppImage update).
 
 ## Renderer relay URL
 
