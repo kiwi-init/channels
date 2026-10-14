@@ -2,6 +2,7 @@
 // can't fill the data folder; a real create keeps its file; a missing room never gets one.
 
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
+import { Database } from "bun:sqlite";
 import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -50,4 +51,17 @@ test("a real create keeps its file, and asking about a missing room makes none",
   const missing = "f".repeat(32);
   for (let i = 0; i < 3; i++) expect((await fetch(`${relay}/v1/rooms/${missing}/info?fp=x`)).status).toBe(404);
   expect(existsSync(join(dataDir, `${missing}.sqlite`))).toBe(false);
+});
+
+test("a create on a legacy room (no owner) is answered as a missing room, and the room is wiped", async () => {
+  const room = "c".repeat(32);
+  const legacy = new Database(join(dataDir, `${room}.sqlite`), { create: true });
+  legacy.run("CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)");
+  legacy.close();
+  const someone = await generateIdentity("someone");
+  const body = "{}";
+  const res = await fetch(`${relay}/v1/rooms/${room}/create`, { method: "POST", headers: { authorization: `Bearer ${await signRequest(someone, room, "POST", "/create", body)}` }, body });
+  expect(res.status).toBe(404);
+  expect(((await res.json()) as { tag: string }).tag).toBe("ChannelGone");
+  expect(existsSync(join(dataDir, `${room}.sqlite`))).toBe(false);
 });

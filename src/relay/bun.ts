@@ -215,8 +215,19 @@ export function startRelay(
         const early = missingFingerprint(req.method, route.rest, url);
         if (early) return withCors(errorResponse(early));
         const isCreate = route.rest === "/create";
-        if (isCreate) creating.set(route.roomId, (creating.get(route.roomId) ?? 0) + 1);
         const db = storeFor(route.roomId, isCreate);
+        // Counted only once the store opened, so a file that can't be opened never leaves a count behind.
+        if (isCreate) creating.set(route.roomId, (creating.get(route.roomId) ?? 0) + 1);
+        // Whether the create ended without a room: read before apply(), which may wipe and close the file.
+        // A handle a wipe already closed (this request's, or a close running alongside) means nothing is left to remove.
+        const noRoom = () => {
+          try {
+            return !db.exists();
+          } catch {
+            return false;
+          }
+        };
+        let empty: boolean | undefined;
         try {
           if (route.rest === "/ws") {
             if (db.isLegacy()) {
@@ -229,6 +240,7 @@ export function startRelay(
             return withCors(errorResponse(new UpdateRequired({ message: "expected websocket" })));
           }
           const result = await onHttp(relay, db, req, route.rest);
+          if (isCreate) empty = noRoom();
           if (result.fx) apply(route.roomId, result.fx);
           return withCors(result.res);
         } finally {
@@ -238,7 +250,7 @@ export function startRelay(
             if (left) creating.set(route.roomId, left);
             else creating.delete(route.roomId);
             // A create that ended without a room (refused before auth, or failed) leaves no file behind.
-            if (!left && !db.exists()) {
+            if (!left && (empty ?? noRoom())) {
               dbs.get(route.roomId)?.close();
               dbs.delete(route.roomId);
               for (const suffix of ["", "-wal", "-shm"]) rmSync(file(route.roomId) + suffix, { force: true });
