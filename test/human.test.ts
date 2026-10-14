@@ -10,7 +10,7 @@ import { Channel, relayConfig } from "../src/client.ts";
 import { b64url } from "../src/crypto.ts";
 import { generateIdentity } from "../src/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { workosHumanAuth } from "../src/relay/human.ts";
+import { authkitDomains, workosHumanAuth } from "../src/relay/human.ts";
 import { claimComputer, provePerson } from "../src/person.ts";
 import { checked, checkedByHand } from "./check.ts";
 import { joinAgent, joinPerson, pairComputer, setupChannel } from "./owner.ts";
@@ -26,10 +26,10 @@ const rsa = (await crypto.subtle.generateKey(
 const jwk = (await crypto.subtle.exportKey("jwk", rsa.publicKey)) as { n: string; e: string };
 const jwks = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => Response.json({ keys: [{ kty: "RSA", kid: "k1", alg: "RS256", use: "sig", n: jwk.n, e: jwk.e }] }) });
 
-async function token(sub: string, opts: { exp?: number; key?: CryptoKey; kid?: string } = {}): Promise<string> {
+async function token(sub: string, opts: { exp?: number; key?: CryptoKey; kid?: string; iss?: string } = {}): Promise<string> {
   const enc = (o: object) => b64url(new TextEncoder().encode(JSON.stringify(o)));
   const head = enc({ alg: "RS256", kid: opts.kid ?? "k1", typ: "JWT" });
-  const body = enc({ sub, iss: "https://api.workos.com/user_management/client_test", exp: opts.exp ?? Math.floor(Date.now() / 1000) + 300 });
+  const body = enc({ sub, iss: opts.iss ?? "https://api.workos.com/user_management/client_test", exp: opts.exp ?? Math.floor(Date.now() / 1000) + 300 });
   const sig = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", opts.key ?? rsa.privateKey, new TextEncoder().encode(`${head}.${body}`));
   return `${head}.${body}.${b64url(new Uint8Array(sig))}`;
 }
@@ -66,6 +66,35 @@ describe("WorkOS token verification", () => {
     const forgedBody = b64url(new TextEncoder().encode(JSON.stringify({ sub: "admin", exp: 9999999999 })));
     expect(await human.verify(`${h}.${forgedBody}.${s}`)).toBeNull();
     expect(await human.verify("not.a.jwt")).toBeNull();
+  });
+});
+
+// Moving to a custom AuthKit domain (auth.example.com in place of ….authkit.app): for a while the relay
+// names both, and takes tokens from either, issued bare or with WorkOS's /user_management/<client> path.
+describe("AuthKit domains", () => {
+  test("a setting names one or several, comma-separated, without trailing slashes", () => {
+    expect(authkitDomains(undefined)).toEqual([]);
+    expect(authkitDomains("https://x.authkit.app/")).toEqual(["https://x.authkit.app"]);
+    expect(authkitDomains(" https://auth.example.com , https://x.authkit.app/,")).toEqual(["https://auth.example.com", "https://x.authkit.app"]);
+  });
+
+  test("while moving domains, tokens from either are taken, and only for this client", async () => {
+    const custom = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => Response.json({ keys: [] }) });
+    try {
+      const old = jwks.url.origin;
+      const now = custom.url.origin;
+      // What workosFromSettings builds for `${now},${old}`, minus api.workos.com's JWKS (no network in tests).
+      const auth = workosHumanAuth("client_test", authkitDomains(`${now},${old}/`).map((d) => `${d}/oauth2/jwks`));
+      expect(await auth.verify(await token("user_a", { iss: old }))).toBe("user_a");
+      expect(await auth.verify(await token("user_a", { iss: `${now}/` }))).toBe("user_a");
+      expect(await auth.verify(await token("user_a", { iss: `${now}/user_management/client_test` }))).toBe("user_a");
+      expect(await auth.verify(await token("user_a"))).toBe("user_a");
+      expect(await auth.verify(await token("user_a", { iss: `${now}/user_management/client_other` }))).toBeNull();
+      expect(await auth.verify(await token("user_a", { iss: "https://evil.example" }))).toBeNull();
+      expect(await auth.verify(await token("user_a", { iss: "https://api.workos.com/user_management/client_other" }))).toBeNull();
+    } finally {
+      custom.stop(true);
+    }
   });
 });
 

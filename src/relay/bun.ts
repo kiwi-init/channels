@@ -11,7 +11,7 @@ import * as Layer from "effect/Layer";
 import { CLOSE_CLOSED, CLOSE_REMOVED, PING, PONG } from "../protocol.ts";
 import { ChannelGone, NotFound, UpdateRequired } from "./failures.ts";
 import { clockLayer } from "./http.ts";
-import { devHostOk, devHumanAuth, devRequestOk, Human, HUMAN_HEADER, workosFromSettings, type HumanAuth } from "./human.ts";
+import { authkitDomains, devHostOk, devHumanAuth, devRequestOk, Human, HUMAN_HEADER, workosFromSettings, type HumanAuth } from "./human.ts";
 import { MAILBOX_TTL_MS } from "../mailbox.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
 import { clientAddress, parseTrustProxy, trustProxyFromArgs, writeAllowed, type TrustProxy } from "./address.ts";
@@ -288,7 +288,8 @@ Usage: ${cmd} [options]
   --web <dir>                   serve the dashboard from here (default web/dist when built; env KIWI_WEB)
   --no-web                      don't serve the dashboard
   --workos-client-id <id>       turn on sign-in with your WorkOS AuthKit app (env WORKOS_CLIENT_ID)
-  --workos-authkit-domain <url> your AuthKit domain, https://….authkit.app (env WORKOS_AUTHKIT_DOMAIN)
+  --workos-authkit-domain <url> your AuthKit domain, https://….authkit.app or your custom one; comma-separate
+                                both while moving to a custom domain (env WORKOS_AUTHKIT_DOMAIN)
   --dev-sign-in                 testing only: the token "dev:<name>" signs in as <name>, no password.
                                 Needs --hostname 127.0.0.1 (or localhost); refused on any other address.
   --trust-proxy [addr,cidr]     a reverse proxy sits in front (env KIWI_TRUST_PROXY=1, or a list).
@@ -314,7 +315,7 @@ export function runRelay(argv: string[], cmd = "bun src/relay/bun.ts"): void {
     const i = argv.indexOf(name);
     return (i >= 0 ? argv[i + 1] : undefined) ?? (process.env[env] || undefined);
   };
-  const authkitDomain = arg("--workos-authkit-domain", "WORKOS_AUTHKIT_DOMAIN")?.replace(/\/$/, "");
+  const authkitDomain = arg("--workos-authkit-domain", "WORKOS_AUTHKIT_DOMAIN");
   const hostname = arg("--hostname", "KIWI_HOSTNAME");
   const dev = argv.includes("--dev-sign-in");
   if (dev && !devHostOk(hostname)) {
@@ -331,7 +332,7 @@ export function runRelay(argv: string[], cmd = "bun src/relay/bun.ts"): void {
   const human = dev ? devHumanAuth() : workosFromSettings({ clientId: arg("--workos-client-id", "WORKOS_CLIENT_ID"), authkitDomain, apiKey: process.env.WORKOS_API_KEY || undefined });
   const builtWeb = resolve(import.meta.dir, "../../web/dist");
   const webDir = argv.includes("--no-web") ? undefined : (arg("--web", "KIWI_WEB") ?? (existsSync(join(builtWeb, "index.html")) ? builtWeb : undefined));
-  const connect = human ? ["https://api.workos.com", ...(authkitDomain ? [authkitDomain] : [])] : [];
+  const connect = human ? ["https://api.workos.com", ...authkitDomains(authkitDomain)] : [];
   const server = startRelay({
     port: Number(arg("--port", "PORT") ?? 8787),
     hostname,
