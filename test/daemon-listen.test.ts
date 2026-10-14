@@ -3,14 +3,16 @@
 // Against a real relay (startRelay), with the seat's home written the way a join would.
 
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
+import { Database } from "bun:sqlite";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Channel } from "../src/client.ts";
-import { saveConfig, saveIdentity } from "../src/config.ts";
-import { daemonListening, listenDaemon, startDaemon, type Daemon, type DaemonSubscription } from "../src/daemon.ts";
+import { loadConfig, saveConfig, saveIdentity } from "../src/config.ts";
+import { daemonListening, listenDaemon, startDaemon, type Daemon, type DaemonEvent, type DaemonSubscription } from "../src/daemon.ts";
 import { generateIdentity } from "../src/identity.ts";
-import type { Message } from "../src/protocol.ts";
+import type { Message, Presence } from "../src/protocol.ts";
+import { checked } from "./check.ts";
 import { startRelay } from "../src/relay/bun.ts";
 
 setDefaultTimeout(30_000);
@@ -24,6 +26,9 @@ let server: ReturnType<typeof startRelay> | undefined;
 let relay = "";
 let ownerCh: Channel;
 let daemon: Daemon | undefined;
+let code = "";
+let roomId = "";
+let agentPk = "";
 
 beforeAll(async () => {
   server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir });
@@ -32,6 +37,9 @@ beforeAll(async () => {
   const agent = await generateIdentity("claude");
   const made = await Channel.create(relay, owner, { name: "human" }, [{ ...agent, info: { name: "claude" } }]);
   ownerCh = new Channel(made.access, relay, owner);
+  code = made.code;
+  roomId = made.access.roomId;
+  agentPk = agent.pk;
   // The seat's home, the way a join leaves it: the channel config and the agent's key.
   saveConfig({ channels: { test: { ...(await Channel.resume(relay, made.code, agent)), relay, code: made.code, as: "claude" } } });
   saveIdentity(agent, made.access.roomId);
@@ -137,5 +145,172 @@ describe("the daemon's shared listening", () => {
       if (Date.now() > end) throw new Error("timed out waiting for return() to unsubscribe");
       await Bun.sleep(50);
     }
+  });
+});
+
+async function until(what: string, ok: () => boolean | Promise<boolean>, ms = 10_000): Promise<void> {
+  const end = Date.now() + ms;
+  while (!(await ok())) {
+    if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+    await Bun.sleep(50);
+  }
+}
+
+async function noSeats(): Promise<void> {
+  await until("every seat to close", async () => (await daemonListening()).length === 0);
+}
+
+describe("the daemon's seat does what a listener does (T332)", () => {
+  beforeAll(async () => {
+    await noSeats();
+    await daemon?.stop();
+    daemon = await startDaemon(undefined, { beaconMs: 300 });
+  });
+
+  test("it announces what a subscriber says, keeps a beacon, and answers a probe", async () => {
+    const heard: (Presence & { sigOk: boolean })[] = [];
+    let probe: ((p: { client: string; query: boolean }) => Promise<void>) | null = null;
+    const ctl = new AbortController();
+    void ownerCh.stream(await ownerCh.head(), () => {}, { signal: ctl.signal, onPresence: (p) => heard.push(p), onOpen: ({ presence }) => (probe = presence) });
+    const sub = await listenDaemon("test", "claude", cursor);
+    try {
+      await sub.presence({ client: "tail", role: "coder" });
+      const fromAgent = () => heard.filter((p) => p.pk === agentPk && !p.query);
+      await until("the announce", () => fromAgent().some((p) => p.client === "tail" && p.role === "coder"));
+      const before = fromAgent().length;
+      await until("a beacon", () => fromAgent().length >= before + 2);
+      await until("the owner's socket", () => probe !== null);
+      const n = fromAgent().length;
+      await probe!({ client: "probe", query: true });
+      await until("an answer to the probe", () => fromAgent().length > n, 3_000);
+    } finally {
+      sub.close();
+      ctl.abort();
+    }
+    await noSeats();
+  });
+
+  test("roster events reach subscribers, and a messages-only subscriber still gets messages", async () => {
+    const events: DaemonEvent[] = [];
+    const sub = await listenDaemon("test", "claude", cursor, { onEvent: (e) => events.push(e) });
+    const plain = await listenDaemon("test", "claude", cursor);
+    try {
+      await until("the open event", () => events.includes("open"));
+      const joiner = await generateIdentity("gemini");
+      const ask = await Channel.requestJoin(relay, code, joiner, { name: "gemini" });
+      await ownerCh.approve((await checked(ownerCh, relay, code, [{ id: joiner, requestId: ask.requestId }]))[0]!);
+      await until("the roster event", () => events.includes("roster"));
+      const seq = await ownerCh.send("after the roster");
+      expect((await waitBody(plain, "after the roster")).seq).toBe(seq);
+      cursor = seq;
+    } finally {
+      sub.close();
+      plain.close();
+    }
+    await noSeats();
+  });
+
+  test("read marks go out only when a subscriber asks", async () => {
+    const markOf = (): number | null => {
+      const db = new Database(join(dataDir, `${roomId}.sqlite`), { readonly: true });
+      try {
+        return (db.query("SELECT seq FROM reads WHERE pk = ?").get(agentPk) as { seq: number } | null)?.seq ?? null;
+      } finally {
+        db.close();
+      }
+    };
+    const before = markOf();
+    const sub = await listenDaemon("test", "claude", cursor);
+    try {
+      const seq = await ownerCh.send("read me");
+      await waitBody(sub, "read me");
+      await Bun.sleep(1_500);
+      expect(markOf()).toBe(before);
+      await sub.mark(seq);
+      await until("the read mark", () => markOf() === seq);
+      cursor = seq;
+    } finally {
+      sub.close();
+    }
+    await noSeats();
+  });
+
+  test("a seat opened while the relay is down waits for it, and says so", async () => {
+    const port = Number(server!.url.port);
+    server!.stop(true);
+    const statuses: string[] = [];
+    const pending = listenDaemon("test", "claude", cursor, { onStatus: (s) => statuses.push(s) });
+    await Bun.sleep(1_000);
+    server = startRelay({ port, hostname: "127.0.0.1", dataDir });
+    const sub = await pending;
+    try {
+      expect(statuses.some((s) => s.startsWith("can't reach the relay"))).toBe(true);
+      expect(statuses.some((s) => s.startsWith("reached the relay"))).toBe(true);
+      const seq = await ownerCh.send("back again");
+      expect((await waitBody(sub, "back again")).seq).toBe(seq);
+      cursor = seq;
+    } finally {
+      sub.close();
+    }
+    await noSeats();
+  });
+
+  test("the first asker leaving during the retry doesn't fail another waiter", async () => {
+    const port = Number(server!.url.port);
+    server!.stop(true);
+    const first = new AbortController();
+    const a = listenDaemon("test", "claude", cursor, { signal: first.signal }).catch((err: unknown) => err);
+    await Bun.sleep(200);
+    const b = listenDaemon("test", "claude", cursor);
+    await Bun.sleep(600);
+    first.abort();
+    await a;
+    await Bun.sleep(300);
+    server = startRelay({ port, hostname: "127.0.0.1", dataDir });
+    const sub = await b;
+    try {
+      const seq = await ownerCh.send("for the one still waiting");
+      expect((await waitBody(sub, "for the one still waiting")).seq).toBe(seq);
+      expect(await daemonListening()).toEqual([{ channel: "test", agent: "claude", subscribers: 1 }]);
+      cursor = seq;
+    } finally {
+      sub.close();
+    }
+    await noSeats();
+  });
+
+  test("a retry with nobody left waiting builds no seat", async () => {
+    const port = Number(server!.url.port);
+    server!.stop(true);
+    const gone = new AbortController();
+    const a = listenDaemon("test", "claude", cursor, { signal: gone.signal }).catch((err: unknown) => err);
+    await Bun.sleep(700);
+    gone.abort();
+    await a;
+    server = startRelay({ port, hostname: "127.0.0.1", dataDir });
+    await Bun.sleep(2_500);
+    expect(await daemonListening()).toEqual([]);
+    expect(daemon!.beacons()).toBe(0);
+  });
+
+  test("subscribers that come and go at once leave no beacon behind", async () => {
+    for (let i = 0; i < 15; i++) (await listenDaemon("test", "claude", cursor)).close();
+    await noSeats();
+    await Bun.sleep(1_000);
+    expect(daemon!.beacons()).toBe(0);
+  });
+
+  test("a key rotation is saved for the agent", async () => {
+    const sub = await listenDaemon("test", "claude", cursor);
+    try {
+      const epoch = await ownerCh.rotate();
+      const seq = await ownerCh.send("under the new key");
+      expect((await waitBody(sub, "under the new key")).seq).toBe(seq);
+      await until("the saved key", () => !!loadConfig().channels.test?.keys[String(epoch)]);
+      cursor = seq;
+    } finally {
+      sub.close();
+    }
+    await noSeats();
   });
 });
