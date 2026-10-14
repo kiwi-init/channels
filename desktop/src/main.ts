@@ -412,6 +412,9 @@ async function installCli(): Promise<{ path: string }> {
 
 // ---------- ipc ----------
 
+/** Set while kiwi:create-person is making the key (it awaits): a second call then is refused. */
+let makingPerson = false;
+
 function wireIpc(): void {
   // Synchronous snapshot at load; main decrypted once at startup (see loadStore).
   ipcMain.on("kiwi:snapshot-sync", (e) => (e.returnValue = snapshot()));
@@ -427,13 +430,21 @@ function wireIpc(): void {
     return norm;
   });
   ipcMain.handle("kiwi:create-person", async (_e, name: string) => {
-    // One person key, for good: every computer's certificate and channel seat is signed by it.
-    if (store.person) throw new Error("this app already has your person key");
-    const clean = name.replace(/[\u0000-\u001f\u007f-\u009f\u2028-\u2069]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "someone";
-    const id = await generateIdentity(clean);
-    const person: PersonView = { name: clean, pk: id.pk, sk: id.sk, xpk: id.xpk as string, xsk: id.xsk as string };
-    mutate((s) => (s.person = person));
-    return person;
+    // One person key, for good: every computer's certificate and channel seat is signed by it. Making
+    // one awaits, so a second call while the first is still making it is refused too, and the store is
+    // checked again right before the write.
+    if (store.person || makingPerson) throw new Error("this app already has your person key");
+    makingPerson = true;
+    try {
+      const clean = name.replace(/[\u0000-\u001f\u007f-\u009f\u2028-\u2069]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "someone";
+      const id = await generateIdentity(clean);
+      const person: PersonView = { name: clean, pk: id.pk, sk: id.sk, xpk: id.xpk as string, xsk: id.xsk as string };
+      if (store.person) throw new Error("this app already has your person key");
+      mutate((s) => (s.person = person));
+      return person;
+    } finally {
+      makingPerson = false;
+    }
   });
   ipcMain.handle("kiwi:save-channels", (_e, channels: ChannelIdentityView[]) => mutate((s) => (s.channels = channels)));
   ipcMain.handle("kiwi:save-computers", (_e, computers: ComputerView[]) => mutate((s) => (s.computers = computers)));
