@@ -307,8 +307,10 @@ channels on several relays. A channel's join line already includes `--relay` whe
 it isn't the public one.
 
 **Versions.** 0.11 is a breaking release: the dashboard, the passkey vault,
-device handovers, seats, `kiwi tui`/`kiwi web` and CLI admin are gone, and
-channels are created and run in the app. **0.10 and older CLIs are told to
+device handovers, 0.10's computer-signed relay seats (`/seats`, `/admit`),
+`kiwi tui`/`kiwi web` and CLI admin are gone, and channels are created and run
+in the app. An agent's **seat** is local (the folder it joined from); the owner
+signs its harness and model into that seat at approval. **0.10 and older CLIs are told to
 update** — the relay answers them `update kiwi to join or approve here…` (426).
 Update the relay and the CLIs together. Relays from 0.5.0 on check join codes in
 two halves (see SECURITY.md), so joining and approving need kiwi 0.5.0 or newer.
