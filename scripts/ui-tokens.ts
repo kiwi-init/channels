@@ -26,7 +26,7 @@ for (const f of files(ROOT)) {
     });
 }
 if (bad.length) {
-  console.error(`Use the type steps (text-stamp, text-meta, text-ui, text-body, text-title, text-display) and radii (rounded-row, rounded-ctl, rounded-card, rounded-bubble):\n${bad.map((b) => `  ${b}`).join("\n")}`);
+  console.error(`Use the type steps (text-stamp, text-meta, text-ui, text-body, text-title, text-display) and radii (rounded-row, rounded-ctl, rounded-card, rounded-bubble, rounded-dock):\n${bad.map((b) => `  ${b}`).join("\n")}`);
   process.exit(1);
 }
 console.log("ui tokens: ok");

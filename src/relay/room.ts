@@ -51,7 +51,6 @@ import {
 } from "./failures.ts";
 import { verify, verifyText } from "../identity.ts";
 import { commitTo, NONCE_RE, ownerNonceStatement } from "../sas.ts";
-import { PAIR_NONCE_RE, PAIR_TTL_MS, pairCommit, type PairRow } from "../pair.ts";
 import {
   CLOSE_CLOSED,
   CLOSE_REMOVED,
@@ -101,13 +100,6 @@ export interface DirectoryEntry {
   member: boolean;
   agents: number;
   at: number;
-}
-
-/** One channel's use of its quotas. */
-export interface RoomUsage {
-  messagesToday: number;
-  bytes: number;
-  members: number;
 }
 
 export interface DirectoryUpdate {
@@ -166,9 +158,9 @@ const REQUEST_TTL_MS = 60 * 60_000;
 const READ_ONLY = "the owner lets you only read in this channel";
 
 /**
- * Request columns added after the first rooms existed. Requests know whether they come from an
- * agent or a human, and which signed-in human vouches for an agent (its sponsor: the person whose
- * linked computer it joined from).
+ * Request columns added after the first rooms existed. The join check (see sas.ts): the joiner's
+ * commit, the owner's signed nonce, the joiner's reveal. `sponsor_*` columns stay for rooms from
+ * before 0.11 (the relay vouched for agents then); new rooms leave them empty and nobody reads them.
  */
 const REQUEST_COLUMNS = [
   ["kind", "TEXT NOT NULL DEFAULT 'agent'"],
@@ -404,33 +396,10 @@ export class RoomDb {
     return t ? (JSON.parse(t) as { iv: string; ct: string }) : null;
   }
 
-  /** Signed-in people tied to this channel now: its owner, people in it, and people whose agents are in it. */
-  links(): Map<string, { owner: boolean; member: boolean; agents: number }> {
-    this.migrate();
-    const links = new Map<string, { owner: boolean; member: boolean; agents: number }>();
-    const owner = this.ownerUser();
-    if (owner) links.set(owner, { owner: true, member: true, agents: 0 });
-    const rows = this.sql.all<{ kind: string; user: string }>(
-      "SELECT r.kind AS kind, r.sponsor_user AS user FROM requests r JOIN members m ON m.pk = r.pk WHERE r.status = 'approved' AND m.active = 1 AND r.sponsor_user IS NOT NULL",
-    );
-    for (const r of rows) {
-      const l = links.get(r.user) ?? { owner: false, member: false, agents: 0 };
-      if (r.kind === "human") l.member = true;
-      else l.agents++;
-      links.set(r.user, l);
-    }
-    return links;
-  }
-
-  /** Who this channel is on the list of, as of the last directory update. */
-  linked(): string[] {
-    return JSON.parse(this.get("linked") ?? "[]") as string[];
-  }
-
-  /** Before closing: drop this channel from every list it was on. */
+  /** Before closing: drop this channel from its owner's owned-channel count. */
   unlinkAll(): DirectoryUpdate[] {
-    const users = new Set([...this.linked(), ...(this.ownerUser() ? [this.ownerUser()!] : [])]);
-    return [...users].map((user) => ({ user, room: this.roomId, entry: null }));
+    const owner = this.ownerUser();
+    return owner ? [{ user: owner, room: this.roomId, entry: null }] : [];
   }
 
   /** `read_only`: the relay refuses that key's posts, so the owner can check the bit matches what they set. */
@@ -438,10 +407,10 @@ export class RoomDb {
     return this.sql.all("SELECT pk, xpk, rec, rec_e AS e, active, read_only FROM members ORDER BY since");
   }
 
-  pendingRequests(): (RequestBody & { kind: string; sponsorUser: string | null; sponsorName: string | null; ownerNonce: string | null; reveal: string | null })[] {
+  pendingRequests(): (RequestBody & { kind: string; ownerNonce: string | null; reveal: string | null })[] {
     this.migrate();
     return this.sql.all(
-      "SELECT id, pk, xpk, box, sig, ts, commit_to AS \"commit\", owner_nonce AS ownerNonce, reveal, kind, sponsor_user AS sponsorUser, sponsor_name AS sponsorName FROM requests WHERE status = 'pending' AND commit_to IS NOT NULL ORDER BY COALESCE(received, ts)",
+      "SELECT id, pk, xpk, box, sig, ts, commit_to AS \"commit\", owner_nonce AS ownerNonce, reveal, kind FROM requests WHERE status = 'pending' AND commit_to IS NOT NULL ORDER BY COALESCE(received, ts)",
     );
   }
 
@@ -557,12 +526,6 @@ export const idleExpired: Effect.Effect<boolean, never, RoomServices> = Effect.g
 /** Expire exactly as a close would: off everyone's channel list, then every row gone. */
 export const expire: Effect.Effect<Effects, never, RoomStore> = Effect.map(RoomStore, (db) => ({ directory: db.unlinkAll(), wipe: true }));
 
-/** What this channel uses, for its owner's usage page. Counts only: nothing sealed. */
-export const usage: Effect.Effect<RoomUsage, never, RoomStore> = Effect.gen(function* () {
-  const db = yield* RoomStore;
-  return { messagesToday: db.messagesOn(yield* Clock.currentTimeMillis), bytes: db.storedBytes(), members: db.activeMembers() };
-});
-
 // ---------- lifecycle ----------
 
 /**
@@ -632,22 +595,20 @@ export const setSettings = Effect.fn("Room.setSettings")(function* (settings: un
   db.set("settings", JSON.stringify(t));
 });
 
-// ---------- who this channel is listed for ----------
+// ---------- who owns this channel ----------
 
-/** Bring everyone's channel list in line with who's tied to this channel now. */
+/** The owner's owned-channel count, for the quota on POST /create: on after create, off after close. */
 export const directory: Effect.Effect<DirectoryUpdate[], ChannelGone, RoomStore> = Effect.gen(function* () {
   const db = yield* RoomStore;
+  const owner = db.ownerUser();
+  if (!owner) return [];
   const { ownerPk } = yield* readMeta;
   const code = encodeJoinCode({ roomId: db.roomId, ownerFp: yield* Effect.promise(() => ownerFingerprint(ownerPk)) });
   const at = Number(db.get("created") ?? Date.now());
-  const links = db.links();
-  const updates: DirectoryUpdate[] = [...links].map(([user, l]) => ({ user, room: db.roomId, entry: { room: db.roomId, code, ...l, at } }));
-  for (const user of db.linked()) if (!links.has(user)) updates.push({ user, room: db.roomId, entry: null });
-  db.set("linked", JSON.stringify([...links.keys()]));
-  return updates;
+  return [{ user: owner, room: db.roomId, entry: { room: db.roomId, code, owner: true, member: true, agents: 0, at } }];
 });
 
-const putMember = Effect.fn("Room.putMember")(function* (m: MemberBody, epoch: number, admitsUntil: number | null = null) {
+const putMember = Effect.fn("Room.putMember")(function* (m: MemberBody, epoch: number) {
   const db = yield* RoomStore;
   if (!fits(MemberRecord, m)) return yield* new BadRequest({ message: "bad member" });
   db.sql.run(
@@ -662,194 +623,16 @@ const putMember = Effect.fn("Room.putMember")(function* (m: MemberBody, epoch: n
   for (const [e, wrapped] of Object.entries(m.keys ?? {})) {
     db.sql.run("INSERT OR REPLACE INTO keys (pk, e, wrapped) VALUES (?, ?, ?)", m.pk, Number(e), wrapped);
   }
-  db.migrate();
-  db.sql.run("UPDATE members SET admits_until = ?, admitted_by = NULL WHERE pk = ?", admitsUntil, m.pk);
-});
-
-/** The longest a seat's grant may run from now: the owner's client asks for 90 days. */
-const MAX_SEAT_MS = 100 * 86_400_000;
-/** Agents one computer may let in per channel per day. */
-export const ADMITS_PER_DAY = 20;
-
-/**
- * Seat one of the owner's linked computers: a member with no join request (the owner checked the
- * computer's code when linking it), read-only, whose `admitsUntil` lets it admit its own agents.
- */
-export const seat = Effect.fn("Room.seat")(function* (body: MemberBody) {
-  const db = yield* RoomStore;
-  const policy = yield* Policy;
-  const { epoch, ownerPk } = yield* readMeta;
-  const until = body.admitsUntil;
-  if (typeof until !== "number" || !Number.isInteger(until) || until <= Date.now() || until > Date.now() + MAX_SEAT_MS) return yield* new BadRequest({ message: "a seat needs an admitsUntil within the next 100 days" });
-  if (body.post !== false) return yield* new BadRequest({ message: "a computer's seat is read-only" });
-  if (body.pk === ownerPk) return yield* new BadRequest({ message: "the owner's key can't be a computer's seat" });
-  const most = policy.membersPerChannel;
-  if (most && !db.isMember(body.pk) && db.activeMembers() >= most) {
-    return yield* new TooMany({ message: `this channel has ${most} members, the most this relay allows; remove someone to let another in` });
-  }
-  for (let e = 0; e <= epoch; e++) {
-    if (!body.keys?.[String(e)]) return yield* new BadRequest({ message: `missing wrapped key for epoch ${e}` });
-  }
-  yield* putMember(body, epoch, until);
-});
-
-/** Whether this member's seat lets it admit agents now. */
-export const admitsNow = Effect.fn("Room.admitsNow")(function* (pk: string) {
-  const db = yield* RoomStore;
-  db.migrate();
-  const r = db.sql.all<{ until: number | null }>("SELECT admits_until AS until FROM members WHERE pk = ? AND active = 1", pk)[0];
-  return !!r?.until && r.until > Date.now();
-});
-
-/**
- * A seated computer lets one of its own agents in. Its record is the computer's signature (clients
- * check it against the seat the owner signed); the relay checks the seat is live, that the key isn't
- * anyone else's, and how many it let in today.
- */
-export const admit = Effect.fn("Room.admit")(function* (admitter: string, body: MemberBody) {
-  const db = yield* RoomStore;
-  const policy = yield* Policy;
-  const { epoch, ownerPk } = yield* readMeta;
-  if (body.pk === ownerPk || body.pk === admitter) return yield* new BadRequest({ message: "a computer lets in its agents, not itself or the owner" });
-  const was = db.sql.all<{ active: number; by: string | null }>("SELECT active, admitted_by AS by FROM members WHERE pk = ?", body.pk)[0];
-  // Its own agent again (under another name, after a clash) is fine, until the owner signs anything for
-  // that key (setRecord, setCanPost clear admitted_by). Anyone else's key, or a key that left, never is.
-  if (was && (was.by !== admitter || !was.active)) return yield* new Conflict({ message: "that key isn't this computer's to let in" });
-  if (!was) {
-    const today = db.sql.all<{ n: number }>("SELECT COUNT(*) AS n FROM members WHERE admitted_by = ? AND since > ?", admitter, Date.now() - 86_400_000)[0]?.n ?? 0;
-    if (today >= ADMITS_PER_DAY) return yield* new TooMany({ message: `this computer let in ${ADMITS_PER_DAY} agents here today, the most it may; the owner can still approve more` });
-    const most = policy.membersPerChannel;
-    if (most && db.activeMembers() >= most) return yield* new TooMany({ message: `this channel has ${most} members, the most this relay allows; remove someone to let another in` });
-  }
-  for (let e = 0; e <= epoch; e++) {
-    if (!body.keys?.[String(e)]) return yield* new BadRequest({ message: `missing wrapped key for epoch ${e}` });
-  }
-  yield* putMember({ pk: body.pk, xpk: body.xpk, rec: body.rec, keys: body.keys }, epoch);
-  db.sql.run("UPDATE members SET admitted_by = ? WHERE pk = ?", admitter, body.pk);
-});
-
-// ---------- pairing a terminal with a person's seat (pair.ts) ----------
-
-/**
- * Pairing slots a member's browser opens per day. A slot is the only way a terminal can ask, so nobody
- * holding the join code can fill someone else's pairing, or use up anyone's share but their own.
- */
-export const PAIR_SLOTS_PER_DAY = 50;
-
-function pairsTable(db: RoomDb): void {
-  db.sql.run(
-    "CREATE TABLE IF NOT EXISTS pairs (id TEXT PRIMARY KEY, pk TEXT NOT NULL UNIQUE, xpk TEXT NOT NULL, commit_to TEXT NOT NULL, wnonce TEXT, tnonce TEXT, box TEXT, ts INTEGER NOT NULL, label TEXT, slot TEXT NOT NULL UNIQUE)",
-  );
-  db.sql.run("CREATE TABLE IF NOT EXISTS pair_slots (slot TEXT PRIMARY KEY, pk TEXT NOT NULL, ts INTEGER NOT NULL, used INTEGER NOT NULL DEFAULT 0)");
-  db.sql.run("DELETE FROM pairs WHERE ts < ?", Date.now() - PAIR_TTL_MS);
-  db.sql.run("DELETE FROM pair_slots WHERE ts < ?", Date.now() - 86_400_000);
-}
-
-const KEY_RE = /^[A-Za-z0-9_-]{43}$/;
-/** Hex, so it never starts with "-" (a pasted `--pair -x…` would read as a missing value). */
-const SLOT_RE = /^[0-9a-f]{32}$/;
-
-/** A member's browser opens a slot for one terminal to pair through (it goes in the command it shows). */
-export const openPairSlot = Effect.fn("Room.openPairSlot")(function* (pk: string) {
-  const db = yield* RoomStore;
-  pairsTable(db);
-  const today = db.sql.all<{ n: number }>("SELECT COUNT(*) AS n FROM pair_slots WHERE pk = ?", pk)[0]?.n ?? 0;
-  if (today >= PAIR_SLOTS_PER_DAY) return yield* new TooMany({ message: `you opened ${PAIR_SLOTS_PER_DAY} pairings today, the most a day; try again tomorrow` });
-  const slot = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, "0")).join("");
-  db.sql.run("INSERT INTO pair_slots (slot, pk, ts) VALUES (?, ?, ?)", slot, pk, Date.now());
-  return { slot };
-});
-
-/** A terminal asks to pair through a slot: its one-time key (it signed the request with `pk`) and its commit. Asking again resumes. */
-export const askPair = Effect.fn("Room.askPair")(function* (pk: string, body: { xpk?: unknown; commit?: unknown; label?: unknown; slot?: unknown }) {
-  const db = yield* RoomStore;
-  yield* readMeta;
-  const { xpk, commit, slot } = body ?? {};
-  // What the terminal says it is (user@host), for the person to tell terminals apart; never trusted for more.
-  const label = typeof body?.label === "string" ? body.label.replace(/[^\x20-\x7e]/g, "").slice(0, 64) || null : null;
-  if (typeof xpk !== "string" || !KEY_RE.test(xpk) || typeof commit !== "string" || !PAIR_NONCE_RE.test(commit)) return yield* new BadRequest({ message: "send the terminal's key and its commit" });
-  if (typeof slot !== "string" || !SLOT_RE.test(slot)) return yield* new BadRequest({ message: "pair with the command from the channel's menu → Use in a terminal (it carries a pairing slot)" });
-  pairsTable(db);
-  const had = db.sql.all<{ id: string; slot: string }>("SELECT id, slot FROM pairs WHERE pk = ?", pk)[0];
-  if (had) return had.slot === slot ? { id: had.id, fresh: false } : yield* new Conflict({ message: "this terminal key already asked through another slot" });
-  const open = db.sql.all<{ ts: number; used: number }>("SELECT ts, used FROM pair_slots WHERE slot = ?", slot)[0];
-  if (!open || open.ts < Date.now() - PAIR_TTL_MS) return yield* new NotFound({ message: "that pairing slot is gone (it lasts 10 minutes): open Use in a terminal again" });
-  // One terminal per slot, ever: spent the moment one asks, so a command left in shell history pairs nothing later.
-  if (open.used || db.sql.all("SELECT 1 FROM pairs WHERE slot = ?", slot).length) return yield* new Conflict({ message: "another terminal already asked through that slot: open Use in a terminal again" });
-  db.sql.run("UPDATE pair_slots SET used = 1 WHERE slot = ?", slot);
-  const id = crypto.randomUUID();
-  db.sql.run("INSERT INTO pairs (id, pk, xpk, commit_to, ts, label, slot) VALUES (?, ?, ?, ?, ?, ?, ?)", id, pk, xpk, commit, Date.now(), label, slot);
-  return { id, fresh: true };
-});
-
-/** The pairing waiting in a slot, for the browser that opened it. */
-export const pendingPairs = Effect.fn("Room.pendingPairs")(function* (slot: string | null) {
-  const db = yield* RoomStore;
-  if (!slot || !SLOT_RE.test(slot)) return yield* new BadRequest({ message: "say which pairing slot" });
-  pairsTable(db);
-  return db.sql.all<PairRow>("SELECT id, pk, xpk, commit_to AS \"commit\", wnonce, tnonce, ts, label FROM pairs WHERE slot = ? AND box IS NULL", slot);
-});
-
-/** The row with this id in this slot: knowing the slot is what lets a browser act on it. */
-function inSlot(db: RoomDb, id: string, slot: unknown): boolean {
-  return typeof slot === "string" && SLOT_RE.test(slot) && db.sql.all("SELECT 1 FROM pairs WHERE id = ? AND slot = ?", id, slot).length > 0;
-}
-
-/** A browser's half of the code: once, before the terminal reveals its own. */
-export const pairNonceFromBrowser = Effect.fn("Room.pairNonce")(function* (id: string, nonce: unknown, slot: unknown) {
-  const db = yield* RoomStore;
-  if (typeof nonce !== "string" || !PAIR_NONCE_RE.test(nonce)) return yield* new BadRequest({ message: "bad nonce" });
-  pairsTable(db);
-  if (!inSlot(db, id, slot)) return yield* new NotFound({ message: "no such pairing" });
-  db.sql.run("UPDATE pairs SET wnonce = ? WHERE id = ? AND wnonce IS NULL", nonce, id);
-  return { wnonce: db.sql.all<{ w: string }>("SELECT wnonce AS w FROM pairs WHERE id = ?", id)[0]!.w };
-});
-
-/** The terminal reveals its nonce, once the browser's is in. It has to match its commit. */
-export const revealPair = Effect.fn("Room.revealPair")(function* (id: string, pk: string, nonce: unknown) {
-  const db = yield* RoomStore;
-  if (typeof nonce !== "string" || !PAIR_NONCE_RE.test(nonce)) return yield* new BadRequest({ message: "bad nonce" });
-  pairsTable(db);
-  const r = db.sql.all<{ pk: string; xpk: string; commit: string; wnonce: string | null; tnonce: string | null }>("SELECT pk, xpk, commit_to AS \"commit\", wnonce, tnonce FROM pairs WHERE id = ?", id)[0];
-  if (!r || r.pk !== pk) return yield* new NotFound({ message: "no such pairing" });
-  if (!r.wnonce) return yield* new Conflict({ message: "nobody has opened this pairing yet" });
-  if ((yield* Effect.promise(() => pairCommit(db.roomId, r.pk, r.xpk, nonce))) !== r.commit) return yield* new BadRequest({ message: "that nonce isn't the one this terminal committed to" });
-  if (!r.tnonce) db.sql.run("UPDATE pairs SET tnonce = ? WHERE id = ?", nonce, id);
-  return { revealed: true };
-});
-
-/** The person approved: the seat, sealed to the terminal's one-time key. */
-export const answerPair = Effect.fn("Room.answerPair")(function* (id: string, box: unknown, slot: unknown) {
-  const db = yield* RoomStore;
-  if (typeof box !== "string" || !box) return yield* new BadRequest({ message: "send the sealed seat" });
-  if (box.length > 8_192) return yield* new TooLarge({ message: "sealed seat too large" });
-  pairsTable(db);
-  if (!inSlot(db, id, slot)) return yield* new NotFound({ message: "no such pairing (it waits 10 minutes)" });
-  const r = db.sql.all<{ tnonce: string | null; box: string | null }>("SELECT tnonce, box FROM pairs WHERE id = ?", id)[0]!;
-  if (!r.tnonce) return yield* new Conflict({ message: "the terminal hasn't shown its code yet" });
-  if (r.box) return yield* new Conflict({ message: "this pairing was already answered" });
-  db.sql.run("UPDATE pairs SET box = ? WHERE id = ?", box, id);
-  return { answered: true };
-});
-
-/** The terminal checks on its pairing: the browser's nonce, then the sealed seat (handed over once). */
-export const pairStatus = Effect.fn("Room.pairStatus")(function* (id: string, pk: string) {
-  const db = yield* RoomStore;
-  pairsTable(db);
-  const r = db.sql.all<{ pk: string; wnonce: string | null; tnonce: string | null; box: string | null }>("SELECT pk, wnonce, tnonce, box FROM pairs WHERE id = ?", id)[0];
-  if (!r || r.pk !== pk) return yield* new NotFound({ message: "no such pairing (it waits 10 minutes)" });
-  if (r.box) db.sql.run("DELETE FROM pairs WHERE id = ?", id);
-  return { wnonce: r.wnonce, revealed: !!r.tnonce, box: r.box };
 });
 
 // ---------- join requests ----------
 
 /**
- * File a join request. With `human` set, it's a signed-in person joining for
- * themself (they are their own sponsor); otherwise it's an agent, which on a
- * sign-in relay arrives vouched for by the person whose computer it joined from.
+ * File a join request. The requester's name and role are sealed to the owner (the relay can't
+ * read them); the relay checks only the signature, the join-check commit and the room's own
+ * limits. Who vouches for whom is the owner's call, from the sealed claims, never the relay's.
  */
-export const request = Effect.fn("Room.request")(function* (body: RequestBody, human: { user: string; name: string } | null = null, vouchUser: string | null = null) {
+export const request = Effect.fn("Room.request")(function* (body: RequestBody) {
   const db = yield* RoomStore;
   yield* readMeta;
   db.migrate();
@@ -867,8 +650,6 @@ export const request = Effect.fn("Room.request")(function* (body: RequestBody, h
   if (existing?.status === "denied") return yield* new Denied({ message: "this key was denied" });
   if (db.sql.all("SELECT 1 FROM members WHERE pk = ? AND active = 0", pk).length) return yield* new Removed({ message: "this key was removed; join with a new identity" });
   if (existing) {
-    // Asking again from a computer its person has since linked: the vouch applies now.
-    if (vouchUser && !human) db.sql.run("UPDATE requests SET sponsor_user = ? WHERE id = ? AND status = 'pending' AND sponsor_user IS NULL AND kind = 'agent'", vouchUser, existing.id);
     // A joiner that lost its nonce starts the check over; the owner signs the new commit.
     db.sql.run(
       "UPDATE requests SET commit_to = ?, box = ?, sig = ?, ts = ?, owner_nonce = NULL, reveal = NULL WHERE id = ? AND status = 'pending' AND commit_to IS NOT ?",
@@ -884,21 +665,7 @@ export const request = Effect.fn("Room.request")(function* (body: RequestBody, h
   const pending = db.sql.all<{ n: number }>("SELECT COUNT(*) AS n FROM requests WHERE status = 'pending'")[0]!.n;
   if (pending >= MAX_PENDING) return yield* new TooMany({ message: "too many pending join requests" });
   const id = crypto.randomUUID();
-  db.sql.run(
-    "INSERT INTO requests (id, pk, xpk, box, sig, ts, status, kind, sponsor_user, sponsor_name, received, commit_to) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, NULL, ?, ?)",
-    id,
-    pk,
-    xpk,
-    box,
-    sig,
-    ts,
-    human ? "human" : "agent",
-    // Only the sign-in user id is kept; names are looked up when the owner reads requests.
-    // An agent from a computer its person linked arrives already vouched for by them.
-    human?.user ?? vouchUser ?? null,
-    Date.now(),
-    commit,
-  );
+  db.sql.run("INSERT INTO requests (id, pk, xpk, box, sig, ts, status, kind, received, commit_to) VALUES (?, ?, ?, ?, ?, ?, 'pending', 'agent', ?, ?)", id, pk, xpk, box, sig, ts, Date.now(), commit);
   return { id, fresh: true };
 });
 
@@ -907,17 +674,14 @@ export const requestStatus = Effect.fn("Room.requestStatus")(function* (id: stri
   const db = yield* RoomStore;
   yield* readMeta;
   db.migrate();
-  const r = db.sql.all<{ pk: string; status: string; sponsor_user: string | null; owner_nonce: string | null; reveal: string | null }>(
-    "SELECT pk, status, sponsor_user, owner_nonce, reveal FROM requests WHERE id = ?",
-    id,
-  )[0];
+  const r = db.sql.all<{ pk: string; status: string; owner_nonce: string | null; reveal: string | null }>("SELECT pk, status, owner_nonce, reveal FROM requests WHERE id = ?", id)[0];
   if (!r || r.pk !== pk) return yield* new NotFound({ message: "no such request" });
-  if (r.status === "pending") return { status: r.status, sponsored: !!r.sponsor_user, ownerNonce: r.owner_nonce, revealed: !!r.reveal } satisfies RequestStatus;
-  if (r.status !== "approved" || !db.isMember(pk)) return { status: r.status, sponsored: !!r.sponsor_user } satisfies RequestStatus;
-  return { status: "approved", sponsored: !!r.sponsor_user, ...(yield* keysFor(pk)) } satisfies RequestStatus;
+  if (r.status === "pending") return { status: r.status, ownerNonce: r.owner_nonce, revealed: !!r.reveal } satisfies RequestStatus;
+  if (r.status !== "approved" || !db.isMember(pk)) return { status: r.status } satisfies RequestStatus;
+  return { status: "approved", ...(yield* keysFor(pk)) } satisfies RequestStatus;
 });
 
-type RequestStatus = { status: string; sponsored: boolean; ownerNonce?: string | null; revealed?: boolean; epoch?: number; keys?: Record<string, string> };
+type RequestStatus = { status: string; ownerNonce?: string | null; revealed?: boolean; epoch?: number; keys?: Record<string, string> };
 
 const pendingCheck = Effect.fn("Room.pendingCheck")(function* (id: string) {
   const db = yield* RoomStore;
@@ -965,15 +729,6 @@ export const requireChecked = Effect.fn("Room.requireChecked")(function* (reques
   if (!r.reveal) return yield* new Conflict({ message: "this request hasn't finished its code check yet" });
 });
 
-/** On a sign-in relay, agents need their human's vouch before the owner can admit them. */
-export const requireSponsor = Effect.fn("Room.requireSponsor")(function* (request: string | undefined, pk: string) {
-  const db = yield* RoomStore;
-  db.migrate();
-  const r = request ? db.sql.all<{ pk: string; sponsor_user: string | null }>("SELECT pk, sponsor_user FROM requests WHERE id = ?", request)[0] : undefined;
-  if (!r || r.pk !== pk) return yield* new BadRequest({ message: "approve a pending request" });
-  if (!r.sponsor_user) return yield* new Conflict({ message: "this agent wasn't vouched for by a person's linked computer" });
-});
-
 // ---------- members & keys ----------
 
 /**
@@ -1014,20 +769,14 @@ export const keysFor = Effect.fn("Room.keysFor")(function* (pk: string) {
  * The owner re-signs a member's record when what they may do changes (sealed: the relay can't read
  * it), and sets the "can post" bit with it, in one step. `e` is the epoch whose key sealed it.
  */
-export const setRecord = Effect.fn("Room.setRecord")(function* (pk: string, rec: string, e: number, post: boolean, admitsUntil?: number | null) {
+export const setRecord = Effect.fn("Room.setRecord")(function* (pk: string, rec: string, e: number, post: boolean) {
   const db = yield* RoomStore;
   if (pk === (yield* readMeta).ownerPk) return yield* new BadRequest({ message: "the owner's record isn't changed this way" });
   if (!db.isMember(pk)) return yield* new NotFound({ message: "not a member" });
   if (!Number.isInteger(e) || e < 0 || e > (yield* readMeta).epoch) return yield* new BadRequest({ message: "no such epoch" });
   if (rec.length > 8_192) return yield* new TooLarge({ message: "record too large" });
-  // The owner's word on this key now: its computer can't let it in again over the top (admit refuses).
   db.migrate();
   db.sql.run("UPDATE members SET rec = ?, rec_e = ?, read_only = ?, admitted_by = NULL WHERE pk = ?", rec, e, post ? 0 : 1, pk);
-  if (admitsUntil !== undefined) {
-    if (admitsUntil !== null && (!Number.isInteger(admitsUntil) || admitsUntil > Date.now() + MAX_SEAT_MS)) return yield* new BadRequest({ message: "admitsUntil runs at most 100 days" });
-    db.migrate();
-    db.sql.run("UPDATE members SET admits_until = ? WHERE pk = ?", admitsUntil, pk);
-  }
 });
 
 /** Whether a member may post (the owner's scope.set says what they may do; this is the bit the relay enforces). */
@@ -1084,8 +833,6 @@ export interface MemberBody {
   keys?: Record<string, string>;
   /** False for a member the owner lets only read: the relay refuses their messages. */
   post?: boolean;
-  /** A linked computer's seat: until when it may admit its own agents. */
-  admitsUntil?: number;
 }
 
 export interface CreateBody {
@@ -1204,24 +951,7 @@ export function parseRoomPath(pathname: string): { roomId: string; rest: string 
 
 export { CLOSE_CLOSED, CLOSE_REMOVED };
 
-/** A channel's newest message: its seq, and when it arrived. */
-export interface RoomHead {
-  head: number;
-  last: number;
-}
-
-/**
- * A channel's newest message, read without a RoomDb: no migration, nothing written, and a
- * channel with no tables (closed, or never made here) is null rather than a new empty room.
- */
-export function readHead(sql: Sql): RoomHead | null {
-  if (!sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'meta'").length) return null;
-  if (!sql.all("SELECT 1 FROM meta WHERE k = 'owner_pk'").length) return null;
-  const top = sql.all<{ seq: number; ts: number }>("SELECT seq, ts FROM msgs ORDER BY seq DESC LIMIT 1")[0];
-  return { head: top?.seq ?? 0, last: top?.ts ?? 0 };
-}
-
-/** Relay-wide settings the web app needs: which WorkOS client to sign in with, if any. */
+/** Relay-wide settings the app needs: which WorkOS client to sign in with (to create), if any. Shape: { workosClientId, dev? }. */
 export function relayConfig(human: HumanAuth | null): Response {
   return Response.json({ workosClientId: human?.clientId ?? null, ...(human?.dev ? { dev: true } : {}) });
 }

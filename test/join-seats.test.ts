@@ -1,6 +1,7 @@
 // Joining without busywork: no --as (agents are called by what they run in, made unique by the
 // owner's side), a seat per agent in its checkout (no -c/--as afterwards, two agents in one checkout
 // each act as themselves, a restart takes its seat back), and Claude Code's hooks doing the listening.
+import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -9,7 +10,7 @@ import { startRelay } from "../src/relay/bun.ts";
 
 setDefaultTimeout(60_000);
 
-const MC = ["bun", join(import.meta.dir, "../src/cli/main.ts")];
+const MC = [process.execPath, join(import.meta.dir, "../src/cli/main.ts")];
 const dataDir = mkdtempSync(join(tmpdir(), "kiwi-js-relay-"));
 const claudeDir = mkdtempSync(join(tmpdir(), "kiwi-js-claude-"));
 const made: string[] = [dataDir, claudeDir];
@@ -37,7 +38,7 @@ const DEAD = String(2 ** 22 + 4242);
 type Env = Record<string, string>;
 
 function spawn(home: string, args: string[], env: Env = {}, cwd = home, stdin?: string) {
-  return Bun.spawn([...MC, ...args], {
+  return Bun.spawn(kiwiCmd(args), {
     cwd,
     // The owner's person seat (--as human) runs from a person's terminal, never an agent's harness.
     env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, CLAUDE_PROJECT_DIR: "", ...env, ...(args[0] === "--as" && args[1] === "human" ? { CLAUDECODE: "" } : {}) },

@@ -2,6 +2,7 @@
 // Adversarial escape attempts live in sh-escape.test.ts; this covers what the files hold
 // and the guarantees the shell is built with.
 
+import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -180,7 +181,7 @@ describe("kiwi sh, end to end", () => {
   const owner = mkdtempSync(join(tmpdir(), "kiwi-sh-owner-"));
   let server: ReturnType<typeof startRelay>;
   const kiwi = async (...args: string[]) => {
-    const p = Bun.spawn(["bun", join(import.meta.dir, "../src/cli/main.ts"), ...args], {
+    const p = Bun.spawn(kiwiCmd(args), {
       cwd: owner,
       env: { ...process.env, KIWI_HOME: owner, KIWI_RELAY: server.url.origin, CLAUDE_CONFIG_DIR: owner, CLAUDECODE: "" },
       stdin: "ignore",

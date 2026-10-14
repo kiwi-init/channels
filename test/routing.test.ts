@@ -42,7 +42,7 @@ describe("cards", () => {
     expect(s.members.get("mac")!.card).toMatchObject({ os: "macos", tools: ["git", "xcode", "docker"], repo: "ojow/channels" });
     expect(cardLine(s.members.get("linux")!.card)).toBe("linux x64 · tools: git, docker, gpu · the CI box");
     const status = formatStatus({ alias: "c", me: "mac", state: s, online: new Map(), unread: 0 });
-    expect(status).toContain("windows x64 · codex · ojow/channels · tools: git, dotnet");
+    expect(status).toContain("codex · windows x64 · ojow/channels · tools: git, dotnet");
   });
 
   test("a later card replaces the earlier one; describeEvent says it", async () => {
@@ -51,7 +51,7 @@ describe("cards", () => {
     const s = fold([first!, later], roster);
     expect(s.members.get("mac")!.card).toMatchObject({ os: "macos", harness: "cursor" });
     expect(s.members.get("mac")!.card!.tools).toBeUndefined();
-    expect(describeEvent(later)).toBe("described itself: macos · cursor");
+    expect(describeEvent(later)).toBe("described itself: cursor · macos");
   });
 
   test("bounded: too many tools, or a long field, is malformed", () => {

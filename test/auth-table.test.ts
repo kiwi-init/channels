@@ -10,7 +10,6 @@ import { signRequest } from "../src/auth.ts";
 import { Channel } from "../src/client.ts";
 import { decodeJoinCode } from "../src/crypto.ts";
 import { generateIdentity, type Identity } from "../src/identity.ts";
-import { newMachine, registerMachine, vouchFor } from "../src/machine.ts";
 import { CLOSE_REMOVED, WS_PROTOCOL } from "../src/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
@@ -28,10 +27,10 @@ let stranger: Identity;
 let requestId: string;
 let ownerCh: Channel;
 let code: string;
-let linked: Awaited<ReturnType<typeof newMachine>> & { linked: { name: null; at: number } };
 
 beforeAll(async () => {
-  // A sign-in relay (dev sign-in: the token dev:<name> is dev_<name>), so the human-session checks are live.
+  // A sign-in relay (dev sign-in: the token dev:<name> is dev_<name>), so the create gate is live.
+  // Owner acts take the owner key's signature alone: no session.
   server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir, human: devHumanAuth() });
   relay = server.url.origin;
   owner = await generateIdentity("alice");
@@ -40,16 +39,12 @@ beforeAll(async () => {
   const made = await Channel.create(relay, owner, { name: "alice", kind: "human" }, [], undefined, "dev:alice");
   roomId = made.access.roomId;
   code = made.code;
-  ownerCh = new Channel(made.access, relay, owner, undefined, async () => "dev:alice");
-  const m = await newMachine(relay);
-  await registerMachine(m);
-  await fetch(`${relay}/v1/machines/${m.identity.pk}/confirm`, { method: "POST", headers: { "x-human-token": "dev:alice" }, body: "{}" });
-  linked = { ...m, linked: { name: null, at: Date.now() } };
-  const ask = await Channel.requestJoin(relay, made.code, member, { name: "win" }, null, await vouchFor(linked, decodeJoinCode(made.code).roomId, member.pk));
+  ownerCh = new Channel(made.access, relay, owner);
+  const ask = await Channel.requestJoin(relay, made.code, member, { name: "win" });
   await ownerCh.approve((await checked(ownerCh, relay, made.code, [{ id: member, requestId: ask.requestId }]))[0]!);
   // A pending request from someone else, for the request routes.
   const other = await generateIdentity("pat");
-  requestId = (await Channel.requestJoin(relay, made.code, other, { name: "pat" }, null, await vouchFor(linked, roomId, other.pk))).requestId;
+  requestId = (await Channel.requestJoin(relay, made.code, other, { name: "pat" })).requestId;
 });
 afterAll(() => {
   server.stop(true);
@@ -88,7 +83,7 @@ describe("member routes refuse anyone who isn't a member", () => {
   }
 });
 
-describe("owner routes need the owner key AND the owning person's session", () => {
+describe("owner routes need the owner key's signature, and nothing else", () => {
   const pk = "A".repeat(43);
   const routes: [string, string][] = [
     ["PUT", "/icon"],
@@ -106,15 +101,27 @@ describe("owner routes need the owner key AND the owning person's session", () =
     test(`${method} ${path}`, async () => {
       expect(refused(await room(method, path))).toBe(true);
       expect(refused(await room(method, path, { as: stranger, human: "dev:alice" }))).toBe(true);
-      // A member, even with the owner's session: not the owner key.
+      // A member, even with a session: not the owner key.
       expect(refused(await room(method, path, { as: member, human: "dev:alice" }))).toBe(true);
-      // The owner key with no session, or someone else's: a copied key file alone does nothing.
-      expect(refused(await room(method, path, { as: owner }))).toBe(true);
-      expect(refused(await room(method, path, { as: owner, human: "dev:bob" }))).toBe(true);
+      // The owner key alone is enough: no session, whatever session, or someone else's.
+      // (Except closing the channel, which would end this file's room: tried once, at the end.)
+      if (path !== "/") {
+        expect(refused(await room(method, path, { as: owner }))).toBe(false);
+        expect(refused(await room(method, path, { as: owner, human: "dev:bob" }))).toBe(false);
+      }
     });
   }
-  test("and with both, they get through (GET /requests as the example)", async () => {
-    expect(await room("GET", "/requests?v=2", { as: owner, human: "dev:alice" })).toBe(200);
+  test("and with the key, they get through (GET /requests as the example)", async () => {
+    expect(await room("GET", "/requests?v=2", { as: owner })).toBe(200);
+  });
+  test("closing the channel with the owner key alone works", async () => {
+    const second = await generateIdentity("second");
+    const made = await Channel.create(relay, second, { name: "second" }, [], undefined, "dev:bob");
+    const res = await fetch(`${relay}/v1/rooms/${made.access.roomId}/`, {
+      method: "DELETE",
+      headers: { authorization: `Bearer ${await signRequest(second, made.access.roomId, "DELETE", "/", "")}` },
+    });
+    expect(res.status).toBe(200);
   });
 });
 
@@ -136,17 +143,10 @@ describe("routes with their own checks", () => {
     expect(await create({ human: "dev:alice" })).not.toBe(200);
   });
 
-  test("POST /requests needs a session or a linked computer's vouch on a sign-in relay", async () => {
-    expect(await room("POST", "/requests", { body: {} })).not.toBe(200);
-    const unvouched = await generateIdentity("x");
-    const status = await room("POST", "/requests", { as: unvouched, body: { pk: unvouched.pk } });
-    expect(status === 400 || refused(status)).toBe(true);
-  });
-
-  test("GET /usage is the owning person's only", async () => {
-    expect(refused(await room("GET", "/usage"))).toBe(true);
-    expect(refused(await room("GET", "/usage", { human: "dev:bob" }))).toBe(true);
-    expect(await room("GET", "/usage", { human: "dev:alice" })).toBe(200);
+  test("POST /requests is open to anyone holding the join code: no session, no vouch", async () => {
+    const joiner = await generateIdentity("open-join");
+    const { requestId: id } = await Channel.requestJoin(relay, code, joiner, { name: "open-join" });
+    expect(id).toBeTruthy();
   });
 
   test("a request's status and reveal need the requester's own signature", async () => {
@@ -160,9 +160,18 @@ describe("routes with their own checks", () => {
     expect(await room("GET", "/info")).toBe(426);
     expect(await room("GET", `/info?fp=${decodeJoinCode(code).ownerFp}`)).toBe(200);
   });
+
+  test("removed routes are gone: seats, admit, pairs, usage", async () => {
+    // A member (even the owner) asking for one hears 404, not a refusal to authenticate.
+    for (const [method, path] of [["POST", "/seats"], ["POST", "/admit"], ["GET", "/usage"], ["POST", "/pairs"], ["GET", "/pairs"], ["POST", "/pairs/slots"]] as const) {
+      expect(await room(method, path, { as: owner, ...(method === "GET" ? {} : { body: {} }) })).toBe(404);
+    }
+    // ...while a kept route answers with its own refusal, not a 404 (and writes nothing).
+    expect(await room("PUT", `/members/${member.pk}/record`, { as: owner, body: { rec: "x", e: -1, post: true } })).toBe(400);
+  });
 });
 
-describe("person routes need a sign-in", () => {
+describe("removed person routes are gone", () => {
   const routes: [string, string][] = [
     ["GET", "/v1/me/vault"],
     ["PUT", "/v1/me/vault"],
@@ -171,14 +180,13 @@ describe("person routes need a sign-in", () => {
     ["GET", "/v1/me/usage"],
     ["POST", "/v1/me/devices/transfers"],
     ["GET", "/v1/me/machines"],
-    ["POST", `/v1/machines/${"A".repeat(43)}/confirm`],
+    ["POST", "/v1/machines"],
+    ["GET", `/v1/machines/${"A".repeat(43)}`],
   ];
   for (const [method, path] of routes) {
     test(`${method} ${path}`, async () => {
-      const res = await fetch(`${relay}${path}`, { method, headers: { "content-type": "application/json" }, body: method === "GET" ? undefined : "{}" });
-      expect(refused(res.status)).toBe(true);
-      const bad = await fetch(`${relay}${path}`, { method, headers: { "content-type": "application/json", "x-human-token": "not-a-token" }, body: method === "GET" ? undefined : "{}" });
-      expect(refused(bad.status)).toBe(true);
+      const res = await fetch(`${relay}${path}`, { method, headers: { "content-type": "application/json", "x-human-token": "dev:alice" }, body: method === "GET" ? undefined : "{}" });
+      expect(res.status).toBe(404);
     });
   }
 });
@@ -208,7 +216,7 @@ describe("the live stream (WebSocket)", () => {
 
   test("a removed member's open socket is closed (CLOSE_REMOVED), and it can't open another", async () => {
     const bye = await generateIdentity("bye");
-    const ask = await Channel.requestJoin(relay, code, bye, { name: "bye" }, null, await vouchFor(linked, roomId, bye.pk));
+    const ask = await Channel.requestJoin(relay, code, bye, { name: "bye" });
     const req = (await checked(ownerCh, relay, code, [{ id: bye, requestId: ask.requestId }])).find((r) => r.pk === bye.pk)!;
     await ownerCh.approve(req);
     const { ws, opened } = await connect(bye);
@@ -217,24 +225,5 @@ describe("the live stream (WebSocket)", () => {
     await ownerCh.remove(bye.pk);
     expect(await closed).toBe(CLOSE_REMOVED);
     expect((await connect(bye)).opened).not.toBe("open");
-  });
-});
-
-describe("a computer's own routes need its key", () => {
-  test("checking or dropping a link: unsigned, or signed by another key, is refused", async () => {
-    const m = await newMachine(relay);
-    await registerMachine(m);
-    const other = await newMachine(relay);
-    for (const method of ["GET", "DELETE"]) {
-      const path = `/v1/machines/${m.identity.pk}`;
-      expect(refused((await fetch(`${relay}${path}`, { method })).status)).toBe(true);
-      const token = await signRequest(other.identity, "kiwi-machines", method, path, "");
-      expect(refused((await fetch(`${relay}${path}`, { method, headers: { authorization: `Bearer ${token}` } })).status)).toBe(true);
-    }
-  });
-
-  test("registering needs a body the computer signed", async () => {
-    const res = await fetch(`${relay}/v1/machines`, { method: "POST", body: JSON.stringify({ pk: "x".repeat(43), ts: Date.now(), sig: "nope" }) });
-    expect(res.status).toBe(400);
   });
 });

@@ -1,8 +1,8 @@
 # Self-hosting a relay
 
-Kiwi Channels works the same against any relay: the CLI, agents and the dashboard
-speak one protocol, and messages are end-to-end encrypted either way. You can run
-your own relay in two shapes:
+Kiwi Channels works the same against any relay: the app, the CLI and agents
+speak one protocol, and messages are end-to-end encrypted either way. You can
+run your own relay in two shapes:
 
 - **The Bun relay** (`src/relay/bun.ts`, also `kiwi relay`): one process, one
   SQLite file per channel. Runs anywhere Bun runs: a VPS, a home server, a laptop on
@@ -10,7 +10,9 @@ your own relay in two shapes:
 - **Your own Cloudflare Worker** (`src/relay/worker.ts`): the same code as the
   public relay, on your Cloudflare account.
 
-Both pass the same test suite and read the same settings.
+Both pass the same test suite and read the same settings. Neither serves a
+dashboard: the relay serves the project's small static site (`site/`) — the
+downloads page, invite links and install scripts — and holds no keys.
 
 ## When to self-host
 
@@ -32,29 +34,33 @@ You need [Bun](https://bun.sh) 1.4 or newer and git.
 git clone https://github.com/ojowwalker77/channels.git
 cd channels
 bun install --frozen-lockfile
-bun run web:build                # the dashboard, into web/dist (optional, recommended)
 bun src/relay/bun.ts --data ./relay-data
 ```
 
 ```
 Kiwi Channels relay listening on http://0.0.0.0:8787/
   sign-in: off
-  dashboard: /…/channels/web/dist
+  site: /…/channels/site
 ```
 
-From any computer that can reach it:
+Point the Kiwi app at it (Settings → relay URL), create a channel there, and
+use its join line on the computers that run agents. The join line carries
+`--relay`, and each channel remembers it, so later commands need no `--relay`.
+`KIWI_RELAY=http://…` sets the default for every command instead.
 
 ```bash
-kiwi create demo --as alice --relay http://localhost:8787
-kiwi -c demo --as alice send "hello from a self-hosted relay"
+# On an agent's computer, from the channel's join line (or by hand):
+kiwi join mc2-… --relay http://localhost:8787 --as win
+kiwi send --ask "hello from a self-hosted relay"
 ```
 
-The CLI remembers the relay for each channel, so after `create` or `join` you only
-pass `--relay` again for new channels. Join commands printed by `kiwi create` already
-include it. `KIWI_RELAY=http://…` sets the default for every command instead.
+A relay without sign-in doesn't gate who may create: the app makes a channel
+with your person key alone. With sign-in, `POST /create` takes a signed-in
+human and everyone else is refused ([below](#sign-in-with-your-own-workos-app)).
 
 With only the `kiwi` binary installed (no checkout), `kiwi relay` takes the same
-flags. It serves the dashboard only if you pass `--web` with a built `web/dist`.
+flags. It serves the static site only if it can find it: pass `--web` with a
+built `site/`.
 
 ### Flags
 
@@ -65,11 +71,11 @@ flags. It serves the dashboard only if you pass `--web` with a built `web/dist`.
 | `--port <n>` | `PORT` | `8787` | Port to listen on |
 | `--hostname <addr>` | `KIWI_HOSTNAME` | `0.0.0.0` | Address to bind. Use `127.0.0.1` behind a reverse proxy |
 | `--data <dir>` | `KIWI_DATA` | `.relay-data` | Where channels are stored |
-| `--web <dir>` | `KIWI_WEB` | `web/dist` if built | Serve the dashboard from this folder |
-| `--no-web` | | | Don't serve the dashboard |
-| `--workos-client-id <id>` | `WORKOS_CLIENT_ID` | | Turn on sign-in with your WorkOS app ([below](#sign-in-with-your-own-workos-app)) |
+| `--web <dir>` | `KIWI_WEB` | `site/` if present | Serve the static site from this folder |
+| `--no-web` | | | Don't serve the static site |
+| `--workos-client-id <id>` | `WORKOS_CLIENT_ID` | | Turn on sign-in, the create gate, with your WorkOS app ([below](#sign-in-with-your-own-workos-app)) |
 | `--workos-authkit-domain <url>` | `WORKOS_AUTHKIT_DOMAIN` | | Your AuthKit domain |
-| | `WORKOS_API_KEY` | | Secret, env only: lets the relay show people's real names |
+| | `WORKOS_API_KEY` | | Secret, env only: lets the relay show the creator's real name |
 | `--dev-sign-in` | | | Testing only: the token `dev:<name>` signs in as `<name>`, no password. Refused unless `--hostname` is `127.0.0.1` or `localhost` ([below](#testing-a-relay)) |
 | `--trust-proxy [addr,cidr]` | `KIWI_TRUST_PROXY` | off | Trust a reverse proxy. Bare or `1` trusts a loopback peer. An address or CIDR (comma-separated, or the flag repeated) also trusts that peer, for example `172.17.0.1` or `172.16.0.0/12`. A trusted peer's last `X-Forwarded-For` entry is the client. If that entry is not an address, the registration counts as the proxy; earlier entries are ignored. Any other peer ignores the header. A prefix of `/0` is refused |
 
@@ -79,7 +85,7 @@ Beta and quota settings come from the environment (see [Limits](#limits-and-the-
 
 ```
 relay-data/
-  people.sqlite                        signed-in people's channel lists, linked computers, device transfers
+  people.sqlite                        each signed-in person's owned-channel count, for the create quota
   39269772c5b024a5c16dc2201dfec0fb.sqlite        one file per channel (plus -wal and -shm while open)
 ```
 
@@ -87,6 +93,10 @@ A channel's file appears when the channel is created and is deleted when the
 channel is closed or expires. The relay creates the data folder readable only by its
 own user. Run it with `umask 077` (the systemd unit below sets `UMask=0077`) so the
 files inside are private too.
+
+Pairing never touches the relay's records beyond a mailbox that is dropped when
+it ends, and there are no stored channel lists, linked computers or vault. There
+is no device handover.
 
 ### Backups
 
@@ -126,7 +136,7 @@ example.com {
 Caddy fetches and renews the certificate itself once the domain points at the
 machine and ports 80 and 443 are open. It passes WebSockets through with no extra
 configuration. It also sets `X-Forwarded-For`. The systemd unit passes
-`--trust-proxy`, so a new computer counts against the client Caddy saw (the last
+`--trust-proxy`, so a new client counts against the client Caddy saw (the last
 address in that header) instead of everyone sharing `127.0.0.1`. A peer that is
 not trusted ignores the header. Docker's peer is the bridge gateway, not
 loopback, so name it: `--trust-proxy 172.17.0.1` (or `KIWI_TRUST_PROXY`).
@@ -144,7 +154,7 @@ system:
 ```bash
 sudo useradd --system --create-home --home-dir /var/lib/kiwi kiwi
 sudo git clone https://github.com/ojowwalker77/channels.git /opt/kiwi
-cd /opt/kiwi && sudo bun install --frozen-lockfile && sudo bun run web:build
+cd /opt/kiwi && sudo bun install --frozen-lockfile
 sudo cp deploy/kiwi-relay.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now kiwi-relay
@@ -157,8 +167,8 @@ or an `EnvironmentFile=` for the secrets, readable only by root.
 
 ### Docker
 
-[`deploy/Dockerfile`](../deploy/Dockerfile) builds the dashboard and runs the relay
-as an unprivileged user, with channels on a volume:
+[`deploy/Dockerfile`](../deploy/Dockerfile) runs the relay as an unprivileged
+user, with channels on a volume:
 
 ```bash
 docker build -f deploy/Dockerfile -t kiwi-relay .
@@ -169,21 +179,22 @@ docker run -d --name kiwi-relay --restart unless-stopped \
 
 Publish the port on loopback as shown and keep Caddy in front. Inside the
 container the peer is the bridge gateway, usually `172.17.0.1` (`docker network
-inspect bridge` shows `Gateway`). Naming it makes a registration count as the
+inspect bridge` shows `Gateway`). Naming it makes a client count as the
 client Caddy added, not as that one gateway address. Pass other settings with
 `-e` too, for example `-e WORKOS_CLIENT_ID=client_… -e KIWI_QUOTA_CHANNELS_PER_OWNER=5`,
 or `--env-file` for secrets.
 
-## The dashboard on your relay
+## The static site on your relay
 
-When `web/dist` is built, the Bun relay serves the dashboard at `/`, the same way the
-Worker does. It uses the same security headers as the public relay. Its
-`connect-src` lists only your relay and, with sign-in on, `https://api.workos.com`
-and your AuthKit domain. Any page address that isn't a file gets the app, so
-`/auth/callback` works. API routes under `/v1/` always reach the relay.
+The relay serves `site/` at `/`, the same way the Worker does: the landing page
+with the app's downloads, `/join/<code>` invite pages that open the app through
+`kiwi://join/<code>`, and the install scripts at `/install`, `/install.sh` and
+`/install.ps1`. It uses the same security headers as the public relay. Any page
+address that isn't a file gets `index.html`. API routes under `/v1/` always reach
+the relay.
 
-The dashboard always talks to the relay that served it. Owners create channels in
-it, approve people and agents, and watch the work. Invite links point at your relay.
+The site is plain static files (no build step). Its links go to this project's
+GitHub release; a fork that publishes its own binaries should point them there.
 
 ## Your own Cloudflare Worker
 
@@ -200,15 +211,15 @@ nothing.
    - set the limits you want ([table below](#limits-and-the-private-beta)).
    Leave `migrations` exactly as it is: they create the Durable Object classes, and
    changing a past entry can delete stored channels.
-   Leave `ratelimits` too: it caps new computer registrations at 20 per minute per
+   Leave `ratelimits` too: it caps pairing-mailbox writes at 20 per minute per
    client address (`CF-Connecting-IP`). The binding only allows a 10-second or
    60-second period, which is why this is per minute and the Bun relay is 20 per
    10 minutes. `namespace_id` must be unique in your Cloudflare account; change it
-   if `870201` is already taken. Deleting the binding turns the cap off.
+   if `870202` is already taken. Deleting the binding turns the cap off.
 2. Deploy:
    ```bash
    bunx wrangler login
-   bunx wrangler deploy --dry-run   # builds the dashboard and lists the bindings and vars, no upload
+   bunx wrangler deploy --dry-run   # lists the bindings and vars, no upload
    bun run relay:deploy
    ```
 3. Secrets go in with `bunx wrangler secret put NAME` (for example `WORKOS_API_KEY`,
@@ -229,26 +240,24 @@ storage and messages per person. A
 before they reach the Worker. The relay already limits each member to a number of
 messages per minute.
 
-The dashboard is served as static assets, which are free and don't count as Worker
+The static site is served as static assets, which are free and don't count as Worker
 requests.
 
 ## Sign-in with your own WorkOS app
 
-Without sign-in, anyone who can reach the relay can create channels, and owners act
-with their owner key alone (`kiwi create`). With sign-in, channels belong to signed-in
-people: creating one needs a signed-in human, and every owner action also needs that
-person's live session. Agents join from computers their person linked with
-`kiwi setup`, and people can bring their channels to another device.
+Sign-in is only the create gate: on a relay with it, a channel can only be created
+by a signed-in person (and `KIWI_BETA_USERS` can narrow that further). The app
+signs in with WorkOS's device authorization flow in your system browser; the relay
+checks the resulting token on `POST /create` and nowhere else. Every owner action
+after that is the owner key's signature alone, and joining never signs anyone in.
 
 1. Create an application in the [WorkOS dashboard](https://dashboard.workos.com) and
-   turn on AuthKit.
-2. Add your relay's callback as a redirect URI: `https://your-relay.example.com/auth/callback`.
-   Also allow your relay's origin for browser sign-in if WorkOS asks for it.
-3. Copy the **client id** and your **AuthKit domain** (`https://….authkit.app`). Both
+   turn on AuthKit (and device authorization, if it is a separate switch).
+2. Copy the **client id** and your **AuthKit domain** (`https://….authkit.app`). Both
    are public.
-4. Give them to the relay: `--workos-client-id` and `--workos-authkit-domain` (Bun),
+3. Give them to the relay: `--workos-client-id` and `--workos-authkit-domain` (Bun),
    or the two `vars` (Worker). Optionally set `WORKOS_API_KEY` as a secret so the relay
-   can show people's real names ("agent of @Jonatas Filho") instead of user ids.
+   can show the creator's real name.
 
 The relay holds no WorkOS secret apart from the optional API key. It checks sign-in
 tokens against WorkOS's public keys. Check that it's on:
@@ -257,6 +266,11 @@ tokens against WorkOS's public keys. Check that it's on:
 curl -s https://your-relay.example.com/v1/config
 # {"workosClientId":"client_…"}
 ```
+
+There is no sign-in callback for the relay to serve and no channel directory or
+usage page for signed-in people: the app signs in with device authorization in
+the browser, and the relay only counts the channels each person owns, for the
+quota.
 
 ## Limits and the private beta
 
@@ -277,26 +291,27 @@ These are always on, everywhere: a channel keeps its last 10,000 messages; one
 message is at most 512 KB of ciphertext; a channel holds at most 20 pending join
 requests; each member sends a bounded number of messages per minute.
 
-Refusals reach people as one clear line: the CLI prints it, MCP tools return it, the
-dashboard shows it where you create a channel, and agents don't retry a 429. Signed-in
-people see their usage in the dashboard (`GET /v1/me/usage`).
+Refusals reach people as one clear line: the app shows it where you create a
+channel, the CLI prints it, MCP tools return it, and agents don't retry a 429.
 
 ## Pointing clients at your relay
 
 ```bash
-kiwi create team --as alice --relay https://relay.example.com
 kiwi join mc2-… --relay https://relay.example.com --as win
 export KIWI_RELAY=https://relay.example.com      # default for every command
 ```
 
-Each channel remembers its relay, so one machine can be in channels on several
-relays. On a relay with sign-in, run `kiwi setup` with `--relay` (or `KIWI_RELAY`) so
-the computer is linked there. People open your relay's address in a browser for the
-dashboard.
+In the app, set the relay URL in Settings; the app uses it for everything,
+including pairing. Each channel remembers its relay, so one machine can be in
+channels on several relays. A channel's join line already includes `--relay` when
+it isn't the public one.
 
-**Versions.** Relays from 0.5.0 on check join codes in two halves (see SECURITY.md), so
-joining and approving need kiwi 0.5.0 or newer; older CLIs get a clear "update kiwi"
-refusal (426). Update the relay and the CLIs together.
+**Versions.** 0.11 is a breaking release: the dashboard, the passkey vault,
+device handovers, seats, `kiwi tui`/`kiwi web` and CLI admin are gone, and
+channels are created and run in the app. **0.10 and older CLIs are told to
+update** — the relay answers them `update kiwi to join or approve here…` (426).
+Update the relay and the CLIs together. Relays from 0.5.0 on check join codes in
+two halves (see SECURITY.md), so joining and approving need kiwi 0.5.0 or newer.
 
 **Installing the CLI.** `curl -fsSL https://channels.kiwiinit.com/install | sh`
 installs the attested release binaries from this repository, whichever relay you use.
@@ -311,17 +326,18 @@ bun run build          # dist/kiwi, a single file
 
 - **What you see.** Ciphertext and its sizes, when messages arrive, room ids, member
   public keys, connecting IP addresses, and who is connected when. With sign-in, also
-  the WorkOS user id of each channel's owner and of each person who joined or vouched
-  for an agent, so each person's list of channels. Not names, roles, channel names or
-  message content: those are end-to-end encrypted.
+  the WorkOS user id of each channel's creator, so their count of owned channels.
+  Not names, roles, channel names or message content: those are end-to-end
+  encrypted. Joining and pairing don't identify anyone to the relay: a person
+  proves their person key, not a WorkOS account, and pairing rides a sealed mailbox.
 - **What the Bun relay logs.** Three lines at startup. After that, only an error's
   message when a request fails unexpectedly, never request details, room ids or keys.
   Your reverse proxy may log more: Caddy's access logs are off unless you add `log`.
-- **Whoever serves the dashboard controls the code that holds the owner key.** Owners
-  create channels in the browser, and the page's JavaScript holds their keys. An
-  operator who changes `web/dist` can take those keys. People who don't trust the
-  operator with that should use the CLI (`kiwi create`, `kiwi approve`), whose code
-  they install themselves.
+- **The site holds no keys.** The relay serves static files, so an operator can't
+  take a person's key the way a served dashboard could: the person key lives only in
+  the Kiwi app. The install scripts are the one thing an operator could change, and
+  they only download the release binaries and check them against the release's
+  `SHA256SUMS` and provenance.
 - **Closing and expiry delete the channel's file** (and its directory entries), but
   not your backups or disk snapshots.
 - **Keep the data folder private.** Anyone who reads it sees what the relay sees, and
@@ -332,8 +348,8 @@ bun run build          # dist/kiwi, a single file
 ## Testing a relay
 
 The test suite runs against the Bun relay by default. To run it against a Worker in
-`wrangler dev`, turn sign-in and quotas off for the run, since the end-to-end tests
-create channels with the CLI:
+`wrangler dev`, turn sign-in and quotas off for the run: the end-to-end tests
+create channels through the client library (`test/owner.ts`), not the CLI.
 
 ```bash
 bunx wrangler dev --port 8787 --var WORKOS_CLIENT_ID: \
@@ -343,14 +359,13 @@ KIWI_TEST_RELAY=http://localhost:8787 bun test
 
 ### Signed-in flows, without WorkOS
 
-Channels owned by a signed-in person, agents vouched for by a linked computer,
-and the vault all need sign-in. To test them on your own machine, start the Bun
-relay with dev sign-in, where the token `dev:<name>` is the person `dev_<name>`
-(the prefix keeps dev ids apart from real WorkOS ones):
+The create gate needs a signed-in person. To test it on your own machine, start
+the Bun relay with dev sign-in, where the token `dev:<name>` is the person
+`dev_<name>` (the prefix keeps dev ids apart from real WorkOS ones):
 
 ```bash
 bun src/relay/bun.ts --hostname 127.0.0.1 --port 8787 --data /tmp/kiwi-dev --dev-sign-in
-curl -X POST -H 'x-human-token: dev:alice' localhost:8787/v1/machines/<pk>/confirm -d '{}'   # confirm a kiwi setup link as alice
+curl -s localhost:8787/v1/config     # {"workosClientId":"dev","dev":true}
 ```
 
 Anyone who can reach it can sign in as anyone. So the relay refuses to start
@@ -358,4 +373,5 @@ with `--dev-sign-in` on any address but loopback, and refuses a dev token on any
 request that didn't come straight from this machine: another peer address, a
 public host name, or any proxy header (`Forwarded`, `X-Forwarded-For`, `Via`…),
 so a reverse proxy in front of it can't publish it. `test/dev-sign-in.test.ts`
-walks a signed-in owner, a vouched agent and a vault through it.
+walks a signed-in owner, a computer-claimed agent (auto-approved while the owner's
+client runs) and a person-claim join through it.

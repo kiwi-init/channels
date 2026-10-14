@@ -1,9 +1,12 @@
 // What this agent is and has, read from the machine it runs on: the card it shows the channel, so
-// people can see who runs where and with what. Only coarse facts: the OS, the CPU, which harness
-// runs it, which tools are on PATH, and the git repository and branch it's in. Nothing from files,
-// and nothing the person didn't put there.
+// people can see who runs where and with what. Only coarse facts: the OS, the CPU and memory, which
+// harness runs it (and its model, when given or the harness says), which tools are on PATH, and the
+// git repository and branch it's in. Nothing from files, and nothing the person didn't put there.
 
 import { execFileSync } from "node:child_process";
+import { cpus, totalmem } from "node:os";
+
+import { harnessModel } from "./harness.ts";
 import type { Card } from "./protocol.ts";
 
 /** Tools worth showing, as the binary that shows each one is here. */
@@ -46,7 +49,7 @@ export function mergeCard(detected: Card, was: Card | undefined, given: { model?
  * The variables an agent's harness sets on the commands its agent runs (the same set hooks.ts reads a
  * session from). Not CURSOR_TRACE_ID or CODEX_SANDBOX: a person's own terminal in those apps may carry them.
  */
-export const AGENT_COMMAND_ENV = ["CLAUDECODE", "CODEX_THREAD_ID", "GEMINI_CLI", "CURSOR_AGENT", "GROK_SESSION_ID"] as const;
+export const AGENT_COMMAND_ENV = ["CLAUDECODE", "CODEX_THREAD_ID", "GEMINI_CLI", "CURSOR_AGENT", "GROK_SESSION_ID", "OPENCODE_SESSION_ID"] as const;
 
 /** Whether an agent is running this command: what keeps admin (and the owner key) away from agents. */
 export function inAgentHarness(env: Record<string, string | undefined> = process.env): boolean {
@@ -60,6 +63,7 @@ export function detectHarness(env: Record<string, string | undefined> = process.
   if (env.GEMINI_CLI) return "gemini";
   if (env.CURSOR_AGENT || env.CURSOR_TRACE_ID) return "cursor";
   if (env.GROK_SESSION_ID) return "grok";
+  if (env.OPENCODE_SESSION_ID) return "opencode";
   return undefined;
 }
 
@@ -84,9 +88,13 @@ export function detectCard(env: Record<string, string | undefined> = process.env
   const repo = repoName(git(["remote", "get-url", "origin"]));
   const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
   const harness = detectHarness(env);
+  const cores = cpus();
+  const chip = cores[0]?.model.replace(/\s+/g, " ").trim();
   return {
     os,
     arch: process.arch,
+    cpu: `${cores.length} cores${chip ? ` · ${chip}` : ""}`,
+    memory: `${Math.round(totalmem() / 2 ** 30)} GB`,
     ...(harness ? { harness } : {}),
     ...(tools.length ? { tools } : {}),
     ...(repo ? { repo } : {}),
@@ -94,10 +102,19 @@ export function detectCard(env: Record<string, string | undefined> = process.env
   };
 }
 
+/**
+ * The model this agent runs on: KIWI_MODEL when set, else what its harness keeps on this machine
+ * (harness.ts). Undefined when it can't be told: `kiwi join` then asks for --model.
+ */
+export async function detectModel(env: Record<string, string | undefined> = process.env): Promise<string | undefined> {
+  const said = env.KIWI_MODEL?.trim();
+  return said || (await harnessModel(env));
+}
+
 /** Whether two cards say the same thing (tool order aside). */
 export function sameCard(a: Card | undefined, b: Card): boolean {
   if (!a) return false;
-  const keys: (keyof Card)[] = ["os", "arch", "harness", "model", "repo", "branch", "note"];
+  const keys: (keyof Card)[] = ["os", "arch", "harness", "model", "cpu", "memory", "repo", "branch", "note"];
   if (keys.some((k) => (a[k] ?? undefined) !== (b[k] ?? undefined))) return false;
   const ta = [...(a.tools ?? [])].sort().join(",");
   const tb = [...(b.tools ?? [])].map((t) => t.toLowerCase()).sort().join(",");

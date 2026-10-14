@@ -1,16 +1,14 @@
 // What every relay route table shares: the request as a service, the tagged
 // refusals (failures.ts), and a dispatcher that runs a route's declared check
-// before its handler. The room's routes are in route.ts; a person's in
-// devices.ts, vault.ts, machines.ts and me.ts, which run with the services the
-// adapter builds once (me.ts: makePeople).
+// before its handler. The room's routes are in route.ts; the pairing mailbox's
+// in mailbox.ts.
 
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as References from "effect/References";
-import { BadRequest, NotFound, refusalResponse, SignInRequired, type Refusal } from "./failures.ts";
-import { Human, HUMAN_HEADER } from "./human.ts";
+import { BadRequest, refusalResponse, type Refusal } from "./failures.ts";
 
 /** Plain async code (a store call): if it throws, that's a bug or an outage, so a defect (a 500), never a refusal. */
 export const attempt = <A>(f: () => A | Promise<A>): Effect.Effect<A> => Effect.promise(async () => f());
@@ -118,36 +116,3 @@ export const respond = <R>(context: Context.Context<R>, program: Effect.Effect<R
 
 /** A route table as plain rows (method, path, check), for tests. */
 export const describeRoutes = (routes: { method: string; path: string | RegExp; guard: string }[]) => routes.map(({ method, path, guard }) => ({ method, path: String(path), guard }));
-
-// ---------- a signed-in person's routes ----------
-
-/**
- * The signed-in person behind a request, by the relay's sign-in (Human).
- * `noSignIn` is the 404 each area has always given on a relay without sign-in
- * (its text is API too).
- */
-export const signedInPerson = (noSignIn: string) =>
-  Effect.gen(function* () {
-    const human = yield* Human;
-    const { req } = yield* Request_;
-    if (!human) return yield* new NotFound({ message: noSignIn });
-    const user = yield* Effect.promise(() => human.verify(req.headers.get(HUMAN_HEADER) ?? ""));
-    if (!user) return yield* new SignInRequired({ message: "sign in first" });
-    return user;
-  });
-
-/**
- * Run a person route table for one request, in the context its adapter built
- * once (the stores, sign-in and clock); the answer as a Response.
- */
-export async function servePerson<G extends string, W, R>(
-  req: Request,
-  routes: Route<G, W, never, R | Request_>[],
-  guards: Record<G, Effect.Effect<W, Refusal, R | Request_>>,
-  otherwise: Effect.Effect<Reply<never>, Refusal, R | Request_>,
-  context: Context.Context<R>,
-): Promise<Response> {
-  const request = await incoming(req, new URL(req.url).pathname);
-  return (await Effect.runPromiseWith(Context.add(context, Request_, request))(answer(dispatch(routes, guards, otherwise)))).res;
-}
-

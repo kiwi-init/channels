@@ -1,0 +1,14 @@
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Referrer-Policy: no-referrer
+  X-Content-Type-Options: nosniff
+
+/install
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: no-cache
+/install.sh
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: no-cache
+/install.ps1
+  Content-Type: text/plain; charset=utf-8
+  Cache-Control: no-cache

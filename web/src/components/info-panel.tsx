@@ -1,4 +1,5 @@
-import { Add01Icon, ArrowRight01Icon, BookOpen01Icon, Cancel01Icon, ComputerTerminal01Icon, Link01Icon, PauseIcon, PencilEdit01Icon, PlayIcon, UserMultipleIcon } from "@hugeicons/core-free-icons"
+import { relayUrl } from "../lib/relay"
+import { Add01Icon, ArrowRight01Icon, BookOpen01Icon, Cancel01Icon, Link01Icon, PauseIcon, PencilEdit01Icon, PlayIcon, UserMultipleIcon } from "@hugeicons/core-free-icons"
 import { useState, type ReactNode } from "react"
 
 import type { ChannelIcon } from "@mc/protocol.ts"
@@ -23,7 +24,6 @@ export function InfoPanel({
   subtitle,
   onClose,
   onPause,
-  conversations,
   notes,
   onMessage,
   mood,
@@ -34,8 +34,6 @@ export function InfoPanel({
   onClose: () => void
   /** Owner: open the pause dialog (the conversation holds it). */
   onPause?: () => void
-  /** The channel's conversations, for a phone (the list beside it isn't there). */
-  conversations?: ReactNode
   /** What agents noted: the channel's Notes block. */
   notes?: ReactNode
   /** Open the direct conversation with a member. */
@@ -54,11 +52,11 @@ export function InfoPanel({
   return (
     <aside
       aria-label="Details"
-      className="animate-slide-in flex h-full w-full flex-col bg-rail md:w-[340px]"
+      className="animate-slide-in flex h-full w-full flex-col border-l border-line bg-rail md:w-[340px]"
       onKeyDown={(e) => e.key === "Escape" && onClose()}
     >
-      <header className="flex h-14 shrink-0 items-center px-3">
-        <IconButton label="Close details" round className="size-8" onClick={onClose}>
+      <header className="drag flex h-(--chrome-h) shrink-0 items-center px-3">
+        <IconButton label="Close details" round className="glass size-9 text-ink" onClick={onClose}>
           <Icon icon={Cancel01Icon} size={16} />
         </IconButton>
       </header>
@@ -82,15 +80,7 @@ export function InfoPanel({
               onClick={() => (hold ? void p.onHold!(false).then(() => toast("Agents may carry on"), (err) => toast(errorText(err), "error")) : onPause())}
             />
           )}
-          {p.pairing && <RoundAction icon={ComputerTerminal01Icon} label="Terminal" onClick={() => openDialog("terminal")} />}
         </div>
-
-        {/* On a phone the list beside the conversation isn't there, so its conversations are here. */}
-        {conversations && (
-          <div className="md:hidden">
-            <Section label="Conversations">{conversations}</Section>
-          </div>
-        )}
 
         {p.isOwner && p.requests.length > 0 && (
           <Section>
@@ -173,13 +163,8 @@ export function InfoPanel({
             </Row>
           )}
           {p.isOwner && (
-            <Row icon={Link01Icon} onClick={() => void navigator.clipboard.writeText(`${location.origin}/#${p.code}`).then(() => toast("Invite link copied"))}>
+            <Row icon={Link01Icon} onClick={() => void navigator.clipboard.writeText(`${relayUrl()}/#${p.code}`).then(() => toast("Invite link copied"))}>
               Copy invite link
-            </Row>
-          )}
-          {p.pairing && (
-            <Row icon={ComputerTerminal01Icon} onClick={() => openDialog("terminal")}>
-              Use in a terminal…
             </Row>
           )}
         </Section>

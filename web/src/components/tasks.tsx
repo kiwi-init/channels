@@ -1,20 +1,19 @@
-import { ArrowDown01Icon, Cancel01Icon, Note01Icon } from "@hugeicons/core-free-icons"
+import { ArrowDown01Icon, Cancel01Icon, Note01Icon, Search01Icon } from "@hugeicons/core-free-icons"
 import { useState } from "react"
 
 import type { TaskState } from "@mc/protocol.ts"
-import { taskId, type ChannelState, type Task } from "@mc/state.ts"
+import { colorOf, taskId, type ChannelState, type Task } from "@mc/state.ts"
 import { formatAgo, memberName } from "@/lib/format"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
-import { Alert, Button, IconButton, errorText, toast } from "./kit"
+import { isAgent } from "./message"
+import { Alert, Button, IconButton, Monogram, errorText, toast } from "./kit"
 
 export const LABEL: Record<TaskState, string> = { doing: "In progress", review: "In review", todo: "Open", done: "Done" }
 
 /** A task's state as a label, saying when a done one was cancelled rather than finished. */
 export const labelOf = (t: Pick<Task, "state" | "cancelled">) => (t.state === "done" && t.cancelled ? "Done (cancelled)" : LABEL[t.state])
-const ORDER: TaskState[] = ["doing", "review", "todo", "done"]
 
-/** A task's state as a small circle: empty, half full, dashed, or checked. */
 /** Where a task stands, as one small dot: grey open, blue in progress, amber in review, green done. */
 export function StateMark({ state }: { state: TaskState }) {
   return (
@@ -24,20 +23,35 @@ export function StateMark({ state }: { state: TaskState }) {
   )
 }
 
-function TaskRow({ task, now, onOpen }: { task: Task; now: number; onOpen: () => void }) {
+function TaskRow({ task, state, now, nameOf, unread, onOpen }: { task: Task; state: ChannelState; now: number; nameOf: (n: string) => string; unread?: { n: number; forMe: boolean }; onOpen: () => void }) {
   return (
-    <button type="button" onClick={onOpen} className="-mx-3 flex w-[calc(100%+24px)] items-start gap-3 rounded-ctl px-3 py-2 text-left transition-colors hover:bg-wash">
-      <span className="flex pt-[3px]">
-        <StateMark state={task.state} />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className={cx("block text-body leading-snug", task.state === "done" && "text-ink-2")}>{task.title}</span>
-        <span className="mt-0.5 flex items-center gap-3 text-meta text-ink-3">
-          <span className="tabular-nums">{taskId(task.id)}</span>
-          {task.cancelled && <span className="shrink-0">Cancelled</span>}
-          <span className="truncate">{task.owner ?? "Unassigned"}</span>
-          {task.notes.length > 0 && <span className="shrink-0">{task.notes.length === 1 ? "1 note" : `${task.notes.length} notes`}</span>}
-          <span className="shrink-0">{formatAgo(task.updatedAt, now)}</span>
+    <button type="button" onClick={onOpen} className="group flex w-full items-center gap-3 pl-4 text-left transition-colors hover:bg-wash">
+      <StateMark state={task.state} />
+      {/* A grouped list's hairline starts at the text, as in iOS. */}
+      <span className="flex min-w-0 flex-1 items-center gap-3 border-b border-line py-3 pr-4 group-last:border-b-0">
+        <span className="min-w-0 flex-1">
+          <span className={cx("block text-body leading-snug", task.state === "done" && "text-ink-2")}>{task.title}</span>
+          <span className="mt-0.5 block truncate text-meta text-ink-3">
+            <span className="tabular-nums">{taskId(task.id)}</span>
+            {task.cancelled && " · Cancelled"}
+            {task.notes.length > 0 && ` · ${task.notes.length === 1 ? "1 note" : `${task.notes.length} notes`}`}
+            {` · ${formatAgo(task.updatedAt, now)}`}
+          </span>
+        </span>
+        {unread && unread.n > 0 ? (
+          unread.forMe ? (
+            <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-stamp font-semibold text-accent-ink tabular-nums">{unread.n}</span>
+          ) : (
+            <span aria-label="New messages" className="size-2 shrink-0 rounded-full bg-ink-3" />
+          )
+        ) : null}
+        <span className="flex shrink-0 items-center gap-2 text-ui text-ink-3">
+          <span className="hidden max-w-32 truncate sm:block">{task.owner ? nameOf(task.owner) : "Unassigned"}</span>
+          {task.owner ? (
+            <Monogram name={nameOf(task.owner)} agent={isAgent(state.members.get(task.owner))} color={colorOf(state, task.owner)} size={24} />
+          ) : (
+            <span title="Unassigned" className="size-6 shrink-0 rounded-full border border-dashed border-edge-strong" />
+          )}
         </span>
       </span>
     </button>
@@ -161,38 +175,71 @@ export function TaskCard({ task, state, now, onOpen, highlighted }: { task: Task
   )
 }
 
-/** Every task by state: the conversation's Tasks view. */
-export function Tasks({ state, now, onOpen }: { state: ChannelState; now: number; onOpen: (id: number) => void }) {
-  const [showDone, setShowDone] = useState(false)
-  const all = [...state.tasks.values()].sort((a, b) => b.updatedAt - a.updatedAt)
+/** The board's groups, in the order they ask for attention. */
+const GROUPS: [TaskState, string][] = [
+  ["review", "Needs review"],
+  ["doing", "In progress"],
+  ["todo", "Up next"],
+  ["done", "Done"],
+]
 
-  const empty = (
-    <div className="max-w-xs">
-      <p className="text-body font-semibold">No tasks yet</p>
-      <p className="mt-1 text-ui leading-normal text-ink-2">When agents split up work, each task and who has it shows up here, and in the conversation where it was made.</p>
-    </div>
-  )
-  if (!all.length) return <div className="flex flex-1 items-center justify-center p-8">{empty}</div>
+/** Every task by state, with room for whole titles: the conversation's Tasks pill, and the one list of tasks. */
+export function Tasks({ state, now, nameOf, unreadIn, onOpen }: { state: ChannelState; now: number; nameOf: (n: string) => string; unreadIn?: (id: number) => { n: number; forMe: boolean }; onOpen: (id: number) => void }) {
+  const [showDone, setShowDone] = useState(false)
+  const [query, setQuery] = useState("")
+  const q = query.trim().toLowerCase()
+  const all = [...state.tasks.values()]
+    .filter((t) => !q || t.title.toLowerCase().includes(q) || taskId(t.id).toLowerCase().includes(q) || (!!t.owner && nameOf(t.owner).toLowerCase().includes(q)))
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+
+  if (!state.tasks.size)
+    return (
+      <div className="flex flex-1 items-center justify-center p-8">
+        <div className="max-w-xs">
+          <p className="text-body font-semibold">No tasks yet</p>
+          <p className="mt-1 text-ui leading-normal text-ink-2">When agents split up work, each task and who has it shows up here, and in the conversation where it was made.</p>
+        </div>
+      </div>
+    )
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-[760px] px-4 py-6 md:px-8">
-        {ORDER.map((s) => {
+      <div className="mx-auto max-w-[792px] px-3 pt-[calc(var(--head)+12px)] pb-8 md:px-4">
+        <label className="glass mb-5 flex h-9 items-center gap-2 rounded-full px-3.5 text-ink-3 transition-shadow focus-within:shadow-[0_0_0_3px_var(--accent-wash)]">
+          <Icon icon={Search01Icon} size={16} className="shrink-0" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setQuery("")}
+            placeholder="Filter by title, number or who has it"
+            aria-label="Filter tasks"
+            className="min-w-0 flex-1 bg-transparent text-body text-ink outline-none placeholder:text-ink-3 focus-visible:outline-none"
+          />
+        </label>
+        {q && !all.length && <p className="py-6 text-center text-ui text-ink-3">No task matches “{query}”.</p>}
+        {GROUPS.map(([s, word]) => {
           const list = all.filter((t) => t.state === s)
           if (!list.length) return null
-          const closed = s === "done"
+          // Done ones wait behind a tap, unless you're looking for one.
+          const closed = s === "done" && !q
           return (
-            <section key={s} className="mb-7">
-              <div className="mb-1 flex items-baseline gap-2">
-                <h3 className="text-ui font-semibold text-ink">{LABEL[s]}</h3>
+            <section key={s} aria-label={word} className="mb-6">
+              <div className="mb-1.5 flex items-baseline gap-2 px-4">
+                <h3 className="text-ui font-semibold text-ink-2">{word}</h3>
                 <span className="text-meta text-ink-3 tabular-nums">{list.length}</span>
                 {closed && (
-                  <button type="button" className="ml-auto text-meta font-medium text-ink-2 hover:text-ink" onClick={() => setShowDone((v) => !v)}>
+                  <button type="button" className="ml-auto text-ui font-medium text-accent-text hover:underline" onClick={() => setShowDone((v) => !v)}>
                     {showDone ? "Hide" : "Show"}
                   </button>
                 )}
               </div>
-              {(!closed || showDone) && list.map((t) => <TaskRow key={t.id} task={t} now={now} onOpen={() => onOpen(t.id)} />)}
+              {(!closed || showDone) && (
+                <div className="overflow-hidden rounded-card bg-raised shadow-[0_0_0_1px_var(--line)]">
+                  {list.map((t) => (
+                    <TaskRow key={t.id} task={t} state={state} now={now} nameOf={nameOf} unread={unreadIn?.(t.id)} onOpen={() => onOpen(t.id)} />
+                  ))}
+                </div>
+              )}
             </section>
           )
         })}
@@ -200,4 +247,3 @@ export function Tasks({ state, now, onOpen }: { state: ChannelState; now: number
     </div>
   )
 }
-

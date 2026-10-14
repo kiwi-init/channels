@@ -27,24 +27,24 @@ export function ThreadPanel({ count, children, composer, onClose }: { count: num
     }
   }, [])
 
-  // On the rail's tone, the field steps up to the raised one so the composer still stands out.
-  // Others' bubbles stay Messages grey, as in the main conversation.
+  // The same canvas as the conversation, a hairline between them; its header is on the window's one
+  // header row. Others' bubbles stay Messages grey, as in the main conversation.
   return (
     <ResizablePanel>
       <aside
         aria-label="Thread"
-        className="animate-slide-in flex h-full w-full flex-col bg-rail [--field:var(--raised)]"
+        className="animate-slide-in flex h-full w-full flex-col border-l border-line bg-rail"
         onKeyDown={(e) => {
           if (e.key !== "Escape") return
           e.preventDefault()
           onClose()
         }}
       >
-        <header className="flex h-14 shrink-0 items-center justify-between pr-3 pl-4">
+        <header className="drag flex h-(--chrome-h) shrink-0 items-center justify-between px-3">
           <span className="text-ui font-semibold">
             Thread <span className="font-normal text-ink-3">{count === 1 ? "1 reply" : `${count} replies`}</span>
           </span>
-          <IconButton label="Close thread" round onClick={onClose}>
+          <IconButton label="Close thread" round className="glass size-9 text-ink" onClick={onClose}>
             <Icon icon={Cancel01Icon} size={17} />
           </IconButton>
         </header>

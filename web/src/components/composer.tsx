@@ -1,5 +1,5 @@
 import { Add01Icon, ArrowUp02Icon, Cancel01Icon } from "@hugeicons/core-free-icons"
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 import type { SendOptions } from "@mc/client.ts"
 import { MAX_IMAGE_BYTES, RASTER_MIMES, type Color, type Message } from "@mc/protocol.ts"
@@ -44,6 +44,8 @@ interface Props {
   extra?: Pick<SendOptions, "to" | "task" | "dm">
   /** Placeholder for this conversation ("Message T12", "Message win"). */
   placeholder?: string
+  /** Under the field, inside the composer: what the agents are doing (agent-strip.tsx). */
+  footer?: ReactNode
 }
 
 /** Who a message is for: the people @mentioned at its start. */
@@ -52,7 +54,7 @@ function recipients(body: string, names: Set<string>): string[] {
   return [...lead.matchAll(/@([\p{L}\p{N}_.-]+)/gu)].map((m) => m[1]!).filter((n) => names.has(n))
 }
 
-export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, send, thread, route, extra, placeholder }: Props) {
+export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, send, thread, route, extra, placeholder, footer }: Props) {
   const [body, setBody] = useState("")
   const [files, setFiles] = useState<{ name: string; mime: string; data: string }[]>([])
   const [dropping, setDropping] = useState(false)
@@ -189,7 +191,7 @@ export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, 
   const hint = disabled ? "Connecting…" : thread ? "Reply" : replyTo ? `Reply to ${nameOf(replyTo.from)}` : (placeholder ?? (route?.view === "coordinator" ? `Message ${route.label}` : "Message"))
 
   return (
-    <div className={cx("relative mx-auto w-full shrink-0", thread ? "px-3 pt-2 pb-3" : "max-w-[792px] px-4 pt-2 pb-4")}>
+    <div className={cx("relative mx-auto w-full shrink-0", thread ? "px-3 pt-2 pb-3" : "max-w-[792px] px-3 pt-2 pb-4 md:px-4")}>
       <input ref={picker} type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple className="hidden" onChange={(e) => (pick(e.target.files), (e.target.value = ""))} />
 
       {matches.length > 0 && (
@@ -210,7 +212,7 @@ export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, 
       )}
 
       {replyTo && !thread && (
-        <div className="mb-1.5 ml-11 flex items-center gap-2 rounded-ctl px-2 text-meta text-ink-2">
+        <div className="mb-1.5 ml-3 flex items-center gap-2 rounded-ctl px-2 text-meta text-ink-2">
           <span className="min-w-0 truncate">
             Replying to <span className="font-medium text-ink">{nameOf(replyTo.from)}</span> <span className="text-ink-3">{excerpt(replyTo.body, 80)}</span>
           </span>
@@ -220,23 +222,11 @@ export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, 
         </div>
       )}
 
-      <div className="flex items-end gap-2">
-        {/* Attach, as Messages' + beside the field. */}
-        <button
-          type="button"
-          aria-label="Attach images"
-          title="Attach images"
-          onClick={() => picker.current?.click()}
-          disabled={disabled || files.length >= 8}
-          className="mb-[3px] flex size-[30px] shrink-0 items-center justify-center rounded-full text-ink-3 transition-colors hover:bg-wash-2 hover:text-ink disabled:opacity-40"
-        >
-          <Icon icon={Add01Icon} size={17} strokeWidth={2} />
-        </button>
-
+      <div>
         <div
           className={cx(
-            "relative min-w-0 flex-1 rounded-bubble bg-field transition-shadow focus-within:shadow-[0_0_0_3px_var(--accent-wash)]",
-            dropping && "shadow-[inset_0_0_0_1.5px_var(--ring)]"
+            "glass relative min-w-0 overflow-hidden rounded-dock transition-shadow focus-within:shadow-[inset_0_1px_0_var(--glass-rim),0_0_0_1px_var(--ring),0_0_0_4px_var(--accent-wash)]",
+            dropping && "shadow-[0_0_0_1.5px_var(--ring)]"
           )}
           onDragEnter={(e) => {
             if (disabled || !e.dataTransfer.types.includes("Files")) return
@@ -258,7 +248,7 @@ export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, 
             pick(e.dataTransfer.files)
           }}
         >
-          {dropping && <div className="pointer-events-none absolute inset-1 z-10 flex items-center justify-center rounded-bubble bg-canvas/90 text-ui text-ink-2">Drop images</div>}
+          {dropping && <div className="pointer-events-none absolute inset-1 z-10 flex items-center justify-center rounded-dock bg-canvas/90 text-ui text-ink-2">Drop images</div>}
 
           {files.length > 0 && (
             <div className="flex gap-2 overflow-x-auto px-3 pt-2.5">
@@ -279,6 +269,16 @@ export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, 
           )}
 
           <div className="flex items-end">
+            <button
+              type="button"
+              aria-label="Attach images"
+              title="Attach images"
+              onClick={() => picker.current?.click()}
+              disabled={disabled || files.length >= 8}
+              className="m-1.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-wash-2 text-ink-2 transition-colors hover:bg-pick hover:text-ink disabled:opacity-40"
+            >
+              <Icon icon={Add01Icon} size={17} strokeWidth={2} />
+            </button>
             <textarea
               ref={area}
               rows={1}
@@ -331,7 +331,7 @@ export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, 
                   onClearReply()
                 }
               }}
-              className="bubble-text block max-h-[220px] min-h-[36px] min-w-0 flex-1 resize-none bg-transparent py-2 pr-1 pl-3.5 text-body outline-none placeholder:truncate placeholder:text-ink-3 focus-visible:outline-none"
+              className="bubble-text block max-h-[220px] min-h-[48px] min-w-0 flex-1 resize-none bg-transparent py-[13px] pr-1 pl-1 text-body outline-none placeholder:truncate placeholder:text-ink-3 focus-visible:outline-none"
             />
             <button
               type="button"
@@ -340,16 +340,17 @@ export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, 
               disabled={!canSend}
               onClick={() => void submit()}
               className={cx(
-                "m-[4px] flex size-7 shrink-0 items-center justify-center rounded-full transition-[background-color,color,opacity,transform] duration-150",
-                canSend ? "scale-100 bg-accent text-accent-ink hover:opacity-90 active:scale-95" : "scale-75 bg-wash-2 text-ink-3 opacity-0"
+                "m-1.5 flex size-9 shrink-0 items-center justify-center rounded-full transition-[background-color,color,transform] duration-150",
+                canSend ? "bg-accent text-accent-ink hover:opacity-90 active:scale-95" : "bg-wash-2 text-ink-3"
               )}
             >
-              <Icon icon={ArrowUp02Icon} size={15} strokeWidth={2.4} />
+              <Icon icon={ArrowUp02Icon} size={18} strokeWidth={2.2} />
             </button>
           </div>
+          {footer}
         </div>
       </div>
-      {routeNote && <p className="mt-1 ml-12 truncate text-stamp text-ink-3">{routeNote}</p>}
+      {routeNote && <p className="mt-1.5 ml-4 truncate text-stamp text-ink-3">{routeNote}</p>}
     </div>
   )
 }

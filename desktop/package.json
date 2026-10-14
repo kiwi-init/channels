@@ -1,0 +1,82 @@
+{
+  "name": "kiwi-desktop",
+  "version": "0.11.0-rc.7",
+  "private": true,
+  "description": "Kiwi desktop app: an Electron shell hosting web/ for people (auto-approval, pairing, admin).",
+  "homepage": "https://github.com/ojowwalker77/channels",
+  "author": {
+    "name": "Jow",
+    "email": "ojowwalker77@users.noreply.github.com"
+  },
+  "main": "dist/main.js",
+  "scripts": {
+    "build:main": "bun build src/main.ts --outfile dist/main.js --target node --format cjs --external electron",
+    "build:preload": "bun build src/preload.ts --outfile dist/preload.js --target node --format cjs --external electron",
+    "build": "bun run build:main && bun run build:preload",
+    "start": "bun run build && electron dist/main.js",
+    "dist": "bun run build && electron-builder",
+    "typecheck": "bunx tsc --noEmit"
+  },
+  "devDependencies": {
+    "electron": "^44.0.0",
+    "electron-builder": "^26.0.0",
+    "typescript": "^7.0.2"
+  },
+  "build": {
+    "appId": "com.kiwiinit.kiwi",
+    "productName": "Kiwi",
+    "files": [
+      "dist/**"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/dist",
+        "to": "web/dist"
+      },
+      {
+        "from": "assets",
+        "to": "assets"
+      }
+    ],
+    "protocols": {
+      "name": "Kiwi",
+      "schemes": [
+        "kiwi"
+      ]
+    },
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "extraResources": [
+        {
+          "from": "../dist/kiwi",
+          "to": "kiwi"
+        }
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "linux": {
+      "category": "Utility",
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "extraResources": [
+        {
+          "from": "../dist/kiwi",
+          "to": "kiwi"
+        }
+      ]
+    },
+    "artifactName": "Kiwi-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "release"
+    }
+  }
+}

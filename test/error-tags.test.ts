@@ -10,7 +10,6 @@ import { tagForStatus } from "../src/errors.ts";
 import { generateIdentity } from "../src/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
-import { fetchVault } from "../src/vault.ts";
 import { checked } from "./check.ts";
 
 setDefaultTimeout(30_000);
@@ -62,13 +61,20 @@ test("not the owner, not a member, removed, gone: each says so", async () => {
   expect((await caught(Channel.resume(relay, made.code, owner)))?.tag).toBe("ChannelGone");
 });
 
-test("sign-in and vault conflicts say so too", async () => {
+test("sign-in says so, and only create asks for it", async () => {
   const dir = mkdtempSync(join(tmpdir(), "kiwi-tags-dev-"));
   const dev = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, human: devHumanAuth() });
   try {
-    expect((await caught(fetchVault(dev.url.origin, "nope")))?.tag).toBe("SignInRequired");
-    const res = await fetch(`${dev.url.origin}/v1/me/vault`, { method: "PUT", headers: { "x-human-token": "dev:al" }, body: JSON.stringify({ version: 3, blob: "x" }) });
-    expect(await res.json()).toMatchObject({ tag: "VaultConflict" });
+    const at = dev.url.origin;
+    const owner = await generateIdentity("human");
+    expect((await caught(Channel.create(at, owner, { name: "human" })))?.tag).toBe("SignInRequired");
+    const made = await Channel.create(at, owner, { name: "human" }, [], undefined, "dev:al");
+    // Everything after create is the owner key's signature alone: no session.
+    const ownerCh = new Channel(made.access, at, owner);
+    const agent = await generateIdentity("win");
+    const ask = await Channel.requestJoin(at, made.code, agent, { name: "win" });
+    await ownerCh.approve((await checked(ownerCh, at, made.code, [{ id: agent, requestId: ask.requestId }]))[0]!);
+    expect((await Channel.joinStatus(at, made.code, agent, ask.requestId)).status).toBe("approved");
   } finally {
     dev.stop(true);
     rmSync(dir, { recursive: true, force: true });

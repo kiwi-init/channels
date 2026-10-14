@@ -1,12 +1,11 @@
+import { hasBridge, relayUrl } from "../lib/relay"
 import { CheckListIcon, LockIcon } from "@hugeicons/core-free-icons"
 import { useEffect, useState, type ReactNode } from "react"
 
-import type { Identity } from "@mc/identity.ts"
 import { handleFor, NAME_RE } from "@mc/membership.ts"
-import { useAuth } from "@/lib/auth"
-import { cancelled } from "@/lib/passkey"
-import { atChannelLimit, type MyUsage } from "@/lib/usage"
-import { unlockWithPasskey, useVault } from "@/lib/vault"
+import { tokenForCreate, useSignInMode } from "@/lib/auth"
+import { bridge, useSecrets } from "@/lib/secrets"
+import { isSignInGone } from "@/lib/session"
 import {
   askToJoin,
   checkJoin,
@@ -16,18 +15,15 @@ import {
   isJoinCode,
   loadMember,
   loadPending,
-  memberFromLink,
-  personName,
   type ChannelRow,
   type PendingJoin,
   type StoredMember,
 } from "@/lib/channel"
 import { Conversation } from "./conversation"
-import { Reason } from "./usage"
 import { Command } from "./add-agent"
 import { CoordinatorHead } from "./coordinator-head"
 import { Icon } from "./icon"
-import { Button, Modal, Monogram, Spinner, TextField, Wordmark, errorText, toast } from "./kit"
+import { Button, Modal, Monogram, Spinner, TextField, Wordmark, errorText } from "./kit"
 
 /** Every screen that isn't a conversation: one calm, left-aligned column. */
 function Stage({ children, width = 380 }: { children: ReactNode; width?: number }) {
@@ -87,15 +83,20 @@ function Specimen() {
 }
 
 export function Welcome({ onNew, onJoin }: { onNew: () => void; onJoin: () => void }) {
-  const auth = useAuth()
-  // Signed in, this is a workspace with nothing open, not a pitch: say what to do next.
-  if (auth.status === "signed-in")
+  const person = useSecrets().person
+  // With channels or a person key, this is a workspace with nothing open, not a pitch: say what to do next.
+  if (person)
     return (
       <Stage width={460}>
         <CoordinatorHead size={88} live interactive seed={0.6} className="-ml-1" label="Kiwi" />
         <h1 className="mt-4 text-display font-semibold">Nothing open</h1>
-        <p className="mt-1.5 text-body text-ink-2">Pick a channel on the left, or start one. Your agents need kiwi on their computer: paste this into the terminal they work in.</p>
-        <Command text={`curl -fsSL ${location.origin}/install | sh`} label="Copy the install command" />
+        <p className="mt-1.5 text-body text-ink-2">
+          {/* In the app, this computer's kiwi is the app's to keep (desktop/src/cli.ts). */}
+          {hasBridge()
+            ? "Pick a channel on the left, or start one. Agents on this computer already have kiwi: the app installs it and keeps it current. For another computer, add it from Your computers, or paste this into the terminal its agents work in."
+            : "Pick a channel on the left, or start one. Your agents need kiwi on their computer: add it from Your computers, or paste this into the terminal they work in."}
+        </p>
+        <Command text={`curl -fsSL ${relayUrl()}/install | sh`} label="Copy the install command" />
         <div className="mt-5 flex flex-wrap gap-2">
           <Button variant="secondary" onClick={onNew}>New channel</Button>
           <Button variant="ghost" onClick={onJoin}>
@@ -111,15 +112,9 @@ export function Welcome({ onNew, onJoin }: { onNew: () => void; onJoin: () => vo
         Private channels where your agents work together in real time. You approve everyone who joins, watch the work, and step in when it matters.
       </p>
       <div className="mt-7 flex flex-wrap gap-2">
-        {auth.status === "signed-out" ? (
-          <Button size="lg" onClick={auth.signIn}>
-            Sign in
-          </Button>
-        ) : (
-          <Button size="lg" onClick={onNew} disabled={auth.status === "loading"}>
-            New channel
-          </Button>
-        )}
+        <Button size="lg" onClick={onNew}>
+          New channel
+        </Button>
         <Button size="lg" variant="secondary" onClick={onJoin}>
           Join with a code
         </Button>
@@ -135,25 +130,28 @@ export function Welcome({ onNew, onJoin }: { onNew: () => void; onJoin: () => vo
   )
 }
 
-export function NewChannel({ open, onClose, onCreated, usage }: { open: boolean; onClose: () => void; onCreated: (code: string) => void; usage: MyUsage | null }) {
-  const auth = useAuth()
+export function NewChannel({ open, onClose, onCreated, onJoin }: { open: boolean; onClose: () => void; onCreated: (code: string) => void; /** Have a code instead: join with it. */ onJoin?: () => void }) {
+  const person = useSecrets().person
+  const signIn = useSignInMode()
   const [name, setName] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // On a relay with sign-in, only signed-in people create channels.
-  const canCreate = auth.status === "signed-in" || auth.status === "off"
-  // Say so before they type a name, rather than after.
-  const full = atChannelLimit(usage)
+  const [needSignIn, setNeedSignIn] = useState(false)
 
-  const create = async () => {
+  const create = async (fresh = false) => {
     setBusy(true)
     setError(null)
     try {
-      const m = await createChannel(name.trim() || "Untitled channel", await auth.token(), auth.user)
+      // The one place sign-in is asked for: a relay with sign-in lets signed-in people create channels.
+      const token = await tokenForCreate(fresh)
+      const m = await createChannel(name.trim() || "Untitled channel", token, person ? { name: person.name } : null)
       setName("")
+      setNeedSignIn(false)
       onCreated(m.code)
     } catch (err) {
-      setError(errorText(err))
+      const gone = isSignInGone(err)
+      setNeedSignIn(gone && !!bridge())
+      setError(gone ? (bridge() ? "You need to sign in to create a channel on this relay." : "Creating a channel on this relay needs sign-in, which the Kiwi desktop app does.") : errorText(err))
     } finally {
       setBusy(false)
     }
@@ -165,28 +163,31 @@ export function NewChannel({ open, onClose, onCreated, usage }: { open: boolean;
         className="p-5"
         onSubmit={(e) => {
           e.preventDefault()
-          if (canCreate && !full) void create()
+          void create()
         }}
       >
         <h2 className="text-title font-semibold">New channel</h2>
         <p className="mt-1 text-ui leading-normal text-ink-2">You own it and approve everyone who joins. Only members can read its name.</p>
-        {canCreate ? (
-          <TextField className="mt-4" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="payments-refactor" maxLength={60} autoComplete="off" />
-        ) : (
-          <p className="mt-4 text-ui text-ink-2">Sign in first. Channels here belong to a signed-in person.</p>
-        )}
-        {full && !error && <p className="mt-3 text-ui leading-normal text-ink-2">You own {usage!.owned} channels, the most you can have here. Close one you no longer need to create another.</p>}
-        {error && <Reason text={error} className="mt-3 rounded-ctl bg-wash px-3 py-2.5 text-alert" />}
-        <div className="mt-5 flex justify-end gap-2">
+        <TextField className="mt-4" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="payments-refactor" maxLength={60} autoComplete="off" />
+        {signIn === "workos" && <p className="mt-3 text-meta leading-normal text-ink-3">This relay asks you to sign in to create a channel. Your browser opens for it.</p>}
+        {error && <p className="mt-3 rounded-ctl bg-wash px-3 py-2.5 text-ui leading-normal text-alert">{error}</p>}
+        <div className="mt-5 flex items-center justify-end gap-2">
+          {onJoin && (
+            <button type="button" onClick={onJoin} className="mr-auto text-ui font-medium text-accent-text hover:underline">
+              Have a code? Join
+            </button>
+          )}
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          {canCreate ? (
-            <Button type="submit" disabled={busy || full}>
-              {busy ? <Spinner className="border-white/30 border-t-white" /> : "Create channel"}
+          {needSignIn ? (
+            <Button disabled={busy} onClick={() => void create(true)}>
+              {busy ? <Spinner className="border-white/30 border-t-white" /> : "Sign in"}
             </Button>
           ) : (
-            <Button onClick={auth.signIn}>Sign in</Button>
+            <Button type="submit" disabled={busy}>
+              {busy ? <Spinner className="border-white/30 border-t-white" /> : "Create channel"}
+            </Button>
           )}
         </div>
       </form>
@@ -233,15 +234,11 @@ type Phase =
   | { kind: "waiting"; pending: PendingJoin; code: string | null }
   | { kind: "denied" }
   | { kind: "member"; member: StoredMember }
-  | { kind: "confirmLink"; identity: Identity }
   | { kind: "error"; message: string }
 
 /** Decide what this browser is in a channel: a member, waiting for approval, or a visitor who may ask. */
-export function ChannelGate({ code, identity, listed, onBack, onGone }: { code: string; identity: Identity | null; listed?: ChannelRow; onBack: () => void; onGone: () => void }) {
+export function ChannelGate({ code, listed, onBack, onGone }: { code: string; listed?: ChannelRow; onBack: () => void; onGone: () => void }) {
   const [phase, setPhase] = useState<Phase>({ kind: "loading" })
-  const [askHere, setAskHere] = useState(false)
-  const vault = useVault()
-  const [unlocking, setUnlocking] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -249,8 +246,6 @@ export function ChannelGate({ code, identity, listed, onBack, onGone }: { code: 
       if (!isJoinCode(code)) return setPhase({ kind: "error", message: "That isn’t a join code. Join codes start with mc2-." })
       try {
         const stored = loadMember(code)
-        // A link carrying a key: ask before using it, unless it's the key this browser already holds.
-        if (identity && stored?.identity.pk !== identity.pk) return setPhase({ kind: "confirmLink", identity })
         if (stored) return setPhase({ kind: "member", member: stored })
         const pending = loadPending(code)
         setPhase(pending ? { kind: "waiting", pending, code: null } : { kind: "ask" })
@@ -261,7 +256,7 @@ export function ChannelGate({ code, identity, listed, onBack, onGone }: { code: 
     return () => {
       cancelled = true
     }
-  }, [code, identity])
+  }, [code])
 
   // Poll a pending request until the owner decides.
   useEffect(() => {
@@ -292,84 +287,6 @@ export function ChannelGate({ code, identity, listed, onBack, onGone }: { code: 
   const giveUp = () => {
     forgetPending(code)
     onGone()
-  }
-
-  if (phase.kind === "confirmLink") {
-    const id = phase.identity
-    return (
-      <Stage>
-        <Heading title={`Open this channel as ${id.name}?`}>
-          This link carries a private key. Open it only if you made it yourself, with kiwi web on your own computer. Never open one that someone sent you.
-        </Heading>
-        <p className="mt-4 text-meta text-ink-3">Key {id.pk.slice(0, 16)}</p>
-        <div className="mt-6 flex gap-2">
-          <Button
-            size="lg"
-            onClick={() => {
-              setPhase({ kind: "loading" })
-              memberFromLink(code, id)
-                .then((m) => setPhase({ kind: "member", member: m }))
-                .catch((err: unknown) => setPhase({ kind: "error", message: errorText(err) }))
-            }}
-          >
-            Open channel
-          </Button>
-          <Button size="lg" variant="secondary" onClick={onBack}>
-            Cancel
-          </Button>
-        </div>
-      </Stage>
-    )
-  }
-
-  // This person holds the channel's keys on another device: unlock the vault, or bring them here from there.
-  if (phase.kind === "ask" && listed?.state === "elsewhere" && !askHere) {
-    const locked = vault.kind === "locked"
-    return (
-      <Stage>
-        <Heading title="This channel is on another device of yours">
-          {locked ? (
-            <>Your channels are saved to a passkey. Touch it to bring this one, and every other, to this browser.</>
-          ) : (
-            <>
-              Its keys are on the device you {listed.owner ? "created it on" : "joined from"}. To bring your channels here, open Channels there, choose{" "}
-              <span className="font-medium text-ink">Add a device</span> from your account menu, and scan the code with this device.
-            </>
-          )}
-        </Heading>
-        <div className="mt-6 flex flex-wrap gap-2">
-          {locked && (
-            <Button
-              disabled={unlocking}
-              onClick={async () => {
-                setUnlocking(true)
-                try {
-                  const n = await unlockWithPasskey()
-                  const here = loadMember(code)
-                  if (here) setPhase({ kind: "member", member: here })
-                  toast(n === 1 ? "1 channel added" : `${n} channels added`)
-                } catch (err) {
-                  if (!cancelled(err)) toast(errorText(err), "error")
-                } finally {
-                  setUnlocking(false)
-                }
-              }}
-            >
-              {unlocking ? <Spinner className="size-3.5 border-accent-ink/30 border-t-accent-ink" /> : "Use passkey"}
-            </Button>
-          )}
-          <Button variant="secondary" onClick={onBack}>
-            Back to channels
-          </Button>
-          {/* Without that device (lost, or wiped), a member can still ask the owner again; an owner can't replace their own key. */}
-          {!listed.owner && (
-            <Button variant="ghost" onClick={() => setAskHere(true)}>
-              I don’t have that device
-            </Button>
-          )}
-        </div>
-      </Stage>
-    )
   }
 
   return (
@@ -415,12 +332,10 @@ export function ChannelGate({ code, identity, listed, onBack, onGone }: { code: 
 }
 
 function AskToJoin({ code, listed, onAsked, onCancel }: { code: string; listed?: ChannelRow; onAsked: (p: PendingJoin) => void; onCancel: () => void }) {
-  const auth = useAuth()
-  // People join under their own signed-in name. An empty field fills once auth
-  // arrives, and again if it's cleared, same as before.
-  const suggested = auth.user ? handleFor(personName(auth.user), auth.user.email) : ""
+  const person = useSecrets().person
+  // People join under their own name, from their person key.
+  const suggested = person ? handleFor(person.name) : ""
   const [name, setName] = useState(suggested)
-  if (auth.user && !name && suggested) setName(suggested)
   const [role, setRole] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -451,39 +366,9 @@ function AskToJoin({ code, listed, onAsked, onCancel }: { code: string; listed?:
 
   const owner = invite.ownerName
   const intro =
-    listed?.state === "elsewhere"
-      ? { title: "Ask to join from this browser", text: "The owner lets this browser in as you, like any new member." }
-      : listed?.state === "agents"
+    listed?.state === "agents"
         ? { title: "Your agents are in this channel", text: "Ask the owner to let you in as well, so you can watch what they do." }
         : { title: owner ? `${owner} invited you to a channel` : "You’re invited to a channel", text: null }
-
-  // Before sign-in: what this is and what happens next, in plain words.
-  if (auth.status === "signed-out") {
-    const who = owner ?? "The owner"
-    return (
-      <>
-        <Heading title={intro.title}>{intro.text}</Heading>
-        {!intro.text && (
-          <>
-            <p className="mt-3 text-body leading-normal text-ink-2">Kiwi Channels is a private chat where people and their AI agents work together. Here’s what happens:</p>
-            <ol className="mt-4 grid list-decimal gap-2 pl-5 text-body leading-normal text-ink-2 marker:text-ink-3">
-              <li>Sign in, so {owner ?? "the owner"} sees who’s asking.</li>
-              <li>{who} lets you in after checking a short number with you.</li>
-              <li>Messages are end-to-end encrypted, and only your browser can read them.</li>
-            </ol>
-          </>
-        )}
-        <div className="mt-6 flex gap-2">
-          <Button size="lg" onClick={auth.signIn}>
-            Sign in to continue
-          </Button>
-          <Button size="lg" variant="secondary" onClick={onCancel}>
-            Not now
-          </Button>
-        </div>
-      </>
-    )
-  }
 
   return (
     <form
@@ -493,7 +378,7 @@ function AskToJoin({ code, listed, onAsked, onCancel }: { code: string; listed?:
         setBusy(true)
         setError(null)
         try {
-          onAsked(await askToJoin(code, name.trim(), role.trim() || undefined, await auth.token()))
+          onAsked(await askToJoin(code, name.trim(), role.trim() || undefined))
         } catch (err) {
           setError(errorText(err))
         } finally {

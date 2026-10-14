@@ -6,8 +6,8 @@ import { verificationCode } from "./crypto.ts";
 /** Requests about machines are signed like room requests, under this fixed scope. */
 export const MACHINE_SCOPE = "kiwi-machines";
 
-/** The statement a machine signs to vouch for one agent key in one channel. */
-export const vouchStatement = (roomId: string, agentPk: string) => `kiwi-vouch\n${roomId}\n${agentPk}`;
+/** The statement a machine signs to vouch for one agent key in one channel (person.ts owns it now). */
+export { vouchStatement } from "./person.ts";
 
 /**
  * What a computer signs over its exchange key, so the link page can seat it in its person's channels:

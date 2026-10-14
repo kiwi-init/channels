@@ -1,0 +1,99 @@
+// Talking to "kiwi daemon" over its local socket, in the daemon's own protocol (src/daemon.ts is
+// the contract; this follows it, so the CLI and the app reach the same daemon the same way):
+//   path: $KIWI_HOME/daemon.sock (a named pipe on Windows: \\.\pipe\kiwi-daemon-<home's tag>)
+//   framing: newline-delimited JSON, one request per line, one response per line
+//   request:  { "id": number, "verb": string, ...params }        (params flat on the request)
+//   response: { "id": number, "ok": true, ...fields } | { "id": number, "ok": false, "error": string }
+//   verbs this shell needs:
+//     hello -> { version, machine: pk | null, mxpk, label, person: { pk, name, … } | null, certified }
+//     adopt { cert, person: { pk, xpk, name } } -> { ok: true }
+//       (cert is the MachineCert the app made for this machine's key)
+// It used to send { method, params } and read { result }, which the daemon ignores: every hello
+// timed out, so the app never saw its own daemon and never listed this computer.
+
+import net from "node:net";
+import os from "node:os";
+import path from "node:path";
+
+import type { MachineCert } from "../../src/person.ts";
+
+export interface HelloResult {
+  version: string;
+  machine: { pk: string; xpk: string };
+  paired: { person: string; name: string; label: string } | null;
+}
+
+export interface AdoptParams {
+  cert: MachineCert;
+  person: { pk: string; xpk: string; name: string };
+}
+
+const idOf = (u: string) => u.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32) || "kiwi";
+
+export function kiwiHome(): string {
+  return process.env["KIWI_HOME"] ?? path.join(os.homedir(), ".kiwi");
+}
+
+export function daemonSocketPath(home: string = kiwiHome()): string {
+  // The same name the daemon picks (src/daemon.ts daemonSock): its home, as a tag.
+  if (process.platform === "win32") return `\\\\.\\pipe\\kiwi-daemon-${home.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(-64) || "kiwi"}`;
+  return path.join(home, "daemon.sock");
+}
+
+type Reply = { id: number; ok: boolean; error?: string } & Record<string, unknown>;
+
+function call(sock: string, verb: string, params: object = {}, timeoutMs = 5_000): Promise<Reply> {
+  return new Promise((resolve, reject) => {
+    const conn = net.createConnection(sock);
+    const timer = setTimeout(() => (conn.destroy(), reject(new Error("the daemon didn't answer"))), timeoutMs);
+    let buf = "";
+    conn.on("connect", () => conn.write(`${JSON.stringify({ ...params, id: 1, verb })}\n`));
+    conn.on("data", (chunk) => {
+      buf += chunk.toString("utf8");
+      const nl = buf.indexOf("\n");
+      if (nl < 0) return;
+      clearTimeout(timer);
+      conn.destroy();
+      try {
+        const res = JSON.parse(buf.slice(0, nl)) as Reply;
+        if (res.ok) resolve(res);
+        else reject(new Error(typeof res.error === "string" ? res.error : "the daemon refused"));
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error(String(err)));
+      }
+    });
+    conn.on("error", (err) => (clearTimeout(timer), reject(err)));
+  });
+}
+
+/** The daemon's hello, or null when none is listening (stale socket included) or it has no key yet. */
+export async function daemonHello(home: string = kiwiHome(), timeoutMs = 5_000): Promise<HelloResult | null> {
+  try {
+    const r = await call(daemonSocketPath(home), "hello", {}, timeoutMs);
+    if (typeof r["version"] !== "string" || typeof r["machine"] !== "string" || typeof r["mxpk"] !== "string") return null;
+    const person = r["person"] as { pk?: unknown; name?: unknown } | null;
+    const label = typeof r["label"] === "string" ? r["label"] : "";
+    return {
+      version: r["version"],
+      machine: { pk: r["machine"], xpk: r["mxpk"] },
+      paired: r["certified"] && person && typeof person.pk === "string" ? { person: person.pk, name: typeof person.name === "string" ? person.name : "", label } : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Ask the daemon to stop (an older one, before a newer starts). True once it said it would. */
+export async function daemonStop(home: string = kiwiHome(), timeoutMs = 5_000): Promise<boolean> {
+  try {
+    await call(daemonSocketPath(home), "stop", {}, timeoutMs);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Hand the daemon its cert from the person. Throws when it refuses. */
+export async function daemonAdopt(home: string, params: AdoptParams, timeoutMs = 10_000): Promise<void> {
+  await call(daemonSocketPath(home), "adopt", params, timeoutMs);
+}

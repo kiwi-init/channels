@@ -10,7 +10,8 @@
   "durable_objects": {
     "bindings": [
       { "name": "CHANNELS", "class_name": "Channel" },
-      { "name": "PEOPLE", "class_name": "Directory" }
+      { "name": "OWNERS", "class_name": "Owners" },
+      { "name": "MAILBOX", "class_name": "MailboxBox" }
     ]
   },
   // SQLite-backed Durable Objects are the ones available on the Workers Free plan.
@@ -19,7 +20,12 @@
     { "tag": "v1", "new_sqlite_classes": ["Room"] },
     { "tag": "v2", "deleted_classes": ["Room"] },
     { "tag": "v3", "new_sqlite_classes": ["Channel"] },
-    { "tag": "v4", "new_sqlite_classes": ["Directory"] }
+    { "tag": "v4", "new_sqlite_classes": ["Directory"] },
+    { "tag": "v5", "new_sqlite_classes": ["MailboxBox"] },
+    // 0.11: the signed-in channel lists are gone (their vaults, links and lists with them);
+    // a small Owners object per person counts their owned channels for the create quota.
+    { "tag": "v6", "deleted_classes": ["Directory"] },
+    { "tag": "v7", "new_sqlite_classes": ["Owners"] }
   ],
   // The web app (web/, React), served before the Worker runs.
   // Static assets are free and don't count as Worker requests.
@@ -49,11 +55,10 @@
     "KIWI_EXPIRE_AFTER_DAYS": ""
   },
   "build": { "command": "bun run web:build" },
-  // Computer registrations, per client address. The binding's period is only 10 or 60
-  // seconds, so this is 20 per minute. The Bun relay counts 20 per 10 minutes in-process.
+  // 20 mailbox writes per minute per client address (pairing codes are pasted by hand).
   // namespace_id must be unique in the Cloudflare account.
   "ratelimits": [
-    { "name": "MACHINE_REGISTRATIONS", "namespace_id": "870201", "simple": { "limit": 20, "period": 60 } }
+    { "name": "MAILBOX_WRITES", "namespace_id": "870202", "simple": { "limit": 20, "period": 60 } }
   ],
   // No request logs: room ids and timing are nobody's business, and a closed
   // channel must leave nothing behind.

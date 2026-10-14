@@ -2,6 +2,7 @@
 // means the owner removes the old seat and the agent joins again; until then, a name someone holds
 // is offered the next free one.
 
+import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -62,7 +63,7 @@ describe("a lost key, without reclaim", () => {
   });
 });
 
-describe("on the owner's own computer", () => {
+describe("a taken name", () => {
   test("joining under a name someone holds comes in under the next free one, instead of failing", async () => {
     const homes: string[] = [];
     const home = () => {
@@ -71,7 +72,7 @@ describe("on the owner's own computer", () => {
       return d;
     };
     const run = async (dir: string, ...args: string[]) => {
-      const p = Bun.spawn(["bun", join(import.meta.dir, "../src/cli/main.ts"), ...args], {
+      const p = Bun.spawn(kiwiCmd(args), {
         cwd: dir,
         env: { ...process.env, KIWI_HOME: dir, KIWI_RELAY: relay, KIWI_NO_HOOKS: "1", CLAUDECODE: "" },
         stdin: "ignore",
@@ -99,8 +100,15 @@ describe("on the owner's own computer", () => {
         await run(owner, "--as", "human", "approve", again[1]!, "--yes");
       }
       expect(room).toBeTruthy();
-      // On the owner's computer, an agent typing --as bob: let in on its own, as bob-2.
-      const joined = await run(owner, "join", code, "--as", "bob");
+      // An agent typing --as bob: once the owner lets it in, it's bob-2 (the CLI no longer admits on the owner's computer itself).
+      const joining = run(owner, "join", code, "--as", "bob");
+      let pending: RegExpExecArray | null = null;
+      for (let i = 0; i < 300 && !pending; i++) {
+        pending = /(\d{3}-\d{3})\s+bob-2/.exec((await run(owner, "--as", "human", "requests")).out);
+        if (!pending) await Bun.sleep(50);
+      }
+      await run(owner, "--as", "human", "approve", pending![1]!, "--yes");
+      const joined = await joining;
       expect(joined.code).toBe(0);
       expect(joined.out).toContain('"bob-2"');
     } finally {

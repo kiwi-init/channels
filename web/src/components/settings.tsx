@@ -1,7 +1,10 @@
 import { Dialog } from "@base-ui/react/dialog"
 
 import { setAppearance, setTextSize, useAppearance, useTextSize, type Appearance, type TextSize } from "@/lib/theme"
+import { setAccessibilityOption, useAccessibilityOption } from "@/lib/accessibility"
 import { cx } from "@/lib/utils"
+import { useState } from "react"
+import { relayUrl } from "@/lib/relay"
 import { Button, Modal, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from "./kit"
 
 // How Channels looks in this browser: the theme and how large everything reads.
@@ -29,9 +32,43 @@ function Choice<T extends string>({ label, value, options, onChange }: { label: 
   )
 }
 
+type RelayBridge = { setRelayUrl?: (url: string) => Promise<string> }
+
+// The relay this app talks to. Only the desktop app can change it; saving reloads the app on the new relay.
+function RelayField() {
+  const bridge = (window as unknown as { kiwi?: RelayBridge }).kiwi
+  const [value, setValue] = useState(relayUrl())
+  const [error, setError] = useState<string | null>(null)
+  if (!bridge?.setRelayUrl) return null
+  const save = () => {
+    setError(null)
+    bridge.setRelayUrl!(value.trim()).catch((e: unknown) => setError(e instanceof Error ? e.message.replace(/^.*?Error: /, "") : String(e)))
+  }
+  return (
+    <div>
+      <label htmlFor="relay-url" className="mb-2 block text-ui font-medium text-ink">Relay</label>
+      <div className="flex gap-2">
+        <input
+          id="relay-url"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && save()}
+          spellCheck={false}
+          className="h-8 min-w-0 flex-1 rounded-row border border-line bg-transparent px-2 font-mono text-ui text-ink"
+        />
+        <Button variant="secondary" onClick={save} disabled={value.trim() === relayUrl()}>
+          Use
+        </Button>
+      </div>
+      {error && <p className="mt-1 text-ui text-ink-2" role="alert">{error}</p>}
+    </div>
+  )
+}
+
 export function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const appearance = useAppearance()
   const size = useTextSize()
+  const reduceMotion = useAccessibilityOption("reduce-motion")
   return (
     <Modal open={open} onClose={onClose}>
       <div className="p-5">
@@ -59,6 +96,16 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
               { value: "larger", label: "Larger" },
             ]}
           />
+          <Choice<"on" | "off">
+            label="Motion"
+            value={reduceMotion ? "on" : "off"}
+            onChange={(v) => setAccessibilityOption("reduce-motion", v === "on")}
+            options={[
+              { value: "off", label: "Full" },
+              { value: "on", label: "Reduced" },
+            ]}
+          />
+          <RelayField />
         </div>
         <div className="mt-6 flex justify-end">
           <Button variant="secondary" onClick={onClose}>

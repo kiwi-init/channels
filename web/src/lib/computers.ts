@@ -1,66 +1,93 @@
-// Linking a computer to your account (kiwi setup prints a #link=<key> page),
-// the list of your linked computers, and their seats in the channels you own.
+// Your computers: the ones paired with this app (kiwi pair), kept in the bridge's secrets store.
+// Pairing runs in the main process over the relay's pairing mailbox (window.kiwi.pairBegin/Poll/
+// Answer): the app shows a kp1- code, the computer runs `kiwi pair <code>`, and the person confirms
+// what asked. Removing one forgets it and takes its agents out of every channel this app owns.
 
-import { Channel, RelayError, type HumanSession } from "@mc/client.ts"
+import { Channel } from "@mc/client.ts"
+
 import { allMembers, saveMember } from "./channel"
+import { relayUrl } from "./relay"
+import { bridge, saveComputers, secrets, type ComputerView, type PairAskView } from "./secrets"
 
-/** What `#link=` carries: the computer's key. */
-export interface ParsedLink {
-  pk: string
+export type { ComputerView, PairAskView }
+
+/** What to paste on the computer to pair it: install-and-pair, or pair with kiwi already there. */
+export function pairCommands(code: string): { install: string; pair: string } {
+  return { install: `curl -fsSL ${relayUrl()}/install | sh -s -- pair ${code}`, pair: `kiwi pair ${code}` }
 }
 
-/** `#link=<computer key>`: the page `kiwi setup` opens to link that computer. Kiwi 0.9.1 to 0.10 added `&x=…&s=…` (its exchange key), no longer used. */
-export function parseLinkHash(hash: string): ParsedLink | null {
-  const m = /^#link=([A-Za-z0-9_-]{20,})(?:&x=[A-Za-z0-9_-]{20,}&s=[A-Za-z0-9_-]{20,})?$/.exec(hash)
-  return m ? { pk: m[1]! } : null
+/**
+ * The app's own computer: the daemon it runs, certified by this person, so agents on this machine
+ * come in as theirs (and are let in on their own) like any paired computer's. Nothing else adds it:
+ * the app does this once a person exists, and again only while it's missing. Null outside the app.
+ */
+export async function adoptThisComputer(): Promise<ComputerView | null> {
+  const b = bridge()
+  if (!b || !secrets().person || secrets().computers.some((c) => c.own)) return null
+  return b.daemonAdopt()
 }
 
-async function call<T>(path: string, init: RequestInit & { token?: string | null } = {}): Promise<T> {
-  const headers: Record<string, string> = { "content-type": "application/json" }
-  if (init.token) headers["x-human-token"] = init.token
-  const res = await fetch(path, { ...init, headers })
-  const json = (await res.json().catch(() => ({}))) as T & { error?: string; tag?: string }
-  // A RelayError, so callers (and the sign-in check) branch on its tag, not its words.
-  if (!res.ok) throw new RelayError(res.status, json.error ?? `the relay returned ${res.status}`, json.tag)
-  return json
+/** Raised outside the desktop app: pairing runs in its main process. */
+export class PairingNeedsApp extends Error {
+  constructor() {
+    super("Pairing a computer needs the Kiwi desktop app.")
+  }
 }
 
-/** What the computer asked to be called, and whether it's linked already. */
-export const computerInfo = (pk: string) => call<{ label: string; status: "pending" | "linked"; created: number }>(`/v1/machines/${pk}/public`)
-
-export const confirmComputer = (pk: string, token: string) => call<{ status: string; label: string }>(`/v1/machines/${pk}/confirm`, { method: "POST", token, body: "{}" })
-
-export interface Computer {
-  pk: string
-  label: string
-  linked: number
-  /** Last time it vouched for an agent or checked its link, to the hour; null if it hasn't since linking. */
-  used: number | null
-  /** When the relay unlinks it if it stays unused. */
-  expires: number
+export interface Pairing {
+  code: string
+  /** Wait for a computer to ask (polls the mailbox); null when it was cancelled. */
+  next: (signal: AbortSignal) => Promise<PairAskView | null>
+  answer: (accept: boolean) => Promise<{ machinePk: string } | null>
+  cancel: () => Promise<void>
 }
 
-export const myComputers = (token: string) => call<{ machines: Computer[] }>("/v1/me/machines", { token }).then((r) => r.machines)
+/** Open the pairing mailbox: a code to show, then the computer that asks on it. */
+export async function beginPairing(): Promise<Pairing> {
+  const b = bridge()
+  if (!b) throw new PairingNeedsApp()
+  const { code } = await b.pairBegin()
+  return {
+    code,
+    next: async (signal) => {
+      while (!signal.aborted) {
+        const ask = await b.pairPoll()
+        if (ask) return ask
+        await new Promise((r) => setTimeout(r, 1500))
+      }
+      return null
+    },
+    answer: (accept) => b.pairAnswer(accept),
+    cancel: () => b.pairCancel(),
+  }
+}
 
-export const removeComputer = (pk: string, token: string) => call<unknown>(`/v1/me/machines/${pk}`, { method: "DELETE", token })
-
-// ---------- seats: your computers letting their own agents in ----------
-//
-// A computer gets a quiet seat in a channel (Channel.seatComputer) only when its person approves its
-// first agent there with "let agents from it in from now on": the owner's signature that it may let its
-// own agents in for 90 days, renewed while they use the channel. Removing the computer here takes every
-// seat away again, and the agents it let in.
-
-/** The channels this browser owns, opened as their owner. */
-function owned(human: HumanSession): Channel[] {
+/** The channels this app owns, opened as their owner. */
+function owned(): Channel[] {
   return allMembers()
     .filter((m) => m.identity.pk === m.access.ownerPk)
-    .map((m) => new Channel(m.access, location.origin, m.identity, (access) => saveMember({ ...m, access }), human))
+    .map((m) => new Channel(m.access, relayUrl(), m.identity, (access) => saveMember({ ...m, access })))
 }
 
-/** Take a computer's seat away in every channel this browser owns, and remove the agents it let in. */
-export async function revokeEverywhere(pk: string, human: HumanSession): Promise<string[]> {
+/** Take every agent that computer let in out of the channels this app owns; returns their names. */
+export async function removeAgentsOf(machinePk: string): Promise<string[]> {
   const removed: string[] = []
-  for (const ch of owned(human)) removed.push(...(await ch.revokeComputer(pk).catch(() => [])))
+  for (const ch of owned()) {
+    const members = await ch.members().catch(() => [])
+    for (const m of members) {
+      if (m.from?.pk !== machinePk) continue
+      await ch
+        .remove(m.pk)
+        .then(() => removed.push(m.name))
+        .catch(() => {})
+    }
+  }
   return removed
+}
+
+/** Forget a computer, and remove its agents from the channels this app owns. */
+export async function removeComputer(machinePk: string): Promise<string[]> {
+  // Forgotten first: from then on its agents' requests aren't yours, so auto-approval stops for it.
+  await saveComputers(secrets().computers.filter((c) => c.machinePk !== machinePk))
+  return removeAgentsOf(machinePk)
 }
