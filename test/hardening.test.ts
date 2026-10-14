@@ -227,4 +227,21 @@ describe("the join code check", () => {
     const listOld = Effect.runPromise(Effect.provideService(request, Relay, fetchRelay));
     await expect(listOld).rejects.toMatchObject({ status: 426 });
   });
+
+  test("an approve that names a seat to take over is refused, and the seat stays (T114)", async () => {
+    const { code, ownerCh } = await ownedChannel();
+    const win = await generateIdentity("win");
+    const winAsk = await Channel.requestJoin(relay, code, win, { name: "win" });
+    await ownerCh.approve((await checked(ownerCh, relay, code, [{ id: win, requestId: winAsk.requestId }]))[0]!);
+    const thief = await generateIdentity("thief");
+    const thiefAsk = await Channel.requestJoin(relay, code, thief, { name: "win" });
+    await checked(ownerCh, relay, code, [{ id: thief, requestId: thiefAsk.requestId }]);
+    // The old reclaim: the owner's own signature, a checked request, and the seat to move.
+    const body = JSON.stringify({ pk: thief.pk, xpk: thief.xpk, rec: "sealed", keys: { "0": "wrapped" }, request: thiefAsk.requestId, replaces: win.pk });
+    const post = (ownerCh as unknown as { request: (path: string, init: RequestInit) => Effect.Effect<unknown, unknown, Relay> }).request("/members", { method: "POST", body });
+    await expect(Effect.runPromise(Effect.provideService(post, Relay, fetchRelay))).rejects.toMatchObject({ status: 400 });
+    const members = await ownerCh.members();
+    expect(members.find((m) => m.pk === win.pk)?.active).toBe(true);
+    expect(members.some((m) => m.pk === thief.pk)).toBe(false);
+  });
 });

@@ -2,7 +2,6 @@
 
 exports[`the relay's error texts are exactly these 1`] = `
 [
-  "400 a seat can't be reclaimed by its own key",
   "400 approve a pending request",
   "400 bad envelope",
   "400 bad icon (at most 32KB, sealed with a channel key)",
@@ -27,7 +26,6 @@ exports[`the relay's error texts are exactly these 1`] = `
   "400 the owner may always post",
   "400 the owner must be a member",
   "400 the owner's record isn't changed this way",
-  "400 the owner's seat can't be reclaimed",
   "401 bad or expired signature",
   "401 create must be signed by the owner",
   "401 sign in required: channels on this relay are owned and run by a signed-in human (sign in from the Kiwi app)",
@@ -42,7 +40,6 @@ exports[`the relay's error texts are exactly these 1`] = `
   "404 no such request",
   "404 not a member",
   "404 not found",
-  "404 the seat to reclaim isn't a member any more",
   "409 already a member",
   "409 channel already exists",
   "409 next epoch is \${meta.epoch + 1}",
