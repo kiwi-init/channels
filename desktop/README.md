@@ -23,8 +23,11 @@ window says so. Closing the window keeps the app in the tray (background auto-ap
 - `src/preload.ts` — context-isolated `window.kiwi` (see `src/bridge.ts` for the shape).
 - `src/bridge.ts` — the shared bridge type; renderer-neutral, no electron/node imports.
 - `src/daemon-client.ts` — the local socket client (`hello`, `adopt`) and the JSON wire
-  shape the daemon side must match (documented at the top of the file).
+  shape the daemon side must match (documented at the top of the file); starting the daemon
+  on the app's relay (`spawnDaemon`).
 - `src/updater.ts` — checks GitHub releases for a newer app.
+- `src/move.ts` — moves a download over the file it replaces, across filesystems too (the
+  AppImage update).
 - `build/icon.svg` — the app icon. `bun desktop/scripts/icons.ts` (on a Mac) makes every
   size from it: `build/icon.icns`, `build/icons/NxN.png` for Linux, and `assets/icon.png`
   for the window. On Linux the window finds its icon through `desktopName` in
@@ -32,9 +35,10 @@ window says so. Closing the window keeps the app in the tray (background auto-ap
 
 ## Renderer relay URL
 
-`web/` prefers `?relay=` on the app URL, then `window.kiwi.relayUrl`, then
-`location.origin` when served by a relay. The app loads
-`kiwi-app://app/index.html?relay=<url>`.
+In the app, `web/` takes the relay from `window.kiwi.relayUrl` (main's store, through
+the preload) and never from the page's URL: the sign-in token goes wherever the relay
+is. The app loads `kiwi-app://app/index.html`. In a browser, `web/` takes `?relay=`,
+else `location.origin` when served by a relay.
 
 ## Typecheck / build
 

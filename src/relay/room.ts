@@ -28,7 +28,7 @@ import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import { fits, JoinRequest, MemberRecord, SealedIcon, StoredEnvelope } from "./schema.ts";
+import { fits, JoinRequest, MAX_RECORD, MAX_WRAPPED, MemberRecord, SealedIcon, StoredEnvelope } from "./schema.ts";
 import { verifyRequest } from "../auth.ts";
 import { encodeJoinCode, ownerFingerprint } from "../crypto.ts";
 import type { HumanAuth } from "./human.ts";
@@ -108,8 +108,40 @@ export interface DirectoryUpdate {
   entry: DirectoryEntry | null;
 }
 
-/** Signed-in people's channel lists, as the adapter keeps them (an object per person, or people.sqlite). */
-export class Directory extends Context.Service<Directory, { list(user: string): Promise<DirectoryEntry[]> }>()("kiwi/relay/Directory") {}
+/**
+ * Signed-in people's owned channels, as the adapter keeps them (an object per person, or people.sqlite).
+ * `reserve` is the quota's one check: in a single step it counts the person's channels and, when there's
+ * room, holds a slot for this one, so two creates at once can't both pass. The create's own directory
+ * update replaces the hold; `release` drops it when the create fails.
+ */
+export class Directory extends Context.Service<
+  Directory,
+  {
+    list(user: string): Promise<DirectoryEntry[]>;
+    reserve(user: string, room: string, most: number): Promise<boolean>;
+    release(user: string, room: string): Promise<void>;
+  }
+>()("kiwi/relay/Directory") {}
+
+/** How long a create's hold on a quota slot lasts if the create never finishes (a crash). */
+export const HOLD_MS = 10 * 60_000;
+
+/** A hold, not a channel: what reserve writes before the create, with no join code yet. */
+export const holdEntry = (room: string, now: number): DirectoryEntry => ({ room, code: "", owner: true, member: true, agents: 0, at: now });
+const isHold = (e: DirectoryEntry) => e.code === "";
+
+/**
+ * The quota's decision, for the adapters to run in one step: may `room` take one of `most` slots, and
+ * which stale holds (a create that died) to drop. A room that already has its entry is let through.
+ */
+export function reserveSlot(entries: DirectoryEntry[], room: string, most: number, now: number): { ok: boolean; stale: string[] } {
+  const stale = entries.filter((e) => isHold(e) && e.room !== room && now - e.at > HOLD_MS).map((e) => e.room);
+  const live = entries.filter((e) => e.owner && !stale.includes(e.room));
+  return { ok: live.some((e) => e.room === room) || live.length < most, stale };
+}
+
+/** Whether an entry is a hold that `release` may drop (never a created channel's entry). */
+export const releasable = (e: DirectoryEntry | undefined) => !!e && isHold(e);
 
 const utcDay = (ts: number) => new Date(ts).toISOString().slice(0, 10);
 
@@ -130,15 +162,23 @@ function formatBytes(n: number): string {
 export const MESSAGES_PER_MINUTE = 120;
 /** Presence and other ephemeral frames one member may send per minute. */
 const EPHEMERAL_PER_MINUTE = 60;
+/** How many keys the limiter remembers. Past this, the oldest window is dropped, never the whole table. */
+const MAX_WINDOWS = 10_000;
+/** Each key's window, oldest start first: a key is moved to the end when its new window starts. */
 const windows = new Map<string, { start: number; n: number }>();
 
 /** A fixed one-minute window per key; false once the key has used up its limit. */
-export function allow(key: string, limit: number): boolean {
-  const now = Date.now();
+export function allow(key: string, limit: number, now = Date.now()): boolean {
   const w = windows.get(key);
   if (!w || now - w.start > 60_000) {
-    if (windows.size > 10_000) windows.clear();
+    windows.delete(key);
     windows.set(key, { start: now, n: 1 });
+    // A flood of new keys drops the oldest windows (most already over), not every member's count.
+    while (windows.size > MAX_WINDOWS) {
+      const oldest = windows.keys().next().value;
+      if (oldest === undefined || oldest === key) break;
+      windows.delete(oldest);
+    }
     return true;
   }
   return ++w.n <= limit;
@@ -184,13 +224,15 @@ interface Counters {
 export const UPDATE_KIWI = "update kiwi to join or approve here: curl -fsSL https://channels.kiwiinit.com/install | sh (Windows: irm https://channels.kiwiinit.com/install.ps1 | iex)";
 
 /**
- * GET /info with no `fp` is refused before the room is opened. A room id is not
- * a join code: only a client holding the code's fingerprint half may learn the
- * owner key or the owner's name. A present but wrong fingerprint falls through
- * and is answered like a missing room.
+ * GET /info and POST /requests with no `fp` are refused before the room is opened.
+ * A room id is not a join code: only a client holding the code's fingerprint half
+ * may learn the owner key or the owner's name, or ask to join (else anyone who saw
+ * a room id could fill its pending requests). A present but wrong fingerprint falls
+ * through and is answered like a missing room.
  */
 export function missingFingerprint(method: string, path: string, url: URL): UpdateRequired | null {
-  if (method.toUpperCase() === "GET" && path === "/info" && url.searchParams.get("fp") === null) {
+  const m = method.toUpperCase();
+  if (((m === "GET" && path === "/info") || (m === "POST" && path === "/requests")) && url.searchParams.get("fp") === null) {
     return new UpdateRequired({ message: UPDATE_KIWI });
   }
   return null;
@@ -544,6 +586,9 @@ export const create = Effect.fn("Room.create")(function* (signer: string | null,
   );
   if (!signed) return yield* new BadRequest({ message: "bad owner signature" });
   if (!members?.some((m) => m.pk === owner.pk)) return yield* new BadRequest({ message: "the owner must be a member" });
+  // The member quota holds from the start, not only when the owner approves someone later.
+  const most = (yield* Policy).membersPerChannel;
+  if (most && new Set(members.map((m) => m.pk)).size > most) return yield* new TooMany({ message: `a channel may have at most ${most} members on this relay` });
   db.init();
   db.set("owner_pk", owner.pk);
   db.set("owner_xpk", owner.xpk);
@@ -611,6 +656,8 @@ export const directory: Effect.Effect<DirectoryUpdate[], ChannelGone, RoomStore>
 const putMember = Effect.fn("Room.putMember")(function* (m: MemberBody, epoch: number) {
   const db = yield* RoomStore;
   if (!fits(MemberRecord, m)) return yield* new BadRequest({ message: "bad member" });
+  // Only keys for epochs the channel has had, named by their number: one per epoch, never more.
+  if (Object.keys(m.keys ?? {}).some((e) => !/^\d{1,9}$/.test(e) || Number(e) > epoch)) return yield* new BadRequest({ message: "bad member" });
   db.sql.run(
     "INSERT INTO members (pk, xpk, rec, rec_e, since, active, read_only) VALUES (?, ?, ?, ?, ?, 1, ?) ON CONFLICT (pk) DO UPDATE SET xpk = excluded.xpk, rec = excluded.rec, rec_e = excluded.rec_e, active = 1, read_only = excluded.read_only",
     m.pk,
@@ -774,7 +821,7 @@ export const setRecord = Effect.fn("Room.setRecord")(function* (pk: string, rec:
   if (pk === (yield* readMeta).ownerPk) return yield* new BadRequest({ message: "the owner's record isn't changed this way" });
   if (!db.isMember(pk)) return yield* new NotFound({ message: "not a member" });
   if (!Number.isInteger(e) || e < 0 || e > (yield* readMeta).epoch) return yield* new BadRequest({ message: "no such epoch" });
-  if (rec.length > 8_192) return yield* new TooLarge({ message: "record too large" });
+  if (rec.length > MAX_RECORD) return yield* new TooLarge({ message: "record too large" });
   db.migrate();
   db.sql.run("UPDATE members SET rec = ?, rec_e = ?, read_only = ?, admitted_by = NULL WHERE pk = ?", rec, e, post ? 0 : 1, pk);
 });
@@ -819,6 +866,7 @@ export const rotate = Effect.fn("Room.rotate")(function* (epoch: number, keys: R
   if (epoch !== meta.epoch + 1) return yield* new Conflict({ message: `next epoch is ${meta.epoch + 1}` });
   const members = db.members().filter((m) => m.active);
   for (const m of members) if (!keys[m.pk]) return yield* new BadRequest({ message: `missing wrapped key for ${m.pk.slice(0, 8)}` });
+  for (const m of members) if (typeof keys[m.pk] !== "string" || keys[m.pk]!.length > MAX_WRAPPED) return yield* new BadRequest({ message: "bad wrapped key" });
   for (const m of members) db.sql.run("INSERT OR REPLACE INTO keys (pk, e, wrapped) VALUES (?, ?, ?)", m.pk, epoch, keys[m.pk]!);
   db.set("epoch", epoch);
   db.set("rotate", 0);
@@ -914,7 +962,7 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
  * The HTTP API (all under /v1/rooms/<room>):
  *   GET    /info?fp=<fingerprint>     holder of the join code: owner keys, epoch, whether a rotation is due
  *   POST   /create                    owner: create the room
- *   POST   /requests                  anyone with the code: ask to join (self-signed)
+ *   POST   /requests?fp=<fingerprint> holder of the join code: ask to join (self-signed)
  *   GET    /requests/<id>             the requester: status, and wrapped keys once approved
  *   POST   /requests/<id>/reveal      the requester: its half of the code check
  *   GET    /requests?v=2              owner: pending requests

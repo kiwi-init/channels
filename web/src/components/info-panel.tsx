@@ -185,20 +185,18 @@ export function InfoPanel({
 
 /**
  * Coordinator mode: on (someone relays people's words) or off, with the owner's switch where they'd
- * look for it. The mode follows the coordinator role, so turning off takes the role away and turning
- * on picks who holds it.
+ * look for it. Turning off keeps the coordinator's role, so turning back on is one pick; turning on
+ * someone else moves the role to them.
  */
 function CoordinatorMode() {
   const { p, busy, run, setCoordinator } = useControls()
   const [picking, setPicking] = useState(false)
   const coordinator = p.state.coordinator
   const on = p.state.mode.coordinatorOnly
-  const entry = coordinator ? p.roster.find((m) => m.active && m.name === coordinator) : undefined
   const agents = p.roster.filter((m) => m.active && m.kind !== "human")
 
   const turnOff = () => {
-    if (entry) void setCoordinator(entry, false)
-    else if (p.onMode) void run(() => p.onMode!(false, true), "Coordinator mode off")
+    if (p.onMode) void run(() => p.onMode!(false, true), "Coordinator mode off")
   }
 
   return (
@@ -246,14 +244,16 @@ function CoordinatorMode() {
                 disabled={busy}
                 onClick={() => {
                   setPicking(false)
-                  void setCoordinator(m, true)
+                  // They kept the role while the mode was off: only the mode comes back.
+                  if (m.name === coordinator && p.onMode) void run(() => p.onMode!(true, true), `Coordinator mode on: ${memberName(m)} relays`)
+                  else void setCoordinator(m, true)
                 }}
                 className="flex items-center gap-3 rounded-ctl px-2 py-2 text-left transition-colors hover:bg-wash disabled:opacity-40"
               >
                 <Monogram name={m.name} agent size={32} online={p.online.has(m.name)} color={colorOf(p.state, m.name)} />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-ui font-medium">{memberName(m)}</span>
-                  <span className="block truncate text-meta text-ink-3">{coordinator === m.name ? "Coordinating now" : memberDetail(p, m)}</span>
+                  <span className="block truncate text-meta text-ink-3">{coordinator === m.name ? (on ? "Coordinating now" : "Still the coordinator") : memberDetail(p, m)}</span>
                 </span>
               </button>
             ))}

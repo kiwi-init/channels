@@ -10,7 +10,9 @@ import { Channel, relayConfig } from "../src/client.ts";
 import { b64url } from "../src/crypto.ts";
 import { generateIdentity } from "../src/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { workosHumanAuth } from "../src/relay/human.ts";
+import { authkitDomains, workosHumanAuth } from "../src/relay/human.ts";
+import { HOLD_MS, holdEntry, reserveSlot } from "../src/relay/room.ts";
+import { signRequest } from "../src/auth.ts";
 import { claimComputer, provePerson } from "../src/person.ts";
 import { checked, checkedByHand } from "./check.ts";
 import { joinAgent, joinPerson, pairComputer, setupChannel } from "./owner.ts";
@@ -26,10 +28,10 @@ const rsa = (await crypto.subtle.generateKey(
 const jwk = (await crypto.subtle.exportKey("jwk", rsa.publicKey)) as { n: string; e: string };
 const jwks = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => Response.json({ keys: [{ kty: "RSA", kid: "k1", alg: "RS256", use: "sig", n: jwk.n, e: jwk.e }] }) });
 
-async function token(sub: string, opts: { exp?: number; key?: CryptoKey; kid?: string } = {}): Promise<string> {
+async function token(sub: string, opts: { exp?: number; key?: CryptoKey; kid?: string; iss?: string } = {}): Promise<string> {
   const enc = (o: object) => b64url(new TextEncoder().encode(JSON.stringify(o)));
   const head = enc({ alg: "RS256", kid: opts.kid ?? "k1", typ: "JWT" });
-  const body = enc({ sub, iss: "https://api.workos.com/user_management/client_test", exp: opts.exp ?? Math.floor(Date.now() / 1000) + 300 });
+  const body = enc({ sub, iss: opts.iss ?? "https://api.workos.com/user_management/client_test", exp: opts.exp ?? Math.floor(Date.now() / 1000) + 300 });
   const sig = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", opts.key ?? rsa.privateKey, new TextEncoder().encode(`${head}.${body}`));
   return `${head}.${body}.${b64url(new Uint8Array(sig))}`;
 }
@@ -66,6 +68,35 @@ describe("WorkOS token verification", () => {
     const forgedBody = b64url(new TextEncoder().encode(JSON.stringify({ sub: "admin", exp: 9999999999 })));
     expect(await human.verify(`${h}.${forgedBody}.${s}`)).toBeNull();
     expect(await human.verify("not.a.jwt")).toBeNull();
+  });
+});
+
+// Moving to a custom AuthKit domain (auth.example.com in place of ….authkit.app): for a while the relay
+// names both, and takes tokens from either, issued bare or with WorkOS's /user_management/<client> path.
+describe("AuthKit domains", () => {
+  test("a setting names one or several, comma-separated, without trailing slashes", () => {
+    expect(authkitDomains(undefined)).toEqual([]);
+    expect(authkitDomains("https://x.authkit.app/")).toEqual(["https://x.authkit.app"]);
+    expect(authkitDomains(" https://auth.example.com , https://x.authkit.app/,")).toEqual(["https://auth.example.com", "https://x.authkit.app"]);
+  });
+
+  test("while moving domains, tokens from either are taken, and only for this client", async () => {
+    const custom = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => Response.json({ keys: [] }) });
+    try {
+      const old = jwks.url.origin;
+      const now = custom.url.origin;
+      // What workosFromSettings builds for `${now},${old}`, minus api.workos.com's JWKS (no network in tests).
+      const auth = workosHumanAuth("client_test", authkitDomains(`${now},${old}/`).map((d) => `${d}/oauth2/jwks`));
+      expect(await auth.verify(await token("user_a", { iss: old }))).toBe("user_a");
+      expect(await auth.verify(await token("user_a", { iss: `${now}/` }))).toBe("user_a");
+      expect(await auth.verify(await token("user_a", { iss: `${now}/user_management/client_test` }))).toBe("user_a");
+      expect(await auth.verify(await token("user_a"))).toBe("user_a");
+      expect(await auth.verify(await token("user_a", { iss: `${now}/user_management/client_other` }))).toBeNull();
+      expect(await auth.verify(await token("user_a", { iss: "https://evil.example" }))).toBeNull();
+      expect(await auth.verify(await token("user_a", { iss: "https://api.workos.com/user_management/client_other" }))).toBeNull();
+    } finally {
+      custom.stop(true);
+    }
   });
 });
 
@@ -234,6 +265,44 @@ describe("channels per person", () => {
       r.stop(true);
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("channels per person, at once (T113)", () => {
+  test("parallel creates can't pass the limit together, and a failed create gives its slot back", async () => {
+    const { OPEN_POLICY } = await import("../src/relay/policy.ts");
+    const dir = mkdtempSync(join(tmpdir(), "mc-owned-race-"));
+    const r = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, human, policy: { ...OPEN_POLICY, channelsPerOwner: 1 } });
+    const at = r.url.origin;
+    try {
+      const ids = await Promise.all([1, 2, 3, 4, 5].map((i) => generateIdentity(`race-${i}`)));
+      const tokens = await Promise.all(ids.map(() => token("user_dana")));
+      const tries = await Promise.allSettled(ids.map((id, i) => Channel.create(at, id, { name: "dana", kind: "human" }, [], undefined, tokens[i])));
+      expect(tries.filter((t) => t.status === "fulfilled").length).toBe(1);
+      expect(tries.filter((t) => t.status === "rejected").every((t) => (t as PromiseRejectedResult).reason.status === 429)).toBe(true);
+      // Erin's broken create (no members) is refused, and doesn't use up her one slot.
+      const erin = await generateIdentity("erin");
+      const room = "ab".repeat(16);
+      const body = JSON.stringify({ owner: { pk: erin.pk, xpk: erin.xpk, sig: "x" }, members: [] });
+      const auth = await signRequest(erin, room, "POST", "/create", body);
+      const bad = await fetch(`${at}/v1/rooms/${room}/create`, { method: "POST", headers: { authorization: `Bearer ${auth}`, "x-human-token": await token("user_erin") }, body });
+      expect(bad.status).toBe(400);
+      expect((await Channel.create(at, erin, { name: "erin", kind: "human" }, [], undefined, await token("user_erin"))).code).toBeTruthy();
+    } finally {
+      r.stop(true);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a hold from a create that never finished expires", () => {
+    const now = 1_700_000_000_000;
+    const real = { room: "r1", code: "mc2-x", owner: true, member: true, agents: 0, at: now - HOLD_MS * 10 };
+    const fresh = holdEntry("r2", now - 1_000);
+    const dead = holdEntry("r3", now - HOLD_MS - 1);
+    expect(reserveSlot([real, fresh], "r4", 2, now)).toEqual({ ok: false, stale: [] });
+    expect(reserveSlot([real, dead], "r4", 2, now)).toEqual({ ok: true, stale: ["r3"] });
+    // A room that's already counted is let through (a retry of the same create).
+    expect(reserveSlot([real, fresh], "r2", 2, now).ok).toBe(true);
   });
 });
 

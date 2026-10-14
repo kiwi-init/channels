@@ -9,6 +9,7 @@ import { cpus, totalmem } from "node:os";
 import { harnessModel } from "./harness.ts";
 import type { Runs } from "./membership.ts";
 import type { Card } from "./protocol.ts";
+import { canonicalHarness } from "./seats.ts";
 
 /** Tools worth showing, as the binary that shows each one is here. */
 const TOOLS: [tag: string, bin: string][] = [
@@ -59,11 +60,11 @@ export function inAgentHarness(env: Record<string, string | undefined> = process
 
 /** The harness running this process, from the markers each one sets for its shell commands. */
 export function detectHarness(env: Record<string, string | undefined> = process.env): string | undefined {
+  if (env.GROK_SESSION_ID) return "grok";
   if (env.CLAUDECODE) return "claude-code";
   if (env.CODEX_THREAD_ID || env.CODEX_SANDBOX) return "codex";
   if (env.GEMINI_CLI) return "gemini";
   if (env.CURSOR_AGENT || env.CURSOR_TRACE_ID) return "cursor";
-  if (env.GROK_SESSION_ID) return "grok";
   if (env.OPENCODE_SESSION_ID) return "opencode";
   return undefined;
 }
@@ -118,7 +119,7 @@ export async function detectModel(env: Record<string, string | undefined> = proc
  * unknown: a plain terminal names its harness with --harness.
  */
 export async function detectRuns(env: Record<string, string | undefined> = process.env, given: { harness?: string; model?: string } = {}): Promise<Runs | undefined> {
-  const harness = given.harness?.trim().toLowerCase() || env.KIWI_HARNESS?.trim().toLowerCase() || detectHarness(env);
+  const harness = canonicalHarness(given.harness?.trim().toLowerCase() || env.KIWI_HARNESS?.trim().toLowerCase() || detectHarness(env));
   const model = given.model?.trim() || (await detectModel(env));
   return harness && model ? { harness: harness.slice(0, 40), model: model.slice(0, 60) } : undefined;
 }

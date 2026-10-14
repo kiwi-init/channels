@@ -6,23 +6,21 @@
 // build (crypto.ts is WebCrypto-only, and main has WebCrypto): no wrapper, no
 // duplicate scheme to drift.
 
-import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, Notification, protocol, safeStorage, shell, Tray } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, Notification, protocol, safeStorage, shell, Tray } from "electron";
 
 import { generateIdentity, type Identity } from "../../src/identity.ts";
 import { answerPair, newSecret, openMailbox, pairCode, readPairAsk, type Mailbox, type PairAsk } from "../../src/mailbox.ts";
 import { certifyMachine } from "../../src/person.ts";
 import { compareVersions, ensureOnPath, keepCli } from "./cli.ts";
+import { APP_HOST, APP_SCHEME, csp, externalUrl, fileFor, isAppUrl, normalizeRelay, readStore } from "./guard.ts";
 import { applyUpdate, startUpdates, updateState } from "./updater.ts";
-import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, type HelloResult } from "./daemon-client.ts";
+import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, spawnDaemon, type HelloResult } from "./daemon-client.ts";
 import type { ChannelIdentityView, ComputerView, DaemonStatus, PairAskView, PendingItem, PersonView, SignInResult, StoreSnapshot } from "./bridge.ts";
 
 const PUBLIC_RELAY = "https://channels.kiwiinit.com";
-const APP_SCHEME = "kiwi-app";
-const APP_HOST = "app";
 const JOIN_SCHEME = "kiwi";
 
 let win: BrowserWindow | null = null;
@@ -49,40 +47,62 @@ function defaults(): StoreFile {
 
 let store: StoreFile = defaults();
 
+/**
+ * Why the saved store couldn't be read (a locked keychain, encryption that went away, a damaged file),
+ * or null. While set, nothing is written over that file: an empty store saved there would wipe the
+ * person's key and every channel's.
+ */
+let storeBroken: string | null = null;
+
 function loadStore(): void {
+  let raw: Buffer | null = null;
   try {
-    const raw = fs.readFileSync(storePath());
-    const json = safeStorage.isEncryptionAvailable()
-      ? safeStorage.decryptString(raw)
-      : raw.toString("utf8");
-    store = { ...defaults(), ...(JSON.parse(json) as Partial<StoreFile>) };
-  } catch {
+    raw = fs.readFileSync(storePath());
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") storeBroken = e instanceof Error ? e.message : String(e);
+  }
+  const read = storeBroken ? null : readStore(raw, safeStorage.isEncryptionAvailable() ? (b) => safeStorage.decryptString(b) : null);
+  if (read?.kind === "ok") store = { ...defaults(), ...(read.json as Partial<StoreFile>) };
+  else {
     store = defaults();
+    if (read?.kind === "unreadable") storeBroken = read.why;
   }
   store.relayUrl = normalizeRelay(store.relayUrl) ?? PUBLIC_RELAY;
 }
 
+const brokenError = () => new Error(`Kiwi can't read its saved keys (${storeBroken}), so it saves nothing over them. Unlock your keychain, then quit and reopen Kiwi. The file is ${storePath()}.`);
+
+/** Write the store: encrypted when the system can, to a temporary file first, so a crash never leaves half of one. */
 function saveStore(): void {
+  if (storeBroken) throw brokenError();
   const json = JSON.stringify(store);
   const raw = safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(json) : Buffer.from(json, "utf8");
-  fs.mkdirSync(path.dirname(storePath()), { recursive: true });
-  fs.writeFileSync(storePath(), raw, { mode: 0o600 });
+  const file = storePath();
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  const tmp = `${file}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(tmp, raw, { mode: 0o600 });
+    fs.renameSync(tmp, file);
+  } catch (e) {
+    fs.rmSync(tmp, { force: true });
+    throw e;
+  }
+}
+
+/** Say once, at start, that the saved keys couldn't be read: the app runs, but saves nothing until a restart reads them. */
+function warnIfBroken(): void {
+  if (!storeBroken) return;
+  void dialog.showMessageBox({ type: "error", message: "Kiwi can't read its saved keys", detail: brokenError().message });
 }
 
 const snapshot = (): StoreSnapshot => ({ relayUrl: store.relayUrl, person: store.person, channels: store.channels, computers: store.computers, pending: store.pending });
 const broadcast = () => win?.webContents.send("kiwi:store", snapshot());
-const mutate = (fn: (s: StoreFile) => void) => (fn(store), saveStore(), broadcast());
-
-function normalizeRelay(url: string): string | null {
-  try {
-    const u = new URL(url.trim());
-    if (u.protocol === "https:") return u.origin;
-    if (u.protocol === "http:" && (u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "::1")) return u.origin;
-    return null;
-  } catch {
-    return null;
-  }
-}
+const mutate = (fn: (s: StoreFile) => void) => {
+  if (storeBroken) throw brokenError();
+  fn(store);
+  saveStore();
+  broadcast();
+};
 
 // ---------- renderer hosting ----------
 
@@ -92,20 +112,25 @@ const webDist = () => path.join(app.isPackaged ? process.resourcesPath : path.jo
 
 const MIME: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".woff2": "font/woff2", ".woff": "font/woff", ".ttf": "font/ttf", ".map": "application/json" };
 
+/** Headers for everything kiwi-app:// serves: the type, and the CSP (guard.ts), so script that got in can't reach out. */
+const webHeaders = (type: string): Record<string, string> => ({
+  "content-type": type,
+  "content-security-policy": csp(store.relayUrl),
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "no-referrer",
+});
+
 function serveWeb(): void {
   protocol.handle(APP_SCHEME, (req) => {
     const u = new URL(req.url);
-    let p = decodeURIComponent(u.pathname);
-    if (p === "/" || !path.extname(p)) p = "/index.html";
-    // Stay inside web/dist: an absolute path on the URL must not escape it.
-    const file = path.normalize(path.join(webDist(), p));
-    if (!file.startsWith(path.normalize(webDist()))) return new Response("not found", { status: 404 });
+    // Only kiwi-app://app/, and only a file inside web/dist (guard.ts: no climbing out, no bad escapes).
+    const file = u.host === APP_HOST ? fileFor(webDist(), u.pathname) : null;
+    if (!file) return new Response("not found", { status: 404 });
     try {
       const body = fs.readFileSync(file);
-      // The relay URL rides the entry URL's query (?relay=…); assets don't need it.
-      return new Response(new Uint8Array(body), { headers: { "content-type": MIME[path.extname(file)] ?? "application/octet-stream" } });
+      return new Response(new Uint8Array(body), { headers: webHeaders(MIME[path.extname(file)] ?? "application/octet-stream") });
     } catch {
-      if (p !== "/index.html") return serveWebFallback();
+      if (path.basename(file) !== "index.html") return serveWebFallback();
       return new Response("not found", { status: 404 });
     }
   });
@@ -114,15 +139,42 @@ function serveWeb(): void {
 function serveWebFallback(): Response {
   try {
     const body = fs.readFileSync(path.join(webDist(), "index.html"));
-    return new Response(new Uint8Array(body), { headers: { "content-type": "text/html" } });
+    return new Response(new Uint8Array(body), { headers: webHeaders("text/html") });
   } catch {
     return new Response("run `bun run web:build` in the repo root first", { status: 500 });
   }
 }
 
-const entryUrl = () => `${APP_SCHEME}://${APP_HOST}/index.html?relay=${encodeURIComponent(store.relayUrl)}`;
+// The relay isn't on the URL: the page gets it from window.kiwi (the snapshot), which only main sets.
+const entryUrl = () => `${APP_SCHEME}://${APP_HOST}/index.html`;
 
 // ---------- window + tray ----------
+
+/** A link that may leave the app goes to the system browser (http(s) only); anything else goes nowhere. */
+function openOutside(url: string): void {
+  const ext = externalUrl(url);
+  if (ext) void shell.openExternal(ext);
+}
+
+/**
+ * Every page this app makes shows kiwi-app:// and nothing else: a page holding window.kiwi (the person's
+ * keys, the sign-in) must never become someone else's. A link that opens a window (target=_blank in a
+ * message) or navigates away goes to the system browser instead, with no window.kiwi there.
+ */
+function guardContents(wc: Electron.WebContents): void {
+  wc.setWindowOpenHandler(({ url }) => {
+    openOutside(url);
+    return { action: "deny" };
+  });
+  const stay = (e: Electron.Event, url: string) => {
+    if (isAppUrl(url)) return;
+    e.preventDefault();
+    openOutside(url);
+  };
+  wc.on("will-navigate", stay);
+  wc.on("will-redirect", stay);
+  wc.on("will-attach-webview", (e) => e.preventDefault());
+}
 
 function createWindow(): void {
   win = new BrowserWindow({
@@ -198,7 +250,8 @@ function handleDeepLink(url: string): void {
   if (!url.startsWith(`${JOIN_SCHEME}://join/`)) return;
   deepLink = url;
   win?.webContents.send("kiwi:deep-link", url);
-  win?.show();
+  // A link can arrive before ready (a Mac launching the app for it): the window it opens takes it then.
+  if (app.isReady()) showWindow();
 }
 
 // ---------- sign-in ----------
@@ -228,7 +281,9 @@ async function workosDeviceSignIn(clientId: string): Promise<{ access: string; r
     body: JSON.stringify({ client_id: clientId, scope: "openid profile email offline_access" }),
   })).json() as { device_code?: string; user_code?: string; verification_uri?: string; verification_uri_complete?: string; expires_in?: number; interval?: number };
   if (!start.device_code) throw new Error("the relay's sign-in didn't start");
-  const verifyUrl = start.verification_uri_complete ?? (start.verification_uri ? `${start.verification_uri}?user_code=${start.user_code ?? ""}` : null);
+  const given = start.verification_uri_complete ?? (start.verification_uri ? `${start.verification_uri}?user_code=${encodeURIComponent(start.user_code ?? "")}` : null);
+  // Only a web page goes to the browser: never a file, an app's scheme, or anything else a reply could name.
+  const verifyUrl = given && URL.canParse(given) && new URL(given).protocol === "https:" ? given : null;
   if (!verifyUrl) throw new Error("the relay's sign-in didn't start");
   await shell.openExternal(verifyUrl);
   const until = Date.now() + (start.expires_in ?? 600) * 1000;
@@ -263,10 +318,19 @@ async function signInMain(): Promise<SignInResult> {
   return { token: sess.access };
 }
 
+// One refresh at a time: WorkOS turns the refresh token over on each use, so a second refresh racing
+// the first with the same one is refused, reads as signed out, and sends the person to sign in again.
+let refreshing: Promise<string | null> | null = null;
+
 async function freshToken(): Promise<string | null> {
   const s = store.signin;
   if (!s) return null;
   if (Date.now() < s.exp - 60_000) return s.access;
+  refreshing ??= refreshToken(s).finally(() => (refreshing = null));
+  return refreshing;
+}
+
+async function refreshToken(s: NonNullable<StoreFile["signin"]>): Promise<string | null> {
   try {
     const config = await relayConfig(store.relayUrl);
     if (!config.workosClientId) return s.access;
@@ -278,6 +342,8 @@ async function freshToken(): Promise<string | null> {
     if (!res.ok) throw new Error("refresh refused");
     const tok = (await res.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
     if (!tok.access_token) throw new Error("no token");
+    // A sign-out (or a change of relay) while this ran stands: its session isn't put back.
+    if (store.signin !== s) return store.signin?.access ?? null;
     mutate((st) => (st.signin = { access: tok.access_token as string, refresh: tok.refresh_token ?? s.refresh, exp: Date.now() + (tok.expires_in ?? 3600) * 1000 }));
     return store.signin?.access ?? null;
   } catch {
@@ -287,7 +353,8 @@ async function freshToken(): Promise<string | null> {
 
 // ---------- pairing ----------
 
-let pairing: { secret: string; mailbox: Mailbox; ask: PairAsk | null } | null = null;
+// stop ends a poll's wait when this pairing is cancelled, answered or replaced.
+let pairing: { secret: string; mailbox: Mailbox; ask: PairAsk | null; stop: AbortController } | null = null;
 
 function requirePerson(): Identity {
   const p = store.person;
@@ -325,10 +392,8 @@ async function ensureDaemon(): Promise<HelloResult | null> {
     await daemonStop(home);
     for (let i = 0; i < 20 && (await daemonHello(home, 500)); i++) await new Promise((r) => setTimeout(r, 250));
   }
-  // Start it as `kiwi daemon` for ~/.kiwi.
-  const bin = kiwiBin?.path ?? bundledKiwi();
-  const child = spawn(bin, ["daemon"], { env: { ...process.env, KIWI_HOME: home }, detached: true, stdio: "ignore", windowsHide: true });
-  child.unref();
+  // Start it as `kiwi daemon` for ~/.kiwi, on the app's relay.
+  spawnDaemon(kiwiBin?.path ?? bundledKiwi(), home, store.relayUrl);
   const until = Date.now() + 10_000;
   for (;;) {
     const hello = await daemonHello(home);
@@ -360,6 +425,9 @@ async function installCli(): Promise<{ path: string }> {
 
 // ---------- ipc ----------
 
+/** Set while kiwi:create-person is making the key (it awaits): a second call then is refused. */
+let makingPerson = false;
+
 function wireIpc(): void {
   // Synchronous snapshot at load; main decrypted once at startup (see loadStore).
   ipcMain.on("kiwi:snapshot-sync", (e) => (e.returnValue = snapshot()));
@@ -375,17 +443,29 @@ function wireIpc(): void {
     return norm;
   });
   ipcMain.handle("kiwi:create-person", async (_e, name: string) => {
-    const clean = name.replace(/[\u0000-\u001f\u007f-\u009f\u2028-\u2069]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "someone";
-    const id = await generateIdentity(clean);
-    const person: PersonView = { name: clean, pk: id.pk, sk: id.sk, xpk: id.xpk as string, xsk: id.xsk as string };
-    mutate((s) => (s.person = person));
-    return person;
+    // One person key, for good: every computer's certificate and channel seat is signed by it. Making
+    // one awaits, so a second call while the first is still making it is refused too, and the store is
+    // checked again right before the write.
+    if (store.person || makingPerson) throw new Error("this app already has your person key");
+    makingPerson = true;
+    try {
+      const clean = name.replace(/[\u0000-\u001f\u007f-\u009f\u2028-\u2069]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "someone";
+      const id = await generateIdentity(clean);
+      const person: PersonView = { name: clean, pk: id.pk, sk: id.sk, xpk: id.xpk as string, xsk: id.xsk as string };
+      if (store.person) throw new Error("this app already has your person key");
+      mutate((s) => (s.person = person));
+      return person;
+    } finally {
+      makingPerson = false;
+    }
   });
   ipcMain.handle("kiwi:save-channels", (_e, channels: ChannelIdentityView[]) => mutate((s) => (s.channels = channels)));
   ipcMain.handle("kiwi:save-computers", (_e, computers: ComputerView[]) => mutate((s) => (s.computers = computers)));
   ipcMain.handle("kiwi:set-pending", (_e, pending: PendingItem[]) => mutate((s) => (s.pending = pending)));
   ipcMain.handle("kiwi:sign-in", (): Promise<SignInResult> => signInMain());
-  ipcMain.handle("kiwi:dev-sign-in", (_e, name: string) => {
+  ipcMain.handle("kiwi:dev-sign-in", async (_e, name: string) => {
+    // Only a relay that says it takes dev sign-in (bun relay --dev-sign-in) gets a dev token kept for it.
+    if (!(await relayConfig(store.relayUrl)).dev) throw new Error("this relay doesn't take dev sign-in");
     const clean = name.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64) || "dev";
     mutate((s) => (s.signin = { access: `dev:${clean}`, refresh: "", exp: Number.MAX_SAFE_INTEGER }));
     return { token: `dev:${clean}` };
@@ -393,24 +473,32 @@ function wireIpc(): void {
   ipcMain.handle("kiwi:token", () => freshToken());
   ipcMain.handle("kiwi:sign-out", () => mutate((s) => (s.signin = undefined)));
   ipcMain.handle("kiwi:pair-begin", async () => {
+    pairing?.stop.abort();
     pairing?.mailbox.drop().catch(() => {});
     const secret = newSecret();
-    pairing = { secret, mailbox: await openMailbox(store.relayUrl, secret), ask: null };
+    pairing = { secret, mailbox: await openMailbox(store.relayUrl, secret), ask: null, stop: new AbortController() };
     return { code: pairCode(secret) };
   });
   // One short wait on slot a per call; the renderer polls until the person cancels.
+  // A cancel, an answer or a new pairing can land during the wait: the poll keeps to the pairing it
+  // began on, and once that one is gone it has nothing to say.
   ipcMain.handle("kiwi:pair-poll", async (): Promise<PairAskView | null> => {
-    if (!pairing) throw new Error("pairing hasn't started");
-    const raw = await pairing.mailbox.wait("a", { timeoutMs: 20_000, everyMs: 1_500 });
-    const ask = await readPairAsk(raw, pairing.mailbox);
-    if (!ask) return null;
-    pairing.ask = ask;
+    const p = pairing;
+    if (!p) throw new Error("pairing hasn't started");
+    const raw = await p.mailbox.wait("a", { timeoutMs: 20_000, everyMs: 1_500, signal: p.stop.signal }).catch((err: unknown) => {
+      if (pairing === p) throw err;
+      return null;
+    });
+    const ask = await readPairAsk(raw, p.mailbox);
+    if (!ask || pairing !== p) return null;
+    p.ask = ask;
     return { label: ask.label, os: ask.os, machinePk: ask.pk, at: ask.at };
   });
   ipcMain.handle("kiwi:pair-answer", async (_e, accept: boolean) => {
     if (!pairing) throw new Error("pairing hasn't started");
-    const { mailbox, ask } = pairing;
+    const { mailbox, ask, stop } = pairing;
     pairing = null;
+    stop.abort();
     if (!accept || !ask) {
       await mailbox.drop();
       return null;
@@ -424,6 +512,7 @@ function wireIpc(): void {
   ipcMain.handle("kiwi:pair-cancel", async () => {
     const p = pairing;
     pairing = null;
+    p?.stop.abort();
     await p?.mailbox.drop().catch(() => {});
   });
   ipcMain.handle("kiwi:daemon-status", async (): Promise<DaemonStatus> => {
@@ -435,16 +524,31 @@ function wireIpc(): void {
   ipcMain.handle("kiwi:install-cli", () => installCli());
   ipcMain.handle("kiwi:update-state", () => updateState());
   ipcMain.handle("kiwi:update-install", () => restartToUpdate());
+  // Each notification is held until it's clicked or closed: one nothing refers to is garbage collected,
+  // and its click with it. A Mac doesn't always say when one is closed (Notification Center keeps
+  // them), so past 100 the oldest are let go.
+  const shown = new Set<Notification>();
   ipcMain.handle("kiwi:notify", (_e, title: string, body: string) => {
     const n = new Notification({ title, body });
-    n.on("click", showWindow);
+    shown.add(n);
+    for (const old of shown) if (shown.size > 100) shown.delete(old);
+    const done = () => shown.delete(n);
+    n.on("click", () => (done(), showWindow()));
+    n.on("close", done);
+    n.on("failed", done);
     n.show();
   });
   ipcMain.handle("kiwi:open-external", (_e, url: string) => {
-    if (!/^https?:\/\//.test(url)) throw new Error("only http(s) links open outside");
-    return shell.openExternal(url);
+    const ext = externalUrl(url);
+    if (!ext) throw new Error("only http(s) links open outside");
+    return shell.openExternal(ext);
   });
-  ipcMain.handle("kiwi:deep-link", () => deepLink);
+  // Each link is the renderer's once: a reload doesn't open the channel again.
+  ipcMain.handle("kiwi:deep-link", () => {
+    const link = deepLink;
+    deepLink = null;
+    return link;
+  });
 }
 
 // Bring the window back: recreate it if it was destroyed, restore, show and focus.
@@ -471,10 +575,12 @@ else {
   }
   if (process.defaultApp && process.argv.length >= 2) app.setAsDefaultProtocolClient(JOIN_SCHEME, process.execPath, [path.resolve(process.argv[1] as string)]);
 
+  app.on("web-contents-created", (_e, wc) => guardContents(wc));
   // Privileged schemes must be registered before the ready event (Electron ignores them after).
   protocol.registerSchemesAsPrivileged([{ scheme: APP_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
   void app.whenReady().then(async () => {
     loadStore();
+    warnIfBroken();
     serveWeb();
     wireIpc();
     createWindow();

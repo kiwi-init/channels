@@ -113,8 +113,9 @@ export interface KiwiBridge {
   installUpdate(): Promise<void>;
   notify(title: string, body: string): Promise<void>;
   openExternal(url: string): Promise<void>;
-  /** The kiwi://join/<code> link that opened us, if any. */
+  /** The kiwi://join/<code> link waiting to be opened, if any; taking it clears it. */
   getDeepLink(): Promise<string | null>;
+  /** A link came in while the app runs (it waits for getDeepLink too, so it's opened once). */
   onDeepLink(cb: (url: string) => void): () => void;
 }
 

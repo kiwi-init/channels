@@ -174,7 +174,7 @@ export function ComputersModal({ open, onClose }: { open: boolean; onClose: () =
           )}
         </div>
         <div className="mt-5 flex justify-end gap-2">
-          {!adding && (
+          {!adding && inApp && (
             <Button variant="secondary" onClick={() => setAdding(true)}>
               Add a computer
             </Button>

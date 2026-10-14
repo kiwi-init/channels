@@ -55,13 +55,13 @@ let pendingOut = ""
 const bot = (...args: string[]) => kiwi(["-c", "kiwi", "--as", "atlas", ...args])
 const win = (...args: string[]) => kiwi(["-c", "kiwi-w", "--as", "win", ...args])
 
-const relay = spawn("bun", ["src/relay/bun.ts", "--hostname", "127.0.0.1", "--port", String(PORT), "--data", join(data, "relay"), "--dev-sign-in"], { cwd: ROOT, stdio: ["ignore", "pipe", "inherit"] })
+const relay = spawn("bun", ["src/relay/bun.ts", "--hostname", "127.0.0.1", "--port", String(PORT), "--data", join(data, "relay"), "--web", "web/dist", "--dev-sign-in"], { cwd: ROOT, stdio: ["ignore", "pipe", "inherit"] })
 await new Promise<void>((ok, fail) => {
   let out = ""
   relay.stdout!.on("data", (d) => {
     out += d
-    if (out.includes("dashboard: not served")) fail(new Error("web/dist is missing: run bun run web:build first"))
-    else if (out.includes("dashboard:")) ok()
+    if (out.includes("site: not served")) fail(new Error("web/dist is missing: run bun run web:build first"))
+    else if (out.includes("site:")) ok()
   })
   relay.on("exit", (code) => fail(new Error(`relay exited (${code})`)))
 })
@@ -245,11 +245,18 @@ try {
       const narrow = vp === "narrow"
       const detailsBtn = () => owner.getByRole("button", { name: /^Details:/ })
       const convs = () => owner.getByRole("main").getByRole("navigation", { name: "Conversations" })
-      /** The channel's conversations are tabs under its header; a task is opened from the Tasks tab. */
-      const toPlace = async (name: RegExp) => {
-        if (await convs().getByRole("button", { name }).count()) return void (await convs().getByRole("button", { name }).first().click())
-        await convs().getByRole("button", { name: /^Tasks/ }).click()
-        await owner.getByRole("main").getByRole("button", { name }).first().click()
+      const tasksBtn = () => owner.getByRole("main").getByRole("button", { name: "Tasks", exact: true })
+      const tasksPanel = () => owner.getByRole("complementary", { name: "Tasks" })
+      const closeTasks = () => tasksPanel().getByRole("button", { name: "Close tasks" }).click()
+      /** Back to main from a direct conversation: the name's capsule leads with the way back. */
+      const toChat = async () => {
+        const back = convs().getByRole("button", { name: "Back to chat" })
+        if (await back.count()) await back.click()
+      }
+      /** A task opens in the Tasks panel, from its list. */
+      const toTask = async (name: RegExp) => {
+        if (!(await tasksPanel().count())) await tasksBtn().click()
+        await tasksPanel().getByRole("button", { name }).first().click()
       }
       await shoot(owner, tag, "01-channel")
       await owner.mouse.wheel(0, -4000)
@@ -258,23 +265,17 @@ try {
         await owner.locator("button[aria-label='Reply']").last().dispatchEvent("click")
         await owner.getByRole("button", { name: "Close thread" }).waitFor()
       }, () => owner.getByRole("button", { name: "Close thread" }).click())
-      await shoot(owner, tag, "04-tasks", () => toPlace(/^Tasks/), () => toPlace(/^Chat/))
-      await shoot(owner, tag, "05-task-thread", () => toPlace(/Write fewer rows/), async () => {})
+      await shoot(owner, tag, "04-tasks", () => tasksBtn().click(), closeTasks)
+      await shoot(owner, tag, "05-task-thread", () => toTask(/Write fewer rows/), async () => {})
       await shoot(owner, tag, "06-task-page", async () => {
-        await owner.getByRole("main").getByRole("button", { name: /^(?!Details).*Write fewer rows per message T\d+/ }).first().click()
-        await owner.getByRole("heading", { name: "Activity" }).waitFor()
-      }, async () => {
-        await owner.getByRole("button", { name: "Close task" }).click()
-        await toPlace(/^Chat/)
-      })
+        await tasksPanel().getByRole("region", { name: /^Task T\d+/ }).getByRole("button", { name: /^Activity/ }).click()
+        await tasksPanel().getByRole("textbox", { name: /^Comment on T\d+/ }).waitFor()
+      }, closeTasks)
       await shoot(owner, tag, "15-needs-you", async () => {
-        await toPlace(/^Chat/)
         await owner.getByRole("region", { name: "Needs you" }).getByRole("button", { name: /needs? you/ }).first().click()
       })
       await shoot(owner, tag, "07-details", () => detailsBtn().click(), () => owner.getByRole("button", { name: "Close details" }).click())
-      await shoot(owner, tag, "08-direct", () => toPlace(/atlas/), async () => {
-        await toPlace(/^Chat/)
-      })
+      await shoot(owner, tag, "08-direct", () => convs().getByRole("button", { name: /atlas/ }).first().click(), toChat)
       await shoot(owner, tag, "09-invite", async () => {
         await detailsBtn().click()
         await owner.getByRole("button", { name: "Invite", exact: true }).click()

@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, updateConfig, wipeChannel } from "../src/config.ts";
 import { freeAgentName } from "../src/membership.ts";
-import { baseName, bindDirectory, bindingFor, here, seatsAt } from "../src/seats.ts";
+import { baseName, bindDirectory, bindingFor, canonicalHarness, here, sameHarness, seatsAt } from "../src/seats.ts";
 
 let home = "";
 let dir = "";
@@ -38,10 +38,18 @@ test("what each harness says about itself", () => {
   expect(here({ CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "s1", CLAUDE_PID: "42" })).toEqual({ harness: "claude", session: "s1", pid: 42 });
   expect(here({ CODEX_THREAD_ID: "t1" })).toEqual({ harness: "codex", session: "t1" });
   expect(here({ GROK_SESSION_ID: "g1" })).toEqual({ harness: "grok", session: "g1" });
+  expect(here({ CLAUDECODE: "1", GROK_SESSION_ID: "g1" })).toEqual({ harness: "grok", session: "g1" });
   expect(here({ GEMINI_CLI: "1" })).toEqual({ harness: "gemini" });
   expect(here({})).toEqual({});
   expect(baseName(here({ CLAUDECODE: "1" }))).toBe("claude");
+  expect(baseName(here({ CLAUDECODE: "1", GROK_SESSION_ID: "g1" }))).toBe("grok");
   expect(baseName({})).toBe("agent");
+  expect(canonicalHarness("claude")).toBe("claude-code");
+  expect(canonicalHarness("claude-code")).toBe("claude-code");
+  expect(canonicalHarness("grok")).toBe("grok");
+  expect(sameHarness("claude", "claude-code")).toBe(true);
+  expect(sameHarness("claude-code", "claude")).toBe(true);
+  expect(sameHarness("claude", "grok")).toBe(false);
 });
 
 test("a session finds its own seat; a second live session in the same checkout finds none", () => {

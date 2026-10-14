@@ -100,6 +100,18 @@ test("home() locks only kiwi's own entries, once, and does not follow symlinks",
   expect(mode(dir)).toBe(0o755);
 });
 
+test("home() locks a daemon-only home that has machine.json but no config.json", () => {
+  const dir = scratch("kiwi-machine-");
+  chmodSync(dir, 0o755);
+  writeFileSync(join(dir, "machine.json"), "{}\n", { mode: 0o644 });
+  writeFileSync(join(dir, "notes.txt"), "hi", { mode: 0o644 });
+  process.env.KIWI_HOME = dir;
+  expect(home()).toBe(dir);
+  expect(mode(dir)).toBe(0o700);
+  expect(mode(join(dir, "machine.json"))).toBe(0o600);
+  expect(mode(join(dir, "notes.txt"))).toBe(0o644);
+});
+
 test("KIWI_HOME with no kiwi state leaves unrelated files and directories untouched", () => {
   const dir = scratch("kiwi-foreign-");
   chmodSync(dir, 0o755);
@@ -184,7 +196,7 @@ test("hook install removes only kiwi's own commands", () => {
 });
 
 test("installers document the checksum and create a private home", () => {
-  const root = join(import.meta.dir, "../web/public");
+  const root = join(import.meta.dir, "../site");
   const sh = readFileSync(join(root, "install.sh"), "utf8");
   expect(readFileSync(join(root, "install"), "utf8")).toBe(sh);
   expect(sh).toContain('mkdir -m 700 "$HOME/.kiwi"');

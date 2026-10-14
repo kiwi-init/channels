@@ -21,6 +21,7 @@
     "web:dev": "cd web && bun run dev",
     "web:build": "cd web && bun install --frozen-lockfile && bun run build",
     "demo": "bun scripts/demo.ts",
+    "changelog": "bun scripts/changelog.ts",
     "install:local": "scripts/install.sh"
   },
   "devDependencies": {

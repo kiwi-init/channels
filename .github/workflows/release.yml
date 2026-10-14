@@ -21,6 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -34,6 +36,12 @@ jobs:
           test "v$v" = "$GITHUB_REF_NAME" || { echo "src/version.ts says $v, tag is $GITHUB_REF_NAME"; exit 1; }
           test "$pkg" = "$v" || { echo "package.json says $pkg, src/version.ts says $v"; exit 1; }
           test "$app" = "$v" || { echo "desktop/package.json says $app, src/version.ts says $v"; exit 1; }
+
+      # Required: a release ships with its changelog. CHANGELOG.md must have this version's section
+      # (`bun run changelog --write` in the release PR); a pre-release without one gets notes made
+      # from its commits. Checked here so nothing builds for a tag that can't be published.
+      - name: Check the changelog has this version
+        run: bun scripts/changelog.ts --notes "$GITHUB_REF_NAME" > /dev/null
 
   cli:
     needs: version
@@ -222,6 +230,15 @@ jobs:
     needs: [cli, desktop]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: repo
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -242,7 +259,10 @@ jobs:
           # A release candidate (v0.11.0-rc.3) is a prerelease: the install scripts fetch
           # releases/latest, which must stay on the last real release.
           pre=(); [[ "$GITHUB_REF_NAME" == *-* ]] && pre=(--prerelease)
+          # The notes: this version's changelog (scripts/changelog.ts), then where to get it.
+          bun repo/scripts/changelog.ts --notes "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
+          printf '\n---\n\n%s\n' "Kiwi desktop app (macOS dmg/zip, Linux AppImage/deb) and the kiwi CLI. Download the app at https://channels.kiwiinit.com/; install the CLI with: curl -fsSL https://channels.kiwiinit.com/install | sh (macOS, Linux) or irm https://channels.kiwiinit.com/install.ps1 | iex (Windows). Every file is checksummed in SHA256SUMS and has a build-provenance attestation: gh attestation verify <file> --repo $GITHUB_REPOSITORY" >> "$RUNNER_TEMP/notes.md"
           gh release create "$GITHUB_REF_NAME" "${files[@]}" "${pre[@]}" \
             --repo "$GITHUB_REPOSITORY" \
             --title "kiwi $GITHUB_REF_NAME" \
-            --notes "Kiwi desktop app (macOS dmg/zip, Linux AppImage/deb) and the kiwi CLI. Download the app at https://channels.kiwiinit.com/; install the CLI with: curl -fsSL https://channels.kiwiinit.com/install | sh (macOS, Linux) or irm https://channels.kiwiinit.com/install.ps1 | iex (Windows). Every file is checksummed in SHA256SUMS and has a build-provenance attestation: gh attestation verify <file> --repo $GITHUB_REPOSITORY"
+            --notes-file "$RUNNER_TEMP/notes.md"

@@ -4,7 +4,7 @@ import { Add01Icon, Copy01Icon, PauseIcon } from "@hugeicons/core-free-icons"
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react"
 
 import { memberLoad, showsLoad, type Load } from "@mc/load.ts"
-import { NAME_RE, type JoinRequest, type Member as RosterMember } from "@mc/membership.ts"
+import { NAME_RE, nameKey, type JoinRequest, type Member as RosterMember } from "@mc/membership.ts"
 import { MAX_CHARTER, type ChannelIcon, type Color, type Event } from "@mc/protocol.ts"
 import { TOO_MANY_REQUESTS } from "@mc/sas.ts"
 import { SCOPES, type Scope } from "@mc/scopes.ts"
@@ -137,7 +137,9 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
   const [roleDraft, setRoleDraft] = useState({ role: "", about: "" })
   const [scopeDraft, setScopeDraft] = useState<Scope[]>([...SCOPES])
   const active = p.roster.filter((m) => m.active)
-  const taken = confirm?.kind === "approve" && active.some((m) => m.name === confirm.req.name)
+  // Someone else's seat: the joiner's own key landing in the roster mid-approve (the live join event beats
+  // the approve call home) is this request going through, not a clash.
+  const taken = confirm?.kind === "approve" && active.some((m) => m.pk !== confirm.req.pk && nameKey(m.name) === nameKey(confirm.req.name))
   // A seat in use: seen in the last ten minutes or listening right now (the same rule as kiwi approve).
   const lastSeenOf = (name: string) => p.state.members.get(name)?.lastSeen || null
   const onlineNow = (name: string) => p.online.has(name) || p.now - (lastSeenOf(name) ?? 0) < 10 * 60_000
@@ -478,7 +480,7 @@ function Invite({ onDone }: { onDone: () => void }) {
       </div>
       {who === "person" ? (
         <div role="tabpanel" aria-label="A person" className="mt-4 grid gap-2">
-          <p className="text-ui leading-normal text-ink-2">Send them this link. They open it, sign in, and ask to join.</p>
+          <p className="text-ui leading-normal text-ink-2">Send them this link. They open it and ask to join.</p>
           <CopyBox text={inviteLink(p.code)} label="Copy link" done="Invite link copied" />
         </div>
       ) : (

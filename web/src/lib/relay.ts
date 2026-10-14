@@ -1,7 +1,8 @@
-// The relay URL, in one place. It comes from the desktop shell's bridge
-// (window.kiwi.relayUrl), else the `?relay=` entry param the shell injects,
-// else location.origin (plain-browser development, where the dev server
-// proxies /v1 to the relay). Nothing else in the renderer may use
+// The relay URL, in one place. In the desktop app it is the shell's bridge
+// (window.kiwi.relayUrl), and only that: the page's own URL is never trusted
+// there, since the sign-in token goes wherever the relay is. In a browser it
+// is a `?relay=` param, else location.origin (development, where the dev
+// server proxies /v1 to the relay). Nothing else in the renderer may use
 // location.origin for relay traffic: call relayUrl() here instead.
 
 function fromBridge(): string | null {
@@ -24,7 +25,8 @@ function fromEntry(): string | null {
 
 /** The relay this renderer talks to. */
 export function relayUrl(): string {
-  return fromBridge() ?? fromEntry() ?? window.location.origin
+  if (hasBridge()) return fromBridge() ?? PUBLIC_RELAY
+  return fromEntry() ?? window.location.origin
 }
 
 /** Whether the renderer runs inside the desktop shell (a bridge is present). */

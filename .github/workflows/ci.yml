@@ -224,6 +224,8 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
@@ -231,3 +233,7 @@ jobs:
         env:
           NEEDS: ${{ toJSON(needs) }}
           GITHUB_TOKEN: ${{ github.token }}
+      # A PR is squash-merged, and that commit's description is its changelog entry (scripts/changelog.ts):
+      # a PR none of whose commits says what changed and why fails the gate. Version bumps are exempt.
+      - if: always() && github.event_name == 'pull_request'
+        run: bun scripts/changelog.ts --check "origin/${{ github.base_ref }}..HEAD"

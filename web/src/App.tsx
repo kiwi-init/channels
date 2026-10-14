@@ -15,10 +15,11 @@ import { SettingsModal } from "@/components/settings"
 import { useAutoApproval } from "@/lib/approval"
 import { adoptThisComputer } from "@/lib/computers"
 import { parseHash, useChannelList } from "@/lib/channel"
+import { joinCodeFromLink } from "@/lib/deep-link"
 import { newsTotal, rowNews, startMarks, useMarks, useNewsKeys, useOpenNews, useTabNews } from "@/lib/news"
 import { formatShort } from "@/lib/format"
 import { setAppearance } from "@/lib/theme"
-import { useSecrets } from "@/lib/secrets"
+import { bridge, useSecrets } from "@/lib/secrets"
 import { toggleSidebar, useSidebarOpen, useSidebarShortcut } from "@/lib/sidebar"
 import { cx } from "@/lib/utils"
 
@@ -90,6 +91,23 @@ export default function App() {
     }
     window.addEventListener("hashchange", onHash)
     return () => window.removeEventListener("hashchange", onHash)
+  }, [])
+
+  // A kiwi://join/<code> link opens its channel: the one that started the app, and each one after.
+  // Main hands each link over once, so a reload doesn't open it again.
+  useEffect(() => {
+    const b = bridge()
+    if (!b) return
+    const take = () =>
+      void b
+        .getDeepLink()
+        .then((url) => {
+          const linked = url ? joinCodeFromLink(url) : null
+          if (linked) open(linked)
+        })
+        .catch(() => {})
+    take()
+    return b.onDeepLink(take)
   }, [])
 
   const close = () => {

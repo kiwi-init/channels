@@ -24,7 +24,7 @@ import { Channel, ChannelGone, reason, RelayError } from "../client.ts";
 import { Cursor, DEFAULT_RELAY, home, Keystore, type ChannelConfig } from "../config.ts";
 import { decodeJoinCode, type ChannelAccess } from "../crypto.ts";
 import { describeMember, freeAgentName, handleFor } from "../membership.ts";
-import { baseName, here, seatsNear } from "../seats.ts";
+import { baseName, canonicalHarness, here, seatsNear } from "../seats.ts";
 import { cardLine, charterLines, describeEvent, holdLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, modeLine, parseDuration, taskStateWord, statusJson } from "../format.ts";
 import { canPost, describeScopes, presetOf, SCOPES, type Scope } from "../scopes.ts";
 import { fingerprint } from "../identity.ts";
@@ -36,6 +36,7 @@ import { computerClaimFor } from "../machine.ts";
 import { briefText, COMMANDS } from "../brief.ts";
 import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor, EXTRA_HARNESSES, extraInstalled, hooksInstalled, hooksListen, hooksStatus, installDetected, installExtra, installHooks, mcFor, runHook, uninstallDetected, uninstallExtra, uninstallHooks, type ExtraHarness } from "../hooks.ts";
 import { BadName } from "../refusals.ts";
+import { binDir, ensureOnPath, profileFor } from "../shell-path.ts";
 import { detectCard, detectModel, detectRuns, mergeCard } from "../card.ts";
 
 const CLAIMS_GONE = "claims are gone: say what you're working on in the task, or post it";
@@ -64,11 +65,13 @@ Agents
                                                  for anything outside the charter, destructive, or not yours
      --image f.png · --room R · --kind K
   kiwi reply N "text"                            answer message #N: to its sender, in its room
+  kiwi react N 👍 [--clear]                       react to message #N with one emoji (--clear takes it back)
   kiwi show N [dir]                              message #N in full, with its whole thread; its images saved
   kiwi log [-n 30] [--all] [--room R]            recent history (marks nothing read)
   kiwi status [--json]                           one screen: who's here and online, the charter, tasks, notes,
                                                  and questions waiting on you
-  kiwi task add "title" [--owner NAME] [--review NAME|any]   a task: open, then doing, then done
+  kiwi task add "title" [--owner NAME] [--review NAME|any] [--re N]   a task: open, then doing, then done
+                                                 (--re N: made from message #N; taking it on tells its sender)
      task claim|start|done|note|show T7 · task review T7 (when it has a reviewer) · approve|reject T7
      task assign T7 NAME ["what's next"] · drop T7 (back to the board)   (kiwi task alone: the board)
   kiwi note [KEY [VALUE] [--ttl 7d] | KEY --clear]   shared notes: all of them, one, set one, or remove one
@@ -77,7 +80,7 @@ Agents
 This computer
   kiwi setup                                     set it up once: Claude Code's hooks, the PATH, and how to pair it
   kiwi pair kp1-…                                pair it with your Kiwi app (approve it there): its agents get in on their own
-  kiwi daemon                                    this computer's hub: keeps every local agent listening (starts on its own)
+  kiwi daemon                                    this computer's hub: key, cert, and a listen multiplex (starts on its own)
   kiwi demo · doctor · hooks install|uninstall|status · mcp · channels · relay --help
 
 Running a channel (create, approve, remove, roles, hold, charter, close) is the owner's, in the Kiwi app.
@@ -145,6 +148,27 @@ const { values: opt, positionals: args } = parseArgs({
   },
 });
 
+// Early signals for `kiwi daemon` only (the first positional, same as the CLI). Bun plus the
+// Effect runtime take ~100ms before runDaemonForeground arms a clean shutdown. A supervisor
+// killing in that window would otherwise die with 143. runDaemonForeground disarms these
+// once its own handler is in. Other commands keep the default so SIGINT still interrupts
+// their Effect stream.
+if (args[0] === "daemon") {
+  let earlySigExit = false;
+  const earlySig = (): void => {
+    if (!earlySigExit) {
+      earlySigExit = true;
+      process.exit(0);
+    }
+  };
+  process.once("SIGTERM", earlySig);
+  process.once("SIGINT", earlySig);
+  (globalThis as { __kiwiDisarmEarlySignals?: () => void }).__kiwiDisarmEarlySignals = () => {
+    process.removeListener("SIGTERM", earlySig);
+    process.removeListener("SIGINT", earlySig);
+  };
+}
+
 /** A command that stops here: `kiwi: <message>` on stderr, and this exit code. */
 class Quit extends Data.TaggedError("Quit")<{ readonly message: string; readonly code: number }> {}
 
@@ -211,6 +235,12 @@ const session = Effect.fn("kiwi.session")(function* () {
   const alias = yield* channelAlias();
   const cfg = (yield* config).channels[alias]!;
   acting.name = yield* agentName(cfg);
+  const keys = yield* Keystore;
+  // loadIdentity mints a key when the file is missing: that is for join. A typo in --as
+  // (or a stale ch.as) must not write an unused identity.
+  if (!(yield* keys.identitiesIn(cfg.roomId)).includes(acting.name)) {
+    return yield* die(`${acting.name} has no key in "${alias}" on this machine`);
+  }
   return yield* openSession(alias, cfg, acting.name);
 });
 
@@ -529,7 +559,13 @@ const commands: Record<string, Command> = {
           out(yes ? "   Added.\n" : "   Skipped. kiwi hooks install adds them any time.\n");
         }
       }
-      if (!Bun.which("kiwi")) out(`To type plain kiwi, add this line to your shell profile:\n  export PATH="${join(homedir(), ".kiwi", "bin")}:$PATH"\n`);
+      if (!Bun.which("kiwi")) {
+        const { file, line } = profileFor({ mark: "" });
+        const added = ensureOnPath({ mark: "# Added by kiwi setup: puts the kiwi CLI on your PATH." });
+        if (added) out(`PATH: added ${binDir()} to ${added}, so a new terminal finds plain kiwi.\n`);
+        else if (process.platform === "win32") out(`PATH: to type plain kiwi, add ${binDir()} to your user Path (install.ps1 does it for you).\n`);
+        else out(`PATH: ${file} already names ${binDir()}; open a new terminal to type plain kiwi (or: ${line}).\n`);
+      }
       out("To let this computer's agents in on their own, pair it with your Kiwi app: Your computers → Add a computer,");
       out("then run the kiwi pair kp1-… command it shows, here.");
     }),
@@ -751,6 +787,15 @@ const commands: Record<string, Command> = {
       out(`sent #${yield* s.reply(seq, body, (opt.kind ?? "msg") as Kind, imgs)}`);
     }),
 
+  react: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi react N 👍 (or --clear)"));
+      const emoji = opt.clear ? null : (args[2]?.trim() || (yield* die("usage: kiwi react N 👍 (or --clear)")));
+      yield* s.react(seq, emoji);
+      out(emoji ? `reacted ${emoji} to #${seq}` : `took back your reaction on #${seq}`);
+    }),
+
   save: () =>
     Effect.gen(function* () {
       const s = yield* session();
@@ -955,8 +1000,9 @@ const commands: Record<string, Command> = {
             ts: m.ts,
           });
           // Whether it got there: a message the webhook didn't take isn't marked read.
+          // A hung POST would freeze eachLive (uninterruptible) and the read cursor.
           try {
-            const res = await fetch(url, { method: "POST", headers, body });
+            const res = await fetch(url, { method: "POST", headers, body, signal: AbortSignal.timeout(10_000) });
             if (!res.ok) process.stderr.write(`kiwi: webhook ${res.status} for #${m.seq}\n`);
             return res.ok;
           } catch (err) {
@@ -971,7 +1017,7 @@ const commands: Record<string, Command> = {
         ...(!opt["for-me"] && opt.thread === undefined ? { chat: true } : {}),
         onStatus: (msg) => Effect.sync(() => void process.stderr.write(`kiwi: ${msg}\n`)),
         onNotice: (text) =>
-          Effect.sync(() => void fetch(url, { method: "POST", headers, body: JSON.stringify({ channel: s.alias, kind: "notice", text, ts: Date.now() }) }).catch(() => {})),
+          Effect.sync(() => void fetch(url, { method: "POST", headers, body: JSON.stringify({ channel: s.alias, kind: "notice", text, ts: Date.now() }), signal: AbortSignal.timeout(10_000) }).catch(() => {})),
       });
     }),
 
@@ -984,11 +1030,12 @@ const commands: Record<string, Command> = {
       const STATE_FOR: Record<string, TaskState> = { start: "doing", review: "review", done: "done" };
       if (sub === "add") {
         const title = yield* text(2);
-        if (!title.trim()) return yield* die('usage: kiwi task add "title" [--owner NAME] [--review NAME|any]');
+        if (!title.trim()) return yield* die('usage: kiwi task add "title" [--owner NAME] [--review NAME|any] [--re N]');
+        const re = opt.re === undefined ? undefined : Number(opt.re.replace(/^#/, "")) || (yield* die("--re takes a message number"));
         // Gone, and said so rather than refused, so an agent running older instructions still adds its task.
         for (const gone of ["after", "needs"] as const) if (opt[gone] !== undefined) process.stderr.write(`kiwi: --${gone} is gone (tasks don't wait on or match anything now); put it in the title or --detail\n`);
         const { state: before } = yield* s.state();
-        const id = yield* s.taskAdd(title, { owner: opt.owner, detail: opt.detail, ...(opt.review !== undefined ? { review: opt.review } : {}) });
+        const id = yield* s.taskAdd(title, { owner: opt.owner, detail: opt.detail, ...(opt.review !== undefined ? { review: opt.review } : {}), ...(re !== undefined ? { re } : {}) });
         const like = similarOpenTasks(before, title).map((t) => t.id);
         const lines = [`added ${taskId(id)}`];
         if (like.length) lines.push(looksLikeLine(like));
@@ -1161,9 +1208,9 @@ const commands: Record<string, Command> = {
 function listenLine(mc: string): string {
   if (hooksListen()) return "Messages for you arrive on their own: Kiwi's hooks wake you when one comes. Don't run listen.";
   const h = here().harness;
-  if (h === "claude") return `Start a Monitor on \`${COMMANDS.listen(mc)}\` with the longest timeout allowed, and start it again whenever it ends: that's how messages reach you.`;
+  if (canonicalHarness(h) === "claude-code") return `Start a Monitor on \`${COMMANDS.listen(mc)}\` with the longest timeout allowed, and start it again whenever it ends: that's how messages reach you.`;
   // OpenCode has no hooks kiwi installs (yet): it keeps a listener running like any other harness.
-  if (h && h !== "opencode" && extraInstalled(h)) return "Kiwi's hooks hand you new messages as your turns start and end. Don't run listen.";
+  if (h && h !== "opencode" && h !== "claude" && extraInstalled(h)) return "Kiwi's hooks hand you new messages as your turns start and end. Don't run listen.";
   return `Run \`${COMMANDS.listenOnce(mc)}\`, and run it again every time it returns: it returns when messages for you arrive.`;
 }
 

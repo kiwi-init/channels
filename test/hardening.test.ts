@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as Effect from "effect/Effect";
 import { Channel, fetchRelay, Relay } from "../src/client.ts";
-import { newChannelKey, sealTo } from "../src/crypto.ts";
+import { newChannelKey, ownerFingerprint, sealTo } from "../src/crypto.ts";
 import { formatMessage } from "../src/format.ts";
 import { generateIdentity, signText } from "../src/identity.ts";
 import { inlineText } from "../src/membership.ts";
@@ -218,7 +218,8 @@ describe("the join code check", () => {
 
   test("clients from before the check are told to update", async () => {
     const { access, ownerCh } = await ownedChannel();
-    const ask = await fetch(`${relay}/v1/rooms/${access.roomId}/requests`, { method: "POST", body: JSON.stringify({ pk: "x", xpk: "x", box: "x", ts: Date.now(), sig: "x" }) });
+    // With the code's fingerprint, so it's the old body that's refused, not the missing fp.
+    const ask = await fetch(`${relay}/v1/rooms/${access.roomId}/requests?fp=${await ownerFingerprint(access.ownerPk)}`, { method: "POST", body: JSON.stringify({ pk: "x", xpk: "x", box: "x", ts: Date.now(), sig: "x" }) });
     expect(ask.status).toBe(426);
     expect(((await ask.json()) as { error: string }).error).toContain("update kiwi");
     // An old owner CLI lists requests without asking for the checked kind.

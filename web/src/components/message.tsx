@@ -5,6 +5,7 @@ import { describeEvent } from "@mc/format.ts"
 import { ignored, type Color, type Message, type Trust } from "@mc/protocol.ts"
 import type { ChannelState, Member } from "@mc/state.ts"
 import { excerpt, formatAgo, formatFull, formatStamp, memberName } from "@/lib/format"
+import { chipLabel, type Chip } from "@/lib/reactions"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 import { Monogram, toast } from "./kit"
@@ -60,16 +61,16 @@ export function shortEvent(m: Message, state: ChannelState): string {
 }
 
 /** Something that happened rather than something said: one quiet line centred on the column, as Messages sets them, cut short if long. */
-export function EventRow({ m, state, now, onOpenTask, openLabel = "Open", more }: { m: Message; state: ChannelState; now: number; onOpenTask?: (id: number) => void; openLabel?: string; more?: ReactNode }) {
+export function EventRow({ m, state, now, onOpenTask, anchor = "m", more }: { m: Message; state: ChannelState; now: number; onOpenTask?: (id: number) => void; anchor?: string; more?: ReactNode }) {
   const taskRef = m.ev && "task" in m.ev ? m.ev.task : m.ev?.op === "task.add" ? m.seq : null
   const forged = ignored(state.trust.get(m.seq))
   const full = `${memberName(state.members.get(m.from), m.from)} ${describeEvent(m, state)} · ${formatFull(m.ts)} (${formatAgo(m.rts ?? m.ts, now)})`
   return (
-    <p id={`m${m.seq}`} title={full} className={cx("flex min-w-0 items-baseline justify-center gap-1.5 px-8 py-[3px] text-center text-stamp text-ink-3", forged && "line-through opacity-60")}>
+    <p id={`${anchor}${m.seq}`} title={full} className={cx("flex min-w-0 items-baseline justify-center gap-1.5 px-8 py-[3px] text-center text-stamp text-ink-3", forged && "line-through opacity-60")}>
       <span className="min-w-0 truncate">{shortEvent(m, state)}</span>
       {taskRef !== null && onOpenTask && (
         <button type="button" onClick={() => onOpenTask(taskRef)} className="shrink-0 font-medium text-ink-2 hover:text-ink hover:underline">
-          {openLabel}
+          Open
         </button>
       )}
       {more}
@@ -78,9 +79,9 @@ export function EventRow({ m, state, now, onOpenTask, openLabel = "Open", more }
 }
 
 /** A same-day run of events: three or more read as the latest, with the rest a click away. */
-export function EventGroup({ messages, state, now, onOpenTask, highlight, openLabel }: { messages: Message[]; state: ChannelState; now: number; onOpenTask?: (id: number) => void; highlight: number | null; openLabel?: string }) {
+export function EventGroup({ messages, state, now, onOpenTask, highlight, anchor }: { messages: Message[]; state: ChannelState; now: number; onOpenTask?: (id: number) => void; highlight: number | null; anchor?: string }) {
   const [open, setOpen] = useState(false)
-  const row = (m: Message, more?: ReactNode) => <EventRow key={m.seq} m={m} state={state} now={now} onOpenTask={onOpenTask} openLabel={openLabel} more={more} />
+  const row = (m: Message, more?: ReactNode) => <EventRow key={m.seq} m={m} state={state} now={now} onOpenTask={onOpenTask} anchor={anchor} more={more} />
   if (messages.length < 3) return <div className="my-1">{messages.map((m) => row(m))}</div>
   const forced = highlight !== null && messages.some((m) => m.seq === highlight)
   const shown = open || forced
@@ -138,6 +139,8 @@ interface BubbleProps {
   receipt?: string
   /** Coordinator-only: an agent sent this to a person directly, not through this coordinator. */
   direct?: string
+  /** Members' reactions to it (reactions.ts). */
+  reactions?: Chip[]
   /** Found by the key that signed the message, so two members sharing a name still read right. */
   author?: Author
   trust?: Trust
@@ -182,7 +185,7 @@ export interface ThreadSummary {
  * tail, pointing at its sender. An escalation is a plain bubble with an amber "Decision for you"
  * over it; a forged one (shown only when the owner asks) is struck through.
  */
-export const Bubble = memo(function Bubble({ m, me, author, trust, online, first, last, fresh, group, adjacentReply, highlighted, quoted, nameOf, onReply, onJump, thread, onOpenThread, anchor = "m", color, direct, face, receipt }: BubbleProps) {
+export const Bubble = memo(function Bubble({ m, me, author, trust, online, first, last, fresh, group, adjacentReply, highlighted, quoted, nameOf, onReply, onJump, thread, onOpenThread, anchor = "m", color, direct, face, receipt, reactions }: BubbleProps) {
   const forged = ignored(trust)
   const mine = m.from === me
   const repliedTo = new Set((m.re ?? []).map((seq) => quoted(seq)?.from).filter((f): f is string => !!f))
@@ -285,6 +288,21 @@ export const Bubble = memo(function Bubble({ m, me, author, trust, online, first
             <button type="button" onClick={() => onReply(m)} className="font-medium text-decide hover:underline">
               Answer
             </button>
+          </p>
+        )}
+        {!!reactions?.length && !forged && (
+          <p className={cx("mt-0.5 flex flex-wrap gap-1 px-2", mine && "justify-end")}>
+            {reactions.map((c) => (
+              <span
+                key={c.emoji}
+                title={chipLabel(c)}
+                aria-label={chipLabel(c)}
+                className={cx("inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-stamp tabular-nums", c.mine ? "bg-accent-wash text-accent-text" : "bg-wash-2 text-ink-2")}
+              >
+                <span aria-hidden>{c.emoji}</span>
+                {c.who.length > 1 && <span aria-hidden>{c.who.length}</span>}
+              </span>
+            ))}
           </p>
         )}
         {receipt && mine && !forged && (

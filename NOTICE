@@ -19,4 +19,4 @@ trimmed to what Channels uses.
 This product includes robot-heads 0.3.0 (https://github.com/fayazara/robot-heads,
 npm robot-heads), Copyright (c) 2026 Fayaz Ahmed, licensed under the MIT License.
 A copy of that license is in licenses/robot-heads-LICENSE. It draws the
-coordinator's animated head in the web dashboard (web/src/components/coordinator-head.tsx).
+coordinator's animated head in the desktop app (web/src/components/coordinator-head.tsx).

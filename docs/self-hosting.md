@@ -74,7 +74,7 @@ built `site/`.
 | `--web <dir>` | `KIWI_WEB` | `site/` if present | Serve the static site from this folder |
 | `--no-web` | | | Don't serve the static site |
 | `--workos-client-id <id>` | `WORKOS_CLIENT_ID` | | Turn on sign-in, the create gate, with your WorkOS app ([below](#sign-in-with-your-own-workos-app)) |
-| `--workos-authkit-domain <url>` | `WORKOS_AUTHKIT_DOMAIN` | | Your AuthKit domain |
+| `--workos-authkit-domain <url>` | `WORKOS_AUTHKIT_DOMAIN` | | Your AuthKit domain. Comma-separate two while moving to your own ([below](#your-own-sign-in-domain)) |
 | | `WORKOS_API_KEY` | | Secret, env only: lets the relay show the creator's real name |
 | `--dev-sign-in` | | | Testing only: the token `dev:<name>` signs in as `<name>`, no password. Refused unless `--hostname` is `127.0.0.1` or `localhost` ([below](#testing-a-relay)) |
 | `--trust-proxy [addr,cidr]` | `KIWI_TRUST_PROXY` | off | Trust a reverse proxy. Bare or `1` trusts a loopback peer. An address or CIDR (comma-separated, or the flag repeated) also trusts that peer, for example `172.17.0.1` or `172.16.0.0/12`. A trusted peer's last `X-Forwarded-For` entry is the client. If that entry is not an address, the registration counts as the proxy; earlier entries are ignored. Any other peer ignores the header. A prefix of `/0` is refused |
@@ -271,6 +271,26 @@ There is no sign-in callback for the relay to serve and no channel directory or
 usage page for signed-in people: the app signs in with device authorization in
 the browser, and the relay only counts the channels each person owns, for the
 quota.
+
+### Your own sign-in domain
+
+The page the app opens to sign in is on your AuthKit domain, `https://<random-words>.authkit.app`
+by default. WorkOS can serve it from a domain of yours instead (`auth.example.com`). That's a
+WorkOS add-on, for production environments only. WorkOS's pricing page lists custom domains as
+an extra monthly fee (reported as $99/month).
+
+1. In the WorkOS dashboard, with the **production** environment selected: *Domains* →
+   *Configure AuthKit domain*, and enter it (`auth.example.com`).
+2. Add the CNAME record it shows at your DNS provider. On Cloudflare, make it **DNS only** (grey
+   cloud) until WorkOS has verified it, which it keeps retrying for up to 72 hours.
+3. Once it's verified, the device sign-in page and its tokens come from the new domain. Tokens
+   then name it as their issuer, so tell the relay about both domains for the switch, new one
+   first: `WORKOS_AUTHKIT_DOMAIN="https://auth.example.com,https://<random-words>.authkit.app"`
+   (or `--workos-authkit-domain` with the same list), and redeploy. The relay takes tokens from
+   either domain, for your client only. The public site (`site/`) does not sign in; the desktop
+   app talks to WorkOS.
+4. Sign in from the app once and check the page was on your domain. Sign-in tokens last minutes,
+   so a day later you can drop the `.authkit.app` domain from the setting.
 
 ## Limits and the private beta
 

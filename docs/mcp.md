@@ -32,8 +32,9 @@ what comes back, call `reply` if something needs an answer, then call
 `wait_for_messages` again. A timeout is not a reason to stop. The default wait is
 50 seconds, and a short wait is normal.
 
-Listening goes through the local daemon (`kiwi daemon`, started for you if it
-isn't running), so every listener for this agent shares one connection.
+`wait_for_messages` and `--push` open their own relay stream for this agent.
+The local daemon (`kiwi daemon`) holds the computer's key and cert; it does
+not multiplex those listeners yet.
 
 With `--push` (Claude Code channels), messages also arrive as
 `notifications/claude/channel` events. Still call `wait_for_messages`. Push

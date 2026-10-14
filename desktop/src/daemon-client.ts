@@ -11,6 +11,7 @@
 // It used to send { method, params } and read { result }, which the daemon ignores: every hello
 // timed out, so the app never saw its own daemon and never listed this computer.
 
+import { spawn } from "node:child_process";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -96,4 +97,17 @@ export async function daemonStop(home: string = kiwiHome(), timeoutMs = 5_000): 
 /** Hand the daemon its cert from the person. Throws when it refuses. */
 export async function daemonAdopt(home: string, params: AdoptParams, timeoutMs = 10_000): Promise<void> {
   await call(daemonSocketPath(home), "adopt", params, timeoutMs);
+}
+
+/**
+ * Start `kiwi daemon` for `home`, apart from the app (it outlives a quit). It gets the app's relay:
+ * a daemon not yet adopted follows the relay it starts on (src/daemon.ts ensureMachine), and the
+ * app's own environment rarely says one (KIWI_RELAY), so without it a self-hosted relay's app
+ * would adopt a daemon on the public one.
+ */
+export function spawnDaemon(bin: string, home: string, relay: string): void {
+  const child = spawn(bin, ["daemon"], { env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay }, detached: true, stdio: "ignore", windowsHide: true });
+  // A binary that won't start shows as no hello (the caller waits for one), not an uncaught error.
+  child.on("error", () => {});
+  child.unref();
 }

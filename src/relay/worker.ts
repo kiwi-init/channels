@@ -9,10 +9,13 @@ import { DurableObject } from "cloudflare:workers";
 import * as Layer from "effect/Layer";
 import { CLOSE_CLOSED, CLOSE_REMOVED, PING, PONG } from "../protocol.ts";
 import { ChannelGone, NotFound, Refused, UpdateRequired } from "./failures.ts";
-import { Human, workosHumanAuth, workosProfiles, type HumanAuth } from "./human.ts";
+import { Human, workosFromSettings, type HumanAuth } from "./human.ts";
 import { Policy, policyFrom, type RelayPolicy } from "./policy.ts";
 import {
   Directory as ChannelLists, // the service; the Durable Object below counts owned channels instead
+  holdEntry,
+  releasable,
+  reserveSlot,
   RoomDb,
   relayConfig,
   authenticateSocket,
@@ -42,7 +45,7 @@ interface Env {
   MAILBOX: DurableObjectNamespace<MailboxBox>;
   /** When set, channels belong to humans signed in with this WorkOS AuthKit client. */
   WORKOS_CLIENT_ID?: string;
-  /** The AuthKit domain (https://….authkit.app), whose keys may also sign tokens. */
+  /** The AuthKit domain (https://….authkit.app or a custom one), whose keys may also sign tokens. Comma-separated while moving domains. */
   WORKOS_AUTHKIT_DOMAIN?: string;
   /** Secret, optional: lets the beta list match people by email (the relay never names owners from it). */
   WORKOS_API_KEY?: string;
@@ -56,24 +59,31 @@ let humanAuth: HumanAuth | null | undefined;
 /** One verifier (and JWKS cache) per isolate. */
 function human(env: Env): HumanAuth | null {
   if (humanAuth === undefined) {
-    const id = env.WORKOS_CLIENT_ID;
-    const jwks = id ? [`https://api.workos.com/sso/jwks/${id}`, ...(env.WORKOS_AUTHKIT_DOMAIN ? [`${env.WORKOS_AUTHKIT_DOMAIN}/oauth2/jwks`] : [])] : [];
-    humanAuth = id ? { ...workosHumanAuth(id, jwks), ...(env.WORKOS_API_KEY ? { profile: workosProfiles(env.WORKOS_API_KEY) } : {}) } : null;
+    humanAuth = workosFromSettings({ clientId: env.WORKOS_CLIENT_ID, authkitDomain: env.WORKOS_AUTHKIT_DOMAIN, apiKey: env.WORKOS_API_KEY });
   }
   return humanAuth;
 }
 
-let peopleOf: { env: Env; list: (user: string) => Promise<DirectoryEntry[]> } | undefined;
+type Owned = ChannelLists["Service"];
+let peopleOf: { env: Env; owned: Owned } | undefined;
 /**
  * The owned-channel counts rooms read for the quota: each person's Owners object, reached through
  * this isolate's cached fetchers. Built once per isolate, like the verifier above.
  */
-function owned(env: Env): (user: string) => Promise<DirectoryEntry[]> {
+function owned(env: Env): Owned {
   if (peopleOf?.env !== env) {
     const at = (user: string) => env.OWNERS.get(env.OWNERS.idFromName(user));
-    peopleOf = { env, list: async (user: string) => (await at(user).fetch("https://owners/")).json() };
+    const post = (user: string, path: string, body: object) => at(user).fetch(`https://owners/${path}`, { method: "POST", body: JSON.stringify(body) });
+    peopleOf = {
+      env,
+      owned: {
+        list: async (user) => (await at(user).fetch("https://owners/")).json(),
+        reserve: async (user, room, most) => ((await (await post(user, "reserve", { room, most })).json()) as { ok: boolean }).ok,
+        release: async (user, room) => void (await post(user, "release", { room })),
+      },
+    };
   }
-  return peopleOf.list;
+  return peopleOf.owned;
 }
 
 export class Channel extends DurableObject<Env> {
@@ -93,7 +103,7 @@ export class Channel extends DurableObject<Env> {
       Layer.mergeAll(
         Layer.succeed(Human, human(env)),
         Layer.succeed(Policy, this.policy),
-        Layer.succeed(ChannelLists, { list: (user: string) => owned(env)(user) }),
+        Layer.succeed(ChannelLists, owned(env)),
       ),
     );
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));
@@ -194,14 +204,28 @@ export class Owners extends DurableObject<Env> {
 
   override async fetch(req: Request): Promise<Response> {
     const sql = this.ctx.storage.sql;
+    const entries = () => (sql.exec("SELECT entry FROM owned").toArray() as { entry: string }[]).map((r) => JSON.parse(r.entry) as DirectoryEntry);
+    const path = new URL(req.url).pathname;
+    // One object per person, and no await between the count and the hold: two creates can't both pass.
+    if (req.method === "POST" && path === "/reserve") {
+      const { room, most } = (await req.json()) as { room: string; most: number };
+      const { ok, stale } = reserveSlot(entries(), room, most, Date.now());
+      for (const r of stale) sql.exec("DELETE FROM owned WHERE room = ?", r);
+      if (ok && !entries().some((e) => e.room === room)) sql.exec("INSERT INTO owned (room, entry) VALUES (?, ?)", room, JSON.stringify(holdEntry(room, Date.now())));
+      return Response.json({ ok });
+    }
+    if (req.method === "POST" && path === "/release") {
+      const { room } = (await req.json()) as { room: string };
+      if (releasable(entries().find((e) => e.room === room))) sql.exec("DELETE FROM owned WHERE room = ?", room);
+      return Response.json({ ok: true });
+    }
     if (req.method === "POST") {
       const u = (await req.json()) as DirectoryUpdate;
       if (u.entry?.owner) sql.exec("INSERT OR REPLACE INTO owned (room, entry) VALUES (?, ?)", u.room, JSON.stringify(u.entry));
       else sql.exec("DELETE FROM owned WHERE room = ?", u.room);
       return Response.json({ ok: true });
     }
-    const rows = sql.exec("SELECT entry FROM owned").toArray() as { entry: string }[];
-    return Response.json(rows.map((r) => JSON.parse(r.entry) as DirectoryEntry));
+    return Response.json(entries());
   }
 }
 

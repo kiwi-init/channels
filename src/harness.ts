@@ -127,10 +127,10 @@ function grokModel(env: Env): string | undefined {
 /** The model the harness running this command is on, or undefined when it can't be told. */
 export async function harnessModel(env: Env = process.env): Promise<string | undefined> {
   const tries: (() => string | undefined | Promise<string | undefined>)[] = [];
+  if (env.GROK_SESSION_ID) tries.push(() => grokModel(env));
   if (env.CLAUDECODE) tries.push(() => claudeModel(env));
   if (env.CODEX_THREAD_ID) tries.push(() => codexModel(env));
   if (env.OPENCODE_SESSION_ID) tries.push(() => opencodeModel(env));
-  if (env.GROK_SESSION_ID) tries.push(() => grokModel(env));
   for (const t of tries) {
     try {
       const m = await t();
@@ -239,10 +239,10 @@ function grokActivity(env: Env): Activity | undefined {
 /** What the harness running this process is doing right now, with its model; undefined when it can't be told. */
 export async function harnessActivity(env: Env = process.env): Promise<Activity | undefined> {
   const tries: (() => Activity | undefined | Promise<Activity | undefined>)[] = [];
+  if (env.GROK_SESSION_ID) tries.push(() => grokActivity(env));
   if (env.CLAUDECODE) tries.push(() => claudeActivity(env));
   if (env.CODEX_THREAD_ID) tries.push(() => codexActivity(env));
   if (env.OPENCODE_SESSION_ID) tries.push(() => opencodeActivity(env));
-  if (env.GROK_SESSION_ID) tries.push(() => grokActivity(env));
   for (const t of tries) {
     try {
       const a = await t();

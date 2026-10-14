@@ -459,7 +459,7 @@ const pinnedInfo = Effect.fn("Channel.pinnedInfo")(function* (relay: string, cod
   if ((yield* Effect.promise(() => ownerFingerprint(info.ownerPk))) !== ownerFp) throw new Error("this relay is serving a different owner than the join code names; refusing");
   const statement = yield* Effect.promise(() => ownerStatement(roomId, info));
   if (!statement) throw new Error("the channel owner's keys aren't signed; refusing");
-  return { roomId, info, signedKeys: statement === "signed-keys" };
+  return { roomId, ownerFp, info, signedKeys: statement === "signed-keys" };
 });
 
 const keyStatement = (room: string, e: number | string, memberPk: string, box: string) => `kiwi-key\n${room}\n${e}\n${memberPk}\n${box}`;
@@ -689,13 +689,13 @@ export class Channel {
       /** The claims sealed into the request: an agent's computer claim, a person's person claim. */
       claims?: JoinClaims,
     ) {
-      const { roomId, info: room } = yield* pinnedInfo(relay, code);
+      const { roomId, ownerFp, info: room } = yield* pinnedInfo(relay, code);
       if (!id.xpk) return yield* new MissingKey("identity has no exchange key");
       const xpk = id.xpk;
       const box = yield* Effect.promise(() => sealTo(room.ownerXpk, JSON.stringify({ ...info, ...claims }), requestInfo(roomId)));
       const commit = yield* Effect.promise(async () => commitTo(roomId, id.pk, await joinNonce(id, roomId)));
       const body = yield* Effect.promise(() => sign(id, { room: roomId, xpk, box, ts: Date.now(), commit }));
-      const { id: requestId } = yield* callRelay<{ id: string }>(relay, roomId, "/requests", { method: "POST", body: JSON.stringify(body) });
+      const { id: requestId } = yield* callRelay<{ id: string }>(relay, roomId, "/requests", { method: "POST", body: JSON.stringify(body) }, { fp: ownerFp });
       return { roomId, requestId };
     }),
 
@@ -1035,9 +1035,12 @@ export class Channel {
         if (req.computer?.own && req.check === "unchecked") yield* Effect.ignoreCause(this.fx.checkRequest(req));
       }
       // Approve each one whose code both sides can see now, as an agent sponsored by the owner.
+      // One refusal must not skip the rest of this computer's asks.
       const approved: Member[] = [];
       for (const req of yield* this.fx.requests({ person })) {
-        if (req.computer?.own && req.check === "ready" && req.code) approved.push(yield* this.fx.approve(req, undefined, { person }));
+        if (!(req.computer?.own && req.check === "ready" && req.code)) continue;
+        const one = yield* Effect.exit(this.fx.approve(req, undefined, { person }));
+        if (Exit.isSuccess(one)) approved.push(one.value);
       }
       return approved;
     }),

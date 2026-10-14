@@ -30,8 +30,8 @@ export interface ChannelConfig extends ChannelAccess {
   /** This machine holds the owner key (the human who approves joins). */
   owner?: string;
   /**
-   * A person's own seat, brought here from the web for `kiwi tui` (their key, the owner's
-   * included). Only `kiwi tui` acts with it: agent commands never pick it.
+   * A person's own seat on this machine (their key, the owner's included).
+   * Agent commands never pick it.
    */
   person?: string;
   /** The channel's name, as its owner set it (sealed: only members can read it). */
@@ -143,12 +143,17 @@ function isRealFile(p: string): boolean {
   }
 }
 
+/** True when `dir` already holds kiwi state. KIWI_HOME is user-supplied: do not chmod a tree that is not ours. */
+export function hasKiwiState(dir: string): boolean {
+  return isRealFile(join(dir, "config.json")) || isRealFile(join(dir, "machine.json")) || isRealDir(join(dir, "identities"));
+}
+
 /**
  * Make an existing kiwi home private, once. The root is chmodded only when it
- * already holds kiwi state (`config.json` or `identities/`). Only kiwi's own
- * entries are walked, never the rest of the tree: KIWI_HOME is user-supplied,
- * and pointing it at a home directory or a project must not chmod that tree.
- * Symlinks are not followed.
+ * already holds kiwi state (`config.json`, `machine.json`, or `identities/`).
+ * Only kiwi's own entries are walked, never the rest of the tree: KIWI_HOME is
+ * user-supplied, and pointing it at a home directory or a project must not
+ * chmod that tree. Symlinks are not followed.
  */
 function tightenHome(dir: string): void {
   if (tightened.has(dir)) return;
@@ -160,7 +165,7 @@ function tightenHome(dir: string): void {
   }
   if (!st.isDirectory()) return;
   tightened.add(dir);
-  if (!isRealFile(join(dir, "config.json")) && !isRealDir(join(dir, "identities"))) return;
+  if (!hasKiwiState(dir)) return;
   try {
     chmodSync(dir, 0o700);
     for (const name of KIWI_DIRS) lockKiwiDir(join(dir, name), name === "downloads");
@@ -395,7 +400,7 @@ export async function loadIdentity(name: string, roomId: string): Promise<Identi
   return id;
 }
 
-/** Keep a key brought from elsewhere (a person's, for `kiwi tui`). Never replaces one this machine has. */
+/** Keep a key brought from elsewhere (a person's). Never replaces one this machine has. */
 export function saveIdentity(id: Identity, roomId: string): void {
   const path = join(identityDir(roomId), `${safe(id.name)}.json`);
   if (existsSync(path)) throw new Error(`this computer already has a key named ${id.name} in this channel`);
@@ -577,7 +582,7 @@ export interface KeystoreApi {
   readonly identity: (name: string, roomId: string) => Effect.Effect<Identity>;
   readonly identitiesIn: (roomId: string) => Effect.Effect<string[]>;
   readonly forgetIdentity: (name: string, roomId: string) => Effect.Effect<void>;
-  /** Keep a key brought from elsewhere (a person's, for `kiwi tui`); never replaces one this machine has. */
+  /** Keep a key brought from elsewhere (a person's); never replaces one this machine has. */
   readonly saveIdentity: (id: Identity, roomId: string) => Effect.Effect<void>;
   readonly forgetIdentities: (roomId: string) => Effect.Effect<void>;
   /** Persist a channel's keys after they change (a rotation). */

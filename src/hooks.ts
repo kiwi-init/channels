@@ -337,7 +337,8 @@ export function hooksListen(env: Record<string, string | undefined> = process.en
 /** Install automatically when an agent joins from inside Claude Code (opt out with KIWI_NO_HOOKS=1). */
 export function autoInstallHooks(): string | null {
   // Never against the choice this computer's person made in `kiwi setup`.
-  if (process.env.KIWI_NO_HOOKS || !process.env.CLAUDECODE || loadConfig().claudeHooks === "off") return null;
+  // Grok Build can inherit CLAUDECODE; do not write ~/.claude/settings.json from it.
+  if (process.env.KIWI_NO_HOOKS || !process.env.CLAUDECODE || process.env.GROK_SESSION_ID || loadConfig().claudeHooks === "off") return null;
   try {
     // A different invocation path still counts as installed only when the command string matches this binary.
     return hooksInstalled() ? null : installHooks();

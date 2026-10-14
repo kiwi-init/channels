@@ -1,5 +1,9 @@
 # Plan: the backend on Effect 4
 
+> **Shipped in part.** Effect is in use. 0.11 removed the passkey vault and device
+> handovers: `src/vault.ts`, `src/devices.ts` and `src/vouch.ts` are gone. The
+> table below is the plan as written.
+
 > Owner's ask (#460): "our backend to be full Effect TS", pointing at
 > https://effect.website/docs/v4/onboarding. This is the plan for review before
 > any code. Effect 4.0.2 is current on npm.

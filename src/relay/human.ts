@@ -103,17 +103,27 @@ export function workosProfiles(apiKey: string): (userId: string) => Promise<Huma
 export interface WorkosSettings {
   /** No client id: the relay has no sign-in, exactly as before. */
   clientId?: string;
-  /** The AuthKit domain (https://….authkit.app), whose keys may also sign tokens. */
+  /**
+   * The AuthKit domain (https://….authkit.app, or your own custom domain), whose keys may also sign
+   * tokens. Several, comma-separated, while moving to a custom domain: tokens from either are taken.
+   */
   authkitDomain?: string;
   /** Secret: lets the relay vouch for people's real names ("agent of @…"). */
   apiKey?: string;
 }
 
+/** The AuthKit domains a setting names: comma-separated, without trailing slashes. */
+export function authkitDomains(setting: string | undefined): string[] {
+  return (setting ?? "")
+    .split(",")
+    .map((d) => d.trim().replace(/\/+$/, ""))
+    .filter(Boolean);
+}
+
 /** Sign-in from the same three settings on either relay (Worker vars or Bun flags/env). */
 export function workosFromSettings(s: WorkosSettings): HumanAuth | null {
   if (!s.clientId) return null;
-  const domain = s.authkitDomain?.replace(/\/$/, "");
-  const jwks = [`https://api.workos.com/sso/jwks/${s.clientId}`, ...(domain ? [`${domain}/oauth2/jwks`] : [])];
+  const jwks = [`https://api.workos.com/sso/jwks/${s.clientId}`, ...authkitDomains(s.authkitDomain).map((d) => `${d}/oauth2/jwks`)];
   return { ...workosHumanAuth(s.clientId, jwks), ...(s.apiKey ? { profile: workosProfiles(s.apiKey) } : {}) };
 }
 
@@ -137,12 +147,15 @@ function b64urlDecode(s: string): Uint8Array<ArrayBuffer> {
  * Verifies RS256 WorkOS access tokens against the client's JWKS (cached,
  * refreshed on an unknown kid). Tokens may be signed by the WorkOS API keys
  * or by the AuthKit domain's, so both sets are accepted when a domain is given.
+ * A domain's tokens may name it as their issuer bare or with WorkOS's
+ * /user_management/<client> path (a custom domain's do, WorkOS says, without
+ * documenting which): both are taken, for this client only.
  */
 export function workosHumanAuth(clientId: string, jwksUrls: string | string[] = `https://api.workos.com/sso/jwks/${clientId}`): HumanAuth {
   const urls = Array.isArray(jwksUrls) ? jwksUrls : [jwksUrls];
   const issuers = new Set([
     `https://api.workos.com/user_management/${clientId}`,
-    ...urls.filter((u) => !u.startsWith("https://api.workos.com/")).map((u) => new URL(u).origin),
+    ...urls.filter((u) => !u.startsWith("https://api.workos.com/")).flatMap((u) => [new URL(u).origin, `${new URL(u).origin}/user_management/${clientId}`]),
   ]);
   let keys: Promise<Map<string, CryptoKey>> | null = null;
   let fetchedAt = 0;
@@ -196,7 +209,7 @@ export function workosHumanAuth(clientId: string, jwksUrls: string | string[] = 
         const claims = JSON.parse(new TextDecoder().decode(b64urlDecode(p))) as { sub?: string; exp?: number; nbf?: number; iss?: string };
         const now = Date.now() / 1000;
         if (!claims.sub || !claims.exp || claims.exp < now - 30 || (claims.nbf && claims.nbf > now + 30)) return null;
-        // Only tokens issued for this app: WorkOS user management for our client, or our AuthKit domain.
+        // Only tokens issued for this app: WorkOS user management for our client, or our AuthKit domains.
         if (!issuers.has((claims.iss ?? "").replace(/\/$/, ""))) return null;
         return claims.sub;
       } catch {

@@ -8,7 +8,7 @@
 // shows someone who isn't in yet, a reload that paints the sent message from
 // the sealed cache and asks the relay only for newer ones, a computer linked
 // through its #link page by `kiwi setup`, that computer's agent asking to join
-// and approved, and the task it adds opened from the board.
+// and approved, and the task it adds opened in the Tasks panel.
 //
 //   bun run web:build && bun scripts/smoke-ui.ts
 //
@@ -49,13 +49,13 @@ function kiwi(args: string[], watch?: (out: string) => void): Promise<string> {
   return new Promise((ok, fail) => p.on("exit", (code) => (code === 0 ? ok(out) : fail(new Error(`kiwi ${args[0]} exited ${code}: ${out.trim().split("\n").pop()}`)))))
 }
 
-const relay = spawn("bun", ["src/relay/bun.ts", "--hostname", "127.0.0.1", "--port", String(PORT), "--data", join(data, "relay"), "--dev-sign-in"], { cwd: ROOT, stdio: ["ignore", "pipe", "inherit"] })
+const relay = spawn("bun", ["src/relay/bun.ts", "--hostname", "127.0.0.1", "--port", String(PORT), "--data", join(data, "relay"), "--web", "web/dist", "--dev-sign-in"], { cwd: ROOT, stdio: ["ignore", "pipe", "inherit"] })
 await new Promise<void>((ok, fail) => {
   let out = ""
   relay.stdout!.on("data", (d) => {
     out += d
-    if (out.includes("dashboard: not served")) fail(new Error("web/dist is missing: run bun run web:build first"))
-    else if (out.includes("dashboard:")) ok()
+    if (out.includes("site: not served")) fail(new Error("web/dist is missing: run bun run web:build first"))
+    else if (out.includes("site:")) ok()
   })
   relay.on("exit", (code) => fail(new Error(`relay exited (${code})`)))
 })
@@ -315,19 +315,21 @@ try {
   console.log(`ok  ${at}`)
 
   await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke task", "--owner", "bot"])
-  // A task has its own conversation, opened from the Tasks tab under the channel's header; it opens on the task's card, and the card on its page.
-  at = "Task conversation and page"
+  // A task has its own conversation, in the Tasks panel beside the chat (the header's Tasks button):
+  // the task opens there on its details, its activity a tap away, with what's said in it under them.
+  at = "Task in the Tasks panel"
   const conversations = page.getByRole("main").getByRole("navigation", { name: "Conversations" })
-  await conversations.getByRole("button", { name: /^Tasks/ }).click({ timeout: 15000 })
-  await page.getByRole("main").getByRole("button", { name: /Smoke task/ }).first().click({ timeout: 15000 })
-  await page.getByRole("main").getByRole("button", { name: /^(?!Details).*Smoke task T\d+/ }).first().click()
-  await page.getByRole("region", { name: /^Task T\d+/ }).getByRole("heading", { name: "Activity" }).waitFor()
-  await page.getByRole("button", { name: "Close task" }).click()
-  // In a task's conversation, a message goes to the task's thread.
-  await page.getByRole("textbox", { name: "Message" }).fill("smoke in the task")
+  const tasksButton = page.getByRole("main").getByRole("button", { name: "Tasks", exact: true })
+  const tasksPanel = page.getByRole("complementary", { name: "Tasks" })
+  await tasksButton.click({ timeout: 15000 })
+  await tasksPanel.getByRole("button", { name: /Smoke task/ }).first().click({ timeout: 15000 })
+  await tasksPanel.getByRole("region", { name: /^Task T\d+/ }).getByRole("button", { name: /^Activity/ }).click()
+  await tasksPanel.getByRole("textbox", { name: /^Comment on T\d+/ }).waitFor()
+  // In a task's conversation, a message goes to the task's thread, and main never shows it.
+  await tasksPanel.getByRole("textbox", { name: "Message" }).fill("smoke in the task")
   await page.keyboard.press("Enter")
-  await page.getByText("smoke in the task", { exact: true }).first().waitFor()
-  await conversations.getByRole("button", { name: /^Chat/ }).click()
+  await tasksPanel.getByText("smoke in the task", { exact: true }).first().waitFor()
+  await tasksPanel.getByRole("button", { name: "Close tasks" }).click()
   if (await page.getByText("smoke in the task", { exact: true }).count()) throw new Error("a message in a task's conversation showed in main")
   console.log(`ok  ${at}`)
   // What the owner can do to a member: each item behind their face in the details.
@@ -365,15 +367,21 @@ try {
   await page.getByRole("textbox", { name: "Message" }).fill("smoke, privately")
   await page.keyboard.press("Enter")
   await conversations.getByRole("button", { name: /^bot/ }).waitFor({ timeout: 15000 })
-  await conversations.getByRole("button", { name: /^Chat/ }).click()
+  // Away from main, the name's capsule leads with the way back.
+  await conversations.getByRole("button", { name: "Back to chat" }).click()
+  await conversations.getByRole("button", { name: "Back to chat" }).waitFor({ state: "detached" })
   console.log(`ok  ${at} and a direct conversation`)
 
-  at = "Tasks view"
-  await conversations.getByRole("button", { name: /^Tasks/ }).click()
-  await page.getByRole("main").getByRole("button", { name: /Smoke task/ }).first().waitFor()
-  await conversations.getByRole("button", { name: /^Chat/ }).click()
+  // The panel lists the tasks; one opened from it has a way back to the list, and Escape closes the panel.
+  at = "Tasks panel"
+  await tasksButton.click()
+  await tasksPanel.getByRole("button", { name: /Smoke task/ }).first().click()
+  await tasksPanel.getByRole("button", { name: "All tasks" }).click()
+  await tasksPanel.getByRole("textbox", { name: "Filter tasks" }).waitFor()
+  await page.keyboard.press("Escape")
+  await tasksPanel.waitFor({ state: "detached" })
   await page.getByRole("textbox", { name: "Message" }).waitFor()
-  console.log("ok  Tasks view")
+  console.log(`ok  ${at}`)
 
   // (Not walked in 0.11: news in a channel that isn't open. 0.10 read every channel's head from the
   // signed-in account's listing on the relay; 0.11 has no account, and its list is local only, so a

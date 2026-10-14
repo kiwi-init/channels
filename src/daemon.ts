@@ -5,7 +5,10 @@
 //   - this computer's key and cert (machine.json, re-read on every request, so `kiwi pair`
 //     changing it just works), plus `adopt` for the app handing the cert to its own computer;
 //   - one live relay stream per local agent seat, shared by every subscriber of that agent
-//     (`listen`); each subscriber still gets its deliveries from its own cursor.
+//     (`listen` on this socket); each subscriber still gets its deliveries from its own cursor.
+//     Messages only: the stream has no presence, roster, or Open. CLI `kiwi listen`, hooks, and
+//     MCP still use AgentSession.listen (`ch.fx.live`) so they keep those. listenDaemon is the
+//     socket subscriber; tests are the only caller today.
 //
 // The multiplex runs over client.ts's Promise API (history for catch-up, one stream() per seat),
 // not over an agent session: the relay authenticates one socket as one member key, and presence
@@ -14,14 +17,14 @@
 // `kiwi pair` (below) pairs the computer through the relay's pairing mailbox.
 
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { Socket } from "bun";
 // The channel stack (client.ts) loads lazily in seatFor, where the multiplex needs it: pairing,
 // hello/adopt and the socket itself never touch it, so `kiwi pair` works without it.
 import type { Channel } from "./client.ts";
 import type { Message } from "./protocol.ts";
-import { DEFAULT_RELAY, home, identitiesIn, loadConfig, loadIdentity } from "./config.ts";
+import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity } from "./config.ts";
 import { withExchangeKey } from "./identity.ts";
 import { loadMachine, newMachine, saveMachine, type MachineFile } from "./machine.ts";
 import { MAILBOX_TTL_MS, MailboxError, askToPair, openMailbox, readPairAnswer, readPairCode } from "./mailbox.ts";
@@ -138,6 +141,8 @@ export interface Daemon {
 export async function startDaemon(dir = home()): Promise<Daemon> {
   const sock = daemonSock(dir);
   if (await tryHello(sock)) throw new Error(`a daemon is already answering on ${sock}`);
+  const existed = existsSync(dir);
+  const ours = existed && hasKiwiState(dir);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   // A socket file left by a crashed daemon; pipe names need no cleanup.
   if (process.platform !== "win32") {
@@ -148,6 +153,16 @@ export async function startDaemon(dir = home()): Promise<Daemon> {
     }
   }
   await ensureMachine(process.env.KIWI_RELAY ?? DEFAULT_RELAY);
+  // mkdirSync(mode) does not chmod an existing dir. Lock 0700 only when this is kiwi's
+  // own home (we created it, or it already held kiwi state). KIWI_HOME is user-supplied:
+  // do not chmod ~ or a project. (macOS ignores unix-socket mode and checks the directory.)
+  if (process.platform !== "win32" && (!existed || ours)) {
+    try {
+      chmodSync(dir, 0o700);
+    } catch {
+      // A directory this user can't chmod must not stop the daemon.
+    }
+  }
 
   const seats = new Map<string, Seat>();
   const conns = new Set<ConnState>();
@@ -215,8 +230,15 @@ export async function startDaemon(dir = home()): Promise<Daemon> {
       const head = await ch.head().catch((err: unknown) => {
         throw new Error(why(err));
       });
+      if (stopped) throw new Error("the daemon is stopping");
       const seat: Seat = { key, alias, agent, ch, ctl: new AbortController(), subs: new Set(), head };
       seats.set(key, seat);
+      // stop() may have run between the check and the set: don't leave a stream behind it.
+      if (stopped) {
+        seats.delete(key);
+        seat.ctl.abort();
+        throw new Error("the daemon is stopping");
+      }
       ch.stream(
         seat.head,
         (m) => {
@@ -248,9 +270,24 @@ export async function startDaemon(dir = home()): Promise<Daemon> {
     // The seat's stream is already running before the catch-up below, so the two overlap and
     // never gap; the cursor dedupes the overlap.
     const seat = await seatFor(channel, as);
+    const reapEmpty = (): void => {
+      if (seat.subs.size !== 0) return;
+      if (seats.get(seat.key) === seat) seats.delete(seat.key);
+      seat.ctl.abort();
+    };
+    if (conn.dead || stopped) {
+      reapEmpty();
+      return;
+    }
     const sub: Sub = { id, cursor, conn, seat };
     seat.subs.add(sub);
     conn.subs.add(sub);
+    // The client dropped while seatFor ran: adding then dropping reaps a 0-sub seat
+    // so its relay WebSocket does not stay open with nobody listening.
+    if (conn.dead || stopped) {
+      dropSub(sub);
+      return;
+    }
     sendLine(conn, JSON.stringify({ id, ok: true, stream: true, head: seat.head, channel, agent: as }));
     try {
       const { messages } = await seat.ch.history(cursor);
@@ -361,6 +398,15 @@ export async function startDaemon(dir = home()): Promise<Daemon> {
       },
     },
   });
+  // Unix sockets have no auth: anyone who can connect can stop/listen/adopt. Bun.listen
+  // creates the file with a wide mode; lock it to this user. (Windows uses a named pipe.)
+  if (process.platform !== "win32") {
+    try {
+      chmodSync(sock, 0o600);
+    } catch {
+      // Same as the home chmod: a mode this user can't set must not stop the daemon.
+    }
+  }
 
   const stop = async (): Promise<void> => {
     if (stopped) return;
@@ -682,16 +728,17 @@ export async function listenDaemon(
     c.close();
     throw err;
   }
+  const close = (): void => {
+    opts.signal?.removeEventListener("abort", onAbort);
+    done = true;
+    stir();
+    c.close();
+  };
   return {
     head,
     channel,
     agent,
-    close: () => {
-      opts.signal?.removeEventListener("abort", onAbort);
-      done = true;
-      stir();
-      c.close();
-    },
+    close,
     [Symbol.asyncIterator]() {
       return {
         next: async (): Promise<IteratorResult<Message>> => {
@@ -708,6 +755,14 @@ export async function listenDaemon(
             });
           }
         },
+        return: async (): Promise<IteratorResult<Message>> => {
+          close();
+          return { value: undefined, done: true };
+        },
+        throw: async (err?: unknown): Promise<IteratorResult<Message>> => {
+          close();
+          throw err instanceof Error ? err : new Error(err == null ? "the listen was aborted" : String(err));
+        },
       };
     },
   };
@@ -715,6 +770,9 @@ export async function listenDaemon(
 
 /** `kiwi daemon`: serve this home in the foreground until SIGTERM/SIGINT. Logs one line. */
 export async function runDaemonForeground(dir = home()): Promise<void> {
+  // The CLI installed early SIGTERM/SIGINT handlers before anything async (see src/cli/main.ts):
+  // drop them now that this handler is in, so one signal has exactly one clean shutdown.
+  (globalThis as { __kiwiDisarmEarlySignals?: () => void }).__kiwiDisarmEarlySignals?.();
   // Handlers first: a signal during startup stops a clean exit, never a kill (a supervisor that
   // kills right after spawn would otherwise win the race with the listener below).
   let sock: string | null = null;

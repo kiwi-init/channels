@@ -178,7 +178,7 @@ const routes: RoomRoute[] = [
         const { url } = yield* Request_;
         const m = yield* readMeta;
         // The join code's second half is the owner key's fingerprint. A wrong one is answered like a
-        // missing room. Requests with no fp never reach here (missingFingerprint).
+        // missing room. Calls with no fp never reach here (missingFingerprint).
         if (url.searchParams.get("fp") !== (yield* Effect.promise(() => ownerFingerprint(m.ownerPk)))) return yield* new ChannelGone({ message: "no such channel" });
         return { data: { ownerPk: m.ownerPk, ownerXpk: m.ownerXpk, ownerSig: m.ownerSig, titlesSig: db.getTitlesSig(), epoch: m.epoch, rotate: m.rotate, title: db.title(), settings: db.settings(), iconAt: db.iconAt() } };
       }),
@@ -194,11 +194,17 @@ const routes: RoomRoute[] = [
         // During a private beta only listed people create channels; anyone may still join one.
         if (user && !(yield* inBeta(user))) return yield* new Forbidden({ message: betaMessage(policy) });
         const most = policy.channelsPerOwner;
-        if (user && most && (yield* Effect.promise(() => people.list(user))).filter((c) => c.owner).length >= most) {
+        const { roomId } = yield* RoomStore;
+        // One step in the owner's own store counts their channels and holds a slot for this one, so
+        // creates running at once (on other rooms) can't all pass. A failed create gives the slot back.
+        const quota = user && most ? { user, most } : null;
+        if (quota && !(yield* Effect.promise(() => people.reserve(quota.user, roomId, quota.most)))) {
           return yield* new TooMany({ message: `you own ${most} channels, the most this relay allows per person; close one to create another` });
         }
-        const b = yield* json<CreateBody>();
-        yield* create(signer, b, user);
+        yield* Effect.gen(function* () {
+          const b = yield* json<CreateBody>();
+          yield* create(signer, b, user);
+        }).pipe(Effect.onError(() => (quota ? Effect.promise(() => people.release(quota.user, roomId)) : Effect.void)));
         const updates = user ? yield* directory : undefined;
         return { data: { head: 0 }, fx: { ...(updates ? { directory: updates } : {}), expireAt: (yield* touch) ?? undefined } };
       }),
@@ -209,6 +215,10 @@ const routes: RoomRoute[] = [
     guard: "joiner",
     run: () =>
       Effect.gen(function* () {
+        // Only the join code's holder may ask, as for GET /info: a wrong fingerprint is a missing room.
+        const { url } = yield* Request_;
+        const m = yield* readMeta;
+        if (url.searchParams.get("fp") !== (yield* Effect.promise(() => ownerFingerprint(m.ownerPk)))) return yield* new ChannelGone({ message: "no such channel" });
         const b = yield* json<RequestBody>();
         const { id, fresh } = yield* request(b);
         return { data: { id }, fx: fresh ? { broadcast: [frame({ t: "request" })] } : undefined };

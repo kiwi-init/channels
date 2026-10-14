@@ -1,36 +1,29 @@
-import { ArrowDown01Icon, ArrowUp01Icon, Cancel01Icon, GitPullRequestIcon } from "@hugeicons/core-free-icons"
+import { ArrowDown01Icon, GitPullRequestIcon } from "@hugeicons/core-free-icons"
 import { useMemo, useState, type ReactNode } from "react"
 import type { Message } from "@mc/protocol.ts"
 import { colorOf, taskId, type ChannelState, type Task } from "@mc/state.ts"
 import { taskFeed, taskPrs } from "@mc/work.ts"
 import { formatAgo, formatFull, memberName } from "@/lib/format"
+import { cx } from "@/lib/utils"
 import { Feed, PrLink } from "./feed"
 import { Icon } from "./icon"
-import { Button, IconButton, Monogram } from "./kit"
+import { Button, Monogram } from "./kit"
 import { Markdown } from "./markdown"
 import { isAgent } from "./message"
 import { labelOf, StateMark } from "./tasks"
 
-const ORDER = ["doing", "review", "todo", "done"] as const
-
-/** The board's order: in progress, review, open, done; oldest first within each. */
-export function boardOrder(state: ChannelState): number[] {
-  return [...state.tasks.values()].sort((a, b) => ORDER.indexOf(a.state) - ORDER.indexOf(b.state) || a.id - b.id).map((t) => t.id)
-}
-
 /**
- * One task as its own page, like a Linear issue: what it is, then its whole story as one feed (its
- * events, every thread that names it, the PRs linked there), with its properties beside it.
- * Comments are task notes, so the story stays on the task.
+ * A task at the head of its conversation in the Tasks panel, as a thread opens on its first message:
+ * what it is and its properties, then its whole story behind a tap (its events, every thread that
+ * names it, the PRs linked there). Comments are task notes, so the story stays on the task.
  */
-export function TaskPage({
+export function TaskDetails({
   id,
   state,
   messages,
   me,
   now,
-  onOpen,
-  onClose,
+  highlighted,
   noteBlocked,
   onNote,
 }: {
@@ -39,72 +32,54 @@ export function TaskPage({
   messages: Message[]
   me: string
   now: number
-  onOpen: (id: number) => void
-  onClose: () => void
+  highlighted?: boolean
   /** Why this member can't add notes (their scopes), or null if they can. */
   noteBlocked: string | null
   onNote: (note: string) => Promise<void>
 }) {
   const task = state.tasks.get(id)
   const items = useMemo(() => taskFeed(state, messages, id, me), [state, messages, id, me])
-  const order = useMemo(() => boardOrder(state), [state])
-  const at = order.indexOf(id)
+  const [story, setStory] = useState(false)
+
+  if (!task)
+    return (
+      <div className="p-4">
+        <p className="text-body font-semibold">This task is gone</p>
+        <p className="mt-1 text-ui text-ink-2">It was pruned from the channel’s history.</p>
+      </div>
+    )
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col" aria-label={`Task ${taskId(id)}`}>
-      <header className="flex h-14 shrink-0 items-center gap-2 px-4 md:px-5">
-        <nav className="flex min-w-0 flex-1 items-center gap-1.5 text-title font-semibold" aria-label="Breadcrumb">
-          <button type="button" onClick={onClose} className="font-medium text-ink-3 hover:text-ink">
-            Tasks
-          </button>
-          <span className="text-ink-3">/</span>
-          <span className="tabular-nums">{taskId(id)}</span>
-        </nav>
-        {at >= 0 && (
-          <span className="text-meta text-ink-3 tabular-nums">
-            {at + 1} / {order.length}
-          </span>
-        )}
-        <IconButton label="Previous task" disabled={at <= 0} onClick={() => onOpen(order[at - 1]!)}>
-          <Icon icon={ArrowUp01Icon} size={16} />
-        </IconButton>
-        <IconButton label="Next task" disabled={at < 0 || at >= order.length - 1} onClick={() => onOpen(order[at + 1]!)}>
-          <Icon icon={ArrowDown01Icon} size={16} />
-        </IconButton>
-        <IconButton label="Close task" onClick={onClose}>
-          <Icon icon={Cancel01Icon} size={16} />
-        </IconButton>
-      </header>
-
-      {!task ? (
-        <div className="p-8">
-          <p className="text-body font-semibold">This task is gone</p>
-          <p className="mt-1 text-ui text-ink-2">It was pruned from the channel’s history.</p>
+    <section
+      id={`k${id}`}
+      aria-label={`Task ${taskId(id)}`}
+      className={cx("mt-1 rounded-card bg-raised px-4 py-3.5 shadow-[0_0_0_1px_var(--line)]", highlighted && "animate-flash outline-2 outline-offset-2 outline-[var(--ring)]")}
+    >
+      <h2 className="flex items-start gap-2 text-title font-semibold">
+        <span className="mt-0.5">
+          <StateMark state={task.state} />
+        </span>
+        <span className="min-w-0">{task.title}</span>
+      </h2>
+      {task.detail && (
+        <div className="mt-1.5 text-body text-ink-2">
+          <Markdown>{task.detail}</Markdown>
         </div>
-      ) : (
-        <div className="flex min-h-0 flex-1 overflow-y-auto">
-          <div className="min-w-0 flex-1">
-            <div className="mx-auto max-w-[760px] px-6 pt-8 pb-16">
-              <h1 className="flex items-center gap-2.5 text-display font-semibold tracking-[-0.01em]">
-                <StateMark state={task.state} />
-                <span className="min-w-0">{task.title}</span>
-              </h1>
-              {task.detail && (
-                <div className="mt-2 max-w-[680px] text-body text-ink-2">
-                  <Markdown>{task.detail}</Markdown>
-                </div>
-              )}
-              <div className="mt-6 lg:hidden">
-                <Properties task={task} state={state} now={now} items={items} />
-              </div>
-              <h2 className="mt-8 mb-2 text-title font-semibold">Activity</h2>
-              <Feed items={items} state={state} now={now} />
-              <NoteBox task={task} blocked={noteBlocked} onNote={onNote} />
-            </div>
-          </div>
-          <aside className="hidden w-[272px] shrink-0 border-l border-edge px-5 pt-8 lg:block">
-            <Properties task={task} state={state} now={now} items={items} />
-          </aside>
+      )}
+      <div className="mt-4">
+        <Properties task={task} state={state} now={now} items={items} />
+      </div>
+      <h3 className="mt-4 text-ui font-semibold">
+        <button type="button" aria-expanded={story} onClick={() => setStory((v) => !v)} className="flex w-full items-center gap-2 text-left">
+          Activity
+          <span className="text-meta font-normal text-ink-3 tabular-nums">{items.length}</span>
+          <Icon icon={ArrowDown01Icon} size={14} className={cx("ml-auto shrink-0 text-ink-3 transition-transform", story && "rotate-180")} />
+        </button>
+      </h3>
+      {story && (
+        <div className="mt-2">
+          <Feed items={items} state={state} now={now} />
+          <NoteBox task={task} blocked={noteBlocked} onNote={onNote} />
         </div>
       )}
     </section>
@@ -115,7 +90,7 @@ function Properties({ task, state, now, items }: { task: Task; state: ChannelSta
   const prs = taskPrs(items)
   const owner = task.owner ? state.members.get(task.owner) : undefined
   return (
-    <dl className="grid grid-cols-2 gap-4 lg:block lg:space-y-4">
+    <dl className="grid grid-cols-2 gap-4">
       <Prop label="Status">
         <StateMark state={task.state} />
         {labelOf(task)}
@@ -124,7 +99,7 @@ function Properties({ task, state, now, items }: { task: Task; state: ChannelSta
         {task.owner ? (
           <>
             <Monogram name={task.owner} agent={isAgent(owner)} size={18} color={colorOf(state, task.owner)} />
-            {memberName(owner, task.owner)}
+            <span className="truncate">{memberName(owner, task.owner)}</span>
           </>
         ) : (
           <span className="text-ink-3">Nobody yet</span>
@@ -161,9 +136,9 @@ function Properties({ task, state, now, items }: { task: Task; state: ChannelSta
 
 function Prop({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div>
+    <div className="min-w-0">
       <dt className="mb-1.5 text-meta font-medium text-ink-3">{label}</dt>
-      <dd className="flex items-center gap-2 text-ui">{children}</dd>
+      <dd className="flex min-w-0 items-center gap-2 text-ui">{children}</dd>
     </div>
   )
 }
@@ -172,7 +147,7 @@ function Prop({ label, children }: { label: string; children: ReactNode }) {
 function NoteBox({ task, blocked, onNote }: { task: Task; blocked: string | null; onNote: (note: string) => Promise<void> }) {
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
-  if (blocked) return <p className="mt-4 rounded-card border border-edge bg-raised px-4 py-3 text-ui text-ink-3">{blocked}</p>
+  if (blocked) return <p className="mt-3 rounded-card bg-field px-3.5 py-2.5 text-ui text-ink-3">{blocked}</p>
   const submit = async () => {
     if (!text.trim() || busy) return
     setBusy(true)
@@ -185,7 +160,7 @@ function NoteBox({ task, blocked, onNote }: { task: Task; blocked: string | null
   }
   return (
     <form
-      className="mt-4 flex items-end gap-2 rounded-card border border-edge bg-raised px-4 py-3 focus-within:border-edge-strong"
+      className="mt-3 flex items-end gap-2 rounded-card bg-field px-3.5 py-2.5"
       onSubmit={(e) => {
         e.preventDefault()
         void submit()

@@ -128,6 +128,8 @@ export function describeEvent(m: Message, state?: ChannelState): string {
       return ev.text ? `set the charter: ${ev.text}` : "cleared the charter";
     case "hold.set":
       return ev.on ? `put the channel ON HOLD${note(ev.note)}. Agents: stop all work now and change nothing; only answer people until it's lifted` : "lifted the hold: agents may carry on";
+    case "react":
+      return ev.emoji ? `reacted ${ev.emoji} to #${ev.seq}` : `took back the reaction on #${ev.seq}`;
   }
 }
 
@@ -296,7 +298,7 @@ export function modeLine(state: ChannelState, me: string): string | null {
   if (!state.mode.coordinatorOnly) return null;
   const c = state.coordinator;
   if (!c) return "mode: coordinator-only, but no coordinator yet (the owner gives someone the role coordinator): delivery is as usual until then";
-  if (c === me) return "mode: coordinator-only, and you are the coordinator: relay between people and agents in both directions, and answer every person";
+  if (c === me) return "mode: coordinator-only, and you are the coordinator: relay between people and agents in both directions, and answer every person. Pass a person's message on with --re N (or kiwi task add … --re N): the agent that takes it on reacts 👀 on it, so they know it got through";
   const me_ = state.members.get(me);
   if (me_ && (me_.kind === "human" || me_.owner)) return `mode: coordinator-only: you talk with ${c}, who passes things on`;
   return `mode: coordinator-only: report to ${c}, never to a person${state.mode.strict ? " (every client refuses an agent's message to a person)" : ""}`;

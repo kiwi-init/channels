@@ -1,12 +1,13 @@
 // Your computers: the ones paired with this app (kiwi pair), kept in the bridge's secrets store.
 // Pairing runs in the main process over the relay's pairing mailbox (window.kiwi.pairBegin/Poll/
 // Answer): the app shows a kp1- code, the computer runs `kiwi pair <code>`, and the person confirms
-// what asked. Removing one forgets it and takes its agents out of every channel this app owns.
+// what asked. Removing one takes its agents out of every channel this app owns, then forgets it.
 
 import { Channel } from "@mc/client.ts"
 
 import { allMembers, saveMember } from "./channel"
 import { relayUrl } from "./relay"
+import { takeAgents } from "./remove-agents"
 import { bridge, saveComputers, secrets, type ComputerView, type PairAskView } from "./secrets"
 
 export type { ComputerView, PairAskView }
@@ -71,23 +72,16 @@ function owned(): Channel[] {
 
 /** Take every agent that computer let in out of the channels this app owns; returns their names. */
 export async function removeAgentsOf(machinePk: string): Promise<string[]> {
-  const removed: string[] = []
-  for (const ch of owned()) {
-    const members = await ch.members().catch(() => [])
-    for (const m of members) {
-      if (m.from?.pk !== machinePk) continue
-      await ch
-        .remove(m.pk)
-        .then(() => removed.push(m.name))
-        .catch(() => {})
-    }
+  const { removed, leftover } = await takeAgents(machinePk, owned())
+  if (leftover.length) {
+    throw new Error(`Couldn’t remove ${leftover.join(", ")} from your channels. The computer is still paired.`)
   }
   return removed
 }
 
-/** Forget a computer, and remove its agents from the channels this app owns. */
+/** Remove that computer's agents, then forget it. Pairing stays if a remove failed. */
 export async function removeComputer(machinePk: string): Promise<string[]> {
-  // Forgotten first: from then on its agents' requests aren't yours, so auto-approval stops for it.
+  const removed = await removeAgentsOf(machinePk)
   await saveComputers(secrets().computers.filter((c) => c.machinePk !== machinePk))
-  return removeAgentsOf(machinePk)
+  return removed
 }

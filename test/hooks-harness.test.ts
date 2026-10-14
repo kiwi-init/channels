@@ -93,18 +93,31 @@ test("a harness session during tests does not touch the real home", () => {
     CODEX_THREAD_ID: "thr_test",
     GEMINI_CLI: "1",
     CURSOR_AGENT: "1",
-    GROK_SESSION_ID: "sess_test",
   });
   expect(autoInstallHooks()).toContain(process.env.CLAUDE_CONFIG_DIR!);
   const extras = autoInstallExtraHooks();
   expect(extras).toContain("Codex hooks");
   expect(extras).toContain("Gemini hooks");
   expect(extras).toContain("Cursor hooks");
-  expect(extras).toContain("Grok hooks");
-  expect(existsSync(join(process.env.KIWI_GROK_DIR!, "hooks", "kiwi.json"))).toBe(true);
   installDetected();
+  expect(existsSync(join(process.env.KIWI_GROK_DIR!, "hooks", "kiwi.json"))).toBe(true);
   uninstallDetected();
   expect(realHomeStamp()).toBe(before);
+});
+
+test("CLAUDECODE plus GROK_SESSION_ID does not write Claude settings", () => {
+  const claude = scratch("hk-grok-compat-");
+  setEnv({
+    KIWI_HOME: scratch("hk-grok-compat-home-"),
+    CLAUDE_CONFIG_DIR: claude,
+    CLAUDECODE: "1",
+    GROK_SESSION_ID: "sess_test",
+  });
+  expect(autoInstallHooks()).toBeNull();
+  expect(existsSync(join(claude, "settings.json"))).toBe(false);
+  const extras = autoInstallExtraHooks();
+  expect(extras).toContain("Grok hooks");
+  expect(existsSync(join(process.env.KIWI_GROK_DIR!, "hooks", "kiwi.json"))).toBe(true);
 });
 
 test("codex, gemini, cursor, and grok install, re-install once, and uninstall keeps user entries", () => {

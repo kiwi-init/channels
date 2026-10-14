@@ -25,7 +25,7 @@ import { inlineText, type Member } from "./membership.ts";
 import type { Identity } from "./identity.ts";
 import { isLocalRefusal, OwnerOnly, Rejected } from "./refusals.ts";
 import { canPost, describeScopes, refusal, wireScopes, type Scope } from "./scopes.ts";
-import { GENERAL_ROOM, ignored, MAX_CHARTER, TASK_STATES, type Activity, type Card, type Color, type Event, type ImageAttachment, type Kind, type Message, type Presence, type TaskState } from "./protocol.ts";
+import { GENERAL_ROOM, ignored, MAX_CHARTER, TASK_STATES, wellFormedReaction, type Activity, type Card, type Color, type Event, type ImageAttachment, type Kind, type Message, type Presence, type TaskState } from "./protocol.ts";
 import { allowedOnHold, COORDINATOR, findRoom, firstAgent, fold, humanOf, isPerson, keptFromPeople, newRoomId, ON_HOLD, ownerOf, taskId, threadMembers, type ChannelState, type GuardFloor, type Roster, type RoomsFloor } from "./state.ts";
 import { inAgentHarness, mergeCard, sameCard } from "./card.ts";
 import { harnessActivity } from "./harness.ts";
@@ -446,7 +446,9 @@ export class AgentSession {
     if (opts.dm && (to?.length !== 1 || to[0] === this.me || !state.members.get(to[0]!)?.active)) return yield* new Rejected("a direct message goes to exactly one other member: --dm NAME");
     // A reply sits where its parent does: no task or dm on top of it.
     const inThread = !!opts.re?.length;
-    return yield* this.ch.fx.send(body, { ...opts, to, room, ...(inThread ? { task: undefined, dm: undefined } : {}) });
+    const seq = yield* this.ch.fx.send(body, { ...opts, to, room, ...(inThread ? { task: undefined, dm: undefined } : {}) });
+    if (opts.kind !== "event" && opts.re?.length) yield* this.ack(opts.re);
+    return seq;
   });
 
   /**
@@ -540,8 +542,37 @@ export class AgentSession {
     const to = orig.from === this.me ? orig.to : [orig.from];
     yield* this.mayI({ kind, to });
     yield* this.mayTalkTo(to);
-    return yield* this.ch.fx.send(body, { to, kind, re: [seq], imgs, room: state.roomOf.get(seq) ?? orig.room });
+    const sent = yield* this.ch.fx.send(body, { to, kind, re: [seq], imgs, room: state.roomOf.get(seq) ?? orig.room });
+    yield* this.ack([seq]);
+    return sent;
   });
+
+  /** React to message #seq with an emoji, or take your reaction back (null). */
+  readonly react = Effect.fn("AgentSession.react")({ self: this }, function* (this: AgentSession, seq: number, emoji: string | null) {
+    if (emoji !== null && !wellFormedReaction(emoji)) return yield* new Rejected("a reaction is one emoji (no letters or digits)");
+    const { state } = yield* this.state();
+    if (!state.placeOf.has(seq) || ignored(state.trust.get(seq))) return yield* new Rejected(`no message #${seq} to react to`);
+    return yield* this.confirm(yield* this.event({ op: "react", seq, emoji }, "reaction"));
+  });
+
+  /**
+   * Coordinator-only: an agent answering (a reply, or taking on a task made from a message) tells the people
+   * whose words it answers that they got through, with 👀 on each of their messages. The coordinator and
+   * people don't: their answers reach people already. Once per message; never fails what it follows.
+   */
+  private ack(re: readonly number[]) {
+    return Effect.ignoreCause(
+      Effect.gen({ self: this }, function* () {
+        const { messages, state } = yield* this.state();
+        const me = state.members.get(this.me);
+        if (!state.mode.coordinatorOnly || !state.coordinator || this.me === state.coordinator || !me || isPerson(me) || state.hold) return;
+        for (const seq of answersPeople(state, messages, re)) {
+          if (state.reactions.get(seq)?.has(this.me)) continue;
+          yield* this.event({ op: "react", seq, emoji: ACK }, "reaction");
+        }
+      }),
+    );
+  }
 
   /** Announce yourself. After joining, a different role or rules is a request: the owner decides. */
   readonly hello = Effect.fn("AgentSession.hello")({ self: this }, function* (this: AgentSession, role?: string, about?: string) {
@@ -576,10 +607,10 @@ export class AgentSession {
 
   // ---------- events ----------
 
-  private event(ev: Event, body: string, to?: string[]) {
+  private event(ev: Event, body: string, to?: string[], re?: number) {
     return Effect.gen({ self: this }, function* () {
       yield* this.mayI({ kind: "event", ev });
-      return yield* this.ch.fx.send(body, { kind: "event", ev, to: to?.length ? [...new Set(to)].filter((n) => n !== this.me) : undefined });
+      return yield* this.ch.fx.send(body, { kind: "event", ev, to: to?.length ? [...new Set(to)].filter((n) => n !== this.me) : undefined, ...(re !== undefined ? { re: [re] } : {}) });
     });
   }
 
@@ -596,9 +627,10 @@ export class AgentSession {
   readonly taskAdd = Effect.fn("AgentSession.taskAdd")({ self: this }, function* (
     this: AgentSession,
     title: string,
-    opts: { detail?: string; owner?: string; review?: string } = {},
+    opts: { detail?: string; owner?: string; review?: string; re?: number } = {},
   ) {
     const { state } = yield* this.state();
+    if (opts.re !== undefined && (!state.placeOf.has(opts.re) || ignored(state.trust.get(opts.re)))) return yield* new Rejected(`no message #${opts.re}`);
     const owner = opts.owner && (yield* this.resolveTo([opts.owner], state))?.[0];
     const review = opts.review === undefined ? undefined : yield* this.reviewer(state, opts.review);
     return yield* this.event(
@@ -611,6 +643,7 @@ export class AgentSession {
       },
       `task: ${title}`,
       [...(owner ? [owner] : []), ...(review && review !== "*" ? [review] : [])],
+      opts.re,
     );
   });
 
@@ -630,7 +663,9 @@ export class AgentSession {
     if (t.state === "done") return yield* new Rejected(`${taskId(id)} is already done`);
     if (t.owner && t.owner !== this.me) return yield* new Rejected(`${taskId(id)} is owned by ${t.owner}`);
     const seq = yield* this.event({ op: "task.claim", task: id }, `claimed ${taskId(id)}`);
-    return yield* this.confirm(seq);
+    const after = yield* this.confirm(seq);
+    if (t.source !== undefined) yield* this.ack([t.source]);
+    return after;
   });
 
   readonly taskUpdate = Effect.fn("AgentSession.taskUpdate")({ self: this }, function* (
@@ -666,7 +701,10 @@ export class AgentSession {
       `${taskId(id)} ${change.state ?? "updated"}`,
       notify,
     );
-    return yield* this.confirm(seq);
+    const after = yield* this.confirm(seq);
+    // Starting a task made from someone's message answers it.
+    if (change.state === "doing" && t.source !== undefined) yield* this.ack([t.source]);
+    return after;
   });
 
   /** Give a task to someone else, with a note on where it stands and what's next. */
@@ -709,6 +747,10 @@ export const openSession = Effect.fn("AgentSession.open")(function* (alias: stri
   const keys = yield* Keystore;
   // Member records: the newest this machine has seen per key wins, across runs.
   keepRecordsIn(keys.records);
+  // Join creates the key first (loadIdentity). Everything else must use a name this machine already holds.
+  if (!(yield* keys.identitiesIn(cfg.roomId)).includes(name)) {
+    return yield* Effect.fail(new Error(`${name} has no key in "${alias}" on this machine`));
+  }
   const identity = yield* keys.identity(name, cfg.roomId);
   return new AgentSession(alias, cfg, identity, (a) => Effect.runSync(keys.saveAccess(alias, a)));
 });
@@ -757,4 +799,29 @@ export function wants(me: string, m: Message, state: ChannelState | null, d: Del
   const fromPerson = !m.to?.length && (sender?.kind === "human" || !!sender?.owner);
   const inMyThread = !!state?.threadPeople.get(state.threadOf.get(m.seq) ?? m.seq)?.has(me);
   return addressed || asking || fromPerson || inMyThread;
+}
+
+/** What an agent's automatic reaction is: "seen, on it". */
+export const ACK = "👀";
+
+/**
+ * The people's messages that answering `re` answers: each one it names that a person wrote, or, through
+ * someone else's message that passed it on (the coordinator forwarding it, a task made from it), the
+ * person's message that one answers. A few steps at most; only verified messages count.
+ */
+export function answersPeople(state: Pick<ChannelState, "members" | "trust">, messages: readonly Message[], re: readonly number[]): number[] {
+  const bySeq = new Map(messages.map((m) => [m.seq, m]));
+  const out = new Set<number>();
+  const walk = (seq: number, depth: number) => {
+    const m = bySeq.get(seq);
+    if (!m || state.trust.get(seq) !== "verified") return;
+    const from = state.members.get(m.from);
+    if (from && isPerson(from)) {
+      if (m.kind !== "event") out.add(seq);
+      return;
+    }
+    if (depth < 3) for (const r of m.re ?? []) walk(r, depth + 1);
+  };
+  for (const r of re) walk(r, 0);
+  return [...out];
 }
