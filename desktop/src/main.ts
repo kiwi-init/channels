@@ -6,7 +6,6 @@
 // build (crypto.ts is WebCrypto-only, and main has WebCrypto): no wrapper, no
 // duplicate scheme to drift.
 
-import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -18,7 +17,7 @@ import { certifyMachine } from "../../src/person.ts";
 import { compareVersions, ensureOnPath, keepCli } from "./cli.ts";
 import { APP_HOST, APP_SCHEME, csp, externalUrl, fileFor, isAppUrl, normalizeRelay, readStore } from "./guard.ts";
 import { applyUpdate, startUpdates, updateState } from "./updater.ts";
-import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, type HelloResult } from "./daemon-client.ts";
+import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, spawnDaemon, type HelloResult } from "./daemon-client.ts";
 import type { ChannelIdentityView, ComputerView, DaemonStatus, PairAskView, PendingItem, PersonView, SignInResult, StoreSnapshot } from "./bridge.ts";
 
 const PUBLIC_RELAY = "https://channels.kiwiinit.com";
@@ -390,10 +389,8 @@ async function ensureDaemon(): Promise<HelloResult | null> {
     await daemonStop(home);
     for (let i = 0; i < 20 && (await daemonHello(home, 500)); i++) await new Promise((r) => setTimeout(r, 250));
   }
-  // Start it as `kiwi daemon` for ~/.kiwi.
-  const bin = kiwiBin?.path ?? bundledKiwi();
-  const child = spawn(bin, ["daemon"], { env: { ...process.env, KIWI_HOME: home }, detached: true, stdio: "ignore", windowsHide: true });
-  child.unref();
+  // Start it as `kiwi daemon` for ~/.kiwi, on the app's relay.
+  spawnDaemon(kiwiBin?.path ?? bundledKiwi(), home, store.relayUrl);
   const until = Date.now() + 10_000;
   for (;;) {
     const hello = await daemonHello(home);

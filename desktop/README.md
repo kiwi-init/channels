@@ -23,7 +23,8 @@ window says so. Closing the window keeps the app in the tray (background auto-ap
 - `src/preload.ts` — context-isolated `window.kiwi` (see `src/bridge.ts` for the shape).
 - `src/bridge.ts` — the shared bridge type; renderer-neutral, no electron/node imports.
 - `src/daemon-client.ts` — the local socket client (`hello`, `adopt`) and the JSON wire
-  shape the daemon side must match (documented at the top of the file).
+  shape the daemon side must match (documented at the top of the file); starting the daemon
+  on the app's relay (`spawnDaemon`).
 - `src/updater.ts` — checks GitHub releases for a newer app.
 - `src/move.ts` — moves a download over the file it replaces, across filesystems too (the
   AppImage update).
