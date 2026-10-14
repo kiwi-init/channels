@@ -1035,9 +1035,12 @@ export class Channel {
         if (req.computer?.own && req.check === "unchecked") yield* Effect.ignoreCause(this.fx.checkRequest(req));
       }
       // Approve each one whose code both sides can see now, as an agent sponsored by the owner.
+      // One refusal must not skip the rest of this computer's asks.
       const approved: Member[] = [];
       for (const req of yield* this.fx.requests({ person })) {
-        if (req.computer?.own && req.check === "ready" && req.code) approved.push(yield* this.fx.approve(req, undefined, { person }));
+        if (!(req.computer?.own && req.check === "ready" && req.code)) continue;
+        const one = yield* Effect.exit(this.fx.approve(req, undefined, { person }));
+        if (Exit.isSuccess(one)) approved.push(one.value);
       }
       return approved;
     }),
