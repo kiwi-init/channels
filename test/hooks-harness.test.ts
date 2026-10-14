@@ -95,7 +95,7 @@ test("a harness session during tests does not touch the real home", () => {
     CURSOR_AGENT: "1",
     GROK_SESSION_ID: "sess_test",
   });
-  expect(autoInstallHooks()).toContain(process.env.CLAUDE_CONFIG_DIR!);
+  expect(autoInstallHooks()).toBeNull();
   const extras = autoInstallExtraHooks();
   expect(extras).toContain("Codex hooks");
   expect(extras).toContain("Gemini hooks");

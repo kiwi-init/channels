@@ -38,9 +38,11 @@ test("what each harness says about itself", () => {
   expect(here({ CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "s1", CLAUDE_PID: "42" })).toEqual({ harness: "claude", session: "s1", pid: 42 });
   expect(here({ CODEX_THREAD_ID: "t1" })).toEqual({ harness: "codex", session: "t1" });
   expect(here({ GROK_SESSION_ID: "g1" })).toEqual({ harness: "grok", session: "g1" });
+  expect(here({ CLAUDECODE: "1", GROK_SESSION_ID: "g1" })).toEqual({ harness: "grok", session: "g1" });
   expect(here({ GEMINI_CLI: "1" })).toEqual({ harness: "gemini" });
   expect(here({})).toEqual({});
   expect(baseName(here({ CLAUDECODE: "1" }))).toBe("claude");
+  expect(baseName(here({ CLAUDECODE: "1", GROK_SESSION_ID: "g1" }))).toBe("grok");
   expect(baseName({})).toBe("agent");
 });
 

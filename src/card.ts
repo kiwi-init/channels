@@ -59,11 +59,11 @@ export function inAgentHarness(env: Record<string, string | undefined> = process
 
 /** The harness running this process, from the markers each one sets for its shell commands. */
 export function detectHarness(env: Record<string, string | undefined> = process.env): string | undefined {
+  if (env.GROK_SESSION_ID) return "grok";
   if (env.CLAUDECODE) return "claude-code";
   if (env.CODEX_THREAD_ID || env.CODEX_SANDBOX) return "codex";
   if (env.GEMINI_CLI) return "gemini";
   if (env.CURSOR_AGENT || env.CURSOR_TRACE_ID) return "cursor";
-  if (env.GROK_SESSION_ID) return "grok";
   if (env.OPENCODE_SESSION_ID) return "opencode";
   return undefined;
 }

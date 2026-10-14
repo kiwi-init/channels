@@ -159,6 +159,8 @@ describe("reading the machine", () => {
 
   test("the harness from its markers", () => {
     expect(detectHarness({ CLAUDECODE: "1" })).toBe("claude-code");
+    expect(detectHarness({ GROK_SESSION_ID: "g1" })).toBe("grok");
+    expect(detectHarness({ CLAUDECODE: "1", GROK_SESSION_ID: "g1" })).toBe("grok");
     expect(detectHarness({ CODEX_THREAD_ID: "x" })).toBe("codex");
     expect(detectHarness({})).toBeUndefined();
   });
