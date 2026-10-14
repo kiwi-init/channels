@@ -15,6 +15,7 @@
     "build": "bun build src/cli/main.ts --compile --external node-liblzma --external @mongodb-js/zstd --outfile dist/kiwi",
     "test": "bun test",
     "smoke:ui": "bun scripts/smoke-ui.ts",
+    "ci:plan": "bun .github/jev-ci/cli.ts plan",
     "shots:ui": "bun scripts/shoot-ui.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json && bun scripts/ui-tokens.ts && cd web && tsc -b && bun eslint src",
     "web:dev": "cd web && bun run dev",

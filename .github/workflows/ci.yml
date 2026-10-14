@@ -4,28 +4,147 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+# A new push to a pull request cancels its run still in progress. Main keeps every run.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 jobs:
-  typecheck:
+  # Decides which jobs this pull request can break (.github/jev-ci.yml): rules first, then a
+  # cache of inputs that already passed, then Jev for the rest. Pushes to main run everything,
+  # and if planning fails, everything runs. Every check below runs only if the plan says so.
+  plan:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+    outputs:
+      run: ${{ steps.plan.outputs.run }}
+      hashes: ${{ steps.plan.outputs.hashes }}
+      plan: ${{ steps.plan.outputs.plan }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
-      - run: bun install --frozen-lockfile && (cd web && bun install --frozen-lockfile)
-      - run: bun run typecheck
+      - id: plan
+        run: bun .github/jev-ci/cli.ts plan --github
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+
+  core-types:
+    name: core / types
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['core-types']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          web: "false"
+      - run: bunx tsc --noEmit && bunx tsc --noEmit -p tsconfig.worker.json
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: core-types
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['core-types'] }}
+
+  core-test:
+    name: core / test
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['core-test']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: bun scripts/ci-tests.ts core
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: core-test
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['core-test'] }}
+
+  # The slow agent flows, split in two so they run side by side (scripts/ci-tests.ts).
+  flows-a:
+    name: core / flows-a
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['flows-a']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: bun scripts/ci-tests.ts flows-a
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: flows-a
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['flows-a'] }}
+
+  flows-b:
+    name: core / flows-b
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['flows-b']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: bun scripts/ci-tests.ts flows-b
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: flows-b
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['flows-b'] }}
+
+  web-types:
+    name: web / types
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['web-types']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: cd web && bunx tsc -b
+      - run: bun scripts/ui-tokens.ts
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: web-types
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['web-types'] }}
+
+  web-lint:
+    name: web / lint
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['web-lint']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: cd web && bun eslint src
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: web-lint
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['web-lint'] }}
 
   # Opens every menu, popover and dialog on the production build: Base UI throws on a
   # misplaced part only at render, which typecheck can't see (the b085ae8 crash).
   ui-smoke:
+    name: ui-smoke
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['ui-smoke']
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.2
-      - run: bun install --frozen-lockfile && (cd web && bun install --frozen-lockfile)
+      - uses: ./.github/actions/setup
       - run: bunx playwright-core install --with-deps --only-shell chromium
       - run: cd web && bun run build
       - run: bun run smoke:ui
@@ -35,3 +154,80 @@ jobs:
           name: ui-smoke-failure
           path: /tmp/kiwi-smoke-failure.png
           if-no-files-found: ignore
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: ui-smoke
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['ui-smoke'] }}
+
+  desktop:
+    name: desktop / build
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['desktop']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          web: "false"
+      - run: cd desktop && bun install --frozen-lockfile && bunx tsc --noEmit && bun run build
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: desktop
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop'] }}
+
+  cli-build:
+    name: cli / build
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['cli-build']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          web: "false"
+      - run: bun run build && ./dist/kiwi --version
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: cli-build
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['cli-build'] }}
+
+  relay-worker:
+    name: relay / worker
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['relay-worker']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          web: "false"
+      # wrangler.jsonc serves web/dist as assets; the bundle check doesn't need it built.
+      - run: mkdir -p web/dist && bunx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/worker"
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: relay-worker
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['relay-worker'] }}
+
+  # The one check to require: passes when every job the plan ran passed and the rest were skipped.
+  # It also finishes the plan's comment on the pull request with each job's result.
+  ci-ok:
+    name: ci-ok
+    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, ui-smoke, desktop, cli-build, relay-worker]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun .github/jev-ci/cli.ts report --github
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          GITHUB_TOKEN: ${{ github.token }}

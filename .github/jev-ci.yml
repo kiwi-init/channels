@@ -1,0 +1,145 @@
+# jev-ci: which CI jobs a pull request can break. Read by .github/jev-ci/cli.ts in the
+# `plan` job of .github/workflows/ci.yml. Pushes to main always run everything.
+#
+# For each job: `inputs` are the files it reads (a change elsewhere skips it), `always` are
+# files that run it by rule (config, dependencies), and `description` says in plain words
+# what it checks and what makes it fail. Jev reads the description, so keep it true.
+# `jev: false` marks static checks (types, lint): any edit to their files can fail them, so
+# they run whenever those files change and Jev only judges tests, flows and builds.
+
+# enforce: jobs Jev judges unaffected are skipped. shadow: they run anyway and the plan says so.
+mode: enforce
+# Run a job when Jev puts its chance of failing at or above this.
+threshold: 0.3
+
+workflow: .github/workflows/ci.yml
+planner_jobs: [plan, ci-ok]
+
+# The planner itself, its config and the shared setup: a change here runs every job.
+run_all_when_changed:
+  - ".github/jev-ci/**"
+  - ".github/jev-ci.yml"
+  - ".github/actions/**"
+
+# A release bump changes only these lines; it counts as no change.
+version_only:
+  files: ["package.json", "web/package.json", "desktop/package.json", "src/version.ts"]
+  pattern: '^\s*("version"\s*:|export const VERSION\s*=)'
+
+summarize_files: ["bun.lock", "web/bun.lock", "desktop/bun.lock"]
+
+# Above this many changed lines, or a single file above max_file_lines, Jev isn't asked: the jobs run.
+max_jev_lines: 800
+max_file_lines: 300
+
+jobs:
+  core-types:
+    jev: false
+    name: core / types
+    inputs: ["src/**", "test/**"]
+    always: ["tsconfig.json", "tsconfig.worker.json", "package.json", "bun.lock"]
+    description: >-
+      Runs tsc --noEmit over src/ (the kiwi CLI, daemon, client, relay and MCP server) and test/,
+      and again over the Cloudflare worker (src/relay/worker.ts, src/relay/room.ts,
+      src/protocol.ts) with the Workers types. Fails on any TypeScript type error in those files
+      or in what they import, including a changed export, signature or type.
+
+  core-test:
+    name: core / test
+    inputs: ["src/**", "test/**", "web/src/**", "web/public/**"]
+    always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "web/bun.lock", "scripts/ci-tests.ts"]
+    description: >-
+      Runs the fast unit tests with bun test: every test/*.test.ts except the slow agent-flow
+      suites, plus the dashboard's helper tests in web/src. They cover pure modules: protocol and
+      event validation, state folding, formatting, identity and signing, scopes and roles,
+      routing and auth tables, error texts, the install script (web/public/install.sh), hooks and
+      harness detection, the history cache. Fails if a tested module's behavior, output text or
+      exported names change.
+
+  flows-a:
+    name: core / flows-a
+    inputs: ["src/**", "test/**", "web/src/**", "web/public/**"]
+    always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts"]
+    description: >-
+      Runs slow end-to-end tests that start a real local relay (src/relay/bun.ts) and drive the
+      kiwi CLI and client: e2e (create a channel, join, send and listen through the relay),
+      verbs (the agent CLI verbs listen, send, show, status, note, join, log, task, leave and
+      their aliases), threads (task threads and direct threads), reconnect (what a listener says
+      when the relay drops). Fails if the CLI, the client, the relay, the protocol or the text
+      they print changes behavior.
+
+  flows-b:
+    name: core / flows-b
+    inputs: ["src/**", "test/**", "web/src/**", "web/public/**"]
+    always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts"]
+    description: >-
+      Runs slow agent-flow tests against a real local relay and the kiwi CLI: join-seats
+      (joining, one seat per agent, Claude Code hooks doing the listening), read-receipts,
+      daemon-pair (kiwi pair through the relay's pairing mailbox: src/daemon.ts, src/machine.ts,
+      src/mailbox.ts), sh-escape (the sandboxed kiwi sh), coordinator-follows (the coordinator
+      role), reclaim (getting a seat back). Fails if joining, seats, hooks, pairing, the daemon,
+      kiwi sh or the relay change behavior.
+
+  web-types:
+    jev: false
+    name: web / types
+    inputs: ["web/src/**", "web/index.html", "src/**", "scripts/ui-tokens.ts"]
+    always: ["web/package.json", "web/bun.lock", "web/tsconfig*.json", "web/vite.config.ts", "scripts/ui-tokens.ts"]
+    description: >-
+      Type-checks the React web dashboard with tsc -b in web/, which also compiles the src/
+      modules the dashboard imports through @mc/* (client, crypto, format, identity, load,
+      membership, protocol, sas, scopes, state, work). Then fails on any arbitrary text-[Npx] or
+      rounded-[Npx] Tailwind class in web/src. Fails on a type error in web/src or those src/
+      modules, or a raw pixel size in web/src.
+
+  web-lint:
+    jev: false
+    name: web / lint
+    inputs: ["web/src/**"]
+    always: ["web/eslint.config.js", "web/package.json", "web/bun.lock"]
+    description: >-
+      Runs eslint on web/src with the recommended JavaScript, TypeScript and React hooks rules.
+      Fails on an eslint error in the dashboard's .ts or .tsx files: an unused variable or
+      import, a hook called conditionally or with missing dependencies, an explicit any.
+
+  ui-smoke:
+    name: ui-smoke
+    inputs: ["src/**", "web/**", "scripts/smoke-ui.ts"]
+    always: ["package.json", "bun.lock", "web/package.json", "web/bun.lock", "web/vite.config.ts", "scripts/smoke-ui.ts"]
+    description: >-
+      Builds the web dashboard for production, starts the relay (src/relay) and runs the kiwi CLI
+      (src/cli) as a test computer, then drives the dashboard in headless Chromium: opens every
+      menu, popover and dialog, sets up a passkey, previews an invite link, links a computer with
+      `kiwi setup`, approves its agent joining, and opens a task. It finds buttons, menus and
+      dialogs by their visible names and roles. Fails if a page throws while rendering, if a
+      button, label or dialog it looks for is renamed, moved or missing, or if the relay,
+      pairing or join flow breaks.
+
+  desktop:
+    name: desktop / build
+    inputs: ["desktop/**", "src/**"]
+    always: ["desktop/package.json", "desktop/bun.lock", "desktop/tsconfig*.json"]
+    description: >-
+      Installs desktop/ dependencies, type-checks the Electron shell in desktop/src, and bundles
+      its main and preload scripts with bun build. desktop/src imports src/identity.ts,
+      src/mailbox.ts and src/person.ts. Fails on a type or bundling error in desktop/src or those
+      imports. The dashboard and the rest of src/ are not compiled here.
+
+  cli-build:
+    name: cli / build
+    inputs: ["src/**"]
+    always: ["package.json", "bun.lock"]
+    description: >-
+      Compiles the kiwi CLI (src/cli/main.ts and everything it imports) into one Linux binary
+      with bun build --compile, then runs `kiwi --version`. Fails if a module can't be resolved
+      or bundled, or the binary crashes on start. Tests and the dashboard aren't part of it.
+
+  relay-worker:
+    name: relay / worker
+    inputs: ["src/**"]
+    always: ["wrangler.jsonc", "package.json", "bun.lock"]
+    description: >-
+      Bundles the Cloudflare worker relay (src/relay/worker.ts and its imports) with wrangler
+      deploy --dry-run and wrangler.jsonc. Fails if the worker can't be bundled for Cloudflare,
+      for example a Node- or Bun-only import reaching src/relay/worker.ts, or an invalid
+      wrangler.jsonc. Code the worker doesn't import can't affect it.

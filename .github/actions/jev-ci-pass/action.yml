@@ -1,0 +1,21 @@
+name: jev-ci pass
+description: >-
+  Remembers that this job passed on these exact inputs (an empty Actions cache entry named
+  after the job and its input hash), so jev-ci can skip it when the same inputs come back.
+inputs:
+  job:
+    required: true
+  hash:
+    description: The job's input hash from the plan. Empty when planning failed; then nothing is saved.
+    required: true
+runs:
+  using: composite
+  steps:
+    - if: inputs.hash != ''
+      shell: bash
+      run: mkdir -p "$RUNNER_TEMP/jev-ci-pass" && echo "${{ inputs.hash }}" > "$RUNNER_TEMP/jev-ci-pass/${{ inputs.job }}"
+    - if: inputs.hash != ''
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ runner.temp }}/jev-ci-pass/${{ inputs.job }}
+        key: jev-ci-pass-${{ inputs.job }}-${{ inputs.hash }}
