@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react"
 
 import { handleFor, NAME_RE } from "@mc/membership.ts"
 import { tokenForCreate, useSignInMode } from "@/lib/auth"
+import { isJoinBlip } from "@/lib/join-blip"
 import { bridge, useSecrets } from "@/lib/secrets"
 import { isSignInGone } from "@/lib/session"
 import {
@@ -239,6 +240,7 @@ type Phase =
 /** Decide what this browser is in a channel: a member, waiting for approval, or a visitor who may ask. */
 export function ChannelGate({ code, listed, onBack, onGone }: { code: string; listed?: ChannelRow; onBack: () => void; onGone: () => void }) {
   const [phase, setPhase] = useState<Phase>({ kind: "loading" })
+  const [unreachable, setUnreachable] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -258,7 +260,7 @@ export function ChannelGate({ code, listed, onBack, onGone }: { code: string; li
     }
   }, [code])
 
-  // Poll a pending request until the owner decides.
+  // Poll a pending request until the owner decides. A blip stays on waiting.
   useEffect(() => {
     if (phase.kind !== "waiting") return
     let stop = false
@@ -267,11 +269,14 @@ export function ChannelGate({ code, listed, onBack, onGone }: { code: string; li
       try {
         const r = await checkJoin(phase.pending)
         if (stop) return
+        setUnreachable(false)
         if (r === "denied") return setPhase({ kind: "denied" })
         if ("access" in r) return setPhase({ kind: "member", member: r })
         if (r.code !== phase.code) return setPhase({ ...phase, code: r.code })
       } catch (err) {
-        if (!stop) return setPhase({ kind: "error", message: errorText(err) })
+        if (stop) return
+        if (!isJoinBlip(err)) return setPhase({ kind: "error", message: errorText(err) })
+        setUnreachable(true)
       }
       setTimeout(tick, 2000)
     }
@@ -310,7 +315,9 @@ export function ChannelGate({ code, listed, onBack, onGone }: { code: string; li
           {phase.code && <VerifyCode code={phase.code} />}
           <div className="flex items-center gap-3">
             <Spinner />
-            <span className="text-ui text-ink-2">This page updates the moment you’re in.</span>
+            <span className="text-ui text-ink-2">
+              {unreachable ? "Can’t reach the relay. Still waiting." : "This page updates the moment you’re in."}
+            </span>
           </div>
           <Button variant="ghost" className="mt-6 -ml-3.5" onClick={giveUp}>
             Cancel request
