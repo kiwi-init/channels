@@ -1,4 +1,4 @@
-import { ArrowDown01Icon, ArrowLeft01Icon, BubbleChatIcon, CheckListIcon, Search01Icon } from "@hugeicons/core-free-icons"
+import { ArrowDown01Icon, ArrowLeft01Icon, CheckListIcon, Search01Icon } from "@hugeicons/core-free-icons"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react"
 
 import { droppedCount } from "@mc/format.ts"
@@ -28,8 +28,9 @@ import { InfoPanel } from "./info-panel"
 import { Button, IconButton, Monogram, Spinner } from "./kit"
 import { Bubble, EventGroup, EventRow, TimeMark, isAgent, standsAlone, type ThreadSummary } from "./message"
 import { NeedsYou } from "./needs-you"
-import { TaskPage } from "./task-page"
-import { Notes, StateMark, TaskCard, Tasks } from "./tasks"
+import { TaskDetails } from "./task-details"
+import { Notes, Tasks } from "./tasks"
+import { TasksPanel } from "./tasks-panel"
 import { ThreadPanel } from "./thread"
 
 /** Messages this close together from one sender read as one run. */
@@ -76,6 +77,12 @@ const STAMP_GAP = 15 * 60_000
 /** The places a task's own events go, summed up in main as one line each: made, and a change of state. */
 const summarised = (m: Message) => m.ev?.op === "task.add" || (m.ev?.op === "task.update" && !!m.ev.state)
 
+/** What the main column shows: the main conversation or a direct one. A task's opens in the Tasks panel. */
+type Here = Exclude<Place, { kind: "task" }>
+
+/** What's open on the right, one at a time: a thread (by its first message), the details, or the tasks (the list, or one of them). */
+type Side = { kind: "thread"; root: number } | { kind: "info" } | { kind: "tasks"; task: number | null } | null
+
 export function Conversation({ member, onBack, onGone }: { member: StoredMember; onBack: () => void; onGone: () => void }) {
   const me = member.identity.name
   const { ch, connection, gone, messages, roster, state, online, isOwner, requests, send, refreshRequests, refreshRoster, head, marks, pkOf } = useChannel(member)
@@ -83,16 +90,18 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const roomId = member.access.roomId
   const icon = useIcons().get(roomId) ?? null
   const now = useNow()
-  // Where you are in the channel: its main conversation, a task's, or a direct one. Or the task list.
+  // Where you are in the channel: its main conversation, or a direct one.
   const [here, setHere] = useState<string>("main")
-  const [board, setBoard] = useState(false)
-  const [info, setInfo] = useState(false)
+  const [side, setSide] = useState<Side>(null)
+  const threadRoot = side?.kind === "thread" ? side.root : null
+  const info = side?.kind === "info"
+  /** The task open in the Tasks panel, if one is (else the panel lists them, if it's open). */
+  const shownTask = side?.kind === "tasks" ? side.task : null
+  const openThread = useCallback((root: number) => setSide({ kind: "thread", root }), [])
+  const openTask = useCallback((task: number) => setSide({ kind: "tasks", task }), [])
   const [pausing, setPausing] = useState(false)
   const [search, setSearch] = useState<string | null>(null)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
-  /** The thread open on the right, by its first message. */
-  const [threadRoot, setThreadRoot] = useState<number | null>(null)
-  const [openTask, setOpenTask] = useState<number | null>(null)
   const [highlight, setHighlight] = useState<number | null>(null)
   /** New messages below while scrolled up. */
   const [behind, setBehind] = useState(0)
@@ -174,21 +183,25 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
 
   // ---------- places: main, each task's conversation, direct ones ----------
   const { placeOf, places } = state
-  const place: Place = useMemo(() => {
+  const place: Here = useMemo(() => {
     const p = placeFromKey(here)
     // A direct conversation can be opened before anything's been said in it.
-    return p && (places.has(placeKey(p)) || p.kind === "dm") ? p : MAIN
-  }, [here, places])
+    return p?.kind === "dm" ? p : { kind: "main" }
+  }, [here])
   const hereKey = placeKey(place)
-  const go = useCallback((p: Place) => {
-    setHere(placeKey(p))
-    setBehind(0)
-    setBoard(false)
-    setOpenTask(null)
-    setThreadRoot(null)
-    setReplyTo(null)
-    setSearch(null)
-  }, [])
+  const go = useCallback(
+    (p: Place) => {
+      // A task's conversation is beside this one, in the Tasks panel.
+      if (p.kind === "task") return openTask(p.task)
+      setHere(placeKey(p))
+      setBehind(0)
+      // A thread belongs to the conversation it's in, and the details make way; the tasks stay open beside.
+      setSide((s) => (s?.kind === "tasks" ? s : null))
+      setReplyTo(null)
+      setSearch(null)
+    },
+    [openTask]
+  )
 
   // What's new where: the newest message seen in each place, kept by this browser.
   const seen = useSeen(roomId)
@@ -222,8 +235,14 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   )
   const lastHere = places.get(hereKey)?.last ?? 0
   useEffect(() => {
-    if (!document.hidden && !board && lastHere) markSeenIn(roomId, { [hereKey]: lastHere })
-  }, [hereKey, lastHere, roomId, board])
+    if (!document.hidden && lastHere) markSeenIn(roomId, { [hereKey]: lastHere })
+  }, [hereKey, lastHere, roomId])
+  // The task open in the panel is read too.
+  const taskKey = shownTask === null ? null : placeKey({ kind: "task", task: shownTask })
+  const lastInTask = (taskKey && places.get(taskKey)?.last) || 0
+  useEffect(() => {
+    if (!document.hidden && taskKey && lastInTask) markSeenIn(roomId, { [taskKey]: lastInTask })
+  }, [taskKey, lastInTask, roomId])
 
   // Replies to a message live in its thread on the right. A message answering a task's own event is just in that task's conversation.
   const bySeqAll = useMemo(() => new Map(messages.map((m) => [m.seq, m])), [messages])
@@ -273,6 +292,15 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     else list = list.filter((m) => m.kind === "event" || rootOf(m.seq) === null)
     return list
   }, [messages, placeOf, hereKey, search, nameOf, rootOf, state, revealed, reaches])
+  // The open task's conversation, in the panel: everything said there in order, replies too, as a thread reads.
+  // Not the event that made it: its details at the top say that.
+  const inTask = useMemo(
+    () =>
+      taskKey === null
+        ? []
+        : messages.filter((m) => m.seq !== shownTask && placeKey(placeOf.get(m.seq) ?? MAIN) === taskKey && (revealed || !ignored(state.trust.get(m.seq)))),
+    [messages, placeOf, taskKey, shownTask, state.trust, revealed]
+  )
 
   const bySeq = useMemo(() => new Map(messages.map((m) => [m.seq, m])), [messages])
   const quoted = useCallback((seq: number) => bySeq.get(seq), [bySeq])
@@ -298,7 +326,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     // A new message glides into view; the first paint just starts at the bottom.
     if (atBottom.current) el.scrollTo({ top: el.scrollHeight, behavior: added > 0 && added < 4 ? "smooth" : "instant" })
     else if (added > 0) setBehind((b) => b + added)
-  }, [visible, board])
+  }, [visible])
   // A new place opens at its latest message.
   useLayoutEffect(() => {
     atBottom.current = true
@@ -316,17 +344,19 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     (seq: number) => {
       setHighlight(seq)
       setTimeout(() => setHighlight((h) => (h === seq ? null : h)), 1600)
-      const inThread = rootOf(seq)
-      if (inThread !== null) setThreadRoot(inThread)
-      // Somewhere else in the channel: go there first.
-      const at = placeOf.get(inThread ?? seq)
-      if (at && placeKey(at) !== hereKey) {
-        setHere(placeKey(at))
-        setBoard(false)
+      // In a task's conversation: open it in the panel, where replies read in line. Elsewhere a reply is in its thread.
+      const at = placeOf.get(seq)
+      const inTask = at?.kind === "task" ? at.task : null
+      const inThread = inTask === null ? rootOf(seq) : null
+      if (inTask !== null) openTask(inTask)
+      else {
+        if (inThread !== null) openThread(inThread)
+        // Somewhere else in the channel: go there first.
+        if (at && placeKey(at) !== hereKey) setHere(placeKey(at))
       }
       setSearch(null)
       const find = (left: number) => {
-        const el = document.getElementById(`${inThread !== null ? "t" : "m"}${seq}`)
+        const el = document.getElementById(`${inTask !== null ? "k" : inThread !== null ? "t" : "m"}${seq}`)
         if (!el) {
           if (left > 0) requestAnimationFrame(() => find(left - 1))
           return
@@ -336,11 +366,11 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       // A few frames so a new place, or a collapsed run, can render before we look for the row.
       requestAnimationFrame(() => requestAnimationFrame(() => find(3)))
     },
-    [rootOf, placeOf, hereKey]
+    [rootOf, placeOf, hereKey, openTask, openThread]
   )
 
   // Replying opens the message's thread, so the answer doesn't land in the conversation.
-  const onReply = useCallback((m: Message) => setThreadRoot(rootOf(m.seq) ?? m.seq), [rootOf])
+  const onReply = useCallback((m: Message) => openThread(rootOf(m.seq) ?? m.seq), [rootOf, openThread])
   const peopleOf = useCallback(
     (list: Message[]) => {
       const seenNames = new Map<string, { name: string; label: string; agent: boolean; color: Color | null }>()
@@ -395,13 +425,41 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       onReply={anchor ? undefined : onReply}
       onJump={jump}
       thread={search || anchor ? undefined : summaryOf(m.seq)}
-      onOpenThread={setThreadRoot}
+      onOpenThread={openThread}
       receipt={!anchor && m.seq === lastMine ? (receipt(m, state, marks, pkOf, formatTime) ?? undefined) : undefined}
       reactions={chipsFor(state, m.seq, me, nameOf)}
       // The coordinator's runs end on its face; only the latest one moves.
       face={coord && m.from === coord ? <CoordinatorAvatar size={28} mood={mood} live={m.seq >= (said?.last ?? 0) && !anchor} seed={0.3} /> : undefined}
     />
   )
+  // A run of messages as rows: the main column's, and (anchored "k") the open task's in the panel.
+  const timeline = (list: Message[], anchor?: string) => {
+    const out: ReactNode[] = []
+    for (let i = 0; i < list.length; i++) {
+      const m = list[i]!
+      const prev = list[i - 1]
+      if (!prev || !sameDay(prev.ts, m.ts) || m.ts - prev.ts > STAMP_GAP) out.push(<TimeMark key={`s${m.seq}`} ts={m.ts} />)
+      if (m.kind === "event") {
+        const batch: Message[] = [m]
+        let j = i + 1
+        while (j < list.length && list[j]!.kind === "event" && sameDay(m.ts, list[j]!.ts) && list[j]!.ts - list[j - 1]!.ts <= STAMP_GAP) batch.push(list[j++]!)
+        i = j - 1
+        const alone = batch.filter((ev) => standsAlone(ev, state, me))
+        const rest = batch.filter((ev) => !standsAlone(ev, state, me))
+        // Main's lines about a task open it beside; in the task's own conversation it's already open.
+        const open = anchor ? undefined : openTask
+        for (const ev of alone) out.push(<EventRow key={ev.seq} m={ev} state={state} now={now} onOpenTask={open} anchor={anchor} />)
+        if (rest.length) out.push(<EventGroup key={`e${rest[0]!.seq}`} messages={rest} state={state} now={now} onOpenTask={open} highlight={highlight} anchor={anchor} />)
+        continue
+      }
+      const next = list[i + 1]
+      const runs = (a: Message | undefined, b: Message) => !!a && a.kind !== "event" && b.kind !== "event" && a.from === b.from && sameDay(a.ts, b.ts) && b.ts - a.ts <= RUN_GAP
+      const first = !runs(prev, m) || m.ts - (prev?.ts ?? 0) > STAMP_GAP
+      const last = !next || !runs(m, next) || next.ts - m.ts > STAMP_GAP
+      out.push(bubble(m, first, last, prev, anchor))
+    }
+    return out
+  }
   const rows: ReactNode[] = []
   const dropped = isOwner ? droppedCount(state) : 0
   if (dropped && hereKey === "main")
@@ -413,34 +471,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
         </button>
       </p>
     )
-  // A task's own conversation opens on its card: what it is, where it stands, who has it.
-  const task = place.kind === "task" ? state.tasks.get(place.task) : undefined
-  if (task) rows.push(<TaskCard key="card" task={task} state={state} now={now} onOpen={() => setOpenTask(task.id)} highlighted={highlight === task.id} />)
-  for (let i = 0; i < visible.length; i++) {
-    const m = visible[i]!
-    const prev = visible[i - 1]
-    if (!prev || !sameDay(prev.ts, m.ts) || m.ts - prev.ts > STAMP_GAP) rows.push(<TimeMark key={`s${m.seq}`} ts={m.ts} />)
-    if (m.kind === "event") {
-      const batch: Message[] = [m]
-      let j = i + 1
-      while (j < visible.length && visible[j]!.kind === "event" && sameDay(m.ts, visible[j]!.ts) && visible[j]!.ts - visible[j - 1]!.ts <= STAMP_GAP) batch.push(visible[j++]!)
-      i = j - 1
-      // In a task's conversation its card says where it stands; there, its events are the history under it.
-      const lines = batch.filter((ev) => !(task && ev.seq === task.id))
-      if (!lines.length) continue
-      const alone = lines.filter((ev) => standsAlone(ev, state, me))
-      const rest = lines.filter((ev) => !standsAlone(ev, state, me))
-      const open = hereKey === "main" ? (id: number) => go({ kind: "task", task: id }) : setOpenTask
-      for (const ev of alone) rows.push(<EventRow key={ev.seq} m={ev} state={state} now={now} onOpenTask={open} openLabel={hereKey === "main" ? "Open" : "Details"} />)
-      if (rest.length) rows.push(<EventGroup key={`e${rest[0]!.seq}`} messages={rest} state={state} now={now} onOpenTask={open} highlight={highlight} openLabel={hereKey === "main" ? "Open" : "Details"} />)
-      continue
-    }
-    const next = visible[i + 1]
-    const runs = (a: Message | undefined, b: Message) => !!a && a.kind !== "event" && b.kind !== "event" && a.from === b.from && sameDay(a.ts, b.ts) && b.ts - a.ts <= RUN_GAP
-    const first = !runs(prev, m) || m.ts - (prev?.ts ?? 0) > STAMP_GAP
-    const last = !next || !runs(m, next) || next.ts - m.ts > STAMP_GAP
-    rows.push(bubble(m, first, last, prev))
-  }
+  rows.push(...timeline(visible))
 
   // The open thread: its first message, then every reply, in runs the same way.
   const root = threadRoot === null ? undefined : bySeqAll.get(threadRoot)
@@ -457,6 +488,9 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       if (i === 0 && replies.length) threadRows.push(<div key="split" className="my-3 text-center text-stamp text-ink-3">{replies.length === 1 ? "1 reply" : `${replies.length} replies`}</div>)
     })
   }
+  // The open task's conversation, under its details the way replies sit under a thread's first message.
+  const taskRows = shownTask === null ? [] : timeline(inTask, "k")
+  const saidInTask = inTask.filter((m) => m.kind !== "event").length
 
   const subtitle =
     connection === "connecting"
@@ -475,19 +509,11 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     .filter((m) => isAgent(m))
     .map((m) => ({ name: m.name, label: memberName(m), color: colorOf(state, m.name), online: online.has(m.name), coordinator: m.name === state.coordinator, model: online.get(m.name)?.activity?.model ?? m.card?.model, activity: online.get(m.name)?.activity, load: memberLoad(state, m.name, now), lastAt: lastAt.get(m.name) }))
   const needsMe = escalations.length + reviews.length + (isOwner ? requests.length : 0)
+  // The header's capsule is the channel's, wherever you are in it, so this line is the channel's too.
   const headline =
     connection === "connecting" || connection === "reconnecting"
       ? subtitle
-      : place.kind === "task"
-        ? task
-          ? // Where it stands is in the strip under this; here, who's in it.
-            [taskId(task.id), threadMembers(state, place).filter((n) => n !== me).map(nameOf).join(", ") || "nobody on it yet"].join(" · ")
-          : "Task"
-        : place.kind === "dm"
-          ? place.with.includes(me)
-            ? "Just the two of you; anyone in the channel can read along"
-            : `Between ${place.with.map(nameOf).join(" and ")}`
-          : [
+      : [
           state.coordinator && state.coordinator !== me ? `${nameOf(state.coordinator)} coordinating` : null,
           working ? `${working} working` : null,
           needsMe ? `${needsMe} ${needsMe === 1 ? "needs" : "need"} you` : null,
@@ -504,11 +530,14 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     : undefined
 
   // A direct conversation you're in is named for the other one, as Messages names a chat.
-  const placeTitle = place.kind === "main" ? title : place.kind === "task" ? (task ? task.title : "Task") : place.with.includes(me) ? nameOf(place.with.find((n) => n !== me) ?? me) : place.with.map(nameOf).join(" & ")
+  const placeTitle = place.kind === "main" ? title : place.with.includes(me) ? nameOf(place.with.find((n) => n !== me) ?? me) : place.with.map(nameOf).join(" & ")
   // A direct conversation is between its two; anyone else reads it.
   const mayWrite = place.kind !== "dm" || place.with.includes(me)
-  // A task's thread reaches whoever works it on its own (state.ts threadMembers); only an @ names anyone. A direct one goes to the other one.
+  // A direct one goes to the other one. A task's (in the panel) reaches whoever works it on its own
+  // (state.ts threadMembers); only an @ names anyone.
   const extra = place.kind === "main" ? undefined : sendFrom(state, place, me)
+  const task = shownTask === null ? undefined : state.tasks.get(shownTask)
+  const openCount = [...state.tasks.values()].filter((t) => t.state !== "done").length
 
   return (
     <ChannelControls
@@ -594,12 +623,12 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     >
       <div className="flex h-full min-w-0 flex-1">
         <div
-          className={cx("relative flex min-w-0 flex-1 flex-col bg-canvas", (root || info) && "hidden md:flex")}
+          className={cx("relative flex min-w-0 flex-1 flex-col bg-canvas", (root || info || side?.kind === "tasks") && "hidden md:flex")}
           style={{ "--head": `${headH}px`, "--foot": `${footH}px` } as CSSProperties}
         >
           {/* The conversation's part of the window's one header row, floating over it as Grok's does:
-              in the middle, one glass capsule (the chat, the name, the tasks); on the right, search.
-              Messages scroll under it. Pausing every agent is in the details (the name opens them). */}
+              in the middle, one glass capsule with the channel's name; on the right, search and the
+              tasks. Messages scroll under it. Pausing every agent is in the details (the name opens them). */}
           <header ref={headRef} className="absolute inset-x-0 top-0 z-20">
             <div aria-hidden className="scrim-top absolute inset-x-0 top-0 -bottom-6" />
             <div className={cx("drag relative flex h-(--chrome-h) items-center gap-2 px-3", !listOpen && LEAD_WHEN_HIDDEN)}>
@@ -607,9 +636,17 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                 <Icon icon={ArrowLeft01Icon} size={20} />
               </IconButton>
               <span className="flex-1" />
-              <IconButton label="Search" round className="glass size-9 text-ink" active={search !== null} onClick={() => setSearch((s) => (s === null ? "" : null))} disabled={board}>
+              {/* On, a glass button is ink with canvas on it: no ink colour of our own then. */}
+              <IconButton label="Search" round className={cx("glass size-9", search === null && "text-ink")} active={search !== null} onClick={() => setSearch((s) => (s === null ? "" : null))}>
                 <Icon icon={Search01Icon} size={18} />
               </IconButton>
+              <TasksButton
+                places={places}
+                unreadIn={unreadIn}
+                shown={taskKey}
+                active={side?.kind === "tasks"}
+                onClick={() => setSide((s) => (s?.kind === "tasks" ? null : { kind: "tasks", task: null }))}
+              />
             </div>
             {/* After the row in the document and marked no-drag: the desktop app's drag region is worked
                 out in document order, so it would otherwise swallow these clicks. */}
@@ -617,20 +654,18 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
               className="absolute top-0 left-1/2 h-(--chrome-h) -translate-x-1/2"
               me={me}
               places={places}
-              current={board ? "board" : hereKey}
+              current={hereKey}
               state={state}
               nameOf={nameOf}
               unreadIn={unreadIn}
-              title={placeTitle}
-              titleLabel={`Details: ${placeTitle}, ${subtitle}`}
+              title={title}
+              titleLabel={`Details: ${title}, ${subtitle}`}
               titleHint={headline}
-              task={task}
               info={info}
-              onTitle={() => (setInfo((v) => !v), setThreadRoot(null))}
-              onPick={(p) => (go(p), setInfo(false))}
-              onBoard={() => (setBoard(true), setOpenTask(null), setThreadRoot(null), setInfo(false))}
+              onTitle={() => setSide((s) => (s?.kind === "info" ? null : { kind: "info" }))}
+              onPick={go}
             />
-            {search !== null && !board && openTask === null && (
+            {search !== null && (
               <div className="relative mx-auto w-full max-w-[792px] px-3 pb-2 md:px-4">
                 <label className="glass flex h-9 items-center gap-2 rounded-full px-3.5 text-ink-3">
                   <Icon icon={Search01Icon} size={16} className="shrink-0" />
@@ -653,87 +688,69 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
 
           {pausing && hold && <HoldDialog onClose={() => setPausing(false)} onSave={(note) => hold(true, note)} />}
 
-          {openTask !== null ? (
-            <div className="flex min-h-0 flex-1 flex-col pt-(--head)">
-            <TaskPage
-              id={openTask}
-              state={state}
-              messages={messages}
-              me={me}
-              now={now}
-              onOpen={setOpenTask}
-              onClose={() => setOpenTask(null)}
-              noteBlocked={state.members.get(me)?.scopes.includes("tasks") === false ? "The owner hasn’t let you change tasks here, so you can’t comment on one." : null}
-              onNote={async (note) => void (await send(`noted on ${taskId(openTask)}`, { kind: "event", ev: { op: "task.update", task: openTask, note } }))}
-            />
-            </div>
-          ) : board ? (
-            <Tasks state={state} now={now} nameOf={nameOf} unreadIn={(id) => unreadIn(placeKey({ kind: "task", task: id }))} onOpen={(id) => go({ kind: "task", task: id })} />
-          ) : (
-            <>
-              <div
-                ref={scroller}
-                className="absolute inset-0 overflow-y-auto"
-                onScroll={(e) => {
-                  const el = e.currentTarget
-                  atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
-                  if (atBottom.current && behind) setBehind(0)
-                }}
-              >
-                <div className="relative mx-auto w-full max-w-[792px] px-4 pt-[calc(var(--head)+8px)] pb-[calc(var(--foot)+16px)]">
-                  {/* What needs a person: at the top of the main conversation, as system cards. */}
-                  {hereKey === "main" && (
-                    <NeedsYou
-                      now={now}
-                      roomId={roomId}
-                      escalations={escalations}
-                      reviews={reviews}
-                      nameOf={nameOf}
-                      onReply={async (m, text) => void (await send(text, { to: [m.from], re: [m.seq], kind: "msg" }))}
-                      onApproveTask={async (t: Task) => void (await send(`${taskId(t.id)} done`, { kind: "event", ev: { op: "task.update", task: t.id, state: "done", note: "approved" }, ...(t.owner ? { to: [t.owner] } : {}) }))}
-                      onSendBack={async (t: Task, why: string) => void (await send(`${taskId(t.id)} doing`, { kind: "event", ev: { op: "task.update", task: t.id, state: "doing", note: why }, ...(t.owner ? { to: [t.owner] } : {}) }))}
-                      onOpenTask={(id) => go({ kind: "task", task: id })}
-                      onJump={jump}
-                    />
-                  )}
-                  {connection === "connecting" && messages.length === 0 ? (
-                    <Centered>
-                      <Spinner />
-                    </Centered>
-                  ) : hereKey === "main" && noAgents && !search ? (
-                    <>
-                      <AddAgent code={member.code} isOwner={isOwner} />
-                      {/* A brand-new channel's own setup lines (coordinator mode on) aren't worth reading yet. */}
-                      {!quiet && rows}
-                    </>
-                  ) : visible.length === 0 && !task ? (
-                    <Centered>
-                      <p className="text-body font-semibold">{search ? "No results" : "No messages yet"}</p>
-                      <p className="mt-1 max-w-xs text-ui leading-normal text-ink-2">
-                        {search ? `No message here mentions “${search}”.` : place.kind === "dm" ? "What these two say to each other shows up here." : "What’s said here shows up the moment it’s sent."}
-                      </p>
-                    </Centered>
-                  ) : (
-                    rows
-                  )}
-                </div>
-              </div>
-
-              {behind > 0 && (
-                <button
-                  type="button"
-                  onClick={toBottom}
-                  className="glass animate-rise absolute bottom-[calc(var(--foot)+10px)] left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full py-1.5 pr-3.5 pl-2.5 text-ui font-medium text-accent-text"
-                >
-                  <Icon icon={ArrowDown01Icon} size={15} />
-                  {behind === 1 ? "1 new message" : `${behind} new messages`}
-                </button>
+          <div
+            ref={scroller}
+            className="absolute inset-0 overflow-y-auto"
+            onScroll={(e) => {
+              const el = e.currentTarget
+              atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+              if (atBottom.current && behind) setBehind(0)
+            }}
+          >
+            <div className="relative mx-auto w-full max-w-[792px] px-4 pt-[calc(var(--head)+8px)] pb-[calc(var(--foot)+16px)]">
+              {/* What needs a person: at the top of the main conversation, as system cards. */}
+              {hereKey === "main" && (
+                <NeedsYou
+                  now={now}
+                  roomId={roomId}
+                  escalations={escalations}
+                  reviews={reviews}
+                  nameOf={nameOf}
+                  onReply={async (m, text) => void (await send(text, { to: [m.from], re: [m.seq], kind: "msg" }))}
+                  onApproveTask={async (t: Task) => void (await send(`${taskId(t.id)} done`, { kind: "event", ev: { op: "task.update", task: t.id, state: "done", note: "approved" }, ...(t.owner ? { to: [t.owner] } : {}) }))}
+                  onSendBack={async (t: Task, why: string) => void (await send(`${taskId(t.id)} doing`, { kind: "event", ev: { op: "task.update", task: t.id, state: "doing", note: why }, ...(t.owner ? { to: [t.owner] } : {}) }))}
+                  onOpenTask={openTask}
+                  onJump={jump}
+                />
               )}
+              {connection === "connecting" && messages.length === 0 ? (
+                <Centered>
+                  <Spinner />
+                </Centered>
+              ) : hereKey === "main" && noAgents && !search ? (
+                <>
+                  <AddAgent code={member.code} isOwner={isOwner} />
+                  {/* A brand-new channel's own setup lines (coordinator mode on) aren't worth reading yet. */}
+                  {!quiet && rows}
+                </>
+              ) : visible.length === 0 ? (
+                <Centered>
+                  <p className="text-body font-semibold">{search ? "No results" : "No messages yet"}</p>
+                  <p className="mt-1 max-w-xs text-ui leading-normal text-ink-2">
+                    {search ? `No message here mentions “${search}”.` : place.kind === "dm" ? "What these two say to each other shows up here." : "What’s said here shows up the moment it’s sent."}
+                  </p>
+                </Centered>
+              ) : (
+                rows
+              )}
+            </div>
+          </div>
 
-              {/* The composer floats on glass at the foot; messages scroll under it too. */}
-              <div ref={footRef} className="absolute inset-x-0 bottom-0 z-20">
-                <div aria-hidden className="scrim-bottom absolute inset-x-0 -top-6 bottom-0" />
-                <div className="relative">
+          {behind > 0 && (
+            <button
+              type="button"
+              onClick={toBottom}
+              className="glass animate-rise absolute bottom-[calc(var(--foot)+10px)] left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full py-1.5 pr-3.5 pl-2.5 text-ui font-medium text-accent-text"
+            >
+              <Icon icon={ArrowDown01Icon} size={15} />
+              {behind === 1 ? "1 new message" : `${behind} new messages`}
+            </button>
+          )}
+
+          {/* The composer floats on glass at the foot; messages scroll under it too. */}
+          <div ref={footRef} className="absolute inset-x-0 bottom-0 z-20">
+            <div aria-hidden className="scrim-bottom absolute inset-x-0 -top-6 bottom-0" />
+            <div className="relative">
               {mayWrite ? (
                 <Composer
                   key={hereKey}
@@ -750,33 +767,27 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                       ? state.coordinator && state.coordinator !== me
                         ? `Message ${nameOf(state.coordinator)}`
                         : "Message everyone"
-                      : place.kind === "task"
-                        ? task
-                          ? `Message in ${taskId(task.id)} · ${task.title}`
-                          : "Message in this task"
-                        : `Message ${nameOf(place.with.find((n) => n !== me) ?? "")} privately`
+                      : `Message ${nameOf(place.with.find((n) => n !== me) ?? "")} privately`
                   }
                   send={async (body, opts) => {
                     atBottom.current = true
                     return send(body, opts)
                   }}
-                  footer={<AgentStrip agents={agentsNow} now={now} onOpenTask={(id) => go({ kind: "task", task: id })} />}
+                  footer={<AgentStrip agents={agentsNow} now={now} onOpenTask={openTask} />}
                 />
               ) : (
                 <p className="shrink-0 px-6 pt-2 pb-4 text-center text-meta text-ink-3">
                   Between {place.kind === "dm" ? place.with.map(nameOf).join(" and ") : ""}. You can read along; talk with them in the main conversation.
                 </p>
               )}
-                </div>
-              </div>
-            </>
-          )}
+            </div>
+          </div>
         </div>
 
-        {root && !info && (
+        {root && (
           <ThreadPanel
             count={replies.length}
-            onClose={() => setThreadRoot(null)}
+            onClose={() => setSide(null)}
             composer={
               <Composer
                 key={root.seq}
@@ -801,12 +812,67 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             title={title}
             icon={icon}
             subtitle={subtitle}
-            onClose={() => setInfo(false)}
+            onClose={() => setSide(null)}
             onPause={hold && !state.hold ? () => setPausing(true) : undefined}
-            onMessage={(name) => (go(dmPlace(me, name)), setInfo(false))}
+            onMessage={(name) => go(dmPlace(me, name))}
             mood={mood}
             notes={<Notes state={state} now={now} onClear={async (key) => void (await send(`cleared ${key}`, { kind: "event", ev: { op: "fact.del", key } }))} />}
           />
+        )}
+
+        {side?.kind === "tasks" && (
+          <TasksPanel
+            title={
+              shownTask === null ? (
+                <>
+                  Tasks <span className="font-normal text-ink-3 tabular-nums">{openCount} open</span>
+                </>
+              ) : (
+                <>
+                  <span className="tabular-nums">{taskId(shownTask)}</span>{" "}
+                  <span className="font-normal text-ink-3">{saidInTask === 1 ? "1 message" : `${saidInTask} messages`}</span>
+                </>
+              )
+            }
+            onBack={shownTask === null ? undefined : () => setSide({ kind: "tasks", task: null })}
+            onClose={() => setSide(null)}
+            follow={shownTask === null ? null : `${shownTask}:${inTask.length}`}
+            composer={
+              task && (
+                <Composer
+                  key={taskKey}
+                  me={me}
+                  people={people}
+                  replyTo={null}
+                  nameOf={nameOf}
+                  onClearReply={() => undefined}
+                  disabled={connection === "connecting"}
+                  extra={sendFrom(state, { kind: "task", task: task.id }, me)}
+                  placeholder={`Message in ${taskId(task.id)}`}
+                  send={send}
+                />
+              )
+            }
+          >
+            {shownTask === null ? (
+              <Tasks state={state} now={now} nameOf={nameOf} unreadIn={(id) => unreadIn(placeKey({ kind: "task", task: id }))} onOpen={openTask} />
+            ) : (
+              <div className="px-3 pt-1 pb-4">
+                <TaskDetails
+                  id={shownTask}
+                  state={state}
+                  messages={messages}
+                  me={me}
+                  now={now}
+                  highlighted={highlight === shownTask}
+                  noteBlocked={state.members.get(me)?.scopes.includes("tasks") === false ? "The owner hasn’t let you change tasks here, so you can’t comment on one." : null}
+                  onNote={async (note) => void (await send(`noted on ${taskId(shownTask)}`, { kind: "event", ev: { op: "task.update", task: shownTask, note } }))}
+                />
+                {task && !saidInTask && <p className="mt-4 text-center text-meta text-ink-3">What the agents on it say to each other shows up here.</p>}
+                {taskRows}
+              </div>
+            )}
+          </TasksPanel>
         )}
       </div>
     </ChannelControls>
@@ -814,9 +880,9 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
 }
 
 /**
- * The channel's conversations, in the middle of the header row as one glass capsule: Chat (main:
- * people and the coordinator), the name (it opens the details), and Tasks (the board, which lists
- * every task with room for its whole title). Direct conversations follow as faces.
+ * The middle of the header row: the channel's name in one glass capsule (it opens the details), its
+ * direct conversations as faces beside it. Away from the main chat, the capsule leads with the way
+ * back to it, which carries main's news; the open face takes you back too.
  */
 function PlaceSwitch({
   className,
@@ -829,11 +895,9 @@ function PlaceSwitch({
   title,
   titleLabel,
   titleHint,
-  task,
   info,
   onTitle,
   onPick,
-  onBoard,
 }: {
   className?: string
   me: string
@@ -845,65 +909,38 @@ function PlaceSwitch({
   title: string
   titleLabel: string
   titleHint: string
-  /** The task whose conversation is open, if one is. */
-  task: Task | undefined
   info: boolean
   onTitle: () => void
   onPick: (p: Place) => void
-  onBoard: () => void
 }) {
-  const all = [...places.entries()]
-  const dms = all.filter(([, i]) => i.place.kind === "dm").sort((a, b) => b[1].last - a[1].last)
-  const open = [...state.tasks.values()].filter((t) => t.state !== "done").length
-  // What's new across the tasks' conversations: a count of what's for you, else a quiet dot.
-  let forMe = 0
-  let news = false
-  for (const [k, i] of all) {
-    if (i.place.kind !== "task" || i.done || k === current) continue
-    const u = unreadIn(k)
-    if (u.forMe) forMe += u.n
-    else if (u.n) news = true
-  }
-  const inTasks = current === "board" || !!task
-  // Each end of the capsule says what it is in words, not just an icon.
-  const seg = (on: boolean) => cx("relative flex h-8 shrink-0 items-center gap-1.5 rounded-full pr-3 pl-2.5 text-ui font-medium transition-colors", on ? "bg-ink text-canvas" : "text-ink-2 hover:bg-wash-2 hover:text-ink")
-  // On an icon: a count when it's for you, else a quiet dot.
-  const badge = (u: { n: number; forMe: boolean }) =>
-    u.n <= 0 ? null : u.forMe ? (
-      <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-stamp leading-none font-semibold text-accent-ink tabular-nums">{u.n}</span>
-    ) : (
-      <span aria-label="New messages" className="absolute top-0 right-0 size-2 rounded-full bg-accent" />
-    )
+  const dms = [...places.entries()].filter(([, i]) => i.place.kind === "dm").sort((a, b) => b[1].last - a[1].last)
   const face = (name: string) =>
     name === state.coordinator ? <CoordinatorAvatar size={28} /> : <Monogram name={nameOf(name)} agent={isAgent(state.members.get(name))} color={colorOf(state, name)} size={28} />
-  const main = current === "main" ? { n: 0, forMe: false } : unreadIn("main")
   return (
     <nav aria-label="Conversations" className={cx("no-drag flex items-center gap-2", className)}>
       <div className="glass flex h-9 items-center gap-0.5 rounded-full p-0.5">
-        <button type="button" title="The channel's chat: people and the coordinator" aria-current={current === "main" ? "page" : undefined} onClick={() => onPick(MAIN)} className={seg(current === "main")}>
-          <Icon icon={BubbleChatIcon} size={17} />
-          Chat
-          {badge(main)}
-        </button>
+        {current !== "main" && (
+          <button
+            type="button"
+            aria-label="Back to chat"
+            title="Back to the channel’s chat"
+            onClick={() => onPick(MAIN)}
+            className="relative flex size-8 shrink-0 items-center justify-center rounded-full text-ink-2 transition-colors hover:bg-wash-2 hover:text-ink"
+          >
+            <Icon icon={ArrowLeft01Icon} size={17} />
+            <Badge u={unreadIn("main")} />
+          </button>
+        )}
         <button
           type="button"
           aria-label={titleLabel}
           aria-expanded={info}
           title={titleHint}
           onClick={onTitle}
-          className="flex h-8 max-w-[min(46vw,360px)] min-w-0 items-center gap-1.5 rounded-full px-3 text-ui font-semibold transition-colors hover:bg-wash-2"
+          className="flex h-8 max-w-[min(46vw,360px)] min-w-0 items-center rounded-full px-3 text-ui font-semibold transition-colors hover:bg-wash-2"
         >
-          {task && <StateMark state={task.state} />}
           <span className="truncate">{title}</span>
         </button>
-        {state.tasks.size > 0 && (
-          <button type="button" title={`${open} open`} aria-current={inTasks ? "page" : undefined} onClick={onBoard} className={seg(inTasks)}>
-            <Icon icon={CheckListIcon} size={17} />
-            Tasks
-            <span className="tabular-nums opacity-60">{open}</span>
-            {badge(forMe ? { n: forMe, forMe: true } : { n: news ? 1 : 0, forMe: false })}
-          </button>
-        )}
       </div>
       {dms.map(([k, i]) => {
         const p = i.place
@@ -917,15 +954,57 @@ function PlaceSwitch({
             aria-label={name}
             title={`${name}, privately`}
             aria-current={k === current ? "page" : undefined}
-            onClick={() => onPick(p)}
+            onClick={() => onPick(k === current ? MAIN : p)}
             className={cx("glass relative flex size-9 shrink-0 items-center justify-center rounded-full", k === current && "shadow-[0_0_0_2px_var(--ink)]")}
           >
             {face(other ?? p.with[0]!)}
-            {k !== current && badge(unreadIn(k))}
+            {k !== current && <Badge u={unreadIn(k)} />}
           </button>
         )
       })}
     </nav>
+  )
+}
+
+/** The header's Tasks button: it opens the panel, and says what's new across the tasks' conversations. */
+function TasksButton({
+  places,
+  unreadIn,
+  shown,
+  active,
+  onClick,
+}: {
+  places: Map<string, PlaceSummary>
+  unreadIn: (key: string) => { n: number; forMe: boolean }
+  /** The task open in the panel, by its place's key: it's being read. */
+  shown: string | null
+  active: boolean
+  onClick: () => void
+}) {
+  // A count of what's for you, else a quiet dot.
+  let forMe = 0
+  let news = false
+  for (const [k, i] of places) {
+    if (i.place.kind !== "task" || i.done || k === shown) continue
+    const u = unreadIn(k)
+    if (u.forMe) forMe += u.n
+    else if (u.n) news = true
+  }
+  return (
+    <IconButton label="Tasks" round className={cx("glass size-9", !active && "text-ink")} active={active} aria-expanded={active} onClick={onClick}>
+      <Icon icon={CheckListIcon} size={18} />
+      <Badge u={forMe ? { n: forMe, forMe: true } : { n: news ? 1 : 0, forMe: false }} />
+    </IconButton>
+  )
+}
+
+/** On an icon: a count when it's for you, else a quiet dot. */
+function Badge({ u }: { u: { n: number; forMe: boolean } }) {
+  if (u.n <= 0) return null
+  return u.forMe ? (
+    <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-stamp leading-none font-semibold text-accent-ink tabular-nums">{u.n}</span>
+  ) : (
+    <span aria-label="New messages" className="absolute top-0 right-0 size-2 rounded-full bg-accent" />
   )
 }
 
