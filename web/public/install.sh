@@ -6,6 +6,7 @@
 #   2. downloads it from this project's GitHub release, built from the public source
 #   3. checks its SHA-256 against the release's SHA256SUMS before installing
 #   4. puts it at ~/.kiwi/bin/kiwi (nothing outside your home folder, no sudo)
+#   5. adds that folder to PATH in your shell's profile, once (KIWI_NO_MODIFY_PATH=1 skips it)
 # SHA256SUMS comes from the same release as the binary. It catches a bad
 # download, not a release that was swapped. The `gh attestation verify`
 # line at the end is printed for you to run; this script does not run it.
@@ -65,9 +66,36 @@ mkdir -p "$DIR"
 mv "$tmp/kiwi" "$DIR/kiwi"
 chmod 755 "$DIR/kiwi"
 echo "Installed kiwi $("$DIR/kiwi" --version) at $DIR/kiwi (checksum verified)"
+# New terminals find plain `kiwi`: unless this shell's profile already names $DIR, one marked
+# line goes at its end, once (the same line the desktop app and `kiwi setup` add). The shell is
+# $SHELL's: zsh, bash or fish; anything else gets ~/.profile. KIWI_NO_MODIFY_PATH=1 leaves every
+# profile alone and prints the line instead.
 case ":$PATH:" in
   *":$DIR:"*) ;;
-  *) echo "To run it as plain \`kiwi\`, add this to your shell profile: export PATH=\"$DIR:\$PATH\"" ;;
+  *)
+    rest=${DIR#"$HOME"}
+    if [ "$rest" != "$DIR" ]; then shown="\$HOME$rest"; else shown="$DIR"; fi
+    line="export PATH=\"$shown:\$PATH\""
+    case "$(basename "${SHELL:-sh}")" in
+      zsh) rc="${ZDOTDIR:-$HOME}/.zshrc" ;;
+      bash) if [ "$os" = darwin ]; then rc="$HOME/.bash_profile"; else rc="$HOME/.bashrc"; fi ;;
+      fish) rc="$HOME/.config/fish/conf.d/kiwi.fish"; line="fish_add_path -g \"$shown\"" ;;
+      *) rc="$HOME/.profile" ;;
+    esac
+    if [ -f "$rc" ] && { grep -qF -e "$DIR" "$rc" || { [ "$rest" != "$DIR" ] && grep -qF -e "\$HOME$rest" -e "\${HOME}$rest" -e "~$rest" "$rc"; }; }; then
+      echo "$rc already puts $DIR on your PATH: open a new terminal to type plain kiwi."
+    elif [ -n "${KIWI_NO_MODIFY_PATH:-}" ]; then
+      echo "To type plain kiwi, add this to $rc: $line"
+    elif {
+      mkdir -p "$(dirname "$rc")" &&
+        { [ ! -s "$rc" ] || [ -z "$(tail -c 1 "$rc")" ] || echo >>"$rc"; } &&
+        printf '\n%s\n%s\n' "# Added by the kiwi installer: puts the kiwi CLI on your PATH." "$line" >>"$rc"
+    } 2>/dev/null; then
+      echo "Added $DIR to your PATH in $rc: open a new terminal to type plain kiwi."
+    else
+      echo "Couldn't write $rc. To type plain kiwi, add this to your shell profile: $line"
+    fi
+    ;;
 esac
 echo "Check where it came from: gh attestation verify $DIR/kiwi --repo $REPO"
 
