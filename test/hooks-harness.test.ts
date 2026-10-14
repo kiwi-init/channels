@@ -258,6 +258,8 @@ test("stop style keeps Grok on the Claude block path and Cursor on followup", ()
   expect(unread).not.toContain("\n");
   expect(cursorStopFollowup(mc, false, true, 0)).toBeNull();
   expect(cursorStopFollowup(mc, false, false, 0)).toContain("Monitor");
+  expect(cursorStopFollowup(mc, false, false, 0)).toContain(`${mc} listen`);
+  expect(cursorStopFollowup(mc, false, false, 0)).not.toContain("tail");
   expect(cursorStopFollowup(mc, false, false, 1)).toBeNull();
 });
 

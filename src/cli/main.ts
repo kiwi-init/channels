@@ -936,7 +936,7 @@ const commands: Record<string, Command> = {
     Effect.gen(function* () {
       const url = opt.webhook ?? (yield* die("usage: kiwi watch --webhook URL [--for-me|--all]"));
       if (!/^https?:\/\//.test(url)) return yield* die("--webhook must be an http(s) URL");
-      const secret = opt.secret ?? process.env.MC_WEBHOOK_SECRET;
+      const secret = opt.secret ?? process.env.KIWI_WEBHOOK_SECRET ?? process.env.MC_WEBHOOK_SECRET;
       const s = yield* session();
       process.stderr.write(`kiwi: watching ${s.alias} as ${s.me}, POSTing to ${url}\n`);
       const headers = { "content-type": "application/json", ...(secret ? { "x-kiwi-secret": secret } : {}) };
