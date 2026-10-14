@@ -28,7 +28,7 @@ import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import { fits, JoinRequest, MemberRecord, SealedIcon, StoredEnvelope } from "./schema.ts";
+import { fits, JoinRequest, MAX_RECORD, MAX_WRAPPED, MemberRecord, SealedIcon, StoredEnvelope } from "./schema.ts";
 import { verifyRequest } from "../auth.ts";
 import { encodeJoinCode, ownerFingerprint } from "../crypto.ts";
 import type { HumanAuth } from "./human.ts";
@@ -544,6 +544,9 @@ export const create = Effect.fn("Room.create")(function* (signer: string | null,
   );
   if (!signed) return yield* new BadRequest({ message: "bad owner signature" });
   if (!members?.some((m) => m.pk === owner.pk)) return yield* new BadRequest({ message: "the owner must be a member" });
+  // The member quota holds from the start, not only when the owner approves someone later.
+  const most = (yield* Policy).membersPerChannel;
+  if (most && new Set(members.map((m) => m.pk)).size > most) return yield* new TooMany({ message: `a channel may have at most ${most} members on this relay` });
   db.init();
   db.set("owner_pk", owner.pk);
   db.set("owner_xpk", owner.xpk);
@@ -611,6 +614,8 @@ export const directory: Effect.Effect<DirectoryUpdate[], ChannelGone, RoomStore>
 const putMember = Effect.fn("Room.putMember")(function* (m: MemberBody, epoch: number) {
   const db = yield* RoomStore;
   if (!fits(MemberRecord, m)) return yield* new BadRequest({ message: "bad member" });
+  // Only keys for epochs the channel has had, named by their number: one per epoch, never more.
+  if (Object.keys(m.keys ?? {}).some((e) => !/^\d{1,9}$/.test(e) || Number(e) > epoch)) return yield* new BadRequest({ message: "bad member" });
   db.sql.run(
     "INSERT INTO members (pk, xpk, rec, rec_e, since, active, read_only) VALUES (?, ?, ?, ?, ?, 1, ?) ON CONFLICT (pk) DO UPDATE SET xpk = excluded.xpk, rec = excluded.rec, rec_e = excluded.rec_e, active = 1, read_only = excluded.read_only",
     m.pk,
@@ -774,7 +779,7 @@ export const setRecord = Effect.fn("Room.setRecord")(function* (pk: string, rec:
   if (pk === (yield* readMeta).ownerPk) return yield* new BadRequest({ message: "the owner's record isn't changed this way" });
   if (!db.isMember(pk)) return yield* new NotFound({ message: "not a member" });
   if (!Number.isInteger(e) || e < 0 || e > (yield* readMeta).epoch) return yield* new BadRequest({ message: "no such epoch" });
-  if (rec.length > 8_192) return yield* new TooLarge({ message: "record too large" });
+  if (rec.length > MAX_RECORD) return yield* new TooLarge({ message: "record too large" });
   db.migrate();
   db.sql.run("UPDATE members SET rec = ?, rec_e = ?, read_only = ?, admitted_by = NULL WHERE pk = ?", rec, e, post ? 0 : 1, pk);
 });
@@ -819,6 +824,7 @@ export const rotate = Effect.fn("Room.rotate")(function* (epoch: number, keys: R
   if (epoch !== meta.epoch + 1) return yield* new Conflict({ message: `next epoch is ${meta.epoch + 1}` });
   const members = db.members().filter((m) => m.active);
   for (const m of members) if (!keys[m.pk]) return yield* new BadRequest({ message: `missing wrapped key for ${m.pk.slice(0, 8)}` });
+  for (const m of members) if (typeof keys[m.pk] !== "string" || keys[m.pk]!.length > MAX_WRAPPED) return yield* new BadRequest({ message: "bad wrapped key" });
   for (const m of members) db.sql.run("INSERT OR REPLACE INTO keys (pk, e, wrapped) VALUES (?, ?, ?)", m.pk, epoch, keys[m.pk]!);
   db.set("epoch", epoch);
   db.set("rotate", 0);
