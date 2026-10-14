@@ -71,7 +71,44 @@ Written by `bun scripts/changelog.ts` from each squash-merged pull request's tit
   The renderer never asked for the link main kept (getDeepLink) nor listened for new ones (onDeepLink), so a link from an invite page only brought the window forward. App now reads the code out of each link and opens it.
 - **T204: stale copy and browser pairing** ([#134](https://github.com/ojowwalker77/channels/pull/134))
   Invite said sign in; join is person-key only. Empty-channel described 0.10 first-agent auto-approve; 0.11 lets any paired-computer agent in while the app runs. Add a computer showed in a plain browser (beginPairing throws). Sidebar preview used the latest non-event, including agent-to-agent lines keptFromPeople hides in main.
-- **Merge remote-tracking branch 'origin/main' into grok2/t480-0.12.0**
+- **T115: a socket's failed frame never echoes exception text** ([#135](https://github.com/ojowwalker77/channels/pull/135))
+  Over HTTP, a defect is logged and answered "internal error". Over the socket, a failed send echoed err.message to the member, so a SQLite or storage error's text reached them. A failed read mark showed "bad read mark" for everything and logged nothing.
+- **Desktop: the app icon (G3), every size, and Linux finds it under Wayland** ([#107](https://github.com/ojowwalker77/channels/pull/107))
+  The approved mark (T22, #102): a C of two arcs around a dot on a top-lit blue tile, on the macOS grid. build/icon.svg is the source; desktop/scripts/icons.ts makes build/icon.icns, build/icons/NxN.png (Linux) and assets/icon.png (the window) from it.
+- **AGENTS.md: the rules for agents in this repo** ([#141](https://github.com/ojowwalker77/channels/pull/141))
+  jow's rules for every agent: spec-first work gated by the needs-triage and agent-ready labels, no code comments, strict types, shared types in /shared, oxlint and oxfmt, DESIGN.md for UI, one stream per branch and PR, a CI gate for each change, and the Agent trailer on every commit.
+- **T114: the relay no longer moves a seat to a new key** ([#140](https://github.com/ojowwalker77/channels/pull/140))
+  SECURITY.md and the reclaim tests say a membership never moves to a new key, and the client stopped sending `replaces` with T1426. The relay still took it: POST /members with replaces admitted the new key, removed the old one and cut its socket. An owner key (or a bug) could still move a seat. Now a body with replaces is refused as "bad member" (400), and the three reclaim error texts are gone.
+- **T109: the Bun relay leaves no room file for a refused create** ([#139](https://github.com/ojowwalker77/channels/pull/139))
+  /create opened <room>.sqlite before the creator was checked, and only a create that threw removed it. A refusal (no signature, a bad body) returned normally and left the file, so anyone could mint room ids and fill the data folder. Now a create that ends without a room removes its file, unless another create of the same id is still running.
+- **T198: channel list is the secrets store** ([#137](https://github.com/ojowwalker77/channels/pull/137))
+  Keys live in secrets().channels; the sidebar read mc.channels. A channel had to be in both. Clearing renderer localStorage (or a failed registry write) emptied the list while owner keys remained. saveMember swallowed saveChannels failures; two overlapping writes were last-write-wins.
+- **T197: poll listed channel heads so unread dots work** ([#136](https://github.com/ojowwalker77/channels/pull/136))
+  useChannelList asks GET / for each member row every 15s (and when the tab is shown). withHeads stashes seq on the row. startMarks and rowNews then see other channels. Drop LEFT_CHANNEL; it had no listener.
+- **T430: the desktop daemon client fails at once when the daemon closes** ([#149](https://github.com/ojowwalker77/channels/pull/149))
+  call() in desktop/src/daemon-client.ts had no close handler. A daemon that closed the socket before its reply line made the call wait out its whole timer (5 s, or 10 s for adopt). Now a close before a full reply rejects at once with "the daemon closed the connection", like the CLI's client in src/daemon.ts. The call settles once only.
+- **T551: listen calls onNotice for join requests** ([#148](https://github.com/ojowwalker77/channels/pull/148))
+  tail, wait, watch, hooks and MCP pass Hearing.onNotice. listen ignored Request events, so those callbacks never ran. An agent seat on the owner's machine now lists requests with the owner key on this computer, at start and on each Request. A machine without that key still does not notice.
+- **Read receipt under your newest reply in a thread, too (T74)** ([#150](https://github.com/ojowwalker77/channels/pull/150))
+  jow asked for receipts "like Apple Messages or WhatsApp" (#542). Main already shows one under your newest message there. A reply you wrote in the thread panel never got one, because the bubble skipped anchored rows. Now the thread panel shows the receipt under your newest reply in it. It still never shows on older messages, on others' messages, or on events. receipts.ts is unchanged.
+- **T203 step 1: the person key stays in main** ([#151](https://github.com/ojowwalker77/channels/pull/151))
+  - The renderer's snapshot and the create-person reply carry the person's
+    public keys only (name, pk, xpk). A join's person claim is made in main
+    through the new kiwi:prove-person, and askToJoin asks the bridge for
+    it. The plain-browser dev mode still keeps its key in localStorage.
+  - The store is written by writePrivate: on every save the folder is
+    chmod 0700 and the file 0600, so a store with no keychain (plain JSON)
+    is readable only by you, like ~/.kiwi and ~/.ssh. Electron makes the
+    userData folder before the app does, so mkdir's mode alone did nothing.
+  - kiwi:save-channels merges: a saved channel's sk, xsk and existing epoch
+    keys can't change. The renderer may add or remove channels and add a new
+    epoch's key. kiwi:save-computers keeps the public fields only.
+  - SECURITY.md and docs/plans/desktop.md say where keys live now, and
+    which keys the renderer still holds until step 2.
+  - jev-ci: core / types and core / test also read desktop/src/guard.ts and
+    bridge.ts, so a change there runs their tests.
+- **T332 PR 1: the daemon's seat does what a listener does** ([#152](https://github.com/ojowwalker77/channels/pull/152))
+  A daemon seat was messages only. Now, per seat: - Presence: the stream opens with presence on. A new "presence" verb ({channel, as, client, role?, activity?}) sets what the seat announces; until then it announces {client: "daemon"}. It announces on every Open, then on a beacon (60 s; startDaemon's beaconMs for tests), and answers "who's here" probes at most every 3 s. - Events: open, roster, info and request go to every subscriber as {id, event}, and connection status as {id, status}. Message lines are unchanged. listenDaemon takes onEvent and onStatus; without them these lines are skipped, so a messages-only subscriber works as before. - Read marks: a new "mark" verb ({channel, as, seq}). The seat sends a mark only when a subscriber asks, forward only, at most once a second, and again after a reconnect. A subscription has presence() and mark(). - Start-up: the seat's first head() retries with the reach() backoff (500 ms doubling to 30 s) while the asking connection is open, and tells it "can't reach the relay" and later "reached the relay after Ns". Refusals and a gone channel still fail at once. - Key rotation: the seat's Channel saves new keys (saveAccess), so a rotation reaches the channel config. - hello says protocol 2. ensureDaemon restarts a daemon below it, as it does for another version. - StreamOptions.onOpen also gives the Open's mark sender.
 
 ## 0.11.0 — 2026-10-14
 
