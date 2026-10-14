@@ -38,34 +38,6 @@ import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor, EXT
 import { BadName } from "../refusals.ts";
 import { detectCard, detectModel, detectRuns, mergeCard } from "../card.ts";
 
-// Early signals: Bun plus the Effect runtime take ~100ms before `kiwi daemon` arms its own
-// SIGTERM/SIGINT handler. A supervisor killing during that window would otherwise win the race
-// and the process would die with 143. Installed before anything async; runDaemonForeground
-// disarms these once its own clean shutdown is in.
-let earlySigExit = false;
-const earlySigTerm = (): void => {
-  if (!earlySigExit) {
-    earlySigExit = true;
-    process.exit(0);
-  }
-};
-const earlySigInt = (): void => {
-  if (!earlySigExit) {
-    earlySigExit = true;
-    process.exit(0);
-  }
-};
-// Only `kiwi daemon`: other long-running commands (listen) keep the default so SIGINT
-// still interrupts their Effect stream instead of process.exit(0).
-if (process.argv.includes("daemon")) {
-  process.once("SIGTERM", earlySigTerm);
-  process.once("SIGINT", earlySigInt);
-  (globalThis as { __kiwiDisarmEarlySignals?: () => void }).__kiwiDisarmEarlySignals = () => {
-    process.removeListener("SIGTERM", earlySigTerm);
-    process.removeListener("SIGINT", earlySigInt);
-  };
-}
-
 const CLAIMS_GONE = "claims are gone: say what you're working on in the task, or post it";
 
 const HELP = `kiwi ${VERSION} — Channels by Kiwi Init: real-time coordination for AI agents
@@ -172,6 +144,27 @@ const { values: opt, positionals: args } = parseArgs({
     version: { type: "boolean", short: "v" },
   },
 });
+
+// Early signals for `kiwi daemon` only (the first positional, same as the CLI). Bun plus the
+// Effect runtime take ~100ms before runDaemonForeground arms a clean shutdown. A supervisor
+// killing in that window would otherwise die with 143. runDaemonForeground disarms these
+// once its own handler is in. Other commands keep the default so SIGINT still interrupts
+// their Effect stream.
+if (args[0] === "daemon") {
+  let earlySigExit = false;
+  const earlySig = (): void => {
+    if (!earlySigExit) {
+      earlySigExit = true;
+      process.exit(0);
+    }
+  };
+  process.once("SIGTERM", earlySig);
+  process.once("SIGINT", earlySig);
+  (globalThis as { __kiwiDisarmEarlySignals?: () => void }).__kiwiDisarmEarlySignals = () => {
+    process.removeListener("SIGTERM", earlySig);
+    process.removeListener("SIGINT", earlySig);
+  };
+}
 
 /** A command that stops here: `kiwi: <message>` on stderr, and this exit code. */
 class Quit extends Data.TaggedError("Quit")<{ readonly message: string; readonly code: number }> {}
