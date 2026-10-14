@@ -94,24 +94,40 @@ export function startRelay(
   const mailboxSweep = setInterval(sweepMailboxes, 3_600_000);
   mailboxSweep.unref?.();
 
+  /** The throwaway in-memory DBs standing in for rooms that don't exist, by the store using one: closed by doneWith. */
+  const stubs = new WeakMap<RoomDb, Database>();
   /** A store for the room; rooms that don't exist get a throwaway in-memory DB (so no file appears). */
-  const sqlFor = (roomId: string, creating: boolean): Sql => {
+  const storeFor = (roomId: string, creating: boolean): RoomDb => {
     let db = dbs.get(roomId);
+    let stub = false;
     if (!db) {
-      if (!creating && !existsSync(file(roomId))) db = new Database(":memory:");
-      else {
+      if (!creating && !existsSync(file(roomId))) {
+        db = new Database(":memory:");
+        stub = true;
+      } else {
         db = new Database(file(roomId), { create: true });
         db.run("PRAGMA journal_mode = WAL");
         dbs.set(roomId, db);
       }
     }
     const d = db;
-    return {
-      run: (q, ...p) => void d.query(q).run(...p),
-      all: <T>(q: string, ...p: (string | number | null)[]) => d.query(q).all(...p) as T[],
-    };
+    const store = new RoomDb(
+      {
+        run: (q, ...p) => void d.query(q).run(...p),
+        all: <T>(q: string, ...p: (string | number | null)[]) => d.query(q).all(...p) as T[],
+      },
+      roomId,
+    );
+    if (stub) stubs.set(store, d);
+    return store;
   };
-  const storeFor = (roomId: string, creating: boolean): RoomDb => new RoomDb(sqlFor(roomId, creating), roomId);
+  /** The caller is done with this store: a stand-in for a missing room is closed, a real room stays open. */
+  const doneWith = (store: RoomDb) => {
+    stubs.get(store)?.close();
+    stubs.delete(store);
+  };
+  /** Creates in flight, by room: a refused one removes the file only when no other create of that id is still running. */
+  const creating = new Map<string, number>();
   const listOf = (user: string) => (people.query("SELECT entry FROM owned WHERE user = ?").all(user) as { entry: string }[]).map((r) => JSON.parse(r.entry) as DirectoryEntry);
 
   // What every room runs with. `now` (tests) is the clock the room reads.
@@ -198,31 +214,37 @@ export function startRelay(
         // No fingerprint: 426 before the room file is opened.
         const early = missingFingerprint(req.method, route.rest, url);
         if (early) return withCors(errorResponse(early));
-        const db = storeFor(route.roomId, route.rest === "/create");
-        if (route.rest === "/ws") {
-          if (db.isLegacy()) {
-            apply(route.roomId, { wipe: true });
-            return withCors(errorResponse(new ChannelGone({ message: "no such channel" })));
-          }
-          const pk = await runRoom(relay, db, authenticateSocket(req));
-          const since = Number(url.searchParams.get("since") ?? 0) || 0;
-          if (server.upgrade(req, { data: { roomId: route.roomId, pk, since }, headers: wsHeaders(req) })) return undefined;
-          return withCors(errorResponse(new UpdateRequired({ message: "expected websocket" })));
-        }
-        let result: Awaited<ReturnType<typeof onHttp>>;
+        const isCreate = route.rest === "/create";
+        if (isCreate) creating.set(route.roomId, (creating.get(route.roomId) ?? 0) + 1);
+        const db = storeFor(route.roomId, isCreate);
         try {
-          result = await onHttp(relay, db, req, route.rest);
-        } catch (err) {
-          // A create that failed leaves no file behind.
-          if (route.rest === "/create" && !db.exists()) {
-            dbs.get(route.roomId)?.close();
-            dbs.delete(route.roomId);
-            for (const suffix of ["", "-wal", "-shm"]) rmSync(file(route.roomId) + suffix, { force: true });
+          if (route.rest === "/ws") {
+            if (db.isLegacy()) {
+              apply(route.roomId, { wipe: true });
+              return withCors(errorResponse(new ChannelGone({ message: "no such channel" })));
+            }
+            const pk = await runRoom(relay, db, authenticateSocket(req));
+            const since = Number(url.searchParams.get("since") ?? 0) || 0;
+            if (server.upgrade(req, { data: { roomId: route.roomId, pk, since }, headers: wsHeaders(req) })) return undefined;
+            return withCors(errorResponse(new UpdateRequired({ message: "expected websocket" })));
           }
-          throw err;
+          const result = await onHttp(relay, db, req, route.rest);
+          if (result.fx) apply(route.roomId, result.fx);
+          return withCors(result.res);
+        } finally {
+          doneWith(db);
+          if (isCreate) {
+            const left = (creating.get(route.roomId) ?? 1) - 1;
+            if (left) creating.set(route.roomId, left);
+            else creating.delete(route.roomId);
+            // A create that ended without a room (refused before auth, or failed) leaves no file behind.
+            if (!left && !db.exists()) {
+              dbs.get(route.roomId)?.close();
+              dbs.delete(route.roomId);
+              for (const suffix of ["", "-wal", "-shm"]) rmSync(file(route.roomId) + suffix, { force: true });
+            }
+          }
         }
-        if (result.fx) apply(route.roomId, result.fx);
-        return withCors(result.res);
       } catch (err) {
         return withCors(errorResponse(err));
       }
@@ -234,14 +256,24 @@ export function startRelay(
         if (!set) sockets.set(ws.data.roomId, (set = new Set()));
         set.add(ws);
         const db = storeFor(ws.data.roomId, false);
-        for (const f of runRoomSync(relay, db, welcomeFrames(ws.data.since))) ws.send(f);
-        // A connection counts as activity for idle expiry.
-        runRoomSync(relay, db, touch);
+        try {
+          for (const f of runRoomSync(relay, db, welcomeFrames(ws.data.since))) ws.send(f);
+          // A connection counts as activity for idle expiry.
+          runRoomSync(relay, db, touch);
+        } finally {
+          doneWith(db);
+        }
       },
       message(ws, data) {
         const raw = typeof data === "string" ? data : new TextDecoder().decode(data);
         if (raw === PING) return void ws.send(PONG);
-        const fx = runRoomSync(relay, storeFor(ws.data.roomId, false), onClientFrame(raw, ws.data.pk));
+        const db = storeFor(ws.data.roomId, false);
+        let fx: Effects;
+        try {
+          fx = runRoomSync(relay, db, onClientFrame(raw, ws.data.pk));
+        } finally {
+          doneWith(db);
+        }
         if (fx.reply) ws.send(fx.reply);
         apply(ws.data.roomId, fx, ws);
       },
