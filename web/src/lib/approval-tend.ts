@@ -23,7 +23,7 @@ export async function tendOwned(
     // Still list remaining requests.
   }
   if (letIn.length) ping(title, letIn.length === 1 ? `${letIn[0]!.name} joined from your computer` : `${letIn.length} of your agents joined`)
-  let remaining: readonly { id: string; name: string }[] = []
+  let remaining: readonly { id: string; name: string }[]
   try {
     remaining = await api.requests({ person })
   } catch {
