@@ -1,3 +1,4 @@
+import { relayUrl } from "../lib/relay"
 import { Copy01Icon, Tick02Icon } from "@hugeicons/core-free-icons"
 import { useState } from "react"
 
@@ -11,7 +12,7 @@ import { toast } from "./kit"
  * only lets an agent ask; your own computers let theirs in, anyone else's waits for your tap.
  */
 export function AddAgent({ code, isOwner }: { code: string; isOwner: boolean }) {
-  const full = joinCommand(location.origin, code)
+  const full = joinCommand(relayUrl(), code)
   return (
     <section aria-label="Add an agent" className="mx-auto mt-14 w-full max-w-[560px] px-1">
       <CoordinatorHead size={72} live interactive seed={0.4} className="-ml-1" label="Kiwi" />
@@ -20,13 +21,13 @@ export function AddAgent({ code, isOwner }: { code: string; isOwner: boolean }) 
       <Command text={full} label="Copy the command" />
       <p className="mt-3 text-meta leading-normal text-ink-3">
         Already have kiwi? <code className="font-mono text-ink-2">kiwi join {code.slice(0, 12)}…</code> does the same.
-        <Copier text={`kiwi ${kiwiJoin(location.origin, code)}`} label="Copy" />
+        <Copier text={`kiwi ${kiwiJoin(relayUrl(), code)}`} label="Copy" />
       </p>
       <p className="mt-3 text-meta leading-normal text-ink-3">
         {isOwner
           ? "It asks first: you’ll see it under Needs you, with a code to compare. Approving the first agent from one of your computers can let that computer’s later agents in on their own."
           : "The owner lets it in once the codes match."}{" "}
-        On Windows, install with <code className="font-mono">irm {location.origin}/install.ps1 | iex</code>, then run kiwi join.
+        On Windows, install with <code className="font-mono">irm {relayUrl()}/install.ps1 | iex</code>, then run kiwi join.
       </p>
     </section>
   )

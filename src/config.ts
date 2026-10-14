@@ -42,7 +42,7 @@ export interface ChannelConfig extends ChannelAccess {
 export interface SeatRecord {
   alias: string;
   as: string;
-  harness?: "claude" | "codex" | "gemini" | "cursor" | "grok";
+  harness?: "claude" | "codex" | "gemini" | "cursor" | "grok" | "opencode";
   session?: string;
   pid?: number;
   /** When a session took this seat. */

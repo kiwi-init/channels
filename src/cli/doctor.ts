@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { DEFAULT_RELAY, loadConfig } from "../config.ts";
 import { EXTRA_HARNESSES, extraInstalled, hooksInstalled } from "../hooks.ts";
 import { reason } from "../client.ts";
-import { loadMachine, machineFx } from "../machine.ts";
+import { loadMachine, type MachineFile } from "../machine.ts";
 import { VERSION } from "../version.ts";
 
 /** One check. `how` is the plain fix, and only a problem has one. */
@@ -112,24 +112,12 @@ const checkRelay = Effect.fn("Doctor.relay")(function* (relay: string) {
   );
 });
 
-/** The link, and only the link. Call this after the relay has answered and said sign-in is on. */
-const checkLink = Effect.fn("Doctor.link")(function* (relay: string) {
-  const m = loadMachine();
-  if (!m?.linked) return { ok: false, what: "this computer isn't linked to an account.", how: "Run kiwi setup." } satisfies Finding;
-  if (m.relay !== relay) return { ok: false, what: `this computer is linked at ${m.relay}, not ${relay}.`, how: "Run kiwi setup again for this relay." } satisfies Finding;
-  const linked = m.linked;
-  return yield* machineFx.status(m).pipe(
-    Effect.map((st): Finding => {
-      if (st.status === "linked") return { ok: true, what: `link     ${st.name ?? linked.name ?? "your account"} (${m.label})` };
-      // "expired" is the relay's word for a link it no longer has (removed, or left unused).
-      if (st.status === "expired") return { ok: false, what: "this computer's link was removed.", how: "Run kiwi setup again." };
-      return { ok: false, what: `this computer's link is ${st.status}, not confirmed.`, how: "Run kiwi setup and confirm it in the browser." };
-    }),
-    Effect.catchCause((cause) =>
-      Effect.succeed<Finding>({ ok: false, what: `couldn't check this computer's link (${reason(Cause.squash(cause))}).`, how: "The relay answered /v1/config, but the link check failed. Run kiwi doctor again." }),
-    ),
-  );
-});
+/** Whether this computer is paired with its person's app (machine.json carries their cert). Never a failure: agents still join by approval. */
+function checkPaired(): Finding {
+  const m = loadMachine() as (MachineFile & { cert?: { name?: string } }) | null;
+  if (m?.cert) return { ok: true, what: `paired   with ${m.cert.name ?? "your app"} (${m.label})` };
+  return { ok: true, what: "paired   no: agents here ask to join and wait for the owner (kiwi pair kp1-… pairs this computer with your app)" };
+}
 
 function checkHooks(): Finding {
   const dir = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
@@ -158,7 +146,7 @@ export const checks = Effect.fn("Doctor.checks")(function* () {
   const found = yield* checkInstall();
   const relayCheck = yield* checkRelay(relay);
   found.push(relayCheck.finding);
-  if (relayCheck.finding.ok && relayCheck.signIn) found.push(yield* checkLink(relay));
+  found.push(checkPaired());
   found.push(checkHooks());
   return found;
 });

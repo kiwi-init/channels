@@ -1,23 +1,21 @@
+import { relayUrl } from "../lib/relay"
 import { Dialog } from "@base-ui/react/dialog"
 import { Add01Icon, Copy01Icon, PauseIcon } from "@hugeicons/core-free-icons"
-import { createContext, useContext, useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react"
 
 import { memberLoad, showsLoad, type Load } from "@mc/load.ts"
 import { NAME_RE, type JoinRequest, type Member as RosterMember } from "@mc/membership.ts"
 import { MAX_CHARTER, type ChannelIcon, type Color, type Event } from "@mc/protocol.ts"
-import { decodeJoinCode } from "@mc/crypto.ts"
-import { browserCode, pairNonce, sealedTo, type Chosen, type PairRow } from "@mc/pair.ts"
 import { TOO_MANY_REQUESTS } from "@mc/sas.ts"
 import { SCOPES, type Scope } from "@mc/scopes.ts"
 import { COORDINATOR, firstAgent, isPerson, taskId, type ChannelState } from "@mc/state.ts"
-import { useAuth } from "@/lib/auth"
-import { noteAgentWorked, useClock } from "@/lib/channel"
+import { noteAgentWorked } from "@/lib/channel"
 import { formatAgo, memberLine, memberName } from "@/lib/format"
-import { isSignInGone } from "@/lib/session"
-import { defaultScopes, saveDefaultScopes, ScopePicker, scopesLine, SeatPicker } from "./scopes"
+import { defaultScopes, saveDefaultScopes, ScopePicker, scopesLine } from "./scopes"
 import { Icon } from "./icon"
 import { Alert, Button, IconButton, Modal, Monogram, Tabs, TextField, errorText, toast } from "./kit"
 import { Menu, MenuItem, MenuSeparator } from "./ui/menu"
+import { AgentFacts } from "./agent-facts"
 
 // Everything about a channel that isn't the conversation, each where you'd
 // look for it: people behind the faces in the header, Invite as a button,
@@ -44,8 +42,8 @@ export interface ControlsProps {
   online: Map<string, unknown>
   state: ChannelState
   now: number
-  /** `scopes`: what they may do besides read; left out, everything. `seat`: let agents from its computer in from now on. */
-  onApprove: (r: JoinRequest, scopes?: Scope[], seat?: boolean) => Promise<void>
+  /** `scopes`: what they may do besides read; left out, everything. */
+  onApprove: (r: JoinRequest, scopes?: Scope[]) => Promise<void>
   onDeny: (r: JoinRequest) => Promise<void>
   /** Sign this browser's half of a request's code check, at the person's click. */
   onCheck: (r: JoinRequest) => Promise<void>
@@ -56,15 +54,6 @@ export interface ControlsProps {
   onRole: (ev: Extract<Event, { op: "role.set" | "role.refuse" }>) => Promise<void>
   onCloseChannel: () => Promise<void>
   onLeaveChannel: () => Promise<void>
-  /** This seat in a terminal: `kiwi tui <code>` there, then the person approves the code it shows (pair.ts). No key is copied. */
-  pairing?: {
-    code: string
-    /** A one-time slot: only a terminal given it (in the command) can ask, so nobody else can fill or open this pairing. */
-    slot: () => Promise<string>
-    list: (slot: string) => Promise<PairRow[]>
-    open: (id: string, nonce: string, slot: string) => Promise<string>
-    answer: (p: PairRow, slot: string) => Promise<void>
-  }
   /** Unused: channel icons left the UI (T1389). Still accepted until conversation.tsx stops passing it. */
   onSetIcon?: (icon: ChannelIcon | null) => Promise<void>
   /** Owner: rename the channel (a title signed by the owner). Absent for everyone else. */
@@ -99,7 +88,7 @@ interface Api {
   lastSeenOf: (name: string) => number | null
   onlineNow: (name: string) => boolean
   /** The channel's own dialogs, from wherever they're offered (the info panel). */
-  openDialog: (d: "rename" | "charter" | "terminal") => void
+  openDialog: (d: "rename" | "charter") => void
 }
 
 const Ctx = createContext<Api | null>(null)
@@ -138,16 +127,15 @@ function CopyBox({ text, label, done }: { text: string; label: string; done: str
   )
 }
 
-const inviteLink = (code: string) => `${location.origin}/#${code}`
+const inviteLink = (code: string) => `${relayUrl()}/#${code}`
 
 export function ChannelControls({ children, ...p }: ControlsProps & { children: ReactNode }) {
   const [confirm, setConfirm] = useState<Confirm>(null)
   const [sheet, setSheet] = useState<"requests" | "invite" | null>(null)
   const [busy, setBusy] = useState(false)
-  const [dialog, setDialog] = useState<"rename" | "charter" | "terminal" | null>(null)
+  const [dialog, setDialog] = useState<"rename" | "charter" | null>(null)
   const [roleDraft, setRoleDraft] = useState({ role: "", about: "" })
   const [scopeDraft, setScopeDraft] = useState<Scope[]>([...SCOPES])
-  const [seatDraft, setSeatDraft] = useState(true)
   const active = p.roster.filter((m) => m.active)
   const taken = confirm?.kind === "approve" && active.some((m) => m.name === confirm.req.name)
   // A seat in use: seen in the last ten minutes or listening right now (the same rule as kiwi approve).
@@ -161,8 +149,7 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
       toast(done)
       setConfirm(null)
     } catch (err) {
-      const message = errorText(err)
-      toast(isSignInGone(err) ? "Sign in first. Owner actions need your session." : message, "error")
+      toast(errorText(err), "error")
     } finally {
       setBusy(false)
     }
@@ -216,7 +203,6 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
       // Approving starts from what this browser picked for new members when inviting.
       if (c?.kind === "approve") {
         setScopeDraft(p.roomId ? defaultScopes(p.roomId) : [...SCOPES])
-        setSeatDraft(!!c.req.computer?.own)
       }
       setConfirm(c)
     },
@@ -247,7 +233,6 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
 
       {p.onRename && dialog === "rename" && <RenameDialog title={p.title ?? ""} onClose={() => setDialog(null)} onSave={p.onRename} />}
       {dialog === "charter" && <CharterDialog text={p.state.charter?.text ?? ""} onClose={() => setDialog(null)} onSave={p.isOwner ? p.onCharter : undefined} />}
-      {dialog === "terminal" && p.pairing && <TerminalDialog pairing={p.pairing} onClose={() => setDialog(null)} />}
 
       <Modal open={sheet === "requests" && confirm === null} onClose={() => setSheet(null)} wide>
         <Requests onDone={() => setSheet(null)} />
@@ -298,11 +283,11 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
         message={
           confirm?.kind === "approve" && (
             <>
+              {confirm.req.kind !== "human" && <AgentFacts card={confirm.req.card} said className="mb-3" />}
               Approve only if {confirm.req.kind === "human" ? "they show" : "its terminal shows"} this exact code.
               <span className="mt-4 mb-4 block text-[34px] leading-none font-semibold tracking-[0.04em] text-ink tabular-nums">{confirm.req.code}</span>
               <span className="mb-2 block text-ui font-medium text-ink">What {confirm.req.kind === "human" ? "they" : "it"} can do</span>
               <ScopePicker value={scopeDraft} onChange={setScopeDraft} disabled={busy} />
-              {confirm.req.computer && <SeatPicker computer={confirm.req.computer.label} value={seatDraft} onChange={setSeatDraft} disabled={busy} className="mt-3" />}
             </>
           )
         }
@@ -311,7 +296,7 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
           Cancel
         </Button>
         {confirm?.kind === "approve" && (
-          <Button disabled={busy || taken} onClick={() => run(() => p.onApprove(confirm.req, scopeDraft, seatDraft), `${confirm.req.name} joined`)}>
+          <Button disabled={busy || taken} onClick={() => run(() => p.onApprove(confirm.req, scopeDraft), `${confirm.req.name} joined`)}>
             {taken ? "That name is taken" : "Approve"}
           </Button>
         )}
@@ -466,7 +451,7 @@ function Invite({ onDone }: { onDone: () => void }) {
   const command = [
     `kiwi join ${p.code}`,
     // On any other relay, the agent's CLI has to be told where to go.
-    location.origin !== PUBLIC_RELAY && `--relay ${location.origin}`,
+    relayUrl() !== PUBLIC_RELAY && `--relay ${relayUrl()}`,
     // No name: the agent is called by what it runs in (claude, codex…), made unique when you approve it.
     n && !badName && `--as ${n}`,
     role.trim() && `--role ${quoted(role.trim())}`,
@@ -539,7 +524,6 @@ function Invite({ onDone }: { onDone: () => void }) {
 /** The quiet line above the conversation when someone's waiting to be let in. Owner only. */
 export function RequestsBanner() {
   const { p, openRequests } = useControls()
-  const auth = useAuth()
   if (!p.isOwner || p.requests.length === 0) return null
   const first = p.requests[0]!
   return (
@@ -553,15 +537,9 @@ export function RequestsBanner() {
           </>
         )}
       </span>
-      {auth.status === "signed-out" ? (
-        <button type="button" onClick={auth.signIn} className="shrink-0 font-medium hover:underline">
-          Sign in to review
-        </button>
-      ) : (
-        <button type="button" onClick={openRequests} className="shrink-0 font-medium hover:underline">
-          Review
-        </button>
-      )}
+      <button type="button" onClick={openRequests} className="shrink-0 font-medium hover:underline">
+        Review
+      </button>
     </div>
   )
 }
@@ -594,9 +572,9 @@ function Requests({ onDone }: { onDone: () => void }) {
                 </p>
               )}
               <p className="text-meta leading-snug text-ink-2">
-                {r.kind === "human" ? `Signed in as ${r.sponsoredBy?.name ?? "someone"}` : r.sponsoredBy ? `Agent for ${r.sponsoredBy.name}, from their computer` : "Agent"}
-                {r.sponsoredBy?.email && ` · ${r.sponsoredBy.email}`} · asked {formatAgo(r.ts, p.now)}
+                {r.kind === "human" ? "A person" : r.computer ? `Agent on ${r.computer.personName}’s ${r.computer.label}` : "Agent"} · asked {formatAgo(r.ts, p.now)}
               </p>
+              {r.kind !== "human" && <AgentFacts card={r.card} said className="mt-1" />}
               <div className="mt-2 flex gap-2">
                 <Button size="sm" variant="secondary" onClick={() => run(() => p.onDeny(r), `Declined ${r.name}`)}>
                   Decline
@@ -751,141 +729,6 @@ function CharterDialog({ text, onClose, onSave }: { text: string; onClose: () =>
   )
 }
 
-/**
- * Your seat in a terminal: run `kiwi tui <code>` there, choose it here, and let it in once both show
- * the same code. The code comes only from what this browser fixed when you chose the terminal (its own
- * nonce, the terminal's key and commit) plus the terminal's reveal, and the seat is sealed to that key:
- * nothing the relay lists afterwards can change either. Nothing secret is copied.
- */
-function TerminalDialog({ pairing, onClose }: { pairing: NonNullable<ControlsProps["pairing"]>; onClose: () => void }) {
-  const [rows, setRows] = useState<PairRow[]>([])
-  const [codes, setCodes] = useState<Map<string, string | null>>(() => new Map())
-  // Read by the polling (a ref), shown by the render (state): both written together.
-  const chosen = useRef(new Map<string, Chosen>())
-  const [picked, setPicked] = useState<Map<string, Chosen>>(() => new Map())
-  const now = useClock(5_000)
-  const [busy, setBusy] = useState(false)
-  const room = decodeJoinCode(pairing.code).roomId
-  const [slot, setSlot] = useState<string | null>(null)
-  // The pairing's functions come new with every render of the conversation: read them as events, so
-  // the slot is opened once per dialog and the polling isn't restarted.
-  const openSlot = useEffectEvent(() => pairing.slot())
-  const listSlot = useEffectEvent((s: string) => pairing.list(s))
-  useEffect(() => {
-    let gone = false
-    openSlot().then(
-      (s) => !gone && setSlot(s),
-      (err) => toast(errorText(err), "error"),
-    )
-    return () => {
-      gone = true
-    }
-  }, [])
-  const command = slot ? `kiwi tui ${pairing.code}${location.origin !== PUBLIC_RELAY ? ` --relay ${location.origin}` : ""} --pair ${slot}` : null
-
-  useEffect(() => {
-    if (!slot) return
-    let stop = false
-    const tick = async () => {
-      try {
-        const list = await listSlot(slot)
-        const next = new Map<string, string | null>()
-        for (const r of list) {
-          const c = chosen.current.get(r.id)
-          next.set(r.id, c ? await browserCode(room, c, r) : null)
-        }
-        if (!stop) {
-          setRows(list)
-          setCodes(next)
-        }
-      } catch {
-        // The relay out of reach for a moment: the next tick tries again.
-      }
-    }
-    void tick()
-    const t = window.setInterval(() => void tick(), 1500)
-    return () => {
-      stop = true
-      window.clearInterval(t)
-    }
-  }, [room, slot])
-
-  const choose = async (r: PairRow) => {
-    if (!slot) return
-    const c: Chosen = { nonce: pairNonce(), pk: r.pk, xpk: r.xpk, commit: r.commit, kept: null }
-    chosen.current.set(r.id, c)
-    try {
-      c.kept = await pairing.open(r.id, c.nonce, slot)
-    } catch (err) {
-      toast(errorText(err), "error")
-    }
-    setPicked(new Map(chosen.current))
-  }
-
-  // Two terminals showing one code can't be told apart: neither is let in.
-  const shownCodes = [...codes.values()].filter((c): c is string => !!c)
-  const approve = async (r: PairRow, code: string) => {
-    const c = chosen.current.get(r.id)
-    if (!c || !slot || shownCodes.filter((x) => x === code).length > 1) return
-    setBusy(true)
-    try {
-      // Sealed to the key this browser saw when it was chosen, with the code computed from its own nonce.
-      await pairing.answer(sealedTo(c, r), slot)
-      toast("That terminal has your seat now")
-      onClose()
-    } catch (err) {
-      toast(errorText(err), "error")
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <Modal open onClose={onClose} wide>
-      <div className="p-5">
-        <Dialog.Title className="text-title font-semibold tracking-[-0.01em]">Use in a terminal</Dialog.Title>
-        <Dialog.Description className="mt-1 text-ui leading-normal text-ink-2">
-          Run this in a terminal on your computer, then choose it below. Let it in only when it shows the same code as here.
-        </Dialog.Description>
-        <div className="mt-4">{command ? <CopyBox text={command} label="Copy command" done="Command copied" /> : <p className="text-meta text-ink-2">Opening a pairing…</p>}</div>
-        <div className="mt-4 grid gap-2" aria-live="polite">
-          {rows.length === 0 && <p className="text-meta text-ink-2">Waiting for a terminal…</p>}
-          {rows.map((r) => {
-            const c = picked.get(r.id)
-            const code = codes.get(r.id) ?? null
-            const twin = !!code && shownCodes.filter((x) => x === code).length > 1
-            const said = r.label ? `${r.label}` : "A terminal"
-            return (
-              <div key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-ctl bg-wash px-3 py-2.5">
-                <span className="min-w-0 flex-1 text-ui">
-                  <span className="font-medium">{said}</span> <span className="text-meta text-ink-3">· asked {formatAgo(r.ts, now)}</span>
-                  {c && c.kept && c.kept !== c.nonce && <span className="block text-meta text-alert">Opened in another browser or tab: close this and use that one, or run the command again.</span>}
-                  {twin && <span className="block text-meta text-alert">Two terminals show this code: let neither in, and run the command again.</span>}
-                  {code && !twin && (
-                    <span className="block">
-                      Does it show <span className="font-mono font-semibold tracking-wide">{code}</span>?
-                    </span>
-                  )}
-                  {c && c.kept === c.nonce && !code && <span className="block text-meta text-ink-2">Waiting for its code…</span>}
-                </span>
-                {!c ? (
-                  <Button size="sm" variant="secondary" disabled={busy} onClick={() => void choose(r)}>
-                    That’s mine
-                  </Button>
-                ) : code && !twin ? (
-                  <Button size="sm" disabled={busy} onClick={() => void approve(r, code)}>
-                    It matches: let it in
-                  </Button>
-                ) : null}
-              </div>
-            )
-          })}
-        </div>
-        <p className="mt-3 text-meta text-ink-3">Only choose a terminal you just opened yourself. The seat it gets can act as you.</p>
-      </div>
-    </Modal>
-  )
-}
 
 /** The owner renames the channel. Every member sees the new name; the relay never can. */
 function RenameDialog({ title, onClose, onSave }: { title: string; onClose: () => void; onSave: (name: string) => Promise<void> }) {

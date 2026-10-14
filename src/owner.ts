@@ -1,0 +1,180 @@
+// The owner's side of a channel, in-process: what the Kiwi app does for a channel it owns, on top of
+// an AgentSession signed with the owner key. Agents never get one (the CLI holds no owner key); the
+// demo and the tests play the owner with it, through the client library.
+
+import * as Effect from "effect/Effect";
+import { AgentSession, runAgent, type Agent } from "./agent.ts";
+import { Channel, keepRecordsIn } from "./client.ts";
+import { Keystore, type ChannelConfig } from "./config.ts";
+import { Rejected } from "./refusals.ts";
+import { describeScopes, wireScopes, type Scope } from "./scopes.ts";
+import { GENERAL_ROOM, MAX_CHARTER, type Event } from "./protocol.ts";
+import { COORDINATOR, firstAgent, fold, newRoomId } from "./state.ts";
+
+export class OwnerSession extends AgentSession {
+  /** The owner key's handle on the channel (the same as `ch`: this session signs as the owner). */
+  get ownerCh(): Channel {
+    return this.ch;
+  }
+
+  /** Pending join requests, checked within this computer's budget. */
+  readonly requests = Effect.fn("OwnerSession.requests")({ self: this }, function* (this: OwnerSession) {
+    return yield* this.ch.fx.requests({ budget: (yield* Keystore).budget });
+  });
+
+  /** Every look finishes what the owner already decided: a rotation owed to someone leaving, the relay's can-post bits. */
+  protected override chores() {
+    return Effect.gen({ self: this }, function* () {
+      const owner = this.ch;
+      if (yield* owner.fx.rotateIfDue()) yield* this.ch.fx.refreshKeys();
+      // The relay's "can post" bit follows the log's scopes: check once a session, and again whenever
+      // the roster changes or a scope.set's second step failed. (Not state(): it calls this.)
+      if (this.postingChecked) return;
+      const [messages, roster] = yield* Effect.all([this.sync(), this.members()], { concurrency: "unbounded" });
+      yield* owner.fx.reconcilePosting(fold(messages, roster));
+      this.postingChecked = true;
+    });
+  }
+
+
+  /** Owner: make a room. Its id is made here and never changes; the name can (renameRoom). */
+  readonly createRoom = Effect.fn("OwnerSession.createRoom")({ self: this }, function* (this: OwnerSession, name: string) {
+    const owner = this.ch;
+    const id = newRoomId();
+    const state = yield* this.roomEvent(owner, { op: "room.create", id, name }, `made the room #${name}`);
+    return { id, state };
+  });
+
+  /** Owner: rename a room (general too; ids stay). */
+  readonly renameRoom = Effect.fn("OwnerSession.renameRoom")({ self: this }, function* (this: OwnerSession, nameOrId: string, name: string) {
+    const owner = this.ch;
+    const id = yield* this.roomId(nameOrId);
+    return yield* this.roomEvent(owner, { op: "room.rename", id, name }, `renamed a room to #${name}`);
+  });
+
+  /** Send a room event as the owner, confirm it, then sign the room list into the settings as of it. */
+  private roomEvent(owner: Channel, ev: Event, body: string) {
+    return Effect.gen({ self: this }, function* () {
+      const seq = yield* owner.fx.send(body, { kind: "event", ev });
+      const state = yield* this.confirm(seq);
+      const list = [...state.rooms.values()].filter((r) => r.id !== GENERAL_ROOM || r.name !== GENERAL_ROOM).map(({ id, name }) => ({ id, name }));
+      yield* owner.fx.setRooms({ list, since: seq });
+      this.roomsFloor = { list, since: seq };
+      return state;
+    });
+  }
+
+
+  /**
+   * Owner, a person: in coordinator mode with nobody holding the role, the earliest agent still here
+   * becomes the coordinator (the first one in, unless the owner picks another). Returns who, or null.
+   */
+  readonly ensureCoordinator = Effect.fn("OwnerSession.ensureCoordinator")({ self: this }, function* (this: OwnerSession) {
+    // The roster as it is now: someone may have just joined or been removed.
+    yield* this.members(true);
+    const { state } = yield* this.state();
+    const next = firstAgent(state);
+    if (!state.mode.coordinatorOnly || state.coordinator || !next) return null;
+    yield* this.decideRole(next, { role: COORDINATOR });
+    return next;
+  });
+
+  /** Owner: set a member's role and rules. Sent as the owner, so every client checks it's the owner's word. */
+  readonly decideRole = Effect.fn("OwnerSession.decideRole")({ self: this }, function* (this: OwnerSession, member: string, decision: { role: string | null; about?: string | null }) {
+    const owner = this.ch;
+    const { state } = yield* this.state();
+    const m = state.members.get(member);
+    if (!m?.active) return yield* new Rejected(`no member named ${member}`);
+    const ev = { op: "role.set" as const, member, ...decision };
+    // Addressed to them: a role (the coordinator's, handed out unasked) is news they have to get.
+    const seq = yield* owner.fx.send(`made ${member} ${ev.role ?? "unassigned"}`, { kind: "event", ev, to: [member] });
+    // Then the member's record says it too, for clients holding only the log's tail. If this fails,
+    // the owner's next reconcile puts it right; the role.set already counts for every client.
+    if (!m.owner) {
+      const rec = (yield* owner.fx.members()).find((x) => x.active && x.name === member && x.pk === m.pk);
+      if (rec) yield* Effect.ignoreCause(owner.fx.updateRole(rec, ev.role, ev.about, seq));
+    }
+    return seq;
+  });
+
+  /**
+   * Owner: what a member may do besides read (null: everything). Signed by the owner key, so every
+   * client checks it's the owner's word; it names the member's key, so it never carries over to
+   * whoever is admitted under that name next. The relay is told the one bit it enforces itself.
+   */
+  readonly setScopes = Effect.fn("OwnerSession.setScopes")({ self: this }, function* (this: OwnerSession, member: string, scopes: Scope[] | null) {
+    const owner = this.ch;
+    const { state } = yield* this.state();
+    const m = state.members.get(member);
+    if (!m?.active) return yield* new Rejected(`no member named ${member}`);
+    if (m.owner) return yield* new Rejected("the owner may do everything");
+    const wire = wireScopes(scopes);
+    const ev: Event = { op: "scope.set", member, pk: m.pk, scopes: wire };
+    const seq = yield* owner.fx.send(`set what ${member} may do: ${wire ? describeScopes(wire) : "full"}`, { kind: "event", ev });
+    const after = yield* this.confirm(seq);
+    // Then the member's record says it too (for clients holding only the log's tail), with the relay's
+    // bit. If this fails, ownerChores puts both right next time.
+    const rec = (yield* owner.fx.members()).find((r) => r.pk === m.pk);
+    const recheck = Effect.sync(() => {
+      this.postingChecked = false;
+    });
+    yield* rec ? owner.fx.updateScopes(rec, after.members.get(member)?.scopes ?? [], seq).pipe(Effect.catchCause(() => recheck)) : recheck;
+    return after;
+  });
+
+  /**
+   * Owner: coordinator-only on or off. On, people talk only with the member whose role is
+   * coordinator; strict (the default) has every client refuse other agents' messages to people.
+   */
+  readonly setMode = Effect.fn("OwnerSession.setMode")({ self: this }, function* (this: OwnerSession, coordinatorOnly: boolean, strict = true) {
+    const owner = this.ch;
+    const ev = { op: "mode.set" as const, coordinatorOnly, strict: coordinatorOnly && strict };
+    const body = coordinatorOnly ? `coordinator-only on${ev.strict ? " (strict)" : ""}` : "coordinator-only off";
+    const since = yield* owner.fx.send(body, { kind: "event", ev });
+    // Then the channel's settings say it too, for clients holding only the log's tail.
+    yield* owner.fx.setMode({ coordinatorOnly, strict: ev.strict, since });
+    return yield* this.confirm(since);
+  });
+
+  /**
+   * Owner: what the channel is for and where its limits are (null clears it). Every agent is shown it,
+   * and told to escalate what falls outside it instead of doing it.
+   */
+  readonly setCharter = Effect.fn("OwnerSession.setCharter")({ self: this }, function* (this: OwnerSession, text: string | null) {
+    const owner = this.ch;
+    const clean = text?.trim() || null;
+    if (clean && clean.length > MAX_CHARTER) return yield* new Rejected(`a charter is at most ${MAX_CHARTER} characters`);
+    const since = yield* owner.fx.send(clean ? `charter: ${clean}` : "cleared the charter", { kind: "event", ev: { op: "charter.set", text: clean } });
+    // Then the settings say it too, for clients holding only the log's tail.
+    yield* owner.fx.setCharter({ text: clean, since });
+    this.guardFloor = undefined;
+    return yield* this.confirm(since);
+  });
+
+  /**
+   * Owner: stop every agent, or let them carry on. While on hold every client refuses an agent's work
+   * (tasks, facts, messages to other agents); agents may still answer people.
+   */
+  readonly setHold = Effect.fn("OwnerSession.setHold")({ self: this }, function* (this: OwnerSession, on: boolean, note?: string) {
+    const owner = this.ch;
+    const clean = note?.trim().slice(0, 500) || undefined;
+    const since = yield* owner.fx.send(on ? `on hold${clean ? `: ${clean}` : ""}` : "hold lifted", { kind: "event", ev: { op: "hold.set", on, ...(clean ? { note: clean } : {}) } });
+    yield* owner.fx.setHold({ on, ...(clean ? { note: clean } : {}), since });
+    this.guardFloor = undefined;
+    return yield* this.confirm(since);
+  });
+}
+
+/** The owner's session on a channel whose owner key this computer holds under `name` (the demo, tests). */
+export const openOwnerSession = Effect.fn("OwnerSession.open")(function* (alias: string, cfg: ChannelConfig, name: string) {
+  const keys = yield* Keystore;
+  keepRecordsIn(keys.records);
+  const identity = yield* keys.identity(name, cfg.roomId);
+  if (identity.pk !== cfg.ownerPk) return yield* new Rejected(`${name} isn't this channel's owner key`);
+  return new OwnerSession(alias, cfg, identity, (a) => Effect.runSync(keys.saveAccess(alias, a)));
+});
+
+/** openOwnerSession, as a Promise. */
+export const openOwner = (alias: string, cfg: ChannelConfig, name: string): Promise<OwnerSession> => runAgent(openOwnerSession(alias, cfg, name));
+
+export type { Agent };

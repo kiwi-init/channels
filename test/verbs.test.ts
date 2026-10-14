@@ -1,5 +1,6 @@
 // The agent CLI in about ten verbs: listen, send, show, status, note (plus join, log, task, leave, help).
 // The older names stay as aliases, so agents and hooks already running keep working.
+import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -8,7 +9,7 @@ import { startRelay } from "../src/relay/bun.ts";
 
 setDefaultTimeout(60_000);
 
-const MC = ["bun", join(import.meta.dir, "../src/cli/main.ts")];
+const MC = [process.execPath, join(import.meta.dir, "../src/cli/main.ts")];
 const dataDir = mkdtempSync(join(tmpdir(), "kiwi-verbs-relay-"));
 const made: string[] = [dataDir];
 let server: ReturnType<typeof startRelay> | undefined;
@@ -30,7 +31,7 @@ const scratch = (tag: string) => {
 };
 
 function spawn(home: string, args: string[]) {
-  return Bun.spawn([...MC, ...args], {
+  return Bun.spawn(kiwiCmd(args), {
     cwd: home,
     env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, KIWI_NO_HOOKS: "1" },
     stdin: "ignore",
@@ -158,7 +159,10 @@ describe("ten verbs", () => {
     await ok(owner, "send", "--to", "dev", "streamed");
     await until(() => got.includes("streamed"), "streamed message");
     stream.kill();
-    await reading;
+    await stream.exited;
+    // Done with it once it has exited (test/proc.ts).
+    await reader.cancel().catch(() => {});
+    await reading.catch(() => {});
   });
 
   test("show: the message, what it answers, its replies, and the rest of its thread", async () => {

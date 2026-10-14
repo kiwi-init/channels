@@ -1,2 +1,2 @@
 // Kept in sync with package.json by the release workflow.
-export const VERSION = "0.10.2";
+export const VERSION = "0.11.0-rc.7";

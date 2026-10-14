@@ -1,6 +1,7 @@
 // Joining without busywork: no --as (agents are called by what they run in, made unique by the
 // owner's side), a seat per agent in its checkout (no -c/--as afterwards, two agents in one checkout
 // each act as themselves, a restart takes its seat back), and Claude Code's hooks doing the listening.
+import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -9,7 +10,7 @@ import { startRelay } from "../src/relay/bun.ts";
 
 setDefaultTimeout(60_000);
 
-const MC = ["bun", join(import.meta.dir, "../src/cli/main.ts")];
+const MC = [process.execPath, join(import.meta.dir, "../src/cli/main.ts")];
 const dataDir = mkdtempSync(join(tmpdir(), "kiwi-js-relay-"));
 const claudeDir = mkdtempSync(join(tmpdir(), "kiwi-js-claude-"));
 const made: string[] = [dataDir, claudeDir];
@@ -37,7 +38,7 @@ const DEAD = String(2 ** 22 + 4242);
 type Env = Record<string, string>;
 
 function spawn(home: string, args: string[], env: Env = {}, cwd = home, stdin?: string) {
-  return Bun.spawn([...MC, ...args], {
+  return Bun.spawn(kiwiCmd(args), {
     cwd,
     // The owner's person seat (--as human) runs from a person's terminal, never an agent's harness.
     // KIWI_MODEL: an agent in a harness says what runs it or can't join; these sessions have no transcript to read it from.
@@ -391,7 +392,7 @@ describe("what runs an agent", () => {
       listed = await ok(owner, ["--as", "human", "requests"]);
       return /\d{3}-\d{3}/.test(listed);
     }, "request listed");
-    expect(listed).toContain("glm · agent · runs opencode · glm-5.3");
+    expect(listed).toContain("glm · runs opencode · glm-5.3");
     await ok(owner, ["--as", "human", "approve", /(\d{3}-\d{3})/.exec(listed)![1]!, "--yes"]);
     expect(await p.exited).toBe(0);
     expect(await ok(owner, ["--as", "human", "status"])).toContain("runs opencode · glm-5.3 (owner-signed)");

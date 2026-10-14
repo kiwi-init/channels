@@ -1,3 +1,4 @@
+import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -44,7 +45,7 @@ afterAll(async () => {
   for (const d of [dataDir, claudeDir, ...made]) rmSync(d, { recursive: true, force: true });
 });
 
-const MC = ["bun", join(import.meta.dir, "../src/cli/main.ts")];
+const MC = [process.execPath, join(import.meta.dir, "../src/cli/main.ts")];
 
 // Tests never touch the real Claude Code settings.
 const claudeDir = mkdtempSync(join(tmpdir(), "mc-claude-"));
@@ -53,10 +54,9 @@ const claudeDir = mkdtempSync(join(tmpdir(), "mc-claude-"));
 const asPerson = (args: string[]) => args.some((a, i) => a === "--as" && args[i + 1] === "human");
 
 function mc(home: string, ...args: string[]) {
-  return Bun.spawn([...MC, ...args], {
+  return Bun.spawn(kiwiCmd(args), {
     cwd: home,
-    // KIWI_MODEL: an agent in a harness says what runs it or can't join; these sessions have no transcript to read it from.
-    env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, CLAUDECODE: asPerson(args) ? "" : "1", KIWI_MODEL: "test-model" },
+    env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, CLAUDECODE: asPerson(args) ? "" : "1" },
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
@@ -100,7 +100,11 @@ function lines(p: ReturnType<typeof mc>) {
     },
     stop: async () => {
       p.kill();
-      await done;
+      await p.exited;
+      // Done with it once it has exited (test/proc.ts).
+      await Promise.race([done, Bun.sleep(300)]);
+      await reader.cancel().catch(() => {});
+      await done.catch(() => {});
     },
   };
 }
@@ -177,7 +181,6 @@ describe("agents coordinating through the CLI", () => {
     // An open channel (no coordinator): these agents talk with people directly.
     const created = await ok(lead, "create", "proj", "--as", "lead", "--role", "planner", "--open");
     code = /join code: (\S+)/.exec(created)![1]!;
-    expect(created).toContain("owner dashboard link: run `kiwi web`");
     const joined = await joinVia(lead, mac, code, "proj", "mac", "macos");
     // A few lines, not a manual: who it is, who directs it, how messages reach it, where the rest is.
     expect(joined).toContain('You\'re "mac" in channel "proj"');
@@ -199,8 +202,9 @@ describe("agents coordinating through the CLI", () => {
     await ok(lead, "--as", "human", "deny", evilKey);
     expect(await evil.exited).toBe(1);
 
-    // Agents can't approve: only the owner's machine sees requests.
-    expect((await run(mac, "requests")).err).toContain("only a person can see join requests");
+    // Agents can't approve: requests are the owner's, in the Kiwi app, and the kiwi command says so.
+    const asked = Bun.spawn([...MC, "requests"], { cwd: mac, env: { ...process.env, KIWI_HOME: mac, KIWI_RELAY: relay }, stdout: "pipe", stderr: "pipe" });
+    expect(await new Response(asked.stderr).text()).toContain("in the Kiwi app");
 
     const status = await ok(lead, "status");
     expect(status).toContain("lead (you) — planner");
@@ -340,7 +344,6 @@ describe("images and cross-channel tasks through the CLI", () => {
     const a = home("imgcli");
     const created = await ok(a, "quick", "pics", "--as", "pic");
     const code = /join code: (\S+)/.exec(created)![1]!;
-    expect(created).toContain("owner dashboard link: run `kiwi web`");
     expect(created).toContain('You\'re "pic" in channel "pics"');
 
     // No --as needed: the agent is called by what it runs in.
@@ -420,7 +423,7 @@ describe("several agents on one machine", () => {
     const code = /join code: (\S+)/.exec(await ok(owner, "create", "m", "--as", "boss"))![1]!;
 
     const inDir = (dir: string, ...args: string[]) =>
-      Bun.spawn([...MC, ...args], { cwd: dir, env: { ...process.env, KIWI_HOME: shared, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, KIWI_MODEL: "test-model" }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+      Bun.spawn(kiwiCmd(args), { cwd: dir, env: { ...process.env, KIWI_HOME: shared, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
     const runIn = async (dir: string, ...args: string[]) => {
       const p = inDir(dir, ...args);
       const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
@@ -458,7 +461,7 @@ describe("several agents on one machine", () => {
     const codeB = /join code: (\S+)/.exec(await ok(ownerB, "create", "b", "--as", "boss"))![1]!;
 
     const inDir = (dir: string, ...args: string[]) =>
-      Bun.spawn([...MC, ...args], { cwd: dir, env: { ...process.env, KIWI_HOME: shared, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, KIWI_MODEL: "test-model" }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+      Bun.spawn(kiwiCmd(args), { cwd: dir, env: { ...process.env, KIWI_HOME: shared, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
     const runIn = async (dir: string, ...args: string[]) => {
       const p = inDir(dir, ...args);
       const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
@@ -510,7 +513,7 @@ describe("several agents on one machine", () => {
     const owner = home("hb-owner");
     const h = home("hb-home");
     const code = /join code: (\S+)/.exec(await ok(owner, "create", "hb", "--as", "boss"))![1]!;
-    const p = Bun.spawn([...MC, "join", code, "--as", "solo"], { cwd: h, env: { ...process.env, HOME: h, KIWI_HOME: h, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, KIWI_MODEL: "test-model" }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+    const p = Bun.spawn([...MC, "join", code, "--as", "solo"], { cwd: h, env: { ...process.env, HOME: h, KIWI_HOME: h, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
     const l = lines(p);
     await ok(owner, "--as", "human", "approve", await codeShown(owner, l), "--yes");
     expect(await p.exited).toBe(0);

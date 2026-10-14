@@ -198,7 +198,11 @@ export interface Card {
   arch?: string;
   /** What runs the agent: claude-code, codex, gemini, cursor, grok, or anything else. */
   harness?: string;
+  /** The model it runs on, as its harness names it (claude-opus-4-1, gpt-5-codex, grok-4…). */
   model?: string;
+  /** The machine's CPU ("10 cores · Apple M1 Pro") and memory ("32 GB"): what it can take on. */
+  cpu?: string;
+  memory?: string;
   /** Tools and capabilities on its machine: docker, gpu, xcode, cargo… */
   tools?: string[];
   /** The repository it works in ("owner/repo") and the branch it's on. */
@@ -210,6 +214,28 @@ export interface Card {
 
 /** Most tools a card lists. */
 export const MAX_TAGS = 40;
+
+/**
+ * A card as someone else said it (a join request carries the asker's): only the fields a card has,
+ * each a short single line, tools capped. Anything else is dropped; null when nothing's left.
+ */
+export function cleanCard(x: unknown): Card | null {
+  if (!x || typeof x !== "object") return null;
+  const r = x as Record<string, unknown>;
+  const line = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ").trim().slice(0, max) : "");
+  const out: Card = {};
+  for (const k of ["os", "arch", "harness", "model", "cpu", "memory", "repo", "branch"] as const) {
+    const v = line(r[k], 120);
+    if (v) out[k] = v;
+  }
+  const note = line(r.note, 500);
+  if (note) out.note = note;
+  if (Array.isArray(r.tools)) {
+    const tools = r.tools.map((t) => line(t, 40)).filter(Boolean).slice(0, MAX_TAGS);
+    if (tools.length) out.tools = tools;
+  }
+  return Object.keys(out).length ? out : null;
+}
 
 /** Longest charter, in characters: it shares the sealed settings (about 16KB at the relay) with the room list. */
 export const MAX_CHARTER = 2000;
@@ -305,6 +331,30 @@ export interface Message extends Payload {
   sigOk: boolean;
 }
 
+/**
+ * What an agent is doing right now, as its harness tells its listener on its machine (harness.ts):
+ * working (with the running tool's name, never its input), waiting on a person, or idle; its model.
+ */
+export interface Activity {
+  state: "working" | "waiting" | "idle";
+  tool?: string;
+  model?: string;
+  /** Since when, as the harness says (ms). */
+  since?: number;
+}
+
+/** An activity as someone else said it: only its fields, each short; null when it isn't one. */
+export function cleanActivity(x: unknown): Activity | null {
+  if (!x || typeof x !== "object") return null;
+  const r = x as Record<string, unknown>;
+  if (r.state !== "working" && r.state !== "waiting" && r.state !== "idle") return null;
+  const line = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ").trim().slice(0, max) : "");
+  const tool = line(r.tool, 60);
+  const model = line(r.model, 120);
+  const since = typeof r.since === "number" && Number.isFinite(r.since) ? r.since : undefined;
+  return { state: r.state, ...(tool ? { tool } : {}), ...(model ? { model } : {}), ...(since ? { since } : {}) };
+}
+
 /** Ephemeral, unstored payloads: presence beacons and queries. */
 export interface Presence {
   v: typeof PROTOCOL_VERSION;
@@ -315,6 +365,8 @@ export interface Presence {
   client: string;
   /** Ask everyone listening to announce themselves. */
   query?: boolean;
+  /** What the agent is doing right now, when its harness says (read through cleanActivity). */
+  activity?: Activity;
   ts: number;
   pk?: string;
   sig?: string;
@@ -361,7 +413,7 @@ export function wellFormedEvent(ev: unknown): ev is Event {
       );
     case "card":
       return (
-        ["os", "arch", "harness", "model", "repo", "branch"].every((k) => opt(e[k], (x): x is string => str(x, 120))) &&
+        ["os", "arch", "harness", "model", "cpu", "memory", "repo", "branch"].every((k) => opt(e[k], (x): x is string => str(x, 120))) &&
         opt(e.tools, (x): x is string[] => tags(x)) &&
         opt(e.note, (x): x is string => str(x, 500))
       );

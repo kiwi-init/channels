@@ -1,20 +1,19 @@
+// Sign-in at the relay: verifying WorkOS tokens, and the one gate they guard (creating
+// channels). Everything after creation takes member keys alone: owners approve by their owner
+// key's signature, agents join with computer claims and people with person claims.
+
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { Database } from "bun:sqlite";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Channel, myChannels, myUsage, relayConfig } from "../src/client.ts";
-import { decodeJoinCode, ownerFingerprint } from "../src/crypto.ts";
-import { machineStatus, newMachine, registerMachine, unlinkMachine, vouchFor, type MachineFile } from "../src/machine.ts";
+import { Channel, relayConfig } from "../src/client.ts";
 import { b64url } from "../src/crypto.ts";
 import { generateIdentity } from "../src/identity.ts";
-import { offerLink, offerToDevice, offerWaiting, parseOfferHash, takeOffer, withdrawOffer } from "../src/devices.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import * as Layer from "effect/Layer";
-import { Handovers, onDeviceHttp, TRANSFER_TTL_MS, type DeviceStore, type DeviceTransfer } from "../src/relay/devices.ts";
-import { buildContext, clockLayer } from "../src/relay/http.ts";
-import { Human, workosHumanAuth } from "../src/relay/human.ts";
+import { workosHumanAuth } from "../src/relay/human.ts";
+import { claimComputer, provePerson } from "../src/person.ts";
 import { checked, checkedByHand } from "./check.ts";
+import { joinAgent, joinPerson, pairComputer, setupChannel } from "./owner.ts";
 
 setDefaultTimeout(30_000);
 
@@ -35,9 +34,10 @@ async function token(sub: string, opts: { exp?: number; key?: CryptoKey; kid?: s
   return `${head}.${body}.${b64url(new Uint8Array(sig))}`;
 }
 
-const names: Record<string, string> = { user_alice: "Alice Owner", user_bob: "Bob Builder", user_carol: "Carol Coder" };
-const emails: Record<string, string> = { user_carol: "carol@example.com" };
-const human = { ...workosHumanAuth("client_test", `${jwks.url.origin}/jwks`), profile: async (u: string) => (names[u] ? { name: names[u]!, email: emails[u] } : null) };
+const human = {
+  ...workosHumanAuth("client_test", `${jwks.url.origin}/jwks`),
+  profile: async (u: string) => (u === "user_alice" ? { name: "Alice Owner", email: "alice@example.com" } : u === "user_carol" ? { name: "Carol Coder", email: "carol@example.com" } : null),
+};
 const dataDir = mkdtempSync(join(tmpdir(), "mc-relay-"));
 let server: ReturnType<typeof startRelay>;
 let relay: string;
@@ -51,20 +51,6 @@ afterAll(() => {
   jwks.stop(true);
   rmSync(dataDir, { recursive: true, force: true });
 });
-
-/** A computer its person linked with `kiwi setup`: registered by the computer, confirmed by the person signed in. */
-async function linkedComputer(user: string): Promise<MachineFile> {
-  const m = await newMachine(relay);
-  await registerMachine(m);
-  const res = await fetch(`${relay}/v1/machines/${m.identity.pk}/confirm`, { method: "POST", headers: { "x-human-token": await token(user) }, body: "{}" });
-  if (!res.ok) throw new Error(`confirm failed: ${res.status}`);
-  return { ...m, linked: { name: null, at: Date.now() } };
-}
-
-/** An agent asking to join from a linked computer. */
-async function agentAsks(code: string, agent: Awaited<ReturnType<typeof generateIdentity>>, name: string, computer: MachineFile) {
-  return Channel.requestJoin(relay, code, agent, { name }, null, await vouchFor(computer, decodeJoinCode(code).roomId, agent.pk));
-}
 
 describe("WorkOS token verification", () => {
   test("accepts a valid token, rejects expired, forged and tampered ones", async () => {
@@ -88,143 +74,103 @@ describe("a relay that requires sign-in", () => {
     expect(await relayConfig(relay)).toEqual({ workosClientId: "client_test" });
   });
 
-  test("only a signed-in human can create a channel, and only that human can run it", async () => {
+  test("only a signed-in human can create a channel; anyone with the code can ask to join", async () => {
     const [owner, agent] = await Promise.all([generateIdentity("human"), generateIdentity("mac")]);
     // No session: refused.
     await expect(Channel.create(relay, owner, { name: "human" })).rejects.toMatchObject({ status: 401 });
 
     const alice = await token("user_alice");
     const { code, access } = await Channel.create(relay, owner, { name: "human" }, [], undefined, alice);
+    // No session, no vouch: asking is open.
+    const req = await Channel.requestJoin(relay, code, agent, { name: "mac" });
+    expect(req.requestId).toBeTruthy();
 
-    // An agent asks to join from Alice's linked computer.
-    const req = await agentAsks(code, agent, "mac", await linkedComputer("user_alice"));
-
-    // The owner key alone (e.g. an agent that copied it) can't see or approve requests.
+    // The owner key alone (e.g. an agent that copied it) sees and approves requests.
     const keyOnly = new Channel(access, relay, owner);
-    await expect(keyOnly.requests()).rejects.toMatchObject({ status: 401 });
-
-    // Another signed-in human with the same key file can't either.
-    const bob = new Channel(access, relay, owner, undefined, () => token("user_bob"));
-    await expect(bob.requests()).rejects.toMatchObject({ status: 403 });
-
-    // The owning human can.
-    const asAlice = new Channel(access, relay, owner, undefined, () => token("user_alice"));
-    const pending = await checked(asAlice, relay, code, [{ id: agent, requestId: req.requestId }]);
+    const pending = await checked(keyOnly, relay, code, [{ id: agent, requestId: req.requestId }]);
     expect(pending.map((r) => r.code)).toEqual([((await Channel.joinStatus(relay, code, agent, req.requestId)) as { code: string }).code]);
-    await asAlice.approve(pending[0]!);
+    await keyOnly.approve(pending[0]!);
     expect((await Channel.joinStatus(relay, code, agent, req.requestId)).status).toBe("approved");
 
-    // Members still talk with their keys alone; sign-in is only for owning.
+    // Members still talk with their keys alone; sign-in is only for creating.
     const st = await Channel.joinStatus(relay, code, agent, req.requestId);
     if (st.status !== "approved") throw new Error("not approved");
     const mac = new Channel(st.access, relay, agent);
     await mac.send("hello");
-    expect((await asAlice.history(0)).messages.map((m) => m.body)).toEqual(["hello"]);
+    expect((await keyOnly.history(0)).messages.map((m) => m.body)).toEqual(["hello"]);
 
-    await expect(keyOnly.close()).rejects.toMatchObject({ status: 401 });
-    await asAlice.close();
+    await expect(keyOnly.close()).resolves.toBeUndefined();
   });
 });
 
-describe("agents join only from a computer their person linked", () => {
-  test("no request without a linked computer; the owner sees whose agent it is; unlinking stops it", async () => {
-    const [owner, agent, stray, late] = await Promise.all([generateIdentity("alice"), generateIdentity("helper"), generateIdentity("stray"), generateIdentity("late")]);
-    const alice = () => token("user_alice");
-    const { code, access } = await Channel.create(relay, owner, { name: "alice-owner", kind: "human" }, [], undefined, await alice());
-    const ownerCh = new Channel(access, relay, owner, undefined, alice);
+describe("agents join with computer claims, people with person claims", () => {
+  test("the owner's client verifies both; forgeries read as unclaimed", async () => {
+    const s = await setupChannel(relay, { human: await token("user_alice") });
+    const computer = await pairComputer(s.person, "mac-mini");
 
-    // A bare agent, or one from a computer nobody confirmed, can't even ask.
-    await expect(Channel.requestJoin(relay, code, stray, { name: "stray" })).rejects.toMatchObject({ status: 403 });
-    const unconfirmed = await newMachine(relay);
-    await registerMachine(unconfirmed);
-    expect((await machineStatus(unconfirmed)).status).toBe("pending");
-    await expect(agentAsks(code, stray, "stray", unconfirmed)).rejects.toMatchObject({ status: 403 });
+    // An agent from the owner's own computer: the owner is its sponsor, and it carries `from`.
+    const helper = await joinAgent(s, "helper", computer);
+    expect(helper.member).toMatchObject({
+      kind: "agent",
+      sponsor: { user: s.person.pk, handle: "owner" },
+      from: { pk: computer.machine.pk, label: "mac-mini" },
+    });
+    expect(helper.req.computer).toMatchObject({ pk: computer.machine.pk, person: s.person.pk, own: true });
 
-    // Bob links his computer; someone else can't take it over.
-    const bobs = await linkedComputer("user_bob");
-    expect(await machineStatus(bobs)).toMatchObject({ status: "linked", name: "Bob Builder" });
-    const steal = await fetch(`${relay}/v1/machines/${bobs.identity.pk}/confirm`, { method: "POST", headers: { "x-human-token": await alice() }, body: "{}" });
-    expect(steal.status).toBe(409);
+    // A claim for another agent's key, or another channel, checks out to nothing.
+    const stray = await generateIdentity("stray");
+    const roomId = s.roomId;
+    const wrongAgent = await claimComputer(computer.machine, computer.cert, roomId, (await generateIdentity("other")).pk);
+    const { requestId } = await Channel.requestJoin(relay, s.code, stray, { name: "stray" }, { computer: wrongAgent });
+    const [r] = (await s.ownerCh.requests({ person: s.person.pk })).filter((x) => x.id === requestId);
+    expect(r?.computer).toBeUndefined();
+    await s.ownerCh.deny(requestId);
 
-    // His agent's request arrives as his; the owner approves it.
-    const helperReq = await agentAsks(code, agent, "helper", bobs);
-    const [r] = await checked(ownerCh, relay, code, [{ id: agent, requestId: helperReq.requestId }]);
-    expect(r).toMatchObject({ kind: "agent", sponsoredBy: { user: "user_bob", name: "Bob Builder" } });
-    await ownerCh.approve(r!);
-    const roster = await ownerCh.members();
-    expect(roster.find((m) => m.name === "helper")).toMatchObject({ kind: "agent", sponsor: { user: "user_bob", name: "Bob Builder" } });
-
-    // Bob sees and removes his computer; agents from it can't ask anymore.
-    const mine = (await (await fetch(`${relay}/v1/me/machines`, { headers: { "x-human-token": await token("user_bob") } })).json()) as { machines: { pk: string }[] };
-    expect(mine.machines.map((m) => m.pk)).toContain(bobs.identity.pk);
-    await unlinkMachine(bobs);
-    await expect(agentAsks(code, late, "late", bobs)).rejects.toMatchObject({ status: 403 });
-    await ownerCh.close();
+    // A person joins as themself: a human member carrying their person key.
+    const bob = await generateIdentity("bob-person");
+    const joined = await joinPerson(s, "bob", bob);
+    expect(joined.member).toMatchObject({ kind: "human", name: "bob", person: bob.pk, sponsor: { user: bob.pk, handle: "bob" } });
+    await s.ownerCh.close();
   });
-});
 
-describe("each person's channel list", () => {
-  test("lists channels you own, are in, or have agents in, and forgets closed ones", async () => {
-    const [owner, agent, bobKey] = await Promise.all([generateIdentity("alice"), generateIdentity("scout"), generateIdentity("bob")]);
-    const alice = () => token("user_alice");
-    const bob = () => token("user_bob");
-    const { code, access } = await Channel.create(relay, owner, { name: "alice", kind: "human" }, [], undefined, await alice(), "launch-plan");
-    const room = access.roomId;
-    const ownerCh = new Channel(access, relay, owner, undefined, alice);
-    expect(await ownerCh.title()).toBe("launch-plan");
-    expect((await myChannels(relay, await alice())).find((c) => c.room === room)).toMatchObject({ code, owner: true, member: true, agents: 0 });
-    expect((await myChannels(relay, await bob())).some((c) => c.room === room)).toBe(false);
-
-    // Bob joins himself, and his agent joins from his linked computer; the owner admits both.
-    const bobReq = await Channel.requestJoin(relay, code, bobKey, { name: "bob" }, await bob());
-    const req = await agentAsks(code, agent, "scout", await linkedComputer("user_bob"));
-    for (const r of await checked(ownerCh, relay, code, [
-      { id: bobKey, requestId: bobReq.requestId },
-      { id: agent, requestId: req.requestId },
-    ]))
-      await ownerCh.approve(r);
-    expect(bobReq.requestId).toBeTruthy();
-    expect((await myChannels(relay, await bob())).find((c) => c.room === room)).toMatchObject({ owner: false, member: true, agents: 1 });
-
-    // Members (not the relay) can read the channel's name.
-    const st = await Channel.joinStatus(relay, code, agent, req.requestId);
-    if (st.status !== "approved") throw new Error("not approved");
-    expect(await new Channel(st.access, relay, agent).title()).toBe("launch-plan");
-
-    // Without sign-in there's no list.
-    await expect(myChannels(relay, "nope")).rejects.toMatchObject({ status: 401 });
-
-    // Closing removes it from everyone's list.
-    await ownerCh.close();
-    expect((await myChannels(relay, await alice())).some((c) => c.room === room)).toBe(false);
-    expect((await myChannels(relay, await bob())).some((c) => c.room === room)).toBe(false);
+  test("another person's computer: sponsored by them, with no handle here", async () => {
+    const s = await setupChannel(relay, { human: await token("user_alice") });
+    const bobsPerson = await generateIdentity("bobs-person");
+    const bobsComputer = await pairComputer(bobsPerson, "bob-box");
+    const agent = await joinAgent(s, "scout", bobsComputer);
+    expect(agent.member.sponsor).toEqual({ user: bobsPerson.pk, name: "bobs-person" });
+    expect(agent.req.computer).toMatchObject({ own: false, personName: "bobs-person" });
+    await s.ownerCh.close();
   });
 });
 
 describe("names", () => {
-  test("people get their whole name as a handle, and the owner can't admit a name twice", async () => {
+  test("people get the name they asked under, and the owner can't admit a name twice", async () => {
     const { handleFor } = await import("../src/membership.ts");
     expect(handleFor("Jonatas Filho")).toBe("jonatas-filho");
     expect(handleFor("Jonatas Walker")).toBe("jonatas-walker");
     expect(handleFor("  José  da Silva ")).toBe("jose-da-silva");
 
-    const [owner, bob1, bob2, agent] = await Promise.all([generateIdentity("alice"), generateIdentity("alice"), generateIdentity("x"), generateIdentity("alice")]);
-    const alice = () => token("user_alice");
-    const { code, access } = await Channel.create(relay, owner, { name: "alice", kind: "human" }, [], undefined, await alice());
-    const ownerCh = new Channel(access, relay, owner, undefined, alice);
-    // A person who types someone else's name still gets the handle of their own account.
-    const ask1 = await Channel.requestJoin(relay, code, bob1, { name: "alice" }, await token("user_bob"));
-    await ownerCh.approve((await checked(ownerCh, relay, code, [{ id: bob1, requestId: ask1.requestId }]))[0]!);
-    // The same account again (another browser) gets a distinct handle.
-    const ask2 = await Channel.requestJoin(relay, code, bob2, { name: "whatever" }, await token("user_bob"));
-    await ownerCh.approve((await checked(ownerCh, relay, code, [{ id: bob2, requestId: ask2.requestId }]))[0]!);
+    const s = await setupChannel(relay, { human: await token("user_alice") });
+    // A person who types someone else's name gets exactly what they typed (there's no account
+    // handle anymore); a second requester under a taken name is refused at approval.
+    const bob1 = await generateIdentity("b1");
+    const ask1 = await Channel.requestJoin(relay, s.code, bob1, { name: "alice" }, { person: await provePerson(await generateIdentity("p1"), s.roomId, bob1.pk) });
+    await s.ownerCh.approve((await checked(s.ownerCh, relay, s.code, [{ id: bob1, requestId: ask1.requestId }]))[0]!);
+    const bob2 = await generateIdentity("b2");
+    const ask2 = await Channel.requestJoin(relay, s.code, bob2, { name: "alice" }, { person: await provePerson(await generateIdentity("p2"), s.roomId, bob2.pk) });
+    const dup = (await checked(s.ownerCh, relay, s.code, [{ id: bob2, requestId: ask2.requestId }]))[0]!;
+    await expect(s.ownerCh.approve(dup)).rejects.toThrow(/already someone's name/);
     // An agent can't take a person's name, nor one that reads as theirs ("alice-2"): it's offered an agent's.
-    const ask3 = await agentAsks(code, agent, "alice", await linkedComputer("user_bob"));
-    const taken = (await checkedByHand(ownerCh, relay, code, [{ id: agent, requestId: ask3.requestId }]))[0]!;
+    const computer = await pairComputer(s.person);
+    const agent = await generateIdentity("agent");
+    const claim = await claimComputer(computer.machine, computer.cert, s.roomId, agent.pk);
+    const ask3 = await Channel.requestJoin(relay, s.code, agent, { name: "alice" }, { computer: claim });
+    const taken = (await checkedByHand(s.ownerCh, relay, s.code, [{ id: agent, requestId: ask3.requestId }])).find((r) => r.id === ask3.requestId)!;
     expect(taken.name).toBe("agent");
-    await ownerCh.approve(taken);
-    expect((await ownerCh.members()).filter((m) => m.active).map((m) => m.name).sort()).toEqual(["agent", "alice", "bob-builder", "bob-builder-2"]);
-    await ownerCh.close();
+    await s.ownerCh.approve(taken);
+    expect((await s.ownerCh.members()).filter((m) => m.active).map((m) => m.name).sort()).toEqual(["agent", "alice", "owner"]);
+    await s.ownerCh.close();
   });
 });
 
@@ -250,7 +196,7 @@ describe("private beta", () => {
         message: expect.stringContaining("https://kiwiinit.com/waitlist"),
       });
       // Bob isn't in the beta, but he can ask to join Alice's channel.
-      expect((await Channel.requestJoin(at, code, guest, { name: "bob" }, await token("user_bob"))).requestId).toBeTruthy();
+      expect((await Channel.requestJoin(at, code, guest, { name: "bob" })).requestId).toBeTruthy();
     } finally {
       beta.stop(true);
       rmSync(betaDir, { recursive: true, force: true });
@@ -261,7 +207,7 @@ describe("private beta", () => {
     // The shared relay in this file has no beta list: Bob could create above too.
     const owner = await generateIdentity("bob");
     const { access } = await Channel.create(relay, owner, { name: "bob", kind: "human" }, [], undefined, await token("user_bob"));
-    await new Channel(access, relay, owner, undefined, () => token("user_bob")).close();
+    await new Channel(access, relay, owner).close();
   });
 });
 
@@ -282,7 +228,7 @@ describe("channels per person", () => {
       // Others aren't affected.
       const bobs = await Channel.create(at, await generateIdentity("c"), { name: "bob", kind: "human" }, [], undefined, await token("user_bob"));
       expect(bobs.code).toBeTruthy();
-      await new Channel(access, at, first, undefined, alice).close();
+      await new Channel(access, at, first).close();
       expect((await Channel.create(at, second, { name: "alice-owner", kind: "human" }, [], undefined, await alice())).code).toBeTruthy();
     } finally {
       r.stop(true);
@@ -291,157 +237,22 @@ describe("channels per person", () => {
   });
 });
 
-describe("expiry and channel lists", () => {
-  test("an expired channel leaves everyone's list, like a close", async () => {
+describe("expiry", () => {
+  test("an expired channel is wiped like a close, and members learn it's gone", async () => {
     const { OPEN_POLICY } = await import("../src/relay/policy.ts");
     const dir = mkdtempSync(join(tmpdir(), "mc-expire-"));
     const clock = { now: Date.now() };
     const r = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, human, policy: { ...OPEN_POLICY, expireAfterDays: 90 }, now: () => clock.now });
     try {
       const owner = await generateIdentity("a");
-      const { access } = await Channel.create(r.url.origin, owner, { name: "alice-owner", kind: "human" }, [], undefined, await token("user_alice"));
-      expect((await myChannels(r.url.origin, await token("user_alice"))).some((c) => c.room === access.roomId)).toBe(true);
+      const { access, code } = await Channel.create(r.url.origin, owner, { name: "alice-owner", kind: "human" }, [], undefined, await token("user_alice"));
+      const ch = new Channel(access, r.url.origin, owner);
+      const seq = await ch.send("one");
+      expect(seq).toBe(1);
       clock.now += 91 * 86_400_000;
       expect(r.sweep()).toBe(1);
-      expect((await myChannels(r.url.origin, await token("user_alice"))).some((c) => c.room === access.roomId)).toBe(false);
-    } finally {
-      r.stop(true);
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-});
-
-describe("usage", () => {
-  test("a person sees their channels' use against the relay's limits; only they can", async () => {
-    const { OPEN_POLICY } = await import("../src/relay/policy.ts");
-    const dir = mkdtempSync(join(tmpdir(), "mc-usage-"));
-    const r = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, human, policy: { ...OPEN_POLICY, channelsPerOwner: 2, messagesPerDay: 2000 } });
-    const at = r.url.origin;
-    try {
-      const [owner, agent] = await Promise.all([generateIdentity("a"), generateIdentity("helper")]);
-      const alice = () => token("user_alice");
-      const { code, access } = await Channel.create(at, owner, { name: "alice-owner", kind: "human" }, [], undefined, await alice());
-      const ownerCh = new Channel(access, at, owner, undefined, alice);
-      const m = await newMachine(at);
-      await registerMachine(m);
-      await fetch(`${at}/v1/machines/${m.identity.pk}/confirm`, { method: "POST", headers: { "x-human-token": await alice() }, body: "{}" });
-      const ask = await Channel.requestJoin(at, code, agent, { name: "helper" }, null, await vouchFor(m, access.roomId, agent.pk));
-      await ownerCh.approve((await checked(ownerCh, at, code, [{ id: agent, requestId: ask.requestId }]))[0]!);
-      await ownerCh.send("one");
-      await ownerCh.send("two");
-
-      // Anyone with the code sees who invited them, as sign-in knows the owner (the code's fingerprint proves it).
-      const fp = await ownerFingerprint(access.ownerPk);
-      expect(((await (await fetch(`${at}/v1/rooms/${access.roomId}/info?fp=${fp}`)).json()) as { ownerName?: string }).ownerName).toBe("Alice Owner");
-      const u = await myUsage(at, await alice());
-      expect(u.limits).toMatchObject({ channelsPerOwner: 2, messagesPerDay: 2000, membersPerChannel: null });
-      expect(u.owned).toBe(1);
-      expect(u.channels[0]).toMatchObject({ room: access.roomId, messagesToday: 2, members: 2 });
-      expect(u.channels[0]!.bytes).toBeGreaterThan(0);
-      // Someone else sees only their own (none), and can't read this channel's counts.
-      expect((await myUsage(at, await token("user_bob"))).owned).toBe(0);
-      const peek = await fetch(`${at}/v1/rooms/${access.roomId}/usage`, { headers: { "x-human-token": await token("user_bob") } });
-      expect(peek.status).toBe(403);
-    } finally {
-      r.stop(true);
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-});
-
-describe("bringing your channels to another device", () => {
-  const channels = JSON.stringify({ channels: [{ code: "mc2-example", identity: { sk: "secret-member-key" } }] });
-
-  test("your other device takes the box once, and the relay only ever holds ciphertext", async () => {
-    const alice = await token("user_alice");
-    const offer = await offerToDevice(relay, alice, channels);
-    expect(await offerWaiting(relay, alice, offer.id)).toBe(true);
-    // The secret travels in the link's fragment, which browsers never send.
-    const link = offerLink(relay, offer);
-    expect(new URL(link).hash).toBe(`#device=${offer.id}.${offer.secret}`);
-    expect(parseOfferHash(new URL(link).hash)).toEqual({ id: offer.id, secret: offer.secret });
-    // What the relay stored can't be read without that secret.
-    const { Database } = await import("bun:sqlite");
-    const stored = new Database(join(dataDir, "people.sqlite"), { readonly: true }).query("SELECT rec FROM devices").all() as { rec: string }[];
-    expect(stored.length).toBe(1);
-    expect(stored[0]!.rec).not.toContain("secret-member-key");
-    expect(stored[0]!.rec).not.toContain(offer.secret);
-
-    expect(await takeOffer(relay, await token("user_alice"), offer.id, offer.secret)).toBe(channels);
-    expect(await offerWaiting(relay, alice, offer.id)).toBe(false);
-    await expect(takeOffer(relay, alice, offer.id, offer.secret)).rejects.toThrow(/already used or has expired/);
-  });
-
-  test("someone else can't take it, even with the link", async () => {
-    const alice = await token("user_alice");
-    const offer = await offerToDevice(relay, alice, channels);
-    await expect(takeOffer(relay, await token("user_bob"), offer.id, offer.secret)).rejects.toThrow(/already used or has expired/);
-    expect(await offerWaiting(relay, alice, offer.id)).toBe(true);
-    await withdrawOffer(relay, alice, offer.id);
-  });
-
-  test("a box under a different secret doesn't open", async () => {
-    const alice = await token("user_alice");
-    const offer = await offerToDevice(relay, alice, channels);
-    const other = (await offerToDevice(relay, alice, channels)).secret;
-    // Showing a new code retires the last one.
-    expect(await offerWaiting(relay, alice, offer.id)).toBe(false);
-    const fresh = await offerToDevice(relay, alice, channels);
-    await expect(takeOffer(relay, alice, fresh.id, other)).rejects.toThrow(/didn’t open/);
-  });
-
-  test("signed-out requests and unknown routes are refused", async () => {
-    expect((await fetch(`${relay}/v1/me/devices/transfers`, { method: "POST", body: JSON.stringify({ box: "x" }) })).status).toBe(401);
-    expect((await fetch(`${relay}/v1/me/devices/elsewhere`, { headers: { "x-human-token": await token("user_alice") } })).status).toBe(404);
-  });
-
-  test("codes expire after ten minutes", async () => {
-    const rows = new Map<string, DeviceTransfer>();
-    const store: DeviceStore = {
-      list: async () => [...rows.values()],
-      put: async (_u, t) => void rows.set(t.id, t),
-      remove: async (_u, id) => void rows.delete(id),
-    };
-    const at = (path: string, method = "GET", body?: string) =>
-      token("user_alice").then((t) => new Request(`https://relay/v1/me/devices/transfers${path}`, { method, body, headers: { "x-human-token": t } }));
-    const t0 = 1_000_000;
-    // The handover routes on their own: this store, this sign-in, and a clock stopped at `now`.
-    const handoversAt = (now: number) => buildContext(Layer.mergeAll(Layer.succeed(Human, human), Layer.succeed(Handovers, store), clockLayer(() => now)));
-    const { id } = (await (await onDeviceHttp(await at("", "POST", JSON.stringify({ box: "ct" })), handoversAt(t0)))!.json()) as { id: string };
-    expect((await onDeviceHttp(await at(`/${id}`, "HEAD"), handoversAt(t0 + TRANSFER_TTL_MS)))!.status).toBe(200);
-    expect((await onDeviceHttp(await at(`/${id}`, "HEAD"), handoversAt(t0 + TRANSFER_TTL_MS + 1)))!.status).toBe(404);
-    expect(rows.size).toBe(0);
-  });
-});
-
-describe("what's new in each listed channel", () => {
-  test("the listing carries each channel's head, read without writing a row or migrating an old room", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "mc-heads-"));
-    let r = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, human });
-    try {
-      const owner = await generateIdentity("alice");
-      const alice = () => token("user_alice");
-      const { access } = await Channel.create(r.url.origin, owner, { name: "alice", kind: "human" }, [], undefined, await alice(), "heads");
-      const ch = new Channel(access, r.url.origin, owner, undefined, alice);
-      const seq = await ch.send("one");
-      expect((await myChannels(r.url.origin, await alice())).find((c) => c.room === access.roomId)?.head).toBe(seq);
-      expect((await myChannels(r.url.origin, await token("user_bob"))).some((c) => c.room === access.roomId)).toBe(false);
-      r.stop(true);
-
-      // The room as an older relay left it (no read_only column), with the relay restarted cold.
-      const file = join(dir, `${access.roomId}.sqlite`);
-      const old = new Database(file);
-      old.run("ALTER TABLE members DROP COLUMN read_only");
-      old.close();
-      r = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, human });
-      const watch = new Database(file, { readonly: true });
-      const version = () => (watch.query("PRAGMA data_version").get() as { data_version: number }).data_version;
-      const before = version();
-      expect((await myChannels(r.url.origin, await alice())).find((c) => c.room === access.roomId)?.head).toBe(seq);
-      // Nothing committed to the room's file: no rows written, no column added.
-      expect(version()).toBe(before);
-      expect((watch.query("PRAGMA table_info(members)").all() as { name: string }[]).map((c) => c.name)).not.toContain("read_only");
-      watch.close();
+      await expect(Channel.requestJoin(r.url.origin, code, await generateIdentity("late"), { name: "late" })).rejects.toThrow();
+      await expect(ch.send("anyone?")).rejects.toMatchObject({ why: "closed" });
     } finally {
       r.stop(true);
       rmSync(dir, { recursive: true, force: true });

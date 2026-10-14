@@ -1,9 +1,8 @@
 import { useSyncExternalStore } from "react"
 
-// Light, dark, or whatever the system says, and how large everything reads.
+// Light, dark, or whatever the system says, and how large the text reads.
 // Both are per browser. "system" leaves <html> without data-theme so the CSS
-// media query decides; the text size scales the whole page (it's set in px
-// throughout, so a root font-size alone wouldn't reach it).
+// media query decides; the text size scales the type steps (--text-scale), not the page.
 
 export type Appearance = "system" | "light" | "dark"
 
@@ -36,10 +35,17 @@ function readSize(): TextSize {
   return v === "small" || v === "large" || v === "larger" ? v : "default"
 }
 
+/**
+ * Text size scales the type, not the page: index.css's type steps multiply by --text-scale, so words
+ * grow while the layout (header row, controls, gaps, the traffic lights' place) stays put. (It used to
+ * zoom the whole page, which moved and stretched everything.)
+ */
 function applySize(t: TextSize) {
   const z = TEXT_SIZES[t]
-  if (z === 1) document.documentElement.style.removeProperty("zoom")
-  else document.documentElement.style.setProperty("zoom", String(z))
+  const root = document.documentElement.style
+  root.removeProperty("zoom")
+  if (z === 1) root.removeProperty("--text-scale")
+  else root.setProperty("--text-scale", String(z))
 }
 
 export function setTextSize(t: TextSize) {

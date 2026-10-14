@@ -12,24 +12,6 @@ export function scopesLine(scopes: readonly Scope[]): string | null {
   return "limited (an older setting)"
 }
 
-/**
- * Approving an agent from a computer: let that computer's later agents into this channel on their own
- * (its seat here), each shown as joined via it. Removing the computer takes them all out again.
- */
-export function SeatPicker({ computer, value, onChange, disabled, className }: { computer: string; value: boolean; onChange: (v: boolean) => void; disabled?: boolean; className?: string }) {
-  return (
-    <div className={`grid gap-1 ${className ?? ""}`}>
-      <label className="flex items-center gap-2 text-ui text-ink">
-        <input type="checkbox" checked={value} onChange={(e) => onChange(e.target.checked)} disabled={disabled} className="size-4 accent-[var(--accent)]" />
-        Let agents from {computer} in from now on
-      </label>
-      <p className="text-meta leading-snug text-ink-3">
-        {value ? `Its next agents join this channel with no code, each shown as joined via ${computer}.` : `You approve each agent from ${computer} yourself.`}
-      </p>
-    </div>
-  )
-}
-
 /** One switch: a member, or someone who can only read. */
 export function ScopePicker({ value, onChange, disabled }: { value: Scope[]; onChange: (s: Scope[]) => void; disabled?: boolean }) {
   const preset = presetOf(value)

@@ -2,8 +2,9 @@
 @import "@fontsource-variable/inter/opsz.css";
 
 /*
- * Kiwi's look. The conversation is the product and everything else stays out of its way: flat,
- * opaque surfaces in three neutral levels, one type family set with care, and one colour of our own.
+ * Kiwi's look: Apple Messages' conversation, in a room as quiet as Grok's. The conversation is the
+ * product and everything else stays out of its way: no bars or hairlines between areas, round
+ * controls, a pill composer, and big friendly faces in the list.
  *
  * The accent is Apple system blue, mirroring Messages: it marks what's yours and what's new, and
  * nothing else. Your bubbles, the send button, unread counts, and the one primary action on a page.
@@ -11,67 +12,85 @@
  * under AA 4.5 for small text; the owner asked to mirror Apple, so it stays. Red is for alerts, amber for
  * a decision someone is waiting on; neither decorates.
  *
- * Surfaces: canvas (the conversation), rail (the list and the details beside it), raised (cards,
- * popovers). No hairlines between areas: a step in tone separates them. Others' bubbles are Messages
- * grey, a step from the canvas, so their words read as bubbles and yours as the blue answer.
+ * One chrome colour: the list, the conversation and the panels beside it are all the canvas (rail
+ * is the canvas), and share one header row. Raised is for cards, popovers and grouped lists. What
+ * floats over the conversation (its header, the composer) is liquid glass: the canvas blurred and
+ * saturated through a translucent fill, a bright rim on top. Others' bubbles are Messages grey, a step
+ * from the canvas, so their words read as bubbles and yours as the blue answer.
  *
  * Each token is written once as light-dark(day, night). The system picks the side, unless
  * lib/theme.ts has set data-theme because the person chose one.
  */
 :root {
   color-scheme: light dark;
-  --canvas: light-dark(#ffffff, #161618);
-  --rail: light-dark(#f6f6f7, #1c1c1f);
-  --raised: light-dark(#ffffff, #232327);
-  --field: light-dark(#ededf0, #26262a);
-  --ink: light-dark(#18181b, #ededf0);
+  --canvas: light-dark(#ffffff, #0d0d0e);
+  --rail: var(--canvas);
+  --raised: light-dark(#ffffff, #1c1c1e);
+  --field: light-dark(#f0f0f3, #1a1a1c);
+  --ink: light-dark(#0f0f11, #f3f3f5);
   /* Quiet text still clears 4.5:1 on canvas, rail, raised and field. ink-3 is that floor; ink-2 a step stronger. */
-  --ink-2: light-dark(#4f4f57, #b4b4bc);
-  --ink-3: light-dark(#6b6b73, #8f8f98);
-  --line: light-dark(rgba(24, 24, 27, 0.07), rgba(255, 255, 255, 0.07));
-  --wash: light-dark(rgba(24, 24, 27, 0.04), rgba(255, 255, 255, 0.05));
-  --wash-2: light-dark(rgba(24, 24, 27, 0.07), rgba(255, 255, 255, 0.08));
+  --ink-2: light-dark(#4a4a52, #bcbcc3);
+  --ink-3: light-dark(#6b6b73, #8f8f97);
+  --line: light-dark(rgba(15, 15, 17, 0.08), rgba(255, 255, 255, 0.08));
+  --wash: light-dark(rgba(15, 15, 17, 0.045), rgba(255, 255, 255, 0.055));
+  --wash-2: light-dark(rgba(15, 15, 17, 0.075), rgba(255, 255, 255, 0.09));
   /* Apple system blue. White on the light accent is ~4:1, Apple's own choice and just under AA 4.5
      for small text; as text on the dark canvas the dark side clears 4.5:1. */
   --accent: light-dark(#007aff, #0a84ff);
   --accent-ink: #ffffff;
   --accent-text: light-dark(#007aff, #0a84ff);
-  --accent-wash: light-dark(rgba(0, 122, 255, 0.1), rgba(10, 132, 255, 0.16));
+  --accent-wash: light-dark(rgba(0, 122, 255, 0.1), rgba(10, 132, 255, 0.18));
   --link: light-dark(#007aff, #0a84ff);
-  --ring: light-dark(rgba(0, 122, 255, 0.55), rgba(10, 132, 255, 0.55));
+  --ring: light-dark(rgba(0, 122, 255, 0.55), rgba(10, 132, 255, 0.6));
   --alert: light-dark(#d1342a, #ff6259);
   --decide: light-dark(#a35a00, #f5b041);
   --decide-wash: light-dark(rgba(214, 125, 0, 0.12), rgba(245, 176, 65, 0.14));
-  --live: light-dark(#1f9a55, #3ccf7f);
+  --live: light-dark(#1f9a55, #32d074);
   /* A task in progress: the one status colour that isn't green, amber or red. */
   --doing: light-dark(#2f6fe4, #5b9bff);
   --warn: light-dark(#a35a00, #f5b041);
-  --overlay: light-dark(rgba(20, 20, 22, 0.32), rgba(0, 0, 0, 0.6));
+  --overlay: light-dark(rgba(20, 20, 22, 0.32), rgba(0, 0, 0, 0.62));
   --bubble-me: var(--accent);
   --bubble-me-ink: #ffffff;
-  /* Others' bubbles: Messages grey, text as everywhere else. */
-  --bubble-them: light-dark(#e9e9eb, #262628);
+  /* Others' bubbles: Messages grey by day, Grok's soft charcoal by night. */
+  --bubble-them: light-dark(#e9e9eb, #1f1f21);
   --bubble-them-ink: var(--ink);
   --frame: var(--rail);
   --panel: var(--canvas);
   --edge: var(--line);
-  --edge-strong: light-dark(rgba(24, 24, 27, 0.14), rgba(255, 255, 255, 0.14));
-  /* The open channel in the list: a neutral step, not a block of colour. */
-  --pick: light-dark(rgba(24, 24, 27, 0.065), rgba(255, 255, 255, 0.075));
+  --edge-strong: light-dark(rgba(15, 15, 17, 0.14), rgba(255, 255, 255, 0.14));
+  /* The open channel in the list: a soft filled pill, as Grok marks the open chat. */
+  --pick: light-dark(rgba(15, 15, 17, 0.07), rgba(255, 255, 255, 0.08));
   --pick-edge: transparent;
   /* The coordinator's head: a system-blue shell, its screen a pale tint, the trim a quiet steel. */
   --head-shell: light-dark(#007aff, #0a84ff);
   --head-screen: light-dark(#e9f0fc, #d9e7fa);
   --head-trim: light-dark(#cfd4d6, #9aa0a3);
   /* Behind the head in a round avatar: a soft blue field, like a contact photo's backdrop. */
-  --head-bg-top: light-dark(#e1ebf8, #222e3d);
-  --head-bg-bottom: light-dark(#c6daf2, #17222e);
-  /* A contact without a picture: a soft neutral gradient. Agents get a hue of their own (kit.tsx). */
-  --avatar-top: light-dark(#a3a3ab, #6f6f78);
-  --avatar-bottom: light-dark(#86868e, #55555d);
-  --pop-edge: light-dark(rgba(24, 24, 27, 0.08), rgba(255, 255, 255, 0.08));
-  --pop-shade: light-dark(rgba(24, 24, 27, 0.14), rgba(0, 0, 0, 0.6));
-  --shadow-pop: 0 0 0 1px var(--pop-edge), 0 12px 32px -10px var(--pop-shade);
+  --head-bg-top: light-dark(#e1ebf8, #22324a);
+  --head-bg-bottom: light-dark(#c6daf2, #141e2c);
+  /* A contact without a picture: a soft neutral gradient, as Messages draws one. */
+  --avatar-top: light-dark(#a8a8b0, #78787f);
+  --avatar-bottom: light-dark(#8a8a92, #55555c);
+  --pop-edge: light-dark(rgba(15, 15, 17, 0.08), rgba(255, 255, 255, 0.09));
+  --pop-shade: light-dark(rgba(15, 15, 17, 0.16), rgba(0, 0, 0, 0.65));
+  --shadow-pop: 0 0 0 1px var(--pop-edge), 0 16px 40px -12px var(--pop-shade);
+  /* The composer: a hairline round it, lifted a touch off the canvas. */
+  --shadow-dock: 0 0 0 1px var(--line), 0 6px 20px -12px var(--pop-shade);
+  /* Liquid glass: a translucent fill over a blur, a bright rim on its top edge, a hairline round it, a soft drop. */
+  --glass-fill: light-dark(rgba(255, 255, 255, 0.64), rgba(40, 40, 44, 0.52));
+  --glass-fill-hover: light-dark(rgba(255, 255, 255, 0.8), rgba(52, 52, 57, 0.62));
+  --glass-rim: light-dark(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.11));
+  --glass-edge: light-dark(rgba(15, 15, 17, 0.07), rgba(255, 255, 255, 0.07));
+  --glass-shade: light-dark(rgba(15, 15, 17, 0.14), rgba(0, 0, 0, 0.55));
+  /*
+   * The chrome's grid, on 4px: one header row every column shares (52px), every round control on it
+   * 36px (8px above and below), 8px between controls, a 12px gutter from every edge (header, rows,
+   * the account pill), and what a Mac window's traffic lights take of the list's header: they end
+   * about 80px in, so 92px leaves the gutter after them.
+   */
+  --chrome-h: 52px;
+  --lights-w: 92px;
 }
 
 :root[data-theme="light"] {
@@ -81,6 +100,9 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
 }
+
+/* In the desktop app on a Mac (main.tsx sets data-shell): the traffic lights sit on the list's header. */
+@custom-variant shell-mac (&:where([data-shell="mac"], [data-shell="mac"] *));
 
 @theme inline {
   /*
@@ -96,24 +118,25 @@
    * names, rows, menus and buttons; body for what people read, in bubbles too; title for headers and
    * dialogs; display for the info panel's name, empty states and welcomes.
    */
-  --text-stamp: 11px;
-  --text-stamp--line-height: 14px;
-  --text-meta: 12px;
-  --text-meta--line-height: 16px;
-  --text-ui: 13px;
-  --text-ui--line-height: 18px;
-  --text-body: 14px;
-  --text-body--line-height: 20px;
-  --text-title: 15px;
-  --text-title--line-height: 20px;
-  --text-display: 22px;
-  --text-display--line-height: 28px;
-  --radius-row: 6px;
-  --radius-ctl: 8px;
-  --radius-card: 12px;
-  /* A message bubble: rounder than anything else, so a conversation reads as one at a glance; 6px where a run stacks. */
-  --radius-bubble: 18px;
-  --radius-stack: 6px;
+  --text-stamp: calc(11px * var(--text-scale, 1));
+  --text-stamp--line-height: calc(14px * var(--text-scale, 1));
+  --text-meta: calc(12px * var(--text-scale, 1));
+  --text-meta--line-height: calc(16px * var(--text-scale, 1));
+  --text-ui: calc(13px * var(--text-scale, 1));
+  --text-ui--line-height: calc(18px * var(--text-scale, 1));
+  --text-body: calc(15px * var(--text-scale, 1));
+  --text-body--line-height: calc(21px * var(--text-scale, 1));
+  --text-title: calc(16px * var(--text-scale, 1));
+  --text-title--line-height: calc(21px * var(--text-scale, 1));
+  --text-display: calc(26px * var(--text-scale, 1));
+  --text-display--line-height: calc(32px * var(--text-scale, 1));
+  --radius-row: 8px;
+  --radius-ctl: 10px;
+  --radius-card: 16px;
+  /* A message bubble: rounder than anything else, so a conversation reads as one at a glance. */
+  --radius-bubble: 20px;
+  /* The composer: soft, Grok-round, without a pill's half-moon ends once it grows to several lines. */
+  --radius-dock: 26px;
   --color-frame: var(--frame);
   --color-panel: var(--panel);
   --color-edge: var(--edge);
@@ -147,6 +170,7 @@
   --color-decide: var(--decide);
   --color-decide-wash: var(--decide-wash);
   --shadow-pop: var(--shadow-pop);
+  --shadow-dock: var(--shadow-dock);
 }
 
 html,
@@ -155,13 +179,32 @@ body,
   height: 100%;
 }
 
+/* Smooth, even type on a Mac (grayscale antialiasing, as Apple's apps draw it), everywhere: form
+   controls don't inherit the body's font settings, so they're named too. */
+html,
+button,
+input,
+textarea,
+select {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-feature-settings: inherit;
+}
+
 body {
   margin: 0;
   background: var(--rail);
   color: var(--ink);
   font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 20px;
+  font-size: calc(15px * var(--text-scale, 1));
+  line-height: calc(21px * var(--text-scale, 1));
   /* Inter's open digits and a tailed l: easier to tell 1, l and I apart in names and keys. */
   font-feature-settings: "calt", "kern", "cv05", "cv08";
   font-optical-sizing: auto;
@@ -246,7 +289,7 @@ button {
   animation: flash 1.6s ease-out;
 }
 
-/* A message you send lands with a small give; one that arrives rises into place. */
+/* A message you send lands with a small give, as in Messages; one that arrives rises into place. */
 @keyframes sent {
   from {
     opacity: 0;
@@ -274,4 +317,63 @@ button {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* The persisted reduce-motion toggle (lib/accessibility.ts): same as the OS setting. */
+html.reduce-motion *,
+html.reduce-motion ::before,
+html.reduce-motion ::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+
+
+/* Liquid glass, for what floats: the header's controls, the place pills, the composer. In the
+   components layer, so a utility (a state's colour, a focus ring) still wins over it. */
+@layer components {
+  .glass {
+    background: var(--glass-fill);
+    -webkit-backdrop-filter: blur(20px) saturate(1.8);
+    backdrop-filter: blur(20px) saturate(1.8);
+    box-shadow:
+      inset 0 1px 0 var(--glass-rim),
+      inset 0 0 0 1px var(--glass-edge),
+      0 8px 24px -12px var(--glass-shade);
+  }
+  button.glass:hover,
+  .glass-hover:hover {
+    background: var(--glass-fill-hover);
+  }
+}
+
+/*
+ * Behind what floats: the canvas fading out (and blurring a little) toward the content, so text that
+ * scrolls under the header or the composer never fights with it.
+ */
+.scrim-top,
+.scrim-bottom {
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.scrim-top {
+  background: linear-gradient(to bottom, var(--canvas) 30%, transparent);
+  mask-image: linear-gradient(to bottom, #000 55%, transparent);
+}
+.scrim-bottom {
+  background: linear-gradient(to top, var(--canvas) 35%, transparent);
+  mask-image: linear-gradient(to top, #000 55%, transparent);
+}
+
+/* The desktop app draws no title bar: the header row moves the window, and what's on it still clicks. */
+.drag {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+.drag :is(button, a, input, textarea, select, [role="button"], [role="tab"], [role="separator"]),
+.no-drag,
+.no-drag * {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }

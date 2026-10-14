@@ -2,22 +2,13 @@
 # TLS stays in front of this container (see deploy/Caddyfile). Inside the
 # container the relay binds every interface, so a published port can reach it.
 
-# The dashboard is built here and copied into the runtime image. The relay
-# serves web/dist on its own (src/relay sits next to web/).
-FROM oven/bun:1.4.2 AS build
-WORKDIR /app
-COPY package.json bun.lock ./
-# The dashboard imports the relay client through the @mc alias, which is ../src.
-COPY src ./src
-COPY web ./web
-RUN bun install --frozen-lockfile && bun run web:build
-
 FROM oven/bun:1.4.2
 WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile --production
 COPY src ./src
-COPY --from=build /app/web/dist ./web/dist
+# The relay serves this static site at / (downloads, invite links, install scripts).
+COPY site ./site
 
 # Room files must be owned by the runtime user, not root. /data is created
 # before VOLUME so the named volume inherits this ownership.

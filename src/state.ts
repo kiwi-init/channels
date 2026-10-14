@@ -13,8 +13,6 @@ export interface Member {
   name: string;
   /** Never "computer" after a fold (seats are left out); the type takes it so member lists of either shape fit. */
   kind?: "human" | "agent" | "computer";
-  /** An agent a person's linked computer let in: that computer's name here. */
-  viaName?: string;
   display?: string;
   sponsor?: { user: string; name: string; handle?: string };
   /** The key the owner admitted under this name. */
@@ -50,8 +48,6 @@ export type Roster = {
   active: boolean;
   /** A "computer" is a linked computer's quiet seat: it never posts, and the fold leaves it out. */
   kind?: "human" | "agent" | "computer";
-  /** For an agent a computer let in: that computer's name here. */
-  viaName?: string;
   display?: string;
   sponsor?: { user: string; name: string; handle?: string };
   color?: Color;
@@ -392,7 +388,6 @@ export function fold(
       role: r.role,
       about: r.about,
       kind: r.kind,
-      ...(r.viaName ? { viaName: r.viaName } : {}),
       display: r.display,
       sponsor: r.sponsor,
       color: r.color,

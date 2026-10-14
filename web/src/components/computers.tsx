@@ -1,155 +1,131 @@
 import { useEffect, useState } from "react"
 
-import { machineCode } from "@mc/vouch.ts"
-import { displayName, useAuth } from "@/lib/auth"
 import { clockNow } from "@/lib/channel"
-import { computerInfo, confirmComputer, myComputers, removeComputer, revokeEverywhere, type Computer, type ParsedLink } from "@/lib/computers"
+import { adoptThisComputer, beginPairing, pairCommands, removeComputer, type ComputerView, type PairAskView, type Pairing } from "@/lib/computers"
 import { formatAgo } from "@/lib/format"
-import { Button, Modal, Spinner, Wordmark, errorText, toast } from "./kit"
+import { bridge, useSecrets } from "@/lib/secrets"
+import { Command } from "./add-agent"
+import { Button, Modal, Spinner, errorText, toast } from "./kit"
 
-/**
- * The page `kiwi setup` opens: link that computer to the signed-in person, so
- * agents started there join as theirs. Only after they check the code matches.
- * It isn't seated anywhere: approving its first agent in a channel can let its later ones in there.
- */
-export function LinkComputerPage({ link, onDone }: { link: ParsedLink; onDone: () => void }) {
-  const pk = link.pk
-  const auth = useAuth()
-  const [code, setCode] = useState("")
-  const [info, setInfo] = useState<{ label: string; status: string } | null>(null)
-  const [state, setState] = useState<"loading" | "ready" | "working" | "done" | "error">("loading")
-  const [error, setError] = useState("")
+type Adding = { kind: "starting" } | { kind: "waiting"; pairing: Pairing } | { kind: "confirm"; pairing: Pairing; ask: PairAskView } | { kind: "error"; message: string }
+
+/** Add a computer: show the code and the commands, wait on the mailbox, then confirm what asked. */
+function AddComputer({ onDone }: { onDone: () => void }) {
+  const [state, setState] = useState<Adding>({ kind: "starting" })
+  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    // The code comes from the key in this link, the same way the terminal derives it.
-    void machineCode(pk).then(setCode)
-    void computerInfo(pk)
-      .then((i) => {
-        setInfo(i)
-        // Linked already: there's nothing left to do here.
-        setState(i.status === "linked" ? "done" : "ready")
-      })
-      .catch((err: unknown) => {
-        setError(errorText(err))
-        setState("error")
-      })
-  }, [pk])
+    const stop = new AbortController()
+    let pairing: Pairing | null = null
+    void (async () => {
+      try {
+        pairing = await beginPairing()
+        if (stop.signal.aborted) return void pairing.cancel()
+        setState({ kind: "waiting", pairing })
+        const ask = await pairing.next(stop.signal)
+        if (ask && !stop.signal.aborted) setState({ kind: "confirm", pairing, ask })
+      } catch (err) {
+        if (!stop.signal.aborted) setState({ kind: "error", message: errorText(err) })
+      }
+    })()
+    return () => {
+      stop.abort()
+      void pairing?.cancel().catch(() => {})
+    }
+  }, [])
 
-  const confirm = async () => {
-    setState("working")
+  if (state.kind === "starting") return <Spinner />
+  if (state.kind === "error")
+    return (
+      <>
+        <p className="text-ui leading-normal text-alert">{state.message}</p>
+        <Button variant="secondary" className="mt-3" onClick={onDone}>
+          Back
+        </Button>
+      </>
+    )
+  if (state.kind === "waiting") {
+    const cmd = pairCommands(state.pairing.code)
+    return (
+      <>
+        <p className="text-ui leading-normal text-ink-2">Paste this into a terminal on the computer. It installs kiwi and pairs it with this app:</p>
+        <Command text={cmd.install} label="Copy the install command" />
+        <p className="mt-3 text-ui leading-normal text-ink-2">Already has kiwi? Run this instead:</p>
+        <Command text={cmd.pair} label="Copy the pair command" />
+        <div className="mt-4 flex items-center gap-3">
+          <Spinner />
+          <span className="text-ui text-ink-2">Waiting for the computer…</span>
+        </div>
+        <Button variant="ghost" className="mt-3 -ml-3.5" onClick={onDone}>
+          Cancel
+        </Button>
+      </>
+    )
+  }
+  const { pairing, ask } = state
+  const answer = async (accept: boolean) => {
+    setBusy(true)
     try {
-      const token = await auth.token()
-      if (!token) throw new Error("Sign in first.")
-      await confirmComputer(pk, token)
-      setState("done")
+      const r = await pairing.answer(accept)
+      if (accept && r) toast(`Paired ${ask.label}`)
+      onDone()
     } catch (err) {
-      setError(errorText(err))
-      setState("error")
+      setState({ kind: "error", message: errorText(err) })
+    } finally {
+      setBusy(false)
     }
   }
-
   return (
-    <div className="flex h-svh flex-col">
-      <header className="flex h-[56px] shrink-0 items-center px-5">
-        <Wordmark className="text-title" />
-      </header>
-      <div className="flex flex-1 items-center justify-center p-8">
-        <div className="w-full max-w-[380px]">
-          <h2 className="text-display leading-tight font-semibold tracking-[-0.02em]">Link this computer to your account?</h2>
-          <p className="mt-2 text-body leading-normal text-ink-2">
-            Agents you start on <span className="font-medium text-ink">{info?.label ?? "it"}</span> will ask to join channels as yours, and each channel’s owner approves them.
-          </p>
-          {state === "loading" && <Spinner className="mt-6" />}
-          {state === "ready" && (
-            <>
-              <p className="mt-6 text-ui text-ink-2">Check that your terminal shows this code:</p>
-              <div className="my-5 text-[44px] leading-none font-semibold tracking-[0.04em] tabular-nums">{code}</div>
-              {auth.status === "signed-in" ? (
-                <div className="flex gap-2">
-                  <Button size="lg" onClick={() => void confirm()}>
-                    Yes, link it
-                  </Button>
-                  <Button size="lg" variant="secondary" onClick={onDone}>
-                    Cancel
-                  </Button>
-                </div>
-              ) : auth.status === "loading" ? (
-                <Spinner />
-              ) : (
-                <Button size="lg" onClick={auth.signIn}>
-                  Sign in to continue
-                </Button>
-              )}
-              {auth.status === "signed-in" && <p className="mt-6 text-meta text-ink-3">Signed in as {displayName(auth.user)}. Only confirm a code you just saw in your own terminal.</p>}
-            </>
-          )}
-          {state === "working" && <Spinner className="mt-6" />}
-          {state === "done" && (
-            <>
-              <p className="mt-6 text-body">Linked. Your terminal continues on its own; you can close this tab.</p>
-              <p className="mt-2 text-ui text-ink-2">
-                Agents you start there ask to join, and you approve them. Approving the first one in a channel can let later agents from {info?.label ?? "it"} into that channel on their own.
-              </p>
-              <Button size="lg" variant="secondary" className="mt-4" onClick={onDone}>
-                Go to your channels
-              </Button>
-            </>
-          )}
-          {state === "error" && <p className="mt-6 text-ui text-alert">{error}</p>}
-        </div>
+    <>
+      <p className="text-ui leading-normal text-ink-2">
+        <span className="font-medium text-ink">{ask.label}</span> ({ask.os}) asks to pair. Pair it only if you just ran the command on it yourself: its agents will join your channels as yours.
+      </p>
+      <div className="mt-4 flex gap-2">
+        <Button disabled={busy} onClick={() => void answer(true)}>
+          {busy ? <Spinner className="border-white/30 border-t-white" /> : "Pair"}
+        </Button>
+        <Button variant="secondary" disabled={busy} onClick={() => void answer(false)}>
+          Not this one
+        </Button>
       </div>
-    </div>
+    </>
   )
 }
 
-const DAY_MS = 86_400_000
-
-/** "Used 3h ago · linked 12d ago", and a warning in its last week. Use is only known to the hour. */
-function usage(c: Computer, now: number): string {
-  const used = c.used === null ? "Not used yet" : now - c.used < 3600_000 ? "Used in the last hour" : `Used ${formatAgo(c.used, now)}`
-  const left = Math.ceil((c.expires - now) / DAY_MS)
-  const expiry = left <= 7 ? ` · unlinks in ${left <= 1 ? "a day" : `${left} days`} unless used` : ""
-  return `${used} · linked ${formatAgo(c.linked, now)}${expiry}`
-}
-
-/** Your linked computers, with a way to remove any of them. */
+/** Your paired computers: add one, or remove one (and its agents from your channels). */
 export function ComputersModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const auth = useAuth()
-  const [list, setList] = useState<Computer[] | null>(null)
-  const [fetchFor, setFetchFor] = useState({ open, auth })
-  if (fetchFor.open !== open || fetchFor.auth !== auth) {
-    setFetchFor({ open, auth })
-    setList(null)
+  const { computers } = useSecrets()
+  const [adding, setAdding] = useState(false)
+  const [removing, setRemoving] = useState<string | null>(null)
+  const [wasOpen, setWasOpen] = useState(open)
+  if (wasOpen !== open) {
+    setWasOpen(open)
+    if (!open) setAdding(false)
   }
 
-  useEffect(() => {
-    if (!open) return
-    let cancelled = false
-    void auth
-      .token()
-      .then((t) => (t ? myComputers(t) : []))
-      .then((rows) => {
-        if (!cancelled) setList(rows)
-      })
-      .catch(() => {
-        if (!cancelled) setList([])
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [open, auth])
-
-  const remove = async (c: Computer) => {
+  const inApp = !!bridge()
+  const [adoptingHere, setAdoptingHere] = useState(false)
+  const addHere = async () => {
+    setAdoptingHere(true)
     try {
-      const t = await auth.token()
-      if (!t) throw new Error("Sign in first.")
-      // Unlinked first: from then on the relay refuses its seats, before any channel is told.
-      await removeComputer(c.pk, t)
-      const gone = await revokeEverywhere(c.pk, auth.token)
-      setList((l) => l?.filter((x) => x.pk !== c.pk) ?? null)
-      toast(`Removed ${c.label}${gone.length > 1 ? ", and the agents it let in" : ""}`)
+      const c = await adoptThisComputer()
+      if (c) toast(`Added ${c.label}`)
+    } catch (err) {
+      toast(`Not added: ${errorText(err)}`, "error")
+    } finally {
+      setAdoptingHere(false)
+    }
+  }
+
+  const remove = async (c: ComputerView) => {
+    setRemoving(c.machinePk)
+    try {
+      const gone = await removeComputer(c.machinePk)
+      toast(`Removed ${c.label}${gone.length ? `, and ${gone.length === 1 ? "its agent" : `its ${gone.length} agents`} in your channels` : ""}`)
     } catch (err) {
       toast(errorText(err), "error")
+    } finally {
+      setRemoving(null)
     }
   }
 
@@ -158,26 +134,51 @@ export function ComputersModal({ open, onClose }: { open: boolean; onClose: () =
       <div className="p-5">
         <h2 className="text-title font-semibold">Your computers</h2>
         <p className="mt-1 text-ui leading-normal text-ink-2">
-          Where you let a computer's agents in from now on (when approving its first agent in a channel), its later agents come into that channel on their own, each shown as joined via that computer. A computer unused for 30 days is unlinked on its own. Removing one also removes every agent it let in.
+          Agents on a paired computer join your channels as yours: Kiwi lets them in on its own while it runs. Removing a computer also takes its agents out of the channels you own.
         </p>
         <div className="mt-4 grid gap-1">
-          {list === null && <Spinner />}
-          {list?.length === 0 && <p className="text-ui text-ink-3">None yet. Run kiwi setup on a computer to link it.</p>}
-          {list?.map((c) => (
-            <div key={c.pk} className="rounded-ctl py-1.5">
-              <div className="flex items-center gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-ui font-medium">{c.label}</p>
-                  <p className="text-meta text-ink-3">{usage(c, clockNow())}</p>
+          {adding ? (
+            <AddComputer onDone={() => setAdding(false)} />
+          ) : (
+            <>
+              {/* In the app, this computer belongs on the list: if adding it at start didn't work, say so and offer it. */}
+              {inApp && !computers.some((c) => c.own) && (
+                <div className="flex items-center gap-3 rounded-ctl py-1.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-ui font-medium">This computer</p>
+                    <p className="text-meta text-ink-3">Not added yet, so its agents ask to join like anyone else’s.</p>
+                  </div>
+                  <Button size="sm" variant="secondary" disabled={adoptingHere} onClick={() => void addHere()}>
+                    Add this computer
+                  </Button>
                 </div>
-                <Button size="sm" variant="danger" onClick={() => void remove(c)}>
-                  Remove
-                </Button>
-              </div>
-            </div>
-          ))}
+              )}
+              {!inApp && computers.length === 0 && <p className="text-ui text-ink-3">None yet.</p>}
+              {computers.map((c) => (
+                <div key={c.machinePk} className="flex items-center gap-3 rounded-ctl py-1.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-ui font-medium">
+                      {c.label}
+                      {c.own && <span className="font-normal text-ink-3"> · this computer</span>}
+                    </p>
+                    <p className="text-meta text-ink-3">
+                      {c.os} · paired {formatAgo(c.at, clockNow())}
+                    </p>
+                  </div>
+                  <Button size="sm" variant="danger" disabled={removing === c.machinePk} onClick={() => void remove(c)}>
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </>
+          )}
         </div>
-        <div className="mt-5 flex justify-end">
+        <div className="mt-5 flex justify-end gap-2">
+          {!adding && (
+            <Button variant="secondary" onClick={() => setAdding(true)}>
+              Add a computer
+            </Button>
+          )}
           <Button variant="secondary" onClick={onClose}>
             Done
           </Button>

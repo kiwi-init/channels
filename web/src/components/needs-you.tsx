@@ -1,32 +1,27 @@
-import { ArrowDown01Icon, Cancel01Icon } from "@hugeicons/core-free-icons"
+import { ArrowDown01Icon } from "@hugeicons/core-free-icons"
 import { useEffect, useRef, useState, type ReactNode } from "react"
 
 import { freeAgentName, nameKey, type JoinRequest } from "@mc/membership.ts"
 import type { Message } from "@mc/protocol.ts"
 import { TOO_MANY_REQUESTS } from "@mc/sas.ts"
 import { taskId, type Task } from "@mc/state.ts"
-import { useAuth } from "@/lib/auth"
 import { excerpt, formatAgo } from "@/lib/format"
 import { cx } from "@/lib/utils"
 import { useControls } from "./controls"
 import { Icon } from "./icon"
-import { Button, IconButton, Monogram, TextField, errorText, toast } from "./kit"
-import { defaultScopes, SeatPicker } from "./scopes"
-
-/** Agents a computer let in since this view opened, by the computer's name. */
-export type JoinedVia = Map<string, number>
+import { Button, Monogram, TextField, errorText, toast } from "./kit"
+import { defaultScopes } from "./scopes"
+import { AgentFacts } from "./agent-facts"
 
 /**
  * The one place a person acts: who wants in, what agents escalated to them, work waiting on their
- * review, and agents their computers let in. Everything else the channel just says.
+ * review. Everything else the channel just says.
  */
 export function NeedsYou({
   now,
   roomId,
   escalations,
   reviews,
-  joinedVia,
-  onDismissJoined,
   nameOf,
   onReply,
   onApproveTask,
@@ -40,8 +35,6 @@ export function NeedsYou({
   escalations: Message[]
   /** Tasks in review that this person may approve. */
   reviews: Task[]
-  joinedVia: JoinedVia
-  onDismissJoined: () => void
   nameOf: (name: string) => string
   onReply: (m: Message, text: string) => Promise<void>
   onApproveTask: (t: Task) => Promise<void>
@@ -69,21 +62,6 @@ export function NeedsYou({
     ...requests.map((r) => ({ key: `r${r.id}`, summary: `${r.name} wants to join`, node: <RequestItem r={r} roomId={roomId} now={now} /> })),
     ...escalations.map((m) => ({ key: `e${m.seq}`, summary: `${nameOf(m.from)} needs a decision`, node: <EscalationItem m={m} now={now} nameOf={nameOf} onReply={onReply} onJump={(seq) => (setOpen(false), onJump(seq))} /> })),
     ...reviews.map((t) => ({ key: `t${t.id}`, summary: `${taskId(t.id)} is ready for review`, node: <ReviewItem t={t} nameOf={nameOf} onApprove={onApproveTask} onSendBack={onSendBack} onOpen={(id) => (setOpen(false), onOpenTask(id))} /> })),
-    ...(joinedVia.size
-      ? [
-          {
-            key: "via",
-            summary: [...joinedVia].map(([computer, n]) => `${n === 1 ? "An agent" : `${n} agents`} joined via ${computer}`).join(" · "),
-            node: (
-              <Row lead={<Monogram name="+" agent size={24} />} title={[...joinedVia].map(([computer, n]) => `${n === 1 ? "An agent" : `${n} agents`} joined via ${computer}`).join(" · ")} detail="Your computer let them in. Remove one from the details if it shouldn’t be here.">
-                <IconButton label="Dismiss" className="size-7" onClick={onDismissJoined}>
-                  <Icon icon={Cancel01Icon} size={14} />
-                </IconButton>
-              </Row>
-            ),
-          },
-        ]
-      : []),
   ]
   if (!items.length) return null
   const n = items.length
@@ -132,25 +110,12 @@ function Row({ lead, title, detail, children }: { lead: ReactNode; title: ReactN
 /** Someone asking to join: compare the code, then one click. Whether it can only read is the default this browser keeps; "Choose…" to change it. */
 function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: number }) {
   const { p, busy, run, ask } = useControls()
-  const auth = useAuth()
   // A name someone here took since the request was listed (a race: a taken name usually comes offered as a free one): let it in under another.
   const taken = r.kind !== "human" && p.roster.some((m) => m.active && nameKey(m.name) === nameKey(r.name))
   const [rename, setRename] = useState(() => (taken ? freeAgentName(r.name, p.roster) : ""))
-  // Its computer's first agent here: one tap lets that computer's later ones in too (owner's pick, #1340).
-  // Ticked to begin with only for a computer the relay says is the owner's: anyone can name theirs anything.
-  const [seat, setSeat] = useState(!!r.computer?.own)
-  const from = r.computer ? `from ${r.computer.label}` : "from their computer"
-  const who = r.kind === "human" ? `Signed in as ${r.sponsoredBy?.name ?? "someone"}` : r.sponsoredBy ? `Agent for ${r.sponsoredBy.name}, ${from}` : r.computer ? `An agent ${from}` : "An agent"
+  // Whose computer it runs on, from its verified computer claim (not the relay's word).
+  const who = r.kind === "human" ? (r.person ? `A person · key ${r.person.slice(0, 8)}` : "A person") : r.computer ? `An agent on ${r.computer.personName}’s ${r.computer.label}` : "An agent"
   const lead = <Monogram name={r.name} agent={r.kind !== "human"} size={24} />
-  if (auth.status === "signed-out") {
-    return (
-      <Row lead={lead} title={<><span className="font-medium">{r.name}</span> wants to join</>} detail={who}>
-        <Button size="sm" variant="secondary" onClick={auth.signIn}>
-          Sign in to review
-        </Button>
-      </Row>
-    )
-  }
   return (
     <Row
       lead={lead}
@@ -163,15 +128,13 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
       detail={
         <>
           {who} · asked {formatAgo(r.ts, now)}
-          {/* What it says runs it: letting it in signs this into its seat, so it's worth a look before the code. */}
-          {r.kind !== "human" && <span className="block">{r.runs ? `Runs ${r.runs.harness} · ${r.runs.model}` : "Says nothing about what runs it"}</span>}
+          {r.kind !== "human" && <AgentFacts card={r.card} said className="mt-1" />}
           {r.check === "ready" && r.code && (
             <span className="mt-1.5 flex items-baseline gap-2">
               <span>Let in only if {r.kind === "human" ? "they see" : "its terminal shows"}</span>
               <span className="text-title font-semibold tracking-[0.04em] text-ink tabular-nums">{r.code}</span>
             </span>
           )}
-          {r.check === "ready" && r.code && r.computer && <SeatPicker computer={r.computer.label} value={seat} onChange={setSeat} disabled={busy} className="mt-1.5" />}
         </>
       }
     >
@@ -181,7 +144,7 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
           onSubmit={(e) => {
             e.preventDefault()
             const name = rename.trim()
-            if (name) void run(() => p.onApprove({ ...r, name }, defaultScopes(roomId), seat), `${r.name} joined as ${name}`)
+            if (name) void run(() => p.onApprove({ ...r, name }, defaultScopes(roomId)), `${r.name} joined as ${name}`)
           }}
         >
           <span className="text-meta text-ink-2">{r.name} is taken here. It matches: let in as</span>
@@ -192,7 +155,7 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
         </form>
       ) : r.check === "ready" ? (
         <>
-          <Button size="sm" variant="secondary" disabled={busy} onClick={() => run(() => p.onApprove(r, defaultScopes(roomId), seat), `${r.name} joined`)}>
+          <Button size="sm" variant="secondary" disabled={busy} onClick={() => run(() => p.onApprove(r, defaultScopes(roomId)), `${r.name} joined`)}>
             It matches: let in
           </Button>
           <Button size="sm" variant="ghost" onClick={() => ask({ kind: "approve", req: r })}>

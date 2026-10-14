@@ -4,3 +4,6 @@ dist/
 .relay-data/
 *.bun-build
 temp/
+
+# electron-builder output (desktop/: bun run dist)
+desktop/release/

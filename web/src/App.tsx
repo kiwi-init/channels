@@ -1,52 +1,49 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 
 import { Boundary, Toaster } from "@/components/kit"
-import { ComputersModal, LinkComputerPage } from "@/components/computers"
-import { AddDeviceModal, TakeChannelsPage } from "@/components/devices"
+import { ComputersModal } from "@/components/computers"
+import { FirstRun } from "@/components/first-run"
 import { ChannelGate, JoinWithCode, NewChannel, Welcome } from "@/components/onboarding"
 import { ChannelIconTile } from "@/components/channel-icon"
 import { Sidebar } from "@/components/sidebar"
+import { ListControls } from "@/components/chrome"
 import { useIcons } from "@/lib/icons"
 import { Palette, usePaletteShortcut, type Command } from "@/components/ui/palette"
-import { Add01Icon, ChartColumnIcon, ComputerIcon, Login01Icon, Moon02Icon, Settings01Icon, SmartPhone01Icon, Sun03Icon } from "@hugeicons/core-free-icons"
+import { Add01Icon, ComputerIcon, Login01Icon, Moon02Icon, Settings01Icon, SidebarLeftIcon, Sun03Icon } from "@hugeicons/core-free-icons"
 import { Icon, type IconSvgElement } from "@/components/icon"
 import { SettingsModal } from "@/components/settings"
-import { UsageModal } from "@/components/usage"
-import { PasskeysSheet } from "@/components/vault"
-import { displayName, useAuth } from "@/lib/auth"
+import { useAutoApproval } from "@/lib/approval"
+import { adoptThisComputer } from "@/lib/computers"
 import { parseHash, useChannelList } from "@/lib/channel"
-import { parseLinkHash } from "@/lib/computers"
 import { newsTotal, rowNews, startMarks, useMarks, useNewsKeys, useOpenNews, useTabNews } from "@/lib/news"
-import { readOfferHash } from "@/lib/devices"
 import { formatShort } from "@/lib/format"
 import { setAppearance } from "@/lib/theme"
-import { useUsage } from "@/lib/usage"
-import { startVault } from "@/lib/vault"
+import { useSecrets } from "@/lib/secrets"
+import { toggleSidebar, useSidebarOpen, useSidebarShortcut } from "@/lib/sidebar"
 import { cx } from "@/lib/utils"
 
-// The join code (and optionally a signing identity) live in the URL
-// fragment, which browsers never send to the server.
-function readHash() {
-  const parsed = parseHash(location.hash)
-  // Don't leave a private key sitting in the address bar or history.
-  if (parsed.identity) history.replaceState(null, "", `#${encodeURIComponent(parsed.code)}`)
-  return parsed
-}
+// The join code lives in the URL fragment, which never leaves the app.
+const readHash = () => parseHash(location.hash)
 
 const open = (code: string) => (location.hash = encodeURIComponent(code))
 
 export default function App() {
-  const auth = useAuth()
-  const [link, setLink] = useState(() => parseLinkHash(location.hash))
-  const [offer, setOffer] = useState(readOfferHash)
-  const [{ code, identity }, setHash] = useState(readHash)
-  const [sheet, setSheet] = useState<"new" | "join" | "computers" | "usage" | "device" | "passkeys" | "settings" | null>(null)
-  const rows = useChannelList(auth.status === "signed-in", auth.token)
+  const person = useSecrets().person
+  const [{ code }, setHash] = useState(readHash)
+  const [sheet, setSheet] = useState<"new" | "join" | "computers" | "settings" | null>(null)
+  const rows = useChannelList()
   const icons = useIcons()
-  const usage = useUsage(auth.status === "signed-in", auth.token)
   const [palette, setPalette] = useState(false)
   usePaletteShortcut(useCallback(() => setPalette(true), []))
-  const signedIn = auth.status === "signed-in"
+  useSidebarShortcut()
+  const listOpen = useSidebarOpen()
+  // Every owned channel, watched in the background: your computers' agents in, a notification otherwise.
+  useAutoApproval(rows)
+  // The app's own computer joins the list once there's a person to certify it (lib/computers.ts).
+  const personPk = person?.pk
+  useEffect(() => {
+    if (personPk) void adoptThisComputer().catch(() => {})
+  }, [personPk])
 
   // What's new where: a dot per channel, the total in the tab, Alt+↑/↓ through the ones with news.
   const marks = useMarks()
@@ -76,31 +73,19 @@ export default function App() {
     const act = (id: string, label: string, icon: IconSvgElement, run: () => void) => list.push({ id, group: "Actions", label, run, leading: lead(icon) })
     act("new", "New channel", Add01Icon, () => setSheet("new"))
     act("join", "Join with a code", Login01Icon, () => setSheet("join"))
-    if (signedIn) {
-      act("computers", "Your computers", ComputerIcon, () => setSheet("computers"))
-      act("device", "Add a device", SmartPhone01Icon, () => setSheet("device"))
-    }
-    if (usage) act("usage", "Usage", ChartColumnIcon, () => setSheet("usage"))
-    if (auth.status === "signed-out") act("signin", "Sign in", Login01Icon, auth.signIn)
+    act("computers", "Your computers", ComputerIcon, () => setSheet("computers"))
     act("settings", "Settings", Settings01Icon, () => setSheet("settings"))
+    act("sidebar", "Show or hide the list", SidebarLeftIcon, toggleSidebar)
     list.push(
       { id: "light", group: "Appearance", label: "Light", run: () => setAppearance("light"), leading: lead(Sun03Icon) },
       { id: "dark", group: "Appearance", label: "Dark", run: () => setAppearance("dark"), leading: lead(Moon02Icon) },
       { id: "system", group: "Appearance", label: "System", run: () => setAppearance("system"), leading: lead(ComputerIcon) }
     )
     return list
-  }, [rows, icons, signedIn, usage, auth.status, auth.signIn])
-
-  // Signed in, the vault brings this person's channels to this browser.
-  const user = auth.status === "signed-in" ? auth.user : null
-  useEffect(() => {
-    void startVault(user ? { user: user.id, email: user.email, name: displayName(user), token: auth.token } : null)
-  }, [user, auth.token])
+  }, [rows, icons])
 
   useEffect(() => {
     const onHash = () => {
-      setLink(parseLinkHash(location.hash))
-      setOffer(readOfferHash())
       setHash(readHash())
     }
     window.addEventListener("hashchange", onHash)
@@ -109,27 +94,16 @@ export default function App() {
 
   const close = () => {
     history.replaceState(null, "", location.pathname)
-    setHash({ code: "", identity: null })
+    setHash({ code: "" })
   }
 
   return (
     <>
-      {offer ? (
-        <TakeChannelsPage
-          offer={offer}
-          onDone={() => {
-            history.replaceState(null, "", location.pathname)
-            setOffer(null)
-          }}
-        />
-      ) : link ? (
-        <LinkComputerPage
-          link={link}
-          onDone={() => {
-            history.replaceState(null, "", location.pathname)
-            setLink(null)
-          }}
-        />
+      {!person ? (
+        <>
+          <div aria-hidden className="drag fixed inset-x-0 top-0 z-10 h-(--chrome-h)" />
+          <FirstRun />
+        </>
       ) : (
         <div className="flex h-svh overflow-clip">
           <Sidebar
@@ -138,31 +112,31 @@ export default function App() {
             active={code}
             onSelect={open}
             onNew={() => setSheet("new")}
-            onJoin={() => setSheet("join")}
             onComputers={() => setSheet("computers")}
-            onAddDevice={() => setSheet("device")}
-            onPasskeys={() => setSheet("passkeys")}
             onSettings={() => setSheet("settings")}
-            usage={usage}
-            onUsage={() => setSheet("usage")}
-            onPalette={() => setPalette(true)}
-            className={code ? "hidden md:flex" : "flex"}
+            // A phone shows the list or a channel; a wide window shows both, unless the list is hidden.
+            className={cx(code ? "hidden" : "flex", listOpen ? "md:flex" : "md:hidden")}
           />
-          {/* The app: one inset panel on the frame (edge to edge on a phone). */}
-          <main className={cx("min-w-0 flex-1 overflow-clip bg-canvas", code ? "flex" : "hidden md:flex")}>
+          {/* The app: the conversation beside the list, in the same colour, under the same header row. */}
+          <main className={cx("relative min-w-0 flex-1 overflow-clip bg-canvas", code ? "flex" : "hidden md:flex")}>
+            {/* No conversation, no header: the top row still moves the window. */}
+            {!code && <div aria-hidden className="drag absolute inset-x-0 top-0 h-(--chrome-h)" />}
             {code ? (
               <Boundary resetKey={code}>
-                <ChannelGate key={code} code={code} identity={identity} listed={rows.find((r) => r.code === code)} onBack={close} onGone={close} />
+                <ChannelGate key={code} code={code} listed={rows.find((r) => r.code === code)} onBack={close} onGone={close} />
               </Boundary>
             ) : (
               <Welcome onNew={() => setSheet("new")} onJoin={() => setSheet("join")} />
             )}
+            {/* Last in the document, not just on top: the desktop app works out what drags the window
+                in document order, whatever the z-index, so a header after these would swallow their clicks. */}
+            <ListControls onNew={() => setSheet("new")} onJoin={() => setSheet("join")} />
           </main>
         </div>
       )}
       <NewChannel
         open={sheet === "new"}
-        usage={usage}
+        onJoin={() => setSheet("join")}
         onClose={() => setSheet(null)}
         onCreated={(c) => {
           setSheet(null)
@@ -178,9 +152,6 @@ export default function App() {
         }}
       />
       <ComputersModal open={sheet === "computers"} onClose={() => setSheet(null)} />
-      {sheet === "device" && <AddDeviceModal onClose={() => setSheet(null)} />}
-      <PasskeysSheet open={sheet === "passkeys"} onClose={() => setSheet(null)} />
-      <UsageModal open={sheet === "usage"} onClose={() => setSheet(null)} usage={usage} rows={rows} />
       <SettingsModal open={sheet === "settings"} onClose={() => setSheet(null)} />
       <Palette open={palette} onClose={() => setPalette(false)} commands={commands} />
       <Toaster />

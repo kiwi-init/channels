@@ -1,5 +1,6 @@
-// Dev sign-in: a local relay where "dev:<name>" is <name>, so the signed-in flows
-// (owner, vouched agents, vault) can be tested end to end without WorkOS.
+// Dev sign-in: a local relay where "dev:<name>" is <name>, so the create gate can be
+// tested end to end without WorkOS. Sign-in gates only creation: every owner act takes
+// the owner key's signature alone.
 
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -8,11 +9,10 @@ import { join } from "node:path";
 import { Channel, relayConfig } from "../src/client.ts";
 import { decodeJoinCode } from "../src/crypto.ts";
 import { generateIdentity } from "../src/identity.ts";
-import { newMachine, registerMachine, vouchFor } from "../src/machine.ts";
+import { claimComputer, provePerson } from "../src/person.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { devHostOk, devHumanAuth } from "../src/relay/human.ts";
-import { fetchVault, newVault, putVault } from "../src/vault.ts";
-import { checked } from "./check.ts";
+import { joinAgent, joinPerson, pairComputer, setupChannel } from "./owner.ts";
 
 setDefaultTimeout(30_000);
 
@@ -43,42 +43,32 @@ test("the relay says it's dev, and dev tokens are the only ones it takes", async
   for (const bad of ["alice", "dev:", "dev:../x", "dev:a b", "Bearer dev:alice"]) expect(await auth.verify(bad)).toBeNull();
 });
 
-test("a signed-in owner, a vouched agent and a vault, end to end", async () => {
+test("creating needs a session; everything after takes the owner key alone", async () => {
   const owner = await generateIdentity("alice");
+  await expect(Channel.create(relay, owner, { name: "alice", kind: "human" })).rejects.toMatchObject({ status: 401 });
   const { code, access } = await Channel.create(relay, owner, { name: "alice", kind: "human" }, [], undefined, "dev:alice");
-  const ownerCh = new Channel(access, relay, owner, undefined, async () => "dev:alice");
-
-  // alice links her computer, and an agent joins from it, vouched for.
-  const m = await newMachine(relay);
-  await registerMachine(m);
-  const confirmed = await fetch(`${relay}/v1/machines/${m.identity.pk}/confirm`, { method: "POST", headers: { "x-human-token": "dev:alice" }, body: "{}" });
-  expect(confirmed.ok).toBe(true);
-  const agent = await generateIdentity("win");
-  const ask = await Channel.requestJoin(relay, code, agent, { name: "win" }, null, await vouchFor({ ...m, linked: { name: null, at: Date.now() } }, decodeJoinCode(code).roomId, agent.pk));
-  const [req] = await checked(ownerCh, relay, code, [{ id: agent, requestId: ask.requestId }]);
-  expect(req!.sponsoredBy?.user).toBe("dev_alice");
-  const admitted = await ownerCh.approve(req!);
-  expect(admitted.sponsor?.name).toBe("Alice (dev)");
-
-  // Owner actions still need the session: without it, nothing.
-  const noSession = new Channel(access, relay, owner);
-  await expect(noSession.rotate()).rejects.toThrow();
-
-  // Her vault, saved and read back as her.
-  const v = await newVault("dev_alice", { channels: [], gone: {} }, { kind: "passkey", label: "test", secret: crypto.getRandomValues(new Uint8Array(32)), credentialId: "c" });
-  expect(await putVault(relay, "dev:alice", "dev_alice", 0, v.blob, v.writer, v.writer.pk)).toEqual({ version: 1 });
-  expect((await fetchVault(relay, "dev:alice"))?.version).toBe(1);
-  expect(await fetchVault(relay, "dev:bob")).toBeNull();
+  const ownerCh = new Channel(access, relay, owner);
+  // No session anywhere: the owner still rotates and closes.
+  await ownerCh.rotate();
+  expect(ownerCh.access.epoch).toBe(1);
+  await ownerCh.close();
+  await expect(Channel.requestJoin(relay, code, await generateIdentity("late"), { name: "late" })).rejects.toThrow();
 });
 
-test("a dev token is refused unless the request comes straight from this machine", async () => {
-  const get = (headers: Record<string, string>) => fetch(`${relay}/v1/me/vault`, { headers: { "x-human-token": "dev:alice", ...headers } });
-  expect((await get({})).status).not.toBe(403);
-  // Passed on by a reverse proxy on this machine, or asked for under a public name: no.
-  const proxied: Record<string, string>[] = [{ "x-forwarded-for": "203.0.113.9" }, { forwarded: "for=203.0.113.9" }, { "x-real-ip": "203.0.113.9" }, { via: "1.1 caddy" }, { host: "relay.example.com" }];
-  for (const h of proxied) {
-    const res = await get(h);
-    expect(res.status).toBe(403);
-    expect(await res.text()).toContain("only takes requests made on this machine");
-  }
+test("agents join with a computer claim and people with a person claim; nobody needs a session", async () => {
+  const s = await setupChannel(relay, { human: "dev:alice" });
+  const computer = await pairComputer(s.person, "dev box");
+  const { member } = await joinAgent(s, "win", computer);
+  expect(member).toMatchObject({ name: "win", kind: "agent", sponsor: { user: s.person.pk }, from: { pk: computer.machine.pk, label: "dev box" } });
+  const bob = await generateIdentity("bob-person");
+  const joined = await joinPerson(s, "bob", bob);
+  expect(joined.member).toMatchObject({ name: "bob", kind: "human", person: bob.pk });
+  // The requests carry no relay vouch: what the owner saw came from the sealed claims.
+  const agent = await generateIdentity("unclaimed");
+  const roomId = decodeJoinCode(s.code).roomId;
+  const badClaim = await claimComputer(computer.machine, computer.cert, roomId, (await generateIdentity("other")).pk);
+  const { requestId } = await Channel.requestJoin(relay, s.code, agent, { name: "unclaimed" }, { computer: badClaim });
+  const [req] = (await s.ownerCh.requests({ person: s.person.pk })).filter((r) => r.id === requestId);
+  expect(req?.computer).toBeUndefined();
+  await s.ownerCh.deny(requestId);
 });

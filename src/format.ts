@@ -59,7 +59,6 @@ export function looksLikeLine(ids: number[]): string {
  * by title as well as id.
  */
 /** " via mac-mini": the computer that let an agent in, as its join reads. */
-const via = (name: string | undefined) => (name ? ` via ${inlineText(name, 40)}` : "");
 
 export function describeEvent(m: Message, state?: ChannelState): string {
   const ev = m.ev;
@@ -76,7 +75,7 @@ export function describeEvent(m: Message, state?: ChannelState): string {
       const who = state?.members.get(m.from);
       const role = ev.role && (who?.owner || who?.role === ev.role) ? ev.role : undefined;
       const about = ev.about && (who?.owner || who?.about === ev.about) ? ev.about : undefined;
-      return `joined${role ? ` as ${role}` : ""}${about ? ` (${about})` : ""}${via(who?.viaName)}`;
+      return `joined${role ? ` as ${role}` : ""}${about ? ` (${about})` : ""}`;
     }
     case "role.set":
       return ev.role ? `made ${ev.member} ${ev.role}${ev.about ? ` (${ev.about})` : ""}` : `cleared ${ev.member}'s role`;
@@ -151,9 +150,10 @@ export function cardLine(c: Card | undefined): string {
   if (!c) return "";
   const where = c.repo ? `${inlineText(c.repo, 80)}${c.branch ? `@${inlineText(c.branch, 80)}` : ""}` : "";
   const parts = [
-    [c.os, c.arch].filter(Boolean).map((x) => inlineText(x, 40)).join(" "),
-    inlineText(c.harness, 40),
     inlineText(c.model, 60),
+    inlineText(c.harness, 40),
+    [c.os, c.arch].filter(Boolean).map((x) => inlineText(x, 40)).join(" "),
+    [c.cpu, c.memory].filter(Boolean).map((x) => inlineText(x, 60)).join(", "),
     where,
     c.tools?.length ? `tools: ${c.tools.map((t) => inlineText(t, 40)).join(", ")}` : "",
     inlineText(c.note, 200),

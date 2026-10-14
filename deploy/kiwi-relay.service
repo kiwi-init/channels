@@ -9,7 +9,7 @@ Type=simple
 # Before enabling:
 #   useradd --system --create-home --home-dir /var/lib/kiwi kiwi
 #   clone the repo to /opt/kiwi, then:
-#   bun install --frozen-lockfile --production && bun run web:build
+#   bun install --frozen-lockfile --production
 User=kiwi
 Group=kiwi
 WorkingDirectory=/opt/kiwi

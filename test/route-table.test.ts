@@ -8,16 +8,8 @@ test("every route declares its check", () => {
     "GET /info public",
     "POST /create creator",
     "POST /requests joiner",
-    "GET /usage ownerPerson",
     "POST /^\\/requests\\/([0-9a-f-]{36})\\/reveal$/ requester",
-    "POST /pairs requester",
-    "GET /^\\/pairs\\/([0-9a-f-]{36})$/ requester",
-    "POST /^\\/pairs\\/([0-9a-f-]{36})\\/reveal$/ requester",
     "GET /^\\/requests\\/([0-9a-f-]{36})$/ requester",
-    "POST /pairs/slots member",
-    "GET /pairs member",
-    "POST /^\\/pairs\\/([0-9a-f-]{36})\\/nonce$/ member",
-    "PUT /^\\/pairs\\/([0-9a-f-]{36})$/ member",
     "GET / member",
     "GET /messages member",
     "POST /messages member",
@@ -33,8 +25,6 @@ test("every route declares its check", () => {
     "POST /^\\/requests\\/([0-9a-f-]{36})\\/nonce$/ owner",
     "POST /^\\/requests\\/([0-9a-f-]{36})\\/deny$/ owner",
     "POST /members owner",
-    "POST /seats owner",
-    "POST /admit admitter",
     "DELETE /^\\/members\\/([A-Za-z0-9_-]{20,})$/ owner",
     "PUT /^\\/members\\/([A-Za-z0-9_-]{20,})\\/record$/ owner",
     "PUT /^\\/members\\/([A-Za-z0-9_-]{20,})\\/post$/ owner",
@@ -49,27 +39,31 @@ test("the only public room route is the one meant to be", () => {
   expect(routeTable.filter((r) => r.guard === "public").map((r) => `${r.method} ${r.path}`)).toEqual(["GET /info"]);
 });
 
-test("a person's routes declare their checks too, and only the link page is public", async () => {
-  const { vaultRouteTable } = await import("../src/relay/vault.ts");
-  const { deviceRouteTable } = await import("../src/relay/devices.ts");
-  const { machineRouteTable } = await import("../src/relay/machines.ts");
-  const rows = [...vaultRouteTable, ...deviceRouteTable, ...machineRouteTable].map((r) => `${r.method} ${r.path} ${r.guard}`);
-  expect(rows).toEqual([
-    "GET /v1/me/vault person",
-    "PUT /v1/me/vault person",
-    "DELETE /v1/me/vault person",
-    "POST /v1/me/devices/transfers person",
-    "HEAD /^\\/v1\\/me\\/devices\\/transfers\\/([0-9a-f-]{36})$/ person",
-    "GET /^\\/v1\\/me\\/devices\\/transfers\\/([0-9a-f-]{36})$/ person",
-    "DELETE /^\\/v1\\/me\\/devices\\/transfers\\/([0-9a-f-]{36})$/ person",
-    "POST /v1/machines selfSigned",
-    "GET /^\\/v1\\/machines\\/([A-Za-z0-9_-]{20,})\\/public$/ public",
-    "POST /^\\/v1\\/machines\\/([A-Za-z0-9_-]{20,})\\/confirm$/ person",
-    "GET /^\\/v1\\/machines\\/([A-Za-z0-9_-]{20,})$/ computer",
-    "DELETE /^\\/v1\\/machines\\/([A-Za-z0-9_-]{20,})$/ computer",
-    "GET /v1/me/machines person",
-    "DELETE /^\\/v1\\/me\\/machines\\/([A-Za-z0-9_-]{20,})$/ person",
-  ]);
-  // The confirm page shows a pending link's label and code to whoever has the link: nothing secret.
-  expect(rows.filter((r) => r.endsWith(" public"))).toEqual(["GET /^\\/v1\\/machines\\/([A-Za-z0-9_-]{20,})\\/public$/ public"]);
+test("0.11: the signed-in person routes, machine links, pairing, seats and usage are gone", async () => {
+  const { startRelay } = await import("../src/relay/bun.ts");
+  const { mkdtempSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dir = mkdtempSync(join(tmpdir(), "kiwi-gone-"));
+  const r = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, human: { clientId: "c", verify: async (t: string) => (t ? t : null) } });
+  try {
+    for (const [method, path] of [
+      ["GET", "/v1/me/channels"],
+      ["GET", "/v1/me/usage"],
+      ["GET", "/v1/me/vault"],
+      ["POST", "/v1/me/devices/transfers"],
+      ["GET", "/v1/me/machines"],
+      ["POST", "/v1/machines"],
+      ["GET", `/v1/machines/${"a".repeat(43)}`],
+    ]) {
+      const res = await fetch(`${r.url.origin}${path}`, { method, headers: { "x-human-token": "user_a" }, body: method === "GET" ? undefined : "{}" });
+      expect(`${method} ${path} ${res.status}`).toBe(`${method} ${path} 404`);
+    }
+    // No room route serves them either: they aren't in the table at all.
+    const paths = routeTable.map((x) => x.path);
+    for (const gone of ["/seats", "/admit", "/usage", "/pairs"]) expect(paths.some((p) => p.includes(gone.slice(1)))).toBe(false);
+  } finally {
+    r.stop(true);
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

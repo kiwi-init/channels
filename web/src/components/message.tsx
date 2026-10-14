@@ -16,14 +16,11 @@ export const isAgent = (m: Pick<Member, "kind"> | undefined) => m?.kind !== "hum
 /** Who wrote a message, as far as the transcript needs to know. */
 export type Author = Pick<Member, "name" | "kind" | "display" | "sponsor">
 
-/**
- * Time passing in the conversation: a small stamp between bubbles, the day set a little heavier. It
- * sits on the bubbles' text edge, with names, event lines and "1 Reply", so the column reads as one.
- */
+/** Time passing in the conversation: a small stamp centred between bubbles, the day set a little heavier, as Messages does. */
 export function TimeMark({ ts }: { ts: number }) {
   const [day, time] = splitStamp(formatStamp(ts))
   return (
-    <div className="mt-6 mb-2 pl-12 select-none">
+    <div className="mt-6 mb-2 text-center select-none">
       <time className="text-stamp text-ink-3" dateTime={new Date(ts).toISOString()} title={formatFull(ts)}>
         <span className="font-semibold text-ink-2">{day}</span>
         {time && <span className="tabular-nums"> {time}</span>}
@@ -62,13 +59,13 @@ export function shortEvent(m: Message, state: ChannelState): string {
   }
 }
 
-/** Something that happened rather than something said: one quiet line on the column, cut short if long. */
+/** Something that happened rather than something said: one quiet line centred on the column, as Messages sets them, cut short if long. */
 export function EventRow({ m, state, now, onOpenTask, openLabel = "Open", more }: { m: Message; state: ChannelState; now: number; onOpenTask?: (id: number) => void; openLabel?: string; more?: ReactNode }) {
   const taskRef = m.ev && "task" in m.ev ? m.ev.task : m.ev?.op === "task.add" ? m.seq : null
   const forged = ignored(state.trust.get(m.seq))
   const full = `${memberName(state.members.get(m.from), m.from)} ${describeEvent(m, state)} · ${formatFull(m.ts)} (${formatAgo(m.rts ?? m.ts, now)})`
   return (
-    <p id={`m${m.seq}`} title={full} className={cx("flex min-w-0 items-baseline gap-1.5 py-[3px] pl-12 text-stamp text-ink-3", forged && "line-through opacity-60")}>
+    <p id={`m${m.seq}`} title={full} className={cx("flex min-w-0 items-baseline justify-center gap-1.5 px-8 py-[3px] text-center text-stamp text-ink-3", forged && "line-through opacity-60")}>
       <span className="min-w-0 truncate">{shortEvent(m, state)}</span>
       {taskRef !== null && onOpenTask && (
         <button type="button" onClick={() => onOpenTask(taskRef)} className="shrink-0 font-medium text-ink-2 hover:text-ink hover:underline">
@@ -181,9 +178,9 @@ export interface ThreadSummary {
 
 /**
  * One message as a bubble: yours on the right in system blue, everyone else's on the left in Messages grey,
- * with their face at the foot of the run. A run reads as one stack: the corners where its
- * bubbles meet, on the sender's side, are tighter. An escalation is a plain bubble with an amber
- * "Decision for you" over it; a forged one (shown only when the owner asks) is struck through.
+ * with their face at the foot of the run. Every bubble is round; the last of a run wears Messages'
+ * tail, pointing at its sender. An escalation is a plain bubble with an amber "Decision for you"
+ * over it; a forged one (shown only when the owner asks) is struck through.
  */
 export const Bubble = memo(function Bubble({ m, me, author, trust, online, first, last, fresh, group, adjacentReply, highlighted, quoted, nameOf, onReply, onJump, thread, onOpenThread, anchor = "m", color, direct, face, receipt }: BubbleProps) {
   const forged = ignored(trust)
@@ -198,8 +195,6 @@ export const Bubble = memo(function Bubble({ m, me, author, trust, online, first
   const decide = !!m.esc
   // Quote what this answers, unless it's the bubble right above.
   const quotes = adjacentReply ? [] : (m.re ?? []).map((seq) => ({ seq, q: quoted(seq) })).filter(({ q }) => !q || q.kind !== "event")
-  // The stacked corners of a run, on the sender's side: tight where a bubble meets the next.
-  const stack = mine ? cx(!first && "rounded-tr-stack", !last && "rounded-br-stack") : cx(!first && "rounded-tl-stack", !last && "rounded-bl-stack")
 
   return (
     <div id={`${anchor}${m.seq}`} className={cx("group/b relative", first ? "mt-3" : "mt-[2px]", fresh && (mine ? "animate-sent" : "animate-arrived"))}>
@@ -237,8 +232,7 @@ export const Bubble = memo(function Bubble({ m, me, author, trust, online, first
             <div
               className={cx(
                 // Code keeps its lines: it scrolls inside the bubble rather than wrapping mid-word like prose.
-                "bubble-text max-w-full min-w-0 rounded-bubble px-3 py-2 text-body [&_pre]:max-w-full [&_pre]:whitespace-pre [&_pre]:[overflow-wrap:normal]",
-                stack,
+                "bubble-text relative isolate max-w-full min-w-0 rounded-bubble px-3.5 py-[7px] text-body [&_pre]:max-w-full [&_pre]:whitespace-pre [&_pre]:[overflow-wrap:normal]",
                 mine
                   ? "bg-bubble-me text-bubble-me-ink [&_a]:text-bubble-me-ink [&_a]:decoration-white/50 [&_code]:bg-white/18 [&_pre]:border-white/15 [&_pre]:bg-black/15 [&_pre]:text-white [&_li]:marker:text-white/70"
                   : "bg-bubble-them text-bubble-them-ink",
@@ -247,6 +241,7 @@ export const Bubble = memo(function Bubble({ m, me, author, trust, online, first
               )}
             >
               <Markdown>{m.body}</Markdown>
+              {last && <Tail mine={mine} />}
             </div>
           )}
 
@@ -315,3 +310,16 @@ export const Bubble = memo(function Bubble({ m, me, author, trust, online, first
     </div>
   )
 })
+
+/**
+ * Messages' tail: a small hook off the last bubble of a run, toward its sender, in the bubble's own
+ * colour. It starts on the bubble's flat bottom (20px in from its edge, past the rounded corner),
+ * fills the corner, and curls out 8px to a point. Behind the text (the bubble isolates it), never over it.
+ */
+function Tail({ mine }: { mine: boolean }) {
+  return (
+    <svg aria-hidden viewBox="0 0 28 20" className={cx("pointer-events-none absolute bottom-0 -z-10 h-5 w-7", mine ? "-right-2 fill-bubble-me" : "-left-2 -scale-x-100 fill-bubble-them")}>
+      <path d="M0 20V0H20C20 9 22 15.5 27.5 19.6C23 20.4 19.5 19.8 16.6 18.3C13.7 16.8 8 20 0 20Z" />
+    </svg>
+  )
+}

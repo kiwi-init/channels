@@ -34,10 +34,11 @@ const info = async (fp?: string) => {
   return { status: res.status, body: (await res.json()) as Record<string, unknown> };
 };
 
-test("with the code's fingerprint: everything, the owner's name included", async () => {
+test("with the code's fingerprint: everything, but no owner name (sign-in is only for creating)", async () => {
   const r = await info(decodeJoinCode(code).ownerFp);
   expect(r.status).toBe(200);
-  expect(r.body.ownerName).toBe("Alice (dev)");
+  expect(r.body.ownerPk).toBeTruthy();
+  expect(r.body.ownerName).toBeUndefined();
 });
 
 test("a wrong fingerprint is answered like a missing room", async () => {
@@ -59,14 +60,14 @@ test("no fingerprint is 426 before any room lookup, and names no owner", async (
 
 test("this client sends it: joining still pins the owner", async () => {
   const joiner = await generateIdentity("win");
-  const ask = await Channel.requestJoin(relay, code, joiner, { name: "win" }, "dev:bob");
+  const ask = await Channel.requestJoin(relay, code, joiner, { name: "win" });
   expect(ask.requestId).toBeTruthy();
 });
 
 test("a probe that doesn't know the owner yet (the dashboard's owner link) passes the code's fingerprint", async () => {
   const probe = new Channel({ roomId, ownerPk: "", ownerXpk: "", epoch: 0, keys: {} }, relay, await generateIdentity("probe"));
   const i = await probe.info(decodeJoinCode(code).ownerFp);
-  expect(i.ownerName).toBe("Alice (dev)");
+  expect(i.ownerPk).toBeTruthy();
   // Without it, the probe is told to update. An empty owner key must not be sent as a fingerprint.
   await expect(probe.info()).rejects.toMatchObject({ status: 426 });
 });

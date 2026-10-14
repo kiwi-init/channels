@@ -10,19 +10,15 @@ import * as Layer from "effect/Layer";
 import { CLOSE_CLOSED, CLOSE_REMOVED, PING, PONG } from "../protocol.ts";
 import { ChannelGone, NotFound, Refused, UpdateRequired } from "./failures.ts";
 import { Human, workosHumanAuth, workosProfiles, type HumanAuth } from "./human.ts";
-import { Handovers, onDeviceHttp, type DeviceStore, type DeviceTransfer } from "./devices.ts";
-import { onVaultHttp, Vaults, vaultSwap, type VaultRecord, type VaultStore } from "./vault.ts";
-import { cloudflareClient, LINK_TTL_MS, Machines, onMachineHttp, type MachineRecord, type MachineStore } from "./machines.ts";
 import { Policy, policyFrom, type RelayPolicy } from "./policy.ts";
 import {
-  Directory as ChannelLists, // the service; the Durable Object below is also called Directory
+  Directory as ChannelLists, // the service; the Durable Object below counts owned channels instead
   RoomDb,
   relayConfig,
   authenticateSocket,
   errorResponse,
   expire,
   idleExpired,
-  readHead,
   missingFingerprint,
   onClientFrame,
   parseRoomPath,
@@ -32,24 +28,26 @@ import {
   type DirectoryEntry,
   type DirectoryUpdate,
   type Effects,
-  type RoomHead,
   type Sql,
 } from "./room.ts";
-import { HEADS_CACHE_SECONDS, makePeople, myChannels, myUsage, type HeadSource, type People } from "./me.ts";
+import { MAILBOX_TTL_MS } from "../mailbox.ts";
+import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
 
 interface Env {
   CHANNELS: DurableObjectNamespace<Channel>;
-  /** One per signed-in person: the channels they own, are in, or have agents in. */
-  PEOPLE: DurableObjectNamespace<Directory>;
+  /** One per signed-in person: the channels they own, for the quota on POST /create. */
+  OWNERS: DurableObjectNamespace<Owners>;
+  /** One per pairing mailbox id: two sealed slots, gone ten minutes after the first write. */
+  MAILBOX: DurableObjectNamespace<MailboxBox>;
   /** When set, channels belong to humans signed in with this WorkOS AuthKit client. */
   WORKOS_CLIENT_ID?: string;
   /** The AuthKit domain (https://….authkit.app), whose keys may also sign tokens. */
   WORKOS_AUTHKIT_DOMAIN?: string;
-  /** Secret: lets the relay vouch for people's real names ("agent of @…"). */
+  /** Secret, optional: lets the beta list match people by email (the relay never names owners from it). */
   WORKOS_API_KEY?: string;
-  /** 20 computer registrations per minute per client address. See wrangler.jsonc ratelimits. */
-  MACHINE_REGISTRATIONS: RateLimit;
+  /** 20 mailbox writes per minute per client address (pairing codes are pasted by hand). */
+  MAILBOX_WRITES: RateLimit;
   /** "off": don't retry a room request the platform refused (to count refusals, e.g. on a canary). */
   KIWI_ROOM_RETRY?: string;
 }
@@ -65,36 +63,23 @@ function human(env: Env): HumanAuth | null {
   return humanAuth;
 }
 
-let peopleOf: { env: Env; people: People } | undefined;
+let peopleOf: { env: Env; list: (user: string) => Promise<DirectoryEntry[]> } | undefined;
 /**
- * What a person's own routes run with: sign-in, policy, their lists, computers,
- * vaults and handovers, each reached through their Directory objects. Built
- * once per isolate, like the verifier above.
+ * The owned-channel counts rooms read for the quota: each person's Owners object, reached through
+ * this isolate's cached fetchers. Built once per isolate, like the verifier above.
  */
-function people(env: Env): People {
+function owned(env: Env): (user: string) => Promise<DirectoryEntry[]> {
   if (peopleOf?.env !== env) {
-    const layer = Layer.mergeAll(
-      Layer.succeed(Human, human(env)),
-      Layer.succeed(Policy, policyFrom(env as unknown as Record<string, string | undefined>)),
-      Layer.succeed(ChannelLists, { list: (user: string) => channelsOf(env, user) }),
-      Layer.succeed(Machines, machineStore(env)),
-      Layer.succeed(Vaults, vaultStore(env)),
-      Layer.succeed(Handovers, deviceStore(env)),
-    );
-    peopleOf = { env, people: makePeople(layer) };
+    const at = (user: string) => env.OWNERS.get(env.OWNERS.idFromName(user));
+    peopleOf = { env, list: async (user: string) => (await at(user).fetch("https://owners/")).json() };
   }
-  return peopleOf.people;
-}
-
-/** A person's channel list, from their Directory object. */
-async function channelsOf(env: Env, user: string): Promise<DirectoryEntry[]> {
-  return (await env.PEOPLE.get(env.PEOPLE.idFromName(user)).fetch("https://directory/list")).json();
+  return peopleOf.list;
 }
 
 export class Channel extends DurableObject<Env> {
   private readonly sql: Sql;
   private readonly policy: RelayPolicy;
-  /** What this channel's room runs with: sign-in, policy, people's lists, linked computers. */
+  /** What this channel's room runs with: sign-in, policy and the owner's owned-channel count. */
   private readonly relay: Relay;
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -108,8 +93,7 @@ export class Channel extends DurableObject<Env> {
       Layer.mergeAll(
         Layer.succeed(Human, human(env)),
         Layer.succeed(Policy, this.policy),
-        Layer.succeed(ChannelLists, { list: (user: string) => channelsOf(env, user) }),
-        Layer.succeed(Machines, machineStore(env)),
+        Layer.succeed(ChannelLists, { list: (user: string) => owned(env)(user) }),
       ),
     );
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));
@@ -119,18 +103,13 @@ export class Channel extends DurableObject<Env> {
     return new RoomDb(this.sql, roomId);
   }
 
-  /** RPC for the signed-in listing (no HTTP route reaches it): the newest message, a pure read. */
-  head(): RoomHead | null {
-    return readHead(this.sql);
-  }
-
   override async fetch(req: Request): Promise<Response> {
     try {
       const url = new URL(req.url);
       const route = parseRoomPath(url.pathname)!;
       // No fingerprint: 426 before this object reads the room.
       const early = missingFingerprint(req.method, route.rest, url);
-      if (early) return errorResponse(early);
+      if (early) return withCors(errorResponse(early));
       const db = this.store(route.roomId);
       if (route.rest === "/ws") {
         if (db.isLegacy()) {
@@ -148,9 +127,9 @@ export class Channel extends DurableObject<Env> {
       }
       const { res, fx } = await onHttp(this.relay, db, req, route.rest);
       if (fx) await this.apply(fx);
-      return res;
+      return withCors(res);
     } catch (err) {
-      return errorResponse(err);
+      return withCors(errorResponse(err));
     }
   }
 
@@ -176,10 +155,10 @@ export class Channel extends DurableObject<Env> {
         if ((ws.deserializeAttachment() as { pk?: string } | null)?.pk === fx.disconnect) close(ws, CLOSE_REMOVED, "removed from channel");
       }
     }
-    // People's channel lists are best-effort: a failure there must never stop a close from wiping.
+    // Owned-channel counts are best-effort: a failure there must never stop a close from wiping.
     if (fx.directory?.length) {
       await Promise.allSettled(
-        fx.directory.map((u) => this.env.PEOPLE.get(this.env.PEOPLE.idFromName(u.user)).fetch("https://directory/apply", { method: "POST", body: JSON.stringify(u) })),
+        fx.directory.map((u) => this.env.OWNERS.get(this.env.OWNERS.idFromName(u.user)).fetch("https://owners/apply", { method: "POST", body: JSON.stringify(u) })),
       );
     }
     if (fx.wipe) {
@@ -206,140 +185,70 @@ export class Channel extends DurableObject<Env> {
   }
 }
 
-/** A signed-in person's channel list. Holds room ids and join codes only; a closed channel is removed from it. */
-export class Directory extends DurableObject<Env> {
+/** One signed-in person's owned channels: room ids and join codes only, for the quota on POST /create. */
+export class Owners extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS entries (room TEXT PRIMARY KEY, entry TEXT NOT NULL)");
-    // A person's linked computers; and, in a computer's own object, its record.
-    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS machines (pk TEXT PRIMARY KEY, label TEXT NOT NULL, linked INTEGER NOT NULL)");
-    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS machine (k INTEGER PRIMARY KEY CHECK (k = 1), rec TEXT NOT NULL)");
-    // Boxes handing a person's channels to another of their devices (ciphertext only).
-    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS devices (id TEXT PRIMARY KEY, rec TEXT NOT NULL)");
-    // The person's vault (ciphertext only): one row, swapped by version.
-    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS vault (k INTEGER PRIMARY KEY CHECK (k = 1), rec TEXT NOT NULL)");
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS owned (room TEXT PRIMARY KEY, entry TEXT NOT NULL)");
   }
 
   override async fetch(req: Request): Promise<Response> {
-    const { pathname, searchParams } = new URL(req.url);
     const sql = this.ctx.storage.sql;
-    if (pathname === "/devices") {
-      if (req.method === "PUT") {
-        const r = (await req.json()) as DeviceTransfer;
-        sql.exec("INSERT OR REPLACE INTO devices (id, rec) VALUES (?, ?)", r.id, JSON.stringify(r));
-      } else if (req.method === "DELETE") sql.exec("DELETE FROM devices WHERE id = ?", searchParams.get("id") ?? "");
-      return Response.json((sql.exec("SELECT rec FROM devices").toArray() as { rec: string }[]).map((r) => JSON.parse(r.rec) as DeviceTransfer));
-    }
-    if (pathname === "/vault") {
-      const read = () => {
-        const row = sql.exec("SELECT rec FROM vault").toArray()[0] as { rec: string } | undefined;
-        return row ? (JSON.parse(row.rec) as VaultRecord) : null;
-      };
-      if (req.method === "GET") return Response.json(read());
-      const { expected, rec } = (await req.json()) as { expected: number; rec?: VaultRecord };
-      // One object per person, and no await between this read and the write: the swap is atomic.
-      const current = read();
-      if (!vaultSwap(current, expected)) return Response.json({ ok: false, current });
-      if (req.method === "PUT" && rec) sql.exec("INSERT OR REPLACE INTO vault (k, rec) VALUES (1, ?)", JSON.stringify(rec));
-      else if (req.method === "DELETE" && current) sql.exec("DELETE FROM vault");
-      else return Response.json({ ok: false, current });
-      return Response.json({ ok: true });
-    }
-    if (pathname === "/machine") {
-      if (req.method === "PUT") {
-        const text = await req.text();
-        const rec = JSON.parse(text) as MachineRecord;
-        sql.exec("INSERT OR REPLACE INTO machine (k, rec) VALUES (1, ?)", text);
-        // One alarm per unlinked registration, on this computer's object only. A linked computer is kept until it goes unused, which is checked on read.
-        if (rec.user) await this.ctx.storage.deleteAlarm();
-        else await this.ctx.storage.setAlarm((rec.created || Date.now()) + LINK_TTL_MS);
-      } else if (req.method === "DELETE") {
-        sql.exec("DELETE FROM machine");
-        await this.ctx.storage.deleteAlarm();
-      }
-      const row = sql.exec("SELECT rec FROM machine").toArray()[0] as { rec: string } | undefined;
-      return Response.json(row ? JSON.parse(row.rec) : null);
-    }
-    if (pathname === "/machines") {
-      if (req.method === "PUT") {
-        const m = (await req.json()) as { pk: string; label: string; linked: number };
-        sql.exec("INSERT OR REPLACE INTO machines (pk, label, linked) VALUES (?, ?, ?)", m.pk, m.label, m.linked);
-      } else if (req.method === "DELETE") sql.exec("DELETE FROM machines WHERE pk = ?", searchParams.get("pk") ?? "");
-      return Response.json(sql.exec("SELECT pk, label, linked FROM machines ORDER BY linked DESC").toArray());
-    }
     if (req.method === "POST") {
       const u = (await req.json()) as DirectoryUpdate;
-      if (u.entry) this.ctx.storage.sql.exec("INSERT OR REPLACE INTO entries (room, entry) VALUES (?, ?)", u.room, JSON.stringify(u.entry));
-      else this.ctx.storage.sql.exec("DELETE FROM entries WHERE room = ?", u.room);
+      if (u.entry?.owner) sql.exec("INSERT OR REPLACE INTO owned (room, entry) VALUES (?, ?)", u.room, JSON.stringify(u.entry));
+      else sql.exec("DELETE FROM owned WHERE room = ?", u.room);
       return Response.json({ ok: true });
     }
-    const rows = this.ctx.storage.sql.exec("SELECT entry FROM entries").toArray() as { entry: string }[];
+    const rows = sql.exec("SELECT entry FROM owned").toArray() as { entry: string }[];
     return Response.json(rows.map((r) => JSON.parse(r.entry) as DirectoryEntry));
   }
+}
 
-  /** The link window closed: delete the registration if nobody confirmed it. */
-  override async alarm(): Promise<void> {
-    const row = this.ctx.storage.sql.exec("SELECT rec FROM machine").toArray()[0] as { rec: string } | undefined;
-    if (!row) return;
-    const rec = JSON.parse(row.rec) as MachineRecord;
-    if (rec.user) return;
-    if (Date.now() - rec.created >= LINK_TTL_MS) this.ctx.storage.sql.exec("DELETE FROM machine");
-    else await this.ctx.storage.setAlarm(rec.created + LINK_TTL_MS);
+/** One pairing mailbox: two sealed slots, gone ten minutes after the first write. */
+export class MailboxBox extends DurableObject<Env> {
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS slots (slot TEXT PRIMARY KEY, box TEXT NOT NULL)");
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS meta (k INTEGER PRIMARY KEY CHECK (k = 1), firstAt INTEGER NOT NULL)");
   }
-}
 
-/** Device handoffs live in the person's own Directory object. */
-function deviceStore(env: Env): DeviceStore {
-  const at = (user: string) => env.PEOPLE.get(env.PEOPLE.idFromName(user));
-  return {
-    list: async (user) => (await at(user).fetch("https://directory/devices")).json(),
-    put: async (user, r) => void (await at(user).fetch("https://directory/devices", { method: "PUT", body: JSON.stringify(r) })),
-    remove: async (user, id) => void (await at(user).fetch(`https://directory/devices?id=${encodeURIComponent(id)}`, { method: "DELETE" })),
-  };
-}
+  override async fetch(req: Request): Promise<Response> {
+    const sql = this.ctx.storage.sql;
+    const store: MailboxStore = {
+      load: async () => {
+        const first = sql.exec("SELECT firstAt FROM meta").toArray()[0] as { firstAt: number } | undefined;
+        if (!first) return null;
+        const at = (s: string) => (sql.exec("SELECT box FROM slots WHERE slot = ?", s).toArray()[0] as { box: string } | undefined)?.box ?? null;
+        return { a: at("a"), b: at("b"), firstAt: first.firstAt };
+      },
+      save: async (_id, rec) => {
+        sql.exec("INSERT OR REPLACE INTO meta (k, firstAt) VALUES (1, ?)", rec.firstAt);
+        for (const s of ["a", "b"] as const) {
+          if (rec[s]) sql.exec("INSERT OR REPLACE INTO slots (slot, box) VALUES (?, ?)", s, rec[s]);
+        }
+        // A mailbox nobody reads still dies on time.
+        await this.ctx.storage.setAlarm(rec.firstAt + MAILBOX_TTL_MS);
+      },
+      drop: async () => {
+        await this.ctx.storage.deleteAlarm();
+        await this.ctx.storage.deleteAll();
+      },
+    };
+    const ip = req.headers.get("cf-connecting-ip");
+    const res =
+      (await onMailboxHttp(req, store, {
+        ip,
+        allow: async (key) => (await this.env.MAILBOX_WRITES.limit({ key })).success,
+      })) ?? withCors(errorResponse(new NotFound({ message: "not found" })));
+    // A write starts the expiry clock even when the alarm below failed to set.
+    return res;
+  }
 
-/** A person's vault lives in their own Directory object, which runs the compare-and-swap. */
-function vaultStore(env: Env): VaultStore {
-  const at = (user: string) => env.PEOPLE.get(env.PEOPLE.idFromName(user));
-  const swap = async (user: string, method: string, expected: number, rec?: VaultRecord) =>
-    (await (await at(user).fetch("https://directory/vault", { method, body: JSON.stringify({ expected, rec }) })).json()) as { ok: boolean; current?: VaultRecord | null };
-  return {
-    get: async (user) => (await at(user).fetch("https://directory/vault")).json(),
-    put: async (user, expected, rec) => {
-      const r = await swap(user, "PUT", expected, rec);
-      return r.ok ? { ok: true } : { ok: false, current: r.current ?? null };
-    },
-    remove: async (user, expected) => (await swap(user, "DELETE", expected)).ok,
-  };
-}
-
-/** Computers live in their own Directory object ("machine:<pk>"); each person's object lists theirs. */
-function machineStore(env: Env): MachineStore {
-  const at = (name: string) => env.PEOPLE.get(env.PEOPLE.idFromName(name));
-  return {
-    get: async (pk) => (await at(`machine:${pk}`).fetch("https://directory/machine")).json<MachineRecord | null>(),
-    put: async (rec) => {
-      await at(`machine:${rec.pk}`).fetch("https://directory/machine", { method: "PUT", body: JSON.stringify(rec) });
-      if (rec.user) await at(rec.user).fetch("https://directory/machines", { method: "PUT", body: JSON.stringify({ pk: rec.pk, label: rec.label, linked: rec.linked ?? Date.now() }) });
-    },
-    remove: async (rec) => {
-      await at(`machine:${rec.pk}`).fetch("https://directory/machine", { method: "DELETE" });
-      if (rec.user) await at(rec.user).fetch(`https://directory/machines?pk=${encodeURIComponent(rec.pk)}`, { method: "DELETE" });
-    },
-    listFor: async (user) => (await at(user).fetch("https://directory/machines")).json(),
-  };
-}
-
-/** Each person's channel heads, kept in this colo's cache so a listing wakes their channels at most once per period. */
-function headCache(origin: string): NonNullable<HeadSource["cache"]> {
-  const key = (user: string) => new Request(`${origin}/__cache/heads/${encodeURIComponent(user)}`);
-  return {
-    get: async (user) => {
-      const hit = await caches.default.match(key(user));
-      return hit ? hit.json() : null;
-    },
-    put: (user, heads) => caches.default.put(key(user), Response.json(heads, { headers: { "cache-control": `max-age=${HEADS_CACHE_SECONDS}` } })),
-  };
+  /** The ten minutes are up: leave nothing behind. */
+  override async alarm(): Promise<void> {
+    await this.ctx.storage.deleteAll();
+  }
 }
 
 function send(ws: WebSocket, f: string): void {
@@ -357,56 +266,20 @@ function close(ws: WebSocket, code: number, reason: string): void {
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
-    if (url.pathname === "/v1/config") return relayConfig(human(env));
-    if (url.pathname.startsWith("/v1/me/devices")) {
-      try {
-        return (await onDeviceHttp(req, people(env))) ?? errorResponse(new NotFound({ message: "not found" }));
-      } catch (err) {
-        return errorResponse(err);
-      }
-    }
-    if (url.pathname === "/v1/me/vault") {
-      try {
-        return (await onVaultHttp(req, people(env))) ?? errorResponse(new NotFound({ message: "not found" }));
-      } catch (err) {
-        return errorResponse(err);
-      }
-    }
-    if (url.pathname.startsWith("/v1/machines") || url.pathname.startsWith("/v1/me/machines")) {
-      try {
-        const ip = cloudflareClient(req);
-        const gate = ip ? { ip, allow: (key: string) => env.MACHINE_REGISTRATIONS.limit({ key }).then((r) => r.success) } : null;
-        return (await onMachineHttp(req, people(env), gate)) ?? errorResponse(new NotFound({ message: "not found" }));
-      } catch (err) {
-        return errorResponse(err);
-      }
-    }
-    if (url.pathname === "/v1/me/usage" && req.method === "GET") {
-      try {
-        // Each channel answers for itself, to the same signed-in person.
-        return await myUsage(req, people(env), async (room) => {
-          const res = await env.CHANNELS.get(env.CHANNELS.idFromName(room)).fetch(new Request(`https://relay/v1/rooms/${room}/usage`, { headers: req.headers }));
-          return res.ok ? res.json() : null;
-        });
-      } catch (err) {
-        return errorResponse(err);
-      }
-    }
-    if (url.pathname === "/v1/me/channels" && req.method === "GET") {
-      try {
-        return await myChannels(req, people(env), {
-          read: async (room) => (await env.CHANNELS.get(env.CHANNELS.idFromName(room)).head()) ?? null,
-          cache: headCache(url.origin),
-        });
-      } catch (err) {
-        return errorResponse(err);
-      }
+    if (url.pathname === "/v1/config") return withCors(relayConfig(human(env)));
+    // The desktop app's renderer isn't served by the relay: /v1/* answers any origin.
+    if (req.method === "OPTIONS" && url.pathname.startsWith("/v1/")) return corsPreflight();
+    if (url.pathname.startsWith("/v1/mailbox")) {
+      // One object per mailbox id; a path without one is a 404, never a wake-up.
+      const id = /^\/v1\/mailbox\/([A-Za-z0-9_-]{43})(?:\/(?:a|b))?$/.exec(url.pathname)?.[1];
+      if (!id) return withCors(errorResponse(new NotFound({ message: "not found" })));
+      return env.MAILBOX.get(env.MAILBOX.idFromName(id)).fetch(req);
     }
     const route = parseRoomPath(url.pathname);
-    if (!route) return errorResponse(new NotFound({ message: "not found" }));
+    if (!route) return withCors(errorResponse(new NotFound({ message: "not found" })));
     // No fingerprint: 426 before the room's object is woken.
     const early = missingFingerprint(req.method, route.rest, url);
-    if (early) return errorResponse(early);
+    if (early) return withCors(errorResponse(early));
     return toRoom(env, route.roomId, req);
   },
 } satisfies ExportedHandler<Env>;
@@ -421,7 +294,7 @@ async function toRoom(env: Env, roomId: string, req: Request): Promise<Response>
   const stub = () => env.CHANNELS.get(env.CHANNELS.idFromName(roomId));
   const read = req.method === "GET" || req.method === "HEAD";
   try {
-    return await stub().fetch(req);
+    return withCors(await stub().fetch(req));
   } catch (err) {
     const e = err as Error & { retryable?: boolean; overloaded?: boolean };
     // No room id or path in the log: only what went wrong.
@@ -429,11 +302,11 @@ async function toRoom(env: Env, roomId: string, req: Request): Promise<Response>
     // KIWI_ROOM_RETRY=off turns the retry off (to count refusals as they happen, e.g. on a canary).
     if (read && e.retryable && !e.overloaded && env.KIWI_ROOM_RETRY !== "off") {
       try {
-        return await stub().fetch(req);
+        return withCors(await stub().fetch(req));
       } catch (again) {
         console.error(JSON.stringify({ at: "room-stub-retry", method: req.method, error: (again as Error).message }));
       }
     }
-    return errorResponse(new Refused({ status: 503, message: "the channel is busy or restarting; try again in a moment", tag: "Internal" }));
+    return withCors(errorResponse(new Refused({ status: 503, message: "the channel is busy or restarting; try again in a moment", tag: "Internal" })));
   }
 }

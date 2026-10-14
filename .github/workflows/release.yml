@@ -1,6 +1,7 @@
-# Builds kiwi for every platform from a tagged commit, on GitHub's machines,
-# and publishes the files with checksums and a signed build-provenance
-# attestation, so anyone can check a binary came from this exact source:
+# Builds kiwi and the Kiwi desktop app for every platform from a tagged commit,
+# on GitHub's machines, and publishes the files with checksums and a signed
+# build-provenance attestation, so anyone can check a binary came from this
+# exact source:
 #   gh attestation verify ~/.kiwi/bin/kiwi --repo ojowwalker77/channels
 name: release
 
@@ -14,7 +15,28 @@ permissions:
   attestations: write
 
 jobs:
-  build:
+  # src/version.ts is the version; the two package.json files must agree so the
+  # binaries and the app carry the same tag.
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Check the version matches the tag
+        run: |
+          v=$(bun -e 'console.log((await import("./src/version.ts")).VERSION)')
+          pkg=$(bun -e 'console.log(JSON.parse(await Bun.file("package.json").text()).version)')
+          app=$(bun -e 'console.log(JSON.parse(await Bun.file("desktop/package.json").text()).version)')
+          test "v$v" = "$GITHUB_REF_NAME" || { echo "src/version.ts says $v, tag is $GITHUB_REF_NAME"; exit 1; }
+          test "$pkg" = "$v" || { echo "package.json says $pkg, src/version.ts says $v"; exit 1; }
+          test "$app" = "$v" || { echo "desktop/package.json says $app, src/version.ts says $v"; exit 1; }
+
+  cli:
+    needs: version
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,13 +46,8 @@ jobs:
           bun-version: 1.4.2
 
       - name: Install
-        # web/ too: some tests (web/src/**/*.test.tsx) import the dashboard's React.
+        # web/ too: some tests (web/src/**/*.test.tsx) import the web app's React.
         run: bun install --frozen-lockfile && (cd web && bun install --frozen-lockfile)
-
-      - name: Check the version matches the tag
-        run: |
-          v=$(bun -e 'console.log((await import("./src/version.ts")).VERSION)')
-          test "v$v" = "$GITHUB_REF_NAME" || { echo "src/version.ts says $v, tag is $GITHUB_REF_NAME"; exit 1; }
 
       - name: Test
         run: bun test
@@ -45,17 +62,158 @@ jobs:
           # Apple Silicon only runs signed code: give the macOS builds an ad-hoc signature.
           codesign --force --sign - dist/kiwi-darwin-arm64 dist/kiwi-darwin-x64
           ./dist/kiwi-darwin-arm64 --version
-          (cd dist && shasum -a 256 kiwi-* > SHA256SUMS && cat SHA256SUMS)
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: "dist/kiwi-*"
 
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli
+          path: dist/kiwi-*
+
+  # The Electron app builds on each OS for that OS: dmg/zip on macOS, AppImage/deb
+  # on Linux. Unsigned for now. No Windows app (the kiwi CLI still ships for Windows).
+  desktop:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: macos
+          - os: ubuntu-latest
+            target: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install
+        shell: bash
+        run: |
+          bun install --frozen-lockfile
+          (cd web && bun install --frozen-lockfile)
+          (cd desktop && bun install --frozen-lockfile)
+
+      - name: Build the renderer
+        run: bun run web:build
+
+      - name: Package
+        working-directory: desktop
+        shell: bash
+        env:
+          # macOS: signed with the Developer ID and notarized when these secrets are set; without them
+          # (a fork, or before they're added) it builds unsigned.
+          CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          # The app bundles the kiwi binary through extraResources (`../dist/kiwi`);
+          # build it for the platform (and architecture) being packaged.
+          cli() { bun build ../src/cli/main.ts --compile --minify --external node-liblzma --external @mongodb-js/zstd --target="$1" --outfile ../dist/kiwi; }
+          mkdir -p ../dist
+          bun run build
+          sign=()
+          if [ "${{ runner.os }}" = macOS ] && [ -n "$CSC_LINK" ] && [ -n "$APPLE_API_KEY_P8" ]; then
+            # electron-builder imports the certificate from CSC_LINK, signs the app and everything in it
+            # (the bundled kiwi too) with the hardened runtime, and notarizes it with the API key.
+            printf '%s' "$APPLE_API_KEY_P8" > "$RUNNER_TEMP/apple-api-key.p8"
+            export APPLE_API_KEY="$RUNNER_TEMP/apple-api-key.p8"
+            sign=(-c.mac.notarize=true)
+            echo "signing and notarizing with the Developer ID"
+          else
+            unset CSC_LINK CSC_KEY_PASSWORD
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+            echo "no signing secrets: building unsigned"
+          fi
+          case "${{ runner.os }}" in
+            macOS)
+              cli bun-darwin-arm64 && codesign --force --sign - ../dist/kiwi && bunx electron-builder --mac --arm64 --publish never "${sign[@]}"
+              cli bun-darwin-x64 && codesign --force --sign - ../dist/kiwi && bunx electron-builder --mac --x64 --publish never "${sign[@]}"
+              ;;
+            *)
+              cli bun-linux-x64 && bunx electron-builder --linux --publish never
+              ;;
+          esac
+          # Signed: prove it before anything ships. A valid Developer ID signature on every file, the
+          # notarization ticket stapled, and Gatekeeper accepting the app as it would on a user's Mac.
+          if [ ${#sign[@]} -gt 0 ]; then
+            for app in release/mac*/Kiwi.app; do
+              codesign --verify --deep --strict --verbose=2 "$app"
+              codesign -dv "$app/Contents/Resources/kiwi" 2>&1 | grep -q "Authority=Developer ID Application" || { echo "the bundled kiwi isn't signed with the Developer ID"; exit 1; }
+              xcrun stapler validate "$app"
+              spctl --assess --type execute --verbose=2 "$app"
+            done
+          fi
+          # The app is useless without these: fail here, not on a user's machine. Every app built
+          # (two on macOS) must carry both: a Mac app keeps them in Contents/Resources, Linux's
+          # unpacked app in resources. No `find | grep -q`: under pipefail, grep quitting early fails it.
+          apps=$(find release -maxdepth 4 -type d \( -path 'release/*-unpacked/resources' -o -path 'release/*/*.app/Contents/Resources' \))
+          [ -n "$apps" ] || { echo "no packaged app found under release/"; exit 1; }
+          for r in $apps; do
+            [ -f "$r/web/dist/index.html" ] || { echo "web/dist missing from $r"; exit 1; }
+            [ -f "$r/kiwi" ] || { echo "kiwi binary missing from $r"; exit 1; }
+          done
+          echo "checked: $apps"
+
+      - name: Collect
+        shell: bash
+        run: |
+          bun -e '
+            const fs = require("fs");
+            fs.mkdirSync("out", { recursive: true });
+            const exts = [".dmg", ".zip", ".appimage", ".deb"];
+            const dir = "desktop/release";
+            const names = fs.readdirSync(dir).filter((f) => exts.some((e) => f.toLowerCase().endsWith(e)));
+            for (const n of names) fs.copyFileSync(`${dir}/${n}`, `out/${n}`);
+            console.log(names.join("\n") || "(nothing collected)");
+          '
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "out/*"
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.target }}
+          path: out/*
+          if-no-files-found: error
+
+  publish:
+    needs: [cli, desktop]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Checksums
+        run: |
+          cd artifacts
+          rm -f SHA256SUMS
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/* \
+          mapfile -t files < <(find artifacts -maxdepth 1 -type f | sort)
+          # A release candidate (v0.11.0-rc.3) is a prerelease: the install scripts fetch
+          # releases/latest, which must stay on the last real release.
+          pre=(); [[ "$GITHUB_REF_NAME" == *-* ]] && pre=(--prerelease)
+          gh release create "$GITHUB_REF_NAME" "${files[@]}" "${pre[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
             --title "kiwi $GITHUB_REF_NAME" \
-            --notes "Install: curl -fsSL https://channels.kiwiinit.com/install | sh (macOS, Linux) or irm https://channels.kiwiinit.com/install.ps1 | iex (Windows). Every file is checksummed in SHA256SUMS and has a build-provenance attestation: gh attestation verify <file> --repo $GITHUB_REPOSITORY"
+            --notes "Kiwi desktop app (macOS dmg/zip, Linux AppImage/deb) and the kiwi CLI. Download the app at https://channels.kiwiinit.com/; install the CLI with: curl -fsSL https://channels.kiwiinit.com/install | sh (macOS, Linux) or irm https://channels.kiwiinit.com/install.ps1 | iex (Windows). Every file is checksummed in SHA256SUMS and has a build-provenance attestation: gh attestation verify <file> --repo $GITHUB_REPOSITORY"

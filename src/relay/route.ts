@@ -18,19 +18,9 @@ import { ownerFingerprint } from "../crypto.ts";
 import { PAGE_LIMIT } from "../protocol.ts";
 import { ChannelGone, BadRequest, Forbidden, NotFound, NotOwner, SignInRequired, TooMany, Unauthorized, UpdateRequired, type Refusal } from "./failures.ts";
 import { answer, buildContext, describeRoutes, dispatch, incoming, json, Request_, type Route } from "./http.ts";
-import { Human, HUMAN_HEADER, profileOf } from "./human.ts";
-import { linkedUser, Machines, vouchedBy } from "./machines.ts";
+import { Human, HUMAN_HEADER } from "./human.ts";
 import { betaMessage, inBeta, Policy } from "./policy.ts";
 import {
-  admit,
-  admitsNow,
-  answerPair,
-  askPair,
-  openPairSlot,
-  pairNonceFromBrowser,
-  pairStatus,
-  pendingPairs,
-  revealPair,
   allow,
   append,
   approve,
@@ -52,11 +42,9 @@ import {
   requestStatus,
   requestToken,
   requireChecked,
-  requireSponsor,
   reveal,
   rotate,
   RoomStore,
-  seat,
   setCanPost,
   setIcon,
   setOwnerNonce,
@@ -65,7 +53,6 @@ import {
   setTitle,
   touch,
   UPDATE_KIWI,
-  usage,
   type CreateBody,
   type Effects,
   type MemberBody,
@@ -77,7 +64,7 @@ import {
 // ---------- the relay's services ----------
 
 /** What a relay runs its rooms with, from its adapter. */
-export type RelayServices = Human | Policy | Directory | Machines;
+export type RelayServices = Human | Policy | Directory;
 
 /** The relay's services, built once from the adapter's Layer. */
 export type Relay = Context.Context<RelayServices>;
@@ -99,17 +86,16 @@ export const runRoom = <A, E>(relay: Relay, db: RoomDb, effect: Effect.Effect<A,
  * The checks. Only GET /info is public; every other row names one of these, so
  * test/route-table.test.ts and the auth table can see what each route needs.
  */
-type Guard = "public" | "creator" | "joiner" | "ownerPerson" | "requester" | "member" | "owner" | "admitter";
+type Guard = "public" | "creator" | "joiner" | "requester" | "member" | "owner";
 
-/** Who a check found: the key that signed, the signed-in person, the vouching person. */
+/** Who a check found: the key that signed, and the signed-in person creating a channel. */
 interface Who {
   me: string;
   signer: string | null;
   user: string | null;
   person: { user: string; name: string } | null;
-  vouchUser: string | null;
 }
-const nobody: Who = { me: "", signer: null, user: null, person: null, vouchUser: null };
+const nobody: Who = { me: "", signer: null, user: null, person: null };
 
 /** The signed-in person behind this request, when the relay requires sign-in. */
 const signedIn = Effect.gen(function* () {
@@ -117,21 +103,8 @@ const signedIn = Effect.gen(function* () {
   const { req } = yield* Request_;
   if (!human) return null;
   const user = yield* Effect.promise(() => human.verify(req.headers.get(HUMAN_HEADER) ?? ""));
-  if (!user) return yield* new SignInRequired({ message: "sign in required: channels on this relay are owned and run by a signed-in human (use the dashboard)" });
+  if (!user) return yield* new SignInRequired({ message: "sign in required: channels on this relay are owned and run by a signed-in human (sign in from the Kiwi app)" });
   return user;
-});
-
-/** The signed-in person behind a request, with their name as WorkOS knows it (null when none came). */
-const person = Effect.gen(function* () {
-  const human = yield* Human;
-  const { req } = yield* Request_;
-  if (!human) return null;
-  const token = req.headers.get(HUMAN_HEADER);
-  if (!token) return null;
-  const user = yield* Effect.promise(() => human.verify(token));
-  if (!user) return yield* new SignInRequired({ message: "sign in again: that session isn't valid" });
-  const profile = yield* profileOf(user);
-  return { user, name: profile?.name ?? user };
 });
 
 /** The key that signed this request (for requesters, who aren't members yet). */
@@ -150,35 +123,13 @@ const member = Effect.gen(function* () {
 });
 
 /**
- * The owner: the owner key's signature and, on relays that require sign-in, the
- * owning person's live session. A copied key file alone can't approve anyone.
+ * The owner: the owner key's signature, and nothing else. Since 0.11 the relay never sees a
+ * session on owner routes: whoever holds the owner key runs the channel (the app keeps it, and
+ * agents never see it).
  */
 const owner = Effect.gen(function* () {
-  const db = yield* RoomStore;
-  const human = yield* Human;
   const me = yield* member;
   if (me !== (yield* readMeta).ownerPk) return yield* new NotOwner({ message: "only the channel owner can do that" });
-  const want = db.ownerUser();
-  if (human && want) {
-    const user = yield* signedIn;
-    if (user !== want) return yield* new NotOwner({ message: "only the human who owns this channel can do that" });
-  }
-  return me;
-});
-
-/**
- * A linked computer with a live seat, letting its own agents in: a member whose seat the owner gave an
- * admitsUntil still ahead and, on relays that require sign-in, a computer still linked to the owner.
- * Unlinking it in Your computers stops it here at once, before any channel is told.
- */
-const admitter = Effect.gen(function* () {
-  const db = yield* RoomStore;
-  const human = yield* Human;
-  const machines = yield* Machines;
-  const me = yield* member;
-  if (!(yield* admitsNow(me))) return yield* new Forbidden({ message: "this key has no seat here that lets agents in" });
-  const want = db.ownerUser();
-  if (human && want && (yield* Effect.promise(() => linkedUser(machines, me))) !== want) return yield* new Forbidden({ message: "this computer isn't linked to the channel's owner any more" });
   return me;
 });
 
@@ -191,25 +142,8 @@ const creator = Effect.gen(function* () {
   return { ...nobody, signer, user };
 });
 
-/** Asking to join: on a sign-in relay, a person's session or the vouch of a computer its person linked. */
-const joiner = Effect.gen(function* () {
-  const db = yield* RoomStore;
-  const human = yield* Human;
-  const machines = yield* Machines;
-  const b = yield* json<{ pk?: unknown; machine?: unknown }>();
-  const who = yield* person;
-  const vouchUser = !who && typeof b?.pk === "string" ? yield* Effect.promise(() => vouchedBy(machines, db.roomId, b.pk as string, b.machine)) : null;
-  if (human && !who && !vouchUser) return yield* new Forbidden({ message: "this computer isn't set up: its person runs `kiwi setup` once, then agents can join from it" });
-  return { ...nobody, person: who, vouchUser };
-});
-
-/** The person who owns this channel, signed in (its usage page). */
-const ownerPerson = Effect.gen(function* () {
-  const db = yield* RoomStore;
-  const user = yield* signedIn;
-  if (!user || user !== db.ownerUser()) return yield* new Forbidden({ message: "only the person who owns this channel can see its usage" });
-  return { ...nobody, user };
-});
+/** Asking to join: anyone holding the join code may ask. Who vouches for whom is the owner's call. */
+const joiner = Effect.succeed(nobody);
 
 const asKey = <E, R>(check: Effect.Effect<string, E, R>) => Effect.map(check, (me): Who => ({ ...nobody, me }));
 
@@ -219,11 +153,9 @@ const guards: Record<Guard, Effect.Effect<Who, Refusal, Services>> = {
   public: Effect.succeed(nobody),
   creator,
   joiner,
-  ownerPerson,
   requester: asKey(requester),
   member: asKey(member),
   owner: asKey(owner),
-  admitter: asKey(admitter),
 };
 
 // ---------- the routes ----------
@@ -248,10 +180,7 @@ const routes: RoomRoute[] = [
         // The join code's second half is the owner key's fingerprint. A wrong one is answered like a
         // missing room. Requests with no fp never reach here (missingFingerprint).
         if (url.searchParams.get("fp") !== (yield* Effect.promise(() => ownerFingerprint(m.ownerPk)))) return yield* new ChannelGone({ message: "no such channel" });
-        // Who invited you, as sign-in knows them: only for someone holding the code.
-        const ownerUser = db.ownerUser();
-        const ownerName = ownerUser ? ((yield* profileOf(ownerUser))?.name ?? null) : null;
-        return { data: { ownerPk: m.ownerPk, ownerXpk: m.ownerXpk, ownerSig: m.ownerSig, titlesSig: db.getTitlesSig(), epoch: m.epoch, rotate: m.rotate, title: db.title(), settings: db.settings(), ownerName, iconAt: db.iconAt() } };
+        return { data: { ownerPk: m.ownerPk, ownerXpk: m.ownerXpk, ownerSig: m.ownerSig, titlesSig: db.getTitlesSig(), epoch: m.epoch, rotate: m.rotate, title: db.title(), settings: db.settings(), iconAt: db.iconAt() } };
       }),
   },
   {
@@ -278,18 +207,12 @@ const routes: RoomRoute[] = [
     method: "POST",
     path: "/requests",
     guard: "joiner",
-    run: ({ person: who, vouchUser }) =>
+    run: () =>
       Effect.gen(function* () {
-        const b = yield* json<RequestBody & { machine?: unknown }>();
-        const { id, fresh } = yield* request(b, who, vouchUser);
+        const b = yield* json<RequestBody>();
+        const { id, fresh } = yield* request(b);
         return { data: { id }, fx: fresh ? { broadcast: [frame({ t: "request" })] } : undefined };
       }),
-  },
-  {
-    method: "GET",
-    path: "/usage",
-    guard: "ownerPerson",
-    run: () => Effect.map(usage, (data) => ({ data })),
   },
   {
     method: "POST",
@@ -302,71 +225,11 @@ const routes: RoomRoute[] = [
         return { data: { revealed: true }, fx: fresh ? { broadcast: [frame({ t: "request" })] } : undefined };
       }),
   },
-  // Pairing a terminal with a person's seat (pair.ts): the terminal signs with its one-time key, members answer.
-  // Changes ride the "request" frame, which every client already re-reads on, so older ones are unaffected.
-  {
-    method: "POST",
-    path: "/pairs",
-    guard: "requester", // the terminal's one-time key, which isn't a member
-    run: ({ me: pk }) =>
-      Effect.gen(function* () {
-        const { id, fresh } = yield* askPair(pk, yield* json<{ xpk?: unknown; commit?: unknown; label?: unknown; slot?: unknown }>());
-        return { data: { id }, fx: fresh ? { broadcast: [frame({ t: "request" })] } : undefined };
-      }),
-  },
-  {
-    method: "GET",
-    path: new RegExp(`^/pairs/${ID}$`),
-    guard: "requester", // the terminal that asked
-    run: ({ me: pk }, m) => Effect.map(pairStatus(m[1]!, pk), (data) => ({ data })),
-  },
-  {
-    method: "POST",
-    path: new RegExp(`^/pairs/${ID}/reveal$`),
-    guard: "requester",
-    run: ({ me: pk }, m) =>
-      Effect.gen(function* () {
-        const { nonce } = yield* json<{ nonce?: unknown }>();
-        const data = yield* revealPair(m[1]!, pk, nonce);
-        return { data, fx: { broadcast: [frame({ t: "request" })] } };
-      }),
-  },
   {
     method: "GET",
     path: new RegExp(`^/requests/${ID}$`),
     guard: "requester", // signed by the requester's key, which isn't a member yet
     run: ({ me: pk }, m) => Effect.map(requestStatus(m[1]!, pk), (data) => ({ data })),
-  },
-  { method: "POST", path: "/pairs/slots", guard: "member", run: ({ me }) => Effect.map(openPairSlot(me), (data) => ({ data })) },
-  {
-    method: "GET",
-    path: "/pairs",
-    guard: "member", // with the slot only the opening browser knows
-    run: () =>
-      Effect.gen(function* () {
-        const { url } = yield* Request_;
-        return { data: { pairs: yield* pendingPairs(url.searchParams.get("slot")) } };
-      }),
-  },
-  {
-    method: "POST",
-    path: new RegExp(`^/pairs/${ID}/nonce$`),
-    guard: "member", // a person's browser, opening the pairing
-    run: (_, m) =>
-      Effect.gen(function* () {
-        const { nonce, slot } = yield* json<{ nonce?: unknown; slot?: unknown }>();
-        return { data: yield* pairNonceFromBrowser(m[1]!, nonce, slot) };
-      }),
-  },
-  {
-    method: "PUT",
-    path: new RegExp(`^/pairs/${ID}$`),
-    guard: "member", // the person approved: their seat, sealed to the terminal
-    run: (_, m) =>
-      Effect.gen(function* () {
-        const { box, slot } = yield* json<{ box?: unknown; slot?: unknown }>();
-        return { data: yield* answerPair(m[1]!, box, slot), fx: { broadcast: [frame({ t: "request" })] } };
-      }),
   },
   { method: "GET", path: "/", guard: "member", run: () => withRoom((db) => ({ data: { head: db.head() } })) },
   {
@@ -452,8 +315,7 @@ const routes: RoomRoute[] = [
     run: ({ me }) =>
       Effect.gen(function* () {
         yield* remove(me);
-        const updates = yield* directory;
-        return { data: { left: true }, fx: { disconnect: me, broadcast: [frame({ t: "roster" })], directory: updates } };
+        return { data: { left: true }, fx: { disconnect: me, broadcast: [frame({ t: "roster" })] } };
       }),
   },
   {
@@ -463,22 +325,10 @@ const routes: RoomRoute[] = [
     run: () =>
       Effect.gen(function* () {
         const db = yield* RoomStore;
-        const human = yield* Human;
         const { url } = yield* Request_;
         if (url.searchParams.get("v") !== "2") return yield* new UpdateRequired({ message: UPDATE_KIWI });
         yield* owner;
-        // Names and emails come from sign-in at read time, for the owner only; the relay doesn't keep them.
-        // ownersOwn: an agent from a computer linked to the owner, so the only kind POST /seats takes here.
-        const want = db.ownerUser();
-        const requests = yield* Effect.promise(() =>
-          Promise.all(
-            db.pendingRequests().map(async (r) => {
-              const p = r.sponsorUser ? ((await human?.profile?.(r.sponsorUser).catch(() => null)) ?? null) : null;
-              return { ...r, sponsorName: p?.name ?? r.sponsorName ?? r.sponsorUser, sponsorEmail: p?.email ?? null, ...(want ? { ownersOwn: r.sponsorUser === want } : {}) };
-            }),
-          ),
-        );
-        return { data: { requests } };
+        return { data: { requests: db.pendingRequests() } };
       }),
   },
   {
@@ -504,47 +354,12 @@ const routes: RoomRoute[] = [
     guard: "owner",
     run: () =>
       Effect.gen(function* () {
-        const db = yield* RoomStore;
-        const human = yield* Human;
         const b = yield* json<MemberBody & { request?: string; replaces?: string }>();
         // The checks and the admission run as one step, with no await in between.
         yield* requireChecked(b.request, b.pk);
-        if (human && db.ownerUser()) yield* requireSponsor(b.request, b.pk);
         yield* approve(b);
-        const updates = yield* directory;
         // A reclaimed seat's old key is cut off at once, like a removed member.
-        return { data: { approved: true }, fx: { ...(b.replaces ? { disconnect: b.replaces } : {}), broadcast: [frame({ t: "roster" })], directory: updates } };
-      }),
-  },
-  {
-    method: "POST",
-    path: "/seats",
-    guard: "owner",
-    run: () =>
-      Effect.gen(function* () {
-        const db = yield* RoomStore;
-        const human = yield* Human;
-        const machines = yield* Machines;
-        const b = yield* json<MemberBody>();
-        // On a sign-in relay, only a computer linked to the owner: the code they compared when linking it.
-        const want = db.ownerUser();
-        if (human && want && (yield* Effect.promise(() => linkedUser(machines, String(b.pk)))) !== want) {
-          return yield* new Forbidden({ message: "that computer isn't linked to your account: run kiwi setup on it first" });
-        }
-        yield* seat(b);
-        return { data: { seated: true }, fx: { broadcast: [frame({ t: "roster" })] } };
-      }),
-  },
-  {
-    method: "POST",
-    path: "/admit",
-    guard: "admitter",
-    run: (who) =>
-      Effect.gen(function* () {
-        const b = yield* json<MemberBody>();
-        yield* admit(who.me, b);
-        const updates = yield* directory;
-        return { data: { admitted: true }, fx: { broadcast: [frame({ t: "roster" })], directory: updates } };
+        return { data: { approved: true }, fx: { ...(b.replaces ? { disconnect: b.replaces } : {}), broadcast: [frame({ t: "roster" })] } };
       }),
   },
   {
@@ -554,8 +369,7 @@ const routes: RoomRoute[] = [
     run: (_, m) =>
       Effect.gen(function* () {
         yield* remove(m[1]!);
-        const updates = yield* directory;
-        return { data: { removed: true }, fx: { disconnect: m[1]!, broadcast: [frame({ t: "roster" })], directory: updates } };
+        return { data: { removed: true }, fx: { disconnect: m[1]!, broadcast: [frame({ t: "roster" })] } };
       }),
   },
   {
@@ -564,10 +378,9 @@ const routes: RoomRoute[] = [
     guard: "owner",
     run: (_, m) =>
       Effect.gen(function* () {
-        const b = yield* json<{ rec?: unknown; e?: unknown; post?: unknown; admitsUntil?: unknown }>();
+        const b = yield* json<{ rec?: unknown; e?: unknown; post?: unknown }>();
         if (typeof b.rec !== "string" || typeof b.e !== "number" || typeof b.post !== "boolean") return yield* new BadRequest({ message: "send the sealed record, its epoch, and whether they may post" });
-        if (b.admitsUntil !== undefined && b.admitsUntil !== null && typeof b.admitsUntil !== "number") return yield* new BadRequest({ message: "admitsUntil is a time or null" });
-        yield* setRecord(m[1]!, b.rec, b.e, b.post, b.admitsUntil as number | null | undefined);
+        yield* setRecord(m[1]!, b.rec, b.e, b.post);
         // Everyone re-reads the roster, so the new record (and what it lets them do) lands at once.
         return { data: { ok: true }, fx: { broadcast: [frame({ t: "roster" })] } };
       }),

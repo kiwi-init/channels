@@ -53,6 +53,7 @@ export function here(env: Record<string, string | undefined> = process.env): Her
   if (env.GROK_SESSION_ID) return { harness: "grok", session: env.GROK_SESSION_ID };
   if (env.GEMINI_CLI) return { harness: "gemini" };
   if (env.CURSOR_AGENT) return { harness: "cursor" };
+  if (env.OPENCODE_SESSION_ID) return { harness: "opencode", session: env.OPENCODE_SESSION_ID };
   return {};
 }
 

@@ -23,7 +23,6 @@ export const MemberRecord = Schema.Struct({
   rec: Schema.String,
   keys: Schema.optional(Schema.Record(Schema.String, Schema.String)),
   post: Schema.optional(Schema.Boolean),
-  admitsUntil: Schema.optional(Schema.Number),
 });
 
 /** A message as stored: AES-GCM iv and ciphertext. */
@@ -35,15 +34,6 @@ export const SealedIcon = Schema.Struct({
   iv: Schema.String,
   ct: Schema.String.check(Schema.isMaxLength(48 * 1024)),
 });
-
-/** A vault version: the one the client read (0 for none yet). */
-export const VaultVersion = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0), Schema.isLessThanOrEqualTo(Number.MAX_SAFE_INTEGER));
-
-/** A vault blob, a device handover box, a writer key: present and not empty. */
-export const Present = Schema.NonEmptyString;
-
-/** A body a linked computer signed: its key and when. */
-export const SignedByMachine = Schema.Struct({ pk: Schema.String, ts: Schema.Number, label: Schema.optional(Schema.Unknown) });
 
 /** Whether `x` has `schema`'s shape (routes keep their own refusal texts). */
 export function fits<S extends Schema.Top>(schema: S, x: unknown): x is S["Type"] {

@@ -1,3 +1,4 @@
+import { relayUrl } from "./relay"
 // Cached channel icons. Members read them through the sealed API; everyone else sees a letter.
 
 import { useEffect, useState } from "react"
@@ -32,7 +33,7 @@ function write(room: string, stored: Stored): void {
 /** Refetch when iconAt moved. A channel that never had an icon stays a letter. */
 export async function refreshIcon(member: StoredMember): Promise<void> {
   const room = member.access.roomId
-  const ch = new Channel(member.access, location.origin, member.identity)
+  const ch = new Channel(member.access, relayUrl(), member.identity)
   const at = (await ch.info()).iconAt ?? null
   const prev = read(room)
   if (prev && prev.at === at) return

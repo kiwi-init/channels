@@ -62,6 +62,8 @@ export function IconButton({
   round?: boolean
   ref?: Ref<HTMLButtonElement>
 }) {
+  // On glass (the floating header), the glass is its fill: hover brightens it, and on reads as ink.
+  const glass = /(^|\s)glass(\s|$)/.test(className ?? "")
   return (
     <Tooltip label={label}>
       <button
@@ -71,7 +73,13 @@ export function IconButton({
           "relative inline-flex shrink-0 items-center justify-center transition-colors duration-120 disabled:opacity-40",
           round ? "rounded-full" : "rounded-ctl",
           !/(^|\s)size-/.test(className ?? "") && "size-8",
-          active ? "bg-wash-2 text-ink" : "text-ink-2 hover:bg-wash hover:text-ink data-popup-open:bg-wash-2 data-popup-open:text-ink",
+          glass
+            ? active
+              ? "bg-ink text-canvas"
+              : "data-popup-open:bg-(--glass-fill-hover)"
+            : active
+              ? "bg-wash-2 text-ink"
+              : "text-ink-2 hover:bg-wash hover:text-ink data-popup-open:bg-wash-2 data-popup-open:text-ink",
           className
         )}
         {...props}
@@ -94,7 +102,7 @@ export function TextField({ className, ...props }: InputHTMLAttributes<HTMLInput
 
 /** An agent with no colour of its own still gets one, the same every time: a channel of agents isn't a wall of grey. */
 const HUES = Object.keys(PALETTE).filter((c) => c !== "yellow") as Color[]
-function hueOf(name: string): Color {
+export function hueOf(name: string): Color {
   let h = 0
   for (const ch of name) h = (h * 31 + ch.codePointAt(0)!) >>> 0
   return HUES[h % HUES.length]!
