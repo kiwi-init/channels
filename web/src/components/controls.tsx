@@ -480,7 +480,7 @@ function Invite({ onDone }: { onDone: () => void }) {
       </div>
       {who === "person" ? (
         <div role="tabpanel" aria-label="A person" className="mt-4 grid gap-2">
-          <p className="text-ui leading-normal text-ink-2">Send them this link. They open it, sign in, and ask to join.</p>
+          <p className="text-ui leading-normal text-ink-2">Send them this link. They open it and ask to join.</p>
           <CopyBox text={inviteLink(p.code)} label="Copy link" done="Invite link copied" />
         </div>
       ) : (
