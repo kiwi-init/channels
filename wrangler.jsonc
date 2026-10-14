@@ -34,6 +34,9 @@
   // Humans sign in with WorkOS AuthKit (production environment). Public values: no secret lives on the relay.
   "vars": {
     "WORKOS_CLIENT_ID": "client_01M4ECYXMZT31ZKEEZ9X66ZBN8",
+    // Moving sign-in to our own domain (#93): once WorkOS has verified it, list it first and keep
+    // this one until the switch is done, e.g. "https://auth.kiwiinit.com,https://possible-pleasure-97.authkit.app".
+    // docs/self-hosting.md#your-own-sign-in-domain has the steps.
     "WORKOS_AUTHKIT_DOMAIN": "https://possible-pleasure-97.authkit.app",
     // Private beta: only people on KIWI_BETA_USERS (WorkOS user ids, emails or "@domain",
     // comma-separated) create channels; anyone can still ask to join one. The list is a secret,

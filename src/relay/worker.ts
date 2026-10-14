@@ -9,7 +9,7 @@ import { DurableObject } from "cloudflare:workers";
 import * as Layer from "effect/Layer";
 import { CLOSE_CLOSED, CLOSE_REMOVED, PING, PONG } from "../protocol.ts";
 import { ChannelGone, NotFound, Refused, UpdateRequired } from "./failures.ts";
-import { Human, workosHumanAuth, workosProfiles, type HumanAuth } from "./human.ts";
+import { Human, workosFromSettings, type HumanAuth } from "./human.ts";
 import { Policy, policyFrom, type RelayPolicy } from "./policy.ts";
 import {
   Directory as ChannelLists, // the service; the Durable Object below counts owned channels instead
@@ -42,7 +42,7 @@ interface Env {
   MAILBOX: DurableObjectNamespace<MailboxBox>;
   /** When set, channels belong to humans signed in with this WorkOS AuthKit client. */
   WORKOS_CLIENT_ID?: string;
-  /** The AuthKit domain (https://….authkit.app), whose keys may also sign tokens. */
+  /** The AuthKit domain (https://….authkit.app or a custom one), whose keys may also sign tokens. Comma-separated while moving domains. */
   WORKOS_AUTHKIT_DOMAIN?: string;
   /** Secret, optional: lets the beta list match people by email (the relay never names owners from it). */
   WORKOS_API_KEY?: string;
@@ -56,9 +56,7 @@ let humanAuth: HumanAuth | null | undefined;
 /** One verifier (and JWKS cache) per isolate. */
 function human(env: Env): HumanAuth | null {
   if (humanAuth === undefined) {
-    const id = env.WORKOS_CLIENT_ID;
-    const jwks = id ? [`https://api.workos.com/sso/jwks/${id}`, ...(env.WORKOS_AUTHKIT_DOMAIN ? [`${env.WORKOS_AUTHKIT_DOMAIN}/oauth2/jwks`] : [])] : [];
-    humanAuth = id ? { ...workosHumanAuth(id, jwks), ...(env.WORKOS_API_KEY ? { profile: workosProfiles(env.WORKOS_API_KEY) } : {}) } : null;
+    humanAuth = workosFromSettings({ clientId: env.WORKOS_CLIENT_ID, authkitDomain: env.WORKOS_AUTHKIT_DOMAIN, apiKey: env.WORKOS_API_KEY });
   }
   return humanAuth;
 }
