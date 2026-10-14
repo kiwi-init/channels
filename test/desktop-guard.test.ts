@@ -3,7 +3,8 @@
 
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { externalUrl, fileFor, isAppUrl, readStore } from "../desktop/src/guard.ts";
+import { readFileSync } from "node:fs";
+import { csp, externalUrl, fileFor, isAppUrl, readStore } from "../desktop/src/guard.ts";
 
 describe("the window shows the app and nothing else (T183)", () => {
   test("only kiwi-app://app/ is the app", () => {
@@ -59,5 +60,26 @@ describe("kiwi-app:// serves web/dist and nothing beside it (T187)", () => {
     expect(fileFor(root, "/%E0%A4%A.js")).toBeNull();
     expect(fileFor(root, "/x%00.js")).toBeNull();
     expect(fileFor(root, "/../dist-extra/x.js")).toBe(join(root, "dist-extra/x.js"));
+  });
+});
+
+describe("kiwi-app:// sends a CSP (T184)", () => {
+  const directives = (p: string) => new Map(p.split("; ").map((d) => [d.split(" ")[0]!, d.split(" ").slice(1)]));
+  test("only the app's own script; its relay over HTTP and WebSocket; nothing framed or posted", () => {
+    const d = directives(csp("https://channels.kiwiinit.com"));
+    expect(d.get("script-src")).toEqual(["'self'"]);
+    expect(d.get("connect-src")).toEqual(expect.arrayContaining(["'self'", "https://channels.kiwiinit.com", "wss://channels.kiwiinit.com"]));
+    expect(d.get("object-src")).toEqual(["'none'"]);
+    expect(d.get("frame-ancestors")).toEqual(["'none'"]);
+    expect(d.get("form-action")).toEqual(["'none'"]);
+    expect(csp("http://localhost:8787")).toContain("ws://localhost:8787");
+    // A relay that isn't one adds nothing to connect to.
+    expect(csp("http://attacker.example")).not.toContain("attacker");
+    for (const p of [csp("https://r.example")]) expect(p).not.toMatch(/unsafe-eval|script-src[^;]*unsafe-inline/);
+  });
+  test("it allows what the hosted web's CSP does (web/public/_headers)", () => {
+    const hosted = /Content-Security-Policy: (.*)/.exec(readFileSync(new URL("../web/public/_headers", import.meta.url), "utf8"))![1]!;
+    const app = directives(csp("https://r.example"));
+    for (const [name, values] of directives(hosted)) for (const v of values) expect(app.get(name) ?? []).toContain(v);
   });
 });

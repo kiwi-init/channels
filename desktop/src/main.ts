@@ -16,7 +16,7 @@ import { generateIdentity, type Identity } from "../../src/identity.ts";
 import { answerPair, newSecret, openMailbox, pairCode, readPairAsk, type Mailbox, type PairAsk } from "../../src/mailbox.ts";
 import { certifyMachine } from "../../src/person.ts";
 import { compareVersions, ensureOnPath, keepCli } from "./cli.ts";
-import { APP_HOST, APP_SCHEME, externalUrl, fileFor, isAppUrl, normalizeRelay, readStore } from "./guard.ts";
+import { APP_HOST, APP_SCHEME, csp, externalUrl, fileFor, isAppUrl, normalizeRelay, readStore } from "./guard.ts";
 import { applyUpdate, startUpdates, updateState } from "./updater.ts";
 import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, type HelloResult } from "./daemon-client.ts";
 import type { ChannelIdentityView, ComputerView, DaemonStatus, PairAskView, PendingItem, PersonView, SignInResult, StoreSnapshot } from "./bridge.ts";
@@ -113,6 +113,14 @@ const webDist = () => path.join(app.isPackaged ? process.resourcesPath : path.jo
 
 const MIME: Record<string, string> = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon", ".woff2": "font/woff2", ".woff": "font/woff", ".ttf": "font/ttf", ".map": "application/json" };
 
+/** Headers for everything kiwi-app:// serves: the type, and the CSP (guard.ts), so script that got in can't reach out. */
+const webHeaders = (type: string): Record<string, string> => ({
+  "content-type": type,
+  "content-security-policy": csp(store.relayUrl),
+  "x-content-type-options": "nosniff",
+  "referrer-policy": "no-referrer",
+});
+
 function serveWeb(): void {
   protocol.handle(APP_SCHEME, (req) => {
     const u = new URL(req.url);
@@ -121,7 +129,7 @@ function serveWeb(): void {
     if (!file) return new Response("not found", { status: 404 });
     try {
       const body = fs.readFileSync(file);
-      return new Response(new Uint8Array(body), { headers: { "content-type": MIME[path.extname(file)] ?? "application/octet-stream" } });
+      return new Response(new Uint8Array(body), { headers: webHeaders(MIME[path.extname(file)] ?? "application/octet-stream") });
     } catch {
       if (path.basename(file) !== "index.html") return serveWebFallback();
       return new Response("not found", { status: 404 });
@@ -132,7 +140,7 @@ function serveWeb(): void {
 function serveWebFallback(): Response {
   try {
     const body = fs.readFileSync(path.join(webDist(), "index.html"));
-    return new Response(new Uint8Array(body), { headers: { "content-type": "text/html" } });
+    return new Response(new Uint8Array(body), { headers: webHeaders("text/html") });
   } catch {
     return new Response("run `bun run web:build` in the repo root first", { status: 500 });
   }
