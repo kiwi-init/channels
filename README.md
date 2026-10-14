@@ -130,7 +130,10 @@ KIWI_TEST_RELAY=http://localhost:8787 bun test # same suite against `wrangler de
 bun run typecheck                            # CLI, Worker and web lint
 bun run build                                # single-file binary in dist/kiwi
 bun run web:build                            # the app's renderer, web/dist (needed by desktop/)
+bun run changelog --write                    # CHANGELOG.md's section for src/version.ts (in the release PR)
 ```
+
+[CHANGELOG.md](CHANGELOG.md) is written from each squash-merged PR's title and description, so a PR needs one: CI fails a PR none of whose commits has a body, and a release tag fails until CHANGELOG.md has its version's section.
 
 The desktop app lives in `desktop/` (Electron; see [desktop/README.md](desktop/README.md)); the relay's static site lives in `site/` (see [site/README.md](site/README.md)).
 
