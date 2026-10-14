@@ -27,9 +27,8 @@ import { forgetHistory, readCached, rememberMessage } from "./history"
 import { wholeLog } from "./history-plan"
 import { ICON_LIVE } from "./icon-event"
 import { addMarks, type Marks } from "./receipts"
-import { personClaimFor } from "./person-claim"
 import { fork, run } from "./runtime"
-import { bridge, saveChannels, secrets, useSecrets, type ChannelIdentityView } from "./secrets"
+import { bridge, personClaim, saveChannels, secrets, useSecrets, type ChannelIdentityView } from "./secrets"
 import { noteSignInGone } from "./session"
 import { untilOpen } from "./until-open"
 import { withHeads } from "./news"
@@ -552,8 +551,8 @@ export async function askToJoin(code: string, name: string, role?: string): Prom
   const prior = loadPending(code)
   const identity = prior && prior.identity.name === name ? prior.identity : await generateIdentity(name)
   // A person says which person key is theirs, so the owner can sign it into their record and recognise their computers.
-  const person = secrets().person
-  const claims = person ? { person: await personClaimFor(person, code, identity.pk) } : undefined
+  const claim = await personClaim(code, identity.pk)
+  const claims = claim ? { person: claim } : undefined
   const r = await Channel.requestJoin(relayUrl(), code, identity, { name, ...(role ? { role } : {}) }, claims)
   const p: PendingJoin = { code, identity, requestId: r.requestId }
   await savePending(p)

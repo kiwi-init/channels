@@ -150,7 +150,10 @@ what the app does through `src/client.ts`.
 
 - **Bridge** (`window.kiwi` from the preload, context-isolated): the relay URL (setting; default the
   public relay), a secrets store (the person key, channel identities and pending requests: a
-  synchronous snapshot loaded at start, writes sent to the main process, kept with `safeStorage`),
+  synchronous snapshot loaded at start, writes sent to the main process, kept with `safeStorage`,
+  or a 0600 file in a 0700 folder without a keychain). The snapshot carries the person's public
+  keys only: `provePerson(code, memberPk)` makes a join's person claim in main, and main refuses
+  a write that changes a saved channel's keys (T203),
   `signIn()` (WorkOS device authorization in the main process, opening the system browser; refresh
   token kept with `safeStorage`; a relay with dev sign-in asks for a name), notifications, opening
   links outside, the daemon (`status`, `adopt`), deep links (`kiwi://join/<code>`).

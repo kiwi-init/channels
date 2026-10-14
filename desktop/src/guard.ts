@@ -2,7 +2,13 @@
 // here), so they can be tested without an app. main.ts wires them to the window, the kiwi-app://
 // handler and the secrets store.
 
+import fs from "node:fs";
 import path from "node:path";
+
+import { decodeJoinCode } from "../../src/crypto.ts";
+import type { Identity } from "../../src/identity.ts";
+import { provePerson, type PersonClaim } from "../../src/person.ts";
+import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, PublicPerson, StoreSnapshot } from "./bridge.ts";
 
 export const APP_SCHEME = "kiwi-app";
 export const APP_HOST = "app";
@@ -111,4 +117,65 @@ export function readStore(raw: Buffer | null, decrypt: ((b: Buffer) => string) |
   } catch (e) {
     return { kind: "unreadable", why: why || (e instanceof Error ? e.message : String(e)) };
   }
+}
+
+export function publicPerson(p: PersonView | null): PublicPerson | null {
+  return p ? { name: p.name, pk: p.pk, xpk: p.xpk } : null;
+}
+
+export interface StoredKeys {
+  relayUrl: string;
+  person: PersonView | null;
+  channels: ChannelIdentityView[];
+  computers: ComputerView[];
+  pending: PendingItem[];
+}
+
+export function snapshotOf(s: StoredKeys): StoreSnapshot {
+  return { relayUrl: s.relayUrl, person: publicPerson(s.person), channels: s.channels, computers: s.computers, pending: s.pending };
+}
+
+function epochKeys(access: unknown): Map<string, string> {
+  const keys = access && typeof access === "object" ? (access as { keys?: unknown }).keys : undefined;
+  if (!keys || typeof keys !== "object") return new Map();
+  return new Map(Object.entries(keys).filter((e): e is [string, string] => typeof e[1] === "string"));
+}
+
+const seatOf = (c: ChannelIdentityView): string => `${c.roomId ?? ""}/${c.pk}`;
+
+export function mergeChannels(stored: ChannelIdentityView[], next: ChannelIdentityView[]): ChannelIdentityView[] {
+  const before = new Map(stored.map((c) => [seatOf(c), c]));
+  for (const c of next) {
+    const old = before.get(seatOf(c));
+    if (!old) continue;
+    const changed = c.sk !== old.sk || (old.xsk !== undefined && c.xsk !== old.xsk);
+    const now = epochKeys(c.access);
+    const lost = [...epochKeys(old.access)].some(([e, k]) => now.get(e) !== k);
+    if (changed || lost) throw new Error(`the keys of a saved channel can't change (${c.label})`);
+  }
+  return next;
+}
+
+export function publicComputer(c: ComputerView): ComputerView {
+  return { label: c.label, os: c.os, machinePk: c.machinePk, machineXpk: c.machineXpk, personPk: c.personPk, at: c.at, ...(c.own ? { own: true } : {}) };
+}
+
+export function writePrivate(file: string, raw: Buffer, platform: NodeJS.Platform = process.platform): void {
+  const dir = path.dirname(file);
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  if (platform !== "win32") fs.chmodSync(dir, 0o700);
+  const tmp = `${file}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(tmp, raw, { mode: 0o600 });
+    if (platform !== "win32") fs.chmodSync(tmp, 0o600);
+    fs.renameSync(tmp, file);
+  } catch (e) {
+    fs.rmSync(tmp, { force: true });
+    throw e;
+  }
+}
+
+export function claimFor(person: Identity, code: unknown, memberPk: unknown): Promise<PersonClaim> {
+  if (typeof code !== "string" || typeof memberPk !== "string") throw new Error("bad person claim request");
+  return provePerson(person, decodeJoinCode(code).roomId, memberPk);
 }

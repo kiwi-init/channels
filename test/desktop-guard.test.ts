@@ -4,7 +4,13 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
-import { csp, externalUrl, fileFor, isAppUrl, readStore } from "../desktop/src/guard.ts";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import type { ChannelIdentityView, ComputerView, PersonView } from "../desktop/src/bridge.ts";
+import { claimFor, csp, externalUrl, fileFor, isAppUrl, mergeChannels, publicComputer, readStore, snapshotOf, writePrivate } from "../desktop/src/guard.ts";
+import { encodeJoinCode, newRoomId } from "../src/crypto.ts";
+import { generateIdentity } from "../src/identity.ts";
+import { checkPerson } from "../src/person.ts";
 
 describe("the window shows the app and nothing else (T183)", () => {
   test("only kiwi-app://app/ is the app", () => {
@@ -82,5 +88,67 @@ describe("kiwi-app:// sends a CSP (T184)", () => {
     const app = directives(csp("https://r.example"));
     for (const [name, values] of directives(hosted)) for (const v of values) if (!/workos|authkit/.test(v)) expect(app.get(name) ?? []).toContain(v);
     expect(csp("https://r.example")).not.toMatch(/workos|authkit/);
+  });
+});
+
+describe("the person key stays in main (T203)", () => {
+  const person: PersonView = { name: "jow", pk: "PK", sk: "SK", xpk: "XPK", xsk: "XSK" };
+
+  test("the renderer's snapshot has the person's public keys only", () => {
+    const snap = snapshotOf({ relayUrl: "https://r.example", person, channels: [], computers: [], pending: [] });
+    expect(snap.person).toEqual({ name: "jow", pk: "PK", xpk: "XPK" });
+    expect(JSON.stringify(snap)).not.toContain("SK\"");
+    expect(snapshotOf({ relayUrl: "https://r.example", person: null, channels: [], computers: [], pending: [] }).person).toBeNull();
+  });
+
+  test("main makes the person's claim for a join, and it checks out", async () => {
+    const me = await generateIdentity("jow");
+    const member = await generateIdentity("jow-agent");
+    const room = newRoomId();
+    const claim = await claimFor(me, encodeJoinCode({ roomId: room, ownerFp: "A".repeat(16) }), member.pk);
+    expect(await checkPerson(claim, room, member.pk)).toBe(me.pk);
+    expect(() => claimFor(me, 42, member.pk)).toThrow("bad person claim request");
+  });
+});
+
+describe("the renderer can't change a saved channel's keys (T203)", () => {
+  const ch = (keys: Record<string, string>, over: Partial<ChannelIdentityView> = {}): ChannelIdentityView => ({ label: "c", pk: "pk1", sk: "sk1", xpk: "x1", xsk: "xs1", roomId: "r1", access: { roomId: "r1", keys }, ...over });
+  const stored = [ch({ "0": "k0" })];
+
+  test("adding a channel, removing one, and adding the next epoch's key are kept", () => {
+    const added = [...stored, ch({ "0": "z" }, { pk: "pk2", sk: "sk2", roomId: "r2" })];
+    expect(mergeChannels(stored, added)).toEqual(added);
+    expect(mergeChannels(stored, [])).toEqual([]);
+    expect(mergeChannels(stored, [ch({ "0": "k0", "1": "k1" })])).toEqual([ch({ "0": "k0", "1": "k1" })]);
+  });
+
+  test("a different secret key, or a changed or missing epoch key, is refused", () => {
+    expect(() => mergeChannels(stored, [ch({ "0": "k0" }, { sk: "evil" })])).toThrow("can't change");
+    expect(() => mergeChannels(stored, [ch({ "0": "k0" }, { xsk: "evil" })])).toThrow("can't change");
+    expect(() => mergeChannels(stored, [ch({ "0": "evil" })])).toThrow("can't change");
+    expect(() => mergeChannels(stored, [ch({ "1": "k1" })])).toThrow("can't change");
+  });
+
+  test("a computer keeps its public fields only", () => {
+    const sneaky = { label: "mac", os: "macos", machinePk: "m", machineXpk: "mx", personPk: "p", at: 1, sk: "secret" } as ComputerView;
+    expect(publicComputer(sneaky)).toEqual({ label: "mac", os: "macos", machinePk: "m", machineXpk: "mx", personPk: "p", at: 1 });
+  });
+});
+
+describe.skipIf(process.platform === "win32")("the saved keys are a 0600 file in a 0700 folder (T203)", () => {
+  test("even when the folder was already there and open to others", () => {
+    const root = mkdtempSync(join(tmpdir(), "kiwi-store-"));
+    try {
+      const dir = join(root, "Kiwi");
+      mkdirSync(dir, { mode: 0o755 });
+      chmodSync(dir, 0o755);
+      const file = join(dir, "kiwi-store.bin");
+      writePrivate(file, Buffer.from("{}"));
+      writePrivate(file, Buffer.from('{"a":1}'));
+      expect(statSync(dir).mode & 0o777).toBe(0o700);
+      expect(statSync(file).mode & 0o777).toBe(0o600);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

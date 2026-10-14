@@ -6,7 +6,8 @@
 
 import { contextBridge, ipcRenderer } from "electron";
 
-import type { ChannelIdentityView, ComputerView, DaemonStatus, KiwiBridge, PairAskView, PendingItem, PersonView, SignInResult, StoreSnapshot, UpdateView } from "./bridge.ts";
+import type { PersonClaim } from "../../src/person.ts";
+import type { ChannelIdentityView, ComputerView, DaemonStatus, KiwiBridge, PairAskView, PendingItem, PublicPerson, SignInResult, StoreSnapshot, UpdateView } from "./bridge.ts";
 
 const relayUrl = (ipcRenderer.sendSync("kiwi:snapshot-sync") as StoreSnapshot).relayUrl;
 
@@ -21,7 +22,8 @@ const kiwi: KiwiBridge = {
   getSnapshot: () => ipcRenderer.sendSync("kiwi:snapshot-sync") as StoreSnapshot,
   onStore: (cb) => on("kiwi:store", cb),
   setRelayUrl: (url: string) => ipcRenderer.invoke("kiwi:set-relay-url", url) as Promise<string>,
-  createPerson: (name: string) => ipcRenderer.invoke("kiwi:create-person", name) as Promise<PersonView>,
+  createPerson: (name: string) => ipcRenderer.invoke("kiwi:create-person", name) as Promise<PublicPerson>,
+  provePerson: (code: string, memberPk: string) => ipcRenderer.invoke("kiwi:prove-person", code, memberPk) as Promise<PersonClaim>,
   saveChannels: (channels: ChannelIdentityView[]) => ipcRenderer.invoke("kiwi:save-channels", channels) as Promise<void>,
   saveComputers: (computers: ComputerView[]) => ipcRenderer.invoke("kiwi:save-computers", computers) as Promise<void>,
   setPending: (pending: PendingItem[]) => ipcRenderer.invoke("kiwi:set-pending", pending) as Promise<void>,
