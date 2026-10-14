@@ -146,7 +146,9 @@ jobs:
             # With electron-builder's bundled keychain of Apple's intermediates (it adds that itself only
             # when it makes the keychain), so the Developer ID identity validates.
             security list-keychains -d user -s "$kc" "$PWD/node_modules/app-builder-lib/certs/root_certs.keychain" $(security list-keychains -d user | tr -d '"')
-            security find-identity -v -p codesigning "$kc" | grep -q "Developer ID Application" \
+            # (Captured, not piped into grep -q: under pipefail an early-quitting grep fails the pipe.)
+            ids=$(security find-identity -v -p codesigning "$kc")
+            [[ "$ids" == *"Developer ID Application"* ]] \
               || { echo "no Developer ID Application identity in the certificate (export it from My Certificates, with its key)"; exit 1; }
             export CSC_KEYCHAIN="$kc"
             unset MAC_CERT_P12_BASE64 MAC_CERT_PASSWORD
@@ -173,7 +175,9 @@ jobs:
           if [ ${#sign[@]} -gt 0 ]; then
             for app in release/mac*/Kiwi.app; do
               codesign --verify --deep --strict --verbose=2 "$app"
-              codesign -dv "$app/Contents/Resources/kiwi" 2>&1 | grep -q "Authority=Developer ID Application" || { echo "the bundled kiwi isn't signed with the Developer ID"; exit 1; }
+              # -dvv: codesign names the signing authorities only from two v's up.
+              kiwi_sig=$(codesign -dvv "$app/Contents/Resources/kiwi" 2>&1)
+              [[ "$kiwi_sig" == *"Authority=Developer ID Application"* ]] || { echo "the bundled kiwi isn't signed with the Developer ID:"; echo "$kiwi_sig"; exit 1; }
               xcrun stapler validate "$app"
               spctl --assess --type execute --verbose=2 "$app"
             done
