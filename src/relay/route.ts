@@ -194,11 +194,17 @@ const routes: RoomRoute[] = [
         // During a private beta only listed people create channels; anyone may still join one.
         if (user && !(yield* inBeta(user))) return yield* new Forbidden({ message: betaMessage(policy) });
         const most = policy.channelsPerOwner;
-        if (user && most && (yield* Effect.promise(() => people.list(user))).filter((c) => c.owner).length >= most) {
+        const { roomId } = yield* RoomStore;
+        // One step in the owner's own store counts their channels and holds a slot for this one, so
+        // creates running at once (on other rooms) can't all pass. A failed create gives the slot back.
+        const quota = user && most ? { user, most } : null;
+        if (quota && !(yield* Effect.promise(() => people.reserve(quota.user, roomId, quota.most)))) {
           return yield* new TooMany({ message: `you own ${most} channels, the most this relay allows per person; close one to create another` });
         }
-        const b = yield* json<CreateBody>();
-        yield* create(signer, b, user);
+        yield* Effect.gen(function* () {
+          const b = yield* json<CreateBody>();
+          yield* create(signer, b, user);
+        }).pipe(Effect.onError(() => (quota ? Effect.promise(() => people.release(quota.user, roomId)) : Effect.void)));
         const updates = user ? yield* directory : undefined;
         return { data: { head: 0 }, fx: { ...(updates ? { directory: updates } : {}), expireAt: (yield* touch) ?? undefined } };
       }),
