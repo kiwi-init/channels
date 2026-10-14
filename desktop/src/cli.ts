@@ -7,6 +7,7 @@ import { execFile } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { ensureOnPath as ensureShellPath } from "../../src/shell-path.ts";
 
 /** Where the CLI lives: the install script's place (KIWI_INSTALL moves both). */
 export function cliPath(): string {
@@ -66,29 +67,11 @@ export async function keepCli(bundled: string, bundledVersion: string): Promise<
   return { path: dest, version: bundledVersion, updated: true };
 }
 
-const MARK = "# Added by the Kiwi app: it keeps the kiwi CLI in ~/.kiwi/bin current.";
-
 /**
- * A shell finds `kiwi`: unless the shell's own profile already says ~/.kiwi/bin (the app or the
- * person put it there), one marked line is added to it, once. Returns the file it changed, if any.
- * The shell is $SHELL's: zsh, bash or fish; anything else gets ~/.profile.
+ * A shell finds `kiwi`: unless the shell's own profile already names the CLI's folder (the app, the
+ * install script or the person put it there), one marked line is added to it, once. Returns the file
+ * it changed, if any. Shared with the install script's logic and `kiwi setup` (src/shell-path.ts).
  */
 export function ensureOnPath(): string | null {
-  if (process.platform === "win32") return null;
-  const home = os.homedir();
-  const sh = path.basename(process.env["SHELL"] || (process.platform === "darwin" ? "zsh" : "bash"));
-  const file =
-    sh === "zsh"
-      ? path.join(process.env["ZDOTDIR"] || home, ".zshrc")
-      : sh === "bash"
-        ? path.join(home, process.platform === "darwin" ? ".bash_profile" : ".bashrc")
-        : sh === "fish"
-          ? path.join(home, ".config", "fish", "conf.d", "kiwi.fish")
-          : path.join(home, ".profile");
-  const line = sh === "fish" ? "fish_add_path -g $HOME/.kiwi/bin" : 'export PATH="$HOME/.kiwi/bin:$PATH"';
-  const text = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
-  if (text.includes(".kiwi/bin")) return null;
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.appendFileSync(file, `${text && !text.endsWith("\n") ? "\n" : ""}\n${MARK}\n${line}\n`);
-  return file;
+  return ensureShellPath({ dir: path.dirname(cliPath()), mark: "# Added by the Kiwi app: it keeps the kiwi CLI in ~/.kiwi/bin current." });
 }

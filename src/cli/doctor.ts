@@ -59,7 +59,7 @@ const checkInstall = Effect.fn("Doctor.install")(function* () {
     found.push({
       ok: false,
       what: "`kiwi` is not on PATH.",
-      how: `Add this to your shell profile: export PATH="${join(homedir(), ".kiwi", "bin")}:$PATH"`,
+      how: `Run \`kiwi setup\` (it adds kiwi to your shell profile), or add this yourself: export PATH="${join(homedir(), ".kiwi", "bin")}:$PATH"`,
     });
     return found;
   }

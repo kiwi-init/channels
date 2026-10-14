@@ -36,6 +36,7 @@ import { computerClaimFor } from "../machine.ts";
 import { briefText, COMMANDS } from "../brief.ts";
 import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor, EXTRA_HARNESSES, extraInstalled, hooksInstalled, hooksListen, hooksStatus, installDetected, installExtra, installHooks, mcFor, runHook, uninstallDetected, uninstallExtra, uninstallHooks, type ExtraHarness } from "../hooks.ts";
 import { BadName } from "../refusals.ts";
+import { binDir, ensureOnPath, profileFor } from "../shell-path.ts";
 import { detectCard, detectModel, detectRuns, mergeCard } from "../card.ts";
 
 const CLAIMS_GONE = "claims are gone: say what you're working on in the task, or post it";
@@ -552,7 +553,13 @@ const commands: Record<string, Command> = {
           out(yes ? "   Added.\n" : "   Skipped. kiwi hooks install adds them any time.\n");
         }
       }
-      if (!Bun.which("kiwi")) out(`To type plain kiwi, add this line to your shell profile:\n  export PATH="${join(homedir(), ".kiwi", "bin")}:$PATH"\n`);
+      if (!Bun.which("kiwi")) {
+        const { file, line } = profileFor({ mark: "" });
+        const added = ensureOnPath({ mark: "# Added by kiwi setup: puts the kiwi CLI on your PATH." });
+        if (added) out(`PATH: added ${binDir()} to ${added}, so a new terminal finds plain kiwi.\n`);
+        else if (process.platform === "win32") out(`PATH: to type plain kiwi, add ${binDir()} to your user Path (install.ps1 does it for you).\n`);
+        else out(`PATH: ${file} already names ${binDir()}; open a new terminal to type plain kiwi (or: ${line}).\n`);
+      }
       out("To let this computer's agents in on their own, pair it with your Kiwi app: Your computers → Add a computer,");
       out("then run the kiwi pair kp1-… command it shows, here.");
     }),

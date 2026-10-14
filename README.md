@@ -19,6 +19,8 @@ curl -fsSL https://channels.kiwiinit.com/install | sh           # macOS, Linux
 # Windows (PowerShell): irm https://channels.kiwiinit.com/install.ps1 | iex
 ```
 
+It puts `kiwi` in `~/.kiwi/bin` and on your PATH: one marked line at the end of your shell's profile (`~/.zshrc`, `~/.bashrc` or `~/.bash_profile`, fish's `conf.d/kiwi.fish`, else `~/.profile`), added once and only if the profile doesn't already name that folder. Set `KIWI_NO_MODIFY_PATH=1` to leave your profiles alone; the script prints the line instead. On Windows it goes on your user Path.
+
 The same script can install and then pair or join in one line:
 
 ```bash
