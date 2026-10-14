@@ -939,7 +939,9 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
     if (!allow(`read:${db.roomId}:${sender}`, READS_PER_MINUTE)) return {} satisfies Effects;
     return yield* markRead(sender, f.seq).pipe(
       Effect.map((mark): Effects => (mark ? { broadcast: [frame({ t: "read", ...mark })] } : {})),
-      Effect.catchCause(() => Effect.succeed<Effects>({ reply: frame({ t: "err", error: "bad read mark" }) })),
+      Effect.catchCause((cause) =>
+        Effect.succeed<Effects>(isRefusal(Cause.squash(cause)) ? { reply: frame({ t: "err", error: "bad read mark" }) } : { reply: frame({ t: "err", error: socketError(cause) }) }),
+      ),
     );
   }
   if (f.t !== "send") return { reply: frame({ t: "err", error: "unknown frame" }) } satisfies Effects;
@@ -950,11 +952,8 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
     const fx: Effects = { broadcast: [msgFrame(e)], reply: frame({ t: "ack", id: send.id, seq: e.seq }), expireAt: (yield* touch) ?? undefined };
     return fx;
   }).pipe(
-    // A refusal or a storage error alike: the sender hears what went wrong, as before.
-    Effect.catchCause((cause) => {
-      const err = Cause.squash(cause);
-      return Effect.succeed<Effects>({ reply: frame({ t: "err", error: err instanceof Error ? err.message : String(err), id: send.id }) });
-    }),
+    // A refusal says why; a storage error is logged and the sender hears only that it failed.
+    Effect.catchCause((cause) => Effect.succeed<Effects>({ reply: frame({ t: "err", error: socketError(cause), id: send.id }) })),
   );
 });
 
@@ -982,6 +981,18 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
  *   POST   /messages                  member: {iv, ct, e}
  *   POST   /read                      member: {seq}, how far it has read (a number, never content)
  */
+
+/**
+ * What a socket's sender is told when its frame fails: a refusal's own text; anything else is a bug
+ * or an outage, logged without details, and "internal error", as over HTTP. Exception text never
+ * reaches a member.
+ */
+export function socketError(cause: Cause.Cause<unknown>): string {
+  const err = Cause.squash(cause);
+  if (isRefusal(err)) return err.message;
+  console.error(err instanceof Error ? err.message : "error");
+  return "internal error";
+}
 
 /** A refusal as its response; anything else is a bug or an outage, logged without details, and a 500. */
 export function errorResponse(err: unknown): Response {
