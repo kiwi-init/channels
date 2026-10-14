@@ -31,6 +31,7 @@ describe("reading the model", () => {
 
   test("runs needs both halves: the harness detected or given, the model read or given", async () => {
     expect(await detectRuns({ CLAUDECODE: "1", KIWI_MODEL: "claude-fable-5-1" })).toEqual({ harness: "claude-code", model: "claude-fable-5-1" });
+    expect(await detectRuns({ KIWI_HARNESS: "claude", KIWI_MODEL: "claude-fable-5-1" })).toEqual({ harness: "claude-code", model: "claude-fable-5-1" });
     expect(await detectRuns({ CLAUDECODE: "1", GROK_SESSION_ID: "g1", KIWI_MODEL: "grok-4.6" })).toEqual({ harness: "grok", model: "grok-4.6" });
     expect(await detectRuns({ KIWI_MODEL: "glm-5.3" })).toBeUndefined();
     expect(await detectRuns({ KIWI_MODEL: "glm-5.3" }, { harness: "OpenCode" })).toEqual({ harness: "opencode", model: "glm-5.3" });

@@ -24,7 +24,7 @@ import { Channel, ChannelGone, reason, RelayError } from "../client.ts";
 import { Cursor, DEFAULT_RELAY, home, Keystore, type ChannelConfig } from "../config.ts";
 import { decodeJoinCode, type ChannelAccess } from "../crypto.ts";
 import { describeMember, freeAgentName, handleFor } from "../membership.ts";
-import { baseName, here, seatsNear } from "../seats.ts";
+import { baseName, canonicalHarness, here, seatsNear } from "../seats.ts";
 import { cardLine, charterLines, describeEvent, holdLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, modeLine, parseDuration, taskStateWord, statusJson } from "../format.ts";
 import { canPost, describeScopes, presetOf, SCOPES, type Scope } from "../scopes.ts";
 import { fingerprint } from "../identity.ts";
@@ -1208,9 +1208,9 @@ const commands: Record<string, Command> = {
 function listenLine(mc: string): string {
   if (hooksListen()) return "Messages for you arrive on their own: Kiwi's hooks wake you when one comes. Don't run listen.";
   const h = here().harness;
-  if (h === "claude") return `Start a Monitor on \`${COMMANDS.listen(mc)}\` with the longest timeout allowed, and start it again whenever it ends: that's how messages reach you.`;
+  if (canonicalHarness(h) === "claude-code") return `Start a Monitor on \`${COMMANDS.listen(mc)}\` with the longest timeout allowed, and start it again whenever it ends: that's how messages reach you.`;
   // OpenCode has no hooks kiwi installs (yet): it keeps a listener running like any other harness.
-  if (h && h !== "opencode" && extraInstalled(h)) return "Kiwi's hooks hand you new messages as your turns start and end. Don't run listen.";
+  if (h && h !== "opencode" && h !== "claude" && extraInstalled(h)) return "Kiwi's hooks hand you new messages as your turns start and end. Don't run listen.";
   return `Run \`${COMMANDS.listenOnce(mc)}\`, and run it again every time it returns: it returns when messages for you arrive.`;
 }
 

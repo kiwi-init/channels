@@ -63,6 +63,22 @@ export function baseName(h: Here): string {
   return h.harness ?? "agent";
 }
 
+/**
+ * The owner-signed `runs` name for a seat harness. Seats store `claude` so
+ * agents stay named `claude`; cards and `runs` store `claude-code`.
+ */
+export function canonicalHarness(h: string | undefined): string | undefined {
+  if (!h) return undefined;
+  return h === "claude" ? "claude-code" : h;
+}
+
+/** Whether a seat harness and a card/`runs` harness are the same product. */
+export function sameHarness(a: string | undefined, b: string | undefined): boolean {
+  const left = canonicalHarness(a);
+  const right = canonicalHarness(b);
+  return !!left && left === right;
+}
+
 function real(p: string): string {
   try {
     return realpathSync(p);
