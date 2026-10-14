@@ -419,6 +419,8 @@ function wireIpc(): void {
     return norm;
   });
   ipcMain.handle("kiwi:create-person", async (_e, name: string) => {
+    // One person key, for good: every computer's certificate and channel seat is signed by it.
+    if (store.person) throw new Error("this app already has your person key");
     const clean = name.replace(/[\u0000-\u001f\u007f-\u009f\u2028-\u2069]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "someone";
     const id = await generateIdentity(clean);
     const person: PersonView = { name: clean, pk: id.pk, sk: id.sk, xpk: id.xpk as string, xsk: id.xsk as string };
