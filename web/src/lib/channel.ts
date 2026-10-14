@@ -32,6 +32,7 @@ import { fork, run } from "./runtime"
 import { bridge, saveChannels, secrets, useSecrets, type ChannelIdentityView } from "./secrets"
 import { noteSignInGone } from "./session"
 import { untilOpen } from "./until-open"
+import { withHeads } from "./news"
 
 /** How much history to load when the page opens. */
 const HISTORY = 2_000
@@ -377,8 +378,8 @@ export interface ChannelRow {
   head?: number
 }
 
-/** Sent when the person leaves a channel: a moment to refresh the list (within LISTING_EVERY). */
-export const LEFT_CHANNEL = "mc:left-channel"
+/** How often listed channels are asked for their head (GET /). Cheap: seq only. */
+export const HEADS_EVERY = 15_000
 
 const untitled = (room: string) => `Channel ${room.slice(0, 4).toUpperCase()}`
 
@@ -393,7 +394,7 @@ export function useChannelList(): ChannelRow[] {
     return () => window.removeEventListener(CHANGED, update)
   }, [])
 
-  return useMemo(() => {
+  const rows = useMemo(() => {
     const rows = new Map<string, ChannelRow>()
     for (const c of local) {
       const m = loadMember(c.code)
@@ -423,6 +424,57 @@ export function useChannelList(): ChannelRow[] {
     }
     return [...rows.values()].sort((a, b) => b.ts - a.ts)
   }, [local, pending])
+
+  const [heads, setHeads] = useState<Record<string, number>>({})
+  const memberKey = rows
+    .filter((r) => r.state === "member")
+    .map((r) => `${r.room}\t${r.code}`)
+    .sort()
+    .join("\n")
+  useEffect(() => {
+    if (!memberKey) return
+    const members = memberKey.split("\n").map((s) => {
+      const i = s.indexOf("\t")
+      return { room: s.slice(0, i), code: s.slice(i + 1) }
+    })
+    let stop = false
+    let gen = 0
+    const tick = async () => {
+      const my = ++gen
+      const next: Record<string, number> = {}
+      await Promise.all(
+        members.map(async ({ room, code }) => {
+          const m = loadMember(code)
+          if (!m) return
+          try {
+            next[room] = await new Channel(m.access, relayUrl(), m.identity).head()
+          } catch {
+            // Closed or unreachable: keep the last head we have.
+          }
+        }),
+      )
+      if (stop || my !== gen) return
+      setHeads((prev) => {
+        const merged = { ...prev, ...next }
+        const keys = Object.keys(merged)
+        if (keys.length === Object.keys(prev).length && keys.every((k) => prev[k] === merged[k])) return prev
+        return merged
+      })
+    }
+    void tick()
+    const id = setInterval(tick, HEADS_EVERY)
+    const onVis = () => {
+      if (!document.hidden) void tick()
+    }
+    document.addEventListener("visibilitychange", onVis)
+    return () => {
+      stop = true
+      clearInterval(id)
+      document.removeEventListener("visibilitychange", onVis)
+    }
+  }, [memberKey])
+
+  return useMemo(() => withHeads(rows, heads), [rows, heads])
 }
 
 /** The channels this browser is in, kept current as they change. */
