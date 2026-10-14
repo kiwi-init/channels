@@ -145,10 +145,10 @@ function isRealFile(p: string): boolean {
 
 /**
  * Make an existing kiwi home private, once. The root is chmodded only when it
- * already holds kiwi state (`config.json` or `identities/`). Only kiwi's own
- * entries are walked, never the rest of the tree: KIWI_HOME is user-supplied,
- * and pointing it at a home directory or a project must not chmod that tree.
- * Symlinks are not followed.
+ * already holds kiwi state (`config.json`, `machine.json`, or `identities/`).
+ * Only kiwi's own entries are walked, never the rest of the tree: KIWI_HOME is
+ * user-supplied, and pointing it at a home directory or a project must not
+ * chmod that tree. Symlinks are not followed.
  */
 function tightenHome(dir: string): void {
   if (tightened.has(dir)) return;
@@ -160,7 +160,7 @@ function tightenHome(dir: string): void {
   }
   if (!st.isDirectory()) return;
   tightened.add(dir);
-  if (!isRealFile(join(dir, "config.json")) && !isRealDir(join(dir, "identities"))) return;
+  if (!isRealFile(join(dir, "config.json")) && !isRealFile(join(dir, "machine.json")) && !isRealDir(join(dir, "identities"))) return;
   try {
     chmodSync(dir, 0o700);
     for (const name of KIWI_DIRS) lockKiwiDir(join(dir, name), name === "downloads");

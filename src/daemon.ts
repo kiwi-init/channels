@@ -14,7 +14,7 @@
 // `kiwi pair` (below) pairs the computer through the relay's pairing mailbox.
 
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import type { Socket } from "bun";
 // The channel stack (client.ts) loads lazily in seatFor, where the multiplex needs it: pairing,
@@ -148,6 +148,16 @@ export async function startDaemon(dir = home()): Promise<Daemon> {
     }
   }
   await ensureMachine(process.env.KIWI_RELAY ?? DEFAULT_RELAY);
+  // mkdirSync(mode) does not chmod an existing dir. After machine.json exists this
+  // is kiwi's own home: lock it so a 0755 leftover cannot leave the socket world-reachable
+  // (macOS ignores unix-socket mode and checks the directory).
+  if (process.platform !== "win32") {
+    try {
+      chmodSync(dir, 0o700);
+    } catch {
+      // A directory this user can't chmod must not stop the daemon.
+    }
+  }
 
   const seats = new Map<string, Seat>();
   const conns = new Set<ConnState>();
@@ -361,6 +371,15 @@ export async function startDaemon(dir = home()): Promise<Daemon> {
       },
     },
   });
+  // Unix sockets have no auth: anyone who can connect can stop/listen/adopt. Bun.listen
+  // creates the file with a wide mode; lock it to this user. (Windows uses a named pipe.)
+  if (process.platform !== "win32") {
+    try {
+      chmodSync(sock, 0o600);
+    } catch {
+      // Same as the home chmod: a mode this user can't set must not stop the daemon.
+    }
+  }
 
   const stop = async (): Promise<void> => {
     if (stopped) return;
