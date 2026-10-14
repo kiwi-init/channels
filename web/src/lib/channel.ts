@@ -31,6 +31,7 @@ import { personClaimFor } from "./person-claim"
 import { fork, run } from "./runtime"
 import { bridge, saveChannels, secrets, type ChannelIdentityView } from "./secrets"
 import { noteSignInGone } from "./session"
+import { untilOpen } from "./until-open"
 
 /** How much history to load when the page opens. */
 const HISTORY = 2_000
@@ -64,9 +65,6 @@ clockTimer.unref?.()
 export function clockNow(): number {
   return latest
 }
-
-/** Latest signed-in session for a channel, so the client can stay put while the token refreshes. */
-const humanSessions = new Map<string, HumanSession | undefined>()
 
 export function useClock(intervalMs: number): number {
   const subscribe = useCallback((onChange: () => void) => {
@@ -578,21 +576,27 @@ interface Viewer {
 /**
  * Open a channel and follow it: the member list and requests, then the sealed
  * cache, then the relay's Stream from where the cache ends, for as long as it
- * runs. It ends only by failing (ChannelGone: this member is out) or being
- * interrupted, which closes the socket.
+ * runs. Opening retries on a blip; it ends only by failing (ChannelGone: this
+ * member is out) or being interrupted, which closes the socket. live() reconnects
+ * on its own after that.
  */
 const follow = (ch: Channel, view: Viewer) =>
   Effect.gen(function* () {
-    yield* view.refresh
-    const head = yield* ch.fx.head()
-    // Paint the sealed cache, then ask the relay only for seqs after it.
-    // Anything unusable (private mode, a broken cache) falls back to the usual window.
-    const cached = yield* Effect.promise(() => readCached(ch.roomId, ch.identity.pk, ch.access.keys, head, HISTORY).catch(() => null))
-    const since = cached ? cached.since : Math.max(0, head - HISTORY)
-    const firstSeq = cached?.messages[0]?.seq
-    if (cached?.messages.length) view.cached(cached.messages)
-    view.started({ head, whole: wholeLog(head, HISTORY, firstSeq) })
-    yield* eachLive(ch.fx.live(since, { presence: true }), view.live, view.status)
+    const opened = yield* untilOpen(
+      Effect.gen(function* () {
+        yield* view.refresh
+        const head = yield* ch.fx.head()
+        // Read the sealed cache, then ask the relay only for seqs after it.
+        // Anything unusable (private mode, a broken cache) falls back to the usual window.
+        const cached = yield* Effect.promise(() => readCached(ch.roomId, ch.identity.pk, ch.access.keys, head, HISTORY).catch(() => null))
+        const since = cached ? cached.since : Math.max(0, head - HISTORY)
+        return { head, cached, since, firstSeq: cached?.messages[0]?.seq }
+      }),
+      view.status,
+    )
+    if (opened.cached?.messages.length) view.cached(opened.cached.messages)
+    view.started({ head: opened.head, whole: wholeLog(opened.head, HISTORY, opened.firstSeq) })
+    yield* eachLive(ch.fx.live(opened.since, { presence: true }), view.live, view.status)
   })
 
 /** Merge messages into a view's list: each seq once, in order. */
@@ -607,13 +611,6 @@ const merged = (prev: Message[], more: Message[]) => {
  * with no session, the relay answers 401, and this browser signs itself out.
  */
 export function useChannel(member: StoredMember, human?: HumanSession | null): ChannelHandle {
-  useEffect(() => {
-    if (human === null) return
-    humanSessions.set(member.code, human)
-    return () => {
-      if (humanSessions.get(member.code) === human) humanSessions.delete(member.code)
-    }
-  }, [human, member.code])
   const ch = useMemo(
     () =>
       new Channel(
