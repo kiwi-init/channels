@@ -272,7 +272,9 @@ async function workosDeviceSignIn(clientId: string): Promise<{ access: string; r
     body: JSON.stringify({ client_id: clientId, scope: "openid profile email offline_access" }),
   })).json() as { device_code?: string; user_code?: string; verification_uri?: string; verification_uri_complete?: string; expires_in?: number; interval?: number };
   if (!start.device_code) throw new Error("the relay's sign-in didn't start");
-  const verifyUrl = start.verification_uri_complete ?? (start.verification_uri ? `${start.verification_uri}?user_code=${start.user_code ?? ""}` : null);
+  const given = start.verification_uri_complete ?? (start.verification_uri ? `${start.verification_uri}?user_code=${encodeURIComponent(start.user_code ?? "")}` : null);
+  // Only a web page goes to the browser: never a file, an app's scheme, or anything else a reply could name.
+  const verifyUrl = given && URL.canParse(given) && new URL(given).protocol === "https:" ? given : null;
   if (!verifyUrl) throw new Error("the relay's sign-in didn't start");
   await shell.openExternal(verifyUrl);
   const until = Date.now() + (start.expires_in ?? 600) * 1000;
@@ -431,7 +433,9 @@ function wireIpc(): void {
   ipcMain.handle("kiwi:save-computers", (_e, computers: ComputerView[]) => mutate((s) => (s.computers = computers)));
   ipcMain.handle("kiwi:set-pending", (_e, pending: PendingItem[]) => mutate((s) => (s.pending = pending)));
   ipcMain.handle("kiwi:sign-in", (): Promise<SignInResult> => signInMain());
-  ipcMain.handle("kiwi:dev-sign-in", (_e, name: string) => {
+  ipcMain.handle("kiwi:dev-sign-in", async (_e, name: string) => {
+    // Only a relay that says it takes dev sign-in (bun relay --dev-sign-in) gets a dev token kept for it.
+    if (!(await relayConfig(store.relayUrl)).dev) throw new Error("this relay doesn't take dev sign-in");
     const clean = name.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64) || "dev";
     mutate((s) => (s.signin = { access: `dev:${clean}`, refresh: "", exp: Number.MAX_SAFE_INTEGER }));
     return { token: `dev:${clean}` };
