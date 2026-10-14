@@ -779,29 +779,22 @@ export const requireChecked = Effect.fn("Room.requireChecked")(function* (reques
 // ---------- members & keys ----------
 
 /**
- * Admit a member. With `replaces`, a new key takes over an existing member's
- * seat (a reclaim): the old key is removed in the same step, so the two are
- * never members at once, and the owner rotates next, as after any removal.
+ * Admit a member. A membership never moves to a new key (SECURITY.md): a body that still names a
+ * seat to take over (`replaces`, the old reclaim) is refused like any other bad member.
  */
-export const approve = Effect.fn("Room.approve")(function* (body: MemberBody & { request?: string; replaces?: string }) {
+export const approve = Effect.fn("Room.approve")(function* (body: MemberBody & { request?: string }) {
   const db = yield* RoomStore;
   const policy = yield* Policy;
-  const { epoch, ownerPk } = yield* readMeta;
-  if (body.replaces !== undefined) {
-    if (typeof body.replaces !== "string" || !db.isMember(body.replaces)) return yield* new NotFound({ message: "the seat to reclaim isn't a member any more" });
-    if (body.replaces === ownerPk) return yield* new BadRequest({ message: "the owner's seat can't be reclaimed" });
-    if (body.replaces === body.pk) return yield* new BadRequest({ message: "a seat can't be reclaimed by its own key" });
-  }
+  const { epoch } = yield* readMeta;
+  if (body && Object.hasOwn(body, "replaces")) return yield* new BadRequest({ message: "bad member" });
   const most = policy.membersPerChannel;
-  if (most && !body.replaces && !db.isMember(body.pk) && db.activeMembers() >= most) {
+  if (most && !db.isMember(body.pk) && db.activeMembers() >= most) {
     return yield* new TooMany({ message: `this channel has ${most} members, the most this relay allows; remove someone to let another in` });
   }
   for (let e = 0; e <= epoch; e++) {
     if (!body.keys?.[String(e)]) return yield* new BadRequest({ message: `missing wrapped key for epoch ${e}` });
   }
-  // Both in one step with no await in between (nothing else runs there), new key first so a bad record changes nothing.
   yield* putMember(body, epoch);
-  if (body.replaces) yield* remove(body.replaces);
   if (body.request) db.sql.run("UPDATE requests SET status = 'approved' WHERE id = ? AND pk = ?", body.request, body.pk);
 });
 
@@ -939,7 +932,9 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
     if (!allow(`read:${db.roomId}:${sender}`, READS_PER_MINUTE)) return {} satisfies Effects;
     return yield* markRead(sender, f.seq).pipe(
       Effect.map((mark): Effects => (mark ? { broadcast: [frame({ t: "read", ...mark })] } : {})),
-      Effect.catchCause(() => Effect.succeed<Effects>({ reply: frame({ t: "err", error: "bad read mark" }) })),
+      Effect.catchCause((cause) =>
+        Effect.succeed<Effects>(isRefusal(Cause.squash(cause)) ? { reply: frame({ t: "err", error: "bad read mark" }) } : { reply: frame({ t: "err", error: socketError(cause) }) }),
+      ),
     );
   }
   if (f.t !== "send") return { reply: frame({ t: "err", error: "unknown frame" }) } satisfies Effects;
@@ -950,11 +945,8 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
     const fx: Effects = { broadcast: [msgFrame(e)], reply: frame({ t: "ack", id: send.id, seq: e.seq }), expireAt: (yield* touch) ?? undefined };
     return fx;
   }).pipe(
-    // A refusal or a storage error alike: the sender hears what went wrong, as before.
-    Effect.catchCause((cause) => {
-      const err = Cause.squash(cause);
-      return Effect.succeed<Effects>({ reply: frame({ t: "err", error: err instanceof Error ? err.message : String(err), id: send.id }) });
-    }),
+    // A refusal says why; a storage error is logged and the sender hears only that it failed.
+    Effect.catchCause((cause) => Effect.succeed<Effects>({ reply: frame({ t: "err", error: socketError(cause), id: send.id }) })),
   );
 });
 
@@ -982,6 +974,18 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
  *   POST   /messages                  member: {iv, ct, e}
  *   POST   /read                      member: {seq}, how far it has read (a number, never content)
  */
+
+/**
+ * What a socket's sender is told when its frame fails: a refusal's own text; anything else is a bug
+ * or an outage, logged without details, and "internal error", as over HTTP. Exception text never
+ * reaches a member.
+ */
+export function socketError(cause: Cause.Cause<unknown>): string {
+  const err = Cause.squash(cause);
+  if (isRefusal(err)) return err.message;
+  console.error(err instanceof Error ? err.message : "error");
+  return "internal error";
+}
 
 /** A refusal as its response; anything else is a bug or an outage, logged without details, and a 500. */
 export function errorResponse(err: unknown): Response {

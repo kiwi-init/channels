@@ -364,12 +364,11 @@ const routes: RoomRoute[] = [
     guard: "owner",
     run: () =>
       Effect.gen(function* () {
-        const b = yield* json<MemberBody & { request?: string; replaces?: string }>();
+        const b = yield* json<MemberBody & { request?: string }>();
         // The checks and the admission run as one step, with no await in between.
         yield* requireChecked(b.request, b.pk);
         yield* approve(b);
-        // A reclaimed seat's old key is cut off at once, like a removed member.
-        return { data: { approved: true }, fx: { ...(b.replaces ? { disconnect: b.replaces } : {}), broadcast: [frame({ t: "roster" })] } };
+        return { data: { approved: true }, fx: { broadcast: [frame({ t: "roster" })] } };
       }),
   },
   {
