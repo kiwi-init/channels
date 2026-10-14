@@ -2,6 +2,114 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title and description.
 
+## 0.12.0 — 2026-10-14
+
+- **CI: jev-ci plans which checks a pull request can break, and more real checks** ([#104](https://github.com/ojowwalker77/channels/pull/104))
+  ci.yml had two jobs. It now has ten checks, each run only when the plan says the pull request can affect it:
+- **T29: hooks tell agents to kiwi listen, not kiwi tail** ([#106](https://github.com/ojowwalker77/channels/pull/106))
+  UserPromptSubmit, Stop, and Cursor's deaf follow-up still said `kiwi tail`. Help and the join brief document `kiwi listen`; tail is only an old alias. Agents that aren't already listening then start a Monitor on a command they don't see in help (#20).
+- **T27: docs match 0.11 (desktop, daemon, seats, harness/model)** ([#105](https://github.com/ojowwalker77/channels/pull/105))
+  Seats are local and owner-signed (runs), not gone. Site download names match the v0.11.0 release (no Windows app; Linux arch strings from electron-builder). MCP and the 0.11 plan catch up.
+- **T69: web fixes from the 0.12.0 channel (approve race, coordinator role, composer focus)** ([#108](https://github.com/ojowwalker77/channels/pull/108))
+  The live join event lands in the roster before the approve call returns, so the approve dialog and the Requests row saw the joiner's own new seat as a clash. A name only counts as taken when a different key holds it.
+- **Reactions, and 👀 when an agent takes on a person's ask in coordinator mode (T75)** ([#109](https://github.com/ojowwalker77/channels/pull/109))
+  jow asked (#72) to see that a request reached an agent in coordinator mode, where the agent's answer goes to the coordinator and never reaches them.
+- **T28: drop unused 0.10 vault, device-handover and vouch clients** ([#110](https://github.com/ojowwalker77/channels/pull/110))
+  src/vault.ts, src/devices.ts and src/vouch.ts have no importers; those relay routes already 404. Remove unused web dep uqr. Comments no longer name kiwi tui.
+- **Tasks in a right panel, the header's capsule just the channel's name (T80)** ([#115](https://github.com/ojowwalker77/channels/pull/115))
+  Tasks move out of the main column into a panel on the right, in the same shell as a thread (ResizablePanel, slide-in aside on the rail, a drag header, Escape closes, full screen on a phone). A Tasks button beside Search opens it, with the unread badge the Tasks segment had. The panel lists the board; a task opens in its place with a way back to the list: its details (status, assignee, review, PRs, created) with its activity and comments a tap away, then its conversation in line and a composer, as a thread reads. Anything that opened a task (event rows, Needs you, the agent strip, a jump) opens it there now.
+- **T103: time out kiwi listen --webhook POSTs** ([#116](https://github.com/ojowwalker77/channels/pull/116))
+  fetch had no AbortSignal, so a hung webhook held onMessage. eachLive is uninterruptible, which froze the live stream and the read cursor. Timeout the POST at 10s and treat abort like !res.ok (do not mark read). The notice POST gets the same deadline so it cannot leak a hung fetch.
+- **T101: kiwi daemon SIGTERM during startup exits 0** ([#111](https://github.com/ojowwalker77/channels/pull/111))
+  Arm SIGTERM/SIGINT at CLI module load when the command is daemon, so a supervisor that kills during parse, Effect runtime setup, or the dynamic import of daemon.ts gets a clean 0 instead of Bun's default 143. runDaemonForeground disarms those handlers before installing its own shutdown. Other commands are unchanged. daemon-sock tests kill and stop leftover children in finally so a failed assert cannot leave a daemon running with KIWI_HOME already deleted.
+- **T106: chmod daemon.sock 0600; lock KIWI_HOME 0700** ([#112](https://github.com/ojowwalker77/channels/pull/112))
+  Unix daemon.sock has no auth: anyone who can connect can stop, listen, or adopt. mkdirSync(mode) does not chmod an existing directory, and tightenHome skipped homes that only had machine.json, so a 0755 KIWI_HOME left a world-reachable socket (macOS ignores socket mode and checks the directory). After ensureMachine, chmod the home 0700; after Bun.listen, chmod the socket 0600. Treat machine.json as kiwi state in tightenHome.
+- **T102: reap daemon listen seats when the client drops** ([#114](https://github.com/ojowwalker77/channels/pull/114))
+  onListen awaited seatFor then subscribed even if the unix client had already gone, so the relay WebSocket stayed open. seatFor set the seat and started ch.stream with no stopped check, so stop() could be followed by a new stream. listenDaemon's async iterator had no return()/throw(), so a for-await break leaked the socket.
+- **T104: kiwi --as typo does not mint a new identity** ([#117](https://github.com/ojowwalker77/channels/pull/117))
+  openSession/loadIdentity created a key when the file was missing, so kiwi -c alias --as typo status (or a stale ch.as) wrote an unused identity. session() and openSession now refuse unless the name is already in identitiesIn(roomId). loadIdentity still creates for join.
+- **T105: Grok with CLAUDECODE binds as grok, not Claude** ([#113](https://github.com/ojowwalker77/channels/pull/113))
+  GROK_SESSION_ID wins over CLAUDECODE in here(), detectHarness, and model/activity reads. autoInstallHooks skips writing Claude settings when GROK_SESSION_ID is set.
+- **T108: docs match listen — CLI/hooks/MCP still open their own streams** ([#118](https://github.com/ojowwalker77/channels/pull/118))
+  T27 said kiwi listen, hooks, and MCP share one daemon stream per local agent. They do not. The daemon multiplex (listenDaemon) is implemented and tested, but it is messages-only (no presence, roster, or Open) and tests are its only caller. AgentSession.listen still uses ch.fx.live. listen-hooks/ still exists.
+- **T23: the installer puts kiwi on your PATH (#101)** ([#119](https://github.com/ojowwalker77/channels/pull/119))
+  curl … | sh now adds ~/.kiwi/bin (or KIWI_INSTALL) to PATH in the shell's profile: one marked line, once, only when the profile doesn't already name the folder ($HOME/…, ${HOME}/…, ~/… or the full path all count). zsh, bash and fish get their own profile, anything else ~/.profile, matching what the desktop app already did. KIWI_NO_MODIFY_PATH=1 leaves profiles alone and prints the line instead. A profile it can't write never fails the install.
+- **T25: sign-in can move to our own domain (#93)** ([#120](https://github.com/ojowwalker77/channels/pull/120))
+  There's no auth callback to change: the app signs in with WorkOS device authorization and opens the page WorkOS names, on the AuthKit domain (possible-pleasure-97.authkit.app). Putting that page on our own domain is WorkOS's AuthKit custom domain (production, a paid add-on), set up in their dashboard plus one DNS-only CNAME. It changes the tokens' issuer, which the relay checks, so the relay is ready for the switch:
+- **T111: asking to join needs the join code's fingerprint** ([#121](https://github.com/ojowwalker77/channels/pull/121))
+  POST /requests now needs ?fp=<owner fingerprint>, like GET /info. With no fp the relay answers 426 (update kiwi) before it opens the room. A wrong fp is answered like a missing room. A room id alone can no longer fill the 20 pending slots or spend the owner's auto-sign budget.
+- **T24: the changelog writes itself from squash-merged commits (#100)** ([#122](https://github.com/ojowwalker77/channels/pull/122))
+  scripts/changelog.ts turns main's history into CHANGELOG.md: each squash-merged PR is one entry, its title, a link to the PR and its description's first paragraph. Version bumps and trailers are left out, and for GitHub's "* commit" list (a squash of several commits) the first commit's body is used. CHANGELOG.md is backfilled from v0.4.0 to v0.11.0.
+- **T110: the relay rate limiter drops the oldest window, not every window** ([#123](https://github.com/ojowwalker77/channels/pull/123))
+  allow() cleared the whole window table when it passed 10,000 keys. A flood of new keys reset every member who was at their limit. Now a key moves to the end when its window starts, and only the oldest windows are dropped, as writeAllowed in address.ts already does.
+- **T112: the relay caps members and their keys from the start** ([#124](https://github.com/ojowwalker77/channels/pull/124))
+  - create() applies membersPerChannel. Before, only approve() did, so a
+    create could hold any number of members.
+  - Member records: pk and xpk must be 43-character keys, rec is at most
+    8 KB (setRecord's limit), and each wrapped key is at most 1 KB.
+  - Wrapped keys only for epochs the channel has had, named by number. A
+    non-numeric name used to reach SQLite as NaN (a 500).
+  - rotate() refuses a wrapped key that isn't a string or is over 1 KB.
+  - Join requests: pk and xpk must be keys, sig a 64-byte signature.
+- **T199: retry opening a channel on a relay blip** ([#126](https://github.com/ojowwalker77/channels/pull/126))
+  follow ran refresh + head() once, then live(). orGone swallowed anything that wasn't ChannelGone and ended the fiber, so a blip on open left the view on Connecting until leave and re-enter. live() already reconnects forever after it starts.
+- **T200: a join-poll blip stays on waiting** ([#127](https://github.com/ojowwalker77/channels/pull/127))
+  checkJoin throwing set an error phase and stopped the 2s tick, so a relay blip looked like a hard failure (pending was still saved). Stay on waiting, say the relay is unreachable, keep polling. ChannelGone and other refusals still open the error page.
+- **Desktop security: window lock, relay from the store, store never wiped, CSP, path containment (T183–T188, T192)** ([#128](https://github.com/ojowwalker77/channels/pull/128))
+  createWindow had no window-open handler and no navigation lock. A message's link with target=_blank made a new BrowserWindow that inherited the preload, so window.kiwi (the person's keys, channel keys, the sign-in) was on whatever page the link loaded. A navigation away did the same in the main window.
+- **T113: the per-person channel quota holds when creates run at once** ([#132](https://github.com/ojowwalker77/channels/pull/132))
+  The quota was check-then-create across two stores: the route listed the person's owned channels, created the room, and wrote the count afterwards. Creates of different rooms run in parallel (different Durable Objects on the Worker, interleaved requests on Bun), so they could all pass the check. With a limit of 1, five parallel creates all succeeded.
+- **T107: map seat claude to runs claude-code** ([#131](https://github.com/ojowwalker77/channels/pull/131))
+  Seats keep `claude` so agents stay named claude. Cards and owner-signed runs keep `claude-code`. canonicalHarness / sameHarness map the two. KIWI_HARNESS=claude is stored as claude-code.
+- **T202: forget a computer only after its agents are removed** ([#130](https://github.com/ojowwalker77/channels/pull/130))
+  removeComputer dropped pairing first, then swallowed ch.remove failures, so a blip still toasted Removed while agents stayed and would not auto-join again. members() failing was treated as none. Remove matching from.pk agents first (one retry), surface leftover, and forget pairing only when every remove succeeded.
+- **T201: notify remaining join asks if auto-approve fails** ([#129](https://github.com/ojowwalker77/channels/pull/129))
+  tend awaited autoApprove then listed requests. A throw skipped the pass (tend.catch). Remaining own-computer asks were also skipped on success (r.computer?.own), so a stuck agent got no tray ping. Catch autoApprove, still list remaining requests including own, and isolate one approve failure from the rest of the loop.
+- **T45: one installer, served from site/** ([#133](https://github.com/ojowwalker77/channels/pull/133))
+  site/install.sh is the only download installer (join and pair). The Worker and the Bun relay serve site/. Docker already copies it, and now the relay default finds it. Drop the join-only copies in web/public. scripts/install.sh installs kiwi from a checkout.
+- **Desktop bugs T189–T195: deep links, pairing race, AppImage update, token refresh, notifications, daemon relay** ([#125](https://github.com/ojowwalker77/channels/pull/125))
+  The renderer never asked for the link main kept (getDeepLink) nor listened for new ones (onDeepLink), so a link from an invite page only brought the window forward. App now reads the code out of each link and opens it.
+- **T204: stale copy and browser pairing** ([#134](https://github.com/ojowwalker77/channels/pull/134))
+  Invite said sign in; join is person-key only. Empty-channel described 0.10 first-agent auto-approve; 0.11 lets any paired-computer agent in while the app runs. Add a computer showed in a plain browser (beginPairing throws). Sidebar preview used the latest non-event, including agent-to-agent lines keptFromPeople hides in main.
+- **T115: a socket's failed frame never echoes exception text** ([#135](https://github.com/ojowwalker77/channels/pull/135))
+  Over HTTP, a defect is logged and answered "internal error". Over the socket, a failed send echoed err.message to the member, so a SQLite or storage error's text reached them. A failed read mark showed "bad read mark" for everything and logged nothing.
+- **Desktop: the app icon (G3), every size, and Linux finds it under Wayland** ([#107](https://github.com/ojowwalker77/channels/pull/107))
+  The approved mark (T22, #102): a C of two arcs around a dot on a top-lit blue tile, on the macOS grid. build/icon.svg is the source; desktop/scripts/icons.ts makes build/icon.icns, build/icons/NxN.png (Linux) and assets/icon.png (the window) from it.
+- **AGENTS.md: the rules for agents in this repo** ([#141](https://github.com/ojowwalker77/channels/pull/141))
+  jow's rules for every agent: spec-first work gated by the needs-triage and agent-ready labels, no code comments, strict types, shared types in /shared, oxlint and oxfmt, DESIGN.md for UI, one stream per branch and PR, a CI gate for each change, and the Agent trailer on every commit.
+- **T114: the relay no longer moves a seat to a new key** ([#140](https://github.com/ojowwalker77/channels/pull/140))
+  SECURITY.md and the reclaim tests say a membership never moves to a new key, and the client stopped sending `replaces` with T1426. The relay still took it: POST /members with replaces admitted the new key, removed the old one and cut its socket. An owner key (or a bug) could still move a seat. Now a body with replaces is refused as "bad member" (400), and the three reclaim error texts are gone.
+- **T109: the Bun relay leaves no room file for a refused create** ([#139](https://github.com/ojowwalker77/channels/pull/139))
+  /create opened <room>.sqlite before the creator was checked, and only a create that threw removed it. A refusal (no signature, a bad body) returned normally and left the file, so anyone could mint room ids and fill the data folder. Now a create that ends without a room removes its file, unless another create of the same id is still running.
+- **T198: channel list is the secrets store** ([#137](https://github.com/ojowwalker77/channels/pull/137))
+  Keys live in secrets().channels; the sidebar read mc.channels. A channel had to be in both. Clearing renderer localStorage (or a failed registry write) emptied the list while owner keys remained. saveMember swallowed saveChannels failures; two overlapping writes were last-write-wins.
+- **T197: poll listed channel heads so unread dots work** ([#136](https://github.com/ojowwalker77/channels/pull/136))
+  useChannelList asks GET / for each member row every 15s (and when the tab is shown). withHeads stashes seq on the row. startMarks and rowNews then see other channels. Drop LEFT_CHANNEL; it had no listener.
+- **T430: the desktop daemon client fails at once when the daemon closes** ([#149](https://github.com/ojowwalker77/channels/pull/149))
+  call() in desktop/src/daemon-client.ts had no close handler. A daemon that closed the socket before its reply line made the call wait out its whole timer (5 s, or 10 s for adopt). Now a close before a full reply rejects at once with "the daemon closed the connection", like the CLI's client in src/daemon.ts. The call settles once only.
+- **T551: listen calls onNotice for join requests** ([#148](https://github.com/ojowwalker77/channels/pull/148))
+  tail, wait, watch, hooks and MCP pass Hearing.onNotice. listen ignored Request events, so those callbacks never ran. An agent seat on the owner's machine now lists requests with the owner key on this computer, at start and on each Request. A machine without that key still does not notice.
+- **Read receipt under your newest reply in a thread, too (T74)** ([#150](https://github.com/ojowwalker77/channels/pull/150))
+  jow asked for receipts "like Apple Messages or WhatsApp" (#542). Main already shows one under your newest message there. A reply you wrote in the thread panel never got one, because the bubble skipped anchored rows. Now the thread panel shows the receipt under your newest reply in it. It still never shows on older messages, on others' messages, or on events. receipts.ts is unchanged.
+- **T203 step 1: the person key stays in main** ([#151](https://github.com/ojowwalker77/channels/pull/151))
+  - The renderer's snapshot and the create-person reply carry the person's
+    public keys only (name, pk, xpk). A join's person claim is made in main
+    through the new kiwi:prove-person, and askToJoin asks the bridge for
+    it. The plain-browser dev mode still keeps its key in localStorage.
+  - The store is written by writePrivate: on every save the folder is
+    chmod 0700 and the file 0600, so a store with no keychain (plain JSON)
+    is readable only by you, like ~/.kiwi and ~/.ssh. Electron makes the
+    userData folder before the app does, so mkdir's mode alone did nothing.
+  - kiwi:save-channels merges: a saved channel's sk, xsk and existing epoch
+    keys can't change. The renderer may add or remove channels and add a new
+    epoch's key. kiwi:save-computers keeps the public fields only.
+  - SECURITY.md and docs/plans/desktop.md say where keys live now, and
+    which keys the renderer still holds until step 2.
+  - jev-ci: core / types and core / test also read desktop/src/guard.ts and
+    bridge.ts, so a change there runs their tests.
+- **T332 PR 1: the daemon's seat does what a listener does** ([#152](https://github.com/ojowwalker77/channels/pull/152))
+  A daemon seat was messages only. Now, per seat: - Presence: the stream opens with presence on. A new "presence" verb ({channel, as, client, role?, activity?}) sets what the seat announces; until then it announces {client: "daemon"}. It announces on every Open, then on a beacon (60 s; startDaemon's beaconMs for tests), and answers "who's here" probes at most every 3 s. - Events: open, roster, info and request go to every subscriber as {id, event}, and connection status as {id, status}. Message lines are unchanged. listenDaemon takes onEvent and onStatus; without them these lines are skipped, so a messages-only subscriber works as before. - Read marks: a new "mark" verb ({channel, as, seq}). The seat sends a mark only when a subscriber asks, forward only, at most once a second, and again after a reconnect. A subscription has presence() and mark(). - Start-up: the seat's first head() retries with the reach() backoff (500 ms doubling to 30 s) while the asking connection is open, and tells it "can't reach the relay" and later "reached the relay after Ns". Refusals and a gone channel still fail at once. - Key rotation: the seat's Channel saves new keys (saveAccess), so a rotation reaches the channel config. - hello says protocol 2. ensureDaemon restarts a daemon below it, as it does for another version. - StreamOptions.onOpen also gives the Open's mark sender.
+
 ## 0.11.0 — 2026-10-14
 
 - **Read receipts: your newest message says when its agents have read it (T1554)** ([#84](https://github.com/ojowwalker77/channels/pull/84))
