@@ -48,9 +48,10 @@ export interface Listener {
  */
 export function here(env: Record<string, string | undefined> = process.env): Here {
   const pid = Number(env.CLAUDE_PID);
+  // Grok Build can inherit CLAUDECODE from a Claude-compat session. GROK_SESSION_ID wins.
+  if (env.GROK_SESSION_ID) return { harness: "grok", session: env.GROK_SESSION_ID };
   if (env.CLAUDECODE) return { harness: "claude", ...(env.CLAUDE_CODE_SESSION_ID ? { session: env.CLAUDE_CODE_SESSION_ID } : {}), ...(Number.isInteger(pid) && pid > 0 ? { pid } : {}) };
   if (env.CODEX_THREAD_ID) return { harness: "codex", session: env.CODEX_THREAD_ID };
-  if (env.GROK_SESSION_ID) return { harness: "grok", session: env.GROK_SESSION_ID };
   if (env.GEMINI_CLI) return { harness: "gemini" };
   if (env.CURSOR_AGENT) return { harness: "cursor" };
   if (env.OPENCODE_SESSION_ID) return { harness: "opencode", session: env.OPENCODE_SESSION_ID };
