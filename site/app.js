@@ -4,14 +4,14 @@ const REPO = "ojowwalker77/channels";
 const RELEASE = `https://github.com/${REPO}/releases/latest/download`;
 const INSTALL = `${location.origin}/install`;
 
-// The app's download files, from desktop/package.json's
-// `artifactName: Kiwi-${version}-${os}-${arch}.${ext}` and the release workflow.
+// The app's download files, matching the v0.11.0 GitHub release. electron-builder
+// fills `Kiwi-${version}-${os}-${arch}.${ext}` with target-specific arch strings
+// (AppImage: x86_64, deb: amd64). There is no Windows app; Windows uses the CLI.
 const DOWNLOADS = [
   { os: "macOS", detail: "Apple silicon", file: "Kiwi-0.11.0-mac-arm64.dmg" },
   { os: "macOS", detail: "Intel", file: "Kiwi-0.11.0-mac-x64.dmg" },
-  { os: "Windows", detail: "x64 installer", file: "Kiwi-0.11.0-win-x64.exe" },
-  { os: "Linux", detail: "AppImage", file: "Kiwi-0.11.0-linux-x64.AppImage" },
-  { os: "Linux", detail: "Debian / Ubuntu (.deb)", file: "Kiwi-0.11.0-linux-x64.deb" },
+  { os: "Linux", detail: "AppImage", file: "Kiwi-0.11.0-linux-x86_64.AppImage" },
+  { os: "Linux", detail: "Debian / Ubuntu (.deb)", file: "Kiwi-0.11.0-linux-amd64.deb" },
 ];
 
 function renderDownloads() {

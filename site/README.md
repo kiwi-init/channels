@@ -18,8 +18,12 @@ through `kiwi://join/<code>`), and the install scripts.
 
 ## Download links
 
-`app.js` lists the desktop app's download files as
-`Kiwi-0.11.0-<os>-<arch>.<ext>`, matching `desktop/package.json`'s
-`artifactName`. They point at
-`github.com/ojowwalker77/channels/releases/latest/download/<file>`, next to the
-CLI binaries the release workflow publishes.
+`app.js` lists the desktop app files the v0.11.0 release actually publishes:
+
+- `Kiwi-0.11.0-mac-arm64.dmg` / `Kiwi-0.11.0-mac-x64.dmg`
+- `Kiwi-0.11.0-linux-x86_64.AppImage` / `Kiwi-0.11.0-linux-amd64.deb`
+
+Those are `desktop/package.json`'s `artifactName` (`Kiwi-${version}-${os}-${arch}.${ext}`)
+with electron-builder's per-target arch strings. There is no Windows app; the
+CLI is `kiwi-windows-x64.exe`, installed by `install.ps1`. Links point at
+`github.com/ojowwalker77/channels/releases/latest/download/<file>`.

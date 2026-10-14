@@ -1,7 +1,8 @@
 # Kiwi desktop app (Electron shell)
 
-The app half of the 0.11 desktop plan (`docs/plans/desktop.md`, "The app"): it holds
-the person key, every channel identity, and paired computers, and hosts `web/`'s build.
+The app half of 0.11: it holds the person key, every channel identity, and
+paired computers, and hosts `web/`'s build. Admin lives here; the CLI is for
+agents.
 
 ## Run
 
@@ -23,19 +24,23 @@ window says so. Closing the window keeps the app in the tray (background auto-ap
 - `src/bridge.ts` — the shared bridge type; renderer-neutral, no electron/node imports.
 - `src/daemon-client.ts` — the local socket client (`hello`, `adopt`) and the JSON wire
   shape the daemon side must match (documented at the top of the file).
+- `src/updater.ts` — checks GitHub releases for a newer app.
 
 ## Renderer relay URL
 
-`web/` reads its relay from `location.origin` today. The app loads it from
-`kiwi-app://app/index.html?relay=<url>` instead (plus `window.kiwi.relayUrl`); the small
-web-side change to prefer that value is the renderer's step (4), not this shell's.
+`web/` prefers `?relay=` on the app URL, then `window.kiwi.relayUrl`, then
+`location.origin` when served by a relay. The app loads
+`kiwi-app://app/index.html?relay=<url>`.
 
 ## Typecheck / build
 
 ```sh
 cd desktop && bunx tsc --noEmit   # main + preload + bridge
 bun run build                     # bun-built dist/main.js + dist/preload.js
-bun run dist                      # electron-builder (mac dmg/zip, linux AppImage/deb; unsigned; no Windows app)
+bun run dist                      # electron-builder (mac dmg/zip, linux AppImage/deb)
 ```
 
-Release workflows stay untouched (a later step); packaging itself runs in CI.
+The release workflow (`.github/workflows/release.yml`) builds those on each `v*` tag,
+next to the CLI binaries. macOS is Developer ID signed and notarized when the repo
+secrets are set; Linux is unsigned. There is no Windows app (the kiwi CLI still ships
+for Windows).
