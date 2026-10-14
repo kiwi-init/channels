@@ -124,6 +124,7 @@ interface Seat {
   wantMark: number;
   lastMarkAt: number;
   markTimer: ReturnType<typeof setTimeout> | null;
+  joining: number;
 }
 
 interface Sub {
@@ -151,6 +152,7 @@ export interface Daemon {
   stop(): Promise<void>;
   /** Resolves when the daemon stops, however it was told (socket `stop`, `stop()`, a crash of the server). */
   readonly stopped: Promise<void>;
+  beacons(): number;
 }
 
 export interface DaemonOptions {
@@ -193,7 +195,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   // reason() without importing the channel stack (see the note at the top): a refusal's text.
   const why = (err: unknown): string => (err instanceof Error ? err.message : String(err));
   // Seats being opened: concurrent first-subscribers share one relay stream, not one each.
-  const opening = new Map<string, Promise<Seat>>();
+  const opening = new Map<string, { promise: Promise<Seat>; waiters: Set<Waiting> }>();
+  let beacons = 0;
 
   const sendLine = (conn: ConnState, line: string): boolean => {
     if (conn.dead) return false;
@@ -206,9 +209,16 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
   };
 
+  const stopBeacon = (seat: Seat): void => {
+    if (!seat.beacon) return;
+    clearInterval(seat.beacon);
+    seat.beacon = null;
+    beacons--;
+  };
+
   const endSeat = (seat: Seat): void => {
     seat.ctl.abort();
-    if (seat.beacon) clearInterval(seat.beacon);
+    stopBeacon(seat);
     if (seat.markTimer) clearTimeout(seat.markTimer);
     seat.beacon = null;
     seat.markTimer = null;
@@ -248,7 +258,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     sub.conn.subs.delete(sub);
     sub.seat.subs.delete(sub);
     // Nobody left on this seat: close its stream. A later subscriber reopens it fresh.
-    if (sub.seat.subs.size === 0 && !stopped) {
+    if (sub.seat.subs.size === 0 && sub.seat.joining === 0 && !stopped) {
       if (seats.get(sub.seat.key) === sub.seat) seats.delete(sub.seat.key);
       endSeat(sub.seat);
     }
@@ -283,17 +293,23 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           told = true;
           waiting.tell(`can't reach the relay (${why(err)}); still retrying`);
         }
-        await Bun.sleep(backoff);
+        const until = Date.now() + backoff;
+        while (Date.now() < until) {
+          if (stopped || !waiting.alive()) throw new Error(why(err));
+          await Bun.sleep(Math.min(250, until - Date.now()));
+        }
       }
     }
   };
 
   const opened = (seat: Seat, presence: (p: PresenceFields) => Promise<void>, mark: (seq: number) => boolean): void => {
+    if (seats.get(seat.key) !== seat || seat.ctl.signal.aborted) return;
     seat.mark = mark;
     seat.announce = () => void presence(seat.fields).catch(() => {});
     seat.announce();
-    if (seat.beacon) clearInterval(seat.beacon);
+    stopBeacon(seat);
     seat.beacon = setInterval(() => seat.announce?.(), beaconMs);
+    beacons++;
     seat.marked = 0;
     flushMark(seat);
     tell(seat, { event: "open" });
@@ -307,14 +323,28 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     const id = await loadIdentity(agent, c.roomId);
     const key = `${c.roomId}/${id.pk}`;
     const hit = seats.get(key);
-    if (hit) return hit;
+    if (hit) {
+      hit.joining++;
+      return hit;
+    }
     const inflight = opening.get(key);
-    if (inflight) return inflight;
+    if (inflight) {
+      inflight.waiters.add(waiting);
+      return inflight.promise;
+    }
+    const waiters = new Set<Waiting>([waiting]);
+    const anyone: Waiting = {
+      tell: (s) => {
+        for (const w of waiters) if (w.alive()) w.tell(s);
+      },
+      alive: () => [...waiters].some((w) => w.alive()),
+    };
     const open = (async (): Promise<Seat> => {
       const { Channel } = await import("./client.ts");
       const ch = new Channel(c, c.relay, id, (a) => saveAccess(alias, a));
-      const head = await firstHead(ch, waiting);
+      const head = await firstHead(ch, anyone);
       if (stopped) throw new Error("the daemon is stopping");
+      if (!anyone.alive()) throw new Error("nobody is waiting for this channel any more");
       const seat: Seat = {
         key,
         alias,
@@ -332,6 +362,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         wantMark: 0,
         lastMarkAt: 0,
         markTimer: null,
+        joining: waiters.size,
       };
       seats.set(key, seat);
       // stop() may have run between the check and the set: don't leave a stream behind it.
@@ -368,11 +399,12 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       );
       return seat;
     })();
-    opening.set(key, open);
+    const entry = { promise: open, waiters };
+    opening.set(key, entry);
     try {
       return await open;
     } finally {
-      if (opening.get(key) === open) opening.delete(key);
+      if (opening.get(key) === entry) opening.delete(key);
     }
   };
 
@@ -384,10 +416,11 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     // never gap; the cursor dedupes the overlap.
     const seat = await seatFor(channel, as, { tell: (s) => sendLine(conn, JSON.stringify({ id, status: s })), alive: () => !conn.dead });
     const reapEmpty = (): void => {
-      if (seat.subs.size !== 0) return;
+      if (seat.subs.size !== 0 || seat.joining !== 0) return;
       if (seats.get(seat.key) === seat) seats.delete(seat.key);
       endSeat(seat);
     };
+    seat.joining = Math.max(0, seat.joining - 1);
     if (conn.dead || stopped) {
       reapEmpty();
       return;
@@ -576,7 +609,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
   };
 
-  return { sock, stop, stopped: stoppedP };
+  return { sock, stop, stopped: stoppedP, beacons: () => beacons };
 }
 
 // ---------- talking to the daemon ----------

@@ -255,6 +255,51 @@ describe("the daemon's seat does what a listener does (T332)", () => {
     await noSeats();
   });
 
+  test("the first asker leaving during the retry doesn't fail another waiter", async () => {
+    const port = Number(server!.url.port);
+    server!.stop(true);
+    const first = new AbortController();
+    const a = listenDaemon("test", "claude", cursor, { signal: first.signal }).catch((err: unknown) => err);
+    await Bun.sleep(200);
+    const b = listenDaemon("test", "claude", cursor);
+    await Bun.sleep(600);
+    first.abort();
+    await a;
+    await Bun.sleep(300);
+    server = startRelay({ port, hostname: "127.0.0.1", dataDir });
+    const sub = await b;
+    try {
+      const seq = await ownerCh.send("for the one still waiting");
+      expect((await waitBody(sub, "for the one still waiting")).seq).toBe(seq);
+      expect(await daemonListening()).toEqual([{ channel: "test", agent: "claude", subscribers: 1 }]);
+      cursor = seq;
+    } finally {
+      sub.close();
+    }
+    await noSeats();
+  });
+
+  test("a retry with nobody left waiting builds no seat", async () => {
+    const port = Number(server!.url.port);
+    server!.stop(true);
+    const gone = new AbortController();
+    const a = listenDaemon("test", "claude", cursor, { signal: gone.signal }).catch((err: unknown) => err);
+    await Bun.sleep(700);
+    gone.abort();
+    await a;
+    server = startRelay({ port, hostname: "127.0.0.1", dataDir });
+    await Bun.sleep(2_500);
+    expect(await daemonListening()).toEqual([]);
+    expect(daemon!.beacons()).toBe(0);
+  });
+
+  test("subscribers that come and go at once leave no beacon behind", async () => {
+    for (let i = 0; i < 15; i++) (await listenDaemon("test", "claude", cursor)).close();
+    await noSeats();
+    await Bun.sleep(1_000);
+    expect(daemon!.beacons()).toBe(0);
+  });
+
   test("a key rotation is saved for the agent", async () => {
     const sub = await listenDaemon("test", "claude", cursor);
     try {
