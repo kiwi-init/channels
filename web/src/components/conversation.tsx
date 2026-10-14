@@ -8,6 +8,7 @@ import { describeScopes, wireScopes } from "@mc/scopes.ts"
 import { colorOf, keptFromPeople, taskId, type ChannelState, type Task } from "@mc/state.ts"
 import { secrets } from "@/lib/secrets"
 import { channelTitle, forgetChannel, LEFT_CHANNEL, loadMember, loadRecent, saveMember, saveRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
+import { lastPreview } from "@/lib/preview"
 import { markSeen, setOpenNews } from "@/lib/news"
 import { useIcons, useLiveIcon } from "@/lib/icons"
 import { excerpt, formatTime, memberName } from "@/lib/format"
@@ -152,10 +153,10 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   // A brand-new channel: nothing said and nobody to say it. The stop button waits for agents.
   const quiet = noAgents && !messages.some((m) => m.kind !== "event")
 
-  // Remember the latest message and who's here, for the channel list. Not events (joins, cards, task changes),
-  // and not a note an agent sent only to itself (a listener test): the preview is the latest thing said to someone.
+  // Remember the latest message and who's here, for the channel list. Same filter as the
+  // transcript: not events, not a self-note, not ignored, and what this person actually sees.
   useEffect(() => {
-    const last = [...messages].reverse().find((m) => m.kind !== "event" && !ignored(state.trust.get(m.seq)) && !(m.to?.length && m.to.every((n) => n === m.from)))
+    const last = lastPreview(messages, reaches, (seq) => state.trust.get(seq))
     const prior = loadRecent(member.code)
     if (!last && !others.length) return
     saveRecent(member.code, {
@@ -165,7 +166,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       people: others.length ? others.map((m) => memberName(m)) : (prior?.people ?? []),
       ...(last && state.coordinator && last.from === state.coordinator ? { byCoordinator: true } : {}),
     })
-  }, [messages, others, state.trust, state.coordinator, member.code, member.at, nameOf, me])
+  }, [messages, others, state.trust, state.coordinator, member.code, member.at, nameOf, me, reaches])
 
   // ---------- the coordinator's face: what it's doing right now ----------
   const coord = state.coordinator
