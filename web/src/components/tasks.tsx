@@ -3,7 +3,7 @@ import { useState } from "react"
 
 import type { TaskState } from "@mc/protocol.ts"
 import { colorOf, taskId, type ChannelState, type Task } from "@mc/state.ts"
-import { formatAgo, memberName } from "@/lib/format"
+import { formatAgo } from "@/lib/format"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 import { isAgent } from "./message"
@@ -46,7 +46,7 @@ function TaskRow({ task, state, now, nameOf, unread, onOpen }: { task: Task; sta
           )
         ) : null}
         <span className="flex shrink-0 items-center gap-2 text-ui text-ink-3">
-          <span className="hidden max-w-32 truncate sm:block">{task.owner ? nameOf(task.owner) : "Unassigned"}</span>
+          <span className="hidden max-w-32 truncate @sm:block">{task.owner ? nameOf(task.owner) : "Unassigned"}</span>
           {task.owner ? (
             <Monogram name={nameOf(task.owner)} agent={isAgent(state.members.get(task.owner))} color={colorOf(state, task.owner)} size={24} />
           ) : (
@@ -132,49 +132,6 @@ export function Notes({ state, now, onClear }: { state: ChannelState; now: numbe
   )
 }
 
-/** Where a task's review stands, in a few words; null when it has no reviewer. */
-export function reviewLine(task: Task, nameOf: (n: string) => string): string | null {
-  if (task.approvedBy) return `Approved by ${nameOf(task.approvedBy)}`
-  if (!task.review) return null
-  const who = task.review === "*" ? "someone who hasn’t worked on it" : nameOf(task.review)
-  return task.state === "review" ? `Waiting for review by ${who}` : `Reviewed by ${who}`
-}
-
-/**
- * A task where it was made in the conversation: one card that follows the task as it moves (its
- * state, who has it, its review), so the timeline doesn't repeat every change. Opens the task.
- */
-export function TaskCard({ task, state, now, onOpen, highlighted }: { task: Task; state: ChannelState; now: number; onOpen: () => void; highlighted?: boolean }) {
-  const nameOf = (n: string) => memberName(state.members.get(n), n)
-  const review = reviewLine(task, nameOf)
-  // The header already names the task: this strip says where it stands, and opens it.
-  return (
-    <button
-      type="button"
-      id={`m${task.id}`}
-      onClick={onOpen}
-      aria-label={`${task.title} ${taskId(task.id)}`}
-      className={cx("mt-3 mb-1 flex w-full items-center gap-2.5 rounded-card bg-field px-3.5 py-2.5 text-left text-meta text-ink-2 transition-colors hover:bg-wash-2", highlighted && "outline-2 outline-offset-2 outline-[var(--ring)]")}
-    >
-      <StateMark state={task.state} />
-      <span className="min-w-0 flex-1 truncate">
-        <span className="font-medium text-ink">{labelOf(task)}</span>
-        {" · "}
-        {task.owner ? nameOf(task.owner) : "Unassigned"}
-        {review && (
-          <>
-            {" · "}
-            <span className={cx(task.state === "review" && "font-medium text-decide")}>{review}</span>
-          </>
-        )}
-        {" · "}
-        {formatAgo(task.updatedAt, now)}
-      </span>
-      <span className="shrink-0 font-medium text-ink-2">Open task ›</span>
-    </button>
-  )
-}
-
 /** The board's groups, in the order they ask for attention. */
 const GROUPS: [TaskState, string][] = [
   ["review", "Needs review"],
@@ -183,7 +140,7 @@ const GROUPS: [TaskState, string][] = [
   ["done", "Done"],
 ]
 
-/** Every task by state, with room for whole titles: the conversation's Tasks pill, and the one list of tasks. */
+/** Every task by state, with room for whole titles: the Tasks panel's list, and the one list of tasks. */
 export function Tasks({ state, now, nameOf, unreadIn, onOpen }: { state: ChannelState; now: number; nameOf: (n: string) => string; unreadIn?: (id: number) => { n: number; forMe: boolean }; onOpen: (id: number) => void }) {
   const [showDone, setShowDone] = useState(false)
   const [query, setQuery] = useState("")
@@ -194,7 +151,7 @@ export function Tasks({ state, now, nameOf, unreadIn, onOpen }: { state: Channel
 
   if (!state.tasks.size)
     return (
-      <div className="flex flex-1 items-center justify-center p-8">
+      <div className="flex flex-1 items-center justify-center p-6">
         <div className="max-w-xs">
           <p className="text-body font-semibold">No tasks yet</p>
           <p className="mt-1 text-ui leading-normal text-ink-2">When agents split up work, each task and who has it shows up here, and in the conversation where it was made.</p>
@@ -203,47 +160,51 @@ export function Tasks({ state, now, nameOf, unreadIn, onOpen }: { state: Channel
     )
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-[792px] px-3 pt-[calc(var(--head)+12px)] pb-8 md:px-4">
-        <label className="glass mb-5 flex h-9 items-center gap-2 rounded-full px-3.5 text-ink-3 transition-shadow focus-within:shadow-[0_0_0_3px_var(--accent-wash)]">
-          <Icon icon={Search01Icon} size={16} className="shrink-0" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Escape" && setQuery("")}
-            placeholder="Filter by title, number or who has it"
-            aria-label="Filter tasks"
-            className="min-w-0 flex-1 bg-transparent text-body text-ink outline-none placeholder:text-ink-3 focus-visible:outline-none"
-          />
-        </label>
-        {q && !all.length && <p className="py-6 text-center text-ui text-ink-3">No task matches “{query}”.</p>}
-        {GROUPS.map(([s, word]) => {
-          const list = all.filter((t) => t.state === s)
-          if (!list.length) return null
-          // Done ones wait behind a tap, unless you're looking for one.
-          const closed = s === "done" && !q
-          return (
-            <section key={s} aria-label={word} className="mb-6">
-              <div className="mb-1.5 flex items-baseline gap-2 px-4">
-                <h3 className="text-ui font-semibold text-ink-2">{word}</h3>
-                <span className="text-meta text-ink-3 tabular-nums">{list.length}</span>
-                {closed && (
-                  <button type="button" className="ml-auto text-ui font-medium text-accent-text hover:underline" onClick={() => setShowDone((v) => !v)}>
-                    {showDone ? "Hide" : "Show"}
-                  </button>
-                )}
-              </div>
-              {(!closed || showDone) && (
-                <div className="overflow-hidden rounded-card bg-raised shadow-[0_0_0_1px_var(--line)]">
-                  {list.map((t) => (
-                    <TaskRow key={t.id} task={t} state={state} now={now} nameOf={nameOf} unread={unreadIn?.(t.id)} onOpen={() => onOpen(t.id)} />
-                  ))}
-                </div>
+    // Sized by its column (the panel runs 300 to 720 wide), not by the window.
+    <div className="@container px-3 pt-1 pb-6">
+      <label className="mb-4 flex h-9 items-center gap-2 rounded-full bg-field px-3.5 text-ink-3 transition-shadow focus-within:shadow-[0_0_0_3px_var(--accent-wash)]">
+        <Icon icon={Search01Icon} size={16} className="shrink-0" />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            // Escape clears the filter first; with nothing to clear, it closes the panel.
+            if (e.key !== "Escape" || !query) return
+            e.stopPropagation()
+            setQuery("")
+          }}
+          placeholder="Filter by title, number or who has it"
+          aria-label="Filter tasks"
+          className="min-w-0 flex-1 bg-transparent text-body text-ink outline-none placeholder:text-ink-3 focus-visible:outline-none"
+        />
+      </label>
+      {q && !all.length && <p className="py-6 text-center text-ui text-ink-3">No task matches “{query}”.</p>}
+      {GROUPS.map(([s, word]) => {
+        const list = all.filter((t) => t.state === s)
+        if (!list.length) return null
+        // Done ones wait behind a tap, unless you're looking for one.
+        const closed = s === "done" && !q
+        return (
+          <section key={s} aria-label={word} className="mb-5">
+            <div className="mb-1.5 flex items-baseline gap-2 px-3">
+              <h3 className="text-ui font-semibold text-ink-2">{word}</h3>
+              <span className="text-meta text-ink-3 tabular-nums">{list.length}</span>
+              {closed && (
+                <button type="button" className="ml-auto text-ui font-medium text-accent-text hover:underline" onClick={() => setShowDone((v) => !v)}>
+                  {showDone ? "Hide" : "Show"}
+                </button>
               )}
-            </section>
-          )
-        })}
-      </div>
+            </div>
+            {(!closed || showDone) && (
+              <div className="overflow-hidden rounded-card bg-raised shadow-[0_0_0_1px_var(--line)]">
+                {list.map((t) => (
+                  <TaskRow key={t.id} task={t} state={state} now={now} nameOf={nameOf} unread={unreadIn?.(t.id)} onOpen={() => onOpen(t.id)} />
+                ))}
+              </div>
+            )}
+          </section>
+        )
+      })}
     </div>
   )
 }

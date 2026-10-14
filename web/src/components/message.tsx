@@ -61,16 +61,16 @@ export function shortEvent(m: Message, state: ChannelState): string {
 }
 
 /** Something that happened rather than something said: one quiet line centred on the column, as Messages sets them, cut short if long. */
-export function EventRow({ m, state, now, onOpenTask, openLabel = "Open", more }: { m: Message; state: ChannelState; now: number; onOpenTask?: (id: number) => void; openLabel?: string; more?: ReactNode }) {
+export function EventRow({ m, state, now, onOpenTask, anchor = "m", more }: { m: Message; state: ChannelState; now: number; onOpenTask?: (id: number) => void; anchor?: string; more?: ReactNode }) {
   const taskRef = m.ev && "task" in m.ev ? m.ev.task : m.ev?.op === "task.add" ? m.seq : null
   const forged = ignored(state.trust.get(m.seq))
   const full = `${memberName(state.members.get(m.from), m.from)} ${describeEvent(m, state)} · ${formatFull(m.ts)} (${formatAgo(m.rts ?? m.ts, now)})`
   return (
-    <p id={`m${m.seq}`} title={full} className={cx("flex min-w-0 items-baseline justify-center gap-1.5 px-8 py-[3px] text-center text-stamp text-ink-3", forged && "line-through opacity-60")}>
+    <p id={`${anchor}${m.seq}`} title={full} className={cx("flex min-w-0 items-baseline justify-center gap-1.5 px-8 py-[3px] text-center text-stamp text-ink-3", forged && "line-through opacity-60")}>
       <span className="min-w-0 truncate">{shortEvent(m, state)}</span>
       {taskRef !== null && onOpenTask && (
         <button type="button" onClick={() => onOpenTask(taskRef)} className="shrink-0 font-medium text-ink-2 hover:text-ink hover:underline">
-          {openLabel}
+          Open
         </button>
       )}
       {more}
@@ -79,9 +79,9 @@ export function EventRow({ m, state, now, onOpenTask, openLabel = "Open", more }
 }
 
 /** A same-day run of events: three or more read as the latest, with the rest a click away. */
-export function EventGroup({ messages, state, now, onOpenTask, highlight, openLabel }: { messages: Message[]; state: ChannelState; now: number; onOpenTask?: (id: number) => void; highlight: number | null; openLabel?: string }) {
+export function EventGroup({ messages, state, now, onOpenTask, highlight, anchor }: { messages: Message[]; state: ChannelState; now: number; onOpenTask?: (id: number) => void; highlight: number | null; anchor?: string }) {
   const [open, setOpen] = useState(false)
-  const row = (m: Message, more?: ReactNode) => <EventRow key={m.seq} m={m} state={state} now={now} onOpenTask={onOpenTask} openLabel={openLabel} more={more} />
+  const row = (m: Message, more?: ReactNode) => <EventRow key={m.seq} m={m} state={state} now={now} onOpenTask={onOpenTask} anchor={anchor} more={more} />
   if (messages.length < 3) return <div className="my-1">{messages.map((m) => row(m))}</div>
   const forced = highlight !== null && messages.some((m) => m.seq === highlight)
   const shown = open || forced
