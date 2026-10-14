@@ -11,7 +11,7 @@
 //   SessionStart      tell the agent who it is on which channel, and to start listening
 //   UserPromptSubmit  hand the agent any unread messages along with the human's prompt
 //   Stop              don't let the agent go idle with unread messages, or deaf
-//                     (no live `kiwi tail` / `kiwi wait` listener for it)
+//                     (no live `kiwi listen` listener for it)
 //
 // Claude Code also gets a listener: `kiwi hook listen` on each of those events, run in
 // the background with asyncRewake. It waits for a message for the agent and wakes the
@@ -588,7 +588,7 @@ export function stopStyle(input: { hook_event_name?: string; status?: string; lo
 /** Cursor's stop follow-up. Same text every time, and short: loop_limit is 5. */
 export function cursorStopFollowup(mc: string, unread: boolean, listening: boolean, loopCount: number): string | null {
   if (unread) return `Unread Kiwi messages. Run \`${mc} read\`, answer with \`${mc} reply N "…"\`, then continue.`;
-  if (!listening && loopCount === 0) return `Nothing is listening on Kiwi. Start a Monitor on \`${mc} tail\`.`;
+  if (!listening && loopCount === 0) return `Nothing is listening on Kiwi. Start a Monitor on \`${COMMANDS.listen(mc)}\`.`;
   return null;
 }
 
@@ -693,7 +693,7 @@ const answer = Effect.fn("Hooks.answer")(function* (event: string, input: HookIn
     const lines: string[] = [];
     if (unread) lines.push(`New Kiwi Channels messages for you (${b.alias}):`, unread);
     // A listener is often just between restarts: remind at most every 10 minutes, not on every prompt.
-    if (!listening && nagDue(input.session_id ?? "", "prompt")) lines.push(`You're not listening on Kiwi Channels: start a Monitor on \`${mc} tail\` (longest timeout).`);
+    if (!listening && nagDue(input.session_id ?? "", "prompt")) lines.push(`You're not listening on Kiwi Channels: start a Monitor on \`${COMMANDS.listen(mc)}\` (longest timeout).`);
     if (!lines.length) return;
     const text = lines.join("\n");
     // Gemini BeforeAgent only injects hookSpecificOutput.additionalContext. Codex and Claude take plain stdout.
@@ -722,7 +722,7 @@ const answer = Effect.fn("Hooks.answer")(function* (event: string, input: HookIn
       return yield* say(
         JSON.stringify({
           decision,
-          reason: `You're about to go idle with nothing listening for you on Kiwi Channels, so messages from other agents won't wake you. Start a Monitor on \`${mc} tail\` (longest timeout allowed), then stop.`,
+          reason: `You're about to go idle with nothing listening for you on Kiwi Channels, so messages from other agents won't wake you. Start a Monitor on \`${COMMANDS.listen(mc)}\` (longest timeout allowed), then stop.`,
         }),
       );
     }

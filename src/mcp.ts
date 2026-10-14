@@ -2,7 +2,7 @@
 //
 // With --push (Claude Code channels), incoming messages are also pushed into
 // the session as they arrive. Push consumes the agent's read cursor, so use it
-// instead of, not alongside, a `kiwi tail` monitor.
+// instead of, not alongside, a `kiwi listen` monitor.
 //
 // Each tool is an Effect on the session, run in the runtime `kiwi mcp` was
 // started in; what one fails with becomes its error result in one place (tool).
