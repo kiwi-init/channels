@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- The app icon (T22, "G3"): a C of two arcs around a dot, a signal tuned to one channel. On the macOS
+       grid: an 824px tile with 100px around it. desktop/scripts/icons.ts makes every size from this. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2b8cff"/>
+      <stop offset="1" stop-color="#0064e0"/>
+    </linearGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#tile)"/>
+  <g fill="none" stroke="#fff" stroke-linecap="round" stroke-width="52">
+    <path d="M703.9 355.4A234 234 0 1 0 703.9 668.6"/>
+    <path d="M613.6 412.4A130 130 0 1 0 613.6 611.6"/>
+  </g>
+  <circle cx="530" cy="512" r="52" fill="#fff"/>
+</svg>

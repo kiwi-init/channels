@@ -183,6 +183,9 @@ function createWindow(): void {
     minWidth: 720,
     minHeight: 480,
     autoHideMenuBar: true,
+    // Linux takes the window's icon from here (X11) or from the .desktop entry its app_id names
+    // (Wayland: package.json's desktopName). A Mac uses the bundle's icon.icns.
+    ...(process.platform === "linux" ? { icon: path.join(assetsDir(), "icon.png") } : {}),
     // No title bar on a Mac: the app's own header row (52px, web/src/index.css --chrome-h) carries
     // the traffic lights, centred on it, and moves the window. Elsewhere the system frame stays.
     ...(process.platform === "darwin" ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 20, y: 20 } } : {}),
