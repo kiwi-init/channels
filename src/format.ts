@@ -1,7 +1,7 @@
 // Plain-text rendering for agents: compact, greppable, one header line per message.
 
 import { loadJson, loadSummary, memberLoad, showsLoad } from "./load.ts";
-import { inlineText } from "./membership.ts";
+import { inlineText, runsLine, type Runs } from "./membership.ts";
 import { GENERAL_ROOM, ignored, imageMarker } from "./protocol.ts";
 import type { Card, Message, OldTaskState, TaskState, Trust } from "./protocol.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
@@ -137,6 +137,15 @@ function reviewPhrase(review: string): string {
   return review === "*" ? "review by anyone who hasn't worked on it" : `review by ${inlineText(review, 40)}`;
 }
 
+/**
+ * "runs claude-code · claude-fable-5-1 (owner-signed)": what the owner attested at approval, and when the
+ * agent's own card now names another model, that too, so a reader sees the record and the claim apart.
+ */
+export function runsStatus(runs: Runs, card: Card | undefined): string {
+  const says = card?.model && card.model !== runs.model ? `; its card says ${inlineText(card.model, 60)}` : "";
+  return `runs ${runsLine(runs)} (owner-signed)${says}`;
+}
+
 /** "macos arm64 · claude-code · ojow/channels@main · tools: docker, gpu · note", one line. */
 export function cardLine(c: Card | undefined): string {
   if (!c) return "";
@@ -245,6 +254,8 @@ export function memberJson(state: ChannelState, name: string, online: Snapshot["
     lastSeen: m?.lastSeen ?? null,
     load: loadJson(memberLoad(state, name, now)),
     card: m?.card ? { ...m.card } : null,
+    // What the owner signed at approval as running this agent; the card above is the agent's own word.
+    runs: m?.runs ? { ...m.runs } : null,
   };
 }
 
@@ -340,6 +351,7 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
     const load = memberLoad(state, name, now);
     if (showsLoad(m, load)) out.push(`      ${loadSummary(load)}`);
     if (m?.card) out.push(`      ${cardLine(m.card)}`);
+    if (m?.runs) out.push(`      ${runsStatus(m.runs, m.card)}`);
   }
   if (left.length) out.push(`  left or removed: ${left.sort().join(", ")}`);
 

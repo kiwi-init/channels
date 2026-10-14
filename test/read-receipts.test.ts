@@ -116,7 +116,7 @@ describe("agents mark as kiwi hands them messages", () => {
   function spawn(home: string, args: string[], env: Record<string, string> = {}, input?: string) {
     return Bun.spawn([...MC, ...args], {
       cwd: home,
-      env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, KIWI_NO_HOOKS: "1", ...env },
+      env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, KIWI_NO_HOOKS: "1", KIWI_MODEL: "test-model", ...env },
       stdin: input === undefined ? "ignore" : new Blob([input]),
       stdout: "pipe",
       stderr: "pipe",

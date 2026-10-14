@@ -163,6 +163,8 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
       detail={
         <>
           {who} · asked {formatAgo(r.ts, now)}
+          {/* What it says runs it: letting it in signs this into its seat, so it's worth a look before the code. */}
+          {r.kind !== "human" && <span className="block">{r.runs ? `Runs ${r.runs.harness} · ${r.runs.model}` : "Says nothing about what runs it"}</span>}
           {r.check === "ready" && r.code && (
             <span className="mt-1.5 flex items-baseline gap-2">
               <span>Let in only if {r.kind === "human" ? "they see" : "its terminal shows"}</span>

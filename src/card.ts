@@ -4,6 +4,11 @@
 // and nothing the person didn't put there.
 
 import { execFileSync } from "node:child_process";
+import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, statSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { home } from "./config.ts";
+import type { Runs } from "./membership.ts";
 import type { Card } from "./protocol.ts";
 
 /** Tools worth showing, as the binary that shows each one is here. */
@@ -61,6 +66,102 @@ export function detectHarness(env: Record<string, string | undefined> = process.
   if (env.CURSOR_AGENT || env.CURSOR_TRACE_ID) return "cursor";
   if (env.GROK_SESSION_ID) return "grok";
   return undefined;
+}
+
+// ---------- what runs this agent ----------
+//
+// A harness tells its shell commands which session they belong to, never which model answers. The
+// model is readable where each harness keeps it: Claude Code writes it on every assistant line of the
+// session's transcript (its hooks are handed the transcript's path, which noteTranscript keeps for the
+// shell), Codex keeps it in its config. KIWI_MODEL (or `kiwi join --model`) says it for any other.
+
+/** Where a hook noted a session's transcript path, for `kiwi join` run from that session's shell. */
+function transcriptNote(session: string): string {
+  return join(home(), "hook-state", `${encodeURIComponent(session)}.transcript`);
+}
+
+/** Keep a session's transcript path (from a hook's input) where its shell commands can find it. */
+export function noteTranscript(session: string, path: string): void {
+  try {
+    mkdirSync(join(home(), "hook-state"), { recursive: true, mode: 0o700 });
+    writeFileSync(transcriptNote(session), path, { mode: 0o600 });
+  } catch {
+    // A note that can't be written costs a `--model` later, nothing more.
+  }
+}
+
+/** The model a Claude Code transcript last answered with: its newest assistant line names it. */
+export function modelInTranscript(file: string): string | undefined {
+  let fd: number | undefined;
+  try {
+    // The tail is enough: the newest assistant message is the model in use now.
+    const size = statSync(file).size;
+    const n = Math.min(size, 256 * 1024);
+    const buf = Buffer.alloc(n);
+    fd = openSync(file, "r");
+    readSync(fd, buf, 0, n, size - n);
+    const text = buf.toString("utf8");
+    let last: string | undefined;
+    // "<synthetic>" marks a message the harness made up itself, not one a model answered.
+    for (const m of text.matchAll(/"model":"([^"\\]{1,80})"/g)) if (!m[1]!.startsWith("<")) last = m[1];
+    return last;
+  } catch {
+    return undefined;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+  }
+}
+
+/** A Claude Code session's transcript: what a hook noted, else the file named after the session under its projects folder. */
+function claudeTranscript(session: string, env: Record<string, string | undefined>): string | undefined {
+  try {
+    const noted = readFileSync(transcriptNote(session), "utf8").trim();
+    if (noted && existsSync(noted)) return noted;
+  } catch {}
+  const root = join(env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude"), "projects");
+  try {
+    for (const d of readdirSync(root)) {
+      const f = join(root, d, `${session}.jsonl`);
+      if (existsSync(f)) return f;
+    }
+  } catch {}
+  return undefined;
+}
+
+/** Codex's model from its config (`model = "…"`): the one its sessions start with. */
+function codexModel(env: Record<string, string | undefined>): string | undefined {
+  try {
+    const m = /^\s*model\s*=\s*"([^"]{1,80})"/m.exec(readFileSync(join(env.CODEX_HOME || join(homedir(), ".codex"), "config.toml"), "utf8"));
+    return m?.[1];
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The model behind this process, where its harness leaves it readable: KIWI_MODEL first (said
+ * outright), then Claude Code's transcript for this session, then Codex's config. Undefined when
+ * nothing says; `kiwi join` then asks for --model.
+ */
+export function detectModel(env: Record<string, string | undefined> = process.env): string | undefined {
+  const said = env.KIWI_MODEL?.trim();
+  if (said) return said.slice(0, 80);
+  if (env.CLAUDECODE && env.CLAUDE_CODE_SESSION_ID) {
+    const file = claudeTranscript(env.CLAUDE_CODE_SESSION_ID, env);
+    return file ? modelInTranscript(file) : undefined;
+  }
+  if (env.CODEX_THREAD_ID || env.CODEX_SANDBOX) return codexModel(env);
+  return undefined;
+}
+
+/**
+ * What runs this process, as `kiwi join` declares it: the harness (detected, or `harness` given)
+ * and the model (detected, or `model` given). Undefined while either is unknown.
+ */
+export function detectRuns(env: Record<string, string | undefined> = process.env, given: { harness?: string; model?: string } = {}): Runs | undefined {
+  const harness = given.harness?.trim().toLowerCase() || env.KIWI_HARNESS?.trim().toLowerCase() || detectHarness(env);
+  const model = given.model?.trim() || detectModel(env);
+  return harness && model ? { harness: harness.slice(0, 40), model: model.slice(0, 60) } : undefined;
 }
 
 function git(args: string[], cwd = process.cwd()): string | null {

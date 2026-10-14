@@ -55,7 +55,8 @@ const asPerson = (args: string[]) => args.some((a, i) => a === "--as" && args[i 
 function mc(home: string, ...args: string[]) {
   return Bun.spawn([...MC, ...args], {
     cwd: home,
-    env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, CLAUDECODE: asPerson(args) ? "" : "1" },
+    // KIWI_MODEL: an agent in a harness says what runs it or can't join; these sessions have no transcript to read it from.
+    env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, CLAUDECODE: asPerson(args) ? "" : "1", KIWI_MODEL: "test-model" },
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
@@ -419,7 +420,7 @@ describe("several agents on one machine", () => {
     const code = /join code: (\S+)/.exec(await ok(owner, "create", "m", "--as", "boss"))![1]!;
 
     const inDir = (dir: string, ...args: string[]) =>
-      Bun.spawn([...MC, ...args], { cwd: dir, env: { ...process.env, KIWI_HOME: shared, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+      Bun.spawn([...MC, ...args], { cwd: dir, env: { ...process.env, KIWI_HOME: shared, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, KIWI_MODEL: "test-model" }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
     const runIn = async (dir: string, ...args: string[]) => {
       const p = inDir(dir, ...args);
       const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
@@ -457,7 +458,7 @@ describe("several agents on one machine", () => {
     const codeB = /join code: (\S+)/.exec(await ok(ownerB, "create", "b", "--as", "boss"))![1]!;
 
     const inDir = (dir: string, ...args: string[]) =>
-      Bun.spawn([...MC, ...args], { cwd: dir, env: { ...process.env, KIWI_HOME: shared, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+      Bun.spawn([...MC, ...args], { cwd: dir, env: { ...process.env, KIWI_HOME: shared, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, KIWI_MODEL: "test-model" }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
     const runIn = async (dir: string, ...args: string[]) => {
       const p = inDir(dir, ...args);
       const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
@@ -509,7 +510,7 @@ describe("several agents on one machine", () => {
     const owner = home("hb-owner");
     const h = home("hb-home");
     const code = /join code: (\S+)/.exec(await ok(owner, "create", "hb", "--as", "boss"))![1]!;
-    const p = Bun.spawn([...MC, "join", code, "--as", "solo"], { cwd: h, env: { ...process.env, HOME: h, KIWI_HOME: h, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+    const p = Bun.spawn([...MC, "join", code, "--as", "solo"], { cwd: h, env: { ...process.env, HOME: h, KIWI_HOME: h, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, KIWI_MODEL: "test-model" }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
     const l = lines(p);
     await ok(owner, "--as", "human", "approve", await codeShown(owner, l), "--yes");
     expect(await p.exited).toBe(0);

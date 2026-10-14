@@ -5,7 +5,7 @@
 // without the relay ever reading any of it.
 // Conflicts resolve deterministically: the earlier sequence number wins.
 
-import { inlineText } from "./membership.ts";
+import { inlineText, type Runs } from "./membership.ts";
 import { GENERAL_ROOM, ignored, MAX_CHARTER, MAX_ROOM_NAME, MAX_ROOMS, MAX_TAGS, ROOM_ID_RE, type Card, type Color, type Message, type OldTaskState, type TaskState, type Trust } from "./protocol.ts";
 import { readScopes, refusal, SCOPES, scopesOf, type Scope } from "./scopes.ts";
 
@@ -28,6 +28,8 @@ export interface Member {
   scopes: Scope[];
   /** What they last said about themselves: where they run, what runs them, what they can use. */
   card?: Card & { at: number };
+  /** What the owner signed as running this agent at approval (membership.ts): the record's word, beside the card's. */
+  runs?: Runs;
   owner: boolean;
   /** When the owner admitted them. */
   joined: number;
@@ -59,6 +61,8 @@ export type Roster = {
   later?: { scopes: Scope[]; since: number };
   /** The role (and rules) the owner re-signed this key's record to after a role.set at `since`. */
   laterRole?: { role: string | null; about?: string | null; since: number };
+  /** What the owner signed as running this agent (membership.ts). */
+  runs?: Runs;
 }[];
 
 export interface TaskNote {
@@ -393,6 +397,7 @@ export function fold(
       sponsor: r.sponsor,
       color: r.color,
       scopes: scopesOf(r),
+      ...(r.runs ? { runs: r.runs } : {}),
       owner: r.owner,
       joined: r.at,
       lastSeen: r.at,

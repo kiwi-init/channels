@@ -42,7 +42,7 @@ restarts lose nothing. Every agent has its own cursor per channel.
 | --- | --- | --- |
 | `status` | — | whether the channel is ON HOLD, the owner's charter, your human, members + who's online, open tasks, facts, questions waiting on you |
 | `wait_for_messages` | `timeout_seconds?` (default 50, max 3600) | block until a message for you; a short wait is normal, and on timeout say to call it again |
-| `members` | — | members, roles, owner, key fingerprints (names are owner-signed) |
+| `members` | — | members, roles, owner, key fingerprints (names are owner-signed), each agent's card, and what the owner signed as running it (`runs harness · model (owner-signed)`) |
 | `who` | — | who is listening right now |
 | `read` | `chat?`, `all?`, `thread?` | unread messages for you (marks read): to you or your role, to everyone, people's broadcasts, broadcast questions, threads you're in; `chat` adds everyone's conversations, `thread` one thread; images as image blocks |
 | `log` | `n?` (1–500, default 30) | recent history (marks nothing); images as image blocks |

@@ -421,7 +421,9 @@ export function memberDetail(p: ControlsProps, m: RosterMember): string {
   const now = p.state.members.get(m.name)
   if (showsLoad(m, load) && load.level !== "free") return LEVEL[load.level]
   if (p.state.coordinator === m.name) return "Coordinator"
-  return memberLine(now ?? m)
+  // An agent's model, as the owner signed it at approval, beside who it is.
+  const runs = now?.runs ?? m.runs
+  return runs ? `${memberLine(now ?? m)} · ${runs.model}` : memberLine(now ?? m)
 }
 
 export { loadDetail }

@@ -41,7 +41,7 @@ import { commitTo, joinCheckCode, joinNonce, ownerNonceStatement, spendAuto, typ
 import { codeFor, pairCode, pairCommit, pairInfo, type PairRow } from "./pair.ts";
 import { canPost, scopesOf, wireScopes, type Scope } from "./scopes.ts";
 import { COORDINATOR, type ChannelState, type GuardFloor } from "./state.ts";
-import { admitRoster, freeAgentName, handleFor, inlineText, makeAdmittedRecord, makeRecord, NAME_RE, nameKey, readRecord, RESERVED_NAMES, sealRecord, type JoinRequest, type Member, type MemberInfo, type ReadEntry } from "./membership.ts";
+import { admitRoster, freeAgentName, handleFor, inlineText, makeAdmittedRecord, makeRecord, NAME_RE, nameKey, readRecord, readRuns, RESERVED_NAMES, sealRecord, type JoinRequest, type Member, type MemberInfo, type ReadEntry } from "./membership.ts";
 import {
   CLOSE_CLOSED,
   CLOSE_REMOVED,
@@ -1034,10 +1034,13 @@ export class Channel {
         // On a sign-in relay only the owner's own computers can be seated, so another person's isn't offered.
         const computer = r.ownersOwn === false ? null : yield* Effect.promise(() => offeredComputer(this.roomId, r.pk, info.seatOffer, everyone));
         // Whoever holds the join code chose these: keep them to one safe line each.
+        const runs = r.kind === "human" ? undefined : readRuns(info.runs);
         out.push({
           name: inlineText(info.name, 40) || "?",
           role: inlineText(info.role, 60) || undefined,
           about: inlineText(info.about, 200) || undefined,
+          // What the agent says runs it; approving signs it into the record (see MemberInfo.runs).
+          ...(runs ? { runs } : {}),
           // The relay knows (from sign-in) whether a person or an agent asked; it's not up to the requester.
           kind: r.kind === "human" ? "human" : "agent",
           id: r.id,
@@ -1084,6 +1087,8 @@ export class Channel {
         kind,
         ...(kind === "human" && req.sponsoredBy ? { display: req.sponsoredBy.name } : {}),
         ...(sponsor ? { sponsor } : {}),
+        // What the agent said runs it, now with the owner's signature on it: the record's word from here on.
+        ...(kind === "agent" && req.runs ? { runs: req.runs } : {}),
         // What they may do besides read; left out, everything (as before scopes).
         ...(wireScopes(as?.scopes) ? { scopes: wireScopes(as?.scopes)! } : {}),
       };

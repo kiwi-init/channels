@@ -100,6 +100,7 @@ const toRoster = (m: Member): Roster[number] => ({
   ...(m.scopes ? { scopes: m.scopes } : {}),
   ...(m.later ? { later: m.later } : {}),
   ...(m.laterRole ? { laterRole: m.laterRole } : {}),
+  ...(m.runs ? { runs: m.runs } : {}),
 });
 
 /** A floor from the channel's settings; one that can't be read is no floor. */

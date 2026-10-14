@@ -441,7 +441,7 @@ describe("kiwi join on a seated computer", () => {
     const kiwi = async (env: Record<string, string>, ...args: string[]) => {
       const p = Bun.spawn(["bun", join(import.meta.dir, "../src/cli/main.ts"), ...args], {
         cwd: home,
-        env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, KIWI_NO_HOOKS: "1", CLAUDE_CONFIG_DIR: claudeDir, ...env },
+        env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, KIWI_NO_HOOKS: "1", CLAUDE_CONFIG_DIR: claudeDir, KIWI_MODEL: "test-model", ...env },
         stdin: "ignore",
         stdout: "pipe",
         stderr: "pipe",

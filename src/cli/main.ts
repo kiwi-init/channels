@@ -24,7 +24,7 @@ import { Channel, ChannelGone, fx as relayFx, reason, RelayError } from "../clie
 import { TOO_MANY_REQUESTS } from "../sas.ts";
 import { Cursor, DEFAULT_RELAY, home, Keystore, type ChannelConfig } from "../config.ts";
 import { b64url, decodeJoinCode, fromB64url, newRoomId, type ChannelAccess } from "../crypto.ts";
-import { describeMember, freeAgentName, handleFor, type JoinRequest } from "../membership.ts";
+import { describeMember, freeAgentName, handleFor, runsLine, type JoinRequest } from "../membership.ts";
 import { baseName, here, seatsNear } from "../seats.ts";
 import { ago, cardLine, charterLines, describeEvent, holdLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, mayDo, modeLine, parseDuration, stateWord, taskStateWord, statusJson } from "../format.ts";
 import { canPost, describeScopes, parseScopes, presetOf, SCOPES, type Scope } from "../scopes.ts";
@@ -38,7 +38,7 @@ import { computerOffer, forgetMachine, linkUrl, loadMachine, machineCode, machin
 import { briefText, COMMANDS } from "../brief.ts";
 import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor, EXTRA_HARNESSES, extraInstalled, hooksInstalled, hooksListen, hooksStatus, installDetected, installExtra, installHooks, mcFor, runHook, uninstallDetected, uninstallExtra, uninstallHooks, type ExtraHarness } from "../hooks.ts";
 import { BadName } from "../refusals.ts";
-import { detectCard, inAgentHarness } from "../card.ts";
+import { detectCard, detectHarness, detectRuns, inAgentHarness } from "../card.ts";
 
 const CLAIMS_GONE = "claims are gone: say what you're working on in the task, or post it";
 
@@ -46,7 +46,9 @@ const HELP = `kiwi ${VERSION} — Channels by Kiwi Init: real-time coordination 
 
 Agents
   kiwi join <code>                               ask to join (named after what you run in: claude, codex…; --as NAME
-                                                 picks one); waits for the owner, then says what to do
+                                                 picks one); waits for the owner, then says what to do. It says what
+                                                 runs you (Claude Code and Codex are read on their own; else --model ID,
+                                                 --harness NAME), and the owner signs that into your seat
   kiwi listen                                    messages for you as they come, one per line (for a Monitor)
      --once [--timeout 10m]                      wait for the next message(s), then exit (2 and "no messages yet" on timeout)
      --now                                       unread messages, without waiting
@@ -100,6 +102,7 @@ const { values: opt, positionals: args } = parseArgs({
     as: { type: "string" },
     role: { type: "string" },
     about: { type: "string" },
+    harness: { type: "string" },
     relay: { type: "string" },
     code: { type: "string" },
     to: { type: "string" },
@@ -568,7 +571,7 @@ const commands: Record<string, Command> = {
     Effect.gen(function* () {
       const keys = yield* Keystore;
       const cursor = yield* Cursor;
-      const code = (args[1] ?? (yield* die("usage: kiwi join <code> [alias] [--as NAME] [--role ROLE]"))).trim();
+      const code = (args[1] ?? (yield* die("usage: kiwi join <code> [alias] [--as NAME] [--role ROLE] [--model ID] [--harness NAME]"))).trim();
       try {
         decodeJoinCode(code);
       } catch {
@@ -577,6 +580,17 @@ const commands: Record<string, Command> = {
       const relay = relayUrl();
       const roomId = decodeJoinCode(code).roomId;
       const who = here();
+      // What runs this agent goes with the request, for the owner to see and sign. An agent in a
+      // harness can't ask without it: a seat that says nothing about its model proves nothing later.
+      const runs = detectRuns(process.env, { ...(opt.harness ? { harness: opt.harness } : {}), ...(opt.model ? { model: opt.model } : {}) });
+      if (!runs && (inAgentHarness(process.env) || opt.harness || opt.model || process.env.KIWI_HARNESS)) {
+        const harness = opt.harness?.trim() || process.env.KIWI_HARNESS?.trim() || detectHarness(process.env);
+        return yield* die(
+          harness
+            ? `say what model runs you: kiwi join <code> --model <model id> (or KIWI_MODEL). Claude Code's transcript and Codex's config are read on their own; this ${harness} session left no model to read.`
+            : "say what runs you: kiwi join <code> --harness <claude-code|codex|gemini|cursor|grok|…> --model <model id> (or KIWI_HARNESS and KIWI_MODEL)",
+        );
+      }
       const local = yield* keys.identitiesIn(roomId);
       // No --as: this checkout's seat in the channel when it's free for this session (a restart takes
       // it back), else a name from what the agent runs in, which the owner's side makes unique.
@@ -604,7 +618,7 @@ const commands: Record<string, Command> = {
       if (name === OWNER_NAME) return yield* die(`"${OWNER_NAME}" is reserved for the channel owner; pick an agent name with --as`);
       const hadKey = local.includes(name);
       let id = yield* keys.identity(name, roomId);
-      const info = { name, ...(opt.role ? { role: opt.role } : {}), ...(opt.about ? { about: opt.about } : {}), ...(auto ? { auto: true } : {}) };
+      const info = { name, ...(opt.role ? { role: opt.role } : {}), ...(opt.about ? { about: opt.about } : {}), ...(auto ? { auto: true } : {}), ...(runs ? { runs } : {}) };
 
       // Agents join from a computer its person linked with `kiwi setup`; the computer vouches for them.
       const signIn = yield* signInOn(relay);
@@ -912,7 +926,9 @@ const commands: Record<string, Command> = {
         const code = r.code ?? (r.check === "waiting" ? "waiting" : "unchecked");
         // A name someone here already holds comes as the next free one: asked for X, it joins as X-2.
         const asked = r.askedAs && r.askedAs !== r.name ? ` (asked as ${r.askedAs}, which is taken)` : "";
-        out(`${code.padEnd(8)} ${r.name}${asked}${r.role ? ` (${r.role})` : ""} · ${who}${r.computer ? ` on ${r.computer.label}` : ""} · key ${fingerprint(r.pk)} · ${ago(r.ts)}`);
+        // What it says runs it, which approving signs into its seat; an agent that said nothing is worth a second look.
+        const runs = r.kind === "human" ? "" : r.runs ? ` · runs ${runsLine(r.runs)}` : " · says nothing about what runs it";
+        out(`${code.padEnd(8)} ${r.name}${asked}${r.role ? ` (${r.role})` : ""} · ${who}${r.computer ? ` on ${r.computer.label}` : ""}${runs} · key ${fingerprint(r.pk)} · ${ago(r.ts)}`);
       }
       if (reqs.some((r) => r.computer)) out("kiwi approve CODE --seat also lets that computer's later agents into this channel on their own");
       if (reqs.some((r) => r.check === "waiting")) out("waiting: the requester shows its code in a moment; run kiwi requests again");

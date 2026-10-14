@@ -29,6 +29,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { openSession, type AgentSession } from "./agent.ts";
+import { noteTranscript } from "./card.ts";
 import { Cursor, home, Keystore, loadConfig, type ChannelConfig } from "./config.ts";
 import { ChannelGone } from "./client.ts";
 import { briefText, COMMANDS } from "./brief.ts";
@@ -596,6 +597,8 @@ export function cursorStopFollowup(mc: string, unread: boolean, listening: boole
 
 interface HookInput {
   session_id?: string;
+  /** Claude Code: the session's transcript, where the model it answers with is written. */
+  transcript_path?: string;
   cwd?: string;
   stop_hook_active?: boolean;
   hook_event_name?: string;
@@ -794,6 +797,8 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
   } catch {}
   // The session that runs the hook: the one its seat remembers (or takes back, after a restart).
   const who: Here = { ...here(), ...(input.session_id ? { session: input.session_id } : {}) };
+  // Where this session's transcript is, so a later `kiwi join` from its shell can read the model it runs.
+  if (input.session_id && input.transcript_path) noteTranscript(input.session_id, input.transcript_path);
   const b = bindingFor(process.env.CLAUDE_PROJECT_DIR ?? input.cwd ?? process.cwd(), { who }) ?? bindingFor(input.cwd ?? process.cwd(), { who });
   if (!b) return;
   const keys = yield* Keystore;

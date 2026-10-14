@@ -60,6 +60,13 @@ export interface MemberInfo {
   /** An agent a computer let in: that computer's key. Kept when the owner re-signs the record, so revoking the computer finds it. */
   via?: string;
   /**
+   * What runs this agent: the harness and the model id, as the agent declared them when it asked to
+   * join and the owner signed them at approval. Only the owner's signature puts it in a record, so a
+   * seat's `runs` is the owner's word on what sits behind the key, not the agent's. An agent's later
+   * card may say another model; the record keeps what was approved.
+   */
+  runs?: Runs;
+  /**
    * In a join request only: the agent didn't pick its name (kiwi join without --as), so a taken
    * one means "give me a free one like it", never a RECLAIM of that seat.
    */
@@ -70,6 +77,26 @@ export interface MemberInfo {
    * own exchange key, so neither the relay nor another agent can offer someone else's computer.
    */
   seatOffer?: ComputerOffer;
+}
+
+/** What runs an agent: its harness (claude-code, codex, gemini…) and the model id it answers with. */
+export interface Runs {
+  harness: string;
+  model: string;
+}
+
+/** `runs` as something sent or stored says it, if it reads as one: two short non-empty lines. */
+export function readRuns(x: unknown): Runs | undefined {
+  if (!x || typeof x !== "object") return undefined;
+  const r = x as { harness?: unknown; model?: unknown };
+  const harness = inlineText(r.harness, 40);
+  const model = inlineText(r.model, 60);
+  return harness && model ? { harness, model } : undefined;
+}
+
+/** "claude-code · claude-fable-5-1": what runs an agent, in one line. */
+export function runsLine(r: Runs | undefined): string {
+  return r ? `${r.harness} · ${r.model}` : "";
 }
 
 /** A computer as a join request offers it for a seat: its keys, its name, and its two signatures. */
@@ -167,6 +194,7 @@ export async function makeRecord(owner: Identity, room: string, m: MemberInfo & 
     ...(!m.owner && m.laterRole ? { laterRole: m.laterRole } : {}),
     ...(m.kind === "computer" && m.admits ? { admits: { since: m.admits.since, until: m.admits.until } } : {}),
     ...(m.via ? { via: m.via } : {}),
+    ...(!m.owner && m.kind !== "human" && m.kind !== "computer" && m.runs ? { runs: { harness: m.runs.harness, model: m.runs.model } } : {}),
     at: Date.now(),
   });
 }
@@ -220,6 +248,8 @@ export async function readRecord(key: string, sealed: string, room: string, pk: 
     const a = (rec as { admits?: { since?: unknown; until?: unknown } }).admits;
     const admits = rec.kind === "computer" && a && Number.isInteger(a.since) && Number.isInteger(a.until) ? { since: a.since as number, until: a.until as number } : undefined;
     const via = typeof rec.via === "string" ? rec.via : undefined;
+    // What runs it is the owner's to attest: a computer's record (admitRoster) never carries it.
+    const runs = owner || rec.kind === "human" || rec.kind === "computer" ? undefined : readRuns((rec as { runs?: unknown }).runs);
     return {
       signer: rec.pk,
       fields: Object.keys(rec),
@@ -238,6 +268,7 @@ export async function readRecord(key: string, sealed: string, room: string, pk: 
         ...(laterRole ? { laterRole } : {}),
         ...(admits ? { admits } : {}),
         ...(via ? { via } : {}),
+        ...(runs ? { runs } : {}),
         owner,
         at: rec.at,
         active: true,

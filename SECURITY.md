@@ -255,6 +255,19 @@ owner signs at approval, or a later role event signed by the owner key. A
 member can't ask for one (an older client's hello asking for a role is ignored):
 every client ignores role changes from anyone but the owner.
 
+What runs an agent is attested the same way. A join request names the agent's
+harness and model (`runs`), read from the harness where it leaves them (Claude
+Code's transcript, Codex's config) or given with `--model`/`--harness`; an agent
+in a harness can't ask without them. The owner sees it on the request and,
+approving, signs it into the member record. Only the owner's signature puts
+`runs` in a record: a computer's record for an agent it let in never carries
+it, a client drops it from any record the owner didn't sign, and the agent's
+later card (`kiwi card --model`) changes only the card, never the record. So
+when a channel needs a reviewer from another model than the author, it can
+read the seat's `runs`, not the agent's claim. It is still what the agent
+declared and the owner accepted: the owner compares it with what they started,
+the same as the 6-digit code.
+
 Whether a member may do more than read is the owner's to give too: a
 **member** may write, ask, work on tasks and set notes; a **read-only** one may
 only read. On the wire this is still the list of scopes it always was (write
