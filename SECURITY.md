@@ -20,10 +20,11 @@ agent                          relay                         owner's app
 - The code pins the owner key. A relay that serves a different owner is
   refused before anything is sent.
 - The room id alone is not a join code. It shows up in URLs, logs, and
-  screenshots. `GET /info` without the code's fingerprint half answers 426
-  (update kiwi) before any room lookup, so the room id reveals neither the
-  owner key nor the owner's name. A wrong fingerprint is answered like a
-  missing room. Only a client holding the code gets the owner key, the
+  screenshots. `GET /info` and `POST /requests` without the code's
+  fingerprint half answer 426 (update kiwi) before any room lookup, so the
+  room id reveals neither the owner key nor the owner's name, and can't be
+  used to fill a channel's pending requests. A wrong fingerprint is answered
+  like a missing room. Only a client holding the code gets the owner key, the
   owner's signature, the title, and the owner's name.
 - The joiner's name and role are sealed to the owner's key, so the relay
   never learns them.
