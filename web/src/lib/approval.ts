@@ -7,6 +7,7 @@ import { useEffect, useEffectEvent } from "react"
 
 import { Channel } from "@mc/client.ts"
 
+import { tendOwned } from "./approval-tend"
 import { loadMember, saveMember, type ChannelRow } from "./channel"
 import { relayUrl } from "./relay"
 import { bridge, secrets } from "./secrets"
@@ -27,14 +28,7 @@ async function tend(code: string, person: string): Promise<void> {
   const m = loadMember(code)
   if (!m || m.identity.pk !== m.access.ownerPk) return
   const ch = new Channel(m.access, relayUrl(), m.identity, (access) => saveMember({ ...(loadMember(code) ?? m), access }))
-  const title = m.name ?? "your channel"
-  const let_in = await ch.autoApprove(person)
-  if (let_in.length) notify(title, let_in.length === 1 ? `${let_in[0]!.name} joined from your computer` : `${let_in.length} of your agents joined`)
-  for (const r of await ch.requests({ person })) {
-    if (r.computer?.own || told.has(r.id)) continue
-    told.add(r.id)
-    notify(title, `${r.name} asks to join`)
-  }
+  await tendOwned(person, m.name ?? "your channel", ch, notify, told)
 }
 
 /** Watch every owned channel in `rows` while the app runs (the tray keeps it running when closed). */
