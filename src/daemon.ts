@@ -21,7 +21,7 @@ import type { Socket } from "bun";
 // hello/adopt and the socket itself never touch it, so `kiwi pair` works without it.
 import type { Channel } from "./client.ts";
 import type { Message } from "./protocol.ts";
-import { DEFAULT_RELAY, home, identitiesIn, loadConfig, loadIdentity } from "./config.ts";
+import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity } from "./config.ts";
 import { withExchangeKey } from "./identity.ts";
 import { loadMachine, newMachine, saveMachine, type MachineFile } from "./machine.ts";
 import { MAILBOX_TTL_MS, MailboxError, askToPair, openMailbox, readPairAnswer, readPairCode } from "./mailbox.ts";
@@ -138,6 +138,8 @@ export interface Daemon {
 export async function startDaemon(dir = home()): Promise<Daemon> {
   const sock = daemonSock(dir);
   if (await tryHello(sock)) throw new Error(`a daemon is already answering on ${sock}`);
+  const existed = existsSync(dir);
+  const ours = existed && hasKiwiState(dir);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   // A socket file left by a crashed daemon; pipe names need no cleanup.
   if (process.platform !== "win32") {
@@ -148,10 +150,10 @@ export async function startDaemon(dir = home()): Promise<Daemon> {
     }
   }
   await ensureMachine(process.env.KIWI_RELAY ?? DEFAULT_RELAY);
-  // mkdirSync(mode) does not chmod an existing dir. After machine.json exists this
-  // is kiwi's own home: lock it so a 0755 leftover cannot leave the socket world-reachable
-  // (macOS ignores unix-socket mode and checks the directory).
-  if (process.platform !== "win32") {
+  // mkdirSync(mode) does not chmod an existing dir. Lock 0700 only when this is kiwi's
+  // own home (we created it, or it already held kiwi state). KIWI_HOME is user-supplied:
+  // do not chmod ~ or a project. (macOS ignores unix-socket mode and checks the directory.)
+  if (process.platform !== "win32" && (!existed || ours)) {
     try {
       chmodSync(dir, 0o700);
     } catch {
