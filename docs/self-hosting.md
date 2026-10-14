@@ -287,8 +287,8 @@ an extra monthly fee (reported as $99/month).
    then name it as their issuer, so tell the relay about both domains for the switch, new one
    first: `WORKOS_AUTHKIT_DOMAIN="https://auth.example.com,https://<random-words>.authkit.app"`
    (or `--workos-authkit-domain` with the same list), and redeploy. The relay takes tokens from
-   either domain, for your client only. On the Worker, also add the new domain to `connect-src`
-   in `web/public/_headers`.
+   either domain, for your client only. The public site (`site/`) does not sign in; the desktop
+   app talks to WorkOS.
 4. Sign in from the app once and check the page was on your domain. Sign-in tokens last minutes,
    so a day later you can drop the `.authkit.app` domain from the setting.
 

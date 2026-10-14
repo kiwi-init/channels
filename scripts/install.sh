@@ -1,12 +1,13 @@
 #!/bin/sh
-# Install the mc binary to ~/.local/bin (override with PREFIX=/somewhere).
+# Install kiwi from this checkout to ~/.kiwi/bin (PREFIX to override).
 # Needs bun on PATH: https://bun.sh
+# The download installer that people curl lives in site/install.sh.
 set -eu
 cd "$(dirname "$0")/.."
-PREFIX="${PREFIX:-$HOME/.local}"
+PREFIX="${PREFIX:-$HOME/.kiwi}"
 bun run build
 mkdir -p "$PREFIX/bin"
-install -m755 dist/mc "$PREFIX/bin/mc"
-echo "installed to $PREFIX/bin/mc — make sure it is on your PATH:"
-echo "  export PATH=\"\$PREFIX/bin:\$PATH\""
-echo "then run:  mc create --as $USER"
+install -m755 dist/kiwi "$PREFIX/bin/kiwi"
+echo "installed to $PREFIX/bin/kiwi — make sure it is on your PATH:"
+echo "  export PATH=\"$PREFIX/bin:\$PATH\""
+echo "then run:  kiwi --help"

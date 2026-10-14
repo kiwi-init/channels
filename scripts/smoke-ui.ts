@@ -49,13 +49,13 @@ function kiwi(args: string[], watch?: (out: string) => void): Promise<string> {
   return new Promise((ok, fail) => p.on("exit", (code) => (code === 0 ? ok(out) : fail(new Error(`kiwi ${args[0]} exited ${code}: ${out.trim().split("\n").pop()}`)))))
 }
 
-const relay = spawn("bun", ["src/relay/bun.ts", "--hostname", "127.0.0.1", "--port", String(PORT), "--data", join(data, "relay"), "--dev-sign-in"], { cwd: ROOT, stdio: ["ignore", "pipe", "inherit"] })
+const relay = spawn("bun", ["src/relay/bun.ts", "--hostname", "127.0.0.1", "--port", String(PORT), "--data", join(data, "relay"), "--web", "web/dist", "--dev-sign-in"], { cwd: ROOT, stdio: ["ignore", "pipe", "inherit"] })
 await new Promise<void>((ok, fail) => {
   let out = ""
   relay.stdout!.on("data", (d) => {
     out += d
-    if (out.includes("dashboard: not served")) fail(new Error("web/dist is missing: run bun run web:build first"))
-    else if (out.includes("dashboard:")) ok()
+    if (out.includes("site: not served")) fail(new Error("web/dist is missing: run bun run web:build first"))
+    else if (out.includes("site:")) ok()
   })
   relay.on("exit", (code) => fail(new Error(`relay exited (${code})`)))
 })
