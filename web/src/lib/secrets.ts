@@ -8,6 +8,7 @@ import { useSyncExternalStore } from "react"
 import { generateIdentity } from "@mc/identity.ts"
 
 import type { ChannelIdentityView, ComputerView, KiwiBridge, PairAskView, PendingItem, PersonView, StoreSnapshot, UpdateView } from "../../../desktop/src/bridge.ts"
+import { persistQueue } from "./persist-queue"
 
 export type { ChannelIdentityView, ComputerView, KiwiBridge, PairAskView, PendingItem, PersonView, StoreSnapshot, UpdateView }
 
@@ -79,12 +80,14 @@ export async function createPerson(name: string): Promise<PersonView> {
   return p
 }
 
-/** Keep the channel identities (member keys, pending joins). Visible at once; the write follows. */
+const persistChannels = persistQueue()
+
+/** Keep the channel identities (member keys, pending joins). Visible at once; the write follows, one at a time. */
 export async function saveChannels(channels: ChannelIdentityView[]): Promise<void> {
   const b = bridge()
   if (b) {
     publish({ ...snapshot, channels })
-    await b.saveChannels(channels)
+    await persistChannels(() => b.saveChannels(channels))
   } else writeLocal({ channels })
 }
 
