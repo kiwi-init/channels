@@ -524,9 +524,18 @@ function wireIpc(): void {
   ipcMain.handle("kiwi:install-cli", () => installCli());
   ipcMain.handle("kiwi:update-state", () => updateState());
   ipcMain.handle("kiwi:update-install", () => restartToUpdate());
+  // Each notification is held until it's clicked or closed: one nothing refers to is garbage collected,
+  // and its click with it. A Mac doesn't always say when one is closed (Notification Center keeps
+  // them), so past 100 the oldest are let go.
+  const shown = new Set<Notification>();
   ipcMain.handle("kiwi:notify", (_e, title: string, body: string) => {
     const n = new Notification({ title, body });
-    n.on("click", showWindow);
+    shown.add(n);
+    for (const old of shown) if (shown.size > 100) shown.delete(old);
+    const done = () => shown.delete(n);
+    n.on("click", () => (done(), showWindow()));
+    n.on("close", done);
+    n.on("failed", done);
     n.show();
   });
   ipcMain.handle("kiwi:open-external", (_e, url: string) => {
