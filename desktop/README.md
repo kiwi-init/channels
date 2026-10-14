@@ -28,9 +28,10 @@ window says so. Closing the window keeps the app in the tray (background auto-ap
 
 ## Renderer relay URL
 
-`web/` prefers `?relay=` on the app URL, then `window.kiwi.relayUrl`, then
-`location.origin` when served by a relay. The app loads
-`kiwi-app://app/index.html?relay=<url>`.
+In the app, `web/` takes the relay from `window.kiwi.relayUrl` (main's store, through
+the preload) and never from the page's URL: the sign-in token goes wherever the relay
+is. The app loads `kiwi-app://app/index.html`. In a browser, `web/` takes `?relay=`,
+else `location.origin` when served by a relay.
 
 ## Typecheck / build
 

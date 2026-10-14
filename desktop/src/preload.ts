@@ -1,21 +1,14 @@
 // The context-isolated face of main.ts: exposes window.kiwi and nothing else.
-// The relay URL rides the entry URL (?relay=…); the snapshot is synchronous
-// (main decrypted once at startup), everything else is invoke/on.
+// The snapshot is synchronous (main decrypted once at startup), everything else
+// is invoke/on. The relay is main's, from the snapshot: never the page's URL,
+// which anything that can make the app load a URL could choose (and the token
+// getToken hands out would go to it).
 
 import { contextBridge, ipcRenderer } from "electron";
 
 import type { ChannelIdentityView, ComputerView, DaemonStatus, KiwiBridge, PairAskView, PendingItem, PersonView, SignInResult, StoreSnapshot, UpdateView } from "./bridge.ts";
 
-const relayFromEntry = (): string | null => {
-  try {
-    const r = new URL(window.location.href).searchParams.get("relay");
-    return r && /^https?:\/\//.test(r) ? r : null;
-  } catch {
-    return null;
-  }
-};
-
-const relayUrl = relayFromEntry() ?? (ipcRenderer.sendSync("kiwi:snapshot-sync") as StoreSnapshot).relayUrl;
+const relayUrl = (ipcRenderer.sendSync("kiwi:snapshot-sync") as StoreSnapshot).relayUrl;
 
 const on = (channel: "kiwi:store" | "kiwi:deep-link" | "kiwi:update", cb: (v: never) => void): (() => void) => {
   const fn = (_e: unknown, v: never) => cb(v);
