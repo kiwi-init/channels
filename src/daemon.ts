@@ -715,6 +715,9 @@ export async function listenDaemon(
 
 /** `kiwi daemon`: serve this home in the foreground until SIGTERM/SIGINT. Logs one line. */
 export async function runDaemonForeground(dir = home()): Promise<void> {
+  // The CLI installed early SIGTERM/SIGINT handlers before anything async (see src/cli/main.ts):
+  // drop them now that this handler is in, so one signal has exactly one clean shutdown.
+  (globalThis as { __kiwiDisarmEarlySignals?: () => void }).__kiwiDisarmEarlySignals?.();
   // Handlers first: a signal during startup stops a clean exit, never a kill (a supervisor that
   // kills right after spawn would otherwise win the race with the listener below).
   let sock: string | null = null;

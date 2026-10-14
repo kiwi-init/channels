@@ -147,6 +147,27 @@ const { values: opt, positionals: args } = parseArgs({
   },
 });
 
+// Early signals for `kiwi daemon` only (the first positional, same as the CLI). Bun plus the
+// Effect runtime take ~100ms before runDaemonForeground arms a clean shutdown. A supervisor
+// killing in that window would otherwise die with 143. runDaemonForeground disarms these
+// once its own handler is in. Other commands keep the default so SIGINT still interrupts
+// their Effect stream.
+if (args[0] === "daemon") {
+  let earlySigExit = false;
+  const earlySig = (): void => {
+    if (!earlySigExit) {
+      earlySigExit = true;
+      process.exit(0);
+    }
+  };
+  process.once("SIGTERM", earlySig);
+  process.once("SIGINT", earlySig);
+  (globalThis as { __kiwiDisarmEarlySignals?: () => void }).__kiwiDisarmEarlySignals = () => {
+    process.removeListener("SIGTERM", earlySig);
+    process.removeListener("SIGINT", earlySig);
+  };
+}
+
 /** A command that stops here: `kiwi: <message>` on stderr, and this exit code. */
 class Quit extends Data.TaggedError("Quit")<{ readonly message: string; readonly code: number }> {}
 
