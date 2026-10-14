@@ -2,6 +2,8 @@
 // main.ts and preload.ts; renderer-neutral on purpose (no electron/node imports),
 // so web/ can type against it without touching this process.
 
+import type { PersonClaim } from "../../src/person.ts";
+
 /** The person's own key. Same JSON shape as Identity in src/identity.ts. */
 export interface PersonView {
   name: string;
@@ -10,6 +12,8 @@ export interface PersonView {
   xpk: string;
   xsk: string;
 }
+
+export type PublicPerson = Pick<PersonView, "name" | "pk" | "xpk">;
 
 /** One channel identity of the person's (owner keys included). */
 export interface ChannelIdentityView {
@@ -55,7 +59,7 @@ export interface PendingItem {
 /** Everything the renderer needs at load: one synchronous snapshot (see main). */
 export interface StoreSnapshot {
   relayUrl: string;
-  person: PersonView | null;
+  person: PublicPerson | null;
   channels: ChannelIdentityView[];
   computers: ComputerView[];
   pending: PendingItem[];
@@ -86,7 +90,8 @@ export interface KiwiBridge {
   getSnapshot(): StoreSnapshot;
   onStore(cb: (s: StoreSnapshot) => void): () => void;
   setRelayUrl(url: string): Promise<string>;
-  createPerson(name: string): Promise<PersonView>;
+  createPerson(name: string): Promise<PublicPerson>;
+  provePerson(code: string, memberPk: string): Promise<PersonClaim>;
   saveChannels(channels: ChannelIdentityView[]): Promise<void>;
   saveComputers(computers: ComputerView[]): Promise<void>;
   setPending(pending: PendingItem[]): Promise<void>;
