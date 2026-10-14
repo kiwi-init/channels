@@ -161,6 +161,11 @@ describe("routes with their own checks", () => {
     expect(await room("GET", `/info?fp=${decodeJoinCode(code).ownerFp}`)).toBe(200);
   });
 
+  test("POST /requests needs the code's fingerprint", async () => {
+    expect(await room("POST", "/requests", { body: {} })).toBe(426);
+    expect(await room("POST", "/requests?fp=wrong", { body: {} })).toBe(404);
+  });
+
   test("removed routes are gone: seats, admit, pairs, usage", async () => {
     // A member (even the owner) asking for one hears 404, not a refusal to authenticate.
     for (const [method, path] of [["POST", "/seats"], ["POST", "/admit"], ["GET", "/usage"], ["POST", "/pairs"], ["GET", "/pairs"], ["POST", "/pairs/slots"]] as const) {

@@ -184,13 +184,15 @@ interface Counters {
 export const UPDATE_KIWI = "update kiwi to join or approve here: curl -fsSL https://channels.kiwiinit.com/install | sh (Windows: irm https://channels.kiwiinit.com/install.ps1 | iex)";
 
 /**
- * GET /info with no `fp` is refused before the room is opened. A room id is not
- * a join code: only a client holding the code's fingerprint half may learn the
- * owner key or the owner's name. A present but wrong fingerprint falls through
- * and is answered like a missing room.
+ * GET /info and POST /requests with no `fp` are refused before the room is opened.
+ * A room id is not a join code: only a client holding the code's fingerprint half
+ * may learn the owner key or the owner's name, or ask to join (else anyone who saw
+ * a room id could fill its pending requests). A present but wrong fingerprint falls
+ * through and is answered like a missing room.
  */
 export function missingFingerprint(method: string, path: string, url: URL): UpdateRequired | null {
-  if (method.toUpperCase() === "GET" && path === "/info" && url.searchParams.get("fp") === null) {
+  const m = method.toUpperCase();
+  if (((m === "GET" && path === "/info") || (m === "POST" && path === "/requests")) && url.searchParams.get("fp") === null) {
     return new UpdateRequired({ message: UPDATE_KIWI });
   }
   return null;
@@ -914,7 +916,7 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
  * The HTTP API (all under /v1/rooms/<room>):
  *   GET    /info?fp=<fingerprint>     holder of the join code: owner keys, epoch, whether a rotation is due
  *   POST   /create                    owner: create the room
- *   POST   /requests                  anyone with the code: ask to join (self-signed)
+ *   POST   /requests?fp=<fingerprint> holder of the join code: ask to join (self-signed)
  *   GET    /requests/<id>             the requester: status, and wrapped keys once approved
  *   POST   /requests/<id>/reveal      the requester: its half of the code check
  *   GET    /requests?v=2              owner: pending requests

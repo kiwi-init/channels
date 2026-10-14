@@ -1,5 +1,5 @@
 // GET /info: the owner key and name only for someone holding the join code. No fingerprint is 426
-// before the room is opened (GLM-1).
+// before the room is opened (GLM-1). POST /requests the same (T111).
 
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
@@ -56,6 +56,24 @@ test("no fingerprint is 426 before any room lookup, and names no owner", async (
   const res = await fetch(`${relay}/v1/rooms/${missing}/info`);
   expect(res.status).toBe(426);
   expect(existsSync(join(dataDir, `${missing}.sqlite`))).toBe(false);
+});
+
+// POST /requests too (T111): a bare room id can't fill a channel's pending requests.
+const ask = (fp?: string) => fetch(`${relay}/v1/rooms/${roomId}/requests${fp === undefined ? "" : `?fp=${fp}`}`, { method: "POST", body: "{}" });
+
+test("asking to join with no fingerprint is 426 before any room lookup", async () => {
+  const r = await ask();
+  expect(r.status).toBe(426);
+  expect(((await r.json()) as { tag: string }).tag).toBe("UpdateRequired");
+  const missing = "ef".repeat(16);
+  expect((await fetch(`${relay}/v1/rooms/${missing}/requests`, { method: "POST", body: "{}" })).status).toBe(426);
+  expect(existsSync(join(dataDir, `${missing}.sqlite`))).toBe(false);
+});
+
+test("asking to join with a wrong fingerprint is answered like a missing room", async () => {
+  const r = await ask("x".repeat(22));
+  expect(r.status).toBe(404);
+  expect(await r.json()).toEqual({ error: "no such channel", tag: "ChannelGone" });
 });
 
 test("this client sends it: joining still pins the owner", async () => {

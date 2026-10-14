@@ -178,7 +178,7 @@ const routes: RoomRoute[] = [
         const { url } = yield* Request_;
         const m = yield* readMeta;
         // The join code's second half is the owner key's fingerprint. A wrong one is answered like a
-        // missing room. Requests with no fp never reach here (missingFingerprint).
+        // missing room. Calls with no fp never reach here (missingFingerprint).
         if (url.searchParams.get("fp") !== (yield* Effect.promise(() => ownerFingerprint(m.ownerPk)))) return yield* new ChannelGone({ message: "no such channel" });
         return { data: { ownerPk: m.ownerPk, ownerXpk: m.ownerXpk, ownerSig: m.ownerSig, titlesSig: db.getTitlesSig(), epoch: m.epoch, rotate: m.rotate, title: db.title(), settings: db.settings(), iconAt: db.iconAt() } };
       }),
@@ -209,6 +209,10 @@ const routes: RoomRoute[] = [
     guard: "joiner",
     run: () =>
       Effect.gen(function* () {
+        // Only the join code's holder may ask, as for GET /info: a wrong fingerprint is a missing room.
+        const { url } = yield* Request_;
+        const m = yield* readMeta;
+        if (url.searchParams.get("fp") !== (yield* Effect.promise(() => ownerFingerprint(m.ownerPk)))) return yield* new ChannelGone({ message: "no such channel" });
         const b = yield* json<RequestBody>();
         const { id, fresh } = yield* request(b);
         return { data: { id }, fx: fresh ? { broadcast: [frame({ t: "request" })] } : undefined };
