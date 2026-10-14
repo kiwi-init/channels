@@ -20,6 +20,11 @@ export interface OpenNews {
   needs: number
 }
 
+/** Put polled heads onto list rows so unread dots can compare `head` to the mark. */
+export function withHeads<T extends { room: string; head?: number }>(rows: T[], heads: Record<string, number>): T[] {
+  return rows.map((r) => (heads[r.room] !== undefined ? { ...r, head: heads[r.room] } : r))
+}
+
 /** What a row in the channel list shows. */
 export interface RowNews {
   /** This is the open channel. */

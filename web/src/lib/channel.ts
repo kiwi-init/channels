@@ -27,11 +27,11 @@ import { forgetHistory, readCached, rememberMessage } from "./history"
 import { wholeLog } from "./history-plan"
 import { ICON_LIVE } from "./icon-event"
 import { addMarks, type Marks } from "./receipts"
-import { personClaimFor } from "./person-claim"
 import { fork, run } from "./runtime"
-import { bridge, saveChannels, secrets, type ChannelIdentityView } from "./secrets"
+import { bridge, personClaim, saveChannels, secrets, useSecrets, type ChannelIdentityView } from "./secrets"
 import { noteSignInGone } from "./session"
 import { untilOpen } from "./until-open"
+import { withHeads } from "./news"
 
 /** How much history to load when the page opens. */
 const HISTORY = 2_000
@@ -123,7 +123,6 @@ export interface PendingJoin {
 
 const MEMBER_KEY = (code: string) => `mc.member.${code}`
 const PENDING_KEY = (code: string) => `mc.pending.${code}`
-const REGISTRY_KEY = "mc.channels"
 
 function read<T>(key: string): T | null {
   try {
@@ -135,7 +134,8 @@ function read<T>(key: string): T | null {
 
 // Where member keys live: in the desktop app, its secrets store (lib/secrets.ts, kept with the OS
 // keychain); in a plain browser, localStorage as before. One entry per channel: a member (with
-// access) or a join this app is waiting on (with requestId).
+// access) or a join this app is waiting on (with requestId). The sidebar list is those keys,
+// not a separate localStorage index.
 
 type Entry = ChannelIdentityView
 const asMember = (e: Entry): StoredMember | null =>
@@ -151,7 +151,7 @@ const pendingEntry = (p: PendingJoin): Entry => ({ label: p.identity.name, idNam
 const inApp = () => bridge() !== null
 const entries = (): Entry[] => secrets().channels
 const otherEntries = (code: string) => entries().filter((e) => e.code !== code)
-const writeEntries = (next: Entry[]) => void saveChannels(next).catch(() => {})
+const writeEntries = (next: Entry[]) => saveChannels(next)
 
 /**
  * Once, in the app: member keys and pending joins an older renderer kept in localStorage move to
@@ -184,6 +184,7 @@ export async function migrateChannelsToStore(): Promise<number> {
   }
   await saveChannels(next)
   for (const { key } of found) localStorage.removeItem(key)
+  localStorage.removeItem("mc.channels")
   changed()
   return found.length
 }
@@ -194,18 +195,20 @@ export function loadMember(code: string): StoredMember | null {
   return e ? asMember(e) : null
 }
 
-export function saveMember(m: StoredMember): void {
+export function saveMember(m: StoredMember): Promise<void> {
   // This app's key for a channel is never swapped for another one: losing an owner key
   // would leave the channel impossible to manage or close.
   const prior = loadMember(m.code)
   if (prior && prior.identity.pk !== m.identity.pk) throw new Error(`this app is already in this channel as ${prior.identity.name}`)
-  if (inApp()) writeEntries([...otherEntries(m.code), memberEntry(m)])
-  else {
+  if (!inApp()) {
     localStorage.setItem(MEMBER_KEY(m.code), JSON.stringify(m))
     localStorage.removeItem(PENDING_KEY(m.code))
+    changed()
+    return Promise.resolve()
   }
-  rememberChannel(m.code)
+  const done = writeEntries([...otherEntries(m.code), memberEntry(m)])
   changed()
+  return done
 }
 
 export function loadPending(code: string): PendingJoin | null {
@@ -215,16 +218,26 @@ export function loadPending(code: string): PendingJoin | null {
 }
 
 /** Drop a join request this app was waiting on, and nothing else. */
-export function forgetPending(code: string): void {
-  if (inApp()) writeEntries(entries().filter((e) => !(e.code === code && !e.access)))
-  else localStorage.removeItem(PENDING_KEY(code))
+export function forgetPending(code: string): Promise<void> {
+  if (!inApp()) {
+    localStorage.removeItem(PENDING_KEY(code))
+    changed()
+    return Promise.resolve()
+  }
+  const done = writeEntries(entries().filter((e) => !(e.code === code && !e.access)))
   changed()
+  return done
 }
 
-export function savePending(p: PendingJoin): void {
-  if (inApp()) writeEntries([...otherEntries(p.code), pendingEntry(p)])
-  else localStorage.setItem(PENDING_KEY(p.code), JSON.stringify(p))
+export function savePending(p: PendingJoin): Promise<void> {
+  if (!inApp()) {
+    localStorage.setItem(PENDING_KEY(p.code), JSON.stringify(p))
+    changed()
+    return Promise.resolve()
+  }
+  const done = writeEntries([...otherEntries(p.code), pendingEntry(p)])
   changed()
+  return done
 }
 
 /** Join requests this app is waiting on. */
@@ -253,20 +266,16 @@ export function allMembers(): StoredMember[] {
   return out
 }
 
-/** Forget a channel in this browser: identity, keys, pending request, registry entry, cached history. */
-export function forgetChannel(code: string): void {
+/** Forget a channel in this browser: identity, keys, pending request, cached history. */
+export function forgetChannel(code: string): Promise<void> {
   const member = loadMember(code)
   if (member) void forgetHistory(member.access.roomId, member.identity.pk).catch(() => {})
-  if (inApp()) writeEntries(otherEntries(code))
+  const done = inApp() ? writeEntries(otherEntries(code)) : Promise.resolve()
   localStorage.removeItem(MEMBER_KEY(code))
   localStorage.removeItem(PENDING_KEY(code))
   localStorage.removeItem(RECENT_KEY(code))
-  try {
-    localStorage.setItem(REGISTRY_KEY, JSON.stringify(knownChannels().filter((c) => c.code !== code)))
-  } catch {
-    // Private mode and a full disk both refuse the write. The in-memory list still updates.
-  }
   changed()
+  return done
 }
 
 // ---------- what the channel list shows ----------
@@ -368,8 +377,8 @@ export interface ChannelRow {
   head?: number
 }
 
-/** Sent when the person leaves a channel: a moment to refresh the list (within LISTING_EVERY). */
-export const LEFT_CHANNEL = "mc:left-channel"
+/** How often listed channels are asked for their head (GET /). Cheap: seq only. */
+export const HEADS_EVERY = 15_000
 
 const untitled = (room: string) => `Channel ${room.slice(0, 4).toUpperCase()}`
 
@@ -384,7 +393,7 @@ export function useChannelList(): ChannelRow[] {
     return () => window.removeEventListener(CHANGED, update)
   }, [])
 
-  return useMemo(() => {
+  const rows = useMemo(() => {
     const rows = new Map<string, ChannelRow>()
     for (const c of local) {
       const m = loadMember(c.code)
@@ -414,13 +423,65 @@ export function useChannelList(): ChannelRow[] {
     }
     return [...rows.values()].sort((a, b) => b.ts - a.ts)
   }, [local, pending])
+
+  const [heads, setHeads] = useState<Record<string, number>>({})
+  const memberKey = rows
+    .filter((r) => r.state === "member")
+    .map((r) => `${r.room}\t${r.code}`)
+    .sort()
+    .join("\n")
+  useEffect(() => {
+    if (!memberKey) return
+    const members = memberKey.split("\n").map((s) => {
+      const i = s.indexOf("\t")
+      return { room: s.slice(0, i), code: s.slice(i + 1) }
+    })
+    let stop = false
+    let gen = 0
+    const tick = async () => {
+      const my = ++gen
+      const next: Record<string, number> = {}
+      await Promise.all(
+        members.map(async ({ room, code }) => {
+          const m = loadMember(code)
+          if (!m) return
+          try {
+            next[room] = await new Channel(m.access, relayUrl(), m.identity).head()
+          } catch {
+            // Closed or unreachable: keep the last head we have.
+          }
+        }),
+      )
+      if (stop || my !== gen) return
+      setHeads((prev) => {
+        const merged = { ...prev, ...next }
+        const keys = Object.keys(merged)
+        if (keys.length === Object.keys(prev).length && keys.every((k) => prev[k] === merged[k])) return prev
+        return merged
+      })
+    }
+    void tick()
+    const id = setInterval(tick, HEADS_EVERY)
+    const onVis = () => {
+      if (!document.hidden) void tick()
+    }
+    document.addEventListener("visibilitychange", onVis)
+    return () => {
+      stop = true
+      clearInterval(id)
+      document.removeEventListener("visibilitychange", onVis)
+    }
+  }, [memberKey])
+
+  return useMemo(() => withHeads(rows, heads), [rows, heads])
 }
 
 /** The channels this browser is in, kept current as they change. */
 export function useKnownChannels(): KnownChannel[] {
-  const [list, setList] = useState(knownChannels)
+  useSecrets()
+  const [, setTick] = useState(0)
   useEffect(() => {
-    const update = () => setList(knownChannels())
+    const update = () => setTick((n) => n + 1)
     window.addEventListener(CHANGED, update)
     window.addEventListener("storage", update)
     return () => {
@@ -428,7 +489,7 @@ export function useKnownChannels(): KnownChannel[] {
       window.removeEventListener("storage", update)
     }
   }, [])
-  return list
+  return knownChannels()
 }
 
 export interface KnownChannel {
@@ -437,20 +498,11 @@ export interface KnownChannel {
   name?: string
 }
 
-/** Channels this browser is a member of, newest first. */
+/** Channels this browser is a member of, newest first. The keys, not a separate index. */
 export function knownChannels(): KnownChannel[] {
-  const raw = read<KnownChannel[]>(REGISTRY_KEY)
-  return Array.isArray(raw) ? raw.filter((c) => c && typeof c.code === "string" && loadMember(c.code)) : []
-}
-
-function rememberChannel(code: string): void {
-  const name = loadMember(code)?.name
-  const next = [{ code, at: Date.now(), ...(name ? { name } : {}) }, ...knownChannels().filter((c) => c.code !== code)].slice(0, 200)
-  try {
-    localStorage.setItem(REGISTRY_KEY, JSON.stringify(next))
-  } catch {
-    // Private mode and a full disk both refuse the write. The channel is still open in this tab.
-  }
+  return allMembers()
+    .map((m) => ({ code: m.code, at: m.at, ...(m.name ? { name: m.name } : {}) }))
+    .sort((a, b) => b.at - a.at)
 }
 
 /**
@@ -465,7 +517,7 @@ export async function createChannel(name: string, token: string | null, me: { na
   const info = me ? { name: handle, role: "owner", kind: "human" as const, display: me.name } : { name: "human", role: "owner" }
   const { code, access } = await Channel.create(relayUrl(), owner, info, [], roomId, token, name)
   const m: StoredMember = { code, identity: owner, access, at: Date.now(), name }
-  saveMember(m)
+  await saveMember(m)
   // A new channel starts in coordinator mode: people talk with the coordinator, agents in their tasks'
   // conversations. Best effort: the channel is made either way, and the owner can turn it on later.
   await new Channel(access, relayUrl(), owner, (a) => saveMember({ ...m, access: a }))
@@ -499,11 +551,11 @@ export async function askToJoin(code: string, name: string, role?: string): Prom
   const prior = loadPending(code)
   const identity = prior && prior.identity.name === name ? prior.identity : await generateIdentity(name)
   // A person says which person key is theirs, so the owner can sign it into their record and recognise their computers.
-  const person = secrets().person
-  const claims = person ? { person: await personClaimFor(person, code, identity.pk) } : undefined
+  const claim = await personClaim(code, identity.pk)
+  const claims = claim ? { person: claim } : undefined
   const r = await Channel.requestJoin(relayUrl(), code, identity, { name, ...(role ? { role } : {}) }, claims)
   const p: PendingJoin = { code, identity, requestId: r.requestId }
-  savePending(p)
+  await savePending(p)
   return p
 }
 
@@ -516,7 +568,7 @@ export async function checkJoin(p: PendingJoin): Promise<{ code: string | null }
   const record = (await new Channel(st.access, relayUrl(), p.identity).members().catch(() => [])).find((x) => x.pk === p.identity.pk)
   const identity = record && record.name !== p.identity.name ? { ...p.identity, name: record.name } : p.identity
   const m: StoredMember = { code: p.code, identity, access: st.access, at: Date.now() }
-  saveMember(m)
+  await saveMember(m)
   return m
 }
 

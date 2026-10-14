@@ -28,6 +28,10 @@ window says so. Closing the window keeps the app in the tray (background auto-ap
 - `src/updater.ts` — checks GitHub releases for a newer app.
 - `src/move.ts` — moves a download over the file it replaces, across filesystems too (the
   AppImage update).
+- `build/icon.svg` — the app icon. `bun desktop/scripts/icons.ts` (on a Mac) makes every
+  size from it: `build/icon.icns`, `build/icons/NxN.png` for Linux, and `assets/icon.png`
+  for the window. On Linux the window finds its icon through `desktopName` in
+  `package.json`: Wayland matches the window's app_id to `kiwi-desktop.desktop`.
 
 ## Renderer relay URL
 

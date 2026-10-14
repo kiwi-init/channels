@@ -46,24 +46,33 @@ type Reply = { id: number; ok: boolean; error?: string } & Record<string, unknow
 function call(sock: string, verb: string, params: object = {}, timeoutMs = 5_000): Promise<Reply> {
   return new Promise((resolve, reject) => {
     const conn = net.createConnection(sock);
-    const timer = setTimeout(() => (conn.destroy(), reject(new Error("the daemon didn't answer"))), timeoutMs);
+    let settled = false;
+    const settle = (finish: () => void): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      conn.destroy();
+      finish();
+    };
+    const timer = setTimeout(() => settle(() => reject(new Error("the daemon didn't answer"))), timeoutMs);
     let buf = "";
     conn.on("connect", () => conn.write(`${JSON.stringify({ ...params, id: 1, verb })}\n`));
     conn.on("data", (chunk) => {
       buf += chunk.toString("utf8");
       const nl = buf.indexOf("\n");
       if (nl < 0) return;
-      clearTimeout(timer);
-      conn.destroy();
-      try {
-        const res = JSON.parse(buf.slice(0, nl)) as Reply;
-        if (res.ok) resolve(res);
-        else reject(new Error(typeof res.error === "string" ? res.error : "the daemon refused"));
-      } catch (err) {
-        reject(err instanceof Error ? err : new Error(String(err)));
-      }
+      settle(() => {
+        try {
+          const res = JSON.parse(buf.slice(0, nl)) as Reply;
+          if (res.ok) resolve(res);
+          else reject(new Error(typeof res.error === "string" ? res.error : "the daemon refused"));
+        } catch (err) {
+          reject(err instanceof Error ? err : new Error(String(err)));
+        }
+      });
     });
-    conn.on("error", (err) => (clearTimeout(timer), reject(err)));
+    conn.on("error", (err) => settle(() => reject(err)));
+    conn.on("close", () => settle(() => reject(new Error("the daemon closed the connection"))));
   });
 }
 

@@ -6,10 +6,13 @@
 import { useSyncExternalStore } from "react"
 
 import { generateIdentity } from "@mc/identity.ts"
+import type { PersonClaim } from "@mc/person.ts"
 
-import type { ChannelIdentityView, ComputerView, KiwiBridge, PairAskView, PendingItem, PersonView, StoreSnapshot, UpdateView } from "../../../desktop/src/bridge.ts"
+import type { ChannelIdentityView, ComputerView, KiwiBridge, PairAskView, PendingItem, PersonView, PublicPerson, StoreSnapshot, UpdateView } from "../../../desktop/src/bridge.ts"
+import { personClaimFor } from "./person-claim"
+import { persistQueue } from "./persist-queue"
 
-export type { ChannelIdentityView, ComputerView, KiwiBridge, PairAskView, PendingItem, PersonView, StoreSnapshot, UpdateView }
+export type { ChannelIdentityView, ComputerView, KiwiBridge, PairAskView, PendingItem, PersonView, PublicPerson, StoreSnapshot, UpdateView }
 
 /** The desktop bridge, or null in a plain browser. */
 export function bridge(): KiwiBridge | null {
@@ -22,7 +25,7 @@ export function bridge(): KiwiBridge | null {
 }
 
 const LOCAL_KEY = "kiwi.secrets"
-type Local = Omit<StoreSnapshot, "relayUrl">
+type Local = Omit<StoreSnapshot, "relayUrl" | "person"> & { person: PersonView | null }
 
 function readLocal(): Local {
   try {
@@ -46,7 +49,7 @@ bridge()?.onStore(publish)
 
 function writeLocal(patch: Partial<Local>) {
   const next = { ...snapshot, ...patch }
-  const local: Local = { person: next.person, channels: next.channels, computers: next.computers, pending: next.pending }
+  const local: Local = { person: patch.person ?? readLocal().person, channels: next.channels, computers: next.computers, pending: next.pending }
   localStorage.setItem(LOCAL_KEY, JSON.stringify(local))
   publish(next)
 }
@@ -66,7 +69,7 @@ export function useSecrets(): StoreSnapshot {
 }
 
 /** First run: make the person key under `name` and keep it. */
-export async function createPerson(name: string): Promise<PersonView> {
+export async function createPerson(name: string): Promise<PublicPerson> {
   const b = bridge()
   if (b) {
     const p = await b.createPerson(name)
@@ -79,12 +82,21 @@ export async function createPerson(name: string): Promise<PersonView> {
   return p
 }
 
-/** Keep the channel identities (member keys, pending joins). Visible at once; the write follows. */
+export async function personClaim(code: string, memberPk: string): Promise<PersonClaim | null> {
+  const b = bridge()
+  if (b) return snapshot.person ? b.provePerson(code, memberPk) : null
+  const local = readLocal().person
+  return local ? personClaimFor(local, code, memberPk) : null
+}
+
+const persistChannels = persistQueue()
+
+/** Keep the channel identities (member keys, pending joins). Visible at once; the write follows, one at a time. */
 export async function saveChannels(channels: ChannelIdentityView[]): Promise<void> {
   const b = bridge()
   if (b) {
     publish({ ...snapshot, channels })
-    await b.saveChannels(channels)
+    await persistChannels(() => b.saveChannels(channels))
   } else writeLocal({ channels })
 }
 

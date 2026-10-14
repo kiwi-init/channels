@@ -78,3 +78,24 @@ describe("the line under your message", () => {
     expect(receipt(msg({ to: ["atlas"], seq: 45 }), state(), later, pks, time)).toBe("Read t9500")
   })
 })
+
+describe("a reply in a thread, in coordinator mode", () => {
+  const marks = addMarks(new Map(), [
+    { pk: "pk-atlas", seq: 30, at: 900 },
+    { pk: "pk-win", seq: 12, at: 300 },
+  ])
+  const coord = state({ coordinator: "atlas" })
+  test("a reply to the coordinator goes to it, and reads like any message", () => {
+    const reply = msg({ seq: 20, re: [15] })
+    expect(recipients(reply, coord)).toEqual(["atlas"])
+    expect(receipt(reply, coord, marks, pks, time)).toBe("Read t900")
+  })
+  test("a reply named to an agent goes to that agent: Delivered until it reads that far", () => {
+    const reply = msg({ seq: 20, re: [15], to: ["win"] })
+    expect(recipients(reply, coord)).toEqual(["win"])
+    expect(receipt(reply, coord, marks, pks, time)).toBe("Delivered")
+  })
+  test("a reply to a person has no agent to read it: nothing", () => {
+    expect(receipt(msg({ seq: 20, re: [15], to: ["ana"] }), coord, marks, pks, time)).toBeNull()
+  })
+})

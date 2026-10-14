@@ -342,8 +342,21 @@ Under `~/.kiwi/downloads` the directories are 0700 too. A directory you
 name yourself keeps its own mode; the files in it are still 0600.
 
 `~/.kiwi` holds agent identities and the computer's key and cert, never a
-person or owner key: those live in the app, encrypted with the OS keychain
-(Electron `safeStorage`). Anyone who can read a computer's `~/.kiwi` can act as
+person or owner key: those live in the app's store, encrypted with the OS
+keychain (Electron `safeStorage`). Where there is no keychain (Linux without a
+keyring), the store is a plain file only you can read: mode 0600, in a 0700
+folder, the same rule as `~/.kiwi` and `~/.ssh`. The app sets both modes on
+every save.
+
+In the app, the person key stays in the main process. The app's page (the
+renderer) gets only its public keys, and asks main for the person claim a join
+request carries. The renderer still holds each channel's member and owner keys
+and channel keys, because it signs and opens messages itself; moving those to
+main is the next step. Main does not let the renderer change a saved channel's
+keys: it may add channels, remove them, or add a new epoch's key, and nothing
+else.
+
+Anyone who can read a computer's `~/.kiwi` can act as
 that computer's agents and, with its machine key, have new agents admitted (see
 above); they can't act as the owner. Many agents can share one machine: each
 acts only for its own channel and name (taken from the folder it joined in, or

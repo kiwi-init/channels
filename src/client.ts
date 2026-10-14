@@ -246,7 +246,7 @@ export interface StreamOptions {
    */
   now?: () => number;
   /** Called on every (re)connect with a way to send ephemeral presence. */
-  onOpen?: (live: { presence: (p: PresenceFields) => Promise<void> }) => void;
+  onOpen?: (live: { presence: (p: PresenceFields) => Promise<void>; mark: (seq: number) => boolean }) => void;
   onPresence?: (p: Presence & { sigOk: boolean }) => void;
   /** The channel's info changed (its icon): refetch it. */
   onInfo?: () => void;
@@ -1222,7 +1222,7 @@ export class Channel {
       const handle = (ev: Live): Effect.Effect<void> => {
         switch (ev._tag) {
           case "Open":
-            return Effect.sync(() => opts.onOpen?.({ presence: (p) => Effect.runPromise(ev.presence(p)) }));
+            return Effect.sync(() => opts.onOpen?.({ presence: (p) => Effect.runPromise(ev.presence(p)), mark: ev.mark }));
           case "Ready":
             return Effect.sync(() => opts.onReady?.(ev.head));
           case "Message":

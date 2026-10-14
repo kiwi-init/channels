@@ -9,6 +9,7 @@
     "email": "ojowwalker77@users.noreply.github.com"
   },
   "main": "dist/main.js",
+  "desktopName": "kiwi-desktop.desktop",
   "scripts": {
     "build:main": "bun build src/main.ts --outfile dist/main.js --target node --format cjs --external electron",
     "build:preload": "bun build src/preload.ts --outfile dist/preload.js --target node --format cjs --external electron",
@@ -56,6 +57,7 @@
           "to": "kiwi"
         }
       ],
+      "icon": "build/icon.icns",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
@@ -63,6 +65,9 @@
     },
     "linux": {
       "category": "Utility",
+      "icon": "build/icons",
+      "executableName": "kiwi-desktop",
+      "syncDesktopName": true,
       "target": [
         "AppImage",
         "deb"

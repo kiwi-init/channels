@@ -7,7 +7,7 @@ import { ignored, isReaction, type Color, type Message } from "@mc/protocol.ts"
 import { describeScopes, wireScopes } from "@mc/scopes.ts"
 import { colorOf, keptFromPeople, taskId, type ChannelState, type Task } from "@mc/state.ts"
 import { secrets } from "@/lib/secrets"
-import { channelTitle, forgetChannel, LEFT_CHANNEL, loadMember, loadRecent, saveMember, saveRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
+import { channelTitle, forgetChannel, loadMember, loadRecent, saveMember, saveRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { lastPreview } from "@/lib/preview"
 import { markSeen, setOpenNews } from "@/lib/news"
 import { useIcons, useLiveIcon } from "@/lib/icons"
@@ -61,14 +61,8 @@ function useChannelNews(room: string, top: number, arrivals: number, inOtherRoom
     if (!hidden && top > 0) markSeen(room, top, needs)
   }, [room, top, needs, hidden])
   useEffect(() => setOpenNews({ room, unread, needs }), [room, unread, needs])
-  // Leaving: the list takes over (and may refresh what it knows of the others).
-  useEffect(
-    () => () => {
-      setOpenNews(null)
-      window.dispatchEvent(new Event(LEFT_CHANNEL))
-    },
-    [room]
-  )
+  // Leaving: the list takes over (polled heads mark the other rows).
+  useEffect(() => () => setOpenNews(null), [room])
 }
 
 const sameDay = (a: number, b: number) => new Date(a).toDateString() === new Date(b).toDateString()
@@ -404,6 +398,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const group = memberCount > 2
   // Your newest message here says whether the agents it went to have read it, as Messages does.
   const lastMine = visible.findLast((m) => m.from === me && m.kind !== "event")?.seq
+  const lastMineReply = threadRoot === null ? undefined : (threads.get(threadRoot) ?? []).findLast((m) => m.from === me && m.kind !== "event")?.seq
+  const showsReceipt = (m: Message, anchor: string | undefined): boolean => (anchor === undefined && m.seq === lastMine) || (anchor === "t" && m.seq === lastMineReply)
   const bubble = (m: Message, first: boolean, last: boolean, prev: Message | undefined, anchor?: string) => (
     <Bubble
       key={m.seq}
@@ -427,7 +423,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       onJump={jump}
       thread={search || anchor ? undefined : summaryOf(m.seq)}
       onOpenThread={openThread}
-      receipt={!anchor && m.seq === lastMine ? (receipt(m, state, marks, pkOf, formatTime) ?? undefined) : undefined}
+      receipt={showsReceipt(m, anchor) ? (receipt(m, state, marks, pkOf, formatTime) ?? undefined) : undefined}
       reactions={chipsFor(state, m.seq, me, nameOf)}
       // The coordinator's runs end on its face; only the latest one moves.
       face={coord && m.from === coord ? <CoordinatorAvatar size={28} mood={mood} live={m.seq >= (said?.last ?? 0) && !anchor} seed={0.3} /> : undefined}

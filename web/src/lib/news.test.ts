@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { newsTotal, nextWithNews, rowNews, type Mark } from "./news"
+import { newsTotal, nextWithNews, rowNews, withHeads, type Mark } from "./news"
 
 const marks: Record<string, Mark> = { a: { seen: 5, needs: 0 }, b: { seen: 9, needs: 2 }, c: { seen: 3, needs: 0 } }
 
@@ -40,4 +40,12 @@ test("Alt+↓/↑ skip quiet channels and the open one, and wrap around", () => 
   // Nothing open: from the top, or from the bottom going up.
   expect(nextWithNews(rows, [n(false), n(true), n(false), n(true)], -1, 1)).toBe("b")
   expect(nextWithNews(rows, [n(false), n(true), n(false), n(true)], -1, -1)).toBe("d")
+})
+
+test("withHeads stashes polled seqs so a closed row can be fresh", () => {
+  const listed = [{ room: "a" }]
+  expect(withHeads(listed, {})[0]!.head).toBeUndefined()
+  expect(withHeads(listed, { a: 6 })[0]!.head).toBe(6)
+  expect(rowNews(withHeads(listed, { a: 6 })[0]!, marks, null).fresh).toBe(true)
+  expect(rowNews(withHeads(listed, { a: 5 })[0]!, marks, null).fresh).toBe(false)
 })

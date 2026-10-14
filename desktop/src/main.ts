@@ -15,7 +15,7 @@ import { generateIdentity, type Identity } from "../../src/identity.ts";
 import { answerPair, newSecret, openMailbox, pairCode, readPairAsk, type Mailbox, type PairAsk } from "../../src/mailbox.ts";
 import { certifyMachine } from "../../src/person.ts";
 import { compareVersions, ensureOnPath, keepCli } from "./cli.ts";
-import { APP_HOST, APP_SCHEME, csp, externalUrl, fileFor, isAppUrl, normalizeRelay, readStore } from "./guard.ts";
+import { APP_HOST, APP_SCHEME, claimFor, csp, externalUrl, fileFor, isAppUrl, mergeChannels, normalizeRelay, publicComputer, publicPerson, readStore, snapshotOf, writePrivate } from "./guard.ts";
 import { applyUpdate, startUpdates, updateState } from "./updater.ts";
 import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, spawnDaemon, type HelloResult } from "./daemon-client.ts";
 import type { ChannelIdentityView, ComputerView, DaemonStatus, PairAskView, PendingItem, PersonView, SignInResult, StoreSnapshot } from "./bridge.ts";
@@ -77,16 +77,7 @@ function saveStore(): void {
   if (storeBroken) throw brokenError();
   const json = JSON.stringify(store);
   const raw = safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(json) : Buffer.from(json, "utf8");
-  const file = storePath();
-  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
-  const tmp = `${file}.${process.pid}.tmp`;
-  try {
-    fs.writeFileSync(tmp, raw, { mode: 0o600 });
-    fs.renameSync(tmp, file);
-  } catch (e) {
-    fs.rmSync(tmp, { force: true });
-    throw e;
-  }
+  writePrivate(storePath(), raw);
 }
 
 /** Say once, at start, that the saved keys couldn't be read: the app runs, but saves nothing until a restart reads them. */
@@ -95,7 +86,7 @@ function warnIfBroken(): void {
   void dialog.showMessageBox({ type: "error", message: "Kiwi can't read its saved keys", detail: brokenError().message });
 }
 
-const snapshot = (): StoreSnapshot => ({ relayUrl: store.relayUrl, person: store.person, channels: store.channels, computers: store.computers, pending: store.pending });
+const snapshot = (): StoreSnapshot => snapshotOf(store);
 const broadcast = () => win?.webContents.send("kiwi:store", snapshot());
 const mutate = (fn: (s: StoreFile) => void) => {
   if (storeBroken) throw brokenError();
@@ -183,6 +174,9 @@ function createWindow(): void {
     minWidth: 720,
     minHeight: 480,
     autoHideMenuBar: true,
+    // Linux takes the window's icon from here (X11) or from the .desktop entry its app_id names
+    // (Wayland: package.json's desktopName). A Mac uses the bundle's icon.icns.
+    ...(process.platform === "linux" ? { icon: path.join(assetsDir(), "icon.png") } : {}),
     // No title bar on a Mac: the app's own header row (52px, web/src/index.css --chrome-h) carries
     // the traffic lights, centred on it, and moves the window. Elsewhere the system frame stays.
     ...(process.platform === "darwin" ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 20, y: 20 } } : {}),
@@ -451,13 +445,14 @@ function wireIpc(): void {
       const person: PersonView = { name: clean, pk: id.pk, sk: id.sk, xpk: id.xpk as string, xsk: id.xsk as string };
       if (store.person) throw new Error("this app already has your person key");
       mutate((s) => (s.person = person));
-      return person;
+      return publicPerson(person);
     } finally {
       makingPerson = false;
     }
   });
-  ipcMain.handle("kiwi:save-channels", (_e, channels: ChannelIdentityView[]) => mutate((s) => (s.channels = channels)));
-  ipcMain.handle("kiwi:save-computers", (_e, computers: ComputerView[]) => mutate((s) => (s.computers = computers)));
+  ipcMain.handle("kiwi:save-channels", (_e, channels: ChannelIdentityView[]) => mutate((s) => (s.channels = mergeChannels(s.channels, channels))));
+  ipcMain.handle("kiwi:save-computers", (_e, computers: ComputerView[]) => mutate((s) => (s.computers = computers.map(publicComputer))));
+  ipcMain.handle("kiwi:prove-person", (_e, code: unknown, memberPk: unknown) => claimFor(requirePerson(), code, memberPk));
   ipcMain.handle("kiwi:set-pending", (_e, pending: PendingItem[]) => mutate((s) => (s.pending = pending)));
   ipcMain.handle("kiwi:sign-in", (): Promise<SignInResult> => signInMain());
   ipcMain.handle("kiwi:dev-sign-in", async (_e, name: string) => {
