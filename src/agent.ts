@@ -747,6 +747,10 @@ export const openSession = Effect.fn("AgentSession.open")(function* (alias: stri
   const keys = yield* Keystore;
   // Member records: the newest this machine has seen per key wins, across runs.
   keepRecordsIn(keys.records);
+  // Join creates the key first (loadIdentity). Everything else must use a name this machine already holds.
+  if (!(yield* keys.identitiesIn(cfg.roomId)).includes(name)) {
+    return yield* Effect.fail(new Error(`${name} has no key in "${alias}" on this machine`));
+  }
   const identity = yield* keys.identity(name, cfg.roomId);
   return new AgentSession(alias, cfg, identity, (a) => Effect.runSync(keys.saveAccess(alias, a)));
 });

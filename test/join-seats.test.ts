@@ -398,3 +398,18 @@ describe("what runs an agent", () => {
     expect(await ok(owner, ["--as", "human", "status"])).toContain("runs opencode · glm-5.3 (owner-signed)");
   });
 });
+
+describe("--as", () => {
+  test("a typo does not mint a new unused identity", async () => {
+    const owner = scratch("as-typo");
+    await ok(owner, ["create", "proj", "--as", "boss"]);
+    const r = await run(owner, ["-c", "proj", "--as", "typo", "status"]);
+    expect(r.code).not.toBe(0);
+    expect(r.err).toContain('typo has no key in "proj" on this machine');
+    const idDir = join(owner, "identities");
+    const files = existsSync(idDir)
+      ? readdirSync(idDir).flatMap((room) => readdirSync(join(idDir, room)))
+      : [];
+    expect(files.some((f) => f.toLowerCase().includes("typo"))).toBe(false);
+  });
+});

@@ -234,6 +234,12 @@ const session = Effect.fn("kiwi.session")(function* () {
   const alias = yield* channelAlias();
   const cfg = (yield* config).channels[alias]!;
   acting.name = yield* agentName(cfg);
+  const keys = yield* Keystore;
+  // loadIdentity mints a key when the file is missing: that is for join. A typo in --as
+  // (or a stale ch.as) must not write an unused identity.
+  if (!(yield* keys.identitiesIn(cfg.roomId)).includes(acting.name)) {
+    return yield* die(`${acting.name} has no key in "${alias}" on this machine`);
+  }
   return yield* openSession(alias, cfg, acting.name);
 });
 
