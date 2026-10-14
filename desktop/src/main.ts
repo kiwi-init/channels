@@ -248,7 +248,8 @@ function handleDeepLink(url: string): void {
   if (!url.startsWith(`${JOIN_SCHEME}://join/`)) return;
   deepLink = url;
   win?.webContents.send("kiwi:deep-link", url);
-  win?.show();
+  // A link can arrive before ready (a Mac launching the app for it): the window it opens takes it then.
+  if (app.isReady()) showWindow();
 }
 
 // ---------- sign-in ----------
@@ -512,7 +513,12 @@ function wireIpc(): void {
     if (!ext) throw new Error("only http(s) links open outside");
     return shell.openExternal(ext);
   });
-  ipcMain.handle("kiwi:deep-link", () => deepLink);
+  // Each link is the renderer's once: a reload doesn't open the channel again.
+  ipcMain.handle("kiwi:deep-link", () => {
+    const link = deepLink;
+    deepLink = null;
+    return link;
+  });
 }
 
 // Bring the window back: recreate it if it was destroyed, restore, show and focus.
