@@ -216,10 +216,7 @@ export function startRelay(
         if (early) return withCors(errorResponse(early));
         const isCreate = route.rest === "/create";
         const db = storeFor(route.roomId, isCreate);
-        // Counted only once the store opened, so a file that can't be opened never leaves a count behind.
         if (isCreate) creating.set(route.roomId, (creating.get(route.roomId) ?? 0) + 1);
-        // Whether the create ended without a room: read before apply(), which may wipe and close the file.
-        // A handle a wipe already closed (this request's, or a close running alongside) means nothing is left to remove.
         const noRoom = () => {
           try {
             return !db.exists();
