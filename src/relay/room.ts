@@ -130,15 +130,23 @@ function formatBytes(n: number): string {
 export const MESSAGES_PER_MINUTE = 120;
 /** Presence and other ephemeral frames one member may send per minute. */
 const EPHEMERAL_PER_MINUTE = 60;
+/** How many keys the limiter remembers. Past this, the oldest window is dropped, never the whole table. */
+const MAX_WINDOWS = 10_000;
+/** Each key's window, oldest start first: a key is moved to the end when its new window starts. */
 const windows = new Map<string, { start: number; n: number }>();
 
 /** A fixed one-minute window per key; false once the key has used up its limit. */
-export function allow(key: string, limit: number): boolean {
-  const now = Date.now();
+export function allow(key: string, limit: number, now = Date.now()): boolean {
   const w = windows.get(key);
   if (!w || now - w.start > 60_000) {
-    if (windows.size > 10_000) windows.clear();
+    windows.delete(key);
     windows.set(key, { start: now, n: 1 });
+    // A flood of new keys drops the oldest windows (most already over), not every member's count.
+    while (windows.size > MAX_WINDOWS) {
+      const oldest = windows.keys().next().value;
+      if (oldest === undefined || oldest === key) break;
+      windows.delete(oldest);
+    }
     return true;
   }
   return ++w.n <= limit;
