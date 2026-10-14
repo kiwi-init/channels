@@ -5,6 +5,7 @@ import { describeEvent } from "@mc/format.ts"
 import { ignored, type Color, type Message, type Trust } from "@mc/protocol.ts"
 import type { ChannelState, Member } from "@mc/state.ts"
 import { excerpt, formatAgo, formatFull, formatStamp, memberName } from "@/lib/format"
+import { chipLabel, type Chip } from "@/lib/reactions"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 import { Monogram, toast } from "./kit"
@@ -138,6 +139,8 @@ interface BubbleProps {
   receipt?: string
   /** Coordinator-only: an agent sent this to a person directly, not through this coordinator. */
   direct?: string
+  /** Members' reactions to it (reactions.ts). */
+  reactions?: Chip[]
   /** Found by the key that signed the message, so two members sharing a name still read right. */
   author?: Author
   trust?: Trust
@@ -182,7 +185,7 @@ export interface ThreadSummary {
  * tail, pointing at its sender. An escalation is a plain bubble with an amber "Decision for you"
  * over it; a forged one (shown only when the owner asks) is struck through.
  */
-export const Bubble = memo(function Bubble({ m, me, author, trust, online, first, last, fresh, group, adjacentReply, highlighted, quoted, nameOf, onReply, onJump, thread, onOpenThread, anchor = "m", color, direct, face, receipt }: BubbleProps) {
+export const Bubble = memo(function Bubble({ m, me, author, trust, online, first, last, fresh, group, adjacentReply, highlighted, quoted, nameOf, onReply, onJump, thread, onOpenThread, anchor = "m", color, direct, face, receipt, reactions }: BubbleProps) {
   const forged = ignored(trust)
   const mine = m.from === me
   const repliedTo = new Set((m.re ?? []).map((seq) => quoted(seq)?.from).filter((f): f is string => !!f))
@@ -285,6 +288,21 @@ export const Bubble = memo(function Bubble({ m, me, author, trust, online, first
             <button type="button" onClick={() => onReply(m)} className="font-medium text-decide hover:underline">
               Answer
             </button>
+          </p>
+        )}
+        {!!reactions?.length && !forged && (
+          <p className={cx("mt-0.5 flex flex-wrap gap-1 px-2", mine && "justify-end")}>
+            {reactions.map((c) => (
+              <span
+                key={c.emoji}
+                title={chipLabel(c)}
+                aria-label={chipLabel(c)}
+                className={cx("inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-stamp tabular-nums", c.mine ? "bg-accent-wash text-accent-text" : "bg-wash-2 text-ink-2")}
+              >
+                <span aria-hidden>{c.emoji}</span>
+                {c.who.length > 1 && <span aria-hidden>{c.who.length}</span>}
+              </span>
+            ))}
           </p>
         )}
         {receipt && mine && !forged && (

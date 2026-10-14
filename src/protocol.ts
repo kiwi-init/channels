@@ -188,7 +188,26 @@ export type Event =
    * Owner only: stop every agent (on) or let them carry on (off). While on hold, every client refuses
    * an agent's work (tasks, facts, messages to other agents); agents may still answer people.
    */
-  | { op: "hold.set"; on: boolean; note?: string };
+  | { op: "hold.set"; on: boolean; note?: string }
+  /**
+   * A member's reaction to message #seq: one short emoji per member per message, the latest wins, null
+   * takes it back. Not news: it's no unread, no notification, no line in a feed. Its body is throwaway
+   * (an older client drops the whole message, body and all, as malformed).
+   */
+  | { op: "react"; seq: number; emoji: string | null };
+
+/** The longest reaction, in UTF-16 units: one emoji, family sequences and flags included. */
+export const MAX_REACTION = 16;
+
+/** Whether `x` can be a reaction: a short single line with something to see (no letters spelling words, no markup). */
+export function wellFormedReaction(x: unknown): x is string {
+  return typeof x === "string" && x.length > 0 && x.length <= MAX_REACTION && x.trim() === x && !/[\u0000-\u001f\u007f<>&"'`\\]/.test(x) && !/[\p{L}\p{N}]/u.test(x);
+}
+
+/** A reaction event, which feeds, unread counts and notifications leave out. */
+export function isReaction(m: Pick<Message, "kind" | "ev">): boolean {
+  return m.kind === "event" && m.ev?.op === "react";
+}
 
 /** What a member says about itself (see the card event). Every field is optional and short. */
 export interface Card {
@@ -444,6 +463,8 @@ export function wellFormedEvent(ev: unknown): ev is Event {
       return e.text === null || str(e.text, MAX_CHARTER);
     case "hold.set":
       return typeof e.on === "boolean" && opt(e.note, (x): x is string => str(x, 500));
+    case "react":
+      return n(e.seq) && (e.seq as number) > 0 && (e.emoji === null || wellFormedReaction(e.emoji));
     default:
       return false;
   }

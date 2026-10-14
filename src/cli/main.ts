@@ -64,11 +64,13 @@ Agents
                                                  for anything outside the charter, destructive, or not yours
      --image f.png · --room R · --kind K
   kiwi reply N "text"                            answer message #N: to its sender, in its room
+  kiwi react N 👍 [--clear]                       react to message #N with one emoji (--clear takes it back)
   kiwi show N [dir]                              message #N in full, with its whole thread; its images saved
   kiwi log [-n 30] [--all] [--room R]            recent history (marks nothing read)
   kiwi status [--json]                           one screen: who's here and online, the charter, tasks, notes,
                                                  and questions waiting on you
-  kiwi task add "title" [--owner NAME] [--review NAME|any]   a task: open, then doing, then done
+  kiwi task add "title" [--owner NAME] [--review NAME|any] [--re N]   a task: open, then doing, then done
+                                                 (--re N: made from message #N; taking it on tells its sender)
      task claim|start|done|note|show T7 · task review T7 (when it has a reviewer) · approve|reject T7
      task assign T7 NAME ["what's next"] · drop T7 (back to the board)   (kiwi task alone: the board)
   kiwi note [KEY [VALUE] [--ttl 7d] | KEY --clear]   shared notes: all of them, one, set one, or remove one
@@ -751,6 +753,15 @@ const commands: Record<string, Command> = {
       out(`sent #${yield* s.reply(seq, body, (opt.kind ?? "msg") as Kind, imgs)}`);
     }),
 
+  react: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi react N 👍 (or --clear)"));
+      const emoji = opt.clear ? null : (args[2]?.trim() || (yield* die("usage: kiwi react N 👍 (or --clear)")));
+      yield* s.react(seq, emoji);
+      out(emoji ? `reacted ${emoji} to #${seq}` : `took back your reaction on #${seq}`);
+    }),
+
   save: () =>
     Effect.gen(function* () {
       const s = yield* session();
@@ -984,11 +995,12 @@ const commands: Record<string, Command> = {
       const STATE_FOR: Record<string, TaskState> = { start: "doing", review: "review", done: "done" };
       if (sub === "add") {
         const title = yield* text(2);
-        if (!title.trim()) return yield* die('usage: kiwi task add "title" [--owner NAME] [--review NAME|any]');
+        if (!title.trim()) return yield* die('usage: kiwi task add "title" [--owner NAME] [--review NAME|any] [--re N]');
+        const re = opt.re === undefined ? undefined : Number(opt.re.replace(/^#/, "")) || (yield* die("--re takes a message number"));
         // Gone, and said so rather than refused, so an agent running older instructions still adds its task.
         for (const gone of ["after", "needs"] as const) if (opt[gone] !== undefined) process.stderr.write(`kiwi: --${gone} is gone (tasks don't wait on or match anything now); put it in the title or --detail\n`);
         const { state: before } = yield* s.state();
-        const id = yield* s.taskAdd(title, { owner: opt.owner, detail: opt.detail, ...(opt.review !== undefined ? { review: opt.review } : {}) });
+        const id = yield* s.taskAdd(title, { owner: opt.owner, detail: opt.detail, ...(opt.review !== undefined ? { review: opt.review } : {}), ...(re !== undefined ? { re } : {}) });
         const like = similarOpenTasks(before, title).map((t) => t.id);
         const lines = [`added ${taskId(id)}`];
         if (like.length) lines.push(looksLikeLine(like));

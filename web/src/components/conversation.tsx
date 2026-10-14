@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 
 import { droppedCount } from "@mc/format.ts"
 import { memberLoad } from "@mc/load.ts"
-import { ignored, type Color, type Message } from "@mc/protocol.ts"
+import { ignored, isReaction, type Color, type Message } from "@mc/protocol.ts"
 import { describeScopes, wireScopes } from "@mc/scopes.ts"
 import { colorOf, keptFromPeople, taskId, type ChannelState, type Task } from "@mc/state.ts"
 import { secrets } from "@/lib/secrets"
@@ -12,6 +12,7 @@ import { markSeen, setOpenNews } from "@/lib/news"
 import { useIcons, useLiveIcon } from "@/lib/icons"
 import { excerpt, formatTime, memberName } from "@/lib/format"
 import { coordinatorMood, ERROR_MS, moodInputs, SPEAKING_MS, type Mood } from "@/lib/coordinator-mood"
+import { chipsFor } from "@/lib/reactions"
 import { receipt } from "@/lib/receipts"
 import { dmPlace, markSeenIn, MAIN, placeFromKey, placeKey, seenIn, sendFrom, useSeen, threadMembers, type Place, type PlaceSummary } from "@/lib/threads"
 import { useSidebarOpen } from "@/lib/sidebar"
@@ -122,7 +123,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   // Coordinator-only: a person's main conversation is with the coordinator.
   const meM = state.members.get(me)
   const coordinator = state.mode.coordinatorOnly && meM && !isAgent(meM) && state.coordinator !== me ? state.coordinator : null
-  const arrivals = useMemo(() => messages.filter((m) => m.from !== me && reaches(m)).length, [messages, me, reaches])
+  // A reaction isn't news.
+  const arrivals = useMemo(() => messages.filter((m) => m.from !== me && !isReaction(m) && reaches(m)).length, [messages, me, reaches])
   // Needs you: a question to you (or to everyone) that nobody else has answered yet.
   const needs = useMemo(() => openAsks.filter((m) => m.from !== me && (m.to?.includes(me) || m.to?.includes("*"))).length, [openAsks, me])
   useChannelNews(roomId, Math.max(head, messages.at(-1)?.seq ?? 0), arrivals, 0, needs)
@@ -258,7 +260,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       const inHere = at === hereKey || (hereKey === "main" && at.startsWith("task:") && summarised(m))
       if (!inHere) return false
       // Joins and what an agent says it runs on are in the details; the conversation doesn't repeat them.
-      if (m.ev?.op === "hello" || m.ev?.op === "card") return false
+      // Nor reactions: they sit on their message, not in the conversation.
+      if (m.ev?.op === "hello" || m.ev?.op === "card" || m.ev?.op === "react") return false
       if (!revealed && ignored(state.trust.get(m.seq))) return false
       // Strict coordinator mode keeps other agents out of the people's main conversation; their own
       // conversations (a task's, a direct one) show everything said there.
@@ -394,6 +397,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       thread={search || anchor ? undefined : summaryOf(m.seq)}
       onOpenThread={setThreadRoot}
       receipt={!anchor && m.seq === lastMine ? (receipt(m, state, marks, pkOf, formatTime) ?? undefined) : undefined}
+      reactions={chipsFor(state, m.seq, me, nameOf)}
       // The coordinator's runs end on its face; only the latest one moves.
       face={coord && m.from === coord ? <CoordinatorAvatar size={28} mood={mood} live={m.seq >= (said?.last ?? 0) && !anchor} seed={0.3} /> : undefined}
     />

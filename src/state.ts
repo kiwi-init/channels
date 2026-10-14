@@ -6,7 +6,7 @@
 // Conflicts resolve deterministically: the earlier sequence number wins.
 
 import { inlineText, type Runs } from "./membership.ts";
-import { GENERAL_ROOM, ignored, MAX_CHARTER, MAX_ROOM_NAME, MAX_ROOMS, MAX_TAGS, ROOM_ID_RE, type Card, type Color, type Message, type OldTaskState, type TaskState, type Trust } from "./protocol.ts";
+import { GENERAL_ROOM, ignored, isReaction, MAX_CHARTER, MAX_ROOM_NAME, MAX_ROOMS, MAX_TAGS, ROOM_ID_RE, type Card, type Color, type Message, type OldTaskState, type TaskState, type Trust } from "./protocol.ts";
 import { readScopes, refusal, SCOPES, scopesOf, type Scope } from "./scopes.ts";
 
 export interface Member {
@@ -86,6 +86,16 @@ export interface Task {
   cancelled?: boolean;
   /** Everyone who has owned it or moved it along: none of them may approve it under a "*" review. */
   workedBy: string[];
+  /** The message it was made from (kiwi task add --re N): taking it on answers that message. */
+  source?: number;
+}
+
+/** A member's reaction to a message (see the react event). */
+export interface Reaction {
+  emoji: string;
+  /** The react event's seq and time. */
+  seq: number;
+  at: number;
 }
 
 export interface Fact {
@@ -133,6 +143,8 @@ export interface ChannelState {
   charter: Charter | null;
   /** Set while the owner has every agent stopped; null otherwise. */
   hold: Hold | null;
+  /** Reactions by message seq, then by member: one each, the latest. */
+  reactions: Map<number, Map<string, Reaction>>;
   head: number;
 }
 
@@ -494,6 +506,9 @@ export function fold(
   };
   const tasks = new Map<number, Task>();
   const facts = new Map<string, Fact>();
+  const reactions = new Map<number, Map<string, Reaction>>();
+  /** Every react event's seq: a reaction is never something to react to. */
+  const reactSeqs = new Set<number>();
   const trust = new Map<number, Trust>();
   const rejected = new Map<number, string>();
   const answered = new Map<number, Set<string>>();
@@ -596,7 +611,8 @@ export function fold(
         );
       }
       member.lastSeen = Math.max(member.lastSeen, at);
-      member.messages++;
+      // A reaction is no message of theirs.
+      if (!isReaction(m)) member.messages++;
 
       for (const r of m.re ?? []) {
         let set = answered.get(r);
@@ -617,9 +633,27 @@ export function fold(
 
       const ev = m.ev;
       if (m.kind !== "event" || !ev) continue;
+      const reject = (why: string) => rejected.set(m.seq, why);
+      // A reaction sits nowhere (it gets no place or room: only chat does, above, and events, below): it's
+      // on its message, not a line in any conversation. Only on a message that has a place, never a reaction.
+      if (ev.op === "react") {
+        reactSeqs.add(m.seq);
+        const target = ev.seq < m.seq ? trust.get(ev.seq) : undefined;
+        if (!target || ignored(target) || reactSeqs.has(ev.seq) || !placeOf.has(ev.seq)) {
+          reject(`no message #${ev.seq} to react to`);
+          continue;
+        }
+        let on = reactions.get(ev.seq);
+        if (ev.emoji === null) on?.delete(m.from);
+        else {
+          if (!on) reactions.set(ev.seq, (on = new Map()));
+          on.set(m.from, { emoji: ev.emoji, seq: m.seq, at });
+        }
+        if (on && !on.size) reactions.delete(ev.seq);
+        continue;
+      }
       // A task's events sit in its thread (its card and its changes); every other event is the channel's.
       placeOf.set(m.seq, ev.op === "task.add" ? { kind: "task", task: m.seq } : (ev.op === "task.update" || ev.op === "task.claim") && tasks.has(ev.task) ? { kind: "task", task: ev.task } : MAIN);
-      const reject = (why: string) => rejected.set(m.seq, why);
 
       switch (ev.op) {
         case "hello": {
@@ -767,6 +801,7 @@ export function fold(
             notes: [],
             ...(ev.review?.trim() ? { review: ev.review.trim() } : {}),
             workedBy: ev.owner ? [ev.owner] : [],
+            ...(m.re?.length ? { source: m.re[0] } : {}),
           });
           break;
 
@@ -891,6 +926,7 @@ export function fold(
     places: summarize(placeOf, tasks, trust),
     charter,
     hold,
+    reactions,
     head,
   };
 }
