@@ -135,20 +135,6 @@ jobs:
           job: web-lint
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['web-lint'] }}
 
-  # A PR is squash-merged, and that commit's description is its changelog entry (scripts/changelog.ts):
-  # a PR none of whose commits says what changed and why fails here. Version bumps are exempt.
-  changelog:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.2
-      - run: bun scripts/changelog.ts --check "origin/${{ github.base_ref }}..HEAD"
-
   # Opens every menu, popover and dialog on the production build: Base UI throws on a
   # misplaced part only at render, which typecheck can't see (the b085ae8 crash).
   ui-smoke:
@@ -238,6 +224,8 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
@@ -245,3 +233,7 @@ jobs:
         env:
           NEEDS: ${{ toJSON(needs) }}
           GITHUB_TOKEN: ${{ github.token }}
+      # A PR is squash-merged, and that commit's description is its changelog entry (scripts/changelog.ts):
+      # a PR none of whose commits says what changed and why fails the gate. Version bumps are exempt.
+      - if: always() && github.event_name == 'pull_request'
+        run: bun scripts/changelog.ts --check "origin/${{ github.base_ref }}..HEAD"
