@@ -1,5 +1,12 @@
 # Plan: a desktop app and a headless daemon (0.11)
 
+> **Shipped in 0.11.0.** Read this as the plan that landed, with these differences:
+> local **seats** stayed (one agent's place in one channel, bound to the folder it joined
+> from); 0.10's computer-signed relay seats (`/seats`, `/admit`) went. The owner signs
+> the agent's harness and model (`runs`) into that seat at approval. Mac builds are
+> Developer ID signed and notarized; Linux is unsigned; there is no Windows app.
+> `kiwi setup` is hooks, PATH, and how to pair — not browser linking.
+
 > Owner's ask: "if channels had just Desktop App + headless daemon for VPS or remote machines,
 > wouldn't this simplify a lot? I feel like it's too junkie right now… the overhead of doing a proper
 > Chromium app is not an issue at all." Then: "this is all I want, go off."
