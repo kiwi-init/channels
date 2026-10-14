@@ -225,7 +225,7 @@ export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, 
       <div>
         <div
           className={cx(
-            "glass relative min-w-0 overflow-hidden rounded-dock transition-shadow focus-within:shadow-[inset_0_1px_0_var(--glass-rim),0_0_0_1px_var(--ring),0_0_0_4px_var(--accent-wash)]",
+            "glass relative min-w-0 overflow-hidden rounded-dock transition-shadow focus-within:shadow-[inset_0_1px_0_var(--glass-rim),inset_0_0_0_1px_var(--edge-strong),0_8px_24px_-12px_var(--glass-shade)]",
             dropping && "shadow-[0_0_0_1.5px_var(--ring)]"
           )}
           onDragEnter={(e) => {
