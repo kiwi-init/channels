@@ -966,8 +966,9 @@ const commands: Record<string, Command> = {
             ts: m.ts,
           });
           // Whether it got there: a message the webhook didn't take isn't marked read.
+          // A hung POST would freeze eachLive (uninterruptible) and the read cursor.
           try {
-            const res = await fetch(url, { method: "POST", headers, body });
+            const res = await fetch(url, { method: "POST", headers, body, signal: AbortSignal.timeout(10_000) });
             if (!res.ok) process.stderr.write(`kiwi: webhook ${res.status} for #${m.seq}\n`);
             return res.ok;
           } catch (err) {
@@ -982,7 +983,7 @@ const commands: Record<string, Command> = {
         ...(!opt["for-me"] && opt.thread === undefined ? { chat: true } : {}),
         onStatus: (msg) => Effect.sync(() => void process.stderr.write(`kiwi: ${msg}\n`)),
         onNotice: (text) =>
-          Effect.sync(() => void fetch(url, { method: "POST", headers, body: JSON.stringify({ channel: s.alias, kind: "notice", text, ts: Date.now() }) }).catch(() => {})),
+          Effect.sync(() => void fetch(url, { method: "POST", headers, body: JSON.stringify({ channel: s.alias, kind: "notice", text, ts: Date.now() }), signal: AbortSignal.timeout(10_000) }).catch(() => {})),
       });
     }),
 
