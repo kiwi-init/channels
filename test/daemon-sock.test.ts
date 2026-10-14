@@ -2,7 +2,7 @@
 // pairing; adopt stores the cert; listening names the subscribers; stop quiets the socket.
 
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { adoptDaemon, daemonHello, daemonListening, daemonSock, ensureDaemon, loadPairedMachine, startDaemon, stopDaemon, type Daemon } from "../src/daemon.ts";
@@ -125,6 +125,38 @@ describe("the daemon socket", () => {
         // Gone.
       }
       rmSync(fg, { recursive: true, force: true });
+    }
+  });
+
+  test("startDaemon locks an existing 0755 kiwi home and the socket 0600", async () => {
+    if (process.platform === "win32") return;
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-daemon-perms-"));
+    writeFileSync(join(dir, "config.json"), "{}\n", { mode: 0o644 });
+    chmodSync(dir, 0o755);
+    let d: Daemon | undefined;
+    try {
+      d = await startDaemon(dir);
+      expect(statSync(dir).mode & 0o777).toBe(0o700);
+      expect(statSync(daemonSock(dir)).mode & 0o777).toBe(0o600);
+    } finally {
+      await d?.stop().catch(() => {});
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("startDaemon does not chmod a user-supplied dir that is not a kiwi home", async () => {
+    if (process.platform === "win32") return;
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-daemon-foreign-"));
+    chmodSync(dir, 0o755);
+    writeFileSync(join(dir, "notes.txt"), "hi", { mode: 0o644 });
+    let d: Daemon | undefined;
+    try {
+      d = await startDaemon(dir);
+      expect(statSync(dir).mode & 0o777).toBe(0o755);
+      expect(statSync(daemonSock(dir)).mode & 0o777).toBe(0o600);
+    } finally {
+      await d?.stop().catch(() => {});
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 
