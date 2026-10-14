@@ -27,10 +27,10 @@
     { "tag": "v6", "deleted_classes": ["Directory"] },
     { "tag": "v7", "new_sqlite_classes": ["Owners"] }
   ],
-  // The web app (web/, React), served before the Worker runs.
+  // The public site (site/): landing page, invite links, install scripts.
   // Static assets are free and don't count as Worker requests.
-  // SPA fallback so /auth/callback loads the app; API routes always reach the Worker.
-  "assets": { "directory": "web/dist", "not_found_handling": "single-page-application", "run_worker_first": ["/v1/*"] },
+  // SPA fallback so /join/<code> loads the page; API routes always reach the Worker.
+  "assets": { "directory": "site", "not_found_handling": "single-page-application", "run_worker_first": ["/v1/*"] },
   // Humans sign in with WorkOS AuthKit (production environment). Public values: no secret lives on the relay.
   "vars": {
     "WORKOS_CLIENT_ID": "client_01M4ECYXMZT31ZKEEZ9X66ZBN8",
@@ -57,7 +57,6 @@
     // exactly like a close. Launch: 90.
     "KIWI_EXPIRE_AFTER_DAYS": ""
   },
-  "build": { "command": "bun run web:build" },
   // 20 mailbox writes per minute per client address (pairing codes are pasted by hand).
   // namespace_id must be unique in the Cloudflare account.
   "ratelimits": [

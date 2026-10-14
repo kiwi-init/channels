@@ -196,7 +196,7 @@ test("hook install removes only kiwi's own commands", () => {
 });
 
 test("installers document the checksum and create a private home", () => {
-  const root = join(import.meta.dir, "../web/public");
+  const root = join(import.meta.dir, "../site");
   const sh = readFileSync(join(root, "install.sh"), "utf8");
   expect(readFileSync(join(root, "install"), "utf8")).toBe(sh);
   expect(sh).toContain('mkdir -m 700 "$HOME/.kiwi"');

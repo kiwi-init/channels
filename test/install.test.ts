@@ -9,7 +9,7 @@ import { join } from "node:path"
 import { createHash } from "node:crypto"
 import { joinCommand, kiwiJoin } from "../web/src/lib/join-line.ts"
 
-const SCRIPT = join(import.meta.dir, "..", "web", "public", "install.sh")
+const SCRIPT = join(import.meta.dir, "..", "site", "install.sh")
 
 function sandbox() {
   const dir = mkdtempSync(join(tmpdir(), "kiwi-install-"))
@@ -57,12 +57,23 @@ describe("the installer", () => {
     }
   })
 
-  test("anything but join is refused before downloading", () => {
+  test("with `pair CODE`, installs and then runs exactly that pair", () => {
+    const dir = sandbox()
+    try {
+      const r = install(dir, ["pair", "kp1-abc"])
+      expect(r.exitCode).toBe(0)
+      expect(readFileSync(join(dir, "ran"), "utf8").trim()).toBe("ran: pair kp1-abc")
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  test("anything but join or pair is refused before downloading", () => {
     const dir = sandbox()
     try {
       const r = install(dir, ["close", "--yes"])
       expect(r.exitCode).toBe(1)
-      expect(r.stderr.toString()).toContain("only runs `kiwi join`")
+      expect(r.stderr.toString()).toContain("only runs `kiwi join` or `kiwi pair`")
       expect(() => readFileSync(join(dir, "bin", "kiwi"))).toThrow()
     } finally {
       rmSync(dir, { recursive: true, force: true })
@@ -70,11 +81,9 @@ describe("the installer", () => {
   })
 })
 
-// Both copies: web/public is what the Worker serves today, site/ is what the Bun relay and Docker image ship.
-const SCRIPTS = [SCRIPT, join(import.meta.dir, "..", "site", "install.sh")]
 const LINE = 'export PATH="$HOME/bin:$PATH"'
 
-describe.each(SCRIPTS)("the installer's PATH step (%s)", (script) => {
+describe("the installer's PATH step", () => {
   const withSandbox = (fn: (dir: string) => void) => {
     const dir = sandbox()
     try {
@@ -88,34 +97,34 @@ describe.each(SCRIPTS)("the installer's PATH step (%s)", (script) => {
   test("adds one marked line to the shell's profile, once", () =>
     withSandbox((dir) => {
       writeFileSync(join(dir, ".zshrc"), "alias ll='ls -l'") // no trailing newline
-      const r = install(dir, [], { SHELL: "/bin/zsh" }, script)
+      const r = install(dir, [], { SHELL: "/bin/zsh" })
       expect(r.exitCode).toBe(0)
       expect(r.stdout.toString()).toContain(`Added ${join(dir, "bin")} to your PATH in ${join(dir, ".zshrc")}`)
       expect(readFileSync(join(dir, ".zshrc"), "utf8")).toBe(`alias ll='ls -l'\n\n# Added by the kiwi installer: puts the kiwi CLI on your PATH.\n${LINE}\n`)
-      expect(install(dir, [], { SHELL: "/bin/zsh" }, script).stdout.toString()).toContain("already puts")
+      expect(install(dir, [], { SHELL: "/bin/zsh" }).stdout.toString()).toContain("already puts")
       expect(readFileSync(join(dir, ".zshrc"), "utf8").split(LINE).length).toBe(2)
     }))
 
   test("bash, fish and any other shell get their own profile", () =>
     withSandbox((dir) => {
-      install(dir, [], { SHELL: "/usr/bin/bash" }, script)
+      install(dir, [], { SHELL: "/usr/bin/bash" })
       expect(readFileSync(join(dir, bashrc), "utf8")).toContain(LINE)
-      install(dir, [], { SHELL: "/usr/local/bin/fish" }, script)
+      install(dir, [], { SHELL: "/usr/local/bin/fish" })
       expect(readFileSync(join(dir, ".config", "fish", "conf.d", "kiwi.fish"), "utf8")).toContain('fish_add_path -g "$HOME/bin"')
-      install(dir, [], { SHELL: "/bin/ksh" }, script)
+      install(dir, [], { SHELL: "/bin/ksh" })
       expect(readFileSync(join(dir, ".profile"), "utf8")).toContain(LINE)
     }))
 
   test("a profile that already names the folder, however it's spelled, is left alone", () =>
     withSandbox((dir) => {
       writeFileSync(join(dir, ".zshrc"), "export PATH=~/bin:$PATH\n")
-      install(dir, [], { SHELL: "/bin/zsh" }, script)
+      install(dir, [], { SHELL: "/bin/zsh" })
       expect(readFileSync(join(dir, ".zshrc"), "utf8")).toBe("export PATH=~/bin:$PATH\n")
     }))
 
   test("KIWI_NO_MODIFY_PATH prints the line and writes nothing", () =>
     withSandbox((dir) => {
-      const r = install(dir, [], { SHELL: "/bin/zsh", KIWI_NO_MODIFY_PATH: "1" }, script)
+      const r = install(dir, [], { SHELL: "/bin/zsh", KIWI_NO_MODIFY_PATH: "1" })
       expect(r.exitCode).toBe(0)
       expect(r.stdout.toString()).toContain(LINE)
       expect(existsSync(join(dir, ".zshrc"))).toBe(false)
@@ -123,7 +132,7 @@ describe.each(SCRIPTS)("the installer's PATH step (%s)", (script) => {
 
   test("already on PATH: nothing to do", () =>
     withSandbox((dir) => {
-      const r = install(dir, [], { SHELL: "/bin/zsh", PATH: `${join(dir, "bin")}:${dir}:${process.env.PATH}` }, script)
+      const r = install(dir, [], { SHELL: "/bin/zsh", PATH: `${join(dir, "bin")}:${dir}:${process.env.PATH}` })
       expect(r.exitCode).toBe(0)
       expect(existsSync(join(dir, ".zshrc"))).toBe(false)
     }))
@@ -131,11 +140,16 @@ describe.each(SCRIPTS)("the installer's PATH step (%s)", (script) => {
   test("a profile it can't write doesn't fail the install, and the join still runs", () =>
     withSandbox((dir) => {
       mkdirSync(join(dir, ".zshrc")) // a folder where the file should be
-      const r = install(dir, ["join", "mc2-abc"], { SHELL: "/bin/zsh" }, script)
+      const r = install(dir, ["join", "mc2-abc"], { SHELL: "/bin/zsh" })
       expect(r.exitCode).toBe(0)
       expect(r.stdout.toString()).toContain("Couldn't write")
       expect(readFileSync(join(dir, "ran"), "utf8").trim()).toBe("ran: join mc2-abc")
     }))
+})
+
+test("site/install is the same script as site/install.sh", () => {
+  const sh = readFileSync(SCRIPT, "utf8")
+  expect(readFileSync(join(import.meta.dir, "..", "site", "install"), "utf8")).toBe(sh)
 })
 
 describe("the Add an agent line", () => {

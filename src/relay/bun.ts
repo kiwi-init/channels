@@ -1,6 +1,6 @@
 // Self-hosted relay on Bun: same protocol as the Cloudflare relay, one SQLite
 // file per room, created only when the room is and deleted when it closes.
-// It can also serve the web dashboard (web/dist), as the Worker does.
+// It can also serve the static site (site/), as the Worker does.
 // Usage: bun src/relay/bun.ts --help
 
 import { Database } from "bun:sqlite";
@@ -45,7 +45,7 @@ interface SocketData {
   since: number;
 }
 
-/** The dashboard's files, and the sign-in origins its page may call besides this relay. */
+/** The static site's files, and the sign-in origins its page may call besides this relay. */
 export interface WebApp {
   dir: string;
   connect?: string[];
@@ -254,9 +254,9 @@ export function startRelay(
 }
 
 /**
- * Serves the dashboard the way the Worker's static assets do: real files as
- * they are, any other page address gets index.html (so /auth/callback loads
- * the app), and the same security headers as web/public/_headers. The CSP is
+ * Serves the static site the way the Worker's static assets do: real files as
+ * they are, any other page address gets index.html (so /join/<code> loads
+ * the page), and the same security headers as site/_headers. The CSP is
  * built here because its sign-in origins depend on this relay's settings.
  */
 function webApp(app: WebApp): (pathname: string) => Response {
@@ -301,8 +301,8 @@ Usage: ${cmd} [options]
   --port <n>                    port to listen on (default 8787; env PORT)
   --hostname <addr>             address to bind (default 0.0.0.0; 127.0.0.1 behind a reverse proxy; env KIWI_HOSTNAME)
   --data <dir>                  where rooms are stored (default .relay-data; env KIWI_DATA)
-  --web <dir>                   serve the dashboard from here (default web/dist when built; env KIWI_WEB)
-  --no-web                      don't serve the dashboard
+  --web <dir>                   serve the static site from here (default site/ when present; env KIWI_WEB)
+  --no-web                      don't serve the static site
   --workos-client-id <id>       turn on sign-in with your WorkOS AuthKit app (env WORKOS_CLIENT_ID)
   --workos-authkit-domain <url> your AuthKit domain, https://….authkit.app or your custom one; comma-separate
                                 both while moving to a custom domain (env WORKOS_AUTHKIT_DOMAIN)
@@ -346,8 +346,10 @@ export function runRelay(argv: string[], cmd = "bun src/relay/bun.ts"): void {
     process.exit(2);
   }
   const human = dev ? devHumanAuth() : workosFromSettings({ clientId: arg("--workos-client-id", "WORKOS_CLIENT_ID"), authkitDomain, apiKey: process.env.WORKOS_API_KEY || undefined });
+  const siteDir = resolve(import.meta.dir, "../../site");
   const builtWeb = resolve(import.meta.dir, "../../web/dist");
-  const webDir = argv.includes("--no-web") ? undefined : (arg("--web", "KIWI_WEB") ?? (existsSync(join(builtWeb, "index.html")) ? builtWeb : undefined));
+  const defaultSite = existsSync(join(siteDir, "index.html")) ? siteDir : existsSync(join(builtWeb, "index.html")) ? builtWeb : undefined;
+  const webDir = argv.includes("--no-web") ? undefined : (arg("--web", "KIWI_WEB") ?? defaultSite);
   const connect = human ? ["https://api.workos.com", ...authkitDomains(authkitDomain)] : [];
   const server = startRelay({
     port: Number(arg("--port", "PORT") ?? 8787),
@@ -359,7 +361,7 @@ export function runRelay(argv: string[], cmd = "bun src/relay/bun.ts"): void {
   });
   console.log(`Kiwi Channels relay listening on ${server.url}`);
   console.log(`  sign-in: ${human?.dev ? 'DEV: the token "dev:<name>" is <name>, no password (this machine only)' : human ? `WorkOS ${human.clientId}${human.profile ? " (with emails, for the beta list)" : ""}` : "off"}`);
-  console.log(`  dashboard: ${webDir ? resolve(webDir) : "not served"}`);
+  console.log(`  site: ${webDir ? resolve(webDir) : "not served"}`);
 }
 
 if (import.meta.main) runRelay(process.argv.slice(2));
