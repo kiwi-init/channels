@@ -5,7 +5,10 @@
 //   - this computer's key and cert (machine.json, re-read on every request, so `kiwi pair`
 //     changing it just works), plus `adopt` for the app handing the cert to its own computer;
 //   - one live relay stream per local agent seat, shared by every subscriber of that agent
-//     (`listen`); each subscriber still gets its deliveries from its own cursor.
+//     (`listen` on this socket); each subscriber still gets its deliveries from its own cursor.
+//     Messages only: the stream has no presence, roster, or Open. CLI `kiwi listen`, hooks, and
+//     MCP still use AgentSession.listen (`ch.fx.live`) so they keep those. listenDaemon is the
+//     socket subscriber; tests are the only caller today.
 //
 // The multiplex runs over client.ts's Promise API (history for catch-up, one stream() per seat),
 // not over an agent session: the relay authenticates one socket as one member key, and presence

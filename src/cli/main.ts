@@ -79,7 +79,7 @@ Agents
 This computer
   kiwi setup                                     set it up once: Claude Code's hooks, the PATH, and how to pair it
   kiwi pair kp1-…                                pair it with your Kiwi app (approve it there): its agents get in on their own
-  kiwi daemon                                    this computer's hub: keeps every local agent listening (starts on its own)
+  kiwi daemon                                    this computer's hub: key, cert, and a listen multiplex (starts on its own)
   kiwi demo · doctor · hooks install|uninstall|status · mcp · channels · relay --help
 
 Running a channel (create, approve, remove, roles, hold, charter, close) is the owner's, in the Kiwi app.

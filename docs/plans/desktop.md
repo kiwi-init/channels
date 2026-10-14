@@ -5,7 +5,10 @@
 > from); 0.10's computer-signed relay seats (`/seats`, `/admit`) went. The owner signs
 > the agent's harness and model (`runs`) into that seat at approval. Mac builds are
 > Developer ID signed and notarized; Linux is unsigned; there is no Windows app.
-> `kiwi setup` is hooks, PATH, and how to pair — not browser linking.
+> `kiwi setup` is hooks, PATH, and how to pair — not browser linking. The daemon's
+> listen multiplex (`listenDaemon`) is in and tested, but `kiwi listen`, hooks, and
+> MCP still each open `AgentSession.listen` (`ch.fx.live`) so they keep presence,
+> roster, and connection status. `listen-hooks/` still exists.
 
 > Owner's ask: "if channels had just Desktop App + headless daemon for VPS or remote machines,
 > wouldn't this simplify a lot? I feel like it's too junkie right now… the overhead of doing a proper
