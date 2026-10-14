@@ -59,18 +59,16 @@ export function fileFor(root: string, pathname: string): string | null {
   return rel && !rel.startsWith("..") && !path.isAbsolute(rel) ? file : null;
 }
 
-/** WorkOS, which the renderer reaches for sign-in (as the hosted web's CSP allows, web/public/_headers). */
-const WORKOS = ["https://api.workos.com", "https://possible-pleasure-97.authkit.app"];
-
 /**
  * The Content-Security-Policy for every kiwi-app:// response: the hosted web's (web/public/_headers),
- * plus the relay this app talks to, over HTTP and its WebSocket. No eval, no inline script, nothing
- * framed, no form posts: script that got in some other way still can't phone anywhere else.
+ * with the relay this app talks to, over HTTP and its WebSocket, as the only place to connect. Not
+ * WorkOS: in the app, sign-in runs in main (the device flow), never in the page. No eval, no inline
+ * script, nothing framed, no form posts: script that got in some other way can't phone anywhere else.
  */
 export function csp(relay: string): string {
   const origin = normalizeRelay(relay);
   const socket = origin ? origin.replace(/^http/, "ws") : null;
-  const connect = ["'self'", ...(origin ? [origin, socket!] : []), ...WORKOS].join(" ");
+  const connect = ["'self'", ...(origin ? [origin, socket!] : [])].join(" ");
   return [
     "default-src 'self'",
     "script-src 'self'",
