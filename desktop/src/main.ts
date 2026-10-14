@@ -316,10 +316,19 @@ async function signInMain(): Promise<SignInResult> {
   return { token: sess.access };
 }
 
+// One refresh at a time: WorkOS turns the refresh token over on each use, so a second refresh racing
+// the first with the same one is refused, reads as signed out, and sends the person to sign in again.
+let refreshing: Promise<string | null> | null = null;
+
 async function freshToken(): Promise<string | null> {
   const s = store.signin;
   if (!s) return null;
   if (Date.now() < s.exp - 60_000) return s.access;
+  refreshing ??= refreshToken(s).finally(() => (refreshing = null));
+  return refreshing;
+}
+
+async function refreshToken(s: NonNullable<StoreFile["signin"]>): Promise<string | null> {
   try {
     const config = await relayConfig(store.relayUrl);
     if (!config.workosClientId) return s.access;
@@ -331,6 +340,8 @@ async function freshToken(): Promise<string | null> {
     if (!res.ok) throw new Error("refresh refused");
     const tok = (await res.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
     if (!tok.access_token) throw new Error("no token");
+    // A sign-out (or a change of relay) while this ran stands: its session isn't put back.
+    if (store.signin !== s) return store.signin?.access ?? null;
     mutate((st) => (st.signin = { access: tok.access_token as string, refresh: tok.refresh_token ?? s.refresh, exp: Date.now() + (tok.expires_in ?? 3600) * 1000 }));
     return store.signin?.access ?? null;
   } catch {
