@@ -6,7 +6,6 @@
 // build (crypto.ts is WebCrypto-only, and main has WebCrypto): no wrapper, no
 // duplicate scheme to drift.
 
-import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -18,7 +17,7 @@ import { certifyMachine } from "../../src/person.ts";
 import { compareVersions, ensureOnPath, keepCli } from "./cli.ts";
 import { APP_HOST, APP_SCHEME, csp, externalUrl, fileFor, isAppUrl, normalizeRelay, readStore } from "./guard.ts";
 import { applyUpdate, startUpdates, updateState } from "./updater.ts";
-import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, type HelloResult } from "./daemon-client.ts";
+import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, spawnDaemon, type HelloResult } from "./daemon-client.ts";
 import type { ChannelIdentityView, ComputerView, DaemonStatus, PairAskView, PendingItem, PersonView, SignInResult, StoreSnapshot } from "./bridge.ts";
 
 const PUBLIC_RELAY = "https://channels.kiwiinit.com";
@@ -248,7 +247,8 @@ function handleDeepLink(url: string): void {
   if (!url.startsWith(`${JOIN_SCHEME}://join/`)) return;
   deepLink = url;
   win?.webContents.send("kiwi:deep-link", url);
-  win?.show();
+  // A link can arrive before ready (a Mac launching the app for it): the window it opens takes it then.
+  if (app.isReady()) showWindow();
 }
 
 // ---------- sign-in ----------
@@ -315,10 +315,19 @@ async function signInMain(): Promise<SignInResult> {
   return { token: sess.access };
 }
 
+// One refresh at a time: WorkOS turns the refresh token over on each use, so a second refresh racing
+// the first with the same one is refused, reads as signed out, and sends the person to sign in again.
+let refreshing: Promise<string | null> | null = null;
+
 async function freshToken(): Promise<string | null> {
   const s = store.signin;
   if (!s) return null;
   if (Date.now() < s.exp - 60_000) return s.access;
+  refreshing ??= refreshToken(s).finally(() => (refreshing = null));
+  return refreshing;
+}
+
+async function refreshToken(s: NonNullable<StoreFile["signin"]>): Promise<string | null> {
   try {
     const config = await relayConfig(store.relayUrl);
     if (!config.workosClientId) return s.access;
@@ -330,6 +339,8 @@ async function freshToken(): Promise<string | null> {
     if (!res.ok) throw new Error("refresh refused");
     const tok = (await res.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
     if (!tok.access_token) throw new Error("no token");
+    // A sign-out (or a change of relay) while this ran stands: its session isn't put back.
+    if (store.signin !== s) return store.signin?.access ?? null;
     mutate((st) => (st.signin = { access: tok.access_token as string, refresh: tok.refresh_token ?? s.refresh, exp: Date.now() + (tok.expires_in ?? 3600) * 1000 }));
     return store.signin?.access ?? null;
   } catch {
@@ -339,7 +350,8 @@ async function freshToken(): Promise<string | null> {
 
 // ---------- pairing ----------
 
-let pairing: { secret: string; mailbox: Mailbox; ask: PairAsk | null } | null = null;
+// stop ends a poll's wait when this pairing is cancelled, answered or replaced.
+let pairing: { secret: string; mailbox: Mailbox; ask: PairAsk | null; stop: AbortController } | null = null;
 
 function requirePerson(): Identity {
   const p = store.person;
@@ -377,10 +389,8 @@ async function ensureDaemon(): Promise<HelloResult | null> {
     await daemonStop(home);
     for (let i = 0; i < 20 && (await daemonHello(home, 500)); i++) await new Promise((r) => setTimeout(r, 250));
   }
-  // Start it as `kiwi daemon` for ~/.kiwi.
-  const bin = kiwiBin?.path ?? bundledKiwi();
-  const child = spawn(bin, ["daemon"], { env: { ...process.env, KIWI_HOME: home }, detached: true, stdio: "ignore", windowsHide: true });
-  child.unref();
+  // Start it as `kiwi daemon` for ~/.kiwi, on the app's relay.
+  spawnDaemon(kiwiBin?.path ?? bundledKiwi(), home, store.relayUrl);
   const until = Date.now() + 10_000;
   for (;;) {
     const hello = await daemonHello(home);
@@ -460,24 +470,32 @@ function wireIpc(): void {
   ipcMain.handle("kiwi:token", () => freshToken());
   ipcMain.handle("kiwi:sign-out", () => mutate((s) => (s.signin = undefined)));
   ipcMain.handle("kiwi:pair-begin", async () => {
+    pairing?.stop.abort();
     pairing?.mailbox.drop().catch(() => {});
     const secret = newSecret();
-    pairing = { secret, mailbox: await openMailbox(store.relayUrl, secret), ask: null };
+    pairing = { secret, mailbox: await openMailbox(store.relayUrl, secret), ask: null, stop: new AbortController() };
     return { code: pairCode(secret) };
   });
   // One short wait on slot a per call; the renderer polls until the person cancels.
+  // A cancel, an answer or a new pairing can land during the wait: the poll keeps to the pairing it
+  // began on, and once that one is gone it has nothing to say.
   ipcMain.handle("kiwi:pair-poll", async (): Promise<PairAskView | null> => {
-    if (!pairing) throw new Error("pairing hasn't started");
-    const raw = await pairing.mailbox.wait("a", { timeoutMs: 20_000, everyMs: 1_500 });
-    const ask = await readPairAsk(raw, pairing.mailbox);
-    if (!ask) return null;
-    pairing.ask = ask;
+    const p = pairing;
+    if (!p) throw new Error("pairing hasn't started");
+    const raw = await p.mailbox.wait("a", { timeoutMs: 20_000, everyMs: 1_500, signal: p.stop.signal }).catch((err: unknown) => {
+      if (pairing === p) throw err;
+      return null;
+    });
+    const ask = await readPairAsk(raw, p.mailbox);
+    if (!ask || pairing !== p) return null;
+    p.ask = ask;
     return { label: ask.label, os: ask.os, machinePk: ask.pk, at: ask.at };
   });
   ipcMain.handle("kiwi:pair-answer", async (_e, accept: boolean) => {
     if (!pairing) throw new Error("pairing hasn't started");
-    const { mailbox, ask } = pairing;
+    const { mailbox, ask, stop } = pairing;
     pairing = null;
+    stop.abort();
     if (!accept || !ask) {
       await mailbox.drop();
       return null;
@@ -491,6 +509,7 @@ function wireIpc(): void {
   ipcMain.handle("kiwi:pair-cancel", async () => {
     const p = pairing;
     pairing = null;
+    p?.stop.abort();
     await p?.mailbox.drop().catch(() => {});
   });
   ipcMain.handle("kiwi:daemon-status", async (): Promise<DaemonStatus> => {
@@ -502,9 +521,18 @@ function wireIpc(): void {
   ipcMain.handle("kiwi:install-cli", () => installCli());
   ipcMain.handle("kiwi:update-state", () => updateState());
   ipcMain.handle("kiwi:update-install", () => restartToUpdate());
+  // Each notification is held until it's clicked or closed: one nothing refers to is garbage collected,
+  // and its click with it. A Mac doesn't always say when one is closed (Notification Center keeps
+  // them), so past 100 the oldest are let go.
+  const shown = new Set<Notification>();
   ipcMain.handle("kiwi:notify", (_e, title: string, body: string) => {
     const n = new Notification({ title, body });
-    n.on("click", showWindow);
+    shown.add(n);
+    for (const old of shown) if (shown.size > 100) shown.delete(old);
+    const done = () => shown.delete(n);
+    n.on("click", () => (done(), showWindow()));
+    n.on("close", done);
+    n.on("failed", done);
     n.show();
   });
   ipcMain.handle("kiwi:open-external", (_e, url: string) => {
@@ -512,7 +540,12 @@ function wireIpc(): void {
     if (!ext) throw new Error("only http(s) links open outside");
     return shell.openExternal(ext);
   });
-  ipcMain.handle("kiwi:deep-link", () => deepLink);
+  // Each link is the renderer's once: a reload doesn't open the channel again.
+  ipcMain.handle("kiwi:deep-link", () => {
+    const link = deepLink;
+    deepLink = null;
+    return link;
+  });
 }
 
 // Bring the window back: recreate it if it was destroyed, restore, show and focus.
