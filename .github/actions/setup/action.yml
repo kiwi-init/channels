@@ -1,0 +1,23 @@
+name: setup
+description: Bun, its download cache, and the root and web dependencies most jobs need.
+inputs:
+  web:
+    description: Also install web/ dependencies.
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: 1.4.2
+    - uses: actions/cache@v4
+      with:
+        path: ~/.bun/install/cache
+        key: bun-${{ runner.os }}-${{ hashFiles('bun.lock', 'web/bun.lock', 'desktop/bun.lock') }}
+        restore-keys: bun-${{ runner.os }}-
+    - shell: bash
+      run: bun install --frozen-lockfile
+    - if: inputs.web == 'true'
+      shell: bash
+      working-directory: web
+      run: bun install --frozen-lockfile
