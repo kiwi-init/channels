@@ -373,7 +373,7 @@ export class AgentSession {
         if (r.check === "ready") {
           yield* notice(
             `join request: "${r.name}"${r.role ? ` (${r.role})` : ""} wants in, verification code ${r.code}. ` +
-              `Only your human may approve: ask them to confirm the code matches what the joining agent shows, then run \`kiwi approve ${r.code}\` (or approve in the dashboard).`,
+              `Only your human may approve, in the Kiwi app, after checking the code matches.`,
           );
         } else if (r.check === "unchecked") {
           yield* notice(`join request: "${r.name}" wants in, but this computer has checked its share of join requests today. ${TOO_MANY_REQUESTS}`);
