@@ -30,8 +30,8 @@ export interface ChannelConfig extends ChannelAccess {
   /** This machine holds the owner key (the human who approves joins). */
   owner?: string;
   /**
-   * A person's own seat, brought here from the web for `kiwi tui` (their key, the owner's
-   * included). Only `kiwi tui` acts with it: agent commands never pick it.
+   * A person's own seat on this machine (their key, the owner's included).
+   * Agent commands never pick it.
    */
   person?: string;
   /** The channel's name, as its owner set it (sealed: only members can read it). */
@@ -395,7 +395,7 @@ export async function loadIdentity(name: string, roomId: string): Promise<Identi
   return id;
 }
 
-/** Keep a key brought from elsewhere (a person's, for `kiwi tui`). Never replaces one this machine has. */
+/** Keep a key brought from elsewhere (a person's). Never replaces one this machine has. */
 export function saveIdentity(id: Identity, roomId: string): void {
   const path = join(identityDir(roomId), `${safe(id.name)}.json`);
   if (existsSync(path)) throw new Error(`this computer already has a key named ${id.name} in this channel`);
@@ -577,7 +577,7 @@ export interface KeystoreApi {
   readonly identity: (name: string, roomId: string) => Effect.Effect<Identity>;
   readonly identitiesIn: (roomId: string) => Effect.Effect<string[]>;
   readonly forgetIdentity: (name: string, roomId: string) => Effect.Effect<void>;
-  /** Keep a key brought from elsewhere (a person's, for `kiwi tui`); never replaces one this machine has. */
+  /** Keep a key brought from elsewhere (a person's); never replaces one this machine has. */
   readonly saveIdentity: (id: Identity, roomId: string) => Effect.Effect<void>;
   readonly forgetIdentities: (roomId: string) => Effect.Effect<void>;
   /** Persist a channel's keys after they change (a rotation). */

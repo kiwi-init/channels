@@ -2,10 +2,10 @@ import * as Context from "effect/Context"
 import * as Data from "effect/Data"
 import * as Effect from "effect/Effect"
 
-// This browser's localStorage, as the Effect code reaches it: the vault's
-// highest version seen, the signed-in listing. Same keys, same values. What
-// render reads synchronously (membership, the channel list) stays plain calls
-// in channel.ts; this is the same storage, as a service a test can stand in for.
+// This browser's localStorage, as the Effect code reaches it. Same keys, same
+// values. What render reads synchronously (membership, the channel list) stays
+// plain calls in channel.ts; this is the same storage, as a service a test can
+// stand in for.
 
 /** The browser refused a write: private mode, or a full disk. */
 export class StorageRefused extends Data.TaggedError("StorageRefused")<{ readonly cause: unknown }> {
