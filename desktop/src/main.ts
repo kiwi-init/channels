@@ -340,7 +340,8 @@ async function freshToken(): Promise<string | null> {
 
 // ---------- pairing ----------
 
-let pairing: { secret: string; mailbox: Mailbox; ask: PairAsk | null } | null = null;
+// stop ends a poll's wait when this pairing is cancelled, answered or replaced.
+let pairing: { secret: string; mailbox: Mailbox; ask: PairAsk | null; stop: AbortController } | null = null;
 
 function requirePerson(): Identity {
   const p = store.person;
@@ -461,24 +462,32 @@ function wireIpc(): void {
   ipcMain.handle("kiwi:token", () => freshToken());
   ipcMain.handle("kiwi:sign-out", () => mutate((s) => (s.signin = undefined)));
   ipcMain.handle("kiwi:pair-begin", async () => {
+    pairing?.stop.abort();
     pairing?.mailbox.drop().catch(() => {});
     const secret = newSecret();
-    pairing = { secret, mailbox: await openMailbox(store.relayUrl, secret), ask: null };
+    pairing = { secret, mailbox: await openMailbox(store.relayUrl, secret), ask: null, stop: new AbortController() };
     return { code: pairCode(secret) };
   });
   // One short wait on slot a per call; the renderer polls until the person cancels.
+  // A cancel, an answer or a new pairing can land during the wait: the poll keeps to the pairing it
+  // began on, and once that one is gone it has nothing to say.
   ipcMain.handle("kiwi:pair-poll", async (): Promise<PairAskView | null> => {
-    if (!pairing) throw new Error("pairing hasn't started");
-    const raw = await pairing.mailbox.wait("a", { timeoutMs: 20_000, everyMs: 1_500 });
-    const ask = await readPairAsk(raw, pairing.mailbox);
-    if (!ask) return null;
-    pairing.ask = ask;
+    const p = pairing;
+    if (!p) throw new Error("pairing hasn't started");
+    const raw = await p.mailbox.wait("a", { timeoutMs: 20_000, everyMs: 1_500, signal: p.stop.signal }).catch((err: unknown) => {
+      if (pairing === p) throw err;
+      return null;
+    });
+    const ask = await readPairAsk(raw, p.mailbox);
+    if (!ask || pairing !== p) return null;
+    p.ask = ask;
     return { label: ask.label, os: ask.os, machinePk: ask.pk, at: ask.at };
   });
   ipcMain.handle("kiwi:pair-answer", async (_e, accept: boolean) => {
     if (!pairing) throw new Error("pairing hasn't started");
-    const { mailbox, ask } = pairing;
+    const { mailbox, ask, stop } = pairing;
     pairing = null;
+    stop.abort();
     if (!accept || !ask) {
       await mailbox.drop();
       return null;
@@ -492,6 +501,7 @@ function wireIpc(): void {
   ipcMain.handle("kiwi:pair-cancel", async () => {
     const p = pairing;
     pairing = null;
+    p?.stop.abort();
     await p?.mailbox.drop().catch(() => {});
   });
   ipcMain.handle("kiwi:daemon-status", async (): Promise<DaemonStatus> => {
