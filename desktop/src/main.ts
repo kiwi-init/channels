@@ -16,7 +16,7 @@ import { generateIdentity, type Identity } from "../../src/identity.ts";
 import { answerPair, newSecret, openMailbox, pairCode, readPairAsk, type Mailbox, type PairAsk } from "../../src/mailbox.ts";
 import { certifyMachine } from "../../src/person.ts";
 import { compareVersions, ensureOnPath, keepCli } from "./cli.ts";
-import { APP_HOST, APP_SCHEME, externalUrl, isAppUrl, normalizeRelay, readStore } from "./guard.ts";
+import { APP_HOST, APP_SCHEME, externalUrl, fileFor, isAppUrl, normalizeRelay, readStore } from "./guard.ts";
 import { applyUpdate, startUpdates, updateState } from "./updater.ts";
 import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, type HelloResult } from "./daemon-client.ts";
 import type { ChannelIdentityView, ComputerView, DaemonStatus, PairAskView, PendingItem, PersonView, SignInResult, StoreSnapshot } from "./bridge.ts";
@@ -116,16 +116,14 @@ const MIME: Record<string, string> = { ".html": "text/html", ".js": "text/javasc
 function serveWeb(): void {
   protocol.handle(APP_SCHEME, (req) => {
     const u = new URL(req.url);
-    let p = decodeURIComponent(u.pathname);
-    if (p === "/" || !path.extname(p)) p = "/index.html";
-    // Stay inside web/dist: an absolute path on the URL must not escape it.
-    const file = path.normalize(path.join(webDist(), p));
-    if (!file.startsWith(path.normalize(webDist()))) return new Response("not found", { status: 404 });
+    // Only kiwi-app://app/, and only a file inside web/dist (guard.ts: no climbing out, no bad escapes).
+    const file = u.host === APP_HOST ? fileFor(webDist(), u.pathname) : null;
+    if (!file) return new Response("not found", { status: 404 });
     try {
       const body = fs.readFileSync(file);
       return new Response(new Uint8Array(body), { headers: { "content-type": MIME[path.extname(file)] ?? "application/octet-stream" } });
     } catch {
-      if (p !== "/index.html") return serveWebFallback();
+      if (path.basename(file) !== "index.html") return serveWebFallback();
       return new Response("not found", { status: 404 });
     }
   });

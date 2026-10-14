@@ -2,7 +2,8 @@
 // window.kiwi (the person's keys), so it must only ever show the app, and must never lose them.
 
 import { describe, expect, test } from "bun:test";
-import { externalUrl, isAppUrl, readStore } from "../desktop/src/guard.ts";
+import { join } from "node:path";
+import { externalUrl, fileFor, isAppUrl, readStore } from "../desktop/src/guard.ts";
 
 describe("the window shows the app and nothing else (T183)", () => {
   test("only kiwi-app://app/ is the app", () => {
@@ -39,5 +40,24 @@ describe("the saved keys are never lost to a bad read (T186)", () => {
     expect(readStore(Buffer.from(""), decrypt).kind).toBe("unreadable");
     const locked = readStore(Buffer.from("\x00\x01garbage"), decrypt);
     expect(locked.kind === "unreadable" && locked.why).toContain("decrypt");
+  });
+});
+
+describe("kiwi-app:// serves web/dist and nothing beside it (T187)", () => {
+  const root = "/app/web/dist";
+  test("files inside, and routes as index.html", () => {
+    expect(fileFor(root, "/assets/index-abc.js")).toBe(join(root, "assets/index-abc.js"));
+    expect(fileFor(root, "/")).toBe(join(root, "index.html"));
+    expect(fileFor(root, "/channels/abc")).toBe(join(root, "index.html"));
+    expect(fileFor(root, "/a%20b.png")).toBe(join(root, "a b.png"));
+  });
+  test("never a file outside it, a sibling that shares its name, or a bad escape", () => {
+    for (const p of ["/../dist-extra/x.js", "/%2e%2e/dist-extra/x.js", "/..%2f..%2fetc/passwd.txt", "/a/../../../etc/hosts.txt", "/%E0%A4%A.js", "/x%00.js"]) {
+      const f = fileFor(root, p);
+      expect(f === null || f.startsWith(`${root}/`)).toBe(true);
+    }
+    expect(fileFor(root, "/%E0%A4%A.js")).toBeNull();
+    expect(fileFor(root, "/x%00.js")).toBeNull();
+    expect(fileFor(root, "/../dist-extra/x.js")).toBe(join(root, "dist-extra/x.js"));
   });
 });
