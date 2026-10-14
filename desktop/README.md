@@ -23,6 +23,10 @@ window says so. Closing the window keeps the app in the tray (background auto-ap
 - `src/bridge.ts` — the shared bridge type; renderer-neutral, no electron/node imports.
 - `src/daemon-client.ts` — the local socket client (`hello`, `adopt`) and the JSON wire
   shape the daemon side must match (documented at the top of the file).
+- `build/icon.svg` — the app icon. `bun desktop/scripts/icons.ts` (on a Mac) makes every
+  size from it: `build/icon.icns`, `build/icons/NxN.png` for Linux, and `assets/icon.png`
+  for the window. On Linux the window finds its icon through `desktopName` in
+  `package.json`: Wayland matches the window's app_id to `kiwi-desktop.desktop`.
 
 ## Renderer relay URL
 
