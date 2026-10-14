@@ -126,8 +126,9 @@ export function applyUpdate(relaunch: boolean): boolean {
         "#!/bin/sh",
         `while kill -0 ${process.pid} 2>/dev/null; do sleep 0.2; done`,
         `mv ${q(target)} ${q(old)} && mv ${q(staged.path)} ${q(target)} && rm -rf ${q(old)} || { [ -e ${q(target)} ] || mv ${q(old)} ${q(target)}; }`,
-        `rm -rf ${q(dir)}`,
+        // Relaunch before the cleanup: the cleanup removes this script's own folder.
         relaunch ? `open ${q(target)}` : "",
+        `rm -rf ${q(dir)}`,
       ].join("\n"),
     );
     spawn("/bin/sh", [script], { detached: true, stdio: "ignore" }).unref();
