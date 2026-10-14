@@ -71,6 +71,7 @@ Written by `bun scripts/changelog.ts` from each squash-merged pull request's tit
   The renderer never asked for the link main kept (getDeepLink) nor listened for new ones (onDeepLink), so a link from an invite page only brought the window forward. App now reads the code out of each link and opens it.
 - **T204: stale copy and browser pairing** ([#134](https://github.com/ojowwalker77/channels/pull/134))
   Invite said sign in; join is person-key only. Empty-channel described 0.10 first-agent auto-approve; 0.11 lets any paired-computer agent in while the app runs. Add a computer showed in a plain browser (beginPairing throws). Sidebar preview used the latest non-event, including agent-to-agent lines keptFromPeople hides in main.
+- **Merge remote-tracking branch 'origin/main' into grok2/t480-0.12.0**
 
 ## 0.11.0 — 2026-10-14
 
