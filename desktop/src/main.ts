@@ -90,7 +90,6 @@ function serveWeb(): void {
     if (!file.startsWith(path.normalize(webDist()))) return new Response("not found", { status: 404 });
     try {
       const body = fs.readFileSync(file);
-      // The relay URL rides the entry URL's query (?relay=…); assets don't need it.
       return new Response(new Uint8Array(body), { headers: { "content-type": MIME[path.extname(file)] ?? "application/octet-stream" } });
     } catch {
       if (p !== "/index.html") return serveWebFallback();
@@ -108,7 +107,8 @@ function serveWebFallback(): Response {
   }
 }
 
-const entryUrl = () => `${APP_SCHEME}://${APP_HOST}/index.html?relay=${encodeURIComponent(store.relayUrl)}`;
+// The relay isn't on the URL: the page gets it from window.kiwi (the snapshot), which only main sets.
+const entryUrl = () => `${APP_SCHEME}://${APP_HOST}/index.html`;
 
 // ---------- window + tray ----------
 
