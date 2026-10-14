@@ -227,8 +227,15 @@ export async function startDaemon(dir = home()): Promise<Daemon> {
       const head = await ch.head().catch((err: unknown) => {
         throw new Error(why(err));
       });
+      if (stopped) throw new Error("the daemon is stopping");
       const seat: Seat = { key, alias, agent, ch, ctl: new AbortController(), subs: new Set(), head };
       seats.set(key, seat);
+      // stop() may have run between the check and the set: don't leave a stream behind it.
+      if (stopped) {
+        seats.delete(key);
+        seat.ctl.abort();
+        throw new Error("the daemon is stopping");
+      }
       ch.stream(
         seat.head,
         (m) => {
@@ -260,9 +267,24 @@ export async function startDaemon(dir = home()): Promise<Daemon> {
     // The seat's stream is already running before the catch-up below, so the two overlap and
     // never gap; the cursor dedupes the overlap.
     const seat = await seatFor(channel, as);
+    const reapEmpty = (): void => {
+      if (seat.subs.size !== 0) return;
+      if (seats.get(seat.key) === seat) seats.delete(seat.key);
+      seat.ctl.abort();
+    };
+    if (conn.dead || stopped) {
+      reapEmpty();
+      return;
+    }
     const sub: Sub = { id, cursor, conn, seat };
     seat.subs.add(sub);
     conn.subs.add(sub);
+    // The client dropped while seatFor ran: adding then dropping reaps a 0-sub seat
+    // so its relay WebSocket does not stay open with nobody listening.
+    if (conn.dead || stopped) {
+      dropSub(sub);
+      return;
+    }
     sendLine(conn, JSON.stringify({ id, ok: true, stream: true, head: seat.head, channel, agent: as }));
     try {
       const { messages } = await seat.ch.history(cursor);
@@ -703,16 +725,17 @@ export async function listenDaemon(
     c.close();
     throw err;
   }
+  const close = (): void => {
+    opts.signal?.removeEventListener("abort", onAbort);
+    done = true;
+    stir();
+    c.close();
+  };
   return {
     head,
     channel,
     agent,
-    close: () => {
-      opts.signal?.removeEventListener("abort", onAbort);
-      done = true;
-      stir();
-      c.close();
-    },
+    close,
     [Symbol.asyncIterator]() {
       return {
         next: async (): Promise<IteratorResult<Message>> => {
@@ -728,6 +751,14 @@ export async function listenDaemon(
               if (queue.length || failed || done || c.closed()) stir();
             });
           }
+        },
+        return: async (): Promise<IteratorResult<Message>> => {
+          close();
+          return { value: undefined, done: true };
+        },
+        throw: async (err?: unknown): Promise<IteratorResult<Message>> => {
+          close();
+          throw err instanceof Error ? err : new Error(err == null ? "the listen was aborted" : String(err));
         },
       };
     },

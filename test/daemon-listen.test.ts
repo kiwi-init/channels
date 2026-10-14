@@ -127,4 +127,15 @@ describe("the daemon's shared listening", () => {
       d.close();
     }
   });
+
+  test("the iterator's return() unsubscribes and closes the unix socket", async () => {
+    const sub = await listenDaemon("test", "claude", cursor);
+    expect(await daemonListening()).toEqual([{ channel: "test", agent: "claude", subscribers: 1 }]);
+    await sub[Symbol.asyncIterator]().return?.();
+    const end = Date.now() + 5_000;
+    while ((await daemonListening()).length !== 0) {
+      if (Date.now() > end) throw new Error("timed out waiting for return() to unsubscribe");
+      await Bun.sleep(50);
+    }
+  });
 });
