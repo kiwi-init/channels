@@ -82,12 +82,14 @@ describe("the daemon socket", () => {
 
   test("kiwi daemon runs in the foreground: one line, then SIGTERM stops it", async () => {
     const fg = mkdtempSync(join(tmpdir(), "kiwi-daemon-fg-"));
+    const sock = join(fg, "daemon.sock");
+    let proc: { kill(signal?: string): void; exited: Promise<number>; stdout: ReadableStream<Uint8Array> } | undefined;
     try {
-      const proc = Bun.spawn([process.execPath, join(import.meta.dir, "../src/cli/main.ts"), "daemon"], {
+      proc = Bun.spawn([process.execPath, join(import.meta.dir, "../src/cli/main.ts"), "daemon"], {
         env: { ...process.env, KIWI_HOME: fg },
         stdout: "pipe",
         stderr: "pipe",
-      });
+      }) as unknown as NonNullable<typeof proc>;
       const reader = proc.stdout.getReader();
       let out = "";
       for (;;) {
@@ -98,7 +100,6 @@ describe("the daemon socket", () => {
       reader.releaseLock();
       expect(out.split("\n")[0]).toMatch(new RegExp(`^kiwi daemon ${VERSION.replace(/\./g, "\\.")} on .*daemon\\.sock \\(pid \\d+\\)$`));
       // Ready, not just loud: killing during startup races the runtime's signal handling.
-      const sock = join(fg, "daemon.sock");
       const end = Date.now() + 5_000;
       while (!(await daemonHello(sock).catch(() => null))) {
         if (Date.now() > end) throw new Error("the foreground daemon never answered");
@@ -108,19 +109,38 @@ describe("the daemon socket", () => {
       expect(await proc.exited).toBe(0);
       expect(await daemonHello(sock).catch(() => null)).toBeNull();
     } finally {
+      // Never leave the foreground child behind: a failure before the SIGTERM above (or a
+      // daemon that ignored it) would otherwise keep running with its KIWI_HOME unlinked.
+      try {
+        proc?.kill("SIGTERM");
+      } catch {
+        // Already gone; the socket wait below is what matters.
+      }
+      if (proc) await Promise.race([proc.exited, Bun.sleep(5_000)]).catch(() => {});
+      await stopDaemon(sock).catch(() => {});
+      await untilDown(sock).catch(() => {});
+      try {
+        proc?.kill("SIGKILL");
+      } catch {
+        // Gone.
+      }
       rmSync(fg, { recursive: true, force: true });
     }
   });
 
   test("ensureDaemon starts a daemon in the background when none answers", async () => {
     const bg = mkdtempSync(join(tmpdir(), "kiwi-daemon-bg-"));
+    const sock = daemonSock(bg);
     try {
       const hello = await ensureDaemon(bg, [process.execPath, join(import.meta.dir, "../src/cli/main.ts"), "daemon"]);
       expect(hello.version).toBe(VERSION);
       expect(typeof hello.machine).toBe("string");
-      await stopDaemon(daemonSock(bg));
-      await untilDown(daemonSock(bg));
+      await stopDaemon(sock);
+      await untilDown(sock);
     } finally {
+      // The background daemon is detached (no handle): stopping it is the only cleanup.
+      await stopDaemon(sock).catch(() => {});
+      await untilDown(sock).catch(() => {});
       rmSync(bg, { recursive: true, force: true });
     }
   });
