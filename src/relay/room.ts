@@ -108,8 +108,40 @@ export interface DirectoryUpdate {
   entry: DirectoryEntry | null;
 }
 
-/** Signed-in people's channel lists, as the adapter keeps them (an object per person, or people.sqlite). */
-export class Directory extends Context.Service<Directory, { list(user: string): Promise<DirectoryEntry[]> }>()("kiwi/relay/Directory") {}
+/**
+ * Signed-in people's owned channels, as the adapter keeps them (an object per person, or people.sqlite).
+ * `reserve` is the quota's one check: in a single step it counts the person's channels and, when there's
+ * room, holds a slot for this one, so two creates at once can't both pass. The create's own directory
+ * update replaces the hold; `release` drops it when the create fails.
+ */
+export class Directory extends Context.Service<
+  Directory,
+  {
+    list(user: string): Promise<DirectoryEntry[]>;
+    reserve(user: string, room: string, most: number): Promise<boolean>;
+    release(user: string, room: string): Promise<void>;
+  }
+>()("kiwi/relay/Directory") {}
+
+/** How long a create's hold on a quota slot lasts if the create never finishes (a crash). */
+export const HOLD_MS = 10 * 60_000;
+
+/** A hold, not a channel: what reserve writes before the create, with no join code yet. */
+export const holdEntry = (room: string, now: number): DirectoryEntry => ({ room, code: "", owner: true, member: true, agents: 0, at: now });
+const isHold = (e: DirectoryEntry) => e.code === "";
+
+/**
+ * The quota's decision, for the adapters to run in one step: may `room` take one of `most` slots, and
+ * which stale holds (a create that died) to drop. A room that already has its entry is let through.
+ */
+export function reserveSlot(entries: DirectoryEntry[], room: string, most: number, now: number): { ok: boolean; stale: string[] } {
+  const stale = entries.filter((e) => isHold(e) && e.room !== room && now - e.at > HOLD_MS).map((e) => e.room);
+  const live = entries.filter((e) => e.owner && !stale.includes(e.room));
+  return { ok: live.some((e) => e.room === room) || live.length < most, stale };
+}
+
+/** Whether an entry is a hold that `release` may drop (never a created channel's entry). */
+export const releasable = (e: DirectoryEntry | undefined) => !!e && isHold(e);
 
 const utcDay = (ts: number) => new Date(ts).toISOString().slice(0, 10);
 

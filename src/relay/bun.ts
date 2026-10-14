@@ -18,6 +18,9 @@ import { clientAddress, parseTrustProxy, trustProxyFromArgs, writeAllowed, type 
 import { Policy, policyFrom, type RelayPolicy } from "./policy.ts";
 import {
   Directory,
+  holdEntry,
+  releasable,
+  reserveSlot,
   RoomDb,
   relayConfig,
   authenticateSocket,
@@ -115,7 +118,20 @@ export function startRelay(
   const services = Layer.mergeAll(
     Layer.succeed(Human, human),
     Layer.succeed(Policy, policy),
-    Layer.succeed(Directory, { list: async (user: string) => listOf(user) }),
+    Layer.succeed(Directory, {
+      list: async (user: string) => listOf(user),
+      // Synchronous SQLite: the count and the hold happen with nothing in between.
+      reserve: async (user: string, room: string, most: number) => {
+        const { ok, stale } = reserveSlot(listOf(user), room, most, Date.now());
+        for (const r of stale) people.query("DELETE FROM owned WHERE user = ? AND room = ?").run(user, r);
+        if (ok && !listOf(user).some((e) => e.room === room)) people.query("INSERT INTO owned (user, room, entry) VALUES (?, ?, ?)").run(user, room, JSON.stringify(holdEntry(room, Date.now())));
+        return ok;
+      },
+      release: async (user: string, room: string) => {
+        const row = people.query("SELECT entry FROM owned WHERE user = ? AND room = ?").get(user, room) as { entry: string } | null;
+        if (row && releasable(JSON.parse(row.entry) as DirectoryEntry)) people.query("DELETE FROM owned WHERE user = ? AND room = ?").run(user, room);
+      },
+    }),
     clockLayer(opts.now),
   );
   const relay = makeRelay(services);
