@@ -10,13 +10,13 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, Notification, protocol, safeStorage, shell, Tray } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, Notification, protocol, safeStorage, shell, Tray } from "electron";
 
 import { generateIdentity, type Identity } from "../../src/identity.ts";
 import { answerPair, newSecret, openMailbox, pairCode, readPairAsk, type Mailbox, type PairAsk } from "../../src/mailbox.ts";
 import { certifyMachine } from "../../src/person.ts";
 import { compareVersions, ensureOnPath, keepCli } from "./cli.ts";
-import { APP_HOST, APP_SCHEME, externalUrl, isAppUrl, normalizeRelay } from "./guard.ts";
+import { APP_HOST, APP_SCHEME, externalUrl, isAppUrl, normalizeRelay, readStore } from "./guard.ts";
 import { applyUpdate, startUpdates, updateState } from "./updater.ts";
 import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, type HelloResult } from "./daemon-client.ts";
 import type { ChannelIdentityView, ComputerView, DaemonStatus, PairAskView, PendingItem, PersonView, SignInResult, StoreSnapshot } from "./bridge.ts";
@@ -48,29 +48,62 @@ function defaults(): StoreFile {
 
 let store: StoreFile = defaults();
 
+/**
+ * Why the saved store couldn't be read (a locked keychain, encryption that went away, a damaged file),
+ * or null. While set, nothing is written over that file: an empty store saved there would wipe the
+ * person's key and every channel's.
+ */
+let storeBroken: string | null = null;
+
 function loadStore(): void {
+  let raw: Buffer | null = null;
   try {
-    const raw = fs.readFileSync(storePath());
-    const json = safeStorage.isEncryptionAvailable()
-      ? safeStorage.decryptString(raw)
-      : raw.toString("utf8");
-    store = { ...defaults(), ...(JSON.parse(json) as Partial<StoreFile>) };
-  } catch {
+    raw = fs.readFileSync(storePath());
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") storeBroken = e instanceof Error ? e.message : String(e);
+  }
+  const read = storeBroken ? null : readStore(raw, safeStorage.isEncryptionAvailable() ? (b) => safeStorage.decryptString(b) : null);
+  if (read?.kind === "ok") store = { ...defaults(), ...(read.json as Partial<StoreFile>) };
+  else {
     store = defaults();
+    if (read?.kind === "unreadable") storeBroken = read.why;
   }
   store.relayUrl = normalizeRelay(store.relayUrl) ?? PUBLIC_RELAY;
 }
 
+const brokenError = () => new Error(`Kiwi can't read its saved keys (${storeBroken}), so it saves nothing over them. Unlock your keychain, then quit and reopen Kiwi. The file is ${storePath()}.`);
+
+/** Write the store: encrypted when the system can, to a temporary file first, so a crash never leaves half of one. */
 function saveStore(): void {
+  if (storeBroken) throw brokenError();
   const json = JSON.stringify(store);
   const raw = safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(json) : Buffer.from(json, "utf8");
-  fs.mkdirSync(path.dirname(storePath()), { recursive: true });
-  fs.writeFileSync(storePath(), raw, { mode: 0o600 });
+  const file = storePath();
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  const tmp = `${file}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(tmp, raw, { mode: 0o600 });
+    fs.renameSync(tmp, file);
+  } catch (e) {
+    fs.rmSync(tmp, { force: true });
+    throw e;
+  }
+}
+
+/** Say once, at start, that the saved keys couldn't be read: the app runs, but saves nothing until a restart reads them. */
+function warnIfBroken(): void {
+  if (!storeBroken) return;
+  void dialog.showMessageBox({ type: "error", message: "Kiwi can't read its saved keys", detail: brokenError().message });
 }
 
 const snapshot = (): StoreSnapshot => ({ relayUrl: store.relayUrl, person: store.person, channels: store.channels, computers: store.computers, pending: store.pending });
 const broadcast = () => win?.webContents.send("kiwi:store", snapshot());
-const mutate = (fn: (s: StoreFile) => void) => (fn(store), saveStore(), broadcast());
+const mutate = (fn: (s: StoreFile) => void) => {
+  if (storeBroken) throw brokenError();
+  fn(store);
+  saveStore();
+  broadcast();
+};
 
 // ---------- renderer hosting ----------
 
@@ -488,6 +521,7 @@ else {
   protocol.registerSchemesAsPrivileged([{ scheme: APP_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
   void app.whenReady().then(async () => {
     loadStore();
+    warnIfBroken();
     serveWeb();
     wireIpc();
     createWindow();
