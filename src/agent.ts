@@ -257,7 +257,6 @@ export class AgentSession {
       let { since, messages, state } = yield* this.reach(status);
       const cache = yield* Cache;
       const cursor = yield* Cursor;
-      const budget = (yield* Keystore).budget;
       const seen = yield* cursor.seen(this.alias, this.me);
       const role = state.members.get(this.me)?.role;
       let lastQueryReply = 0;
@@ -342,12 +341,45 @@ export class AgentSession {
           case "Roster":
             this.postingChecked = false;
             return aside(Effect.andThen(this.members(true), this.chores()));
+          case "Request":
+            return opts.onNotice ? aside(this.notices(opts.onNotice)) : Effect.void;
           default:
             return Effect.void;
         }
       };
+      if (opts.onNotice) yield* aside(this.notices(opts.onNotice));
       yield* eachLive(this.ch.fx.live(since, { presence: true }), handle, status);
     }).pipe(Effect.scoped);
+  }
+
+  private ownerChannel() {
+    return Effect.gen({ self: this }, function* (this: AgentSession) {
+      if (this.identity.pk === this.cfg.ownerPk) return this.ch;
+      const name = this.cfg.owner;
+      if (!name) return null;
+      const keys = yield* Keystore;
+      if (!(yield* keys.identitiesIn(this.cfg.roomId)).includes(name)) return null;
+      const identity = yield* keys.identity(name, this.cfg.roomId);
+      return new Channel(this.cfg, this.cfg.relay, identity);
+    });
+  }
+
+  private notices<R>(notice: (text: string) => Effect.Effect<void, never, R>) {
+    return Effect.gen({ self: this }, function* (this: AgentSession) {
+      const owner = yield* this.ownerChannel();
+      if (!owner) return;
+      const budget = (yield* Keystore).budget;
+      for (const r of yield* owner.fx.requests({ budget })) {
+        if (r.check === "ready") {
+          yield* notice(
+            `join request: "${r.name}"${r.role ? ` (${r.role})` : ""} wants in, verification code ${r.code}. ` +
+              `Only your human may approve, in the Kiwi app, after checking the code matches.`,
+          );
+        } else if (r.check === "unchecked") {
+          yield* notice(`join request: "${r.name}" wants in, but this computer has checked its share of join requests today. ${TOO_MANY_REQUESTS}`);
+        }
+      }
+    });
   }
 
   /**
