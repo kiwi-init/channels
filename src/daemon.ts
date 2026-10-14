@@ -6,9 +6,6 @@
 //     changing it just works), plus `adopt` for the app handing the cert to its own computer;
 //   - one live relay stream per local agent seat, shared by every subscriber of that agent
 //     (`listen` on this socket); each subscriber still gets its deliveries from its own cursor.
-//     Messages only: the stream has no presence, roster, or Open. CLI `kiwi listen`, hooks, and
-//     MCP still use AgentSession.listen (`ch.fx.live`) so they keep those. listenDaemon is the
-//     socket subscriber; tests are the only caller today.
 //
 // The multiplex runs over client.ts's Promise API (history for catch-up, one stream() per seat),
 // not over an agent session: the relay authenticates one socket as one member key, and presence
@@ -22,9 +19,9 @@ import { join } from "node:path";
 import type { Socket } from "bun";
 // The channel stack (client.ts) loads lazily in seatFor, where the multiplex needs it: pairing,
 // hello/adopt and the socket itself never touch it, so `kiwi pair` works without it.
-import type { Channel } from "./client.ts";
-import type { Message } from "./protocol.ts";
-import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity } from "./config.ts";
+import type { Channel, PresenceFields } from "./client.ts";
+import { cleanActivity, type Message } from "./protocol.ts";
+import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity, saveAccess } from "./config.ts";
 import { withExchangeKey } from "./identity.ts";
 import { loadMachine, newMachine, saveMachine, type MachineFile } from "./machine.ts";
 import { MAILBOX_TTL_MS, MailboxError, askToPair, openMailbox, readPairAnswer, readPairCode } from "./mailbox.ts";
@@ -86,10 +83,15 @@ export function daemonSock(dir = home()): string {
 
 // ---------- the socket protocol ----------
 
-export type DaemonVerb = "hello" | "adopt" | "listen" | "listening" | "stop";
+export type DaemonVerb = "hello" | "adopt" | "listen" | "listening" | "presence" | "mark" | "stop";
+
+export const DAEMON_PROTOCOL = 2;
+
+export type DaemonEvent = "open" | "roster" | "info" | "request";
 
 export interface DaemonHello {
   version: string;
+  protocol: number;
   pid: number;
   machine: string | null;
   mxpk: string | null;
@@ -113,6 +115,15 @@ interface Seat {
   ctl: AbortController;
   subs: Set<Sub>;
   head: number;
+  fields: PresenceFields;
+  announce: (() => void) | null;
+  beacon: ReturnType<typeof setInterval> | null;
+  lastProbe: number;
+  mark: ((seq: number) => boolean) | null;
+  marked: number;
+  wantMark: number;
+  lastMarkAt: number;
+  markTimer: ReturnType<typeof setTimeout> | null;
 }
 
 interface Sub {
@@ -120,6 +131,11 @@ interface Sub {
   cursor: number;
   conn: ConnState;
   seat: Seat;
+}
+
+interface Waiting {
+  tell: (status: string) => void;
+  alive: () => boolean;
 }
 
 interface ConnState {
@@ -137,8 +153,12 @@ export interface Daemon {
   readonly stopped: Promise<void>;
 }
 
+export interface DaemonOptions {
+  beaconMs?: number;
+}
+
 /** Serve this home's daemon (used by `kiwi daemon`, and by tests in-process). Refuses when one already answers. */
-export async function startDaemon(dir = home()): Promise<Daemon> {
+export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promise<Daemon> {
   const sock = daemonSock(dir);
   if (await tryHello(sock)) throw new Error(`a daemon is already answering on ${sock}`);
   const existed = existsSync(dir);
@@ -186,6 +206,37 @@ export async function startDaemon(dir = home()): Promise<Daemon> {
     }
   };
 
+  const endSeat = (seat: Seat): void => {
+    seat.ctl.abort();
+    if (seat.beacon) clearInterval(seat.beacon);
+    if (seat.markTimer) clearTimeout(seat.markTimer);
+    seat.beacon = null;
+    seat.markTimer = null;
+    seat.announce = null;
+    seat.mark = null;
+  };
+
+  const tell = (seat: Seat, line: { event: DaemonEvent } | { status: string }): void => {
+    for (const sub of [...seat.subs]) sendLine(sub.conn, JSON.stringify({ id: sub.id, ...line }));
+  };
+
+  const flushMark = (seat: Seat): void => {
+    if (seat.markTimer || seat.wantMark <= seat.marked || !seat.mark) return;
+    const wait = seat.lastMarkAt + 1_000 - Date.now();
+    if (wait > 0) {
+      seat.markTimer = setTimeout(() => {
+        seat.markTimer = null;
+        flushMark(seat);
+      }, wait);
+      return;
+    }
+    const seq = seat.wantMark;
+    if (seat.mark(seq)) {
+      seat.marked = seq;
+      seat.lastMarkAt = Date.now();
+    }
+  };
+
   const killConn = (conn: ConnState): void => {
     if (conn.dead) return;
     conn.dead = true;
@@ -199,13 +250,14 @@ export async function startDaemon(dir = home()): Promise<Daemon> {
     // Nobody left on this seat: close its stream. A later subscriber reopens it fresh.
     if (sub.seat.subs.size === 0 && !stopped) {
       if (seats.get(sub.seat.key) === sub.seat) seats.delete(sub.seat.key);
-      sub.seat.ctl.abort();
+      endSeat(sub.seat);
     }
   };
 
   const seatEnded = (seat: Seat, err: unknown): void => {
     if (seats.get(seat.key) !== seat) return; // reaped when its last subscriber left
     seats.delete(seat.key);
+    endSeat(seat);
     if (err === null) return;
     for (const sub of [...seat.subs]) {
       sendLine(sub.conn, JSON.stringify({ id: sub.id, ok: false, error: `the channel stream ended: ${why(err)}` }));
@@ -213,7 +265,41 @@ export async function startDaemon(dir = home()): Promise<Daemon> {
     }
   };
 
-  const seatFor = async (alias: string, agent: string): Promise<Seat> => {
+  const beaconMs = opts.beaconMs ?? 60_000;
+
+  const firstHead = async (ch: Channel, waiting: Waiting): Promise<number> => {
+    const { ChannelGone, RelayError } = await import("./client.ts");
+    const answered = (err: unknown): boolean => err instanceof ChannelGone || (err instanceof RelayError && err.status < 500 && err.status !== 429);
+    const since = Date.now();
+    let told = false;
+    for (let backoff = 500; ; backoff = Math.min(backoff * 2, 30_000)) {
+      try {
+        const head = await ch.head();
+        if (told) waiting.tell(`reached the relay after ${Math.round((Date.now() - since) / 1000)}s`);
+        return head;
+      } catch (err) {
+        if (answered(err) || stopped || !waiting.alive()) throw new Error(why(err));
+        if (!told) {
+          told = true;
+          waiting.tell(`can't reach the relay (${why(err)}); still retrying`);
+        }
+        await Bun.sleep(backoff);
+      }
+    }
+  };
+
+  const opened = (seat: Seat, presence: (p: PresenceFields) => Promise<void>, mark: (seq: number) => boolean): void => {
+    seat.mark = mark;
+    seat.announce = () => void presence(seat.fields).catch(() => {});
+    seat.announce();
+    if (seat.beacon) clearInterval(seat.beacon);
+    seat.beacon = setInterval(() => seat.announce?.(), beaconMs);
+    seat.marked = 0;
+    flushMark(seat);
+    tell(seat, { event: "open" });
+  };
+
+  const seatFor = async (alias: string, agent: string, waiting: Waiting): Promise<Seat> => {
     const cfg = loadConfig();
     const c = cfg.channels[alias];
     if (!c) throw new Error(`unknown channel "${alias}" on this computer (see: kiwi channels)`);
@@ -226,17 +312,32 @@ export async function startDaemon(dir = home()): Promise<Daemon> {
     if (inflight) return inflight;
     const open = (async (): Promise<Seat> => {
       const { Channel } = await import("./client.ts");
-      const ch = new Channel(c, c.relay, id);
-      const head = await ch.head().catch((err: unknown) => {
-        throw new Error(why(err));
-      });
+      const ch = new Channel(c, c.relay, id, (a) => saveAccess(alias, a));
+      const head = await firstHead(ch, waiting);
       if (stopped) throw new Error("the daemon is stopping");
-      const seat: Seat = { key, alias, agent, ch, ctl: new AbortController(), subs: new Set(), head };
+      const seat: Seat = {
+        key,
+        alias,
+        agent,
+        ch,
+        ctl: new AbortController(),
+        subs: new Set(),
+        head,
+        fields: { client: "daemon" },
+        announce: null,
+        beacon: null,
+        lastProbe: 0,
+        mark: null,
+        marked: 0,
+        wantMark: 0,
+        lastMarkAt: 0,
+        markTimer: null,
+      };
       seats.set(key, seat);
       // stop() may have run between the check and the set: don't leave a stream behind it.
       if (stopped) {
         seats.delete(key);
-        seat.ctl.abort();
+        endSeat(seat);
         throw new Error("the daemon is stopping");
       }
       ch.stream(
@@ -248,7 +349,19 @@ export async function startDaemon(dir = home()): Promise<Daemon> {
             if (sendLine(sub.conn, JSON.stringify({ id: sub.id, message: m }))) sub.cursor = m.seq;
           }
         },
-        { signal: seat.ctl.signal },
+        {
+          signal: seat.ctl.signal,
+          onOpen: ({ presence, mark }) => opened(seat, presence, mark),
+          onPresence: (p) => {
+            if (!p.query || Date.now() - seat.lastProbe < 3_000) return;
+            seat.lastProbe = Date.now();
+            seat.announce?.();
+          },
+          onRoster: () => tell(seat, { event: "roster" }),
+          onInfo: () => tell(seat, { event: "info" }),
+          onRequest: () => tell(seat, { event: "request" }),
+          onStatus: (s) => tell(seat, { status: s }),
+        },
       ).then(
         () => seatEnded(seat, null),
         (err: unknown) => seatEnded(seat, seat.ctl.signal.aborted ? null : err),
@@ -269,11 +382,11 @@ export async function startDaemon(dir = home()): Promise<Daemon> {
     if (typeof cursor !== "number" || !Number.isInteger(cursor) || cursor < 0) throw new Error("listen needs a cursor: the last sequence number this subscriber saw (0 for everything)");
     // The seat's stream is already running before the catch-up below, so the two overlap and
     // never gap; the cursor dedupes the overlap.
-    const seat = await seatFor(channel, as);
+    const seat = await seatFor(channel, as, { tell: (s) => sendLine(conn, JSON.stringify({ id, status: s })), alive: () => !conn.dead });
     const reapEmpty = (): void => {
       if (seat.subs.size !== 0) return;
       if (seats.get(seat.key) === seat) seats.delete(seat.key);
-      seat.ctl.abort();
+      endSeat(seat);
     };
     if (conn.dead || stopped) {
       reapEmpty();
@@ -302,6 +415,13 @@ export async function startDaemon(dir = home()): Promise<Daemon> {
     }
   };
 
+  const seatNamed = (params: Record<string, unknown>): Seat => {
+    const { channel, as } = params;
+    const seat = [...seats.values()].find((s) => s.alias === channel && s.agent === as);
+    if (!seat) throw new Error(`nobody listens as "${String(as)}" in "${String(channel)}" through this daemon`);
+    return seat;
+  };
+
   const onRequest = async (conn: ConnState, raw: string): Promise<void> => {
     let req: { id?: unknown; verb?: unknown } & Record<string, unknown>;
     try {
@@ -323,6 +443,7 @@ export async function startDaemon(dir = home()): Promise<Daemon> {
               id,
               ok: true,
               version: VERSION,
+              protocol: DAEMON_PROTOCOL,
               pid: process.pid,
               machine: m?.identity.pk ?? null,
               mxpk: m?.identity.xpk ?? null,
@@ -352,6 +473,25 @@ export async function startDaemon(dir = home()): Promise<Daemon> {
         case "listen":
           await onListen(conn, id, params);
           break;
+        case "presence": {
+          const seat = seatNamed(params);
+          const { client, role, activity } = params;
+          if (typeof client !== "string" || !client) throw new Error('presence needs {"channel", "as", "client"}');
+          const act = cleanActivity(activity);
+          seat.fields = { client, ...(typeof role === "string" && role ? { role } : {}), ...(act ? { activity: act } : {}) };
+          seat.announce?.();
+          sendLine(conn, JSON.stringify({ id, ok: true }));
+          break;
+        }
+        case "mark": {
+          const seat = seatNamed(params);
+          const { seq } = params;
+          if (typeof seq !== "number" || !Number.isInteger(seq) || seq < 0) throw new Error('mark needs {"channel", "as", "seq"}');
+          if (seq > seat.wantMark) seat.wantMark = seq;
+          flushMark(seat);
+          sendLine(conn, JSON.stringify({ id, ok: true }));
+          break;
+        }
         case "listening":
           sendLine(
             conn,
@@ -368,7 +508,7 @@ export async function startDaemon(dir = home()): Promise<Daemon> {
           setTimeout(() => void stop(), 50);
           break;
         default:
-          throw new Error(`unknown verb "${verb}" (hello, adopt, listen, listening, stop)`);
+          throw new Error(`unknown verb "${verb}" (hello, adopt, listen, listening, presence, mark, stop)`);
       }
     } catch (err) {
       sendLine(conn, JSON.stringify({ id, ok: false, error: err instanceof Error ? err.message : String(err) }));
@@ -420,7 +560,7 @@ export async function startDaemon(dir = home()): Promise<Daemon> {
       }
       killConn(conn);
     }
-    for (const seat of seats.values()) seat.ctl.abort();
+    for (const seat of seats.values()) endSeat(seat);
     seats.clear();
     try {
       server.stop();
@@ -449,12 +589,18 @@ interface DaemonConn {
     params: Record<string, unknown>,
     onMessage: (m: Message) => void,
     onError: (err: Error) => void,
+    side?: SideLines,
   ): Promise<Extract<Reply, { ok: true }>>;
   closed(): boolean;
   close(): void;
 }
 
-interface Pending {
+interface SideLines {
+  onEvent?: (e: DaemonEvent) => void;
+  onStatus?: (s: string) => void;
+}
+
+interface Pending extends SideLines {
   resolve: (r: Reply) => void;
   reject: (e: Error) => void;
   onMessage?: (m: Message) => void;
@@ -493,6 +639,14 @@ async function openConn(sock: string, timeoutMs = 15_000): Promise<DaemonConn> {
           // A listen reply's later lines: deliveries, then at most one error.
           if ("message" in msg && msg.message) {
             p.onMessage?.(msg.message as Message);
+            continue;
+          }
+          if (typeof msg.event === "string") {
+            if (isDaemonEvent(msg.event)) p.onEvent?.(msg.event);
+            continue;
+          }
+          if (typeof msg.status === "string") {
+            p.onStatus?.(msg.status);
             continue;
           }
           if (p.onMessage) {
@@ -540,6 +694,8 @@ async function openConn(sock: string, timeoutMs = 15_000): Promise<DaemonConn> {
       },
       onMessage: entry.onMessage,
       onError: entry.onError,
+      onEvent: entry.onEvent,
+      onStatus: entry.onStatus,
     });
     try {
       socket.write(JSON.stringify({ id, ...body }) + "\n");
@@ -563,9 +719,9 @@ async function openConn(sock: string, timeoutMs = 15_000): Promise<DaemonConn> {
       new Promise<Extract<Reply, { ok: true }>>((resolve, reject) => {
         send({ verb, ...params }, { resolve: resolve as (r: Reply) => void, reject });
       }),
-    subscribe: (params, onMessage, onError) =>
+    subscribe: (params, onMessage, onError, side = {}) =>
       new Promise<Extract<Reply, { ok: true }>>((resolve, reject) => {
-        send({ verb: "listen", ...params }, { resolve: resolve as (r: Reply) => void, reject, onMessage, onError });
+        send({ verb: "listen", ...params }, { resolve: resolve as (r: Reply) => void, reject, onMessage, onError, ...side });
       }),
   };
 }
@@ -578,6 +734,7 @@ async function tryHello(sock: string): Promise<DaemonHello | null> {
       const r = await c.call("hello");
       return {
         version: String(r.version),
+        protocol: typeof r.protocol === "number" ? r.protocol : 1,
         pid: Number(r.pid),
         machine: typeof r.machine === "string" ? r.machine : null,
         mxpk: typeof r.mxpk === "string" ? r.mxpk : null,
@@ -599,14 +756,15 @@ async function tryHello(sock: string): Promise<DaemonHello | null> {
  * daemon is spawned (tests); unset, it re-runs this very program as `kiwi daemon`. */
 export async function ensureDaemon(dir = home(), argv?: string[]): Promise<DaemonHello> {
   const sock = daemonSock(dir);
+  const current = (h: DaemonHello | null): h is DaemonHello => !!h && h.version === VERSION && h.protocol >= DAEMON_PROTOCOL;
   const live = await tryHello(sock);
-  if (live && live.version === VERSION) return live;
+  if (current(live)) return live;
   if (live) await stopDaemon(sock);
   spawnDaemon(dir, argv);
   const until = Date.now() + 15_000;
   for (;;) {
     const hello = await tryHello(sock);
-    if (hello && hello.version === VERSION) return hello;
+    if (current(hello)) return hello;
     if (Date.now() > until) throw new Error(`kiwi daemon didn't answer on ${sock}`);
     await Bun.sleep(100);
   }
@@ -675,12 +833,17 @@ export async function stopDaemon(sock = daemonSock()): Promise<void> {
   }
 }
 
+const DAEMON_EVENTS: readonly DaemonEvent[] = ["open", "roster", "info", "request"];
+const isDaemonEvent = (e: string): e is DaemonEvent => (DAEMON_EVENTS as readonly string[]).includes(e);
+
 export interface DaemonSubscription {
   readonly head: number;
   readonly channel: string;
   readonly agent: string;
   [Symbol.asyncIterator](): AsyncIterator<Message>;
   close(): void;
+  presence(fields: PresenceFields): Promise<void>;
+  mark(seq: number): Promise<void>;
 }
 
 /**
@@ -693,7 +856,7 @@ export async function listenDaemon(
   channel: string,
   agent: string,
   cursor: number,
-  opts: { sock?: string; signal?: AbortSignal; noSpawn?: boolean } = {},
+  opts: { sock?: string; signal?: AbortSignal; noSpawn?: boolean } & SideLines = {},
 ): Promise<DaemonSubscription> {
   const sock = opts.sock ?? daemonSock();
   if (!opts.noSpawn) await ensureDaemon(home());
@@ -715,13 +878,18 @@ export async function listenDaemon(
   opts.signal?.addEventListener("abort", onAbort, { once: true });
   let head = cursor;
   try {
-    const r = await c.subscribe({ channel, as: agent, cursor }, (m) => {
-      queue.push(m);
-      stir();
-    }, (err) => {
-      failed = err;
-      stir();
-    });
+    const r = await c.subscribe(
+      { channel, as: agent, cursor },
+      (m) => {
+        queue.push(m);
+        stir();
+      },
+      (err) => {
+        failed = err;
+        stir();
+      },
+      { onEvent: opts.onEvent, onStatus: opts.onStatus },
+    );
     if (typeof r.head === "number") head = r.head;
   } catch (err) {
     opts.signal?.removeEventListener("abort", onAbort);
@@ -739,6 +907,8 @@ export async function listenDaemon(
     channel,
     agent,
     close,
+    presence: async (fields) => void (await c.call("presence", { channel, as: agent, ...fields })),
+    mark: async (seq) => void (await c.call("mark", { channel, as: agent, seq })),
     [Symbol.asyncIterator]() {
       return {
         next: async (): Promise<IteratorResult<Message>> => {
