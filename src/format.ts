@@ -373,12 +373,12 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
   const asks = state.openAsks.filter((a) => a.from !== me && (!a.to || a.to.includes(me)));
   if (asks.length) {
     out.push("", `waiting on you (${asks.length}) — answer with: kiwi reply <#> "…"`);
-    for (const a of asks) out.push(`  #${a.seq} ${a.from}${a.kind === "blocking" ? " [blocking]" : ""}: ${oneLine(a.body)}`);
+    for (const a of asks) out.push(`  #${a.seq} ${a.from}${a.kind === "blocking" ? " [blocking]" : ""}: ${inlineText(a.body, 140)}`);
   }
   const mine = state.openAsks.filter((a) => a.from === me);
   if (mine.length) {
     out.push("", `your unanswered questions (${mine.length}):`);
-    for (const a of mine) out.push(`  #${a.seq} → ${a.to?.join(",") ?? "all"}: ${oneLine(a.body)}`);
+    for (const a of mine) out.push(`  #${a.seq} → ${a.to?.join(",") ?? "all"}: ${inlineText(a.body, 140)}`);
   }
 
   const tasks = [...state.tasks.values()];
@@ -460,17 +460,12 @@ export function formatShown(m: Message, messages: Message[], state: ChannelState
   if (savedImages.length) out.push(`  images saved: ${savedImages.join(", ")}`);
   for (const r of m.re ?? []) {
     const parent = messages.find((x) => x.seq === r);
-    if (parent && !ignored(state.trust.get(parent.seq))) out.push(`answers #${parent.seq} ${who(parent.from, state)}: ${oneLine(parent.kind === "event" ? describeEvent(parent, state) : parent.body)}`);
+    if (parent && !ignored(state.trust.get(parent.seq))) out.push(`answers #${parent.seq} ${who(parent.from, state)}: ${inlineText(parent.kind === "event" ? describeEvent(parent, state) : parent.body, 140)}`);
   }
   const replies = messages.filter((x) => x.re?.includes(m.seq) && !ignored(state.trust.get(x.seq)));
   if (replies.length) {
     out.push(`replies (${replies.length}):`);
-    for (const x of replies) out.push(`  #${x.seq} ${who(x.from, state)}: ${oneLine(x.body)}`);
+    for (const x of replies) out.push(`  #${x.seq} ${who(x.from, state)}: ${inlineText(x.body, 140)}`);
   }
   return out.join("\n");
-}
-
-function oneLine(s: string, max = 140): string {
-  const flat = s.replace(/\s+/g, " ").trim();
-  return flat.length > max ? flat.slice(0, max - 1) + "…" : flat;
 }

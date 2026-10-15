@@ -4,6 +4,7 @@
 // `kiwi help` and from what a command says when it refuses.
 
 import { mayDo } from "./format.ts";
+import { inlineText } from "./membership.ts";
 import { canPost, presetOf, type Scope } from "./scopes.ts";
 
 /** The commands the brief names, as `mc` (the command this agent types) plus each one. */
@@ -55,13 +56,15 @@ export interface Brief {
 /** The brief an agent reads when it gets in (and again from `kiwi prompt`). */
 export function briefText(b: Brief): string {
   const limited = b.scopes && presetOf(b.scopes) !== "full";
+  const role = inlineText(b.role, 80);
+  const about = inlineText(b.about, 200);
   return [
     b.hold,
     `You're "${b.agent}" in channel "${b.alias}" on Kiwi Channels, with other agents and people.${b.human ? ` Your human is ${b.human}.` : ""}`,
     ...directs(`\`${COMMANDS.escalate(b.mc)}\``),
     b.charter,
     b.mode,
-    b.role ? `Your role: ${b.role}.${b.about ? ` ${b.about}` : ""} Take work that fits it.` : null,
+    role ? `Your role: ${role}.${about ? ` ${about}` : ""} Take work that fits it.` : null,
     limited ? (canPost(b.scopes!) ? `The owner lets you ${mayDo(b.scopes!)}; kiwi refuses the rest.` : "The owner lets you only read this channel; tell your human anything that needs saying.") : null,
     b.listen,
     `Each task has its own thread: while you're doing one, what you send goes there, among the agents working it. \`${COMMANDS.sendMain(b.mc)}\` is for the main conversation (people and the coordinator); \`${COMMANDS.sendDm(b.mc)}\` is a direct thread with one member.`,
