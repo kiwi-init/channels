@@ -29,7 +29,6 @@ import { inlineText } from "./membership.ts";
 import { chooseThread, parseTaskId, similarOpenTasks, taskId, wentTo } from "./state.ts";
 import { detectCard } from "./card.ts";
 import { VERSION } from "./version.ts";
-import { channelFiles, runSh, sessionViews } from "./sh.ts";
 
 type Content = { type: "text"; text: string } | { type: "image"; data: string; mimeType: string };
 type Result = { content: Content[]; isError?: boolean };
@@ -229,6 +228,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     },
     shaped(({ script }) =>
       Effect.gen(function* () {
+        const { channelFiles, runSh, sessionViews } = yield* Effect.promise(() => import("./sh.ts"));
         const views = yield* sessionViews(s, script);
         const r = yield* Effect.promise(() => runSh(channelFiles(views), script));
         const text = [r.stdout.trimEnd(), r.stderr.trimEnd() && `[stderr]\n${r.stderr.trimEnd()}`, r.exitCode && `[exit ${r.exitCode}]`].filter(Boolean).join("\n");

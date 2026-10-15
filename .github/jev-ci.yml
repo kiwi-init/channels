@@ -46,7 +46,7 @@ jobs:
 
   core-test:
     name: core / test
-    inputs: ["src/**", "test/**", "web/src/**", "web/public/**", "desktop/src/move.ts", "desktop/src/daemon-client.ts", "desktop/src/guard.ts", "desktop/src/bridge.ts"]
+    inputs: ["src/**", "test/**", "web/src/**", "web/public/**", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "desktop/src/move.ts", "desktop/src/daemon-client.ts", "desktop/src/guard.ts", "desktop/src/bridge.ts"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "web/bun.lock", "scripts/ci-tests.ts"]
     description: >-
       Runs the fast unit tests with bun test: every test/*.test.ts except the slow agent-flow
@@ -152,12 +152,18 @@ jobs:
 
   cli-build:
     name: cli / build
-    inputs: ["src/**"]
+    inputs: ["src/**", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/smoke-cli.ts", "test/owner.ts", "test/owner-cli.ts", "test/check.ts"]
     always: ["package.json", "bun.lock"]
     description: >-
       Compiles the kiwi CLI (src/cli/main.ts and everything it imports) into one Linux binary
-      with bun build --compile, then runs `kiwi --version`. Fails if a module can't be resolved
-      or bundled, or the binary crashes on start. Tests and the dashboard aren't part of it.
+      with scripts/build-cli.ts (minified, split into lazily loaded chunks, and with every
+      just-bash command kiwi sh doesn't allow left out), then runs `kiwi --version`, then checks
+      the minified JS: it fails over its byte budget (BUDGET_BYTES in scripts/build-cli.ts) or if
+      QuickJS (run), sql.js, turndown or domino got back in. Then scripts/smoke-cli.ts drives the
+      binary against a local relay: it joins a channel, runs every allowed kiwi sh command and
+      compares the output with the source CLI's, calls the MCP sh tool, and runs kiwi doctor.
+      Fails if a module or chunk can't be resolved, bundled or loaded, if the binary crashes, or
+      if any of those answers differ.
 
   relay-worker:
     name: relay / worker

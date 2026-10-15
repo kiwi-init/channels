@@ -33,7 +33,6 @@ import { fingerprint } from "../identity.ts";
 import { CHAT_KINDS, COLORS, ignored, isColor, type Kind, type Message, type TaskState } from "../protocol.ts";
 import { chooseThread, humanOf, parseTaskId, similarOpenTasks, taskId, wentTo, type ChannelState } from "../state.ts";
 import { VERSION } from "../version.ts";
-import { channelFiles, runSh, sessionViews } from "../sh.ts";
 import { computerClaimFor } from "../machine.ts";
 import { briefText } from "../brief.ts";
 import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor, EXTRA_HARNESSES, extraInstalled, hooksInstalled, hooksStatus, howMessagesReachYou, installDetected, installExtra, installHooks, mcFor, runHook, uninstallDetected, uninstallExtra, uninstallHooks, type ExtraHarness } from "../hooks.ts";
@@ -909,6 +908,7 @@ const commands: Record<string, Command> = {
     Effect.gen(function* () {
       const s = yield* session();
       const script = (yield* text(1)) || (yield* die("usage: kiwi sh 'SCRIPT' (start with: kiwi sh 'cat README')"));
+      const { channelFiles, runSh, sessionViews } = yield* Effect.promise(() => import("../sh.ts"));
       const views = yield* sessionViews(s, script);
       const r = yield* Effect.promise(() => runSh(channelFiles(views), script));
       process.stdout.write(r.stdout);
