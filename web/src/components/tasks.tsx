@@ -23,7 +23,21 @@ export function StateMark({ state }: { state: TaskState }) {
   )
 }
 
-function TaskRow({ task, state, now, nameOf, unread, onOpen }: { task: Task; state: ChannelState; now: number; nameOf: (n: string) => string; unread?: { n: number; forMe: boolean }; onOpen: () => void }) {
+function TaskRow({
+  task,
+  state,
+  now,
+  nameOf,
+  unread,
+  onOpen,
+}: {
+  task: Task
+  state: ChannelState
+  now: number
+  nameOf: (n: string) => string
+  unread?: { n: number; forMe: boolean }
+  onOpen: () => void
+}) {
   return (
     <button type="button" onClick={onOpen} className="group flex w-full items-center gap-3 pl-4 text-left transition-colors hover:bg-wash">
       <StateMark state={task.state} />
@@ -141,7 +155,19 @@ const GROUPS: [TaskState, string][] = [
 ]
 
 /** Every task by state, with room for whole titles: the Tasks panel's list, and the one list of tasks. */
-export function Tasks({ state, now, nameOf, unreadIn, onOpen }: { state: ChannelState; now: number; nameOf: (n: string) => string; unreadIn?: (id: number) => { n: number; forMe: boolean }; onOpen: (id: number) => void }) {
+export function Tasks({
+  state,
+  now,
+  nameOf,
+  unreadIn,
+  onOpen,
+}: {
+  state: ChannelState
+  now: number
+  nameOf: (n: string) => string
+  unreadIn?: (id: number) => { n: number; forMe: boolean }
+  onOpen: (id: number) => void
+}) {
   const [showDone, setShowDone] = useState(false)
   const [query, setQuery] = useState("")
   const q = query.trim().toLowerCase()

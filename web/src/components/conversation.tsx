@@ -136,10 +136,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   // Needs you: escalations to this person nobody answered, and work waiting on their review.
   const escalations = useMemo(() => openAsks.filter((m) => m.esc && m.from !== me && m.to?.includes(me)), [openAsks, me])
   const reviews = useMemo(
-    () =>
-      iAmPerson
-        ? [...state.tasks.values()].filter((t) => t.state === "review" && !!t.review && (t.review === me || (t.review === "*" && t.owner !== me && !t.workedBy.includes(me))))
-        : [],
+    () => (iAmPerson ? [...state.tasks.values()].filter((t) => t.state === "review" && !!t.review && (t.review === me || (t.review === "*" && t.owner !== me && !t.workedBy.includes(me)))) : []),
     [state.tasks, me, iAmPerson]
   )
   // Nobody to talk to yet: the conversation opens on how to add an agent.
@@ -290,10 +287,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   // The open task's conversation, in the panel: everything said there in order, replies too, as a thread reads.
   // Not the event that made it: its details at the top say that.
   const inTask = useMemo(
-    () =>
-      taskKey === null
-        ? []
-        : messages.filter((m) => m.seq !== shownTask && placeKey(placeOf.get(m.seq) ?? MAIN) === taskKey && (revealed || !ignored(state.trust.get(m.seq)))),
+    () => (taskKey === null ? [] : messages.filter((m) => m.seq !== shownTask && placeKey(placeOf.get(m.seq) ?? MAIN) === taskKey && (revealed || !ignored(state.trust.get(m.seq))))),
     [messages, placeOf, taskKey, shownTask, state.trust, revealed]
   )
 
@@ -482,7 +476,12 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       const first = !prev || prev.from !== m.from || m.ts - prev.ts > RUN_GAP
       const last = !next || next.from !== m.from || next.ts - m.ts > RUN_GAP
       threadRows.push(bubble(m, first, last, prev, "t"))
-      if (i === 0 && replies.length) threadRows.push(<div key="split" className="my-3 text-center text-stamp text-ink-3">{replies.length === 1 ? "1 reply" : `${replies.length} replies`}</div>)
+      if (i === 0 && replies.length)
+        threadRows.push(
+          <div key="split" className="my-3 text-center text-stamp text-ink-3">
+            {replies.length === 1 ? "1 reply" : `${replies.length} replies`}
+          </div>
+        )
     })
   }
   // The open task's conversation, under its details the way replies sit under a thread's first message.
@@ -504,7 +503,17 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   for (const m of messages) if (m.kind !== "event") lastAt.set(m.from, m.ts)
   const agentsNow: AgentNow[] = active
     .filter((m) => isAgent(m))
-    .map((m) => ({ name: m.name, label: memberName(m), color: colorOf(state, m.name), online: online.has(m.name), coordinator: m.name === state.coordinator, model: online.get(m.name)?.activity?.model ?? m.card?.model, activity: online.get(m.name)?.activity, load: memberLoad(state, m.name, now), lastAt: lastAt.get(m.name) }))
+    .map((m) => ({
+      name: m.name,
+      label: memberName(m),
+      color: colorOf(state, m.name),
+      online: online.has(m.name),
+      coordinator: m.name === state.coordinator,
+      model: online.get(m.name)?.activity?.model ?? m.card?.model,
+      activity: online.get(m.name)?.activity,
+      load: memberLoad(state, m.name, now),
+      lastAt: lastAt.get(m.name),
+    }))
   const needsMe = escalations.length + reviews.length + (isOwner ? requests.length : 0)
   // The header's capsule is the channel's, wherever you are in it, so this line is the channel's too.
   const headline =
@@ -704,8 +713,12 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                   reviews={reviews}
                   nameOf={nameOf}
                   onReply={async (m, text) => void (await send(text, { to: [m.from], re: [m.seq], kind: "msg" }))}
-                  onApproveTask={async (t: Task) => void (await send(`${taskId(t.id)} done`, { kind: "event", ev: { op: "task.update", task: t.id, state: "done", note: "approved" }, ...(t.owner ? { to: [t.owner] } : {}) }))}
-                  onSendBack={async (t: Task, why: string) => void (await send(`${taskId(t.id)} doing`, { kind: "event", ev: { op: "task.update", task: t.id, state: "doing", note: why }, ...(t.owner ? { to: [t.owner] } : {}) }))}
+                  onApproveTask={async (t: Task) =>
+                    void (await send(`${taskId(t.id)} done`, { kind: "event", ev: { op: "task.update", task: t.id, state: "done", note: "approved" }, ...(t.owner ? { to: [t.owner] } : {}) }))
+                  }
+                  onSendBack={async (t: Task, why: string) =>
+                    void (await send(`${taskId(t.id)} doing`, { kind: "event", ev: { op: "task.update", task: t.id, state: "doing", note: why }, ...(t.owner ? { to: [t.owner] } : {}) }))
+                  }
                   onOpenTask={openTask}
                   onJump={jump}
                 />
@@ -826,8 +839,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                 </>
               ) : (
                 <>
-                  <span className="tabular-nums">{taskId(shownTask)}</span>{" "}
-                  <span className="font-normal text-ink-3">{saidInTask === 1 ? "1 message" : `${saidInTask} messages`}</span>
+                  <span className="tabular-nums">{taskId(shownTask)}</span> <span className="font-normal text-ink-3">{saidInTask === 1 ? "1 message" : `${saidInTask} messages`}</span>
                 </>
               )
             }

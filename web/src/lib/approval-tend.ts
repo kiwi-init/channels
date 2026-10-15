@@ -9,13 +9,7 @@ export interface TendApi {
  * Approve own computers' agents, then announce whoever is still waiting — including
  * own-computer requests auto-approve did not let in (it threw, or returned none).
  */
-export async function tendOwned(
-  person: string,
-  title: string,
-  api: TendApi,
-  ping: (title: string, body: string) => void,
-  told: Set<string>,
-): Promise<void> {
+export async function tendOwned(person: string, title: string, api: TendApi, ping: (title: string, body: string) => void, told: Set<string>): Promise<void> {
   let letIn: readonly { name: string }[] = []
   try {
     letIn = await api.autoApprove(person)

@@ -39,8 +39,7 @@ export function doingNow(a: AgentNow): { text: string; busy: boolean } | null {
   return null
 }
 
-const face = (a: AgentNow, size: number) =>
-  a.coordinator ? <CoordinatorAvatar size={size} /> : <Monogram name={a.label} agent color={a.color} size={size} online={size > 20 && a.online} />
+const face = (a: AgentNow, size: number) => (a.coordinator ? <CoordinatorAvatar size={size} /> : <Monogram name={a.label} agent color={a.color} size={size} online={size > 20 && a.online} />)
 
 export function AgentStrip({ agents, now, onOpenTask }: { agents: AgentNow[]; now: number; onOpenTask: (id: number) => void }) {
   const [open, setOpen] = useState(false)
@@ -103,7 +102,12 @@ export function AgentStrip({ agents, now, onOpenTask }: { agents: AgentNow[]; no
           </ul>
         </div>
       </div>
-      <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="flex h-9 w-full items-center gap-2.5 px-3.5 text-left text-meta text-ink-2 transition-colors hover:text-ink">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-9 w-full items-center gap-2.5 px-3.5 text-left text-meta text-ink-2 transition-colors hover:text-ink"
+      >
         <span aria-hidden className="flex shrink-0 -space-x-1.5 [&>*]:rounded-full [&>*]:shadow-[0_0_0_2px_var(--canvas)]">
           {ordered.slice(0, 4).map((a) => (
             <span key={a.name} className="flex">

@@ -79,7 +79,21 @@ export function EventRow({ m, state, now, onOpenTask, anchor = "m", more }: { m:
 }
 
 /** A same-day run of events: three or more read as the latest, with the rest a click away. */
-export function EventGroup({ messages, state, now, onOpenTask, highlight, anchor }: { messages: Message[]; state: ChannelState; now: number; onOpenTask?: (id: number) => void; highlight: number | null; anchor?: string }) {
+export function EventGroup({
+  messages,
+  state,
+  now,
+  onOpenTask,
+  highlight,
+  anchor,
+}: {
+  messages: Message[]
+  state: ChannelState
+  now: number
+  onOpenTask?: (id: number) => void
+  highlight: number | null
+  anchor?: string
+}) {
   const [open, setOpen] = useState(false)
   const row = (m: Message, more?: ReactNode) => <EventRow key={m.seq} m={m} state={state} now={now} onOpenTask={onOpenTask} anchor={anchor} more={more} />
   if (messages.length < 3) return <div className="my-1">{messages.map((m) => row(m))}</div>
@@ -185,7 +199,31 @@ export interface ThreadSummary {
  * tail, pointing at its sender. An escalation is a plain bubble with an amber "Decision for you"
  * over it; a forged one (shown only when the owner asks) is struck through.
  */
-export const Bubble = memo(function Bubble({ m, me, author, trust, online, first, last, fresh, group, adjacentReply, highlighted, quoted, nameOf, onReply, onJump, thread, onOpenThread, anchor = "m", color, direct, face, receipt, reactions }: BubbleProps) {
+export const Bubble = memo(function Bubble({
+  m,
+  me,
+  author,
+  trust,
+  online,
+  first,
+  last,
+  fresh,
+  group,
+  adjacentReply,
+  highlighted,
+  quoted,
+  nameOf,
+  onReply,
+  onJump,
+  thread,
+  onOpenThread,
+  anchor = "m",
+  color,
+  direct,
+  face,
+  receipt,
+  reactions,
+}: BubbleProps) {
   const forged = ignored(trust)
   const mine = m.from === me
   const repliedTo = new Set((m.re ?? []).map((seq) => quoted(seq)?.from).filter((f): f is string => !!f))
@@ -205,7 +243,7 @@ export const Bubble = memo(function Bubble({ m, me, author, trust, online, first
       <div className={cx("relative flex items-end gap-2", mine ? "justify-end pl-10 md:pl-16" : "pr-10 md:pr-16")}>
         {!mine && <div className="w-7 shrink-0 self-end">{last && (face ?? <Monogram name={who} agent={isAgent(author)} online={online} color={color} size={28} />)}</div>}
 
-        <div className={cx("flex min-w-0 max-w-[min(80%,600px)] flex-col", mine ? "items-end" : "items-start")}>
+        <div className={cx("flex max-w-[min(80%,600px)] min-w-0 flex-col", mine ? "items-end" : "items-start")}>
           {first && (!mine || said) && (
             <p className={cx("mb-1 flex max-w-full items-center gap-1.5 px-3 text-stamp text-ink-3", mine && "justify-end")}>
               {!mine && group && (
@@ -223,7 +261,12 @@ export const Bubble = memo(function Bubble({ m, me, author, trust, online, first
           )}
 
           {quotes.map(({ seq, q }) => (
-            <button key={seq} type="button" onClick={() => onJump(seq)} className={cx("mb-0.5 flex max-w-full items-center gap-1 px-3 text-left text-stamp text-ink-3 transition-colors hover:text-ink-2", mine && "self-end")}>
+            <button
+              key={seq}
+              type="button"
+              onClick={() => onJump(seq)}
+              className={cx("mb-0.5 flex max-w-full items-center gap-1 px-3 text-left text-stamp text-ink-3 transition-colors hover:text-ink-2", mine && "self-end")}
+            >
               <Icon icon={ArrowTurnBackwardIcon} size={12} className="shrink-0" />
               <span className="truncate">
                 <span className="font-medium text-ink-2">{q ? nameOf(q.from) : "Earlier message"}</span> {q ? excerpt(q.body, 80) : ""}
@@ -235,9 +278,9 @@ export const Bubble = memo(function Bubble({ m, me, author, trust, online, first
             <div
               className={cx(
                 // Code keeps its lines: it scrolls inside the bubble rather than wrapping mid-word like prose.
-                "bubble-text relative isolate max-w-full min-w-0 rounded-bubble px-3.5 py-[7px] text-body [&_pre]:max-w-full [&_pre]:whitespace-pre [&_pre]:[overflow-wrap:normal]",
+                "bubble-text relative isolate max-w-full min-w-0 rounded-bubble px-3.5 py-[7px] text-body [&_pre]:max-w-full [&_pre]:[overflow-wrap:normal] [&_pre]:whitespace-pre",
                 mine
-                  ? "bg-bubble-me text-bubble-me-ink [&_a]:text-bubble-me-ink [&_a]:decoration-white/50 [&_code]:bg-white/18 [&_pre]:border-white/15 [&_pre]:bg-black/15 [&_pre]:text-white [&_li]:marker:text-white/70"
+                  ? "bg-bubble-me text-bubble-me-ink [&_a]:text-bubble-me-ink [&_a]:decoration-white/50 [&_code]:bg-white/18 [&_li]:marker:text-white/70 [&_pre]:border-white/15 [&_pre]:bg-black/15 [&_pre]:text-white"
                   : "bg-bubble-them text-bubble-them-ink",
                 forged && "line-through opacity-60",
                 highlighted && "animate-flash outline-2 outline-offset-2 outline-[var(--ring)]"
@@ -265,7 +308,13 @@ export const Bubble = memo(function Bubble({ m, me, author, trust, online, first
         {/* Reply and copy, beside the bubble on hover: on its inner side, so they never cover anything. */}
         <div className={cx("absolute bottom-0 hidden items-center gap-0.5 group-focus-within/b:flex group-hover/b:flex", mine ? "left-0" : "right-0")}>
           {onReply && (
-            <button type="button" aria-label="Reply" title="Reply" onClick={() => onReply(m)} className="flex size-7 items-center justify-center rounded-full text-ink-3 transition-colors hover:bg-wash-2 hover:text-ink">
+            <button
+              type="button"
+              aria-label="Reply"
+              title="Reply"
+              onClick={() => onReply(m)}
+              className="flex size-7 items-center justify-center rounded-full text-ink-3 transition-colors hover:bg-wash-2 hover:text-ink"
+            >
               <Icon icon={ArrowTurnBackwardIcon} size={15} />
             </button>
           )}

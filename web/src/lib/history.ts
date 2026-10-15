@@ -135,13 +135,7 @@ export async function rememberMessage(roomId: string, memberPk: string, epoch: n
  * Messages to paint, and the exclusive seq to stream from. An unusable cache
  * is deleted here, so the next save starts clean.
  */
-export async function readCached(
-  roomId: string,
-  memberPk: string,
-  keys: Record<string, string>,
-  head: number,
-  limit: number,
-): Promise<{ messages: Message[]; since: number }> {
+export async function readCached(roomId: string, memberPk: string, keys: Record<string, string>, head: number, limit: number): Promise<{ messages: Message[]; since: number }> {
   const stored = await db().rows(roomId, memberPk)
   const opened: Message[] = []
   for (const row of stored) {
@@ -151,7 +145,7 @@ export async function readCached(
   const plan = planReload(
     opened.map((m) => m.seq),
     head,
-    limit,
+    limit
   )
   if (!plan.keep.length) {
     if (stored.length) await db().drop(roomId, memberPk)

@@ -328,7 +328,6 @@ html.reduce-motion ::after {
   transition-duration: 0.01ms !important;
 }
 
-
 /* Liquid glass, for what floats: the header's controls, the place pills, the composer. In the
    components layer, so a utility (a state's colour, a focus ring) still wins over it. */
 @layer components {

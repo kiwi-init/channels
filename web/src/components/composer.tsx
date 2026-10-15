@@ -216,7 +216,12 @@ export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, 
           <span className="min-w-0 truncate">
             Replying to <span className="font-medium text-ink">{nameOf(replyTo.from)}</span> <span className="text-ink-3">{excerpt(replyTo.body, 80)}</span>
           </span>
-          <button type="button" aria-label="Cancel reply" onClick={onClearReply} className="ml-auto flex size-6 shrink-0 items-center justify-center rounded-full text-ink-3 hover:bg-wash-2 hover:text-ink">
+          <button
+            type="button"
+            aria-label="Cancel reply"
+            onClick={onClearReply}
+            className="ml-auto flex size-6 shrink-0 items-center justify-center rounded-full text-ink-3 hover:bg-wash-2 hover:text-ink"
+          >
             <Icon icon={Cancel01Icon} size={12} />
           </button>
         </div>

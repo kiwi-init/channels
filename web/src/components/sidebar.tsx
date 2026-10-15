@@ -88,7 +88,11 @@ export function Sidebar({
               title={rowNote(c)}
               className={cx("flex h-16 w-full items-center gap-3 rounded-card px-3 text-left transition-colors", selected ? "bg-pick" : "hover:bg-wash")}
             >
-              {c.recent?.byCoordinator && reachable ? <CoordinatorAvatar size={40} label="The coordinator spoke last" /> : <ChannelIconTile icon={icons.get(c.room) ?? null} title={c.title} size={40} />}
+              {c.recent?.byCoordinator && reachable ? (
+                <CoordinatorAvatar size={40} label="The coordinator spoke last" />
+              ) : (
+                <ChannelIconTile icon={icons.get(c.room) ?? null} title={c.title} size={40} />
+              )}
               <span className="min-w-0 flex-1">
                 <span className="flex items-baseline gap-2">
                   <span className={cx("min-w-0 flex-1 truncate text-body font-semibold", !reachable && "text-ink-2")}>{c.title}</span>
@@ -101,7 +105,10 @@ export function Sidebar({
                 <span className="mt-0.5 flex items-center gap-2">
                   <span className={cx("min-w-0 flex-1 truncate text-ui", fresh ? "font-medium text-ink" : "text-ink-3")}>{rowNote(c)}</span>
                   {n?.needs ? (
-                    <span aria-label={n.needs === 1 ? "A question for you" : `${n.needs} questions for you`} className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-stamp font-semibold text-accent-ink tabular-nums">
+                    <span
+                      aria-label={n.needs === 1 ? "A question for you" : `${n.needs} questions for you`}
+                      className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-stamp font-semibold text-accent-ink tabular-nums"
+                    >
                       {n.needs}
                     </span>
                   ) : fresh ? (
@@ -113,11 +120,7 @@ export function Sidebar({
             </button>
           )
         })}
-        {rows.length === 0 && (
-          <p className="px-3 py-4 text-ui leading-normal text-ink-3">
-            Channels you create or join show up here.
-          </p>
-        )}
+        {rows.length === 0 && <p className="px-3 py-4 text-ui leading-normal text-ink-3">Channels you create or join show up here.</p>}
       </nav>
 
       {/* Who you are, at the foot of the list as Grok keeps it: your face and name on a glass pill that
@@ -146,9 +149,13 @@ export function Sidebar({
             }
           >
             <MenuNote>Key {person.pk.slice(0, 12)}</MenuNote>
-            <MenuItem icon={ComputerIcon} onClick={onComputers}>Your computers</MenuItem>
+            <MenuItem icon={ComputerIcon} onClick={onComputers}>
+              Your computers
+            </MenuItem>
             <MenuSeparator />
-            <MenuItem icon={Settings01Icon} onClick={onSettings}>Settings…</MenuItem>
+            <MenuItem icon={Settings01Icon} onClick={onSettings}>
+              Settings…
+            </MenuItem>
           </Menu>
         </div>
       )}
