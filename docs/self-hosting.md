@@ -364,7 +364,9 @@ bun run build          # dist/kiwi, a single file
   `SHA256SUMS` (from the same release; they print, but don't run, the
   `gh attestation verify` command). Your relay's refusal messages are the other:
   clients show them as the relay words them.
-- **Serve `site/`, not the dashboard.** `--web` is for the static site. A built
+- **Serve `site/`, not the dashboard.** `--web` is for the static site. With no
+  `--web`, the Bun relay serves `site/` and falls back to a built `web/dist` when
+  `site/` is missing; pass `--web site` or `--no-web` to rule that out. A built
   `web/dist` served from a browser origin keeps the person key in that origin's
   `localStorage`, where any script on the origin, or a browser extension, can read
   it. In the Kiwi app the same dashboard never holds a secret key.
