@@ -5,10 +5,20 @@
 // server proxies /v1 to the relay). Nothing else in the renderer may use
 // location.origin for relay traffic: call relayUrl() here instead.
 
+export function relayOrigin(raw: unknown): string | null {
+  if (typeof raw !== "string") return null
+  try {
+    const u = new URL(raw)
+    const web = u.protocol === "https:" || u.protocol === "http:"
+    return web && /^(?:[a-z0-9-]+\.)*[a-z0-9-]+\.?$|^\[[0-9a-f:.]+\]$/.test(u.hostname) ? u.origin : null
+  } catch {
+    return null
+  }
+}
+
 function fromBridge(): string | null {
   try {
-    const u = (window as unknown as { kiwi?: { relayUrl?: unknown } }).kiwi?.relayUrl
-    return typeof u === "string" && /^https?:\/\//.test(u) ? u.replace(/\/+$/, "") : null
+    return relayOrigin((window as unknown as { kiwi?: { relayUrl?: unknown } }).kiwi?.relayUrl)
   } catch {
     return null
   }
@@ -16,8 +26,7 @@ function fromBridge(): string | null {
 
 function fromEntry(): string | null {
   try {
-    const r = new URLSearchParams(window.location.search).get("relay")
-    return r && /^https?:\/\//.test(r) ? r.replace(/\/+$/, "") : null
+    return relayOrigin(new URLSearchParams(window.location.search).get("relay"))
   } catch {
     return null
   }

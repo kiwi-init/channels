@@ -256,9 +256,11 @@ export class AgentSession {
    */
   listen<R = never>(onMessage: (m: Message, state: ChannelState) => Effect.Effect<void | boolean, unknown, R>, opts: Delivery & Hearing<R>): Effect.Effect<void, Refused | ChannelGone, Agent | R> {
     return Effect.gen({ self: this }, function* () {
-      // Lets the Claude Code Stop hook know this agent can hear the channel, for as long as this process lives.
-      const { registerListener } = yield* Effect.promise(() => import("./hooks.ts"));
-      registerListener(this.alias, this.me);
+      const { holdListening } = yield* Effect.promise(() => import("./hooks.ts"));
+      yield* Effect.acquireRelease(
+        Effect.promise(() => holdListening(this.alias, this.me)),
+        (held) => Effect.sync(() => held.close()),
+      );
       const status = (line: string) => opts.onStatus?.(line) ?? Effect.void;
       let { since, messages, state } = yield* this.reach(status);
       const cache = yield* Cache;

@@ -13,7 +13,7 @@ const SCRIPT = join(import.meta.dir, "..", "site", "install.sh")
 
 function sandbox() {
   const dir = mkdtempSync(join(tmpdir(), "kiwi-install-"))
-  const fake = `#!/bin/sh\nif [ "$1" = --version ]; then echo 9.9.9; exit 0; fi\necho "ran: $*" > "${dir}/ran"\n`
+  const fake = `#!/bin/sh\nif [ "$1" = --version ]; then echo 9.9.9; exit 0; fi\necho "ran: $*" >> "${dir}/ran"\n`
   writeFileSync(join(dir, "fake-kiwi"), fake)
   const sum = createHash("sha256").update(fake).digest("hex")
   // curl -fsSL URL -o FILE: the binary for any asset, SHA256SUMS naming that asset.
@@ -40,18 +40,18 @@ describe("the installer", () => {
     try {
       const r = install(dir, ["join", "mc2-abc", "--relay", "http://localhost:8787"])
       expect(r.exitCode).toBe(0)
-      expect(readFileSync(join(dir, "ran"), "utf8").trim()).toBe("ran: join mc2-abc --relay http://localhost:8787")
+      expect(readFileSync(join(dir, "ran"), "utf8").trim()).toBe("ran: cleanup --quiet\nran: join mc2-abc --relay http://localhost:8787")
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
   })
 
-  test("with no arguments, installs and runs nothing", () => {
+  test("with no arguments, installs, cleans up what older installs left, and runs nothing else", () => {
     const dir = sandbox()
     try {
       const r = install(dir, [])
       expect(r.exitCode).toBe(0)
-      expect(() => readFileSync(join(dir, "ran"))).toThrow()
+      expect(readFileSync(join(dir, "ran"), "utf8").trim()).toBe("ran: cleanup --quiet")
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -62,7 +62,7 @@ describe("the installer", () => {
     try {
       const r = install(dir, ["pair", "kp1-abc"])
       expect(r.exitCode).toBe(0)
-      expect(readFileSync(join(dir, "ran"), "utf8").trim()).toBe("ran: pair kp1-abc")
+      expect(readFileSync(join(dir, "ran"), "utf8").trim()).toBe("ran: cleanup --quiet\nran: pair kp1-abc")
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -143,7 +143,7 @@ describe("the installer's PATH step", () => {
       const r = install(dir, ["join", "mc2-abc"], { SHELL: "/bin/zsh" })
       expect(r.exitCode).toBe(0)
       expect(r.stdout.toString()).toContain("Couldn't write")
-      expect(readFileSync(join(dir, "ran"), "utf8").trim()).toBe("ran: join mc2-abc")
+      expect(readFileSync(join(dir, "ran"), "utf8").trim()).toBe("ran: cleanup --quiet\nran: join mc2-abc")
     }))
 })
 

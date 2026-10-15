@@ -2,10 +2,11 @@
 
 import { kiwiCmd } from "./owner.ts";
 import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
-import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Channel } from "../src/client.ts";
+import { daemonListeners, daemonSock } from "../src/daemon.ts";
 import { generateIdentity } from "../src/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { killAndRead } from "./proc.ts";
@@ -88,13 +89,11 @@ test("tail started while the relay is down keeps waiting instead of exiting", as
     server.stop(true);
     // Its first fetch fails (0.5.0 exited here for good); it must keep trying.
     const tail = cli("-c", "r", "--as", "lead", "tail");
-    const listening = () => existsSync(join(dir, "listeners")) && readdirSync(join(dir, "listeners")).some((name) => name.startsWith("r."));
-    // The listener file is written before the first fetch. The old bug exited on that fetch,
-    // so the condition is "still running after listen() has started", not the file alone.
+    const listening = async () => (await daemonListeners(daemonSock(dir)).catch(() => [])).some((l) => l.channel === "r" && l.kind === "listen");
     let downSince: number | null = null;
     await until(async () => {
       if (tail.exitCode !== null) throw new Error(`tail exited ${tail.exitCode} while the relay was down`);
-      if (!listening()) return false;
+      if (!(await listening())) return false;
       downSince ??= Date.now();
       return Date.now() - downSince >= 1_000;
     }, "tail keeps waiting while the relay is down");

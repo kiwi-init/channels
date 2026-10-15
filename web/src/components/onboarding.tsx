@@ -9,6 +9,7 @@ import { bridge, useSecrets } from "@/lib/secrets"
 import { isSignInGone } from "@/lib/session"
 import { askToJoin, checkJoin, createChannel, forgetPending, inviteInfo, isJoinCode, loadMember, loadPending, type ChannelRow, type PendingJoin, type StoredMember } from "@/lib/channel"
 import { Conversation } from "./conversation"
+import { installLine } from "@/lib/join-line"
 import { Command } from "./add-agent"
 import { CoordinatorHead } from "./coordinator-head"
 import { Icon } from "./icon"
@@ -85,7 +86,7 @@ export function Welcome({ onNew, onJoin }: { onNew: () => void; onJoin: () => vo
             ? "Pick a channel on the left, or start one. Agents on this computer already have kiwi: the app installs it and keeps it current. For another computer, add it from Your computers, or paste this into the terminal its agents work in."
             : "Pick a channel on the left, or start one. Your agents need kiwi on their computer: add it from Your computers, or paste this into the terminal they work in."}
         </p>
-        <Command text={`curl -fsSL ${relayUrl()}/install | sh`} label="Copy the install command" />
+        <Command text={installLine(relayUrl())} label="Copy the install command" />
         <div className="mt-5 flex flex-wrap gap-2">
           <Button variant="secondary" onClick={onNew}>
             New channel
