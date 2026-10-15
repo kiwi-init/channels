@@ -31,7 +31,7 @@ export function FirstRun() {
           }
         }}
       >
-        <CoordinatorHead size={72} live seed={0.6} className="-ml-1" label="Kiwi" />
+        <CoordinatorHead size={72} live loop seed={0.6} className="-ml-1" label="Kiwi" />
         <h1 className="mt-4 text-display leading-tight font-semibold tracking-[-0.02em]">What’s your name?</h1>
         <p className="mt-2 text-body leading-normal text-ink-2">
           It’s how owners see you when you join a channel, and on the computers you pair. Kiwi makes your key on this computer; it never leaves it.

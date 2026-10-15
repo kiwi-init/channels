@@ -3,9 +3,11 @@
 // it isn't in the first bundle; until then, and wherever a head would be too many, a plain circle
 // stands in.
 
-import { lazy, Suspense, useEffect, useState } from "react"
+import { lazy, Suspense, useEffect, useState, useSyncExternalStore } from "react"
 
+import { useReducedMotionActive } from "@/lib/accessibility"
 import type { Mood } from "@/lib/coordinator-mood"
+import { HEAD_BURST_MS, HEAD_ENTRANCE_MS, headMotion, headMoves } from "@/lib/head-motion"
 import { cx } from "@/lib/utils"
 
 const RobotHead = lazy(() => import("robot-heads").then((m) => ({ default: m.RobotHead })))
@@ -46,10 +48,42 @@ function useTones(): Tones {
   return tones
 }
 
+function subscribeFocus(onChange: () => void): () => void {
+  window.addEventListener("focus", onChange)
+  window.addEventListener("blur", onChange)
+  return () => {
+    window.removeEventListener("focus", onChange)
+    window.removeEventListener("blur", onChange)
+  }
+}
+
+function useWindowFocused(): boolean {
+  return useSyncExternalStore(
+    subscribeFocus,
+    () => document.hasFocus(),
+    () => true
+  )
+}
+
+function useOnScreen(el: Element | null): boolean {
+  const [onScreen, setOnScreen] = useState(true)
+  useEffect(() => {
+    if (!el || typeof IntersectionObserver === "undefined") return
+    const watch = new IntersectionObserver((entries) => {
+      const last = entries.at(-1)
+      if (last) setOnScreen(last.isIntersecting)
+    })
+    watch.observe(el)
+    return () => watch.disconnect()
+  }, [el])
+  return onScreen
+}
+
 export function CoordinatorHead({
   size,
   mood,
   live = false,
+  loop = false,
   interactive = false,
   seed,
   className,
@@ -59,6 +93,7 @@ export function CoordinatorHead({
   mood?: Mood
   /** Animate it. Off, it rests on its current face: a list of heads shouldn't all move at once. */
   live?: boolean
+  loop?: boolean
   /** Follow the pointer and hop on a click: only the big heads. */
   interactive?: boolean
   seed?: number
@@ -66,23 +101,37 @@ export function CoordinatorHead({
   label?: string
 }) {
   const tones = useTones()
-  // A still head first plays its entrance and settles on its resting face, then stops: frozen on its
-  // first frame it would be caught mid-entrance, cut off or squashed.
+  const motion = headMotion(loop, live)
   const [settled, setSettled] = useState(false)
   useEffect(() => {
-    const t = setTimeout(() => setSettled(true), 1600)
+    const t = setTimeout(() => setSettled(true), HEAD_ENTRANCE_MS)
     return () => clearTimeout(t)
   }, [])
+  const [pokes, setPokes] = useState(0)
+  const burstKey = `${mood?.state ?? "idle"}:${pokes}`
+  const [rested, setRested] = useState<string | null>(null)
+  useEffect(() => {
+    if (motion !== "burst") return
+    const t = setTimeout(() => setRested(burstKey), HEAD_BURST_MS)
+    return () => clearTimeout(t)
+  }, [motion, burstKey])
+  const [box, setBox] = useState<HTMLSpanElement | null>(null)
+  const focused = useWindowFocused()
+  const onScreen = useOnScreen(box)
+  const reducedMotion = useReducedMotionActive()
+  const bursting = motion === "entrance" ? !settled : rested !== burstKey
+  const moving = headMoves(motion, bursting, { focused, onScreen, reducedMotion, held: !!mood?.paused })
+  const poke = interactive ? () => setPokes((n) => n + 1) : undefined
   // Small heads sit a little inside their box, so a glance or a breath never reaches its edge.
   const inner = size <= 32 ? size - 4 : size
   const fallback = <span className={cx("block shrink-0 rounded-full bg-accent", className)} style={{ width: size, height: size }} aria-hidden />
   return (
     <Suspense fallback={fallback}>
-      <span className={cx("inline-flex shrink-0 items-center justify-center", className)} style={{ width: size, height: size }}>
+      <span ref={setBox} onPointerEnter={poke} onClick={poke} className={cx("inline-flex shrink-0 items-center justify-center", className)} style={{ width: size, height: size }}>
         <RobotHead
           size={inner}
           state={live ? (mood?.state ?? "idle") : mood?.state === "sleeping" ? "sleeping" : "idle"}
-          paused={(!live && settled) || !!mood?.paused}
+          paused={!moving}
           interactive={interactive}
           antenna={size > 40}
           floorShadow={size > 64}
