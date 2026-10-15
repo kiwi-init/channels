@@ -1,13 +1,13 @@
 import type { CachedRow } from "@mc/cache-row.ts"
 import type { PresenceFields } from "@mc/client.ts"
 
-import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, FollowEvent, JoinCheck } from "../../../desktop/src/bridge.ts"
+import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, FollowEvent } from "../../../desktop/src/bridge.ts"
 import { localOps } from "./channel-local"
 import { errorOf, remoteOps } from "./channel-remote"
 import { bridge } from "./secrets"
 
 export { errorOf }
-export type { ChannelOps, FollowEvent, JoinCheck }
+export type { ChannelOps, FollowEvent }
 
 let picked: ChannelOps | null = null
 

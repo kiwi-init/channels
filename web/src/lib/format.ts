@@ -27,21 +27,11 @@ export function memberLine(m: Pick<Member, "name" | "kind" | "display" | "sponso
 
 const timeFmt = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" })
 const fullFmt = new Intl.DateTimeFormat(undefined, { dateStyle: "full", timeStyle: "medium" })
-const dayFmt = new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" })
 const weekdayFmt = new Intl.DateTimeFormat(undefined, { weekday: "long" })
 const dateFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "numeric", year: "2-digit" })
 
 export const formatTime = (ts: number) => timeFmt.format(ts)
 export const formatFull = (ts: number) => fullFmt.format(ts)
-
-export function formatDay(ts: number): string {
-  const d = new Date(ts)
-  const today = new Date()
-  const yesterday = new Date(today.getTime() - 86_400_000)
-  if (d.toDateString() === today.toDateString()) return "Today"
-  if (d.toDateString() === yesterday.toDateString()) return "Yesterday"
-  return dayFmt.format(d)
-}
 
 /** Like the Messages list: a time today, "Yesterday", a weekday this week, else a date. */
 export function formatShort(ts: number, now = Date.now()): string {

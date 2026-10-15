@@ -11,7 +11,6 @@ import { startRelay } from "../src/relay/bun.ts";
 
 setDefaultTimeout(60_000);
 
-const MC = [process.execPath, join(import.meta.dir, "../src/cli/main.ts")];
 const dataDir = mkdtempSync(join(tmpdir(), "kiwi-js-relay-"));
 const claudeDir = mkdtempSync(join(tmpdir(), "kiwi-js-claude-"));
 const made: string[] = [dataDir, claudeDir];

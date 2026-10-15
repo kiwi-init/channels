@@ -78,13 +78,13 @@ export function devRequestOk(req: Request, peer: string | undefined): boolean {
   return !["forwarded", "x-forwarded-for", "x-forwarded-host", "x-real-ip", "via", "cf-connecting-ip"].some((h) => req.headers.has(h));
 }
 
-export interface HumanProfile {
+interface HumanProfile {
   name: string;
   email?: string;
 }
 
 /** Look up a WorkOS user's name with the API key (kept as a Worker secret). */
-export function workosProfiles(apiKey: string): (userId: string) => Promise<HumanProfile | null> {
+function workosProfiles(apiKey: string): (userId: string) => Promise<HumanProfile | null> {
   const cache = new Map<string, HumanProfile>();
   return async (userId) => {
     if (!/^user_[A-Za-z0-9]+$/.test(userId)) return null;

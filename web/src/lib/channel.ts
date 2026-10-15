@@ -54,9 +54,9 @@ export function useClock(intervalMs: number): number {
   return useSyncExternalStore(subscribe, clockNow)
 }
 
-export type Connection = "connecting" | "live" | "reconnecting"
+type Connection = "connecting" | "live" | "reconnecting"
 
-export interface Online {
+interface Online {
   client: string
   role?: string
   at: number
@@ -142,7 +142,7 @@ export async function forgetPending(code: string): Promise<void> {
   changed()
 }
 
-export function pendingChannels(): PendingJoin[] {
+function pendingChannels(): PendingJoin[] {
   return entries().flatMap((e) => asPending(e) ?? [])
 }
 
@@ -164,7 +164,7 @@ export async function forgetChannel(code: string): Promise<void> {
 // ---------- what the channel list shows ----------
 
 /** Fired whenever the list of channels, or what they last said, changes. */
-export const CHANGED = "mc:channels"
+const CHANGED = "mc:channels"
 function changed(): void {
   window.dispatchEvent(new Event(CHANGED))
 }
@@ -176,7 +176,7 @@ const AGENT_WORKED_EVENT = "mc:agent-worked"
  * Whether an agent has worked in a channel this browser had open (it said what it runs on, which every
  * agent does once it listens). Things worth setting up later, like the vault, wait for this.
  */
-export function agentWorked(): boolean {
+function agentWorked(): boolean {
   try {
     return localStorage.getItem(AGENT_WORKED) === "1"
   } catch {
@@ -192,18 +192,6 @@ export function noteAgentWorked(): void {
     return
   }
   window.dispatchEvent(new Event(AGENT_WORKED_EVENT))
-}
-
-/** agentWorked, as state that turns true the moment it happens. */
-export function useAgentWorked(): boolean {
-  const [worked, setWorked] = useState(agentWorked)
-  useEffect(() => {
-    if (worked) return
-    const on = () => setWorked(true)
-    window.addEventListener(AGENT_WORKED_EVENT, on)
-    return () => window.removeEventListener(AGENT_WORKED_EVENT, on)
-  }, [worked])
-  return worked
 }
 
 /** The last thing said in a channel, and who's in it, as of the last time this browser had it open. */
@@ -244,7 +232,7 @@ export function channelTitle(c: { name?: string }, recent: Recent | null): strin
 }
 
 /** How this browser relates to a channel in the list. */
-export type ListState = "member" | "pending" | "agents"
+type ListState = "member" | "pending" | "agents"
 
 export interface ChannelRow {
   code: string
@@ -261,7 +249,7 @@ export interface ChannelRow {
 }
 
 /** How often listed channels are asked for their head (GET /). Cheap: seq only. */
-export const HEADS_EVERY = 15_000
+const HEADS_EVERY = 15_000
 
 const untitled = (room: string) => `Channel ${room.slice(0, 4).toUpperCase()}`
 
@@ -381,7 +369,7 @@ export interface KnownChannel {
 }
 
 /** Channels this browser is a member of, newest first. The keys, not a separate index. */
-export function knownChannels(): KnownChannel[] {
+function knownChannels(): KnownChannel[] {
   return allMembers()
     .map((m) => ({ code: m.code, at: m.at, ...(m.name ? { name: m.name } : {}) }))
     .sort((a, b) => b.at - a.at)

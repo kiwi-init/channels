@@ -15,7 +15,7 @@ import { Markdown } from "./markdown"
 export const isAgent = (m: Pick<Member, "kind"> | undefined) => m?.kind !== "human"
 
 /** Who wrote a message, as far as the transcript needs to know. */
-export type Author = Pick<Member, "name" | "kind" | "display" | "sponsor">
+type Author = Pick<Member, "name" | "kind" | "display" | "sponsor">
 
 /** Time passing in the conversation: a small stamp centred between bubbles, the day set a little heavier, as Messages does. */
 export function TimeMark({ ts }: { ts: number }) {
@@ -37,7 +37,7 @@ function splitStamp(stamp: string): [string, string] {
 }
 
 /** What happened, in as few words as it takes: the long form is in the line's tooltip. */
-export function shortEvent(m: Message, state: ChannelState): string {
+function shortEvent(m: Message, state: ChannelState): string {
   const ev = m.ev
   const who = memberName(state.members.get(m.from), m.from)
   const name = (n: string) => memberName(state.members.get(n), n)

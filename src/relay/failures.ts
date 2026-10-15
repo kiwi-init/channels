@@ -33,7 +33,7 @@ export class ChannelGone extends Schema.TaggedError<ChannelGone>()("ChannelGone"
 /** No such request, member or route. */
 export class NotFound extends Schema.TaggedError<NotFound>()("NotFound", text) {}
 /** The path is right, the method isn't (the vault takes GET, PUT and DELETE). */
-export class MethodNotAllowed extends Schema.TaggedError<MethodNotAllowed>()("MethodNotAllowed", text) {}
+class MethodNotAllowed extends Schema.TaggedError<MethodNotAllowed>()("MethodNotAllowed", text) {}
 /** The room moved on (an epoch, a check, an existing member): read again and retry. */
 export class Conflict extends Schema.TaggedError<Conflict>()("Conflict", text) {}
 /** More than the relay stores at once. */

@@ -3,7 +3,3 @@ export function git(repo: string, args: string[]): string {
   if (!p.success) throw new Error(`git ${args.join(" ")}: ${p.stderr.toString().trim()}`)
   return p.stdout.toString()
 }
-
-export function hasCommit(repo: string, sha: string): boolean {
-  return Bun.spawnSync(["git", "-C", repo, "cat-file", "-e", `${sha}^{commit}`]).success
-}

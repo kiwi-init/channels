@@ -48,7 +48,7 @@ export function editable(m: Member | undefined): Member {
   return m;
 }
 
-export function wireError(e: unknown): WireError {
+function wireError(e: unknown): WireError {
   if (e instanceof ChannelGone) return { kind: "gone", why: e.why };
   if (e instanceof RelayError) return { kind: "relay", status: e.status, message: e.message, ...(e.tagged ? { tag: e.tag } : {}) };
   if (e instanceof Unreachable) return { kind: "unreachable", message: e.cause instanceof Error ? e.cause.message : "can't reach the relay" };

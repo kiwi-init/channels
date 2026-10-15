@@ -34,7 +34,7 @@ const TOOLS: [tag: string, bin: string][] = [
 ];
 
 /** Tags this file detects; any other tool on a card was said by hand, and stays until said otherwise. */
-export const DETECTED_TOOLS = new Set(TOOLS.map(([tag]) => tag));
+const DETECTED_TOOLS = new Set(TOOLS.map(([tag]) => tag));
 
 /**
  * The card to show: what's detected now, plus what was said by hand before (a model, a note, tools it
@@ -46,17 +46,6 @@ export function mergeCard(detected: Card, was: Card | undefined, given: { model?
   const model = given.model ?? was?.model;
   const note = given.note ?? was?.note;
   return { ...detected, ...(model ? { model } : {}), ...(tools.length ? { tools } : {}), ...(note ? { note } : {}) };
-}
-
-/**
- * The variables an agent's harness sets on the commands its agent runs (the same set hooks.ts reads a
- * session from). Not CURSOR_TRACE_ID or CODEX_SANDBOX: a person's own terminal in those apps may carry them.
- */
-export const AGENT_COMMAND_ENV = ["CLAUDECODE", "CODEX_THREAD_ID", "GEMINI_CLI", "CURSOR_AGENT", "GROK_SESSION_ID", "OPENCODE_SESSION_ID"] as const;
-
-/** Whether an agent is running this command: what keeps admin (and the owner key) away from agents. */
-export function inAgentHarness(env: Record<string, string | undefined> = process.env): boolean {
-  return AGENT_COMMAND_ENV.some((k) => !!env[k]);
 }
 
 /** The harness running this process, from the markers each one sets for its shell commands. */

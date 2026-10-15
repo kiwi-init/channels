@@ -11,7 +11,7 @@ import { provePerson, type PersonClaim } from "../../src/person.ts";
 import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, PublicPerson, StoreSnapshot } from "./bridge.ts";
 import { publicChannel } from "./seats.ts";
 
-export { acceptSeat, mergeChannels, mergePublicChannels, migrateEntries, publicChannel, withAccess } from "./seats.ts";
+export { acceptSeat, mergeChannels, mergePublicChannels, migrateEntries, withAccess } from "./seats.ts";
 
 export const APP_SCHEME = "kiwi-app";
 export const APP_HOST = "app";

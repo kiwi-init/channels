@@ -53,8 +53,6 @@ import {
 import { verify, verifyText } from "../identity.ts";
 import { commitTo, NONCE_RE, ownerNonceStatement } from "../sas.ts";
 import {
-  CLOSE_CLOSED,
-  CLOSE_REMOVED,
   MAX_CT_LENGTH,
   MAX_EPH_LENGTH,
   PAGE_LIMIT,
@@ -1012,8 +1010,6 @@ export function parseRoomPath(pathname: string): { roomId: string; rest: string 
   const m = /^\/v1\/rooms\/([0-9a-f]{32})(\/.*)?$/.exec(pathname);
   return m ? { roomId: m[1]!, rest: m[2] ?? "/" } : null;
 }
-
-export { CLOSE_CLOSED, CLOSE_REMOVED };
 
 /** Relay-wide settings the app needs: which WorkOS client to sign in with (to create), if any. Shape: { workosClientId, dev? }. */
 export function relayConfig(human: HumanAuth | null): Response {

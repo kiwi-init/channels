@@ -5,7 +5,7 @@
 
 import { RelayError } from "@mc/client.ts"
 
-export const SIGN_IN_GONE = "mc:sign-in-gone"
+const SIGN_IN_GONE = "mc:sign-in-gone"
 
 /** Whether `err` (or what caused it) is the relay saying this browser isn't signed in. */
 export function isSignInGone(err: unknown): boolean {

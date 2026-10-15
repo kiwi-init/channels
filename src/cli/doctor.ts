@@ -2,7 +2,6 @@
 // It does not change anything. The checks are Effects that return their
 // findings, so tests can read them; printing is separate.
 
-import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import { spawn } from "node:child_process";
@@ -12,7 +11,6 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_RELAY, loadConfig } from "../config.ts";
 import { EXTRA_HARNESSES, extraInstalled, hooksInstalled } from "../hooks.ts";
-import { reason } from "../client.ts";
 import { loadMachine, type MachineFile } from "../machine.ts";
 import { VERSION } from "../version.ts";
 

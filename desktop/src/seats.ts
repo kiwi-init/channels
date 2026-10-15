@@ -3,7 +3,7 @@ import type { ChannelIdentityView, ChannelView, PublicAccess } from "./bridge.ts
 
 const str = (v: unknown): v is string => typeof v === "string";
 
-export function publicAccess(a: unknown): PublicAccess | undefined {
+function publicAccess(a: unknown): PublicAccess | undefined {
   if (!a || typeof a !== "object") return undefined;
   const x = a as Partial<ChannelAccess>;
   if (!str(x.roomId) || !str(x.ownerPk) || !str(x.ownerXpk) || typeof x.epoch !== "number") return undefined;
@@ -39,7 +39,7 @@ function epochKeys(access: unknown): Map<string, string> {
   return new Map(Object.entries(keys).filter((e): e is [string, string] => str(e[1])));
 }
 
-export const seatOf = (c: { roomId?: string; pk: string }): string => `${c.roomId ?? ""}/${c.pk}`;
+const seatOf = (c: { roomId?: string; pk: string }): string => `${c.roomId ?? ""}/${c.pk}`;
 
 export function mergeChannels(stored: ChannelIdentityView[], next: ChannelIdentityView[]): ChannelIdentityView[] {
   const before = new Map(stored.map((c) => [seatOf(c), c]));
@@ -105,7 +105,7 @@ export function withAccess(stored: ChannelIdentityView[], code: string, pk: stri
   return stored.map((c) => (c === seat ? next : c));
 }
 
-export function wellFormedEntry(v: unknown): v is ChannelIdentityView {
+function wellFormedEntry(v: unknown): v is ChannelIdentityView {
   if (!v || typeof v !== "object") return false;
   const c = v as Record<string, unknown>;
   if (!str(c.label) || !str(c.pk) || !str(c.sk) || !str(c.code)) return false;

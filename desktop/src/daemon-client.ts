@@ -29,8 +29,6 @@ export interface AdoptParams {
   person: { pk: string; xpk: string; name: string };
 }
 
-const idOf = (u: string) => u.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 32) || "kiwi";
-
 export function kiwiHome(): string {
   return process.env["KIWI_HOME"] ?? path.join(os.homedir(), ".kiwi");
 }

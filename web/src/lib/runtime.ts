@@ -17,7 +17,7 @@ import { Storage, localStore } from "./storage"
 export type Web = Storage | Relay
 
 /** This browser's services. */
-export const WebLive: Layer.Layer<Web> = Layer.mergeAll(Layer.succeed(Storage, localStore), Layer.succeed(Relay, fetchRelay))
+const WebLive: Layer.Layer<Web> = Layer.mergeAll(Layer.succeed(Storage, localStore), Layer.succeed(Relay, fetchRelay))
 
 const runtime = ManagedRuntime.make(WebLive)
 

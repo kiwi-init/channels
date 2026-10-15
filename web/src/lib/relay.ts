@@ -39,4 +39,4 @@ export function hasBridge(): boolean {
 }
 
 /** The relay `kiwi` talks to when told nothing else. */
-export const PUBLIC_RELAY = "https://channels.kiwiinit.com"
+const PUBLIC_RELAY = "https://channels.kiwiinit.com"

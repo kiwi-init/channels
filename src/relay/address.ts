@@ -203,8 +203,3 @@ export function clientAddress(peer: string | null | undefined, forwardedFor: str
   const last = usableIp(parts[parts.length - 1] ?? "");
   return last ?? peerIp;
 }
-
-/** The client address Cloudflare puts on a Worker request. Absent in local tests, which are then not limited. */
-export function cloudflareClient(req: Request): string | null {
-  return usableIp(req.headers.get("cf-connecting-ip") ?? "");
-}

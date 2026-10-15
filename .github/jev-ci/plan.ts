@@ -5,7 +5,7 @@ import { git } from "./git.ts"
 import { ask, MODEL, type Request } from "./jev.ts"
 import { changedWorkflowJobs, workflowJob } from "./workflow.ts"
 
-export type Layer = "L0" | "L1" | "L2" | "fallback"
+type Layer = "L0" | "L1" | "L2" | "fallback"
 export type Decision = {
   job: string
   run: boolean
@@ -28,7 +28,7 @@ export type Plan = {
 }
 
 /** Hash of every file a job reads at `head`, plus its own CI definition. Same hash as a run that passed means the same result. */
-export function inputHash(repo: string, head: string, config: Config, job: string, tree?: string[]): string {
+function inputHash(repo: string, head: string, config: Config, job: string, tree?: string[]): string {
   const j = config.jobs[job]!
   const files = (tree ?? git(repo, ["ls-tree", "-r", head]).split("\n")).filter((l) => {
     const path = l.split("\t")[1]
@@ -59,7 +59,7 @@ const reads = (patterns: string[], f: FileChange) => matches(patterns, f.path) |
 const clip = (lines: string[]) => lines.map((l) => (l.length > 300 ? l.slice(0, 300) + " …" : l))
 
 /** One Jev request per file: the file's change is the state, one yes/no question per job it can reach. */
-export function jevRequest(f: FileChange, jobs: string[], config: Config): Request {
+function jevRequest(f: FileChange, jobs: string[], config: Config): Request {
   const state: Record<string, unknown> = { file: f.path, change: f.status }
   if (f.from) state.renamed_from = f.from
   if (matches(config.summarize_files, f.path)) state.change = "regenerated: a generated file, rebuilt from its source; content not shown"

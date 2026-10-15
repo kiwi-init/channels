@@ -34,7 +34,6 @@ import {
   welcomeFrames,
   wsHeaders,
   type DirectoryEntry,
-  type Sql,
   type Effects,
 } from "./room.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync } from "./route.ts";

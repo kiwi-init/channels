@@ -39,7 +39,7 @@ const COMMANDS: CommandName[] = [
 
 export const MAX_SCRIPT_BYTES = 16 * 1024;
 export const MAX_OUTPUT_CHARS = 64 * 1024;
-export const MAX_RUN_MS = 5_000;
+const MAX_RUN_MS = 5_000;
 
 export interface ShResult {
   stdout: string;
@@ -57,7 +57,7 @@ export interface ChannelView {
   cursor: number;
 }
 
-export const README = `Channel files (read-only; every run starts fresh). Writes go through the kiwi commands/tools, never here.
+const README = `Channel files (read-only; every run starts fresh). Writes go through the kiwi commands/tools, never here.
   /channel                 the current channel
     README                 this file
     me                     {"name","role","channel"}
@@ -139,7 +139,7 @@ export function channelFiles(views: ChannelView[], now = Date.now()): Record<str
 }
 
 /** What one session contributes: its log, its folded state and its cursor. Reads only; marks nothing. */
-export const viewOf = Effect.fn("sh.viewOf")(function* (s: AgentSession) {
+const viewOf = Effect.fn("sh.viewOf")(function* (s: AgentSession) {
   const { messages, state } = yield* s.state();
   const cursor = (yield* (yield* Cursor).read(s.alias, s.me)) ?? state.head;
   const view: ChannelView = { alias: s.alias, me: s.me, messages, state, cursor };

@@ -13,7 +13,7 @@ import { Menu, MenuItem } from "./ui/menu"
 const mac = /Mac/.test(navigator.platform)
 
 /** One round glass control on the header row: 36px, 8px above and below it (index.css, the chrome's grid). */
-export const ROUND = "glass size-9 text-ink"
+const ROUND = "glass size-9 text-ink"
 
 export function SidebarToggle({ className }: { className?: string }) {
   const open = useSidebarOpen()
@@ -24,7 +24,7 @@ export function SidebarToggle({ className }: { className?: string }) {
   )
 }
 
-export function NewMenu({ onNew, onJoin }: { onNew: () => void; onJoin: () => void }) {
+function NewMenu({ onNew, onJoin }: { onNew: () => void; onJoin: () => void }) {
   return (
     <Menu
       align="end"

@@ -4,7 +4,7 @@
 // Once a killed CLI has exited, these read what it wrote without waiting on an EOF.
 
 /** Read `s` to its end, or until the process behind it is gone and nothing more comes. */
-export function drain(s: ReadableStream<Uint8Array>) {
+function drain(s: ReadableStream<Uint8Array>) {
   const reader = s.getReader();
   let text = "";
   const dec = new TextDecoder();

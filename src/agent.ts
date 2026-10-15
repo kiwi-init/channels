@@ -23,14 +23,13 @@ import { TOO_MANY_REQUESTS } from "./sas.ts";
 import type { ChannelAccess } from "./crypto.ts";
 import { inlineText, type Member } from "./membership.ts";
 import type { Identity } from "./identity.ts";
-import { isLocalRefusal, OwnerOnly, Rejected } from "./refusals.ts";
-import { canPost, describeScopes, refusal, wireScopes, type Scope } from "./scopes.ts";
-import { GENERAL_ROOM, ignored, MAX_CHARTER, PROTOCOL_VERSION, TASK_STATES, wellFormedReaction, type Card, type Color, type Event, type ImageAttachment, type Kind, type Message, type Presence, type TaskState, type Verdict } from "./protocol.ts";
-import { allowedOnHold, COORDINATOR, findRoom, firstAgent, fold, humanOf, isPerson, keptFromPeople, newRoomId, ON_HOLD, openRound, ownerOf, revisedOut, taskId, threadMembers, type ChannelState, type GuardFloor, type ReviewRound, type Roster, type RoomsFloor, type Task } from "./state.ts";
+import { isLocalRefusal, Rejected } from "./refusals.ts";
+import { canPost, describeScopes, refusal } from "./scopes.ts";
+import { GENERAL_ROOM, ignored, PROTOCOL_VERSION, TASK_STATES, wellFormedReaction, type Card, type Color, type Event, type ImageAttachment, type Kind, type Message, type Presence, type TaskState, type Verdict } from "./protocol.ts";
+import { allowedOnHold, findRoom, fold, humanOf, isPerson, keptFromPeople, ON_HOLD, openRound, ownerOf, revisedOut, taskId, threadMembers, type ChannelState, type GuardFloor, type ReviewRound, type Roster, type RoomsFloor, type Task } from "./state.ts";
 import { mergeCard, sameCard } from "./card.ts";
 import { daemonSeat } from "./daemon.ts";
 import { isWakeVia, viaOf } from "./wake.ts";
-import { COMMANDS } from "./brief.ts";
 import { cardLine } from "./format.ts";
 
 export { Rejected };

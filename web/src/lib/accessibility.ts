@@ -31,20 +31,20 @@ function write(key: string, value: string): void {
   }
 }
 
-export function accessibilityOptionEnabled(option: AccessibilityOption): boolean {
+function accessibilityOptionEnabled(option: AccessibilityOption): boolean {
   return read(`${STORAGE_PREFIX}${option}`) === "on"
 }
 
-export function systemPrefersReducedMotion(): boolean {
+function systemPrefersReducedMotion(): boolean {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false
   return window.matchMedia(REDUCED_MOTION_QUERY).matches
 }
 
-export function reducedMotionActive(): boolean {
+function reducedMotionActive(): boolean {
   return accessibilityOptionEnabled("reduce-motion") || systemPrefersReducedMotion()
 }
 
-export function syncAccessibilityClasses(): void {
+function syncAccessibilityClasses(): void {
   document.documentElement.classList.toggle("reduce-motion", reducedMotionActive())
 }
 

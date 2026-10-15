@@ -5,12 +5,12 @@
 
 import { useSyncExternalStore } from "react"
 
-import type { ChannelIdentityView, ChannelView, ComputerView, KiwiBridge, PairAskView, PendingItem, PersonView, PublicPerson, StoreSnapshot, UpdateView } from "../../../desktop/src/bridge.ts"
+import type { ChannelIdentityView, ChannelView, ComputerView, KiwiBridge, PairAskView, PublicPerson, StoreSnapshot, UpdateView } from "../../../desktop/src/bridge.ts"
 import { mergePublicChannels, migrateEntries, publicChannel } from "../../../desktop/src/seats.ts"
 import { makeLocalPerson, onLocalChange, readLocal, writeLocal, type Local } from "./channel-local"
 import { persistQueue } from "./persist-queue"
 
-export type { ChannelView, ComputerView, KiwiBridge, PairAskView, PendingItem, PersonView, PublicPerson, StoreSnapshot, UpdateView }
+export type { ChannelView, ComputerView, KiwiBridge, PairAskView, PublicPerson, StoreSnapshot, UpdateView }
 
 /** The desktop bridge, or null in a plain browser. */
 export function bridge(): KiwiBridge | null {
@@ -95,12 +95,4 @@ export async function saveComputers(computers: ComputerView[]): Promise<void> {
     await b.saveComputers(computers)
     publish({ ...snapshot, computers })
   } else writeLocal({ computers })
-}
-
-export async function setPending(pending: PendingItem[]): Promise<void> {
-  const b = bridge()
-  if (b) {
-    await b.setPending(pending)
-    publish({ ...snapshot, pending })
-  } else writeLocal({ pending })
 }

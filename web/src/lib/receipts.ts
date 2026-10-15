@@ -10,7 +10,7 @@ import { isPerson, threadMembers, type ChannelState } from "../../../src/state.t
  * A mark as this view heard it. One from the snapshot on connect (`snapshot`) says how far that member
  * had read by then, and when it got that far: not when it passed any earlier message.
  */
-export type Heard = ReadMark & { snapshot?: true }
+type Heard = ReadMark & { snapshot?: true }
 
 /** The marks this view has heard for each key, oldest first (each further on than the last). */
 export type Marks = Map<string, Heard[]>

@@ -49,10 +49,10 @@ export interface PersonClaim {
 }
 
 /** What a computer signs for each of its agents: this agent key, in this channel, is one of mine. */
-export const vouchStatement = (roomId: string, agentPk: string) => `kiwi-vouch\n${roomId}\n${agentPk}`;
+const vouchStatement = (roomId: string, agentPk: string) => `kiwi-vouch\n${roomId}\n${agentPk}`;
 
 /** What a person signs when they join: this member key, in this channel, is me. */
-export const personStatement = (roomId: string, memberPk: string) => `kiwi-person\n${roomId}\n${memberPk}`;
+const personStatement = (roomId: string, memberPk: string) => `kiwi-person\n${roomId}\n${memberPk}`;
 
 /** Text a person or a computer chose, bounded and on one line, for a cert. */
 function clean(s: string, max: number): string {

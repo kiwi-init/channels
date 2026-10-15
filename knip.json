@@ -1,0 +1,55 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreBinaries": [
+    "oxlint",
+    "oxfmt",
+    "iconutil"
+  ],
+  "workspaces": {
+    ".": {
+      "entry": [
+        "scripts/*.ts",
+        "scripts/bench-sh/run.ts",
+        "test/**/*.test.ts",
+        "test/owner-cli.ts"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "scripts/**/*.ts",
+        "test/**/*.ts",
+        ".github/jev-ci/**/*.ts"
+      ],
+      "ignoreDependencies": [
+        "cloudflare"
+      ],
+      "ignoreUnresolved": [
+        "src/cli/main.ts",
+        "src/relay/bun.ts"
+      ]
+    },
+    "web": {
+      "entry": [
+        "src/**/*.test.{ts,tsx}"
+      ],
+      "project": [
+        "src/**/*.{ts,tsx,css}"
+      ],
+      "ignore": [
+        "src/lib/design-tokens.ts",
+        "src/lib/fonts.ts"
+      ]
+    },
+    "desktop": {
+      "entry": [
+        "src/main.ts",
+        "src/preload.ts",
+        "src/channels.ts",
+        "scripts/*.ts"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "scripts/**/*.ts"
+      ]
+    }
+  }
+}

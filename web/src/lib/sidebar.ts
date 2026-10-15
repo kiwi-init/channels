@@ -15,7 +15,7 @@ function read(): boolean {
   }
 }
 
-export function setSidebarOpen(open: boolean): void {
+function setSidebarOpen(open: boolean): void {
   try {
     if (open) localStorage.removeItem(KEY)
     else localStorage.setItem(KEY, "closed")

@@ -19,7 +19,7 @@
 
 import { MAILBOX_ID_RE, MAILBOX_MAX_BYTES, MAILBOX_TTL_MS } from "../mailbox.ts";
 
-export interface MailboxSlots {
+interface MailboxSlots {
   a: string | null;
   b: string | null;
   firstAt: number;
@@ -38,7 +38,7 @@ const PATH = /^\/v1\/mailbox\/([A-Za-z0-9_-]{43})(?:\/(a|b))?$/;
 // Requests carry signatures, never cookies, so answering any origin opens
 // nothing. Adapters wrap every /v1/* response (and answer OPTIONS) with this.
 
-export const CORS_HEADERS: Record<string, string> = {
+const CORS_HEADERS: Record<string, string> = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, PUT, POST, DELETE, OPTIONS",
   "access-control-allow-headers": "authorization, content-type, x-human-token",

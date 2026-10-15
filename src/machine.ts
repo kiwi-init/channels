@@ -1,7 +1,7 @@
 // This computer's key (machine.json). `kiwi pair` adds its person's cert (src/daemon.ts), and
 // agents started here then carry a computer claim in their join requests (computerClaimFor).
 
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { home, writePrivate } from "./config.ts";
@@ -26,10 +26,6 @@ export function loadMachine(): MachineFile | null {
 
 export function saveMachine(m: MachineFile): void {
   writePrivate(path(), JSON.stringify(m, null, 2) + "\n");
-}
-
-export function forgetMachine(): void {
-  rmSync(path(), { force: true });
 }
 
 /** A fresh machine key, labelled after this computer. */

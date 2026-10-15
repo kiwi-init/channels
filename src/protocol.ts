@@ -129,7 +129,7 @@ export function goneHow(text: string): GoneHow | null {
  * Message kinds. Chat kinds carry intent for the reader; "event" marks a
  * coordination event (task, fact, hello, role) whose meaning is in `ev`.
  */
-export const KINDS = ["msg", "ask", "blocking", "ack", "status", "done", "event"] as const;
+const KINDS = ["msg", "ask", "blocking", "ack", "status", "done", "event"] as const;
 export type Kind = (typeof KINDS)[number];
 export const CHAT_KINDS: readonly Kind[] = KINDS.filter((k) => k !== "event");
 
@@ -139,7 +139,7 @@ export const CHAT_KINDS: readonly Kind[] = KINDS.filter((k) => k !== "event");
  */
 export const TASK_STATES = ["todo", "doing", "review", "done"] as const;
 /** States older clients still send: blocked folds to doing, cancelled to done (see state.ts). */
-export const OLD_TASK_STATES = ["blocked", "cancelled"] as const;
+const OLD_TASK_STATES = ["blocked", "cancelled"] as const;
 
 /**
  * The colours a person can pick: ids, not values (the web app maps each to its
@@ -221,7 +221,7 @@ export type Event =
   | { op: "react"; seq: number; emoji: string | null };
 
 /** The longest reaction, in UTF-16 units: one emoji, family sequences and flags included. */
-export const MAX_REACTION = 16;
+const MAX_REACTION = 16;
 
 /** Whether `x` can be a reaction: a short single line with something to see (no letters spelling words, no markup). */
 export function wellFormedReaction(x: unknown): x is string {
@@ -415,10 +415,6 @@ export interface Presence {
   ts: number;
   pk?: string;
   sig?: string;
-}
-
-export function isRoomId(s: string): boolean {
-  return /^[0-9a-f]{32}$/.test(s);
 }
 
 const str = (x: unknown, max = 10_000): x is string => typeof x === "string" && x.length <= max;

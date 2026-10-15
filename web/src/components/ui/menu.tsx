@@ -1,5 +1,4 @@
 import { Menu as Base } from "@base-ui/react/menu"
-import { Tick02Icon } from "@hugeicons/core-free-icons"
 import type { ReactNode } from "react"
 
 import { cx } from "@/lib/utils"
@@ -8,9 +7,9 @@ import { Icon, type IconSvgElement } from "../icon"
 // Menus on Base UI: keyboard, focus and outside-click come for free. Pass the
 // element that opens it as `trigger`; it keeps its own look.
 
-export const POP = "rounded-card bg-raised p-1 text-ink shadow-pop outline-none"
+const POP = "rounded-card bg-raised p-1 text-ink shadow-pop outline-none"
 /** Popups grow out of their anchor on open and leave at once on close. */
-export const POP_IN = "origin-(--transform-origin) transition-[opacity,scale] duration-120 ease-out data-starting-style:scale-[0.98] data-starting-style:opacity-0"
+const POP_IN = "origin-(--transform-origin) transition-[opacity,scale] duration-120 ease-out data-starting-style:scale-[0.98] data-starting-style:opacity-0"
 const ITEM =
   "flex w-full cursor-default items-center gap-2 rounded-ctl px-2 py-1.5 text-left text-ui outline-none select-none data-disabled:opacity-40 data-highlighted:bg-wash-2 data-highlighted:text-ink"
 
@@ -55,41 +54,6 @@ export function MenuNote({ children }: { children: ReactNode }) {
   return <p className="truncate px-2 pt-1.5 pb-2 text-meta text-ink-2">{children}</p>
 }
 
-export function MenuLabel({ children }: { children: ReactNode }) {
-  return <Base.GroupLabel className="px-2 pt-1.5 pb-1 text-meta font-medium text-ink-3">{children}</Base.GroupLabel>
-}
-
 export function MenuSeparator() {
   return <Base.Separator className="mx-1 my-1 h-px bg-line" />
-}
-
-export const MenuGroup = Base.Group
-
-export function MenuRadioGroup<T extends string>({ value, onChange, children }: { value: T; onChange: (v: T) => void; children: ReactNode }) {
-  return (
-    <Base.RadioGroup value={value} onValueChange={(v) => onChange(v as T)}>
-      {children}
-    </Base.RadioGroup>
-  )
-}
-
-/** One choice of several: a tick marks the current one; a hint can say what it means. */
-export function MenuRadioItem({ value, children, hint, onClick }: { value: string; children: ReactNode; hint?: ReactNode; onClick?: () => void }) {
-  return (
-    <Base.RadioItem value={value} closeOnClick onClick={onClick} className={cx(ITEM, hint != null && "items-start")}>
-      <span className={cx("w-4 shrink-0 text-ink", hint != null && "pt-0.5")}>
-        <Base.RadioItemIndicator>
-          <Icon icon={Tick02Icon} size={14} strokeWidth={2} />
-        </Base.RadioItemIndicator>
-      </span>
-      {hint ? (
-        <span>
-          <span className="block font-medium">{children}</span>
-          <span className="block text-meta text-ink-3">{hint}</span>
-        </span>
-      ) : (
-        children
-      )}
-    </Base.RadioItem>
-  )
 }

@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { Channel, relayConfig } from "../src/client.ts";
 import { decodeJoinCode } from "../src/crypto.ts";
 import { generateIdentity } from "../src/identity.ts";
-import { claimComputer, provePerson } from "../src/person.ts";
+import { claimComputer } from "../src/person.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { devHostOk, devHumanAuth } from "../src/relay/human.ts";
 import { joinAgent, joinPerson, pairComputer, setupChannel } from "./owner.ts";

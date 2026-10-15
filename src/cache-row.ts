@@ -29,7 +29,7 @@ export async function openRow(row: CachedRow, roomId: string, keys: Record<strin
   return null;
 }
 
-export function wellFormedRow(x: unknown): x is CachedRow {
+function wellFormedRow(x: unknown): x is CachedRow {
   if (!x || typeof x !== "object") return false;
   const r = x as Record<string, unknown>;
   return Number.isSafeInteger(r.seq) && Number.isSafeInteger(r.e) && typeof r.iv === "string" && typeof r.ct === "string" && (r.rts === undefined || typeof r.rts === "number");

@@ -40,7 +40,7 @@ export function Feed({ items, state, now }: { items: FeedItem[]; state: ChannelS
 }
 
 /** "name · 2m ago", muted, the meta line every row and card uses. */
-export function Meta({ name, at, now, state, strong = true }: { name: string; at: number; now: number; state: ChannelState; strong?: boolean }) {
+function Meta({ name, at, now, state, strong = true }: { name: string; at: number; now: number; state: ChannelState; strong?: boolean }) {
   return (
     <span className="text-meta text-ink-3">
       <span className={cx(strong ? "font-medium text-ink" : "text-ink-2", "text-ui")}>{memberName(state.members.get(name), name)}</span>
@@ -126,7 +126,7 @@ export function PrLink({ pr }: { pr: PrRef }) {
 }
 
 /** The small mark beside an event row: a task's new state as its state mark, otherwise an icon for what happened. */
-export function Mark({ mark }: { mark: EventMark }) {
+function Mark({ mark }: { mark: EventMark }) {
   if (mark === "add") return <Icon icon={Add01Icon} size={16} />
   if (mark === "assign") return <Icon icon={UserIcon} size={16} />
   if (mark === "note") return <Icon icon={Note01Icon} size={16} />
