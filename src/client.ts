@@ -371,7 +371,7 @@ export function reason(err: unknown): string {
 }
 
 /** The line a listener's status gets for `ev`, if any: back after an outage, the relay out of reach, a frame dropped. */
-export function statusLine(ev: Live): string | null {
+function statusLine(ev: Live): string | null {
   switch (ev._tag) {
     case "Open":
       return ev.outage !== null ? `reconnected after ${Math.round(ev.outage / 1000)}s; nothing was missed` : null;
@@ -421,7 +421,7 @@ export interface Info {
 
 /** The channel's mode as the owner last signed it, and the log position it took effect at. */
 /** A room as the settings list it: its id and its name. */
-export interface RoomEntry {
+interface RoomEntry {
   id: string;
   name: string;
 }
@@ -457,7 +457,7 @@ export async function ownerStatement(roomId: string, info: { ownerPk: string; ow
  * of the key statement so older clients ignore it. A relay can strip it, which
  * drops the room back to the older rule until a signed title has been seen.
  */
-export async function titlesSigned(roomId: string, ownerPk: string, titlesSig: string | null | undefined): Promise<boolean> {
+async function titlesSigned(roomId: string, ownerPk: string, titlesSig: string | null | undefined): Promise<boolean> {
   if (!titlesSig) return false;
   return verify({ room: roomId, pk: ownerPk, titles: "signed", sig: titlesSig });
 }
@@ -1820,8 +1820,6 @@ export function isForAgent(m: Message, agent: string): boolean {
 export function isDirectedAt(m: Message, agent: string): boolean {
   return !!m.to?.includes(agent);
 }
-
-export { encodeJoinCode };
 
 /** Relay-wide settings: which WorkOS client signs people in to create channels (null: no sign-in), and whether it's dev sign-in. */
 export interface RelayConfig {

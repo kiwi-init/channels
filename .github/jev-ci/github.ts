@@ -3,7 +3,7 @@ import { appendFileSync } from "node:fs"
 import type { Decision, Plan } from "./plan.ts"
 
 const API = "https://api.github.com"
-export const PASS_PREFIX = "jev-ci-pass-"
+const PASS_PREFIX = "jev-ci-pass-"
 const MARKER = "<!-- jev-ci -->"
 
 async function api(path: string, init: RequestInit = {}): Promise<Response> {

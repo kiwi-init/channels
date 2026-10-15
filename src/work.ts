@@ -7,16 +7,16 @@ import { describeEvent } from "./format.ts";
 import { inlineText } from "./membership.ts";
 import { ignored, type Message } from "./protocol.ts";
 import type { OldTaskState, TaskState } from "./protocol.ts";
-import { currentState, isPerson, keptFromPeople, taskId, type ChannelState, type Task } from "./state.ts";
+import { currentState, isPerson, keptFromPeople, type ChannelState, type Task } from "./state.ts";
 
 /** Quiet this long, with nothing in progress, and an agent reads as idle. */
-export const IDLE_AFTER_MS = 15 * 60_000;
+const IDLE_AFTER_MS = 15 * 60_000;
 
 /**
  * Whether `viewer` may see message `m` here: nothing forged or refused, and for a person in
  * strict coordinator-only mode, no agent's chat except the coordinator's. Events always show.
  */
-export function visibleTo(state: ChannelState, viewer: string, m: Message): boolean {
+function visibleTo(state: ChannelState, viewer: string, m: Message): boolean {
   if (ignored(state.trust.get(m.seq))) return false;
   const me = state.members.get(viewer);
   return !(me && isPerson(me) && keptFromPeople(state, m));
@@ -73,7 +73,7 @@ export function prsIn(state: ChannelState, messages: Message[], viewer: string, 
 
 // ---------- agents ----------
 
-export type AgentStatus = "working" | "blocked" | "idle" | "offline";
+type AgentStatus = "working" | "blocked" | "idle" | "offline";
 
 export interface AgentRow {
   name: string;
@@ -125,30 +125,6 @@ const RANK: Record<AgentStatus, number> = { blocked: 0, working: 1, idle: 2, off
 
 // ---------- what changed, what needs a person ----------
 
-export interface Change {
-  seq: number;
-  at: number;
-  actor: string;
-  /** The event, the way the log describes it ("started T12 “Fix login”: note"). */
-  text: string;
-  op: string;
-  task?: number;
-}
-
-const CHANGE_OPS = new Set(["task.add", "task.claim", "task.update", "room.create", "mode.set"]);
-
-/** The latest task and room events, newest first. */
-export function recentChanges(state: ChannelState, messages: Message[], limit = 8): Change[] {
-  const out: Change[] = [];
-  for (let i = messages.length - 1; i >= 0 && out.length < limit; i--) {
-    const m = messages[i]!;
-    if (m.kind !== "event" || !m.ev || !CHANGE_OPS.has(m.ev.op) || state.rejected.has(m.seq) || ignored(state.trust.get(m.seq))) continue;
-    const task = m.ev.op === "task.add" ? m.seq : "task" in m.ev ? m.ev.task : undefined;
-    out.push({ seq: m.seq, at: at(m), actor: m.from, text: describeEvent(m, state), op: m.ev.op, ...(task !== undefined ? { task } : {}) });
-  }
-  return out;
-}
-
 export interface Need {
   seq: number;
   at: number;
@@ -182,7 +158,7 @@ export type FeedItem =
   | { type: "thread"; seq: number; at: number; root: number; room?: string; messages: Message[] };
 
 /** Whether a message names task `id` ("T12"). */
-export function mentions(m: Message, id: number): boolean {
+function mentions(m: Message, id: number): boolean {
   return new RegExp(`\\bT${id}\\b`).test(textOf(m));
 }
 
@@ -254,22 +230,7 @@ function onTask(m: Message, state: ChannelState): { text: string; mark: EventMar
   }
 }
 
-/** The mark an event's row shows in any feed: a task's new state, or what kind of change it was. */
-export function markOf(m: Message): EventMark {
-  const ev = m.ev;
-  if (!ev) return "other";
-  if (ev.op === "task.add") return "add";
-  if (ev.op === "task.claim") return "assign";
-  if (ev.op === "task.update") return ev.state ? currentState(ev.state) : ev.owner !== undefined ? "assign" : ev.note ? "note" : "other";
-  return "other";
-}
-
 /** The pull requests a task's feed links, for the task page's side panel. */
 export function taskPrs(items: FeedItem[]): PrRef[] {
   return items.flatMap((i) => (i.type === "pr" ? [i.pr] : []));
-}
-
-/** "T12 · Fix login", for a task row or chip. */
-export function taskLabel(t: Task): string {
-  return `${taskId(t.id)} · ${t.title}`;
 }

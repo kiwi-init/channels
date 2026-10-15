@@ -181,3 +181,14 @@ jobs:
       (a docstring listed in its ALLOWED_DOCSTRINGS passes, a #! first line passes). Old lines
       are not checked. The job also type-checks scripts/ci with mypy --strict and runs its
       unit tests.
+
+  repo-knip:
+    jev: false
+    name: repo / knip
+    inputs: ["**/*.{ts,tsx,css}"]
+    always: ["knip.json", "package.json", "bun.lock", "web/package.json", "web/bun.lock", "desktop/package.json", "desktop/bun.lock"]
+    description: >-
+      Runs Knip (knip.json) over the root, web/ and desktop/ packages. Fails on a file nothing
+      imports, an export or exported type nothing outside its file uses, a dependency no file
+      uses, or an import of a package a package.json doesn't list. Tests count as users, so an
+      export only a test imports passes.

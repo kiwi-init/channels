@@ -2,12 +2,12 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
 
-export interface ProcInfo {
+interface ProcInfo {
   ppid: number;
   name: string;
 }
 
-export type ProcLookup = (pid: number) => ProcInfo | null;
+type ProcLookup = (pid: number) => ProcInfo | null;
 
 function fromProc(pid: number): ProcInfo | null {
   try {
@@ -28,7 +28,7 @@ function fromPs(pid: number): ProcInfo | null {
   return m ? { ppid: Number(m[1]), name: basename(m[2] ?? "") } : null;
 }
 
-export function procInfo(pid: number): ProcInfo | null {
+function procInfo(pid: number): ProcInfo | null {
   return process.platform === "linux" ? fromProc(pid) : fromPs(pid);
 }
 

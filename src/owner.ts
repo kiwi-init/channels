@@ -3,7 +3,7 @@
 // demo and the tests play the owner with it, through the client library.
 
 import * as Effect from "effect/Effect";
-import { AgentSession, runAgent, type Agent } from "./agent.ts";
+import { AgentSession } from "./agent.ts";
 import { Channel, keepRecordsIn } from "./client.ts";
 import { Keystore, type ChannelConfig } from "./config.ts";
 import { Rejected } from "./refusals.ts";
@@ -11,7 +11,7 @@ import { describeScopes, wireScopes, type Scope } from "./scopes.ts";
 import { GENERAL_ROOM, MAX_CHARTER, type Event } from "./protocol.ts";
 import { COORDINATOR, firstAgent, fold, newRoomId } from "./state.ts";
 
-export class OwnerSession extends AgentSession {
+class OwnerSession extends AgentSession {
   /** The owner key's handle on the channel (the same as `ch`: this session signs as the owner). */
   get ownerCh(): Channel {
     return this.ch;
@@ -173,8 +173,3 @@ export const openOwnerSession = Effect.fn("OwnerSession.open")(function* (alias:
   if (identity.pk !== cfg.ownerPk) return yield* new Rejected(`${name} isn't this channel's owner key`);
   return new OwnerSession(alias, cfg, identity, (a) => Effect.runSync(keys.saveAccess(alias, a)));
 });
-
-/** openOwnerSession, as a Promise. */
-export const openOwner = (alias: string, cfg: ChannelConfig, name: string): Promise<OwnerSession> => runAgent(openOwnerSession(alias, cfg, name));
-
-export type { Agent };

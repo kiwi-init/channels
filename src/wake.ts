@@ -6,7 +6,7 @@ export type WakePath = { kind: "hooks" } | { kind: "command"; via: WakeCommand; 
 
 export type WakeVia = "hooks" | WakeCommand;
 
-export const WAKE_VIA: readonly WakeVia[] = ["hooks", "codex-queue", "opencode-api"];
+const WAKE_VIA: readonly WakeVia[] = ["hooks", "codex-queue", "opencode-api"];
 
 export function isWakeVia(v: unknown): v is WakeVia {
   return typeof v === "string" && (WAKE_VIA as readonly string[]).includes(v);
@@ -58,7 +58,7 @@ export function wakePath(record: { harness?: WakeHarness; session?: string } | n
   }
 }
 
-export function shellWord(s: string): string {
+function shellWord(s: string): string {
   return /^[A-Za-z0-9_.@%+=:,/-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`;
 }
 

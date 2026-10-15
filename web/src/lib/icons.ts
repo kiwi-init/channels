@@ -30,7 +30,7 @@ function write(room: string, stored: Stored): void {
 }
 
 /** Refetch when iconAt moved. A channel that never had an icon stays a letter. */
-export async function refreshIcon(member: StoredMember): Promise<void> {
+async function refreshIcon(member: StoredMember): Promise<void> {
   const room = member.access.roomId
   const ch = linkOf(member)
   const at = (await ch.info()).iconAt ?? null

@@ -1,6 +1,6 @@
 import { relayUrl } from "../lib/relay"
 import { Dialog } from "@base-ui/react/dialog"
-import { Add01Icon, Copy01Icon, PauseIcon } from "@hugeicons/core-free-icons"
+import { Copy01Icon, PauseIcon } from "@hugeicons/core-free-icons"
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react"
 
 import { memberLoad, showsLoad, type Load } from "@mc/load.ts"
@@ -427,18 +427,6 @@ const PUBLIC_RELAY = "https://channels.kiwiinit.com"
 
 const ROLES = ["designer", "frontend", "backend", "reviewer", "tester", "docs", "intern"]
 
-export function InviteButton() {
-  const { p, openInvite } = useControls()
-  if (!p.isOwner) return null
-  return (
-    // On a phone it lives in the channel menu (Invite…), so the header keeps room for the title.
-    <Button size="sm" variant="secondary" className="h-8 gap-1 pr-3 pl-2.5 max-md:hidden" aria-label="Invite" onClick={openInvite}>
-      <Icon icon={Add01Icon} size={15} />
-      <span>Invite</span>
-    </Button>
-  )
-}
-
 /** One dialog for both ways in: a link for a person, a command for an agent with the role and rules agreed up front. */
 function Invite({ onDone }: { onDone: () => void }) {
   const { p } = useControls()
@@ -529,29 +517,6 @@ function Invite({ onDone }: { onDone: () => void }) {
 }
 
 // ---------- join requests ----------
-
-/** The quiet line above the conversation when someone's waiting to be let in. Owner only. */
-export function RequestsBanner() {
-  const { p, openRequests } = useControls()
-  if (!p.isOwner || p.requests.length === 0) return null
-  const first = p.requests[0]!
-  return (
-    <div className="flex shrink-0 items-center gap-3 bg-accent-wash px-5 py-2 text-ui">
-      <span className="min-w-0 flex-1 truncate">
-        {p.requests.length > 1 ? (
-          `${p.requests.length} people and agents want to join this channel.`
-        ) : (
-          <>
-            <span className="font-medium">{first.name}</span> wants to join this channel.
-          </>
-        )}
-      </span>
-      <button type="button" onClick={openRequests} className="shrink-0 font-medium hover:underline">
-        Review
-      </button>
-    </div>
-  )
-}
 
 function Requests({ onDone }: { onDone: () => void }) {
   const { p, busy, run, ask } = useControls()

@@ -5,7 +5,7 @@
 import { ignored, type Message } from "../../../src/protocol.ts"
 import { isPerson, type ChannelState } from "../../../src/state.ts"
 
-export type HeadState = "idle" | "thinking" | "speaking" | "working" | "error" | "sleeping"
+type HeadState = "idle" | "thinking" | "speaking" | "working" | "error" | "sleeping"
 
 export interface Mood {
   state: HeadState

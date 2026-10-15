@@ -9,7 +9,7 @@ import { Icon } from "./icon"
 import { isAgent } from "./message"
 import { Alert, Button, IconButton, Monogram, errorText, toast } from "./kit"
 
-export const LABEL: Record<TaskState, string> = { doing: "In progress", review: "In review", todo: "Open", done: "Done" }
+const LABEL: Record<TaskState, string> = { doing: "In progress", review: "In review", todo: "Open", done: "Done" }
 
 /** A task's state as a label, saying when a done one was cancelled rather than finished. */
 export const labelOf = (t: Pick<Task, "state" | "cancelled">) => (t.state === "done" && t.cancelled ? "Done (cancelled)" : LABEL[t.state])

@@ -266,11 +266,27 @@ jobs:
           job: repo-comments
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['repo-comments'] }}
 
+  repo-knip:
+    name: repo / knip
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['repo-knip']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: cd desktop && bun install --frozen-lockfile
+      - run: bun run knip
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: repo-knip
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['repo-knip'] }}
+
   # The one check to require: passes when every job the plan ran passed and the rest were skipped.
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, cli-build, relay-worker, repo-comments, desktop-keys]
+    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, cli-build, relay-worker, repo-comments, desktop-keys, repo-knip]
     if: always()
     runs-on: ubuntu-latest
     permissions:

@@ -8,7 +8,7 @@ export const MODEL = "jev-1.13.0"
 /** Answers already paid for, keyed by request. Outside the repo, so a checkout stays clean. */
 const CACHE = process.env.JEV_CI_CACHE ?? join(tmpdir(), "jev-ci", "answers.json")
 
-export type Noul = { type: "noul"; noul: number }
+type Noul = { type: "noul"; noul: number }
 export type Response = { model: string; answers: Record<string, Noul>; usage: { input_tokens: number; output_tokens: number } }
 export type Request = { model: string; state: unknown; questions: Record<string, unknown> }
 

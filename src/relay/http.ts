@@ -10,9 +10,6 @@ import * as Layer from "effect/Layer";
 import * as References from "effect/References";
 import { BadRequest, refusalResponse, type Refusal } from "./failures.ts";
 
-/** Plain async code (a store call): if it throws, that's a bug or an outage, so a defect (a 500), never a refusal. */
-export const attempt = <A>(f: () => A | Promise<A>): Effect.Effect<A> => Effect.promise(async () => f());
-
 // ---------- the relay's services, built once ----------
 
 /**
@@ -109,10 +106,6 @@ export const answer = <Fx, R>(program: Effect.Effect<Reply<Fx>, Refusal, R>): Ef
     Effect.map((reply) => ("res" in reply ? reply : { res: Response.json(reply.data), fx: reply.fx })),
     Effect.catch((r) => Effect.succeed({ res: refusalResponse(r) })),
   );
-
-/** Run a handler that answers with a whole Response, in the relay's context; a refusal becomes its response. */
-export const respond = <R>(context: Context.Context<R>, program: Effect.Effect<Response, Refusal, R>): Promise<Response> =>
-  Effect.runPromiseWith(context)(program.pipe(Effect.catch((r) => Effect.succeed(refusalResponse(r)))));
 
 /** A route table as plain rows (method, path, check), for tests. */
 export const describeRoutes = (routes: { method: string; path: string | RegExp; guard: string }[]) => routes.map(({ method, path, guard }) => ({ method, path: String(path), guard }));

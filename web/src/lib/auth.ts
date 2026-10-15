@@ -18,7 +18,7 @@ export type SignInMode = "loading" | "off" | "workos" | "dev"
 let mode: Promise<SignInMode> | null = null
 
 /** Whether this relay has sign-in, and which; a relay that doesn't answer has none. */
-export function signInMode(): Promise<SignInMode> {
+function signInMode(): Promise<SignInMode> {
   mode ??= run(
     relayFx.relayConfig(relayUrl()).pipe(
       Effect.map((c: { workosClientId: string | null; dev?: boolean }): SignInMode => (c.dev ? "dev" : c.workosClientId ? "workos" : "off")),
@@ -41,7 +41,7 @@ export function useSignInMode(): SignInMode {
 }
 
 /** Raised when sign-in can't happen here (a WorkOS relay, outside the app). */
-export class SignInUnavailable extends Error {}
+class SignInUnavailable extends Error {}
 
 /**
  * A token for creating a channel: null on a relay without sign-in. In the app, the bridge signs in

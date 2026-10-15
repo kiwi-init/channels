@@ -61,7 +61,7 @@ export type Roster = {
   runs?: Runs;
 }[];
 
-export interface TaskNote {
+interface TaskNote {
   seq: number;
   by: string;
   ts: number;
@@ -149,7 +149,7 @@ export interface ChannelState {
 }
 
 /** The owner's word on what the channel is for. Agents work within it and escalate what falls outside. */
-export interface Charter {
+interface Charter {
   text: string;
   by: string;
   /** When it was set (0 when known only from the signed settings). */
@@ -157,7 +157,7 @@ export interface Charter {
 }
 
 /** The owner stopped every agent. */
-export interface Hold {
+interface Hold {
   note?: string;
   by: string;
   at: number;
@@ -211,7 +211,7 @@ export function keptFromPeople(state: ChannelState, m: Message): boolean {
 }
 
 /** A room's name as it's shown: one line, bounded. Empty means no name. */
-export function roomName(name: unknown): string {
+function roomName(name: unknown): string {
   return inlineText(name, MAX_ROOM_NAME);
 }
 
@@ -358,16 +358,6 @@ export function wentTo(c: ThreadChoice): string {
   if (c.task !== undefined) return ` in ${taskId(c.task)}'s thread${c.doing !== undefined ? " (the task you're doing; --main for the main conversation)" : ""}`;
   if (c.several) return ` in the main conversation: you're doing ${c.several.map(taskId).join(" and ")}, so say which with --task`;
   return "";
-}
-
-/**
- * The task an agent's words belong to by default: the one it's doing, when it owns exactly one in
- * progress. The coordinator's words belong in main, so never for it.
- */
-export function workingOn(state: Pick<ChannelState, "tasks" | "coordinator">, me: string): number | undefined {
-  if (state.coordinator === me) return undefined;
-  const doing = [...state.tasks.values()].filter((t) => t.owner === me && t.state === "doing");
-  return doing.length === 1 ? doing[0]!.id : undefined;
 }
 
 /** Parse "T12", "t12", "#12" or "12". */
@@ -990,6 +980,6 @@ export function colorOf(state: ChannelState, name: string): Color | null {
 }
 
 /** A card's tools as kept: lowercase, trimmed, no empties or repeats. */
-export function normTags(tags: readonly string[] | undefined): string[] {
+function normTags(tags: readonly string[] | undefined): string[] {
   return [...new Set((tags ?? []).map((t) => String(t).trim().toLowerCase()).filter(Boolean))].slice(0, MAX_TAGS);
 }

@@ -19,7 +19,7 @@ import { dirname, resolve } from "node:path";
 import { kimiCodePid, mimoHere, type ProcessTree } from "./ancestry.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord } from "./config.ts";
 
-export type Harness = NonNullable<SeatRecord["harness"]>;
+type Harness = NonNullable<SeatRecord["harness"]>;
 
 /** The agent running this process: its harness, and the session and process when the harness says. */
 export interface Here {
@@ -101,7 +101,7 @@ function real(p: string): string {
  * Directories too broad to bind: the home folder and the filesystem root. A
  * binding there would make every session in every project act as that agent.
  */
-export function tooBroad(dir: string): boolean {
+function tooBroad(dir: string): boolean {
   const d = real(dir);
   return d === real(homedir()) || dirname(d) === d;
 }
@@ -139,7 +139,7 @@ const SEEN_EVERY_MS = 10 * 60_000;
  * when the harness says (Claude Code), and then it's held while that process runs. Otherwise
  * (Codex, Grok…) it's held while that session listens or has used it in the last 12 hours.
  */
-export function heldElsewhere(b: Binding, who: Here, listening: (alias: string, as: string) => boolean, now = Date.now()): boolean {
+function heldElsewhere(b: Binding, who: Here, listening: (alias: string, as: string) => boolean, now = Date.now()): boolean {
   if (!b.session || b.session === who.session) return false;
   if (b.pid) return b.pid !== who.pid && pidAlive(b.pid);
   return listening(b.alias, b.as) || now - (b.seen ?? b.at ?? 0) < STALE_MS;

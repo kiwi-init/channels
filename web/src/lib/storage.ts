@@ -8,7 +8,7 @@ import * as Effect from "effect/Effect"
 // stand in for.
 
 /** The browser refused a write: private mode, or a full disk. */
-export class StorageRefused extends Data.TaggedError("StorageRefused")<{ readonly cause: unknown }> {
+class StorageRefused extends Data.TaggedError("StorageRefused")<{ readonly cause: unknown }> {
   override get message(): string {
     return this.cause instanceof Error ? this.cause.message : String(this.cause)
   }

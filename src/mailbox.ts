@@ -22,8 +22,8 @@ export const MAILBOX_TTL_MS = 10 * 60_000;
 /** The most one slot holds (the sealed box, as sent). */
 export const MAILBOX_MAX_BYTES = 64 * 1024;
 export const MAILBOX_ID_RE = /^[A-Za-z0-9_-]{43}$/;
-export const SLOTS = ["a", "b"] as const;
-export type Slot = (typeof SLOTS)[number];
+const SLOTS = ["a", "b"] as const;
+type Slot = (typeof SLOTS)[number];
 
 const enc = new TextEncoder();
 const SECRET_RE = /^[A-Za-z0-9_-]{43}$/;
@@ -127,7 +127,7 @@ export async function openMailbox(relay: string, secret: string, fetchImpl: type
 // ---------- pairing a computer with a person's app ----------
 
 /** A pairing code: what the app shows and `kiwi pair` takes. */
-export const PAIR_PREFIX = "kp1-";
+const PAIR_PREFIX = "kp1-";
 
 export const pairCode = (secret: string) => `${PAIR_PREFIX}${secret}`;
 

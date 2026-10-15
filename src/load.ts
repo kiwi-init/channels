@@ -5,7 +5,7 @@
 
 import { taskId, type ChannelState, type Task } from "./state.ts";
 
-export type LoadLevel = "free" | "busy" | "overloaded";
+type LoadLevel = "free" | "busy" | "overloaded";
 
 export interface Load {
   level: LoadLevel;
@@ -30,8 +30,8 @@ export function loadSummary(l: Load): string {
 }
 
 /** Two things at once, or four on their plate, is more than one agent should carry. */
-export const OVERLOADED_DOING = 2;
-export const OVERLOADED_TOTAL = 4;
+const OVERLOADED_DOING = 2;
+const OVERLOADED_TOTAL = 4;
 
 /** `_now` is kept so callers that pass a clock still fit (it used to age out claims). */
 export function memberLoad(state: ChannelState, name: string, _now?: number): Load {

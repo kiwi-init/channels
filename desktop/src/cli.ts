@@ -10,7 +10,7 @@ import path from "node:path";
 import { ensureOnPath as ensureShellPath } from "../../src/shell-path.ts";
 
 /** Where the CLI lives: the install script's place (KIWI_INSTALL moves both). */
-export function cliPath(): string {
+function cliPath(): string {
   return path.join(process.env["KIWI_INSTALL"] || path.join(os.homedir(), ".kiwi", "bin"), process.platform === "win32" ? "kiwi.exe" : "kiwi");
 }
 
@@ -44,7 +44,7 @@ export function compareVersions(a: string, b: string): number {
 }
 
 /** What a kiwi binary says it is, or null when it won't run. */
-export function versionOf(bin: string): Promise<string | null> {
+function versionOf(bin: string): Promise<string | null> {
   return new Promise((resolve) => {
     execFile(bin, ["--version"], { timeout: 5_000 }, (err, stdout) => resolve(err ? null : stdout.trim().split(/\s+/).pop() || null));
   });

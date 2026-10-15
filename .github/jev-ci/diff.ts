@@ -1,6 +1,6 @@
 import { git } from "./git.ts"
 
-export type Hunk = { at: string; removed: string[]; added: string[] }
+type Hunk = { at: string; removed: string[]; added: string[] }
 export type FileChange = {
   path: string
   /** The old path, for a rename. */

@@ -35,7 +35,7 @@ import { chooseThread, humanOf, parseTaskId, similarOpenTasks, taskId, wentTo, t
 import { VERSION } from "../version.ts";
 import { channelFiles, runSh, sessionViews } from "../sh.ts";
 import { computerClaimFor } from "../machine.ts";
-import { briefText, COMMANDS } from "../brief.ts";
+import { briefText } from "../brief.ts";
 import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor, EXTRA_HARNESSES, extraInstalled, hooksInstalled, hooksStatus, howMessagesReachYou, installDetected, installExtra, installHooks, mcFor, runHook, uninstallDetected, uninstallExtra, uninstallHooks, type ExtraHarness } from "../hooks.ts";
 import { BadName } from "../refusals.ts";
 import { binDir, ensureOnPath, profileFor } from "../shell-path.ts";

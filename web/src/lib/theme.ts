@@ -27,7 +27,7 @@ export function setAppearance(a: Appearance) {
 }
 
 export type TextSize = "small" | "default" | "large" | "larger"
-export const TEXT_SIZES: Record<TextSize, number> = { small: 0.92, default: 1, large: 1.1, larger: 1.22 }
+const TEXT_SIZES: Record<TextSize, number> = { small: 0.92, default: 1, large: 1.1, larger: 1.22 }
 const SIZE_KEY = "mc.text-size"
 
 function readSize(): TextSize {

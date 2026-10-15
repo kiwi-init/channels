@@ -27,13 +27,11 @@ export const SCOPE_LABELS: Record<Scope, string> = {
  * events still carry the list, so a grant from before (some scopes, not all) keeps reading and binding
  * exactly as it was; it just isn't offered any more.
  */
-export const PRESETS = {
+const PRESETS = {
   "read-only": [] as Scope[],
   full: [...SCOPES] as Scope[],
 } as const;
 export type Preset = keyof typeof PRESETS;
-
-export const isScope = (x: unknown): x is Scope => typeof x === "string" && (SCOPES as readonly string[]).includes(x);
 
 /**
  * The scopes in a record or event, in a fixed order. Names this version doesn't
@@ -70,7 +68,7 @@ export function canPost(scopes: readonly Scope[]): boolean {
  * announcing yourself, your colour); null means nothing (letting go of a claim
  * only ever shrinks what you hold). Owner-only events are checked as such in fold.
  */
-export function scopeFor(m: Pick<Message, "kind" | "ev">): Scope | "any" | null {
+function scopeFor(m: Pick<Message, "kind" | "ev">): Scope | "any" | null {
   if (m.kind === "ask" || m.kind === "blocking") return "ask";
   if (m.kind !== "event") return "post";
   switch (m.ev?.op) {

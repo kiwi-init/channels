@@ -8,7 +8,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Channel, RelayError } from "../src/client.ts";
 import { generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
-import type { JoinRequest } from "../src/membership.ts";
 import type { Message } from "../src/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { fold } from "../src/state.ts";
@@ -82,7 +81,7 @@ describe("no seat moves to a new key", () => {
   });
 
   test("a seat.reclaim event that isn't from the owner is rejected and moves nothing", async () => {
-    const { oldKey, code, ownerCh, oldCh } = await seat();
+    const { oldKey, ownerCh, oldCh } = await seat();
     await oldCh.send("I took it", { ev: { op: "seat.reclaim", member: "win", from: "deadbeef", to: "cafebabe" } });
     const { messages } = await ownerCh.history(0);
     const members = await ownerCh.members();

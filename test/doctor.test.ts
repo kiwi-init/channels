@@ -3,7 +3,6 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { doctorChecks, type Finding } from "../src/cli/doctor.ts";
-import { b64url } from "../src/crypto.ts";
 import { newMachine, saveMachine, type MachineFile } from "../src/machine.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { workosHumanAuth } from "../src/relay/human.ts";
@@ -20,14 +19,6 @@ const jwks = Bun.serve({
   hostname: "127.0.0.1",
   fetch: () => Response.json({ keys: [{ kty: "RSA", kid: "k1", alg: "RS256", use: "sig", n: jwk.n, e: jwk.e }] }),
 });
-
-async function token(sub: string): Promise<string> {
-  const enc = (o: object) => b64url(new TextEncoder().encode(JSON.stringify(o)));
-  const head = enc({ alg: "RS256", kid: "k1", typ: "JWT" });
-  const body = enc({ sub, iss: "https://api.workos.com/user_management/client_test", exp: Math.floor(Date.now() / 1000) + 300 });
-  const sig = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", rsa.privateKey, new TextEncoder().encode(`${head}.${body}`));
-  return `${head}.${body}.${b64url(new Uint8Array(sig))}`;
-}
 
 const human = {
   ...workosHumanAuth("client_test", `${jwks.url.origin}/jwks`),

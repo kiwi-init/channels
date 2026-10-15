@@ -3,7 +3,7 @@
 // runtime. The relay sends `{ error, tag }`; older relays send only `error`, so a
 // missing tag falls back to one read from the status.
 
-export const ERROR_TAGS = [
+const ERROR_TAGS = [
   "BadRequest",
   "SignInRequired",
   "Unauthorized",

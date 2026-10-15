@@ -1,4 +1,4 @@
-export type Job = {
+type Job = {
   /** The job's display name in CI. */
   name?: string
   /** Files the job reads. A change outside these can't affect it. */

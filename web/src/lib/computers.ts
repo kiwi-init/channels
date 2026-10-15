@@ -28,7 +28,7 @@ export async function adoptThisComputer(): Promise<ComputerView | null> {
 }
 
 /** Raised outside the desktop app: pairing runs in its main process. */
-export class PairingNeedsApp extends Error {
+class PairingNeedsApp extends Error {
   constructor() {
     super("Pairing a computer needs the Kiwi desktop app.")
   }
@@ -70,7 +70,7 @@ function owned(): ChannelLink[] {
 }
 
 /** Take every agent that computer let in out of the channels this app owns; returns their names. */
-export async function removeAgentsOf(machinePk: string): Promise<string[]> {
+async function removeAgentsOf(machinePk: string): Promise<string[]> {
   const { removed, leftover } = await takeAgents(machinePk, owned())
   if (leftover.length) {
     throw new Error(`Couldn’t remove ${leftover.join(", ")} from your channels. The computer is still paired.`)

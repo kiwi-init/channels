@@ -21,7 +21,7 @@ import { loadImages, saveImages } from "./attach.ts";
 import { loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { Cursor, home, Keystore } from "./config.ts";
 import { ChannelGone, goneText, reason } from "./client.ts";
-import { ago, cardLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, mayDo, parseDuration, presenceWords, runsStatus, stateWord, taskStateWord } from "./format.ts";
+import { ago, cardLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, mayDo, parseDuration, presenceWords, runsStatus, taskStateWord } from "./format.ts";
 import { isWakeVia } from "./wake.ts";
 import { SCOPES } from "./scopes.ts";
 import { CHAT_KINDS, ignored, type Kind, type Message } from "./protocol.ts";

@@ -8,12 +8,11 @@ import { join } from "node:path";
 import { Channel, RelayError } from "../src/client.ts";
 import type { ChannelAccess } from "../src/crypto.ts";
 import { generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
-import type { JoinRequest } from "../src/membership.ts";
 import { ignored, type Event, type Kind, type Message } from "../src/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { parseScopes, readScopes, refusal, wireScopes, type Scope } from "../src/scopes.ts";
 import { fold, type Roster } from "../src/state.ts";
-import { checked, memoryBudget } from "./check.ts";
+import { checked } from "./check.ts";
 
 setDefaultTimeout(60_000);
 
