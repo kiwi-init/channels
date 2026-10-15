@@ -5,7 +5,7 @@ import { inlineText, runsLine, type Runs } from "./membership.ts";
 import { GENERAL_ROOM, ignored, imageMarker } from "./protocol.ts";
 import type { Card, Message, OldTaskState, TaskState, Trust } from "./protocol.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
-import { colorOf, humanOf, isPerson, taskId, type ChannelState, type Fact, type Task } from "./state.ts";
+import { colorOf, humanOf, isPerson, taskId, type ChannelState, type Fact, type ReviewRound, type Task } from "./state.ts";
 import { isWakeVia, wakeWords, type WakeVia } from "./wake.ts";
 
 export function ago(ts: number, now = Date.now()): string {
@@ -69,6 +69,7 @@ export function describeEvent(m: Message, state?: ChannelState): string {
     return title ? `${taskId(id)} “${title}”` : taskId(id);
   };
   const note = (n?: string) => (n ? `: ${n}` : "");
+  const round = ev.op === "task.update" ? roundTag(state?.tasks.get(ev.task), m.seq, ev.round) : "";
   switch (ev.op) {
     case "hello": {
       // Only the owner's word sets a role: anyone else's hello shows the role only when it's the one they
@@ -105,12 +106,14 @@ export function describeEvent(m: Message, state?: ChannelState): string {
     case "task.claim":
       return `claimed ${task(ev.task)}`;
     case "task.update": {
+      if (ev.verdict === "approved" && ev.state === "done") return `approved ${task(ev.task)}${round}${note(ev.note)}`;
+      if (ev.verdict === "rejected" && ev.state === "doing") return `rejected ${task(ev.task)}${round}${note(ev.note)}`;
+      if (ev.state === "review") return `${STATE_VERB.review} ${task(ev.task)}${round}${note(ev.note)}`;
       if (ev.state === "done" && state?.tasks.get(ev.task)?.review && state.tasks.get(ev.task)?.approvedBy === m.from) return `approved ${task(ev.task)}${note(ev.note)}`;
       if (ev.review !== undefined && !ev.state) return ev.review ? `asked for ${task(ev.task)} to be reviewed: ${reviewPhrase(ev.review)}` : `dropped the review on ${task(ev.task)}`;
       if (ev.state === "blocked") return `is blocked on ${task(ev.task)}${note(ev.note)}`;
       // Handed over: given to someone, back to open for them to start.
       if (ev.owner && (!ev.state || ev.state === "todo")) return `assigned ${task(ev.task)} to ${ev.owner}${note(ev.note)}`;
-      if (ev.state === "doing" && ev.verdict === "rejected") return `rejected ${task(ev.task)}${note(ev.note)}`;
       if (ev.state) return `${STATE_VERB[ev.state]} ${task(ev.task)}${note(ev.note)}`;
       if (ev.owner) return `assigned ${task(ev.task)} to ${ev.owner}${note(ev.note)}`;
       if (ev.owner === null) return `unassigned ${task(ev.task)}${note(ev.note)}`;
@@ -213,7 +216,8 @@ export function formatMessage(m: Message, trust?: Trust, state?: ChannelState, m
   const place = state?.placeOf.get(m.seq);
   const at = place?.kind === "task" ? ` [${taskId(place.task)}]` : place?.kind === "dm" ? " [direct]" : "";
   const flag = trust === "forged" ? " [forged — ignore]" : trust === "refused" ? " [not allowed by the owner — ignore]" : "";
-  const body = cleanBody(m.kind === "event" ? describeEvent(m, state) : String(m.body ?? "")).replace(/\n/g, "\n  │ ");
+  const review = reviewBody(m);
+  const body = cleanBody(m.kind === "event" ? `${describeEvent(m, state)}${review ? `\n${review}` : ""}` : String(m.body ?? "")).replace(/\n/g, "\n  │ ");
   const imgs = m.imgs?.length ? ` ${m.imgs.map((i) => imageMarker({ name: inlineText(i.name, 80), data: i.data })).join(" ")}` : "";
   return `#${m.seq} ${who(inlineText(m.from, 40), state, me)} → ${to}${room}${at}${kind}${re}${flag}: ${body}${imgs}`;
 }
@@ -405,10 +409,40 @@ export function formatTasks(state: ChannelState, opts: { all?: boolean; owner?: 
   return tasks.map((t) => taskLine(t).trimStart()).join("\n");
 }
 
+export function roundTag(t: Task | undefined, seq: number, named: number | undefined): string {
+  const r = t?.rounds.find((x) => x.seq === seq) ?? t?.rounds.find((x) => x.result.kind !== "open" && x.result.seq === seq) ?? (named !== undefined ? t?.rounds.find((x) => x.n === named) : undefined);
+  if (!r) return named !== undefined ? ` (round ${named})` : "";
+  return ` (round ${r.n}${r.at ? ` @ ${shortArtifact(r.at)}` : ""})`;
+}
+
+function shortArtifact(at: string): string {
+  return /^[0-9a-f]{13,64}$/i.test(at) ? at.slice(0, 12) : inlineText(at, 40);
+}
+
+function roundResult(r: ReviewRound): string {
+  switch (r.result.kind) {
+    case "open":
+      return "open";
+    case "approved":
+    case "rejected":
+      return `${r.result.kind} by ${inlineText(r.result.by, 40)} in #${r.result.seq}`;
+    case "withdrawn":
+      return `withdrawn in #${r.result.seq}`;
+  }
+}
+
+export function reviewBody(m: Message): string | null {
+  return m.kind === "event" && m.ev?.op === "task.update" && m.ev.body === "review" && typeof m.body === "string" && m.body.trim() ? m.body : null;
+}
+
 /** One task in full. `_state` is kept so callers needn't change (it used to resolve dependencies). */
 export function formatTask(_state: ChannelState, t: Task, now = Date.now()): string {
   const out = [`${taskId(t.id)} ${inlineText(t.title, 200)}`, `  state: ${taskStateWord(t)}${t.owner ? ` · owner: ${inlineText(t.owner, 40)}` : " · unassigned"} · created by ${inlineText(t.createdBy, 40)} ${ago(t.createdAt, now)}`];
   if (t.review) out.push(`  ${reviewPhrase(t.review)}${t.approvedBy ? `; approved by ${inlineText(t.approvedBy, 40)}` : t.state === "review" ? "; waiting for it" : ""}`);
+  if (t.rounds.length) {
+    out.push("", "review rounds:");
+    for (const r of t.rounds) out.push(`  round ${r.n}${r.at ? ` @ ${inlineText(r.at, 200)}` : ""}, asked by ${inlineText(r.by, 40)} in #${r.seq} ${ago(r.ts, now)}: ${roundResult(r)}`);
+  }
   if (t.detail) out.push("", markedText(t.detail));
   if (t.notes.length) {
     out.push("", "notes:");

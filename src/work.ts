@@ -3,7 +3,7 @@
 // client already holds; nothing new crosses the relay. What a person may not see in strict
 // coordinator-only mode (an agent's chat with another agent) stays out of every part of it.
 
-import { describeEvent } from "./format.ts";
+import { cleanBody, describeEvent, reviewBody, roundTag } from "./format.ts";
 import { inlineText } from "./membership.ts";
 import { ignored, type Message } from "./protocol.ts";
 import type { OldTaskState, TaskState } from "./protocol.ts";
@@ -153,7 +153,7 @@ export type EventMark = TaskState | "add" | "assign" | "note" | "other";
 
 /** One item of an activity feed: an event as a single row, or a thread as one card. */
 export type FeedItem =
-  | { type: "event"; seq: number; at: number; actor: string; text: string; op: string; mark: EventMark; note?: string }
+  | { type: "event"; seq: number; at: number; actor: string; text: string; op: string; mark: EventMark; note?: string; review?: string }
   | { type: "pr"; seq: number; at: number; actor: string; pr: PrRef }
   | { type: "thread"; seq: number; at: number; root: number; room?: string; messages: Message[] };
 
@@ -209,9 +209,11 @@ const VERB: Record<TaskState | OldTaskState, string> = {
 };
 
 /** A task's own event, told from the task's page: "started it", "assigned it to ann", "created the task". */
-function onTask(m: Message, state: ChannelState): { text: string; mark: EventMark; note?: string } {
+function onTask(m: Message, state: ChannelState): { text: string; mark: EventMark; note?: string; review?: string } {
   const ev = m.ev!;
-  const note = ev.op === "task.update" && ev.note ? { note: inlineText(ev.note, 2000) } : {};
+  const review = reviewBody(m);
+  const note = { ...(ev.op === "task.update" && ev.note ? { note: inlineText(ev.note, 2000) } : {}), ...(review ? { review: cleanBody(review) } : {}) };
+  const round = ev.op === "task.update" ? roundTag(state.tasks.get(ev.task), m.seq, ev.round) : "";
   switch (ev.op) {
     case "task.add":
       return { text: ev.owner ? `created the task for ${ev.owner}` : "created the task", mark: "add" };
@@ -219,7 +221,9 @@ function onTask(m: Message, state: ChannelState): { text: string; mark: EventMar
       return { text: "took it", mark: "assign" };
     case "task.update":
       if (ev.owner && (!ev.state || ev.state === "todo")) return { text: `assigned it to ${ev.owner}`, mark: "assign", ...note };
-      if (ev.state === "doing" && ev.verdict === "rejected") return { text: "rejected it", mark: currentState(ev.state), ...note };
+      if (ev.state === "doing" && ev.verdict === "rejected") return { text: `rejected it${round}`, mark: currentState(ev.state), ...note };
+      if (ev.state === "done" && ev.verdict === "approved") return { text: `approved it${round}`, mark: currentState(ev.state), ...note };
+      if (ev.state === "review") return { text: `${VERB.review}${round}`, mark: currentState(ev.state), ...note };
       if (ev.state) return { text: VERB[ev.state], mark: currentState(ev.state), ...note };
       if (ev.owner) return { text: `assigned it to ${ev.owner}`, mark: "assign", ...note };
       if (ev.owner === null) return { text: "unassigned it", mark: "assign", ...note };

@@ -6,7 +6,7 @@
 // Conflicts resolve deterministically: the earlier sequence number wins.
 
 import { inlineText, type Runs } from "./membership.ts";
-import { GENERAL_ROOM, ignored, isReaction, MAX_CHARTER, MAX_ROOM_NAME, MAX_ROOMS, MAX_TAGS, ROOM_ID_RE, type Card, type Color, type Message, type OldTaskState, type TaskState, type Trust } from "./protocol.ts";
+import { GENERAL_ROOM, ignored, isReaction, MAX_CHARTER, MAX_ROOM_NAME, MAX_ROOMS, MAX_TAGS, ROOM_ID_RE, type Card, type Color, type Message, type OldTaskState, type TaskState, type Trust, type Verdict } from "./protocol.ts";
 import { readScopes, refusal, SCOPES, scopesOf, type Scope } from "./scopes.ts";
 
 export interface Member {
@@ -68,6 +68,17 @@ interface TaskNote {
   text: string;
 }
 
+type RoundResult = { kind: "open" } | { kind: Verdict; by: string; seq: number; ts: number } | { kind: "withdrawn"; seq: number };
+
+export interface ReviewRound {
+  n: number;
+  at?: string;
+  by: string;
+  seq: number;
+  ts: number;
+  result: RoundResult;
+}
+
 export interface Task {
   id: number;
   title: string;
@@ -86,6 +97,7 @@ export interface Task {
   cancelled?: boolean;
   /** Everyone who has owned it or moved it along: none of them may approve it under a "*" review. */
   workedBy: string[];
+  rounds: ReviewRound[];
   /** The message it was made from (kiwi task add --re N): taking it on answers that message. */
   source?: number;
 }
@@ -791,6 +803,7 @@ export function fold(
             notes: [],
             ...(ev.review?.trim() ? { review: ev.review.trim() } : {}),
             workedBy: ev.owner ? [ev.owner] : [],
+            rounds: [],
             ...(m.re?.length ? { source: m.re[0] } : {}),
           });
           break;
@@ -836,10 +849,21 @@ export function fold(
             reject(`${taskId(task.id)} needs review by ${review === "*" ? "someone who hasn't worked on it" : review} before it's done (send it for review)`);
             break;
           }
+          const open = openRound(task);
+          const verdictWrong = ev.verdict ? verdictRefusal(task, ev.verdict, ev, mayFinish, open) : null;
+          if (verdictWrong) {
+            reject(verdictWrong);
+            break;
+          }
           // Cancelling finishes it, by whoever may finish it; from anyone else it's only a note saying so,
           // so a cancel is never a way around review. Blocked (an older client's) is still being done.
           const cancel = ev.state === "cancelled" && task.state !== "done";
-          const state = ev.state === "cancelled" ? (cancel && mayFinish ? "done" : undefined) : ev.state && currentState(ev.state);
+          const state = ev.state === "cancelled" ? (cancel && (mayFinish || (ev.round !== undefined && revisedOut(task, m.from, open) === ev.round)) ? "done" : undefined) : ev.state && currentState(ev.state);
+          if (open && state && state !== "review") open.result = ev.verdict && mayFinish ? { kind: ev.verdict, by: m.from, seq: m.seq, ts: at } : state === "done" && !cancel ? { kind: "approved", by: m.from, seq: m.seq, ts: at } : { kind: "withdrawn", seq: m.seq };
+          if (state === "review") {
+            if (open) open.result = { kind: "withdrawn", seq: m.seq };
+            task.rounds.push({ n: (task.rounds.at(-1)?.n ?? 0) + 1, ...(ev.at ? { at: ev.at.trim() } : {}), by: m.from, seq: m.seq, ts: at, result: { kind: "open" } });
+          }
           const note = ev.note || (ev.state === "blocked" ? "blocked" : ev.state === "cancelled" ? "cancelled" : undefined);
           if (ev.review !== undefined) task.review = review;
           if (ev.state === "done" && task.state !== "done" && task.review) task.approvedBy = m.from;
@@ -923,6 +947,28 @@ export function fold(
 
 function worked(task: Task, name: string): void {
   if (!task.workedBy.includes(name)) task.workedBy.push(name);
+}
+
+export function openRound(task: Task): ReviewRound | undefined {
+  const last = task.rounds.at(-1);
+  return last?.result.kind === "open" ? last : undefined;
+}
+
+function verdictRefusal(task: Task, verdict: Verdict, ev: { state?: string; round?: number; at?: string; body?: "review" }, mayFinish: boolean, open: ReviewRound | undefined): string | null {
+  const id = taskId(task.id);
+  if (ev.round === undefined) return (verdict === "approved" || ev.body) && task.rounds.length ? `a verdict on ${id} names the round it judges` : null;
+  if ((verdict === "approved" && ev.state !== "done") || (verdict === "rejected" && ev.state !== "doing")) return "an approval finishes the task and a rejection sends it back to doing";
+  if (task.state === "done") return `${id} is already done`;
+  if (!mayFinish) return `only ${task.review === "*" ? "someone who hasn't worked on it" : task.review} gives ${id}'s verdict`;
+  if (!open) return `${id} has no review round open`;
+  if (open.n !== ev.round) return `round ${ev.round} of ${id} isn't the open one: round ${open.n} is`;
+  if (ev.at !== undefined && ev.at.trim() !== open.at) return `round ${open.n} of ${id} is ${open.at ? `at ${open.at}` : "at no commit"}, not at ${ev.at.trim()}`;
+  return null;
+}
+
+export function revisedOut(task: Task, from: string, open: ReviewRound | undefined): number | null {
+  const last = task.rounds.at(-1);
+  return !open && last?.result.kind === "rejected" && (from === task.owner || from === task.createdBy) ? last.n : null;
 }
 
 const OPEN_FOR_TITLE = new Set<TaskState>(["todo", "doing", "review"]);

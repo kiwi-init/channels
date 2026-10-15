@@ -449,16 +449,19 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     {
       description:
         "Take, progress, hand over or annotate a task. `claim` takes it (fails if someone else owns it); `done` finishes it; `drop` puts it back on the board; `assign` gives it to `owner`, with `note` saying where it stands and what's next. " +
-        "A task with a reviewer can't be marked done by whoever did it: send it for `review`; the reviewer then calls `approve` (done) or `reject` (back to doing, with a note saying what to change). " +
+        "A task with a reviewer can't be marked done by whoever did it: send it for `review` (with `at`, the commit under review), which opens a review round; the reviewer then calls `approve` (done) or `reject` (back to doing, with a note saying what to change), naming the `round` (or `at`) it reviewed, with the whole review in `review_text` so the review and its verdict are one message; a verdict for a round that isn't open is refused. A task whose last round was rejected can be cancelled by its owner. " +
         'Example: task_update {"task":"T12","action":"claim"}.',
       inputSchema: {
         task: z.string().describe("task id, like T12"),
         action: z.enum(["claim", "start", "review", "approve", "reject", "done", "drop", "assign", "note", "show"]),
         note: z.string().optional(),
         owner: z.string().optional().describe("for assign"),
+        at: z.string().optional().describe("for review: the commit or artifact under review; for approve or reject: the commit you reviewed"),
+        round: z.number().int().positive().optional().describe("for approve or reject: the review round you judged"),
+        review_text: z.string().optional().describe("for approve or reject: the whole review, sent with the verdict"),
       },
     },
-    tool(({ task: raw, action, note, owner }) =>
+    tool(({ task: raw, action, note, owner, at, round, review_text }) =>
       Effect.gen(function* () {
         const id = yield* task(raw);
         if (action === "show") {
@@ -471,7 +474,8 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
           const state = yield* s.taskHandoff(id, owner, note);
           return `${taskId(id)} is ${state.tasks.get(id)!.owner}'s now`;
         }
-        if (action === "reject" && !note) return yield* new Rejected("reject needs a note saying what to change");
+        const verdictNote = note || (review_text?.trim() ? review_text.split("\n").map((l) => l.trim()).find(Boolean)?.slice(0, 200) : undefined);
+        if (action === "reject" && !verdictNote) return yield* new Rejected("reject needs a note saying what to change, or the review in review_text");
         const states = { start: "doing", review: "review", approve: "done", reject: "doing", done: "done" } as const;
         const state =
           action === "claim"
@@ -482,7 +486,9 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
                 ? yield* s.taskUpdate(id, { owner: s.me, note })
                 : action === "note"
                   ? yield* s.taskUpdate(id, { note: note ?? "" })
-                  : yield* s.taskUpdate(id, { state: states[action], note, ...(action === "reject" ? { verdict: "rejected" as const } : {}) });
+                  : action === "approve" || action === "reject"
+                    ? yield* s.taskUpdate(id, { state: states[action], note: verdictNote, verdict: action === "approve" ? "approved" : "rejected", ...(round !== undefined ? { round } : {}), ...(at?.trim() ? { at: at.trim() } : {}) }, review_text)
+                    : yield* s.taskUpdate(id, { state: states[action], note, ...(action === "review" && at?.trim() ? { at: at.trim() } : {}) });
         const t = state.tasks.get(id)!;
         return `${taskId(id)} ${taskStateWord(t)}${t.owner ? ` @${t.owner}` : ""}: ${t.title}`;
       }),

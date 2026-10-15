@@ -25,8 +25,8 @@ import { inlineText, type Member } from "./membership.ts";
 import type { Identity } from "./identity.ts";
 import { isLocalRefusal, Rejected } from "./refusals.ts";
 import { canPost, describeScopes, refusal } from "./scopes.ts";
-import { GENERAL_ROOM, ignored, PROTOCOL_VERSION, TASK_STATES, wellFormedReaction, type Card, type Color, type Event, type ImageAttachment, type Kind, type Message, type Presence, type TaskState } from "./protocol.ts";
-import { allowedOnHold, findRoom, fold, humanOf, isPerson, keptFromPeople, ON_HOLD, ownerOf, taskId, threadMembers, type ChannelState, type GuardFloor, type Roster, type RoomsFloor } from "./state.ts";
+import { GENERAL_ROOM, ignored, PROTOCOL_VERSION, TASK_STATES, wellFormedReaction, type Card, type Color, type Event, type ImageAttachment, type Kind, type Message, type Presence, type TaskState, type Verdict } from "./protocol.ts";
+import { allowedOnHold, findRoom, fold, humanOf, isPerson, keptFromPeople, ON_HOLD, openRound, ownerOf, revisedOut, taskId, threadMembers, type ChannelState, type GuardFloor, type ReviewRound, type Roster, type RoomsFloor, type Task } from "./state.ts";
 import { mergeCard, sameCard } from "./card.ts";
 import { daemonSeat } from "./daemon.ts";
 import { isWakeVia, viaOf } from "./wake.ts";
@@ -101,6 +101,18 @@ const toRoster = (m: Member): Roster[number] => ({
 
 /** A floor from the channel's settings; one that can't be read is no floor. */
 const orNone = <A, E, R>(e: Effect.Effect<A | null, E, R>) => Effect.catchCause(e, () => Effect.succeed(null));
+
+function judgedRound(t: Task, open: ReviewRound | undefined, round: number | undefined, at: string | undefined): Effect.Effect<ReviewRound, Rejected> {
+  const id = taskId(t.id);
+  const wanted = at?.trim() || undefined;
+  if (!open) return Effect.fail(new Rejected(`${id} has no review round open`));
+  if (round === undefined && wanted === undefined) return Effect.fail(new Rejected(`say which round of ${id} you reviewed: --round ${open.n}${open.at ? ` (or --at ${open.at})` : ""}`));
+  const target = round !== undefined ? t.rounds.find((r) => r.n === round) : [...t.rounds].reverse().find((r) => r.at === wanted);
+  if (!target) return Effect.fail(new Rejected(`${id} has no round ${round ?? `at ${wanted}`}`));
+  if (target.n !== open.n) return Effect.fail(new Rejected(`round ${target.n} of ${id} isn't the open one: round ${open.n} is${open.at ? `, at ${open.at}` : ""}`));
+  if (wanted !== undefined && target.at !== wanted) return Effect.fail(new Rejected(`round ${target.n} of ${id} is ${target.at ? `at ${target.at}` : "at no commit"}, not at ${wanted}`));
+  return Effect.succeed(target);
+}
 
 export class AgentSession {
   readonly ch: Channel;
@@ -666,7 +678,8 @@ export class AgentSession {
   readonly taskUpdate = Effect.fn("AgentSession.taskUpdate")({ self: this }, function* (
     this: AgentSession,
     id: number,
-    change: { state?: TaskState | "cancelled"; owner?: string | null; title?: string; note?: string; review?: string | null; verdict?: "rejected" },
+    change: { state?: TaskState | "cancelled"; owner?: string | null; title?: string; note?: string; review?: string | null; verdict?: Verdict; at?: string; round?: number },
+    reviewText?: string,
   ) {
     const { state } = yield* this.state();
     const t = state.tasks.get(id);
@@ -678,10 +691,19 @@ export class AgentSession {
     const me = state.members.get(this.me);
     const gate = review === undefined ? t.review : review || undefined;
     const finishing = change.state === "done" || change.state === "cancelled";
-    if (finishing && t.state !== "done" && gate && me && !isPerson(me) && (gate === "*" ? (owner ?? t.owner) === this.me || t.workedBy.includes(this.me) : gate !== this.me)) {
+    const notReviewer = !!gate && !!me && !isPerson(me) && (gate === "*" ? (owner ?? t.owner) === this.me || t.workedBy.includes(this.me) : gate !== this.me);
+    const open = openRound(t);
+    const revised = change.state === "cancelled" ? revisedOut(t, this.me, open) : null;
+    if (finishing && t.state !== "done" && notReviewer && revised === null) {
       const what = change.state === "cancelled" ? "cancelled" : "done";
-      return yield* new Rejected(`${taskId(id)} needs review by ${gate === "*" ? "someone who hasn't worked on it" : gate} before it's ${what}: ${change.state === "cancelled" ? "ask a person or its reviewer to cancel it" : `send it for review (kiwi task review ${taskId(id)})`}`);
+      return yield* new Rejected(`${taskId(id)} needs review by ${gate === "*" ? "someone who hasn't worked on it" : gate} before it's ${what}: ${change.state === "cancelled" ? "ask a person or its reviewer to cancel it, or cancel it yourself once a review round has rejected it" : `send it for review (kiwi task review ${taskId(id)})`}`);
     }
+    if (change.verdict && notReviewer) return yield* new Rejected(`only ${gate === "*" ? "someone who hasn't worked on it" : gate} gives ${taskId(id)}'s verdict`);
+    const judged = change.verdict && t.rounds.length ? yield* judgedRound(t, open, change.round, change.at) : null;
+    const round = judged ? { round: judged.n, ...(judged.at ? { at: judged.at } : {}) } : revised !== null && notReviewer ? { round: revised } : {};
+    const body = change.verdict && reviewText?.trim() ? { body: "review" as const } : {};
+    const { round: _round, at: _at, ...rest } = change;
+    const opening = change.state === "review" && change.at?.trim() ? { at: change.at.trim() } : {};
     // Tell whoever this concerns: the new owner, the current owner if it isn't
     // us, and the creator when it's done.
     const notify: string[] = [];
@@ -692,8 +714,8 @@ export class AgentSession {
     if ((change.state === "review" || review) && reviewerName) notify.push(reviewerName);
     if (finishing) notify.push(t.createdBy);
     const seq = yield* this.event(
-      { op: "task.update", task: id, ...change, ...(owner !== undefined ? { owner } : {}), ...(review !== undefined ? { review } : {}) },
-      `${taskId(id)} ${change.verdict ?? change.state ?? "updated"}`,
+      { op: "task.update", task: id, ...rest, ...opening, ...(owner !== undefined ? { owner } : {}), ...(review !== undefined ? { review } : {}), ...round, ...body },
+      body.body ? (reviewText ?? "") : `${taskId(id)} ${change.verdict ?? change.state ?? "updated"}`,
       notify,
     );
     const after = yield* this.confirm(seq);
