@@ -141,7 +141,10 @@ export function Monogram({
           !tone && "bg-[linear-gradient(180deg,var(--avatar-top),var(--avatar-bottom))]",
           working && "shadow-[0_0_0_1.5px_var(--canvas),0_0_0_3px_var(--doing)]"
         )}
-        style={{ ...(tone && { background: `linear-gradient(180deg, ${tone.fill}, color-mix(in srgb, ${tone.fill} 72%, black))`, color: tone.ink }), fontSize: Math.round(size * (letters.length > 1 ? 0.38 : 0.44)) }}
+        style={{
+          ...(tone && { background: `linear-gradient(180deg, ${tone.fill}, color-mix(in srgb, ${tone.fill} 72%, black))`, color: tone.ink }),
+          fontSize: Math.round(size * (letters.length > 1 ? 0.38 : 0.44)),
+        }}
       >
         {letters}
       </span>
@@ -166,7 +169,19 @@ export const SEGMENTED = "rounded-ctl bg-wash p-0.5"
 export const SEGMENT_ON = "bg-raised text-ink shadow-[0_0_0_1px_var(--line)]"
 export const SEGMENT_OFF = "text-ink-2 hover:text-ink"
 
-export function Tabs<T extends string>({ value, options, onChange, stretch, label }: { value: T; options: { value: T; label: ReactNode }[]; onChange: (v: T) => void; stretch?: boolean; label?: string }) {
+export function Tabs<T extends string>({
+  value,
+  options,
+  onChange,
+  stretch,
+  label,
+}: {
+  value: T
+  options: { value: T; label: ReactNode }[]
+  onChange: (v: T) => void
+  stretch?: boolean
+  label?: string
+}) {
   return (
     <div
       className={cx("flex items-center gap-0.5", stretch && SEGMENTED)}
@@ -282,11 +297,7 @@ export function Toaster() {
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[60] flex flex-col items-center gap-2 px-4" aria-live="polite">
       {items.map((t) => (
-        <div
-          key={t.id}
-          role="status"
-          className={cx("animate-rise max-w-md rounded-card bg-ink px-3.5 py-2 text-ui font-medium text-canvas shadow-pop", t.tone === "error" && "bg-alert text-white")}
-        >
+        <div key={t.id} role="status" className={cx("animate-rise max-w-md rounded-card bg-ink px-3.5 py-2 text-ui font-medium text-canvas shadow-pop", t.tone === "error" && "bg-alert text-white")}>
           {t.text}
         </div>
       ))}
@@ -325,7 +336,9 @@ export class Boundary extends Component<{ children: ReactNode; resetKey?: string
       <div className="flex h-full flex-1 items-center justify-center p-8">
         <div className="max-w-xs">
           <p className="text-body font-semibold">{this.props.whole ? "Channels hit a problem" : "This view hit a problem"}</p>
-          <p className="mt-1 text-ui leading-normal text-ink-2">{this.props.whole ? "Nothing was lost: your channels and keys are still in this browser. Reload to carry on." : "Nothing was lost. Reload to try again; your other channels still work."}</p>
+          <p className="mt-1 text-ui leading-normal text-ink-2">
+            {this.props.whole ? "Nothing was lost: your channels and keys are still in this browser. Reload to carry on." : "Nothing was lost. Reload to try again; your other channels still work."}
+          </p>
           <Button className="mt-4" onClick={() => location.reload()}>
             Reload
           </Button>

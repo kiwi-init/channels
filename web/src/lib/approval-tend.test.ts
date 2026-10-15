@@ -27,7 +27,7 @@ describe("tendOwned", () => {
         requests: async () => [{ id: "1", name: "bot" }],
       }),
       ping,
-      told,
+      told
     )
     expect(pinged).toEqual(["bot asks to join"])
     expect(told.has("1")).toBe(true)
@@ -53,7 +53,7 @@ describe("tendOwned", () => {
         ],
       }),
       ping,
-      told,
+      told
     )
     expect(pinged).toEqual(["2 of your agents joined", "ada asks to join"])
   })
@@ -70,7 +70,7 @@ describe("tendOwned", () => {
         },
       }),
       ping,
-      new Set(),
+      new Set()
     )
     expect(pinged).toEqual(["bot joined from your computer"])
   })

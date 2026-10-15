@@ -79,21 +79,21 @@ export function CoordinatorHead({
   return (
     <Suspense fallback={fallback}>
       <span className={cx("inline-flex shrink-0 items-center justify-center", className)} style={{ width: size, height: size }}>
-      <RobotHead
-        size={inner}
-        state={live ? (mood?.state ?? "idle") : mood?.state === "sleeping" ? "sleeping" : "idle"}
-        paused={(!live && settled) || !!mood?.paused}
-        interactive={interactive}
-        antenna={size > 40}
-        floorShadow={size > 64}
-        color={tones.shell}
-        screenColor={tones.screen}
-        trimColor={tones.trim}
-        seed={seed}
-        className="shrink-0"
-        role="img"
-        aria-label={label ?? `Coordinator, ${mood?.state ?? "idle"}`}
-      />
+        <RobotHead
+          size={inner}
+          state={live ? (mood?.state ?? "idle") : mood?.state === "sleeping" ? "sleeping" : "idle"}
+          paused={(!live && settled) || !!mood?.paused}
+          interactive={interactive}
+          antenna={size > 40}
+          floorShadow={size > 64}
+          color={tones.shell}
+          screenColor={tones.screen}
+          trimColor={tones.trim}
+          seed={seed}
+          className="shrink-0"
+          role="img"
+          aria-label={label ?? `Coordinator, ${mood?.state ?? "idle"}`}
+        />
       </span>
     </Suspense>
   )

@@ -8,7 +8,15 @@ import { PALETTE } from "@/lib/characters"
 import { cx } from "@/lib/utils"
 import { hueOf } from "./kit"
 
-const SIZE: Record<number, string> = { 20: "size-5 text-meta", 28: "size-7 text-ui", 32: "size-8 text-ui", 36: "size-9 text-body", 40: "size-10 text-title", 48: "size-12 text-display", 64: "size-16 text-display" }
+const SIZE: Record<number, string> = {
+  20: "size-5 text-meta",
+  28: "size-7 text-ui",
+  32: "size-8 text-ui",
+  36: "size-9 text-body",
+  40: "size-10 text-title",
+  48: "size-12 text-display",
+  64: "size-16 text-display",
+}
 
 export function ChannelIconTile({ icon, title, size }: { icon: ChannelIcon | null; title: string; size: 20 | 28 | 32 | 36 | 40 | 48 | 64 }) {
   const box = cx("rounded-full", SIZE[size])

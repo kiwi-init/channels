@@ -7,19 +7,7 @@ import { tokenForCreate, useSignInMode } from "@/lib/auth"
 import { isJoinBlip } from "@/lib/join-blip"
 import { bridge, useSecrets } from "@/lib/secrets"
 import { isSignInGone } from "@/lib/session"
-import {
-  askToJoin,
-  checkJoin,
-  createChannel,
-  forgetPending,
-  inviteInfo,
-  isJoinCode,
-  loadMember,
-  loadPending,
-  type ChannelRow,
-  type PendingJoin,
-  type StoredMember,
-} from "@/lib/channel"
+import { askToJoin, checkJoin, createChannel, forgetPending, inviteInfo, isJoinCode, loadMember, loadPending, type ChannelRow, type PendingJoin, type StoredMember } from "@/lib/channel"
 import { Conversation } from "./conversation"
 import { Command } from "./add-agent"
 import { CoordinatorHead } from "./coordinator-head"
@@ -99,7 +87,9 @@ export function Welcome({ onNew, onJoin }: { onNew: () => void; onJoin: () => vo
         </p>
         <Command text={`curl -fsSL ${relayUrl()}/install | sh`} label="Copy the install command" />
         <div className="mt-5 flex flex-wrap gap-2">
-          <Button variant="secondary" onClick={onNew}>New channel</Button>
+          <Button variant="secondary" onClick={onNew}>
+            New channel
+          </Button>
           <Button variant="ghost" onClick={onJoin}>
             Join with a code
           </Button>
@@ -131,7 +121,17 @@ export function Welcome({ onNew, onJoin }: { onNew: () => void; onJoin: () => vo
   )
 }
 
-export function NewChannel({ open, onClose, onCreated, onJoin }: { open: boolean; onClose: () => void; onCreated: (code: string) => void; /** Have a code instead: join with it. */ onJoin?: () => void }) {
+export function NewChannel({
+  open,
+  onClose,
+  onCreated,
+  onJoin,
+}: {
+  open: boolean
+  onClose: () => void
+  onCreated: (code: string) => void
+  /** Have a code instead: join with it. */ onJoin?: () => void
+}) {
   const person = useSecrets().person
   const signIn = useSignInMode()
   const [name, setName] = useState("")
@@ -315,9 +315,7 @@ export function ChannelGate({ code, listed, onBack, onGone }: { code: string; li
           {phase.code && <VerifyCode code={phase.code} />}
           <div className="flex items-center gap-3">
             <Spinner />
-            <span className="text-ui text-ink-2">
-              {unreachable ? "Can’t reach the relay. Still waiting." : "This page updates the moment you’re in."}
-            </span>
+            <span className="text-ui text-ink-2">{unreachable ? "Can’t reach the relay. Still waiting." : "This page updates the moment you’re in."}</span>
           </div>
           <Button variant="ghost" className="mt-6 -ml-3.5" onClick={giveUp}>
             Cancel request
@@ -374,8 +372,8 @@ function AskToJoin({ code, listed, onAsked, onCancel }: { code: string; listed?:
   const owner = invite.ownerName
   const intro =
     listed?.state === "agents"
-        ? { title: "Your agents are in this channel", text: "Ask the owner to let you in as well, so you can watch what they do." }
-        : { title: owner ? `${owner} invited you to a channel` : "You’re invited to a channel", text: null }
+      ? { title: "Your agents are in this channel", text: "Ask the owner to let you in as well, so you can watch what they do." }
+      : { title: owner ? `${owner} invited you to a channel` : "You’re invited to a channel", text: null }
 
   return (
     <form

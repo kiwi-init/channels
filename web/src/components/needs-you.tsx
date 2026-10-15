@@ -60,8 +60,16 @@ export function NeedsYou({
   }, [open])
   const items: { key: string; summary: string; node: ReactNode }[] = [
     ...requests.map((r) => ({ key: `r${r.id}`, summary: `${r.name} wants to join`, node: <RequestItem r={r} roomId={roomId} now={now} /> })),
-    ...escalations.map((m) => ({ key: `e${m.seq}`, summary: `${nameOf(m.from)} needs a decision`, node: <EscalationItem m={m} now={now} nameOf={nameOf} onReply={onReply} onJump={(seq) => (setOpen(false), onJump(seq))} /> })),
-    ...reviews.map((t) => ({ key: `t${t.id}`, summary: `${taskId(t.id)} is ready for review`, node: <ReviewItem t={t} nameOf={nameOf} onApprove={onApproveTask} onSendBack={onSendBack} onOpen={(id) => (setOpen(false), onOpenTask(id))} /> })),
+    ...escalations.map((m) => ({
+      key: `e${m.seq}`,
+      summary: `${nameOf(m.from)} needs a decision`,
+      node: <EscalationItem m={m} now={now} nameOf={nameOf} onReply={onReply} onJump={(seq) => (setOpen(false), onJump(seq))} />,
+    })),
+    ...reviews.map((t) => ({
+      key: `t${t.id}`,
+      summary: `${taskId(t.id)} is ready for review`,
+      node: <ReviewItem t={t} nameOf={nameOf} onApprove={onApproveTask} onSendBack={onSendBack} onOpen={(id) => (setOpen(false), onOpenTask(id))} />,
+    })),
   ]
   if (!items.length) return null
   const n = items.length
@@ -75,7 +83,10 @@ export function NeedsYou({
       >
         <span aria-hidden className="size-2 shrink-0 rounded-full bg-decide" />
         <span className="shrink-0 font-semibold">{n === 1 ? "1 thing needs you" : `${n} things need you`}</span>
-        <span className="min-w-0 flex-1 truncate text-ink-3">{items[0]!.summary}{n > 1 ? `, and ${n - 1} more` : ""}</span>
+        <span className="min-w-0 flex-1 truncate text-ink-3">
+          {items[0]!.summary}
+          {n > 1 ? `, and ${n - 1} more` : ""}
+        </span>
         <Icon icon={ArrowDown01Icon} size={14} className={cx("shrink-0 text-ink-3 transition-transform", open && "rotate-180")} />
       </button>
       {open && (
@@ -177,7 +188,19 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
 }
 
 /** An agent handing a decision to its person: what it says, and an answer right here. */
-function EscalationItem({ m, now, nameOf, onReply, onJump }: { m: Message; now: number; nameOf: (n: string) => string; onReply: (m: Message, text: string) => Promise<void>; onJump: (seq: number) => void }) {
+function EscalationItem({
+  m,
+  now,
+  nameOf,
+  onReply,
+  onJump,
+}: {
+  m: Message
+  now: number
+  nameOf: (n: string) => string
+  onReply: (m: Message, text: string) => Promise<void>
+  onJump: (seq: number) => void
+}) {
   const [draft, setDraft] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const send = async () => {
@@ -221,7 +244,15 @@ function EscalationItem({ m, now, nameOf, onReply, onJump }: { m: Message; now: 
             void send()
           }}
         >
-          <TextField autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setDraft(null)} placeholder={`Answer ${nameOf(m.from)}`} aria-label="Answer" className="flex-1" />
+          <TextField
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setDraft(null)}
+            placeholder={`Answer ${nameOf(m.from)}`}
+            aria-label="Answer"
+            className="flex-1"
+          />
           <Button size="sm" variant="secondary" type="submit" disabled={busy || !draft.trim()}>
             Send
           </Button>
@@ -232,7 +263,19 @@ function EscalationItem({ m, now, nameOf, onReply, onJump }: { m: Message; now: 
 }
 
 /** Work an agent says is finished, waiting on this person's word. */
-function ReviewItem({ t, nameOf, onApprove, onSendBack, onOpen }: { t: Task; nameOf: (n: string) => string; onApprove: (t: Task) => Promise<void>; onSendBack: (t: Task, why: string) => Promise<void>; onOpen: (id: number) => void }) {
+function ReviewItem({
+  t,
+  nameOf,
+  onApprove,
+  onSendBack,
+  onOpen,
+}: {
+  t: Task
+  nameOf: (n: string) => string
+  onApprove: (t: Task) => Promise<void>
+  onSendBack: (t: Task, why: string) => Promise<void>
+  onOpen: (id: number) => void
+}) {
   const [why, setWhy] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const act = async (fn: () => Promise<void>, done: string) => {
@@ -277,7 +320,15 @@ function ReviewItem({ t, nameOf, onApprove, onSendBack, onOpen }: { t: Task; nam
             if (why.trim()) void act(() => onSendBack(t, why.trim()), `Sent ${taskId(t.id)} back`)
           }}
         >
-          <TextField autoFocus value={why} onChange={(e) => setWhy(e.target.value)} onKeyDown={(e) => e.key === "Escape" && setWhy(null)} placeholder="What to change" aria-label="What to change" className="flex-1" />
+          <TextField
+            autoFocus
+            value={why}
+            onChange={(e) => setWhy(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setWhy(null)}
+            placeholder="What to change"
+            aria-label="What to change"
+            className="flex-1"
+          />
           <Button size="sm" variant="secondary" type="submit" disabled={busy || !why.trim()}>
             Send back
           </Button>

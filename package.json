@@ -17,7 +17,7 @@
     "smoke:ui": "bun scripts/smoke-ui.ts",
     "ci:plan": "bun .github/jev-ci/cli.ts plan",
     "shots:ui": "bun scripts/shoot-ui.ts",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json && bun scripts/ui-tokens.ts && cd web && tsc -b && bun eslint src",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json && bun scripts/ui-tokens.ts && cd web && tsc -b && bun oxlint src && bun oxfmt --check src",
     "web:dev": "cd web && bun run dev",
     "web:build": "cd web && bun install --frozen-lockfile && bun run build",
     "demo": "bun scripts/demo.ts",

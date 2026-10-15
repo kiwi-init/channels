@@ -50,11 +50,7 @@ export function InfoPanel({
   const coordinator = p.state.coordinator
 
   return (
-    <aside
-      aria-label="Details"
-      className="animate-slide-in flex h-full w-full flex-col border-l border-line bg-rail md:w-[340px]"
-      onKeyDown={(e) => e.key === "Escape" && onClose()}
-    >
+    <aside aria-label="Details" className="animate-slide-in flex h-full w-full flex-col border-l border-line bg-rail md:w-[340px]" onKeyDown={(e) => e.key === "Escape" && onClose()}>
       <header className="drag flex h-(--chrome-h) shrink-0 items-center px-3">
         <IconButton label="Close details" round className="glass size-9 text-ink" onClick={onClose}>
           <Icon icon={Cancel01Icon} size={16} />
@@ -77,14 +73,25 @@ export function InfoPanel({
               icon={hold ? PlayIcon : PauseIcon}
               label={hold ? "Resume" : "Pause"}
               tone={hold ? "alert" : undefined}
-              onClick={() => (hold ? void p.onHold!(false).then(() => toast("Agents may carry on"), (err) => toast(errorText(err), "error")) : onPause())}
+              onClick={() =>
+                hold
+                  ? void p.onHold!(false).then(
+                      () => toast("Agents may carry on"),
+                      (err) => toast(errorText(err), "error")
+                    )
+                  : onPause()
+              }
             />
           )}
         </div>
 
         {p.isOwner && p.requests.length > 0 && (
           <Section>
-            <Row icon={UserMultipleIcon} onClick={openRequests} trailing={<span className="rounded-full bg-decide-wash px-1.5 text-meta font-semibold text-decide tabular-nums">{p.requests.length}</span>}>
+            <Row
+              icon={UserMultipleIcon}
+              onClick={openRequests}
+              trailing={<span className="rounded-full bg-decide-wash px-1.5 text-meta font-semibold text-decide tabular-nums">{p.requests.length}</span>}
+            >
               {p.requests.length === 1 ? `${p.requests[0]!.name} wants to join` : `${p.requests.length} want to join`}
             </Row>
           </Section>
@@ -172,7 +179,11 @@ export function InfoPanel({
         {notes}
 
         <Section>
-          <button type="button" onClick={() => ask(p.isOwner ? { kind: "close" } : { kind: "leave" })} className="w-full px-3 py-2.5 text-left text-ui font-medium text-alert transition-colors hover:bg-wash">
+          <button
+            type="button"
+            onClick={() => ask(p.isOwner ? { kind: "close" } : { kind: "leave" })}
+            className="w-full px-3 py-2.5 text-left text-ui font-medium text-alert transition-colors hover:bg-wash"
+          >
             {p.isOwner ? "Close channel…" : "Leave this channel…"}
           </button>
         </Section>
@@ -303,7 +314,27 @@ function Row({ icon, children, detail, trailing, onClick }: { icon: IconSvgEleme
   )
 }
 
-function Face({ head, name, agent, online, color, working, line, strong, title }: { head?: ReactNode; name: string; agent: boolean; online: boolean; color: ReturnType<typeof colorOf>; working: boolean; line: string; strong: boolean; title?: string }) {
+function Face({
+  head,
+  name,
+  agent,
+  online,
+  color,
+  working,
+  line,
+  strong,
+  title,
+}: {
+  head?: ReactNode
+  name: string
+  agent: boolean
+  online: boolean
+  color: ReturnType<typeof colorOf>
+  working: boolean
+  line: string
+  strong: boolean
+  title?: string
+}) {
   return (
     <span className="flex min-w-0 flex-col items-center px-1" title={title}>
       {head ?? <Monogram name={name} agent={agent} size={52} online={online} color={color} working={working} />}

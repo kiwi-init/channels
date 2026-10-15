@@ -327,7 +327,6 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
         )}
       </Alert>
 
-
       <Alert
         open={confirm?.kind === "remove"}
         onClose={() => setConfirm(null)}
@@ -486,7 +485,15 @@ function Invite({ onDone }: { onDone: () => void }) {
       ) : (
         <div role="tabpanel" aria-label="An agent" className="mt-4 grid gap-2">
           <div className="grid grid-cols-2 gap-2">
-            <TextField value={name} onChange={(e) => setName(e.target.value)} placeholder="Name (optional)" maxLength={32} aria-invalid={badName} aria-label="Agent name" aria-describedby={badName ? "invite-name-error" : undefined} />
+            <TextField
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Name (optional)"
+              maxLength={32}
+              aria-invalid={badName}
+              aria-label="Agent name"
+              aria-describedby={badName ? "invite-name-error" : undefined}
+            />
             <TextField value={role} onChange={(e) => setRole(e.target.value)} placeholder="Role" maxLength={60} list="kiwi-roles" aria-label="Role" />
           </div>
           <TextField value={rules} onChange={(e) => setRules(e.target.value)} placeholder="Rules, e.g. only web/; ask before changing APIs" maxLength={200} aria-label="Rules" />
@@ -566,13 +573,13 @@ function Requests({ onDone }: { onDone: () => void }) {
           <div key={r.id} className="flex items-start gap-3">
             <Monogram name={r.name} agent={r.kind !== "human"} size={28} />
             <div className="min-w-0 flex-1">
-              {(
+              {
                 <p className="truncate text-ui font-medium">
                   {r.name}
                   {r.role && <span className="font-normal text-ink-2">, {r.role}</span>}
                   {r.askedAs && r.askedAs !== r.name && <span className="font-normal text-ink-2"> (asked as {r.askedAs}, which is taken)</span>}
                 </p>
-              )}
+              }
               <p className="text-meta leading-snug text-ink-2">
                 {r.kind === "human" ? "A person" : r.computer ? `Agent on ${r.computer.personName}’s ${r.computer.label}` : "Agent"} · asked {formatAgo(r.ts, p.now)}
               </p>
@@ -621,7 +628,16 @@ export function HoldBanner() {
         <span className="font-medium">Agents are on hold.</span> {hold.note ? hold.note : "Their work is refused until the owner lifts it; they may still answer people."}
       </span>
       {p.isOwner && p.onHold && (
-        <button type="button" onClick={() => void p.onHold!(false).then(() => toast("Agents may carry on"), (err) => toast(errorText(err), "error"))} className="shrink-0 font-medium hover:underline">
+        <button
+          type="button"
+          onClick={() =>
+            void p.onHold!(false).then(
+              () => toast("Agents may carry on"),
+              (err) => toast(errorText(err), "error")
+            )
+          }
+          className="shrink-0 font-medium hover:underline"
+        >
           Lift the hold
         </button>
       )}
@@ -714,7 +730,7 @@ function CharterDialog({ text, onClose, onSave }: { text: string; onClose: () =>
             className="mt-4 w-full resize-y rounded-ctl border border-edge bg-raised px-3 py-2 text-body outline-none placeholder:text-ink-3 focus:border-edge-strong"
           />
         ) : (
-          <p className="mt-4 whitespace-pre-wrap text-body text-ink">{text}</p>
+          <p className="mt-4 text-body whitespace-pre-wrap text-ink">{text}</p>
         )}
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>
@@ -730,7 +746,6 @@ function CharterDialog({ text, onClose, onSave }: { text: string; onClose: () =>
     </Modal>
   )
 }
-
 
 /** The owner renames the channel. Every member sees the new name; the relay never can. */
 function RenameDialog({ title, onClose, onSave }: { title: string; onClose: () => void; onSave: (name: string) => Promise<void> }) {
@@ -762,7 +777,17 @@ function RenameDialog({ title, onClose, onSave }: { title: string; onClose: () =
       >
         <Dialog.Title className="text-title font-semibold tracking-[-0.01em]">Rename channel</Dialog.Title>
         <Dialog.Description className="mt-1 text-ui leading-normal text-ink-2">Everyone in the channel sees the new name. It’s encrypted, so the relay can’t read it.</Dialog.Description>
-        <TextField className="mt-4" autoFocus value={name} maxLength={80} onChange={(e) => setName(e.target.value)} aria-label="Channel name" aria-invalid={!!error} aria-describedby={error ? "rename-error" : undefined} onFocus={(e) => e.currentTarget.select()} />
+        <TextField
+          className="mt-4"
+          autoFocus
+          value={name}
+          maxLength={80}
+          onChange={(e) => setName(e.target.value)}
+          aria-label="Channel name"
+          aria-invalid={!!error}
+          aria-describedby={error ? "rename-error" : undefined}
+          onFocus={(e) => e.currentTarget.select()}
+        />
         {error && (
           <p id="rename-error" role="alert" className="mt-2 text-ui text-alert">
             {error}

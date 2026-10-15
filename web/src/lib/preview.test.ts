@@ -26,7 +26,7 @@ describe("lastPreview", () => {
     const last = lastPreview(
       messages,
       (m) => m.from === "coord",
-      (seq) => (seq === 3 ? "refused" : undefined),
+      (seq) => (seq === 3 ? "refused" : undefined)
     )
     expect(last?.seq).toBe(4)
   })
@@ -34,7 +34,19 @@ describe("lastPreview", () => {
   test("an agent-to-agent line is not the preview when it does not reach a person", () => {
     const agent = chat("dev", 1)
     const coord = chat("coord", 2)
-    expect(lastPreview([agent, coord], (m) => m.from === "coord", () => undefined)?.from).toBe("coord")
-    expect(lastPreview([agent], () => false, () => undefined)).toBeUndefined()
+    expect(
+      lastPreview(
+        [agent, coord],
+        (m) => m.from === "coord",
+        () => undefined
+      )?.from
+    ).toBe("coord")
+    expect(
+      lastPreview(
+        [agent],
+        () => false,
+        () => undefined
+      )
+    ).toBeUndefined()
   })
 })
