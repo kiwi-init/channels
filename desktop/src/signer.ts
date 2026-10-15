@@ -17,7 +17,9 @@ const runTool: RunTool = (cmd, args) =>
 export function developerIdRequirement(out: string): string | null {
   const req = /^designated => (.+)$/m.exec(out)?.[1]?.trim();
   if (!req) return null;
-  return /\banchor apple generic\b/.test(req) && /\bcertificate leaf\[subject\.OU\] = /.test(req) ? req : null;
+  const bare = req.replace(/"[^"]*"/g, '""');
+  if (/\bor\b|[()!]/.test(bare)) return null;
+  return /\banchor apple generic\b/.test(bare) && /\bcertificate leaf\[subject\.OU\] = /.test(bare) ? req : null;
 }
 
 export async function signedLikeThisApp(running: string, next: string, run: RunTool = runTool): Promise<boolean> {

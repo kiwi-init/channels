@@ -28,6 +28,17 @@ describe("developerIdRequirement", () => {
     expect(developerIdRequirement("code object is not signed at all\n")).toBeNull();
     expect(developerIdRequirement(`designated => identifier "com.kiwiinit.kiwi" and anchor apple generic\n`)).toBeNull();
   });
+
+  test("a requirement that an alternative or a negation could loosen is not one to hold an update to", () => {
+    expect(developerIdRequirement(`designated => (${REQ}) or true\n`)).toBeNull();
+    expect(developerIdRequirement(`designated => ${REQ} or anchor apple\n`)).toBeNull();
+    expect(developerIdRequirement(`designated => ${REQ} and ! identifier "x"\n`)).toBeNull();
+  });
+
+  test("words inside quoted values don't count as operators", () => {
+    const quoted = REQ.replace('identifier "com.kiwiinit.kiwi"', 'identifier "com.or.kiwi (beta)"');
+    expect(developerIdRequirement(`designated => ${quoted}\n`)).toBe(quoted);
+  });
 });
 
 describe("signedLikeThisApp", () => {
