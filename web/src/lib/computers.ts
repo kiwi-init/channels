@@ -3,9 +3,8 @@
 // Answer): the app shows a kp1- code, the computer runs `kiwi pair <code>`, and the person confirms
 // what asked. Removing one takes its agents out of every channel this app owns, then forgets it.
 
-import { Channel } from "@mc/client.ts"
-
-import { allMembers, saveMember } from "./channel"
+import { allMembers } from "./channel"
+import { linkOf, type ChannelLink } from "./channel-ops"
 import { relayUrl } from "./relay"
 import { takeAgents } from "./remove-agents"
 import { bridge, saveComputers, secrets, type ComputerView, type PairAskView } from "./secrets"
@@ -64,10 +63,10 @@ export async function beginPairing(): Promise<Pairing> {
 }
 
 /** The channels this app owns, opened as their owner. */
-function owned(): Channel[] {
+function owned(): ChannelLink[] {
   return allMembers()
     .filter((m) => m.identity.pk === m.access.ownerPk)
-    .map((m) => new Channel(m.access, relayUrl(), m.identity, (access) => saveMember({ ...m, access })))
+    .map(linkOf)
 }
 
 /** Take every agent that computer let in out of the channels this app owns; returns their names. */

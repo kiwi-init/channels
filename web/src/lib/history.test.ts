@@ -2,10 +2,11 @@
 // and a hole or a seq past the relay head is thrown out instead of shown.
 
 import { afterAll, beforeEach, expect, test } from "bun:test"
-import { b64url } from "../../../src/crypto.ts"
+import { b64url, seal } from "../../../src/crypto.ts"
 import { generateIdentity, sign } from "../../../src/identity.ts"
 import { PROTOCOL_VERSION, type Message } from "../../../src/protocol.ts"
-import { forgetAllHistory, forgetHistory, openRow, packRow, readCached, rememberMessage, useHistoryDb, type CachedRow, type HistoryDb } from "./history.ts"
+import { openRow, openRows, packRow } from "../../../src/cache-row.ts"
+import { forgetAllHistory, forgetHistory, readCached, rememberRow, useHistoryDb, type CachedRow, type HistoryDb } from "./history.ts"
 
 const SENTINEL = "SENTINEL-plain-text-should-not-rest"
 const ROOM = "a".repeat(32)
@@ -58,6 +59,10 @@ function msg(seq: number, body: string): Message {
   }
 }
 
+async function rememberMessage(room: string, pk: string, epoch: number, k: string, m: Message, limit: number): Promise<void> {
+  await rememberRow(room, pk, await packRow(k, room, epoch, m), limit)
+}
+
 beforeEach(() => {
   store = memoryDb()
   useHistoryDb(store)
@@ -93,7 +98,7 @@ test("a signed message still verifies after a cache round trip", async () => {
     ts: 10,
   })
   await rememberMessage(ROOM, PK_A, 1, key, { ...signed, seq: 1, rts: 20, sigOk: true }, 10)
-  const out = await readCached(ROOM, PK_A, { "1": key }, 1, 10)
+  const out = await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, { "1": key }), 1, 10)
   expect(out.messages.map((m) => ({ body: m.body, seq: m.seq, sigOk: m.sigOk, pk: m.pk }))).toEqual([{ body: "signed", seq: 1, sigOk: true, pk: id.pk }])
 })
 
@@ -103,11 +108,11 @@ test("two members and two rooms do not read each other's rows", async () => {
   await rememberMessage(ROOM, PK_B, 1, key, msg(1, "b-in-room"), 10)
   await rememberMessage(ROOM_B, PK_A, 1, key, msg(1, "a-in-other"), 10)
 
-  const a = await readCached(ROOM, PK_A, keys, 1, 10)
+  const a = await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, keys), 1, 10)
   expect(a.messages.map((m) => m.body)).toEqual(["a-in-room"])
   expect(a.since).toBe(1)
 
-  const b = await readCached(ROOM, PK_B, keys, 1, 10)
+  const b = await readCached(ROOM, PK_B, (rows) => openRows(rows, ROOM, keys), 1, 10)
   expect(b.messages.map((m) => m.body)).toEqual(["b-in-room"])
 })
 
@@ -120,7 +125,7 @@ test("a row that does not open is a hole, so the cache is dropped", async () => 
   const broken = rows.find((r) => r.seq === 2)!
   await store.put(ROOM, PK_A, { ...broken, ct: "not-ciphertext" })
 
-  const out = await readCached(ROOM, PK_A, keys, 3, 10)
+  const out = await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, keys), 3, 10)
   expect(out).toEqual({ messages: [], since: 0 })
   expect(await store.rows(ROOM, PK_A)).toEqual([])
 })
@@ -130,7 +135,7 @@ test("a hole drops the cache and asks for the usual window", async () => {
   await rememberMessage(ROOM, PK_A, 1, key, msg(1, "one"), 10)
   await rememberMessage(ROOM, PK_A, 1, key, msg(3, "three"), 10)
 
-  const out = await readCached(ROOM, PK_A, keys, 3, 10)
+  const out = await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, keys), 3, 10)
   expect(out).toEqual({ messages: [], since: 0 })
   expect(await store.rows(ROOM, PK_A)).toEqual([])
 })
@@ -141,7 +146,7 @@ test("a seq past the relay head is dropped and cannot return later", async () =>
   await rememberMessage(ROOM, PK_A, 1, key, msg(2, "two"), 10)
   await rememberMessage(ROOM, PK_A, 1, key, msg(9, "nine"), 10)
 
-  const out = await readCached(ROOM, PK_A, keys, 2, 10)
+  const out = await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, keys), 2, 10)
   expect(out.messages.map((m) => m.seq)).toEqual([1, 2])
   expect(out.messages.map((m) => m.body)).toEqual(["one", "two"])
   expect(out.since).toBe(2)
@@ -152,7 +157,7 @@ test("only the newest limit messages stay, in seq order", async () => {
   const keys = { "1": key }
   for (let seq = 1; seq <= 5; seq++) await rememberMessage(ROOM, PK_A, 1, key, msg(seq, `m${seq}`), 3)
 
-  const out = await readCached(ROOM, PK_A, keys, 5, 3)
+  const out = await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, keys), 5, 3)
   expect(out.messages.map((m) => m.seq)).toEqual([3, 4, 5])
   expect(out.since).toBe(5)
 })
@@ -163,9 +168,19 @@ test("leave drops one member; sign-out drops every row", async () => {
   await rememberMessage(ROOM, PK_B, 1, key, msg(1, "b"), 10)
 
   await forgetHistory(ROOM, PK_A)
-  expect((await readCached(ROOM, PK_A, keys, 1, 10)).messages).toEqual([])
-  expect((await readCached(ROOM, PK_B, keys, 1, 10)).messages.map((m) => m.body)).toEqual(["b"])
+  expect((await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, keys), 1, 10)).messages).toEqual([])
+  expect((await readCached(ROOM, PK_B, (rows) => openRows(rows, ROOM, keys), 1, 10)).messages.map((m) => m.body)).toEqual(["b"])
 
   await forgetAllHistory()
   expect(await store.rows(ROOM, PK_B)).toEqual([])
+})
+
+test("a row sealed before the keys left the window still opens", async () => {
+  const { seq, rts, sigOk, ...payload } = msg(7, "from an older app")
+  void sigOk
+  const sealed = await seal(key, ROOM, { seq, msg: payload })
+  const old: CachedRow = { seq, rts, e: 1, iv: sealed.iv, ct: sealed.ct }
+  await store.put(ROOM, PK_A, old)
+  const out = await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, { "1": key }), 7, 10)
+  expect(out.messages.map((m) => m.body)).toEqual(["from an older app"])
 })
