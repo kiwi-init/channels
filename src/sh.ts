@@ -29,7 +29,7 @@ import { taskId, type ChannelState } from "./state.ts";
  * Never add xz or zstd: their libraries are left out of the binary (package.json build), so
  * just-bash would import them at runtime from wherever kiwi runs.
  */
-const COMMANDS: CommandName[] = [
+export const COMMANDS: CommandName[] = [
   "cat", "echo", "printf", "ls", "pwd", "readlink", "stat", "file", "find", "tree", "du", "basename", "dirname",
   "head", "tail", "wc", "grep", "fgrep", "egrep", "rg", "sed", "awk", "sort", "uniq", "comm", "cut", "paste",
   "tr", "rev", "nl", "fold", "expand", "unexpand", "strings", "column", "join", "tac", "od", "diff",

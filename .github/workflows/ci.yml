@@ -220,6 +220,8 @@ jobs:
         with:
           web: "false"
       - run: bun run build && ./dist/kiwi --version
+      - run: bun scripts/build-cli.ts --check
+      - run: bun scripts/smoke-cli.ts dist/kiwi
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         with:
