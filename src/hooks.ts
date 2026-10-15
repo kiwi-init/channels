@@ -35,7 +35,7 @@ import { briefText, COMMANDS } from "./brief.ts";
 import { charterLines, formatMessage, holdLine, modeLine } from "./format.ts";
 import { humanOf } from "./state.ts";
 import { asOption, channelOption, wakePath, wakeWords } from "./wake.ts";
-import { wakeOn } from "./daemon.ts";
+import { daemonListeners, ensureDaemon, holdListener, wakeOn, type DaemonListener, type HeldListener } from "./daemon.ts";
 import { bindDirectory as bindSeat, bindingFor as seatFor, here, seatsNear, type Binding, type Here, type Listener, type SeatOptions } from "./seats.ts";
 
 /** Marks our entries so install/uninstall can find them. Current clients only. */
@@ -68,24 +68,49 @@ function listenerDir(): string {
   return join(home(), "listeners");
 }
 
-/**
- * Record that this process listens for `as` on `alias`, and for which session (when its harness says),
- * so that session's hooks know who it is; removed on exit.
- */
-export function registerListener(alias: string, as: string): void {
-  const dir = listenerDir();
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const file = join(dir, `${encodeURIComponent(alias)}.${encodeURIComponent(as)}.${process.pid}`);
+let fromDaemon: DaemonListener[] = [];
+let signalsSet = false;
+
+function heldFor(alias: string, as: string, kind: DaemonListener["kind"], session: string | null): Omit<DaemonListener, "at"> {
   const who = here();
-  writeFileSync(file, JSON.stringify({ at: Date.now(), alias, as, cwd: process.cwd(), ...who }));
-  const drop = () => rmSync(file, { force: true });
-  process.on("exit", drop);
-  for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
-    process.on(sig, () => {
-      drop();
-      process.exit(0);
-    });
+  return { channel: alias, agent: as, kind, cwd: process.cwd(), harness: who.harness ?? null, session, pid: who.pid ?? null };
+}
+
+export async function refreshListeners(): Promise<void> {
+  fromDaemon = await daemonListeners().catch(() => []);
+}
+
+export async function holdListening(alias: string, as: string): Promise<HeldListener> {
+  const held = await holdListener(heldFor(alias, as, "listen", here().session ?? null));
+  if (!signalsSet) {
+    signalsSet = true;
+    for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"] as const) process.on(sig, () => process.exit(0));
   }
+  return held;
+}
+
+function legacySlotHeld(alias: string, as: string, session: string): boolean {
+  const file = join(home(), "listen-hooks", `${encodeURIComponent(alias)}.${encodeURIComponent(as)}.${encodeURIComponent(session)}`);
+  try {
+    const pid = Number(readFileSync(file, "utf8"));
+    if (pid > 0 && alive(pid)) return true;
+    rmSync(file, { force: true });
+  } catch {}
+  return false;
+}
+
+async function takeListenSlot(alias: string, as: string, session: string): Promise<HeldListener | null> {
+  if (legacySlotHeld(alias, as, session)) return null;
+  const entry = heldFor(alias, as, "hook", session);
+  let slot = await holdListener(entry);
+  if (slot.held === null) {
+    slot.close();
+    await ensureDaemon().catch(() => null);
+    slot = await holdListener(entry);
+  }
+  if (slot.held) return slot;
+  slot.close();
+  return null;
 }
 
 /** The live listener records (stale ones are cleaned up): each file's name, and what it says. */
@@ -115,7 +140,16 @@ function liveRecords(): { name: string; rec: Record<string, unknown> }[] {
 
 /** Every live listener on this machine. One from before 0.10.3 says only who it listens as (when its file name can tell). */
 export function liveListeners(): Listener[] {
-  const out: Listener[] = [];
+  const out: Listener[] = fromDaemon
+    .filter((l) => l.kind === "listen")
+    .map((l) => ({
+      alias: l.channel,
+      as: l.agent,
+      ...(l.cwd ? { cwd: l.cwd } : {}),
+      ...(l.harness ? { harness: l.harness as Listener["harness"] } : {}),
+      ...(l.session ? { session: l.session } : {}),
+      ...(l.pid ? { pid: l.pid } : {}),
+    }));
   for (const { name, rec } of liveRecords()) {
     const parts = name.split(".");
     const alias = typeof rec.alias === "string" ? rec.alias : parts.length === 3 ? decodeURIComponent(parts[0]!) : null;
@@ -135,8 +169,7 @@ export function liveListeners(): Listener[] {
 
 /** Whether some live process is listening for `as` on `alias`. */
 export function isListening(alias: string, as: string): boolean {
-  const prefix = `${encodeURIComponent(alias)}.${encodeURIComponent(as)}.`;
-  return liveRecords().some(({ name }) => name.startsWith(prefix) && /^\d+$/.test(name.slice(prefix.length)));
+  return liveListeners().some((l) => l.alias === alias && l.as === as);
 }
 
 function deliveredFile(alias: string, as: string, session: string): string {
@@ -166,34 +199,6 @@ const commitDelivered = Effect.fn("Hooks.commitDelivered")(function* (s: AgentSe
   rmSync(deliveredFile(s.alias, s.me, session), { force: true });
   yield* s.markRead(upTo);
 });
-
-/** Hold the one background listener slot for `as` on `alias` in this session; false when a live one already has it. */
-function takeListenSlot(alias: string, as: string, session: string): boolean {
-  const dir = join(home(), "listen-hooks");
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const file = join(dir, `${encodeURIComponent(alias)}.${encodeURIComponent(as)}.${encodeURIComponent(session)}`);
-  for (let tries = 0; tries < 2; tries++) {
-    try {
-      writeFileSync(file, String(process.pid), { flag: "wx" });
-      process.on("exit", () => {
-        try {
-          if (readFileSync(file, "utf8") === String(process.pid)) rmSync(file, { force: true });
-        } catch {}
-      });
-      return true;
-    } catch {
-      const pid = Number(existsSync(file) ? readFileSync(file, "utf8") : 0);
-      try {
-        if (pid > 0) {
-          process.kill(pid, 0);
-          return false;
-        }
-      } catch {}
-      rmSync(file, { force: true });
-    }
-  }
-  return false;
-}
 
 function alive(pid: number): boolean {
   try {
@@ -726,7 +731,10 @@ const answer = Effect.fn("Hooks.answer")(function* (event: string, input: HookIn
  * line, so the following turn arms a fresh one instead of the session going deaf.
  */
 const listen = Effect.fn("Hooks.listen")(function* (b: Binding, cfg: ChannelConfig, who: Here) {
-  if (!hooksListen() || !wakeOn(loadConfig(), b.alias, b.as) || isListening(b.alias, b.as) || !takeListenSlot(b.alias, b.as, who.session ?? "")) return 0;
+  if (!hooksListen() || !wakeOn(loadConfig(), b.alias, b.as) || isListening(b.alias, b.as)) return 0;
+  const slot = yield* Effect.promise(() => takeListenSlot(b.alias, b.as, who.session ?? ""));
+  if (!slot) return 0;
+  yield* Effect.addFinalizer(() => Effect.sync(() => slot.close()));
   const s = yield* openSession(b.alias, cfg, b.as);
   // Peek: the listener never moves the agent's cursor. It reads on a copy that starts past what it already
   // handed this session, hands the messages over, and notes how far that went; the session's next hook
@@ -783,12 +791,13 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
   } catch {}
   // The session that runs the hook: the one its seat remembers (or takes back, after a restart).
   const who: Here = { ...here(), ...(input.session_id ? { session: input.session_id } : {}) };
+  yield* Effect.promise(() => refreshListeners());
   const b = bindingFor(process.env.CLAUDE_PROJECT_DIR ?? input.cwd ?? process.cwd(), { who }) ?? bindingFor(input.cwd ?? process.cwd(), { who });
   if (!b) return;
   const keys = yield* Keystore;
   const cfg = (yield* keys.config).channels[b.alias];
   if (!cfg) return;
-  if (event === LISTEN) return yield* listen(b, cfg, who).pipe(Effect.catchCause(() => Effect.succeed(0)));
+  if (event === LISTEN) return yield* listen(b, cfg, who).pipe(Effect.scoped, Effect.catchCause(() => Effect.succeed(0)));
   const work = answer(event, input, b, cfg, who).pipe(
     Effect.catchCause((cause) => {
       // The channel is gone for this agent: forget only what this agent held, quietly.

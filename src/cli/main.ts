@@ -26,7 +26,8 @@ import { decodeJoinCode, type ChannelAccess } from "../crypto.ts";
 import { describeMember, freeAgentName, handleFor, inlineText } from "../membership.ts";
 import { freeHandle } from "../handles.ts";
 import { baseName, here, seatsNear } from "../seats.ts";
-import { daemonSeat, ensureDaemon, reportRead, wakeOn, type DaemonSeat } from "../daemon.ts";
+import { daemonHello, daemonSeat, ensureDaemon, reportRead, stopDaemon, wakeOn, type DaemonSeat } from "../daemon.ts";
+import { cleanup } from "../cleanup.ts";
 import { asOption, channelOption, isWakeVia, wakeKey, wakeWords } from "../wake.ts";
 import { ago, cardLine, charterLines, describeEvent, holdLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, modeLine, parseDuration, presenceWords, taskStateWord, statusJson } from "../format.ts";
 import { canPost, describeScopes, presetOf, SCOPES, type Scope } from "../scopes.ts";
@@ -36,7 +37,7 @@ import { chooseThread, humanOf, parseTaskId, similarOpenTasks, taskId, wentTo, t
 import { VERSION } from "../version.ts";
 import { computerClaimFor } from "../machine.ts";
 import { briefText } from "../brief.ts";
-import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor, EXTRA_HARNESSES, extraInstalled, hooksInstalled, hooksStatus, howMessagesReachYou, installDetected, installExtra, installHooks, mcFor, runHook, uninstallDetected, uninstallExtra, uninstallHooks, type ExtraHarness } from "../hooks.ts";
+import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor, EXTRA_HARNESSES, extraInstalled, hooksInstalled, hooksStatus, howMessagesReachYou, installDetected, installExtra, installHooks, mcFor, refreshListeners, runHook, uninstallDetected, uninstallExtra, uninstallHooks, type ExtraHarness } from "../hooks.ts";
 import { BadName } from "../refusals.ts";
 import { binDir, ensureOnPath, profileFor } from "../shell-path.ts";
 import { detectCard, detectModel, detectRuns, mergeCard } from "../card.ts";
@@ -88,6 +89,7 @@ Agents
 This computer
   kiwi setup                                     set it up once: Claude Code's hooks, the PATH, and how to pair it
   kiwi pair kp1-…                                pair it with your Kiwi app (approve it there): its agents get in on their own
+  kiwi cleanup [--quiet]                         remove what older installs and updates left behind (the installer runs it)
   kiwi daemon                                    this computer's hub: key, cert, and every agent's seat (starts on its own)
   kiwi demo · doctor · hooks install|uninstall|status · mcp · channels · relay --help
 
@@ -109,6 +111,7 @@ const { values: opt, positionals: args } = parseArgs({
     channel: { type: "string", short: "c" },
     as: { type: "string" },
     nick: { type: "string" },
+    quiet: { type: "boolean" },
     role: { type: "string" },
     about: { type: "string" },
     relay: { type: "string" },
@@ -631,6 +634,19 @@ const commands: Record<string, Command> = {
         try: () => pairComputer(code, { relay: relayUrl() }),
         catch: (err) => (err instanceof PairError ? new Quit({ message: err.message, code: err.code }) : err),
       });
+    }),
+
+  cleanup: () =>
+    Effect.gen(function* () {
+      const done = cleanup({ home: home(), bin: binDir() });
+      const running = yield* Effect.promise(() => daemonHello().catch(() => null));
+      if (running && running.version !== VERSION) {
+        yield* Effect.promise(() => stopDaemon());
+        done.removed.push(`the kiwi ${running.version} daemon (the next kiwi command starts ${VERSION})`);
+      }
+      for (const r of done.removed) out(`removed ${r}`);
+      for (const w of done.warnings) out(`note: ${w}`);
+      if (!done.removed.length && !done.warnings.length && !opt.quiet) out("nothing to clean up");
     }),
 
   /** This computer's hub: one process per KIWI_HOME, keeping every local agent listening. It starts on its own when something needs it; run this to keep it in the foreground (systemd, the app). */
@@ -1352,6 +1368,7 @@ if (import.meta.main) {
   }
   const shortcuts: Record<string, string> = { s: "status", t: "tasks" };
   const command = commands[shortcuts[cmd] ?? cmd];
+  if (command && cmd !== "daemon" && cmd !== "relay" && cmd !== "hook") await refreshListeners();
   // One runtime for the whole command: the relay over HTTP, and this computer's files.
   const runtime = ManagedRuntime.make(AgentLive);
   const exit = await runtime.runPromiseExit(command ? command() : die(`unknown command "${cmd}" (see: kiwi help)`));

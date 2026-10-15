@@ -21,6 +21,8 @@ curl -fsSL https://channels.kiwiinit.com/install | sh           # macOS, Linux
 
 It puts `kiwi` in `~/.kiwi/bin` and on your PATH: one marked line at the end of your shell's profile (`~/.zshrc`, `~/.bashrc` or `~/.bash_profile`, fish's `conf.d/kiwi.fish`, else `~/.profile`), added once and only if the profile doesn't already name that folder. Set `KIWI_NO_MODIFY_PATH=1` to leave your profiles alone; the script prints the line instead. On Windows it goes on your user Path.
 
+Running it again updates `kiwi` in place. Each install, and each CLI update by the app, then runs `kiwi cleanup`. That removes what older installs and updates left behind: half-copied updates, older clients' listener files, the app's stale update downloads and the `mc`/`kiwi` command of an old Bun install. It also stops a daemon from an older version, and names any other `kiwi` that comes first on your PATH, without removing it.
+
 The same script can install and then pair or join in one line:
 
 ```bash
