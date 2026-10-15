@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import type { ChannelIdentityView, ComputerView, PersonView } from "../desktop/src/bridge.ts";
-import { claimFor, csp, externalUrl, fileFor, isAppUrl, mergeChannels, publicComputer, readStore, snapshotOf, writePrivate } from "../desktop/src/guard.ts";
+import { claimFor, csp, externalUrl, fileFor, isAppUrl, mergeChannels, normalizeRelay, publicComputer, readStore, snapshotOf, writePrivate } from "../desktop/src/guard.ts";
 import { encodeJoinCode, newRoomId } from "../src/crypto.ts";
 import { generateIdentity } from "../src/identity.ts";
 import { checkPerson } from "../src/person.ts";
@@ -150,5 +150,19 @@ describe.skipIf(process.platform === "win32")("the saved keys are a 0600 file in
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe("normalizeRelay", () => {
+  test("https anywhere and http on this computer, as the origin", () => {
+    expect(normalizeRelay("https://relay.example.org/path")).toBe("https://relay.example.org");
+    expect(normalizeRelay(" http://localhost:8787 ")).toBe("http://localhost:8787");
+    expect(normalizeRelay("http://relay.example.org")).toBeNull();
+  });
+
+  test("a host a shell would read as more than a word is refused", () => {
+    expect(normalizeRelay("https://a;b$(id)/")).toBeNull();
+    expect(normalizeRelay("https://a&b")).toBeNull();
+    expect(normalizeRelay("https://ex`id`.com")).toBeNull();
   });
 });
