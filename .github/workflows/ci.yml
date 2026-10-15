@@ -128,12 +128,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
-      - run: cd web && bun eslint src
+      - run: cd web && bun oxlint src
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         with:
           job: web-lint
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['web-lint'] }}
+
+  web-format:
+    name: web / format
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['web-format']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: cd web && bun oxfmt --check src
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: web-format
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['web-format'] }}
 
   # Opens every menu, popover and dialog on the production build: Base UI throws on a
   # misplaced part only at render, which typecheck can't see (the b085ae8 crash).
@@ -216,7 +231,7 @@ jobs:
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, ui-smoke, desktop, cli-build, relay-worker]
+    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, cli-build, relay-worker]
     if: always()
     runs-on: ubuntu-latest
     permissions:
