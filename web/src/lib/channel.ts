@@ -9,9 +9,10 @@ import type { JoinRequest, Member } from "@mc/membership.ts"
 import type { Message } from "@mc/protocol.ts"
 import { fold, type ChannelState, type GuardFloor, type Roster } from "@mc/state.ts"
 import type { Activity } from "@mc/protocol.ts"
-import type { ChannelIdentityView, PublicAccess } from "../../../desktop/src/bridge.ts"
+import type { PublicAccess } from "../../../desktop/src/bridge.ts"
 import { errorOf, linkOf, ops, type ChannelLink, type FollowEvent } from "./channel-ops"
 import { forgetHistory, readCached, rememberRow } from "./history"
+import { migrateLegacy } from "./legacy-seats"
 import { wholeLog } from "./history-plan"
 import { ICON_LIVE } from "./icon-event"
 import { addMarks, type Marks } from "./receipts"
@@ -113,40 +114,10 @@ const asMember = (e: ChannelView): StoredMember | null =>
 const asPending = (e: ChannelView): PendingJoin | null => (e.code && !e.access && e.requestId ? { code: e.code, identity: { name: e.idName ?? e.label, pk: e.pk }, requestId: e.requestId } : null)
 const entries = (): ChannelView[] => secrets().channels
 
-interface Legacy {
-  code?: unknown
-  identity?: { name?: unknown; pk?: unknown; sk?: unknown; xpk?: unknown; xsk?: unknown }
-  access?: { roomId?: unknown }
-  at?: unknown
-  name?: unknown
-  requestId?: unknown
-}
-
-function legacyEntry(v: Legacy | null): ChannelIdentityView | null {
-  const id = v?.identity
-  if (!v || typeof v.code !== "string" || !id || typeof id.name !== "string" || typeof id.pk !== "string" || typeof id.sk !== "string") return null
-  const keys = { pk: id.pk, sk: id.sk, ...(typeof id.xpk === "string" ? { xpk: id.xpk } : {}), ...(typeof id.xsk === "string" ? { xsk: id.xsk } : {}) }
-  const name = typeof v.name === "string" ? v.name : undefined
-  if (v.access && typeof v.access.roomId === "string") {
-    return { label: name ?? id.name, idName: id.name, ...keys, roomId: v.access.roomId, code: v.code, access: v.access, at: typeof v.at === "number" ? v.at : 0, ...(name ? { name } : {}) }
-  }
-  return typeof v.requestId === "string" ? { label: id.name, idName: id.name, ...keys, code: v.code, requestId: v.requestId } : null
-}
-
 export async function migrateChannelsToStore(): Promise<number> {
-  const found: { key: string; entry: ChannelIdentityView }[] = []
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i)
-    if (!k?.startsWith("mc.member.") && !k?.startsWith("mc.pending.")) continue
-    const entry = legacyEntry(read<Legacy>(k))
-    if (entry) found.push({ key: k, entry })
-  }
-  if (!found.length) return 0
-  await migrateChannels(found.map((f) => f.entry))
-  for (const { key } of found) localStorage.removeItem(key)
-  localStorage.removeItem("mc.channels")
-  changed()
-  return found.length
+  const n = await migrateLegacy(localStorage, migrateChannels)
+  if (n) changed()
+  return n
 }
 
 export function loadMember(code: string): StoredMember | null {

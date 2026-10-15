@@ -43,6 +43,11 @@ function asOf(v: unknown): Partial<MemberInfo> | undefined {
   return v as Partial<MemberInfo>;
 }
 
+export function editable(m: Member | undefined): Member {
+  if (!m || !m.active || m.unverified || m.owner) throw new Error("that member isn't one whose record you can change");
+  return m;
+}
+
 export function wireError(e: unknown): WireError {
   if (e instanceof ChannelGone) return { kind: "gone", why: e.why };
   if (e instanceof RelayError) return { kind: "relay", status: e.status, message: e.message, ...(e.tagged ? { tag: e.tag } : {}) };
@@ -117,9 +122,7 @@ export class Keyring implements ChannelOps {
       case "updateScopes":
       case "updateRole": {
         const pk = field(args[0], "pk");
-        const m = (await ch.members()).find((x) => x.pk === pk);
-        if (!m) throw new Error("that member isn't in this channel");
-        return [m, ...args.slice(1)];
+        return [editable((await ch.members()).find((x) => x.pk === pk)), ...args.slice(1)];
       }
       case "reconcilePosting":
         return [args[0]];

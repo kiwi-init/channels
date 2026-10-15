@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import type { ChannelIdentityView, ChannelOps, FollowEvent, KeysAsk, KeysPort, KeysPush, KeysReply } from "../desktop/src/bridge.ts";
 import { snapshotOf } from "../desktop/src/guard.ts";
-import { Keyring, serveKeys, type KeyHost } from "../desktop/src/keyring.ts";
+import { editable, Keyring, serveKeys, type KeyHost } from "../desktop/src/keyring.ts";
 import { acceptSeat, mergePublicChannels, migrateEntries, publicChannel, withAccess } from "../desktop/src/seats.ts";
 import { fromWire, toWire } from "../desktop/src/wire.ts";
 import { remoteOps } from "../web/src/lib/channel-remote.ts";
@@ -13,6 +13,7 @@ import { ChannelGone } from "../src/client.ts";
 import { decodeJoinCode, encodeJoinCode, newRoomId } from "../src/crypto.ts";
 import { generateIdentity, type Identity } from "../src/identity.ts";
 import type { CachedRow } from "../src/cache-row.ts";
+import type { Member } from "../src/membership.ts";
 import { provePerson } from "../src/person.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { memoryBudget } from "./check.ts";
@@ -154,7 +155,14 @@ describe("channel keys stay out of the window (T203 step 2)", () => {
     expect((await aw.ops.openRows(code, [row]))[0]?.body).toBe("hello from bo");
     stop();
 
+    const roster = await aw.ops.call(code, "members");
+    const owner = roster.find((m) => m.owner)!;
+    await expect(aw.ops.call(code, "updateRole", owner, "x", null, 0)).rejects.toThrow("can change");
+    await expect(aw.ops.call(code, "updateScopes", { ...owner, pk: "not-a-member" }, [], 0)).rejects.toThrow("can change");
     await aw.ops.call(code, "remove", asked.pk);
+    const gone = (await aw.ops.call(code, "members")).find((m) => m.pk === asked.pk);
+    expect(gone?.active).toBeFalsy();
+    if (gone) await expect(aw.ops.call(code, "updateRole", gone, "x", null, 0)).rejects.toThrow("can change");
     const seat = a.store.seats.find((c) => c.code === code)!;
     expect(publicChannel(seat).access?.epoch).toBe(1);
     expect(Object.keys((seat.access as { keys: Record<string, string> }).keys).sort()).toEqual(["0", "1"]);
@@ -191,6 +199,12 @@ describe("channel keys stay out of the window (T203 step 2)", () => {
     await refused({ id: 4, op: "nope" });
     expect(await session.handle({ op: "follow" })).toBeNull();
     expect(await session.handle("junk")).toBeNull();
+  });
+
+  test("records change only for active, verified members who aren't the owner", () => {
+    const m = { name: "bo", pk: "pk", xpk: "x", role: "", owner: false, at: 1, active: true } as Member;
+    expect(editable(m)).toBe(m);
+    for (const bad of [undefined, { ...m, active: false }, { ...m, unverified: true }, { ...m, owner: true }]) expect(() => editable(bad)).toThrow("can change");
   });
 
   test("following a channel this app isn't in fails, it doesn't throw", async () => {
