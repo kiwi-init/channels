@@ -6,8 +6,7 @@
 
 import { contextBridge, ipcRenderer } from "electron";
 
-import type { PersonClaim } from "../../src/person.ts";
-import type { ChannelIdentityView, ComputerView, DaemonStatus, KiwiBridge, PairAskView, PendingItem, PublicPerson, SignInResult, StoreSnapshot, UpdateView } from "./bridge.ts";
+import type { ChannelIdentityView, ChannelView, ComputerView, DaemonStatus, KeysPort, KeysPush, KeysReply, KeysRequest, KiwiBridge, PairAskView, PendingItem, PublicPerson, SignInResult, StoreSnapshot, UpdateView } from "./bridge.ts";
 
 const relayUrl = (ipcRenderer.sendSync("kiwi:snapshot-sync") as StoreSnapshot).relayUrl;
 
@@ -17,14 +16,64 @@ const on = (channel: "kiwi:store" | "kiwi:deep-link" | "kiwi:update", cb: (v: ne
   return () => ipcRenderer.removeListener(channel, fn as (...args: unknown[]) => void);
 };
 
+let port: MessagePort | null = null;
+let nextAsk = 1;
+const waiting = new Map<number, (r: KeysReply) => void>();
+const queued: KeysRequest[] = [];
+const pushes = new Set<(p: KeysPush) => void>();
+const restarts = new Set<() => void>();
+
+ipcRenderer.on("kiwi:channels-port", (e) => {
+  const fresh = e.ports[0];
+  if (!fresh) return;
+  const restarted = port !== null;
+  port?.close();
+  if (restarted) {
+    for (const [id, done] of waiting) done({ id, ok: false, error: { kind: "unreachable", message: "Kiwi restarted the part that holds your keys; try again" } });
+    waiting.clear();
+  }
+  port = fresh;
+  port.onmessage = (ev: MessageEvent<KeysReply | KeysPush>) => {
+    const d = ev.data;
+    if ("sub" in d) {
+      for (const cb of pushes) cb(d);
+      return;
+    }
+    waiting.get(d.id)?.(d);
+    waiting.delete(d.id);
+  };
+  for (const q of queued.splice(0)) port.postMessage(q);
+  if (restarted) for (const cb of restarts) cb();
+});
+ipcRenderer.send("kiwi:channels-connect");
+
+const channels: KeysPort = {
+  request: (ask) =>
+    new Promise<KeysReply>((resolve) => {
+      const req = { ...ask, id: nextAsk++ } as KeysRequest;
+      waiting.set(req.id, resolve);
+      if (port) port.postMessage(req);
+      else queued.push(req);
+    }),
+  onPush: (cb) => {
+    pushes.add(cb);
+    return () => void pushes.delete(cb);
+  },
+  onRestart: (cb) => {
+    restarts.add(cb);
+    return () => void restarts.delete(cb);
+  },
+};
+
 const kiwi: KiwiBridge = {
   relayUrl,
   getSnapshot: () => ipcRenderer.sendSync("kiwi:snapshot-sync") as StoreSnapshot,
   onStore: (cb) => on("kiwi:store", cb),
   setRelayUrl: (url: string) => ipcRenderer.invoke("kiwi:set-relay-url", url) as Promise<string>,
   createPerson: (name: string) => ipcRenderer.invoke("kiwi:create-person", name) as Promise<PublicPerson>,
-  provePerson: (code: string, memberPk: string) => ipcRenderer.invoke("kiwi:prove-person", code, memberPk) as Promise<PersonClaim>,
-  saveChannels: (channels: ChannelIdentityView[]) => ipcRenderer.invoke("kiwi:save-channels", channels) as Promise<void>,
+  saveChannels: (list: ChannelView[]) => ipcRenderer.invoke("kiwi:save-channels", list) as Promise<void>,
+  migrateChannels: (entries: ChannelIdentityView[]) => ipcRenderer.invoke("kiwi:migrate-channels", entries) as Promise<number>,
+  channels,
   saveComputers: (computers: ComputerView[]) => ipcRenderer.invoke("kiwi:save-computers", computers) as Promise<void>,
   setPending: (pending: PendingItem[]) => ipcRenderer.invoke("kiwi:set-pending", pending) as Promise<void>,
   signIn: () => ipcRenderer.invoke("kiwi:sign-in") as Promise<SignInResult>,

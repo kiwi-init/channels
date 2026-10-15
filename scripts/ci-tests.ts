@@ -10,6 +10,7 @@ import { Glob } from "bun"
 const FLOWS: Record<string, string[]> = {
   "flows-a": ["e2e", "verbs", "threads", "reconnect"],
   "flows-b": ["join-seats", "read-receipts", "daemon-pair", "sh-escape", "coordinator-follows", "reclaim"],
+  "desktop-keys": ["desktop-keys"],
 }
 
 const group = process.argv[2] ?? ""

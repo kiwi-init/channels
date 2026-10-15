@@ -5,14 +5,12 @@
 
 import { useSyncExternalStore } from "react"
 
-import { generateIdentity } from "@mc/identity.ts"
-import type { PersonClaim } from "@mc/person.ts"
-
-import type { ChannelIdentityView, ComputerView, KiwiBridge, PairAskView, PendingItem, PersonView, PublicPerson, StoreSnapshot, UpdateView } from "../../../desktop/src/bridge.ts"
-import { personClaimFor } from "./person-claim"
+import type { ChannelIdentityView, ChannelView, ComputerView, KiwiBridge, PairAskView, PendingItem, PersonView, PublicPerson, StoreSnapshot, UpdateView } from "../../../desktop/src/bridge.ts"
+import { mergePublicChannels, migrateEntries, publicChannel } from "../../../desktop/src/seats.ts"
+import { makeLocalPerson, onLocalChange, readLocal, writeLocal, type Local } from "./channel-local"
 import { persistQueue } from "./persist-queue"
 
-export type { ChannelIdentityView, ComputerView, KiwiBridge, PairAskView, PendingItem, PersonView, PublicPerson, StoreSnapshot, UpdateView }
+export type { ChannelView, ComputerView, KiwiBridge, PairAskView, PendingItem, PersonView, PublicPerson, StoreSnapshot, UpdateView }
 
 /** The desktop bridge, or null in a plain browser. */
 export function bridge(): KiwiBridge | null {
@@ -24,21 +22,17 @@ export function bridge(): KiwiBridge | null {
   }
 }
 
-const LOCAL_KEY = "kiwi.secrets"
-type Local = Omit<StoreSnapshot, "relayUrl" | "person"> & { person: PersonView | null }
-
-function readLocal(): Local {
-  try {
-    const v = JSON.parse(localStorage.getItem(LOCAL_KEY) ?? "null") as Partial<Local> | null
-    return { person: v?.person ?? null, channels: v?.channels ?? [], computers: v?.computers ?? [], pending: v?.pending ?? [] }
-  } catch {
-    return { person: null, channels: [], computers: [], pending: [] }
-  }
-}
+const publicOf = (l: Local): StoreSnapshot => ({
+  relayUrl: "",
+  person: l.person ? { name: l.person.name, pk: l.person.pk, xpk: l.person.xpk } : null,
+  channels: l.channels.map(publicChannel),
+  computers: l.computers,
+  pending: l.pending,
+})
 
 let snapshot: StoreSnapshot = (() => {
   const b = bridge()
-  return b ? b.getSnapshot() : { relayUrl: "", ...readLocal() }
+  return b ? b.getSnapshot() : publicOf(readLocal())
 })()
 const listeners = new Set<() => void>()
 function publish(next: StoreSnapshot) {
@@ -46,13 +40,9 @@ function publish(next: StoreSnapshot) {
   for (const l of listeners) l()
 }
 bridge()?.onStore(publish)
-
-function writeLocal(patch: Partial<Local>) {
-  const next = { ...snapshot, ...patch }
-  const local: Local = { person: patch.person ?? readLocal().person, channels: next.channels, computers: next.computers, pending: next.pending }
-  localStorage.setItem(LOCAL_KEY, JSON.stringify(local))
-  publish(next)
-}
+onLocalChange((l) => {
+  if (!bridge()) publish(publicOf(l))
+})
 
 /** What's kept right now. */
 export const secrets = (): StoreSnapshot => snapshot
@@ -76,28 +66,27 @@ export async function createPerson(name: string): Promise<PublicPerson> {
     publish({ ...snapshot, person: p })
     return p
   }
-  const id = await generateIdentity(name)
-  const p: PersonView = { name: id.name, pk: id.pk, sk: id.sk, xpk: id.xpk!, xsk: id.xsk! }
-  writeLocal({ person: p })
-  return p
-}
-
-export async function personClaim(code: string, memberPk: string): Promise<PersonClaim | null> {
-  const b = bridge()
-  if (b) return snapshot.person ? b.provePerson(code, memberPk) : null
-  const local = readLocal().person
-  return local ? personClaimFor(local, code, memberPk) : null
+  const p = await makeLocalPerson(name)
+  return { name: p.name, pk: p.pk, xpk: p.xpk }
 }
 
 const persistChannels = persistQueue()
 
 /** Keep the channel identities (member keys, pending joins). Visible at once; the write follows, one at a time. */
-export async function saveChannels(channels: ChannelIdentityView[]): Promise<void> {
+export async function saveChannels(channels: ChannelView[]): Promise<void> {
   const b = bridge()
   if (b) {
     publish({ ...snapshot, channels })
     await persistChannels(() => b.saveChannels(channels))
-  } else writeLocal({ channels })
+  } else writeLocal({ channels: mergePublicChannels(readLocal().channels, channels) })
+}
+
+export async function migrateChannels(entries: ChannelIdentityView[]): Promise<number> {
+  const b = bridge()
+  if (b) return b.migrateChannels(entries)
+  const { channels, added } = migrateEntries(readLocal().channels, entries)
+  if (added) writeLocal({ channels })
+  return added
 }
 
 export async function saveComputers(computers: ComputerView[]): Promise<void> {

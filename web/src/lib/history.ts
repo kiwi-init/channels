@@ -12,20 +12,12 @@
 // page loads the usual window. The cache does not fill a gap or sort ahead of
 // the relay. See history-plan.ts.
 
-import { open, seal } from "../../../src/crypto.ts"
-import { verify } from "../../../src/identity.ts"
-import { wellFormed, type Message } from "../../../src/protocol.ts"
+import type { CachedRow } from "../../../src/cache-row.ts"
+import type { Message } from "../../../src/protocol.ts"
 import { planReload } from "./history-plan"
 
-/** One sealed message. No plaintext. */
-export interface CachedRow {
-  seq: number
-  rts?: number
-  /** Epoch of the channel key that sealed this copy. */
-  e: number
-  iv: string
-  ct: string
-}
+export type { CachedRow }
+export type OpenRows = (rows: CachedRow[]) => Promise<(Message | null)[]>
 
 export interface HistoryDb {
   put(roomId: string, memberPk: string, row: CachedRow): Promise<void>
@@ -102,46 +94,19 @@ export function useHistoryDb(next: HistoryDb | null): void {
   backing = next
 }
 
-/** Seal a message for the cache. The stored row does not contain the text. */
-export async function packRow(key: string, roomId: string, epoch: number, message: Message): Promise<CachedRow> {
-  const { seq, rts, sigOk, ...payload } = message
-  void sigOk
-  const sealed = await seal(key, roomId, { seq, msg: payload })
-  return { seq, ...(rts !== undefined ? { rts } : {}), e: epoch, iv: sealed.iv, ct: sealed.ct }
-}
-
-/** Open a row, or null if the seal, the seq, or the payload does not check out. */
-export async function openRow(row: CachedRow, roomId: string, keys: Record<string, string>): Promise<Message | null> {
-  const epochs = [String(row.e), ...Object.keys(keys).filter((e) => e !== String(row.e))]
-  for (const e of epochs) {
-    const key = keys[e]
-    if (!key) continue
-    const opened = (await open(key, roomId, row.iv, row.ct)) as { seq?: unknown; msg?: unknown } | null
-    if (!opened || opened.seq !== row.seq || !wellFormed(opened.msg)) continue
-    return { ...opened.msg, seq: row.seq, ...(row.rts !== undefined ? { rts: row.rts } : {}), sigOk: await verify(opened.msg) }
-  }
-  return null
-}
-
-/** Remember one message the relay just delivered. Keeps at most `limit` newest seqs. */
-export async function rememberMessage(roomId: string, memberPk: string, epoch: number, key: string, message: Message, limit: number): Promise<void> {
-  if (!key || !Number.isSafeInteger(message.seq) || message.seq <= 0) return
-  const row = await packRow(key, roomId, epoch, message)
+export async function rememberRow(roomId: string, memberPk: string, row: CachedRow, limit: number): Promise<void> {
+  if (!Number.isSafeInteger(row.seq) || row.seq <= 0) return
   await db().put(roomId, memberPk, row)
-  await db().trimBelow(roomId, memberPk, message.seq - limit + 1)
+  await db().trimBelow(roomId, memberPk, row.seq - limit + 1)
 }
 
 /**
  * Messages to paint, and the exclusive seq to stream from. An unusable cache
  * is deleted here, so the next save starts clean.
  */
-export async function readCached(roomId: string, memberPk: string, keys: Record<string, string>, head: number, limit: number): Promise<{ messages: Message[]; since: number }> {
+export async function readCached(roomId: string, memberPk: string, openRows: OpenRows, head: number, limit: number): Promise<{ messages: Message[]; since: number }> {
   const stored = await db().rows(roomId, memberPk)
-  const opened: Message[] = []
-  for (const row of stored) {
-    const m = await openRow(row, roomId, keys)
-    if (m) opened.push(m)
-  }
+  const opened = (await openRows(stored)).filter((m): m is Message => m !== null)
   const plan = planReload(
     opened.map((m) => m.seq),
     head,

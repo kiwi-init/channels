@@ -7,7 +7,7 @@ import { ignored, isReaction, type Color, type Message } from "@mc/protocol.ts"
 import { describeScopes, wireScopes } from "@mc/scopes.ts"
 import { colorOf, keptFromPeople, taskId, type Task } from "@mc/state.ts"
 import { secrets } from "@/lib/secrets"
-import { channelTitle, forgetChannel, loadMember, loadRecent, saveMember, saveRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
+import { channelTitle, forgetChannel, loadMember, loadRecent, renameChannel, saveRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { lastPreview } from "@/lib/preview"
 import { markSeen, setOpenNews } from "@/lib/news"
 import { useIcons, useLiveIcon } from "@/lib/icons"
@@ -612,7 +612,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
               await ch.setTitle(name)
               // Show it here at once; other members pick it up from the relay's info frame.
               const stored = loadMember(member.code)
-              if (stored) saveMember({ ...stored, name: name.trim().slice(0, 80) })
+              if (stored) void renameChannel(stored.code, name.trim().slice(0, 80))
             }
           : undefined
       }

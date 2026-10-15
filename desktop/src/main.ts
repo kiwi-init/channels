@@ -9,16 +9,18 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, Notification, protocol, safeStorage, shell, Tray } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, MessageChannelMain, nativeImage, nativeTheme, Notification, protocol, safeStorage, shell, Tray, utilityProcess } from "electron";
 
 import { generateIdentity, type Identity } from "../../src/identity.ts";
 import { answerPair, newSecret, openMailbox, pairCode, readPairAsk, type Mailbox, type PairAsk } from "../../src/mailbox.ts";
 import { certifyMachine } from "../../src/person.ts";
 import { compareVersions, ensureOnPath, keepCli } from "./cli.ts";
-import { APP_HOST, APP_SCHEME, claimFor, csp, externalUrl, fileFor, isAppUrl, mergeChannels, normalizeRelay, publicComputer, publicPerson, readStore, snapshotOf, writePrivate } from "./guard.ts";
+import { acceptSeat, APP_HOST, APP_SCHEME, claimFor, csp, externalUrl, fileFor, isAppUrl, mergePublicChannels, migrateEntries, normalizeRelay, publicComputer, publicPerson, readStore, snapshotOf, withAccess, writePrivate } from "./guard.ts";
+import type { HostToKeys, KeysToHost } from "./keyring.ts";
 import { applyUpdate, startUpdates, updateState } from "./updater.ts";
 import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, spawnDaemon, type HelloResult } from "./daemon-client.ts";
 import type { ChannelIdentityView, ComputerView, DaemonStatus, PairAskView, PendingItem, PersonView, SignInResult, StoreSnapshot } from "./bridge.ts";
+import type { PersonClaim } from "../../src/person.ts";
 
 const PUBLIC_RELAY = "https://channels.kiwiinit.com";
 const JOIN_SCHEME = "kiwi";
@@ -37,6 +39,7 @@ interface StoreFile {
   computers: ComputerView[];
   pending: PendingItem[];
   signin?: { access: string; refresh: string; exp: number };
+  migrated?: boolean;
 }
 
 const storePath = () => path.join(app.getPath("userData"), "kiwi-store.bin");
@@ -93,7 +96,86 @@ const mutate = (fn: (s: StoreFile) => void) => {
   fn(store);
   saveStore();
   broadcast();
+  tellKeys({ type: "seats", seats: store.channels, person: store.person?.pk ?? null });
 };
+
+let keys: Electron.UtilityProcess | null = null;
+let keysWait = 1_000;
+let keysFlushed: (() => void) | null = null;
+let keysClosed = false;
+
+function closeKeys(then: () => void): void {
+  const child = keys;
+  if (!child) return then();
+  const finish = () => {
+    keysFlushed = null;
+    clearTimeout(timer);
+    keysClosed = true;
+    child.kill();
+    then();
+  };
+  const timer = setTimeout(finish, 1_000);
+  keysFlushed = finish;
+  child.postMessage({ type: "flush" } satisfies HostToKeys);
+}
+
+const channelsPath = () => (app.isPackaged ? path.join(app.getAppPath(), "dist", "channels.js") : path.join(__dirname, "..", "dist", "channels.js"));
+
+function tellKeys(m: HostToKeys, ports: Electron.MessagePortMain[] = []): void {
+  keys?.postMessage(m, ports);
+}
+
+function connectKeys(wc: Electron.WebContents): void {
+  if (!keys || wc.isDestroyed()) return;
+  const { port1, port2 } = new MessageChannelMain();
+  tellKeys({ type: "port" }, [port1]);
+  wc.postMessage("kiwi:channels-port", null, [port2]);
+}
+
+function startKeys(): void {
+  const child = utilityProcess.fork(channelsPath(), [], { serviceName: "Kiwi keys" });
+  const started = Date.now();
+  keys = child;
+  tellKeys({ type: "init", relay: store.relayUrl, dir: app.getPath("userData"), seats: store.channels, person: store.person?.pk ?? null });
+  child.on("message", (m: KeysToHost) => onKeys(child, m));
+  child.on("exit", () => {
+    if (keys === child) keys = null;
+    if (quitting) return;
+    keysWait = Date.now() - started > 60_000 ? 1_000 : Math.min(keysWait * 2, 30_000);
+    setTimeout(startKeys, keysWait);
+  });
+  if (win && !win.isDestroyed()) connectKeys(win.webContents);
+}
+
+function onKeys(child: Electron.UtilityProcess, m: KeysToHost): void {
+  if (m.type === "flushed") {
+    keysFlushed?.();
+    return;
+  }
+  const done = (extra: { error?: string; claim?: PersonClaim | null } = {}) => {
+    if (keys === child) child.postMessage({ type: "done", id: m.id, ...extra } satisfies HostToKeys);
+  };
+  const fail = (e: unknown) => done({ error: e instanceof Error ? e.message : String(e) });
+  try {
+    switch (m.type) {
+      case "save":
+        mutate((s) => (s.channels = acceptSeat(s.channels, m.entry)));
+        return done();
+      case "access":
+        mutate((s) => (s.channels = withAccess(s.channels, m.code, m.pk, m.access)));
+        return done();
+      case "forget":
+        mutate((s) => (s.channels = s.channels.filter((c) => c.code !== m.code)));
+        return done();
+      case "prove":
+        if (!store.person) return done({ claim: null });
+        void claimFor(requirePerson(), m.code, m.memberPk).then((claim) => done({ claim }), fail);
+        return;
+    }
+  } catch (e) {
+    fail(e);
+  }
+}
 
 // ---------- renderer hosting ----------
 
@@ -430,6 +512,7 @@ function wireIpc(): void {
       s.relayUrl = norm;
       s.signin = undefined;
     });
+    tellKeys({ type: "relay", relay: norm });
     win?.loadURL(entryUrl());
     return norm;
   });
@@ -450,9 +533,18 @@ function wireIpc(): void {
       makingPerson = false;
     }
   });
-  ipcMain.handle("kiwi:save-channels", (_e, channels: ChannelIdentityView[]) => mutate((s) => (s.channels = mergeChannels(s.channels, channels))));
+  ipcMain.handle("kiwi:save-channels", (_e, channels: unknown) => mutate((s) => (s.channels = mergePublicChannels(s.channels, channels))));
+  ipcMain.handle("kiwi:migrate-channels", (_e, entries: unknown) => {
+    if (store.migrated) return 0;
+    const { channels, added } = migrateEntries(store.channels, entries);
+    mutate((s) => {
+      s.channels = channels;
+      s.migrated = true;
+    });
+    return added;
+  });
+  ipcMain.on("kiwi:channels-connect", (e) => connectKeys(e.sender));
   ipcMain.handle("kiwi:save-computers", (_e, computers: ComputerView[]) => mutate((s) => (s.computers = computers.map(publicComputer))));
-  ipcMain.handle("kiwi:prove-person", (_e, code: unknown, memberPk: unknown) => claimFor(requirePerson(), code, memberPk));
   ipcMain.handle("kiwi:set-pending", (_e, pending: PendingItem[]) => mutate((s) => (s.pending = pending)));
   ipcMain.handle("kiwi:sign-in", (): Promise<SignInResult> => signInMain());
   ipcMain.handle("kiwi:dev-sign-in", async (_e, name: string) => {
@@ -575,6 +667,7 @@ else {
     warnIfBroken();
     serveWeb();
     wireIpc();
+    startKeys();
     createWindow();
     createTray();
     // The app's own updates, from proper releases (updater.ts): the window and the tray hear each step.
@@ -604,5 +697,10 @@ else {
   });
   // Any real quit (⌘Q, the Dock's Quit, a logout, the tray's Quit) lets the window close: closing it
   // otherwise only hides it, and would cancel the quit.
-  app.on("before-quit", () => (quitting = true));
+  app.on("before-quit", (e) => {
+    quitting = true;
+    if (keysClosed || !keys) return;
+    e.preventDefault();
+    closeKeys(() => app.quit());
+  });
 }

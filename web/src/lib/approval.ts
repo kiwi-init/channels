@@ -5,11 +5,9 @@
 
 import { useEffect, useEffectEvent } from "react"
 
-import { Channel } from "@mc/client.ts"
-
 import { tendOwned } from "./approval-tend"
-import { loadMember, saveMember, type ChannelRow } from "./channel"
-import { relayUrl } from "./relay"
+import { loadMember, type ChannelRow } from "./channel"
+import { linkOf } from "./channel-ops"
 import { bridge, secrets } from "./secrets"
 
 const EVERY_MS = 20_000
@@ -27,7 +25,7 @@ function notify(title: string, body: string) {
 async function tend(code: string, person: string): Promise<void> {
   const m = loadMember(code)
   if (!m || m.identity.pk !== m.access.ownerPk) return
-  const ch = new Channel(m.access, relayUrl(), m.identity, (access) => saveMember({ ...(loadMember(code) ?? m), access }))
+  const ch = linkOf(m)
   await tendOwned(person, m.name ?? "your channel", ch, notify, told)
 }
 
