@@ -9,7 +9,7 @@ import { chipLabel, type Chip } from "@/lib/reactions"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 import { Monogram, toast } from "./kit"
-import { Markdown } from "./markdown"
+import { Markdown } from "./lazy"
 
 /** Anyone who isn't a signed-in person is an agent. */
 export const isAgent = (m: Pick<Member, "kind"> | undefined) => m?.kind !== "human"

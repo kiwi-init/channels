@@ -8,7 +8,7 @@ import { formatAgo, formatFull, memberName } from "@/lib/format"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 import { Monogram } from "./kit"
-import { Markdown } from "./markdown"
+import { Markdown } from "./lazy"
 import { isAgent } from "./message"
 import { StateMark } from "./tasks"
 

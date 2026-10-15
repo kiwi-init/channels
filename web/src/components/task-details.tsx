@@ -8,7 +8,7 @@ import { cx } from "@/lib/utils"
 import { Feed, PrLink } from "./feed"
 import { Icon } from "./icon"
 import { Button, Monogram } from "./kit"
-import { Markdown } from "./markdown"
+import { Markdown } from "./lazy"
 import { isAgent } from "./message"
 import { labelOf, StateMark } from "./tasks"
 

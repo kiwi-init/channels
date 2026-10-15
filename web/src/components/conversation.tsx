@@ -25,14 +25,11 @@ import { AddAgent } from "./add-agent"
 import { AgentStrip, type AgentNow } from "./agent-strip"
 import { ChannelControls, HoldBanner, HoldDialog } from "./controls"
 import { Icon } from "./icon"
-import { InfoPanel } from "./info-panel"
 import { Button, IconButton, Spinner } from "./kit"
 import { Bubble, EventGroup, EventRow, TimeMark, isAgent, standsAlone, type ThreadSummary } from "./message"
 import { NeedsYou } from "./needs-you"
-import { TaskDetails } from "./task-details"
 import { Notes, Tasks } from "./tasks"
-import { TasksPanel } from "./tasks-panel"
-import { ThreadPanel } from "./thread"
+import { InfoPanel, TaskDetails, TasksPanel, ThreadPanel } from "./lazy"
 
 /** Messages this close together from one sender read as one run. */
 const RUN_GAP = 5 * 60_000
