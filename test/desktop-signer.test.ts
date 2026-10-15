@@ -67,4 +67,10 @@ describe("signedLikeThisApp", () => {
     expect(await signedLikeThisApp("/Applications/Kiwi.app", "/tmp/u/Kiwi.app", run)).toBe(false);
     expect(calls.length).toBe(1);
   });
+
+  test("a running app codesign can't read refuses after one call, whatever it printed", async () => {
+    const { run, calls } = tools({ display: { code: 1, out: DISPLAYED } });
+    expect(await signedLikeThisApp("/Applications/Kiwi.app", "/tmp/u/Kiwi.app", run)).toBe(false);
+    expect(calls.length).toBe(1);
+  });
 });

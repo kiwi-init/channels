@@ -2,10 +2,6 @@
 // pre-release, so release candidates never reach anyone who didn't download one. Checked at start and
 // every few hours; a newer one is downloaded in the background, checked against the release's
 // SHA256SUMS, and put in place the next time the app quits (or now, from "Restart to update").
-//
-// Not Electron's autoUpdater: on a Mac it only takes apps signed with an Apple Developer ID, and these
-// builds are signed ad hoc. This swaps the bundle itself: the macOS zip for this Mac's architecture,
-// or the Linux AppImage this runs from. A .deb install (owned by root) is told there's an update.
 
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";

@@ -9,7 +9,7 @@ export type RunTool = (cmd: string, args: string[]) => Promise<ToolRun>;
 
 const runTool: RunTool = (cmd, args) =>
   new Promise((resolve) => {
-    execFile(cmd, args, { encoding: "utf8" }, (err, stdout, stderr) => {
+    execFile(cmd, args, { encoding: "utf8", timeout: 120_000, maxBuffer: 4 * 1024 * 1024 }, (err, stdout, stderr) => {
       resolve({ code: err ? (typeof err.code === "number" ? err.code : 1) : 0, out: `${stdout}${stderr}` });
     });
   });
@@ -23,7 +23,8 @@ export function developerIdRequirement(out: string): string | null {
 }
 
 export async function signedLikeThisApp(running: string, next: string, run: RunTool = runTool): Promise<boolean> {
-  const req = developerIdRequirement((await run("/usr/bin/codesign", ["-d", "-r-", running])).out);
+  const own = await run("/usr/bin/codesign", ["-d", "-r-", running]);
+  const req = own.code === 0 ? developerIdRequirement(own.out) : null;
   if (!req) return false;
   const verified = await run("/usr/bin/codesign", ["--verify", "--deep", "--strict", "-R", `=${req}`, next]);
   if (verified.code !== 0) return false;
