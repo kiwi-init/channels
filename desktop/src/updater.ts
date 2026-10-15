@@ -14,6 +14,7 @@ import { app } from "electron";
 import { compareVersions } from "./cli.ts";
 import { moveOver } from "./move.ts";
 import { signedLikeThisApp } from "./signer.ts";
+import { swapAsset } from "./update-asset.ts";
 
 const REPO = "ojowwalker77/channels";
 const EVERY_MS = 6 * 3_600_000;
@@ -30,13 +31,6 @@ let staged: { version: string; path: string } | null = null;
 let current: UpdateState | null = null;
 let notify: (s: UpdateState) => void = () => {};
 
-/** What this install can swap itself for: the macOS zip for its CPU, or the AppImage it runs from. */
-function assetFor(version: string): string | null {
-  if (process.platform === "darwin") return `Kiwi-${version}-mac-${process.arch === "arm64" ? "arm64" : "x64"}.zip`;
-  if (process.platform === "linux" && process.env["APPIMAGE"] && process.arch === "x64") return `Kiwi-${version}-linux-x86_64.AppImage`;
-  return null;
-}
-
 /** The Kiwi.app this runs from (…/Kiwi.app/Contents/MacOS/Kiwi). */
 const macBundle = () => path.resolve(app.getPath("exe"), "..", "..", "..");
 
@@ -48,7 +42,7 @@ async function check(): Promise<void> {
   const version = rel.tag_name?.replace(/^v/, "");
   if (!version || rel.prerelease || rel.draft || compareVersions(version, app.getVersion()) <= 0) return;
   const url = rel.html_url ?? `https://github.com/${REPO}/releases/latest`;
-  const name = assetFor(version);
+  const name = swapAsset(version, process.platform, process.arch);
   const asset = name ? rel.assets?.find((a) => a.name === name) : undefined;
   const sums = rel.assets?.find((a) => a.name === "SHA256SUMS");
   if (!asset || !sums) return set({ version, state: "available", url });
