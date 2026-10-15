@@ -32,11 +32,7 @@ describe("safe markdown links", () => {
 
   test("rendered links drop unsafe schemes and do not fetch images", () => {
     const html = renderToStaticMarkup(
-      createElement(
-        Markdown,
-        null,
-        "[ok](https://example.com)\n[bad](javascript:alert(1))\n[mail](mailto:a@b.example)\n![pic](https://evil.example/x.png)\n![nope](javascript:alert(1))",
-      ),
+      createElement(Markdown, null, "[ok](https://example.com)\n[bad](javascript:alert(1))\n[mail](mailto:a@b.example)\n![pic](https://evil.example/x.png)\n![nope](javascript:alert(1))")
     )
     expect(html).toContain('href="https://example.com"')
     expect(html).toContain('rel="noopener noreferrer nofollow"')
@@ -57,9 +53,7 @@ describe("markdown tables and code", () => {
   })
 
   test("a fenced block offers copy and a table header can be sorted", () => {
-    const html = renderToStaticMarkup(
-      createElement(Markdown, null, "```js\nconsole.log(1)\n```\n\n| n | name |\n| - | - |\n| 10 | b |\n| 2 | a |\n"),
-    )
+    const html = renderToStaticMarkup(createElement(Markdown, null, "```js\nconsole.log(1)\n```\n\n| n | name |\n| - | - |\n| 10 | b |\n| 2 | a |\n"))
     expect(html).toContain('aria-label="Copy code"')
     expect(html).toContain("console.log(1)")
     expect(html).toContain('aria-label="Sort by n"')

@@ -10,7 +10,16 @@ const name = (n: string) => n.toUpperCase()
 
 describe("reaction chips", () => {
   test("one per emoji, in the order each first came, with who in the order they reacted", () => {
-    const chips = chipsFor(state([["win", r("👍", 14)], ["dev", r("👀", 12)], ["me", r("👀", 13)]]), 10, "me", name)
+    const chips = chipsFor(
+      state([
+        ["win", r("👍", 14)],
+        ["dev", r("👀", 12)],
+        ["me", r("👀", 13)],
+      ]),
+      10,
+      "me",
+      name
+    )
     expect(chips).toEqual([
       { emoji: "👀", who: ["DEV", "ME"], mine: true },
       { emoji: "👍", who: ["WIN"], mine: false },

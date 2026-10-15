@@ -28,10 +28,7 @@ export function setSidebarOpen(open: boolean): void {
 export const toggleSidebar = () => setSidebarOpen(!read())
 
 export function useSidebarOpen(): boolean {
-  return useSyncExternalStore(
-    (l) => (listeners.add(l), () => void listeners.delete(l)),
-    read
-  )
+  return useSyncExternalStore((l) => (listeners.add(l), () => void listeners.delete(l)), read)
 }
 
 /** ⌘B (Ctrl+B elsewhere) shows or hides the list; so does ⌃⌘S, the macOS convention. */

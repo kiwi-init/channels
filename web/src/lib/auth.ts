@@ -66,5 +66,10 @@ export async function tokenForCreate(fresh = false): Promise<string | null> {
 
 /** The person's name as a dev relay's user (letters, digits, - and _). */
 function devName(): string {
-  return (secrets().person?.name ?? "someone").replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64) || "someone"
+  return (
+    (secrets().person?.name ?? "someone")
+      .replace(/[^A-Za-z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 64) || "someone"
+  )
 }

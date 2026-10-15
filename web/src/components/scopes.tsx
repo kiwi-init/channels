@@ -18,13 +18,7 @@ export function ScopePicker({ value, onChange, disabled }: { value: Scope[]; onC
   return (
     <div className="grid gap-1">
       <label className="flex items-center gap-2 text-ui text-ink">
-        <input
-          type="checkbox"
-          checked={preset === "read-only"}
-          onChange={(e) => onChange(e.target.checked ? [] : [...SCOPES])}
-          disabled={disabled}
-          className="size-4 accent-[var(--accent)]"
-        />
+        <input type="checkbox" checked={preset === "read-only"} onChange={(e) => onChange(e.target.checked ? [] : [...SCOPES])} disabled={disabled} className="size-4 accent-[var(--accent)]" />
         Can only read
       </label>
       <p className="text-meta leading-snug text-ink-3">

@@ -9,7 +9,7 @@ export function persistQueue(): (job: () => Promise<void>) => Promise<void> {
     const run = tail.then(job, job)
     tail = run.then(
       () => undefined,
-      () => undefined,
+      () => undefined
     )
     return run
   }

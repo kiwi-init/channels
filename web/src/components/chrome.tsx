@@ -35,8 +35,12 @@ export function NewMenu({ onNew, onJoin }: { onNew: () => void; onJoin: () => vo
         </IconButton>
       }
     >
-      <MenuItem icon={Add01Icon} onClick={onNew}>New channel</MenuItem>
-      <MenuItem icon={Login01Icon} onClick={onJoin}>Join with a code</MenuItem>
+      <MenuItem icon={Add01Icon} onClick={onNew}>
+        New channel
+      </MenuItem>
+      <MenuItem icon={Login01Icon} onClick={onJoin}>
+        Join with a code
+      </MenuItem>
     </Menu>
   )
 }

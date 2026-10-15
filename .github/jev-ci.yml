@@ -97,11 +97,21 @@ jobs:
     jev: false
     name: web / lint
     inputs: ["web/src/**"]
-    always: ["web/eslint.config.js", "web/package.json", "web/bun.lock"]
+    always: ["web/.oxlintrc.json", "web/package.json", "web/bun.lock"]
     description: >-
-      Runs eslint on web/src with the recommended JavaScript, TypeScript and React hooks rules.
-      Fails on an eslint error in the dashboard's .ts or .tsx files: an unused variable or
-      import, a hook called conditionally or with missing dependencies, an explicit any.
+      Runs oxlint on web/src with the rules ESLint's recommended JavaScript, TypeScript and
+      React hooks sets had (web/.oxlintrc.json lists them). Fails on an oxlint error in the
+      dashboard's .ts or .tsx files: an unused variable or import, a hook called conditionally,
+      setState in an effect, an impure call in render, an explicit any.
+
+  web-format:
+    jev: false
+    name: web / format
+    inputs: ["web/src/**"]
+    always: ["web/.oxfmtrc.json", "web/package.json", "web/bun.lock"]
+    description: >-
+      Runs oxfmt --check on web/src with web/.oxfmtrc.json. Fails when a file in web/src is not
+      formatted as oxfmt would write it (run `bun run format` in web/ to fix).
 
   ui-smoke:
     name: ui-smoke

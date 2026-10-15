@@ -46,7 +46,9 @@ function RelayField() {
   }
   return (
     <div>
-      <label htmlFor="relay-url" className="mb-2 block text-ui font-medium text-ink">Relay</label>
+      <label htmlFor="relay-url" className="mb-2 block text-ui font-medium text-ink">
+        Relay
+      </label>
       <div className="flex gap-2">
         <input
           id="relay-url"
@@ -60,7 +62,11 @@ function RelayField() {
           Use
         </Button>
       </div>
-      {error && <p className="mt-1 text-ui text-ink-2" role="alert">{error}</p>}
+      {error && (
+        <p className="mt-1 text-ui text-ink-2" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   )
 }

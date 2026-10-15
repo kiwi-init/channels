@@ -3,19 +3,7 @@ import * as Cause from "effect/Cause"
 import * as Effect from "effect/Effect"
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState, useSyncExternalStore } from "react"
 
-import {
-  Channel,
-  ChannelGone,
-  RelayError,
-  eachLive,
-  keepRecordsIn,
-  type HumanSession,
-  type Live,
-  type Relay,
-  type ModeSetting,
-  type RoomsSetting,
-  type SendOptions,
-} from "@mc/client.ts"
+import { Channel, ChannelGone, RelayError, eachLive, keepRecordsIn, type HumanSession, type Live, type Relay, type ModeSetting, type RoomsSetting, type SendOptions } from "@mc/client.ts"
 import { decodeJoinCode, newRoomId, ownerFingerprint, type ChannelAccess } from "@mc/crypto.ts"
 import { generateIdentity, type Identity } from "@mc/identity.ts"
 import { handleFor, type JoinRequest, type Member } from "@mc/membership.ts"
@@ -67,10 +55,13 @@ export function clockNow(): number {
 }
 
 export function useClock(intervalMs: number): number {
-  const subscribe = useCallback((onChange: () => void) => {
-    const timer = setInterval(onChange, intervalMs)
-    return () => clearInterval(timer)
-  }, [intervalMs])
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      const timer = setInterval(onChange, intervalMs)
+      return () => clearInterval(timer)
+    },
+    [intervalMs]
+  )
   return useSyncExternalStore(subscribe, clockNow)
 }
 
@@ -145,7 +136,16 @@ function entryIdentity(e: Entry): Identity {
   return { name: e.idName ?? e.label, pk: e.pk, sk: e.sk, ...(e.xpk ? { xpk: e.xpk } : {}), ...(e.xsk ? { xsk: e.xsk } : {}) }
 }
 const keysOf = (id: Identity) => ({ pk: id.pk, sk: id.sk, ...(id.xpk ? { xpk: id.xpk } : {}), ...(id.xsk ? { xsk: id.xsk } : {}) })
-const memberEntry = (m: StoredMember): Entry => ({ label: m.name ?? m.identity.name, idName: m.identity.name, ...keysOf(m.identity), roomId: m.access.roomId, code: m.code, access: m.access, at: m.at, ...(m.name ? { name: m.name } : {}) })
+const memberEntry = (m: StoredMember): Entry => ({
+  label: m.name ?? m.identity.name,
+  idName: m.identity.name,
+  ...keysOf(m.identity),
+  roomId: m.access.roomId,
+  code: m.code,
+  access: m.access,
+  at: m.at,
+  ...(m.name ? { name: m.name } : {}),
+})
 const pendingEntry = (p: PendingJoin): Entry => ({ label: p.identity.name, idName: p.identity.name, ...keysOf(p.identity), code: p.code, requestId: p.requestId })
 
 const inApp = () => bridge() !== null
@@ -172,7 +172,11 @@ export async function migrateChannelsToStore(): Promise<number> {
     }
   }
   if (!found.length) return 0
-  const have = new Set(entries().filter((e) => e.access).map((e) => e.code))
+  const have = new Set(
+    entries()
+      .filter((e) => e.access)
+      .map((e) => e.code)
+  )
   const next = [...entries()]
   for (const { entry } of found) {
     if (have.has(entry.code)) continue
@@ -450,7 +454,7 @@ export function useChannelList(): ChannelRow[] {
           } catch {
             // Closed or unreachable: keep the last head we have.
           }
-        }),
+        })
       )
       if (stop || my !== gen) return
       setHeads((prev) => {
@@ -520,9 +524,7 @@ export async function createChannel(name: string, token: string | null, me: { na
   await saveMember(m)
   // A new channel starts in coordinator mode: people talk with the coordinator, agents in their tasks'
   // conversations. Best effort: the channel is made either way, and the owner can turn it on later.
-  await new Channel(access, relayUrl(), owner, (a) => saveMember({ ...m, access: a }))
-    .startCoordinated()
-    .catch(() => {})
+  await new Channel(access, relayUrl(), owner, (a) => saveMember({ ...m, access: a })).startCoordinated().catch(() => {})
   return m
 }
 
@@ -644,7 +646,7 @@ const follow = (ch: Channel, view: Viewer) =>
         const since = cached ? cached.since : Math.max(0, head - HISTORY)
         return { head, cached, since, firstSeq: cached?.messages[0]?.seq }
       }),
-      view.status,
+      view.status
     )
     if (opened.cached?.messages.length) view.cached(opened.cached.messages)
     view.started({ head: opened.head, whole: wholeLog(opened.head, HISTORY, opened.firstSeq) })
@@ -663,16 +665,7 @@ const merged = (prev: Message[], more: Message[]) => {
  * with no session, the relay answers 401, and this browser signs itself out.
  */
 export function useChannel(member: StoredMember, human?: HumanSession | null): ChannelHandle {
-  const ch = useMemo(
-    () =>
-      new Channel(
-        member.access,
-        relayUrl(),
-        member.identity,
-        (access) => saveMember({ ...(loadMember(member.code) ?? member), access })
-      ),
-    [member]
-  )
+  const ch = useMemo(() => new Channel(member.access, relayUrl(), member.identity, (access) => saveMember({ ...(loadMember(member.code) ?? member), access })), [member])
   const [connection, setConnection] = useState<Connection>("connecting")
   /** The head when this view started, and whether the whole log fits in what it loads. */
   const [start, setStart] = useState<{ head: number; whole: boolean } | null>(null)
@@ -727,7 +720,11 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
 
   /** A step that failed is reported to onGone; one that was stopped (the view closed) isn't. */
   const orGone = useCallback(
-    <A, E, R>(step: Effect.Effect<A, E, R>) => step.pipe(Effect.asVoid, Effect.catchCause((cause) => (Cause.hasInterruptsOnly(cause) ? Effect.void : Effect.sync(() => void onGone(Cause.squash(cause)))))),
+    <A, E, R>(step: Effect.Effect<A, E, R>) =>
+      step.pipe(
+        Effect.asVoid,
+        Effect.catchCause((cause) => (Cause.hasInterruptsOnly(cause) ? Effect.void : Effect.sync(() => void onGone(Cause.squash(cause)))))
+      ),
     [onGone]
   )
 
@@ -890,4 +887,3 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
 
   return { ch, connection, gone, messages, roster, state, online: live, isOwner, requests, send, refreshRequests, refreshRoster, head: start?.head ?? 0, marks, pkOf }
 }
-

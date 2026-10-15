@@ -71,13 +71,20 @@ function CodeBlock({ children }: { children?: ReactNode }) {
   return (
     <div className="group relative my-2">
       {/* On a phone, long lines wrap rather than run off the edge with no sign there's more. */}
-      <pre ref={preRef} onScroll={measure} className={cx("overflow-x-auto rounded-ctl bg-wash-2 px-3 py-2.5 font-mono text-ui leading-relaxed text-ink max-sm:break-all max-sm:whitespace-pre-wrap [&>code]:bg-transparent [&>code]:p-0", more && "code-more")}>
+      <pre
+        ref={preRef}
+        onScroll={measure}
+        className={cx(
+          "overflow-x-auto rounded-ctl bg-wash-2 px-3 py-2.5 font-mono text-ui leading-relaxed text-ink max-sm:break-all max-sm:whitespace-pre-wrap [&>code]:bg-transparent [&>code]:p-0",
+          more && "code-more"
+        )}
+      >
         {children}
       </pre>
       <button
         type="button"
         aria-label={copied ? "Copied" : "Copy code"}
-        className="absolute top-1.5 right-1.5 inline-flex size-7 items-center justify-center rounded-row text-ink-3 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 hover:bg-wash-2 hover:text-ink"
+        className="absolute top-1.5 right-1.5 inline-flex size-7 items-center justify-center rounded-row text-ink-3 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-wash-2 hover:text-ink focus-visible:opacity-100"
         onClick={() => {
           const text = preRef.current?.innerText ?? ""
           if (!text || !navigator.clipboard) return
@@ -120,7 +127,12 @@ function MarkdownTable({ children }: { children?: ReactNode }) {
               const label = cellText(header) || `column ${index + 1}`
               return (
                 <th key={index} scope="col" aria-sort={direction === "asc" ? "ascending" : direction === "desc" ? "descending" : "none"}>
-                  <button type="button" className="inline-flex items-center gap-1 text-left font-semibold hover:text-ink focus-visible:[outline-offset:-2px]" aria-label={`Sort by ${label}`} onClick={() => setSort((current) => nextSort(current, index))}>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 text-left font-semibold hover:text-ink focus-visible:[outline-offset:-2px]"
+                    aria-label={`Sort by ${label}`}
+                    onClick={() => setSort((current) => nextSort(current, index))}
+                  >
                     {header}
                     <span aria-hidden className="text-meta text-ink-3">
                       {direction === "asc" ? "↑" : direction === "desc" ? "↓" : ""}
@@ -196,12 +208,7 @@ function cellText(node: ReactNode): string {
 export const Markdown = memo(function Markdown({ children }: { children: string }) {
   return (
     <div className="[overflow-wrap:anywhere] break-words">
-      <ReactMarkdown
-        skipHtml
-        remarkPlugins={[remarkGfm, remarkBreaks]}
-        components={components}
-        urlTransform={(url) => sanitizeMarkdownUrl(url) ?? ""}
-      >
+      <ReactMarkdown skipHtml remarkPlugins={[remarkGfm, remarkBreaks]} components={components} urlTransform={(url) => sanitizeMarkdownUrl(url) ?? ""}>
         {children}
       </ReactMarkdown>
     </div>

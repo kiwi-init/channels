@@ -5,17 +5,7 @@ import { afterAll, beforeEach, expect, test } from "bun:test"
 import { b64url } from "../../../src/crypto.ts"
 import { generateIdentity, sign } from "../../../src/identity.ts"
 import { PROTOCOL_VERSION, type Message } from "../../../src/protocol.ts"
-import {
-  forgetAllHistory,
-  forgetHistory,
-  openRow,
-  packRow,
-  readCached,
-  rememberMessage,
-  useHistoryDb,
-  type CachedRow,
-  type HistoryDb,
-} from "./history.ts"
+import { forgetAllHistory, forgetHistory, openRow, packRow, readCached, rememberMessage, useHistoryDb, type CachedRow, type HistoryDb } from "./history.ts"
 
 const SENTINEL = "SENTINEL-plain-text-should-not-rest"
 const ROOM = "a".repeat(32)
@@ -104,9 +94,7 @@ test("a signed message still verifies after a cache round trip", async () => {
   })
   await rememberMessage(ROOM, PK_A, 1, key, { ...signed, seq: 1, rts: 20, sigOk: true }, 10)
   const out = await readCached(ROOM, PK_A, { "1": key }, 1, 10)
-  expect(out.messages.map((m) => ({ body: m.body, seq: m.seq, sigOk: m.sigOk, pk: m.pk }))).toEqual([
-    { body: "signed", seq: 1, sigOk: true, pk: id.pk },
-  ])
+  expect(out.messages.map((m) => ({ body: m.body, seq: m.seq, sigOk: m.sigOk, pk: m.pk }))).toEqual([{ body: "signed", seq: 1, sigOk: true, pk: id.pk }])
 })
 
 test("two members and two rooms do not read each other's rows", async () => {
