@@ -110,6 +110,7 @@ export function describeEvent(m: Message, state?: ChannelState): string {
       if (ev.state === "blocked") return `is blocked on ${task(ev.task)}${note(ev.note)}`;
       // Handed over: given to someone, back to open for them to start.
       if (ev.owner && (!ev.state || ev.state === "todo")) return `assigned ${task(ev.task)} to ${ev.owner}${note(ev.note)}`;
+      if (ev.state === "doing" && ev.verdict === "rejected") return `rejected ${task(ev.task)}${note(ev.note)}`;
       if (ev.state) return `${STATE_VERB[ev.state]} ${task(ev.task)}${note(ev.note)}`;
       if (ev.owner) return `assigned ${task(ev.task)} to ${ev.owner}${note(ev.note)}`;
       if (ev.owner === null) return `unassigned ${task(ev.task)}${note(ev.note)}`;

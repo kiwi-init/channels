@@ -243,6 +243,7 @@ function onTask(m: Message, state: ChannelState): { text: string; mark: EventMar
       return { text: "took it", mark: "assign" };
     case "task.update":
       if (ev.owner && (!ev.state || ev.state === "todo")) return { text: `assigned it to ${ev.owner}`, mark: "assign", ...note };
+      if (ev.state === "doing" && ev.verdict === "rejected") return { text: "rejected it", mark: currentState(ev.state), ...note };
       if (ev.state) return { text: VERB[ev.state], mark: currentState(ev.state), ...note };
       if (ev.owner) return { text: `assigned it to ${ev.owner}`, mark: "assign", ...note };
       if (ev.owner === null) return { text: "unassigned it", mark: "assign", ...note };

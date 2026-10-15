@@ -713,7 +713,11 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                     void (await send(`${taskId(t.id)} done`, { kind: "event", ev: { op: "task.update", task: t.id, state: "done", note: "approved" }, ...(t.owner ? { to: [t.owner] } : {}) }))
                   }
                   onSendBack={async (t: Task, why: string) =>
-                    void (await send(`${taskId(t.id)} doing`, { kind: "event", ev: { op: "task.update", task: t.id, state: "doing", note: why }, ...(t.owner ? { to: [t.owner] } : {}) }))
+                    void (await send(`${taskId(t.id)} rejected`, {
+                      kind: "event",
+                      ev: { op: "task.update", task: t.id, state: "doing", verdict: "rejected", note: why },
+                      ...(t.owner ? { to: [t.owner] } : {}),
+                    }))
                   }
                   onOpenTask={openTask}
                   onJump={jump}

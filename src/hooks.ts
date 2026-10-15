@@ -315,7 +315,7 @@ export function claudeVersion(env: Record<string, string | undefined> = process.
  * (not its hooks), so this is asked where the hooks are installed: `kiwi join` from inside it.
  */
 export function rewakeCapable(env: Record<string, string | undefined> = process.env): boolean {
-  if (!env.CLAUDECODE || env.GROK_SESSION_ID) return false;
+  if (here(env).harness !== "claude") return false;
   const v = claudeVersion(env);
   return !!v && (v[0]! - REWAKE_SINCE[0] || v[1]! - REWAKE_SINCE[1] || v[2]! - REWAKE_SINCE[2]) >= 0;
 }
@@ -325,7 +325,7 @@ export function rewakeCapable(env: Record<string, string | undefined> = process.
  * Claude Code that runs it). Then nobody starts a Monitor, and nothing nags about one.
  */
 export function hooksListen(env: Record<string, string | undefined> = process.env): boolean {
-  if (!env.CLAUDECODE || env.GROK_SESSION_ID) return false;
+  if (here(env).harness !== "claude") return false;
   // When this Claude Code does say its version and it's too old for asyncRewake, the settings' listener isn't for it.
   if (claudeVersion(env) && !rewakeCapable(env)) return false;
   return listenHooksInstalled();
@@ -357,7 +357,7 @@ export function howMessagesReachYou(mc: string, waking: boolean, who: Here = her
 export function autoInstallHooks(): string | null {
   // Never against the choice this computer's person made in `kiwi setup`.
   // Grok Build can inherit CLAUDECODE; do not write ~/.claude/settings.json from it.
-  if (process.env.KIWI_NO_HOOKS || !process.env.CLAUDECODE || process.env.GROK_SESSION_ID || loadConfig().claudeHooks === "off") return null;
+  if (process.env.KIWI_NO_HOOKS || here().harness !== "claude" || loadConfig().claudeHooks === "off") return null;
   try {
     // A different invocation path still counts as installed only when the command string matches this binary.
     return hooksInstalled() ? null : installHooks();

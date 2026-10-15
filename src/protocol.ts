@@ -113,6 +113,16 @@ export type ClientFrame =
 export const CLOSE_REMOVED = 4403;
 export const CLOSE_CLOSED = 4410;
 
+export type GoneHow = "owner" | "left";
+
+export const GONE_WORDS: Record<GoneHow, string> = { owner: "the owner removed this key", left: "this key left the channel" };
+
+export function goneHow(text: string): GoneHow | null {
+  if (text.includes(GONE_WORDS.owner)) return "owner";
+  if (text.includes(GONE_WORDS.left)) return "left";
+  return null;
+}
+
 /**
  * Message kinds. Chat kinds carry intent for the reader; "event" marks a
  * coordination event (task, fact, hello, role) whose meaning is in `ev`.
@@ -149,7 +159,7 @@ export type Event =
    */
   | { op: "task.add"; title: string; detail?: string; owner?: string; review?: string }
   | { op: "task.claim"; task: number }
-  | { op: "task.update"; task: number; state?: TaskState | OldTaskState; owner?: string | null; title?: string; note?: string; review?: string | null }
+  | { op: "task.update"; task: number; state?: TaskState | OldTaskState; owner?: string | null; title?: string; note?: string; review?: string | null; verdict?: "rejected" }
   /** What a member is and has, said by itself: where it runs, what runs it, what it can use. Shown in People. */
   | ({ op: "card" } & Card)
   /** Claims are gone. Older clients still send these; they fold to nothing. */
@@ -430,7 +440,8 @@ export function wellFormedEvent(ev: unknown): ev is Event {
         (e.owner === undefined || e.owner === null || str(e.owner, 64)) &&
         opt(e.title, (x): x is string => str(x, 500)) &&
         opt(e.note, (x): x is string => str(x)) &&
-        (e.review === undefined || e.review === null || str(e.review, 64))
+        (e.review === undefined || e.review === null || str(e.review, 64)) &&
+        (e.verdict === undefined || e.verdict === "rejected")
       );
     case "card":
       return (

@@ -33,6 +33,7 @@ import { verifyRequest } from "../auth.ts";
 import { encodeJoinCode, ownerFingerprint } from "../crypto.ts";
 import type { HumanAuth } from "./human.ts";
 import { Policy } from "./policy.ts";
+import { GONE_WORDS, type GoneHow } from "../protocol.ts";
 import {
   BadRequest,
   ChannelGone,
@@ -79,7 +80,7 @@ export interface Effects {
   /** Send to the sender only. */
   reply?: string;
   /** Disconnect every socket authenticated as this key. */
-  disconnect?: string;
+  disconnect?: { pk: string; how: GoneHow };
   /** Delete the room's storage, then disconnect everyone. */
   wipe?: boolean;
   /** Update signed-in people's channel lists (a null entry drops this channel from theirs). */
@@ -315,6 +316,7 @@ export class RoomDb {
     // A linked computer's seat: until when it may let its own agents in, and which computer let each one in.
     if (!memberCols.has("admits_until")) this.sql.run("ALTER TABLE members ADD COLUMN admits_until INTEGER");
     if (!memberCols.has("admitted_by")) this.sql.run("ALTER TABLE members ADD COLUMN admitted_by TEXT");
+    if (!memberCols.has("gone")) this.sql.run("ALTER TABLE members ADD COLUMN gone TEXT");
     const cols = new Set(this.sql.all<{ name: string }>("PRAGMA table_info(requests)").map((c) => c.name));
     for (const [col, def] of REQUEST_COLUMNS) {
       if (!cols.has(col)) this.sql.run(`ALTER TABLE requests ADD COLUMN ${col} ${def}`);
@@ -485,6 +487,12 @@ export const readMeta = Effect.gen(function* () {
   return m;
 });
 
+function goneOf(db: RoomDb, pk: string): GoneHow | null {
+  db.migrate();
+  const how = db.sql.all<{ gone: string | null }>("SELECT gone FROM members WHERE pk = ? AND active = 0", pk)[0]?.gone;
+  return how === "owner" || how === "left" ? how : null;
+}
+
 /** The member key that signed this request, or a 401/403. */
 export const authenticate = Effect.fn("Room.authenticate")(function* (req: Request, method: string, path: string, body: string) {
   const db = yield* RoomStore;
@@ -492,7 +500,10 @@ export const authenticate = Effect.fn("Room.authenticate")(function* (req: Reque
   if (!db.exists()) return yield* gone();
   const pk = yield* Effect.promise(() => verifyRequest(requestToken(req), db.roomId, method, path, body));
   if (!pk) return yield* new Unauthorized({ message: "bad or expired signature" });
-  if (!db.isMember(pk)) return yield* new NotMember({ message: "not a member of this channel" });
+  if (!db.isMember(pk)) {
+    const how = goneOf(db, pk);
+    return yield* how ? new NotMember({ message: `not a member of this channel: ${GONE_WORDS[how]}` }) : new NotMember({ message: "not a member of this channel" });
+  }
   return pk;
 });
 
@@ -828,12 +839,13 @@ export const setCanPost = Effect.fn("Room.setCanPost")(function* (pk: string, po
   db.sql.run("UPDATE members SET read_only = ?, admitted_by = NULL WHERE pk = ?", post ? 0 : 1, pk);
 });
 
-export const remove = Effect.fn("Room.remove")(function* (pk: string) {
+export const remove = Effect.fn("Room.remove")(function* (pk: string, how: GoneHow) {
   const db = yield* RoomStore;
   const { ownerPk } = yield* readMeta;
   if (pk === ownerPk) return yield* new BadRequest({ message: "the owner can't leave; close the channel instead" });
   if (!db.isMember(pk)) return yield* new NotFound({ message: "not a member" });
-  db.sql.run("UPDATE members SET active = 0 WHERE pk = ?", pk);
+  db.migrate();
+  db.sql.run("UPDATE members SET active = 0, gone = ? WHERE pk = ?", how, pk);
   db.sql.run("DELETE FROM keys WHERE pk = ?", pk);
   db.sql.run("DELETE FROM requests WHERE pk = ?", pk);
   db.sql.run("DELETE FROM reads WHERE pk = ?", pk);

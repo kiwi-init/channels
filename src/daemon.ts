@@ -150,7 +150,7 @@ interface Seat {
 
 type Env = Record<string, string | undefined>;
 
-const HARNESS_ENV = ["CLAUDECODE", "CLAUDE_PID", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID", "OPENCODE_SESSION_ID", "GROK_SESSION_ID", "GEMINI_CLI", "CURSOR_AGENT"] as const;
+const HARNESS_ENV = ["CLAUDECODE", "CLAUDE_PID", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID", "OPENCODE_SESSION_ID", "GROK_SESSION_ID", "GEMINI_CLI", "CURSOR_AGENT", "MIMOCODE", "MIMOCODE_PID"] as const;
 
 export const ACTIVITY_EVERY_MS = 3_000;
 const PROBE_ANSWER_GAP_MS = 500;
@@ -182,6 +182,8 @@ export function activityEnv(record: SeatRecord, base: Env): Env | null {
       return session ? { ...env, GROK_SESSION_ID: session } : null;
     case "gemini":
     case "cursor":
+    case "kimi":
+    case "mimo":
     case undefined:
       return null;
   }

@@ -8,6 +8,7 @@ import { cardLine, describeEvent, formatStatus, formatTask, formatTasks } from "
 import { generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
 import { wellFormed, type Event, type Kind, type Message } from "../src/protocol.ts";
 import { fold, type Roster } from "../src/state.ts";
+import { taskFeed } from "../src/work.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
@@ -80,6 +81,21 @@ describe("review", () => {
     // A person overrides.
     const p = fold([add, await ev("jon", { op: "task.update", task: t, state: "done" })], roster);
     expect(p.tasks.get(t)!.state).toBe("done");
+  });
+
+  test("a reviewer's reject reads as rejected, never as started; it sends the work back all the same", async () => {
+    const add = await ev("jon", { op: "task.add", title: "driver", owner: "win", review: "mac" });
+    const t = add.seq;
+    const toReview = await ev("win", { op: "task.update", task: t, state: "review" });
+    const reject = await ev("mac", { op: "task.update", task: t, state: "doing", verdict: "rejected", note: "3 blocking" });
+    const restart = await ev("win", { op: "task.update", task: t, state: "doing" });
+    const ms = [add, toReview, reject, restart];
+    const s = fold(ms, roster);
+    expect(s.tasks.get(t)!.state).toBe("doing");
+    expect(describeEvent(reject, s)).toBe(`rejected T${t} “driver”: 3 blocking`);
+    expect(describeEvent(restart, s)).toBe(`started T${t} “driver”`);
+    expect(taskFeed(s, ms, t, "jon").flatMap((i) => (i.type === "event" ? [i.text] : []))).toEqual(["created the task for win", "sent it for review", "rejected it", "started it"]);
+    expect(wellFormed({ ...reject, ev: { op: "task.update", task: t, verdict: "approved" } })).toBe(false);
   });
 
   test("any: anyone who hasn't worked on it, judged by who owns it then", async () => {
@@ -162,6 +178,8 @@ describe("reading the machine", () => {
     expect(detectHarness({ GROK_SESSION_ID: "g1" })).toBe("grok");
     expect(detectHarness({ CLAUDECODE: "1", GROK_SESSION_ID: "g1" })).toBe("grok");
     expect(detectHarness({ CODEX_THREAD_ID: "x" })).toBe("codex");
+    expect(detectHarness({ MIMOCODE: "1", CLAUDECODE: "1" })).toBe("mimocode");
+    expect(detectHarness({ TERM: "dumb", NO_COLOR: "1", CLAUDECODE: "1" }, { from: 9, lookup: () => ({ ppid: 1, name: "kimi-code" }) })).toBe("kimi-code");
     expect(detectHarness({})).toBeUndefined();
   });
 

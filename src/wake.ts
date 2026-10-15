@@ -1,4 +1,4 @@
-export type WakeHarness = "claude" | "codex" | "gemini" | "cursor" | "grok" | "opencode";
+export type WakeHarness = "claude" | "codex" | "gemini" | "cursor" | "grok" | "opencode" | "kimi" | "mimo";
 
 export type WakeCommand = "codex-queue" | "opencode-api";
 
@@ -49,6 +49,10 @@ export function wakePath(record: { harness?: WakeHarness; session?: string } | n
       return { kind: "none", why: "Gemini CLI gives Kiwi no way to start a turn in a running session" };
     case "cursor":
       return { kind: "none", why: "Cursor gives Kiwi no way to start a turn in a running session" };
+    case "kimi":
+      return { kind: "none", why: "Kimi Code gives Kiwi no way to start a turn in a running session" };
+    case "mimo":
+      return { kind: "none", why: "MiMoCode gives Kiwi no way to start a turn in a running session" };
     case undefined:
       return { kind: "none", why: "Kiwi doesn't recognise this agent's harness" };
   }

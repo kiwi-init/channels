@@ -261,6 +261,8 @@ describe("wake paths, commands and words", () => {
     expect(wakePath({ harness: "grok", session: "g" }, true).kind).toBe("none");
     expect(wakePath({ harness: "gemini" }, true).kind).toBe("none");
     expect(wakePath({ harness: "cursor" }, true).kind).toBe("none");
+    expect(wakePath({ harness: "kimi", session: "kimi-pid-9" }, true)).toEqual({ kind: "none", why: "Kimi Code gives Kiwi no way to start a turn in a running session" });
+    expect(wakePath({ harness: "mimo", session: "mimo-pid-9" }, true)).toEqual({ kind: "none", why: "MiMoCode gives Kiwi no way to start a turn in a running session" });
     expect(wakePath({}, true).kind).toBe("none");
     expect(wakePath(null, true).kind).toBe("none");
   });

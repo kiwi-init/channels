@@ -16,6 +16,7 @@
 import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
+import { kimiCodePid, mimoHere, type ProcessTree } from "./ancestry.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord } from "./config.ts";
 
 export type Harness = NonNullable<SeatRecord["harness"]>;
@@ -46,8 +47,12 @@ export interface Listener {
  * Who this process runs for, from the variables each harness sets on its shell
  * commands and hooks (see SESSION_ENV in hooks.ts for where each comes from).
  */
-export function here(env: Record<string, string | undefined> = process.env): Here {
+export function here(env: Record<string, string | undefined> = process.env, tree: ProcessTree = {}): Here {
   const pid = Number(env.CLAUDE_PID);
+  const mimo = mimoHere(env, tree);
+  if (mimo) return mimo.pid ? heldByProcess("mimo", mimo.pid) : { harness: "mimo" };
+  const kimi = kimiCodePid(env, tree);
+  if (kimi) return heldByProcess("kimi", kimi);
   // Grok Build can inherit CLAUDECODE from a Claude-compat session. GROK_SESSION_ID wins.
   if (env.GROK_SESSION_ID) return { harness: "grok", session: env.GROK_SESSION_ID };
   if (env.CLAUDECODE) return { harness: "claude", ...(env.CLAUDE_CODE_SESSION_ID ? { session: env.CLAUDE_CODE_SESSION_ID } : {}), ...(Number.isInteger(pid) && pid > 0 ? { pid } : {}) };
@@ -56,6 +61,10 @@ export function here(env: Record<string, string | undefined> = process.env): Her
   if (env.CURSOR_AGENT) return { harness: "cursor" };
   if (env.OPENCODE_SESSION_ID) return { harness: "opencode", session: env.OPENCODE_SESSION_ID };
   return {};
+}
+
+function heldByProcess(harness: "kimi" | "mimo", pid: number): Here {
+  return { harness, session: `${harness}-pid-${pid}`, pid };
 }
 
 /** The name an agent gets when it doesn't pick one: what it runs in. */
@@ -69,7 +78,8 @@ export function baseName(h: Here): string {
  */
 export function canonicalHarness(h: string | undefined): string | undefined {
   if (!h) return undefined;
-  return h === "claude" ? "claude-code" : h;
+  const card: Record<string, string> = { claude: "claude-code", kimi: "kimi-code", mimo: "mimocode" };
+  return card[h] ?? h;
 }
 
 /** Whether a seat harness and a card/`runs` harness are the same product. */
@@ -145,7 +155,7 @@ export function bindDirectory(dir: string, b: Binding, listening: (alias: string
   updateConfig((cfg) => {
     // Without a session nothing could tell two seats apart later, so a sessionless seat replaces the others like it (the last join wins, as before seats),
     // except one whose agent is listening right now: that's another agent at work here, not an older seat of this one.
-    const others = seatsAt(cfg, at).filter((s) => !(s.alias === b.alias && s.as === b.as) && !(!b.session && !s.session && s.harness === b.harness && !listening(s.alias, s.as)));
+    const others = seatsAt(cfg, at).filter((s) => !(s.alias === b.alias && s.as === b.as) && !(b.harness && !b.session && !s.session && s.harness === b.harness && !listening(s.alias, s.as)));
     store(cfg, at, [...others, { ...b, at: Date.now() }]);
   });
   return true;
