@@ -230,11 +230,16 @@ export function formatFact(f: Fact, now = Date.now()): string {
   return [head, ...lines.slice(1).map((l) => `  │ ${l}`)].join("\n");
 }
 
+export function presenceWords(on: { client: string; readAt?: number }, now = Date.now()): string {
+  if (on.client !== "daemon") return `online (${inlineText(on.client, 40)})`;
+  return `reachable · ${on.readAt === undefined ? "not read yet" : `read ${ago(on.readAt, now)}`}`;
+}
+
 export interface Snapshot {
   alias: string;
   me: string;
   state: ChannelState;
-  online: Map<string, { client: string; role?: string }>;
+  online: Map<string, { client: string; role?: string; readAt?: number }>;
   unread: number;
   now?: number;
 }
@@ -253,6 +258,7 @@ export function memberJson(state: ChannelState, name: string, online: Snapshot["
     color: colorOf(state, name),
     scopes: m ? m.scopes : null,
     online: !!on,
+    readAt: on?.readAt ?? null,
     lastSeen: m?.lastSeen ?? null,
     load: loadJson(memberLoad(state, name, now)),
     card: m?.card ? { ...m.card } : null,
@@ -343,7 +349,7 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
   for (const name of [...names].sort()) {
     const m = state.members.get(name);
     const on = online.get(name);
-    const where = on ? `online (${inlineText(on.client, 40)})` : m ? `last seen ${ago(m.lastSeen, now)}` : "online";
+    const where = on ? presenceWords(on, now) : m ? `last seen ${ago(m.lastSeen, now)}` : "online";
     const role = inlineText(m?.role ?? on?.role, 80);
     const key = m?.pk ? ` · key ${m.pk.slice(0, 8)}` : "";
     const kind = m?.kind === "human" ? ` · human${m.display ? ` (${inlineText(m.display, 80)})` : ""}${m.owner ? ", owner" : ""}` : m?.sponsor ? ` · agent of @${inlineText(m.sponsor.handle ?? m.sponsor.name, 80)}` : "";

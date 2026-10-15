@@ -753,7 +753,6 @@ const listen = Effect.fn("Hooks.listen")(function* (b: Binding, cfg: ChannelConf
   );
   const hearing = s
     .listen((m, state) => Effect.andThen(Effect.sync(() => void got.push(formatMessage(m, state.trust.get(m.seq), state, s.me))), woke), {
-      client: "hook",
       onNotice: (text) => Effect.andThen(Effect.sync(() => void got.push(`* ${text}`)), woke),
       // Handed over isn't read yet: the session's next hook commits it, and marks it read then.
       marks: false,

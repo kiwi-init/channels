@@ -25,19 +25,15 @@ import { inlineText, type Member } from "./membership.ts";
 import type { Identity } from "./identity.ts";
 import { isLocalRefusal, OwnerOnly, Rejected } from "./refusals.ts";
 import { canPost, describeScopes, refusal, wireScopes, type Scope } from "./scopes.ts";
-import { GENERAL_ROOM, ignored, MAX_CHARTER, TASK_STATES, wellFormedReaction, type Activity, type Card, type Color, type Event, type ImageAttachment, type Kind, type Message, type Presence, type TaskState } from "./protocol.ts";
+import { GENERAL_ROOM, ignored, MAX_CHARTER, PROTOCOL_VERSION, TASK_STATES, wellFormedReaction, type Card, type Color, type Event, type ImageAttachment, type Kind, type Message, type Presence, type TaskState } from "./protocol.ts";
 import { allowedOnHold, COORDINATOR, findRoom, firstAgent, fold, humanOf, isPerson, keptFromPeople, newRoomId, ON_HOLD, ownerOf, taskId, threadMembers, type ChannelState, type GuardFloor, type Roster, type RoomsFloor } from "./state.ts";
-import { inAgentHarness, mergeCard, sameCard } from "./card.ts";
-import { harnessActivity } from "./harness.ts";
+import { mergeCard, sameCard } from "./card.ts";
+import { daemonSeat } from "./daemon.ts";
 import { COMMANDS } from "./brief.ts";
 import { cardLine } from "./format.ts";
 
 export { Rejected };
 
-/** How often a listening agent re-announces itself. Receivers treat 2.5x this as offline. */
-export const PRESENCE_EVERY_MS = 60_000;
-/** How often a listener asks its harness what the agent is doing (harness.ts); it says so at once when that changes. */
-export const ACTIVITY_EVERY_MS = 3_000;
 /** How often a listener tells the channel how far it has read, at most. */
 export const MARK_EVERY_MS = 1_000;
 /** How long a command that's done waits for its last read mark to land. */
@@ -61,8 +57,6 @@ export interface Delivery {
 
 /** What a listener hears besides messages. */
 export interface Hearing<R = never> {
-  /** Who is listening, as presence says it (tail, wait, mcp…). */
-  client: string;
   /** Connection trouble worth a line (the relay out of reach, back again, a frame dropped). */
   onStatus?: (line: string) => Effect.Effect<void>;
   /** Something the owner's machine should act on: a join request whose code both sides can see. */
@@ -258,12 +252,6 @@ export class AgentSession {
       const cache = yield* Cache;
       const cursor = yield* Cursor;
       const seen = yield* cursor.seen(this.alias, this.me);
-      const role = state.members.get(this.me)?.role;
-      let lastQueryReply = 0;
-      let announce: Effect.Effect<void> = Effect.void;
-      let beacon: Fiber.Fiber<unknown> | null = null;
-      /** What the agent's harness last said it's doing, sent with every beacon. */
-      let activity: Activity | undefined;
       /** In the background, for as long as this listens; its failure is nobody's business. */
       const aside = <E, R2>(e: Effect.Effect<unknown, E, R2>) => Effect.forkScoped(Effect.ignoreCause(e));
 
@@ -297,34 +285,11 @@ export class AgentSession {
         yield* Effect.addFinalizer(() => Effect.suspend(() => (readTo > saidTo ? this.markRead(readTo) : Effect.void)));
       }
 
-      // What the agent's harness says it's doing (harness.ts: working and with which tool, waiting, idle):
-      // asked every few seconds, and said at once on the beacon when it changes. Only inside a harness.
-      if (inAgentHarness()) {
-        activity = yield* Effect.promise(() => harnessActivity());
-        yield* Effect.forkScoped(
-          Effect.forever(
-            Effect.andThen(
-              Effect.sleep(ACTIVITY_EVERY_MS),
-              Effect.gen(function* () {
-                const now = yield* Effect.promise(() => harnessActivity());
-                if (JSON.stringify(now) === JSON.stringify(activity)) return;
-                activity = now;
-                yield* announce;
-              }),
-            ),
-          ),
-        );
-      }
-
-      const opened = ({ presence, mark: on }: Extract<Live, { _tag: "Open" }>) =>
+      const opened = ({ mark: on }: Extract<Live, { _tag: "Open" }>) =>
         Effect.gen({ self: this }, function* () {
           mark = on;
           // Members may have joined or left while we were disconnected.
           yield* aside(this.members(true));
-          announce = Effect.suspend(() => Effect.ignoreCause(presence({ client: opts.client, ...(role ? { role } : {}), ...(activity ? { activity } : {}) })));
-          yield* aside(announce);
-          if (beacon) yield* Fiber.interrupt(beacon);
-          beacon = yield* Effect.forkScoped(Effect.forever(Effect.andThen(Effect.sleep(PRESENCE_EVERY_MS), announce)));
         });
 
       const handle = (ev: Live): Effect.Effect<void, unknown, Agent | R | Scoped.Scope> => {
@@ -333,11 +298,6 @@ export class AgentSession {
             return opened(ev);
           case "Message":
             return hear(ev.message);
-          case "Presence":
-            // Answer "who's here?" probes, at most every few seconds.
-            if (!ev.presence.query || Date.now() - lastQueryReply < 3_000) return Effect.void;
-            lastQueryReply = Date.now();
-            return aside(announce);
           case "Roster":
             this.postingChecked = false;
             return aside(Effect.andThen(this.members(true), this.chores()));
@@ -348,7 +308,7 @@ export class AgentSession {
         }
       };
       if (opts.onNotice) yield* aside(this.notices(opts.onNotice));
-      yield* eachLive(this.ch.fx.live(since, { presence: true }), handle, status);
+      yield* eachLive(this.ch.fx.live(since, { presence: false }), handle, status);
     }).pipe(Effect.scoped);
   }
 
@@ -436,10 +396,12 @@ export class AgentSession {
         if (!p.sigOk || roster.find((r) => r.name === p.from && r.active)?.pk !== p.pk) return;
         if (!found.has(p.from)) yield* heard;
         const role = typeof p.role === "string" ? inlineText(p.role, 80) || undefined : undefined;
-        found.set(p.from, { ...p, ...(typeof p.role === "string" ? { role } : {}) });
+        const { readAt, ...rest } = p;
+        found.set(p.from, { ...rest, ...(typeof p.role === "string" ? { role } : {}), ...(typeof readAt === "number" && Number.isFinite(readAt) ? { readAt } : {}) });
       });
     const probing = eachLive(this.ch.fx.live(head, { presence: true }), handle, () => Effect.void);
-    yield* Effect.raceFirst(probing, Effect.raceFirst(Deferred.await(quiet), Effect.sleep(waitMs))).pipe(Effect.ignoreCause, Effect.scoped);
+    const [mine] = yield* Effect.all([Effect.promise(() => daemonSeat(this.alias, this.me)), Effect.raceFirst(probing, Effect.raceFirst(Deferred.await(quiet), Effect.sleep(waitMs))).pipe(Effect.ignoreCause, Effect.scoped)], { concurrency: "unbounded" });
+    if (mine) found.set(this.me, { v: PROTOCOL_VERSION, type: "presence", from: this.me, client: "daemon", ts: Date.now(), ...(mine.read ? { readAt: mine.read.at } : {}) });
     return found;
   });
 

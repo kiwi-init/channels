@@ -15,13 +15,13 @@
 
 import { spawn } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type { Socket } from "bun";
 // The channel stack (client.ts) loads lazily in seatFor, where the multiplex needs it: pairing,
 // hello/adopt and the socket itself never touch it, so `kiwi pair` works without it.
 import type { Channel, PresenceFields } from "./client.ts";
-import { cleanActivity, type Message } from "./protocol.ts";
-import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity, saveAccess } from "./config.ts";
+import type { Activity, Message } from "./protocol.ts";
+import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity, saveAccess, type Config, type SeatRecord } from "./config.ts";
 import { withExchangeKey } from "./identity.ts";
 import { loadMachine, newMachine, saveMachine, type MachineFile } from "./machine.ts";
 import { MAILBOX_TTL_MS, MailboxError, askToPair, openMailbox, readPairAnswer, readPairCode } from "./mailbox.ts";
@@ -83,9 +83,9 @@ export function daemonSock(dir = home()): string {
 
 // ---------- the socket protocol ----------
 
-export type DaemonVerb = "hello" | "adopt" | "listen" | "listening" | "presence" | "mark" | "stop";
+export type DaemonVerb = "hello" | "adopt" | "listen" | "listening" | "read" | "mark" | "stop";
 
-export const DAEMON_PROTOCOL = 2;
+export const DAEMON_PROTOCOL = 3;
 
 export type DaemonEvent = "open" | "roster" | "info" | "request";
 
@@ -101,10 +101,16 @@ export interface DaemonHello {
   certified: boolean;
 }
 
+export interface DaemonRead {
+  at: number;
+  session: string | null;
+}
+
 export interface DaemonSeat {
   channel: string;
   agent: string;
   subscribers: number;
+  read: DaemonRead | null;
 }
 
 interface Seat {
@@ -115,7 +121,8 @@ interface Seat {
   ctl: AbortController;
   subs: Set<Sub>;
   head: number;
-  fields: PresenceFields;
+  activity: Activity | undefined;
+  activityTimer: ReturnType<typeof setInterval> | null;
   announce: (() => void) | null;
   beacon: ReturnType<typeof setInterval> | null;
   lastProbe: number;
@@ -124,8 +131,48 @@ interface Seat {
   wantMark: number;
   lastMarkAt: number;
   markTimer: ReturnType<typeof setTimeout> | null;
-  joining: number;
 }
+
+type Env = Record<string, string | undefined>;
+
+const HARNESS_ENV = ["CLAUDECODE", "CLAUDE_PID", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID", "OPENCODE_SESSION_ID", "GROK_SESSION_ID", "GEMINI_CLI", "CURSOR_AGENT"] as const;
+
+export const ACTIVITY_EVERY_MS = 3_000;
+const PROBE_ANSWER_GAP_MS = 500;
+const TICK_MS = 5_000;
+const RETRY_FIRST_MS = 5_000;
+const RETRY_MAX_MS = 30 * 60_000;
+
+class NotAgentSeat extends Error {}
+
+export function seatRecordFor(cfg: Config, alias: string, agent: string): SeatRecord | null {
+  const records = Object.values(cfg.bindings ?? {}).flatMap((v) => (Array.isArray(v) ? v : [v]));
+  const mine = records.filter((r) => r.alias === alias && r.as === agent && r.harness && (r.session || r.pid));
+  const when = (r: SeatRecord): number => r.seen ?? r.at ?? 0;
+  return mine.reduce<SeatRecord | null>((best, r) => (!best || when(r) > when(best) ? r : best), null);
+}
+
+export function activityEnv(record: SeatRecord, base: Env): Env | null {
+  const env: Env = { ...base };
+  for (const k of HARNESS_ENV) delete env[k];
+  const session = record.session;
+  switch (record.harness) {
+    case "claude":
+      return record.pid ? { ...env, CLAUDECODE: "1", CLAUDE_PID: String(record.pid), ...(session ? { CLAUDE_CODE_SESSION_ID: session } : {}) } : null;
+    case "codex":
+      return session ? { ...env, CODEX_THREAD_ID: session } : null;
+    case "opencode":
+      return session ? { ...env, OPENCODE_SESSION_ID: session } : null;
+    case "grok":
+      return session ? { ...env, GROK_SESSION_ID: session } : null;
+    case "gemini":
+    case "cursor":
+    case undefined:
+      return null;
+  }
+}
+
+const readKey = (alias: string, agent: string): string => `${alias}\u0000${agent}`;
 
 interface Sub {
   id: number;
@@ -195,8 +242,40 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   // reason() without importing the channel stack (see the note at the top): a refusal's text.
   const why = (err: unknown): string => (err instanceof Error ? err.message : String(err));
   // Seats being opened: concurrent first-subscribers share one relay stream, not one each.
-  const opening = new Map<string, { promise: Promise<Seat>; waiters: Set<Waiting> }>();
+  const opening = new Map<string, { promise: Promise<Seat>; waiters: Set<Waiting>; last: () => string | null }>();
   let beacons = 0;
+  const reads = new Map<string, DaemonRead>();
+  const retries = new Map<string, { at: number; delay: number; fp: string }>();
+  const people = new Set<string>();
+  const keeper: Waiting = { tell: () => {}, alive: () => !stopped };
+
+  const fingerprintOf = (key: string, alias: string): string => `${key}\u0000${JSON.stringify(loadConfig().channels[alias] ?? null)}`;
+
+  const backoff = (key: string, fp: string): void => {
+    const prev = retries.get(key);
+    const delay = prev ? Math.min(prev.delay * 2, RETRY_MAX_MS) : RETRY_FIRST_MS;
+    retries.set(key, { at: Date.now() + delay, delay, fp });
+  };
+
+  const stillWanted = (alias: string, roomId: string, agent: string): boolean => {
+    const now = loadConfig().channels[alias];
+    return !!now && now.roomId === roomId && identitiesIn(roomId).includes(agent);
+  };
+
+  const fieldsOf = (seat: Seat): PresenceFields => {
+    const read = reads.get(readKey(seat.alias, seat.agent));
+    return { client: "daemon", ...(seat.activity ? { activity: seat.activity } : {}), ...(read ? { readAt: read.at } : {}) };
+  };
+
+  const refreshActivity = async (seat: Seat): Promise<void> => {
+    const record = seatRecordFor(loadConfig(), seat.alias, seat.agent);
+    const env = record ? activityEnv(record, process.env) : null;
+    const { harnessActivity } = await import("./harness.ts");
+    const now = env ? await harnessActivity(env) : undefined;
+    if (JSON.stringify(now) === JSON.stringify(seat.activity)) return;
+    seat.activity = now;
+    seat.announce?.();
+  };
 
   const sendLine = (conn: ConnState, line: string): boolean => {
     if (conn.dead) return false;
@@ -220,6 +299,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     seat.ctl.abort();
     stopBeacon(seat);
     if (seat.markTimer) clearTimeout(seat.markTimer);
+    if (seat.activityTimer) clearInterval(seat.activityTimer);
+    seat.activityTimer = null;
     seat.beacon = null;
     seat.markTimer = null;
     seat.announce = null;
@@ -257,22 +338,26 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   const dropSub = (sub: Sub): void => {
     sub.conn.subs.delete(sub);
     sub.seat.subs.delete(sub);
-    // Nobody left on this seat: close its stream. A later subscriber reopens it fresh.
-    if (sub.seat.subs.size === 0 && sub.seat.joining === 0 && !stopped) {
-      if (seats.get(sub.seat.key) === sub.seat) seats.delete(sub.seat.key);
-      endSeat(sub.seat);
+  };
+
+  const closeSeat = (seat: Seat, error: string): void => {
+    if (seats.get(seat.key) === seat) seats.delete(seat.key);
+    endSeat(seat);
+    for (const sub of [...seat.subs]) {
+      sendLine(sub.conn, JSON.stringify({ id: sub.id, ok: false, error }));
+      dropSub(sub);
     }
   };
 
   const seatEnded = (seat: Seat, err: unknown): void => {
-    if (seats.get(seat.key) !== seat) return; // reaped when its last subscriber left
-    seats.delete(seat.key);
-    endSeat(seat);
-    if (err === null) return;
-    for (const sub of [...seat.subs]) {
-      sendLine(sub.conn, JSON.stringify({ id: sub.id, ok: false, error: `the channel stream ended: ${why(err)}` }));
-      dropSub(sub);
+    if (seats.get(seat.key) !== seat) return;
+    if (err === null) {
+      seats.delete(seat.key);
+      endSeat(seat);
+      return;
     }
+    closeSeat(seat, `the channel stream ended: ${why(err)}`);
+    backoff(seat.key, fingerprintOf(seat.key, seat.alias));
   };
 
   const beaconMs = opts.beaconMs ?? 60_000;
@@ -288,6 +373,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         if (told) waiting.tell(`reached the relay after ${Math.round((Date.now() - since) / 1000)}s`);
         return head;
       } catch (err) {
+        if (err instanceof ChannelGone) throw err;
         if (answered(err) || stopped || !waiting.alive()) throw new Error(why(err));
         if (!told) {
           told = true;
@@ -305,11 +391,12 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   const opened = (seat: Seat, presence: (p: PresenceFields) => Promise<void>, mark: (seq: number) => boolean): void => {
     if (seats.get(seat.key) !== seat || seat.ctl.signal.aborted) return;
     seat.mark = mark;
-    seat.announce = () => void presence(seat.fields).catch(() => {});
+    seat.announce = () => void presence(fieldsOf(seat)).catch(() => {});
     seat.announce();
     stopBeacon(seat);
     seat.beacon = setInterval(() => seat.announce?.(), beaconMs);
     beacons++;
+    if (!seat.activityTimer) seat.activityTimer = setInterval(() => void refreshActivity(seat).catch(() => {}), ACTIVITY_EVERY_MS);
     seat.marked = 0;
     flushMark(seat);
     tell(seat, { event: "open" });
@@ -323,18 +410,19 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     const id = await loadIdentity(agent, c.roomId);
     const key = `${c.roomId}/${id.pk}`;
     const hit = seats.get(key);
-    if (hit) {
-      hit.joining++;
-      return hit;
-    }
+    if (hit) return hit;
     const inflight = opening.get(key);
     if (inflight) {
       inflight.waiters.add(waiting);
+      const said = inflight.last();
+      if (said) waiting.tell(said);
       return inflight.promise;
     }
     const waiters = new Set<Waiting>([waiting]);
+    let last: string | null = null;
     const anyone: Waiting = {
       tell: (s) => {
+        last = s;
         for (const w of waiters) if (w.alive()) w.tell(s);
       },
       alive: () => [...waiters].some((w) => w.alive()),
@@ -345,6 +433,10 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       const head = await firstHead(ch, anyone);
       if (stopped) throw new Error("the daemon is stopping");
       if (!anyone.alive()) throw new Error("nobody is waiting for this channel any more");
+      if (!stillWanted(alias, c.roomId, agent)) throw new Error(`"${agent}" no longer has a key in "${alias}" on this computer`);
+      const self = (await ch.members()).find((m) => m.pk === id.pk);
+      if (!self || self.owner || self.kind === "human") throw new NotAgentSeat(`"${agent}" isn't an agent in "${alias}": the daemon holds seats for agents only`);
+      if (stopped) throw new Error("the daemon is stopping");
       const seat: Seat = {
         key,
         alias,
@@ -353,7 +445,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         ctl: new AbortController(),
         subs: new Set(),
         head,
-        fields: { client: "daemon" },
+        activity: undefined,
+        activityTimer: null,
         announce: null,
         beacon: null,
         lastProbe: 0,
@@ -362,7 +455,6 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         wantMark: 0,
         lastMarkAt: 0,
         markTimer: null,
-        joining: waiters.size,
       };
       seats.set(key, seat);
       // stop() may have run between the check and the set: don't leave a stream behind it.
@@ -384,7 +476,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           signal: seat.ctl.signal,
           onOpen: ({ presence, mark }) => opened(seat, presence, mark),
           onPresence: (p) => {
-            if (!p.query || Date.now() - seat.lastProbe < 3_000) return;
+            if (!p.query || Date.now() - seat.lastProbe < PROBE_ANSWER_GAP_MS) return;
             seat.lastProbe = Date.now();
             seat.announce?.();
           },
@@ -399,7 +491,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       );
       return seat;
     })();
-    const entry = { promise: open, waiters };
+    const entry = { promise: open, waiters, last: () => last };
     opening.set(key, entry);
     try {
       return await open;
@@ -415,25 +507,10 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     // The seat's stream is already running before the catch-up below, so the two overlap and
     // never gap; the cursor dedupes the overlap.
     const seat = await seatFor(channel, as, { tell: (s) => sendLine(conn, JSON.stringify({ id, status: s })), alive: () => !conn.dead });
-    const reapEmpty = (): void => {
-      if (seat.subs.size !== 0 || seat.joining !== 0) return;
-      if (seats.get(seat.key) === seat) seats.delete(seat.key);
-      endSeat(seat);
-    };
-    seat.joining = Math.max(0, seat.joining - 1);
-    if (conn.dead || stopped) {
-      reapEmpty();
-      return;
-    }
+    if (conn.dead || stopped) return;
     const sub: Sub = { id, cursor, conn, seat };
     seat.subs.add(sub);
     conn.subs.add(sub);
-    // The client dropped while seatFor ran: adding then dropping reaps a 0-sub seat
-    // so its relay WebSocket does not stay open with nobody listening.
-    if (conn.dead || stopped) {
-      dropSub(sub);
-      return;
-    }
     sendLine(conn, JSON.stringify({ id, ok: true, stream: true, head: seat.head, channel, agent: as }));
     try {
       const { messages } = await seat.ch.history(cursor);
@@ -451,8 +528,41 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   const seatNamed = (params: Record<string, unknown>): Seat => {
     const { channel, as } = params;
     const seat = [...seats.values()].find((s) => s.alias === channel && s.agent === as);
-    if (!seat) throw new Error(`nobody listens as "${String(as)}" in "${String(channel)}" through this daemon`);
+    if (!seat) throw new Error(`this daemon holds no seat for "${String(as)}" in "${String(channel)}"`);
     return seat;
+  };
+
+  const syncSeats = async (): Promise<void> => {
+    if (stopped) return;
+    let cfg: Config;
+    try {
+      cfg = loadConfig();
+    } catch {
+      return;
+    }
+    const wanted = new Set<string>();
+    for (const [alias, c] of Object.entries(cfg.channels)) {
+      for (const agent of identitiesIn(c.roomId)) {
+        const id = await loadIdentity(agent, c.roomId).catch(() => null);
+        if (!id || stopped || id.pk === c.ownerPk) continue;
+        const key = `${c.roomId}/${id.pk}`;
+        wanted.add(key);
+        if (seats.has(key) || opening.has(key) || people.has(key)) continue;
+        const fp = `${key}\u0000${JSON.stringify(c)}`;
+        const retry = retries.get(key);
+        if (retry && retry.fp === fp && Date.now() < retry.at) continue;
+        void seatFor(alias, agent, keeper).then(
+          () => void retries.delete(key),
+          (err: unknown) => {
+            if (err instanceof NotAgentSeat) people.add(key);
+            else if (!stopped) backoff(key, fp);
+          },
+        );
+      }
+    }
+    for (const seat of [...seats.values()]) {
+      if (!wanted.has(seat.key)) closeSeat(seat, `"${seat.agent}" no longer has a key in "${seat.alias}" on this computer`);
+    }
   };
 
   const onRequest = async (conn: ConnState, raw: string): Promise<void> => {
@@ -466,6 +576,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     const id = req.id;
     const verb = req.verb;
     const params: Record<string, unknown> = req;
+    void syncSeats();
     try {
       switch (verb as DaemonVerb) {
         case "hello": {
@@ -506,13 +617,11 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         case "listen":
           await onListen(conn, id, params);
           break;
-        case "presence": {
-          const seat = seatNamed(params);
-          const { client, role, activity } = params;
-          if (typeof client !== "string" || !client) throw new Error('presence needs {"channel", "as", "client"}');
-          const act = cleanActivity(activity);
-          seat.fields = { client, ...(typeof role === "string" && role ? { role } : {}), ...(act ? { activity: act } : {}) };
-          seat.announce?.();
+        case "read": {
+          const { channel, as, session } = params;
+          if (typeof channel !== "string" || !channel || typeof as !== "string" || !as) throw new Error('read needs {"channel", "as", "session"?}');
+          reads.set(readKey(channel, as), { at: Date.now(), session: typeof session === "string" && session ? session : null });
+          [...seats.values()].find((s) => s.alias === channel && s.agent === as)?.announce?.();
           sendLine(conn, JSON.stringify({ id, ok: true }));
           break;
         }
@@ -531,7 +640,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
             JSON.stringify({
               id,
               ok: true,
-              subscriptions: [...seats.values()].map((s): DaemonSeat => ({ channel: s.alias, agent: s.agent, subscribers: s.subs.size })),
+              subscriptions: [...seats.values()].map((s): DaemonSeat => ({ channel: s.alias, agent: s.agent, subscribers: s.subs.size, read: reads.get(readKey(s.alias, s.agent)) ?? null })),
             }),
           );
           break;
@@ -541,7 +650,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           setTimeout(() => void stop(), 50);
           break;
         default:
-          throw new Error(`unknown verb "${verb}" (hello, adopt, listen, listening, presence, mark, stop)`);
+          throw new Error(`unknown verb "${verb}" (hello, adopt, listen, listening, read, mark, stop)`);
       }
     } catch (err) {
       sendLine(conn, JSON.stringify({ id, ok: false, error: err instanceof Error ? err.message : String(err) }));
@@ -581,9 +690,15 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
   }
 
+  const tick = setInterval(() => {
+    if (!existsSync(dir)) void stop();
+    else void syncSeats();
+  }, TICK_MS);
+
   const stop = async (): Promise<void> => {
     if (stopped) return;
     stopped = true;
+    clearInterval(tick);
     resolveStopped();
     for (const conn of [...conns]) {
       try {
@@ -609,6 +724,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
   };
 
+  await syncSeats();
   return { sock, stop, stopped: stoppedP, beacons: () => beacons };
 }
 
@@ -685,7 +801,9 @@ async function openConn(sock: string, timeoutMs = 15_000): Promise<DaemonConn> {
           if (p.onMessage) {
             if (!msg.ok) {
               pending.delete(msg.id);
-              p.onError?.(new Error(typeof msg.error === "string" ? msg.error : "the daemon refused"));
+              const err = new Error(typeof msg.error === "string" ? msg.error : "the daemon refused");
+              if (p.live) p.onError?.(err);
+              else p.reject(err);
             } else if (!p.live) {
               p.live = true;
               p.resolve(msg as Reply);
@@ -806,7 +924,8 @@ export async function ensureDaemon(dir = home(), argv?: string[]): Promise<Daemo
 /** Start `kiwi daemon` for `dir` in the background, detached from this process. */
 export function spawnDaemon(dir = home(), argv?: string[]): void {
   const cmd = argv ?? cliDaemonArgv();
-  const child = spawn(cmd[0]!, cmd.slice(1), { cwd: dir, env: { ...process.env, KIWI_HOME: dir }, stdio: "ignore", detached: true });
+  const abs = resolve(dir);
+  const child = spawn(cmd[0]!, cmd.slice(1), { cwd: abs, env: { ...process.env, KIWI_HOME: abs }, stdio: "ignore", detached: true });
   child.unref();
 }
 
@@ -847,6 +966,27 @@ export async function daemonListening(sock = daemonSock()): Promise<DaemonSeat[]
   }
 }
 
+export async function daemonSeat(channel: string, agent: string, sock = daemonSock()): Promise<DaemonSeat | null> {
+  try {
+    return (await daemonListening(sock)).find((s) => s.channel === channel && s.agent === agent) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function reportRead(channel: string, agent: string, session: string | undefined, sock = daemonSock()): Promise<void> {
+  try {
+    const c = await openConn(sock, 2_000);
+    try {
+      await c.call("read", { channel, as: agent, ...(session ? { session } : {}) });
+    } finally {
+      c.close();
+    }
+  } catch {
+    return;
+  }
+}
+
 /** Stop the daemon. Quiet when none is running. */
 export async function stopDaemon(sock = daemonSock()): Promise<void> {
   try {
@@ -875,7 +1015,6 @@ export interface DaemonSubscription {
   readonly agent: string;
   [Symbol.asyncIterator](): AsyncIterator<Message>;
   close(): void;
-  presence(fields: PresenceFields): Promise<void>;
   mark(seq: number): Promise<void>;
 }
 
@@ -940,7 +1079,6 @@ export async function listenDaemon(
     channel,
     agent,
     close,
-    presence: async (fields) => void (await c.call("presence", { channel, as: agent, ...fields })),
     mark: async (seq) => void (await c.call("mark", { channel, as: agent, seq })),
     [Symbol.asyncIterator]() {
       return {

@@ -212,9 +212,9 @@ describe("agents coordinating through the CLI", () => {
     expect(status).toContain("win — windows");
   });
 
-  test("tail wakes on messages for you, skips your own, and announces presence", async () => {
+  test("tail wakes on messages for you and skips your own; the daemon's seat is what shows in who", async () => {
     const tail = lines(mc(win, "tail"));
-    await untilTrue(async () => (await ok(mac, "who")).includes("win — windows · tail"), "tail in who");
+    await untilTrue(async () => (await ok(mac, "who")).includes("win — windows · reachable"), "win's seat in who");
     await ok(win, "send", "my own message");
     await ok(mac, "send", "--to", "win", "--kind", "status", "capture is up");
     await tail.until((l) => l.some((x) => x.includes("capture is up")));
@@ -390,9 +390,9 @@ describe("images and cross-channel tasks through the CLI", () => {
         return new Response("ok");
       },
     });
+    await ok(a, "read");
     const watching = mc(a, "watch", "--webhook", `http://127.0.0.1:${server.port}/hook`);
     const linesP = lines(watching);
-    await untilTrue(async () => (await ok(b, "who")).includes("· watch"), "watch is listening");
     await ok(b, "send", "ping the hook");
     // The first POST may be something else. Wait until this message's body is there, then stop.
     await untilTrue(
@@ -718,7 +718,7 @@ describe("MCP server", () => {
       expect(shown.content[0]!.text).toContain("the dialog");
       expect(shown.content[0]!.text).toContain("images saved:");
       expect(shown.content.some((c) => c.type === "image")).toBe(true);
-      expect(await ok(other, "who")).toContain("nobody else is listening right now");
+      expect(await ok(other, "who")).toContain("agent-a — builder · reachable");
     } finally {
       p.kill();
     }

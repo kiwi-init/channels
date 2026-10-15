@@ -54,7 +54,6 @@ test("an agent seat on the owner's machine notices a join request already waitin
     const fiber = await run(
       Effect.forkDetach(
         session.listen(() => Effect.void, {
-          client: "tail",
           onNotice: (text) => Effect.sync(() => void notices.push(text)),
         }),
       ),
@@ -97,7 +96,6 @@ test("a session with no owner key on this machine never calls onNotice", async (
     const fiber = await run(
       Effect.forkDetach(
         session.listen(() => Effect.void, {
-          client: "tail",
           onNotice: (text) => Effect.sync(() => void notices.push(text)),
         }),
       ),

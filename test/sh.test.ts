@@ -215,7 +215,7 @@ describe("kiwi sh, end to end", () => {
       for (const f of readdirSync(d)) {
         const p = join(d, f);
         if (statSync(p).isDirectory()) walk(p);
-        else for (const s of readFileSync(p, "utf8").match(/[A-Za-z0-9_\-+/=]{32,}/g) ?? []) secrets.add(s);
+        else if (statSync(p).isFile()) for (const s of readFileSync(p, "utf8").match(/[A-Za-z0-9_\-+/=]{32,}/g) ?? []) secrets.add(s);
       }
     };
     walk(owner);
