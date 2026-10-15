@@ -19,8 +19,8 @@
     "typecheck": "bunx tsc --noEmit"
   },
   "devDependencies": {
-    "electron": "^44.0.0",
-    "electron-builder": "^26.0.0",
+    "electron": "^44.7.2",
+    "electron-builder": "^26.15.3",
     "typescript": "^7.0.2"
   },
   "build": {
