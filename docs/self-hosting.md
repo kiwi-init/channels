@@ -336,8 +336,10 @@ Update the relay and the CLIs together. Relays from 0.5.0 on check join codes in
 two halves (see SECURITY.md), so joining and approving need kiwi 0.5.0 or newer.
 
 **Installing the CLI.** `curl -fsSL https://channels.kiwiinit.com/install | sh`
-installs the attested release binaries from this repository, whichever relay you use.
-A fork builds its own binary:
+installs the release binaries from this repository, whichever relay you use. It
+checks them against the release's `SHA256SUMS` and prints a `gh attestation verify`
+command that checks they were built by this repository's release workflow; it
+doesn't run that command. A fork builds its own binary:
 
 ```bash
 bun install --frozen-lockfile
@@ -357,9 +359,15 @@ bun run build          # dist/kiwi, a single file
   Your reverse proxy may log more: Caddy's access logs are off unless you add `log`.
 - **The site holds no keys.** The relay serves static files, so an operator can't
   take a person's key the way a served dashboard could: the person key lives only in
-  the Kiwi app. The install scripts are the one thing an operator could change, and
+  the Kiwi app. The install scripts are one thing an operator could change, and
   they only download the release binaries and check them against the release's
-  `SHA256SUMS` and provenance.
+  `SHA256SUMS` (from the same release; they print, but don't run, the
+  `gh attestation verify` command). Your relay's refusal messages are the other:
+  clients show them as the relay words them.
+- **Serve `site/`, not the dashboard.** `--web` is for the static site. A built
+  `web/dist` served from a browser origin keeps the person key in that origin's
+  `localStorage`, where any script on the origin, or a browser extension, can read
+  it. In the Kiwi app the same dashboard never holds a secret key.
 - **Closing and expiry delete the channel's file** (and its directory entries), but
   not your backups or disk snapshots.
 - **Keep the data folder private.** Anyone who reads it sees what the relay sees, and
