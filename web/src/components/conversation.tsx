@@ -5,7 +5,7 @@ import { droppedCount } from "@mc/format.ts"
 import { memberLoad } from "@mc/load.ts"
 import { ignored, isReaction, type Color, type Message } from "@mc/protocol.ts"
 import { describeScopes, wireScopes } from "@mc/scopes.ts"
-import { colorOf, keptFromPeople, taskId, type ChannelState, type Task } from "@mc/state.ts"
+import { colorOf, keptFromPeople, taskId, type Task } from "@mc/state.ts"
 import { secrets } from "@/lib/secrets"
 import { channelTitle, forgetChannel, loadMember, loadRecent, saveMember, saveRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { lastPreview } from "@/lib/preview"
@@ -26,7 +26,7 @@ import { AgentStrip, type AgentNow } from "./agent-strip"
 import { ChannelControls, HoldBanner, HoldDialog } from "./controls"
 import { Icon } from "./icon"
 import { InfoPanel } from "./info-panel"
-import { Button, IconButton, Monogram, Spinner } from "./kit"
+import { Button, IconButton, Spinner } from "./kit"
 import { Bubble, EventGroup, EventRow, TimeMark, isAgent, standsAlone, type ThreadSummary } from "./message"
 import { NeedsYou } from "./needs-you"
 import { TaskDetails } from "./task-details"
@@ -649,11 +649,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                 out in document order, so it would otherwise swallow these clicks. */}
             <PlaceSwitch
               className="absolute top-0 left-1/2 h-(--chrome-h) -translate-x-1/2"
-              me={me}
-              places={places}
               current={hereKey}
-              state={state}
-              nameOf={nameOf}
               unreadIn={unreadIn}
               title={title}
               titleLabel={`Details: ${title}, ${subtitle}`}
@@ -877,17 +873,12 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
 }
 
 /**
- * The middle of the header row: the channel's name in one glass capsule (it opens the details), its
- * direct conversations as faces beside it. Away from the main chat, the capsule leads with the way
- * back to it, which carries main's news; the open face takes you back too.
+ * The middle of the header row: the channel's name in one glass capsule (it opens the details). Away
+ * from the main chat, the capsule leads with the way back to it, which carries main's news.
  */
 function PlaceSwitch({
   className,
-  me,
-  places,
   current,
-  state,
-  nameOf,
   unreadIn,
   title,
   titleLabel,
@@ -897,11 +888,7 @@ function PlaceSwitch({
   onPick,
 }: {
   className?: string
-  me: string
-  places: Map<string, PlaceSummary>
   current: string
-  state: ChannelState
-  nameOf: (n: string) => string
   unreadIn: (key: string) => { n: number; forMe: boolean }
   title: string
   titleLabel: string
@@ -910,9 +897,6 @@ function PlaceSwitch({
   onTitle: () => void
   onPick: (p: Place) => void
 }) {
-  const dms = [...places.entries()].filter(([, i]) => i.place.kind === "dm").sort((a, b) => b[1].last - a[1].last)
-  const face = (name: string) =>
-    name === state.coordinator ? <CoordinatorAvatar size={28} /> : <Monogram name={nameOf(name)} agent={isAgent(state.members.get(name))} color={colorOf(state, name)} size={28} />
   return (
     <nav aria-label="Conversations" className={cx("no-drag flex items-center gap-2", className)}>
       <div className="glass flex h-9 items-center gap-0.5 rounded-full p-0.5">
@@ -939,26 +923,6 @@ function PlaceSwitch({
           <span className="truncate">{title}</span>
         </button>
       </div>
-      {dms.map(([k, i]) => {
-        const p = i.place
-        if (p.kind !== "dm") return null
-        const other = p.with.includes(me) ? (p.with.find((n) => n !== me) ?? me) : null
-        const name = other ? nameOf(other) : p.with.map(nameOf).join(" ↔ ")
-        return (
-          <button
-            key={k}
-            type="button"
-            aria-label={name}
-            title={`${name}, privately`}
-            aria-current={k === current ? "page" : undefined}
-            onClick={() => onPick(k === current ? MAIN : p)}
-            className={cx("glass relative flex size-9 shrink-0 items-center justify-center rounded-full", k === current && "shadow-[0_0_0_2px_var(--ink)]")}
-          >
-            {face(other ?? p.with[0]!)}
-            {k !== current && <Badge u={unreadIn(k)} />}
-          </button>
-        )
-      })}
     </nav>
   )
 }
