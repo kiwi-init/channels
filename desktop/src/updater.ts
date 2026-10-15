@@ -17,6 +17,7 @@ import { app } from "electron";
 
 import { compareVersions } from "./cli.ts";
 import { moveOver } from "./move.ts";
+import { signedLikeThisApp } from "./signer.ts";
 
 const REPO = "ojowwalker77/channels";
 const EVERY_MS = 6 * 3_600_000;
@@ -86,7 +87,7 @@ async function download(assetUrl: string, sumsUrl: string, name: string, dir: st
     // ditto keeps the bundle's symlinks and modes (the frameworks need both).
     await run("/usr/bin/ditto", ["-x", "-k", file, dir]);
     const next = path.join(dir, "Kiwi.app");
-    return fs.existsSync(next) ? next : null;
+    return fs.existsSync(next) && (await signedLikeThisApp(macBundle(), next)) ? next : null;
   }
   fs.chmodSync(file, 0o755);
   return file;

@@ -36,7 +36,7 @@ jobs:
   core-types:
     jev: false
     name: core / types
-    inputs: ["src/**", "test/**", "desktop/src/move.ts", "desktop/src/daemon-client.ts", "desktop/src/guard.ts", "desktop/src/bridge.ts"]
+    inputs: ["src/**", "test/**", "desktop/src/move.ts", "desktop/src/signer.ts", "desktop/src/daemon-client.ts", "desktop/src/guard.ts", "desktop/src/bridge.ts"]
     always: ["tsconfig.json", "tsconfig.worker.json", "package.json", "bun.lock"]
     description: >-
       Runs tsc --noEmit over src/ (the kiwi CLI, daemon, client, relay and MCP server) and test/,
@@ -46,7 +46,7 @@ jobs:
 
   core-test:
     name: core / test
-    inputs: ["src/**", "test/**", "web/src/**", "web/public/**", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "desktop/src/move.ts", "desktop/src/daemon-client.ts", "desktop/src/guard.ts", "desktop/src/bridge.ts"]
+    inputs: ["src/**", "test/**", "web/src/**", "web/public/**", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "desktop/src/move.ts", "desktop/src/signer.ts", "desktop/src/daemon-client.ts", "desktop/src/guard.ts", "desktop/src/bridge.ts"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "web/bun.lock", "scripts/ci-tests.ts"]
     description: >-
       Runs the fast unit tests with bun test: every test/*.test.ts except the slow agent-flow
@@ -54,7 +54,7 @@ jobs:
       event validation, state folding, formatting, identity and signing, scopes and roles,
       routing and auth tables, error texts, the install script (web/public/install.sh), hooks and
       harness detection, the history cache, and the desktop app's node-only helpers
-      (desktop/src/move.ts, desktop/src/daemon-client.ts, desktop/src/guard.ts). Fails if a tested module's behavior,
+      (desktop/src/move.ts, desktop/src/signer.ts, desktop/src/daemon-client.ts, desktop/src/guard.ts). Fails if a tested module's behavior,
       output text or exported names change.
 
   flows-a:
