@@ -4,6 +4,7 @@ dist/
 .relay-data/
 *.bun-build
 temp/
+__pycache__/
 
 # electron-builder output (desktop/: bun run dist)
 desktop/release/
