@@ -89,7 +89,13 @@ function packageName(dir: string): string | null {
 }
 
 function bunShims(bun: string, out: Cleaned): void {
-  const globals = resolve(bun, "install", "global", "node_modules") + sep;
+  const globals = resolve(bun, "install", "global", "node_modules");
+  let real: string;
+  try {
+    real = realpathSync(globals) + sep;
+  } catch {
+    return;
+  }
   for (const name of OLD_COMMANDS) {
     const shim = join(bun, "bin", name);
     let target: string;
@@ -99,8 +105,8 @@ function bunShims(bun: string, out: Cleaned): void {
     } catch {
       continue;
     }
-    if (!target.startsWith(globals)) continue;
-    const pkg = join(globals, target.slice(globals.length).split(sep)[0]!);
+    if (!target.startsWith(real)) continue;
+    const pkg = join(globals, target.slice(real.length).split(sep)[0]!);
     const named = packageName(pkg);
     if (named && OLD_PACKAGES.has(named)) {
       remove(shim, out);
