@@ -137,6 +137,17 @@ jobs:
       what it imports. Fails on a type or bundling error in desktop/src or those imports. The
       dashboard is not compiled here.
 
+  site-test:
+    name: site / test
+    inputs: ["site/app.js", "test/site.test.ts"]
+    always: ["package.json", "bun.lock", "scripts/ci-tests.ts"]
+    description: >-
+      Runs test/site.test.ts: loads the public site's script (site/app.js) against a stub page and
+      checks which invite it shows for /join/<code> paths and #<code> links, that a path which
+      isn't a join code (a malformed percent escape included) leaves the landing page and its
+      downloads in place instead of throwing, and the install command it prints. Fails if the
+      invite parsing, the kiwi:// link or the printed command changes.
+
   desktop-keys:
     name: desktop / keys
     inputs: ["desktop/src/**", "src/**", "web/src/**", "test/desktop-keys.test.ts", "test/check.ts"]

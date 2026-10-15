@@ -43,8 +43,8 @@ function showInvite(code) {
 
 // The renderer's invite link is `<relay>/#<code>`; `/join/<code>` also works.
 function inviteCode() {
-  const fromPath = /^\/join\/(.+)$/.exec(location.pathname);
-  if (fromPath) return decodeURIComponent(fromPath[1]).replace(/[^A-Za-z0-9_-]/g, "");
+  const fromPath = /^\/join\/(mc2-[A-Za-z0-9_-]+)\/?$/.exec(location.pathname);
+  if (fromPath) return fromPath[1];
   const hash = location.hash.replace(/^#/, "").trim();
   return /^mc2-[A-Za-z0-9_-]+$/.test(hash) ? hash : "";
 }
