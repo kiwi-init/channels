@@ -1,12 +1,5 @@
 # AGENTS.md
 
-## Specs e labels
-
-- Desenvolvimento só guiado por spec. Nenhum código sem spec acordada na descrição da issue ou do PR, com escopo, critérios de aceite e gates de CI. A implementação segue a spec; mudar o escopo exige atualizar a spec antes, com o item em `needs-triage`.
-- `needs-triage`: precisa do loop humano-agente. Agentes só discutem e escrevem spec; não commitam código. Item com pergunta aberta é `needs-triage`.
-- `agent-ready`: liberado para implementar. Só uma pessoa aplica esse label; o agente pode apenas propor.
-- Antes de commitar, confira o label da issue ou do PR: sem `agent-ready`, não commite código.
-
 ## Código
 
 - Comentários no código são proibidos, inclusive diretivas de ferramenta (`@ts-expect-error`, `@ts-ignore`, `oxlint-disable`, `eslint-disable`, `type: ignore`, `noqa`, `pragma` etc.). Única exceção: docstring Python estritamente necessária em tempo de execução, registrada na lista `ALLOWED_DOCSTRINGS` de `scripts/ci/no_comments.py` (hoje vazia) e justificada no PR; fora dela, o guard `repo / comments` reprova. O contexto vai no commit e no PR.
