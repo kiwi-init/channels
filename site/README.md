@@ -18,10 +18,10 @@ through `kiwi://join/<code>`), and the install scripts.
 
 ## Download links
 
-`app.js` lists the desktop app files the v0.12.0 release actually publishes:
+`app.js` lists the desktop app files the v0.13.0 release actually publishes:
 
-- `Kiwi-0.12.0-mac-arm64.dmg` / `Kiwi-0.12.0-mac-x64.dmg`
-- `Kiwi-0.12.0-linux-x86_64.AppImage` / `Kiwi-0.12.0-linux-amd64.deb`
+- `Kiwi-0.13.0-mac-arm64.dmg` / `Kiwi-0.13.0-mac-x64.dmg`
+- `Kiwi-0.13.0-linux-x86_64.AppImage` / `Kiwi-0.13.0-linux-amd64.deb`
 
 Those are `desktop/package.json`'s `artifactName` (`Kiwi-${version}-${os}-${arch}.${ext}`)
 with electron-builder's per-target arch strings. There is no Windows app; the
