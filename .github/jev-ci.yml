@@ -191,13 +191,14 @@ jobs:
   repo-pins:
     jev: false
     name: repo / pins
-    inputs: [".github/workflows/**", ".github/actions/**"]
-    always: ["scripts/ci/action_pins.py"]
+    inputs: [".github/workflows/**", ".github/actions/**", "scripts/action-pins.ts", "test/action-pins.test.ts"]
+    always: ["package.json", "bun.lock", "scripts/ci-tests.ts"]
     description: >-
-      Runs scripts/ci/action_pins.py over .github/workflows and every composite action under
-      .github/actions. Fails when a uses: line names a third-party action by tag or branch
-      instead of a full 40-character commit SHA, or a docker:// image without a sha256 digest.
-      Local actions (./…) pass.
+      Runs test/action-pins.test.ts, then scripts/action-pins.ts over .github/workflows and every
+      composite action under .github/actions. The script parses each file as YAML and reads every
+      step's uses, a job's uses (reusable workflows) and a composite action's steps. Fails when one
+      names a third-party action or workflow by tag or branch instead of a full 40-character commit
+      SHA, or a docker:// image without a sha256 digest. Local ones (./…) pass.
 
   repo-knip:
     jev: false
