@@ -46,7 +46,7 @@ jobs:
 
   core-test:
     name: core / test
-    inputs: ["src/**", "test/**", "web/src/**", "web/public/**", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "desktop/src/move.ts", "desktop/src/daemon-client.ts", "desktop/src/guard.ts", "desktop/src/bridge.ts"]
+    inputs: ["src/**", "test/**", "web/src/**", "web/public/**", "site/install", "site/install.sh", "site/install.ps1", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "desktop/src/move.ts", "desktop/src/daemon-client.ts", "desktop/src/guard.ts", "desktop/src/bridge.ts"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "web/bun.lock", "scripts/ci-tests.ts"]
     description: >-
       Runs the fast unit tests with bun test: every test/*.test.ts except the slow agent-flow
@@ -137,6 +137,17 @@ jobs:
       what it imports. Fails on a type or bundling error in desktop/src or those imports. The
       dashboard is not compiled here.
 
+  site-test:
+    name: site / test
+    inputs: ["site/app.js", "test/site.test.ts"]
+    always: ["package.json", "bun.lock", "scripts/ci-tests.ts"]
+    description: >-
+      Runs test/site.test.ts: loads the public site's script (site/app.js) against a stub page and
+      checks which invite it shows for /join/<code> paths and #<code> links, that a path which
+      isn't a join code (a malformed percent escape included) leaves the landing page and its
+      downloads in place instead of throwing, and the install command it prints. Fails if the
+      invite parsing, the kiwi:// link or the printed command changes.
+
   desktop-keys:
     name: desktop / keys
     inputs: ["desktop/src/**", "src/**", "web/src/**", "test/desktop-keys.test.ts", "test/check.ts"]
@@ -187,6 +198,18 @@ jobs:
       (a docstring listed in its ALLOWED_DOCSTRINGS passes, a #! first line passes). Old lines
       are not checked. The job also type-checks scripts/ci with mypy --strict and runs its
       unit tests.
+
+  repo-pins:
+    jev: false
+    name: repo / pins
+    inputs: [".github/workflows/**", ".github/actions/**", "scripts/action-pins.ts", "test/action-pins.test.ts"]
+    always: ["package.json", "bun.lock", "scripts/ci-tests.ts"]
+    description: >-
+      Runs test/action-pins.test.ts, then scripts/action-pins.ts over .github/workflows and every
+      composite action under .github/actions. The script parses each file as YAML and reads every
+      step's uses, a job's uses (reusable workflows) and a composite action's steps. Fails when one
+      names a third-party action or workflow by tag or branch instead of a full 40-character commit
+      SHA, or a docker:// image without a sha256 digest. Local ones (./…) pass.
 
   repo-knip:
     jev: false

@@ -60,7 +60,7 @@ if (-not (($userPath -split ';') -contains $dir)) {
 }
 Write-Host "Installed kiwi $(& "$dir\kiwi.exe" --version) at $dir\kiwi.exe (checksum verified)"
 try { & "$dir\kiwi.exe" cleanup --quiet } catch {}
-Write-Host "Check where it came from: gh attestation verify $dir\kiwi.exe --repo $repo"
+Write-Host "Check where it came from: gh attestation verify $dir\kiwi.exe --repo $repo --signer-workflow $repo/.github/workflows/release.yml"
 
 if ($KiwiArgs.Count -gt 0) {
   Write-Host

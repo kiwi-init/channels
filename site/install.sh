@@ -103,7 +103,7 @@ case ":$PATH:" in
     fi
     ;;
 esac
-echo "Check where it came from: gh attestation verify $DIR/kiwi --repo $REPO"
+echo "Check where it came from: gh attestation verify $DIR/kiwi --repo $REPO --signer-workflow $REPO/.github/workflows/release.yml"
 
 if [ "$#" -gt 0 ]; then
   echo
