@@ -66,6 +66,57 @@ describe("harnessModel", () => {
     expect(await harnessModel({ GROK_SESSION_ID: "g-1", GROK_HOME: home })).toBe("grok-4");
   });
 
+  test("Grok Build: current_model_id, where Grok keeps it now", async () => {
+    const home = dir();
+    mkdirSync(join(home, "sessions", "ws", "g-2"), { recursive: true });
+    writeFileSync(join(home, "sessions", "ws", "g-2", "summary.json"), JSON.stringify({ current_model_id: "grok-4.7", title: "t" }));
+    expect(await harnessModel({ GROK_SESSION_ID: "g-2", GROK_HOME: home })).toBe("grok-4.7");
+  });
+
+  test("Kimi Code: the model its default alias names, read only under a kimi-code process", async () => {
+    const home = dir();
+    writeFileSync(
+      join(home, "config.toml"),
+      'default_model = "kimi-code/k3-256k"\n\n[models."kimi-code/k3"]\nmodel = "k3"\n\n[models."kimi-code/k3-256k"]\nprovider = "kimi"\nmodel = "k3-256k"\n',
+    );
+    const tree = { from: 9, lookup: () => ({ ppid: 1, name: "kimi-code" }) };
+    const env = { TERM: "dumb", NO_COLOR: "1", KIMI_CODE_HOME: home, CLAUDECODE: "1", CLAUDE_CONFIG_DIR: dir() };
+    expect(await harnessModel(env, { tree })).toBe("k3-256k");
+    expect(await harnessModel(env, { tree: { from: 9, lookup: () => ({ ppid: 1, name: "zsh" }) } })).toBeUndefined();
+  });
+
+  test("Kimi Code: a bare or single-quoted table key resolves; an alias with no table is no model at all", async () => {
+    const tree = { from: 9, lookup: () => ({ ppid: 1, name: "kimi-code" }) };
+    const at = (toml: string) => {
+      const home = dir();
+      writeFileSync(join(home, "config.toml"), toml);
+      return harnessModel({ TERM: "dumb", NO_COLOR: "1", KIMI_CODE_HOME: home }, { tree });
+    };
+    expect(await at('default_model = "work"\n[models.work]\nmodel = "kimi-k2.5"\n')).toBe("kimi-k2.5");
+    expect(await at("default_model = 'work' # mine\n[models.'work']\nmodel = 'kimi-k2.6'\n")).toBe("kimi-k2.6");
+    expect(await at('default_model = "kimi-code/k3"\n[models."kimi-code/k3-256k"]\nmodel = "k3-256k"\n')).toBeUndefined();
+    expect(await at('default_model = "work"\n')).toBeUndefined();
+  });
+
+  test("MiMoCode: the newest message's model among sessions in this folder or above it", async () => {
+    const data = dir();
+    mkdirSync(join(data, "mimocode"));
+    const db = new Database(join(data, "mimocode", "mimocode.db"));
+    db.run("CREATE TABLE session (id TEXT, directory TEXT)");
+    db.run("CREATE TABLE message (id TEXT, session_id TEXT, time_created INTEGER, data TEXT)");
+    db.run("INSERT INTO session VALUES ('s-here', '/work/repo'), ('s-elsewhere', '/work/other'), ('s-prefix', '/work/repo-2')");
+    db.run("INSERT INTO message VALUES ('m1', 's-here', 1, ?), ('m2', 's-here', 2, ?), ('m3', 's-elsewhere', 3, ?), ('m4', 's-prefix', 4, ?)", [
+      JSON.stringify({ role: "user", model: { modelID: "mimo-old" } }),
+      JSON.stringify({ role: "assistant", modelID: "mimo-v2.6-pro", content: "secret" }),
+      JSON.stringify({ role: "assistant", modelID: "other-model" }),
+      JSON.stringify({ role: "assistant", modelID: "prefix-model" }),
+    ]);
+    db.close();
+    const env = { MIMOCODE: "1", XDG_DATA_HOME: data, CLAUDECODE: "1", CLAUDE_CONFIG_DIR: dir() };
+    expect(await harnessModel(env, { cwd: "/work/repo/src" })).toBe("mimo-v2.6-pro");
+    expect(await harnessModel(env, { cwd: "/work/none" })).toBeUndefined();
+  });
+
   test("can't tell: no harness, an unknown session, or files that aren't there", async () => {
     expect(await harnessModel({})).toBeUndefined();
     expect(await harnessModel({ CODEX_THREAD_ID: "t-9", CODEX_HOME: dir() })).toBeUndefined();

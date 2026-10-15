@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { basename, join, resolve, sep } from "node:path";
 import type { ServerWebSocket } from "bun";
 import * as Layer from "effect/Layer";
-import { CLOSE_CLOSED, CLOSE_REMOVED, PING, PONG } from "../protocol.ts";
+import { CLOSE_CLOSED, CLOSE_REMOVED, GONE_WORDS, PING, PONG } from "../protocol.ts";
 import { ChannelGone, NotFound, UpdateRequired } from "./failures.ts";
 import { clockLayer } from "./http.ts";
 import { authkitDomains, devHostOk, devHumanAuth, devRequestOk, Human, HUMAN_HEADER, workosFromSettings, type HumanAuth } from "./human.ts";
@@ -156,7 +156,7 @@ export function startRelay(
     const room = sockets.get(roomId) ?? new Set();
     for (const f of fx.broadcast ?? []) for (const ws of room) ws.send(f);
     if (fx.others) for (const ws of room) if (ws !== sender) ws.send(fx.others);
-    if (fx.disconnect) for (const ws of room) if (ws.data.pk === fx.disconnect) ws.close(CLOSE_REMOVED, "removed from channel");
+    if (fx.disconnect) for (const ws of room) if (ws.data.pk === fx.disconnect.pk) ws.close(CLOSE_REMOVED, GONE_WORDS[fx.disconnect.how]);
     for (const u of fx.directory ?? []) {
       if (u.entry) people.query("INSERT OR REPLACE INTO owned (user, room, entry) VALUES (?, ?, ?)").run(u.user, u.room, JSON.stringify(u.entry));
       else people.query("DELETE FROM owned WHERE user = ? AND room = ?").run(u.user, u.room);

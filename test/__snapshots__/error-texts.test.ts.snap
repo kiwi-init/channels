@@ -31,6 +31,7 @@ exports[`the relay's error texts are exactly these 1`] = `
   "401 sign in required: channels on this relay are owned and run by a signed-in human (sign in from the Kiwi app)",
   "403 <betaMessage(policy)>",
   "403 not a member of this channel",
+  "403 not a member of this channel: \${GONE_WORDS[how]}",
   "403 only the channel owner can do that",
   "403 the owner lets you only read in this channel",
   "403 this key was denied",

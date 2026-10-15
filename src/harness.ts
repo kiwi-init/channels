@@ -13,10 +13,11 @@
 // These are each harness's own files, not a published contract: every read is version-tolerant and
 // fails soft (undefined), and `kiwi join --model` always says it instead.
 
-import { closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
+import { closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
+import { kimiCodePid, mimoHere, type ProcessTree } from "./ancestry.ts";
 import type { Activity } from "./protocol.ts";
 
 type Env = Record<string, string | undefined>;
@@ -118,19 +119,77 @@ function grokModel(env: Env): string | undefined {
   for (const ws of readdirSync(sessions)) {
     const file = join(sessions, ws, session, "summary.json");
     if (!existsSync(file)) continue;
-    const m = (JSON.parse(readFileSync(file, "utf8")) as { model?: unknown }).model;
+    const summary = JSON.parse(readFileSync(file, "utf8")) as { current_model_id?: unknown; model?: unknown };
+    const m = summary.current_model_id ?? summary.model;
     return slug(typeof m === "object" && m ? ((m as { id?: unknown; name?: unknown }).id ?? (m as { name?: unknown }).name) : m);
   }
   return undefined;
 }
 
+function kimiModel(env: Env): string | undefined {
+  const toml = readFileSync(join(env.KIMI_CODE_HOME || join(homedir(), ".kimi-code"), "config.toml"), "utf8");
+  const alias = tomlString(/^\s*default_model\s*=(.*)$/m.exec(toml)?.[1]);
+  if (!alias) return undefined;
+  const key = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const keys = [`"${key}"`, `'${key}'`, ...(/^[A-Za-z0-9_-]+$/.test(alias) ? [key] : [])];
+  const header = new RegExp(`^\\s*\\[\\s*models\\s*\\.\\s*(?:${keys.join("|")})\\s*\\]\\s*(?:#.*)?$`, "m").exec(toml);
+  if (!header) return undefined;
+  const section = toml.slice(header.index + header[0].length).split(/^\s*\[/m)[0] ?? "";
+  return slug(tomlString(/^\s*model\s*=(.*)$/m.exec(section)?.[1]));
+}
+
+function tomlString(v: string | undefined): string | undefined {
+  const m = v === undefined ? null : /^\s*(?:"([^"\\]{1,120})"|'([^']{1,120})')\s*(?:#.*)?$/.exec(v);
+  return m ? (m[1] ?? m[2]) : undefined;
+}
+
+function realDir(dir: string): string {
+  try {
+    return realpathSync(dir);
+  } catch {
+    return dir;
+  }
+}
+
+async function mimoModel(env: Env, cwd: string): Promise<string | undefined> {
+  const file = join(env.XDG_DATA_HOME || join(homedir(), ".local", "share"), "mimocode", "mimocode.db");
+  if (!existsSync(file)) return undefined;
+  const { Database } = await import("bun:sqlite");
+  const db = new Database(file, { readonly: true });
+  try {
+    const rows = db
+      .query(
+        "SELECT m.data AS data FROM message m JOIN session s ON s.id = m.session_id WHERE s.directory = ?1 OR substr(?1, 1, length(s.directory) + 1) = s.directory || '/' ORDER BY m.time_created DESC LIMIT 20",
+      )
+      .all(realDir(cwd)) as { data?: unknown }[];
+    for (const row of rows) {
+      if (typeof row.data !== "string") continue;
+      const data = JSON.parse(row.data) as { modelID?: unknown; model?: { modelID?: unknown } };
+      const m = slug(data.modelID ?? data.model?.modelID);
+      if (m) return m;
+    }
+    return undefined;
+  } finally {
+    db.close();
+  }
+}
+
+export interface HarnessWhere {
+  cwd?: string;
+  tree?: ProcessTree;
+}
+
 /** The model the harness running this command is on, or undefined when it can't be told. */
-export async function harnessModel(env: Env = process.env): Promise<string | undefined> {
+export async function harnessModel(env: Env = process.env, where: HarnessWhere = {}): Promise<string | undefined> {
   const tries: (() => string | undefined | Promise<string | undefined>)[] = [];
-  if (env.GROK_SESSION_ID) tries.push(() => grokModel(env));
-  if (env.CLAUDECODE) tries.push(() => claudeModel(env));
-  if (env.CODEX_THREAD_ID) tries.push(() => codexModel(env));
-  if (env.OPENCODE_SESSION_ID) tries.push(() => opencodeModel(env));
+  if (mimoHere(env, where.tree)) tries.push(() => mimoModel(env, where.cwd ?? process.cwd()));
+  else if (kimiCodePid(env, where.tree)) tries.push(() => kimiModel(env));
+  else {
+    if (env.GROK_SESSION_ID) tries.push(() => grokModel(env));
+    if (env.CLAUDECODE) tries.push(() => claudeModel(env));
+    if (env.CODEX_THREAD_ID) tries.push(() => codexModel(env));
+    if (env.OPENCODE_SESSION_ID) tries.push(() => opencodeModel(env));
+  }
   for (const t of tries) {
     try {
       const m = await t();

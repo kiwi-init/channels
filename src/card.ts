@@ -6,6 +6,7 @@
 import { execFileSync } from "node:child_process";
 import { cpus, totalmem } from "node:os";
 
+import { kimiCodePid, mimoHere, type ProcessTree } from "./ancestry.ts";
 import { harnessModel } from "./harness.ts";
 import type { Runs } from "./membership.ts";
 import type { Card } from "./protocol.ts";
@@ -59,7 +60,9 @@ export function inAgentHarness(env: Record<string, string | undefined> = process
 }
 
 /** The harness running this process, from the markers each one sets for its shell commands. */
-export function detectHarness(env: Record<string, string | undefined> = process.env): string | undefined {
+export function detectHarness(env: Record<string, string | undefined> = process.env, tree: ProcessTree = {}): string | undefined {
+  if (mimoHere(env, tree)) return "mimocode";
+  if (kimiCodePid(env, tree)) return "kimi-code";
   if (env.GROK_SESSION_ID) return "grok";
   if (env.CLAUDECODE) return "claude-code";
   if (env.CODEX_THREAD_ID || env.CODEX_SANDBOX) return "codex";

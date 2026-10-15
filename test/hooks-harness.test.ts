@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, wri
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, updateConfig } from "../src/config.ts";
-import { autoInstallExtraHooks, autoInstallHooks, cursorStopFollowup, extraInstalled, installDetected, installExtra, installHooks, stopStyle, uninstallDetected, uninstallExtra } from "../src/hooks.ts";
+import { autoInstallExtraHooks, autoInstallHooks, cursorStopFollowup, extraInstalled, hooksListen, installDetected, installExtra, installHooks, rewakeCapable, stopStyle, uninstallDetected, uninstallExtra } from "../src/hooks.ts";
 
 const made: string[] = [];
 const prev = new Map<string, string | undefined>();
@@ -361,4 +361,11 @@ test("the listener: installed from a Claude Code that runs it, kept by an instal
   setEnv({ CLAUDECODE: "1", AI_AGENT: "claude-code_2-1-100_agent" });
   installHooks();
   expect(has()).toBe(false);
+});
+
+test("a harness that passes CLAUDECODE through is never taken for Claude Code by its hooks", () => {
+  expect(hooksListen({ CLAUDECODE: "1", MIMOCODE: "1" })).toBe(false);
+  expect(rewakeCapable({ CLAUDECODE: "1", MIMOCODE: "1", AI_AGENT: "claude-code_9-9-9_agent" })).toBe(false);
+  expect(rewakeCapable({ CLAUDECODE: "1", GROK_SESSION_ID: "g", AI_AGENT: "claude-code_9-9-9_agent" })).toBe(false);
+  expect(rewakeCapable({ CLAUDECODE: "1", AI_AGENT: "claude-code_9-9-9_agent" })).toBe(true);
 });

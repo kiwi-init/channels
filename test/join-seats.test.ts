@@ -71,8 +71,8 @@ async function until(pred: () => boolean | Promise<boolean>, label: string, ms =
 }
 
 /** Join without --as and approve it on the owner's machine; returns everything the joiner printed. */
-async function join_(owner: string, joiner: string, code: string, env: Env, cwd = joiner): Promise<{ out: string; err: string; asked: string }> {
-  const p = spawn(joiner, ["join", code, "--timeout", "40s"], env, cwd);
+async function join_(owner: string, joiner: string, code: string, env: Env, cwd = joiner, extra: string[] = []): Promise<{ out: string; err: string; asked: string }> {
+  const p = spawn(joiner, ["join", code, "--timeout", "40s", ...extra], env, cwd);
   let out = "";
   const reader = p.stdout.getReader();
   const reading = (async () => {
@@ -224,6 +224,35 @@ describe("review fixes (#1352)", () => {
     const log = await ok(owner, ["log"]);
     expect(log).toContain("codex → all: from t1");
     expect(log).toContain("codex-2 → all: from t2");
+  });
+
+  test("an agent of a harness kiwi can't tell is never taken for the one already seated in its folder", async () => {
+    const owner = scratch("own10");
+    const code = created(await ok(owner, ["create", "unknown", "--as", "boss"]));
+    const h = scratch("unknown");
+    const PLAIN = { CLAUDECODE: "" };
+    expect((await join_(owner, h, code, PLAIN)).out).toContain('You\'re "agent"');
+    const again = await run(h, ["join", code], PLAIN);
+    expect(again.code).toBe(2);
+    expect(again.err).toContain("this folder already has agent's seat");
+    expect(again.err).toContain(`kiwi join ${code} --as agent`);
+    expect((await join_(owner, h, code, PLAIN, h, ["--as", "glm"])).out).toContain('You\'re "glm"');
+    const cfg = JSON.parse(readFileSync(join(h, "config.json"), "utf8")) as { bindings?: Record<string, { as: string } | { as: string }[]> };
+    const seated = Object.values(cfg.bindings ?? {}).flatMap((v) => (Array.isArray(v) ? v : [v])).map((b) => b.as);
+    expect(seated.sort()).toEqual(["agent", "glm"]);
+    await ok(h, ["--as", "agent", "send", "from agent"], PLAIN);
+    await ok(h, ["--as", "glm", "send", "from glm"], PLAIN);
+    const log = await ok(owner, ["log"]);
+    expect(log).toContain("agent → all: from agent");
+    expect(log).toContain("glm → all: from glm");
+  });
+
+  test("an agent of another harness never takes a folder's only seat", async () => {
+    const owner = scratch("own11");
+    const code = created(await ok(owner, ["create", "mixed", "--as", "boss"]));
+    const h = scratch("mixed");
+    expect((await join_(owner, h, code, { CODEX_THREAD_ID: "t1", CLAUDECODE: "" })).out).toContain('You\'re "codex"');
+    expect((await join_(owner, h, code, { GEMINI_CLI: "1", CLAUDECODE: "" })).out).toContain('You\'re "gemini"');
   });
 
   test("two agents of one machine let in under new names never lose each other's keys", async () => {

@@ -1,6 +1,6 @@
 import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Channel, RelayError } from "../src/client.ts";
@@ -310,6 +310,13 @@ describe("leaving, removal and closing through the CLI", () => {
     await joinVia(owner, a, code, "x", "alice");
     await joinVia(owner, b, code, "x", "bob");
     await ok(a, "send", "hi from alice");
+    writeFileSync(join(a, "note.md"), "from a file\nsecond line\n");
+    await ok(a, "send", "--file", join(a, "note.md"));
+    expect(await ok(owner, "log")).toContain("from a file");
+    const both = await run(a, "send", "words", "--file", join(a, "note.md"));
+    expect(both.code).toBe(1);
+    expect(both.err).toContain("give the text as words or with --file, not both");
+    expect((await run(a, "send", "--file", join(a, "missing.md"))).err).toContain(`can't read ${join(a, "missing.md")}`);
 
     // alice leaves: she's out and forgets the channel; the owner's next command rotates the key.
     expect(await ok(a, "leave")).toContain("left");
@@ -325,7 +332,8 @@ describe("leaving, removal and closing through the CLI", () => {
     expect(await ok(owner, "--as", "human", "kick", "bob")).toContain("rotated");
     const after = await run(b, "status");
     expect(after.code).toBe(4);
-    expect(after.err).toContain("no longer a member");
+    expect(after.err).toContain("the owner removed you from this channel (x); forgot bob's key on this machine");
+    expect(after.err).toContain("kiwi join CODE --as bob");
     expect(await ok(b, "channels")).toBe("");
     expect(readdirSync(join(b, "identities"))).toEqual([]);
 

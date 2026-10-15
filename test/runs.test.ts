@@ -35,7 +35,8 @@ describe("reading the model", () => {
     expect(await detectRuns({ CLAUDECODE: "1", GROK_SESSION_ID: "g1", KIWI_MODEL: "grok-4.6" })).toEqual({ harness: "grok", model: "grok-4.6" });
     expect(await detectRuns({ KIWI_MODEL: "glm-5.3" })).toBeUndefined();
     expect(await detectRuns({ KIWI_MODEL: "glm-5.3" }, { harness: "OpenCode" })).toEqual({ harness: "opencode", model: "glm-5.3" });
-    expect(await detectRuns({ KIWI_HARNESS: "mimo" }, { model: "mimo-v2.6-pro" })).toEqual({ harness: "mimo", model: "mimo-v2.6-pro" });
+    expect(await detectRuns({ KIWI_HARNESS: "mimo" }, { model: "mimo-v2.6-pro" })).toEqual({ harness: "mimocode", model: "mimo-v2.6-pro" });
+    expect(await detectRuns({ MIMOCODE: "1", CLAUDECODE: "1" }, { model: "mimo-v2.6-pro" })).toEqual({ harness: "mimocode", model: "mimo-v2.6-pro" });
     expect(await detectRuns({ CLAUDECODE: "1", CLAUDE_CONFIG_DIR: scratch("none") })).toBeUndefined();
   });
 

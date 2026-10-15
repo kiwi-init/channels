@@ -43,6 +43,8 @@ import { freeAgentName, inlineText, makeRecord, NAME_RE, nameKey, readRecord, re
 import {
   CLOSE_CLOSED,
   CLOSE_REMOVED,
+  goneHow,
+  type GoneHow,
   GENERAL_ROOM,
   MAX_ICON_BYTES,
   MAX_CHARTER,
@@ -114,12 +116,21 @@ export class RelayError extends Error {
 
 /** This member was removed, or the owner closed the channel. Local copies should be wiped. */
 export class ChannelGone extends Error {
-  constructor(readonly why: "removed" | "closed") {
-    super(why === "closed" ? "the owner closed this channel" : "you are no longer a member of this channel");
+  constructor(
+    readonly why: "removed" | "closed",
+    readonly how: GoneHow | null = null,
+  ) {
+    super(why === "closed" ? "the owner closed this channel" : how === "owner" ? "the owner removed you from this channel" : how === "left" ? "you left this channel" : "you are no longer a member of this channel");
   }
   get _tag(): "ChannelGone" {
     return "ChannelGone";
   }
+}
+
+export function goneText(err: ChannelGone, alias: string | undefined, name: string | undefined): string {
+  if (err.why === "closed" || !alias) return `${err.message}; forgot it on this machine`;
+  const who = name ? `${name}'s key` : "this agent's key";
+  return `${err.message} (${alias}); forgot ${who} on this machine. To come back, ask the owner for a new join code and run: kiwi join CODE${name ? ` --as ${name}` : ""}`;
 }
 
 /** The relay couldn't be reached at all (fetch itself failed). The Promise methods reject with what fetch threw, as they always have. */
@@ -139,7 +150,7 @@ export type Refused = MemberRefusal | LocalRefusal;
 function gone<E>(err: E): E | ChannelGone {
   if (!(err instanceof RelayError)) return err;
   // By tag; by text too, for relays from before tags (0.7 and older).
-  if (err.tag === "NotMember" || (err.status === 403 && /not a member/.test(err.message))) return new ChannelGone("removed");
+  if (err.tag === "NotMember" || (err.status === 403 && /not a member/.test(err.message))) return new ChannelGone("removed", goneHow(err.message));
   if (err.tag === "ChannelGone" || (err.status === 404 && /no such channel/.test(err.message))) return new ChannelGone("closed");
   return err;
 }
@@ -1412,7 +1423,7 @@ export class Channel {
       yield* Effect.forkScoped(keepAlive(ws));
       const { code, reason } = yield* Effect.promise(() => closed);
       if (code === 4000) return yield* Queue.end(q);
-      if (code === CLOSE_REMOVED) return yield* Queue.fail(q, new ChannelGone("removed"));
+      if (code === CLOSE_REMOVED) return yield* Queue.fail(q, new ChannelGone("removed", goneHow(reason)));
       if (code === CLOSE_CLOSED) return yield* Queue.fail(q, new ChannelGone("closed"));
       return yield* Queue.fail(q, new Dropped({ code, reason }));
     });

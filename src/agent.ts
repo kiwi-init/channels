@@ -667,7 +667,7 @@ export class AgentSession {
   readonly taskUpdate = Effect.fn("AgentSession.taskUpdate")({ self: this }, function* (
     this: AgentSession,
     id: number,
-    change: { state?: TaskState | "cancelled"; owner?: string | null; title?: string; note?: string; review?: string | null },
+    change: { state?: TaskState | "cancelled"; owner?: string | null; title?: string; note?: string; review?: string | null; verdict?: "rejected" },
   ) {
     const { state } = yield* this.state();
     const t = state.tasks.get(id);
@@ -694,7 +694,7 @@ export class AgentSession {
     if (finishing) notify.push(t.createdBy);
     const seq = yield* this.event(
       { op: "task.update", task: id, ...change, ...(owner !== undefined ? { owner } : {}), ...(review !== undefined ? { review } : {}) },
-      `${taskId(id)} ${change.state ?? "updated"}`,
+      `${taskId(id)} ${change.verdict ?? change.state ?? "updated"}`,
       notify,
     );
     const after = yield* this.confirm(seq);

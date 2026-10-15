@@ -20,7 +20,7 @@ import { mcpBrief } from "./brief.ts";
 import { loadImages, saveImages } from "./attach.ts";
 import { loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { Cursor, home, Keystore } from "./config.ts";
-import { ChannelGone, reason } from "./client.ts";
+import { ChannelGone, goneText, reason } from "./client.ts";
 import { ago, cardLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, mayDo, parseDuration, presenceWords, runsStatus, stateWord, taskStateWord } from "./format.ts";
 import { isWakeVia } from "./wake.ts";
 import { SCOPES } from "./scopes.ts";
@@ -85,7 +85,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         if (!(err instanceof ChannelGone)) return fail(reason(err));
         Effect.runSync(err.why === "closed" ? keys.wipeChannel(s.alias) : keys.forgetMember(s.alias, s.me));
         setTimeout(() => process.exit(4), 200);
-        return fail(`${err.message}; forgot it on this machine.\nNext: stop. Do not call any tool again.`);
+        return fail(`${goneText(err, s.alias, s.me)}.\nNext: stop. Do not call any tool again.`);
       });
     };
   }
@@ -482,7 +482,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
                 ? yield* s.taskUpdate(id, { owner: s.me, note })
                 : action === "note"
                   ? yield* s.taskUpdate(id, { note: note ?? "" })
-                  : yield* s.taskUpdate(id, { state: states[action], note });
+                  : yield* s.taskUpdate(id, { state: states[action], note, ...(action === "reject" ? { verdict: "rejected" as const } : {}) });
         const t = state.tasks.get(id)!;
         return `${taskId(id)} ${taskStateWord(t)}${t.owner ? ` @${t.owner}` : ""}: ${t.title}`;
       }),

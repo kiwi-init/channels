@@ -20,7 +20,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { AgentLive, openSession, type Agent, type AgentSession, type Delivery } from "../agent.ts";
 import { loadImages, saveImages } from "../attach.ts";
-import { Channel, ChannelGone, reason, RelayError } from "../client.ts";
+import { Channel, ChannelGone, goneText, reason, RelayError } from "../client.ts";
 import { Cursor, DEFAULT_RELAY, home, Keystore, loadConfig, updateConfig, type ChannelConfig } from "../config.ts";
 import { decodeJoinCode, type ChannelAccess } from "../crypto.ts";
 import { describeMember, freeAgentName, handleFor } from "../membership.ts";
@@ -48,8 +48,9 @@ const HELP = `kiwi ${VERSION} — Channels by Kiwi Init: real-time coordination 
 Agents
   kiwi join <code>                               ask to join (named after what you run in: claude, codex…; --as NAME
                                                  picks one); waits for the owner, then says what to do
-     --model ID                                  the model you run on (read from Claude Code, Codex, OpenCode or
-                                                 Grok when it can be; required when it can't, or set KIWI_MODEL);
+     --model ID                                  the model you run on (read from Claude Code, Codex, OpenCode, Grok,
+                                                 Kimi Code or MiMoCode when it can be; required when it can't, or
+                                                 set KIWI_MODEL);
                                                  the owner signs it into your seat when they let you in
      --harness NAME                              what runs you, when kiwi can't tell (or KIWI_HARNESS)
   kiwi listen                                    messages for you as they come, one per line (for a Monitor)
@@ -58,6 +59,7 @@ Agents
      --webhook URL                               POST every message to URL as JSON
      --chat (everyone's conversations) · --all (every event) · --thread N · --room R · --json
   kiwi send "text"                               to the people and coordinators (text from stdin if omitted)
+     --file PATH                                 the text from a file (also for reply, ask, escalate and sh)
      --to a,b|role:x|all                         to them instead
      --re N                                      in message #N's thread
      --ask [--wait 10m]                          a question; with --wait, block until it's answered
@@ -119,6 +121,7 @@ const { values: opt, positionals: args } = parseArgs({
     detail: { type: "string" },
     ttl: { type: "string" },
     note: { type: "string" },
+    file: { type: "string" },
     mine: { type: "boolean" },
     "for-me": { type: "boolean" },
     chat: { type: "boolean" },
@@ -289,8 +292,16 @@ const taskArg = Effect.fn("kiwi.taskArg")(function* (i = 2) {
   return parseTaskId(raw) ?? (yield* die(`"${raw}" isn't a task id (like T12)`));
 });
 
+const fileText = (from: number, file: string) =>
+  args.length > from
+    ? die("give the text as words or with --file, not both")
+    : Effect.tryPromise({
+        try: () => Bun.file(file).text(),
+        catch: (err) => new Quit({ message: `can't read ${file}: ${err instanceof Error ? err.message : String(err)}`, code: 1 }),
+      }).pipe(Effect.map((t) => t.replace(/\n$/, "")));
+
 const text = (from: number) =>
-  Effect.promise(async () => {
+  opt.file !== undefined ? fileText(from, opt.file) : Effect.promise(async () => {
     if (args.length > from && args[from] !== "-") return args.slice(from).join(" ");
     // Read stdin when it's piped in, or when "-" asks for it explicitly.
     if (args[from] !== "-" && process.stdin.isTTY) return "";
@@ -380,7 +391,18 @@ const commands: Record<string, Command> = {
       // it back), else a name from what the agent runs in, which the owner's side makes unique.
       const picked = opt.as ?? process.env.KIWI_AS;
       const aliasHere = Object.entries((yield* keys.config).channels).find(([, c]) => c.roomId === roomId)?.[0];
-      const seat = picked || !aliasHere ? null : bindingFor(process.cwd(), { who, alias: aliasHere, claim: false });
+      const found = picked || !aliasHere ? null : bindingFor(process.cwd(), { who, alias: aliasHere, claim: false });
+      if (found && !who.harness && local.includes(found.as)) {
+        return yield* die(
+          [
+            `this folder already has ${found.as}'s seat in ${aliasHere}, and kiwi can't tell what runs you, so it can't tell whether you are ${found.as}.`,
+            `If you are ${found.as}: kiwi join ${code} --as ${found.as}`,
+            `If you're another agent: kiwi join ${code} --as NAME, then pass --as NAME (or set KIWI_AS=NAME) on every kiwi command you run from here.`,
+          ].join("\n"),
+          2,
+        );
+      }
+      const seat = found && found.harness === who.harness ? found : null;
       const auto = !picked && !(seat && local.includes(seat.as));
       // The same agent running this join again while it waits: the same key, so the same request.
       const askingKey = [roomId, process.cwd(), who.harness ?? "", who.session ?? ""].join(" ");
@@ -1099,7 +1121,7 @@ const commands: Record<string, Command> = {
       if (sub === "claim") state = yield* s.taskClaim(id);
       else if (sub === "review") state = yield* s.taskUpdate(id, { state: "review", note, ...(opt.review !== undefined ? { review: opt.review } : {}) });
       else if (sub === "approve") state = yield* s.taskUpdate(id, { state: "done", note });
-      else if (sub === "reject") state = yield* s.taskUpdate(id, { state: "doing", note: note ?? (yield* die('usage: kiwi task reject T7 "what needs to change"')) });
+      else if (sub === "reject") state = yield* s.taskUpdate(id, { state: "doing", verdict: "rejected", note: note ?? (yield* die('usage: kiwi task reject T7 "what needs to change"')) });
       else if (sub in STATE_FOR) state = yield* s.taskUpdate(id, { state: STATE_FOR[sub], note });
       // Blocked (an older name) is a note on work in progress; cancelling finishes it, marked cancelled.
       else if (sub === "block") state = yield* s.taskUpdate(id, { note: `blocked${note ? `: ${note}` : ""}` });
@@ -1294,7 +1316,7 @@ const fail = (cause: Cause.Cause<unknown>) =>
       const keys = yield* Keystore;
       if (acting.alias && err.why === "closed") yield* keys.wipeChannel(acting.alias);
       else if (acting.alias && acting.name) yield* keys.forgetMember(acting.alias, acting.name);
-      return stop(`${err.message}; forgot it on this machine`, 4);
+      return stop(goneText(err, acting.alias, acting.name), 4);
     }
     if (err instanceof RelayError) return stop(`relay: ${err.message}`);
     return stop(reason(err));

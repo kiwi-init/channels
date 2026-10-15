@@ -50,6 +50,42 @@ test("what each harness says about itself", () => {
   expect(sameHarness("claude", "claude-code")).toBe(true);
   expect(sameHarness("claude-code", "claude")).toBe(true);
   expect(sameHarness("claude", "grok")).toBe(false);
+  expect(canonicalHarness("kimi")).toBe("kimi-code");
+  expect(canonicalHarness("mimo")).toBe("mimocode");
+});
+
+test("MiMoCode and Kimi Code: the harness's own process holds the seat, over the CLAUDECODE they pass through", () => {
+  const chain = (...names: string[]) => {
+    const procs = new Map(names.map((name, i) => [100 - i, { ppid: i === names.length - 1 ? 1 : 99 - i, name }]));
+    return { from: 100, lookup: (pid: number) => procs.get(pid) ?? null };
+  };
+  expect(here({ MIMOCODE: "1", MIMOCODE_PID: "99", CLAUDECODE: "1" }, chain("zsh", "mimo", "claude"))).toEqual({ harness: "mimo", session: "mimo-pid-99", pid: 99 });
+  expect(here({ MIMOCODE: "1" })).toEqual({ harness: "mimo" });
+  expect(here({ TERM: "dumb", NO_COLOR: "1", CLAUDECODE: "1" }, chain("zsh", "kimi-code", "claude"))).toEqual({ harness: "kimi", session: "kimi-pid-99", pid: 99 });
+  expect(here({ CLAUDECODE: "1" }, chain("zsh", "kimi-code"))).toEqual({ harness: "claude" });
+  expect(here({ TERM: "dumb", NO_COLOR: "1" }, chain("zsh", "bash"))).toEqual({});
+  expect(baseName(here({ MIMOCODE: "1", MIMOCODE_PID: "99" }, chain("zsh", "mimo")))).toBe("mimo");
+});
+
+test("the nearest harness process decides when one harness runs inside another", () => {
+  const chain = (...names: string[]) => {
+    const procs = new Map(names.map((name, i) => [100 - i, { ppid: i === names.length - 1 ? 1 : 99 - i, name }]));
+    return { from: 100, lookup: (pid: number) => procs.get(pid) ?? null };
+  };
+  expect(here({ TERM: "dumb", NO_COLOR: "1", CODEX_THREAD_ID: "codex-child" }, chain("zsh", "codex", "kimi-code"))).toEqual({ harness: "codex", session: "codex-child" });
+  expect(here({ GROK_SESSION_ID: "parent-grok", MIMOCODE: "1", MIMOCODE_PID: "50" }, chain("zsh", "bun", "grok"))).toEqual({ harness: "grok", session: "parent-grok" });
+  expect(here({ GROK_SESSION_ID: "parent-grok", MIMOCODE: "1", MIMOCODE_PID: "98" }, chain("zsh", "mimo-worker", "mimo", "grok"))).toEqual({ harness: "mimo", session: "mimo-pid-98", pid: 98 });
+  expect(here({ GROK_SESSION_ID: "child-grok", MIMOCODE: "1", MIMOCODE_PID: "98" }, chain("zsh", "grok", "mimo"))).toEqual({ harness: "grok", session: "child-grok" });
+  expect(here({ GROK_SESSION_ID: "g", MIMOCODE: "1" })).toEqual({ harness: "grok", session: "g" });
+});
+
+test("a second agent of a harness kiwi can't tell never replaces the first one's seat", () => {
+  bindDirectory(dir, { alias: "ch", as: "agent", plain: true });
+  bindDirectory(dir, { alias: "ch", as: "glm", plain: true });
+  expect(seatsAt(loadConfig(), dir).map((b) => b.as)).toEqual(["agent", "glm"]);
+  bindDirectory(dir, { alias: "ch", as: "gemini", harness: "gemini" });
+  bindDirectory(dir, { alias: "ch", as: "gemini-2", harness: "gemini" });
+  expect(seatsAt(loadConfig(), dir).map((b) => b.as)).toEqual(["agent", "glm", "gemini-2"]);
 });
 
 test("a session finds its own seat; a second live session in the same checkout finds none", () => {
@@ -85,11 +121,8 @@ test("a plain terminal in a folder with one agent acts as it, as before seats; w
   expect(bindingFor(dir, { who: {} })).toBeNull();
 });
 
-test("without a session, the last join in a folder wins, as before seats", () => {
+test("one seat in a folder is stored as a plain object", () => {
   bindDirectory(dir, { alias: "ch", as: "pic" });
-  bindDirectory(dir, { alias: "other", as: "pic" });
-  expect(seatsAt(loadConfig(), dir)).toEqual([expect.objectContaining({ alias: "other", as: "pic" })]);
-  // One seat is stored as a plain object, which older clients read.
   expect(Array.isArray(loadConfig().bindings?.[dir])).toBe(false);
 });
 
@@ -137,15 +170,18 @@ test("a suffixed name still fits in 32 characters", () => {
 });
 
 test("a session's hooks name its own seat, never the seat a plain terminal joined into the same checkout (T1571)", () => {
-  // The coordinator's seat from before seats (no harness, no session), then another agent joins from a
-  // plain terminal and the last-join-wins rule replaced it: only that other agent's seat is left.
   bindDirectory(dir, { alias: "ch", as: "claude" });
   bindDirectory(dir, { alias: "ch", as: "muse", plain: true });
-  expect(seatsAt(loadConfig(), dir).map((b) => b.as)).toEqual(["muse"]);
+  expect(seatsAt(loadConfig(), dir).map((b) => b.as)).toEqual(["claude", "muse"]);
   const coord = { harness: "claude" as const, session: "coord", pid: process.pid };
-  // Never someone else's seat: a seat joined from a plain terminal isn't taken over by a session.
+  expect(bindingFor(dir, { who: coord })?.as).toBe("claude");
+  expect(bindingFor(dir, { who: {} })?.as).toBe("muse");
+});
+
+test("a session listening as an agent whose seat is gone gets it back beside the others", () => {
+  bindDirectory(dir, { alias: "ch", as: "muse", plain: true });
+  const coord = { harness: "claude" as const, session: "coord", pid: process.pid };
   expect(bindingFor(dir, { who: coord })).toBeNull();
-  // The session listens as claude from here: that's who it is, and it gets its seat back beside muse's.
   const listeners = () => [{ alias: "ch", as: "claude", harness: "claude" as const, session: "coord", pid: process.pid, cwd: dir }];
   expect(bindingFor(join(dir, "src"), { who: coord, listeners })?.as).toBe("claude");
   expect(seatsAt(loadConfig(), dir).map((b) => b.as).sort()).toEqual(["claude", "muse"]);

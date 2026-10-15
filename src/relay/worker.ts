@@ -7,7 +7,7 @@
 
 import { DurableObject } from "cloudflare:workers";
 import * as Layer from "effect/Layer";
-import { CLOSE_CLOSED, CLOSE_REMOVED, PING, PONG } from "../protocol.ts";
+import { CLOSE_CLOSED, CLOSE_REMOVED, GONE_WORDS, PING, PONG } from "../protocol.ts";
 import { ChannelGone, NotFound, Refused, UpdateRequired } from "./failures.ts";
 import { Human, workosFromSettings, type HumanAuth } from "./human.ts";
 import { Policy, policyFrom, type RelayPolicy } from "./policy.ts";
@@ -162,7 +162,7 @@ export class Channel extends DurableObject<Env> {
     if (fx.others) for (const ws of sockets) if (ws !== sender) send(ws, fx.others);
     if (fx.disconnect) {
       for (const ws of sockets) {
-        if ((ws.deserializeAttachment() as { pk?: string } | null)?.pk === fx.disconnect) close(ws, CLOSE_REMOVED, "removed from channel");
+        if ((ws.deserializeAttachment() as { pk?: string } | null)?.pk === fx.disconnect.pk) close(ws, CLOSE_REMOVED, GONE_WORDS[fx.disconnect.how]);
       }
     }
     // Owned-channel counts are best-effort: a failure there must never stop a close from wiping.

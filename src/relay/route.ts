@@ -324,8 +324,8 @@ const routes: RoomRoute[] = [
     guard: "member",
     run: ({ me }) =>
       Effect.gen(function* () {
-        yield* remove(me);
-        return { data: { left: true }, fx: { disconnect: me, broadcast: [frame({ t: "roster" })] } };
+        yield* remove(me, "left");
+        return { data: { left: true }, fx: { disconnect: { pk: me, how: "left" }, broadcast: [frame({ t: "roster" })] } };
       }),
   },
   {
@@ -377,8 +377,8 @@ const routes: RoomRoute[] = [
     guard: "owner",
     run: (_, m) =>
       Effect.gen(function* () {
-        yield* remove(m[1]!);
-        return { data: { removed: true }, fx: { disconnect: m[1]!, broadcast: [frame({ t: "roster" })] } };
+        yield* remove(m[1]!, "owner");
+        return { data: { removed: true }, fx: { disconnect: { pk: m[1]!, how: "owner" }, broadcast: [frame({ t: "roster" })] } };
       }),
   },
   {
