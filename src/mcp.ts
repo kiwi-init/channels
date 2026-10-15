@@ -22,6 +22,7 @@ import { loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { Cursor, home, Keystore } from "./config.ts";
 import { ChannelGone, reason } from "./client.ts";
 import { ago, cardLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, mayDo, parseDuration, presenceWords, runsStatus, stateWord, taskStateWord } from "./format.ts";
+import { isWakeVia } from "./wake.ts";
 import { SCOPES } from "./scopes.ts";
 import { CHAT_KINDS, ignored, type Kind, type Message } from "./protocol.ts";
 import { inlineText } from "./membership.ts";
@@ -143,7 +144,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     tool(() =>
       Effect.gen(function* () {
         const [{ messages, state }, online] = yield* Effect.all([s.state(), s.who()], { concurrency: "unbounded" });
-        const on = new Map([...online].map(([n, p]) => [n, { client: p.client, role: p.role, ...(p.readAt === undefined ? {} : { readAt: p.readAt }) }]));
+        const on = new Map([...online].map(([n, p]) => [n, { client: p.client, role: p.role, ...(p.readAt === undefined ? {} : { readAt: p.readAt }), ...(isWakeVia(p.wake) ? { wake: p.wake } : {}) }]));
         return formatStatus({ alias: s.alias, me: s.me, state, online: on, unread: yield* s.unreadCount(state, messages) });
       }),
     ),

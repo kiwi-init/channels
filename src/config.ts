@@ -92,6 +92,7 @@ export interface Config {
    * harness is installed. `kiwi hooks uninstall <name>` sets one to off.
    */
   harnessHooks?: Partial<Record<"codex" | "gemini" | "cursor" | "grok", "on" | "off">>;
+  wakeOff?: string[];
 }
 
 export function home(): string {

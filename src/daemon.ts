@@ -14,9 +14,9 @@
 // `kiwi pair` (below) pairs the computer through the relay's pairing mailbox.
 
 import { spawn } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
-import type { Socket } from "bun";
+import type { Socket, Subprocess } from "bun";
 // The channel stack (client.ts) loads lazily in seatFor, where the multiplex needs it: pairing,
 // hello/adopt and the socket itself never touch it, so `kiwi pair` works without it.
 import type { Channel, PresenceFields } from "./client.ts";
@@ -27,6 +27,7 @@ import { loadMachine, newMachine, saveMachine, type MachineFile } from "./machin
 import { MAILBOX_TTL_MS, MailboxError, askToPair, openMailbox, readPairAnswer, readPairCode } from "./mailbox.ts";
 import { readMachineCert, type MachineCert } from "./person.ts";
 import { VERSION } from "./version.ts";
+import { viaOf, wakeArgv, wakeKey, wakePath, wakePrompt, type WakeCommand, type WakePath, type WakeVia } from "./wake.ts";
 
 /** Who paired this computer: the person's key, exchange key and name, as their app answered. */
 export interface PairedPerson {
@@ -106,11 +107,19 @@ export interface DaemonRead {
   session: string | null;
 }
 
+export interface DaemonWake {
+  at: number;
+  via: WakeCommand;
+  unread: number;
+  ok: boolean;
+}
+
 export interface DaemonSeat {
   channel: string;
   agent: string;
   subscribers: number;
   read: DaemonRead | null;
+  wake: { on: boolean; path: WakePath; last: DaemonWake | null };
 }
 
 interface Seat {
@@ -131,6 +140,12 @@ interface Seat {
   wantMark: number;
   lastMarkAt: number;
   markTimer: ReturnType<typeof setTimeout> | null;
+  wakeVia: WakeVia | null;
+  wakeTimer: ReturnType<typeof setTimeout> | null;
+  waking: boolean;
+  wakeAgain: boolean;
+  wakeChild: Subprocess | null;
+  lastWake: DaemonWake | null;
 }
 
 type Env = Record<string, string | undefined>;
@@ -147,7 +162,7 @@ class NotAgentSeat extends Error {}
 
 export function seatRecordFor(cfg: Config, alias: string, agent: string): SeatRecord | null {
   const records = Object.values(cfg.bindings ?? {}).flatMap((v) => (Array.isArray(v) ? v : [v]));
-  const mine = records.filter((r) => r.alias === alias && r.as === agent && r.harness && (r.session || r.pid));
+  const mine = records.filter((r) => r.alias === alias && r.as === agent);
   const when = (r: SeatRecord): number => r.seen ?? r.at ?? 0;
   return mine.reduce<SeatRecord | null>((best, r) => (!best || when(r) > when(best) ? r : best), null);
 }
@@ -204,6 +219,27 @@ export interface Daemon {
 
 export interface DaemonOptions {
   beaconMs?: number;
+  wakeDelayMs?: number;
+  wakeGapMs?: number;
+}
+
+const WAKE_DELAY_MS = 2_000;
+const WAKE_GAP_MS = 60_000;
+const WAKE_RUN_MS = 60_000;
+const UNREAD_CHECK_MS = 30_000;
+
+function withDeadline<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`no answer in ${ms} ms`)), ms);
+  });
+  return Promise.race([work, late]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+export function wakeOn(cfg: Config, alias: string, agent: string): boolean {
+  return !(cfg.wakeOff ?? []).includes(wakeKey(alias, agent));
 }
 
 /** Serve this home's daemon (used by `kiwi daemon`, and by tests in-process). Refuses when one already answers. */
@@ -264,17 +300,121 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
 
   const fieldsOf = (seat: Seat): PresenceFields => {
     const read = reads.get(readKey(seat.alias, seat.agent));
-    return { client: "daemon", ...(seat.activity ? { activity: seat.activity } : {}), ...(read ? { readAt: read.at } : {}) };
+    return { client: "daemon", ...(seat.activity ? { activity: seat.activity } : {}), ...(read ? { readAt: read.at } : {}), ...(seat.wakeVia ? { wake: seat.wakeVia } : {}) };
+  };
+
+  const pathOf = async (cfg: Config, alias: string, agent: string): Promise<WakePath> => {
+    const { listenHooksInstalled } = await import("./hooks.ts");
+    return wakePath(seatRecordFor(cfg, alias, agent), listenHooksInstalled());
   };
 
   const refreshActivity = async (seat: Seat): Promise<void> => {
-    const record = seatRecordFor(loadConfig(), seat.alias, seat.agent);
+    const cfg = loadConfig();
+    const record = seatRecordFor(cfg, seat.alias, seat.agent);
     const env = record ? activityEnv(record, process.env) : null;
     const { harnessActivity } = await import("./harness.ts");
     const now = env ? await harnessActivity(env) : undefined;
-    if (JSON.stringify(now) === JSON.stringify(seat.activity)) return;
+    const via = wakeOn(cfg, seat.alias, seat.agent) ? viaOf(await pathOf(cfg, seat.alias, seat.agent)) : null;
+    if (JSON.stringify(now) === JSON.stringify(seat.activity) && via === seat.wakeVia) return;
     seat.activity = now;
+    seat.wakeVia = via;
     seat.announce?.();
+  };
+
+  const wakeDelayMs = opts.wakeDelayMs ?? WAKE_DELAY_MS;
+  const wakeGapMs = opts.wakeGapMs ?? WAKE_GAP_MS;
+
+  const unreadFor = async (seat: Seat): Promise<number> => {
+    const c = loadConfig().channels[seat.alias];
+    if (!c) return 0;
+    const { AgentSession, runAgent } = await import("./agent.ts");
+    const s = await AgentSession.open(seat.alias, c, seat.agent);
+    const { messages, state } = await runAgent(s.state());
+    return runAgent(s.unreadCount(state, messages));
+  };
+
+  const runWake = async (seat: Seat, [cmd, ...rest]: string[]): Promise<boolean> => {
+    const exe = cmd ? Bun.which(cmd, { PATH: process.env.PATH ?? "" }) : null;
+    if (!exe) return false;
+    try {
+      const child = Bun.spawn([exe, ...rest], { env: { ...process.env }, stdin: "ignore", stdout: "ignore", stderr: "ignore" });
+      seat.wakeChild = child;
+      const timer = setTimeout(() => child.kill(), WAKE_RUN_MS);
+      const code = await child.exited;
+      clearTimeout(timer);
+      if (seat.wakeChild === child) seat.wakeChild = null;
+      return code === 0;
+    } catch {
+      return false;
+    }
+  };
+
+  const logWake = (seat: Seat, w: DaemonWake): void => {
+    try {
+      appendFileSync(join(dir, "wake.log"), `${new Date(w.at).toISOString()}\t${seat.alias}\t${seat.agent}\t${w.via}\t${w.unread}\t${w.ok ? "ok" : "failed"}\n`, { mode: 0o600 });
+    } catch {
+      return;
+    }
+  };
+
+  const scheduleWake = (seat: Seat, delay = wakeDelayMs): void => {
+    if (seat.wakeTimer || stopped) return;
+    seat.wakeTimer = setTimeout(() => {
+      seat.wakeTimer = null;
+      void fireWake(seat).catch(() => {});
+    }, delay);
+  };
+
+  const current = (seat: Seat): boolean => !stopped && seats.get(seat.key) === seat;
+
+  const commandPath = async (seat: Seat): Promise<Extract<WakePath, { kind: "command" }> | null> => {
+    const cfg = loadConfig();
+    if (!wakeOn(cfg, seat.alias, seat.agent)) return null;
+    const path = await pathOf(cfg, seat.alias, seat.agent);
+    return path.kind === "command" ? path : null;
+  };
+
+  const fireWake = async (seat: Seat): Promise<void> => {
+    if (!current(seat)) return;
+    if (seat.waking) {
+      seat.wakeAgain = true;
+      return;
+    }
+    if (!(await commandPath(seat))) return;
+    const since = Date.now() - (seat.lastWake?.at ?? 0);
+    if (since < wakeGapMs) return scheduleWake(seat, wakeGapMs - since);
+    seat.waking = true;
+    try {
+      const unread = await withDeadline(unreadFor(seat), UNREAD_CHECK_MS).catch(() => null);
+      if (unread === null) {
+        seat.wakeAgain = false;
+        return scheduleWake(seat, wakeGapMs);
+      }
+      if (!unread || !current(seat)) return;
+      const path = await commandPath(seat);
+      if (!path || !current(seat)) return;
+      const ok = await runWake(seat, wakeArgv(path.via, path.session, wakePrompt(seat.alias, seat.agent)));
+      if (!current(seat)) return;
+      seat.lastWake = { at: Date.now(), via: path.via, unread, ok };
+      logWake(seat, seat.lastWake);
+    } finally {
+      seat.waking = false;
+      if (seat.wakeAgain && current(seat)) {
+        seat.wakeAgain = false;
+        scheduleWake(seat);
+      }
+    }
+  };
+
+  const seatInfo = async (s: Seat): Promise<DaemonSeat> => {
+    const cfg = loadConfig();
+    return {
+      channel: s.alias,
+      agent: s.agent,
+      subscribers: s.subs.size,
+      read: reads.get(readKey(s.alias, s.agent)) ?? null,
+      wake: { on: wakeOn(cfg, s.alias, s.agent), path: await pathOf(cfg, s.alias, s.agent), last: s.lastWake },
+    };
   };
 
   const sendLine = (conn: ConnState, line: string): boolean => {
@@ -300,7 +440,11 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     stopBeacon(seat);
     if (seat.markTimer) clearTimeout(seat.markTimer);
     if (seat.activityTimer) clearInterval(seat.activityTimer);
+    if (seat.wakeTimer) clearTimeout(seat.wakeTimer);
+    seat.wakeChild?.kill();
     seat.activityTimer = null;
+    seat.wakeTimer = null;
+    seat.wakeChild = null;
     seat.beacon = null;
     seat.markTimer = null;
     seat.announce = null;
@@ -455,6 +599,12 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         wantMark: 0,
         lastMarkAt: 0,
         markTimer: null,
+        wakeVia: null,
+        wakeTimer: null,
+        waking: false,
+        wakeAgain: false,
+        wakeChild: null,
+        lastWake: null,
       };
       seats.set(key, seat);
       // stop() may have run between the check and the set: don't leave a stream behind it.
@@ -467,6 +617,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         seat.head,
         (m) => {
           if (m.seq > seat.head) seat.head = m.seq;
+          if (m.from !== seat.agent) scheduleWake(seat);
           for (const sub of [...seat.subs]) {
             if (m.seq <= sub.cursor) continue;
             if (sendLine(sub.conn, JSON.stringify({ id: sub.id, message: m }))) sub.cursor = m.seq;
@@ -640,7 +791,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
             JSON.stringify({
               id,
               ok: true,
-              subscriptions: [...seats.values()].map((s): DaemonSeat => ({ channel: s.alias, agent: s.agent, subscribers: s.subs.size, read: reads.get(readKey(s.alias, s.agent)) ?? null })),
+              subscriptions: await Promise.all([...seats.values()].map(seatInfo)),
             }),
           );
           break;

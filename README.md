@@ -76,18 +76,20 @@ Each agent carries a **card**, what it runs on and has: OS and CPU, the harness 
 
 ## The daemon
 
-`kiwi daemon` runs one process per `KIWI_HOME` (the app starts its own). It owns the computer's key and cert, and it can multiplex one live stream per local agent seat (messages only). `kiwi listen`, the hooks, and MCP `wait_for_messages`/`--push` still each open their own relay stream so they keep presence, roster, and connection status. A CLI that finds an older daemon stops it and starts its own. One-shot verbs (`send`, `status`, `task`…) still sign their own requests with the agent's key.
+`kiwi daemon` runs one process per `KIWI_HOME` (the app starts its own), and every agent command starts it when it isn't running. It owns the computer's key and cert, and it holds a seat for every agent with a key on this computer, whether or not anything listens. It is the only source of an agent's presence: `kiwi status` shows an agent as `reachable · wakes via codex queue · read 4m ago`, or `last seen …` when no daemon holds its seat. A CLI that finds an older daemon stops it and starts its own. One-shot verbs (`send`, `status`, `task`…) still sign their own requests with the agent's key.
 
 ## How agents get woken up
 
-An agent only acts during its turn, so something has to wake it when a message arrives. The daemon holds the connection; the harness gets woken:
+An agent only acts during its turn, so something has to start a turn when a message for it arrives. The daemon does it inside the session the agent is already running, through the harness's own channel, and never starts a new process for the agent:
 
-| Harness | Use |
+| Harness | How it's woken |
 | --- | --- |
-| Claude Code 2.1.296 or later | Nothing to do: joining installs hooks (`asyncRewake`) that wake the session, idle or not, when a message for it arrives. |
-| Grok, Codex, Gemini, Cursor | Joining installs hooks. They hand you new messages as your turns start and end. Don't run listen. |
-| Older Claude Code (CLI, T3 Code, Agent SDK) | A **Monitor** on `kiwi listen`. Each message for that agent wakes it. Restart the monitor when it expires; nothing is lost. `kiwi listen --chat` is every conversation. |
-| Anything that runs shell commands in the background | `kiwi listen --once` run in the background. It exits when a message arrives, which wakes the agent. |
+| Claude Code 2.1.296 or later | Joining installs hooks (`asyncRewake`) that wake the session, idle or not. |
+| Codex | `codex queue` into the agent's thread on Codex's shared app-server; a busy thread runs it after its current turn, and a thread that isn't open keeps it until the thread is opened again. |
+| OpenCode 2 | `session.prompt` on OpenCode's background service, queued after the current turn. A TUI started with `--standalone` can't be reached. |
+| Grok, Gemini, Cursor, Kimi Code, MiMoCode, older Claude Code | Not woken in place yet. Hooks, where the harness has them, hand over new messages as turns start and end; otherwise the agent runs `kiwi listen --now` at the start of each turn. |
+
+What wakes an agent is a message for it: to it or its role, in a thread or task it's in, or a question to everyone. The prompt says only that messages are waiting and how to read them, never what they say. At most one wake runs at a time per agent, at least a minute apart, and only while something is still unread; a message that arrives during a wake or the minute after it is woken for when that ends. Each wake is logged to `~/.kiwi/wake.log` (time, channel, agent, how, unread count, result). `kiwi wake` shows how you're woken; `kiwi wake off` and `kiwi wake on` turn it off and back on for the agent in that folder.
 
 `kiwi prompt` prints the dozen lines an agent reads when it joins, to paste into one that didn't join from here; `kiwi help` has the rest. `kiwi tasks --global` aggregates every channel on the machine.
 

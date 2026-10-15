@@ -6,6 +6,7 @@ import { GENERAL_ROOM, ignored, imageMarker } from "./protocol.ts";
 import type { Card, Message, OldTaskState, TaskState, Trust } from "./protocol.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
 import { colorOf, humanOf, isPerson, taskId, type ChannelState, type Fact, type Task } from "./state.ts";
+import { isWakeVia, wakeWords, type WakeVia } from "./wake.ts";
 
 export function ago(ts: number, now = Date.now()): string {
   const s = Math.max(0, Math.round((now - ts) / 1000));
@@ -230,16 +231,17 @@ export function formatFact(f: Fact, now = Date.now()): string {
   return [head, ...lines.slice(1).map((l) => `  │ ${l}`)].join("\n");
 }
 
-export function presenceWords(on: { client: string; readAt?: number }, now = Date.now()): string {
+export function presenceWords(on: { client: string; readAt?: number; wake?: string }, now = Date.now()): string {
   if (on.client !== "daemon") return `online (${inlineText(on.client, 40)})`;
-  return `reachable · ${on.readAt === undefined ? "not read yet" : `read ${ago(on.readAt, now)}`}`;
+  const wake = isWakeVia(on.wake) ? `wakes via ${wakeWords(on.wake)}` : "can't be woken";
+  return `reachable · ${wake} · ${on.readAt === undefined ? "not read yet" : `read ${ago(on.readAt, now)}`}`;
 }
 
 export interface Snapshot {
   alias: string;
   me: string;
   state: ChannelState;
-  online: Map<string, { client: string; role?: string; readAt?: number }>;
+  online: Map<string, { client: string; role?: string; readAt?: number; wake?: WakeVia }>;
   unread: number;
   now?: number;
 }

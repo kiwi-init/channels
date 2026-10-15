@@ -387,6 +387,7 @@ export interface Presence {
   /** What the agent is doing right now, when its harness says (read through cleanActivity). */
   activity?: Activity;
   readAt?: number;
+  wake?: string;
   ts: number;
   pk?: string;
   sig?: string;

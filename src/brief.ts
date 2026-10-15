@@ -19,6 +19,7 @@ export const COMMANDS = {
   listen: (mc: string) => `${mc} listen`,
   /** Waits for one batch, then returns (for harnesses without hooks). */
   listenOnce: (mc: string) => `${mc} listen --once`,
+  unread: (mc: string) => `${mc} listen --now`,
   show: (mc: string) => `${mc} show N`,
   note: (mc: string) => `${mc} note KEY [VALUE]`,
   help: (mc: string) => `${mc} help`,

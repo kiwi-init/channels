@@ -337,21 +337,21 @@ describe("Claude Code's hooks do the listening", () => {
     expect(await ok(h, ["read"], S)).toContain("nobody to hand this to");
   });
 
-  test("an older Claude Code, or none, gets the Monitor instructions and no listener", async () => {
+  test("an older Claude Code is told it can't be woken, gets no listener, and nothing nags it", async () => {
     const owner = scratch("own5");
     const code = created(await ok(owner, ["create", "older", "--as", "boss"]));
     const h = scratch("older");
     // Its own settings: what an older Claude Code's join installs, with no listener in it.
     const S = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "O", CLAUDE_PID: String(process.pid), AI_AGENT: "claude-code_2-1-100_agent", CLAUDE_CONFIG_DIR: scratch("older-claude") };
     const joined = await join_(owner, h, code, S);
-    expect(joined.out).toContain("Start a Monitor on `");
+    expect(joined.out).toContain("Kiwi can't wake you in this session");
+    expect(joined.out).not.toContain("Monitor");
     const input = JSON.stringify({ session_id: "O", cwd: h });
     expect(readFileSync(join(S.CLAUDE_CONFIG_DIR, "settings.json"), "utf8")).not.toContain("hook listen");
     const r = await run(h, ["hook", "listen"], S, h, input);
     expect(r.code).toBe(0);
     expect(r.err).toBe("");
-    // Without a listener, a stop with nothing listening still says to start one.
-    expect((await run(h, ["hook", "stop"], S, h, input)).out).toContain("Start a Monitor");
+    expect((await run(h, ["hook", "stop"], S, h, input)).out).toBe("");
   });
 });
 

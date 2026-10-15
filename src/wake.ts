@@ -1,0 +1,76 @@
+export type WakeHarness = "claude" | "codex" | "gemini" | "cursor" | "grok" | "opencode";
+
+export type WakeCommand = "codex-queue" | "opencode-api";
+
+export type WakePath = { kind: "hooks" } | { kind: "command"; via: WakeCommand; session: string } | { kind: "none"; why: string };
+
+export type WakeVia = "hooks" | WakeCommand;
+
+export const WAKE_VIA: readonly WakeVia[] = ["hooks", "codex-queue", "opencode-api"];
+
+export function isWakeVia(v: unknown): v is WakeVia {
+  return typeof v === "string" && (WAKE_VIA as readonly string[]).includes(v);
+}
+
+export function wakeWords(via: WakeVia): string {
+  switch (via) {
+    case "hooks":
+      return "Claude Code's hooks";
+    case "codex-queue":
+      return "codex queue";
+    case "opencode-api":
+      return "OpenCode's service";
+  }
+}
+
+export function viaOf(path: WakePath): WakeVia | null {
+  switch (path.kind) {
+    case "hooks":
+      return "hooks";
+    case "command":
+      return path.via;
+    case "none":
+      return null;
+  }
+}
+
+export function wakePath(record: { harness?: WakeHarness; session?: string } | null, claudeHooks: boolean): WakePath {
+  if (!record) return { kind: "none", why: "no session of a harness Kiwi knows has used this seat yet" };
+  switch (record.harness) {
+    case "claude":
+      return claudeHooks ? { kind: "hooks" } : { kind: "none", why: "Claude Code's listening hooks aren't installed, or this Claude Code is older than 2.1.296 (kiwi hooks install)" };
+    case "codex":
+      return record.session ? { kind: "command", via: "codex-queue", session: record.session } : { kind: "none", why: "Codex didn't say which thread this is" };
+    case "opencode":
+      return record.session ? { kind: "command", via: "opencode-api", session: record.session } : { kind: "none", why: "OpenCode didn't say which session this is" };
+    case "grok":
+      return { kind: "none", why: "Kiwi can't tell whether a Grok session is live in its leader, and waking one that isn't would start a second copy" };
+    case "gemini":
+      return { kind: "none", why: "Gemini CLI gives Kiwi no way to start a turn in a running session" };
+    case "cursor":
+      return { kind: "none", why: "Cursor gives Kiwi no way to start a turn in a running session" };
+    case undefined:
+      return { kind: "none", why: "Kiwi doesn't recognise this agent's harness" };
+  }
+}
+
+export function shellWord(s: string): string {
+  return /^[A-Za-z0-9_.@%+=:,/-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+export function wakePrompt(alias: string, agent: string): string {
+  return `New Kiwi messages for you in ${JSON.stringify(alias)}. Read them with: kiwi -c ${shellWord(alias)} --as ${shellWord(agent)} listen --now, then act on them.`;
+}
+
+export function wakeArgv(via: WakeCommand, session: string, prompt: string): string[] {
+  switch (via) {
+    case "codex-queue":
+      return ["codex", "queue", "--thread", session, "--message", prompt];
+    case "opencode-api":
+      return ["opencode", "api", "session.prompt", "--param", `sessionID=${session}`, "-d", JSON.stringify({ text: prompt, delivery: "queue" })];
+  }
+}
+
+export function wakeKey(alias: string, agent: string): string {
+  return `${alias}/${agent}`;
+}
