@@ -21,6 +21,8 @@ import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { chromium, type Locator, type Page } from "playwright-core"
 
+import { HEAD_BURST_MS } from "../web/src/lib/head-motion.ts"
+
 const ROOT = resolve(import.meta.dir, "..")
 const PORT = 20000 + Math.floor(Math.random() * 20000)
 // localhost, not 127.0.0.1: WebAuthn refuses an IP address as the passkey's site.
@@ -372,6 +374,19 @@ try {
     await page.getByRole("dialog").getByRole("button", { name: /bot/ }).click()
   })
   await panel.getByText(/Coordinator mode: on \(bot relays\)/).waitFor({ timeout: 15000 })
+  await panel.locator("canvas").first().waitFor({ state: "attached", timeout: 15000 })
+  await page.mouse.move(0, 0)
+  await page.waitForTimeout(HEAD_BURST_MS + 1000)
+  const frames = await page.evaluate(async () => {
+    let drawn = 0
+    const raf = window.requestAnimationFrame.bind(window)
+    window.requestAnimationFrame = (draw) => raf((t) => (drawn++, draw(t)))
+    await new Promise((done) => setTimeout(done, 2000))
+    window.requestAnimationFrame = raf
+    return drawn
+  })
+  if (frames > 0) throw new Error(`the coordinator's head drew ${frames} frames in 2s after its burst`)
+  console.log("ok  the coordinator's head rests after its burst")
   // A direct conversation with a member, from their face.
   await panel.getByRole("button", { name: "More for bot" }).click()
   await page.getByRole("menuitem", { name: "Message privately" }).click()
