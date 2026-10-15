@@ -46,13 +46,17 @@ try {
 
   const code = /join code: (\S+)/.exec(await ok(kiwiCmd(["create", "smoke", "--as", "lead", "--open"]), owner))?.[1]
   if (!code) throw new Error("no join code")
-  const joining = spawn([binary, "join", code, "--as", "dev"], agent)
+  const joining = spawn([binary, "join", code, "--as", "dev", "--model", "claude-sonnet-5-5"], agent)
   let request: string | undefined
-  for (let i = 0; i < 300 && !request; i++) {
+  for (let i = 0; i < 300 && !request && joining.exitCode === null; i++) {
     request = /(\d{3}-\d{3})/.exec(await ok(kiwiCmd(["--as", "human", "requests"]), owner))?.[1]
     if (!request) await Bun.sleep(50)
   }
-  if (!request) throw new Error("the join request never showed")
+  if (!request) {
+    joining.kill()
+    const [out, err] = await Promise.all([new Response(joining.stdout).text(), new Response(joining.stderr).text()])
+    throw new Error(`the join request never showed; kiwi join said:\n${out}\n${err}`)
+  }
   await ok(kiwiCmd(["--as", "human", "approve", request, "--yes"]), owner)
   check("join, from the binary", (await joining.exited) === 0)
 
