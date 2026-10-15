@@ -23,6 +23,12 @@ describe("developerIdRequirement", () => {
     expect(developerIdRequirement(DISPLAYED)).toBe(REQ);
   });
 
+  test("reads Kiwi 0.13.0's own requirement, as codesign -d -r- printed it on a Mac (team id quoted)", () => {
+    const shipped =
+      'identifier "com.kiwiinit.kiwi" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = "57249C654W"';
+    expect(developerIdRequirement(`Executable=/Applications/Kiwi.app/Contents/MacOS/Kiwi\ndesignated => ${shipped}\n`)).toBe(shipped);
+  });
+
   test("an ad-hoc or unsigned app has none to hold an update to", () => {
     expect(developerIdRequirement(AD_HOC)).toBeNull();
     expect(developerIdRequirement("code object is not signed at all\n")).toBeNull();
