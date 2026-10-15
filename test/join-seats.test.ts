@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { daemonListening, daemonSock } from "../src/daemon.ts";
+import { daemonListeners, daemonListening, daemonSock } from "../src/daemon.ts";
 import { startRelay } from "../src/relay/bun.ts";
 
 setDefaultTimeout(60_000);
@@ -350,7 +350,8 @@ describe("Claude Code's hooks do the listening", () => {
 
     const listening = spawn(h, ["hook", "listen"], S, h, input);
     // A second listener for the same agent steps aside at once.
-    await until(() => existsSync(join(h, "listen-hooks")) && readdirSync(join(h, "listen-hooks")).length > 0, "listener slot");
+    await until(async () => (await daemonListeners(daemonSock(h)).catch(() => [])).some((l) => l.kind === "hook" && l.agent === me), "listener slot");
+    expect(existsSync(join(h, "listen-hooks"))).toBe(false);
     expect((await run(h, ["hook", "listen"], S, h, input)).code).toBe(0);
     await ok(owner, ["send", "--to", me, "wake up"]);
     expect(await listening.exited).toBe(2);

@@ -71,6 +71,7 @@ mkdir -p "$DIR"
 mv "$tmp/kiwi" "$DIR/kiwi"
 chmod 755 "$DIR/kiwi"
 echo "Installed kiwi $("$DIR/kiwi" --version) at $DIR/kiwi (checksum verified)"
+"$DIR/kiwi" cleanup --quiet </dev/null || true
 # New terminals find plain `kiwi`: unless this shell's profile already names $DIR, one marked
 # line goes at its end, once (the same line the desktop app and `kiwi setup` add). The shell is
 # $SHELL's: zsh, bash or fish; anything else gets ~/.profile. KIWI_NO_MODIFY_PATH=1 leaves every

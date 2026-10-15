@@ -64,7 +64,14 @@ export async function keepCli(bundled: string, bundledVersion: string): Promise<
   fs.copyFileSync(bundled, tmp);
   if (process.platform !== "win32") fs.chmodSync(tmp, 0o755);
   fs.renameSync(tmp, dest);
+  await tidy(dest);
   return { path: dest, version: bundledVersion, updated: true };
+}
+
+function tidy(bin: string): Promise<void> {
+  return new Promise((resolve) => {
+    execFile(bin, ["cleanup", "--quiet"], { timeout: 15_000 }, () => resolve());
+  });
 }
 
 /**

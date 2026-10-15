@@ -84,9 +84,9 @@ export function daemonSock(dir = home()): string {
 
 // ---------- the socket protocol ----------
 
-export type DaemonVerb = "hello" | "adopt" | "listen" | "listening" | "read" | "mark" | "stop";
+export type DaemonVerb = "hello" | "adopt" | "listen" | "listening" | "hold" | "listeners" | "read" | "mark" | "stop";
 
-export const DAEMON_PROTOCOL = 3;
+export const DAEMON_PROTOCOL = 4;
 
 export type DaemonEvent = "open" | "roster" | "info" | "request";
 
@@ -112,6 +112,39 @@ export interface DaemonWake {
   via: WakeCommand;
   unread: number;
   ok: boolean;
+}
+
+export type ListenerKind = "listen" | "hook";
+
+export interface DaemonListener {
+  channel: string;
+  agent: string;
+  kind: ListenerKind;
+  cwd: string | null;
+  harness: string | null;
+  session: string | null;
+  pid: number | null;
+  at: number;
+}
+
+const optionalText = (v: unknown): string | null => (typeof v === "string" && v ? v : null);
+
+function readListener(x: unknown): DaemonListener | null {
+  if (!x || typeof x !== "object") return null;
+  const r = x as Record<string, unknown>;
+  const channel = optionalText(r.channel);
+  const agent = optionalText(r.agent ?? r.as);
+  if (!channel || !agent || (r.kind !== "listen" && r.kind !== "hook")) return null;
+  return {
+    channel,
+    agent,
+    kind: r.kind,
+    cwd: optionalText(r.cwd),
+    harness: optionalText(r.harness),
+    session: optionalText(r.session),
+    pid: typeof r.pid === "number" && Number.isInteger(r.pid) && r.pid > 0 ? r.pid : null,
+    at: typeof r.at === "number" ? r.at : Date.now(),
+  };
 }
 
 export interface DaemonSeat {
@@ -208,6 +241,7 @@ interface ConnState {
   decoder: TextDecoder;
   buf: string;
   subs: Set<Sub>;
+  held: Set<DaemonListener>;
   dead: boolean;
 }
 
@@ -797,13 +831,25 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
             }),
           );
           break;
+        case "hold": {
+          const l = readListener({ ...params, at: Date.now() });
+          if (!l) throw new Error('hold needs {"channel", "as", "kind": "listen" or "hook", "cwd"?, "harness"?, "session"?, "pid"?}');
+          const others = [...conns].filter((c) => c !== conn && !c.dead).flatMap((c) => [...c.held]);
+          const taken = l.kind === "hook" && others.some((h) => h.kind === "hook" && h.channel === l.channel && h.agent === l.agent && h.session === l.session);
+          if (!taken) conn.held.add(l);
+          sendLine(conn, JSON.stringify({ id, ok: true, held: !taken }));
+          break;
+        }
+        case "listeners":
+          sendLine(conn, JSON.stringify({ id, ok: true, listeners: [...conns].filter((c) => !c.dead).flatMap((c) => [...c.held]) }));
+          break;
         case "stop":
           sendLine(conn, JSON.stringify({ id, ok: true }));
           // After the reply flushes.
           setTimeout(() => void stop(), 50);
           break;
         default:
-          throw new Error(`unknown verb "${verb}" (hello, adopt, listen, listening, read, mark, stop)`);
+          throw new Error(`unknown verb "${verb}" (hello, adopt, listen, listening, hold, listeners, read, mark, stop)`);
       }
     } catch (err) {
       sendLine(conn, JSON.stringify({ id, ok: false, error: err instanceof Error ? err.message : String(err) }));
@@ -814,7 +860,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     unix: sock,
     socket: {
       open(socket) {
-        conns.add({ socket: socket as Socket, decoder: new TextDecoder(), buf: "", subs: new Set(), dead: false });
+        conns.add({ socket: socket as Socket, decoder: new TextDecoder(), buf: "", subs: new Set(), held: new Set(), dead: false });
       },
       data(socket, data) {
         const conn = [...conns].find((c) => c.socket === socket);
@@ -1117,6 +1163,62 @@ export async function daemonListening(sock = daemonSock()): Promise<DaemonSeat[]
   } finally {
     c.close();
   }
+}
+
+export async function daemonListeners(sock = daemonSock()): Promise<DaemonListener[]> {
+  const c = await openConn(sock, 2_000);
+  try {
+    const r = await c.call("listeners");
+    return (Array.isArray(r.listeners) ? r.listeners : []).map(readListener).filter((l): l is DaemonListener => !!l);
+  } finally {
+    c.close();
+  }
+}
+
+export interface HeldListener {
+  readonly held: boolean | null;
+  close(): void;
+}
+
+export async function holdListener(entry: Omit<DaemonListener, "at">, sock = daemonSock(), retryMs = 2_000): Promise<HeldListener> {
+  let conn: DaemonConn | null = null;
+  let ended = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const attempt = async (): Promise<boolean | null> => {
+    try {
+      const c = await openConn(sock, 2_000);
+      const r = await c.call("hold", { ...entry, as: entry.agent });
+      if (ended || r.held !== true) {
+        c.close();
+        return ended ? null : false;
+      }
+      conn = c;
+      return true;
+    } catch {
+      return null;
+    }
+  };
+  const watch = (): void => {
+    timer = setTimeout(() => {
+      if (ended) return;
+      const again = conn && !conn.closed() ? Promise.resolve(true) : attempt();
+      void again.then(() => {
+        if (!ended) watch();
+      });
+    }, retryMs);
+    timer.unref?.();
+  };
+  const held = await attempt();
+  if (held !== false) watch();
+  return {
+    held,
+    close: () => {
+      ended = true;
+      if (timer) clearTimeout(timer);
+      conn?.close();
+      conn = null;
+    },
+  };
 }
 
 export async function daemonSeat(channel: string, agent: string, sock = daemonSock()): Promise<DaemonSeat | null> {
