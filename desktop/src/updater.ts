@@ -2,10 +2,6 @@
 // pre-release, so release candidates never reach anyone who didn't download one. Checked at start and
 // every few hours; a newer one is downloaded in the background, checked against the release's
 // SHA256SUMS, and put in place the next time the app quits (or now, from "Restart to update").
-//
-// Not Electron's autoUpdater: on a Mac it only takes apps signed with an Apple Developer ID, and these
-// builds are signed ad hoc. This swaps the bundle itself: the macOS zip for this Mac's architecture,
-// or the Linux AppImage this runs from. A .deb install (owned by root) is told there's an update.
 
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -17,6 +13,7 @@ import { app } from "electron";
 
 import { compareVersions } from "./cli.ts";
 import { moveOver } from "./move.ts";
+import { signedLikeThis } from "./signer.ts";
 
 const REPO = "ojowwalker77/channels";
 const EVERY_MS = 6 * 3_600_000;
@@ -86,7 +83,7 @@ async function download(assetUrl: string, sumsUrl: string, name: string, dir: st
     // ditto keeps the bundle's symlinks and modes (the frameworks need both).
     await run("/usr/bin/ditto", ["-x", "-k", file, dir]);
     const next = path.join(dir, "Kiwi.app");
-    return fs.existsSync(next) ? next : null;
+    return fs.existsSync(next) && (await signedLikeThis(macBundle(), next)) ? next : null;
   }
   fs.chmodSync(file, 0o755);
   return file;
