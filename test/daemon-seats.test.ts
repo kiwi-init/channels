@@ -77,7 +77,7 @@ const from = (pk: string) => heard.filter((p) => p.pk === pk && !p.query);
 describe("seats always on", () => {
   test("with no subscriber, a joined agent's seat is open and the relay sees it as the daemon", async () => {
     await until("claude's seat", async () => (await seatOf("claude")) !== null);
-    expect(await seatOf("claude")).toEqual({ channel: "test", agent: "claude", subscribers: 0, read: null });
+    expect(await seatOf("claude")).toMatchObject({ channel: "test", agent: "claude", subscribers: 0, read: null, wake: { on: true, path: { kind: "none" }, last: null } });
     await until("claude's presence", () => from(claudePk).some((p) => p.client === "daemon"));
   });
 
@@ -106,8 +106,8 @@ describe("seats always on", () => {
     expect(online.get("claude")?.client).toBe("daemon");
     expect(typeof online.get("claude")?.readAt).toBe("number");
     expect(online.get("gemini")?.client).toBe("daemon");
-    expect(presenceWords(online.get("claude")!)).toStartWith("reachable · read ");
-    expect(presenceWords(online.get("gemini")!)).toBe("reachable · not read yet");
+    expect(presenceWords(online.get("claude")!)).toStartWith("reachable · can't be woken · read ");
+    expect(presenceWords(online.get("gemini")!)).toBe("reachable · can't be woken · not read yet");
   });
 
   test("a listener adds no presence of its own", async () => {
@@ -230,8 +230,9 @@ describe("the CLI and the daemon", () => {
 describe("presenceWords", () => {
   test("a daemon seat is reachable, with its read time when it has one", () => {
     const now = Date.now();
-    expect(presenceWords({ client: "daemon", readAt: now - 4 * 60_000 }, now)).toBe("reachable · read 4m ago");
-    expect(presenceWords({ client: "daemon" }, now)).toBe("reachable · not read yet");
+    expect(presenceWords({ client: "daemon", readAt: now - 4 * 60_000, wake: "codex-queue" }, now)).toBe("reachable · wakes via codex queue · read 4m ago");
+    expect(presenceWords({ client: "daemon" }, now)).toBe("reachable · can't be woken · not read yet");
+    expect(presenceWords({ client: "daemon", wake: "something else" }, now)).toBe("reachable · can't be woken · not read yet");
     expect(presenceWords({ client: "web" }, now)).toBe("online (web)");
   });
 });

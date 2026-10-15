@@ -29,6 +29,7 @@ import { GENERAL_ROOM, ignored, MAX_CHARTER, PROTOCOL_VERSION, TASK_STATES, well
 import { allowedOnHold, COORDINATOR, findRoom, firstAgent, fold, humanOf, isPerson, keptFromPeople, newRoomId, ON_HOLD, ownerOf, taskId, threadMembers, type ChannelState, type GuardFloor, type Roster, type RoomsFloor } from "./state.ts";
 import { mergeCard, sameCard } from "./card.ts";
 import { daemonSeat } from "./daemon.ts";
+import { isWakeVia, viaOf } from "./wake.ts";
 import { COMMANDS } from "./brief.ts";
 import { cardLine } from "./format.ts";
 
@@ -396,12 +397,13 @@ export class AgentSession {
         if (!p.sigOk || roster.find((r) => r.name === p.from && r.active)?.pk !== p.pk) return;
         if (!found.has(p.from)) yield* heard;
         const role = typeof p.role === "string" ? inlineText(p.role, 80) || undefined : undefined;
-        const { readAt, ...rest } = p;
-        found.set(p.from, { ...rest, ...(typeof p.role === "string" ? { role } : {}), ...(typeof readAt === "number" && Number.isFinite(readAt) ? { readAt } : {}) });
+        const { readAt, wake, ...rest } = p;
+        found.set(p.from, { ...rest, ...(typeof p.role === "string" ? { role } : {}), ...(typeof readAt === "number" && Number.isFinite(readAt) ? { readAt } : {}), ...(isWakeVia(wake) ? { wake } : {}) });
       });
     const probing = eachLive(this.ch.fx.live(head, { presence: true }), handle, () => Effect.void);
     const [mine] = yield* Effect.all([Effect.promise(() => daemonSeat(this.alias, this.me)), Effect.raceFirst(probing, Effect.raceFirst(Deferred.await(quiet), Effect.sleep(waitMs))).pipe(Effect.ignoreCause, Effect.scoped)], { concurrency: "unbounded" });
-    if (mine) found.set(this.me, { v: PROTOCOL_VERSION, type: "presence", from: this.me, client: "daemon", ts: Date.now(), ...(mine.read ? { readAt: mine.read.at } : {}) });
+    const myWake = mine?.wake.on ? viaOf(mine.wake.path) : null;
+    if (mine) found.set(this.me, { v: PROTOCOL_VERSION, type: "presence", from: this.me, client: "daemon", ts: Date.now(), ...(mine.read ? { readAt: mine.read.at } : {}), ...(myWake ? { wake: myWake } : {}) });
     return found;
   });
 

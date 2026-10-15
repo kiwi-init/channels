@@ -34,6 +34,8 @@ import { ChannelGone } from "./client.ts";
 import { briefText, COMMANDS } from "./brief.ts";
 import { charterLines, formatMessage, holdLine, modeLine } from "./format.ts";
 import { humanOf } from "./state.ts";
+import { wakePath, wakeWords } from "./wake.ts";
+import { wakeOn } from "./daemon.ts";
 import { bindDirectory as bindSeat, bindingFor as seatFor, here, seatsNear, type Binding, type Here, type Listener, type SeatOptions } from "./seats.ts";
 
 /** Marks our entries so install/uninstall can find them. Current clients only. */
@@ -326,11 +328,28 @@ export function hooksListen(env: Record<string, string | undefined> = process.en
   if (!env.CLAUDECODE || env.GROK_SESSION_ID) return false;
   // When this Claude Code does say its version and it's too old for asyncRewake, the settings' listener isn't for it.
   if (claudeVersion(env) && !rewakeCapable(env)) return false;
+  return listenHooksInstalled();
+}
+
+export function listenHooksInstalled(): boolean {
   try {
     const s = readSettings();
     return Object.keys(EVENTS).every((event) => hasHook(s, event, LISTEN));
   } catch {
     return false;
+  }
+}
+
+export function howMessagesReachYou(mc: string, waking: boolean, who: Here = here()): string {
+  if (!waking) return `Kiwi won't wake you: waking is off for you here (\`kiwi wake on\` turns it back on). At the start of each turn, run \`${COMMANDS.unread(mc)}\`.`;
+  const path = wakePath(who.harness ? { harness: who.harness, ...(who.session ? { session: who.session } : {}) } : null, hooksListen());
+  switch (path.kind) {
+    case "hooks":
+      return "Messages for you arrive on their own: Kiwi's hooks wake you when one comes. Don't run listen.";
+    case "command":
+      return `Kiwi wakes you in this session when a message for you arrives (${wakeWords(path.via)}). Don't run listen.`;
+    case "none":
+      return `Kiwi can't wake you in this session: ${path.why}. At the start of each turn, run \`${COMMANDS.unread(mc)}\`.`;
   }
 }
 
@@ -587,9 +606,8 @@ export function stopStyle(input: { hook_event_name?: string; status?: string; lo
 }
 
 /** Cursor's stop follow-up. Same text every time, and short: loop_limit is 5. */
-export function cursorStopFollowup(mc: string, unread: boolean, listening: boolean, loopCount: number): string | null {
+export function cursorStopFollowup(mc: string, unread: boolean): string | null {
   if (unread) return `Unread Kiwi messages. Run \`${mc} read\`, answer with \`${mc} reply N "…"\`, then continue.`;
-  if (!listening && loopCount === 0) return `Nothing is listening on Kiwi. Start a Monitor on \`${COMMANDS.listen(mc)}\`.`;
   return null;
 }
 
@@ -605,17 +623,6 @@ interface HookInput {
   loop_count?: number;
   composer_mode?: string;
   is_background_agent?: boolean;
-}
-
-/** Remember when we last nagged a session about not listening (per kind of nag), so it's at most every 10 minutes. */
-function nagDue(session: string, kind = "stop"): boolean {
-  const dir = join(home(), "hook-state");
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const file = join(dir, encodeURIComponent(session || "unknown") + (kind === "stop" ? "" : `.${kind}`));
-  const last = existsSync(file) ? Number(readFileSync(file, "utf8")) : 0;
-  if (Date.now() - last < 10 * 60_000) return false;
-  writeFileSync(file, String(Date.now()));
-  return true;
 }
 
 /** How an agent's shell should call kiwi: plain `kiwi` when it's on PATH, else the full path. */
@@ -649,9 +656,6 @@ const say = (text: string) => Effect.sync(() => void process.stdout.write(text))
 /** What one hook answers, for the agent bound here. */
 const answer = Effect.fn("Hooks.answer")(function* (event: string, input: HookInput, b: Binding, cfg: ChannelConfig, who: Here) {
   const mc = mcFor(b.alias, b.as, input.cwd ?? process.cwd(), who);
-  // Kiwi's own background listener hears for this session: no Monitor to start, nothing to nag about.
-  const hooked = hooksListen();
-  const listening = hooked || isListening(b.alias, b.as);
   const s = yield* openSession(b.alias, cfg, b.as);
   // A hook from the session the listener woke: it has seen what it was handed.
   if (who.session) yield* commitDelivered(s, who.session);
@@ -659,11 +663,7 @@ const answer = Effect.fn("Hooks.answer")(function* (event: string, input: HookIn
   if (event === "session-start") {
     const { state } = yield* s.state();
     const seat = state.members.get(b.as);
-    const listen = hooked
-      ? "Messages for you arrive on their own: Kiwi's hooks wake you when one comes."
-      : listening
-        ? "A listener is already running for you."
-        : `First, start a Monitor on \`${COMMANDS.listen(mc)}\` with the longest timeout allowed, and restart it whenever it ends. That's how messages reach you.`;
+    const listen = howMessagesReachYou(mc, wakeOn(loadConfig(), b.alias, b.as), who);
     const lines = [
       briefText({
         alias: b.alias,
@@ -693,8 +693,6 @@ const answer = Effect.fn("Hooks.answer")(function* (event: string, input: HookIn
     const unread = yield* unreadText(s);
     const lines: string[] = [];
     if (unread) lines.push(`New Kiwi Channels messages for you (${b.alias}):`, unread);
-    // A listener is often just between restarts: remind at most every 10 minutes, not on every prompt.
-    if (!listening && nagDue(input.session_id ?? "", "prompt")) lines.push(`You're not listening on Kiwi Channels: start a Monitor on \`${COMMANDS.listen(mc)}\` (longest timeout).`);
     if (!lines.length) return;
     const text = lines.join("\n");
     // Gemini BeforeAgent only injects hookSpecificOutput.additionalContext. Codex and Claude take plain stdout.
@@ -709,23 +707,14 @@ const answer = Effect.fn("Hooks.answer")(function* (event: string, input: HookIn
       if (input.status && input.status !== "completed") return;
       const { messages, state } = yield* s.state();
       const unread = (yield* s.unreadCount(state, messages)) > 0;
-      const follow = cursorStopFollowup(mc, unread, listening, input.loop_count ?? 0);
+      const follow = cursorStopFollowup(mc, unread);
       if (!follow) return;
-      if (!unread && !nagDue(input.session_id ?? "")) return;
       return yield* say(JSON.stringify({ followup_message: follow }));
     }
     const unread = yield* unreadText(s);
     const decision = style === "gemini" ? "deny" : "block";
     if (unread) {
       return yield* say(JSON.stringify({ decision, reason: `Before stopping: unread Kiwi Channels messages for you. Handle them (answer with \`${mc} reply N "…"\`):\n${unread}` }));
-    }
-    if (!listening && !input.stop_hook_active && nagDue(input.session_id ?? "")) {
-      return yield* say(
-        JSON.stringify({
-          decision,
-          reason: `You're about to go idle with nothing listening for you on Kiwi Channels, so messages from other agents won't wake you. Start a Monitor on \`${COMMANDS.listen(mc)}\` (longest timeout allowed), then stop.`,
-        }),
-      );
     }
   }
 });
@@ -737,7 +726,7 @@ const answer = Effect.fn("Hooks.answer")(function* (event: string, input: HookIn
  * line, so the following turn arms a fresh one instead of the session going deaf.
  */
 const listen = Effect.fn("Hooks.listen")(function* (b: Binding, cfg: ChannelConfig, who: Here) {
-  if (!hooksListen() || isListening(b.alias, b.as) || !takeListenSlot(b.alias, b.as, who.session ?? "")) return 0;
+  if (!hooksListen() || !wakeOn(loadConfig(), b.alias, b.as) || isListening(b.alias, b.as) || !takeListenSlot(b.alias, b.as, who.session ?? "")) return 0;
   const s = yield* openSession(b.alias, cfg, b.as);
   // Peek: the listener never moves the agent's cursor. It reads on a copy that starts past what it already
   // handed this session, hands the messages over, and notes how far that went; the session's next hook

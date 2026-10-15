@@ -545,8 +545,6 @@ describe("Claude Code hooks", () => {
     const settings = JSON.parse(readFileSync(join(claudeDir, "settings.json"), "utf8"));
     for (const e of ["SessionStart", "UserPromptSubmit", "Stop"]) expect(JSON.stringify(settings.hooks[e])).toContain("# kiwi");
 
-    // Nothing listening: the first stop is blocked, then it nags at most every 10 minutes.
-    expect(await hook(a, a, "stop", { cwd: a, session_id: "s1" })).toContain("nothing listening");
     expect(await hook(a, a, "stop", { cwd: a, session_id: "s1" })).toBe("");
 
     // Unread messages always block a stop, and are handed to the agent.
@@ -555,9 +553,8 @@ describe("Claude Code hooks", () => {
     expect(blocked.decision).toBe("block");
     expect(blocked.reason).toContain("boss → worker: hello worker");
 
-    // Listening: session start says so, and a caught-up agent may stop.
+    expect(await hook(a, a, "session-start", { cwd: a })).not.toContain("Monitor");
     const tail = lines(mc(a, "tail"));
-    await untilTrue(async () => (await hook(a, a, "session-start", { cwd: a })).includes("A listener is already running"), "listener is running");
     expect(await hook(a, a, "stop", { cwd: a, session_id: "s2" })).toBe("");
     await ok(o, "send", "--to", "worker", "while listening");
     await tail.until((l) => l.some((x) => x.includes("while listening")));

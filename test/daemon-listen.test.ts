@@ -90,7 +90,7 @@ describe("the daemon's shared listening", () => {
   test("two subscribers share one agent's stream, each from its cursor", async () => {
     const [a, b] = await Promise.all([listenDaemon("test", "claude", cursor), listenDaemon("test", "claude", cursor)]);
     try {
-      expect(await daemonListening()).toEqual([{ channel: "test", agent: "claude", subscribers: 2, read: null }]);
+      expect(await daemonListening()).toMatchObject([{ channel: "test", agent: "claude", subscribers: 2, read: null }]);
       const seq = await ownerCh.send("hello agents");
       expect((await waitBody(a, "hello agents")).seq).toBe(seq);
       expect((await waitBody(b, "hello agents")).seq).toBe(seq);

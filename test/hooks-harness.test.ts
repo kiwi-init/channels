@@ -263,17 +263,11 @@ test("stop style keeps Grok on the Claude block path and Cursor on followup", ()
   expect(stopStyle({ status: "aborted" })).toBe("cursor");
 
   const mc = "kiwi -c proj --as mac";
-  const unread = cursorStopFollowup(mc, true, true, 0);
-  const again = cursorStopFollowup(mc, true, false, 4);
-  expect(again).toBe(unread);
+  const unread = cursorStopFollowup(mc, true);
   expect(unread).toBe(`Unread Kiwi messages. Run \`${mc} read\`, answer with \`${mc} reply N "…"\`, then continue.`);
   expect(unread!.length).toBeLessThan(180);
   expect(unread).not.toContain("\n");
-  expect(cursorStopFollowup(mc, false, true, 0)).toBeNull();
-  expect(cursorStopFollowup(mc, false, false, 0)).toContain("Monitor");
-  expect(cursorStopFollowup(mc, false, false, 0)).toContain(`${mc} listen`);
-  expect(cursorStopFollowup(mc, false, false, 0)).not.toContain("tail");
-  expect(cursorStopFollowup(mc, false, false, 1)).toBeNull();
+  expect(cursorStopFollowup(mc, false)).toBeNull();
 });
 
 function harnessHomes(): { home: string; codex: string; gemini: string; cursor: string; grok: string } {

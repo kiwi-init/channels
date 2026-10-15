@@ -21,11 +21,12 @@ import { homedir } from "node:os";
 import { AgentLive, openSession, type Agent, type AgentSession, type Delivery } from "../agent.ts";
 import { loadImages, saveImages } from "../attach.ts";
 import { Channel, ChannelGone, reason, RelayError } from "../client.ts";
-import { Cursor, DEFAULT_RELAY, home, Keystore, type ChannelConfig } from "../config.ts";
+import { Cursor, DEFAULT_RELAY, home, Keystore, loadConfig, updateConfig, type ChannelConfig } from "../config.ts";
 import { decodeJoinCode, type ChannelAccess } from "../crypto.ts";
 import { describeMember, freeAgentName, handleFor } from "../membership.ts";
-import { baseName, canonicalHarness, here, seatsNear } from "../seats.ts";
-import { ensureDaemon, reportRead } from "../daemon.ts";
+import { baseName, here, seatsNear } from "../seats.ts";
+import { daemonSeat, ensureDaemon, reportRead, wakeOn, type DaemonSeat } from "../daemon.ts";
+import { isWakeVia, wakeKey, wakeWords } from "../wake.ts";
 import { ago, cardLine, charterLines, describeEvent, holdLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, modeLine, parseDuration, presenceWords, taskStateWord, statusJson } from "../format.ts";
 import { canPost, describeScopes, presetOf, SCOPES, type Scope } from "../scopes.ts";
 import { fingerprint } from "../identity.ts";
@@ -35,7 +36,7 @@ import { VERSION } from "../version.ts";
 import { channelFiles, runSh, sessionViews } from "../sh.ts";
 import { computerClaimFor } from "../machine.ts";
 import { briefText, COMMANDS } from "../brief.ts";
-import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor, EXTRA_HARNESSES, extraInstalled, hooksInstalled, hooksListen, hooksStatus, installDetected, installExtra, installHooks, mcFor, runHook, uninstallDetected, uninstallExtra, uninstallHooks, type ExtraHarness } from "../hooks.ts";
+import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor, EXTRA_HARNESSES, extraInstalled, hooksInstalled, hooksStatus, howMessagesReachYou, installDetected, installExtra, installHooks, mcFor, runHook, uninstallDetected, uninstallExtra, uninstallHooks, type ExtraHarness } from "../hooks.ts";
 import { BadName } from "../refusals.ts";
 import { binDir, ensureOnPath, profileFor } from "../shell-path.ts";
 import { detectCard, detectModel, detectRuns, mergeCard } from "../card.ts";
@@ -71,6 +72,7 @@ Agents
   kiwi log [-n 30] [--all] [--room R]            recent history (marks nothing read)
   kiwi status [--json]                           one screen: who's here and online, the charter, tasks, notes,
                                                  and questions waiting on you
+  kiwi wake [on|off]                             how Kiwi wakes you in your session when a message for you arrives
   kiwi task add "title" [--owner NAME] [--review NAME|any] [--re N]   a task: open, then doing, then done
                                                  (--re N: made from message #N; taking it on tells its sender)
      task claim|start|done|note|show T7 · task review T7 (when it has a reviewer) · approve|reject T7
@@ -725,11 +727,31 @@ const commands: Record<string, Command> = {
       out(`kiwi in ${process.cwd()} now acts as ${name} in "${alias}"`);
     }),
 
+  wake: () =>
+    Effect.gen(function* () {
+      const s = yield* session();
+      const turn = args[1];
+      if (turn === "on" || turn === "off") {
+        const key = wakeKey(s.alias, s.me);
+        updateConfig((cfg) => {
+          const off = new Set(cfg.wakeOff ?? []);
+          if (turn === "off") off.add(key);
+          else off.delete(key);
+          if (off.size) cfg.wakeOff = [...off];
+          else delete cfg.wakeOff;
+        });
+        return out(turn === "off" ? `Kiwi won't wake ${s.me} in "${s.alias}"; read with \`kiwi listen --now\`` : `Kiwi wakes ${s.me} in "${s.alias}" when a message for it arrives`);
+      }
+      if (turn !== undefined) return yield* die("usage: kiwi wake [on|off]");
+      const seat = yield* Effect.promise(() => daemonSeat(s.alias, s.me));
+      out(seat ? wakeLine(seat.wake) : `the daemon holds no seat for ${s.me} in "${s.alias}" yet`);
+    }),
+
   status: () =>
     Effect.gen(function* () {
       const s = yield* session();
       const [{ messages, state }, online] = yield* Effect.all([s.state(), s.who()], { concurrency: "unbounded" });
-      const on = new Map([...online].map(([n, p]) => [n, { client: p.client, role: p.role, ...(p.readAt === undefined ? {} : { readAt: p.readAt }) }]));
+      const on = new Map([...online].map(([n, p]) => [n, { client: p.client, role: p.role, ...(p.readAt === undefined ? {} : { readAt: p.readAt }), ...(isWakeVia(p.wake) ? { wake: p.wake } : {}) }]));
       const snap = { alias: s.alias, me: s.me, state, online: on, unread: yield* s.unreadCount(state, messages) };
       out(opt.json ? JSON.stringify(statusJson(snap)) : formatStatus(snap));
       yield* noteRead(s);
@@ -1222,14 +1244,14 @@ const commands: Record<string, Command> = {
     }),
 };
 
-/** How messages reach this agent, in one line: its harness's hooks when they can, else the one command to keep running. */
-function listenLine(mc: string): string {
-  if (hooksListen()) return "Messages for you arrive on their own: Kiwi's hooks wake you when one comes. Don't run listen.";
-  const h = here().harness;
-  if (canonicalHarness(h) === "claude-code") return `Start a Monitor on \`${COMMANDS.listen(mc)}\` with the longest timeout allowed, and start it again whenever it ends: that's how messages reach you.`;
-  // OpenCode has no hooks kiwi installs (yet): it keeps a listener running like any other harness.
-  if (h && h !== "opencode" && h !== "claude" && extraInstalled(h)) return "Kiwi's hooks hand you new messages as your turns start and end. Don't run listen.";
-  return `Run \`${COMMANDS.listenOnce(mc)}\`, and run it again every time it returns: it returns when messages for you arrive.`;
+function wakeLine(w: DaemonSeat["wake"]): string {
+  const how = w.path.kind === "hooks" ? `wakes via ${wakeWords("hooks")}` : w.path.kind === "command" ? `wakes via ${wakeWords(w.path.via)}` : `can't be woken: ${w.path.why}`;
+  const last = w.last ? ` · last wake ${ago(w.last.at)} via ${wakeWords(w.last.via)}, ${w.last.unread} unread, ${w.last.ok ? "ok" : "failed"}` : "";
+  return `wake ${w.on ? "on" : "off"} · ${how}${last}`;
+}
+
+function listenLine(mc: string, alias: string, agent: string): string {
+  return howMessagesReachYou(mc, wakeOn(loadConfig(), alias, agent));
 }
 
 /** What an agent reads when it gets in (brief.ts): who it is, who directs it, how messages reach it, and where the rest is. */
@@ -1239,7 +1261,7 @@ export function joinedText(
   as: { scopes?: readonly Scope[]; hold?: string | null; charter?: string | null; mode?: string | null; human?: string | null; role?: string; about?: string } = {},
 ): string {
   const mc = mcFor(alias, agent);
-  return briefText({ alias, agent, mc, listen: listenLine(mc), ...as });
+  return briefText({ alias, agent, mc, listen: listenLine(mc, alias, agent), ...as });
 }
 
 /** `kiwi prompt`: the same brief, to paste into an agent that didn't join from here. */
