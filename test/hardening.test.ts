@@ -78,10 +78,10 @@ describe("names", () => {
       const id = await generateIdentity("x");
       asks.push({ id, requestId: (await Channel.requestJoin(relay, code, id, { name })).requestId });
     }
-    // An invalid or reserved name is refused at approval; a taken one ("HELPER" is helper's) is offered the next free one.
     const checked = await checkedByHand(ownerCh, relay, code, asks);
     for (const r of checked.slice(0, 2)) await expect(ownerCh.approve(r)).rejects.toThrow(/valid name|reserved/);
-    expect(checked[2]!.name).toBe("HELPER-2");
+    expect(checked[2]!.name).toMatch(/^[a-z]+-[a-z]+$/);
+    expect(checked[2]!.display).toBe("HELPER");
     expect(checked[2]!.askedAs).toBe("HELPER");
   });
 

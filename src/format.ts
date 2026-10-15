@@ -179,8 +179,9 @@ export function who(name: string, state?: ChannelState, me?: string): string {
   if (me && state && humanOf(state, me) === name) return `${name} (your human${m.owner ? ", owner" : ""})`;
   if (me && m.owner) return `${name} (human, owner)`;
   if (m.kind === "human") return `${name} (human)`;
-  if (m.sponsor) return `${name} (for @${m.sponsor.handle ?? m.sponsor.name})`;
-  return name;
+  const nick = m.display ? inlineText(m.display, 40) : "";
+  if (m.sponsor) return `${name} (${nick ? `${nick}, ` : ""}for @${m.sponsor.handle ?? m.sponsor.name})`;
+  return nick ? `${name} (${nick})` : name;
 }
 
 /** Strip control and direction characters (terminal escapes, invisible text) but keep line breaks. */
@@ -359,7 +360,7 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
     const where = on ? presenceWords(on, now) : m ? `last seen ${ago(m.lastSeen, now)}` : "online";
     const role = inlineText(m?.role ?? on?.role, 80);
     const key = m?.pk ? ` · key ${m.pk.slice(0, 8)}` : "";
-    const kind = m?.kind === "human" ? ` · human${m.display ? ` (${inlineText(m.display, 80)})` : ""}${m.owner ? ", owner" : ""}` : m?.sponsor ? ` · agent of @${inlineText(m.sponsor.handle ?? m.sponsor.name, 80)}` : "";
+    const kind = m?.kind === "human" ? ` · human${m.display ? ` (${inlineText(m.display, 80)})` : ""}${m.owner ? ", owner" : ""}` : `${m?.display ? ` · nickname ${inlineText(m.display, 40)}` : ""}${m?.sponsor ? ` · agent of @${inlineText(m.sponsor.handle ?? m.sponsor.name, 80)}` : ""}`;
     const may = m && presetOf(m.scopes) !== "full" ? ` · may: ${describeScopes(m.scopes)}` : "";
     out.push(`  ${name}${name === me ? " (you)" : ""}${role ? ` — ${role}` : ""}${kind}${may} · ${where}${key}`);
     // How busy they are, so work goes to whoever's free (people only when they hold tasks).

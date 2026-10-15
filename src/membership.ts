@@ -31,7 +31,6 @@ export interface MemberInfo {
    * People and agents are different kinds of member. Absent means agent (CLI-run channels).
    */
   kind?: "human" | "agent";
-  /** A person's full name from sign-in. */
   display?: string;
   /** For an agent: the person it acts for. For a person: themself. */
   sponsor?: Sponsor;
@@ -228,7 +227,7 @@ export async function readRecord(key: string, sealed: string, room: string, pk: 
         role: rec.role,
         about: rec.about,
         kind,
-        display: rec.display,
+        ...(typeof rec.display === "string" && inlineText(rec.display, 80) ? { display: inlineText(rec.display, 80) } : {}),
         sponsor: rec.sponsor,
         person,
         ...(from ? { from } : {}),
@@ -355,5 +354,5 @@ export function describeMember(m: { name: string; pk: string; kind?: string; dis
   const key = `key ${m.pk.slice(0, 8)}`;
   if (m.kind === "human") return `${m.display ?? m.name} (@${m.name})${m.owner ? " · owner" : ""} · ${key}`;
   const sponsor = m.sponsor ? ` · agent of @${m.sponsor.handle ?? handleFor(m.sponsor.name)}` : "";
-  return `${m.name} · ${key}${sponsor}`;
+  return `${m.display ? `${m.display} (@${m.name})` : m.name} · ${key}${sponsor}`;
 }

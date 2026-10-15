@@ -11,10 +11,9 @@ export function initials(name: string): string {
   return (parts.length > 1 ? parts[0]![0]! + parts[1]![0]! : parts[0]!.slice(0, 1)).toUpperCase()
 }
 
-/** The name to show for a member: a person's real name, an agent's own name. */
 export function memberName(m: Pick<Member, "name" | "kind" | "display"> | undefined, fallback = ""): string {
   if (!m) return fallback
-  return m.kind === "human" && m.display ? m.display : m.name
+  return m.display || m.name
 }
 
 /** Who a member is, in a phrase: "Owner", "Reviewer for Jonatas Filho", "Agent for Jonatas Walker". */

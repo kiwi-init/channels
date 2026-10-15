@@ -120,7 +120,8 @@ export class Keyring implements ChannelOps {
         return op === "approve" ? [req, asOf(args[1]), who] : [req];
       }
       case "updateScopes":
-      case "updateRole": {
+      case "updateRole":
+      case "updateNickname": {
         const pk = field(args[0], "pk");
         return [editable((await ch.members()).find((x) => x.pk === pk)), ...args.slice(1)];
       }

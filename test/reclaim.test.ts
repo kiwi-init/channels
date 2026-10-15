@@ -42,10 +42,11 @@ describe("a lost key, without reclaim", () => {
     const oldKey = await generateIdentity("win");
     const made = await Channel.create(relay, owner, { name: "human", kind: "human" }, [{ ...oldKey, info: { name: "win", kind: "agent" } }]);
     const ownerCh = new Channel(made.access, relay, owner);
-    // The key is lost: asking again under the same name, from a new key, is offered the next free name.
     const newKey = await generateIdentity("win");
     const first = await Channel.requestJoin(relay, made.code, newKey, { name: "win" });
-    expect((await ownerCh.requests({ budget: memoryBudget() })).find((r) => r.id === first.requestId)?.name).toBe("win-2");
+    const offered = (await ownerCh.requests({ budget: memoryBudget() })).find((r) => r.id === first.requestId);
+    expect(offered?.name).toMatch(/^[a-z]+-[a-z]+$/);
+    expect(offered?.display).toBe("win");
     await ownerCh.deny(first.requestId);
     // So the owner removes the old seat; then the same name is free for a new key.
     await ownerCh.remove(oldKey.pk);
@@ -64,7 +65,7 @@ describe("a lost key, without reclaim", () => {
 });
 
 describe("a taken name", () => {
-  test("joining under a name someone holds comes in under the next free one, instead of failing", async () => {
+  test("joining under a name someone holds comes in under a free handle, instead of failing", async () => {
     const homes: string[] = [];
     const home = () => {
       const d = mkdtempSync(join(tmpdir(), "kiwi-reclaim-"));
@@ -100,17 +101,16 @@ describe("a taken name", () => {
         await run(owner, "--as", "human", "approve", again[1]!, "--yes");
       }
       expect(room).toBeTruthy();
-      // An agent typing --as bob: once the owner lets it in, it's bob-2 (the CLI no longer admits on the owner's computer itself).
       const joining = run(owner, "join", code, "--as", "bob");
       let pending: RegExpExecArray | null = null;
       for (let i = 0; i < 300 && !pending; i++) {
-        pending = /(\d{3}-\d{3})\s+bob-2/.exec((await run(owner, "--as", "human", "requests")).out);
+        pending = /(\d{3}-\d{3})\s+([a-z]+-[a-z]+) \(asked as bob, which is taken\)/.exec((await run(owner, "--as", "human", "requests")).out);
         if (!pending) await Bun.sleep(50);
       }
       await run(owner, "--as", "human", "approve", pending![1]!, "--yes");
       const joined = await joining;
       expect(joined.code).toBe(0);
-      expect(joined.out).toContain('"bob-2"');
+      expect(joined.out).toContain(`"${pending![2]}"`);
     } finally {
       for (const d of homes) rmSync(d, { recursive: true, force: true });
     }

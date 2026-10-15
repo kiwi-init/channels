@@ -241,7 +241,7 @@ export const Bubble = memo(function Bubble({
     <div id={`${anchor}${m.seq}`} className={cx("group/b relative", first ? "mt-3" : "mt-[2px]", fresh && (mine ? "animate-sent" : "animate-arrived"))}>
       {/* The bubble and the face beside it: the face sits by the bubble's last line, not by what hangs under it. */}
       <div className={cx("relative flex items-end gap-2", mine ? "justify-end pl-10 md:pl-16" : "pr-10 md:pr-16")}>
-        {!mine && <div className="w-7 shrink-0 self-end">{last && (face ?? <Monogram name={who} agent={isAgent(author)} online={online} color={color} size={28} />)}</div>}
+        {!mine && <div className="w-7 shrink-0 self-end">{last && (face ?? <Monogram name={who} hue={m.from} agent={isAgent(author)} online={online} color={color} size={28} />)}</div>}
 
         <div className={cx("flex max-w-[min(80%,600px)] min-w-0 flex-col", mine ? "items-end" : "items-start")}>
           {first && (!mine || said) && (
@@ -249,6 +249,7 @@ export const Bubble = memo(function Bubble({
               {!mine && group && (
                 <span className="truncate font-medium text-ink-2" title={sponsor}>
                   {who}
+                  {who !== m.from && isAgent(author) && <span className="ml-1 font-normal text-ink-3">@{m.from}</span>}
                 </span>
               )}
               {said &&

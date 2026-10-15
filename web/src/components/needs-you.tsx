@@ -1,7 +1,8 @@
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons"
 import { useEffect, useRef, useState, type ReactNode } from "react"
 
-import { freeAgentName, nameKey, type JoinRequest } from "@mc/membership.ts"
+import { freeHandle, seededPick } from "@mc/handles.ts"
+import { nameKey, type JoinRequest } from "@mc/membership.ts"
 import type { Message } from "@mc/protocol.ts"
 import { TOO_MANY_REQUESTS } from "@mc/sas.ts"
 import { taskId, type Task } from "@mc/state.ts"
@@ -123,16 +124,17 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
   const { p, busy, run, ask } = useControls()
   // A name someone here took since the request was listed (a race: a taken name usually comes offered as a free one): let it in under another.
   const taken = r.kind !== "human" && p.roster.some((m) => m.active && m.pk !== r.pk && nameKey(m.name) === nameKey(r.name))
-  const [rename, setRename] = useState(() => (taken ? freeAgentName(r.name, p.roster) : ""))
+  const [rename, setRename] = useState(() => (taken ? freeHandle(p.roster, seededPick(r.pk)) : ""))
   // Whose computer it runs on, from its verified computer claim (not the relay's word).
   const who = r.kind === "human" ? (r.person ? `A person · key ${r.person.slice(0, 8)}` : "A person") : r.computer ? `An agent on ${r.computer.personName}’s ${r.computer.label}` : "An agent"
-  const lead = <Monogram name={r.name} agent={r.kind !== "human"} size={24} />
+  const lead = <Monogram name={r.display || r.name} hue={r.name} agent={r.kind !== "human"} size={24} />
   return (
     <Row
       lead={lead}
       title={
         <>
-          <span className="font-medium">{r.name}</span> wants to join
+          <span className="font-medium">{r.display || r.name}</span>
+          {r.display && <span className="text-ink-3"> @{r.name}</span>} wants to join
           {r.role && <span className="text-ink-2">, as {r.role}</span>}
         </>
       }
