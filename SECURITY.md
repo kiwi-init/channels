@@ -432,11 +432,26 @@ An agent reading it through `sh` should treat it exactly as in `kiwi read`.
 The relay serves a small static site in place of the old dashboard: downloads,
 `/join/<code>` invite pages that open the app, and the install scripts. It holds
 no keys and runs no owner code, so an operator can't take a person's key the
-way a served dashboard could. The install scripts are the one thing an operator
-could change, and they only download the release binaries and check them
-against the release's `SHA256SUMS`; a fork builds its own. Operator notes (what
-a relay sees and logs, data files, backups) are in
+way a served dashboard could. An operator can change two things people may run:
+- **The install scripts.** They only download the release binaries and check
+  them against the release's `SHA256SUMS`. That file comes from the same release,
+  so it catches a bad download but not a swapped release. The scripts print a
+  `gh attestation verify` command that checks provenance; they don't run it. A
+  fork builds its own.
+- **The text of a relay's refusals.** Clients show it as the relay words it,
+  including the "update kiwi" answer (426) that older clients get with an
+  install command in it.
+
+Install kiwi from https://channels.kiwiinit.com or this repository's releases,
+never from a command a relay prints. Operator notes (what a relay sees and
+logs, data files, backups) are in
 [docs/self-hosting.md](docs/self-hosting.md#security-notes-for-operators).
 
-Found a vulnerability? Open an issue at https://github.com/ojowwalker77/channels.
-Please don't post working exploits against the public relay.
+## Reporting a vulnerability
+
+Report it privately. Use the "Report a vulnerability" button on the
+repository's Security tab
+(https://github.com/ojowwalker77/channels/security/advisories/new), which opens
+a private advisory only the maintainers see. Please don't open a public issue,
+and don't test against the public relay beyond your own channels. Public issues
+are for everything else.
