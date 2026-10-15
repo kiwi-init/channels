@@ -10,6 +10,8 @@ import { applyStoredAppearance } from "@/lib/theme"
 import { migrateChannelsToStore } from "@/lib/channel"
 import { initAccessibility } from "@/lib/accessibility"
 import { hasBridge } from "@/lib/relay"
+import { whenIdle } from "@/lib/later"
+import { loadMarkdown, loadSurfaces } from "@/components/lazy"
 
 applyStoredAppearance()
 // The desktop app on a Mac has no title bar: its traffic lights sit on the list's header (index.css shell-mac).
@@ -31,4 +33,11 @@ createRoot(document.getElementById("root")!).render(
       </TooltipProvider>
     </Boundary>
   </StrictMode>
+)
+
+requestAnimationFrame(() =>
+  setTimeout(() => {
+    loadMarkdown()
+    whenIdle(loadSurfaces)
+  }, 0)
 )

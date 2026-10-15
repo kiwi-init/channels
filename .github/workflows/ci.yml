@@ -150,6 +150,22 @@ jobs:
           job: web-format
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['web-format'] }}
 
+  web-bundle:
+    name: web / bundle
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['web-bundle']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - run: cd web && bun run build
+      - run: bun scripts/web-bundle.ts
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: web-bundle
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['web-bundle'] }}
+
   # Opens every menu, popover and dialog on the production build: Base UI throws on a
   # misplaced part only at render, which typecheck can't see (the b085ae8 crash).
   ui-smoke:
@@ -286,7 +302,7 @@ jobs:
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, cli-build, relay-worker, repo-comments, desktop-keys, repo-knip]
+    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, cli-build, relay-worker, repo-comments, desktop-keys, repo-knip, web-bundle]
     if: always()
     runs-on: ubuntu-latest
     permissions:

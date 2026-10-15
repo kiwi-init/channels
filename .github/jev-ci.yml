@@ -192,3 +192,16 @@ jobs:
       imports, an export or exported type nothing outside its file uses, a dependency no file
       uses, or an import of a package a package.json doesn't list. Tests count as users, so an
       export only a test imports passes.
+
+  web-bundle:
+    jev: false
+    name: web / bundle
+    inputs: ["web/src/**", "web/index.html", "src/**", "scripts/web-bundle.ts"]
+    always: ["web/package.json", "web/bun.lock", "web/vite.config.ts", "scripts/web-bundle.ts"]
+    description: >-
+      Builds the web dashboard for production (vite build in web/), then adds up the JS the first
+      screen loads: the entry script in web/dist/index.html plus every chunk it modulepreloads.
+      Fails when that is over BUDGET_BYTES in scripts/web-bundle.ts. Code reached only through
+      web/src/components/lazy.tsx (markdown, settings, computers, the palette and the side panels)
+      is loaded after first paint and doesn't count; a new static import of it, or a new heavy
+      dependency on the first screen, can push the total over.

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 import { cx } from "@/lib/utils"
 import { Icon } from "../icon"
+import { takePaletteReturn } from "./palette-shortcut"
 
 // ⌘K: jump to a channel or do something, by typing a few letters of it.
 
@@ -68,9 +69,7 @@ export function Palette({ open, onClose, commands }: { open: boolean; onClose: (
         if (o) return
         setQuery("")
         setIndex(0)
-        // ⌘K has no trigger for the dialog to return to. The shortcut saved the focused element.
-        const back = paletteReturn
-        paletteReturn = null
+        const back = takePaletteReturn()
         if (back?.isConnected) back.focus()
       }}
     >
@@ -147,19 +146,3 @@ export function Palette({ open, onClose, commands }: { open: boolean; onClose: (
 }
 
 /** Where ⌘K was pressed, so closing the palette can put focus back. A button opener leaves this empty. */
-let paletteReturn: HTMLElement | null = null
-
-/** ⌘K on a Mac, Ctrl+K elsewhere, from anywhere in the app. */
-export function usePaletteShortcut(open: () => void) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() === "k" && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey) {
-        e.preventDefault()
-        paletteReturn = document.activeElement instanceof HTMLElement ? document.activeElement : null
-        open()
-      }
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [open])
-}
