@@ -377,7 +377,7 @@ try {
   await page.getByRole("menuitem", { name: "Message privately" }).click()
   await page.getByRole("textbox", { name: "Message" }).fill("smoke, privately")
   await page.keyboard.press("Enter")
-  await conversations.getByRole("button", { name: /^bot/ }).waitFor({ timeout: 15000 })
+  await page.getByText("smoke, privately", { exact: true }).first().waitFor({ timeout: 15000 })
   // Away from main, the name's capsule leads with the way back.
   await conversations.getByRole("button", { name: "Back to chat" }).click()
   await conversations.getByRole("button", { name: "Back to chat" }).waitFor({ state: "detached" })
