@@ -77,7 +77,9 @@ Agents
   kiwi wake [on|off]                             how Kiwi wakes you in your session when a message for you arrives
   kiwi task add "title" [--owner NAME] [--review NAME|any] [--re N]   a task: open, then doing, then done
                                                  (--re N: made from message #N; taking it on tells its sender)
-     task claim|start|done|note|show T7 · task review T7 (when it has a reviewer) · approve|reject T7
+     task claim|start|done|note|show T7 [--json] · task review T7 [--at SHA] (opens a review round on that commit)
+     task approve|reject T7 --round N|--at SHA ["note"] [--file review.md]   the verdict on the round you reviewed,
+                                                 refused unless it's still the open one; --file sends the review with it
      task assign T7 NAME ["what's next"] · drop T7 (back to the board)   (kiwi task alone: the board)
   kiwi note [KEY [VALUE] [--ttl 7d] | KEY --clear]   shared notes: all of them, one, set one, or remove one
   kiwi leave                                     leave the channel and forget it on this machine
@@ -122,6 +124,8 @@ const { values: opt, positionals: args } = parseArgs({
     ttl: { type: "string" },
     note: { type: "string" },
     file: { type: "string" },
+    at: { type: "string" },
+    round: { type: "string" },
     mine: { type: "boolean" },
     "for-me": { type: "boolean" },
     chat: { type: "boolean" },
@@ -292,13 +296,15 @@ const taskArg = Effect.fn("kiwi.taskArg")(function* (i = 2) {
   return parseTaskId(raw) ?? (yield* die(`"${raw}" isn't a task id (like T12)`));
 });
 
-const fileText = (from: number, file: string) =>
-  args.length > from
-    ? die("give the text as words or with --file, not both")
-    : Effect.tryPromise({
-        try: () => Bun.file(file).text(),
-        catch: (err) => new Quit({ message: `can't read ${file}: ${err instanceof Error ? err.message : String(err)}`, code: 1 }),
-      }).pipe(Effect.map((t) => t.replace(/\n$/, "")));
+const readText = (file: string) =>
+  Effect.tryPromise({
+    try: () => Bun.file(file).text(),
+    catch: (err) => new Quit({ message: `can't read ${file}: ${err instanceof Error ? err.message : String(err)}`, code: 1 }),
+  }).pipe(Effect.map((t) => t.replace(/\n$/, "")));
+
+const fileText = (from: number, file: string) => (args.length > from ? die("give the text as words or with --file, not both") : readText(file));
+
+const firstLine = (text: string) => text.split("\n").map((l) => l.trim()).find(Boolean)?.slice(0, 200);
 
 const text = (from: number) =>
   opt.file !== undefined ? fileText(from, opt.file) : Effect.promise(async () => {
@@ -1105,7 +1111,8 @@ const commands: Record<string, Command> = {
       const id = yield* taskArg();
       if (sub === "show") {
         const { state } = yield* s.state();
-        return out(formatTask(state, state.tasks.get(id) ?? (yield* die(`no task ${taskId(id)}`))));
+        const shown = state.tasks.get(id) ?? (yield* die(`no task ${taskId(id)}`));
+        return out(opt.json ? JSON.stringify(shown) : formatTask(state, shown));
       }
       if (sub === "match" || sub === "after") return yield* die(`kiwi task ${sub} is gone: tasks don't wait on or match anything now. Pick what you can do from the board (kiwi task)`);
       // Handing it over is giving it to someone with a note on where it stands (handoff is the older name).
@@ -1116,12 +1123,18 @@ const commands: Record<string, Command> = {
         const t = state.tasks.get(id)!;
         return out(`${taskId(id)} is ${t.owner}'s now${next ? "" : ' (add where it stands next time: kiwi task assign T7 NAME "…")'}`);
       }
-      const note = args.slice(3).join(" ") || opt.note || undefined;
+      const verdictOf = { approve: "approved", reject: "rejected" } as const;
+      const verdict = sub === "approve" || sub === "reject" ? verdictOf[sub] : undefined;
+      const review = verdict && opt.file !== undefined ? yield* readText(opt.file) : undefined;
+      if (review !== undefined && !review.trim()) return yield* die(`${opt.file} is empty`);
+      const note = args.slice(3).join(" ") || opt.note || (review ? firstLine(review) : undefined) || undefined;
+      const roundNo = opt.round === undefined ? undefined : /^[1-9]\d{0,8}$/.test(opt.round.trim()) ? Number(opt.round.trim()) : yield* die(`"${opt.round}" isn't a round number`);
+      const judged = { ...(roundNo !== undefined ? { round: roundNo } : {}), ...(opt.at?.trim() ? { at: opt.at.trim() } : {}) };
       let state: ChannelState;
       if (sub === "claim") state = yield* s.taskClaim(id);
-      else if (sub === "review") state = yield* s.taskUpdate(id, { state: "review", note, ...(opt.review !== undefined ? { review: opt.review } : {}) });
-      else if (sub === "approve") state = yield* s.taskUpdate(id, { state: "done", note });
-      else if (sub === "reject") state = yield* s.taskUpdate(id, { state: "doing", verdict: "rejected", note: note ?? (yield* die('usage: kiwi task reject T7 "what needs to change"')) });
+      else if (sub === "review") state = yield* s.taskUpdate(id, { state: "review", note, ...(opt.review !== undefined ? { review: opt.review } : {}), ...(opt.at?.trim() ? { at: opt.at.trim() } : {}) });
+      else if (sub === "approve") state = yield* s.taskUpdate(id, { state: "done", verdict: "approved", note, ...judged }, review);
+      else if (sub === "reject") state = yield* s.taskUpdate(id, { state: "doing", verdict: "rejected", note: note ?? (yield* die('usage: kiwi task reject T7 "what needs to change" (or --file review.md)')), ...judged }, review);
       else if (sub in STATE_FOR) state = yield* s.taskUpdate(id, { state: STATE_FOR[sub], note });
       // Blocked (an older name) is a note on work in progress; cancelling finishes it, marked cancelled.
       else if (sub === "block") state = yield* s.taskUpdate(id, { note: `blocked${note ? `: ${note}` : ""}` });
