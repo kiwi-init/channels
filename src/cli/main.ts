@@ -391,6 +391,7 @@ const commands: Record<string, Command> = {
       } catch {
         return yield* die("that isn't a join code (they look like mc2-…-…)");
       }
+      if (args[2] !== undefined && !NAME_RE.test(args[2])) return yield* die(`the alias ${JSON.stringify(args[2])} is invalid (1-32 letters, digits, _ . or -)`);
       const relay = relayUrl();
       const roomId = decodeJoinCode(code).roomId;
       const who = here();

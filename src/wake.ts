@@ -58,7 +58,7 @@ export function wakePath(record: { harness?: WakeHarness; session?: string } | n
   }
 }
 
-function shellWord(s: string): string {
+export function shellWord(s: string): string {
   return /^[A-Za-z0-9_.@%+=:,/-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
