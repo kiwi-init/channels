@@ -1,0 +1,131 @@
+import fs from "node:fs";
+import path from "node:path";
+import type { MessagePortMain } from "electron";
+
+import { keepRecordsIn, type RecordMemory } from "../../src/client.ts";
+import type { Member } from "../../src/membership.ts";
+import type { PersonClaim } from "../../src/person.ts";
+import type { Signed, SigningBudget } from "../../src/sas.ts";
+import type { ChannelIdentityView } from "./bridge.ts";
+import { writePrivate } from "./guard.ts";
+import { Keyring, serveKeys, type HostToKeys, type KeysToHost } from "./keyring.ts";
+
+type Done = Extract<HostToKeys, { type: "done" }>;
+type Ask = KeysToHost extends infer T ? (T extends { id: number } ? Omit<T, "id"> : never) : never;
+
+interface Memory {
+  records: Record<string, Member>;
+  checks: Record<string, Signed[]>;
+}
+
+const parent = process.parentPort;
+let relay = "";
+let dir = "";
+let seats: ChannelIdentityView[] = [];
+let memory: Memory = { records: {}, checks: {} };
+let writing: ReturnType<typeof setTimeout> | null = null;
+let nextId = 1;
+const waiting = new Map<number, (d: Done) => void>();
+
+const memoryFile = (): string => path.join(dir, "kiwi-keys-memory.json");
+
+function loadMemory(): void {
+  try {
+    const v = JSON.parse(fs.readFileSync(memoryFile(), "utf8")) as Partial<Memory> | null;
+    memory = { records: v?.records && typeof v.records === "object" ? v.records : {}, checks: v?.checks && typeof v.checks === "object" ? v.checks : {} };
+  } catch {
+    memory = { records: {}, checks: {} };
+  }
+}
+
+function persist(): void {
+  if (writing || !dir) return;
+  writing = setTimeout(() => {
+    writing = null;
+    try {
+      writePrivate(memoryFile(), Buffer.from(JSON.stringify(memory), "utf8"));
+    } catch {
+      return;
+    }
+  }, 500);
+}
+
+const records: RecordMemory = {
+  get: (room, pk) => memory.records[`${room}/${pk}`] ?? null,
+  set: (room, pk, m) => {
+    memory.records[`${room}/${pk}`] = m;
+    persist();
+  },
+};
+
+const budget: SigningBudget = {
+  load: (room) => memory.checks[room] ?? [],
+  save: (room, signed) => {
+    memory.checks[room] = signed;
+    persist();
+  },
+};
+
+keepRecordsIn(records);
+
+function ask(msg: Ask): Promise<Done> {
+  return new Promise((resolve) => {
+    const id = nextId++;
+    waiting.set(id, resolve);
+    parent.postMessage({ ...msg, id });
+  });
+}
+
+async function asked(msg: Ask): Promise<Done> {
+  const d = await ask(msg);
+  if (d.error) throw new Error(d.error);
+  return d;
+}
+
+const keyring = new Keyring({
+  relay: () => relay,
+  seats: () => seats,
+  save: async (entry) => void (await asked({ type: "save", entry })),
+  access: async (code, pk, access) => void (await asked({ type: "access", code, pk, access })),
+  forget: async (code) => void (await asked({ type: "forget", code })),
+  prove: async (code, memberPk): Promise<PersonClaim | null> => (await asked({ type: "prove", code, memberPk })).claim ?? null,
+  budget,
+});
+
+function attach(port: MessagePortMain): void {
+  const session = serveKeys(keyring, (p) => port.postMessage(p));
+  port.on("message", (e) => {
+    void session.handle(e.data).then((reply) => {
+      if (reply) port.postMessage(reply);
+    });
+  });
+  port.on("close", () => session.close());
+  port.start();
+}
+
+parent.on("message", (e) => {
+  const m = e.data as HostToKeys;
+  switch (m.type) {
+    case "init":
+      relay = m.relay;
+      dir = m.dir;
+      seats = m.seats;
+      loadMemory();
+      return;
+    case "seats":
+      seats = m.seats;
+      return;
+    case "relay":
+      relay = m.relay;
+      return;
+    case "port": {
+      const port = e.ports[0];
+      if (port) attach(port);
+      return;
+    }
+    case "done":
+      waiting.get(m.id)?.(m);
+      waiting.delete(m.id);
+      return;
+  }
+});

@@ -2,7 +2,10 @@
 // main.ts and preload.ts; renderer-neutral on purpose (no electron/node imports),
 // so web/ can type against it without touching this process.
 
-import type { PersonClaim } from "../../src/person.ts";
+import type { CachedRow } from "../../src/cache-row.ts";
+import type { Channel, PresenceFields } from "../../src/client.ts";
+import type { Message, Presence, ReadMark } from "../../src/protocol.ts";
+import type { Wire } from "./wire.ts";
 
 /** The person's own key. Same JSON shape as Identity in src/identity.ts. */
 export interface PersonView {
@@ -35,6 +38,114 @@ export interface ChannelIdentityView {
   requestId?: string;
 }
 
+export interface PublicAccess {
+  roomId: string;
+  ownerPk: string;
+  ownerXpk: string;
+  epoch: number;
+  signedKeys?: boolean;
+  signedTitle?: boolean;
+}
+
+export interface ChannelView {
+  label: string;
+  pk: string;
+  xpk?: string;
+  roomId?: string;
+  code?: string;
+  idName?: string;
+  name?: string;
+  access?: PublicAccess;
+  at?: number;
+  requestId?: string;
+}
+
+export const CHANNEL_CALLS = [
+  "head",
+  "members",
+  "requests",
+  "checkRequest",
+  "approve",
+  "autoApprove",
+  "deny",
+  "remove",
+  "updateScopes",
+  "updateRole",
+  "reconcilePosting",
+  "rotateIfDue",
+  "info",
+  "title",
+  "setTitle",
+  "mode",
+  "setMode",
+  "rooms",
+  "guard",
+  "setCharter",
+  "setHold",
+  "icon",
+  "close",
+  "leave",
+  "send",
+] as const;
+
+export type ChannelCallName = (typeof CHANNEL_CALLS)[number];
+export type ChannelCalls = Pick<Channel, ChannelCallName>;
+export type CallResult<K extends ChannelCallName> = Awaited<ReturnType<ChannelCalls[K]>>;
+
+export type JoinCheck = { status: "pending"; code: string | null } | { status: "denied" } | { status: "in"; channel: ChannelView };
+
+export type FollowEvent =
+  | { _tag: "Open" }
+  | { _tag: "Message"; message: Message; row: CachedRow | null }
+  | { _tag: "Presence"; presence: Presence & { sigOk: boolean } }
+  | { _tag: "Read"; reads: ReadMark[]; snapshot: boolean }
+  | { _tag: "Info" }
+  | { _tag: "Roster" }
+  | { _tag: "Request" }
+  | { _tag: "Status"; line: string }
+  | { _tag: "Failed"; error: WireError };
+
+export interface ChannelOps {
+  call<K extends ChannelCallName>(code: string, op: K, ...args: Parameters<ChannelCalls[K]>): Promise<CallResult<K>>;
+  create(name: string, token: string | null, me: { name: string } | null): Promise<ChannelView>;
+  requestJoin(code: string, name: string, role?: string): Promise<ChannelView>;
+  joinStatus(code: string): Promise<JoinCheck>;
+  forget(code: string): Promise<void>;
+  presence(code: string, p: PresenceFields): Promise<void>;
+  openRows(code: string, rows: CachedRow[]): Promise<(Message | null)[]>;
+  follow(code: string, since: number, on: (e: FollowEvent) => void): () => void;
+}
+
+export type WireError =
+  | { kind: "gone"; why: "removed" | "closed" }
+  | { kind: "relay"; status: number; message: string; tag?: string }
+  | { kind: "unreachable"; message: string }
+  | { kind: "other"; message: string; tag?: string };
+
+export type KeysAsk =
+  | { op: "call"; code: string; name: ChannelCallName; args: Wire }
+  | { op: "create"; name: string; token: string | null; me: { name: string } | null }
+  | { op: "requestJoin"; code: string; name: string; role?: string }
+  | { op: "joinStatus"; code: string }
+  | { op: "forget"; code: string }
+  | { op: "presence"; code: string; p: Wire }
+  | { op: "openRows"; code: string; rows: Wire }
+  | { op: "follow"; code: string; since: number }
+  | { op: "unfollow"; sub: number };
+
+export type KeysRequest = KeysAsk & { id: number };
+export type KeysReply = { id: number; ok: true; value: Wire } | { id: number; ok: false; error: WireError };
+export interface KeysPush {
+  sub: number;
+  event: Wire;
+}
+
+export interface KeysPort {
+  request(ask: KeysAsk): Promise<KeysReply>;
+  onPush(cb: (p: KeysPush) => void): () => void;
+  onRestart(cb: () => void): () => void;
+}
+
 /** A computer paired with this app (or adopted: this machine). */
 export interface ComputerView {
   label: string;
@@ -60,7 +171,7 @@ export interface PendingItem {
 export interface StoreSnapshot {
   relayUrl: string;
   person: PublicPerson | null;
-  channels: ChannelIdentityView[];
+  channels: ChannelView[];
   computers: ComputerView[];
   pending: PendingItem[];
 }
@@ -91,8 +202,9 @@ export interface KiwiBridge {
   onStore(cb: (s: StoreSnapshot) => void): () => void;
   setRelayUrl(url: string): Promise<string>;
   createPerson(name: string): Promise<PublicPerson>;
-  provePerson(code: string, memberPk: string): Promise<PersonClaim>;
-  saveChannels(channels: ChannelIdentityView[]): Promise<void>;
+  saveChannels(channels: ChannelView[]): Promise<void>;
+  migrateChannels(entries: ChannelIdentityView[]): Promise<number>;
+  readonly channels: KeysPort;
   saveComputers(computers: ComputerView[]): Promise<void>;
   setPending(pending: PendingItem[]): Promise<void>;
   /** WorkOS device authorization (system browser, polled in main), or { dev } for a dev relay. */

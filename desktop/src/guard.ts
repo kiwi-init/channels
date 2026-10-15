@@ -9,6 +9,9 @@ import { decodeJoinCode } from "../../src/crypto.ts";
 import type { Identity } from "../../src/identity.ts";
 import { provePerson, type PersonClaim } from "../../src/person.ts";
 import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, PublicPerson, StoreSnapshot } from "./bridge.ts";
+import { publicChannel } from "./seats.ts";
+
+export { acceptSeat, mergeChannels, mergePublicChannels, migrateEntries, publicChannel, withAccess } from "./seats.ts";
 
 export const APP_SCHEME = "kiwi-app";
 export const APP_HOST = "app";
@@ -132,28 +135,7 @@ export interface StoredKeys {
 }
 
 export function snapshotOf(s: StoredKeys): StoreSnapshot {
-  return { relayUrl: s.relayUrl, person: publicPerson(s.person), channels: s.channels, computers: s.computers, pending: s.pending };
-}
-
-function epochKeys(access: unknown): Map<string, string> {
-  const keys = access && typeof access === "object" ? (access as { keys?: unknown }).keys : undefined;
-  if (!keys || typeof keys !== "object") return new Map();
-  return new Map(Object.entries(keys).filter((e): e is [string, string] => typeof e[1] === "string"));
-}
-
-const seatOf = (c: ChannelIdentityView): string => `${c.roomId ?? ""}/${c.pk}`;
-
-export function mergeChannels(stored: ChannelIdentityView[], next: ChannelIdentityView[]): ChannelIdentityView[] {
-  const before = new Map(stored.map((c) => [seatOf(c), c]));
-  for (const c of next) {
-    const old = before.get(seatOf(c));
-    if (!old) continue;
-    const changed = c.sk !== old.sk || (old.xsk !== undefined && c.xsk !== old.xsk);
-    const now = epochKeys(c.access);
-    const lost = [...epochKeys(old.access)].some(([e, k]) => now.get(e) !== k);
-    if (changed || lost) throw new Error(`the keys of a saved channel can't change (${c.label})`);
-  }
-  return next;
+  return { relayUrl: s.relayUrl, person: publicPerson(s.person), channels: s.channels.map(publicChannel), computers: s.computers, pending: s.pending };
 }
 
 export function publicComputer(c: ComputerView): ComputerView {

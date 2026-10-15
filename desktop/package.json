@@ -13,7 +13,8 @@
   "scripts": {
     "build:main": "bun build src/main.ts --outfile dist/main.js --target node --format cjs --external electron",
     "build:preload": "bun build src/preload.ts --outfile dist/preload.js --target node --format cjs --external electron",
-    "build": "bun run build:main && bun run build:preload",
+    "build:channels": "bun build src/channels.ts --outfile dist/channels.js --target node --format cjs --external electron",
+    "build": "bun run build:main && bun run build:preload && bun run build:channels",
     "start": "bun run build && electron dist/main.js",
     "dist": "bun run build && electron-builder",
     "typecheck": "bunx tsc --noEmit"

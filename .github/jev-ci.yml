@@ -132,9 +132,23 @@ jobs:
     always: ["desktop/package.json", "desktop/bun.lock", "desktop/tsconfig*.json"]
     description: >-
       Installs desktop/ dependencies, type-checks the Electron shell in desktop/src, and bundles
-      its main and preload scripts with bun build. desktop/src imports src/identity.ts,
-      src/mailbox.ts and src/person.ts. Fails on a type or bundling error in desktop/src or those
-      imports. The dashboard and the rest of src/ are not compiled here.
+      its main, preload and channels (the key process) scripts with bun build. desktop/src imports
+      src/identity.ts, src/mailbox.ts, src/person.ts, and through keyring.ts src/client.ts and
+      what it imports. Fails on a type or bundling error in desktop/src or those imports. The
+      dashboard is not compiled here.
+
+  desktop-keys:
+    name: desktop / keys
+    inputs: ["desktop/src/**", "src/**", "web/src/**", "test/desktop-keys.test.ts", "test/check.ts"]
+    always: ["package.json", "bun.lock", "scripts/ci-tests.ts"]
+    description: >-
+      Runs test/desktop-keys.test.ts: the desktop key process (desktop/src/keyring.ts, served over
+      the same wire the window uses, web/src/lib/channel-remote.ts) against a local relay. It
+      creates a channel, joins, chats, opens cached rows, rotates on remove, restarts and closes,
+      and fails if any member, owner, person or channel key reaches what the window receives.
+      Also the seat rules (desktop/src/seats.ts: what the window may save), the wire codec, the
+      list of calls the window may make, and a scan of web/src that fails when a file other than
+      web/src/lib/channel-local.ts imports Channel, generateIdentity, seal/open or the keyring.
 
   cli-build:
     name: cli / build

@@ -348,13 +348,20 @@ keyring), the store is a plain file only you can read: mode 0600, in a 0700
 folder, the same rule as `~/.kiwi` and `~/.ssh`. The app sets both modes on
 every save.
 
-In the app, the person key stays in the main process. The app's page (the
-renderer) gets only its public keys, and asks main for the person claim a join
-request carries. The renderer still holds each channel's member and owner keys
-and channel keys, because it signs and opens messages itself; moving those to
-main is the next step. Main does not let the renderer change a saved channel's
-keys: it may add channels, remove them, or add a new epoch's key, and nothing
-else.
+In the app, no secret key reaches the app's page (the renderer). The person key
+stays in the main process. Each channel's member and owner keys and its channel
+keys live in a separate utility process (the key process), which main starts
+and starts again if it stops. The key process signs every relay request, holds
+the live connection, opens messages, and seals and opens the history cache;
+the page asks it over a port the preload wraps, and gets back public fields,
+messages and sealed cache rows only. The page can call only a fixed list of
+channel operations. Main stays the only writer of the store: the page may
+rename or remove a channel, never write a key or add a channel; new channels,
+joins and key rotations come from the key process, and main does not let them
+change a saved key (only a new epoch's key is added). The store is unchanged on
+disk, so a key process that stops loses nothing. The history cache stays in the
+page's IndexedDB as ciphertext; moving its storage to the key process is the
+next step.
 
 Anyone who can read a computer's `~/.kiwi` can act as
 that computer's agents and, with its machine key, have new agents admitted (see

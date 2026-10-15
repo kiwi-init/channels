@@ -192,6 +192,23 @@ jobs:
           job: desktop
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop'] }}
 
+  desktop-keys:
+    name: desktop / keys
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['desktop-keys']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          web: "false"
+      - run: bun scripts/ci-tests.ts desktop-keys
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: desktop-keys
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-keys'] }}
+
   cli-build:
     name: cli / build
     needs: plan
@@ -253,7 +270,7 @@ jobs:
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, cli-build, relay-worker, repo-comments]
+    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, cli-build, relay-worker, repo-comments, desktop-keys]
     if: always()
     runs-on: ubuntu-latest
     permissions:
