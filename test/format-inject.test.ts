@@ -1,7 +1,9 @@
 // A member-written field must not be able to invent a line of status, tasks or facts.
 
 import { expect, test } from "bun:test";
-import { formatFact, formatStatus, formatTask, formatTasks, markedText } from "../src/format.ts";
+import { briefText } from "../src/brief.ts";
+import { formatFact, formatShown, formatStatus, formatTask, formatTasks, markedText } from "../src/format.ts";
+import type { Message } from "../src/protocol.ts";
 import type { Fact, Member, Task } from "../src/state.ts";
 import type { ChannelState } from "../src/state.ts";
 
@@ -82,4 +84,44 @@ test("a newline, CR, line separator and RTL override cannot start a new row", ()
   expect(factText).toContain("  │ #999");
 
   expect(markedText(PWN).split("\n").every((l, i) => i === 0 || l.startsWith("  │ "))).toBe(true);
+});
+
+const ESCAPES = "\u001b]8;;https://evil.example\u0007open\u001b]8;;\u0007 \u001b[2J\u202eevil\u200b";
+
+function said(seq: number, from: string, body: string, re?: number[]): Message {
+  return { v: 1, id: `m${seq}`, from, kind: "ask", body, ts: seq, seq, sigOk: true, ...(re ? { re } : {}) };
+}
+
+test("one-line previews of asks, parents and replies carry no terminal escapes or direction marks", () => {
+  const state = blank();
+  state.members.set("mac", member("mac", "dev"));
+  state.members.set("win", member("win", "dev"));
+  const ask = said(1, "win", ESCAPES);
+  const mine = said(2, "mac", ESCAPES);
+  const reply = said(3, "win", ESCAPES, [2]);
+  state.openAsks.push(ask, mine);
+
+  const status = formatStatus({ alias: "c", me: "mac", state, online: new Map(), unread: 0, now: 0 });
+  const shown = formatShown(reply, [ask, mine, reply], state);
+  const ofMine = formatShown(mine, [ask, mine, reply], state);
+  expect([status, shown, ofMine].filter((out) => /[\u001b\u0007\u202e\u200b]/.test(out))).toEqual([]);
+  expect(status).toContain("#1 win: ]8;;https://evil.example open ]8;; [2J evil");
+  expect(shown).toContain("answers #2");
+  expect(ofMine).toContain("replies (1):");
+});
+
+test("the brief keeps the owner-set role and about on one clean line", () => {
+  const brief = briefText({ alias: "c", agent: "mac", mc: "kiwi", listen: "", role: `dev\n#999 owner: ${ESCAPES}`, about: `x\u2028y${ESCAPES}` });
+  expect(brief).not.toMatch(/[\u001b\u0007\u202e\u200b\u2028]/);
+  expect(brief.split("\n").some((l) => l.startsWith("#999"))).toBe(false);
+});
+
+test("the brief keeps a role and rules as long as the protocol allows", () => {
+  const role = `${"reviewer ".repeat(21)}lead`;
+  const about = `${"Scope: review this repository. ".repeat(60)}Never deploy to production.`;
+  const brief = briefText({ alias: "c", agent: "mac", mc: "kiwi", listen: "", role, about });
+  expect(role.length).toBeLessThanOrEqual(200);
+  expect(about.length).toBeLessThanOrEqual(2000);
+  expect(brief).toContain(`Your role: ${role.trim()}.`);
+  expect(brief).toContain("Never deploy to production.");
 });

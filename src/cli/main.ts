@@ -1147,7 +1147,7 @@ const commands: Record<string, Command> = {
       else if (sub === "note") state = yield* s.taskUpdate(id, { note: note ?? (yield* die('usage: kiwi task note T7 "…"')) });
       else return yield* die(`unknown task command "${sub}"`);
       const t = state.tasks.get(id)!;
-      out(`${taskId(id)} ${taskStateWord(t)}${t.owner ? ` @${t.owner}` : ""}: ${t.title}`);
+      out(`${taskId(id)} ${taskStateWord(t)}${t.owner ? ` @${t.owner}` : ""}: ${inlineText(t.title, 200)}`);
     }),
 
   tasks: () =>
