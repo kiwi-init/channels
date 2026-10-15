@@ -5,6 +5,7 @@
 
 import { allMembers } from "./channel"
 import { linkOf, type ChannelLink } from "./channel-ops"
+import { installLine } from "./join-line"
 import { relayUrl } from "./relay"
 import { takeAgents } from "./remove-agents"
 import { bridge, saveComputers, secrets, type ComputerView, type PairAskView } from "./secrets"
@@ -13,7 +14,7 @@ export type { ComputerView, PairAskView }
 
 /** What to paste on the computer to pair it: install-and-pair, or pair with kiwi already there. */
 export function pairCommands(code: string): { install: string; pair: string } {
-  return { install: `curl -fsSL ${relayUrl()}/install | sh -s -- pair ${code}`, pair: `kiwi pair ${code}` }
+  return { install: installLine(relayUrl(), `pair ${code}`), pair: `kiwi pair ${code}` }
 }
 
 /**

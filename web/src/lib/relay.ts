@@ -10,7 +10,7 @@ export function relayOrigin(raw: unknown): string | null {
   try {
     const u = new URL(raw)
     const web = u.protocol === "https:" || u.protocol === "http:"
-    return web && /^(?:[a-z0-9-]+\.)*[a-z0-9-]+$|^\[[0-9a-f:.]+\]$/.test(u.hostname) ? u.origin : null
+    return web && /^(?:[a-z0-9-]+\.)*[a-z0-9-]+\.?$|^\[[0-9a-f:.]+\]$/.test(u.hostname) ? u.origin : null
   } catch {
     return null
   }

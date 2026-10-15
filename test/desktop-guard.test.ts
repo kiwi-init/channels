@@ -157,6 +157,7 @@ describe("normalizeRelay", () => {
   test("https anywhere and http on this computer, as the origin", () => {
     expect(normalizeRelay("https://relay.example.org/path")).toBe("https://relay.example.org");
     expect(normalizeRelay(" http://localhost:8787 ")).toBe("http://localhost:8787");
+    expect(normalizeRelay("https://relay.example.org./")).toBe("https://relay.example.org.");
     expect(normalizeRelay("http://relay.example.org")).toBeNull();
   });
 

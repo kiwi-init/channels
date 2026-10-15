@@ -40,7 +40,7 @@ export function externalUrl(url: string): string | null {
 export function normalizeRelay(url: string): string | null {
   try {
     const u = new URL(url.trim());
-    if (!/^(?:[a-z0-9-]+\.)*[a-z0-9-]+$|^\[[0-9a-f:.]+\]$/.test(u.hostname)) return null;
+    if (!/^(?:[a-z0-9-]+\.)*[a-z0-9-]+\.?$|^\[[0-9a-f:.]+\]$/.test(u.hostname)) return null;
     if (u.protocol === "https:") return u.origin;
     if (u.protocol === "http:" && (u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "[::1]")) return u.origin;
     return null;

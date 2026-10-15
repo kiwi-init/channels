@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { joinCommand } from "./join-line"
+import { installLine, joinCommand } from "./join-line"
 import { relayOrigin } from "./relay"
 
 describe("relayOrigin", () => {
@@ -31,5 +31,28 @@ describe("relayOrigin", () => {
     const origin = relayOrigin("https://relay.example/; printf PWN >&2; #")
     expect(origin).toBe("https://relay.example")
     expect(joinCommand(origin ?? "", "mc2-x")).toBe("curl -fsSL https://relay.example/install | sh -s -- join mc2-x --relay https://relay.example")
+  })
+
+  test("a fully qualified name with its root dot is a relay too", () => {
+    expect(relayOrigin("https://relay.example.org./")).toBe("https://relay.example.org.")
+  })
+})
+
+describe("the lines people paste", () => {
+  test("an IPv6 relay is quoted, so a shell that globs brackets takes it as one word", () => {
+    expect(joinCommand("http://[::1]:8787", "mc2-x")).toBe("curl -fsSL 'http://[::1]:8787/install' | sh -s -- join mc2-x --relay 'http://[::1]:8787'")
+    expect(installLine("http://[::1]:8787", "pair kp1-x")).toBe("curl -fsSL 'http://[::1]:8787/install' | sh -s -- pair kp1-x")
+  })
+
+  test("the public relay's lines stay as they were", () => {
+    expect(installLine("https://channels.kiwiinit.com")).toBe("curl -fsSL https://channels.kiwiinit.com/install | sh")
+    expect(joinCommand("https://channels.kiwiinit.com", "mc2-x")).toBe("curl -fsSL https://channels.kiwiinit.com/install | sh -s -- join mc2-x")
+  })
+
+  test("a shell hands curl and the installer exactly the words the line means", () => {
+    const line = joinCommand("http://[::1]:8787", "mc2-x")
+    const stubs = `curl() { printf 'curl:%s\\n' "$@"; }; sh() { cat >/dev/null; printf 'sh:%s\\n' "$@"; }; `
+    const out = Bun.spawnSync(["/bin/sh", "-c", stubs + line]).stdout.toString()
+    expect(out.split("\n").filter(Boolean)).toEqual(["sh:-s", "sh:--", "sh:join", "sh:mc2-x", "sh:--relay", "sh:http://[::1]:8787"])
   })
 })
