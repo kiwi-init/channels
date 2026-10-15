@@ -8,7 +8,7 @@ import { openRows as openSealedRows, packRow, type CachedRow } from "../../src/c
 import { Channel, ChannelGone, RelayError, Relay, Unreachable, eachLive, fetchRelay, type Live, type PresenceFields } from "../../src/client.ts";
 import type { ChannelAccess } from "../../src/crypto.ts";
 import { generateIdentity, type Identity } from "../../src/identity.ts";
-import { handleFor, type Member } from "../../src/membership.ts";
+import { handleFor, type Member, type MemberInfo } from "../../src/membership.ts";
 import type { PersonClaim } from "../../src/person.ts";
 import type { Message } from "../../src/protocol.ts";
 import type { SigningBudget } from "../../src/sas.ts";
@@ -23,6 +23,7 @@ export interface KeyHost {
   access(code: string, pk: string, access: ChannelAccess): Promise<void>;
   forget(code: string): Promise<void>;
   prove(code: string, memberPk: string): Promise<PersonClaim | null>;
+  person(): string | null;
   budget: SigningBudget;
 }
 
@@ -34,9 +35,12 @@ const keysOf = (id: Identity): Pick<ChannelIdentityView, "pk" | "sk" | "xpk" | "
 
 const isCall = (name: unknown): name is ChannelCallName => typeof name === "string" && (CHANNEL_CALLS as readonly string[]).includes(name);
 
-function personOf(opts: unknown): { person?: string } {
-  const person = opts && typeof opts === "object" ? (opts as { person?: unknown }).person : undefined;
-  return typeof person === "string" ? { person } : {};
+const field = (v: unknown, k: string): unknown => (v && typeof v === "object" ? (v as Record<string, unknown>)[k] : undefined);
+
+function asOf(v: unknown): Partial<MemberInfo> | undefined {
+  if (v === undefined || v === null) return undefined;
+  if (typeof v !== "object" || Array.isArray(v)) throw new Error("bad request");
+  return v as Partial<MemberInfo>;
 }
 
 export function wireError(e: unknown): WireError {
@@ -89,9 +93,39 @@ export class Keyring implements ChannelOps {
   async callRaw(code: string, op: ChannelCallName, args: readonly unknown[]): Promise<unknown> {
     if (!isCall(op)) throw new Error("no such call");
     const ch = this.channel(code);
-    const list = op === "requests" ? [{ budget: this.host.budget, ...personOf(args[0]) }] : [...args];
+    const list = await this.trusted(ch, op, args);
     const fn = ch[op] as unknown as (...a: unknown[]) => Promise<unknown>;
     return fn.apply(ch, list);
+  }
+
+  private async trusted(ch: Channel, op: ChannelCallName, args: readonly unknown[]): Promise<unknown[]> {
+    const person = this.host.person();
+    const who = person ? { person } : {};
+    switch (op) {
+      case "requests":
+        return [{ budget: this.host.budget, ...(field(args[0], "person") !== undefined ? who : {}) }];
+      case "autoApprove":
+        if (!person) throw new Error("make your person key first");
+        return [person];
+      case "approve":
+      case "checkRequest": {
+        const id = field(args[0], "id");
+        const req = (await ch.requests()).find((r) => r.id === id);
+        if (!req) throw new Error("that join request isn't waiting any more");
+        return op === "approve" ? [req, asOf(args[1]), who] : [req];
+      }
+      case "updateScopes":
+      case "updateRole": {
+        const pk = field(args[0], "pk");
+        const m = (await ch.members()).find((x) => x.pk === pk);
+        if (!m) throw new Error("that member isn't in this channel");
+        return [m, ...args.slice(1)];
+      }
+      case "reconcilePosting":
+        return [args[0]];
+      default:
+        return [...args];
+    }
   }
 
   call<K extends ChannelCallName>(code: string, op: K, ...args: Parameters<ChannelCalls[K]>): Promise<CallResult<K>> {
@@ -112,7 +146,7 @@ export class Keyring implements ChannelOps {
   }
 
   async requestJoin(code: string, name: string, role?: string): Promise<ChannelView> {
-    const prior = this.host.seats().find((c) => c.code === code && !c.access);
+    const prior = this.host.seats().find((c) => c.code === code && !c.access && !c.imported);
     const identity = prior && (prior.idName ?? prior.label) === name ? identityOf(prior) : await generateIdentity(name);
     const claim = await this.host.prove(code, identity.pk);
     const r = await Channel.requestJoin(this.host.relay(), code, identity, { name, ...(role ? { role } : {}) }, claim ? { person: claim } : undefined);
@@ -295,8 +329,9 @@ export function serveKeys(k: Keyring, push: (p: KeysPush) => void): KeysSession 
 }
 
 export type HostToKeys =
-  | { type: "init"; relay: string; dir: string; seats: ChannelIdentityView[] }
-  | { type: "seats"; seats: ChannelIdentityView[] }
+  | { type: "init"; relay: string; dir: string; seats: ChannelIdentityView[]; person: string | null }
+  | { type: "seats"; seats: ChannelIdentityView[]; person: string | null }
+  | { type: "flush" }
   | { type: "relay"; relay: string }
   | { type: "port" }
   | { type: "done"; id: number; error?: string; claim?: PersonClaim | null };
@@ -305,4 +340,5 @@ export type KeysToHost =
   | { type: "save"; id: number; entry: ChannelIdentityView }
   | { type: "access"; id: number; code: string; pk: string; access: ChannelAccess }
   | { type: "forget"; id: number; code: string }
-  | { type: "prove"; id: number; code: string; memberPk: string };
+  | { type: "prove"; id: number; code: string; memberPk: string }
+  | { type: "flushed"; id: 0 };

@@ -39,6 +39,7 @@ interface StoreFile {
   computers: ComputerView[];
   pending: PendingItem[];
   signin?: { access: string; refresh: string; exp: number };
+  migrated?: boolean;
 }
 
 const storePath = () => path.join(app.getPath("userData"), "kiwi-store.bin");
@@ -95,11 +96,28 @@ const mutate = (fn: (s: StoreFile) => void) => {
   fn(store);
   saveStore();
   broadcast();
-  tellKeys({ type: "seats", seats: store.channels });
+  tellKeys({ type: "seats", seats: store.channels, person: store.person?.pk ?? null });
 };
 
 let keys: Electron.UtilityProcess | null = null;
 let keysWait = 1_000;
+let keysFlushed: (() => void) | null = null;
+let keysClosed = false;
+
+function closeKeys(then: () => void): void {
+  const child = keys;
+  if (!child) return then();
+  const finish = () => {
+    keysFlushed = null;
+    clearTimeout(timer);
+    keysClosed = true;
+    child.kill();
+    then();
+  };
+  const timer = setTimeout(finish, 1_000);
+  keysFlushed = finish;
+  child.postMessage({ type: "flush" } satisfies HostToKeys);
+}
 
 const channelsPath = () => (app.isPackaged ? path.join(app.getAppPath(), "dist", "channels.js") : path.join(__dirname, "..", "dist", "channels.js"));
 
@@ -118,8 +136,8 @@ function startKeys(): void {
   const child = utilityProcess.fork(channelsPath(), [], { serviceName: "Kiwi keys" });
   const started = Date.now();
   keys = child;
-  tellKeys({ type: "init", relay: store.relayUrl, dir: app.getPath("userData"), seats: store.channels });
-  child.on("message", (m: KeysToHost) => onKeys(m));
+  tellKeys({ type: "init", relay: store.relayUrl, dir: app.getPath("userData"), seats: store.channels, person: store.person?.pk ?? null });
+  child.on("message", (m: KeysToHost) => onKeys(child, m));
   child.on("exit", () => {
     if (keys === child) keys = null;
     if (quitting) return;
@@ -129,8 +147,14 @@ function startKeys(): void {
   if (win && !win.isDestroyed()) connectKeys(win.webContents);
 }
 
-function onKeys(m: KeysToHost): void {
-  const done = (extra: { error?: string; claim?: PersonClaim | null } = {}) => tellKeys({ type: "done", id: m.id, ...extra });
+function onKeys(child: Electron.UtilityProcess, m: KeysToHost): void {
+  if (m.type === "flushed") {
+    keysFlushed?.();
+    return;
+  }
+  const done = (extra: { error?: string; claim?: PersonClaim | null } = {}) => {
+    if (keys === child) child.postMessage({ type: "done", id: m.id, ...extra } satisfies HostToKeys);
+  };
   const fail = (e: unknown) => done({ error: e instanceof Error ? e.message : String(e) });
   try {
     switch (m.type) {
@@ -511,8 +535,12 @@ function wireIpc(): void {
   });
   ipcMain.handle("kiwi:save-channels", (_e, channels: unknown) => mutate((s) => (s.channels = mergePublicChannels(s.channels, channels))));
   ipcMain.handle("kiwi:migrate-channels", (_e, entries: unknown) => {
+    if (store.migrated) return 0;
     const { channels, added } = migrateEntries(store.channels, entries);
-    if (added) mutate((s) => (s.channels = channels));
+    mutate((s) => {
+      s.channels = channels;
+      s.migrated = true;
+    });
     return added;
   });
   ipcMain.on("kiwi:channels-connect", (e) => connectKeys(e.sender));
@@ -669,8 +697,10 @@ else {
   });
   // Any real quit (⌘Q, the Dock's Quit, a logout, the tray's Quit) lets the window close: closing it
   // otherwise only hides it, and would cancel the quit.
-  app.on("before-quit", () => {
+  app.on("before-quit", (e) => {
     quitting = true;
-    keys?.kill();
+    if (keysClosed || !keys) return;
+    e.preventDefault();
+    closeKeys(() => app.quit());
   });
 }

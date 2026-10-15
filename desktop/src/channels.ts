@@ -22,6 +22,7 @@ const parent = process.parentPort;
 let relay = "";
 let dir = "";
 let seats: ChannelIdentityView[] = [];
+let person: string | null = null;
 let memory: Memory = { records: {}, checks: {} };
 let writing: ReturnType<typeof setTimeout> | null = null;
 let nextId = 1;
@@ -38,16 +39,20 @@ function loadMemory(): void {
   }
 }
 
+function writeMemory(): void {
+  if (writing) clearTimeout(writing);
+  writing = null;
+  if (!dir) return;
+  try {
+    writePrivate(memoryFile(), Buffer.from(JSON.stringify(memory), "utf8"));
+  } catch {
+    return;
+  }
+}
+
 function persist(): void {
   if (writing || !dir) return;
-  writing = setTimeout(() => {
-    writing = null;
-    try {
-      writePrivate(memoryFile(), Buffer.from(JSON.stringify(memory), "utf8"));
-    } catch {
-      return;
-    }
-  }, 500);
+  writing = setTimeout(writeMemory, 500);
 }
 
 const records: RecordMemory = {
@@ -89,6 +94,7 @@ const keyring = new Keyring({
   access: async (code, pk, access) => void (await asked({ type: "access", code, pk, access })),
   forget: async (code) => void (await asked({ type: "forget", code })),
   prove: async (code, memberPk): Promise<PersonClaim | null> => (await asked({ type: "prove", code, memberPk })).claim ?? null,
+  person: () => person,
   budget,
 });
 
@@ -110,10 +116,16 @@ parent.on("message", (e) => {
       relay = m.relay;
       dir = m.dir;
       seats = m.seats;
+      person = m.person;
       loadMemory();
       return;
     case "seats":
       seats = m.seats;
+      person = m.person;
+      return;
+    case "flush":
+      writeMemory();
+      parent.postMessage({ type: "flushed", id: 0 });
       return;
     case "relay":
       relay = m.relay;

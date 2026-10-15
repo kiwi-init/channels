@@ -10,7 +10,7 @@ import { acceptSeat, mergePublicChannels, migrateEntries, publicChannel, withAcc
 import { fromWire, toWire } from "../desktop/src/wire.ts";
 import { remoteOps } from "../web/src/lib/channel-remote.ts";
 import { ChannelGone } from "../src/client.ts";
-import { decodeJoinCode } from "../src/crypto.ts";
+import { decodeJoinCode, encodeJoinCode, newRoomId } from "../src/crypto.ts";
 import { generateIdentity, type Identity } from "../src/identity.ts";
 import type { CachedRow } from "../src/cache-row.ts";
 import { provePerson } from "../src/person.ts";
@@ -45,6 +45,7 @@ function memHost(person: Identity | null): { host: KeyHost; store: Store } {
     access: async (code, pk, access) => void (store.seats = withAccess(store.seats, code, pk, access)),
     forget: async (code) => void (store.seats = store.seats.filter((c) => c.code !== code)),
     prove: async (code, memberPk) => (person ? provePerson(person, decodeJoinCode(code).roomId, memberPk) : null),
+    person: () => person?.pk ?? null,
     budget: memoryBudget(),
   };
   return { host, store };
@@ -126,14 +127,18 @@ describe("channel keys stay out of the window (T203 step 2)", () => {
     expect(made.access?.roomId).toBe(decodeJoinCode(code).roomId);
     expect(keyNames(made).has("sk")).toBe(false);
 
+    const planted: ChannelIdentityView = { label: "bo", idName: "bo", pk: "planted-pk", sk: "planted-sk", code, requestId: "r", imported: true };
+    b.store.seats = [planted];
     const asked = await bw.ops.requestJoin(code, "bo");
+    expect(asked.pk).not.toBe("planted-pk");
     expect(asked.requestId).toBeTruthy();
     expect(b.store.seats[0]?.sk).toBeTruthy();
     await aw.ops.call(code, "requests");
     expect(await bw.ops.joinStatus(code)).toMatchObject({ status: "pending" });
     const req = (await aw.ops.call(code, "requests")).find((r) => r.pk === asked.pk);
     expect(req?.person).toBe(bo.pk);
-    await aw.ops.call(code, "approve", req!, undefined, { person: ada.pk });
+    const forged = { ...req!, xpk: (await generateIdentity("mallory")).xpk!, person: "forged" };
+    await aw.ops.call(code, "approve", forged, undefined, { person: "forged-person" });
     const joined = await bw.ops.joinStatus(code);
     expect(joined.status).toBe("in");
 
@@ -220,7 +225,14 @@ describe("what the window may save", () => {
     expect(mergePublicChannels([...stored, fresh], [{ ...publicChannel(stored[0]!), label: "late" }]).map((c) => c.code)).toEqual(["code1", "code9"]);
     expect(() => mergePublicChannels(stored, [{ ...publicChannel(stored[0]!), sk: "x" }])).toThrow("can't save channel keys");
     expect(() => mergePublicChannels(stored, [{ ...publicChannel(stored[0]!), access: { roomId: "room1", keys: {} } }])).toThrow("can't save channel keys");
-    expect(() => mergePublicChannels(stored, [{ label: "x", pk: "other", roomId: "room1" }])).toThrow("can't add a channel");
+    expect(mergePublicChannels(stored, [{ label: "x", pk: "other", roomId: "room1" }])).toEqual(stored);
+    expect(() => mergePublicChannels(stored, [publicChannel(stored[0]!), publicChannel(stored[0]!)])).toThrow("bad channel list");
+    const twin = seat({ sk: "SECRET-other" });
+    const both = mergePublicChannels([seat(), twin], [{ ...publicChannel(stored[0]!), label: "both" }]);
+    expect(both.map((c) => [c.label, c.sk])).toEqual([
+      ["both", "SECRET-sk"],
+      ["both", "SECRET-other"],
+    ]);
     expect(() => mergePublicChannels(stored, "nope")).toThrow();
   });
 
@@ -233,13 +245,32 @@ describe("what the window may save", () => {
     const rotated = withAccess([seat()], "code1", "pk1", { roomId: "room1", ownerPk: "pk1", ownerXpk: "xpk1", epoch: 1, keys: { "0": "SECRET-k0", "1": "SECRET-k1" } });
     expect(publicChannel(rotated[0]!).access?.epoch).toBe(1);
     expect(() => withAccess([seat()], "code1", "pk1", { roomId: "room1", ownerPk: "pk1", ownerXpk: "xpk1", epoch: 1, keys: { "1": "SECRET-k1" } })).toThrow("can't change");
+    const keys = { "0": "SECRET-k0", "1": "SECRET-k1" };
+    for (const bad of [
+      { roomId: "room2", ownerPk: "pk1", ownerXpk: "xpk1", epoch: 1, keys },
+      { roomId: "room1", ownerPk: "evil", ownerXpk: "xpk1", epoch: 1, keys },
+      { roomId: "room1", ownerPk: "pk1", ownerXpk: "evil", epoch: 1, keys },
+    ])
+      expect(() => withAccess([seat()], "code1", "pk1", bad)).toThrow("can't change its room, owner or epoch");
+    expect(() => withAccess(rotated, "code1", "pk1", { roomId: "room1", ownerPk: "pk1", ownerXpk: "xpk1", epoch: 0, keys })).toThrow("can't change its room, owner or epoch");
+    expect(() => acceptSeat([seat()], seat({ access: { roomId: "room1", ownerPk: "evil", ownerXpk: "xpk1", epoch: 0, keys: { "0": "SECRET-k0" } } }))).toThrow("can't change its room, owner or epoch");
   });
 
-  test("old localStorage seats move in once, and never over a seat the store has", () => {
-    const old = seat({ code: "code2", roomId: "room2" });
-    const first = migrateEntries([seat()], [old, seat({ sk: "other" }), { junk: true }]);
+  test("old localStorage seats move in, marked imported, never over or beside a seat the store has", () => {
+    const real = (roomId: string) => encodeJoinCode({ roomId, ownerFp: "AAAAAAAAAAAAAAAA" });
+    const r1 = newRoomId();
+    const r2 = newRoomId();
+    const r3 = newRoomId();
+    const mine = seat({ code: real(r1), roomId: r1, access: { roomId: r1, ownerPk: "pk1", ownerXpk: "xpk1", epoch: 0, keys: { "0": "SECRET-k0" } } });
+    const old = seat({ pk: "pk2", code: real(r2), roomId: r2, access: { roomId: r2, ownerPk: "pk1", ownerXpk: "xpk1", epoch: 0, keys: { "0": "k" } }, extra: "junk" } as Partial<ChannelIdentityView>);
+    const samePk = seat({ code: real(r3), roomId: r3, access: { roomId: r3, ownerPk: "pk1", ownerXpk: "xpk1", epoch: 0, keys: { "0": "k" } } });
+    const sameCode = seat({ pk: "pk4", sk: "evil", code: real(r1), roomId: r1, access: { roomId: r1, ownerPk: "pk1", ownerXpk: "xpk1", epoch: 0, keys: { "0": "evil" } } });
+    const wrongRoom = seat({ pk: "pk5", code: real(r3), roomId: r2, access: { roomId: r2, ownerPk: "pk1", ownerXpk: "xpk1", epoch: 0, keys: { "0": "k" } } });
+    const first = migrateEntries([mine], [old, samePk, sameCode, wrongRoom, seat({ pk: "pk6", code: "not-a-code" }), { junk: true }]);
     expect(first.added).toBe(1);
-    expect(first.channels.map((c) => c.code)).toEqual(["code1", "code2"]);
+    expect(first.channels[0]).toEqual(mine);
+    expect(first.channels[1]).toMatchObject({ pk: "pk2", code: real(r2), imported: true });
+    expect("extra" in first.channels[1]!).toBe(false);
     expect(migrateEntries(first.channels, [old]).added).toBe(0);
   });
 });
