@@ -188,6 +188,17 @@ jobs:
       are not checked. The job also type-checks scripts/ci with mypy --strict and runs its
       unit tests.
 
+  repo-pins:
+    jev: false
+    name: repo / pins
+    inputs: [".github/workflows/**", ".github/actions/**"]
+    always: ["scripts/ci/action_pins.py"]
+    description: >-
+      Runs scripts/ci/action_pins.py over .github/workflows and every composite action under
+      .github/actions. Fails when a uses: line names a third-party action by tag or branch
+      instead of a full 40-character commit SHA, or a docker:// image without a sha256 digest.
+      Local actions (./…) pass.
+
   repo-knip:
     jev: false
     name: repo / knip

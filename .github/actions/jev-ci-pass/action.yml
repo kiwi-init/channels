@@ -15,7 +15,7 @@ runs:
       shell: bash
       run: mkdir -p "$RUNNER_TEMP/jev-ci-pass" && echo "${{ inputs.hash }}" > "$RUNNER_TEMP/jev-ci-pass/${{ inputs.job }}"
     - if: inputs.hash != ''
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ${{ runner.temp }}/jev-ci-pass/${{ inputs.job }}
         key: jev-ci-pass-${{ inputs.job }}-${{ inputs.hash }}
