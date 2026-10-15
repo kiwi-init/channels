@@ -5,7 +5,7 @@ import { droppedCount } from "@mc/format.ts"
 import { memberLoad } from "@mc/load.ts"
 import { ignored, isReaction, type Color, type Message } from "@mc/protocol.ts"
 import { describeScopes, wireScopes } from "@mc/scopes.ts"
-import { colorOf, keptFromPeople, taskId, type Task } from "@mc/state.ts"
+import { colorOf, keptFromPeople, openRound, taskId, type Task } from "@mc/state.ts"
 import { secrets } from "@/lib/secrets"
 import { channelTitle, forgetChannel, loadMember, loadRecent, renameChannel, saveRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { lastPreview } from "@/lib/preview"
@@ -77,6 +77,11 @@ type Here = Exclude<Place, { kind: "task" }>
 
 /** What's open on the right, one at a time: a thread (by its first message), the details, or the tasks (the list, or one of them). */
 type Side = { kind: "thread"; root: number } | { kind: "info" } | { kind: "tasks"; task: number | null } | null
+
+function roundOf(t: Task): { round: number; at?: string } | Record<string, never> {
+  const open = openRound(t)
+  return open ? { round: open.n, ...(open.at ? { at: open.at } : {}) } : {}
+}
 
 export function Conversation({ member, onBack, onGone }: { member: StoredMember; onBack: () => void; onGone: () => void }) {
   const me = member.identity.name
@@ -710,12 +715,16 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                   nameOf={nameOf}
                   onReply={async (m, text) => void (await send(text, { to: [m.from], re: [m.seq], kind: "msg" }))}
                   onApproveTask={async (t: Task) =>
-                    void (await send(`${taskId(t.id)} done`, { kind: "event", ev: { op: "task.update", task: t.id, state: "done", note: "approved" }, ...(t.owner ? { to: [t.owner] } : {}) }))
+                    void (await send(`${taskId(t.id)} approved`, {
+                      kind: "event",
+                      ev: { op: "task.update", task: t.id, state: "done", verdict: "approved", note: "approved", ...roundOf(t) },
+                      ...(t.owner ? { to: [t.owner] } : {}),
+                    }))
                   }
                   onSendBack={async (t: Task, why: string) =>
                     void (await send(`${taskId(t.id)} rejected`, {
                       kind: "event",
-                      ev: { op: "task.update", task: t.id, state: "doing", verdict: "rejected", note: why },
+                      ev: { op: "task.update", task: t.id, state: "doing", verdict: "rejected", note: why, ...roundOf(t) },
                       ...(t.owner ? { to: [t.owner] } : {}),
                     }))
                   }

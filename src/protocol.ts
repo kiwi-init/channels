@@ -115,6 +115,8 @@ export const CLOSE_CLOSED = 4410;
 
 export type GoneHow = "owner" | "left";
 
+export type Verdict = "approved" | "rejected";
+
 export const GONE_WORDS: Record<GoneHow, string> = { owner: "the owner removed this key", left: "this key left the channel" };
 
 export function goneHow(text: string): GoneHow | null {
@@ -159,7 +161,19 @@ export type Event =
    */
   | { op: "task.add"; title: string; detail?: string; owner?: string; review?: string }
   | { op: "task.claim"; task: number }
-  | { op: "task.update"; task: number; state?: TaskState | OldTaskState; owner?: string | null; title?: string; note?: string; review?: string | null; verdict?: "rejected" }
+  | {
+      op: "task.update";
+      task: number;
+      state?: TaskState | OldTaskState;
+      owner?: string | null;
+      title?: string;
+      note?: string;
+      review?: string | null;
+      verdict?: Verdict;
+      round?: number;
+      at?: string;
+      body?: "review";
+    }
   /** What a member is and has, said by itself: where it runs, what runs it, what it can use. Shown in People. */
   | ({ op: "card" } & Card)
   /** Claims are gone. Older clients still send these; they fold to nothing. */
@@ -441,7 +455,10 @@ export function wellFormedEvent(ev: unknown): ev is Event {
         opt(e.title, (x): x is string => str(x, 500)) &&
         opt(e.note, (x): x is string => str(x)) &&
         (e.review === undefined || e.review === null || str(e.review, 64)) &&
-        (e.verdict === undefined || e.verdict === "rejected")
+        (e.verdict === undefined || e.verdict === "approved" || e.verdict === "rejected") &&
+        (e.round === undefined || (Number.isSafeInteger(e.round) && (e.round as number) > 0)) &&
+        opt(e.at, (x): x is string => str(x, 200) && x.trim().length > 0 && !/[\r\n]/.test(x)) &&
+        (e.body === undefined || (e.body === "review" && e.verdict !== undefined))
       );
     case "card":
       return (

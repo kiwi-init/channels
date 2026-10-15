@@ -54,6 +54,7 @@ test("a newline, CR, line separator and RTL override cannot start a new row", ()
     notes: [{ seq: 4, by: "mac", ts: 0, text: PWN }],
     review: PWN,
     workedBy: [],
+    rounds: [],
   };
   state.tasks.set(3, task);
   const fact: Fact = { key: PWN, value: PWN, by: "mac", ts: 0, seq: 2 };

@@ -29,7 +29,7 @@ export function Feed({ items, state, now }: { items: FeedItem[]; state: ChannelS
               linked <PrLink pr={item.pr} />
             </EventLine>
           ) : (
-            <EventLine mark={<Mark mark={item.mark} />} actor={item.actor} at={item.at} now={now} state={state} note={item.note}>
+            <EventLine mark={<Mark mark={item.mark} />} actor={item.actor} at={item.at} now={now} state={state} note={item.note} review={item.review}>
               {item.text}
             </EventLine>
           )}
@@ -50,7 +50,25 @@ export function Meta({ name, at, now, state, strong = true }: { name: string; at
   )
 }
 
-function EventLine({ mark, actor, at, now, state, note, children }: { mark: ReactNode; actor: string; at: number; now: number; state: ChannelState; note?: string; children: ReactNode }) {
+function EventLine({
+  mark,
+  actor,
+  at,
+  now,
+  state,
+  note,
+  review,
+  children,
+}: {
+  mark: ReactNode
+  actor: string
+  at: number
+  now: number
+  state: ChannelState
+  note?: string
+  review?: string
+  children: ReactNode
+}) {
   return (
     <div className="flex items-start gap-2.5 py-1.5 text-ui text-ink-3">
       <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center text-ink-3">{mark}</span>
@@ -64,6 +82,7 @@ function EventLine({ mark, actor, at, now, state, note, children }: { mark: Reac
         </p>
         {/* A note is something someone wrote, so it reads as text, not as part of the event. */}
         {note && <p className="mt-1 text-body text-ink">{note}</p>}
+        {review && <p className="mt-1 text-body whitespace-pre-wrap text-ink">{review}</p>}
       </div>
     </div>
   )

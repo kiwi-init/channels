@@ -4,7 +4,7 @@
 
 import { beforeAll, describe, expect, test } from "bun:test";
 import { detectHarness, mergeCard, repoName, sameCard } from "../src/card.ts";
-import { cardLine, describeEvent, formatStatus, formatTask, formatTasks } from "../src/format.ts";
+import { cardLine, describeEvent, formatMessage, formatStatus, formatTask, formatTasks } from "../src/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
 import { wellFormed, type Event, type Kind, type Message } from "../src/protocol.ts";
 import { fold, type Roster } from "../src/state.ts";
@@ -92,10 +92,110 @@ describe("review", () => {
     const ms = [add, toReview, reject, restart];
     const s = fold(ms, roster);
     expect(s.tasks.get(t)!.state).toBe("doing");
-    expect(describeEvent(reject, s)).toBe(`rejected T${t} “driver”: 3 blocking`);
+    expect(describeEvent(reject, s)).toBe(`rejected T${t} “driver” (round 1): 3 blocking`);
     expect(describeEvent(restart, s)).toBe(`started T${t} “driver”`);
-    expect(taskFeed(s, ms, t, "jon").flatMap((i) => (i.type === "event" ? [i.text] : []))).toEqual(["created the task for win", "sent it for review", "rejected it", "started it"]);
-    expect(wellFormed({ ...reject, ev: { op: "task.update", task: t, verdict: "approved" } })).toBe(false);
+    expect(taskFeed(s, ms, t, "jon").flatMap((i) => (i.type === "event" ? [i.text] : []))).toEqual(["created the task for win", "sent it for review (round 1)", "rejected it (round 1)", "started it"]);
+    expect(wellFormed({ ...reject, ev: { op: "task.update", task: t, verdict: "maybe" } })).toBe(false);
+  });
+
+  test("review rounds: each review opens a round at a commit, a verdict closes the open one, and a stale verdict is refused", async () => {
+    const add = await ev("jon", { op: "task.add", title: "driver", owner: "win", review: "mac" });
+    const t = add.seq;
+    const r1 = await ev("win", { op: "task.update", task: t, state: "review", at: "abc123" });
+    const rej = await ev("mac", { op: "task.update", task: t, state: "doing", verdict: "rejected", round: 1, note: "2 blocking" });
+    const r2 = await ev("win", { op: "task.update", task: t, state: "review", at: "def456" });
+    const stale = await ev("mac", { op: "task.update", task: t, state: "doing", verdict: "rejected", round: 1, note: "late" });
+    const future = await ev("mac", { op: "task.update", task: t, state: "done", verdict: "approved", round: 3 });
+    const self = await ev("win", { op: "task.update", task: t, state: "done", verdict: "approved", round: 2 });
+    const mismatched = await ev("mac", { op: "task.update", task: t, state: "doing", verdict: "approved", round: 2 });
+    const ok = await ev("mac", { op: "task.update", task: t, state: "done", verdict: "approved", round: 2, note: "clean" });
+    const s = fold([add, r1, rej, r2, stale, future, self, mismatched, ok], roster);
+    const task = s.tasks.get(t)!;
+    expect(task.state).toBe("done");
+    expect(task.approvedBy).toBe("mac");
+    expect(task.rounds).toEqual([
+      { n: 1, at: "abc123", by: "win", seq: r1.seq, ts: r1.ts, result: { kind: "rejected", by: "mac", seq: rej.seq, ts: rej.ts } },
+      { n: 2, at: "def456", by: "win", seq: r2.seq, ts: r2.ts, result: { kind: "approved", by: "mac", seq: ok.seq, ts: ok.ts } },
+    ]);
+    expect(s.rejected.get(stale.seq)).toBe(`round 1 of T${t} isn't the open one: round 2 is`);
+    expect(s.rejected.get(future.seq)).toBe(`round 3 of T${t} isn't the open one: round 2 is`);
+    expect(s.rejected.get(self.seq)).toContain("needs review by mac");
+    expect(s.rejected.get(mismatched.seq)).toBe("an approval finishes the task and a rejection sends it back to doing");
+    expect(describeEvent(r1, s)).toBe(`sent for review T${t} “driver” (round 1 @ abc123)`);
+    expect(describeEvent(ok, s)).toBe(`approved T${t} “driver” (round 2 @ def456): clean`);
+    const shown = formatTask(s, task);
+    expect(shown).toContain(`round 1 @ abc123, asked by win in #${r1.seq}`);
+    expect(shown).toContain(`: rejected by mac in #${rej.seq}`);
+    expect(shown).toContain(`: approved by mac in #${ok.seq}`);
+  });
+
+  test("sending it for review again withdraws the open round; once a round rejects it, its owner may cancel, but not while a round is open", async () => {
+    const add = await ev("jon", { op: "task.add", title: "docs", owner: "win", review: "*" });
+    const t = add.seq;
+    const r1 = await ev("win", { op: "task.update", task: t, state: "review", at: "a1" });
+    const r2 = await ev("win", { op: "task.update", task: t, state: "review", at: "a2" });
+    const tooSoon = await ev("win", { op: "task.update", task: t, state: "cancelled" });
+    const byWorker = await ev("win", { op: "task.update", task: t, state: "doing", verdict: "rejected", round: 2 });
+    const rej = await ev("mac", { op: "task.update", task: t, state: "doing", verdict: "rejected", round: 2, note: "REVISE" });
+    const late = await ev("linux", { op: "task.update", task: t, state: "done", verdict: "approved" });
+    const oldCancel = await ev("win", { op: "task.update", task: t, state: "cancelled", note: "an older client's cancel" });
+    const wrongRound = await ev("win", { op: "task.update", task: t, state: "cancelled", round: 1 });
+    const before = fold([add, r1, r2, tooSoon, byWorker, rej, late, oldCancel, wrongRound], roster);
+    expect(before.tasks.get(t)!.rounds.map((r) => r.result.kind)).toEqual(["withdrawn", "rejected"]);
+    expect(before.tasks.get(t)!.state).toBe("doing");
+    expect(before.rejected.get(byWorker.seq)).toBe(`only someone who hasn't worked on it gives T${t}'s verdict`);
+    expect(before.rejected.get(late.seq)).toBe(`a verdict on T${t} names the round it judges`);
+    const cancel = await ev("win", { op: "task.update", task: t, state: "cancelled", round: 2, note: "handed to the runner" });
+    const after = fold([add, r1, r2, tooSoon, byWorker, rej, late, oldCancel, wrongRound, cancel], roster);
+    expect(after.tasks.get(t)).toMatchObject({ state: "done", cancelled: true });
+    expect(after.tasks.get(t)!.approvedBy).toBeUndefined();
+  });
+
+  test("history from before rounds folds to the same task states", async () => {
+    const add = await ev("jon", { op: "task.add", title: "legacy", owner: "win", review: "mac" });
+    const t = add.seq;
+    const toReview = await ev("win", { op: "task.update", task: t, state: "review" });
+    const done = await ev("mac", { op: "task.update", task: t, state: "done" });
+    const reopen = await ev("mac", { op: "task.update", task: t, state: "doing", verdict: "rejected", note: "after all" });
+    expect(fold([add, toReview, done, reopen], roster).tasks.get(t)!.state).toBe("doing");
+    const add2 = await ev("jon", { op: "task.add", title: "legacy 2", owner: "win", review: "mac" });
+    const t2 = add2.seq;
+    const back = await ev("win", { op: "task.update", task: t2, state: "review" });
+    const todo = await ev("win", { op: "task.update", task: t2, state: "todo" });
+    const sendBack = await ev("mac", { op: "task.update", task: t2, state: "doing", verdict: "rejected" });
+    const cancel = await ev("win", { op: "task.update", task: t2, state: "cancelled" });
+    const s = fold([add2, back, todo, sendBack, cancel], roster);
+    expect(s.tasks.get(t2)!.state).toBe("doing");
+    expect(s.rejected.has(sendBack.seq)).toBe(false);
+  });
+
+  test("an old-style rejection from the author withdraws its round, so it never opens the way to a cancel", async () => {
+    const add = await ev("jon", { op: "task.add", title: "own", owner: "win", review: "mac" });
+    const t = add.seq;
+    const request = await ev("win", { op: "task.update", task: t, state: "review", at: "a1" });
+    const own = await ev("win", { op: "task.update", task: t, state: "doing", verdict: "rejected" });
+    const cancel = await ev("win", { op: "task.update", task: t, state: "cancelled", round: 1 });
+    const s = fold([add, request, own, cancel], roster);
+    expect(s.tasks.get(t)!.rounds[0]!.result).toEqual({ kind: "withdrawn", seq: own.seq });
+    expect(s.tasks.get(t)!.state).toBe("doing");
+  });
+
+  test("a verdict can carry the whole review as its message, and only a verdict can", async () => {
+    const add = await ev("jon", { op: "task.add", title: "api", owner: "win", review: "mac" });
+    const t = add.seq;
+    const r1 = await ev("win", { op: "task.update", task: t, state: "review", at: "c0ffee" });
+    const review = await msg("mac", "event", "## Review\n\n1. BLOCKING: the cache never expires\n\nVerdict: REVISE", {
+      ev: { op: "task.update", task: t, state: "doing", verdict: "rejected", round: 1, note: "## Review", body: "review" },
+    });
+    const s = fold([add, r1, review], roster);
+    expect(s.rejected.has(review.seq)).toBe(false);
+    const line = formatMessage(review, s.trust.get(review.seq), s);
+    expect(line).toContain(`rejected T${t} “api” (round 1 @ c0ffee): ## Review`);
+    expect(line).toContain("│ 1. BLOCKING: the cache never expires");
+    expect(line).toContain("│ Verdict: REVISE");
+    expect(taskFeed(s, [add, r1, review], t, "jon").find((i) => i.type === "event" && i.seq === review.seq)).toMatchObject({ review: "## Review\n\n1. BLOCKING: the cache never expires\n\nVerdict: REVISE" });
+    expect(wellFormed({ ...review, ev: { op: "task.update", task: t, note: "x", body: "review" } })).toBe(false);
+    expect(wellFormed({ ...r1, ev: { op: "task.update", task: t, state: "review", at: "two\nlines" } })).toBe(false);
   });
 
   test("any: anyone who hasn't worked on it, judged by who owns it then", async () => {

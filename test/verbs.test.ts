@@ -2,7 +2,7 @@
 // The older names stay as aliases, so agents and hooks already running keep working.
 import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { startRelay } from "../src/relay/bun.ts";
@@ -198,5 +198,58 @@ describe("ten verbs", () => {
     expect((await run(agent, "read")).code).toBe(0);
     expect((await run(agent, "facts")).code).toBe(0);
     expect((await run(agent, "wait", "--timeout", "1s")).out).toContain("wait --timeout 10m");
+  });
+});
+
+describe("review rounds through the CLI", () => {
+  const owner = scratch("rounds-owner");
+  const dev = scratch("rounds-dev");
+  const rev = scratch("rounds-rev");
+
+  const joinAs = async (home: string, code: string, name: string) => {
+    const p = spawn(home, ["join", code, "--as", name]);
+    let listed = "";
+    await until(async () => {
+      listed = await ok(owner, "--as", "human", "requests");
+      return new RegExp(`(\\d{3}-\\d{3})\\s+${name}\\b`).test(listed);
+    }, `${name}'s request`);
+    await ok(owner, "--as", "human", "approve", new RegExp(`(\\d{3}-\\d{3})\\s+${name}\\b`).exec(listed)![1]!, "--yes");
+    expect(await p.exited).toBe(0);
+  };
+
+  beforeAll(async () => {
+    const code = /join code: (\S+)/.exec(await ok(owner, "create", "rounds", "--as", "lead", "--open"))![1]!;
+    await joinAs(dev, code, "dev");
+    await joinAs(rev, code, "rev");
+  });
+
+  test("review --at opens a round, a verdict with --file carries the review, a stale one is refused, and REVISE can leave the board", async () => {
+    const t = /T(\d+)/.exec(await ok(dev, "task", "add", "stage 6 for QE-1", "--review", "rev"))![1]!;
+    await ok(dev, "task", "claim", `T${t}`);
+    await ok(dev, "task", "review", `T${t}`, "--at", "1111111111111111111111111111111111111111");
+    const review = join(rev, "review.md");
+    writeFileSync(review, "2 blocking\n\n1. BLOCKING: no test for the empty case\n2. BLOCKING: the flag is never read\n\nVerdict: REVISE\n");
+    const unnamed = await run(rev, "task", "reject", `T${t}`, "--file", review);
+    expect(unnamed.err).toContain(`say which round of T${t} you reviewed: --round 1 (or --at 1111111111111111111111111111111111111111)`);
+    await ok(rev, "task", "reject", `T${t}`, "--file", review, "--at", "1111111111111111111111111111111111111111");
+    await ok(dev, "task", "review", `T${t}`, "--at", "2222222222222222222222222222222222222222");
+    const lateReview = await run(rev, "task", "approve", `T${t}`, "--file", review, "--at", "1111111111111111111111111111111111111111");
+    expect(lateReview.code).toBe(1);
+    expect(lateReview.err).toContain(`round 1 of T${t} isn't the open one: round 2 is, at 2222222222222222222222222222222222222222`);
+    expect((await run(rev, "task", "approve", `T${t}`, "--round", "2", "--at", "1111111111111111111111111111111111111111")).err).toContain(`round 2 of T${t} is at 2222222222222222222222222222222222222222, not at 1111111111111111111111111111111111111111`);
+    const shown = JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json")) as { rounds: { n: number; at: string; result: { kind: string; by?: string } }[] };
+    expect(shown.rounds.map((r) => [r.n, r.at.slice(0, 4), r.result.kind])).toEqual([
+      [1, "1111", "rejected"],
+      [2, "2222", "open"],
+    ]);
+    const log = await ok(dev, "log", "-n", "10");
+    expect(log).toContain(`rejected T${t} “stage 6 for QE-1” (round 1 @ 111111111111): 2 blocking`);
+    expect(log).toContain("│ 2. BLOCKING: the flag is never read");
+    expect(log).toContain("│ Verdict: REVISE");
+    expect((await run(dev, "task", "approve", `T${t}`))).toMatchObject({ code: 1 });
+    await ok(rev, "task", "reject", `T${t}`, "still one blocking", "--round", "2");
+    expect((await run(rev, "task", "approve", `T${t}`, "--round", "2")).err).toContain(`T${t} has no review round open`);
+    expect(await ok(dev, "task", "cancel", `T${t}`, "handed to the runner")).toContain("done (cancelled)");
+    expect(await ok(dev, "task", "show", `T${t}`)).toContain("round 2 @ 2222222222222222222222222222222222222222, asked by dev");
   });
 });
