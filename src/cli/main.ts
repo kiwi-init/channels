@@ -27,7 +27,7 @@ import { describeMember, freeAgentName, handleFor, inlineText } from "../members
 import { freeHandle } from "../handles.ts";
 import { baseName, here, seatsNear } from "../seats.ts";
 import { daemonSeat, ensureDaemon, reportRead, wakeOn, type DaemonSeat } from "../daemon.ts";
-import { isWakeVia, wakeKey, wakeWords } from "../wake.ts";
+import { asOption, channelOption, isWakeVia, wakeKey, wakeWords } from "../wake.ts";
 import { ago, cardLine, charterLines, describeEvent, holdLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, modeLine, parseDuration, presenceWords, taskStateWord, statusJson } from "../format.ts";
 import { canPost, describeScopes, presetOf, SCOPES, type Scope } from "../scopes.ts";
 import { fingerprint } from "../identity.ts";
@@ -345,7 +345,7 @@ function seatHere(alias: string, name: string, plain: boolean) {
 /** Give the agent its seat in this directory (beside any other agents here), and make sure its harness keeps it listening. */
 function settleIn(alias: string, name: string): void {
   if (!bindDirectory(process.cwd(), seatHere(alias, name, true))) {
-    process.stderr.write(`kiwi: not binding ${process.cwd()} (too broad); run kiwi from your project folder, or pass -c ${alias} --as ${name}\n`);
+    process.stderr.write(`kiwi: not binding ${process.cwd()} (too broad); run kiwi from your project folder, or pass ${channelOption(alias)} ${asOption(name)}\n`);
   }
   const installed = autoInstallHooks();
   if (installed) process.stderr.write(`kiwi: installed Claude Code hooks (${installed}) so this agent keeps listening; \`kiwi hooks uninstall\` removes them\n`);
@@ -391,6 +391,7 @@ const commands: Record<string, Command> = {
       } catch {
         return yield* die("that isn't a join code (they look like mc2-…-…)");
       }
+      if (args[2] !== undefined && !NAME_RE.test(args[2])) return yield* die(`the alias ${JSON.stringify(args[2])} is invalid (1-32 letters, digits, _ . or -)`);
       const relay = relayUrl();
       const roomId = decodeJoinCode(code).roomId;
       const who = here();
@@ -404,7 +405,7 @@ const commands: Record<string, Command> = {
         return yield* die(
           [
             `this folder already has ${found.as}'s seat in ${aliasHere}, and kiwi can't tell what runs you, so it can't tell whether you are ${found.as}.`,
-            `If you are ${found.as}: kiwi join ${code} --as ${found.as}`,
+            `If you are ${found.as}: kiwi join ${code} ${asOption(found.as)}`,
             `If you're another agent: kiwi join ${code} --as NAME, then pass --as NAME (or set KIWI_AS=NAME) on every kiwi command you run from here.`,
           ].join("\n"),
           2,
@@ -1147,7 +1148,7 @@ const commands: Record<string, Command> = {
       else if (sub === "note") state = yield* s.taskUpdate(id, { note: note ?? (yield* die('usage: kiwi task note T7 "…"')) });
       else return yield* die(`unknown task command "${sub}"`);
       const t = state.tasks.get(id)!;
-      out(`${taskId(id)} ${taskStateWord(t)}${t.owner ? ` @${t.owner}` : ""}: ${t.title}`);
+      out(`${taskId(id)} ${taskStateWord(t)}${t.owner ? ` @${t.owner}` : ""}: ${inlineText(t.title, 200)}`);
     }),
 
   tasks: () =>
