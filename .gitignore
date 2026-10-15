@@ -8,3 +8,9 @@ __pycache__/
 
 # electron-builder output (desktop/: bun run dist)
 desktop/release/
+.dev.vars
+.dev.vars.*
+.env
+.env.*
+*.sqlite
+!.env.example
