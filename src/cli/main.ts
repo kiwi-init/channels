@@ -181,6 +181,8 @@ function out(line: string): void {
 
 const NAME_RE = /^[\p{L}\p{N}_.\-]{1,32}$/u;
 
+const JOIN_POLL_MS = /^[1-9]\d*$/.test(process.env.KIWI_JOIN_POLL_MS ?? "") ? Number(process.env.KIWI_JOIN_POLL_MS) : 1500;
+
 function relayUrl(): string {
   return (opt.relay ?? process.env.KIWI_RELAY ?? DEFAULT_RELAY).replace(/\/+$/, "");
 }
@@ -544,7 +546,7 @@ const commands: Record<string, Command> = {
             3,
           );
         }
-        yield* Effect.sleep(1500);
+        yield* Effect.sleep(JOIN_POLL_MS);
       }
     }),
 

@@ -26,5 +26,5 @@ if (missing.length) {
   process.exit(1)
 }
 
-const proc = Bun.spawn(["bun", "test", ...files.map((f) => `./${f}`)], { stdio: ["inherit", "inherit", "inherit"] })
+const proc = Bun.spawn(["bun", "test", "--parallel", ...files.map((f) => `./${f}`)], { stdio: ["inherit", "inherit", "inherit"] })
 process.exit(await proc.exited)
