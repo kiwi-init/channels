@@ -154,3 +154,16 @@ jobs:
       deploy --dry-run and wrangler.jsonc. Fails if the worker can't be bundled for Cloudflare,
       for example a Node- or Bun-only import reaching src/relay/worker.ts, or an invalid
       wrangler.jsonc. Code the worker doesn't import can't affect it.
+
+  repo-comments:
+    jev: false
+    name: repo / comments
+    inputs: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,css,py}"]
+    always: ["scripts/ci/**"]
+    description: >-
+      AGENTS.md forbids comments and tool directives in code. scripts/ci/no_comments.py reads the
+      lines this change adds (git diff against the first parent) and fails on a comment in a
+      .ts/.tsx/.js/.jsx/.mjs/.cjs/.mts/.cts or .css file, or a comment or docstring in a .py file
+      (a docstring listed in its ALLOWED_DOCSTRINGS passes, a #! first line passes). Old lines
+      are not checked. The job also type-checks scripts/ci with mypy --strict and runs its
+      unit tests.
