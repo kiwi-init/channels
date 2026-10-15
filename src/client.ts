@@ -39,7 +39,8 @@ import { sign, signText, verify, verifyText, type Identity } from "./identity.ts
 import { commitTo, joinCheckCode, joinNonce, ownerNonceStatement, spendAuto, type SigningBudget } from "./sas.ts";
 import { canPost, scopesOf, wireScopes, type Scope } from "./scopes.ts";
 import { COORDINATOR, type ChannelState, type GuardFloor } from "./state.ts";
-import { freeAgentName, inlineText, makeRecord, NAME_RE, nameKey, readRecord, readRuns, RESERVED_NAMES, sealRecord, verifiedComputer, verifiedPerson, type JoinClaims, type JoinRequest, type Member, type MemberInfo } from "./membership.ts";
+import { freeHandle, seededPick } from "./handles.ts";
+import { inlineText, makeRecord, NAME_RE, nameKey, readRecord, readRuns, RESERVED_NAMES, sealRecord, verifiedComputer, verifiedPerson, type JoinClaims, type JoinRequest, type Member, type MemberInfo } from "./membership.ts";
 import {
   CLOSE_CLOSED,
   CLOSE_REMOVED,
@@ -577,6 +578,7 @@ export interface ChannelFx {
   setCanPost(pk: string, post: boolean): Effect.Effect<void, Refused, Relay>;
   updateScopes(m: Member, scopes: readonly Scope[], since: number): Effect.Effect<void, Refused, Relay>;
   updateRole(m: Member, role: string | null, about: string | null | undefined, since: number): Effect.Effect<void, Refused, Relay>;
+  updateNickname(m: Member, nickname: string | null): Effect.Effect<void, Refused, Relay>;
   reconcilePosting(state: Pick<ChannelState, "members" | "scopeSets" | "roleSets">, members?: Member[]): Effect.Effect<string[], Refused, Relay>;
   remove(pk: string): Effect.Effect<void, Refused, Relay>;
   /** Owner, right after making a channel: start it in coordinator mode (an owner-signed mode.set, and the settings). */
@@ -930,19 +932,14 @@ export class Channel {
         const person = yield* Effect.promise(() => verifiedPerson(this.roomId, r.pk, info.person));
         // A person is admitted as a person; everyone else as an agent.
         const kind = person ? "human" : "agent";
-        // (A person is admitted under the name they asked under.)
-        // An agent whose name is taken is offered a free one like it: a seat never moves to a new key
-        // (a lost key means the owner removes the old seat and the agent joins again). One that didn't
-        // pick its name asks under its base ("claude-2" → "claude"), so the next free one is claude-3.
-        // A name that isn't allowed at all (invalid, reserved) isn't swapped for one like it: approving refuses it.
         const asked = inlineText(info.name, 40);
         const allowed = NAME_RE.test(asked) && !RESERVED_NAMES.has(nameKey(asked));
         const holder = allowed ? seats.find((m) => nameKey(m.name) === nameKey(asked)) : undefined;
-        // A person's or the owner's name isn't a base for an agent's: "alice-2" would read as alice's.
         const personName = !!holder && (holder.kind === "human" || holder.owner);
-        const base = info.auto === true ? (allowed ? asked.replace(/-\d+$/, "") || asked : "agent") : asked;
-        const auto = kind !== "human" && (info.auto === true || !!holder) ? (personName ? "agent" : base) : undefined;
-        if (auto) offered.push({ name: (info.name = freeAgentName(auto, offered)) });
+        const auto = kind !== "human" && (info.auto === true || !!holder) ? asked : undefined;
+        const free = !!auto && allowed && !offered.some((m) => nameKey(m.name) === nameKey(asked));
+        const nick = kind === "human" ? "" : inlineText(info.display, 40) || (auto && !free && allowed && !personName ? asked.replace(/-\d+$/, "") || asked : "");
+        if (auto) offered.push({ name: (info.name = free ? asked : freeHandle(offered, seededPick(r.pk))) });
         // A half that doesn't check out means the relay tampered with the request: leave it out.
         // Own computers' halves are signed without the budget (free); anyone else's only once they've
         // revealed (no budget wasted on joins that never complete). Without a person key this is the
@@ -957,6 +954,7 @@ export class Channel {
           role: inlineText(info.role, 60) || undefined,
           about: inlineText(info.about, 200) || undefined,
           kind,
+          ...(nick ? { display: nick } : {}),
           id: r.id,
           pk: r.pk,
           xpk: r.xpk,
@@ -1007,10 +1005,10 @@ export class Channel {
           sponsor = human ? { user: c.person, name: human.display ?? c.personName, handle: human.name } : { user: c.person, name: c.personName };
         }
       }
-      // An agent that didn't pick its name: the one it was offered, or the next free one if that went meanwhile.
       if (kind === "agent" && req.askedAs && !as?.name) {
-        as = { ...as, name: freeAgentName(req.name, members) === req.name ? req.name : freeAgentName(req.askedAs, members) };
+        as = { ...as, name: members.some((m) => nameKey(m.name) === nameKey(req.name)) ? freeHandle(members, seededPick(req.pk)) : req.name };
       }
+      const nick = inlineText(as?.display ?? req.display, 40);
       yield* this.assertNamesFree([as?.name ?? req.name]);
       const info: MemberInfo = {
         name: as?.name ?? req.name,
@@ -1018,7 +1016,7 @@ export class Channel {
         role: as?.role ?? (req.role?.trim().toLowerCase() === COORDINATOR ? undefined : req.role),
         about: as?.about ?? req.about,
         kind,
-        ...(kind === "human" && as?.display ? { display: as.display } : {}),
+        ...(kind === "human" ? (as?.display ? { display: as.display } : {}) : nick ? { display: nick } : {}),
         ...(sponsor ? { sponsor } : {}),
         // A person joins as themself; an agent carries which computer it runs on.
         ...(kind === "human" && req.person ? { person: req.person } : {}),
@@ -1084,6 +1082,18 @@ export class Channel {
       const { active: _a, readOnly: _r, unverified: _u, at: _at, ...info } = m;
       const laterRole = { role, ...(about !== undefined ? { about } : {}), since };
       const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.identity, this.roomId, { ...info, laterRole })));
+      const scopes = m.later?.scopes ?? scopesOf(m);
+      yield* this.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(scopes) }) });
+    }),
+
+    updateNickname: Effect.fn("Channel.updateNickname")({ self: this }, function* (this: Channel, m: Member, nickname: string | null) {
+      yield* this.ownerOnly();
+      if (m.owner || m.kind === "human") return yield* new Rejected("only an agent's nickname is changed this way");
+      const e = this.access.epoch;
+      const key = this.access.keys[String(e)]!;
+      const { active: _a, readOnly: _r, unverified: _u, at: _at, display: _d, ...info } = m;
+      const display = inlineText(nickname ?? "", 40);
+      const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.identity, this.roomId, { ...info, ...(display ? { display } : {}) })));
       const scopes = m.later?.scopes ?? scopesOf(m);
       yield* this.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(scopes) }) });
     }),
@@ -1720,6 +1730,10 @@ export class Channel {
    */
   updateRole(m: Member, role: string | null, about: string | null | undefined, since: number): Promise<void> {
     return run(this.fx.updateRole(m, role, about, since));
+  }
+
+  updateNickname(m: Member, nickname: string | null): Promise<void> {
+    return run(this.fx.updateNickname(m, nickname));
   }
 
   /**

@@ -23,7 +23,8 @@ import { loadImages, saveImages } from "../attach.ts";
 import { Channel, ChannelGone, goneText, reason, RelayError } from "../client.ts";
 import { Cursor, DEFAULT_RELAY, home, Keystore, loadConfig, updateConfig, type ChannelConfig } from "../config.ts";
 import { decodeJoinCode, type ChannelAccess } from "../crypto.ts";
-import { describeMember, freeAgentName, handleFor } from "../membership.ts";
+import { describeMember, freeAgentName, handleFor, inlineText } from "../membership.ts";
+import { freeHandle } from "../handles.ts";
 import { baseName, here, seatsNear } from "../seats.ts";
 import { daemonSeat, ensureDaemon, reportRead, wakeOn, type DaemonSeat } from "../daemon.ts";
 import { isWakeVia, wakeKey, wakeWords } from "../wake.ts";
@@ -45,8 +46,9 @@ const CLAIMS_GONE = "claims are gone: say what you're working on in the task, or
 const HELP = `kiwi ${VERSION} — Channels by Kiwi Init: real-time coordination for AI agents
 
 Agents
-  kiwi join <code>                               ask to join (named after what you run in: claude, codex…; --as NAME
-                                                 picks one); waits for the owner, then says what to do
+  kiwi join <code>                               ask to join under a random handle (@otter-gentle), nicknamed after what
+                                                 you run in (claude, codex…); waits for the owner, then says what to do
+     --nick NAME · --as HANDLE                   your nickname (anyone may share it) · a handle of your own choosing
      --model ID                                  the model you run on (read from Claude Code, Codex, OpenCode, Grok,
                                                  Kimi Code or MiMoCode when it can be; required when it can't, or
                                                  set KIWI_MODEL);
@@ -106,6 +108,7 @@ const { values: opt, positionals: args } = parseArgs({
   options: {
     channel: { type: "string", short: "c" },
     as: { type: "string" },
+    nick: { type: "string" },
     role: { type: "string" },
     about: { type: "string" },
     relay: { type: "string" },
@@ -382,7 +385,7 @@ const commands: Record<string, Command> = {
     Effect.gen(function* () {
       const keys = yield* Keystore;
       const cursor = yield* Cursor;
-      const code = (args[1] ?? (yield* die("usage: kiwi join <code> [alias] --model MODEL [--harness NAME] [--as NAME] [--role ROLE]"))).trim();
+      const code = (args[1] ?? (yield* die("usage: kiwi join <code> [alias] --model MODEL [--harness NAME] [--nick NAME] [--as HANDLE] [--role ROLE]"))).trim();
       try {
         decodeJoinCode(code);
       } catch {
@@ -419,7 +422,7 @@ const commands: Record<string, Command> = {
           const asking = Object.fromEntries(Object.entries(c.asking ?? {}).filter(([, a]) => now - a.at < 7 * 86_400_000));
           const mine = asking[askingKey]?.as;
           const waiting = Object.entries(asking).filter(([k]) => k.startsWith(`${roomId} `) && k !== askingKey).map(([, a]) => ({ name: a.as }));
-          name = mine && local.includes(mine) ? mine : freeAgentName(baseName(who), [...local.map((n) => ({ name: n })), ...waiting]);
+          name = mine && local.includes(mine) ? mine : freeHandle([...local.map((n) => ({ name: n })), ...waiting]);
           c.asking = { ...asking, [askingKey]: { as: name, at: mine && local.includes(mine) ? asking[askingKey]!.at : now } };
         });
       }
@@ -429,7 +432,8 @@ const commands: Record<string, Command> = {
       if (name === OWNER_NAME) return yield* die(`"${OWNER_NAME}" is reserved for the channel owner; pick an agent name with --as`);
       const hadKey = local.includes(name);
       let id = yield* keys.identity(name, roomId);
-      const info = { name, ...(opt.role ? { role: opt.role } : {}), ...(opt.about ? { about: opt.about } : {}), ...(auto ? { auto: true } : {}) };
+      const nick = inlineText(opt.nick ?? (auto ? baseName(who) : ""), 40);
+      const info = { name, ...(nick ? { display: nick } : {}), ...(opt.role ? { role: opt.role } : {}), ...(opt.about ? { about: opt.about } : {}), ...(auto ? { auto: true } : {}) };
       // What it runs on goes with the request, so the owner sees it before letting it in and the
       // coordinator can plan with it: the model (said, or told by the harness), the harness, the machine.
       const model = opt.model?.trim() || (yield* Effect.promise(() => detectModel()));

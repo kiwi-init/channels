@@ -105,6 +105,7 @@ export function InfoPanel({
                 <Face
                   head={coordinator === m.name ? <CoordinatorAvatar size={52} mood={mood} seed={0.2} /> : undefined}
                   name={memberName(m)}
+                  handle={m.name}
                   agent={m.kind !== "human"}
                   online={p.online.has(m.name)}
                   color={colorOf(p.state, m.name)}
@@ -317,6 +318,7 @@ function Row({ icon, children, detail, trailing, onClick }: { icon: IconSvgEleme
 function Face({
   head,
   name,
+  handle,
   agent,
   online,
   color,
@@ -327,6 +329,7 @@ function Face({
 }: {
   head?: ReactNode
   name: string
+  handle: string
   agent: boolean
   online: boolean
   color: ReturnType<typeof colorOf>
@@ -337,8 +340,10 @@ function Face({
 }) {
   return (
     <span className="flex min-w-0 flex-col items-center px-1" title={title}>
-      {head ?? <Monogram name={name} agent={agent} size={52} online={online} color={color} working={working} />}
-      <span className="mt-1.5 max-w-full truncate text-meta font-medium">{name}</span>
+      {head ?? <Monogram name={name} hue={handle} agent={agent} size={52} online={online} color={color} working={working} />}
+      <span className="mt-1.5 max-w-full truncate text-meta font-medium" title={`@${handle}`}>
+        {name}
+      </span>
       <span className={cx("max-w-full truncate text-stamp", strong ? "font-semibold text-ink-2" : "text-ink-3")}>{line}</span>
     </span>
   )

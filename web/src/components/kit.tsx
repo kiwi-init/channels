@@ -115,6 +115,7 @@ export function hueOf(name: string): Color {
  */
 export function Monogram({
   name,
+  hue,
   agent,
   size = 28,
   online,
@@ -123,6 +124,7 @@ export function Monogram({
   className,
 }: {
   name: string
+  hue?: string
   /** An agent: with no colour of its own, it wears a steady hue from its name. */
   agent?: boolean
   size?: number
@@ -131,7 +133,7 @@ export function Monogram({
   working?: boolean
   className?: string
 }) {
-  const tone = color ? PALETTE[color] : agent ? PALETTE[hueOf(name)] : null
+  const tone = color ? PALETTE[color] : agent ? PALETTE[hueOf(hue ?? name)] : null
   const letters = initials(name)
   return (
     <span className={cx("relative inline-flex shrink-0", className)} style={{ width: size, height: size }}>

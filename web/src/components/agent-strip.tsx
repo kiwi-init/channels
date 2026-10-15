@@ -39,7 +39,8 @@ function doingNow(a: AgentNow): { text: string; busy: boolean } | null {
   return null
 }
 
-const face = (a: AgentNow, size: number) => (a.coordinator ? <CoordinatorAvatar size={size} /> : <Monogram name={a.label} agent color={a.color} size={size} online={size > 20 && a.online} />)
+const face = (a: AgentNow, size: number) =>
+  a.coordinator ? <CoordinatorAvatar size={size} /> : <Monogram name={a.label} hue={a.name} agent color={a.color} size={size} online={size > 20 && a.online} />
 
 export function AgentStrip({ agents, now, onOpenTask }: { agents: AgentNow[]; now: number; onOpenTask: (id: number) => void }) {
   const [open, setOpen] = useState(false)

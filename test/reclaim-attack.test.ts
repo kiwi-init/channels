@@ -50,25 +50,28 @@ describe("no seat moves to a new key", () => {
       const id = await generateIdentity(name);
       const { requestId } = await Channel.requestJoin(relay, code, id, { name });
       const r = (await ownerCh.requests()).find((x) => x.id === requestId)!;
-      // "human" is reserved: refused at approval, not renamed. "pat" is a person's: an agent's name instead.
-      if (name === "pat") expect(r.name).toMatch(/^agent(-\d+)?$/);
-      else expect(r.askedAs).toBeUndefined();
+      if (name === "pat") {
+        expect(r.name).toMatch(/^[a-z]+-[a-z]+$/);
+        expect(r.display).toBeUndefined();
+      } else expect(r.askedAs).toBeUndefined();
     }
   });
 
-  test("a new key asking under a taken name, even as a reclaim, is offered the next free name", async () => {
+  test("a new key asking under a taken name, even as a reclaim, is offered a free handle and keeps the name as its nickname", async () => {
     const { oldKey, code, ownerCh } = await seat();
     const newbie = await generateIdentity("win");
     const { requestId } = await Channel.requestJoin(relay, code, newbie, { name: "win", reclaim: true });
     const first = (await ownerCh.requests()).find((r) => r.id === requestId)!;
-    expect(first.name).toBe("win-2");
+    expect(first.name).toMatch(/^[a-z]+-[a-z]+$/);
+    expect(first.display).toBe("win");
     expect(first.askedAs).toBe("win");
     await ownerCh.checkRequest(first);
     await Channel.joinStatus(relay, code, newbie, requestId);
     await ownerCh.approve((await ownerCh.requests()).find((r) => r.id === requestId)!);
     const members = await ownerCh.members();
     expect(active(members, "win")).toEqual([oldKey.pk]);
-    expect(active(members, "win-2")).toEqual([newbie.pk]);
+    expect(active(members, first.name)).toEqual([newbie.pk]);
+    expect(members.find((m) => m.pk === newbie.pk)?.display).toBe("win");
   });
 
   test("a request with no owner approval grants nothing", async () => {

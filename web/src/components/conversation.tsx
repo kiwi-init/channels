@@ -575,6 +575,10 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
         const target = ev.op === "role.set" ? roster.find((m) => m.active && m.name === ev.member && !m.owner) : undefined
         if (ev.op === "role.set" && target) await ch.updateRole(target, ev.role, ev.about, seq).catch(() => {})
       }}
+      onNickname={async (m, nickname) => {
+        await ch.updateNickname(m, nickname)
+        await refreshRoster()
+      }}
       onDeny={async (r) => {
         await ch.deny(r.id)
         await refreshRequests()
