@@ -203,7 +203,7 @@ export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, 
               onMouseDown={(e) => (e.preventDefault(), complete(p))}
               className={cx("flex w-full items-center gap-2.5 rounded-row px-2 py-1.5 text-left text-ui", i === mention!.index ? "bg-wash-2" : "hover:bg-wash")}
             >
-              <Monogram name={p.label} agent={p.agent} color={p.color} size={20} />
+              <Monogram name={p.label} hue={p.name} agent={p.agent} color={p.color} size={20} />
               <span className="truncate font-medium">{p.label}</span>
               {p.label !== p.name && <span className="truncate text-ink-3">@{p.name}</span>}
             </button>

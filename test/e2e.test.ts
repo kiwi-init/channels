@@ -189,16 +189,14 @@ describe("agents coordinating through the CLI", () => {
     expect(joined).toContain(" help`");
     await joinVia(lead, win, code, "proj", "win", "windows");
 
-    // Someone else with the leaked code asks to be "win": nobody's seat ever moves to a new key, so it's a
-    // plain request under the next free name, which the owner sees as such and turns down by key.
     const evil = mc(home("evil"), "join", code, "proj", "--as", "win", "--timeout", "20s");
     let listed = "";
     await untilTrue(async () => {
       listed = await ok(lead, "--as", "human", "requests");
-      return /win-2 \(asked as win, which is taken\)/.test(listed);
+      return /[a-z]+-[a-z]+ \(asked as win, which is taken\)/.test(listed);
     }, "the request listed under a free name");
     expect(listed).not.toContain("RECLAIM");
-    const evilKey = /win-2 \(asked as win, which is taken\).* key (\S+)/.exec(listed)![1]!;
+    const evilKey = /[a-z]+-[a-z]+ \(asked as win, which is taken\).* key (\S+)/.exec(listed)![1]!;
     await ok(lead, "--as", "human", "deny", evilKey);
     expect(await evil.exited).toBe(1);
 

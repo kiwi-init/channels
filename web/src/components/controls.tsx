@@ -28,6 +28,7 @@ type Confirm =
   | { kind: "remove"; member: RosterMember }
   | { kind: "role"; member: RosterMember }
   | { kind: "scopes"; member: RosterMember }
+  | { kind: "nickname"; member: RosterMember }
   | { kind: "close" }
   | { kind: "leave" }
   | null
@@ -52,6 +53,7 @@ export interface ControlsProps {
   onScopes?: (m: RosterMember, scopes: Scope[]) => Promise<void>
   /** Owner: set a member's role (a signed event). role.refuse is an older owner's; nothing sends it now. */
   onRole: (ev: Extract<Event, { op: "role.set" | "role.refuse" }>) => Promise<void>
+  onNickname?: (m: RosterMember, nickname: string | null) => Promise<void>
   onCloseChannel: () => Promise<void>
   onLeaveChannel: () => Promise<void>
   /** Unused: channel icons left the UI (T1389). Still accepted until conversation.tsx stops passing it. */
@@ -85,6 +87,7 @@ interface Api {
   setRole: (ev: Extract<Event, { op: "role.set" | "role.refuse" }>) => Promise<void>
   editRole: (m: RosterMember) => void
   editScopes: (m: RosterMember) => void
+  editNickname: (m: RosterMember) => void
   lastSeenOf: (name: string) => number | null
   onlineNow: (name: string) => boolean
   /** The channel's own dialogs, from wherever they're offered (the info panel). */
@@ -136,6 +139,7 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
   const [dialog, setDialog] = useState<"rename" | "charter" | null>(null)
   const [roleDraft, setRoleDraft] = useState({ role: "", about: "" })
   const [scopeDraft, setScopeDraft] = useState<Scope[]>([...SCOPES])
+  const [nickDraft, setNickDraft] = useState("")
   const active = p.roster.filter((m) => m.active)
   // Someone else's seat: the joiner's own key landing in the roster mid-approve (the live join event beats
   // the approve call home) is this request going through, not a clash.
@@ -224,6 +228,10 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
       setScopeDraft(now && now.length === 0 ? [] : [...SCOPES])
       setConfirm({ kind: "scopes", member: m })
     },
+    editNickname: (m) => {
+      setNickDraft(m.display ?? "")
+      setConfirm({ kind: "nickname", member: m })
+    },
     lastSeenOf,
     onlineNow,
     openDialog: setDialog,
@@ -272,6 +280,33 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
             if (confirm?.kind !== "role") return
             const name = confirm.member.name
             void run(() => setRole({ op: "role.set", member: name, role: roleDraft.role.trim() || null, about: roleDraft.about.trim() || null }), `Saved ${name}’s role`)
+          }}
+        >
+          Save
+        </Button>
+      </Alert>
+
+      <Alert
+        open={confirm?.kind === "nickname"}
+        onClose={() => setConfirm(null)}
+        title={confirm?.kind === "nickname" ? `Nickname for @${confirm.member.name}` : ""}
+        message={
+          <span className="mt-3 grid gap-2">
+            <TextField value={nickDraft} onChange={(e) => setNickDraft(e.target.value)} placeholder="Nickname, e.g. claude" maxLength={40} aria-label="Nickname" autoFocus />
+            <span className="text-meta text-ink-3">What everyone sees. Others still reach it as @{confirm?.kind === "nickname" ? confirm.member.name : ""}, which never changes.</span>
+          </span>
+        }
+      >
+        <Button variant="secondary" onClick={() => setConfirm(null)}>
+          Cancel
+        </Button>
+        <Button
+          disabled={busy || !p.onNickname}
+          onClick={() => {
+            if (confirm?.kind !== "nickname" || !p.onNickname) return
+            const m = confirm.member
+            const nick = nickDraft.trim()
+            void run(() => p.onNickname!(m, nick || null), nick ? `@${m.name} is now ${nick}` : `@${m.name} has no nickname now`)
           }}
         >
           Save
@@ -372,7 +407,7 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
 
 /** The owner's actions on one member, behind whatever opens them (a member's tile in the info panel). */
 export function MemberActions({ m, trigger, onMessage }: { m: RosterMember; trigger: Parameters<typeof Menu>[0]["trigger"]; onMessage?: () => void }) {
-  const { p, ask, editRole, editScopes, setCoordinator } = useControls()
+  const { p, ask, editRole, editScopes, editNickname, setCoordinator } = useControls()
   const now = p.state.members.get(m.name)
   return (
     <Menu align="center" trigger={trigger}>
@@ -382,6 +417,7 @@ export function MemberActions({ m, trigger, onMessage }: { m: RosterMember; trig
           <MenuSeparator />
         </>
       )}
+      {m.kind !== "human" && p.onNickname && <MenuItem onClick={() => editNickname(m)}>Change nickname…</MenuItem>}
       <MenuItem onClick={() => editRole(m)}>Set role…</MenuItem>
       {p.state.coordinator === m.name ? (
         <MenuItem onClick={() => void setCoordinator(m, false)}>No longer coordinator</MenuItem>
@@ -536,11 +572,12 @@ function Requests({ onDone }: { onDone: () => void }) {
         {requests.length === 0 && <p className="text-ui text-ink-3">Nobody’s waiting.</p>}
         {requests.map((r) => (
           <div key={r.id} className="flex items-start gap-3">
-            <Monogram name={r.name} agent={r.kind !== "human"} size={28} />
+            <Monogram name={r.display || r.name} hue={r.name} agent={r.kind !== "human"} size={28} />
             <div className="min-w-0 flex-1">
               {
                 <p className="truncate text-ui font-medium">
-                  {r.name}
+                  {r.display || r.name}
+                  {r.display && <span className="font-normal text-ink-3"> @{r.name}</span>}
                   {r.role && <span className="font-normal text-ink-2">, {r.role}</span>}
                   {r.askedAs && r.askedAs !== r.name && <span className="font-normal text-ink-2"> (asked as {r.askedAs}, which is taken)</span>}
                 </p>

@@ -346,7 +346,7 @@ try {
   if (await page.getByText("smoke in the task", { exact: true }).count()) throw new Error("a message in a task's conversation showed in main")
   console.log(`ok  ${at}`)
   // What the owner can do to a member: each item behind their face in the details.
-  for (const item of ["Set role…", "Remove from channel…"])
+  for (const item of ["Change nickname…", "Set role…", "Remove from channel…"])
     await opens(`Details → bot → ${item}`, () =>
       inDetails(async () => {
         await panel.getByRole("button", { name: "More for bot" }).click()
