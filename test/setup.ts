@@ -27,6 +27,7 @@ function isolate(): void {
   for (const key of SESSION) delete process.env[key];
   // `kiwi join` needs a model: a test's agents say one, unless a test is about not saying one.
   process.env.KIWI_MODEL ??= "test-model";
+  process.env.KIWI_JOIN_POLL_MS ??= "100";
   for (const [key, dir] of Object.entries(DIRS)) {
     if (!process.env[key]) process.env[key] = dir;
   }
