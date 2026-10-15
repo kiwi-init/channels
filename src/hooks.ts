@@ -34,7 +34,7 @@ import { ChannelGone } from "./client.ts";
 import { briefText, COMMANDS } from "./brief.ts";
 import { charterLines, formatMessage, holdLine, modeLine } from "./format.ts";
 import { humanOf } from "./state.ts";
-import { shellWord, wakePath, wakeWords } from "./wake.ts";
+import { asOption, channelOption, wakePath, wakeWords } from "./wake.ts";
 import { wakeOn } from "./daemon.ts";
 import { bindDirectory as bindSeat, bindingFor as seatFor, here, seatsNear, type Binding, type Here, type Listener, type SeatOptions } from "./seats.ts";
 
@@ -640,7 +640,7 @@ export function mcBin(): string {
 export function mcFor(alias: string, as: string, dir = process.cwd(), who?: Here): string {
   const b = bindingFor(dir, { ...(who ? { who } : {}), claim: false });
   const mine = b?.alias === alias && b.as === as && (b.session ? b.session === (who ?? here()).session : seatsNear(dir).length === 1);
-  return mine ? mcBin() : `${mcBin()} -c ${shellWord(alias)} --as ${shellWord(as)}`;
+  return mine ? mcBin() : `${mcBin()} ${channelOption(alias)} ${asOption(as)}`;
 }
 
 const MAX_CONTEXT = 6_000;

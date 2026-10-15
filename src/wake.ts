@@ -58,12 +58,20 @@ export function wakePath(record: { harness?: WakeHarness; session?: string } | n
   }
 }
 
-export function shellWord(s: string): string {
+function shellWord(s: string): string {
   return /^[A-Za-z0-9_.@%+=:,/-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
+export function channelOption(alias: string): string {
+  return alias.startsWith("-") ? shellWord(`--channel=${alias}`) : `-c ${shellWord(alias)}`;
+}
+
+export function asOption(name: string): string {
+  return name.startsWith("-") ? shellWord(`--as=${name}`) : `--as ${shellWord(name)}`;
+}
+
 export function wakePrompt(alias: string, agent: string): string {
-  return `New Kiwi messages for you in ${JSON.stringify(alias)}. Read them with: kiwi -c ${shellWord(alias)} --as ${shellWord(agent)} listen --now, then act on them.`;
+  return `New Kiwi messages for you in ${JSON.stringify(alias)}. Read them with: kiwi ${channelOption(alias)} ${asOption(agent)} listen --now, then act on them.`;
 }
 
 export function wakeArgv(via: WakeCommand, session: string, prompt: string): string[] {

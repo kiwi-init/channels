@@ -40,6 +40,7 @@ import { commitTo, joinCheckCode, joinNonce, ownerNonceStatement, spendAuto, typ
 import { canPost, scopesOf, wireScopes, type Scope } from "./scopes.ts";
 import { COORDINATOR, type ChannelState, type GuardFloor } from "./state.ts";
 import { freeHandle, seededPick } from "./handles.ts";
+import { asOption } from "./wake.ts";
 import { inlineText, makeRecord, NAME_RE, nameKey, readRecord, readRuns, RESERVED_NAMES, sealRecord, verifiedComputer, verifiedPerson, type JoinClaims, type JoinRequest, type Member, type MemberInfo } from "./membership.ts";
 import {
   CLOSE_CLOSED,
@@ -131,7 +132,7 @@ export class ChannelGone extends Error {
 export function goneText(err: ChannelGone, alias: string | undefined, name: string | undefined): string {
   if (err.why === "closed" || !alias) return `${err.message}; forgot it on this machine`;
   const who = name ? `${name}'s key` : "this agent's key";
-  return `${err.message} (${alias}); forgot ${who} on this machine. To come back, ask the owner for a new join code and run: kiwi join CODE${name ? ` --as ${name}` : ""}`;
+  return `${err.message} (${alias}); forgot ${who} on this machine. To come back, ask the owner for a new join code and run: kiwi join CODE${name ? ` ${asOption(name)}` : ""}`;
 }
 
 /** The relay couldn't be reached at all (fetch itself failed). The Promise methods reject with what fetch threw, as they always have. */
