@@ -21,7 +21,7 @@ import { loadImages, saveImages } from "./attach.ts";
 import { loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { Cursor, home, Keystore } from "./config.ts";
 import { ChannelGone, reason } from "./client.ts";
-import { cardLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, mayDo, parseDuration, runsStatus, stateWord, taskStateWord } from "./format.ts";
+import { ago, cardLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, mayDo, parseDuration, presenceWords, runsStatus, stateWord, taskStateWord } from "./format.ts";
 import { SCOPES } from "./scopes.ts";
 import { CHAT_KINDS, ignored, type Kind, type Message } from "./protocol.ts";
 import { inlineText } from "./membership.ts";
@@ -143,7 +143,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     tool(() =>
       Effect.gen(function* () {
         const [{ messages, state }, online] = yield* Effect.all([s.state(), s.who()], { concurrency: "unbounded" });
-        const on = new Map([...online].map(([n, p]) => [n, { client: p.client, role: p.role }]));
+        const on = new Map([...online].map(([n, p]) => [n, { client: p.client, role: p.role, ...(p.readAt === undefined ? {} : { readAt: p.readAt }) }]));
         return formatStatus({ alias: s.alias, me: s.me, state, online: on, unread: yield* s.unreadCount(state, messages) });
       }),
     ),
@@ -171,7 +171,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
             // Linger briefly so a burst of messages is delivered as one wake-up.
             return lines.length === 1 ? Effect.asVoid(Effect.forkScoped(Effect.andThen(Effect.sleep(400), Deferred.succeed(enough, undefined)))) : Effect.void;
           });
-        const listening = s.listen((m, state) => heard(formatMessage(m, state.trust.get(m.seq), state, s.me)), { client: "mcp-wait", onNotice: heard, marks: false });
+        const listening = s.listen((m, state) => heard(formatMessage(m, state.trust.get(m.seq), state, s.me)), { onNotice: heard, marks: false });
         const over = Effect.raceFirst(Deferred.await(enough), Effect.raceFirst(Effect.sleep(seconds * 1000), cancelled(extra.signal)));
         yield* Effect.raceFirst(listening, over).pipe(
           Effect.ensuring(Effect.suspend(() => (extra.signal.aborted ? cursor.write(s.alias, s.me, since) : Effect.void))),
@@ -334,20 +334,21 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
 
   server.registerTool(
     "who",
-    { description: "Who is listening on the channel right now. Example: call who." },
+    { description: "Who is in the channel: each agent the daemon holds a seat for (reachable, with when it last read), and when everyone else was last seen. Example: call who." },
     tool(() =>
       Effect.gen(function* () {
         const [online, { state }] = yield* Effect.all([s.who(), s.state()], { concurrency: "unbounded" });
-        if (!online.size) return "nobody else is listening right now";
+        const away = [...state.members.values()].filter((m) => m.active && !online.has(m.name));
+        if (!online.size && !away.length) return "nobody else is in this channel";
         return [...online]
           .map(([name, p]) => {
             const rec = state.members.get(name);
             const role = inlineText(p.role ?? rec?.role, 80);
             const about = inlineText(rec?.about, 200);
             const sponsorName = rec?.sponsor ? inlineText(rec.sponsor.handle ?? rec.sponsor.name, 80) : "";
-            const client = inlineText(p.client, 40);
-            return `${name}${role ? ` — ${role}` : ""}${about ? ` (${about})` : ""}${sponsorName ? ` · agent of @${sponsorName}` : ""} · ${client}`;
+            return `${name}${role ? ` — ${role}` : ""}${about ? ` (${about})` : ""}${sponsorName ? ` · agent of @${sponsorName}` : ""} · ${presenceWords(p)}`;
           })
+          .concat(away.map((m) => `${m.name}${m.role ? ` — ${inlineText(m.role, 80)}` : ""} · last seen ${ago(m.lastSeen)}`))
           .join("\n");
       }),
     ),
@@ -513,7 +514,6 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
   if (!opts.push) return yield* Effect.never;
   const push = (content: string, meta: Record<string, string>) => Effect.promise(() => server.server.notification({ method: "notifications/claude/channel", params: { content, meta } }));
   yield* s.listen((m, state) => push(formatMessage(m, state.trust.get(m.seq), state, s.me), { seq: String(m.seq), from: m.from, kind: m.kind }), {
-    client: "mcp",
     onNotice: (text) => push(`* ${text}`, { kind: "notice" }),
   });
 });

@@ -25,7 +25,8 @@ import { Cursor, DEFAULT_RELAY, home, Keystore, type ChannelConfig } from "../co
 import { decodeJoinCode, type ChannelAccess } from "../crypto.ts";
 import { describeMember, freeAgentName, handleFor } from "../membership.ts";
 import { baseName, canonicalHarness, here, seatsNear } from "../seats.ts";
-import { cardLine, charterLines, describeEvent, holdLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, modeLine, parseDuration, taskStateWord, statusJson } from "../format.ts";
+import { ensureDaemon, reportRead } from "../daemon.ts";
+import { ago, cardLine, charterLines, describeEvent, holdLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, modeLine, parseDuration, presenceWords, taskStateWord, statusJson } from "../format.ts";
 import { canPost, describeScopes, presetOf, SCOPES, type Scope } from "../scopes.ts";
 import { fingerprint } from "../identity.ts";
 import { CHAT_KINDS, COLORS, ignored, isColor, type Kind, type Message, type TaskState } from "../protocol.ts";
@@ -80,7 +81,7 @@ Agents
 This computer
   kiwi setup                                     set it up once: Claude Code's hooks, the PATH, and how to pair it
   kiwi pair kp1-…                                pair it with your Kiwi app (approve it there): its agents get in on their own
-  kiwi daemon                                    this computer's hub: key, cert, and a listen multiplex (starts on its own)
+  kiwi daemon                                    this computer's hub: key, cert, and every agent's seat (starts on its own)
   kiwi demo · doctor · hooks install|uninstall|status · mcp · channels · relay --help
 
 Running a channel (create, approve, remove, roles, hold, charter, close) is the owner's, in the Kiwi app.
@@ -241,8 +242,18 @@ const session = Effect.fn("kiwi.session")(function* () {
   if (!(yield* keys.identitiesIn(cfg.roomId)).includes(acting.name)) {
     return yield* die(`${acting.name} has no key in "${alias}" on this machine`);
   }
+  yield* keepDaemon;
   return yield* openSession(alias, cfg, acting.name);
 });
+
+const keepDaemon = Effect.promise(() =>
+  ensureDaemon().then(
+    () => undefined,
+    (err: unknown) => void process.stderr.write(`kiwi: the daemon didn't start: ${err instanceof Error ? err.message : String(err)}\n`),
+  ),
+);
+
+const noteRead = (s: { alias: string; me: string }) => Effect.promise(() => reportRead(s.alias, s.me, here().session));
 
 function render(m: Message, state?: ChannelState | null): string {
   return opt.json ? JSON.stringify({ ...m, trust: state?.trust.get(m.seq) }) : formatMessage(m, state?.trust.get(m.seq), state ?? undefined, acting.name);
@@ -476,6 +487,7 @@ const commands: Record<string, Command> = {
           const { state } = yield* s.state();
           const seat = state.members.get(name);
           out(joinedText(alias, name, { scopes, hold: holdLine(state), charter: charterLines(state), mode: modeLine(state, name), human: humanOf(state, name), role: seat?.role, about: seat?.about }));
+          yield* keepDaemon;
         });
 
       // The same key, already a member (the config was lost, or this is a re-run): resume. Only keys the
@@ -715,20 +727,23 @@ const commands: Record<string, Command> = {
     Effect.gen(function* () {
       const s = yield* session();
       const [{ messages, state }, online] = yield* Effect.all([s.state(), s.who()], { concurrency: "unbounded" });
-      const on = new Map([...online].map(([n, p]) => [n, { client: p.client, role: p.role }]));
+      const on = new Map([...online].map(([n, p]) => [n, { client: p.client, role: p.role, ...(p.readAt === undefined ? {} : { readAt: p.readAt }) }]));
       const snap = { alias: s.alias, me: s.me, state, online: on, unread: yield* s.unreadCount(state, messages) };
       out(opt.json ? JSON.stringify(statusJson(snap)) : formatStatus(snap));
+      yield* noteRead(s);
     }),
 
   who: () =>
     Effect.gen(function* () {
       const s = yield* session();
       const [online, { state }] = yield* Effect.all([s.who(), s.state()], { concurrency: "unbounded" });
-      if (!online.size) return out("nobody else is listening right now");
+      const away = [...state.members.values()].filter((m) => m.active && !online.has(m.name));
+      if (!online.size && !away.length) return out("nobody else is in this channel");
       for (const [name, p] of online) {
         const role = p.role ?? state.members.get(name)?.role;
-        out(`${name}${role ? ` — ${role}` : ""} · ${p.client}`);
+        out(`${name}${role ? ` — ${role}` : ""} · ${presenceWords(p)}`);
       }
+      for (const m of away) out(`${m.name}${m.role ? ` — ${m.role}` : ""} · last seen ${ago(m.lastSeen)}`);
     }),
 
   /**
@@ -824,6 +839,7 @@ const commands: Record<string, Command> = {
         out(`the rest of thread #${root}:`);
         for (const x of rest) out(`  ${render(x, state)}`);
       }
+      yield* noteRead(s);
     }),
 
   log: () =>
@@ -938,6 +954,7 @@ const commands: Record<string, Command> = {
       const s = yield* session();
       const { messages, state } = yield* s.read(yield* delivery(s));
       for (const m of messages) out(render(m, state));
+      yield* noteRead(s);
     }),
 
   tail: () =>
@@ -946,7 +963,6 @@ const commands: Record<string, Command> = {
       // Say what this agent runs on, so work that needs it finds it; never in the way of listening.
       yield* Effect.forkDetach(Effect.ignoreCause(s.refreshCard(detectCard())));
       yield* s.listen((m, state) => Effect.sync(() => out(render(m, state))), {
-        client: "tail",
         ...(yield* delivery(s)),
         onStatus: (msg) => Effect.sync(() => void process.stderr.write(`kiwi: ${msg}\n`)),
         onNotice: (text) => Effect.sync(() => out(`* ${text}`)),
@@ -965,14 +981,13 @@ const commands: Record<string, Command> = {
         got++ === 0 ? Effect.asVoid(Effect.forkScoped(Effect.andThen(Effect.sleep(400), Deferred.succeed(enough, undefined)))) : Effect.void,
       );
       const listening = s.listen((m, state) => Effect.andThen(Effect.sync(() => out(render(m, state))), woke), {
-        client: "wait",
         ...(yield* delivery(s)),
         onStatus: (msg) => Effect.sync(() => void process.stderr.write(`kiwi: ${msg}\n`)),
         onNotice: (text) => Effect.andThen(Effect.sync(() => out(`* ${text}`)), woke),
       });
       const timeout = opt.timeout ? Effect.sleep(parseDuration(opt.timeout) * 1000) : Effect.never;
       yield* Effect.raceFirst(listening, Effect.raceFirst(Deferred.await(enough), timeout)).pipe(Effect.scoped);
-      if (got) return;
+      if (got) return yield* noteRead(s);
       out(`no messages yet. Next: run this command again:\n  ${mcFor(s.alias, s.me)} ${args[0] === "listen" ? "listen --once" : "wait"} --timeout 10m`);
       return 2;
     }),
@@ -1011,7 +1026,6 @@ const commands: Record<string, Command> = {
           }
         });
       yield* s.listen(post, {
-        client: "watch",
         // A webhook stands in for a person watching (a phone, CI): all chat unless narrowed.
         ...(yield* delivery(s)),
         ...(!opt["for-me"] && opt.thread === undefined ? { chat: true } : {}),
@@ -1082,6 +1096,7 @@ const commands: Record<string, Command> = {
         if (!aliases.length) return yield* die("no channels yet (see: kiwi join)");
         // Only channels the acting agent is in itself: another local agent's keys are not ours to use.
         const me = opt.as ?? process.env.KIWI_AS ?? bindingFor(process.cwd())?.as ?? (yield* die("--global needs to know who you are: pass --as NAME, or run it from your bound folder"));
+        yield* keepDaemon;
         for (const alias of aliases) {
           const c = cfg.channels[alias]!;
           if (!(yield* keys.identitiesIn(c.roomId)).includes(me)) continue;
@@ -1160,6 +1175,7 @@ const commands: Record<string, Command> = {
       const alias = yield* channelAlias();
       const cfg = (yield* config).channels[alias];
       const name = yield* agentName(cfg);
+      if (cfg) yield* keepDaemon;
       // What the channel says about it, if the relay answers; the prompt doesn't wait on it otherwise.
       const state = cfg
         ? yield* Effect.flatMap(openSession(alias, cfg, name), (s) => s.state()).pipe(

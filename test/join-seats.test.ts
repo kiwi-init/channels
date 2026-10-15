@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { daemonListening, daemonSock } from "../src/daemon.ts";
 import { startRelay } from "../src/relay/bun.ts";
 
 setDefaultTimeout(60_000);
@@ -108,6 +109,7 @@ describe("joining without --as", () => {
     const b = scratch("b");
     const first = await join_(owner, a, code, { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "sa", CLAUDE_PID: String(process.pid) });
     expect(first.out).toContain('You\'re "claude" in channel "names"');
+    await until(async () => (await daemonListening(daemonSock(a)).catch(() => [])).some((s) => s.agent === "claude"), "the joiner's daemon holding its seat");
 
     // Another computer's Claude asks as "claude" too: the owner is offered claude-2, a plain join.
     const second = await join_(owner, b, code, { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "sb", CLAUDE_PID: String(process.pid) });
