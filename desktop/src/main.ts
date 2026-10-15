@@ -17,6 +17,7 @@ import { certifyMachine } from "../../src/person.ts";
 import { compareVersions, ensureOnPath, keepCli } from "./cli.ts";
 import { acceptSeat, APP_HOST, APP_SCHEME, claimFor, csp, externalUrl, fileFor, isAppUrl, mergePublicChannels, migrateEntries, normalizeRelay, publicComputer, publicPerson, readStore, snapshotOf, withAccess, writePrivate } from "./guard.ts";
 import type { HostToKeys, KeysToHost } from "./keyring.ts";
+import { openInBrowser } from "./open.ts";
 import { applyUpdate, startUpdates, updateState } from "./updater.ts";
 import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, spawnDaemon, type HelloResult } from "./daemon-client.ts";
 import type { ChannelIdentityView, ComputerView, DaemonStatus, PairAskView, PendingItem, PersonView, SignInResult, StoreSnapshot } from "./bridge.ts";
@@ -226,7 +227,7 @@ const entryUrl = () => `${APP_SCHEME}://${APP_HOST}/index.html`;
 /** A link that may leave the app goes to the system browser (http(s) only); anything else goes nowhere. */
 function openOutside(url: string): void {
   const ext = externalUrl(url);
-  if (ext) void shell.openExternal(ext);
+  if (ext) void openInBrowser(ext, (u) => shell.openExternal(u)).catch(() => {});
 }
 
 /**
@@ -358,7 +359,7 @@ async function workosDeviceSignIn(clientId: string): Promise<{ access: string; r
   // Only a web page goes to the browser: never a file, an app's scheme, or anything else a reply could name.
   const verifyUrl = given && URL.canParse(given) && new URL(given).protocol === "https:" ? given : null;
   if (!verifyUrl) throw new Error("the relay's sign-in didn't start");
-  await shell.openExternal(verifyUrl);
+  await openInBrowser(verifyUrl, (u) => shell.openExternal(u));
   const until = Date.now() + (start.expires_in ?? 600) * 1000;
   for (;;) {
     await new Promise((r) => setTimeout(r, (start.interval ?? 5) * 1000));
@@ -625,7 +626,7 @@ function wireIpc(): void {
   ipcMain.handle("kiwi:open-external", (_e, url: string) => {
     const ext = externalUrl(url);
     if (!ext) throw new Error("only http(s) links open outside");
-    return shell.openExternal(ext);
+    return openInBrowser(ext, (u) => shell.openExternal(u));
   });
   // Each link is the renderer's once: a reload doesn't open the channel again.
   ipcMain.handle("kiwi:deep-link", () => {
