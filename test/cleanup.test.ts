@@ -88,6 +88,22 @@ describe("kiwi cleanup", () => {
     expect(existsSync(join(s.bun, "bin", "kiwi"))).toBe(true);
   });
 
+  test("an old Bun install is found when its folder is reached through a symlink, as macOS's /var is", () => {
+    const s = sandbox();
+    const real = join(s.root, "real-bun");
+    const bun = join(s.root, "linked-bun");
+    const globals = join(real, "install", "global", "node_modules");
+    mkdirSync(join(globals, "channel-one", "src", "cli"), { recursive: true });
+    writeFileSync(join(globals, "channel-one", "package.json"), JSON.stringify({ name: "channel-one" }));
+    writeFileSync(join(globals, "channel-one", "src", "cli", "main.ts"), "");
+    mkdirSync(join(real, "bin"));
+    symlinkSync(real, bun);
+    symlinkSync(join(bun, "install", "global", "node_modules", "channel-one", "src", "cli", "main.ts"), join(bun, "bin", "mc"));
+    const out = cleanup({ ...s, bun });
+    expect(out.removed).toEqual([join(bun, "bin", "mc")]);
+    expect(out.warnings).toEqual([`an old Bun install of kiwi stays in ${join(bun, "install", "global", "node_modules", "channel-one")}: \`bun remove -g channel-one\` removes it`]);
+  });
+
   test("another kiwi ahead on PATH is named, never removed; one after it, or a link to it, is fine", () => {
     const s = sandbox();
     const ahead = join(s.root, "ahead");
