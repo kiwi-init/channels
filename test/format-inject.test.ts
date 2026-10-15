@@ -115,3 +115,13 @@ test("the brief keeps the owner-set role and about on one clean line", () => {
   expect(brief).not.toMatch(/[\u001b\u0007\u202e\u200b\u2028]/);
   expect(brief.split("\n").some((l) => l.startsWith("#999"))).toBe(false);
 });
+
+test("the brief keeps a role and rules as long as the protocol allows", () => {
+  const role = `${"reviewer ".repeat(21)}lead`;
+  const about = `${"Scope: review this repository. ".repeat(60)}Never deploy to production.`;
+  const brief = briefText({ alias: "c", agent: "mac", mc: "kiwi", listen: "", role, about });
+  expect(role.length).toBeLessThanOrEqual(200);
+  expect(about.length).toBeLessThanOrEqual(2000);
+  expect(brief).toContain(`Your role: ${role.trim()}.`);
+  expect(brief).toContain("Never deploy to production.");
+});

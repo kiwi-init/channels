@@ -180,7 +180,7 @@ export function who(name: string, state?: ChannelState, me?: string): string {
   if (me && m.owner) return `${name} (human, owner)`;
   if (m.kind === "human") return `${name} (human)`;
   const nick = m.display ? inlineText(m.display, 40) : "";
-  if (m.sponsor) return `${name} (${nick ? `${nick}, ` : ""}for @${m.sponsor.handle ?? m.sponsor.name})`;
+  if (m.sponsor) return `${name} (${nick ? `${nick}, ` : ""}for @${inlineText(m.sponsor.handle ?? m.sponsor.name, 80)})`;
   return nick ? `${name} (${nick})` : name;
 }
 

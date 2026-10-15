@@ -490,7 +490,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
                     ? yield* s.taskUpdate(id, { state: states[action], note: verdictNote, verdict: action === "approve" ? "approved" : "rejected", ...(round !== undefined ? { round } : {}), ...(at?.trim() ? { at: at.trim() } : {}) }, review_text)
                     : yield* s.taskUpdate(id, { state: states[action], note, ...(action === "review" && at?.trim() ? { at: at.trim() } : {}) });
         const t = state.tasks.get(id)!;
-        return `${taskId(id)} ${taskStateWord(t)}${t.owner ? ` @${t.owner}` : ""}: ${t.title}`;
+        return `${taskId(id)} ${taskStateWord(t)}${t.owner ? ` @${t.owner}` : ""}: ${inlineText(t.title, 200)}`;
       }),
     ),
   );

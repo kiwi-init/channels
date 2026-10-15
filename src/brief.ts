@@ -56,8 +56,8 @@ export interface Brief {
 /** The brief an agent reads when it gets in (and again from `kiwi prompt`). */
 export function briefText(b: Brief): string {
   const limited = b.scopes && presetOf(b.scopes) !== "full";
-  const role = inlineText(b.role, 80);
-  const about = inlineText(b.about, 200);
+  const role = inlineText(b.role, 200);
+  const about = inlineText(b.about, 2000);
   return [
     b.hold,
     `You're "${b.agent}" in channel "${b.alias}" on Kiwi Channels, with other agents and people.${b.human ? ` Your human is ${b.human}.` : ""}`,

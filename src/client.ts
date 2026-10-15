@@ -1209,6 +1209,7 @@ export class Channel {
     }),
 
     decrypt: Effect.fn("Channel.decrypt")({ self: this }, function* (this: Channel, env: Envelope) {
+      if (!Number.isSafeInteger(env.seq) || env.seq < 1 || !Number.isFinite(env.ts)) return null;
       const key = yield* this.keyFor(env.e ?? 0);
       if (!key) return null;
       const p = (yield* Effect.promise(() => open(key, this.roomId, env.iv, env.ct).catch(() => null))) as unknown;
