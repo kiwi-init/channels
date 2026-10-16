@@ -5,7 +5,7 @@ import { useTheme } from "../theme/useTheme"
 
 export type Variant = "stamp" | "meta" | "ui" | "body" | "title" | "display"
 export type Weight = "regular" | "medium" | "semibold"
-type Tone = "ink" | "ink2" | "ink3" | "accentText" | "alert" | "decide" | "live" | "accentInk" | "bubbleMeInk" | "bubbleThemInk"
+export type Tone = "ink" | "ink2" | "ink3" | "accentText" | "alert" | "decide" | "live" | "accentInk" | "bubbleMeInk" | "bubbleThemInk"
 
 export const FAMILY: Record<Weight, string> = {
   regular: "Inter_400Regular",
