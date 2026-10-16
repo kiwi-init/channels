@@ -5,7 +5,7 @@ import { setOutput, summary } from "../jev-ci/github.ts"
 import { doctor } from "./claude.ts"
 import { loadBus, type BusConfig, type Tier } from "./config.ts"
 import { emit, symbols } from "./events.ts"
-import { busBranches, ciRun, fetchItem, gh, jobLog, push, pushAuth, runJobs, slug, type Item, type Run } from "./github.ts"
+import { busBranches, ciRun, fetchItem, gh, jobLog, push, pushEnv, runJobs, slug, type Item, type Run } from "./github.ts"
 import { judge } from "./questions.ts"
 import { must, run } from "./sh.ts"
 import { trailers, type Ticket } from "./tick.ts"
@@ -21,9 +21,11 @@ export async function bounce(repo: string, cfg: BusConfig, item: Item, b: { reas
     push(repo, [`--force-with-lease=refs/heads/${item.key}:${item.sha}`, `:refs/heads/${item.key}`])
   } else if (item.number) {
     const s = slug()
-    await gh(`/repos/${s}/issues/${item.number}/labels/${encodeURIComponent(cfg.label)}`, { method: "DELETE" })
+    const removed = await gh(`/repos/${s}/issues/${item.number}/labels/${encodeURIComponent(cfg.label)}`, { method: "DELETE" })
+    if (!removed.ok && removed.status !== 404) throw new Error(`removing the ${cfg.label} label from #${item.number}: ${removed.status}`)
     const body = `kiwi-bus on behalf of ${cfg.on_behalf_of}\n\nThe merge bus handed this back: ${b.reason}${b.note ? `\n\n${b.note}` : ""}\n\nTried: ${b.tried.join(", ")}. Label it \`${cfg.label}\` again once it merges with main.`
-    await gh(`/repos/${s}/issues/${item.number}/comments`, { method: "POST", body: JSON.stringify({ body }) })
+    const posted = await gh(`/repos/${s}/issues/${item.number}/comments`, { method: "POST", body: JSON.stringify({ body }) })
+    if (!posted.ok) throw new Error(`commenting on #${item.number}: ${posted.status}`)
   }
   emit({ what: "bus.bounced", task: item.task, branch: item.key, reason: b.reason, hunks: b.hunks, tried: b.tried, ...(b.note ? { note: b.note } : {}) })
 }
@@ -34,8 +36,10 @@ export async function land(repo: string, ticket: Ticket) {
   fetchItem(repo, item)
   const main = must(["git", "rev-parse", "refs/remotes/origin/main"], repo).trim()
   if (main !== ticket.main) return console.log(`main moved to ${main.slice(0, 7)}; the next tick rebuilds bus/staging`)
+  const head = must(["git", "rev-parse", item.ref], repo).trim()
+  if (head !== item.sha) return console.log(`${item.key} moved to ${head.slice(0, 7)} since the tick; the next tick rebuilds bus/staging`)
   push(repo, [`${sha}:refs/heads/main`])
-  if (item.kind === "branch") run(["git", ...pushAuth(), "push", "origin", `--force-with-lease=refs/heads/${item.key}:${item.sha}`, `:refs/heads/${item.key}`], repo)
+  if (item.kind === "branch") run(["git", "push", "origin", `--force-with-lease=refs/heads/${item.key}:${item.sha}`, `:refs/heads/${item.key}`], repo, pushEnv())
   const files = must(["git", "diff", "--name-only", main, sha], repo).split("\n").filter(Boolean)
   const tier = (trailers(must(["git", "log", "-1", "--format=%B", sha], repo))["Bus-Tier"] ?? "git") as Tier
   const affects = busBranches(repo, sha)

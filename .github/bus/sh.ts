@@ -5,9 +5,11 @@ export function run(cmd: string[], cwd: string, env?: Record<string, string>): R
   return { ok: p.success, out: p.stdout.toString(), err: p.stderr.toString() }
 }
 
+const redact = (text: string) => text.replace(/(AUTHORIZATION: basic )\S+/gi, "$1***")
+
 export function must(cmd: string[], cwd: string, env?: Record<string, string>): string {
   const r = run(cmd, cwd, env)
-  if (!r.ok) throw new Error(`${cmd.join(" ")}: ${(r.err || r.out).trim().slice(0, 2000)}`)
+  if (!r.ok) throw new Error(`${redact(cmd.join(" "))}: ${redact((r.err || r.out).trim()).slice(0, 2000)}`)
   return r.out
 }
 

@@ -94,11 +94,11 @@ export async function tick(repo: string, cfg: BusConfig): Promise<{ ticket: Tick
     const big = m.hunks.find((h) => h.block.end - h.block.start > cfg.max_hunk_lines)
     if (big)
       return { ticket: { ...head, action: "bounce", why: "a conflict too big to resolve", bounce: { reason: `${big.file}:${big.block.start + 1}: a ${big.block.end - big.block.start}-line conflict`, hunks: m.hunks.length, tried: ["git", "mergiraf"] } }, patch: "" }
-    const kb = cfg.ladder.includes("keep-both") ? await keepBoth(m, cfg, liveDeps(cfg), contexts(m, cfg)) : { fixes: [], resolved: [], candidates: 0 }
+    const kb = cfg.ladder.includes("keep-both") ? await keepBoth(m, cfg, liveDeps(cfg), contexts(m, cfg)) : { fixes: [], resolved: [], candidates: 0, note: undefined }
     const pending = m.hunks.length - kb.resolved.length
     const tier: Tier = !gitLeft ? "git" : !m.hunks.length ? "mergiraf" : !pending ? "keep-both" : "haiku"
     const action: Action = pending ? "resolve" : "stage"
-    const why = !m.hunks.length ? `merges with ${tier}` : `${m.hunks.length} conflicts after mergiraf, ${pending} left after keep-both`
+    const why = !m.hunks.length ? `merges with ${tier}` : `${m.hunks.length} conflicts after mergiraf, ${pending} left after keep-both${kb.note ? ` (${kb.note})` : ""}`
     return { ticket: { ...head, action, why, tier, hunks: m.hunks.length, pending }, patch: patchOf(m, kb.fixes) }
   } finally {
     dispose(m)

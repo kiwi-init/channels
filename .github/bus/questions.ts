@@ -57,5 +57,6 @@ export async function judge(name: QuestionName, state: Record<string, unknown>):
   const res = await ask({ model: MODEL, state, questions: { [name]: questions[name] } })
   const answer = res.answers[name]
   if (!answer) throw new Error(`Jev did not answer ${name}`)
+  if (typeof answer.noul !== "number" || !Number.isFinite(answer.noul)) throw new Error(`Jev gave no number for ${name}`)
   return answer.noul
 }

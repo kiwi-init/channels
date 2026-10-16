@@ -18,9 +18,8 @@ export type Staged =
   | { action: "bounce"; item: Item; reason: string; hunks: number; tried: string[]; note?: string }
   | { action: "stale"; why: string }
 
-const MODEL: Partial<Record<Tier, string>> = { haiku: "claude-haiku-5-5", opus: "claude-opus-5-5" }
-
-export function message(item: Item, tier: Tier, cfg: BusConfig, models: Partial<Record<Tier, string>> = MODEL): string {
+export function message(item: Item, tier: Tier, cfg: BusConfig): string {
+  const models: Partial<Record<Tier, string>> = { haiku: cfg.haiku.model, opus: cfg.opus.model }
   const title = item.kind === "pr" ? item.title : `${item.title} (${item.key})`
   const agent = `${models[tier] ?? "kiwi-bus"} on behalf of ${cfg.on_behalf_of}`
   return `${title}\n\n${item.body ? `${item.body}\n\n` : ""}Agent: ${agent}\nBus-Item: ${item.key}\nBus-Head: ${item.sha}\nBus-Tier: ${tier}\n`
@@ -28,12 +27,12 @@ export function message(item: Item, tier: Tier, cfg: BusConfig, models: Partial<
 
 export function prepare(repo: string, cfg: BusConfig, ticket: Ticket, tickDir: string, resolved: string | undefined): Staged {
   const item = ticket.item!
-  if (ticket.action === "bounce") return { action: "bounce", item, ...ticket.bounce! }
-  const verdict = resolved ? (JSON.parse(readFileSync(join(resolved, "verdict.json"), "utf8")) as Verdict) : undefined
-  if (verdict?.action === "bounce") return { action: "bounce", item, reason: verdict.reason, hunks: verdict.hunks, tried: verdict.tried, ...(verdict.note ? { note: verdict.note } : {}) }
   fetchItem(repo, item)
   const main = must(["git", "rev-parse", "refs/remotes/origin/main"], repo).trim()
   if (main !== ticket.main) return { action: "stale", why: `main moved to ${main.slice(0, 7)} since the tick` }
+  if (ticket.action === "bounce") return { action: "bounce", item, ...ticket.bounce! }
+  const verdict = resolved ? (JSON.parse(readFileSync(join(resolved, "verdict.json"), "utf8")) as Verdict) : undefined
+  if (verdict?.action === "bounce") return { action: "bounce", item, reason: verdict.reason, hunks: verdict.hunks, tried: verdict.tried, ...(verdict.note ? { note: verdict.note } : {}) }
   const tier: Tier = verdict?.action === "stage" ? verdict.tier : (ticket.tier ?? "git")
   const patch = readFileSync(resolved ? join(resolved, "resolution.patch") : join(tickDir, "resolution.patch"), "utf8")
   const m = mergeTrees(repo, main, item.sha, { mergiraf: cfg.ladder.includes("mergiraf"), lockfiles: cfg.lockfiles })
@@ -85,8 +84,7 @@ if (import.meta.main) {
   } else if (positionals[0] === "push") {
     const staged = JSON.parse(readFileSync(join(values.out, "staged.json"), "utf8")) as Staged
     if (staged.action === "push") {
-      const lease = run(["git", "ls-remote", "origin", "refs/heads/bus/staging"], values.repo).out.split("\t")[0]?.trim() ?? ""
-      push(values.repo, [`--force-with-lease=refs/heads/bus/staging:${lease}`, `${staged.sha}:refs/heads/bus/staging`])
+      push(values.repo, [`--force-with-lease=refs/heads/bus/staging:${ticket.staging ?? ""}`, `${staged.sha}:refs/heads/bus/staging`])
       for (const e of ticket.events) emit(e)
       emit({ what: "bus.staged", task: staged.item.task, branch: staged.item.key, sha: staged.sha.slice(0, 7), tier: staged.tier, hunks: staged.hunks })
     } else if (staged.action === "bounce") {

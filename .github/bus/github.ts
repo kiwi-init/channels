@@ -72,25 +72,31 @@ export async function queuedPulls(repo: string, cfg: BusConfig): Promise<Item[]>
   const issues = await ghJson<{ number: number; pull_request?: unknown }[]>(`/repos/${s}/issues?state=open&labels=${encodeURIComponent(cfg.label)}&per_page=100`)
   const items: Item[] = []
   for (const issue of issues.filter((i) => i.pull_request)) {
-    const pr = await ghJson<Pull>(`/repos/${s}/pulls/${issue.number}`)
-    if (pr.head.repo?.full_name !== s || pr.base.ref !== "main") continue
-    const events = await ghJson<IssueEvent[]>(`/repos/${s}/issues/${pr.number}/events?per_page=100`)
-    const labeled = events.filter((e) => e.event === "labeled" && e.label?.name === cfg.label).at(-1)
-    if (!labeled?.actor) continue
-    const perm = await ghJson<{ role_name: string }>(`/repos/${s}/collaborators/${labeled.actor.login}/permission`)
-    if (!cfg.label_roles.includes(perm.role_name)) continue
-    must(["git", "fetch", "-q", "origin", `+refs/pull/${pr.number}/head:refs/remotes/origin/pr/${pr.number}`], repo)
-    items.push({
-      key: `pr:${pr.number}`,
-      kind: "pr",
-      ref: `refs/remotes/origin/pr/${pr.number}`,
-      sha: pr.head.sha,
-      task: `#${pr.number}`,
-      since: Date.parse(labeled.created_at) / 1000,
-      title: `${pr.title} (#${pr.number})`,
-      body: (pr.body ?? "").trim(),
-      number: pr.number,
-    })
+    try {
+      const pr = await ghJson<Pull>(`/repos/${s}/pulls/${issue.number}`)
+      if (pr.head.repo?.full_name !== s || pr.base.ref !== "main") continue
+      const events = await ghJson<IssueEvent[]>(`/repos/${s}/issues/${pr.number}/events?per_page=100`)
+      const labeled = events.filter((e) => e.event === "labeled" && e.label?.name === cfg.label).at(-1)
+      if (!labeled?.actor) continue
+      if (!cfg.maintainers.includes(labeled.actor.login)) {
+        const perm = await ghJson<{ role_name: string }>(`/repos/${s}/collaborators/${labeled.actor.login}/permission`)
+        if (!cfg.label_roles.includes(perm.role_name)) continue
+      }
+      must(["git", "fetch", "-q", "origin", `+refs/pull/${pr.number}/head:refs/remotes/origin/pr/${pr.number}`], repo)
+      items.push({
+        key: `pr:${pr.number}`,
+        kind: "pr",
+        ref: `refs/remotes/origin/pr/${pr.number}`,
+        sha: pr.head.sha,
+        task: `#${pr.number}`,
+        since: Date.parse(labeled.created_at) / 1000,
+        title: `${pr.title} (#${pr.number})`,
+        body: (pr.body ?? "").trim(),
+        number: pr.number,
+      })
+    } catch (e) {
+      console.error(`skipping queued PR #${issue.number}: ${(e as Error).message}`)
+    }
   }
   return items
 }
@@ -114,12 +120,18 @@ export async function jobLog(id: number): Promise<string> {
   return res.ok ? await res.text() : `(log unavailable: ${res.status})`
 }
 
-export function pushAuth(): string[] {
+export function pushEnv(): Record<string, string> {
   const token = process.env.BUS_PUSH_TOKEN
   if (!token) throw new Error("BUS_PUSH_TOKEN is not set")
-  return ["-c", `http.https://github.com/.extraheader=AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`, "-c", "core.hooksPath=/dev/null"]
+  return {
+    GIT_CONFIG_COUNT: "2",
+    GIT_CONFIG_KEY_0: "http.https://github.com/.extraheader",
+    GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`,
+    GIT_CONFIG_KEY_1: "core.hooksPath",
+    GIT_CONFIG_VALUE_1: "/dev/null",
+  }
 }
 
 export function push(repo: string, args: string[]) {
-  must(["git", ...pushAuth(), "push", "origin", ...args], repo)
+  must(["git", "push", "origin", ...args], repo, pushEnv())
 }

@@ -40,6 +40,8 @@ export function emit(e: BusEvent): boolean {
 
 const NAME = /\b(?:class|interface|function\*?|enum|type|namespace)\s+([\w$]+)|\b(?:const|let)\s+([\w$]+)|^(?:(?:public|private|protected|static|readonly|override|async|get|set)\s+)*(#?[\w$]+)/
 
+const DECLARATION = /^\s*(?:(?:export|default|abstract|declare|public|private|protected|static|override|async)\s+)*(?:(?:class|interface|function\*?|enum|type|namespace|const|let)\s+[\w$]+|\*?#?[\w$]+\s*(?:<[^>]*>)?\(.*\)\s*(?::[^{]*)?\{\s*)$/
+
 const nameOf = (declaration: string) => {
   const m = NAME.exec(declaration.trim().replace(/^(?:(?:export|default|abstract|declare|async)\s+)+/, ""))
   return m?.[1] ?? m?.[2] ?? m?.[3]
@@ -60,7 +62,13 @@ export function symbols(repo: string, from: string, to: string): string[] {
     }
     const h = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line)
     if (!h || text === undefined) continue
-    const chain = enclosing(text, Math.max(0, Number(h[1]) - 1)).split(" › ").map(nameOf).filter(Boolean)
+    const start = Math.max(0, Number(h[1]) - 1)
+    const chain = enclosing(text, start).split(" › ").map(nameOf).filter(Boolean)
+    const changed = text.split("\n")[start]
+    if (changed !== undefined && DECLARATION.test(changed)) {
+      const own = nameOf(changed)
+      if (own && chain.at(-1) !== own) chain.push(own)
+    }
     if (chain.length) out.add(`${file}#${chain.join(".")}`)
   }
   return [...out].sort()

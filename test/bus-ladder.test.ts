@@ -52,8 +52,14 @@ const fields = (extra: string) => BASE.replace("  readonly id: string\n", `  rea
 const bothAdd = () => repo(fields("  infoShared = false\n  infoExpires = 0\n"), fields("  packs = 0\n  settingsWrites = 0\n"))
 const bothEdit = () => repo(BASE.replace("return text", "return text.trim()"), BASE.replace("return text", "return text.toUpperCase()"))
 
+function worktreeDir(): string {
+  const parent = mkdtempSync(join(tmpdir(), "bus-wt-"))
+  dirs.push(parent)
+  return join(parent, "wt")
+}
+
 function merge(r: { dir: string; main: string; head: string }): Merged {
-  const m = mergeTrees(r.dir, r.main, r.head, { mergiraf: false, lockfiles: cfg.lockfiles, dir: join(mkdtempSync(join(tmpdir(), "bus-wt-")), "wt") })
+  const m = mergeTrees(r.dir, r.main, r.head, { mergiraf: false, lockfiles: cfg.lockfiles, dir: worktreeDir() })
   merged.push(m)
   return m
 }
@@ -189,8 +195,13 @@ describe("ladder", () => {
     expect(out.tsc?.ok).toBe(true)
   })
 
+  test("majority keeps indentation and blank lines in the vote", () => {
+    expect(majority([say("a"), say("  a"), say("b")]).abstain).toBe(true)
+    expect(majority([say("a\n\nb"), say("a\nb"), say("c")]).abstain).toBe(true)
+  })
+
   test("majority needs more than half of the samples", () => {
-    expect(majority([say("a"), say(" a "), say("b")]).abstain).toBe(false)
+    expect(majority([say("a"), say("a  "), say("b")]).abstain).toBe(false)
     expect(majority([say("a"), say("b"), { abstain: true, reason: "x" }]).abstain).toBe(true)
     expect(majority([{ abstain: true, reason: "no" }])).toEqual({ abstain: true, reason: "no" })
   })
@@ -238,7 +249,7 @@ test("every Jev question is a noul with instructions, a question and both criter
 
 test.skipIf(!Bun.which("mergiraf"))("the mergiraf driver runs on .ts files and leaves real conflicts as diff3 blocks", () => {
   const r = bothEdit()
-  const m = mergeTrees(r.dir, r.main, r.head, { mergiraf: true, lockfiles: cfg.lockfiles, dir: join(mkdtempSync(join(tmpdir(), "bus-wt-")), "wt") })
+  const m = mergeTrees(r.dir, r.main, r.head, { mergiraf: true, lockfiles: cfg.lockfiles, dir: worktreeDir() })
   merged.push(m)
   expect(m.unmergeable).toEqual([])
   expect(m.hunks.length).toBe(1)

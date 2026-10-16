@@ -22,6 +22,7 @@ runs:
         printf '%s' "$SEAT" | base64 -d | tar -xz -C "$dir/home"
         gh release download --repo "$GITHUB_REPOSITORY" --pattern kiwi-linux-x64 --pattern SHA256SUMS --dir "$dir/bin"
         (cd "$dir/bin" && grep ' kiwi-linux-x64$' SHA256SUMS | sha256sum -c -)
+        gh attestation verify "$dir/bin/kiwi-linux-x64" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml"
         chmod +x "$dir/bin/kiwi-linux-x64"
         echo "KIWI_HOME=$dir/home" >> "$GITHUB_ENV"
         echo "KIWI_BIN=$dir/bin/kiwi-linux-x64" >> "$GITHUB_ENV"

@@ -170,7 +170,7 @@ export function majority(answers: Answer[]): Answer {
   const groups = new Map<string, { answer: Answer & { abstain: false }; n: number }>()
   for (const a of answers) {
     if (a.abstain) continue
-    const key = a.lines.map((l) => l.trim()).filter(Boolean).join("\n")
+    const key = a.lines.map((l) => l.trimEnd()).join("\n")
     const g = groups.get(key)
     if (g) g.n++
     else groups.set(key, { answer: a, n: 1 })

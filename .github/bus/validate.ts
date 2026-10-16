@@ -11,7 +11,7 @@ export const hasMarkers = (text: string) => MARKER.test(text)
 
 export function parseError(file: string, text: string): string | undefined {
   try {
-    if (file.endsWith(".json")) JSON.parse(text)
+    if (file.endsWith(".json")) Bun.JSONC.parse(text)
     else if (CODE.test(file)) new Bun.Transpiler({ loader: /x$/.test(file) ? "tsx" : "ts" }).transformSync(text)
     return undefined
   } catch (e) {
@@ -26,7 +26,7 @@ function codeOnly(text: string): string[] {
     const c = text[i]!
     const n = text[i + 1]
     if (c === "\n") {
-      if (state === "line") state = "code"
+      if (state === "line" || state === "'" || state === '"') state = "code"
       out += "\n"
     } else if (state === "code") {
       if (c === "/" && n === "/") state = "line"

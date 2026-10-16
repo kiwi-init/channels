@@ -41,6 +41,7 @@ bus:
   # A pull request joins the bus with this label, added by someone with one of these roles. Never a fork.
   label: queue
   label_roles: [admin, maintain]
+  maintainers: [ojowwalker77]
   on_behalf_of: Jonatas Walker
   # Keep both sides of a hunk whose base was empty when Jev's keep_both is at or above this.
   keep_both: 0.7
