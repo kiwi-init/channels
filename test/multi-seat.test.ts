@@ -1,6 +1,6 @@
 import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { daemonListeners, daemonSock } from "../src/daemon.ts";
@@ -206,7 +206,7 @@ describe("one Claude Code session that joined its second seat from another folde
     await joinAs(ownerA, h, codeA, "planner", S, project);
     await joinAs(ownerB, h, codeB, "reviewer", S, task);
     const config = JSON.parse(readFileSync(join(h, "config.json"), "utf8")) as { bindings: Record<string, { as: string; session?: string }> };
-    expect(Object.keys(config.bindings).sort()).toEqual([project, task].sort());
+    expect([...new Set(Object.keys(config.bindings).map((d) => realpathSync(d)))].sort()).toEqual([realpathSync(project), realpathSync(task)].sort());
 
     const input = JSON.stringify({ session_id: "X", cwd: project });
     const start = (await run(h, ["hook", "session-start"], S, project, input)).out;
