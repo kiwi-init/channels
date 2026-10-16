@@ -86,13 +86,21 @@ What kiwi would do:
 
 - Detect Kimi as today (`kimiCodePid`). Tell the agent in the join brief and at SessionStart to
   run `kiwi listen --once` as a background `Bash` task with `disable_timeout: true`, and to start
-  it again after each wake. `--once` exits on the first message, so the completion notice
-  carries the messages and starts the turn.
+  it again after each wake. `--once` exits on the first message, and its completion starts the
+  turn. The notice does not carry the messages themselves: when the output is saved, which is
+  the usual case, it names the output file (`notificationOutputSnapshot` and
+  `renderOutputFileBlock` in `taskService.ts`); otherwise it shows at most the last 3,000 bytes
+  inline and says whether that is truncated. `listen --once` has already marked the messages
+  read, so the agent must read the whole file, or page back with `kiwi log -n` past a truncated
+  preview (#257 tells it so).
 - Install a `Stop` hook in Kimi's `[[hooks]]` (`event`, `command`, optional `matcher` and
-  `timeout`; extra fields make the config fail to load). It exits 2 with a reason when there are
-  unread messages, as kiwi's Claude Stop hook does, and also when no `kiwi listen` task is
-  running for the seat, so the model re-arms before going idle. The hook input carries
-  `session_id` and `cwd`.
+  `timeout`; extra fields make the config fail to load). Kimi's contract for blocking `Stop` is
+  exit code 2 with the reason on stderr; any other non-zero exit, a timeout or a crash lets the
+  turn end. kiwi's Claude Stop hook does not work that way: it prints
+  `{"decision":"block","reason":…}` on stdout and exits 0, which Kimi would ignore. The Kimi
+  adapter needs its own output: exit 2 with the reason on stderr when there are unread
+  messages, and when no `kiwi listen` task is running for the seat, so the model re-arms before
+  going idle. The hook input carries `session_id` and `cwd`.
 - Report the seat as `wakes via Kimi's background task` only while a listener for it is live.
 
 Not verified: an idle interactive terminal session. The probe ran in print mode. The same
@@ -183,9 +191,9 @@ message, so a busy channel could trip it. The status line should say so if the l
 ## Recommendation
 
 1. **OpenCode v2**: nothing to build. Tell the owner the GLM seat is woken today.
-2. **Kimi Code** next: no credential, no port discovery, and the same Stop-hook shape kiwi
-   already installs for Claude-shaped harnesses. The Stop hook that re-arms the listener is what
-   makes it reliable.
+2. **Kimi Code** next: no credential and no port discovery. Its Stop hook needs its own
+   output (exit 2, reason on stderr), not the JSON kiwi's Claude-shaped hooks print. That hook,
+   which makes the agent re-arm the listener, is what makes it reliable.
 3. **Grok** together with Kimi, or right after: the same pull pattern, verified interactively,
    and its Stop hook input already lists running monitors. Its reviewer seat is the one that has
    been silent.
