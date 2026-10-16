@@ -30,7 +30,7 @@ import { Icon } from "./icon"
 import { Button, IconButton, Spinner } from "./kit"
 import { Bubble, EventGroup, EventRow, TimeMark, isAgent, standsAlone, type ThreadSummary } from "./message"
 import { NeedsYou } from "./needs-you"
-import { FLOAT_W, Overview } from "./side-panel"
+import { FLOAT_GAP, FLOAT_W, Overview } from "./side-panel"
 import { Notes, Tasks } from "./tasks"
 import { InfoPanel, TaskDetails, TasksPanel, ThreadPanel } from "./lazy"
 
@@ -77,6 +77,8 @@ type Here = Exclude<Place, { kind: "task" }>
 
 /** What's open on the right, one at a time: a thread (by its first message), the details, or the tasks (the list, or one of them). */
 type Side = { kind: "thread"; root: number } | { kind: "info" } | { kind: "tasks"; task: number | null; fromList?: true } | null
+
+const CLEAR = "xl:pr-[min(var(--float),max(0px,calc(792px_+_2*var(--float)_-_100%)))]"
 
 function roundOf(t: Task): { round: number; at?: string } | Record<string, never> {
   const open = openRound(t)
@@ -650,7 +652,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       <div className="flex h-full min-w-0 flex-1">
         <div
           className={cx("relative flex min-w-0 flex-1 flex-col bg-canvas", (root || info || side?.kind === "tasks") && "hidden md:flex")}
-          style={{ "--head": `${headH}px`, "--foot": `${footH}px`, "--float": `${FLOAT_W + 48}px` } as CSSProperties}
+          style={{ "--head": `${headH}px`, "--foot": `${footH}px`, "--float": `${FLOAT_W + 2 * FLOAT_GAP}px` } as CSSProperties}
         >
           {/* The conversation's part of the window's one header row, floating over it as Grok's does:
               in the middle, one glass capsule with the channel's name; on the right, search and the
@@ -712,7 +714,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
 
           <div
             ref={scroller}
-            className={cx("absolute inset-0 overflow-y-auto", floating && "lg:pr-(--float)")}
+            className={cx("absolute inset-0 overflow-y-auto", floating && CLEAR)}
             onScroll={(e) => {
               const el = e.currentTarget
               atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
@@ -784,7 +786,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
           )}
 
           {/* The composer floats on glass at the foot; messages scroll under it too. */}
-          <div ref={footRef} className={cx("absolute inset-x-0 bottom-0 z-20", floating && "lg:pr-(--float)")}>
+          <div ref={footRef} className={cx("absolute inset-x-0 bottom-0 z-20", floating && CLEAR)}>
             <div aria-hidden className="scrim-bottom absolute inset-x-0 -top-6 bottom-0" />
             <div className="relative">
               {mayWrite ? (
@@ -810,7 +812,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                     return send(body, opts)
                   }}
                   footer={
-                    <div className="lg:hidden">
+                    <div className="xl:hidden">
                       <AgentStrip agents={agentsNow} now={now} onOpenTask={openTask} />
                     </div>
                   }
@@ -999,7 +1001,7 @@ function TasksButton({
     else if (u.n) news = true
   }
   return (
-    <IconButton label="Tasks" round className={cx("glass size-9 lg:hidden", !active && "text-ink")} active={active} aria-expanded={active} onClick={onClick}>
+    <IconButton label="Tasks" round className={cx("glass size-9 xl:hidden", !active && "text-ink")} active={active} aria-expanded={active} onClick={onClick}>
       <Icon icon={CheckListIcon} size={18} />
       <Badge u={forMe ? { n: forMe, forMe: true } : { n: news ? 1 : 0, forMe: false }} />
     </IconButton>

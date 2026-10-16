@@ -9,7 +9,7 @@ import { agentRows, needsPerson, prLinks, prsIn, recentPrs, taskFeed, taskPrs } 
 
 let seq = 0;
 const T0 = 1_700_000_000_000;
-async function msg(id: Identity, init: { kind?: Kind; ev?: Event; to?: string[]; re?: number[]; body?: string; at?: number } = {}): Promise<Message> {
+async function msg(id: Identity, init: { kind?: Kind; ev?: Event; to?: string[]; re?: number[]; body?: string; at?: number; task?: number } = {}): Promise<Message> {
   seq++;
   const ts = init.at ?? T0 + seq * 1000;
   const base = {
@@ -22,6 +22,7 @@ async function msg(id: Identity, init: { kind?: Kind; ev?: Event; to?: string[];
     ...(init.to ? { to: init.to } : {}),
     ...(init.re ? { re: init.re } : {}),
     ...(init.ev ? { ev: init.ev } : {}),
+    ...(init.task !== undefined ? { task: init.task } : {}),
   };
   const p = await sign(id, base);
   return { ...p, seq, rts: ts, sigOk: await verify(p) };
@@ -62,6 +63,15 @@ describe("pull requests", () => {
     expect(recent.map((p) => p.number)).toEqual([1, 3]);
     expect(recent[0]).toMatchObject({ by: "coord", last: again.rts, task: add.seq, state: "open" });
     expect(recent[1]).toMatchObject({ state: "merged" });
+  });
+
+  test("recent PRs: the task a message names wins over the task thread it was sent in", async () => {
+    const doing = await msg(ann, { ev: { op: "task.add", title: "Keys move out", owner: "ann" } });
+    const other = await msg(ann, { ev: { op: "task.add", title: "Faces go", owner: "ann" } });
+    const link = await msg(ann, { task: doing.seq, body: `T${other.seq} is up: https://github.com/o/r/pull/7` });
+    const ms = [doing, other, link];
+    const s = fold(ms, roster);
+    expect(recentPrs(s, ms, "jonatas", 5)[0]).toMatchObject({ number: 7, task: other.seq });
   });
 });
 

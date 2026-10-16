@@ -147,16 +147,17 @@ From `design-tokens.ts`:
   with `ink`. Runs stack at `stack` radius on the joined corners.
 - Needs-you: approvals, escalations and review-waiting work in one place at
   the top; `Pause agents` in the header stops every agent at once.
-- Overview cards: always in the chat area on wide windows, never behind
-  a button. Flat `raised` cards (a 1px `line` ring, `card` radius, 24px
-  from the window's edge, 16px apart, 20px inside) float at the top right
-  of the conversation, each folding from its header: Agents, Tasks (the 5
-  last updated, quiet text filters, a state with no task left out), Pull
-  requests (the last 5 linked in the channel). The messages and the
-  composer keep 24px clear of them, and the agent strip under the
-  composer gives way to the Agents card. A
-  thread, the details or a task in the side column hide them until it
-  closes. Narrow windows keep the header's Tasks button instead.
+- Overview cards: always in the chat area from 1280px wide, never behind
+  a button. Cards on the canvas itself, outlined with a 1px `edge-strong`
+  ring at `card` radius, 336px wide, 24px from the window's edge and 12px
+  apart, float at the top right of the conversation, each folding from its
+  header: Agents, Tasks (the 5 last updated, a `SEGMENTED` filter that
+  leaves out a state with no task), Pull requests (the last 5 linked in
+  the channel). Rows put the time on the right. The conversation stays
+  centered while it has room and moves left only as far as it must. The
+  agent strip under the composer gives way to the Agents card. A thread,
+  the details or a task in the side column hide the cards until it closes.
+  Below 1280px the cards are hidden and the header's Tasks button stays.
 - Coordinator: `coordinator-head` (system-blue shell, pale screen, quiet
   steel trim; `robot-heads`); behind it in a round avatar a soft blue field.
 - Command palette wears the same icons as the menus. Dark/light/system and

@@ -78,13 +78,12 @@ export interface RecentPr extends PrRef {
 }
 
 function taskOf(state: ChannelState, m: Message, text: string): number | undefined {
-  if (m.ev?.op === "task.update") return m.ev.task;
-  if (m.task !== undefined) return m.task;
   for (const hit of text.matchAll(/\bT(\d+)\b/g)) {
     const id = Number(hit[1]);
     if (state.tasks.has(id)) return id;
   }
-  return undefined;
+  if (m.ev?.op === "task.update") return m.ev.task;
+  return m.task;
 }
 
 export function recentPrs(state: ChannelState, messages: Message[], viewer: string, limit: number): RecentPr[] {

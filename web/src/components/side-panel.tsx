@@ -1,4 +1,4 @@
-import { ArrowDown01Icon, ArrowRight01Icon, GitPullRequestIcon } from "@hugeicons/core-free-icons"
+import { ArrowDown01Icon, GitPullRequestIcon } from "@hugeicons/core-free-icons"
 import { useState, type ReactNode } from "react"
 
 import type { TaskState } from "@mc/protocol.ts"
@@ -9,9 +9,14 @@ import { remember, remembered } from "@/lib/side"
 import { cx } from "@/lib/utils"
 import { AgentLine, busy, byBusy, type AgentNow } from "./agent-strip"
 import { Icon } from "./icon"
-import { StateMark, labelOf } from "./tasks"
+import { SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from "./kit"
+import { StateMark } from "./tasks"
 
 const SHOWN = 5
+
+export const FLOAT_W = 336
+
+export const FLOAT_GAP = 24
 
 type Filter = "all" | TaskState
 
@@ -27,7 +32,7 @@ function Card({ id, title, count, children }: { id: string; title: string; count
   const key = `mc.side.${id}`
   const [open, setOpen] = useState(() => remembered(key))
   return (
-    <section aria-label={title} className="rounded-card bg-raised shadow-[0_0_0_1px_var(--line)]">
+    <section aria-label={title} className="rounded-card shadow-[0_0_0_1px_var(--edge-strong)]">
       <button
         type="button"
         aria-expanded={open}
@@ -35,19 +40,27 @@ function Card({ id, title, count, children }: { id: string; title: string; count
           remember(key, !open)
           setOpen(!open)
         }}
-        className="flex w-full items-center gap-2 rounded-card px-5 pt-4 pb-3 text-left"
+        className="flex h-11 w-full items-center gap-2 rounded-card px-4 text-left"
       >
         <span className="text-ui font-semibold text-ink">{title}</span>
         {count !== undefined && <span className="text-meta text-ink-3 tabular-nums">{count}</span>}
         <Icon icon={ArrowDown01Icon} size={14} className={cx("ml-auto shrink-0 text-ink-3 transition-transform duration-200", !open && "-rotate-90")} />
       </button>
-      {open && <div className="px-2.5 pb-3">{children}</div>}
+      {open && <div className="px-2 pb-2">{children}</div>}
     </section>
   )
 }
 
 function Quiet({ children }: { children: ReactNode }) {
-  return <p className="px-2.5 pb-1 text-ui leading-normal text-ink-3">{children}</p>
+  return <p className="px-2 pb-2 text-ui leading-normal text-ink-3">{children}</p>
+}
+
+function When({ at, now }: { at: number; now: number }) {
+  return (
+    <time title={formatFull(at)} className="shrink-0 pt-px text-meta text-ink-3 tabular-nums">
+      {formatAgo(at, now)}
+    </time>
+  )
 }
 
 function Agents({ agents, now, onOpenTask }: { agents: AgentNow[]; now: number; onOpenTask: (id: number) => void }) {
@@ -58,11 +71,11 @@ function Agents({ agents, now, onOpenTask }: { agents: AgentNow[]; now: number; 
       {agents.length ? (
         <ul aria-label="What the agents are doing">
           {byBusy(agents).map((a) => (
-            <AgentLine key={a.name} a={a} now={now} onOpenTask={onOpenTask} />
+            <AgentLine key={a.name} a={a} now={now} onOpenTask={onOpenTask} brief />
           ))}
         </ul>
       ) : (
-        <Quiet>No agent has joined yet. Add one from the channel’s details.</Quiet>
+        <Quiet>No agent has joined yet.</Quiet>
       )}
     </Card>
   )
@@ -71,20 +84,17 @@ function Agents({ agents, now, onOpenTask }: { agents: AgentNow[]; now: number; 
 function TaskLine({ task, now, nameOf, onOpen }: { task: Task; now: number; nameOf: (n: string) => string; onOpen: () => void }) {
   return (
     <li>
-      <button type="button" onClick={onOpen} className="flex w-full items-start gap-2.5 rounded-ctl px-2.5 py-2 text-left transition-colors hover:bg-wash">
+      <button type="button" onClick={onOpen} className="flex w-full items-start gap-2 rounded-ctl px-2 py-1.5 text-left transition-colors hover:bg-wash">
         <span className="pt-0.5">
           <StateMark state={task.state} />
         </span>
         <span className="min-w-0 flex-1">
           <span className={cx("line-clamp-2 text-ui leading-snug", task.state === "done" ? "text-ink-2" : "text-ink")}>{task.title}</span>
           <span className="mt-0.5 block truncate text-meta text-ink-3">
-            <span className="tabular-nums">{taskId(task.id)}</span>
-            {` · ${labelOf(task)}`}
-            {` · ${task.owner ? nameOf(task.owner) : "Unassigned"}`}
-            {" · "}
-            <time title={formatFull(task.updatedAt)}>{formatAgo(task.updatedAt, now)}</time>
+            <span className="tabular-nums">{taskId(task.id)}</span> · {task.owner ? nameOf(task.owner) : "Unassigned"}
           </span>
         </span>
+        <When at={task.updatedAt} now={now} />
       </button>
     </li>
   )
@@ -93,34 +103,26 @@ function TaskLine({ task, now, nameOf, onOpen }: { task: Task; now: number; name
 function Tasks({ state, now, nameOf, onOpen, onAll }: { state: ChannelState; now: number; nameOf: (n: string) => string; onOpen: (id: number) => void; onAll: () => void }) {
   const [filter, setFilter] = useState<Filter>("all")
   const all = [...state.tasks.values()].sort((a, b) => b.updatedAt - a.updatedAt)
-  const countOf = (f: Filter) => (f === "all" ? all.length : all.filter((t) => t.state === f).length)
   const list = all.filter((t) => filter === "all" || t.state === filter)
   const open = all.filter((t) => t.state !== "done").length
+  const shown = FILTERS.filter(([f]) => f === "all" || f === filter || all.some((t) => t.state === f))
   return (
     <Card id="tasks" title="Tasks" count={all.length ? `${open} open` : undefined}>
       {all.length ? (
         <>
-          <div role="radiogroup" aria-label="Show tasks" className="flex flex-wrap gap-x-4 gap-y-1 px-2.5 pb-2">
-            {FILTERS.map(([f, word]) => {
-              const on = filter === f
-              if (!on && f !== "all" && !countOf(f)) return null
-              return (
-                <button
-                  key={f}
-                  type="button"
-                  role="radio"
-                  aria-checked={on}
-                  onClick={() => setFilter(f)}
-                  className={cx(
-                    "flex h-7 items-center gap-1 border-b-2 text-meta transition-colors",
-                    on ? "border-ink font-semibold text-ink" : "border-transparent font-medium text-ink-3 hover:text-ink"
-                  )}
-                >
-                  {word}
-                  <span className="font-normal text-ink-3 tabular-nums">{countOf(f)}</span>
-                </button>
-              )
-            })}
+          <div role="radiogroup" aria-label="Show tasks" className={cx("mx-2 mb-2 flex gap-0.5", SEGMENTED)}>
+            {shown.map(([f, word]) => (
+              <button
+                key={f}
+                type="button"
+                role="radio"
+                aria-checked={filter === f}
+                onClick={() => setFilter(f)}
+                className={cx("h-6 flex-auto rounded-row px-2 text-meta font-medium whitespace-nowrap transition-colors", filter === f ? SEGMENT_ON : SEGMENT_OFF)}
+              >
+                {word}
+              </button>
+            ))}
           </div>
           {list.length ? (
             <ul aria-label="Recently updated tasks">
@@ -129,11 +131,10 @@ function Tasks({ state, now, nameOf, onOpen, onAll }: { state: ChannelState; now
               ))}
             </ul>
           ) : (
-            <Quiet>No task is {FILTERS.find(([f]) => f === filter)?.[1].toLowerCase()} right now.</Quiet>
+            <Quiet>Nothing here right now.</Quiet>
           )}
-          <button type="button" onClick={onAll} className="flex w-full items-center gap-1 rounded-ctl px-2.5 py-2 text-left text-ui font-medium text-accent-text transition-colors hover:bg-wash">
+          <button type="button" onClick={onAll} className="mt-1 w-full rounded-ctl px-2 py-1.5 text-left text-ui font-medium text-accent-text transition-colors hover:bg-wash">
             All tasks
-            <Icon icon={ArrowRight01Icon} size={14} />
           </button>
         </>
       ) : (
@@ -143,9 +144,14 @@ function Tasks({ state, now, nameOf, onOpen, onAll }: { state: ChannelState; now
   )
 }
 
-const FATE: Record<RecentPr["state"], string> = { open: "text-live", merged: "text-doing", closed: "text-ink-3" }
+const FATE: Record<RecentPr["state"], { color: string; word: string }> = {
+  open: { color: "text-live", word: "Open" },
+  merged: { color: "text-doing", word: "Merged" },
+  closed: { color: "text-ink-3", word: "Closed" },
+}
 
 function Pulls({ prs, state, now, nameOf }: { prs: RecentPr[]; state: ChannelState; now: number; nameOf: (n: string) => string }) {
+  const repos = new Set(prs.map((p) => p.repo))
   return (
     <Card id="prs" title="Pull requests" count={prs.length || undefined}>
       {prs.length ? (
@@ -154,39 +160,35 @@ function Pulls({ prs, state, now, nameOf }: { prs: RecentPr[]; state: ChannelSta
             const task = pr.task === undefined ? undefined : state.tasks.get(pr.task)
             return (
               <li key={pr.url}>
-                <a href={pr.url} target="_blank" rel="noreferrer" title={pr.url} className="flex w-full items-start gap-2.5 rounded-ctl px-2.5 py-2 text-left transition-colors hover:bg-wash">
-                  <Icon icon={GitPullRequestIcon} size={16} className={cx("mt-0.5 shrink-0", FATE[pr.state])} />
+                <a href={pr.url} target="_blank" rel="noreferrer" title={pr.url} className="flex w-full items-start gap-2 rounded-ctl px-2 py-1.5 text-left transition-colors hover:bg-wash">
+                  <Icon icon={GitPullRequestIcon} size={15} className={cx("mt-0.5 shrink-0", FATE[pr.state].color)} />
                   <span className="min-w-0 flex-1">
-                    <span className="flex items-baseline gap-1.5 text-ui">
-                      <span className="font-semibold text-ink tabular-nums">#{pr.number}</span>
-                      <span className="truncate text-ink-3">{pr.repo}</span>
-                      {pr.state !== "open" && <span className="shrink-0 text-meta text-ink-3">{pr.state}</span>}
+                    <span className="block truncate text-ui leading-snug text-ink">
+                      <span className="font-semibold tabular-nums">#{pr.number}</span> {task ? task.title : `Linked by ${nameOf(pr.by)}`}
                     </span>
-                    <span className="block truncate text-meta text-ink-3">
-                      {task ? (
+                    <span className="mt-0.5 block truncate text-meta text-ink-3">
+                      {FATE[pr.state].word}
+                      {task && (
                         <>
-                          <span className="tabular-nums">{taskId(task.id)}</span> {task.title}
+                          {" · "}
+                          <span className="tabular-nums">{taskId(task.id)}</span>
                         </>
-                      ) : (
-                        <>Linked by {nameOf(pr.by)}</>
                       )}
-                      {" · "}
-                      <time title={formatFull(pr.last)}>{formatAgo(pr.last, now)}</time>
+                      {repos.size > 1 && ` · ${pr.repo}`}
                     </span>
                   </span>
+                  <When at={pr.last} now={now} />
                 </a>
               </li>
             )
           })}
         </ul>
       ) : (
-        <Quiet>When someone links a GitHub pull request here, the last {SHOWN} show up.</Quiet>
+        <Quiet>GitHub pull requests linked here show up as they come.</Quiet>
       )}
     </Card>
   )
 }
-
-export const FLOAT_W = 344
 
 export function Overview({
   state,
@@ -206,8 +208,8 @@ export function Overview({
   onAllTasks: () => void
 }) {
   return (
-    <aside aria-label="Overview" style={{ width: FLOAT_W }} className="pointer-events-none absolute top-[calc(var(--head)+8px)] right-6 bottom-6 z-30 hidden flex-col lg:flex">
-      <div className="pointer-events-auto flex max-h-full [scrollbar-width:none] flex-col gap-4 overflow-y-auto rounded-card">
+    <aside aria-label="Overview" style={{ width: FLOAT_W, right: FLOAT_GAP }} className="pointer-events-none absolute top-[calc(var(--head)+8px)] bottom-6 z-30 hidden flex-col xl:flex">
+      <div className="pointer-events-auto flex max-h-full [scrollbar-width:none] flex-col gap-3 overflow-y-auto p-px">
         <Agents agents={agents} now={now} onOpenTask={onOpenTask} />
         <Tasks state={state} now={now} nameOf={nameOf} onOpen={onOpenTask} onAll={onAllTasks} />
         <Pulls prs={prs} state={state} now={now} nameOf={nameOf} />

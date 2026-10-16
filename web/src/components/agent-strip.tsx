@@ -47,16 +47,16 @@ export const byBusy = (agents: AgentNow[]) => [...agents].sort((a, b) => Number(
 const face = (a: AgentNow, size: number) =>
   a.coordinator ? <CoordinatorAvatar size={size} /> : <Monogram name={a.label} hue={a.name} agent color={a.color} size={size} online={size > 20 && !!a.here} />
 
-export function AgentLine({ a, now, onOpenTask }: { a: AgentNow; now: number; onOpenTask: (id: number) => void }) {
+export function AgentLine({ a, now, onOpenTask, brief }: { a: AgentNow; now: number; onOpenTask: (id: number) => void; brief?: boolean }) {
   return (
     <li className="flex items-start gap-3 rounded-ctl px-2 py-2">
       <span className="flex pt-0.5">{face(a, 28)}</span>
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline gap-2">
           <span className="truncate text-ui font-semibold">{a.label}</span>
-          {a.model && <span className="truncate text-stamp text-ink-3">{a.model}</span>}
+          {a.model && !brief && <span className="truncate text-stamp text-ink-3">{a.model}</span>}
           {a.coordinator && <span className="shrink-0 text-stamp text-ink-3">coordinator</span>}
-          <span className="ml-auto shrink-0 text-stamp text-ink-3">{a.here ? "online" : a.lastAt ? `away · ${formatAgo(a.lastAt, now)}` : "away"}</span>
+          <span className="ml-auto shrink-0 text-stamp text-ink-3">{a.here ? "online" : a.lastAt && !brief ? `away · ${formatAgo(a.lastAt, now)}` : "away"}</span>
         </span>
         {doingNow(a) && (
           <span className="flex items-center gap-1.5 text-meta">
