@@ -131,7 +131,7 @@ export class AgentSession {
     /** Keeps the channel's keys after a rotation. */
     persist: (a: ChannelAccess) => void,
   ) {
-    this.ch = new Channel(cfg, cfg.relay, identity, persist);
+    this.ch = new Channel(cfg, cfg.relay, identity, persist, { keepInfo: true });
   }
 
   /** openSession, as a Promise: for callers outside Effect. */
@@ -186,6 +186,7 @@ export class AgentSession {
       const unknown = [...state.rejected].some(([seq, why]) => seq > this.roomsCheckedAt && why.startsWith("no room "));
       if (unknown) {
         this.roomsCheckedAt = state.head;
+        this.ch.forgetInfo();
         this.roomsFloor = yield* orNone(this.ch.fx.rooms());
         state = fold(messages, roster, Date.now(), undefined, this.roomsFloor, this.guardFloor);
       }
