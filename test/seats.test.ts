@@ -134,7 +134,10 @@ test("a session's seats are found in every folder it joined from, never another 
   expect(seatsFor(dir, { who }).map((b) => b.as)).toEqual(["planner"]);
   expect(seatsHeldAnywhere(who).map((b) => `${b.as}@${b.alias}`).sort()).toEqual(["planner@ch", "reviewer@other"]);
   expect(seatsHeldAnywhere({ harness: "claude" })).toEqual([]);
-  wipeChannel("other");
+  updateConfig((c) => {
+    delete c.channels.other;
+  });
+  expect(seatsAt(loadConfig(), sibling).map((b) => b.as).sort()).toEqual(["claude-2", "reviewer"]);
   expect(seatsHeldAnywhere(who).map((b) => b.as)).toEqual(["planner"]);
 });
 
