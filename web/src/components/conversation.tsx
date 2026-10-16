@@ -94,7 +94,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const [here, setHere] = useState<string>("main")
   const [side, setSide] = useState<Side>(null)
   const floating = side === null
-  const threadRoot = side?.kind === "thread" ? side.root : null
+  const sideRoot = side?.kind === "thread" ? side.root : null
   const info = side?.kind === "info"
   /** The task open in the Tasks panel, if one is (else the panel lists them, if it's open). */
   const shownTask = side?.kind === "tasks" ? side.task : null
@@ -253,9 +253,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     },
     [state.threadOf, state.placeOf, bySeqAll, coordinator]
   )
-  useEffect(() => {
-    if (coordinator && threadRoot !== null && (state.placeOf.get(threadRoot) ?? MAIN).kind === "main") setSide(null)
-  }, [coordinator, threadRoot, state.placeOf])
+  const threadRoot = sideRoot !== null && coordinator && (state.placeOf.get(sideRoot) ?? MAIN).kind === "main" ? null : sideRoot
   // The owner can look at what every view leaves out (forged, or not allowed), tagged; nobody else can.
   const [showDropped, setShowDropped] = useState(false)
   const revealed = isOwner && showDropped
