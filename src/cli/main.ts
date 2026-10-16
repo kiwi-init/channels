@@ -922,7 +922,6 @@ const commands: Record<string, Command> = {
       const fetched = m.imgs?.length
         ? yield* Effect.forEach(m.imgs, (img) => s.ch.fx.images([img]).pipe(Effect.orElseSucceed((): InlineImage[] => [])), { concurrency: 4 }).pipe(Effect.map((lists) => lists.flat()))
         : [];
-      // Images land under the channel's own folder (closing it deletes them), or where asked.
       const saved = fetched.length ? saveImages(seq, fetched, args[2] ?? joinPath(home(), "downloads", s.ch.roomId)) : [];
       out(formatShown(m, known, state, saved, s.me));
       // The rest of its thread, when there's more of it than #N, what it answers and its replies.
