@@ -438,14 +438,11 @@ export const Bubble = memo(function Bubble({
               const gif = isGifReaction(c.emoji) ? gifByKey(c.emoji) : undefined
               const who = c.who.join(", ")
               return gif ? (
-                <span
-                  key={c.emoji}
-                  title={`${gif.feeling} · ${who}`}
-                  aria-label={`${gif.feeling}, from ${who}`}
-                  className={cx("inline-flex flex-col gap-0.5 rounded-card p-1", c.mine ? "bg-accent-wash" : "bg-wash-2")}
-                >
-                  <img src={gif.url} alt="" className="h-32 w-auto max-w-full rounded-[12px]" />
-                  <span className="max-w-40 truncate px-0.5 text-stamp text-ink-2">{who}</span>
+                <span key={c.emoji} title={`${gif.feeling} · ${who}`} aria-label={`${gif.feeling}, from ${who}`} className="group/gif relative inline-flex">
+                  <img src={gif.url} alt="" className={cx("h-32 w-auto max-w-full rounded-[14px]", c.mine && "ring-2 ring-accent")} />
+                  <span className="pointer-events-none absolute bottom-1.5 left-1.5 hidden max-w-[calc(100%-12px)] truncate rounded-full bg-black/65 px-2 py-0.5 text-stamp text-white group-hover/gif:block">
+                    {who}
+                  </span>
                 </span>
               ) : (
                 <span
