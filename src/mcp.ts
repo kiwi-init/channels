@@ -209,6 +209,13 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         const cursor = yield* Cursor;
         const seen = yield* cursor.seen(s.alias, s.me);
         let lines: string[] = [];
+        let taken: typeof pending = [];
+        const giveBack = () => {
+          pending.unshift(...taken);
+          taken = [];
+          lines = [];
+          return cursor.write(s.alias, s.me, since);
+        };
         yield* Effect.gen(function* () {
           yield* holding(s.alias, s.me);
           const arrived = yield* Deferred.make<void>();
@@ -229,18 +236,21 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
           yield* Effect.raceFirst(ended, over);
           yield* Effect.sync(() => {
             waiting = null;
-            if (!extra.signal.aborted) lines = pending.splice(0).flatMap((h) => (h.seq !== null && (h.seq <= since || seen.has(h.seq)) ? [] : [h.line]));
+            if (extra.signal.aborted) return;
+            taken = pending.splice(0);
+            lines = taken.flatMap((h) => (h.seq !== null && (h.seq <= since || seen.has(h.seq)) ? [] : [h.line]));
           });
         }).pipe(
           Effect.ensuring(
             Effect.suspend(() => {
               waiting = null;
-              return extra.signal.aborted ? cursor.write(s.alias, s.me, since) : Effect.void;
+              return extra.signal.aborted ? giveBack() : Effect.void;
             }),
           ),
           Effect.scoped,
         );
-        if (extra.signal.aborted || !lines.length) return "no messages yet, call wait_for_messages again.\nNext: call wait_for_messages.";
+        if (extra.signal.aborted) yield* giveBack();
+        if (!lines.length) return "no messages yet, call wait_for_messages again.\nNext: call wait_for_messages.";
         // Handed back to the session: read now.
         yield* s.markRead((yield* cursor.read(s.alias, s.me)) ?? 0);
         return `${lines.join("\n")}\nNext: handle these. If one needs an answer, call reply. Then call wait_for_messages.`;
