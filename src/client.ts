@@ -607,6 +607,11 @@ export interface ChannelFx {
   stream(since: number, onMessage: (m: Message) => void | Promise<void>, opts?: StreamOptions): Effect.Effect<void, ChannelGone, Relay>;
 }
 
+function received(p: Payload, seq: number, rts: number, sigOk: boolean): Message {
+  const imgs = Array.isArray(p.imgs) ? p.imgs.filter(rasterAttachment) : undefined;
+  return { ...p, ...(imgs?.length ? { imgs } : { imgs: undefined }), seq, rts, sigOk };
+}
+
 export class Channel {
   readonly name: string;
   /** The key fetch in flight, shared by everyone who needs it meanwhile. */
@@ -614,6 +619,7 @@ export class Channel {
   /** How far this member has told the relay it read, and whether the relay knows read marks at all. */
   private markedTo = 0;
   private marksUnknown = false;
+  onSent: ((seq: number, message: Message | null) => void) | null = null;
 
   constructor(
     public access: ChannelAccess,
@@ -1203,10 +1209,16 @@ export class Channel {
         const key = this.access.keys[String(e)];
         if (!key) return yield* new MissingKey(`no key for epoch ${e}`);
         const sealed = yield* Effect.promise(() => seal(key, this.roomId, signed));
-        return (yield* this.request<{ seq: number }>("/messages", { method: "POST", body: JSON.stringify({ ...sealed, e }) })).seq;
+        return yield* this.request<{ seq: number; ts?: number }>("/messages", { method: "POST", body: JSON.stringify({ ...sealed, e }) });
       });
       // The key rotated under us: fetch the new one and resend once.
-      return yield* post.pipe(Effect.catchIf((err) => err instanceof RelayError && err.status === 409, () => Effect.andThen(this.fx.refreshKeys(), post)));
+      const stored = yield* post.pipe(Effect.catchIf((err) => err instanceof RelayError && err.status === 409, () => Effect.andThen(this.fx.refreshKeys(), post)));
+      if (this.onSent) {
+        const p: unknown = JSON.parse(JSON.stringify(signed));
+        const kept = typeof stored.ts === "number" && Number.isFinite(stored.ts) && wellFormed(p) ? received(p, stored.seq, stored.ts, yield* Effect.promise(() => verify(p))) : null;
+        this.onSent(stored.seq, kept);
+      }
+      return stored.seq;
     }),
 
     decrypt: Effect.fn("Channel.decrypt")({ self: this }, function* (this: Channel, env: Envelope) {
@@ -1217,9 +1229,7 @@ export class Channel {
       // Anything that isn't a well-formed message is dropped here, before any client folds it.
       if (!wellFormed(p)) return null;
       // Drop anything that isn't a named raster image, including SVG, rather than the whole message.
-      const imgs = Array.isArray(p.imgs) ? p.imgs.filter(rasterAttachment) : undefined;
-      const message: Message = { ...p, ...(imgs?.length ? { imgs } : { imgs: undefined }), seq: env.seq, rts: env.ts, sigOk: yield* Effect.promise(() => verify(p)) };
-      return message;
+      return received(p, env.seq, env.ts, yield* Effect.promise(() => verify(p)));
     }),
 
     history: Effect.fn("Channel.history")({ self: this }, function* (this: Channel, since: number) {
