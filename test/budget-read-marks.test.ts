@@ -70,16 +70,23 @@ function marks(): Map<string, number> {
   }
 }
 
-function ownerChannel(): Promise<Channel> {
+function withHome<T>(home: string, f: () => T): T {
   const was = process.env.KIWI_HOME;
-  process.env.KIWI_HOME = owner;
+  process.env.KIWI_HOME = home;
   try {
+    return f();
+  } finally {
+    if (was === undefined) delete process.env.KIWI_HOME;
+    else process.env.KIWI_HOME = was;
+  }
+}
+
+function ownerChannel(): Promise<Channel> {
+  return withHome(owner, () => {
     const cfg = loadConfig();
     const access = Object.values(cfg.channels).find((c) => c.roomId === roomId)!;
     return loadIdentity("human", roomId).then((id) => new Channel(access, proxy!.url, id));
-  } finally {
-    process.env.KIWI_HOME = was;
-  }
+  });
 }
 
 beforeAll(async () => {
@@ -126,15 +133,7 @@ describe("read marks in a channel of agents listening live", () => {
       last = Number(/#(\d+)/.exec(await ok(owner, "--as", "lead", "send", "--to", "all", `round ${i}`))![1]);
       await Bun.sleep(1_300);
     }
-    const ids = await Promise.all(agents.map((a) => {
-      const was = process.env.KIWI_HOME;
-      process.env.KIWI_HOME = a.home;
-      try {
-        return loadIdentity(a.name, roomId);
-      } finally {
-        process.env.KIWI_HOME = was;
-      }
-    }));
+    const ids = await Promise.all(agents.map((a) => withHome(a.home, () => loadIdentity(a.name, roomId))));
     await until(() => ids.every((id) => (marks().get(id.pk) ?? 0) >= last), "every agent's mark");
     await until(() => viewerMarks >= AGENTS, "the marks at the viewer");
     await Bun.sleep(1_500);
