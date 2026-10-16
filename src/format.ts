@@ -456,10 +456,6 @@ export function missingImages(seq: number, want: number, got: number): string | 
   return got < want ? `${want - got} of the ${want} images in #${seq} did not load; the relay may no longer have them` : null;
 }
 
-/**
- * One message in full (`kiwi show`, the MCP message tool): the message itself,
- * the one it answers, and every verified reply to it, so nothing needs the log.
- */
 export function formatShown(m: Message, messages: Message[], state: ChannelState, savedImages: string[] = [], me?: string): string {
   const out = [formatMessage(m, state.trust.get(m.seq), state, me)];
   if (savedImages.length) out.push(`  images saved: ${savedImages.join(", ")}`);
