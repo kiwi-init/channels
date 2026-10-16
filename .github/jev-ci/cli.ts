@@ -41,6 +41,10 @@ async function planInCI(): Promise<Plan> {
     return plan({ repo: values.repo, base: fork, head, config, passed: await passed() })
   }
   const event = process.env.GITHUB_EVENT_NAME
+  if (event === "push" && process.env.GITHUB_REF?.startsWith("refs/heads/mobile")) {
+    const fork = git(values.repo, ["merge-base", "origin/main", "HEAD"]).trim()
+    return plan({ repo: values.repo, base: fork, head, config, passed: await passed() })
+  }
   if (event !== "pull_request") return runAll(config, `${event} run: everything runs`, hashes, event)
   // The checkout is GitHub's merge of the PR into its base: its first parent is the base.
   const base = git(values.repo, ["rev-parse", "HEAD^1"]).trim()
