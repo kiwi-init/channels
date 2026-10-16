@@ -6,8 +6,10 @@ import { memberLoad } from "@mc/load.ts"
 import { ignored, isReaction, type Color, type Message } from "@mc/protocol.ts"
 import { describeScopes, wireScopes } from "@mc/scopes.ts"
 import { colorOf, keptFromPeople, openRound, taskId, type Task } from "@mc/state.ts"
+import { recentPrs } from "@mc/work.ts"
 import { secrets } from "@/lib/secrets"
 import { channelTitle, forgetChannel, loadMember, loadRecent, renameChannel, saveRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
+import { howHere } from "@/lib/presence"
 import { lastPreview } from "@/lib/preview"
 import { markSeen, setOpenNews } from "@/lib/news"
 import { useIcons, useLiveIcon } from "@/lib/icons"
@@ -16,9 +18,7 @@ import { coordinatorMood, ERROR_MS, moodInputs, SPEAKING_MS, type Mood } from "@
 import { chipsFor } from "@/lib/reactions"
 import { receipt } from "@/lib/receipts"
 import { dmPlace, markSeenIn, MAIN, placeFromKey, placeKey, seenIn, sendFrom, useSeen, threadMembers, type Place, type PlaceSummary } from "@/lib/threads"
-import { useSidebarOpen } from "@/lib/sidebar"
 import { cx } from "@/lib/utils"
-import { LEAD_WHEN_HIDDEN } from "./chrome"
 import { CoordinatorAvatar } from "./coordinator-head"
 import { Composer } from "./composer"
 import { AddAgent } from "./add-agent"
@@ -28,6 +28,7 @@ import { Icon } from "./icon"
 import { Button, IconButton, Spinner } from "./kit"
 import { Bubble, EventGroup, EventRow, TimeMark, isAgent, standsAlone, type ThreadSummary } from "./message"
 import { NeedsYou } from "./needs-you"
+import { FLOAT_GAP, FLOAT_W, Overview } from "./side-panel"
 import { Notes, Tasks } from "./tasks"
 import { InfoPanel, TaskDetails, TasksPanel, ThreadPanel } from "./lazy"
 
@@ -73,7 +74,9 @@ const summarised = (m: Message) => m.ev?.op === "task.add" || (m.ev?.op === "tas
 type Here = Exclude<Place, { kind: "task" }>
 
 /** What's open on the right, one at a time: a thread (by its first message), the details, or the tasks (the list, or one of them). */
-type Side = { kind: "thread"; root: number } | { kind: "info" } | { kind: "tasks"; task: number | null } | null
+type Side = { kind: "thread"; root: number } | { kind: "info" } | { kind: "tasks"; task: number | null; via?: "overview" } | null
+
+const CLEAR = "xl:pr-[min(var(--float),max(0px,calc(792px_+_2*var(--float)_-_100%)))]"
 
 function roundOf(t: Task): { round: number; at?: string } | Record<string, never> {
   const open = openRound(t)
@@ -90,6 +93,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   // Where you are in the channel: its main conversation, or a direct one.
   const [here, setHere] = useState<string>("main")
   const [side, setSide] = useState<Side>(null)
+  const floating = side === null
   const threadRoot = side?.kind === "thread" ? side.root : null
   const info = side?.kind === "info"
   /** The task open in the Tasks panel, if one is (else the panel lists them, if it's open). */
@@ -105,7 +109,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   // The floating header and composer: their heights pad the conversation, so its ends clear them.
   const [headRef, headH] = useHeight()
   const [footRef, footH] = useHeight()
-  const listOpen = useSidebarOpen()
 
   const nameOf = useCallback((name: string) => memberName(state.members.get(name), name), [state.members])
   // Members by key: names are what people type, keys are who they are.
@@ -509,13 +512,14 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       name: m.name,
       label: memberName(m),
       color: colorOf(state, m.name),
-      online: online.has(m.name),
+      here: howHere(online.get(m.name)),
       coordinator: m.name === state.coordinator,
       model: online.get(m.name)?.activity?.model ?? m.card?.model,
       activity: online.get(m.name)?.activity,
       load: memberLoad(state, m.name, now),
       lastAt: lastAt.get(m.name),
     }))
+  const prs = floating ? recentPrs(state, messages, me, 5) : []
   const needsMe = escalations.length + reviews.length + (isOwner ? requests.length : 0)
   // The header's capsule is the channel's, wherever you are in it, so this line is the channel's too.
   const headline =
@@ -558,8 +562,17 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       state={state}
       now={now}
       onApprove={async (r, scopes) => {
-        await ch.approve(r, wireScopes(scopes) ? { scopes } : undefined, { person: secrets().person?.pk })
-        await Promise.all([refreshRequests(), refreshRoster()])
+        const as = wireScopes(scopes) ? { scopes } : undefined
+        try {
+          await ch.approve(r, as, { person: secrets().person?.pk })
+        } catch (err) {
+          const joined = (await ch.members().catch(() => [])).find((m) => m.active && !m.unverified && m.pk === r.pk)
+          if (!joined) throw err
+          if (String(wireScopes(joined.later?.scopes ?? joined.scopes)) !== String(wireScopes(scopes)))
+            throw new Error(`${r.name} already joined with other permissions: change them from its menu`, { cause: err })
+        } finally {
+          await Promise.all([refreshRequests(), refreshRoster()])
+        }
       }}
       onScopes={async (m, scopes) => {
         const wire = wireScopes(scopes)
@@ -636,14 +649,14 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       <div className="flex h-full min-w-0 flex-1">
         <div
           className={cx("relative flex min-w-0 flex-1 flex-col bg-canvas", (root || info || side?.kind === "tasks") && "hidden md:flex")}
-          style={{ "--head": `${headH}px`, "--foot": `${footH}px` } as CSSProperties}
+          style={{ "--head": `${headH}px`, "--foot": `${footH}px`, "--float": `${FLOAT_W + 2 * FLOAT_GAP}px` } as CSSProperties}
         >
           {/* The conversation's part of the window's one header row, floating over it as Grok's does:
               in the middle, one glass capsule with the channel's name; on the right, search and the
               tasks. Messages scroll under it. Pausing every agent is in the details (the name opens them). */}
           <header ref={headRef} className="absolute inset-x-0 top-0 z-20">
             <div aria-hidden className="scrim-top absolute inset-x-0 top-0 -bottom-6" />
-            <div className={cx("drag relative flex h-(--chrome-h) items-center gap-2 px-3", !listOpen && LEAD_WHEN_HIDDEN)}>
+            <div className="drag relative flex h-(--chrome-h) items-center gap-2 px-3">
               <IconButton label="Channels" round className="glass size-9 text-ink md:hidden" onClick={onBack}>
                 <Icon icon={ArrowLeft01Icon} size={20} />
               </IconButton>
@@ -698,7 +711,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
 
           <div
             ref={scroller}
-            className="absolute inset-0 overflow-y-auto"
+            className={cx("absolute inset-0 overflow-y-auto", floating && CLEAR)}
             onScroll={(e) => {
               const el = e.currentTarget
               atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
@@ -756,6 +769,18 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             </div>
           </div>
 
+          {floating && (
+            <Overview
+              state={state}
+              agents={agentsNow}
+              prs={prs}
+              now={now}
+              nameOf={nameOf}
+              onOpenTask={(task) => setSide({ kind: "tasks", task, via: "overview" })}
+              onAllTasks={() => setSide({ kind: "tasks", task: null, via: "overview" })}
+            />
+          )}
+
           {behind > 0 && (
             <button
               type="button"
@@ -768,7 +793,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
           )}
 
           {/* The composer floats on glass at the foot; messages scroll under it too. */}
-          <div ref={footRef} className="absolute inset-x-0 bottom-0 z-20">
+          <div ref={footRef} className={cx("absolute inset-x-0 bottom-0 z-20", floating && CLEAR)}>
             <div aria-hidden className="scrim-bottom absolute inset-x-0 -top-6 bottom-0" />
             <div className="relative">
               {mayWrite ? (
@@ -793,7 +818,11 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                     atBottom.current = true
                     return send(body, opts)
                   }}
-                  footer={<AgentStrip agents={agentsNow} now={now} onOpenTask={openTask} />}
+                  footer={
+                    <div className="xl:hidden">
+                      <AgentStrip agents={agentsNow} now={now} onOpenTask={openTask} />
+                    </div>
+                  }
                 />
               ) : (
                 <p className="shrink-0 px-6 pt-2 pb-4 text-center text-meta text-ink-3">
@@ -853,7 +882,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                 </>
               )
             }
-            onBack={shownTask === null ? undefined : () => setSide({ kind: "tasks", task: null })}
+            backLabel={side.task === null ? "Overview" : "All tasks"}
+            onBack={side.task !== null ? () => setSide({ kind: "tasks", task: null, ...(side.via ? { via: side.via } : {}) }) : side.via ? () => setSide(null) : undefined}
             onClose={() => setSide(null)}
             follow={shownTask === null ? null : `${shownTask}:${inTask.length}`}
             composer={
@@ -874,7 +904,13 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             }
           >
             {shownTask === null ? (
-              <Tasks state={state} now={now} nameOf={nameOf} unreadIn={(id) => unreadIn(placeKey({ kind: "task", task: id }))} onOpen={openTask} />
+              <Tasks
+                state={state}
+                now={now}
+                nameOf={nameOf}
+                unreadIn={(id) => unreadIn(placeKey({ kind: "task", task: id }))}
+                onOpen={(task) => setSide((s) => ({ kind: "tasks", task, ...(s?.kind === "tasks" && s.via ? { via: s.via } : {}) }))}
+              />
             ) : (
               <div className="px-3 pt-1 pb-4">
                 <TaskDetails
@@ -978,7 +1014,7 @@ function TasksButton({
     else if (u.n) news = true
   }
   return (
-    <IconButton label="Tasks" round className={cx("glass size-9", !active && "text-ink")} active={active} aria-expanded={active} onClick={onClick}>
+    <IconButton label="Tasks" round className={cx("glass size-9 xl:hidden", !active && "text-ink")} active={active} aria-expanded={active} onClick={onClick}>
       <Icon icon={CheckListIcon} size={18} />
       <Badge u={forMe ? { n: forMe, forMe: true } : { n: news ? 1 : 0, forMe: false }} />
     </IconButton>

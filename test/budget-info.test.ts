@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, setDefaultTimeout, setSystemTime, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -154,6 +154,25 @@ describe("the app's reads of one channel", () => {
     expect(await kept.title()).toBe("first");
   });
 
+  test("a socket's first open keeps the read the session already has", async () => {
+    const owner = await generateIdentity("human");
+    const made = await Channel.create(proxy!.url, owner, { name: "human" }, [], undefined, undefined, "first");
+    const kept = new Channel(made.access, proxy!.url, owner, undefined, { keepInfo: true });
+    await Bun.sleep(100);
+    proxy!.reset();
+    expect(await kept.title()).toBe("first");
+    const stop = new AbortController();
+    const opened = Promise.withResolvers<void>();
+    const live = kept.stream(0, () => {}, { signal: stop.signal, onOpen: () => opened.resolve() });
+    await opened.promise;
+    await Bun.sleep(100);
+    expect(await kept.title()).toBe("first");
+    await kept.guard();
+    stop.abort();
+    await live;
+    expect(proxy!.reset().routes["GET /info"] ?? 0).toBe(1);
+  });
+
   test("a kept read expires: past its max age the next read goes to the relay and sees another client's change", async () => {
     expect(INFO_MAX_AGE_MS).toBe(30_000);
     const owner = await generateIdentity("human");
@@ -161,19 +180,25 @@ describe("the app's reads of one channel", () => {
     const kept = new Channel(made.access, proxy!.url, owner, undefined, { keepInfo: true, infoMaxAgeMs: 300 });
     const other = new Channel(made.access, proxy!.url, owner);
     await Bun.sleep(100);
-    proxy!.reset();
-    expect(await kept.title()).toBe("first");
-    await other.setTitle("second");
-    await other.setCharter({ text: "Docs only.", since: 1 });
-    proxy!.reset();
-    expect(await kept.title()).toBe("first");
-    expect(await kept.guard()).toBeNull();
-    expect(proxy!.reset().routes["GET /info"] ?? 0).toBe(0);
-    await Bun.sleep(400);
-    expect(await kept.title()).toBe("second");
-    expect((await kept.guard())?.charter).toEqual({ text: "Docs only.", since: 1 });
-    const after = proxy!.reset().routes["GET /info"] ?? 0;
-    console.log(`after max age: ${after} GET /info for title and guard`);
-    expect(after).toBe(1);
+    const start = Date.now();
+    setSystemTime(start);
+    try {
+      proxy!.reset();
+      expect(await kept.title()).toBe("first");
+      await other.setTitle("second");
+      await other.setCharter({ text: "Docs only.", since: 1 });
+      proxy!.reset();
+      expect(await kept.title()).toBe("first");
+      expect(await kept.guard()).toBeNull();
+      expect(proxy!.reset().routes["GET /info"] ?? 0).toBe(0);
+      setSystemTime(start + 400);
+      expect(await kept.title()).toBe("second");
+      expect((await kept.guard())?.charter).toEqual({ text: "Docs only.", since: 1 });
+      const after = proxy!.reset().routes["GET /info"] ?? 0;
+      console.log(`after max age: ${after} GET /info for title and guard`);
+      expect(after).toBe(1);
+    } finally {
+      setSystemTime();
+    }
   });
 });

@@ -58,7 +58,9 @@ import {
   wellFormedIcon,
   type ChannelIcon,
   cleanActivity,
+  isReach,
   cleanCard,
+  PAGE_LIMIT,
   PING,
   PROTOCOL_VERSION,
   WS_PROTOCOL,
@@ -140,6 +142,11 @@ export class Unreachable extends Data.TaggedError("Unreachable")<{ readonly caus
 
 /** A socket that closed for no reason that's an answer (not removed, not closed, not "more"): connect again. */
 class Dropped extends Data.TaggedError("Dropped")<{ readonly code: number; readonly reason: string }> {}
+
+interface PageOffer {
+  cap: string;
+  next: number;
+}
 
 /** What a request can fail with: the relay refused it, or never heard it. */
 export type Refusal = RelayError | Unreachable;
@@ -1360,14 +1367,32 @@ export class Channel {
     history: Effect.fn("Channel.history")({ self: this }, function* (this: Channel, since: number) {
       const messages: Message[] = [];
       let head = since;
+      const take = (envelopes: Envelope[]) =>
+        Effect.gen({ self: this }, function* () {
+          const decrypted = yield* Effect.forEach(envelopes, (e) => this.fx.decrypt(e), { concurrency: "unbounded" });
+          for (let i = 0; i < envelopes.length; i++) {
+            const m = decrypted[i];
+            if (m) messages.push(m);
+            since = envelopes[i]!.seq;
+          }
+        });
+      let ask: Record<string, number> = { pages: 1 };
       for (;;) {
-        const page = yield* this.request<{ head: number; messages: Envelope[] }>("/messages", {}, { since });
+        const page = yield* this.request<{ head: number; messages: Envelope[]; pages?: PageOffer }>("/messages", {}, { since, ...ask });
+        ask = {};
         head = page.head;
-        const decrypted = yield* Effect.forEach(page.messages, (e) => this.fx.decrypt(e), { concurrency: "unbounded" });
-        for (let i = 0; i < page.messages.length; i++) {
-          const m = decrypted[i];
-          if (m) messages.push(m);
-          since = page.messages[i]!.seq;
+        yield* take(page.messages);
+        const offer = page.pages;
+        if (offer && typeof offer.cap === "string" && Number.isSafeInteger(offer.next) && offer.next % PAGE_LIMIT === 0 && offer.next >= since && offer.next < head) {
+          since = offer.next;
+          for (let k = offer.next / PAGE_LIMIT; (k + 1) * PAGE_LIMIT <= head; k++) {
+            const exit = yield* Effect.exit(this.request<{ messages: Envelope[] }>(`/pages/${k}`, {}, { cap: offer.cap }));
+            if (Exit.isFailure(exit)) break;
+            yield* take(exit.value.messages.filter((e) => e.seq > k * PAGE_LIMIT && e.seq <= (k + 1) * PAGE_LIMIT));
+            since = (k + 1) * PAGE_LIMIT;
+          }
+          if (since >= head) break;
+          continue;
         }
         if (!page.messages.length || since >= head) break;
       }
@@ -1636,9 +1661,9 @@ export class Channel {
     return Effect.gen({ self: this }, function* () {
       switch (f.t) {
         case "open": {
-          this.forgetInfo();
           // Back after an outage the listener was told about: say for how long. The schedule's metadata is that outage's.
           const { attempt, elapsed, start } = yield* Schedule.CurrentMetadata;
+          if (attempt > 0) this.forgetInfo();
           const now = yield* Clock.currentTimeMillis;
           return { _tag: "Open", presence: f.presence, mark: f.mark, outage: attempt > 0 && elapsed >= quietMs ? now - start : null } satisfies Live;
         }
@@ -1696,9 +1721,12 @@ export class Channel {
           // role is self-reported. Flatten it before anyone renders status, so it can't invent a line.
           const role = typeof rest.role === "string" ? inlineText(rest.role, 80) || undefined : undefined;
           // So is what it says it's doing: only an activity's fields, each short.
-          const { activity: said, ...fields } = rest;
+          const { activity: said, reach, ...fields } = rest;
           const activity = cleanActivity(said);
-          return { _tag: "Presence", presence: { ...fields, ...(typeof rest.role === "string" ? { role } : {}), ...(activity ? { activity } : {}), sigOk } } satisfies Live;
+          return {
+            _tag: "Presence",
+            presence: { ...fields, ...(typeof rest.role === "string" ? { role } : {}), ...(activity ? { activity } : {}), ...(isReach(reach) ? { reach } : {}), sigOk },
+          } satisfies Live;
         }
       }
       return null;

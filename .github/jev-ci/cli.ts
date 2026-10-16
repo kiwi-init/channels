@@ -37,8 +37,7 @@ async function planInCI(): Promise<Plan> {
   const hashes = allHashes(values.repo, head, config)
   if (process.env.GITHUB_EVENT_NAME !== "pull_request") return runAll(config, `${process.env.GITHUB_EVENT_NAME} run: everything runs`, hashes)
   // The checkout is GitHub's merge of the PR into its base: its first parent is the base.
-  const event = (await Bun.file(process.env.GITHUB_EVENT_PATH!).json()) as { pull_request: { base: { sha: string } } }
-  const base = git(values.repo, ["merge-base", event.pull_request.base.sha, head]).trim()
+  const base = git(values.repo, ["rev-parse", "HEAD^1"]).trim()
   const passed = await passedJobs(slug, Object.keys(config.jobs)).catch((e) => (note(e), new Set<string>()))
   return plan({ repo: values.repo, base, head, config, passed })
 }

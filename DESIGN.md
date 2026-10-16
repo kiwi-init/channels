@@ -20,7 +20,8 @@ small purposeful motion, one pop shadow.
 
 - CSS vars are the contract. Tailwind v4 maps them via `@theme inline`:
   `canvas, rail, raised, field, ink, ink-2, ink-3, line, wash, wash-2,
-  accent, accent-ink, accent-text, accent-wash, link, ring, alert, live,
+  accent, accent-ink, accent-text, accent-wash, link, ring, alert,
+  alert-fill, live,
   doing, warn, overlay, bubble-me, bubble-them, pick, head-*, avatar-*,
   pop-edge, pop-shade, shadow-pop`, plus `frame, panel, edge, edge-strong`
   aliases.
@@ -51,6 +52,7 @@ Light / dark are the two sides of each `light-dark()` in `index.css`:
 | `accent` (Apple system blue) | `#007aff` | `#0a84ff` |
 | `accent-ink` (on the accent) | `#ffffff` | `#ffffff` |
 | `alert` | `#d1342a` | `#ff6259` |
+| `alert-fill` (under white text) | `#d1342a` | `#d1342a` |
 | `decide` (amber, someone waits) | `#a35a00` | `#f5b041` |
 | `live` | `#1f9a55` | `#3ccf7f` |
 | `doing` (in-progress blue) | `#2f6fe4` | `#5b9bff` |
@@ -62,6 +64,9 @@ block of colour), `bubble-them` (Messages grey `#e9e9eb` / `#262628`).
 White on the light accent is ~4:1, Apple's own choice and just under AA 4.5
 for small text; the owner asked to mirror Apple, so it stays. As text on the
 dark canvas the dark side clears 4.5:1.
+
+White on the dark `alert` is ~2.9:1, so a red surface under white text (the
+error toast) uses `alert-fill`, the light red in both themes (~5:1).
 
 ## 4. Typography
 
@@ -138,10 +143,28 @@ From `design-tokens.ts`:
 
 - Shell: flat `rail` sidebar beside one inset `canvas` panel (edge to edge
   on a phone). No hairlines between areas.
+- On a wide window the list starts as an 80px icon rail, as Grok's
+  collapsed one: the Mac traffic lights on its header row, each channel
+  as its 40px tile in a 56px `card`-round cell (`pick` when open), a blue
+  dot or a count for news and questions, a lock on a channel you can't
+  open yet. A hover card says what the full row says: name, time, last
+  line. New, the app update, expand (⌘B) and your account sit at its foot.
+  Expanded, it is the full 300px list; a phone always shows the full list.
 - Conversation: your bubbles `accent` with white ink; theirs `bubble-them`
   with `ink`. Runs stack at `stack` radius on the joined corners.
 - Needs-you: approvals, escalations and review-waiting work in one place at
   the top; `Pause agents` in the header stops every agent at once.
+- Overview cards: always in the chat area from 1280px wide, never behind
+  a button. Cards on the canvas itself, outlined with a 1px `edge-strong`
+  ring at `card` radius, 336px wide, 24px from the window's edge and 12px
+  apart, float at the top right of the conversation, each folding from its
+  header: Agents, Tasks (the 5 last updated, a `SEGMENTED` filter that
+  leaves out a state with no task), Pull requests (the last 5 linked in
+  the channel). Rows put the time on the right. The conversation stays
+  centered while it has room and moves left only as far as it must. The
+  agent strip under the composer gives way to the Agents card. A thread,
+  the details or a task in the side column hide the cards until it closes.
+  Below 1280px the cards are hidden and the header's Tasks button stays.
 - Coordinator: `coordinator-head` (system-blue shell, pale screen, quiet
   steel trim; `robot-heads`); behind it in a round avatar a soft blue field.
 - Command palette wears the same icons as the menus. Dark/light/system and

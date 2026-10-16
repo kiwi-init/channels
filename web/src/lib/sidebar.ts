@@ -9,16 +9,15 @@ const listeners = new Set<() => void>()
 
 function read(): boolean {
   try {
-    return localStorage.getItem(KEY) !== "closed"
+    return localStorage.getItem(KEY) === "open"
   } catch {
-    return true
+    return false
   }
 }
 
 function setSidebarOpen(open: boolean): void {
   try {
-    if (open) localStorage.removeItem(KEY)
-    else localStorage.setItem(KEY, "closed")
+    localStorage.setItem(KEY, open ? "open" : "rail")
   } catch {
     // Not kept: it still moves for this session.
   }

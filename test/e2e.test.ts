@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Channel } from "../src/client.ts";
+import { daemonListeners, daemonSock } from "../src/daemon.ts";
 import { generateIdentity } from "../src/identity.ts";
 import type { Message } from "../src/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -722,6 +723,7 @@ describe("MCP server", () => {
       expect(shown.content[0]!.text).toContain("images saved:");
       expect(shown.content.some((c) => c.type === "image")).toBe(true);
       expect(await ok(other, "who")).toContain("agent-a — builder · reachable");
+      expect((await daemonListeners(daemonSock(h))).filter((l) => l.agent === "agent-a").map((l) => l.kind)).toEqual(["session"]);
     } finally {
       p.kill();
     }

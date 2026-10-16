@@ -289,6 +289,26 @@ forge or swap anything. Writes are rate-limited per client address.
   connected for a set number of days (`KIWI_EXPIRE_AFTER_DAYS`; off unless
   configured). Expiry is exactly a close: all storage goes, and members wipe
   their copy the next time they connect.
+- **Cached history pages** (only on a relay with `KIWI_PAGE_KEY` set; see
+  docs/self-hosting.md): complete pages of old ciphertext may be answered from
+  the Worker's cache without asking the channel whether the reader is still a
+  member. A page read needs the member's request signature and a capability
+  the channel issued to that key on an authenticated read: an HMAC under a
+  secret only the relay holds over the room, the key, the channel's random
+  page generation, the pages complete at that moment, and an expiry five
+  minutes out. Someone who was never a member never gets one. What that
+  leaves:
+  - A removed member's capability keeps working for at most five minutes,
+    only for pages already in the cache, and only for pages that were
+    complete while they were still a member. That is ciphertext they were
+    sent as a member and hold the keys to, so it is not new exposure; every
+    read that reaches the channel refuses them at once.
+  - Closing deletes the generation with the room, so a room created again
+    under the same id never reaches the old pages. A capability issued before
+    the close still reads pages cached before it, for at most five minutes,
+    on Cloudflare (the Bun relay drops them on close). The unreachable copies
+    leave Cloudflare's cache within an hour. The same hour bounds how long a
+    cached page can still hold messages retention has since deleted.
 - The Cloudflare relay runs with request logging off, so there are no access
   logs naming rooms. The Bun relay logs only its startup lines and the message
   of an unexpected error, never request details.

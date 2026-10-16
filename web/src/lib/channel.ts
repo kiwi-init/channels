@@ -8,7 +8,8 @@ import { decodeJoinCode, ownerFingerprint } from "@mc/crypto.ts"
 import type { JoinRequest, Member } from "@mc/membership.ts"
 import type { Message } from "@mc/protocol.ts"
 import { fold, type ChannelState, type GuardFloor, type Roster } from "@mc/state.ts"
-import type { Activity } from "@mc/protocol.ts"
+import type { Activity, Reach } from "@mc/protocol.ts"
+import { isWakeVia } from "@mc/wake.ts"
 import type { PublicAccess } from "../../../desktop/src/bridge.ts"
 import { errorOf, linkOf, ops, type ChannelLink, type FollowEvent } from "./channel-ops"
 import { forgetHistory, readCached, rememberRow } from "./history"
@@ -21,6 +22,7 @@ import { migrateChannels, saveChannels, secrets, useSecrets, type ChannelView } 
 import { noteSignInGone } from "./session"
 import { untilOpen } from "./until-open"
 import { withHeads } from "./news"
+import { howHere } from "./presence"
 
 /** How much history to load when the page opens. */
 const HISTORY = 2_000
@@ -64,6 +66,8 @@ interface Online {
   pk?: string
   /** What the agent is doing right now, as its harness tells its listener (working, waiting, idle). */
   activity?: Activity
+  reach?: Reach
+  wakes: boolean
 }
 
 // ---------- the URL fragment ----------
@@ -553,10 +557,21 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
         case "Presence": {
           const p = ev.presence
           if (p.client === "probe" || !p.sigOk) return
-          setOnline((prev) => new Map(prev).set(p.from, { client: p.client, role: p.role, at: Date.now(), pk: p.pk, ...(p.activity ? { activity: p.activity } : {}) }))
+          setOnline((prev) =>
+            new Map(prev).set(p.from, {
+              client: p.client,
+              role: p.role,
+              at: Date.now(),
+              pk: p.pk,
+              ...(p.activity ? { activity: p.activity } : {}),
+              ...(p.reach ? { reach: p.reach } : {}),
+              wakes: isWakeVia(p.wake) && p.wake !== "hooks",
+            })
+          )
           return
         }
         case "Roster":
+          void refreshRequests()
           return void refreshRoster()
         case "Request":
           return void refreshRequests()
@@ -655,7 +670,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
   })
   useEffect(() => reconcile(), [scopesKey, bitsKey, caughtUp])
   // Online only if signed by the very key the owner admitted under that name.
-  const live = useMemo(() => new Map([...online].filter(([name, o]) => !!o.pk && keyOf.get(name) === o.pk && now - o.at < PRESENCE_TTL)), [online, keyOf, now])
+  const live = useMemo(() => new Map([...online].filter(([name, o]) => !!o.pk && keyOf.get(name) === o.pk && now - o.at < PRESENCE_TTL && howHere(o) !== null)), [online, keyOf, now])
 
   const chRef = useRef(ch)
   useEffect(() => {
