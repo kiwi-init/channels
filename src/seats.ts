@@ -171,14 +171,7 @@ export interface SeatOptions {
   claim?: boolean;
 }
 
-/**
- * The seat this process acts for in `dir` or its nearest ancestor with seats, never reaching
- * home or root. In order: the seat this session holds; else the one seat there that no other
- * live session holds and that this harness joined (a restart takes its seat back). Two
- * candidates are never guessed between, except that among free seats of the same harness the
- * one used last wins. Null when there's nothing to act for, or another session holds it.
- */
-export function bindingFor(dir: string, opts: SeatOptions = {}): Binding | null {
+export function seatsFor(dir: string, opts: SeatOptions = {}): Binding[] {
   const who = opts.who ?? here();
   const live = opts.listeners?.() ?? [];
   const listening = (alias: string, as: string) => live.some((l) => l.alias === alias && l.as === as);
@@ -198,11 +191,12 @@ export function bindingFor(dir: string, opts: SeatOptions = {}): Binding | null 
     !live.some((o) => o.alias === l.alias && o.as === l.as && !ours(o));
   for (let d = resolve(dir); !tooBroad(d); d = dirname(d)) {
     const seats = seatsAt(cfg, d).filter((b) => cfg.channels[b.alias] && (!opts.alias || b.alias === opts.alias));
-    const mine = who.session ? seats.find((b) => b.session === who.session) : undefined;
-    if (mine) {
+    const mine = who.session ? seats.filter((b) => b.session === who.session) : [];
+    if (mine.length) {
       // Note that this session still uses it, so nobody takes it for stale (seats with no process to check).
-      if (opts.claim !== false && !mine.pid && Date.now() - (mine.seen ?? mine.at ?? 0) > SEEN_EVERY_MS) {
-        updateConfig((c) => store(c, d, seatsAt(c, d).map((b) => (b.alias === mine.alias && b.as === mine.as ? { ...b, seen: Date.now() } : b))));
+      const stale = opts.claim === false ? [] : mine.filter((m) => !m.pid && Date.now() - (m.seen ?? m.at ?? 0) > SEEN_EVERY_MS);
+      if (stale.length) {
+        updateConfig((c) => store(c, d, seatsAt(c, d).map((b) => (stale.some((m) => b.alias === m.alias && b.as === m.as) ? { ...b, seen: Date.now() } : b))));
       }
       return mine;
     }
@@ -221,11 +215,11 @@ export function bindingFor(dir: string, opts: SeatOptions = {}): Binding | null 
         seen: Date.now(),
       };
       if (opts.claim !== false) updateConfig((c) => store(c, d, [...seatsAt(c, d).filter((b) => !(b.alias === seat.alias && b.as === seat.as)), seat]));
-      return seat;
+      return [seat];
     }
     if (!seats.length) continue;
     // A plain terminal (or a harness that names no session) in a folder with one agent acts as that agent, as before seats.
-    if (!who.session && seats.length === 1) return seats[0]!;
+    if (!who.session && seats.length === 1) return [seats[0]!];
     // Seats this agent could be: no other live session holds them, nobody else is listening as them, the harness fits
     // (or one side doesn't say), and a session never takes over a seat joined from a plain terminal.
     const listenedElsewhere = (b: Binding) => live.some((l) => l.alias === b.alias && l.as === b.as && !ours(l));
@@ -236,17 +230,22 @@ export function bindingFor(dir: string, opts: SeatOptions = {}): Binding | null 
     // Several free seats: the one of this session's harness, when there's exactly one; otherwise it would be guessing.
     const ofMine = free.filter((b) => who.harness && b.harness === who.harness);
     const pick = free.length === 1 ? free[0]! : who.session && ofMine.length === 1 ? ofMine[0]! : null;
-    if (!pick) return null;
+    if (!pick) return [];
     if (opts.claim !== false && who.session && (pick.session !== who.session || (who.pid && pick.pid !== who.pid))) {
       // The previous holder's process goes with it: this session's, or none.
       const { pid: _gone, ...rest } = pick;
       const taken: Binding = { ...rest, session: who.session, ...(who.pid ? { pid: who.pid } : {}), ...(who.harness && !pick.harness ? { harness: who.harness } : {}), at: Date.now(), seen: Date.now() };
       updateConfig((c) => store(c, d, seatsAt(c, d).map((b) => (b.alias === pick.alias && b.as === pick.as ? taken : b))));
-      return taken;
+      return [taken];
     }
-    return pick;
+    return [pick];
   }
-  return null;
+  return [];
+}
+
+export function bindingFor(dir: string, opts: SeatOptions = {}): Binding | null {
+  const [only, ...more] = seatsFor(dir, opts);
+  return only && !more.length ? only : null;
 }
 
 /** Whether `path` is `dir` or inside it. */

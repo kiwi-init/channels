@@ -176,14 +176,21 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - run: bunx playwright-core install --with-deps --only-shell chromium
+      - id: playwright
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - run: bunx playwright-core install-deps chromium-headless-shell
+      - if: steps.playwright.outputs.cache-hit != 'true'
+        run: bunx playwright-core install --only-shell chromium
       - run: cd web && bun run build
       - run: bun run smoke:ui
       - if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ui-smoke-failure
-          path: /tmp/kiwi-smoke-failure.png
+          path: /tmp/kiwi-smoke-failure-*.png
           if-no-files-found: ignore
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
@@ -317,6 +324,23 @@ jobs:
           job: relay-budget
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['relay-budget'] }}
 
+  cli-seats:
+    name: cli / seats
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['cli-seats']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup
+        with:
+          web: "false"
+      - run: bun scripts/ci-tests.ts seats
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: cli-seats
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['cli-seats'] }}
+
   repo-comments:
     name: repo / comments
     needs: plan
@@ -377,7 +401,7 @@ jobs:
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, desktop-fuses, cli-build, relay-worker, relay-budget, repo-comments, desktop-keys, repo-knip, web-bundle, site-test, repo-pins]
+    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, desktop-fuses, cli-build, relay-worker, relay-budget, cli-seats, repo-comments, desktop-keys, repo-knip, web-bundle, site-test, repo-pins]
     if: always()
     runs-on: ubuntu-latest
     permissions:
