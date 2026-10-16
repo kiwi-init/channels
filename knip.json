@@ -58,7 +58,8 @@
         "app/**/*.{ts,tsx}",
         "src/**/*.test.{ts,tsx}",
         "src/lib/sqlite.ts",
-        "src/theme/useTheme.ts"
+        "src/theme/useTheme.ts",
+        "src/lib/keychain.ts"
       ],
       "project": [
         "app/**/*.{ts,tsx}",
