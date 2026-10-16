@@ -521,16 +521,22 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
   };
 
+  const reachMoved = (alias: string, agent: string): void => {
+    for (const seat of seats.values()) if (seat.alias === alias && seat.agent === agent && seat.announce) void refreshActivity(seat).catch(() => {});
+  };
+
   const killConn = (conn: ConnState): void => {
     if (conn.dead) return;
     conn.dead = true;
     conns.delete(conn);
     for (const sub of [...conn.subs]) dropSub(sub);
+    for (const l of conn.held) reachMoved(l.channel, l.agent);
   };
 
   const dropSub = (sub: Sub): void => {
     sub.conn.subs.delete(sub);
     sub.seat.subs.delete(sub);
+    reachMoved(sub.seat.alias, sub.seat.agent);
   };
 
   const closeSeat = (seat: Seat, error: string): void => {
@@ -712,6 +718,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     const sub: Sub = { id, cursor, conn, seat };
     seat.subs.add(sub);
     conn.subs.add(sub);
+    reachMoved(seat.alias, seat.agent);
     sendLine(conn, JSON.stringify({ id, ok: true, stream: true, head: seat.head, channel, agent: as }));
     try {
       const { messages } = await seat.ch.history(cursor);
@@ -850,7 +857,10 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           if (!l) throw new Error('hold needs {"channel", "as", "kind": "listen" or "hook", "cwd"?, "harness"?, "session"?, "pid"?}');
           const others = [...conns].filter((c) => c !== conn && !c.dead).flatMap((c) => [...c.held]);
           const taken = l.kind === "hook" && others.some((h) => h.kind === "hook" && h.channel === l.channel && h.agent === l.agent && h.session === l.session);
-          if (!taken) conn.held.add(l);
+          if (!taken) {
+            conn.held.add(l);
+            reachMoved(l.channel, l.agent);
+          }
           sendLine(conn, JSON.stringify({ id, ok: true, held: !taken }));
           break;
         }

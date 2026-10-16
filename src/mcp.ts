@@ -511,6 +511,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
   yield* Effect.promise(() => server.connect(new StdioServerTransport()));
   // Say what this agent runs on, so people can see it. In the background: the harness is waiting on the handshake.
   yield* Effect.forkDetach(Effect.ignoreCause(s.refreshCard(detectCard())));
+  yield* Effect.forkDetach(Effect.ignoreCause(Effect.promise(() => import("./hooks.ts").then(({ holdListening }) => holdListening(s.alias, s.me)))));
   // An MCP server lives exactly as long as its client: exit when stdin closes,
   // so a crashed or killed agent never leaves an orphaned listener behind.
   const bye = () => process.exit(0);
