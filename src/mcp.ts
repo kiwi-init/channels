@@ -15,12 +15,12 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import { join } from "node:path";
 import { z } from "zod";
-import { openSession, Rejected, type Agent, type AgentSession } from "./agent.ts";
+import { holding, openSession, Rejected, type Agent, type AgentSession } from "./agent.ts";
 import { mcpBrief } from "./brief.ts";
 import { loadImages, saveImages } from "./attach.ts";
 import { loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { Cursor, home, Keystore } from "./config.ts";
-import { ChannelGone, goneText, reason } from "./client.ts";
+import { ChannelGone, goneText, reason, type Refused } from "./client.ts";
 import { ago, cardLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, mayDo, parseDuration, presenceWords, runsStatus, taskStateWord } from "./format.ts";
 import { isWakeVia } from "./wake.ts";
 import { SCOPES } from "./scopes.ts";
@@ -95,6 +95,50 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     (a: A) =>
       answer(fn(a), (r) => r, (cause) => fail(reason(Cause.squash(cause))));
 
+  const pending: { seq: number | null; line: string }[] = [];
+  let fedTo = 0;
+  let heardTo = 0;
+  let waiting: Deferred.Deferred<void> | null = null;
+  let floor = 0;
+  let following: Deferred.Deferred<void, Refused | ChannelGone> | null = null;
+
+  const arrive = (heard: { seq: number | null; line: string }): Effect.Effect<void> =>
+    Effect.suspend(() => {
+      if (!waiting && (opts.push || heard.seq === null)) return Effect.void;
+      if (heard.seq !== null) {
+        if (heard.seq <= fedTo) return Effect.void;
+        fedTo = heard.seq;
+        if (waiting && heard.seq <= floor) return Effect.void;
+      }
+      pending.push(heard);
+      return waiting ? Effect.asVoid(Deferred.succeed(waiting, undefined)) : Effect.void;
+    });
+
+  const follow = (since: number) =>
+    Effect.gen(function* () {
+      const real = yield* Cursor;
+      let at = Math.max(since, heardTo);
+      const peek = Cursor.of({
+        read: () => Effect.succeed(at),
+        write: (channel, agent, seq) =>
+          Effect.suspend(() => {
+            at = Math.max(at, seq);
+            heardTo = at;
+            return waiting ? real.write(channel, agent, seq) : Effect.void;
+          }),
+        seen: real.seen,
+        markSeen: () => Effect.void,
+      });
+      const ended = yield* Deferred.make<void, Refused | ChannelGone>();
+      following = ended;
+      const listening = s.listen((m, state) => arrive({ seq: m.seq, line: formatMessage(m, state.trust.get(m.seq), state, s.me) }), {
+        onNotice: (line) => arrive({ seq: null, line }),
+        marks: false,
+        hold: false,
+      });
+      yield* Effect.forkDetach(listening.pipe(Effect.provideService(Cursor, peek), Effect.exit, Effect.flatMap((exit) => Deferred.done(ended, exit))));
+    });
+
   const server = new McpServer(
     { name: "kiwi-channels", version: VERSION },
     {
@@ -163,18 +207,37 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         // when the client cancels the call before it sees the result.
         const since = yield* s.cursor();
         const cursor = yield* Cursor;
-        const lines: string[] = [];
-        const enough = yield* Deferred.make<void>();
-        const heard = (line: string) =>
-          Effect.suspend(() => {
-            lines.push(line);
-            // Linger briefly so a burst of messages is delivered as one wake-up.
-            return lines.length === 1 ? Effect.asVoid(Effect.forkScoped(Effect.andThen(Effect.sleep(400), Deferred.succeed(enough, undefined)))) : Effect.void;
+        const seen = yield* cursor.seen(s.alias, s.me);
+        let lines: string[] = [];
+        yield* Effect.gen(function* () {
+          yield* holding(s.alias, s.me);
+          const arrived = yield* Deferred.make<void>();
+          waiting = arrived;
+          floor = since;
+          for (let i = pending.length - 1; i >= 0; i--) {
+            const seq = pending[i]!.seq;
+            if (seq === null || seq <= since || seen.has(seq)) pending.splice(i, 1);
+          }
+          if (!opts.push && heardTo > since) yield* cursor.write(s.alias, s.me, heardTo);
+          if (pending.length) yield* Deferred.succeed(arrived, undefined);
+          const fresh = !opts.push && (following === null || Deferred.isDoneUnsafe(following));
+          if (fresh) yield* follow(since);
+          else yield* Effect.forkScoped(Effect.ignoreCause(s.notices((line) => arrive({ seq: null, line }))));
+          const ended = opts.push || following === null ? Effect.never : Deferred.await(following);
+          const enough = Effect.andThen(Deferred.await(arrived), Effect.sleep(400));
+          const over = Effect.raceFirst(enough, Effect.raceFirst(Effect.sleep(seconds * 1000), cancelled(extra.signal)));
+          yield* Effect.raceFirst(ended, over);
+          yield* Effect.sync(() => {
+            waiting = null;
+            if (!extra.signal.aborted) lines = pending.splice(0).flatMap((h) => (h.seq !== null && (h.seq <= since || seen.has(h.seq)) ? [] : [h.line]));
           });
-        const listening = s.listen((m, state) => heard(formatMessage(m, state.trust.get(m.seq), state, s.me)), { onNotice: heard, marks: false });
-        const over = Effect.raceFirst(Deferred.await(enough), Effect.raceFirst(Effect.sleep(seconds * 1000), cancelled(extra.signal)));
-        yield* Effect.raceFirst(listening, over).pipe(
-          Effect.ensuring(Effect.suspend(() => (extra.signal.aborted ? cursor.write(s.alias, s.me, since) : Effect.void))),
+        }).pipe(
+          Effect.ensuring(
+            Effect.suspend(() => {
+              waiting = null;
+              return extra.signal.aborted ? cursor.write(s.alias, s.me, since) : Effect.void;
+            }),
+          ),
           Effect.scoped,
         );
         if (extra.signal.aborted || !lines.length) return "no messages yet, call wait_for_messages again.\nNext: call wait_for_messages.";
@@ -520,7 +583,11 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
 
   if (!opts.push) return yield* Effect.never;
   const push = (content: string, meta: Record<string, string>) => Effect.promise(() => server.server.notification({ method: "notifications/claude/channel", params: { content, meta } }));
-  yield* s.listen((m, state) => push(formatMessage(m, state.trust.get(m.seq), state, s.me), { seq: String(m.seq), from: m.from, kind: m.kind }), {
-    onNotice: (text) => push(`* ${text}`, { kind: "notice" }),
-  });
+  yield* s.listen(
+    (m, state) => {
+      const line = formatMessage(m, state.trust.get(m.seq), state, s.me);
+      return Effect.andThen(push(line, { seq: String(m.seq), from: m.from, kind: m.kind }), arrive({ seq: m.seq, line }));
+    },
+    { onNotice: (text) => Effect.andThen(push(`* ${text}`, { kind: "notice" }), arrive({ seq: null, line: text })) },
+  );
 });

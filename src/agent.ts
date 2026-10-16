@@ -67,6 +67,7 @@ export interface Hearing<R = never> {
    * and the MCP wait (a cancelled call gives its messages back).
    */
   marks?: boolean;
+  hold?: boolean;
 }
 
 /** What a session needs: the relay, and this computer's files. */
@@ -98,6 +99,15 @@ const toRoster = (m: Member): Roster[number] => ({
   ...(m.laterRole ? { laterRole: m.laterRole } : {}),
   ...(m.runs ? { runs: m.runs } : {}),
 });
+
+export const holding = (alias: string, as: string): Effect.Effect<void, never, Scoped.Scope> =>
+  Effect.gen(function* () {
+    const { holdListening } = yield* Effect.promise(() => import("./hooks.ts"));
+    yield* Effect.acquireRelease(
+      Effect.promise(() => holdListening(alias, as)),
+      (held) => Effect.sync(() => held.close()),
+    );
+  });
 
 /** A floor from the channel's settings; one that can't be read is no floor. */
 const orNone = <A, E, R>(e: Effect.Effect<A | null, E, R>) => Effect.catchCause(e, () => Effect.succeed(null));
@@ -256,11 +266,7 @@ export class AgentSession {
    */
   listen<R = never>(onMessage: (m: Message, state: ChannelState) => Effect.Effect<void | boolean, unknown, R>, opts: Delivery & Hearing<R>): Effect.Effect<void, Refused | ChannelGone, Agent | R> {
     return Effect.gen({ self: this }, function* () {
-      const { holdListening } = yield* Effect.promise(() => import("./hooks.ts"));
-      yield* Effect.acquireRelease(
-        Effect.promise(() => holdListening(this.alias, this.me)),
-        (held) => Effect.sync(() => held.close()),
-      );
+      if (opts.hold !== false) yield* holding(this.alias, this.me);
       const status = (line: string) => opts.onStatus?.(line) ?? Effect.void;
       let { since, messages, state } = yield* this.reach(status);
       const cache = yield* Cache;
@@ -338,7 +344,7 @@ export class AgentSession {
     });
   }
 
-  private notices<R>(notice: (text: string) => Effect.Effect<void, never, R>) {
+  notices<R>(notice: (text: string) => Effect.Effect<void, never, R>) {
     return Effect.gen({ self: this }, function* (this: AgentSession) {
       const owner = yield* this.ownerChannel();
       if (!owner) return;
