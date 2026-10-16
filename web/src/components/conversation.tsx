@@ -247,10 +247,11 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     (seq: number) => {
       const root = state.threadOf.get(seq)
       if (root === undefined || root === seq) return null
+      if (coordinator && (state.placeOf.get(seq) ?? MAIN).kind === "main") return null
       const r = bySeqAll.get(root)
       return r && r.kind !== "event" ? root : null
     },
-    [state.threadOf, bySeqAll]
+    [state.threadOf, state.placeOf, bySeqAll, coordinator]
   )
   // The owner can look at what every view leaves out (forged, or not allowed), tagged; nobody else can.
   const [showDropped, setShowDropped] = useState(false)
@@ -364,7 +365,13 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   )
 
   // Replying opens the message's thread, so the answer doesn't land in the conversation.
-  const onReply = useCallback((m: Message) => openThread(rootOf(m.seq) ?? m.seq), [rootOf, openThread])
+  const onReply = useCallback(
+    (m: Message) => {
+      if (coordinator && (state.placeOf.get(m.seq) ?? MAIN).kind === "main") setReplyTo(m)
+      else openThread(rootOf(m.seq) ?? m.seq)
+    },
+    [coordinator, state.placeOf, rootOf, openThread]
+  )
   const peopleOf = useCallback(
     (list: Message[]) => {
       const seenNames = new Map<string, { name: string; label: string; agent: boolean; color: Color | null }>()
