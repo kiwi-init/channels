@@ -110,7 +110,8 @@ jobs:
       (joining, one seat per agent, Claude Code hooks doing the listening), read-receipts,
       daemon-pair (kiwi pair through the relay's pairing mailbox: src/daemon.ts, src/machine.ts,
       src/mailbox.ts), sh-escape (the sandboxed kiwi sh), coordinator-follows (the coordinator
-      role), reclaim (getting a seat back). Fails if joining, seats, hooks, pairing, the daemon,
+      role), reclaim (getting a seat back), wake-yourself (the Stop hooks that keep a Kimi Code
+      or Grok agent's own listener running). Fails if joining, seats, hooks, pairing, the daemon,
       kiwi sh or the relay change behavior.
 
   web-types:
@@ -247,6 +248,22 @@ jobs:
       a proxy in front of a local relay that counts HTTP requests by route, sockets, frames by
       type and bytes. Each fails when an operation costs more requests, frames, bytes or
       statements than its budget, so a change that adds relay traffic or storage work fails.
+
+  cli-seats:
+    name: cli / seats
+    inputs: ["src/**", "test/seats.test.ts", "test/multi-seat.test.ts", "test/setup.ts", "test/owner.ts", "test/owner-cli.ts", "test/check.ts"]
+    always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts"]
+    description: >-
+      Runs test/seats.test.ts and test/multi-seat.test.ts. seats checks which agent a command or
+      hook acts for in a folder (src/seats.ts): a session's own seat, a restart taking its seat
+      back, a second live session never acting as the first, and a session that holds several
+      seats getting all of them. multi-seat drives the kiwi CLI against a local relay: one Claude
+      Code session joins two channels under two names from one folder, and its SessionStart, Stop
+      and background listen hooks (src/hooks.ts) must serve both seats, while a bare `kiwi listen
+      --now` there must refuse and name both (src/cli/main.ts). A second session joins its second
+      seat from a sibling folder, and the hooks run from the folder it started in must serve that
+      seat too, while another session's hooks must not. Fails if seat resolution, the hook
+      answers or the CLI's choice of agent change.
 
   repo-comments:
     jev: false

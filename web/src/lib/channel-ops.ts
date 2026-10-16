@@ -5,11 +5,18 @@ import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, FollowEvent
 import { localOps } from "./channel-local"
 import { errorOf, remoteOps } from "./channel-remote"
 import { bridge } from "./secrets"
+import { makeWatches, type Watches } from "./watch"
 
 export { errorOf }
 export type { ChannelOps, FollowEvent }
 
 let picked: ChannelOps | null = null
+let watching: Watches | null = null
+
+export function watches(): Watches {
+  watching ??= makeWatches(ops())
+  return watching
+}
 
 export function ops(): ChannelOps {
   if (!picked) {
@@ -51,6 +58,8 @@ export class ChannelLink {
   updateNickname = (...a: Args<"updateNickname">) => this.c("updateNickname", ...a)
   reconcilePosting = (...a: Args<"reconcilePosting">) => this.c("reconcilePosting", ...a)
   rotateIfDue = () => this.c("rotateIfDue")
+  snapshotIfDue = () => this.c("snapshotIfDue")
+  snapshotAt = () => this.c("snapshotAt")
   info = () => this.c("info")
   title = () => this.c("title")
   setTitle = (...a: Args<"setTitle">) => this.c("setTitle", ...a)
@@ -64,6 +73,7 @@ export class ChannelLink {
   close = () => this.c("close")
   leave = () => this.c("leave")
   send = (...a: Args<"send">) => this.c("send", ...a)
+  image = (...a: Args<"image">) => this.c("image", ...a)
   presence = (p: PresenceFields) => this.via.presence(this.code, p)
   openRows = (rows: CachedRow[]) => this.via.openRows(this.code, rows)
   follow = (since: number, on: (e: FollowEvent) => void) => this.via.follow(this.code, since, on)

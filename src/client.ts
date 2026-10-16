@@ -19,6 +19,7 @@ import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Queue from "effect/Queue";
 import * as Schedule from "effect/Schedule";
+import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import { signRequest } from "./auth.ts";
 import { isErrorTag, tagForStatus, type ErrorTag } from "./errors.ts";
@@ -26,23 +27,29 @@ import { BadName, MissingKey, OwnerOnly, Rejected, type LocalRefusal } from "./r
 import {
   decodeJoinCode,
   encodeJoinCode,
+  fromBase64,
   newChannelKey,
   newRoomId,
   open,
+  openBlob,
   openFrom,
   ownerFingerprint,
   seal,
+  sealBlob,
   sealTo,
+  toBase64,
   type ChannelAccess,
 } from "./crypto.ts";
 import { sign, signText, verify, verifyText, type Identity } from "./identity.ts";
 import { commitTo, joinCheckCode, joinNonce, ownerNonceStatement, spendAuto, type SigningBudget } from "./sas.ts";
 import { canPost, scopesOf, wireScopes, type Scope } from "./scopes.ts";
-import { COORDINATOR, type ChannelState, type GuardFloor } from "./state.ts";
+import { COORDINATOR, fold, toRoster, type ChannelState, type FoldBase, type GuardFloor } from "./state.ts";
+import { openSnapshot, sealSnapshot, wellFormedSnapshot } from "./snapshot.ts";
 import { freeHandle, seededPick } from "./handles.ts";
 import { asOption } from "./wake.ts";
 import { inlineText, makeRecord, NAME_RE, nameKey, readRecord, readRuns, RESERVED_NAMES, sealRecord, verifiedComputer, verifiedPerson, type JoinClaims, type JoinRequest, type Member, type MemberInfo } from "./membership.ts";
 import {
+  MORE_REFUSED,
   CLOSE_CLOSED,
   CLOSE_REMOVED,
   goneHow,
@@ -63,12 +70,14 @@ import {
   PAGE_LIMIT,
   PING,
   PROTOCOL_VERSION,
+  SNAPSHOT_EVERY,
   WS_PROTOCOL,
   wellFormed,
   wellFormedRead,
   type Envelope,
   type Event,
   type ImageAttachment,
+  type InlineImage,
   type Kind,
   type Message,
   type Payload,
@@ -187,6 +196,7 @@ export interface RelayApi {
   readonly conditional: <T>(relay: string, roomId: string, path: string, etag: string | null, init?: CallInit, params?: Record<string, string | number>) => Effect.Effect<Conditional<T>, Refusal>;
   /** Whether a relay requires a signed-in human to create channels, and with which WorkOS client. */
   readonly config: (relay: string) => Effect.Effect<RelayConfig, Unreachable>;
+  readonly blob: (relay: string, roomId: string, id: string, identity: Identity, put?: Uint8Array<ArrayBuffer>) => Effect.Effect<Uint8Array<ArrayBuffer>, Refusal>;
 }
 
 /** The relay, as the client talks to it. `fetchRelay` is HTTP; a test or another transport provides its own. */
@@ -236,6 +246,18 @@ export const fetchRelay: RelayApi = {
     Effect.suspend(() => reach(new URL("/v1/config", relay), {})).pipe(
       Effect.flatMap((res) => (res.ok ? Effect.promise(() => res.json() as Promise<RelayConfig>) : Effect.succeed({ workosClientId: null }))),
     ),
+  blob: (relay, roomId, id, identity, put) =>
+    Effect.suspend(() => {
+      const path = `/blobs/${id}`;
+      const method = put ? "PUT" : "GET";
+      const once = Effect.gen(function* () {
+        const authorization = `Bearer ${yield* Effect.promise(() => signRequest(identity, roomId, method, path, ""))}`;
+        const res = yield* reach(new URL(`/v1/rooms/${roomId}${path}`, relay), { method, body: put, headers: put ? { authorization, "content-type": "application/octet-stream" } : { authorization } });
+        if (!res.ok) return yield* answered<never>(res);
+        return new Uint8Array(yield* Effect.tryPromise({ try: () => res.arrayBuffer(), catch: (cause) => new Unreachable({ cause }) }));
+      });
+      return Effect.retry(once, { times: 1, while: expired });
+    }),
 };
 
 const callRelay = <T>(relay: string, roomId: string, path: string, init?: CallInit, params?: Record<string, string | number>) =>
@@ -285,7 +307,7 @@ export interface StreamOptions {
    */
   now?: () => number;
   /** Called on every (re)connect with a way to send ephemeral presence. */
-  onOpen?: (live: { presence: (p: PresenceFields) => Promise<void>; mark: (seq: number) => boolean }) => void;
+  onOpen?: (live: { presence: (p: PresenceFields) => Promise<void>; mark: (seq: number) => boolean; probe: (ms: number) => Promise<Probe | null> }) => void;
   onPresence?: (p: Presence & { sigOk: boolean }) => void;
   /** The channel's info changed (its icon): refetch it. */
   onInfo?: () => void;
@@ -294,6 +316,8 @@ export interface StreamOptions {
   /** Someone asked to join (owners act on it). */
   onRequest?: () => void;
 }
+
+export type OpenKind = "first" | "page" | "reconnect";
 
 /** What a member says about itself in presence; the rest (version, name, time) is filled in. */
 export type PresenceFields = Omit<Presence, "v" | "type" | "from" | "ts">;
@@ -309,11 +333,14 @@ export type Live =
       readonly presence: (p: PresenceFields) => Effect.Effect<void>;
       /** Say on this socket that this member has read up to `seq`; false once it has closed. */
       readonly mark: (seq: number) => boolean;
+      readonly probe: (ms: number) => Promise<Probe | null>;
       readonly outage: number | null;
+      readonly kind: OpenKind;
     }
   /** Caught up: the relay's head when this connection's replay ended. */
   | { readonly _tag: "Ready"; readonly head: number }
   | { readonly _tag: "Message"; readonly message: Message }
+  | { readonly _tag: "Head"; readonly seq: number }
   | { readonly _tag: "Presence"; readonly presence: Presence & { sigOk: boolean } }
   /**
    * How far members have read (by key): one mark as it moves, or (`snapshot`) every member's latest on
@@ -334,6 +361,7 @@ export interface LiveOptions {
   presence?: boolean;
   reads?: boolean;
   send?: boolean;
+  watch?: boolean;
 }
 
 /** How long a dropped connection may stay down before listeners hear about it. */
@@ -348,12 +376,20 @@ const backoff = Schedule.min([Schedule.exponential("500 millis"), Schedule.space
 const outlasted = ({ attempt, elapsed, elapsedSincePrevious }: Schedule.InputMetadata<unknown>, quietMs: number) =>
   elapsed >= quietMs && (attempt === 1 || elapsed - elapsedSincePrevious < quietMs);
 
+interface Resume {
+  seq: number;
+  next: OpenKind;
+}
+
 /** A frame from the socket, or the socket opening (with a way to send presence on it). */
 type Incoming =
   | ServerFrame
   | { t: "pong" }
   | { t: "own"; seq: number; ts: number; payload: unknown }
-  | { t: "open"; presence: (p: PresenceFields) => Effect.Effect<void>; mark: (seq: number) => boolean };
+  | { t: "open"; presence: (p: PresenceFields) => Effect.Effect<void>; mark: (seq: number) => boolean; probe: (ms: number) => Promise<Probe | null>; kind: OpenKind }
+  | { t: "more"; ask: (since: number) => void };
+
+const STILL_IN_EVERY = 5;
 
 type Inbox = Queue.Queue<Incoming, Dropped | ChannelGone | Cause.Done>;
 
@@ -418,12 +454,74 @@ function ownMessage(p: unknown, seq: number, rts: number): Message | null {
   return { ...p, ...(imgs?.length ? { imgs } : { imgs: undefined }), seq, rts, sigOk: true };
 }
 
+
 /** A ping now and then keeps proxies from closing a quiet socket. */
-const keepAlive = (ws: WebSocket) =>
+const keepAlive = (ping: () => boolean) =>
   Effect.sleep("25 seconds").pipe(
-    Effect.andThen(Effect.sync(() => ws.readyState === WebSocket.OPEN && ws.send(PING))),
+    Effect.andThen(Effect.sync(ping)),
     Effect.forever,
   );
+
+export interface Probe {
+  readonly head: number;
+  readonly changes: number;
+}
+
+function wireOf(ws: WebSocket, since: number) {
+  let head = since;
+  let ready = false;
+  let changes = 0;
+  let sent = 0;
+  let answered = 0;
+  const waiting = new Set<{ n: number; done: (p: Probe | null) => void }>();
+  const ping = (): boolean => {
+    if (ws.readyState !== WebSocket.OPEN) return false;
+    ws.send(PING);
+    sent++;
+    return true;
+  };
+  const settle = (all: boolean): void => {
+    for (const w of [...waiting]) {
+      if (!all && w.n > answered) continue;
+      waiting.delete(w);
+      w.done(all || !ready ? null : { head, changes });
+    }
+  };
+  return {
+    ping,
+    closed: () => {
+      ready = false;
+      settle(true);
+    },
+    frame: (f: ServerFrame | { t: "pong" }): void => {
+      if (f.t === "msg") head = Number.isSafeInteger(f.seq) ? Math.max(head, f.seq) : head;
+      else if (f.t === "ready") {
+        if (Number.isSafeInteger(f.head) && f.head > head) head = f.head;
+        ready = !f.more;
+      } else if (f.t === "roster" || f.t === "info" || f.t === "epoch") changes++;
+      else if (f.t === "pong") {
+        answered++;
+        settle(false);
+      }
+    },
+    probe: (ms: number): Promise<Probe | null> =>
+      new Promise<Probe | null>((resolve) => {
+        if (!ready || !ping()) return resolve(null);
+        const timer = setTimeout(() => {
+          waiting.delete(w);
+          resolve(null);
+        }, ms);
+        const w = {
+          n: sent,
+          done: (p: Probe | null) => {
+            clearTimeout(timer);
+            resolve(p);
+          },
+        };
+        waiting.add(w);
+      }),
+  };
+}
 
 /** A real 10ms wait, for polling a test's clock. */
 const tick = Effect.callback<void>((resume) => {
@@ -460,7 +558,7 @@ function markOn(ws: WebSocket): (seq: number) => boolean {
 }
 
 /** The frame each Live came from, for the line about one whose handling failed. */
-const FRAME: Record<Live["_tag"], string> = { Open: "open", Ready: "ready", Message: "msg", Presence: "eph", Info: "info", Roster: "roster", Request: "request", Read: "read", Down: "status", Skipped: "status" };
+const FRAME: Record<Live["_tag"], string> = { Open: "open", Ready: "ready", Message: "msg", Head: "head", Presence: "eph", Info: "info", Roster: "roster", Request: "request", Read: "read", Down: "status", Skipped: "status" };
 const failedFrame = (frame: string, err: unknown) => `dropped a ${frame} frame whose handling failed: ${reason(err)}`;
 
 /** What went wrong, in words: a relay out of reach says what fetch said, as it always has. */
@@ -516,6 +614,7 @@ export interface Info {
   iconAt?: number | null;
   /** The channel's settings (its mode), sealed with the epoch-0 key and signed by the owner. */
   settings?: { iv: string; ct: string } | null;
+  blobs?: boolean;
 }
 
 /** The channel's mode as the owner last signed it, and the log position it took effect at. */
@@ -625,7 +724,7 @@ export type JoinStatus =
   | { status: "approved"; access: ChannelAccess };
 
 /** A member list entry as the relay sends it. */
-type MemberRow = { pk: string; xpk: string; rec: string; e: number; active: number; read_only?: number };
+export type MemberRow = { pk: string; xpk: string; rec: string; e: number; active: number; read_only?: number };
 
 /** A pending join request as the relay sends it. */
 type RequestRow = {
@@ -653,15 +752,18 @@ export interface ChannelFx {
   title(): Effect.Effect<string | null, Refusal, Relay>;
   setTitle(name: string): Effect.Effect<void, Refused, Relay>;
   mode(): Effect.Effect<ModeSetting | null, Refusal, Relay>;
-  rooms(): Effect.Effect<RoomsSetting | null, Refusal, Relay>;
+  rooms(info?: Info): Effect.Effect<RoomsSetting | null, Refusal, Relay>;
   setMode(mode: ModeSetting): Effect.Effect<void, Refused, Relay>;
   setRooms(rooms: RoomsSetting): Effect.Effect<void, Refused, Relay>;
-  guard(): Effect.Effect<GuardFloor | null, Refusal, Relay>;
+  guard(info?: Info): Effect.Effect<GuardFloor | null, Refusal, Relay>;
   setCharter(charter: NonNullable<GuardFloor["charter"]>): Effect.Effect<void, Refused, Relay>;
   setHold(hold: NonNullable<GuardFloor["hold"]>): Effect.Effect<void, Refused, Relay>;
-  icon(): Effect.Effect<ChannelIcon | null, MemberRefusal, Relay>;
+  compress(): Effect.Effect<boolean, Refusal, Relay>;
+  setCompress(on: boolean): Effect.Effect<void, Refused, Relay>;
+  icon():Effect.Effect<ChannelIcon | null, MemberRefusal, Relay>;
   setIcon(icon: ChannelIcon | null): Effect.Effect<void, Refused, Relay>;
-  members(): Effect.Effect<Member[], MemberRefusal, Relay>;
+  members(rows?: readonly MemberRow[]): Effect.Effect<Member[], MemberRefusal, Relay>;
+  memberRows(): Effect.Effect<MemberRow[], MemberRefusal, Relay>;
   leave(): Effect.Effect<void, MemberRefusal, Relay>;
   requests(opts?: { budget?: SigningBudget; person?: string }): Effect.Effect<JoinRequest[], Refused, Relay>;
   checkRequest(req: Pick<JoinRequest, "id" | "pk" | "commit">): Effect.Effect<void, Refused, Relay>;
@@ -692,8 +794,17 @@ export interface ChannelFx {
    */
   markRead(seq: number): Effect.Effect<void, never, Relay>;
   send(body: string, opts?: SendOptions): Effect.Effect<number, Refused, Relay>;
+  imageRefs(): Effect.Effect<boolean, Refusal, Relay>;
+  setImageRefs(on: boolean): Effect.Effect<void, Refused, Relay>;
+  image(img: ImageAttachment): Effect.Effect<string | null, MemberRefusal, Relay>;
+  images(imgs: readonly ImageAttachment[]): Effect.Effect<InlineImage[], MemberRefusal, Relay>;
   decrypt(env: Envelope): Effect.Effect<Message | null, never, Relay>;
-  history(since: number): Effect.Effect<{ head: number; messages: Message[] }, MemberRefusal, Relay>;
+  history(since: number): Effect.Effect<{ head: number; messages: Message[]; first: number | null }, MemberRefusal, Relay>;
+  page(since: number, limit: number): Effect.Effect<Message[], MemberRefusal, Relay>;
+  snapshot(): Effect.Effect<FoldBase | null, never, Relay>;
+  snapshotAt(): Effect.Effect<number | null, MemberRefusal, Relay>;
+  putSnapshot(base: FoldBase): Effect.Effect<number, Refused, Relay>;
+  snapshotIfDue(every?: number): Effect.Effect<number | null, Refused, Relay>;
   /**
    * The channel live, from after `since`: replays anything missed, reconnects with backoff, and
    * resumes from the last message handed on, so nothing is lost across drops. Fails ChannelGone
@@ -720,6 +831,9 @@ export class Channel {
   onSent: ((seq: number, message: Message | null) => void) | null = null;
   private infoShared: Fiber.Fiber<Info, Refusal> | null = null;
   private infoExpires: number | null = null;
+  private moreUnknown = false;
+  private packs = false;
+  private readonly settingsWrites = Semaphore.makeUnsafe(1);
 
   constructor(
     public access: ChannelAccess,
@@ -935,8 +1049,8 @@ export class Channel {
       return mode;
     }),
 
-    rooms: Effect.fn("Channel.rooms")({ self: this }, function* (this: Channel) {
-      const r = (yield* this.settings())?.rooms as Partial<RoomsSetting> | undefined;
+    rooms: Effect.fn("Channel.rooms")({ self: this }, function* (this: Channel, info?: Info) {
+      const r = (yield* this.settings(info))?.rooms as Partial<RoomsSetting> | undefined;
       if (!r || !Array.isArray(r.list) || !Number.isInteger(r.since)) return null;
       const list = r.list.filter((x): x is RoomEntry => !!x && typeof x === "object" && ROOM_ID_RE.test((x as RoomEntry).id) && typeof (x as RoomEntry).name === "string");
       const rooms: RoomsSetting = { list: list.map((x) => ({ id: x.id, name: x.name.slice(0, MAX_ROOM_NAME) })), since: r.since! };
@@ -969,8 +1083,8 @@ export class Channel {
      * The charter and the hold the owner last signed into the channel's settings, each as of the event
      * at its `since`: the floor for a client holding only the log's tail, where those events may be gone.
      */
-    guard: Effect.fn("Channel.guard")({ self: this }, function* (this: Channel) {
-      const o = yield* this.settings();
+    guard: Effect.fn("Channel.guard")({ self: this }, function* (this: Channel, info?: Info) {
+      const o = yield* this.settings(info);
       if (!o) return null;
       const c = o.charter as { text?: unknown; since?: unknown } | undefined;
       const h = o.hold as { on?: unknown; note?: unknown; since?: unknown } | undefined;
@@ -988,6 +1102,14 @@ export class Channel {
     /** Owner: sign the hold into the channel's settings, after the hold.set at `since`. */
     setHold: Effect.fn("Channel.setHold")({ self: this }, function* (this: Channel, hold: NonNullable<GuardFloor["hold"]>) {
       yield* this.putSettings({ hold });
+    }),
+
+    compress: Effect.fn("Channel.compress")({ self: this }, function* (this: Channel) {
+      return (yield* this.settings())?.compress === true;
+    }),
+
+    setCompress: Effect.fn("Channel.setCompress")({ self: this }, function* (this: Channel, on: boolean) {
+      yield* this.putSettings({ compress: on });
     }),
 
     icon: Effect.fn("Channel.icon")({ self: this }, function* (this: Channel) {
@@ -1012,8 +1134,13 @@ export class Channel {
       yield* this.request("/icon", { method: "PUT", body: JSON.stringify({ icon: sealed }) }).pipe(Effect.ensuring(Effect.sync(() => this.forgetInfo())));
     }),
 
-    members: Effect.fn("Channel.members")({ self: this }, function* (this: Channel) {
+    memberRows: Effect.fn("Channel.memberRows")({ self: this }, function* (this: Channel) {
       const { members } = yield* callUnlessUnchanged<{ members: MemberRow[] }>(this.relay, this.roomId, "members", "/members", { identity: this.identity }).pipe(Effect.mapError(gone));
+      return members;
+    }),
+
+    members: Effect.fn("Channel.members")({ self: this }, function* (this: Channel, rows?: readonly MemberRow[]) {
+      const members = rows ?? (yield* this.fx.memberRows());
       const out: Member[] = [];
       for (const m of members) {
         if (!this.access.keys[String(m.e)]) yield* this.fx.refreshKeys();
@@ -1307,6 +1434,8 @@ export class Channel {
       const imgs = opts.imgs?.slice(0, MAX_IMAGES);
       // The same raster list as icons. A caller that skips the file picker still cannot attach SVG.
       if (imgs?.some((i) => !isRasterMime(i.mime))) return yield* new Rejected("an image must be png, jpg, gif or webp");
+      if (imgs?.some((i) => !rasterAttachment(i))) return yield* new Rejected("an image needs its bytes or a stored reference");
+      const attached = imgs?.length ? yield* this.stored(imgs) : undefined;
       const payload: Payload = {
         v: PROTOCOL_VERSION,
         id: crypto.randomUUID(),
@@ -1316,7 +1445,7 @@ export class Channel {
         body,
         ...(opts.re?.length ? { re: opts.re } : {}),
         ...(opts.ev ? { ev: opts.ev } : {}),
-        ...(imgs?.length ? { imgs } : {}),
+        ...(attached?.length ? { imgs: attached } : {}),
         ...(opts.room && opts.room !== GENERAL_ROOM && !opts.ev ? { room: opts.room } : {}),
         ...(opts.esc && !opts.ev ? { esc: true as const } : {}),
         ...(opts.task && !opts.ev ? { task: opts.task } : {}),
@@ -1329,7 +1458,7 @@ export class Channel {
         const e = this.access.epoch;
         const key = this.access.keys[String(e)];
         if (!key) return yield* new MissingKey(`no key for epoch ${e}`);
-        return { e, sealed: yield* Effect.promise(() => seal(key, this.roomId, signed)) };
+        return { e, sealed: yield* Effect.promise(() => seal(key, this.roomId, signed, { pack: this.packs })) };
       });
       const post = Effect.gen({ self: this }, function* () {
         const { e, sealed } = yield* sealNow;
@@ -1351,6 +1480,48 @@ export class Channel {
       if (acked === null) return yield* posted;
       this.onSent?.(acked, null);
       return acked;
+    }),
+
+    imageRefs: Effect.fn("Channel.imageRefs")({ self: this }, function* (this: Channel) {
+      return (yield* this.settings())?.imageRefs === true;
+    }),
+
+    setImageRefs: Effect.fn("Channel.setImageRefs")({ self: this }, function* (this: Channel, on: boolean) {
+      yield* this.putSettings({ imageRefs: on });
+    }),
+
+    image: Effect.fn("Channel.image")({ self: this }, function* (this: Channel, img: ImageAttachment) {
+      if (img.data !== undefined) return img.data;
+      const ref = img.ref;
+      if (!ref) return null;
+      const cached = blobMemory.get(this.roomId, ref.id);
+      const kept = cached ? yield* Effect.promise(() => openBlob(ref, cached)) : null;
+      if (kept && kept.length === ref.size) return toBase64(kept);
+      const relay = yield* Relay;
+      const blob = yield* relay.blob(this.relay, this.roomId, ref.id, this.identity).pipe(
+        Effect.mapError(gone),
+        Effect.catchIf(
+          (err) => err instanceof RelayError && err.status === 404,
+          () =>
+            Effect.sync(() => {
+              blobMemory.drop(this.roomId, ref.id);
+              return null;
+            }),
+        ),
+      );
+      if (!blob) return null;
+      const raw = yield* Effect.promise(() => openBlob(ref, blob));
+      if (!raw || raw.length !== ref.size) return null;
+      blobMemory.set(this.roomId, ref.id, blob);
+      return toBase64(raw);
+    }),
+
+    images: Effect.fn("Channel.images")({ self: this }, function* (this: Channel, imgs: readonly ImageAttachment[]) {
+      const data = yield* Effect.forEach(imgs, (img) => this.fx.image(img), { concurrency: 4 });
+      return imgs.flatMap((img, i): InlineImage[] => {
+        const d = data[i];
+        return d == null ? [] : [{ name: img.name, mime: img.mime, data: d }];
+      });
     }),
 
     decrypt: Effect.fn("Channel.decrypt")({ self: this }, function* (this: Channel, env: Envelope) {
@@ -1377,10 +1548,12 @@ export class Channel {
           }
         });
       let ask: Record<string, number> = { pages: 1 };
+      let first: number | null = null;
       for (;;) {
         const page = yield* this.request<{ head: number; messages: Envelope[]; pages?: PageOffer }>("/messages", {}, { since, ...ask });
         ask = {};
         head = page.head;
+        first ??= page.messages[0]?.seq ?? null;
         yield* take(page.messages);
         const offer = page.pages;
         if (offer && typeof offer.cap === "string" && Number.isSafeInteger(offer.next) && offer.next % PAGE_LIMIT === 0 && offer.next >= since && offer.next < head) {
@@ -1396,7 +1569,56 @@ export class Channel {
         }
         if (!page.messages.length || since >= head) break;
       }
-      return { head, messages };
+      return { head, messages, first };
+    }),
+
+    page: Effect.fn("Channel.page")({ self: this }, function* (this: Channel, since: number, limit: number) {
+      const page = yield* this.request<{ head: number; messages: Envelope[] }>("/messages", {}, { since, limit });
+      const decrypted = yield* Effect.forEach(page.messages, (e) => this.fx.decrypt(e), { concurrency: "unbounded" });
+      return decrypted.filter((m): m is Message => !!m);
+    }),
+
+    snapshot: Effect.fn("Channel.snapshot")({ self: this }, function* (this: Channel) {
+      const got = yield* Effect.exit(this.request<{ snapshot: unknown }>("/snapshot"));
+      if (Exit.isFailure(got) || !wellFormedSnapshot(got.value.snapshot)) return null;
+      const s = got.value.snapshot;
+      yield* this.keyFor(s.e);
+      return yield* Effect.promise(() => openSnapshot(this.access, s).catch(() => null));
+    }),
+
+    snapshotAt: Effect.fn("Channel.snapshotAt")({ self: this }, function* (this: Channel) {
+      const { snapshot } = yield* this.request<{ snapshot: { n?: unknown } | null }>("/snapshot", {}, { only: "n" });
+      return typeof snapshot?.n === "number" ? snapshot.n : null;
+    }),
+
+    putSnapshot: Effect.fn("Channel.putSnapshot")({ self: this }, function* (this: Channel, base: FoldBase) {
+      yield* this.ownerOnly();
+      yield* this.keyFor(this.access.epoch);
+      const sealed = yield* Effect.promise(() => sealSnapshot(this.identity, this.access, base));
+      if (!sealed) return yield* new MissingKey("can't seal a snapshot without this epoch's key");
+      return (yield* this.request<{ n: number }>("/snapshot", { method: "PUT", body: JSON.stringify({ snapshot: sealed }) })).n;
+    }),
+
+    snapshotIfDue: Effect.fn("Channel.snapshotIfDue")({ self: this }, function* (this: Channel, every: number = SNAPSHOT_EVERY) {
+      yield* this.ownerOnly();
+      const at = (yield* this.fx.snapshotAt()) ?? 0;
+      if ((yield* this.fx.head()) - at < Math.max(every, 1)) return null;
+      const from = at ? yield* this.fx.snapshot() : null;
+      const since = from?.n ?? 0;
+      const [{ messages, first }, members, mode, rooms, guard] = yield* Effect.all(
+        [
+          this.fx.history(since),
+          this.fx.members(),
+          Effect.orElseSucceed(this.fx.mode(), () => null),
+          Effect.orElseSucceed(this.fx.rooms(), () => null),
+          Effect.orElseSucceed(this.fx.guard(), () => null),
+        ],
+        { concurrency: "unbounded" },
+      );
+      if (first !== null && first > since + 1) return null;
+      const kept: { base?: FoldBase } = {};
+      fold(messages, members.map(toRoster), Date.now(), mode, rooms, guard, from, (b) => void (kept.base = b));
+      return kept.base && kept.base.n > at ? yield* this.fx.putSnapshot(kept.base) : null;
     }),
 
     live: (since: number, opts: LiveOptions = {}) => this.live(since, opts),
@@ -1405,7 +1627,7 @@ export class Channel {
       const handle = (ev: Live): Effect.Effect<void> => {
         switch (ev._tag) {
           case "Open":
-            return Effect.sync(() => opts.onOpen?.({ presence: (p) => Effect.runPromise(ev.presence(p)), mark: ev.mark }));
+            return Effect.sync(() => opts.onOpen?.({ presence: (p) => Effect.runPromise(ev.presence(p)), mark: ev.mark, probe: ev.probe }));
           case "Ready":
             return Effect.sync(() => opts.onReady?.(ev.head));
           case "Message":
@@ -1457,14 +1679,40 @@ export class Channel {
   }
 
   /** The channel's settings, opened and checked: sealed with the epoch-0 key and signed by the owner. */
-  private settings(): Effect.Effect<Record<string, unknown> | null, Refusal, Relay> {
+  private settings(info?: Info): Effect.Effect<Record<string, unknown> | null, Refusal, Relay> {
     return Effect.gen({ self: this }, function* () {
-      const s = (yield* this.fx.info()).settings;
+      const s = (info ?? (yield* this.fx.info())).settings;
       const key = this.access.keys["0"];
       if (!s || !key) return null;
       const o = (yield* Effect.promise(() => open(key, this.roomId, s.iv, s.ct).catch(() => null))) as ({ what?: unknown; room?: unknown; pk?: string; sig?: string } & Record<string, unknown>) | null;
       if (!o || o.what !== "channel-settings" || o.room !== this.roomId || o.pk !== this.access.ownerPk || !(yield* Effect.promise(() => verify(o as never)))) return null;
+      this.packs = o.compress === true;
       return o;
+    });
+  }
+
+  private stored(imgs: ImageAttachment[]): Effect.Effect<ImageAttachment[], never, Relay> {
+    return Effect.gen({ self: this }, function* () {
+      if (!imgs.some((i) => i.data !== undefined)) return imgs;
+      const info = yield* Effect.option(this.fx.info());
+      if (info._tag === "None" || info.value.blobs !== true) return imgs;
+      const settings = yield* Effect.option(this.settings(info.value));
+      if (settings._tag === "None" || settings.value?.imageRefs !== true) return imgs;
+      const relay = yield* Relay;
+      return yield* Effect.forEach(
+        imgs,
+        (img) =>
+          Effect.gen({ self: this }, function* () {
+            if (img.data === undefined) return img;
+            const raw = fromBase64(img.data);
+            const { id, key, blob } = yield* Effect.promise(() => sealBlob(raw));
+            yield* relay.blob(this.relay, this.roomId, id, this.identity, blob);
+            blobMemory.set(this.roomId, id, blob);
+            const ref: ImageAttachment = { name: img.name, mime: img.mime, ref: { id, key, size: raw.length } };
+            return ref;
+          }).pipe(Effect.orElseSucceed(() => img)),
+        { concurrency: 4 },
+      );
     });
   }
 
@@ -1476,9 +1724,11 @@ export class Channel {
       if (!key) return yield* new MissingKey("missing the channel key");
       this.forgetInfo();
       const { what: _w, room: _r, pk: _p, sig: _s, ...kept } = (yield* this.settings()) ?? {};
-      const sealed = yield* Effect.promise(async () => seal(key, this.roomId, await sign(this.identity, { ...kept, ...change, what: "channel-settings", room: this.roomId })));
+      const next = { ...kept, ...change };
+      const sealed = yield* Effect.promise(async () => seal(key, this.roomId, await sign(this.identity, { ...next, what: "channel-settings", room: this.roomId })));
       yield* this.request("/settings", { method: "PUT", body: JSON.stringify({ settings: sealed }) }).pipe(Effect.ensuring(Effect.sync(() => this.forgetInfo())));
-    });
+      this.packs = next.compress === true;
+    }).pipe(Semaphore.withPermit(this.settingsWrites));
   }
 
   /** Where one request's code check stands, signing the owner's half if the budget allows. */
@@ -1535,11 +1785,11 @@ export class Channel {
   }
 
   /** live(): connections one after another, each from where the last left off, fed to one queue. */
-  private live(since: number, { quietMs = QUIET_DROP_MS, presence = true, reads = true, send = false }: LiveOptions): Stream.Stream<Live, ChannelGone, Relay> {
+  private live(since: number, { quietMs = QUIET_DROP_MS, presence = true, reads = true, send = false, watch = false }: LiveOptions): Stream.Stream<Live, ChannelGone, Relay> {
     // The newest seq handed on: each (re)connect asks for what's after it, so nothing is lost across drops.
-    const at = { seq: since };
+    const at: Resume = { seq: since, next: "first" };
     return Stream.callback<Live, ChannelGone, Relay>((out) =>
-      Stream.suspend(() => this.session(at, quietMs, presence, reads, send)).pipe(
+      Stream.suspend(() => this.session(at, quietMs, presence, reads, send, watch)).pipe(
         // A drop: connect again on the schedule. A connection that opens starts the schedule over.
         Stream.retry(this.reconnect(out, quietMs)),
         // The schedule never gives up on a drop; only an answer (ChannelGone) gets past it.
@@ -1565,7 +1815,7 @@ export class Channel {
         meta.input instanceof Dropped && outlasted(meta, quietMs) ? Queue.offer(out, { _tag: "Down", after: meta.elapsed, code: meta.input.code, reason: meta.input.reason }) : Effect.void,
       ),
       // Upgrade failures (removed, closed) look like plain drops; check before retrying.
-      Schedule.tap(() => this.stillIn()),
+      Schedule.tap(({ attempt }) => (attempt === 1 || attempt % STILL_IN_EVERY === 0 ? this.stillIn() : Effect.void)),
     );
   }
 
@@ -1581,32 +1831,37 @@ export class Channel {
    * One connection, read: Open, then what the relay sends, strictly in order, until it closes. A
    * frame whose reading fails is reported and dropped: one bad payload mustn't stop the rest.
    */
-  private session(at: { seq: number }, quietMs: number, presence: boolean, reads: boolean, send: boolean): Stream.Stream<Live, Dropped | ChannelGone, Relay> {
-    return Stream.callback<Incoming, Dropped | ChannelGone, Relay>((q) => this.socket(at.seq, presence, reads, q, send)).pipe(
+  private session(at: Resume, quietMs: number, presence: boolean, reads: boolean, send: boolean, watch: boolean): Stream.Stream<Live, Dropped | ChannelGone, Relay> {
+    return Stream.callback<Incoming, Dropped | ChannelGone, Relay>((q) => this.socket(at, presence, reads, q, send, watch)).pipe(
       Stream.mapEffect((f) =>
-        this.read(f, at, quietMs, presence, reads).pipe(Effect.catchCause((cause) => Effect.succeed<Live>({ _tag: "Skipped", frame: f.t, error: Cause.squash(cause) }))),
+        (watch && f.t !== "open" && f.t !== "epoch" ? Effect.succeed(this.watched(f, at)) : this.read(f, at, quietMs, presence, reads)).pipe(Effect.catchCause((cause) => Effect.succeed<Live>({ _tag: "Skipped", frame: f.t, error: Cause.squash(cause) }))),
       ),
       Stream.filter((x): x is Live => x !== null),
     );
   }
 
   /** A socket for what's after `since`: its frames go to `q` as they arrive, then how it closed. Closing the scope closes it. */
-  private socket(since: number, presence: boolean, reads: boolean, q: Inbox, send: boolean) {
+  private socket(at: Resume, presence: boolean, reads: boolean, q: Inbox, send: boolean, watch: boolean) {
     return Effect.gen({ self: this }, function* () {
       const auth = yield* Effect.promise(() => signRequest(this.identity, this.roomId, "GET", "/ws"));
       const u = new URL(`/v1/rooms/${this.roomId}/ws`, this.relay);
-      u.searchParams.set("since", String(since));
+      u.searchParams.set("since", String(at.seq));
+      if (watch) u.searchParams.set("watch", "1");
       if (!presence) u.searchParams.set("presence", "0");
       if (!reads) u.searchParams.set("reads", "0");
       if (send) u.searchParams.set("echo", "0");
       u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
-      const { ws, closed } = yield* Effect.acquireRelease(
-        Effect.sync(() => this.connect(u, auth, q, send)),
+      const { closed, ping } = yield* Effect.acquireRelease(
+        Effect.sync(() => this.connect(u, auth, q, at, send)),
         ({ ws }) => Effect.sync(() => ws.close(1000, "aborted")),
       );
-      yield* Effect.forkScoped(keepAlive(ws));
+      yield* Effect.forkScoped(keepAlive(ping));
       const { code, reason } = yield* Effect.promise(() => closed);
-      if (code === 4000) return yield* Queue.end(q);
+      if (code === 4000) {
+        at.next = "page";
+        return yield* Queue.end(q);
+      }
+      if (at.next === "page") at.next = "reconnect";
       if (code === CLOSE_REMOVED) return yield* Queue.fail(q, new ChannelGone("removed", goneHow(reason)));
       if (code === CLOSE_CLOSED) return yield* Queue.fail(q, new ChannelGone("closed"));
       return yield* Queue.fail(q, new Dropped({ code, reason }));
@@ -1614,11 +1869,13 @@ export class Channel {
   }
 
   /** Open the socket with every handler set at once, before any event can arrive. */
-  private connect(u: URL, auth: string, q: Inbox, send: boolean) {
+  private connect(u: URL, auth: string, q: Inbox, at: Resume, send: boolean) {
     const ws = new WebSocket(u, [WS_PROTOCOL, auth]);
+    const sock = wireOf(ws, at.seq);
     const wire = send ? wireOn(ws, q) : null;
     const closed = new Promise<{ code: number; reason: string }>((resolve) => {
       ws.onclose = (ev) => {
+        sock.closed();
         if (wire) {
           this.wires.delete(wire);
           wire.drop();
@@ -1627,7 +1884,20 @@ export class Channel {
       };
     });
     ws.onerror = () => {};
-    ws.onopen = () => void Queue.offerUnsafe(q, { t: "open", presence: this.presenceOn(ws), mark: markOn(ws) });
+    let openedAs: OpenKind = at.next;
+    ws.onopen = () => {
+      openedAs = at.next;
+      at.next = "reconnect";
+      Queue.offerUnsafe(q, { t: "open", presence: this.presenceOn(ws), mark: markOn(ws), probe: sock.probe, kind: openedAs });
+    };
+    let paging = false;
+    let inPage = false;
+    let asked = false;
+    const ask = (since: number) => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      asked = true;
+      ws.send(JSON.stringify({ t: "more", since }));
+    };
     ws.onmessage = (ev) => {
       let f: ServerFrame | { t: "pong" };
       try {
@@ -1635,13 +1905,30 @@ export class Channel {
       } catch {
         return; // not a frame: ignore it, keep listening
       }
+      sock.frame(f);
       if (wire?.answer(f)) return;
+      if (f.t === "page") return void (inPage = true);
+      if (f.t === "msg" && paging && !inPage) return;
+      if (f.t === "err" && asked && (f.error === "unknown frame" || f.error === MORE_REFUSED)) {
+        if (f.error === "unknown frame") this.moreUnknown = true;
+        return void ws.close(4000, "more");
+      }
       Queue.offerUnsafe(q, f);
-      // The relay replays at most one page on connect; reconnect for the rest.
-      if (f.t === "ready" && f.more) ws.close(4000, "more");
-      else if (f.t === "ready" && wire) this.wires.add(wire);
+      if (f.t !== "ready") return;
+      paging = f.more;
+      inPage = false;
+      asked = false;
+      if (f.more && this.moreUnknown) ws.close(4000, "more");
+      else if (f.more) Queue.offerUnsafe(q, { t: "more", ask });
+      else {
+        if (wire) this.wires.add(wire);
+        if (openedAs === "page") {
+          Queue.offerUnsafe(q, { t: "roster" });
+          Queue.offerUnsafe(q, { t: "request" });
+        }
+      }
     };
-    return { ws, closed };
+    return { ws, closed, ping: sock.ping };
   }
 
   /** Send ephemeral presence on `ws`, sealed with the current key (nothing, once it has closed). */
@@ -1657,7 +1944,7 @@ export class Channel {
   }
 
   /** What one frame means to a listener (null: nothing, like a message already handed on). */
-  private read(f: Incoming, at: { seq: number }, quietMs: number, presence: boolean, reads: boolean): Effect.Effect<Live | null, never, Relay> {
+  private read(f: Incoming, at: Resume, quietMs: number, presence: boolean, reads: boolean): Effect.Effect<Live | null, never, Relay> {
     return Effect.gen({ self: this }, function* () {
       switch (f.t) {
         case "open": {
@@ -1665,8 +1952,11 @@ export class Channel {
           const { attempt, elapsed, start } = yield* Schedule.CurrentMetadata;
           if (attempt > 0) this.forgetInfo();
           const now = yield* Clock.currentTimeMillis;
-          return { _tag: "Open", presence: f.presence, mark: f.mark, outage: attempt > 0 && elapsed >= quietMs ? now - start : null } satisfies Live;
+          return { _tag: "Open", presence: f.presence, mark: f.mark, probe: f.probe, outage: attempt > 0 && elapsed >= quietMs ? now - start : null, kind: f.kind } satisfies Live;
         }
+        case "more":
+          f.ask(at.seq);
+          return null;
         case "msg": {
           if (f.seq <= at.seq) return null;
           const m = yield* this.fx.decrypt(f);
@@ -1708,6 +1998,27 @@ export class Channel {
           return null;
       }
     });
+  }
+
+  private watched(f: Incoming, at: { seq: number }): Live | null {
+    switch (f.t) {
+      case "msg":
+      case "head":
+        if (!Number.isSafeInteger(f.seq) || f.seq <= at.seq) return null;
+        at.seq = f.seq;
+        return { _tag: "Head", seq: f.seq };
+      case "ready":
+        at.seq = Math.max(at.seq, f.head);
+        return { _tag: "Ready", head: f.head };
+      case "info":
+        return { _tag: "Info" };
+      case "roster":
+        return { _tag: "Roster" };
+      case "request":
+        return { _tag: "Request" };
+      default:
+        return null;
+    }
   }
 
   /** Presence, opened: it's sealed with whichever epoch key the sender had, so try the current one, then older. */
@@ -1852,6 +2163,14 @@ export class Channel {
     return run(this.fx.setHold(hold));
   }
 
+  compress(): Promise<boolean> {
+    return run(this.fx.compress());
+  }
+
+  setCompress(on: boolean): Promise<void> {
+    return run(this.fx.setCompress(on));
+  }
+
   /** The channel's icon, if the owner set one (only members can read it). */
   icon(): Promise<ChannelIcon | null> {
     return run(this.fx.icon());
@@ -1865,6 +2184,10 @@ export class Channel {
   /** The verified member list. Records that fail verification are dropped. */
   members(): Promise<Member[]> {
     return run(this.fx.members());
+  }
+
+  memberRows(): Promise<MemberRow[]> {
+    return run(this.fx.memberRows());
   }
 
   /** Leave the channel. Access is revoked at once; the owner rotates the key. */
@@ -1961,6 +2284,14 @@ export class Channel {
     return run(this.fx.rotateIfDue());
   }
 
+  snapshotIfDue(): Promise<number | null> {
+    return run(this.fx.snapshotIfDue());
+  }
+
+  snapshotAt(): Promise<number | null> {
+    return run(this.fx.snapshotAt());
+  }
+
   /** Delete the channel at the relay: messages, members, keys, everything. */
   close(): Promise<void> {
     return run(this.fx.close());
@@ -1974,12 +2305,24 @@ export class Channel {
     return run(this.fx.send(body, opts));
   }
 
+  imageRefs(): Promise<boolean> {
+    return run(this.fx.imageRefs());
+  }
+
+  setImageRefs(on: boolean): Promise<void> {
+    return run(this.fx.setImageRefs(on));
+  }
+
+  image(img: ImageAttachment): Promise<string | null> {
+    return run(this.fx.image(img));
+  }
+
   decrypt(env: Envelope): Promise<Message | null> {
     return run(this.fx.decrypt(env));
   }
 
   /** Messages after `since`, oldest first, following pages to the head. */
-  history(since: number): Promise<{ head: number; messages: Message[] }> {
+  history(since: number): Promise<{ head: number; messages: Message[]; first: number | null }> {
     return run(this.fx.history(since));
   }
 
@@ -2009,6 +2352,25 @@ let recordMemory: RecordMemory = {
 };
 export function keepRecordsIn(memory: RecordMemory): void {
   recordMemory = memory;
+}
+
+export interface BlobMemory {
+  get(room: string, id: string): Uint8Array<ArrayBuffer> | null;
+  set(room: string, id: string, blob: Uint8Array<ArrayBuffer>): void;
+  drop(room: string, id: string): void;
+}
+const blobsInProcess = new Map<string, Uint8Array<ArrayBuffer>>();
+let blobMemory: BlobMemory = {
+  get: (_room, id) => blobsInProcess.get(id) ?? null,
+  set: (_room, id, blob) => {
+    blobsInProcess.delete(id);
+    blobsInProcess.set(id, blob);
+    while (blobsInProcess.size > 64) blobsInProcess.delete(blobsInProcess.keys().next().value!);
+  },
+  drop: (_room, id) => void blobsInProcess.delete(id),
+};
+export function keepBlobsIn(memory: BlobMemory): void {
+  blobMemory = memory;
 }
 /**
  * The newer of `served` and what this client has seen for that key (by the record's `at`). Once the

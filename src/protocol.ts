@@ -9,6 +9,10 @@ export const PROTOCOL_VERSION = 1;
 /** Largest ciphertext (base64) the relay accepts for a single message. */
 export const MAX_CT_LENGTH = 512 * 1024;
 
+export const MAX_SNAPSHOT_LENGTH = 512 * 1024;
+
+export const SNAPSHOT_EVERY = 500;
+
 /** Largest raw image (per file) a client will attach: must survive two base64 trips inside this budget. */
 export const MAX_IMAGE_BYTES = 256 * 1024;
 
@@ -44,6 +48,8 @@ export const ROOM_RETENTION = 10_000;
 
 /** Most messages returned by one history read or replayed on connect. */
 export const PAGE_LIMIT = 1_000;
+
+export const MORE_REFUSED = "too many page requests; slow down";
 
 /**
  * WebSocket subprotocol. Clients offer [WS_PROTOCOL, token] so the token
@@ -84,7 +90,9 @@ export type ServerFrame =
   /** A member has read everything up to `seq` (their word for it, at the relay's `at`). Older clients ignore it. */
   | ({ t: "read" } & ReadMark)
   /** On connect, before ready: how far each member has read. */
-  | { t: "reads"; reads: ReadMark[] };
+  | { t: "reads"; reads: ReadMark[] }
+  | { t: "page" }
+  | { t: "head"; seq: number; ts: number };
 
 /** How far one member has read: a seq and when it got there. A number, never content. */
 export interface ReadMark {
@@ -107,7 +115,8 @@ export type ClientFrame =
   | { t: "send"; id: string; iv: string; ct: string; e?: number }
   | { t: "eph"; iv: string; ct: string }
   /** This member has read up to `seq` (a listener says it on the socket it already has: cheaper than a request). */
-  | { t: "read"; seq: number };
+  | { t: "read"; seq: number }
+  | { t: "more"; since: number };
 
 /** WebSocket close codes the relay uses for membership changes. */
 export const CLOSE_REMOVED = 4403;
@@ -298,14 +307,33 @@ export interface ImageAttachment {
   /** A raster type from `RASTER_MIMES`. Never SVG. */
   mime: string;
   /** Raw bytes, base64. */
-  data: string;
+  data?: string;
+  ref?: ImageRef;
+}
+
+interface ImageRef {
+  id: string;
+  key: string;
+  size: number;
+}
+
+export type InlineImage = ImageAttachment & { data: string };
+
+export const MAX_BLOB_BYTES = MAX_IMAGE_BYTES + 28;
+
+export const BLOB_ID_RE = /^[0-9a-f]{64}$/;
+
+function wellFormedRef(x: unknown): x is ImageRef {
+  if (!x || typeof x !== "object") return false;
+  const r = x as Record<string, unknown>;
+  return typeof r.id === "string" && BLOB_ID_RE.test(r.id) && typeof r.key === "string" && /^[A-Za-z0-9_-]{43}$/.test(r.key) && Number.isSafeInteger(r.size) && (r.size as number) >= 0 && (r.size as number) <= MAX_IMAGE_BYTES;
 }
 
 /** An attachment worth keeping: a named raster image. Anything else (including SVG) is dropped. */
 export function rasterAttachment(x: unknown): x is ImageAttachment {
   if (!x || typeof x !== "object") return false;
   const i = x as Record<string, unknown>;
-  return typeof i.name === "string" && typeof i.mime === "string" && isRasterMime(i.mime) && typeof i.data === "string";
+  return typeof i.name === "string" && typeof i.mime === "string" && isRasterMime(i.mime) && (typeof i.data === "string" || (i.data === undefined && wellFormedRef(i.ref)));
 }
 
 function kb(n: number): string {
@@ -313,8 +341,8 @@ function kb(n: number): string {
 }
 
 /** One-line marker for an image, e.g. `[image: shot.png (84KB)]`. */
-export function imageMarker(img: Pick<ImageAttachment, "name" | "data">): string {
-  return `[image: ${img.name} (${kb(Math.ceil((img.data.length * 3) / 4))})]`;
+export function imageMarker(img: Pick<ImageAttachment, "name" | "data" | "ref">): string {
+  return `[image: ${img.name} (${kb(img.data !== undefined ? Math.ceil((img.data.length * 3) / 4) : (img.ref?.size ?? 0))})]`;
 }
 
 /** The decrypted message body. */

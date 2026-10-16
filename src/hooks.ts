@@ -24,7 +24,9 @@
 import * as Cause from "effect/Cause";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Schedule from "effect/Schedule";
+import type * as Scope from "effect/Scope";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -36,13 +38,15 @@ import { charterLines, formatMessage, holdLine, modeLine } from "./format.ts";
 import { humanOf } from "./state.ts";
 import { asOption, channelOption, wakePath, wakeWords } from "./wake.ts";
 import { daemonListeners, ensureDaemon, holdListener, wakeOn, type DaemonListener, type HeldListener } from "./daemon.ts";
-import { bindDirectory as bindSeat, bindingFor as seatFor, here, seatsNear, type Binding, type Here, type Listener, type SeatOptions } from "./seats.ts";
+import { kimiCodePid } from "./ancestry.ts";
+import { bindDirectory as bindSeat, bindingFor as seatFor, here, kimiHookHere, sameSeat, seatsFor as heldSeats, seatsHeldAnywhere, seatsNear, type Binding, type Here, type Listener, type SeatOptions } from "./seats.ts";
 
 /** Marks our entries so install/uninstall can find them. Current clients only. */
 const MARK = "# kiwi";
 const EVENTS = { SessionStart: "session-start", UserPromptSubmit: "prompt", Stop: "stop" } as const;
 /** The background listener (Claude Code only): armed on every one of EVENTS, it exits at once when one already runs. */
 const LISTEN = "listen";
+const KIMI_STOP = "kimi-stop";
 /** How long one listener lives; Claude Code enforces an asyncRewake hook's timeout, so it ends itself just before. */
 const LISTEN_SECONDS = 24 * 3600;
 
@@ -55,6 +59,10 @@ export type { Binding } from "./seats.ts";
 /** The seat this process (or hook, for `who`) acts for in `dir`. */
 export function bindingFor(dir: string, opts: Omit<SeatOptions, "listeners"> = {}): Binding | null {
   return seatFor(dir, { ...opts, listeners: liveListeners });
+}
+
+export function seatsFor(dir: string, opts: Omit<SeatOptions, "listeners"> = {}): Binding[] {
+  return heldSeats(dir, { ...opts, listeners: liveListeners });
 }
 
 /** Give an agent its seat in `dir`, never pushing out another agent that's listening from here. */
@@ -249,7 +257,7 @@ function writeSettings(s: Settings): void {
  * the entry instead of adding a second one.
  */
 function isOurHookCommand(command: string): boolean {
-  for (const event of [...Object.values(EVENTS), LISTEN]) {
+  for (const event of [...Object.values(EVENTS), LISTEN, KIMI_STOP]) {
     const tail = ` hook ${event} ${MARK}`;
     if (command.endsWith(tail) && command.length > tail.length) return true;
   }
@@ -349,8 +357,36 @@ export function listenHooksInstalled(): boolean {
   }
 }
 
+function checkEachTurn(mc: string): string {
+  return `Run \`${COMMANDS.unread(mc)}\` at the start of every turn and again before you end one. It prints the messages waiting for you, or nothing.`;
+}
+
+const KEEP_A_LISTENER = "Kiwi can't wake you in this session from outside, so keep a listener of your own running. It is what wakes you.";
+
+function wakeYourself(mc: string, harness: Here["harness"]): string | null {
+  if (harness === "kimi") {
+    return [
+      KEEP_A_LISTENER,
+      `Now, from your main session (not a subagent), and again every time it wakes you: call the Bash tool with command \`${COMMANDS.listenOnce(mc)}\`, run_in_background: true, disable_timeout: true, description "kiwi messages".`,
+      "It ends when a message for you arrives, and Kimi starts your next turn with a notice. The messages are marked read already and won't be shown again, so get all of them:",
+      "- If the notice names an output file, read that whole file: it holds your messages.",
+      `- If it shows the output inline instead and says it is truncated, the start is cut off: run \`${mc} log -n 100\` (it marks nothing read) and read back to the last message you handled before this wake. If the oldest message it shows is still newer than that one, run it again with a larger -n until it reaches it.`,
+      "Don't call WaitFor or TaskOutput while it runs. Before you end any turn, check TaskList shows it running; if not, start it.",
+    ].join("\n");
+  }
+  if (harness === "grok") {
+    return [
+      KEEP_A_LISTENER,
+      `Now, once for this session: start the monitor tool with command \`${COMMANDS.listen(mc)}\`, description "${COMMANDS.listen(mc)}", persistent: true.`,
+      "Each message for you arrives as monitor output and starts a turn. Answer it, then end the turn; the monitor keeps running.",
+      "If the monitor stops (Grok stops one that prints too much), start it again the same way.",
+    ].join("\n");
+  }
+  return null;
+}
+
 export function howMessagesReachYou(mc: string, waking: boolean, who: Here = here()): string {
-  if (!waking) return `Kiwi won't wake you: waking is off for you here (\`kiwi wake on\` turns it back on). At the start of each turn, run \`${COMMANDS.unread(mc)}\`.`;
+  if (!waking) return `Kiwi won't wake you: waking is off for you here (\`kiwi wake on\` turns it back on). ${checkEachTurn(mc)}`;
   const path = wakePath(who.harness ? { harness: who.harness, ...(who.session ? { session: who.session } : {}) } : null, hooksListen());
   switch (path.kind) {
     case "hooks":
@@ -358,7 +394,7 @@ export function howMessagesReachYou(mc: string, waking: boolean, who: Here = her
     case "command":
       return `Kiwi wakes you in this session when a message for you arrives (${wakeWords(path.via)}). Don't run listen.`;
     case "none":
-      return `Kiwi can't wake you in this session: ${path.why}. At the start of each turn, run \`${COMMANDS.unread(mc)}\`.`;
+      return wakeYourself(mc, who.harness) ?? `Kiwi can't wake you in this session: ${path.why}. ${checkEachTurn(mc)}`;
   }
 }
 
@@ -377,7 +413,7 @@ export function autoInstallHooks(): string | null {
 
 // ---------- Codex, Gemini, Cursor, Grok (user-level only) ----------
 
-export const EXTRA_HARNESSES = ["codex", "gemini", "cursor", "grok"] as const;
+export const EXTRA_HARNESSES = ["codex", "gemini", "cursor", "grok", "kimi"] as const;
 export type ExtraHarness = (typeof EXTRA_HARNESSES)[number];
 
 /** Set in tests so install never writes the real home. Unset means the harness's own user dir. */
@@ -386,6 +422,7 @@ const HARNESS_ENV: Record<ExtraHarness, string> = {
   gemini: "KIWI_GEMINI_DIR",
   cursor: "KIWI_CURSOR_DIR",
   grok: "KIWI_GROK_DIR",
+  kimi: "KIWI_KIMI_DIR",
 };
 
 /**
@@ -405,7 +442,7 @@ const HARNESS_ENV: Record<ExtraHarness, string> = {
  *          GROK_AGENT is an agent-definition name (user guide 05-configuration.md),
  *          so it is not a session marker.
  */
-const SESSION_ENV: Record<ExtraHarness, string> = {
+const SESSION_ENV: Record<Exclude<ExtraHarness, "kimi">, string> = {
   codex: "CODEX_THREAD_ID",
   gemini: "GEMINI_CLI",
   cursor: "CURSOR_AGENT",
@@ -418,13 +455,19 @@ function harnessRoot(h: ExtraHarness): string {
   if (h === "codex") return join(homedir(), ".codex");
   if (h === "gemini") return join(homedir(), ".gemini");
   if (h === "cursor") return join(homedir(), ".cursor");
+  if (h === "kimi") return process.env.KIMI_CODE_HOME || join(homedir(), ".kimi-code");
   return join(homedir(), ".grok");
+}
+
+function insideHarness(h: ExtraHarness): boolean {
+  return h === "kimi" ? kimiCodePid(process.env) !== null : !!process.env[SESSION_ENV[h]];
 }
 
 function harnessPath(h: ExtraHarness): string {
   if (h === "codex") return join(harnessRoot(h), "hooks.json");
   if (h === "gemini") return join(harnessRoot(h), "settings.json");
   if (h === "cursor") return join(harnessRoot(h), "hooks.json");
+  if (h === "kimi") return join(harnessRoot(h), "config.toml");
   return join(harnessRoot(h), "hooks", "kiwi.json");
 }
 
@@ -436,8 +479,7 @@ function harnessPath(h: ExtraHarness): string {
 export function harnessPresent(h: ExtraHarness): boolean {
   if (process.env[HARNESS_ENV[h]] !== undefined) return existsSync(harnessRoot(h));
   if (existsSync(harnessRoot(h))) return true;
-  const bins = h === "codex" ? ["codex"] : h === "gemini" ? ["gemini"] : h === "cursor" ? ["cursor"] : ["grok"];
-  return bins.some((b) => !!Bun.which(b));
+  return !!Bun.which(h);
 }
 
 function readJson(p: string): Record<string, any> {
@@ -524,12 +566,96 @@ function cursorFileInstalled(path: string): boolean {
   return has("sessionStart", "session-start") && has("stop", "stop");
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseToml(text: string): Record<string, unknown> {
+  const parsed: unknown = Bun.TOML.parse(text);
+  if (!isRecord(parsed)) throw new Error("not a TOML table");
+  return parsed;
+}
+
+const KIMI_TIMEOUT = 30;
+
+function kimiEntry(): { event: string; command: string; timeout: number } {
+  return { event: "Stop", command: hookCommand(KIMI_STOP), timeout: KIMI_TIMEOUT };
+}
+
+function kimiHooks(config: Record<string, unknown>): unknown[] {
+  return Array.isArray(config.hooks) ? config.hooks : [];
+}
+
+function isOurKimiHook(h: unknown): boolean {
+  return isRecord(h) && typeof h.command === "string" && isOurHookCommand(h.command);
+}
+
+const TOML_HEADER = /^\s*\[\[?[^[\]]+\]\]?\s*(#.*)?$/;
+const HOOKS_HEADER = /^\s*\[\[\s*hooks\s*\]\]/;
+
+export function withoutKimiHooks(text: string): string {
+  const lines = text.split("\n");
+  const starts = lines.flatMap((line, i) => (TOML_HEADER.test(line) ? [i] : []));
+  const drop = new Set<number>();
+  starts.forEach((start, k) => {
+    if (!HOOKS_HEADER.test(lines[start] ?? "")) return;
+    let end = starts[k + 1] ?? lines.length;
+    while (end > start + 1 && /^\s*(#.*)?$/.test(lines[end - 1] ?? "")) end -= 1;
+    let ours = false;
+    try {
+      ours = kimiHooks(parseToml(lines.slice(start, end).join("\n"))).some(isOurKimiHook);
+    } catch {
+      return;
+    }
+    if (ours) for (let i = start; i < end; i++) drop.add(i);
+  });
+  return lines.filter((_, i) => !drop.has(i)).join("\n");
+}
+
+export function withKimiHooks(text: string): string {
+  const kept = withoutKimiHooks(text).trimEnd();
+  const e = kimiEntry();
+  const block = ["[[hooks]]", `event = ${JSON.stringify(e.event)}`, `command = ${JSON.stringify(e.command)}`, `timeout = ${e.timeout}`].join("\n");
+  return `${kept ? `${kept}\n\n` : ""}${block}\n`;
+}
+
+function kimiExpected(config: Record<string, unknown>, add: boolean): Record<string, unknown> {
+  const hooks = [...kimiHooks(config).filter((h) => !isOurKimiHook(h)), ...(add ? [kimiEntry()] : [])];
+  const { hooks: _old, ...rest } = config;
+  return hooks.length ? { ...rest, hooks } : rest;
+}
+
+function editKimiConfig(path: string, add: boolean): void {
+  const before = existsSync(path) ? readFileSync(path, "utf8") : "";
+  const stripped = withoutKimiHooks(before);
+  const after = add ? withKimiHooks(before) : stripped === before ? before : stripped.trim() ? `${stripped.trimEnd()}\n` : "";
+  let same = false;
+  try {
+    same = Bun.deepEquals(parseToml(after), kimiExpected(parseToml(before), add));
+  } catch {}
+  if (!same) throw new Error(`kiwi can't edit ${path} safely; ${add ? "add" : "remove"} its [[hooks]] entry for \`${hookCommand(KIMI_STOP)}\` by hand`);
+  if (after === before) return;
+  if (!after) {
+    rmSync(path, { force: true });
+    return;
+  }
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, after);
+}
+
+function kimiConfigInstalled(path: string): boolean {
+  if (!existsSync(path)) return false;
+  const e = kimiEntry();
+  return kimiHooks(parseToml(readFileSync(path, "utf8"))).some((h) => isRecord(h) && h.event === e.event && h.command === e.command);
+}
+
 /** Install one harness's user-level file. Creates the file even when the harness isn't detected. */
 export function installExtra(h: ExtraHarness): string {
   const path = harnessPath(h);
   if (h === "codex") installClaudeShaped(path, EVENTS, (event) => (event === "UserPromptSubmit" ? 20 : 30));
   else if (h === "gemini") installClaudeShaped(path, GEMINI_EVENTS, (event) => (event === "BeforeAgent" ? 20_000 : 30_000), "*");
   else if (h === "cursor") installCursorFile(path);
+  else if (h === "kimi") editKimiConfig(path, true);
   else installClaudeShaped(path, { Stop: "stop" }, () => 30);
   return path;
 }
@@ -537,7 +663,9 @@ export function installExtra(h: ExtraHarness): string {
 export function uninstallExtra(h: ExtraHarness): string {
   const path = harnessPath(h);
   if (h === "cursor") stripCursorFile(path);
-  else stripClaudeShaped(path);
+  else if (h === "kimi") {
+    if (existsSync(path)) editKimiConfig(path, false);
+  } else stripClaudeShaped(path);
   return path;
 }
 
@@ -545,10 +673,11 @@ export function extraInstalled(h: ExtraHarness): boolean {
   if (h === "cursor") return cursorFileInstalled(harnessPath(h));
   if (h === "gemini") return claudeShapedInstalled(harnessPath(h), GEMINI_EVENTS);
   if (h === "grok") return claudeShapedInstalled(harnessPath(h), { Stop: "stop" });
+  if (h === "kimi") return kimiConfigInstalled(harnessPath(h));
   return claudeShapedInstalled(harnessPath(h), EVENTS);
 }
 
-const HARNESS_LABEL: Record<ExtraHarness, string> = { codex: "Codex", gemini: "Gemini", cursor: "Cursor", grok: "Grok" };
+const HARNESS_LABEL: Record<ExtraHarness, string> = { codex: "Codex", gemini: "Gemini", cursor: "Cursor", grok: "Grok", kimi: "Kimi Code" };
 
 /**
  * Install the harness this process is running inside. Does not change
@@ -560,7 +689,7 @@ export function autoInstallExtraHooks(): string | null {
   const choice = loadConfig().harnessHooks ?? {};
   const wrote: string[] = [];
   for (const h of EXTRA_HARNESSES) {
-    if (!process.env[SESSION_ENV[h]] || choice[h] === "off") continue;
+    if (!insideHarness(h) || choice[h] === "off") continue;
     try {
       if (extraInstalled(h)) continue;
       wrote.push(`${HARNESS_LABEL[h]} hooks (${installExtra(h)})`);
@@ -632,7 +761,53 @@ interface HookInput {
   loop_count?: number;
   composer_mode?: string;
   is_background_agent?: boolean;
+  reason?: string;
+  backgroundTasks?: unknown;
 }
+
+export interface BackgroundTask {
+  type: string;
+  text: string;
+}
+
+export function backgroundTasks(raw: unknown): BackgroundTask[] | null {
+  if (!Array.isArray(raw)) return null;
+  return raw.flatMap((t) => (isRecord(t) && typeof t.type === "string" ? [{ type: t.type, text: [t.command, t.description].filter((x) => typeof x === "string").join("\n") }] : []));
+}
+
+export function grokMonitorListens(tasks: readonly BackgroundTask[], commands: readonly string[]): boolean {
+  return tasks.some((t) => t.type === "monitor" && t.text.split("\n").some((line) => commands.includes(line.trim())));
+}
+
+const LISTENER_SETTLE_MS = 1_500;
+
+type ListenCheck = { kind: "skip" } | { kind: "check"; listens: () => boolean; settles: boolean };
+
+function listenCheck(input: HookInput, b: Binding, who: Here, mc: string): ListenCheck {
+  if (who.harness === "kimi") {
+    const heard = () => liveListeners().some((l) => l.alias === b.alias && l.as === b.as && ((!!who.session && l.session === who.session) || (!!who.pid && l.pid === who.pid)));
+    return { kind: "check", listens: heard, settles: true };
+  }
+  if (who.harness !== "grok" || input.stop_hook_active) return { kind: "skip" };
+  const tasks = backgroundTasks(input.backgroundTasks);
+  if (!tasks) return { kind: "skip" };
+  const commands = [COMMANDS.listen(mc), COMMANDS.listen(`${mcBin()} ${channelOption(b.alias)} ${asOption(b.as)}`)];
+  return { kind: "check", listens: () => grokMonitorListens(tasks, commands), settles: false };
+}
+
+const rearmText = Effect.fn("Hooks.rearmText")(function* (input: HookInput, b: Binding, who: Here, mc: string) {
+  const how = wakeYourself(mc, who.harness);
+  if (!how || !wakeOn(loadConfig(), b.alias, b.as)) return null;
+  const check = listenCheck(input, b, who, mc);
+  if (check.kind === "skip" || check.listens()) return null;
+  if (check.settles) {
+    yield* Effect.sleep(LISTENER_SETTLE_MS);
+    yield* Effect.promise(() => refreshListeners());
+    if (check.listens()) return null;
+  }
+  const subagent = who.harness === "kimi" ? " If you are a subagent, ignore this and end your turn." : "";
+  return `Before you end this turn: no Kiwi listener of yours is running for ${b.alias}, so nothing would wake you when a message for you arrives.${subagent}\n${how}`;
+});
 
 /** How an agent's shell should call kiwi: plain `kiwi` when it's on PATH, else the full path. */
 export function mcBin(): string {
@@ -653,6 +828,8 @@ export function mcFor(alias: string, as: string, dir = process.cwd(), who?: Here
 }
 
 const MAX_CONTEXT = 6_000;
+const HOOK_MS = 15_000;
+const SEAT_ANSWER_MS = HOOK_MS - 1_000;
 
 const unreadText = Effect.fn("Hooks.unreadText")(function* (s: AgentSession) {
   const { messages, state } = yield* s.read();
@@ -662,8 +839,59 @@ const unreadText = Effect.fn("Hooks.unreadText")(function* (s: AgentSession) {
 
 const say = (text: string) => Effect.sync(() => void process.stdout.write(text));
 
-/** What one hook answers, for the agent bound here. */
+type AnswerKind = "cursor-start" | "start" | "gemini-prompt" | "prompt" | "followup" | "block" | "deny";
+
+interface Answer {
+  kind: AnswerKind;
+  text: string;
+}
+
+function envelope(kind: AnswerKind, texts: readonly string[]): string {
+  switch (kind) {
+    case "cursor-start":
+      return JSON.stringify({ additional_context: texts.join("\n\n") });
+    case "start":
+      return JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: texts.join("\n\n") } });
+    case "gemini-prompt":
+      return JSON.stringify({ hookSpecificOutput: { hookEventName: "BeforeAgent", additionalContext: texts.join("\n\n") } });
+    case "prompt":
+      return texts.join("\n\n");
+    case "followup":
+      return JSON.stringify({ followup_message: texts.join(" ") });
+    case "block":
+    case "deny":
+      return JSON.stringify({ decision: kind, reason: texts.join("\n\n") });
+  }
+}
+
+function answered(kind: AnswerKind, text: string): Answer {
+  return { kind, text };
+}
+
+export function kimiReason(answers: readonly Answer[]): string {
+  return answers.map((a) => a.text).join("\n\n");
+}
+
+function tellKimi(reason: string): number {
+  try {
+    writeSync(2, `${reason}\n`);
+    return 2;
+  } catch {
+    return 0;
+  }
+}
+
+export function hookOutput(answers: readonly Answer[]): string | null {
+  const [first] = answers;
+  if (!first) return null;
+  return envelope(
+    first.kind,
+    answers.filter((a) => a.kind === first.kind).map((a) => a.text),
+  );
+}
+
 const answer = Effect.fn("Hooks.answer")(function* (event: string, input: HookInput, b: Binding, cfg: ChannelConfig, who: Here) {
+  if (who.harness === "grok" && (event === "session-start" || event === "prompt")) return null;
   const mc = mcFor(b.alias, b.as, input.cwd ?? process.cwd(), who);
   const s = yield* openSession(b.alias, cfg, b.as);
   // A hook from the session the listener woke: it has seen what it was handed.
@@ -693,39 +921,42 @@ const answer = Effect.fn("Hooks.answer")(function* (event: string, input: HookIn
     const additionalContext = lines.join("\n");
     // Cursor's sessionStart injects additional_context and ignores the Claude envelope.
     if (input.hook_event_name === "sessionStart" || input.composer_mode != null || typeof input.is_background_agent === "boolean") {
-      return yield* say(JSON.stringify({ additional_context: additionalContext }));
+      return answered("cursor-start", additionalContext);
     }
-    return yield* say(JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext } }));
+    return answered("start", additionalContext);
   }
 
   if (event === "prompt") {
     const unread = yield* unreadText(s);
     const lines: string[] = [];
     if (unread) lines.push(`New Kiwi Channels messages for you (${b.alias}):`, unread);
-    if (!lines.length) return;
+    if (!lines.length) return null;
     const text = lines.join("\n");
     // Gemini BeforeAgent only injects hookSpecificOutput.additionalContext. Codex and Claude take plain stdout.
-    if (input.hook_event_name === "BeforeAgent") return yield* say(JSON.stringify({ hookSpecificOutput: { hookEventName: "BeforeAgent", additionalContext: text } }));
-    return yield* say(text);
+    if (input.hook_event_name === "BeforeAgent") return answered("gemini-prompt", text);
+    return answered("prompt", text);
   }
 
   if (event === "stop") {
     const style = stopStyle(input);
     if (style === "cursor") {
       // An aborted or failed turn must not schedule another one. Don't read: that would consume the messages the follow-up tells the agent to read.
-      if (input.status && input.status !== "completed") return;
+      if (input.status && input.status !== "completed") return null;
       const { messages, state } = yield* s.state();
       const unread = (yield* s.unreadCount(state, messages)) > 0;
       const follow = cursorStopFollowup(mc, unread);
-      if (!follow) return;
-      return yield* say(JSON.stringify({ followup_message: follow }));
+      if (!follow) return null;
+      return answered("followup", follow);
     }
+    if (who.harness === "grok" && input.reason !== undefined && input.reason !== "end_turn") return null;
     const unread = yield* unreadText(s);
     const decision = style === "gemini" ? "deny" : "block";
-    if (unread) {
-      return yield* say(JSON.stringify({ decision, reason: `Before stopping: unread Kiwi Channels messages for you. Handle them (answer with \`${mc} reply N "…"\`):\n${unread}` }));
-    }
+    const handOver = unread ? `Before stopping: unread Kiwi Channels messages for you. Handle them (answer with \`${mc} reply N "…"\`):\n${unread}` : null;
+    const rearm = yield* rearmText(input, b, who, mc);
+    const reason = [handOver, rearm].filter((t) => t !== null).join("\n\n");
+    if (reason) return answered(decision, reason);
   }
+  return null;
 });
 
 /**
@@ -734,11 +965,12 @@ const answer = Effect.fn("Hooks.answer")(function* (event: string, input: HookIn
  * runs per agent; the next event arms the next one. After a day with nothing it ends with a short
  * line, so the following turn arms a fresh one instead of the session going deaf.
  */
-const listen = Effect.fn("Hooks.listen")(function* (b: Binding, cfg: ChannelConfig, who: Here) {
-  if (!hooksListen() || !wakeOn(loadConfig(), b.alias, b.as) || isListening(b.alias, b.as)) return 0;
-  const slot = yield* Effect.promise(() => takeListenSlot(b.alias, b.as, who.session ?? ""));
-  if (!slot) return 0;
-  yield* Effect.addFinalizer(() => Effect.sync(() => slot.close()));
+interface Served {
+  b: Binding;
+  cfg: ChannelConfig;
+}
+
+const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, woke: Effect.Effect<void, never, Scope.Scope>) {
   const s = yield* openSession(b.alias, cfg, b.as);
   // Peek: the listener never moves the agent's cursor. It reads on a copy that starts past what it already
   // handed this session, hands the messages over, and notes how far that went; the session's next hook
@@ -747,11 +979,6 @@ const listen = Effect.fn("Hooks.listen")(function* (b: Binding, cfg: ChannelConf
   let at = Math.max((yield* s.cursor()), deliveredUpTo(b.alias, b.as, who.session ?? ""));
   const peek = Cursor.of({ read: () => Effect.succeed(at), write: (_c, _a, seq) => Effect.sync(() => void (at = Math.max(at, seq))), seen: real.seen, markSeen: () => Effect.void });
   const got: string[] = [];
-  const enough = yield* Deferred.make<void>();
-  const woke = Effect.suspend(() =>
-    // Linger briefly so a burst of messages is one wake-up.
-    got.length === 1 ? Effect.asVoid(Effect.forkScoped(Effect.andThen(Effect.sleep(400), Deferred.succeed(enough, undefined)))) : Effect.void,
-  );
   const hearing = s
     .listen((m, state) => Effect.andThen(Effect.sync(() => void got.push(formatMessage(m, state.trust.get(m.seq), state, s.me))), woke), {
       onNotice: (text) => Effect.andThen(Effect.sync(() => void got.push(`* ${text}`)), woke),
@@ -759,26 +986,64 @@ const listen = Effect.fn("Hooks.listen")(function* (b: Binding, cfg: ChannelConf
       marks: false,
     })
     .pipe(Effect.provideService(Cursor, peek));
+  return { b, got, hearing, reached: () => at };
+});
+
+const arm = Effect.fn("Hooks.arm")(function* (seat: Served, who: Here, woke: Effect.Effect<void, never, Scope.Scope>) {
+  const { b } = seat;
+  if (!wakeOn(loadConfig(), b.alias, b.as) || isListening(b.alias, b.as)) return null;
+  const slot = yield* Effect.promise(() => takeListenSlot(b.alias, b.as, who.session ?? ""));
+  if (!slot) return null;
+  const release = () => slot.close();
+  yield* Effect.addFinalizer(() => Effect.sync(release));
+  return yield* tune(seat, who, woke).pipe(
+    Effect.map((tuned) => ({ ...tuned, release })),
+    Effect.catchCause(() => Effect.sync(() => (release(), null))),
+  );
+});
+
+const listen = Effect.fn("Hooks.listen")(function* (served: readonly Served[], who: Here) {
+  if (!hooksListen()) return 0;
+  const enough = yield* Deferred.make<void>();
+  let heard = 0;
+  const woke = Effect.suspend(() => {
+    heard += 1;
+    return heard === 1 ? Effect.asVoid(Effect.forkScoped(Effect.andThen(Effect.sleep(400), Deferred.succeed(enough, undefined)))) : Effect.void;
+  });
+  const armed = (yield* Effect.forEach(served, (seat) => arm(seat, who, woke).pipe(Effect.catchCause(() => Effect.succeed(null))))).filter((a) => a !== null);
+  let failed = 0;
+  const hear = ({ hearing, release }: (typeof armed)[number]) =>
+    Effect.as(hearing, "heard" as const).pipe(
+      Effect.catchCause(() =>
+        Effect.suspend(() => {
+          release();
+          failed += 1;
+          return failed === armed.length ? Effect.succeed("failed" as const) : Effect.never;
+        }),
+      ),
+    );
+  const [first, ...rest] = armed.map(hear);
+  if (!first) return 0;
+  const hearing = rest.reduce((all, h) => Effect.raceFirst(all, h), first);
   // Its session ending ends it too: nobody would get what it read.
   const sessionGone = who.pid ? Effect.repeat(Effect.sync(() => alive(who.pid!)), { while: (up) => up, schedule: Schedule.spaced("2 seconds") }) : Effect.never;
   const ended = yield* Effect.raceFirst(
-    Effect.as(hearing, "heard" as const),
+    hearing,
     Effect.raceFirst(Effect.as(Deferred.await(enough), "heard" as const), Effect.raceFirst(Effect.as(Effect.sleep(LISTEN_SECONDS * 1000), "day" as const), Effect.as(sessionGone, "gone" as const))),
   ).pipe(Effect.scoped);
-  if (ended === "gone" || (who.pid && !alive(who.pid))) return 0;
-  const mc = mcFor(b.alias, b.as, process.cwd(), who);
-  const text = got.join("\n");
+  if (ended === "gone" || ended === "failed" || (who.pid && !alive(who.pid))) return 0;
+  const told = armed.filter((a) => a.got.length);
+  const blocks = told.map(({ b, got }) => {
+    const mc = mcFor(b.alias, b.as, process.cwd(), who);
+    const text = got.join("\n");
+    return `New Kiwi Channels messages for you (${b.alias}). Handle them; answer with \`${mc} reply N "…"\`:\n${text.length > MAX_CONTEXT ? `${text.slice(0, MAX_CONTEXT)}\n… (more: run \`${mc} log\`)` : text}\n`;
+  });
   try {
-    writeSync(
-      2,
-      got.length
-        ? `New Kiwi Channels messages for you (${b.alias}). Handle them; answer with \`${mc} reply N "…"\`:\n${text.length > MAX_CONTEXT ? `${text.slice(0, MAX_CONTEXT)}\n… (more: run \`${mc} log\`)` : text}\n`
-        : "Kiwi Channels: a day with no messages for you. Nothing to do; just end your turn.\n",
-    );
+    writeSync(2, blocks.length ? blocks.join("\n") : "Kiwi Channels: a day with no messages for you. Nothing to do; just end your turn.\n");
   } catch {
     return 0;
   }
-  if (got.length) noteDelivered(b.alias, b.as, who.session ?? "", at);
+  for (const { b, reached } of told) noteDelivered(b.alias, b.as, who.session ?? "", reached());
   return 2;
 });
 
@@ -793,22 +1058,36 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
   try {
     input = JSON.parse(raw) as HookInput;
   } catch {}
+  const kimi = event === KIMI_STOP;
   // The session that runs the hook: the one its seat remembers (or takes back, after a restart).
-  const who: Here = { ...here(), ...(input.session_id ? { session: input.session_id } : {}) };
+  const who: Here = kimi ? kimiHookHere() : { ...here(), ...(input.session_id ? { session: input.session_id } : {}) };
   yield* Effect.promise(() => refreshListeners());
-  const b = bindingFor(process.env.CLAUDE_PROJECT_DIR ?? input.cwd ?? process.cwd(), { who }) ?? bindingFor(input.cwd ?? process.cwd(), { who });
-  if (!b) return;
+  const project = seatsFor(process.env.CLAUDE_PROJECT_DIR ?? input.cwd ?? process.cwd(), { who });
+  const near = project.length ? project : seatsFor(input.cwd ?? process.cwd(), { who });
+  const seats = [...near, ...seatsHeldAnywhere(who)].filter((b, i, all) => all.findIndex((o) => sameSeat(o, b)) === i);
   const keys = yield* Keystore;
-  const cfg = (yield* keys.config).channels[b.alias];
-  if (!cfg) return;
-  if (event === LISTEN) return yield* listen(b, cfg, who).pipe(Effect.scoped, Effect.catchCause(() => Effect.succeed(0)));
-  const work = answer(event, input, b, cfg, who).pipe(
+  const channels = (yield* keys.config).channels;
+  const served = seats.flatMap((b): Served[] => {
+    const cfg = channels[b.alias];
+    return cfg ? [{ b, cfg }] : [];
+  });
+  if (!served.length) return 0;
+  if (event === LISTEN) return yield* listen(served, who).pipe(Effect.scoped, Effect.catchCause(() => Effect.succeed(0)));
+  const one = ({ b, cfg }: Served) => answer(kimi ? "stop" : event, input, b, cfg, who).pipe(
     Effect.catchCause((cause) => {
       // The channel is gone for this agent: forget only what this agent held, quietly.
       const err = Cause.squash(cause);
-      if (err instanceof ChannelGone) return err.why === "closed" ? keys.wipeChannel(b.alias) : keys.forgetMember(b.alias, b.as);
-      return Effect.void;
+      if (err instanceof ChannelGone) return Effect.as(err.why === "closed" ? keys.wipeChannel(b.alias) : keys.forgetMember(b.alias, b.as), null);
+      return Effect.succeed(null);
     }),
+    Effect.timeoutOption(SEAT_ANSWER_MS),
+    Effect.map(Option.getOrNull),
   );
-  yield* Effect.raceFirst(work, Effect.sleep(15_000));
+  const work = Effect.flatMap(Effect.forEach(served, one, { concurrency: "unbounded" }), (answers) => {
+    const got = answers.filter((a) => a !== null);
+    if (kimi) return got.length ? Effect.sync(() => tellKimi(kimiReason(got))) : Effect.succeed(0);
+    const out = hookOutput(got);
+    return out === null ? Effect.succeed(0) : Effect.as(say(out), 0);
+  });
+  return yield* Effect.raceFirst(work, Effect.as(Effect.sleep(HOOK_MS), 0));
 });

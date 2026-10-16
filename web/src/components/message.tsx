@@ -1,8 +1,8 @@
 import { ArrowTurnBackwardIcon, Copy01Icon } from "@hugeicons/core-free-icons"
-import { memo, useState, type ReactNode } from "react"
+import { memo, useEffect, useState, type ReactNode } from "react"
 
 import { describeEvent } from "@mc/format.ts"
-import { ignored, type Color, type Message, type Trust } from "@mc/protocol.ts"
+import { ignored, type Color, type ImageAttachment, type Message, type Trust } from "@mc/protocol.ts"
 import type { ChannelState, Member } from "@mc/state.ts"
 import { excerpt, formatAgo, formatFull, formatStamp, memberName } from "@/lib/format"
 import { chipLabel, type Chip } from "@/lib/reactions"
@@ -183,6 +183,54 @@ interface BubbleProps {
   color?: Color | null
   /** A face other than the monogram at the run's foot: the coordinator's head. */
   face?: ReactNode
+  image?: (img: ImageAttachment) => Promise<string | null>
+}
+
+function useSeen(el: Element | null): boolean {
+  const [seen, setSeen] = useState(typeof IntersectionObserver === "undefined")
+  useEffect(() => {
+    if (seen || !el) return
+    const watch = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setSeen(true)
+      },
+      { rootMargin: "400px 0px" }
+    )
+    watch.observe(el)
+    return () => watch.disconnect()
+  }, [el, seen])
+  return seen
+}
+
+function Attached({ img, load }: { img: ImageAttachment; load?: (img: ImageAttachment) => Promise<string | null> }) {
+  const [data, setData] = useState<string | null>(img.data ?? null)
+  const [failed, setFailed] = useState(false)
+  const [spot, setSpot] = useState<HTMLSpanElement | null>(null)
+  const seen = useSeen(spot)
+  useEffect(() => {
+    if (img.data !== undefined || !load || !seen) return
+    let live = true
+    load(img).then(
+      (d) => live && (d ? setData(d) : setFailed(true)),
+      () => live && setFailed(true)
+    )
+    return () => {
+      live = false
+    }
+  }, [img, load, seen])
+  if (!data) {
+    return (
+      <span ref={setSpot} title={img.name} className="flex h-24 w-32 items-center justify-center rounded-bubble bg-wash px-2 text-center text-stamp text-ink-3 shadow-[0_0_0_0.5px_var(--line)]">
+        {failed ? "Image no longer available" : "Loading image…"}
+      </span>
+    )
+  }
+  const url = `data:${img.mime};base64,${data}`
+  return (
+    <a href={url} target="_blank" rel="noreferrer" title={img.name}>
+      <img src={url} alt={img.name} loading="lazy" className="max-h-72 max-w-full rounded-bubble object-cover shadow-[0_0_0_0.5px_var(--line)]" />
+    </a>
+  )
 }
 
 export interface ThreadSummary {
@@ -223,6 +271,7 @@ export const Bubble = memo(function Bubble({
   face,
   receipt,
   reactions,
+  image,
 }: BubbleProps) {
   const forged = ignored(trust)
   const mine = m.from === me
@@ -294,14 +343,9 @@ export const Bubble = memo(function Bubble({
 
           {m.imgs?.length ? (
             <div className={cx("mt-0.5 flex flex-wrap gap-1", mine && "justify-end")}>
-              {m.imgs.map((img, i) => {
-                const url = `data:${img.mime};base64,${img.data}`
-                return (
-                  <a key={i} href={url} target="_blank" rel="noreferrer" title={img.name}>
-                    <img src={url} alt={img.name} loading="lazy" className="max-h-72 max-w-full rounded-bubble object-cover shadow-[0_0_0_0.5px_var(--line)]" />
-                  </a>
-                )
-              })}
+              {m.imgs.map((img, i) => (
+                <Attached key={i} img={img} load={image} />
+              ))}
             </div>
           ) : null}
         </div>

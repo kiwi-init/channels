@@ -134,6 +134,25 @@ describe("stored bytes per channel", () => {
     expect(messages.at(-1)!.body).toStartWith("message 11");
     await expect(a.send("y".repeat(5000))).rejects.toMatchObject({ status: 413 });
   });
+
+  test("images make room too, so a message never pushes the channel past its allowance", async () => {
+    const cap = 6000;
+    const { relay, dataDir } = relayWith({ bytesPerChannel: cap });
+    const { access, ownerCh, agents } = await channelOn(relay, 1);
+    const a = agents[0]!;
+    await ownerCh.setImageRefs(true);
+    const raw = crypto.getRandomValues(new Uint8Array(4000));
+    await a.send("pic", { imgs: [{ name: "p.png", mime: "image/png", data: Buffer.from(raw).toString("base64") }] });
+    await a.send("z".repeat(2000));
+    const db = new Database(join(dataDir, `${access.roomId}.sqlite`));
+    const msgs = (db.query("SELECT COALESCE(SUM(CASE WHEN typeof(ct) = 'blob' THEN (LENGTH(ct) * 4 + 2) / 3 ELSE LENGTH(ct) END), 0) AS n FROM msgs").get() as { n: number }).n;
+    const blobs = (db.query("SELECT COALESCE(SUM(size), 0) AS n FROM blobs").get() as { n: number }).n;
+    const counted = (JSON.parse((db.query("SELECT v FROM meta WHERE k = 'usage'").get() as { v: string }).v) as { bytes: number }).bytes;
+    db.close();
+    expect(counted).toBe(msgs + blobs);
+    expect(msgs + blobs).toBeLessThanOrEqual(cap);
+    expect((await a.history(0)).messages.at(-1)!.body).toBe("z".repeat(2000));
+  });
 });
 
 describe("idle rooms expire", () => {

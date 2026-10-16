@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm"
 import { compareCells, nextSort, sanitizeMarkdownUrl, type SortDir } from "../lib/markdown"
 import { cx } from "../lib/utils"
 import { Icon } from "./icon"
+import { MermaidBlock } from "./mermaid"
 
 // react-markdown never renders raw HTML. urlTransform also drops any scheme outside the allowlist.
 const components: Components = {
@@ -42,10 +43,22 @@ const components: Components = {
   h1: ({ children }) => <p className="mt-3 font-semibold first:mt-0">{children}</p>,
   h2: ({ children }) => <p className="mt-3 font-semibold first:mt-0">{children}</p>,
   h3: ({ children }) => <p className="mt-3 font-semibold first:mt-0">{children}</p>,
-  pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
+  pre: ({ children }) => {
+    const source = mermaidSource(children)
+    return source === undefined ? <CodeBlock>{children}</CodeBlock> : <MermaidBlock source={source} code={<CodeBlock>{children}</CodeBlock>} />
+  },
   code: ({ children }) => <code className="rounded-row bg-wash-2 px-1 py-px font-mono text-[0.86em]">{children}</code>,
   hr: () => <hr className="my-3 border-line" />,
   table: ({ children }) => <MarkdownTable>{children}</MarkdownTable>,
+}
+
+function mermaidSource(children: ReactNode): string | undefined {
+  const code = Children.toArray(children).find((c) => isValidElement<{ className?: string; children?: ReactNode }>(c))
+  if (!isValidElement<{ className?: string; children?: ReactNode }>(code) || !/\blanguage-mermaid\b/.test(code.props.className ?? "")) return undefined
+  const text = Children.toArray(code.props.children)
+    .filter((c) => typeof c === "string")
+    .join("")
+  return text.trim() ? text : undefined
 }
 
 function CodeBlock({ children }: { children?: ReactNode }) {

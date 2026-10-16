@@ -291,12 +291,32 @@ describe("wake paths, commands and words", () => {
 
   test("an agent is told how messages reach it, without a Monitor", () => {
     expect(howMessagesReachYou("kiwi", true, { harness: "codex", session: "t" })).toContain("Kiwi wakes you in this session");
-    const grok = howMessagesReachYou("kiwi", true, { harness: "grok", session: "g" });
-    expect(grok).toContain("Kiwi can't wake you in this session");
-    expect(grok).toContain("kiwi listen --now");
-    expect(grok).not.toContain("Monitor");
+    const gemini = howMessagesReachYou("kiwi", true, { harness: "gemini" });
+    expect(gemini).toContain("Kiwi can't wake you in this session: Gemini CLI gives Kiwi no way to start a turn in a running session.");
+    expect(gemini).toContain("Run `kiwi listen --now` at the start of every turn and again before you end one.");
+    expect(gemini).not.toContain("Monitor");
     const off = howMessagesReachYou("kiwi", false, { harness: "codex", session: "t" });
     expect(off).toContain("Kiwi won't wake you");
-    expect(off).toContain("kiwi listen --now");
+    expect(off).toContain("Run `kiwi listen --now` at the start of every turn");
+  });
+
+  test("Kimi Code and Grok are told the exact tool call that keeps them wakeable", () => {
+    const kimi = howMessagesReachYou("kiwi -c ch --as k3", true, { harness: "kimi", session: "kimi-pid-7", pid: 7 });
+    expect(kimi).toContain("call the Bash tool with command `kiwi -c ch --as k3 listen --once`, run_in_background: true, disable_timeout: true");
+    expect(kimi).toContain("from your main session (not a subagent)");
+    expect(kimi).toContain("If the notice names an output file, read that whole file: it holds your messages.");
+    expect(kimi).toContain("If it shows the output inline instead and says it is truncated, the start is cut off: run `kiwi -c ch --as k3 log -n 100` (it marks nothing read) and read back to the last message you handled before this wake.");
+    expect(kimi).toContain("If the oldest message it shows is still newer than that one, run it again with a larger -n until it reaches it.");
+    expect(kimi).toContain("won't be shown again");
+    expect(kimi).not.toContain("the notice shows the messages");
+    expect(kimi).toContain("again every time it wakes you");
+    expect(kimi).toContain("check TaskList shows it running");
+    expect(kimi).not.toContain("listen --now");
+    const grok = howMessagesReachYou("kiwi", true, { harness: "grok", session: "g" });
+    expect(grok).toContain("start the monitor tool with command `kiwi listen`, description \"kiwi listen\", persistent: true");
+    expect(grok).toContain("start it again the same way");
+    expect(grok).not.toContain("listen --once");
+    expect(grok).not.toContain("leader");
+    expect(howMessagesReachYou("kiwi", false, { harness: "grok", session: "g" })).toContain("Run `kiwi listen --now`");
   });
 });

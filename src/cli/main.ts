@@ -29,7 +29,7 @@ import { baseName, here, seatsNear } from "../seats.ts";
 import { daemonHello, daemonSeat, ensureDaemon, reportRead, stopDaemon, wakeOn, type DaemonSeat } from "../daemon.ts";
 import { cleanup } from "../cleanup.ts";
 import { asOption, channelOption, isWakeVia, wakeKey, wakeWords } from "../wake.ts";
-import { ago, cardLine, charterLines, describeEvent, holdLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, modeLine, parseDuration, presenceWords, taskStateWord, statusJson } from "../format.ts";
+import { ago, cardLine, charterLines, describeEvent, holdLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, missingImages, formatTask, formatTasks, looksLikeLine, modeLine, parseDuration, presenceWords, taskStateWord, statusJson } from "../format.ts";
 import { canPost, describeScopes, presetOf, SCOPES, type Scope } from "../scopes.ts";
 import { fingerprint } from "../identity.ts";
 import { CHAT_KINDS, COLORS, ignored, isColor, type Kind, type Message, type TaskState } from "../protocol.ts";
@@ -37,7 +37,7 @@ import { chooseThread, humanOf, parseTaskId, similarOpenTasks, taskId, wentTo, t
 import { VERSION } from "../version.ts";
 import { computerClaimFor } from "../machine.ts";
 import { briefText } from "../brief.ts";
-import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor, EXTRA_HARNESSES, extraInstalled, hooksInstalled, hooksStatus, howMessagesReachYou, installDetected, installExtra, installHooks, mcFor, refreshListeners, runHook, uninstallDetected, uninstallExtra, uninstallHooks, type ExtraHarness } from "../hooks.ts";
+import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor, EXTRA_HARNESSES, extraInstalled, hooksInstalled, hooksStatus, howMessagesReachYou, installDetected, installExtra, installHooks, mcFor, refreshListeners, runHook, seatsFor, uninstallDetected, uninstallExtra, uninstallHooks, type ExtraHarness } from "../hooks.ts";
 import { BadName } from "../refusals.ts";
 import { binDir, ensureOnPath, profileFor } from "../shell-path.ts";
 import { detectCard, detectModel, detectRuns, mergeCard } from "../card.ts";
@@ -213,7 +213,15 @@ const channelAlias = Effect.fn("kiwi.channelAlias")(function* () {
   const all = Object.keys(cfg.channels);
   // Explicit flags win; otherwise the channel this directory is bound to; otherwise the only one.
   // Never a machine-wide default: other agents on this machine are in other channels.
-  const alias = opt.channel ?? process.env.KIWI_CHANNEL ?? bindingFor(process.cwd())?.alias ?? (all.length === 1 ? all[0] : undefined);
+  const explicit = opt.channel ?? process.env.KIWI_CHANNEL;
+  const ours = explicit ? [] : seatsFor(process.cwd());
+  const named = opt.as ?? process.env.KIWI_AS;
+  const fits = ours.length > 1 && named ? ours.filter((b) => b.as === named) : ours;
+  const [seat, ...others] = fits;
+  if (others.length || (ours.length > 1 && !seat)) {
+    return yield* die(`this session is several agents here (${ours.map((b) => `${b.as} in ${b.alias}`).join(", ")}); pass -c ALIAS --as NAME to say which`);
+  }
+  const alias = explicit ?? seat?.alias ?? (all.length === 1 ? all[0] : undefined);
   if (!alias) {
     if (!all.length) return yield* die("no channel: join one first (kiwi join <code>)");
     return yield* die(`this directory isn't bound to a channel, and this machine is in several (${all.join(", ")}); pass -c ALIAS --as NAME, or run kiwi from the directory you joined in`);
@@ -229,10 +237,12 @@ const agentName = Effect.fn("kiwi.agentName")(function* (ch?: ChannelConfig) {
   let raw = explicit;
   if (!raw && ch) {
     // Several agents can share a machine (and a channel): never guess between them.
-    const bound = bindingFor(process.cwd());
+    const ours = seatsFor(process.cwd());
     const cfg = yield* keys.config;
-    const held = bound ? [] : seatsNear(process.cwd()).filter((b) => cfg.channels[b.alias]?.roomId === ch.roomId);
-    if (bound && ch.roomId === cfg.channels[bound.alias]?.roomId) raw = bound.as;
+    const [bound, ...also] = ours.filter((b) => cfg.channels[b.alias]?.roomId === ch.roomId);
+    if (bound && also.length) return yield* die(`this session is several agents in this channel (${[bound, ...also].map((b) => b.as).join(", ")}); pass --as NAME to say which`);
+    const held = ours.length ? [] : seatsNear(process.cwd()).filter((b) => cfg.channels[b.alias]?.roomId === ch.roomId);
+    if (bound) raw = bound.as;
     else if (held.length && here().session) {
       // This folder's agents are other live sessions: acting as one of them would be speaking for it.
       return yield* die(`${held.map((b) => b.as).join(", ")} ${held.length > 1 ? "work" : "works"} from this folder in another session; to take part yourself, run kiwi join with the channel's code (or pass --as NAME)`);
@@ -664,7 +674,7 @@ const commands: Record<string, Command> = {
       const keys = yield* Keystore;
       const sub = args[1] ?? "status";
       const raw = args[2];
-      const usage = "usage: kiwi hooks install|uninstall|status [claude|codex|gemini|cursor|grok]";
+      const usage = "usage: kiwi hooks install|uninstall|status [claude|codex|gemini|cursor|grok|kimi]";
       let name: "claude" | ExtraHarness | undefined;
       if (raw) {
         if (raw !== "claude" && !EXTRA_HARNESSES.includes(raw as ExtraHarness)) return yield* die(usage);
@@ -754,10 +764,10 @@ const commands: Record<string, Command> = {
     Effect.gen(function* () {
       const keys = yield* Keystore;
       const cfg = yield* keys.config;
-      const here = bindingFor(process.cwd());
+      const here = seatsFor(process.cwd());
       for (const [alias, c] of Object.entries(cfg.channels)) {
         const agents = (yield* keys.identitiesIn(c.roomId)).filter((n) => n !== c.owner && n !== c.person);
-        out(`${here?.alias === alias ? "*" : " "} ${alias}${c.title && c.title !== alias ? ` (${c.title})` : ""}  ${agents.length ? `agents here: ${agents.join(", ")}` : "no agent keys"}  ${c.relay}`);
+        out(`${here.some((b) => b.alias === alias) ? "*" : " "} ${alias}${c.title && c.title !== alias ? ` (${c.title})` : ""}  ${agents.length ? `agents here: ${agents.join(", ")}` : "no agent keys"}  ${c.relay}`);
       }
     }),
 
@@ -888,9 +898,14 @@ const commands: Record<string, Command> = {
       const s = yield* session();
       const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi save N [dir]"));
       const { messages, state } = yield* s.state();
-      const m = messages.find((x) => x.seq === seq && !ignored(state.trust.get(x.seq))) ?? (yield* die(`no message #${seq}`));
+      const found = yield* s.message(seq, messages);
+      const m = found && !ignored(state.trust.get(seq)) ? found : yield* die(`no message #${seq}`);
       if (!m.imgs?.length) return yield* die(`message #${seq} has no images`);
-      for (const path of saveImages(seq, m.imgs, args[2] ?? ".")) out(path);
+      const imgs = yield* s.ch.fx.images(m.imgs);
+      if (!imgs.length) return yield* die(`message #${seq}'s images are no longer on the relay`);
+      for (const path of saveImages(seq, imgs, args[2] ?? ".")) out(path);
+      const missing = missingImages(seq, m.imgs.length, imgs.length);
+      if (missing) process.stderr.write(`kiwi: ${missing}\n`);
     }),
 
   show: () =>
@@ -899,9 +914,10 @@ const commands: Record<string, Command> = {
       const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi show N [dir]"));
       const { messages, state } = yield* s.state();
       // Forged messages, and ones the owner doesn't allow, are left out everywhere (status counts them).
-      const m = messages.find((x) => x.seq === seq && !ignored(state.trust.get(x.seq))) ?? (yield* die(`no message #${seq}`));
+      const found = yield* s.message(seq, messages);
+      const m = found && !ignored(state.trust.get(seq)) ? found : yield* die(`no message #${seq}`);
       // Images land under the channel's own folder (closing it deletes them), or where asked.
-      const saved = m.imgs?.length ? saveImages(seq, m.imgs, args[2] ?? joinPath(home(), "downloads", s.ch.roomId)) : [];
+      const saved = m.imgs?.length ? saveImages(seq, yield* s.ch.fx.images(m.imgs), args[2] ?? joinPath(home(), "downloads", s.ch.roomId)) : [];
       out(formatShown(m, messages, state, saved, s.me));
       // The rest of its thread, when there's more of it than #N, what it answers and its replies.
       const root = state.threadOf.get(seq) ?? seq;
@@ -917,11 +933,11 @@ const commands: Record<string, Command> = {
   log: () =>
     Effect.gen(function* () {
       const s = yield* session();
-      const { messages, state } = yield* s.state();
+      const { messages: held, state } = yield* s.state();
       const room = opt.room === undefined ? undefined : yield* s.roomId(opt.room, state);
-      const shown = (opt.all ? messages : messages.filter((m) => m.kind !== "event" || m.ev?.op !== "hello")).filter(
-        (m) => !ignored(state.trust.get(m.seq)) && (room === undefined || (m.kind !== "event" && state.roomOf.get(m.seq) === room)),
-      );
+      const visible = (m: Message) =>
+        (opt.all || m.kind !== "event" || m.ev?.op !== "hello") && !ignored(state.trust.get(m.seq)) && (room === undefined || (m.kind !== "event" && state.roomOf.get(m.seq) === room));
+      const shown = (yield* s.earlier(held, Number(opt.n ?? 30), visible)).filter(visible);
       for (const m of shown.slice(-Number(opt.n ?? 30))) out(render(m, state));
     }),
 
@@ -1001,9 +1017,9 @@ const commands: Record<string, Command> = {
       const s = yield* session();
       const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi thread N"));
       const { messages, state } = yield* s.state();
-      if (!messages.some((m) => m.seq === seq)) return yield* die(`no message #${seq}`);
+      if (!(yield* s.message(seq, messages))) return yield* die(`no message #${seq}`);
       const root = state.threadOf.get(seq) ?? seq;
-      for (const m of messages) if (state.threadOf.get(m.seq) === root && !ignored(state.trust.get(m.seq))) out(render(m, state));
+      for (const m of yield* s.threadMessages(root, messages, state)) if (!ignored(state.trust.get(m.seq))) out(render(m, state));
     }),
 
   /** One verb for hearing the channel: streams (tail); --once waits for the next (wait); --now doesn't wait (read); --webhook posts (watch). */
