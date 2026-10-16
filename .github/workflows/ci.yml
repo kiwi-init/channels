@@ -176,14 +176,21 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - run: bunx playwright-core install --with-deps --only-shell chromium
+      - id: playwright
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - run: bunx playwright-core install-deps chromium-headless-shell
+      - if: steps.playwright.outputs.cache-hit != 'true'
+        run: bunx playwright-core install --only-shell chromium
       - run: cd web && bun run build
       - run: bun run smoke:ui
       - if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ui-smoke-failure
-          path: /tmp/kiwi-smoke-failure.png
+          path: /tmp/kiwi-smoke-failure-*.png
           if-no-files-found: ignore
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
