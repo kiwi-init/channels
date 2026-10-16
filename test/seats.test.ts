@@ -138,6 +138,22 @@ test("a session's seats are found in every folder it joined from, never another 
   expect(seatsHeldAnywhere(who).map((b) => b.as)).toEqual(["planner"]);
 });
 
+test("a seat found in another folder is marked as still in use, so no other session takes it for stale", () => {
+  const sibling = join(home, "proj-task");
+  mkdirSync(sibling);
+  const old = Date.now() - 13 * 3600_000;
+  bindDirectory(sibling, { alias: "ch", as: "codex", harness: "codex", session: "x" });
+  updateConfig((c) => {
+    c.bindings![sibling] = seatsAt(c, sibling).map((b) => ({ ...b, at: old, seen: old }));
+  });
+  expect(seatsHeldAnywhere({ harness: "codex", session: "x" }, { claim: false }).map((b) => b.as)).toEqual(["codex"]);
+  expect(seatsAt(loadConfig(), sibling)[0]?.seen).toBe(old);
+  expect(seatsHeldAnywhere({ harness: "codex", session: "x" }).map((b) => b.as)).toEqual(["codex"]);
+  expect(seatsAt(loadConfig(), sibling)[0]?.seen ?? 0).toBeGreaterThan(old);
+  expect(bindingFor(sibling, { who: { harness: "codex", session: "y" } })).toBeNull();
+  expect(seatsHeldAnywhere({ harness: "codex", session: "x" }).map((b) => b.as)).toEqual(["codex"]);
+});
+
 test("a session's seats with no process to check are all marked as still in use", () => {
   const old = Date.now() - 3600_000;
   bindDirectory(dir, { alias: "ch", as: "planner", harness: "codex", session: "t1" });
