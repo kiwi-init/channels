@@ -311,6 +311,13 @@ describe("compressed message payloads", () => {
   test("only the owner sets it", async () => {
     await expect(agent.setCompress(true)).rejects.toThrow("only the channel owner can do that");
   });
+
+  test("two settings written at once both stay", async () => {
+    await Promise.all([s.ownerCh.setCompress(true), s.ownerCh.setCharter({ text: "Docs only.", since: 1 })]);
+    expect(await agent.compress()).toBe(true);
+    expect((await agent.guard())?.charter).toEqual({ text: "Docs only.", since: 1 });
+    await s.ownerCh.setCompress(false);
+  });
 });
 
 describe("unpacking limits", () => {

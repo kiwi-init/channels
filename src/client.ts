@@ -19,6 +19,7 @@ import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Queue from "effect/Queue";
 import * as Schedule from "effect/Schedule";
+import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import { signRequest } from "./auth.ts";
 import { isErrorTag, tagForStatus, type ErrorTag } from "./errors.ts";
@@ -617,6 +618,7 @@ export class Channel {
   private markedTo = 0;
   private marksUnknown = false;
   private packs = false;
+  private readonly settingsWrites = Semaphore.makeUnsafe(1);
 
   constructor(
     public access: ChannelAccess,
@@ -875,7 +877,6 @@ export class Channel {
 
     setCompress: Effect.fn("Channel.setCompress")({ self: this }, function* (this: Channel, on: boolean) {
       yield* this.putSettings({ compress: on });
-      this.packs = on;
     }),
 
     icon: Effect.fn("Channel.icon")({ self: this }, function* (this: Channel) {
@@ -1320,9 +1321,11 @@ export class Channel {
       const key = this.access.keys["0"];
       if (!key) return yield* new MissingKey("missing the channel key");
       const { what: _w, room: _r, pk: _p, sig: _s, ...kept } = (yield* this.settings()) ?? {};
-      const sealed = yield* Effect.promise(async () => seal(key, this.roomId, await sign(this.identity, { ...kept, ...change, what: "channel-settings", room: this.roomId })));
+      const next = { ...kept, ...change };
+      const sealed = yield* Effect.promise(async () => seal(key, this.roomId, await sign(this.identity, { ...next, what: "channel-settings", room: this.roomId })));
       yield* this.request("/settings", { method: "PUT", body: JSON.stringify({ settings: sealed }) });
-    });
+      this.packs = next.compress === true;
+    }).pipe(Semaphore.withPermit(this.settingsWrites));
   }
 
   /** Where one request's code check stands, signing the owner's half if the budget allows. */
