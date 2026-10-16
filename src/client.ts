@@ -1495,7 +1495,7 @@ export class Channel {
       const u = new URL(`/v1/rooms/${this.roomId}/ws`, this.relay);
       u.searchParams.set("since", String(since));
       u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
-      const { ws, closed, ping } = yield* Effect.acquireRelease(
+      const { closed, ping } = yield* Effect.acquireRelease(
         Effect.sync(() => this.connect(u, auth, q, since)),
         ({ ws }) => Effect.sync(() => ws.close(1000, "aborted")),
       );
