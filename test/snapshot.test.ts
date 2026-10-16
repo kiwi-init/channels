@@ -9,6 +9,7 @@ import { newChannelKey, type ChannelAccess } from "../src/crypto.ts";
 import { canonical, generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
 import { MAX_SNAPSHOT_LENGTH, type Event, type Kind, type Message } from "../src/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
+import { OPEN_POLICY } from "../src/relay/policy.ts";
 import { openSnapshot, sealSnapshot } from "../src/snapshot.ts";
 import { fold, toRoster, type ChannelState, type FoldBase, type GuardFloor, type Roster, type RoomsFloor } from "../src/state.ts";
 import { setupChannel } from "./owner.ts";
@@ -357,6 +358,61 @@ describe("the relay keeps one snapshot per channel", () => {
       expect(await put(ok)).toBe(200);
       expect(meta("usage").bytes).toBe(before + 1);
       expect(await runAgent(s.ownerCh.fx.snapshot())).toBeNull();
+    } finally {
+      server.stop(true);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("within the byte cap: a snapshot frees only messages it covers, a message frees the snapshot, and an older one is refused", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-snapshot-cap-"));
+    const cap = 6000;
+    const server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, policy: { ...OPEN_POLICY, bytesPerChannel: cap } });
+    try {
+      const s = await setupChannel(server.url.origin);
+      for (let i = 0; i < 6; i++) await s.ownerCh.send(`m${i} ${"x".repeat(300)}`);
+      const read = <T>(q: string): T => {
+        const d = new Database(join(dir, `${s.roomId}.sqlite`), { readonly: true });
+        const row = d.query(q).get() as T;
+        d.close();
+        return row;
+      };
+      const seqs = () => {
+        const d = new Database(join(dir, `${s.roomId}.sqlite`), { readonly: true });
+        const rows = (d.query("SELECT seq FROM msgs ORDER BY seq").all() as { seq: number }[]).map((r) => r.seq);
+        d.close();
+        return rows;
+      };
+      const usage = () => (JSON.parse(read<{ v: string }>("SELECT v FROM meta WHERE k = 'usage'").v) as { bytes: number }).bytes;
+      const through = (n: number) => read<{ n: number }>(`SELECT COALESCE(SUM(LENGTH(ct)), 0) AS n FROM msgs WHERE seq <= ${n}`).n;
+      const put = async (snapshot: unknown) => {
+        const body = JSON.stringify({ snapshot });
+        const res = await fetch(`${server.url.origin}/v1/rooms/${s.roomId}/snapshot`, {
+          method: "PUT",
+          headers: { "content-type": "application/json", authorization: `Bearer ${await signRequest(s.owner, s.roomId, "PUT", "/snapshot", body)}` },
+          body,
+        });
+        return res.status;
+      };
+      const ok = { e: 0, iv: "A".repeat(16), hash: "h".repeat(43), sig: "s".repeat(86) };
+      const all = seqs();
+      expect(all.length).toBe(6);
+      const room = cap - usage();
+      expect(await put({ ...ok, n: 2, ct: "x".repeat(room + through(2) + 1) })).toBe(413);
+      expect(seqs()).toEqual(all);
+      expect(await put({ ...ok, n: 2, ct: "x".repeat(room + through(2)) })).toBe(200);
+      expect(seqs()).toEqual(all.filter((n) => n > 2));
+      expect(usage()).toBe(cap);
+      expect(await put({ ...ok, n: 1, ct: "x" })).toBe(409);
+      const head = all.at(-1)!;
+      expect(await put({ ...ok, n: head, ct: "x".repeat(cap - 10) })).toBe(200);
+      expect(seqs()).toEqual([]);
+      expect(usage()).toBe(cap - 10);
+      await s.ownerCh.send("one more");
+      expect(seqs()).toEqual([head + 1]);
+      expect(usage()).toBe(through(head + 1));
+      expect(usage()).toBeLessThanOrEqual(cap);
+      expect(await runAgent(s.ownerCh.fx.snapshotAt())).toBeNull();
     } finally {
       server.stop(true);
       rmSync(dir, { recursive: true, force: true });
