@@ -172,7 +172,7 @@ export interface CallInit {
   human?: string | null;
 }
 
-export type Conditional<T> = { readonly fresh: true; readonly etag: string | null; readonly data: T } | { readonly fresh: false };
+type Conditional<T> = { readonly fresh: true; readonly etag: string | null; readonly data: T } | { readonly fresh: false };
 
 export interface RelayApi {
   /** A channel's route, signed when `init.identity` is given. A refusal is a RelayError with the relay's own text. */
@@ -1845,7 +1845,7 @@ function newestRecord(room: string, served: Member): Member {
   return served;
 }
 
-export type Remembered = "members" | "info";
+type Remembered = "members" | "info";
 
 export interface AnswerMemory {
   get(room: string, what: Remembered): { etag: string; data: unknown } | null;
