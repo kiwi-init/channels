@@ -548,8 +548,10 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
       switch (ev._tag) {
         case "Open":
           setConnection("live")
-          void refreshRequests()
-          void refreshRoster()
+          if (ev.kind !== "page") {
+            void refreshRequests()
+            void refreshRoster()
+          }
           void ch.presence({ client: "probe", query: true }).catch(() => {})
           return
         case "Message":

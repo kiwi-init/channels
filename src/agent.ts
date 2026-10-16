@@ -299,9 +299,10 @@ export class AgentSession {
         yield* Effect.addFinalizer(() => Effect.suspend(() => (readTo > saidTo ? this.markRead(readTo) : Effect.void)));
       }
 
-      const opened = ({ mark: on }: Extract<Live, { _tag: "Open" }>) =>
+      const opened = ({ mark: on, kind }: Extract<Live, { _tag: "Open" }>) =>
         Effect.gen({ self: this }, function* () {
           mark = on;
+          if (kind === "page") return;
           // Members may have joined or left while we were disconnected.
           yield* aside(this.members(true));
         });

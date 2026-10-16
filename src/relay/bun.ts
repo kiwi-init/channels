@@ -282,7 +282,7 @@ export function startRelay(
         } finally {
           doneWith(db);
         }
-        if (fx.reply) ws.send(fx.reply);
+        for (const f of [fx.reply ?? []].flat()) ws.send(f);
         apply(ws.data.roomId, fx, ws);
       },
       close(ws) {

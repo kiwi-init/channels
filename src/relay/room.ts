@@ -76,7 +76,7 @@ export interface Effects {
   /** Send to every socket except the sender. */
   others?: string;
   /** Send to the sender only. */
-  reply?: string;
+  reply?: string | string[];
   /** Disconnect every socket authenticated as this key. */
   disconnect?: { pk: string; how: GoneHow };
   /** Delete the room's storage, then disconnect everyone. */
@@ -1025,6 +1025,7 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
       ),
     );
   }
+  if (f.t === "more") return { reply: [frame({ t: "page" }), ...(yield* welcomeFrames(Number(f.since) || 0))] } satisfies Effects;
   if (f.t !== "send") return { reply: frame({ t: "err", error: "unknown frame" }) } satisfies Effects;
   if (!allow(`${db.roomId}:${sender}`, MESSAGES_PER_MINUTE)) return { reply: frame({ t: "err", error: "too many messages; wait a minute", id: f.id }) } satisfies Effects;
   const send = f;

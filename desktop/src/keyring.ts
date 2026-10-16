@@ -226,7 +226,7 @@ export class Keyring implements ChannelOps {
     switch (ev._tag) {
       case "Open":
         f.presence = ev.presence;
-        return { _tag: "Open" };
+        return { _tag: "Open", kind: ev.kind };
       case "Message": {
         const key = ch.access.keys[String(ch.access.epoch)];
         const row: CachedRow | null = key && Number.isSafeInteger(ev.message.seq) && ev.message.seq > 0 ? await packRow(key, ch.roomId, ch.access.epoch, ev.message).catch(() => null) : null;

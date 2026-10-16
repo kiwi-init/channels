@@ -269,6 +269,8 @@ export interface StreamOptions {
   onRequest?: () => void;
 }
 
+export type OpenKind = "first" | "page" | "reconnect";
+
 /** What a member says about itself in presence; the rest (version, name, time) is filled in. */
 export type PresenceFields = Omit<Presence, "v" | "type" | "from" | "ts">;
 
@@ -284,6 +286,7 @@ export type Live =
       /** Say on this socket that this member has read up to `seq`; false once it has closed. */
       readonly mark: (seq: number) => boolean;
       readonly outage: number | null;
+      readonly kind: OpenKind;
     }
   /** Caught up: the relay's head when this connection's replay ended. */
   | { readonly _tag: "Ready"; readonly head: number }
@@ -318,8 +321,19 @@ const backoff = Schedule.min([Schedule.exponential("500 millis"), Schedule.space
 const outlasted = ({ attempt, elapsed, elapsedSincePrevious }: Schedule.InputMetadata<unknown>, quietMs: number) =>
   elapsed >= quietMs && (attempt === 1 || elapsed - elapsedSincePrevious < quietMs);
 
+interface Resume {
+  seq: number;
+  next: OpenKind;
+}
+
 /** A frame from the socket, or the socket opening (with a way to send presence on it). */
-type Incoming = ServerFrame | { t: "pong" } | { t: "open"; presence: (p: PresenceFields) => Effect.Effect<void>; mark: (seq: number) => boolean };
+type Incoming =
+  | ServerFrame
+  | { t: "pong" }
+  | { t: "open"; presence: (p: PresenceFields) => Effect.Effect<void>; mark: (seq: number) => boolean; kind: OpenKind }
+  | { t: "more"; ask: (since: number) => void };
+
+const STILL_IN_EVERY = 5;
 
 /** A ping now and then keeps proxies from closing a quiet socket. */
 const keepAlive = (ws: WebSocket) =>
@@ -614,6 +628,7 @@ export class Channel {
   /** How far this member has told the relay it read, and whether the relay knows read marks at all. */
   private markedTo = 0;
   private marksUnknown = false;
+  private moreUnknown = false;
 
   constructor(
     public access: ChannelAccess,
@@ -1368,7 +1383,7 @@ export class Channel {
   /** live(): connections one after another, each from where the last left off, fed to one queue. */
   private live(since: number, { quietMs = QUIET_DROP_MS, presence = true }: LiveOptions): Stream.Stream<Live, ChannelGone, Relay> {
     // The newest seq handed on: each (re)connect asks for what's after it, so nothing is lost across drops.
-    const at = { seq: since };
+    const at: Resume = { seq: since, next: "first" };
     return Stream.callback<Live, ChannelGone, Relay>((out) =>
       Stream.suspend(() => this.session(at, quietMs, presence)).pipe(
         // A drop: connect again on the schedule. A connection that opens starts the schedule over.
@@ -1396,7 +1411,7 @@ export class Channel {
         meta.input instanceof Dropped && outlasted(meta, quietMs) ? Queue.offer(out, { _tag: "Down", after: meta.elapsed, code: meta.input.code, reason: meta.input.reason }) : Effect.void,
       ),
       // Upgrade failures (removed, closed) look like plain drops; check before retrying.
-      Schedule.tap(() => this.stillIn()),
+      Schedule.tap(({ attempt }) => (attempt === 1 || attempt % STILL_IN_EVERY === 0 ? this.stillIn() : Effect.void)),
     );
   }
 
@@ -1412,8 +1427,8 @@ export class Channel {
    * One connection, read: Open, then what the relay sends, strictly in order, until it closes. A
    * frame whose reading fails is reported and dropped: one bad payload mustn't stop the rest.
    */
-  private session(at: { seq: number }, quietMs: number, presence: boolean): Stream.Stream<Live, Dropped | ChannelGone, Relay> {
-    return Stream.callback<Incoming, Dropped | ChannelGone, Relay>((q) => this.socket(at.seq, q)).pipe(
+  private session(at: Resume, quietMs: number, presence: boolean): Stream.Stream<Live, Dropped | ChannelGone, Relay> {
+    return Stream.callback<Incoming, Dropped | ChannelGone, Relay>((q) => this.socket(at, q)).pipe(
       Stream.mapEffect((f) =>
         this.read(f, at, quietMs, presence).pipe(Effect.catchCause((cause) => Effect.succeed<Live>({ _tag: "Skipped", frame: f.t, error: Cause.squash(cause) }))),
       ),
@@ -1422,19 +1437,23 @@ export class Channel {
   }
 
   /** A socket for what's after `since`: its frames go to `q` as they arrive, then how it closed. Closing the scope closes it. */
-  private socket(since: number, q: Queue.Queue<Incoming, Dropped | ChannelGone | Cause.Done>) {
+  private socket(at: Resume, q: Queue.Queue<Incoming, Dropped | ChannelGone | Cause.Done>) {
     return Effect.gen({ self: this }, function* () {
       const auth = yield* Effect.promise(() => signRequest(this.identity, this.roomId, "GET", "/ws"));
       const u = new URL(`/v1/rooms/${this.roomId}/ws`, this.relay);
-      u.searchParams.set("since", String(since));
+      u.searchParams.set("since", String(at.seq));
       u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
       const { ws, closed } = yield* Effect.acquireRelease(
-        Effect.sync(() => this.connect(u, auth, q)),
+        Effect.sync(() => this.connect(u, auth, q, at)),
         ({ ws }) => Effect.sync(() => ws.close(1000, "aborted")),
       );
       yield* Effect.forkScoped(keepAlive(ws));
       const { code, reason } = yield* Effect.promise(() => closed);
-      if (code === 4000) return yield* Queue.end(q);
+      if (code === 4000) {
+        at.next = "page";
+        return yield* Queue.end(q);
+      }
+      if (at.next === "page") at.next = "reconnect";
       if (code === CLOSE_REMOVED) return yield* Queue.fail(q, new ChannelGone("removed", goneHow(reason)));
       if (code === CLOSE_CLOSED) return yield* Queue.fail(q, new ChannelGone("closed"));
       return yield* Queue.fail(q, new Dropped({ code, reason }));
@@ -1442,13 +1461,25 @@ export class Channel {
   }
 
   /** Open the socket with every handler set at once, before any event can arrive. */
-  private connect(u: URL, auth: string, q: Queue.Queue<Incoming, Dropped | ChannelGone | Cause.Done>) {
+  private connect(u: URL, auth: string, q: Queue.Queue<Incoming, Dropped | ChannelGone | Cause.Done>, at: Resume) {
     const ws = new WebSocket(u, [WS_PROTOCOL, auth]);
     const closed = new Promise<{ code: number; reason: string }>((resolve) => {
       ws.onclose = (ev) => resolve({ code: ev.code, reason: ev.reason });
     });
     ws.onerror = () => {};
-    ws.onopen = () => void Queue.offerUnsafe(q, { t: "open", presence: this.presenceOn(ws), mark: markOn(ws) });
+    ws.onopen = () => {
+      const kind = at.next;
+      at.next = "reconnect";
+      Queue.offerUnsafe(q, { t: "open", presence: this.presenceOn(ws), mark: markOn(ws), kind });
+    };
+    let paging = false;
+    let inPage = false;
+    let asked = false;
+    const ask = (since: number) => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      asked = true;
+      ws.send(JSON.stringify({ t: "more", since }));
+    };
     ws.onmessage = (ev) => {
       let f: ServerFrame | { t: "pong" };
       try {
@@ -1456,9 +1487,19 @@ export class Channel {
       } catch {
         return; // not a frame: ignore it, keep listening
       }
+      if (f.t === "page") return void (inPage = true);
+      if (f.t === "msg" && paging && !inPage) return;
+      if (f.t === "err" && asked && f.error === "unknown frame") {
+        this.moreUnknown = true;
+        return void ws.close(4000, "more");
+      }
       Queue.offerUnsafe(q, f);
-      // The relay replays at most one page on connect; reconnect for the rest.
-      if (f.t === "ready" && f.more) ws.close(4000, "more");
+      if (f.t !== "ready") return;
+      paging = f.more;
+      inPage = false;
+      asked = false;
+      if (f.more && this.moreUnknown) ws.close(4000, "more");
+      else if (f.more) Queue.offerUnsafe(q, { t: "more", ask });
     };
     return { ws, closed };
   }
@@ -1476,15 +1517,18 @@ export class Channel {
   }
 
   /** What one frame means to a listener (null: nothing, like a message already handed on). */
-  private read(f: Incoming, at: { seq: number }, quietMs: number, presence: boolean): Effect.Effect<Live | null, never, Relay> {
+  private read(f: Incoming, at: Resume, quietMs: number, presence: boolean): Effect.Effect<Live | null, never, Relay> {
     return Effect.gen({ self: this }, function* () {
       switch (f.t) {
         case "open": {
           // Back after an outage the listener was told about: say for how long. The schedule's metadata is that outage's.
           const { attempt, elapsed, start } = yield* Schedule.CurrentMetadata;
           const now = yield* Clock.currentTimeMillis;
-          return { _tag: "Open", presence: f.presence, mark: f.mark, outage: attempt > 0 && elapsed >= quietMs ? now - start : null } satisfies Live;
+          return { _tag: "Open", presence: f.presence, mark: f.mark, outage: attempt > 0 && elapsed >= quietMs ? now - start : null, kind: f.kind } satisfies Live;
         }
+        case "more":
+          f.ask(at.seq);
+          return null;
         case "msg": {
           if (f.seq <= at.seq) return null;
           const m = yield* this.fx.decrypt(f);

@@ -3,7 +3,7 @@
 // so web/ can type against it without touching this process.
 
 import type { CachedRow } from "../../src/cache-row.ts";
-import type { Channel, PresenceFields } from "../../src/client.ts";
+import type { Channel, OpenKind, PresenceFields } from "../../src/client.ts";
 import type { Message, Presence, ReadMark } from "../../src/protocol.ts";
 import type { Wire } from "./wire.ts";
 
@@ -97,7 +97,7 @@ export type CallResult<K extends ChannelCallName> = Awaited<ReturnType<ChannelCa
 export type JoinCheck = { status: "pending"; code: string | null } | { status: "denied" } | { status: "in"; channel: ChannelView };
 
 export type FollowEvent =
-  | { _tag: "Open" }
+  | { _tag: "Open"; kind?: OpenKind }
   | { _tag: "Message"; message: Message; row: CachedRow | null }
   | { _tag: "Presence"; presence: Presence & { sigOk: boolean } }
   | { _tag: "Read"; reads: ReadMark[]; snapshot: boolean }
