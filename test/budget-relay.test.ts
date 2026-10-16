@@ -116,7 +116,7 @@ describe("relay storage budget, per operation on a warm room", () => {
     expect(head).toBe(2);
     const mark = (pk: string) => {
       const fx = runRoomSync(relayCtx, new RoomDb(sql, roomId), onClientFrame(JSON.stringify({ t: "read", seq: n }), pk));
-      expect(fx.broadcast?.[0]).toContain('"t":"read"');
+      expect(fx.readers?.[0]).toContain('"t":"read"');
     };
     for (const pk of members) mark(pk);
     send(sql, members[0]!);

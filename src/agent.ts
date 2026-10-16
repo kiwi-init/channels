@@ -11,6 +11,7 @@
 // stops the presence beacon with it.
 
 import * as Cause from "effect/Cause";
+import * as Context from "effect/Context";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -109,6 +110,26 @@ export const holding = (alias: string, as: string): Effect.Effect<void, never, S
     );
   });
 
+interface Seen {
+  messages: Message[];
+  roster: Roster;
+  rooms: RoomsFloor | null | undefined;
+  guard: GuardFloor | null | undefined;
+  view: { messages: Message[]; state: ChannelState };
+}
+
+interface Look {
+  fetched: WeakSet<AgentSession>;
+  seen: WeakMap<AgentSession, Seen>;
+}
+
+const Look = Context.Reference<Look | null>("kiwi/AgentSession/Look", { defaultValue: () => null });
+
+export const oneLook = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
+  Effect.flatMap(Effect.service(Look), (look) => (look ? effect : Effect.provideService(effect, Look, { fetched: new WeakSet(), seen: new WeakMap() })));
+
+const lastSeq = (log: readonly Message[]) => log.at(-1)?.seq ?? 0;
+
 /** A floor from the channel's settings; one that can't be read is no floor. */
 const orNone = <A, E, R>(e: Effect.Effect<A | null, E, R>) => Effect.catchCause(e, () => Effect.succeed(null));
 
@@ -132,6 +153,9 @@ export class AgentSession {
   protected roomsFloor: RoomsFloor | null | undefined;
   protected guardFloor: GuardFloor | null | undefined;
   private roomsCheckedAt = 0;
+  private log: Message[] | null = null;
+  private saved = 0;
+  private owed = 0;
 
   /** openSession makes these, with the keys loaded. */
   constructor(
@@ -141,7 +165,11 @@ export class AgentSession {
     /** Keeps the channel's keys after a rotation. */
     persist: (a: ChannelAccess) => void,
   ) {
-    this.ch = new Channel(cfg, cfg.relay, identity, persist);
+    this.ch = new Channel(cfg, cfg.relay, identity, persist, { keepInfo: true });
+    this.ch.onSent = (seq, m) => {
+      if (m && this.log && seq === lastSeq(this.log) + 1) this.log = [...this.log, m];
+      else this.owed = Math.max(this.owed, seq);
+    };
   }
 
   /** openSession, as a Promise: for callers outside Effect. */
@@ -169,18 +197,37 @@ export class AgentSession {
   /** The full log: cached messages plus anything new from the relay. */
   readonly sync = Effect.fn("AgentSession.sync")({ self: this }, function* (this: AgentSession) {
     const cache = yield* Cache;
-    const cached = yield* cache.read(this.cfg.roomId);
-    const last = cached.at(-1)?.seq ?? 0;
-    const { messages } = yield* this.ch.fx.history(last);
-    const fresh = messages.filter((m) => m.seq > last);
-    yield* cache.append(this.cfg.roomId, fresh);
-    return [...cached, ...fresh];
+    if (!this.log) {
+      const cached = yield* cache.read(this.cfg.roomId);
+      this.saved = Math.max(this.saved, lastSeq(cached));
+      this.log ??= cached;
+    }
+    const look = yield* Look;
+    if (!look?.fetched.has(this) || lastSeq(this.log) < this.owed) {
+      const { messages } = yield* this.ch.fx.history(lastSeq(this.log));
+      const last = lastSeq(this.log);
+      const fresh = messages.filter((m) => m.seq > last);
+      if (fresh.length) this.log = [...this.log, ...fresh];
+      look?.fetched.add(this);
+    }
+    const log = this.log;
+    const unsaved = log.filter((m) => m.seq > this.saved);
+    if (unsaved.length) {
+      yield* cache.append(this.cfg.roomId, unsaved);
+      this.saved = Math.max(this.saved, lastSeq(unsaved));
+    }
+    return log;
   });
 
   readonly state = Effect.fn("AgentSession.state")({ self: this }, function* (this: AgentSession) {
     yield* this.chores();
     const [messages, roster] = yield* Effect.all([this.sync(), this.members()], { concurrency: "unbounded" });
-    return { messages, state: yield* this.foldState(messages, roster) };
+    const look = yield* Look;
+    const seen = look?.seen.get(this);
+    if (seen && seen.messages === messages && seen.roster === roster && seen.rooms === this.roomsFloor && seen.guard === this.guardFloor) return seen.view;
+    const view = { messages, state: yield* this.foldState(messages, roster) };
+    look?.seen.set(this, { messages, roster, rooms: this.roomsFloor, guard: this.guardFloor, view });
+    return view;
   });
 
   /**
@@ -196,6 +243,7 @@ export class AgentSession {
       const unknown = [...state.rejected].some(([seq, why]) => seq > this.roomsCheckedAt && why.startsWith("no room "));
       if (unknown) {
         this.roomsCheckedAt = state.head;
+        this.ch.forgetInfo();
         this.roomsFloor = yield* orNone(this.ch.fx.rooms());
         state = fold(messages, roster, Date.now(), undefined, this.roomsFloor, this.guardFloor);
       }
@@ -328,7 +376,7 @@ export class AgentSession {
         }
       };
       if (opts.onNotice) yield* aside(this.notices(opts.onNotice));
-      yield* eachLive(this.ch.fx.live(since, { presence: false }), handle, status);
+      yield* eachLive(this.ch.fx.live(since, { presence: false, reads: false }), handle, status);
     }).pipe(Effect.scoped);
   }
 
@@ -419,7 +467,7 @@ export class AgentSession {
         const { readAt, wake, ...rest } = p;
         found.set(p.from, { ...rest, ...(typeof p.role === "string" ? { role } : {}), ...(typeof readAt === "number" && Number.isFinite(readAt) ? { readAt } : {}), ...(isWakeVia(wake) ? { wake } : {}) });
       });
-    const probing = eachLive(this.ch.fx.live(head, { presence: true }), handle, () => Effect.void);
+    const probing = eachLive(this.ch.fx.live(head, { presence: true, reads: false }), handle, () => Effect.void);
     const [mine] = yield* Effect.all([Effect.promise(() => daemonSeat(this.alias, this.me)), Effect.raceFirst(probing, Effect.raceFirst(Deferred.await(quiet), Effect.sleep(waitMs))).pipe(Effect.ignoreCause, Effect.scoped)], { concurrency: "unbounded" });
     const myWake = mine?.wake.on ? viaOf(mine.wake.path) : null;
     if (mine) found.set(this.me, { v: PROTOCOL_VERSION, type: "presence", from: this.me, client: "daemon", ts: Date.now(), ...(mine.read ? { readAt: mine.read.at } : {}), ...(myWake ? { wake: myWake } : {}) });
@@ -464,7 +512,7 @@ export class AgentSession {
     const seq = yield* this.ch.fx.send(body, { ...opts, to, room, ...(inThread ? { task: undefined, dm: undefined } : {}) });
     if (opts.kind !== "event" && opts.re?.length) yield* this.ack(opts.re);
     return seq;
-  });
+  }, oneLook);
 
   /**
    * Strict coordinator-only: refuse here a message from an agent (not the coordinator) to a person.
@@ -543,7 +591,7 @@ export class AgentSession {
         // Linger briefly so several quick answers come back together.
         if (replies.length === 1) yield* Effect.forkScoped(Effect.andThen(Effect.sleep(600), Deferred.succeed(answered, undefined)));
       });
-    const listening = eachLive(this.ch.fx.live(since, { presence: false }), handle, () => Effect.void);
+    const listening = eachLive(this.ch.fx.live(since, { presence: false, reads: false }), handle, () => Effect.void);
     yield* Effect.raceFirst(listening, Effect.raceFirst(Deferred.await(answered), Effect.sleep(waitSec * 1000))).pipe(Effect.scoped);
     yield* (yield* Cursor).markSeen(this.alias, this.me, replies.map((r) => r.seq));
     return replies;
@@ -560,7 +608,7 @@ export class AgentSession {
     const sent = yield* this.ch.fx.send(body, { to, kind, re: [seq], imgs, room: state.roomOf.get(seq) ?? orig.room });
     yield* this.ack([seq]);
     return sent;
-  });
+  }, oneLook);
 
   /** React to message #seq with an emoji, or take your reaction back (null). */
   readonly react = Effect.fn("AgentSession.react")({ self: this }, function* (this: AgentSession, seq: number, emoji: string | null) {
@@ -568,7 +616,7 @@ export class AgentSession {
     const { state } = yield* this.state();
     if (!state.placeOf.has(seq) || ignored(state.trust.get(seq))) return yield* new Rejected(`no message #${seq} to react to`);
     return yield* this.confirm(yield* this.event({ op: "react", seq, emoji }, "reaction"));
-  });
+  }, oneLook);
 
   /**
    * Coordinator-only: an agent answering (a reply, or taking on a task made from a message) tells the people
@@ -607,7 +655,7 @@ export class AgentSession {
     if (!to.length) return yield* new Rejected("there's no person in this channel to escalate to");
     const seq = yield* this.send(body, { to, kind: "blocking", esc: true, ...(re !== undefined ? { re: [re] } : {}) });
     return { seq, to };
-  });
+  }, oneLook);
 
   /**
    * This person's own colour (null clears it), signed by them. The fold refuses a colour someone
@@ -618,7 +666,7 @@ export class AgentSession {
     const ev: Event = { op: "color.set", member, color };
     yield* this.mayI({ kind: "event", ev });
     return yield* this.confirm(yield* this.ch.fx.send(color ? `${member}'s colour is ${color}` : `cleared ${member}'s colour`, { kind: "event", ev }));
-  });
+  }, oneLook);
 
   // ---------- events ----------
 
@@ -660,7 +708,7 @@ export class AgentSession {
       [...(owner ? [owner] : []), ...(review && review !== "*" ? [review] : [])],
       opts.re,
     );
-  });
+  }, oneLook);
 
   /** "any" (or "*") is anyone but the task's owner; otherwise a current member, by name or role:x. */
   private reviewer(state: ChannelState, who: string): Effect.Effect<string, Rejected> {
@@ -681,7 +729,7 @@ export class AgentSession {
     const after = yield* this.confirm(seq);
     if (t.source !== undefined) yield* this.ack([t.source]);
     return after;
-  });
+  }, oneLook);
 
   readonly taskUpdate = Effect.fn("AgentSession.taskUpdate")({ self: this }, function* (
     this: AgentSession,
@@ -730,7 +778,7 @@ export class AgentSession {
     // Starting a task made from someone's message answers it.
     if (change.state === "doing" && t.source !== undefined) yield* this.ack([t.source]);
     return after;
-  });
+  }, oneLook);
 
   /** Give a task to someone else, with a note on where it stands and what's next. */
   readonly taskHandoff = Effect.fn("AgentSession.taskHandoff")({ self: this }, function* (this: AgentSession, id: number, to: string, next: string | undefined) {
@@ -739,7 +787,7 @@ export class AgentSession {
     if (!target || !state.members.get(target)?.active) return yield* new Rejected(`no member named ${to}`);
     if (target === this.me) return yield* new Rejected("hand it to someone else");
     return yield* this.taskUpdate(id, { owner: target, ...(next ? { note: next } : {}), ...(state.tasks.get(id)?.state === "doing" ? { state: "todo" as const } : {}) });
-  });
+  }, oneLook);
 
   /**
    * Say what this agent is and has (see card.ts): what's detected here, keeping what was said by hand
@@ -756,7 +804,7 @@ export class AgentSession {
     if (!me || isPerson(me) || !canPost(me.scopes) || state.hold || sameCard(me.card, card)) return { sent: false, card };
     yield* this.event({ op: "card", ...card }, `card: ${cardLine(card)}`);
     return { sent: true, card };
-  });
+  }, oneLook);
 
   readonly setFact = Effect.fn("AgentSession.setFact")({ self: this }, function* (this: AgentSession, key: string, value: string, ttlSec?: number) {
     return yield* this.event({ op: "fact.set", key, value, ...(ttlSec ? { ttl: ttlSec } : {}) }, `${key} = ${value}`);
