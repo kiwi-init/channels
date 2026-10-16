@@ -1,23 +1,23 @@
 # AGENTS.md
 
-## Código
+## Code
 
-- Comentários no código são proibidos, inclusive diretivas de ferramenta (`@ts-expect-error`, `@ts-ignore`, `oxlint-disable`, `eslint-disable`, `type: ignore`, `noqa`, `pragma` etc.). Única exceção: docstring Python estritamente necessária em tempo de execução, registrada na lista `ALLOWED_DOCSTRINGS` de `scripts/ci/no_comments.py` (hoje vazia) e justificada no PR; fora dela, o guard `repo / comments` reprova. O contexto vai no commit e no PR.
-- Tudo estritamente tipado. Nada de `any`, de `any` implícito ou de código sem tipo, em TypeScript e em Python. Em Python, toda função tem tipos de parâmetro e de retorno, sem `Any`.
-- Front: lint com oxlint e formatação com oxfmt (sem Biome nem Prettier).
-- Trabalho de UI segue o `DESIGN.md` (tema, cores, raio, tipografia, movimento).
+- Comments in code are forbidden, including tool directives (`@ts-expect-error`, `@ts-ignore`, `oxlint-disable`, `eslint-disable`, `type: ignore`, `noqa`, `pragma` etc.). Only exception: a Python docstring strictly required at runtime, listed in `ALLOWED_DOCSTRINGS` in `scripts/ci/no_comments.py` (empty today) and justified in the PR; anything else fails the `repo / comments` guard. Context goes in the commit and the PR.
+- Everything strictly typed. No `any`, no implicit `any`, no untyped code, in TypeScript and in Python. In Python, every function has parameter and return types, with no `Any`.
+- Front end: lint with oxlint and format with oxfmt (no Biome, no Prettier).
+- UI work follows `DESIGN.md` (theme, colors, radius, typography, motion).
 
-## Branches e CI
+## Branches and CI
 
-- Uma issue = uma branch = um PR.
-- Lockfile em conflito não se resolve à mão: aceite o remoto e regenere.
-- Commits pequenos. Antes de todo push: `git pull --rebase`, rodar as checagens da área tocada e depois `git push` normal.
-- Proibido: force-push manual, `--no-verify`, `[skip ci]` e merge com o check `ci-ok` vermelho.
-- Processo longo (CI, checagens, testes, build, servidor, espera por run de CI) roda destacado, em background, para que a interrupção do turno não o mate: dispare pelo modo background da ferramenta do agente ou, no shell, com `nohup <comando> > arquivo.log 2>&1 &` (ou `setsid`), nunca só com `&`, que não desacopla o processo do shell; mande a saída para um arquivo de log e acompanhe pelo log ou pelo aviso de término, sem bloquear o turno esperando.
-- Toda mudança chega com o seu gate de CI: um job próprio no `ci.yml`, nomeado `<área> / <checagem>` (ex.: `web / lint`) e incluído no `needs` do `ci-ok`.
+- One issue = one branch = one PR.
+- A conflicted lockfile is never resolved by hand: take the remote one and regenerate it.
+- Small commits. Before every push: `git pull --rebase`, run the checks for the area you touched, then a plain `git push`.
+- Forbidden: manual force-push, `--no-verify`, `[skip ci]`, and merging with the `ci-ok` check red.
+- Long-running processes (CI, checks, tests, builds, servers, waiting on a CI run) run detached, in background, so a turn interruption does not kill them: start them with the agent tool's background mode or, in the shell, with `nohup <command> > file.log 2>&1 &` (or `setsid`), never with a bare `&`, which does not detach the process from the shell; send output to a log file and follow the log or the completion notice instead of blocking the turn waiting.
+- Every change ships with its CI gate: its own job in `ci.yml`, named `<area> / <check>` (e.g. `web / lint`) and listed in the `needs` of `ci-ok`.
 
-## Autoria
+## Authorship
 
-- Só agentes commitam; não há commit humano. Todo agente age em nome de uma pessoa e assina como `{model_slug} on behalf of {human_name}`:
-  - commits: trailer `Agent: {model_slug} on behalf of {human_name}` obrigatório em todo commit (a CI rejeita commit sem ele);
-  - comentários em PR: primeira linha de todo comentário, review, comentário de review (inline) e resposta em thread, e também da descrição do PR.
+- Only agents commit; there are no human commits. Every agent acts on behalf of a person and signs as `{model_slug} on behalf of {human_name}`:
+  - commits: an `Agent: {model_slug} on behalf of {human_name}` trailer is required on every commit (CI rejects commits without it);
+  - PR comments: the first line of every comment, review, inline review comment and thread reply, and also of the PR description.
