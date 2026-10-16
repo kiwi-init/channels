@@ -27,9 +27,9 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schedule from "effect/Schedule";
 import type * as Scope from "effect/Scope";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, writeSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { accessSync, closeSync, constants as fsConstants, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { dirname, isAbsolute, join } from "node:path";
 import { openSession, type AgentSession } from "./agent.ts";
 import { Cursor, home, Keystore, loadConfig, type ChannelConfig } from "./config.ts";
 import { ChannelGone } from "./client.ts";
@@ -39,6 +39,8 @@ import { humanOf } from "./state.ts";
 import { asOption, channelOption, wakePath, wakeWords } from "./wake.ts";
 import { daemonListeners, ensureDaemon, holdListener, wakeOn, type DaemonListener, type HeldListener } from "./daemon.ts";
 import { kimiCodePid } from "./ancestry.ts";
+import { binDir } from "./shell-path.ts";
+import { VERSION } from "./version.ts";
 import { bindDirectory as bindSeat, bindingFor as seatFor, here, kimiHookHere, sameSeat, seatsFor as heldSeats, seatsHeldAnywhere, seatsNear, type Binding, type Here, type Listener, type SeatOptions } from "./seats.ts";
 
 /** Marks our entries so install/uninstall can find them. Current clients only. */
@@ -229,11 +231,92 @@ function settingsPath(): string {
 
 /** How to invoke this very `kiwi`, wherever and however it's installed. */
 function selfCommand(): string {
-  const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
   const compiled = !/\.(ts|js)$/.test(Bun.main);
   // Prefer the PATH entry for bun (e.g. /opt/homebrew/bin/bun) over its versioned real path, which upgrades remove.
   const bun = Bun.which("bun") ?? process.execPath;
-  return compiled ? q(process.execPath) : `${q(bun)} ${q(Bun.main)}`;
+  return compiled ? shellQuote(process.execPath) : `${shellQuote(bun)} ${shellQuote(Bun.main)}`;
+}
+
+function shellQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+const KIWI_EXE = process.platform === "win32" ? "kiwi.exe" : "kiwi";
+
+function installedBin(): string {
+  return join(homedir(), ".kiwi", "bin", KIWI_EXE);
+}
+
+export const IDENTITY_ARG = "__kiwi-identity";
+
+function selfFile(): string {
+  return /\.(ts|js)$/.test(Bun.main) ? Bun.main : process.execPath;
+}
+
+export function selfIdentity(): string | null {
+  try {
+    const file = realpathSync(selfFile());
+    const s = statSync(file);
+    return `${VERSION} ${file} ${s.dev}:${s.ino} ${s.size} ${s.mtimeMs}`;
+  } catch {
+    return null;
+  }
+}
+
+function selfRunnable(): boolean {
+  if (!/\.(ts|js)$/.test(Bun.main)) return runnable(process.execPath);
+  try {
+    return statSync(Bun.main).isFile() && runnable(Bun.which("bun") ?? process.execPath);
+  } catch {
+    return false;
+  }
+}
+
+function installCandidates(): string[] {
+  const found = [join(binDir(), KIWI_EXE), join(dirname(process.execPath), KIWI_EXE), Bun.which("kiwi")];
+  return [...new Set(found.filter((p): p is string => typeof p === "string" && isAbsolute(p)))];
+}
+
+const PROBE_ENV = ["PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "TMPDIR", "TEMP", "TMP", "KIWI_HOME", "KIWI_INSTALL", "SystemRoot", "USERPROFILE", "PATHEXT", "COMSPEC"];
+export const PROBE_MS = 5_000;
+export const PROBE_TTL_MS = 30_000;
+const probed = new Map<string, { id: string | null; at: number }>();
+
+function probeIdentity(program: string): string | null {
+  const env: Record<string, string> = {};
+  for (const k of PROBE_ENV) {
+    const v = process.env[k];
+    if (v !== undefined) env[k] = v;
+  }
+  let dir: string | null = null;
+  let fd: number | null = null;
+  try {
+    dir = mkdtempSync(join(tmpdir(), "kiwi-probe-"));
+    const out = join(dir, "identity");
+    fd = openSync(out, "w");
+    const r = Bun.spawnSync([program, IDENTITY_ARG], { cwd: dir, env, stdin: "ignore", stdout: fd, stderr: "ignore", timeout: PROBE_MS, killSignal: "SIGKILL" });
+    return r.exitCode === 0 ? readFileSync(out, "utf8").trim() || null : null;
+  } catch {
+    return null;
+  } finally {
+    if (fd !== null) closeSync(fd);
+    if (dir !== null) rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function identityOf(program: string): string | null {
+  let key: string;
+  try {
+    const s = statSync(program);
+    key = `${program}\u0000${s.dev}:${s.ino}\u0000${s.size}\u0000${s.mtimeMs}`;
+  } catch {
+    return null;
+  }
+  const known = probed.get(key);
+  if (known && Date.now() - known.at < PROBE_TTL_MS) return known.id;
+  const id = probeIdentity(program);
+  probed.set(key, { id, at: Date.now() });
+  return id;
 }
 
 type HookEntry = { matcher?: string; hooks: { type: "command"; command: string; timeout?: number; async?: boolean; asyncRewake?: boolean }[] };
@@ -306,8 +389,27 @@ export function uninstallHooks(): string {
   return settingsPath();
 }
 
+function runnable(path: string): boolean {
+  try {
+    if (!statSync(path).isFile()) return false;
+    accessSync(path, fsConstants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function isOurHook(command: unknown, arg: string): boolean {
+  if (typeof command !== "string") return false;
+  if (command === hookCommand(arg)) return selfRunnable();
+  const named = installCandidates().find((p) => command === `${shellQuote(p)} hook ${arg} ${MARK}`);
+  if (named === undefined || !runnable(named)) return false;
+  const self = selfIdentity();
+  return self !== null && identityOf(named) === self;
+}
+
 function hasHook(s: Settings, event: string, arg: string): boolean {
-  return !!s.hooks?.[event]?.some((x) => x.hooks.some((h) => h.command === hookCommand(arg) && (arg !== LISTEN || h.asyncRewake === true)));
+  return !!s.hooks?.[event]?.some((x) => x.hooks.some((h) => isOurHook(h.command, arg) && (arg !== LISTEN || h.asyncRewake === true)));
 }
 
 /** Ours are all there, and so is the listener when this Claude Code can run it. */
@@ -404,7 +506,6 @@ export function autoInstallHooks(): string | null {
   // Grok Build can inherit CLAUDECODE; do not write ~/.claude/settings.json from it.
   if (process.env.KIWI_NO_HOOKS || here().harness !== "claude" || loadConfig().claudeHooks === "off") return null;
   try {
-    // A different invocation path still counts as installed only when the command string matches this binary.
     return hooksInstalled() ? null : installHooks();
   } catch {
     return null;
@@ -525,7 +626,7 @@ function stripClaudeShaped(path: string): void {
 function claudeShapedInstalled(path: string, events: Record<string, string>): boolean {
   if (!existsSync(path)) return false;
   const s = readJson(path) as Settings;
-  return Object.entries(events).every(([event, arg]) => s.hooks?.[event]?.some((x) => x.hooks.some((h) => h.command === hookCommand(arg))));
+  return Object.entries(events).every(([event, arg]) => s.hooks?.[event]?.some((x) => x.hooks.some((h) => isOurHook(h.command, arg))));
 }
 
 type CursorHook = { command?: string; timeout?: number; loop_limit?: number | null };
@@ -562,7 +663,7 @@ function stripCursorFile(path: string): void {
 function cursorFileInstalled(path: string): boolean {
   if (!existsSync(path)) return false;
   const s = readJson(path) as CursorFile;
-  const has = (event: string, arg: string) => (s.hooks?.[event] ?? []).some((h) => h.command === hookCommand(arg));
+  const has = (event: string, arg: string) => (s.hooks?.[event] ?? []).some((h) => isOurHook(h.command, arg));
   return has("sessionStart", "session-start") && has("stop", "stop");
 }
 
@@ -646,7 +747,7 @@ function editKimiConfig(path: string, add: boolean): void {
 function kimiConfigInstalled(path: string): boolean {
   if (!existsSync(path)) return false;
   const e = kimiEntry();
-  return kimiHooks(parseToml(readFileSync(path, "utf8"))).some((h) => isRecord(h) && h.event === e.event && h.command === e.command);
+  return kimiHooks(parseToml(readFileSync(path, "utf8"))).some((h) => isRecord(h) && h.event === e.event && isOurHook(h.command, KIMI_STOP));
 }
 
 /** Install one harness's user-level file. Creates the file even when the harness isn't detected. */
@@ -772,7 +873,11 @@ export interface BackgroundTask {
 
 export function backgroundTasks(raw: unknown): BackgroundTask[] | null {
   if (!Array.isArray(raw)) return null;
-  return raw.flatMap((t) => (isRecord(t) && typeof t.type === "string" ? [{ type: t.type, text: [t.command, t.description].filter((x) => typeof x === "string").join("\n") }] : []));
+  return raw.flatMap((t) => {
+    if (!isRecord(t)) return [];
+    const type = typeof t.type === "string" ? t.type : typeof t.kind === "string" ? t.kind : null;
+    return type === null ? [] : [{ type, text: [t.command, t.description].filter((x) => typeof x === "string").join("\n") }];
+  });
 }
 
 export function grokMonitorListens(tasks: readonly BackgroundTask[], commands: readonly string[]): boolean {
@@ -812,7 +917,7 @@ const rearmText = Effect.fn("Hooks.rearmText")(function* (input: HookInput, b: B
 /** How an agent's shell should call kiwi: plain `kiwi` when it's on PATH, else the full path. */
 export function mcBin(): string {
   if (Bun.which("kiwi")) return "kiwi";
-  const installed = join(homedir(), ".kiwi", "bin", process.platform === "win32" ? "kiwi.exe" : "kiwi");
+  const installed = installedBin();
   if (existsSync(installed)) return installed;
   return selfCommand();
 }

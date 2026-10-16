@@ -37,7 +37,7 @@ import { chooseThread, humanOf, parseTaskId, similarOpenTasks, taskId, wentTo, t
 import { VERSION } from "../version.ts";
 import { computerClaimFor } from "../machine.ts";
 import { briefText } from "../brief.ts";
-import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor, EXTRA_HARNESSES, extraInstalled, hooksInstalled, hooksStatus, howMessagesReachYou, installDetected, installExtra, installHooks, mcFor, refreshListeners, runHook, seatsFor, uninstallDetected, uninstallExtra, uninstallHooks, type ExtraHarness } from "../hooks.ts";
+import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor, EXTRA_HARNESSES, extraInstalled, hooksInstalled, hooksStatus, howMessagesReachYou, IDENTITY_ARG, installDetected, installExtra, installHooks, mcFor, refreshListeners, runHook, selfIdentity, seatsFor, uninstallDetected, uninstallExtra, uninstallHooks, type ExtraHarness } from "../hooks.ts";
 import { BadName } from "../refusals.ts";
 import { binDir, ensureOnPath, profileFor } from "../shell-path.ts";
 import { detectCard, detectModel, detectRuns, mergeCard } from "../card.ts";
@@ -104,6 +104,13 @@ Claims, task dependencies (--after) and matching by --needs are gone: say what y
 
 Options: -c/--channel ALIAS, --as NAME (or KIWI_CHANNEL / KIWI_AS) only when a folder has several agents and no session
 tells them apart; --relay URL (or KIWI_RELAY)`;
+
+if (process.argv[2] === IDENTITY_ARG && process.argv.length === 3) {
+  const identity = selfIdentity();
+  if (identity === null) process.exit(1);
+  process.stdout.write(`${identity}\n`);
+  process.exit(0);
+}
 
 // `kiwi relay` takes the relay's own flags (see src/relay/bun.ts), not these.
 const isRelay = process.argv[2] === "relay";
