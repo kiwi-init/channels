@@ -1030,15 +1030,13 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
   if (f.t !== "send") return { reply: frame({ t: "err", error: "unknown frame" }) } satisfies Effects;
   if (!allow(`${db.roomId}:${sender}`, MESSAGES_PER_MINUTE)) return { reply: frame({ t: "err", error: "too many messages; wait a minute", id: f.id }) } satisfies Effects;
   const send = f;
-  return yield* Effect.gen(function* () {
-    const e = yield* append(send.iv, send.ct, Number(send.e ?? 0), sender);
-    const reply = frame({ t: "ack", id: send.id, seq: e.seq, ts: e.ts });
-    const fx: Effects = { ...(echo ? { broadcast: [msgFrame(e)] } : { others: msgFrame(e) }), reply, expireAt: (yield* touch) ?? undefined };
-    return fx;
-  }).pipe(
-    // A refusal says why; a storage error is logged and the sender hears only that it failed.
-    Effect.catchCause((cause) => Effect.succeed<Effects>({ reply: frame({ t: "err", error: socketError(cause), id: send.id }) })),
-  );
+  const stored = yield* Effect.exit(append(send.iv, send.ct, Number(send.e ?? 0), sender));
+  if (stored._tag === "Failure") return { reply: frame({ t: "err", error: socketError(stored.cause), id: send.id }) } satisfies Effects;
+  const e = stored.value;
+  const expireAt = yield* touch.pipe(Effect.catchCause(() => Effect.succeed(null)));
+  const reply = frame({ t: "ack", id: send.id, seq: e.seq, ts: e.ts });
+  const fx: Effects = { ...(echo ? { broadcast: [msgFrame(e)] } : { others: msgFrame(e) }), reply, expireAt: expireAt ?? undefined };
+  return fx;
 });
 
 /**

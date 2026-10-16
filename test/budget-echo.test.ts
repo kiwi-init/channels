@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import type { ServerWebSocket } from "bun";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -13,6 +14,11 @@ import type { ChannelAccess } from "../src/crypto.ts";
 import { generateIdentity, type Identity } from "../src/identity.ts";
 import { WS_PROTOCOL, type Message, type ServerFrame } from "../src/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
+import * as Layer from "effect/Layer";
+import { Human } from "../src/relay/human.ts";
+import { OPEN_POLICY, Policy } from "../src/relay/policy.ts";
+import { Directory, onClientFrame, RoomDb, type Sql } from "../src/relay/room.ts";
+import { makeRelay, runRoomSync } from "../src/relay/route.ts";
 import { memoryBudget } from "./check.ts";
 import { sum, trafficProxy, type Traffic } from "./traffic.ts";
 
@@ -318,5 +324,40 @@ describe("app: the open conversation's sends", () => {
     expect(viaApp).toBe(viaHttp);
     expect(traffic.framesUp.send).toBe(1);
     expect(traffic.routes["POST /messages"]).toBe(1);
+  });
+});
+
+describe("a socket send the relay stored", () => {
+  test("is acked even when the idle-expiry write after it fails", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-echo-touch-"));
+    const relay = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir });
+    const owner = await generateIdentity("boss");
+    const { access } = await Channel.create(relay.url.origin, owner, { name: "boss" });
+    relay.stop(true);
+    const file = new Database(join(dir, `${access.roomId}.sqlite`));
+    try {
+      const sql: Sql = {
+        run: (q, ...p) => {
+          if (p.includes("active")) throw new Error("storage failed");
+          file.query(q).run(...p);
+        },
+        all: <T>(q: string, ...p: (string | number | null)[]) => file.query(q).all(...p) as T[],
+      };
+      const ctx = makeRelay(
+        Layer.mergeAll(
+          Layer.succeed(Human, null),
+          Layer.succeed(Policy, { ...OPEN_POLICY, expireAfterDays: 30 }),
+          Layer.succeed(Directory, { list: async () => [], reserve: async () => true, release: async () => {} }),
+        ),
+      );
+      const before = (file.query("SELECT COUNT(*) AS n FROM msgs").get() as { n: number }).n;
+      const fx = runRoomSync(ctx, new RoomDb(sql, access.roomId), onClientFrame(JSON.stringify({ t: "send", id: "kept", iv: "aXZpdml2aXZpdml2", ct: "Y3Z2", e: 0 }), owner.pk));
+      expect((file.query("SELECT COUNT(*) AS n FROM msgs").get() as { n: number }).n).toBe(before + 1);
+      expect(fx.reply).toContain('"t":"ack"');
+      expect(fx.reply).not.toContain('"t":"err"');
+    } finally {
+      file.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
