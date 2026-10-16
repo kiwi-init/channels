@@ -242,7 +242,8 @@ const callUnlessUnchanged = <T>(relay: string, roomId: string, what: Remembered,
     const kept = memory?.get(roomId, what) ?? null;
     const got = yield* (yield* Relay).conditional<T>(relay, roomId, path, kept?.etag ?? null, init, params);
     if (!got.fresh) return kept!.data as T;
-    if (got.etag && memory) memory.set(roomId, what, { etag: got.etag, data: got.data });
+    const etag = got.etag;
+    if (etag && memory) yield* Effect.ignore(Effect.try({ try: () => memory.set(roomId, what, { etag, data: got.data }), catch: (err) => err }));
     return got.data;
   });
 
