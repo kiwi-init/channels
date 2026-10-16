@@ -74,7 +74,10 @@
       },
       "ignoreDependencies": [
         "expo-updates",
-        "expo-system-ui"
+        "expo-system-ui",
+        "expo-font",
+        "react-test-renderer",
+        "@types/react-test-renderer"
       ]
     }
   }

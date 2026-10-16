@@ -2,7 +2,11 @@ import "../src/platform/install"
 import { Stack } from "expo-router"
 import { StatusBar } from "expo-status-bar"
 
+import { useInter } from "../src/ui/fonts"
+
 export default function Layout() {
+  const ready = useInter()
+  if (!ready) return null
   return (
     <>
       <StatusBar style="auto" />
