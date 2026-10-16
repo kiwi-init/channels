@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AgentSession, runAgent } from "../src/agent.ts";
@@ -216,6 +216,40 @@ describe("waking an agent in its own session", () => {
       expect(await cli("wake", "on")).toContain("Kiwi wakes claude");
     }
     expect(loadConfig().wakeOff).toBeUndefined();
+  });
+
+  test("a wake that fails says why in the wake log", async () => {
+    const before = await quiet();
+    writeFileSync(join(bin, "codex"), "#!/bin/sh\necho boom >&2\nexit 3\n");
+    try {
+      await ownerCh.send("the wake will fail", { to: ["claude"] });
+      await until("the failure in the log", () => existsSync(join(home, "wake.log")) && readFileSync(join(home, "wake.log"), "utf8").includes("\tfailed\texit 3: boom"));
+    } finally {
+      fake("codex");
+    }
+    expect(calls().length).toBe(before);
+  });
+
+  test("a daemon whose PATH lacks the harness still finds it in ~/.local/bin", async () => {
+    const before = await quiet();
+    const fakeHome = mkdtempSync(join(tmpdir(), "kiwi-wake-home-"));
+    mkdirSync(join(fakeHome, ".local", "bin"), { recursive: true });
+    const local = join(fakeHome, ".local", "bin", "codex");
+    writeFileSync(local, `#!/bin/sh\necho codex >> "$FAKE_WAKE_LOG"\nfor a in "$@"; do echo "$a" >> "$FAKE_WAKE_LOG"; done\necho "---" >> "$FAKE_WAKE_LOG"\n`);
+    chmodSync(local, 0o755);
+    const prior = { home: process.env.HOME, path: process.env.PATH };
+    rmSync(join(bin, "codex"));
+    process.env.HOME = fakeHome;
+    process.env.PATH = "/usr/bin:/bin";
+    try {
+      await ownerCh.send("found through the fallback", { to: ["claude"] });
+      await until("a wake from the fallback directory", () => calls().length === before + 1);
+    } finally {
+      process.env.HOME = prior.home;
+      process.env.PATH = prior.path;
+      fake("codex");
+      rmSync(fakeHome, { recursive: true, force: true });
+    }
   });
 
   test("an OpenCode agent gets the prompt through OpenCode's service, queued", async () => {
