@@ -31,11 +31,14 @@ import {
   onClientFrame,
   wantsEcho,
   parseRoomPath,
+  takesPresence,
   touch,
+  wantsReads,
   welcomeFrames,
   wsHeaders,
   type DirectoryEntry,
   type Effects,
+  type SqlParam,
 } from "./room.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync } from "./route.ts";
 
@@ -43,6 +46,8 @@ interface SocketData {
   roomId: string;
   pk: string;
   since: number;
+  presence: boolean;
+  reads: boolean;
   echo: boolean;
 }
 
@@ -115,7 +120,7 @@ export function startRelay(
     const store = new RoomDb(
       {
         run: (q, ...p) => void d.query(q).run(...p),
-        all: <T>(q: string, ...p: (string | number | null)[]) => d.query(q).all(...p) as T[],
+        all: <T>(q: string, ...p: SqlParam[]) => d.query(q).all(...p) as T[],
       },
       roomId,
     );
@@ -157,6 +162,8 @@ export function startRelay(
     const room = sockets.get(roomId) ?? new Set();
     for (const f of fx.broadcast ?? []) for (const ws of room) ws.send(f);
     if (fx.others) for (const ws of room) if (ws !== sender) ws.send(fx.others);
+    if (fx.ephemeral) for (const ws of room) if (ws !== sender && ws.data.presence) ws.send(fx.ephemeral);
+    for (const f of fx.readers ?? []) for (const ws of room) if (ws.data.reads) ws.send(f);
     if (fx.disconnect) for (const ws of room) if (ws.data.pk === fx.disconnect.pk) ws.close(CLOSE_REMOVED, GONE_WORDS[fx.disconnect.how]);
     for (const u of fx.directory ?? []) {
       if (u.entry) people.query("INSERT OR REPLACE INTO owned (user, room, entry) VALUES (?, ?, ?)").run(u.user, u.room, JSON.stringify(u.entry));
@@ -234,7 +241,7 @@ export function startRelay(
             }
             const pk = await runRoom(relay, db, authenticateSocket(req));
             const since = Number(url.searchParams.get("since") ?? 0) || 0;
-            if (server.upgrade(req, { data: { roomId: route.roomId, pk, since, echo: wantsEcho(url) }, headers: wsHeaders(req) })) return undefined;
+            if (server.upgrade(req, { data: { roomId: route.roomId, pk, since, presence: takesPresence(url), reads: wantsReads(url), echo: wantsEcho(url) }, headers: wsHeaders(req) })) return undefined;
             return withCors(errorResponse(new UpdateRequired({ message: "expected websocket" })));
           }
           const result = await onHttp(relay, db, req, route.rest);
@@ -267,7 +274,7 @@ export function startRelay(
         set.add(ws);
         const db = storeFor(ws.data.roomId, false);
         try {
-          for (const f of runRoomSync(relay, db, welcomeFrames(ws.data.since))) ws.send(f);
+          for (const f of runRoomSync(relay, db, welcomeFrames(ws.data.since, ws.data.reads))) ws.send(f);
           // A connection counts as activity for idle expiry.
           runRoomSync(relay, db, touch);
         } finally {

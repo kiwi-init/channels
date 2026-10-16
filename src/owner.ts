@@ -4,7 +4,7 @@
 
 import * as Effect from "effect/Effect";
 import { AgentSession } from "./agent.ts";
-import { Channel, keepRecordsIn } from "./client.ts";
+import { Channel, keepAnswersIn, keepRecordsIn } from "./client.ts";
 import { Keystore, type ChannelConfig } from "./config.ts";
 import { Rejected } from "./refusals.ts";
 import { describeScopes, wireScopes, type Scope } from "./scopes.ts";
@@ -169,6 +169,7 @@ class OwnerSession extends AgentSession {
 export const openOwnerSession = Effect.fn("OwnerSession.open")(function* (alias: string, cfg: ChannelConfig, name: string) {
   const keys = yield* Keystore;
   keepRecordsIn(keys.records);
+  keepAnswersIn(keys.answers ?? null);
   const identity = yield* keys.identity(name, cfg.roomId);
   if (identity.pk !== cfg.ownerPk) return yield* new Rejected(`${name} isn't this channel's owner key`);
   return new OwnerSession(alias, cfg, identity, (a) => Effect.runSync(keys.saveAccess(alias, a)));

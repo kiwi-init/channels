@@ -50,7 +50,7 @@ test("a room from before the usage row: its stored bytes are counted once, and a
   // The previous layout: three counter rows, no usage row.
   const file = join(dataDir, `${access.roomId}.sqlite`);
   let db = new Database(file);
-  const before = (db.query("SELECT COALESCE(SUM(LENGTH(ct)), 0) AS n FROM msgs").get() as { n: number }).n;
+  const before = (db.query("SELECT COALESCE(SUM(CASE WHEN typeof(ct) = 'blob' THEN (LENGTH(ct) * 4 + 2) / 3 ELSE LENGTH(ct) END), 0) AS n FROM msgs").get() as { n: number }).n;
   db.run("DELETE FROM meta WHERE k = 'usage'");
   db.run("INSERT INTO meta (k, v) VALUES ('bytes', ?), ('day', '2026-01-01'), ('day_count', '7')", [String(before)]);
   db.close();
@@ -62,7 +62,7 @@ test("a room from before the usage row: its stored bytes are counted once, and a
     server.stop(true);
   }
   db = new Database(file);
-  const stored = (db.query("SELECT COALESCE(SUM(LENGTH(ct)), 0) AS n FROM msgs").get() as { n: number }).n;
+  const stored = (db.query("SELECT COALESCE(SUM(CASE WHEN typeof(ct) = 'blob' THEN (LENGTH(ct) * 4 + 2) / 3 ELSE LENGTH(ct) END), 0) AS n FROM msgs").get() as { n: number }).n;
   const usage = JSON.parse((db.query("SELECT v FROM meta WHERE k = 'usage'").get() as { v: string }).v) as { bytes: number; n: number };
   db.close();
   expect(usage.bytes).toBe(stored);

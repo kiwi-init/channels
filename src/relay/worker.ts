@@ -27,13 +27,16 @@ import {
   onClientFrame,
   wantsEcho,
   parseRoomPath,
+  takesPresence,
   touch,
+  wantsReads,
   welcomeFrames,
   wsHeaders,
   type DirectoryEntry,
   type DirectoryUpdate,
   type Effects,
   type Sql,
+  type SqlParam,
 } from "./room.ts";
 import { MAILBOX_TTL_MS } from "../mailbox.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
@@ -98,7 +101,7 @@ export class Channel extends DurableObject<Env> {
     super(ctx, env);
     this.sql = {
       run: (q, ...p) => void ctx.storage.sql.exec(q, ...p),
-      all: <T>(q: string, ...p: (string | number | null)[]) => ctx.storage.sql.exec(q, ...p).toArray() as T[],
+      all: <T>(q: string, ...p: SqlParam[]) => ctx.storage.sql.exec(q, ...p).toArray() as T[],
     };
     this.policy = policyFrom(env as unknown as Record<string, string | undefined>);
     this.relay = makeRelay(
@@ -132,8 +135,9 @@ export class Channel extends DurableObject<Env> {
         const pk = await runRoom(this.relay, db, authenticateSocket(req));
         const { 0: client, 1: server } = new WebSocketPair();
         this.ctx.acceptWebSocket(server);
-        server.serializeAttachment({ pk, room: route.roomId, ...(wantsEcho(url) ? {} : { echo: false }) });
-        for (const f of runRoomSync(this.relay, db, welcomeFrames(Number(url.searchParams.get("since") ?? 0) || 0))) server.send(f);
+        const reads = wantsReads(url);
+        server.serializeAttachment({ pk, room: route.roomId, reads, ...(takesPresence(url) ? {} : { presence: false }), ...(wantsEcho(url) ? {} : { echo: false }) });
+        for (const f of runRoomSync(this.relay, db, welcomeFrames(Number(url.searchParams.get("since") ?? 0) || 0, reads))) server.send(f);
         await this.apply({ expireAt: runRoomSync(this.relay, db, touch) ?? undefined });
         return new Response(null, { status: 101, webSocket: client, headers: wsHeaders(req) });
       }
@@ -162,6 +166,15 @@ export class Channel extends DurableObject<Env> {
     const sockets = this.ctx.getWebSockets();
     for (const f of fx.broadcast ?? []) for (const ws of sockets) send(ws, f);
     if (fx.others) for (const ws of sockets) if (ws !== sender) send(ws, fx.others);
+    if (fx.ephemeral) {
+      for (const ws of sockets) if (ws !== sender && (ws.deserializeAttachment() as { presence?: boolean } | null)?.presence !== false) send(ws, fx.ephemeral);
+    }
+    if (fx.readers?.length) {
+      for (const ws of sockets) {
+        if ((ws.deserializeAttachment() as { reads?: boolean } | null)?.reads === false) continue;
+        for (const f of fx.readers) send(ws, f);
+      }
+    }
     if (fx.disconnect) {
       for (const ws of sockets) {
         if ((ws.deserializeAttachment() as { pk?: string } | null)?.pk === fx.disconnect.pk) close(ws, CLOSE_REMOVED, GONE_WORDS[fx.disconnect.how]);
