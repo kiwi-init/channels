@@ -52,6 +52,26 @@
         "src/**/*.ts",
         "scripts/**/*.ts"
       ]
+    },
+    "mobile": {
+      "entry": [
+        "app/**/*.{ts,tsx}",
+        "src/**/*.test.{ts,tsx}"
+      ],
+      "project": [
+        "app/**/*.{ts,tsx}",
+        "src/**/*.{ts,tsx}"
+      ],
+      "paths": {
+        "@mc/*": [
+          "../src/*"
+        ]
+      },
+      "ignoreDependencies": [
+        "effect",
+        "expo-updates",
+        "expo-system-ui"
+      ]
     }
   }
 }

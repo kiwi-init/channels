@@ -7,8 +7,17 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "ios": { "supportsTablet": true, "bundleIdentifier": "dev.kiwi.mobile" },
-    "android": { "package": "dev.kiwi.mobile" },
-    "plugins": ["expo-router"]
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "dev.kiwi.mobile"
+    },
+    "android": {
+      "package": "dev.kiwi.mobile"
+    },
+    "plugins": [
+      "expo-router",
+      "react-native-quick-crypto",
+      "expo-build-properties"
+    ]
   }
 }
