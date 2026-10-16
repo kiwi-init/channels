@@ -29,7 +29,7 @@ import * as Schedule from "effect/Schedule";
 import type * as Scope from "effect/Scope";
 import { accessSync, constants as fsConstants, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, dirname, isAbsolute, join } from "node:path";
+import { dirname, join } from "node:path";
 import { openSession, type AgentSession } from "./agent.ts";
 import { Cursor, home, Keystore, loadConfig, type ChannelConfig } from "./config.ts";
 import { ChannelGone } from "./client.ts";
@@ -229,11 +229,22 @@ function settingsPath(): string {
 
 /** How to invoke this very `kiwi`, wherever and however it's installed. */
 function selfCommand(): string {
-  const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
   const compiled = !/\.(ts|js)$/.test(Bun.main);
   // Prefer the PATH entry for bun (e.g. /opt/homebrew/bin/bun) over its versioned real path, which upgrades remove.
   const bun = Bun.which("bun") ?? process.execPath;
-  return compiled ? q(process.execPath) : `${q(bun)} ${q(Bun.main)}`;
+  return compiled ? shellQuote(process.execPath) : `${shellQuote(bun)} ${shellQuote(Bun.main)}`;
+}
+
+function shellQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+function installedBin(): string {
+  return join(homedir(), ".kiwi", "bin", process.platform === "win32" ? "kiwi.exe" : "kiwi");
+}
+
+function selfOnDisk(): boolean {
+  return existsSync(/\.(ts|js)$/.test(Bun.main) ? Bun.main : process.execPath);
 }
 
 type HookEntry = { matcher?: string; hooks: { type: "command"; command: string; timeout?: number; async?: boolean; asyncRewake?: boolean }[] };
@@ -306,40 +317,7 @@ export function uninstallHooks(): string {
   return settingsPath();
 }
 
-function shellWords(line: string): string[] | null {
-  const words: string[] = [];
-  let word = "";
-  let started = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line.charAt(i);
-    if (c === " " || c === "\t") {
-      if (started) words.push(word);
-      word = "";
-      started = false;
-    } else if (c === "'") {
-      const end = line.indexOf("'", i + 1);
-      if (end < 0) return null;
-      word += line.slice(i + 1, end);
-      started = true;
-      i = end;
-    } else if (c === "\\") {
-      if (i + 1 >= line.length) return null;
-      word += line.charAt(i + 1);
-      started = true;
-      i++;
-    } else if (c === '"' || c === "$" || c === "`" || c === ";" || c === "&" || c === "|") {
-      return null;
-    } else {
-      word += c;
-      started = true;
-    }
-  }
-  if (started) words.push(word);
-  return words;
-}
-
 function runnable(path: string): boolean {
-  if (!isAbsolute(path)) return false;
   try {
     if (!statSync(path).isFile()) return false;
     accessSync(path, fsConstants.X_OK);
@@ -349,26 +327,11 @@ function runnable(path: string): boolean {
   }
 }
 
-function devMain(path: string): boolean {
-  if (!isAbsolute(path) || !path.endsWith(join("src", "cli", "main.ts"))) return false;
-  try {
-    return statSync(path).isFile();
-  } catch {
-    return false;
-  }
-}
-
 export function isOurHook(command: unknown, arg: string): boolean {
   if (typeof command !== "string") return false;
-  if (command === hookCommand(arg)) return true;
-  const tail = ` hook ${arg} ${MARK}`;
-  if (!command.endsWith(tail)) return false;
-  const words = shellWords(command.slice(0, -tail.length));
-  if (!words) return false;
-  const [program, script, ...rest] = words;
-  if (program === undefined || rest.length) return false;
-  if (script === undefined) return runnable(program) && basename(program).startsWith("kiwi");
-  return runnable(program) && devMain(script);
+  if (command === hookCommand(arg)) return selfOnDisk();
+  const installed = installedBin();
+  return command === `${shellQuote(installed)} hook ${arg} ${MARK}` && runnable(installed);
 }
 
 function hasHook(s: Settings, event: string, arg: string): boolean {
@@ -469,7 +432,6 @@ export function autoInstallHooks(): string | null {
   // Grok Build can inherit CLAUDECODE; do not write ~/.claude/settings.json from it.
   if (process.env.KIWI_NO_HOOKS || here().harness !== "claude" || loadConfig().claudeHooks === "off") return null;
   try {
-    // A different invocation path still counts as installed only when the command string matches this binary.
     return hooksInstalled() ? null : installHooks();
   } catch {
     return null;
@@ -881,7 +843,7 @@ const rearmText = Effect.fn("Hooks.rearmText")(function* (input: HookInput, b: B
 /** How an agent's shell should call kiwi: plain `kiwi` when it's on PATH, else the full path. */
 export function mcBin(): string {
   if (Bun.which("kiwi")) return "kiwi";
-  const installed = join(homedir(), ".kiwi", "bin", process.platform === "win32" ? "kiwi.exe" : "kiwi");
+  const installed = installedBin();
   if (existsSync(installed)) return installed;
   return selfCommand();
 }
