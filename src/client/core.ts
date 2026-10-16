@@ -1,0 +1,48 @@
+import * as Effect from "effect/Effect";
+import type { ChannelAccess } from "../crypto.ts";
+import type { Identity } from "../identity.ts";
+import { OwnerOnly } from "../refusals.ts";
+import { gone, type MemberRefusal } from "./errors.ts";
+import type { HistoryFx } from "./history.ts";
+import type { InfoFx } from "./info.ts";
+import type { KeysFx } from "./keys.ts";
+import type { LiveFx } from "./live.ts";
+import type { MembersFx } from "./members.ts";
+import { callRelay, type CallInit, type Relay } from "./relay.ts";
+import type { RequestsFx } from "./requests.ts";
+import type { SendFx } from "./send.ts";
+import type { SettingsFx } from "./settings.ts";
+
+export interface ChannelFx extends KeysFx, InfoFx, SettingsFx, RequestsFx, MembersFx, HistoryFx, SendFx, LiveFx {}
+
+export class ChannelCore {
+  readonly name: string;
+  fx!: ChannelFx;
+
+  constructor(
+    public access: ChannelAccess,
+    readonly relay: string,
+    readonly identity: Identity,
+    readonly onAccess?: (a: ChannelAccess) => void,
+  ) {
+    this.name = identity.name;
+  }
+
+  get roomId(): string {
+    return this.access.roomId;
+  }
+
+  get isOwner(): boolean {
+    return this.identity.pk === this.access.ownerPk;
+  }
+
+  request<T>(path: string, init: CallInit = {}, params: Record<string, string | number> = {}): Effect.Effect<T, MemberRefusal, Relay> {
+    return Effect.gen({ self: this }, function* () {
+      return yield* callRelay<T>(this.relay, this.roomId, path, { ...init, identity: this.identity }, params);
+    }).pipe(Effect.mapError(gone));
+  }
+
+  ownerOnly(): Effect.Effect<void, OwnerOnly> {
+    return this.isOwner ? Effect.void : Effect.fail(new OwnerOnly("only the channel owner can do that"));
+  }
+}
