@@ -186,6 +186,18 @@ jobs:
       for example a Node- or Bun-only import reaching src/relay/worker.ts, or an invalid
       wrangler.jsonc. Code the worker doesn't import can't affect it.
 
+  relay-budget:
+    name: relay / budget
+    inputs: ["src/relay/**", "src/protocol.ts", "test/relay-budget.test.ts", "test/check.ts"]
+    always: ["package.json", "bun.lock", "scripts/ci-tests.ts"]
+    description: >-
+      Runs test/relay-budget.test.ts: on one long-lived room storage handle, as a Cloudflare
+      Durable Object keeps it, counts the SQL statements a stored message, a read mark and a
+      connecting socket cost, and fails when one goes over its budget (a warm message pays no
+      read and two writes). Also checks the room's in-memory state follows posting rights,
+      removals, message numbering after old messages are dropped, and a closed room. Fails if
+      src/relay/room.ts reads or writes more per operation, or serves stale state.
+
   repo-comments:
     jev: false
     name: repo / comments

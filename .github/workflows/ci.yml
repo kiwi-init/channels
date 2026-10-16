@@ -279,6 +279,23 @@ jobs:
           job: relay-worker
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['relay-worker'] }}
 
+  relay-budget:
+    name: relay / budget
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['relay-budget']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup
+        with:
+          web: "false"
+      - run: bun scripts/ci-tests.ts budget
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: relay-budget
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['relay-budget'] }}
+
   repo-comments:
     name: repo / comments
     needs: plan
@@ -339,7 +356,7 @@ jobs:
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, cli-build, relay-worker, repo-comments, desktop-keys, repo-knip, web-bundle, site-test, repo-pins]
+    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, cli-build, relay-worker, relay-budget, repo-comments, desktop-keys, repo-knip, web-bundle, site-test, repo-pins]
     if: always()
     runs-on: ubuntu-latest
     permissions:

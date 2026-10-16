@@ -13,6 +13,7 @@ const FLOWS: Record<string, string[]> = {
   "desktop-keys": ["desktop-keys"],
   site: ["site"],
   pins: ["action-pins"],
+  budget: ["relay-budget"],
 }
 
 const group = process.argv[2] ?? ""
