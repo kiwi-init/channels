@@ -100,15 +100,23 @@ const toRoster = (m: Member): Roster[number] => ({
   ...(m.runs ? { runs: m.runs } : {}),
 });
 
+interface Seen {
+  messages: Message[];
+  roster: Roster;
+  rooms: RoomsFloor | null | undefined;
+  guard: GuardFloor | null | undefined;
+  view: { messages: Message[]; state: ChannelState };
+}
+
 interface Look {
-  fetched: boolean;
-  seen: { messages: Message[]; roster: Roster; rooms: RoomsFloor | null | undefined; guard: GuardFloor | null | undefined; view: { messages: Message[]; state: ChannelState } } | null;
+  fetched: WeakSet<AgentSession>;
+  seen: WeakMap<AgentSession, Seen>;
 }
 
 const Look = Context.Reference<Look | null>("kiwi/AgentSession/Look", { defaultValue: () => null });
 
 export const oneLook = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
-  Effect.flatMap(Effect.service(Look), (look) => (look ? effect : Effect.provideService(effect, Look, { fetched: false, seen: null })));
+  Effect.flatMap(Effect.service(Look), (look) => (look ? effect : Effect.provideService(effect, Look, { fetched: new WeakSet(), seen: new WeakMap() })));
 
 const lastSeq = (log: readonly Message[]) => log.at(-1)?.seq ?? 0;
 
@@ -185,18 +193,18 @@ export class AgentSession {
       this.log ??= cached;
     }
     const look = yield* Look;
-    if (!look?.fetched || lastSeq(this.log) < this.owed) {
+    if (!look?.fetched.has(this) || lastSeq(this.log) < this.owed) {
       const { messages } = yield* this.ch.fx.history(lastSeq(this.log));
       const last = lastSeq(this.log);
       const fresh = messages.filter((m) => m.seq > last);
       if (fresh.length) this.log = [...this.log, ...fresh];
-      if (look) look.fetched = true;
+      look?.fetched.add(this);
     }
     const log = this.log;
     const unsaved = log.filter((m) => m.seq > this.saved);
     if (unsaved.length) {
-      this.saved = lastSeq(unsaved);
       yield* cache.append(this.cfg.roomId, unsaved);
+      this.saved = Math.max(this.saved, lastSeq(unsaved));
     }
     return log;
   });
@@ -205,10 +213,10 @@ export class AgentSession {
     yield* this.chores();
     const [messages, roster] = yield* Effect.all([this.sync(), this.members()], { concurrency: "unbounded" });
     const look = yield* Look;
-    const seen = look?.seen;
+    const seen = look?.seen.get(this);
     if (seen && seen.messages === messages && seen.roster === roster && seen.rooms === this.roomsFloor && seen.guard === this.guardFloor) return seen.view;
     const view = { messages, state: yield* this.foldState(messages, roster) };
-    if (look) look.seen = { messages, roster, rooms: this.roomsFloor, guard: this.guardFloor, view };
+    look?.seen.set(this, { messages, roster, rooms: this.roomsFloor, guard: this.guardFloor, view });
     return view;
   });
 

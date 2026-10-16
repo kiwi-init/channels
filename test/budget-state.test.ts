@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as Effect from "effect/Effect";
-import { openSession, runAgent, type Agent, type AgentSession } from "../src/agent.ts";
+import { oneLook, openSession, runAgent, type Agent, type AgentSession } from "../src/agent.ts";
 import { appendCache, Cache, Keystore, readCache } from "../src/config.ts";
 import type { Message } from "../src/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -146,5 +146,66 @@ describe("one fetch of the log per agent command", () => {
     const s = await inProcess("task claim", (s) => s.taskClaim(second));
     expect(s.gets).toBeLessThanOrEqual(BUDGET.messagesPerCommand);
     expect(s.reads).toBeLessThanOrEqual(BUDGET.cacheReadsPerCommand);
+  });
+
+  test("a failed cache write is tried again on the next sync", async () => {
+    const sent = sentSeq(await ok(owner, "--as", "lead", "send", "not in the agent's cache yet"));
+    let failNext = true;
+    const written: number[] = [];
+    const flaky = {
+      read: (roomId: string) => Effect.sync(() => readCache(roomId)),
+      append: (roomId: string, messages: Message[]) =>
+        Effect.sync(() => {
+          if (failNext) {
+            failNext = false;
+            throw new Error("disk full");
+          }
+          written.push(...messages.map((m) => m.seq));
+          appendCache(roomId, messages);
+        }),
+    };
+    const was = process.env.KIWI_HOME;
+    process.env.KIWI_HOME = agent;
+    try {
+      const { failed, roomId } = await runAgent(
+        Effect.gen(function* () {
+          const cfg = (yield* (yield* Keystore).config).channels["budget"]!;
+          const s = yield* openSession("budget", cfg, "dev");
+          const failed = yield* Effect.exit(s.sync());
+          yield* s.sync();
+          return { failed: failed._tag, roomId: cfg.roomId };
+        }).pipe(Effect.provideService(Cache, flaky)),
+      );
+      expect(failed).toBe("Failure");
+      expect(written).toContain(sent);
+      expect(readCache(roomId).some((m) => m.seq === sent)).toBe(true);
+    } finally {
+      if (was === undefined) delete process.env.KIWI_HOME;
+      else process.env.KIWI_HOME = was;
+    }
+  });
+
+  test("each session in one look fetches the log for itself", async () => {
+    const was = process.env.KIWI_HOME;
+    process.env.KIWI_HOME = agent;
+    try {
+      const { sent, last } = await runAgent(
+        oneLook(
+          Effect.gen(function* () {
+            const cfg = (yield* (yield* Keystore).config).channels["budget"]!;
+            const first = yield* openSession("budget", cfg, "dev");
+            const second = yield* openSession("budget", cfg, "dev");
+            yield* first.state();
+            const sent = yield* Effect.promise(() => ok(owner, "--as", "lead", "send", "after the first look").then(sentSeq));
+            const { messages } = yield* second.state();
+            return { sent, last: messages.at(-1)?.seq };
+          }),
+        ),
+      );
+      expect(last).toBe(sent);
+    } finally {
+      if (was === undefined) delete process.env.KIWI_HOME;
+      else process.env.KIWI_HOME = was;
+    }
   });
 });
