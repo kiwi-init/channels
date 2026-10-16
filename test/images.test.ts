@@ -9,8 +9,9 @@ import { signRequest } from "../src/auth.ts";
 import { Channel, keepBlobsIn } from "../src/client.ts";
 import { seal } from "../src/crypto.ts";
 import { generateIdentity, sign, type Identity } from "../src/identity.ts";
-import { PROTOCOL_VERSION, type ImageAttachment } from "../src/protocol.ts";
+import { MAX_BLOB_BYTES, PROTOCOL_VERSION, type ImageAttachment } from "../src/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
+import { incoming, readCapped } from "../src/relay/http.ts";
 import { checked } from "./check.ts";
 
 setDefaultTimeout(30_000);
@@ -128,4 +129,30 @@ test("the relay stores an image only under the hash of its bytes", async () => {
   const auth = await signRequest(member, memberCh.roomId, "PUT", `/blobs/${id}`, "");
   const res = await fetch(`${relay}/v1/rooms/${memberCh.roomId}/blobs/${id}`, { method: "PUT", headers: { authorization: `Bearer ${auth}` }, body: bytes });
   expect(res.status).toBe(400);
+});
+
+test("the relay reads no image bytes before it checks the sender, and stops reading at the cap", async () => {
+  const chunk = 64 * 1024;
+  let pulled = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(c) {
+      pulled += chunk;
+      c.enqueue(new Uint8Array(chunk));
+      if (pulled >= 8 * 1024 * 1024) c.close();
+    },
+  });
+  const path = `/blobs/${"0".repeat(64)}`;
+  const req = new Request(`http://relay/v1/rooms/x${path}`, { method: "PUT", body });
+  await incoming(req, path);
+  expect(pulled).toBeLessThan(MAX_BLOB_BYTES);
+  expect(await readCapped(req, MAX_BLOB_BYTES)).toBeNull();
+  expect(pulled).toBeLessThanOrEqual(MAX_BLOB_BYTES + 2 * chunk);
+});
+
+test("the relay refuses an image bigger than the cap", async () => {
+  const id = "a".repeat(64);
+  const put = async (headers: Record<string, string>) =>
+    (await fetch(`${relay}/v1/rooms/${memberCh.roomId}/blobs/${id}`, { method: "PUT", headers, body: new Uint8Array(MAX_BLOB_BYTES + 1) })).status;
+  expect(await put({})).toBe(401);
+  expect(await put({ authorization: `Bearer ${await signRequest(member, memberCh.roomId, "PUT", `/blobs/${id}`, "")}` })).toBe(413);
 });

@@ -677,11 +677,11 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
   return stored;
 });
 
-export const storeBlob = Effect.fn("Room.storeBlob")(function* (id: string, bytes: Uint8Array<ArrayBuffer> | null, sender: string) {
+export const storeBlob = Effect.fn("Room.storeBlob")(function* (id: string, bytes: Uint8Array<ArrayBuffer>, sender: string) {
   const db = yield* RoomStore;
   const policy = yield* Policy;
   if (db.isReadOnly(sender)) return yield* new ReadOnly({ message: READ_ONLY });
-  if (!bytes?.length) return yield* new BadRequest({ message: "send the image's encrypted bytes" });
+  if (!bytes.length) return yield* new BadRequest({ message: "send the image's encrypted bytes" });
   if (bytes.length > MAX_BLOB_BYTES) return yield* new TooLarge({ message: "image too large" });
   if ((yield* Effect.promise(() => blobId(bytes))) !== id) return yield* new BadRequest({ message: "the image's bytes don't match its id" });
   if (db.hasBlob(id)) return;

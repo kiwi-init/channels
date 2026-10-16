@@ -15,9 +15,9 @@ import * as Effect from "effect/Effect";
 import type * as Layer from "effect/Layer";
 import { verifyRequest } from "../auth.ts";
 import { ownerFingerprint } from "../crypto.ts";
-import { PAGE_LIMIT } from "../protocol.ts";
-import { ChannelGone, BadRequest, Forbidden, NotFound, NotOwner, SignInRequired, TooMany, Unauthorized, UpdateRequired, type Refusal } from "./failures.ts";
-import { answer, buildContext, describeRoutes, dispatch, incoming, json, Request_, type Route } from "./http.ts";
+import { MAX_BLOB_BYTES, PAGE_LIMIT } from "../protocol.ts";
+import { ChannelGone, BadRequest, Forbidden, NotFound, NotOwner, SignInRequired, TooLarge, TooMany, Unauthorized, UpdateRequired, type Refusal } from "./failures.ts";
+import { answer, buildContext, describeRoutes, dispatch, incoming, json, readCapped, Request_, type Route } from "./http.ts";
 import { Human, HUMAN_HEADER } from "./human.ts";
 import { betaMessage, inBeta, Policy } from "./policy.ts";
 import {
@@ -294,7 +294,9 @@ const routes: RoomRoute[] = [
       Effect.gen(function* () {
         const db = yield* RoomStore;
         if (!allow(`blob:${db.roomId}:${me}`, BLOBS_PER_MINUTE)) return yield* new TooMany({ message: "too many images; wait a minute" });
-        const { bytes } = yield* Request_;
+        const { req } = yield* Request_;
+        const bytes = yield* Effect.tryPromise({ try: () => readCapped(req, MAX_BLOB_BYTES), catch: () => new BadRequest({ message: "send the image's encrypted bytes" }) });
+        if (!bytes) return yield* new TooLarge({ message: "image too large" });
         yield* storeBlob(m[1]!, bytes, me);
         return { data: { id: m[1]! }, fx: { expireAt: (yield* touch) ?? undefined } };
       }),
