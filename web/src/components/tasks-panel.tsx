@@ -12,6 +12,7 @@ import { ResizablePanel } from "./ui/panel"
 export function TasksPanel({
   title,
   onBack,
+  backLabel = "All tasks",
   onClose,
   follow,
   children,
@@ -21,6 +22,7 @@ export function TasksPanel({
   title: ReactNode
   /** While a task is open: back to the list. */
   onBack?: () => void
+  backLabel?: string
   onClose: () => void
   /** The panel keeps to its foot as this changes (a task opens, a message lands there); null keeps to the top, for the list. */
   follow: string | null
@@ -62,7 +64,7 @@ export function TasksPanel({
       >
         <header className="drag flex h-(--chrome-h) shrink-0 items-center gap-2 px-3">
           {onBack && (
-            <IconButton label="All tasks" round className="glass size-9 text-ink" onClick={onBack}>
+            <IconButton label={backLabel} round className="glass size-9 text-ink" onClick={onBack}>
               <Icon icon={ArrowLeft01Icon} size={18} />
             </IconButton>
           )}

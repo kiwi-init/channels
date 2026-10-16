@@ -71,6 +71,42 @@ export function prsIn(state: ChannelState, messages: Message[], viewer: string, 
   return [...prs.values()];
 }
 
+export interface RecentPr extends PrRef {
+  by: string;
+  last: number;
+  task?: number;
+}
+
+function taskOf(state: ChannelState, m: Message, text: string): number | undefined {
+  for (const hit of text.matchAll(/\bT(\d+)\b/g)) {
+    const id = Number(hit[1]);
+    if (state.tasks.has(id)) return id;
+  }
+  if (m.ev?.op === "task.update") return m.ev.task;
+  const place = state.placeOf.get(m.seq);
+  return m.task ?? (place?.kind === "task" ? place.task : undefined);
+}
+
+export function recentPrs(state: ChannelState, messages: Message[], viewer: string, limit: number): RecentPr[] {
+  const seen = new Map<string, { by: string; last: number; task?: number }>();
+  for (const m of messages) {
+    if (!visibleTo(state, viewer, m)) continue;
+    const text = textOf(m);
+    if (!text) continue;
+    for (const l of prLinks(text)) {
+      const task = seen.get(l.url)?.task ?? taskOf(state, m, text);
+      seen.set(l.url, { by: m.from, last: at(m), ...(task !== undefined ? { task } : {}) });
+    }
+  }
+  return prsIn(state, messages, viewer, () => true)
+    .flatMap((pr) => {
+      const s = seen.get(pr.url);
+      return s ? [{ ...pr, ...s }] : [];
+    })
+    .sort((a, b) => b.last - a.last)
+    .slice(0, limit);
+}
+
 // ---------- agents ----------
 
 type AgentStatus = "working" | "blocked" | "idle" | "offline";

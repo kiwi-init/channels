@@ -246,7 +246,12 @@ try {
       const detailsBtn = () => owner.getByRole("button", { name: /^Details:/ })
       const convs = () => owner.getByRole("main").getByRole("navigation", { name: "Conversations" })
       const tasksBtn = () => owner.getByRole("main").getByRole("button", { name: "Tasks", exact: true })
+      const overview = () => owner.getByRole("complementary", { name: "Overview" })
       const tasksPanel = () => owner.getByRole("complementary", { name: "Tasks" })
+      const openOverview = async () => {
+        if (await tasksPanel().count()) await tasksPanel().getByRole("button", { name: "Close tasks" }).click()
+        await overview().waitFor()
+      }
       const closeTasks = () => tasksPanel().getByRole("button", { name: "Close tasks" }).click()
       /** Back to main from a direct conversation: the name's capsule leads with the way back. */
       const toChat = async () => {
@@ -255,7 +260,13 @@ try {
       }
       /** A task opens in the Tasks panel, from its list. */
       const toTask = async (name: RegExp) => {
-        if (!(await tasksPanel().count())) await tasksBtn().click()
+        if (!(await tasksPanel().count())) {
+          if (narrow) await tasksBtn().click()
+          else {
+            await openOverview()
+            await overview().getByRole("button", { name: "All tasks" }).click()
+          }
+        }
         await tasksPanel().getByRole("button", { name }).first().click()
       }
       await shoot(owner, tag, "01-channel")
@@ -265,7 +276,7 @@ try {
         await owner.locator("button[aria-label='Reply']").last().dispatchEvent("click")
         await owner.getByRole("button", { name: "Close thread" }).waitFor()
       }, () => owner.getByRole("button", { name: "Close thread" }).click())
-      await shoot(owner, tag, "04-tasks", () => tasksBtn().click(), closeTasks)
+      await shoot(owner, tag, narrow ? "04-tasks" : "04-overview", narrow ? () => tasksBtn().click() : openOverview, narrow ? closeTasks : undefined)
       await shoot(owner, tag, "05-task-thread", () => toTask(/Write fewer rows/), async () => {})
       await shoot(owner, tag, "06-task-page", async () => {
         await tasksPanel().getByRole("region", { name: /^Task T\d+/ }).getByRole("button", { name: /^Activity/ }).click()

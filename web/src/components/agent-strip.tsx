@@ -40,16 +40,56 @@ function doingNow(a: AgentNow): { text: string; busy: boolean } | null {
   return null
 }
 
+export const busy = (a: AgentNow) => !!a.here && (doingNow(a)?.busy ?? a.load.current.length > 0)
+
+export const byBusy = (agents: AgentNow[]) => [...agents].sort((a, b) => Number(busy(b)) - Number(busy(a)) || Number(!!b.here) - Number(!!a.here))
+
 const face = (a: AgentNow, size: number) =>
   a.coordinator ? <CoordinatorAvatar size={size} /> : <Monogram name={a.label} hue={a.name} agent color={a.color} size={size} online={size > 20 && !!a.here} />
+
+export function AgentLine({ a, now, onOpenTask, brief }: { a: AgentNow; now: number; onOpenTask: (id: number) => void; brief?: boolean }) {
+  return (
+    <li className="flex items-start gap-3 rounded-ctl px-2 py-2">
+      <span className="flex pt-0.5">{face(a, 28)}</span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-baseline gap-2">
+          <span className="truncate text-ui font-semibold">{a.label}</span>
+          {a.model && !brief && <span className="truncate text-stamp text-ink-3">{a.model}</span>}
+          {a.coordinator && <span className="shrink-0 text-stamp text-ink-3">coordinator</span>}
+          <span className="ml-auto shrink-0 text-stamp text-ink-3">{a.here ? "online" : a.lastAt && !brief ? `away · ${formatAgo(a.lastAt, now)}` : "away"}</span>
+        </span>
+        {doingNow(a) && (
+          <span className="flex items-center gap-1.5 text-meta">
+            <span className={cx("size-1.5 shrink-0 rounded-full", doingNow(a)!.busy ? "animate-pulse bg-doing" : "bg-ink-3")} />
+            <span className={doingNow(a)!.busy ? "font-medium text-ink" : "text-ink-3"}>{doingNow(a)!.text}</span>
+            {a.activity?.since && <span className="text-ink-3">· {formatAgo(a.activity.since, now)}</span>}
+          </span>
+        )}
+        {a.load.current.length ? (
+          a.load.current.map((t) => (
+            <button key={t.id} type="button" onClick={() => onOpenTask(t.id)} className="block max-w-full truncate text-left text-meta text-ink-2 hover:text-ink hover:underline">
+              <span className="font-medium text-doing">Working on</span> <span className="tabular-nums">{taskId(t.id)}</span> {t.title}
+            </button>
+          ))
+        ) : doingNow(a) ? null : a.here ? (
+          howWords(a.here) && <span className="block text-meta text-ink-3">{howWords(a.here)}</span>
+        ) : (
+          <span className="block text-meta text-ink-3">Not listening</span>
+        )}
+        {(a.load.queued.length > 0 || a.load.waiting.length > 0) && (
+          <span className="block text-stamp text-ink-3">
+            {[a.load.queued.length ? `${a.load.queued.length} queued` : null, a.load.waiting.length ? `${a.load.waiting.length} waiting for review` : null].filter(Boolean).join(" · ")}
+          </span>
+        )}
+      </span>
+    </li>
+  )
+}
 
 export function AgentStrip({ agents, now, onOpenTask }: { agents: AgentNow[]; now: number; onOpenTask: (id: number) => void }) {
   const [open, setOpen] = useState(false)
   if (!agents.length) return null
-  // Working first, then whoever's here, then whoever's away.
-  // Busy means its harness says it's working, or (when its harness doesn't say) a task it's on.
-  const busy = (a: AgentNow) => !!a.here && (doingNow(a)?.busy ?? a.load.current.length > 0)
-  const ordered = [...agents].sort((a, b) => Number(busy(b)) - Number(busy(a)) || Number(!!b.here) - Number(!!a.here))
+  const ordered = byBusy(agents)
   const working = ordered.filter(busy)
   const here = agents.filter((a) => a.here).length
   const line = working.length
@@ -67,41 +107,7 @@ export function AgentStrip({ agents, now, onOpenTask }: { agents: AgentNow[]; no
         <div className="min-h-0 overflow-hidden">
           <ul aria-label="What the agents are doing" className="max-h-72 overflow-y-auto px-1.5 pt-1.5">
             {ordered.map((a) => (
-              <li key={a.name} className="flex items-start gap-3 rounded-ctl px-2 py-2">
-                <span className="flex pt-0.5">{face(a, 28)}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-baseline gap-2">
-                    <span className="truncate text-ui font-semibold">{a.label}</span>
-                    {a.model && <span className="truncate text-stamp text-ink-3">{a.model}</span>}
-                    {a.coordinator && <span className="shrink-0 text-stamp text-ink-3">coordinator</span>}
-                    <span className="ml-auto shrink-0 text-stamp text-ink-3">{a.here ? "online" : a.lastAt ? `away · ${formatAgo(a.lastAt, now)}` : "away"}</span>
-                  </span>
-                  {/* Live from its harness: what it's doing this moment. */}
-                  {doingNow(a) && (
-                    <span className="flex items-center gap-1.5 text-meta">
-                      <span className={cx("size-1.5 shrink-0 rounded-full", doingNow(a)!.busy ? "animate-pulse bg-doing" : "bg-ink-3")} />
-                      <span className={doingNow(a)!.busy ? "font-medium text-ink" : "text-ink-3"}>{doingNow(a)!.text}</span>
-                      {a.activity?.since && <span className="text-ink-3">· {formatAgo(a.activity.since, now)}</span>}
-                    </span>
-                  )}
-                  {a.load.current.length ? (
-                    a.load.current.map((t) => (
-                      <button key={t.id} type="button" onClick={() => onOpenTask(t.id)} className="block max-w-full truncate text-left text-meta text-ink-2 hover:text-ink hover:underline">
-                        <span className="font-medium text-doing">Working on</span> <span className="tabular-nums">{taskId(t.id)}</span> {t.title}
-                      </button>
-                    ))
-                  ) : doingNow(a) ? null : a.here ? (
-                    howWords(a.here) && <span className="block text-meta text-ink-3">{howWords(a.here)}</span>
-                  ) : (
-                    <span className="block text-meta text-ink-3">Not listening</span>
-                  )}
-                  {(a.load.queued.length > 0 || a.load.waiting.length > 0) && (
-                    <span className="block text-stamp text-ink-3">
-                      {[a.load.queued.length ? `${a.load.queued.length} queued` : null, a.load.waiting.length ? `${a.load.waiting.length} waiting for review` : null].filter(Boolean).join(" · ")}
-                    </span>
-                  )}
-                </span>
-              </li>
+              <AgentLine key={a.name} a={a} now={now} onOpenTask={onOpenTask} />
             ))}
           </ul>
         </div>

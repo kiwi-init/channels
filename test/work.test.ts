@@ -5,11 +5,11 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
 import type { Event, Kind, Message } from "../src/protocol.ts";
 import { fold, type Roster } from "../src/state.ts";
-import { agentRows, needsPerson, prLinks, prsIn, taskFeed, taskPrs } from "../src/work.ts";
+import { agentRows, needsPerson, prLinks, prsIn, recentPrs, taskFeed, taskPrs } from "../src/work.ts";
 
 let seq = 0;
 const T0 = 1_700_000_000_000;
-async function msg(id: Identity, init: { kind?: Kind; ev?: Event; to?: string[]; re?: number[]; body?: string; at?: number } = {}): Promise<Message> {
+async function msg(id: Identity, init: { kind?: Kind; ev?: Event; to?: string[]; re?: number[]; body?: string; at?: number; task?: number } = {}): Promise<Message> {
   seq++;
   const ts = init.at ?? T0 + seq * 1000;
   const base = {
@@ -22,6 +22,7 @@ async function msg(id: Identity, init: { kind?: Kind; ev?: Event; to?: string[];
     ...(init.to ? { to: init.to } : {}),
     ...(init.re ? { re: init.re } : {}),
     ...(init.ev ? { ev: init.ev } : {}),
+    ...(init.task !== undefined ? { task: init.task } : {}),
   };
   const p = await sign(id, base);
   return { ...p, seq, rts: ts, sigOk: await verify(p) };
@@ -47,6 +48,39 @@ describe("pull requests", () => {
     const ms = [linked, merged];
     const s = fold(ms, roster);
     expect(prsIn(s, ms, "jonatas", (m) => m.from === "ann")).toMatchObject([{ number: 49, state: "merged", seq: linked.seq }]);
+  });
+
+  test("recent PRs: newest mention first, cut to the limit, with the task that named them", async () => {
+    const add = await msg(ann, { ev: { op: "task.add", title: "Keys move out", owner: "ann" } });
+    const a = await msg(ann, { body: `T${add.seq} is up: https://github.com/o/r/pull/1` });
+    const b = await msg(bob, { body: "https://github.com/o/r/pull/2" });
+    const c = await msg(coord, { body: "https://github.com/o/r/pull/3" });
+    const merged = await msg(coord, { body: "merged #3" });
+    const again = await msg(coord, { body: "back on https://github.com/o/r/pull/1" });
+    const ms = [add, a, b, c, merged, again];
+    const s = fold(ms, roster);
+    const recent = recentPrs(s, ms, "jonatas", 2);
+    expect(recent.map((p) => p.number)).toEqual([1, 3]);
+    expect(recent[0]).toMatchObject({ by: "coord", last: again.rts, task: add.seq, state: "open" });
+    expect(recent[1]).toMatchObject({ state: "merged" });
+  });
+
+  test("recent PRs: the task a message names wins over the task thread it was sent in", async () => {
+    const doing = await msg(ann, { ev: { op: "task.add", title: "Keys move out", owner: "ann" } });
+    const other = await msg(ann, { ev: { op: "task.add", title: "Faces go", owner: "ann" } });
+    const link = await msg(ann, { task: doing.seq, body: `T${other.seq} is up: https://github.com/o/r/pull/7` });
+    const ms = [doing, other, link];
+    const s = fold(ms, roster);
+    expect(recentPrs(s, ms, "jonatas", 5)[0]).toMatchObject({ number: 7, task: other.seq });
+  });
+
+  test("recent PRs: a reply in a task's thread ties its PR to that task", async () => {
+    const add = await msg(ann, { ev: { op: "task.add", title: "Keys move out", owner: "ann" } });
+    const root = await msg(ann, { task: add.seq, body: "starting" });
+    const reply = await msg(bob, { re: [root.seq], body: "up: https://github.com/o/r/pull/9" });
+    const ms = [add, root, reply];
+    const s = fold(ms, roster);
+    expect(recentPrs(s, ms, "jonatas", 5)[0]).toMatchObject({ number: 9, task: add.seq });
   });
 });
 
