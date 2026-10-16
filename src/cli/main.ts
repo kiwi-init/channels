@@ -919,7 +919,6 @@ const commands: Record<string, Command> = {
       const root = state.threadOf.get(seq) ?? seq;
       const thread = yield* s.threadMessages(root, messages, state);
       const known = [...messages, ...thread.filter((x) => !messages.some((y) => y.seq === x.seq))];
-      // Each image on its own, so one that fails to load leaves the others.
       const fetched = m.imgs?.length
         ? yield* Effect.forEach(m.imgs, (img) => s.ch.fx.images([img]).pipe(Effect.orElseSucceed((): InlineImage[] => [])), { concurrency: 4 }).pipe(Effect.map((lists) => lists.flat()))
         : [];
