@@ -201,7 +201,7 @@ describe("Grok keeps its own monitor running", () => {
     const joined = await joining;
     expect(joined.code).toBe(0);
     const me = youAre(joined.out);
-    expect(joined.out).toContain("start the monitor tool with command");
+    expect(joined.out).toMatch(/start the monitor tool with command `([^`]+)`, description "\1", persistent: true/);
     const file = JSON.parse(readFileSync(join(grokDir, "hooks", "kiwi.json"), "utf8")) as { hooks: Record<string, { hooks: { command: string }[] }[]> };
     expect(Object.keys(file.hooks)).toEqual(["Stop"]);
 
@@ -234,8 +234,9 @@ describe("Grok keeps its own monitor running", () => {
     const monitor = spawn(h, ["listen"], G);
     shells.push(monitor);
     await until(async () => (await listenersOf(h, me)).some((l) => l.session === "g1"), "the monitor's listener held for this Grok session");
-    expect(await stop({ backgroundTasks: [{ id: "m2", type: "monitor", status: "running", description: "kiwi messages" }] })).toBeNull();
-    expect((await stop({ backgroundTasks: [{ id: "s2", type: "shell", status: "running", command: listen }] }))?.decision).toBe("block");
+    expect((await stop({ backgroundTasks: [{ id: "m2", type: "monitor", status: "running", description: "tail -f build.log" }] }))?.decision).toBe("block");
+    expect((await stop({ backgroundTasks: [{ id: "s2", type: "shell", status: "running", command: listen }, { id: "m4", type: "monitor", status: "running", description: "tail -f build.log" }] }))?.decision).toBe("block");
+    expect(await stop({ backgroundTasks: [{ id: "m5", type: "monitor", status: "running", description: listen }] })).toBeNull();
     monitor.kill();
   });
 });

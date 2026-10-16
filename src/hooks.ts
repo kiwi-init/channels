@@ -377,7 +377,7 @@ function wakeYourself(mc: string, harness: Here["harness"]): string | null {
   if (harness === "grok") {
     return [
       KEEP_A_LISTENER,
-      `Now, once for this session: start the monitor tool with command \`${COMMANDS.listen(mc)}\`, description "kiwi messages", persistent: true.`,
+      `Now, once for this session: start the monitor tool with command \`${COMMANDS.listen(mc)}\`, description "${COMMANDS.listen(mc)}", persistent: true.`,
       "Each message for you arrives as monitor output and starts a turn. Answer it, then end the turn; the monitor keeps running.",
       "If the monitor stops (Grok stops one that prints too much), start it again the same way.",
     ].join("\n");
@@ -771,8 +771,8 @@ export function backgroundTasks(raw: unknown): BackgroundTask[] | null {
   return raw.flatMap((t) => (isRecord(t) && typeof t.type === "string" ? [{ type: t.type, text: [t.command, t.description].filter((x) => typeof x === "string").join("\n") }] : []));
 }
 
-export function grokMonitorListens(tasks: readonly BackgroundTask[], commands: readonly string[], heardFromSession: boolean): boolean {
-  return tasks.some((t) => t.type === "monitor" && (heardFromSession || t.text.split("\n").some((line) => commands.includes(line.trim()))));
+export function grokMonitorListens(tasks: readonly BackgroundTask[], commands: readonly string[]): boolean {
+  return tasks.some((t) => t.type === "monitor" && t.text.split("\n").some((line) => commands.includes(line.trim())));
 }
 
 const LISTENER_SETTLE_MS = 1_500;
@@ -780,13 +780,15 @@ const LISTENER_SETTLE_MS = 1_500;
 type ListenCheck = { kind: "skip" } | { kind: "check"; listens: () => boolean; settles: boolean };
 
 function listenCheck(input: HookInput, b: Binding, who: Here, mc: string): ListenCheck {
-  const heard = () => liveListeners().some((l) => l.alias === b.alias && l.as === b.as && ((!!who.session && l.session === who.session) || (!!who.pid && l.pid === who.pid)));
-  if (who.harness === "kimi") return { kind: "check", listens: heard, settles: true };
+  if (who.harness === "kimi") {
+    const heard = () => liveListeners().some((l) => l.alias === b.alias && l.as === b.as && ((!!who.session && l.session === who.session) || (!!who.pid && l.pid === who.pid)));
+    return { kind: "check", listens: heard, settles: true };
+  }
   if (who.harness !== "grok" || input.stop_hook_active) return { kind: "skip" };
   const tasks = backgroundTasks(input.backgroundTasks);
   if (!tasks) return { kind: "skip" };
   const commands = [COMMANDS.listen(mc), COMMANDS.listen(`${mcBin()} ${channelOption(b.alias)} ${asOption(b.as)}`)];
-  return { kind: "check", listens: () => grokMonitorListens(tasks, commands, heard()), settles: tasks.some((t) => t.type === "monitor") };
+  return { kind: "check", listens: () => grokMonitorListens(tasks, commands), settles: false };
 }
 
 const rearmText = Effect.fn("Hooks.rearmText")(function* (input: HookInput, b: Binding, who: Here, mc: string) {
