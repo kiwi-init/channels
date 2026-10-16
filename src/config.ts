@@ -52,6 +52,7 @@ export interface SeatRecord {
   seen?: number;
   /** Joined from a process that named no harness (a plain terminal, an unknown tool): no session ever takes it over. */
   plain?: true;
+  model?: string;
 }
 
 /** Drop the seats `drop` matches from every directory. */

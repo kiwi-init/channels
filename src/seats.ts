@@ -27,6 +27,7 @@ export interface Here {
   session?: string;
   /** The harness's own process (Claude Code's CLAUDE_PID): the seat is held while it lives. */
   pid?: number;
+  model?: string;
 }
 
 export type Binding = SeatRecord;
@@ -61,6 +62,14 @@ export function here(env: Record<string, string | undefined> = process.env, tree
   if (env.CURSOR_AGENT) return { harness: "cursor" };
   if (env.OPENCODE_SESSION_ID) return { harness: "opencode", session: env.OPENCODE_SESSION_ID };
   return {};
+}
+
+function modelKey(model: string): string {
+  return model.trim().toLowerCase().replace(/\[[^\]]*\]$/, "");
+}
+
+function sameModel(seat: string | undefined, session: string | undefined): boolean {
+  return !seat || !session || modelKey(seat) === modelKey(session);
 }
 
 function heldByProcess(harness: "kimi" | "mimo", pid: number): Here {
@@ -227,7 +236,7 @@ export function seatsFor(dir: string, opts: SeatOptions = {}): Binding[] {
     const listenedElsewhere = (b: Binding) => live.some((l) => l.alias === b.alias && l.as === b.as && !ours(l));
     const free = seats.filter(
       // (Only a session asks whether someone else listens: a plain terminal can't tell its own listener from another's.)
-      (b) => !heldElsewhere(b, who, listening) && !(who.session && !b.session && listenedElsewhere(b)) && !(b.plain && who.session) && (!b.harness || !who.harness || b.harness === who.harness),
+      (b) => !heldElsewhere(b, who, listening) && !(who.session && !b.session && listenedElsewhere(b)) && !(b.plain && who.session) && (!b.harness || !who.harness || b.harness === who.harness) && sameModel(b.model, who.model),
     );
     // Several free seats: the one of this session's harness, when there's exactly one; otherwise it would be guessing.
     const ofMine = free.filter((b) => who.harness && b.harness === who.harness);
@@ -235,8 +244,8 @@ export function seatsFor(dir: string, opts: SeatOptions = {}): Binding[] {
     if (!pick) return [];
     if (opts.claim !== false && who.session && (pick.session !== who.session || (who.pid && pick.pid !== who.pid))) {
       // The previous holder's process goes with it: this session's, or none.
-      const { pid: _gone, ...rest } = pick;
-      const taken: Binding = { ...rest, session: who.session, ...(who.pid ? { pid: who.pid } : {}), ...(who.harness && !pick.harness ? { harness: who.harness } : {}), at: Date.now(), seen: Date.now() };
+      const { pid: _gone, model: _was, ...rest } = pick;
+      const taken: Binding = { ...rest, session: who.session, ...(who.pid ? { pid: who.pid } : {}), ...(who.model ? { model: who.model } : {}), ...(who.harness && !pick.harness ? { harness: who.harness } : {}), at: Date.now(), seen: Date.now() };
       updateConfig((c) => store(c, d, seatsAt(c, d).map((b) => (b.alias === pick.alias && b.as === pick.as ? taken : b))));
       return [taken];
     }

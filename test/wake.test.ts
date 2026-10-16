@@ -45,6 +45,7 @@ const fake = (name: string): void => {
 const calls = (): string[][] =>
   (existsSync(wakeLog) ? readFileSync(wakeLog, "utf8") : "")
     .split("---\n")
+    .slice(0, -1)
     .filter((c) => c.trim())
     .map((c) => c.trim().split("\n"));
 

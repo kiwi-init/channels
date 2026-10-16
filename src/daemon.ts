@@ -28,7 +28,7 @@ import { MAILBOX_TTL_MS, MailboxError, askToPair, openMailbox, readPairAnswer, r
 import { readMachineCert, type MachineCert } from "./person.ts";
 import { pidAlive } from "./seats.ts";
 import { VERSION } from "./version.ts";
-import { viaOf, wakeArgv, wakeKey, wakePath, wakePrompt, type WakeCommand, type WakePath, type WakeVia } from "./wake.ts";
+import { pullsWake, viaOf, wakeArgv, wakeKey, wakePath, wakePrompt, type WakeCommand, type WakePath, type WakeVia } from "./wake.ts";
 
 /** Who paired this computer: the person's key, exchange key and name, as their app answered. */
 export interface PairedPerson {
@@ -386,8 +386,10 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     const env = record ? activityEnv(record, process.env) : null;
     const { harnessActivity } = await import("./harness.ts");
     const now = env ? await harnessActivity(env) : undefined;
-    const via = wakeOn(cfg, seat.alias, seat.agent) ? viaOf(await pathOf(cfg, seat.alias, seat.agent)) : null;
-    const reach = reachOf(attachedTo(seat), record, now);
+    const attached = attachedTo(seat);
+    const pulled = attached === "listener" && pullsWake(record?.harness);
+    const via = wakeOn(cfg, seat.alias, seat.agent) ? (viaOf(await pathOf(cfg, seat.alias, seat.agent)) ?? (pulled ? "listener" : null)) : null;
+    const reach = reachOf(attached, record, now);
     if (!force && JSON.stringify(now) === JSON.stringify(seat.activity) && via === seat.wakeVia && reach === seat.reach) return;
     seat.activity = now;
     seat.wakeVia = via;
