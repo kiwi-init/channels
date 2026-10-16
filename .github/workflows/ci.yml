@@ -6,10 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
-# A new push to a pull request cancels its run still in progress. Main and bus/staging keep every run.
+# A new push to a pull request cancels its run still in progress. Main and bus/staging keep every run; a push to mobile or mobile/<piece> cancels the earlier run on that branch.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || format('{0}-{1}', github.ref_name, github.sha) }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ci-${{ github.event.pull_request.number || (startsWith(github.ref, 'refs/heads/mobile') && github.ref_name) || format('{0}-{1}', github.ref_name, github.sha) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/mobile') }}
 
 permissions:
   contents: read
