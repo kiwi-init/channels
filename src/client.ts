@@ -43,6 +43,7 @@ import { freeHandle, seededPick } from "./handles.ts";
 import { asOption } from "./wake.ts";
 import { inlineText, makeRecord, NAME_RE, nameKey, readRecord, readRuns, RESERVED_NAMES, sealRecord, verifiedComputer, verifiedPerson, type JoinClaims, type JoinRequest, type Member, type MemberInfo } from "./membership.ts";
 import {
+  MORE_REFUSED,
   CLOSE_CLOSED,
   CLOSE_REMOVED,
   goneHow,
@@ -1467,10 +1468,11 @@ export class Channel {
       ws.onclose = (ev) => resolve({ code: ev.code, reason: ev.reason });
     });
     ws.onerror = () => {};
+    let openedAs: OpenKind = at.next;
     ws.onopen = () => {
-      const kind = at.next;
+      openedAs = at.next;
       at.next = "reconnect";
-      Queue.offerUnsafe(q, { t: "open", presence: this.presenceOn(ws), mark: markOn(ws), kind });
+      Queue.offerUnsafe(q, { t: "open", presence: this.presenceOn(ws), mark: markOn(ws), kind: openedAs });
     };
     let paging = false;
     let inPage = false;
@@ -1489,8 +1491,8 @@ export class Channel {
       }
       if (f.t === "page") return void (inPage = true);
       if (f.t === "msg" && paging && !inPage) return;
-      if (f.t === "err" && asked && f.error === "unknown frame") {
-        this.moreUnknown = true;
+      if (f.t === "err" && asked && (f.error === "unknown frame" || f.error === MORE_REFUSED)) {
+        if (f.error === "unknown frame") this.moreUnknown = true;
         return void ws.close(4000, "more");
       }
       Queue.offerUnsafe(q, f);
@@ -1500,6 +1502,10 @@ export class Channel {
       asked = false;
       if (f.more && this.moreUnknown) ws.close(4000, "more");
       else if (f.more) Queue.offerUnsafe(q, { t: "more", ask });
+      else if (openedAs === "page") {
+        Queue.offerUnsafe(q, { t: "roster" });
+        Queue.offerUnsafe(q, { t: "request" });
+      }
     };
     return { ws, closed };
   }

@@ -10,7 +10,12 @@ import * as Stream from "effect/Stream";
 import { AgentLive } from "../src/agent.ts";
 import { Channel, type Live } from "../src/client.ts";
 import { generateIdentity } from "../src/identity.ts";
-import { WS_PROTOCOL } from "../src/protocol.ts";
+import * as Layer from "effect/Layer";
+import { MORE_REFUSED, WS_PROTOCOL } from "../src/protocol.ts";
+import { Human } from "../src/relay/human.ts";
+import { OPEN_POLICY, Policy } from "../src/relay/policy.ts";
+import { Directory, MORE_PER_MINUTE, onClientFrame, RoomDb, type Sql } from "../src/relay/room.ts";
+import { makeRelay, runRoomSync } from "../src/relay/route.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { checked } from "./check.ts";
 import { trafficProxy } from "./traffic.ts";
@@ -59,11 +64,13 @@ async function seeded(): Promise<{ dataDir: string; access: Channel["access"]; o
   return { dataDir, access, owner, head: seed.seq + BACKLOG - 1 };
 }
 
-async function catchUp(via: string, relay: string, seed: Awaited<ReturnType<typeof seeded>>): Promise<{ kinds: string[]; seqs: number[] }> {
+async function catchUp(via: string, relay: string, seed: Awaited<ReturnType<typeof seeded>>): Promise<{ kinds: string[]; seqs: number[]; rosters: number; requests: number }> {
   const ch = new Channel(seed.access, via, seed.owner);
   const poster = new Channel(seed.access, relay, seed.owner);
   const kinds: string[] = [];
   const seqs: number[] = [];
+  let rosters = 0;
+  let requests = 0;
   let posted = false;
   const handle = (ev: Live) => {
     switch (ev._tag) {
@@ -72,6 +79,10 @@ async function catchUp(via: string, relay: string, seed: Awaited<ReturnType<type
         return ev.kind === "page" ? Effect.void : Effect.asVoid(Effect.ignoreCause(ch.fx.members()));
       case "Message":
         return Effect.sync(() => void seqs.push(ev.message.seq));
+      case "Roster":
+        return Effect.sync(() => void rosters++);
+      case "Request":
+        return Effect.sync(() => void requests++);
       case "Ready":
         if (posted) return Effect.void;
         posted = true;
@@ -84,7 +95,7 @@ async function catchUp(via: string, relay: string, seed: Awaited<ReturnType<type
   await until(() => seqs.includes(seed.head + 1), "the whole backlog and the message said meanwhile");
   await Bun.sleep(200);
   await Effect.runPromise(Fiber.interrupt(fiber));
-  return { kinds, seqs };
+  return { kinds, seqs, rosters, requests };
 }
 
 const inOrder = (seqs: number[]) => seqs.every((s, i) => i === 0 || s === seqs[i - 1]! + 1);
@@ -109,7 +120,7 @@ test("a fresh listener catches up on a long backlog with one socket and one rost
   }
 });
 
-function oldRelay(target: string): { url: string; sockets: () => number; stop: () => void } {
+function oldRelay(target: string, refusal = "unknown frame"): { url: string; sockets: () => number; stop: () => void } {
   let sockets = 0;
   const ups = new WeakMap<ServerWebSocket<{ path: string; protocols: string[] }>, WebSocket>();
   const server = Bun.serve<{ path: string; protocols: string[] }>({
@@ -136,7 +147,7 @@ function oldRelay(target: string): { url: string; sockets: () => number; stop: (
         };
       },
       message(ws, data) {
-        if (typeof data === "string" && (JSON.parse(data) as { t?: unknown }).t === "more") return void ws.send(JSON.stringify({ t: "err", error: "unknown frame" }));
+        if (typeof data === "string" && (JSON.parse(data) as { t?: unknown }).t === "more") return void ws.send(JSON.stringify({ t: "err", error: refusal }));
         const up = ups.get(ws);
         if (up?.readyState === WebSocket.OPEN) up.send(data);
       },
@@ -155,14 +166,56 @@ test("against a relay that doesn't know more frames, the listener pages by recon
   const server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: seed.dataDir });
   const old = oldRelay(server.url.origin);
   try {
-    const { kinds, seqs } = await catchUp(old.url, server.url.origin, seed);
+    const { kinds, seqs, rosters, requests } = await catchUp(old.url, server.url.origin, seed);
     console.log(`catch-up from an old relay: ${old.sockets()} sockets, opens ${kinds.join(", ")}`);
     expect(seqs.length).toBe(BACKLOG + 1);
     expect(inOrder(seqs)).toBe(true);
     expect(kinds.filter((k) => k !== "page")).toEqual(["first"]);
+    expect(kinds).toContain("page");
+    expect(rosters).toBe(1);
+    expect(requests).toBe(1);
   } finally {
     old.stop();
     server.stop(true);
+  }
+});
+
+test("a relay that refuses a page ask is paged by reconnecting, and nothing is lost", async () => {
+  const seed = await seeded();
+  const server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: seed.dataDir });
+  const busy = oldRelay(server.url.origin, MORE_REFUSED);
+  try {
+    const { kinds, seqs, rosters } = await catchUp(busy.url, server.url.origin, seed);
+    expect(seqs.length).toBe(BACKLOG + 1);
+    expect(inOrder(seqs)).toBe(true);
+    expect(kinds).toContain("page");
+    expect(rosters).toBe(1);
+  } finally {
+    busy.stop();
+    server.stop(true);
+  }
+});
+
+test("the relay answers a member's page asks only so often", async () => {
+  const seed = await seeded();
+  const file = new Database(join(seed.dataDir, `${seed.access.roomId}.sqlite`));
+  try {
+    const sql: Sql = {
+      run: (q, ...p) => void file.query(q).run(...p),
+      all: <T>(q: string, ...p: (string | number | null)[]) => file.query(q).all(...p) as T[],
+    };
+    const ctx = makeRelay(
+      Layer.mergeAll(
+        Layer.succeed(Human, null),
+        Layer.succeed(Policy, OPEN_POLICY),
+        Layer.succeed(Directory, { list: async () => [], reserve: async () => true, release: async () => {} }),
+      ),
+    );
+    const ask = () => runRoomSync(ctx, new RoomDb(sql, seed.access.roomId), onClientFrame(JSON.stringify({ t: "more", since: seed.head - 1 }), seed.owner.pk)).reply;
+    for (let i = 0; i < MORE_PER_MINUTE; i++) expect(String(ask())).toContain('"t":"page"');
+    expect(String(ask())).toContain(MORE_REFUSED);
+  } finally {
+    file.close();
   }
 });
 
