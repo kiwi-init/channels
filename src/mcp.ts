@@ -304,9 +304,9 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     },
     shaped(({ script }) =>
       Effect.gen(function* () {
-        const { channelFiles, runSh, sessionViews } = yield* Effect.promise(() => import("./sh.ts"));
+        const { channelFiles, runSh, sessionViews, channelTables } = yield* Effect.promise(() => import("./sh.ts"));
         const views = yield* sessionViews(s, script);
-        const r = yield* Effect.promise(() => runSh(channelFiles(views), script));
+        const r = yield* Effect.promise(() => runSh(channelFiles(views), script, { tables: channelTables(views) }));
         const text = [r.stdout.trimEnd(), r.stderr.trimEnd() && `[stderr]\n${r.stderr.trimEnd()}`, r.exitCode && `[exit ${r.exitCode}]`].filter(Boolean).join("\n");
         return r.exitCode ? fail(text) : ok(text || "(no output)");
       }),
