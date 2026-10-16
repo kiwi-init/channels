@@ -27,9 +27,9 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schedule from "effect/Schedule";
 import type * as Scope from "effect/Scope";
-import { accessSync, constants as fsConstants, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { accessSync, constants as fsConstants, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { dirname, isAbsolute, join } from "node:path";
 import { openSession, type AgentSession } from "./agent.ts";
 import { Cursor, home, Keystore, loadConfig, type ChannelConfig } from "./config.ts";
 import { ChannelGone } from "./client.ts";
@@ -39,6 +39,8 @@ import { humanOf } from "./state.ts";
 import { asOption, channelOption, wakePath, wakeWords } from "./wake.ts";
 import { daemonListeners, ensureDaemon, holdListener, wakeOn, type DaemonListener, type HeldListener } from "./daemon.ts";
 import { kimiCodePid } from "./ancestry.ts";
+import { binDir } from "./shell-path.ts";
+import { VERSION } from "./version.ts";
 import { bindDirectory as bindSeat, bindingFor as seatFor, here, kimiHookHere, sameSeat, seatsFor as heldSeats, seatsHeldAnywhere, seatsNear, type Binding, type Here, type Listener, type SeatOptions } from "./seats.ts";
 
 /** Marks our entries so install/uninstall can find them. Current clients only. */
@@ -239,12 +241,66 @@ function shellQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
+const KIWI_EXE = process.platform === "win32" ? "kiwi.exe" : "kiwi";
+
 function installedBin(): string {
-  return join(homedir(), ".kiwi", "bin", process.platform === "win32" ? "kiwi.exe" : "kiwi");
+  return join(homedir(), ".kiwi", "bin", KIWI_EXE);
 }
 
-function selfOnDisk(): boolean {
-  return existsSync(/\.(ts|js)$/.test(Bun.main) ? Bun.main : process.execPath);
+export const IDENTITY_ARG = "__kiwi-identity";
+
+function selfFile(): string {
+  return /\.(ts|js)$/.test(Bun.main) ? Bun.main : process.execPath;
+}
+
+export function selfIdentity(): string | null {
+  try {
+    const file = realpathSync(selfFile());
+    const s = statSync(file);
+    return `${VERSION} ${file} ${s.dev}:${s.ino} ${s.size} ${s.mtimeMs}`;
+  } catch {
+    return null;
+  }
+}
+
+function selfRunnable(): boolean {
+  if (!/\.(ts|js)$/.test(Bun.main)) return runnable(process.execPath);
+  try {
+    return statSync(Bun.main).isFile() && runnable(Bun.which("bun") ?? process.execPath);
+  } catch {
+    return false;
+  }
+}
+
+function installCandidates(): string[] {
+  const found = [join(binDir(), KIWI_EXE), join(dirname(process.execPath), KIWI_EXE), Bun.which("kiwi")];
+  return [...new Set(found.filter((p): p is string => typeof p === "string" && isAbsolute(p)))];
+}
+
+const PROBE_SCRUB = ["CLAUDECODE", "CLAUDE_PID", "CLAUDE_CODE_SESSION_ID", "CLAUDE_PROJECT_DIR", "CODEX_THREAD_ID", "GROK_SESSION_ID", "OPENCODE_SESSION_ID", "MIMOCODE", "MIMOCODE_PID", "GEMINI_CLI", "CURSOR_AGENT", "AI_AGENT", "KIWI_CHANNEL", "KIWI_AS"];
+const probed = new Map<string, string | null>();
+
+function identityOf(program: string): string | null {
+  let key: string;
+  try {
+    const s = statSync(program);
+    key = `${program}\u0000${s.dev}:${s.ino}\u0000${s.size}\u0000${s.mtimeMs}`;
+  } catch {
+    return null;
+  }
+  const known = probed.get(key);
+  if (known !== undefined) return known;
+  const env: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !PROBE_SCRUB.includes(k)) env[k] = v;
+  let id: string | null = null;
+  try {
+    const r = Bun.spawnSync([program, IDENTITY_ARG], { cwd: tmpdir(), env, stdin: "ignore", stdout: "pipe", stderr: "ignore", timeout: 5_000 });
+    id = r.exitCode === 0 ? r.stdout.toString().trim() || null : null;
+  } catch {
+    id = null;
+  }
+  probed.set(key, id);
+  return id;
 }
 
 type HookEntry = { matcher?: string; hooks: { type: "command"; command: string; timeout?: number; async?: boolean; asyncRewake?: boolean }[] };
@@ -329,9 +385,11 @@ function runnable(path: string): boolean {
 
 export function isOurHook(command: unknown, arg: string): boolean {
   if (typeof command !== "string") return false;
-  if (command === hookCommand(arg)) return selfOnDisk();
-  const installed = installedBin();
-  return command === `${shellQuote(installed)} hook ${arg} ${MARK}` && runnable(installed);
+  if (command === hookCommand(arg)) return selfRunnable();
+  const named = installCandidates().find((p) => command === `${shellQuote(p)} hook ${arg} ${MARK}`);
+  if (named === undefined || !runnable(named)) return false;
+  const self = selfIdentity();
+  return self !== null && identityOf(named) === self;
 }
 
 function hasHook(s: Settings, event: string, arg: string): boolean {

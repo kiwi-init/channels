@@ -1,9 +1,10 @@
 // Per-harness hook files: write, idempotent re-install, uninstall leaves the user's own entries.
 import { afterEach, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, updateConfig } from "../src/config.ts";
+import { VERSION } from "../src/version.ts";
 import { autoInstallExtraHooks, autoInstallHooks, backgroundTasks, cursorStopFollowup, extraInstalled, grokMonitorListens, hooksListen, hooksStatus, installDetected, installExtra, installHooks, kimiReason, rewakeCapable, stopStyle, uninstallDetected, uninstallExtra, withKimiHooks, withoutKimiHooks } from "../src/hooks.ts";
 
 const made: string[] = [];
@@ -496,110 +497,79 @@ test("Grok's Stop input names a task's type as kind, as Grok 1.0.62 sends it, an
   expect(grokMonitorListens(tasks ?? [], ["kiwi listen", "kiwi -c ch --as g listen"])).toBe(true);
 });
 
-const HOOKS_TS = join(import.meta.dir, "..", "src", "hooks.ts");
-
-function inHome(home: string, script: string, env: Record<string, string> = {}): unknown {
-  const r = Bun.spawnSync(["bun", "-e", `import * as h from ${JSON.stringify(HOOKS_TS)};\n${script}`], { env: { ...process.env, HOME: home, ...env }, stdout: "pipe", stderr: "pipe" });
-  if (r.exitCode !== 0) throw new Error(r.stderr.toString());
-  return JSON.parse(r.stdout.toString());
-}
+const MAIN_TS = join(import.meta.dir, "..", "src", "cli", "main.ts");
 
 function shellQuoted(p: string): string {
   return `'${p.replace(/'/g, `'\\''`)}'`;
 }
 
-function standardWrapper(home: string): { bin: string; real: string } {
-  mkdirSync(join(home, ".kiwi", "bin"), { recursive: true });
-  const real = join(home, ".kiwi", "bin", "kiwi.real");
-  writeFileSync(real, "#!/bin/sh\nexit 0\n");
-  chmodSync(real, 0o755);
-  const bin = join(home, ".kiwi", "bin", "kiwi");
-  writeFileSync(bin, `#!/bin/sh\nexec ${shellQuoted(real)} "$@"\n`);
-  chmodSync(bin, 0o755);
-  return { bin, real };
+function script(path: string, body: string): string {
+  writeFileSync(path, `#!/bin/sh\n${body}\n`);
+  chmodSync(path, 0o755);
+  return path;
 }
 
-test("kiwi's hook is the command this kiwi writes, or the same command for the standard install path when that path runs", () => {
-  const home = scratch("hk-ours-home ' ");
-  const dir = scratch("hk-ours-");
-  const bin = join(home, ".kiwi", "bin", "kiwi");
-  const cmd = (program: string, arg: string) => `${shellQuoted(program)} hook ${arg} # kiwi`;
-  const check = (commands: [unknown, string][]) => inHome(home, `console.log(JSON.stringify(${JSON.stringify(commands)}.map(([c, a]) => h.isOurHook(c, a))));`);
+function kiwiCli(args: string[], env: Record<string, string>): { code: number; out: string } {
+  const r = Bun.spawnSync([process.execPath, MAIN_TS, ...args], { cwd: scratch("hk-cli-cwd-"), env: { ...process.env, ...env }, stdout: "pipe", stderr: "pipe" });
+  return { code: r.exitCode, out: r.stdout.toString() };
+}
 
-  expect(check([[cmd(bin, "listen"), "listen"]])).toEqual([false]);
-  const { real } = standardWrapper(home);
-  expect(Bun.spawnSync([bin, "hook", "stop"]).exitCode).toBe(0);
-  const exe = (p: string) => {
-    writeFileSync(p, "#!/bin/sh\nexit 0\n");
-    chmodSync(p, 0o755);
-    return p;
-  };
-  const elsewhere = exe(join(dir, "kiwi"));
-  const echo = exe(join(dir, "echo"));
-  const bun = exe(join(dir, "bun"));
-  mkdirSync(join(dir, "src", "cli"), { recursive: true });
-  const main = join(dir, "src", "cli", "main.ts");
-  writeFileSync(main, "");
-  expect(
-    check([
-      [cmd(bin, "listen"), "listen"],
-      [cmd(bin, "kimi-stop"), "kimi-stop"],
-      [cmd(bin, "stop"), "listen"],
-      [cmd(bin, "kimi-stop"), "stop"],
-      [`${shellQuoted(bin)}oops hook stop # kiwi`, "stop"],
-      [`${shellQuoted(bin)} extra hook stop # kiwi`, "stop"],
-      [`${shellQuoted(bin)} hook stop`, "stop"],
-      ["kiwi hook stop # kiwi", "stop"],
-      [cmd(real, "stop"), "stop"],
-      [cmd(elsewhere, "stop"), "stop"],
-      [cmd(echo, "stop"), "stop"],
-      [`${shellQuoted(bun)} ${shellQuoted(main)} hook stop # kiwi`, "stop"],
-      [`${shellQuoted(echo)} ${shellQuoted(main)} hook stop # kiwi`, "stop"],
-      [undefined, "stop"],
-    ]),
-  ).toEqual([true, true, false, false, false, false, false, false, false, false, false, false, false, false]);
-
-  chmodSync(bin, 0o644);
-  expect(check([[cmd(bin, "stop"), "stop"]])).toEqual([false]);
-  rmSync(bin);
-  mkdirSync(bin);
-  expect(check([[cmd(bin, "stop"), "stop"]])).toEqual([false]);
+test("`kiwi __kiwi-identity` prints this kiwi's version and the file it runs from, and nothing else takes that argument", () => {
+  const r = kiwiCli(["__kiwi-identity"], {});
+  expect(r.code).toBe(0);
+  const line = r.out.trim();
+  expect(line.split("\n")).toHaveLength(1);
+  expect(line.startsWith(`${VERSION} ${realpathSync(MAIN_TS)} `)).toBe(true);
+  expect(kiwiCli(["__kiwi-identity"], {}).out.trim()).toBe(line);
 });
 
-test("Claude Code's and Grok's hooks count as installed through a wrapper at the standard path, and not once it's gone", () => {
-  const home = scratch("hk-wrap-home-");
-  const claude = scratch("hk-wrap-claude-");
-  const grok = scratch("hk-wrap-grok-");
-  const elsewhere = scratch("hk-wrap-else-");
-  const { bin } = standardWrapper(home);
-  const other = join(elsewhere, "kiwi");
-  writeFileSync(other, "#!/bin/sh\nexit 0\n");
-  chmodSync(other, 0o755);
+test("a hook through a wrapper in kiwi's install folder counts only when the wrapper answers as this kiwi", () => {
+  const install = scratch("hk-id-install ' ");
+  const elsewhere = scratch("hk-id-else-");
+  const claude = scratch("hk-id-claude-");
+  const grok = scratch("hk-id-grok-");
+  const env = { KIWI_HOME: scratch("hk-id-home-"), KIWI_INSTALL: install, CLAUDE_CONFIG_DIR: claude, KIWI_GROK_DIR: grok, KIWI_CODEX_DIR: join(elsewhere, "none"), KIWI_GEMINI_DIR: join(elsewhere, "none"), KIWI_CURSOR_DIR: join(elsewhere, "none"), KIWI_KIMI_DIR: join(elsewhere, "none") };
+  const forward = (target: string) => `exec ${shellQuoted(process.execPath)} ${shellQuoted(target)} "$@"`;
   const write = (program: string) => {
     const cmd = (arg: string) => `${shellQuoted(program)} hook ${arg} # kiwi`;
-    const listen = { hooks: [{ type: "command", command: cmd("listen"), async: true, asyncRewake: true }] };
     writeFileSync(
       join(claude, "settings.json"),
       JSON.stringify({
         hooks: {
-          SessionStart: [{ hooks: [{ type: "command", command: cmd("session-start") }] }, listen],
-          UserPromptSubmit: [{ hooks: [{ type: "command", command: cmd("prompt") }] }, listen],
-          Stop: [{ hooks: [{ type: "command", command: cmd("stop") }] }, listen],
+          SessionStart: [{ hooks: [{ type: "command", command: cmd("session-start") }] }],
+          UserPromptSubmit: [{ hooks: [{ type: "command", command: cmd("prompt") }] }],
+          Stop: [{ hooks: [{ type: "command", command: cmd("stop") }] }],
         },
       }),
     );
     mkdirSync(join(grok, "hooks"), { recursive: true });
     writeFileSync(join(grok, "hooks", "kiwi.json"), JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: cmd("stop") }] }] } }));
   };
-  const installed = () =>
-    inHome(home, `console.log(JSON.stringify([h.listenHooksInstalled(), h.extraInstalled("grok")]));`, { KIWI_HOME: scratch("hk-wrap-kiwi-"), CLAUDE_CONFIG_DIR: claude, KIWI_GROK_DIR: grok });
-  write(bin);
-  expect(installed()).toEqual([true, true]);
-  write(other);
-  expect(installed()).toEqual([false, false]);
-  write(bin);
-  rmSync(bin);
-  expect(installed()).toEqual([false, false]);
+  const status = () => {
+    const r = kiwiCli(["hooks", "status"], env);
+    expect(r.code).toBe(0);
+    return r.out.split("\n").filter((l) => l.startsWith("claude:") || l.startsWith("grok:"));
+  };
+
+  const wrapper = join(install, "kiwi");
+  script(wrapper, forward(MAIN_TS));
+  write(wrapper);
+  expect(status()).toEqual(["claude: installed", "grok: installed"]);
+
+  const old = script(join(elsewhere, "old-kiwi"), `[ "$1" = "__kiwi-identity" ] && echo "0.0.1 ${elsewhere}/old-kiwi 1:1 1 1"; exit 0`);
+  script(wrapper, `exec ${shellQuoted(old)} "$@"`);
+  expect(status()).toEqual(["claude: not installed", "grok: not installed"]);
+
+  script(wrapper, `exec ${shellQuoted(join(elsewhere, "missing"))} "$@"`);
+  expect(status()).toEqual(["claude: not installed", "grok: not installed"]);
+
+  script(wrapper, forward(MAIN_TS));
+  chmodSync(wrapper, 0o644);
+  expect(status()).toEqual(["claude: not installed", "grok: not installed"]);
+
+  const outside = script(join(elsewhere, "kiwi"), forward(MAIN_TS));
+  write(outside);
+  expect(status()).toEqual(["claude: not installed", "grok: not installed"]);
 });
 
 test("a Kimi Code Stop reason is the answers' plain text, for stderr", () => {
