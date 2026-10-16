@@ -57,7 +57,8 @@
       "entry": [
         "app/**/*.{ts,tsx}",
         "src/**/*.test.{ts,tsx}",
-        "src/lib/sqlite.ts"
+        "src/lib/sqlite.ts",
+        "src/theme/useTheme.ts"
       ],
       "project": [
         "app/**/*.{ts,tsx}",
