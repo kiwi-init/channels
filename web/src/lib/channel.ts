@@ -6,7 +6,7 @@ import type { CachedRow } from "@mc/cache-row.ts"
 import { ChannelGone, RelayError, type HumanSession, type ModeSetting, type RoomsSetting, type SendOptions } from "@mc/client.ts"
 import { decodeJoinCode, ownerFingerprint } from "@mc/crypto.ts"
 import type { JoinRequest, Member } from "@mc/membership.ts"
-import { SNAPSHOT_EVERY, type Message } from "@mc/protocol.ts"
+import type { Message } from "@mc/protocol.ts"
 import { fold, type ChannelState, type GuardFloor, type Roster } from "@mc/state.ts"
 import type { Activity } from "@mc/protocol.ts"
 import type { PublicAccess } from "../../../desktop/src/bridge.ts"
@@ -14,6 +14,7 @@ import { errorOf, linkOf, ops, type ChannelLink, type FollowEvent } from "./chan
 import { forgetHistory, readCached, rememberRow } from "./history"
 import { migrateLegacy } from "./legacy-seats"
 import { wholeLog } from "./history-plan"
+import { nextSnapshotTry } from "./snapshot-plan"
 import { ICON_LIVE } from "./icon-event"
 import { addMarks, type Marks } from "./receipts"
 import { fork } from "./runtime"
@@ -658,10 +659,22 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
     )
   })
   useEffect(() => reconcile(), [scopesKey, bitsKey, caughtUp])
-  const snapshotStep = ch.isOwner ? Math.floor(state.head / SNAPSHOT_EVERY) : 0
-  useEffect(() => {
-    if (snapshotStep > 0) ch.snapshotIfDue().catch(() => {})
-  }, [ch, snapshotStep])
+  const snapshotNext = useRef(nextSnapshotTry(0, 0))
+  const snapshotBusy = useRef(false)
+  const snapshotIfDue = useEffectEvent(() => {
+    const head = state.head
+    if (!ch.isOwner || snapshotBusy.current || head < snapshotNext.current) return
+    snapshotBusy.current = true
+    ch.snapshotIfDue()
+      .then(async (n) => {
+        snapshotNext.current = nextSnapshotTry(head, n ?? (await ch.snapshotAt()) ?? 0)
+      })
+      .catch(() => {})
+      .finally(() => {
+        snapshotBusy.current = false
+      })
+  })
+  useEffect(() => snapshotIfDue(), [state.head])
   // Online only if signed by the very key the owner admitted under that name.
   const live = useMemo(() => new Map([...online].filter(([name, o]) => !!o.pk && keyOf.get(name) === o.pk && now - o.at < PRESENCE_TTL)), [online, keyOf, now])
 

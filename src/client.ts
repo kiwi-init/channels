@@ -1828,6 +1828,10 @@ export class Channel {
     return run(this.fx.snapshotIfDue());
   }
 
+  snapshotAt(): Promise<number | null> {
+    return run(this.fx.snapshotAt());
+  }
+
   /** Delete the channel at the relay: messages, members, keys, everything. */
   close(): Promise<void> {
     return run(this.fx.close());

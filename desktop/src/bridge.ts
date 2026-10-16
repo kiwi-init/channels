@@ -76,6 +76,7 @@ export const CHANNEL_CALLS = [
   "reconcilePosting",
   "rotateIfDue",
   "snapshotIfDue",
+  "snapshotAt",
   "info",
   "title",
   "setTitle",
