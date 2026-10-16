@@ -924,7 +924,6 @@ const commands: Record<string, Command> = {
         : [];
       const saved = fetched.length ? saveImages(seq, fetched, args[2] ?? joinPath(home(), "downloads", s.ch.roomId)) : [];
       out(formatShown(m, known, state, saved, s.me));
-      // The rest of its thread, when there's more of it than #N, what it answers and its replies.
       const near = new Set([seq, ...(m.re ?? []), ...known.filter((x) => x.re?.includes(seq)).map((x) => x.seq)]);
       const rest = thread.filter((x) => !near.has(x.seq) && !ignored(state.trust.get(x.seq)));
       if (rest.length) {
