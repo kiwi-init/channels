@@ -188,7 +188,7 @@ jobs:
 
   relay-budget:
     name: relay / budget
-    inputs: ["src/**", "web/src/lib/**", "test/budget-*.test.ts", "test/traffic.ts", "test/check.ts"]
+    inputs: ["src/**", "web/src/lib/**", "test/budget-*.test.ts", "test/traffic.ts", "test/check.ts", "test/owner.ts", "test/owner-cli.ts"]
     always: ["package.json", "bun.lock", "scripts/ci-tests.ts"]
     description: >-
       Runs every test/budget-*.test.ts. budget-relay counts, on one long-lived room storage
