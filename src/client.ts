@@ -1245,19 +1245,18 @@ export class Channel {
       if (img.data !== undefined) return img.data;
       const ref = img.ref;
       if (!ref) return null;
-      let blob = blobMemory.get(this.roomId, ref.id);
-      if (!blob) {
-        const relay = yield* Relay;
-        const got = yield* relay.blob(this.relay, this.roomId, ref.id, this.identity).pipe(
-          Effect.mapError(gone),
-          Effect.catchIf(
-            (err) => err instanceof RelayError && err.status === 404,
-            () => Effect.succeed(null),
-          ),
-        );
-        if (!got) return null;
-        blob = got;
-      }
+      const cached = blobMemory.get(this.roomId, ref.id);
+      const kept = cached ? yield* Effect.promise(() => openBlob(ref, cached)) : null;
+      if (kept && kept.length === ref.size) return toBase64(kept);
+      const relay = yield* Relay;
+      const blob = yield* relay.blob(this.relay, this.roomId, ref.id, this.identity).pipe(
+        Effect.mapError(gone),
+        Effect.catchIf(
+          (err) => err instanceof RelayError && err.status === 404,
+          () => Effect.succeed(null),
+        ),
+      );
+      if (!blob) return null;
       const raw = yield* Effect.promise(() => openBlob(ref, blob));
       if (!raw || raw.length !== ref.size) return null;
       blobMemory.set(this.roomId, ref.id, blob);

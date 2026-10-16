@@ -123,6 +123,21 @@ test("with image refs on, an image travels as a reference and reads back byte fo
   expect((await ownerCh.history(back - 1)).messages.find((m) => m.seq === back)?.imgs).toEqual([img]);
 });
 
+test("a damaged image in the local cache is fetched again from the relay", async () => {
+  const kept = new Map<string, Uint8Array<ArrayBuffer>>();
+  keepBlobsIn({ get: (_, id) => kept.get(id) ?? null, set: (_, id, blob) => void kept.set(id, blob) });
+  const raw = crypto.getRandomValues(new Uint8Array(2048));
+  const img: ImageAttachment = { name: "c.png", mime: "image/png", data: Buffer.from(raw).toString("base64") };
+  await ownerCh.setImageRefs(true);
+  const seq = await memberCh.send("cached", { imgs: [img] });
+  await ownerCh.setImageRefs(false);
+  const ref = (await ownerCh.history(seq - 1)).messages.find((m) => m.seq === seq)!.imgs![0]!;
+  const id = ref.ref!.id;
+  kept.set(id, kept.get(id)!.slice(0, 100));
+  expect(await ownerCh.image(ref)).toBe(img.data!);
+  expect(kept.get(id)!.length).toBeGreaterThan(100);
+});
+
 test("the relay stores an image only under the hash of its bytes", async () => {
   const bytes = new Uint8Array(100).fill(1);
   const id = "f".repeat(64);

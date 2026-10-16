@@ -240,7 +240,7 @@ export const signingBudget: SigningBudget = {
   },
 };
 
-export function writePrivate(path: string, data: string): void {
+export function writePrivate(path: string, data: string | Uint8Array): void {
   mkdirSync(join(path, ".."), { recursive: true, mode: 0o700 });
   // Exclusive create. The first name is predictable, so a symlink planted there
   // must fail the open instead of being followed. Leave it in place and use a
@@ -534,8 +534,7 @@ const fileBlobMemory: BlobMemory = {
   set(room, id, blob) {
     if (!BLOB_ID_RE.test(id)) return;
     try {
-      mkdirSync(blobDir(room), { recursive: true, mode: 0o700 });
-      writeFileSync(join(blobDir(room), id), blob, { mode: 0o600 });
+      writePrivate(join(blobDir(room), id), blob);
     } catch {}
   },
 };
