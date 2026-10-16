@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Channel } from "../src/client.ts";
+import { Channel, INFO_MAX_AGE_MS } from "../src/client.ts";
 import { generateIdentity } from "../src/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { kiwiCmd } from "./owner.ts";
@@ -138,5 +138,28 @@ describe("the app's reads of one channel", () => {
     expect(await kept.title()).toBe("second");
     await kept.setCharter({ text: "Docs only.", since: 1 });
     expect((await kept.guard())?.charter).toEqual({ text: "Docs only.", since: 1 });
+  });
+
+  test("a kept read expires: past its max age the next read goes to the relay and sees another client's change", async () => {
+    expect(INFO_MAX_AGE_MS).toBe(30_000);
+    const owner = await generateIdentity("human");
+    const made = await Channel.create(proxy!.url, owner, { name: "human" }, [], undefined, undefined, "first");
+    const kept = new Channel(made.access, proxy!.url, owner, undefined, { keepInfo: true, infoMaxAgeMs: 300 });
+    const other = new Channel(made.access, proxy!.url, owner);
+    await Bun.sleep(100);
+    proxy!.reset();
+    expect(await kept.title()).toBe("first");
+    await other.setTitle("second");
+    await other.setCharter({ text: "Docs only.", since: 1 });
+    proxy!.reset();
+    expect(await kept.title()).toBe("first");
+    expect(await kept.guard()).toBeNull();
+    expect(proxy!.reset().routes["GET /info"] ?? 0).toBe(0);
+    await Bun.sleep(400);
+    expect(await kept.title()).toBe("second");
+    expect((await kept.guard())?.charter).toEqual({ text: "Docs only.", since: 1 });
+    const after = proxy!.reset().routes["GET /info"] ?? 0;
+    console.log(`after max age: ${after} GET /info for title and guard`);
+    expect(after).toBe(1);
   });
 });

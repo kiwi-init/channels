@@ -311,6 +311,8 @@ export interface LiveOptions {
 /** How long a dropped connection may stay down before listeners hear about it. */
 export const QUIET_DROP_MS = 30_000;
 
+export const INFO_MAX_AGE_MS = 30_000;
+
 /** The wait before connecting again: half a second, doubling, never more than 30s. */
 const backoff = Schedule.min([Schedule.exponential("500 millis"), Schedule.spaced("30 seconds")]);
 
@@ -615,6 +617,7 @@ export class Channel {
   private markedTo = 0;
   private marksUnknown = false;
   private infoShared: Fiber.Fiber<Info, Refusal> | null = null;
+  private infoExpires: number | null = null;
 
   constructor(
     public access: ChannelAccess,
@@ -623,13 +626,14 @@ export class Channel {
     readonly identity: Identity,
     /** Called whenever keys change (e.g. after a rotation) so callers can persist them. */
     private readonly onAccess?: (a: ChannelAccess) => void,
-    private readonly opts: { keepInfo?: boolean } = {},
+    private readonly opts: { keepInfo?: boolean; infoMaxAgeMs?: number } = {},
   ) {
     this.name = identity.name;
   }
 
   forgetInfo(): void {
     this.infoShared = null;
+    this.infoExpires = null;
   }
 
   get roomId(): string {
@@ -775,13 +779,17 @@ export class Channel {
 
     info: Effect.fn("Channel.info")({ self: this }, function* (this: Channel, fp?: string) {
       if (fp !== undefined) return yield* this.fetchInfo(fp);
+      if (this.infoExpires !== null && Date.now() >= this.infoExpires) this.forgetInfo();
       let shared = this.infoShared;
       if (!shared) {
         const fiber = yield* Effect.forkDetach(this.fetchInfo());
         shared = this.infoShared = fiber;
         const keep = !!this.opts.keepInfo;
+        const maxAge = this.opts.infoMaxAgeMs ?? INFO_MAX_AGE_MS;
         fiber.addObserver((exit) => {
-          if (this.infoShared === fiber && (!keep || Exit.isFailure(exit))) this.infoShared = null;
+          if (this.infoShared !== fiber) return;
+          if (!keep || Exit.isFailure(exit)) this.forgetInfo();
+          else this.infoExpires = Date.now() + maxAge;
         });
       }
       return yield* Fiber.join(shared);
