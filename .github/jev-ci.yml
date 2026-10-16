@@ -188,15 +188,16 @@ jobs:
 
   relay-budget:
     name: relay / budget
-    inputs: ["src/relay/**", "src/protocol.ts", "test/relay-budget.test.ts", "test/check.ts"]
+    inputs: ["src/**", "web/src/lib/**", "test/budget-*.test.ts", "test/traffic.ts", "test/check.ts"]
     always: ["package.json", "bun.lock", "scripts/ci-tests.ts"]
     description: >-
-      Runs test/relay-budget.test.ts: on one long-lived room storage handle, as a Cloudflare
-      Durable Object keeps it, counts the SQL statements a stored message, a read mark and a
-      connecting socket cost, and fails when one goes over its budget (a warm message pays no
-      read and two writes). Also checks the room's in-memory state follows posting rights,
-      removals, message numbering after old messages are dropped, and a closed room. Fails if
-      src/relay/room.ts reads or writes more per operation, or serves stale state.
+      Runs every test/budget-*.test.ts. budget-relay counts, on one long-lived room storage
+      handle as a Cloudflare Durable Object keeps it, the SQL statements a stored message, a read
+      mark and a connecting socket cost, and checks the room's in-memory state follows posting
+      rights, removals, numbering and a close. The others drive clients through test/traffic.ts,
+      a proxy in front of a local relay that counts HTTP requests by route, sockets, frames by
+      type and bytes. Each fails when an operation costs more requests, frames, bytes or
+      statements than its budget, so a change that adds relay traffic or storage work fails.
 
   repo-comments:
     jev: false
