@@ -150,6 +150,7 @@ export async function sealSnapshot(owner: Identity, access: ChannelAccess, base:
   const key = access.keys[String(e)];
   if (!key || owner.pk !== access.ownerPk || base.n < 1) return null;
   const plain = enc.encode(canonical({ v: VERSION, room: access.roomId, base: toWire(base) }));
+  if (plain.length > MAX_PLAIN) return null;
   const hash = await digest(plain);
   const packed = await squeeze(plain, new CompressionStream("deflate-raw"), Infinity);
   if (!packed) return null;

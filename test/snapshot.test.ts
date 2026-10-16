@@ -291,6 +291,12 @@ describe("sealed snapshots", () => {
     expect(await openSnapshot(access, forged)).toBeNull();
   });
 
+  test("a base too big to open again is never sealed", async () => {
+    const { w, access, base } = await channel();
+    const huge = { ...base, facts: [{ key: "k", value: "a".repeat(64 * 1024 * 1024), by: "own", ts: 1, seq: 1 }] };
+    expect(await sealSnapshot(w.ids.own!, access, huge)).toBeNull();
+  });
+
   test("anything the relay changes is refused", async () => {
     const { w, access, base } = await channel();
     const s = (await sealSnapshot(w.ids.own!, access, base))!;
