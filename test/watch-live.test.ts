@@ -40,20 +40,22 @@ test("a watch connection says when the relay is back after an outage", async () 
   const owner = await generateIdentity("human");
   const { access } = await Channel.create(relay, owner, { name: "human" });
   const w = watch(new Channel(access, relay, owner), 300);
-  await until(() => w.events.some((e) => e._tag === "Ready"), "the first ready");
+  try {
+    await until(() => w.events.some((e) => e._tag === "Ready"), "the first ready");
 
-  server.stop(true);
-  await until(() => w.status.length >= 1, "the outage line");
-  server = startRelay({ port, hostname: "127.0.0.1", dataDir });
-  await until(() => w.status.length >= 2, "the line when the relay is back");
+    server.stop(true);
+    await until(() => w.status.length >= 1, "the outage line");
+    server = startRelay({ port, hostname: "127.0.0.1", dataDir });
+    await until(() => w.status.length >= 2, "the line when the relay is back");
 
-  expect(w.status[0]).toMatch(/can't reach the relay for \d+s/);
-  expect(w.status[1]).toMatch(/reconnected after \d+s; nothing was missed/);
-  const opens = w.events.filter((e): e is Extract<Live, { _tag: "Open" }> => e._tag === "Open");
-  expect(opens.at(-1)?.outage).toBeGreaterThan(0);
-
-  await w.stop();
-  server.stop(true);
+    expect(w.status[0]).toMatch(/can't reach the relay for \d+s/);
+    expect(w.status[1]).toMatch(/reconnected after \d+s; nothing was missed/);
+    const opens = w.events.filter((e): e is Extract<Live, { _tag: "Open" }> => e._tag === "Open");
+    expect(opens.at(-1)?.outage).toBeGreaterThan(0);
+  } finally {
+    await w.stop();
+    server.stop(true);
+  }
 });
 
 test("a watch connection takes the new key when the channel rotates", async () => {
@@ -63,12 +65,14 @@ test("a watch connection takes the new key when the channel rotates", async () =
   const { access } = await Channel.create(relay, owner, { name: "human" });
   const watching = new Channel(access, relay, owner);
   const w = watch(watching, 1_500);
-  await until(() => w.events.some((e) => e._tag === "Ready"), "the first ready");
+  try {
+    await until(() => w.events.some((e) => e._tag === "Ready"), "the first ready");
 
-  const next = await new Channel(access, relay, owner).rotate();
-  await until(() => watching.access.epoch === next, "the new epoch on the watching channel");
-  expect(watching.access.keys[String(next)]).toBeDefined();
-
-  await w.stop();
-  server.stop(true);
+    const next = await new Channel(access, relay, owner).rotate();
+    await until(() => watching.access.epoch === next, "the new epoch on the watching channel");
+    expect(watching.access.keys[String(next)]).toBeDefined();
+  } finally {
+    await w.stop();
+    server.stop(true);
+  }
 });
