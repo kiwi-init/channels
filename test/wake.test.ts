@@ -164,8 +164,9 @@ describe("waking an agent in its own session", () => {
 
   test("a binding that changes after the message is the one woken", async () => {
     const before = await quiet();
-    await ownerCh.send("for the new thread", { to: ["claude"] });
+    const sent = ownerCh.send("for the new thread", { to: ["claude"] });
     bindAs({ harness: "codex", session: "thread-2" });
+    await sent;
     try {
       await until("a wake", () => calls().length === before + 1);
       expect(calls().at(-1)).toContain("thread-2");
