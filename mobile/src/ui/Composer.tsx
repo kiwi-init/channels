@@ -15,12 +15,12 @@ export interface Attachment {
   uri: string
 }
 
-export interface ReplyTo {
+interface ReplyTo {
   label: string
   text: string
 }
 
-export interface Draft {
+interface Draft {
   body: string
   to: string[]
 }
