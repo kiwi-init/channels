@@ -40,8 +40,8 @@ jobs:
     always: ["tsconfig.json", "tsconfig.worker.json", "package.json", "bun.lock"]
     description: >-
       Runs tsc --noEmit over src/ (the kiwi CLI, daemon, client, relay and MCP server) and test/,
-      and again over the Cloudflare worker (src/relay/worker.ts, src/relay/room.ts,
-      src/protocol.ts) with the Workers types. Fails on any TypeScript type error in those files
+      and again over the Cloudflare worker (src/relay/worker.ts, src/relay/room.ts and the
+      src/relay/room/ modules it re-exports, src/protocol.ts) with the Workers types. Fails on any TypeScript type error in those files
       or in what they import, including a changed export, signature or type.
 
   core-test:
@@ -88,8 +88,8 @@ jobs:
     always: ["web/package.json", "web/bun.lock", "web/tsconfig*.json", "web/vite.config.ts", "scripts/ui-tokens.ts"]
     description: >-
       Type-checks the React web dashboard with tsc -b in web/, which also compiles the src/
-      modules the dashboard imports through @mc/* (client, crypto, format, identity, load,
-      membership, protocol, sas, scopes, state, work). Then fails on any arbitrary text-[Npx] or
+      modules the dashboard imports through @mc/* (client and the src/client/ modules behind it,
+      crypto, format, identity, load, membership, protocol, sas, scopes, state, work). Then fails on any arbitrary text-[Npx] or
       rounded-[Npx] Tailwind class in web/src. Fails on a type error in web/src or those src/
       modules, or a raw pixel size in web/src.
 
@@ -133,8 +133,8 @@ jobs:
     description: >-
       Installs desktop/ dependencies, type-checks the Electron shell in desktop/src, and bundles
       its main, preload and channels (the key process) scripts with bun build. desktop/src imports
-      src/identity.ts, src/mailbox.ts, src/person.ts, and through keyring.ts src/client.ts and
-      what it imports. Fails on a type or bundling error in desktop/src or those imports. The
+      src/identity.ts, src/mailbox.ts, src/person.ts, and through keyring.ts src/client.ts, the
+      src/client/ modules it composes, and what they import. Fails on a type or bundling error in desktop/src or those imports. The
       dashboard is not compiled here.
 
   desktop-fuses:
