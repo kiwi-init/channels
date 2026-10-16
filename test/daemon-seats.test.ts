@@ -141,6 +141,8 @@ describe("seats always on", () => {
       saveConfig({ ...loadConfig(), bindings: { "/work": { alias: "test", as: "claude", harness: "claude", pid: 4242 } } });
       await until("idle activity in claude's presence", () => from(claudePk).some((p) => p.activity?.state === "idle"));
     } finally {
+      const { "/work": _work, ...bindings } = loadConfig().bindings ?? {};
+      saveConfig({ ...loadConfig(), bindings });
       if (prev === undefined) delete process.env.CLAUDE_CONFIG_DIR;
       else process.env.CLAUDE_CONFIG_DIR = prev;
       rmSync(claudeDir, { recursive: true, force: true });
