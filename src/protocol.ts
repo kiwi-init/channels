@@ -345,6 +345,41 @@ export function imageMarker(img: Pick<ImageAttachment, "name" | "data" | "ref">)
   return `[image: ${img.name} (${kb(img.data !== undefined ? Math.ceil((img.data.length * 3) / 4) : (img.ref?.size ?? 0))})]`;
 }
 
+const HANDOFF_MAX_URL = 2048;
+export const HANDOFF_MAX_VENDOR = 40;
+export const HANDOFF_DEFAULT_SECONDS = 600;
+export const HANDOFF_MAX_SECONDS = 3600;
+export const HANDOFF_DONE = "handoff: done";
+export const HANDOFF_FAILED = "handoff: failed";
+
+export interface Handoff {
+  url: string;
+  vendor: string;
+  expiresAt: number;
+  mode?: "tab" | "full";
+}
+
+function unsafeChar(c: string): boolean {
+  const n = c.codePointAt(0) ?? 0;
+  return n <= 0x20 || (n >= 0x7f && n <= 0x9f) || (n >= 0x2028 && n <= 0x202e) || (n >= 0x2060 && n <= 0x2069);
+}
+
+export function handoffUrl(x: unknown): x is string {
+  if (typeof x !== "string" || x.length === 0 || x.length > HANDOFF_MAX_URL) return false;
+  try {
+    const u = new URL(x);
+    return u.protocol === "https:" && !u.username && !u.password && ![...x].some(unsafeChar);
+  } catch {
+    return false;
+  }
+}
+
+export function wellFormedHandoff(x: unknown): x is Handoff {
+  if (!x || typeof x !== "object") return false;
+  const h = x as Record<string, unknown>;
+  return handoffUrl(h.url) && str(h.vendor, HANDOFF_MAX_VENDOR) && Number.isFinite(h.expiresAt) && Number.isFinite(new Date(h.expiresAt as number).getTime()) && (h.mode === undefined || h.mode === "tab" || h.mode === "full");
+}
+
 /** The decrypted message body. */
 export interface Payload {
   v: typeof PROTOCOL_VERSION;
@@ -374,6 +409,7 @@ export interface Payload {
    * its own human and the owner. Older clients see it as the blocking question it also is.
    */
   esc?: true;
+  handoff?: Handoff;
   ts: number;
   /** Sender's Ed25519 public key (raw, base64url) and signature over the rest. */
   pk?: string;
@@ -549,6 +585,7 @@ export function wellFormed(p: unknown): p is Payload {
     (m.task === undefined || (Number.isSafeInteger(m.task) && (m.task as number) > 0)) &&
     (m.dm === undefined || m.dm === true) &&
     (m.esc === undefined || m.esc === true) &&
+    (m.handoff === undefined || (m.esc === true && wellFormedHandoff(m.handoff))) &&
     (m.ev === undefined || wellFormedEvent(m.ev)) &&
     (m.kind !== "event" || m.ev !== undefined)
   );

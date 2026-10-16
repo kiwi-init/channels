@@ -32,7 +32,7 @@ import { asOption, channelOption, isWakeVia, wakeKey, wakeWords } from "../wake.
 import { ago, cardLine, charterLines, describeEvent, holdLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, missingImages, formatTask, formatTasks, looksLikeLine, modeLine, parseDuration, presenceWords, taskStateWord, statusJson } from "../format.ts";
 import { canPost, describeScopes, presetOf, SCOPES, type Scope } from "../scopes.ts";
 import { fingerprint } from "../identity.ts";
-import { CHAT_KINDS, COLORS, ignored, isColor, type Kind, type Message, type TaskState } from "../protocol.ts";
+import { CHAT_KINDS, COLORS, HANDOFF_DEFAULT_SECONDS, HANDOFF_MAX_SECONDS, HANDOFF_MAX_VENDOR, handoffUrl, ignored, isColor, type Kind, type Message, type TaskState } from "../protocol.ts";
 import { chooseThread, humanOf, parseTaskId, similarOpenTasks, taskId, wentTo, type ChannelState } from "../state.ts";
 import { VERSION } from "../version.ts";
 import { computerClaimFor } from "../machine.ts";
@@ -69,6 +69,9 @@ Agents
                                                  thread with NAME (while you're doing a task, it goes to its thread)
      --escalate [--re N]                         to your own human and the owner, in every mode and during a hold:
                                                  for anything outside the charter, destructive, or not yours
+     --handoff URL [--vendor NAME] [--expires 10m]  with --escalate: hand a live browser tab to a person (https link,
+                                                 up to 1h); --wait 15m blocks until they press Done (exit 0),
+                                                 Couldn't or the link expires (exit 4)
      --image f.png · --room R · --kind K
   kiwi reply N "text"                            answer message #N: to its sender, in its room
   kiwi react N 👍 [--clear]                       react to message #N with one emoji (--clear takes it back)
@@ -123,6 +126,10 @@ const { values: opt, positionals: args } = parseArgs({
     secret: { type: "string" },
     image: { type: "string", multiple: true },
     wait: { type: "string" },
+    handoff: { type: "string" },
+    vendor: { type: "string" },
+    expires: { type: "string" },
+    reveal: { type: "boolean" },
     owner: { type: "string" },
     after: { type: "string" },
     detail: { type: "string" },
@@ -282,7 +289,7 @@ const keepDaemon = Effect.promise(() =>
 const noteRead = (s: { alias: string; me: string }) => Effect.promise(() => reportRead(s.alias, s.me, here().session));
 
 function render(m: Message, state?: ChannelState | null): string {
-  return opt.json ? JSON.stringify({ ...m, trust: state?.trust.get(m.seq) }) : formatMessage(m, state?.trust.get(m.seq), state ?? undefined, acting.name);
+  return opt.json ? JSON.stringify({ ...m, ...(m.handoff ? { handoff: { vendor: m.handoff.vendor, expiresAt: m.handoff.expiresAt } } : {}), trust: state?.trust.get(m.seq) }) : formatMessage(m, state?.trust.get(m.seq), state ?? undefined, acting.name);
 }
 
 /** Which messages tail/wait/read/watch hand over: --chat, --for-me, --all or --thread N (default: those for you), in every room unless --room. */
@@ -837,10 +844,11 @@ const commands: Record<string, Command> = {
     oneLook(Effect.gen(function* () {
       if (opt.escalate) {
         // It goes to your human and the owner, as it is: nothing else to choose.
-        const extra = (["to", "image", "kind", "room", "ask", "wait"] as const).filter((f) => opt[f] !== undefined);
+        const extra = (["to", "image", "kind", "room", "ask", ...(opt.handoff === undefined ? (["wait"] as const) : [])] as const).filter((f) => opt[f] !== undefined);
         if (extra.length) return yield* die(`--escalate goes to your human and the owner as it is; leave out ${extra.map((f) => `--${f}`).join(", ")}`);
         return yield* commands.escalate!();
       }
+      if (opt.handoff !== undefined) return yield* die("--handoff goes with --escalate");
       const s = yield* session();
       const body = yield* text(1);
       if (!body.trim()) return yield* die("empty message");
@@ -918,7 +926,7 @@ const commands: Record<string, Command> = {
       const m = found && !ignored(state.trust.get(seq)) ? found : yield* die(`no message #${seq}`);
       // Images land under the channel's own folder (closing it deletes them), or where asked.
       const saved = m.imgs?.length ? saveImages(seq, yield* s.ch.fx.images(m.imgs), args[2] ?? joinPath(home(), "downloads", s.ch.roomId)) : [];
-      out(formatShown(m, messages, state, saved, s.me));
+      out(formatShown(m, messages, state, saved, s.me, !!opt.reveal && !!m.to?.includes(s.me)));
       // The rest of its thread, when there's more of it than #N, what it answers and its replies.
       const root = state.threadOf.get(seq) ?? seq;
       const near = new Set([seq, ...(m.re ?? []), ...messages.filter((x) => x.re?.includes(seq)).map((x) => x.seq)]);
@@ -992,8 +1000,26 @@ const commands: Record<string, Command> = {
       const body = yield* text(1);
       if (!body.trim()) return yield* die('usage: kiwi escalate [--re N] "why this needs a person"');
       const re = opt.re === undefined ? undefined : Number(opt.re.replace(/^#/, "")) || (yield* die("--re takes a message number"));
-      const { seq, to } = yield* s.escalate(body, re);
-      out(`escalated #${seq} to ${to.join(" and ")}; wait for their answer before acting on it`);
+      if (opt.handoff === undefined) {
+        for (const f of ["vendor", "expires", "wait"] as const) if (opt[f] !== undefined) return yield* die(`--${f} goes with --handoff URL`);
+        const { seq, to } = yield* s.escalate(body, re);
+        return out(`escalated #${seq} to ${to.join(" and ")}; wait for their answer before acting on it`);
+      }
+      if (!handoffUrl(opt.handoff)) return yield* die("--handoff takes an https link without a user name or password, up to 2048 characters");
+      const vendor = opt.vendor ?? new URL(opt.handoff).hostname;
+      if (/steel/i.test(vendor) || /(^|\.)steel\.dev$/i.test(new URL(opt.handoff).hostname)) process.stderr.write("kiwi: steel live links are not authenticated; anyone with the link can use the tab\n");
+      const seconds = opt.expires === undefined ? HANDOFF_DEFAULT_SECONDS : parseDuration(opt.expires);
+      if (seconds < 1 || seconds > HANDOFF_MAX_SECONDS) return yield* die(`--expires must be between 1s and ${HANDOFF_MAX_SECONDS / 60}m`);
+      const expiresAt = Date.now() + seconds * 1000;
+      const head = opt.wait === undefined ? 0 : yield* s.ch.fx.head();
+      const { seq, to } = yield* s.escalate(body, re, { url: opt.handoff, vendor: vendor.slice(0, HANDOFF_MAX_VENDOR), expiresAt });
+      out(`escalated #${seq} to ${to.join(" and ")} with a browser link that opens for ${opt.expires ?? "10m"}; wait for their answer before acting on it`);
+      if (opt.wait === undefined) return;
+      const { outcome, replies } = yield* s.awaitHandoff(seq, head, expiresAt, parseDuration(opt.wait));
+      for (const r of replies) out(render(r));
+      if (outcome === "done") return;
+      if (outcome === "waiting") return yield* die(`no answer to the handoff #${seq} within ${opt.wait}; the link is still open, so replies will still arrive when you listen`, 2);
+      return yield* die(outcome === "failed" ? `the person couldn't finish the handoff #${seq}` : `no answer to the handoff #${seq} before it expired`, 4);
     }),
 
   icon: () =>

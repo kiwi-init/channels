@@ -14,6 +14,7 @@ const FLOWS: Record<string, string[]> = {
   site: ["site"],
   pins: ["action-pins"],
   seats: ["seats", "multi-seat"],
+  handoff: ["handoff"],
   budget: [...new Glob("test/budget-*.test.ts").scanSync()].map((f) => f.slice("test/".length, -".test.ts".length)).sort(),
   bus: [...new Glob("test/bus-*.test.ts").scanSync()].map((f) => f.slice("test/".length, -".test.ts".length)).sort(),
 }

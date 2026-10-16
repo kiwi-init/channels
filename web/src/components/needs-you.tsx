@@ -3,10 +3,12 @@ import { useEffect, useRef, useState, type ReactNode } from "react"
 
 import { freeHandle, seededPick } from "@mc/handles.ts"
 import { nameKey, type JoinRequest } from "@mc/membership.ts"
-import type { Message } from "@mc/protocol.ts"
+import { HANDOFF_DONE, HANDOFF_FAILED, type Message } from "@mc/protocol.ts"
 import { TOO_MANY_REQUESTS } from "@mc/sas.ts"
 import { taskId, type Task } from "@mc/state.ts"
 import { excerpt, formatAgo } from "@/lib/format"
+import { openHandoff } from "@/lib/handoff-open"
+import { handoffLabel, handoffLeft, handoffOf, handoffOpen } from "@/lib/handoff"
 import { cx } from "@/lib/utils"
 import { useControls } from "./controls"
 import { Icon } from "./icon"
@@ -205,11 +207,13 @@ function EscalationItem({
 }) {
   const [draft, setDraft] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const send = async () => {
-    if (!draft?.trim()) return
+  const handoff = handoffOf(m)
+  const live = !!handoff && handoffOpen(handoff, now)
+  const send = async (text = draft?.trim() ?? "") => {
+    if (!text) return
     setBusy(true)
     try {
-      await onReply(m, draft.trim())
+      await onReply(m, text)
       setDraft(null)
       toast(`Answered ${nameOf(m.from)}`)
     } catch (err) {
@@ -223,14 +227,27 @@ function EscalationItem({
       lead={<Monogram name={m.from} agent size={24} />}
       title={
         <>
-          <span className="mr-1.5 rounded-full bg-decide-wash px-1.5 text-meta font-semibold text-decide">Decision for you</span>
+          <span className="mr-1.5 rounded-full bg-decide-wash px-1.5 text-meta font-semibold text-decide">{handoff ? "Browser for you" : "Decision for you"}</span>
           <span className="font-medium">{nameOf(m.from)}</span>: {excerpt(m.body, 220)}
         </>
       }
-      detail={formatAgo(m.ts, now)}
+      detail={handoff ? `${formatAgo(m.ts, now)} · ${handoffLabel(handoff)} · ${live ? handoffLeft(handoff, now) : "link expired"}` : formatAgo(m.ts, now)}
     >
       {draft === null ? (
         <>
+          {handoff && live && (
+            <>
+              <Button size="sm" variant="secondary" onClick={() => !openHandoff(handoff) && toast("The link has expired", "error")}>
+                Open browser
+              </Button>
+              <Button size="sm" variant="secondary" disabled={busy} onClick={() => void send(HANDOFF_DONE)}>
+                Done
+              </Button>
+              <Button size="sm" variant="ghost" disabled={busy} onClick={() => void send(HANDOFF_FAILED)}>
+                Couldn’t
+              </Button>
+            </>
+          )}
           <Button size="sm" variant="secondary" onClick={() => setDraft("")}>
             Answer
           </Button>
@@ -243,7 +260,7 @@ function EscalationItem({
           className="flex w-full items-center gap-2"
           onSubmit={(e) => {
             e.preventDefault()
-            void send()
+            void send(draft?.trim())
           }}
         >
           <TextField
