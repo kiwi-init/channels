@@ -648,6 +648,10 @@ function readBase(roomId: string): FoldBase | null {
   }
 }
 
+function dropBase(roomId: string): void {
+  rmSync(`${cachePath(roomId)}.base`, { force: true });
+}
+
 function keepBase(roomId: string, base: FoldBase): void {
   const path = cachePath(roomId);
   mkdirSync(join(path, ".."), { recursive: true, mode: 0o700 });
@@ -699,6 +703,7 @@ export class Cache extends Context.Service<
     readonly append: (roomId: string, messages: Message[]) => Effect.Effect<void>;
     readonly base: (roomId: string) => Effect.Effect<FoldBase | null>;
     readonly keepBase: (roomId: string, base: FoldBase) => Effect.Effect<void>;
+    readonly dropBase: (roomId: string) => Effect.Effect<void>;
   }
 >()("kiwi/Cache") {}
 
@@ -739,6 +744,7 @@ export const LocalFiles: Layer.Layer<Keystore | Cache | Cursor> = Layer.mergeAll
     append: (roomId, messages) => Effect.sync(() => appendCache(roomId, messages)),
     base: (roomId) => Effect.sync(() => readBase(roomId)),
     keepBase: (roomId, base) => Effect.sync(() => keepBase(roomId, base)),
+    dropBase: (roomId) => Effect.sync(() => dropBase(roomId)),
   }),
   Layer.succeed(Cursor, {
     read: (channel, agent) => Effect.sync(() => readCursor(channel, agent)),

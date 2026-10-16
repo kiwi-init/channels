@@ -916,14 +916,18 @@ const commands: Record<string, Command> = {
       // Forged messages, and ones the owner doesn't allow, are left out everywhere (status counts them).
       const found = yield* s.message(seq, messages);
       const m = found && !ignored(state.trust.get(seq)) ? found : yield* die(`no message #${seq}`);
-      // Images land under the channel's own folder (closing it deletes them), or where asked.
-      const fetched = m.imgs?.length ? yield* s.ch.fx.images(m.imgs).pipe(Effect.orElseSucceed((): InlineImage[] => [])) : [];
-      const saved = fetched.length ? saveImages(seq, fetched, args[2] ?? joinPath(home(), "downloads", s.ch.roomId)) : [];
-      out(formatShown(m, messages, state, saved, s.me));
-      // The rest of its thread, when there's more of it than #N, what it answers and its replies.
       const root = state.threadOf.get(seq) ?? seq;
-      const near = new Set([seq, ...(m.re ?? []), ...messages.filter((x) => x.re?.includes(seq)).map((x) => x.seq)]);
       const thread = yield* s.threadMessages(root, messages, state);
+      const known = [...messages, ...thread.filter((x) => !messages.some((y) => y.seq === x.seq))];
+      // Each image on its own, so one that fails to load leaves the others.
+      const fetched = m.imgs?.length
+        ? yield* Effect.forEach(m.imgs, (img) => s.ch.fx.images([img]).pipe(Effect.orElseSucceed((): InlineImage[] => [])), { concurrency: 4 }).pipe(Effect.map((lists) => lists.flat()))
+        : [];
+      // Images land under the channel's own folder (closing it deletes them), or where asked.
+      const saved = fetched.length ? saveImages(seq, fetched, args[2] ?? joinPath(home(), "downloads", s.ch.roomId)) : [];
+      out(formatShown(m, known, state, saved, s.me));
+      // The rest of its thread, when there's more of it than #N, what it answers and its replies.
+      const near = new Set([seq, ...(m.re ?? []), ...known.filter((x) => x.re?.includes(seq)).map((x) => x.seq)]);
       const rest = thread.filter((x) => !near.has(x.seq) && !ignored(state.trust.get(x.seq)));
       if (rest.length) {
         out(`the rest of thread #${root}:`);

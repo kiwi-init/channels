@@ -199,6 +199,7 @@ export class AgentSession {
       if (gap) {
         this.partial = true;
         this.base = null;
+        yield* cache.dropBase(this.cfg.roomId);
       } else if (fetched) {
         yield* cache.keepBase(this.cfg.roomId, fetched);
         this.base ??= fetched;
