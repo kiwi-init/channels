@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { Markdown } from "./markdown"
+import { errorLine } from "./mermaid"
 import { compareCells, nextSort, sanitizeMarkdownUrl } from "../lib/markdown"
 
 describe("safe markdown links", () => {
@@ -59,5 +60,26 @@ describe("markdown tables and code", () => {
     expect(html).toContain('aria-label="Sort by n"')
     expect(html).toContain('aria-sort="none"')
     expect(html).not.toContain("<script")
+  })
+})
+
+describe("mermaid blocks", () => {
+  const fence = "```"
+  test("a mermaid block shows its code until the diagram is drawn, and other code stays a plain block", () => {
+    const html = renderToStaticMarkup(createElement(Markdown, null, `${fence}mermaid\nflowchart LR\n  A --> B\n${fence}\n\n${fence}ts\nconst a = 1\n${fence}`))
+    expect(html.match(/group\/mermaid/g)?.length).toBe(1)
+    expect(html).toContain("A --&gt; B")
+    expect(html).toContain("const a = 1")
+    expect(html).not.toContain('aria-label="Mermaid diagram"')
+  })
+
+  test("an empty mermaid block is ordinary code", () => {
+    expect(renderToStaticMarkup(createElement(Markdown, null, `${fence}mermaid\n${fence}`))).not.toContain("group/mermaid")
+  })
+
+  test("a parse error is shown as its first line, without the trailing colon", () => {
+    expect(errorLine(new Error("Parse error on line 2:\n...A[relay --> B{{daemon\n-----^\nExpecting 'SQE'"))).toBe("Parse error on line 2")
+    expect(errorLine(new Error(""))).toBe("it isn’t valid Mermaid")
+    expect(errorLine("No diagram type detected")).toBe("No diagram type detected")
   })
 })
