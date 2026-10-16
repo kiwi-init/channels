@@ -3,7 +3,7 @@
 // so web/ can type against it without touching this process.
 
 import type { CachedRow } from "../../src/cache-row.ts";
-import type { Channel, PresenceFields } from "../../src/client.ts";
+import type { Channel, OpenKind, PresenceFields } from "../../src/client.ts";
 import type { Message, Presence, ReadMark } from "../../src/protocol.ts";
 import type { Wire } from "./wire.ts";
 
@@ -75,6 +75,8 @@ export const CHANNEL_CALLS = [
   "updateNickname",
   "reconcilePosting",
   "rotateIfDue",
+  "snapshotIfDue",
+  "snapshotAt",
   "info",
   "title",
   "setTitle",
@@ -88,6 +90,7 @@ export const CHANNEL_CALLS = [
   "close",
   "leave",
   "send",
+  "image",
 ] as const;
 
 export type ChannelCallName = (typeof CHANNEL_CALLS)[number];
@@ -97,8 +100,9 @@ export type CallResult<K extends ChannelCallName> = Awaited<ReturnType<ChannelCa
 export type JoinCheck = { status: "pending"; code: string | null } | { status: "denied" } | { status: "in"; channel: ChannelView };
 
 export type FollowEvent =
-  | { _tag: "Open" }
+  | { _tag: "Open"; kind?: OpenKind }
   | { _tag: "Message"; message: Message; row: CachedRow | null }
+  | { _tag: "Head"; seq: number }
   | { _tag: "Presence"; presence: Presence & { sigOk: boolean } }
   | { _tag: "Read"; reads: ReadMark[]; snapshot: boolean }
   | { _tag: "Info" }
@@ -115,7 +119,11 @@ export interface ChannelOps {
   forget(code: string): Promise<void>;
   presence(code: string, p: PresenceFields): Promise<void>;
   openRows(code: string, rows: CachedRow[]): Promise<(Message | null)[]>;
-  follow(code: string, since: number, on: (e: FollowEvent) => void): () => void;
+  follow(code: string, since: number, on: (e: FollowEvent) => void, opts?: FollowOptions): () => void;
+}
+
+export interface FollowOptions {
+  watch?: boolean;
 }
 
 export type WireError =
@@ -132,7 +140,7 @@ export type KeysAsk =
   | { op: "forget"; code: string }
   | { op: "presence"; code: string; p: Wire }
   | { op: "openRows"; code: string; rows: Wire }
-  | { op: "follow"; code: string; since: number }
+  | { op: "follow"; code: string; since: number; watch?: boolean }
   | { op: "unfollow"; sub: number };
 
 export type KeysRequest = KeysAsk & { id: number };

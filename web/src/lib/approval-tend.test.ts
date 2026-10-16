@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
-import { tendOwned, type TendApi } from "./approval-tend"
+import { tendOnPush, tendOwned, type TendApi } from "./approval-tend"
+import type { Watches } from "./watch"
 
 const pinged: string[] = []
 const ping = (_title: string, body: string) => pinged.push(body)
@@ -73,5 +74,28 @@ describe("tendOwned", () => {
       new Set()
     )
     expect(pinged).toEqual(["bot joined from your computer"])
+  })
+})
+
+describe("tendOnPush", () => {
+  test("stop drops a rerun queued while a pass is in flight", async () => {
+    const passes: string[] = []
+    let finish = () => {}
+    const tend = (code: string) => {
+      passes.push(code)
+      return new Promise<void>((resolve) => {
+        finish = resolve
+      })
+    }
+    const watch: Watches["watch"] = () => () => {}
+    const tending = tendOnPush(["a"], watch, tend)
+    tending.kick("a")
+    tending.kick("a")
+    tending.stop()
+    finish()
+    await Bun.sleep(0)
+    tending.kick("a")
+    await Bun.sleep(0)
+    expect(passes).toEqual(["a"])
   })
 })

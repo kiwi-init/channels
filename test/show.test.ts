@@ -31,4 +31,13 @@ describe("kiwi show", () => {
     expect(out).toContain("replies (1):\n  #3 mac: thanks");
     expect(out).not.toContain("FORGED");
   });
+
+  test("says how many images did not load", async () => {
+    const mac = await generateIdentity("mac");
+    const img = { name: "a.png", mime: "image/png", data: "AA==" };
+    const m: Message = { ...(await msg(mac, "mac", "two pics")), imgs: [img, img] };
+    const state = fold([m], roster);
+    expect(formatShown(m, [m], state, ["/tmp/a.png"])).toContain("1 of the 2 images in #");
+    expect(formatShown(m, [m], state, ["/tmp/a.png", "/tmp/b.png"])).not.toContain("did not load");
+  });
 });

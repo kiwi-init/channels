@@ -4,6 +4,7 @@
 // (the texts are API; see test/error-texts.test.ts).
 
 import * as Schema from "effect/Schema";
+import { MAX_SNAPSHOT_LENGTH } from "../protocol.ts";
 import { NONCE_RE } from "../sas.ts";
 
 /** A public key (Ed25519 or X25519): 32 bytes, base64url without padding. */
@@ -43,6 +44,15 @@ export const SealedIcon = Schema.Struct({
   e: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   iv: Schema.String,
   ct: Schema.String.check(Schema.isMaxLength(48 * 1024)),
+});
+
+export const SealedSnapshot = Schema.Struct({
+  n: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
+  e: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  iv: Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{16}$/)),
+  ct: Schema.NonEmptyString.check(Schema.isMaxLength(MAX_SNAPSHOT_LENGTH)),
+  hash: Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{43}$/)),
+  sig: Sig,
 });
 
 /** Whether `x` has `schema`'s shape (routes keep their own refusal texts). */

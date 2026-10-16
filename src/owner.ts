@@ -4,14 +4,19 @@
 
 import * as Effect from "effect/Effect";
 import { AgentSession } from "./agent.ts";
-import { Channel, keepAnswersIn, keepRecordsIn } from "./client.ts";
+import { Channel, keepAnswersIn, keepRecordsIn, type Relay } from "./client.ts";
 import { Keystore, type ChannelConfig } from "./config.ts";
 import { Rejected } from "./refusals.ts";
 import { describeScopes, wireScopes, type Scope } from "./scopes.ts";
-import { GENERAL_ROOM, MAX_CHARTER, type Event } from "./protocol.ts";
-import { COORDINATOR, firstAgent, fold, newRoomId } from "./state.ts";
+import { GENERAL_ROOM, MAX_CHARTER, SNAPSHOT_EVERY, type Event } from "./protocol.ts";
+import { COORDINATOR, firstAgent, fold, newRoomId, type FoldBase } from "./state.ts";
 
 class OwnerSession extends AgentSession {
+  private snapshotAt: number | null = null;
+  private failedAt = 0;
+  private published: number | null = null;
+  private forced = false;
+
   /** The owner key's handle on the channel (the same as `ch`: this session signs as the owner). */
   get ownerCh(): Channel {
     return this.ch;
@@ -27,15 +32,46 @@ class OwnerSession extends AgentSession {
     return Effect.gen({ self: this }, function* () {
       const owner = this.ch;
       if (yield* owner.fx.rotateIfDue()) yield* this.ch.fx.refreshKeys();
+      if (this.snapshotAt === null) this.snapshotAt = (yield* Effect.orElseSucceed(owner.fx.snapshotAt(), () => null)) ?? 0;
       // The relay's "can post" bit follows the log's scopes: check once a session, and again whenever
       // the roster changes or a scope.set's second step failed. (Not state(): it calls this.)
       if (this.postingChecked) return;
       const [messages, roster] = yield* Effect.all([this.sync(), this.members()], { concurrency: "unbounded" });
-      yield* owner.fx.reconcilePosting(fold(messages, roster));
+      yield* owner.fx.reconcilePosting(fold(messages, roster, Date.now(), undefined, undefined, undefined, this.base));
       this.postingChecked = true;
     });
   }
 
+  protected override snapshotDue(head: number): boolean {
+    if (this.partial) return false;
+    return this.forced || (this.snapshotAt !== null && head - this.snapshotAt >= SNAPSHOT_EVERY && head > this.failedAt);
+  }
+
+  protected override publish(base: FoldBase): Effect.Effect<void, never, Relay> {
+    return Effect.catchCause(
+      Effect.gen({ self: this }, function* () {
+        const n = yield* this.ch.fx.putSnapshot(base);
+        this.snapshotAt = n;
+        this.published = n;
+      }),
+      () =>
+        Effect.sync(() => {
+          this.failedAt = base.n;
+        }),
+    );
+  }
+
+  readonly snapshot = Effect.fn("OwnerSession.snapshot")({ self: this }, function* (this: OwnerSession) {
+    this.forced = true;
+    this.published = null;
+    yield* Effect.ensuring(
+      this.state(),
+      Effect.sync(() => {
+        this.forced = false;
+      }),
+    );
+    return this.published;
+  });
 
   /** Owner: make a room. Its id is made here and never changes; the name can (renameRoom). */
   readonly createRoom = Effect.fn("OwnerSession.createRoom")({ self: this }, function* (this: OwnerSession, name: string) {

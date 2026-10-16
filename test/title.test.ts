@@ -52,6 +52,7 @@ test("a new room signs its title, and an unsigned blob is refused without anyone
   const key = memberCh.access.keys["0"]!;
   const evil = await seal(key, memberCh.roomId, { name: "evil" });
   put(memberCh.roomId, "title", JSON.stringify(evil));
+  put(memberCh.roomId, "info_rev", crypto.randomUUID());
   const fresh = new Channel({ ...memberCh.access, signedTitle: undefined }, relay, member);
   expect(fresh.access.signedTitle).toBeUndefined();
   expect(await fresh.title()).toBeNull();
@@ -69,6 +70,7 @@ test("a 0.7 client still verifies a new room's owner statement; stripping the ti
   db.run("DELETE FROM meta WHERE k = 'titles_sig'");
   db.close();
   put(memberCh.roomId, "title", JSON.stringify(await seal(key, memberCh.roomId, { name: "evil" })));
+  put(memberCh.roomId, "info_rev", crypto.randomUUID());
   // This client already saw the signed title, so the stripped promise doesn't bring the unsigned name back.
   expect(await memberCh.title()).toBeNull();
   // A client that never saw it, and was never given the promise, is on the older rule.
@@ -106,6 +108,7 @@ test("an older room still shows an unsigned title, and refuses one after it has 
 
   // Downgrade: the relay serves a member-sealed unsigned name again. This client saw the signature, so it refuses.
   put(roomId, "title", JSON.stringify(await seal(key, roomId, { name: "evil" })));
+  put(roomId, "info_rev", crypto.randomUUID());
   expect(await reader.title()).toBeNull();
   const persisted = new Channel({ ...reader.access }, relay, member);
   expect(await persisted.title()).toBeNull();

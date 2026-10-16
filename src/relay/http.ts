@@ -55,8 +55,27 @@ export class Request_ extends Context.Service<Request_, Incoming>()("kiwi/relay/
 
 export async function incoming(req: Request, path: string): Promise<Incoming> {
   const method = req.method.toUpperCase();
+  if (method === "PUT" && path.startsWith("/blobs/")) return { req, url: new URL(req.url), method, path, body: "" };
   // Every client signs the exact body it sends (empty when there is none), so reading DELETE's too is safe; the vault needs it.
   return { req, url: new URL(req.url), method, path, body: method === "GET" || method === "HEAD" ? "" : await req.text() };
+}
+
+export async function readCapped(req: Request, max: number): Promise<Uint8Array<ArrayBuffer> | null> {
+  if (Number(req.headers.get("content-length") ?? 0) > max) return null;
+  if (!req.body) return new Uint8Array(0);
+  const reader = req.body.getReader();
+  const out = new Uint8Array(max);
+  let n = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) return out.slice(0, n);
+    if (n + value.length > max) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    out.set(value, n);
+    n += value.length;
+  }
 }
 
 /** The request body as JSON, or the 400 every route has always sent. */

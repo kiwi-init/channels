@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { saveImages } from "../src/attach.ts";
 import { home, writeCursor, writePrivate } from "../src/config.ts";
 import { installHooks, uninstallHooks } from "../src/hooks.ts";
-import type { ImageAttachment } from "../src/protocol.ts";
+import type { InlineImage } from "../src/protocol.ts";
 
 const prev = { KIWI_HOME: process.env.KIWI_HOME, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR };
 const trash: string[] = [];
@@ -25,7 +25,7 @@ function scratch(prefix: string): string {
   return dir;
 }
 
-const png = (name: string): ImageAttachment => ({ name, mime: "image/png", data: Buffer.from("png").toString("base64") });
+const png = (name: string): InlineImage => ({ name, mime: "image/png", data: Buffer.from("png").toString("base64") });
 const mode = (p: string) => statSync(p).mode & 0o777;
 
 test("saveImages writes 0600 files, and 0700 directories only under downloads", () => {

@@ -1,7 +1,7 @@
 import { ChannelGone, RelayError } from "../../../src/client.ts"
 import type { Message } from "../../../src/protocol.ts"
 
-import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, ChannelView, FollowEvent, JoinCheck, KeysAsk, KeysPort, WireError } from "../../../desktop/src/bridge.ts"
+import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, ChannelView, FollowEvent, FollowOptions, JoinCheck, KeysAsk, KeysPort, WireError } from "../../../desktop/src/bridge.ts"
 import { fromWire, toWire } from "../../../desktop/src/wire.ts"
 
 export function errorOf(w: WireError): Error {
@@ -23,6 +23,7 @@ interface Sub {
   last: number
   remote: number | null
   stopped: boolean
+  watch: boolean
 }
 
 export function remoteOps(port: KeysPort): ChannelOps {
@@ -34,7 +35,7 @@ export function remoteOps(port: KeysPort): ChannelOps {
   const subs = new Set<Sub>()
   const byRemote = new Map<number, Sub>()
   const start = (s: Sub) => {
-    void port.request({ op: "follow", code: s.code, since: s.last }).then((r) => {
+    void port.request({ op: "follow", code: s.code, since: s.last, ...(s.watch ? { watch: true } : {}) }).then((r) => {
       if (!r.ok) {
         if (!s.stopped) s.on({ _tag: "Failed", error: r.error })
         return
@@ -54,6 +55,7 @@ export function remoteOps(port: KeysPort): ChannelOps {
     if (!s || s.stopped) return
     const ev = fromWire(p.event) as FollowEvent
     if (ev._tag === "Message") s.last = Math.max(s.last, ev.message.seq)
+    if (ev._tag === "Head") s.last = Math.max(s.last, ev.seq)
     s.on(ev)
   })
   port.onRestart(() => {
@@ -72,8 +74,8 @@ export function remoteOps(port: KeysPort): ChannelOps {
     forget: async (code) => void (await ask({ op: "forget", code })),
     presence: async (code, p) => void (await ask({ op: "presence", code, p: toWire(p) })),
     openRows: (code, rows) => ask({ op: "openRows", code, rows: toWire(rows) }) as Promise<(Message | null)[]>,
-    follow: (code, since, on) => {
-      const s: Sub = { code, on, last: since, remote: null, stopped: false }
+    follow: (code, since, on, opts?: FollowOptions) => {
+      const s: Sub = { code, on, last: since, remote: null, stopped: false, watch: opts?.watch === true }
       subs.add(s)
       start(s)
       return () => {

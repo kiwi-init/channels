@@ -259,8 +259,35 @@ list. Non-members can't read ciphertext, post, or see who's online.
 | Channel keys | sealed to each member's X25519 key, signed by the owner | one signed, sealed box per member per epoch |
 | Channel name | signed by the owner, then sealed with the channel key; clients drop one the owner didn't sign | ciphertext. New rooms also store a separate owner signature (`titles: "signed"`), not part of the key statement, so a 0.7 client still joins. A relay can strip that signature: the room then follows the older rule, and an unsigned `{ name }` still shows until this client has seen a signed title |
 | Channel icon (one emoji, or a png/jpg/gif/webp image ≤32KB, never SVG) | signed by the owner, then sealed with the channel key; clients drop one the owner didn't sign | ciphertext, and when it last changed |
+| Message images sent by reference (only in channels whose owner turned it on) | each image under its own fresh random AES-256-GCM key; that key travels only inside the sealed, signed message. The blob's id is also in the upload and fetch paths, so the relay sees it, but it is a hash of the encrypted bytes and tells nothing about the image | the encrypted bytes under their id (the SHA-256 of those bytes, which the relay checks), their size, and when they were stored |
 
 Channel keys are random (256-bit), not derived from the code.
+
+**Compression, off by default.** The owner can sign `compress: true` into the
+channel's settings (`Channel.setCompress` in the client library; the CLI and
+the app have no control for it yet). A client that has read that setting
+deflates a message's plaintext (deflate-raw) before sealing it, when the
+plaintext is at least 512 bytes and gets smaller; a leading 0x00 byte, which
+JSON never starts with, marks it. Every reader newer than 0.14 opens both kinds
+and inflates at most 4 MiB, dropping anything larger as unreadable. A 0.14 or
+older client drops a compressed message as malformed, so turn it on only once
+every member runs a newer one. Inflating needs a runtime whose
+`DecompressionStream` supports `deflate-raw` (Bun, the desktop app and current
+browsers do). A reader without it also drops compressed messages as
+unreadable. Compressing before encrypting leaks through
+lengths when attacker-chosen text and a secret share one message
+(CRIME/BREACH); here the sender writes each message whole, the relay already
+sees every ciphertext's length, and presence and other ephemeral frames are
+never compressed.
+
+Images go inside the message by default. An owner can sign `imageRefs: true`
+into the channel's settings (`Channel.setImageRefs`); then, on a relay whose
+`/info` says `blobs: true`, a client encrypts each image separately, uploads it
+to `PUT /blobs/<id>` (members only), and puts `{ name, mime, ref: { id, key, size } }`
+in the message instead of the bytes. Readers fetch `GET /blobs/<id>` (members
+only) only when they show or save the image, check the hash and the size, and
+decrypt it. Kiwi 0.14 and older drop an image they get by reference and still
+show the message's text, which is why it's the owner's switch and off by default.
 
 The pairing mailbox (`src/mailbox.ts`) keeps pairing off the relay's records
 too: the code the app shows (`kp1-…`) is a secret; the mailbox id is a hash of
@@ -439,6 +466,11 @@ An agent reading it through `sh` should treat it exactly as in `kiwi read`.
 - At most 20 pending join requests per channel; requests expire an hour after
   the relay received them.
 - One message ≤ 512KB ciphertext; one image ≤ 256KB raw (≤ 8 per message).
+- An image sent by reference is one blob of at most 256KB plus 28 bytes. Blobs
+  count toward the channel's stored bytes; when the oldest messages are dropped,
+  blobs stored more than an hour before the oldest message kept go with them.
+  If that does not free enough space, the oldest blobs go next. Closing the
+  channel deletes them with everything else.
 - A room keeps its last 10,000 messages, and at most 1 GB of ciphertext unless
   the relay sets another cap; the oldest messages make room.
 - Each member sends a bounded number of messages per minute.
