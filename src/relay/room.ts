@@ -28,7 +28,7 @@ import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import { fits, JoinRequest, MAX_RECORD, MAX_WRAPPED, MemberRecord, SealedIcon, StoredEnvelope } from "./schema.ts";
+import { fits, JoinRequest, MAX_RECORD, MAX_WRAPPED, MemberRecord, SealedIcon, SealedSnapshot, StoredEnvelope } from "./schema.ts";
 import { verifyRequest } from "../auth.ts";
 import { encodeJoinCode, ownerFingerprint } from "../crypto.ts";
 import type { HumanAuth } from "./human.ts";
@@ -214,6 +214,16 @@ const REQUEST_COLUMNS = [
   ["owner_nonce", "TEXT"],
   ["reveal", "TEXT"],
 ] as const;
+
+export interface StoredSnapshot {
+  n: number;
+  e: number;
+  iv: string;
+  ct: string;
+  hash: string;
+  sig: string;
+  at: number;
+}
 
 /** A channel's stored bytes, and how many messages it stored on `day` (UTC). */
 interface Counters {
@@ -513,6 +523,15 @@ export class RoomDb {
     return t ? (JSON.parse(t) as { iv: string; ct: string }) : null;
   }
 
+  snapshot(): StoredSnapshot | null {
+    const t = this.sql.all<{ v: string }>("SELECT v FROM meta WHERE k = 'snapshot'")[0]?.v;
+    return t ? (JSON.parse(t) as StoredSnapshot) : null;
+  }
+
+  setSnapshot(s: StoredSnapshot): void {
+    this.sql.run("INSERT INTO meta (k, v) VALUES ('snapshot', ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v", JSON.stringify(s));
+  }
+
   /** Before closing: drop this channel from its owner's owned-channel count. */
   unlinkAll(): DirectoryUpdate[] {
     const owner = this.ownerUser();
@@ -722,6 +741,23 @@ export const setSettings = Effect.fn("Room.setSettings")(function* (settings: un
   const t = sealedUnder(settings, 16_384);
   if (!t) return yield* new BadRequest({ message: "bad settings" });
   db.set("settings", JSON.stringify(t));
+});
+
+export const setSnapshot = Effect.fn("Room.setSnapshot")(function* (snapshot: unknown) {
+  const db = yield* RoomStore;
+  const { epoch } = yield* readMeta;
+  if (!fits(SealedSnapshot, snapshot) || snapshot.e > epoch || snapshot.n > db.head()) {
+    return yield* new BadRequest({ message: "bad snapshot (at most 512KB, sealed with a channel key, at a seq the channel has)" });
+  }
+  const cap = (yield* Policy).bytesPerChannel;
+  if (snapshot.ct.length > cap) return yield* new TooLarge({ message: `that snapshot is bigger than this channel may hold (${formatBytes(cap)})` });
+  const grows = snapshot.ct.length - (db.snapshot()?.ct.length ?? 0);
+  let bytes = db.storedBytes();
+  if (bytes + grows > cap) bytes -= db.dropOldest(bytes + grows - cap);
+  const { n, e, iv, ct, hash, sig } = snapshot;
+  db.setSnapshot({ n, e, iv, ct, hash, sig, at: yield* Clock.currentTimeMillis });
+  db.setCounters({ ...(db.counters() ?? { day: "", n: 0 }), bytes: Math.max(0, bytes + grows) });
+  return n;
 });
 
 // ---------- who owns this channel ----------

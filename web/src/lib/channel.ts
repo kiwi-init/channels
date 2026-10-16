@@ -6,7 +6,7 @@ import type { CachedRow } from "@mc/cache-row.ts"
 import { ChannelGone, RelayError, type HumanSession, type ModeSetting, type RoomsSetting, type SendOptions } from "@mc/client.ts"
 import { decodeJoinCode, ownerFingerprint } from "@mc/crypto.ts"
 import type { JoinRequest, Member } from "@mc/membership.ts"
-import type { Message } from "@mc/protocol.ts"
+import { SNAPSHOT_EVERY, type Message } from "@mc/protocol.ts"
 import { fold, type ChannelState, type GuardFloor, type Roster } from "@mc/state.ts"
 import type { Activity } from "@mc/protocol.ts"
 import type { PublicAccess } from "../../../desktop/src/bridge.ts"
@@ -658,6 +658,10 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
     )
   })
   useEffect(() => reconcile(), [scopesKey, bitsKey, caughtUp])
+  const snapshotStep = ch.isOwner ? Math.floor(state.head / SNAPSHOT_EVERY) : 0
+  useEffect(() => {
+    if (snapshotStep > 0) ch.snapshotIfDue().catch(() => {})
+  }, [ch, snapshotStep])
   // Online only if signed by the very key the owner admitted under that name.
   const live = useMemo(() => new Map([...online].filter(([name, o]) => !!o.pk && keyOf.get(name) === o.pk && now - o.at < PRESENCE_TTL)), [online, keyOf, now])
 

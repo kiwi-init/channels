@@ -9,6 +9,10 @@ export const PROTOCOL_VERSION = 1;
 /** Largest ciphertext (base64) the relay accepts for a single message. */
 export const MAX_CT_LENGTH = 512 * 1024;
 
+export const MAX_SNAPSHOT_LENGTH = 512 * 1024;
+
+export const SNAPSHOT_EVERY = 500;
+
 /** Largest raw image (per file) a client will attach: must survive two base64 trips inside this budget. */
 export const MAX_IMAGE_BYTES = 256 * 1024;
 

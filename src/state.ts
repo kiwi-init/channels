@@ -5,7 +5,7 @@
 // without the relay ever reading any of it.
 // Conflicts resolve deterministically: the earlier sequence number wins.
 
-import { inlineText, type Runs } from "./membership.ts";
+import { inlineText, type Member as MemberRecord, type Runs } from "./membership.ts";
 import { GENERAL_ROOM, ignored, isReaction, MAX_CHARTER, MAX_ROOM_NAME, MAX_ROOMS, MAX_TAGS, ROOM_ID_RE, type Card, type Color, type Message, type OldTaskState, type TaskState, type Trust, type Verdict } from "./protocol.ts";
 import { readScopes, refusal, SCOPES, scopesOf, type Scope } from "./scopes.ts";
 
@@ -60,6 +60,24 @@ export type Roster = {
   /** What the owner signed as running this agent (membership.ts). */
   runs?: Runs;
 }[];
+
+export const toRoster = (m: MemberRecord): Roster[number] => ({
+  name: m.name,
+  pk: m.pk,
+  role: m.role,
+  about: m.about,
+  owner: m.owner,
+  at: m.at,
+  active: m.active,
+  kind: m.kind,
+  display: m.display,
+  sponsor: m.sponsor,
+  color: m.color,
+  ...(m.scopes ? { scopes: m.scopes } : {}),
+  ...(m.later ? { later: m.later } : {}),
+  ...(m.laterRole ? { laterRole: m.laterRole } : {}),
+  ...(m.runs ? { runs: m.runs } : {}),
+});
 
 interface TaskNote {
   seq: number;
@@ -203,6 +221,32 @@ export interface Room {
   /** Who made it, when that event is in the folded log (null for general, or a room known only from the owner's signed list). */
   createdBy: string | null;
   at: number;
+}
+
+export interface FoldBase {
+  n: number;
+  members: { name: string; role?: string; about?: string; color?: Color; card?: Card & { at: number }; lastSeen: number; messages: number }[];
+  coordinator: string | null;
+  mode: { coordinatorOnly: boolean; strict: boolean };
+  charter: Charter | null;
+  hold: Hold | null;
+  scopesByKey: [string, Scope[]][];
+  scopeSets: [string, { seq: number; scopes: Scope[] }][];
+  roleSets: [string, { seq: number; role: string | null; about?: string | null }][];
+  tasks: Task[];
+  facts: Fact[];
+  reactions: [number, [string, Reaction][]][];
+  reactSeqs: number[];
+  trust: [number, Trust][];
+  rejected: [number, string][];
+  asks: Message[];
+  answered: [number, string[]][];
+  threadOf: [number, number][];
+  threadPeople: [number, string[]][];
+  direct: number[];
+  rooms: Room[];
+  roomOf: [number, string][];
+  placeOf: [number, Place][];
 }
 
 /** The room list the owner signed into the channel's settings, as it stood after log position `since`. */
@@ -390,7 +434,11 @@ export function fold(
   modeFloor?: { coordinatorOnly: boolean; strict: boolean; since: number } | null,
   roomsFloor?: RoomsFloor | null,
   guardFloor?: GuardFloor | null,
+  from?: FoldBase | null,
+  keep?: (base: FoldBase) => void,
 ): ChannelState {
+  const after = from?.n ?? -1;
+  const ahead = <F extends { since: number }>(f: F | null | undefined): F | null => (f && f.since >= after ? f : null);
   const members = new Map<string, Member>();
   // A name can be re-admitted under a new key after its old one left; the active key wins.
   for (const r of [...roster].sort((a, b) => Number(a.active) - Number(b.active))) {
@@ -428,10 +476,30 @@ export function fold(
     if (coordinator) m.role = undefined;
     else coordinator = m.name;
   }
-  let mode = { coordinatorOnly: false, strict: false };
+  if (from) {
+    const prior = new Map(from.members.map((p) => [p.name, p]));
+    coordinator = from.coordinator;
+    for (const m of [...members.values()].sort((a, b) => a.joined - b.joined)) {
+      const p = prior.get(m.name);
+      if (!p) {
+        if (m.active && isCoordinatorRole(m.role)) {
+          if (coordinator && coordinator !== m.name) m.role = undefined;
+          else coordinator = m.name;
+        }
+        continue;
+      }
+      m.role = p.role;
+      m.about = p.about;
+      m.color = p.color;
+      if (p.card) m.card = p.card;
+      m.lastSeen = Math.max(m.lastSeen, p.lastSeen);
+      m.messages = p.messages;
+    }
+  }
+  let mode = from ? { ...from.mode } : { coordinatorOnly: false, strict: false };
   // The mode the owner signed into the channel's settings, from log position `since` on: a client
   // holding only the log's tail (the web) may not have that mode.set. Any later one still applies.
-  let floor = modeFloor ?? null;
+  let floor = ahead(modeFloor);
   const passFloor = (seq: number) => {
     if (floor && floor.since < seq) {
       mode = { coordinatorOnly: floor.coordinatorOnly, strict: floor.coordinatorOnly && floor.strict };
@@ -440,10 +508,10 @@ export function fold(
   };
   // The charter and the hold, the same way: the owner's signed settings are the floor from `since` on.
   const ownerName = [...members.values()].find((x) => x.owner)?.name ?? "owner";
-  let charter: Charter | null = null;
-  let hold: Hold | null = null;
-  let charterFloor = guardFloor?.charter ?? null;
-  let holdFloor = guardFloor?.hold ?? null;
+  let charter: Charter | null = from?.charter ?? null;
+  let hold: Hold | null = from?.hold ?? null;
+  let charterFloor = ahead(guardFloor?.charter);
+  let holdFloor = ahead(guardFloor?.hold);
   const passGuard = (seq: number) => {
     if (charterFloor && charterFloor.since < seq) {
       charter = charterFloor.text ? { text: charterFloor.text, by: ownerName, at: charter?.at ?? 0 } : null;
@@ -454,7 +522,7 @@ export function fold(
       holdFloor = null;
     }
   };
-  const direct = new Set<number>();
+  const direct = new Set<number>(from?.direct);
   /** The person (a member here) whose account vouched for an agent. */
   const humanFor = (a: Member) => (a.sponsor ? [...members.values()].find((x) => x.active && isPerson(x) && x.sponsor?.user === a.sponsor!.user)?.name : undefined);
   const keysByName = new Map<string, Set<string>>();
@@ -467,11 +535,12 @@ export function fold(
   // from its own record, and an old key's history is judged by what that key was allowed.
   const scopesByKey = new Map<string, Scope[]>();
   for (const r of roster) scopesByKey.set(r.pk, scopesOf(r));
+  for (const [pk, scopes] of from?.scopesByKey ?? []) scopesByKey.set(pk, scopes);
   // The record's later scopes, applied once the log passes where they took effect. A client holding
   // only the tail of the log (the web) never sees that scope.set; this says the same thing. Any
   // scope.set after it, in the log, still applies on top.
   const floors = roster
-    .filter((r) => r.later && !r.owner)
+    .filter((r) => r.later && !r.owner && !!ahead(r.later))
     .map((r) => ({ pk: r.pk, ...r.later! }))
     .sort((a, b) => a.since - b.since);
   const passFloors = (seq: number) => {
@@ -481,8 +550,8 @@ export function fold(
     }
   };
   /** The latest scope.set the log holds for each key: the owner's client checks the record matches. */
-  const scopeSets = new Map<string, { seq: number; scopes: Scope[] }>();
-  const roleSets = new Map<string, { seq: number; role: string | null; about?: string | null }>();
+  const scopeSets = new Map<string, { seq: number; scopes: Scope[] }>(from?.scopeSets);
+  const roleSets = new Map<string, { seq: number; role: string | null; about?: string | null }>(from?.roleSets);
   /** A role (and rules) from the owner. The coordinator role has one holder: giving it to someone moves it. */
   const setRole = (target: Member, role: string | null, about: string | null | undefined) => {
     if (isCoordinatorRole(role ?? undefined)) {
@@ -496,7 +565,7 @@ export function fold(
   // The record's later role, the same way: a client holding only the log's tail never sees an old
   // role.set, so the owner re-signs the record with it; it applies once the log passes `since`.
   const roleFloors = roster
-    .filter((r) => r.laterRole && !r.owner && r.active)
+    .filter((r) => r.laterRole && !r.owner && r.active && !!ahead(r.laterRole))
     .map((r) => ({ name: r.name, pk: r.pk, ...r.laterRole! }))
     .sort((a, b) => a.since - b.since);
   const passRoleFloors = (seq: number) => {
@@ -506,32 +575,35 @@ export function fold(
       if (target?.pk === f.pk) setRole(target, f.role, f.about);
     }
   };
-  const tasks = new Map<number, Task>();
-  const facts = new Map<string, Fact>();
-  const reactions = new Map<number, Map<string, Reaction>>();
+  const tasks = new Map<number, Task>(from?.tasks.map((t) => [t.id, t]));
+  const facts = new Map<string, Fact>(from?.facts.map((f) => [f.key, f]));
+  const reactions = new Map<number, Map<string, Reaction>>(from?.reactions.map(([seq, by]) => [seq, new Map(by)]));
   /** Every react event's seq: a reaction is never something to react to. */
-  const reactSeqs = new Set<number>();
-  const trust = new Map<number, Trust>();
-  const rejected = new Map<number, string>();
-  const answered = new Map<number, Set<string>>();
-  const threadOf = new Map<number, number>();
-  const threadPeople = new Map<number, Set<string>>();
-  let head = 0;
+  const reactSeqs = new Set<number>(from?.reactSeqs);
+  const trust = new Map<number, Trust>(from?.trust);
+  const rejected = new Map<number, string>(from?.rejected);
+  const answered = new Map<number, Set<string>>(from?.answered.map(([seq, by]) => [seq, new Set(by)]));
+  const threadOf = new Map<number, number>(from?.threadOf);
+  const threadPeople = new Map<number, Set<string>>(from?.threadPeople.map(([seq, people]) => [seq, new Set(people)]));
+  let head = from?.n ?? 0;
 
   // Rooms: general always; then the ones the owner signed into the settings, which a client holding only
   // the log's tail may never see created. Room events up to the list's `since` are already in it.
-  const rooms = new Map<string, Room>([[GENERAL_ROOM, { id: GENERAL_ROOM, name: GENERAL_ROOM, createdBy: null, at: 0 }]]);
+  const known = new Map<string, Room>(from?.rooms.map((r) => [r.id, r]));
+  const rooms = new Map<string, Room>([[GENERAL_ROOM, known.get(GENERAL_ROOM) ?? { id: GENERAL_ROOM, name: GENERAL_ROOM, createdBy: null, at: 0 }]]);
   const roomsSince = roomsFloor?.since ?? -1;
-  for (const r of roomsFloor?.list ?? []) {
+  for (const r of ahead(roomsFloor)?.list ?? []) {
     const name = roomName(r.name);
     if (!ROOM_ID_RE.test(r.id) || !name || (rooms.size >= MAX_ROOMS && !rooms.has(r.id))) continue;
-    rooms.set(r.id, { ...(rooms.get(r.id) ?? { id: r.id, createdBy: null, at: 0 }), name });
+    rooms.set(r.id, { ...(rooms.get(r.id) ?? known.get(r.id) ?? { id: r.id, createdBy: null, at: 0 }), name });
   }
+  for (const [id, r] of known) if (!rooms.has(id)) rooms.set(id, r);
   const nameTaken = (name: string, except?: string) => [...rooms.values()].some((r) => r.id !== except && r.name.toLowerCase() === name.toLowerCase());
-  const roomOf = new Map<number, string>();
-  const placeOf = new Map<number, Place>();
+  const roomOf = new Map<number, string>(from?.roomOf);
+  const placeOf = new Map<number, Place>(from?.placeOf);
 
   for (const m of messages) {
+    if (m.seq <= after) continue;
     passFloors(m.seq);
     passRoleFloors(m.seq);
     passFloor(m.seq);
@@ -904,12 +976,39 @@ export function fold(
     }
   }
 
-  const openAsks = messages.filter((m) => {
+  const openAsks = [...(from?.asks ?? []), ...messages.filter((m) => m.seq > after)].filter((m) => {
     if (m.kind !== "ask" && m.kind !== "blocking") return false;
     if (ignored(trust.get(m.seq))) return false;
     const by = answered.get(m.seq);
     return !by || [...by].every((n) => n === m.from);
   });
+  keep?.(
+    structuredClone({
+      n: head,
+      members: [...members.values()].map((m) => ({ name: m.name, role: m.role, about: m.about, color: m.color, card: m.card, lastSeen: m.lastSeen, messages: m.messages })),
+      coordinator,
+      mode,
+      charter,
+      hold,
+      scopesByKey: [...scopesByKey],
+      scopeSets: [...scopeSets],
+      roleSets: [...roleSets],
+      tasks: [...tasks.values()],
+      facts: [...facts.values()],
+      reactions: [...reactions].map(([seq, by]): [number, [string, Reaction][]] => [seq, [...by]]),
+      reactSeqs: [...reactSeqs],
+      trust: [...trust],
+      rejected: [...rejected],
+      asks: openAsks,
+      answered: openAsks.flatMap((m): [number, string[]][] => [[m.seq, [...(answered.get(m.seq) ?? [])]]]),
+      threadOf: [...threadOf],
+      threadPeople: [...threadPeople].map(([seq, people]): [number, string[]] => [seq, [...people]]),
+      direct: [...direct],
+      rooms: [...rooms.values()],
+      roomOf: [...roomOf],
+      placeOf: [...placeOf],
+    }),
+  );
 
   // Floors the loaded log hasn't passed yet: the record is newer than anything here says.
   passFloors(Infinity);

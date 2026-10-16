@@ -16,6 +16,7 @@ import type { ChannelAccess } from "./crypto.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "./identity.ts";
 import type { Member } from "./membership.ts";
 import type { Message } from "./protocol.ts";
+import type { FoldBase } from "./state.ts";
 import type { Signed, SigningBudget } from "./sas.ts";
 
 /** Public relay used when neither --relay nor KIWI_RELAY is given. */
@@ -461,7 +462,7 @@ export function wipeChannel(alias: string): void {
   });
   if (c) {
     rmSync(identityDir(c.roomId), { recursive: true, force: true });
-    for (const suffix of ["", ".seq"]) rmSync(cachePath(c.roomId) + suffix, { force: true });
+    for (const suffix of ["", ".seq", ".base"]) rmSync(cachePath(c.roomId) + suffix, { force: true });
     rmSync(join(home(), "downloads", c.roomId), { recursive: true, force: true });
   }
   rmSync(cursorDir(alias), { recursive: true, force: true });
@@ -568,6 +569,23 @@ export function appendCache(roomId: string, messages: Message[]): void {
   });
 }
 
+function readBase(roomId: string): FoldBase | null {
+  try {
+    return JSON.parse(readFileSync(`${cachePath(roomId)}.base`, "utf8")) as FoldBase;
+  } catch {
+    return null;
+  }
+}
+
+function keepBase(roomId: string, base: FoldBase): void {
+  const path = cachePath(roomId);
+  mkdirSync(join(path, ".."), { recursive: true, mode: 0o700 });
+  withLock(`${path}.lock`, () => {
+    if ((readBase(roomId)?.n ?? 0) >= base.n) return;
+    writePrivate(`${path}.base`, JSON.stringify(base));
+  });
+}
+
 // ---------- the same files, as services ----------
 //
 // The agent session and the commands reach ~/.kiwi through these, so a test (or
@@ -606,6 +624,8 @@ export class Cache extends Context.Service<
   {
     readonly read: (roomId: string) => Effect.Effect<Message[]>;
     readonly append: (roomId: string, messages: Message[]) => Effect.Effect<void>;
+    readonly base: (roomId: string) => Effect.Effect<FoldBase | null>;
+    readonly keepBase: (roomId: string, base: FoldBase) => Effect.Effect<void>;
   }
 >()("kiwi/Cache") {}
 
@@ -642,6 +662,8 @@ export const LocalFiles: Layer.Layer<Keystore | Cache | Cursor> = Layer.mergeAll
   Layer.succeed(Cache, {
     read: (roomId) => Effect.sync(() => readCache(roomId)),
     append: (roomId, messages) => Effect.sync(() => appendCache(roomId, messages)),
+    base: (roomId) => Effect.sync(() => readBase(roomId)),
+    keepBase: (roomId, base) => Effect.sync(() => keepBase(roomId, base)),
   }),
   Layer.succeed(Cursor, {
     read: (channel, agent) => Effect.sync(() => readCursor(channel, agent)),

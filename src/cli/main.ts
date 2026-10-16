@@ -888,7 +888,8 @@ const commands: Record<string, Command> = {
       const s = yield* session();
       const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi save N [dir]"));
       const { messages, state } = yield* s.state();
-      const m = messages.find((x) => x.seq === seq && !ignored(state.trust.get(x.seq))) ?? (yield* die(`no message #${seq}`));
+      const found = yield* s.message(seq, messages);
+      const m = found && !ignored(state.trust.get(seq)) ? found : yield* die(`no message #${seq}`);
       if (!m.imgs?.length) return yield* die(`message #${seq} has no images`);
       for (const path of saveImages(seq, m.imgs, args[2] ?? ".")) out(path);
     }),
@@ -899,7 +900,8 @@ const commands: Record<string, Command> = {
       const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi show N [dir]"));
       const { messages, state } = yield* s.state();
       // Forged messages, and ones the owner doesn't allow, are left out everywhere (status counts them).
-      const m = messages.find((x) => x.seq === seq && !ignored(state.trust.get(x.seq))) ?? (yield* die(`no message #${seq}`));
+      const found = yield* s.message(seq, messages);
+      const m = found && !ignored(state.trust.get(seq)) ? found : yield* die(`no message #${seq}`);
       // Images land under the channel's own folder (closing it deletes them), or where asked.
       const saved = m.imgs?.length ? saveImages(seq, m.imgs, args[2] ?? joinPath(home(), "downloads", s.ch.roomId)) : [];
       out(formatShown(m, messages, state, saved, s.me));
@@ -917,7 +919,8 @@ const commands: Record<string, Command> = {
   log: () =>
     Effect.gen(function* () {
       const s = yield* session();
-      const { messages, state } = yield* s.state();
+      const { messages: held, state } = yield* s.state();
+      const messages = yield* s.earlier(held, Number(opt.n ?? 30));
       const room = opt.room === undefined ? undefined : yield* s.roomId(opt.room, state);
       const shown = (opt.all ? messages : messages.filter((m) => m.kind !== "event" || m.ev?.op !== "hello")).filter(
         (m) => !ignored(state.trust.get(m.seq)) && (room === undefined || (m.kind !== "event" && state.roomOf.get(m.seq) === room)),
@@ -1001,7 +1004,7 @@ const commands: Record<string, Command> = {
       const s = yield* session();
       const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi thread N"));
       const { messages, state } = yield* s.state();
-      if (!messages.some((m) => m.seq === seq)) return yield* die(`no message #${seq}`);
+      if (!(yield* s.message(seq, messages))) return yield* die(`no message #${seq}`);
       const root = state.threadOf.get(seq) ?? seq;
       for (const m of messages) if (state.threadOf.get(m.seq) === root && !ignored(state.trust.get(m.seq))) out(render(m, state));
     }),

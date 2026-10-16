@@ -50,6 +50,7 @@ import {
   setOwnerNonce,
   setRecord,
   setSettings,
+  setSnapshot,
   setTitle,
   touch,
   UPDATE_KIWI,
@@ -315,6 +316,28 @@ const routes: RoomRoute[] = [
         const { settings } = yield* json<{ settings?: unknown }>();
         yield* setSettings(settings);
         return { data: { ok: true }, fx: { broadcast: [frame({ t: "info" })] } };
+      }),
+  },
+  {
+    method: "GET",
+    path: "/snapshot",
+    guard: "member",
+    run: () =>
+      Effect.gen(function* () {
+        const db = yield* RoomStore;
+        const { url } = yield* Request_;
+        const s = db.snapshot();
+        return { data: { snapshot: s && url.searchParams.get("only") === "n" ? { n: s.n, e: s.e, at: s.at } : s } };
+      }),
+  },
+  {
+    method: "PUT",
+    path: "/snapshot",
+    guard: "owner",
+    run: () =>
+      Effect.gen(function* () {
+        const { snapshot } = yield* json<{ snapshot?: unknown }>();
+        return { data: { n: yield* setSnapshot(snapshot) } };
       }),
   },
   { method: "GET", path: "/members", guard: "member", run: () => withRoom((db) => ({ data: { members: db.members() } })) },

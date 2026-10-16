@@ -70,6 +70,7 @@ describe("member routes refuse anyone who isn't a member", () => {
     ["POST", "/messages"],
     ["GET", "/keys"],
     ["GET", "/icon"],
+    ["GET", "/snapshot"],
     ["GET", "/members"],
     ["DELETE", "/members/me"],
   ];
@@ -89,6 +90,7 @@ describe("owner routes need the owner key's signature, and nothing else", () => 
     ["PUT", "/icon"],
     ["PUT", "/title"],
     ["PUT", "/settings"],
+    ["PUT", "/snapshot"],
     ["GET", "/requests?v=2"],
     ["POST", `/requests/${"0".repeat(8)}-0000-0000-0000-${"0".repeat(12)}/nonce`],
     ["POST", `/requests/${"0".repeat(8)}-0000-0000-0000-${"0".repeat(12)}/deny`],
