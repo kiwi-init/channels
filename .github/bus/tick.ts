@@ -68,10 +68,14 @@ export async function tick(repo: string, cfg: BusConfig): Promise<{ ticket: Tick
   const main = must(["git", "rev-parse", "refs/remotes/origin/main"], repo).trim()
   const st = run(["git", "rev-parse", "--verify", "-q", "refs/remotes/origin/bus/staging"], repo)
   const staging = st.ok ? st.out.trim() : undefined
-  const items = [...busBranches(repo, main), ...(await queuedPulls(repo, cfg))]
+  const queued = await queuedPulls(repo, cfg)
+  const items = [...busBranches(repo, main), ...queued.items]
   const base = { main, ...(staging ? { staging } : {}), events: [] as BusEvent[] }
 
   const flying = inFlight(repo, main, staging, items)
+  const stagedKey = staging && staging !== main && run(["git", "rev-parse", `${staging}^1`], repo).out.trim() === main ? trailers(must(["git", "log", "-1", "--format=%B", staging], repo))["Bus-Item"] : undefined
+  const lost = stagedKey ? queued.failed.find((f) => f.key === stagedKey) : undefined
+  if (!flying && lost) return { ticket: { ...base, action: "wait", why: `${lost.key} is on bus/staging but could not be read this tick: ${lost.error.slice(0, 200)}` }, patch: "" }
   if (flying && staging) {
     const r = await ciRun(staging, "bus/staging")
     if (!r || r.status !== "completed") return { ticket: { ...base, action: "wait", why: `ci is ${r?.status ?? "not started"} on bus/staging for ${flying.key}`, item: flying, ...(r ? { run: r } : {}) }, patch: "" }

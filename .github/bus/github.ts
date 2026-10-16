@@ -67,10 +67,13 @@ export function busBranches(repo: string, main: string): Item[] {
 type Pull = { number: number; title: string; body: string | null; head: { sha: string; repo: { full_name: string } | null }; base: { ref: string } }
 type IssueEvent = { event: string; label?: { name: string }; actor: { login: string } | null; created_at: string }
 
-export async function queuedPulls(repo: string, cfg: BusConfig): Promise<Item[]> {
+export type Queued = { items: Item[]; failed: { key: string; error: string }[] }
+
+export async function queuedPulls(repo: string, cfg: BusConfig): Promise<Queued> {
   const s = slug()
   const issues = await ghJson<{ number: number; pull_request?: unknown }[]>(`/repos/${s}/issues?state=open&labels=${encodeURIComponent(cfg.label)}&per_page=100`)
   const items: Item[] = []
+  const failed: Queued["failed"] = []
   for (const issue of issues.filter((i) => i.pull_request)) {
     try {
       const pr = await ghJson<Pull>(`/repos/${s}/pulls/${issue.number}`)
@@ -95,10 +98,12 @@ export async function queuedPulls(repo: string, cfg: BusConfig): Promise<Item[]>
         number: pr.number,
       })
     } catch (e) {
-      console.error(`skipping queued PR #${issue.number}: ${(e as Error).message}`)
+      const error = (e as Error).message
+      failed.push({ key: `pr:${issue.number}`, error })
+      console.log(`::warning title=queued PR #${issue.number} skipped::${error.replace(/\s+/g, " ").slice(0, 300)}`)
     }
   }
-  return items
+  return { items, failed }
 }
 
 export type Run = { id: number; status: string; conclusion: string | null; run_attempt: number }

@@ -38,7 +38,7 @@ max_file_lines: 300
 bus:
   # Resolution tiers, cheapest first. A hunk none of them resolves bounces the item to its author.
   ladder: [git, mergiraf, keep-both, haiku]
-  # A pull request joins the bus with this label, added by someone with one of these roles. Never a fork.
+  # A pull request joins the bus with this label, added by someone with one of these roles or listed in maintainers. Never a fork.
   label: queue
   label_roles: [admin, maintain]
   maintainers: [ojowwalker77]

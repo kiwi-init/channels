@@ -13,10 +13,11 @@ from GitHub and does the next step.
    it needs first, and merge it onto main: git, then mergiraf on `*.ts`/`*.tsx`, then
    keep-both for hunks whose base was empty when Jev's `keep_both` is high.
 2. **resolve** (read-only, model keys only): Haiku resolves each hunk left, sampled 3 times,
-   and may abstain. Opus takes the hunk when Haiku abstains or disagrees with itself, when
-   Jev's `intent_shift` is high, or when the merged tree fails a check. It writes
-   `resolution.patch`, which may only replace whole conflicts, or a bounce with Haiku's note
-   for the author.
+   and may abstain. A hunk Haiku abstains on or disagrees with itself on, that Jev's
+   `intent_shift` rates high, or whose merged tree fails a check, goes back to its author.
+   Opus is configured but off: add `opus` to `ladder` to let it take those hunks first. It
+   writes `resolution.patch`, which may only replace whole conflicts, or a bounce with
+   Haiku's note for the author.
 3. **stage** (App token, no model): redoes the merge, checks the patch fits only the
    conflicts, runs [`validate.ts`](validate.ts) (no markers, parses, no duplicate class
    members, `tsc` on the touched projects), commits the merge with an `Agent:` trailer and
