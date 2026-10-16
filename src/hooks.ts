@@ -27,9 +27,9 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schedule from "effect/Schedule";
 import type * as Scope from "effect/Scope";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, writeSync } from "node:fs";
+import { accessSync, constants as fsConstants, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, isAbsolute, join } from "node:path";
 import { openSession, type AgentSession } from "./agent.ts";
 import { Cursor, home, Keystore, loadConfig, type ChannelConfig } from "./config.ts";
 import { ChannelGone } from "./client.ts";
@@ -306,18 +306,69 @@ export function uninstallHooks(): string {
   return settingsPath();
 }
 
-function hookProgram(command: string): string | null {
-  const quoted = /^'((?:[^']|'\\'')*)'/.exec(command)?.[1];
-  if (quoted !== undefined) return quoted.replace(/'\\''/g, "'");
-  return /^(\S+)/.exec(command)?.[1] ?? null;
+function shellWords(line: string): string[] | null {
+  const words: string[] = [];
+  let word = "";
+  let started = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line.charAt(i);
+    if (c === " " || c === "\t") {
+      if (started) words.push(word);
+      word = "";
+      started = false;
+    } else if (c === "'") {
+      const end = line.indexOf("'", i + 1);
+      if (end < 0) return null;
+      word += line.slice(i + 1, end);
+      started = true;
+      i = end;
+    } else if (c === "\\") {
+      if (i + 1 >= line.length) return null;
+      word += line.charAt(i + 1);
+      started = true;
+      i++;
+    } else if (c === '"' || c === "$" || c === "`" || c === ";" || c === "&" || c === "|") {
+      return null;
+    } else {
+      word += c;
+      started = true;
+    }
+  }
+  if (started) words.push(word);
+  return words;
+}
+
+function runnable(path: string): boolean {
+  if (!isAbsolute(path)) return false;
+  try {
+    if (!statSync(path).isFile()) return false;
+    accessSync(path, fsConstants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function devMain(path: string): boolean {
+  if (!isAbsolute(path) || !path.endsWith(join("src", "cli", "main.ts"))) return false;
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
 }
 
 export function isOurHook(command: unknown, arg: string): boolean {
   if (typeof command !== "string") return false;
+  if (command === hookCommand(arg)) return true;
   const tail = ` hook ${arg} ${MARK}`;
-  if (!command.endsWith(tail) || command.length === tail.length) return false;
-  const program = hookProgram(command);
-  return !!program && existsSync(program);
+  if (!command.endsWith(tail)) return false;
+  const words = shellWords(command.slice(0, -tail.length));
+  if (!words) return false;
+  const [program, script, ...rest] = words;
+  if (program === undefined || rest.length) return false;
+  if (script === undefined) return runnable(program) && basename(program).startsWith("kiwi");
+  return runnable(program) && devMain(script);
 }
 
 function hasHook(s: Settings, event: string, arg: string): boolean {

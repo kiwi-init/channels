@@ -1,6 +1,6 @@
 // Per-harness hook files: write, idempotent re-install, uninstall leaves the user's own entries.
 import { afterEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, updateConfig } from "../src/config.ts";
@@ -492,23 +492,52 @@ test("Grok's Stop input names a task's type as kind, as Grok 1.0.62 sends it, an
     { type: "monitor", text: "kiwi -c ch --as g listen\nkiwi messages" },
     { type: "monitor", text: "tail -f x" },
   ]);
-  expect(grokMonitorListens(tasks!, ["kiwi listen", "kiwi -c ch --as g listen"])).toBe(true);
+  expect(tasks).not.toBeNull();
+  expect(grokMonitorListens(tasks ?? [], ["kiwi listen", "kiwi -c ch --as g listen"])).toBe(true);
 });
 
-test("kiwi's hook is recognised by its `hook <event> # kiwi` ending and a program that exists, whatever the program's path", () => {
+test("kiwi's hook is the command kiwi writes: a runnable kiwi program, or bun running a checkout's main.ts, whatever the path", () => {
   const dir = scratch("hk-ours-");
-  const wrapper = join(dir, "kiwi wrapper's");
-  writeFileSync(wrapper, "#!/bin/sh\n");
-  const quoted = `'${wrapper.replace(/'/g, `'\\''`)}'`;
-  expect(isOurHook(`${quoted} hook listen # kiwi`, "listen")).toBe(true);
-  expect(isOurHook(`${quoted} hook stop # kiwi`, "listen")).toBe(false);
-  expect(isOurHook(`${quoted} hook kimi-stop # kiwi`, "stop")).toBe(false);
-  expect(isOurHook(`${quoted} hook kimi-stop # kiwi`, "kimi-stop")).toBe(true);
-  expect(isOurHook(`'${join(dir, "gone")}' hook listen # kiwi`, "listen")).toBe(false);
-  expect(isOurHook(`${join(dir, "gone")} hook listen # kiwi`, "listen")).toBe(false);
+  const q = (p: string) => `'${p.replace(/'/g, `'\\''`)}'`;
+  const exe = (p: string, body = "#!/bin/sh\nexit 0\n") => {
+    writeFileSync(p, body);
+    chmodSync(p, 0o755);
+    return p;
+  };
+  const wrapper = exe(join(dir, "kiwi wrapper's"));
+  expect(Bun.spawnSync([wrapper]).exitCode).toBe(0);
+  expect(isOurHook(`${q(wrapper)} hook listen # kiwi`, "listen")).toBe(true);
+  expect(isOurHook(`${q(wrapper)} hook stop # kiwi`, "listen")).toBe(false);
+  expect(isOurHook(`${q(wrapper)} hook kimi-stop # kiwi`, "stop")).toBe(false);
+  expect(isOurHook(`${q(wrapper)} hook kimi-stop # kiwi`, "kimi-stop")).toBe(true);
+  expect(isOurHook(`${q(join(dir, "gone"))} hook listen # kiwi`, "listen")).toBe(false);
   expect(isOurHook(" hook listen # kiwi", "listen")).toBe(false);
-  expect(isOurHook(`${quoted} hook listen`, "listen")).toBe(false);
+  expect(isOurHook(`${q(wrapper)} hook listen`, "listen")).toBe(false);
   expect(isOurHook(undefined, "listen")).toBe(false);
+
+  const other = exe(join(dir, "echo"));
+  expect(isOurHook(`${q(other)} hook stop # kiwi`, "stop")).toBe(false);
+  const folder = join(dir, "kiwi-folder");
+  mkdirSync(folder);
+  expect(isOurHook(`${q(folder)} hook stop # kiwi`, "stop")).toBe(false);
+  const plain = join(dir, "kiwi-plain");
+  writeFileSync(plain, "#!/bin/sh\n");
+  expect(isOurHook(`${q(plain)} hook stop # kiwi`, "stop")).toBe(false);
+  expect(isOurHook(`${q(wrapper)}oops hook stop # kiwi`, "stop")).toBe(false);
+  expect(isOurHook(`kiwi hook stop # kiwi`, "stop")).toBe(false);
+  expect(isOurHook(`${q(wrapper)} "x" hook stop # kiwi`, "stop")).toBe(false);
+
+  const bun = exe(join(dir, "bun"));
+  const checkout = join(dir, "checkout");
+  mkdirSync(join(checkout, "src", "cli"), { recursive: true });
+  const main = join(checkout, "src", "cli", "main.ts");
+  writeFileSync(main, "");
+  const dev = `${q(bun)} ${q(main)} hook stop # kiwi`;
+  expect(isOurHook(dev, "stop")).toBe(true);
+  expect(isOurHook(`${q(bun)} ${q(main)} extra hook stop # kiwi`, "stop")).toBe(false);
+  expect(isOurHook(`${q(bun)} ${q(join(checkout, "other.ts"))} hook stop # kiwi`, "stop")).toBe(false);
+  rmSync(checkout, { recursive: true });
+  expect(isOurHook(dev, "stop")).toBe(false);
 });
 
 test("Claude Code's and Grok's hooks count as installed through a wrapper, and not when the program is gone", () => {
@@ -516,8 +545,13 @@ test("Claude Code's and Grok's hooks count as installed through a wrapper, and n
   const claude = scratch("hk-wrap-claude-");
   const grok = scratch("hk-wrap-grok-");
   setEnv({ KIWI_HOME: scratch("hk-wrap-home-"), CLAUDE_CONFIG_DIR: claude, KIWI_GROK_DIR: grok });
+  const real = join(dir, "kiwi.real");
+  writeFileSync(real, "#!/bin/sh\nexit 0\n");
+  chmodSync(real, 0o755);
   const wrapper = join(dir, "kiwi");
-  writeFileSync(wrapper, "#!/bin/sh\n");
+  writeFileSync(wrapper, `#!/bin/sh\nexec '${real}' "$@"\n`);
+  chmodSync(wrapper, 0o755);
+  expect(Bun.spawnSync([wrapper, "hook", "stop"]).exitCode).toBe(0);
   const settings = (program: string) => {
     const cmd = (arg: string) => `'${program}' hook ${arg} # kiwi`;
     const listen = { hooks: [{ type: "command", command: cmd("listen"), async: true, asyncRewake: true }] };
