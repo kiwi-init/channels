@@ -13,7 +13,7 @@
 - Lockfile em conflito não se resolve à mão: aceite o remoto e regenere.
 - Commits pequenos. Antes de todo push: `git pull --rebase`, rodar as checagens da área tocada e depois `git push` normal.
 - Proibido: force-push manual, `--no-verify`, `[skip ci]` e merge com o check `ci-ok` vermelho.
-- Processo longo (CI, checagens, testes, build, servidor, espera por run de CI) roda destacado, em background, para que a interrupção do turno não o mate: dispare em background (ou com `nohup`/`setsid`), mande a saída para um arquivo de log e acompanhe pelo log ou pelo aviso de término, sem bloquear o turno esperando.
+- Processo longo (CI, checagens, testes, build, servidor, espera por run de CI) roda destacado, em background, para que a interrupção do turno não o mate: dispare pelo modo background da ferramenta do agente ou, no shell, com `nohup <comando> > arquivo.log 2>&1 &` (ou `setsid`), nunca só com `&`, que não desacopla o processo do shell; mande a saída para um arquivo de log e acompanhe pelo log ou pelo aviso de término, sem bloquear o turno esperando.
 - Toda mudança chega com o seu gate de CI: um job próprio no `ci.yml`, nomeado `<área> / <checagem>` (ex.: `web / lint`) e incluído no `needs` do `ci-ok`.
 
 ## Autoria
