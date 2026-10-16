@@ -74,7 +74,7 @@ const summarised = (m: Message) => m.ev?.op === "task.add" || (m.ev?.op === "tas
 type Here = Exclude<Place, { kind: "task" }>
 
 /** What's open on the right, one at a time: a thread (by its first message), the details, or the tasks (the list, or one of them). */
-type Side = { kind: "thread"; root: number } | { kind: "info" } | { kind: "tasks"; task: number | null; fromList?: true } | null
+type Side = { kind: "thread"; root: number } | { kind: "info" } | { kind: "tasks"; task: number | null; via?: "overview" } | null
 
 const CLEAR = "xl:pr-[min(var(--float),max(0px,calc(792px_+_2*var(--float)_-_100%)))]"
 
@@ -769,7 +769,17 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             </div>
           </div>
 
-          {floating && <Overview state={state} agents={agentsNow} prs={prs} now={now} nameOf={nameOf} onOpenTask={openTask} onAllTasks={() => setSide({ kind: "tasks", task: null })} />}
+          {floating && (
+            <Overview
+              state={state}
+              agents={agentsNow}
+              prs={prs}
+              now={now}
+              nameOf={nameOf}
+              onOpenTask={(task) => setSide({ kind: "tasks", task, via: "overview" })}
+              onAllTasks={() => setSide({ kind: "tasks", task: null, via: "overview" })}
+            />
+          )}
 
           {behind > 0 && (
             <button
@@ -872,8 +882,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                 </>
               )
             }
-            backLabel={side.fromList ? "All tasks" : "Overview"}
-            onBack={() => setSide(side.fromList ? { kind: "tasks", task: null } : null)}
+            backLabel={side.task === null ? "Overview" : "All tasks"}
+            onBack={side.task !== null ? () => setSide({ kind: "tasks", task: null, ...(side.via ? { via: side.via } : {}) }) : side.via ? () => setSide(null) : undefined}
             onClose={() => setSide(null)}
             follow={shownTask === null ? null : `${shownTask}:${inTask.length}`}
             composer={
@@ -894,7 +904,13 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             }
           >
             {shownTask === null ? (
-              <Tasks state={state} now={now} nameOf={nameOf} unreadIn={(id) => unreadIn(placeKey({ kind: "task", task: id }))} onOpen={(task) => setSide({ kind: "tasks", task, fromList: true })} />
+              <Tasks
+                state={state}
+                now={now}
+                nameOf={nameOf}
+                unreadIn={(id) => unreadIn(placeKey({ kind: "task", task: id }))}
+                onOpen={(task) => setSide((s) => ({ kind: "tasks", task, ...(s?.kind === "tasks" && s.via ? { via: s.via } : {}) }))}
+              />
             ) : (
               <div className="px-3 pt-1 pb-4">
                 <TaskDetails

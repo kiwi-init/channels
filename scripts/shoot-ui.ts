@@ -276,7 +276,7 @@ try {
         await owner.locator("button[aria-label='Reply']").last().dispatchEvent("click")
         await owner.getByRole("button", { name: "Close thread" }).waitFor()
       }, () => owner.getByRole("button", { name: "Close thread" }).click())
-      await shoot(owner, tag, "04-overview", openOverview)
+      await shoot(owner, tag, narrow ? "04-tasks" : "04-overview", narrow ? () => tasksBtn().click() : openOverview, narrow ? closeTasks : undefined)
       await shoot(owner, tag, "05-task-thread", () => toTask(/Write fewer rows/), async () => {})
       await shoot(owner, tag, "06-task-page", async () => {
         await tasksPanel().getByRole("region", { name: /^Task T\d+/ }).getByRole("button", { name: /^Activity/ }).click()

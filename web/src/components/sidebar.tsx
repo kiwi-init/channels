@@ -3,7 +3,7 @@ import { Add01Icon, ComputerIcon, Download04Icon, LockIcon, Settings01Icon } fro
 import type { ChannelIcon } from "@mc/protocol.ts"
 import type { ChannelRow } from "@/lib/channel"
 import type { RowNews } from "@/lib/news"
-import { useIcons, useMemberIcons } from "@/lib/icons"
+import { useIcons } from "@/lib/icons"
 import { formatShort } from "@/lib/format"
 import { useSecrets } from "@/lib/secrets"
 import { openRelease, restartToUpdate, useUpdate } from "@/lib/update"
@@ -49,7 +49,6 @@ export function Sidebar({
   const update = useUpdate()
   const newsOf = new Map(rows.map((c, i) => [c.room, news[i]]))
   const icons = useIcons()
-  useMemberIcons(rows.filter((c) => c.state === "member").map((c) => c.code))
 
   return (
     <aside className={cx("relative h-full w-full shrink-0 flex-col bg-rail md:w-[300px]", className)}>
@@ -193,7 +192,7 @@ function RailChannel({ c, n, selected, icon, onSelect }: { c: ChannelRow; n: Row
         className={cx("relative flex size-14 shrink-0 items-center justify-center rounded-card transition-colors", selected ? "bg-pick" : "hover:bg-wash")}
       >
         <span className={cx("flex", !reachable && "grayscale")}>
-          <ChannelIconTile icon={icon} title={c.title} size={40} />
+          {c.recent?.byCoordinator && reachable ? <CoordinatorAvatar size={40} label="The coordinator spoke last" /> : <ChannelIconTile icon={icon} title={c.title} size={40} />}
         </span>
         {needs > 0 ? (
           <span className="absolute top-1 right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-stamp font-semibold text-accent-ink tabular-nums shadow-[0_0_0_2px_var(--rail)]">
@@ -235,7 +234,6 @@ export function Rail({
   const update = useUpdate()
   const newsOf = new Map(rows.map((c, i) => [c.room, news[i]]))
   const icons = useIcons()
-  useMemberIcons(rows.filter((c) => c.state === "member").map((c) => c.code))
   return (
     <aside className="relative hidden h-full w-20 shrink-0 flex-col items-center bg-rail md:flex">
       <div aria-hidden className="drag h-(--chrome-h) w-full shrink-0" />

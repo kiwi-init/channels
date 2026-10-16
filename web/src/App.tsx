@@ -5,6 +5,7 @@ import { FirstRun } from "@/components/first-run"
 import { ChannelGate, JoinWithCode, NewChannel, Welcome } from "@/components/onboarding"
 import { ChannelIconTile } from "@/components/channel-icon"
 import { Rail, Sidebar } from "@/components/sidebar"
+import { useMemberIcons } from "@/lib/icons"
 import { useIcons } from "@/lib/icons"
 import type { Command } from "@/components/ui/palette"
 import { usePaletteShortcut } from "@/components/ui/palette-shortcut"
@@ -37,6 +38,7 @@ export default function App() {
   usePaletteShortcut(useCallback(() => setPalette(true), []))
   useSidebarShortcut()
   const listOpen = useSidebarOpen()
+  useMemberIcons(rows.filter((c) => c.state === "member").map((c) => c.code))
   // Every owned channel, watched in the background: your computers' agents in, a notification otherwise.
   useAutoApproval(rows)
   // The app's own computer joins the list once there's a person to certify it (lib/computers.ts).

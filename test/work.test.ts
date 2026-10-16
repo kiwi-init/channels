@@ -73,6 +73,15 @@ describe("pull requests", () => {
     const s = fold(ms, roster);
     expect(recentPrs(s, ms, "jonatas", 5)[0]).toMatchObject({ number: 7, task: other.seq });
   });
+
+  test("recent PRs: a reply in a task's thread ties its PR to that task", async () => {
+    const add = await msg(ann, { ev: { op: "task.add", title: "Keys move out", owner: "ann" } });
+    const root = await msg(ann, { task: add.seq, body: "starting" });
+    const reply = await msg(bob, { re: [root.seq], body: "up: https://github.com/o/r/pull/9" });
+    const ms = [add, root, reply];
+    const s = fold(ms, roster);
+    expect(recentPrs(s, ms, "jonatas", 5)[0]).toMatchObject({ number: 9, task: add.seq });
+  });
 });
 
 describe("agent rows", () => {

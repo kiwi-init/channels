@@ -83,7 +83,8 @@ function taskOf(state: ChannelState, m: Message, text: string): number | undefin
     if (state.tasks.has(id)) return id;
   }
   if (m.ev?.op === "task.update") return m.ev.task;
-  return m.task;
+  const place = state.placeOf.get(m.seq);
+  return m.task ?? (place?.kind === "task" ? place.task : undefined);
 }
 
 export function recentPrs(state: ChannelState, messages: Message[], viewer: string, limit: number): RecentPr[] {
