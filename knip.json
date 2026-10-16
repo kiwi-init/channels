@@ -58,6 +58,7 @@
         "app/**/*.{ts,tsx}",
         "src/**/*.test.{ts,tsx}",
         "src/lib/sqlite.ts",
+        "src/lib/attachmentsPlatform.ts",
         "src/theme/useTheme.ts",
         "src/lib/keychain.ts"
       ],
