@@ -87,7 +87,8 @@ export type ServerFrame =
   | ({ t: "read" } & ReadMark)
   /** On connect, before ready: how far each member has read. */
   | { t: "reads"; reads: ReadMark[] }
-  | { t: "page" };
+  | { t: "page" }
+  | { t: "head"; seq: number; ts: number };
 
 /** How far one member has read: a seq and when it got there. A number, never content. */
 export interface ReadMark {

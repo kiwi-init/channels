@@ -12,7 +12,7 @@ import { handleFor, type Member, type MemberInfo } from "../../src/membership.ts
 import type { PersonClaim } from "../../src/person.ts";
 import type { Message } from "../../src/protocol.ts";
 import type { SigningBudget } from "../../src/sas.ts";
-import { CHANNEL_CALLS, type CallResult, type ChannelCallName, type ChannelCalls, type ChannelIdentityView, type ChannelOps, type ChannelView, type FollowEvent, type JoinCheck, type KeysPush, type KeysReply, type WireError } from "./bridge.ts";
+import { CHANNEL_CALLS, type CallResult, type ChannelCallName, type ChannelCalls, type ChannelIdentityView, type ChannelOps, type ChannelView, type FollowEvent, type FollowOptions, type JoinCheck, type KeysPush, type KeysReply, type WireError } from "./bridge.ts";
 import { channelAccess, publicChannel } from "./seats.ts";
 import { fromWire, toWire } from "./wire.ts";
 
@@ -64,6 +64,22 @@ interface Follow {
   code: string;
   stop: () => void;
   presence: ((p: PresenceFields) => Effect.Effect<void>) | null;
+}
+
+function watched(ev: Live): FollowEvent | null {
+  switch (ev._tag) {
+    case "Open":
+    case "Info":
+    case "Roster":
+    case "Request":
+      return { _tag: ev._tag };
+    case "Head":
+      return { _tag: "Head", seq: ev.seq };
+    case "Ready":
+      return { _tag: "Head", seq: ev.head };
+    default:
+      return null;
+  }
 }
 
 export class Keyring implements ChannelOps {
@@ -194,7 +210,7 @@ export class Keyring implements ChannelOps {
     return openSealedRows(rows, access.roomId, access.keys);
   }
 
-  follow(code: string, since: number, on: (e: FollowEvent) => void): () => void {
+  follow(code: string, since: number, on: (e: FollowEvent) => void, opts: FollowOptions = {}): () => void {
     let ch: Channel;
     try {
       ch = this.channel(code);
@@ -203,14 +219,15 @@ export class Keyring implements ChannelOps {
       return () => {};
     }
     const sub = this.nextSub++;
+    const watch = opts.watch === true;
     const f: Follow = { code, stop: () => {}, presence: null };
     const handle = (ev: Live): Effect.Effect<void> =>
       Effect.promise(async () => {
-        const out = await this.event(ch, ev, f);
+        const out = watch ? watched(ev) : await this.event(ch, ev, f);
         if (out) on(out);
       });
     const status = (line: string): Effect.Effect<void> => Effect.sync(() => on({ _tag: "Status", line }));
-    const program = eachLive(ch.fx.live(Math.max(0, since), { presence: true, send: true }), handle, status).pipe(
+    const program = eachLive(ch.fx.live(Math.max(0, since), watch ? { presence: false, watch } : { presence: true, send: true }), handle, status).pipe(
       Effect.catchCause((cause) => (Cause.hasInterruptsOnly(cause) ? Effect.void : Effect.sync(() => on({ _tag: "Failed", error: wireError(Cause.squash(cause)) })))),
     );
     const fiber = runtime.runFork(program);
@@ -299,7 +316,7 @@ export function serveKeys(k: Keyring, push: (p: KeysPush) => void): KeysSession 
         return k.openRows(text(r.code), Array.isArray(rows) ? rows : []);
       }
       case "follow": {
-        const stop = k.follow(text(r.code), count(r.since), (event) => push({ sub: id, event: toWire(event) }));
+        const stop = k.follow(text(r.code), count(r.since), (event) => push({ sub: id, event: toWire(event) }), { watch: r.watch === true });
         subs.set(id, stop);
         return id;
       }

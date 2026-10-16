@@ -92,6 +92,7 @@ export interface Effects {
   broadcast?: string[];
   others?: string;
   ephemeral?: string;
+  watch?: string[];
   /** Send to the sender only. */
   reply?: string | string[];
   readers?: string[];
@@ -1053,9 +1054,14 @@ export function msgFrame(e: Envelope): string {
   return frame({ t: "msg", ...e });
 }
 
+export const watchFrame = (e: Envelope): Pick<Effects, "watch"> => ({ watch: [frame({ t: "head", seq: e.seq, ts: e.ts })] });
+
+export const wantsWatch = (url: URL): boolean => url.searchParams.get("watch") === "1";
+
 /** Frames to send a newly connected socket: the backlog after `since`, then ready. */
-export const welcomeFrames = (since: number, reads = true): Effect.Effect<string[], never, RoomStore> =>
+export const welcomeFrames = (since: number, reads = true, watch = false): Effect.Effect<string[], never, RoomStore> =>
   Effect.map(RoomStore, (db) => {
+    if (watch) return [frame({ t: "ready", head: db.head(), more: false })];
     const backlog = db.since(since);
     const head = db.head();
     const last = backlog.at(-1)?.seq ?? since;
@@ -1110,7 +1116,7 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
     ),
   );
   const reply = frame({ t: "ack", id: send.id, seq: e.seq, ts: e.ts });
-  const fx: Effects = { ...(echo ? { broadcast: [msgFrame(e)] } : { others: msgFrame(e) }), reply, expireAt: expireAt ?? undefined };
+  const fx: Effects = { ...(echo ? { broadcast: [msgFrame(e)] } : { others: msgFrame(e) }), ...watchFrame(e), reply, expireAt: expireAt ?? undefined };
   return fx;
 });
 

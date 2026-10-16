@@ -320,6 +320,7 @@ export type Live =
   /** Caught up: the relay's head when this connection's replay ended. */
   | { readonly _tag: "Ready"; readonly head: number }
   | { readonly _tag: "Message"; readonly message: Message }
+  | { readonly _tag: "Head"; readonly seq: number }
   | { readonly _tag: "Presence"; readonly presence: Presence & { sigOk: boolean } }
   /**
    * How far members have read (by key): one mark as it moves, or (`snapshot`) every member's latest on
@@ -340,6 +341,7 @@ export interface LiveOptions {
   presence?: boolean;
   reads?: boolean;
   send?: boolean;
+  watch?: boolean;
 }
 
 /** How long a dropped connection may stay down before listeners hear about it. */
@@ -536,7 +538,7 @@ function markOn(ws: WebSocket): (seq: number) => boolean {
 }
 
 /** The frame each Live came from, for the line about one whose handling failed. */
-const FRAME: Record<Live["_tag"], string> = { Open: "open", Ready: "ready", Message: "msg", Presence: "eph", Info: "info", Roster: "roster", Request: "request", Read: "read", Down: "status", Skipped: "status" };
+const FRAME: Record<Live["_tag"], string> = { Open: "open", Ready: "ready", Message: "msg", Head: "head", Presence: "eph", Info: "info", Roster: "roster", Request: "request", Read: "read", Down: "status", Skipped: "status" };
 const failedFrame = (frame: string, err: unknown) => `dropped a ${frame} frame whose handling failed: ${reason(err)}`;
 
 /** What went wrong, in words: a relay out of reach says what fetch said, as it always has. */
@@ -1633,11 +1635,11 @@ export class Channel {
   }
 
   /** live(): connections one after another, each from where the last left off, fed to one queue. */
-  private live(since: number, { quietMs = QUIET_DROP_MS, presence = true, reads = true, send = false }: LiveOptions): Stream.Stream<Live, ChannelGone, Relay> {
+  private live(since: number, { quietMs = QUIET_DROP_MS, presence = true, reads = true, send = false, watch = false }: LiveOptions): Stream.Stream<Live, ChannelGone, Relay> {
     // The newest seq handed on: each (re)connect asks for what's after it, so nothing is lost across drops.
     const at: Resume = { seq: since, next: "first" };
     return Stream.callback<Live, ChannelGone, Relay>((out) =>
-      Stream.suspend(() => this.session(at, quietMs, presence, reads, send)).pipe(
+      Stream.suspend(() => this.session(at, quietMs, presence, reads, send, watch)).pipe(
         // A drop: connect again on the schedule. A connection that opens starts the schedule over.
         Stream.retry(this.reconnect(out, quietMs)),
         // The schedule never gives up on a drop; only an answer (ChannelGone) gets past it.
@@ -1679,21 +1681,22 @@ export class Channel {
    * One connection, read: Open, then what the relay sends, strictly in order, until it closes. A
    * frame whose reading fails is reported and dropped: one bad payload mustn't stop the rest.
    */
-  private session(at: Resume, quietMs: number, presence: boolean, reads: boolean, send: boolean): Stream.Stream<Live, Dropped | ChannelGone, Relay> {
-    return Stream.callback<Incoming, Dropped | ChannelGone, Relay>((q) => this.socket(at, presence, reads, q, send)).pipe(
+  private session(at: Resume, quietMs: number, presence: boolean, reads: boolean, send: boolean, watch: boolean): Stream.Stream<Live, Dropped | ChannelGone, Relay> {
+    return Stream.callback<Incoming, Dropped | ChannelGone, Relay>((q) => this.socket(at, presence, reads, q, send, watch)).pipe(
       Stream.mapEffect((f) =>
-        this.read(f, at, quietMs, presence, reads).pipe(Effect.catchCause((cause) => Effect.succeed<Live>({ _tag: "Skipped", frame: f.t, error: Cause.squash(cause) }))),
+        (watch && f.t !== "open" && f.t !== "epoch" ? Effect.succeed(this.watched(f, at)) : this.read(f, at, quietMs, presence, reads)).pipe(Effect.catchCause((cause) => Effect.succeed<Live>({ _tag: "Skipped", frame: f.t, error: Cause.squash(cause) }))),
       ),
       Stream.filter((x): x is Live => x !== null),
     );
   }
 
   /** A socket for what's after `since`: its frames go to `q` as they arrive, then how it closed. Closing the scope closes it. */
-  private socket(at: Resume, presence: boolean, reads: boolean, q: Inbox, send: boolean) {
+  private socket(at: Resume, presence: boolean, reads: boolean, q: Inbox, send: boolean, watch: boolean) {
     return Effect.gen({ self: this }, function* () {
       const auth = yield* Effect.promise(() => signRequest(this.identity, this.roomId, "GET", "/ws"));
       const u = new URL(`/v1/rooms/${this.roomId}/ws`, this.relay);
       u.searchParams.set("since", String(at.seq));
+      if (watch) u.searchParams.set("watch", "1");
       if (!presence) u.searchParams.set("presence", "0");
       if (!reads) u.searchParams.set("reads", "0");
       if (send) u.searchParams.set("echo", "0");
@@ -1845,6 +1848,27 @@ export class Channel {
           return null;
       }
     });
+  }
+
+  private watched(f: Incoming, at: { seq: number }): Live | null {
+    switch (f.t) {
+      case "msg":
+      case "head":
+        if (!Number.isSafeInteger(f.seq) || f.seq <= at.seq) return null;
+        at.seq = f.seq;
+        return { _tag: "Head", seq: f.seq };
+      case "ready":
+        at.seq = Math.max(at.seq, f.head);
+        return { _tag: "Ready", head: f.head };
+      case "info":
+        return { _tag: "Info" };
+      case "roster":
+        return { _tag: "Roster" };
+      case "request":
+        return { _tag: "Request" };
+      default:
+        return null;
+    }
   }
 
   /** Presence, opened: it's sealed with whichever epoch key the sender had, so try the current one, then older. */

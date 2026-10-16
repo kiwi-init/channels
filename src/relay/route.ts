@@ -52,6 +52,7 @@ import {
   setRecord,
   setSettings,
   setTitle,
+  watchFrame,
   touch,
   UPDATE_KIWI,
   type CreateBody,
@@ -286,7 +287,7 @@ const routes: RoomRoute[] = [
         if (!allow(`${db.roomId}:${me}`, MESSAGES_PER_MINUTE)) return yield* new TooMany({ message: "too many messages; wait a minute" });
         const b = yield* json<{ iv?: string; ct?: string; e?: number }>();
         const e = yield* append(b.iv as string, b.ct as string, Number(b.e ?? 0), me);
-        return { data: { seq: e.seq, ts: e.ts }, fx: { broadcast: [msgFrame(e)], expireAt: (yield* touch) ?? undefined } };
+        return { data: { seq: e.seq, ts: e.ts }, fx: { broadcast: [msgFrame(e)], ...watchFrame(e), expireAt: (yield* touch) ?? undefined } };
       }),
   },
   {
