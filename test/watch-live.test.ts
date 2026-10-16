@@ -55,3 +55,20 @@ test("a watch connection says when the relay is back after an outage", async () 
   await w.stop();
   server.stop(true);
 });
+
+test("a watch connection takes the new key when the channel rotates", async () => {
+  const server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir });
+  const relay = server.url.origin;
+  const owner = await generateIdentity("human");
+  const { access } = await Channel.create(relay, owner, { name: "human" });
+  const watching = new Channel(access, relay, owner);
+  const w = watch(watching, 1_500);
+  await until(() => w.events.some((e) => e._tag === "Ready"), "the first ready");
+
+  const next = await new Channel(access, relay, owner).rotate();
+  await until(() => watching.access.epoch === next, "the new epoch on the watching channel");
+  expect(watching.access.keys[String(next)]).toBeDefined();
+
+  await w.stop();
+  server.stop(true);
+});
