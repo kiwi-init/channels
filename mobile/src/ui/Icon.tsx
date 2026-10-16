@@ -2,8 +2,6 @@ import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react-native"
 
 import { useTheme } from "../theme/useTheme"
 
-export type { IconSvgElement }
-
 export interface IconProps {
   icon: IconSvgElement
   size?: number
