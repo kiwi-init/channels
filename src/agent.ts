@@ -706,6 +706,7 @@ export class AgentSession {
    * the owner, about message #re when given. It reaches them in any mode, and on hold.
    */
   readonly escalate = Effect.fn("AgentSession.escalate")({ self: this }, function* (this: AgentSession, body: string, re?: number, handoff?: Handoff, ask: { choices?: string[]; task?: number } = {}) {
+    if (!body.trim()) return yield* new Rejected("say what needs deciding: the text is empty");
     const { messages, state } = yield* this.state();
     const me = state.members.get(this.me);
     if (me && isPerson(me)) return yield* new Rejected("escalating is for agents: you're a person, so you decide");
@@ -714,6 +715,13 @@ export class AgentSession {
     const to = [...new Set([humanOf(state, this.me), ownerOf(state)].filter((n): n is string => !!n))];
     if (!to.length) return yield* new Rejected("there's no person in this channel to escalate to");
     if (ask.choices && handoff) return yield* new Rejected("a browser handoff has its own Done and Couldn't answers; leave out the options");
+    if (ask.task !== undefined && re !== undefined) {
+      const place = state.placeOf.get(re);
+      if (place?.kind !== "task" || place.task !== ask.task) {
+        const where = place?.kind === "task" ? `in ${taskId(place.task)}'s thread` : place?.kind === "dm" ? "in a direct thread" : "in the main conversation";
+        return yield* new Rejected(`#${re} is ${where}, and an answer to it goes there, not in ${taskId(ask.task)}'s thread: leave out the task or the message it answers`);
+      }
+    }
     const seq = yield* this.send(body, { to, kind: "blocking", esc: true, ...(handoff ? { handoff } : {}), ...(ask.choices ? { choices: ask.choices } : {}), ...(ask.task !== undefined ? { task: ask.task } : {}), ...(re !== undefined ? { re: [re] } : {}) });
     return { seq, to };
   }, oneLook);

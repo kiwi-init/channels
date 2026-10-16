@@ -219,6 +219,17 @@ describe("kiwi ask-human", () => {
     expect(await ok(agent, "listen", "--now")).toContain("B: rebuild dedup");
   });
 
+  test("--task with --re asks in that task's thread only when the message it answers is there", async () => {
+    const inMain = seqOf(await ok(agent, "send", "--main", "the audit clears evidence on edit"));
+    const refused = await run(agent, "ask-human", "--task", task, "--re", inMain, "Which way?");
+    expect(refused.code).toBe(1);
+    expect(refused.err).toContain(`#${inMain} is in the main conversation`);
+    const inTask = seqOf(await ok(agent, "send", "--task", task, "dedup is lost on re-audit"));
+    const asked = seqOf(await ok(agent, "ask-human", "--task", task, "--re", inTask, "--option", "A: refuse", "--option", "B: rebuild", "Which way?"));
+    expect(await ok(owner, "log")).toContain(`#${asked} dev → `);
+    expect((await ok(owner, "log")).split("\n").find((l) => l.startsWith(`#${asked} `))).toContain(`[${task}] [escalation]`);
+  });
+
   test("the flags are refused where they don't fit", async () => {
     expect((await run(agent, "ask-human", "--option", "A", "Which?")).code).toBe(1);
     expect((await run(agent, "ask-human", "--option", "Keep", "--option", "keep", "Which?")).code).toBe(1);

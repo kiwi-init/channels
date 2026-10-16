@@ -243,7 +243,7 @@ function EscalationItem({
                     type="button"
                     disabled={busy}
                     onClick={() => void send(c)}
-                    className="w-full rounded-row bg-field px-3 py-1.5 text-left text-ui leading-snug transition-colors hover:bg-wash-2 disabled:pointer-events-none disabled:opacity-40"
+                    className="w-full rounded-row bg-field px-3 py-1.5 text-left text-ui leading-snug [overflow-wrap:anywhere] transition-colors hover:bg-wash-2 disabled:pointer-events-none disabled:opacity-40"
                   >
                     {c}
                   </button>

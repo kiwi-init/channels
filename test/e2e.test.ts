@@ -698,6 +698,7 @@ describe("MCP server", () => {
       expect(tools).toEqual(["ask", "ask_human", "escalate", "facts", "log", "members", "message", "read", "reply", "rooms", "save", "send", "sh", "status", "task_add", "task_update", "tasks", "wait_for_messages", "who"]);
 
       expect(await call("task_add", { title: "write docs" })).toMatch(/^added T\d+$/);
+      expect(await call("ask_human", { text: "  ", options: ["A: yes", "B: no"] })).toContain("the text is empty");
       expect(await call("status")).toContain("agent-a (you) — builder");
       expect(await call("facts", { set: "docs.url", value: "https://example.com" })).toContain("docs.url = https://example.com");
       expect(await ok(other, "tasks")).toContain("write docs");
