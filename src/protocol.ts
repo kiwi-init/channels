@@ -45,6 +45,8 @@ export const ROOM_RETENTION = 10_000;
 /** Most messages returned by one history read or replayed on connect. */
 export const PAGE_LIMIT = 1_000;
 
+export const MORE_REFUSED = "too many page requests; slow down";
+
 /**
  * WebSocket subprotocol. Clients offer [WS_PROTOCOL, token] so the token
  * travels in a header (browsers can't set Authorization on WebSockets, and
