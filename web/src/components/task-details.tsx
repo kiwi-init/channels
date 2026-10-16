@@ -205,7 +205,7 @@ function Actions({
           className="flex w-full items-center gap-2"
           onSubmit={(e) => {
             e.preventDefault()
-            if (why.trim()) void act(() => onSendBack(task, why.trim()), `Sent ${id} back`)
+            if (why.trim() && !busy) void act(() => onSendBack(task, why.trim()), `Sent ${id} back`)
           }}
         >
           <TextField
@@ -233,7 +233,7 @@ function Actions({
               autoFocus
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), cancel())}
+              onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && (e.preventDefault(), cancel())}
               placeholder="Why it’s cancelled"
               maxLength={500}
               aria-label="Why it’s cancelled"

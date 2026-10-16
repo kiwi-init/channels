@@ -21,7 +21,8 @@ export function reviewsFor(tasks: Iterable<Task>, me: string, person: boolean): 
 export function taskActions(t: Task, me: string, person: boolean): TaskActions {
   if (!person || t.state === "done") return { kind: "hidden" }
   if (t.state !== "review") return { kind: "open", review: "none" }
-  return { kind: "open", review: !t.review || reviewsMe(t, me) ? "verdict" : "send-back" }
+  const judges = (!t.review || reviewsMe(t, me)) && (!!openRound(t) || t.rounds.length === 0)
+  return { kind: "open", review: judges ? "verdict" : "send-back" }
 }
 
 function roundOf(t: Task): { round: number; at?: string } | Record<string, never> {

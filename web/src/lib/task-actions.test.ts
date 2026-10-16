@@ -73,12 +73,41 @@ describe("taskActions", () => {
     expect(taskActions(task(unnamed), "jon", true)).toEqual({ kind: "open", review: "verdict" })
   })
 
+  test("a review open to anyone isn't this person's to judge once they've worked on it", async () => {
+    const id = await post("jon", { op: "task.add", title: "jon's own", owner: "jon", review: "*" })
+    await post("jon", { op: "task.update", task: id, state: "review" })
+    expect(taskActions(task(id), "jon", true)).toEqual({ kind: "open", review: "send-back" })
+    const at = await sendAs("jon", sendBackTask(task(id), "not yet"))
+    expect(state().rejected.get(at)).toBeUndefined()
+    expect(task(id).state).toBe("doing")
+  })
+
+  test("a review with no reviewer is approved by the person", async () => {
+    const id = await post("dev", { op: "task.add", title: "unnamed approve", owner: "dev" })
+    await post("dev", { op: "task.update", task: id, state: "review" })
+    const at = await sendAs("jon", approveTask(task(id)))
+    expect(state().rejected.get(at)).toBeUndefined()
+    expect(task(id)).toMatchObject({ state: "done" })
+    expect(task(id).rounds.at(-1)?.result).toMatchObject({ kind: "approved", by: "jon" })
+  })
+
+  test("in review with only closed rounds, there's no round to approve, so only send back", async () => {
+    const id = await inReview("jon")
+    const t = task(id)
+    const closed: Task = { ...t, rounds: t.rounds.map((r) => ({ ...r, result: { kind: "withdrawn", seq: 0 } })) }
+    expect(taskActions(closed, "jon", true)).toEqual({ kind: "open", review: "send-back" })
+  })
+
   test("work not in review can only be cancelled; done work and agents get nothing", async () => {
-    const doing = await post("dev", { op: "task.add", title: "doing", owner: "dev" })
-    expect(taskActions(task(doing), "jon", true)).toEqual({ kind: "open", review: "none" })
-    expect(taskActions(task(doing), "dev", false)).toEqual({ kind: "hidden" })
-    await post("dev", { op: "task.update", task: doing, state: "done" })
-    expect(taskActions(task(doing), "jon", true)).toEqual({ kind: "hidden" })
+    const todo = await post("dev", { op: "task.add", title: "to do", owner: "dev" })
+    expect(task(todo).state).toBe("todo")
+    expect(taskActions(task(todo), "jon", true)).toEqual({ kind: "open", review: "none" })
+    await post("dev", { op: "task.claim", task: todo })
+    expect(task(todo).state).toBe("doing")
+    expect(taskActions(task(todo), "jon", true)).toEqual({ kind: "open", review: "none" })
+    expect(taskActions(task(todo), "dev", false)).toEqual({ kind: "hidden" })
+    await post("dev", { op: "task.update", task: todo, state: "done" })
+    expect(taskActions(task(todo), "jon", true)).toEqual({ kind: "hidden" })
   })
 })
 
