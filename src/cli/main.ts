@@ -920,11 +920,10 @@ const commands: Record<string, Command> = {
     Effect.gen(function* () {
       const s = yield* session();
       const { messages: held, state } = yield* s.state();
-      const messages = yield* s.earlier(held, Number(opt.n ?? 30));
       const room = opt.room === undefined ? undefined : yield* s.roomId(opt.room, state);
-      const shown = (opt.all ? messages : messages.filter((m) => m.kind !== "event" || m.ev?.op !== "hello")).filter(
-        (m) => !ignored(state.trust.get(m.seq)) && (room === undefined || (m.kind !== "event" && state.roomOf.get(m.seq) === room)),
-      );
+      const visible = (m: Message) =>
+        (opt.all || m.kind !== "event" || m.ev?.op !== "hello") && !ignored(state.trust.get(m.seq)) && (room === undefined || (m.kind !== "event" && state.roomOf.get(m.seq) === room));
+      const shown = (yield* s.earlier(held, Number(opt.n ?? 30), visible)).filter(visible);
       for (const m of shown.slice(-Number(opt.n ?? 30))) out(render(m, state));
     }),
 
@@ -1006,7 +1005,7 @@ const commands: Record<string, Command> = {
       const { messages, state } = yield* s.state();
       if (!(yield* s.message(seq, messages))) return yield* die(`no message #${seq}`);
       const root = state.threadOf.get(seq) ?? seq;
-      for (const m of messages) if (state.threadOf.get(m.seq) === root && !ignored(state.trust.get(m.seq))) out(render(m, state));
+      for (const m of yield* s.threadMessages(root, messages, state)) if (!ignored(state.trust.get(m.seq))) out(render(m, state));
     }),
 
   /** One verb for hearing the channel: streams (tail); --once waits for the next (wait); --now doesn't wait (read); --webhook posts (watch). */

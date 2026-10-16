@@ -209,9 +209,9 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     shaped(({ n }) =>
       Effect.gen(function* () {
         const { messages: held, state } = yield* s.state();
-        const messages = yield* s.earlier(held, n ?? 30);
+        const visible = (m: Message) => !ignored(state.trust.get(m.seq));
         // Forged messages, and ones the owner doesn't allow, are left out (status counts them for people).
-        const shown = messages.filter((m) => !ignored(state.trust.get(m.seq))).slice(-(n ?? 30));
+        const shown = (yield* s.earlier(held, n ?? 30, visible)).filter(visible).slice(-(n ?? 30));
         if (!shown.length) return ok("no messages");
         return withImages(shown.map((m) => formatMessage(m, state.trust.get(m.seq), state, s.me)).join("\n"), shown);
       }),

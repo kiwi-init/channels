@@ -25,7 +25,7 @@ import { inlineText } from "./membership.ts";
 import type { Identity } from "./identity.ts";
 import { isLocalRefusal, Rejected } from "./refusals.ts";
 import { canPost, describeScopes, refusal } from "./scopes.ts";
-import { GENERAL_ROOM, ignored, PROTOCOL_VERSION, TASK_STATES, wellFormedReaction, type Card, type Color, type Event, type ImageAttachment, type Kind, type Message, type Presence, type TaskState, type Verdict } from "./protocol.ts";
+import { GENERAL_ROOM, ignored, PAGE_LIMIT, PROTOCOL_VERSION, TASK_STATES, wellFormedReaction, type Card, type Color, type Event, type ImageAttachment, type Kind, type Message, type Presence, type TaskState, type Verdict } from "./protocol.ts";
 import { allowedOnHold, findRoom, fold, humanOf, isPerson, keptFromPeople, ON_HOLD, openRound, ownerOf, revisedOut, taskId, threadMembers, toRoster, type ChannelState, type FoldBase, type GuardFloor, type ReviewRound, type Roster, type RoomsFloor, type Task } from "./state.ts";
 import { mergeCard, sameCard } from "./card.ts";
 import { daemonSeat } from "./daemon.ts";
@@ -200,13 +200,38 @@ export class AgentSession {
     return (yield* this.ch.fx.page(seq - 1, 1)).find((m) => m.seq === seq) ?? null;
   });
 
-  readonly earlier = Effect.fn("AgentSession.earlier")({ self: this }, function* (this: AgentSession, messages: Message[], n: number) {
-    const first = messages[0]?.seq ?? (this.base ? this.base.n + 1 : 0);
-    if (!this.base || first <= 1 || messages.length >= n) return messages;
-    const from = Math.min(first, this.base.n + 1);
-    const want = n - messages.length;
-    const older = yield* this.ch.fx.page(Math.max(0, from - 1 - want), Math.min(want, from - 1));
-    return [...older.filter((m) => m.seq < first), ...messages];
+  readonly threadMessages = Effect.fn("AgentSession.threadMessages")({ self: this }, function* (this: AgentSession, root: number, messages: readonly Message[], state: ChannelState) {
+    const held = new Set(messages.map((m) => m.seq));
+    const missing = [...state.threadOf]
+      .filter(([seq, r]) => r === root && !held.has(seq))
+      .map(([seq]) => seq)
+      .sort((a, b) => a - b);
+    const wanted = new Set(missing);
+    const older: Message[] = [];
+    for (let i = 0; i < missing.length; ) {
+      const from = missing[i]!;
+      let j = i;
+      while (j + 1 < missing.length && missing[j + 1]! - from < PAGE_LIMIT && missing[j + 1]! - missing[j]! <= 50) j++;
+      older.push(...(yield* this.ch.fx.page(from - 1, missing[j]! - from + 1)).filter((m) => wanted.has(m.seq)));
+      i = j + 1;
+    }
+    return [...older, ...messages.filter((m) => state.threadOf.get(m.seq) === root)].sort((a, b) => a.seq - b.seq);
+  });
+
+  readonly earlier = Effect.fn("AgentSession.earlier")({ self: this }, function* (this: AgentSession, messages: Message[], n: number, shown: (m: Message) => boolean = () => true) {
+    if (!this.base) return messages;
+    let out = messages;
+    let first = Math.min(messages[0]?.seq ?? this.base.n + 1, this.base.n + 1);
+    let step = 0;
+    for (let seen = out.filter(shown).length; first > 1 && seen < n; seen = out.filter(shown).length) {
+      step = Math.min(PAGE_LIMIT, first - 1, Math.max(step * 2, n - seen));
+      const since = first - 1 - step;
+      const older = (yield* this.ch.fx.page(since, step)).filter((m) => m.seq <= since + step);
+      if (!older.length) break;
+      out = [...older, ...out];
+      first = since + 1;
+    }
+    return out;
   });
 
   /** A room's id from its name or id (# optional); general when none is given. */

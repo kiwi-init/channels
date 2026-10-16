@@ -501,6 +501,33 @@ describe("sessions fold from a snapshot only when the log after it is whole", ()
     }
   });
 
+  test("older messages from before the snapshot: as many as are shown, and a whole thread", async () => {
+    const { s, origin, done } = await scene();
+    try {
+      const keep: number[] = [];
+      const root = await s.ownerCh.send("root");
+      const reply = await s.ownerCh.send("reply", { re: [root] });
+      for (let k = 0; k < 4; k++) {
+        keep.push(await s.ownerCh.send(`keep ${k}`));
+        for (let i = 0; i < 20; i++) await s.ownerCh.send(`noise ${k} ${i}`);
+      }
+      const at = await runAgent(s.ownerCh.fx.snapshotIfDue(1));
+      expect(at).toBe(keep.at(-1)! + 20);
+      const late = await s.ownerCh.send("late reply", { re: [reply] });
+      await s.ownerCh.send("noise after");
+      const agent = new AgentSession("older", { ...s.access, relay: origin, code: s.code }, s.owner, () => {});
+      const { messages, state } = await runAgent(agent.state());
+      expect(messages.length).toBe(2);
+      const shown = (m: Message) => m.body.startsWith("keep");
+      const older = await runAgent(agent.earlier(messages, 3, shown));
+      expect(older.filter(shown).map((m) => m.seq).slice(-3)).toEqual(keep.slice(-3));
+      const thread = await runAgent(agent.threadMessages(state.threadOf.get(late) ?? late, messages, state));
+      expect(thread.map((m) => m.seq)).toEqual([root, reply, late]);
+    } finally {
+      done();
+    }
+  });
+
   test("the owner's session tries again after a snapshot the relay didn't take", async () => {
     const { s, done } = await scene();
     let failing = true;
