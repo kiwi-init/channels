@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 
 import type { SendOptions } from "@mc/client.ts"
 import { MAX_IMAGE_BYTES, RASTER_MIMES, type Color, type Message } from "@mc/protocol.ts"
+import { compressImage, needsCompressing, renamed } from "@/lib/compress-image"
 import { excerpt } from "@/lib/format"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
@@ -115,6 +116,13 @@ export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, 
       const name = imageName(f)
       if (!IMAGE_TYPES.has(f.type)) {
         toast(`${name} isn’t a PNG, JPEG, GIF, or WebP.`, "error")
+        continue
+      }
+      if (needsCompressing(f, MAX_IMAGE_BYTES)) {
+        void compressImage(f, MAX_IMAGE_BYTES).then((done) => {
+          if (!done) return toast(`${name} couldn’t be shrunk under ${Math.round(MAX_IMAGE_BYTES / 1024)} KB.`, "error")
+          setFiles((prev) => (prev.length < 8 ? [...prev, { ...done, name: renamed(name, done.mime) }] : prev))
+        })
         continue
       }
       if (f.size > MAX_IMAGE_BYTES) {
