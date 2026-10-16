@@ -316,14 +316,15 @@ jobs:
     name: release / rehearsal
     needs: plan
     if: fromJSON(needs.plan.outputs.run)['release-rehearsal']
-    permissions:
-      contents: write
-      id-token: write
-      attestations: write
-    uses: ./.github/workflows/release.yml
+    uses: ./.github/workflows/release-build.yml
     with:
       rehearsal: true
-    secrets: inherit
+    secrets:
+      MAC_CERT_P12_BASE64: ${{ github.event_name == 'workflow_dispatch' && secrets.MAC_CERT_P12_BASE64 || '' }}
+      MAC_CERT_PASSWORD: ${{ github.event_name == 'workflow_dispatch' && secrets.MAC_CERT_PASSWORD || '' }}
+      APPLE_API_KEY_P8: ${{ github.event_name == 'workflow_dispatch' && secrets.APPLE_API_KEY_P8 || '' }}
+      APPLE_API_KEY_ID: ${{ github.event_name == 'workflow_dispatch' && secrets.APPLE_API_KEY_ID || '' }}
+      APPLE_API_ISSUER: ${{ github.event_name == 'workflow_dispatch' && secrets.APPLE_API_ISSUER || '' }}
 
   relay-worker:
     name: relay / worker

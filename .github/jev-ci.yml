@@ -309,14 +309,15 @@ jobs:
     push: false
     version_bumps: true
     inputs: []
-    always: [".github/workflows/release.yml", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/bun.lock", "desktop/scripts/fuses.ts", "scripts/changelog.ts"]
+    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/bun.lock", "desktop/scripts/fuses.ts", "scripts/changelog.ts"]
     description: >-
-      Runs .github/workflows/release.yml itself with rehearsal: true, the way a tag would but
-      without attesting, publishing or deploying: the version and changelog checks (taking
-      v<src/version.ts> as the tag), the cli job on macOS (bun test, five builds), and the
-      desktop app packaged on macOS (arm64 and x64, signed and notarized when the signing
-      secrets are there) and Linux (AppImage and deb), with each package's contents and fuses
-      checked. Fails where the tag would: versions that disagree, no changelog section,
-      a test failing on macOS, an electron-builder or signing error, a package missing the
-      web app or the kiwi binary. Runs on release PRs (they change CHANGELOG.md), on any change
+      Runs .github/workflows/release-build.yml, the build a tag's release.yml runs, with
+      rehearsal: true and a read-only token, uploading nothing: the version and changelog checks
+      (taking v<src/version.ts> as the tag), the cli job on macOS (bun test, five builds), and
+      the desktop app packaged on macOS (arm64 and x64) and Linux (AppImage and deb), with each
+      package's contents and fuses checked. On a pull request the macOS app is unsigned; a
+      manual run of ci.yml passes the signing secrets, so the app is signed, notarized and
+      checked as on a tag. Fails where the tag would: versions that disagree, no changelog
+      section, a test failing on macOS, an electron-builder error, a package missing the web
+      app or the kiwi binary, and on a manual run a signing or notarization error. Runs on release PRs (they change CHANGELOG.md), on any change
       that only bumps a version number, and on manual runs of ci.yml, never on a push to main.
