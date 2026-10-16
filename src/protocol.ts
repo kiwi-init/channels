@@ -404,10 +404,6 @@ export interface Payload {
    * its own human and the owner. Older clients see it as the blocking question it also is.
    */
   esc?: true;
-  /**
-   * A live browser tab handed to a person (an escalation only): the link, who hosts it and when it stops opening.
-   * Older clients ignore the field and show the escalation's plain body.
-   */
   handoff?: Handoff;
   ts: number;
   /** Sender's Ed25519 public key (raw, base64url) and signature over the rest. */
