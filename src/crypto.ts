@@ -5,6 +5,8 @@
 // when approving them, and wraps a fresh key to everyone left whenever a
 // member leaves or is removed. The relay stores only those sealed boxes.
 
+import { deflateRaw, inflateRaw } from "./deflate.ts";
+
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
@@ -64,29 +66,9 @@ function concat(parts: Uint8Array[], size: number): Uint8Array<ArrayBuffer> {
   return out;
 }
 
-async function deflate(bytes: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
-  return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer());
-}
-
-async function inflate(bytes: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer> | null> {
-  const reader = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw")).getReader();
-  const parts: Uint8Array[] = [];
-  let size = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) return concat(parts, size);
-    size += value.byteLength;
-    if (size > MAX_UNPACKED) {
-      await reader.cancel().catch(() => {});
-      return null;
-    }
-    parts.push(value);
-  }
-}
-
 async function pack(plain: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
   if (plain.byteLength < PACK_FROM || plain.byteLength > MAX_UNPACKED) return plain;
-  const packed = await deflate(plain);
+  const packed = await deflateRaw(plain);
   if (packed.byteLength + 1 >= plain.byteLength) return plain;
   return concat([Uint8Array.of(PACKED), packed], packed.byteLength + 1);
 }
@@ -113,7 +95,7 @@ export async function open(key: string, roomId: string, iv: string, ct: string):
     );
     const bytes = new Uint8Array(pt);
     if (bytes[0] !== PACKED) return JSON.parse(dec.decode(bytes));
-    const plain = await inflate(bytes.subarray(1));
+    const plain = await inflateRaw(bytes.subarray(1), MAX_UNPACKED);
     return plain ? JSON.parse(dec.decode(plain)) : null;
   } catch {
     return null;

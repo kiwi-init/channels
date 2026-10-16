@@ -1,3 +1,4 @@
+import { deflateRaw, inflateRaw } from "./deflate.ts";
 import { b64url, openBytes, sealBytes, type ChannelAccess } from "./crypto.ts";
 import { canonical, sign, verify, type Identity } from "./identity.ts";
 import { MAX_SNAPSHOT_LENGTH, type Trust } from "./protocol.ts";
@@ -89,29 +90,6 @@ async function statement(room: string, s: Omit<SealedSnapshot, "sig">) {
   return { what: "channel-snapshot", room, n: s.n, e: s.e, hash: s.hash, sealed: await digest(enc.encode(`${s.iv}.${s.ct}`)) };
 }
 
-async function squeeze(bytes: Uint8Array<ArrayBuffer>, stream: CompressionStream | DecompressionStream, cap: number): Promise<Uint8Array<ArrayBuffer> | null> {
-  const reader = new Blob([bytes]).stream().pipeThrough(stream).getReader();
-  const parts: Uint8Array[] = [];
-  let size = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.length;
-    if (size > cap) {
-      await reader.cancel();
-      return null;
-    }
-    parts.push(value);
-  }
-  const out = new Uint8Array(size);
-  let at = 0;
-  for (const p of parts) {
-    out.set(p, at);
-    at += p.length;
-  }
-  return out;
-}
-
 function wellFormedWire(x: unknown, n: number): x is Wire {
   if (!x || typeof x !== "object") return false;
   const b = x as Record<string, unknown>;
@@ -152,7 +130,7 @@ export async function sealSnapshot(owner: Identity, access: ChannelAccess, base:
   const plain = enc.encode(canonical({ v: VERSION, room: access.roomId, base: toWire(base) }));
   if (plain.length > MAX_PLAIN) return null;
   const hash = await digest(plain);
-  const packed = await squeeze(plain, new CompressionStream("deflate-raw"), Infinity);
+  const packed = await deflateRaw(plain);
   if (!packed) return null;
   const { iv, ct } = await sealBytes(key, packed, boundTo(access.roomId, base.n, e));
   if (ct.length > MAX_SNAPSHOT_LENGTH) return null;
@@ -167,7 +145,7 @@ export async function openSnapshot(access: ChannelAccess, s: unknown): Promise<F
   if (!(await verify({ ...(await statement(access.roomId, s)), pk: access.ownerPk, sig: s.sig }))) return null;
   const packed = await openBytes(key, s.iv, s.ct, boundTo(access.roomId, s.n, s.e));
   if (!packed) return null;
-  const plain = await squeeze(packed, new DecompressionStream("deflate-raw"), MAX_PLAIN).catch(() => null);
+  const plain = await inflateRaw(packed, MAX_PLAIN).catch(() => null);
   if (!plain || (await digest(plain)) !== s.hash) return null;
   try {
     const o = JSON.parse(new TextDecoder().decode(plain)) as { v?: unknown; room?: unknown; base?: unknown };
