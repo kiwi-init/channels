@@ -1,5 +1,7 @@
 # jev-ci: which CI jobs a pull request can break. Read by .github/jev-ci/cli.ts in the
-# `plan` job of .github/workflows/ci.yml. Pushes to main always run everything.
+# `plan` job of .github/workflows/ci.yml. Pushes to main run everything except the jobs marked
+# `push: false`, which run on pull requests and manual runs only. `version_bumps: true` runs a
+# job when a change only bumps a version number, which otherwise counts as no change.
 #
 # For each job: `inputs` are the files it reads (a change elsewhere skips it), `always` are
 # files that run it by rule (config, dependencies), and `description` says in plain words
@@ -88,7 +90,9 @@ jobs:
       routing and auth tables, error texts, the install script (web/public/install.sh), hooks and
       harness detection, the history cache, and the desktop app's node-only helpers
       (desktop/src/move.ts, desktop/src/open.ts, desktop/src/signer.ts, desktop/src/update-asset.ts, desktop/src/daemon-client.ts, desktop/src/guard.ts). Fails if a tested module's behavior,
-      output text or exported names change.
+      output text or exported names change. scripts/ci-tests.ts runs every group with TMPDIR
+      pointing through a symlink, as macOS's does, so a test that compares a tmp path with its
+      realpath or process.cwd() fails here too.
 
   flows-a:
     name: core / flows-a
@@ -327,6 +331,43 @@ jobs:
       web/src/components/lazy.tsx (markdown, settings, computers, the palette and the side panels)
       is loaded after first paint and doesn't count; a new static import of it, or a new heavy
       dependency on the first screen, can push the total over.
+
+  cli-macos:
+    name: cli / macos
+    inputs: ["src/**", "test/**", "web/src/**", "web/public/**", "site/install", "site/install.sh", "site/install.ps1", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "desktop/src/**"]
+    always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "web/bun.lock"]
+    description: >-
+      On a macOS runner, does what the release's cli job does: runs the whole bun test suite
+      (every test/*.test.ts and web/src test, the agent flows included), compiles the kiwi CLI
+      for darwin-arm64, darwin-x64, linux-x64, linux-arm64 and windows-x64 with
+      scripts/build-cli.ts, ad-hoc signs the macOS binaries and runs `kiwi --version`. The same
+      tests run on Linux in core / test, core / flows-a, core / flows-b, cli / seats and the
+      other test jobs, so this job is for what fails only on macOS: paths (os.tmpdir() is under
+      /var, a symlink to /private/var, so process.cwd() and realpath spell a folder differently
+      from mkdtemp; home is under /Users; the file system ignores case; a unix socket path is
+      capped at 104 bytes), how the CLI names its own command in the text it prints, BSD
+      versions of shell tools, process, signal and file-watching differences, and a build
+      target that fails to compile. Fails if any test fails on macOS or a target doesn't build.
+
+  release-rehearsal:
+    name: release / rehearsal
+    jev: false
+    push: false
+    version_bumps: true
+    inputs: []
+    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/bun.lock", "desktop/scripts/fuses.ts", "scripts/changelog.ts"]
+    description: >-
+      Runs .github/workflows/release-build.yml, the build a tag's release.yml runs, with
+      rehearsal: true and a read-only token, uploading nothing: the version and changelog checks
+      (taking v<src/version.ts> as the tag), the cli job on macOS (bun test, five builds), and
+      the desktop app packaged on macOS (arm64 and x64) and Linux (AppImage and deb), with each
+      package's contents and fuses checked. On a pull request the macOS app is unsigned; a
+      manual run of ci.yml passes the signing secrets, so the app is signed, notarized and
+      checked as on a tag. Fails where the tag would: versions that disagree, no changelog
+      section, a test failing on macOS, an electron-builder error, a package missing the web
+      app or the kiwi binary, and on a manual run a signing or notarization error. Runs on
+      release PRs (they change CHANGELOG.md), on any change that only bumps a version number,
+      and on manual runs of ci.yml, never on a push to main.
 
   bus-test:
     name: bus / test
