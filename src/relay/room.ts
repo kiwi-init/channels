@@ -30,7 +30,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import { fits, JoinRequest, MAX_RECORD, MAX_WRAPPED, MemberRecord, SealedIcon, StoredEnvelope } from "./schema.ts";
 import { verifyRequest } from "../auth.ts";
-import { encodeJoinCode, ownerFingerprint } from "../crypto.ts";
+import { b64url, encodeJoinCode, fromB64url, ownerFingerprint } from "../crypto.ts";
 import type { HumanAuth } from "./human.ts";
 import { Policy } from "./policy.ts";
 import { GONE_WORDS, type GoneHow } from "../protocol.ts";
@@ -64,19 +64,35 @@ import {
   type ServerFrame,
 } from "../protocol.ts";
 
+export type SqlParam = string | number | null | Uint8Array;
+
 export interface Sql {
-  run(query: string, ...params: (string | number | null)[]): void;
-  all<T>(query: string, ...params: (string | number | null)[]): T[];
+  run(query: string, ...params: SqlParam[]): void;
+  all<T>(query: string, ...params: SqlParam[]): T[];
+}
+
+type Stored = string | Uint8Array | ArrayBuffer;
+
+const CT_CHARS = "CASE WHEN typeof(ct) = 'blob' THEN (LENGTH(ct) * 4 + 2) / 3 ELSE LENGTH(ct) END";
+
+function packed(s: string): string | Uint8Array {
+  if (!/^[A-Za-z0-9_-]+$/.test(s) || s.length % 4 === 1) return s;
+  const bytes = fromB64url(s);
+  return b64url(bytes) === s ? bytes : s;
+}
+
+function unpacked(v: Stored): string {
+  return typeof v === "string" ? v : b64url(v instanceof Uint8Array ? v : new Uint8Array(v));
 }
 
 /** What an adapter must do after handling a request or frame. */
 export interface Effects {
   /** Send to every socket. */
   broadcast?: string[];
-  /** Send to every socket except the sender. */
-  others?: string;
+  ephemeral?: string;
   /** Send to the sender only. */
   reply?: string;
+  readers?: string[];
   /** Disconnect every socket authenticated as this key. */
   disconnect?: { pk: string; how: GoneHow };
   /** Delete the room's storage, then disconnect everyone. */
@@ -413,7 +429,7 @@ export class RoomDb {
   }
 
   insert(seq: number, ts: number, iv: string, ct: string, e: number): void {
-    this.sql.run("INSERT INTO msgs (seq, ts, iv, ct, e) VALUES (?, ?, ?, ?, ?)", seq, ts, iv, ct, e);
+    this.sql.run("INSERT INTO msgs (seq, ts, iv, ct, e) VALUES (?, ?, ?, ?, ?)", seq, ts, packed(iv), packed(ct), e);
     this.warm.head = seq;
   }
 
@@ -456,7 +472,7 @@ export class RoomDb {
   storedBytes(): number {
     const u = this.counters();
     if (u) return u.bytes;
-    const total = this.sql.all<{ n: number }>("SELECT COALESCE(SUM(LENGTH(ct)), 0) AS n FROM msgs")[0]?.n ?? 0;
+    const total = this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM msgs`)[0]?.n ?? 0;
     this.setCounters({ bytes: total, day: "", n: 0 });
     return total;
   }
@@ -464,7 +480,7 @@ export class RoomDb {
   /** Delete messages through `seq`; returns the ciphertext bytes freed. */
   dropThrough(seq: number): number {
     if (seq <= 0) return 0;
-    const freed = this.sql.all<{ n: number }>("SELECT COALESCE(SUM(LENGTH(ct)), 0) AS n FROM msgs WHERE seq <= ?", seq)[0]?.n ?? 0;
+    const freed = this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM msgs WHERE seq <= ?`, seq)[0]?.n ?? 0;
     if (freed) this.sql.run("DELETE FROM msgs WHERE seq <= ?", seq);
     return freed;
   }
@@ -474,7 +490,7 @@ export class RoomDb {
     let freed = 0;
     let through = 0;
     while (freed < need) {
-      const batch = this.sql.all<{ seq: number; n: number }>("SELECT seq, LENGTH(ct) AS n FROM msgs WHERE seq > ? ORDER BY seq LIMIT ?", through, DROP_BATCH);
+      const batch = this.sql.all<{ seq: number; n: number }>(`SELECT seq, ${CT_CHARS} AS n FROM msgs WHERE seq > ? ORDER BY seq LIMIT ?`, through, DROP_BATCH);
       for (const r of batch) {
         freed += r.n;
         through = r.seq;
@@ -492,7 +508,9 @@ export class RoomDb {
   }
 
   since(seq: number, limit = PAGE_LIMIT): Envelope[] {
-    return this.sql.all<Envelope>("SELECT seq, ts, iv, ct, e FROM msgs WHERE seq > ? ORDER BY seq LIMIT ?", seq, Math.min(Math.max(limit, 1), PAGE_LIMIT));
+    return this.sql
+      .all<{ seq: number; ts: number; iv: Stored; ct: Stored; e: number }>("SELECT seq, ts, iv, ct, e FROM msgs WHERE seq > ? ORDER BY seq LIMIT ?", seq, Math.min(Math.max(limit, 1), PAGE_LIMIT))
+      .map((r) => ({ seq: r.seq, ts: r.ts, iv: unpacked(r.iv), ct: unpacked(r.ct), e: r.e }));
   }
 
   /** The channel's sealed icon (owner-set; the relay can't read it). */
@@ -589,6 +607,8 @@ export const authenticate = Effect.fn("Room.authenticate")(function* (req: Reque
   }
   return pk;
 });
+
+export const takesPresence = (url: URL): boolean => url.searchParams.get("presence") !== "0";
 
 /** Authenticate a WebSocket upgrade; returns the member key. */
 export const authenticateSocket = (req: Request) => authenticate(req, "GET", "/ws", "");
@@ -1011,13 +1031,15 @@ export function msgFrame(e: Envelope): string {
 }
 
 /** Frames to send a newly connected socket: the backlog after `since`, then ready. */
-export const welcomeFrames = (since: number): Effect.Effect<string[], never, RoomStore> =>
+export const welcomeFrames = (since: number, reads = true): Effect.Effect<string[], never, RoomStore> =>
   Effect.map(RoomStore, (db) => {
     const backlog = db.since(since);
     const head = db.head();
     const last = backlog.at(-1)?.seq ?? since;
-    return [...backlog.map(msgFrame), frame({ t: "reads", reads: db.reads() }), frame({ t: "ready", head, more: last < head })];
+    return [...backlog.map(msgFrame), ...(reads ? [frame({ t: "reads", reads: db.reads() })] : []), frame({ t: "ready", head, more: last < head })];
   });
+
+export const wantsReads = (url: URL): boolean => url.searchParams.get("reads") !== "0";
 
 /** Handle one frame from an authenticated socket. It never fails: whatever goes wrong is the sender's err frame. */
 export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: string, sender = "") {
@@ -1034,13 +1056,13 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
     if (typeof f.iv !== "string" || typeof f.ct !== "string" || f.ct.length > MAX_EPH_LENGTH) {
       return { reply: frame({ t: "err", error: "bad ephemeral frame" }) } satisfies Effects;
     }
-    return { others: frame({ t: "eph", iv: f.iv, ct: f.ct }) } satisfies Effects;
+    return { ephemeral: frame({ t: "eph", iv: f.iv, ct: f.ct }) } satisfies Effects;
   }
   if (f.t === "read") {
     // How far this member has read: kept and passed on only when it moves forward. Too many is just dropped.
     if (!allow(`read:${db.roomId}:${sender}`, READS_PER_MINUTE)) return {} satisfies Effects;
     return yield* markRead(sender, f.seq).pipe(
-      Effect.map((mark): Effects => (mark ? { broadcast: [frame({ t: "read", ...mark })] } : {})),
+      Effect.map((mark): Effects => (mark ? { readers: [frame({ t: "read", ...mark })] } : {})),
       Effect.catchCause((cause) =>
         Effect.succeed<Effects>(isRefusal(Cause.squash(cause)) ? { reply: frame({ t: "err", error: "bad read mark" }) } : { reply: frame({ t: "err", error: socketError(cause) }) }),
       ),

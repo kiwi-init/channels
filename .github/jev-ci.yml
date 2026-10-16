@@ -137,6 +137,23 @@ jobs:
       what it imports. Fails on a type or bundling error in desktop/src or those imports. The
       dashboard is not compiled here.
 
+  desktop-fuses:
+    name: desktop / fuses
+    inputs: ["desktop/**", "src/**", "web/src/**", "web/index.html", "scripts/build-cli.ts", "scripts/cli-bundle.ts"]
+    always: ["desktop/package.json", "desktop/bun.lock", "desktop/tsconfig*.json", "desktop/scripts/fuses.ts", "desktop/scripts/smoke.ts", "package.json", "bun.lock", "web/package.json", "web/bun.lock"]
+    description: >-
+      Packages the Linux app with electron-builder --dir from desktop/package.json's build config
+      (its electronFuses block included), then desktop/scripts/fuses.ts reads the packaged
+      binary's Electron fuses with @electron/fuses and fails unless RunAsNode,
+      EnableNodeOptionsEnvironmentVariable and EnableNodeCliInspectArguments are off and
+      EnableCookieEncryption, EnableEmbeddedAsarIntegrityValidation and OnlyLoadAppFromAsar are
+      on. Then desktop/scripts/smoke.ts starts the packaged app under Xvfb and fails unless its
+      window renders, its key process (utilityProcess.fork of dist/channels.js from app.asar)
+      stays up, and the bundled kiwi daemon answers on its socket, and fails if
+      ELECTRON_RUN_AS_NODE=1 runs JavaScript or --inspect opens a debugger in the packaged app.
+      Fails on a packaging error, a fuse changed or dropped, or an app that no longer starts from
+      its asar.
+
   site-test:
     name: site / test
     inputs: ["site/app.js", "test/site.test.ts"]

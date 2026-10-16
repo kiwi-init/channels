@@ -325,10 +325,13 @@ export interface LiveOptions {
   quietMs?: number;
   /** Open presence frames (default true). A listener that ignores presence skips the work. */
   presence?: boolean;
+  reads?: boolean;
 }
 
 /** How long a dropped connection may stay down before listeners hear about it. */
 export const QUIET_DROP_MS = 30_000;
+
+export const INFO_MAX_AGE_MS = 30_000;
 
 /** The wait before connecting again: half a second, doubling, never more than 30s. */
 const backoff = Schedule.min([Schedule.exponential("500 millis"), Schedule.spaced("30 seconds")]);
@@ -626,6 +629,11 @@ export interface ChannelFx {
   stream(since: number, onMessage: (m: Message) => void | Promise<void>, opts?: StreamOptions): Effect.Effect<void, ChannelGone, Relay>;
 }
 
+function received(p: Payload, seq: number, rts: number, sigOk: boolean): Message {
+  const imgs = Array.isArray(p.imgs) ? p.imgs.filter(rasterAttachment) : undefined;
+  return { ...p, ...(imgs?.length ? { imgs } : { imgs: undefined }), seq, rts, sigOk };
+}
+
 export class Channel {
   readonly name: string;
   /** The key fetch in flight, shared by everyone who needs it meanwhile. */
@@ -633,6 +641,9 @@ export class Channel {
   /** How far this member has told the relay it read, and whether the relay knows read marks at all. */
   private markedTo = 0;
   private marksUnknown = false;
+  onSent: ((seq: number, message: Message | null) => void) | null = null;
+  private infoShared: Fiber.Fiber<Info, Refusal> | null = null;
+  private infoExpires: number | null = null;
 
   constructor(
     public access: ChannelAccess,
@@ -641,8 +652,14 @@ export class Channel {
     readonly identity: Identity,
     /** Called whenever keys change (e.g. after a rotation) so callers can persist them. */
     private readonly onAccess?: (a: ChannelAccess) => void,
+    private readonly opts: { keepInfo?: boolean; infoMaxAgeMs?: number } = {},
   ) {
     this.name = identity.name;
+  }
+
+  forgetInfo(): void {
+    this.infoShared = null;
+    this.infoExpires = null;
   }
 
   get roomId(): string {
@@ -787,9 +804,21 @@ export class Channel {
     }),
 
     info: Effect.fn("Channel.info")({ self: this }, function* (this: Channel, fp?: string) {
-      const ownerPk = this.access.ownerPk;
-      const proof = fp ?? (ownerPk ? yield* Effect.promise(() => ownerFingerprint(ownerPk)) : undefined);
-      return yield* callUnlessUnchanged<Info>(this.relay, this.roomId, "info", "/info", {}, proof ? { fp: proof } : {});
+      if (fp !== undefined) return yield* this.fetchInfo(fp);
+      if (this.infoExpires !== null && Date.now() >= this.infoExpires) this.forgetInfo();
+      let shared = this.infoShared;
+      if (!shared) {
+        const fiber = yield* Effect.forkDetach(this.fetchInfo());
+        shared = this.infoShared = fiber;
+        const keep = !!this.opts.keepInfo;
+        const maxAge = this.opts.infoMaxAgeMs ?? INFO_MAX_AGE_MS;
+        fiber.addObserver((exit) => {
+          if (this.infoShared !== fiber) return;
+          if (!keep || Exit.isFailure(exit)) this.forgetInfo();
+          else this.infoExpires = Date.now() + maxAge;
+        });
+      }
+      return structuredClone(yield* Fiber.join(shared));
     }),
 
     title: Effect.fn("Channel.title")({ self: this }, function* (this: Channel) {
@@ -819,7 +848,7 @@ export class Channel {
       const key = this.access.keys["0"];
       if (!key) return yield* new MissingKey("missing the channel key");
       const sealed = yield* Effect.promise(async () => seal(key, this.roomId, await sign(this.identity, { what: "channel-title", room: this.roomId, name: title })));
-      yield* this.request("/title", { method: "PUT", body: JSON.stringify({ title: sealed }) });
+      yield* this.request("/title", { method: "PUT", body: JSON.stringify({ title: sealed }) }).pipe(Effect.ensuring(Effect.sync(() => this.forgetInfo())));
       this.noteSignedTitle();
     }),
 
@@ -904,7 +933,7 @@ export class Channel {
       const e = this.access.epoch;
       const signed = icon ? yield* Effect.promise(() => sign(this.identity, { what: "channel-icon", room: this.roomId, icon })) : null;
       const sealed = signed ? { e, ...(yield* Effect.promise(() => seal(this.access.keys[String(e)]!, this.roomId, signed))) } : null;
-      yield* this.request("/icon", { method: "PUT", body: JSON.stringify({ icon: sealed }) });
+      yield* this.request("/icon", { method: "PUT", body: JSON.stringify({ icon: sealed }) }).pipe(Effect.ensuring(Effect.sync(() => this.forgetInfo())));
     }),
 
     members: Effect.fn("Channel.members")({ self: this }, function* (this: Channel) {
@@ -1158,6 +1187,7 @@ export class Channel {
       // The new key goes only to members whose admission the owner signed, under the exchange key in
       // that record: never to whatever list or key the relay hands back.
       const members = (yield* this.fx.members()).filter((m) => m.active && !m.unverified);
+      this.forgetInfo();
       const { epoch } = yield* this.fx.info();
       const next = epoch + 1;
       const key = newChannelKey();
@@ -1166,14 +1196,16 @@ export class Channel {
         for (const m of members) out[m.pk] = await wrapFor(this.identity, this.roomId, next, m.pk, m.xpk, key);
         return out;
       });
-      yield* this.request("/epochs", { method: "POST", body: JSON.stringify({ epoch: next, keys }) });
+      yield* this.request("/epochs", { method: "POST", body: JSON.stringify({ epoch: next, keys }) }).pipe(Effect.ensuring(Effect.sync(() => this.forgetInfo())));
       this.access = { ...this.access, epoch: next, keys: { ...this.access.keys, [String(next)]: key } };
       this.onAccess?.(this.access);
       return next;
     }),
 
     rotateIfDue: Effect.fn("Channel.rotateIfDue")({ self: this }, function* (this: Channel) {
-      if (!this.isOwner || !(yield* this.fx.info()).rotate) return false;
+      if (!this.isOwner) return false;
+      this.forgetInfo();
+      if (!(yield* this.fx.info()).rotate) return false;
       yield* this.fx.rotate();
       return true;
     }),
@@ -1222,10 +1254,16 @@ export class Channel {
         const key = this.access.keys[String(e)];
         if (!key) return yield* new MissingKey(`no key for epoch ${e}`);
         const sealed = yield* Effect.promise(() => seal(key, this.roomId, signed));
-        return (yield* this.request<{ seq: number }>("/messages", { method: "POST", body: JSON.stringify({ ...sealed, e }) })).seq;
+        return yield* this.request<{ seq: number; ts?: number }>("/messages", { method: "POST", body: JSON.stringify({ ...sealed, e }) });
       });
       // The key rotated under us: fetch the new one and resend once.
-      return yield* post.pipe(Effect.catchIf((err) => err instanceof RelayError && err.status === 409, () => Effect.andThen(this.fx.refreshKeys(), post)));
+      const stored = yield* post.pipe(Effect.catchIf((err) => err instanceof RelayError && err.status === 409, () => Effect.andThen(this.fx.refreshKeys(), post)));
+      if (this.onSent) {
+        const p: unknown = JSON.parse(JSON.stringify(signed));
+        const kept = typeof stored.ts === "number" && Number.isFinite(stored.ts) && wellFormed(p) ? received(p, stored.seq, stored.ts, yield* Effect.promise(() => verify(p))) : null;
+        this.onSent(stored.seq, kept);
+      }
+      return stored.seq;
     }),
 
     decrypt: Effect.fn("Channel.decrypt")({ self: this }, function* (this: Channel, env: Envelope) {
@@ -1236,9 +1274,7 @@ export class Channel {
       // Anything that isn't a well-formed message is dropped here, before any client folds it.
       if (!wellFormed(p)) return null;
       // Drop anything that isn't a named raster image, including SVG, rather than the whole message.
-      const imgs = Array.isArray(p.imgs) ? p.imgs.filter(rasterAttachment) : undefined;
-      const message: Message = { ...p, ...(imgs?.length ? { imgs } : { imgs: undefined }), seq: env.seq, rts: env.ts, sigOk: yield* Effect.promise(() => verify(p)) };
-      return message;
+      return received(p, env.seq, env.ts, yield* Effect.promise(() => verify(p)));
     }),
 
     history: Effect.fn("Channel.history")({ self: this }, function* (this: Channel, since: number) {
@@ -1281,7 +1317,7 @@ export class Channel {
             return Effect.void;
         }
       };
-      const listening = eachLive(this.fx.live(since, { quietMs: opts.quietMs, presence: !!opts.onPresence }), handle, (s) => Effect.sync(() => opts.onStatus?.(s)));
+      const listening = eachLive(this.fx.live(since, { quietMs: opts.quietMs, presence: !!opts.onPresence, reads: false }), handle, (s) => Effect.sync(() => opts.onStatus?.(s)));
       // A test's clock: the quiet window and the waits between retries follow it.
       return yield* opts.now ? Effect.provideService(listening, Clock.Clock, clockFrom(opts.now)) : listening;
     }),
@@ -1297,6 +1333,14 @@ export class Channel {
       // A key this member already holds for an epoch never changes: nobody may swap it.
       this.access = { ...this.access, epoch: r.epoch, keys: { ...keys, ...this.access.keys } };
       this.onAccess?.(this.access);
+    });
+  }
+
+  private fetchInfo(fp?: string): Effect.Effect<Info, Refusal, Relay> {
+    return Effect.gen({ self: this }, function* () {
+      const ownerPk = this.access.ownerPk;
+      const proof = fp ?? (ownerPk ? yield* Effect.promise(() => ownerFingerprint(ownerPk)) : undefined);
+      return yield* callUnlessUnchanged<Info>(this.relay, this.roomId, "info", "/info", {}, proof ? { fp: proof } : {});
     });
   }
 
@@ -1325,9 +1369,10 @@ export class Channel {
       yield* this.ownerOnly();
       const key = this.access.keys["0"];
       if (!key) return yield* new MissingKey("missing the channel key");
+      this.forgetInfo();
       const { what: _w, room: _r, pk: _p, sig: _s, ...kept } = (yield* this.settings()) ?? {};
       const sealed = yield* Effect.promise(async () => seal(key, this.roomId, await sign(this.identity, { ...kept, ...change, what: "channel-settings", room: this.roomId })));
-      yield* this.request("/settings", { method: "PUT", body: JSON.stringify({ settings: sealed }) });
+      yield* this.request("/settings", { method: "PUT", body: JSON.stringify({ settings: sealed }) }).pipe(Effect.ensuring(Effect.sync(() => this.forgetInfo())));
     });
   }
 
@@ -1385,11 +1430,11 @@ export class Channel {
   }
 
   /** live(): connections one after another, each from where the last left off, fed to one queue. */
-  private live(since: number, { quietMs = QUIET_DROP_MS, presence = true }: LiveOptions): Stream.Stream<Live, ChannelGone, Relay> {
+  private live(since: number, { quietMs = QUIET_DROP_MS, presence = true, reads = true }: LiveOptions): Stream.Stream<Live, ChannelGone, Relay> {
     // The newest seq handed on: each (re)connect asks for what's after it, so nothing is lost across drops.
     const at = { seq: since };
     return Stream.callback<Live, ChannelGone, Relay>((out) =>
-      Stream.suspend(() => this.session(at, quietMs, presence)).pipe(
+      Stream.suspend(() => this.session(at, quietMs, presence, reads)).pipe(
         // A drop: connect again on the schedule. A connection that opens starts the schedule over.
         Stream.retry(this.reconnect(out, quietMs)),
         // The schedule never gives up on a drop; only an answer (ChannelGone) gets past it.
@@ -1431,21 +1476,23 @@ export class Channel {
    * One connection, read: Open, then what the relay sends, strictly in order, until it closes. A
    * frame whose reading fails is reported and dropped: one bad payload mustn't stop the rest.
    */
-  private session(at: { seq: number }, quietMs: number, presence: boolean): Stream.Stream<Live, Dropped | ChannelGone, Relay> {
-    return Stream.callback<Incoming, Dropped | ChannelGone, Relay>((q) => this.socket(at.seq, q)).pipe(
+  private session(at: { seq: number }, quietMs: number, presence: boolean, reads: boolean): Stream.Stream<Live, Dropped | ChannelGone, Relay> {
+    return Stream.callback<Incoming, Dropped | ChannelGone, Relay>((q) => this.socket(at.seq, presence, reads, q)).pipe(
       Stream.mapEffect((f) =>
-        this.read(f, at, quietMs, presence).pipe(Effect.catchCause((cause) => Effect.succeed<Live>({ _tag: "Skipped", frame: f.t, error: Cause.squash(cause) }))),
+        this.read(f, at, quietMs, presence, reads).pipe(Effect.catchCause((cause) => Effect.succeed<Live>({ _tag: "Skipped", frame: f.t, error: Cause.squash(cause) }))),
       ),
       Stream.filter((x): x is Live => x !== null),
     );
   }
 
   /** A socket for what's after `since`: its frames go to `q` as they arrive, then how it closed. Closing the scope closes it. */
-  private socket(since: number, q: Queue.Queue<Incoming, Dropped | ChannelGone | Cause.Done>) {
+  private socket(since: number, presence: boolean, reads: boolean, q: Queue.Queue<Incoming, Dropped | ChannelGone | Cause.Done>) {
     return Effect.gen({ self: this }, function* () {
       const auth = yield* Effect.promise(() => signRequest(this.identity, this.roomId, "GET", "/ws"));
       const u = new URL(`/v1/rooms/${this.roomId}/ws`, this.relay);
       u.searchParams.set("since", String(since));
+      if (!presence) u.searchParams.set("presence", "0");
+      if (!reads) u.searchParams.set("reads", "0");
       u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
       const { ws, closed } = yield* Effect.acquireRelease(
         Effect.sync(() => this.connect(u, auth, q)),
@@ -1495,10 +1542,11 @@ export class Channel {
   }
 
   /** What one frame means to a listener (null: nothing, like a message already handed on). */
-  private read(f: Incoming, at: { seq: number }, quietMs: number, presence: boolean): Effect.Effect<Live | null, never, Relay> {
+  private read(f: Incoming, at: { seq: number }, quietMs: number, presence: boolean, reads: boolean): Effect.Effect<Live | null, never, Relay> {
     return Effect.gen({ self: this }, function* () {
       switch (f.t) {
         case "open": {
+          this.forgetInfo();
           // Back after an outage the listener was told about: say for how long. The schedule's metadata is that outage's.
           const { attempt, elapsed, start } = yield* Schedule.CurrentMetadata;
           const now = yield* Clock.currentTimeMillis;
@@ -1513,9 +1561,11 @@ export class Channel {
         case "eph":
           return presence ? yield* this.presenceIn(f) : null;
         case "epoch":
+          this.forgetInfo();
           yield* Effect.ignoreCause(this.fx.refreshKeys());
           return null;
         case "info":
+          this.forgetInfo();
           return { _tag: "Info" } satisfies Live;
         case "roster":
           return { _tag: "Roster" } satisfies Live;
@@ -1524,12 +1574,14 @@ export class Channel {
         case "ready":
           return { _tag: "Ready", head: f.head } satisfies Live;
         case "read": {
+          if (!reads) return null;
           const mark = wellFormedRead(f);
           return mark && ({ _tag: "Read", reads: [mark], snapshot: false } satisfies Live);
         }
         case "reads": {
-          const reads = Array.isArray(f.reads) ? f.reads.map(wellFormedRead).filter((r): r is ReadMark => r !== null) : [];
-          return { _tag: "Read", reads, snapshot: true } satisfies Live;
+          if (!reads) return null;
+          const marks = Array.isArray(f.reads) ? f.reads.map(wellFormedRead).filter((r): r is ReadMark => r !== null) : [];
+          return { _tag: "Read", reads: marks, snapshot: true } satisfies Live;
         }
         default:
           return null;

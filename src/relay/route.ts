@@ -295,7 +295,7 @@ const routes: RoomRoute[] = [
         if (!allow(`read:${db.roomId}:${me}`, READS_PER_MINUTE)) return yield* new TooMany({ message: "too many read marks; one a second is plenty" });
         const b = yield* json<{ seq?: unknown }>();
         const mark = yield* markRead(me, b.seq);
-        return { data: { seq: mark?.seq ?? null }, fx: mark ? { broadcast: [frame({ t: "read", ...mark })] } : undefined };
+        return { data: { seq: mark?.seq ?? null }, fx: mark ? { readers: [frame({ t: "read", ...mark })] } : undefined };
       }),
   },
   { method: "GET", path: "/keys", guard: "member", run: ({ me }) => Effect.map(keysFor(me), (data) => ({ data })) },
