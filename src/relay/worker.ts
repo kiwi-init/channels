@@ -108,7 +108,7 @@ export class Channel extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.sql = {
-      run: (q, ...p) => void ctx.storage.sql.exec(q, ...p),
+      run: (q, ...p) => void ctx.storage.sql.exec(q, ...p.map((v) => (v instanceof Uint8Array ? v.slice().buffer : v))),
       all: <T>(q: string, ...p: SqlParam[]) => ctx.storage.sql.exec(q, ...p).toArray() as T[],
     };
     this.policy = policyFrom(env as unknown as Record<string, string | undefined>);

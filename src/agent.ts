@@ -18,7 +18,7 @@ import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import type * as Scoped from "effect/Scope";
-import { Channel, ChannelGone, eachLive, fetchRelay, isDirectedAt, isForAgent, keepAnswersIn, keepRecordsIn, QUIET_DROP_MS, reason, Relay, RelayError, settle, type Info, type Live, type MemberRow, type Refused, type SendOptions } from "./client.ts";
+import { Channel, ChannelGone, eachLive, fetchRelay, isDirectedAt, isForAgent, keepAnswersIn, keepBlobsIn, keepRecordsIn, QUIET_DROP_MS, reason, Relay, RelayError, settle, type Info, type Live, type MemberRow, type Refused, type SendOptions } from "./client.ts";
 import { Cache, Cursor, Keystore, LocalFiles, type ChannelConfig } from "./config.ts";
 import { TOO_MANY_REQUESTS } from "./sas.ts";
 import type { ChannelAccess } from "./crypto.ts";
@@ -839,6 +839,7 @@ export const openSession = Effect.fn("AgentSession.open")(function* (alias: stri
   // Member records: the newest this machine has seen per key wins, across runs.
   keepRecordsIn(keys.records);
   keepAnswersIn(keys.answers ?? null);
+  keepBlobsIn(keys.blobs);
   // Join creates the key first (loadIdentity). Everything else must use a name this machine already holds.
   if (!(yield* keys.identitiesIn(cfg.roomId)).includes(name)) {
     return yield* Effect.fail(new Error(`${name} has no key in "${alias}" on this machine`));

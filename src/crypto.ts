@@ -221,3 +221,40 @@ export async function openWith(key: string, box: string, ad: string): Promise<st
     return null;
   }
 }
+
+export function toBase64(bytes: Uint8Array): string {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+export function fromBase64(s: string): Uint8Array<ArrayBuffer> {
+  return Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+}
+
+export async function blobId(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
+  return hex(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)));
+}
+
+const BLOB_AD = enc.encode("kiwi-image");
+
+export async function sealBlob(raw: Uint8Array<ArrayBuffer>): Promise<{ id: string; key: string; blob: Uint8Array<ArrayBuffer> }> {
+  const key = crypto.getRandomValues(new Uint8Array(32));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const k = await crypto.subtle.importKey("raw", key, "AES-GCM", false, ["encrypt"]);
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: BLOB_AD }, k, raw));
+  const blob = new Uint8Array(iv.length + ct.length);
+  blob.set(iv);
+  blob.set(ct, iv.length);
+  return { id: await blobId(blob), key: b64url(key), blob };
+}
+
+export async function openBlob(ref: { id: string; key: string }, blob: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer> | null> {
+  try {
+    if (blob.length < 28 || (await blobId(blob)) !== ref.id) return null;
+    const k = await crypto.subtle.importKey("raw", fromB64url(ref.key), "AES-GCM", false, ["decrypt"]);
+    return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: blob.subarray(0, 12), additionalData: BLOB_AD }, k, blob.subarray(12)));
+  } catch {
+    return null;
+  }
+}

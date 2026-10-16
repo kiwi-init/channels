@@ -27,13 +27,17 @@ import { BadName, MissingKey, OwnerOnly, Rejected, type LocalRefusal } from "./r
 import {
   decodeJoinCode,
   encodeJoinCode,
+  fromBase64,
   newChannelKey,
   newRoomId,
   open,
+  openBlob,
   openFrom,
   ownerFingerprint,
   seal,
+  sealBlob,
   sealTo,
+  toBase64,
   type ChannelAccess,
 } from "./crypto.ts";
 import { sign, signText, verify, verifyText, type Identity } from "./identity.ts";
@@ -71,6 +75,7 @@ import {
   type Envelope,
   type Event,
   type ImageAttachment,
+  type InlineImage,
   type Kind,
   type Message,
   type Payload,
@@ -189,6 +194,7 @@ export interface RelayApi {
   readonly conditional: <T>(relay: string, roomId: string, path: string, etag: string | null, init?: CallInit, params?: Record<string, string | number>) => Effect.Effect<Conditional<T>, Refusal>;
   /** Whether a relay requires a signed-in human to create channels, and with which WorkOS client. */
   readonly config: (relay: string) => Effect.Effect<RelayConfig, Unreachable>;
+  readonly blob: (relay: string, roomId: string, id: string, identity: Identity, put?: Uint8Array<ArrayBuffer>) => Effect.Effect<Uint8Array<ArrayBuffer>, Refusal>;
 }
 
 /** The relay, as the client talks to it. `fetchRelay` is HTTP; a test or another transport provides its own. */
@@ -238,6 +244,18 @@ export const fetchRelay: RelayApi = {
     Effect.suspend(() => reach(new URL("/v1/config", relay), {})).pipe(
       Effect.flatMap((res) => (res.ok ? Effect.promise(() => res.json() as Promise<RelayConfig>) : Effect.succeed({ workosClientId: null }))),
     ),
+  blob: (relay, roomId, id, identity, put) =>
+    Effect.suspend(() => {
+      const path = `/blobs/${id}`;
+      const method = put ? "PUT" : "GET";
+      const once = Effect.gen(function* () {
+        const authorization = `Bearer ${yield* Effect.promise(() => signRequest(identity, roomId, method, path, ""))}`;
+        const res = yield* reach(new URL(`/v1/rooms/${roomId}${path}`, relay), { method, body: put, headers: put ? { authorization, "content-type": "application/octet-stream" } : { authorization } });
+        if (!res.ok) return yield* answered<never>(res);
+        return new Uint8Array(yield* Effect.tryPromise({ try: () => res.arrayBuffer(), catch: (cause) => new Unreachable({ cause }) }));
+      });
+      return Effect.retry(once, { times: 1, while: expired });
+    }),
 };
 
 const callRelay = <T>(relay: string, roomId: string, path: string, init?: CallInit, params?: Record<string, string | number>) =>
@@ -594,6 +612,7 @@ export interface Info {
   iconAt?: number | null;
   /** The channel's settings (its mode), sealed with the epoch-0 key and signed by the owner. */
   settings?: { iv: string; ct: string } | null;
+  blobs?: boolean;
 }
 
 /** The channel's mode as the owner last signed it, and the log position it took effect at. */
@@ -773,6 +792,10 @@ export interface ChannelFx {
    */
   markRead(seq: number): Effect.Effect<void, never, Relay>;
   send(body: string, opts?: SendOptions): Effect.Effect<number, Refused, Relay>;
+  imageRefs(): Effect.Effect<boolean, Refusal, Relay>;
+  setImageRefs(on: boolean): Effect.Effect<void, Refused, Relay>;
+  image(img: ImageAttachment): Effect.Effect<string | null, MemberRefusal, Relay>;
+  images(imgs: readonly ImageAttachment[]): Effect.Effect<InlineImage[], MemberRefusal, Relay>;
   decrypt(env: Envelope): Effect.Effect<Message | null, never, Relay>;
   history(since: number): Effect.Effect<{ head: number; messages: Message[] }, MemberRefusal, Relay>;
   /**
@@ -1404,6 +1427,8 @@ export class Channel {
       const imgs = opts.imgs?.slice(0, MAX_IMAGES);
       // The same raster list as icons. A caller that skips the file picker still cannot attach SVG.
       if (imgs?.some((i) => !isRasterMime(i.mime))) return yield* new Rejected("an image must be png, jpg, gif or webp");
+      if (imgs?.some((i) => !rasterAttachment(i))) return yield* new Rejected("an image needs its bytes or a stored reference");
+      const attached = imgs?.length ? yield* this.stored(imgs) : undefined;
       const payload: Payload = {
         v: PROTOCOL_VERSION,
         id: crypto.randomUUID(),
@@ -1413,7 +1438,7 @@ export class Channel {
         body,
         ...(opts.re?.length ? { re: opts.re } : {}),
         ...(opts.ev ? { ev: opts.ev } : {}),
-        ...(imgs?.length ? { imgs } : {}),
+        ...(attached?.length ? { imgs: attached } : {}),
         ...(opts.room && opts.room !== GENERAL_ROOM && !opts.ev ? { room: opts.room } : {}),
         ...(opts.esc && !opts.ev ? { esc: true as const } : {}),
         ...(opts.task && !opts.ev ? { task: opts.task } : {}),
@@ -1448,6 +1473,48 @@ export class Channel {
       if (acked === null) return yield* posted;
       this.onSent?.(acked, null);
       return acked;
+    }),
+
+    imageRefs: Effect.fn("Channel.imageRefs")({ self: this }, function* (this: Channel) {
+      return (yield* this.settings())?.imageRefs === true;
+    }),
+
+    setImageRefs: Effect.fn("Channel.setImageRefs")({ self: this }, function* (this: Channel, on: boolean) {
+      yield* this.putSettings({ imageRefs: on });
+    }),
+
+    image: Effect.fn("Channel.image")({ self: this }, function* (this: Channel, img: ImageAttachment) {
+      if (img.data !== undefined) return img.data;
+      const ref = img.ref;
+      if (!ref) return null;
+      const cached = blobMemory.get(this.roomId, ref.id);
+      const kept = cached ? yield* Effect.promise(() => openBlob(ref, cached)) : null;
+      if (kept && kept.length === ref.size) return toBase64(kept);
+      const relay = yield* Relay;
+      const blob = yield* relay.blob(this.relay, this.roomId, ref.id, this.identity).pipe(
+        Effect.mapError(gone),
+        Effect.catchIf(
+          (err) => err instanceof RelayError && err.status === 404,
+          () =>
+            Effect.sync(() => {
+              blobMemory.drop(this.roomId, ref.id);
+              return null;
+            }),
+        ),
+      );
+      if (!blob) return null;
+      const raw = yield* Effect.promise(() => openBlob(ref, blob));
+      if (!raw || raw.length !== ref.size) return null;
+      blobMemory.set(this.roomId, ref.id, blob);
+      return toBase64(raw);
+    }),
+
+    images: Effect.fn("Channel.images")({ self: this }, function* (this: Channel, imgs: readonly ImageAttachment[]) {
+      const data = yield* Effect.forEach(imgs, (img) => this.fx.image(img), { concurrency: 4 });
+      return imgs.flatMap((img, i): InlineImage[] => {
+        const d = data[i];
+        return d == null ? [] : [{ name: img.name, mime: img.mime, data: d }];
+      });
     }),
 
     decrypt: Effect.fn("Channel.decrypt")({ self: this }, function* (this: Channel, env: Envelope) {
@@ -1563,6 +1630,31 @@ export class Channel {
       if (!o || o.what !== "channel-settings" || o.room !== this.roomId || o.pk !== this.access.ownerPk || !(yield* Effect.promise(() => verify(o as never)))) return null;
       this.packs = o.compress === true;
       return o;
+    });
+  }
+
+  private stored(imgs: ImageAttachment[]): Effect.Effect<ImageAttachment[], never, Relay> {
+    return Effect.gen({ self: this }, function* () {
+      if (!imgs.some((i) => i.data !== undefined)) return imgs;
+      const info = yield* Effect.option(this.fx.info());
+      if (info._tag === "None" || info.value.blobs !== true) return imgs;
+      const settings = yield* Effect.option(this.settings(info.value));
+      if (settings._tag === "None" || settings.value?.imageRefs !== true) return imgs;
+      const relay = yield* Relay;
+      return yield* Effect.forEach(
+        imgs,
+        (img) =>
+          Effect.gen({ self: this }, function* () {
+            if (img.data === undefined) return img;
+            const raw = fromBase64(img.data);
+            const { id, key, blob } = yield* Effect.promise(() => sealBlob(raw));
+            yield* relay.blob(this.relay, this.roomId, id, this.identity, blob);
+            blobMemory.set(this.roomId, id, blob);
+            const ref: ImageAttachment = { name: img.name, mime: img.mime, ref: { id, key, size: raw.length } };
+            return ref;
+          }).pipe(Effect.orElseSucceed(() => img)),
+        { concurrency: 4 },
+      );
     });
   }
 
@@ -2147,6 +2239,18 @@ export class Channel {
     return run(this.fx.send(body, opts));
   }
 
+  imageRefs(): Promise<boolean> {
+    return run(this.fx.imageRefs());
+  }
+
+  setImageRefs(on: boolean): Promise<void> {
+    return run(this.fx.setImageRefs(on));
+  }
+
+  image(img: ImageAttachment): Promise<string | null> {
+    return run(this.fx.image(img));
+  }
+
   decrypt(env: Envelope): Promise<Message | null> {
     return run(this.fx.decrypt(env));
   }
@@ -2182,6 +2286,25 @@ let recordMemory: RecordMemory = {
 };
 export function keepRecordsIn(memory: RecordMemory): void {
   recordMemory = memory;
+}
+
+export interface BlobMemory {
+  get(room: string, id: string): Uint8Array<ArrayBuffer> | null;
+  set(room: string, id: string, blob: Uint8Array<ArrayBuffer>): void;
+  drop(room: string, id: string): void;
+}
+const blobsInProcess = new Map<string, Uint8Array<ArrayBuffer>>();
+let blobMemory: BlobMemory = {
+  get: (_room, id) => blobsInProcess.get(id) ?? null,
+  set: (_room, id, blob) => {
+    blobsInProcess.delete(id);
+    blobsInProcess.set(id, blob);
+    while (blobsInProcess.size > 64) blobsInProcess.delete(blobsInProcess.keys().next().value!);
+  },
+  drop: (_room, id) => void blobsInProcess.delete(id),
+};
+export function keepBlobsIn(memory: BlobMemory): void {
+  blobMemory = memory;
 }
 /**
  * The newer of `served` and what this client has seen for that key (by the record's `at`). Once the

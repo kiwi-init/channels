@@ -29,7 +29,7 @@ import { baseName, here, seatsNear } from "../seats.ts";
 import { daemonHello, daemonSeat, ensureDaemon, reportRead, stopDaemon, wakeOn, type DaemonSeat } from "../daemon.ts";
 import { cleanup } from "../cleanup.ts";
 import { asOption, channelOption, isWakeVia, wakeKey, wakeWords } from "../wake.ts";
-import { ago, cardLine, charterLines, describeEvent, holdLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, modeLine, parseDuration, presenceWords, taskStateWord, statusJson } from "../format.ts";
+import { ago, cardLine, charterLines, describeEvent, holdLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, missingImages, formatTask, formatTasks, looksLikeLine, modeLine, parseDuration, presenceWords, taskStateWord, statusJson } from "../format.ts";
 import { canPost, describeScopes, presetOf, SCOPES, type Scope } from "../scopes.ts";
 import { fingerprint } from "../identity.ts";
 import { CHAT_KINDS, COLORS, ignored, isColor, type Kind, type Message, type TaskState } from "../protocol.ts";
@@ -890,7 +890,11 @@ const commands: Record<string, Command> = {
       const { messages, state } = yield* s.state();
       const m = messages.find((x) => x.seq === seq && !ignored(state.trust.get(x.seq))) ?? (yield* die(`no message #${seq}`));
       if (!m.imgs?.length) return yield* die(`message #${seq} has no images`);
-      for (const path of saveImages(seq, m.imgs, args[2] ?? ".")) out(path);
+      const imgs = yield* s.ch.fx.images(m.imgs);
+      if (!imgs.length) return yield* die(`message #${seq}'s images are no longer on the relay`);
+      for (const path of saveImages(seq, imgs, args[2] ?? ".")) out(path);
+      const missing = missingImages(seq, m.imgs.length, imgs.length);
+      if (missing) process.stderr.write(`kiwi: ${missing}\n`);
     }),
 
   show: () =>
@@ -901,7 +905,7 @@ const commands: Record<string, Command> = {
       // Forged messages, and ones the owner doesn't allow, are left out everywhere (status counts them).
       const m = messages.find((x) => x.seq === seq && !ignored(state.trust.get(x.seq))) ?? (yield* die(`no message #${seq}`));
       // Images land under the channel's own folder (closing it deletes them), or where asked.
-      const saved = m.imgs?.length ? saveImages(seq, m.imgs, args[2] ?? joinPath(home(), "downloads", s.ch.roomId)) : [];
+      const saved = m.imgs?.length ? saveImages(seq, yield* s.ch.fx.images(m.imgs), args[2] ?? joinPath(home(), "downloads", s.ch.roomId)) : [];
       out(formatShown(m, messages, state, saved, s.me));
       // The rest of its thread, when there's more of it than #N, what it answers and its replies.
       const root = state.threadOf.get(seq) ?? seq;

@@ -4,9 +4,7 @@
 import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { home } from "./config.ts";
-import { MAX_IMAGE_BYTES, MAX_IMAGES, type ImageAttachment, type RasterMime } from "./protocol.ts";
-
-export type { ImageAttachment };
+import { MAX_IMAGE_BYTES, MAX_IMAGES, type InlineImage, type RasterMime } from "./protocol.ts";
 
 const MIME: Record<string, RasterMime> = {
   ".png": "image/png",
@@ -21,7 +19,7 @@ function kb(n: number): string {
 }
 
 /** Read image files into attachments. Throws a plain Error naming the problem. */
-export function loadImages(paths: string[]): ImageAttachment[] {
+export function loadImages(paths: string[]): InlineImage[] {
   if (paths.length > MAX_IMAGES) throw new Error(`at most ${MAX_IMAGES} images per message`);
   return paths.map((p) => {
     if (!existsSync(p)) throw new Error(`no such image: ${p}`);
@@ -56,7 +54,7 @@ function lockDirs(dir: string, root: string): void {
 }
 
 /** Write message #seq's images into `dir` as `#<seq>-<name>`; returns the paths. Files are 0600. Directories under ~/.kiwi/downloads are 0700; a directory the caller named keeps its own mode. */
-export function saveImages(seq: number, imgs: ImageAttachment[], dir: string): string[] {
+export function saveImages(seq: number, imgs: InlineImage[], dir: string): string[] {
   const downloads = join(home(), "downloads");
   const locked = inside(downloads, dir);
   mkdirSync(dir, locked ? { recursive: true, mode: 0o700 } : { recursive: true });

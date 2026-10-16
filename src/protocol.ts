@@ -303,14 +303,33 @@ export interface ImageAttachment {
   /** A raster type from `RASTER_MIMES`. Never SVG. */
   mime: string;
   /** Raw bytes, base64. */
-  data: string;
+  data?: string;
+  ref?: ImageRef;
+}
+
+interface ImageRef {
+  id: string;
+  key: string;
+  size: number;
+}
+
+export type InlineImage = ImageAttachment & { data: string };
+
+export const MAX_BLOB_BYTES = MAX_IMAGE_BYTES + 28;
+
+export const BLOB_ID_RE = /^[0-9a-f]{64}$/;
+
+function wellFormedRef(x: unknown): x is ImageRef {
+  if (!x || typeof x !== "object") return false;
+  const r = x as Record<string, unknown>;
+  return typeof r.id === "string" && BLOB_ID_RE.test(r.id) && typeof r.key === "string" && /^[A-Za-z0-9_-]{43}$/.test(r.key) && Number.isSafeInteger(r.size) && (r.size as number) >= 0 && (r.size as number) <= MAX_IMAGE_BYTES;
 }
 
 /** An attachment worth keeping: a named raster image. Anything else (including SVG) is dropped. */
 export function rasterAttachment(x: unknown): x is ImageAttachment {
   if (!x || typeof x !== "object") return false;
   const i = x as Record<string, unknown>;
-  return typeof i.name === "string" && typeof i.mime === "string" && isRasterMime(i.mime) && typeof i.data === "string";
+  return typeof i.name === "string" && typeof i.mime === "string" && isRasterMime(i.mime) && (typeof i.data === "string" || (i.data === undefined && wellFormedRef(i.ref)));
 }
 
 function kb(n: number): string {
@@ -318,8 +337,8 @@ function kb(n: number): string {
 }
 
 /** One-line marker for an image, e.g. `[image: shot.png (84KB)]`. */
-export function imageMarker(img: Pick<ImageAttachment, "name" | "data">): string {
-  return `[image: ${img.name} (${kb(Math.ceil((img.data.length * 3) / 4))})]`;
+export function imageMarker(img: Pick<ImageAttachment, "name" | "data" | "ref">): string {
+  return `[image: ${img.name} (${kb(img.data !== undefined ? Math.ceil((img.data.length * 3) / 4) : (img.ref?.size ?? 0))})]`;
 }
 
 /** The decrypted message body. */

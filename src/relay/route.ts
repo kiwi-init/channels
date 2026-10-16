@@ -15,9 +15,9 @@ import * as Effect from "effect/Effect";
 import type * as Layer from "effect/Layer";
 import { verifyRequest } from "../auth.ts";
 import { ownerFingerprint } from "../crypto.ts";
-import { PAGE_LIMIT } from "../protocol.ts";
-import { ChannelGone, BadRequest, Forbidden, NotFound, NotOwner, SignInRequired, TooMany, Unauthorized, UpdateRequired, type Refusal } from "./failures.ts";
-import { answer, buildContext, describeRoutes, dispatch, incoming, json, Request_, type Route } from "./http.ts";
+import { MAX_BLOB_BYTES, PAGE_LIMIT } from "../protocol.ts";
+import { ChannelGone, BadRequest, Forbidden, NotFound, NotOwner, SignInRequired, TooLarge, TooMany, Unauthorized, UpdateRequired, type Refusal } from "./failures.ts";
+import { answer, buildContext, describeRoutes, dispatch, incoming, json, readCapped, Request_, type Route } from "./http.ts";
 import { Human, HUMAN_HEADER } from "./human.ts";
 import { betaMessage, inBeta, Policy } from "./policy.ts";
 import { offerPages, PAGE_PATH, servePage } from "./pages.ts";
@@ -26,6 +26,7 @@ import {
   append,
   approve,
   authenticate,
+  BLOBS_PER_MINUTE,
   create,
   directory,
   Directory,
@@ -53,6 +54,7 @@ import {
   setSettings,
   setTitle,
   watchFrame,
+  storeBlob,
   touch,
   UPDATE_KIWI,
   type CreateBody,
@@ -166,6 +168,8 @@ type RoomRoute = Route<Guard, Who, Effects, Services>;
 
 const ID = "([0-9a-f-]{36})";
 
+const BLOB = /^\/blobs\/([0-9a-f]{64})$/;
+
 /** A handler that only reads the room. */
 const withRoom = <A>(f: (db: RoomDb) => A) => Effect.map(RoomStore, f);
 
@@ -198,6 +202,7 @@ const routes: RoomRoute[] = [
           title: db.title(),
           settings: db.settings(),
           iconAt: db.iconAt(),
+          blobs: true,
         }));
       }),
   },
@@ -302,6 +307,32 @@ const routes: RoomRoute[] = [
         const b = yield* json<{ seq?: unknown }>();
         const mark = yield* markRead(me, b.seq);
         return { data: { seq: mark?.seq ?? null }, fx: mark ? { readers: [frame({ t: "read", ...mark })] } : undefined };
+      }),
+  },
+  {
+    method: "PUT",
+    path: BLOB,
+    guard: "member",
+    run: ({ me }, m) =>
+      Effect.gen(function* () {
+        const db = yield* RoomStore;
+        if (!allow(`blob:${db.roomId}:${me}`, BLOBS_PER_MINUTE)) return yield* new TooMany({ message: "too many images; wait a minute" });
+        const { req } = yield* Request_;
+        const bytes = yield* Effect.tryPromise({ try: () => readCapped(req, MAX_BLOB_BYTES), catch: () => new BadRequest({ message: "send the image's encrypted bytes" }) });
+        if (!bytes) return yield* new TooLarge({ message: "image too large" });
+        yield* storeBlob(m[1]!, bytes, me);
+        return { data: { id: m[1]! }, fx: { expireAt: (yield* touch) ?? undefined } };
+      }),
+  },
+  {
+    method: "GET",
+    path: BLOB,
+    guard: "member",
+    run: (_, m) =>
+      Effect.gen(function* () {
+        const bytes = (yield* RoomStore).blob(m[1]!);
+        if (!bytes) return yield* new NotFound({ message: "no such image" });
+        return { res: new Response(bytes, { headers: { "content-type": "application/octet-stream", "cache-control": "private, max-age=31536000, immutable" } }) };
       }),
   },
   { method: "GET", path: "/keys", guard: "member", run: ({ me }) => Effect.map(keysFor(me), (data) => ({ data })) },

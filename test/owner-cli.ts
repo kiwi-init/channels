@@ -165,6 +165,14 @@ const verbs: Record<string, () => Effect.Effect<void, unknown, any>> = {
       }
       return yield* die("usage: room create NAME | room rename NAME|ID NEWNAME");
     }),
+  images: () =>
+    Effect.gen(function* () {
+      const s = yield* owner;
+      const on = args[1] === "refs";
+      if (!on && args[1] !== "inline") return yield* die("usage: images refs|inline");
+      yield* s.ownerCh.fx.setImageRefs(on);
+      out(on ? "images go by reference" : "images go inline");
+    }),
 };
 
 const verb = verbs[args[0] ?? ""];

@@ -71,6 +71,7 @@ export class ChannelLink {
   close = () => this.c("close")
   leave = () => this.c("leave")
   send = (...a: Args<"send">) => this.c("send", ...a)
+  image = (...a: Args<"image">) => this.c("image", ...a)
   presence = (p: PresenceFields) => this.via.presence(this.code, p)
   openRows = (rows: CachedRow[]) => this.via.openRows(this.code, rows)
   follow = (since: number, on: (e: FollowEvent) => void) => this.via.follow(this.code, since, on)

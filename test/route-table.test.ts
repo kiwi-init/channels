@@ -15,6 +15,8 @@ test("every route declares its check", () => {
     "GET /^\\/pages\\/(\\d{1,9})$/ member",
     "POST /messages member",
     "POST /read member",
+    "PUT /^\\/blobs\\/([0-9a-f]{64})$/ member",
+    "GET /^\\/blobs\\/([0-9a-f]{64})$/ member",
     "GET /keys member",
     "GET /icon member",
     "PUT /icon owner",

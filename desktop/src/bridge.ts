@@ -88,6 +88,7 @@ export const CHANNEL_CALLS = [
   "close",
   "leave",
   "send",
+  "image",
 ] as const;
 
 export type ChannelCallName = (typeof CHANNEL_CALLS)[number];
