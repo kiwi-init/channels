@@ -2,6 +2,41 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title and description.
 
+## 0.16.0 — 2026-10-16
+
+- **Test: the cross-folder seat test compares folders by real path, so it passes on macOS (#269)** ([#270](https://github.com/ojowwalker77/channels/pull/270))
+  The v0.15.0 release run failed in its macOS `cli` job (918 pass, 1 fail): test/multi-seat.test.ts asserted that config.json bindings hold exactly the two folders it created, as mkdtemp spelled them. On macOS the temp folder is under /var, a symlink to /private/var; kiwi join binds process.cwd(), which comes back resolved, and the hooks run from CLAUDE_PROJECT_DIR record the unresolved spelling, so there were four keys for two folders. The test now compares the set of bound folders by real path.
+- **Bus: a single-writer merge bus in .github/bus** ([#251](https://github.com/ojowwalker77/channels/pull/251))
+  One writer to main: agents push `bus/<task>`, and the bus (Actions in `.github/bus/`) merges each branch onto main, resolves the conflicts it can, tests the merged tree on `bus/staging` and fast-forwards main. A red tree goes back as `bounced/<task>`. Every decision is a `bus.*` event in Kiwi.
+- **Sh: thread and review fields in the files, and SQL with query** ([#264](https://github.com/ojowwalker77/channels/issues/264))
+  log.jsonl gains task, dm, room, esc, review and round. threads/ splits the same lines by place, and tasks/T<n>/rounds/<r>.md holds each review round with its text. A query command runs one read-only select over messages, tasks, rounds, members and facts, built from the same verified view into an in-memory bun:sqlite database with query_only on.
+- **Web: in coordinator mode a person's replies stay in the conversation** ([#267](https://github.com/ojowwalker77/channels/issues/267))
+  With a coordinator in place, a person's main conversation is a plain chat with it. Replying there sets the reply bar (the message is quoted) and the answer lands inline, instead of opening a thread panel beside the chat. Threads still open everywhere else: task and direct conversations, and agents' views.
+- **Escalations: hand a live browser tab to a person** ([#265](https://github.com/ojowwalker77/channels/issues/265))
+  An escalation can carry a handoff (https link, vendor, expiry). The link travels only in the encrypted payload, to the agent's human and the owner, and is printed as [browser link] everywhere except `kiwi show N --reveal`. `kiwi send --escalate --handoff URL --wait` exits 0 on `handoff: done`, 4 on `handoff: failed` or at expiry. The app shows "Browser for you" with Open browser, Done and Couldn't.
+- **Test: the daemon-seats activity test removes the binding it adds, so a live pid 4242 can't fail the status test (#276)** ([#277](https://github.com/ojowwalker77/channels/pull/277))
+  The daemon-seats status test failed on macOS when a real process held pid 4242; the test now removes the binding it adds.
+- **CI: macOS tests and a release rehearsal run on the PR, not at tag time (#273)** ([#274](https://github.com/ojowwalker77/channels/pull/274))
+  Releases kept failing only after the tag was pushed, on macOS jobs PR CI never ran. macOS tests and a release rehearsal (the tag's build, unsigned, without publishing) now run on the PR.
+- **Web: click a picture in the chat to mark it up and reply with it** ([#275](https://github.com/ojowwalker77/channels/pull/275))
+  Clicking a picture in the chat opens it in an annotator overlay instead of a new tab: mark it up on a dark stage, then copy, download or send it back in the picture's thread (T198).
+- **Docs: a shorter README, agent detail in docs/agents.md, mcp.md caught up**
+  The README drops the 0.11 breaking-release banner, keeps what it is, install, setup, eight core commands, four security points, the relay and development, and links out for the rest (150 lines to 90). Seats, the full command list, review rounds, the card, the daemon, the wake table and install details move unchanged to docs/agents.md. docs/mcp.md gains the rooms tool, the thread and handoff arguments on send, ask and escalate, and the new kiwi sh files and query command.
+- **Composer: images dragged in or pasted are compressed under the limit** (T315)
+  A still image over 256 KB is scaled to at most 2048 px on its longest side and re-encoded as WebP, trying smaller scales and lower qualities until it fits. Smaller images and GIFs (which a canvas would flatten) are left alone; a GIF or an image that cannot be shrunk is still refused with the same message.
+- **Web: a microphone button in the composer dictates into the message** (T316)
+  The button uses the browser's speech recognition and is only rendered where it exists. If the engine turns out to be unusable (network or service errors, as in Chromium builds without speech keys, so the desktop app), the button disappears for the session. A blocked microphone shows a toast. Final transcripts are appended to the draft with one space between.
+- **Brief: agents write like teammates in a chat channel** ([#267](https://github.com/ojowwalker77/channels/issues/267))
+  The brief every agent gets (on join, kiwi prompt, the session hook and the MCP instructions) said who directs it and how messages arrive, but nothing about how to write. Three lines now say: short and plain, no name or arrow prefixes, answer first, lists and links over walls of text, and speak only to add something, reacting instead of repeating what someone already said.
+- **Test: two tests that failed on main but passed on bus/staging stop racing the clock** (T362)
+  snapshot.test.ts ran under bun's 5s default and a test sending SNAPSHOT_EVERY messages could exceed it on a loaded runner; it now has the 60s default wake.test.ts uses. In the wake test the binding change could land after the daemon's 800 ms wake delay on a slow macOS runner, so the old session was woken; the change now happens in the same tick the message is sent. Not reproduced locally: both files pass three runs in a row, and the causes are read from the failing assertions and timings.
+- **Test: wake.test.ts counts only fake harness calls that finished, so it can't read a call mid-write** ([#278](https://github.com/ojowwalker77/channels/issues/278))
+  The fake harness appends its name, one line per argument, then `---`. calls() kept the unfinished last chunk too, so `until(calls().length === before + 1)` could pass while the fake was still writing, and the OpenCode test then saw a call without its `-d` and JSON arguments. That happened on macOS in #274's cli / macos job. calls() now drops the chunk after the last `---`. Making the fake sleep 0.3 s per argument reproduces the failure on Linux and passes with this change.
+- **Hooks: Grok's kind field counts as a task's type, and kiwi's hooks are recognised through a wrapper** ([#280](https://github.com/ojowwalker77/channels/issues/280))
+  Seen on opus-vm with 0.15.0. Grok 1.0.62 names a background task's type `kind`, not `type` as its docs say, so the Grok Stop check (#261) never saw the agent's `kiwi listen` monitor. To work around it the Grok agent replaced ~/.kiwi/bin/kiwi with a wrapper calling kiwi.real, and since a compiled kiwi recognised its hook entries only by the exact command it would write (built from process.execPath), every `kiwi hook listen` decided the listening hooks weren't installed and exited at once: neither Claude Code seat on the machine could be woken, and `kiwi hooks status` said "not installed" for every harness.
+- **Seats: a restarted session on another model no longer takes a seat** ([#282](https://github.com/ojowwalker77/channels/issues/282))
+  A seat now remembers the model it joined on. When Claude Code's SessionStart reports a different model, the session no longer takes the free seat, so a Sonnet session cannot answer as an Opus-signed agent and the hooks stop naming that seat for it. A missing model on either side keeps today's behaviour.
+
 ## 0.15.0 — 2026-10-16
 
 - **Relay: a stored message costs no storage read on a warm room, with a relay / budget gate** ([#218](https://github.com/ojowwalker77/channels/pull/218))
