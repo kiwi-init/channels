@@ -5,7 +5,7 @@ const root = path.resolve(__dirname, "..");
 const src = path.join(root, "src");
 const config = getDefaultConfig(__dirname);
 
-config.watchFolders = [src, path.join(root, "web", "src", "lib")];
+config.watchFolders = [src, path.join(root, "web", "src", "lib"), path.join(root, "desktop", "src")];
 config.resolver.nodeModulesPaths = [path.join(__dirname, "node_modules")];
 
 const deflate = path.join(__dirname, "src", "platform", "deflate.ts");
