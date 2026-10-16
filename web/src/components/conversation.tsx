@@ -253,6 +253,9 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     },
     [state.threadOf, state.placeOf, bySeqAll, coordinator]
   )
+  useEffect(() => {
+    if (coordinator && threadRoot !== null && (state.placeOf.get(threadRoot) ?? MAIN).kind === "main") setSide(null)
+  }, [coordinator, threadRoot, state.placeOf])
   // The owner can look at what every view leaves out (forged, or not allowed), tagged; nobody else can.
   const [showDropped, setShowDropped] = useState(false)
   const revealed = isOwner && showDropped
