@@ -434,22 +434,31 @@ export const Bubble = memo(function Bubble({
         )}
         {!!reactions?.length && !forged && (
           <p className={cx("mt-0.5 flex flex-wrap gap-1 px-2", mine && "justify-end")}>
-            {reactions.map((c) => (
-              <span
-                key={c.emoji}
-                title={chipLabel(c)}
-                aria-label={chipLabel(c)}
-                className={cx(
-                  "inline-flex items-center gap-1 text-stamp tabular-nums",
-                  isGifReaction(c.emoji) && gifByKey(c.emoji)
-                    ? cx("rounded-card p-0.5", c.mine ? "bg-accent-wash" : "bg-wash-2")
-                    : cx("h-5 rounded-full px-1.5", c.mine ? "bg-accent-wash text-accent-text" : "bg-wash-2 text-ink-2")
-                )}
-              >
-                {isGifReaction(c.emoji) && gifByKey(c.emoji) ? <img src={gifByKey(c.emoji)?.url} alt="" className="h-32 w-auto max-w-full rounded-[12px]" /> : <span aria-hidden>{c.emoji}</span>}
-                {c.who.length > 1 && <span aria-hidden>{c.who.length}</span>}
-              </span>
-            ))}
+            {reactions.map((c) => {
+              const gif = isGifReaction(c.emoji) ? gifByKey(c.emoji) : undefined
+              const who = c.who.join(", ")
+              return gif ? (
+                <span
+                  key={c.emoji}
+                  title={`${gif.feeling} · ${who}`}
+                  aria-label={`${gif.feeling}, from ${who}`}
+                  className={cx("inline-flex flex-col gap-0.5 rounded-card p-1", c.mine ? "bg-accent-wash" : "bg-wash-2")}
+                >
+                  <img src={gif.url} alt="" className="h-32 w-auto max-w-full rounded-[12px]" />
+                  <span className="max-w-40 truncate px-0.5 text-stamp text-ink-2">{who}</span>
+                </span>
+              ) : (
+                <span
+                  key={c.emoji}
+                  title={chipLabel(c)}
+                  aria-label={chipLabel(c)}
+                  className={cx("inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-stamp tabular-nums", c.mine ? "bg-accent-wash text-accent-text" : "bg-wash-2 text-ink-2")}
+                >
+                  <span aria-hidden>{c.emoji}</span>
+                  {c.who.length > 1 && <span aria-hidden>{c.who.length}</span>}
+                </span>
+              )
+            })}
           </p>
         )}
         {receipt && mine && !forged && (
