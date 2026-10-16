@@ -628,13 +628,17 @@ function kimiExpected(config: Record<string, unknown>, add: boolean): Record<str
 function editKimiConfig(path: string, add: boolean): void {
   const before = existsSync(path) ? readFileSync(path, "utf8") : "";
   const stripped = withoutKimiHooks(before);
-  const after = add ? withKimiHooks(before) : stripped === before ? before : `${stripped.trimEnd()}\n`;
+  const after = add ? withKimiHooks(before) : stripped === before ? before : stripped.trim() ? `${stripped.trimEnd()}\n` : "";
   let same = false;
   try {
     same = Bun.deepEquals(parseToml(after), kimiExpected(parseToml(before), add));
   } catch {}
   if (!same) throw new Error(`kiwi can't edit ${path} safely; ${add ? "add" : "remove"} its [[hooks]] entry for \`${hookCommand(KIMI_STOP)}\` by hand`);
   if (after === before) return;
+  if (!after) {
+    rmSync(path, { force: true });
+    return;
+  }
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, after);
 }

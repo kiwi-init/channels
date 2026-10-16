@@ -446,11 +446,15 @@ test("Kimi Code: a config kiwi can't edit safely is left as it was", () => {
   expect(readFileSync(path, "utf8")).toBe("default_model = ");
 });
 
-test("Kimi Code: an absent config.toml gets just the Stop entry", () => {
+test("Kimi Code: an absent config.toml gets just the Stop entry, and is absent again after uninstall", () => {
   const kimi = join(scratch("hk-kimi-new-"), "nested");
   setEnv({ KIWI_HOME: scratch("hk-kimi-new-home-"), KIWI_KIMI_DIR: kimi });
   installExtra("kimi");
   expect(kimiStops(join(kimi, "config.toml"))).toEqual(["Stop"]);
+  uninstallExtra("kimi");
+  expect(existsSync(join(kimi, "config.toml"))).toBe(false);
+  uninstallExtra("kimi");
+  expect(existsSync(join(kimi, "config.toml"))).toBe(false);
 });
 
 test("Grok's Stop input: a monitor is the listener when it runs this seat's listen, or the daemon hears the seat from this session", () => {

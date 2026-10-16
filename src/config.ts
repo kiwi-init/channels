@@ -88,10 +88,6 @@ export interface Config {
   bindings?: Record<string, SeatRecord | SeatRecord[]>;
   /** What this computer's person chose in `kiwi setup` about Claude Code hooks. */
   claudeHooks?: "on" | "off";
-  /**
-   * Codex, Gemini, Cursor, and Grok hook choice. Missing means on when that
-   * harness is installed. `kiwi hooks uninstall <name>` sets one to off.
-   */
   harnessHooks?: Partial<Record<"codex" | "gemini" | "cursor" | "grok" | "kimi", "on" | "off">>;
   wakeOff?: string[];
 }
