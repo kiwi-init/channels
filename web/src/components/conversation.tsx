@@ -8,6 +8,7 @@ import { describeScopes, wireScopes } from "@mc/scopes.ts"
 import { colorOf, keptFromPeople, openRound, taskId, type Task } from "@mc/state.ts"
 import { secrets } from "@/lib/secrets"
 import { channelTitle, forgetChannel, loadMember, loadRecent, renameChannel, saveRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
+import { howHere } from "@/lib/presence"
 import { lastPreview } from "@/lib/preview"
 import { markSeen, setOpenNews } from "@/lib/news"
 import { useIcons, useLiveIcon } from "@/lib/icons"
@@ -509,7 +510,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       name: m.name,
       label: memberName(m),
       color: colorOf(state, m.name),
-      online: online.has(m.name),
+      here: howHere(online.get(m.name)),
       coordinator: m.name === state.coordinator,
       model: online.get(m.name)?.activity?.model ?? m.card?.model,
       activity: online.get(m.name)?.activity,

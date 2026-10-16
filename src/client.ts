@@ -58,6 +58,7 @@ import {
   wellFormedIcon,
   type ChannelIcon,
   cleanActivity,
+  isReach,
   cleanCard,
   PING,
   PROTOCOL_VERSION,
@@ -1600,9 +1601,12 @@ export class Channel {
           // role is self-reported. Flatten it before anyone renders status, so it can't invent a line.
           const role = typeof rest.role === "string" ? inlineText(rest.role, 80) || undefined : undefined;
           // So is what it says it's doing: only an activity's fields, each short.
-          const { activity: said, ...fields } = rest;
+          const { activity: said, reach, ...fields } = rest;
           const activity = cleanActivity(said);
-          return { _tag: "Presence", presence: { ...fields, ...(typeof rest.role === "string" ? { role } : {}), ...(activity ? { activity } : {}), sigOk } } satisfies Live;
+          return {
+            _tag: "Presence",
+            presence: { ...fields, ...(typeof rest.role === "string" ? { role } : {}), ...(activity ? { activity } : {}), ...(isReach(reach) ? { reach } : {}), sigOk },
+          } satisfies Live;
         }
       }
       return null;

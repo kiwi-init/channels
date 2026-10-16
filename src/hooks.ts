@@ -89,6 +89,10 @@ export async function holdListening(alias: string, as: string): Promise<HeldList
   return held;
 }
 
+export async function holdSession(alias: string, as: string): Promise<HeldListener> {
+  return holdListener(heldFor(alias, as, "session", here().session ?? null));
+}
+
 function legacySlotHeld(alias: string, as: string, session: string): boolean {
   const file = join(home(), "listen-hooks", `${encodeURIComponent(alias)}.${encodeURIComponent(as)}.${encodeURIComponent(session)}`);
   try {

@@ -20,12 +20,13 @@ import type { Socket, Subprocess } from "bun";
 // The channel stack (client.ts) loads lazily in seatFor, where the multiplex needs it: pairing,
 // hello/adopt and the socket itself never touch it, so `kiwi pair` works without it.
 import type { Channel, PresenceFields } from "./client.ts";
-import type { Activity, Message } from "./protocol.ts";
+import type { Activity, Message, Reach } from "./protocol.ts";
 import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity, saveAccess, type Config, type SeatRecord } from "./config.ts";
 import { withExchangeKey } from "./identity.ts";
 import { loadMachine, newMachine, saveMachine, type MachineFile } from "./machine.ts";
 import { MAILBOX_TTL_MS, MailboxError, askToPair, openMailbox, readPairAnswer, readPairCode } from "./mailbox.ts";
 import { readMachineCert, type MachineCert } from "./person.ts";
+import { pidAlive } from "./seats.ts";
 import { VERSION } from "./version.ts";
 import { viaOf, wakeArgv, wakeKey, wakePath, wakePrompt, type WakeCommand, type WakePath, type WakeVia } from "./wake.ts";
 
@@ -114,7 +115,7 @@ export interface DaemonWake {
   ok: boolean;
 }
 
-export type ListenerKind = "listen" | "hook";
+export type ListenerKind = "listen" | "hook" | "session";
 
 export interface DaemonListener {
   channel: string;
@@ -134,7 +135,7 @@ function readListener(x: unknown): DaemonListener | null {
   const r = x as Record<string, unknown>;
   const channel = optionalText(r.channel);
   const agent = optionalText(r.agent ?? r.as);
-  if (!channel || !agent || (r.kind !== "listen" && r.kind !== "hook")) return null;
+  if (!channel || !agent || (r.kind !== "listen" && r.kind !== "hook" && r.kind !== "session")) return null;
   return {
     channel,
     agent,
@@ -153,6 +154,7 @@ export interface DaemonSeat {
   subscribers: number;
   read: DaemonRead | null;
   wake: { on: boolean; path: WakePath; last: DaemonWake | null };
+  reach: Reach | null;
 }
 
 interface Seat {
@@ -164,6 +166,7 @@ interface Seat {
   subs: Set<Sub>;
   head: number;
   activity: Activity | undefined;
+  reach: Reach | null;
   activityTimer: ReturnType<typeof setInterval> | null;
   announce: (() => void) | null;
   beacon: ReturnType<typeof setInterval> | null;
@@ -220,6 +223,15 @@ export function activityEnv(record: SeatRecord, base: Env): Env | null {
     case undefined:
       return null;
   }
+}
+
+export type Attached = "listener" | "session" | "none";
+
+export function reachOf(attached: Attached, record: SeatRecord | null, activity: Activity | undefined, alive: (pid: number) => boolean = pidAlive): Reach {
+  if (attached === "listener") return "listening";
+  if (attached === "session") return "running";
+  if (record?.pid) return alive(record.pid) ? "running" : "unreachable";
+  return record?.harness === "grok" && activity?.state === "working" ? "running" : "unreachable";
 }
 
 const readKey = (alias: string, agent: string): string => `${alias}\u0000${agent}`;
@@ -336,7 +348,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
 
   const fieldsOf = (seat: Seat): PresenceFields => {
     const read = reads.get(readKey(seat.alias, seat.agent));
-    return { client: "daemon", ...(seat.activity ? { activity: seat.activity } : {}), ...(read ? { readAt: read.at } : {}), ...(seat.wakeVia ? { wake: seat.wakeVia } : {}) };
+    return { client: "daemon", ...(seat.activity ? { activity: seat.activity } : {}), ...(seat.reach ? { reach: seat.reach } : {}), ...(read ? { readAt: read.at } : {}), ...(seat.wakeVia ? { wake: seat.wakeVia } : {}) };
   };
 
   const pathOf = async (cfg: Config, alias: string, agent: string): Promise<WakePath> => {
@@ -344,16 +356,24 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     return wakePath(seatRecordFor(cfg, alias, agent), listenHooksInstalled());
   };
 
-  const refreshActivity = async (seat: Seat): Promise<void> => {
+  const attachedTo = (seat: Seat): Attached => {
+    const held = [...conns].filter((c) => !c.dead).flatMap((c) => [...c.held].filter((l) => l.channel === seat.alias && l.agent === seat.agent));
+    if (seat.subs.size > 0 || held.some((l) => l.kind !== "session")) return "listener";
+    return held.length ? "session" : "none";
+  };
+
+  const refreshActivity = async (seat: Seat, force = false): Promise<void> => {
     const cfg = loadConfig();
     const record = seatRecordFor(cfg, seat.alias, seat.agent);
     const env = record ? activityEnv(record, process.env) : null;
     const { harnessActivity } = await import("./harness.ts");
     const now = env ? await harnessActivity(env) : undefined;
     const via = wakeOn(cfg, seat.alias, seat.agent) ? viaOf(await pathOf(cfg, seat.alias, seat.agent)) : null;
-    if (JSON.stringify(now) === JSON.stringify(seat.activity) && via === seat.wakeVia) return;
+    const reach = reachOf(attachedTo(seat), record, now);
+    if (!force && JSON.stringify(now) === JSON.stringify(seat.activity) && via === seat.wakeVia && reach === seat.reach) return;
     seat.activity = now;
     seat.wakeVia = via;
+    seat.reach = reach;
     seat.announce?.();
   };
 
@@ -450,6 +470,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       subscribers: s.subs.size,
       read: reads.get(readKey(s.alias, s.agent)) ?? null,
       wake: { on: wakeOn(cfg, s.alias, s.agent), path: await pathOf(cfg, s.alias, s.agent), last: s.lastWake },
+      reach: s.reach,
     };
   };
 
@@ -508,16 +529,22 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
   };
 
+  const reachMoved = (alias: string, agent: string): void => {
+    for (const seat of seats.values()) if (seat.alias === alias && seat.agent === agent && seat.announce) void refreshActivity(seat).catch(() => {});
+  };
+
   const killConn = (conn: ConnState): void => {
     if (conn.dead) return;
     conn.dead = true;
     conns.delete(conn);
     for (const sub of [...conn.subs]) dropSub(sub);
+    for (const l of conn.held) reachMoved(l.channel, l.agent);
   };
 
   const dropSub = (sub: Sub): void => {
     sub.conn.subs.delete(sub);
     sub.seat.subs.delete(sub);
+    reachMoved(sub.seat.alias, sub.seat.agent);
   };
 
   const closeSeat = (seat: Seat, error: string): void => {
@@ -572,7 +599,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     if (seats.get(seat.key) !== seat || seat.ctl.signal.aborted) return;
     seat.mark = mark;
     seat.announce = () => void presence(fieldsOf(seat)).catch(() => {});
-    seat.announce();
+    void refreshActivity(seat, true).catch(() => seat.announce?.());
     stopBeacon(seat);
     seat.beacon = setInterval(() => seat.announce?.(), beaconMs);
     beacons++;
@@ -626,6 +653,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         subs: new Set(),
         head,
         activity: undefined,
+        reach: null,
         activityTimer: null,
         announce: null,
         beacon: null,
@@ -698,6 +726,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     const sub: Sub = { id, cursor, conn, seat };
     seat.subs.add(sub);
     conn.subs.add(sub);
+    reachMoved(seat.alias, seat.agent);
     sendLine(conn, JSON.stringify({ id, ok: true, stream: true, head: seat.head, channel, agent: as }));
     try {
       const { messages } = await seat.ch.history(cursor);
@@ -836,7 +865,10 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           if (!l) throw new Error('hold needs {"channel", "as", "kind": "listen" or "hook", "cwd"?, "harness"?, "session"?, "pid"?}');
           const others = [...conns].filter((c) => c !== conn && !c.dead).flatMap((c) => [...c.held]);
           const taken = l.kind === "hook" && others.some((h) => h.kind === "hook" && h.channel === l.channel && h.agent === l.agent && h.session === l.session);
-          if (!taken) conn.held.add(l);
+          if (!taken) {
+            conn.held.add(l);
+            reachMoved(l.channel, l.agent);
+          }
           sendLine(conn, JSON.stringify({ id, ok: true, held: !taken }));
           break;
         }

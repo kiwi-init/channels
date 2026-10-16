@@ -187,7 +187,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     tool(() =>
       Effect.gen(function* () {
         const [{ messages, state }, online] = yield* Effect.all([s.state(), s.who()], { concurrency: "unbounded" });
-        const on = new Map([...online].map(([n, p]) => [n, { client: p.client, role: p.role, ...(p.readAt === undefined ? {} : { readAt: p.readAt }), ...(isWakeVia(p.wake) ? { wake: p.wake } : {}) }]));
+        const on = new Map([...online].map(([n, p]) => [n, { client: p.client, role: p.role, ...(p.reach ? { reach: p.reach } : {}), ...(p.readAt === undefined ? {} : { readAt: p.readAt }), ...(isWakeVia(p.wake) ? { wake: p.wake } : {}) }]));
         return formatStatus({ alias: s.alias, me: s.me, state, online: on, unread: yield* s.unreadCount(state, messages) });
       }),
     ),
@@ -584,6 +584,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
   yield* Effect.promise(() => server.connect(new StdioServerTransport()));
   // Say what this agent runs on, so people can see it. In the background: the harness is waiting on the handshake.
   yield* Effect.forkDetach(Effect.ignoreCause(s.refreshCard(detectCard())));
+  yield* Effect.forkDetach(Effect.ignoreCause(Effect.promise(() => import("./hooks.ts").then(({ holdSession }) => holdSession(s.alias, s.me)))));
   // An MCP server lives exactly as long as its client: exit when stdin closes,
   // so a crashed or killed agent never leaves an orphaned listener behind.
   const bye = () => process.exit(0);
