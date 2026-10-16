@@ -8,7 +8,7 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { randomBytes } from "node:crypto";
-import { appendFileSync, chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { BlobMemory, RecordMemory } from "./client.ts";
@@ -522,22 +522,58 @@ export const fileRecordMemory = {
 
 const blobDir = (room: string) => join(home(), "cache", `${safe(room)}.blobs`);
 
-const fileBlobMemory: BlobMemory = {
-  get(room, id) {
-    if (!BLOB_ID_RE.test(id)) return null;
-    try {
-      return new Uint8Array(readFileSync(join(blobDir(room), id)));
-    } catch {
-      return null;
-    }
-  },
-  set(room, id, blob) {
-    if (!BLOB_ID_RE.test(id)) return;
-    try {
-      writePrivate(join(blobDir(room), id), blob);
-    } catch {}
-  },
-};
+export const BLOB_CACHE_BYTES = 128 * 1024 ** 2;
+
+function trimBlobs(dir: string, most: number): void {
+  const files = readdirSync(dir)
+    .filter((f) => BLOB_ID_RE.test(f))
+    .flatMap((f) => {
+      try {
+        const s = statSync(join(dir, f));
+        return [{ path: join(dir, f), size: s.size, used: s.mtimeMs }];
+      } catch {
+        return [];
+      }
+    });
+  let total = files.reduce((n, f) => n + f.size, 0);
+  if (total <= most) return;
+  files.sort((a, b) => a.used - b.used);
+  for (const f of files) {
+    if (total <= most) return;
+    rmSync(f.path, { force: true });
+    total -= f.size;
+  }
+}
+
+export function fileBlobs(most = BLOB_CACHE_BYTES): BlobMemory {
+  return {
+    get(room, id) {
+      if (!BLOB_ID_RE.test(id)) return null;
+      const path = join(blobDir(room), id);
+      try {
+        const blob = new Uint8Array(readFileSync(path));
+        const now = new Date();
+        utimesSync(path, now, now);
+        return blob;
+      } catch {
+        return null;
+      }
+    },
+    set(room, id, blob) {
+      if (!BLOB_ID_RE.test(id)) return;
+      try {
+        writePrivate(join(blobDir(room), id), blob);
+        trimBlobs(blobDir(room), most);
+      } catch {}
+    },
+    drop(room, id) {
+      if (!BLOB_ID_RE.test(id)) return;
+      rmSync(join(blobDir(room), id), { force: true });
+    },
+  };
+}
+
+const fileBlobMemory = fileBlobs();
 
 function cachePath(roomId: string): string {
   return join(home(), "cache", `${roomId}.jsonl`);

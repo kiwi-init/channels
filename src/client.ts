@@ -1254,7 +1254,11 @@ export class Channel {
         Effect.mapError(gone),
         Effect.catchIf(
           (err) => err instanceof RelayError && err.status === 404,
-          () => Effect.succeed(null),
+          () =>
+            Effect.sync(() => {
+              blobMemory.drop(this.roomId, ref.id);
+              return null;
+            }),
         ),
       );
       if (!blob) return null;
@@ -1919,6 +1923,7 @@ export function keepRecordsIn(memory: RecordMemory): void {
 export interface BlobMemory {
   get(room: string, id: string): Uint8Array<ArrayBuffer> | null;
   set(room: string, id: string, blob: Uint8Array<ArrayBuffer>): void;
+  drop(room: string, id: string): void;
 }
 const blobsInProcess = new Map<string, Uint8Array<ArrayBuffer>>();
 let blobMemory: BlobMemory = {
@@ -1928,6 +1933,7 @@ let blobMemory: BlobMemory = {
     blobsInProcess.set(id, blob);
     while (blobsInProcess.size > 64) blobsInProcess.delete(blobsInProcess.keys().next().value!);
   },
+  drop: (_room, id) => void blobsInProcess.delete(id),
 };
 export function keepBlobsIn(memory: BlobMemory): void {
   blobMemory = memory;

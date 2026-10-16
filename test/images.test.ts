@@ -1,12 +1,13 @@
 // Message images are the same raster list as icons. SVG is refused on send and dropped on receive.
 
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadImages } from "../src/attach.ts";
 import { signRequest } from "../src/auth.ts";
 import { Channel, keepBlobsIn } from "../src/client.ts";
+import { fileBlobs } from "../src/config.ts";
 import { seal } from "../src/crypto.ts";
 import { generateIdentity, sign, type Identity } from "../src/identity.ts";
 import { MAX_BLOB_BYTES, PROTOCOL_VERSION, type ImageAttachment } from "../src/protocol.ts";
@@ -107,7 +108,7 @@ test("the cli refuses an svg file", () => {
 });
 
 test("with image refs on, an image travels as a reference and reads back byte for byte", async () => {
-  keepBlobsIn({ get: () => null, set: () => {} });
+  keepBlobsIn({ get: () => null, set: () => {}, drop: () => {} });
   const raw = crypto.getRandomValues(new Uint8Array(4096));
   const img: ImageAttachment = { name: "r.png", mime: "image/png", data: Buffer.from(raw).toString("base64") };
   const inline = await memberCh.send("inline still", { imgs: [img] });
@@ -129,7 +130,7 @@ test("with image refs on, an image travels as a reference and reads back byte fo
 
 test("a damaged image in the local cache is fetched again from the relay", async () => {
   const kept = new Map<string, Uint8Array<ArrayBuffer>>();
-  keepBlobsIn({ get: (_, id) => kept.get(id) ?? null, set: (_, id, blob) => void kept.set(id, blob) });
+  keepBlobsIn({ get: (_, id) => kept.get(id) ?? null, set: (_, id, blob) => void kept.set(id, blob), drop: (_, id) => void kept.delete(id) });
   const raw = crypto.getRandomValues(new Uint8Array(2048));
   const img: ImageAttachment = { name: "c.png", mime: "image/png", data: Buffer.from(raw).toString("base64") };
   await ownerCh.setImageRefs(true);
@@ -174,4 +175,41 @@ test("the relay refuses an image bigger than the cap", async () => {
     (await fetch(`${relay}/v1/rooms/${memberCh.roomId}/blobs/${id}`, { method: "PUT", headers, body: new Uint8Array(MAX_BLOB_BYTES + 1) })).status;
   expect(await put({})).toBe(401);
   expect(await put({ authorization: `Bearer ${await signRequest(member, memberCh.roomId, "PUT", `/blobs/${id}`, "")}` })).toBe(413);
+});
+
+test("a cached image the relay no longer has is removed from the cache", async () => {
+  const gone = "0".repeat(64);
+  const kept = new Map<string, Uint8Array<ArrayBuffer>>([[gone, new Uint8Array(10)]]);
+  keepBlobsIn({ get: (_, id) => kept.get(id) ?? null, set: (_, id, blob) => void kept.set(id, blob), drop: (_, id) => void kept.delete(id) });
+  const img: ImageAttachment = { name: "g.png", mime: "image/png", ref: { id: gone, key: "A".repeat(43), size: 2048 } };
+  expect(await ownerCh.image(img)).toBeNull();
+  expect(kept.has(gone)).toBe(false);
+});
+
+test("the local image cache keeps a channel under its cap and removes the least recently used first", () => {
+  const was = process.env.KIWI_HOME;
+  const home = mkdtempSync(join(tmpdir(), "kiwi-blobs-"));
+  process.env.KIWI_HOME = home;
+  try {
+    const blobs = fileBlobs(250);
+    const room = "f".repeat(32);
+    const [a, b, c] = ["a", "b", "c"].map((x) => x.repeat(64)) as [string, string, string];
+    const path = (id: string) => join(home, "cache", `${room}.blobs`, id);
+    blobs.set(room, a, new Uint8Array(100));
+    blobs.set(room, b, new Uint8Array(100));
+    const now = Date.now() / 1000;
+    utimesSync(path(a), now - 100, now - 100);
+    utimesSync(path(b), now - 50, now - 50);
+    expect(blobs.get(room, a)?.length).toBe(100);
+    blobs.set(room, c, new Uint8Array(100));
+    expect(existsSync(path(a))).toBe(true);
+    expect(existsSync(path(b))).toBe(false);
+    expect(existsSync(path(c))).toBe(true);
+    blobs.drop(room, a);
+    expect(existsSync(path(a))).toBe(false);
+  } finally {
+    if (was === undefined) delete process.env.KIWI_HOME;
+    else process.env.KIWI_HOME = was;
+    rmSync(home, { recursive: true, force: true });
+  }
 });
