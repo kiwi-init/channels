@@ -26,6 +26,7 @@ import {
   idleExpired,
   missingFingerprint,
   onClientFrame,
+  wantsEcho,
   parseRoomPath,
   takesPresence,
   touch,
@@ -142,7 +143,7 @@ export class Channel extends DurableObject<Env> {
         const { 0: client, 1: server } = new WebSocketPair();
         this.ctx.acceptWebSocket(server);
         const reads = wantsReads(url);
-        server.serializeAttachment({ pk, room: route.roomId, reads, ...(takesPresence(url) ? {} : { presence: false }) });
+        server.serializeAttachment({ pk, room: route.roomId, reads, ...(takesPresence(url) ? {} : { presence: false }), ...(wantsEcho(url) ? {} : { echo: false }) });
         for (const f of runRoomSync(this.relay, db, welcomeFrames(Number(url.searchParams.get("since") ?? 0) || 0, reads))) server.send(f);
         await this.apply({ expireAt: runRoomSync(this.relay, db, touch) ?? undefined });
         return new Response(null, { status: 101, webSocket: client, headers: wsHeaders(req) });
@@ -156,8 +157,8 @@ export class Channel extends DurableObject<Env> {
   }
 
   override async webSocketMessage(ws: WebSocket, data: string | ArrayBuffer): Promise<void> {
-    const { room, pk } = ws.deserializeAttachment() as { room: string; pk: string };
-    const fx = runRoomSync(this.relay, this.store(room), onClientFrame(typeof data === "string" ? data : new TextDecoder().decode(data), pk));
+    const { room, pk, echo } = ws.deserializeAttachment() as { room: string; pk: string; echo?: boolean };
+    const fx = runRoomSync(this.relay, this.store(room), onClientFrame(typeof data === "string" ? data : new TextDecoder().decode(data), pk, echo !== false));
     if (fx.reply) ws.send(fx.reply);
     await this.apply(fx, ws);
   }
@@ -171,6 +172,7 @@ export class Channel extends DurableObject<Env> {
   private async apply(fx: Effects, sender?: WebSocket): Promise<void> {
     const sockets = this.ctx.getWebSockets();
     for (const f of fx.broadcast ?? []) for (const ws of sockets) send(ws, f);
+    if (fx.others) for (const ws of sockets) if (ws !== sender) send(ws, fx.others);
     if (fx.ephemeral) {
       for (const ws of sockets) if (ws !== sender && (ws.deserializeAttachment() as { presence?: boolean } | null)?.presence !== false) send(ws, fx.ephemeral);
     }

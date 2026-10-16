@@ -71,7 +71,7 @@ export type ServerFrame =
   | ({ t: "msg" } & Envelope)
   | { t: "eph"; iv: string; ct: string }
   | { t: "ready"; head: number; more: boolean }
-  | { t: "ack"; id: string; seq: number }
+  | { t: "ack"; id: string; seq: number; ts?: number }
   | { t: "err"; error: string; id?: string }
   /** Membership channels: the member list changed; refetch it. */
   | { t: "roster" }

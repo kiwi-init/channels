@@ -29,6 +29,7 @@ import {
   idleExpired,
   missingFingerprint,
   onClientFrame,
+  wantsEcho,
   parseRoomPath,
   takesPresence,
   touch,
@@ -48,6 +49,7 @@ interface SocketData {
   since: number;
   presence: boolean;
   reads: boolean;
+  echo: boolean;
 }
 
 /** The static site's files, and the sign-in origins its page may call besides this relay. */
@@ -170,6 +172,7 @@ export function startRelay(
   const apply = (roomId: string, fx: Effects, sender?: ServerWebSocket<SocketData>) => {
     const room = sockets.get(roomId) ?? new Set();
     for (const f of fx.broadcast ?? []) for (const ws of room) ws.send(f);
+    if (fx.others) for (const ws of room) if (ws !== sender) ws.send(fx.others);
     if (fx.ephemeral) for (const ws of room) if (ws !== sender && ws.data.presence) ws.send(fx.ephemeral);
     for (const f of fx.readers ?? []) for (const ws of room) if (ws.data.reads) ws.send(f);
     if (fx.disconnect) for (const ws of room) if (ws.data.pk === fx.disconnect.pk) ws.close(CLOSE_REMOVED, GONE_WORDS[fx.disconnect.how]);
@@ -251,7 +254,7 @@ export function startRelay(
             }
             const pk = await runRoom(relay, db, authenticateSocket(req));
             const since = Number(url.searchParams.get("since") ?? 0) || 0;
-            if (server.upgrade(req, { data: { roomId: route.roomId, pk, since, presence: takesPresence(url), reads: wantsReads(url) }, headers: wsHeaders(req) })) return undefined;
+            if (server.upgrade(req, { data: { roomId: route.roomId, pk, since, presence: takesPresence(url), reads: wantsReads(url), echo: wantsEcho(url) }, headers: wsHeaders(req) })) return undefined;
             return withCors(errorResponse(new UpdateRequired({ message: "expected websocket" })));
           }
           const result = await onHttp(relay, db, req, route.rest);
@@ -297,7 +300,7 @@ export function startRelay(
         const db = storeFor(ws.data.roomId, false);
         let fx: Effects;
         try {
-          fx = runRoomSync(relay, db, onClientFrame(raw, ws.data.pk));
+          fx = runRoomSync(relay, db, onClientFrame(raw, ws.data.pk, ws.data.echo));
         } finally {
           doneWith(db);
         }
