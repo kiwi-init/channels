@@ -18,7 +18,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join as joinPath, join } from "node:path";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { AgentLive, openSession, type Agent, type AgentSession, type Delivery } from "../agent.ts";
+import { AgentLive, oneLook, openSession, type Agent, type AgentSession, type Delivery } from "../agent.ts";
 import { loadImages, saveImages } from "../attach.ts";
 import { Channel, ChannelGone, goneText, reason, RelayError } from "../client.ts";
 import { Cursor, DEFAULT_RELAY, home, Keystore, loadConfig, updateConfig, type ChannelConfig } from "../config.ts";
@@ -824,7 +824,7 @@ const commands: Record<string, Command> = {
    * to the same recipients as ever (the `reply` alias is the one that answers #N's sender).
    */
   send: () =>
-    Effect.gen(function* () {
+    oneLook(Effect.gen(function* () {
       if (opt.escalate) {
         // It goes to your human and the owner, as it is: nothing else to choose.
         const extra = (["to", "image", "kind", "room", "ask", "wait"] as const).filter((f) => opt[f] !== undefined);
@@ -855,7 +855,7 @@ const commands: Record<string, Command> = {
       const replies = yield* s.awaitReplies(seq, head, parseDuration(opt.wait));
       if (!replies.length) return yield* die(`no answer to #${seq} within ${opt.wait}; replies will still arrive when you listen`, 2);
       for (const r of replies) out(render(r));
-    }),
+    })),
 
   /** `kiwi ask`: a question, the same as send --ask (in the task you're doing, unless you say where). */
   ask: () => {
@@ -865,23 +865,23 @@ const commands: Record<string, Command> = {
   },
 
   reply: () =>
-    Effect.gen(function* () {
+    oneLook(Effect.gen(function* () {
       const s = yield* session();
       const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die('usage: kiwi reply N "text"'));
       const body = yield* text(2);
       if (!body.trim()) return yield* die("empty reply");
       const imgs = yield* images;
       out(`sent #${yield* s.reply(seq, body, (opt.kind ?? "msg") as Kind, imgs)}`);
-    }),
+    })),
 
   react: () =>
-    Effect.gen(function* () {
+    oneLook(Effect.gen(function* () {
       const s = yield* session();
       const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi react N 👍 (or --clear)"));
       const emoji = opt.clear ? null : (args[2]?.trim() || (yield* die("usage: kiwi react N 👍 (or --clear)")));
       yield* s.react(seq, emoji);
       out(emoji ? `reacted ${emoji} to #${seq}` : `took back your reaction on #${seq}`);
-    }),
+    })),
 
   save: () =>
     Effect.gen(function* () {
@@ -1109,7 +1109,7 @@ const commands: Record<string, Command> = {
     }),
 
   task: () =>
-    Effect.gen(function* () {
+    oneLook(Effect.gen(function* () {
       const s = yield* session();
       // kiwi task alone: the board.
       if (!args[1]) return yield* commands.tasks!();
@@ -1165,7 +1165,7 @@ const commands: Record<string, Command> = {
       else return yield* die(`unknown task command "${sub}"`);
       const t = state.tasks.get(id)!;
       out(`${taskId(id)} ${taskStateWord(t)}${t.owner ? ` @${t.owner}` : ""}: ${inlineText(t.title, 200)}`);
-    }),
+    })),
 
   tasks: () =>
     Effect.gen(function* () {
