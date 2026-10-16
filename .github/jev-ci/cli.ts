@@ -40,7 +40,8 @@ async function planInCI(): Promise<Plan> {
     const fork = git(values.repo, ["merge-base", "HEAD^1", "HEAD^2"]).trim()
     return plan({ repo: values.repo, base: fork, head, config, passed: await passed() })
   }
-  if (process.env.GITHUB_EVENT_NAME !== "pull_request") return runAll(config, `${process.env.GITHUB_EVENT_NAME} run: everything runs`, hashes)
+  const event = process.env.GITHUB_EVENT_NAME
+  if (event !== "pull_request") return runAll(config, `${event} run: everything runs`, hashes, event)
   // The checkout is GitHub's merge of the PR into its base: its first parent is the base.
   const base = git(values.repo, ["rev-parse", "HEAD^1"]).trim()
   return plan({ repo: values.repo, base, head, config, passed: await passed() })
@@ -48,7 +49,7 @@ async function planInCI(): Promise<Plan> {
 
 if (positionals[0] === "plan" && values.github) {
   // Fail open: if planning breaks, everything runs.
-  const result = await planInCI().catch((e) => (note(e), runAll(config, `planner failed, so everything runs: ${(e as Error).message}`)))
+  const result = await planInCI().catch((e) => (note(e), runAll(config, `planner failed, so everything runs: ${(e as Error).message}`, {}, process.env.GITHUB_EVENT_NAME)))
   const compact = result.decisions.map(({ job, run, layer, reason, p, wouldSkip }) => ({ job, run, layer, reason, p, wouldSkip }))
   setOutput("run", JSON.stringify(Object.fromEntries(result.decisions.map((d) => [d.job, d.run]))))
   setOutput("hashes", JSON.stringify(result.hashes))
