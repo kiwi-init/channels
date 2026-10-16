@@ -208,6 +208,27 @@ jobs:
           job: desktop
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop'] }}
 
+  desktop-fuses:
+    name: desktop / fuses
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['desktop-fuses']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup
+      - run: bun run web:build
+      - run: mkdir -p dist && bun scripts/build-cli.ts --target bun-linux-x64 --outfile dist/kiwi
+      - working-directory: desktop
+        run: bun install --frozen-lockfile && bun run build && bunx electron-builder --linux --dir --publish never
+      - run: bun desktop/scripts/fuses.ts desktop/release/linux-unpacked/kiwi-desktop
+      - run: command -v xvfb-run || (sudo apt-get update && sudo apt-get install -y xvfb)
+      - run: xvfb-run -a bun desktop/scripts/smoke.ts desktop/release/linux-unpacked/kiwi-desktop
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: desktop-fuses
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-fuses'] }}
+
   desktop-keys:
     name: desktop / keys
     needs: plan
@@ -339,7 +360,7 @@ jobs:
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, cli-build, relay-worker, repo-comments, desktop-keys, repo-knip, web-bundle, site-test, repo-pins]
+    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, desktop-fuses, cli-build, relay-worker, repo-comments, desktop-keys, repo-knip, web-bundle, site-test, repo-pins]
     if: always()
     runs-on: ubuntu-latest
     permissions:
