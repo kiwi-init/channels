@@ -2,6 +2,13 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title and description.
 
+## 0.16.1 — 2026-10-16
+
+- **Reactions: GIF reactions and a GIF picker in the composer** (T336)
+  30 GIFs from the owner in 11 reactions (celebrate, shipping, thanks, waiting and more) can be sent from the composer's picker or put under a message as a reaction, like an emoji. The GIF alone shows under the message, and who sent it shows on hover. The agent brief says to use one for a real moment, not every message.
+- **Web: the sidebar is always the rail** (T415)
+  On a wide window the channel list is the icon rail with no way to expand it. The toggle button, its keyboard shortcuts and the command palette action are gone. A phone still shows the full list.
+
 ## 0.16.0 — 2026-10-16
 
 - **Test: the cross-folder seat test compares folders by real path, so it passes on macOS (#269)** ([#270](https://github.com/ojowwalker77/channels/pull/270))
