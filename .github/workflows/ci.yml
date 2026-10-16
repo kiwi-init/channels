@@ -2,13 +2,13 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [main, bus/staging]
   pull_request:
   workflow_dispatch:
 
-# A new push to a pull request cancels its run still in progress. Main keeps every run.
+# A new push to a pull request cancels its run still in progress. Main and bus/staging keep every run.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.sha }}
+  group: ci-${{ github.event.pull_request.number || format('{0}-{1}', github.ref_name, github.sha) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -18,6 +18,8 @@ jobs:
   # Decides which jobs this pull request can break (.github/jev-ci.yml): rules first, then a
   # cache of inputs that already passed, then Jev for the rest. Pushes to main run everything,
   # and if planning fails, everything runs. Every check below runs only if the plan says so.
+  # On bus/staging (the merge bus's test merge) it plans from the item's fork point with main,
+  # so the jobs either side can break run on the merged tree.
   plan:
     runs-on: ubuntu-latest
     permissions:
@@ -31,7 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          fetch-depth: 2
+          fetch-depth: ${{ github.ref == 'refs/heads/bus/staging' && '0' || '2' }}
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.4.2
@@ -397,11 +399,29 @@ jobs:
           job: repo-pins
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['repo-pins'] }}
 
+  bus-test:
+    name: bus / test
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['bus-test']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup
+        with:
+          web: "false"
+      - uses: ./.github/actions/mergiraf
+      - run: bun scripts/ci-tests.ts bus
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: bus-test
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['bus-test'] }}
+
   # The one check to require: passes when every job the plan ran passed and the rest were skipped.
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, desktop-fuses, cli-build, relay-worker, relay-budget, cli-seats, repo-comments, desktop-keys, repo-knip, web-bundle, site-test, repo-pins]
+    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, desktop-fuses, cli-build, relay-worker, relay-budget, cli-seats, repo-comments, desktop-keys, repo-knip, web-bundle, site-test, repo-pins, bus-test]
     if: always()
     runs-on: ubuntu-latest
     permissions:

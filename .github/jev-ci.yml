@@ -32,14 +32,47 @@ summarize_files: ["bun.lock", "web/bun.lock", "desktop/bun.lock"]
 max_jev_lines: 800
 max_file_lines: 300
 
+# The merge bus (.github/bus, .github/workflows/bus.yml): agents push bus/<task>, and the bus merges
+# each onto main, resolves what it can, tests the exact tree on bus/staging and fast-forwards main.
+# Jev only sets the numbers below; it never approves a merge.
+bus:
+  # Resolution tiers, cheapest first. A hunk none of them resolves bounces the item to its author.
+  ladder: [git, mergiraf, keep-both, haiku]
+  # A pull request joins the bus with this label, added by someone with one of these roles or listed in maintainers. Never a fork.
+  label: queue
+  label_roles: [admin, maintain]
+  maintainers: [ojowwalker77]
+  on_behalf_of: Jonatas Walker
+  # Keep both sides of a hunk whose base was empty when Jev's keep_both is at or above this.
+  keep_both: 0.7
+  # A model's resolution goes up a tier (or bounces) when Jev's intent_shift is at or above this.
+  intent_shift: 0.35
+  # Take a queued branch ahead of the oldest when Jev's needs_order says the oldest needs it first.
+  needs_order: 0.6
+  # A red staging run is rerun when Jev's unrelated_failure is at or above this, at most `reruns` times.
+  unrelated_failure: 0.7
+  reruns: 1
+  haiku: { model: claude-haiku-5-5, samples: 3, effort: medium }
+  opus: { model: claude-opus-5-5, samples: 1, effort: high }
+  context_lines: 40
+  max_hunk_lines: 200
+  lockfiles: ["bun.lock", "web/bun.lock", "desktop/bun.lock"]
+  # Typechecks for a merged tree, each run when the merge touches a file it matches.
+  tsc:
+    - { when: ["src/**", "test/**", ".github/bus/**", ".github/jev-ci/**"], run: [bunx, tsc, --noEmit] }
+    - { when: ["src/relay/**", "src/protocol.ts"], run: [bunx, tsc, --noEmit, -p, tsconfig.worker.json] }
+    - { when: ["web/**", "src/**"], dir: web, run: [bunx, tsc, -b] }
+    - { when: ["desktop/**"], dir: desktop, run: [bunx, tsc, --noEmit] }
+
 jobs:
   core-types:
     jev: false
     name: core / types
-    inputs: ["src/**", "test/**", "desktop/src/move.ts", "desktop/src/open.ts", "desktop/src/signer.ts", "desktop/src/update-asset.ts", "desktop/src/daemon-client.ts", "desktop/src/guard.ts", "desktop/src/bridge.ts"]
+    inputs: ["src/**", "test/**", ".github/bus/**", ".github/jev-ci/**", "desktop/src/move.ts", "desktop/src/open.ts", "desktop/src/signer.ts", "desktop/src/update-asset.ts", "desktop/src/daemon-client.ts", "desktop/src/guard.ts", "desktop/src/bridge.ts"]
     always: ["tsconfig.json", "tsconfig.worker.json", "package.json", "bun.lock"]
     description: >-
-      Runs tsc --noEmit over src/ (the kiwi CLI, daemon, client, relay and MCP server) and test/,
+      Runs tsc --noEmit over src/ (the kiwi CLI, daemon, client, relay and MCP server) and test/
+      (which also compiles the merge bus in .github/bus and the jev-ci planner it imports),
       and again over the Cloudflare worker (src/relay/worker.ts, src/relay/room.ts,
       src/protocol.ts) with the Workers types. Fails on any TypeScript type error in those files
       or in what they import, including a changed export, signature or type.
@@ -281,3 +314,16 @@ jobs:
       web/src/components/lazy.tsx (markdown, settings, computers, the palette and the side panels)
       is loaded after first paint and doesn't count; a new static import of it, or a new heavy
       dependency on the first screen, can push the total over.
+
+  bus-test:
+    name: bus / test
+    inputs: [".github/bus/**", ".github/jev-ci/**", "test/bus-*.test.ts"]
+    always: ["package.json", "bun.lock", "scripts/ci-tests.ts", ".github/actions/mergiraf/**"]
+    description: >-
+      Runs test/bus-*.test.ts against the merge bus in .github/bus, with mergiraf installed: it
+      builds small git repositories with conflicting branches and checks the conflict parser, the
+      resolution patch (which may only replace whole conflicts), the validation checks (markers,
+      parse errors, duplicate class members), the resolution ladder with Jev and Claude stubbed
+      (keep-both thresholds, Haiku sampling and majority, escalation to Opus on abstain, a high
+      intent_shift or a failed typecheck), the tick's queue order and in-flight check, the staging
+      commit's trailers and the symbols an event names. Fails if any of those behaviors change.

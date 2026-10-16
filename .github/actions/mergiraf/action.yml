@@ -1,0 +1,24 @@
+name: mergiraf
+description: >-
+  Installs mergiraf, the syntax-aware merge driver the merge bus runs on *.ts and *.tsx
+  conflicts, from its release archive checked against a pinned SHA-256.
+inputs:
+  version:
+    default: "0.20.0"
+  sha256:
+    default: 4341127da8d1da29eced669fbacc1e5d6e530115098de0b82cc9dc551a1acf37
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        SHA256: ${{ inputs.sha256 }}
+      run: |
+        dir="$RUNNER_TEMP/mergiraf"
+        mkdir -p "$dir"
+        curl -fsSL -o "$dir/mergiraf.tar.gz" "https://codeberg.org/mergiraf/mergiraf/releases/download/v${VERSION}/mergiraf_x86_64-unknown-linux-gnu.tar.gz"
+        echo "${SHA256}  $dir/mergiraf.tar.gz" | sha256sum -c -
+        tar -xzf "$dir/mergiraf.tar.gz" -C "$dir"
+        echo "$dir" >> "$GITHUB_PATH"
+        "$dir/mergiraf" --version
