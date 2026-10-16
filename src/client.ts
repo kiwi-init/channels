@@ -76,6 +76,7 @@ import {
   wellFormedRead,
   type Envelope,
   type Event,
+  type Handoff,
   type ImageAttachment,
   type InlineImage,
   type Kind,
@@ -96,6 +97,7 @@ export interface SendOptions {
   room?: string;
   /** An escalation: a decision handed to people (see Payload.esc). */
   esc?: boolean;
+  handoff?: Handoff;
   /** A chat message in this task's thread (see Payload.task). */
   task?: number;
   /** A chat message to exactly one member, in the pair's direct thread (see Payload.dm). */
@@ -1448,6 +1450,7 @@ export class Channel {
         ...(attached?.length ? { imgs: attached } : {}),
         ...(opts.room && opts.room !== GENERAL_ROOM && !opts.ev ? { room: opts.room } : {}),
         ...(opts.esc && !opts.ev ? { esc: true as const } : {}),
+        ...(opts.esc && opts.handoff && !opts.ev ? { handoff: opts.handoff } : {}),
         ...(opts.task && !opts.ev ? { task: opts.task } : {}),
         ...(opts.dm && !opts.ev && opts.to?.length === 1 ? { dm: true as const } : {}),
         ts: Date.now(),
