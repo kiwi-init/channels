@@ -74,11 +74,10 @@ const shots: string[] = []
 const page = (viewport: { width: number; height: number }) => browser.newPage({ viewport, deviceScaleFactor: 2 })
 const wanted = (name: string) => !only || only.some((w) => name.includes(w))
 
-async function signIn(page: Page, name: string) {
-  await page.getByRole("button", { name: "Sign in" }).first().click()
-  await page.getByRole("textbox", { name: "Name" }).fill(name)
-  await page.getByRole("dialog").getByRole("button", { name: "Sign in" }).click()
-  await page.getByRole("complementary").getByRole("button", { name: new RegExp(name, "i") }).waitFor()
+async function firstRunAs(page: Page, name: string) {
+  await page.getByRole("textbox", { name: "Your name" }).fill(name)
+  await page.getByRole("button", { name: "Continue" }).click()
+  await page.getByRole("complementary").getByRole("button", { name: new RegExp(name, "i") }).first().waitFor()
 }
 
 async function passkey(page: Page) {
@@ -118,7 +117,7 @@ try {
   const owner = await page(WIDE)
   owner.on("pageerror", (e) => console.log(`page error: ${e.message}`))
   await owner.goto(BASE)
-  await signIn(owner, "Jonatas")
+  await firstRunAs(owner, "Jonatas")
   await passkey(owner)
 
   // New is the list's first row.
@@ -130,15 +129,6 @@ try {
   const channel = owner.url()
   const code = decodeURIComponent(new URL(channel).hash.slice(1))
 
-  let opened = false
-  const setup = kiwi(["setup", "--relay", BASE], (out) => {
-    const link = /(http\S+#link=\S+)/.exec(out)?.[1]
-    // Linking seats it nowhere: a pending request is there to shoot.
-    if (link && !opened) (opened = true), void owner.goto(link)
-  })
-  await owner.getByRole("button", { name: "Yes, link it" }).click({ timeout: 20000 })
-  await setup
-  await owner.goto(channel)
   const needs = owner.getByRole("region", { name: "Needs you" })
   /** An agent asks in; the owner compares its code under Needs you and lets it in. */
   const admit = async (args: string[]) => {
@@ -286,7 +276,12 @@ try {
         await owner.getByRole("region", { name: "Needs you" }).getByRole("button", { name: /needs? you/ }).first().click()
       })
       await shoot(owner, tag, "07-details", () => detailsBtn().click(), () => owner.getByRole("button", { name: "Close details" }).click())
-      await shoot(owner, tag, "08-direct", () => convs().getByRole("button", { name: /atlas/ }).first().click(), toChat)
+      await shoot(owner, tag, "08-direct", async () => {
+        await detailsBtn().click()
+        await owner.getByRole("button", { name: "More for atlas" }).click()
+        await owner.getByRole("menuitem", { name: "Message privately" }).click()
+        await convs().getByRole("button", { name: "Back to chat" }).waitFor()
+      }, toChat)
       await shoot(owner, tag, "09-invite", async () => {
         await detailsBtn().click()
         await owner.getByRole("button", { name: "Invite", exact: true }).click()
@@ -329,19 +324,17 @@ try {
       await shoot(owner, tag, "16-add-agent")
 
       // Signed out, and someone opening the invite link who isn't in yet.
-      if (only && !["20-signed-out", "21-join-with-code", "22-invite-preview", "23-signed-in-empty"].some(wanted)) continue
+      if (only && !["20-first-run", "21-join-with-code", "22-invite-preview", "23-signed-in-empty"].some(wanted)) continue
       const out = await page(size)
       await out.goto(BASE)
       await setTheme(out, theme)
-      await shoot(out, tag, "20-signed-out")
-      await shoot(out, tag, "21-join-with-code", () => out.getByRole("main").getByRole("button", { name: "Join with a code" }).click())
-      await out.goto(`${BASE}#${encodeURIComponent(code)}`)
-      await out.getByRole("heading", { name: /invited you to a channel/ }).waitFor({ timeout: 10000 }).catch(() => {})
-      await shoot(out, tag, "22-invite-preview")
-      // Signed in, no channels yet.
-      await out.goto(BASE)
-      await signIn(out, "Pat").catch(() => {})
+      await shoot(out, tag, "20-first-run")
+      await firstRunAs(out, "Pat").catch(() => {})
       await shoot(out, tag, "23-signed-in-empty")
+      await shoot(out, tag, "21-join-with-code", () => out.getByRole("button", { name: "Join with a code" }).first().click())
+      await out.goto(`${BASE}#${encodeURIComponent(code)}`)
+      await out.getByRole("heading", { name: /invited you to a channel|You’re invited to a channel/ }).waitFor({ timeout: 10000 }).catch(() => {})
+      await shoot(out, tag, "22-invite-preview")
       await out.close()
     }
   }
