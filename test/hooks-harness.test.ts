@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, wri
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, updateConfig } from "../src/config.ts";
-import { autoInstallExtraHooks, autoInstallHooks, backgroundTasks, cursorStopFollowup, extraInstalled, grokMonitorListens, hooksListen, hooksStatus, installDetected, installExtra, installHooks, kimiReason, rewakeCapable, stopStyle, uninstallDetected, uninstallExtra, withKimiHooks, withoutKimiHooks } from "../src/hooks.ts";
+import { autoInstallExtraHooks, autoInstallHooks, backgroundTasks, cursorStopFollowup, extraInstalled, grokMonitorListens, hooksListen, hooksStatus, installDetected, installExtra, installHooks, isOurHook, kimiReason, listenHooksInstalled, rewakeCapable, stopStyle, uninstallDetected, uninstallExtra, withKimiHooks, withoutKimiHooks } from "../src/hooks.ts";
 
 const made: string[] = [];
 const prev = new Map<string, string | undefined>();
@@ -480,6 +480,63 @@ test("Grok's Stop input: a monitor is the listener when it runs this seat's list
   expect(grokMonitorListens([{ type: "monitor", text: "kiwi listen --now" }], seat)).toBe(false);
   expect(grokMonitorListens([{ type: "shell", text: "kiwi listen" }], seat)).toBe(false);
   expect(grokMonitorListens([], seat)).toBe(false);
+});
+
+test("Grok's Stop input names a task's type as kind, as Grok 1.0.62 sends it, and type wins when both are there", () => {
+  const tasks = backgroundTasks([
+    { id: "a", kind: "monitor", status: "running", command: "kiwi -c ch --as g listen", description: "kiwi messages" },
+    { id: "b", kind: "shell", type: "monitor", status: "running", command: "tail -f x" },
+    { id: "c", status: "running", command: "no kind" },
+  ]);
+  expect(tasks).toEqual([
+    { type: "monitor", text: "kiwi -c ch --as g listen\nkiwi messages" },
+    { type: "monitor", text: "tail -f x" },
+  ]);
+  expect(grokMonitorListens(tasks!, ["kiwi listen", "kiwi -c ch --as g listen"])).toBe(true);
+});
+
+test("kiwi's hook is recognised by its `hook <event> # kiwi` ending and a program that exists, whatever the program's path", () => {
+  const dir = scratch("hk-ours-");
+  const wrapper = join(dir, "kiwi wrapper's");
+  writeFileSync(wrapper, "#!/bin/sh\n");
+  const quoted = `'${wrapper.replace(/'/g, `'\\''`)}'`;
+  expect(isOurHook(`${quoted} hook listen # kiwi`, "listen")).toBe(true);
+  expect(isOurHook(`${quoted} hook stop # kiwi`, "listen")).toBe(false);
+  expect(isOurHook(`${quoted} hook kimi-stop # kiwi`, "stop")).toBe(false);
+  expect(isOurHook(`${quoted} hook kimi-stop # kiwi`, "kimi-stop")).toBe(true);
+  expect(isOurHook(`'${join(dir, "gone")}' hook listen # kiwi`, "listen")).toBe(false);
+  expect(isOurHook(`${join(dir, "gone")} hook listen # kiwi`, "listen")).toBe(false);
+  expect(isOurHook(" hook listen # kiwi", "listen")).toBe(false);
+  expect(isOurHook(`${quoted} hook listen`, "listen")).toBe(false);
+  expect(isOurHook(undefined, "listen")).toBe(false);
+});
+
+test("Claude Code's and Grok's hooks count as installed through a wrapper, and not when the program is gone", () => {
+  const dir = scratch("hk-wrap-");
+  const claude = scratch("hk-wrap-claude-");
+  const grok = scratch("hk-wrap-grok-");
+  setEnv({ KIWI_HOME: scratch("hk-wrap-home-"), CLAUDE_CONFIG_DIR: claude, KIWI_GROK_DIR: grok });
+  const wrapper = join(dir, "kiwi");
+  writeFileSync(wrapper, "#!/bin/sh\n");
+  const settings = (program: string) => {
+    const cmd = (arg: string) => `'${program}' hook ${arg} # kiwi`;
+    const listen = { hooks: [{ type: "command", command: cmd("listen"), async: true, asyncRewake: true }] };
+    return {
+      hooks: {
+        SessionStart: [{ hooks: [{ type: "command", command: cmd("session-start") }] }, listen],
+        UserPromptSubmit: [{ hooks: [{ type: "command", command: cmd("prompt") }] }, listen],
+        Stop: [{ hooks: [{ type: "command", command: cmd("stop") }] }, listen],
+      },
+    };
+  };
+  writeFileSync(join(claude, "settings.json"), JSON.stringify(settings(wrapper)));
+  mkdirSync(join(grok, "hooks"), { recursive: true });
+  writeFileSync(join(grok, "hooks", "kiwi.json"), JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: `'${wrapper}' hook stop # kiwi` }] }] } }));
+  expect(listenHooksInstalled()).toBe(true);
+  expect(extraInstalled("grok")).toBe(true);
+  rmSync(wrapper);
+  expect(listenHooksInstalled()).toBe(false);
+  expect(extraInstalled("grok")).toBe(false);
 });
 
 test("a Kimi Code Stop reason is the answers' plain text, for stderr", () => {

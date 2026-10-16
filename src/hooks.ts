@@ -306,8 +306,22 @@ export function uninstallHooks(): string {
   return settingsPath();
 }
 
+function hookProgram(command: string): string | null {
+  const quoted = /^'((?:[^']|'\\'')*)'/.exec(command)?.[1];
+  if (quoted !== undefined) return quoted.replace(/'\\''/g, "'");
+  return /^(\S+)/.exec(command)?.[1] ?? null;
+}
+
+export function isOurHook(command: unknown, arg: string): boolean {
+  if (typeof command !== "string") return false;
+  const tail = ` hook ${arg} ${MARK}`;
+  if (!command.endsWith(tail) || command.length === tail.length) return false;
+  const program = hookProgram(command);
+  return !!program && existsSync(program);
+}
+
 function hasHook(s: Settings, event: string, arg: string): boolean {
-  return !!s.hooks?.[event]?.some((x) => x.hooks.some((h) => h.command === hookCommand(arg) && (arg !== LISTEN || h.asyncRewake === true)));
+  return !!s.hooks?.[event]?.some((x) => x.hooks.some((h) => isOurHook(h.command, arg) && (arg !== LISTEN || h.asyncRewake === true)));
 }
 
 /** Ours are all there, and so is the listener when this Claude Code can run it. */
@@ -525,7 +539,7 @@ function stripClaudeShaped(path: string): void {
 function claudeShapedInstalled(path: string, events: Record<string, string>): boolean {
   if (!existsSync(path)) return false;
   const s = readJson(path) as Settings;
-  return Object.entries(events).every(([event, arg]) => s.hooks?.[event]?.some((x) => x.hooks.some((h) => h.command === hookCommand(arg))));
+  return Object.entries(events).every(([event, arg]) => s.hooks?.[event]?.some((x) => x.hooks.some((h) => isOurHook(h.command, arg))));
 }
 
 type CursorHook = { command?: string; timeout?: number; loop_limit?: number | null };
@@ -562,7 +576,7 @@ function stripCursorFile(path: string): void {
 function cursorFileInstalled(path: string): boolean {
   if (!existsSync(path)) return false;
   const s = readJson(path) as CursorFile;
-  const has = (event: string, arg: string) => (s.hooks?.[event] ?? []).some((h) => h.command === hookCommand(arg));
+  const has = (event: string, arg: string) => (s.hooks?.[event] ?? []).some((h) => isOurHook(h.command, arg));
   return has("sessionStart", "session-start") && has("stop", "stop");
 }
 
@@ -646,7 +660,7 @@ function editKimiConfig(path: string, add: boolean): void {
 function kimiConfigInstalled(path: string): boolean {
   if (!existsSync(path)) return false;
   const e = kimiEntry();
-  return kimiHooks(parseToml(readFileSync(path, "utf8"))).some((h) => isRecord(h) && h.event === e.event && h.command === e.command);
+  return kimiHooks(parseToml(readFileSync(path, "utf8"))).some((h) => isRecord(h) && h.event === e.event && isOurHook(h.command, KIMI_STOP));
 }
 
 /** Install one harness's user-level file. Creates the file even when the harness isn't detected. */
@@ -772,7 +786,11 @@ export interface BackgroundTask {
 
 export function backgroundTasks(raw: unknown): BackgroundTask[] | null {
   if (!Array.isArray(raw)) return null;
-  return raw.flatMap((t) => (isRecord(t) && typeof t.type === "string" ? [{ type: t.type, text: [t.command, t.description].filter((x) => typeof x === "string").join("\n") }] : []));
+  return raw.flatMap((t) => {
+    if (!isRecord(t)) return [];
+    const type = typeof t.type === "string" ? t.type : typeof t.kind === "string" ? t.kind : null;
+    return type === null ? [] : [{ type, text: [t.command, t.description].filter((x) => typeof x === "string").join("\n") }];
+  });
 }
 
 export function grokMonitorListens(tasks: readonly BackgroundTask[], commands: readonly string[]): boolean {
