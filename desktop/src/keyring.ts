@@ -210,7 +210,7 @@ export class Keyring implements ChannelOps {
         if (out) on(out);
       });
     const status = (line: string): Effect.Effect<void> => Effect.sync(() => on({ _tag: "Status", line }));
-    const program = eachLive(ch.fx.live(Math.max(0, since), { presence: true }), handle, status).pipe(
+    const program = eachLive(ch.fx.live(Math.max(0, since), { presence: true, send: true }), handle, status).pipe(
       Effect.catchCause((cause) => (Cause.hasInterruptsOnly(cause) ? Effect.void : Effect.sync(() => on({ _tag: "Failed", error: wireError(Cause.squash(cause)) })))),
     );
     const fiber = runtime.runFork(program);
