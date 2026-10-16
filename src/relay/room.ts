@@ -1033,7 +1033,14 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
   const stored = yield* Effect.exit(append(send.iv, send.ct, Number(send.e ?? 0), sender));
   if (stored._tag === "Failure") return { reply: frame({ t: "err", error: socketError(stored.cause), id: send.id }) } satisfies Effects;
   const e = stored.value;
-  const expireAt = yield* touch.pipe(Effect.catchCause(() => Effect.succeed(null)));
+  const expireAt = yield* touch.pipe(
+    Effect.catchCause((cause) =>
+      Effect.sync(() => {
+        socketError(cause);
+        return null;
+      }),
+    ),
+  );
   const reply = frame({ t: "ack", id: send.id, seq: e.seq, ts: e.ts });
   const fx: Effects = { ...(echo ? { broadcast: [msgFrame(e)] } : { others: msgFrame(e) }), reply, expireAt: expireAt ?? undefined };
   return fx;

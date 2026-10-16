@@ -17,7 +17,7 @@ import { startRelay } from "../src/relay/bun.ts";
 import * as Layer from "effect/Layer";
 import { Human } from "../src/relay/human.ts";
 import { OPEN_POLICY, Policy } from "../src/relay/policy.ts";
-import { Directory, onClientFrame, RoomDb, type Sql } from "../src/relay/room.ts";
+import { Directory, onClientFrame, RoomDb, type Effects, type Sql } from "../src/relay/room.ts";
 import { makeRelay, runRoomSync } from "../src/relay/route.ts";
 import { memoryBudget } from "./check.ts";
 import { sum, trafficProxy, type Traffic } from "./traffic.ts";
@@ -351,7 +351,16 @@ describe("a socket send the relay stored", () => {
         ),
       );
       const before = (file.query("SELECT COUNT(*) AS n FROM msgs").get() as { n: number }).n;
-      const fx = runRoomSync(ctx, new RoomDb(sql, access.roomId), onClientFrame(JSON.stringify({ t: "send", id: "kept", iv: "aXZpdml2aXZpdml2", ct: "Y3Z2", e: 0 }), owner.pk));
+      const logged: unknown[] = [];
+      const log = console.error;
+      console.error = (...args: unknown[]) => void logged.push(...args);
+      let fx: Effects;
+      try {
+        fx = runRoomSync(ctx, new RoomDb(sql, access.roomId), onClientFrame(JSON.stringify({ t: "send", id: "kept", iv: "aXZpdml2aXZpdml2", ct: "Y3Z2", e: 0 }), owner.pk));
+      } finally {
+        console.error = log;
+      }
+      expect(logged).toContain("storage failed");
       expect((file.query("SELECT COUNT(*) AS n FROM msgs").get() as { n: number }).n).toBe(before + 1);
       expect(fx.reply).toContain('"t":"ack"');
       expect(fx.reply).not.toContain('"t":"err"');
