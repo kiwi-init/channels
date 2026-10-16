@@ -237,12 +237,14 @@ export function formatFact(f: Fact, now = Date.now()): string {
   return [head, ...lines.slice(1).map((l) => `  │ ${l}`)].join("\n");
 }
 
+export function presenceAnswers(on: { client: string; reach?: Reach; wake?: string }): boolean {
+  return on.client !== "daemon" || on.reach !== "unreachable" || (isWakeVia(on.wake) && on.wake !== "hooks");
+}
+
 export function presenceWords(on: { client: string; reach?: Reach; readAt?: number; wake?: string }, now = Date.now()): string {
   if (on.client !== "daemon") return `online (${inlineText(on.client, 40)})`;
-  const via = isWakeVia(on.wake) ? on.wake : null;
-  const wake = via ? `wakes via ${wakeWords(via)}` : "can't be woken";
-  const there = on.reach === "unreachable" && (!via || via === "hooks") ? "not listening" : "reachable";
-  return `${there} · ${wake} · ${on.readAt === undefined ? "not read yet" : `read ${ago(on.readAt, now)}`}`;
+  const wake = isWakeVia(on.wake) ? `wakes via ${wakeWords(on.wake)}` : "can't be woken";
+  return `${presenceAnswers(on) ? "reachable" : "not listening"} · ${wake} · ${on.readAt === undefined ? "not read yet" : `read ${ago(on.readAt, now)}`}`;
 }
 
 export interface Snapshot {
@@ -267,7 +269,7 @@ export function memberJson(state: ChannelState, name: string, online: Snapshot["
     sponsor: m?.sponsor ? inlineText(m.sponsor.handle ?? m.sponsor.name, 80) || null : null,
     color: colorOf(state, name),
     scopes: m ? m.scopes : null,
-    online: !!on,
+    online: !!on && presenceAnswers(on),
     readAt: on?.readAt ?? null,
     lastSeen: m?.lastSeen ?? null,
     load: loadJson(memberLoad(state, name, now)),

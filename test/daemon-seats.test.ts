@@ -7,7 +7,7 @@ import { AgentSession, runAgent } from "../src/agent.ts";
 import { Channel } from "../src/client.ts";
 import { forgetIdentity, identitiesIn, loadConfig, saveConfig, saveIdentity, type SeatRecord } from "../src/config.ts";
 import { activityEnv, reachOf, daemonHello, daemonListening, daemonSock, listenDaemon, reportRead, startDaemon, stopDaemon, type Daemon } from "../src/daemon.ts";
-import { presenceWords } from "../src/format.ts";
+import { presenceAnswers, presenceWords } from "../src/format.ts";
 import { generateIdentity, type Identity } from "../src/identity.ts";
 import type { Presence } from "../src/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -107,7 +107,11 @@ describe("seats always on", () => {
     expect(typeof online.get("claude")?.readAt).toBe("number");
     expect(online.get("gemini")?.client).toBe("daemon");
     expect(presenceWords(online.get("claude")!)).toStartWith("not listening · can't be woken · read ");
-    expect(presenceWords(online.get("gemini")!)).toBe("reachable · can't be woken · not read yet");
+    expect(presenceWords(online.get("gemini")!)).toBe("not listening · can't be woken · not read yet");
+  });
+
+  test("status says another agent nobody listens for is not listening", async () => {
+    await until("claude not listening in gemini's status", async () => /claude.* · not listening · /.test(await cli(["-c", "test", "--as", "gemini", "status"])));
   });
 
   test("a listener adds no presence of its own", async () => {
@@ -214,10 +218,10 @@ describe("the CLI and the daemon", () => {
     await until("the CLI's read", async () => (await seatOf("claude"))?.read?.session === "cli-session");
   });
 
-  test("status shows your own seat as reachable and reports its read; who shows when the rest were last seen", async () => {
+  test("status shows your own seat as the daemon sees it and reports its read; who shows when the rest were last seen", async () => {
     await until("claude's seat", async () => (await seatOf("claude")) !== null);
     const status = await cli(["-c", "test", "--as", "claude", "status"], "status-session");
-    expect(status).toMatch(/claude \(you\).* · reachable · /);
+    expect(status).toMatch(/claude \(you\).* · not listening · /);
     await until("the status read", async () => (await seatOf("claude"))?.read?.session === "status-session");
     expect(await cli(["-c", "test", "--as", "claude", "who"])).toMatch(/^human .*· last seen /m);
   });
@@ -254,27 +258,47 @@ describe("presenceWords", () => {
     expect(presenceWords({ client: "daemon", reach: "listening" }, now)).toBe("reachable · can't be woken · not read yet");
     expect(presenceWords({ client: "daemon", reach: "running" }, now)).toBe("reachable · can't be woken · not read yet");
   });
+
+  test("status --json counts the same seats as answering", () => {
+    expect(presenceAnswers({ client: "daemon", reach: "unreachable" })).toBe(false);
+    expect(presenceAnswers({ client: "daemon", reach: "unreachable", wake: "hooks" })).toBe(false);
+    expect(presenceAnswers({ client: "daemon", reach: "unreachable", wake: "codex-queue" })).toBe(true);
+    expect(presenceAnswers({ client: "daemon" })).toBe(true);
+    expect(presenceAnswers({ client: "web" })).toBe(true);
+  });
 });
 
 describe("reachOf", () => {
   const seat = (r: Partial<SeatRecord>): SeatRecord => ({ alias: "test", as: "a", ...r });
   const alive = (pid: number) => pid === 7;
 
+  test("a live MCP server's session hold makes a seat running, not listening", () => {
+    expect(reachOf("session", seat({ harness: "codex", session: "c" }), undefined, alive)).toBe("running");
+  });
+
   test("a listener makes a seat listening, whatever its harness says", () => {
-    expect(reachOf(true, null, undefined, alive)).toBe("listening");
-    expect(reachOf(true, seat({ harness: "grok", session: "g" }), { state: "idle", since: 1 }, alive)).toBe("listening");
+    expect(reachOf("listener", null, undefined, alive)).toBe("listening");
+    expect(reachOf("listener", seat({ harness: "grok", session: "g" }), { state: "idle", since: 1 }, alive)).toBe("listening");
   });
 
-  test("with no listener, a live harness process or a harness at work makes it running", () => {
-    expect(reachOf(false, seat({ harness: "claude", pid: 7 }), undefined, alive)).toBe("running");
-    expect(reachOf(false, seat({ harness: "grok", session: "g" }), { state: "working" }, alive)).toBe("running");
-    expect(reachOf(false, seat({ harness: "codex", session: "c" }), { state: "waiting" }, alive)).toBe("running");
+  test("with no listener, a live harness process, or a Grok session written to in the last minute, makes it running", () => {
+    expect(reachOf("none", seat({ harness: "claude", pid: 7 }), undefined, alive)).toBe("running");
+    expect(reachOf("none", seat({ harness: "grok", session: "g" }), { state: "working" }, alive)).toBe("running");
   });
 
-  test("an idle session nobody listens for, or a dead process, is unreachable", () => {
-    expect(reachOf(false, seat({ harness: "grok", session: "g" }), { state: "idle", since: 1 }, alive)).toBe("unreachable");
-    expect(reachOf(false, seat({ harness: "claude", pid: 8 }), { state: "idle" }, alive)).toBe("unreachable");
-    expect(reachOf(false, null, undefined, alive)).toBe("unreachable");
+  test("a dead process is unreachable, whatever its harness last wrote", () => {
+    expect(reachOf("none", seat({ harness: "claude", pid: 8 }), { state: "working", tool: "Bash" }, alive)).toBe("unreachable");
+    expect(reachOf("none", seat({ harness: "mimo", pid: 8 }), undefined, alive)).toBe("unreachable");
+  });
+
+  test("a Codex or OpenCode session's last saved state is no proof it still runs", () => {
+    expect(reachOf("none", seat({ harness: "codex", session: "c" }), { state: "working" }, alive)).toBe("unreachable");
+    expect(reachOf("none", seat({ harness: "opencode", session: "o" }), { state: "working" }, alive)).toBe("unreachable");
+  });
+
+  test("an idle session nobody listens for is unreachable", () => {
+    expect(reachOf("none", seat({ harness: "grok", session: "g" }), { state: "idle", since: 1 }, alive)).toBe("unreachable");
+    expect(reachOf("none", null, undefined, alive)).toBe("unreachable");
   });
 });
 

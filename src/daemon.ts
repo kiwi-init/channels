@@ -115,7 +115,7 @@ export interface DaemonWake {
   ok: boolean;
 }
 
-export type ListenerKind = "listen" | "hook";
+export type ListenerKind = "listen" | "hook" | "session";
 
 export interface DaemonListener {
   channel: string;
@@ -135,7 +135,7 @@ function readListener(x: unknown): DaemonListener | null {
   const r = x as Record<string, unknown>;
   const channel = optionalText(r.channel);
   const agent = optionalText(r.agent ?? r.as);
-  if (!channel || !agent || (r.kind !== "listen" && r.kind !== "hook")) return null;
+  if (!channel || !agent || (r.kind !== "listen" && r.kind !== "hook" && r.kind !== "session")) return null;
   return {
     channel,
     agent,
@@ -154,6 +154,7 @@ export interface DaemonSeat {
   subscribers: number;
   read: DaemonRead | null;
   wake: { on: boolean; path: WakePath; last: DaemonWake | null };
+  reach: Reach | null;
 }
 
 interface Seat {
@@ -165,7 +166,7 @@ interface Seat {
   subs: Set<Sub>;
   head: number;
   activity: Activity | undefined;
-  reach: Reach;
+  reach: Reach | null;
   activityTimer: ReturnType<typeof setInterval> | null;
   announce: (() => void) | null;
   beacon: ReturnType<typeof setInterval> | null;
@@ -224,11 +225,13 @@ export function activityEnv(record: SeatRecord, base: Env): Env | null {
   }
 }
 
-export function reachOf(listened: boolean, record: SeatRecord | null, activity: Activity | undefined, alive: (pid: number) => boolean = pidAlive): Reach {
-  if (listened) return "listening";
-  if (record?.pid && alive(record.pid)) return "running";
-  if (activity?.state === "working" || activity?.state === "waiting") return "running";
-  return "unreachable";
+export type Attached = "listener" | "session" | "none";
+
+export function reachOf(attached: Attached, record: SeatRecord | null, activity: Activity | undefined, alive: (pid: number) => boolean = pidAlive): Reach {
+  if (attached === "listener") return "listening";
+  if (attached === "session") return "running";
+  if (record?.pid) return alive(record.pid) ? "running" : "unreachable";
+  return record?.harness === "grok" && activity?.state === "working" ? "running" : "unreachable";
 }
 
 const readKey = (alias: string, agent: string): string => `${alias}\u0000${agent}`;
@@ -345,7 +348,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
 
   const fieldsOf = (seat: Seat): PresenceFields => {
     const read = reads.get(readKey(seat.alias, seat.agent));
-    return { client: "daemon", ...(seat.activity ? { activity: seat.activity } : {}), reach: seat.reach, ...(read ? { readAt: read.at } : {}), ...(seat.wakeVia ? { wake: seat.wakeVia } : {}) };
+    return { client: "daemon", ...(seat.activity ? { activity: seat.activity } : {}), ...(seat.reach ? { reach: seat.reach } : {}), ...(read ? { readAt: read.at } : {}), ...(seat.wakeVia ? { wake: seat.wakeVia } : {}) };
   };
 
   const pathOf = async (cfg: Config, alias: string, agent: string): Promise<WakePath> => {
@@ -353,7 +356,11 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     return wakePath(seatRecordFor(cfg, alias, agent), listenHooksInstalled());
   };
 
-  const listenedTo = (seat: Seat): boolean => seat.subs.size > 0 || [...conns].some((c) => !c.dead && [...c.held].some((l) => l.channel === seat.alias && l.agent === seat.agent));
+  const attachedTo = (seat: Seat): Attached => {
+    const held = [...conns].filter((c) => !c.dead).flatMap((c) => [...c.held].filter((l) => l.channel === seat.alias && l.agent === seat.agent));
+    if (seat.subs.size > 0 || held.some((l) => l.kind !== "session")) return "listener";
+    return held.length ? "session" : "none";
+  };
 
   const refreshActivity = async (seat: Seat, force = false): Promise<void> => {
     const cfg = loadConfig();
@@ -362,7 +369,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     const { harnessActivity } = await import("./harness.ts");
     const now = env ? await harnessActivity(env) : undefined;
     const via = wakeOn(cfg, seat.alias, seat.agent) ? viaOf(await pathOf(cfg, seat.alias, seat.agent)) : null;
-    const reach = reachOf(listenedTo(seat), record, now);
+    const reach = reachOf(attachedTo(seat), record, now);
     if (!force && JSON.stringify(now) === JSON.stringify(seat.activity) && via === seat.wakeVia && reach === seat.reach) return;
     seat.activity = now;
     seat.wakeVia = via;
@@ -463,6 +470,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       subscribers: s.subs.size,
       read: reads.get(readKey(s.alias, s.agent)) ?? null,
       wake: { on: wakeOn(cfg, s.alias, s.agent), path: await pathOf(cfg, s.alias, s.agent), last: s.lastWake },
+      reach: s.reach,
     };
   };
 
@@ -645,7 +653,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         subs: new Set(),
         head,
         activity: undefined,
-        reach: "unreachable",
+        reach: null,
         activityTimer: null,
         announce: null,
         beacon: null,
