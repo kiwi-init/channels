@@ -6,6 +6,7 @@ import { nameKey, type JoinRequest } from "@mc/membership.ts"
 import { HANDOFF_DONE, HANDOFF_FAILED, type Message } from "@mc/protocol.ts"
 import { TOO_MANY_REQUESTS } from "@mc/sas.ts"
 import { taskId, type Task } from "@mc/state.ts"
+import { askLabel } from "@/lib/asks"
 import { excerpt, formatAgo } from "@/lib/format"
 import { openHandoff } from "@/lib/handoff-open"
 import { handoffLabel, handoffLeft, handoffOf, handoffOpen } from "@/lib/handoff"
@@ -23,9 +24,12 @@ import { AgentFacts } from "./agent-facts"
 export function NeedsYou({
   now,
   roomId,
+  me,
   escalations,
+  questions,
   reviews,
   nameOf,
+  agentOf,
   onReply,
   onApproveTask,
   onSendBack,
@@ -34,11 +38,14 @@ export function NeedsYou({
 }: {
   now: number
   roomId: string
+  me: string
   /** Escalations to this person nobody has answered yet. */
   escalations: Message[]
+  questions: Message[]
   /** Tasks in review that this person may approve. */
   reviews: Task[]
   nameOf: (name: string) => string
+  agentOf: (name: string) => boolean
   onReply: (m: Message, text: string) => Promise<void>
   onApproveTask: (t: Task) => Promise<void>
   onSendBack: (t: Task, why: string) => Promise<void>
@@ -66,7 +73,12 @@ export function NeedsYou({
     ...escalations.map((m) => ({
       key: `e${m.seq}`,
       summary: `${nameOf(m.from)} needs a decision`,
-      node: <EscalationItem m={m} now={now} nameOf={nameOf} onReply={onReply} onJump={(seq) => (setOpen(false), onJump(seq))} />,
+      node: <AskItem m={m} me={me} now={now} nameOf={nameOf} agent={agentOf(m.from)} onReply={onReply} onJump={(seq) => (setOpen(false), onJump(seq))} />,
+    })),
+    ...questions.map((m) => ({
+      key: `q${m.seq}`,
+      summary: `${nameOf(m.from)} asked ${m.to?.includes(me) ? "you" : "everyone"}`,
+      node: <AskItem m={m} me={me} now={now} nameOf={nameOf} agent={agentOf(m.from)} onReply={onReply} onJump={(seq) => (setOpen(false), onJump(seq))} />,
     })),
     ...reviews.map((t) => ({
       key: `t${t.id}`,
@@ -192,16 +204,20 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
 }
 
 /** An agent handing a decision to its person: what it says, and an answer right here. */
-function EscalationItem({
+function AskItem({
   m,
+  me,
   now,
   nameOf,
+  agent,
   onReply,
   onJump,
 }: {
   m: Message
+  me: string
   now: number
   nameOf: (n: string) => string
+  agent: boolean
   onReply: (m: Message, text: string) => Promise<void>
   onJump: (seq: number) => void
 }) {
@@ -224,10 +240,10 @@ function EscalationItem({
   }
   return (
     <Row
-      lead={<Monogram name={m.from} agent size={24} />}
+      lead={<Monogram name={m.from} agent={agent} size={24} />}
       title={
         <>
-          <span className="mr-1.5 rounded-full bg-decide-wash px-1.5 text-meta font-semibold text-decide">{handoff ? "Browser for you" : "Decision for you"}</span>
+          <span className="mr-1.5 rounded-full bg-decide-wash px-1.5 text-meta font-semibold text-decide">{handoff ? "Browser for you" : askLabel(m, me)}</span>
           <span className="font-medium">{nameOf(m.from)}</span>: {excerpt(m.body, 220)}
         </>
       }

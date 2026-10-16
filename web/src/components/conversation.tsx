@@ -13,6 +13,7 @@ import { howHere } from "@/lib/presence"
 import type { Gif } from "@/lib/gifs"
 import { lastPreview } from "@/lib/preview"
 import { markSeen, setOpenNews } from "@/lib/news"
+import { asksFor } from "@/lib/asks"
 import { useIcons, useLiveIcon } from "@/lib/icons"
 import { excerpt, formatShort, formatTime, memberName } from "@/lib/format"
 import { coordinatorMood, ERROR_MS, moodInputs, SPEAKING_MS, type Mood } from "@/lib/coordinator-mood"
@@ -139,11 +140,10 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   // A reaction isn't news.
   const arrivals = useMemo(() => messages.filter((m) => m.from !== me && !isReaction(m) && reaches(m)).length, [messages, me, reaches])
   // Needs you: a question to you (or to everyone) that nobody else has answered yet.
-  const needs = useMemo(() => openAsks.filter((m) => m.from !== me && (m.to?.includes(me) || m.to?.includes("*"))).length, [openAsks, me])
+  const { escalations, questions } = useMemo(() => asksFor(openAsks, me), [openAsks, me])
+  const needs = escalations.length + questions.length
   useChannelNews(roomId, Math.max(head, messages.at(-1)?.seq ?? 0), arrivals, 0, needs)
 
-  // Needs you: escalations to this person nobody answered, and work waiting on their review.
-  const escalations = useMemo(() => openAsks.filter((m) => m.esc && m.from !== me && m.to?.includes(me)), [openAsks, me])
   const reviews = useMemo(
     () => (iAmPerson ? [...state.tasks.values()].filter((t) => t.state === "review" && !!t.review && (t.review === me || (t.review === "*" && t.owner !== me && !t.workedBy.includes(me)))) : []),
     [state.tasks, me, iAmPerson]
@@ -544,7 +544,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       lastAt: lastAt.get(m.name),
     }))
   const prs = floating ? recentPrs(state, messages, me, 5) : []
-  const needsMe = escalations.length + reviews.length + (isOwner ? requests.length : 0)
+  const needsMe = escalations.length + questions.length + reviews.length + (isOwner ? requests.length : 0)
   // The header's capsule is the channel's, wherever you are in it, so this line is the channel's too.
   const headline =
     connection === "connecting" || connection === "reconnecting"
@@ -748,9 +748,12 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                 <NeedsYou
                   now={now}
                   roomId={roomId}
+                  me={me}
                   escalations={escalations}
+                  questions={questions}
                   reviews={reviews}
                   nameOf={nameOf}
+                  agentOf={(name) => isAgent(state.members.get(name))}
                   onReply={async (m, text) => void (await send(text, { to: [m.from], re: [m.seq], kind: "msg" }))}
                   onApproveTask={async (t: Task) =>
                     void (await send(`${taskId(t.id)} approved`, {
