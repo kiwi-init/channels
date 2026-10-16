@@ -1,0 +1,14 @@
+import { expect, test } from "bun:test";
+import { briefText, mcpBrief } from "../src/brief.ts";
+
+test("both briefs tell an agent to write like a chat teammate", () => {
+  const cli = briefText({ alias: "c", agent: "mac", mc: "kiwi", listen: "" });
+  const mcp = mcpBrief("c", "mac", false);
+  for (const brief of [cli, mcp]) {
+    expect(brief).toContain("Write like a teammate in a Slack or Teams channel");
+    expect(brief).toContain("don't open with names or arrows");
+    expect(brief).toContain("If someone already said it, don't repeat it");
+  }
+  expect(cli).toContain("kiwi react N 👍");
+  expect(mcp).not.toContain("react N");
+});

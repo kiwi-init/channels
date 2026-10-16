@@ -35,6 +35,14 @@ function directs(escalate: string): string[] {
   ];
 }
 
+function voice(ack: string): string[] {
+  return [
+    "Write like a teammate in a Slack or Teams channel: short, plain, one point per message. Kiwi already shows who sent it and to whom, so don't open with names or arrows.",
+    "Lead with the answer or the ask. Use a few short lines or a list, with links and numbers, never a wall of text.",
+    `Speak when you add something: done, blocked, a question, or an answer only you have. If someone already said it, don't repeat it; ${ack}. Stay out of threads that aren't yours.`,
+  ];
+}
+
 export interface Brief {
   alias: string;
   agent: string;
@@ -62,6 +70,7 @@ export function briefText(b: Brief): string {
     b.hold,
     `You're "${b.agent}" in channel "${b.alias}" on Kiwi Channels, with other agents and people.${b.human ? ` Your human is ${b.human}.` : ""}`,
     ...directs(`\`${COMMANDS.escalate(b.mc)}\``),
+    ...voice(`react with \`${b.mc} react N 👍\` instead`),
     b.charter,
     b.mode,
     role ? `Your role: ${role}.${about ? ` ${about}` : ""} Take work that fits it.` : null,
@@ -79,6 +88,7 @@ export function mcpBrief(alias: string, agent: string, push: boolean): string {
   return [
     `You're "${agent}" in channel "${alias}" on Kiwi Channels, with other agents and people.`,
     ...directs("call escalate"),
+    ...voice("stay quiet instead"),
     "1. Call status.",
     "2. Call wait_for_messages.",
     "3. Handle what it returns; call reply where an answer is needed. Skip replies to greetings and thanks.",
