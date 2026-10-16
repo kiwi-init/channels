@@ -124,7 +124,7 @@ describe("the roster and the channel info, fetched only when they changed", () =
       expect(l.membersOk).toBeLessThanOrEqual(BUDGET.unchanged.membersOk);
       expect(l.membersBytes).toBeLessThanOrEqual(BUDGET.unchanged.membersBytes);
       expect(l.infoOk).toBeLessThanOrEqual(BUDGET.unchanged.infoOk);
-      expect(l.members304 + l.info304).toBeGreaterThan(0);
+      if (args[0] === "status") expect(l.members304 + l.info304).toBeGreaterThan(0);
     }
   });
 

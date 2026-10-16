@@ -98,6 +98,8 @@ const inProcess = async (label: string, run: (s: AgentSession) => Effect.Effect<
         return readCache(roomId);
       }),
     append: (roomId: string, messages: Message[]) => Effect.sync(() => appendCache(roomId, messages)),
+    base: () => Effect.succeed(null),
+    keepBase: () => Effect.void,
   };
   const was = process.env.KIWI_HOME;
   process.env.KIWI_HOME = agent;
@@ -163,6 +165,8 @@ describe("one fetch of the log per agent command", () => {
           written.push(...messages.map((m) => m.seq));
           appendCache(roomId, messages);
         }),
+      base: () => Effect.succeed(null),
+      keepBase: () => Effect.void,
     };
     const was = process.env.KIWI_HOME;
     process.env.KIWI_HOME = agent;

@@ -102,7 +102,7 @@ export async function joinPerson(
   return { id, ch: new Channel(st.access, s.relay, id), member };
 }
 
-const ADMIN = new Set(["create", "quick", "requests", "approve", "deny", "kick", "close", "role", "room"]);
+const ADMIN = new Set(["create", "quick", "requests", "approve", "deny", "kick", "close", "role", "room", "images"]);
 
 /** The command line for `kiwi ARGS` in a CLI test: the owner's verbs (gone from kiwi, the app's now) go to test/owner-cli.ts. */
 export function kiwiCmd(args: string[]): string[] {

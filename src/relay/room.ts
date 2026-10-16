@@ -28,9 +28,9 @@ import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import { fits, JoinRequest, MAX_RECORD, MAX_WRAPPED, MemberRecord, SealedIcon, StoredEnvelope } from "./schema.ts";
+import { fits, JoinRequest, MAX_RECORD, MAX_WRAPPED, MemberRecord, SealedIcon, SealedSnapshot, StoredEnvelope } from "./schema.ts";
 import { verifyRequest } from "../auth.ts";
-import { b64url, encodeJoinCode, fromB64url, ownerFingerprint } from "../crypto.ts";
+import { b64url, blobId, encodeJoinCode, fromB64url, ownerFingerprint } from "../crypto.ts";
 import type { HumanAuth } from "./human.ts";
 import { Policy } from "./policy.ts";
 import { GONE_WORDS, type GoneHow } from "../protocol.ts";
@@ -53,8 +53,10 @@ import {
 import { verify, verifyText } from "../identity.ts";
 import { commitTo, NONCE_RE, ownerNonceStatement } from "../sas.ts";
 import {
+  MAX_BLOB_BYTES,
   MAX_CT_LENGTH,
   MAX_EPH_LENGTH,
+  MORE_REFUSED,
   PAGE_LIMIT,
   ROOM_RETENTION,
   WS_PROTOCOL,
@@ -85,14 +87,19 @@ function unpacked(v: Stored): string {
   return typeof v === "string" ? v : b64url(v instanceof Uint8Array ? v : new Uint8Array(v));
 }
 
+export const BLOBS_PER_MINUTE = 120;
+
+const BLOB_GRACE_MS = 3_600_000;
+
 /** What an adapter must do after handling a request or frame. */
 export interface Effects {
   /** Send to every socket. */
   broadcast?: string[];
   others?: string;
   ephemeral?: string;
+  watch?: string[];
   /** Send to the sender only. */
-  reply?: string;
+  reply?: string | string[];
   readers?: string[];
   /** Disconnect every socket authenticated as this key. */
   disconnect?: { pk: string; how: GoneHow };
@@ -178,6 +185,7 @@ function formatBytes(n: number): string {
 
 /** Messages one member may post per minute: plenty for real work, too few to flush a channel's history. */
 export const MESSAGES_PER_MINUTE = 120;
+export const MORE_PER_MINUTE = 60;
 /** Presence and other ephemeral frames one member may send per minute. */
 const EPHEMERAL_PER_MINUTE = 60;
 /** How many keys the limiter remembers. Past this, the oldest window is dropped, never the whole table. */
@@ -231,6 +239,16 @@ const REQUEST_COLUMNS = [
   ["owner_nonce", "TEXT"],
   ["reveal", "TEXT"],
 ] as const;
+
+export interface StoredSnapshot {
+  n: number;
+  e: number;
+  iv: string;
+  ct: string;
+  hash: string;
+  sig: string;
+  at: number;
+}
 
 /** A channel's stored bytes, and how many messages it stored on `day` (UTC). */
 interface Counters {
@@ -290,13 +308,14 @@ interface Warm {
   head: number | null;
   members: Map<string, { active: boolean; readOnly: boolean } | null>;
   reads: Map<string, number>;
+  blobs: boolean | null;
 }
 
 const warmRooms = new WeakMap<Sql, Warm>();
 
 type Revised = "roster" | "info";
 
-const coldRoom = (): Warm => ({ exists: null, meta: new Map(), head: null, members: new Map(), reads: new Map() });
+const coldRoom = (): Warm => ({ exists: null, meta: new Map(), head: null, members: new Map(), reads: new Map(), blobs: null });
 
 export function forgetRoom(sql: Sql): void {
   warmRooms.delete(sql);
@@ -339,7 +358,7 @@ export class RoomDb {
   }
 
   init(): void {
-    warmRooms.set(this.sql, { ...coldRoom(), exists: true, head: 0 });
+    warmRooms.set(this.sql, { ...coldRoom(), exists: true, head: 0, blobs: false });
     this.sql.run("CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)");
     this.sql.run("CREATE TABLE msgs (seq INTEGER PRIMARY KEY, ts INTEGER NOT NULL, iv TEXT NOT NULL, ct TEXT NOT NULL, e INTEGER NOT NULL)");
     // Former members keep their sealed record (so their history still verifies) but lose every key.
@@ -478,20 +497,24 @@ export class RoomDb {
     return total;
   }
 
+  bytesThrough(seq: number): number {
+    return this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM msgs WHERE seq <= ?`, seq)[0]?.n ?? 0;
+  }
+
   /** Delete messages through `seq`; returns the ciphertext bytes freed. */
   dropThrough(seq: number): number {
     if (seq <= 0) return 0;
-    const freed = this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM msgs WHERE seq <= ?`, seq)[0]?.n ?? 0;
+    const freed = this.bytesThrough(seq);
     if (freed) this.sql.run("DELETE FROM msgs WHERE seq <= ?", seq);
     return freed;
   }
 
   /** Delete the oldest messages until at least `need` bytes are free; returns the bytes freed. */
-  dropOldest(need: number): number {
+  dropOldest(need: number, upTo = Number.MAX_SAFE_INTEGER): number {
     let freed = 0;
     let through = 0;
     while (freed < need) {
-      const batch = this.sql.all<{ seq: number; n: number }>(`SELECT seq, ${CT_CHARS} AS n FROM msgs WHERE seq > ? ORDER BY seq LIMIT ?`, through, DROP_BATCH);
+      const batch = this.sql.all<{ seq: number; n: number }>(`SELECT seq, ${CT_CHARS} AS n FROM msgs WHERE seq > ? AND seq <= ? ORDER BY seq LIMIT ?`, through, upTo, DROP_BATCH);
       for (const r of batch) {
         freed += r.n;
         through = r.seq;
@@ -500,6 +523,53 @@ export class RoomDb {
       if (batch.length < DROP_BATCH) break;
     }
     if (through) this.sql.run("DELETE FROM msgs WHERE seq <= ?", through);
+    return freed;
+  }
+
+  private hasBlobs(): boolean {
+    const w = this.warm;
+    w.blobs ??= this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'blobs'").length > 0;
+    return w.blobs;
+  }
+
+  blob(id: string): Uint8Array<ArrayBuffer> | null {
+    if (!this.hasBlobs()) return null;
+    const b = this.sql.all<{ bytes: Uint8Array<ArrayBuffer> | ArrayBuffer }>("SELECT bytes FROM blobs WHERE id = ?", id)[0]?.bytes;
+    return b === undefined ? null : b instanceof Uint8Array ? b : new Uint8Array(b);
+  }
+
+  hasBlob(id: string): boolean {
+    return this.hasBlobs() && this.sql.all("SELECT 1 FROM blobs WHERE id = ?", id).length > 0;
+  }
+
+  putBlob(id: string, bytes: Uint8Array<ArrayBuffer>, at: number): void {
+    if (!this.hasBlobs()) {
+      this.sql.run("CREATE TABLE IF NOT EXISTS blobs (id TEXT PRIMARY KEY, bytes BLOB NOT NULL, size INTEGER NOT NULL, at INTEGER NOT NULL)");
+      this.warm.blobs = true;
+    }
+    this.sql.run("INSERT OR IGNORE INTO blobs (id, bytes, size, at) VALUES (?, ?, ?, ?)", id, bytes, bytes.length, at);
+  }
+
+  pruneBlobs(): number {
+    if (!this.hasBlobs()) return 0;
+    const oldest = this.sql.all<{ ts: number }>("SELECT ts FROM msgs ORDER BY seq LIMIT 1")[0]?.ts;
+    if (oldest === undefined) return 0;
+    const before = oldest - BLOB_GRACE_MS;
+    const freed = this.sql.all<{ n: number }>("SELECT COALESCE(SUM(size), 0) AS n FROM blobs WHERE at < ?", before)[0]?.n ?? 0;
+    if (freed) this.sql.run("DELETE FROM blobs WHERE at < ?", before);
+    return freed;
+  }
+
+  dropOldestBlobs(need: number): number {
+    if (!this.hasBlobs()) return 0;
+    let freed = 0;
+    const gone: string[] = [];
+    for (const r of this.sql.all<{ id: string; size: number }>("SELECT id, size FROM blobs ORDER BY at")) {
+      if (freed >= need) break;
+      freed += r.size;
+      gone.push(r.id);
+    }
+    for (const id of gone) this.sql.run("DELETE FROM blobs WHERE id = ?", id);
     return freed;
   }
 
@@ -558,6 +628,21 @@ export class RoomDb {
   settings(): { iv: string; ct: string } | null {
     const t = this.get("settings");
     return t ? (JSON.parse(t) as { iv: string; ct: string }) : null;
+  }
+
+  snapshot(): StoredSnapshot | null {
+    const t = this.sql.all<{ v: string }>("SELECT v FROM meta WHERE k = 'snapshot'")[0]?.v;
+    return t ? (JSON.parse(t) as StoredSnapshot) : null;
+  }
+
+  setSnapshot(s: StoredSnapshot): void {
+    this.sql.run("INSERT INTO meta (k, v) VALUES ('snapshot', ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v", JSON.stringify(s));
+  }
+
+  dropSnapshot(): number {
+    const freed = this.snapshot()?.ct.length ?? 0;
+    if (freed) this.sql.run("DELETE FROM meta WHERE k = 'snapshot'");
+    return freed;
   }
 
   /** Before closing: drop this channel from its owner's owned-channel count. */
@@ -659,15 +744,40 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
   if (ct.length > cap) return yield* new TooLarge({ message: `that message is bigger than this channel may hold (${formatBytes(cap)})` });
   const seq = db.head() + 1;
   let bytes = db.storedBytes();
-  if (bytes + ct.length > cap) bytes -= db.dropOldest(bytes + ct.length - cap);
+  if (bytes + ct.length > cap) bytes -= db.dropOldest(bytes + ct.length - cap) + db.pruneBlobs();
+  if (bytes + ct.length > cap) bytes -= db.dropOldestBlobs(bytes + ct.length - cap);
+  if (bytes + ct.length > cap) bytes -= db.dropSnapshot();
 
   db.insert(seq, ts, iv, ct, e);
   bytes += ct.length;
   // Prune in batches so retention costs one extra write pass per 100 messages.
-  if (seq % 100 === 0) bytes -= db.dropThrough(seq - ROOM_RETENTION);
+  if (seq % 100 === 0) {
+    const freed = db.dropThrough(seq - ROOM_RETENTION);
+    if (freed) bytes -= freed + db.pruneBlobs();
+  }
   db.setCounters({ bytes, day, n: today + 1, head: seq });
   const stored: Envelope = { seq, ts, iv, ct, e };
   return stored;
+});
+
+export const storeBlob = Effect.fn("Room.storeBlob")(function* (id: string, bytes: Uint8Array<ArrayBuffer>, sender: string) {
+  const db = yield* RoomStore;
+  const policy = yield* Policy;
+  if (db.isReadOnly(sender)) return yield* new ReadOnly({ message: READ_ONLY });
+  if (!bytes.length) return yield* new BadRequest({ message: "send the image's encrypted bytes" });
+  if (bytes.length > MAX_BLOB_BYTES) return yield* new TooLarge({ message: "image too large" });
+  if ((yield* Effect.promise(() => blobId(bytes))) !== id) return yield* new BadRequest({ message: "the image's bytes don't match its id" });
+  if (db.hasBlob(id)) return;
+  const cap = policy.bytesPerChannel;
+  if (bytes.length > cap) return yield* new TooLarge({ message: `that image is bigger than this channel may hold (${formatBytes(cap)})` });
+  const at = yield* Clock.currentTimeMillis;
+  const head = db.head();
+  let stored = db.storedBytes();
+  if (stored + bytes.length > cap) stored -= db.dropOldest(stored + bytes.length - cap) + db.pruneBlobs();
+  if (stored + bytes.length > cap) stored -= db.dropOldestBlobs(stored + bytes.length - cap);
+  db.putBlob(id, bytes, at);
+  const u = db.counters();
+  db.setCounters({ bytes: stored + bytes.length, day: u?.day ?? "", n: u?.n ?? 0, head });
 });
 
 // ---------- idle rooms expire ----------
@@ -776,6 +886,28 @@ export const setSettings = Effect.fn("Room.setSettings")(function* (settings: un
   if (!t) return yield* new BadRequest({ message: "bad settings" });
   db.set("settings", JSON.stringify(t));
   db.changed("info");
+});
+
+export const setSnapshot = Effect.fn("Room.setSnapshot")(function* (snapshot: unknown) {
+  const db = yield* RoomStore;
+  const { epoch } = yield* readMeta;
+  if (!fits(SealedSnapshot, snapshot) || snapshot.e > epoch || snapshot.n > db.head()) {
+    return yield* new BadRequest({ message: "bad snapshot (at most 512KB, sealed with a channel key, at a seq the channel has)" });
+  }
+  const stored = db.snapshot();
+  if (stored && snapshot.n < stored.n) return yield* new Conflict({ message: `this channel has a newer snapshot (#${stored.n})` });
+  const cap = (yield* Policy).bytesPerChannel;
+  if (snapshot.ct.length > cap) return yield* new TooLarge({ message: `that snapshot is bigger than this channel may hold (${formatBytes(cap)})` });
+  const grows = snapshot.ct.length - (stored?.ct.length ?? 0);
+  let bytes = db.storedBytes();
+  if (bytes + grows > cap) {
+    if (bytes + grows - db.bytesThrough(snapshot.n) > cap) return yield* new TooLarge({ message: "the messages that snapshot covers don't free enough room for it" });
+    bytes -= db.dropOldest(bytes + grows - cap, snapshot.n);
+  }
+  const { n, e, iv, ct, hash, sig } = snapshot;
+  db.setSnapshot({ n, e, iv, ct, hash, sig, at: yield* Clock.currentTimeMillis });
+  db.setCounters({ ...(db.counters() ?? { day: "", n: 0 }), bytes: Math.max(0, bytes + grows) });
+  return n;
 });
 
 // ---------- who owns this channel ----------
@@ -1051,9 +1183,14 @@ export function msgFrame(e: Envelope): string {
   return frame({ t: "msg", ...e });
 }
 
+export const watchFrame = (e: Envelope): Pick<Effects, "watch"> => ({ watch: [frame({ t: "head", seq: e.seq, ts: e.ts })] });
+
+export const wantsWatch = (url: URL): boolean => url.searchParams.get("watch") === "1";
+
 /** Frames to send a newly connected socket: the backlog after `since`, then ready. */
-export const welcomeFrames = (since: number, reads = true): Effect.Effect<string[], never, RoomStore> =>
+export const welcomeFrames = (since: number, reads = true, watch = false): Effect.Effect<string[], never, RoomStore> =>
   Effect.map(RoomStore, (db) => {
+    if (watch) return [frame({ t: "ready", head: db.head(), more: false })];
     const backlog = db.since(since);
     const head = db.head();
     const last = backlog.at(-1)?.seq ?? since;
@@ -1089,6 +1226,10 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
       ),
     );
   }
+  if (f.t === "more") {
+    if (!allow(`more:${db.roomId}:${sender}`, MORE_PER_MINUTE)) return { reply: frame({ t: "err", error: MORE_REFUSED }) } satisfies Effects;
+    return { reply: [frame({ t: "page" }), ...(yield* welcomeFrames(Number(f.since) || 0))] } satisfies Effects;
+  }
   if (f.t !== "send") return { reply: frame({ t: "err", error: "unknown frame" }) } satisfies Effects;
   if (!allow(`${db.roomId}:${sender}`, MESSAGES_PER_MINUTE)) return { reply: frame({ t: "err", error: "too many messages; wait a minute", id: f.id }) } satisfies Effects;
   const send = f;
@@ -1104,7 +1245,7 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
     ),
   );
   const reply = frame({ t: "ack", id: send.id, seq: e.seq, ts: e.ts });
-  const fx: Effects = { ...(echo ? { broadcast: [msgFrame(e)] } : { others: msgFrame(e) }), reply, expireAt: expireAt ?? undefined };
+  const fx: Effects = { ...(echo ? { broadcast: [msgFrame(e)] } : { others: msgFrame(e) }), ...watchFrame(e), reply, expireAt: expireAt ?? undefined };
   return fx;
 });
 

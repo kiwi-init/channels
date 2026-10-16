@@ -50,13 +50,55 @@ function aesKey(key: string): Promise<CryptoKey> {
   return k;
 }
 
-export async function seal(key: string, roomId: string, payload: object): Promise<{ iv: string; ct: string }> {
+const PACKED = 0x00;
+export const PACK_FROM = 512;
+export const MAX_UNPACKED = 4 * 1024 * 1024;
+
+function concat(parts: Uint8Array[], size: number): Uint8Array<ArrayBuffer> {
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const part of parts) {
+    out.set(part, at);
+    at += part.byteLength;
+  }
+  return out;
+}
+
+async function deflate(bytes: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
+  return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream("deflate-raw"))).arrayBuffer());
+}
+
+async function inflate(bytes: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer> | null> {
+  const reader = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw")).getReader();
+  const parts: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) return concat(parts, size);
+    size += value.byteLength;
+    if (size > MAX_UNPACKED) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    parts.push(value);
+  }
+}
+
+async function pack(plain: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
+  if (plain.byteLength < PACK_FROM || plain.byteLength > MAX_UNPACKED) return plain;
+  const packed = await deflate(plain);
+  if (packed.byteLength + 1 >= plain.byteLength) return plain;
+  return concat([Uint8Array.of(PACKED), packed], packed.byteLength + 1);
+}
+
+export async function seal(key: string, roomId: string, payload: object, opts: { pack?: boolean } = {}): Promise<{ iv: string; ct: string }> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
+  const plain = enc.encode(JSON.stringify(payload));
   const ct = await crypto.subtle.encrypt(
     // Binding the room id stops a relay from replaying ciphertext across channels.
     { name: "AES-GCM", iv, additionalData: enc.encode(roomId) },
     await aesKey(key),
-    enc.encode(JSON.stringify(payload)),
+    opts.pack ? await pack(new Uint8Array(plain)) : plain,
   );
   return { iv: b64url(iv), ct: b64url(new Uint8Array(ct)) };
 }
@@ -69,7 +111,10 @@ export async function open(key: string, roomId: string, iv: string, ct: string):
       await aesKey(key),
       fromB64url(ct),
     );
-    return JSON.parse(dec.decode(pt));
+    const bytes = new Uint8Array(pt);
+    if (bytes[0] !== PACKED) return JSON.parse(dec.decode(bytes));
+    const plain = await inflate(bytes.subarray(1));
+    return plain ? JSON.parse(dec.decode(plain)) : null;
   } catch {
     return null;
   }
@@ -160,6 +205,20 @@ export async function openFrom(xsk: string, box: string, info = "mc/box"): Promi
   }
 }
 
+export async function sealBytes(key: string, data: Uint8Array<ArrayBuffer>, ad: string): Promise<{ iv: string; ct: string }> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: enc.encode(ad) }, await aesKey(key), data);
+  return { iv: b64url(iv), ct: b64url(new Uint8Array(ct)) };
+}
+
+export async function openBytes(key: string, iv: string, ct: string, ad: string): Promise<Uint8Array<ArrayBuffer> | null> {
+  try {
+    return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromB64url(iv), additionalData: enc.encode(ad) }, await aesKey(key), fromB64url(ct)));
+  } catch {
+    return null;
+  }
+}
+
 /** Seal/open with a raw channel key (for member records), independent of room-bound AD. */
 export async function sealWith(key: string, data: string, ad: string): Promise<string> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -172,6 +231,43 @@ export async function openWith(key: string, box: string, ad: string): Promise<st
     const [iv, ct] = box.split(".");
     const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromB64url(iv!), additionalData: enc.encode(ad) }, await aesKey(key), fromB64url(ct!));
     return dec.decode(pt);
+  } catch {
+    return null;
+  }
+}
+
+export function toBase64(bytes: Uint8Array): string {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+export function fromBase64(s: string): Uint8Array<ArrayBuffer> {
+  return Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+}
+
+export async function blobId(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
+  return hex(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)));
+}
+
+const BLOB_AD = enc.encode("kiwi-image");
+
+export async function sealBlob(raw: Uint8Array<ArrayBuffer>): Promise<{ id: string; key: string; blob: Uint8Array<ArrayBuffer> }> {
+  const key = crypto.getRandomValues(new Uint8Array(32));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const k = await crypto.subtle.importKey("raw", key, "AES-GCM", false, ["encrypt"]);
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: BLOB_AD }, k, raw));
+  const blob = new Uint8Array(iv.length + ct.length);
+  blob.set(iv);
+  blob.set(ct, iv.length);
+  return { id: await blobId(blob), key: b64url(key), blob };
+}
+
+export async function openBlob(ref: { id: string; key: string }, blob: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer> | null> {
+  try {
+    if (blob.length < 28 || (await blobId(blob)) !== ref.id) return null;
+    const k = await crypto.subtle.importKey("raw", fromB64url(ref.key), "AES-GCM", false, ["decrypt"]);
+    return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: blob.subarray(0, 12), additionalData: BLOB_AD }, k, blob.subarray(12)));
   } catch {
     return null;
   }

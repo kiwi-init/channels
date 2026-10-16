@@ -424,6 +424,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       onOpenThread={openThread}
       receipt={showsReceipt(m, anchor) ? (receipt(m, state, marks, pkOf, formatTime) ?? undefined) : undefined}
       reactions={chipsFor(state, m.seq, me, nameOf)}
+      image={ch.image}
       // The coordinator's runs end on its face; only the latest one moves.
       face={coord && m.from === coord ? <CoordinatorAvatar size={28} mood={mood} live={m.seq >= (said?.last ?? 0) && !anchor} seed={0.3} /> : undefined}
     />
