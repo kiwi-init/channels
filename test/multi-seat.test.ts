@@ -1,6 +1,6 @@
 import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { daemonListeners, daemonSock } from "../src/daemon.ts";
@@ -80,16 +80,26 @@ function created(out: string): string {
   return /join code: (\S+)/.exec(out)![1]!;
 }
 
+const S = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "M", CLAUDE_PID: String(process.pid), AI_AGENT: "claude-code_2-1-296_agent" };
+
+async function twoSeats() {
+  const ownerA = scratch("own-a");
+  const ownerB = scratch("own-b");
+  const codeA = created(await ok(ownerA, ["create", "alpha", "--as", "boss"], PERSON));
+  const codeB = created(await ok(ownerB, ["create", "beta", "--as", "boss"], PERSON));
+  const h = scratch("agent");
+  await joinAs(ownerA, h, codeA, "planner", S);
+  await joinAs(ownerB, h, codeB, "reviewer", S);
+  return { ownerA, ownerB, h, input: JSON.stringify({ session_id: "M", cwd: h }) };
+}
+
+async function hookSlots(h: string): Promise<string[]> {
+  return (await daemonListeners(daemonSock(h)).catch(() => [])).filter((l) => l.kind === "hook").map((l) => l.agent);
+}
+
 describe("one Claude Code session that holds two seats", () => {
   test("its hooks serve both seats, and the bare CLI names both instead of picking one", async () => {
-    const ownerA = scratch("own-a");
-    const ownerB = scratch("own-b");
-    const codeA = created(await ok(ownerA, ["create", "alpha", "--as", "boss"], PERSON));
-    const codeB = created(await ok(ownerB, ["create", "beta", "--as", "boss"], PERSON));
-    const h = scratch("agent");
-    const S = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "M", CLAUDE_PID: String(process.pid), AI_AGENT: "claude-code_2-1-296_agent" };
-    await joinAs(ownerA, h, codeA, "planner", S);
-    await joinAs(ownerB, h, codeB, "reviewer", S);
+    const { ownerA, ownerB, h } = await twoSeats();
     const config = JSON.parse(readFileSync(join(h, "config.json"), "utf8")) as { bindings: Record<string, { as: string; session?: string }[]> };
     expect(Object.values(config.bindings).flat().map((b) => `${b.as}:${b.session}`).sort()).toEqual(["planner:M", "reviewer:M"]);
 
@@ -100,7 +110,7 @@ describe("one Claude Code session that holds two seats", () => {
 
     const listening = spawn(h, ["hook", "listen"], S, h, input);
     await until(async () => {
-      const held = (await daemonListeners(daemonSock(h)).catch(() => [])).filter((l) => l.kind === "hook").map((l) => l.agent);
+      const held = await hookSlots(h);
       return held.includes("planner") && held.includes("reviewer");
     }, "one listener holding both seats");
     expect((await run(h, ["hook", "listen"], S, h, input)).code).toBe(0);
@@ -126,6 +136,56 @@ describe("one Claude Code session that holds two seats", () => {
     expect(await ok(h, ["--as", "reviewer", "listen", "--now"], S)).toContain("read by name");
     await ok(ownerB, ["send", "--to", "reviewer", "read by channel"], PERSON);
     expect(await ok(h, ["-c", "beta", "listen", "--now"], S)).toContain("read by channel");
+  });
+
+  test("a seat whose relay hangs doesn't hold back the other seat's answer", async () => {
+    const { ownerA, h, input } = await twoSeats();
+    await run(h, ["hook", "session-start"], S, h, input);
+    await ok(ownerA, ["send", "--to", "planner", "answered while the other seat hangs"], PERSON);
+    const path = join(h, "config.json");
+    const original = readFileSync(path, "utf8");
+    const cfg = JSON.parse(original) as { channels: Record<string, { relay: string }> };
+    const hanging = Bun.serve({ hostname: "127.0.0.1", port: 0, idleTimeout: 60, fetch: () => new Promise<Response>(() => {}) });
+    cfg.channels.beta!.relay = hanging.url.origin;
+    writeFileSync(path, JSON.stringify(cfg));
+    try {
+      const prompt = await run(h, ["hook", "prompt"], S, h, input);
+      expect(prompt.out).toContain("answered while the other seat hangs");
+    } finally {
+      hanging.stop(true);
+      writeFileSync(path, original);
+    }
+  });
+
+  test("a closed channel leaves the other seat listening", async () => {
+    const { ownerA, ownerB, h, input } = await twoSeats();
+    await ok(ownerB, ["close", "--yes"], PERSON);
+    const listening = spawn(h, ["hook", "listen"], S, h, input);
+    await until(async () => (await hookSlots(h)).includes("planner"), "the healthy seat's slot");
+    await ok(ownerA, ["send", "--to", "planner", "still heard"], PERSON);
+    expect(await listening.exited).toBe(2);
+    expect(await new Response(listening.stderr).text()).toContain("boss → planner: still heard");
+  });
+
+  test("a seat that can't open gives its slot back, so the next hook listens for it", async () => {
+    const { ownerA, ownerB, h, input } = await twoSeats();
+    const cfg = JSON.parse(readFileSync(join(h, "config.json"), "utf8")) as { channels: Record<string, { roomId: string }> };
+    const key = join(h, "identities", cfg.channels.beta!.roomId, "reviewer.json");
+    const saved = readFileSync(key, "utf8");
+    rmSync(key);
+    const first = spawn(h, ["hook", "listen"], S, h, input);
+    await until(async () => {
+      const held = await hookSlots(h);
+      return held.includes("planner") && !held.includes("reviewer");
+    }, "only the healthy seat's slot");
+    writeFileSync(key, saved);
+    const second = spawn(h, ["hook", "listen"], S, h, input);
+    await until(async () => (await hookSlots(h)).includes("reviewer"), "the restored seat's slot");
+    await ok(ownerB, ["send", "--to", "reviewer", "heard after the key came back"], PERSON);
+    expect(await second.exited).toBe(2);
+    expect(await new Response(second.stderr).text()).toContain("boss → reviewer: heard after the key came back");
+    await ok(ownerA, ["send", "--to", "planner", "ends the first listener"], PERSON);
+    expect(await first.exited).toBe(2);
   });
 });
 

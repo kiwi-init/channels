@@ -24,6 +24,7 @@
 import * as Cause from "effect/Cause";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Schedule from "effect/Schedule";
 import type * as Scope from "effect/Scope";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, writeSync } from "node:fs";
@@ -658,6 +659,8 @@ export function mcFor(alias: string, as: string, dir = process.cwd(), who?: Here
 }
 
 const MAX_CONTEXT = 6_000;
+const HOOK_MS = 15_000;
+const SEAT_ANSWER_MS = HOOK_MS - 1_000;
 
 const unreadText = Effect.fn("Hooks.unreadText")(function* (s: AgentSession) {
   const { messages, state } = yield* s.read();
@@ -782,11 +785,7 @@ interface Served {
   cfg: ChannelConfig;
 }
 
-const arm = Effect.fn("Hooks.arm")(function* ({ b, cfg }: Served, who: Here, woke: Effect.Effect<void, never, Scope.Scope>) {
-  if (!wakeOn(loadConfig(), b.alias, b.as) || isListening(b.alias, b.as)) return null;
-  const slot = yield* Effect.promise(() => takeListenSlot(b.alias, b.as, who.session ?? ""));
-  if (!slot) return null;
-  yield* Effect.addFinalizer(() => Effect.sync(() => slot.close()));
+const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, woke: Effect.Effect<void, never, Scope.Scope>) {
   const s = yield* openSession(b.alias, cfg, b.as);
   // Peek: the listener never moves the agent's cursor. It reads on a copy that starts past what it already
   // handed this session, hands the messages over, and notes how far that went; the session's next hook
@@ -805,6 +804,19 @@ const arm = Effect.fn("Hooks.arm")(function* ({ b, cfg }: Served, who: Here, wok
   return { b, got, hearing, reached: () => at };
 });
 
+const arm = Effect.fn("Hooks.arm")(function* (seat: Served, who: Here, woke: Effect.Effect<void, never, Scope.Scope>) {
+  const { b } = seat;
+  if (!wakeOn(loadConfig(), b.alias, b.as) || isListening(b.alias, b.as)) return null;
+  const slot = yield* Effect.promise(() => takeListenSlot(b.alias, b.as, who.session ?? ""));
+  if (!slot) return null;
+  const release = () => slot.close();
+  yield* Effect.addFinalizer(() => Effect.sync(release));
+  return yield* tune(seat, who, woke).pipe(
+    Effect.map((tuned) => ({ ...tuned, release })),
+    Effect.catchCause(() => Effect.sync(() => (release(), null))),
+  );
+});
+
 const listen = Effect.fn("Hooks.listen")(function* (served: readonly Served[], who: Here) {
   if (!hooksListen()) return 0;
   const enough = yield* Deferred.make<void>();
@@ -814,16 +826,27 @@ const listen = Effect.fn("Hooks.listen")(function* (served: readonly Served[], w
     return heard === 1 ? Effect.asVoid(Effect.forkScoped(Effect.andThen(Effect.sleep(400), Deferred.succeed(enough, undefined)))) : Effect.void;
   });
   const armed = (yield* Effect.forEach(served, (seat) => arm(seat, who, woke).pipe(Effect.catchCause(() => Effect.succeed(null))))).filter((a) => a !== null);
-  const [first, ...rest] = armed;
+  let failed = 0;
+  const hear = ({ hearing, release }: (typeof armed)[number]) =>
+    Effect.as(hearing, "heard" as const).pipe(
+      Effect.catchCause(() =>
+        Effect.suspend(() => {
+          release();
+          failed += 1;
+          return failed === armed.length ? Effect.succeed("failed" as const) : Effect.never;
+        }),
+      ),
+    );
+  const [first, ...rest] = armed.map(hear);
   if (!first) return 0;
-  const hearing = rest.reduce((all, a) => Effect.raceFirst(all, a.hearing), first.hearing);
+  const hearing = rest.reduce((all, h) => Effect.raceFirst(all, h), first);
   // Its session ending ends it too: nobody would get what it read.
   const sessionGone = who.pid ? Effect.repeat(Effect.sync(() => alive(who.pid!)), { while: (up) => up, schedule: Schedule.spaced("2 seconds") }) : Effect.never;
   const ended = yield* Effect.raceFirst(
-    Effect.as(hearing, "heard" as const),
+    hearing,
     Effect.raceFirst(Effect.as(Deferred.await(enough), "heard" as const), Effect.raceFirst(Effect.as(Effect.sleep(LISTEN_SECONDS * 1000), "day" as const), Effect.as(sessionGone, "gone" as const))),
   ).pipe(Effect.scoped);
-  if (ended === "gone" || (who.pid && !alive(who.pid))) return 0;
+  if (ended === "gone" || ended === "failed" || (who.pid && !alive(who.pid))) return 0;
   const told = armed.filter((a) => a.got.length);
   const blocks = told.map(({ b, got }) => {
     const mc = mcFor(b.alias, b.as, process.cwd(), who);
@@ -870,10 +893,12 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
       if (err instanceof ChannelGone) return Effect.as(err.why === "closed" ? keys.wipeChannel(b.alias) : keys.forgetMember(b.alias, b.as), null);
       return Effect.succeed(null);
     }),
+    Effect.timeoutOption(SEAT_ANSWER_MS),
+    Effect.map(Option.getOrNull),
   );
-  const work = Effect.flatMap(Effect.forEach(served, one), (answers) => {
+  const work = Effect.flatMap(Effect.forEach(served, one, { concurrency: "unbounded" }), (answers) => {
     const out = hookOutput(answers.filter((a) => a !== null));
     return out === null ? Effect.void : say(out);
   });
-  yield* Effect.raceFirst(work, Effect.sleep(15_000));
+  yield* Effect.raceFirst(work, Effect.sleep(HOOK_MS));
 });

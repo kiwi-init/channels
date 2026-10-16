@@ -218,7 +218,7 @@ jobs:
 
   cli-seats:
     name: cli / seats
-    inputs: ["src/**", "test/seats.test.ts", "test/multi-seat.test.ts", "test/owner.ts", "test/owner-cli.ts", "test/check.ts"]
+    inputs: ["src/**", "test/seats.test.ts", "test/multi-seat.test.ts", "test/setup.ts", "test/owner.ts", "test/owner-cli.ts", "test/check.ts"]
     always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts"]
     description: >-
       Runs test/seats.test.ts and test/multi-seat.test.ts. seats checks which agent a command or
