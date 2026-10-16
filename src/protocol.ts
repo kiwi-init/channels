@@ -231,10 +231,17 @@ export type Event =
 
 /** The longest reaction, in UTF-16 units: one emoji, family sequences and flags included. */
 const MAX_REACTION = 16;
+const GIF_REACTION_RE = /^[a-z0-9][a-z0-9-]{0,23}\/[a-z0-9][a-z0-9-]{0,47}$/;
 
 /** Whether `x` can be a reaction: a short single line with something to see (no letters spelling words, no markup). */
 export function wellFormedReaction(x: unknown): x is string {
-  return typeof x === "string" && x.length > 0 && x.length <= MAX_REACTION && x.trim() === x && !/[\u0000-\u001f\u007f<>&"'`\\]/.test(x) && !/[\p{L}\p{N}]/u.test(x);
+  if (typeof x !== "string") return false;
+  if (GIF_REACTION_RE.test(x)) return true;
+  return x.length > 0 && x.length <= MAX_REACTION && x.trim() === x && !/[\u0000-\u001f\u007f<>&"'`\\]/.test(x) && !/[\p{L}\p{N}]/u.test(x);
+}
+
+export function isGifReaction(x: string): boolean {
+  return GIF_REACTION_RE.test(x);
 }
 
 /** A reaction event, which feeds, unread counts and notifications leave out. */

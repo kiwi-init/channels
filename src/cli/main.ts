@@ -32,7 +32,8 @@ import { asOption, channelOption, isWakeVia, wakeKey, wakeWords } from "../wake.
 import { ago, cardLine, charterLines, describeEvent, holdLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, missingImages, formatTask, formatTasks, looksLikeLine, modeLine, parseDuration, presenceWords, taskStateWord, statusJson } from "../format.ts";
 import { canPost, describeScopes, presetOf, SCOPES, type Scope } from "../scopes.ts";
 import { fingerprint } from "../identity.ts";
-import { CHAT_KINDS, COLORS, HANDOFF_DEFAULT_SECONDS, HANDOFF_MAX_SECONDS, HANDOFF_MAX_VENDOR, handoffUrl, ignored, isColor, type Kind, type Message, type TaskState } from "../protocol.ts";
+import reactionPack from "../../assets/reactions/index.json";
+import { CHAT_KINDS, COLORS, HANDOFF_DEFAULT_SECONDS, HANDOFF_MAX_SECONDS, HANDOFF_MAX_VENDOR, handoffUrl, ignored, isGifReaction, isColor, type Kind, type Message, type TaskState } from "../protocol.ts";
 import { chooseThread, humanOf, parseTaskId, similarOpenTasks, taskId, wentTo, type ChannelState } from "../state.ts";
 import { VERSION } from "../version.ts";
 import { computerClaimFor } from "../machine.ts";
@@ -74,7 +75,7 @@ Agents
                                                  Couldn't or the link expires (exit 4)
      --image f.png · --room R · --kind K
   kiwi reply N "text"                            answer message #N: to its sender, in its room
-  kiwi react N 👍 [--clear]                       react to message #N with one emoji (--clear takes it back)
+  kiwi react N ok/trailer [--clear]              react to message #N with a GIF (kiwi react --list shows them) or one emoji
   kiwi show N [dir]                              message #N in full, with its whole thread; its images saved
   kiwi log [-n 30] [--all] [--room R]            recent history (marks nothing read)
   kiwi status [--json]                           one screen: who's here and online, the charter, tasks, notes,
@@ -137,6 +138,7 @@ const { values: opt, positionals: args } = parseArgs({
     vendor: { type: "string" },
     expires: { type: "string" },
     reveal: { type: "boolean" },
+    list: { type: "boolean" },
     owner: { type: "string" },
     after: { type: "string" },
     detail: { type: "string" },
@@ -901,9 +903,15 @@ const commands: Record<string, Command> = {
 
   react: () =>
     oneLook(Effect.gen(function* () {
+      if (args[1] === "--list" || opt.list) {
+        for (const g of reactionPack) out(`${g.reaction}/${g.name}  ${g.feeling}`);
+        return;
+      }
       const s = yield* session();
-      const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi react N 👍 (or --clear)"));
-      const emoji = opt.clear ? null : (args[2]?.trim() || (yield* die("usage: kiwi react N 👍 (or --clear)")));
+      const usage = "usage: kiwi react N ok/trailer (kiwi react --list shows the GIFs), or an emoji; --clear takes it back";
+      const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die(usage));
+      const emoji = opt.clear ? null : (args[2]?.trim() || (yield* die(usage)));
+      if (emoji && isGifReaction(emoji) && !reactionPack.some((g) => `${g.reaction}/${g.name}` === emoji)) return yield* die(`no GIF ${emoji}: kiwi react --list shows them`);
       yield* s.react(seq, emoji);
       out(emoji ? `reacted ${emoji} to #${seq}` : `took back your reaction on #${seq}`);
     })),

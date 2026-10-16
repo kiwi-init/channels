@@ -10,6 +10,7 @@ import { recentPrs } from "@mc/work.ts"
 import { secrets } from "@/lib/secrets"
 import { channelTitle, forgetChannel, loadMember, loadRecent, renameChannel, saveRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { howHere } from "@/lib/presence"
+import type { Gif } from "@/lib/gifs"
 import { lastPreview } from "@/lib/preview"
 import { markSeen, setOpenNews } from "@/lib/news"
 import { useIcons, useLiveIcon } from "@/lib/icons"
@@ -25,7 +26,8 @@ import { AddAgent } from "./add-agent"
 import { AgentStrip, type AgentNow } from "./agent-strip"
 import { ChannelControls, HoldBanner, HoldDialog } from "./controls"
 import { Icon } from "./icon"
-import { Button, IconButton, Spinner } from "./kit"
+import { Button, IconButton, Spinner, errorText, toast } from "./kit"
+import { GifPicker } from "./gif-picker"
 import { Bubble, EventGroup, EventRow, TimeMark, isAgent, standsAlone, type ThreadSummary } from "./message"
 import { NeedsYou } from "./needs-you"
 import { FLOAT_GAP, FLOAT_W, Overview } from "./side-panel"
@@ -90,6 +92,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const roomId = member.access.roomId
   const icon = useIcons().get(roomId) ?? null
   const now = useNow()
+  const [reacting, setReacting] = useState<Message | null>(null)
   // Where you are in the channel: its main conversation, or a direct one.
   const [here, setHere] = useState<string>("main")
   const [side, setSide] = useState<Side>(null)
@@ -374,6 +377,15 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     },
     [coordinator, state.placeOf, rootOf, openThread]
   )
+  const react = useCallback(
+    (g: Gif) => {
+      const on = reacting
+      setReacting(null)
+      if (!on) return
+      void send("reaction", { kind: "event", ev: { op: "react", seq: on.seq, emoji: `${g.reaction}/${g.name}` } }).catch((err) => toast(`Not sent: ${errorText(err)}`, "error"))
+    },
+    [reacting, send]
+  )
   const peopleOf = useCallback(
     (list: Message[]) => {
       const seenNames = new Map<string, { name: string; label: string; agent: boolean; color: Color | null }>()
@@ -428,6 +440,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       quoted={quoted}
       nameOf={nameOf}
       onReply={anchor ? undefined : onReply}
+      onReact={anchor ? undefined : setReacting}
       onJump={jump}
       thread={search || anchor ? undefined : summaryOf(m.seq)}
       onOpenThread={openThread}
@@ -806,6 +819,9 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
           {/* The composer floats on glass at the foot; messages scroll under it too. */}
           <div ref={footRef} className={cx("absolute inset-x-0 bottom-0 z-20", floating && CLEAR)}>
             <div aria-hidden className="scrim-bottom absolute inset-x-0 -top-6 bottom-0" />
+            {reacting && (
+              <GifPicker onPick={react} onClose={() => setReacting(null)} className="absolute right-3 bottom-[calc(100%+4px)] left-3 md:right-auto md:left-1/2 md:w-[420px] md:-translate-x-1/2" />
+            )}
             <div className="relative">
               {mayWrite ? (
                 <Composer
