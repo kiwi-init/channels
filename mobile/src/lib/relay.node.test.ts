@@ -1,51 +1,22 @@
-import { spawn, type ChildProcess } from "node:child_process"
-import { mkdtempSync, rmSync } from "node:fs"
-import { createServer } from "node:net"
-import { tmpdir } from "node:os"
-import { join, resolve } from "node:path"
 import { Channel } from "@mc/client.ts"
 import { generateIdentity } from "@mc/identity.ts"
 import type { Message } from "@mc/protocol.ts"
 import { PUBLIC_RELAY, relayUrl, setRelayUrl, watchChannel, watchedRooms } from "./relay"
+import { startTestRelay, type TestRelay } from "./relay-fixture"
 import { run } from "./runtime"
 
 jest.setTimeout(60_000)
 
-let relay = process.env.KIWI_TEST_RELAY ?? ""
-let child: ChildProcess | undefined
-const dir = mkdtempSync(join(tmpdir(), "kiwi-mobile-relay-"))
-
-function freePort(): Promise<number> {
-  return new Promise((ok, fail) => {
-    const server = createServer()
-    server.once("error", fail)
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address()
-      server.close(() => (address && typeof address === "object" ? ok(address.port) : fail(new Error("no port"))))
-    })
-  })
-}
+let relay = ""
+let testRelay: TestRelay | undefined
 
 beforeAll(async () => {
-  if (relay) return
-  const port = await freePort()
-  child = spawn("bun", [resolve(__dirname, "../../../src/relay/bun.ts"), "--hostname", "127.0.0.1", "--port", String(port), "--data", join(dir, "relay")], { stdio: ["ignore", "pipe", "inherit"] })
-  await new Promise<void>((ok, fail) => {
-    let out = ""
-    child?.stdout?.on("data", (d: Buffer) => {
-      out += d
-      if (out.includes("listening")) ok()
-    })
-    child?.once("exit", (code) => fail(new Error(`relay exited (${code})`)))
-  })
-  relay = `http://127.0.0.1:${port}`
+  testRelay = await startTestRelay()
+  relay = testRelay.url
 })
 
 afterAll(async () => {
-  const exited = child ? new Promise<void>((ok) => child?.once("exit", () => ok())) : Promise.resolve()
-  child?.kill()
-  await exited
-  rmSync(dir, { recursive: true, force: true })
+  await testRelay?.stop()
 })
 
 async function channel(): Promise<Channel> {
