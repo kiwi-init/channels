@@ -9,9 +9,9 @@ import { sum, trafficProxy, type Traffic } from "./traffic.ts";
 setDefaultTimeout(120_000);
 
 const BUDGET = {
-  send: { http: 11, sockets: 0 },
-  listenNow: { http: 4, sockets: 0 },
-  status: { http: 6, sockets: 1 },
+  send: { http: 4, messages: 1, sockets: 0 },
+  listenNow: { http: 3, sockets: 0 },
+  status: { http: 5, sockets: 1 },
 } as const;
 
 const made: string[] = [];
@@ -89,6 +89,7 @@ describe("relay traffic per agent command (each one a fresh process, as a hook i
   test("kiwi send", async () => {
     const t = await measure("send", () => ok(agent, "send", "hello from the budget"));
     expect(t.http).toBeLessThanOrEqual(BUDGET.send.http);
+    expect(t.routes["GET /messages"] ?? 0).toBeLessThanOrEqual(BUDGET.send.messages);
     expect(t.sockets).toBeLessThanOrEqual(BUDGET.send.sockets);
   });
 

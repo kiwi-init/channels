@@ -167,6 +167,12 @@ const ID = "([0-9a-f-]{36})";
 /** A handler that only reads the room. */
 const withRoom = <A>(f: (db: RoomDb) => A) => Effect.map(RoomStore, f);
 
+const holds = (req: Request, etag: string) =>
+  (req.headers.get("if-none-match") ?? "").split(",").some((t) => t.trim() === "*" || t.trim().replace(/^W\//, "") === etag);
+
+const tagged = (etag: string, data: () => unknown) =>
+  Effect.map(Request_, ({ req }) => ({ res: holds(req, etag) ? new Response(null, { status: 304, headers: { etag } }) : Response.json(data(), { headers: { etag } }) }));
+
 const routes: RoomRoute[] = [
   {
     method: "GET",
@@ -180,7 +186,17 @@ const routes: RoomRoute[] = [
         // The join code's second half is the owner key's fingerprint. A wrong one is answered like a
         // missing room. Calls with no fp never reach here (missingFingerprint).
         if (url.searchParams.get("fp") !== (yield* Effect.promise(() => ownerFingerprint(m.ownerPk)))) return yield* new ChannelGone({ message: "no such channel" });
-        return { data: { ownerPk: m.ownerPk, ownerXpk: m.ownerXpk, ownerSig: m.ownerSig, titlesSig: db.getTitlesSig(), epoch: m.epoch, rotate: m.rotate, title: db.title(), settings: db.settings(), iconAt: db.iconAt() } };
+        return yield* tagged(db.etag("info"), () => ({
+          ownerPk: m.ownerPk,
+          ownerXpk: m.ownerXpk,
+          ownerSig: m.ownerSig,
+          titlesSig: db.getTitlesSig(),
+          epoch: m.epoch,
+          rotate: m.rotate,
+          title: db.title(),
+          settings: db.settings(),
+          iconAt: db.iconAt(),
+        }));
       }),
   },
   {
@@ -279,7 +295,7 @@ const routes: RoomRoute[] = [
         if (!allow(`read:${db.roomId}:${me}`, READS_PER_MINUTE)) return yield* new TooMany({ message: "too many read marks; one a second is plenty" });
         const b = yield* json<{ seq?: unknown }>();
         const mark = yield* markRead(me, b.seq);
-        return { data: { seq: mark?.seq ?? null }, fx: mark ? { broadcast: [frame({ t: "read", ...mark })] } : undefined };
+        return { data: { seq: mark?.seq ?? null }, fx: mark ? { readers: [frame({ t: "read", ...mark })] } : undefined };
       }),
   },
   { method: "GET", path: "/keys", guard: "member", run: ({ me }) => Effect.map(keysFor(me), (data) => ({ data })) },
@@ -317,7 +333,7 @@ const routes: RoomRoute[] = [
         return { data: { ok: true }, fx: { broadcast: [frame({ t: "info" })] } };
       }),
   },
-  { method: "GET", path: "/members", guard: "member", run: () => withRoom((db) => ({ data: { members: db.members() } })) },
+  { method: "GET", path: "/members", guard: "member", run: () => Effect.flatMap(RoomStore, (db) => tagged(db.etag("roster"), () => ({ members: db.members() }))) },
   {
     method: "DELETE",
     path: "/members/me",

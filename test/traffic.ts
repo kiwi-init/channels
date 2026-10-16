@@ -4,6 +4,8 @@ import { WS_PROTOCOL } from "../src/protocol.ts";
 export interface Traffic {
   http: number;
   routes: Record<string, number>;
+  statuses: Record<string, number>;
+  routeBytes: Record<string, number>;
   sockets: number;
   framesUp: Record<string, number>;
   framesDown: Record<string, number>;
@@ -11,7 +13,7 @@ export interface Traffic {
   bytesDown: number;
 }
 
-const empty = (): Traffic => ({ http: 0, routes: {}, sockets: 0, framesUp: {}, framesDown: {}, bytesUp: 0, bytesDown: 0 });
+const empty = (): Traffic => ({ http: 0, routes: {}, statuses: {}, routeBytes: {}, sockets: 0, framesUp: {}, framesDown: {}, bytesUp: 0, bytesDown: 0 });
 
 const bump = (into: Record<string, number>, key: string) => void (into[key] = (into[key] ?? 0) + 1);
 
@@ -51,11 +53,14 @@ export function trafficProxy(target: string): { url: string; stats: Traffic; res
         if (srv.upgrade(req, { data: { path: url.pathname + url.search, protocols }, headers })) return undefined;
       }
       stats.http++;
-      bump(stats.routes, routeOf(req.method, url.pathname));
+      const route = routeOf(req.method, url.pathname);
+      bump(stats.routes, route);
       stats.bytesUp += body?.byteLength ?? 0;
       const res = await fetch(target + url.pathname + url.search, { method: req.method, headers: req.headers, body });
       const out = new Uint8Array(await res.arrayBuffer());
       stats.bytesDown += out.byteLength;
+      bump(stats.statuses, `${route} ${res.status}`);
+      stats.routeBytes[route] = (stats.routeBytes[route] ?? 0) + out.byteLength;
       const headers = new Headers(res.headers);
       headers.delete("content-encoding");
       headers.delete("content-length");

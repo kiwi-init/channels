@@ -77,7 +77,7 @@ const play = Effect.fn("Demo.run")(function* (opts: DemoOptions) {
   // Every message as it lands, one line each, the way agents read the channel.
   const watcher = yield* Effect.forkChild(
     eachLive(
-      human.ch.fx.live(yield* human.ch.fx.head(), { presence: false }),
+      human.ch.fx.live(yield* human.ch.fx.head(), { presence: false, reads: false }),
       (ev) => (ev._tag === "Message" ? Effect.flatMap(human.state(), ({ state }) => line(formatMessage(ev.message, state.trust.get(ev.message.seq), state))) : Effect.void),
       () => Effect.void,
     ).pipe(Effect.ignoreCause),
