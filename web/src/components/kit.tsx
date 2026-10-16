@@ -299,7 +299,11 @@ export function Toaster() {
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[60] flex flex-col items-center gap-2 px-4" aria-live="polite">
       {items.map((t) => (
-        <div key={t.id} role="status" className={cx("animate-rise max-w-md rounded-card bg-ink px-3.5 py-2 text-ui font-medium text-canvas shadow-pop", t.tone === "error" && "bg-alert text-white")}>
+        <div
+          key={t.id}
+          role="status"
+          className={cx("animate-rise max-w-md rounded-card px-3.5 py-2 text-ui font-medium shadow-pop", t.tone === "error" ? "bg-alert text-white" : "bg-ink text-canvas")}
+        >
           {t.text}
         </div>
       ))}

@@ -148,6 +148,8 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
   const lastSeenOf = (name: string) => p.state.members.get(name)?.lastSeen || null
   const onlineNow = (name: string) => p.online.has(name) || p.now - (lastSeenOf(name) ?? 0) < 10 * 60_000
 
+  const admittedElsewhere = confirm?.kind === "approve" && !busy && active.some((m) => m.pk === confirm.req.pk)
+
   const run = async (fn: () => Promise<void>, done: string) => {
     setBusy(true)
     try {
@@ -314,7 +316,7 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
       </Alert>
 
       <Alert
-        open={confirm?.kind === "approve"}
+        open={confirm?.kind === "approve" && !admittedElsewhere}
         onClose={() => setConfirm(null)}
         title={confirm?.kind === "approve" ? `Let ${confirm.req.name} in?` : ""}
         message={

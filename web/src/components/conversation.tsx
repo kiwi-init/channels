@@ -558,8 +558,16 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       state={state}
       now={now}
       onApprove={async (r, scopes) => {
-        await ch.approve(r, wireScopes(scopes) ? { scopes } : undefined, { person: secrets().person?.pk })
-        await Promise.all([refreshRequests(), refreshRoster()])
+        const as = wireScopes(scopes) ? { scopes } : undefined
+        try {
+          await ch.approve(r, as, { person: secrets().person?.pk })
+        } catch (err) {
+          const joined = (await ch.members().catch(() => [])).find((m) => m.active && m.pk === r.pk)
+          if (!joined) throw err
+          if (String(wireScopes(joined.scopes)) !== String(wireScopes(scopes))) throw new Error(`${r.name} already joined with other permissions: change them from its menu`, { cause: err })
+        } finally {
+          await Promise.all([refreshRequests(), refreshRoster()])
+        }
       }}
       onScopes={async (m, scopes) => {
         const wire = wireScopes(scopes)

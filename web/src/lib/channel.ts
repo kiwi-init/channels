@@ -557,6 +557,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
           return
         }
         case "Roster":
+          void refreshRequests()
           return void refreshRoster()
         case "Request":
           return void refreshRequests()
