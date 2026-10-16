@@ -186,6 +186,19 @@ jobs:
       for example a Node- or Bun-only import reaching src/relay/worker.ts, or an invalid
       wrangler.jsonc. Code the worker doesn't import can't affect it.
 
+  lab-workspace:
+    name: lab / workspace
+    inputs: ["lab/workspace/**"]
+    always: ["lab/workspace/package.json", "lab/workspace/bun.lock"]
+    description: >-
+      The lab prototype in lab/workspace: a Durable Object that holds a git clone in its SQLite,
+      with copy-on-write worktrees per agent and a just-bash shell over them. Type-checks the
+      Worker (src/) and the scripts, then runs scripts/e2e.ts: it serves a bare copy of this repo
+      over git smart HTTP, starts wrangler dev, clones into the Durable Object, edits three
+      worktrees at once, merges them, checks a conflicting merge is refused, pushes back and runs
+      git fsck on the result. Fails on a type error, a broken clone, commit, merge or push, or
+      objects git rejects. Nothing outside lab/workspace affects it.
+
   repo-comments:
     jev: false
     name: repo / comments

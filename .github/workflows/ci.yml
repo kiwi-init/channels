@@ -279,6 +279,28 @@ jobs:
           job: relay-worker
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['relay-worker'] }}
 
+  lab-workspace:
+    name: lab / workspace
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['lab-workspace']
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lab/workspace
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run e2e
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: lab-workspace
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['lab-workspace'] }}
+
   repo-comments:
     name: repo / comments
     needs: plan
@@ -339,7 +361,7 @@ jobs:
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, cli-build, relay-worker, repo-comments, desktop-keys, repo-knip, web-bundle, site-test, repo-pins]
+    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, cli-build, relay-worker, repo-comments, desktop-keys, repo-knip, web-bundle, site-test, repo-pins, lab-workspace]
     if: always()
     runs-on: ubuntu-latest
     permissions:
