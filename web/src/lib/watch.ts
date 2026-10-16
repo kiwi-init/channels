@@ -1,5 +1,7 @@
 import type { ChannelOps, FollowEvent } from "../../../desktop/src/bridge.ts"
 
+export const HEADS_SAFETY_MS = 300_000
+
 type WatchEvent = { _tag: "Open" } | { _tag: "Head"; seq: number } | { _tag: "Request" }
 
 type Listener = (e: WatchEvent) => void

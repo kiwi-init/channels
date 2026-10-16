@@ -6,8 +6,8 @@ import { join } from "node:path";
 import type { ChannelIdentityView, ChannelOps } from "../desktop/src/bridge.ts";
 import { Keyring, type KeyHost } from "../desktop/src/keyring.ts";
 import { acceptSeat, withAccess } from "../desktop/src/seats.ts";
-import { tendOnPush, tendOwned } from "../web/src/lib/approval-tend.ts";
-import { makeWatches } from "../web/src/lib/watch.ts";
+import { TEND_SAFETY_MS, tendOnPush, tendOwned } from "../web/src/lib/approval-tend.ts";
+import { HEADS_SAFETY_MS, makeWatches } from "../web/src/lib/watch.ts";
 import { decodeJoinCode } from "../src/crypto.ts";
 import { generateIdentity, type Identity } from "../src/identity.ts";
 import { provePerson } from "../src/person.ts";
@@ -19,7 +19,6 @@ setDefaultTimeout(120_000);
 
 const HEADS_EVERY_BEFORE = 15_000;
 const TEND_EVERY_BEFORE = 20_000;
-const SAFETY_EVERY_AFTER = 300_000;
 const BUDGET = { idleHttpPerMinute: 4 } as const;
 
 const dataDir = mkdtempSync(join(tmpdir(), "kiwi-budget-app-"));
@@ -151,9 +150,10 @@ describe("the app's sidebar and approval, idle, for 5 channels (3 owned)", () =>
     expect(opened.sockets).toBe(5);
 
     const idle = await measure(() => Bun.sleep(3_000));
-    const safety = (await measure(headTick)).http + (await measure(tendPass)).http;
-    const after = (idle.http * 60_000) / 3_000 + (safety * 60_000) / SAFETY_EVERY_AFTER;
-    console.log(`after: ${idle.http} http in 3s idle, ${safety} http per 5-minute safety poll -> ${after} http/min idle (before ${before})`);
+    const safetyHeads = (await measure(headTick)).http;
+    const safetyTend = (await measure(tendPass)).http;
+    const after = (idle.http * 60_000) / 3_000 + (safetyHeads * 60_000) / HEADS_SAFETY_MS + (safetyTend * 60_000) / TEND_SAFETY_MS;
+    console.log(`after: ${idle.http} http in 3s idle, ${safetyHeads} http per ${HEADS_SAFETY_MS / 1000}s head poll, ${safetyTend} http per ${TEND_SAFETY_MS / 1000}s approval poll -> ${after} http/min idle (before ${before})`);
     expect(idle.http).toBe(0);
     expect(after).toBeLessThanOrEqual(BUDGET.idleHttpPerMinute);
     expect(after).toBeLessThan(before);

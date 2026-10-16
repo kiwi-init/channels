@@ -5,12 +5,10 @@
 
 import { useEffect } from "react"
 
-import { tendOnPush, tendOwned } from "./approval-tend"
+import { TEND_SAFETY_MS, tendOnPush, tendOwned } from "./approval-tend"
 import { loadMember, type ChannelRow } from "./channel"
 import { linkOf, watches } from "./channel-ops"
 import { bridge, secrets } from "./secrets"
-
-const EVERY_MS = 300_000
 
 /** Requests already announced, so each is notified once per run of the app. */
 const told = new Set<string>()
@@ -42,7 +40,7 @@ export function useAutoApproval(rows: ChannelRow[]): void {
     })
     const timer = window.setInterval(() => {
       for (const code of codes) tending.kick(code)
-    }, EVERY_MS)
+    }, TEND_SAFETY_MS)
     return () => {
       tending.stop()
       clearInterval(timer)

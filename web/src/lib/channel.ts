@@ -11,6 +11,7 @@ import { fold, type ChannelState, type GuardFloor, type Roster } from "@mc/state
 import type { Activity } from "@mc/protocol.ts"
 import type { PublicAccess } from "../../../desktop/src/bridge.ts"
 import { errorOf, linkOf, ops, watches, type ChannelLink, type FollowEvent } from "./channel-ops"
+import { HEADS_SAFETY_MS } from "./watch"
 import { forgetHistory, readCached, rememberRow } from "./history"
 import { migrateLegacy } from "./legacy-seats"
 import { wholeLog } from "./history-plan"
@@ -248,9 +249,6 @@ export interface ChannelRow {
   head?: number
 }
 
-/** How often listed channels are asked for their head (GET /). Cheap: seq only. */
-const HEADS_EVERY = 300_000
-
 const untitled = (room: string) => `Channel ${room.slice(0, 4).toUpperCase()}`
 
 /** Every channel to show in the list: the ones this app is in or waiting on. */
@@ -338,7 +336,7 @@ export function useChannelList(): ChannelRow[] {
       if (stop || my !== gen) return
       put(next)
     }
-    const id = setInterval(tick, HEADS_EVERY)
+    const id = setInterval(tick, HEADS_SAFETY_MS)
     const onVis = () => {
       if (!document.hidden) void tick()
     }

@@ -2,6 +2,8 @@
 
 import type { Watches } from "./watch"
 
+export const TEND_SAFETY_MS = 300_000
+
 export interface TendApi {
   autoApprove: (person: string) => Promise<readonly { name: string }[]>
   requests: (opts: { person: string }) => Promise<readonly { id: string; name: string }[]>
