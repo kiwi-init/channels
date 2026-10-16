@@ -217,6 +217,17 @@ describe("a fold resumed from a snapshot folds to the same state as the whole lo
     same(fold(w.messages.filter((m) => m.seq > 140), w.roster, NOW, w.floors.mode, w.floors.rooms, w.floors.guard, second), full);
   });
 
+  test("one base folds the same tail twice to the same state", async () => {
+    const w = await world(200, 13);
+    const full = fold(w.messages, w.roster, NOW, w.floors.mode, w.floors.rooms, w.floors.guard);
+    const base = capture(w.messages, w.roster, w.floors, 100);
+    const kept = structuredClone(base);
+    const tail = w.messages.filter((m) => m.seq > 100);
+    expect(tail.some((m) => m.ev?.op === "task.update" && !!m.ev.note)).toBe(true);
+    for (let i = 0; i < 2; i++) same(fold(tail, w.roster, NOW, w.floors.mode, w.floors.rooms, w.floors.guard, base), full);
+    expect(base).toEqual(kept);
+  });
+
   test("with no settings floors (an agent's fold without the owner's signed settings)", async () => {
     const w = await world(150, 11);
     const none: Floors = { mode: null, rooms: null, guard: null };

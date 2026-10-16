@@ -434,9 +434,10 @@ export function fold(
   modeFloor?: { coordinatorOnly: boolean; strict: boolean; since: number } | null,
   roomsFloor?: RoomsFloor | null,
   guardFloor?: GuardFloor | null,
-  from?: FoldBase | null,
+  given?: FoldBase | null,
   keep?: (base: FoldBase) => void,
 ): ChannelState {
+  const from = given ? structuredClone(given) : null;
   const after = from?.n ?? -1;
   const ahead = <F extends { since: number }>(f: F | null | undefined): F | null => (f && f.since >= after ? f : null);
   const members = new Map<string, Member>();
