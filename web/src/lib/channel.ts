@@ -471,28 +471,24 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
   const isOwner = ch.isOwner
 
   const [infoAt, setInfoAt] = useState(0)
+  const [modeFloor, setModeFloor] = useState<ModeSetting | null>(null)
+  const [guardFloor, setGuardFloor] = useState<GuardFloor | null>(null)
+  const [roomsFloor, setRoomsFloor] = useState<RoomsSetting | null>(null)
   useEffect(() => {
-    void ch
-      .title()
+    const title = ch.title()
+    const mode = ch.mode()
+    const guard = ch.guard()
+    const rooms = ch.rooms()
+    void title
       .then((name) => {
         const stored = loadMember(member.code)
         if (name && stored && stored.name !== name) void renameChannel(member.code, name)
       })
       .catch(() => {})
+    void mode.then(setModeFloor, () => {})
+    void guard.then(setGuardFloor, () => {})
+    void rooms.then(setRoomsFloor, () => {})
   }, [ch, member.code, infoAt])
-
-  const [modeFloor, setModeFloor] = useState<ModeSetting | null>(null)
-  useEffect(() => {
-    void ch.mode().then(setModeFloor, () => {})
-  }, [ch, infoAt])
-  const [guardFloor, setGuardFloor] = useState<GuardFloor | null>(null)
-  useEffect(() => {
-    void ch.guard().then(setGuardFloor, () => {})
-  }, [ch, infoAt])
-  const [roomsFloor, setRoomsFloor] = useState<RoomsSetting | null>(null)
-  useEffect(() => {
-    void ch.rooms().then(setRoomsFloor, () => {})
-  }, [ch, infoAt])
 
   const onGone = useCallback(
     (err: unknown) => {
