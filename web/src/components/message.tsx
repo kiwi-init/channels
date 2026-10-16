@@ -446,7 +446,7 @@ export const Bubble = memo(function Bubble({
                     : cx("h-5 rounded-full px-1.5", c.mine ? "bg-accent-wash text-accent-text" : "bg-wash-2 text-ink-2")
                 )}
               >
-                {isGifReaction(c.emoji) && gifByKey(c.emoji) ? <img src={gifByKey(c.emoji)?.url} alt="" className="h-14 w-auto rounded-[10px]" /> : <span aria-hidden>{c.emoji}</span>}
+                {isGifReaction(c.emoji) && gifByKey(c.emoji) ? <img src={gifByKey(c.emoji)?.url} alt="" className="h-32 w-auto max-w-full rounded-[12px]" /> : <span aria-hidden>{c.emoji}</span>}
                 {c.who.length > 1 && <span aria-hidden>{c.who.length}</span>}
               </span>
             ))}
