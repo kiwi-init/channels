@@ -17,7 +17,8 @@
     "plugins": [
       "expo-router",
       "react-native-quick-crypto",
-      "expo-build-properties"
+      "expo-build-properties",
+      "expo-sqlite"
     ]
   }
 }
