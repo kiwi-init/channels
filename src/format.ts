@@ -3,7 +3,7 @@
 import { loadJson, loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { inlineText, runsLine, type Runs } from "./membership.ts";
 import { GENERAL_ROOM, ignored, imageMarker } from "./protocol.ts";
-import type { Card, Message, OldTaskState, TaskState, Trust } from "./protocol.ts";
+import type { Card, Message, OldTaskState, Reach, TaskState, Trust } from "./protocol.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
 import { colorOf, humanOf, isPerson, taskId, type ChannelState, type Fact, type ReviewRound, type Task } from "./state.ts";
 import { isWakeVia, wakeWords, type WakeVia } from "./wake.ts";
@@ -237,17 +237,19 @@ export function formatFact(f: Fact, now = Date.now()): string {
   return [head, ...lines.slice(1).map((l) => `  │ ${l}`)].join("\n");
 }
 
-export function presenceWords(on: { client: string; readAt?: number; wake?: string }, now = Date.now()): string {
+export function presenceWords(on: { client: string; reach?: Reach; readAt?: number; wake?: string }, now = Date.now()): string {
   if (on.client !== "daemon") return `online (${inlineText(on.client, 40)})`;
-  const wake = isWakeVia(on.wake) ? `wakes via ${wakeWords(on.wake)}` : "can't be woken";
-  return `reachable · ${wake} · ${on.readAt === undefined ? "not read yet" : `read ${ago(on.readAt, now)}`}`;
+  const via = isWakeVia(on.wake) ? on.wake : null;
+  const wake = via ? `wakes via ${wakeWords(via)}` : "can't be woken";
+  const there = on.reach === "unreachable" && (!via || via === "hooks") ? "not listening" : "reachable";
+  return `${there} · ${wake} · ${on.readAt === undefined ? "not read yet" : `read ${ago(on.readAt, now)}`}`;
 }
 
 export interface Snapshot {
   alias: string;
   me: string;
   state: ChannelState;
-  online: Map<string, { client: string; role?: string; readAt?: number; wake?: WakeVia }>;
+  online: Map<string, { client: string; role?: string; reach?: Reach; readAt?: number; wake?: WakeVia }>;
   unread: number;
   now?: number;
 }

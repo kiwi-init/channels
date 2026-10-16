@@ -6,7 +6,7 @@ import * as Effect from "effect/Effect";
 import { AgentSession, runAgent } from "../src/agent.ts";
 import { Channel } from "../src/client.ts";
 import { forgetIdentity, identitiesIn, loadConfig, saveConfig, saveIdentity, type SeatRecord } from "../src/config.ts";
-import { activityEnv, daemonHello, daemonListening, daemonSock, listenDaemon, reportRead, startDaemon, stopDaemon, type Daemon } from "../src/daemon.ts";
+import { activityEnv, reachOf, daemonHello, daemonListening, daemonSock, listenDaemon, reportRead, startDaemon, stopDaemon, type Daemon } from "../src/daemon.ts";
 import { presenceWords } from "../src/format.ts";
 import { generateIdentity, type Identity } from "../src/identity.ts";
 import type { Presence } from "../src/protocol.ts";
@@ -78,7 +78,7 @@ describe("seats always on", () => {
   test("with no subscriber, a joined agent's seat is open and the relay sees it as the daemon", async () => {
     await until("claude's seat", async () => (await seatOf("claude")) !== null);
     expect(await seatOf("claude")).toMatchObject({ channel: "test", agent: "claude", subscribers: 0, read: null, wake: { on: true, path: { kind: "none" }, last: null } });
-    await until("claude's presence", () => from(claudePk).some((p) => p.client === "daemon"));
+    await until("claude's presence", () => from(claudePk).some((p) => p.client === "daemon" && p.reach === "unreachable"));
   });
 
   test("a read is recorded with its session and announced as readAt", async () => {
@@ -100,13 +100,13 @@ describe("seats always on", () => {
     await until("gemini's presence", () => from(geminiPk).some((p) => p.client === "daemon"));
   });
 
-  test("who() shows another agent as reachable with its read time, and your own seat from the daemon", async () => {
+  test("who() shows another agent nobody listens for as not listening, with its read time, and your own seat from the daemon", async () => {
     const s = await AgentSession.open("test", loadConfig().channels.test!, "gemini");
     const online = await runAgent(s.who());
     expect(online.get("claude")?.client).toBe("daemon");
     expect(typeof online.get("claude")?.readAt).toBe("number");
     expect(online.get("gemini")?.client).toBe("daemon");
-    expect(presenceWords(online.get("claude")!)).toStartWith("reachable · can't be woken · read ");
+    expect(presenceWords(online.get("claude")!)).toStartWith("not listening · can't be woken · read ");
     expect(presenceWords(online.get("gemini")!)).toBe("reachable · can't be woken · not read yet");
   });
 
@@ -115,6 +115,16 @@ describe("seats always on", () => {
     const seen = from(claudePk).length;
     await runAgent(Effect.raceFirst(s.listen(() => Effect.void, {}), Effect.sleep(2_000)));
     expect(from(claudePk).slice(seen).every((p) => p.client === "daemon")).toBe(true);
+  });
+
+  test("a seat with a listener is announced as listening, and as unreachable again once it goes", async () => {
+    const s = await AgentSession.open("test", loadConfig().channels.test!, "claude");
+    const seen = from(claudePk).length;
+    const heardListening = () => from(claudePk).slice(seen).some((p) => p.reach === "listening");
+    await runAgent(Effect.raceFirst(s.listen(() => Effect.void, {}), Effect.promise(() => until("a listening presence", heardListening))));
+    expect(heardListening()).toBe(true);
+    const after = from(claudePk).length;
+    await until("an unreachable presence", () => from(claudePk).slice(after).some((p) => p.reach === "unreachable"));
   });
 
   test("the daemon reports a Claude seat's activity from its record, even with no session id", async () => {
@@ -234,6 +244,37 @@ describe("presenceWords", () => {
     expect(presenceWords({ client: "daemon" }, now)).toBe("reachable · can't be woken · not read yet");
     expect(presenceWords({ client: "daemon", wake: "something else" }, now)).toBe("reachable · can't be woken · not read yet");
     expect(presenceWords({ client: "web" }, now)).toBe("online (web)");
+  });
+
+  test("a seat nobody listens for is not listening, unless the daemon can wake it", () => {
+    const now = Date.now();
+    expect(presenceWords({ client: "daemon", reach: "unreachable" }, now)).toBe("not listening · can't be woken · not read yet");
+    expect(presenceWords({ client: "daemon", reach: "unreachable", wake: "opencode-api" }, now)).toStartWith("reachable · wakes via ");
+    expect(presenceWords({ client: "daemon", reach: "unreachable", wake: "hooks" }, now)).toStartWith("not listening · wakes via ");
+    expect(presenceWords({ client: "daemon", reach: "listening" }, now)).toBe("reachable · can't be woken · not read yet");
+    expect(presenceWords({ client: "daemon", reach: "running" }, now)).toBe("reachable · can't be woken · not read yet");
+  });
+});
+
+describe("reachOf", () => {
+  const seat = (r: Partial<SeatRecord>): SeatRecord => ({ alias: "test", as: "a", ...r });
+  const alive = (pid: number) => pid === 7;
+
+  test("a listener makes a seat listening, whatever its harness says", () => {
+    expect(reachOf(true, null, undefined, alive)).toBe("listening");
+    expect(reachOf(true, seat({ harness: "grok", session: "g" }), { state: "idle", since: 1 }, alive)).toBe("listening");
+  });
+
+  test("with no listener, a live harness process or a harness at work makes it running", () => {
+    expect(reachOf(false, seat({ harness: "claude", pid: 7 }), undefined, alive)).toBe("running");
+    expect(reachOf(false, seat({ harness: "grok", session: "g" }), { state: "working" }, alive)).toBe("running");
+    expect(reachOf(false, seat({ harness: "codex", session: "c" }), { state: "waiting" }, alive)).toBe("running");
+  });
+
+  test("an idle session nobody listens for, or a dead process, is unreachable", () => {
+    expect(reachOf(false, seat({ harness: "grok", session: "g" }), { state: "idle", since: 1 }, alive)).toBe("unreachable");
+    expect(reachOf(false, seat({ harness: "claude", pid: 8 }), { state: "idle" }, alive)).toBe("unreachable");
+    expect(reachOf(false, null, undefined, alive)).toBe("unreachable");
   });
 });
 

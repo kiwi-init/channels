@@ -398,6 +398,12 @@ export function cleanActivity(x: unknown): Activity | null {
   return { state: r.state, ...(tool ? { tool } : {}), ...(model ? { model } : {}), ...(since ? { since } : {}) };
 }
 
+export type Reach = "listening" | "running" | "unreachable";
+
+export function isReach(x: unknown): x is Reach {
+  return x === "listening" || x === "running" || x === "unreachable";
+}
+
 /** Ephemeral, unstored payloads: presence beacons and queries. */
 export interface Presence {
   v: typeof PROTOCOL_VERSION;
@@ -410,6 +416,7 @@ export interface Presence {
   query?: boolean;
   /** What the agent is doing right now, when its harness says (read through cleanActivity). */
   activity?: Activity;
+  reach?: Reach;
   readAt?: number;
   wake?: string;
   ts: number;

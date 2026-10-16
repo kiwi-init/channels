@@ -10,6 +10,7 @@ import type { Load } from "@mc/load.ts"
 import type { Activity, Color } from "@mc/protocol.ts"
 import { taskId } from "@mc/state.ts"
 import { formatAgo, shortTitle } from "@/lib/format"
+import { howWords, type How } from "@/lib/presence"
 import { cx } from "@/lib/utils"
 import { CoordinatorAvatar } from "./coordinator-head"
 import { Icon } from "./icon"
@@ -19,7 +20,7 @@ export interface AgentNow {
   name: string
   label: string
   color: Color | null
-  online: boolean
+  here: How | null
   coordinator: boolean
   /** The model it says it runs on (its card, or what its harness says now). */
   model?: string
@@ -32,7 +33,7 @@ export interface AgentNow {
 
 /** What it's doing now, in a few words: live from its harness when it says, else from its tasks. */
 function doingNow(a: AgentNow): { text: string; busy: boolean } | null {
-  const act = a.online ? a.activity : undefined
+  const act = a.here ? a.activity : undefined
   if (act?.state === "working") return { text: act.tool ? `Running ${act.tool}` : "Thinking", busy: true }
   if (act?.state === "waiting") return { text: "Waiting for a person", busy: false }
   if (act?.state === "idle") return { text: "Idle", busy: false }
@@ -40,17 +41,17 @@ function doingNow(a: AgentNow): { text: string; busy: boolean } | null {
 }
 
 const face = (a: AgentNow, size: number) =>
-  a.coordinator ? <CoordinatorAvatar size={size} /> : <Monogram name={a.label} hue={a.name} agent color={a.color} size={size} online={size > 20 && a.online} />
+  a.coordinator ? <CoordinatorAvatar size={size} /> : <Monogram name={a.label} hue={a.name} agent color={a.color} size={size} online={size > 20 && !!a.here} />
 
 export function AgentStrip({ agents, now, onOpenTask }: { agents: AgentNow[]; now: number; onOpenTask: (id: number) => void }) {
   const [open, setOpen] = useState(false)
   if (!agents.length) return null
   // Working first, then whoever's here, then whoever's away.
   // Busy means its harness says it's working, or (when its harness doesn't say) a task it's on.
-  const busy = (a: AgentNow) => doingNow(a)?.busy ?? a.load.current.length > 0
-  const ordered = [...agents].sort((a, b) => Number(busy(b)) - Number(busy(a)) || Number(b.online) - Number(a.online))
+  const busy = (a: AgentNow) => !!a.here && (doingNow(a)?.busy ?? a.load.current.length > 0)
+  const ordered = [...agents].sort((a, b) => Number(busy(b)) - Number(busy(a)) || Number(!!b.here) - Number(!!a.here))
   const working = ordered.filter(busy)
-  const here = agents.filter((a) => a.online).length
+  const here = agents.filter((a) => a.here).length
   const line = working.length
     ? working
         .slice(0, 2)
@@ -73,7 +74,7 @@ export function AgentStrip({ agents, now, onOpenTask }: { agents: AgentNow[]; no
                     <span className="truncate text-ui font-semibold">{a.label}</span>
                     {a.model && <span className="truncate text-stamp text-ink-3">{a.model}</span>}
                     {a.coordinator && <span className="shrink-0 text-stamp text-ink-3">coordinator</span>}
-                    <span className="ml-auto shrink-0 text-stamp text-ink-3">{a.online ? "online" : a.lastAt ? `away · ${formatAgo(a.lastAt, now)}` : "away"}</span>
+                    <span className="ml-auto shrink-0 text-stamp text-ink-3">{a.here ? "online" : a.lastAt ? `away · ${formatAgo(a.lastAt, now)}` : "away"}</span>
                   </span>
                   {/* Live from its harness: what it's doing this moment. */}
                   {doingNow(a) && (
@@ -89,8 +90,10 @@ export function AgentStrip({ agents, now, onOpenTask }: { agents: AgentNow[]; no
                         <span className="font-medium text-doing">Working on</span> <span className="tabular-nums">{taskId(t.id)}</span> {t.title}
                       </button>
                     ))
-                  ) : doingNow(a) ? null : (
-                    <span className="block text-meta text-ink-3">{a.online ? "Idle" : "Not running"}</span>
+                  ) : doingNow(a) ? null : a.here ? (
+                    howWords(a.here) && <span className="block text-meta text-ink-3">{howWords(a.here)}</span>
+                  ) : (
+                    <span className="block text-meta text-ink-3">Not listening</span>
                   )}
                   {(a.load.queued.length > 0 || a.load.waiting.length > 0) && (
                     <span className="block text-stamp text-ink-3">
