@@ -141,14 +141,13 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
   const [scopeDraft, setScopeDraft] = useState<Scope[]>([...SCOPES])
   const [nickDraft, setNickDraft] = useState("")
   const active = p.roster.filter((m) => m.active)
+  if (confirm?.kind === "approve" && active.some((m) => m.pk === confirm.req.pk)) setConfirm(null)
   // Someone else's seat: the joiner's own key landing in the roster mid-approve (the live join event beats
   // the approve call home) is this request going through, not a clash.
   const taken = confirm?.kind === "approve" && active.some((m) => m.pk !== confirm.req.pk && nameKey(m.name) === nameKey(confirm.req.name))
   // A seat in use: seen in the last ten minutes or listening right now (the same rule as kiwi approve).
   const lastSeenOf = (name: string) => p.state.members.get(name)?.lastSeen || null
   const onlineNow = (name: string) => p.online.has(name) || p.now - (lastSeenOf(name) ?? 0) < 10 * 60_000
-
-  const admittedElsewhere = confirm?.kind === "approve" && !busy && active.some((m) => m.pk === confirm.req.pk)
 
   const run = async (fn: () => Promise<void>, done: string) => {
     setBusy(true)
@@ -316,7 +315,7 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
       </Alert>
 
       <Alert
-        open={confirm?.kind === "approve" && !admittedElsewhere}
+        open={confirm?.kind === "approve"}
         onClose={() => setConfirm(null)}
         title={confirm?.kind === "approve" ? `Let ${confirm.req.name} in?` : ""}
         message={

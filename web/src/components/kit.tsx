@@ -302,7 +302,7 @@ export function Toaster() {
         <div
           key={t.id}
           role="status"
-          className={cx("animate-rise max-w-md rounded-card px-3.5 py-2 text-ui font-medium shadow-pop", t.tone === "error" ? "bg-alert text-white" : "bg-ink text-canvas")}
+          className={cx("animate-rise max-w-md rounded-card px-3.5 py-2 text-ui font-medium shadow-pop", t.tone === "error" ? "bg-alert-fill text-white" : "bg-ink text-canvas")}
         >
           {t.text}
         </div>
