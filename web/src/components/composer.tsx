@@ -1,8 +1,9 @@
-import { Add01Icon, ArrowUp02Icon, Cancel01Icon } from "@hugeicons/core-free-icons"
+import { Add01Icon, ArrowUp02Icon, Cancel01Icon, Mic01Icon } from "@hugeicons/core-free-icons"
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 import type { SendOptions } from "@mc/client.ts"
 import { MAX_IMAGE_BYTES, RASTER_MIMES, type Color, type Message } from "@mc/protocol.ts"
+import { appendDictation, useDictation } from "@/lib/dictation"
 import { excerpt } from "@/lib/format"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
@@ -64,6 +65,10 @@ export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, 
     index: number
   } | null>(null)
   const area = useRef<HTMLTextAreaElement>(null)
+  const dictation = useDictation(
+    (text) => setBody((current) => appendDictation(current, text)),
+    (message) => toast(message, "error")
+  )
   const picker = useRef<HTMLInputElement>(null)
 
   const others = useMemo(() => people.filter((p) => p.name !== me), [people, me])
@@ -338,6 +343,22 @@ export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, 
               }}
               className="bubble-text block max-h-[220px] min-h-[48px] min-w-0 flex-1 resize-none bg-transparent py-[13px] pr-1 pl-1 text-body outline-none placeholder:truncate placeholder:text-ink-3 focus-visible:outline-none"
             />
+            {dictation.supported && (
+              <button
+                type="button"
+                aria-label={dictation.listening ? "Stop dictation" : "Dictate"}
+                aria-pressed={dictation.listening}
+                title={dictation.listening ? "Stop dictation" : "Dictate"}
+                onClick={dictation.toggle}
+                disabled={disabled}
+                className={cx(
+                  "my-1.5 ml-1.5 flex size-9 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-40",
+                  dictation.listening ? "bg-accent text-accent-ink" : "bg-wash-2 text-ink-2 hover:bg-pick hover:text-ink"
+                )}
+              >
+                <Icon icon={Mic01Icon} size={17} strokeWidth={2} />
+              </button>
+            )}
             <button
               type="button"
               aria-label="Send (Return)"
