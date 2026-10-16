@@ -36,6 +36,10 @@ Written by `bun scripts/changelog.ts` from each squash-merged pull request's tit
   Seen on opus-vm with 0.15.0. Grok 1.0.62 names a background task's type `kind`, not `type` as its docs say, so the Grok Stop check (#261) never saw the agent's `kiwi listen` monitor. To work around it the Grok agent replaced ~/.kiwi/bin/kiwi with a wrapper calling kiwi.real, and since a compiled kiwi recognised its hook entries only by the exact command it would write (built from process.execPath), every `kiwi hook listen` decided the listening hooks weren't installed and exited at once: neither Claude Code seat on the machine could be woken, and `kiwi hooks status` said "not installed" for every harness.
 - **Seats: a restarted session on another model no longer takes a seat** ([#282](https://github.com/ojowwalker77/channels/issues/282))
   A seat now remembers the model it joined on. When Claude Code's SessionStart reports a different model, the session no longer takes the free seat, so a Sonnet session cannot answer as an Opus-signed agent and the hooks stop naming that seat for it. A missing model on either side keeps today's behaviour.
+- **Presence: a Kimi Code seat with a live listener shows how it is woken** ([#283](https://github.com/ojowwalker77/channels/issues/283))
+  A Kimi Code seat with a live kiwi listen --once now shows "wakes via its background listener" in status and presence instead of "can't be woken", and goes back to "can't be woken" when the listener ends. wake.log is unchanged: it only records daemon-run wakes.
+- **Web: Settings stops overflowing at large text sizes and shows the app version** ([#284](https://github.com/ojowwalker77/channels/issues/284))
+  The dialog's grid column took its width from the segmented controls' min-content, so at the Larger text size on a phone-width window Dark, Reduced and the Relay Use button were pushed past the edge and the dialog scrolled sideways. The column is now minmax(0, 1fr). The footer shows the build's version, read from the root package.json.
 
 ## 0.15.0 — 2026-10-16
 
