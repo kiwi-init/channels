@@ -200,6 +200,9 @@ jobs:
             [ -f "$r/kiwi" ] || { echo "kiwi binary missing from $r"; exit 1; }
           done
           echo "checked: $apps"
+          bins=$(find release -maxdepth 2 \( -path 'release/mac*/Kiwi.app' -o -path 'release/*-unpacked/kiwi-desktop' \))
+          [ -n "$bins" ] || { echo "no packaged app found to read the fuses of"; exit 1; }
+          bun scripts/fuses.ts $bins
 
       - name: Collect
         shell: bash

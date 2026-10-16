@@ -9,9 +9,9 @@ import { sum, trafficProxy, type Traffic } from "./traffic.ts";
 setDefaultTimeout(120_000);
 
 const BUDGET = {
-  send: { http: 5, messages: 1, sockets: 0 },
-  listenNow: { http: 4, sockets: 0 },
-  status: { http: 6, sockets: 1 },
+  send: { http: 4, messages: 1, sockets: 0 },
+  listenNow: { http: 3, sockets: 0 },
+  status: { http: 5, sockets: 1 },
 } as const;
 
 const made: string[] = [];
