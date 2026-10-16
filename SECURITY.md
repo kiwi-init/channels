@@ -270,7 +270,10 @@ plaintext is at least 512 bytes and gets smaller; a leading 0x00 byte, which
 JSON never starts with, marks it. Every reader newer than 0.14 opens both kinds
 and inflates at most 4 MiB, dropping anything larger as unreadable. A 0.14 or
 older client drops a compressed message as malformed, so turn it on only once
-every member runs a newer one. Compressing before encrypting leaks through
+every member runs a newer one. Inflating needs a runtime whose
+`DecompressionStream` supports `deflate-raw` (Bun, the desktop app and current
+browsers do). A reader without it also drops compressed messages as
+unreadable. Compressing before encrypting leaks through
 lengths when attacker-chosen text and a secret share one message
 (CRIME/BREACH); here the sender writes each message whole, the relay already
 sees every ciphertext's length, and presence and other ephemeral frames are
