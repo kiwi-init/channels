@@ -168,7 +168,7 @@ const ID = "([0-9a-f-]{36})";
 const withRoom = <A>(f: (db: RoomDb) => A) => Effect.map(RoomStore, f);
 
 const holds = (req: Request, etag: string) =>
-  (req.headers.get("if-none-match") ?? "").split(",").some((t) => t.trim().replace(/^W\//, "") === etag);
+  (req.headers.get("if-none-match") ?? "").split(",").some((t) => t.trim() === "*" || t.trim().replace(/^W\//, "") === etag);
 
 const tagged = (etag: string, data: () => unknown) =>
   Effect.map(Request_, ({ req }) => ({ res: holds(req, etag) ? new Response(null, { status: 304, headers: { etag } }) : Response.json(data(), { headers: { etag } }) }));

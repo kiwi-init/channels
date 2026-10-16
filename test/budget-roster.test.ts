@@ -2,7 +2,9 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Channel, keepAnswersIn } from "../src/client.ts";
 import { decodeJoinCode } from "../src/crypto.ts";
+import { generateIdentity } from "../src/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { kiwiCmd } from "./owner.ts";
 import { trafficProxy, type Traffic } from "./traffic.ts";
@@ -145,7 +147,7 @@ describe("the roster and the channel info, fetched only when they changed", () =
     expect(etag).toMatch(/^"info-/);
     expect(plain.headers.get("access-control-expose-headers")).toContain("etag");
     const body = await plain.text();
-    for (const sent of [etag, `W/${etag}`, `"other", ${etag}`]) {
+    for (const sent of [etag, `W/${etag}`, `"other", ${etag}`, "*"]) {
       const res = await fetch(url, { headers: { "if-none-match": sent } });
       expect(res.status).toBe(304);
       expect(await res.text()).toBe("");
@@ -166,5 +168,28 @@ describe("the roster and the channel info, fetched only when they changed", () =
     expect(l.infoOk).toBeGreaterThanOrEqual(1);
     const again = await look("status (again)", "status");
     expect(again.membersOk + again.infoOk).toBe(0);
+  });
+});
+
+describe("the answer cache", () => {
+  test("a failed cache write does not fail the read", async () => {
+    const owner = await generateIdentity("human");
+    const { access } = await Channel.create(server!.url.origin, owner, { name: "human" });
+    const ch = new Channel(access, server!.url.origin, owner);
+    let tried = 0;
+    keepAnswersIn({
+      get: () => null,
+      set: () => {
+        tried++;
+        throw new Error("disk full");
+      },
+    });
+    try {
+      expect((await ch.info()).epoch).toBe(0);
+      expect((await ch.members()).length).toBeGreaterThan(0);
+      expect(tried).toBe(2);
+    } finally {
+      keepAnswersIn(null);
+    }
   });
 });
