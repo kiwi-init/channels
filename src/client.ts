@@ -1547,9 +1547,9 @@ export class Channel {
     return Effect.gen({ self: this }, function* () {
       switch (f.t) {
         case "open": {
-          this.forgetInfo();
           // Back after an outage the listener was told about: say for how long. The schedule's metadata is that outage's.
           const { attempt, elapsed, start } = yield* Schedule.CurrentMetadata;
+          if (attempt > 0) this.forgetInfo();
           const now = yield* Clock.currentTimeMillis;
           return { _tag: "Open", presence: f.presence, mark: f.mark, outage: attempt > 0 && elapsed >= quietMs ? now - start : null } satisfies Live;
         }
