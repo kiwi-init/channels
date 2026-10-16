@@ -1,11 +1,11 @@
 // Per-harness hook files: write, idempotent re-install, uninstall leaves the user's own entries.
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, setSystemTime, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, updateConfig } from "../src/config.ts";
 import { VERSION } from "../src/version.ts";
-import { autoInstallExtraHooks, autoInstallHooks, backgroundTasks, cursorStopFollowup, extraInstalled, grokMonitorListens, hooksListen, hooksStatus, installDetected, installExtra, installHooks, kimiReason, rewakeCapable, stopStyle, uninstallDetected, uninstallExtra, withKimiHooks, withoutKimiHooks } from "../src/hooks.ts";
+import { autoInstallExtraHooks, autoInstallHooks, backgroundTasks, cursorStopFollowup, extraInstalled, grokMonitorListens, hooksListen, hooksStatus, installDetected, installExtra, installHooks, isOurHook, kimiReason, PROBE_MS, PROBE_TTL_MS, rewakeCapable, selfIdentity, stopStyle, uninstallDetected, uninstallExtra, withKimiHooks, withoutKimiHooks } from "../src/hooks.ts";
 
 const made: string[] = [];
 const prev = new Map<string, string | undefined>();
@@ -570,6 +570,54 @@ test("a hook through a wrapper in kiwi's install folder counts only when the wra
   const outside = script(join(elsewhere, "kiwi"), forward(MAIN_TS));
   write(outside);
   expect(status()).toEqual(["claude: not installed", "grok: not installed"]);
+});
+
+function probeWrapper(body: string): { cmd: string; install: string } {
+  const install = scratch("hk-probe-install-");
+  setEnv({ KIWI_INSTALL: install, KIWI_HOME: scratch("hk-probe-home-") });
+  const wrapper = script(join(install, "kiwi"), body);
+  return { cmd: `${shellQuoted(wrapper)} hook stop # kiwi`, install };
+}
+
+test("a wrapper's answer is asked again after PROBE_TTL_MS, so a target that changed or was repaired is noticed", () => {
+  const self = selfIdentity();
+  expect(self).not.toBeNull();
+  const idFile = join(scratch("hk-probe-id-"), "id");
+  writeFileSync(idFile, self ?? "");
+  const { cmd } = probeWrapper(`cat ${shellQuoted(idFile)}`);
+  try {
+    expect(isOurHook(cmd, "stop")).toBe(true);
+    writeFileSync(idFile, "0.0.1 another-kiwi 1:1 1 1");
+    expect(isOurHook(cmd, "stop")).toBe(true);
+    setSystemTime(new Date(Date.now() + PROBE_TTL_MS + 1_000));
+    expect(isOurHook(cmd, "stop")).toBe(false);
+    writeFileSync(idFile, self ?? "");
+    expect(isOurHook(cmd, "stop")).toBe(false);
+    setSystemTime(new Date(Date.now() + PROBE_TTL_MS + 1_000));
+    expect(isOurHook(cmd, "stop")).toBe(true);
+  } finally {
+    setSystemTime();
+  }
+});
+
+test(
+  "a wrapper that ignores SIGTERM is cut off at PROBE_MS and doesn't count",
+  () => {
+    const { cmd } = probeWrapper("trap '' TERM\nsleep 9\necho late");
+    const t0 = Date.now();
+    expect(isOurHook(cmd, "stop")).toBe(false);
+    expect(Date.now() - t0).toBeLessThan(PROBE_MS + 2_000);
+  },
+  PROBE_MS + 10_000,
+);
+
+test("the probe runs with a short allowlist of environment variables, not the agent's session or secrets", () => {
+  const self = selfIdentity();
+  const idFile = join(scratch("hk-probe-env-"), "id");
+  writeFileSync(idFile, self ?? "");
+  setEnv({ KIWI_TEST_SECRET: "s3cret", CLAUDE_CODE_SESSION_ID: "session-x", GROK_SESSION_ID: "grok-x" });
+  const { cmd } = probeWrapper(`[ -z "$KIWI_TEST_SECRET" ] && [ -z "$CLAUDE_CODE_SESSION_ID" ] && [ -z "$GROK_SESSION_ID" ] && [ -n "$PATH" ] && cat ${shellQuoted(idFile)}`);
+  expect(isOurHook(cmd, "stop")).toBe(true);
 });
 
 test("a Kimi Code Stop reason is the answers' plain text, for stderr", () => {

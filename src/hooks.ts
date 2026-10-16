@@ -27,7 +27,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schedule from "effect/Schedule";
 import type * as Scope from "effect/Scope";
-import { accessSync, constants as fsConstants, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
+import { accessSync, closeSync, constants as fsConstants, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import { openSession, type AgentSession } from "./agent.ts";
@@ -277,8 +277,32 @@ function installCandidates(): string[] {
   return [...new Set(found.filter((p): p is string => typeof p === "string" && isAbsolute(p)))];
 }
 
-const PROBE_SCRUB = ["CLAUDECODE", "CLAUDE_PID", "CLAUDE_CODE_SESSION_ID", "CLAUDE_PROJECT_DIR", "CODEX_THREAD_ID", "GROK_SESSION_ID", "OPENCODE_SESSION_ID", "MIMOCODE", "MIMOCODE_PID", "GEMINI_CLI", "CURSOR_AGENT", "AI_AGENT", "KIWI_CHANNEL", "KIWI_AS"];
-const probed = new Map<string, string | null>();
+const PROBE_ENV = ["PATH", "HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "TMPDIR", "TEMP", "TMP", "KIWI_HOME", "KIWI_INSTALL", "SystemRoot", "USERPROFILE", "PATHEXT", "COMSPEC"];
+export const PROBE_MS = 5_000;
+export const PROBE_TTL_MS = 30_000;
+const probed = new Map<string, { id: string | null; at: number }>();
+
+function probeIdentity(program: string): string | null {
+  const env: Record<string, string> = {};
+  for (const k of PROBE_ENV) {
+    const v = process.env[k];
+    if (v !== undefined) env[k] = v;
+  }
+  let dir: string | null = null;
+  let fd: number | null = null;
+  try {
+    dir = mkdtempSync(join(tmpdir(), "kiwi-probe-"));
+    const out = join(dir, "identity");
+    fd = openSync(out, "w");
+    const r = Bun.spawnSync([program, IDENTITY_ARG], { cwd: dir, env, stdin: "ignore", stdout: fd, stderr: "ignore", timeout: PROBE_MS, killSignal: "SIGKILL" });
+    return r.exitCode === 0 ? readFileSync(out, "utf8").trim() || null : null;
+  } catch {
+    return null;
+  } finally {
+    if (fd !== null) closeSync(fd);
+    if (dir !== null) rmSync(dir, { recursive: true, force: true });
+  }
+}
 
 function identityOf(program: string): string | null {
   let key: string;
@@ -289,17 +313,9 @@ function identityOf(program: string): string | null {
     return null;
   }
   const known = probed.get(key);
-  if (known !== undefined) return known;
-  const env: Record<string, string> = {};
-  for (const [k, v] of Object.entries(process.env)) if (v !== undefined && !PROBE_SCRUB.includes(k)) env[k] = v;
-  let id: string | null = null;
-  try {
-    const r = Bun.spawnSync([program, IDENTITY_ARG], { cwd: tmpdir(), env, stdin: "ignore", stdout: "pipe", stderr: "ignore", timeout: 5_000 });
-    id = r.exitCode === 0 ? r.stdout.toString().trim() || null : null;
-  } catch {
-    id = null;
-  }
-  probed.set(key, id);
+  if (known && Date.now() - known.at < PROBE_TTL_MS) return known.id;
+  const id = probeIdentity(program);
+  probed.set(key, { id, at: Date.now() });
   return id;
 }
 
