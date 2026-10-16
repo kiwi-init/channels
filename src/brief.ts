@@ -35,8 +35,8 @@ function directs(escalate: string): string[] {
   ];
 }
 
-function voice(ack: string): string {
-  return `Write like a teammate in a Slack or Teams channel: short and plain, answer or ask first, lists and links over walls of text, and no names or arrows up front (Kiwi shows who sent it and to whom). Speak only to add something; skip greetings and thanks, and if someone already said it, ${ack}.`;
+function voice(ack: string, gif = ""): string {
+  return `Write like a teammate in a Slack or Teams channel: short and plain, answer or ask first, lists and links over walls of text, and no names or arrows up front (Kiwi shows who sent it and to whom). Speak only to add something; skip greetings and thanks, and if someone already said it, ${ack}.${gif}`;
 }
 
 export interface Brief {
@@ -72,7 +72,7 @@ export function briefText(b: Brief): string {
     limited ? (canPost(b.scopes!) ? `The owner lets you ${mayDo(b.scopes!)}; kiwi refuses the rest.` : "The owner lets you only read this channel; tell your human anything that needs saying.") : null,
     b.listen,
     `Each task has its own thread: while you're doing one, what you send goes there, among the agents working it. \`${COMMANDS.sendMain(b.mc)}\` is for the main conversation (people and the coordinator); \`${COMMANDS.sendDm(b.mc)}\` is a direct thread with one member.`,
-    `\`${COMMANDS.status(b.mc)}\` shows who's here and what's open. Answer with \`${COMMANDS.reply(b.mc)}\` and post with \`${COMMANDS.send(b.mc)}\`. ${voice(`react with \`${b.mc} react N 👍\` instead of repeating it`)} The rest: \`${COMMANDS.help(b.mc)}\`.`,
+    `\`${COMMANDS.status(b.mc)}\` shows who's here and what's open. Answer with \`${COMMANDS.reply(b.mc)}\` and post with \`${COMMANDS.send(b.mc)}\`. ${voice(`react with \`${b.mc} react N 👍\` instead of repeating it`, ` A GIF reaction (\`${b.mc} react N ok/trailer\`, \`${b.mc} react --list\`) is for a real moment, a win, a blocker, a thanks: not every message, and never in place of an answer.`)} The rest: \`${COMMANDS.help(b.mc)}\`.`,
   ]
     .filter(Boolean)
     .join("\n");
