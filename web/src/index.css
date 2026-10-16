@@ -43,6 +43,7 @@
   --link: light-dark(#007aff, #0a84ff);
   --ring: light-dark(rgba(0, 122, 255, 0.55), rgba(10, 132, 255, 0.6));
   --alert: light-dark(#d1342a, #ff6259);
+  --alert-fill: #d1342a;
   --decide: light-dark(#a35a00, #f5b041);
   --decide-wash: light-dark(rgba(214, 125, 0, 0.12), rgba(245, 176, 65, 0.14));
   --live: light-dark(#1f9a55, #32d074);
@@ -156,6 +157,7 @@
   --color-link: var(--link);
   --color-ring: var(--ring);
   --color-alert: var(--alert);
+  --color-alert-fill: var(--alert-fill);
   --color-live: var(--live);
   --color-doing: var(--doing);
   --color-warn: var(--warn);

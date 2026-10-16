@@ -20,7 +20,8 @@ small purposeful motion, one pop shadow.
 
 - CSS vars are the contract. Tailwind v4 maps them via `@theme inline`:
   `canvas, rail, raised, field, ink, ink-2, ink-3, line, wash, wash-2,
-  accent, accent-ink, accent-text, accent-wash, link, ring, alert, live,
+  accent, accent-ink, accent-text, accent-wash, link, ring, alert,
+  alert-fill, live,
   doing, warn, overlay, bubble-me, bubble-them, pick, head-*, avatar-*,
   pop-edge, pop-shade, shadow-pop`, plus `frame, panel, edge, edge-strong`
   aliases.
@@ -51,6 +52,7 @@ Light / dark are the two sides of each `light-dark()` in `index.css`:
 | `accent` (Apple system blue) | `#007aff` | `#0a84ff` |
 | `accent-ink` (on the accent) | `#ffffff` | `#ffffff` |
 | `alert` | `#d1342a` | `#ff6259` |
+| `alert-fill` (under white text) | `#d1342a` | `#d1342a` |
 | `decide` (amber, someone waits) | `#a35a00` | `#f5b041` |
 | `live` | `#1f9a55` | `#3ccf7f` |
 | `doing` (in-progress blue) | `#2f6fe4` | `#5b9bff` |
@@ -62,6 +64,9 @@ block of colour), `bubble-them` (Messages grey `#e9e9eb` / `#262628`).
 White on the light accent is ~4:1, Apple's own choice and just under AA 4.5
 for small text; the owner asked to mirror Apple, so it stays. As text on the
 dark canvas the dark side clears 4.5:1.
+
+White on the dark `alert` is ~2.9:1, so a red surface under white text (the
+error toast) uses `alert-fill`, the light red in both themes (~5:1).
 
 ## 4. Typography
 

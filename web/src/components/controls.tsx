@@ -141,6 +141,7 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
   const [scopeDraft, setScopeDraft] = useState<Scope[]>([...SCOPES])
   const [nickDraft, setNickDraft] = useState("")
   const active = p.roster.filter((m) => m.active)
+  if (confirm?.kind === "approve" && active.some((m) => m.pk === confirm.req.pk)) setConfirm(null)
   // Someone else's seat: the joiner's own key landing in the roster mid-approve (the live join event beats
   // the approve call home) is this request going through, not a clash.
   const taken = confirm?.kind === "approve" && active.some((m) => m.pk !== confirm.req.pk && nameKey(m.name) === nameKey(confirm.req.name))
