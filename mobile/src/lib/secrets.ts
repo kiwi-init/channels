@@ -1,6 +1,6 @@
 import type { ChannelIdentityView, PersonView } from "../../../desktop/src/bridge.ts"
 
-export type { ChannelIdentityView, PersonView }
+export type { ChannelIdentityView }
 
 export interface SecureKV {
   getItemAsync(key: string): Promise<string | null>

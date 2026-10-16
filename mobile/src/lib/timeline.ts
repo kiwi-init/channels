@@ -3,7 +3,7 @@ import { ignored, type Message } from "@mc/protocol.ts"
 import { MAIN, placeKey, type ChannelState } from "@mc/state.ts"
 import { formatStamp, memberName } from "@web/lib/format"
 
-export const RUN_GAP_MS = 5 * 60_000
+const RUN_GAP_MS = 5 * 60_000
 
 export type Row =
   | { type: "day"; key: string; ts: number; label: string }
@@ -21,13 +21,13 @@ function dayStart(ts: number): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
 }
 
-export function dayLabel(ts: number, now: number): string {
+function dayLabel(ts: number, now: number): string {
   const stamp = formatStamp(ts, now)
   const at = stamp.lastIndexOf(" at ")
   return at < 0 ? stamp : stamp.slice(0, at)
 }
 
-export function shortEvent(m: Message, state: ChannelState): string {
+function shortEvent(m: Message, state: ChannelState): string {
   const ev = m.ev
   if (!ev) return m.body
   const who = memberName(state.members.get(m.from), m.from)
@@ -50,7 +50,7 @@ export function shortEvent(m: Message, state: ChannelState): string {
   }
 }
 
-export function shows(m: Message, state: ChannelState, revealed: boolean): boolean {
+function shows(m: Message, state: ChannelState, revealed: boolean): boolean {
   const place = placeKey(state.placeOf.get(m.seq) ?? MAIN)
   if (place !== "main") return false
   if (m.ev?.op === "hello" || m.ev?.op === "card" || m.ev?.op === "react") return false
