@@ -10,7 +10,7 @@ import { useIcons } from "@/lib/icons"
 import type { Command } from "@/components/ui/palette"
 import { usePaletteShortcut } from "@/components/ui/palette-shortcut"
 import { ComputersModal, Palette, SettingsModal } from "@/components/lazy"
-import { Add01Icon, ComputerIcon, Login01Icon, Moon02Icon, Settings01Icon, SidebarLeftIcon, Sun03Icon } from "@hugeicons/core-free-icons"
+import { Add01Icon, ComputerIcon, Login01Icon, Moon02Icon, Settings01Icon, Sun03Icon } from "@hugeicons/core-free-icons"
 import { Icon, type IconSvgElement } from "@/components/icon"
 import { useAutoApproval } from "@/lib/approval"
 import { adoptThisComputer } from "@/lib/computers"
@@ -20,7 +20,6 @@ import { newsTotal, rowNews, startMarks, useMarks, useNewsKeys, useOpenNews, use
 import { formatShort } from "@/lib/format"
 import { setAppearance } from "@/lib/theme"
 import { bridge, useSecrets } from "@/lib/secrets"
-import { toggleSidebar, useSidebarOpen, useSidebarShortcut } from "@/lib/sidebar"
 import { cx } from "@/lib/utils"
 
 // The join code lives in the URL fragment, which never leaves the app.
@@ -36,8 +35,6 @@ export default function App() {
   const icons = useIcons()
   const [palette, setPalette] = useState(false)
   usePaletteShortcut(useCallback(() => setPalette(true), []))
-  useSidebarShortcut()
-  const listOpen = useSidebarOpen()
   useMemberIcons(rows.filter((c) => c.state === "member").map((c) => c.code))
   // Every owned channel, watched in the background: your computers' agents in, a notification otherwise.
   useAutoApproval(rows)
@@ -77,7 +74,6 @@ export default function App() {
     act("join", "Join with a code", Login01Icon, () => setSheet("join"))
     act("computers", "Your computers", ComputerIcon, () => setSheet("computers"))
     act("settings", "Settings", Settings01Icon, () => setSheet("settings"))
-    act("sidebar", "Expand or collapse the list", SidebarLeftIcon, toggleSidebar)
     list.push(
       { id: "light", group: "Appearance", label: "Light", run: () => setAppearance("light"), leading: lead(Sun03Icon) },
       { id: "dark", group: "Appearance", label: "Dark", run: () => setAppearance("dark"), leading: lead(Moon02Icon) },
@@ -133,10 +129,9 @@ export default function App() {
             onNew={() => setSheet("new")}
             onComputers={() => setSheet("computers")}
             onSettings={() => setSheet("settings")}
-            // A phone shows the list or a channel; a wide window shows both, unless the list is hidden.
-            className={cx(code ? "hidden" : "flex", listOpen ? "md:flex" : "md:hidden")}
+            className={cx(code ? "hidden" : "flex", "md:hidden")}
           />
-          {!listOpen && <Rail rows={rows} news={news} active={code} onSelect={open} onNew={() => setSheet("new")} onComputers={() => setSheet("computers")} onSettings={() => setSheet("settings")} />}
+          <Rail rows={rows} news={news} active={code} onSelect={open} onNew={() => setSheet("new")} onComputers={() => setSheet("computers")} onSettings={() => setSheet("settings")} />
           {/* The app: the conversation beside the list, in the same colour, under the same header row. */}
           <main className={cx("relative min-w-0 flex-1 overflow-clip bg-canvas", code ? "flex" : "hidden md:flex")}>
             {/* No conversation, no header: the top row still moves the window. */}

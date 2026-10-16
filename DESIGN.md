@@ -148,13 +148,14 @@ From `design-tokens.ts`:
 
 - Shell: flat `rail` sidebar beside one inset `canvas` panel (edge to edge
   on a phone). No hairlines between areas.
-- On a wide window the list starts as an 80px icon rail, as Grok's
+- On a wide window the list is an 80px icon rail, as Grok's
   collapsed one: the Mac traffic lights on its header row, each channel
   as its 40px tile in a 56px `card`-round cell (`pick` when open), a blue
   dot or a count for news and questions, a lock on a channel you can't
   open yet. A hover card says what the full row says: name, time, last
-  line. New, the app update, expand (⌘B) and your account sit at its foot.
-  Expanded, it is the full 300px list; a phone always shows the full list.
+  line. New, the app update and your account sit at its foot. A wide
+  window always shows the rail, with no way to expand it; a phone always
+  shows the full list.
 - Conversation: your bubbles `accent` with white ink; theirs `bubble-them`
   with `ink`. Runs stack at `stack` radius on the joined corners.
 - Needs-you: approvals, escalations and review-waiting work in one place at
