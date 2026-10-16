@@ -588,7 +588,7 @@ export class AgentSession {
         const p = state.members.get(n);
         return !!p && (p.kind === "human" || p.owner);
       });
-      if (people.length) return yield* new Rejected(`this channel is coordinator-only: only ${state.coordinator} messages people. Send it to ${state.coordinator}, who passes it on, or for a decision only a person can make: kiwi send --escalate --re N "why".`);
+      if (people.length) return yield* new Rejected(`this channel is coordinator-only: only ${state.coordinator} messages people. Send it to ${state.coordinator}, who passes it on, or for a decision only a person can make: kiwi ask-human --re N "the decision".`);
     });
   }
 
@@ -705,7 +705,7 @@ export class AgentSession {
    * Hand a decision to people instead of acting: a blocking question to this agent's own human and
    * the owner, about message #re when given. It reaches them in any mode, and on hold.
    */
-  readonly escalate = Effect.fn("AgentSession.escalate")({ self: this }, function* (this: AgentSession, body: string, re?: number, handoff?: Handoff) {
+  readonly escalate = Effect.fn("AgentSession.escalate")({ self: this }, function* (this: AgentSession, body: string, re?: number, handoff?: Handoff, ask: { choices?: string[]; task?: number } = {}) {
     const { messages, state } = yield* this.state();
     const me = state.members.get(this.me);
     if (me && isPerson(me)) return yield* new Rejected("escalating is for agents: you're a person, so you decide");
@@ -713,7 +713,8 @@ export class AgentSession {
     if (re !== undefined && !(yield* this.message(re, messages))) return yield* new Rejected(`no message #${re}`);
     const to = [...new Set([humanOf(state, this.me), ownerOf(state)].filter((n): n is string => !!n))];
     if (!to.length) return yield* new Rejected("there's no person in this channel to escalate to");
-    const seq = yield* this.send(body, { to, kind: "blocking", esc: true, ...(handoff ? { handoff } : {}), ...(re !== undefined ? { re: [re] } : {}) });
+    if (ask.choices && handoff) return yield* new Rejected("a browser handoff has its own Done and Couldn't answers; leave out the options");
+    const seq = yield* this.send(body, { to, kind: "blocking", esc: true, ...(handoff ? { handoff } : {}), ...(ask.choices ? { choices: ask.choices } : {}), ...(ask.task !== undefined ? { task: ask.task } : {}), ...(re !== undefined ? { re: [re] } : {}) });
     return { seq, to };
   }, oneLook);
 

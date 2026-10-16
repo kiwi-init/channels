@@ -159,3 +159,71 @@ describe("handoff escalation", () => {
     expect((await run(agent, "send", "--escalate", "--handoff", LINK, "--expires", "0", "why")).code).toBe(1);
   });
 });
+
+import { tasksAwaitingPeople } from "../src/state.ts";
+import type { Message } from "../src/protocol.ts";
+
+describe("ask-human options payload", () => {
+  test("only an escalation without a browser link offers options: 2 to 6 different one-line answers", () => {
+    expect(wellFormed(payload({ esc: true, choices: ["A: keep", "B: rebuild"] }))).toBe(true);
+    expect(wellFormed(payload({ choices: ["A", "B"] }))).toBe(false);
+    expect(wellFormed(payload({ esc: true, handoff: handoff(), choices: ["A", "B"] }))).toBe(false);
+    expect(wellFormed(payload({ esc: true, choices: ["A"] }))).toBe(false);
+    expect(wellFormed(payload({ esc: true, choices: ["A", "B", "C", "D", "E", "F", "G"] }))).toBe(false);
+    expect(wellFormed(payload({ esc: true, choices: ["Keep", " keep "] }))).toBe(false);
+    expect(wellFormed(payload({ esc: true, choices: ["A", "  "] }))).toBe(false);
+    expect(wellFormed(payload({ esc: true, choices: ["A", "B\nC"] }))).toBe(false);
+    expect(wellFormed(payload({ esc: true, choices: ["A", "b".repeat(201)] }))).toBe(false);
+  });
+
+  test("a task waits on people while an escalation in its thread is open", () => {
+    const esc = { seq: 7, esc: true, kind: "blocking" } as Message;
+    const ask = { seq: 8, kind: "ask" } as Message;
+    const placeOf = new Map([
+      [7, { kind: "task" as const, task: 3 }],
+      [8, { kind: "task" as const, task: 4 }],
+    ]);
+    expect([...tasksAwaitingPeople({ openAsks: [esc, ask], placeOf })]).toEqual([3]);
+    expect(tasksAwaitingPeople({ openAsks: [], placeOf }).size).toBe(0);
+  });
+});
+
+describe("kiwi ask-human", () => {
+  const owner = scratch("ask-owner");
+  const agent = scratch("ask-agent");
+  let task = "";
+
+  beforeAll(async () => {
+    const code = /join code: (\S+)/.exec(await ok(owner, "create", "ask-human", "--as", "lead", "--open"))![1]!;
+    const p = spawn(agent, ["join", code, "--as", "dev"]);
+    let listed = "";
+    await until(async () => {
+      listed = await ok(owner, "--as", "human", "requests");
+      return /\d{3}-\d{3}/.test(listed);
+    }, "request");
+    await ok(owner, "--as", "human", "approve", /(\d{3}-\d{3})/.exec(listed)![1]!, "--yes");
+    expect(await p.exited).toBe(0);
+    await ok(agent, "listen", "--now");
+    task = `T${/T(\d+)/.exec(await ok(agent, "task", "add", "edit the audit"))![1]!}`;
+  });
+
+  test("the options and the task ride on the escalation, and picking one answers it", async () => {
+    const sent = await ok(agent, "ask-human", "--task", task, "--option", "A: keep clearing", "--option", "B: rebuild dedup", "Edits clear the old evidence. Which way?");
+    expect(sent).toContain("with 2 options");
+    const seq = seqOf(sent);
+    const log = await ok(owner, "log");
+    expect(log).toContain(`#${seq} dev → `);
+    expect(log).toContain(`[${task}] [escalation]`);
+    expect(log).toContain("[options: A: keep clearing | B: rebuild dedup]");
+    await ok(owner, "--as", "human", "reply", seq, "B: rebuild dedup");
+    expect(await ok(agent, "listen", "--now")).toContain("B: rebuild dedup");
+  });
+
+  test("the flags are refused where they don't fit", async () => {
+    expect((await run(agent, "ask-human", "--option", "A", "Which?")).code).toBe(1);
+    expect((await run(agent, "ask-human", "--option", "Keep", "--option", "keep", "Which?")).code).toBe(1);
+    expect((await run(agent, "send", "--option", "A", "--option", "B", "Which?")).code).toBe(1);
+    expect((await run(agent, "ask-human", "--handoff", LINK, "--option", "A", "--option", "B", "Which?")).code).toBe(1);
+    expect((await run(agent, "ask-human", "--task", "T99", "Which?")).code).toBe(1);
+  });
+});
