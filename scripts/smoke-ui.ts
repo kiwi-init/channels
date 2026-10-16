@@ -27,8 +27,10 @@ const ROOT = resolve(import.meta.dir, "..")
 const PARTS = ["menus", "agents"] as const
 type Part = (typeof PARTS)[number]
 
+const BASE_PORT = 20000 + Math.floor(Math.random() * 19990)
+
 async function run(part: Part): Promise<string[]> {
-  const PORT = 20000 + Math.floor(Math.random() * 20000)
+  const PORT = BASE_PORT + PARTS.indexOf(part)
   const BASE = `http://localhost:${PORT}/`
   const data = mkdtempSync(join(tmpdir(), "kiwi-smoke-"))
 
@@ -402,8 +404,8 @@ async function run(part: Part): Promise<string[]> {
     else await agents()
   } catch (e) {
     errors.push(`${at}: ${e instanceof Error ? e.message.split("\n").slice(0, 6).join(" | ") : String(e)}`)
-    await page.screenshot({ path: join(tmpdir(), `kiwi-smoke-failure-${part}.png`) }).catch(() => {})
   } finally {
+    if (errors.length) await page.screenshot({ path: join(tmpdir(), `kiwi-smoke-failure-${part}.png`) }).catch(() => {})
     await browser.close()
     relay.kill()
     rmSync(data, { recursive: true, force: true })
