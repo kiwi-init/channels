@@ -122,8 +122,12 @@ describe("old pages", () => {
   test("a removed member is refused anything the cache doesn't already hold", async () => {
     const r = await roomWith(relay, dataDir, 2000);
     const { cap } = await offer(r.agent, relay, r.roomId);
+    expect((await page(0, cap, r.agent, r.roomId)).headers.get("x-kiwi-cache")).toBe("miss");
     await r.ownerCh.remove(r.agent.pk);
-    expect((await page(0, cap, r.agent, r.roomId)).status).toBe(403);
+    const cached = await page(0, cap, r.agent, r.roomId);
+    expect(cached.status).toBe(200);
+    expect(cached.headers.get("x-kiwi-cache")).toBe("hit");
+    expect((await page(1, cap, r.agent, r.roomId)).status).toBe(403);
     expect((await get(relay, r.roomId, "/messages?since=0&pages=1", r.agent)).status).toBe(403);
   });
 

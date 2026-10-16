@@ -17,7 +17,12 @@ export async function roomWith(relay: string, dataDir: string, count: number): P
   const { access } = await Channel.create(relay, owner, { name: "boss" }, [{ ...agent, info: { name: "helper" } }]);
   const ownerCh = new Channel(access, relay, owner);
   await ownerCh.send("hello");
-  const file = new Database(join(dataDir, `${access.roomId}.sqlite`));
+  fill(dataDir, access.roomId, count);
+  return { roomId: access.roomId, owner, agent, ownerCh, fresh: (as = owner) => new Channel(access, relay, as) };
+}
+
+export function fill(dataDir: string, roomId: string, count: number): void {
+  const file = new Database(join(dataDir, `${roomId}.sqlite`));
   try {
     const first = file.query("SELECT ts, iv, ct, e FROM msgs WHERE seq = 1").get() as { ts: number; iv: string; ct: string; e: number };
     file.transaction(() => {
@@ -26,5 +31,4 @@ export async function roomWith(relay: string, dataDir: string, count: number): P
   } finally {
     file.close();
   }
-  return { roomId: access.roomId, owner, agent, ownerCh, fresh: (as = owner) => new Channel(access, relay, as) };
 }
