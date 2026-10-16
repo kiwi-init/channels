@@ -364,14 +364,14 @@ const joinedAlias = Effect.fn("kiwi.joinedAlias")(function* (roomId: string, ali
  * This process's seat as `name` on `alias`: its harness, session and process when the harness says. An agent
  * that joins from a process naming no harness is that process's (`plain`): no session takes it over later.
  */
-function seatHere(alias: string, name: string, plain: boolean) {
+function seatHere(alias: string, name: string, plain: boolean, model?: string) {
   const who = here();
-  return { alias, as: name, ...(who.harness ? { harness: who.harness } : plain ? { plain: true as const } : {}), ...(who.session ? { session: who.session } : {}), ...(who.pid ? { pid: who.pid } : {}) };
+  return { alias, as: name, ...(who.harness ? { harness: who.harness } : plain ? { plain: true as const } : {}), ...(who.session ? { session: who.session } : {}), ...(who.pid ? { pid: who.pid } : {}), ...(model ? { model } : {}) };
 }
 
 /** Give the agent its seat in this directory (beside any other agents here), and make sure its harness keeps it listening. */
-function settleIn(alias: string, name: string): void {
-  if (!bindDirectory(process.cwd(), seatHere(alias, name, true))) {
+function settleIn(alias: string, name: string, model: string): void {
+  if (!bindDirectory(process.cwd(), seatHere(alias, name, true, model))) {
     process.stderr.write(`kiwi: not binding ${process.cwd()} (too broad); run kiwi from your project folder, or pass ${channelOption(alias)} ${asOption(name)}\n`);
   }
   const installed = autoInstallHooks();
@@ -542,7 +542,7 @@ const commands: Record<string, Command> = {
             yield* cursor.write(alias, name, yield* s.ch.fx.head());
             yield* hello(opt.role, opt.about);
           }
-          settleIn(alias, name);
+          settleIn(alias, name, model);
           // Say what this agent runs on, so work that needs it finds it. Never worth failing a join over.
           if (canPost(scopes)) yield* Effect.ignoreCause(s.refreshCard(detectCard(), { model }));
           process.stderr.write(`${how === "resumed" ? "back in" : "joined"} "${alias}" as ${name} (key ${fingerprint(id.pk)})\n`);

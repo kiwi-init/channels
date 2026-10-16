@@ -864,6 +864,7 @@ interface HookInput {
   is_background_agent?: boolean;
   reason?: string;
   backgroundTasks?: unknown;
+  model?: unknown;
 }
 
 export interface BackgroundTask {
@@ -1165,7 +1166,8 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
   } catch {}
   const kimi = event === KIMI_STOP;
   // The session that runs the hook: the one its seat remembers (or takes back, after a restart).
-  const who: Here = kimi ? kimiHookHere() : { ...here(), ...(input.session_id ? { session: input.session_id } : {}) };
+  const model = typeof input.model === "string" && input.model.trim() ? input.model.trim() : undefined;
+  const who: Here = kimi ? kimiHookHere() : { ...here(), ...(input.session_id ? { session: input.session_id } : {}), ...(model ? { model } : {}) };
   yield* Effect.promise(() => refreshListeners());
   const project = seatsFor(process.env.CLAUDE_PROJECT_DIR ?? input.cwd ?? process.cwd(), { who });
   const near = project.length ? project : seatsFor(input.cwd ?? process.cwd(), { who });
