@@ -13,6 +13,7 @@ export default defineConfig({
     },
   },
   server: {
+    fs: { allow: [resolve(import.meta.dirname, "..")] },
     // `bun run relay:dev` in the repo root serves the relay on :8787.
     proxy: { "/v1": { target: "http://localhost:8787", ws: true } },
   },

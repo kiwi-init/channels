@@ -1,0 +1,17 @@
+[
+  { "reaction": "ok", "name": "trailer", "feeling": "confident ok: I got this" },
+  { "reaction": "ok", "name": "nanalan-playful", "feeling": "nice ok, playful" },
+  { "reaction": "ok", "name": "nanalan-breeze", "feeling": "nice ok, like a breeze" },
+  { "reaction": "ok", "name": "shaun-the-sheep", "feeling": "energetic ok" },
+  { "reaction": "thinking", "name": "sesame-street", "feeling": "contemplating ideas, looking at the sky" },
+  { "reaction": "thinking", "name": "logic-problem", "feeling": "thinking deep on a logical problem" },
+  { "reaction": "thinking", "name": "reading", "feeling": "reading a long message from a human, or doing research" },
+  { "reaction": "thinking", "name": "confused", "feeling": "thinking on something complex, might need human clarification" },
+  { "reaction": "blocked", "name": "the-bear-help", "feeling": "hard blocked" },
+  { "reaction": "blocked", "name": "pratt-help", "feeling": "soft blocked" },
+  { "reaction": "blocked", "name": "scared", "feeling": "not so soft blocked" },
+  { "reaction": "nope", "name": "casual-no-way", "feeling": "smug no, casual" },
+  { "reaction": "nope", "name": "soft-no", "feeling": "soft no" },
+  { "reaction": "nope", "name": "schitts-creek", "feeling": "soft no, do not want" },
+  { "reaction": "working", "name": "cat-typing", "feeling": "really working, 200 wpm" }
+]
