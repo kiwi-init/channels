@@ -106,6 +106,19 @@ test("a restart takes its old seat back once the session that held it is gone", 
   expect(bindingFor(dir, { who: { harness: "codex", session: "t1" } })).toBeNull();
 });
 
+test("a restart on another model never takes the seat, one on the same or an unknown model does", () => {
+  bindDirectory(dir, { alias: "ch", as: "claude", harness: "claude", session: "old", pid: DEAD, model: "claude-opus-5-5" });
+  expect(bindingFor(dir, { who: { harness: "claude", session: "sonnet", pid: process.pid, model: "claude-sonnet-5-5" } })).toBeNull();
+  expect(seatsAt(loadConfig(), dir)[0]).toMatchObject({ session: "old", model: "claude-opus-5-5" });
+  expect(bindingFor(dir, { who: { harness: "claude", session: "opus", pid: process.pid, model: "Claude-Opus-5-5[1m]" } })?.as).toBe("claude");
+  expect(seatsAt(loadConfig(), dir)[0]).toMatchObject({ session: "opus", model: "Claude-Opus-5-5[1m]" });
+  bindDirectory(dir, { alias: "ch", as: "claude", harness: "claude", session: "gone", pid: DEAD, model: "claude-opus-5-5" });
+  expect(bindingFor(dir, { who: { harness: "claude", session: "unknown", pid: process.pid } })?.as).toBe("claude");
+  expect(seatsAt(loadConfig(), dir)[0]?.model).toBeUndefined();
+  bindDirectory(dir, { alias: "ch", as: "claude", harness: "claude", session: "gone-2", pid: DEAD });
+  expect(bindingFor(dir, { who: { harness: "claude", session: "any", pid: process.pid, model: "claude-sonnet-5-5" } })?.as).toBe("claude");
+});
+
 test("two agents in one checkout each act as themselves", () => {
   bindDirectory(dir, { alias: "ch", as: "claude", harness: "claude", session: "s1", pid: process.pid });
   bindDirectory(dir, { alias: "ch", as: "claude-2", harness: "claude", session: "s2", pid: process.pid });
