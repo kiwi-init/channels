@@ -73,7 +73,6 @@
         ]
       },
       "ignoreDependencies": [
-        "effect",
         "expo-updates",
         "expo-system-ui"
       ]
