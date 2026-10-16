@@ -92,6 +92,7 @@ export interface Effects {
   ephemeral?: string;
   /** Send to the sender only. */
   reply?: string;
+  readers?: string[];
   /** Disconnect every socket authenticated as this key. */
   disconnect?: { pk: string; how: GoneHow };
   /** Delete the room's storage, then disconnect everyone. */
@@ -1009,13 +1010,15 @@ export function msgFrame(e: Envelope): string {
 }
 
 /** Frames to send a newly connected socket: the backlog after `since`, then ready. */
-export const welcomeFrames = (since: number): Effect.Effect<string[], never, RoomStore> =>
+export const welcomeFrames = (since: number, reads = true): Effect.Effect<string[], never, RoomStore> =>
   Effect.map(RoomStore, (db) => {
     const backlog = db.since(since);
     const head = db.head();
     const last = backlog.at(-1)?.seq ?? since;
-    return [...backlog.map(msgFrame), frame({ t: "reads", reads: db.reads() }), frame({ t: "ready", head, more: last < head })];
+    return [...backlog.map(msgFrame), ...(reads ? [frame({ t: "reads", reads: db.reads() })] : []), frame({ t: "ready", head, more: last < head })];
   });
+
+export const wantsReads = (url: URL): boolean => url.searchParams.get("reads") !== "0";
 
 /** Handle one frame from an authenticated socket. It never fails: whatever goes wrong is the sender's err frame. */
 export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: string, sender = "") {
@@ -1038,7 +1041,7 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
     // How far this member has read: kept and passed on only when it moves forward. Too many is just dropped.
     if (!allow(`read:${db.roomId}:${sender}`, READS_PER_MINUTE)) return {} satisfies Effects;
     return yield* markRead(sender, f.seq).pipe(
-      Effect.map((mark): Effects => (mark ? { broadcast: [frame({ t: "read", ...mark })] } : {})),
+      Effect.map((mark): Effects => (mark ? { readers: [frame({ t: "read", ...mark })] } : {})),
       Effect.catchCause((cause) =>
         Effect.succeed<Effects>(isRefusal(Cause.squash(cause)) ? { reply: frame({ t: "err", error: "bad read mark" }) } : { reply: frame({ t: "err", error: socketError(cause) }) }),
       ),

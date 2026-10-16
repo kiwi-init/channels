@@ -322,7 +322,7 @@ export class AgentSession {
         }
       };
       if (opts.onNotice) yield* aside(this.notices(opts.onNotice));
-      yield* eachLive(this.ch.fx.live(since, { presence: false }), handle, status);
+      yield* eachLive(this.ch.fx.live(since, { presence: false, reads: false }), handle, status);
     }).pipe(Effect.scoped);
   }
 
@@ -413,7 +413,7 @@ export class AgentSession {
         const { readAt, wake, ...rest } = p;
         found.set(p.from, { ...rest, ...(typeof p.role === "string" ? { role } : {}), ...(typeof readAt === "number" && Number.isFinite(readAt) ? { readAt } : {}), ...(isWakeVia(wake) ? { wake } : {}) });
       });
-    const probing = eachLive(this.ch.fx.live(head, { presence: true }), handle, () => Effect.void);
+    const probing = eachLive(this.ch.fx.live(head, { presence: true, reads: false }), handle, () => Effect.void);
     const [mine] = yield* Effect.all([Effect.promise(() => daemonSeat(this.alias, this.me)), Effect.raceFirst(probing, Effect.raceFirst(Deferred.await(quiet), Effect.sleep(waitMs))).pipe(Effect.ignoreCause, Effect.scoped)], { concurrency: "unbounded" });
     const myWake = mine?.wake.on ? viaOf(mine.wake.path) : null;
     if (mine) found.set(this.me, { v: PROTOCOL_VERSION, type: "presence", from: this.me, client: "daemon", ts: Date.now(), ...(mine.read ? { readAt: mine.read.at } : {}), ...(myWake ? { wake: myWake } : {}) });
@@ -537,7 +537,7 @@ export class AgentSession {
         // Linger briefly so several quick answers come back together.
         if (replies.length === 1) yield* Effect.forkScoped(Effect.andThen(Effect.sleep(600), Deferred.succeed(answered, undefined)));
       });
-    const listening = eachLive(this.ch.fx.live(since, { presence: false }), handle, () => Effect.void);
+    const listening = eachLive(this.ch.fx.live(since, { presence: false, reads: false }), handle, () => Effect.void);
     yield* Effect.raceFirst(listening, Effect.raceFirst(Deferred.await(answered), Effect.sleep(waitSec * 1000))).pipe(Effect.scoped);
     yield* (yield* Cursor).markSeen(this.alias, this.me, replies.map((r) => r.seq));
     return replies;

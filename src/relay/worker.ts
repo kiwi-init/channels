@@ -28,6 +28,7 @@ import {
   parseRoomPath,
   takesPresence,
   touch,
+  wantsReads,
   welcomeFrames,
   wsHeaders,
   type DirectoryEntry,
@@ -133,8 +134,9 @@ export class Channel extends DurableObject<Env> {
         const pk = await runRoom(this.relay, db, authenticateSocket(req));
         const { 0: client, 1: server } = new WebSocketPair();
         this.ctx.acceptWebSocket(server);
-        server.serializeAttachment(takesPresence(url) ? { pk, room: route.roomId } : { pk, room: route.roomId, presence: false });
-        for (const f of runRoomSync(this.relay, db, welcomeFrames(Number(url.searchParams.get("since") ?? 0) || 0))) server.send(f);
+        const reads = wantsReads(url);
+        server.serializeAttachment({ pk, room: route.roomId, reads, ...(takesPresence(url) ? {} : { presence: false }) });
+        for (const f of runRoomSync(this.relay, db, welcomeFrames(Number(url.searchParams.get("since") ?? 0) || 0, reads))) server.send(f);
         await this.apply({ expireAt: runRoomSync(this.relay, db, touch) ?? undefined });
         return new Response(null, { status: 101, webSocket: client, headers: wsHeaders(req) });
       }
@@ -164,6 +166,12 @@ export class Channel extends DurableObject<Env> {
     for (const f of fx.broadcast ?? []) for (const ws of sockets) send(ws, f);
     if (fx.ephemeral) {
       for (const ws of sockets) if (ws !== sender && (ws.deserializeAttachment() as { presence?: boolean } | null)?.presence !== false) send(ws, fx.ephemeral);
+    }
+    if (fx.readers?.length) {
+      for (const ws of sockets) {
+        if ((ws.deserializeAttachment() as { reads?: boolean } | null)?.reads === false) continue;
+        for (const f of fx.readers) send(ws, f);
+      }
     }
     if (fx.disconnect) {
       for (const ws of sockets) {
