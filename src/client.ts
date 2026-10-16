@@ -19,6 +19,7 @@ import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Queue from "effect/Queue";
 import * as Schedule from "effect/Schedule";
+import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 import { signRequest } from "./auth.ts";
 import { isErrorTag, tagForStatus, type ErrorTag } from "./errors.ts";
@@ -734,7 +735,9 @@ export interface ChannelFx {
   guard(info?: Info): Effect.Effect<GuardFloor | null, Refusal, Relay>;
   setCharter(charter: NonNullable<GuardFloor["charter"]>): Effect.Effect<void, Refused, Relay>;
   setHold(hold: NonNullable<GuardFloor["hold"]>): Effect.Effect<void, Refused, Relay>;
-  icon(): Effect.Effect<ChannelIcon | null, MemberRefusal, Relay>;
+  compress(): Effect.Effect<boolean, Refusal, Relay>;
+  setCompress(on: boolean): Effect.Effect<void, Refused, Relay>;
+  icon():Effect.Effect<ChannelIcon | null, MemberRefusal, Relay>;
   setIcon(icon: ChannelIcon | null): Effect.Effect<void, Refused, Relay>;
   members(rows?: readonly MemberRow[]): Effect.Effect<Member[], MemberRefusal, Relay>;
   memberRows(): Effect.Effect<MemberRow[], MemberRefusal, Relay>;
@@ -797,6 +800,8 @@ export class Channel {
   private infoShared: Fiber.Fiber<Info, Refusal> | null = null;
   private infoExpires: number | null = null;
   private moreUnknown = false;
+  private packs = false;
+  private readonly settingsWrites = Semaphore.makeUnsafe(1);
 
   constructor(
     public access: ChannelAccess,
@@ -1065,6 +1070,14 @@ export class Channel {
     /** Owner: sign the hold into the channel's settings, after the hold.set at `since`. */
     setHold: Effect.fn("Channel.setHold")({ self: this }, function* (this: Channel, hold: NonNullable<GuardFloor["hold"]>) {
       yield* this.putSettings({ hold });
+    }),
+
+    compress: Effect.fn("Channel.compress")({ self: this }, function* (this: Channel) {
+      return (yield* this.settings())?.compress === true;
+    }),
+
+    setCompress: Effect.fn("Channel.setCompress")({ self: this }, function* (this: Channel, on: boolean) {
+      yield* this.putSettings({ compress: on });
     }),
 
     icon: Effect.fn("Channel.icon")({ self: this }, function* (this: Channel) {
@@ -1411,7 +1424,7 @@ export class Channel {
         const e = this.access.epoch;
         const key = this.access.keys[String(e)];
         if (!key) return yield* new MissingKey(`no key for epoch ${e}`);
-        return { e, sealed: yield* Effect.promise(() => seal(key, this.roomId, signed)) };
+        return { e, sealed: yield* Effect.promise(() => seal(key, this.roomId, signed, { pack: this.packs })) };
       });
       const post = Effect.gen({ self: this }, function* () {
         const { e, sealed } = yield* sealNow;
@@ -1546,6 +1559,7 @@ export class Channel {
       if (!s || !key) return null;
       const o = (yield* Effect.promise(() => open(key, this.roomId, s.iv, s.ct).catch(() => null))) as ({ what?: unknown; room?: unknown; pk?: string; sig?: string } & Record<string, unknown>) | null;
       if (!o || o.what !== "channel-settings" || o.room !== this.roomId || o.pk !== this.access.ownerPk || !(yield* Effect.promise(() => verify(o as never)))) return null;
+      this.packs = o.compress === true;
       return o;
     });
   }
@@ -1558,9 +1572,11 @@ export class Channel {
       if (!key) return yield* new MissingKey("missing the channel key");
       this.forgetInfo();
       const { what: _w, room: _r, pk: _p, sig: _s, ...kept } = (yield* this.settings()) ?? {};
-      const sealed = yield* Effect.promise(async () => seal(key, this.roomId, await sign(this.identity, { ...kept, ...change, what: "channel-settings", room: this.roomId })));
+      const next = { ...kept, ...change };
+      const sealed = yield* Effect.promise(async () => seal(key, this.roomId, await sign(this.identity, { ...next, what: "channel-settings", room: this.roomId })));
       yield* this.request("/settings", { method: "PUT", body: JSON.stringify({ settings: sealed }) }).pipe(Effect.ensuring(Effect.sync(() => this.forgetInfo())));
-    });
+      this.packs = next.compress === true;
+    }).pipe(Semaphore.withPermit(this.settingsWrites));
   }
 
   /** Where one request's code check stands, signing the owner's half if the budget allows. */
@@ -1971,6 +1987,14 @@ export class Channel {
 
   setHold(hold: NonNullable<GuardFloor["hold"]>): Promise<void> {
     return run(this.fx.setHold(hold));
+  }
+
+  compress(): Promise<boolean> {
+    return run(this.fx.compress());
+  }
+
+  setCompress(on: boolean): Promise<void> {
+    return run(this.fx.setCompress(on));
   }
 
   /** The channel's icon, if the owner set one (only members can read it). */
