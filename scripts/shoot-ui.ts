@@ -244,6 +244,14 @@ try {
       }
       const closeTasks = () => tasksPanel().getByRole("button", { name: "Close tasks" }).click()
       /** Back to main from a direct conversation: the name's capsule leads with the way back. */
+      const toTop = async () => {
+        await owner.getByRole("main").hover()
+        await owner.mouse.wheel(0, -4000)
+      }
+      const toChannel = async () => {
+        await owner.goto(channel)
+        await toTop()
+      }
       const toChat = async () => {
         const back = convs().getByRole("button", { name: "Back to chat" })
         if (await back.count()) await back.click()
@@ -281,7 +289,10 @@ try {
         await owner.getByRole("button", { name: "More for atlas" }).click()
         await owner.getByRole("menuitem", { name: "Message privately" }).click()
         await convs().getByRole("button", { name: "Back to chat" }).waitFor()
-      }, toChat)
+      }, async () => {
+        await toChat()
+        await toTop()
+      })
       await shoot(owner, tag, "09-invite", async () => {
         await detailsBtn().click()
         await owner.getByRole("button", { name: "Invite", exact: true }).click()
@@ -294,14 +305,14 @@ try {
         await owner.getByRole("complementary").getByRole("button", { name: /Jonatas/ }).click()
       }, async () => {
         await owner.keyboard.press("Escape")
-        if (narrow) await owner.goto(channel)
+        if (narrow) await toChannel()
       })
       await shoot(owner, tag, "11-palette", async () => {
         if (narrow) await owner.getByRole("button", { name: "Channels" }).click()
         await owner.keyboard.press("ControlOrMeta+k")
       }, async () => {
         await owner.keyboard.press("Escape")
-        if (narrow) await owner.goto(channel)
+        if (narrow) await toChannel()
       })
       await shoot(owner, tag, "12-notes", async () => {
         await detailsBtn().click()
@@ -331,7 +342,10 @@ try {
       await shoot(out, tag, "20-first-run")
       await firstRunAs(out, "Pat").catch(() => {})
       await shoot(out, tag, "23-signed-in-empty")
-      await shoot(out, tag, "21-join-with-code", () => out.getByRole("button", { name: "Join with a code" }).first().click())
+      await shoot(out, tag, "21-join-with-code", async () => {
+        await out.getByRole("complementary").getByRole("button", { name: "New channel", exact: true }).click()
+        await out.getByRole("dialog").getByRole("button", { name: "Have a code? Join" }).click()
+      })
       await out.goto(`${BASE}#${encodeURIComponent(code)}`)
       await out.getByRole("heading", { name: /invited you to a channel|You’re invited to a channel/ }).waitFor({ timeout: 10000 }).catch(() => {})
       await shoot(out, tag, "22-invite-preview")
