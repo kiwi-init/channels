@@ -650,7 +650,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       <div className="flex h-full min-w-0 flex-1">
         <div
           className={cx("relative flex min-w-0 flex-1 flex-col bg-canvas", (root || info || side?.kind === "tasks") && "hidden md:flex")}
-          style={{ "--head": `${headH}px`, "--foot": `${footH}px`, "--float": `${FLOAT_W + 24}px` } as CSSProperties}
+          style={{ "--head": `${headH}px`, "--foot": `${footH}px`, "--float": `${FLOAT_W + 48}px` } as CSSProperties}
         >
           {/* The conversation's part of the window's one header row, floating over it as Grok's does:
               in the middle, one glass capsule with the channel's name; on the right, search and the
@@ -809,7 +809,11 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                     atBottom.current = true
                     return send(body, opts)
                   }}
-                  footer={<AgentStrip agents={agentsNow} now={now} onOpenTask={openTask} />}
+                  footer={
+                    <div className="lg:hidden">
+                      <AgentStrip agents={agentsNow} now={now} onOpenTask={openTask} />
+                    </div>
+                  }
                 />
               ) : (
                 <p className="shrink-0 px-6 pt-2 pb-4 text-center text-meta text-ink-3">

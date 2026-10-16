@@ -148,10 +148,13 @@ From `design-tokens.ts`:
 - Needs-you: approvals, escalations and review-waiting work in one place at
   the top; `Pause agents` in the header stops every agent at once.
 - Overview cards: always in the chat area on wide windows, never behind
-  a button. Stacked `glass` cards at `dock` radius float at the top right
+  a button. Flat `raised` cards (a 1px `line` ring, `card` radius, 24px
+  from the window's edge, 16px apart, 20px inside) float at the top right
   of the conversation, each folding from its header: Agents, Tasks (the 5
-  last updated, status filter pills), Pull requests (the last 5 linked in
-  the channel). The messages and the composer keep clear of them. A
+  last updated, quiet text filters, a state with no task left out), Pull
+  requests (the last 5 linked in the channel). The messages and the
+  composer keep 24px clear of them, and the agent strip under the
+  composer gives way to the Agents card. A
   thread, the details or a task in the side column hide them until it
   closes. Narrow windows keep the header's Tasks button instead.
 - Coordinator: `coordinator-head` (system-blue shell, pale screen, quiet
