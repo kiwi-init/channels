@@ -142,6 +142,8 @@ export function reserveSlot(entries: DirectoryEntry[], room: string, most: numbe
 /** Whether an entry is a hold that `release` may drop (never a created channel's entry). */
 export const releasable = (e: DirectoryEntry | undefined) => !!e && isHold(e);
 
+const DROP_BATCH = 64;
+
 const utcDay = (ts: number) => new Date(ts).toISOString().slice(0, 10);
 
 /** "3h 12m": how long until the UTC date changes. */
@@ -218,6 +220,7 @@ interface Counters {
   bytes: number;
   day: string;
   n: number;
+  head?: number;
 }
 /** What a client that speaks an old path is told. */
 export const UPDATE_KIWI = "update kiwi to join or approve here: curl -fsSL https://channels.kiwiinit.com/install | sh (Windows: irm https://channels.kiwiinit.com/install.ps1 | iex)";
@@ -264,6 +267,23 @@ interface Meta {
 /** Storage handles whose room already has every column this version reads. */
 const migrated = new WeakSet<Sql>();
 
+interface Warm {
+  exists: boolean | null;
+  meta: Map<string, string | null>;
+  head: number | null;
+  members: Map<string, { active: boolean; readOnly: boolean } | null>;
+  reads: Map<string, number>;
+}
+
+const warmRooms = new WeakMap<Sql, Warm>();
+
+const coldRoom = (): Warm => ({ exists: null, meta: new Map(), head: null, members: new Map(), reads: new Map() });
+
+export function forgetRoom(sql: Sql): void {
+  warmRooms.delete(sql);
+  migrated.delete(sql);
+}
+
 /**
  * A room's tables and rows. Reads and writes only: what a request may do is
  * decided by the Effects below, which reach this through RoomStore.
@@ -281,9 +301,17 @@ export class RoomDb {
     }
   }
 
+  private get warm(): Warm {
+    let w = warmRooms.get(this.sql);
+    if (!w) warmRooms.set(this.sql, (w = coldRoom()));
+    return w;
+  }
+
   /** Tables exist only once a room is created, so a closed room leaves nothing behind. */
   exists(): boolean {
-    return this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'meta'").length > 0;
+    const w = this.warm;
+    w.exists ??= this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'meta'").length > 0;
+    return w.exists;
   }
 
   /** A room from before owner-gated channels: it has data but no owner. Such rooms are deleted on sight. */
@@ -292,8 +320,9 @@ export class RoomDb {
   }
 
   init(): void {
+    warmRooms.set(this.sql, { ...coldRoom(), exists: true, head: 0 });
     this.sql.run("CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)");
-    this.sql.run("CREATE TABLE msgs (seq INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, iv TEXT NOT NULL, ct TEXT NOT NULL, e INTEGER NOT NULL)");
+    this.sql.run("CREATE TABLE msgs (seq INTEGER PRIMARY KEY, ts INTEGER NOT NULL, iv TEXT NOT NULL, ct TEXT NOT NULL, e INTEGER NOT NULL)");
     // Former members keep their sealed record (so their history still verifies) but lose every key.
     this.sql.run(
       "CREATE TABLE members (pk TEXT PRIMARY KEY, xpk TEXT NOT NULL, rec TEXT NOT NULL, rec_e INTEGER NOT NULL, since INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1, read_only INTEGER NOT NULL DEFAULT 0, admits_until INTEGER, admitted_by TEXT)",
@@ -308,6 +337,7 @@ export class RoomDb {
 
   /** A room from before a column existed gets it added (a new room is created with all of them). */
   migrate(): void {
+    if (migrated.has(this.sql)) return;
     // A key the owner lets only read (member scopes): the one bit of them the relay knows.
     const memberCols = new Set(this.sql.all<{ name: string }>("PRAGMA table_info(members)").map((c) => c.name));
     if (!memberCols.has("read_only")) this.sql.run("ALTER TABLE members ADD COLUMN read_only INTEGER NOT NULL DEFAULT 0");
@@ -320,6 +350,7 @@ export class RoomDb {
       if (!cols.has(col)) this.sql.run(`ALTER TABLE requests ADD COLUMN ${col} ${def}`);
     }
     this.sql.run(READS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
+    migrated.add(this.sql);
   }
 
   /** How far each current member has read. */
@@ -328,11 +359,14 @@ export class RoomDb {
   }
 
   get(k: string): string | undefined {
-    return this.sql.all<{ v: string }>("SELECT v FROM meta WHERE k = ?", k)[0]?.v;
+    const meta = this.warm.meta;
+    if (!meta.has(k)) meta.set(k, this.sql.all<{ v: string }>("SELECT v FROM meta WHERE k = ?", k)[0]?.v ?? null);
+    return meta.get(k) ?? undefined;
   }
 
   set(k: string, v: string | number): void {
     this.sql.run("INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v", k, String(v));
+    this.warm.meta.set(k, String(v));
   }
 
   /** The signed-in human (WorkOS user id) who owns this channel, when the relay requires sign-in. */
@@ -340,12 +374,48 @@ export class RoomDb {
     return this.get("owner_user");
   }
 
+  private member(pk: string): { active: boolean; readOnly: boolean } | null {
+    const members = this.warm.members;
+    if (!members.has(pk)) {
+      const row = this.sql.all<{ active: number; read_only: number }>("SELECT active, read_only FROM members WHERE pk = ?", pk)[0];
+      members.set(pk, row ? { active: row.active === 1, readOnly: row.read_only === 1 } : null);
+    }
+    return members.get(pk) ?? null;
+  }
+
   isMember(pk: string): boolean {
-    return this.sql.all("SELECT 1 FROM members WHERE pk = ? AND active = 1", pk).length > 0;
+    return this.member(pk)?.active === true;
+  }
+
+  isReadOnly(pk: string): boolean {
+    return this.member(pk)?.readOnly === true;
+  }
+
+  membersChanged(pk: string): void {
+    this.warm.members.delete(pk);
+    this.warm.reads.delete(pk);
   }
 
   head(): number {
-    return this.sql.all<{ s: number | null }>("SELECT MAX(seq) AS s FROM msgs")[0]?.s ?? 0;
+    const w = this.warm;
+    w.head ??= Math.max(this.sql.all<{ s: number | null }>("SELECT MAX(seq) AS s FROM msgs")[0]?.s ?? 0, this.counters()?.head ?? 0);
+    return w.head;
+  }
+
+  insert(seq: number, ts: number, iv: string, ct: string, e: number): void {
+    this.sql.run("INSERT INTO msgs (seq, ts, iv, ct, e) VALUES (?, ?, ?, ?, ?)", seq, ts, iv, ct, e);
+    this.warm.head = seq;
+  }
+
+  readThrough(pk: string): number {
+    const reads = this.warm.reads;
+    if (!reads.has(pk)) reads.set(pk, this.sql.all<{ seq: number }>("SELECT seq FROM reads WHERE pk = ?", pk)[0]?.seq ?? 0);
+    return reads.get(pk) ?? 0;
+  }
+
+  setReadThrough(pk: string, seq: number, at: number): void {
+    this.sql.run("INSERT INTO reads (pk, seq, at) VALUES (?, ?, ?) ON CONFLICT (pk) DO UPDATE SET seq = excluded.seq, at = excluded.at", pk, seq, at);
+    this.warm.reads.set(pk, seq);
   }
 
   /**
@@ -393,12 +463,17 @@ export class RoomDb {
   dropOldest(need: number): number {
     let freed = 0;
     let through = 0;
-    for (const r of this.sql.all<{ seq: number; n: number }>("SELECT seq, LENGTH(ct) AS n FROM msgs ORDER BY seq")) {
-      freed += r.n;
-      through = r.seq;
-      if (freed >= need) break;
+    while (freed < need) {
+      const batch = this.sql.all<{ seq: number; n: number }>("SELECT seq, LENGTH(ct) AS n FROM msgs WHERE seq > ? ORDER BY seq LIMIT ?", through, DROP_BATCH);
+      for (const r of batch) {
+        freed += r.n;
+        through = r.seq;
+        if (freed >= need) break;
+      }
+      if (batch.length < DROP_BATCH) break;
     }
-    return this.dropThrough(through);
+    if (through) this.sql.run("DELETE FROM msgs WHERE seq <= ?", through);
+    return freed;
   }
 
   /** How many members (people and agents) are in the channel now. */
@@ -512,7 +587,7 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
   const db = yield* RoomStore;
   const policy = yield* Policy;
   // Every client refuses a read-only member's messages anyway; refusing them here keeps them out of storage.
-  if (db.sql.all("SELECT 1 FROM members WHERE pk = ? AND read_only = 1", sender).length) return yield* new ReadOnly({ message: READ_ONLY });
+  if (db.isReadOnly(sender)) return yield* new ReadOnly({ message: READ_ONLY });
   if (!fits(StoredEnvelope, { iv, ct })) return yield* new BadRequest({ message: "bad envelope" });
   if (ct.length > MAX_CT_LENGTH) return yield* new TooLarge({ message: "message too large" });
   const { epoch } = yield* readMeta;
@@ -533,15 +608,15 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
   // the whole allowance is refused.
   const cap = policy.bytesPerChannel;
   if (ct.length > cap) return yield* new TooLarge({ message: `that message is bigger than this channel may hold (${formatBytes(cap)})` });
+  const seq = db.head() + 1;
   let bytes = db.storedBytes();
   if (bytes + ct.length > cap) bytes -= db.dropOldest(bytes + ct.length - cap);
 
-  db.sql.run("INSERT INTO msgs (ts, iv, ct, e) VALUES (?, ?, ?, ?)", ts, iv, ct, e);
-  const seq = db.head();
+  db.insert(seq, ts, iv, ct, e);
   bytes += ct.length;
   // Prune in batches so retention costs one extra write pass per 100 messages.
   if (seq % 100 === 0) bytes -= db.dropThrough(seq - ROOM_RETENTION);
-  db.setCounters({ bytes, day, n: today + 1 });
+  db.setCounters({ bytes, day, n: today + 1, head: seq });
   const stored: Envelope = { seq, ts, iv, ct, e };
   return stored;
 });
@@ -676,6 +751,7 @@ const putMember = Effect.fn("Room.putMember")(function* (m: MemberBody, epoch: n
     Date.now(),
     m.post === false ? 1 : 0,
   );
+  db.membersChanged(m.pk);
   for (const [e, wrapped] of Object.entries(m.keys ?? {})) {
     db.sql.run("INSERT OR REPLACE INTO keys (pk, e, wrapped) VALUES (?, ?, ?)", m.pk, Number(e), wrapped);
   }
@@ -826,6 +902,7 @@ export const setRecord = Effect.fn("Room.setRecord")(function* (pk: string, rec:
   if (rec.length > MAX_RECORD) return yield* new TooLarge({ message: "record too large" });
   db.migrate();
   db.sql.run("UPDATE members SET rec = ?, rec_e = ?, read_only = ?, admitted_by = NULL WHERE pk = ?", rec, e, post ? 0 : 1, pk);
+  db.membersChanged(pk);
 });
 
 /** Whether a member may post (the owner's scope.set says what they may do; this is the bit the relay enforces). */
@@ -835,6 +912,7 @@ export const setCanPost = Effect.fn("Room.setCanPost")(function* (pk: string, po
   if (!db.isMember(pk)) return yield* new NotFound({ message: "not a member" });
   db.migrate();
   db.sql.run("UPDATE members SET read_only = ?, admitted_by = NULL WHERE pk = ?", post ? 0 : 1, pk);
+  db.membersChanged(pk);
 });
 
 export const remove = Effect.fn("Room.remove")(function* (pk: string, how: GoneHow) {
@@ -847,6 +925,7 @@ export const remove = Effect.fn("Room.remove")(function* (pk: string, how: GoneH
   db.sql.run("DELETE FROM keys WHERE pk = ?", pk);
   db.sql.run("DELETE FROM requests WHERE pk = ?", pk);
   db.sql.run("DELETE FROM reads WHERE pk = ?", pk);
+  db.membersChanged(pk);
   // Its keys are revoked at the relay; the owner rotates so they also can't decrypt anything newer.
   db.set("rotate", 1);
 });
@@ -856,10 +935,9 @@ export const markRead = Effect.fn("Room.markRead")(function* (pk: string, seq: u
   const db = yield* RoomStore;
   if (!Number.isSafeInteger(seq) || (seq as number) < 1) return yield* new BadRequest({ message: "seq must be a positive whole number" });
   const upTo = Math.min(seq as number, db.head());
-  const was = db.sql.all<{ seq: number }>("SELECT seq FROM reads WHERE pk = ?", pk)[0]?.seq ?? 0;
-  if (upTo <= was) return null;
+  if (upTo <= db.readThrough(pk)) return null;
   const at = yield* Clock.currentTimeMillis;
-  db.sql.run("INSERT INTO reads (pk, seq, at) VALUES (?, ?, ?) ON CONFLICT (pk) DO UPDATE SET seq = excluded.seq, at = excluded.at", pk, upTo, at);
+  db.setReadThrough(pk, upTo, at);
   return { pk, seq: upTo, at } satisfies ReadMark;
 });
 

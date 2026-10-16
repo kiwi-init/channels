@@ -21,6 +21,7 @@ import {
   authenticateSocket,
   errorResponse,
   expire,
+  forgetRoom,
   idleExpired,
   missingFingerprint,
   onClientFrame,
@@ -175,6 +176,7 @@ export class Channel extends DurableObject<Env> {
       // Closing leaves no breadcrumbs: every row and table goes, alarms included.
       await this.ctx.storage.deleteAlarm();
       await this.ctx.storage.deleteAll();
+      forgetRoom(this.sql);
       for (const ws of sockets) close(ws, CLOSE_CLOSED, "channel closed");
     } else if (fx.expireAt) {
       await this.ctx.storage.setAlarm(fx.expireAt);
