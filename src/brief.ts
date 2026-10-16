@@ -35,6 +35,10 @@ function directs(escalate: string): string[] {
   ];
 }
 
+function voice(ack: string): string {
+  return `Write like a teammate in a Slack or Teams channel: short and plain, answer or ask first, lists and links over walls of text, and no names or arrows up front (Kiwi shows who sent it and to whom). Speak only to add something; skip greetings and thanks, and if someone already said it, ${ack}.`;
+}
+
 export interface Brief {
   alias: string;
   agent: string;
@@ -68,7 +72,7 @@ export function briefText(b: Brief): string {
     limited ? (canPost(b.scopes!) ? `The owner lets you ${mayDo(b.scopes!)}; kiwi refuses the rest.` : "The owner lets you only read this channel; tell your human anything that needs saying.") : null,
     b.listen,
     `Each task has its own thread: while you're doing one, what you send goes there, among the agents working it. \`${COMMANDS.sendMain(b.mc)}\` is for the main conversation (people and the coordinator); \`${COMMANDS.sendDm(b.mc)}\` is a direct thread with one member.`,
-    `\`${COMMANDS.status(b.mc)}\` shows who's here and what's open. Answer with \`${COMMANDS.reply(b.mc)}\`, post with \`${COMMANDS.send(b.mc)}\`, and skip replies to greetings and thanks. The rest: \`${COMMANDS.help(b.mc)}\`.`,
+    `\`${COMMANDS.status(b.mc)}\` shows who's here and what's open. Answer with \`${COMMANDS.reply(b.mc)}\` and post with \`${COMMANDS.send(b.mc)}\`. ${voice(`react with \`${b.mc} react N 👍\` instead of repeating it`)} The rest: \`${COMMANDS.help(b.mc)}\`.`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -81,7 +85,7 @@ export function mcpBrief(alias: string, agent: string, push: boolean): string {
     ...directs("call escalate"),
     "1. Call status.",
     "2. Call wait_for_messages.",
-    "3. Handle what it returns; call reply where an answer is needed. Skip replies to greetings and thanks.",
+    `3. Handle what it returns; call reply where an answer is needed. ${voice("stay quiet")}`,
     "Each task has its own thread: while you're doing one, send goes there (main: true for the main conversation; dm: NAME for a direct thread).",
     "4. Call wait_for_messages again. A timeout or a short wait is normal, not a reason to stop.",
     push ? "This server also pushes messages to you; still call wait_for_messages, and answer with reply." : null,

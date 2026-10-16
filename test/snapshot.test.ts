@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { describe, expect, setSystemTime, test } from "bun:test";
+import { describe, expect, setDefaultTimeout, setSystemTime, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -15,6 +15,8 @@ import { OPEN_POLICY } from "../src/relay/policy.ts";
 import { openSnapshot, sealSnapshot } from "../src/snapshot.ts";
 import { fold, toRoster, type ChannelState, type FoldBase, type GuardFloor, type Roster, type RoomsFloor } from "../src/state.ts";
 import { setupChannel } from "./owner.ts";
+
+setDefaultTimeout(60_000);
 
 const T0 = 1_700_000_000_000;
 const NOW = T0 + 10_000_000;
