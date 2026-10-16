@@ -101,7 +101,9 @@ export async function plan(opts: {
   const { repo, base, head, config } = opts
   const jobs = Object.keys(config.jobs)
   const hashes = allHashes(repo, head, config)
-  const changes = readDiff(repo, base, head).filter((f) => meaningful(f, config))
+  const diff = readDiff(repo, base, head)
+  const changes = diff.filter((f) => meaningful(f, config))
+  const bump = diff.find((f) => f.hunks.length > 0 && !meaningful(f, config))
   const out: Plan = { decisions: [], hashes, changed: changes.length, jevLines: 0, jevCalls: 0, inputTokens: 0 }
   const decide = (d: Decision) => out.decisions.push(d)
 
@@ -122,6 +124,7 @@ export async function plan(opts: {
     const forced = changes.find((f) => reads(j.always ?? [], f))
     if (redefined.has(job)) decide({ job, run: true, layer: "L0", reason: "its CI definition changed" })
     else if (forced) decide({ job, run: true, layer: "L0", reason: `${forced.path} changed (config or dependencies)` })
+    else if (j.version_bumps && bump) decide({ job, run: true, layer: "L0", reason: `${bump.path} changed a version number` })
     else if (!changes.some((f) => reads(j.inputs, f)))
       decide({ job, run: false, layer: "L0", reason: changes.length ? "no file this job reads changed" : "only version numbers or whitespace changed" })
     else open.push(job)

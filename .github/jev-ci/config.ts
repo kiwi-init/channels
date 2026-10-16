@@ -10,6 +10,7 @@ type Job = {
   /** false: never ask Jev; the job runs whenever a file it reads changed. For static checks (types, lint), where any edit can fail them. */
   jev?: boolean
   push?: boolean
+  version_bumps?: boolean
 }
 
 export type Config = {

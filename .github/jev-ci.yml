@@ -1,6 +1,7 @@
 # jev-ci: which CI jobs a pull request can break. Read by .github/jev-ci/cli.ts in the
 # `plan` job of .github/workflows/ci.yml. Pushes to main run everything except the jobs marked
-# `push: false`, which run on pull requests and manual runs only.
+# `push: false`, which run on pull requests and manual runs only. `version_bumps: true` runs a
+# job when a change only bumps a version number, which otherwise counts as no change.
 #
 # For each job: `inputs` are the files it reads (a change elsewhere skips it), `always` are
 # files that run it by rule (config, dependencies), and `description` says in plain words
@@ -306,6 +307,7 @@ jobs:
     name: release / rehearsal
     jev: false
     push: false
+    version_bumps: true
     inputs: []
     always: [".github/workflows/release.yml", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/bun.lock", "desktop/scripts/fuses.ts", "scripts/changelog.ts"]
     description: >-
@@ -316,5 +318,5 @@ jobs:
       secrets are there) and Linux (AppImage and deb), with each package's contents and fuses
       checked. Fails where the tag would: versions that disagree, no changelog section,
       a test failing on macOS, an electron-builder or signing error, a package missing the
-      web app or the kiwi binary. Runs on release PRs (they change CHANGELOG.md) and on manual
-      runs of ci.yml, never on a push to main.
+      web app or the kiwi binary. Runs on release PRs (they change CHANGELOG.md), on any change
+      that only bumps a version number, and on manual runs of ci.yml, never on a push to main.

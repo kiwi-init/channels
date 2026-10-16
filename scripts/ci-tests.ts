@@ -8,7 +8,7 @@
 import { Glob } from "bun"
 import { mkdtempSync, realpathSync, rmSync, symlinkSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 
 const FLOWS: Record<string, string[]> = {
   "flows-a": ["e2e", "verbs", "threads", "reconnect"],
@@ -35,7 +35,7 @@ if (missing.length) {
 }
 
 function tmpBehindSymlink(): { dir: string; cleanup: () => void } {
-  const tmp = tmpdir()
+  const tmp = resolve(tmpdir())
   if (realpathSync(tmp) !== tmp) return { dir: tmp, cleanup: () => {} }
   const real = mkdtempSync(join(tmp, "kiwi-tmp-"))
   const link = `${real}.link`
