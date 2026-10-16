@@ -22,12 +22,12 @@ import { Channel, ChannelGone, eachLive, fetchRelay, isDirectedAt, isForAgent, k
 import { Cache, Cursor, Keystore, LocalFiles, type ChannelConfig } from "./config.ts";
 import { TOO_MANY_REQUESTS } from "./sas.ts";
 import type { ChannelAccess } from "./crypto.ts";
-import { inlineText, type Member } from "./membership.ts";
+import { inlineText } from "./membership.ts";
 import type { Identity } from "./identity.ts";
 import { isLocalRefusal, Rejected } from "./refusals.ts";
 import { canPost, describeScopes, refusal } from "./scopes.ts";
-import { GENERAL_ROOM, ignored, isReach, PROTOCOL_VERSION, TASK_STATES, wellFormedReaction, type Card, type Color, type Event, type ImageAttachment, type Kind, type Message, type Presence, type TaskState, type Verdict } from "./protocol.ts";
-import { allowedOnHold, findRoom, fold, humanOf, isPerson, keptFromPeople, ON_HOLD, openRound, ownerOf, revisedOut, taskId, threadMembers, type ChannelState, type GuardFloor, type ReviewRound, type Roster, type RoomsFloor, type Task } from "./state.ts";
+import { GENERAL_ROOM, ignored, isReach, PAGE_LIMIT, PROTOCOL_VERSION, TASK_STATES, wellFormedReaction, type Card, type Color, type Event, type ImageAttachment, type Kind, type Message, type Presence, type TaskState, type Verdict } from "./protocol.ts";
+import { allowedOnHold, findRoom, fold, humanOf, isPerson, keptFromPeople, ON_HOLD, openRound, ownerOf, revisedOut, taskId, threadMembers, toRoster, type ChannelState, type FoldBase, type GuardFloor, type ReviewRound, type Roster, type RoomsFloor, type Task } from "./state.ts";
 import { mergeCard, sameCard } from "./card.ts";
 import { daemonMark, daemonPeek, daemonSeat, type DaemonPeek } from "./daemon.ts";
 import { isWakeVia, viaOf } from "./wake.ts";
@@ -82,24 +82,6 @@ export const runAgent = <A, E>(effect: Effect.Effect<A, E, Agent>): Promise<A> =
 
 /** A refusal that's an answer, not an outage: gone, refused here, or refused by the relay for good. */
 const isAnswer = (err: unknown) => err instanceof ChannelGone || isLocalRefusal(err) || (err instanceof RelayError && err.status < 500 && err.status !== 429);
-
-const toRoster = (m: Member): Roster[number] => ({
-  name: m.name,
-  pk: m.pk,
-  role: m.role,
-  about: m.about,
-  owner: m.owner,
-  at: m.at,
-  active: m.active,
-  kind: m.kind,
-  display: m.display,
-  sponsor: m.sponsor,
-  color: m.color,
-  ...(m.scopes ? { scopes: m.scopes } : {}),
-  ...(m.later ? { later: m.later } : {}),
-  ...(m.laterRole ? { laterRole: m.laterRole } : {}),
-  ...(m.runs ? { runs: m.runs } : {}),
-});
 
 export const holding = (alias: string, as: string): Effect.Effect<void, never, Scoped.Scope> =>
   Effect.gen(function* () {
@@ -157,6 +139,8 @@ export class AgentSession {
   private saved = 0;
   private owed = 0;
   private daemonLive = false;
+  protected base: FoldBase | null = null;
+  protected partial = false;
 
   /** openSession makes these, with the keys loaded. */
   constructor(
@@ -202,18 +186,24 @@ export class AgentSession {
       const cached = yield* cache.read(this.cfg.roomId);
       this.saved = Math.max(this.saved, lastSeq(cached));
       this.log ??= cached;
+      this.base ??= yield* cache.base(this.cfg.roomId);
     }
     const look = yield* Look;
     const seen = peeked === undefined ? yield* this.peek() : peeked;
     const current = seen !== null && seen.head <= lastSeq(this.log) && lastSeq(this.log) >= this.owed;
     if (!current && (!look?.fetched.has(this) || lastSeq(this.log) < this.owed)) {
-      const { messages } = yield* this.ch.fx.history(lastSeq(this.log));
-      const last = lastSeq(this.log);
-      const fresh = messages.filter((m) => m.seq > last);
-      if (fresh.length) this.log = [...this.log, ...fresh];
+      const fetched = !this.log.length && !this.base ? yield* this.ch.fx.snapshot() : null;
+      const from = Math.max(lastSeq(this.log), this.base?.n ?? fetched?.n ?? 0);
+      const { messages, first } = yield* this.ch.fx.history(from);
+      const gap = first !== null && first > from + 1;
+      if (gap) this.partial = true;
+      if (fetched && !gap) yield* cache.keepBase(this.cfg.roomId, fetched);
+      this.base ??= gap ? null : fetched;
+      const fresh = messages.filter((m) => m.seq > lastSeq(this.log!));
+      if (fresh.length) this.log = [...this.log!, ...fresh];
       look?.fetched.add(this);
     }
-    const log = this.log;
+    const log = this.log!;
     const unsaved = log.filter((m) => m.seq > this.saved);
     if (unsaved.length) {
       yield* cache.append(this.cfg.roomId, unsaved);
@@ -251,17 +241,68 @@ export class AgentSession {
     return Effect.gen({ self: this }, function* () {
       this.roomsFloor ??= yield* orNone(this.ch.fx.rooms(info));
       this.guardFloor ??= yield* orNone(this.ch.fx.guard(info));
-      let state = fold(messages, roster, Date.now(), undefined, this.roomsFloor, this.guardFloor);
+      const kept: { base?: FoldBase } = {};
+      const keep = this.snapshotDue(messages.at(-1)?.seq ?? 0) ? (b: FoldBase) => void (kept.base = b) : undefined;
+      let state = fold(messages, roster, Date.now(), undefined, this.roomsFloor, this.guardFloor, this.base, keep);
       const unknown = [...state.rejected].some(([seq, why]) => seq > this.roomsCheckedAt && why.startsWith("no room "));
       if (unknown) {
         this.roomsCheckedAt = state.head;
         this.ch.forgetInfo();
         this.roomsFloor = yield* orNone(this.ch.fx.rooms());
-        state = fold(messages, roster, Date.now(), undefined, this.roomsFloor, this.guardFloor);
+        state = fold(messages, roster, Date.now(), undefined, this.roomsFloor, this.guardFloor, this.base, keep);
       }
+      if (kept.base) yield* this.publish(kept.base);
       return state;
     });
   }
+
+  protected snapshotDue(_head: number): boolean {
+    return false;
+  }
+
+  protected publish(_base: FoldBase): Effect.Effect<void, never, Relay> {
+    return Effect.void;
+  }
+
+  readonly message = Effect.fn("AgentSession.message")({ self: this }, function* (this: AgentSession, seq: number, messages: readonly Message[]) {
+    const held = messages.find((m) => m.seq === seq);
+    if (held || !this.base || seq > this.base.n || seq < 1) return held ?? null;
+    return (yield* this.ch.fx.page(seq - 1, 1)).find((m) => m.seq === seq) ?? null;
+  });
+
+  readonly threadMessages = Effect.fn("AgentSession.threadMessages")({ self: this }, function* (this: AgentSession, root: number, messages: readonly Message[], state: ChannelState) {
+    const held = new Set(messages.map((m) => m.seq));
+    const missing = [...state.threadOf]
+      .filter(([seq, r]) => r === root && !held.has(seq))
+      .map(([seq]) => seq)
+      .sort((a, b) => a - b);
+    const wanted = new Set(missing);
+    const older: Message[] = [];
+    for (let i = 0; i < missing.length; ) {
+      const from = missing[i]!;
+      let j = i;
+      while (j + 1 < missing.length && missing[j + 1]! - from < PAGE_LIMIT && missing[j + 1]! - missing[j]! <= 50) j++;
+      older.push(...(yield* this.ch.fx.page(from - 1, missing[j]! - from + 1)).filter((m) => wanted.has(m.seq)));
+      i = j + 1;
+    }
+    return [...older, ...messages.filter((m) => state.threadOf.get(m.seq) === root)].sort((a, b) => a.seq - b.seq);
+  });
+
+  readonly earlier = Effect.fn("AgentSession.earlier")({ self: this }, function* (this: AgentSession, messages: Message[], n: number, shown: (m: Message) => boolean = () => true) {
+    if (!this.base) return messages;
+    let out = messages;
+    let first = Math.min(messages[0]?.seq ?? this.base.n + 1, this.base.n + 1);
+    let step = 0;
+    for (let seen = out.filter(shown).length; first > 1 && seen < n; seen = out.filter(shown).length) {
+      step = Math.min(PAGE_LIMIT, first - 1, Math.max(step * 2, n - seen));
+      const since = first - 1 - step;
+      const older = (yield* this.ch.fx.page(since, step)).filter((m) => m.seq <= since + step);
+      if (!older.length) break;
+      out = [...older, ...out];
+      first = since + 1;
+    }
+    return out;
+  });
 
   /** A room's id from its name or id (# optional); general when none is given. */
   readonly roomId = Effect.fn("AgentSession.roomId")({ self: this }, function* (this: AgentSession, nameOrId: string | undefined, state?: ChannelState) {
@@ -618,7 +659,7 @@ export class AgentSession {
   /** Reply to message #seq, addressed to its sender, in its room (a thread lives in one). */
   readonly reply = Effect.fn("AgentSession.reply")({ self: this }, function* (this: AgentSession, seq: number, body: string, kind: Kind = "msg", imgs?: ImageAttachment[]) {
     const { messages, state } = yield* this.state();
-    const orig = messages.find((m) => m.seq === seq);
+    const orig = yield* this.message(seq, messages);
     if (!orig) return yield* new Rejected(`no message #${seq}`);
     const to = orig.from === this.me ? orig.to : [orig.from];
     yield* this.mayI({ kind, to });
@@ -668,7 +709,7 @@ export class AgentSession {
     const { messages, state } = yield* this.state();
     const me = state.members.get(this.me);
     if (me && isPerson(me)) return yield* new Rejected("escalating is for agents: you're a person, so you decide");
-    if (re !== undefined && !messages.some((m) => m.seq === re)) return yield* new Rejected(`no message #${re}`);
+    if (re !== undefined && !(yield* this.message(re, messages))) return yield* new Rejected(`no message #${re}`);
     const to = [...new Set([humanOf(state, this.me), ownerOf(state)].filter((n): n is string => !!n))];
     if (!to.length) return yield* new Rejected("there's no person in this channel to escalate to");
     const seq = yield* this.send(body, { to, kind: "blocking", esc: true, ...(re !== undefined ? { re: [re] } : {}) });

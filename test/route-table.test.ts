@@ -22,6 +22,8 @@ test("every route declares its check", () => {
     "PUT /icon owner",
     "PUT /title owner",
     "PUT /settings owner",
+    "GET /snapshot member",
+    "PUT /snapshot owner",
     "GET /members member",
     "DELETE /members/me member",
     "GET /requests member",

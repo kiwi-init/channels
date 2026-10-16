@@ -281,11 +281,13 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     "log",
     { description: "Recent channel history (doesn't mark anything read). Images come back as image blocks. Example: log {\"n\":30}.", inputSchema: { n: z.number().int().min(1).max(500).optional() } },
     shaped(({ n }) =>
-      Effect.flatMap(s.state(), ({ messages, state }) => {
+      Effect.gen(function* () {
+        const { messages: held, state } = yield* s.state();
+        const visible = (m: Message) => !ignored(state.trust.get(m.seq));
         // Forged messages, and ones the owner doesn't allow, are left out (status counts them for people).
-        const shown = messages.filter((m) => !ignored(state.trust.get(m.seq))).slice(-(n ?? 30));
-        if (!shown.length) return Effect.succeed(ok("no messages"));
-        return withImages(s.ch, shown.map((m) => formatMessage(m, state.trust.get(m.seq), state, s.me)).join("\n"), shown);
+        const shown = (yield* s.earlier(held, n ?? 30, visible)).filter(visible).slice(-(n ?? 30));
+        if (!shown.length) return ok("no messages");
+        return yield* withImages(s.ch, shown.map((m) => formatMessage(m, state.trust.get(m.seq), state, s.me)).join("\n"), shown);
       }),
     ),
   );
@@ -438,8 +440,8 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     tool(({ seq, dir }) =>
       Effect.gen(function* () {
         const { messages, state } = yield* s.state();
-        const m = messages.find((x) => x.seq === seq && !ignored(state.trust.get(x.seq)));
-        if (!m) return yield* new Rejected(`no message #${seq}`);
+        const m = yield* s.message(seq, messages);
+        if (!m || ignored(state.trust.get(seq))) return yield* new Rejected(`no message #${seq}`);
         if (!m.imgs?.length) return yield* new Rejected(`message #${seq} has no images`);
         // Under the channel's own folder, so closing the channel deletes them too.
         const imgs = yield* s.ch.fx.images(m.imgs);
@@ -458,8 +460,8 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     shaped(({ seq }) =>
       Effect.gen(function* () {
         const { messages, state } = yield* s.state();
-        const m = messages.find((x) => x.seq === seq && !ignored(state.trust.get(x.seq)));
-        if (!m) return fail(`no message #${seq}`);
+        const m = yield* s.message(seq, messages);
+        if (!m || ignored(state.trust.get(seq))) return fail(`no message #${seq}`);
         const images = m.imgs?.length ? yield* s.ch.fx.images(m.imgs).pipe(Effect.orElseSucceed((): InlineImage[] => [])) : [];
         const saved = images.length ? saveImages(seq, images, join(home(), "downloads", s.ch.roomId)) : [];
         return yield* withImages(s.ch, formatShown(m, messages, state, saved, s.me), [m]);

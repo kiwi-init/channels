@@ -58,6 +58,8 @@ export class ChannelLink {
   updateNickname = (...a: Args<"updateNickname">) => this.c("updateNickname", ...a)
   reconcilePosting = (...a: Args<"reconcilePosting">) => this.c("reconcilePosting", ...a)
   rotateIfDue = () => this.c("rotateIfDue")
+  snapshotIfDue = () => this.c("snapshotIfDue")
+  snapshotAt = () => this.c("snapshotAt")
   info = () => this.c("info")
   title = () => this.c("title")
   setTitle = (...a: Args<"setTitle">) => this.c("setTitle", ...a)

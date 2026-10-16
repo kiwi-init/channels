@@ -28,7 +28,7 @@ import * as Cause from "effect/Cause";
 import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
-import { fits, JoinRequest, MAX_RECORD, MAX_WRAPPED, MemberRecord, SealedIcon, StoredEnvelope } from "./schema.ts";
+import { fits, JoinRequest, MAX_RECORD, MAX_WRAPPED, MemberRecord, SealedIcon, SealedSnapshot, StoredEnvelope } from "./schema.ts";
 import { verifyRequest } from "../auth.ts";
 import { b64url, blobId, encodeJoinCode, fromB64url, ownerFingerprint } from "../crypto.ts";
 import type { HumanAuth } from "./human.ts";
@@ -239,6 +239,16 @@ const REQUEST_COLUMNS = [
   ["owner_nonce", "TEXT"],
   ["reveal", "TEXT"],
 ] as const;
+
+export interface StoredSnapshot {
+  n: number;
+  e: number;
+  iv: string;
+  ct: string;
+  hash: string;
+  sig: string;
+  at: number;
+}
 
 /** A channel's stored bytes, and how many messages it stored on `day` (UTC). */
 interface Counters {
@@ -487,20 +497,24 @@ export class RoomDb {
     return total;
   }
 
+  bytesThrough(seq: number): number {
+    return this.sql.all<{ n: number }>("SELECT COALESCE(SUM(LENGTH(ct)), 0) AS n FROM msgs WHERE seq <= ?", seq)[0]?.n ?? 0;
+  }
+
   /** Delete messages through `seq`; returns the ciphertext bytes freed. */
   dropThrough(seq: number): number {
     if (seq <= 0) return 0;
-    const freed = this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM msgs WHERE seq <= ?`, seq)[0]?.n ?? 0;
+    const freed = this.bytesThrough(seq);
     if (freed) this.sql.run("DELETE FROM msgs WHERE seq <= ?", seq);
     return freed;
   }
 
   /** Delete the oldest messages until at least `need` bytes are free; returns the bytes freed. */
-  dropOldest(need: number): number {
+  dropOldest(need: number, upTo = Number.MAX_SAFE_INTEGER): number {
     let freed = 0;
     let through = 0;
     while (freed < need) {
-      const batch = this.sql.all<{ seq: number; n: number }>(`SELECT seq, ${CT_CHARS} AS n FROM msgs WHERE seq > ? ORDER BY seq LIMIT ?`, through, DROP_BATCH);
+      const batch = this.sql.all<{ seq: number; n: number }>(`SELECT seq, ${CT_CHARS} AS n FROM msgs WHERE seq > ? AND seq <= ? ORDER BY seq LIMIT ?`, through, upTo, DROP_BATCH);
       for (const r of batch) {
         freed += r.n;
         through = r.seq;
@@ -616,6 +630,21 @@ export class RoomDb {
     return t ? (JSON.parse(t) as { iv: string; ct: string }) : null;
   }
 
+  snapshot(): StoredSnapshot | null {
+    const t = this.sql.all<{ v: string }>("SELECT v FROM meta WHERE k = 'snapshot'")[0]?.v;
+    return t ? (JSON.parse(t) as StoredSnapshot) : null;
+  }
+
+  setSnapshot(s: StoredSnapshot): void {
+    this.sql.run("INSERT INTO meta (k, v) VALUES ('snapshot', ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v", JSON.stringify(s));
+  }
+
+  dropSnapshot(): number {
+    const freed = this.snapshot()?.ct.length ?? 0;
+    if (freed) this.sql.run("DELETE FROM meta WHERE k = 'snapshot'");
+    return freed;
+  }
+
   /** Before closing: drop this channel from its owner's owned-channel count. */
   unlinkAll(): DirectoryUpdate[] {
     const owner = this.ownerUser();
@@ -717,6 +746,7 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
   let bytes = db.storedBytes();
   if (bytes + ct.length > cap) bytes -= db.dropOldest(bytes + ct.length - cap) + db.pruneBlobs();
   if (bytes + ct.length > cap) bytes -= db.dropOldestBlobs(bytes + ct.length - cap);
+  if (bytes + ct.length > cap) bytes -= db.dropSnapshot();
 
   db.insert(seq, ts, iv, ct, e);
   bytes += ct.length;
@@ -856,6 +886,28 @@ export const setSettings = Effect.fn("Room.setSettings")(function* (settings: un
   if (!t) return yield* new BadRequest({ message: "bad settings" });
   db.set("settings", JSON.stringify(t));
   db.changed("info");
+});
+
+export const setSnapshot = Effect.fn("Room.setSnapshot")(function* (snapshot: unknown) {
+  const db = yield* RoomStore;
+  const { epoch } = yield* readMeta;
+  if (!fits(SealedSnapshot, snapshot) || snapshot.e > epoch || snapshot.n > db.head()) {
+    return yield* new BadRequest({ message: "bad snapshot (at most 512KB, sealed with a channel key, at a seq the channel has)" });
+  }
+  const stored = db.snapshot();
+  if (stored && snapshot.n < stored.n) return yield* new Conflict({ message: `this channel has a newer snapshot (#${stored.n})` });
+  const cap = (yield* Policy).bytesPerChannel;
+  if (snapshot.ct.length > cap) return yield* new TooLarge({ message: `that snapshot is bigger than this channel may hold (${formatBytes(cap)})` });
+  const grows = snapshot.ct.length - (stored?.ct.length ?? 0);
+  let bytes = db.storedBytes();
+  if (bytes + grows > cap) {
+    if (bytes + grows - db.bytesThrough(snapshot.n) > cap) return yield* new TooLarge({ message: "the messages that snapshot covers don't free enough room for it" });
+    bytes -= db.dropOldest(bytes + grows - cap, snapshot.n);
+  }
+  const { n, e, iv, ct, hash, sig } = snapshot;
+  db.setSnapshot({ n, e, iv, ct, hash, sig, at: yield* Clock.currentTimeMillis });
+  db.setCounters({ ...(db.counters() ?? { day: "", n: 0 }), bytes: Math.max(0, bytes + grows) });
+  return n;
 });
 
 // ---------- who owns this channel ----------

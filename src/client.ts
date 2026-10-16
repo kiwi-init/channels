@@ -43,7 +43,8 @@ import {
 import { sign, signText, verify, verifyText, type Identity } from "./identity.ts";
 import { commitTo, joinCheckCode, joinNonce, ownerNonceStatement, spendAuto, type SigningBudget } from "./sas.ts";
 import { canPost, scopesOf, wireScopes, type Scope } from "./scopes.ts";
-import { COORDINATOR, type ChannelState, type GuardFloor } from "./state.ts";
+import { COORDINATOR, fold, toRoster, type ChannelState, type FoldBase, type GuardFloor } from "./state.ts";
+import { openSnapshot, sealSnapshot, wellFormedSnapshot } from "./snapshot.ts";
 import { freeHandle, seededPick } from "./handles.ts";
 import { asOption } from "./wake.ts";
 import { inlineText, makeRecord, NAME_RE, nameKey, readRecord, readRuns, RESERVED_NAMES, sealRecord, verifiedComputer, verifiedPerson, type JoinClaims, type JoinRequest, type Member, type MemberInfo } from "./membership.ts";
@@ -69,6 +70,7 @@ import {
   PAGE_LIMIT,
   PING,
   PROTOCOL_VERSION,
+  SNAPSHOT_EVERY,
   WS_PROTOCOL,
   wellFormed,
   wellFormedRead,
@@ -797,7 +799,12 @@ export interface ChannelFx {
   image(img: ImageAttachment): Effect.Effect<string | null, MemberRefusal, Relay>;
   images(imgs: readonly ImageAttachment[]): Effect.Effect<InlineImage[], MemberRefusal, Relay>;
   decrypt(env: Envelope): Effect.Effect<Message | null, never, Relay>;
-  history(since: number): Effect.Effect<{ head: number; messages: Message[] }, MemberRefusal, Relay>;
+  history(since: number): Effect.Effect<{ head: number; messages: Message[]; first: number | null }, MemberRefusal, Relay>;
+  page(since: number, limit: number): Effect.Effect<Message[], MemberRefusal, Relay>;
+  snapshot(): Effect.Effect<FoldBase | null, never, Relay>;
+  snapshotAt(): Effect.Effect<number | null, MemberRefusal, Relay>;
+  putSnapshot(base: FoldBase): Effect.Effect<number, Refused, Relay>;
+  snapshotIfDue(every?: number): Effect.Effect<number | null, Refused, Relay>;
   /**
    * The channel live, from after `since`: replays anything missed, reconnects with backoff, and
    * resumes from the last message handed on, so nothing is lost across drops. Fails ChannelGone
@@ -1541,10 +1548,12 @@ export class Channel {
           }
         });
       let ask: Record<string, number> = { pages: 1 };
+      let first: number | null = null;
       for (;;) {
         const page = yield* this.request<{ head: number; messages: Envelope[]; pages?: PageOffer }>("/messages", {}, { since, ...ask });
         ask = {};
         head = page.head;
+        first ??= page.messages[0]?.seq ?? null;
         yield* take(page.messages);
         const offer = page.pages;
         if (offer && typeof offer.cap === "string" && Number.isSafeInteger(offer.next) && offer.next % PAGE_LIMIT === 0 && offer.next >= since && offer.next < head) {
@@ -1560,7 +1569,56 @@ export class Channel {
         }
         if (!page.messages.length || since >= head) break;
       }
-      return { head, messages };
+      return { head, messages, first };
+    }),
+
+    page: Effect.fn("Channel.page")({ self: this }, function* (this: Channel, since: number, limit: number) {
+      const page = yield* this.request<{ head: number; messages: Envelope[] }>("/messages", {}, { since, limit });
+      const decrypted = yield* Effect.forEach(page.messages, (e) => this.fx.decrypt(e), { concurrency: "unbounded" });
+      return decrypted.filter((m): m is Message => !!m);
+    }),
+
+    snapshot: Effect.fn("Channel.snapshot")({ self: this }, function* (this: Channel) {
+      const got = yield* Effect.exit(this.request<{ snapshot: unknown }>("/snapshot"));
+      if (Exit.isFailure(got) || !wellFormedSnapshot(got.value.snapshot)) return null;
+      const s = got.value.snapshot;
+      yield* this.keyFor(s.e);
+      return yield* Effect.promise(() => openSnapshot(this.access, s).catch(() => null));
+    }),
+
+    snapshotAt: Effect.fn("Channel.snapshotAt")({ self: this }, function* (this: Channel) {
+      const { snapshot } = yield* this.request<{ snapshot: { n?: unknown } | null }>("/snapshot", {}, { only: "n" });
+      return typeof snapshot?.n === "number" ? snapshot.n : null;
+    }),
+
+    putSnapshot: Effect.fn("Channel.putSnapshot")({ self: this }, function* (this: Channel, base: FoldBase) {
+      yield* this.ownerOnly();
+      yield* this.keyFor(this.access.epoch);
+      const sealed = yield* Effect.promise(() => sealSnapshot(this.identity, this.access, base));
+      if (!sealed) return yield* new MissingKey("can't seal a snapshot without this epoch's key");
+      return (yield* this.request<{ n: number }>("/snapshot", { method: "PUT", body: JSON.stringify({ snapshot: sealed }) })).n;
+    }),
+
+    snapshotIfDue: Effect.fn("Channel.snapshotIfDue")({ self: this }, function* (this: Channel, every: number = SNAPSHOT_EVERY) {
+      yield* this.ownerOnly();
+      const at = (yield* this.fx.snapshotAt()) ?? 0;
+      if ((yield* this.fx.head()) - at < Math.max(every, 1)) return null;
+      const from = at ? yield* this.fx.snapshot() : null;
+      const since = from?.n ?? 0;
+      const [{ messages, first }, members, mode, rooms, guard] = yield* Effect.all(
+        [
+          this.fx.history(since),
+          this.fx.members(),
+          Effect.orElseSucceed(this.fx.mode(), () => null),
+          Effect.orElseSucceed(this.fx.rooms(), () => null),
+          Effect.orElseSucceed(this.fx.guard(), () => null),
+        ],
+        { concurrency: "unbounded" },
+      );
+      if (first !== null && first > since + 1) return null;
+      const kept: { base?: FoldBase } = {};
+      fold(messages, members.map(toRoster), Date.now(), mode, rooms, guard, from, (b) => void (kept.base = b));
+      return kept.base && kept.base.n > at ? yield* this.fx.putSnapshot(kept.base) : null;
     }),
 
     live: (since: number, opts: LiveOptions = {}) => this.live(since, opts),
@@ -2226,6 +2284,14 @@ export class Channel {
     return run(this.fx.rotateIfDue());
   }
 
+  snapshotIfDue(): Promise<number | null> {
+    return run(this.fx.snapshotIfDue());
+  }
+
+  snapshotAt(): Promise<number | null> {
+    return run(this.fx.snapshotAt());
+  }
+
   /** Delete the channel at the relay: messages, members, keys, everything. */
   close(): Promise<void> {
     return run(this.fx.close());
@@ -2256,7 +2322,7 @@ export class Channel {
   }
 
   /** Messages after `since`, oldest first, following pages to the head. */
-  history(since: number): Promise<{ head: number; messages: Message[] }> {
+  history(since: number): Promise<{ head: number; messages: Message[]; first: number | null }> {
     return run(this.fx.history(since));
   }
 

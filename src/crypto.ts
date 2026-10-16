@@ -205,6 +205,20 @@ export async function openFrom(xsk: string, box: string, info = "mc/box"): Promi
   }
 }
 
+export async function sealBytes(key: string, data: Uint8Array<ArrayBuffer>, ad: string): Promise<{ iv: string; ct: string }> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: enc.encode(ad) }, await aesKey(key), data);
+  return { iv: b64url(iv), ct: b64url(new Uint8Array(ct)) };
+}
+
+export async function openBytes(key: string, iv: string, ct: string, ad: string): Promise<Uint8Array<ArrayBuffer> | null> {
+  try {
+    return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromB64url(iv), additionalData: enc.encode(ad) }, await aesKey(key), fromB64url(ct)));
+  } catch {
+    return null;
+  }
+}
+
 /** Seal/open with a raw channel key (for member records), independent of room-bound AD. */
 export async function sealWith(key: string, data: string, ad: string): Promise<string> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
