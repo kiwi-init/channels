@@ -1,13 +1,15 @@
 import { Database } from "bun:sqlite";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setSystemTime, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AgentSession, runAgent } from "../src/agent.ts";
 import { signRequest } from "../src/auth.ts";
+import { saveIdentity } from "../src/config.ts";
 import { newChannelKey, type ChannelAccess } from "../src/crypto.ts";
 import { canonical, generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
-import { MAX_SNAPSHOT_LENGTH, type Event, type Kind, type Message } from "../src/protocol.ts";
+import { MAX_SNAPSHOT_LENGTH, SNAPSHOT_EVERY, type Event, type Kind, type Message } from "../src/protocol.ts";
+import { openOwnerSession } from "../src/owner.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { OPEN_POLICY } from "../src/relay/policy.ts";
 import { openSnapshot, sealSnapshot } from "../src/snapshot.ts";
@@ -495,6 +497,40 @@ describe("sessions fold from a snapshot only when the log after it is whole", ()
       expect(state.head).toBe(messages.at(-1)!.seq);
       expect(existsSync(join(home, "cache", `${s.roomId}.jsonl.base`))).toBe(false);
     } finally {
+      done();
+    }
+  });
+
+  test("the owner's session tries again after a snapshot the relay didn't take", async () => {
+    const { s, done } = await scene();
+    let failing = true;
+    const proxy = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch: async (req) => {
+        const url = new URL(req.url);
+        if (failing && req.method === "PUT" && url.pathname.endsWith("/snapshot")) return Response.json({ error: "down" }, { status: 503 });
+        const body = req.method === "GET" || req.method === "HEAD" ? undefined : await req.arrayBuffer();
+        return fetch(`${s.relay}${url.pathname}${url.search}`, { method: req.method, headers: req.headers, body });
+      },
+    });
+    try {
+      saveIdentity(s.owner, s.roomId);
+      const own = await runAgent(openOwnerSession("retry", { ...s.access, relay: proxy.url.origin, code: s.code }, s.owner.name));
+      const start = Date.now();
+      for (let i = 0; i < SNAPSHOT_EVERY; i++) {
+        if (i % 100 === 0) setSystemTime(new Date(start + (i / 100) * 61_000));
+        await s.ownerCh.send(`m${i}`);
+      }
+      await runAgent(own.state());
+      expect(await runAgent(s.ownerCh.fx.snapshotAt())).toBeNull();
+      failing = false;
+      const head = await s.ownerCh.send("one more");
+      await runAgent(own.state());
+      expect(await runAgent(s.ownerCh.fx.snapshotAt())).toBe(head);
+    } finally {
+      setSystemTime();
+      proxy.stop(true);
       done();
     }
   });

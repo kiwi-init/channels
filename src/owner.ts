@@ -13,6 +13,7 @@ import { COORDINATOR, firstAgent, fold, newRoomId, type FoldBase } from "./state
 
 class OwnerSession extends AgentSession {
   private snapshotAt: number | null = null;
+  private failedAt = 0;
   private published: number | null = null;
   private forced = false;
 
@@ -43,15 +44,20 @@ class OwnerSession extends AgentSession {
 
   protected override snapshotDue(head: number): boolean {
     if (this.partial) return false;
-    return this.forced || (this.snapshotAt !== null && head - this.snapshotAt >= SNAPSHOT_EVERY);
+    return this.forced || (this.snapshotAt !== null && head - this.snapshotAt >= SNAPSHOT_EVERY && head > this.failedAt);
   }
 
   protected override publish(base: FoldBase): Effect.Effect<void, never, Relay> {
-    this.snapshotAt = base.n;
-    return Effect.ignoreCause(
+    return Effect.catchCause(
       Effect.gen({ self: this }, function* () {
-        this.published = yield* this.ch.fx.putSnapshot(base);
+        const n = yield* this.ch.fx.putSnapshot(base);
+        this.snapshotAt = n;
+        this.published = n;
       }),
+      () =>
+        Effect.sync(() => {
+          this.failedAt = base.n;
+        }),
     );
   }
 
