@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, updateConfig, wipeChannel } from "../src/config.ts";
 import { freeAgentName } from "../src/membership.ts";
-import { baseName, bindDirectory, bindingFor, canonicalHarness, here, sameHarness, seatsAt, seatsFor } from "../src/seats.ts";
+import { baseName, bindDirectory, bindingFor, canonicalHarness, here, sameHarness, seatsAt, seatsFor, seatsHeldAnywhere } from "../src/seats.ts";
 
 let home = "";
 let dir = "";
@@ -122,6 +122,20 @@ test("a session that holds two seats here is both agents, and bindingFor names n
   expect(bindingFor(dir, { who })).toBeNull();
   expect(bindingFor(dir, { who, alias: "other" })?.as).toBe("reviewer");
   expect(seatsFor(dir, { who: { harness: "claude", session: "s2", pid: process.pid + 1 } })).toEqual([]);
+});
+
+test("a session's seats are found in every folder it joined from, never another session's", () => {
+  const who = { harness: "claude" as const, session: "s1", pid: process.pid };
+  const sibling = join(home, "proj-task");
+  mkdirSync(sibling);
+  bindDirectory(dir, { alias: "ch", as: "planner", harness: "claude", session: "s1", pid: process.pid });
+  bindDirectory(sibling, { alias: "other", as: "reviewer", harness: "claude", session: "s1", pid: process.pid });
+  bindDirectory(sibling, { alias: "ch", as: "claude-2", harness: "claude", session: "s2", pid: process.pid });
+  expect(seatsFor(dir, { who }).map((b) => b.as)).toEqual(["planner"]);
+  expect(seatsHeldAnywhere(who).map((b) => `${b.as}@${b.alias}`).sort()).toEqual(["planner@ch", "reviewer@other"]);
+  expect(seatsHeldAnywhere({ harness: "claude" })).toEqual([]);
+  wipeChannel("other");
+  expect(seatsHeldAnywhere(who).map((b) => b.as)).toEqual(["planner"]);
 });
 
 test("a session's seats with no process to check are all marked as still in use", () => {

@@ -248,6 +248,16 @@ export function bindingFor(dir: string, opts: SeatOptions = {}): Binding | null 
   return only && !more.length ? only : null;
 }
 
+export function seatsHeldAnywhere(who: Here = here()): Binding[] {
+  if (!who.session) return [];
+  const cfg = loadConfig();
+  return Object.keys(cfg.bindings ?? {}).flatMap((d) => seatsAt(cfg, d).filter((b) => b.session === who.session && cfg.channels[b.alias]));
+}
+
+export function sameSeat(a: Binding, b: Binding): boolean {
+  return a.alias === b.alias && a.as === b.as;
+}
+
 /** Whether `path` is `dir` or inside it. */
 function within(path: string, dir: string): boolean {
   const p = real(path);
