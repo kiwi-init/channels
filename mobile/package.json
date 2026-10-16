@@ -19,6 +19,7 @@
     "effect": "4.0.5",
     "expo": "~58.0.14",
     "expo-build-properties": "~58.0.11",
+    "expo-clipboard": "~58.0.3",
     "expo-constants": "~58.0.12",
     "expo-font": "~58.0.8",
     "expo-linking": "~58.0.13",
@@ -31,11 +32,16 @@
     "react-native-nitro-modules": "^0.37.1",
     "react-native-quick-crypto": "^1.1.8",
     "react-native-safe-area-context": "~5.10.1",
-    "react-native-screens": "~4.30.0"
+    "react-native-screens": "~4.30.0",
+    "remark-breaks": "^4",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11",
+    "unified": "^11"
   },
   "devDependencies": {
     "@testing-library/react-native": "^14.1.0",
     "@types/jest": "29.5.14",
+    "@types/mdast": "^4.0.4",
     "@types/node": "26",
     "@types/react": "~19.3.0",
     "@types/react-test-renderer": "^19.3.0",
@@ -62,7 +68,7 @@
           "<rootDir>/node_modules"
         ],
         "transformIgnorePatterns": [
-          "/node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg|effect)"
+          "/node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg|effect|unified|remark-[a-z-]+|micromark[a-z-]*|mdast-[a-z-]+|unist-[a-z-]+|vfile[a-z-]*|bail|trough|is-plain-obj|devlop|decode-named-character-reference|character-entities[a-z-]*|ccount|escape-string-regexp|markdown-table|zwitch|longest-streak|trim-lines|fflate-none)"
         ],
         "testPathIgnorePatterns": [
           "/node_modules/",
@@ -80,7 +86,7 @@
           "<rootDir>/node_modules"
         ],
         "transformIgnorePatterns": [
-          "/node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg|effect)"
+          "/node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg|effect|unified|remark-[a-z-]+|micromark[a-z-]*|mdast-[a-z-]+|unist-[a-z-]+|vfile[a-z-]*|bail|trough|is-plain-obj|devlop|decode-named-character-reference|character-entities[a-z-]*|ccount|escape-string-regexp|markdown-table|zwitch|longest-streak|trim-lines|fflate-none)"
         ],
         "testEnvironment": "node",
         "testMatch": [
