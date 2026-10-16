@@ -188,12 +188,13 @@ describe("a fresh agent's cold start with the owner's snapshot", () => {
 
   test("a snapshot signed by a member, planted by the relay, is never used", async () => {
     const dev = await session(agent, "dev");
-    const base = await new Promise<FoldBase>((resolve) =>
-      inHome(agent, async () => {
-        const { messages } = await dev.ch.history(0);
-        fold(messages, await runAgent(dev.members()), Date.now(), undefined, null, null, null, resolve);
-      }),
-    );
+    let made: FoldBase | undefined;
+    await inHome(agent, async () => {
+      const { messages } = await dev.ch.history(0);
+      fold(messages, await runAgent(dev.members()), Date.now(), undefined, null, null, null, (b) => void (made = b));
+    });
+    if (!made) throw new Error("the fold made no base");
+    const base = made;
     const evil = { ...base, facts: [{ key: "planted", value: "by a member", by: "human", ts: 1, seq: 1 }] };
     const sealed = await sealSnapshot(dev.identity, { ...dev.ch.access, ownerPk: dev.identity.pk }, evil);
     expect(sealed).not.toBeNull();

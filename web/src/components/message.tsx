@@ -202,23 +202,53 @@ function useSeen(el: Element | null): boolean {
   return seen
 }
 
+const IMAGE_RETRIES = 3
+const IMAGE_RETRY_MS = 5000
+
 function Attached({ img, load }: { img: ImageAttachment; load?: (img: ImageAttachment) => Promise<string | null> }) {
   const [data, setData] = useState<string | null>(img.data ?? null)
   const [failed, setFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+  const [gaveUp, setGaveUp] = useState(false)
   const [spot, setSpot] = useState<HTMLSpanElement | null>(null)
   const seen = useSeen(spot)
   useEffect(() => {
     if (img.data !== undefined || !load || !seen) return
     let live = true
+    let retry: ReturnType<typeof setTimeout> | undefined
     load(img).then(
-      (d) => live && (d ? setData(d) : setFailed(true)),
-      () => live && setFailed(true)
+      (d) => {
+        if (!live) return
+        if (d) setData(d)
+        else setFailed(true)
+      },
+      () => {
+        if (!live) return
+        if (attempt < IMAGE_RETRIES) retry = setTimeout(() => setAttempt((n) => n + 1), IMAGE_RETRY_MS)
+        else setGaveUp(true)
+      }
     )
     return () => {
       live = false
+      clearTimeout(retry)
     }
-  }, [img, load, seen])
+  }, [img, load, seen, attempt])
   if (!data) {
+    if (gaveUp) {
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            setGaveUp(false)
+            setAttempt(0)
+          }}
+          title={img.name}
+          className="flex h-24 w-32 items-center justify-center rounded-bubble bg-wash px-2 text-center text-stamp text-ink-3 shadow-[0_0_0_0.5px_var(--line)]"
+        >
+          Couldn’t load image. Retry
+        </button>
+      )
+    }
     return (
       <span ref={setSpot} title={img.name} className="flex h-24 w-32 items-center justify-center rounded-bubble bg-wash px-2 text-center text-stamp text-ink-3 shadow-[0_0_0_0.5px_var(--line)]">
         {failed ? "Image no longer available" : "Loading image…"}

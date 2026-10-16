@@ -196,9 +196,13 @@ export class AgentSession {
       const from = Math.max(lastSeq(this.log), this.base?.n ?? fetched?.n ?? 0);
       const { messages, first } = yield* this.ch.fx.history(from);
       const gap = first !== null && first > from + 1;
-      if (gap) this.partial = true;
-      if (fetched && !gap) yield* cache.keepBase(this.cfg.roomId, fetched);
-      this.base ??= gap ? null : fetched;
+      if (gap) {
+        this.partial = true;
+        this.base = null;
+      } else if (fetched) {
+        yield* cache.keepBase(this.cfg.roomId, fetched);
+        this.base ??= fetched;
+      }
       const fresh = messages.filter((m) => m.seq > lastSeq(this.log!));
       if (fresh.length) this.log = [...this.log!, ...fresh];
       look?.fetched.add(this);

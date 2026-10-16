@@ -983,6 +983,7 @@ export function fold(
     const by = answered.get(m.seq);
     return !by || [...by].every((n) => n === m.from);
   });
+
   keep?.(
     structuredClone({
       n: head,
@@ -1020,6 +1021,7 @@ export function fold(
   // A floor past the end of what's loaded: the settings are newer than this tail.
   passFloor(Infinity);
   passGuard(Infinity);
+
   return {
     members,
     tasks,

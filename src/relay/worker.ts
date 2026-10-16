@@ -145,7 +145,7 @@ export class Channel extends DurableObject<Env> {
         this.ctx.acceptWebSocket(server);
         const reads = wantsReads(url);
         const watch = wantsWatch(url);
-        server.serializeAttachment({ pk, room: route.roomId, reads, ...(takesPresence(url) ? {} : { presence: false }), ...(wantsEcho(url) ? {} : { echo: false }), ...(watch ? { watch } : {}) });
+        server.serializeAttachment({ pk, room: route.roomId, reads, ...(takesPresence(url) && !watch ? {} : { presence: false }), ...(wantsEcho(url) ? {} : { echo: false }), ...(watch ? { watch } : {}) });
         for (const f of runRoomSync(this.relay, db, welcomeFrames(Number(url.searchParams.get("since") ?? 0) || 0, reads, watch))) server.send(f);
         await this.apply({ expireAt: runRoomSync(this.relay, db, touch) ?? undefined });
         return new Response(null, { status: 101, webSocket: client, headers: wsHeaders(req) });

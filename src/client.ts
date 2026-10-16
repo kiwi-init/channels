@@ -1595,7 +1595,7 @@ export class Channel {
       yield* this.ownerOnly();
       yield* this.keyFor(this.access.epoch);
       const sealed = yield* Effect.promise(() => sealSnapshot(this.identity, this.access, base));
-      if (!sealed) return yield* new MissingKey("can't seal a snapshot without this epoch's key");
+      if (!sealed) return yield* new MissingKey(this.access.keys[String(this.access.epoch)] ? "the snapshot is too large to store" : "can't seal a snapshot without this epoch's key");
       return (yield* this.request<{ n: number }>("/snapshot", { method: "PUT", body: JSON.stringify({ snapshot: sealed }) })).n;
     }),
 
@@ -1605,7 +1605,7 @@ export class Channel {
       if ((yield* this.fx.head()) - at < Math.max(every, 1)) return null;
       const from = at ? yield* this.fx.snapshot() : null;
       const since = from?.n ?? 0;
-      const [{ messages, first }, members, mode, rooms, guard] = yield* Effect.all(
+      const [{ messages, head: top }, members, mode, rooms, guard] = yield* Effect.all(
         [
           this.fx.history(since),
           this.fx.members(),
@@ -1615,7 +1615,8 @@ export class Channel {
         ],
         { concurrency: "unbounded" },
       );
-      if (first !== null && first > since + 1) return null;
+      const contiguous = messages.every((m, i) => m.seq === since + 1 + i) && messages.length === top - since;
+      if (!contiguous) return null;
       const kept: { base?: FoldBase } = {};
       fold(messages, members.map(toRoster), Date.now(), mode, rooms, guard, from, (b) => void (kept.base = b));
       return kept.base && kept.base.n > at ? yield* this.fx.putSnapshot(kept.base) : null;

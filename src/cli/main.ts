@@ -32,7 +32,7 @@ import { asOption, channelOption, isWakeVia, wakeKey, wakeWords } from "../wake.
 import { ago, cardLine, charterLines, describeEvent, holdLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, missingImages, formatTask, formatTasks, looksLikeLine, modeLine, parseDuration, presenceWords, taskStateWord, statusJson } from "../format.ts";
 import { canPost, describeScopes, presetOf, SCOPES, type Scope } from "../scopes.ts";
 import { fingerprint } from "../identity.ts";
-import { CHAT_KINDS, COLORS, ignored, isColor, type Kind, type Message, type TaskState } from "../protocol.ts";
+import { CHAT_KINDS, COLORS, ignored, isColor, type InlineImage, type Kind, type Message, type TaskState } from "../protocol.ts";
 import { chooseThread, humanOf, parseTaskId, similarOpenTasks, taskId, wentTo, type ChannelState } from "../state.ts";
 import { VERSION } from "../version.ts";
 import { computerClaimFor } from "../machine.ts";
@@ -917,12 +917,14 @@ const commands: Record<string, Command> = {
       const found = yield* s.message(seq, messages);
       const m = found && !ignored(state.trust.get(seq)) ? found : yield* die(`no message #${seq}`);
       // Images land under the channel's own folder (closing it deletes them), or where asked.
-      const saved = m.imgs?.length ? saveImages(seq, yield* s.ch.fx.images(m.imgs), args[2] ?? joinPath(home(), "downloads", s.ch.roomId)) : [];
+      const fetched = m.imgs?.length ? yield* s.ch.fx.images(m.imgs).pipe(Effect.orElseSucceed((): InlineImage[] => [])) : [];
+      const saved = fetched.length ? saveImages(seq, fetched, args[2] ?? joinPath(home(), "downloads", s.ch.roomId)) : [];
       out(formatShown(m, messages, state, saved, s.me));
       // The rest of its thread, when there's more of it than #N, what it answers and its replies.
       const root = state.threadOf.get(seq) ?? seq;
       const near = new Set([seq, ...(m.re ?? []), ...messages.filter((x) => x.re?.includes(seq)).map((x) => x.seq)]);
-      const rest = messages.filter((x) => state.threadOf.get(x.seq) === root && !near.has(x.seq) && !ignored(state.trust.get(x.seq)));
+      const thread = yield* s.threadMessages(root, messages, state);
+      const rest = thread.filter((x) => !near.has(x.seq) && !ignored(state.trust.get(x.seq)));
       if (rest.length) {
         out(`the rest of thread #${root}:`);
         for (const x of rest) out(`  ${render(x, state)}`);

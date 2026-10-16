@@ -49,8 +49,19 @@ const kind = z.enum(CHAT_KINDS as [Kind, ...Kind[]]);
 function withImages(ch: Channel, text: string, messages: Message[]): Effect.Effect<Result, never, Relay> {
   const imgs = messages.filter((m) => m.imgs?.length).slice(-3);
   return Effect.map(
-    Effect.forEach(imgs, (m) => ch.fx.images(m.imgs!.slice(0, 3)).pipe(Effect.orElseSucceed((): InlineImage[] => []))),
-    (lists): Result => ({ content: [{ type: "text", text }, ...lists.flat().map((img): Content => ({ type: "image", data: img.data, mimeType: img.mime }))] }),
+    Effect.forEach(imgs, (m) => {
+      const wanted = m.imgs!.slice(0, 3);
+      return ch.fx.images(wanted).pipe(
+        Effect.orElseSucceed((): InlineImage[] => []),
+        Effect.map((got) => ({ got, notice: missingImages(m.seq, wanted.length, got.length) })),
+      );
+    }),
+    (results): Result => {
+      const notices = results.flatMap((r) => (r.notice ? [r.notice] : []));
+      return {
+        content: [{ type: "text", text: [text, ...notices].join("\n") }, ...results.flatMap((r) => r.got).map((img): Content => ({ type: "image", data: img.data, mimeType: img.mime }))],
+      };
+    },
   );
 }
 
@@ -446,7 +457,8 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         // Under the channel's own folder, so closing the channel deletes them too.
         const imgs = yield* s.ch.fx.images(m.imgs);
         if (!imgs.length) return yield* new Rejected(`message #${seq}'s images are no longer on the relay`);
-        return [...saveImages(seq, imgs, dir ?? join(home(), "downloads", s.ch.roomId)), ...(missingImages(seq, m.imgs.length, imgs.length) ?? [])].join("\n");
+        const missing = missingImages(seq, m.imgs.length, imgs.length);
+        return [...saveImages(seq, imgs, dir ?? join(home(), "downloads", s.ch.roomId)), ...(missing ? [missing] : [])].join("\n");
       }),
     ),
   );

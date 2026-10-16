@@ -32,7 +32,10 @@ class OwnerSession extends AgentSession {
     return Effect.gen({ self: this }, function* () {
       const owner = this.ch;
       if (yield* owner.fx.rotateIfDue()) yield* this.ch.fx.refreshKeys();
-      if (this.snapshotAt === null) this.snapshotAt = (yield* Effect.orElseSucceed(owner.fx.snapshotAt(), () => null)) ?? 0;
+      if (this.snapshotAt === null) {
+        const got = yield* Effect.orElseSucceed(owner.fx.snapshotAt(), () => undefined);
+        if (got !== undefined) this.snapshotAt = got ?? 0;
+      }
       // The relay's "can post" bit follows the log's scopes: check once a session, and again whenever
       // the roster changes or a scope.set's second step failed. (Not state(): it calls this.)
       if (this.postingChecked) return;

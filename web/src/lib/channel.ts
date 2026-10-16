@@ -693,7 +693,9 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
       .then(async (n) => {
         snapshotNext.current = nextSnapshotTry(head, n ?? (await ch.snapshotAt()) ?? 0)
       })
-      .catch(() => {})
+      .catch(() => {
+        snapshotNext.current = nextSnapshotTry(head, head)
+      })
       .finally(() => {
         snapshotBusy.current = false
       })
