@@ -2,7 +2,7 @@ import { ArrowDown01Icon, GitPullRequestIcon } from "@hugeicons/core-free-icons"
 import { useState, type ReactNode } from "react"
 
 import type { TaskState } from "@mc/protocol.ts"
-import { taskId, type ChannelState, type Task } from "@mc/state.ts"
+import { taskId, tasksAwaitingPeople, type ChannelState, type Task } from "@mc/state.ts"
 import type { RecentPr } from "@mc/work.ts"
 import { formatAgo, formatFull } from "@/lib/format"
 import { remember, remembered } from "@/lib/side"
@@ -10,7 +10,7 @@ import { cx } from "@/lib/utils"
 import { AgentLine, busy, byBusy, type AgentNow } from "./agent-strip"
 import { Icon } from "./icon"
 import { SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from "./kit"
-import { StateMark } from "./tasks"
+import { DecisionMark, StateMark } from "./tasks"
 
 const SHOWN = 5
 
@@ -81,7 +81,7 @@ function Agents({ agents, now, onOpenTask }: { agents: AgentNow[]; now: number; 
   )
 }
 
-function TaskLine({ task, now, nameOf, onOpen }: { task: Task; now: number; nameOf: (n: string) => string; onOpen: () => void }) {
+function TaskLine({ task, now, nameOf, waiting, onOpen }: { task: Task; now: number; nameOf: (n: string) => string; waiting: boolean; onOpen: () => void }) {
   return (
     <li>
       <button type="button" onClick={onOpen} className="flex w-full items-start gap-2 rounded-ctl px-2 py-1.5 text-left transition-colors hover:bg-wash">
@@ -93,6 +93,11 @@ function TaskLine({ task, now, nameOf, onOpen }: { task: Task; now: number; name
           <span className="mt-0.5 block truncate text-meta text-ink-3">
             <span className="tabular-nums">{taskId(task.id)}</span> · {task.owner ? nameOf(task.owner) : "Unassigned"}
           </span>
+          {waiting && (
+            <span className="mt-1 flex">
+              <DecisionMark />
+            </span>
+          )}
         </span>
         <When at={task.updatedAt} now={now} />
       </button>
@@ -106,6 +111,7 @@ function Tasks({ state, now, nameOf, onOpen, onAll }: { state: ChannelState; now
   const list = all.filter((t) => filter === "all" || t.state === filter)
   const open = all.filter((t) => t.state !== "done").length
   const shown = FILTERS.filter(([f]) => f === "all" || f === filter || all.some((t) => t.state === f))
+  const waiting = tasksAwaitingPeople(state)
   return (
     <Card id="tasks" title="Tasks" count={all.length ? `${open} open` : undefined}>
       {all.length ? (
@@ -127,7 +133,7 @@ function Tasks({ state, now, nameOf, onOpen, onAll }: { state: ChannelState; now
           {list.length ? (
             <ul aria-label="Recently updated tasks">
               {list.slice(0, SHOWN).map((t) => (
-                <TaskLine key={t.id} task={t} now={now} nameOf={nameOf} onOpen={() => onOpen(t.id)} />
+                <TaskLine key={t.id} task={t} now={now} nameOf={nameOf} waiting={waiting.has(t.id)} onOpen={() => onOpen(t.id)} />
               ))}
             </ul>
           ) : (
