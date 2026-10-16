@@ -147,12 +147,13 @@ From `design-tokens.ts`:
   with `ink`. Runs stack at `stack` radius on the joined corners.
 - Needs-you: approvals, escalations and review-waiting work in one place at
   the top; `Pause agents` in the header stops every agent at once.
-- Overview panel (header's sidebar button): a column beside the chat of
-  stacked `glass` cards at `dock` radius, each folding from its header:
-  Agents, Tasks (the 5 last updated, status filter pills), Pull requests
-  (the last 5 linked in the channel). Rows inside are `bubble` round and
-  hover `wash-2`. It opens by default on wide windows and remembers when
-  it is closed; a thread or the details take its place and give it back.
+- Overview cards: always in the chat area on wide windows, never behind
+  a button. Stacked `glass` cards at `dock` radius float at the top right
+  of the conversation, each folding from its header: Agents, Tasks (the 5
+  last updated, status filter pills), Pull requests (the last 5 linked in
+  the channel). The messages and the composer keep clear of them. A
+  thread, the details or a task in the side column hide them until it
+  closes. Narrow windows keep the header's Tasks button instead.
 - Coordinator: `coordinator-head` (system-blue shell, pale screen, quiet
   steel trim; `robot-heads`); behind it in a round avatar a soft blue field.
 - Command palette wears the same icons as the menus. Dark/light/system and

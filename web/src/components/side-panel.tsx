@@ -205,11 +205,7 @@ export function Overview({
   onAllTasks: () => void
 }) {
   return (
-    <aside
-      aria-label="Overview"
-      style={{ width: `min(${FLOAT_W}px, calc(100% - 24px))` }}
-      className="animate-rise pointer-events-none absolute top-[calc(var(--head)+4px)] right-3 bottom-[calc(var(--foot)+8px)] z-30 flex flex-col lg:bottom-4"
-    >
+    <aside aria-label="Overview" style={{ width: FLOAT_W }} className="pointer-events-none absolute top-[calc(var(--head)+4px)] right-3 bottom-4 z-30 hidden flex-col lg:flex">
       <div className="pointer-events-auto flex max-h-full [scrollbar-width:none] flex-col gap-3 overflow-y-auto rounded-dock">
         <Agents agents={agents} now={now} onOpenTask={onOpenTask} />
         <Tasks state={state} now={now} nameOf={nameOf} onOpen={onOpenTask} onAll={onAllTasks} />

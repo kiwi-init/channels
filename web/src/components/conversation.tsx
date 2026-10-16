@@ -1,4 +1,4 @@
-import { ArrowDown01Icon, ArrowLeft01Icon, Search01Icon, SidebarRightIcon } from "@hugeicons/core-free-icons"
+import { ArrowDown01Icon, ArrowLeft01Icon, CheckListIcon, Search01Icon } from "@hugeicons/core-free-icons"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react"
 
 import { droppedCount } from "@mc/format.ts"
@@ -18,7 +18,6 @@ import { coordinatorMood, ERROR_MS, moodInputs, SPEAKING_MS, type Mood } from "@
 import { chipsFor } from "@/lib/reactions"
 import { receipt } from "@/lib/receipts"
 import { dmPlace, markSeenIn, MAIN, placeFromKey, placeKey, seenIn, sendFrom, useSeen, threadMembers, type Place, type PlaceSummary } from "@/lib/threads"
-import { keepSideOpen, sideStartsOpen } from "@/lib/side"
 import { useSidebarOpen } from "@/lib/sidebar"
 import { cx } from "@/lib/utils"
 import { LEAD_WHEN_HIDDEN } from "./chrome"
@@ -93,14 +92,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const now = useNow()
   // Where you are in the channel: its main conversation, or a direct one.
   const [here, setHere] = useState<string>("main")
-  const [pinned, setPinned] = useState(sideStartsOpen)
   const [side, setSide] = useState<Side>(null)
-  const floating = pinned && side === null
-  const pin = useCallback((on: boolean) => {
-    keepSideOpen(on)
-    setPinned(on)
-    if (on) setSide(null)
-  }, [])
+  const floating = side === null
   const threadRoot = side?.kind === "thread" ? side.root : null
   const info = side?.kind === "info"
   /** The task open in the Tasks panel, if one is (else the panel lists them, if it's open). */
@@ -673,7 +666,13 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
               <IconButton label="Search" round className={cx("glass size-9", search === null && "text-ink")} active={search !== null} onClick={() => setSearch((s) => (s === null ? "" : null))}>
                 <Icon icon={Search01Icon} size={18} />
               </IconButton>
-              <PanelButton places={places} unreadIn={unreadIn} shown={taskKey} active={floating} onClick={() => pin(!floating)} />
+              <TasksButton
+                places={places}
+                unreadIn={unreadIn}
+                shown={taskKey}
+                active={side?.kind === "tasks"}
+                onClick={() => setSide((s) => (s?.kind === "tasks" ? null : { kind: "tasks", task: null }))}
+              />
             </div>
             {/* After the row in the document and marked no-drag: the desktop app's drag region is worked
                 out in document order, so it would otherwise swallow these clicks. */}
@@ -713,7 +712,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
 
           <div
             ref={scroller}
-            className={cx("absolute inset-0 overflow-y-auto", floating && "lg:right-(--float)")}
+            className={cx("absolute inset-0 overflow-y-auto", floating && "lg:pr-(--float)")}
             onScroll={(e) => {
               const el = e.currentTarget
               atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
@@ -785,7 +784,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
           )}
 
           {/* The composer floats on glass at the foot; messages scroll under it too. */}
-          <div ref={footRef} className={cx("absolute inset-x-0 bottom-0 z-20", floating && "lg:right-(--float)")}>
+          <div ref={footRef} className={cx("absolute inset-x-0 bottom-0 z-20", floating && "lg:pr-(--float)")}>
             <div aria-hidden className="scrim-bottom absolute inset-x-0 -top-6 bottom-0" />
             <div className="relative">
               {mayWrite ? (
@@ -972,7 +971,7 @@ function PlaceSwitch({
 }
 
 /** The header's Tasks button: it opens the panel, and says what's new across the tasks' conversations. */
-function PanelButton({
+function TasksButton({
   places,
   unreadIn,
   shown,
@@ -996,8 +995,8 @@ function PanelButton({
     else if (u.n) news = true
   }
   return (
-    <IconButton label="Overview" round className={cx("glass size-9", !active && "text-ink")} active={active} aria-expanded={active} onClick={onClick}>
-      <Icon icon={SidebarRightIcon} size={18} />
+    <IconButton label="Tasks" round className={cx("glass size-9 lg:hidden", !active && "text-ink")} active={active} aria-expanded={active} onClick={onClick}>
+      <Icon icon={CheckListIcon} size={18} />
       <Badge u={forMe ? { n: forMe, forMe: true } : { n: news ? 1 : 0, forMe: false }} />
     </IconButton>
   )

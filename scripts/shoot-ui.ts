@@ -245,11 +245,10 @@ try {
       const narrow = vp === "narrow"
       const detailsBtn = () => owner.getByRole("button", { name: /^Details:/ })
       const convs = () => owner.getByRole("main").getByRole("navigation", { name: "Conversations" })
-      const panelBtn = () => owner.getByRole("main").getByRole("button", { name: "Overview", exact: true })
+      const tasksBtn = () => owner.getByRole("main").getByRole("button", { name: "Tasks", exact: true })
       const overview = () => owner.getByRole("complementary", { name: "Overview" })
       const tasksPanel = () => owner.getByRole("complementary", { name: "Tasks" })
       const openOverview = async () => {
-        if ((await panelBtn().getAttribute("aria-expanded")) !== "true") await panelBtn().click()
         if (await tasksPanel().count()) await tasksPanel().getByRole("button", { name: "Close tasks" }).click()
         await overview().waitFor()
       }
@@ -262,8 +261,11 @@ try {
       /** A task opens in the Tasks panel, from its list. */
       const toTask = async (name: RegExp) => {
         if (!(await tasksPanel().count())) {
-          await openOverview()
-          await overview().getByRole("button", { name: "All tasks" }).click()
+          if (narrow) await tasksBtn().click()
+          else {
+            await openOverview()
+            await overview().getByRole("button", { name: "All tasks" }).click()
+          }
         }
         await tasksPanel().getByRole("button", { name }).first().click()
       }
