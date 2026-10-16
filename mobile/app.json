@@ -18,7 +18,8 @@
       "expo-router",
       "react-native-quick-crypto",
       "expo-build-properties",
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-secure-store"
     ]
   }
 }
