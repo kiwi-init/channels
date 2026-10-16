@@ -985,6 +985,8 @@ export interface RequestBody {
 
 // ---------- sockets ----------
 
+export const wantsEcho = (url: URL): boolean => url.searchParams.get("echo") !== "0";
+
 export function msgFrame(e: Envelope): string {
   return frame({ t: "msg", ...e });
 }
@@ -999,7 +1001,7 @@ export const welcomeFrames = (since: number): Effect.Effect<string[], never, Roo
   });
 
 /** Handle one frame from an authenticated socket. It never fails: whatever goes wrong is the sender's err frame. */
-export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: string, sender = "") {
+export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: string, sender = "", echo = true) {
   const db = yield* RoomStore;
   let f: ClientFrame;
   try {
@@ -1030,7 +1032,8 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
   const send = f;
   return yield* Effect.gen(function* () {
     const e = yield* append(send.iv, send.ct, Number(send.e ?? 0), sender);
-    const fx: Effects = { broadcast: [msgFrame(e)], reply: frame({ t: "ack", id: send.id, seq: e.seq }), expireAt: (yield* touch) ?? undefined };
+    const reply = frame({ t: "ack", id: send.id, seq: e.seq, ts: e.ts });
+    const fx: Effects = { ...(echo ? { broadcast: [msgFrame(e)] } : { others: msgFrame(e) }), reply, expireAt: (yield* touch) ?? undefined };
     return fx;
   }).pipe(
     // A refusal says why; a storage error is logged and the sender hears only that it failed.

@@ -29,6 +29,7 @@ import {
   idleExpired,
   missingFingerprint,
   onClientFrame,
+  wantsEcho,
   parseRoomPath,
   touch,
   welcomeFrames,
@@ -42,6 +43,7 @@ interface SocketData {
   roomId: string;
   pk: string;
   since: number;
+  echo: boolean;
 }
 
 /** The static site's files, and the sign-in origins its page may call besides this relay. */
@@ -232,7 +234,7 @@ export function startRelay(
             }
             const pk = await runRoom(relay, db, authenticateSocket(req));
             const since = Number(url.searchParams.get("since") ?? 0) || 0;
-            if (server.upgrade(req, { data: { roomId: route.roomId, pk, since }, headers: wsHeaders(req) })) return undefined;
+            if (server.upgrade(req, { data: { roomId: route.roomId, pk, since, echo: wantsEcho(url) }, headers: wsHeaders(req) })) return undefined;
             return withCors(errorResponse(new UpdateRequired({ message: "expected websocket" })));
           }
           const result = await onHttp(relay, db, req, route.rest);
@@ -278,7 +280,7 @@ export function startRelay(
         const db = storeFor(ws.data.roomId, false);
         let fx: Effects;
         try {
-          fx = runRoomSync(relay, db, onClientFrame(raw, ws.data.pk));
+          fx = runRoomSync(relay, db, onClientFrame(raw, ws.data.pk, ws.data.echo));
         } finally {
           doneWith(db);
         }

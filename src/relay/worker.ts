@@ -25,6 +25,7 @@ import {
   idleExpired,
   missingFingerprint,
   onClientFrame,
+  wantsEcho,
   parseRoomPath,
   touch,
   welcomeFrames,
@@ -131,7 +132,7 @@ export class Channel extends DurableObject<Env> {
         const pk = await runRoom(this.relay, db, authenticateSocket(req));
         const { 0: client, 1: server } = new WebSocketPair();
         this.ctx.acceptWebSocket(server);
-        server.serializeAttachment({ pk, room: route.roomId });
+        server.serializeAttachment({ pk, room: route.roomId, ...(wantsEcho(url) ? {} : { echo: false }) });
         for (const f of runRoomSync(this.relay, db, welcomeFrames(Number(url.searchParams.get("since") ?? 0) || 0))) server.send(f);
         await this.apply({ expireAt: runRoomSync(this.relay, db, touch) ?? undefined });
         return new Response(null, { status: 101, webSocket: client, headers: wsHeaders(req) });
@@ -145,8 +146,8 @@ export class Channel extends DurableObject<Env> {
   }
 
   override async webSocketMessage(ws: WebSocket, data: string | ArrayBuffer): Promise<void> {
-    const { room, pk } = ws.deserializeAttachment() as { room: string; pk: string };
-    const fx = runRoomSync(this.relay, this.store(room), onClientFrame(typeof data === "string" ? data : new TextDecoder().decode(data), pk));
+    const { room, pk, echo } = ws.deserializeAttachment() as { room: string; pk: string; echo?: boolean };
+    const fx = runRoomSync(this.relay, this.store(room), onClientFrame(typeof data === "string" ? data : new TextDecoder().decode(data), pk, echo !== false));
     if (fx.reply) ws.send(fx.reply);
     await this.apply(fx, ws);
   }
