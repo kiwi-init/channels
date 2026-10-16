@@ -150,13 +150,29 @@ export type TaskFilter = "all" | TaskState
 
 export function TaskFilterBar({ value, options, onChange, className }: { value: TaskFilter; options: [TaskFilter, string][]; onChange: (f: TaskFilter) => void; className?: string }) {
   return (
-    <div role="radiogroup" aria-label="Show tasks" className={cx("flex flex-wrap gap-0.5", SEGMENTED, className)}>
+    <div
+      role="radiogroup"
+      aria-label="Show tasks"
+      className={cx("flex flex-wrap gap-0.5", SEGMENTED, className)}
+      onKeyDown={(e) => {
+        const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0
+        if (!step) return
+        e.preventDefault()
+        const at = options.findIndex(([f]) => f === value)
+        const next = options[(at + step + options.length) % options.length]
+        if (!next) return
+        onChange(next[0])
+        const group = e.currentTarget
+        requestAnimationFrame(() => group.querySelector<HTMLElement>('[aria-checked="true"]')?.focus())
+      }}
+    >
       {options.map(([f, word]) => (
         <button
           key={f}
           type="button"
           role="radio"
           aria-checked={value === f}
+          tabIndex={value === f ? 0 : -1}
           onClick={() => onChange(f)}
           className={cx("h-7 flex-auto rounded-row px-3 text-ui font-medium whitespace-nowrap transition-colors", value === f ? SEGMENT_ON : SEGMENT_OFF)}
         >
