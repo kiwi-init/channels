@@ -238,6 +238,10 @@ const OPAQUE = new Set(["link", "linkReference", "definition", "code", "inlineCo
 
 function linkMessageRefs(node: MdNode, known: (seq: number) => boolean): void {
   if (!node.children || OPAQUE.has(node.type)) return
+  if (node.type === "table") {
+    for (const row of node.children.slice(1)) linkMessageRefs(row, known)
+    return
+  }
   node.children = node.children.flatMap((child): MdNode[] => {
     if (child.type !== "text" || child.value === undefined) {
       linkMessageRefs(child, known)

@@ -19,7 +19,7 @@ describe("message references", () => {
   })
 
   test("leaves anchors, words, zero and unknown messages alone", () => {
-    for (const text of ["page#3", "a/b/#4", "&#123;", "#0", "#12abc", "##5", "#4000"]) {
+    for (const text of ["page#3", "a/b/#4", "&#123;", "#0", "#12abc", "##5", "#4000", "café#3", "#12é"]) {
       expect(messageRefs(text, known)).toEqual([{ kind: "text", text }])
     }
   })
@@ -31,6 +31,12 @@ describe("message references", () => {
     expect(html).not.toContain(">#316</button>")
     expect(html).not.toContain(">#317</button>")
     expect(html).not.toContain("value=")
+  })
+
+  test("a table header keeps #N as text inside its sort button, and body cells link it", () => {
+    const html = renderToStaticMarkup(createElement(Markdown, { refs: { known, open: () => {} } }, "| #3 |\n| --- |\n| #4 |"))
+    expect(html).not.toContain(">#3</button>")
+    expect(html).toContain(">#4</button>")
   })
 
   test("without refs, #N stays text", () => {

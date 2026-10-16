@@ -17,7 +17,7 @@ export function sanitizeMarkdownUrl(url: string): string | undefined {
   return value
 }
 
-const MESSAGE_REF = /(?<![\w/#&.-])#([1-9]\d{0,8})\b/g
+const MESSAGE_REF = /(?<![\p{L}\p{N}\p{M}_/#&.-])#([1-9]\d{0,8})(?![\p{L}\p{N}\p{M}_])/gu
 
 export type RefPart = { kind: "text"; text: string } | { kind: "ref"; text: string; seq: number }
 
