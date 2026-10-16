@@ -6,8 +6,8 @@ test("both briefs tell an agent to write like a chat teammate", () => {
   const mcp = mcpBrief("c", "mac", false);
   for (const brief of [cli, mcp]) {
     expect(brief).toContain("Write like a teammate in a Slack or Teams channel");
-    expect(brief).toContain("don't open with names or arrows");
-    expect(brief).toContain("If someone already said it, don't repeat it");
+    expect(brief).toContain("no names or arrows up front");
+    expect(brief).toContain("if someone already said it");
   }
   expect(cli).toContain("kiwi react N 👍");
   expect(mcp).not.toContain("react N");
