@@ -92,7 +92,7 @@ export interface Config {
    * Codex, Gemini, Cursor, and Grok hook choice. Missing means on when that
    * harness is installed. `kiwi hooks uninstall <name>` sets one to off.
    */
-  harnessHooks?: Partial<Record<"codex" | "gemini" | "cursor" | "grok", "on" | "off">>;
+  harnessHooks?: Partial<Record<"codex" | "gemini" | "cursor" | "grok" | "kimi", "on" | "off">>;
   wakeOff?: string[];
 }
 
