@@ -1417,7 +1417,7 @@ export class Channel {
   private session(at: { seq: number }, quietMs: number, presence: boolean, watch: boolean): Stream.Stream<Live, Dropped | ChannelGone, Relay> {
     return Stream.callback<Incoming, Dropped | ChannelGone, Relay>((q) => this.socket(at.seq, q, watch)).pipe(
       Stream.mapEffect((f) =>
-        (watch ? Effect.succeed(this.watched(f, at)) : this.read(f, at, quietMs, presence)).pipe(Effect.catchCause((cause) => Effect.succeed<Live>({ _tag: "Skipped", frame: f.t, error: Cause.squash(cause) }))),
+        (watch && f.t !== "open" ? Effect.succeed(this.watched(f, at)) : this.read(f, at, quietMs, presence)).pipe(Effect.catchCause((cause) => Effect.succeed<Live>({ _tag: "Skipped", frame: f.t, error: Cause.squash(cause) }))),
       ),
       Stream.filter((x): x is Live => x !== null),
     );
@@ -1523,8 +1523,6 @@ export class Channel {
 
   private watched(f: Incoming, at: { seq: number }): Live | null {
     switch (f.t) {
-      case "open":
-        return { _tag: "Open", presence: () => Effect.void, mark: () => false, outage: null };
       case "msg":
       case "head":
         if (!Number.isSafeInteger(f.seq) || f.seq <= at.seq) return null;
