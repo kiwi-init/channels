@@ -186,11 +186,29 @@ interface BubbleProps {
   image?: (img: ImageAttachment) => Promise<string | null>
 }
 
+function useSeen(el: Element | null): boolean {
+  const [seen, setSeen] = useState(typeof IntersectionObserver === "undefined")
+  useEffect(() => {
+    if (seen || !el) return
+    const watch = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setSeen(true)
+      },
+      { rootMargin: "400px 0px" }
+    )
+    watch.observe(el)
+    return () => watch.disconnect()
+  }, [el, seen])
+  return seen
+}
+
 function Attached({ img, load }: { img: ImageAttachment; load?: (img: ImageAttachment) => Promise<string | null> }) {
   const [data, setData] = useState<string | null>(img.data ?? null)
   const [failed, setFailed] = useState(false)
+  const [spot, setSpot] = useState<HTMLSpanElement | null>(null)
+  const seen = useSeen(spot)
   useEffect(() => {
-    if (img.data !== undefined || !load) return
+    if (img.data !== undefined || !load || !seen) return
     let live = true
     load(img).then(
       (d) => live && (d ? setData(d) : setFailed(true)),
@@ -199,10 +217,10 @@ function Attached({ img, load }: { img: ImageAttachment; load?: (img: ImageAttac
     return () => {
       live = false
     }
-  }, [img, load])
+  }, [img, load, seen])
   if (!data) {
     return (
-      <span title={img.name} className="flex h-24 w-32 items-center justify-center rounded-bubble bg-wash px-2 text-center text-stamp text-ink-3 shadow-[0_0_0_0.5px_var(--line)]">
+      <span ref={setSpot} title={img.name} className="flex h-24 w-32 items-center justify-center rounded-bubble bg-wash px-2 text-center text-stamp text-ink-3 shadow-[0_0_0_0.5px_var(--line)]">
         {failed ? "Image no longer available" : "Loading image…"}
       </span>
     )
