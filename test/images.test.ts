@@ -47,6 +47,10 @@ test("send refuses an svg attachment", async () => {
   await expect(memberCh.send("look", { imgs: [svg] })).rejects.toThrow(/png, jpg, gif or webp/);
 });
 
+test("send refuses an image with neither bytes nor a reference", async () => {
+  await expect(memberCh.send("empty", { imgs: [{ name: "e.png", mime: "image/png" }] })).rejects.toThrow(/bytes or a stored reference/);
+});
+
 test("a png attachment is kept", async () => {
   const seq = await memberCh.send("just png", { imgs: [png] });
   const got = (await ownerCh.history(seq - 1)).messages.find((m) => m.seq === seq);

@@ -1203,6 +1203,7 @@ export class Channel {
       const imgs = opts.imgs?.slice(0, MAX_IMAGES);
       // The same raster list as icons. A caller that skips the file picker still cannot attach SVG.
       if (imgs?.some((i) => !isRasterMime(i.mime))) return yield* new Rejected("an image must be png, jpg, gif or webp");
+      if (imgs?.some((i) => !rasterAttachment(i))) return yield* new Rejected("an image needs its bytes or a stored reference");
       const attached = imgs?.length ? yield* this.stored(imgs) : undefined;
       const payload: Payload = {
         v: PROTOCOL_VERSION,
