@@ -3,7 +3,8 @@
   "ignoreBinaries": [
     "oxlint",
     "oxfmt",
-    "iconutil"
+    "iconutil",
+    "kwallet-query"
   ],
   "workspaces": {
     ".": {

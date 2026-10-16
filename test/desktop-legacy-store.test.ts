@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { legacyPassword } from "../desktop/src/legacy-keys.ts";
 import { legacyDirs, legacyPrefix, legacyRounds, openLegacy, readLegacyAt, readLegacyStore, type LegacyName } from "../desktop/src/legacy-store.ts";
 
 const ELECTRON_LINUX = {
@@ -134,5 +135,11 @@ describe("finding 0.14's store", () => {
     const file = put(join(h, ".config", "kiwi-desktop"), Buffer.from(ELECTRON_LINUX.vectors[0]!.b64, "base64"));
     const read = await readLegacyAt(file, "kiwi-desktop", 1, () => Promise.reject(new Error("locked")));
     expect(read.kind).toBe("unreadable");
+  });
+});
+
+describe("the old password's lookup", () => {
+  test("only a Mac or Linux had a 0.14 app, so elsewhere there is nothing to look up", async () => {
+    expect(await legacyPassword("win32")("kiwi-desktop")).toBeNull();
   });
 });
