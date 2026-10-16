@@ -664,6 +664,7 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
   const seq = db.head() + 1;
   let bytes = db.storedBytes();
   if (bytes + ct.length > cap) bytes -= db.dropOldest(bytes + ct.length - cap) + db.pruneBlobs();
+  if (bytes + ct.length > cap) bytes -= db.dropOldestBlobs(bytes + ct.length - cap);
 
   db.insert(seq, ts, iv, ct, e);
   bytes += ct.length;
