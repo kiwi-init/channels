@@ -4,6 +4,7 @@ import type { Message } from "@mc/protocol.ts"
 
 import { fixtureMessages, fixtureRoster, SELF } from "../fixtures/channel"
 import { buildRows } from "../lib/timeline"
+import { Frame } from "../ui/Frame"
 import { Conversation } from "./Conversation"
 
 const mockMounts = new Map<number, number>()
@@ -65,21 +66,33 @@ describe("timeline rows", () => {
 describe("Conversation", () => {
   it("renders the newest messages of 500 and does not remount rows when one arrives", async () => {
     const first = many(500)
-    const view = await render(<Conversation {...props(first)} />)
+    const view = await render(
+      <Frame>
+        <Conversation {...props(first)} />
+      </Frame>
+    )
     expect(screen.getByText("bubble 500")).toBeTruthy()
     const before = new Map(mockMounts)
     expect(before.size).toBeGreaterThan(0)
     expect(before.size).toBeLessThan(500)
 
     const next = [...first, { ...first[0]!, id: "n500", seq: 501, ts: first.at(-1)!.ts + 60_000, rts: first.at(-1)!.ts + 60_000 }]
-    await view.rerender(<Conversation {...props(next)} />)
+    await view.rerender(
+      <Frame>
+        <Conversation {...props(next)} />
+      </Frame>
+    )
     expect(screen.getByText("bubble 501")).toBeTruthy()
     for (const [seq, count] of before) expect(mockMounts.get(seq)).toBe(count)
     expect(mockMounts.get(501)).toBe(1)
   })
 
   it("shows the Latest pill only after scrolling away, and hides it again at the end", async () => {
-    await render(<Conversation {...props(many(60))} />)
+    await render(
+      <Frame>
+        <Conversation {...props(many(60))} />
+      </Frame>
+    )
     expect(screen.queryByLabelText("Scroll to the latest message")).toBeNull()
     const list = screen.getByTestId("timeline")
     await fireEvent.scroll(list, { nativeEvent: { contentOffset: { y: 900 }, contentSize: { height: 4000, width: 300 }, layoutMeasurement: { height: 600, width: 300 } } })
