@@ -16,6 +16,7 @@ import { checkFile, duplicateMembers, hasMarkers, parseError } from "../.github/
 import type { Item } from "../.github/bus/github.ts"
 
 const cfg: BusConfig = { ...(await loadBus(".github/jev-ci.yml")), tsc: [] }
+const withOpus: BusConfig = { ...cfg, ladder: [...cfg.ladder, "opus"] }
 
 const dirs: string[] = []
 const merged: Merged[] = []
@@ -168,10 +169,20 @@ describe("ladder", () => {
     expect(d.calls.filter((c) => c.startsWith("claude-opus"))).toEqual([])
   })
 
-  test("haiku abstaining or disagreeing goes to opus", async () => {
+  test("the shipped ladder has no opus: haiku abstaining sends the hunk to the author", async () => {
     const m = merge(bothEdit())
     const d = deps({ haiku: [say("a"), say("b"), { abstain: true, reason: "x" }], opus: [say("    return text.trim().toUpperCase()")] })
     const out = await withModels(m, [], cfg, d)
+    expect(out.resolved).toEqual([])
+    expect(out.left).toHaveLength(1)
+    expect(out.tried).toEqual(["haiku ×3"])
+    expect(d.calls.filter((c) => c.startsWith("claude-opus"))).toEqual([])
+  })
+
+  test("haiku abstaining or disagreeing goes to opus", async () => {
+    const m = merge(bothEdit())
+    const d = deps({ haiku: [say("a"), say("b"), { abstain: true, reason: "x" }], opus: [say("    return text.trim().toUpperCase()")] })
+    const out = await withModels(m, [], withOpus, d)
     expect(out.resolved.map((r) => r.tier)).toEqual(["opus"])
     expect(out.steps).toEqual([{ tier: "haiku", left: 1 }, { tier: "opus", left: 0 }])
   })
@@ -179,7 +190,7 @@ describe("ladder", () => {
   test("a high intent_shift sends haiku's answer to opus, and opus's to the author", async () => {
     const m = merge(bothEdit())
     const answer = "    return text.trim().toUpperCase()"
-    const out = await withModels(m, [], cfg, deps({ shift: 0.9, haiku: [say(answer), say(answer), say(answer)], opus: [say(answer)] }))
+    const out = await withModels(m, [], withOpus, deps({ shift: 0.9, haiku: [say(answer), say(answer), say(answer)], opus: [say(answer)] }))
     expect(out.resolved).toEqual([])
     expect(out.left[0]!.why).toContain("intent_shift 90%")
     expect(out.tried).toEqual(["haiku ×3", "opus ×1"])
@@ -189,7 +200,7 @@ describe("ladder", () => {
     const m = merge(bothEdit())
     const answer = "    return text.trim().toUpperCase()"
     const d = deps({ haiku: [say(answer), say(answer), say(answer)], opus: [say(answer)], tsc: [false, true] })
-    const out = await withModels(m, [], cfg, d)
+    const out = await withModels(m, [], withOpus, d)
     expect(d.calls).toContain("claude-opus-5-5 +hint")
     expect(out.resolved.map((r) => r.tier)).toEqual(["opus"])
     expect(out.tsc?.ok).toBe(true)
