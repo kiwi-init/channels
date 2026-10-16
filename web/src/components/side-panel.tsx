@@ -1,7 +1,6 @@
 import { ArrowDown01Icon, GitPullRequestIcon } from "@hugeicons/core-free-icons"
 import { useState, type ReactNode } from "react"
 
-import type { TaskState } from "@mc/protocol.ts"
 import { taskId, type ChannelState, type Task } from "@mc/state.ts"
 import type { RecentPr } from "@mc/work.ts"
 import { formatAgo, formatFull } from "@/lib/format"
@@ -9,18 +8,15 @@ import { remember, remembered } from "@/lib/side"
 import { cx } from "@/lib/utils"
 import { AgentLine, busy, byBusy, type AgentNow } from "./agent-strip"
 import { Icon } from "./icon"
-import { SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from "./kit"
-import { StateMark } from "./tasks"
+import { StateMark, TaskFilterBar, type TaskFilter } from "./tasks"
 
 const SHOWN = 5
 
-export const FLOAT_W = 336
+export const FLOAT_W = 384
 
 export const FLOAT_GAP = 24
 
-type Filter = "all" | TaskState
-
-const FILTERS: [Filter, string][] = [
+const FILTERS: [TaskFilter, string][] = [
   ["all", "All"],
   ["todo", "Open"],
   ["doing", "In progress"],
@@ -101,7 +97,7 @@ function TaskLine({ task, now, nameOf, onOpen }: { task: Task; now: number; name
 }
 
 function Tasks({ state, now, nameOf, onOpen, onAll }: { state: ChannelState; now: number; nameOf: (n: string) => string; onOpen: (id: number) => void; onAll: () => void }) {
-  const [filter, setFilter] = useState<Filter>("all")
+  const [filter, setFilter] = useState<TaskFilter>("all")
   const all = [...state.tasks.values()].sort((a, b) => b.updatedAt - a.updatedAt)
   const list = all.filter((t) => filter === "all" || t.state === filter)
   const open = all.filter((t) => t.state !== "done").length
@@ -110,20 +106,7 @@ function Tasks({ state, now, nameOf, onOpen, onAll }: { state: ChannelState; now
     <Card id="tasks" title="Tasks" count={all.length ? `${open} open` : undefined}>
       {all.length ? (
         <>
-          <div role="radiogroup" aria-label="Show tasks" className={cx("mx-2 mb-2 flex gap-0.5", SEGMENTED)}>
-            {shown.map(([f, word]) => (
-              <button
-                key={f}
-                type="button"
-                role="radio"
-                aria-checked={filter === f}
-                onClick={() => setFilter(f)}
-                className={cx("h-6 flex-auto rounded-row px-2 text-meta font-medium whitespace-nowrap transition-colors", filter === f ? SEGMENT_ON : SEGMENT_OFF)}
-              >
-                {word}
-              </button>
-            ))}
-          </div>
+          <TaskFilterBar value={filter} options={shown} onChange={setFilter} className="mx-2 mb-2" />
           {list.length ? (
             <ul aria-label="Recently updated tasks">
               {list.slice(0, SHOWN).map((t) => (
