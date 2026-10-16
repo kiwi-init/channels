@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "Kiwi",
+    "slug": "kiwi",
+    "scheme": "kiwi",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": { "supportsTablet": true, "bundleIdentifier": "dev.kiwi.mobile" },
+    "android": { "package": "dev.kiwi.mobile" },
+    "plugins": ["expo-router"]
+  }
+}
