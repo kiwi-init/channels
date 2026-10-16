@@ -220,7 +220,8 @@ export function formatMessage(m: Message, trust?: Trust, state?: ChannelState, m
   const review = reviewBody(m);
   const body = cleanBody(m.kind === "event" ? `${describeEvent(m, state)}${review ? `\n${review}` : ""}` : String(m.body ?? "")).replace(/\n/g, "\n  │ ");
   const imgs = m.imgs?.length ? ` ${m.imgs.map((i) => imageMarker({ name: inlineText(i.name, 80), data: i.data, ref: i.ref })).join(" ")}` : "";
-  return `#${m.seq} ${who(inlineText(m.from, 40), state, me)} → ${to}${room}${at}${kind}${re}${flag}: ${body}${imgs}`;
+  const link = m.handoff ? " [browser link]" : "";
+  return `#${m.seq} ${who(inlineText(m.from, 40), state, me)} → ${to}${room}${at}${kind}${re}${flag}: ${body}${imgs}${link}`;
 }
 
 function taskLine(t: Task): string {
@@ -460,8 +461,9 @@ export function missingImages(seq: number, want: number, got: number): string | 
   return got < want ? `${want - got} of the ${want} images in #${seq} did not load; the relay may no longer have them` : null;
 }
 
-export function formatShown(m: Message, messages: Message[], state: ChannelState, savedImages: string[] = [], me?: string): string {
+export function formatShown(m: Message, messages: Message[], state: ChannelState, savedImages: string[] = [], me?: string, reveal = false): string {
   const out = [formatMessage(m, state.trust.get(m.seq), state, me)];
+  if (m.handoff && reveal) out.push(`  browser link (${inlineText(m.handoff.vendor, 40)}, opens until ${new Date(m.handoff.expiresAt).toISOString()}): ${m.handoff.url}`);
   if (savedImages.length) out.push(`  images saved: ${savedImages.join(", ")}`);
   const missing = m.imgs?.length ? missingImages(m.seq, m.imgs.length, savedImages.length) : null;
   if (missing) out.push(`  ${missing}`);

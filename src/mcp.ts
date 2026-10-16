@@ -24,7 +24,7 @@ import { ChannelGone, goneText, reason, type Channel, type Refused, type Relay }
 import { ago, cardLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, missingImages, formatTask, formatTasks, looksLikeLine, mayDo, parseDuration, presenceWords, runsStatus, taskStateWord } from "./format.ts";
 import { isWakeVia } from "./wake.ts";
 import { SCOPES } from "./scopes.ts";
-import { CHAT_KINDS, ignored, type InlineImage, type Kind, type Message } from "./protocol.ts";
+import { CHAT_KINDS, HANDOFF_DEFAULT_SECONDS, HANDOFF_MAX_SECONDS, HANDOFF_MAX_VENDOR, handoffUrl, ignored, type InlineImage, type Kind, type Message } from "./protocol.ts";
 import { inlineText } from "./membership.ts";
 import { chooseThread, parseTaskId, similarOpenTasks, taskId, wentTo } from "./state.ts";
 import { detectCard } from "./card.ts";
@@ -304,9 +304,9 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     },
     shaped(({ script }) =>
       Effect.gen(function* () {
-        const { channelFiles, runSh, sessionViews } = yield* Effect.promise(() => import("./sh.ts"));
+        const { channelFiles, runSh, sessionViews, channelTables } = yield* Effect.promise(() => import("./sh.ts"));
         const views = yield* sessionViews(s, script);
-        const r = yield* Effect.promise(() => runSh(channelFiles(views), script));
+        const r = yield* Effect.promise(() => runSh(channelFiles(views), script, { tables: channelTables(views) }));
         const text = [r.stdout.trimEnd(), r.stderr.trimEnd() && `[stderr]\n${r.stderr.trimEnd()}`, r.exitCode && `[exit ${r.exitCode}]`].filter(Boolean).join("\n");
         return r.exitCode ? fail(text) : ok(text || "(no output)");
       }),
@@ -404,9 +404,31 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
       inputSchema: {
         text: z.string().describe("what was asked, by whom, and why it needs a person"),
         re: z.number().int().optional().describe("the message this is about"),
+        handoff_url: z.string().optional().describe("an https live-view link to a browser tab the person must act in (a login, 2FA, CAPTCHA or consent wall); the person opens it from the app, you never try the step yourself"),
+        vendor: z.string().optional().describe("who hosts the tab, e.g. cloudflare, browserbase, steel, local"),
+        expires_in: z.number().int().positive().optional().describe(`seconds the link opens for; default ${HANDOFF_DEFAULT_SECONDS}, at most ${HANDOFF_MAX_SECONDS}`),
+        wait_seconds: z.number().int().positive().optional().describe("with handoff_url: block until the person presses Done or Couldn't, or the link expires"),
       },
     },
-    tool(({ text, re }) => Effect.map(s.escalate(text, re), ({ seq, to }) => `escalated #${seq} to ${to.join(" and ")}; wait for their answer before acting on it`)),
+    tool(({ text, re, handoff_url, vendor, expires_in, wait_seconds }) =>
+      Effect.gen(function* () {
+        if (handoff_url === undefined) {
+          if (vendor !== undefined || expires_in !== undefined || wait_seconds !== undefined) return yield* new Rejected("vendor, expires_in and wait_seconds go with handoff_url");
+          const { seq, to } = yield* s.escalate(text, re);
+          return `escalated #${seq} to ${to.join(" and ")}; wait for their answer before acting on it`;
+        }
+        if (!handoffUrl(handoff_url)) return yield* new Rejected("handoff_url must be an https link without a user name or password");
+        if (expires_in !== undefined && expires_in > HANDOFF_MAX_SECONDS) return yield* new Rejected(`expires_in is at most ${HANDOFF_MAX_SECONDS} seconds`);
+        const seconds = expires_in ?? HANDOFF_DEFAULT_SECONDS;
+        const expiresAt = Date.now() + seconds * 1000;
+        const head = wait_seconds === undefined ? 0 : yield* s.ch.fx.head();
+        const { seq, to } = yield* s.escalate(text, re, { url: handoff_url, vendor: (vendor ?? new URL(handoff_url).hostname).slice(0, HANDOFF_MAX_VENDOR), expiresAt });
+        const sent = `escalated #${seq} to ${to.join(" and ")} with a browser link; wait for their answer before acting on it`;
+        if (wait_seconds === undefined) return sent;
+        const { outcome } = yield* s.awaitHandoff(seq, head, expiresAt, wait_seconds);
+        return `${sent}\nhandoff ${outcome === "waiting" ? "still waiting: the link is open, listen for the answer" : outcome}`;
+      }),
+    ),
   );
 
   server.registerTool(

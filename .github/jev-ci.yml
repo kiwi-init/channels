@@ -270,6 +270,19 @@ jobs:
       seat too, while another session's hooks must not. Fails if seat resolution, the hook
       answers or the CLI's choice of agent change.
 
+  cli-handoff:
+    name: cli / handoff
+    inputs: ["src/**", "test/handoff.test.ts", "test/setup.ts", "test/owner.ts", "test/owner-cli.ts", "test/check.ts"]
+    always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts"]
+    description: >-
+      Runs test/handoff.test.ts. An escalation can carry a live browser link (src/protocol.ts
+      handoff): the payload check accepts it only on an escalation and only as an https link
+      without credentials, a vendor of at most 40 characters and an expiry. Against a local relay,
+      `kiwi send --escalate --handoff URL --wait` must exit 0 when the person answers
+      `handoff: done`, 4 on `handoff: failed` and 4 at expiry, and the link must stay out of
+      kiwi log, show, listen --json and the waiting command's own output, appearing only in
+      `kiwi show N --reveal`. Fails if the field, the wait or the redaction change.
+
   repo-comments:
     jev: false
     name: repo / comments
