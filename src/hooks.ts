@@ -25,6 +25,7 @@ import * as Cause from "effect/Cause";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Schedule from "effect/Schedule";
+import type * as Scope from "effect/Scope";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -36,7 +37,7 @@ import { charterLines, formatMessage, holdLine, modeLine } from "./format.ts";
 import { humanOf } from "./state.ts";
 import { asOption, channelOption, wakePath, wakeWords } from "./wake.ts";
 import { daemonListeners, ensureDaemon, holdListener, wakeOn, type DaemonListener, type HeldListener } from "./daemon.ts";
-import { bindDirectory as bindSeat, bindingFor as seatFor, here, seatsNear, type Binding, type Here, type Listener, type SeatOptions } from "./seats.ts";
+import { bindDirectory as bindSeat, bindingFor as seatFor, here, seatsFor as heldSeats, seatsNear, type Binding, type Here, type Listener, type SeatOptions } from "./seats.ts";
 
 /** Marks our entries so install/uninstall can find them. Current clients only. */
 const MARK = "# kiwi";
@@ -55,6 +56,10 @@ export type { Binding } from "./seats.ts";
 /** The seat this process (or hook, for `who`) acts for in `dir`. */
 export function bindingFor(dir: string, opts: Omit<SeatOptions, "listeners"> = {}): Binding | null {
   return seatFor(dir, { ...opts, listeners: liveListeners });
+}
+
+export function seatsFor(dir: string, opts: Omit<SeatOptions, "listeners"> = {}): Binding[] {
+  return heldSeats(dir, { ...opts, listeners: liveListeners });
 }
 
 /** Give an agent its seat in `dir`, never pushing out another agent that's listening from here. */
@@ -662,7 +667,44 @@ const unreadText = Effect.fn("Hooks.unreadText")(function* (s: AgentSession) {
 
 const say = (text: string) => Effect.sync(() => void process.stdout.write(text));
 
-/** What one hook answers, for the agent bound here. */
+type AnswerKind = "cursor-start" | "start" | "gemini-prompt" | "prompt" | "followup" | "block" | "deny";
+
+interface Answer {
+  kind: AnswerKind;
+  text: string;
+}
+
+function envelope(kind: AnswerKind, texts: readonly string[]): string {
+  switch (kind) {
+    case "cursor-start":
+      return JSON.stringify({ additional_context: texts.join("\n\n") });
+    case "start":
+      return JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: texts.join("\n\n") } });
+    case "gemini-prompt":
+      return JSON.stringify({ hookSpecificOutput: { hookEventName: "BeforeAgent", additionalContext: texts.join("\n\n") } });
+    case "prompt":
+      return texts.join("\n\n");
+    case "followup":
+      return JSON.stringify({ followup_message: texts.join(" ") });
+    case "block":
+    case "deny":
+      return JSON.stringify({ decision: kind, reason: texts.join("\n\n") });
+  }
+}
+
+function answered(kind: AnswerKind, text: string): Answer {
+  return { kind, text };
+}
+
+export function hookOutput(answers: readonly Answer[]): string | null {
+  const [first] = answers;
+  if (!first) return null;
+  return envelope(
+    first.kind,
+    answers.filter((a) => a.kind === first.kind).map((a) => a.text),
+  );
+}
+
 const answer = Effect.fn("Hooks.answer")(function* (event: string, input: HookInput, b: Binding, cfg: ChannelConfig, who: Here) {
   const mc = mcFor(b.alias, b.as, input.cwd ?? process.cwd(), who);
   const s = yield* openSession(b.alias, cfg, b.as);
@@ -693,39 +735,40 @@ const answer = Effect.fn("Hooks.answer")(function* (event: string, input: HookIn
     const additionalContext = lines.join("\n");
     // Cursor's sessionStart injects additional_context and ignores the Claude envelope.
     if (input.hook_event_name === "sessionStart" || input.composer_mode != null || typeof input.is_background_agent === "boolean") {
-      return yield* say(JSON.stringify({ additional_context: additionalContext }));
+      return answered("cursor-start", additionalContext);
     }
-    return yield* say(JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext } }));
+    return answered("start", additionalContext);
   }
 
   if (event === "prompt") {
     const unread = yield* unreadText(s);
     const lines: string[] = [];
     if (unread) lines.push(`New Kiwi Channels messages for you (${b.alias}):`, unread);
-    if (!lines.length) return;
+    if (!lines.length) return null;
     const text = lines.join("\n");
     // Gemini BeforeAgent only injects hookSpecificOutput.additionalContext. Codex and Claude take plain stdout.
-    if (input.hook_event_name === "BeforeAgent") return yield* say(JSON.stringify({ hookSpecificOutput: { hookEventName: "BeforeAgent", additionalContext: text } }));
-    return yield* say(text);
+    if (input.hook_event_name === "BeforeAgent") return answered("gemini-prompt", text);
+    return answered("prompt", text);
   }
 
   if (event === "stop") {
     const style = stopStyle(input);
     if (style === "cursor") {
       // An aborted or failed turn must not schedule another one. Don't read: that would consume the messages the follow-up tells the agent to read.
-      if (input.status && input.status !== "completed") return;
+      if (input.status && input.status !== "completed") return null;
       const { messages, state } = yield* s.state();
       const unread = (yield* s.unreadCount(state, messages)) > 0;
       const follow = cursorStopFollowup(mc, unread);
-      if (!follow) return;
-      return yield* say(JSON.stringify({ followup_message: follow }));
+      if (!follow) return null;
+      return answered("followup", follow);
     }
     const unread = yield* unreadText(s);
     const decision = style === "gemini" ? "deny" : "block";
     if (unread) {
-      return yield* say(JSON.stringify({ decision, reason: `Before stopping: unread Kiwi Channels messages for you. Handle them (answer with \`${mc} reply N "…"\`):\n${unread}` }));
+      return answered(decision, `Before stopping: unread Kiwi Channels messages for you. Handle them (answer with \`${mc} reply N "…"\`):\n${unread}`);
     }
   }
+  return null;
 });
 
 /**
@@ -734,10 +777,15 @@ const answer = Effect.fn("Hooks.answer")(function* (event: string, input: HookIn
  * runs per agent; the next event arms the next one. After a day with nothing it ends with a short
  * line, so the following turn arms a fresh one instead of the session going deaf.
  */
-const listen = Effect.fn("Hooks.listen")(function* (b: Binding, cfg: ChannelConfig, who: Here) {
-  if (!hooksListen() || !wakeOn(loadConfig(), b.alias, b.as) || isListening(b.alias, b.as)) return 0;
+interface Served {
+  b: Binding;
+  cfg: ChannelConfig;
+}
+
+const arm = Effect.fn("Hooks.arm")(function* ({ b, cfg }: Served, who: Here, woke: Effect.Effect<void, never, Scope.Scope>) {
+  if (!wakeOn(loadConfig(), b.alias, b.as) || isListening(b.alias, b.as)) return null;
   const slot = yield* Effect.promise(() => takeListenSlot(b.alias, b.as, who.session ?? ""));
-  if (!slot) return 0;
+  if (!slot) return null;
   yield* Effect.addFinalizer(() => Effect.sync(() => slot.close()));
   const s = yield* openSession(b.alias, cfg, b.as);
   // Peek: the listener never moves the agent's cursor. It reads on a copy that starts past what it already
@@ -747,11 +795,6 @@ const listen = Effect.fn("Hooks.listen")(function* (b: Binding, cfg: ChannelConf
   let at = Math.max((yield* s.cursor()), deliveredUpTo(b.alias, b.as, who.session ?? ""));
   const peek = Cursor.of({ read: () => Effect.succeed(at), write: (_c, _a, seq) => Effect.sync(() => void (at = Math.max(at, seq))), seen: real.seen, markSeen: () => Effect.void });
   const got: string[] = [];
-  const enough = yield* Deferred.make<void>();
-  const woke = Effect.suspend(() =>
-    // Linger briefly so a burst of messages is one wake-up.
-    got.length === 1 ? Effect.asVoid(Effect.forkScoped(Effect.andThen(Effect.sleep(400), Deferred.succeed(enough, undefined)))) : Effect.void,
-  );
   const hearing = s
     .listen((m, state) => Effect.andThen(Effect.sync(() => void got.push(formatMessage(m, state.trust.get(m.seq), state, s.me))), woke), {
       onNotice: (text) => Effect.andThen(Effect.sync(() => void got.push(`* ${text}`)), woke),
@@ -759,6 +802,21 @@ const listen = Effect.fn("Hooks.listen")(function* (b: Binding, cfg: ChannelConf
       marks: false,
     })
     .pipe(Effect.provideService(Cursor, peek));
+  return { b, got, hearing, reached: () => at };
+});
+
+const listen = Effect.fn("Hooks.listen")(function* (served: readonly Served[], who: Here) {
+  if (!hooksListen()) return 0;
+  const enough = yield* Deferred.make<void>();
+  let heard = 0;
+  const woke = Effect.suspend(() => {
+    heard += 1;
+    return heard === 1 ? Effect.asVoid(Effect.forkScoped(Effect.andThen(Effect.sleep(400), Deferred.succeed(enough, undefined)))) : Effect.void;
+  });
+  const armed = (yield* Effect.forEach(served, (seat) => arm(seat, who, woke).pipe(Effect.catchCause(() => Effect.succeed(null))))).filter((a) => a !== null);
+  const [first, ...rest] = armed;
+  if (!first) return 0;
+  const hearing = rest.reduce((all, a) => Effect.raceFirst(all, a.hearing), first.hearing);
   // Its session ending ends it too: nobody would get what it read.
   const sessionGone = who.pid ? Effect.repeat(Effect.sync(() => alive(who.pid!)), { while: (up) => up, schedule: Schedule.spaced("2 seconds") }) : Effect.never;
   const ended = yield* Effect.raceFirst(
@@ -766,19 +824,18 @@ const listen = Effect.fn("Hooks.listen")(function* (b: Binding, cfg: ChannelConf
     Effect.raceFirst(Effect.as(Deferred.await(enough), "heard" as const), Effect.raceFirst(Effect.as(Effect.sleep(LISTEN_SECONDS * 1000), "day" as const), Effect.as(sessionGone, "gone" as const))),
   ).pipe(Effect.scoped);
   if (ended === "gone" || (who.pid && !alive(who.pid))) return 0;
-  const mc = mcFor(b.alias, b.as, process.cwd(), who);
-  const text = got.join("\n");
+  const told = armed.filter((a) => a.got.length);
+  const blocks = told.map(({ b, got }) => {
+    const mc = mcFor(b.alias, b.as, process.cwd(), who);
+    const text = got.join("\n");
+    return `New Kiwi Channels messages for you (${b.alias}). Handle them; answer with \`${mc} reply N "…"\`:\n${text.length > MAX_CONTEXT ? `${text.slice(0, MAX_CONTEXT)}\n… (more: run \`${mc} log\`)` : text}\n`;
+  });
   try {
-    writeSync(
-      2,
-      got.length
-        ? `New Kiwi Channels messages for you (${b.alias}). Handle them; answer with \`${mc} reply N "…"\`:\n${text.length > MAX_CONTEXT ? `${text.slice(0, MAX_CONTEXT)}\n… (more: run \`${mc} log\`)` : text}\n`
-        : "Kiwi Channels: a day with no messages for you. Nothing to do; just end your turn.\n",
-    );
+    writeSync(2, blocks.length ? blocks.join("\n") : "Kiwi Channels: a day with no messages for you. Nothing to do; just end your turn.\n");
   } catch {
     return 0;
   }
-  if (got.length) noteDelivered(b.alias, b.as, who.session ?? "", at);
+  for (const { b, reached } of told) noteDelivered(b.alias, b.as, who.session ?? "", reached());
   return 2;
 });
 
@@ -796,19 +853,27 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
   // The session that runs the hook: the one its seat remembers (or takes back, after a restart).
   const who: Here = { ...here(), ...(input.session_id ? { session: input.session_id } : {}) };
   yield* Effect.promise(() => refreshListeners());
-  const b = bindingFor(process.env.CLAUDE_PROJECT_DIR ?? input.cwd ?? process.cwd(), { who }) ?? bindingFor(input.cwd ?? process.cwd(), { who });
-  if (!b) return;
+  const project = seatsFor(process.env.CLAUDE_PROJECT_DIR ?? input.cwd ?? process.cwd(), { who });
+  const seats = project.length ? project : seatsFor(input.cwd ?? process.cwd(), { who });
   const keys = yield* Keystore;
-  const cfg = (yield* keys.config).channels[b.alias];
-  if (!cfg) return;
-  if (event === LISTEN) return yield* listen(b, cfg, who).pipe(Effect.scoped, Effect.catchCause(() => Effect.succeed(0)));
-  const work = answer(event, input, b, cfg, who).pipe(
+  const channels = (yield* keys.config).channels;
+  const served = seats.flatMap((b): Served[] => {
+    const cfg = channels[b.alias];
+    return cfg ? [{ b, cfg }] : [];
+  });
+  if (!served.length) return;
+  if (event === LISTEN) return yield* listen(served, who).pipe(Effect.scoped, Effect.catchCause(() => Effect.succeed(0)));
+  const one = ({ b, cfg }: Served) => answer(event, input, b, cfg, who).pipe(
     Effect.catchCause((cause) => {
       // The channel is gone for this agent: forget only what this agent held, quietly.
       const err = Cause.squash(cause);
-      if (err instanceof ChannelGone) return err.why === "closed" ? keys.wipeChannel(b.alias) : keys.forgetMember(b.alias, b.as);
-      return Effect.void;
+      if (err instanceof ChannelGone) return Effect.as(err.why === "closed" ? keys.wipeChannel(b.alias) : keys.forgetMember(b.alias, b.as), null);
+      return Effect.succeed(null);
     }),
   );
+  const work = Effect.flatMap(Effect.forEach(served, one), (answers) => {
+    const out = hookOutput(answers.filter((a) => a !== null));
+    return out === null ? Effect.void : say(out);
+  });
   yield* Effect.raceFirst(work, Effect.sleep(15_000));
 });

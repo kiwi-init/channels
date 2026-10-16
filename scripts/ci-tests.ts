@@ -13,6 +13,7 @@ const FLOWS: Record<string, string[]> = {
   "desktop-keys": ["desktop-keys"],
   site: ["site"],
   pins: ["action-pins"],
+  seats: ["seats", "multi-seat"],
   budget: [...new Glob("test/budget-*.test.ts").scanSync()].map((f) => f.slice("test/".length, -".test.ts".length)).sort(),
 }
 
