@@ -1,0 +1,125 @@
+import { describe, expect, test } from "bun:test"
+
+import { generateIdentity, sign, verify, type Identity } from "../../../src/identity.ts"
+import type { Event, Message } from "../../../src/protocol.ts"
+import { fold, type ChannelState, type Roster, type Task } from "../../../src/state.ts"
+
+import { approveTask, cancelTask, reviewsFor, sendBackTask, taskActions, type TaskSend } from "./task-actions"
+
+const roster: Roster = []
+const ids = new Map<string, Identity>()
+let seq = 0
+const log: Message[] = []
+
+async function join(name: string, kind: "human" | "agent"): Promise<void> {
+  const id = await generateIdentity(name)
+  ids.set(name, id)
+  roster.push({ name, pk: id.pk, owner: false, at: 0, active: true, kind })
+}
+
+async function post(from: string, ev: Event, to?: string[]): Promise<number> {
+  const id = ids.get(from)
+  if (!id) throw new Error(`no identity for ${from}`)
+  seq++
+  const signed = await sign(id, { v: 1 as const, id: String(seq), from, kind: "event" as const, body: "", ts: seq * 1000, ev, ...(to ? { to } : {}) })
+  log.push({ ...signed, seq, rts: seq * 1000, sigOk: await verify(signed) })
+  return seq
+}
+
+async function sendAs(from: string, s: TaskSend): Promise<number> {
+  if (!s.opts.ev) throw new Error("not an event")
+  return post(from, s.opts.ev, s.opts.to)
+}
+
+const state = (): ChannelState => fold(log, roster)
+const task = (id: number): Task => {
+  const t = state().tasks.get(id)
+  if (!t) throw new Error(`no task ${id}`)
+  return t
+}
+
+await join("jon", "human")
+await join("dev", "agent")
+await join("grok-reviewer", "agent")
+
+async function inReview(review: string): Promise<number> {
+  const id = await post("dev", { op: "task.add", title: `checked by ${review}`, owner: "dev", review })
+  await post("dev", { op: "task.update", task: id, state: "review", at: "abc123" })
+  return id
+}
+
+describe("which tasks need this person's review", () => {
+  test("only reviews named for them, or open to anyone who hasn't worked on it", async () => {
+    const byGrok = await inReview("grok-reviewer")
+    const byJon = await inReview("jon")
+    const byAnyone = await inReview("*")
+    const ids = reviewsFor(state().tasks.values(), "jon", true).map((t) => t.id)
+    expect(ids).toContain(byJon)
+    expect(ids).toContain(byAnyone)
+    expect(ids).not.toContain(byGrok)
+    expect(reviewsFor(state().tasks.values(), "dev", false)).toEqual([])
+  })
+})
+
+describe("taskActions", () => {
+  test("a person may send back a round waiting on an agent reviewer, but not approve in its place", async () => {
+    expect(taskActions(task(await inReview("grok-reviewer")), "jon", true)).toEqual({ kind: "open", review: "send-back" })
+  })
+
+  test("a person reviewing it, or a review with no reviewer, gets the verdict", async () => {
+    expect(taskActions(task(await inReview("jon")), "jon", true)).toEqual({ kind: "open", review: "verdict" })
+    const unnamed = await post("dev", { op: "task.add", title: "no reviewer", owner: "dev" })
+    await post("dev", { op: "task.update", task: unnamed, state: "review" })
+    expect(taskActions(task(unnamed), "jon", true)).toEqual({ kind: "open", review: "verdict" })
+  })
+
+  test("work not in review can only be cancelled; done work and agents get nothing", async () => {
+    const doing = await post("dev", { op: "task.add", title: "doing", owner: "dev" })
+    expect(taskActions(task(doing), "jon", true)).toEqual({ kind: "open", review: "none" })
+    expect(taskActions(task(doing), "dev", false)).toEqual({ kind: "hidden" })
+    await post("dev", { op: "task.update", task: doing, state: "done" })
+    expect(taskActions(task(doing), "jon", true)).toEqual({ kind: "hidden" })
+  })
+})
+
+describe("the events a person sends from a task", () => {
+  test("send back rejects the open round of an agent's review and puts the work back in doing", async () => {
+    const id = await inReview("grok-reviewer")
+    const sent = sendBackTask(task(id), "stale: redo on main")
+    expect(sent.opts).toEqual({
+      kind: "event",
+      ev: { op: "task.update", task: id, state: "doing", verdict: "rejected", note: "stale: redo on main", round: 1, at: "abc123" },
+      to: ["dev"],
+    })
+    const at = await sendAs("jon", sent)
+    expect(state().rejected.get(at)).toBeUndefined()
+    const t = task(id)
+    expect(t.state).toBe("doing")
+    expect(t.rounds.at(-1)?.result).toMatchObject({ kind: "rejected", by: "jon" })
+  })
+
+  test("cancel closes a task waiting on an agent reviewer, tells its owner and reviewer, and marks it cancelled", async () => {
+    const id = await inReview("grok-reviewer")
+    const sent = cancelTask(task(id), "grok-reviewer can't be woken", "jon")
+    expect(sent.opts).toEqual({ kind: "event", ev: { op: "task.update", task: id, state: "cancelled", note: "grok-reviewer can't be woken" }, to: ["dev", "grok-reviewer"] })
+    const at = await sendAs("jon", sent)
+    expect(state().rejected.get(at)).toBeUndefined()
+    const t = task(id)
+    expect(t).toMatchObject({ state: "done", cancelled: true })
+    expect(t.rounds.at(-1)?.result.kind).toBe("withdrawn")
+    expect(t.notes.at(-1)).toMatchObject({ by: "jon", text: "grok-reviewer can't be woken" })
+  })
+
+  test("cancel tells nobody when the canceller owns it", async () => {
+    const id = await post("jon", { op: "task.add", title: "mine", owner: "jon" })
+    expect(cancelTask(task(id), "not needed", "jon").opts.to).toBeUndefined()
+  })
+
+  test("approve finishes the open round as its reviewer", async () => {
+    const id = await inReview("jon")
+    const at = await sendAs("jon", approveTask(task(id)))
+    expect(state().rejected.get(at)).toBeUndefined()
+    expect(task(id)).toMatchObject({ state: "done", approvedBy: "jon" })
+    expect(task(id).rounds.at(-1)?.result).toMatchObject({ kind: "approved", by: "jon" })
+  })
+})

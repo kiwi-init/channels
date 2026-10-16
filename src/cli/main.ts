@@ -87,6 +87,7 @@ Agents
      task approve|reject T7 --round N|--at SHA ["note"] [--file review.md]   the verdict on the round you reviewed,
                                                  refused unless it's still the open one; --file sends the review with it
      task assign T7 NAME ["what's next"] · drop T7 (back to the board)   (kiwi task alone: the board)
+     task cancel T7 "why"                        closes it, marked cancelled, if you may finish it (else it's only a note)
   kiwi note [KEY [VALUE] [--ttl 7d] | KEY --clear]   shared notes: all of them, one, set one, or remove one
   kiwi leave                                     leave the channel and forget it on this machine
 

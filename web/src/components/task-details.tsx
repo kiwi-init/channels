@@ -4,10 +4,11 @@ import type { Message } from "@mc/protocol.ts"
 import { colorOf, taskId, type ChannelState, type Task } from "@mc/state.ts"
 import { taskFeed, taskPrs } from "@mc/work.ts"
 import { formatAgo, formatFull, memberName } from "@/lib/format"
+import { taskActions } from "@/lib/task-actions"
 import { cx } from "@/lib/utils"
 import { Feed, PrLink } from "./feed"
 import { Icon } from "./icon"
-import { Button, Monogram } from "./kit"
+import { Alert, Button, Monogram, TextField, errorText, toast } from "./kit"
 import { Markdown } from "./lazy"
 import { isAgent } from "./message"
 import { labelOf, StateMark } from "./tasks"
@@ -24,8 +25,12 @@ export function TaskDetails({
   me,
   now,
   highlighted,
+  person,
   noteBlocked,
   onNote,
+  onApprove,
+  onSendBack,
+  onCancel,
 }: {
   id: number
   state: ChannelState
@@ -33,9 +38,13 @@ export function TaskDetails({
   me: string
   now: number
   highlighted?: boolean
+  person: boolean
   /** Why this member can't add notes (their scopes), or null if they can. */
   noteBlocked: string | null
   onNote: (note: string) => Promise<void>
+  onApprove: (t: Task) => Promise<void>
+  onSendBack: (t: Task, why: string) => Promise<void>
+  onCancel: (t: Task, note: string) => Promise<void>
 }) {
   const task = state.tasks.get(id)
   const items = useMemo(() => taskFeed(state, messages, id, me), [state, messages, id, me])
@@ -69,6 +78,7 @@ export function TaskDetails({
       <div className="mt-4">
         <Properties task={task} state={state} now={now} items={items} />
       </div>
+      {!noteBlocked && <Actions key={task.id} task={task} me={me} person={person} onApprove={onApprove} onSendBack={onSendBack} onCancel={onCancel} />}
       <h3 className="mt-4 text-ui font-semibold">
         <button type="button" aria-expanded={story} onClick={() => setStory((v) => !v)} className="flex w-full items-center gap-2 text-left">
           Activity
@@ -131,6 +141,114 @@ function Properties({ task, state, now, items }: { task: Task; state: ChannelSta
         </span>
       </Prop>
     </dl>
+  )
+}
+
+function Actions({
+  task,
+  me,
+  person,
+  onApprove,
+  onSendBack,
+  onCancel,
+}: {
+  task: Task
+  me: string
+  person: boolean
+  onApprove: (t: Task) => Promise<void>
+  onSendBack: (t: Task, why: string) => Promise<void>
+  onCancel: (t: Task, note: string) => Promise<void>
+}) {
+  const [why, setWhy] = useState<string | null>(null)
+  const [cancelling, setCancelling] = useState(false)
+  const [note, setNote] = useState("")
+  const [busy, setBusy] = useState(false)
+  const can = taskActions(task, me, person)
+  if (can.kind === "hidden") return null
+  const id = taskId(task.id)
+  const act = async (fn: () => Promise<void>, done: string) => {
+    setBusy(true)
+    try {
+      await fn()
+      setWhy(null)
+      setCancelling(false)
+      toast(done)
+    } catch (err) {
+      toast(errorText(err), "error")
+    } finally {
+      setBusy(false)
+    }
+  }
+  const cancel = () => {
+    if (note.trim() && !busy) void act(() => onCancel(task, note.trim()), `Cancelled ${id}`)
+  }
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-2">
+      {why === null ? (
+        <>
+          {can.review === "verdict" && (
+            <Button size="sm" variant="secondary" disabled={busy} onClick={() => act(() => onApprove(task), `Approved ${id}`)}>
+              Approve
+            </Button>
+          )}
+          {can.review !== "none" && (
+            <Button size="sm" variant="ghost" onClick={() => setWhy("")}>
+              Send back
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" onClick={() => (setNote(""), setCancelling(true))}>
+            Cancel task…
+          </Button>
+        </>
+      ) : (
+        <form
+          className="flex w-full items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (why.trim()) void act(() => onSendBack(task, why.trim()), `Sent ${id} back`)
+          }}
+        >
+          <TextField
+            autoFocus
+            value={why}
+            onChange={(e) => setWhy(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setWhy(null)}
+            placeholder="What to change"
+            aria-label="What to change"
+            className="flex-1"
+          />
+          <Button size="sm" variant="secondary" type="submit" disabled={busy || !why.trim()}>
+            Send back
+          </Button>
+        </form>
+      )}
+      <Alert
+        open={cancelling}
+        onClose={() => setCancelling(false)}
+        title={`Cancel ${id}?`}
+        message={
+          <span className="mt-3 grid gap-2">
+            <span>It closes for everyone, marked cancelled{task.state === "review" ? ", and its open review round ends" : ""}. Say why, so whoever worked on it knows.</span>
+            <TextField
+              autoFocus
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), cancel())}
+              placeholder="Why it’s cancelled"
+              maxLength={500}
+              aria-label="Why it’s cancelled"
+            />
+          </span>
+        }
+      >
+        <Button variant="secondary" onClick={() => setCancelling(false)}>
+          Keep it
+        </Button>
+        <Button variant="danger" disabled={busy || !note.trim()} onClick={cancel}>
+          Cancel task
+        </Button>
+      </Alert>
+    </div>
   )
 }
 
