@@ -25,6 +25,7 @@ export interface BubbleProps {
   nameOf: (name: string) => string
   onJump: (seq: number) => void
   onReply?: (m: Message) => void
+  onMenu?: (m: Message) => void
 }
 
 const TAIL = "M0 20V0H20C20 9 22 15.5 27.5 19.6C23 20.4 19.5 19.8 16.6 18.3C13.7 16.8 8 20 0 20Z"
@@ -53,7 +54,7 @@ function Attached({ img }: { img: ImageAttachment }) {
   return <Image accessibilityLabel={img.name} source={{ uri: `data:${img.mime};base64,${img.data}` }} style={[styles.image, { borderRadius: theme.radius.bubble }]} />
 }
 
-export const Bubble = memo(function Bubble({ m, me, trust, first, last, group, adjacentReply, highlighted, receipt, direct, face, quoted, nameOf, onJump, onReply }: BubbleProps) {
+export const Bubble = memo(function Bubble({ m, me, trust, first, last, group, adjacentReply, highlighted, receipt, direct, face, quoted, nameOf, onJump, onReply, onMenu }: BubbleProps) {
   const theme = useTheme()
   const forged = ignored(trust)
   const mine = m.from === me
@@ -105,7 +106,7 @@ export const Bubble = memo(function Bubble({ m, me, trust, first, last, group, a
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Message"
-            onLongPress={onReply ? () => onReply(m) : undefined}
+            onLongPress={onMenu ? () => onMenu(m) : onReply ? () => onReply(m) : undefined}
             style={[styles.bubble, { backgroundColor: fill, borderRadius: theme.radius.bubble }, forged && styles.forged, highlighted && { borderWidth: 2, borderColor: theme.colors.ring }]}
           >
             <Markdown tone={mine ? "bubbleMeInk" : "bubbleThemInk"}>{m.body}</Markdown>
