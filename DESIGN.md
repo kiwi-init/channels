@@ -174,6 +174,12 @@ From `design-tokens.ts`:
   steel trim; `robot-heads`); behind it in a round avatar a soft blue field.
 - Command palette wears the same icons as the menus. Dark/light/system and
   text size live in Settings and apply at once.
+- A picture in the chat opens in the annotator: a full-window dark stage
+  (`.dark-stage` puts every token on its dark side, whatever the theme),
+  sender and time on top, one floating tool pill (Move, Pen, Arrow, Box,
+  Text, Hide; the alert, decide, accent and ink colours; undo, redo), and
+  a reply bar that sends the marked-up picture back in its thread. Hide
+  is an opaque block, burned into the pixels that are sent.
 
 ## 10. Composer
 

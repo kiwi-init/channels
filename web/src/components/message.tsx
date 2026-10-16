@@ -208,6 +208,7 @@ interface BubbleProps {
   /** A face other than the monogram at the run's foot: the coordinator's head. */
   face?: ReactNode
   image?: (img: ImageAttachment) => Promise<string | null>
+  onOpenImage?: (m: Message, img: ImageAttachment, src: string) => void
 }
 
 function useSeen(el: Element | null): boolean {
@@ -226,7 +227,7 @@ function useSeen(el: Element | null): boolean {
   return seen
 }
 
-function Attached({ img, load }: { img: ImageAttachment; load?: (img: ImageAttachment) => Promise<string | null> }) {
+function Attached({ img, load, onOpen }: { img: ImageAttachment; load?: (img: ImageAttachment) => Promise<string | null>; onOpen?: (src: string) => void }) {
   const [data, setData] = useState<string | null>(img.data ?? null)
   const [failed, setFailed] = useState(false)
   const [spot, setSpot] = useState<HTMLSpanElement | null>(null)
@@ -250,6 +251,12 @@ function Attached({ img, load }: { img: ImageAttachment; load?: (img: ImageAttac
     )
   }
   const url = `data:${img.mime};base64,${data}`
+  if (onOpen)
+    return (
+      <button type="button" onClick={() => onOpen(url)} title={img.name} aria-label={`Open ${img.name}`} className="block cursor-zoom-in rounded-bubble">
+        <img src={url} alt={img.name} loading="lazy" className="max-h-72 max-w-full rounded-bubble object-cover shadow-[0_0_0_0.5px_var(--line)]" />
+      </button>
+    )
   return (
     <a href={url} target="_blank" rel="noreferrer" title={img.name}>
       <img src={url} alt={img.name} loading="lazy" className="max-h-72 max-w-full rounded-bubble object-cover shadow-[0_0_0_0.5px_var(--line)]" />
@@ -296,6 +303,7 @@ export const Bubble = memo(function Bubble({
   receipt,
   reactions,
   image,
+  onOpenImage,
 }: BubbleProps) {
   const forged = ignored(trust)
   const mine = m.from === me
@@ -369,7 +377,7 @@ export const Bubble = memo(function Bubble({
           {m.imgs?.length ? (
             <div className={cx("mt-0.5 flex flex-wrap gap-1", mine && "justify-end")}>
               {m.imgs.map((img, i) => (
-                <Attached key={i} img={img} load={image} />
+                <Attached key={i} img={img} load={image} onOpen={onOpenImage ? (src) => onOpenImage(m, img, src) : undefined} />
               ))}
             </div>
           ) : null}

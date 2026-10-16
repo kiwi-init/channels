@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 
 import { droppedCount } from "@mc/format.ts"
 import { memberLoad } from "@mc/load.ts"
-import { ignored, isReaction, type Color, type Message } from "@mc/protocol.ts"
+import { ignored, isReaction, type Color, type ImageAttachment, type Message } from "@mc/protocol.ts"
 import { describeScopes, wireScopes } from "@mc/scopes.ts"
 import { colorOf, keptFromPeople, openRound, taskId, type Task } from "@mc/state.ts"
 import { recentPrs } from "@mc/work.ts"
@@ -13,7 +13,7 @@ import { howHere } from "@/lib/presence"
 import { lastPreview } from "@/lib/preview"
 import { markSeen, setOpenNews } from "@/lib/news"
 import { useIcons, useLiveIcon } from "@/lib/icons"
-import { excerpt, formatTime, memberName } from "@/lib/format"
+import { excerpt, formatShort, formatTime, memberName } from "@/lib/format"
 import { coordinatorMood, ERROR_MS, moodInputs, SPEAKING_MS, type Mood } from "@/lib/coordinator-mood"
 import { chipsFor } from "@/lib/reactions"
 import { receipt } from "@/lib/receipts"
@@ -30,7 +30,7 @@ import { Bubble, EventGroup, EventRow, TimeMark, isAgent, standsAlone, type Thre
 import { NeedsYou } from "./needs-you"
 import { FLOAT_GAP, FLOAT_W, Overview } from "./side-panel"
 import { Notes, Tasks } from "./tasks"
-import { InfoPanel, TaskDetails, TasksPanel, ThreadPanel } from "./lazy"
+import { Annotator, InfoPanel, TaskDetails, TasksPanel, ThreadPanel } from "./lazy"
 
 /** Messages this close together from one sender read as one run. */
 const RUN_GAP = 5 * 60_000
@@ -103,6 +103,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const [pausing, setPausing] = useState(false)
   const [search, setSearch] = useState<string | null>(null)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
+  const [picture, setPicture] = useState<{ m: Message; img: ImageAttachment; src: string } | null>(null)
   const [highlight, setHighlight] = useState<number | null>(null)
   /** New messages below while scrolled up. */
   const [behind, setBehind] = useState(0)
@@ -433,6 +434,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       receipt={showsReceipt(m, anchor) ? (receipt(m, state, marks, pkOf, formatTime) ?? undefined) : undefined}
       reactions={chipsFor(state, m.seq, me, nameOf)}
       image={ch.image}
+      onOpenImage={(pm, img, src) => setPicture({ m: pm, img, src })}
       // The coordinator's runs end on its face; only the latest one moves.
       face={coord && m.from === coord ? <CoordinatorAvatar size={28} mood={mood} live={m.seq >= (said?.last ?? 0) && !anchor} seed={0.3} /> : undefined}
     />
@@ -863,6 +865,34 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
           >
             {threadRows}
           </ThreadPanel>
+        )}
+
+        {picture && (
+          <Annotator
+            picture={{ src: picture.src, name: picture.img.name, mime: picture.img.mime }}
+            sender={nameOf(picture.m.from)}
+            agent={isAgent(state.members.get(picture.m.from))}
+            when={formatShort(picture.m.ts)}
+            replyTo={mayWrite ? nameOf(picture.m.from) : undefined}
+            onSend={
+              mayWrite
+                ? async (note, image) => {
+                    const pm = picture.m
+                    let to = pm.from !== me ? [pm.from] : extra?.to
+                    if (coordinator && place.kind === "main" && to?.length && !to.includes(coordinator)) to = [...to, coordinator]
+                    await send(note || image.name, {
+                      to,
+                      kind: "msg",
+                      re: [pm.seq],
+                      ...(extra?.task !== undefined ? { task: extra.task } : {}),
+                      ...(extra?.dm ? { to: extra.to, dm: true } : {}),
+                      imgs: [image],
+                    })
+                  }
+                : undefined
+            }
+            onClose={() => setPicture(null)}
+          />
         )}
 
         {info && (
