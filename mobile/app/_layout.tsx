@@ -1,5 +1,5 @@
-import { Stack } from "expo-router";
-import { StatusBar } from "expo-status-bar";
+import { Stack } from "expo-router"
+import { StatusBar } from "expo-status-bar"
 
 export default function Layout() {
   return (
@@ -7,5 +7,5 @@ export default function Layout() {
       <StatusBar style="auto" />
       <Stack screenOptions={{ headerShown: false }} />
     </>
-  );
+  )
 }

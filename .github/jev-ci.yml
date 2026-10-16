@@ -28,7 +28,7 @@ version_only:
   files: ["package.json", "web/package.json", "desktop/package.json", "src/version.ts"]
   pattern: '^\s*("version"\s*:|export const VERSION\s*=)'
 
-summarize_files: ["bun.lock", "web/bun.lock", "desktop/bun.lock"]
+summarize_files: ["bun.lock", "web/bun.lock", "desktop/bun.lock", "mobile/bun.lock"]
 
 # Above this many changed lines, or a single file above max_file_lines, Jev isn't asked: the jobs run.
 max_jev_lines: 800
@@ -58,13 +58,14 @@ bus:
   opus: { model: claude-opus-5-5, samples: 1, effort: high }
   context_lines: 40
   max_hunk_lines: 200
-  lockfiles: ["bun.lock", "web/bun.lock", "desktop/bun.lock"]
+  lockfiles: ["bun.lock", "web/bun.lock", "desktop/bun.lock", "mobile/bun.lock"]
   # Typechecks for a merged tree, each run when the merge touches a file it matches.
   tsc:
     - { when: ["src/**", "test/**", ".github/bus/**", ".github/jev-ci/**"], run: [bunx, tsc, --noEmit] }
     - { when: ["src/relay/**", "src/protocol.ts"], run: [bunx, tsc, --noEmit, -p, tsconfig.worker.json] }
     - { when: ["web/**", "src/**"], dir: web, run: [bunx, tsc, -b] }
     - { when: ["desktop/**"], dir: desktop, run: [bunx, tsc, --noEmit] }
+    - { when: ["mobile/**", "src/**"], dir: mobile, run: [bunx, tsc, --noEmit] }
 
 jobs:
   core-types:
@@ -318,6 +319,16 @@ jobs:
       imports, an export or exported type nothing outside its file uses, a dependency no file
       uses, or an import of a package a package.json doesn't list. Tests count as users, so an
       export only a test imports passes.
+
+  mobile-check:
+    jev: false
+    name: mobile / check
+    inputs: ["mobile/app/**", "mobile/src/**", "src/**"]
+    always: ["mobile/package.json", "mobile/bun.lock", "mobile/tsconfig.json", "mobile/metro.config.js", "mobile/app.json", "mobile/.oxlintrc.json", "mobile/.oxfmtrc.json"]
+    description: >-
+      Type-checks the Expo mobile app with tsc in mobile/ (which also compiles the src/ modules it
+      imports through @mc/*), runs oxlint and oxfmt --check on mobile/app and mobile/src, and runs
+      the app's jest-expo tests. Fails on a type, lint or format error there or a failing test.
 
   web-bundle:
     jev: false

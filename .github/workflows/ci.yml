@@ -152,6 +152,32 @@ jobs:
           job: web-format
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['web-format'] }}
 
+  mobile-check:
+    name: mobile / check
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['mobile-check']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup
+        with:
+          web: "false"
+      - run: bun install --frozen-lockfile
+        working-directory: mobile
+      - run: bunx tsc --noEmit
+        working-directory: mobile
+      - run: bun oxlint app src
+        working-directory: mobile
+      - run: bun oxfmt --check app src
+        working-directory: mobile
+      - run: bunx jest
+        working-directory: mobile
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: mobile-check
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['mobile-check'] }}
+
   web-bundle:
     name: web / bundle
     needs: plan
@@ -475,7 +501,7 @@ jobs:
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, desktop-fuses, cli-build, relay-worker, relay-budget, cli-seats, cli-handoff, repo-comments, desktop-keys, repo-knip, web-bundle, site-test, repo-pins, bus-test, cli-macos, release-rehearsal]
+    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, desktop-fuses, cli-build, relay-worker, relay-budget, cli-seats, cli-handoff, repo-comments, desktop-keys, repo-knip, web-bundle, mobile-check, site-test, repo-pins, bus-test, cli-macos, release-rehearsal]
     if: always()
     runs-on: ubuntu-latest
     permissions:
