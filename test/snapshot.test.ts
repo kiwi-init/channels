@@ -386,7 +386,7 @@ describe("the relay keeps one snapshot per channel", () => {
         return rows;
       };
       const usage = () => (JSON.parse(read<{ v: string }>("SELECT v FROM meta WHERE k = 'usage'").v) as { bytes: number }).bytes;
-      const through = (n: number) => read<{ n: number }>(`SELECT COALESCE(SUM(LENGTH(ct)), 0) AS n FROM msgs WHERE seq <= ${n}`).n;
+      const through = (n: number) => read<{ n: number }>(`SELECT COALESCE(SUM(CASE WHEN typeof(ct) = 'blob' THEN (LENGTH(ct) * 4 + 2) / 3 ELSE LENGTH(ct) END), 0) AS n FROM msgs WHERE seq <= ${n}`).n;
       const put = async (snapshot: unknown) => {
         const body = JSON.stringify({ snapshot });
         const res = await fetch(`${server.url.origin}/v1/rooms/${s.roomId}/snapshot`, {

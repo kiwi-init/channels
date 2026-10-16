@@ -498,7 +498,7 @@ export class RoomDb {
   }
 
   bytesThrough(seq: number): number {
-    return this.sql.all<{ n: number }>("SELECT COALESCE(SUM(LENGTH(ct)), 0) AS n FROM msgs WHERE seq <= ?", seq)[0]?.n ?? 0;
+    return this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM msgs WHERE seq <= ?`, seq)[0]?.n ?? 0;
   }
 
   /** Delete messages through `seq`; returns the ciphertext bytes freed. */

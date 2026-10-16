@@ -145,7 +145,7 @@ describe("stored bytes per channel", () => {
     await a.send("pic", { imgs: [{ name: "p.png", mime: "image/png", data: Buffer.from(raw).toString("base64") }] });
     await a.send("z".repeat(2000));
     const db = new Database(join(dataDir, `${access.roomId}.sqlite`));
-    const msgs = (db.query("SELECT COALESCE(SUM(LENGTH(ct)), 0) AS n FROM msgs").get() as { n: number }).n;
+    const msgs = (db.query("SELECT COALESCE(SUM(CASE WHEN typeof(ct) = 'blob' THEN (LENGTH(ct) * 4 + 2) / 3 ELSE LENGTH(ct) END), 0) AS n FROM msgs").get() as { n: number }).n;
     const blobs = (db.query("SELECT COALESCE(SUM(size), 0) AS n FROM blobs").get() as { n: number }).n;
     const counted = (JSON.parse((db.query("SELECT v FROM meta WHERE k = 'usage'").get() as { v: string }).v) as { bytes: number }).bytes;
     db.close();
