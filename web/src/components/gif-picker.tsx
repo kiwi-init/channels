@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 import { gifGroups, type Gif } from "@/lib/gifs"
 import { cx } from "@/lib/utils"
 
-export function GifPicker({ onPick, onClose }: { onPick: (r: Gif) => void; onClose: () => void }) {
+export function GifPicker({ onPick, onClose, className }: { onPick: (r: Gif) => void; onClose: () => void; className?: string }) {
   const [tab, setTab] = useState(gifGroups[0]?.reaction ?? "")
   useEffect(() => {
     const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose()
@@ -15,7 +15,10 @@ export function GifPicker({ onPick, onClose }: { onPick: (r: Gif) => void; onClo
     <div
       role="dialog"
       aria-label="GIFs"
-      className="glass absolute right-3 bottom-[calc(100%-8px)] left-3 z-20 flex max-h-[min(420px,60vh)] flex-col gap-2 overflow-hidden rounded-dock p-2 md:right-auto md:left-4 md:w-[420px]"
+      className={cx(
+        "glass z-20 flex max-h-[min(420px,60vh)] flex-col gap-2 overflow-hidden rounded-dock p-2",
+        className ?? "absolute right-3 bottom-[calc(100%-8px)] left-3 md:right-auto md:left-4 md:w-[420px]"
+      )}
     >
       <div role="tablist" className="flex gap-1 overflow-x-auto">
         {gifGroups.map((g) => (

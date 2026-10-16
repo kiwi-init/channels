@@ -14,6 +14,8 @@ const gifs: Gif[] = pack.flatMap((r) => {
   return url ? [{ ...r, url }] : []
 })
 
+export const gifByKey = (key: string): Gif | undefined => gifs.find((g) => `${g.reaction}/${g.name}` === key)
+
 export const gifGroups: { reaction: string; items: Gif[] }[] = [...new Set(gifs.map((g) => g.reaction))].map((reaction) => ({
   reaction,
   items: gifs.filter((g) => g.reaction === reaction),

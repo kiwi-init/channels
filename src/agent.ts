@@ -671,7 +671,7 @@ export class AgentSession {
 
   /** React to message #seq with an emoji, or take your reaction back (null). */
   readonly react = Effect.fn("AgentSession.react")({ self: this }, function* (this: AgentSession, seq: number, emoji: string | null) {
-    if (emoji !== null && !wellFormedReaction(emoji)) return yield* new Rejected("a reaction is one emoji (no letters or digits)");
+    if (emoji !== null && !wellFormedReaction(emoji)) return yield* new Rejected("a reaction is one emoji, or a GIF key like ok/trailer (kiwi react --list)");
     const { state } = yield* this.state();
     if (!state.placeOf.has(seq) || ignored(state.trust.get(seq))) return yield* new Rejected(`no message #${seq} to react to`);
     return yield* this.confirm(yield* this.event({ op: "react", seq, emoji }, "reaction"));

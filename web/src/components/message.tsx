@@ -1,13 +1,14 @@
-import { ArrowTurnBackwardIcon, Copy01Icon } from "@hugeicons/core-free-icons"
+import { ArrowTurnBackwardIcon, Copy01Icon, SmileIcon } from "@hugeicons/core-free-icons"
 import { memo, useEffect, useState, type ReactNode } from "react"
 
 import { describeEvent } from "@mc/format.ts"
-import { ignored, type Color, type Handoff, type ImageAttachment, type Message, type Trust } from "@mc/protocol.ts"
+import { ignored, isGifReaction, type Color, type Handoff, type ImageAttachment, type Message, type Trust } from "@mc/protocol.ts"
 import type { ChannelState, Member } from "@mc/state.ts"
 import { useClock } from "@/lib/channel"
 import { excerpt, formatAgo, formatFull, formatStamp, memberName } from "@/lib/format"
 import { openHandoff } from "@/lib/handoff-open"
 import { handoffLabel, handoffLeft, handoffOf, handoffOpen } from "@/lib/handoff"
+import { gifByKey } from "@/lib/gifs"
 import { chipLabel, type Chip } from "@/lib/reactions"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
@@ -197,6 +198,7 @@ interface BubbleProps {
   quoted: (seq: number) => Message | undefined
   nameOf: (name: string) => string
   onReply?: (m: Message) => void
+  onReact?: (m: Message) => void
   onJump: (seq: number) => void
   /** The thread this message starts, when it has replies: "1 Reply" under it. */
   thread?: ThreadSummary
@@ -293,6 +295,7 @@ export const Bubble = memo(function Bubble({
   quoted,
   nameOf,
   onReply,
+  onReact,
   onJump,
   thread,
   onOpenThread,
@@ -385,6 +388,17 @@ export const Bubble = memo(function Bubble({
 
         {/* Reply and copy, beside the bubble on hover: on its inner side, so they never cover anything. */}
         <div className={cx("absolute bottom-0 hidden items-center gap-0.5 group-focus-within/b:flex group-hover/b:flex", mine ? "left-0" : "right-0")}>
+          {onReact && (
+            <button
+              type="button"
+              aria-label="React with a GIF"
+              title="React with a GIF"
+              onClick={() => onReact(m)}
+              className="flex size-7 items-center justify-center rounded-full text-ink-3 transition-colors hover:bg-wash-2 hover:text-ink"
+            >
+              <Icon icon={SmileIcon} size={15} />
+            </button>
+          )}
           {onReply && (
             <button
               type="button"
@@ -425,9 +439,14 @@ export const Bubble = memo(function Bubble({
                 key={c.emoji}
                 title={chipLabel(c)}
                 aria-label={chipLabel(c)}
-                className={cx("inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-stamp tabular-nums", c.mine ? "bg-accent-wash text-accent-text" : "bg-wash-2 text-ink-2")}
+                className={cx(
+                  "inline-flex items-center gap-1 text-stamp tabular-nums",
+                  isGifReaction(c.emoji) && gifByKey(c.emoji)
+                    ? cx("rounded-card p-0.5", c.mine ? "bg-accent-wash" : "bg-wash-2")
+                    : cx("h-5 rounded-full px-1.5", c.mine ? "bg-accent-wash text-accent-text" : "bg-wash-2 text-ink-2")
+                )}
               >
-                <span aria-hidden>{c.emoji}</span>
+                {isGifReaction(c.emoji) && gifByKey(c.emoji) ? <img src={gifByKey(c.emoji)?.url} alt="" className="h-14 w-auto rounded-[10px]" /> : <span aria-hidden>{c.emoji}</span>}
                 {c.who.length > 1 && <span aria-hidden>{c.who.length}</span>}
               </span>
             ))}
