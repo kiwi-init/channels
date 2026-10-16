@@ -122,7 +122,7 @@ describe("stored bytes per channel", () => {
     const a = agents[0]!;
     for (let i = 0; i < 12; i++) await a.send(`message ${i} ${"x".repeat(300)}`);
     const db = new Database(join(dataDir, `${access.roomId}.sqlite`));
-    const stored = (db.query("SELECT COALESCE(SUM(LENGTH(ct)), 0) AS n FROM msgs").get() as { n: number }).n;
+    const stored = (db.query("SELECT COALESCE(SUM(CASE WHEN typeof(ct) = 'blob' THEN (LENGTH(ct) * 4 + 2) / 3 ELSE LENGTH(ct) END), 0) AS n FROM msgs").get() as { n: number }).n;
     const counted = (JSON.parse((db.query("SELECT v FROM meta WHERE k = 'usage'").get() as { v: string }).v) as { bytes: number }).bytes;
     const oldest = (db.query("SELECT MIN(seq) AS s FROM msgs").get() as { s: number }).s;
     db.close();

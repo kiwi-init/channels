@@ -36,6 +36,7 @@ import {
   wsHeaders,
   type DirectoryEntry,
   type Effects,
+  type SqlParam,
 } from "./room.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync } from "./route.ts";
 
@@ -115,7 +116,7 @@ export function startRelay(
     const store = new RoomDb(
       {
         run: (q, ...p) => void d.query(q).run(...p),
-        all: <T>(q: string, ...p: (string | number | null)[]) => d.query(q).all(...p) as T[],
+        all: <T>(q: string, ...p: SqlParam[]) => d.query(q).all(...p) as T[],
       },
       roomId,
     );
