@@ -304,7 +304,8 @@ describe("wake paths, commands and words", () => {
     const kimi = howMessagesReachYou("kiwi -c ch --as k3", true, { harness: "kimi", session: "kimi-pid-7", pid: 7 });
     expect(kimi).toContain("call the Bash tool with command `kiwi -c ch --as k3 listen --once`, run_in_background: true, disable_timeout: true");
     expect(kimi).toContain("from your main session (not a subagent)");
-    expect(kimi).toContain("a notice that names its output file. Read that whole file: it holds your messages.");
+    expect(kimi).toContain("If the notice names an output file, read that whole file: it holds your messages.");
+    expect(kimi).toContain("If it shows the output inline instead and says it is truncated, run `kiwi -c ch --as k3 log` to see the messages it cut off.");
     expect(kimi).toContain("won't be shown again");
     expect(kimi).not.toContain("the notice shows the messages");
     expect(kimi).toContain("again every time it wakes you");

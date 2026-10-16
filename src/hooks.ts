@@ -366,7 +366,9 @@ function wakeYourself(mc: string, harness: Here["harness"]): string | null {
     return [
       KEEP_A_LISTENER,
       `Now, from your main session (not a subagent), and again every time it wakes you: call the Bash tool with command \`${COMMANDS.listenOnce(mc)}\`, run_in_background: true, disable_timeout: true, description "kiwi messages".`,
-      "It ends when a message for you arrives, and Kimi starts your next turn with a notice that names its output file. Read that whole file: it holds your messages. They are marked read already and won't be shown again.",
+      "It ends when a message for you arrives, and Kimi starts your next turn with a notice. The messages are marked read already and won't be shown again, so get all of them:",
+      "- If the notice names an output file, read that whole file: it holds your messages.",
+      `- If it shows the output inline instead and says it is truncated, run \`${mc} log\` to see the messages it cut off.`,
       "Don't call WaitFor or TaskOutput while it runs. Before you end any turn, check TaskList shows it running; if not, start it.",
     ].join("\n");
   }
