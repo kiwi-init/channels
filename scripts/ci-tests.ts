@@ -6,6 +6,9 @@
 // A new test file lands in core unless it's added to a flows group here.
 
 import { Glob } from "bun"
+import { mkdtempSync, realpathSync, rmSync, symlinkSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 const FLOWS: Record<string, string[]> = {
   "flows-a": ["e2e", "verbs", "threads", "reconnect"],
@@ -31,5 +34,26 @@ if (missing.length) {
   process.exit(1)
 }
 
-const proc = Bun.spawn(["bun", "test", "--parallel", ...files.map((f) => `./${f}`)], { stdio: ["inherit", "inherit", "inherit"] })
-process.exit(await proc.exited)
+function tmpBehindSymlink(): { dir: string; cleanup: () => void } {
+  const tmp = tmpdir()
+  if (realpathSync(tmp) !== tmp) return { dir: tmp, cleanup: () => {} }
+  const real = mkdtempSync(join(tmp, "kiwi-tmp-"))
+  const link = `${real}.link`
+  symlinkSync(real, link)
+  return {
+    dir: link,
+    cleanup: () => {
+      rmSync(link, { force: true })
+      rmSync(real, { recursive: true, force: true })
+    },
+  }
+}
+
+const tmp = tmpBehindSymlink()
+const proc = Bun.spawn(["bun", "test", "--parallel", ...files.map((f) => `./${f}`)], {
+  stdio: ["inherit", "inherit", "inherit"],
+  env: { ...process.env, TMPDIR: tmp.dir },
+})
+const code = await proc.exited
+tmp.cleanup()
+process.exit(code)

@@ -8,6 +8,11 @@ name: release
 on:
   push:
     tags: ["v*"]
+  workflow_call:
+    inputs:
+      rehearsal:
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -29,11 +34,16 @@ jobs:
           bun-version: 1.4.2
 
       - name: Check the version matches the tag
+        env:
+          REHEARSAL: ${{ inputs.rehearsal }}
         run: |
           v=$(bun -e 'console.log((await import("./src/version.ts")).VERSION)')
           pkg=$(bun -e 'console.log(JSON.parse(await Bun.file("package.json").text()).version)')
           app=$(bun -e 'console.log(JSON.parse(await Bun.file("desktop/package.json").text()).version)')
-          test "v$v" = "$GITHUB_REF_NAME" || { echo "src/version.ts says $v, tag is $GITHUB_REF_NAME"; exit 1; }
+          tag="$GITHUB_REF_NAME"
+          if [ "$REHEARSAL" = true ]; then tag="v$v"; echo "rehearsal: the tag to push is $tag"; fi
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          test "v$v" = "$tag" || { echo "src/version.ts says $v, tag is $tag"; exit 1; }
           test "$pkg" = "$v" || { echo "package.json says $pkg, src/version.ts says $v"; exit 1; }
           test "$app" = "$v" || { echo "desktop/package.json says $app, src/version.ts says $v"; exit 1; }
 
@@ -41,7 +51,7 @@ jobs:
       # (`bun run changelog --write` in the release PR); a pre-release without one gets notes made
       # from its commits. Checked here so nothing builds for a tag that can't be published.
       - name: Check the changelog has this version
-        run: bun scripts/changelog.ts --notes "$GITHUB_REF_NAME" > /dev/null
+        run: bun scripts/changelog.ts --notes "$TAG" > /dev/null
 
   cli:
     needs: version
@@ -72,6 +82,7 @@ jobs:
           ./dist/kiwi-darwin-arm64 --version
 
       - name: Attest build provenance
+        if: ${{ !inputs.rehearsal }}
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
           subject-path: "dist/kiwi-*"
@@ -218,6 +229,7 @@ jobs:
           '
 
       - name: Attest build provenance
+        if: ${{ !inputs.rehearsal }}
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
           subject-path: "out/*"
@@ -231,6 +243,7 @@ jobs:
 
   publish:
     needs: [cli, desktop]
+    if: ${{ !inputs.rehearsal }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4

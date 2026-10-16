@@ -81,8 +81,12 @@ function jevRequest(f: FileChange, jobs: string[], config: Config): Request {
 }
 
 /** Every job runs, for one reason: pushes to main, a planner change, a failure to plan. */
-export function runAll(config: Config, reason: string, hashes: Record<string, string> = {}): Plan {
-  const decisions = Object.keys(config.jobs).map((job) => ({ job, run: true, layer: "L0" as const, reason }))
+export function runAll(config: Config, reason: string, hashes: Record<string, string> = {}, event?: string): Plan {
+  const decisions = Object.keys(config.jobs).map((job) =>
+    event === "push" && config.jobs[job]!.push === false
+      ? { job, run: false, layer: "L0" as const, reason: "a push to main skips it: pull requests and manual runs plan it" }
+      : { job, run: true, layer: "L0" as const, reason },
+  )
   return { decisions, hashes, changed: 0, jevLines: 0, jevCalls: 0, inputTokens: 0 }
 }
 
