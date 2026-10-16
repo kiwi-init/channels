@@ -93,8 +93,12 @@ async function twoSeats() {
   return { ownerA, ownerB, h, input: JSON.stringify({ session_id: "M", cwd: h }) };
 }
 
+async function slots(h: string): Promise<string[]> {
+  return (await daemonListeners(daemonSock(h)).catch(() => [])).map((l) => `${l.kind}:${l.agent}`);
+}
+
 async function hookSlots(h: string): Promise<string[]> {
-  return (await daemonListeners(daemonSock(h)).catch(() => [])).filter((l) => l.kind === "hook").map((l) => l.agent);
+  return (await slots(h)).filter((s) => s.startsWith("hook:")).map((s) => s.slice("hook:".length));
 }
 
 describe("one Claude Code session that holds two seats", () => {
@@ -175,9 +179,9 @@ describe("one Claude Code session that holds two seats", () => {
     rmSync(key);
     const first = spawn(h, ["hook", "listen"], S, h, input);
     await until(async () => {
-      const held = await hookSlots(h);
-      return held.includes("planner") && !held.includes("reviewer");
-    }, "only the healthy seat's slot");
+      const held = await slots(h);
+      return held.includes("listen:planner") && !held.some((s) => s.endsWith(":reviewer"));
+    }, "the first hook listening for the healthy seat, after giving the broken one's slot back");
     writeFileSync(key, saved);
     const second = spawn(h, ["hook", "listen"], S, h, input);
     await until(async () => (await hookSlots(h)).includes("reviewer"), "the restored seat's slot");
