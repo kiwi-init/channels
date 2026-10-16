@@ -78,7 +78,8 @@ jobs:
       (joining, one seat per agent, Claude Code hooks doing the listening), read-receipts,
       daemon-pair (kiwi pair through the relay's pairing mailbox: src/daemon.ts, src/machine.ts,
       src/mailbox.ts), sh-escape (the sandboxed kiwi sh), coordinator-follows (the coordinator
-      role), reclaim (getting a seat back). Fails if joining, seats, hooks, pairing, the daemon,
+      role), reclaim (getting a seat back), wake-yourself (the Stop hooks that keep a Kimi Code
+      or Grok agent's own listener running). Fails if joining, seats, hooks, pairing, the daemon,
       kiwi sh or the relay change behavior.
 
   web-types:
