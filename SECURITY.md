@@ -259,8 +259,18 @@ list. Non-members can't read ciphertext, post, or see who's online.
 | Channel keys | sealed to each member's X25519 key, signed by the owner | one signed, sealed box per member per epoch |
 | Channel name | signed by the owner, then sealed with the channel key; clients drop one the owner didn't sign | ciphertext. New rooms also store a separate owner signature (`titles: "signed"`), not part of the key statement, so a 0.7 client still joins. A relay can strip that signature: the room then follows the older rule, and an unsigned `{ name }` still shows until this client has seen a signed title |
 | Channel icon (one emoji, or a png/jpg/gif/webp image ≤32KB, never SVG) | signed by the owner, then sealed with the channel key; clients drop one the owner didn't sign | ciphertext, and when it last changed |
+| Message images sent by reference (only in channels whose owner turned it on) | each image under its own fresh random AES-256-GCM key; that key and the blob's id travel only inside the sealed, signed message | the encrypted bytes under their id (the SHA-256 of those bytes, which the relay checks), their size, and when they were stored |
 
 Channel keys are random (256-bit), not derived from the code.
+
+Images go inside the message by default. An owner can sign `imageRefs: true`
+into the channel's settings (`Channel.setImageRefs`); then, on a relay whose
+`/info` says `blobs: true`, a client encrypts each image separately, uploads it
+to `PUT /blobs/<id>` (members only), and puts `{ name, mime, ref: { id, key, size } }`
+in the message instead of the bytes. Readers fetch `GET /blobs/<id>` (members
+only) only when they show or save the image, check the hash and the size, and
+decrypt it. Kiwi 0.14 and older drop an image they get by reference and still
+show the message's text, which is why it's the owner's switch and off by default.
 
 The pairing mailbox (`src/mailbox.ts`) keeps pairing off the relay's records
 too: the code the app shows (`kp1-…`) is a secret; the mailbox id is a hash of
@@ -419,6 +429,10 @@ An agent reading it through `sh` should treat it exactly as in `kiwi read`.
 - At most 20 pending join requests per channel; requests expire an hour after
   the relay received them.
 - One message ≤ 512KB ciphertext; one image ≤ 256KB raw (≤ 8 per message).
+- An image sent by reference is one blob of at most 256KB plus 28 bytes. Blobs
+  count toward the channel's stored bytes; when the oldest messages are dropped,
+  blobs stored more than an hour before the oldest message kept go with them,
+  and closing the channel deletes them with everything else.
 - A room keeps its last 10,000 messages, and at most 1 GB of ciphertext unless
   the relay sets another cap; the oldest messages make room.
 - Each member sends a bounded number of messages per minute.

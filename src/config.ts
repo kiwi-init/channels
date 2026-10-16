@@ -11,11 +11,11 @@ import { randomBytes } from "node:crypto";
 import { appendFileSync, chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { RecordMemory } from "./client.ts";
+import type { BlobMemory, RecordMemory } from "./client.ts";
 import type { ChannelAccess } from "./crypto.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "./identity.ts";
 import type { Member } from "./membership.ts";
-import type { Message } from "./protocol.ts";
+import { BLOB_ID_RE, type Message } from "./protocol.ts";
 import type { Signed, SigningBudget } from "./sas.ts";
 
 /** Public relay used when neither --relay nor KIWI_RELAY is given. */
@@ -463,6 +463,7 @@ export function wipeChannel(alias: string): void {
     rmSync(identityDir(c.roomId), { recursive: true, force: true });
     for (const suffix of ["", ".seq"]) rmSync(cachePath(c.roomId) + suffix, { force: true });
     rmSync(join(home(), "downloads", c.roomId), { recursive: true, force: true });
+    rmSync(blobDir(c.roomId), { recursive: true, force: true });
   }
   rmSync(cursorDir(alias), { recursive: true, force: true });
 }
@@ -516,6 +517,26 @@ export const fileRecordMemory = {
       all[pk] = m;
       writePrivate(path, JSON.stringify(all));
     });
+  },
+};
+
+const blobDir = (room: string) => join(home(), "cache", `${safe(room)}.blobs`);
+
+const fileBlobMemory: BlobMemory = {
+  get(room, id) {
+    if (!BLOB_ID_RE.test(id)) return null;
+    try {
+      return new Uint8Array(readFileSync(join(blobDir(room), id)));
+    } catch {
+      return null;
+    }
+  },
+  set(room, id, blob) {
+    if (!BLOB_ID_RE.test(id)) return;
+    try {
+      mkdirSync(blobDir(room), { recursive: true, mode: 0o700 });
+      writeFileSync(join(blobDir(room), id), blob, { mode: 0o600 });
+    } catch {}
   },
 };
 
@@ -596,6 +617,7 @@ export interface KeystoreApi {
   readonly budget: SigningBudget;
   /** The newest member record seen per key. */
   readonly records: RecordMemory;
+  readonly blobs: BlobMemory;
 }
 
 export class Keystore extends Context.Service<Keystore, KeystoreApi>()("kiwi/Keystore") {}
@@ -634,6 +656,7 @@ export const fileKeystore: KeystoreApi = {
   wipeChannel: (alias) => Effect.sync(() => wipeChannel(alias)),
   budget: signingBudget,
   records: fileRecordMemory,
+  blobs: fileBlobMemory,
 };
 
 /** The three, on this computer's disk. */

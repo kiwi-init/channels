@@ -20,11 +20,11 @@ import { mcpBrief } from "./brief.ts";
 import { loadImages, saveImages } from "./attach.ts";
 import { loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { Cursor, home, Keystore } from "./config.ts";
-import { ChannelGone, goneText, reason } from "./client.ts";
+import { ChannelGone, goneText, reason, type Channel, type Relay } from "./client.ts";
 import { ago, cardLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, mayDo, parseDuration, presenceWords, runsStatus, taskStateWord } from "./format.ts";
 import { isWakeVia } from "./wake.ts";
 import { SCOPES } from "./scopes.ts";
-import { CHAT_KINDS, ignored, type Kind, type Message } from "./protocol.ts";
+import { CHAT_KINDS, ignored, type InlineImage, type Kind, type Message } from "./protocol.ts";
 import { inlineText } from "./membership.ts";
 import { chooseThread, parseTaskId, similarOpenTasks, taskId, wentTo } from "./state.ts";
 import { detectCard } from "./card.ts";
@@ -46,11 +46,12 @@ const task = (id: string): Effect.Effect<number, Rejected> => {
 const kind = z.enum(CHAT_KINDS as [Kind, ...Kind[]]);
 
 /** Text plus one image block per attached image (newest first, at most a few). */
-function withImages(text: string, messages: Message[]): Result {
-  const content: Content[] = [{ type: "text", text }];
+function withImages(ch: Channel, text: string, messages: Message[]): Effect.Effect<Result, never, Relay> {
   const imgs = messages.filter((m) => m.imgs?.length).slice(-3);
-  for (const m of imgs) for (const img of m.imgs!.slice(0, 3)) content.push({ type: "image", data: img.data, mimeType: img.mime });
-  return { content };
+  return Effect.map(
+    Effect.forEach(imgs, (m) => ch.fx.images(m.imgs!.slice(0, 3)).pipe(Effect.orElseSucceed((): InlineImage[] => []))),
+    (lists): Result => ({ content: [{ type: "text", text }, ...lists.flat().map((img): Content => ({ type: "image", data: img.data, mimeType: img.mime }))] }),
+  );
 }
 
 /** Done once the MCP client cancels the call. */
@@ -197,8 +198,8 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
       },
     },
     shaped(({ chat, all, thread }) =>
-      Effect.map(s.read({ chat, all, ...(thread !== undefined ? { thread } : {}) }), ({ messages, state }) =>
-        messages.length ? withImages(messages.map((m) => formatMessage(m, state.trust.get(m.seq), state, s.me)).join("\n"), messages) : ok("no unread messages.\nNext: call wait_for_messages."),
+      Effect.flatMap(s.read({ chat, all, ...(thread !== undefined ? { thread } : {}) }), ({ messages, state }) =>
+        messages.length ? withImages(s.ch, messages.map((m) => formatMessage(m, state.trust.get(m.seq), state, s.me)).join("\n"), messages) : Effect.succeed(ok("no unread messages.\nNext: call wait_for_messages.")),
       ),
     ),
   );
@@ -207,11 +208,11 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     "log",
     { description: "Recent channel history (doesn't mark anything read). Images come back as image blocks. Example: log {\"n\":30}.", inputSchema: { n: z.number().int().min(1).max(500).optional() } },
     shaped(({ n }) =>
-      Effect.map(s.state(), ({ messages, state }) => {
+      Effect.flatMap(s.state(), ({ messages, state }) => {
         // Forged messages, and ones the owner doesn't allow, are left out (status counts them for people).
         const shown = messages.filter((m) => !ignored(state.trust.get(m.seq))).slice(-(n ?? 30));
-        if (!shown.length) return ok("no messages");
-        return withImages(shown.map((m) => formatMessage(m, state.trust.get(m.seq), state, s.me)).join("\n"), shown);
+        if (!shown.length) return Effect.succeed(ok("no messages"));
+        return withImages(s.ch, shown.map((m) => formatMessage(m, state.trust.get(m.seq), state, s.me)).join("\n"), shown);
       }),
     ),
   );
@@ -368,7 +369,9 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         if (!m) return yield* new Rejected(`no message #${seq}`);
         if (!m.imgs?.length) return yield* new Rejected(`message #${seq} has no images`);
         // Under the channel's own folder, so closing the channel deletes them too.
-        return saveImages(seq, m.imgs, dir ?? join(home(), "downloads", s.ch.roomId)).join("\n");
+        const imgs = yield* s.ch.fx.images(m.imgs);
+        if (!imgs.length) return yield* new Rejected(`message #${seq}'s images are no longer on the relay`);
+        return saveImages(seq, imgs, dir ?? join(home(), "downloads", s.ch.roomId)).join("\n");
       }),
     ),
   );
@@ -380,11 +383,12 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
       inputSchema: { seq: z.number().int() },
     },
     shaped(({ seq }) =>
-      Effect.map(s.state(), ({ messages, state }) => {
+      Effect.gen(function* () {
+        const { messages, state } = yield* s.state();
         const m = messages.find((x) => x.seq === seq && !ignored(state.trust.get(x.seq)));
         if (!m) return fail(`no message #${seq}`);
-        const saved = m.imgs?.length ? saveImages(seq, m.imgs, join(home(), "downloads", s.ch.roomId)) : [];
-        return withImages(formatShown(m, messages, state, saved, s.me), [m]);
+        const saved = m.imgs?.length ? saveImages(seq, yield* s.ch.fx.images(m.imgs), join(home(), "downloads", s.ch.roomId)) : [];
+        return yield* withImages(s.ch, formatShown(m, messages, state, saved, s.me), [m]);
       }),
     ),
   );

@@ -50,13 +50,15 @@ export interface Incoming {
   method: string;
   path: string;
   body: string;
+  bytes: Uint8Array<ArrayBuffer> | null;
 }
 export class Request_ extends Context.Service<Request_, Incoming>()("kiwi/relay/Request") {}
 
 export async function incoming(req: Request, path: string): Promise<Incoming> {
   const method = req.method.toUpperCase();
+  if (method === "PUT" && path.startsWith("/blobs/")) return { req, url: new URL(req.url), method, path, body: "", bytes: new Uint8Array(await req.arrayBuffer()) };
   // Every client signs the exact body it sends (empty when there is none), so reading DELETE's too is safe; the vault needs it.
-  return { req, url: new URL(req.url), method, path, body: method === "GET" || method === "HEAD" ? "" : await req.text() };
+  return { req, url: new URL(req.url), method, path, body: method === "GET" || method === "HEAD" ? "" : await req.text(), bytes: null };
 }
 
 /** The request body as JSON, or the 400 every route has always sent. */

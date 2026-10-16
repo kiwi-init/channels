@@ -72,6 +72,7 @@ describe("member routes refuse anyone who isn't a member", () => {
     ["GET", "/icon"],
     ["GET", "/members"],
     ["DELETE", "/members/me"],
+    ["GET", `/blobs/${"0".repeat(64)}`],
   ];
   for (const [method, path] of routes) {
     test(`${method} ${path}`, async () => {
@@ -81,6 +82,18 @@ describe("member routes refuse anyone who isn't a member", () => {
       if (method !== "DELETE") expect(refused(await room(method, path, { as: member }))).toBe(false);
     });
   }
+  test("PUT /blobs/<id>", async () => {
+    const bytes = new Uint8Array(64).fill(7);
+    const id = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (b) => b.toString(16).padStart(2, "0")).join("");
+    const put = async (as?: Identity) => {
+      const headers: Record<string, string> = { "content-type": "application/octet-stream" };
+      if (as) headers.authorization = `Bearer ${await signRequest(as, roomId, "PUT", `/blobs/${id}`, "")}`;
+      return (await fetch(`${relay}/v1/rooms/${roomId}/blobs/${id}`, { method: "PUT", headers, body: bytes })).status;
+    };
+    expect(refused(await put())).toBe(true);
+    expect(refused(await put(stranger))).toBe(true);
+    expect(await put(member)).toBe(200);
+  });
 });
 
 describe("owner routes need the owner key's signature, and nothing else", () => {

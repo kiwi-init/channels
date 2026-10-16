@@ -25,6 +25,7 @@ import {
   append,
   approve,
   authenticate,
+  BLOBS_PER_MINUTE,
   create,
   directory,
   Directory,
@@ -51,6 +52,7 @@ import {
   setRecord,
   setSettings,
   setTitle,
+  storeBlob,
   touch,
   UPDATE_KIWI,
   type CreateBody,
@@ -164,6 +166,8 @@ type RoomRoute = Route<Guard, Who, Effects, Services>;
 
 const ID = "([0-9a-f-]{36})";
 
+const BLOB = /^\/blobs\/([0-9a-f]{64})$/;
+
 /** A handler that only reads the room. */
 const withRoom = <A>(f: (db: RoomDb) => A) => Effect.map(RoomStore, f);
 
@@ -180,7 +184,7 @@ const routes: RoomRoute[] = [
         // The join code's second half is the owner key's fingerprint. A wrong one is answered like a
         // missing room. Calls with no fp never reach here (missingFingerprint).
         if (url.searchParams.get("fp") !== (yield* Effect.promise(() => ownerFingerprint(m.ownerPk)))) return yield* new ChannelGone({ message: "no such channel" });
-        return { data: { ownerPk: m.ownerPk, ownerXpk: m.ownerXpk, ownerSig: m.ownerSig, titlesSig: db.getTitlesSig(), epoch: m.epoch, rotate: m.rotate, title: db.title(), settings: db.settings(), iconAt: db.iconAt() } };
+        return { data: { ownerPk: m.ownerPk, ownerXpk: m.ownerXpk, ownerSig: m.ownerSig, titlesSig: db.getTitlesSig(), epoch: m.epoch, rotate: m.rotate, title: db.title(), settings: db.settings(), iconAt: db.iconAt(), blobs: true } };
       }),
   },
   {
@@ -280,6 +284,30 @@ const routes: RoomRoute[] = [
         const b = yield* json<{ seq?: unknown }>();
         const mark = yield* markRead(me, b.seq);
         return { data: { seq: mark?.seq ?? null }, fx: mark ? { broadcast: [frame({ t: "read", ...mark })] } : undefined };
+      }),
+  },
+  {
+    method: "PUT",
+    path: BLOB,
+    guard: "member",
+    run: ({ me }, m) =>
+      Effect.gen(function* () {
+        const db = yield* RoomStore;
+        if (!allow(`blob:${db.roomId}:${me}`, BLOBS_PER_MINUTE)) return yield* new TooMany({ message: "too many images; wait a minute" });
+        const { bytes } = yield* Request_;
+        yield* storeBlob(m[1]!, bytes, me);
+        return { data: { id: m[1]! }, fx: { expireAt: (yield* touch) ?? undefined } };
+      }),
+  },
+  {
+    method: "GET",
+    path: BLOB,
+    guard: "member",
+    run: (_, m) =>
+      Effect.gen(function* () {
+        const bytes = (yield* RoomStore).blob(m[1]!);
+        if (!bytes) return yield* new NotFound({ message: "no such image" });
+        return { res: new Response(bytes, { headers: { "content-type": "application/octet-stream", "cache-control": "private, max-age=31536000, immutable" } }) };
       }),
   },
   { method: "GET", path: "/keys", guard: "member", run: ({ me }) => Effect.map(keysFor(me), (data) => ({ data })) },

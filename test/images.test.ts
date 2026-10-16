@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadImages } from "../src/attach.ts";
 import { signRequest } from "../src/auth.ts";
-import { Channel } from "../src/client.ts";
+import { Channel, keepBlobsIn } from "../src/client.ts";
 import { seal } from "../src/crypto.ts";
 import { generateIdentity, sign, type Identity } from "../src/identity.ts";
 import { PROTOCOL_VERSION, type ImageAttachment } from "../src/protocol.ts";
@@ -99,4 +99,33 @@ test("the cli refuses an svg file", () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("with image refs on, an image travels as a reference and reads back byte for byte", async () => {
+  keepBlobsIn({ get: () => null, set: () => {} });
+  const raw = crypto.getRandomValues(new Uint8Array(4096));
+  const img: ImageAttachment = { name: "r.png", mime: "image/png", data: Buffer.from(raw).toString("base64") };
+  const inline = await memberCh.send("inline still", { imgs: [img] });
+  expect((await ownerCh.history(inline - 1)).messages.find((m) => m.seq === inline)?.imgs).toEqual([img]);
+  await ownerCh.setImageRefs(true);
+  expect(await memberCh.imageRefs()).toBe(true);
+  const seq = await memberCh.send("by ref", { imgs: [img] });
+  const got = (await ownerCh.history(seq - 1)).messages.find((m) => m.seq === seq)!;
+  const ref = got.imgs?.[0];
+  expect(ref?.data).toBeUndefined();
+  expect(ref?.ref?.size).toBe(raw.length);
+  expect(await ownerCh.image(ref!)).toBe(img.data!);
+  expect(await ownerCh.image({ ...ref!, ref: { ...ref!.ref!, key: "A".repeat(43) } })).toBeNull();
+  expect(await ownerCh.image({ ...ref!, ref: { ...ref!.ref!, id: "0".repeat(64) } })).toBeNull();
+  await ownerCh.setImageRefs(false);
+  const back = await memberCh.send("inline again", { imgs: [img] });
+  expect((await ownerCh.history(back - 1)).messages.find((m) => m.seq === back)?.imgs).toEqual([img]);
+});
+
+test("the relay stores an image only under the hash of its bytes", async () => {
+  const bytes = new Uint8Array(100).fill(1);
+  const id = "f".repeat(64);
+  const auth = await signRequest(member, memberCh.roomId, "PUT", `/blobs/${id}`, "");
+  const res = await fetch(`${relay}/v1/rooms/${memberCh.roomId}/blobs/${id}`, { method: "PUT", headers: { authorization: `Bearer ${auth}` }, body: bytes });
+  expect(res.status).toBe(400);
 });
