@@ -10,7 +10,7 @@ import type { Message } from "@mc/protocol.ts"
 import { fold, type ChannelState, type GuardFloor, type Roster } from "@mc/state.ts"
 import type { Activity } from "@mc/protocol.ts"
 import type { PublicAccess } from "../../../desktop/src/bridge.ts"
-import { errorOf, linkOf, ops, type ChannelLink, type FollowEvent } from "./channel-ops"
+import { errorOf, linkOf, ops, watches, type ChannelLink, type FollowEvent } from "./channel-ops"
 import { forgetHistory, readCached, rememberRow } from "./history"
 import { migrateLegacy } from "./legacy-seats"
 import { wholeLog } from "./history-plan"
@@ -249,7 +249,7 @@ export interface ChannelRow {
 }
 
 /** How often listed channels are asked for their head (GET /). Cheap: seq only. */
-const HEADS_EVERY = 15_000
+const HEADS_EVERY = 300_000
 
 const untitled = (room: string) => `Channel ${room.slice(0, 4).toUpperCase()}`
 
@@ -309,6 +309,19 @@ export function useChannelList(): ChannelRow[] {
     })
     let stop = false
     let gen = 0
+    const put = (next: Record<string, number>) =>
+      setHeads((prev) => {
+        const merged = { ...prev }
+        for (const [k, v] of Object.entries(next)) merged[k] = Math.max(prev[k] ?? 0, v)
+        const keys = Object.keys(merged)
+        if (keys.length === Object.keys(prev).length && keys.every((k) => prev[k] === merged[k])) return prev
+        return merged
+      })
+    const stops = members.map(({ room, code }) =>
+      watches().watch(code, (ev) => {
+        if (ev._tag === "Head" && !stop) put({ [room]: ev.seq })
+      })
+    )
     const tick = async () => {
       const my = ++gen
       const next: Record<string, number> = {}
@@ -323,14 +336,8 @@ export function useChannelList(): ChannelRow[] {
         })
       )
       if (stop || my !== gen) return
-      setHeads((prev) => {
-        const merged = { ...prev, ...next }
-        const keys = Object.keys(merged)
-        if (keys.length === Object.keys(prev).length && keys.every((k) => prev[k] === merged[k])) return prev
-        return merged
-      })
+      put(next)
     }
-    void tick()
     const id = setInterval(tick, HEADS_EVERY)
     const onVis = () => {
       if (!document.hidden) void tick()
@@ -338,6 +345,7 @@ export function useChannelList(): ChannelRow[] {
     document.addEventListener("visibilitychange", onVis)
     return () => {
       stop = true
+      for (const s of stops) s()
       clearInterval(id)
       document.removeEventListener("visibilitychange", onVis)
     }
@@ -524,6 +532,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
 
   useEffect(() => {
     if (human === null) return
+    const lent = watches().lend(member.code)
     let pending: { message: Message; row: CachedRow | null }[] = []
     let flush: number | undefined
     let stopLive: (() => void) | null = null
@@ -540,6 +549,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
             batch.map((b) => b.message)
           )
         )
+        lent.emit({ _tag: "Head", seq: Math.max(...batch.map((b) => b.message.seq)) })
         if (batch.some((b) => b.message.kind === "event" && b.message.ev?.op === "card")) noteAgentWorked()
         for (const b of batch) if (b.row) void rememberRow(ch.roomId, ch.pk, b.row, HISTORY).catch(() => {})
       }, 30)
@@ -548,6 +558,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
       switch (ev._tag) {
         case "Open":
           setConnection("live")
+          lent.emit({ _tag: "Open" })
           void refreshRequests()
           void refreshRoster()
           void ch.presence({ client: "probe", query: true }).catch(() => {})
@@ -563,6 +574,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
         case "Roster":
           return void refreshRoster()
         case "Request":
+          lent.emit({ _tag: "Request" })
           return void refreshRequests()
         case "Read":
           setMarks((prev) => addMarks(prev, ev.reads, ev.snapshot))
@@ -614,6 +626,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
       stop()
       stopLive?.()
       clearTimeout(flush)
+      lent.release()
     }
   }, [ch, refreshRoster, refreshRequests, onGone, human, member.code])
 

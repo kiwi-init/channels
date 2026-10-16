@@ -75,6 +75,7 @@ export interface Effects {
   broadcast?: string[];
   /** Send to every socket except the sender. */
   others?: string;
+  watch?: string[];
   /** Send to the sender only. */
   reply?: string;
   /** Disconnect every socket authenticated as this key. */
@@ -985,13 +986,18 @@ export interface RequestBody {
 
 // ---------- sockets ----------
 
-export function msgFrame(e: Envelope): string {
+function msgFrame(e: Envelope): string {
   return frame({ t: "msg", ...e });
 }
 
+export const stored = (e: Envelope): Pick<Effects, "broadcast" | "watch"> => ({ broadcast: [msgFrame(e)], watch: [frame({ t: "head", seq: e.seq, ts: e.ts })] });
+
+export const wantsWatch = (url: URL): boolean => url.searchParams.get("watch") === "1";
+
 /** Frames to send a newly connected socket: the backlog after `since`, then ready. */
-export const welcomeFrames = (since: number): Effect.Effect<string[], never, RoomStore> =>
+export const welcomeFrames = (since: number, watch = false): Effect.Effect<string[], never, RoomStore> =>
   Effect.map(RoomStore, (db) => {
+    if (watch) return [frame({ t: "ready", head: db.head(), more: false })];
     const backlog = db.since(since);
     const head = db.head();
     const last = backlog.at(-1)?.seq ?? since;
@@ -1019,7 +1025,7 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
     // How far this member has read: kept and passed on only when it moves forward. Too many is just dropped.
     if (!allow(`read:${db.roomId}:${sender}`, READS_PER_MINUTE)) return {} satisfies Effects;
     return yield* markRead(sender, f.seq).pipe(
-      Effect.map((mark): Effects => (mark ? { broadcast: [frame({ t: "read", ...mark })] } : {})),
+      Effect.map((mark): Effects => (mark ? { broadcast: [frame({ t: "read", ...mark })], watch: [] } : {})),
       Effect.catchCause((cause) =>
         Effect.succeed<Effects>(isRefusal(Cause.squash(cause)) ? { reply: frame({ t: "err", error: "bad read mark" }) } : { reply: frame({ t: "err", error: socketError(cause) }) }),
       ),
@@ -1030,7 +1036,7 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
   const send = f;
   return yield* Effect.gen(function* () {
     const e = yield* append(send.iv, send.ct, Number(send.e ?? 0), sender);
-    const fx: Effects = { broadcast: [msgFrame(e)], reply: frame({ t: "ack", id: send.id, seq: e.seq }), expireAt: (yield* touch) ?? undefined };
+    const fx: Effects = { ...stored(e), reply: frame({ t: "ack", id: send.id, seq: e.seq }), expireAt: (yield* touch) ?? undefined };
     return fx;
   }).pipe(
     // A refusal says why; a storage error is logged and the sender hears only that it failed.

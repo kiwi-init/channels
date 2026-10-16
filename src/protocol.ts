@@ -84,7 +84,8 @@ export type ServerFrame =
   /** A member has read everything up to `seq` (their word for it, at the relay's `at`). Older clients ignore it. */
   | ({ t: "read" } & ReadMark)
   /** On connect, before ready: how far each member has read. */
-  | { t: "reads"; reads: ReadMark[] };
+  | { t: "reads"; reads: ReadMark[] }
+  | { t: "head"; seq: number; ts: number };
 
 /** How far one member has read: a seq and when it got there. A number, never content. */
 export interface ReadMark {

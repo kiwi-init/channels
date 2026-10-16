@@ -5,11 +5,18 @@ import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, FollowEvent
 import { localOps } from "./channel-local"
 import { errorOf, remoteOps } from "./channel-remote"
 import { bridge } from "./secrets"
+import { makeWatches, type Watches } from "./watch"
 
 export { errorOf }
 export type { ChannelOps, FollowEvent }
 
 let picked: ChannelOps | null = null
+let watching: Watches | null = null
+
+export function watches(): Watches {
+  watching ??= makeWatches(ops())
+  return watching
+}
 
 export function ops(): ChannelOps {
   if (!picked) {

@@ -34,7 +34,6 @@ import {
   markRead,
   MESSAGES_PER_MINUTE,
   missingFingerprint,
-  msgFrame,
   readMeta,
   READS_PER_MINUTE,
   remove,
@@ -51,6 +50,7 @@ import {
   setRecord,
   setSettings,
   setTitle,
+  stored,
   touch,
   UPDATE_KIWI,
   type CreateBody,
@@ -265,7 +265,7 @@ const routes: RoomRoute[] = [
         if (!allow(`${db.roomId}:${me}`, MESSAGES_PER_MINUTE)) return yield* new TooMany({ message: "too many messages; wait a minute" });
         const b = yield* json<{ iv?: string; ct?: string; e?: number }>();
         const e = yield* append(b.iv as string, b.ct as string, Number(b.e ?? 0), me);
-        return { data: { seq: e.seq, ts: e.ts }, fx: { broadcast: [msgFrame(e)], expireAt: (yield* touch) ?? undefined } };
+        return { data: { seq: e.seq, ts: e.ts }, fx: { ...stored(e), expireAt: (yield* touch) ?? undefined } };
       }),
   },
   {
@@ -279,7 +279,7 @@ const routes: RoomRoute[] = [
         if (!allow(`read:${db.roomId}:${me}`, READS_PER_MINUTE)) return yield* new TooMany({ message: "too many read marks; one a second is plenty" });
         const b = yield* json<{ seq?: unknown }>();
         const mark = yield* markRead(me, b.seq);
-        return { data: { seq: mark?.seq ?? null }, fx: mark ? { broadcast: [frame({ t: "read", ...mark })] } : undefined };
+        return { data: { seq: mark?.seq ?? null }, fx: mark ? { broadcast: [frame({ t: "read", ...mark })], watch: [] } : undefined };
       }),
   },
   { method: "GET", path: "/keys", guard: "member", run: ({ me }) => Effect.map(keysFor(me), (data) => ({ data })) },

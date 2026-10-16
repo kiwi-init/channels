@@ -27,6 +27,7 @@ import {
   onClientFrame,
   parseRoomPath,
   touch,
+  wantsWatch,
   welcomeFrames,
   wsHeaders,
   type DirectoryEntry,
@@ -131,8 +132,9 @@ export class Channel extends DurableObject<Env> {
         const pk = await runRoom(this.relay, db, authenticateSocket(req));
         const { 0: client, 1: server } = new WebSocketPair();
         this.ctx.acceptWebSocket(server);
-        server.serializeAttachment({ pk, room: route.roomId });
-        for (const f of runRoomSync(this.relay, db, welcomeFrames(Number(url.searchParams.get("since") ?? 0) || 0))) server.send(f);
+        const watch = wantsWatch(url);
+        server.serializeAttachment(watch ? { pk, room: route.roomId, watch } : { pk, room: route.roomId });
+        for (const f of runRoomSync(this.relay, db, welcomeFrames(Number(url.searchParams.get("since") ?? 0) || 0, watch))) server.send(f);
         await this.apply({ expireAt: runRoomSync(this.relay, db, touch) ?? undefined });
         return new Response(null, { status: 101, webSocket: client, headers: wsHeaders(req) });
       }
@@ -159,8 +161,9 @@ export class Channel extends DurableObject<Env> {
 
   private async apply(fx: Effects, sender?: WebSocket): Promise<void> {
     const sockets = this.ctx.getWebSockets();
-    for (const f of fx.broadcast ?? []) for (const ws of sockets) send(ws, f);
-    if (fx.others) for (const ws of sockets) if (ws !== sender) send(ws, fx.others);
+    const watching = fx.watch || fx.others ? new Set(sockets.filter(isWatch)) : null;
+    for (const ws of sockets) for (const f of (watching?.has(ws) ? fx.watch : undefined) ?? fx.broadcast ?? []) send(ws, f);
+    if (fx.others) for (const ws of sockets) if (ws !== sender && !watching?.has(ws)) send(ws, fx.others);
     if (fx.disconnect) {
       for (const ws of sockets) {
         if ((ws.deserializeAttachment() as { pk?: string } | null)?.pk === fx.disconnect.pk) close(ws, CLOSE_REMOVED, GONE_WORDS[fx.disconnect.how]);
@@ -275,6 +278,10 @@ export class MailboxBox extends DurableObject<Env> {
   override async alarm(): Promise<void> {
     await this.ctx.storage.deleteAll();
   }
+}
+
+function isWatch(ws: WebSocket): boolean {
+  return (ws.deserializeAttachment() as { watch?: boolean } | null)?.watch === true;
 }
 
 function send(ws: WebSocket, f: string): void {

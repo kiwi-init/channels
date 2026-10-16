@@ -1,5 +1,7 @@
 /** One pass over an owned channel's join requests. */
 
+import type { Watches } from "./watch"
+
 export interface TendApi {
   autoApprove: (person: string) => Promise<readonly { name: string }[]>
   requests: (opts: { person: string }) => Promise<readonly { id: string; name: string }[]>
@@ -28,4 +30,25 @@ export async function tendOwned(person: string, title: string, api: TendApi, pin
     told.add(r.id)
     ping(title, `${r.name} asks to join`)
   }
+}
+
+export function tendOnPush(codes: readonly string[], watch: Watches["watch"], tend: (code: string) => Promise<void>): { kick: (code: string) => void; stop: () => void } {
+  const busy = new Map<string, boolean>()
+  const kick = (code: string) => {
+    if (busy.has(code)) return void busy.set(code, true)
+    busy.set(code, false)
+    void tend(code)
+      .catch(() => {})
+      .finally(() => {
+        const again = busy.get(code)
+        busy.delete(code)
+        if (again) kick(code)
+      })
+  }
+  const stops = codes.map((code) =>
+    watch(code, (ev) => {
+      if (ev._tag !== "Head") kick(code)
+    })
+  )
+  return { kick, stop: () => stops.forEach((s) => s()) }
 }
