@@ -401,7 +401,7 @@ try {
 
   // The panel lists the tasks; one opened from it has a way back to the list, and Escape closes the panel.
   at = "Tasks panel"
-  await panelButton.click()
+  if ((await panelButton.getAttribute("aria-expanded")) !== "true") await panelButton.click()
   await overview.getByRole("region", { name: "Agents" }).waitFor()
   await overview.getByRole("region", { name: "Pull requests" }).waitFor()
   await overview.getByRole("button", { name: "All tasks" }).click()

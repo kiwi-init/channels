@@ -1,5 +1,5 @@
-import { ArrowDown01Icon, ArrowRight01Icon, Cancel01Icon, GitPullRequestIcon } from "@hugeicons/core-free-icons"
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react"
+import { ArrowDown01Icon, ArrowRight01Icon, GitPullRequestIcon } from "@hugeicons/core-free-icons"
+import { useState, type ReactNode } from "react"
 
 import type { TaskState } from "@mc/protocol.ts"
 import { taskId, type ChannelState, type Task } from "@mc/state.ts"
@@ -9,9 +9,7 @@ import { remember, remembered } from "@/lib/side"
 import { cx } from "@/lib/utils"
 import { AgentLine, busy, byBusy, type AgentNow } from "./agent-strip"
 import { Icon } from "./icon"
-import { IconButton } from "./kit"
 import { StateMark, labelOf } from "./tasks"
-import { ResizablePanel } from "./ui/panel"
 
 const SHOWN = 5
 
@@ -187,7 +185,9 @@ function Pulls({ prs, state, now, nameOf }: { prs: RecentPr[]; state: ChannelSta
   )
 }
 
-export function SidePanel({
+export const FLOAT_W = 340
+
+export function Overview({
   state,
   agents,
   prs,
@@ -195,7 +195,6 @@ export function SidePanel({
   nameOf,
   onOpenTask,
   onAllTasks,
-  onClose,
 }: {
   state: ChannelState
   agents: AgentNow[]
@@ -204,36 +203,18 @@ export function SidePanel({
   nameOf: (n: string) => string
   onOpenTask: (id: number) => void
   onAllTasks: () => void
-  onClose: () => void
 }) {
-  const self = useRef<HTMLElement>(null)
-  useLayoutEffect(() => {
-    if (document.activeElement === document.body) self.current?.focus({ preventScroll: true })
-  }, [])
   return (
-    <ResizablePanel>
-      <aside
-        ref={self}
-        tabIndex={-1}
-        aria-label="Overview"
-        className="animate-slide-in flex h-full w-full flex-col bg-canvas outline-none focus-visible:outline-none"
-        onKeyDown={(e) => {
-          if (e.key !== "Escape") return
-          e.preventDefault()
-          onClose()
-        }}
-      >
-        <header className="drag flex h-(--chrome-h) shrink-0 items-center justify-end px-3">
-          <IconButton label="Close panel" round className="glass size-9 text-ink" onClick={onClose}>
-            <Icon icon={Cancel01Icon} size={17} />
-          </IconButton>
-        </header>
-        <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-3 pt-1 pb-4">
-          <Agents agents={agents} now={now} onOpenTask={onOpenTask} />
-          <Tasks state={state} now={now} nameOf={nameOf} onOpen={onOpenTask} onAll={onAllTasks} />
-          <Pulls prs={prs} state={state} now={now} nameOf={nameOf} />
-        </div>
-      </aside>
-    </ResizablePanel>
+    <aside
+      aria-label="Overview"
+      style={{ width: `min(${FLOAT_W}px, calc(100% - 24px))` }}
+      className="animate-rise pointer-events-none absolute top-[calc(var(--head)+4px)] right-3 bottom-[calc(var(--foot)+8px)] z-30 flex flex-col lg:bottom-4"
+    >
+      <div className="pointer-events-auto flex max-h-full [scrollbar-width:none] flex-col gap-3 overflow-y-auto rounded-dock">
+        <Agents agents={agents} now={now} onOpenTask={onOpenTask} />
+        <Tasks state={state} now={now} nameOf={nameOf} onOpen={onOpenTask} onAll={onAllTasks} />
+        <Pulls prs={prs} state={state} now={now} nameOf={nameOf} />
+      </div>
+    </aside>
   )
 }

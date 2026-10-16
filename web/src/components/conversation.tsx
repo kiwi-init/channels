@@ -31,7 +31,7 @@ import { Icon } from "./icon"
 import { Button, IconButton, Spinner } from "./kit"
 import { Bubble, EventGroup, EventRow, TimeMark, isAgent, standsAlone, type ThreadSummary } from "./message"
 import { NeedsYou } from "./needs-you"
-import { SidePanel } from "./side-panel"
+import { FLOAT_W, Overview } from "./side-panel"
 import { Notes, Tasks } from "./tasks"
 import { InfoPanel, TaskDetails, TasksPanel, ThreadPanel } from "./lazy"
 
@@ -77,11 +77,7 @@ const summarised = (m: Message) => m.ev?.op === "task.add" || (m.ev?.op === "tas
 type Here = Exclude<Place, { kind: "task" }>
 
 /** What's open on the right, one at a time: a thread (by its first message), the details, or the tasks (the list, or one of them). */
-type Side = { kind: "thread"; root: number } | { kind: "info" } | { kind: "overview" } | { kind: "tasks"; task: number | null; fromList?: true } | null
-
-const OVERVIEW: Side = { kind: "overview" }
-
-const besideChat = (s: Side) => s?.kind === "tasks" || s?.kind === "overview"
+type Side = { kind: "thread"; root: number } | { kind: "info" } | { kind: "tasks"; task: number | null; fromList?: true } | null
 
 function roundOf(t: Task): { round: number; at?: string } | Record<string, never> {
   const open = openRound(t)
@@ -98,12 +94,12 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   // Where you are in the channel: its main conversation, or a direct one.
   const [here, setHere] = useState<string>("main")
   const [pinned, setPinned] = useState(sideStartsOpen)
-  const [side, setSide] = useState<Side>(() => (pinned ? OVERVIEW : null))
-  const rest: Side = pinned ? OVERVIEW : null
+  const [side, setSide] = useState<Side>(null)
+  const floating = pinned && side === null
   const pin = useCallback((on: boolean) => {
     keepSideOpen(on)
     setPinned(on)
-    setSide(on ? OVERVIEW : null)
+    if (on) setSide(null)
   }, [])
   const threadRoot = side?.kind === "thread" ? side.root : null
   const info = side?.kind === "info"
@@ -205,11 +201,11 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       setHere(placeKey(p))
       setBehind(0)
       // A thread belongs to the conversation it's in, and the details make way; the tasks stay open beside.
-      setSide((s) => (besideChat(s) ? s : pinned ? OVERVIEW : null))
+      setSide((s) => (s?.kind === "tasks" ? s : null))
       setReplyTo(null)
       setSearch(null)
     },
-    [openTask, pinned]
+    [openTask]
   )
 
   // What's new where: the newest message seen in each place, kept by this browser.
@@ -531,7 +527,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       load: memberLoad(state, m.name, now),
       lastAt: lastAt.get(m.name),
     }))
-  const prs = side?.kind === "overview" ? recentPrs(state, messages, me, 5) : []
+  const prs = floating ? recentPrs(state, messages, me, 5) : []
   const needsMe = escalations.length + reviews.length + (isOwner ? requests.length : 0)
   // The header's capsule is the channel's, wherever you are in it, so this line is the channel's too.
   const headline =
@@ -660,8 +656,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     >
       <div className="flex h-full min-w-0 flex-1">
         <div
-          className={cx("relative flex min-w-0 flex-1 flex-col bg-canvas", (root || info || besideChat(side)) && "hidden md:flex")}
-          style={{ "--head": `${headH}px`, "--foot": `${footH}px` } as CSSProperties}
+          className={cx("relative flex min-w-0 flex-1 flex-col bg-canvas", (root || info || side?.kind === "tasks") && "hidden md:flex")}
+          style={{ "--head": `${headH}px`, "--foot": `${footH}px`, "--float": `${FLOAT_W + 24}px` } as CSSProperties}
         >
           {/* The conversation's part of the window's one header row, floating over it as Grok's does:
               in the middle, one glass capsule with the channel's name; on the right, search and the
@@ -677,7 +673,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
               <IconButton label="Search" round className={cx("glass size-9", search === null && "text-ink")} active={search !== null} onClick={() => setSearch((s) => (s === null ? "" : null))}>
                 <Icon icon={Search01Icon} size={18} />
               </IconButton>
-              <PanelButton places={places} unreadIn={unreadIn} shown={taskKey} active={besideChat(side)} onClick={() => pin(!besideChat(side))} />
+              <PanelButton places={places} unreadIn={unreadIn} shown={taskKey} active={floating} onClick={() => pin(!floating)} />
             </div>
             {/* After the row in the document and marked no-drag: the desktop app's drag region is worked
                 out in document order, so it would otherwise swallow these clicks. */}
@@ -717,7 +713,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
 
           <div
             ref={scroller}
-            className="absolute inset-0 overflow-y-auto"
+            className={cx("absolute inset-0 overflow-y-auto", floating && "lg:right-(--float)")}
             onScroll={(e) => {
               const el = e.currentTarget
               atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
@@ -775,6 +771,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             </div>
           </div>
 
+          {floating && <Overview state={state} agents={agentsNow} prs={prs} now={now} nameOf={nameOf} onOpenTask={openTask} onAllTasks={() => setSide({ kind: "tasks", task: null })} />}
+
           {behind > 0 && (
             <button
               type="button"
@@ -787,7 +785,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
           )}
 
           {/* The composer floats on glass at the foot; messages scroll under it too. */}
-          <div ref={footRef} className="absolute inset-x-0 bottom-0 z-20">
+          <div ref={footRef} className={cx("absolute inset-x-0 bottom-0 z-20", floating && "lg:right-(--float)")}>
             <div aria-hidden className="scrim-bottom absolute inset-x-0 -top-6 bottom-0" />
             <div className="relative">
               {mayWrite ? (
@@ -826,7 +824,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
         {root && (
           <ThreadPanel
             count={replies.length}
-            onClose={() => setSide(rest)}
+            onClose={() => setSide(null)}
             composer={
               <Composer
                 key={root.seq}
@@ -851,16 +849,12 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             title={title}
             icon={icon}
             subtitle={subtitle}
-            onClose={() => setSide(rest)}
+            onClose={() => setSide(null)}
             onPause={hold && !state.hold ? () => setPausing(true) : undefined}
             onMessage={(name) => go(dmPlace(me, name))}
             mood={mood}
             notes={<Notes state={state} now={now} onClear={async (key) => void (await send(`cleared ${key}`, { kind: "event", ev: { op: "fact.del", key } }))} />}
           />
-        )}
-
-        {side?.kind === "overview" && (
-          <SidePanel state={state} agents={agentsNow} prs={prs} now={now} nameOf={nameOf} onOpenTask={openTask} onAllTasks={() => setSide({ kind: "tasks", task: null })} onClose={() => pin(false)} />
         )}
 
         {side?.kind === "tasks" && (
@@ -877,8 +871,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
               )
             }
             backLabel={side.fromList ? "All tasks" : "Overview"}
-            onBack={() => setSide(side.fromList ? { kind: "tasks", task: null } : OVERVIEW)}
-            onClose={() => pin(false)}
+            onBack={() => setSide(side.fromList ? { kind: "tasks", task: null } : null)}
+            onClose={() => setSide(null)}
             follow={shownTask === null ? null : `${shownTask}:${inTask.length}`}
             composer={
               task && (
