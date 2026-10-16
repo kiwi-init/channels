@@ -277,6 +277,8 @@ interface Warm {
 
 const warmRooms = new WeakMap<Sql, Warm>();
 
+type Revised = "roster" | "info";
+
 const coldRoom = (): Warm => ({ exists: null, meta: new Map(), head: null, members: new Map(), reads: new Map() });
 
 export function forgetRoom(sql: Sql): void {
@@ -367,6 +369,14 @@ export class RoomDb {
   set(k: string, v: string | number): void {
     this.sql.run("INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v", k, String(v));
     this.warm.meta.set(k, String(v));
+  }
+
+  changed(what: Revised): void {
+    this.set(`${what}_rev`, crypto.randomUUID().replaceAll("-", "").slice(0, 16));
+  }
+
+  etag(what: Revised): string {
+    return `"${what}-${this.get(`${what}_rev`) ?? "0"}"`;
   }
 
   /** The signed-in human (WorkOS user id) who owns this channel, when the relay requires sign-in. */
@@ -682,6 +692,8 @@ export const create = Effect.fn("Room.create")(function* (signer: string | null,
   db.set("epoch", 0);
   db.set("created", Date.now());
   if (ownerUser) db.set("owner_user", ownerUser);
+  db.changed("roster");
+  db.changed("info");
   // The channel's name, sealed with its key: members can read it, the relay can't.
   if (body.title && typeof body.title.iv === "string" && typeof body.title.ct === "string" && body.title.ct.length < 2048) db.set("title", JSON.stringify(body.title));
   // The owner may always post, whatever the body says.
@@ -699,6 +711,7 @@ export const setIcon = Effect.fn("Room.setIcon")(function* (icon: unknown) {
     db.set("icon", JSON.stringify({ e: icon.e, iv: icon.iv, ct: icon.ct }));
   }
   db.set("icon_at", at);
+  db.changed("info");
   return at;
 });
 
@@ -714,6 +727,7 @@ export const setTitle = Effect.fn("Room.setTitle")(function* (title: unknown) {
   const t = sealedUnder(title, 2048);
   if (!t) return yield* new BadRequest({ message: "bad title" });
   db.set("title", JSON.stringify(t));
+  db.changed("info");
 });
 
 /** Replace the sealed settings. The caller has already checked that this is the owner. */
@@ -722,6 +736,7 @@ export const setSettings = Effect.fn("Room.setSettings")(function* (settings: un
   const t = sealedUnder(settings, 16_384);
   if (!t) return yield* new BadRequest({ message: "bad settings" });
   db.set("settings", JSON.stringify(t));
+  db.changed("info");
 });
 
 // ---------- who owns this channel ----------
@@ -880,6 +895,7 @@ export const approve = Effect.fn("Room.approve")(function* (body: MemberBody & {
     if (!body.keys?.[String(e)]) return yield* new BadRequest({ message: `missing wrapped key for epoch ${e}` });
   }
   yield* putMember(body, epoch);
+  db.changed("roster");
   if (body.request) db.sql.run("UPDATE requests SET status = 'approved' WHERE id = ? AND pk = ?", body.request, body.pk);
 });
 
@@ -903,6 +919,7 @@ export const setRecord = Effect.fn("Room.setRecord")(function* (pk: string, rec:
   db.migrate();
   db.sql.run("UPDATE members SET rec = ?, rec_e = ?, read_only = ?, admitted_by = NULL WHERE pk = ?", rec, e, post ? 0 : 1, pk);
   db.membersChanged(pk);
+  db.changed("roster");
 });
 
 /** Whether a member may post (the owner's scope.set says what they may do; this is the bit the relay enforces). */
@@ -913,6 +930,7 @@ export const setCanPost = Effect.fn("Room.setCanPost")(function* (pk: string, po
   db.migrate();
   db.sql.run("UPDATE members SET read_only = ?, admitted_by = NULL WHERE pk = ?", post ? 0 : 1, pk);
   db.membersChanged(pk);
+  db.changed("roster");
 });
 
 export const remove = Effect.fn("Room.remove")(function* (pk: string, how: GoneHow) {
@@ -926,8 +944,10 @@ export const remove = Effect.fn("Room.remove")(function* (pk: string, how: GoneH
   db.sql.run("DELETE FROM requests WHERE pk = ?", pk);
   db.sql.run("DELETE FROM reads WHERE pk = ?", pk);
   db.membersChanged(pk);
+  db.changed("roster");
   // Its keys are revoked at the relay; the owner rotates so they also can't decrypt anything newer.
   db.set("rotate", 1);
+  db.changed("info");
 });
 
 /** A member has read up to `seq`: kept only when it moves forward, and never past the head. Null when nothing changed. */
@@ -951,6 +971,7 @@ export const rotate = Effect.fn("Room.rotate")(function* (epoch: number, keys: R
   for (const m of members) db.sql.run("INSERT OR REPLACE INTO keys (pk, e, wrapped) VALUES (?, ?, ?)", m.pk, epoch, keys[m.pk]!);
   db.set("epoch", epoch);
   db.set("rotate", 0);
+  db.changed("info");
 });
 
 export interface MemberBody {

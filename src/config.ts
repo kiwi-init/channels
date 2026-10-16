@@ -11,7 +11,7 @@ import { randomBytes } from "node:crypto";
 import { appendFileSync, chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { RecordMemory } from "./client.ts";
+import type { AnswerMemory, RecordMemory } from "./client.ts";
 import type { ChannelAccess } from "./crypto.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "./identity.ts";
 import type { Member } from "./membership.ts";
@@ -463,6 +463,7 @@ export function wipeChannel(alias: string): void {
     rmSync(identityDir(c.roomId), { recursive: true, force: true });
     for (const suffix of ["", ".seq"]) rmSync(cachePath(c.roomId) + suffix, { force: true });
     rmSync(join(home(), "downloads", c.roomId), { recursive: true, force: true });
+    rmSync(join(home(), "answers", safe(c.roomId)), { recursive: true, force: true });
   }
   rmSync(cursorDir(alias), { recursive: true, force: true });
 }
@@ -516,6 +517,20 @@ export const fileRecordMemory = {
       all[pk] = m;
       writePrivate(path, JSON.stringify(all));
     });
+  },
+};
+
+export const fileAnswerMemory: AnswerMemory = {
+  get(room, what) {
+    try {
+      const kept = JSON.parse(readFileSync(join(home(), "answers", safe(room), `${what}.json`), "utf8")) as { etag?: unknown; data?: unknown };
+      return typeof kept.etag === "string" && kept.data && typeof kept.data === "object" ? { etag: kept.etag, data: kept.data } : null;
+    } catch {
+      return null;
+    }
+  },
+  set(room, what, answer) {
+    writePrivate(join(home(), "answers", safe(room), `${what}.json`), JSON.stringify(answer));
   },
 };
 
@@ -596,6 +611,7 @@ export interface KeystoreApi {
   readonly budget: SigningBudget;
   /** The newest member record seen per key. */
   readonly records: RecordMemory;
+  readonly answers?: AnswerMemory;
 }
 
 export class Keystore extends Context.Service<Keystore, KeystoreApi>()("kiwi/Keystore") {}
@@ -634,6 +650,7 @@ export const fileKeystore: KeystoreApi = {
   wipeChannel: (alias) => Effect.sync(() => wipeChannel(alias)),
   budget: signingBudget,
   records: fileRecordMemory,
+  answers: fileAnswerMemory,
 };
 
 /** The three, on this computer's disk. */

@@ -41,7 +41,8 @@ const PATH = /^\/v1\/mailbox\/([A-Za-z0-9_-]{43})(?:\/(a|b))?$/;
 const CORS_HEADERS: Record<string, string> = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, PUT, POST, DELETE, OPTIONS",
-  "access-control-allow-headers": "authorization, content-type, x-human-token",
+  "access-control-allow-headers": "authorization, content-type, x-human-token, if-none-match",
+  "access-control-expose-headers": "etag",
   "access-control-max-age": "86400",
 };
 
@@ -57,6 +58,7 @@ export function withCors(res: Response): Response {
   if (res.status === 101 || (res as Response & { webSocket?: unknown }).webSocket) return res;
   const headers = new Headers(res.headers);
   headers.set("access-control-allow-origin", "*");
+  headers.set("access-control-expose-headers", "etag");
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 

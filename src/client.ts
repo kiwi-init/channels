@@ -172,9 +172,12 @@ export interface CallInit {
   human?: string | null;
 }
 
+export type Conditional<T> = { readonly fresh: true; readonly etag: string | null; readonly data: T } | { readonly fresh: false };
+
 export interface RelayApi {
   /** A channel's route, signed when `init.identity` is given. A refusal is a RelayError with the relay's own text. */
   readonly call: <T>(relay: string, roomId: string, path: string, init?: CallInit, params?: Record<string, string | number>) => Effect.Effect<T, Refusal>;
+  readonly conditional: <T>(relay: string, roomId: string, path: string, etag: string | null, init?: CallInit, params?: Record<string, string | number>) => Effect.Effect<Conditional<T>, Refusal>;
   /** Whether a relay requires a signed-in human to create channels, and with which WorkOS client. */
   readonly config: (relay: string) => Effect.Effect<RelayConfig, Unreachable>;
 }
@@ -199,6 +202,8 @@ const expired = (err: Refusal) => err instanceof RelayError && err.status === 40
 /** The relay over HTTP. */
 export const fetchRelay: RelayApi = {
   call: <T>(relay: string, roomId: string, path: string, init: CallInit = {}, params: Record<string, string | number> = {}) =>
+    Effect.flatMap(fetchRelay.conditional<T>(relay, roomId, path, null, init, params), (a) => (a.fresh ? Effect.succeed(a.data) : Effect.die(new Error("not modified")))),
+  conditional: <T>(relay: string, roomId: string, path: string, etag: string | null, init: CallInit = {}, params: Record<string, string | number> = {}) =>
     Effect.suspend(() => {
       const u = new URL(`/v1/rooms/${roomId}${path}`, relay);
       for (const [k, v] of Object.entries(params)) u.searchParams.set(k, String(v));
@@ -210,8 +215,11 @@ export const fetchRelay: RelayApi = {
         // The signature covers the query too, so a captured token can't be replayed with other parameters.
         if (identity) headers.authorization = `Bearer ${yield* Effect.promise(() => signRequest(identity, roomId, method, path + u.search, body))}`;
         if (human) headers["x-human-token"] = human;
+        if (etag) headers["if-none-match"] = etag;
         const res = yield* reach(u, { method, body: method === "GET" || method === "DELETE" ? undefined : body, headers });
-        return yield* answered<T>(res);
+        if (etag && res.status === 304) return { fresh: false } as const;
+        const data = yield* answered<T>(res);
+        return { fresh: true, etag: res.headers.get("etag"), data } as const;
       });
       // Signed, then the machine slept past the signature's window before it was sent: sign again,
       // once. The relay refused before doing anything, so even a write is safe to send twice.
@@ -226,6 +234,16 @@ export const fetchRelay: RelayApi = {
 const callRelay = <T>(relay: string, roomId: string, path: string, init?: CallInit, params?: Record<string, string | number>) =>
   Effect.gen(function* () {
     return yield* (yield* Relay).call<T>(relay, roomId, path, init, params);
+  });
+
+const callUnlessUnchanged = <T>(relay: string, roomId: string, what: Remembered, path: string, init?: CallInit, params?: Record<string, string | number>) =>
+  Effect.gen(function* () {
+    const memory = answerMemory;
+    const kept = memory?.get(roomId, what) ?? null;
+    const got = yield* (yield* Relay).conditional<T>(relay, roomId, path, kept?.etag ?? null, init, params);
+    if (!got.fresh) return kept!.data as T;
+    if (got.etag && memory) memory.set(roomId, what, { etag: got.etag, data: got.data });
+    return got.data;
   });
 
 /** An Effect's end as a Promise's: its value, or what it failed with (what fetch threw, for a relay out of reach). */
@@ -770,7 +788,7 @@ export class Channel {
     info: Effect.fn("Channel.info")({ self: this }, function* (this: Channel, fp?: string) {
       const ownerPk = this.access.ownerPk;
       const proof = fp ?? (ownerPk ? yield* Effect.promise(() => ownerFingerprint(ownerPk)) : undefined);
-      return yield* callRelay<Info>(this.relay, this.roomId, "/info", {}, proof ? { fp: proof } : {});
+      return yield* callUnlessUnchanged<Info>(this.relay, this.roomId, "info", "/info", {}, proof ? { fp: proof } : {});
     }),
 
     title: Effect.fn("Channel.title")({ self: this }, function* (this: Channel) {
@@ -889,7 +907,7 @@ export class Channel {
     }),
 
     members: Effect.fn("Channel.members")({ self: this }, function* (this: Channel) {
-      const { members } = yield* this.request<{ members: MemberRow[] }>("/members");
+      const { members } = yield* callUnlessUnchanged<{ members: MemberRow[] }>(this.relay, this.roomId, "members", "/members", { identity: this.identity }).pipe(Effect.mapError(gone));
       const out: Member[] = [];
       for (const m of members) {
         if (!this.access.keys[String(m.e)]) yield* this.fx.refreshKeys();
@@ -1825,6 +1843,17 @@ function newestRecord(room: string, served: Member): Member {
   if (seen && seen.at > served.at) return seen;
   if (!seen || served.at > seen.at) recordMemory.set(room, served.pk, served);
   return served;
+}
+
+export type Remembered = "members" | "info";
+
+export interface AnswerMemory {
+  get(room: string, what: Remembered): { etag: string; data: unknown } | null;
+  set(room: string, what: Remembered, answer: { etag: string; data: unknown }): void;
+}
+let answerMemory: AnswerMemory | null = null;
+export function keepAnswersIn(memory: AnswerMemory | null): void {
+  answerMemory = memory;
 }
 
 /** Whether a message is addressed to `agent` (directly, or as a broadcast). */
