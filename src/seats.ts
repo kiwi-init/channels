@@ -16,7 +16,7 @@
 import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
-import { kimiCodePid, mimoHere, type ProcessTree } from "./ancestry.ts";
+import { kimiAncestor, kimiCodePid, mimoHere, type ProcessTree } from "./ancestry.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord } from "./config.ts";
 
 type Harness = NonNullable<SeatRecord["harness"]>;
@@ -65,6 +65,11 @@ export function here(env: Record<string, string | undefined> = process.env, tree
 
 function heldByProcess(harness: "kimi" | "mimo", pid: number): Here {
   return { harness, session: `${harness}-pid-${pid}`, pid };
+}
+
+export function kimiHookHere(tree: ProcessTree = {}): Here {
+  const kimi = kimiAncestor(tree);
+  return kimi ? heldByProcess("kimi", kimi) : {};
 }
 
 /** The name an agent gets when it doesn't pick one: what it runs in. */

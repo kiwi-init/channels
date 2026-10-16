@@ -313,7 +313,7 @@ describe("wake paths, commands and words", () => {
     expect(kimi).toContain("check TaskList shows it running");
     expect(kimi).not.toContain("listen --now");
     const grok = howMessagesReachYou("kiwi", true, { harness: "grok", session: "g" });
-    expect(grok).toContain("start the monitor tool with command `kiwi listen`, description \"kiwi messages\", persistent: true");
+    expect(grok).toContain("start the monitor tool with command `kiwi listen`, description \"kiwi listen\", persistent: true");
     expect(grok).toContain("start it again the same way");
     expect(grok).not.toContain("listen --once");
     expect(grok).not.toContain("leader");

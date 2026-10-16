@@ -58,6 +58,10 @@ function nearestHarness(tree: ProcessTree, mark: number | null, depth = 12): Nea
 
 export function kimiCodePid(env: Record<string, string | undefined>, tree: ProcessTree = {}): number | null {
   if (env.TERM !== "dumb" || env.NO_COLOR !== "1") return null;
+  return kimiAncestor(tree);
+}
+
+export function kimiAncestor(tree: ProcessTree = {}): number | null {
   const near = nearestHarness(tree, null);
   return near.kind === "harness" && KIMI_PROCESSES.includes(near.name) ? near.pid : null;
 }
