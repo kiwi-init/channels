@@ -259,7 +259,7 @@ export interface StreamOptions {
    */
   now?: () => number;
   /** Called on every (re)connect with a way to send ephemeral presence. */
-  onOpen?: (live: { presence: (p: PresenceFields) => Promise<void>; mark: (seq: number) => boolean }) => void;
+  onOpen?: (live: { presence: (p: PresenceFields) => Promise<void>; mark: (seq: number) => boolean; probe: (ms: number) => Promise<Probe | null> }) => void;
   onPresence?: (p: Presence & { sigOk: boolean }) => void;
   /** The channel's info changed (its icon): refetch it. */
   onInfo?: () => void;
@@ -283,6 +283,7 @@ export type Live =
       readonly presence: (p: PresenceFields) => Effect.Effect<void>;
       /** Say on this socket that this member has read up to `seq`; false once it has closed. */
       readonly mark: (seq: number) => boolean;
+      readonly probe: (ms: number) => Promise<Probe | null>;
       readonly outage: number | null;
     }
   /** Caught up: the relay's head when this connection's replay ended. */
@@ -319,14 +320,75 @@ const outlasted = ({ attempt, elapsed, elapsedSincePrevious }: Schedule.InputMet
   elapsed >= quietMs && (attempt === 1 || elapsed - elapsedSincePrevious < quietMs);
 
 /** A frame from the socket, or the socket opening (with a way to send presence on it). */
-type Incoming = ServerFrame | { t: "pong" } | { t: "open"; presence: (p: PresenceFields) => Effect.Effect<void>; mark: (seq: number) => boolean };
+type Incoming = ServerFrame | { t: "pong" } | { t: "open"; presence: (p: PresenceFields) => Effect.Effect<void>; mark: (seq: number) => boolean; probe: (ms: number) => Promise<Probe | null> };
 
 /** A ping now and then keeps proxies from closing a quiet socket. */
-const keepAlive = (ws: WebSocket) =>
+const keepAlive = (ping: () => boolean) =>
   Effect.sleep("25 seconds").pipe(
-    Effect.andThen(Effect.sync(() => ws.readyState === WebSocket.OPEN && ws.send(PING))),
+    Effect.andThen(Effect.sync(ping)),
     Effect.forever,
   );
+
+export interface Probe {
+  readonly head: number;
+  readonly changes: number;
+}
+
+function wireOf(ws: WebSocket, since: number) {
+  let head = since;
+  let ready = false;
+  let changes = 0;
+  let sent = 0;
+  let answered = 0;
+  const waiting = new Set<{ n: number; done: (p: Probe | null) => void }>();
+  const ping = (): boolean => {
+    if (ws.readyState !== WebSocket.OPEN) return false;
+    ws.send(PING);
+    sent++;
+    return true;
+  };
+  const settle = (all: boolean): void => {
+    for (const w of [...waiting]) {
+      if (!all && w.n > answered) continue;
+      waiting.delete(w);
+      w.done(all || !ready ? null : { head, changes });
+    }
+  };
+  return {
+    ping,
+    closed: () => {
+      ready = false;
+      settle(true);
+    },
+    frame: (f: ServerFrame | { t: "pong" }): void => {
+      if (f.t === "msg") head = Number.isSafeInteger(f.seq) ? Math.max(head, f.seq) : head;
+      else if (f.t === "ready") {
+        if (Number.isSafeInteger(f.head) && f.head > head) head = f.head;
+        ready = !f.more;
+      } else if (f.t === "roster" || f.t === "info" || f.t === "epoch") changes++;
+      else if (f.t === "pong") {
+        answered++;
+        settle(false);
+      }
+    },
+    probe: (ms: number): Promise<Probe | null> =>
+      new Promise<Probe | null>((resolve) => {
+        if (!ready || !ping()) return resolve(null);
+        const timer = setTimeout(() => {
+          waiting.delete(w);
+          resolve(null);
+        }, ms);
+        const w = {
+          n: sent,
+          done: (p: Probe | null) => {
+            clearTimeout(timer);
+            resolve(p);
+          },
+        };
+        waiting.add(w);
+      }),
+  };
+}
 
 /** A real 10ms wait, for polling a test's clock. */
 const tick = Effect.callback<void>((resume) => {
@@ -528,7 +590,7 @@ export type JoinStatus =
   | { status: "approved"; access: ChannelAccess };
 
 /** A member list entry as the relay sends it. */
-type MemberRow = { pk: string; xpk: string; rec: string; e: number; active: number; read_only?: number };
+export type MemberRow = { pk: string; xpk: string; rec: string; e: number; active: number; read_only?: number };
 
 /** A pending join request as the relay sends it. */
 type RequestRow = {
@@ -556,15 +618,16 @@ export interface ChannelFx {
   title(): Effect.Effect<string | null, Refusal, Relay>;
   setTitle(name: string): Effect.Effect<void, Refused, Relay>;
   mode(): Effect.Effect<ModeSetting | null, Refusal, Relay>;
-  rooms(): Effect.Effect<RoomsSetting | null, Refusal, Relay>;
+  rooms(info?: Info): Effect.Effect<RoomsSetting | null, Refusal, Relay>;
   setMode(mode: ModeSetting): Effect.Effect<void, Refused, Relay>;
   setRooms(rooms: RoomsSetting): Effect.Effect<void, Refused, Relay>;
-  guard(): Effect.Effect<GuardFloor | null, Refusal, Relay>;
+  guard(info?: Info): Effect.Effect<GuardFloor | null, Refusal, Relay>;
   setCharter(charter: NonNullable<GuardFloor["charter"]>): Effect.Effect<void, Refused, Relay>;
   setHold(hold: NonNullable<GuardFloor["hold"]>): Effect.Effect<void, Refused, Relay>;
   icon(): Effect.Effect<ChannelIcon | null, MemberRefusal, Relay>;
   setIcon(icon: ChannelIcon | null): Effect.Effect<void, Refused, Relay>;
-  members(): Effect.Effect<Member[], MemberRefusal, Relay>;
+  members(rows?: readonly MemberRow[]): Effect.Effect<Member[], MemberRefusal, Relay>;
+  memberRows(): Effect.Effect<MemberRow[], MemberRefusal, Relay>;
   leave(): Effect.Effect<void, MemberRefusal, Relay>;
   requests(opts?: { budget?: SigningBudget; person?: string }): Effect.Effect<JoinRequest[], Refused, Relay>;
   checkRequest(req: Pick<JoinRequest, "id" | "pk" | "commit">): Effect.Effect<void, Refused, Relay>;
@@ -811,8 +874,8 @@ export class Channel {
       return mode;
     }),
 
-    rooms: Effect.fn("Channel.rooms")({ self: this }, function* (this: Channel) {
-      const r = (yield* this.settings())?.rooms as Partial<RoomsSetting> | undefined;
+    rooms: Effect.fn("Channel.rooms")({ self: this }, function* (this: Channel, info?: Info) {
+      const r = (yield* this.settings(info))?.rooms as Partial<RoomsSetting> | undefined;
       if (!r || !Array.isArray(r.list) || !Number.isInteger(r.since)) return null;
       const list = r.list.filter((x): x is RoomEntry => !!x && typeof x === "object" && ROOM_ID_RE.test((x as RoomEntry).id) && typeof (x as RoomEntry).name === "string");
       const rooms: RoomsSetting = { list: list.map((x) => ({ id: x.id, name: x.name.slice(0, MAX_ROOM_NAME) })), since: r.since! };
@@ -845,8 +908,8 @@ export class Channel {
      * The charter and the hold the owner last signed into the channel's settings, each as of the event
      * at its `since`: the floor for a client holding only the log's tail, where those events may be gone.
      */
-    guard: Effect.fn("Channel.guard")({ self: this }, function* (this: Channel) {
-      const o = yield* this.settings();
+    guard: Effect.fn("Channel.guard")({ self: this }, function* (this: Channel, info?: Info) {
+      const o = yield* this.settings(info);
       if (!o) return null;
       const c = o.charter as { text?: unknown; since?: unknown } | undefined;
       const h = o.hold as { on?: unknown; note?: unknown; since?: unknown } | undefined;
@@ -888,8 +951,12 @@ export class Channel {
       yield* this.request("/icon", { method: "PUT", body: JSON.stringify({ icon: sealed }) });
     }),
 
-    members: Effect.fn("Channel.members")({ self: this }, function* (this: Channel) {
-      const { members } = yield* this.request<{ members: MemberRow[] }>("/members");
+    memberRows: Effect.fn("Channel.memberRows")({ self: this }, function* (this: Channel) {
+      return (yield* this.request<{ members: MemberRow[] }>("/members")).members;
+    }),
+
+    members: Effect.fn("Channel.members")({ self: this }, function* (this: Channel, rows?: readonly MemberRow[]) {
+      const members = rows ?? (yield* this.fx.memberRows());
       const out: Member[] = [];
       for (const m of members) {
         if (!this.access.keys[String(m.e)]) yield* this.fx.refreshKeys();
@@ -1245,7 +1312,7 @@ export class Channel {
       const handle = (ev: Live): Effect.Effect<void> => {
         switch (ev._tag) {
           case "Open":
-            return Effect.sync(() => opts.onOpen?.({ presence: (p) => Effect.runPromise(ev.presence(p)), mark: ev.mark }));
+            return Effect.sync(() => opts.onOpen?.({ presence: (p) => Effect.runPromise(ev.presence(p)), mark: ev.mark, probe: ev.probe }));
           case "Ready":
             return Effect.sync(() => opts.onReady?.(ev.head));
           case "Message":
@@ -1289,9 +1356,9 @@ export class Channel {
   }
 
   /** The channel's settings, opened and checked: sealed with the epoch-0 key and signed by the owner. */
-  private settings(): Effect.Effect<Record<string, unknown> | null, Refusal, Relay> {
+  private settings(info?: Info): Effect.Effect<Record<string, unknown> | null, Refusal, Relay> {
     return Effect.gen({ self: this }, function* () {
-      const s = (yield* this.fx.info()).settings;
+      const s = (info ?? (yield* this.fx.info())).settings;
       const key = this.access.keys["0"];
       if (!s || !key) return null;
       const o = (yield* Effect.promise(() => open(key, this.roomId, s.iv, s.ct).catch(() => null))) as ({ what?: unknown; room?: unknown; pk?: string; sig?: string } & Record<string, unknown>) | null;
@@ -1428,11 +1495,11 @@ export class Channel {
       const u = new URL(`/v1/rooms/${this.roomId}/ws`, this.relay);
       u.searchParams.set("since", String(since));
       u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
-      const { ws, closed } = yield* Effect.acquireRelease(
-        Effect.sync(() => this.connect(u, auth, q)),
+      const { ws, closed, ping } = yield* Effect.acquireRelease(
+        Effect.sync(() => this.connect(u, auth, q, since)),
         ({ ws }) => Effect.sync(() => ws.close(1000, "aborted")),
       );
-      yield* Effect.forkScoped(keepAlive(ws));
+      yield* Effect.forkScoped(keepAlive(ping));
       const { code, reason } = yield* Effect.promise(() => closed);
       if (code === 4000) return yield* Queue.end(q);
       if (code === CLOSE_REMOVED) return yield* Queue.fail(q, new ChannelGone("removed", goneHow(reason)));
@@ -1442,13 +1509,17 @@ export class Channel {
   }
 
   /** Open the socket with every handler set at once, before any event can arrive. */
-  private connect(u: URL, auth: string, q: Queue.Queue<Incoming, Dropped | ChannelGone | Cause.Done>) {
+  private connect(u: URL, auth: string, q: Queue.Queue<Incoming, Dropped | ChannelGone | Cause.Done>, since: number) {
     const ws = new WebSocket(u, [WS_PROTOCOL, auth]);
+    const wire = wireOf(ws, since);
     const closed = new Promise<{ code: number; reason: string }>((resolve) => {
-      ws.onclose = (ev) => resolve({ code: ev.code, reason: ev.reason });
+      ws.onclose = (ev) => {
+        wire.closed();
+        resolve({ code: ev.code, reason: ev.reason });
+      };
     });
     ws.onerror = () => {};
-    ws.onopen = () => void Queue.offerUnsafe(q, { t: "open", presence: this.presenceOn(ws), mark: markOn(ws) });
+    ws.onopen = () => void Queue.offerUnsafe(q, { t: "open", presence: this.presenceOn(ws), mark: markOn(ws), probe: wire.probe });
     ws.onmessage = (ev) => {
       let f: ServerFrame | { t: "pong" };
       try {
@@ -1456,11 +1527,12 @@ export class Channel {
       } catch {
         return; // not a frame: ignore it, keep listening
       }
+      wire.frame(f);
       Queue.offerUnsafe(q, f);
       // The relay replays at most one page on connect; reconnect for the rest.
       if (f.t === "ready" && f.more) ws.close(4000, "more");
     };
-    return { ws, closed };
+    return { ws, closed, ping: wire.ping };
   }
 
   /** Send ephemeral presence on `ws`, sealed with the current key (nothing, once it has closed). */
@@ -1483,7 +1555,7 @@ export class Channel {
           // Back after an outage the listener was told about: say for how long. The schedule's metadata is that outage's.
           const { attempt, elapsed, start } = yield* Schedule.CurrentMetadata;
           const now = yield* Clock.currentTimeMillis;
-          return { _tag: "Open", presence: f.presence, mark: f.mark, outage: attempt > 0 && elapsed >= quietMs ? now - start : null } satisfies Live;
+          return { _tag: "Open", presence: f.presence, mark: f.mark, probe: f.probe, outage: attempt > 0 && elapsed >= quietMs ? now - start : null } satisfies Live;
         }
         case "msg": {
           if (f.seq <= at.seq) return null;
@@ -1670,6 +1742,10 @@ export class Channel {
   /** The verified member list. Records that fail verification are dropped. */
   members(): Promise<Member[]> {
     return run(this.fx.members());
+  }
+
+  memberRows(): Promise<MemberRow[]> {
+    return run(this.fx.memberRows());
   }
 
   /** Leave the channel. Access is revoked at once; the owner rotates the key. */

@@ -17,7 +17,7 @@ import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import type * as Scoped from "effect/Scope";
-import { Channel, ChannelGone, eachLive, fetchRelay, isDirectedAt, isForAgent, keepRecordsIn, QUIET_DROP_MS, reason, Relay, RelayError, settle, type Live, type Refused, type SendOptions } from "./client.ts";
+import { Channel, ChannelGone, eachLive, fetchRelay, isDirectedAt, isForAgent, keepRecordsIn, QUIET_DROP_MS, reason, Relay, RelayError, settle, type Info, type Live, type MemberRow, type Refused, type SendOptions } from "./client.ts";
 import { Cache, Cursor, Keystore, LocalFiles, type ChannelConfig } from "./config.ts";
 import { TOO_MANY_REQUESTS } from "./sas.ts";
 import type { ChannelAccess } from "./crypto.ts";
@@ -28,7 +28,7 @@ import { canPost, describeScopes, refusal } from "./scopes.ts";
 import { GENERAL_ROOM, ignored, PROTOCOL_VERSION, TASK_STATES, wellFormedReaction, type Card, type Color, type Event, type ImageAttachment, type Kind, type Message, type Presence, type TaskState, type Verdict } from "./protocol.ts";
 import { allowedOnHold, findRoom, fold, humanOf, isPerson, keptFromPeople, ON_HOLD, openRound, ownerOf, revisedOut, taskId, threadMembers, type ChannelState, type GuardFloor, type ReviewRound, type Roster, type RoomsFloor, type Task } from "./state.ts";
 import { mergeCard, sameCard } from "./card.ts";
-import { daemonSeat } from "./daemon.ts";
+import { daemonMark, daemonPeek, daemonSeat, type DaemonPeek } from "./daemon.ts";
 import { isWakeVia, viaOf } from "./wake.ts";
 import { cardLine } from "./format.ts";
 
@@ -122,6 +122,7 @@ export class AgentSession {
   protected roomsFloor: RoomsFloor | null | undefined;
   protected guardFloor: GuardFloor | null | undefined;
   private roomsCheckedAt = 0;
+  private daemonLive = false;
 
   /** openSession makes these, with the keys loaded. */
   constructor(
@@ -144,8 +145,8 @@ export class AgentSession {
   }
 
   /** The verified member list (owner-signed records). */
-  readonly members = Effect.fn("AgentSession.members")({ self: this }, function* (this: AgentSession, refresh = false) {
-    if (!this.roster || refresh) this.roster = (yield* this.ch.fx.members()).map(toRoster);
+  readonly members = Effect.fn("AgentSession.members")({ self: this }, function* (this: AgentSession, refresh = false, rows?: readonly MemberRow[]) {
+    if (!this.roster || refresh) this.roster = (yield* this.ch.fx.members(refresh ? undefined : rows)).map(toRoster);
     return this.roster;
   });
 
@@ -157,10 +158,12 @@ export class AgentSession {
   // ---------- log & state ----------
 
   /** The full log: cached messages plus anything new from the relay. */
-  readonly sync = Effect.fn("AgentSession.sync")({ self: this }, function* (this: AgentSession) {
+  readonly sync = Effect.fn("AgentSession.sync")({ self: this }, function* (this: AgentSession, peeked?: DaemonPeek | null) {
     const cache = yield* Cache;
     const cached = yield* cache.read(this.cfg.roomId);
     const last = cached.at(-1)?.seq ?? 0;
+    const seen = peeked === undefined ? yield* this.peek() : peeked;
+    if (seen && seen.head <= last) return cached;
     const { messages } = yield* this.ch.fx.history(last);
     const fresh = messages.filter((m) => m.seq > last);
     yield* cache.append(this.cfg.roomId, fresh);
@@ -169,19 +172,28 @@ export class AgentSession {
 
   readonly state = Effect.fn("AgentSession.state")({ self: this }, function* (this: AgentSession) {
     yield* this.chores();
-    const [messages, roster] = yield* Effect.all([this.sync(), this.members()], { concurrency: "unbounded" });
-    return { messages, state: yield* this.foldState(messages, roster) };
+    const seen = yield* this.peek();
+    const [messages, roster] = yield* Effect.all([this.sync(seen), this.members(false, seen?.members ?? undefined)], { concurrency: "unbounded" });
+    return { messages, state: yield* this.foldState(messages, roster, seen?.info ?? undefined) };
   });
+
+  private peek(): Effect.Effect<DaemonPeek | null> {
+    return Effect.promise(async () => {
+      const seen = await daemonPeek(this.alias, this.me, this.cfg.roomId);
+      this.daemonLive = seen !== null;
+      return seen;
+    });
+  }
 
   /**
    * Fold with the room list the owner signed into the settings: the relay keeps only so many
    * messages, so a room's create may be gone from the log. A message in a room we don't know,
    * newer than our last look, sends us to check that list again (it may have just been made).
    */
-  private foldState(messages: Message[], roster: Roster): Effect.Effect<ChannelState, never, Relay> {
+  private foldState(messages: Message[], roster: Roster, info?: Info): Effect.Effect<ChannelState, never, Relay> {
     return Effect.gen({ self: this }, function* () {
-      this.roomsFloor ??= yield* orNone(this.ch.fx.rooms());
-      this.guardFloor ??= yield* orNone(this.ch.fx.guard());
+      this.roomsFloor ??= yield* orNone(this.ch.fx.rooms(info));
+      this.guardFloor ??= yield* orNone(this.ch.fx.guard(info));
       let state = fold(messages, roster, Date.now(), undefined, this.roomsFloor, this.guardFloor);
       const unknown = [...state.rejected].some(([seq, why]) => seq > this.roomsCheckedAt && why.startsWith("no room "));
       if (unknown) {
@@ -235,7 +247,12 @@ export class AgentSession {
 
   /** Tell the channel this agent has read up to `seq`, waiting a moment for it to land; never fails. */
   markRead(seq: number): Effect.Effect<void, never, Relay> {
-    return Effect.ignoreCause(Effect.timeout(this.ch.fx.markRead(seq), LAST_MARK_MS));
+    const overHttp = Effect.ignoreCause(Effect.timeout(this.ch.fx.markRead(seq), LAST_MARK_MS));
+    if (!this.daemonLive) return overHttp;
+    return Effect.flatMap(
+      Effect.promise(() => daemonMark(this.alias, this.me, seq)),
+      (marked) => (marked ? Effect.void : overHttp),
+    );
   }
 
   readonly unreadCount = Effect.fn("AgentSession.unreadCount")({ self: this }, function* (this: AgentSession, state: ChannelState, messages: Message[]) {

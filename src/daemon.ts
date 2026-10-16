@@ -19,7 +19,7 @@ import { join, resolve } from "node:path";
 import type { Socket, Subprocess } from "bun";
 // The channel stack (client.ts) loads lazily in seatFor, where the multiplex needs it: pairing,
 // hello/adopt and the socket itself never touch it, so `kiwi pair` works without it.
-import type { Channel, PresenceFields } from "./client.ts";
+import type { Channel, Info, MemberRow, PresenceFields, Probe } from "./client.ts";
 import type { Activity, Message } from "./protocol.ts";
 import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity, saveAccess, type Config, type SeatRecord } from "./config.ts";
 import { withExchangeKey } from "./identity.ts";
@@ -84,7 +84,7 @@ export function daemonSock(dir = home()): string {
 
 // ---------- the socket protocol ----------
 
-export type DaemonVerb = "hello" | "adopt" | "listen" | "listening" | "hold" | "listeners" | "read" | "mark" | "stop";
+export type DaemonVerb = "hello" | "adopt" | "listen" | "listening" | "hold" | "listeners" | "read" | "mark" | "peek" | "stop";
 
 export const DAEMON_PROTOCOL = 4;
 
@@ -179,6 +179,22 @@ interface Seat {
   wakeAgain: boolean;
   wakeChild: Subprocess | null;
   lastWake: DaemonWake | null;
+  probe: ((ms: number) => Promise<Probe | null>) | null;
+  rows: SeatRows | null;
+  fetchingRows: boolean;
+}
+
+interface SeatRows {
+  probe: (ms: number) => Promise<Probe | null>;
+  changes: number;
+  members: MemberRow[];
+  info: Info;
+}
+
+export interface DaemonPeek {
+  head: number;
+  members: MemberRow[] | null;
+  info: Info | null;
 }
 
 type Env = Record<string, string | undefined>;
@@ -187,6 +203,8 @@ const HARNESS_ENV = ["CLAUDECODE", "CLAUDE_PID", "CLAUDE_CODE_SESSION_ID", "CODE
 
 export const ACTIVITY_EVERY_MS = 3_000;
 const PROBE_ANSWER_GAP_MS = 500;
+const PEEK_PROBE_MS = 250;
+const PEEK_MS = 300;
 const TICK_MS = 5_000;
 const RETRY_FIRST_MS = 5_000;
 const RETRY_MAX_MS = 30 * 60_000;
@@ -485,6 +503,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     seat.markTimer = null;
     seat.announce = null;
     seat.mark = null;
+    seat.probe = null;
+    seat.rows = null;
   };
 
   const tell = (seat: Seat, line: { event: DaemonEvent } | { status: string }): void => {
@@ -568,9 +588,11 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
   };
 
-  const opened = (seat: Seat, presence: (p: PresenceFields) => Promise<void>, mark: (seq: number) => boolean): void => {
+  const opened = (seat: Seat, presence: (p: PresenceFields) => Promise<void>, mark: (seq: number) => boolean, probe: (ms: number) => Promise<Probe | null>): void => {
     if (seats.get(seat.key) !== seat || seat.ctl.signal.aborted) return;
     seat.mark = mark;
+    seat.probe = probe;
+    seat.rows = null;
     seat.announce = () => void presence(fieldsOf(seat)).catch(() => {});
     seat.announce();
     stopBeacon(seat);
@@ -641,6 +663,9 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         wakeAgain: false,
         wakeChild: null,
         lastWake: null,
+        probe: null,
+        rows: null,
+        fetchingRows: false,
       };
       seats.set(key, seat);
       // stop() may have run between the check and the set: don't leave a stream behind it.
@@ -661,7 +686,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         },
         {
           signal: seat.ctl.signal,
-          onOpen: ({ presence, mark }) => opened(seat, presence, mark),
+          onOpen: ({ presence, mark, probe }) => opened(seat, presence, mark, probe),
           onPresence: (p) => {
             if (!p.query || Date.now() - seat.lastProbe < PROBE_ANSWER_GAP_MS) return;
             seat.lastProbe = Date.now();
@@ -710,6 +735,33 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       dropSub(sub);
       sendLine(conn, JSON.stringify({ id, ok: false, error: why(err) }));
     }
+  };
+
+  const refreshRows = (seat: Seat, probe: (ms: number) => Promise<Probe | null>, changes: number): void => {
+    if (seat.fetchingRows) return;
+    seat.fetchingRows = true;
+    void Promise.all([seat.ch.memberRows(), seat.ch.info()])
+      .then(([members, info]) => {
+        if (seat.probe === probe) seat.rows = { probe, changes, members, info };
+      })
+      .catch(() => {})
+      .finally(() => {
+        seat.fetchingRows = false;
+      });
+  };
+
+  const onPeek = async (conn: ConnState, id: number, params: Record<string, unknown>): Promise<void> => {
+    const { channel, as, room } = params;
+    const seat = [...seats.values()].find((s) => s.alias === channel && s.agent === as && s.ch.roomId === room);
+    const probe = seat?.probe ?? null;
+    const seen = seat && probe ? await probe(PEEK_PROBE_MS) : null;
+    if (!seat || !probe || !seen || seat.probe !== probe || !current(seat)) {
+      sendLine(conn, JSON.stringify({ id, ok: true, live: false }));
+      return;
+    }
+    const rows = seat.rows && seat.rows.probe === probe && seat.rows.changes === seen.changes ? seat.rows : null;
+    if (!rows) refreshRows(seat, probe, seen.changes);
+    sendLine(conn, JSON.stringify({ id, ok: true, live: true, head: seen.head, ...(rows ? { members: rows.members, info: rows.info } : {}) }));
   };
 
   const seatNamed = (params: Record<string, unknown>): Seat => {
@@ -821,6 +873,9 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           sendLine(conn, JSON.stringify({ id, ok: true }));
           break;
         }
+        case "peek":
+          await onPeek(conn, id, params);
+          break;
         case "listening":
           sendLine(
             conn,
@@ -1226,6 +1281,57 @@ export async function daemonSeat(channel: string, agent: string, sock = daemonSo
     return (await daemonListening(sock)).find((s) => s.channel === channel && s.agent === agent) ?? null;
   } catch {
     return null;
+  }
+}
+
+const isText = (v: unknown): v is string => typeof v === "string";
+
+function memberRows(v: unknown): MemberRow[] | null {
+  if (!Array.isArray(v)) return null;
+  const rows: MemberRow[] = [];
+  for (const x of v as unknown[]) {
+    if (!x || typeof x !== "object") return null;
+    const r = x as Record<string, unknown>;
+    if (!isText(r.pk) || !isText(r.xpk) || !isText(r.rec) || !Number.isSafeInteger(r.e) || typeof r.active !== "number") return null;
+    rows.push({ pk: r.pk, xpk: r.xpk, rec: r.rec, e: r.e as number, active: r.active, ...(typeof r.read_only === "number" ? { read_only: r.read_only } : {}) });
+  }
+  return rows;
+}
+
+function infoOf(v: unknown): Info | null {
+  if (!v || typeof v !== "object") return null;
+  const i = v as Record<string, unknown>;
+  const sealed = (x: unknown): boolean => x === undefined || x === null || (!!x && typeof x === "object" && isText((x as Record<string, unknown>).iv) && isText((x as Record<string, unknown>).ct));
+  if (!isText(i.ownerPk) || !isText(i.ownerXpk) || !isText(i.ownerSig) || !Number.isSafeInteger(i.epoch) || typeof i.rotate !== "boolean" || !sealed(i.settings) || !sealed(i.title)) return null;
+  return v as Info;
+}
+
+export async function daemonPeek(channel: string, agent: string, room: string, sock = daemonSock()): Promise<DaemonPeek | null> {
+  if (process.platform !== "win32" && !existsSync(sock)) return null;
+  const ask = async (): Promise<DaemonPeek | null> => {
+    const c = await openConn(sock, PEEK_MS);
+    try {
+      const r = await c.call("peek", { channel, as: agent, room });
+      if (r.live !== true || typeof r.head !== "number" || !Number.isSafeInteger(r.head)) return null;
+      return { head: r.head, members: memberRows(r.members), info: infoOf(r.info) };
+    } finally {
+      c.close();
+    }
+  };
+  return withDeadline(ask(), PEEK_MS).catch(() => null);
+}
+
+export async function daemonMark(channel: string, agent: string, seq: number, sock = daemonSock()): Promise<boolean> {
+  try {
+    const c = await openConn(sock, PEEK_MS);
+    try {
+      await c.call("mark", { channel, as: agent, seq });
+      return true;
+    } finally {
+      c.close();
+    }
+  } catch {
+    return false;
   }
 }
 
