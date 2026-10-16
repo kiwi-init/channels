@@ -18,9 +18,7 @@ import { coordinatorMood, ERROR_MS, moodInputs, SPEAKING_MS, type Mood } from "@
 import { chipsFor } from "@/lib/reactions"
 import { receipt } from "@/lib/receipts"
 import { dmPlace, markSeenIn, MAIN, placeFromKey, placeKey, seenIn, sendFrom, useSeen, threadMembers, type Place, type PlaceSummary } from "@/lib/threads"
-import { useSidebarOpen } from "@/lib/sidebar"
 import { cx } from "@/lib/utils"
-import { LEAD_WHEN_HIDDEN } from "./chrome"
 import { CoordinatorAvatar } from "./coordinator-head"
 import { Composer } from "./composer"
 import { AddAgent } from "./add-agent"
@@ -111,7 +109,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   // The floating header and composer: their heights pad the conversation, so its ends clear them.
   const [headRef, headH] = useHeight()
   const [footRef, footH] = useHeight()
-  const listOpen = useSidebarOpen()
 
   const nameOf = useCallback((name: string) => memberName(state.members.get(name), name), [state.members])
   // Members by key: names are what people type, keys are who they are.
@@ -659,7 +656,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
               tasks. Messages scroll under it. Pausing every agent is in the details (the name opens them). */}
           <header ref={headRef} className="absolute inset-x-0 top-0 z-20">
             <div aria-hidden className="scrim-top absolute inset-x-0 top-0 -bottom-6" />
-            <div className={cx("drag relative flex h-(--chrome-h) items-center gap-2 px-3", !listOpen && LEAD_WHEN_HIDDEN)}>
+            <div className="drag relative flex h-(--chrome-h) items-center gap-2 px-3">
               <IconButton label="Channels" round className="glass size-9 text-ink md:hidden" onClick={onBack}>
                 <Icon icon={ArrowLeft01Icon} size={20} />
               </IconButton>

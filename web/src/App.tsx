@@ -4,8 +4,7 @@ import { Boundary, Toaster } from "@/components/kit"
 import { FirstRun } from "@/components/first-run"
 import { ChannelGate, JoinWithCode, NewChannel, Welcome } from "@/components/onboarding"
 import { ChannelIconTile } from "@/components/channel-icon"
-import { Sidebar } from "@/components/sidebar"
-import { ListControls } from "@/components/chrome"
+import { Rail, Sidebar } from "@/components/sidebar"
 import { useIcons } from "@/lib/icons"
 import type { Command } from "@/components/ui/palette"
 import { usePaletteShortcut } from "@/components/ui/palette-shortcut"
@@ -76,7 +75,7 @@ export default function App() {
     act("join", "Join with a code", Login01Icon, () => setSheet("join"))
     act("computers", "Your computers", ComputerIcon, () => setSheet("computers"))
     act("settings", "Settings", Settings01Icon, () => setSheet("settings"))
-    act("sidebar", "Show or hide the list", SidebarLeftIcon, toggleSidebar)
+    act("sidebar", "Expand or collapse the list", SidebarLeftIcon, toggleSidebar)
     list.push(
       { id: "light", group: "Appearance", label: "Light", run: () => setAppearance("light"), leading: lead(Sun03Icon) },
       { id: "dark", group: "Appearance", label: "Dark", run: () => setAppearance("dark"), leading: lead(Moon02Icon) },
@@ -135,6 +134,7 @@ export default function App() {
             // A phone shows the list or a channel; a wide window shows both, unless the list is hidden.
             className={cx(code ? "hidden" : "flex", listOpen ? "md:flex" : "md:hidden")}
           />
+          {!listOpen && <Rail rows={rows} news={news} active={code} onSelect={open} onNew={() => setSheet("new")} onComputers={() => setSheet("computers")} onSettings={() => setSheet("settings")} />}
           {/* The app: the conversation beside the list, in the same colour, under the same header row. */}
           <main className={cx("relative min-w-0 flex-1 overflow-clip bg-canvas", code ? "flex" : "hidden md:flex")}>
             {/* No conversation, no header: the top row still moves the window. */}
@@ -148,7 +148,6 @@ export default function App() {
             )}
             {/* Last in the document, not just on top: the desktop app works out what drags the window
                 in document order, whatever the z-index, so a header after these would swallow their clicks. */}
-            <ListControls onNew={() => setSheet("new")} onJoin={() => setSheet("join")} />
           </main>
         </div>
       )}
