@@ -1,0 +1,269 @@
+name: bus
+
+# The merge bus (.github/bus): agents push bus/<task>, and one writer merges each onto main,
+# resolves what it can, tests the exact tree on bus/staging with ci.yml, and fast-forwards main.
+# Every run is a stateless tick that reads the state from GitHub and does the next step.
+# The jobs that read untrusted text (branch code, commit messages, CI logs) or call a model hold
+# no write token. Only stage, land, settle and last-green mint the bus App's token, run no
+# model, and push only what a deterministic check passed.
+on:
+  push:
+    branches: ["bus/**", "!bus/staging", main]
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [bus/staging, main]
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: bus
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      issues: read
+      pull-requests: read
+    outputs:
+      action: ${{ steps.tick.outputs.action }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          web: "false"
+      - uses: ./.github/actions/mergiraf
+      - id: tick
+        run: bun .github/bus/tick.ts --out "$RUNNER_TEMP/bus-tick"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+      - if: steps.tick.outputs.action != 'idle' && steps.tick.outputs.action != 'wait'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: bus-tick
+          path: ${{ runner.temp }}/bus-tick
+
+  resolve:
+    needs: tick
+    if: needs.tick.outputs.action == 'resolve'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          web: "false"
+      - uses: ./.github/actions/mergiraf
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: bus-tick
+          path: ${{ runner.temp }}/bus-tick
+      - run: bun .github/bus/resolve.ts --in "$RUNNER_TEMP/bus-tick" --out "$RUNNER_TEMP/bus-resolve"
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: bus-resolve
+          path: ${{ runner.temp }}/bus-resolve
+
+  stage:
+    needs: [tick, resolve]
+    if: >-
+      always() && contains(fromJSON('["stage","resolve","bounce"]'), needs.tick.outputs.action) &&
+      (needs.resolve.result == 'success' || needs.resolve.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      attestations: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          web: "false"
+      - uses: ./.github/actions/mergiraf
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: bus-tick
+          path: ${{ runner.temp }}/bus-tick
+      - if: needs.resolve.result == 'success'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: bus-resolve
+          path: ${{ runner.temp }}/bus-resolve
+      - id: prepare
+        run: bun .github/bus/stage.ts prepare --in "$RUNNER_TEMP/bus-tick" --resolved "$RUNNER_TEMP/bus-resolve" --out "$RUNNER_TEMP/bus-stage"
+      - if: steps.prepare.outputs.action != 'stale'
+        id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.BUS_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BUS_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-workflows: write
+          permission-issues: write
+          permission-pull-requests: write
+      - if: steps.prepare.outputs.action != 'stale'
+        uses: ./.github/actions/kiwi-seat
+        with:
+          seat: ${{ secrets.KIWI_BUS_SEAT }}
+      - if: steps.prepare.outputs.action != 'stale'
+        run: bun .github/bus/stage.ts push --in "$RUNNER_TEMP/bus-tick" --out "$RUNNER_TEMP/bus-stage"
+        env:
+          BUS_PUSH_TOKEN: ${{ steps.app.outputs.token }}
+          GITHUB_TOKEN: ${{ steps.app.outputs.token }}
+
+  land:
+    needs: tick
+    if: needs.tick.outputs.action == 'land'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      attestations: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          web: "false"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: bus-tick
+          path: ${{ runner.temp }}/bus-tick
+      - id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.BUS_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BUS_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-workflows: write
+      - uses: ./.github/actions/kiwi-seat
+        with:
+          seat: ${{ secrets.KIWI_BUS_SEAT }}
+      - run: bun .github/bus/land.ts land --in "$RUNNER_TEMP/bus-tick"
+        env:
+          BUS_PUSH_TOKEN: ${{ steps.app.outputs.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+
+  doctor:
+    needs: tick
+    if: needs.tick.outputs.action == 'red'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          web: "false"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: bus-tick
+          path: ${{ runner.temp }}/bus-tick
+      - run: bun .github/bus/land.ts doctor --in "$RUNNER_TEMP/bus-tick" --diagnosis "$RUNNER_TEMP/bus-doctor"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: bus-doctor
+          path: ${{ runner.temp }}/bus-doctor
+
+  settle:
+    needs: [tick, doctor]
+    if: needs.tick.outputs.action == 'red'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      attestations: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          web: "false"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: bus-tick
+          path: ${{ runner.temp }}/bus-tick
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: bus-doctor
+          path: ${{ runner.temp }}/bus-doctor
+      - id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.BUS_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BUS_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-actions: write
+          permission-issues: write
+          permission-pull-requests: write
+      - uses: ./.github/actions/kiwi-seat
+        with:
+          seat: ${{ secrets.KIWI_BUS_SEAT }}
+      - run: bun .github/bus/land.ts settle --in "$RUNNER_TEMP/bus-tick" --diagnosis "$RUNNER_TEMP/bus-doctor"
+        env:
+          BUS_PUSH_TOKEN: ${{ steps.app.outputs.token }}
+          GITHUB_TOKEN: ${{ steps.app.outputs.token }}
+
+  last-green:
+    if: >-
+      github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+        with:
+          web: "false"
+      - id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.BUS_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BUS_APP_PRIVATE_KEY }}
+          permission-contents: write
+      - run: bun .github/bus/land.ts last-green --sha "$SHA"
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          BUS_PUSH_TOKEN: ${{ steps.app.outputs.token }}
+          GITHUB_TOKEN: ${{ github.token }}
