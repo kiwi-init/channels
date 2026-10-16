@@ -73,8 +73,7 @@ export interface Sql {
 export interface Effects {
   /** Send to every socket. */
   broadcast?: string[];
-  /** Send to every socket except the sender. */
-  others?: string;
+  ephemeral?: string;
   /** Send to the sender only. */
   reply?: string;
   /** Disconnect every socket authenticated as this key. */
@@ -580,6 +579,8 @@ export const authenticate = Effect.fn("Room.authenticate")(function* (req: Reque
   return pk;
 });
 
+export const takesPresence = (url: URL): boolean => url.searchParams.get("presence") !== "0";
+
 /** Authenticate a WebSocket upgrade; returns the member key. */
 export const authenticateSocket = (req: Request) => authenticate(req, "GET", "/ws", "");
 
@@ -1013,7 +1014,7 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
     if (typeof f.iv !== "string" || typeof f.ct !== "string" || f.ct.length > MAX_EPH_LENGTH) {
       return { reply: frame({ t: "err", error: "bad ephemeral frame" }) } satisfies Effects;
     }
-    return { others: frame({ t: "eph", iv: f.iv, ct: f.ct }) } satisfies Effects;
+    return { ephemeral: frame({ t: "eph", iv: f.iv, ct: f.ct }) } satisfies Effects;
   }
   if (f.t === "read") {
     // How far this member has read: kept and passed on only when it moves forward. Too many is just dropped.
