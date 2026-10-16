@@ -29,7 +29,7 @@ import { baseName, here, seatsNear } from "../seats.ts";
 import { daemonHello, daemonSeat, ensureDaemon, reportRead, stopDaemon, wakeOn, type DaemonSeat } from "../daemon.ts";
 import { cleanup } from "../cleanup.ts";
 import { asOption, channelOption, isWakeVia, wakeKey, wakeWords } from "../wake.ts";
-import { ago, cardLine, charterLines, describeEvent, holdLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, modeLine, parseDuration, presenceWords, taskStateWord, statusJson } from "../format.ts";
+import { ago, cardLine, charterLines, describeEvent, holdLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, missingImages, formatTask, formatTasks, looksLikeLine, modeLine, parseDuration, presenceWords, taskStateWord, statusJson } from "../format.ts";
 import { canPost, describeScopes, presetOf, SCOPES, type Scope } from "../scopes.ts";
 import { fingerprint } from "../identity.ts";
 import { CHAT_KINDS, COLORS, ignored, isColor, type Kind, type Message, type TaskState } from "../protocol.ts";
@@ -893,6 +893,8 @@ const commands: Record<string, Command> = {
       const imgs = yield* s.ch.fx.images(m.imgs);
       if (!imgs.length) return yield* die(`message #${seq}'s images are no longer on the relay`);
       for (const path of saveImages(seq, imgs, args[2] ?? ".")) out(path);
+      const missing = missingImages(seq, m.imgs.length, imgs.length);
+      if (missing) process.stderr.write(`kiwi: ${missing}\n`);
     }),
 
   show: () =>

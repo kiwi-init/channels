@@ -21,7 +21,7 @@ import { loadImages, saveImages } from "./attach.ts";
 import { loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { Cursor, home, Keystore } from "./config.ts";
 import { ChannelGone, goneText, reason, type Channel, type Relay } from "./client.ts";
-import { ago, cardLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, mayDo, parseDuration, presenceWords, runsStatus, taskStateWord } from "./format.ts";
+import { ago, cardLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, missingImages, formatTask, formatTasks, looksLikeLine, mayDo, parseDuration, presenceWords, runsStatus, taskStateWord } from "./format.ts";
 import { isWakeVia } from "./wake.ts";
 import { SCOPES } from "./scopes.ts";
 import { CHAT_KINDS, ignored, type InlineImage, type Kind, type Message } from "./protocol.ts";
@@ -371,7 +371,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         // Under the channel's own folder, so closing the channel deletes them too.
         const imgs = yield* s.ch.fx.images(m.imgs);
         if (!imgs.length) return yield* new Rejected(`message #${seq}'s images are no longer on the relay`);
-        return saveImages(seq, imgs, dir ?? join(home(), "downloads", s.ch.roomId)).join("\n");
+        return [...saveImages(seq, imgs, dir ?? join(home(), "downloads", s.ch.roomId)), ...(missingImages(seq, m.imgs.length, imgs.length) ?? [])].join("\n");
       }),
     ),
   );
@@ -387,7 +387,8 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         const { messages, state } = yield* s.state();
         const m = messages.find((x) => x.seq === seq && !ignored(state.trust.get(x.seq)));
         if (!m) return fail(`no message #${seq}`);
-        const saved = m.imgs?.length ? saveImages(seq, yield* s.ch.fx.images(m.imgs), join(home(), "downloads", s.ch.roomId)) : [];
+        const images = m.imgs?.length ? yield* s.ch.fx.images(m.imgs).pipe(Effect.orElseSucceed((): InlineImage[] => [])) : [];
+        const saved = images.length ? saveImages(seq, images, join(home(), "downloads", s.ch.roomId)) : [];
         return yield* withImages(s.ch, formatShown(m, messages, state, saved, s.me), [m]);
       }),
     ),

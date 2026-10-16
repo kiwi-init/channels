@@ -456,9 +456,15 @@ export function formatTask(_state: ChannelState, t: Task, now = Date.now()): str
  * One message in full (`kiwi show`, the MCP message tool): the message itself,
  * the one it answers, and every verified reply to it, so nothing needs the log.
  */
+export function missingImages(seq: number, want: number, got: number): string | null {
+  return got < want ? `${want - got} of the ${want} images in #${seq} did not load; the relay may no longer have them` : null;
+}
+
 export function formatShown(m: Message, messages: Message[], state: ChannelState, savedImages: string[] = [], me?: string): string {
   const out = [formatMessage(m, state.trust.get(m.seq), state, me)];
   if (savedImages.length) out.push(`  images saved: ${savedImages.join(", ")}`);
+  const missing = m.imgs?.length ? missingImages(m.seq, m.imgs.length, savedImages.length) : null;
+  if (missing) out.push(`  ${missing}`);
   for (const r of m.re ?? []) {
     const parent = messages.find((x) => x.seq === r);
     if (parent && !ignored(state.trust.get(parent.seq))) out.push(`answers #${parent.seq} ${who(parent.from, state)}: ${inlineText(parent.kind === "event" ? describeEvent(parent, state) : parent.body, 140)}`);
