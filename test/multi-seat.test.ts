@@ -64,8 +64,8 @@ async function until(pred: () => boolean | Promise<boolean>, label: string, ms =
 
 const PERSON = { CLAUDECODE: "" };
 
-async function joinAs(owner: string, joiner: string, code: string, name: string, env: Env): Promise<void> {
-  const p = spawn(joiner, ["join", code, "--as", name, "--timeout", "40s"], env);
+async function joinAs(owner: string, joiner: string, code: string, name: string, env: Env, cwd = joiner): Promise<void> {
+  const p = spawn(joiner, ["join", code, "--as", name, "--timeout", "40s"], env, cwd);
   let listed = "";
   await until(async () => {
     listed = await ok(owner, ["--as", "boss", "requests"], PERSON);
@@ -190,6 +190,49 @@ describe("one Claude Code session that holds two seats", () => {
     expect(await new Response(second.stderr).text()).toContain("boss → reviewer: heard after the key came back");
     await ok(ownerA, ["send", "--to", "planner", "ends the first listener"], PERSON);
     expect(await first.exited).toBe(2);
+  });
+});
+
+describe("one Claude Code session that joined its second seat from another folder", () => {
+  test("its hooks, run from the folder the session started in, serve both seats", async () => {
+    const ownerA = scratch("own-a");
+    const ownerB = scratch("own-b");
+    const codeA = created(await ok(ownerA, ["create", "alpha", "--as", "boss"], PERSON));
+    const codeB = created(await ok(ownerB, ["create", "beta", "--as", "boss"], PERSON));
+    const h = scratch("agent");
+    const project = scratch("project");
+    const task = scratch("task");
+    const S = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "X", CLAUDE_PID: String(process.pid), AI_AGENT: "claude-code_2-1-296_agent", CLAUDE_PROJECT_DIR: project };
+    await joinAs(ownerA, h, codeA, "planner", S, project);
+    await joinAs(ownerB, h, codeB, "reviewer", S, task);
+    const config = JSON.parse(readFileSync(join(h, "config.json"), "utf8")) as { bindings: Record<string, { as: string; session?: string }> };
+    expect(Object.keys(config.bindings).sort()).toEqual([project, task].sort());
+
+    const input = JSON.stringify({ session_id: "X", cwd: project });
+    const start = (await run(h, ["hook", "session-start"], S, project, input)).out;
+    expect(start).toContain("planner");
+    expect(start).toContain("reviewer");
+
+    const listening = spawn(h, ["hook", "listen"], S, project, input);
+    await until(async () => {
+      const held = (await daemonListeners(daemonSock(h)).catch(() => [])).filter((l) => l.kind === "hook").map((l) => l.agent);
+      return held.includes("planner") && held.includes("reviewer");
+    }, "one listener holding the seat from the other folder");
+    await ok(ownerB, ["send", "--to", "reviewer", "wake the seat from the task folder"], PERSON);
+    expect(await listening.exited).toBe(2);
+    const woke = await new Response(listening.stderr).text();
+    expect(woke).toContain("boss → reviewer: wake the seat from the task folder");
+    expect(woke).toContain("-c beta --as reviewer reply N");
+
+    await ok(ownerB, ["send", "--to", "reviewer", "still unread at stop"], PERSON);
+    const stop = JSON.parse((await run(h, ["hook", "stop"], S, project, JSON.stringify({ session_id: "X", cwd: project, hook_event_name: "Stop" }))).out) as { decision: string; reason: string };
+    expect(stop.decision).toBe("block");
+    expect(stop.reason).toContain("still unread at stop");
+    expect(stop.reason).toContain("-c beta --as reviewer reply N");
+
+    const other = { ...S, CLAUDE_CODE_SESSION_ID: "Y" };
+    await ok(ownerB, ["send", "--to", "reviewer", "not for another session"], PERSON);
+    expect((await run(h, ["hook", "prompt"], other, project, JSON.stringify({ session_id: "Y", cwd: project }))).out).not.toContain("not for another session");
   });
 });
 
