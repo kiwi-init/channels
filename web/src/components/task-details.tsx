@@ -1,10 +1,10 @@
-import { ArrowDown01Icon, GitPullRequestIcon } from "@hugeicons/core-free-icons"
+import { ArrowDown01Icon, GitPullRequestIcon, UserMultipleIcon } from "@hugeicons/core-free-icons"
 import { useMemo, useState, type ReactNode } from "react"
 import type { Message } from "@mc/protocol.ts"
 import { colorOf, taskId, type ChannelState, type Task } from "@mc/state.ts"
 import { taskFeed, taskPrs } from "@mc/work.ts"
 import { formatAgo, formatFull, memberName } from "@/lib/format"
-import { taskActions } from "@/lib/task-actions"
+import { ANYONE, reviewerChoices, taskActions } from "@/lib/task-actions"
 import { cx } from "@/lib/utils"
 import { Feed, PrLink } from "./feed"
 import { Icon } from "./icon"
@@ -31,6 +31,7 @@ export function TaskDetails({
   onApprove,
   onSendBack,
   onCancel,
+  onReviewer,
 }: {
   id: number
   state: ChannelState
@@ -45,6 +46,7 @@ export function TaskDetails({
   onApprove: (t: Task) => Promise<void>
   onSendBack: (t: Task, why: string) => Promise<void>
   onCancel: (t: Task, note: string) => Promise<void>
+  onReviewer: (t: Task, review: string) => Promise<void>
 }) {
   const task = state.tasks.get(id)
   const items = useMemo(() => taskFeed(state, messages, id, me), [state, messages, id, me])
@@ -78,7 +80,7 @@ export function TaskDetails({
       <div className="mt-4">
         <Properties task={task} state={state} now={now} items={items} />
       </div>
-      {!noteBlocked && <Actions key={task.id} task={task} me={me} person={person} onApprove={onApprove} onSendBack={onSendBack} onCancel={onCancel} />}
+      {!noteBlocked && <Actions key={task.id} task={task} state={state} me={me} person={person} onApprove={onApprove} onSendBack={onSendBack} onCancel={onCancel} onReviewer={onReviewer} />}
       <h3 className="mt-4 text-ui font-semibold">
         <button type="button" aria-expanded={story} onClick={() => setStory((v) => !v)} className="flex w-full items-center gap-2 text-left">
           Activity
@@ -146,21 +148,26 @@ function Properties({ task, state, now, items }: { task: Task; state: ChannelSta
 
 function Actions({
   task,
+  state,
   me,
   person,
   onApprove,
   onSendBack,
   onCancel,
+  onReviewer,
 }: {
   task: Task
+  state: ChannelState
   me: string
   person: boolean
   onApprove: (t: Task) => Promise<void>
   onSendBack: (t: Task, why: string) => Promise<void>
   onCancel: (t: Task, note: string) => Promise<void>
+  onReviewer: (t: Task, review: string) => Promise<void>
 }) {
   const [why, setWhy] = useState<string | null>(null)
   const [cancelling, setCancelling] = useState(false)
+  const [picking, setPicking] = useState(false)
   const [note, setNote] = useState("")
   const [busy, setBusy] = useState(false)
   const can = taskActions(task, me, person)
@@ -172,6 +179,7 @@ function Actions({
       await fn()
       setWhy(null)
       setCancelling(false)
+      setPicking(false)
       toast(done)
     } catch (err) {
       toast(errorText(err), "error")
@@ -182,6 +190,8 @@ function Actions({
   const cancel = () => {
     if (note.trim() && !busy) void act(() => onCancel(task, note.trim()), `Cancelled ${id}`)
   }
+  const choices = reviewerChoices(task, state.members.values())
+  const nameOf = (name: string) => (name === ANYONE ? "anyone who hasn’t worked on it" : memberName(state.members.get(name), name))
   return (
     <div className="mt-4 flex flex-wrap items-center gap-2">
       {why === null ? (
@@ -196,6 +206,9 @@ function Actions({
               Send back
             </Button>
           )}
+          <Button size="sm" variant="ghost" disabled={choices.length === 0} onClick={() => setPicking(true)}>
+            {task.review ? "Change reviewer…" : "Add reviewer…"}
+          </Button>
           <Button size="sm" variant="ghost" onClick={() => (setNote(""), setCancelling(true))}>
             Cancel task…
           </Button>
@@ -222,6 +235,47 @@ function Actions({
           </Button>
         </form>
       )}
+      <Alert
+        open={picking}
+        onClose={() => setPicking(false)}
+        title={`Who reviews ${id}?`}
+        message={
+          <span className="mt-3 grid gap-1">
+            <span className="mb-2">
+              {task.review ? `Now ${nameOf(task.review)}. ` : ""}
+              {task.state === "review" ? "The new reviewer gives the verdict on the open round." : "The new reviewer gives the verdict when it’s sent for review."}
+            </span>
+            {choices.map((name) => {
+              const m = state.members.get(name)
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void act(() => onReviewer(task, name), `${id}: ${nameOf(name)} reviews it`)}
+                  className="flex items-center gap-3 rounded-ctl px-2 py-2 text-left text-ink transition-colors hover:bg-wash disabled:opacity-40"
+                >
+                  {name === ANYONE ? (
+                    <span className="flex size-6 items-center justify-center text-ink-3">
+                      <Icon icon={UserMultipleIcon} size={18} />
+                    </span>
+                  ) : (
+                    <Monogram name={name} agent={isAgent(m)} size={24} color={colorOf(state, name)} />
+                  )}
+                  <span className="min-w-0 flex-1 truncate text-ui font-medium">
+                    {name === ANYONE ? "Anyone who hasn’t worked on it" : nameOf(name)}
+                    {name === me && <span className="font-normal text-ink-3"> (you)</span>}
+                  </span>
+                </button>
+              )
+            })}
+          </span>
+        }
+      >
+        <Button variant="secondary" onClick={() => setPicking(false)}>
+          Close
+        </Button>
+      </Alert>
       <Alert
         open={cancelling}
         onClose={() => setCancelling(false)}

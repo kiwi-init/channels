@@ -1,6 +1,8 @@
 import type { SendOptions } from "../../../src/client.ts"
 import { openRound, taskId, type Task } from "../../../src/state.ts"
 
+export const ANYONE = "*"
+
 export type ReviewAction = "none" | "send-back" | "verdict"
 
 export type TaskActions = { kind: "hidden" } | { kind: "open"; review: ReviewAction }
@@ -11,7 +13,7 @@ export interface TaskSend {
 }
 
 export function reviewsMe(t: Task, me: string): boolean {
-  return t.state === "review" && !!t.review && (t.review === me || (t.review === "*" && t.owner !== me && !t.workedBy.includes(me)))
+  return t.state === "review" && !!t.review && (t.review === me || (t.review === ANYONE && t.owner !== me && !t.workedBy.includes(me)))
 }
 
 export function reviewsFor(tasks: Iterable<Task>, me: string, person: boolean): Task[] {
@@ -49,10 +51,23 @@ export function sendBackTask(t: Task, why: string): TaskSend {
 }
 
 export function cancelTask(t: Task, note: string, me: string): TaskSend {
-  const waiting = t.state === "review" && t.review && t.review !== "*" ? [t.review] : []
+  const waiting = t.state === "review" && t.review && t.review !== ANYONE ? [t.review] : []
   const to = [...new Set([...(t.owner ? [t.owner] : []), ...waiting])].filter((n) => n !== me)
   return {
     body: `${taskId(t.id)} cancelled: ${note}`,
     opts: { kind: "event", ev: { op: "task.update", task: t.id, state: "cancelled", note }, ...(to.length ? { to } : {}) },
+  }
+}
+
+export function reviewerChoices(t: Task, members: Iterable<{ name: string; active: boolean }>): string[] {
+  const named = [...members].filter((m) => m.active && m.name !== t.owner && m.name !== t.review).map((m) => m.name)
+  return t.review === ANYONE ? named : [ANYONE, ...named]
+}
+
+export function changeReviewer(t: Task, review: string, me: string): TaskSend {
+  const to = [...new Set([...(t.owner ? [t.owner] : []), ...(review === ANYONE ? [] : [review])])].filter((n) => n !== me)
+  return {
+    body: `${taskId(t.id)} review: ${review === ANYONE ? "anyone who hasn't worked on it" : review}`,
+    opts: { kind: "event", ev: { op: "task.update", task: t.id, review }, ...(to.length ? { to } : {}) },
   }
 }

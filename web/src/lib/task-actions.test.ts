@@ -4,7 +4,7 @@ import { generateIdentity, sign, verify, type Identity } from "../../../src/iden
 import type { Event, Message } from "../../../src/protocol.ts"
 import { fold, type ChannelState, type Roster, type Task } from "../../../src/state.ts"
 
-import { approveTask, cancelTask, reviewsFor, sendBackTask, taskActions, type TaskSend } from "./task-actions"
+import { ANYONE, approveTask, cancelTask, changeReviewer, reviewerChoices, reviewsFor, sendBackTask, taskActions, type TaskSend } from "./task-actions"
 
 const roster: Roster = []
 const ids = new Map<string, Identity>()
@@ -41,6 +41,7 @@ const task = (id: number): Task => {
 await join("jon", "human")
 await join("dev", "agent")
 await join("grok-reviewer", "agent")
+await join("codex", "agent")
 
 async function inReview(review: string): Promise<number> {
   const id = await post("dev", { op: "task.add", title: `checked by ${review}`, owner: "dev", review })
@@ -150,5 +151,43 @@ describe("the events a person sends from a task", () => {
     expect(state().rejected.get(at)).toBeUndefined()
     expect(task(id)).toMatchObject({ state: "done", approvedBy: "jon" })
     expect(task(id).rounds.at(-1)?.result).toMatchObject({ kind: "approved", by: "jon" })
+  })
+})
+
+describe("handing a review to someone else", () => {
+  test("the choices are anyone, or an active member other than the owner and the current reviewer", async () => {
+    const id = await inReview("grok-reviewer")
+    expect(reviewerChoices(task(id), state().members.values())).toEqual([ANYONE, "jon", "codex"])
+    const open = await inReview(ANYONE)
+    expect(reviewerChoices(task(open), state().members.values())).toEqual(["jon", "grok-reviewer", "codex"])
+  })
+
+  test("a person moves an open round to a new reviewer, whose verdict counts and the old one's doesn't", async () => {
+    const id = await inReview("grok-reviewer")
+    const sent = changeReviewer(task(id), "codex", "jon")
+    expect(sent.opts).toEqual({ kind: "event", ev: { op: "task.update", task: id, review: "codex" }, to: ["dev", "codex"] })
+    const at = await sendAs("jon", sent)
+    expect(state().rejected.get(at)).toBeUndefined()
+    expect(task(id)).toMatchObject({ state: "review", review: "codex" })
+    expect(task(id).rounds.at(-1)?.result.kind).toBe("open")
+    const stale = await sendAs("grok-reviewer", approveTask(task(id)))
+    expect(state().rejected.get(stale)).toBeDefined()
+    const verdict = await sendAs("codex", approveTask(task(id)))
+    expect(state().rejected.get(verdict)).toBeUndefined()
+    expect(task(id)).toMatchObject({ state: "done", approvedBy: "codex" })
+  })
+
+  test("a person who names themselves gets the verdict on the open round", async () => {
+    const id = await inReview("grok-reviewer")
+    await sendAs("jon", changeReviewer(task(id), "jon", "jon"))
+    expect(taskActions(task(id), "jon", true)).toEqual({ kind: "open", review: "verdict" })
+    expect(changeReviewer(task(id), ANYONE, "jon").opts.to).toEqual(["dev"])
+  })
+
+  test("an agent working on it can't move its own review", async () => {
+    const id = await inReview("grok-reviewer")
+    const at = await sendAs("dev", changeReviewer(task(id), "codex", "dev"))
+    expect(state().rejected.get(at)).toBeDefined()
+    expect(task(id).review).toBe("grok-reviewer")
   })
 })

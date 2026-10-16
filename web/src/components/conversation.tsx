@@ -14,7 +14,7 @@ import type { Gif } from "@/lib/gifs"
 import { lastPreview } from "@/lib/preview"
 import { markSeen, setOpenNews } from "@/lib/news"
 import { asksFor } from "@/lib/asks"
-import { approveTask, cancelTask, reviewsFor, sendBackTask, type TaskSend } from "@/lib/task-actions"
+import { approveTask, cancelTask, changeReviewer, reviewsFor, sendBackTask, type TaskSend } from "@/lib/task-actions"
 import { useIcons, useLiveIcon } from "@/lib/icons"
 import { excerpt, formatShort, formatTime, memberName } from "@/lib/format"
 import { coordinatorMood, ERROR_MS, moodInputs, SPEAKING_MS, type Mood } from "@/lib/coordinator-mood"
@@ -966,6 +966,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                   onApprove={(t) => sendTask(approveTask(t))}
                   onSendBack={(t, why) => sendTask(sendBackTask(t, why))}
                   onCancel={(t, note) => sendTask(cancelTask(t, note, me))}
+                  onReviewer={(t, review) => sendTask(changeReviewer(t, review, me))}
                 />
                 {task && !saidInTask && <p className="mt-4 text-center text-meta text-ink-3">What the agents on it say to each other shows up here.</p>}
                 {taskRows}
