@@ -28,7 +28,14 @@ let relay = "";
 let roomId = "";
 let owner: Identity | undefined;
 let firstCrafted = 0;
+type Kind = "blob" | "text";
 const crafted: { iv: string; ct: string }[] = [];
+const storedAs: { iv: Kind; ct: Kind }[] = [];
+
+const craft = (iv: string, ct: string, ivAs: Kind, ctAs: Kind): void => {
+  crafted.push({ iv, ct });
+  storedAs.push({ iv: ivAs, ct: ctAs });
+};
 
 const relayCtx = makeRelay(
   Layer.mergeAll(
@@ -71,8 +78,12 @@ beforeAll(async () => {
   const ch = new Channel(access, relay, owner);
   for (let i = 0; i < K; i++) await ch.send(line(i));
 
-  for (const n of [1, 2, 3, 16, 17, 18, 100, 1000]) crafted.push({ iv: random(12), ct: random(n) });
-  for (const ct of ["YR", "Y3Z", "Y3Y=", "a+b/", "ab cd", "é-ü", "x"]) crafted.push({ iv: "not base64!", ct });
+  for (const n of [1, 2, 3, 16, 17, 18, 100, 1000]) craft(random(12), random(n), "blob", "blob");
+  for (const ct of ["YR", "Y3Z", "Y3Y=", "a+b/", "ab cd", "é-ü", "x"]) craft("not base64!", ct, "text", "text");
+  craft(random(12), "YR", "blob", "text");
+  craft(random(12), "a+b/", "blob", "text");
+  craft("not base64!", random(16), "text", "blob");
+  craft("Y3Z", random(17), "text", "blob");
   for (const m of crafted) {
     const res = await call("POST", "/messages", JSON.stringify({ ...m, e: 0 }));
     expect(res.status).toBe(200);
@@ -128,9 +139,9 @@ describe("message ciphertext stored as bytes", () => {
     const { messages } = (await res.json()) as { messages: Envelope[] };
     expect(messages.map((m) => ({ iv: m.iv, ct: m.ct }))).toEqual(crafted);
     const db = new Database(join(dataDir, `${roomId}.sqlite`), { readonly: true });
-    const kinds = (db.query(`SELECT typeof(ct) AS t FROM msgs WHERE seq >= ? ORDER BY seq`).all(firstCrafted) as { t: string }[]).map((r) => r.t);
+    const kinds = db.query(`SELECT typeof(iv) AS iv, typeof(ct) AS ct FROM msgs WHERE seq >= ? ORDER BY seq`).all(firstCrafted) as { iv: string; ct: string }[];
     db.close();
-    expect(kinds).toEqual(crafted.map((m) => (m.iv === "not base64!" ? "text" : "blob")));
+    expect(kinds).toEqual(storedAs);
   });
 
   test("a socket's backlog frames are byte-identical to the frames broadcast when sent", async () => {
