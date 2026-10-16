@@ -1,0 +1,108 @@
+import * as Effect from "effect/Effect";
+import type { GoneHow } from "../../protocol.ts";
+import { BadRequest, Conflict, NotFound, TooLarge, TooMany } from "../failures.ts";
+import { Policy } from "../policy.ts";
+import { fits, MAX_RECORD, MAX_WRAPPED, MemberRecord } from "../schema.ts";
+import { readMeta } from "./auth.ts";
+import { RoomStore } from "./db.ts";
+
+export const putMember = Effect.fn("Room.putMember")(function* (m: MemberBody, epoch: number) {
+  const db = yield* RoomStore;
+  if (!fits(MemberRecord, m)) return yield* new BadRequest({ message: "bad member" });
+  if (Object.keys(m.keys ?? {}).some((e) => !/^\d{1,9}$/.test(e) || Number(e) > epoch)) return yield* new BadRequest({ message: "bad member" });
+  db.sql.run(
+    "INSERT INTO members (pk, xpk, rec, rec_e, since, active, read_only) VALUES (?, ?, ?, ?, ?, 1, ?) ON CONFLICT (pk) DO UPDATE SET xpk = excluded.xpk, rec = excluded.rec, rec_e = excluded.rec_e, active = 1, read_only = excluded.read_only",
+    m.pk,
+    m.xpk,
+    m.rec,
+    epoch,
+    Date.now(),
+    m.post === false ? 1 : 0,
+  );
+  db.membersChanged(m.pk);
+  for (const [e, wrapped] of Object.entries(m.keys ?? {})) {
+    db.sql.run("INSERT OR REPLACE INTO keys (pk, e, wrapped) VALUES (?, ?, ?)", m.pk, Number(e), wrapped);
+  }
+});
+
+export const approve = Effect.fn("Room.approve")(function* (body: MemberBody & { request?: string }) {
+  const db = yield* RoomStore;
+  const policy = yield* Policy;
+  const { epoch } = yield* readMeta;
+  if (body && Object.hasOwn(body, "replaces")) return yield* new BadRequest({ message: "bad member" });
+  const most = policy.membersPerChannel;
+  if (most && !db.isMember(body.pk) && db.activeMembers() >= most) {
+    return yield* new TooMany({ message: `this channel has ${most} members, the most this relay allows; remove someone to let another in` });
+  }
+  for (let e = 0; e <= epoch; e++) {
+    if (!body.keys?.[String(e)]) return yield* new BadRequest({ message: `missing wrapped key for epoch ${e}` });
+  }
+  yield* putMember(body, epoch);
+  db.changed("roster");
+  if (body.request) db.sql.run("UPDATE requests SET status = 'approved' WHERE id = ? AND pk = ?", body.request, body.pk);
+});
+
+export const keysFor = Effect.fn("Room.keysFor")(function* (pk: string) {
+  const db = yield* RoomStore;
+  const rows = db.sql.all<{ e: number; wrapped: string }>("SELECT e, wrapped FROM keys WHERE pk = ?", pk);
+  return { epoch: (yield* readMeta).epoch, keys: Object.fromEntries(rows.map((r) => [String(r.e), r.wrapped])) as Record<string, string> };
+});
+
+export const setRecord = Effect.fn("Room.setRecord")(function* (pk: string, rec: string, e: number, post: boolean) {
+  const db = yield* RoomStore;
+  if (pk === (yield* readMeta).ownerPk) return yield* new BadRequest({ message: "the owner's record isn't changed this way" });
+  if (!db.isMember(pk)) return yield* new NotFound({ message: "not a member" });
+  if (!Number.isInteger(e) || e < 0 || e > (yield* readMeta).epoch) return yield* new BadRequest({ message: "no such epoch" });
+  if (rec.length > MAX_RECORD) return yield* new TooLarge({ message: "record too large" });
+  db.migrate();
+  db.sql.run("UPDATE members SET rec = ?, rec_e = ?, read_only = ?, admitted_by = NULL WHERE pk = ?", rec, e, post ? 0 : 1, pk);
+  db.membersChanged(pk);
+  db.changed("roster");
+});
+
+export const setCanPost = Effect.fn("Room.setCanPost")(function* (pk: string, post: boolean) {
+  const db = yield* RoomStore;
+  if (pk === (yield* readMeta).ownerPk) return yield* new BadRequest({ message: "the owner may always post" });
+  if (!db.isMember(pk)) return yield* new NotFound({ message: "not a member" });
+  db.migrate();
+  db.sql.run("UPDATE members SET read_only = ?, admitted_by = NULL WHERE pk = ?", post ? 0 : 1, pk);
+  db.membersChanged(pk);
+  db.changed("roster");
+});
+
+export const remove = Effect.fn("Room.remove")(function* (pk: string, how: GoneHow) {
+  const db = yield* RoomStore;
+  const { ownerPk } = yield* readMeta;
+  if (pk === ownerPk) return yield* new BadRequest({ message: "the owner can't leave; close the channel instead" });
+  if (!db.isMember(pk)) return yield* new NotFound({ message: "not a member" });
+  db.migrate();
+  db.sql.run("UPDATE members SET active = 0, gone = ? WHERE pk = ?", how, pk);
+  db.sql.run("DELETE FROM keys WHERE pk = ?", pk);
+  db.sql.run("DELETE FROM requests WHERE pk = ?", pk);
+  db.sql.run("DELETE FROM reads WHERE pk = ?", pk);
+  db.membersChanged(pk);
+  db.changed("roster");
+  db.set("rotate", 1);
+  db.changed("info");
+});
+
+export const rotate = Effect.fn("Room.rotate")(function* (epoch: number, keys: Record<string, string>) {
+  const db = yield* RoomStore;
+  const meta = yield* readMeta;
+  if (epoch !== meta.epoch + 1) return yield* new Conflict({ message: `next epoch is ${meta.epoch + 1}` });
+  const members = db.members().filter((m) => m.active);
+  for (const m of members) if (!keys[m.pk]) return yield* new BadRequest({ message: `missing wrapped key for ${m.pk.slice(0, 8)}` });
+  for (const m of members) if (typeof keys[m.pk] !== "string" || keys[m.pk]!.length > MAX_WRAPPED) return yield* new BadRequest({ message: "bad wrapped key" });
+  for (const m of members) db.sql.run("INSERT OR REPLACE INTO keys (pk, e, wrapped) VALUES (?, ?, ?)", m.pk, epoch, keys[m.pk]!);
+  db.set("epoch", epoch);
+  db.set("rotate", 0);
+  db.changed("info");
+});
+
+export interface MemberBody {
+  pk: string;
+  xpk: string;
+  rec: string;
+  keys?: Record<string, string>;
+  post?: boolean;
+}
