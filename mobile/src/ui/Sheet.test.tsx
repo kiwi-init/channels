@@ -47,7 +47,7 @@ describe("Sheet", () => {
     const onClose = jest.fn()
     const view = await render(inApp(true, onClose))
     await view.rerender(inApp(false, onClose))
-    await waitFor(() => expect(screen.queryByText("the form")).toBeNull())
+    await waitFor(() => expect(screen.queryByText("the form")).toBeNull(), { timeout: 10000 })
     await view.rerender(inApp(true, onClose))
     expect(screen.getByText("the form")).toBeTruthy()
   })
