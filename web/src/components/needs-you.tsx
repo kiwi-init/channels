@@ -7,7 +7,8 @@ import { HANDOFF_DONE, HANDOFF_FAILED, type Message } from "@mc/protocol.ts"
 import { TOO_MANY_REQUESTS } from "@mc/sas.ts"
 import { taskId, type Task } from "@mc/state.ts"
 import { excerpt, formatAgo } from "@/lib/format"
-import { handoffLeft, handoffOf, handoffOpen, openHandoff } from "@/lib/handoff"
+import { openHandoff } from "@/lib/handoff-open"
+import { handoffLabel, handoffLeft, handoffOf, handoffOpen } from "@/lib/handoff"
 import { cx } from "@/lib/utils"
 import { useControls } from "./controls"
 import { Icon } from "./icon"
@@ -230,13 +231,13 @@ function EscalationItem({
           <span className="font-medium">{nameOf(m.from)}</span>: {excerpt(m.body, 220)}
         </>
       }
-      detail={handoff ? `${formatAgo(m.ts, now)} · ${handoff.vendor} · ${live ? handoffLeft(handoff, now) : "link expired"}` : formatAgo(m.ts, now)}
+      detail={handoff ? `${formatAgo(m.ts, now)} · ${handoffLabel(handoff)} · ${live ? handoffLeft(handoff, now) : "link expired"}` : formatAgo(m.ts, now)}
     >
       {draft === null ? (
         <>
           {handoff && live && (
             <>
-              <Button size="sm" variant="secondary" onClick={() => openHandoff(handoff)}>
+              <Button size="sm" variant="secondary" onClick={() => !openHandoff(handoff) && toast("The link has expired", "error")}>
                 Open browser
               </Button>
               <Button size="sm" variant="secondary" disabled={busy} onClick={() => void send(HANDOFF_DONE)}>

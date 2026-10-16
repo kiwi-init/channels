@@ -77,6 +77,9 @@ describe("handoff payload", () => {
     expect(wellFormed(payload({ esc: true, handoff: handoff({ url: `https://live.example.com/${"a".repeat(2100)}` }) }))).toBe(false);
     expect(wellFormed(payload({ esc: true, handoff: handoff({ vendor: "v".repeat(41) }) }))).toBe(false);
     expect(wellFormed(payload({ esc: true, handoff: handoff({ mode: "devtools" }) }))).toBe(false);
+    expect(wellFormed(payload({ esc: true, handoff: handoff({ url: "https://live.example.com/a\u202eb" }) }))).toBe(false);
+    expect(wellFormed(payload({ esc: true, handoff: handoff({ url: "https://live.example.com/a\nb" }) }))).toBe(false);
+    expect(wellFormed(payload({ esc: true, handoff: handoff({ expiresAt: 1e20 }) }))).toBe(false);
   });
 });
 
@@ -97,11 +100,18 @@ describe("handoff escalation", () => {
     await ok(agent, "listen", "--now");
   });
 
+  const newest = async () => {
+    const found = [...(await ok(owner, "log")).matchAll(/#(\d+) dev → .*\[escalation\]/g)];
+    return Number(found.at(-1)?.[1] ?? 0);
+  };
+
   const waiting = async (args: string[]) => {
+    const before = await newest();
     const p = spawn(agent, ["send", "--escalate", "--handoff", LINK, "--wait", "30s", ...args]);
     let seq = "";
     await until(async () => {
-      seq = /#(\d+) dev → .*\[escalation\]/.exec(await ok(owner, "log"))?.[1] ?? "";
+      const latest = await newest();
+      seq = latest > before ? String(latest) : "";
       return !!seq;
     }, "the escalation");
     return { p, seq };
@@ -113,7 +123,8 @@ describe("handoff escalation", () => {
     expect(log).toContain("[browser link]");
     expect(log).not.toContain("SECRET-TOKEN");
     expect(await ok(owner, "show", seq)).not.toContain("SECRET-TOKEN");
-    expect(await ok(owner, "show", seq, "--reveal")).toContain(LINK);
+    expect(await ok(owner, "--as", "human", "show", seq, "--reveal")).toContain(LINK);
+    expect(await ok(owner, "show", seq, "--reveal")).not.toContain(LINK);
     await ok(owner, "reply", seq, "handoff: done");
     expect(await p.exited).toBe(0);
     const printed = await new Response(p.stdout).text();
@@ -134,10 +145,17 @@ describe("handoff escalation", () => {
     expect(r.err).toContain("expired");
   });
 
+  test("a wait that ends while the link is open exits 2, not 4", async () => {
+    const r = await run(agent, "send", "--escalate", "--handoff", LINK, "--expires", "10m", "--wait", "2s", "Accept the terms");
+    expect(r.code).toBe(2);
+    expect(r.err).toContain("still open");
+  });
+
   test("the flags are refused where they don't fit", async () => {
     expect((await run(agent, "send", "--escalate", "--handoff", "http://live.example.com/x", "why")).code).toBe(1);
     expect((await run(agent, "send", "--escalate", "--handoff", LINK, "--expires", "2h", "why")).code).toBe(1);
     expect((await run(agent, "send", "--escalate", "--wait", "5s", "why")).code).toBe(1);
     expect((await run(agent, "send", "--handoff", LINK, "hello")).code).toBe(1);
+    expect((await run(agent, "send", "--escalate", "--handoff", LINK, "--expires", "0", "why")).code).toBe(1);
   });
 });

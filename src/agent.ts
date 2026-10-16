@@ -729,7 +729,7 @@ export class AgentSession {
       const final = replies.find((r) => r.body.startsWith(HANDOFF_DONE) || r.body.startsWith(HANDOFF_FAILED));
       if (final) return { outcome: final.body.startsWith(HANDOFF_DONE) ? ("done" as const) : ("failed" as const), replies: heard };
     }
-    return { outcome: "expired" as const, replies: heard };
+    return { outcome: Date.now() >= expiresAt ? ("expired" as const) : ("waiting" as const), replies: heard };
   }, oneLook);
 
   /**

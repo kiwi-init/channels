@@ -359,20 +359,25 @@ export interface Handoff {
   mode?: "tab" | "full";
 }
 
+function unsafeChar(c: string): boolean {
+  const n = c.codePointAt(0) ?? 0;
+  return n <= 0x20 || (n >= 0x7f && n <= 0x9f) || (n >= 0x2028 && n <= 0x202e) || (n >= 0x2060 && n <= 0x2069);
+}
+
 export function handoffUrl(x: unknown): x is string {
   if (typeof x !== "string" || x.length === 0 || x.length > HANDOFF_MAX_URL) return false;
   try {
     const u = new URL(x);
-    return u.protocol === "https:" && !u.username && !u.password;
+    return u.protocol === "https:" && !u.username && !u.password && ![...x].some(unsafeChar);
   } catch {
     return false;
   }
 }
 
-function wellFormedHandoff(x: unknown): x is Handoff {
+export function wellFormedHandoff(x: unknown): x is Handoff {
   if (!x || typeof x !== "object") return false;
   const h = x as Record<string, unknown>;
-  return handoffUrl(h.url) && str(h.vendor, HANDOFF_MAX_VENDOR) && Number.isFinite(h.expiresAt) && (h.mode === undefined || h.mode === "tab" || h.mode === "full");
+  return handoffUrl(h.url) && str(h.vendor, HANDOFF_MAX_VENDOR) && Number.isFinite(h.expiresAt) && Number.isFinite(new Date(h.expiresAt as number).getTime()) && (h.mode === undefined || h.mode === "tab" || h.mode === "full");
 }
 
 /** The decrypted message body. */

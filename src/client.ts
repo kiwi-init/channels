@@ -73,6 +73,7 @@ import {
   SNAPSHOT_EVERY,
   WS_PROTOCOL,
   wellFormed,
+  wellFormedHandoff,
   wellFormedRead,
   type Envelope,
   type Event,
@@ -1437,6 +1438,7 @@ export class Channel {
       // The same raster list as icons. A caller that skips the file picker still cannot attach SVG.
       if (imgs?.some((i) => !isRasterMime(i.mime))) return yield* new Rejected("an image must be png, jpg, gif or webp");
       if (imgs?.some((i) => !rasterAttachment(i))) return yield* new Rejected("an image needs its bytes or a stored reference");
+      if (opts.handoff && (!opts.esc || !wellFormedHandoff(opts.handoff))) return yield* new Rejected("a browser handoff goes only on an escalation, with an https link, a vendor and an expiry");
       const attached = imgs?.length ? yield* this.stored(imgs) : undefined;
       const payload: Payload = {
         v: PROTOCOL_VERSION,

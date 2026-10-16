@@ -6,7 +6,8 @@ import { ignored, type Color, type Handoff, type ImageAttachment, type Message, 
 import type { ChannelState, Member } from "@mc/state.ts"
 import { useClock } from "@/lib/channel"
 import { excerpt, formatAgo, formatFull, formatStamp, memberName } from "@/lib/format"
-import { handoffLeft, handoffOf, handoffOpen, openHandoff } from "@/lib/handoff"
+import { openHandoff } from "@/lib/handoff-open"
+import { handoffLabel, handoffLeft, handoffOf, handoffOpen } from "@/lib/handoff"
 import { chipLabel, type Chip } from "@/lib/reactions"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
@@ -132,7 +133,7 @@ function HandoffLine({ handoff }: { handoff: Handoff }) {
             Open browser
           </button>
           <span>
-            {handoff.vendor} · {handoffLeft(handoff, now)}
+            {handoffLabel(handoff)} · {handoffLeft(handoff, now)}
           </span>
         </>
       ) : (
@@ -401,7 +402,7 @@ export const Bubble = memo(function Bubble({
 
       {/* What hangs off the bubble (its answer link, notes, replies), under it on the bubble's edge. */}
       <div className={cx("flex flex-col", mine ? "items-end pl-10 md:pl-16" : "items-start pr-10 pl-9 md:pr-16")}>
-        {handoff && !mine && <HandoffLine handoff={handoff} />}
+        {handoff && !mine && (m.to?.includes(me) || m.to?.includes("*")) && <HandoffLine handoff={handoff} />}
         {decide && !mine && onReply && (
           <p className="mt-1 flex items-center gap-1 px-3 text-meta">
             <button type="button" onClick={() => onReply(m)} className="font-medium text-decide hover:underline">

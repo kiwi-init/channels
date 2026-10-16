@@ -926,7 +926,7 @@ const commands: Record<string, Command> = {
       const m = found && !ignored(state.trust.get(seq)) ? found : yield* die(`no message #${seq}`);
       // Images land under the channel's own folder (closing it deletes them), or where asked.
       const saved = m.imgs?.length ? saveImages(seq, yield* s.ch.fx.images(m.imgs), args[2] ?? joinPath(home(), "downloads", s.ch.roomId)) : [];
-      out(formatShown(m, messages, state, saved, s.me, !!opt.reveal));
+      out(formatShown(m, messages, state, saved, s.me, !!opt.reveal && !!m.to?.includes(s.me)));
       // The rest of its thread, when there's more of it than #N, what it answers and its replies.
       const root = state.threadOf.get(seq) ?? seq;
       const near = new Set([seq, ...(m.re ?? []), ...messages.filter((x) => x.re?.includes(seq)).map((x) => x.seq)]);
@@ -1007,9 +1007,9 @@ const commands: Record<string, Command> = {
       }
       if (!handoffUrl(opt.handoff)) return yield* die("--handoff takes an https link without a user name or password, up to 2048 characters");
       const vendor = opt.vendor ?? new URL(opt.handoff).hostname;
-      if (vendor.toLowerCase() === "steel") process.stderr.write("kiwi: steel live links are not authenticated; anyone with the link can use the tab\n");
+      if (/steel/i.test(vendor) || /(^|\.)steel\.dev$/i.test(new URL(opt.handoff).hostname)) process.stderr.write("kiwi: steel live links are not authenticated; anyone with the link can use the tab\n");
       const seconds = opt.expires === undefined ? HANDOFF_DEFAULT_SECONDS : parseDuration(opt.expires);
-      if (seconds > HANDOFF_MAX_SECONDS) return yield* die(`--expires is at most ${HANDOFF_MAX_SECONDS / 60}m`);
+      if (seconds < 1 || seconds > HANDOFF_MAX_SECONDS) return yield* die(`--expires must be between 1s and ${HANDOFF_MAX_SECONDS / 60}m`);
       const expiresAt = Date.now() + seconds * 1000;
       const head = opt.wait === undefined ? 0 : yield* s.ch.fx.head();
       const { seq, to } = yield* s.escalate(body, re, { url: opt.handoff, vendor: vendor.slice(0, HANDOFF_MAX_VENDOR), expiresAt });
@@ -1018,6 +1018,7 @@ const commands: Record<string, Command> = {
       const { outcome, replies } = yield* s.awaitHandoff(seq, head, expiresAt, parseDuration(opt.wait));
       for (const r of replies) out(render(r));
       if (outcome === "done") return;
+      if (outcome === "waiting") return yield* die(`no answer to the handoff #${seq} within ${opt.wait}; the link is still open, so replies will still arrive when you listen`, 2);
       return yield* die(outcome === "failed" ? `the person couldn't finish the handoff #${seq}` : `no answer to the handoff #${seq} before it expired`, 4);
     }),
 

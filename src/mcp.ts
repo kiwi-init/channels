@@ -413,18 +413,20 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     tool(({ text, re, handoff_url, vendor, expires_in, wait_seconds }) =>
       Effect.gen(function* () {
         if (handoff_url === undefined) {
+          if (vendor !== undefined || expires_in !== undefined || wait_seconds !== undefined) return yield* new Rejected("vendor, expires_in and wait_seconds go with handoff_url");
           const { seq, to } = yield* s.escalate(text, re);
           return `escalated #${seq} to ${to.join(" and ")}; wait for their answer before acting on it`;
         }
         if (!handoffUrl(handoff_url)) return yield* new Rejected("handoff_url must be an https link without a user name or password");
-        const seconds = Math.min(expires_in ?? HANDOFF_DEFAULT_SECONDS, HANDOFF_MAX_SECONDS);
+        if (expires_in !== undefined && expires_in > HANDOFF_MAX_SECONDS) return yield* new Rejected(`expires_in is at most ${HANDOFF_MAX_SECONDS} seconds`);
+        const seconds = expires_in ?? HANDOFF_DEFAULT_SECONDS;
         const expiresAt = Date.now() + seconds * 1000;
         const head = wait_seconds === undefined ? 0 : yield* s.ch.fx.head();
         const { seq, to } = yield* s.escalate(text, re, { url: handoff_url, vendor: (vendor ?? new URL(handoff_url).hostname).slice(0, HANDOFF_MAX_VENDOR), expiresAt });
         const sent = `escalated #${seq} to ${to.join(" and ")} with a browser link; wait for their answer before acting on it`;
         if (wait_seconds === undefined) return sent;
         const { outcome } = yield* s.awaitHandoff(seq, head, expiresAt, wait_seconds);
-        return `${sent}\nhandoff ${outcome}`;
+        return `${sent}\nhandoff ${outcome === "waiting" ? "still waiting: the link is open, listen for the answer" : outcome}`;
       }),
     ),
   );
