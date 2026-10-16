@@ -20,6 +20,7 @@
     "typecheck": "bunx tsc --noEmit"
   },
   "devDependencies": {
+    "@electron/fuses": "^1.8.0",
     "electron": "^44.7.2",
     "electron-builder": "^26.15.3",
     "typescript": "^7.0.2"
@@ -40,6 +41,15 @@
         "to": "assets"
       }
     ],
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true,
+      "resetAdHocDarwinSignature": true
+    },
     "protocols": {
       "name": "Kiwi",
       "schemes": [
