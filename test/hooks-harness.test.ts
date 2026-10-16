@@ -611,6 +611,25 @@ test(
   PROBE_MS + 10_000,
 );
 
+test(
+  "a wrapper that answers and leaves a child holding its output is heard at once",
+  () => {
+    const dir = scratch("hk-probe-child-");
+    const idFile = join(dir, "id");
+    const pidFile = join(dir, "pid");
+    writeFileSync(idFile, selfIdentity() ?? "");
+    const { cmd } = probeWrapper(`sleep 9 &\necho $! > ${shellQuoted(pidFile)}\ncat ${shellQuoted(idFile)}`);
+    const t0 = Date.now();
+    try {
+      expect(isOurHook(cmd, "stop")).toBe(true);
+      expect(Date.now() - t0).toBeLessThan(2_000);
+    } finally {
+      process.kill(Number(readFileSync(pidFile, "utf8").trim()), "SIGKILL");
+    }
+  },
+  PROBE_MS + 10_000,
+);
+
 test("the probe runs with a short allowlist of environment variables, not the agent's session or secrets", () => {
   const self = selfIdentity();
   const idFile = join(scratch("hk-probe-env-"), "id");
