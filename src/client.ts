@@ -1414,7 +1414,7 @@ export class Channel {
    * frame whose reading fails is reported and dropped: one bad payload mustn't stop the rest.
    */
   private session(at: { seq: number }, quietMs: number, presence: boolean, reads: boolean): Stream.Stream<Live, Dropped | ChannelGone, Relay> {
-    return Stream.callback<Incoming, Dropped | ChannelGone, Relay>((q) => this.socket(at.seq, reads, q)).pipe(
+    return Stream.callback<Incoming, Dropped | ChannelGone, Relay>((q) => this.socket(at.seq, presence, reads, q)).pipe(
       Stream.mapEffect((f) =>
         this.read(f, at, quietMs, presence, reads).pipe(Effect.catchCause((cause) => Effect.succeed<Live>({ _tag: "Skipped", frame: f.t, error: Cause.squash(cause) }))),
       ),
@@ -1423,11 +1423,12 @@ export class Channel {
   }
 
   /** A socket for what's after `since`: its frames go to `q` as they arrive, then how it closed. Closing the scope closes it. */
-  private socket(since: number, reads: boolean, q: Queue.Queue<Incoming, Dropped | ChannelGone | Cause.Done>) {
+  private socket(since: number, presence: boolean, reads: boolean, q: Queue.Queue<Incoming, Dropped | ChannelGone | Cause.Done>) {
     return Effect.gen({ self: this }, function* () {
       const auth = yield* Effect.promise(() => signRequest(this.identity, this.roomId, "GET", "/ws"));
       const u = new URL(`/v1/rooms/${this.roomId}/ws`, this.relay);
       u.searchParams.set("since", String(since));
+      if (!presence) u.searchParams.set("presence", "0");
       if (!reads) u.searchParams.set("reads", "0");
       u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
       const { ws, closed } = yield* Effect.acquireRelease(
