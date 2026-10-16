@@ -562,7 +562,9 @@ export interface ChannelFx {
   guard(): Effect.Effect<GuardFloor | null, Refusal, Relay>;
   setCharter(charter: NonNullable<GuardFloor["charter"]>): Effect.Effect<void, Refused, Relay>;
   setHold(hold: NonNullable<GuardFloor["hold"]>): Effect.Effect<void, Refused, Relay>;
-  icon(): Effect.Effect<ChannelIcon | null, MemberRefusal, Relay>;
+  compress(): Effect.Effect<boolean, Refusal, Relay>;
+  setCompress(on: boolean): Effect.Effect<void, Refused, Relay>;
+  icon():Effect.Effect<ChannelIcon | null, MemberRefusal, Relay>;
   setIcon(icon: ChannelIcon | null): Effect.Effect<void, Refused, Relay>;
   members(): Effect.Effect<Member[], MemberRefusal, Relay>;
   leave(): Effect.Effect<void, MemberRefusal, Relay>;
@@ -614,6 +616,7 @@ export class Channel {
   /** How far this member has told the relay it read, and whether the relay knows read marks at all. */
   private markedTo = 0;
   private marksUnknown = false;
+  private packs = false;
 
   constructor(
     public access: ChannelAccess,
@@ -864,6 +867,15 @@ export class Channel {
     /** Owner: sign the hold into the channel's settings, after the hold.set at `since`. */
     setHold: Effect.fn("Channel.setHold")({ self: this }, function* (this: Channel, hold: NonNullable<GuardFloor["hold"]>) {
       yield* this.putSettings({ hold });
+    }),
+
+    compress: Effect.fn("Channel.compress")({ self: this }, function* (this: Channel) {
+      return (yield* this.settings())?.compress === true;
+    }),
+
+    setCompress: Effect.fn("Channel.setCompress")({ self: this }, function* (this: Channel, on: boolean) {
+      yield* this.putSettings({ compress: on });
+      this.packs = on;
     }),
 
     icon: Effect.fn("Channel.icon")({ self: this }, function* (this: Channel) {
@@ -1202,7 +1214,7 @@ export class Channel {
         const e = this.access.epoch;
         const key = this.access.keys[String(e)];
         if (!key) return yield* new MissingKey(`no key for epoch ${e}`);
-        const sealed = yield* Effect.promise(() => seal(key, this.roomId, signed));
+        const sealed = yield* Effect.promise(() => seal(key, this.roomId, signed, { pack: this.packs }));
         return (yield* this.request<{ seq: number }>("/messages", { method: "POST", body: JSON.stringify({ ...sealed, e }) })).seq;
       });
       // The key rotated under us: fetch the new one and resend once.
@@ -1296,6 +1308,7 @@ export class Channel {
       if (!s || !key) return null;
       const o = (yield* Effect.promise(() => open(key, this.roomId, s.iv, s.ct).catch(() => null))) as ({ what?: unknown; room?: unknown; pk?: string; sig?: string } & Record<string, unknown>) | null;
       if (!o || o.what !== "channel-settings" || o.room !== this.roomId || o.pk !== this.access.ownerPk || !(yield* Effect.promise(() => verify(o as never)))) return null;
+      this.packs = o.compress === true;
       return o;
     });
   }
@@ -1655,6 +1668,14 @@ export class Channel {
 
   setHold(hold: NonNullable<GuardFloor["hold"]>): Promise<void> {
     return run(this.fx.setHold(hold));
+  }
+
+  compress(): Promise<boolean> {
+    return run(this.fx.compress());
+  }
+
+  setCompress(on: boolean): Promise<void> {
+    return run(this.fx.setCompress(on));
   }
 
   /** The channel's icon, if the owner set one (only members can read it). */
