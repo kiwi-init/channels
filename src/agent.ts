@@ -105,6 +105,7 @@ export class AgentSession {
   protected guardFloor: GuardFloor | null | undefined;
   private roomsCheckedAt = 0;
   protected base: FoldBase | null = null;
+  protected partial = false;
 
   /** openSession makes these, with the keys loaded. */
   constructor(
@@ -143,17 +144,14 @@ export class AgentSession {
   readonly sync = Effect.fn("AgentSession.sync")({ self: this }, function* (this: AgentSession) {
     const cache = yield* Cache;
     const cached = yield* cache.read(this.cfg.roomId);
-    let base = yield* cache.base(this.cfg.roomId);
-    if (!cached.length && !base) {
-      const snap = yield* this.ch.fx.snapshot();
-      if (snap) {
-        yield* cache.keepBase(this.cfg.roomId, snap);
-        base = yield* cache.base(this.cfg.roomId);
-      }
-    }
-    this.base = base;
-    const last = Math.max(cached.at(-1)?.seq ?? 0, base?.n ?? 0);
-    const { messages } = yield* this.ch.fx.history(last);
+    const kept = yield* cache.base(this.cfg.roomId);
+    const fetched = !cached.length && !kept ? yield* this.ch.fx.snapshot() : null;
+    const last = Math.max(cached.at(-1)?.seq ?? 0, (kept ?? fetched)?.n ?? 0);
+    const { messages, first } = yield* this.ch.fx.history(last);
+    const gap = first !== null && first > last + 1;
+    if (gap) this.partial = true;
+    if (fetched && !gap) yield* cache.keepBase(this.cfg.roomId, fetched);
+    this.base = kept ?? (gap ? null : fetched);
     const fresh = messages.filter((m) => m.seq > last);
     yield* cache.append(this.cfg.roomId, fresh);
     return [...cached, ...fresh];

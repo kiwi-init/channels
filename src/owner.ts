@@ -42,6 +42,7 @@ class OwnerSession extends AgentSession {
   }
 
   protected override snapshotDue(head: number): boolean {
+    if (this.partial) return false;
     return this.forced || (this.snapshotAt !== null && head - this.snapshotAt >= SNAPSHOT_EVERY);
   }
 

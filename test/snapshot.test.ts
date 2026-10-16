@@ -1,9 +1,9 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runAgent } from "../src/agent.ts";
+import { AgentSession, runAgent } from "../src/agent.ts";
 import { signRequest } from "../src/auth.ts";
 import { newChannelKey, type ChannelAccess } from "../src/crypto.ts";
 import { canonical, generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
@@ -419,6 +419,23 @@ describe("the relay keeps one snapshot per channel", () => {
     }
   });
 
+  test("the app's owner makes none when the relay dropped messages the fold needs", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-snapshot-gap-"));
+    const server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, policy: { ...OPEN_POLICY, bytesPerChannel: 8000 } });
+    try {
+      const s = await setupChannel(server.url.origin);
+      for (let i = 0; i < 3; i++) await s.ownerCh.send(`m${i}`);
+      expect(await runAgent(s.ownerCh.fx.snapshotIfDue(2))).toBe(3);
+      for (let i = 0; i < 30; i++) await s.ownerCh.send(`m${i} ${"x".repeat(300)}`);
+      expect((await s.ownerCh.history(3)).first).toBeGreaterThan(4);
+      expect(await runAgent(s.ownerCh.fx.snapshotIfDue(2))).toBeNull();
+      expect(await runAgent(s.ownerCh.fx.snapshotAt())).toBe(3);
+    } finally {
+      server.stop(true);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("the app's owner makes one from the relay's log when enough has happened since the last", async () => {
     const dir = mkdtempSync(join(tmpdir(), "kiwi-snapshot-due-"));
     const server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir });
@@ -441,6 +458,44 @@ describe("the relay keeps one snapshot per channel", () => {
     } finally {
       server.stop(true);
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("sessions fold from a snapshot only when the log after it is whole", () => {
+  async function scene(policy: Partial<typeof OPEN_POLICY> = {}) {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-snapshot-session-"));
+    const home = mkdtempSync(join(tmpdir(), "kiwi-snapshot-home-"));
+    const was = process.env.KIWI_HOME;
+    process.env.KIWI_HOME = home;
+    const server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, policy: { ...OPEN_POLICY, ...policy } });
+    const s = await setupChannel(server.url.origin);
+    const done = () => {
+      server.stop(true);
+      if (was === undefined) delete process.env.KIWI_HOME;
+      else process.env.KIWI_HOME = was;
+      rmSync(dir, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true });
+    };
+    return { s, home, origin: server.url.origin, done };
+  }
+
+  test("a cold agent folds the relay's log, not a snapshot the relay dropped messages after", async () => {
+    const { s, home, origin, done } = await scene({ bytesPerChannel: 8000 });
+    try {
+      const task = await s.ownerCh.send("", { ev: { op: "task.add", title: "first" } });
+      expect(await runAgent(s.ownerCh.fx.snapshotIfDue(1))).toBe(task);
+      await s.ownerCh.send("", { ev: { op: "task.update", task, state: "done" } });
+      for (let i = 0; i < 30; i++) await s.ownerCh.send(`m${i} ${"x".repeat(300)}`);
+      const { messages, first } = await s.ownerCh.history(0);
+      expect(first).toBeGreaterThan(task + 2);
+      const agent = new AgentSession("gap", { ...s.access, relay: origin, code: s.code }, s.owner, () => {});
+      const { state } = await runAgent(agent.state());
+      expect(state.tasks.has(task)).toBe(false);
+      expect(state.head).toBe(messages.at(-1)!.seq);
+      expect(existsSync(join(home, "cache", `${s.roomId}.jsonl.base`))).toBe(false);
+    } finally {
+      done();
     }
   });
 });

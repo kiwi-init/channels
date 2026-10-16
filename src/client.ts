@@ -598,7 +598,7 @@ export interface ChannelFx {
   markRead(seq: number): Effect.Effect<void, never, Relay>;
   send(body: string, opts?: SendOptions): Effect.Effect<number, Refused, Relay>;
   decrypt(env: Envelope): Effect.Effect<Message | null, never, Relay>;
-  history(since: number): Effect.Effect<{ head: number; messages: Message[] }, MemberRefusal, Relay>;
+  history(since: number): Effect.Effect<{ head: number; messages: Message[]; first: number | null }, MemberRefusal, Relay>;
   page(since: number, limit: number): Effect.Effect<Message[], MemberRefusal, Relay>;
   snapshot(): Effect.Effect<FoldBase | null, never, Relay>;
   snapshotAt(): Effect.Effect<number | null, MemberRefusal, Relay>;
@@ -1232,9 +1232,11 @@ export class Channel {
     history: Effect.fn("Channel.history")({ self: this }, function* (this: Channel, since: number) {
       const messages: Message[] = [];
       let head = since;
+      let first: number | null = null;
       for (;;) {
         const page = yield* this.request<{ head: number; messages: Envelope[] }>("/messages", {}, { since });
         head = page.head;
+        first ??= page.messages[0]?.seq ?? null;
         const decrypted = yield* Effect.forEach(page.messages, (e) => this.fx.decrypt(e), { concurrency: "unbounded" });
         for (let i = 0; i < page.messages.length; i++) {
           const m = decrypted[i];
@@ -1243,7 +1245,7 @@ export class Channel {
         }
         if (!page.messages.length || since >= head) break;
       }
-      return { head, messages };
+      return { head, messages, first };
     }),
 
     page: Effect.fn("Channel.page")({ self: this }, function* (this: Channel, since: number, limit: number) {
@@ -1278,12 +1280,20 @@ export class Channel {
       const at = (yield* this.fx.snapshotAt()) ?? 0;
       if ((yield* this.fx.head()) - at < Math.max(every, 1)) return null;
       const from = at ? yield* this.fx.snapshot() : null;
-      const [{ messages }, members, rooms, guard] = yield* Effect.all(
-        [this.fx.history(from?.n ?? 0), this.fx.members(), Effect.orElseSucceed(this.fx.rooms(), () => null), Effect.orElseSucceed(this.fx.guard(), () => null)],
+      const since = from?.n ?? 0;
+      const [{ messages, first }, members, mode, rooms, guard] = yield* Effect.all(
+        [
+          this.fx.history(since),
+          this.fx.members(),
+          Effect.orElseSucceed(this.fx.mode(), () => null),
+          Effect.orElseSucceed(this.fx.rooms(), () => null),
+          Effect.orElseSucceed(this.fx.guard(), () => null),
+        ],
         { concurrency: "unbounded" },
       );
+      if (first !== null && first > since + 1) return null;
       const kept: { base?: FoldBase } = {};
-      fold(messages, members.map(toRoster), Date.now(), undefined, rooms, guard, from, (b) => void (kept.base = b));
+      fold(messages, members.map(toRoster), Date.now(), mode, rooms, guard, from, (b) => void (kept.base = b));
       return kept.base && kept.base.n > at ? yield* this.fx.putSnapshot(kept.base) : null;
     }),
 
@@ -1836,7 +1846,7 @@ export class Channel {
   }
 
   /** Messages after `since`, oldest first, following pages to the head. */
-  history(since: number): Promise<{ head: number; messages: Message[] }> {
+  history(since: number): Promise<{ head: number; messages: Message[]; first: number | null }> {
     return run(this.fx.history(since));
   }
 
