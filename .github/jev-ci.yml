@@ -228,7 +228,9 @@ jobs:
       seats getting all of them. multi-seat drives the kiwi CLI against a local relay: one Claude
       Code session joins two channels under two names from one folder, and its SessionStart, Stop
       and background listen hooks (src/hooks.ts) must serve both seats, while a bare `kiwi listen
-      --now` there must refuse and name both (src/cli/main.ts). Fails if seat resolution, the hook
+      --now` there must refuse and name both (src/cli/main.ts). A second session joins its second
+      seat from a sibling folder, and the hooks run from the folder it started in must serve that
+      seat too, while another session's hooks must not. Fails if seat resolution, the hook
       answers or the CLI's choice of agent change.
 
   repo-comments:

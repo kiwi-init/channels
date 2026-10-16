@@ -39,7 +39,7 @@ import { humanOf } from "./state.ts";
 import { asOption, channelOption, wakePath, wakeWords } from "./wake.ts";
 import { daemonListeners, ensureDaemon, holdListener, wakeOn, type DaemonListener, type HeldListener } from "./daemon.ts";
 import { kimiCodePid } from "./ancestry.ts";
-import { bindDirectory as bindSeat, bindingFor as seatFor, here, kimiHookHere, seatsFor as heldSeats, seatsNear, type Binding, type Here, type Listener, type SeatOptions } from "./seats.ts";
+import { bindDirectory as bindSeat, bindingFor as seatFor, here, kimiHookHere, sameSeat, seatsFor as heldSeats, seatsHeldAnywhere, seatsNear, type Binding, type Here, type Listener, type SeatOptions } from "./seats.ts";
 
 /** Marks our entries so install/uninstall can find them. Current clients only. */
 const MARK = "# kiwi";
@@ -1063,7 +1063,8 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
   const who: Here = kimi ? kimiHookHere() : { ...here(), ...(input.session_id ? { session: input.session_id } : {}) };
   yield* Effect.promise(() => refreshListeners());
   const project = seatsFor(process.env.CLAUDE_PROJECT_DIR ?? input.cwd ?? process.cwd(), { who });
-  const seats = project.length ? project : seatsFor(input.cwd ?? process.cwd(), { who });
+  const near = project.length ? project : seatsFor(input.cwd ?? process.cwd(), { who });
+  const seats = [...near, ...seatsHeldAnywhere(who)].filter((b, i, all) => all.findIndex((o) => sameSeat(o, b)) === i);
   const keys = yield* Keystore;
   const channels = (yield* keys.config).channels;
   const served = seats.flatMap((b): Served[] => {

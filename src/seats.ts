@@ -199,10 +199,7 @@ export function seatsFor(dir: string, opts: SeatOptions = {}): Binding[] {
     const mine = who.session ? seats.filter((b) => b.session === who.session) : [];
     if (mine.length) {
       // Note that this session still uses it, so nobody takes it for stale (seats with no process to check).
-      const stale = opts.claim === false ? [] : mine.filter((m) => !m.pid && Date.now() - (m.seen ?? m.at ?? 0) > SEEN_EVERY_MS);
-      if (stale.length) {
-        updateConfig((c) => store(c, d, seatsAt(c, d).map((b) => (stale.some((m) => b.alias === m.alias && b.as === m.as) ? { ...b, seen: Date.now() } : b))));
-      }
+      if (opts.claim !== false) keepSeen(d, mine);
       return mine;
     }
     // This session listens as an agent from here: that's who it is, even when its seat was lost (a later join
@@ -251,6 +248,26 @@ export function seatsFor(dir: string, opts: SeatOptions = {}): Binding[] {
 export function bindingFor(dir: string, opts: SeatOptions = {}): Binding | null {
   const [only, ...more] = seatsFor(dir, opts);
   return only && !more.length ? only : null;
+}
+
+function keepSeen(dir: string, mine: Binding[]): void {
+  const stale = mine.filter((m) => !m.pid && Date.now() - (m.seen ?? m.at ?? 0) > SEEN_EVERY_MS);
+  if (!stale.length) return;
+  updateConfig((c) => store(c, dir, seatsAt(c, dir).map((b) => (stale.some((m) => sameSeat(b, m)) ? { ...b, seen: Date.now() } : b))));
+}
+
+export function seatsHeldAnywhere(who: Here = here(), opts: Pick<SeatOptions, "claim"> = {}): Binding[] {
+  if (!who.session) return [];
+  const cfg = loadConfig();
+  return Object.keys(cfg.bindings ?? {}).flatMap((d) => {
+    const mine = seatsAt(cfg, d).filter((b) => b.session === who.session && cfg.channels[b.alias]);
+    if (opts.claim !== false) keepSeen(d, mine);
+    return mine;
+  });
+}
+
+export function sameSeat(a: Binding, b: Binding): boolean {
+  return a.alias === b.alias && a.as === b.as;
 }
 
 /** Whether `path` is `dir` or inside it. */

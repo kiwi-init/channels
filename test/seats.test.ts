@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, updateConfig, wipeChannel } from "../src/config.ts";
 import { freeAgentName } from "../src/membership.ts";
-import { baseName, bindDirectory, bindingFor, canonicalHarness, here, sameHarness, seatsAt, seatsFor } from "../src/seats.ts";
+import { baseName, bindDirectory, bindingFor, canonicalHarness, here, sameHarness, seatsAt, seatsFor, seatsHeldAnywhere } from "../src/seats.ts";
 
 let home = "";
 let dir = "";
@@ -122,6 +122,39 @@ test("a session that holds two seats here is both agents, and bindingFor names n
   expect(bindingFor(dir, { who })).toBeNull();
   expect(bindingFor(dir, { who, alias: "other" })?.as).toBe("reviewer");
   expect(seatsFor(dir, { who: { harness: "claude", session: "s2", pid: process.pid + 1 } })).toEqual([]);
+});
+
+test("a session's seats are found in every folder it joined from, never another session's", () => {
+  const who = { harness: "claude" as const, session: "s1", pid: process.pid };
+  const sibling = join(home, "proj-task");
+  mkdirSync(sibling);
+  bindDirectory(dir, { alias: "ch", as: "planner", harness: "claude", session: "s1", pid: process.pid });
+  bindDirectory(sibling, { alias: "other", as: "reviewer", harness: "claude", session: "s1", pid: process.pid });
+  bindDirectory(sibling, { alias: "ch", as: "claude-2", harness: "claude", session: "s2", pid: process.pid });
+  expect(seatsFor(dir, { who }).map((b) => b.as)).toEqual(["planner"]);
+  expect(seatsHeldAnywhere(who).map((b) => `${b.as}@${b.alias}`).sort()).toEqual(["planner@ch", "reviewer@other"]);
+  expect(seatsHeldAnywhere({ harness: "claude" })).toEqual([]);
+  updateConfig((c) => {
+    delete c.channels.other;
+  });
+  expect(seatsAt(loadConfig(), sibling).map((b) => b.as).sort()).toEqual(["claude-2", "reviewer"]);
+  expect(seatsHeldAnywhere(who).map((b) => b.as)).toEqual(["planner"]);
+});
+
+test("a seat found in another folder is marked as still in use, so no other session takes it for stale", () => {
+  const sibling = join(home, "proj-task");
+  mkdirSync(sibling);
+  const old = Date.now() - 13 * 3600_000;
+  bindDirectory(sibling, { alias: "ch", as: "codex", harness: "codex", session: "x" });
+  updateConfig((c) => {
+    c.bindings![sibling] = seatsAt(c, sibling).map((b) => ({ ...b, at: old, seen: old }));
+  });
+  expect(seatsHeldAnywhere({ harness: "codex", session: "x" }, { claim: false }).map((b) => b.as)).toEqual(["codex"]);
+  expect(seatsAt(loadConfig(), sibling)[0]?.seen).toBe(old);
+  expect(seatsHeldAnywhere({ harness: "codex", session: "x" }).map((b) => b.as)).toEqual(["codex"]);
+  expect(seatsAt(loadConfig(), sibling)[0]?.seen ?? 0).toBeGreaterThan(old);
+  expect(bindingFor(sibling, { who: { harness: "codex", session: "y" } })).toBeNull();
+  expect(seatsHeldAnywhere({ harness: "codex", session: "x" }).map((b) => b.as)).toEqual(["codex"]);
 });
 
 test("a session's seats with no process to check are all marked as still in use", () => {
