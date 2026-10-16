@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, updateConfig, wipeChannel } from "../src/config.ts";
 import { freeAgentName } from "../src/membership.ts";
-import { baseName, bindDirectory, bindingFor, canonicalHarness, here, sameHarness, seatsAt } from "../src/seats.ts";
+import { baseName, bindDirectory, bindingFor, canonicalHarness, here, sameHarness, seatsAt, seatsFor } from "../src/seats.ts";
 
 let home = "";
 let dir = "";
@@ -112,6 +112,27 @@ test("two agents in one checkout each act as themselves", () => {
   expect(seatsAt(loadConfig(), dir)).toHaveLength(2);
   expect(bindingFor(dir, { who: { harness: "claude", session: "s1", pid: process.pid } })?.as).toBe("claude");
   expect(bindingFor(dir, { who: { harness: "claude", session: "s2", pid: process.pid } })?.as).toBe("claude-2");
+});
+
+test("a session that holds two seats here is both agents, and bindingFor names neither", () => {
+  const who = { harness: "claude" as const, session: "s1", pid: process.pid };
+  bindDirectory(dir, { alias: "ch", as: "planner", harness: "claude", session: "s1", pid: process.pid });
+  bindDirectory(dir, { alias: "other", as: "reviewer", harness: "claude", session: "s1", pid: process.pid });
+  expect(seatsFor(dir, { who }).map((b) => `${b.as}@${b.alias}`)).toEqual(["planner@ch", "reviewer@other"]);
+  expect(bindingFor(dir, { who })).toBeNull();
+  expect(bindingFor(dir, { who, alias: "other" })?.as).toBe("reviewer");
+  expect(seatsFor(dir, { who: { harness: "claude", session: "s2", pid: process.pid + 1 } })).toEqual([]);
+});
+
+test("a session's seats with no process to check are all marked as still in use", () => {
+  const old = Date.now() - 3600_000;
+  bindDirectory(dir, { alias: "ch", as: "planner", harness: "codex", session: "t1" });
+  bindDirectory(dir, { alias: "other", as: "reviewer", harness: "codex", session: "t1" });
+  updateConfig((c) => {
+    c.bindings![dir] = seatsAt(c, dir).map((b) => ({ ...b, at: old, seen: old }));
+  });
+  expect(seatsFor(dir, { who: { harness: "codex", session: "t1" } })).toHaveLength(2);
+  expect(seatsAt(loadConfig(), dir).every((b) => (b.seen ?? 0) > old)).toBe(true);
 });
 
 test("a plain terminal in a folder with one agent acts as it, as before seats; with two it guesses neither", () => {
