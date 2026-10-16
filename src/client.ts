@@ -59,6 +59,7 @@ import {
   type ChannelIcon,
   cleanActivity,
   cleanCard,
+  PAGE_LIMIT,
   PING,
   PROTOCOL_VERSION,
   WS_PROTOCOL,
@@ -140,6 +141,11 @@ export class Unreachable extends Data.TaggedError("Unreachable")<{ readonly caus
 
 /** A socket that closed for no reason that's an answer (not removed, not closed, not "more"): connect again. */
 class Dropped extends Data.TaggedError("Dropped")<{ readonly code: number; readonly reason: string }> {}
+
+interface PageOffer {
+  cap: string;
+  next: number;
+}
 
 /** What a request can fail with: the relay refused it, or never heard it. */
 export type Refusal = RelayError | Unreachable;
@@ -1225,14 +1231,32 @@ export class Channel {
     history: Effect.fn("Channel.history")({ self: this }, function* (this: Channel, since: number) {
       const messages: Message[] = [];
       let head = since;
+      const take = (envelopes: Envelope[]) =>
+        Effect.gen({ self: this }, function* () {
+          const decrypted = yield* Effect.forEach(envelopes, (e) => this.fx.decrypt(e), { concurrency: "unbounded" });
+          for (let i = 0; i < envelopes.length; i++) {
+            const m = decrypted[i];
+            if (m) messages.push(m);
+            since = envelopes[i]!.seq;
+          }
+        });
+      let ask: Record<string, number> = { pages: 1 };
       for (;;) {
-        const page = yield* this.request<{ head: number; messages: Envelope[] }>("/messages", {}, { since });
+        const page = yield* this.request<{ head: number; messages: Envelope[]; pages?: PageOffer }>("/messages", {}, { since, ...ask });
+        ask = {};
         head = page.head;
-        const decrypted = yield* Effect.forEach(page.messages, (e) => this.fx.decrypt(e), { concurrency: "unbounded" });
-        for (let i = 0; i < page.messages.length; i++) {
-          const m = decrypted[i];
-          if (m) messages.push(m);
-          since = page.messages[i]!.seq;
+        yield* take(page.messages);
+        const offer = page.pages;
+        if (offer && typeof offer.cap === "string" && Number.isSafeInteger(offer.next) && offer.next % PAGE_LIMIT === 0 && offer.next >= since && offer.next < head) {
+          since = offer.next;
+          for (let k = offer.next / PAGE_LIMIT; (k + 1) * PAGE_LIMIT <= head; k++) {
+            const exit = yield* Effect.exit(this.request<{ messages: Envelope[] }>(`/pages/${k}`, {}, { cap: offer.cap }));
+            if (Exit.isFailure(exit)) break;
+            yield* take(exit.value.messages.filter((e) => e.seq > k * PAGE_LIMIT && e.seq <= (k + 1) * PAGE_LIMIT));
+            since = (k + 1) * PAGE_LIMIT;
+          }
+          if (since >= head) break;
+          continue;
         }
         if (!page.messages.length || since >= head) break;
       }

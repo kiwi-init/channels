@@ -20,6 +20,7 @@ import { ChannelGone, BadRequest, Forbidden, NotFound, NotOwner, SignInRequired,
 import { answer, buildContext, describeRoutes, dispatch, incoming, json, Request_, type Route } from "./http.ts";
 import { Human, HUMAN_HEADER } from "./human.ts";
 import { betaMessage, inBeta, Policy } from "./policy.ts";
+import { offerPages, PAGE_PATH, servePage } from "./pages.ts";
 import {
   allow,
   append,
@@ -246,15 +247,19 @@ const routes: RoomRoute[] = [
     method: "GET",
     path: "/messages",
     guard: "member",
-    run: () =>
+    run: ({ me }) =>
       Effect.gen(function* () {
         const db = yield* RoomStore;
         const { url } = yield* Request_;
         const since = Number(url.searchParams.get("since") ?? 0) || 0;
         const limit = Number(url.searchParams.get("limit") ?? PAGE_LIMIT) || PAGE_LIMIT;
-        return { data: { head: db.head(), messages: db.since(since, limit) } };
+        const head = db.head();
+        const messages = db.since(since, limit);
+        const paged = url.searchParams.get("pages") === "1" ? yield* offerPages(me, since, head, messages) : null;
+        return { data: paged ? { head, messages: paged.messages, pages: paged.offer } : { head, messages } };
       }),
   },
+  { method: "GET", path: PAGE_PATH, guard: "member", run: ({ me }, m) => Effect.map(servePage(me, Number(m[1])), (data) => ({ data })) },
   {
     method: "POST",
     path: "/messages",

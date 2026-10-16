@@ -12,6 +12,7 @@ test("every route declares its check", () => {
     "GET /^\\/requests\\/([0-9a-f-]{36})$/ requester",
     "GET / member",
     "GET /messages member",
+    "GET /^\\/pages\\/(\\d{1,9})$/ member",
     "POST /messages member",
     "POST /read member",
     "GET /keys member",

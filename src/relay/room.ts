@@ -485,6 +485,22 @@ export class RoomDb {
     return this.sql.all<Envelope>("SELECT seq, ts, iv, ct, e FROM msgs WHERE seq > ? ORDER BY seq LIMIT ?", seq, Math.min(Math.max(limit, 1), PAGE_LIMIT));
   }
 
+  range(after: number, through: number): Envelope[] {
+    return this.sql.all<Envelope>("SELECT seq, ts, iv, ct, e FROM msgs WHERE seq > ? AND seq <= ? ORDER BY seq LIMIT ?", after, through, PAGE_LIMIT);
+  }
+
+  storedPageGen(): string | null {
+    return this.get("page_gen") ?? null;
+  }
+
+  pageGen(): string {
+    const known = this.storedPageGen();
+    if (known) return known;
+    const gen = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
+    this.set("page_gen", gen);
+    return gen;
+  }
+
   /** The channel's sealed icon (owner-set; the relay can't read it). */
   icon(): { e: number; iv: string; ct: string } | null {
     const t = this.get("icon");

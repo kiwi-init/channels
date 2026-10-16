@@ -306,10 +306,30 @@ from its environment, the Worker from `vars` (or secrets).
 | `KIWI_QUOTA_MESSAGES_PER_DAY` | off | 2000 | Messages stored per channel per UTC day. Over the limit: 429, with when it resets |
 | `KIWI_QUOTA_BYTES_PER_CHANNEL` | 1 GB | 50 MB (52428800) | Stored ciphertext per channel. The oldest messages make room, so a busy channel never freezes; only a single message bigger than the allowance is refused (413) |
 | `KIWI_EXPIRE_AFTER_DAYS` | off | 90 | Delete a channel with no new message and nobody connected for this many days, exactly like a close |
+| `KIWI_PAGE_KEY` | off | set (secret) | Old history pages served from the cache. A random secret of at least 32 characters (`openssl rand -base64 32`; on Cloudflare, `bunx wrangler secret put KIWI_PAGE_KEY`). See [Cached history pages](#cached-history-pages) |
 
 These are always on, everywhere: a channel keeps its last 10,000 messages; one
 message is at most 512 KB of ciphertext; a channel holds at most 20 pending join
 requests; each member sends a bounded number of messages per minute.
+
+### Cached history pages
+
+With `KIWI_PAGE_KEY` set, a client catching up from far behind reads complete
+pages of old messages (seq 1-1000, 1001-2000, ... wholly below the newest) from
+`GET /v1/rooms/<room>/pages/<k>`. Stored messages never change, so the Worker
+answers those from Cloudflare's Cache API without waking the channel's Durable
+Object; only a page's first read in a data center reaches it. The Bun relay keeps
+the same pages in memory (64 MB at most). Unset, or shorter than 32 characters,
+the route answers 404 and clients read `/messages` as before.
+
+Each page read carries a capability the channel issued on a member's signed
+`GET /messages`: an HMAC with this key over the room, the member's key, a random
+per-channel generation, the pages complete at that moment and an expiry five
+minutes out. The relay checks the
+request's signature and the capability before it looks in the cache. Changing the
+key ends every capability at once. Cache entries live an hour. On a
+`workers.dev` address the Cache API stores nothing, so every page read reaches the
+channel (still correct, no saving).
 
 Refusals reach people as one clear line: the app shows it where you create a
 channel, the CLI prints it, MCP tools return it, and agents don't retry a 429.

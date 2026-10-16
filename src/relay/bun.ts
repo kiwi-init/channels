@@ -37,6 +37,7 @@ import {
   type Effects,
 } from "./room.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync } from "./route.ts";
+import { edgePage, PAGE_CACHE_SECONDS, PAGE_PATH, type PageCache } from "./pages.ts";
 
 interface SocketData {
   roomId: string;
@@ -150,6 +151,16 @@ export function startRelay(
     clockLayer(opts.now),
   );
   const relay = makeRelay(services);
+  const clock = opts.now ?? Date.now;
+  const pageCache = policy.pageKey ? memoryPages(64 * 1024 ** 2, clock) : null;
+  const pageFromRoom = async (req: Request, roomId: string, rest: string): Promise<Response> => {
+    const db = storeFor(roomId, false);
+    try {
+      return (await onHttp(relay, db, req, rest)).res;
+    } finally {
+      doneWith(db);
+    }
+  };
 
   const apply = (roomId: string, fx: Effects, sender?: ServerWebSocket<SocketData>) => {
     const room = sockets.get(roomId) ?? new Set();
@@ -161,6 +172,7 @@ export function startRelay(
       else people.query("DELETE FROM owned WHERE user = ? AND room = ?").run(u.user, u.room);
     }
     if (fx.wipe) {
+      pageCache?.forget(roomId);
       dbs.get(roomId)?.close();
       dbs.delete(roomId);
       for (const suffix of ["", "-wal", "-shm"]) rmSync(file(roomId) + suffix, { force: true });
@@ -213,6 +225,7 @@ export function startRelay(
         // No fingerprint: 426 before the room file is opened.
         const early = missingFingerprint(req.method, route.rest, url);
         if (early) return withCors(errorResponse(early));
+        if (pageCache && PAGE_PATH.test(route.rest)) return withCors(await edgePage(req, route.roomId, route.rest, policy.pageKey, pageCache, () => pageFromRoom(req, route.roomId, route.rest), clock()));
         const isCreate = route.rest === "/create";
         const db = storeFor(route.roomId, isCreate);
         if (isCreate) creating.set(route.roomId, (creating.get(route.roomId) ?? 0) + 1);
@@ -291,6 +304,39 @@ export function startRelay(
     },
   });
   return Object.assign(server, { sweep });
+}
+
+function memoryPages(maxBytes: number, now: () => number): PageCache & { forget(roomId: string): void } {
+  const entries = new Map<string, { body: string; at: number }>();
+  let bytes = 0;
+  const drop = (key: string) => {
+    const e = entries.get(key);
+    if (!e) return;
+    bytes -= e.body.length;
+    entries.delete(key);
+  };
+  return {
+    match: async (key) => {
+      const e = entries.get(key);
+      if (!e) return undefined;
+      if (now() - e.at > PAGE_CACHE_SECONDS * 1000) return void drop(key);
+      return new Response(e.body);
+    },
+    put: async (key, res) => {
+      const body = await res.text();
+      if (body.length > maxBytes / 8) return;
+      drop(key);
+      entries.set(key, { body, at: now() });
+      bytes += body.length;
+      for (const k of entries.keys()) {
+        if (bytes <= maxBytes) break;
+        drop(k);
+      }
+    },
+    forget: (roomId) => {
+      for (const k of [...entries.keys()]) if (k.includes(`/${roomId}/`)) drop(k);
+    },
+  };
 }
 
 /**
