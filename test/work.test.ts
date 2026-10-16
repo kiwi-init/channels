@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
 import type { Event, Kind, Message } from "../src/protocol.ts";
 import { fold, type Roster } from "../src/state.ts";
-import { agentRows, needsPerson, prLinks, prsIn, taskFeed, taskPrs } from "../src/work.ts";
+import { agentRows, needsPerson, prLinks, prsIn, recentPrs, taskFeed, taskPrs } from "../src/work.ts";
 
 let seq = 0;
 const T0 = 1_700_000_000_000;
@@ -47,6 +47,21 @@ describe("pull requests", () => {
     const ms = [linked, merged];
     const s = fold(ms, roster);
     expect(prsIn(s, ms, "jonatas", (m) => m.from === "ann")).toMatchObject([{ number: 49, state: "merged", seq: linked.seq }]);
+  });
+
+  test("recent PRs: newest mention first, cut to the limit, with the task that named them", async () => {
+    const add = await msg(ann, { ev: { op: "task.add", title: "Keys move out", owner: "ann" } });
+    const a = await msg(ann, { body: `T${add.seq} is up: https://github.com/o/r/pull/1` });
+    const b = await msg(bob, { body: "https://github.com/o/r/pull/2" });
+    const c = await msg(coord, { body: "https://github.com/o/r/pull/3" });
+    const merged = await msg(coord, { body: "merged #3" });
+    const again = await msg(coord, { body: "back on https://github.com/o/r/pull/1" });
+    const ms = [add, a, b, c, merged, again];
+    const s = fold(ms, roster);
+    const recent = recentPrs(s, ms, "jonatas", 2);
+    expect(recent.map((p) => p.number)).toEqual([1, 3]);
+    expect(recent[0]).toMatchObject({ by: "coord", last: again.rts, task: add.seq, state: "open" });
+    expect(recent[1]).toMatchObject({ state: "merged" });
   });
 });
 

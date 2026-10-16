@@ -1,4 +1,4 @@
-import { ArrowDown01Icon, ArrowLeft01Icon, CheckListIcon, Search01Icon } from "@hugeicons/core-free-icons"
+import { ArrowDown01Icon, ArrowLeft01Icon, Search01Icon, SidebarRightIcon } from "@hugeicons/core-free-icons"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react"
 
 import { droppedCount } from "@mc/format.ts"
@@ -6,6 +6,7 @@ import { memberLoad } from "@mc/load.ts"
 import { ignored, isReaction, type Color, type Message } from "@mc/protocol.ts"
 import { describeScopes, wireScopes } from "@mc/scopes.ts"
 import { colorOf, keptFromPeople, openRound, taskId, type Task } from "@mc/state.ts"
+import { recentPrs } from "@mc/work.ts"
 import { secrets } from "@/lib/secrets"
 import { channelTitle, forgetChannel, loadMember, loadRecent, renameChannel, saveRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { howHere } from "@/lib/presence"
@@ -17,6 +18,7 @@ import { coordinatorMood, ERROR_MS, moodInputs, SPEAKING_MS, type Mood } from "@
 import { chipsFor } from "@/lib/reactions"
 import { receipt } from "@/lib/receipts"
 import { dmPlace, markSeenIn, MAIN, placeFromKey, placeKey, seenIn, sendFrom, useSeen, threadMembers, type Place, type PlaceSummary } from "@/lib/threads"
+import { keepSideOpen, sideStartsOpen } from "@/lib/side"
 import { useSidebarOpen } from "@/lib/sidebar"
 import { cx } from "@/lib/utils"
 import { LEAD_WHEN_HIDDEN } from "./chrome"
@@ -29,6 +31,7 @@ import { Icon } from "./icon"
 import { Button, IconButton, Spinner } from "./kit"
 import { Bubble, EventGroup, EventRow, TimeMark, isAgent, standsAlone, type ThreadSummary } from "./message"
 import { NeedsYou } from "./needs-you"
+import { SidePanel } from "./side-panel"
 import { Notes, Tasks } from "./tasks"
 import { InfoPanel, TaskDetails, TasksPanel, ThreadPanel } from "./lazy"
 
@@ -74,7 +77,11 @@ const summarised = (m: Message) => m.ev?.op === "task.add" || (m.ev?.op === "tas
 type Here = Exclude<Place, { kind: "task" }>
 
 /** What's open on the right, one at a time: a thread (by its first message), the details, or the tasks (the list, or one of them). */
-type Side = { kind: "thread"; root: number } | { kind: "info" } | { kind: "tasks"; task: number | null } | null
+type Side = { kind: "thread"; root: number } | { kind: "info" } | { kind: "overview" } | { kind: "tasks"; task: number | null; fromList?: true } | null
+
+const OVERVIEW: Side = { kind: "overview" }
+
+const besideChat = (s: Side) => s?.kind === "tasks" || s?.kind === "overview"
 
 function roundOf(t: Task): { round: number; at?: string } | Record<string, never> {
   const open = openRound(t)
@@ -90,7 +97,14 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const now = useNow()
   // Where you are in the channel: its main conversation, or a direct one.
   const [here, setHere] = useState<string>("main")
-  const [side, setSide] = useState<Side>(null)
+  const [pinned, setPinned] = useState(sideStartsOpen)
+  const [side, setSide] = useState<Side>(() => (pinned ? OVERVIEW : null))
+  const rest: Side = pinned ? OVERVIEW : null
+  const pin = useCallback((on: boolean) => {
+    keepSideOpen(on)
+    setPinned(on)
+    setSide(on ? OVERVIEW : null)
+  }, [])
   const threadRoot = side?.kind === "thread" ? side.root : null
   const info = side?.kind === "info"
   /** The task open in the Tasks panel, if one is (else the panel lists them, if it's open). */
@@ -191,11 +205,11 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       setHere(placeKey(p))
       setBehind(0)
       // A thread belongs to the conversation it's in, and the details make way; the tasks stay open beside.
-      setSide((s) => (s?.kind === "tasks" ? s : null))
+      setSide((s) => (besideChat(s) ? s : pinned ? OVERVIEW : null))
       setReplyTo(null)
       setSearch(null)
     },
-    [openTask]
+    [openTask, pinned]
   )
 
   // What's new where: the newest message seen in each place, kept by this browser.
@@ -517,6 +531,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       load: memberLoad(state, m.name, now),
       lastAt: lastAt.get(m.name),
     }))
+  const prs = side?.kind === "overview" ? recentPrs(state, messages, me, 5) : []
   const needsMe = escalations.length + reviews.length + (isOwner ? requests.length : 0)
   // The header's capsule is the channel's, wherever you are in it, so this line is the channel's too.
   const headline =
@@ -645,7 +660,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     >
       <div className="flex h-full min-w-0 flex-1">
         <div
-          className={cx("relative flex min-w-0 flex-1 flex-col bg-canvas", (root || info || side?.kind === "tasks") && "hidden md:flex")}
+          className={cx("relative flex min-w-0 flex-1 flex-col bg-canvas", (root || info || besideChat(side)) && "hidden md:flex")}
           style={{ "--head": `${headH}px`, "--foot": `${footH}px` } as CSSProperties}
         >
           {/* The conversation's part of the window's one header row, floating over it as Grok's does:
@@ -662,13 +677,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
               <IconButton label="Search" round className={cx("glass size-9", search === null && "text-ink")} active={search !== null} onClick={() => setSearch((s) => (s === null ? "" : null))}>
                 <Icon icon={Search01Icon} size={18} />
               </IconButton>
-              <TasksButton
-                places={places}
-                unreadIn={unreadIn}
-                shown={taskKey}
-                active={side?.kind === "tasks"}
-                onClick={() => setSide((s) => (s?.kind === "tasks" ? null : { kind: "tasks", task: null }))}
-              />
+              <PanelButton places={places} unreadIn={unreadIn} shown={taskKey} active={besideChat(side)} onClick={() => pin(!besideChat(side))} />
             </div>
             {/* After the row in the document and marked no-drag: the desktop app's drag region is worked
                 out in document order, so it would otherwise swallow these clicks. */}
@@ -817,7 +826,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
         {root && (
           <ThreadPanel
             count={replies.length}
-            onClose={() => setSide(null)}
+            onClose={() => setSide(rest)}
             composer={
               <Composer
                 key={root.seq}
@@ -842,12 +851,16 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             title={title}
             icon={icon}
             subtitle={subtitle}
-            onClose={() => setSide(null)}
+            onClose={() => setSide(rest)}
             onPause={hold && !state.hold ? () => setPausing(true) : undefined}
             onMessage={(name) => go(dmPlace(me, name))}
             mood={mood}
             notes={<Notes state={state} now={now} onClear={async (key) => void (await send(`cleared ${key}`, { kind: "event", ev: { op: "fact.del", key } }))} />}
           />
+        )}
+
+        {side?.kind === "overview" && (
+          <SidePanel state={state} agents={agentsNow} prs={prs} now={now} nameOf={nameOf} onOpenTask={openTask} onAllTasks={() => setSide({ kind: "tasks", task: null })} onClose={() => pin(false)} />
         )}
 
         {side?.kind === "tasks" && (
@@ -863,8 +876,9 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                 </>
               )
             }
-            onBack={shownTask === null ? undefined : () => setSide({ kind: "tasks", task: null })}
-            onClose={() => setSide(null)}
+            backLabel={side.fromList ? "All tasks" : "Overview"}
+            onBack={() => setSide(side.fromList ? { kind: "tasks", task: null } : OVERVIEW)}
+            onClose={() => pin(false)}
             follow={shownTask === null ? null : `${shownTask}:${inTask.length}`}
             composer={
               task && (
@@ -884,7 +898,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             }
           >
             {shownTask === null ? (
-              <Tasks state={state} now={now} nameOf={nameOf} unreadIn={(id) => unreadIn(placeKey({ kind: "task", task: id }))} onOpen={openTask} />
+              <Tasks state={state} now={now} nameOf={nameOf} unreadIn={(id) => unreadIn(placeKey({ kind: "task", task: id }))} onOpen={(task) => setSide({ kind: "tasks", task, fromList: true })} />
             ) : (
               <div className="px-3 pt-1 pb-4">
                 <TaskDetails
@@ -964,7 +978,7 @@ function PlaceSwitch({
 }
 
 /** The header's Tasks button: it opens the panel, and says what's new across the tasks' conversations. */
-function TasksButton({
+function PanelButton({
   places,
   unreadIn,
   shown,
@@ -988,8 +1002,8 @@ function TasksButton({
     else if (u.n) news = true
   }
   return (
-    <IconButton label="Tasks" round className={cx("glass size-9", !active && "text-ink")} active={active} aria-expanded={active} onClick={onClick}>
-      <Icon icon={CheckListIcon} size={18} />
+    <IconButton label="Overview" round className={cx("glass size-9", !active && "text-ink")} active={active} aria-expanded={active} onClick={onClick}>
+      <Icon icon={SidebarRightIcon} size={18} />
       <Badge u={forMe ? { n: forMe, forMe: true } : { n: news ? 1 : 0, forMe: false }} />
     </IconButton>
   )
