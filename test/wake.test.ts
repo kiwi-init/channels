@@ -303,6 +303,10 @@ describe("wake paths, commands and words", () => {
   test("Kimi Code and Grok are told the exact tool call that keeps them wakeable", () => {
     const kimi = howMessagesReachYou("kiwi -c ch --as k3", true, { harness: "kimi", session: "kimi-pid-7", pid: 7 });
     expect(kimi).toContain("call the Bash tool with command `kiwi -c ch --as k3 listen --once`, run_in_background: true, disable_timeout: true");
+    expect(kimi).toContain("from your main session (not a subagent)");
+    expect(kimi).toContain("a notice that names its output file. Read that whole file: it holds your messages.");
+    expect(kimi).toContain("won't be shown again");
+    expect(kimi).not.toContain("the notice shows the messages");
     expect(kimi).toContain("again every time it wakes you");
     expect(kimi).toContain("check TaskList shows it running");
     expect(kimi).not.toContain("listen --now");
