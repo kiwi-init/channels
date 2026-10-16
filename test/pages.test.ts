@@ -5,10 +5,10 @@ import { join } from "node:path";
 import { signRequest } from "../src/auth.ts";
 import { Channel } from "../src/client.ts";
 import { generateIdentity, type Identity } from "../src/identity.ts";
-import { PAGE_CAP_MS } from "../src/relay/pages.ts";
+import { edgePage, PAGE_CAP_MS, type PageCache } from "../src/relay/pages.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { OPEN_POLICY, policyFrom } from "../src/relay/policy.ts";
-import { roomWith, type PagedRoom } from "./pages-room.ts";
+import { fill, roomWith, type PagedRoom } from "./pages-room.ts";
 
 setDefaultTimeout(60_000);
 
@@ -143,6 +143,41 @@ describe("old pages", () => {
     for (let i = 0; i < 3; i++) await again.send(`again ${i}`);
     const res = await page(0, cap, r.owner, r.roomId);
     expect(res.status).toBe(403);
+  });
+
+  test("an edge cache that outlives a close never gives a re-created room's capability the old room's pages", async () => {
+    const r = await roomWith(relay, dataDir, 2000);
+    const kept = new Map<string, string>();
+    const cache: PageCache = {
+      match: async (key) => {
+        const body = kept.get(key);
+        return body === undefined ? undefined : new Response(body);
+      },
+      put: async (key, res) => {
+        kept.set(key, await res.text());
+      },
+    };
+    const edge = async (k: number, cap: string): Promise<Response> => {
+      const path = `/pages/${k}?cap=${encodeURIComponent(cap)}`;
+      const url = `${relay}/v1/rooms/${r.roomId}${path}`;
+      const headers = { authorization: `Bearer ${await signRequest(r.owner, r.roomId, "GET", path)}` };
+      return edgePage(new Request(url, { headers }), r.roomId, `/pages/${k}`, KEY, cache, () => fetch(url, { headers }), clock.now);
+    };
+    const before = await offer(r.owner, relay, r.roomId);
+    const warm = await edge(0, before.cap);
+    expect(warm.headers.get("x-kiwi-cache")).toBe("miss");
+    const oldPage = messagesPart(await warm.text());
+    await r.ownerCh.close();
+    await Channel.create(relay, r.owner, { name: "boss" }, [], r.roomId);
+    await new Channel(r.ownerCh.access, relay, r.owner).send("again");
+    fill(dataDir, r.roomId, 2000);
+    const after = await offer(r.owner, relay, r.roomId);
+    const res = await edge(0, after.cap);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("x-kiwi-cache")).toBe("miss");
+    const newPage = messagesPart(await res.text());
+    expect(newPage).toBe(messagesPart(await (await get(relay, r.roomId, "/messages?since=0", r.owner)).text()));
+    expect(newPage).not.toBe(oldPage);
   });
 
   test("history() reads through pages and gets every message once", async () => {
