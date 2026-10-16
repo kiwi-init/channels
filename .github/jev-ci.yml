@@ -203,6 +203,19 @@ jobs:
       for example a Node- or Bun-only import reaching src/relay/worker.ts, or an invalid
       wrangler.jsonc. Code the worker doesn't import can't affect it.
 
+  relay-budget:
+    name: relay / budget
+    inputs: ["src/**", "web/src/lib/**", "test/budget-*.test.ts", "test/traffic.ts", "test/check.ts", "test/owner.ts", "test/owner-cli.ts"]
+    always: ["package.json", "bun.lock", "scripts/ci-tests.ts"]
+    description: >-
+      Runs every test/budget-*.test.ts. budget-relay counts, on one long-lived room storage
+      handle as a Cloudflare Durable Object keeps it, the SQL statements a stored message, a read
+      mark and a connecting socket cost, and checks the room's in-memory state follows posting
+      rights, removals, numbering and a close. The others drive clients through test/traffic.ts,
+      a proxy in front of a local relay that counts HTTP requests by route, sockets, frames by
+      type and bytes. Each fails when an operation costs more requests, frames, bytes or
+      statements than its budget, so a change that adds relay traffic or storage work fails.
+
   repo-comments:
     jev: false
     name: repo / comments

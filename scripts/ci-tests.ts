@@ -13,6 +13,7 @@ const FLOWS: Record<string, string[]> = {
   "desktop-keys": ["desktop-keys"],
   site: ["site"],
   pins: ["action-pins"],
+  budget: [...new Glob("test/budget-*.test.ts").scanSync()].map((f) => f.slice("test/".length, -".test.ts".length)).sort(),
 }
 
 const group = process.argv[2] ?? ""
