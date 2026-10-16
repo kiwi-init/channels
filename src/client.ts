@@ -792,7 +792,7 @@ export class Channel {
           else this.infoExpires = Date.now() + maxAge;
         });
       }
-      return yield* Fiber.join(shared);
+      return structuredClone(yield* Fiber.join(shared));
     }),
 
     title: Effect.fn("Channel.title")({ self: this }, function* (this: Channel) {

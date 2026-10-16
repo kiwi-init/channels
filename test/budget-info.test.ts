@@ -140,6 +140,20 @@ describe("the app's reads of one channel", () => {
     expect((await kept.guard())?.charter).toEqual({ text: "Docs only.", since: 1 });
   });
 
+  test("a kept read hands each caller its own copy", async () => {
+    const owner = await generateIdentity("human");
+    const made = await Channel.create(proxy!.url, owner, { name: "human" }, [], undefined, undefined, "first");
+    const kept = new Channel(made.access, proxy!.url, owner, undefined, { keepInfo: true });
+    const first = await kept.info();
+    const epoch = first.epoch;
+    first.epoch = epoch + 7;
+    first.title = null;
+    const again = await kept.info();
+    expect(again.epoch).toBe(epoch);
+    expect(again.title).not.toBeNull();
+    expect(await kept.title()).toBe("first");
+  });
+
   test("a kept read expires: past its max age the next read goes to the relay and sees another client's change", async () => {
     expect(INFO_MAX_AGE_MS).toBe(30_000);
     const owner = await generateIdentity("human");
