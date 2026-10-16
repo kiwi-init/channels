@@ -1,8 +1,9 @@
 import { later } from "@/lib/later"
+import type { MessageRefs } from "./markdown"
 
 const markdown = later(
   () => import("./markdown").then((m) => m.Markdown),
-  ({ children }: { children: string }) => <div className="[overflow-wrap:anywhere] break-words whitespace-pre-wrap">{children}</div>
+  ({ children }: { children: string; refs?: MessageRefs }) => <div className="[overflow-wrap:anywhere] break-words whitespace-pre-wrap">{children}</div>
 )
 const settings = later(() => import("./settings").then((m) => m.SettingsModal))
 const computers = later(() => import("./computers").then((m) => m.ComputersModal))
