@@ -306,6 +306,7 @@ export interface LiveOptions {
   quietMs?: number;
   /** Open presence frames (default true). A listener that ignores presence skips the work. */
   presence?: boolean;
+  reads?: boolean;
 }
 
 /** How long a dropped connection may stay down before listeners hear about it. */
@@ -1262,7 +1263,7 @@ export class Channel {
             return Effect.void;
         }
       };
-      const listening = eachLive(this.fx.live(since, { quietMs: opts.quietMs, presence: !!opts.onPresence }), handle, (s) => Effect.sync(() => opts.onStatus?.(s)));
+      const listening = eachLive(this.fx.live(since, { quietMs: opts.quietMs, presence: !!opts.onPresence, reads: false }), handle, (s) => Effect.sync(() => opts.onStatus?.(s)));
       // A test's clock: the quiet window and the waits between retries follow it.
       return yield* opts.now ? Effect.provideService(listening, Clock.Clock, clockFrom(opts.now)) : listening;
     }),
@@ -1366,11 +1367,11 @@ export class Channel {
   }
 
   /** live(): connections one after another, each from where the last left off, fed to one queue. */
-  private live(since: number, { quietMs = QUIET_DROP_MS, presence = true }: LiveOptions): Stream.Stream<Live, ChannelGone, Relay> {
+  private live(since: number, { quietMs = QUIET_DROP_MS, presence = true, reads = true }: LiveOptions): Stream.Stream<Live, ChannelGone, Relay> {
     // The newest seq handed on: each (re)connect asks for what's after it, so nothing is lost across drops.
     const at = { seq: since };
     return Stream.callback<Live, ChannelGone, Relay>((out) =>
-      Stream.suspend(() => this.session(at, quietMs, presence)).pipe(
+      Stream.suspend(() => this.session(at, quietMs, presence, reads)).pipe(
         // A drop: connect again on the schedule. A connection that opens starts the schedule over.
         Stream.retry(this.reconnect(out, quietMs)),
         // The schedule never gives up on a drop; only an answer (ChannelGone) gets past it.
@@ -1412,21 +1413,22 @@ export class Channel {
    * One connection, read: Open, then what the relay sends, strictly in order, until it closes. A
    * frame whose reading fails is reported and dropped: one bad payload mustn't stop the rest.
    */
-  private session(at: { seq: number }, quietMs: number, presence: boolean): Stream.Stream<Live, Dropped | ChannelGone, Relay> {
-    return Stream.callback<Incoming, Dropped | ChannelGone, Relay>((q) => this.socket(at.seq, q)).pipe(
+  private session(at: { seq: number }, quietMs: number, presence: boolean, reads: boolean): Stream.Stream<Live, Dropped | ChannelGone, Relay> {
+    return Stream.callback<Incoming, Dropped | ChannelGone, Relay>((q) => this.socket(at.seq, reads, q)).pipe(
       Stream.mapEffect((f) =>
-        this.read(f, at, quietMs, presence).pipe(Effect.catchCause((cause) => Effect.succeed<Live>({ _tag: "Skipped", frame: f.t, error: Cause.squash(cause) }))),
+        this.read(f, at, quietMs, presence, reads).pipe(Effect.catchCause((cause) => Effect.succeed<Live>({ _tag: "Skipped", frame: f.t, error: Cause.squash(cause) }))),
       ),
       Stream.filter((x): x is Live => x !== null),
     );
   }
 
   /** A socket for what's after `since`: its frames go to `q` as they arrive, then how it closed. Closing the scope closes it. */
-  private socket(since: number, q: Queue.Queue<Incoming, Dropped | ChannelGone | Cause.Done>) {
+  private socket(since: number, reads: boolean, q: Queue.Queue<Incoming, Dropped | ChannelGone | Cause.Done>) {
     return Effect.gen({ self: this }, function* () {
       const auth = yield* Effect.promise(() => signRequest(this.identity, this.roomId, "GET", "/ws"));
       const u = new URL(`/v1/rooms/${this.roomId}/ws`, this.relay);
       u.searchParams.set("since", String(since));
+      if (!reads) u.searchParams.set("reads", "0");
       u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
       const { ws, closed } = yield* Effect.acquireRelease(
         Effect.sync(() => this.connect(u, auth, q)),
@@ -1476,7 +1478,7 @@ export class Channel {
   }
 
   /** What one frame means to a listener (null: nothing, like a message already handed on). */
-  private read(f: Incoming, at: { seq: number }, quietMs: number, presence: boolean): Effect.Effect<Live | null, never, Relay> {
+  private read(f: Incoming, at: { seq: number }, quietMs: number, presence: boolean, reads: boolean): Effect.Effect<Live | null, never, Relay> {
     return Effect.gen({ self: this }, function* () {
       switch (f.t) {
         case "open": {
@@ -1505,12 +1507,14 @@ export class Channel {
         case "ready":
           return { _tag: "Ready", head: f.head } satisfies Live;
         case "read": {
+          if (!reads) return null;
           const mark = wellFormedRead(f);
           return mark && ({ _tag: "Read", reads: [mark], snapshot: false } satisfies Live);
         }
         case "reads": {
-          const reads = Array.isArray(f.reads) ? f.reads.map(wellFormedRead).filter((r): r is ReadMark => r !== null) : [];
-          return { _tag: "Read", reads, snapshot: true } satisfies Live;
+          if (!reads) return null;
+          const marks = Array.isArray(f.reads) ? f.reads.map(wellFormedRead).filter((r): r is ReadMark => r !== null) : [];
+          return { _tag: "Read", reads: marks, snapshot: true } satisfies Live;
         }
         default:
           return null;

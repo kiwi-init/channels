@@ -53,10 +53,10 @@ function stored(roomId: string): { pk: string; seq: number }[] {
 }
 
 /** Every read mark a live view of `ch` hears, until the returned stop. */
-function hear(ch: Channel): { marks: ReadMark[]; stop: () => void } {
+function hear(ch: Channel, reads = true): { marks: ReadMark[]; stop: () => void } {
   const marks: ReadMark[] = [];
   const fiber = Effect.runFork(
-    Stream.runForEach(ch.fx.live(0, { presence: false }), (ev) => Effect.sync(() => void (ev._tag === "Read" && marks.push(...ev.reads)))).pipe(Effect.provide(AgentLive)) as Effect.Effect<void>,
+    Stream.runForEach(ch.fx.live(0, { presence: false, reads }), (ev) => Effect.sync(() => void (ev._tag === "Read" && marks.push(...ev.reads)))).pipe(Effect.provide(AgentLive)) as Effect.Effect<void>,
   );
   return { marks, stop: () => void Effect.runFork(Fiber.interrupt(fiber)) };
 }
@@ -85,6 +85,24 @@ describe("the relay's read marks", () => {
     const later = hear(new Channel(access, relay, owner));
     await until(() => later.marks.some((r) => r.pk === owner.pk && r.seq === b), "the marks on connect");
     later.stop();
+  });
+
+  test("a socket opened with reads=0 hears no marks, live or on connect", async () => {
+    const owner = await generateIdentity("human");
+    const { access } = await Channel.create(relay, owner, { name: "human" });
+    const writer = new Channel(access, relay, owner);
+    const a = await writer.send("one");
+    await runIt(writer.fx.markRead(a));
+    const quiet = hear(new Channel(access, relay, owner), false);
+    const loud = hear(new Channel(access, relay, owner));
+    await until(() => loud.marks.some((r) => r.seq === a), "the marks on connect");
+    const b = await writer.send("two");
+    await runIt(new Channel(access, relay, owner).fx.markRead(b));
+    await until(() => loud.marks.some((r) => r.seq === b), "the mark, live");
+    await Bun.sleep(300);
+    expect(quiet.marks).toEqual([]);
+    quiet.stop();
+    loud.stop();
   });
 
   test("a relay that doesn't know read marks is asked once, and nothing fails", async () => {
