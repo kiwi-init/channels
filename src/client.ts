@@ -43,6 +43,7 @@ import { freeHandle, seededPick } from "./handles.ts";
 import { asOption } from "./wake.ts";
 import { inlineText, makeRecord, NAME_RE, nameKey, readRecord, readRuns, RESERVED_NAMES, sealRecord, verifiedComputer, verifiedPerson, type JoinClaims, type JoinRequest, type Member, type MemberInfo } from "./membership.ts";
 import {
+  MORE_REFUSED,
   CLOSE_CLOSED,
   CLOSE_REMOVED,
   goneHow,
@@ -295,6 +296,8 @@ export interface StreamOptions {
   onRequest?: () => void;
 }
 
+export type OpenKind = "first" | "page" | "reconnect";
+
 /** What a member says about itself in presence; the rest (version, name, time) is filled in. */
 export type PresenceFields = Omit<Presence, "v" | "type" | "from" | "ts">;
 
@@ -311,6 +314,7 @@ export type Live =
       readonly mark: (seq: number) => boolean;
       readonly probe: (ms: number) => Promise<Probe | null>;
       readonly outage: number | null;
+      readonly kind: OpenKind;
     }
   /** Caught up: the relay's head when this connection's replay ended. */
   | { readonly _tag: "Ready"; readonly head: number }
@@ -349,12 +353,20 @@ const backoff = Schedule.min([Schedule.exponential("500 millis"), Schedule.space
 const outlasted = ({ attempt, elapsed, elapsedSincePrevious }: Schedule.InputMetadata<unknown>, quietMs: number) =>
   elapsed >= quietMs && (attempt === 1 || elapsed - elapsedSincePrevious < quietMs);
 
+interface Resume {
+  seq: number;
+  next: OpenKind;
+}
+
 /** A frame from the socket, or the socket opening (with a way to send presence on it). */
 type Incoming =
   | ServerFrame
   | { t: "pong" }
   | { t: "own"; seq: number; ts: number; payload: unknown }
-  | { t: "open"; presence: (p: PresenceFields) => Effect.Effect<void>; mark: (seq: number) => boolean; probe: (ms: number) => Promise<Probe | null> };
+  | { t: "open"; presence: (p: PresenceFields) => Effect.Effect<void>; mark: (seq: number) => boolean; probe: (ms: number) => Promise<Probe | null>; kind: OpenKind }
+  | { t: "more"; ask: (since: number) => void };
+
+const STILL_IN_EVERY = 5;
 
 type Inbox = Queue.Queue<Incoming, Dropped | ChannelGone | Cause.Done>;
 
@@ -418,6 +430,7 @@ function ownMessage(p: unknown, seq: number, rts: number): Message | null {
   const imgs = Array.isArray(p.imgs) ? p.imgs.filter(rasterAttachment) : undefined;
   return { ...p, ...(imgs?.length ? { imgs } : { imgs: undefined }), seq, rts, sigOk: true };
 }
+
 
 /** A ping now and then keeps proxies from closing a quiet socket. */
 const keepAlive = (ping: () => boolean) =>
@@ -783,6 +796,7 @@ export class Channel {
   onSent: ((seq: number, message: Message | null) => void) | null = null;
   private infoShared: Fiber.Fiber<Info, Refusal> | null = null;
   private infoExpires: number | null = null;
+  private moreUnknown = false;
 
   constructor(
     public access: ChannelAccess,
@@ -1605,7 +1619,7 @@ export class Channel {
   /** live(): connections one after another, each from where the last left off, fed to one queue. */
   private live(since: number, { quietMs = QUIET_DROP_MS, presence = true, reads = true, send = false }: LiveOptions): Stream.Stream<Live, ChannelGone, Relay> {
     // The newest seq handed on: each (re)connect asks for what's after it, so nothing is lost across drops.
-    const at = { seq: since };
+    const at: Resume = { seq: since, next: "first" };
     return Stream.callback<Live, ChannelGone, Relay>((out) =>
       Stream.suspend(() => this.session(at, quietMs, presence, reads, send)).pipe(
         // A drop: connect again on the schedule. A connection that opens starts the schedule over.
@@ -1633,7 +1647,7 @@ export class Channel {
         meta.input instanceof Dropped && outlasted(meta, quietMs) ? Queue.offer(out, { _tag: "Down", after: meta.elapsed, code: meta.input.code, reason: meta.input.reason }) : Effect.void,
       ),
       // Upgrade failures (removed, closed) look like plain drops; check before retrying.
-      Schedule.tap(() => this.stillIn()),
+      Schedule.tap(({ attempt }) => (attempt === 1 || attempt % STILL_IN_EVERY === 0 ? this.stillIn() : Effect.void)),
     );
   }
 
@@ -1649,8 +1663,8 @@ export class Channel {
    * One connection, read: Open, then what the relay sends, strictly in order, until it closes. A
    * frame whose reading fails is reported and dropped: one bad payload mustn't stop the rest.
    */
-  private session(at: { seq: number }, quietMs: number, presence: boolean, reads: boolean, send: boolean): Stream.Stream<Live, Dropped | ChannelGone, Relay> {
-    return Stream.callback<Incoming, Dropped | ChannelGone, Relay>((q) => this.socket(at.seq, presence, reads, q, send)).pipe(
+  private session(at: Resume, quietMs: number, presence: boolean, reads: boolean, send: boolean): Stream.Stream<Live, Dropped | ChannelGone, Relay> {
+    return Stream.callback<Incoming, Dropped | ChannelGone, Relay>((q) => this.socket(at, presence, reads, q, send)).pipe(
       Stream.mapEffect((f) =>
         this.read(f, at, quietMs, presence, reads).pipe(Effect.catchCause((cause) => Effect.succeed<Live>({ _tag: "Skipped", frame: f.t, error: Cause.squash(cause) }))),
       ),
@@ -1659,22 +1673,26 @@ export class Channel {
   }
 
   /** A socket for what's after `since`: its frames go to `q` as they arrive, then how it closed. Closing the scope closes it. */
-  private socket(since: number, presence: boolean, reads: boolean, q: Inbox, send: boolean) {
+  private socket(at: Resume, presence: boolean, reads: boolean, q: Inbox, send: boolean) {
     return Effect.gen({ self: this }, function* () {
       const auth = yield* Effect.promise(() => signRequest(this.identity, this.roomId, "GET", "/ws"));
       const u = new URL(`/v1/rooms/${this.roomId}/ws`, this.relay);
-      u.searchParams.set("since", String(since));
+      u.searchParams.set("since", String(at.seq));
       if (!presence) u.searchParams.set("presence", "0");
       if (!reads) u.searchParams.set("reads", "0");
       if (send) u.searchParams.set("echo", "0");
       u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
       const { closed, ping } = yield* Effect.acquireRelease(
-        Effect.sync(() => this.connect(u, auth, q, since, send)),
+        Effect.sync(() => this.connect(u, auth, q, at, send)),
         ({ ws }) => Effect.sync(() => ws.close(1000, "aborted")),
       );
       yield* Effect.forkScoped(keepAlive(ping));
       const { code, reason } = yield* Effect.promise(() => closed);
-      if (code === 4000) return yield* Queue.end(q);
+      if (code === 4000) {
+        at.next = "page";
+        return yield* Queue.end(q);
+      }
+      if (at.next === "page") at.next = "reconnect";
       if (code === CLOSE_REMOVED) return yield* Queue.fail(q, new ChannelGone("removed", goneHow(reason)));
       if (code === CLOSE_CLOSED) return yield* Queue.fail(q, new ChannelGone("closed"));
       return yield* Queue.fail(q, new Dropped({ code, reason }));
@@ -1682,9 +1700,9 @@ export class Channel {
   }
 
   /** Open the socket with every handler set at once, before any event can arrive. */
-  private connect(u: URL, auth: string, q: Inbox, since: number, send: boolean) {
+  private connect(u: URL, auth: string, q: Inbox, at: Resume, send: boolean) {
     const ws = new WebSocket(u, [WS_PROTOCOL, auth]);
-    const sock = wireOf(ws, since);
+    const sock = wireOf(ws, at.seq);
     const wire = send ? wireOn(ws, q) : null;
     const closed = new Promise<{ code: number; reason: string }>((resolve) => {
       ws.onclose = (ev) => {
@@ -1697,7 +1715,20 @@ export class Channel {
       };
     });
     ws.onerror = () => {};
-    ws.onopen = () => void Queue.offerUnsafe(q, { t: "open", presence: this.presenceOn(ws), mark: markOn(ws), probe: sock.probe });
+    let openedAs: OpenKind = at.next;
+    ws.onopen = () => {
+      openedAs = at.next;
+      at.next = "reconnect";
+      Queue.offerUnsafe(q, { t: "open", presence: this.presenceOn(ws), mark: markOn(ws), probe: sock.probe, kind: openedAs });
+    };
+    let paging = false;
+    let inPage = false;
+    let asked = false;
+    const ask = (since: number) => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      asked = true;
+      ws.send(JSON.stringify({ t: "more", since }));
+    };
     ws.onmessage = (ev) => {
       let f: ServerFrame | { t: "pong" };
       try {
@@ -1707,10 +1738,26 @@ export class Channel {
       }
       sock.frame(f);
       if (wire?.answer(f)) return;
+      if (f.t === "page") return void (inPage = true);
+      if (f.t === "msg" && paging && !inPage) return;
+      if (f.t === "err" && asked && (f.error === "unknown frame" || f.error === MORE_REFUSED)) {
+        if (f.error === "unknown frame") this.moreUnknown = true;
+        return void ws.close(4000, "more");
+      }
       Queue.offerUnsafe(q, f);
-      // The relay replays at most one page on connect; reconnect for the rest.
-      if (f.t === "ready" && f.more) ws.close(4000, "more");
-      else if (f.t === "ready" && wire) this.wires.add(wire);
+      if (f.t !== "ready") return;
+      paging = f.more;
+      inPage = false;
+      asked = false;
+      if (f.more && this.moreUnknown) ws.close(4000, "more");
+      else if (f.more) Queue.offerUnsafe(q, { t: "more", ask });
+      else {
+        if (wire) this.wires.add(wire);
+        if (openedAs === "page") {
+          Queue.offerUnsafe(q, { t: "roster" });
+          Queue.offerUnsafe(q, { t: "request" });
+        }
+      }
     };
     return { ws, closed, ping: sock.ping };
   }
@@ -1728,7 +1775,7 @@ export class Channel {
   }
 
   /** What one frame means to a listener (null: nothing, like a message already handed on). */
-  private read(f: Incoming, at: { seq: number }, quietMs: number, presence: boolean, reads: boolean): Effect.Effect<Live | null, never, Relay> {
+  private read(f: Incoming, at: Resume, quietMs: number, presence: boolean, reads: boolean): Effect.Effect<Live | null, never, Relay> {
     return Effect.gen({ self: this }, function* () {
       switch (f.t) {
         case "open": {
@@ -1736,8 +1783,11 @@ export class Channel {
           const { attempt, elapsed, start } = yield* Schedule.CurrentMetadata;
           if (attempt > 0) this.forgetInfo();
           const now = yield* Clock.currentTimeMillis;
-          return { _tag: "Open", presence: f.presence, mark: f.mark, probe: f.probe, outage: attempt > 0 && elapsed >= quietMs ? now - start : null } satisfies Live;
+          return { _tag: "Open", presence: f.presence, mark: f.mark, probe: f.probe, outage: attempt > 0 && elapsed >= quietMs ? now - start : null, kind: f.kind } satisfies Live;
         }
+        case "more":
+          f.ask(at.seq);
+          return null;
         case "msg": {
           if (f.seq <= at.seq) return null;
           const m = yield* this.fx.decrypt(f);

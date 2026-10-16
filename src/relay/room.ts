@@ -55,6 +55,7 @@ import { commitTo, NONCE_RE, ownerNonceStatement } from "../sas.ts";
 import {
   MAX_CT_LENGTH,
   MAX_EPH_LENGTH,
+  MORE_REFUSED,
   PAGE_LIMIT,
   ROOM_RETENTION,
   WS_PROTOCOL,
@@ -92,7 +93,7 @@ export interface Effects {
   others?: string;
   ephemeral?: string;
   /** Send to the sender only. */
-  reply?: string;
+  reply?: string | string[];
   readers?: string[];
   /** Disconnect every socket authenticated as this key. */
   disconnect?: { pk: string; how: GoneHow };
@@ -178,6 +179,7 @@ function formatBytes(n: number): string {
 
 /** Messages one member may post per minute: plenty for real work, too few to flush a channel's history. */
 export const MESSAGES_PER_MINUTE = 120;
+export const MORE_PER_MINUTE = 60;
 /** Presence and other ephemeral frames one member may send per minute. */
 const EPHEMERAL_PER_MINUTE = 60;
 /** How many keys the limiter remembers. Past this, the oldest window is dropped, never the whole table. */
@@ -1088,6 +1090,10 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
         Effect.succeed<Effects>(isRefusal(Cause.squash(cause)) ? { reply: frame({ t: "err", error: "bad read mark" }) } : { reply: frame({ t: "err", error: socketError(cause) }) }),
       ),
     );
+  }
+  if (f.t === "more") {
+    if (!allow(`more:${db.roomId}:${sender}`, MORE_PER_MINUTE)) return { reply: frame({ t: "err", error: MORE_REFUSED }) } satisfies Effects;
+    return { reply: [frame({ t: "page" }), ...(yield* welcomeFrames(Number(f.since) || 0))] } satisfies Effects;
   }
   if (f.t !== "send") return { reply: frame({ t: "err", error: "unknown frame" }) } satisfies Effects;
   if (!allow(`${db.roomId}:${sender}`, MESSAGES_PER_MINUTE)) return { reply: frame({ t: "err", error: "too many messages; wait a minute", id: f.id }) } satisfies Effects;

@@ -159,7 +159,7 @@ export class Channel extends DurableObject<Env> {
   override async webSocketMessage(ws: WebSocket, data: string | ArrayBuffer): Promise<void> {
     const { room, pk, echo } = ws.deserializeAttachment() as { room: string; pk: string; echo?: boolean };
     const fx = runRoomSync(this.relay, this.store(room), onClientFrame(typeof data === "string" ? data : new TextDecoder().decode(data), pk, echo !== false));
-    if (fx.reply) ws.send(fx.reply);
+    for (const f of [fx.reply ?? []].flat()) ws.send(f);
     await this.apply(fx, ws);
   }
 

@@ -45,6 +45,8 @@ export const ROOM_RETENTION = 10_000;
 /** Most messages returned by one history read or replayed on connect. */
 export const PAGE_LIMIT = 1_000;
 
+export const MORE_REFUSED = "too many page requests; slow down";
+
 /**
  * WebSocket subprotocol. Clients offer [WS_PROTOCOL, token] so the token
  * travels in a header (browsers can't set Authorization on WebSockets, and
@@ -84,7 +86,8 @@ export type ServerFrame =
   /** A member has read everything up to `seq` (their word for it, at the relay's `at`). Older clients ignore it. */
   | ({ t: "read" } & ReadMark)
   /** On connect, before ready: how far each member has read. */
-  | { t: "reads"; reads: ReadMark[] };
+  | { t: "reads"; reads: ReadMark[] }
+  | { t: "page" };
 
 /** How far one member has read: a seq and when it got there. A number, never content. */
 export interface ReadMark {
@@ -107,7 +110,8 @@ export type ClientFrame =
   | { t: "send"; id: string; iv: string; ct: string; e?: number }
   | { t: "eph"; iv: string; ct: string }
   /** This member has read up to `seq` (a listener says it on the socket it already has: cheaper than a request). */
-  | { t: "read"; seq: number };
+  | { t: "read"; seq: number }
+  | { t: "more"; since: number };
 
 /** WebSocket close codes the relay uses for membership changes. */
 export const CLOSE_REMOVED = 4403;
