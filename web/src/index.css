@@ -64,13 +64,6 @@
   /* The open channel in the list: a soft filled pill, as Grok marks the open chat. */
   --pick: light-dark(rgba(15, 15, 17, 0.07), rgba(255, 255, 255, 0.08));
   --pick-edge: transparent;
-  /* The coordinator's head: a system-blue shell, its screen a pale tint, the trim a quiet steel. */
-  --head-shell: light-dark(#007aff, #0a84ff);
-  --head-screen: light-dark(#e9f0fc, #d9e7fa);
-  --head-trim: light-dark(#cfd4d6, #9aa0a3);
-  /* Behind the head in a round avatar: a soft blue field, like a contact photo's backdrop. */
-  --head-bg-top: light-dark(#e1ebf8, #22324a);
-  --head-bg-bottom: light-dark(#c6daf2, #141e2c);
   /* A contact without a picture: a soft neutral gradient, as Messages draws one. */
   --avatar-top: light-dark(#a8a8b0, #78787f);
   --avatar-bottom: light-dark(#8a8a92, #55555c);

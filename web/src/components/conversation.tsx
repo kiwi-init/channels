@@ -16,12 +16,10 @@ import { markSeen, setOpenNews } from "@/lib/news"
 import { asksFor } from "@/lib/asks"
 import { useIcons, useLiveIcon } from "@/lib/icons"
 import { excerpt, formatShort, formatTime, memberName } from "@/lib/format"
-import { coordinatorMood, ERROR_MS, moodInputs, SPEAKING_MS, type Mood } from "@/lib/coordinator-mood"
 import { chipsFor } from "@/lib/reactions"
 import { receipt } from "@/lib/receipts"
 import { dmPlace, markSeenIn, MAIN, placeFromKey, placeKey, seenIn, sendFrom, useSeen, threadMembers, type Place, type PlaceSummary } from "@/lib/threads"
 import { cx } from "@/lib/utils"
-import { CoordinatorAvatar } from "./coordinator-head"
 import { Composer } from "./composer"
 import { AddAgent } from "./add-agent"
 import { AgentStrip, type AgentNow } from "./agent-strip"
@@ -167,20 +165,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       ...(last && state.coordinator && last.from === state.coordinator ? { byCoordinator: true } : {}),
     })
   }, [messages, others, state.trust, state.coordinator, member.code, member.at, nameOf, me, reaches])
-
-  // ---------- the coordinator's face: what it's doing right now ----------
-  const coord = state.coordinator
-  const said = useMemo(() => (coord ? moodInputs(state, messages, online, coord) : null), [coord, state, messages, online])
-  // A fresh message or refusal shows for a few seconds: wake the clock when that window closes.
-  const [clock, setClock] = useState(() => Date.now())
-  useEffect(() => {
-    // Read the clock as soon as something new is said, and again when its moment is over.
-    const now = Date.now()
-    const ends = [said?.saidAt != null ? said.saidAt + SPEAKING_MS : 0, said?.failedAt != null ? said.failedAt + ERROR_MS : 0].filter((t) => t > now)
-    const timers = [setTimeout(() => setClock(Date.now()), 0), ...(ends.length ? [setTimeout(() => setClock(Date.now()), Math.min(...ends) - now + 50)] : [])]
-    return () => timers.forEach(clearTimeout)
-  }, [said])
-  const mood: Mood | undefined = coord && said ? coordinatorMood({ ...said, online: online.has(coord), hold: !!state.hold, now: clock }) : undefined
 
   // ---------- places: main, each task's conversation, direct ones ----------
   const { placeOf, places } = state
@@ -449,7 +433,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       image={ch.image}
       onOpenImage={(pm, img, src) => setPicture({ m: pm, img, src })}
       // The coordinator's runs end on its face; only the latest one moves.
-      face={coord && m.from === coord ? <CoordinatorAvatar size={28} mood={mood} live={m.seq >= (said?.last ?? 0) && !anchor} seed={0.3} /> : undefined}
     />
   )
   // A run of messages as rows: the main column's, and (anchored "k") the open task's in the panel.
@@ -922,7 +905,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             onClose={() => setSide(null)}
             onPause={hold && !state.hold ? () => setPausing(true) : undefined}
             onMessage={(name) => go(dmPlace(me, name))}
-            mood={mood}
             notes={<Notes state={state} now={now} onClear={async (key) => void (await send(`cleared ${key}`, { kind: "event", ev: { op: "fact.del", key } }))} />}
           />
         )}
