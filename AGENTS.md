@@ -9,9 +9,10 @@
 
 ## Branches and CI
 
-- One issue = one branch = one PR.
+- One issue = one branch. Agents finish a task with `git push origin HEAD:bus/<task>` (for example `bus/T52-compress`). Never open a PR, rebase or merge: the merge bus (`.github/bus`) merges the branch onto main, resolves conflicts, tests the merged tree and lands it. Listen for `bus.*` events on your task; `bus.bounced` hands the task back with what it collides with, and you push to `bus/<task>` again.
+- Work outside the bus (people, outside contributors) is one branch = one PR, and joins the bus when a maintainer labels it `queue`.
 - A conflicted lockfile is never resolved by hand: take the remote one and regenerate it.
-- Small commits. Before every push: `git pull --rebase`, run the checks for the area you touched, then a plain `git push`.
+- Small commits. Before every push, run the checks for the area you touched, then a plain `git push`.
 - Forbidden: manual force-push, `--no-verify`, `[skip ci]`, and merging with the `ci-ok` check red.
 - Long-running processes (CI, checks, tests, builds, servers, waiting on a CI run) run detached, in background, so a turn interruption does not kill them: start them with the agent tool's background mode or, in the shell, with `nohup <command> > file.log 2>&1 &` (or `setsid`), never with a bare `&`, which does not detach the process from the shell; send output to a log file and follow the log or the completion notice instead of blocking the turn waiting.
 - Every change ships with its CI gate: its own job in `ci.yml`, named `<area> / <check>` (e.g. `web / lint`) and listed in the `needs` of `ci-ok`.
