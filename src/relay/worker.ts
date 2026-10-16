@@ -10,7 +10,8 @@ import * as Layer from "effect/Layer";
 import { CLOSE_CLOSED, CLOSE_REMOVED, GONE_WORDS, PING, PONG } from "../protocol.ts";
 import { ChannelGone, NotFound, Refused, UpdateRequired } from "./failures.ts";
 import { Human, workosFromSettings, type HumanAuth } from "./human.ts";
-import { Policy, policyFrom, type RelayPolicy } from "./policy.ts";
+import { pageSecret, Policy, policyFrom, type RelayPolicy } from "./policy.ts";
+import { edgePage, PAGE_PATH, type PageCache } from "./pages.ts";
 import {
   Directory as ChannelLists, // the service; the Durable Object below counts owned channels instead
   holdEntry,
@@ -57,7 +58,13 @@ interface Env {
   MAILBOX_WRITES: RateLimit;
   /** "off": don't retry a room request the platform refused (to count refusals, e.g. on a canary). */
   KIWI_ROOM_RETRY?: string;
+  KIWI_PAGE_KEY?: string;
 }
+
+const edgeCache: PageCache = {
+  match: (key) => caches.default.match(key),
+  put: (key, res) => caches.default.put(key, res),
+};
 
 let humanAuth: HumanAuth | null | undefined;
 /** One verifier (and JWKS cache) per isolate. */
@@ -318,6 +325,7 @@ export default {
     // No fingerprint: 426 before the room's object is woken.
     const early = missingFingerprint(req.method, route.rest, url);
     if (early) return withCors(errorResponse(early));
+    if (PAGE_PATH.test(route.rest)) return withCors(await edgePage(req, route.roomId, route.rest, pageSecret(env.KIWI_PAGE_KEY), edgeCache, () => toRoom(env, route.roomId, req), Date.now()));
     return toRoom(env, route.roomId, req);
   },
 } satisfies ExportedHandler<Env>;

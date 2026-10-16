@@ -31,6 +31,7 @@ export interface RelayPolicy {
   bytesPerChannel: number;
   /** Delete a channel after this many days with no new message and nobody connected. */
   expireAfterDays: number | null;
+  pageKey: string | null;
 }
 
 /** The policy when nothing is configured: today's behavior plus the byte safety cap. */
@@ -42,6 +43,7 @@ export const OPEN_POLICY: RelayPolicy = {
   messagesPerDay: null,
   bytesPerChannel: SAFETY_BYTES_PER_CHANNEL,
   expireAfterDays: null,
+  pageKey: null,
 };
 
 /** What this relay allows, as the room and its routes see it. */
@@ -51,6 +53,8 @@ const positive =(v: string | undefined): number | null => {
   const n = Number(v);
   return v !== undefined && v !== "" && Number.isFinite(n) && n > 0 ? n : null;
 };
+
+export const pageSecret = (v: string | undefined): string | null => (v && v.trim().length >= 32 ? v.trim() : null);
 
 /**
  * Read the policy from environment-style settings (Worker vars, or the Bun
@@ -69,6 +73,7 @@ export function policyFrom(env: Record<string, string | undefined>): RelayPolicy
     messagesPerDay: positive(env.KIWI_QUOTA_MESSAGES_PER_DAY),
     bytesPerChannel: positive(env.KIWI_QUOTA_BYTES_PER_CHANNEL) ?? SAFETY_BYTES_PER_CHANNEL,
     expireAfterDays: positive(env.KIWI_EXPIRE_AFTER_DAYS),
+    pageKey: pageSecret(env.KIWI_PAGE_KEY),
   };
 }
 
