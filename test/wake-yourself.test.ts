@@ -181,6 +181,7 @@ describe("Kimi Code keeps its own listener running", () => {
     expect(unread.code).toBe(2);
     expect(unread.err).toContain("unread Kiwi Channels messages for you");
     expect(unread.err).toContain("unread at stop");
+    expect(unread.err).toContain("no Kiwi listener of yours is running");
     expect(unread.out).toBe("");
 
     expect((await kimi.tool(["hooks", "uninstall", "kimi"])).code).toBe(0);
@@ -217,6 +218,7 @@ describe("Grok keeps its own monitor running", () => {
     const handed = await stop({ backgroundTasks: [] });
     expect(handed?.decision).toBe("block");
     expect(handed?.reason).toContain("kept for the stop hook");
+    expect(handed?.reason).toContain("no Kiwi listener of yours is running for grok-wake");
 
     const deaf = await stop({ backgroundTasks: [{ id: "t1", type: "shell", status: "running", command: "sleep 100" }] });
     expect(deaf?.decision).toBe("block");
@@ -226,6 +228,8 @@ describe("Grok keeps its own monitor running", () => {
     expect(await stop({ stop_hook_active: true, backgroundTasks: [] })).toBeNull();
     expect(await stop({})).toBeNull();
     expect(await stop({ backgroundTasks: [{ id: "m1", type: "monitor", status: "running", description: listen }] })).toBeNull();
+    const elsewhere = `${listen} -c other --as other`;
+    expect((await stop({ backgroundTasks: [{ id: "m3", type: "monitor", status: "running", description: elsewhere }] }))?.decision).toBe("block");
 
     const monitor = spawn(h, ["listen"], G);
     shells.push(monitor);

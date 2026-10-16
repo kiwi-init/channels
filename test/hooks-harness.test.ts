@@ -467,12 +467,16 @@ test("Grok's Stop input: a monitor is the listener when it runs this seat's list
     { type: "monitor", text: "tail -f build.log" },
     { type: "subagent", text: "review" },
   ]);
-  expect(grokMonitorListens(tasks!, "kiwi", false)).toBe(false);
-  expect(grokMonitorListens(tasks!, "kiwi", true)).toBe(true);
-  expect(grokMonitorListens([{ type: "monitor", text: "kiwi -c ch --as g listen" }], "kiwi -c ch --as g", false)).toBe(true);
-  expect(grokMonitorListens([{ type: "monitor", text: "kiwi -c other --as g listen" }], "kiwi -c ch --as g", false)).toBe(false);
-  expect(grokMonitorListens([{ type: "shell", text: "kiwi listen" }], "kiwi", true)).toBe(false);
-  expect(grokMonitorListens([], "kiwi", true)).toBe(false);
+  const seat = ["kiwi listen", "kiwi -c ch --as g listen"];
+  expect(grokMonitorListens(tasks!, seat, false)).toBe(false);
+  expect(grokMonitorListens(tasks!, seat, true)).toBe(true);
+  expect(grokMonitorListens([{ type: "monitor", text: " kiwi -c ch --as g listen " }], seat, false)).toBe(true);
+  expect(grokMonitorListens([{ type: "monitor", text: "kiwi listen" }], seat, false)).toBe(true);
+  expect(grokMonitorListens([{ type: "monitor", text: "kiwi -c other --as g listen" }], seat, false)).toBe(false);
+  expect(grokMonitorListens([{ type: "monitor", text: "kiwi listen -c other --as other" }], seat, false)).toBe(false);
+  expect(grokMonitorListens([{ type: "monitor", text: "kiwi listen --now" }], seat, false)).toBe(false);
+  expect(grokMonitorListens([{ type: "shell", text: "kiwi listen" }], seat, true)).toBe(false);
+  expect(grokMonitorListens([], seat, true)).toBe(false);
 });
 
 test("a Kimi Code Stop reason is the answers' plain text, for stderr", () => {

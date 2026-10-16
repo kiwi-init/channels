@@ -771,8 +771,8 @@ export function backgroundTasks(raw: unknown): BackgroundTask[] | null {
   return raw.flatMap((t) => (isRecord(t) && typeof t.type === "string" ? [{ type: t.type, text: [t.command, t.description].filter((x) => typeof x === "string").join("\n") }] : []));
 }
 
-export function grokMonitorListens(tasks: readonly BackgroundTask[], mc: string, heardFromSession: boolean): boolean {
-  return tasks.some((t) => t.type === "monitor" && (heardFromSession || t.text.includes(COMMANDS.listen(mc))));
+export function grokMonitorListens(tasks: readonly BackgroundTask[], commands: readonly string[], heardFromSession: boolean): boolean {
+  return tasks.some((t) => t.type === "monitor" && (heardFromSession || t.text.split("\n").some((line) => commands.includes(line.trim()))));
 }
 
 const LISTENER_SETTLE_MS = 1_500;
@@ -785,7 +785,8 @@ function listenCheck(input: HookInput, b: Binding, who: Here, mc: string): Liste
   if (who.harness !== "grok" || input.stop_hook_active) return { kind: "skip" };
   const tasks = backgroundTasks(input.backgroundTasks);
   if (!tasks) return { kind: "skip" };
-  return { kind: "check", listens: () => grokMonitorListens(tasks, mc, heard()), settles: tasks.some((t) => t.type === "monitor") };
+  const commands = [COMMANDS.listen(mc), COMMANDS.listen(`${mcBin()} ${channelOption(b.alias)} ${asOption(b.as)}`)];
+  return { kind: "check", listens: () => grokMonitorListens(tasks, commands, heard()), settles: tasks.some((t) => t.type === "monitor") };
 }
 
 const rearmText = Effect.fn("Hooks.rearmText")(function* (input: HookInput, b: Binding, who: Here, mc: string) {
@@ -944,11 +945,10 @@ const answer = Effect.fn("Hooks.answer")(function* (event: string, input: HookIn
     if (who.harness === "grok" && input.reason !== undefined && input.reason !== "end_turn") return null;
     const unread = yield* unreadText(s);
     const decision = style === "gemini" ? "deny" : "block";
-    if (unread) {
-      return answered(decision, `Before stopping: unread Kiwi Channels messages for you. Handle them (answer with \`${mc} reply N "…"\`):\n${unread}`);
-    }
+    const handOver = unread ? `Before stopping: unread Kiwi Channels messages for you. Handle them (answer with \`${mc} reply N "…"\`):\n${unread}` : null;
     const rearm = yield* rearmText(input, b, who, mc);
-    if (rearm) return answered(decision, rearm);
+    const reason = [handOver, rearm].filter((t) => t !== null).join("\n\n");
+    if (reason) return answered(decision, reason);
   }
   return null;
 });
