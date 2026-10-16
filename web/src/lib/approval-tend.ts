@@ -34,7 +34,9 @@ export async function tendOwned(person: string, title: string, api: TendApi, pin
 
 export function tendOnPush(codes: readonly string[], watch: Watches["watch"], tend: (code: string) => Promise<void>): { kick: (code: string) => void; stop: () => void } {
   const busy = new Map<string, boolean>()
+  let stopped = false
   const kick = (code: string) => {
+    if (stopped) return
     if (busy.has(code)) return void busy.set(code, true)
     busy.set(code, false)
     void tend(code)
@@ -50,5 +52,11 @@ export function tendOnPush(codes: readonly string[], watch: Watches["watch"], te
       if (ev._tag !== "Head") kick(code)
     })
   )
-  return { kick, stop: () => stops.forEach((s) => s()) }
+  return {
+    kick,
+    stop: () => {
+      stopped = true
+      stops.forEach((s) => s())
+    },
+  }
 }
