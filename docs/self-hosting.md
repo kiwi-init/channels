@@ -317,8 +317,9 @@ requests; each member sends a bounded number of messages per minute.
 With `KIWI_PAGE_KEY` set, a client catching up from far behind reads complete
 pages of old messages (seq 1-1000, 1001-2000, ... wholly below the newest) from
 `GET /v1/rooms/<room>/pages/<k>`. Stored messages never change, so the Worker
-answers those from Cloudflare's Cache API without waking the channel's Durable
-Object; only a page's first read in a data center reaches it. The Bun relay keeps
+answers those from Cloudflare's Cache API. A cache hit does not wake the
+channel's Durable Object. A miss reaches it: the first read of a page in a data
+center, and every read after the entry expires or the cache evicts it. The Bun relay keeps
 the same pages in memory (64 MB at most). Unset, or shorter than 32 characters,
 the route answers 404 and clients read `/messages` as before.
 
