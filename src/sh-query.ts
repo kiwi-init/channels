@@ -19,7 +19,7 @@ const SCHEMA: Record<string, string[]> = {
 
 const MAX_ROWS = 5_000;
 const READ_ONLY_SQL = /^\s*(select|with|values)\b/i;
-const FORBIDDEN_SQL = /\b(attach|detach|pragma|vacuum)\b/i;
+const FORBIDDEN_SQL = /\b(attach|detach|pragma|vacuum|recursive)\b/i;
 
 export function reviewTexts(messages: Message[]): Map<string, string> {
   const out = new Map<string, string>();
@@ -47,7 +47,7 @@ export function queryTables(v: ChannelView, now = Date.now()): Tables {
           m.to?.length ? m.to.join(",") : "all",
           m.kind,
           m.re?.length ? m.re.join(",") : null,
-          m.task ?? null,
+          m.task === undefined ? null : taskId(m.task),
           dm,
           m.room ? (state.rooms.get(m.room)?.name ?? m.room) : null,
           m.esc ? 1 : 0,
@@ -103,17 +103,68 @@ const schemaText = () => Object.entries(SCHEMA).map(([name, cols]) => `${name}($
 
 const fail = (stderr: string, exitCode = 1) => ({ stdout: "", stderr, exitCode });
 
-export function queryCommand(tables: Tables | null): Command {
+function bare(sql: string): string {
+  let out = "";
+  let i = 0;
+  while (i < sql.length) {
+    const c = sql[i]!;
+    if (c === "'" || c === '"' || c === "`") {
+      const end = sql.indexOf(c, i + 1);
+      if (end < 0) return out + " \u0000";
+      out += " ";
+      i = end + 1;
+    } else if (c === "-" && sql[i + 1] === "-") {
+      const end = sql.indexOf("\n", i);
+      out += " ";
+      i = end < 0 ? sql.length : end + 1;
+    } else if (c === "/" && sql[i + 1] === "*") {
+      const end = sql.indexOf("*/", i + 2);
+      out += " ";
+      i = end < 0 ? sql.length : end + 2;
+    } else {
+      out += c;
+      i++;
+    }
+  }
+  return out;
+}
+
+function unique(names: string[]): string[] {
+  const seen = new Map<string, number>();
+  return names.map((n) => {
+    const k = (seen.get(n) ?? 0) + 1;
+    seen.set(n, k);
+    return k === 1 ? n : `${n}_${k}`;
+  });
+}
+
+export function queryCommand(load: () => Tables | undefined): Command {
   return defineCommand("query", async (args, ctx) => {
     if (args[0] === "--schema") return { stdout: schemaText(), stderr: "", exitCode: 0 };
-    if (!tables) return fail("query: no channel data in this run\n");
     const sql = (args.length ? args.join(" ") : decodeBytesToUtf8(ctx.stdin)).trim().replace(/;+$/, "");
     if (!sql) return fail("usage: query 'SQL' (or SQL on stdin); query --schema lists the tables\n", 2);
-    if (!READ_ONLY_SQL.test(sql) || FORBIDDEN_SQL.test(sql) || sql.includes(";")) return fail("query: one select, with or values statement only (no attach, detach, pragma, vacuum or ';')\n");
+    const code = bare(sql);
+    if (code.includes("\u0000") || !READ_ONLY_SQL.test(code) || FORBIDDEN_SQL.test(code) || code.includes(";")) {
+      return fail("query: one select, with or values statement only (no attach, detach, pragma, vacuum, recursive or ';' outside a string)\n");
+    }
+    const tables = load();
+    if (!tables) return fail("query: no channel data in this run\n");
     const db = database(tables);
     try {
-      const out = db.query(sql).all().slice(0, MAX_ROWS);
-      return { stdout: out.map((r) => JSON.stringify(r) + "\n").join(""), stderr: "", exitCode: 0 };
+      const stmt = db.query(sql);
+      const names = unique(stmt.columnNames);
+      let out = "";
+      let n = 0;
+      let cut = false;
+      for (const row of stmt.values()) {
+        if (n === MAX_ROWS) {
+          cut = true;
+          break;
+        }
+        out += JSON.stringify(Object.fromEntries(names.map((k, i) => [k, row[i]]))) + "\n";
+        n++;
+      }
+      return { stdout: out, stderr: cut ? `query: output cut at ${MAX_ROWS} rows; narrow the query\n` : "", exitCode: 0 };
     } catch (err) {
       return fail(`query: ${err instanceof Error ? err.message : String(err)}\n`);
     } finally {

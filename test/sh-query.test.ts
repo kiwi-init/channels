@@ -64,10 +64,26 @@ describe("kiwi sh threads and query", () => {
     const tables = channelTables([v]);
     for (const sql of ["delete from messages", "attach database '/tmp/x.db' as x", "pragma query_only = off", "select 1; delete from messages"]) {
       const r = await runSh(channelFiles([v]), `query "${sql}"`, { tables });
-      expect([sql, r.exitCode]).not.toEqual([sql, 0]);
+      expect([sql, r.exitCode]).toEqual([sql, 1]);
+      expect([sql, r.stderr]).toEqual([sql, "query: one select, with or values statement only (no attach, detach, pragma, vacuum, recursive or ';' outside a string)\n"]);
     }
     const after = await runSh(channelFiles([v]), `query "select count(*) as n from messages"`, { tables });
     expect(after.stdout.trim()).toBe(`{"n":4}`);
+  });
+
+  test("a semicolon inside a string is fine, and duplicate column names are kept", async () => {
+    const v = await fixture();
+    const tables = channelTables([v]);
+    const a = await runSh(channelFiles([v]), `query "select ';' as s"`, { tables });
+    expect(a.stdout).toBe(`{"s":";"}\n`);
+    const b = await runSh(channelFiles([v]), `query "select 1 as x, 2 as x"`, { tables });
+    expect(b.stdout).toBe(`{"x":1,"x_2":2}\n`);
+  });
+
+  test("a task's messages join to tasks on the T<n> id", async () => {
+    const v = await fixture();
+    const r = await runSh(channelFiles([v]), `query "select t.title from tasks t join messages m on m.task = t.id"`, { tables: channelTables([v]) });
+    expect(r.stdout).toBe(`{"title":"Ship it"}\n`);
   });
 
   test("query --schema lists the tables", async () => {

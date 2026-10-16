@@ -1,20 +1,3 @@
-// `kiwi sh`: the channel as read-only files, queried with one shell script per call.
-//
-// The shell is just-bash, a shell simulated in TypeScript: no process is spawned
-// and it can only see the files we hand it. Safety comes in layers:
-//
-//   - The files are made here, from verified messages and the state folded from
-//     them, which this identity can already read. Nothing comes from config,
-//     identities, keys, cursors, the cache file, the environment or the disk.
-//   - The file system is read-only (writes fail), and each run gets a new one,
-//     so nothing a script does outlives it.
-//   - Only the read-only text commands below exist. There is no network, python,
-//     javascript or sqlite, and nothing that sends or changes the channel:
-//     writes stay on the typed CLI commands and MCP tools.
-//   - The "hardened" limit profile, plus our own caps on script size, wall time
-//     and output, so a bad script ends with an error instead of hanging.
-//   - just-bash's defense-in-depth stays on, with no exclusions.
-
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import { Bash, InMemoryFs, type CommandName, type IFileSystem } from "just-bash";
@@ -105,6 +88,7 @@ function channelTree(v: ChannelView, now: number): Record<string, string> {
   // Presence isn't known here (it takes a live query), so "online" is left out rather than guessed.
   const status = statusJson({ alias: v.alias, me, state, online: new Map(), unread: 0, now });
   files["status.json"] = JSON.stringify({ ...status, members: status.members.map(({ online: _, ...m }) => m) }, null, 2) + "\n";
+  const reviews = reviewTexts(verified);
   const entries = verified.map((m) => ({ m, entry: logEntry(m, state, me) }));
   files["log.jsonl"] = entries.map(({ entry }) => JSON.stringify(entry) + "\n").join("");
   const threads = new Map<string, string>();
@@ -122,7 +106,7 @@ function channelTree(v: ChannelView, now: number): Record<string, string> {
   }
   for (const t of state.tasks.values()) {
     files[`tasks/${taskId(t.id)}.md`] = formatTask(state, t, now) + "\n";
-    for (const r of t.rounds) files[`tasks/${taskId(t.id)}/rounds/${r.n}.md`] = roundFile(t.id, r, verified, state)
+    for (const r of t.rounds) files[`tasks/${taskId(t.id)}/rounds/${r.n}.md`] = roundFile(t.id, r, reviews)
   }
   for (const m of state.members.values()) {
     if (!m.active) continue;
@@ -140,9 +124,9 @@ function threadPath(place: Place | undefined, me: string): string {
   return `threads/dm/${segment(other)}.jsonl`;
 }
 
-function roundFile(task: number, r: ReviewRound, verified: Message[], state: ChannelState): string {
+function roundFile(task: number, r: ReviewRound, reviews: Map<string, string>): string {
   const res = r.result;
-  const text = reviewTexts(verified).get(`${task}:${r.n}`);
+  const text = reviews.get(`${task}:${r.n}`);
   const lines = [
     `task: ${taskId(task)}`,
     `round: ${r.n}`,
@@ -156,7 +140,7 @@ function roundFile(task: number, r: ReviewRound, verified: Message[], state: Cha
 
 export function logEntry(m: Message, state: ChannelState, me: string) {
   const place = state.placeOf.get(m.seq);
-  const dm = place?.kind === "dm" ? (place.with[0] === me ? place.with[1] : place.with[0]) : undefined;
+  const dm = place?.kind === "dm" && place.with.includes(me) ? (place.with[0] === me ? place.with[1] : place.with[0]) : undefined;
   const room = m.room ? (state.rooms.get(m.room)?.name ?? m.room) : undefined;
   const review = reviewBody(m);
   return {
@@ -223,7 +207,7 @@ export const sessionViews = Effect.fn("sh.sessionViews")(function* (s: AgentSess
 });
 
 /** Run `script` against `files` (paths ending in "/" are empty directories). Never throws: every failure is a nonzero exit with a reason on stderr. */
-export async function runSh(files: Record<string, string>, script: string, opts: { cwd?: string; tables?: Tables } = {}): Promise<ShResult> {
+export async function runSh(files: Record<string, string>, script: string, opts: { cwd?: string; tables?: () => Tables | undefined } = {}): Promise<ShResult> {
   if (new TextEncoder().encode(script).length > MAX_SCRIPT_BYTES) return { stdout: "", stderr: `kiwi sh: script longer than ${MAX_SCRIPT_BYTES} bytes\n`, exitCode: 2 };
   const inner = new InMemoryFs(Object.fromEntries(Object.entries(files).filter(([p]) => !p.endsWith("/"))));
   for (const p of Object.keys(files)) if (p.endsWith("/")) inner.mkdirSync(p.slice(0, -1), { recursive: true });
@@ -237,7 +221,7 @@ export async function runSh(files: Record<string, string>, script: string, opts:
       cwd: opts.cwd ?? "/channel",
       env: { HOME: "/channel", PWD: opts.cwd ?? "/channel", PATH: "/usr/bin:/bin", USER: "agent", LANG: "C.UTF-8" },
       commands: COMMANDS,
-      customCommands: [queryCommand(opts.tables ?? null)],
+      customCommands: [queryCommand(opts.tables ?? (() => undefined))],
       executionLimitProfile: "hardened",
       executionLimits: { maxExecutionTimeMs: MAX_RUN_MS, maxOutputSize: MAX_OUTPUT_CHARS * 4 },
       defenseInDepth: true,
@@ -311,6 +295,6 @@ class ReadOnlyFs implements IFileSystem {
   utimes: IFileSystem["utimes"] = async (p, a, m) => (this.guard(p), this.inner.utimes(p, a, m));
 }
 
-export function channelTables(views: ChannelView[], now = Date.now()): Tables | undefined {
-  return views[0] ? queryTables(views[0], now) : undefined;
+export function channelTables(views: ChannelView[], now = Date.now()): () => Tables | undefined {
+  return () => (views[0] ? queryTables(views[0], now) : undefined);
 }
