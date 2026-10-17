@@ -184,6 +184,20 @@ jobs:
       list of calls the window may make, and a scan of web/src that fails when a file other than
       web/src/lib/channel-local.ts imports Channel, generateIdentity, seal/open or the keyring.
 
+  desktop-voice:
+    name: desktop / voice
+    inputs: ["desktop/src/**", "desktop/build/entitlements.mac.plist", "test/desktop-voice.test.ts", "web/src/components/settings.tsx"]
+    always: ["package.json", "bun.lock", "scripts/ci-tests.ts"]
+    description: >-
+      Runs test/desktop-voice.test.ts: the desktop voice store (CSP connect-src includes
+      https://api.x.ai and wss://api.x.ai only when an xAI key is saved, worker-src is then
+      'self' blob:, unconfigured still forbids api.x.ai), snapshotOf / VoiceView never carries
+      the project key, consent defaults off, mintVoiceToken maps value/expires_at over a mocked
+      fetch and never hits the network or returns the project key, and media is allowed only
+      from kiwi-app://. Also checks desktop/build/entitlements.mac.plist for
+      com.apple.security.device.audio-input. Fails if the key leaks onto the snapshot or the
+      token IPC result, if consent is on by default, or if api.x.ai is allowed without a key.
+
   cli-build:
     name: cli / build
     inputs: ["src/**", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/smoke-cli.ts", "test/owner.ts", "test/owner-cli.ts", "test/check.ts"]

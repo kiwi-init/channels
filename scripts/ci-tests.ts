@@ -14,6 +14,7 @@ const FLOWS: Record<string, string[]> = {
   "flows-a": ["e2e", "verbs", "threads", "reconnect"],
   "flows-b": ["join-seats", "read-receipts", "daemon-pair", "sh-escape", "coordinator-follows", "reclaim", "wake-yourself"],
   "desktop-keys": ["desktop-keys"],
+  "desktop-voice": ["desktop-voice"],
   site: ["site"],
   pins: ["action-pins"],
   seats: ["seats", "multi-seat"],

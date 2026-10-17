@@ -4,8 +4,8 @@
   What the hardened runtime lets Kiwi do, for the app and everything signed inside it (the same
   file is its entitlementsInherit). Electron's V8 needs JIT and writable executable memory; the
   bundled kiwi CLI is a Bun-compiled binary, which also needs executable-page protection off and its
-  own embedded code loaded (Bun's codesigning notes list exactly these). Nothing else: no camera,
-  microphone, network server or file-access entitlements.
+  own embedded code loaded (Bun's codesigning notes list exactly these). Microphone for live voice
+  and dictation. No camera, network server or file-access entitlements.
 -->
 <plist version="1.0">
   <dict>
@@ -18,6 +18,8 @@
     <key>com.apple.security.cs.disable-library-validation</key>
     <true/>
     <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+    <true/>
+    <key>com.apple.security.device.audio-input</key>
     <true/>
   </dict>
 </plist>
