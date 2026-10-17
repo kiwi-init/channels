@@ -31,7 +31,7 @@ agent                          relay                         owner's app
 - Both sides see a **6-digit verification code**, and the owner approves only
   when they match. The code can't come from the joiner's key alone: six
   digits are about 20 bits, so a relay could mint keys until one gave the same
-  code and swap its own request in. Instead (`src/sas.ts`) the joiner commits
+  code and swap its own request in. Instead (`packages/core/src/sas.ts`) the joiner commits
   to a secret nonce in its signed request; the owner's device signs that
   commit, and the signature is its half; only then does the joiner reveal its
   nonce, and the code mixes both. The relay must fix its key and nonce before
@@ -289,7 +289,7 @@ only) only when they show or save the image, check the hash and the size, and
 decrypt it. Kiwi 0.14 and older drop an image they get by reference and still
 show the message's text, which is why it's the owner's switch and off by default.
 
-The pairing mailbox (`src/mailbox.ts`) keeps pairing off the relay's records
+The pairing mailbox (`packages/core/src/mailbox.ts`) keeps pairing off the relay's records
 too: the code the app shows (`kp1-…`) is a secret; the mailbox id is a hash of
 it, and each slot is sealed under a key derived from it, so the relay can't read,
 forge or swap anything. Writes are rate-limited per client address.
