@@ -1,9 +1,9 @@
 import { Copy01Icon, Tick02Icon } from "@hugeicons/core-free-icons"
-import { Children, isValidElement, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react"
+import { Children, createContext, isValidElement, memo, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react"
 import ReactMarkdown, { type Components } from "react-markdown"
 import remarkBreaks from "remark-breaks"
 import remarkGfm from "remark-gfm"
-import { compareCells, nextSort, sanitizeMarkdownUrl, type SortDir } from "../lib/markdown"
+import { compareCells, messageRefs, nextSort, sanitizeMarkdownUrl, type SortDir } from "../lib/markdown"
 import { cx } from "../lib/utils"
 import { Icon } from "./icon"
 import { MermaidBlock } from "./mermaid"
@@ -50,6 +50,7 @@ const components: Components = {
   code: ({ children }) => <code className="rounded-row bg-wash-2 px-1 py-px font-mono text-[0.86em]">{children}</code>,
   hr: () => <hr className="my-3 border-line" />,
   table: ({ children }) => <MarkdownTable>{children}</MarkdownTable>,
+  button: ({ children, value }) => (typeof value === "string" && /^[1-9]\d*$/.test(value) ? <MessageRef seq={Number(value)}>{children}</MessageRef> : <span>{children}</span>),
 }
 
 function mermaidSource(children: ReactNode): string | undefined {
@@ -218,12 +219,54 @@ function cellText(node: ReactNode): string {
   return ""
 }
 
-export const Markdown = memo(function Markdown({ children }: { children: string }) {
+export type MessageRefs = { known: (seq: number) => boolean; open: (seq: number) => void }
+
+const OpenRef = createContext<((seq: number) => void) | undefined>(undefined)
+
+function MessageRef({ seq, children }: { seq: number; children?: ReactNode }) {
+  const open = useContext(OpenRef)
+  return (
+    <button type="button" data-ref="" onClick={() => open?.(seq)} className="text-link underline decoration-link/30 underline-offset-2 hover:decoration-link">
+      {children}
+    </button>
+  )
+}
+
+type MdNode = { type: string; value?: string; data?: { hName?: string; hProperties?: Record<string, string> }; children?: MdNode[] }
+
+const OPAQUE = new Set(["link", "linkReference", "definition", "code", "inlineCode", "html"])
+
+function linkMessageRefs(node: MdNode, known: (seq: number) => boolean): void {
+  if (!node.children || OPAQUE.has(node.type)) return
+  if (node.type === "table") {
+    for (const row of node.children.slice(1)) linkMessageRefs(row, known)
+    return
+  }
+  node.children = node.children.flatMap((child): MdNode[] => {
+    if (child.type !== "text" || child.value === undefined) {
+      linkMessageRefs(child, known)
+      return [child]
+    }
+    const parts = messageRefs(child.value, known)
+    if (parts.length === 1 && parts[0]?.kind === "text") return [child]
+    return parts.map((part) =>
+      part.kind === "text"
+        ? { type: "text", value: part.text }
+        : { type: "messageRef", data: { hName: "button", hProperties: { value: String(part.seq) } }, children: [{ type: "text", value: part.text }] }
+    )
+  })
+}
+
+export const Markdown = memo(function Markdown({ children, refs }: { children: string; refs?: MessageRefs }) {
+  const known = refs?.known
+  const plugins = useMemo(() => (known ? [remarkGfm, remarkBreaks, () => (tree: MdNode) => linkMessageRefs(tree, known)] : [remarkGfm, remarkBreaks]), [known])
   return (
     <div className="[overflow-wrap:anywhere] break-words">
-      <ReactMarkdown skipHtml remarkPlugins={[remarkGfm, remarkBreaks]} components={components} urlTransform={(url) => sanitizeMarkdownUrl(url) ?? ""}>
-        {children}
-      </ReactMarkdown>
+      <OpenRef.Provider value={refs?.open}>
+        <ReactMarkdown skipHtml remarkPlugins={plugins} components={components} urlTransform={(url) => sanitizeMarkdownUrl(url) ?? ""}>
+          {children}
+        </ReactMarkdown>
+      </OpenRef.Provider>
     </div>
   )
 })
