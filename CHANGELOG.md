@@ -2,6 +2,51 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.17.0 — 2026-10-17
+
+- **The desktop app is now Channels, with a new icon and its own bundle ID.** Kiwi.app does not update to it: install Channels from the release, pair this computer again, then remove Kiwi.app (both answer kiwi:// links). The `kiwi` CLI, `kiwi://` links and `~/.kiwi` are unchanged.
+- **Docs: the README shows the app's channel view and uses the app icon** (T1147)
+- **Web: each open task is one live card in the main conversation** (T1253)
+- **UI smoke: a task's message may show in main only inside its live task card**
+- **Bus: no more mergiraf, so the bus no longer depends on codeberg.org** ([#292](https://github.com/ojowwalker77/channels/pull/292))
+- **CI: the bus plans a test merge from main, and a web-only change no longer runs the macOS job** ([#293](https://github.com/ojowwalker77/channels/pull/293))
+- **Bus: a branch whose own CI is green and that merges cleanly lands at once, without a staging run** ([#294](https://github.com/ojowwalker77/channels/pull/294))
+- **Bus: a PR labelled queue takes the fast path too, on its own CI run** ([#295](https://github.com/ojowwalker77/channels/pull/295))
+- **Remove the merge bus: back to a normal pull request flow** ([#298](https://github.com/ojowwalker77/channels/pull/298))
+- **Docs: DESIGN.md sections 3 to 5 match web/src/index.css (T550)** ([#299](https://github.com/ojowwalker77/channels/pull/299))
+- **Web: a long inline command copies with one click, the copy button on code blocks shows on touch, and agents are told to put commands in code (T768)** ([#300](https://github.com/ojowwalker77/channels/pull/300))
+- **Avatars: agents wear robot heads, and the coordinator's animated head is gone (T456)** ([#296](https://github.com/ojowwalker77/channels/pull/296))
+- **Desktop: mic entitlement, CSP for api.x.ai when a voice key is set, and an ephemeral token mint (T11)** ([#297](https://github.com/ojowwalker77/channels/pull/297))
+- **Address the review on #248: snapshot contiguity, watch presence, blob quota, image notices, test hygiene** ([#254](https://github.com/ojowwalker77/channels/pull/254))
+- **CI: 28 jobs become 10, one per area, each with a timeout** ([#301](https://github.com/ojowwalker77/channels/pull/301))
+- **Split the conflict hotspots: client.ts, relay/room.ts and agent.ts into modules (pure moves)** ([#249](https://github.com/ojowwalker77/channels/pull/249))
+- **Web: reach root src/ only through @mc, and keep the relay URL in one place** ([#302](https://github.com/ojowwalker77/channels/pull/302))
+- **Repo: Bun workspaces, one lockfile, one TypeScript** ([#303](https://github.com/ojowwalker77/channels/pull/303))
+- **Web: split conversation.tsx into components/conversation/** ([#309](https://github.com/ojowwalker77/channels/pull/309))
+- **State: split src/state.ts into modules under src/state/** ([#308](https://github.com/ojowwalker77/channels/pull/308))
+- **Web: split lib/channel.ts into lib/channel/** ([#311](https://github.com/ojowwalker77/channels/pull/311))
+- **CI: the no-comments rule is no longer enforced, and a comment in a catch block is allowed** ([#307](https://github.com/ojowwalker77/channels/pull/307))
+- **CLI: move joinedText and agentPrompt out of main.ts into src/cli/brief.ts** ([#305](https://github.com/ojowwalker77/channels/pull/305))
+- **Web: split components/controls.tsx into components/controls/** ([#312](https://github.com/ojowwalker77/channels/pull/312))
+- **Desktop: split main.ts into modules, and keyring's wire server into keys-server.ts (pure moves)** ([#304](https://github.com/ojowwalker77/channels/pull/304))
+- **Daemon: split src/daemon.ts into modules under src/daemon/ (pure moves)** ([#306](https://github.com/ojowwalker77/channels/pull/306))
+- **Config: split src/config.ts into modules under src/config/** ([#310](https://github.com/ojowwalker77/channels/pull/310))
+- **Hooks: split src/hooks.ts into modules under src/hooks/ (pure moves)** ([#313](https://github.com/ojowwalker77/channels/pull/313))
+- **CLI: split src/cli/main.ts into modules under src/cli/ (pure moves)** ([#314](https://github.com/ojowwalker77/channels/pull/314))
+- **CI: a push to main cancels main's run still in progress** ([#315](https://github.com/ojowwalker77/channels/pull/315))
+- **Changelog: titles only, and the description check leaves ci-ok** ([#316](https://github.com/ojowwalker77/channels/pull/316))
+- **jev-ci: plan ci.yml and jev-ci.yml edits per job, judge module splits, narrower flows and macOS triggers** ([#317](https://github.com/ojowwalker77/channels/pull/317))
+- **Lint the whole repo with oxlint, and fix every finding** ([#318](https://github.com/ojowwalker77/channels/pull/318))
+- **jev-ci: a comma expression in diff.ts becomes a block, so lint passes on main** ([#321](https://github.com/ojowwalker77/channels/pull/321))
+- **Web: a malformed link fragment like #% no longer crashes the app** ([#319](https://github.com/ojowwalker77/channels/pull/319))
+- **Comments that named src/daemon.ts point at the module that now holds the code** ([#320](https://github.com/ojowwalker77/channels/pull/320))
+- **Move the shared code into packages/core, the @kiwi/core workspace package** ([#322](https://github.com/ojowwalker77/channels/pull/322))
+- **Desktop: a new app icon, the glass starburst** ([#323](https://github.com/ojowwalker77/channels/pull/323))
+- **Add philosophy section to AGENTS.md** ([#324](https://github.com/ojowwalker77/channels/pull/324))
+- **Desktop: the app is Channels, with its own bundle ID** ([#325](https://github.com/ojowwalker77/channels/pull/325))
+- **Web: the dashboard calls the app Channels** ([#326](https://github.com/ojowwalker77/channels/pull/326))
+- **Format the root packages with oxfmt, and lint site/app.js** ([#327](https://github.com/ojowwalker77/channels/pull/327))
+
 ## 0.16.2 — 2026-10-17
 
 - **Wake: a daemon with the app's PATH still finds the harness, and wake.log says why a wake failed** (T544)
