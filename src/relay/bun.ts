@@ -13,6 +13,7 @@ import { ChannelGone, NotFound, UpdateRequired } from "./failures.ts";
 import { clockLayer } from "./http.ts";
 import { authkitDomains, devHostOk, devHumanAuth, devRequestOk, Human, HUMAN_HEADER, workosFromSettings, type HumanAuth } from "./human.ts";
 import { MAILBOX_TTL_MS } from "../mailbox.ts";
+import { onBackupHttp, hourlyLimit, BACKUP_PER_HOUR, type BackupStore } from "./backup.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
 import { clientAddress, parseTrustProxy, trustProxyFromArgs, writeAllowed, type TrustProxy } from "./address.ts";
 import { Policy, policyFrom, type RelayPolicy } from "./policy.ts";
@@ -88,6 +89,16 @@ export function startRelay(
     save: async (id, rec) => void people.query("INSERT OR REPLACE INTO mailboxes (id, rec) VALUES (?, ?)").run(id, JSON.stringify(rec)),
     drop: async (id) => void people.query("DELETE FROM mailboxes WHERE id = ?").run(id),
   };
+  people.run("CREATE TABLE IF NOT EXISTS backups (user TEXT PRIMARY KEY, rec TEXT NOT NULL)");
+  const backups: BackupStore = {
+    load: async (user) => {
+      const row = people.query("SELECT rec FROM backups WHERE user = ?").get(user) as { rec: string } | null;
+      return row ? (JSON.parse(row.rec) as Awaited<ReturnType<BackupStore["load"]>>) : null;
+    },
+    save: async (user, rec) => void people.query("INSERT OR REPLACE INTO backups (user, rec) VALUES (?, ?)").run(user, JSON.stringify(rec)),
+    drop: async (user) => void people.query("DELETE FROM backups WHERE user = ?").run(user),
+  };
+  const backupAllowed = hourlyLimit(BACKUP_PER_HOUR);
   // Expired pairing mailboxes go on startup and hourly (reads expire them lazily too).
   const sweepMailboxes = () => {
     const now = Date.now();
@@ -231,6 +242,8 @@ export function startRelay(
         const ip = clientAddress(server.requestIP(req)?.address ?? null, req.headers.get("x-forwarded-for"), trustProxy);
         const mailbox = await onMailboxHttp(req, mailboxes, ip ? { ip, allow: writeAllowed } : {});
         if (mailbox) return mailbox;
+        const backup = await onBackupHttp(req, backups, { human, allow: backupAllowed });
+        if (backup) return backup;
         const route = parseRoomPath(url.pathname);
         if (!route) return withCors(errorResponse(new NotFound({ message: "not found" })));
         // No fingerprint: 426 before the room file is opened.
