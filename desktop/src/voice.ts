@@ -8,7 +8,7 @@ export interface VoiceStore {
   consent?: Record<string, boolean>;
 }
 
-export interface VoiceResponse {
+interface VoiceResponse {
   readonly ok: boolean;
   readonly status: number;
   json(): Promise<unknown>;
@@ -16,7 +16,7 @@ export interface VoiceResponse {
 
 export type VoiceHttp = (url: string, init: { method: string; headers: Record<string, string>; body: string }) => Promise<VoiceResponse>;
 
-export function hasVoiceKey(voice: VoiceStore | undefined): boolean {
+function hasVoiceKey(voice: VoiceStore | undefined): boolean {
   return typeof voice?.key === "string" && voice.key.length > 0;
 }
 
