@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { ChannelGone, RelayError, Unreachable } from "../../../src/client.ts"
+import { ChannelGone, RelayError, Unreachable } from "@mc/client.ts"
 
 import { isJoinBlip } from "./join-blip"
 
