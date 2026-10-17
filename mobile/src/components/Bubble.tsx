@@ -6,6 +6,7 @@ import Svg, { Path } from "react-native-svg"
 
 import { excerpt, forgedNote, isImageOnly, phrase } from "../lib/bubble"
 import { useTheme } from "../theme/useTheme"
+import { Arrive } from "../ui/Arrive"
 import { Text } from "../ui/Text"
 import type { Chip } from "../lib/reactions"
 import { repliesLabel } from "../lib/thread"
@@ -24,6 +25,7 @@ export interface BubbleProps {
   receipt?: string
   direct?: string
   reactions?: Chip[]
+  fresh?: boolean
   replies?: number
   onOpenThread?: (root: number) => void
   face?: ReactNode
@@ -79,6 +81,7 @@ export const Bubble = memo(function Bubble({
   receipt,
   direct,
   reactions,
+  fresh,
   replies,
   onOpenThread,
   face,
@@ -99,94 +102,96 @@ export const Bubble = memo(function Bubble({
   const align = mine ? "flex-end" : "flex-start"
 
   return (
-    <View testID={`bubble-${m.seq}`} style={[styles.row, { marginTop: first ? 12 : 2, justifyContent: align }]}>
-      {!mine && <View style={styles.face}>{last ? face : null}</View>}
-      <View style={[styles.column, { alignItems: align }]}>
-        {first && (!mine || said) && (
-          <View style={[styles.header, { justifyContent: align }]}>
-            {!mine && group && (
-              <Text variant="stamp" weight="medium" tone="ink2">
-                {nameOf(m.from)}
-              </Text>
-            )}
-            {said ? (
-              said.decide ? (
-                <View style={[styles.decide, { backgroundColor: theme.colors.decideWash }]}>
-                  <Text variant="stamp" weight="semibold" tone="decide">
+    <Arrive active={!!fresh} from={mine ? "right" : "left"}>
+      <View testID={`bubble-${m.seq}`} style={[styles.row, { marginTop: first ? 12 : 2, justifyContent: align }]}>
+        {!mine && <View style={styles.face}>{last ? face : null}</View>}
+        <View style={[styles.column, { alignItems: align }]}>
+          {first && (!mine || said) && (
+            <View style={[styles.header, { justifyContent: align }]}>
+              {!mine && group && (
+                <Text variant="stamp" weight="medium" tone="ink2">
+                  {nameOf(m.from)}
+                </Text>
+              )}
+              {said ? (
+                said.decide ? (
+                  <View style={[styles.decide, { backgroundColor: theme.colors.decideWash }]}>
+                    <Text variant="stamp" weight="semibold" tone="decide">
+                      {said.text}
+                    </Text>
+                  </View>
+                ) : (
+                  <Text variant="stamp" weight={said.alert ? "semibold" : "regular"} tone={said.alert ? "alert" : "ink3"}>
                     {said.text}
                   </Text>
-                </View>
-              ) : (
-                <Text variant="stamp" weight={said.alert ? "semibold" : "regular"} tone={said.alert ? "alert" : "ink3"}>
-                  {said.text}
+                )
+              ) : null}
+            </View>
+          )}
+
+          {quotes.map(({ seq, q }) => (
+            <Pressable key={seq} accessibilityRole="button" accessibilityLabel={`Jump to message ${seq}`} onPress={() => onJump(seq)} style={styles.quote}>
+              <Text variant="stamp" tone="ink3" numberOfLines={1}>
+                <Text variant="stamp" weight="medium" tone="ink2">
+                  {q ? nameOf(q.from) : "Earlier message"}
                 </Text>
-              )
-            ) : null}
-          </View>
-        )}
-
-        {quotes.map(({ seq, q }) => (
-          <Pressable key={seq} accessibilityRole="button" accessibilityLabel={`Jump to message ${seq}`} onPress={() => onJump(seq)} style={styles.quote}>
-            <Text variant="stamp" tone="ink3" numberOfLines={1}>
-              <Text variant="stamp" weight="medium" tone="ink2">
-                {q ? nameOf(q.from) : "Earlier message"}
+                {q ? ` ${excerpt(q.body, 80)}` : ""}
               </Text>
-              {q ? ` ${excerpt(q.body, 80)}` : ""}
+            </Pressable>
+          ))}
+
+          {!isImageOnly(m) && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Message"
+              onLongPress={onMenu ? () => onMenu(m) : onReply ? () => onReply(m) : undefined}
+              style={[styles.bubble, { backgroundColor: fill, borderRadius: theme.radius.bubble }, forged && styles.forged, highlighted && { borderWidth: 2, borderColor: theme.colors.ring }]}
+            >
+              <Markdown tone={mine ? "bubbleMeInk" : "bubbleThemInk"}>{m.body}</Markdown>
+              {last ? <Tail mine={mine} color={fill} /> : null}
+            </Pressable>
+          )}
+
+          {m.imgs?.length ? (
+            <View style={[styles.images, { justifyContent: align }]}>
+              {m.imgs.map((img, index) => (
+                <Attached key={index} img={img} onOpen={onOpenImage} />
+              ))}
+            </View>
+          ) : null}
+
+          {reactions?.length && !forged ? (
+            <View style={[styles.reactions, { justifyContent: align }]}>
+              {reactions.map((chip) => (
+                <ReactionChip key={chip.emoji} chip={chip} />
+              ))}
+            </View>
+          ) : null}
+          {replies && onOpenThread ? (
+            <Pressable accessibilityRole="button" accessibilityLabel={`Open thread, ${repliesLabel(replies)}`} onPress={() => onOpenThread(m.seq)} style={styles.thread}>
+              <Text variant="meta" weight="medium" tone="ink2">
+                {repliesLabel(replies)}
+              </Text>
+            </Pressable>
+          ) : null}
+          {receipt && mine && !forged ? (
+            <Text variant="stamp" tone="ink3" style={styles.note}>
+              {receipt}
             </Text>
-          </Pressable>
-        ))}
-
-        {!isImageOnly(m) && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Message"
-            onLongPress={onMenu ? () => onMenu(m) : onReply ? () => onReply(m) : undefined}
-            style={[styles.bubble, { backgroundColor: fill, borderRadius: theme.radius.bubble }, forged && styles.forged, highlighted && { borderWidth: 2, borderColor: theme.colors.ring }]}
-          >
-            <Markdown tone={mine ? "bubbleMeInk" : "bubbleThemInk"}>{m.body}</Markdown>
-            {last ? <Tail mine={mine} color={fill} /> : null}
-          </Pressable>
-        )}
-
-        {m.imgs?.length ? (
-          <View style={[styles.images, { justifyContent: align }]}>
-            {m.imgs.map((img, index) => (
-              <Attached key={index} img={img} onOpen={onOpenImage} />
-            ))}
-          </View>
-        ) : null}
-
-        {reactions?.length && !forged ? (
-          <View style={[styles.reactions, { justifyContent: align }]}>
-            {reactions.map((chip) => (
-              <ReactionChip key={chip.emoji} chip={chip} />
-            ))}
-          </View>
-        ) : null}
-        {replies && onOpenThread ? (
-          <Pressable accessibilityRole="button" accessibilityLabel={`Open thread, ${repliesLabel(replies)}`} onPress={() => onOpenThread(m.seq)} style={styles.thread}>
-            <Text variant="meta" weight="medium" tone="ink2">
-              {repliesLabel(replies)}
+          ) : null}
+          {direct && !forged ? (
+            <Text variant="stamp" tone="ink3" style={styles.note}>
+              {`Sent directly, not through ${nameOf(direct)}.`}
             </Text>
-          </Pressable>
-        ) : null}
-        {receipt && mine && !forged ? (
-          <Text variant="stamp" tone="ink3" style={styles.note}>
-            {receipt}
-          </Text>
-        ) : null}
-        {direct && !forged ? (
-          <Text variant="stamp" tone="ink3" style={styles.note}>
-            {`Sent directly, not through ${nameOf(direct)}.`}
-          </Text>
-        ) : null}
-        {forged && (trust === "forged" || trust === "refused") ? (
-          <Text variant="stamp" tone="alert" style={styles.note}>
-            {forgedNote(m, trust)}
-          </Text>
-        ) : null}
+          ) : null}
+          {forged && (trust === "forged" || trust === "refused") ? (
+            <Text variant="stamp" tone="alert" style={styles.note}>
+              {forgedNote(m, trust)}
+            </Text>
+          ) : null}
+        </View>
       </View>
-    </View>
+    </Arrive>
   )
 })
 
