@@ -66,7 +66,9 @@ export class ChannelRequests {
         let info: MemberInfo & JoinClaims = { name: "?" };
         try {
           info = JSON.parse(raw ?? "{}") as typeof info;
-        } catch {}
+        } catch {
+          // Info that isn't JSON: the request still shows, named "?".
+        }
         const computer = yield* Effect.promise(() => verifiedComputer(this.ch.roomId, r.pk, info.computer));
         const person = yield* Effect.promise(() => verifiedPerson(this.ch.roomId, r.pk, info.person));
         const kind = person ? "human" : "agent";

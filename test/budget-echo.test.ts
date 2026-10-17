@@ -98,7 +98,9 @@ function legacyRelay(target: string): { url: string; stop: () => void } {
         up.onclose = (ev) => {
           try {
             ws.close(ev.code === 1005 || ev.code === 1006 ? 1000 : ev.code, ev.reason);
-          } catch {}
+          } catch {
+            // The client already hung up: nothing to pass the close on to.
+          }
         };
       },
       message(ws, data) {
@@ -110,7 +112,9 @@ function legacyRelay(target: string): { url: string; stop: () => void } {
       close(ws) {
         try {
           ups.get(ws)?.up.close(1000);
-        } catch {}
+        } catch {
+          // The upstream is already closed: nothing to pass the close on to.
+        }
       },
     },
   });

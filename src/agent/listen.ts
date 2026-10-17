@@ -20,7 +20,9 @@ export class SessionListen extends SessionState {
     return Effect.gen({ self: this }, function* () {
       if (opts.hold !== false) yield* holding(this.alias, this.me);
       const status = (line: string) => opts.onStatus?.(line) ?? Effect.void;
-      let { since, messages, state } = yield* this.reach(status);
+      const reached = yield* this.reach(status);
+      const since = reached.since;
+      let { messages, state } = reached;
       const cache = yield* Cache;
       const cursor = yield* Cursor;
       const seen = yield* cursor.seen(this.alias, this.me);

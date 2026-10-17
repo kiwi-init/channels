@@ -49,7 +49,7 @@ export function MemberActions({ m, trigger, onMessage }: { m: RosterMember; trig
 }
 
 export function memberDetail(p: ControlsProps, m: RosterMember): string {
-  const load = memberLoad(p.state, m.name, p.now)
+  const load = memberLoad(p.state, m.name)
   const now = p.state.members.get(m.name)
   if (showsLoad(m, load) && load.level !== "free") return LEVEL[load.level]
   if (p.state.coordinator === m.name) return "Coordinator"

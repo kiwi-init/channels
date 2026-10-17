@@ -39,8 +39,10 @@ export function readDiff(repo: string, base: string, head: string): FileChange[]
     else if (!hunk) {
       if (line.startsWith("new file mode")) file.status = "added"
       else if (line.startsWith("deleted file mode")) file.status = "deleted"
-      else if (line.startsWith("rename from ")) (file.status = "renamed"), (file.from = line.slice(12))
-      else if (line.startsWith("Binary files")) file.binary = true
+      else if (line.startsWith("rename from ")) {
+        file.status = "renamed"
+        file.from = line.slice(12)
+      } else if (line.startsWith("Binary files")) file.binary = true
       else if (line.startsWith("@@")) file.hunks.push((hunk = { at: line.replace(/^@@[^@]*@@\s?/, ""), removed: [], added: [] }))
     } else if (line.startsWith("@@")) file.hunks.push((hunk = { at: line.replace(/^@@[^@]*@@\s?/, ""), removed: [], added: [] }))
     else if (line.startsWith("+")) hunk.added.push(line.slice(1))

@@ -104,10 +104,10 @@ export function InfoPanel({
                   agent={m.kind !== "human"}
                   online={p.online.has(m.name)}
                   color={colorOf(p.state, m.name)}
-                  working={m.kind !== "human" && memberLoad(p.state, m.name, p.now).current.length > 0}
+                  working={m.kind !== "human" && memberLoad(p.state, m.name).current.length > 0}
                   line={m.pk === p.myKey ? "You" : memberDetail(p, m)}
                   strong={coordinator === m.name}
-                  title={m.kind !== "human" ? loadDetail(memberLoad(p.state, m.name, p.now)) : undefined}
+                  title={m.kind !== "human" ? loadDetail(memberLoad(p.state, m.name)) : undefined}
                 />
               )
               const mine = m.pk === p.myKey

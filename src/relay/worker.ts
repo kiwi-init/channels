@@ -168,7 +168,9 @@ export class Channel extends DurableObject<Env> {
   override webSocketClose(ws: WebSocket, code: number): void {
     try {
       ws.close(code === 1005 ? 1000 : code);
-    } catch {}
+    } catch {
+      // Already closed: closing back is only a courtesy.
+    }
   }
 
   private async apply(fx: Effects, sender?: WebSocket): Promise<void> {
@@ -308,13 +310,17 @@ function isWatch(ws: WebSocket): boolean {
 function send(ws: WebSocket, f: string): void {
   try {
     ws.send(f);
-  } catch {}
+  } catch {
+    // A socket that is closing: one dead peer must not stop the broadcast to the rest.
+  }
 }
 
 function close(ws: WebSocket, code: number, reason: string): void {
   try {
     ws.close(code, reason);
-  } catch {}
+  } catch {
+    // Already closed: the other sockets still get theirs.
+  }
 }
 
 export default {

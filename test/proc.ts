@@ -15,7 +15,9 @@ function drain(s: ReadableStream<Uint8Array>) {
         if (done) return;
         text += dec.decode(value);
       }
-    } catch {}
+    } catch {
+      // close() cancels the reader, or the pipe broke with the process: what was read is kept.
+    }
   })();
   return {
     get text() {

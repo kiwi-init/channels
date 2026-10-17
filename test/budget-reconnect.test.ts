@@ -143,7 +143,9 @@ function oldRelay(target: string, refusal = "unknown frame"): { url: string; soc
         up.onclose = (ev) => {
           try {
             ws.close(ev.code === 1005 || ev.code === 1006 ? 1000 : ev.code, ev.reason);
-          } catch {}
+          } catch {
+            // The client already hung up: nothing to pass the close on to.
+          }
         };
       },
       message(ws, data) {
@@ -154,7 +156,9 @@ function oldRelay(target: string, refusal = "unknown frame"): { url: string; soc
       close(ws, code, reason) {
         try {
           ups.get(ws)?.close(code === 1005 || code === 1006 ? 1000 : code, reason);
-        } catch {}
+        } catch {
+          // The upstream is already closed: nothing to pass the close on to.
+        }
       },
     },
   });

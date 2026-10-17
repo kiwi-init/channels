@@ -39,7 +39,9 @@ afterAll(async () => {
     try {
       const cfg = JSON.parse(readFileSync(join(d, "config.json"), "utf8")) as { channels: Record<string, { owner?: string }> };
       for (const [alias, c] of Object.entries(cfg.channels)) if (c.owner) await run(d, "-c", alias, "--as", c.owner, "close", "--yes");
-    } catch {}
+    } catch {
+      // No config.json (a home that never joined), or one that isn't JSON: nothing of it to close.
+    }
   }
   server?.stop(true);
   // Test homes hold keys: don't leave them lying around in /tmp.
@@ -87,7 +89,10 @@ function lines(p: ReturnType<typeof mc>) {
       if (done) return;
       buf += new TextDecoder().decode(value);
       let i;
-      while ((i = buf.indexOf("\n")) >= 0) (got.push(buf.slice(0, i)), (buf = buf.slice(i + 1)));
+      while ((i = buf.indexOf("\n")) >= 0) {
+        got.push(buf.slice(0, i));
+        buf = buf.slice(i + 1);
+      }
     }
   })();
   return {

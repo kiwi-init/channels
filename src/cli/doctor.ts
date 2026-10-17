@@ -120,13 +120,13 @@ function checkPaired(): Finding {
 function checkHooks(): Finding {
   const dir = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
   if (!existsSync(dir)) return { ok: true, what: "hooks    Claude Code is not installed here" };
-  let installed = false;
+  let installed: boolean;
   try {
     installed = hooksInstalled();
   } catch {
     return { ok: false, what: "Claude Code's settings.json could not be read.", how: "Fix ~/.claude/settings.json, then run kiwi hooks install." };
   }
-  let also: string[] = [];
+  let also: string[];
   try {
     also = EXTRA_HARNESSES.filter((h) => extraInstalled(h));
   } catch {

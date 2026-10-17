@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
 import { TASK_STATES, ignored, type TaskState, type Verdict } from "../protocol.ts";
+import { omit } from "../omit.ts";
 import { Rejected } from "../refusals.ts";
 import { isPerson, openRound, revisedOut, taskId, type ChannelState, type ReviewRound, type Task } from "../state.ts";
 import { SessionMessaging } from "./messaging.ts";
@@ -87,7 +88,7 @@ export class SessionTasks extends SessionMessaging {
     const judged = change.verdict && t.rounds.length ? yield* judgedRound(t, open, change.round, change.at) : null;
     const round = judged ? { round: judged.n, ...(judged.at ? { at: judged.at } : {}) } : revised !== null && notReviewer ? { round: revised } : {};
     const body = change.verdict && reviewText?.trim() ? { body: "review" as const } : {};
-    const { round: _round, at: _at, ...rest } = change;
+    const rest = omit(change, "round", "at");
     const opening = change.state === "review" && change.at?.trim() ? { at: change.at.trim() } : {};
     const notify: string[] = [];
     if (owner) notify.push(owner);

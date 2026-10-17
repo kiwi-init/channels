@@ -30,7 +30,7 @@ export function reviewTexts(messages: Message[]): Map<string, string> {
   return out;
 }
 
-export function queryTables(v: ChannelView, now = Date.now()): Tables {
+export function queryTables(v: ChannelView): Tables {
   const { state, me } = v;
   const verified = v.messages.filter((m) => !ignored(state.trust.get(m.seq)));
   const reviews = reviewTexts(verified);
@@ -79,7 +79,7 @@ export function queryTables(v: ChannelView, now = Date.now()): Tables {
       columns: SCHEMA.members!,
       rows: [...state.members.values()]
         .filter((m) => m.active)
-        .map((m) => [m.name, m.role ?? null, m.kind ?? (m.owner ? "human" : "agent"), m.owner ? 1 : 0, m.lastSeen ? new Date(m.lastSeen).toISOString() : null, loadJson(memberLoad(state, m.name, now)).level]),
+        .map((m) => [m.name, m.role ?? null, m.kind ?? (m.owner ? "human" : "agent"), m.owner ? 1 : 0, m.lastSeen ? new Date(m.lastSeen).toISOString() : null, loadJson(memberLoad(state, m.name)).level]),
     },
     facts: {
       columns: SCHEMA.facts!,

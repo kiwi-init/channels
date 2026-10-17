@@ -241,7 +241,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
         ? "Reconnecting…"
         : (online.size ? `${memberCount} members, ${online.size} online` : `${memberCount} ${memberCount === 1 ? "member" : "members"}`) +
           (state.mode.coordinatorOnly ? (state.coordinator ? " · coordinator mode" : " · coordinator mode, no coordinator yet") : "")
-  const working = active.filter((m) => isAgent(m) && memberLoad(state, m.name, now).current.length > 0).length
+  const working = active.filter((m) => isAgent(m) && memberLoad(state, m.name).current.length > 0).length
   const lastAt = new Map<string, number>()
   for (const m of messages) if (m.kind !== "event") lastAt.set(m.from, m.ts)
   const agentsNow: AgentNow[] = active
@@ -254,7 +254,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       coordinator: m.name === state.coordinator,
       model: online.get(m.name)?.activity?.model ?? m.card?.model,
       activity: online.get(m.name)?.activity,
-      load: memberLoad(state, m.name, now),
+      load: memberLoad(state, m.name),
       lastAt: lastAt.get(m.name),
     }))
   const prs = floating ? recentPrs(state, messages, me, 5) : []

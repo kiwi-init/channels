@@ -5,6 +5,7 @@ import { Cursor, Keystore } from "./config.ts";
 import { openSession, runAgent, wants, type AgentSession } from "./agent.ts";
 import { describeEvent, formatMessage, formatStatus, formatTask, markedText, memberJson, reviewBody, statusJson } from "./format.ts";
 import { ignored, type Message } from "./protocol.ts";
+import { omit } from "./omit.ts";
 import { queryCommand, queryTables, reviewTexts, type Tables } from "./sh-query.ts";
 import { taskId, type ChannelState, type Place, type ReviewRound } from "./state.ts";
 
@@ -87,7 +88,7 @@ function channelTree(v: ChannelView, now: number): Record<string, string> {
   files["status"] = formatStatus({ alias: v.alias, me, state, online: new Map(), unread: 0, now }) + "\n";
   // Presence isn't known here (it takes a live query), so "online" is left out rather than guessed.
   const status = statusJson({ alias: v.alias, me, state, online: new Map(), unread: 0, now });
-  files["status.json"] = JSON.stringify({ ...status, members: status.members.map(({ online: _, ...m }) => m) }, null, 2) + "\n";
+  files["status.json"] = JSON.stringify({ ...status, members: status.members.map((m) => omit(m, "online")) }, null, 2) + "\n";
   const reviews = reviewTexts(verified);
   const entries = verified.map((m) => ({ m, entry: logEntry(m, state, me) }));
   files["log.jsonl"] = entries.map(({ entry }) => JSON.stringify(entry) + "\n").join("");
@@ -110,7 +111,7 @@ function channelTree(v: ChannelView, now: number): Record<string, string> {
   }
   for (const m of state.members.values()) {
     if (!m.active) continue;
-    const { online: _, ...json } = memberJson(state, m.name, new Map(), now);
+    const json = omit(memberJson(state, m.name, new Map()), "online");
     files[`members/${segment(m.name)}.json`] = JSON.stringify(json, null, 2) + "\n";
   }
   for (const f of state.facts.values()) files[`facts/${segment(f.key)}`] = markedText(f.value) + "\n";
@@ -295,6 +296,6 @@ class ReadOnlyFs implements IFileSystem {
   utimes: IFileSystem["utimes"] = async (p, a, m) => (this.guard(p), this.inner.utimes(p, a, m));
 }
 
-export function channelTables(views: ChannelView[], now = Date.now()): () => Tables | undefined {
-  return () => (views[0] ? queryTables(views[0], now) : undefined);
+export function channelTables(views: ChannelView[]): () => Tables | undefined {
+  return () => (views[0] ? queryTables(views[0]) : undefined);
 }

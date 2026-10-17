@@ -19,7 +19,9 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
   let input: HookInput = {};
   try {
     input = JSON.parse(raw) as HookInput;
-  } catch {}
+  } catch {
+    // Empty or not JSON on stdin: the hook goes by its environment alone.
+  }
   const kimi = event === KIMI_STOP;
   const model = typeof input.model === "string" && input.model.trim() ? input.model.trim() : undefined;
   const who: Here = kimi ? kimiHookHere() : { ...here(), ...(input.session_id ? { session: input.session_id } : {}), ...(model ? { model } : {}) };

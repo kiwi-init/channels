@@ -139,7 +139,9 @@ async function openConn(sock: string, timeoutMs = 15_000): Promise<DaemonConn> {
     close: () => {
       try {
         socket.end();
-      } catch {}
+      } catch {
+        // Already closed; the close handler reaps the rest.
+      }
       closed = true;
     },
     call: (verb, params = {}) =>
@@ -369,7 +371,9 @@ export async function stopDaemon(sock = daemonSock()): Promise<void> {
     } finally {
       c.close();
     }
-  } catch {}
+  } catch {
+    // Already gone; stopping nothing is stopping done.
+  }
   if (process.platform !== "win32") {
     const until = Date.now() + 5_000;
     while (existsSync(sock) && Date.now() < until) await Bun.sleep(50);

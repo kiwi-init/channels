@@ -72,9 +72,13 @@ function tightenHome(dir: string): void {
       if (!isRealFile(p)) continue;
       try {
         chmodSync(p, 0o600);
-      } catch {}
+      } catch {
+        // A file this user can't chmod keeps its mode; the rest are still tightened.
+      }
     }
-  } catch {}
+  } catch {
+    // A file this user can't chmod must not stop startup.
+  }
 }
 
 function lockKiwiDir(dir: string, privateFiles: boolean): void {
@@ -100,7 +104,9 @@ function lockKiwiDir(dir: string, privateFiles: boolean): void {
     if (child.isFile() && privateFiles) {
       try {
         chmodSync(p, 0o600);
-      } catch {}
+      } catch {
+        // A file this user can't chmod keeps its mode; the rest are still tightened.
+      }
     }
   }
 }
@@ -151,12 +157,16 @@ export function writePrivate(path: string, data: string | Uint8Array): void {
     } catch (err) {
       try {
         rmSync(tmp, { force: true });
-      } catch {}
+      } catch {
+        // The rename's error is the one to throw; a leftover tmp file is only debris.
+      }
       throw err;
     }
     try {
       chmodSync(path, 0o600);
-    } catch {}
+    } catch {
+      // Written 0600 already; a mode this user can't set must not fail the write.
+    }
     return;
   }
   throw blocked;

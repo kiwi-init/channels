@@ -47,7 +47,9 @@ function lockDirs(dir: string, root: string): void {
     if (cur !== top && !inside(top, cur)) break;
     try {
       if (lstatSync(cur).isDirectory()) chmodSync(cur, 0o700);
-    } catch {}
+    } catch {
+      // A directory this user can't chmod keeps its mode; the images in it are still written 0600.
+    }
     if (cur === top || dirname(cur) === cur) break;
     cur = dirname(cur);
   }
@@ -65,7 +67,9 @@ export function saveImages(seq: number, imgs: InlineImage[], dir: string): strin
     writeFileSync(path, Buffer.from(img.data, "base64"), { mode: 0o600 });
     try {
       chmodSync(path, 0o600);
-    } catch {}
+    } catch {
+      // Written with mode 0600 already; a mode this user can't set must not fail saving the image.
+    }
     return path;
   });
 }

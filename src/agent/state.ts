@@ -113,7 +113,7 @@ export class SessionState {
       this.roomsFloor ??= yield* orNone(this.ch.fx.rooms(info));
       this.guardFloor ??= yield* orNone(this.ch.fx.guard(info));
       const kept: { base?: FoldBase } = {};
-      const keep = this.snapshotDue(messages.at(-1)?.seq ?? 0) ? (b: FoldBase) => void (kept.base = b) : undefined;
+      const keep = this.snapshotDue?.(messages.at(-1)?.seq ?? 0) ? (b: FoldBase) => void (kept.base = b) : undefined;
       let state = fold(messages, roster, Date.now(), undefined, this.roomsFloor, this.guardFloor, this.base, keep);
       const unknown = [...state.rejected].some(([seq, why]) => seq > this.roomsCheckedAt && why.startsWith("no room "));
       if (unknown) {
@@ -122,18 +122,14 @@ export class SessionState {
         this.roomsFloor = yield* orNone(this.ch.fx.rooms());
         state = fold(messages, roster, Date.now(), undefined, this.roomsFloor, this.guardFloor, this.base, keep);
       }
-      if (kept.base) yield* this.publish(kept.base);
+      if (kept.base && this.publish) yield* this.publish(kept.base);
       return state;
     });
   }
 
-  protected snapshotDue(_head: number): boolean {
-    return false;
-  }
+  protected snapshotDue?(head: number): boolean;
 
-  protected publish(_base: FoldBase): Effect.Effect<void, never, Relay> {
-    return Effect.void;
-  }
+  protected publish?(base: FoldBase): Effect.Effect<void, never, Relay>;
 
   readonly message = Effect.fn("AgentSession.message")({ self: this }, function* (this: SessionState, seq: number, messages: readonly Message[]) {
     const held = messages.find((m) => m.seq === seq);

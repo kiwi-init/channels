@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 import * as Semaphore from "effect/Semaphore";
 import { open, seal } from "../crypto.ts";
+import { omit } from "../omit.ts";
 import { sign, verify } from "../identity.ts";
 import { MAX_CHARTER, MAX_ROOM_NAME, ROOM_ID_RE } from "../protocol.ts";
 import { MissingKey } from "../refusals.ts";
@@ -136,7 +137,7 @@ export class ChannelSettings {
       const key = this.ch.access.keys["0"];
       if (!key) return yield* new MissingKey("missing the channel key");
       this.info.forgetInfo();
-      const { what: _w, room: _r, pk: _p, sig: _s, ...kept } = (yield* this.settings()) ?? {};
+      const kept = omit((yield* this.settings()) ?? {}, "what", "room", "pk", "sig");
       const next = { ...kept, ...change };
       const sealed = yield* Effect.promise(async () => seal(key, this.ch.roomId, await sign(this.ch.identity, { ...next, what: "channel-settings", room: this.ch.roomId })));
       yield* this.ch.request("/settings", { method: "PUT", body: JSON.stringify({ settings: sealed }) }).pipe(Effect.ensuring(Effect.sync(() => this.info.forgetInfo())));

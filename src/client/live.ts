@@ -10,6 +10,7 @@ import { signRequest } from "../auth.ts";
 import { open, seal } from "../crypto.ts";
 import { sign, verify } from "../identity.ts";
 import { inlineText } from "../membership.ts";
+import { omit } from "../omit.ts";
 import {
   CLOSE_CLOSED,
   CLOSE_REMOVED,
@@ -400,7 +401,7 @@ export class ChannelLive {
       for (const k of Object.values(this.ch.access.keys).reverse()) {
         const p = (yield* Effect.promise(() => open(k, this.ch.roomId, f.iv, f.ct))) as (Presence & { e?: number }) | null;
         if (p?.type === "presence" && typeof p.from === "string") {
-          const { e: _e, ...rest } = p;
+          const rest = omit(p, "e");
           const sigOk = yield* Effect.promise(() => verify(rest));
           const role = typeof rest.role === "string" ? inlineText(rest.role, 80) || undefined : undefined;
           const { activity: said, reach, ...fields } = rest;

@@ -61,7 +61,9 @@ function deadListenerFiles(home: string, out: Cleaned): void {
     let pid = 0;
     try {
       pid = Number(readFileSync(join(hooks, f), "utf8"));
-    } catch {}
+    } catch {
+      // Unreadable: pid stays 0, so the file counts as dead and goes.
+    }
     if (!alive(pid)) remove(join(hooks, f), out);
   }
   for (const dir of [listeners, hooks]) {
@@ -75,7 +77,9 @@ function oldUpdates(tmp: string, now: number, out: Cleaned): void {
     const p = join(tmp, f);
     try {
       if (now - statSync(p).mtimeMs > DAY_MS) remove(p, out);
-    } catch {}
+    } catch {
+      // Gone already, or can't be stat'ed: left alone.
+    }
   }
 }
 

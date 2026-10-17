@@ -6,7 +6,7 @@
 //   requests | approve CODE [--name N] [--role R] | deny CODE|KEY | kick NAME | close
 //   role NAME ROLE|none [--about A] | room create NAME | room rename NAME|ID NEWNAME
 import * as Effect from "effect/Effect";
-import { runAgent } from "../src/agent.ts";
+import { runAgent, type Agent } from "../src/agent.ts";
 import { Channel } from "../src/client.ts";
 import { Cursor, DEFAULT_RELAY, Keystore } from "../src/config.ts";
 import { newRoomId } from "../src/crypto.ts";
@@ -55,7 +55,7 @@ const findRequest = Effect.fn(function* (needle: string, byKey = false) {
   return r ? { s, r } : yield* die(`no pending request shows code ${needle}`);
 });
 
-const verbs: Record<string, () => Effect.Effect<void, unknown, any>> = {
+const verbs: Record<string, () => Effect.Effect<void, unknown, Agent>> = {
   quick: () => verbs.create!(),
   create: () =>
     Effect.gen(function* () {
@@ -181,7 +181,7 @@ if (!verb) {
   process.exit(2);
 }
 try {
-  await runAgent(verb() as Effect.Effect<void, unknown, never>);
+  await runAgent(verb());
   process.exit(0);
 } catch (e) {
   process.stderr.write(`owner-cli: ${e instanceof Die ? e.message : e instanceof Error ? e.message : String(e)}\n`);

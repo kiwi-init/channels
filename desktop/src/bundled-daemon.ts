@@ -62,7 +62,9 @@ export async function keepDaemon(): Promise<void> {
     try {
       kiwiBin = await keepCli(bundledKiwi(), app.getVersion());
       ensureOnPath();
-    } catch {}
+    } catch {
+      // The daemon still runs from the app's own copy below.
+    }
   }
   await ensureDaemon();
 }

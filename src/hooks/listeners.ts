@@ -52,7 +52,9 @@ function legacySlotHeld(alias: string, as: string, session: string): boolean {
     const pid = Number(readFileSync(file, "utf8"));
     if (pid > 0 && alive(pid)) return true;
     rmSync(file, { force: true });
-  } catch {}
+  } catch {
+    // No legacy slot file (the usual case), or one that can't be read: not held.
+  }
   return false;
 }
 
@@ -86,7 +88,9 @@ function liveRecords(): { name: string; rec: Record<string, unknown> }[] {
     try {
       const parsed = JSON.parse(readFileSync(join(dir, f), "utf8")) as unknown;
       if (parsed && typeof parsed === "object") rec = parsed as Record<string, unknown>;
-    } catch {}
+    } catch {
+      // Gone since the readdir, or torn mid-write: an empty record, as for one from before 0.10.3.
+    }
     out.push({ name: f, rec });
   }
   return out;
