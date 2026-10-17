@@ -695,9 +695,10 @@ describe("MCP server", () => {
       p.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
       const tools = ((await rpc("tools/list")) as { tools: { name: string }[] }).tools.map((t) => t.name).sort();
       // No admin tools, even on the owner's machine: a person lets people in and sets what they may do.
-      expect(tools).toEqual(["ask", "escalate", "facts", "log", "members", "message", "read", "reply", "rooms", "save", "send", "sh", "status", "task_add", "task_update", "tasks", "wait_for_messages", "who"]);
+      expect(tools).toEqual(["ask", "ask_human", "escalate", "facts", "log", "members", "message", "read", "reply", "rooms", "save", "send", "sh", "status", "task_add", "task_update", "tasks", "wait_for_messages", "who"]);
 
       expect(await call("task_add", { title: "write docs" })).toMatch(/^added T\d+$/);
+      expect(await call("ask_human", { text: "  ", options: ["A: yes", "B: no"] })).toContain("the text is empty");
       expect(await call("status")).toContain("agent-a (you) — builder");
       expect(await call("facts", { set: "docs.url", value: "https://example.com" })).toContain("docs.url = https://example.com");
       expect(await ok(other, "tasks")).toContain("write docs");

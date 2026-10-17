@@ -17,6 +17,24 @@ export function sanitizeMarkdownUrl(url: string): string | undefined {
   return value
 }
 
+const MESSAGE_REF = /(?<![\p{L}\p{N}\p{M}_/#&.-])#([1-9]\d{0,8})(?![\p{L}\p{N}\p{M}_])/gu
+
+export type RefPart = { kind: "text"; text: string } | { kind: "ref"; text: string; seq: number }
+
+export function messageRefs(text: string, known: (seq: number) => boolean): RefPart[] {
+  const parts: RefPart[] = []
+  let from = 0
+  for (const match of text.matchAll(MESSAGE_REF)) {
+    const seq = Number(match[1])
+    if (!known(seq)) continue
+    if (match.index > from) parts.push({ kind: "text", text: text.slice(from, match.index) })
+    parts.push({ kind: "ref", text: match[0], seq })
+    from = match.index + match[0].length
+  }
+  if (from < text.length || parts.length === 0) parts.push({ kind: "text", text: text.slice(from) })
+  return parts
+}
+
 export type SortDir = "asc" | "desc"
 
 /** None, then ascending, then descending, then back to the author's order. */

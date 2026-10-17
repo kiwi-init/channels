@@ -33,7 +33,7 @@ import { ago, cardLine, charterLines, describeEvent, holdLine, formatFact, forma
 import { canPost, describeScopes, presetOf, SCOPES, type Scope } from "../scopes.ts";
 import { fingerprint } from "../identity.ts";
 import reactionPack from "../../assets/reactions/index.json";
-import { CHAT_KINDS, COLORS, HANDOFF_DEFAULT_SECONDS, HANDOFF_MAX_SECONDS, HANDOFF_MAX_VENDOR, handoffUrl, ignored, isGifReaction, isColor, type Kind, type Message, type TaskState } from "../protocol.ts";
+import { CHAT_KINDS, CHOICE_MAX_LENGTH, CHOICES_MAX, CHOICES_MIN, COLORS, HANDOFF_DEFAULT_SECONDS, HANDOFF_MAX_SECONDS, HANDOFF_MAX_VENDOR, handoffUrl, ignored, wellFormedChoices, isGifReaction, isColor, type Kind, type Message, type TaskState } from "../protocol.ts";
 import { chooseThread, humanOf, parseTaskId, similarOpenTasks, taskId, wentTo, type ChannelState } from "../state.ts";
 import { VERSION } from "../version.ts";
 import { computerClaimFor } from "../machine.ts";
@@ -74,6 +74,10 @@ Agents
                                                  up to 1h); --wait 15m blocks until they press Done (exit 0),
                                                  Couldn't or the link expires (exit 4)
      --image f.png · --room R · --kind K
+  kiwi ask-human "question"                      a decision you wait on a person for: to your own human and the
+                                                 owner, in the app's Needs you list, in every mode and during a hold
+     --option "A: …" --option "B: …"             2 to 6 answers the person picks from with one click
+     --task T7 · --re N                          in that task's thread (it shows on the task) · about message #N
   kiwi reply N "text"                            answer message #N: to its sender, in its room
   kiwi react N ok/trailer [--clear]              react to message #N with a GIF (kiwi react --list shows them) or one emoji
   kiwi show N [dir]                              message #N in full, with its whole thread; its images saved
@@ -87,6 +91,7 @@ Agents
      task approve|reject T7 --round N|--at SHA ["note"] [--file review.md]   the verdict on the round you reviewed,
                                                  refused unless it's still the open one; --file sends the review with it
      task assign T7 NAME ["what's next"] · drop T7 (back to the board)   (kiwi task alone: the board)
+     task cancel T7 "why"                        closes it, marked cancelled, if you may finish it (else it's only a note)
   kiwi note [KEY [VALUE] [--ttl 7d] | KEY --clear]   shared notes: all of them, one, set one, or remove one
   kiwi leave                                     leave the channel and forget it on this machine
 
@@ -133,6 +138,7 @@ const { values: opt, positionals: args } = parseArgs({
     webhook: { type: "string" },
     secret: { type: "string" },
     image: { type: "string", multiple: true },
+    option: { type: "string", multiple: true },
     wait: { type: "string" },
     handoff: { type: "string" },
     vendor: { type: "string" },
@@ -858,6 +864,7 @@ const commands: Record<string, Command> = {
         return yield* commands.escalate!();
       }
       if (opt.handoff !== undefined) return yield* die("--handoff goes with --escalate");
+      if (opt.option !== undefined) return yield* die("--option goes with kiwi ask-human");
       const s = yield* session();
       const body = yield* text(1);
       if (!body.trim()) return yield* die("empty message");
@@ -1008,18 +1015,24 @@ const commands: Record<string, Command> = {
       out(holdLine((yield* s.state()).state) ?? "not on hold");
     }),
 
+  "ask-human": () => commands.escalate!(),
+
   /** Hand a decision to people instead of acting on it. */
   escalate: () =>
     Effect.gen(function* () {
       const s = yield* session();
       const body = yield* text(1);
-      if (!body.trim()) return yield* die('usage: kiwi escalate [--re N] "why this needs a person"');
+      if (!body.trim()) return yield* die('usage: kiwi ask-human [--option "A: …" --option "B: …"] [--task T7] [--re N] "the decision you need"');
       const re = opt.re === undefined ? undefined : Number(opt.re.replace(/^#/, "")) || (yield* die("--re takes a message number"));
+      const task = opt.task === undefined ? undefined : (parseTaskId(opt.task) ?? (yield* die(`"${opt.task}" isn't a task id (like T12)`)));
       if (opt.handoff === undefined) {
         for (const f of ["vendor", "expires", "wait"] as const) if (opt[f] !== undefined) return yield* die(`--${f} goes with --handoff URL`);
-        const { seq, to } = yield* s.escalate(body, re);
-        return out(`escalated #${seq} to ${to.join(" and ")}; wait for their answer before acting on it`);
+        const choices = opt.option?.map((o) => o.trim());
+        if (choices && !wellFormedChoices(choices)) return yield* die(`--option takes ${CHOICES_MIN} to ${CHOICES_MAX} different answers, one line of up to ${CHOICE_MAX_LENGTH} characters each`);
+        const { seq, to } = yield* s.escalate(body, re, undefined, { ...(choices ? { choices } : {}), ...(task !== undefined ? { task } : {}) });
+        return out(`escalated #${seq} to ${to.join(" and ")}${choices ? ` with ${choices.length} options` : ""}; wait for their answer before acting on it`);
       }
+      if (opt.option !== undefined) return yield* die("--handoff has its own Done and Couldn't answers; leave out --option");
       if (!handoffUrl(opt.handoff)) return yield* die("--handoff takes an https link without a user name or password, up to 2048 characters");
       const vendor = opt.vendor ?? new URL(opt.handoff).hostname;
       if (/steel/i.test(vendor) || /(^|\.)steel\.dev$/i.test(new URL(opt.handoff).hostname)) process.stderr.write("kiwi: steel live links are not authenticated; anyone with the link can use the tab\n");
@@ -1027,7 +1040,7 @@ const commands: Record<string, Command> = {
       if (seconds < 1 || seconds > HANDOFF_MAX_SECONDS) return yield* die(`--expires must be between 1s and ${HANDOFF_MAX_SECONDS / 60}m`);
       const expiresAt = Date.now() + seconds * 1000;
       const head = opt.wait === undefined ? 0 : yield* s.ch.fx.head();
-      const { seq, to } = yield* s.escalate(body, re, { url: opt.handoff, vendor: vendor.slice(0, HANDOFF_MAX_VENDOR), expiresAt });
+      const { seq, to } = yield* s.escalate(body, re, { url: opt.handoff, vendor: vendor.slice(0, HANDOFF_MAX_VENDOR), expiresAt }, task !== undefined ? { task } : {});
       out(`escalated #${seq} to ${to.join(" and ")} with a browser link that opens for ${opt.expires ?? "10m"}; wait for their answer before acting on it`);
       if (opt.wait === undefined) return;
       const { outcome, replies } = yield* s.awaitHandoff(seq, head, expiresAt, parseDuration(opt.wait));

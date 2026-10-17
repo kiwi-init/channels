@@ -318,7 +318,7 @@ async function run(part: Part): Promise<string[]> {
     await page.getByRole("button", { name: "Close thread" }).click()
     log(`ok  ${at}`)
 
-    await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke task", "--owner", "bot"])
+    const smokeTask = /T\d+/.exec(await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke task", "--owner", "bot"]))?.[0] ?? "T0"
     at = "Task in the Tasks panel"
     const conversations = page.getByRole("main").getByRole("navigation", { name: "Conversations" })
     const tasksPanel = page.getByRole("complementary", { name: "Tasks" })
@@ -330,6 +330,40 @@ async function run(part: Part): Promise<string[]> {
     await tasksPanel.getByText("smoke in the task", { exact: true }).first().waitFor()
     await tasksPanel.getByRole("button", { name: "Close tasks" }).click()
     if (await page.getByText("smoke in the task", { exact: true }).count()) throw new Error("a message in a task's conversation showed in main")
+    log(`ok  ${at}`)
+
+    at = "ask-human: options as buttons, and the task waits on a person until one is picked"
+    await kiwi(["-c", "smoke", "--as", "bot", "ask-human", "--task", smokeTask, "--option", "A: ship it", "--option", "B: wait a day", "Ship the smoke build now?"])
+    const awaiting = overview.getByRole("region", { name: "Tasks" }).getByText("Needs a decision")
+    await awaiting.first().waitFor({ timeout: 15000 })
+    await needsOpen()
+    await needs.getByRole("list", { name: "Options" }).getByRole("button", { name: "B: wait a day" }).click()
+    await awaiting.first().waitFor({ state: "detached", timeout: 15000 })
+    log(`ok  ${at}`)
+
+    at = "Take over, then cancel, a task waiting on an agent's review"
+    const added = /added (T\d+)/.exec(await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke review", "--owner", "bot", "--review", "helper"]))?.[1]
+    if (!added) throw new Error("kiwi task add printed no task id")
+    await kiwi(["-c", "smoke", "--as", "bot", "task", "review", added])
+    await overview.getByRole("region", { name: "Tasks" }).getByRole("button", { name: /Smoke review/ }).first().click({ timeout: 15000 })
+    const reviewed = tasksPanel.getByRole("region", { name: `Task ${added}` })
+    await reviewed.getByRole("button", { name: "Send back" }).waitFor({ timeout: 15000 })
+    if (await reviewed.getByRole("button", { name: "Approve" }).count()) throw new Error("Approve showed for a review waiting on an agent")
+    await reviewed.getByRole("button", { name: "Change reviewer…" }).click()
+    const picking = page.getByRole("dialog", { name: `Who reviews ${added}?` })
+    const shots = process.env.SMOKE_SHOTS
+    if (shots) await page.waitForTimeout(400).then(() => page.screenshot({ path: join(shots, "change-reviewer.png") }))
+    await picking.getByRole("button", { name: /\(you\)/ }).click()
+    await picking.waitFor({ state: "detached" })
+    await reviewed.getByRole("button", { name: "Approve" }).waitFor({ timeout: 15000 })
+    await reviewed.getByRole("button", { name: "Cancel task…" }).click()
+    const cancelling = page.getByRole("dialog", { name: `Cancel ${added}?` })
+    await cancelling.getByRole("textbox", { name: "Why it’s cancelled" }).fill("smoke: stale")
+    if (shots) await page.waitForTimeout(400).then(() => page.screenshot({ path: join(shots, "cancel-task.png") }))
+    await cancelling.getByRole("button", { name: "Cancel task" }).click()
+    await cancelling.waitFor({ state: "detached" })
+    await reviewed.getByRole("button", { name: "Cancel task…" }).waitFor({ state: "detached", timeout: 15000 })
+    await tasksPanel.getByRole("button", { name: "Close tasks" }).click()
     log(`ok  ${at}`)
 
     for (const item of ["Change nickname…", "Set role…", "Remove from channel…"])

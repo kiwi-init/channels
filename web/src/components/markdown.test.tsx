@@ -3,7 +3,46 @@ import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { Markdown } from "./markdown"
 import { errorLine } from "./mermaid"
-import { compareCells, nextSort, sanitizeMarkdownUrl } from "../lib/markdown"
+import { compareCells, messageRefs, nextSort, sanitizeMarkdownUrl } from "../lib/markdown"
+
+describe("message references", () => {
+  const known = (seq: number) => seq < 1000
+
+  test("#N becomes a reference to message N when the channel has it", () => {
+    expect(messageRefs("see #305 and #315.", known)).toEqual([
+      { kind: "text", text: "see " },
+      { kind: "ref", text: "#305", seq: 305 },
+      { kind: "text", text: " and " },
+      { kind: "ref", text: "#315", seq: 315 },
+      { kind: "text", text: "." },
+    ])
+  })
+
+  test("leaves anchors, words, zero and unknown messages alone", () => {
+    for (const text of ["page#3", "a/b/#4", "&#123;", "#0", "#12abc", "##5", "#4000", "café#3", "#12é"]) {
+      expect(messageRefs(text, known)).toEqual([{ kind: "text", text }])
+    }
+  })
+
+  test("rendered refs are buttons, but not inside code or existing links", () => {
+    const html = renderToStaticMarkup(createElement(Markdown, { refs: { known, open: () => {} } }, "Drafted in #315.\n\n`#316` and [#317](https://example.com)"))
+    expect(html).toContain('<button type="button" data-ref="" class="text-link')
+    expect(html).toContain(">#315</button>")
+    expect(html).not.toContain(">#316</button>")
+    expect(html).not.toContain(">#317</button>")
+    expect(html).not.toContain("value=")
+  })
+
+  test("a table header keeps #N as text inside its sort button, and body cells link it", () => {
+    const html = renderToStaticMarkup(createElement(Markdown, { refs: { known, open: () => {} } }, "| #3 |\n| --- |\n| #4 |"))
+    expect(html).not.toContain(">#3</button>")
+    expect(html).toContain(">#4</button>")
+  })
+
+  test("without refs, #N stays text", () => {
+    expect(renderToStaticMarkup(createElement(Markdown, null, "Drafted in #315."))).not.toContain("<button")
+  })
+})
 
 describe("safe markdown links", () => {
   test("allows http, https, mailto and tel only", () => {

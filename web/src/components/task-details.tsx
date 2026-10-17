@@ -1,13 +1,14 @@
-import { ArrowDown01Icon, GitPullRequestIcon } from "@hugeicons/core-free-icons"
+import { ArrowDown01Icon, GitPullRequestIcon, UserMultipleIcon } from "@hugeicons/core-free-icons"
 import { useMemo, useState, type ReactNode } from "react"
 import type { Message } from "@mc/protocol.ts"
 import { colorOf, taskId, type ChannelState, type Task } from "@mc/state.ts"
 import { taskFeed, taskPrs } from "@mc/work.ts"
 import { formatAgo, formatFull, memberName } from "@/lib/format"
+import { ANYONE, reviewerChoices, taskActions } from "@/lib/task-actions"
 import { cx } from "@/lib/utils"
 import { Feed, PrLink } from "./feed"
 import { Icon } from "./icon"
-import { Button, Monogram } from "./kit"
+import { Alert, Button, Monogram, TextField, errorText, toast } from "./kit"
 import { Markdown } from "./lazy"
 import { isAgent } from "./message"
 import { labelOf, StateMark } from "./tasks"
@@ -24,8 +25,13 @@ export function TaskDetails({
   me,
   now,
   highlighted,
+  person,
   noteBlocked,
   onNote,
+  onApprove,
+  onSendBack,
+  onCancel,
+  onReviewer,
 }: {
   id: number
   state: ChannelState
@@ -33,9 +39,14 @@ export function TaskDetails({
   me: string
   now: number
   highlighted?: boolean
+  person: boolean
   /** Why this member can't add notes (their scopes), or null if they can. */
   noteBlocked: string | null
   onNote: (note: string) => Promise<void>
+  onApprove: (t: Task) => Promise<void>
+  onSendBack: (t: Task, why: string) => Promise<void>
+  onCancel: (t: Task, note: string) => Promise<void>
+  onReviewer: (t: Task, review: string) => Promise<void>
 }) {
   const task = state.tasks.get(id)
   const items = useMemo(() => taskFeed(state, messages, id, me), [state, messages, id, me])
@@ -69,6 +80,7 @@ export function TaskDetails({
       <div className="mt-4">
         <Properties task={task} state={state} now={now} items={items} />
       </div>
+      {!noteBlocked && <Actions key={task.id} task={task} state={state} me={me} person={person} onApprove={onApprove} onSendBack={onSendBack} onCancel={onCancel} onReviewer={onReviewer} />}
       <h3 className="mt-4 text-ui font-semibold">
         <button type="button" aria-expanded={story} onClick={() => setStory((v) => !v)} className="flex w-full items-center gap-2 text-left">
           Activity
@@ -131,6 +143,166 @@ function Properties({ task, state, now, items }: { task: Task; state: ChannelSta
         </span>
       </Prop>
     </dl>
+  )
+}
+
+function Actions({
+  task,
+  state,
+  me,
+  person,
+  onApprove,
+  onSendBack,
+  onCancel,
+  onReviewer,
+}: {
+  task: Task
+  state: ChannelState
+  me: string
+  person: boolean
+  onApprove: (t: Task) => Promise<void>
+  onSendBack: (t: Task, why: string) => Promise<void>
+  onCancel: (t: Task, note: string) => Promise<void>
+  onReviewer: (t: Task, review: string) => Promise<void>
+}) {
+  const [why, setWhy] = useState<string | null>(null)
+  const [cancelling, setCancelling] = useState(false)
+  const [picking, setPicking] = useState(false)
+  const [note, setNote] = useState("")
+  const [busy, setBusy] = useState(false)
+  const can = taskActions(task, me, person)
+  if (can.kind === "hidden") return null
+  const id = taskId(task.id)
+  const act = async (fn: () => Promise<void>, done: string) => {
+    setBusy(true)
+    try {
+      await fn()
+      setWhy(null)
+      setCancelling(false)
+      setPicking(false)
+      toast(done)
+    } catch (err) {
+      toast(errorText(err), "error")
+    } finally {
+      setBusy(false)
+    }
+  }
+  const cancel = () => {
+    if (note.trim() && !busy) void act(() => onCancel(task, note.trim()), `Cancelled ${id}`)
+  }
+  const choices = reviewerChoices(task, state.members.values())
+  const nameOf = (name: string) => (name === ANYONE ? "anyone who hasn’t worked on it" : memberName(state.members.get(name), name))
+  return (
+    <div className="mt-4 flex flex-wrap items-center gap-2">
+      {why === null ? (
+        <>
+          {can.review === "verdict" && (
+            <Button size="sm" variant="secondary" disabled={busy} onClick={() => act(() => onApprove(task), `Approved ${id}`)}>
+              Approve
+            </Button>
+          )}
+          {can.review !== "none" && (
+            <Button size="sm" variant="ghost" onClick={() => setWhy("")}>
+              Send back
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" disabled={choices.length === 0} onClick={() => setPicking(true)}>
+            {task.review ? "Change reviewer…" : "Add reviewer…"}
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => (setNote(""), setCancelling(true))}>
+            Cancel task…
+          </Button>
+        </>
+      ) : (
+        <form
+          className="flex w-full items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (why.trim() && !busy) void act(() => onSendBack(task, why.trim()), `Sent ${id} back`)
+          }}
+        >
+          <TextField
+            autoFocus
+            value={why}
+            onChange={(e) => setWhy(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setWhy(null)}
+            placeholder="What to change"
+            aria-label="What to change"
+            className="flex-1"
+          />
+          <Button size="sm" variant="secondary" type="submit" disabled={busy || !why.trim()}>
+            Send back
+          </Button>
+        </form>
+      )}
+      <Alert
+        open={picking}
+        onClose={() => setPicking(false)}
+        title={`Who reviews ${id}?`}
+        message={
+          <span className="mt-3 grid gap-1">
+            <span className="mb-2">
+              {task.review ? `Now ${nameOf(task.review)}. ` : ""}
+              {task.state === "review" ? "The new reviewer gives the verdict on the open round." : "The new reviewer gives the verdict when it’s sent for review."}
+            </span>
+            {choices.map((name) => {
+              const m = state.members.get(name)
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void act(() => onReviewer(task, name), `${id}: ${nameOf(name)} reviews it`)}
+                  className="flex items-center gap-3 rounded-ctl px-2 py-2 text-left text-ink transition-colors hover:bg-wash disabled:opacity-40"
+                >
+                  {name === ANYONE ? (
+                    <span className="flex size-6 items-center justify-center text-ink-3">
+                      <Icon icon={UserMultipleIcon} size={18} />
+                    </span>
+                  ) : (
+                    <Monogram name={name} agent={isAgent(m)} size={24} color={colorOf(state, name)} />
+                  )}
+                  <span className="min-w-0 flex-1 truncate text-ui font-medium">
+                    {name === ANYONE ? "Anyone who hasn’t worked on it" : nameOf(name)}
+                    {name === me && <span className="font-normal text-ink-3"> (you)</span>}
+                  </span>
+                </button>
+              )
+            })}
+          </span>
+        }
+      >
+        <Button variant="secondary" onClick={() => setPicking(false)}>
+          Close
+        </Button>
+      </Alert>
+      <Alert
+        open={cancelling}
+        onClose={() => setCancelling(false)}
+        title={`Cancel ${id}?`}
+        message={
+          <span className="mt-3 grid gap-2">
+            <span>It closes for everyone, marked cancelled{task.state === "review" ? ", and its open review round ends" : ""}. Say why, so whoever worked on it knows.</span>
+            <TextField
+              autoFocus
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && (e.preventDefault(), cancel())}
+              placeholder="Why it’s cancelled"
+              maxLength={500}
+              aria-label="Why it’s cancelled"
+            />
+          </span>
+        }
+      >
+        <Button variant="secondary" onClick={() => setCancelling(false)}>
+          Keep it
+        </Button>
+        <Button variant="danger" disabled={busy || !note.trim()} onClick={cancel}>
+          Cancel task
+        </Button>
+      </Alert>
+    </div>
   )
 }
 
