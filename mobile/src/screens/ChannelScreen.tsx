@@ -17,6 +17,7 @@ import { Thread } from "../components/Thread"
 import { threadIndex } from "../lib/thread"
 import { useServices } from "../lib/EngineProvider"
 import { shareImage } from "../lib/shareImage"
+import { lightTap } from "../lib/haptics"
 import { useChannel } from "../lib/useChannel"
 import { useTheme } from "../theme/useTheme"
 import { Composer, type Person } from "../ui/Composer"
@@ -92,6 +93,7 @@ export function ChannelScreen({ code, onBack }: { code: string; onBack?: () => v
   const replies = threadRoot === null ? [] : (threads.replies.get(threadRoot) ?? [])
 
   const send = async ({ body, to }: { body: string; to: string[] }, re?: number[]) => {
+    lightTap()
     try {
       await live.send(body, to, re)
     } catch (err) {

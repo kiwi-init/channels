@@ -79,6 +79,7 @@ export function Conversation({
   const list = useRef<FlatList<Row>>(null)
   const [away, setAway] = useState(false)
   const [menu, setMenu] = useState<Message | null>(null)
+  const [opened] = useState(() => messages.reduce((top, m) => Math.max(top, m.seq), 0))
   const threads = useMemo(() => threadIndex(messages, state, { revealed }), [messages, state, revealed])
   const rows = useMemo(() => buildRows(messages, state, { me, revealed, hide: (seq) => threads.rootOf(seq) !== null }).reverse(), [messages, state, me, revealed, threads])
   const bySeq = useMemo(() => new Map(messages.map((m) => [m.seq, m])), [messages])
@@ -113,6 +114,7 @@ export function Conversation({
           group={group}
           adjacentReply={item.adjacentReply}
           highlighted={highlight === item.m.seq}
+          fresh={item.m.seq > opened}
           receipt={receipt?.(item.m)}
           reactions={chipsFor(state, item.m.seq, me, nameOf)}
           face={face?.(item.m)}
@@ -127,7 +129,7 @@ export function Conversation({
         />
       )
     },
-    [state, me, group, highlight, receipt, face, quoted, nameOf, onJump, onReply, onReact, onOpenThread, onOpenTask, onOpenImage, threads]
+    [state, me, group, highlight, opened, receipt, face, quoted, nameOf, onJump, onReply, onReact, onOpenThread, onOpenTask, onOpenImage, threads]
   )
 
   return (
