@@ -7,7 +7,7 @@ import { useSyncExternalStore } from "react"
 import type { SendOptions } from "@kiwi/core/client.ts"
 import { chooseThread, type ChannelState, type Place } from "@kiwi/core/state.ts"
 
-export { MAIN, dmPlace, placeFromKey, placeKey, threadMembers, type Place, type PlaceSummary } from "@kiwi/core/state.ts"
+export { MAIN, dmPlace, placeFromKey, placeKey, type Place, type PlaceSummary } from "@kiwi/core/state.ts"
 
 /**
  * What a message sent from a place carries so it lands there, chosen the way every client chooses it

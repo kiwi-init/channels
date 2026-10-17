@@ -16,7 +16,7 @@ const IDLE_AFTER_MS = 15 * 60_000;
  * Whether `viewer` may see message `m` here: nothing forged or refused, and for a person in
  * strict coordinator-only mode, no agent's chat except the coordinator's. Events always show.
  */
-function visibleTo(state: ChannelState, viewer: string, m: Message): boolean {
+export function visibleTo(state: ChannelState, viewer: string, m: Message): boolean {
   if (ignored(state.trust.get(m.seq))) return false;
   const me = state.members.get(viewer);
   return !(me && isPerson(me) && keptFromPeople(state, m));
@@ -51,7 +51,7 @@ function fateIn(text: string, pr: { url: string; number: number }): "merged" | "
 }
 
 /** The text a message carries for links: its body, or a task note. */
-const textOf = (m: Message): string => (m.ev?.op === "task.update" ? (m.ev.note ?? "") : m.kind === "event" ? "" : m.body);
+export const textOf = (m: Message): string => (m.ev?.op === "task.update" ? (m.ev.note ?? "") : m.kind === "event" ? "" : m.body);
 
 /** PRs linked in these messages, with what later messages (any visible one) say happened to them. */
 export function prsIn(state: ChannelState, messages: Message[], viewer: string, linkedBy: (m: Message) => boolean): PrRef[] {

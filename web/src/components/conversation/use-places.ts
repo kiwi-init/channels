@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef } from "react"
 
-import { ignored, type Message } from "@kiwi/core/protocol.ts"
+import type { Message } from "@kiwi/core/protocol.ts"
+import { unreadIn as unreadInPlace } from "@kiwi/core/standup.ts"
 import type { ChannelState } from "@kiwi/core/state.ts"
-import { markSeenIn, MAIN, placeFromKey, placeKey, seenIn, threadMembers, useSeen } from "@/lib/threads"
+import { markSeenIn, placeFromKey, placeKey, seenIn, useSeen } from "@/lib/threads"
 import type { Here, Unread } from "./types"
 
 export function usePlaces({
@@ -22,7 +23,7 @@ export function usePlaces({
   reaches: (m: Message) => boolean
   shownTask: number | null
 }) {
-  const { placeOf, places } = state
+  const { places } = state
   const place: Here = useMemo(() => {
     const p = placeFromKey(here)
     return p?.kind === "dm" ? p : { kind: "main" }
@@ -36,23 +37,7 @@ export function usePlaces({
     firstVisit.current = false
     markSeenIn(roomId, Object.fromEntries([...places].map(([k, v]) => [k, v.last])))
   }, [messages.length, places, roomId])
-  const unreadIn = useCallback(
-    (key: string): Unread => {
-      const since = seen[key] ?? 0
-      const p = placeFromKey(key) ?? MAIN
-      const mine = p.kind === "main" || (p.kind === "dm" ? p.with.includes(me) : threadMembers(state, p).includes(me))
-      let n = 0
-      let named = 0
-      for (const m of messages) {
-        if (m.seq <= since || m.kind === "event" || m.from === me || placeKey(placeOf.get(m.seq) ?? MAIN) !== key || ignored(state.trust.get(m.seq))) continue
-        if (key === "main" && !reaches(m)) continue
-        n++
-        if (m.to?.includes(me)) named++
-      }
-      return mine ? { n, forMe: n > 0 } : { n: named || n, forMe: named > 0 }
-    },
-    [seen, messages, me, placeOf, reaches, state]
-  )
+  const unreadIn = useCallback((key: string): Unread => unreadInPlace(state, messages, me, key, seen[key] ?? 0, reaches), [seen, messages, me, reaches, state])
   const lastHere = places.get(hereKey)?.last ?? 0
   useEffect(() => {
     if (!document.hidden && lastHere) markSeenIn(roomId, { [hereKey]: lastHere })
