@@ -97,7 +97,6 @@ function AddComputer({ onDone }: { onDone: () => void }) {
 
 type Linkage = { kind: "starting" } | { kind: "waiting"; linking: Linking } | { kind: "confirm"; linking: Linking; ask: LinkAskView } | { kind: "error"; message: string }
 
-/** Link a phone: show a code to scan, wait for the phone, compare six digits with it, then send the person to it. */
 function LinkPhone({ onDone }: { onDone: () => void }) {
   const [state, setState] = useState<Linkage>({ kind: "starting" })
   const [busy, setBusy] = useState(false)
