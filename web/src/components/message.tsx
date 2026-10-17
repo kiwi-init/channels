@@ -1,10 +1,14 @@
-import { ArrowTurnBackwardIcon, Copy01Icon } from "@hugeicons/core-free-icons"
-import { memo, useEffect, useState, type ReactNode } from "react"
+import { ArrowTurnBackwardIcon, Copy01Icon, SmileIcon } from "@hugeicons/core-free-icons"
+import { memo, useEffect, useMemo, useState, type ReactNode } from "react"
 
 import { describeEvent } from "@mc/format.ts"
-import { ignored, type Color, type ImageAttachment, type Message, type Trust } from "@mc/protocol.ts"
+import { ignored, isGifReaction, type Color, type Handoff, type ImageAttachment, type Message, type Trust } from "@mc/protocol.ts"
 import type { ChannelState, Member } from "@mc/state.ts"
+import { useClock } from "@/lib/channel"
 import { excerpt, formatAgo, formatFull, formatStamp, memberName } from "@/lib/format"
+import { openHandoff } from "@/lib/handoff-open"
+import { handoffLabel, handoffLeft, handoffOf, handoffOpen } from "@/lib/handoff"
+import { gifByKey } from "@/lib/gifs"
 import { chipLabel, type Chip } from "@/lib/reactions"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
@@ -120,6 +124,26 @@ export function standsAlone(m: Message, state: ChannelState, me: string): boolea
   return false
 }
 
+function HandoffLine({ handoff }: { handoff: Handoff }) {
+  const now = useClock(30_000)
+  return (
+    <p className="mt-1 flex items-center gap-2 px-3 text-meta text-ink-3">
+      {handoffOpen(handoff, now) ? (
+        <>
+          <button type="button" onClick={() => openHandoff(handoff)} className="font-medium text-decide hover:underline">
+            Open browser
+          </button>
+          <span>
+            {handoffLabel(handoff)} · {handoffLeft(handoff, now)}
+          </span>
+        </>
+      ) : (
+        <span>Link expired</span>
+      )}
+    </p>
+  )
+}
+
 /** What a message asks of the reader, in a few words above its bubble. */
 function phrase(m: Message, me: string, nameOf: (n: string) => string, repliedTo: Set<string>): { text: string; alert?: boolean; decide?: boolean } | null {
   // Questions and blockers always say who they're for; plain messages only when the text doesn't already.
@@ -129,6 +153,7 @@ function phrase(m: Message, me: string, nameOf: (n: string) => string, repliedTo
   const to = targets.map((t) => (t === "*" ? "everyone" : t === me ? "you" : nameOf(t)))
   const list = to.length > 1 ? `${to.slice(0, -1).join(", ")} and ${to[to.length - 1]}` : to[0]
   // An agent handing a decision to people: named for what it is, in amber, never shouted.
+  if (m.esc && m.handoff) return { text: to.includes("you") ? "Browser for you" : list ? `Browser for ${list}` : "Browser for people", decide: true }
   if (m.esc) return { text: to.includes("you") ? "Decision for you" : list ? `Decision for ${list}` : "Decision for people", decide: true }
   switch (m.kind) {
     case "ask":
@@ -173,6 +198,7 @@ interface BubbleProps {
   quoted: (seq: number) => Message | undefined
   nameOf: (name: string) => string
   onReply?: (m: Message) => void
+  onReact?: (m: Message) => void
   onJump: (seq: number) => void
   /** The thread this message starts, when it has replies: "1 Reply" under it. */
   thread?: ThreadSummary
@@ -184,6 +210,7 @@ interface BubbleProps {
   /** A face other than the monogram at the run's foot: the coordinator's head. */
   face?: ReactNode
   image?: (img: ImageAttachment) => Promise<string | null>
+  onOpenImage?: (m: Message, img: ImageAttachment, src: string) => void
 }
 
 function useSeen(el: Element | null): boolean {
@@ -205,7 +232,7 @@ function useSeen(el: Element | null): boolean {
 const IMAGE_RETRIES = 3
 const IMAGE_RETRY_MS = 5000
 
-function Attached({ img, load }: { img: ImageAttachment; load?: (img: ImageAttachment) => Promise<string | null> }) {
+function Attached({ img, load, onOpen }: { img: ImageAttachment; load?: (img: ImageAttachment) => Promise<string | null>; onOpen?: (src: string) => void }) {
   const [data, setData] = useState<string | null>(img.data ?? null)
   const [failed, setFailed] = useState(false)
   const [attempt, setAttempt] = useState(0)
@@ -256,6 +283,12 @@ function Attached({ img, load }: { img: ImageAttachment; load?: (img: ImageAttac
     )
   }
   const url = `data:${img.mime};base64,${data}`
+  if (onOpen)
+    return (
+      <button type="button" onClick={() => onOpen(url)} title={img.name} aria-label={`Open ${img.name}`} className="block cursor-zoom-in rounded-bubble">
+        <img src={url} alt={img.name} loading="lazy" className="max-h-72 max-w-full rounded-bubble object-cover shadow-[0_0_0_0.5px_var(--line)]" />
+      </button>
+    )
   return (
     <a href={url} target="_blank" rel="noreferrer" title={img.name}>
       <img src={url} alt={img.name} loading="lazy" className="max-h-72 max-w-full rounded-bubble object-cover shadow-[0_0_0_0.5px_var(--line)]" />
@@ -292,6 +325,7 @@ export const Bubble = memo(function Bubble({
   quoted,
   nameOf,
   onReply,
+  onReact,
   onJump,
   thread,
   onOpenThread,
@@ -302,8 +336,10 @@ export const Bubble = memo(function Bubble({
   receipt,
   reactions,
   image,
+  onOpenImage,
 }: BubbleProps) {
   const forged = ignored(trust)
+  const refs = useMemo(() => ({ known: (seq: number) => seq !== m.seq && quoted(seq) !== undefined, open: onJump }), [m.seq, quoted, onJump])
   const mine = m.from === me
   const repliedTo = new Set((m.re ?? []).map((seq) => quoted(seq)?.from).filter((f): f is string => !!f))
   // Your own bubbles don't need saying who they're to, unless you handed something to people.
@@ -313,6 +349,7 @@ export const Bubble = memo(function Bubble({
   // Image-only messages carry the file names as their body; don't print them.
   const imageOnly = !!m.imgs?.length && m.body === m.imgs.map((i) => i.name).join(", ")
   const decide = !!m.esc
+  const handoff = handoffOf(m)
   // Quote what this answers, unless it's the bubble right above.
   const quotes = adjacentReply ? [] : (m.re ?? []).map((seq) => ({ seq, q: quoted(seq) })).filter(({ q }) => !q || q.kind !== "event")
 
@@ -360,13 +397,20 @@ export const Bubble = memo(function Bubble({
                 // Code keeps its lines: it scrolls inside the bubble rather than wrapping mid-word like prose.
                 "bubble-text relative isolate max-w-full min-w-0 rounded-bubble px-3.5 py-[7px] text-body [&_pre]:max-w-full [&_pre]:[overflow-wrap:normal] [&_pre]:whitespace-pre",
                 mine
-                  ? "bg-bubble-me text-bubble-me-ink [&_a]:text-bubble-me-ink [&_a]:decoration-white/50 [&_code]:bg-white/18 [&_li]:marker:text-white/70 [&_pre]:border-white/15 [&_pre]:bg-black/15 [&_pre]:text-white"
+                  ? "bg-bubble-me text-bubble-me-ink [&_[data-ref]]:text-bubble-me-ink [&_[data-ref]]:decoration-white/50 [&_a]:text-bubble-me-ink [&_a]:decoration-white/50 [&_code]:bg-white/18 [&_li]:marker:text-white/70 [&_pre]:border-white/15 [&_pre]:bg-black/15 [&_pre]:text-white"
                   : "bg-bubble-them text-bubble-them-ink",
                 forged && "line-through opacity-60",
                 highlighted && "animate-flash outline-2 outline-offset-2 outline-[var(--ring)]"
               )}
             >
-              <Markdown>{m.body}</Markdown>
+              <Markdown refs={refs}>{m.body}</Markdown>
+              {m.esc && m.choices?.length ? (
+                <ul aria-label="Options" className="mt-1.5 list-disc pl-5 text-ui">
+                  {m.choices.map((c) => (
+                    <li key={c}>{c}</li>
+                  ))}
+                </ul>
+              ) : null}
               {last && <Tail mine={mine} />}
             </div>
           )}
@@ -374,7 +418,7 @@ export const Bubble = memo(function Bubble({
           {m.imgs?.length ? (
             <div className={cx("mt-0.5 flex flex-wrap gap-1", mine && "justify-end")}>
               {m.imgs.map((img, i) => (
-                <Attached key={i} img={img} load={image} />
+                <Attached key={i} img={img} load={image} onOpen={onOpenImage ? (src) => onOpenImage(m, img, src) : undefined} />
               ))}
             </div>
           ) : null}
@@ -382,6 +426,17 @@ export const Bubble = memo(function Bubble({
 
         {/* Reply and copy, beside the bubble on hover: on its inner side, so they never cover anything. */}
         <div className={cx("absolute bottom-0 hidden items-center gap-0.5 group-focus-within/b:flex group-hover/b:flex", mine ? "left-0" : "right-0")}>
+          {onReact && (
+            <button
+              type="button"
+              aria-label="React with a GIF"
+              title="React with a GIF"
+              onClick={() => onReact(m)}
+              className="flex size-7 items-center justify-center rounded-full text-ink-3 transition-colors hover:bg-wash-2 hover:text-ink"
+            >
+              <Icon icon={SmileIcon} size={15} />
+            </button>
+          )}
           {onReply && (
             <button
               type="button"
@@ -407,6 +462,7 @@ export const Bubble = memo(function Bubble({
 
       {/* What hangs off the bubble (its answer link, notes, replies), under it on the bubble's edge. */}
       <div className={cx("flex flex-col", mine ? "items-end pl-10 md:pl-16" : "items-start pr-10 pl-9 md:pr-16")}>
+        {handoff && !mine && (m.to?.includes(me) || m.to?.includes("*")) && <HandoffLine handoff={handoff} />}
         {decide && !mine && onReply && (
           <p className="mt-1 flex items-center gap-1 px-3 text-meta">
             <button type="button" onClick={() => onReply(m)} className="font-medium text-decide hover:underline">
@@ -416,17 +472,28 @@ export const Bubble = memo(function Bubble({
         )}
         {!!reactions?.length && !forged && (
           <p className={cx("mt-0.5 flex flex-wrap gap-1 px-2", mine && "justify-end")}>
-            {reactions.map((c) => (
-              <span
-                key={c.emoji}
-                title={chipLabel(c)}
-                aria-label={chipLabel(c)}
-                className={cx("inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-stamp tabular-nums", c.mine ? "bg-accent-wash text-accent-text" : "bg-wash-2 text-ink-2")}
-              >
-                <span aria-hidden>{c.emoji}</span>
-                {c.who.length > 1 && <span aria-hidden>{c.who.length}</span>}
-              </span>
-            ))}
+            {reactions.map((c) => {
+              const gif = isGifReaction(c.emoji) ? gifByKey(c.emoji) : undefined
+              const who = c.who.join(", ")
+              return gif ? (
+                <span key={c.emoji} title={`${gif.feeling} · ${who}`} aria-label={`${gif.feeling}, from ${who}`} className="group/gif relative inline-flex">
+                  <img src={gif.url} alt="" className={cx("h-32 w-auto max-w-full rounded-card", c.mine && "ring-2 ring-accent")} />
+                  <span className="pointer-events-none absolute bottom-1.5 left-1.5 hidden max-w-[calc(100%-12px)] truncate rounded-full bg-black/65 px-2 py-0.5 text-stamp text-white group-hover/gif:block">
+                    {who}
+                  </span>
+                </span>
+              ) : (
+                <span
+                  key={c.emoji}
+                  title={chipLabel(c)}
+                  aria-label={chipLabel(c)}
+                  className={cx("inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-stamp tabular-nums", c.mine ? "bg-accent-wash text-accent-text" : "bg-wash-2 text-ink-2")}
+                >
+                  <span aria-hidden>{c.emoji}</span>
+                  {c.who.length > 1 && <span aria-hidden>{c.who.length}</span>}
+                </span>
+              )
+            })}
           </p>
         )}
         {receipt && mine && !forged && (

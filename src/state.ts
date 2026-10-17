@@ -416,6 +416,17 @@ export function wentTo(c: ThreadChoice): string {
   return "";
 }
 
+export function tasksAwaitingPeople(state: Pick<ChannelState, "openAsks" | "placeOf">): Set<number> {
+  return new Set(
+    state.openAsks
+      .filter((m) => m.esc)
+      .flatMap((m) => {
+        const place = state.placeOf.get(m.seq);
+        return place?.kind === "task" ? [place.task] : [];
+      }),
+  );
+}
+
 /** Parse "T12", "t12", "#12" or "12". */
 export function parseTaskId(s: string): number | null {
   const m = /^(?:[Tt#])?(\d+)$/.exec(s.trim());

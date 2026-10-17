@@ -73,9 +73,15 @@ import {
   SNAPSHOT_EVERY,
   WS_PROTOCOL,
   wellFormed,
+  wellFormedHandoff,
+  wellFormedChoices,
+  CHOICES_MAX,
+  CHOICES_MIN,
+  CHOICE_MAX_LENGTH,
   wellFormedRead,
   type Envelope,
   type Event,
+  type Handoff,
   type ImageAttachment,
   type InlineImage,
   type Kind,
@@ -96,6 +102,8 @@ export interface SendOptions {
   room?: string;
   /** An escalation: a decision handed to people (see Payload.esc). */
   esc?: boolean;
+  handoff?: Handoff;
+  choices?: string[];
   /** A chat message in this task's thread (see Payload.task). */
   task?: number;
   /** A chat message to exactly one member, in the pair's direct thread (see Payload.dm). */
@@ -1435,6 +1443,8 @@ export class Channel {
       // The same raster list as icons. A caller that skips the file picker still cannot attach SVG.
       if (imgs?.some((i) => !isRasterMime(i.mime))) return yield* new Rejected("an image must be png, jpg, gif or webp");
       if (imgs?.some((i) => !rasterAttachment(i))) return yield* new Rejected("an image needs its bytes or a stored reference");
+      if (opts.handoff && (!opts.esc || !wellFormedHandoff(opts.handoff))) return yield* new Rejected("a browser handoff goes only on an escalation, with an https link, a vendor and an expiry");
+      if (opts.choices && (!opts.esc || opts.handoff || !wellFormedChoices(opts.choices))) return yield* new Rejected(`options go only on an escalation without a browser link: ${CHOICES_MIN} to ${CHOICES_MAX} different ones, one line of up to ${CHOICE_MAX_LENGTH} characters each`);
       const attached = imgs?.length ? yield* this.stored(imgs) : undefined;
       const payload: Payload = {
         v: PROTOCOL_VERSION,
@@ -1448,6 +1458,8 @@ export class Channel {
         ...(attached?.length ? { imgs: attached } : {}),
         ...(opts.room && opts.room !== GENERAL_ROOM && !opts.ev ? { room: opts.room } : {}),
         ...(opts.esc && !opts.ev ? { esc: true as const } : {}),
+        ...(opts.esc && opts.handoff && !opts.ev ? { handoff: opts.handoff } : {}),
+        ...(opts.esc && opts.choices && !opts.ev ? { choices: opts.choices } : {}),
         ...(opts.task && !opts.ev ? { task: opts.task } : {}),
         ...(opts.dm && !opts.ev && opts.to?.length === 1 ? { dm: true as const } : {}),
         ts: Date.now(),

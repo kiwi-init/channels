@@ -42,24 +42,24 @@ Light / dark are the two sides of each `light-dark()` in `index.css`:
 
 | Token | Light | Dark |
 |---|---|---|
-| `canvas` (conversation) | `#ffffff` | `#161618` |
-| `rail` (list and details) | `#f6f6f7` | `#1c1c1f` |
-| `raised` (cards, popovers) | `#ffffff` | `#232327` |
-| `field` (inputs) | `#ededf0` | `#26262a` |
-| `ink` | `#18181b` | `#ededf0` |
-| `ink-2` | `#4f4f57` | `#b4b4bc` |
-| `ink-3` (quiet floor, still 4.5:1) | `#6b6b73` | `#8f8f98` |
+| `canvas` (conversation) | `#ffffff` | `#0d0d0e` |
+| `rail` (list and details; the same as `canvas`) | `#ffffff` | `#0d0d0e` |
+| `raised` (cards, popovers) | `#ffffff` | `#1c1c1e` |
+| `field` (inputs) | `#f0f0f3` | `#1a1a1c` |
+| `ink` | `#0f0f11` | `#f3f3f5` |
+| `ink-2` | `#4a4a52` | `#bcbcc3` |
+| `ink-3` (quiet floor, still 4.5:1) | `#6b6b73` | `#8f8f97` |
 | `accent` (Apple system blue) | `#007aff` | `#0a84ff` |
 | `accent-ink` (on the accent) | `#ffffff` | `#ffffff` |
 | `alert` | `#d1342a` | `#ff6259` |
 | `alert-fill` (under white text) | `#d1342a` | `#d1342a` |
 | `decide` (amber, someone waits) | `#a35a00` | `#f5b041` |
-| `live` | `#1f9a55` | `#3ccf7f` |
+| `live` (3:1 on the surfaces, a dot or a word beside one, not body text) | `#1f9a55` | `#32d074` |
 | `doing` (in-progress blue) | `#2f6fe4` | `#5b9bff` |
 
 Supporting chrome: `line` (7% ink/white), `wash` (4/5%), `wash-2` (7/8%),
 `accent-wash` (10/16%), `pick` (the open channel: a neutral step, never a
-block of colour), `bubble-them` (Messages grey `#e9e9eb` / `#262628`).
+block of colour), `bubble-them` (Messages grey `#e9e9eb` / `#1f1f21`).
 
 White on the light accent is ~4:1, Apple's own choice and just under AA 4.5
 for small text; the owner asked to mirror Apple, so it stays. As text on the
@@ -79,23 +79,30 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   that way; 4 documented exceptions for the pairing code, wordmark and
   swatch initials): `stamp 11px` (times between messages), `meta 12px`
   (counts, dates, section heads), `ui 13px` (names, rows, menus, buttons),
-  `body 14px/20px` (what people read, in bubbles too), `title 15px`
-  (headers, dialogs), `display 22px/28px` (panel names, empty states,
-  welcomes).
+  `body 15px/21px` (what people read, in bubbles too), `title 16px/21px`
+  (headers, dialogs), `display 26px/32px` (panel names, empty states,
+  welcomes). All six scale with the text-size setting (`--text-scale`).
 - Metrics and counts always use tabular numerals (`time, .tabular-nums`).
 - Chat prose wraps pretty (`bubble-text`), code blocks fade at the right
   edge (`code-more`) so cut-off lines read as "scroll for more".
+- A `mermaid` code block draws as a diagram on a `raised` card in the
+  bubble, in the tokens of the current theme (`field` nodes, `ink-3`
+  lines, `accent-wash` notes, Inter 13px, `row`-round nodes, no shadows).
+  It fits the bubble down to 70%, then scrolls with the same `code-more`
+  fade. Mermaid that doesn't parse stays a code block with its error.
 - No additional font families. Hierarchy comes from weight, size and
   spacing, not font swaps.
 
 ## 5. Radius, shadow, blur
 
-- Steps: `row 6px`, `ctl 8px`, `card 12px`, `bubble 18px` (a message
+- Steps: `row 8px`, `ctl 10px`, `card 16px`, `bubble 20px` (a message
   bubble: rounder than anything else, so a conversation reads as one at a
-  glance; `stack 6px` where a run stacks).
+  glance) and `dock 26px` (the composer, soft without a pill's half-moon
+  ends once it grows to several lines).
 - Buttons and rows use `row`; controls and inputs `ctl`; cards `card`;
-  bubbles `bubble`. Arbitrary `rounded-[Npx]` fails `ui-tokens.ts`.
-- One shadow: `pop` (`0 0 0 1px pop-edge, 12px 32px -10px pop-shade`).
+  bubbles `bubble`; the composer `dock`. Arbitrary `rounded-[Npx]` fails
+  `ui-tokens.ts`.
+- One shadow: `pop` (`0 0 0 1px pop-edge, 0 16px 40px -12px pop-shade`).
   No other shadows, no colored shadows.
 - No blur in surfaces: surfaces are flat and opaque, separated by steps in
   tone, never hairlines between areas. (No glass/liquid treatments.)
@@ -143,24 +150,27 @@ From `design-tokens.ts`:
 
 - Shell: flat `rail` sidebar beside one inset `canvas` panel (edge to edge
   on a phone). No hairlines between areas.
-- On a wide window the list starts as an 80px icon rail, as Grok's
+- On a wide window the list is an 80px icon rail, as Grok's
   collapsed one: the Mac traffic lights on its header row, each channel
   as its 40px tile in a 56px `card`-round cell (`pick` when open), a blue
   dot or a count for news and questions, a lock on a channel you can't
   open yet. A hover card says what the full row says: name, time, last
-  line. New, the app update, expand (⌘B) and your account sit at its foot.
-  Expanded, it is the full 300px list; a phone always shows the full list.
+  line. New, the app update and your account sit at its foot. A wide
+  window always shows the rail, with no way to expand it; a phone always
+  shows the full list.
 - Conversation: your bubbles `accent` with white ink; theirs `bubble-them`
   with `ink`. Runs stack at `stack` radius on the joined corners.
 - Needs-you: approvals, escalations and review-waiting work in one place at
   the top; `Pause agents` in the header stops every agent at once.
 - Overview cards: always in the chat area from 1280px wide, never behind
   a button. Cards on the canvas itself, outlined with a 1px `edge-strong`
-  ring at `card` radius, 336px wide, 24px from the window's edge and 12px
+  ring at `card` radius, 384px wide, 24px from the window's edge and 12px
   apart, float at the top right of the conversation, each folding from its
   header: Agents, Tasks (the 5 last updated, a `SEGMENTED` filter that
-  leaves out a state with no task), Pull requests (the last 5 linked in
-  the channel). Rows put the time on the right. The conversation stays
+  leaves out a state with no task, wide enough that every tab fits on one
+  row), Pull requests (the last 5 linked in the channel). The Tasks panel
+  has the same filter with every state, and it wraps to a second row
+  rather than cut a tab off. Rows put the time on the right. The conversation stays
   centered while it has room and moves left only as far as it must. The
   agent strip under the composer gives way to the Agents card. A thread,
   the details or a task in the side column hide the cards until it closes.
@@ -169,6 +179,12 @@ From `design-tokens.ts`:
   steel trim; `robot-heads`); behind it in a round avatar a soft blue field.
 - Command palette wears the same icons as the menus. Dark/light/system and
   text size live in Settings and apply at once.
+- A picture in the chat opens in the annotator: a full-window dark stage
+  (`.dark-stage` puts every token on its dark side, whatever the theme),
+  sender and time on top, one floating tool pill (Move, Pen, Arrow, Box,
+  Text, Hide; the alert, decide, accent and ink colours; undo, redo), and
+  a reply bar that sends the marked-up picture back in its thread. Hide
+  is an opaque block, burned into the pixels that are sent.
 
 ## 10. Composer
 

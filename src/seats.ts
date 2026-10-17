@@ -16,7 +16,7 @@
 import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
-import { kimiCodePid, mimoHere, type ProcessTree } from "./ancestry.ts";
+import { kimiAncestor, kimiCodePid, mimoHere, type ProcessTree } from "./ancestry.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord } from "./config.ts";
 
 type Harness = NonNullable<SeatRecord["harness"]>;
@@ -27,6 +27,7 @@ export interface Here {
   session?: string;
   /** The harness's own process (Claude Code's CLAUDE_PID): the seat is held while it lives. */
   pid?: number;
+  model?: string;
 }
 
 export type Binding = SeatRecord;
@@ -63,8 +64,21 @@ export function here(env: Record<string, string | undefined> = process.env, tree
   return {};
 }
 
+function modelKey(model: string): string {
+  return model.trim().toLowerCase().replace(/\[[^\]]*\]$/, "");
+}
+
+function sameModel(seat: string | undefined, session: string | undefined): boolean {
+  return !seat || !session || modelKey(seat) === modelKey(session);
+}
+
 function heldByProcess(harness: "kimi" | "mimo", pid: number): Here {
   return { harness, session: `${harness}-pid-${pid}`, pid };
+}
+
+export function kimiHookHere(tree: ProcessTree = {}): Here {
+  const kimi = kimiAncestor(tree);
+  return kimi ? heldByProcess("kimi", kimi) : {};
 }
 
 /** The name an agent gets when it doesn't pick one: what it runs in. */
@@ -194,10 +208,7 @@ export function seatsFor(dir: string, opts: SeatOptions = {}): Binding[] {
     const mine = who.session ? seats.filter((b) => b.session === who.session) : [];
     if (mine.length) {
       // Note that this session still uses it, so nobody takes it for stale (seats with no process to check).
-      const stale = opts.claim === false ? [] : mine.filter((m) => !m.pid && Date.now() - (m.seen ?? m.at ?? 0) > SEEN_EVERY_MS);
-      if (stale.length) {
-        updateConfig((c) => store(c, d, seatsAt(c, d).map((b) => (stale.some((m) => b.alias === m.alias && b.as === m.as) ? { ...b, seen: Date.now() } : b))));
-      }
+      if (opts.claim !== false) keepSeen(d, mine);
       return mine;
     }
     // This session listens as an agent from here: that's who it is, even when its seat was lost (a later join
@@ -225,7 +236,7 @@ export function seatsFor(dir: string, opts: SeatOptions = {}): Binding[] {
     const listenedElsewhere = (b: Binding) => live.some((l) => l.alias === b.alias && l.as === b.as && !ours(l));
     const free = seats.filter(
       // (Only a session asks whether someone else listens: a plain terminal can't tell its own listener from another's.)
-      (b) => !heldElsewhere(b, who, listening) && !(who.session && !b.session && listenedElsewhere(b)) && !(b.plain && who.session) && (!b.harness || !who.harness || b.harness === who.harness),
+      (b) => !heldElsewhere(b, who, listening) && !(who.session && !b.session && listenedElsewhere(b)) && !(b.plain && who.session) && (!b.harness || !who.harness || b.harness === who.harness) && sameModel(b.model, who.model),
     );
     // Several free seats: the one of this session's harness, when there's exactly one; otherwise it would be guessing.
     const ofMine = free.filter((b) => who.harness && b.harness === who.harness);
@@ -233,8 +244,8 @@ export function seatsFor(dir: string, opts: SeatOptions = {}): Binding[] {
     if (!pick) return [];
     if (opts.claim !== false && who.session && (pick.session !== who.session || (who.pid && pick.pid !== who.pid))) {
       // The previous holder's process goes with it: this session's, or none.
-      const { pid: _gone, ...rest } = pick;
-      const taken: Binding = { ...rest, session: who.session, ...(who.pid ? { pid: who.pid } : {}), ...(who.harness && !pick.harness ? { harness: who.harness } : {}), at: Date.now(), seen: Date.now() };
+      const { pid: _gone, model: _was, ...rest } = pick;
+      const taken: Binding = { ...rest, session: who.session, ...(who.pid ? { pid: who.pid } : {}), ...(who.model ? { model: who.model } : {}), ...(who.harness && !pick.harness ? { harness: who.harness } : {}), at: Date.now(), seen: Date.now() };
       updateConfig((c) => store(c, d, seatsAt(c, d).map((b) => (b.alias === pick.alias && b.as === pick.as ? taken : b))));
       return [taken];
     }
@@ -246,6 +257,26 @@ export function seatsFor(dir: string, opts: SeatOptions = {}): Binding[] {
 export function bindingFor(dir: string, opts: SeatOptions = {}): Binding | null {
   const [only, ...more] = seatsFor(dir, opts);
   return only && !more.length ? only : null;
+}
+
+function keepSeen(dir: string, mine: Binding[]): void {
+  const stale = mine.filter((m) => !m.pid && Date.now() - (m.seen ?? m.at ?? 0) > SEEN_EVERY_MS);
+  if (!stale.length) return;
+  updateConfig((c) => store(c, dir, seatsAt(c, dir).map((b) => (stale.some((m) => sameSeat(b, m)) ? { ...b, seen: Date.now() } : b))));
+}
+
+export function seatsHeldAnywhere(who: Here = here(), opts: Pick<SeatOptions, "claim"> = {}): Binding[] {
+  if (!who.session) return [];
+  const cfg = loadConfig();
+  return Object.keys(cfg.bindings ?? {}).flatMap((d) => {
+    const mine = seatsAt(cfg, d).filter((b) => b.session === who.session && cfg.channels[b.alias]);
+    if (opts.claim !== false) keepSeen(d, mine);
+    return mine;
+  });
+}
+
+export function sameSeat(a: Binding, b: Binding): boolean {
+  return a.alias === b.alias && a.as === b.as;
 }
 
 /** Whether `path` is `dir` or inside it. */

@@ -10,13 +10,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const root = mkdtempSync(join(tmpdir(), "kiwi-test-harness-"));
-for (const name of ["codex", "gemini", "cursor", "grok", "claude"]) mkdirSync(join(root, name));
+for (const name of ["codex", "gemini", "cursor", "grok", "kimi", "claude"]) mkdirSync(join(root, name));
 
 const DIRS: Record<string, string> = {
   KIWI_CODEX_DIR: join(root, "codex"),
   KIWI_GEMINI_DIR: join(root, "gemini"),
   KIWI_CURSOR_DIR: join(root, "cursor"),
   KIWI_GROK_DIR: join(root, "grok"),
+  KIWI_KIMI_DIR: join(root, "kimi"),
   CLAUDE_CONFIG_DIR: join(root, "claude"),
 };
 

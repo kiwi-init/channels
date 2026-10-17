@@ -1,28 +1,12 @@
-// `kiwi sh`: the channel as read-only files, queried with one shell script per call.
-//
-// The shell is just-bash, a shell simulated in TypeScript: no process is spawned
-// and it can only see the files we hand it. Safety comes in layers:
-//
-//   - The files are made here, from verified messages and the state folded from
-//     them, which this identity can already read. Nothing comes from config,
-//     identities, keys, cursors, the cache file, the environment or the disk.
-//   - The file system is read-only (writes fail), and each run gets a new one,
-//     so nothing a script does outlives it.
-//   - Only the read-only text commands below exist. There is no network, python,
-//     javascript or sqlite, and nothing that sends or changes the channel:
-//     writes stay on the typed CLI commands and MCP tools.
-//   - The "hardened" limit profile, plus our own caps on script size, wall time
-//     and output, so a bad script ends with an error instead of hanging.
-//   - just-bash's defense-in-depth stays on, with no exclusions.
-
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import { Bash, InMemoryFs, type CommandName, type IFileSystem } from "just-bash";
 import { Cursor, Keystore } from "./config.ts";
 import { openSession, runAgent, wants, type AgentSession } from "./agent.ts";
-import { describeEvent, formatMessage, formatStatus, formatTask, markedText, memberJson, statusJson } from "./format.ts";
+import { describeEvent, formatMessage, formatStatus, formatTask, markedText, memberJson, reviewBody, statusJson } from "./format.ts";
 import { ignored, type Message } from "./protocol.ts";
-import { taskId, type ChannelState } from "./state.ts";
+import { queryCommand, queryTables, reviewTexts, type Tables } from "./sh-query.ts";
+import { taskId, type ChannelState, type Place, type ReviewRound } from "./state.ts";
 
 /**
  * Read-only text tools. Anything that writes, waits, archives or reaches out is left out.
@@ -63,17 +47,24 @@ const README = `Channel files (read-only; every run starts fresh). Writes go thr
     me                     {"name","role","channel"}
     status                 what \`kiwi status\` prints (members, load, open asks, tasks, facts)
     status.json            members with role and load, as \`kiwi status --json\`
-    log.jsonl              every verified message, one JSON object per line: seq, at, from, to, kind, re, body, op, images
+    log.jsonl              every verified message, one JSON object per line: seq, at, from, to, kind, re, task, dm, room, esc, body, review, round, op, images
+    threads/main.jsonl     the same lines, split by place: the main conversation
+    threads/T12.jsonl      a task's thread
+    threads/dm/<name>.jsonl  your direct thread with <name>
     msgs/000042.txt        one message per file, in the \`kiwi log\` one-line format
     inbox/000042.txt       your unread messages (reading them here doesn't mark them read)
     tasks/T12.md           one task per file: state, owner, deps, detail, notes
+    tasks/T12/rounds/1.md  one review round: commit, asked by, verdict, and the review text
     members/<name>.json    role, about, kind, owner, sponsor, lastSeen, load
     facts/<key>            each shared fact's value
   /channels/<alias>/…      other channels this same name belongs to. Not this one.
                            All channels: /channel plus /channels/*. Loaded when
                            the script mentions /channels.
 Forged messages never appear. Names and keys that aren't safe as file names are %-encoded.
-Examples: jq -r 'select(.kind=="ask") | "#\\(.seq) \\(.from): \\(.body)"' log.jsonl
+  query 'SQL'              read-only SQL over messages, tasks, rounds, members, facts; one JSON object per line
+                           (query --schema lists the tables)
+Examples: query "select seq, sender, body from messages where esc=1" | jq -r .body
+          jq -r 'select(.kind=="ask") | "#\\(.seq) \\(.from): \\(.body)"' log.jsonl
           grep -l 'state: todo' tasks/*.md · jq -r 'select(.load.level=="free") | .name' members/*.json`;
 
 /** A name or key as one safe path segment: no "/", no "..", no control characters. */
@@ -97,13 +88,26 @@ function channelTree(v: ChannelView, now: number): Record<string, string> {
   // Presence isn't known here (it takes a live query), so "online" is left out rather than guessed.
   const status = statusJson({ alias: v.alias, me, state, online: new Map(), unread: 0, now });
   files["status.json"] = JSON.stringify({ ...status, members: status.members.map(({ online: _, ...m }) => m) }, null, 2) + "\n";
-  files["log.jsonl"] = verified.map((m) => JSON.stringify(logEntry(m, state)) + "\n").join("");
+  const reviews = reviewTexts(verified);
+  const entries = verified.map((m) => ({ m, entry: logEntry(m, state, me) }));
+  files["log.jsonl"] = entries.map(({ entry }) => JSON.stringify(entry) + "\n").join("");
+  const threads = new Map<string, string>();
+  for (const { m, entry } of entries) {
+    const path = threadPath(state.placeOf.get(m.seq), me);
+    threads.set(path, (threads.get(path) ?? "") + JSON.stringify(entry) + "\n");
+  }
+  for (const [path, body] of threads) files[path] = body;
+  files["threads/"] = "";
+  files["threads/dm/"] = "";
   for (const m of verified) {
     const line = formatMessage(m, "verified", state, me) + "\n";
     files[`msgs/${pad(m.seq)}.txt`] = line;
     if (m.seq > v.cursor && wants(me, m, state)) files[`inbox/${pad(m.seq)}.txt`] = line;
   }
-  for (const t of state.tasks.values()) files[`tasks/${taskId(t.id)}.md`] = formatTask(state, t, now) + "\n";
+  for (const t of state.tasks.values()) {
+    files[`tasks/${taskId(t.id)}.md`] = formatTask(state, t, now) + "\n";
+    for (const r of t.rounds) files[`tasks/${taskId(t.id)}/rounds/${r.n}.md`] = roundFile(t.id, r, reviews)
+  }
   for (const m of state.members.values()) {
     if (!m.active) continue;
     const { online: _, ...json } = memberJson(state, m.name, new Map(), now);
@@ -113,7 +117,32 @@ function channelTree(v: ChannelView, now: number): Record<string, string> {
   return files;
 }
 
-function logEntry(m: Message, state: ChannelState) {
+function threadPath(place: Place | undefined, me: string): string {
+  if (!place || place.kind === "main") return "threads/main.jsonl";
+  if (place.kind === "task") return `threads/T${place.task}.jsonl`;
+  const other = place.with[0] === me ? place.with[1] : place.with[0];
+  return `threads/dm/${segment(other)}.jsonl`;
+}
+
+function roundFile(task: number, r: ReviewRound, reviews: Map<string, string>): string {
+  const res = r.result;
+  const text = reviews.get(`${task}:${r.n}`);
+  const lines = [
+    `task: ${taskId(task)}`,
+    `round: ${r.n}`,
+    `commit: ${r.at ?? ""}`,
+    `asked by: ${r.by} in #${r.seq}`,
+    `verdict: ${res.kind}${res.kind === "open" ? "" : ` in #${res.seq}`}`,
+    ...(res.kind === "approved" || res.kind === "rejected" ? [`verdict by: ${res.by}`] : []),
+  ];
+  return lines.join("\n") + (text ? `\n\n${markedText(text)}` : "") + "\n";
+}
+
+export function logEntry(m: Message, state: ChannelState, me: string) {
+  const place = state.placeOf.get(m.seq);
+  const dm = place?.kind === "dm" && place.with.includes(me) ? (place.with[0] === me ? place.with[1] : place.with[0]) : undefined;
+  const room = m.room ? (state.rooms.get(m.room)?.name ?? m.room) : undefined;
+  const review = reviewBody(m);
   return {
     seq: m.seq,
     at: new Date(m.rts ?? m.ts).toISOString(),
@@ -121,7 +150,13 @@ function logEntry(m: Message, state: ChannelState) {
     to: m.to?.length ? m.to : "all",
     kind: m.kind,
     ...(m.re?.length ? { re: m.re } : {}),
+    ...(m.task !== undefined ? { task: m.task } : {}),
+    ...(dm ? { dm } : {}),
+    ...(room ? { room } : {}),
+    ...(m.esc ? { esc: true } : {}),
     body: m.kind === "event" ? describeEvent(m, state) : m.body,
+    ...(review ? { review } : {}),
+    ...(m.ev?.op === "task.update" && m.ev.round !== undefined ? { round: m.ev.round } : {}),
     ...(m.ev ? { op: m.ev.op } : {}),
     ...(m.imgs?.length ? { images: m.imgs.map((i) => i.name) } : {}),
   };
@@ -172,7 +207,7 @@ export const sessionViews = Effect.fn("sh.sessionViews")(function* (s: AgentSess
 });
 
 /** Run `script` against `files` (paths ending in "/" are empty directories). Never throws: every failure is a nonzero exit with a reason on stderr. */
-export async function runSh(files: Record<string, string>, script: string, opts: { cwd?: string } = {}): Promise<ShResult> {
+export async function runSh(files: Record<string, string>, script: string, opts: { cwd?: string; tables?: () => Tables | undefined } = {}): Promise<ShResult> {
   if (new TextEncoder().encode(script).length > MAX_SCRIPT_BYTES) return { stdout: "", stderr: `kiwi sh: script longer than ${MAX_SCRIPT_BYTES} bytes\n`, exitCode: 2 };
   const inner = new InMemoryFs(Object.fromEntries(Object.entries(files).filter(([p]) => !p.endsWith("/"))));
   for (const p of Object.keys(files)) if (p.endsWith("/")) inner.mkdirSync(p.slice(0, -1), { recursive: true });
@@ -186,6 +221,7 @@ export async function runSh(files: Record<string, string>, script: string, opts:
       cwd: opts.cwd ?? "/channel",
       env: { HOME: "/channel", PWD: opts.cwd ?? "/channel", PATH: "/usr/bin:/bin", USER: "agent", LANG: "C.UTF-8" },
       commands: COMMANDS,
+      customCommands: [queryCommand(opts.tables ?? (() => undefined))],
       executionLimitProfile: "hardened",
       executionLimits: { maxExecutionTimeMs: MAX_RUN_MS, maxOutputSize: MAX_OUTPUT_CHARS * 4 },
       defenseInDepth: true,
@@ -257,4 +293,8 @@ class ReadOnlyFs implements IFileSystem {
   symlink: IFileSystem["symlink"] = async (t, l) => (this.guard(l), this.inner.symlink(t, l));
   link: IFileSystem["link"] = async (e, n) => (this.guard(n), this.inner.link(e, n));
   utimes: IFileSystem["utimes"] = async (p, a, m) => (this.guard(p), this.inner.utimes(p, a, m));
+}
+
+export function channelTables(views: ChannelView[], now = Date.now()): () => Tables | undefined {
+  return () => (views[0] ? queryTables(views[0], now) : undefined);
 }

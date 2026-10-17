@@ -52,6 +52,7 @@ export interface SeatRecord {
   seen?: number;
   /** Joined from a process that named no harness (a plain terminal, an unknown tool): no session ever takes it over. */
   plain?: true;
+  model?: string;
 }
 
 /** Drop the seats `drop` matches from every directory. */
@@ -88,11 +89,7 @@ export interface Config {
   bindings?: Record<string, SeatRecord | SeatRecord[]>;
   /** What this computer's person chose in `kiwi setup` about Claude Code hooks. */
   claudeHooks?: "on" | "off";
-  /**
-   * Codex, Gemini, Cursor, and Grok hook choice. Missing means on when that
-   * harness is installed. `kiwi hooks uninstall <name>` sets one to off.
-   */
-  harnessHooks?: Partial<Record<"codex" | "gemini" | "cursor" | "grok", "on" | "off">>;
+  harnessHooks?: Partial<Record<"codex" | "gemini" | "cursor" | "grok" | "kimi", "on" | "off">>;
   wakeOff?: string[];
 }
 

@@ -21,7 +21,8 @@
  * Each token is written once as light-dark(day, night). The system picks the side, unless
  * lib/theme.ts has set data-theme because the person chose one.
  */
-:root {
+:root,
+.dark-stage {
   color-scheme: light dark;
   --canvas: light-dark(#ffffff, #0d0d0e);
   --rail: var(--canvas);
@@ -99,6 +100,10 @@
 }
 
 :root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+.dark-stage {
   color-scheme: dark;
 }
 

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AgentSession, runAgent } from "../src/agent.ts";
@@ -45,6 +45,7 @@ const fake = (name: string): void => {
 const calls = (): string[][] =>
   (existsSync(wakeLog) ? readFileSync(wakeLog, "utf8") : "")
     .split("---\n")
+    .slice(0, -1)
     .filter((c) => c.trim())
     .map((c) => c.trim().split("\n"));
 
@@ -164,8 +165,9 @@ describe("waking an agent in its own session", () => {
 
   test("a binding that changes after the message is the one woken", async () => {
     const before = await quiet();
-    await ownerCh.send("for the new thread", { to: ["claude"] });
+    const sent = ownerCh.send("for the new thread", { to: ["claude"] });
     bindAs({ harness: "codex", session: "thread-2" });
+    await sent;
     try {
       await until("a wake", () => calls().length === before + 1);
       expect(calls().at(-1)).toContain("thread-2");
@@ -214,6 +216,40 @@ describe("waking an agent in its own session", () => {
       expect(await cli("wake", "on")).toContain("Kiwi wakes claude");
     }
     expect(loadConfig().wakeOff).toBeUndefined();
+  });
+
+  test("a wake that fails says why in the wake log", async () => {
+    const before = await quiet();
+    writeFileSync(join(bin, "codex"), "#!/bin/sh\necho boom >&2\nexit 3\n");
+    try {
+      await ownerCh.send("the wake will fail", { to: ["claude"] });
+      await until("the failure in the log", () => existsSync(join(home, "wake.log")) && readFileSync(join(home, "wake.log"), "utf8").includes("\tfailed\texit 3: boom"));
+    } finally {
+      fake("codex");
+    }
+    expect(calls().length).toBe(before);
+  });
+
+  test("a daemon whose PATH lacks the harness still finds it in ~/.local/bin", async () => {
+    const before = await quiet();
+    const fakeHome = mkdtempSync(join(tmpdir(), "kiwi-wake-home-"));
+    mkdirSync(join(fakeHome, ".local", "bin"), { recursive: true });
+    const local = join(fakeHome, ".local", "bin", "codex");
+    writeFileSync(local, `#!/bin/sh\necho codex >> "$FAKE_WAKE_LOG"\nfor a in "$@"; do echo "$a" >> "$FAKE_WAKE_LOG"; done\necho "---" >> "$FAKE_WAKE_LOG"\n`);
+    chmodSync(local, 0o755);
+    const prior = { home: process.env.HOME, path: process.env.PATH };
+    rmSync(join(bin, "codex"));
+    process.env.HOME = fakeHome;
+    process.env.PATH = "/usr/bin:/bin";
+    try {
+      await ownerCh.send("found through the fallback", { to: ["claude"] });
+      await until("a wake from the fallback directory", () => calls().length === before + 1);
+    } finally {
+      process.env.HOME = prior.home;
+      process.env.PATH = prior.path;
+      fake("codex");
+      rmSync(fakeHome, { recursive: true, force: true });
+    }
   });
 
   test("an OpenCode agent gets the prompt through OpenCode's service, queued", async () => {
@@ -291,12 +327,32 @@ describe("wake paths, commands and words", () => {
 
   test("an agent is told how messages reach it, without a Monitor", () => {
     expect(howMessagesReachYou("kiwi", true, { harness: "codex", session: "t" })).toContain("Kiwi wakes you in this session");
-    const grok = howMessagesReachYou("kiwi", true, { harness: "grok", session: "g" });
-    expect(grok).toContain("Kiwi can't wake you in this session");
-    expect(grok).toContain("kiwi listen --now");
-    expect(grok).not.toContain("Monitor");
+    const gemini = howMessagesReachYou("kiwi", true, { harness: "gemini" });
+    expect(gemini).toContain("Kiwi can't wake you in this session: Gemini CLI gives Kiwi no way to start a turn in a running session.");
+    expect(gemini).toContain("Run `kiwi listen --now` at the start of every turn and again before you end one.");
+    expect(gemini).not.toContain("Monitor");
     const off = howMessagesReachYou("kiwi", false, { harness: "codex", session: "t" });
     expect(off).toContain("Kiwi won't wake you");
-    expect(off).toContain("kiwi listen --now");
+    expect(off).toContain("Run `kiwi listen --now` at the start of every turn");
+  });
+
+  test("Kimi Code and Grok are told the exact tool call that keeps them wakeable", () => {
+    const kimi = howMessagesReachYou("kiwi -c ch --as k3", true, { harness: "kimi", session: "kimi-pid-7", pid: 7 });
+    expect(kimi).toContain("call the Bash tool with command `kiwi -c ch --as k3 listen --once`, run_in_background: true, disable_timeout: true");
+    expect(kimi).toContain("from your main session (not a subagent)");
+    expect(kimi).toContain("If the notice names an output file, read that whole file: it holds your messages.");
+    expect(kimi).toContain("If it shows the output inline instead and says it is truncated, the start is cut off: run `kiwi -c ch --as k3 log -n 100` (it marks nothing read) and read back to the last message you handled before this wake.");
+    expect(kimi).toContain("If the oldest message it shows is still newer than that one, run it again with a larger -n until it reaches it.");
+    expect(kimi).toContain("won't be shown again");
+    expect(kimi).not.toContain("the notice shows the messages");
+    expect(kimi).toContain("again every time it wakes you");
+    expect(kimi).toContain("check TaskList shows it running");
+    expect(kimi).not.toContain("listen --now");
+    const grok = howMessagesReachYou("kiwi", true, { harness: "grok", session: "g" });
+    expect(grok).toContain("start the monitor tool with command `kiwi listen`, description \"kiwi listen\", persistent: true");
+    expect(grok).toContain("start it again the same way");
+    expect(grok).not.toContain("listen --once");
+    expect(grok).not.toContain("leader");
+    expect(howMessagesReachYou("kiwi", false, { harness: "grok", session: "g" })).toContain("Run `kiwi listen --now`");
   });
 });

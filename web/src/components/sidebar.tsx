@@ -11,7 +11,6 @@ import { cx } from "@/lib/utils"
 import { ChannelIconTile } from "./channel-icon"
 import { CoordinatorAvatar } from "./coordinator-head"
 import { Icon } from "./icon"
-import { SidebarToggle } from "./chrome"
 import { Monogram, Wordmark } from "./kit"
 import { Tooltip } from "./ui/tooltip"
 import { Menu, MenuItem, MenuNote, MenuSeparator } from "./ui/menu"
@@ -58,7 +57,6 @@ export function Sidebar({
       <header className="drag flex h-(--chrome-h) shrink-0 items-center gap-2 px-3 shell-mac:pl-(--lights-w)">
         {!person && !rows.length && <Wordmark className="pl-1 text-title" />}
         <span className="flex-1" />
-        <SidebarToggle />
       </header>
 
       {/* New, inline as the list's first row (as Grok has "New chat"), on the rows' grid: its + where a
@@ -267,7 +265,6 @@ export function Rail({
             </button>
           </Tooltip>
         )}
-        <SidebarToggle className={RAIL_BUTTON} />
         {person && (
           <Menu
             side="right"

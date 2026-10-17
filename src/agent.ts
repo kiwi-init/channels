@@ -26,7 +26,7 @@ import { inlineText } from "./membership.ts";
 import type { Identity } from "./identity.ts";
 import { isLocalRefusal, Rejected } from "./refusals.ts";
 import { canPost, describeScopes, refusal } from "./scopes.ts";
-import { GENERAL_ROOM, ignored, isReach, PAGE_LIMIT, PROTOCOL_VERSION, TASK_STATES, wellFormedReaction, type Card, type Color, type Event, type ImageAttachment, type Kind, type Message, type Presence, type TaskState, type Verdict } from "./protocol.ts";
+import { GENERAL_ROOM, HANDOFF_DONE, HANDOFF_FAILED, HANDOFF_MAX_SECONDS, ignored, isReach, PAGE_LIMIT, PROTOCOL_VERSION, TASK_STATES, wellFormedReaction, type Card, type Color, type Event, type Handoff, type ImageAttachment, type Kind, type Message, type Presence, type TaskState, type Verdict } from "./protocol.ts";
 import { allowedOnHold, findRoom, fold, humanOf, isPerson, keptFromPeople, ON_HOLD, openRound, ownerOf, revisedOut, taskId, threadMembers, toRoster, type ChannelState, type FoldBase, type GuardFloor, type ReviewRound, type Roster, type RoomsFloor, type Task } from "./state.ts";
 import { mergeCard, sameCard } from "./card.ts";
 import { daemonMark, daemonPeek, daemonSeat, type DaemonPeek } from "./daemon.ts";
@@ -593,7 +593,7 @@ export class AgentSession {
         const p = state.members.get(n);
         return !!p && (p.kind === "human" || p.owner);
       });
-      if (people.length) return yield* new Rejected(`this channel is coordinator-only: only ${state.coordinator} messages people. Send it to ${state.coordinator}, who passes it on, or for a decision only a person can make: kiwi send --escalate --re N "why".`);
+      if (people.length) return yield* new Rejected(`this channel is coordinator-only: only ${state.coordinator} messages people. Send it to ${state.coordinator}, who passes it on, or for a decision only a person can make: kiwi ask-human --re N "the decision".`);
     });
   }
 
@@ -676,7 +676,7 @@ export class AgentSession {
 
   /** React to message #seq with an emoji, or take your reaction back (null). */
   readonly react = Effect.fn("AgentSession.react")({ self: this }, function* (this: AgentSession, seq: number, emoji: string | null) {
-    if (emoji !== null && !wellFormedReaction(emoji)) return yield* new Rejected("a reaction is one emoji (no letters or digits)");
+    if (emoji !== null && !wellFormedReaction(emoji)) return yield* new Rejected("a reaction is one emoji, or a GIF key like ok/trailer (kiwi react --list)");
     const { state } = yield* this.state();
     if (!state.placeOf.has(seq) || ignored(state.trust.get(seq))) return yield* new Rejected(`no message #${seq} to react to`);
     return yield* this.confirm(yield* this.event({ op: "react", seq, emoji }, "reaction"));
@@ -710,15 +710,40 @@ export class AgentSession {
    * Hand a decision to people instead of acting: a blocking question to this agent's own human and
    * the owner, about message #re when given. It reaches them in any mode, and on hold.
    */
-  readonly escalate = Effect.fn("AgentSession.escalate")({ self: this }, function* (this: AgentSession, body: string, re?: number) {
+  readonly escalate = Effect.fn("AgentSession.escalate")({ self: this }, function* (this: AgentSession, body: string, re?: number, handoff?: Handoff, ask: { choices?: string[]; task?: number } = {}) {
+    if (!body.trim()) return yield* new Rejected("say what needs deciding: the text is empty");
     const { messages, state } = yield* this.state();
     const me = state.members.get(this.me);
     if (me && isPerson(me)) return yield* new Rejected("escalating is for agents: you're a person, so you decide");
+    if (handoff && handoff.expiresAt - Date.now() > HANDOFF_MAX_SECONDS * 1000 + 5000) return yield* new Rejected(`a browser handoff link lasts at most ${HANDOFF_MAX_SECONDS / 60} minutes`);
     if (re !== undefined && !(yield* this.message(re, messages))) return yield* new Rejected(`no message #${re}`);
     const to = [...new Set([humanOf(state, this.me), ownerOf(state)].filter((n): n is string => !!n))];
     if (!to.length) return yield* new Rejected("there's no person in this channel to escalate to");
-    const seq = yield* this.send(body, { to, kind: "blocking", esc: true, ...(re !== undefined ? { re: [re] } : {}) });
+    if (ask.choices && handoff) return yield* new Rejected("a browser handoff has its own Done and Couldn't answers; leave out the options");
+    if (ask.task !== undefined && re !== undefined) {
+      const place = state.placeOf.get(re);
+      if (place?.kind !== "task" || place.task !== ask.task) {
+        const where = place?.kind === "task" ? `in ${taskId(place.task)}'s thread` : place?.kind === "dm" ? "in a direct thread" : "in the main conversation";
+        return yield* new Rejected(`#${re} is ${where}, and an answer to it goes there, not in ${taskId(ask.task)}'s thread: leave out the task or the message it answers`);
+      }
+    }
+    const seq = yield* this.send(body, { to, kind: "blocking", esc: true, ...(handoff ? { handoff } : {}), ...(ask.choices ? { choices: ask.choices } : {}), ...(ask.task !== undefined ? { task: ask.task } : {}), ...(re !== undefined ? { re: [re] } : {}) });
     return { seq, to };
+  }, oneLook);
+
+  readonly awaitHandoff = Effect.fn("AgentSession.awaitHandoff")({ self: this }, function* (this: AgentSession, seq: number, since: number, expiresAt: number, waitSec: number) {
+    const deadline = Math.min(expiresAt, Date.now() + waitSec * 1000);
+    let from = since;
+    const heard: Message[] = [];
+    while (Date.now() < deadline) {
+      const replies = yield* this.awaitReplies(seq, from, Math.max(1, Math.ceil((deadline - Date.now()) / 1000)));
+      if (!replies.length) break;
+      heard.push(...replies);
+      from = Math.max(from, ...replies.map((r) => r.seq));
+      const final = replies.find((r) => r.body.startsWith(HANDOFF_DONE) || r.body.startsWith(HANDOFF_FAILED));
+      if (final) return { outcome: final.body.startsWith(HANDOFF_DONE) ? ("done" as const) : ("failed" as const), replies: heard };
+    }
+    return { outcome: Date.now() >= expiresAt ? ("expired" as const) : ("waiting" as const), replies: heard };
   }, oneLook);
 
   /**

@@ -5,6 +5,7 @@ import { setAccessibilityOption, useAccessibilityOption } from "@/lib/accessibil
 import { cx } from "@/lib/utils"
 import { useState } from "react"
 import { relayUrl } from "@/lib/relay"
+import { version } from "../../../package.json"
 import { Button, Modal, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from "./kit"
 
 // How Channels looks in this browser: the theme and how large everything reads.
@@ -80,7 +81,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
       <div className="p-5">
         <Dialog.Title className="text-title font-semibold tracking-[-0.01em]">Settings</Dialog.Title>
         <Dialog.Description className="mt-1 text-ui leading-normal text-ink-2">How Channels looks in this browser. Changes apply at once.</Dialog.Description>
-        <div className="mt-5 grid gap-5">
+        <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-5">
           <Choice<Appearance>
             label="Theme"
             value={appearance}
@@ -113,7 +114,8 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
           />
           <RelayField />
         </div>
-        <div className="mt-6 flex justify-end">
+        <div className="mt-6 flex items-center justify-between gap-3">
+          <p className="min-w-0 truncate text-ui text-ink-2">Channels {version}</p>
           <Button variant="secondary" onClick={onClose}>
             Done
           </Button>
