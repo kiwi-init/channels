@@ -20,6 +20,7 @@ import { mcpBrief } from "./brief.ts";
 import { loadImages, saveImages } from "./attach.ts";
 import { loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { Cursor, home, Keystore } from "./config.ts";
+import { holdSession } from "./hooks/listeners.ts";
 import { ChannelGone, goneText, reason, type Channel, type Refused, type Relay } from "./client.ts";
 import { ago, cardLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, missingImages, formatTask, formatTasks, looksLikeLine, mayDo, parseDuration, presenceWords, runsStatus, taskStateWord } from "./format.ts";
 import { isWakeVia } from "./wake.ts";
@@ -648,7 +649,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
   yield* Effect.promise(() => server.connect(new StdioServerTransport()));
   // Say what this agent runs on, so people can see it. In the background: the harness is waiting on the handshake.
   yield* Effect.forkDetach(Effect.ignoreCause(s.refreshCard(detectCard())));
-  yield* Effect.forkDetach(Effect.ignoreCause(Effect.promise(() => import("./hooks.ts").then(({ holdSession }) => holdSession(s.alias, s.me)))));
+  yield* Effect.forkDetach(Effect.ignoreCause(Effect.promise(() => holdSession(s.alias, s.me))));
   // An MCP server lives exactly as long as its client: exit when stdin closes,
   // so a crashed or killed agent never leaves an orphaned listener behind.
   const bye = () => process.exit(0);
