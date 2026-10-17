@@ -18,12 +18,15 @@ through `kiwi://join/<code>`), and the install scripts.
 
 ## Download links
 
-`app.js` lists the desktop app files the v0.16.2 release actually publishes:
+`app.js` lists the desktop app files the next release publishes, under the app's
+new name, Channels (releases up to v0.16.2 named them `Kiwi-…`):
 
-- `Kiwi-0.16.2-mac-arm64.dmg` / `Kiwi-0.16.2-mac-x64.dmg`
-- `Kiwi-0.16.2-linux-x86_64.AppImage` / `Kiwi-0.16.2-linux-amd64.deb`
+- `Channels-0.16.2-mac-arm64.dmg` / `Channels-0.16.2-mac-x64.dmg`
+- `Channels-0.16.2-linux-x86_64.AppImage` / `Channels-0.16.2-linux-amd64.deb`
 
-Those are `desktop/package.json`'s `artifactName` (`Kiwi-${version}-${os}-${arch}.${ext}`)
+The release PR bumps the version in these names; the site deploys only from a tag,
+after its GitHub release exists. Those are `desktop/package.json`'s `artifactName`
+(`Channels-${version}-${os}-${arch}.${ext}`)
 with electron-builder's per-target arch strings. There is no Windows app; the
 CLI is `kiwi-windows-x64.exe`, installed by `install.ps1`. Links point at
 `github.com/ojowwalker77/channels/releases/latest/download/<file>`.

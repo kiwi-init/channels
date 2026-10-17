@@ -71,7 +71,7 @@ export function restartToUpdate(): void {
 function trayMenu(): Electron.Menu {
   const u = updateState();
   return Menu.buildFromTemplate([
-    { label: "Open Kiwi", click: showWindow },
+    { label: "Open Channels", click: showWindow },
     ...(u?.state === "ready" ? [{ label: `Restart to update to ${u.version}`, click: restartToUpdate }] : []),
     { type: "separator" },
     { label: "Quit", click: () => (quitting = true, app.quit()) },
@@ -85,7 +85,7 @@ export function refreshTray(): void {
 export function createTray(): void {
   const icon = trayIcon();
   tray = new Tray(icon);
-  tray.setToolTip("Kiwi");
+  tray.setToolTip("Channels");
   tray.setContextMenu(trayMenu());
   tray.on("click", () => (win && !win.isDestroyed() && win.isVisible() ? win.hide() : showWindow()));
 }

@@ -1,4 +1,4 @@
-# Builds kiwi and the Kiwi desktop app for every platform from a tagged commit,
+# Builds kiwi and the Channels desktop app for every platform from a tagged commit,
 # on GitHub's machines, and publishes the files with checksums and a signed
 # build-provenance attestation, so anyone can check a binary came from this
 # exact source:
@@ -61,7 +61,7 @@ jobs:
           pre=(); [[ "$GITHUB_REF_NAME" == *-* ]] && pre=(--prerelease)
           # The notes: this version's changelog (scripts/changelog.ts), then where to get it.
           bun repo/scripts/changelog.ts --notes "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
-          printf '\n---\n\n%s\n' "Kiwi desktop app (macOS dmg/zip, Linux AppImage/deb) and the kiwi CLI. Download the app at https://channels.kiwiinit.com/; install the CLI with: curl -fsSL https://channels.kiwiinit.com/install | sh (macOS, Linux) or irm https://channels.kiwiinit.com/install.ps1 | iex (Windows). Every file is checksummed in SHA256SUMS and has a build-provenance attestation: gh attestation verify <file> --repo $GITHUB_REPOSITORY" >> "$RUNNER_TEMP/notes.md"
+          printf '\n---\n\n%s\n' "Channels desktop app (macOS dmg/zip, Linux AppImage/deb) and the kiwi CLI. Download the app at https://channels.kiwiinit.com/; install the CLI with: curl -fsSL https://channels.kiwiinit.com/install | sh (macOS, Linux) or irm https://channels.kiwiinit.com/install.ps1 | iex (Windows). Every file is checksummed in SHA256SUMS and has a build-provenance attestation: gh attestation verify <file> --repo $GITHUB_REPOSITORY" >> "$RUNNER_TEMP/notes.md"
           gh release create "$GITHUB_REF_NAME" "${files[@]}" "${pre[@]}" \
             --repo "$GITHUB_REPOSITORY" \
             --title "kiwi $GITHUB_REF_NAME" \

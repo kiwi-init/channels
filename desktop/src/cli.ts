@@ -80,5 +80,5 @@ function tidy(bin: string): Promise<void> {
  * it changed, if any. Shared with the install script's logic and `kiwi setup` (src/shell-path.ts).
  */
 export function ensureOnPath(): string | null {
-  return ensureShellPath({ dir: path.dirname(cliPath()), mark: "# Added by the Kiwi app: it keeps the kiwi CLI in ~/.kiwi/bin current." });
+  return ensureShellPath({ dir: path.dirname(cliPath()), mark: "# Added by the Channels app: it keeps the kiwi CLI in ~/.kiwi/bin current." });
 }

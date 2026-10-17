@@ -3,9 +3,9 @@ import { describe, expect, test } from "bun:test";
 import { developerIdRequirement, signedLikeThisApp, type RunTool, type ToolRun } from "../desktop/src/signer.ts";
 
 const REQ =
-  'identifier "com.kiwiinit.kiwi" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = ABCDE12345';
-const DISPLAYED = `Executable=/Applications/Kiwi.app/Contents/MacOS/Kiwi\ndesignated => ${REQ}\n`;
-const AD_HOC = 'Executable=/Applications/Kiwi.app/Contents/MacOS/Kiwi\ndesignated => cdhash H"0123456789abcdef0123456789abcdef01234567"\n';
+  'identifier "com.kiwiinit.channels" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] /* exists */ and certificate leaf[field.1.2.840.113635.100.6.1.13] /* exists */ and certificate leaf[subject.OU] = ABCDE12345';
+const DISPLAYED = `Executable=/Applications/Channels.app/Contents/MacOS/Channels\ndesignated => ${REQ}\n`;
+const AD_HOC = 'Executable=/Applications/Channels.app/Contents/MacOS/Channels\ndesignated => cdhash H"0123456789abcdef0123456789abcdef01234567"\n';
 
 function tools(answers: { display?: ToolRun; verify?: ToolRun; assess?: ToolRun }): { run: RunTool; calls: string[][] } {
   const calls: string[][] = [];
@@ -32,7 +32,7 @@ describe("developerIdRequirement", () => {
   test("an ad-hoc or unsigned app has none to hold an update to", () => {
     expect(developerIdRequirement(AD_HOC)).toBeNull();
     expect(developerIdRequirement("code object is not signed at all\n")).toBeNull();
-    expect(developerIdRequirement(`designated => identifier "com.kiwiinit.kiwi" and anchor apple generic\n`)).toBeNull();
+    expect(developerIdRequirement(`designated => identifier "com.kiwiinit.channels" and anchor apple generic\n`)).toBeNull();
   });
 
   test("a requirement that an alternative or a negation could loosen is not one to hold an update to", () => {
@@ -42,7 +42,7 @@ describe("developerIdRequirement", () => {
   });
 
   test("words inside quoted values don't count as operators", () => {
-    const quoted = REQ.replace('identifier "com.kiwiinit.kiwi"', 'identifier "com.or.kiwi (beta)"');
+    const quoted = REQ.replace('identifier "com.kiwiinit.channels"', 'identifier "com.or.kiwi (beta)"');
     expect(developerIdRequirement(`designated => ${quoted}\n`)).toBe(quoted);
   });
 });
@@ -50,33 +50,33 @@ describe("developerIdRequirement", () => {
 describe("signedLikeThisApp", () => {
   test("an update passes when codesign holds it to the running app's requirement and Gatekeeper accepts it", async () => {
     const { run, calls } = tools({});
-    expect(await signedLikeThisApp("/Applications/Kiwi.app", "/tmp/u/Kiwi.app", run)).toBe(true);
+    expect(await signedLikeThisApp("/Applications/Channels.app", "/tmp/u/Channels.app", run)).toBe(true);
     expect(calls).toEqual([
-      ["/usr/bin/codesign", "-d", "-r-", "/Applications/Kiwi.app"],
-      ["/usr/bin/codesign", "--verify", "--deep", "--strict", "-R", `=${REQ}`, "/tmp/u/Kiwi.app"],
-      ["/usr/sbin/spctl", "--assess", "--type", "execute", "/tmp/u/Kiwi.app"],
+      ["/usr/bin/codesign", "-d", "-r-", "/Applications/Channels.app"],
+      ["/usr/bin/codesign", "--verify", "--deep", "--strict", "-R", `=${REQ}`, "/tmp/u/Channels.app"],
+      ["/usr/sbin/spctl", "--assess", "--type", "execute", "/tmp/u/Channels.app"],
     ]);
   });
 
   test("an update signed by anyone else fails codesign's requirement test and is refused", async () => {
     const { run } = tools({ verify: { code: 3, out: "test-requirement: code failed to satisfy specified code requirement(s)" } });
-    expect(await signedLikeThisApp("/Applications/Kiwi.app", "/tmp/u/Kiwi.app", run)).toBe(false);
+    expect(await signedLikeThisApp("/Applications/Channels.app", "/tmp/u/Channels.app", run)).toBe(false);
   });
 
   test("an update Gatekeeper rejects (not notarized) is refused", async () => {
     const { run } = tools({ assess: { code: 3, out: "rejected" } });
-    expect(await signedLikeThisApp("/Applications/Kiwi.app", "/tmp/u/Kiwi.app", run)).toBe(false);
+    expect(await signedLikeThisApp("/Applications/Channels.app", "/tmp/u/Channels.app", run)).toBe(false);
   });
 
   test("an ad-hoc running app never swaps itself, and asks nothing more of the update", async () => {
     const { run, calls } = tools({ display: { code: 0, out: AD_HOC } });
-    expect(await signedLikeThisApp("/Applications/Kiwi.app", "/tmp/u/Kiwi.app", run)).toBe(false);
+    expect(await signedLikeThisApp("/Applications/Channels.app", "/tmp/u/Channels.app", run)).toBe(false);
     expect(calls.length).toBe(1);
   });
 
   test("a running app codesign can't read refuses after one call, whatever it printed", async () => {
     const { run, calls } = tools({ display: { code: 1, out: DISPLAYED } });
-    expect(await signedLikeThisApp("/Applications/Kiwi.app", "/tmp/u/Kiwi.app", run)).toBe(false);
+    expect(await signedLikeThisApp("/Applications/Channels.app", "/tmp/u/Channels.app", run)).toBe(false);
     expect(calls.length).toBe(1);
   });
 });

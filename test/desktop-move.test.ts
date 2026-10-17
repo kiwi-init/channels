@@ -11,8 +11,8 @@ const exdev = () => Object.assign(new Error("EXDEV: cross-device link not permit
 
 function place(): { dir: string; from: string; to: string } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kiwi-move-"));
-  const from = path.join(dir, "Kiwi-next.AppImage");
-  const to = path.join(dir, "Kiwi.AppImage");
+  const from = path.join(dir, "Channels-next.AppImage");
+  const to = path.join(dir, "Channels.AppImage");
   fs.writeFileSync(from, "new");
   fs.chmodSync(from, 0o755);
   fs.writeFileSync(to, "old");
@@ -50,7 +50,7 @@ describe("moveOver", () => {
     expect(fs.readFileSync(to, "utf8")).toBe("new");
     expect(fs.statSync(to).mode & 0o777).toBe(0o755);
     expect(fs.existsSync(from)).toBe(false);
-    expect(fs.readdirSync(dir)).toEqual(["Kiwi.AppImage"]);
+    expect(fs.readdirSync(dir)).toEqual(["Channels.AppImage"]);
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
@@ -62,13 +62,13 @@ describe("moveOver", () => {
     expect(() => moveOver(from, to)).toThrow("EXDEV");
     expect(fs.readFileSync(to, "utf8")).toBe("old");
     expect(fs.readFileSync(from, "utf8")).toBe("new");
-    expect(fs.readdirSync(dir).sort()).toEqual(["Kiwi-next.AppImage", "Kiwi.AppImage"]);
+    expect(fs.readdirSync(dir).sort()).toEqual(["Channels-next.AppImage", "Channels.AppImage"]);
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
   test("any other rename failure is the caller's", () => {
     const { dir, from } = place();
-    expect(() => moveOver(from, path.join(dir, "missing", "Kiwi.AppImage"))).toThrow();
+    expect(() => moveOver(from, path.join(dir, "missing", "Channels.AppImage"))).toThrow();
     expect(fs.readFileSync(from, "utf8")).toBe("new");
     fs.rmSync(dir, { recursive: true, force: true });
   });

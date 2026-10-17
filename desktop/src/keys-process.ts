@@ -43,7 +43,7 @@ export function connectKeys(wc: Electron.WebContents): void {
 }
 
 export function startKeys(): void {
-  const child = utilityProcess.fork(channelsPath(), [], { serviceName: "Kiwi keys" });
+  const child = utilityProcess.fork(channelsPath(), [], { serviceName: "Channels keys" });
   const started = Date.now();
   keys = child;
   tellKeys({ type: "init", relay: store.relayUrl, dir: app.getPath("userData"), seats: store.channels, person: store.person?.pk ?? null });

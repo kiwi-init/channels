@@ -29,7 +29,7 @@ ipcRenderer.on("kiwi:channels-port", (e) => {
   const restarted = port !== null;
   port?.close();
   if (restarted) {
-    for (const [id, done] of waiting) done({ id, ok: false, error: { kind: "unreachable", message: "Kiwi restarted the part that holds your keys; try again" } });
+    for (const [id, done] of waiting) done({ id, ok: false, error: { kind: "unreachable", message: "Channels restarted the part that holds your keys; try again" } });
     waiting.clear();
   }
   port = fresh;

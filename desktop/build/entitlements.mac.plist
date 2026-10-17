@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  What the hardened runtime lets Kiwi do, for the app and everything signed inside it (the same
+  What the hardened runtime lets Channels do, for the app and everything signed inside it (the same
   file is its entitlementsInherit). Electron's V8 needs JIT and writable executable memory; the
   bundled kiwi CLI is a Bun-compiled binary, which also needs executable-page protection off and its
   own embedded code loaded (Bun's codesigning notes list exactly these). Microphone for live voice
