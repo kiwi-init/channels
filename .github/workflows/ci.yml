@@ -478,7 +478,6 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           web: "false"
-      - uses: ./.github/actions/mergiraf
       - run: bun scripts/ci-tests.ts bus
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true

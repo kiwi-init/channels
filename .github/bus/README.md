@@ -10,7 +10,7 @@ from GitHub and does the next step.
 1. **tick** (read-only): if `bus/staging` sits on main and its item is unchanged, wait for its
    CI, then land it or diagnose it. Otherwise take the oldest `bus/*` branch (or a PR a
    maintainer labelled `queue`, never a fork), ahead of it any branch Jev's `needs_order` says
-   it needs first, and merge it onto main: git, then mergiraf on `*.ts`/`*.tsx`, then
+   it needs first, and merge it onto main: git, then
    keep-both for hunks whose base was empty when Jev's `keep_both` is high.
 2. **resolve** (read-only, model keys only): Haiku resolves each hunk left, sampled 3 times,
    and may abstain. A hunk Haiku abstains on or disagrees with itself on, that Jev's

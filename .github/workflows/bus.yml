@@ -43,7 +43,6 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           web: "false"
-      - uses: ./.github/actions/mergiraf
       - id: tick
         run: bun .github/bus/tick.ts --out "$RUNNER_TEMP/bus-tick"
         env:
@@ -70,7 +69,6 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           web: "false"
-      - uses: ./.github/actions/mergiraf
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: bus-tick
@@ -102,7 +100,6 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           web: "false"
-      - uses: ./.github/actions/mergiraf
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: bus-tick
