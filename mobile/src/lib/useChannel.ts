@@ -1,4 +1,4 @@
-import type { Channel } from "@mc/client.ts"
+import type { Channel, SendOptions } from "@mc/client.ts"
 import type { Message } from "@mc/protocol.ts"
 import { fold, type ChannelState, type Roster } from "@mc/state.ts"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -12,6 +12,8 @@ export interface ChannelHandle {
   state: ChannelState
   connected: boolean
   send(body: string, to?: string[], re?: number[]): Promise<void>
+  post(body: string, options: SendOptions): Promise<void>
+  channel: Channel | null
   unread: number
 }
 
@@ -92,6 +94,14 @@ export function useChannel(channel: Channel | null, memberPk: string, history: H
     [channel]
   )
 
+  const post = useCallback(
+    async (body: string, options: SendOptions) => {
+      if (!channel) return
+      await channel.send(body, options)
+    },
+    [channel]
+  )
+
   const self = channel?.identity.name ?? ""
   const unread = useMemo(() => messages.filter((m) => m.seq > mark && m.kind !== "event" && m.from !== self).length, [messages, mark, self])
 
@@ -100,5 +110,5 @@ export function useChannel(channel: Channel | null, memberPk: string, history: H
     void setReadMark(sql, room, messages[messages.length - 1]!.seq).catch(() => {})
   }, [sql, room, messages])
 
-  return { messages, state, connected, send, unread }
+  return { messages, state, connected, send, post, channel, unread }
 }
