@@ -45,6 +45,9 @@ export default function Home() {
         <Text variant="display">Channels</Text>
       </View>
       <ChannelList rows={rows} news={news} now={now} onSelect={open} onNew={() => setCreating(true)} />
+      <Text variant="meta" tone="ink3" accessibilityRole="button" accessibilityLabel="Open the gallery" onPress={() => router.push("/gallery")} style={styles.gallery}>
+        Gallery
+      </Text>
       <NewChannelSheet
         visible={creating}
         onClose={() => setCreating(false)}
@@ -72,4 +75,5 @@ export default function Home() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },
+  gallery: { textAlign: "center", paddingVertical: 8 },
 })
