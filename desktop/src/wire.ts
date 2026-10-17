@@ -13,7 +13,9 @@ export function toWire(v: unknown): Wire {
   if (v instanceof Set) return { $set: [...v].map(toWire) };
   if (typeof v === "object" && isPlain(v)) {
     const out: { [k: string]: Wire } = {};
-    for (const [k, x] of Object.entries(v)) if (x !== undefined) out[k === "$map" || k === "$set" || k.startsWith("$$") ? `$$${k}` : k] = toWire(x);
+    for (const [k, x] of Object.entries(v))
+      if (x !== undefined)
+        out[k === "$map" || k === "$set" || k.startsWith("$$") ? `$$${k}` : k] = toWire(x);
     return out;
   }
   return null;
@@ -24,8 +26,14 @@ export function fromWire(v: unknown): unknown {
   if (Array.isArray(v)) return v.map(fromWire);
   const o = v as Record<string, unknown>;
   const keys = Object.keys(o);
-  if (keys.length === 1 && keys[0] === "$map" && Array.isArray(o.$map)) return new Map(o.$map.map((e) => (Array.isArray(e) ? [fromWire(e[0]), fromWire(e[1])] : [undefined, undefined])));
-  if (keys.length === 1 && keys[0] === "$set" && Array.isArray(o.$set)) return new Set(o.$set.map(fromWire));
+  if (keys.length === 1 && keys[0] === "$map" && Array.isArray(o.$map))
+    return new Map(
+      o.$map.map((e) =>
+        Array.isArray(e) ? [fromWire(e[0]), fromWire(e[1])] : [undefined, undefined],
+      ),
+    );
+  if (keys.length === 1 && keys[0] === "$set" && Array.isArray(o.$set))
+    return new Set(o.$set.map(fromWire));
   const out: Record<string, unknown> = {};
   for (const k of keys) out[k.startsWith("$$") ? k.slice(2) : k] = fromWire(o[k]);
   return out;

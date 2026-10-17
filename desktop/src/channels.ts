@@ -33,7 +33,10 @@ const memoryFile = (): string => path.join(dir, "kiwi-keys-memory.json");
 function loadMemory(): void {
   try {
     const v = JSON.parse(fs.readFileSync(memoryFile(), "utf8")) as Partial<Memory> | null;
-    memory = { records: v?.records && typeof v.records === "object" ? v.records : {}, checks: v?.checks && typeof v.checks === "object" ? v.checks : {} };
+    memory = {
+      records: v?.records && typeof v.records === "object" ? v.records : {},
+      checks: v?.checks && typeof v.checks === "object" ? v.checks : {},
+    };
   } catch {
     memory = { records: {}, checks: {} };
   }
@@ -93,7 +96,8 @@ const keyring = new Keyring({
   save: async (entry) => void (await asked({ type: "save", entry })),
   access: async (code, pk, access) => void (await asked({ type: "access", code, pk, access })),
   forget: async (code) => void (await asked({ type: "forget", code })),
-  prove: async (code, memberPk): Promise<PersonClaim | null> => (await asked({ type: "prove", code, memberPk })).claim ?? null,
+  prove: async (code, memberPk): Promise<PersonClaim | null> =>
+    (await asked({ type: "prove", code, memberPk })).claim ?? null,
   person: () => person,
   budget,
 });
