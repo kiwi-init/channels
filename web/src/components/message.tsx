@@ -1,5 +1,5 @@
 import { ArrowTurnBackwardIcon, Copy01Icon, SmileIcon } from "@hugeicons/core-free-icons"
-import { memo, useEffect, useState, type ReactNode } from "react"
+import { memo, useEffect, useMemo, useState, type ReactNode } from "react"
 
 import { describeEvent } from "@mc/format.ts"
 import { ignored, isGifReaction, type Color, type Handoff, type ImageAttachment, type Message, type Trust } from "@mc/protocol.ts"
@@ -309,6 +309,7 @@ export const Bubble = memo(function Bubble({
   onOpenImage,
 }: BubbleProps) {
   const forged = ignored(trust)
+  const refs = useMemo(() => ({ known: (seq: number) => seq !== m.seq && quoted(seq) !== undefined, open: onJump }), [m.seq, quoted, onJump])
   const mine = m.from === me
   const repliedTo = new Set((m.re ?? []).map((seq) => quoted(seq)?.from).filter((f): f is string => !!f))
   // Your own bubbles don't need saying who they're to, unless you handed something to people.
@@ -366,13 +367,20 @@ export const Bubble = memo(function Bubble({
                 // Code keeps its lines: it scrolls inside the bubble rather than wrapping mid-word like prose.
                 "bubble-text relative isolate max-w-full min-w-0 rounded-bubble px-3.5 py-[7px] text-body [&_pre]:max-w-full [&_pre]:[overflow-wrap:normal] [&_pre]:whitespace-pre",
                 mine
-                  ? "bg-bubble-me text-bubble-me-ink [&_a]:text-bubble-me-ink [&_a]:decoration-white/50 [&_code]:bg-white/18 [&_li]:marker:text-white/70 [&_pre]:border-white/15 [&_pre]:bg-black/15 [&_pre]:text-white"
+                  ? "bg-bubble-me text-bubble-me-ink [&_[data-ref]]:text-bubble-me-ink [&_[data-ref]]:decoration-white/50 [&_a]:text-bubble-me-ink [&_a]:decoration-white/50 [&_code]:bg-white/18 [&_li]:marker:text-white/70 [&_pre]:border-white/15 [&_pre]:bg-black/15 [&_pre]:text-white"
                   : "bg-bubble-them text-bubble-them-ink",
                 forged && "line-through opacity-60",
                 highlighted && "animate-flash outline-2 outline-offset-2 outline-[var(--ring)]"
               )}
             >
-              <Markdown>{m.body}</Markdown>
+              <Markdown refs={refs}>{m.body}</Markdown>
+              {m.esc && m.choices?.length ? (
+                <ul aria-label="Options" className="mt-1.5 list-disc pl-5 text-ui">
+                  {m.choices.map((c) => (
+                    <li key={c}>{c}</li>
+                  ))}
+                </ul>
+              ) : null}
               {last && <Tail mine={mine} />}
             </div>
           )}

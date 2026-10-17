@@ -1,6 +1,6 @@
 {
   "name": "kiwi-desktop",
-  "version": "0.16.1",
+  "version": "0.16.2",
   "private": true,
   "description": "Kiwi desktop app: an Electron shell hosting web/ for people (auto-approval, pairing, admin).",
   "homepage": "https://github.com/ojowwalker77/channels",

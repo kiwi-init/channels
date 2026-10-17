@@ -387,6 +387,16 @@ export function wellFormedHandoff(x: unknown): x is Handoff {
   return handoffUrl(h.url) && str(h.vendor, HANDOFF_MAX_VENDOR) && Number.isFinite(h.expiresAt) && Number.isFinite(new Date(h.expiresAt as number).getTime()) && (h.mode === undefined || h.mode === "tab" || h.mode === "full");
 }
 
+export const CHOICES_MIN = 2;
+export const CHOICES_MAX = 6;
+export const CHOICE_MAX_LENGTH = 200;
+
+export function wellFormedChoices(x: unknown): x is string[] {
+  if (!Array.isArray(x) || x.length < CHOICES_MIN || x.length > CHOICES_MAX) return false;
+  if (!x.every((c) => typeof c === "string" && c.trim().length > 0 && c.length <= CHOICE_MAX_LENGTH && !/[\r\n]/.test(c))) return false;
+  return new Set(x.map((c: string) => c.trim().toLowerCase())).size === x.length;
+}
+
 /** The decrypted message body. */
 export interface Payload {
   v: typeof PROTOCOL_VERSION;
@@ -417,6 +427,7 @@ export interface Payload {
    */
   esc?: true;
   handoff?: Handoff;
+  choices?: string[];
   ts: number;
   /** Sender's Ed25519 public key (raw, base64url) and signature over the rest. */
   pk?: string;
@@ -593,6 +604,7 @@ export function wellFormed(p: unknown): p is Payload {
     (m.dm === undefined || m.dm === true) &&
     (m.esc === undefined || m.esc === true) &&
     (m.handoff === undefined || (m.esc === true && wellFormedHandoff(m.handoff))) &&
+    (m.choices === undefined || (m.esc === true && m.handoff === undefined && wellFormedChoices(m.choices))) &&
     (m.ev === undefined || wellFormedEvent(m.ev)) &&
     (m.kind !== "event" || m.ev !== undefined)
   );

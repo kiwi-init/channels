@@ -1,26 +1,22 @@
 import { ArrowDown01Icon, GitPullRequestIcon } from "@hugeicons/core-free-icons"
 import { useState, type ReactNode } from "react"
 
-import type { TaskState } from "@mc/protocol.ts"
-import { taskId, type ChannelState, type Task } from "@mc/state.ts"
+import { taskId, tasksAwaitingPeople, type ChannelState, type Task } from "@mc/state.ts"
 import type { RecentPr } from "@mc/work.ts"
 import { formatAgo, formatFull } from "@/lib/format"
 import { remember, remembered } from "@/lib/side"
 import { cx } from "@/lib/utils"
 import { AgentLine, busy, byBusy, type AgentNow } from "./agent-strip"
 import { Icon } from "./icon"
-import { SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from "./kit"
-import { StateMark } from "./tasks"
+import { DecisionMark, StateMark, TaskFilterBar, type TaskFilter } from "./tasks"
 
 const SHOWN = 5
 
-export const FLOAT_W = 336
+export const FLOAT_W = 384
 
 export const FLOAT_GAP = 24
 
-type Filter = "all" | TaskState
-
-const FILTERS: [Filter, string][] = [
+const FILTERS: [TaskFilter, string][] = [
   ["all", "All"],
   ["todo", "Open"],
   ["doing", "In progress"],
@@ -81,7 +77,7 @@ function Agents({ agents, now, onOpenTask }: { agents: AgentNow[]; now: number; 
   )
 }
 
-function TaskLine({ task, now, nameOf, onOpen }: { task: Task; now: number; nameOf: (n: string) => string; onOpen: () => void }) {
+function TaskLine({ task, now, nameOf, waiting, onOpen }: { task: Task; now: number; nameOf: (n: string) => string; waiting: boolean; onOpen: () => void }) {
   return (
     <li>
       <button type="button" onClick={onOpen} className="flex w-full items-start gap-2 rounded-ctl px-2 py-1.5 text-left transition-colors hover:bg-wash">
@@ -93,6 +89,11 @@ function TaskLine({ task, now, nameOf, onOpen }: { task: Task; now: number; name
           <span className="mt-0.5 block truncate text-meta text-ink-3">
             <span className="tabular-nums">{taskId(task.id)}</span> · {task.owner ? nameOf(task.owner) : "Unassigned"}
           </span>
+          {waiting && (
+            <span className="mt-1 flex">
+              <DecisionMark />
+            </span>
+          )}
         </span>
         <When at={task.updatedAt} now={now} />
       </button>
@@ -101,33 +102,21 @@ function TaskLine({ task, now, nameOf, onOpen }: { task: Task; now: number; name
 }
 
 function Tasks({ state, now, nameOf, onOpen, onAll }: { state: ChannelState; now: number; nameOf: (n: string) => string; onOpen: (id: number) => void; onAll: () => void }) {
-  const [filter, setFilter] = useState<Filter>("all")
+  const [filter, setFilter] = useState<TaskFilter>("all")
   const all = [...state.tasks.values()].sort((a, b) => b.updatedAt - a.updatedAt)
   const list = all.filter((t) => filter === "all" || t.state === filter)
   const open = all.filter((t) => t.state !== "done").length
   const shown = FILTERS.filter(([f]) => f === "all" || f === filter || all.some((t) => t.state === f))
+  const waiting = tasksAwaitingPeople(state)
   return (
     <Card id="tasks" title="Tasks" count={all.length ? `${open} open` : undefined}>
       {all.length ? (
         <>
-          <div role="radiogroup" aria-label="Show tasks" className={cx("mx-2 mb-2 flex gap-0.5", SEGMENTED)}>
-            {shown.map(([f, word]) => (
-              <button
-                key={f}
-                type="button"
-                role="radio"
-                aria-checked={filter === f}
-                onClick={() => setFilter(f)}
-                className={cx("h-6 flex-auto rounded-row px-2 text-meta font-medium whitespace-nowrap transition-colors", filter === f ? SEGMENT_ON : SEGMENT_OFF)}
-              >
-                {word}
-              </button>
-            ))}
-          </div>
+          <TaskFilterBar value={filter} options={shown} onChange={setFilter} className="mx-2 mb-2" />
           {list.length ? (
             <ul aria-label="Recently updated tasks">
               {list.slice(0, SHOWN).map((t) => (
-                <TaskLine key={t.id} task={t} now={now} nameOf={nameOf} onOpen={() => onOpen(t.id)} />
+                <TaskLine key={t.id} task={t} now={now} nameOf={nameOf} waiting={waiting.has(t.id)} onOpen={() => onOpen(t.id)} />
               ))}
             </ul>
           ) : (

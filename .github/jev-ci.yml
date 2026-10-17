@@ -319,6 +319,16 @@ jobs:
       uses, or an import of a package a package.json doesn't list. Tests count as users, so an
       export only a test imports passes.
 
+  web-task-cards:
+    jev: false
+    name: web / task-cards
+    inputs: ["web/src/lib/task-cards.ts", "web/src/lib/task-cards.test.ts", "src/protocol.ts", "src/state.ts"]
+    always: ["package.json", "bun.lock", "bunfig.toml"]
+    description: >-
+      Runs the tests for web/src/lib/task-cards.ts, which decides how the main conversation shows tasks:
+      one live card per open task, its claim and update lines folded into that card, and a done task as
+      its last line only. Fails when an open task's events leak into main or a done task loses its line.
+
   web-bundle:
     jev: false
     name: web / bundle

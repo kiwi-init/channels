@@ -162,11 +162,13 @@ From `design-tokens.ts`:
   the top; `Pause agents` in the header stops every agent at once.
 - Overview cards: always in the chat area from 1280px wide, never behind
   a button. Cards on the canvas itself, outlined with a 1px `edge-strong`
-  ring at `card` radius, 336px wide, 24px from the window's edge and 12px
+  ring at `card` radius, 384px wide, 24px from the window's edge and 12px
   apart, float at the top right of the conversation, each folding from its
   header: Agents, Tasks (the 5 last updated, a `SEGMENTED` filter that
-  leaves out a state with no task), Pull requests (the last 5 linked in
-  the channel). Rows put the time on the right. The conversation stays
+  leaves out a state with no task, wide enough that every tab fits on one
+  row), Pull requests (the last 5 linked in the channel). The Tasks panel
+  has the same filter with every state, and it wraps to a second row
+  rather than cut a tab off. Rows put the time on the right. The conversation stays
   centered while it has room and moves left only as far as it must. The
   agent strip under the composer gives way to the Agents card. A thread,
   the details or a task in the side column hide the cards until it closes.

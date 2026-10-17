@@ -251,6 +251,22 @@ function AskItem({
     >
       {draft === null ? (
         <>
+          {!handoff && m.choices?.length ? (
+            <ul aria-label="Options" className="flex w-full flex-col gap-1.5">
+              {m.choices.map((c) => (
+                <li key={c}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void send(c)}
+                    className="w-full rounded-row bg-field px-3 py-1.5 text-left text-ui leading-snug [overflow-wrap:anywhere] transition-colors hover:bg-wash-2 disabled:pointer-events-none disabled:opacity-40"
+                  >
+                    {c}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
           {handoff && live && (
             <>
               <Button size="sm" variant="secondary" onClick={() => !openHandoff(handoff) && toast("The link has expired", "error")}>
@@ -264,8 +280,8 @@ function AskItem({
               </Button>
             </>
           )}
-          <Button size="sm" variant="secondary" onClick={() => setDraft("")}>
-            Answer
+          <Button size="sm" variant={m.choices?.length ? "ghost" : "secondary"} onClick={() => setDraft("")}>
+            {m.choices?.length ? "Something else" : "Answer"}
           </Button>
           <Button size="sm" variant="ghost" onClick={() => onJump(m.seq)}>
             Show
