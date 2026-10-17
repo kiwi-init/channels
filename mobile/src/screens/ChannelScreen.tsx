@@ -24,7 +24,7 @@ import { ImageViewer } from "../ui/ImageViewer"
 import { Text } from "../ui/Text"
 import { toast } from "../ui/Toast"
 
-type View = "chat" | "tasks" | "needs"
+type Tab = "chat" | "tasks" | "needs"
 
 const NO_BUDGET = { load: () => [], save: () => {} }
 
@@ -38,7 +38,7 @@ export function ChannelScreen({ code, onBack }: { code: string; onBack?: () => v
   const [threadRoot, setThreadRoot] = useState<number | null>(null)
   const threads = useMemo(() => threadIndex(live.messages, live.state), [live.messages, live.state])
   const [viewing, setViewing] = useState<ImageAttachment | null>(null)
-  const [view, setView] = useState<View>("chat")
+  const [view, setView] = useState<Tab>("chat")
   const [openTask, setOpenTask] = useState<number | null>(null)
   const [reactTo, setReactTo] = useState<Message | null>(null)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
@@ -70,12 +70,15 @@ export function ChannelScreen({ code, onBack }: { code: string; onBack?: () => v
   }, [channel, isOwner])
 
   useEffect(() => {
-    void refreshRequests()
+    const first = setTimeout(() => void refreshRequests(), 0)
     const tick = setInterval(() => {
       setNow(Date.now())
       void refreshRequests()
     }, 5000)
-    return () => clearInterval(tick)
+    return () => {
+      clearTimeout(first)
+      clearInterval(tick)
+    }
   }, [refreshRequests])
 
   const person = engine.person()?.pk
