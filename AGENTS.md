@@ -1,5 +1,12 @@
 # AGENTS.md
 
+## Our Philosophy 
+
+- Optimism beats everything.
+- We must refuse don't confuse working/done with good.
+- Ambition, creativity, boldness. 
+
+and the most important of all: we can fix everything! 
 ## Code
 
 - No comments in code: context goes in the commit and the PR. One exception: a comment inside a `catch` block, saying why the error is ignored or handled that way. Tool directives (`@ts-expect-error`, `@ts-ignore`, `oxlint-disable`, `eslint-disable`, `type: ignore`, `noqa`, `pragma` etc.) stay forbidden. CI does not check this; review does.
