@@ -10,6 +10,7 @@ import * as Layer from "effect/Layer";
 import { CLOSE_CLOSED, CLOSE_REMOVED, GONE_WORDS, PING, PONG } from "../protocol.ts";
 import { ChannelGone, NotFound, Refused, UpdateRequired } from "./failures.ts";
 import { Human, workosFromSettings, type HumanAuth } from "./human.ts";
+import { BACKUP_PATH, BACKUP_PER_HOUR, hourlyLimit, onBackupHttp, type BackupRecord, type BackupStore } from "./backup.ts";
 import { pageSecret, Policy, policyFrom, type RelayPolicy } from "./policy.ts";
 import { edgePage, PAGE_PATH, type PageCache } from "./pages.ts";
 import {
@@ -226,10 +227,23 @@ export class Owners extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS owned (room TEXT PRIMARY KEY, entry TEXT NOT NULL)");
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS backup (k INTEGER PRIMARY KEY CHECK (k = 1), rec TEXT NOT NULL)");
   }
 
   override async fetch(req: Request): Promise<Response> {
     const sql = this.ctx.storage.sql;
+    if (new URL(req.url).pathname === "/backup") {
+      if (req.method === "PUT") {
+        sql.exec("INSERT OR REPLACE INTO backup (k, rec) VALUES (1, ?)", await req.text());
+        return new Response(null, { status: 204 });
+      }
+      if (req.method === "DELETE") {
+        sql.exec("DELETE FROM backup");
+        return new Response(null, { status: 204 });
+      }
+      const row = sql.exec("SELECT rec FROM backup").toArray()[0] as { rec: string } | undefined;
+      return row ? new Response(row.rec, { headers: { "content-type": "application/json" } }) : new Response(null, { status: 404 });
+    }
     const entries = () => (sql.exec("SELECT entry FROM owned").toArray() as { entry: string }[]).map((r) => JSON.parse(r.entry) as DirectoryEntry);
     const path = new URL(req.url).pathname;
     // One object per person, and no await between the count and the hold: two creates can't both pass.
@@ -317,12 +331,27 @@ function close(ws: WebSocket, code: number, reason: string): void {
   } catch {}
 }
 
+const backupAllowed = hourlyLimit(BACKUP_PER_HOUR);
+
+function ownerBackups(env: Env): BackupStore {
+  const at = (user: string) => env.OWNERS.get(env.OWNERS.idFromName(user));
+  return {
+    load: async (user) => {
+      const res = await at(user).fetch("https://owners/backup");
+      return res.ok ? ((await res.json()) as BackupRecord) : null;
+    },
+    save: async (user, rec) => void (await at(user).fetch("https://owners/backup", { method: "PUT", body: JSON.stringify(rec) })),
+    drop: async (user) => void (await at(user).fetch("https://owners/backup", { method: "DELETE" })),
+  };
+}
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
     if (url.pathname === "/v1/config") return withCors(relayConfig(human(env)));
     // The desktop app's renderer isn't served by the relay: /v1/* answers any origin.
     if (req.method === "OPTIONS" && url.pathname.startsWith("/v1/")) return corsPreflight();
+    if (url.pathname === BACKUP_PATH) return (await onBackupHttp(req, ownerBackups(env), { human: human(env), allow: backupAllowed })) ?? withCors(errorResponse(new NotFound({ message: "not found" })));
     if (url.pathname.startsWith("/v1/mailbox")) {
       // One object per mailbox id; a path without one is a 404, never a wake-up.
       const id = /^\/v1\/mailbox\/([A-Za-z0-9_-]{43})(?:\/(?:a|b))?$/.exec(url.pathname)?.[1];

@@ -358,6 +358,31 @@ forge or swap anything. Writes are rate-limited per client address.
 - Tasks and notes belong to the name: an agent that rejoins under its old name
   picks them up; the old key's messages still verify.
 
+## Your account backup (phone sign-in)
+
+A person can keep one encrypted backup of their keys on the relay, so a phone
+signed in to the same account becomes the same person as the desktop app.
+
+- **What it holds**: the person key and every channel identity (member keys,
+  room, access keys, join code), sealed with AES-GCM under a key derived from a
+  passphrase with scrypt (N=2^16, r=8, p=1, random salt).
+- **The passphrase**: the app makes it, 6 words from a 7776-word list (about
+  77 bits), and shows it once. A typed passphrase must be at least 5 words or 20
+  characters. It never leaves the device; the relay gets only the sealed blob.
+- **Who can reach it**: `/v1/backup` answers only the signed-in account it
+  belongs to (GET, PUT, DELETE), one blob of at most 256 KiB, a limited number of
+  requests per hour.
+- **What that does not protect against**: the relay can't tell a wrong guess,
+  so whoever holds the blob (the relay operator, or anyone who gets into the
+  account) can try passphrases offline, at scrypt's cost per try. That is why it
+  is 6 random words and not a PIN: a short PIN falls quickly, 6 words don't.
+  Whoever has both the account and the passphrase gets the keys.
+- **Copied keys**: a phone restored this way holds the same keys as the desktop.
+  There is no per-device key yet, so a lost phone or a leaked passphrase can't
+  be revoked on its own: rotate by leaving and rejoining the channels. The phone
+  keeps the keys in the keychain for this device only, unlocked with Face ID or
+  the passcode.
+
 ## What the relay (and its operator) still learns
 
 Encryption hides content, not shape: message timing, sizes and counts, room
