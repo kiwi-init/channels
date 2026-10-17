@@ -56,9 +56,9 @@ export interface SlotTake {
   ttl: number;
 }
 
-export const SLOT_ID_RE = /^[A-Za-z0-9_-]{16,64}$/;
-export const MAX_SLOT_TTL = 24 * 3_600_000;
-export const MAX_SLOTS_FREED = 8;
+const SLOT_ID_RE = /^[A-Za-z0-9_-]{16,64}$/;
+const MAX_SLOT_TTL = 24 * 3_600_000;
+const MAX_SLOTS_FREED = 8;
 
 export function wellFormedSlot(x: unknown): x is SlotTake {
   if (!x || typeof x !== "object") return false;

@@ -27,7 +27,7 @@ import { ACK, answersPeople } from "./wants.ts";
 
 const ANSWERING_TTL = 600_000;
 
-export const answeringKey = (seq: number): string => `answering #${seq}`;
+const answeringKey = (seq: number): string => `answering #${seq}`;
 
 export class SessionMessaging extends SessionListen {
   readonly resolveTo = Effect.fn("AgentSession.resolveTo")({ self: this }, function* (this: SessionMessaging, to: string[] | undefined, state?: ChannelState) {
