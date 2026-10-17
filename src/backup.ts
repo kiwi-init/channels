@@ -63,11 +63,13 @@ async function keyFor(
   passphrase: string,
   salt: Uint8Array,
   params: { N: number; r: number; p: number },
+  onProgress?: (fraction: number) => void,
 ): Promise<string> {
   const raw = await scryptAsync(enc.encode(normalizePassphrase(passphrase)), salt, {
     ...params,
     dkLen: 32,
     maxmem: 160 * params.N * params.r,
+    ...(onProgress ? { onProgress } : {}),
   });
   return b64url(raw);
 }
@@ -120,8 +122,9 @@ export async function openBackup<T extends object>(
   passphrase: string,
   env: BackupEnvelope,
   check: (v: unknown) => v is T,
+  onProgress?: (fraction: number) => void,
 ): Promise<T> {
-  const key = await keyFor(passphrase, fromB64url(env.salt), env);
+  const key = await keyFor(passphrase, fromB64url(env.salt), env, onProgress);
   const plain = await openBytes(key, env.iv, env.ct, aad(env));
   if (!plain) throw new WrongPassphrase();
   const parsed: unknown = JSON.parse(new TextDecoder().decode(plain));
