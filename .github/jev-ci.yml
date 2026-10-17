@@ -35,280 +35,117 @@ max_jev_lines: 800
 max_file_lines: 300
 
 jobs:
-  core-types:
+  static:
     jev: false
-    name: core / types
-    inputs: ["src/**", "test/**", ".github/jev-ci/**", "desktop/src/move.ts", "desktop/src/open.ts", "desktop/src/signer.ts", "desktop/src/update-asset.ts", "desktop/src/daemon-client.ts", "desktop/src/guard.ts", "desktop/src/bridge.ts"]
-    always: ["tsconfig.json", "tsconfig.worker.json", "package.json", "bun.lock"]
+    name: repo / static
+    inputs: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,css,py}", "web/index.html", ".github/workflows/**", ".github/actions/**"]
+    always: ["tsconfig.json", "tsconfig.worker.json", "package.json", "bun.lock", "web/package.json", "web/bun.lock", "web/tsconfig*.json", "web/vite.config.ts", "web/.oxlintrc.json", "web/.oxfmtrc.json", "desktop/package.json", "desktop/bun.lock", "desktop/tsconfig*.json", "knip.json", "scripts/ci/**"]
     description: >-
-      Runs tsc --noEmit over src/ (the kiwi CLI, daemon, client, relay and MCP server) and test/
-      (which also compiles the jev-ci planner it imports),
-      and again over the Cloudflare worker (src/relay/worker.ts, src/relay/room.ts,
-      src/protocol.ts) with the Workers types. Fails on any TypeScript type error in those files
-      or in what they import, including a changed export, signature or type.
+      The static checks, one after another, each run even when an earlier one failed.
+      Types: tsc --noEmit over src/ and test/ (and the jev-ci planner test/ imports), again over
+      the Cloudflare worker with the Workers types (tsconfig.worker.json), tsc -b in web/ (which
+      also compiles the src/ modules the dashboard imports through @mc/*), and tsc --noEmit in
+      desktop/. scripts/ui-tokens.ts fails on an arbitrary text-[Npx] or rounded-[Npx] Tailwind
+      class in web/src. oxlint on web/src (web/.oxlintrc.json: unused variables or imports,
+      conditional hooks, setState in an effect, impure calls in render, explicit any). oxfmt
+      --check on web/src. Knip (knip.json) over the root, web/ and desktop/: a file nothing
+      imports, an export nothing outside its file uses, an unused dependency, an unlisted package.
+      scripts/action-pins.ts: every uses: in .github/workflows and .github/actions names a
+      third-party action by a full commit SHA. scripts/ci/no_comments.py: a comment or tool
+      directive on a line this change adds to a .ts/.tsx/.js/.jsx/.mjs/.cjs/.mts/.cts/.css file,
+      or a comment or docstring in a .py file (scripts/ci is also checked with mypy --strict and
+      its unit tests). Fails on any of these.
 
-  core-test:
-    name: core / test
-    inputs: ["src/**", "test/**", "web/src/**", "web/public/**", "site/install", "site/install.sh", "site/install.ps1", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "desktop/src/move.ts", "desktop/src/open.ts", "desktop/src/signer.ts", "desktop/src/update-asset.ts", "desktop/src/daemon-client.ts", "desktop/src/guard.ts", "desktop/src/bridge.ts"]
+  test-unit:
+    name: test / unit
+    inputs: ["src/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "site/install.ps1", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/action-pins.ts", "desktop/src/**", "desktop/build/entitlements.mac.plist"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "web/bun.lock", "scripts/ci-tests.ts"]
     description: >-
-      Runs the fast unit tests with bun test: every test/*.test.ts except the slow agent-flow
-      suites, plus the dashboard's helper tests in web/src. They cover pure modules: protocol and
-      event validation, state folding, formatting, identity and signing, scopes and roles,
-      routing and auth tables, error texts, the install script (web/public/install.sh), hooks and
-      harness detection, the history cache, and the desktop app's node-only helpers
-      (desktop/src/move.ts, desktop/src/open.ts, desktop/src/signer.ts, desktop/src/update-asset.ts, desktop/src/daemon-client.ts, desktop/src/guard.ts). Fails if a tested module's behavior,
-      output text or exported names change. scripts/ci-tests.ts runs every group with TMPDIR
-      pointing through a symlink, as macOS's does, so a test that compares a tmp path with its
-      realpath or process.cwd() fails here too.
+      Runs the unit tests with bun test: every test/*.test.ts except the slow suites in
+      scripts/ci-tests.ts's flows groups, plus the dashboard's tests in web/src (task-cards
+      among them: one live card per open task, a done task as its last line only). They cover
+      pure modules: protocol and event validation, state folding, formatting, identity and
+      signing, scopes and roles, routing and auth tables, error texts, the install scripts,
+      hooks and harness detection, the history cache, the desktop app's node-only helpers, the
+      public site's invite parsing (site/app.js, test/site.test.ts), scripts/action-pins.ts.
+      Also test/desktop-keys.test.ts: the desktop key process (desktop/src/keyring.ts, over the
+      wire web/src/lib/channel-remote.ts uses) against a local relay, failing if any member,
+      owner, person or channel key reaches the window, plus the seat rules, the wire codec, the
+      allowed calls and a scan of web/src for imports of Channel, seal/open or the keyring
+      outside web/src/lib/channel-local.ts. And test/desktop-voice.test.ts: the desktop voice
+      store, its CSP connect-src and the mic entitlement. Fails if a tested module's behavior,
+      output text or exported names change. TMPDIR points through a symlink, as macOS's does,
+      so a test that compares a tmp path with its realpath or process.cwd() fails here too.
 
-  flows-a:
-    name: core / flows-a
+  test-flows-a:
+    name: test / flows-a
     inputs: ["src/**", "test/**", "web/src/**", "web/public/**"]
     always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts"]
     description: >-
       Runs slow end-to-end tests that start a real local relay (src/relay/bun.ts) and drive the
       kiwi CLI and client: e2e (create a channel, join, send and listen through the relay),
-      verbs (the agent CLI verbs listen, send, show, status, note, join, log, task, leave and
-      their aliases), threads (task threads and direct threads), reconnect (what a listener says
-      when the relay drops). Fails if the CLI, the client, the relay, the protocol or the text
-      they print changes behavior.
+      verbs (the agent CLI verbs and their aliases), threads (task threads and direct threads),
+      reconnect (what a listener says when the relay drops). Then every test/budget-*.test.ts:
+      budget-relay counts the SQL statements a stored message, a read mark and a connecting
+      socket cost on one Durable Object storage handle; the others drive clients through
+      test/traffic.ts, a proxy that counts HTTP requests by route, sockets, frames and bytes.
+      Fails if the CLI, the client, the relay, the protocol or the text they print changes
+      behavior, or an operation costs more requests, frames, bytes or statements than its budget.
 
-  flows-b:
-    name: core / flows-b
+  test-flows-b:
+    name: test / flows-b
     inputs: ["src/**", "test/**", "web/src/**", "web/public/**"]
     always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts"]
     description: >-
       Runs slow agent-flow tests against a real local relay and the kiwi CLI: join-seats
       (joining, one seat per agent, Claude Code hooks doing the listening), read-receipts,
       daemon-pair (kiwi pair through the relay's pairing mailbox: src/daemon.ts, src/machine.ts,
-      src/mailbox.ts), sh-escape (the sandboxed kiwi sh), coordinator-follows (the coordinator
-      role), reclaim (getting a seat back), wake-yourself (the Stop hooks that keep a Kimi Code
-      or Grok agent's own listener running). Fails if joining, seats, hooks, pairing, the daemon,
-      kiwi sh or the relay change behavior.
+      src/mailbox.ts), sh-escape (the sandboxed kiwi sh), coordinator-follows, reclaim,
+      wake-yourself (the Stop hooks that keep a Kimi Code or Grok agent's listener running).
+      Then seats and multi-seat: which agent a command or hook acts for in a folder
+      (src/seats.ts), one session holding seats in two channels, hooks serving the right seat
+      from sibling folders. Then handoff: an escalation's live browser link (src/protocol.ts),
+      `kiwi send --escalate --handoff URL --wait` exit codes, and the link kept out of log, show,
+      listen --json except `kiwi show N --reveal`. Fails if joining, seats, hooks, pairing, the
+      daemon, kiwi sh, handoff or the relay change behavior.
 
-  web-types:
-    jev: false
-    name: web / types
-    inputs: ["web/src/**", "web/index.html", "src/**", "scripts/ui-tokens.ts"]
-    always: ["web/package.json", "web/bun.lock", "web/tsconfig*.json", "web/vite.config.ts", "scripts/ui-tokens.ts"]
+  build:
+    name: build / bundles
+    inputs: ["src/**", "web/**", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/smoke-cli.ts", "scripts/smoke-ui.ts", "scripts/web-bundle.ts", "test/owner.ts", "test/owner-cli.ts", "test/check.ts"]
+    always: ["package.json", "bun.lock", "web/package.json", "web/bun.lock", "web/vite.config.ts", "wrangler.jsonc", "scripts/smoke-ui.ts", "scripts/web-bundle.ts"]
     description: >-
-      Type-checks the React web dashboard with tsc -b in web/, which also compiles the src/
-      modules the dashboard imports through @mc/* (client, crypto, format, identity, load,
-      membership, protocol, sas, scopes, state, work). Then fails on any arbitrary text-[Npx] or
-      rounded-[Npx] Tailwind class in web/src. Fails on a type error in web/src or those src/
-      modules, or a raw pixel size in web/src.
-
-  web-lint:
-    jev: false
-    name: web / lint
-    inputs: ["web/src/**"]
-    always: ["web/.oxlintrc.json", "web/package.json", "web/bun.lock"]
-    description: >-
-      Runs oxlint on web/src with the rules ESLint's recommended JavaScript, TypeScript and
-      React hooks sets had (web/.oxlintrc.json lists them). Fails on an oxlint error in the
-      dashboard's .ts or .tsx files: an unused variable or import, a hook called conditionally,
-      setState in an effect, an impure call in render, an explicit any.
-
-  web-format:
-    jev: false
-    name: web / format
-    inputs: ["web/src/**"]
-    always: ["web/.oxfmtrc.json", "web/package.json", "web/bun.lock"]
-    description: >-
-      Runs oxfmt --check on web/src with web/.oxfmtrc.json. Fails when a file in web/src is not
-      formatted as oxfmt would write it (run `bun run format` in web/ to fix).
-
-  ui-smoke:
-    name: ui-smoke
-    inputs: ["src/**", "web/**", "scripts/smoke-ui.ts"]
-    always: ["package.json", "bun.lock", "web/package.json", "web/bun.lock", "web/vite.config.ts", "scripts/smoke-ui.ts"]
-    description: >-
-      Builds the web dashboard for production, starts the relay (src/relay) and runs the kiwi CLI
-      (src/cli) as a test computer, then drives the dashboard in headless Chromium: opens every
-      menu, popover and dialog, sets up a passkey, previews an invite link, links a computer with
-      `kiwi setup`, approves its agent joining, and opens a task. It finds buttons, menus and
-      dialogs by their visible names and roles. Fails if a page throws while rendering, if a
-      button, label or dialog it looks for is renamed, moved or missing, or if the relay,
-      pairing or join flow breaks.
+      Builds the web dashboard for production (vite build in web/) and fails when the JS the
+      first screen loads (the entry script plus every chunk it modulepreloads) is over
+      BUDGET_BYTES in scripts/web-bundle.ts; code reached only through
+      web/src/components/lazy.tsx doesn't count. Then ui smoke: starts the relay and the kiwi CLI
+      as a test computer and drives the built dashboard in headless Chromium, opening every
+      menu, popover and dialog, setting up a passkey, previewing an invite, linking a computer
+      with `kiwi setup`, approving its agent and opening a task, finding controls by visible
+      names and roles; fails if a page throws while rendering, a control it looks for is renamed
+      or missing, or the relay, pairing or join flow breaks. Then compiles the kiwi CLI into one
+      Linux binary with scripts/build-cli.ts, runs `kiwi --version`, fails over the minified
+      JS byte budget or if QuickJS, sql.js, turndown or domino got back in, and
+      scripts/smoke-cli.ts drives the binary against a local relay (every allowed kiwi sh
+      command compared with the source CLI, the MCP sh tool, kiwi doctor). Then bundles the
+      Cloudflare worker (src/relay/worker.ts) with wrangler deploy --dry-run, failing on a Node-
+      or Bun-only import reaching it or an invalid wrangler.jsonc.
 
   desktop:
-    name: desktop / build
-    inputs: ["desktop/**", "src/**"]
-    always: ["desktop/package.json", "desktop/bun.lock", "desktop/tsconfig*.json"]
-    description: >-
-      Installs desktop/ dependencies, type-checks the Electron shell in desktop/src, and bundles
-      its main, preload and channels (the key process) scripts with bun build. desktop/src imports
-      src/identity.ts, src/mailbox.ts, src/person.ts, and through keyring.ts src/client.ts and
-      what it imports. Fails on a type or bundling error in desktop/src or those imports. The
-      dashboard is not compiled here.
-
-  desktop-fuses:
-    name: desktop / fuses
+    name: desktop / package
     inputs: ["desktop/**", "src/**", "web/src/**", "web/index.html", "scripts/build-cli.ts", "scripts/cli-bundle.ts"]
     always: ["desktop/package.json", "desktop/bun.lock", "desktop/tsconfig*.json", "desktop/scripts/fuses.ts", "desktop/scripts/smoke.ts", "package.json", "bun.lock", "web/package.json", "web/bun.lock"]
     description: >-
-      Packages the Linux app with electron-builder --dir from desktop/package.json's build config
-      (its electronFuses block included), then desktop/scripts/fuses.ts reads the packaged
-      binary's Electron fuses with @electron/fuses and fails unless RunAsNode,
+      Bundles the Electron shell's main, preload and channels (key process) scripts with bun
+      build, then packages the Linux app with electron-builder --dir from desktop/package.json's
+      build config (its electronFuses block included). desktop/scripts/fuses.ts reads the
+      packaged binary's Electron fuses and fails unless RunAsNode,
       EnableNodeOptionsEnvironmentVariable and EnableNodeCliInspectArguments are off and
       EnableCookieEncryption, EnableEmbeddedAsarIntegrityValidation and OnlyLoadAppFromAsar are
-      on. Then desktop/scripts/smoke.ts starts the packaged app under Xvfb and fails unless its
+      on. desktop/scripts/smoke.ts starts the packaged app under Xvfb and fails unless its
       window renders, its key process (utilityProcess.fork of dist/channels.js from app.asar)
-      stays up, and the bundled kiwi daemon answers on its socket, and fails if
-      ELECTRON_RUN_AS_NODE=1 runs JavaScript or --inspect opens a debugger in the packaged app.
-      Fails on a packaging error, a fuse changed or dropped, or an app that no longer starts from
-      its asar.
-
-  site-test:
-    name: site / test
-    inputs: ["site/app.js", "test/site.test.ts"]
-    always: ["package.json", "bun.lock", "scripts/ci-tests.ts"]
-    description: >-
-      Runs test/site.test.ts: loads the public site's script (site/app.js) against a stub page and
-      checks which invite it shows for /join/<code> paths and #<code> links, that a path which
-      isn't a join code (a malformed percent escape included) leaves the landing page and its
-      downloads in place instead of throwing, and the install command it prints. Fails if the
-      invite parsing, the kiwi:// link or the printed command changes.
-
-  desktop-keys:
-    name: desktop / keys
-    inputs: ["desktop/src/**", "src/**", "web/src/**", "test/desktop-keys.test.ts", "test/check.ts"]
-    always: ["package.json", "bun.lock", "scripts/ci-tests.ts"]
-    description: >-
-      Runs test/desktop-keys.test.ts: the desktop key process (desktop/src/keyring.ts, served over
-      the same wire the window uses, web/src/lib/channel-remote.ts) against a local relay. It
-      creates a channel, joins, chats, opens cached rows, rotates on remove, restarts and closes,
-      and fails if any member, owner, person or channel key reaches what the window receives.
-      Also the seat rules (desktop/src/seats.ts: what the window may save), the wire codec, the
-      list of calls the window may make, and a scan of web/src that fails when a file other than
-      web/src/lib/channel-local.ts imports Channel, generateIdentity, seal/open or the keyring.
-
-  cli-build:
-    name: cli / build
-    inputs: ["src/**", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/smoke-cli.ts", "test/owner.ts", "test/owner-cli.ts", "test/check.ts"]
-    always: ["package.json", "bun.lock"]
-    description: >-
-      Compiles the kiwi CLI (src/cli/main.ts and everything it imports) into one Linux binary
-      with scripts/build-cli.ts (minified, split into lazily loaded chunks, and with every
-      just-bash command kiwi sh doesn't allow left out), then runs `kiwi --version`, then checks
-      the minified JS: it fails over its byte budget (BUDGET_BYTES in scripts/build-cli.ts) or if
-      QuickJS (run), sql.js, turndown or domino got back in. Then scripts/smoke-cli.ts drives the
-      binary against a local relay: it joins a channel, runs every allowed kiwi sh command and
-      compares the output with the source CLI's, calls the MCP sh tool, and runs kiwi doctor.
-      Fails if a module or chunk can't be resolved, bundled or loaded, if the binary crashes, or
-      if any of those answers differ.
-
-  relay-worker:
-    name: relay / worker
-    inputs: ["src/**"]
-    always: ["wrangler.jsonc", "package.json", "bun.lock"]
-    description: >-
-      Bundles the Cloudflare worker relay (src/relay/worker.ts and its imports) with wrangler
-      deploy --dry-run and wrangler.jsonc. Fails if the worker can't be bundled for Cloudflare,
-      for example a Node- or Bun-only import reaching src/relay/worker.ts, or an invalid
-      wrangler.jsonc. Code the worker doesn't import can't affect it.
-
-  relay-budget:
-    name: relay / budget
-    inputs: ["src/**", "web/src/lib/**", "test/budget-*.test.ts", "test/traffic.ts", "test/check.ts", "test/owner.ts", "test/owner-cli.ts"]
-    always: ["package.json", "bun.lock", "scripts/ci-tests.ts"]
-    description: >-
-      Runs every test/budget-*.test.ts. budget-relay counts, on one long-lived room storage
-      handle as a Cloudflare Durable Object keeps it, the SQL statements a stored message, a read
-      mark and a connecting socket cost, and checks the room's in-memory state follows posting
-      rights, removals, numbering and a close. The others drive clients through test/traffic.ts,
-      a proxy in front of a local relay that counts HTTP requests by route, sockets, frames by
-      type and bytes. Each fails when an operation costs more requests, frames, bytes or
-      statements than its budget, so a change that adds relay traffic or storage work fails.
-
-  cli-seats:
-    name: cli / seats
-    inputs: ["src/**", "test/seats.test.ts", "test/multi-seat.test.ts", "test/setup.ts", "test/owner.ts", "test/owner-cli.ts", "test/check.ts"]
-    always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts"]
-    description: >-
-      Runs test/seats.test.ts and test/multi-seat.test.ts. seats checks which agent a command or
-      hook acts for in a folder (src/seats.ts): a session's own seat, a restart taking its seat
-      back, a second live session never acting as the first, and a session that holds several
-      seats getting all of them. multi-seat drives the kiwi CLI against a local relay: one Claude
-      Code session joins two channels under two names from one folder, and its SessionStart, Stop
-      and background listen hooks (src/hooks.ts) must serve both seats, while a bare `kiwi listen
-      --now` there must refuse and name both (src/cli/main.ts). A second session joins its second
-      seat from a sibling folder, and the hooks run from the folder it started in must serve that
-      seat too, while another session's hooks must not. Fails if seat resolution, the hook
-      answers or the CLI's choice of agent change.
-
-  cli-handoff:
-    name: cli / handoff
-    inputs: ["src/**", "test/handoff.test.ts", "test/setup.ts", "test/owner.ts", "test/owner-cli.ts", "test/check.ts"]
-    always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts"]
-    description: >-
-      Runs test/handoff.test.ts. An escalation can carry a live browser link (src/protocol.ts
-      handoff): the payload check accepts it only on an escalation and only as an https link
-      without credentials, a vendor of at most 40 characters and an expiry. Against a local relay,
-      `kiwi send --escalate --handoff URL --wait` must exit 0 when the person answers
-      `handoff: done`, 4 on `handoff: failed` and 4 at expiry, and the link must stay out of
-      kiwi log, show, listen --json and the waiting command's own output, appearing only in
-      `kiwi show N --reveal`. Fails if the field, the wait or the redaction change.
-
-  repo-comments:
-    jev: false
-    name: repo / comments
-    inputs: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,css,py}"]
-    always: ["scripts/ci/**"]
-    description: >-
-      AGENTS.md forbids comments and tool directives in code. scripts/ci/no_comments.py reads the
-      lines this change adds (git diff against the first parent) and fails on a comment in a
-      .ts/.tsx/.js/.jsx/.mjs/.cjs/.mts/.cts or .css file, or a comment or docstring in a .py file
-      (a docstring listed in its ALLOWED_DOCSTRINGS passes, a #! first line passes). Old lines
-      are not checked. The job also type-checks scripts/ci with mypy --strict and runs its
-      unit tests.
-
-  repo-pins:
-    jev: false
-    name: repo / pins
-    inputs: [".github/workflows/**", ".github/actions/**", "scripts/action-pins.ts", "test/action-pins.test.ts"]
-    always: ["package.json", "bun.lock", "scripts/ci-tests.ts"]
-    description: >-
-      Runs test/action-pins.test.ts, then scripts/action-pins.ts over .github/workflows and every
-      composite action under .github/actions. The script parses each file as YAML and reads every
-      step's uses, a job's uses (reusable workflows) and a composite action's steps. Fails when one
-      names a third-party action or workflow by tag or branch instead of a full 40-character commit
-      SHA, or a docker:// image without a sha256 digest. Local ones (./…) pass.
-
-  repo-knip:
-    jev: false
-    name: repo / knip
-    inputs: ["**/*.{ts,tsx,css}"]
-    always: ["knip.json", "package.json", "bun.lock", "web/package.json", "web/bun.lock", "desktop/package.json", "desktop/bun.lock"]
-    description: >-
-      Runs Knip (knip.json) over the root, web/ and desktop/ packages. Fails on a file nothing
-      imports, an export or exported type nothing outside its file uses, a dependency no file
-      uses, or an import of a package a package.json doesn't list. Tests count as users, so an
-      export only a test imports passes.
-
-  web-task-cards:
-    jev: false
-    name: web / task-cards
-    inputs: ["web/src/lib/task-cards.ts", "web/src/lib/task-cards.test.ts", "src/protocol.ts", "src/state.ts"]
-    always: ["package.json", "bun.lock", "bunfig.toml"]
-    description: >-
-      Runs the tests for web/src/lib/task-cards.ts, which decides how the main conversation shows tasks:
-      one live card per open task, its claim and update lines folded into that card, and a done task as
-      its last line only. Fails when an open task's events leak into main or a done task loses its line.
-
-  web-bundle:
-    jev: false
-    name: web / bundle
-    inputs: ["web/src/**", "web/index.html", "src/**", "scripts/web-bundle.ts"]
-    always: ["web/package.json", "web/bun.lock", "web/vite.config.ts", "scripts/web-bundle.ts"]
-    description: >-
-      Builds the web dashboard for production (vite build in web/), then adds up the JS the first
-      screen loads: the entry script in web/dist/index.html plus every chunk it modulepreloads.
-      Fails when that is over BUDGET_BYTES in scripts/web-bundle.ts. Code reached only through
-      web/src/components/lazy.tsx (markdown, settings, computers, the palette and the side panels)
-      is loaded after first paint and doesn't count; a new static import of it, or a new heavy
-      dependency on the first screen, can push the total over.
+      stays up and the bundled kiwi daemon answers on its socket, and fails if
+      ELECTRON_RUN_AS_NODE=1 runs JavaScript or --inspect opens a debugger. Fails on a bundling
+      or packaging error, a fuse changed or dropped, or an app that no longer starts.
 
   cli-macos:
     name: cli / macos
@@ -319,8 +156,7 @@ jobs:
       (every test/*.test.ts and web/src test, the agent flows included), compiles the kiwi CLI
       for darwin-arm64, darwin-x64, linux-x64, linux-arm64 and windows-x64 with
       scripts/build-cli.ts, ad-hoc signs the macOS binaries and runs `kiwi --version`. The same
-      tests run on Linux in core / test, core / flows-a, core / flows-b, cli / seats and the
-      other test jobs, so this job is for what fails only on macOS: paths (os.tmpdir() is under
+      tests run on Linux in test / unit, test / flows-a and test / flows-b, so this job is for what fails only on macOS: paths (os.tmpdir() is under
       /var, a symlink to /private/var, so process.cwd() and realpath spell a folder differently
       from mkdtemp; home is under /Users; the file system ignores case; a unix socket path is
       capped at 104 bytes), how the CLI names its own command in the text it prints, BSD

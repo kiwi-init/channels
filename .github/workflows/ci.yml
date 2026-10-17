@@ -14,12 +14,15 @@ concurrency:
 permissions:
   contents: read
 
+# One job per area, its checks as steps: each job pays for one checkout and one install.
+# A step that fails doesn't stop the checks after it (`!cancelled()`), so one run shows every failure.
 jobs:
   # Decides which jobs this pull request can break (.github/jev-ci.yml): rules first, then a
   # cache of inputs that already passed, then Jev for the rest. Pushes to main run everything,
   # and if planning fails, everything runs. Every check below runs only if the plan says so.
   plan:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       actions: read
@@ -41,44 +44,81 @@ jobs:
           TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
 
-  core-types:
-    name: core / types
+  # Types, lint, format, unused code, action pins and the no-comments rule.
+  static:
+    name: repo / static
     needs: plan
-    if: fromJSON(needs.plan.outputs.run)['core-types']
+    if: fromJSON(needs.plan.outputs.run)['static']
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: ./.github/actions/setup
         with:
-          web: "false"
-      - run: bunx tsc --noEmit && bunx tsc --noEmit -p tsconfig.worker.json
+          fetch-depth: 2
+      - uses: ./.github/actions/setup
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - run: cd desktop && bun install --frozen-lockfile
+      - name: core types
+        run: bunx tsc --noEmit && bunx tsc --noEmit -p tsconfig.worker.json
+      - name: web types
+        if: ${{ !cancelled() }}
+        run: cd web && bunx tsc -b
+      - name: desktop types
+        if: ${{ !cancelled() }}
+        run: cd desktop && bunx tsc --noEmit
+      - name: ui tokens
+        if: ${{ !cancelled() }}
+        run: bun scripts/ui-tokens.ts
+      - name: web lint
+        if: ${{ !cancelled() }}
+        run: cd web && bun oxlint src
+      - name: web format
+        if: ${{ !cancelled() }}
+        run: cd web && bun oxfmt --check src
+      - name: knip
+        if: ${{ !cancelled() }}
+        run: bun run knip
+      - name: action pins
+        if: ${{ !cancelled() }}
+        run: bun scripts/action-pins.ts
+      - name: no comments
+        if: ${{ !cancelled() }}
+        run: |
+          python -m pip install mypy==2.3.1
+          python -m mypy --strict scripts/ci
+          python -m unittest discover -s scripts/ci -p 'test_*.py'
+          python scripts/ci/no_comments.py --base HEAD^1
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         with:
-          job: core-types
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['core-types'] }}
+          job: static
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['static'] }}
 
-  core-test:
-    name: core / test
+  test-unit:
+    name: test / unit
     needs: plan
-    if: fromJSON(needs.plan.outputs.run)['core-test']
+    if: fromJSON(needs.plan.outputs.run)['test-unit']
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - run: bun scripts/ci-tests.ts core
+      - run: bun scripts/ci-tests.ts unit
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         with:
-          job: core-test
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['core-test'] }}
+          job: test-unit
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['test-unit'] }}
 
-  # The slow agent flows, split in two so they run side by side (scripts/ci-tests.ts).
-  flows-a:
-    name: core / flows-a
+  # The slow suites against a real local relay, split in two so they run side by side (scripts/ci-tests.ts).
+  test-flows-a:
+    name: test / flows-a
     needs: plan
-    if: fromJSON(needs.plan.outputs.run)['flows-a']
+    if: fromJSON(needs.plan.outputs.run)['test-flows-a']
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
@@ -86,14 +126,15 @@ jobs:
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         with:
-          job: flows-a
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['flows-a'] }}
+          job: test-flows-a
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['test-flows-a'] }}
 
-  flows-b:
-    name: core / flows-b
+  test-flows-b:
+    name: test / flows-b
     needs: plan
-    if: fromJSON(needs.plan.outputs.run)['flows-b']
+    if: fromJSON(needs.plan.outputs.run)['test-flows-b']
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
@@ -101,93 +142,16 @@ jobs:
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         with:
-          job: flows-b
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['flows-b'] }}
+          job: test-flows-b
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['test-flows-b'] }}
 
-  web-types:
-    name: web / types
+  # The web dashboard, the CLI binary and the worker, each built and smoke-tested.
+  build:
+    name: build / bundles
     needs: plan
-    if: fromJSON(needs.plan.outputs.run)['web-types']
+    if: fromJSON(needs.plan.outputs.run)['build']
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: ./.github/actions/setup
-      - run: cd web && bunx tsc -b
-      - run: bun scripts/ui-tokens.ts
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: web-types
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['web-types'] }}
-
-  web-lint:
-    name: web / lint
-    needs: plan
-    if: fromJSON(needs.plan.outputs.run)['web-lint']
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: ./.github/actions/setup
-      - run: cd web && bun oxlint src
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: web-lint
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['web-lint'] }}
-
-  web-format:
-    name: web / format
-    needs: plan
-    if: fromJSON(needs.plan.outputs.run)['web-format']
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: ./.github/actions/setup
-      - run: cd web && bun oxfmt --check src
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: web-format
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['web-format'] }}
-
-  web-task-cards:
-    name: web / task-cards
-    needs: plan
-    if: fromJSON(needs.plan.outputs.run)['web-task-cards']
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: ./.github/actions/setup
-      - run: bun test web/src/lib/task-cards.test.ts
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: web-task-cards
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['web-task-cards'] }}
-
-  web-bundle:
-    name: web / bundle
-    needs: plan
-    if: fromJSON(needs.plan.outputs.run)['web-bundle']
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: ./.github/actions/setup
-      - run: cd web && bun run build
-      - run: bun scripts/web-bundle.ts
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: web-bundle
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['web-bundle'] }}
-
-  # Opens every menu, popover and dialog on the production build: Base UI throws on a
-  # misplaced part only at render, which typecheck can't see (the b085ae8 crash).
-  ui-smoke:
-    name: ui-smoke
-    needs: plan
-    if: fromJSON(needs.plan.outputs.run)['ui-smoke']
-    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
@@ -199,42 +163,42 @@ jobs:
       - run: bunx playwright-core install-deps chromium-headless-shell
       - if: steps.playwright.outputs.cache-hit != 'true'
         run: bunx playwright-core install --only-shell chromium
-      - run: cd web && bun run build
-      - run: bun run smoke:ui
+      - name: web build
+        run: cd web && bun run build
+      - name: web bundle budget
+        run: bun scripts/web-bundle.ts
+      # Opens every menu, popover and dialog on the production build: Base UI throws on a
+      # misplaced part only at render, which typecheck can't see (the b085ae8 crash).
+      - name: ui smoke
+        if: ${{ !cancelled() }}
+        run: bun run smoke:ui
       - if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ui-smoke-failure
           path: /tmp/kiwi-smoke-failure-*.png
           if-no-files-found: ignore
+      - name: cli build
+        if: ${{ !cancelled() }}
+        run: bun run build && ./dist/kiwi --version && bun scripts/build-cli.ts --check
+      - name: cli smoke
+        if: ${{ !cancelled() }}
+        run: bun scripts/smoke-cli.ts dist/kiwi
+      - name: relay worker
+        if: ${{ !cancelled() }}
+        run: bunx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/worker"
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         with:
-          job: ui-smoke
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['ui-smoke'] }}
+          job: build
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['build'] }}
 
   desktop:
-    name: desktop / build
+    name: desktop / package
     needs: plan
     if: fromJSON(needs.plan.outputs.run)['desktop']
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: ./.github/actions/setup
-        with:
-          web: "false"
-      - run: cd desktop && bun install --frozen-lockfile && bunx tsc --noEmit && bun run build
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: desktop
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop'] }}
-
-  desktop-fuses:
-    name: desktop / fuses
-    needs: plan
-    if: fromJSON(needs.plan.outputs.run)['desktop-fuses']
-    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
@@ -248,67 +212,15 @@ jobs:
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         with:
-          job: desktop-fuses
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-fuses'] }}
-
-  desktop-keys:
-    name: desktop / keys
-    needs: plan
-    if: fromJSON(needs.plan.outputs.run)['desktop-keys']
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: ./.github/actions/setup
-        with:
-          web: "false"
-      - run: bun scripts/ci-tests.ts desktop-keys
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: desktop-keys
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-keys'] }}
-
-  site-test:
-    name: site / test
-    needs: plan
-    if: fromJSON(needs.plan.outputs.run)['site-test']
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: ./.github/actions/setup
-        with:
-          web: "false"
-      - run: bun scripts/ci-tests.ts site
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: site-test
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['site-test'] }}
-
-  cli-build:
-    name: cli / build
-    needs: plan
-    if: fromJSON(needs.plan.outputs.run)['cli-build']
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: ./.github/actions/setup
-        with:
-          web: "false"
-      - run: bun run build && ./dist/kiwi --version
-      - run: bun scripts/build-cli.ts --check
-      - run: bun scripts/smoke-cli.ts dist/kiwi
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: cli-build
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['cli-build'] }}
+          job: desktop
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop'] }}
 
   cli-macos:
     name: cli / macos
     needs: plan
     if: fromJSON(needs.plan.outputs.run)['cli-macos']
     runs-on: macos-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
@@ -341,136 +253,14 @@ jobs:
       APPLE_API_KEY_ID: ${{ github.event_name == 'workflow_dispatch' && secrets.APPLE_API_KEY_ID || '' }}
       APPLE_API_ISSUER: ${{ github.event_name == 'workflow_dispatch' && secrets.APPLE_API_ISSUER || '' }}
 
-  relay-worker:
-    name: relay / worker
-    needs: plan
-    if: fromJSON(needs.plan.outputs.run)['relay-worker']
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: ./.github/actions/setup
-        with:
-          web: "false"
-      # wrangler.jsonc serves web/dist as assets; the bundle check doesn't need it built.
-      - run: mkdir -p web/dist && bunx wrangler deploy --dry-run --outdir "$RUNNER_TEMP/worker"
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: relay-worker
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['relay-worker'] }}
-
-  relay-budget:
-    name: relay / budget
-    needs: plan
-    if: fromJSON(needs.plan.outputs.run)['relay-budget']
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: ./.github/actions/setup
-        with:
-          web: "false"
-      - run: bun scripts/ci-tests.ts budget
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: relay-budget
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['relay-budget'] }}
-
-  cli-seats:
-    name: cli / seats
-    needs: plan
-    if: fromJSON(needs.plan.outputs.run)['cli-seats']
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: ./.github/actions/setup
-        with:
-          web: "false"
-      - run: bun scripts/ci-tests.ts seats
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: cli-seats
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['cli-seats'] }}
-
-  cli-handoff:
-    name: cli / handoff
-    needs: plan
-    if: fromJSON(needs.plan.outputs.run)['cli-handoff']
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: ./.github/actions/setup
-        with:
-          web: "false"
-      - run: bun scripts/ci-tests.ts handoff
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: cli-handoff
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['cli-handoff'] }}
-
-  repo-comments:
-    name: repo / comments
-    needs: plan
-    if: fromJSON(needs.plan.outputs.run)['repo-comments']
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          fetch-depth: 2
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
-        with:
-          python-version: "3.12"
-      - run: python -m pip install mypy==2.3.1
-      - run: python -m mypy --strict scripts/ci
-      - run: python -m unittest discover -s scripts/ci -p 'test_*.py'
-      - run: python scripts/ci/no_comments.py --base HEAD^1
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: repo-comments
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['repo-comments'] }}
-
-  repo-knip:
-    name: repo / knip
-    needs: plan
-    if: fromJSON(needs.plan.outputs.run)['repo-knip']
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: ./.github/actions/setup
-      - run: cd desktop && bun install --frozen-lockfile
-      - run: bun run knip
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: repo-knip
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['repo-knip'] }}
-
-  repo-pins:
-    name: repo / pins
-    needs: plan
-    if: fromJSON(needs.plan.outputs.run)['repo-pins']
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: ./.github/actions/setup
-        with:
-          web: "false"
-      - run: bun scripts/ci-tests.ts pins
-      - run: bun scripts/action-pins.ts
-      - uses: ./.github/actions/jev-ci-pass
-        continue-on-error: true
-        with:
-          job: repo-pins
-          hash: ${{ fromJSON(needs.plan.outputs.hashes)['repo-pins'] }}
-
+  # The one check to require: passes when every job the plan ran passed and the rest were skipped.
+  # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, desktop-fuses, cli-build, relay-worker, relay-budget, cli-seats, cli-handoff, repo-comments, desktop-keys, repo-knip, web-bundle, web-task-cards, site-test, repo-pins, cli-macos, release-rehearsal]
+    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, desktop, cli-macos, release-rehearsal]
     if: always()
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: write

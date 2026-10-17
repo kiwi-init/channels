@@ -1,32 +1,20 @@
-// The test suite in CI's groups, so each group is its own job: jev-ci can skip the groups a
-// change can't reach, and the slow agent flows run side by side instead of one after another.
-//
-//   bun scripts/ci-tests.ts core | flows-a | flows-b
-//
-// A new test file lands in core unless it's added to a flows group here.
-
 import { Glob } from "bun"
 import { mkdtempSync, realpathSync, rmSync, symlinkSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 
+const budget = [...new Glob("test/budget-*.test.ts").scanSync()].map((f) => f.slice("test/".length, -".test.ts".length)).sort()
 const FLOWS: Record<string, string[]> = {
-  "flows-a": ["e2e", "verbs", "threads", "reconnect"],
-  "flows-b": ["join-seats", "read-receipts", "daemon-pair", "sh-escape", "coordinator-follows", "reclaim", "wake-yourself"],
-  "desktop-keys": ["desktop-keys"],
-  site: ["site"],
-  pins: ["action-pins"],
-  seats: ["seats", "multi-seat"],
-  handoff: ["handoff"],
-  budget: [...new Glob("test/budget-*.test.ts").scanSync()].map((f) => f.slice("test/".length, -".test.ts".length)).sort(),
+  "flows-a": ["e2e", "verbs", "threads", "reconnect", ...budget],
+  "flows-b": ["join-seats", "read-receipts", "daemon-pair", "sh-escape", "coordinator-follows", "reclaim", "wake-yourself", "seats", "multi-seat", "handoff"],
 }
 
 const group = process.argv[2] ?? ""
 const all = [...new Glob("test/*.test.ts").scanSync(), ...new Glob("web/src/**/*.test.{ts,tsx}").scanSync()].sort()
 const slow = new Set(Object.values(FLOWS).flat().map((name) => `test/${name}.test.ts`))
-const files = group === "core" ? all.filter((f) => !slow.has(f)) : FLOWS[group]?.map((name) => `test/${name}.test.ts`)
+const files = group === "unit" ? all.filter((f) => !slow.has(f)) : FLOWS[group]?.map((name) => `test/${name}.test.ts`)
 if (!files) {
-  console.error(`usage: bun scripts/ci-tests.ts ${["core", ...Object.keys(FLOWS)].join(" | ")}`)
+  console.error(`usage: bun scripts/ci-tests.ts ${["unit", ...Object.keys(FLOWS)].join(" | ")}`)
   process.exit(2)
 }
 const missing = files.filter((f) => !all.includes(f))
