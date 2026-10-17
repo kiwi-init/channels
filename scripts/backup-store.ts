@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { generatePassphrase, putBackup, sealBackup } from "../src/backup.ts";
+import { signIn } from "../src/signin.ts";
 
 interface Store {
   relayUrl: string;
@@ -38,15 +39,27 @@ console.log(
 );
 if (dry) process.exit(0);
 
-if (!store.signin || Date.now() > store.signin.exp - 60_000)
-  throw new Error(
-    "the saved sign-in has expired: open Kiwi once so it refreshes, quit it, and run this again",
-  );
 const relay = flag("relay") ?? store.relayUrl;
+const saved = store.signin && Date.now() < store.signin.exp - 60_000 ? store.signin.access : null;
+const token =
+  saved ??
+  (await signIn(
+    {
+      relay,
+      devName: "dev",
+      open: async (url) => {
+        execFileSync("open", [url]);
+      },
+    },
+    (step) => {
+      if (step.step === "waiting")
+        console.log(`Finish signing in in the browser that opened (code ${step.userCode}).`);
+    },
+  ));
 const passphrase = generatePassphrase();
 await putBackup(
   relay,
-  store.signin.access,
+  token,
   await sealBackup(passphrase, { person: store.person, channels: store.channels }),
 );
 console.log(
