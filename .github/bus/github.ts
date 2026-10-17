@@ -106,11 +106,22 @@ export async function queuedPulls(repo: string, cfg: BusConfig): Promise<Queued>
   return { items, failed }
 }
 
-export type Run = { id: number; status: string; conclusion: string | null; run_attempt: number }
+export type Run = { id: number; status: string; conclusion: string | null; run_attempt: number; created_at?: string }
 
 export async function ciRun(sha: string, branch: string): Promise<Run | undefined> {
   const res = await ghJson<{ workflow_runs: Run[] }>(`/repos/${slug()}/actions/workflows/ci.yml/runs?head_sha=${sha}&branch=${encodeURIComponent(branch)}&per_page=5`)
   return res.workflow_runs[0]
+}
+
+export type Ci = { state: "green" | "red" | "pending" | "none"; startedAt?: number }
+
+export async function ciState(sha: string, branch: string): Promise<Ci> {
+  const r = await ciRun(sha, branch)
+  if (!r) return { state: "none" }
+  const startedAt = r.created_at ? Math.floor(Date.parse(r.created_at) / 1000) : undefined
+  if (r.status !== "completed") return { state: "pending", ...(startedAt ? { startedAt } : {}) }
+  const gate = (await runJobs(r)).find((j) => j.name === "ci-ok")
+  return { state: gate?.conclusion === "success" ? "green" : gate?.conclusion ? "red" : "none", ...(startedAt ? { startedAt } : {}) }
 }
 
 export type Job = { id: number; name: string; conclusion: string | null }

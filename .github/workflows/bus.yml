@@ -12,7 +12,7 @@ on:
   workflow_run:
     workflows: [ci]
     types: [completed]
-    branches: [bus/staging, main]
+    branches: ["bus/**", main]
   schedule:
     - cron: "*/10 * * * *"
   workflow_dispatch:

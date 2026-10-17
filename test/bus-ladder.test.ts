@@ -11,9 +11,9 @@ import { dispose, enclosing, fixesFrom, keepBoth, majority, mergeTrees, patchOf,
 import { questions } from "../.github/bus/questions.ts"
 import { highest } from "../.github/bus/resolve.ts"
 import { message } from "../.github/bus/stage.ts"
-import { inFlight, order, trailers } from "../.github/bus/tick.ts"
+import { fastBlock, inFlight, order, ranked, ready, trailers } from "../.github/bus/tick.ts"
 import { checkFile, duplicateMembers, hasMarkers, parseError } from "../.github/bus/validate.ts"
-import type { Item } from "../.github/bus/github.ts"
+import type { Ci, Item } from "../.github/bus/github.ts"
 
 const cfg: BusConfig = { ...(await loadBus(".github/jev-ci.yml")), tsc: [] }
 const withOpus: BusConfig = { ...cfg, ladder: [...cfg.ladder, "opus"] }
@@ -265,4 +265,68 @@ test.skipIf(!Bun.which("mergiraf"))("the mergiraf driver runs on .ts files and l
   expect(m.unmergeable).toEqual([])
   expect(m.hunks.length).toBe(1)
   expect(m.hunks[0]!.block.base).not.toBeNull()
+})
+
+function forked(ours: Record<string, string>, theirs: Record<string, string>): { dir: string; main: string; fork: string; head: string } {
+  const dir = mkdtempSync(join(tmpdir(), "bus-fast-"))
+  dirs.push(dir)
+  const write = (files: Record<string, string>) => {
+    for (const [name, text] of Object.entries(files)) {
+      Bun.spawnSync(["mkdir", "-p", join(dir, name, "..")])
+      writeFileSync(join(dir, name), text)
+    }
+  }
+  git(dir, "init", "-q", "-b", "main")
+  write({ "a.ts": "a\n", "b.ts": "b\n" })
+  git(dir, "add", ".")
+  git(dir, "commit", "-q", "-m", "base")
+  const fork = git(dir, "rev-parse", "HEAD")
+  git(dir, "checkout", "-q", "-b", "bus/T1-item")
+  write(theirs)
+  git(dir, "add", ".")
+  git(dir, "commit", "-q", "-m", "item")
+  git(dir, "checkout", "-q", "main")
+  write(ours)
+  git(dir, "add", ".")
+  git(dir, "commit", "-q", "-m", "main moved")
+  return { dir, main: git(dir, "rev-parse", "main"), fork, head: git(dir, "rev-parse", "bus/T1-item") }
+}
+
+describe("the fast path", () => {
+  const block = (ours: Record<string, string>, theirs: Record<string, string>) => {
+    const r = forked(ours, theirs)
+    return fastBlock(r.dir, r.main, r.fork, r.head)
+  }
+
+  test("lands on its own CI when main moved only in other files", () => {
+    expect(block({ "b.ts": "b2\n" }, { "a.ts": "a2\n" })).toBeUndefined()
+  })
+
+  test("goes through staging when main changed a file the item changed too", () => {
+    expect(block({ "a.ts": "main\n" }, { "a.ts": "item\n" })).toContain("a.ts")
+  })
+
+  test("goes through staging when the item changes CI or dependency files, or main did since", () => {
+    expect(block({ "b.ts": "b2\n" }, { ".github/workflows/x.yml": "x\n" })).toContain(".github/workflows/x.yml")
+    expect(block({ "b.ts": "b2\n" }, { "package.json": "{}\n" })).toContain("package.json")
+    expect(block({ "bun.lock": "lock\n" }, { "a.ts": "a2\n" })).toContain("bun.lock")
+    expect(block({ "web/package.json": "{}\n" }, { "a.ts": "a2\n" })).toContain("web/package.json")
+  })
+
+  const item = (key: string, since: number): Item => ({ key, kind: "branch", ref: `refs/remotes/origin/${key}`, sha: key, task: key, since, title: key, body: "" })
+  const ci = (entries: Record<string, Ci>) => new Map(Object.entries(entries))
+
+  test("an item whose CI is green goes first, the rest by age, and one still being tested waits", () => {
+    const [old, mid, fresh] = [item("bus/old", 1), item("bus/mid", 2), item("bus/fresh", 3)]
+    const states = ci({ "bus/old": { state: "pending", startedAt: 1_000 }, "bus/mid": { state: "none" }, "bus/fresh": { state: "green" } })
+    expect(ready([old!, mid!, fresh!], states, 1_100).map((i) => i.key)).toEqual(["bus/mid", "bus/fresh"])
+    expect(ranked([mid!, fresh!], states).map((i) => i.key)).toEqual(["bus/fresh", "bus/mid"])
+  })
+
+  test("an item whose CI has been pending too long is taken anyway, and a red one goes to staging", () => {
+    const [stuck, red] = [item("bus/stuck", 1), item("bus/red", 2)]
+    const states = ci({ "bus/stuck": { state: "pending", startedAt: 1_000 }, "bus/red": { state: "red" } })
+    expect(ready([stuck!, red!], states, 1_000 + 21 * 60).map((i) => i.key)).toEqual(["bus/stuck", "bus/red"])
+    expect(ranked([stuck!, red!], states).map((i) => i.key)).toEqual(["bus/stuck", "bus/red"])
+  })
 })
