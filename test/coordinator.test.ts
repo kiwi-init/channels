@@ -59,7 +59,14 @@ describe("coordinator-only in fold", () => {
   });
 
   test("strict: an agent's message to a person is refused; the coordinator's isn't; agent to agent is fine", async () => {
-    const ms = [await makeCoord("coord"), await on(), await msg("dev", "msg", "hi ana", { to: ["ana"] }), await msg("coord", "msg", "hi ana", { to: ["ana"] }), await msg("dev", "msg", "hi coord", { to: ["coord"] }), await msg("dev", "status", "all good")];
+    const ms = [
+      await makeCoord("coord"),
+      await on(),
+      await msg("dev", "msg", "hi ana", { to: ["ana"] }),
+      await msg("coord", "msg", "hi ana", { to: ["ana"] }),
+      await msg("dev", "msg", "hi coord", { to: ["coord"] }),
+      await msg("dev", "status", "all good"),
+    ];
     const s = fold(ms, roster);
     expect(ms.slice(2).map((m) => s.trust.get(m.seq))).toEqual(["refused", "verified", "verified", "verified"]);
     expect(s.rejected.get(ms[2]!.seq)).toBe("only the coordinator (coord) messages people here");
@@ -143,7 +150,7 @@ describe("strict holds however an agent spells its recipients", () => {
   test("a broadcast, *, or a thread reply from another agent never reaches a person", async () => {
     const { keptFromPeople } = await import("@kiwi/core/state.ts");
     const setup = [await makeCoord("coord"), await on()];
-    const ask = await msg("ana", "msg", "status?")
+    const ask = await msg("ana", "msg", "status?");
     const broadcast = await msg("dev", "msg", "everyone: shipping now");
     const star = await msg("dev", "msg", "all: shipping", { to: ["*"] });
     const inThread = await msg("dev", "msg", "on it", { re: [ask.seq] } as never);

@@ -79,7 +79,8 @@ function keepChannel(old: ChannelIdentityView, next: ChannelIdentityView): void 
   const a = publicAccess(old.access);
   if (!a) return;
   const b = publicAccess(next.access);
-  if (!b || b.roomId !== a.roomId || b.ownerPk !== a.ownerPk || b.ownerXpk !== a.ownerXpk || b.epoch < a.epoch || (old.roomId !== undefined && next.roomId !== old.roomId)) throw new Error(`a saved channel can't change its room, owner or epoch (${old.label})`);
+  if (!b || b.roomId !== a.roomId || b.ownerPk !== a.ownerPk || b.ownerXpk !== a.ownerXpk || b.epoch < a.epoch || (old.roomId !== undefined && next.roomId !== old.roomId))
+    throw new Error(`a saved channel can't change its room, owner or epoch (${old.label})`);
 }
 
 export function acceptSeat(stored: ChannelIdentityView[], entry: ChannelIdentityView): ChannelIdentityView[] {

@@ -61,7 +61,9 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, stopped, current }: Wak
 
   const logWake = (seat: Seat, w: DaemonWake, why: string | null): void => {
     try {
-      appendFileSync(join(dir, "wake.log"), `${new Date(w.at).toISOString()}\t${seat.alias}\t${seat.agent}\t${w.via}\t${w.unread}\t${w.ok ? "ok" : "failed"}${why ? `\t${why}` : ""}\n`, { mode: 0o600 });
+      appendFileSync(join(dir, "wake.log"), `${new Date(w.at).toISOString()}\t${seat.alias}\t${seat.agent}\t${w.via}\t${w.unread}\t${w.ok ? "ok" : "failed"}${why ? `\t${why}` : ""}\n`, {
+        mode: 0o600,
+      });
     } catch {
       return;
     }

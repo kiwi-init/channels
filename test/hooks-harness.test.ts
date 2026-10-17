@@ -5,7 +5,30 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, updateConfig } from "../src/config.ts";
 import { VERSION } from "../src/version.ts";
-import { autoInstallExtraHooks, autoInstallHooks, backgroundTasks, cursorStopFollowup, extraInstalled, grokMonitorListens, hooksListen, hooksStatus, installDetected, installExtra, installHooks, isOurHook, kimiReason, PROBE_MS, PROBE_TTL_MS, rewakeCapable, selfIdentity, stopStyle, uninstallDetected, uninstallExtra, withKimiHooks, withoutKimiHooks } from "../src/hooks.ts";
+import {
+  autoInstallExtraHooks,
+  autoInstallHooks,
+  backgroundTasks,
+  cursorStopFollowup,
+  extraInstalled,
+  grokMonitorListens,
+  hooksListen,
+  hooksStatus,
+  installDetected,
+  installExtra,
+  installHooks,
+  isOurHook,
+  kimiReason,
+  PROBE_MS,
+  PROBE_TTL_MS,
+  rewakeCapable,
+  selfIdentity,
+  stopStyle,
+  uninstallDetected,
+  uninstallExtra,
+  withKimiHooks,
+  withoutKimiHooks,
+} from "../src/hooks.ts";
 
 const made: string[] = [];
 const prev = new Map<string, string | undefined>();
@@ -169,23 +192,21 @@ test("codex, gemini, cursor, and grok install, re-install once, and uninstall ke
     join(codex, "hooks.json"),
     JSON.stringify({
       hooks: {
-        Stop: [{ hooks: [{ type: "command", command: "echo mine # kiwi" }, { type: "command", command: "'/old/kiwi' hook stop # channel-one" }] }],
+        Stop: [
+          {
+            hooks: [
+              { type: "command", command: "echo mine # kiwi" },
+              { type: "command", command: "'/old/kiwi' hook stop # channel-one" },
+            ],
+          },
+        ],
       },
     }),
   );
-  writeFileSync(
-    join(gemini, "settings.json"),
-    JSON.stringify({ theme: "dark", hooks: { BeforeAgent: [{ matcher: "startup", hooks: [{ type: "command", command: "echo gemini-user" }] }] } }),
-  );
-  writeFileSync(
-    join(cursor, "hooks.json"),
-    JSON.stringify({ version: 1, hooks: { stop: [{ command: "echo cursor-user # kiwi" }], preToolUse: [{ command: "echo tool" }] } }),
-  );
+  writeFileSync(join(gemini, "settings.json"), JSON.stringify({ theme: "dark", hooks: { BeforeAgent: [{ matcher: "startup", hooks: [{ type: "command", command: "echo gemini-user" }] }] } }));
+  writeFileSync(join(cursor, "hooks.json"), JSON.stringify({ version: 1, hooks: { stop: [{ command: "echo cursor-user # kiwi" }], preToolUse: [{ command: "echo tool" }] } }));
   mkdirSync(join(grok, "hooks"), { recursive: true });
-  writeFileSync(
-    join(grok, "hooks", "kiwi.json"),
-    JSON.stringify({ hooks: { PostToolUse: [{ hooks: [{ type: "command", command: "echo grok-user" }] }] } }),
-  );
+  writeFileSync(join(grok, "hooks", "kiwi.json"), JSON.stringify({ hooks: { PostToolUse: [{ hooks: [{ type: "command", command: "echo grok-user" }] }] } }));
 
   installHooks();
   installExtra("codex");
@@ -448,12 +469,12 @@ test("Kimi Code: one Stop entry in config.toml, re-installed once, and uninstall
 
 test("Kimi Code: a Stop entry with the user's tables after it is replaced in place of nothing they wrote", () => {
   const ours = withKimiHooks("");
-  expect(ours).toStartWith("[[hooks]]\nevent = \"Stop\"\ncommand = ");
-  expect(ours).toEndWith(" hook kimi-stop # kiwi\"\ntimeout = 30\n");
+  expect(ours).toStartWith('[[hooks]]\nevent = "Stop"\ncommand = ');
+  expect(ours).toEndWith(' hook kimi-stop # kiwi"\ntimeout = 30\n');
   const later = `${ours}\n# mine\n[mcp]\nservers = ["a"]\n`;
   const stripped = withoutKimiHooks(later);
   expect(stripped).not.toContain("kimi-stop");
-  expect(stripped).toContain("# mine\n[mcp]\nservers = [\"a\"]");
+  expect(stripped).toContain('# mine\n[mcp]\nservers = ["a"]');
   const again = withKimiHooks(later);
   expect(again.match(/kimi-stop/g)).toHaveLength(1);
   expect(Bun.TOML.parse(again)).toMatchObject({ mcp: { servers: ["a"] } });
@@ -553,7 +574,16 @@ test("a hook through a wrapper in kiwi's install folder counts only when the wra
   const elsewhere = scratch("hk-id-else-");
   const claude = scratch("hk-id-claude-");
   const grok = scratch("hk-id-grok-");
-  const env = { KIWI_HOME: scratch("hk-id-home-"), KIWI_INSTALL: install, CLAUDE_CONFIG_DIR: claude, KIWI_GROK_DIR: grok, KIWI_CODEX_DIR: join(elsewhere, "none"), KIWI_GEMINI_DIR: join(elsewhere, "none"), KIWI_CURSOR_DIR: join(elsewhere, "none"), KIWI_KIMI_DIR: join(elsewhere, "none") };
+  const env = {
+    KIWI_HOME: scratch("hk-id-home-"),
+    KIWI_INSTALL: install,
+    CLAUDE_CONFIG_DIR: claude,
+    KIWI_GROK_DIR: grok,
+    KIWI_CODEX_DIR: join(elsewhere, "none"),
+    KIWI_GEMINI_DIR: join(elsewhere, "none"),
+    KIWI_CURSOR_DIR: join(elsewhere, "none"),
+    KIWI_KIMI_DIR: join(elsewhere, "none"),
+  };
   const forward = (target: string) => `exec ${shellQuoted(process.execPath)} ${shellQuoted(target)} "$@"`;
   const write = (program: string) => {
     const cmd = (arg: string) => `${shellQuoted(program)} hook ${arg} # kiwi`;
@@ -665,5 +695,10 @@ test("the probe runs with a short allowlist of environment variables, not the ag
 });
 
 test("a Kimi Code Stop reason is the answers' plain text, for stderr", () => {
-  expect(kimiReason([{ kind: "block", text: "a" }, { kind: "block", text: "b" }])).toBe("a\n\nb");
+  expect(
+    kimiReason([
+      { kind: "block", text: "a" },
+      { kind: "block", text: "b" },
+    ]),
+  ).toBe("a\n\nb");
 });

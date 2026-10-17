@@ -92,14 +92,7 @@ afterAll(() => {
 
 const pinged: string[] = [];
 const told = new Set<string>();
-const tend = (code: string) =>
-  tendOwned(
-    ada.pk,
-    code,
-    { autoApprove: (p) => app.call(code, "autoApprove", p), requests: (o) => app.call(code, "requests", o) },
-    (_t, body) => pinged.push(body),
-    told,
-  );
+const tend = (code: string) => tendOwned(ada.pk, code, { autoApprove: (p) => app.call(code, "autoApprove", p), requests: (o) => app.call(code, "requests", o) }, (_t, body) => pinged.push(body), told);
 const headTick = () => Promise.all([...owned, ...joined].map((code) => app.call(code, "head")));
 const tendPass = async () => {
   for (const code of owned) await tend(code);
@@ -158,7 +151,9 @@ describe("the app's sidebar and approval, idle, for 5 channels (3 owned)", () =>
     const safetyHeads = (await measure(headTick)).http;
     const safetyTend = (await measure(tendPass)).http;
     const after = (idle.http * 60_000) / 3_000 + (safetyHeads * 60_000) / HEADS_SAFETY_MS + (safetyTend * 60_000) / TEND_SAFETY_MS;
-    console.log(`after: ${idle.http} http in 3s idle, ${safetyHeads} http per ${HEADS_SAFETY_MS / 1000}s head poll, ${safetyTend} http per ${TEND_SAFETY_MS / 1000}s approval poll -> ${after} http/min idle (before ${before})`);
+    console.log(
+      `after: ${idle.http} http in 3s idle, ${safetyHeads} http per ${HEADS_SAFETY_MS / 1000}s head poll, ${safetyTend} http per ${TEND_SAFETY_MS / 1000}s approval poll -> ${after} http/min idle (before ${before})`,
+    );
     expect(idle.http).toBe(0);
     expect(after).toBeLessThanOrEqual(BUDGET.idleHttpPerMinute);
     expect(after).toBeLessThan(before);

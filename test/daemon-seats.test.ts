@@ -118,18 +118,39 @@ describe("seats always on", () => {
   test("a listener adds no presence of its own", async () => {
     const s = await AgentSession.open("test", loadConfig().channels.test!, "claude");
     const seen = from(claudePk).length;
-    await runAgent(Effect.raceFirst(s.listen(() => Effect.void, {}), Effect.sleep(2_000)));
-    expect(from(claudePk).slice(seen).every((p) => p.client === "daemon")).toBe(true);
+    await runAgent(
+      Effect.raceFirst(
+        s.listen(() => Effect.void, {}),
+        Effect.sleep(2_000),
+      ),
+    );
+    expect(
+      from(claudePk)
+        .slice(seen)
+        .every((p) => p.client === "daemon"),
+    ).toBe(true);
   });
 
   test("a seat with a listener is announced as listening, and as unreachable again once it goes", async () => {
     const s = await AgentSession.open("test", loadConfig().channels.test!, "claude");
     const seen = from(claudePk).length;
-    const heardListening = () => from(claudePk).slice(seen).some((p) => p.reach === "listening");
-    await runAgent(Effect.raceFirst(s.listen(() => Effect.void, {}), Effect.promise(() => until("a listening presence", heardListening))));
+    const heardListening = () =>
+      from(claudePk)
+        .slice(seen)
+        .some((p) => p.reach === "listening");
+    await runAgent(
+      Effect.raceFirst(
+        s.listen(() => Effect.void, {}),
+        Effect.promise(() => until("a listening presence", heardListening)),
+      ),
+    );
     expect(heardListening()).toBe(true);
     const after = from(claudePk).length;
-    await until("an unreachable presence", () => from(claudePk).slice(after).some((p) => p.reach === "unreachable"));
+    await until("an unreachable presence", () =>
+      from(claudePk)
+        .slice(after)
+        .some((p) => p.reach === "unreachable"),
+    );
   });
 
   test("a Kimi Code seat is announced as woken by its background listener only while one runs", async () => {
@@ -137,11 +158,23 @@ describe("seats always on", () => {
     try {
       const s = await AgentSession.open("test", loadConfig().channels.test!, "claude");
       const seen = from(claudePk).length;
-      const heardWake = () => from(claudePk).slice(seen).some((p) => p.wake === "listener");
-      await runAgent(Effect.raceFirst(s.listen(() => Effect.void, {}), Effect.promise(() => until("a presence with the listener wake", heardWake))));
+      const heardWake = () =>
+        from(claudePk)
+          .slice(seen)
+          .some((p) => p.wake === "listener");
+      await runAgent(
+        Effect.raceFirst(
+          s.listen(() => Effect.void, {}),
+          Effect.promise(() => until("a presence with the listener wake", heardWake)),
+        ),
+      );
       expect(heardWake()).toBe(true);
       const after = from(claudePk).length;
-      await until("the wake to go with the listener", () => from(claudePk).slice(after).some((p) => p.wake === undefined));
+      await until("the wake to go with the listener", () =>
+        from(claudePk)
+          .slice(after)
+          .some((p) => p.wake === undefined),
+      );
     } finally {
       const bindings = omit(loadConfig().bindings ?? {}, "/kimi");
       saveConfig({ ...loadConfig(), bindings });

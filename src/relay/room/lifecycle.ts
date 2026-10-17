@@ -17,8 +17,7 @@ export const create = Effect.fn("Room.create")(function* (signer: string | null,
   const { owner, members } = body;
   if (!owner || signer !== owner.pk) return yield* new Unauthorized({ message: "create must be signed by the owner" });
   const signed = yield* Effect.promise(
-    async () =>
-      (await verify({ room: db.roomId, pk: owner.pk, xpk: owner.xpk, v: 2, sig: owner.sig })) || (await verify({ room: db.roomId, pk: owner.pk, xpk: owner.xpk, sig: owner.sig })),
+    async () => (await verify({ room: db.roomId, pk: owner.pk, xpk: owner.xpk, v: 2, sig: owner.sig })) || (await verify({ room: db.roomId, pk: owner.pk, xpk: owner.xpk, sig: owner.sig })),
   );
   if (!signed) return yield* new BadRequest({ message: "bad owner signature" });
   if (!members?.some((m) => m.pk === owner.pk)) return yield* new BadRequest({ message: "the owner must be a member" });

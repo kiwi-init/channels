@@ -159,8 +159,14 @@ export function cardLine(c: Card | undefined): string {
   const parts = [
     inlineText(c.model, 60),
     inlineText(c.harness, 40),
-    [c.os, c.arch].filter(Boolean).map((x) => inlineText(x, 40)).join(" "),
-    [c.cpu, c.memory].filter(Boolean).map((x) => inlineText(x, 60)).join(", "),
+    [c.os, c.arch]
+      .filter(Boolean)
+      .map((x) => inlineText(x, 40))
+      .join(" "),
+    [c.cpu, c.memory]
+      .filter(Boolean)
+      .map((x) => inlineText(x, 60))
+      .join(", "),
     where,
     c.tools?.length ? `tools: ${c.tools.map((t) => inlineText(t, 40)).join(", ")}` : "",
     inlineText(c.note, 200),
@@ -318,7 +324,8 @@ export function modeLine(state: ChannelState, me: string): string | null {
   if (!state.mode.coordinatorOnly) return null;
   const c = state.coordinator;
   if (!c) return "mode: coordinator-only, but no coordinator yet (the owner gives someone the role coordinator): delivery is as usual until then";
-  if (c === me) return "mode: coordinator-only, and you are the coordinator: relay between people and agents in both directions, and answer every person. Pass a person's message on with --re N (or kiwi task add … --re N): the agent that takes it on reacts 👀 on it, so they know it got through";
+  if (c === me)
+    return "mode: coordinator-only, and you are the coordinator: relay between people and agents in both directions, and answer every person. Pass a person's message on with --re N (or kiwi task add … --re N): the agent that takes it on reacts 👀 on it, so they know it got through";
   const me_ = state.members.get(me);
   if (me_ && (me_.kind === "human" || me_.owner)) return `mode: coordinator-only: you talk with ${c}, who passes things on`;
   return `mode: coordinator-only: report to ${c}, never to a person${state.mode.strict ? " (every client refuses an agent's message to a person)" : ""}`;
@@ -366,7 +373,10 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
     const where = on ? presenceWords(on, now) : m ? `last seen ${ago(m.lastSeen, now)}` : "online";
     const role = inlineText(m?.role ?? on?.role, 80);
     const key = m?.pk ? ` · key ${m.pk.slice(0, 8)}` : "";
-    const kind = m?.kind === "human" ? ` · human${m.display ? ` (${inlineText(m.display, 80)})` : ""}${m.owner ? ", owner" : ""}` : `${m?.display ? ` · nickname ${inlineText(m.display, 40)}` : ""}${m?.sponsor ? ` · agent of @${inlineText(m.sponsor.handle ?? m.sponsor.name, 80)}` : ""}`;
+    const kind =
+      m?.kind === "human"
+        ? ` · human${m.display ? ` (${inlineText(m.display, 80)})` : ""}${m.owner ? ", owner" : ""}`
+        : `${m?.display ? ` · nickname ${inlineText(m.display, 40)}` : ""}${m?.sponsor ? ` · agent of @${inlineText(m.sponsor.handle ?? m.sponsor.name, 80)}` : ""}`;
     const may = m && presetOf(m.scopes) !== "full" ? ` · may: ${describeScopes(m.scopes)}` : "";
     out.push(`  ${name}${name === me ? " (you)" : ""}${role ? ` — ${role}` : ""}${kind}${may} · ${where}${key}`);
     // How busy they are, so work goes to whoever's free (people only when they hold tasks).
@@ -393,7 +403,7 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
   const done = tasks.filter((t) => t.state === "done").length;
   const cancelled = tasks.filter((t) => t.state === "done" && t.cancelled).length;
   out.push("", `tasks (${active.length} open${done ? `, ${done} done${cancelled ? ` (${cancelled} cancelled)` : ""}` : ""}):`);
-  if (!active.length) out.push("  none — add one with: kiwi task add \"…\"");
+  if (!active.length) out.push('  none — add one with: kiwi task add "…"');
   const order = ["doing", "review", "todo"];
   active.sort((a, b) => order.indexOf(a.state) - order.indexOf(b.state) || a.id - b.id);
   for (const t of active) out.push(taskLine(t));
@@ -444,7 +454,10 @@ export function reviewBody(m: Message): string | null {
 
 /** One task in full. `_state` is kept so callers needn't change (it used to resolve dependencies). */
 export function formatTask(_state: ChannelState, t: Task, now = Date.now()): string {
-  const out = [`${taskId(t.id)} ${inlineText(t.title, 200)}`, `  state: ${taskStateWord(t)}${t.owner ? ` · owner: ${inlineText(t.owner, 40)}` : " · unassigned"} · created by ${inlineText(t.createdBy, 40)} ${ago(t.createdAt, now)}`];
+  const out = [
+    `${taskId(t.id)} ${inlineText(t.title, 200)}`,
+    `  state: ${taskStateWord(t)}${t.owner ? ` · owner: ${inlineText(t.owner, 40)}` : " · unassigned"} · created by ${inlineText(t.createdBy, 40)} ${ago(t.createdAt, now)}`,
+  ];
   if (t.review) out.push(`  ${reviewPhrase(t.review)}${t.approvedBy ? `; approved by ${inlineText(t.approvedBy, 40)}` : t.state === "review" ? "; waiting for it" : ""}`);
   if (t.rounds.length) {
     out.push("", "review rounds:");
@@ -470,7 +483,8 @@ export function formatShown(m: Message, messages: Message[], state: ChannelState
   if (missing) out.push(`  ${missing}`);
   for (const r of m.re ?? []) {
     const parent = messages.find((x) => x.seq === r);
-    if (parent && !ignored(state.trust.get(parent.seq))) out.push(`answers #${parent.seq} ${who(parent.from, state)}: ${inlineText(parent.kind === "event" ? describeEvent(parent, state) : parent.body, 140)}`);
+    if (parent && !ignored(state.trust.get(parent.seq)))
+      out.push(`answers #${parent.seq} ${who(parent.from, state)}: ${inlineText(parent.kind === "event" ? describeEvent(parent, state) : parent.body, 140)}`);
   }
   const replies = messages.filter((x) => x.re?.includes(m.seq) && !ignored(state.trust.get(x.seq)));
   if (replies.length) {

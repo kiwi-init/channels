@@ -103,7 +103,6 @@ class OwnerSession extends AgentSession {
     });
   }
 
-
   /**
    * Owner, a person: in coordinator mode with nobody holding the role, the earliest agent still here
    * becomes the coordinator (the first one in, unless the owner picks another). Returns who, or null.

@@ -1,9 +1,42 @@
 import { describe, expect, test } from "bun:test";
 import { loadJson, loadLine, loadSummary, memberLoad, showsLoad } from "@kiwi/core/load.ts";
 import type { ChannelState, Task } from "@kiwi/core/state.ts";
-const task = (id: number, owner: string | undefined, state: Task["state"], title = `task ${id}`): Task => ({ id, title, state, owner, createdBy: "x", createdAt: 0, updatedAt: 0, notes: [], workedBy: [], rounds: [] });
+const task = (id: number, owner: string | undefined, state: Task["state"], title = `task ${id}`): Task => ({
+  id,
+  title,
+  state,
+  owner,
+  createdBy: "x",
+  createdAt: 0,
+  updatedAt: 0,
+  notes: [],
+  workedBy: [],
+  rounds: [],
+});
 const board = (tasks: Task[]): ChannelState =>
-  ({ members: new Map(), tasks: new Map(tasks.map((t) => [t.id, t])), facts: new Map(), trust: new Map(), scopeSets: new Map(), roleSets: new Map(), rejected: new Map(), openAsks: [], threadOf: new Map(), threadPeople: new Map(), mode: { coordinatorOnly: false, strict: false }, coordinator: null, direct: new Set(), rooms: new Map(), roomOf: new Map(), placeOf: new Map(), places: new Map(), charter: null, hold: null, reactions: new Map(), head: 0 }) as ChannelState;
+  ({
+    members: new Map(),
+    tasks: new Map(tasks.map((t) => [t.id, t])),
+    facts: new Map(),
+    trust: new Map(),
+    scopeSets: new Map(),
+    roleSets: new Map(),
+    rejected: new Map(),
+    openAsks: [],
+    threadOf: new Map(),
+    threadPeople: new Map(),
+    mode: { coordinatorOnly: false, strict: false },
+    coordinator: null,
+    direct: new Set(),
+    rooms: new Map(),
+    roomOf: new Map(),
+    placeOf: new Map(),
+    places: new Map(),
+    charter: null,
+    hold: null,
+    reactions: new Map(),
+    head: 0,
+  }) as ChannelState;
 
 describe("member load", () => {
   test("nothing assigned is free; done tasks and other people's don't count", () => {

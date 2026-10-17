@@ -47,7 +47,8 @@ export function loadStore(): void {
   store.relayUrl = normalizeRelay(store.relayUrl) ?? DEFAULT_RELAY;
 }
 
-const brokenError = () => new Error(`Channels can't read its saved keys (${storeBroken}), so it saves nothing over them. Unlock your keychain, then quit and reopen Channels. The file is ${storePath()}.`);
+const brokenError = () =>
+  new Error(`Channels can't read its saved keys (${storeBroken}), so it saves nothing over them. Unlock your keychain, then quit and reopen Channels. The file is ${storePath()}.`);
 
 function saveStore(): void {
   if (storeBroken) throw brokenError();

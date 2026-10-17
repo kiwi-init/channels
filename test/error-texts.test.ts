@@ -17,7 +17,9 @@ const dir = join(import.meta.dir, "../src/relay");
  */
 function errorTexts(): string[] {
   const out = new Set<string>();
-  for (const f of readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((f) => f.endsWith(".ts")).sort()) {
+  for (const f of readdirSync(dir, { recursive: true, encoding: "utf8" })
+    .filter((f) => f.endsWith(".ts"))
+    .sort()) {
     const src = readFileSync(join(dir, f), "utf8");
     for (const m of src.matchAll(/refuse\(\s*(\d{3}),\s*([`"'])((?:\\.|(?!\2).)*)\2/g)) out.add(`${m[1]} ${m[3]}`);
     // A text kept in a string constant counts as that text.

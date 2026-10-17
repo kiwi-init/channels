@@ -27,9 +27,7 @@ export const isCoordinatorRole = (role: string | undefined) => role?.trim().toLo
 export function firstAgent(state: Pick<ChannelState, "members">): string | undefined {
   const owner = [...state.members.values()].find((m) => m.owner && m.active)?.sponsor?.user;
   if (!owner) return undefined;
-  const agents = [...state.members.values()]
-    .filter((m) => m.active && !isPerson(m) && (m.kind as string | undefined) !== "computer" && m.sponsor?.user === owner)
-    .sort((a, b) => a.joined - b.joined);
+  const agents = [...state.members.values()].filter((m) => m.active && !isPerson(m) && (m.kind as string | undefined) !== "computer" && m.sponsor?.user === owner).sort((a, b) => a.joined - b.joined);
   return agents.find((m) => !m.role)?.name;
 }
 

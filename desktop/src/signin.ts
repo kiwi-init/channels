@@ -19,11 +19,13 @@ export async function relayConfig(relay: string): Promise<RelayConfig> {
 }
 
 async function workosDeviceSignIn(clientId: string): Promise<{ access: string; refresh: string; exp: number }> {
-  const start = await (await fetch(WORKOS_DEVICE_URL, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ client_id: clientId, scope: "openid profile email offline_access" }),
-  })).json() as { device_code?: string; user_code?: string; verification_uri?: string; verification_uri_complete?: string; expires_in?: number; interval?: number };
+  const start = (await (
+    await fetch(WORKOS_DEVICE_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ client_id: clientId, scope: "openid profile email offline_access" }),
+    })
+  ).json()) as { device_code?: string; user_code?: string; verification_uri?: string; verification_uri_complete?: string; expires_in?: number; interval?: number };
   if (!start.device_code) throw new Error("the relay's sign-in didn't start");
   const given = start.verification_uri_complete ?? (start.verification_uri ? `${start.verification_uri}?user_code=${encodeURIComponent(start.user_code ?? "")}` : null);
   const verifyUrl = given && URL.canParse(given) && new URL(given).protocol === "https:" ? given : null;

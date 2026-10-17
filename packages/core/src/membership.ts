@@ -100,7 +100,12 @@ export function runsLine(r: Runs | undefined): string {
 export function handleFor(name: string, email?: string): string {
   // The whole name, not just the first: "Jonatas Filho" and "Jonatas Walker" must not both be @jonatas.
   const base = (name.trim() || email?.split("@")[0] || "person").toLowerCase().replace(/\s+/g, "-");
-  const h = base.normalize("NFKD").replace(/[^\p{L}\p{N}_.-]/gu, "").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 32);
+  const h = base
+    .normalize("NFKD")
+    .replace(/[^\p{L}\p{N}_.-]/gu, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 32);
   return h || "person";
 }
 

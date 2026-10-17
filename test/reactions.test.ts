@@ -43,7 +43,10 @@ describe("the react event", () => {
     const hi = await msg("jon", "msg", "fix the build");
     const ms = [hi, await react("dev", hi.seq, "👀"), await react("dev2", hi.seq, "👍"), await react("dev", hi.seq, "✅")];
     const s = fold(ms, roster);
-    expect([...s.reactions.get(hi.seq)!].map(([n, r]) => [n, r.emoji])).toEqual([["dev", "✅"], ["dev2", "👍"]]);
+    expect([...s.reactions.get(hi.seq)!].map(([n, r]) => [n, r.emoji])).toEqual([
+      ["dev", "✅"],
+      ["dev2", "👍"],
+    ]);
     // Reactions aren't messages of theirs.
     expect(s.members.get("dev")!.messages).toBe(0);
     expect(s.members.get("jon")!.messages).toBe(1);

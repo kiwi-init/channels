@@ -66,7 +66,10 @@ export function here(env: Record<string, string | undefined> = process.env, tree
 }
 
 function modelKey(model: string): string {
-  return model.trim().toLowerCase().replace(/\[[^\]]*\]$/, "");
+  return model
+    .trim()
+    .toLowerCase()
+    .replace(/\[[^\]]*\]$/, "");
 }
 
 function sameModel(seat: string | undefined, session: string | undefined): boolean {
@@ -237,7 +240,12 @@ export function seatsFor(dir: string, opts: SeatOptions = {}): Binding[] {
     const listenedElsewhere = (b: Binding) => live.some((l) => l.alias === b.alias && l.as === b.as && !ours(l));
     const free = seats.filter(
       // (Only a session asks whether someone else listens: a plain terminal can't tell its own listener from another's.)
-      (b) => !heldElsewhere(b, who, listening) && !(who.session && !b.session && listenedElsewhere(b)) && !(b.plain && who.session) && (!b.harness || !who.harness || b.harness === who.harness) && sameModel(b.model, who.model),
+      (b) =>
+        !heldElsewhere(b, who, listening) &&
+        !(who.session && !b.session && listenedElsewhere(b)) &&
+        !(b.plain && who.session) &&
+        (!b.harness || !who.harness || b.harness === who.harness) &&
+        sameModel(b.model, who.model),
     );
     // Several free seats: the one of this session's harness, when there's exactly one; otherwise it would be guessing.
     const ofMine = free.filter((b) => who.harness && b.harness === who.harness);
@@ -246,8 +254,22 @@ export function seatsFor(dir: string, opts: SeatOptions = {}): Binding[] {
     if (opts.claim !== false && who.session && (pick.session !== who.session || (who.pid && pick.pid !== who.pid))) {
       // The previous holder's process goes with it: this session's, or none.
       const rest = omit(pick, "pid", "model");
-      const taken: Binding = { ...rest, session: who.session, ...(who.pid ? { pid: who.pid } : {}), ...(who.model ? { model: who.model } : {}), ...(who.harness && !pick.harness ? { harness: who.harness } : {}), at: Date.now(), seen: Date.now() };
-      updateConfig((c) => store(c, d, seatsAt(c, d).map((b) => (b.alias === pick.alias && b.as === pick.as ? taken : b))));
+      const taken: Binding = {
+        ...rest,
+        session: who.session,
+        ...(who.pid ? { pid: who.pid } : {}),
+        ...(who.model ? { model: who.model } : {}),
+        ...(who.harness && !pick.harness ? { harness: who.harness } : {}),
+        at: Date.now(),
+        seen: Date.now(),
+      };
+      updateConfig((c) =>
+        store(
+          c,
+          d,
+          seatsAt(c, d).map((b) => (b.alias === pick.alias && b.as === pick.as ? taken : b)),
+        ),
+      );
       return [taken];
     }
     return [pick];
@@ -263,7 +285,13 @@ export function bindingFor(dir: string, opts: SeatOptions = {}): Binding | null 
 function keepSeen(dir: string, mine: Binding[]): void {
   const stale = mine.filter((m) => !m.pid && Date.now() - (m.seen ?? m.at ?? 0) > SEEN_EVERY_MS);
   if (!stale.length) return;
-  updateConfig((c) => store(c, dir, seatsAt(c, dir).map((b) => (stale.some((m) => sameSeat(b, m)) ? { ...b, seen: Date.now() } : b))));
+  updateConfig((c) =>
+    store(
+      c,
+      dir,
+      seatsAt(c, dir).map((b) => (stale.some((m) => sameSeat(b, m)) ? { ...b, seen: Date.now() } : b)),
+    ),
+  );
 }
 
 export function seatsHeldAnywhere(who: Here = here(), opts: Pick<SeatOptions, "claim"> = {}): Binding[] {

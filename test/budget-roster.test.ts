@@ -109,9 +109,7 @@ const look = async (label: string, ...args: string[]): Promise<Look> => {
     info304: t.statuses["GET /info 304"] ?? 0,
     infoBytes: t.routeBytes["GET /info"] ?? 0,
   };
-  console.log(
-    `${label}: ${t.http} http, ${t.bytesDown} B down; GET /members ${l.membersOk}x200 ${l.members304}x304 ${l.membersBytes} B; GET /info ${l.infoOk}x200 ${l.info304}x304 ${l.infoBytes} B`,
-  );
+  console.log(`${label}: ${t.http} http, ${t.bytesDown} B down; GET /members ${l.membersOk}x200 ${l.members304}x304 ${l.membersBytes} B; GET /info ${l.infoOk}x200 ${l.info304}x304 ${l.infoBytes} B`);
   return l;
 };
 

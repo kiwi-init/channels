@@ -11,7 +11,8 @@ export function wants(me: string, m: Message, state: ChannelState | null, d: Del
   if (d.thread !== undefined) return m.kind !== "event" && (state?.threadOf.get(m.seq) ?? m.seq) === (state?.threadOf.get(d.thread) ?? d.thread);
   const role = state?.members.get(me)?.role;
   const addressed = isDirectedAt(m, me) || !!m.to?.includes("*") || (!!role && !!m.to?.includes(`role:${role}`));
-  if (m.kind === "event") return addressed || m.ev?.op === "hello" || m.ev?.op === "mode.set" || m.ev?.op === "room.create" || m.ev?.op === "room.rename" || m.ev?.op === "charter.set" || m.ev?.op === "hold.set";
+  if (m.kind === "event")
+    return addressed || m.ev?.op === "hello" || m.ev?.op === "mode.set" || m.ev?.op === "room.create" || m.ev?.op === "room.rename" || m.ev?.op === "charter.set" || m.ev?.op === "hold.set";
   if (d.chat) return true;
   const place = state?.placeOf.get(m.seq);
   if (state && place && place.kind !== "main") return isDirectedAt(m, me) || threadMembers(state, place).includes(me) || !!state.threadPeople.get(state.threadOf.get(m.seq) ?? m.seq)?.has(me);

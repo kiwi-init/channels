@@ -44,7 +44,10 @@ describe("kiwi sh threads and query", () => {
   test("log.jsonl carries task and esc, and threads/ splits by place", async () => {
     const v = await fixture();
     const files = channelFiles([v]);
-    const log = (files["/channel/log.jsonl"] ?? "").trim().split("\n").map((l) => JSON.parse(l));
+    const log = (files["/channel/log.jsonl"] ?? "")
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l));
     expect(log.find((e) => e.body === "need a decision")?.esc).toBe(true);
     expect(log.find((e) => e.body === "working on it")?.task).toBe(1);
     expect(files["/channel/threads/T1.jsonl"]).toContain("working on it");

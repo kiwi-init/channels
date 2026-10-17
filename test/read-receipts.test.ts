@@ -170,7 +170,9 @@ describe("agents mark as kiwi hands them messages", () => {
   beforeAll(async () => {
     const before = new Set(readdirSync(dataDir));
     const code = /join code: (\S+)/.exec(await ok(owner, "create", "reads", "--as", "lead", "--open"))![1]!;
-    roomId = readdirSync(dataDir).find((f) => !before.has(f) && /^[0-9a-f]{32}\.sqlite$/.test(f))!.slice(0, 32);
+    roomId = readdirSync(dataDir)
+      .find((f) => !before.has(f) && /^[0-9a-f]{32}\.sqlite$/.test(f))!
+      .slice(0, 32);
     const p = spawn(agent, ["join", code, "--as", "dev"]);
     let listed = "";
     await until(async () => /\d{3}-\d{3}/.test((listed = await ok(owner, "--as", "human", "requests"))), "request");
@@ -220,7 +222,13 @@ describe("agents mark as kiwi hands them messages", () => {
   });
 
   test("an MCP wait marks what it returned", async () => {
-    const p = Bun.spawn([...MC, "mcp"], { cwd: agent, env: { ...process.env, KIWI_HOME: agent, KIWI_RELAY: relay, KIWI_NO_HOOKS: "1", KIWI_CHANNEL: "reads", KIWI_AS: "dev" }, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
+    const p = Bun.spawn([...MC, "mcp"], {
+      cwd: agent,
+      env: { ...process.env, KIWI_HOME: agent, KIWI_RELAY: relay, KIWI_NO_HOOKS: "1", KIWI_CHANNEL: "reads", KIWI_AS: "dev" },
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
     try {
       const reader = p.stdout.getReader();
       let buf = "";

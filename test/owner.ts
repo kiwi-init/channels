@@ -48,10 +48,7 @@ export async function pairComputer(person: Identity, label = "test-computer"): P
 }
 
 /** Run the join-check handshake the way the two clients do: the owner signs halves, joiners reveal. */
-export async function handshake(
-  s: Pick<OwnerSetup, "relay" | "code"> & { ownerCh: Channel },
-  joiners: { id: Identity; requestId: string }[],
-): Promise<JoinRequest[]> {
+export async function handshake(s: Pick<OwnerSetup, "relay" | "code"> & { ownerCh: Channel }, joiners: { id: Identity; requestId: string }[]): Promise<JoinRequest[]> {
   return checked(s.ownerCh, s.relay, s.code, joiners, memoryBudget());
 }
 
@@ -86,11 +83,7 @@ export async function joinAgent(
 }
 
 /** A person asks to join themself, and the owner lets them in. */
-export async function joinPerson(
-  s: OwnerSetup,
-  name: string,
-  person: Identity,
-): Promise<{ id: Identity; ch: Channel; member: Member }> {
+export async function joinPerson(s: OwnerSetup, name: string, person: Identity): Promise<{ id: Identity; ch: Channel; member: Member }> {
   const id = await generateIdentity(name);
   const claim = await provePerson(person, s.roomId, id.pk);
   const { requestId } = await Channel.requestJoin(s.relay, s.code, id, { name }, { person: claim });

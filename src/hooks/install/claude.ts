@@ -24,9 +24,7 @@ function writeSettings(s: Settings): void {
 }
 
 export function withoutOurs(entries: HookEntry[] | undefined): HookEntry[] {
-  return (entries ?? [])
-    .map((e) => ({ ...e, hooks: e.hooks.filter((h) => !isOurHookCommand(h.command)) }))
-    .filter((e) => e.hooks.length > 0);
+  return (entries ?? []).map((e) => ({ ...e, hooks: e.hooks.filter((h) => !isOurHookCommand(h.command)) })).filter((e) => e.hooks.length > 0);
 }
 
 export function installHooks(): string {

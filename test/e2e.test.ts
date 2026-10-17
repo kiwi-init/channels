@@ -408,13 +408,14 @@ describe("images and cross-channel tasks through the CLI", () => {
     await ok(b, "send", "ping the hook");
     // The first POST may be something else. Wait until this message's body is there, then stop.
     await untilTrue(
-      () => hooks.some((h) => {
-        try {
-          return (JSON.parse(h) as { text?: string }).text === "ping the hook";
-        } catch {
-          return false;
-        }
-      }),
+      () =>
+        hooks.some((h) => {
+          try {
+            return (JSON.parse(h) as { text?: string }).text === "ping the hook";
+          } catch {
+            return false;
+          }
+        }),
       "webhook body",
     );
     watching.kill();
@@ -525,7 +526,13 @@ describe("several agents on one machine", () => {
     const owner = home("hb-owner");
     const h = home("hb-home");
     const code = /join code: (\S+)/.exec(await ok(owner, "create", "hb", "--as", "boss"))![1]!;
-    const p = Bun.spawn([...MC, "join", code, "--as", "solo"], { cwd: h, env: { ...process.env, HOME: h, KIWI_HOME: h, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir }, stdin: "ignore", stdout: "pipe", stderr: "pipe" });
+    const p = Bun.spawn([...MC, "join", code, "--as", "solo"], {
+      cwd: h,
+      env: { ...process.env, HOME: h, KIWI_HOME: h, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir },
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
     const l = lines(p);
     await ok(owner, "--as", "human", "approve", await codeShown(owner, l), "--yes");
     expect(await p.exited).toBe(0);
@@ -599,10 +606,7 @@ function storedCursor(dir: string): number {
 }
 
 /** One MCP session: initialize, then run `fn`. The process dies when `fn` returns. */
-async function withMcp(
-  h: string,
-  fn: (call: (name: string, args?: object) => Promise<string>, init: { instructions: string }) => Promise<void>,
-): Promise<void> {
+async function withMcp(h: string, fn: (call: (name: string, args?: object) => Promise<string>, init: { instructions: string }) => Promise<void>): Promise<void> {
   const p = Bun.spawn([...MC, "mcp"], { env: { ...process.env, KIWI_HOME: h, KIWI_RELAY: relay }, stdin: "pipe", stdout: "pipe", stderr: "pipe" });
   try {
     const reader = p.stdout.getReader();
@@ -700,7 +704,27 @@ describe("MCP server", () => {
       p.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
       const tools = ((await rpc("tools/list")) as { tools: { name: string }[] }).tools.map((t) => t.name).sort();
       // No admin tools, even on the owner's machine: a person lets people in and sets what they may do.
-      expect(tools).toEqual(["ask", "ask_human", "escalate", "facts", "log", "members", "message", "read", "reply", "rooms", "save", "send", "sh", "status", "task_add", "task_update", "tasks", "wait_for_messages", "who"]);
+      expect(tools).toEqual([
+        "ask",
+        "ask_human",
+        "escalate",
+        "facts",
+        "log",
+        "members",
+        "message",
+        "read",
+        "reply",
+        "rooms",
+        "save",
+        "send",
+        "sh",
+        "status",
+        "task_add",
+        "task_update",
+        "tasks",
+        "wait_for_messages",
+        "who",
+      ]);
 
       expect(await call("task_add", { title: "write docs" })).toMatch(/^added T\d+$/);
       expect(await call("ask_human", { text: "  ", options: ["A: yes", "B: no"] })).toContain("the text is empty");

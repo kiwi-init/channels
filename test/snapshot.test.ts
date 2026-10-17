@@ -37,7 +37,12 @@ function plain(x: unknown): unknown {
   if (x instanceof Map) return [...x].map(([k, v]) => [k, plain(v)]).sort((a, b) => (String(a[0]) < String(b[0]) ? -1 : String(a[0]) > String(b[0]) ? 1 : 0));
   if (x instanceof Set) return [...x].map(String).sort();
   if (Array.isArray(x)) return x.map(plain);
-  if (x && typeof x === "object") return Object.fromEntries(Object.entries(x).filter(([, v]) => v !== undefined).map(([k, v]) => [k, plain(v)]));
+  if (x && typeof x === "object")
+    return Object.fromEntries(
+      Object.entries(x)
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => [k, plain(v)]),
+    );
   return x;
 }
 
@@ -135,7 +140,16 @@ async function world(count: number, seed: number): Promise<World> {
     } else if (roll < 0.5 && tasks.length) {
       const task = pick(tasks);
       if (r() < 0.3) await send(who, { ev: { op: "task.claim", task } });
-      else await send(who, { ev: { op: "task.update", task, state: pick(["doing", "review", "done", "cancelled", "blocked", "todo"] as const), ...(r() < 0.3 ? { note: "note" } : {}), ...(r() < 0.2 ? { verdict: pick(["approved", "rejected"] as const), round: 1 } : {}) } });
+      else
+        await send(who, {
+          ev: {
+            op: "task.update",
+            task,
+            state: pick(["doing", "review", "done", "cancelled", "blocked", "todo"] as const),
+            ...(r() < 0.3 ? { note: "note" } : {}),
+            ...(r() < 0.2 ? { verdict: pick(["approved", "rejected"] as const), round: 1 } : {}),
+          },
+        });
     } else if (roll < 0.58) {
       if (r() < 0.75) await send(who, { ev: { op: "fact.set", key: pick(["k1", "k2", "k3", "k4"]), value: `v${seq}`, ...(r() < 0.3 ? { ttl: pick([60, 100_000]) } : {}) } });
       else await send(who, { ev: { op: "fact.del", key: pick(["k1", "k2", "k3", "k4"]) } });
@@ -217,9 +231,26 @@ describe("a fold resumed from a snapshot folds to the same state as the whole lo
     const w = await world(200, 7);
     const full = fold(w.messages, w.roster, NOW, w.floors.mode, w.floors.rooms, w.floors.guard);
     const first = capture(w.messages, w.roster, w.floors, 60);
-    const second = capture(w.messages.filter((m) => m.seq > 60), w.roster, w.floors, 140, first);
+    const second = capture(
+      w.messages.filter((m) => m.seq > 60),
+      w.roster,
+      w.floors,
+      140,
+      first,
+    );
     expect(second).toEqual(capture(w.messages, w.roster, w.floors, 140));
-    same(fold(w.messages.filter((m) => m.seq > 140), w.roster, NOW, w.floors.mode, w.floors.rooms, w.floors.guard, second), full);
+    same(
+      fold(
+        w.messages.filter((m) => m.seq > 140),
+        w.roster,
+        NOW,
+        w.floors.mode,
+        w.floors.rooms,
+        w.floors.guard,
+        second,
+      ),
+      full,
+    );
   });
 
   test("one base folds the same tail twice to the same state", async () => {
@@ -248,7 +279,14 @@ describe("a fold resumed from a snapshot folds to the same state as the whole lo
       const p = await sign(own, { v: 1 as const, id: `f${seq}`, from: "own", kind: "event" as const, body: "", ev, ts: at(seq) });
       return { ...p, seq, rts: at(seq), sigOk: true };
     };
-    const log = [...w.messages, await event(41, { op: "mode.set", coordinatorOnly: true, strict: true }), await event(42, { op: "charter.set", text: "old" }), await event(43, { op: "mode.set", coordinatorOnly: false, strict: false }), await event(44, { op: "charter.set", text: "new" }), await event(45, { op: "hello" })];
+    const log = [
+      ...w.messages,
+      await event(41, { op: "mode.set", coordinatorOnly: true, strict: true }),
+      await event(42, { op: "charter.set", text: "old" }),
+      await event(43, { op: "mode.set", coordinatorOnly: false, strict: false }),
+      await event(44, { op: "charter.set", text: "new" }),
+      await event(45, { op: "hello" }),
+    ];
     const floors: Floors = { mode: { coordinatorOnly: true, strict: true, since: 41 }, rooms: null, guard: { charter: { text: "old", since: 42 }, hold: null } };
     const full = fold(log, w.roster, NOW, floors.mode, floors.rooms, floors.guard);
     expect(full.mode.coordinatorOnly).toBe(false);
@@ -522,7 +560,12 @@ describe("sessions fold from a snapshot only when the log after it is whole", ()
       expect(messages.length).toBe(2);
       const shown = (m: Message) => m.body.startsWith("keep");
       const older = await runAgent(agent.earlier(messages, 3, shown));
-      expect(older.filter(shown).map((m) => m.seq).slice(-3)).toEqual(keep.slice(-3));
+      expect(
+        older
+          .filter(shown)
+          .map((m) => m.seq)
+          .slice(-3),
+      ).toEqual(keep.slice(-3));
       const thread = await runAgent(agent.threadMessages(state.threadOf.get(late) ?? late, messages, state));
       expect(thread.map((m) => m.seq)).toEqual([root, reply, late]);
     } finally {

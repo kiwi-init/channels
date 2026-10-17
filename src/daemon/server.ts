@@ -89,7 +89,13 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
 
   const fieldsOf = (seat: Seat): PresenceFields => {
     const read = reads.get(readKey(seat.alias, seat.agent));
-    return { client: "daemon", ...(seat.activity ? { activity: seat.activity } : {}), ...(seat.reach ? { reach: seat.reach } : {}), ...(read ? { readAt: read.at } : {}), ...(seat.wakeVia ? { wake: seat.wakeVia } : {}) };
+    return {
+      client: "daemon",
+      ...(seat.activity ? { activity: seat.activity } : {}),
+      ...(seat.reach ? { reach: seat.reach } : {}),
+      ...(read ? { readAt: read.at } : {}),
+      ...(seat.wakeVia ? { wake: seat.wakeVia } : {}),
+    };
   };
 
   const attachedTo = (seat: Seat): Attached => {
@@ -596,8 +602,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         const conn = [...conns].find((c) => c.socket === socket);
         if (conn) killConn(conn);
       },
-      error() {
-      },
+      error() {},
     },
   });
   if (process.platform !== "win32") {

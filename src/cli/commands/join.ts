@@ -44,8 +44,7 @@ function settleIn(alias: string, name: string, model: string): void {
   if (extras) process.stderr.write(`kiwi: installed ${extras} so this agent keeps listening; \`kiwi hooks uninstall\` removes them\n`);
 }
 
-const outForGood = (err: unknown) =>
-  err instanceof RelayError && (err.tag === "Removed" || err.tag === "Denied" || (!err.tagged && err.status === 403 && /removed|denied/.test(err.message)));
+const outForGood = (err: unknown) => err instanceof RelayError && (err.tag === "Removed" || err.tag === "Denied" || (!err.tagged && err.status === 403 && /removed|denied/.test(err.message)));
 
 export const joinCommands: Record<string, Command> = {
   join: () =>
@@ -85,7 +84,9 @@ export const joinCommands: Record<string, Command> = {
           const now = Date.now();
           const asking = Object.fromEntries(Object.entries(c.asking ?? {}).filter(([, a]) => now - a.at < 7 * 86_400_000));
           const mine = asking[askingKey]?.as;
-          const waiting = Object.entries(asking).filter(([k]) => k.startsWith(`${roomId} `) && k !== askingKey).map(([, a]) => ({ name: a.as }));
+          const waiting = Object.entries(asking)
+            .filter(([k]) => k.startsWith(`${roomId} `) && k !== askingKey)
+            .map(([, a]) => ({ name: a.as }));
           name = mine && local.includes(mine) ? mine : freeHandle([...local.map((n) => ({ name: n })), ...waiting]);
           c.asking = { ...asking, [askingKey]: { as: name, at: mine && local.includes(mine) ? asking[askingKey]!.at : now } };
         });
@@ -122,7 +123,10 @@ export const joinCommands: Record<string, Command> = {
           for (const n of names) if ((yield* keys.identity(n, roomId)).pk === id.pk) ours.push(n);
           if (names.includes(to) && !ours.includes(to)) {
             const other = yield* keys.identity(to, roomId);
-            const aside = freeAgentName(to, names.map((n) => ({ name: n })));
+            const aside = freeAgentName(
+              to,
+              names.map((n) => ({ name: n })),
+            );
             yield* keys.saveIdentity({ ...other, name: aside }, roomId);
             yield* keys.forgetIdentity(to, roomId);
             yield* keys.update((c) => {
@@ -171,7 +175,12 @@ export const joinCommands: Record<string, Command> = {
         });
 
       if (hadKey) {
-        const access = yield* Channel.fx.resume(relay, code, id).pipe(Effect.catchIf((err) => err instanceof RelayError && [401, 403, 404].includes(err.status), () => Effect.succeed(null)));
+        const access = yield* Channel.fx.resume(relay, code, id).pipe(
+          Effect.catchIf(
+            (err) => err instanceof RelayError && [401, 403, 404].includes(err.status),
+            () => Effect.succeed(null),
+          ),
+        );
         const local = Object.values((yield* keys.config).channels).find((c) => c.roomId === roomId);
         if (access && (access.keys[String(access.epoch)] ?? local?.keys[String(access.epoch)])) return yield* settle(access, "resumed");
       }

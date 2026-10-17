@@ -60,10 +60,7 @@ function installClaudeShaped(path: string, events: Record<string, string>, timeo
   const s = readJson(path) as Settings;
   s.hooks ??= {};
   for (const [event, arg] of Object.entries(events)) {
-    s.hooks[event] = [
-      ...withoutOurs(s.hooks[event]),
-      { ...(matcher ? { matcher } : {}), hooks: [{ type: "command", command: hookCommand(arg), timeout: timeoutFor(event) }] },
-    ];
+    s.hooks[event] = [...withoutOurs(s.hooks[event]), { ...(matcher ? { matcher } : {}), hooks: [{ type: "command", command: hookCommand(arg), timeout: timeoutFor(event) }] }];
   }
   writeJson(path, s);
 }

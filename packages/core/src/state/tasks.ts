@@ -43,7 +43,10 @@ export function revisedOut(task: Task, from: string, open: ReviewRound | undefin
 const OPEN_FOR_TITLE = new Set<TaskState>(["todo", "doing", "review"]);
 
 function normTitle(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 export function titlesLookAlike(a: string, b: string): boolean {

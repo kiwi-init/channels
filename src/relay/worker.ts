@@ -112,13 +112,7 @@ export class Channel extends DurableObject<Env> {
       all: <T>(q: string, ...p: SqlParam[]) => ctx.storage.sql.exec(q, ...p).toArray() as T[],
     };
     this.policy = policyFrom(env as unknown as Record<string, string | undefined>);
-    this.relay = makeRelay(
-      Layer.mergeAll(
-        Layer.succeed(Human, human(env)),
-        Layer.succeed(Policy, this.policy),
-        Layer.succeed(ChannelLists, owned(env)),
-      ),
-    );
+    this.relay = makeRelay(Layer.mergeAll(Layer.succeed(Human, human(env)), Layer.succeed(Policy, this.policy), Layer.succeed(ChannelLists, owned(env))));
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));
   }
 
@@ -145,7 +139,14 @@ export class Channel extends DurableObject<Env> {
         this.ctx.acceptWebSocket(server);
         const reads = wantsReads(url);
         const watch = wantsWatch(url);
-        server.serializeAttachment({ pk, room: route.roomId, reads, ...(takesPresence(url) && !watch ? {} : { presence: false }), ...(wantsEcho(url) ? {} : { echo: false }), ...(watch ? { watch } : {}) });
+        server.serializeAttachment({
+          pk,
+          room: route.roomId,
+          reads,
+          ...(takesPresence(url) && !watch ? {} : { presence: false }),
+          ...(wantsEcho(url) ? {} : { echo: false }),
+          ...(watch ? { watch } : {}),
+        });
         for (const f of runRoomSync(this.relay, db, welcomeFrames(Number(url.searchParams.get("since") ?? 0) || 0, reads, watch))) server.send(f);
         await this.apply({ expireAt: runRoomSync(this.relay, db, touch) ?? undefined });
         return new Response(null, { status: 101, webSocket: client, headers: wsHeaders(req) });
@@ -194,9 +195,7 @@ export class Channel extends DurableObject<Env> {
     }
     // Owned-channel counts are best-effort: a failure there must never stop a close from wiping.
     if (fx.directory?.length) {
-      await Promise.allSettled(
-        fx.directory.map((u) => this.env.OWNERS.get(this.env.OWNERS.idFromName(u.user)).fetch("https://owners/apply", { method: "POST", body: JSON.stringify(u) })),
-      );
+      await Promise.allSettled(fx.directory.map((u) => this.env.OWNERS.get(this.env.OWNERS.idFromName(u.user)).fetch("https://owners/apply", { method: "POST", body: JSON.stringify(u) })));
     }
     if (fx.wipe) {
       // Closing leaves no breadcrumbs: every row and table goes, alarms included.

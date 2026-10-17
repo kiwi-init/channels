@@ -71,11 +71,9 @@ export async function pairComputer(
     throw pairRefused(relay, err);
   });
   say(`asked to pair "${m.label}": approve it in your app, and this waits here.`);
-  const raw = await mailbox
-    .wait<unknown>("b", { timeoutMs: opts.timeoutMs ?? MAILBOX_TTL_MS, everyMs: 1_500, ...(opts.signal ? { signal: opts.signal } : {}) })
-    .catch((err: unknown) => {
-      throw pairRefused(relay, err);
-    });
+  const raw = await mailbox.wait<unknown>("b", { timeoutMs: opts.timeoutMs ?? MAILBOX_TTL_MS, everyMs: 1_500, ...(opts.signal ? { signal: opts.signal } : {}) }).catch((err: unknown) => {
+    throw pairRefused(relay, err);
+  });
   if (raw === null) throw new PairError(`nothing approved "${m.label}" in time; run the same command with a fresh code to try again`, 3);
   const answer = await readPairAnswer(raw, m.identity.pk);
   if (!answer) throw new PairError("the app's answer didn't check out (another computer, or a forged answer); approve again with a fresh code");

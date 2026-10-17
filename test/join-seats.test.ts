@@ -42,7 +42,16 @@ function spawn(home: string, args: string[], env: Env = {}, cwd = home, stdin?: 
     cwd,
     // The owner's person seat (--as human) runs from a person's terminal, never an agent's harness.
     // KIWI_MODEL: an agent in a harness says what runs it or can't join; these sessions have no transcript to read it from.
-    env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay, CLAUDE_CONFIG_DIR: claudeDir, CLAUDE_PROJECT_DIR: "", KIWI_MODEL: "test-model", ...env, ...(args[0] === "--as" && args[1] === "human" ? { CLAUDECODE: "" } : {}) },
+    env: {
+      ...process.env,
+      KIWI_HOME: home,
+      KIWI_RELAY: relay,
+      CLAUDE_CONFIG_DIR: claudeDir,
+      CLAUDE_PROJECT_DIR: "",
+      KIWI_MODEL: "test-model",
+      ...env,
+      ...(args[0] === "--as" && args[1] === "human" ? { CLAUDECODE: "" } : {}),
+    },
     stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),
     stdout: "pipe",
     stderr: "pipe",
@@ -248,7 +257,9 @@ describe("review fixes (#1352)", () => {
     expect(again.err).toContain(`kiwi join ${code} --as ${first}`);
     expect((await join_(owner, h, code, PLAIN, h, ["--as", "glm"])).out).toContain('You\'re "glm"');
     const cfg = JSON.parse(readFileSync(join(h, "config.json"), "utf8")) as { bindings?: Record<string, { as: string } | { as: string }[]> };
-    const seated = Object.values(cfg.bindings ?? {}).flatMap((v) => (Array.isArray(v) ? v : [v])).map((b) => b.as);
+    const seated = Object.values(cfg.bindings ?? {})
+      .flatMap((v) => (Array.isArray(v) ? v : [v]))
+      .map((b) => b.as);
     expect(seated.sort()).toEqual([first, "glm"].sort());
     await ok(h, ["--as", first, "send", "from agent"], PLAIN);
     await ok(h, ["--as", "glm", "send", "from glm"], PLAIN);
@@ -455,9 +466,7 @@ describe("--as", () => {
     expect(r.code).not.toBe(0);
     expect(r.err).toContain('typo has no key in "proj" on this machine');
     const idDir = join(owner, "identities");
-    const files = existsSync(idDir)
-      ? readdirSync(idDir).flatMap((room) => readdirSync(join(idDir, room)))
-      : [];
+    const files = existsSync(idDir) ? readdirSync(idDir).flatMap((room) => readdirSync(join(idDir, room))) : [];
     expect(files.some((f) => f.toLowerCase().includes("typo"))).toBe(false);
   });
 });

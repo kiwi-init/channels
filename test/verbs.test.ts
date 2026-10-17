@@ -236,7 +236,9 @@ describe("review rounds through the CLI", () => {
     const lateReview = await run(rev, "task", "approve", `T${t}`, "--file", review, "--at", "1111111111111111111111111111111111111111");
     expect(lateReview.code).toBe(1);
     expect(lateReview.err).toContain(`round 1 of T${t} isn't the open one: round 2 is, at 2222222222222222222222222222222222222222`);
-    expect((await run(rev, "task", "approve", `T${t}`, "--round", "2", "--at", "1111111111111111111111111111111111111111")).err).toContain(`round 2 of T${t} is at 2222222222222222222222222222222222222222, not at 1111111111111111111111111111111111111111`);
+    expect((await run(rev, "task", "approve", `T${t}`, "--round", "2", "--at", "1111111111111111111111111111111111111111")).err).toContain(
+      `round 2 of T${t} is at 2222222222222222222222222222222222222222, not at 1111111111111111111111111111111111111111`,
+    );
     const shown = JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json")) as { rounds: { n: number; at: string; result: { kind: string; by?: string } }[] };
     expect(shown.rounds.map((r) => [r.n, r.at.slice(0, 4), r.result.kind])).toEqual([
       [1, "1111", "rejected"],
@@ -246,7 +248,7 @@ describe("review rounds through the CLI", () => {
     expect(log).toContain(`rejected T${t} “stage 6 for QE-1” (round 1 @ 111111111111): 2 blocking`);
     expect(log).toContain("│ 2. BLOCKING: the flag is never read");
     expect(log).toContain("│ Verdict: REVISE");
-    expect((await run(dev, "task", "approve", `T${t}`))).toMatchObject({ code: 1 });
+    expect(await run(dev, "task", "approve", `T${t}`)).toMatchObject({ code: 1 });
     await ok(rev, "task", "reject", `T${t}`, "still one blocking", "--round", "2");
     expect((await run(rev, "task", "approve", `T${t}`, "--round", "2")).err).toContain(`T${t} has no review round open`);
     expect(await ok(dev, "task", "cancel", `T${t}`, "handed to the runner")).toContain("done (cancelled)");

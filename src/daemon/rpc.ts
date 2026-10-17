@@ -16,12 +16,7 @@ type Reply = { id: number; ok: true; [k: string]: unknown } | { id: number; ok: 
 
 interface DaemonConn {
   call(verb: string, params?: Record<string, unknown>): Promise<Extract<Reply, { ok: true }>>;
-  subscribe(
-    params: Record<string, unknown>,
-    onMessage: (m: Message) => void,
-    onError: (err: Error) => void,
-    side?: SideLines,
-  ): Promise<Extract<Reply, { ok: true }>>;
+  subscribe(params: Record<string, unknown>, onMessage: (m: Message) => void, onError: (err: Error) => void, side?: SideLines): Promise<Extract<Reply, { ok: true }>>;
   closed(): boolean;
   close(): void;
 }
@@ -389,12 +384,7 @@ export interface DaemonSubscription {
   mark(seq: number): Promise<void>;
 }
 
-export async function listenDaemon(
-  channel: string,
-  agent: string,
-  cursor: number,
-  opts: { sock?: string; signal?: AbortSignal; noSpawn?: boolean } & SideLines = {},
-): Promise<DaemonSubscription> {
+export async function listenDaemon(channel: string, agent: string, cursor: number, opts: { sock?: string; signal?: AbortSignal; noSpawn?: boolean } & SideLines = {}): Promise<DaemonSubscription> {
   const sock = opts.sock ?? daemonSock();
   if (!opts.noSpawn) await ensureDaemon(home());
   const c = await openConn(sock);

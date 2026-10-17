@@ -35,7 +35,13 @@ export function kiwiHome(): string {
 
 export function daemonSocketPath(home: string = kiwiHome()): string {
   // The same name the daemon picks (src/daemon/protocol.ts daemonSock): its home, as a tag.
-  if (process.platform === "win32") return `\\\\.\\pipe\\kiwi-daemon-${home.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(-64) || "kiwi"}`;
+  if (process.platform === "win32")
+    return `\\\\.\\pipe\\kiwi-daemon-${
+      home
+        .replace(/[^A-Za-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(-64) || "kiwi"
+    }`;
   return path.join(home, "daemon.sock");
 }
 

@@ -236,7 +236,8 @@ export function startRelay(
         // No fingerprint: 426 before the room file is opened.
         const early = missingFingerprint(req.method, route.rest, url);
         if (early) return withCors(errorResponse(early));
-        if (pageCache && PAGE_PATH.test(route.rest)) return withCors(await edgePage(req, route.roomId, route.rest, policy.pageKey, pageCache, () => pageFromRoom(req, route.roomId, route.rest), clock()));
+        if (pageCache && PAGE_PATH.test(route.rest))
+          return withCors(await edgePage(req, route.roomId, route.rest, policy.pageKey, pageCache, () => pageFromRoom(req, route.roomId, route.rest), clock()));
         const isCreate = route.rest === "/create";
         const db = storeFor(route.roomId, isCreate);
         if (isCreate) creating.set(route.roomId, (creating.get(route.roomId) ?? 0) + 1);
@@ -256,7 +257,13 @@ export function startRelay(
             }
             const pk = await runRoom(relay, db, authenticateSocket(req));
             const since = Number(url.searchParams.get("since") ?? 0) || 0;
-            if (server.upgrade(req, { data: { roomId: route.roomId, pk, since, presence: takesPresence(url) && !wantsWatch(url), reads: wantsReads(url), echo: wantsEcho(url), watch: wantsWatch(url) }, headers: wsHeaders(req) })) return undefined;
+            if (
+              server.upgrade(req, {
+                data: { roomId: route.roomId, pk, since, presence: takesPresence(url) && !wantsWatch(url), reads: wantsReads(url), echo: wantsEcho(url), watch: wantsWatch(url) },
+                headers: wsHeaders(req),
+              })
+            )
+              return undefined;
             return withCors(errorResponse(new UpdateRequired({ message: "expected websocket" })));
           }
           const result = await onHttp(relay, db, req, route.rest);
@@ -457,7 +464,9 @@ export function runRelay(argv: string[], cmd = "bun src/relay/bun.ts"): void {
     trustProxy,
   });
   console.log(`Kiwi Channels relay listening on ${server.url}`);
-  console.log(`  sign-in: ${human?.dev ? 'DEV: the token "dev:<name>" is <name>, no password (this machine only)' : human ? `WorkOS ${human.clientId}${human.profile ? " (with emails, for the beta list)" : ""}` : "off"}`);
+  console.log(
+    `  sign-in: ${human?.dev ? 'DEV: the token "dev:<name>" is <name>, no password (this machine only)' : human ? `WorkOS ${human.clientId}${human.profile ? " (with emails, for the beta list)" : ""}` : "off"}`,
+  );
   console.log(`  site: ${webDir ? resolve(webDir) : "not served"}`);
 }
 

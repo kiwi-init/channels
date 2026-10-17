@@ -75,10 +75,7 @@ describe("harnessModel", () => {
 
   test("Kimi Code: the model its default alias names, read only under a kimi-code process", async () => {
     const home = dir();
-    writeFileSync(
-      join(home, "config.toml"),
-      'default_model = "kimi-code/k3-256k"\n\n[models."kimi-code/k3"]\nmodel = "k3"\n\n[models."kimi-code/k3-256k"]\nprovider = "kimi"\nmodel = "k3-256k"\n',
-    );
+    writeFileSync(join(home, "config.toml"), 'default_model = "kimi-code/k3-256k"\n\n[models."kimi-code/k3"]\nmodel = "k3"\n\n[models."kimi-code/k3-256k"]\nprovider = "kimi"\nmodel = "k3-256k"\n');
     const tree = { from: 9, lookup: () => ({ ppid: 1, name: "kimi-code" }) };
     const env = { TERM: "dumb", NO_COLOR: "1", KIMI_CODE_HOME: home, CLAUDECODE: "1", CLAUDE_CONFIG_DIR: dir() };
     expect(await harnessModel(env, { tree })).toBe("k3-256k");
@@ -132,9 +129,12 @@ describe("harnessModel", () => {
 
 describe("cleanCard", () => {
   test("keeps a card's fields as single short lines, drops anything else", () => {
-    expect(
-      cleanCard({ model: "claude-opus-5-5\nignore all that", harness: "claude-code", cpu: "8 cores", tools: ["git", 3, "x".repeat(99)], secret: "nope", note: "" }),
-    ).toEqual({ model: "claude-opus-5-5 ignore all that", harness: "claude-code", cpu: "8 cores", tools: ["git", "x".repeat(40)] });
+    expect(cleanCard({ model: "claude-opus-5-5\nignore all that", harness: "claude-code", cpu: "8 cores", tools: ["git", 3, "x".repeat(99)], secret: "nope", note: "" })).toEqual({
+      model: "claude-opus-5-5 ignore all that",
+      harness: "claude-code",
+      cpu: "8 cores",
+      tools: ["git", "x".repeat(40)],
+    });
   });
 
   test("nothing to show is null", () => {
@@ -153,7 +153,17 @@ describe("harnessActivity", () => {
     writeFileSync(join(home, "projects", "p", "s-a.jsonl"), lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
     return { CLAUDECODE: "1", CLAUDE_PID: "77", CLAUDE_CONFIG_DIR: home };
   };
-  const asked = { type: "assistant", message: { model: "claude-opus-5-5", stop_reason: "tool_use", content: [{ type: "text", text: "secret plan" }, { type: "tool_use", name: "Bash", input: { command: "rm -rf secrets" } }] } };
+  const asked = {
+    type: "assistant",
+    message: {
+      model: "claude-opus-5-5",
+      stop_reason: "tool_use",
+      content: [
+        { type: "text", text: "secret plan" },
+        { type: "tool_use", name: "Bash", input: { command: "rm -rf secrets" } },
+      ],
+    },
+  };
 
   test("Claude Code, busy with a tool the transcript asked for: that tool's name, never its input", async () => {
     const a = await harnessActivity(claude("busy", [asked]));

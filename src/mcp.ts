@@ -22,10 +22,41 @@ import { loadSummary, memberLoad, showsLoad } from "@kiwi/core/load.ts";
 import { Cursor, home, Keystore } from "./config.ts";
 import { holdSession } from "./hooks/listeners.ts";
 import { ChannelGone, goneText, reason, type Channel, type Refused, type Relay } from "@kiwi/core/client.ts";
-import { ago, cardLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, missingImages, formatTask, formatTasks, looksLikeLine, mayDo, parseDuration, presenceWords, runsStatus, taskStateWord } from "@kiwi/core/format.ts";
+import {
+  ago,
+  cardLine,
+  formatFact,
+  formatMessage,
+  formatRooms,
+  formatShown,
+  formatStatus,
+  missingImages,
+  formatTask,
+  formatTasks,
+  looksLikeLine,
+  mayDo,
+  parseDuration,
+  presenceWords,
+  runsStatus,
+  taskStateWord,
+} from "@kiwi/core/format.ts";
 import { isWakeVia } from "@kiwi/core/wake.ts";
 import { SCOPES } from "@kiwi/core/scopes.ts";
-import { CHAT_KINDS, CHOICE_MAX_LENGTH, CHOICES_MAX, CHOICES_MIN, HANDOFF_DEFAULT_SECONDS, HANDOFF_MAX_SECONDS, HANDOFF_MAX_VENDOR, handoffUrl, ignored, wellFormedChoices, type InlineImage, type Kind, type Message } from "@kiwi/core/protocol.ts";
+import {
+  CHAT_KINDS,
+  CHOICE_MAX_LENGTH,
+  CHOICES_MAX,
+  CHOICES_MIN,
+  HANDOFF_DEFAULT_SECONDS,
+  HANDOFF_MAX_SECONDS,
+  HANDOFF_MAX_VENDOR,
+  handoffUrl,
+  ignored,
+  wellFormedChoices,
+  type InlineImage,
+  type Kind,
+  type Message,
+} from "@kiwi/core/protocol.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { chooseThread, parseTaskId, similarOpenTasks, taskId, wentTo } from "@kiwi/core/state.ts";
 import { detectCard } from "./card.ts";
@@ -106,7 +137,11 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
   const shaped =
     <A>(fn: (a: A) => Effect.Effect<Result, unknown, Agent>) =>
     (a: A) =>
-      answer(fn(a), (r) => r, (cause) => fail(reason(Cause.squash(cause))));
+      answer(
+        fn(a),
+        (r) => r,
+        (cause) => fail(reason(Cause.squash(cause))),
+      );
 
   const pending: { seq: number | null; line: string }[] = [];
   let fedTo = 0;
@@ -149,7 +184,13 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         marks: false,
         hold: false,
       });
-      yield* Effect.forkDetach(listening.pipe(Effect.provideService(Cursor, peek), Effect.exit, Effect.flatMap((exit) => Deferred.done(ended, exit))));
+      yield* Effect.forkDetach(
+        listening.pipe(
+          Effect.provideService(Cursor, peek),
+          Effect.exit,
+          Effect.flatMap((exit) => Deferred.done(ended, exit)),
+        ),
+      );
     });
 
   const server = new McpServer(
@@ -200,7 +241,12 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     tool(() =>
       Effect.gen(function* () {
         const [{ messages, state }, online] = yield* Effect.all([s.state(), s.who()], { concurrency: "unbounded" });
-        const on = new Map([...online].map(([n, p]) => [n, { client: p.client, role: p.role, ...(p.reach ? { reach: p.reach } : {}), ...(p.readAt === undefined ? {} : { readAt: p.readAt }), ...(isWakeVia(p.wake) ? { wake: p.wake } : {}) }]));
+        const on = new Map(
+          [...online].map(([n, p]) => [
+            n,
+            { client: p.client, role: p.role, ...(p.reach ? { reach: p.reach } : {}), ...(p.readAt === undefined ? {} : { readAt: p.readAt }), ...(isWakeVia(p.wake) ? { wake: p.wake } : {}) },
+          ]),
+        );
         return formatStatus({ alias: s.alias, me: s.me, state, online: on, unread: yield* s.unreadCount(state, messages) });
       }),
     ),
@@ -210,7 +256,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     "wait_for_messages",
     {
       description:
-        "Block until a message for you arrives, then return it. If none arrives, return and call this again. A short wait is normal. Default 50 seconds, maximum 3600. Example: wait_for_messages {\"timeout_seconds\":50}.",
+        'Block until a message for you arrives, then return it. If none arrives, return and call this again. A short wait is normal. Default 50 seconds, maximum 3600. Example: wait_for_messages {"timeout_seconds":50}.',
       inputSchema: { timeout_seconds: z.number().int().min(1).max(3600).optional().describe("seconds to wait. Default 50. A short wait is normal; call this again. Maximum 3600.") },
     },
     tool(({ timeout_seconds }, extra) =>
@@ -284,14 +330,16 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     },
     shaped(({ chat, all, thread }) =>
       Effect.flatMap(s.read({ chat, all, ...(thread !== undefined ? { thread } : {}) }), ({ messages, state }) =>
-        messages.length ? withImages(s.ch, messages.map((m) => formatMessage(m, state.trust.get(m.seq), state, s.me)).join("\n"), messages) : Effect.succeed(ok("no unread messages.\nNext: call wait_for_messages.")),
+        messages.length
+          ? withImages(s.ch, messages.map((m) => formatMessage(m, state.trust.get(m.seq), state, s.me)).join("\n"), messages)
+          : Effect.succeed(ok("no unread messages.\nNext: call wait_for_messages.")),
       ),
     ),
   );
 
   server.registerTool(
     "log",
-    { description: "Recent channel history (doesn't mark anything read). Images come back as image blocks. Example: log {\"n\":30}.", inputSchema: { n: z.number().int().min(1).max(500).optional() } },
+    { description: 'Recent channel history (doesn\'t mark anything read). Images come back as image blocks. Example: log {"n":30}.', inputSchema: { n: z.number().int().min(1).max(500).optional() } },
     shaped(({ n }) =>
       Effect.gen(function* () {
         const { messages: held, state } = yield* s.state();
@@ -311,7 +359,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         "Query the channel as read-only files with a sandboxed shell (grep, jq, awk, sed, find…), in one script. " +
         "/channel has log.jsonl, msgs/, inbox/, tasks/T<n>.md, members/<name>.json, facts/<key>, status, status.json; " +
         "/channels/<alias>/ is every OTHER channel you're in, not this one. All channels: /channel plus /channels/*. `cat README` for the layout. " +
-        "Read-only: no disk, no network, no writes; use the other tools to send or change anything. Example: sh {\"script\":\"cat status\"}.",
+        'Read-only: no disk, no network, no writes; use the other tools to send or change anything. Example: sh {"script":"cat status"}.',
       inputSchema: { script: z.string().describe("a bash script, e.g. jq -r 'select(.kind==\"ask\") | .body' log.jsonl") },
     },
     shaped(({ script }) =>
@@ -345,7 +393,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     "send",
     {
       description:
-        "Post a message. Omit `to` to address everyone; `role:x` addresses everyone with that role. While you're doing a task it goes to that task's thread unless `main` or `dm`. Example: send {\"text\":\"hello\",\"to\":[\"win\"]}.",
+        'Post a message. Omit `to` to address everyone; `role:x` addresses everyone with that role. While you\'re doing a task it goes to that task\'s thread unless `main` or `dm`. Example: send {"text":"hello","to":["win"]}.',
       inputSchema: {
         text: z.string(),
         to: z.array(z.string()).optional(),
@@ -361,7 +409,15 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     tool(({ text, to, kind, re, images, room, task, main, dm }) =>
       Effect.gen(function* () {
         const chosen = yield* where(task, main, dm, to, !!re?.length);
-        const seq = yield* s.send(text, { to: chosen.to ?? to, kind, re, room, imgs: images?.length ? loadImages(images) : undefined, ...(chosen.task !== undefined ? { task: chosen.task } : {}), ...(chosen.dm ? { dm: true } : {}) });
+        const seq = yield* s.send(text, {
+          to: chosen.to ?? to,
+          kind,
+          re,
+          room,
+          imgs: images?.length ? loadImages(images) : undefined,
+          ...(chosen.task !== undefined ? { task: chosen.task } : {}),
+          ...(chosen.dm ? { dm: true } : {}),
+        });
         return `sent #${seq}${wentTo(chosen)}`;
       }),
     ),
@@ -370,7 +426,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
   server.registerTool(
     "ask",
     {
-      description: "Ask a question. With wait_seconds, blocks until someone replies and returns the answer. Example: ask {\"text\":\"is it done?\",\"to\":[\"win\"],\"wait_seconds\":60}.",
+      description: 'Ask a question. With wait_seconds, blocks until someone replies and returns the answer. Example: ask {"text":"is it done?","to":["win"],"wait_seconds":60}.',
       inputSchema: {
         text: z.string(),
         to: z.array(z.string()).optional(),
@@ -385,7 +441,14 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     tool(({ text, to, wait_seconds, blocking, room, task, main, dm }) =>
       Effect.gen(function* () {
         const chosen = yield* where(task, main, dm, to, false);
-        const { seq, replies } = yield* s.ask(text, { to: chosen.to ?? to, kind: blocking ? "blocking" : "ask", waitSec: wait_seconds, room, ...(chosen.task !== undefined ? { task: chosen.task } : {}), ...(chosen.dm ? { dm: true } : {}) });
+        const { seq, replies } = yield* s.ask(text, {
+          to: chosen.to ?? to,
+          kind: blocking ? "blocking" : "ask",
+          waitSec: wait_seconds,
+          room,
+          ...(chosen.task !== undefined ? { task: chosen.task } : {}),
+          ...(chosen.dm ? { dm: true } : {}),
+        });
         if (!wait_seconds) return `asked #${seq}${wentTo(chosen)}`;
         if (!replies.length) return `no answer to #${seq} within ${wait_seconds}s; replies will still reach you`;
         return replies.map((r) => formatMessage(r)).join("\n");
@@ -396,7 +459,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
   server.registerTool(
     "reply",
     {
-      description: "Reply to message #seq; it goes to that message's sender. Example: reply {\"seq\":42,\"text\":\"done\"}.",
+      description: 'Reply to message #seq; it goes to that message\'s sender. Example: reply {"seq":42,"text":"done"}.',
       inputSchema: {
         seq: z.number().int(),
         text: z.string(),
@@ -416,7 +479,10 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
       inputSchema: {
         text: z.string().describe("what was asked, by whom, and why it needs a person"),
         re: z.number().int().optional().describe("the message this is about"),
-        handoff_url: z.string().optional().describe("an https live-view link to a browser tab the person must act in (a login, 2FA, CAPTCHA or consent wall); the person opens it from the app, you never try the step yourself"),
+        handoff_url: z
+          .string()
+          .optional()
+          .describe("an https live-view link to a browser tab the person must act in (a login, 2FA, CAPTCHA or consent wall); the person opens it from the app, you never try the step yourself"),
         vendor: z.string().optional().describe("who hosts the tab, e.g. cloudflare, browserbase, steel, local"),
         expires_in: z.number().int().positive().optional().describe(`seconds the link opens for; default ${HANDOFF_DEFAULT_SECONDS}, at most ${HANDOFF_MAX_SECONDS}`),
         wait_seconds: z.number().int().positive().optional().describe("with handoff_url: block until the person presses Done or Couldn't, or the link expires"),
@@ -447,11 +513,14 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     "ask_human",
     {
       description:
-        "Ask your own human and the channel owner for a decision you are waiting on: it shows in their app's Needs you list, with your options as buttons, in every mode and during a hold. Use it whenever you stop until a person decides, instead of ending a message with \"reply A, B or C\"; then wait for their answer. " +
+        'Ask your own human and the channel owner for a decision you are waiting on: it shows in their app\'s Needs you list, with your options as buttons, in every mode and during a hold. Use it whenever you stop until a person decides, instead of ending a message with "reply A, B or C"; then wait for their answer. ' +
         'Example: ask_human {"task":251,"text":"Edits clear the old evidence. Which way?","options":["A: keep clearing, refuse until a forced audit","B: keep clearing, the audit rebuilds dedup","C: a stale flag the audit clears"]}.',
       inputSchema: {
         text: z.string().describe("the decision, with what each choice costs; the person reads it outside the thread"),
-        options: z.array(z.string()).optional().describe(`${CHOICES_MIN} to ${CHOICES_MAX} answers to pick from, one line of up to ${CHOICE_MAX_LENGTH} characters each; picking one replies with its text`),
+        options: z
+          .array(z.string())
+          .optional()
+          .describe(`${CHOICES_MIN} to ${CHOICES_MAX} answers to pick from, one line of up to ${CHOICE_MAX_LENGTH} characters each; picking one replies with its text`),
         task: z.number().int().positive().optional().describe("the task this blocks: the question goes in its thread and the task shows it waits on a person"),
         re: z.number().int().optional().describe("the message this is about"),
       },
@@ -459,7 +528,8 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     tool(({ text, options, task, re }) =>
       Effect.gen(function* () {
         const choices = options?.map((o) => o.trim());
-        if (choices && !wellFormedChoices(choices)) return yield* new Rejected(`options takes ${CHOICES_MIN} to ${CHOICES_MAX} different answers, one line of up to ${CHOICE_MAX_LENGTH} characters each`);
+        if (choices && !wellFormedChoices(choices))
+          return yield* new Rejected(`options takes ${CHOICES_MIN} to ${CHOICES_MAX} different answers, one line of up to ${CHOICE_MAX_LENGTH} characters each`);
         const { seq, to } = yield* s.escalate(text, re, undefined, { ...(choices ? { choices } : {}), ...(task !== undefined ? { task } : {}) });
         return `escalated #${seq} to ${to.join(" and ")}${choices ? ` with ${choices.length} options` : ""}; wait for their answer before acting on it`;
       }),
@@ -491,7 +561,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
   server.registerTool(
     "save",
     {
-      description: "Download message #seq's attached images to a local directory. Returns the file paths. Example: save {\"seq\":42}.",
+      description: 'Download message #seq\'s attached images to a local directory. Returns the file paths. Example: save {"seq":42}.',
       inputSchema: { seq: z.number().int(), dir: z.string().optional().describe("defaults to ~/…/.kiwi/downloads") },
     },
     tool(({ seq, dir }) =>
@@ -512,7 +582,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
   server.registerTool(
     "message",
     {
-      description: "One message in full, never cut short: its text, the message it answers, its replies, and its images (as image blocks, also saved to disk). Example: message {\"seq\":42}.",
+      description: 'One message in full, never cut short: its text, the message it answers, its replies, and its images (as image blocks, also saved to disk). Example: message {"seq":42}.',
       inputSchema: { seq: z.number().int() },
     },
     shaped(({ seq }) =>
@@ -530,7 +600,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
   server.registerTool(
     "tasks",
     {
-      description: "The shared task board. With global, every channel you joined. Example: tasks {\"mine\":true}.",
+      description: 'The shared task board. With global, every channel you joined. Example: tasks {"mine":true}.',
       inputSchema: { mine: z.boolean().optional(), all: z.boolean().optional().describe("include done tasks"), global: z.boolean().optional() },
     },
     tool(({ mine, all, global }) =>
@@ -549,7 +619,13 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
           const owner = mine ? sess.me : undefined;
           const lines = formatTasks(state, { all, owner });
           out.push(`## ${alias}${lines === "no tasks" ? " — no tasks" : ""}`);
-          if (lines !== "no tasks") out.push(lines.split("\n").map((l) => `  ${l}`).join("\n"));
+          if (lines !== "no tasks")
+            out.push(
+              lines
+                .split("\n")
+                .map((l) => `  ${l}`)
+                .join("\n"),
+            );
         }
         return out.join("\n");
       }),
@@ -612,7 +688,15 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
           const state = yield* s.taskHandoff(id, owner, note);
           return `${taskId(id)} is ${state.tasks.get(id)!.owner}'s now`;
         }
-        const verdictNote = note || (review_text?.trim() ? review_text.split("\n").map((l) => l.trim()).find(Boolean)?.slice(0, 200) : undefined);
+        const verdictNote =
+          note ||
+          (review_text?.trim()
+            ? review_text
+                .split("\n")
+                .map((l) => l.trim())
+                .find(Boolean)
+                ?.slice(0, 200)
+            : undefined);
         if (action === "reject" && !verdictNote) return yield* new Rejected("reject needs a note saying what to change, or the review in review_text");
         const states = { start: "doing", review: "review", approve: "done", reject: "doing", done: "done" } as const;
         const state =
@@ -625,7 +709,17 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
                 : action === "note"
                   ? yield* s.taskUpdate(id, { note: note ?? "" })
                   : action === "approve" || action === "reject"
-                    ? yield* s.taskUpdate(id, { state: states[action], note: verdictNote, verdict: action === "approve" ? "approved" : "rejected", ...(round !== undefined ? { round } : {}), ...(at?.trim() ? { at: at.trim() } : {}) }, review_text)
+                    ? yield* s.taskUpdate(
+                        id,
+                        {
+                          state: states[action],
+                          note: verdictNote,
+                          verdict: action === "approve" ? "approved" : "rejected",
+                          ...(round !== undefined ? { round } : {}),
+                          ...(at?.trim() ? { at: at.trim() } : {}),
+                        },
+                        review_text,
+                      )
                     : yield* s.taskUpdate(id, { state: states[action], note, ...(action === "review" && at?.trim() ? { at: at.trim() } : {}) });
         const t = state.tasks.get(id)!;
         return `${taskId(id)} ${taskStateWord(t)}${t.owner ? ` @${t.owner}` : ""}: ${inlineText(t.title, 200)}`;
@@ -635,7 +729,11 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
 
   server.registerTool(
     "facts",
-    { description: "Shared key/value facts: read all, or set/unset one. Anyone may set or unset a key. ttl (like 7d) makes a fact expire on its own. Example: facts {\"set\":\"build.cmd\",\"value\":\"bun test\"}.", inputSchema: { set: z.string().optional(), value: z.string().optional(), unset: z.string().optional(), ttl: z.string().optional() } },
+    {
+      description:
+        'Shared key/value facts: read all, or set/unset one. Anyone may set or unset a key. ttl (like 7d) makes a fact expire on its own. Example: facts {"set":"build.cmd","value":"bun test"}.',
+      inputSchema: { set: z.string().optional(), value: z.string().optional(), unset: z.string().optional(), ttl: z.string().optional() },
+    },
     tool(({ set, value, unset, ttl }) =>
       Effect.gen(function* () {
         if (set) yield* s.setFact(set, value ?? "", ttl ? parseDuration(ttl) : undefined);

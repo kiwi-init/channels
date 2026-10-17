@@ -205,7 +205,10 @@ export function fold(
         }
       }
       if (ctx.mode.coordinatorOnly && coordinator && members.get(coordinator)?.active && m.kind !== "event" && !m.esc && !isPerson(member) && m.from !== coordinator) {
-        const people = (m.to ?? []).filter((n) => { const p = members.get(n); return !!p && isPerson(p); });
+        const people = (m.to ?? []).filter((n) => {
+          const p = members.get(n);
+          return !!p && isPerson(p);
+        });
         if (people.length) {
           if (ctx.mode.strict) {
             trust.set(m.seq, "refused");
@@ -215,7 +218,14 @@ export function fold(
           direct.add(m.seq);
         }
       }
-      if (ctx.hold && !isPerson(member) && !allowedOnHold(m, (n) => { const p = members.get(n); return !!p && isPerson(p); })) {
+      if (
+        ctx.hold &&
+        !isPerson(member) &&
+        !allowedOnHold(m, (n) => {
+          const p = members.get(n);
+          return !!p && isPerson(p);
+        })
+      ) {
         trust.set(m.seq, "refused");
         rejected.set(m.seq, ON_HOLD);
         continue;
@@ -231,15 +241,7 @@ export function fold(
         roomOf.set(m.seq, room);
         const parentPlace = parent !== undefined ? placeOf.get(parent) : undefined;
         const to = m.to?.length === 1 ? m.to[0]! : undefined;
-        placeOf.set(
-          m.seq,
-          parentPlace ??
-            (m.task !== undefined && tasks.has(m.task)
-              ? { kind: "task", task: m.task }
-              : m.dm && to && to !== m.from && members.has(to)
-                ? dmPlace(m.from, to)
-                : MAIN),
-        );
+        placeOf.set(m.seq, parentPlace ?? (m.task !== undefined && tasks.has(m.task) ? { kind: "task", task: m.task } : m.dm && to && to !== m.from && members.has(to) ? dmPlace(m.from, to) : MAIN));
       }
       member.lastSeen = Math.max(member.lastSeen, at);
       if (!isReaction(m)) member.messages++;
@@ -282,7 +284,7 @@ export function fold(
       placeOf.set(m.seq, ev.op === "task.add" ? { kind: "task", task: m.seq } : (ev.op === "task.update" || ev.op === "task.claim") && tasks.has(ev.task) ? { kind: "task", task: ev.task } : MAIN);
 
       applyEvent(ctx, m, ev, member, at, reject);
-      } catch {
+    } catch {
       trust.set(m.seq, "forged");
       rejected.set(m.seq, "malformed message");
     }

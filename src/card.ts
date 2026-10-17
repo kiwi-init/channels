@@ -122,6 +122,9 @@ export function sameCard(a: Card | undefined, b: Card): boolean {
   const keys: (keyof Card)[] = ["os", "arch", "harness", "model", "cpu", "memory", "repo", "branch", "note"];
   if (keys.some((k) => (a[k] ?? undefined) !== (b[k] ?? undefined))) return false;
   const ta = [...(a.tools ?? [])].sort().join(",");
-  const tb = [...(b.tools ?? [])].map((t) => t.toLowerCase()).sort().join(",");
+  const tb = [...(b.tools ?? [])]
+    .map((t) => t.toLowerCase())
+    .sort()
+    .join(",");
   return ta === tb;
 }

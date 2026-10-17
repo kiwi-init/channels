@@ -20,8 +20,7 @@ function inHome(fn: (home: string) => void) {
 
 describe("profileFor", () => {
   const home = "/home/ana";
-  const at = (SHELL: string | undefined, platform: NodeJS.Platform = "linux", extra: Record<string, string> = {}) =>
-    profileFor({ mark: MARK, home, platform, env: { SHELL, ...extra } });
+  const at = (SHELL: string | undefined, platform: NodeJS.Platform = "linux", extra: Record<string, string> = {}) => profileFor({ mark: MARK, home, platform, env: { SHELL, ...extra } });
 
   test("each shell's own profile", () => {
     expect(at("/bin/zsh").file).toBe("/home/ana/.zshrc");

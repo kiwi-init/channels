@@ -82,8 +82,7 @@ const inRoom = (relay: Relay, db: RoomDb) => Context.add(relay, RoomStore, db);
 export const runRoomSync = <A, E>(relay: Relay, db: RoomDb, effect: Effect.Effect<A, E, RoomServices | RelayServices>): A => Effect.runSyncWith(inRoom(relay, db))(effect);
 
 /** Run a room Effect; a refusal rejects with the tagged failure, which errorResponse answers. */
-export const runRoom = <A, E>(relay: Relay, db: RoomDb, effect: Effect.Effect<A, E, RoomServices | RelayServices>): Promise<A> =>
-  Effect.runPromiseWith(inRoom(relay, db))(effect);
+export const runRoom = <A, E>(relay: Relay, db: RoomDb, effect: Effect.Effect<A, E, RoomServices | RelayServices>): Promise<A> => Effect.runPromiseWith(inRoom(relay, db))(effect);
 
 // ---------- the checks a route can ask for ----------
 
@@ -174,8 +173,7 @@ const BLOB = /^\/blobs\/([0-9a-f]{64})$/;
 /** A handler that only reads the room. */
 const withRoom = <A>(f: (db: RoomDb) => A) => Effect.map(RoomStore, f);
 
-const holds = (req: Request, etag: string) =>
-  (req.headers.get("if-none-match") ?? "").split(",").some((t) => t.trim() === "*" || t.trim().replace(/^W\//, "") === etag);
+const holds = (req: Request, etag: string) => (req.headers.get("if-none-match") ?? "").split(",").some((t) => t.trim() === "*" || t.trim().replace(/^W\//, "") === etag);
 
 const tagged = (etag: string, data: () => unknown) =>
   Effect.map(Request_, ({ req }) => ({ res: holds(req, etag) ? new Response(null, { status: 304, headers: { etag } }) : Response.json(data(), { headers: { etag } }) }));
@@ -464,7 +462,8 @@ const routes: RoomRoute[] = [
     run: (_, m) =>
       Effect.gen(function* () {
         const b = yield* json<{ rec?: unknown; e?: unknown; post?: unknown }>();
-        if (typeof b.rec !== "string" || typeof b.e !== "number" || typeof b.post !== "boolean") return yield* new BadRequest({ message: "send the sealed record, its epoch, and whether they may post" });
+        if (typeof b.rec !== "string" || typeof b.e !== "number" || typeof b.post !== "boolean")
+          return yield* new BadRequest({ message: "send the sealed record, its epoch, and whether they may post" });
         yield* setRecord(m[1]!, b.rec, b.e, b.post);
         // Everyone re-reads the roster, so the new record (and what it lets them do) lands at once.
         return { data: { ok: true }, fx: { broadcast: [frame({ t: "roster" })] } };
@@ -506,7 +505,13 @@ export const routeTable = describeRoutes(routes);
 
 // The whole request handling, built once: each request only supplies its context.
 // An unknown path still asks for a member first, as it always has.
-const program = answer(dispatch(routes, guards, Effect.flatMap(member, () => Effect.fail(new NotFound({ message: "not found" })))));
+const program = answer(
+  dispatch(
+    routes,
+    guards,
+    Effect.flatMap(member, () => Effect.fail(new NotFound({ message: "not found" }))),
+  ),
+);
 
 /** Handle one HTTP request to a room. Adapters apply `fx`. */
 export async function onHttp(relay: Relay, db: RoomDb, req: Request, path: string): Promise<{ res: Response; fx?: Effects }> {

@@ -105,7 +105,10 @@ const checkRelay = Effect.fn("Doctor.relay")(function* (relay: string) {
   });
   return yield* asked.pipe(
     Effect.catch((err) =>
-      Effect.succeed({ finding: { ok: false, what: `could not reach ${relay} (${why(err)}).`, how: "Start the relay, or fix KIWI_RELAY, then run kiwi doctor again." }, signIn: false } satisfies Check),
+      Effect.succeed({
+        finding: { ok: false, what: `could not reach ${relay} (${why(err)}).`, how: "Start the relay, or fix KIWI_RELAY, then run kiwi doctor again." },
+        signIn: false,
+      } satisfies Check),
     ),
   );
 });

@@ -106,11 +106,7 @@ export async function seal(key: string, roomId: string, payload: object, opts: {
 /** Decrypt an envelope to its JSON payload, or null if it isn't valid for this channel. */
 export async function open(key: string, roomId: string, iv: string, ct: string): Promise<unknown> {
   try {
-    const pt = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: fromB64url(iv), additionalData: enc.encode(roomId) },
-      await aesKey(key),
-      fromB64url(ct),
-    );
+    const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromB64url(iv), additionalData: enc.encode(roomId) }, await aesKey(key), fromB64url(ct));
     const bytes = new Uint8Array(pt);
     if (bytes[0] !== PACKED) return JSON.parse(dec.decode(bytes));
     const plain = await inflate(bytes.subarray(1));
@@ -171,13 +167,7 @@ const X25519 = { name: "X25519" } as const;
 
 async function wrapKey(shared: ArrayBuffer, info: string): Promise<CryptoKey> {
   const hk = await crypto.subtle.importKey("raw", shared, "HKDF", false, ["deriveKey"]);
-  return crypto.subtle.deriveKey(
-    { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(0), info: enc.encode(info) },
-    hk,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"],
-  );
+  return crypto.subtle.deriveKey({ name: "HKDF", hash: "SHA-256", salt: new Uint8Array(0), info: enc.encode(info) }, hk, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
 }
 
 /** Encrypt `data` so only the holder of the X25519 secret for `xpk` can read it. */

@@ -61,7 +61,9 @@ export const agentName = Effect.fn("kiwi.agentName")(function* (ch?: ChannelConf
     const held = ours.length ? [] : seatsNear(process.cwd()).filter((b) => cfg.channels[b.alias]?.roomId === ch.roomId);
     if (bound) raw = bound.as;
     else if (held.length && here().session) {
-      return yield* die(`${held.map((b) => b.as).join(", ")} ${held.length > 1 ? "work" : "works"} from this folder in another session; to take part yourself, run kiwi join with the channel's code (or pass --as NAME)`);
+      return yield* die(
+        `${held.map((b) => b.as).join(", ")} ${held.length > 1 ? "work" : "works"} from this folder in another session; to take part yourself, run kiwi join with the channel's code (or pass --as NAME)`,
+      );
     } else {
       const mine = (yield* keys.identitiesIn(ch.roomId)).filter((n) => n !== ch.owner && n !== ch.person);
       if (mine.length > 1) return yield* die(`several agents on this machine are in this channel (${mine.join(", ")}); pass --as NAME`);
@@ -97,7 +99,14 @@ export const noteRead = (s: { alias: string; me: string }) => Effect.promise(() 
 
 export function seatHere(alias: string, name: string, plain: boolean, model?: string) {
   const who = here();
-  return { alias, as: name, ...(who.harness ? { harness: who.harness } : plain ? { plain: true as const } : {}), ...(who.session ? { session: who.session } : {}), ...(who.pid ? { pid: who.pid } : {}), ...(model ? { model } : {}) };
+  return {
+    alias,
+    as: name,
+    ...(who.harness ? { harness: who.harness } : plain ? { plain: true as const } : {}),
+    ...(who.session ? { session: who.session } : {}),
+    ...(who.pid ? { pid: who.pid } : {}),
+    ...(model ? { model } : {}),
+  };
 }
 
 export type Command = () => Effect.Effect<void | number, unknown, Agent>;

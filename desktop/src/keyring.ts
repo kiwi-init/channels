@@ -12,7 +12,19 @@ import { handleFor, type Member, type MemberInfo } from "@kiwi/core/membership.t
 import type { PersonClaim } from "@kiwi/core/person.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import type { SigningBudget } from "@kiwi/core/sas.ts";
-import { CHANNEL_CALLS, type CallResult, type ChannelCallName, type ChannelCalls, type ChannelIdentityView, type ChannelOps, type ChannelView, type FollowEvent, type FollowOptions, type JoinCheck, type WireError } from "./bridge.ts";
+import {
+  CHANNEL_CALLS,
+  type CallResult,
+  type ChannelCallName,
+  type ChannelCalls,
+  type ChannelIdentityView,
+  type ChannelOps,
+  type ChannelView,
+  type FollowEvent,
+  type FollowOptions,
+  type JoinCheck,
+  type WireError,
+} from "./bridge.ts";
 import { channelAccess, publicChannel } from "./seats.ts";
 
 export interface KeyHost {

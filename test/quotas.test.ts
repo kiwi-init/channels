@@ -68,7 +68,12 @@ describe("members per channel", () => {
     const a0 = (await ownerCh.members()).find((m) => m.name === "a0")!;
     await ownerCh.remove(a0.pk);
     await ownerCh.approve(r!);
-    expect((await ownerCh.members()).filter((m) => m.active).map((m) => m.name).sort()).toEqual(["boss", "extra"]);
+    expect(
+      (await ownerCh.members())
+        .filter((m) => m.active)
+        .map((m) => m.name)
+        .sort(),
+    ).toEqual(["boss", "extra"]);
   });
 });
 

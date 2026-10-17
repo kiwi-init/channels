@@ -60,11 +60,7 @@ let members: string[] = [];
 let file: Database | undefined;
 
 const relayCtx: Relay = makeRelay(
-  Layer.mergeAll(
-    Layer.succeed(Human, null),
-    Layer.succeed(Policy, OPEN_POLICY),
-    Layer.succeed(Directory, { list: async () => [], reserve: async () => true, release: async () => {} }),
-  ),
+  Layer.mergeAll(Layer.succeed(Human, null), Layer.succeed(Policy, OPEN_POLICY), Layer.succeed(Directory, { list: async () => [], reserve: async () => true, release: async () => {} })),
 );
 
 beforeAll(async () => {

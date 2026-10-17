@@ -72,7 +72,12 @@ function plain(x: unknown): unknown {
   if (x instanceof Map) return [...x].map(([k, v]) => [k, plain(v)]).sort((a, b) => (String(a[0]) < String(b[0]) ? -1 : String(a[0]) > String(b[0]) ? 1 : 0));
   if (x instanceof Set) return [...x].map(String).sort();
   if (Array.isArray(x)) return x.map(plain);
-  if (x && typeof x === "object") return Object.fromEntries(Object.entries(x).filter(([, v]) => v !== undefined).map(([k, v]) => [k, plain(v)]));
+  if (x && typeof x === "object")
+    return Object.fromEntries(
+      Object.entries(x)
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => [k, plain(v)]),
+    );
   return x;
 }
 

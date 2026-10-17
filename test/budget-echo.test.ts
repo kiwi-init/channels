@@ -71,7 +71,10 @@ function legacyRelay(target: string): { url: string; stop: () => void } {
       const url = new URL(req.url);
       if (req.headers.get("upgrade") === "websocket") {
         url.searchParams.delete("echo");
-        const protocols = (req.headers.get("sec-websocket-protocol") ?? "").split(",").map((p) => p.trim()).filter(Boolean);
+        const protocols = (req.headers.get("sec-websocket-protocol") ?? "")
+          .split(",")
+          .map((p) => p.trim())
+          .filter(Boolean);
         if (s.upgrade(req, { data: { path: url.pathname + url.search, protocols }, headers: { "sec-websocket-protocol": WS_PROTOCOL } })) return undefined;
       }
       const body = req.method === "GET" || req.method === "HEAD" ? undefined : new Uint8Array(await req.arrayBuffer());
@@ -185,7 +188,18 @@ describe("relay: a socket's own sends", () => {
   });
 });
 
-const seat = (): ChannelIdentityView => ({ label: "budget", idName: "mac", pk: mac.pk, sk: mac.sk, ...(mac.xpk ? { xpk: mac.xpk } : {}), ...(mac.xsk ? { xsk: mac.xsk } : {}), roomId, code, access, at: Date.now() });
+const seat = (): ChannelIdentityView => ({
+  label: "budget",
+  idName: "mac",
+  pk: mac.pk,
+  sk: mac.sk,
+  ...(mac.xpk ? { xpk: mac.xpk } : {}),
+  ...(mac.xsk ? { xsk: mac.xsk } : {}),
+  roomId,
+  code,
+  access,
+  at: Date.now(),
+});
 
 function app(relay: string): Keyring {
   const seats = [seat()];
@@ -248,7 +262,11 @@ describe("app: the open conversation's sends", () => {
     const seen: Message[] = [];
     const fiber = Effect.runFork(
       Effect.provideService(
-        eachLive(ch.fx.live(head, { presence: false }), (ev) => Effect.sync(() => void (ev._tag === "Message" && seen.push(ev.message))), () => Effect.void),
+        eachLive(
+          ch.fx.live(head, { presence: false }),
+          (ev) => Effect.sync(() => void (ev._tag === "Message" && seen.push(ev.message))),
+          () => Effect.void,
+        ),
         Relay,
         fetchRelay,
       ),
@@ -269,7 +287,9 @@ describe("app: the open conversation's sends", () => {
 
   test("after: the app sends on its live socket and builds each message from the ack", async () => {
     const { traffic, seqs, seen } = await appSends(app(proxy!.url), "app");
-    console.log(`[app, socket] http ${traffic.http} ${JSON.stringify(traffic.routes)}, frames up ${JSON.stringify(traffic.framesUp)}, frames down ${JSON.stringify(traffic.framesDown)}, bytes down ${traffic.bytesDown}`);
+    console.log(
+      `[app, socket] http ${traffic.http} ${JSON.stringify(traffic.routes)}, frames up ${JSON.stringify(traffic.framesUp)}, frames down ${JSON.stringify(traffic.framesDown)}, bytes down ${traffic.bytesDown}`,
+    );
     expect(traffic.http).toBe(BUDGET.app.http);
     expect(traffic.framesDown.msg ?? 0).toBe(BUDGET.app.msgDown);
     expect(traffic.bytesDown).toBeLessThanOrEqual(BUDGET.app.bytesDown);
@@ -296,10 +316,7 @@ describe("app: the open conversation's sends", () => {
     const owner = new Channel(access, server!.url.origin, human);
     const head = await owner.head();
     const seen = await follow(k, head);
-    const sent = await Promise.all([
-      ...Array.from({ length: K }, (_, i) => k.call(code, "send", `mine ${i}`)),
-      ...Array.from({ length: K }, (_, i) => owner.send(`theirs ${i}`)),
-    ]);
+    const sent = await Promise.all([...Array.from({ length: K }, (_, i) => k.call(code, "send", `mine ${i}`)), ...Array.from({ length: K }, (_, i) => owner.send(`theirs ${i}`))]);
     await until(() => seen.messages.length >= 2 * K, "every message");
     await Bun.sleep(200);
     seen.stop();

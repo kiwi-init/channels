@@ -36,16 +36,21 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
     return cfg ? [{ b, cfg }] : [];
   });
   if (!served.length) return 0;
-  if (event === LISTEN) return yield* listen(served, who).pipe(Effect.scoped, Effect.catchCause(() => Effect.succeed(0)));
-  const one = ({ b, cfg }: Served) => answer(kimi ? "stop" : event, input, b, cfg, who).pipe(
-    Effect.catchCause((cause) => {
-      const err = Cause.squash(cause);
-      if (err instanceof ChannelGone) return Effect.as(err.why === "closed" ? keys.wipeChannel(b.alias) : keys.forgetMember(b.alias, b.as), null);
-      return Effect.succeed(null);
-    }),
-    Effect.timeoutOption(SEAT_ANSWER_MS),
-    Effect.map(Option.getOrNull),
-  );
+  if (event === LISTEN)
+    return yield* listen(served, who).pipe(
+      Effect.scoped,
+      Effect.catchCause(() => Effect.succeed(0)),
+    );
+  const one = ({ b, cfg }: Served) =>
+    answer(kimi ? "stop" : event, input, b, cfg, who).pipe(
+      Effect.catchCause((cause) => {
+        const err = Cause.squash(cause);
+        if (err instanceof ChannelGone) return Effect.as(err.why === "closed" ? keys.wipeChannel(b.alias) : keys.forgetMember(b.alias, b.as), null);
+        return Effect.succeed(null);
+      }),
+      Effect.timeoutOption(SEAT_ANSWER_MS),
+      Effect.map(Option.getOrNull),
+    );
   const work = Effect.flatMap(Effect.forEach(served, one, { concurrency: "unbounded" }), (answers) => {
     const got = answers.filter((a) => a !== null);
     if (kimi) return got.length ? Effect.sync(() => tellKimi(kimiReason(got))) : Effect.succeed(0);

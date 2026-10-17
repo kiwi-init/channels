@@ -6,7 +6,24 @@
 
 import { contextBridge, ipcRenderer } from "electron";
 
-import type { ChannelIdentityView, ChannelView, ComputerView, DaemonStatus, KeysPort, KeysPush, KeysReply, KeysRequest, KiwiBridge, PairAskView, PendingItem, PublicPerson, SignInResult, StoreSnapshot, UpdateView, VoiceAuth } from "./bridge.ts";
+import type {
+  ChannelIdentityView,
+  ChannelView,
+  ComputerView,
+  DaemonStatus,
+  KeysPort,
+  KeysPush,
+  KeysReply,
+  KeysRequest,
+  KiwiBridge,
+  PairAskView,
+  PendingItem,
+  PublicPerson,
+  SignInResult,
+  StoreSnapshot,
+  UpdateView,
+  VoiceAuth,
+} from "./bridge.ts";
 
 const relayUrl = (ipcRenderer.sendSync("kiwi:snapshot-sync") as StoreSnapshot).relayUrl;
 

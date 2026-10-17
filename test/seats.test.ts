@@ -145,12 +145,20 @@ test("a session's seats are found in every folder it joined from, never another 
   bindDirectory(sibling, { alias: "other", as: "reviewer", harness: "claude", session: "s1", pid: process.pid });
   bindDirectory(sibling, { alias: "ch", as: "claude-2", harness: "claude", session: "s2", pid: process.pid });
   expect(seatsFor(dir, { who }).map((b) => b.as)).toEqual(["planner"]);
-  expect(seatsHeldAnywhere(who).map((b) => `${b.as}@${b.alias}`).sort()).toEqual(["planner@ch", "reviewer@other"]);
+  expect(
+    seatsHeldAnywhere(who)
+      .map((b) => `${b.as}@${b.alias}`)
+      .sort(),
+  ).toEqual(["planner@ch", "reviewer@other"]);
   expect(seatsHeldAnywhere({ harness: "claude" })).toEqual([]);
   updateConfig((c) => {
     delete c.channels.other;
   });
-  expect(seatsAt(loadConfig(), sibling).map((b) => b.as).sort()).toEqual(["claude-2", "reviewer"]);
+  expect(
+    seatsAt(loadConfig(), sibling)
+      .map((b) => b.as)
+      .sort(),
+  ).toEqual(["claude-2", "reviewer"]);
   expect(seatsHeldAnywhere(who).map((b) => b.as)).toEqual(["planner"]);
 });
 
@@ -251,7 +259,11 @@ test("a session listening as an agent whose seat is gone gets it back beside the
   expect(bindingFor(dir, { who: coord })).toBeNull();
   const listeners = () => [{ alias: "ch", as: "claude", harness: "claude" as const, session: "coord", pid: process.pid, cwd: dir }];
   expect(bindingFor(join(dir, "src"), { who: coord, listeners })?.as).toBe("claude");
-  expect(seatsAt(loadConfig(), dir).map((b) => b.as).sort()).toEqual(["claude", "muse"]);
+  expect(
+    seatsAt(loadConfig(), dir)
+      .map((b) => b.as)
+      .sort(),
+  ).toEqual(["claude", "muse"]);
   expect(bindingFor(dir, { who: coord })?.as).toBe("claude");
   // The plain terminal is still muse.
   expect(bindingFor(dir, { who: {} })?.as).toBe("muse");
@@ -268,7 +280,11 @@ test("a seat with no session that someone else is listening as is never taken", 
 test("joining from a plain terminal doesn't push out an agent that's listening here", () => {
   bindDirectory(dir, { alias: "ch", as: "claude" });
   bindDirectory(dir, { alias: "ch", as: "muse", plain: true }, (_a, as) => as === "claude");
-  expect(seatsAt(loadConfig(), dir).map((b) => b.as).sort()).toEqual(["claude", "muse"]);
+  expect(
+    seatsAt(loadConfig(), dir)
+      .map((b) => b.as)
+      .sort(),
+  ).toEqual(["claude", "muse"]);
 });
 
 test("live listeners say who started them; an older record only who it listens as", async () => {
@@ -336,7 +352,11 @@ test("listening as a plain-terminal or Gemini agent that isn't listening right n
     expect(bindingFor(dir, { who: A, listeners })?.as).not.toBe(as);
   }
   // Neither seat was rewritten to the session.
-  expect(seatsAt(loadConfig(), dir).map((b) => [b.as, b.session ?? null]).sort()).toEqual([
+  expect(
+    seatsAt(loadConfig(), dir)
+      .map((b) => [b.as, b.session ?? null])
+      .sort(),
+  ).toEqual([
     ["gem", null],
     ["muse", null],
   ]);

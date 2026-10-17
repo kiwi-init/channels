@@ -101,7 +101,9 @@ test("tail started while the relay is down keeps waiting instead of exiting", as
     let backSince: number | null = null;
     await until(async () => {
       if (tail.exitCode !== null) throw new Error(`tail exited ${tail.exitCode} after the relay came back`);
-      const up = await fetch(`${server.url.origin}/v1/config`).then((r) => r.ok).catch(() => false);
+      const up = await fetch(`${server.url.origin}/v1/config`)
+        .then((r) => r.ok)
+        .catch(() => false);
       if (!up || !listening()) return false;
       backSince ??= Date.now();
       return Date.now() - backSince >= 1_000;

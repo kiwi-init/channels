@@ -171,8 +171,7 @@ test("the relay reads no image bytes before it checks the sender, and stops read
 
 test("the relay refuses an image bigger than the cap", async () => {
   const id = "a".repeat(64);
-  const put = async (headers: Record<string, string>) =>
-    (await fetch(`${relay}/v1/rooms/${memberCh.roomId}/blobs/${id}`, { method: "PUT", headers, body: new Uint8Array(MAX_BLOB_BYTES + 1) })).status;
+  const put = async (headers: Record<string, string>) => (await fetch(`${relay}/v1/rooms/${memberCh.roomId}/blobs/${id}`, { method: "PUT", headers, body: new Uint8Array(MAX_BLOB_BYTES + 1) })).status;
   expect(await put({})).toBe(401);
   expect(await put({ authorization: `Bearer ${await signRequest(member, memberCh.roomId, "PUT", `/blobs/${id}`, "")}` })).toBe(413);
 });

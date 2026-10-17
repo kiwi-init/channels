@@ -49,7 +49,7 @@ export const OPEN_POLICY: RelayPolicy = {
 /** What this relay allows, as the room and its routes see it. */
 export class Policy extends Context.Service<Policy, RelayPolicy>()("kiwi/relay/Policy") {}
 
-const positive =(v: string | undefined): number | null => {
+const positive = (v: string | undefined): number | null => {
   const n = Number(v);
   return v !== undefined && v !== "" && Number.isFinite(n) && n > 0 ? n : null;
 };

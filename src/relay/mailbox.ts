@@ -62,8 +62,7 @@ export function withCors(res: Response): Response {
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 
-const json = (data: unknown, status: number, tag: string, error: string) =>
-  withCors(Response.json(data ?? { error, tag }, { status }));
+const json = (data: unknown, status: number, tag: string, error: string) => withCors(Response.json(data ?? { error, tag }, { status }));
 
 /**
  * One mailbox request, or null when the path isn't a mailbox's. `ip` is the

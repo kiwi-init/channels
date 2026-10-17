@@ -183,7 +183,14 @@ describe("routes with their own checks", () => {
 
   test("removed routes are gone: seats, admit, pairs, usage", async () => {
     // A member (even the owner) asking for one hears 404, not a refusal to authenticate.
-    for (const [method, path] of [["POST", "/seats"], ["POST", "/admit"], ["GET", "/usage"], ["POST", "/pairs"], ["GET", "/pairs"], ["POST", "/pairs/slots"]] as const) {
+    for (const [method, path] of [
+      ["POST", "/seats"],
+      ["POST", "/admit"],
+      ["GET", "/usage"],
+      ["POST", "/pairs"],
+      ["GET", "/pairs"],
+      ["POST", "/pairs/slots"],
+    ] as const) {
       expect(await room(method, path, { as: owner, ...(method === "GET" ? {} : { body: {} }) })).toBe(404);
     }
     // ...while a kept route answers with its own refusal, not a 404 (and writes nothing).

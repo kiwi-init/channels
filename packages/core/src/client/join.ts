@@ -19,10 +19,7 @@ const pinnedInfo = Effect.fn("Channel.pinnedInfo")(function* (relay: string, cod
   return { roomId, ownerFp, info, signedKeys: statement === "signed-keys" };
 });
 
-export type JoinStatus =
-  | { status: "pending"; code: string | null }
-  | { status: "denied" }
-  | { status: "approved"; access: ChannelAccess };
+export type JoinStatus = { status: "pending"; code: string | null } | { status: "denied" } | { status: "approved"; access: ChannelAccess };
 
 export const joinFx = {
   create: Effect.fn("Channel.create")(function* (
@@ -58,13 +55,7 @@ export const joinFx = {
     return { code: encodeJoinCode({ roomId, ownerFp: yield* Effect.promise(() => ownerFingerprint(owner.pk)) }), access };
   }),
 
-  requestJoin: Effect.fn("Channel.requestJoin")(function* (
-    relay: string,
-    code: string,
-    id: Identity,
-    info: MemberInfo,
-    claims?: JoinClaims,
-  ) {
+  requestJoin: Effect.fn("Channel.requestJoin")(function* (relay: string, code: string, id: Identity, info: MemberInfo, claims?: JoinClaims) {
     const { roomId, ownerFp, info: room } = yield* pinnedInfo(relay, code);
     if (!id.xpk) return yield* new MissingKey("identity has no exchange key");
     const xpk = id.xpk;
@@ -77,12 +68,9 @@ export const joinFx = {
 
   joinStatus: Effect.fn("Channel.joinStatus")(function* (relay: string, code: string, id: Identity, requestId: string): Effect.fn.Return<JoinStatus, Refusal, Relay> {
     const { roomId, info, signedKeys } = yield* pinnedInfo(relay, code);
-    const r = yield* callRelay<{ status: string; ownerNonce?: string | null; revealed?: boolean; epoch?: number; keys?: Record<string, string> }>(
-      relay,
-      roomId,
-      `/requests/${requestId}`,
-      { identity: id },
-    );
+    const r = yield* callRelay<{ status: string; ownerNonce?: string | null; revealed?: boolean; epoch?: number; keys?: Record<string, string> }>(relay, roomId, `/requests/${requestId}`, {
+      identity: id,
+    });
     if (r.status === "denied") return { status: "denied" };
     if (r.status !== "approved") {
       const ownerNonce = r.ownerNonce;

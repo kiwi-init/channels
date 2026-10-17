@@ -206,7 +206,13 @@ describe("Grok keeps its own monitor running", () => {
     expect(Object.keys(file.hooks)).toEqual(["Stop"]);
 
     const stop = async (extra: Record<string, unknown>) => {
-      const r = await run(h, ["hook", "stop"], G, h, JSON.stringify({ hook_event_name: "Stop", hookEventName: "stop", session_id: "g1", cwd: h, stop_hook_active: false, reason: "end_turn", ...extra }));
+      const r = await run(
+        h,
+        ["hook", "stop"],
+        G,
+        h,
+        JSON.stringify({ hook_event_name: "Stop", hookEventName: "stop", session_id: "g1", cwd: h, stop_hook_active: false, reason: "end_turn", ...extra }),
+      );
       expect(r.code).toBe(0);
       return r.out ? (JSON.parse(r.out) as { decision: string; reason: string }) : null;
     };
@@ -235,7 +241,16 @@ describe("Grok keeps its own monitor running", () => {
     shells.push(monitor);
     await until(async () => (await listenersOf(h, me)).some((l) => l.session === "g1"), "the monitor's listener held for this Grok session");
     expect((await stop({ backgroundTasks: [{ id: "m2", type: "monitor", status: "running", description: "tail -f build.log" }] }))?.decision).toBe("block");
-    expect((await stop({ backgroundTasks: [{ id: "s2", type: "shell", status: "running", command: listen }, { id: "m4", type: "monitor", status: "running", description: "tail -f build.log" }] }))?.decision).toBe("block");
+    expect(
+      (
+        await stop({
+          backgroundTasks: [
+            { id: "s2", type: "shell", status: "running", command: listen },
+            { id: "m4", type: "monitor", status: "running", description: "tail -f build.log" },
+          ],
+        })
+      )?.decision,
+    ).toBe("block");
     expect(await stop({ backgroundTasks: [{ id: "m5", type: "monitor", status: "running", description: listen }] })).toBeNull();
     monitor.kill();
   });
