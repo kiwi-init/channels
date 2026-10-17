@@ -3,7 +3,7 @@
 CI's `plan` job decides which checks a pull request can break, and only those run.
 
 1. **Rules.**
-   - A change to the planner itself (`.github/jev-ci/**`) runs everything.
+   - A change to the planner's code (`.github/jev-ci/**/*.ts`) runs everything.
    - `ci.yml` is compared parsed, not line by line. A job runs when its own job block
      changed, or a local action or reusable workflow it uses (`uses: ./...`), followed through
      the files it uses in turn. A change to `name`, `run-name`, `on` or `concurrency`, a

@@ -31,7 +31,7 @@ planner_jobs: [plan, ci-ok]
 
 # The planner itself: a change here runs every job.
 run_all_when_changed:
-  - ".github/jev-ci/**"
+  - ".github/jev-ci/**/*.ts"
 
 # A release bump changes only these lines; it counts as no change.
 version_only:

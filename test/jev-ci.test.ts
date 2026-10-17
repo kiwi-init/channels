@@ -190,6 +190,11 @@ describe("jev-ci.yml edits", () => {
     const { result } = await planFor({ ".github/jev-ci/plan.ts": "export const planner = 2\n" })
     expect(ran(result)).toEqual([...CHECKS, "release-rehearsal"].sort())
   })
+
+  test("a planner README change doesn't run every job", async () => {
+    const { result } = await planFor({ ".github/jev-ci/README.md": "# jev-ci\n" })
+    expect(result.decisions.filter((d) => d.run && d.layer === "L0")).toEqual([])
+  })
 })
 
 describe("what each job reads", () => {
