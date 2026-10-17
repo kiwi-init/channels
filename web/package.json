@@ -25,7 +25,8 @@
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
     "robot-heads": "0.3.0",
-    "tailwindcss": "^4.3.3"
+    "tailwindcss": "^4.3.3",
+    "uqr": "0.1.2"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

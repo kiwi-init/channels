@@ -6,7 +6,7 @@
 
 import { contextBridge, ipcRenderer } from "electron";
 
-import type { ChannelIdentityView, ChannelView, ComputerView, DaemonStatus, KeysPort, KeysPush, KeysReply, KeysRequest, KiwiBridge, PairAskView, PendingItem, PublicPerson, SignInResult, StoreSnapshot, UpdateView } from "./bridge.ts";
+import type { ChannelIdentityView, ChannelView, ComputerView, DaemonStatus, KeysPort, KeysPush, KeysReply, KeysRequest, KiwiBridge, LinkAskView, PairAskView, PendingItem, PhoneView, PublicPerson, SignInResult, StoreSnapshot, UpdateView } from "./bridge.ts";
 
 const relayUrl = (ipcRenderer.sendSync("kiwi:snapshot-sync") as StoreSnapshot).relayUrl;
 
@@ -83,6 +83,10 @@ const kiwi: KiwiBridge = {
   pairBegin: () => ipcRenderer.invoke("kiwi:pair-begin") as Promise<{ code: string }>,
   pairPoll: () => ipcRenderer.invoke("kiwi:pair-poll") as Promise<PairAskView | null>,
   pairCancel: () => ipcRenderer.invoke("kiwi:pair-cancel") as Promise<void>,
+  linkBegin: () => ipcRenderer.invoke("kiwi:link-begin") as Promise<{ code: string }>,
+  linkPoll: () => ipcRenderer.invoke("kiwi:link-poll") as Promise<LinkAskView | null>,
+  linkAnswer: (accept: boolean) => ipcRenderer.invoke("kiwi:link-answer", accept) as Promise<PhoneView | null>,
+  linkCancel: () => ipcRenderer.invoke("kiwi:link-cancel") as Promise<void>,
   pairAnswer: (accept: boolean) => ipcRenderer.invoke("kiwi:pair-answer", accept) as Promise<{ machinePk: string } | null>,
   daemonStatus: () => ipcRenderer.invoke("kiwi:daemon-status") as Promise<DaemonStatus>,
   daemonAdopt: () => ipcRenderer.invoke("kiwi:daemon-adopt") as Promise<ComputerView>,
