@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context"
 
 import { JoinSheet } from "../src/components/JoinSheet"
 import { NewChannelSheet } from "../src/components/NewChannelSheet"
-import { useEngine, usePerson, useSeats } from "../src/lib/EngineProvider"
+import { useEngine, usePerson, useSeats, useServices } from "../src/lib/EngineProvider"
 import { joinCodeFromInput } from "../src/lib/deep-link"
 import { FirstRun } from "../src/screens/FirstRun"
 import { useTheme } from "../src/theme/useTheme"
@@ -22,15 +22,42 @@ export default function Home() {
   const [creating, setCreating] = useState(false)
   const [joining, setJoining] = useState(false)
   const [now] = useState(() => Date.now())
+  const { history, sql } = useServices()
+  const [previews, setPreviews] = useState<ReadonlyMap<string, Preview>>(new Map())
+  const me = person?.name ?? ""
+
+  useEffect(() => {
+    let live = true
+    void (async () => {
+      const next = new Map<string, Preview>()
+      for (const seat of joined) {
+        if (!seat.code || !seat.roomId || !seat.access) continue
+        const access = seat.access as { keys?: Record<string, string> }
+        next.set(seat.code, await previewOf(history, sql, { roomId: seat.roomId, memberPk: seat.pk, me: seat.idName ?? me, keys: access.keys ?? {} }))
+      }
+      if (live) setPreviews(next)
+    })()
+    return () => {
+      live = false
+    }
+  }, [joined, history, sql, me])
 
   const rows: ChannelRowView[] = useMemo(
     () => [
       ...waiting.map((seat) => ({ code: seat.code ?? "", room: seat.roomId ?? "", title: seat.name || seat.label || "Channel", state: "pending" as const, agents: 0, ts: seat.at ?? 0, recent: null })),
-      ...joined.map((seat) => ({ code: seat.code ?? "", room: seat.roomId ?? "", title: seat.name || seat.label || "Channel", state: "member" as const, agents: 0, ts: seat.at ?? 0, recent: null })),
+      ...joined.map((seat) => ({
+        code: seat.code ?? "",
+        room: seat.roomId ?? "",
+        title: seat.name || seat.label || "Channel",
+        state: "member" as const,
+        agents: 0,
+        ts: previews.get(seat.code ?? "")?.ts ?? seat.at ?? 0,
+        recent: previews.get(seat.code ?? "")?.recent ?? null,
+      })),
     ],
-    [joined, waiting]
+    [joined, waiting, previews]
   )
-  const news = useMemo(() => rows.map(() => ({ fresh: false, needs: 0 })), [rows])
+  const news = useMemo(() => rows.map((row) => ({ fresh: previews.get(row.code)?.fresh ?? false, needs: 0 })), [rows, previews])
 
   if (!person) return <FirstRun onContinue={async (name) => void (await engine.createPerson(name))} />
 
