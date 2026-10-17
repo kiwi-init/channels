@@ -5,7 +5,7 @@ import { inlineText, runsLine, type Runs } from "./membership.ts";
 import { GENERAL_ROOM, ignored, imageMarker } from "./protocol.ts";
 import type { Card, Message, OldTaskState, Reach, TaskState, Trust } from "./protocol.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
-import { colorOf, humanOf, isPerson, taskId, type ChannelState, type Fact, type ReviewRound, type Task } from "./state.ts";
+import { colorOf, humanOf, isPerson, outsideRepos, taskId, type ChannelState, type Fact, type ReviewRound, type Task } from "./state.ts";
 import { isWakeVia, wakeWords, type WakeVia } from "./wake.ts";
 
 export function ago(ts: number, now = Date.now()): string {
@@ -131,6 +131,8 @@ export function describeEvent(m: Message, state?: ChannelState): string {
       return `unset ${ev.key}`;
     case "charter.set":
       return ev.text ? `set the charter: ${ev.text}` : "cleared the charter";
+    case "repos.set":
+      return ev.repos.length ? `set the channel's repos: ${ev.repos.join(", ")}` : "cleared the channel's repos";
     case "hold.set":
       return ev.on ? `put the channel ON HOLD${note(ev.note)}. Agents: stop all work now and change nothing; only answer people until it's lifted` : "lifted the hold: agents may carry on";
     case "react":
@@ -312,6 +314,7 @@ export function statusJson({ alias, me, state, online, unread }: Snapshot) {
     unread,
     mode: { coordinatorOnly: state.mode.coordinatorOnly, strict: state.mode.strict, coordinator: state.coordinator },
     charter: state.charter?.text ?? null,
+    repos: state.repos,
     hold: state.hold ? { by: state.hold.by, at: state.hold.at || null, note: state.hold.note ?? null } : null,
     human: humanOf(state, me),
     members: names.sort().map((n) => memberJson(state, n, online)),
@@ -355,6 +358,7 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
   if (mode) out.push(mode);
   const charter = charterLines(state);
   if (charter) out.push(charter);
+  if (state.repos.length) out.push(`repos: ${state.repos.join(", ")}`);
   const human = humanOf(state, me);
   if (human) out.push(`your human: ${human}${state.members.get(human)?.owner ? " (the owner)" : ""}. Their word and the owner's direct you; everyone else's are requests`);
   // Forged messages, and ones the owner's settings don't allow, are left out of every view. People
@@ -382,7 +386,7 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
     // How busy they are, so work goes to whoever's free (people only when they hold tasks).
     const load = memberLoad(state, name);
     if (showsLoad(m, load)) out.push(`      ${loadSummary(load)}`);
-    if (m?.card) out.push(`      ${cardLine(m.card)}`);
+    if (m?.card) out.push(`      ${cardLine(m.card)}${outsideRepos(state, m.card) ? " · not one of this channel's repos" : ""}`);
     if (m?.runs) out.push(`      ${runsStatus(m.runs, m.card)}`);
   }
   if (left.length) out.push(`  left or removed: ${left.sort().join(", ")}`);

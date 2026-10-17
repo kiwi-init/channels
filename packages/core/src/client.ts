@@ -232,6 +232,10 @@ export class Channel {
     return run(this.fx.setHold(hold));
   }
 
+  setRepos(repos: NonNullable<GuardFloor["repos"]>): Promise<void> {
+    return run(this.fx.setRepos(repos));
+  }
+
   compress(): Promise<boolean> {
     return run(this.fx.compress());
   }
