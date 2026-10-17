@@ -32,7 +32,7 @@ export default function Home() {
   )
   const news = useMemo(() => rows.map(() => ({ fresh: false, needs: 0 })), [rows])
 
-  if (!person) return <FirstRun onContinue={async (name) => void (await engine.createPerson(name))} />
+  if (!person) return <FirstRun onContinue={async (name) => void (await engine.createPerson(name))} onRestore={() => router.push("/restore")} />
 
   const open = (code: string) => {
     const waitingSeat = waiting.find((seat) => seat.code === code)
