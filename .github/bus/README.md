@@ -10,7 +10,7 @@ Each run of [`bus.yml`](../workflows/bus.yml) is one stateless tick (bors): it r
 from GitHub and does the next step.
 
 1. **tick** (read-only): if `bus/staging` sits on main and its item is unchanged, wait for its
-   CI, then land it or diagnose it. Otherwise look at each branch's own CI run (the one for
+   CI, then land it or diagnose it. Otherwise look at each branch's (or labelled PR's) own CI run (the one for
    exactly its head): a branch still being tested waits (for 20 minutes at most), one with a
    green `ci-ok` goes first, and the rest follow by age. Take the first `bus/*` branch (or a PR a
    maintainer labelled `queue`, never a fork), ahead of it any branch Jev's `needs_order` says

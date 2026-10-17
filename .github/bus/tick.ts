@@ -115,7 +115,7 @@ export async function tick(repo: string, cfg: BusConfig): Promise<{ ticket: Tick
   }
   if (!items.length) return { ticket: { ...base, action: "idle", why: "nothing is queued" }, patch: "" }
 
-  const ci = new Map(await Promise.all(items.map(async (i) => [i.key, i.kind === "branch" ? await ciState(i.sha, i.key).catch((): Ci => ({ state: "none" })) : ({ state: "none" } as Ci)] as const)))
+  const ci = new Map(await Promise.all(items.map(async (i) => [i.key, await ciState(i.sha, i.kind === "branch" ? i.key : (i.branch ?? "")).catch((): Ci => ({ state: "none" }))] as const)))
   const waiting = ready(items, ci)
   if (!waiting.length) return { ticket: { ...base, action: "wait", why: `${items.map((i) => i.key).join(", ")} wait for their own CI` }, patch: "" }
   const { item, events } = await pick(repo, main, ranked(waiting, ci), cfg)
