@@ -1,4 +1,4 @@
-import { GENERAL_ROOM, MAX_CHARTER, MAX_ROOMS, MAX_TAGS, type Event, type Message } from "../protocol.ts";
+import { GENERAL_ROOM, MAX_CHARTER, MAX_ROOMS, MAX_TAGS, TASK_TITLE_MAX_LENGTH, type Event, type Message } from "../protocol.ts";
 import { omit } from "../omit.ts";
 import { readScopes, SCOPES, type Scope } from "../scopes.ts";
 import { isPerson } from "./people.ts";
@@ -154,7 +154,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: Member, at
     case "task.add":
       tasks.set(m.seq, {
         id: m.seq,
-        title: String(ev.title).slice(0, 200),
+        title: String(ev.title).slice(0, TASK_TITLE_MAX_LENGTH),
         detail: ev.detail,
         state: "todo",
         owner: ev.owner || undefined,
@@ -236,7 +236,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: Member, at
       if (ev.owner) worked(task, ev.owner);
       if (state && state !== "done" && (m.from === task.owner || state === "review")) worked(task, m.from);
       if (state) task.state = state;
-      if (ev.title) task.title = ev.title.slice(0, 200);
+      if (ev.title) task.title = ev.title.slice(0, TASK_TITLE_MAX_LENGTH);
       if (note) task.notes.push({ seq: m.seq, by: m.from, ts: at, text: note });
       if (ev.owner === null && task.state === "doing") task.state = "todo";
       task.updatedAt = at;
