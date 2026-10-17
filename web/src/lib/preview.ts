@@ -1,5 +1,3 @@
-// Latest line the channel list should preview. Relative imports so bun test
-// resolves them without the @mc alias.
 import { ignored, type Message, type Trust } from "@mc/protocol.ts"
 
 /**
