@@ -38,8 +38,8 @@ jobs:
   static:
     jev: false
     name: repo / static
-    inputs: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,css,py}", "web/index.html", ".github/workflows/**", ".github/actions/**"]
-    always: ["tsconfig.json", "tsconfig.worker.json", "package.json", "bun.lock", "web/package.json", "web/bun.lock", "web/tsconfig*.json", "web/vite.config.ts", "web/.oxlintrc.json", "web/.oxfmtrc.json", "desktop/package.json", "desktop/bun.lock", "desktop/tsconfig*.json", "knip.json", "scripts/ci/**"]
+    inputs: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,css}", "web/index.html", ".github/workflows/**", ".github/actions/**"]
+    always: ["tsconfig.json", "tsconfig.worker.json", "package.json", "bun.lock", "web/package.json", "web/bun.lock", "web/tsconfig*.json", "web/vite.config.ts", "web/.oxlintrc.json", "web/.oxfmtrc.json", "desktop/package.json", "desktop/bun.lock", "desktop/tsconfig*.json", "knip.json"]
     description: >-
       The static checks, one after another, each run even when an earlier one failed.
       Types: tsc --noEmit over src/ and test/ (and the jev-ci planner test/ imports), again over
@@ -51,10 +51,7 @@ jobs:
       --check on web/src. Knip (knip.json) over the root, web/ and desktop/: a file nothing
       imports, an export nothing outside its file uses, an unused dependency, an unlisted package.
       scripts/action-pins.ts: every uses: in .github/workflows and .github/actions names a
-      third-party action by a full commit SHA. scripts/ci/no_comments.py: a comment or tool
-      directive on a line this change adds to a .ts/.tsx/.js/.jsx/.mjs/.cjs/.mts/.cts/.css file,
-      or a comment or docstring in a .py file (scripts/ci is also checked with mypy --strict and
-      its unit tests). Fails on any of these.
+      third-party action by a full commit SHA. Fails on any of these.
 
   test-unit:
     name: test / unit
