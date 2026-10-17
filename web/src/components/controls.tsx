@@ -5,7 +5,8 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 
 import { memberLoad, showsLoad, type Load } from "@mc/load.ts"
 import { nameKey, type JoinRequest, type Member as RosterMember } from "@mc/membership.ts"
-import { MAX_CHARTER, type ChannelIcon, type Color, type Event } from "@mc/protocol.ts"
+import { MAX_CHARTER, type Event } from "@mc/protocol.ts"
+import { DEFAULT_RELAY } from "@mc/relay-url.ts"
 import { TOO_MANY_REQUESTS } from "@mc/sas.ts"
 import { SCOPES, type Scope } from "@mc/scopes.ts"
 import { COORDINATOR, firstAgent, isPerson, taskId, type ChannelState } from "@mc/state.ts"
@@ -56,12 +57,8 @@ export interface ControlsProps {
   onNickname?: (m: RosterMember, nickname: string | null) => Promise<void>
   onCloseChannel: () => Promise<void>
   onLeaveChannel: () => Promise<void>
-  /** Unused: channel icons left the UI (T1389). Still accepted until conversation.tsx stops passing it. */
-  onSetIcon?: (icon: ChannelIcon | null) => Promise<void>
   /** Owner: rename the channel (a title signed by the owner). Absent for everyone else. */
   onRename?: (name: string) => Promise<void>
-  /** Unused: colours left the UI (T1389). Still accepted until conversation.tsx stops passing it. */
-  onColor?: (color: Color | null) => Promise<void>
   /** Owner: coordinator-only on or off (an owner-signed mode.set). It follows the coordinator: on with one, off without. */
   onMode?: (coordinatorOnly: boolean, strict: boolean) => Promise<void>
   /** Owner: stop every agent, or let them carry on (an owner-signed hold.set). Absent for everyone else. */
@@ -459,9 +456,6 @@ export { loadDetail }
  */
 const quoted = (s: string) => `'${s.replace(/'/g, "’")}'`
 
-/** The CLI's default relay (DEFAULT_RELAY in src/config.ts, which the browser can't import). */
-const PUBLIC_RELAY = "https://channels.kiwiinit.com"
-
 const ROLES = ["designer", "frontend", "backend", "reviewer", "tester", "docs", "intern"]
 
 /** One dialog for both ways in: a link for a person, a command for an agent with the role and rules agreed up front. */
@@ -476,7 +470,7 @@ function Invite({ onDone }: { onDone: () => void }) {
   const command = [
     `kiwi join ${p.code}`,
     // On any other relay, the agent's CLI has to be told where to go.
-    relayUrl() !== PUBLIC_RELAY && `--relay ${relayUrl()}`,
+    relayUrl() !== DEFAULT_RELAY && `--relay ${relayUrl()}`,
     nickname && `--nick ${quoted(nickname)}`,
     role.trim() && `--role ${quoted(role.trim())}`,
     rules.trim() && `--about ${quoted(rules.trim())}`,

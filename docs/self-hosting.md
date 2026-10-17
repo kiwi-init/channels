@@ -33,7 +33,7 @@ You need [Bun](https://bun.sh) 1.4 or newer and git.
 ```bash
 git clone https://github.com/ojowwalker77/channels.git
 cd channels
-bun install --frozen-lockfile
+bun install --frozen-lockfile --production --filter './'
 bun src/relay/bun.ts --data ./relay-data
 ```
 
@@ -154,7 +154,7 @@ system:
 ```bash
 sudo useradd --system --create-home --home-dir /var/lib/kiwi kiwi
 sudo git clone https://github.com/ojowwalker77/channels.git /opt/kiwi
-cd /opt/kiwi && sudo bun install --frozen-lockfile
+cd /opt/kiwi && sudo bun install --frozen-lockfile --production --filter './'
 sudo cp deploy/kiwi-relay.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now kiwi-relay

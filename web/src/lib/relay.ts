@@ -5,6 +5,8 @@
 // server proxies /v1 to the relay). Nothing else in the renderer may use
 // location.origin for relay traffic: call relayUrl() here instead.
 
+import { DEFAULT_RELAY } from "@mc/relay-url.ts"
+
 export function relayOrigin(raw: unknown): string | null {
   if (typeof raw !== "string") return null
   try {
@@ -34,7 +36,7 @@ function fromEntry(): string | null {
 
 /** The relay this renderer talks to. */
 export function relayUrl(): string {
-  if (hasBridge()) return fromBridge() ?? PUBLIC_RELAY
+  if (hasBridge()) return fromBridge() ?? DEFAULT_RELAY
   return fromEntry() ?? window.location.origin
 }
 
@@ -46,6 +48,3 @@ export function hasBridge(): boolean {
     return false
   }
 }
-
-/** The relay `kiwi` talks to when told nothing else. */
-const PUBLIC_RELAY = "https://channels.kiwiinit.com"

@@ -1,5 +1,5 @@
-import type { Message } from "../../../src/protocol.ts"
-import type { Task } from "../../../src/state.ts"
+import type { Message } from "@mc/protocol.ts"
+import type { Task } from "@mc/state.ts"
 
 type Tasks = ReadonlyMap<number, Pick<Task, "state">>
 
