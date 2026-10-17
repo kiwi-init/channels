@@ -351,7 +351,7 @@ export default {
     if (url.pathname === "/v1/config") return withCors(relayConfig(human(env)));
     // The desktop app's renderer isn't served by the relay: /v1/* answers any origin.
     if (req.method === "OPTIONS" && url.pathname.startsWith("/v1/")) return corsPreflight();
-    if (url.pathname === BACKUP_PATH) return onBackupHttp(req, ownerBackups(env), { human: human(env), allow: backupAllowed });
+    if (url.pathname === BACKUP_PATH) return (await onBackupHttp(req, ownerBackups(env), { human: human(env), allow: backupAllowed })) ?? withCors(errorResponse(new NotFound({ message: "not found" })));
     if (url.pathname.startsWith("/v1/mailbox")) {
       // One object per mailbox id; a path without one is a 404, never a wake-up.
       const id = /^\/v1\/mailbox\/([A-Za-z0-9_-]{43})(?:\/(?:a|b))?$/.exec(url.pathname)?.[1];
