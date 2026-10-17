@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { omit } from "../../omit.ts";
 import { isRecord, parseToml } from "../files.ts";
 import { hookCommand, isOurHook, isOurHookCommand, KIMI_STOP } from "../self.ts";
 
@@ -28,7 +29,7 @@ export function withoutKimiHooks(text: string): string {
     if (!HOOKS_HEADER.test(lines[start] ?? "")) return;
     let end = starts[k + 1] ?? lines.length;
     while (end > start + 1 && /^\s*(#.*)?$/.test(lines[end - 1] ?? "")) end -= 1;
-    let ours = false;
+    let ours: boolean;
     try {
       ours = kimiHooks(parseToml(lines.slice(start, end).join("\n"))).some(isOurKimiHook);
     } catch {
@@ -48,7 +49,7 @@ export function withKimiHooks(text: string): string {
 
 function kimiExpected(config: Record<string, unknown>, add: boolean): Record<string, unknown> {
   const hooks = [...kimiHooks(config).filter((h) => !isOurKimiHook(h)), ...(add ? [kimiEntry()] : [])];
-  const { hooks: _old, ...rest } = config;
+  const rest = omit(config, "hooks");
   return hooks.length ? { ...rest, hooks } : rest;
 }
 

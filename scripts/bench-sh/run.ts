@@ -159,38 +159,6 @@ function parseAsks(extracted: string): string[] {
   return extracted.split("\n").filter((l) => /^\s*#\d+/.test(l)).map((l) => l.trim());
 }
 
-interface ShRun {
-  pending?: string;
-  stdout?: string;
-  stderr?: string;
-  exitCode?: number;
-}
-
-async function trySh(script: string): Promise<ShRun> {
-  let mod: Record<string, unknown>;
-  try {
-    mod = await import(join(root, "src/sh.ts"));
-  } catch (err) {
-    return { pending: `src/sh.ts not importable (${err instanceof Error ? err.message : err})` };
-  }
-  const { runSh, channelFiles, channelView } = mod;
-  if (typeof runSh !== "function" || typeof channelFiles !== "function" || typeof channelView !== "function") {
-    return { pending: "runSh, channelFiles or channelView is not exported yet" };
-  }
-  try {
-    const { AgentSession } = await import(join(root, "src/agent.ts"));
-    const { loadConfig } = await import(join(root, "src/config.ts"));
-    const cfg = loadConfig().channels[ALIAS];
-    if (!cfg) return { pending: `no local channel ${ALIAS}` };
-    const session = await AgentSession.open(ALIAS, cfg, AS);
-    const files = channelFiles([await channelView(session)]) as Record<string, string>;
-    const result = (await runSh(files, script, { cwd: "/channel" })) as { stdout: string; stderr: string; exitCode: number };
-    return result;
-  } catch (err) {
-    return { pending: `runSh failed (${err instanceof Error ? err.message : err})` };
-  }
-}
-
 function pctFewer(base: number, next: number): string {
   if (base <= 0) return "n/a";
   const pct = ((base - next) / base) * 100;

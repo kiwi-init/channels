@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 import { newChannelKey } from "../crypto.ts";
 import { inlineText, makeRecord, sealRecord, type Member } from "../membership.ts";
+import { omit } from "../omit.ts";
 import { Rejected } from "../refusals.ts";
 import { canPost, scopesOf, type Scope } from "../scopes.ts";
 import type { ChannelState } from "../state.ts";
@@ -44,7 +45,7 @@ export class ChannelMembers {
       if (m.owner) return yield* new Rejected("the owner may do everything");
       const e = this.ch.access.epoch;
       const key = this.ch.access.keys[String(e)]!;
-      const { active: _a, readOnly: _r, unverified: _u, at: _at, ...info } = m;
+      const info = omit(m, "active", "readOnly", "unverified", "at");
       const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.ch.identity, this.ch.roomId, { ...info, later: { scopes: [...scopes], since } })));
       yield* this.ch.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(scopes) }) });
     }),
@@ -54,7 +55,7 @@ export class ChannelMembers {
       if (m.owner) return yield* new Rejected("the owner's record isn't changed this way");
       const e = this.ch.access.epoch;
       const key = this.ch.access.keys[String(e)]!;
-      const { active: _a, readOnly: _r, unverified: _u, at: _at, ...info } = m;
+      const info = omit(m, "active", "readOnly", "unverified", "at");
       const laterRole = { role, ...(about !== undefined ? { about } : {}), since };
       const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.ch.identity, this.ch.roomId, { ...info, laterRole })));
       const scopes = m.later?.scopes ?? scopesOf(m);
@@ -66,7 +67,7 @@ export class ChannelMembers {
       if (m.owner || m.kind === "human") return yield* new Rejected("only an agent's nickname is changed this way");
       const e = this.ch.access.epoch;
       const key = this.ch.access.keys[String(e)]!;
-      const { active: _a, readOnly: _r, unverified: _u, at: _at, display: _d, ...info } = m;
+      const info = omit(m, "active", "readOnly", "unverified", "at", "display");
       const display = inlineText(nickname ?? "", 40);
       const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.ch.identity, this.ch.roomId, { ...info, ...(display ? { display } : {}) })));
       const scopes = m.later?.scopes ?? scopesOf(m);

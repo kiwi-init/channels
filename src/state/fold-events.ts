@@ -1,4 +1,5 @@
 import { GENERAL_ROOM, MAX_CHARTER, MAX_ROOMS, MAX_TAGS, type Event, type Message } from "../protocol.ts";
+import { omit } from "../omit.ts";
 import { readScopes, SCOPES, type Scope } from "../scopes.ts";
 import { isPerson } from "./people.ts";
 import { roomName } from "./rooms.ts";
@@ -169,7 +170,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: Member, at
       break;
 
     case "card": {
-      const { op: _op, ...card } = ev;
+      const card = omit(ev, "op");
       member.card = { ...card, ...(card.tools ? { tools: normTags(card.tools) } : {}), at };
       break;
     }

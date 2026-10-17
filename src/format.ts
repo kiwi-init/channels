@@ -259,7 +259,7 @@ export interface Snapshot {
 }
 
 /** One member as `kiwi status --json` and the MCP tools give it: who they are, where, and how busy. */
-export function memberJson(state: ChannelState, name: string, online: Snapshot["online"], now = Date.now()) {
+export function memberJson(state: ChannelState, name: string, online: Snapshot["online"]) {
   const m = state.members.get(name);
   const on = online.get(name);
   return {
@@ -274,7 +274,7 @@ export function memberJson(state: ChannelState, name: string, online: Snapshot["
     online: !!on && presenceAnswers(on),
     readAt: on?.readAt ?? null,
     lastSeen: m?.lastSeen ?? null,
-    load: loadJson(memberLoad(state, name, now)),
+    load: loadJson(memberLoad(state, name)),
     card: m?.card ? { ...m.card } : null,
     // What the owner signed at approval as running this agent; the card above is the agent's own word.
     runs: m?.runs ? { ...m.runs } : null,
@@ -297,7 +297,7 @@ export function mayDo(scopes: readonly Scope[]): string {
 }
 
 /** `kiwi status --json`: the members a coordinator routes work between, by role and load. */
-export function statusJson({ alias, me, state, online, unread, now = Date.now() }: Snapshot) {
+export function statusJson({ alias, me, state, online, unread }: Snapshot) {
   const names = [...state.members.values()].filter((m) => m.active).map((m) => m.name);
   return {
     channel: alias,
@@ -308,7 +308,7 @@ export function statusJson({ alias, me, state, online, unread, now = Date.now() 
     charter: state.charter?.text ?? null,
     hold: state.hold ? { by: state.hold.by, at: state.hold.at || null, note: state.hold.note ?? null } : null,
     human: humanOf(state, me),
-    members: names.sort().map((n) => memberJson(state, n, online, now)),
+    members: names.sort().map((n) => memberJson(state, n, online)),
   };
 }
 
@@ -370,7 +370,7 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
     const may = m && presetOf(m.scopes) !== "full" ? ` · may: ${describeScopes(m.scopes)}` : "";
     out.push(`  ${name}${name === me ? " (you)" : ""}${role ? ` — ${role}` : ""}${kind}${may} · ${where}${key}`);
     // How busy they are, so work goes to whoever's free (people only when they hold tasks).
-    const load = memberLoad(state, name, now);
+    const load = memberLoad(state, name);
     if (showsLoad(m, load)) out.push(`      ${loadSummary(load)}`);
     if (m?.card) out.push(`      ${cardLine(m.card)}`);
     if (m?.runs) out.push(`      ${runsStatus(m.runs, m.card)}`);

@@ -33,8 +33,7 @@ export function loadSummary(l: Load): string {
 const OVERLOADED_DOING = 2;
 const OVERLOADED_TOTAL = 4;
 
-/** `_now` is kept so callers that pass a clock still fit (it used to age out claims). */
-export function memberLoad(state: ChannelState, name: string, _now?: number): Load {
+export function memberLoad(state: ChannelState, name: string): Load {
   const mine = [...state.tasks.values()].filter((t) => t.owner === name).sort((a, b) => a.id - b.id);
   const current = mine.filter((t) => t.state === "doing");
   const queued = mine.filter((t) => t.state === "todo");

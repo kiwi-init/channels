@@ -9,6 +9,7 @@ import { forgetIdentity, identitiesIn, loadConfig, saveConfig, saveIdentity, typ
 import { activityEnv, reachOf, daemonHello, daemonListening, daemonSock, listenDaemon, reportRead, startDaemon, stopDaemon, type Daemon } from "../src/daemon.ts";
 import { presenceAnswers, presenceWords } from "../src/format.ts";
 import { generateIdentity, type Identity } from "../src/identity.ts";
+import { omit } from "../src/omit.ts";
 import type { Presence } from "../src/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { checked } from "./check.ts";
@@ -142,7 +143,7 @@ describe("seats always on", () => {
       const after = from(claudePk).length;
       await until("the wake to go with the listener", () => from(claudePk).slice(after).some((p) => p.wake === undefined));
     } finally {
-      const { "/kimi": _kimi, ...bindings } = loadConfig().bindings ?? {};
+      const bindings = omit(loadConfig().bindings ?? {}, "/kimi");
       saveConfig({ ...loadConfig(), bindings });
     }
   });
@@ -157,7 +158,7 @@ describe("seats always on", () => {
       saveConfig({ ...loadConfig(), bindings: { "/work": { alias: "test", as: "claude", harness: "claude", pid: 4242 } } });
       await until("idle activity in claude's presence", () => from(claudePk).some((p) => p.activity?.state === "idle"));
     } finally {
-      const { "/work": _work, ...bindings } = loadConfig().bindings ?? {};
+      const bindings = omit(loadConfig().bindings ?? {}, "/work");
       saveConfig({ ...loadConfig(), bindings });
       if (prev === undefined) delete process.env.CLAUDE_CONFIG_DIR;
       else process.env.CLAUDE_CONFIG_DIR = prev;

@@ -18,6 +18,7 @@ import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { kimiAncestor, kimiCodePid, mimoHere, type ProcessTree } from "./ancestry.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord } from "./config.ts";
+import { omit } from "./omit.ts";
 
 type Harness = NonNullable<SeatRecord["harness"]>;
 
@@ -244,7 +245,7 @@ export function seatsFor(dir: string, opts: SeatOptions = {}): Binding[] {
     if (!pick) return [];
     if (opts.claim !== false && who.session && (pick.session !== who.session || (who.pid && pick.pid !== who.pid))) {
       // The previous holder's process goes with it: this session's, or none.
-      const { pid: _gone, model: _was, ...rest } = pick;
+      const rest = omit(pick, "pid", "model");
       const taken: Binding = { ...rest, session: who.session, ...(who.pid ? { pid: who.pid } : {}), ...(who.model ? { model: who.model } : {}), ...(who.harness && !pick.harness ? { harness: who.harness } : {}), at: Date.now(), seen: Date.now() };
       updateConfig((c) => store(c, d, seatsAt(c, d).map((b) => (b.alias === pick.alias && b.as === pick.as ? taken : b))));
       return [taken];
