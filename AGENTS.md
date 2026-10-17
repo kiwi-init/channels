@@ -15,7 +15,7 @@
 - Small commits. Before every push, run the checks for the area you touched, then a plain `git push`.
 - Forbidden: manual force-push, `--no-verify`, `[skip ci]`, and merging with the `ci-ok` check red.
 - Long-running processes (CI, checks, tests, builds, servers, waiting on a CI run) run detached, in background, so a turn interruption does not kill them: start them with the agent tool's background mode or, in the shell, with `nohup <command> > file.log 2>&1 &` (or `setsid`), never with a bare `&`, which does not detach the process from the shell; send output to a log file and follow the log or the completion notice instead of blocking the turn waiting.
-- Every change ships with its CI gate: its own job in `ci.yml`, named `<area> / <check>` (e.g. `web / lint`) and listed in the `needs` of `ci-ok`.
+- Every change ships with its CI gate, as a step in the job for its area in `ci.yml` (`repo / static`, `test / unit`, `test / flows-a`, `test / flows-b`, `build / bundles`, `desktop / package`, `cli / macos`), and with that job's `inputs` and `description` in `.github/jev-ci.yml` updated to cover it. A new test file lands in `test / unit` unless `scripts/ci-tests.ts` puts it in a flows group. Add a job only when the check needs its own runner (another OS, a long build) or would become the slowest step in its job by a wide margin; then name it `<area> / <check>`, give it a `timeout-minutes`, add it to `.github/jev-ci.yml` and to the `needs` of `ci-ok`. The only required check is `ci-ok`.
 
 ## Authorship
 
