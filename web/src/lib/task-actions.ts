@@ -1,7 +1,7 @@
 import type { SendOptions } from "../../../src/client.ts"
 import { openRound, taskId, type Task } from "../../../src/state.ts"
 
-export type ReviewAction = "none" | "send-back" | "verdict"
+type ReviewAction = "none" | "send-back" | "verdict"
 
 export type TaskActions = { kind: "hidden" } | { kind: "open"; review: ReviewAction }
 
@@ -10,7 +10,7 @@ export interface TaskSend {
   opts: SendOptions
 }
 
-export function reviewsMe(t: Task, me: string): boolean {
+function reviewsMe(t: Task, me: string): boolean {
   return t.state === "review" && !!t.review && (t.review === me || (t.review === "*" && t.owner !== me && !t.workedBy.includes(me)))
 }
 
