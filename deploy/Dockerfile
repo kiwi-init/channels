@@ -4,8 +4,12 @@
 
 FROM oven/bun:1.4.2
 WORKDIR /app
+# The relay needs only the root workspace's dependencies; the web and desktop
+# manifests are copied so the lockfile matches, and --filter skips their installs.
 COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile --production
+COPY web/package.json ./web/
+COPY desktop/package.json ./desktop/
+RUN bun install --frozen-lockfile --production --filter './'
 COPY src ./src
 # The relay serves this static site at / (downloads, invite links, install scripts).
 COPY site ./site

@@ -1,6 +1,4 @@
-// Latest line the channel list should preview. Relative imports so bun test
-// resolves them without the @mc alias.
-import { ignored, type Message, type Trust } from "../../../src/protocol.ts"
+import { ignored, type Message, type Trust } from "@mc/protocol.ts"
 
 /**
  * The last thing said that this viewer actually sees: not events, not a note

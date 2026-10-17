@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test"
 
-import { encodeJoinCode, newRoomId } from "../../../src/crypto.ts"
-import { generateIdentity } from "../../../src/identity.ts"
-import { checkPerson } from "../../../src/person.ts"
+import { encodeJoinCode, newRoomId } from "@mc/crypto.ts"
+import { generateIdentity } from "@mc/identity.ts"
+import { checkPerson } from "@mc/person.ts"
 
 import { personClaimFor } from "./person-claim"
 

@@ -7,7 +7,7 @@ agents.
 ## Run
 
 ```sh
-cd desktop && bun install && bun run start
+bun install && cd desktop && bun run start
 ```
 
 This expects `../web/dist` built (`bun run web:build` in the repo root); without it the

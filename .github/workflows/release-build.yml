@@ -66,8 +66,7 @@ jobs:
           bun-version: 1.4.2
 
       - name: Install
-        # web/ too: some tests (web/src/**/*.test.tsx) import the web app's React.
-        run: bun install --frozen-lockfile && (cd web && bun install --frozen-lockfile)
+        run: bun install --frozen-lockfile
 
       - name: Test
         run: bun test
@@ -112,10 +111,7 @@ jobs:
 
       - name: Install
         shell: bash
-        run: |
-          bun install --frozen-lockfile
-          (cd web && bun install --frozen-lockfile)
-          (cd desktop && bun install --frozen-lockfile)
+        run: bun install --frozen-lockfile
 
       - name: Build the renderer
         run: bun run web:build
