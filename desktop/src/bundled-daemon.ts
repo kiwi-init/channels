@@ -1,0 +1,68 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { app } from "electron";
+
+import { certifyMachine } from "../../src/person.ts";
+import type { ComputerView } from "./bridge.ts";
+import { compareVersions, ensureOnPath, keepCli } from "./cli.ts";
+import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, spawnDaemon, type HelloResult } from "./daemon-client.ts";
+import { requirePerson, store, upsertComputer } from "./store.ts";
+
+function bundledKiwi(): string {
+  const exe = process.platform === "win32" ? "kiwi.exe" : "kiwi";
+  const fromPkg = path.join(process.resourcesPath, exe);
+  if (app.isPackaged && fs.existsSync(fromPkg)) return fromPkg;
+  const fromRepo = path.join(__dirname, "..", "..", "dist", exe);
+  if (fs.existsSync(fromRepo)) return fromRepo;
+  throw new Error("the bundled kiwi binary is missing (repo root `bun run build` makes dist/kiwi)");
+}
+
+let kiwiBin: { path: string; version: string } | null = null;
+
+async function ensureDaemon(): Promise<HelloResult | null> {
+  const home = kiwiHome();
+  const running = await daemonHello(home);
+  if (running && !(kiwiBin && compareVersions(running.version, kiwiBin.version) < 0)) return running;
+  if (running) {
+    await daemonStop(home);
+    for (let i = 0; i < 20 && (await daemonHello(home, 500)); i++) await new Promise((r) => setTimeout(r, 250));
+  }
+  spawnDaemon(kiwiBin?.path ?? bundledKiwi(), home, store.relayUrl);
+  const until = Date.now() + 10_000;
+  for (;;) {
+    const hello = await daemonHello(home);
+    if (hello) return hello;
+    if (Date.now() > until) return null;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+}
+
+export async function adoptDaemon(): Promise<ComputerView> {
+  const person = requirePerson();
+  const home = kiwiHome();
+  const hello = (await daemonHello(home)) ?? (await ensureDaemon());
+  if (!hello) throw new Error(`no daemon answers at ${daemonSocketPath(home)}`);
+  const label = os.hostname().split(".")[0] || "this computer";
+  const cert = await certifyMachine(person, { pk: hello.machine.pk, xpk: hello.machine.xpk, label });
+  await daemonAdopt(home, { cert, person: { pk: person.pk, xpk: person.xpk as string, name: person.name } });
+  const c: ComputerView = { label, os: process.platform, machinePk: hello.machine.pk, machineXpk: hello.machine.xpk, personPk: person.pk, at: Date.now(), own: true };
+  upsertComputer(c);
+  return c;
+}
+
+export async function installCli(): Promise<{ path: string }> {
+  kiwiBin = await keepCli(bundledKiwi(), app.getVersion());
+  ensureOnPath();
+  return { path: kiwiBin.path };
+}
+
+export async function keepDaemon(): Promise<void> {
+  if (app.isPackaged) {
+    try {
+      kiwiBin = await keepCli(bundledKiwi(), app.getVersion());
+      ensureOnPath();
+    } catch {}
+  }
+  await ensureDaemon();
+}

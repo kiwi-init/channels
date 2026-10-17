@@ -8,7 +8,8 @@ import type { PersonClaim } from "../../src/person.ts";
 import type { Signed, SigningBudget } from "../../src/sas.ts";
 import type { ChannelIdentityView } from "./bridge.ts";
 import { writePrivate } from "./guard.ts";
-import { Keyring, serveKeys, type HostToKeys, type KeysToHost } from "./keyring.ts";
+import { Keyring } from "./keyring.ts";
+import { serveKeys, type HostToKeys, type KeysToHost } from "./keys-server.ts";
 
 type Done = Extract<HostToKeys, { type: "done" }>;
 type Ask = KeysToHost extends infer T ? (T extends { id: number } ? Omit<T, "id"> : never) : never;

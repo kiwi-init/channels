@@ -5,7 +5,8 @@ import { join } from "node:path";
 
 import type { ChannelIdentityView, ChannelOps, FollowEvent, KeysAsk, KeysPort, KeysPush, KeysReply } from "../desktop/src/bridge.ts";
 import { snapshotOf } from "../desktop/src/guard.ts";
-import { editable, Keyring, serveKeys, type KeyHost } from "../desktop/src/keyring.ts";
+import { editable, Keyring, type KeyHost } from "../desktop/src/keyring.ts";
+import { serveKeys } from "../desktop/src/keys-server.ts";
 import { acceptSeat, mergePublicChannels, migrateEntries, publicChannel, withAccess } from "../desktop/src/seats.ts";
 import { fromWire, toWire } from "../desktop/src/wire.ts";
 import { remoteOps } from "../web/src/lib/channel-remote.ts";
@@ -310,7 +311,7 @@ describe("the window's code holds no channel keys", () => {
     [/\bgenerateIdentity\b/, "generateIdentity"],
     [/import\s*\{[^}]*\b(seal|open)\b[^}]*\}\s*from\s*"[^"]*\/crypto(\.ts)?"/, "seal/open from crypto.ts"],
     [/import\s*\{[^}]*\b(packRow|openRow|openRows)\b[^}]*\}\s*from\s*"[^"]*\/cache-row(\.ts)?"/, "packRow/openRow from cache-row.ts"],
-    [/from\s*"[^"]*\/desktop\/src\/keyring(\.ts)?"/, "desktop/src/keyring.ts"],
+    [/from\s*"[^"]*\/desktop\/src\/(keyring|keys-server)(\.ts)?"/, "desktop/src/keyring.ts or keys-server.ts"],
   ];
 
   test("only channel-local.ts (the plain-browser dev mode) touches them", () => {
