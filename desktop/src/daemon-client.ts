@@ -35,7 +35,13 @@ export function kiwiHome(): string {
 
 export function daemonSocketPath(home: string = kiwiHome()): string {
   // The same name the daemon picks (src/daemon.ts daemonSock): its home, as a tag.
-  if (process.platform === "win32") return `\\\\.\\pipe\\kiwi-daemon-${home.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(-64) || "kiwi"}`;
+  if (process.platform === "win32")
+    return `\\\\.\\pipe\\kiwi-daemon-${
+      home
+        .replace(/[^A-Za-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(-64) || "kiwi"
+    }`;
   return path.join(home, "daemon.sock");
 }
 
@@ -52,7 +58,10 @@ function call(sock: string, verb: string, params: object = {}, timeoutMs = 5_000
       conn.destroy();
       finish();
     };
-    const timer = setTimeout(() => settle(() => reject(new Error("the daemon didn't answer"))), timeoutMs);
+    const timer = setTimeout(
+      () => settle(() => reject(new Error("the daemon didn't answer"))),
+      timeoutMs,
+    );
     let buf = "";
     conn.on("connect", () => conn.write(`${JSON.stringify({ ...params, id: 1, verb })}\n`));
     conn.on("data", (chunk) => {
@@ -75,16 +84,27 @@ function call(sock: string, verb: string, params: object = {}, timeoutMs = 5_000
 }
 
 /** The daemon's hello, or null when none is listening (stale socket included) or it has no key yet. */
-export async function daemonHello(home: string = kiwiHome(), timeoutMs = 5_000): Promise<HelloResult | null> {
+export async function daemonHello(
+  home: string = kiwiHome(),
+  timeoutMs = 5_000,
+): Promise<HelloResult | null> {
   try {
     const r = await call(daemonSocketPath(home), "hello", {}, timeoutMs);
-    if (typeof r["version"] !== "string" || typeof r["machine"] !== "string" || typeof r["mxpk"] !== "string") return null;
+    if (
+      typeof r["version"] !== "string" ||
+      typeof r["machine"] !== "string" ||
+      typeof r["mxpk"] !== "string"
+    )
+      return null;
     const person = r["person"] as { pk?: unknown; name?: unknown } | null;
     const label = typeof r["label"] === "string" ? r["label"] : "";
     return {
       version: r["version"],
       machine: { pk: r["machine"], xpk: r["mxpk"] },
-      paired: r["certified"] && person && typeof person.pk === "string" ? { person: person.pk, name: typeof person.name === "string" ? person.name : "", label } : null,
+      paired:
+        r["certified"] && person && typeof person.pk === "string"
+          ? { person: person.pk, name: typeof person.name === "string" ? person.name : "", label }
+          : null,
     };
   } catch {
     return null;
@@ -102,7 +122,11 @@ export async function daemonStop(home: string = kiwiHome(), timeoutMs = 5_000): 
 }
 
 /** Hand the daemon its cert from the person. Throws when it refuses. */
-export async function daemonAdopt(home: string, params: AdoptParams, timeoutMs = 10_000): Promise<void> {
+export async function daemonAdopt(
+  home: string,
+  params: AdoptParams,
+  timeoutMs = 10_000,
+): Promise<void> {
   await call(daemonSocketPath(home), "adopt", params, timeoutMs);
 }
 
@@ -113,7 +137,12 @@ export async function daemonAdopt(home: string, params: AdoptParams, timeoutMs =
  * would adopt a daemon on the public one.
  */
 export function spawnDaemon(bin: string, home: string, relay: string): void {
-  const child = spawn(bin, ["daemon"], { env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay }, detached: true, stdio: "ignore", windowsHide: true });
+  const child = spawn(bin, ["daemon"], {
+    env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay },
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+  });
   // A binary that won't start shows as no hello (the caller waits for one), not an uncaught error.
   child.on("error", () => {});
   child.unref();

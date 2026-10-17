@@ -97,7 +97,10 @@ export type ChannelCallName = (typeof CHANNEL_CALLS)[number];
 export type ChannelCalls = Pick<Channel, ChannelCallName>;
 export type CallResult<K extends ChannelCallName> = Awaited<ReturnType<ChannelCalls[K]>>;
 
-export type JoinCheck = { status: "pending"; code: string | null } | { status: "denied" } | { status: "in"; channel: ChannelView };
+export type JoinCheck =
+  | { status: "pending"; code: string | null }
+  | { status: "denied" }
+  | { status: "in"; channel: ChannelView };
 
 export type FollowEvent =
   | { _tag: "Open"; kind?: OpenKind }
@@ -112,14 +115,23 @@ export type FollowEvent =
   | { _tag: "Failed"; error: WireError };
 
 export interface ChannelOps {
-  call<K extends ChannelCallName>(code: string, op: K, ...args: Parameters<ChannelCalls[K]>): Promise<CallResult<K>>;
+  call<K extends ChannelCallName>(
+    code: string,
+    op: K,
+    ...args: Parameters<ChannelCalls[K]>
+  ): Promise<CallResult<K>>;
   create(name: string, token: string | null, me: { name: string } | null): Promise<ChannelView>;
   requestJoin(code: string, name: string, role?: string): Promise<ChannelView>;
   joinStatus(code: string): Promise<JoinCheck>;
   forget(code: string): Promise<void>;
   presence(code: string, p: PresenceFields): Promise<void>;
   openRows(code: string, rows: CachedRow[]): Promise<(Message | null)[]>;
-  follow(code: string, since: number, on: (e: FollowEvent) => void, opts?: FollowOptions): () => void;
+  follow(
+    code: string,
+    since: number,
+    on: (e: FollowEvent) => void,
+    opts?: FollowOptions,
+  ): () => void;
 }
 
 export interface FollowOptions {
@@ -144,7 +156,9 @@ export type KeysAsk =
   | { op: "unfollow"; sub: number };
 
 export type KeysRequest = KeysAsk & { id: number };
-export type KeysReply = { id: number; ok: true; value: Wire } | { id: number; ok: false; error: WireError };
+export type KeysReply =
+  | { id: number; ok: true; value: Wire }
+  | { id: number; ok: false; error: WireError };
 export interface KeysPush {
   sub: number;
   event: Wire;
@@ -211,6 +225,8 @@ export interface KiwiBridge {
   getSnapshot(): StoreSnapshot;
   onStore(cb: (s: StoreSnapshot) => void): () => void;
   setRelayUrl(url: string): Promise<string>;
+  backupStatus(): Promise<{ at: number } | null>;
+  backupRun(): Promise<{ passphrase: string; at: number }>;
   createPerson(name: string): Promise<PublicPerson>;
   saveChannels(channels: ChannelView[]): Promise<void>;
   migrateChannels(entries: ChannelIdentityView[]): Promise<number>;

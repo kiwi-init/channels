@@ -11,11 +11,26 @@ import * as Layer from "effect/Layer";
 import { CLOSE_CLOSED, CLOSE_REMOVED, GONE_WORDS, PING, PONG } from "../protocol.ts";
 import { ChannelGone, NotFound, UpdateRequired } from "./failures.ts";
 import { clockLayer } from "./http.ts";
-import { authkitDomains, devHostOk, devHumanAuth, devRequestOk, Human, HUMAN_HEADER, workosFromSettings, type HumanAuth } from "./human.ts";
+import {
+  authkitDomains,
+  devHostOk,
+  devHumanAuth,
+  devRequestOk,
+  Human,
+  HUMAN_HEADER,
+  workosFromSettings,
+  type HumanAuth,
+} from "./human.ts";
 import { MAILBOX_TTL_MS } from "../mailbox.ts";
 import { onBackupHttp, hourlyLimit, BACKUP_PER_HOUR, type BackupStore } from "./backup.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
-import { clientAddress, parseTrustProxy, trustProxyFromArgs, writeAllowed, type TrustProxy } from "./address.ts";
+import {
+  clientAddress,
+  parseTrustProxy,
+  trustProxyFromArgs,
+  writeAllowed,
+  type TrustProxy,
+} from "./address.ts";
 import { Policy, policyFrom, type RelayPolicy } from "./policy.ts";
 import {
   Directory,
@@ -62,12 +77,23 @@ export interface WebApp {
 }
 
 export function startRelay(
-  opts: { port?: number; hostname?: string; dataDir?: string; human?: HumanAuth | null; policy?: RelayPolicy; web?: WebApp | null; now?: () => number; trustProxy?: TrustProxy } = {},
+  opts: {
+    port?: number;
+    hostname?: string;
+    dataDir?: string;
+    human?: HumanAuth | null;
+    policy?: RelayPolicy;
+    web?: WebApp | null;
+    now?: () => number;
+    trustProxy?: TrustProxy;
+  } = {},
 ) {
   const human = opts.human ?? null;
   // Settings come from the caller, or else from the environment, the same keys the Worker reads.
   const policy = opts.policy ?? policyFrom(process.env);
-  const trustProxy: TrustProxy = Array.isArray(opts.trustProxy) ? parseTrustProxy(opts.trustProxy) : opts.trustProxy === true;
+  const trustProxy: TrustProxy = Array.isArray(opts.trustProxy)
+    ? parseTrustProxy(opts.trustProxy)
+    : opts.trustProxy === true;
   const web = opts.web ? webApp(opts.web) : null;
   const dataDir = opts.dataDir ?? ".relay-data";
   // Rooms hold ciphertext, member keys and join codes: only the relay's own user reads them.
@@ -77,34 +103,52 @@ export function startRelay(
   const file = (roomId: string) => join(dataDir, `${roomId}.sqlite`);
   // Signed-in people's owned channels (room ids and join codes only): the quota on POST /create.
   const people = new Database(join(dataDir, "people.sqlite"), { create: true });
-  people.run("CREATE TABLE IF NOT EXISTS owned (user TEXT NOT NULL, room TEXT NOT NULL, entry TEXT NOT NULL, PRIMARY KEY (user, room))");
+  people.run(
+    "CREATE TABLE IF NOT EXISTS owned (user TEXT NOT NULL, room TEXT NOT NULL, entry TEXT NOT NULL, PRIMARY KEY (user, room))",
+  );
   // One-time pairing mailboxes (src/relay/mailbox.ts): id-hashed, sealed
   // boxes the relay can't read. Expired rows are deleted on read and below.
   people.run("CREATE TABLE IF NOT EXISTS mailboxes (id TEXT PRIMARY KEY, rec TEXT NOT NULL)");
   const mailboxes: MailboxStore = {
     load: async (id) => {
-      const row = people.query("SELECT rec FROM mailboxes WHERE id = ?").get(id) as { rec: string } | null;
-      return row ? (JSON.parse(row.rec) as { a: string | null; b: string | null; firstAt: number }) : null;
+      const row = people.query("SELECT rec FROM mailboxes WHERE id = ?").get(id) as {
+        rec: string;
+      } | null;
+      return row
+        ? (JSON.parse(row.rec) as { a: string | null; b: string | null; firstAt: number })
+        : null;
     },
-    save: async (id, rec) => void people.query("INSERT OR REPLACE INTO mailboxes (id, rec) VALUES (?, ?)").run(id, JSON.stringify(rec)),
+    save: async (id, rec) =>
+      void people
+        .query("INSERT OR REPLACE INTO mailboxes (id, rec) VALUES (?, ?)")
+        .run(id, JSON.stringify(rec)),
     drop: async (id) => void people.query("DELETE FROM mailboxes WHERE id = ?").run(id),
   };
   people.run("CREATE TABLE IF NOT EXISTS backups (user TEXT PRIMARY KEY, rec TEXT NOT NULL)");
   const backups: BackupStore = {
     load: async (user) => {
-      const row = people.query("SELECT rec FROM backups WHERE user = ?").get(user) as { rec: string } | null;
+      const row = people.query("SELECT rec FROM backups WHERE user = ?").get(user) as {
+        rec: string;
+      } | null;
       return row ? (JSON.parse(row.rec) as Awaited<ReturnType<BackupStore["load"]>>) : null;
     },
-    save: async (user, rec) => void people.query("INSERT OR REPLACE INTO backups (user, rec) VALUES (?, ?)").run(user, JSON.stringify(rec)),
+    save: async (user, rec) =>
+      void people
+        .query("INSERT OR REPLACE INTO backups (user, rec) VALUES (?, ?)")
+        .run(user, JSON.stringify(rec)),
     drop: async (user) => void people.query("DELETE FROM backups WHERE user = ?").run(user),
   };
   const backupAllowed = hourlyLimit(BACKUP_PER_HOUR);
   // Expired pairing mailboxes go on startup and hourly (reads expire them lazily too).
   const sweepMailboxes = () => {
     const now = Date.now();
-    for (const r of people.query("SELECT id, rec FROM mailboxes").all() as { id: string; rec: string }[]) {
+    for (const r of people.query("SELECT id, rec FROM mailboxes").all() as {
+      id: string;
+      rec: string;
+    }[]) {
       try {
-        if (now - (JSON.parse(r.rec) as { firstAt: number }).firstAt > MAILBOX_TTL_MS) people.query("DELETE FROM mailboxes WHERE id = ?").run(r.id);
+        if (now - (JSON.parse(r.rec) as { firstAt: number }).firstAt > MAILBOX_TTL_MS)
+          people.query("DELETE FROM mailboxes WHERE id = ?").run(r.id);
       } catch {
         people.query("DELETE FROM mailboxes WHERE id = ?").run(r.id);
       }
@@ -148,7 +192,10 @@ export function startRelay(
   };
   /** Creates in flight, by room: a refused one removes the file only when no other create of that id is still running. */
   const creating = new Map<string, number>();
-  const listOf = (user: string) => (people.query("SELECT entry FROM owned WHERE user = ?").all(user) as { entry: string }[]).map((r) => JSON.parse(r.entry) as DirectoryEntry);
+  const listOf = (user: string) =>
+    (people.query("SELECT entry FROM owned WHERE user = ?").all(user) as { entry: string }[]).map(
+      (r) => JSON.parse(r.entry) as DirectoryEntry,
+    );
 
   // What every room runs with. `now` (tests) is the clock the room reads.
   const services = Layer.mergeAll(
@@ -159,13 +206,20 @@ export function startRelay(
       // Synchronous SQLite: the count and the hold happen with nothing in between.
       reserve: async (user: string, room: string, most: number) => {
         const { ok, stale } = reserveSlot(listOf(user), room, most, Date.now());
-        for (const r of stale) people.query("DELETE FROM owned WHERE user = ? AND room = ?").run(user, r);
-        if (ok && !listOf(user).some((e) => e.room === room)) people.query("INSERT INTO owned (user, room, entry) VALUES (?, ?, ?)").run(user, room, JSON.stringify(holdEntry(room, Date.now())));
+        for (const r of stale)
+          people.query("DELETE FROM owned WHERE user = ? AND room = ?").run(user, r);
+        if (ok && !listOf(user).some((e) => e.room === room))
+          people
+            .query("INSERT INTO owned (user, room, entry) VALUES (?, ?, ?)")
+            .run(user, room, JSON.stringify(holdEntry(room, Date.now())));
         return ok;
       },
       release: async (user: string, room: string) => {
-        const row = people.query("SELECT entry FROM owned WHERE user = ? AND room = ?").get(user, room) as { entry: string } | null;
-        if (row && releasable(JSON.parse(row.entry) as DirectoryEntry)) people.query("DELETE FROM owned WHERE user = ? AND room = ?").run(user, room);
+        const row = people
+          .query("SELECT entry FROM owned WHERE user = ? AND room = ?")
+          .get(user, room) as { entry: string } | null;
+        if (row && releasable(JSON.parse(row.entry) as DirectoryEntry))
+          people.query("DELETE FROM owned WHERE user = ? AND room = ?").run(user, room);
       },
     }),
     clockLayer(opts.now),
@@ -184,13 +238,21 @@ export function startRelay(
 
   const apply = (roomId: string, fx: Effects, sender?: ServerWebSocket<SocketData>) => {
     const room = sockets.get(roomId) ?? new Set();
-    for (const ws of room) for (const f of (ws.data.watch ? fx.watch : undefined) ?? fx.broadcast ?? []) ws.send(f);
+    for (const ws of room)
+      for (const f of (ws.data.watch ? fx.watch : undefined) ?? fx.broadcast ?? []) ws.send(f);
     if (fx.others) for (const ws of room) if (ws !== sender && !ws.data.watch) ws.send(fx.others);
-    if (fx.ephemeral) for (const ws of room) if (ws !== sender && ws.data.presence) ws.send(fx.ephemeral);
-    for (const f of fx.readers ?? []) for (const ws of room) if (ws.data.reads && !ws.data.watch) ws.send(f);
-    if (fx.disconnect) for (const ws of room) if (ws.data.pk === fx.disconnect.pk) ws.close(CLOSE_REMOVED, GONE_WORDS[fx.disconnect.how]);
+    if (fx.ephemeral)
+      for (const ws of room) if (ws !== sender && ws.data.presence) ws.send(fx.ephemeral);
+    for (const f of fx.readers ?? [])
+      for (const ws of room) if (ws.data.reads && !ws.data.watch) ws.send(f);
+    if (fx.disconnect)
+      for (const ws of room)
+        if (ws.data.pk === fx.disconnect.pk) ws.close(CLOSE_REMOVED, GONE_WORDS[fx.disconnect.how]);
     for (const u of fx.directory ?? []) {
-      if (u.entry) people.query("INSERT OR REPLACE INTO owned (user, room, entry) VALUES (?, ?, ?)").run(u.user, u.room, JSON.stringify(u.entry));
+      if (u.entry)
+        people
+          .query("INSERT OR REPLACE INTO owned (user, room, entry) VALUES (?, ?, ?)")
+          .run(u.user, u.room, JSON.stringify(u.entry));
       else people.query("DELETE FROM owned WHERE user = ? AND room = ?").run(u.user, u.room);
     }
     if (fx.wipe) {
@@ -231,15 +293,31 @@ export function startRelay(
       try {
         const url = new URL(req.url);
         // Dev sign-in answers only this machine, directly: never a request a proxy passed on.
-        if (human?.dev && req.headers.has(HUMAN_HEADER) && !devRequestOk(req, server.requestIP(req)?.address)) {
-          return Response.json({ error: "dev sign-in only takes requests made on this machine, not through a proxy" }, { status: 403 });
+        if (
+          human?.dev &&
+          req.headers.has(HUMAN_HEADER) &&
+          !devRequestOk(req, server.requestIP(req)?.address)
+        ) {
+          return Response.json(
+            { error: "dev sign-in only takes requests made on this machine, not through a proxy" },
+            { status: 403 },
+          );
         }
-        if (web && !url.pathname.startsWith("/v1/") && (req.method === "GET" || req.method === "HEAD")) return web(url.pathname);
+        if (
+          web &&
+          !url.pathname.startsWith("/v1/") &&
+          (req.method === "GET" || req.method === "HEAD")
+        )
+          return web(url.pathname);
         if (url.pathname === "/") return new Response("Kiwi Channels relay (bun)\n");
         // The desktop app's renderer isn't served by the relay: /v1/* answers any origin.
         if (req.method === "OPTIONS" && url.pathname.startsWith("/v1/")) return corsPreflight();
         if (url.pathname === "/v1/config") return withCors(await relayConfig(human));
-        const ip = clientAddress(server.requestIP(req)?.address ?? null, req.headers.get("x-forwarded-for"), trustProxy);
+        const ip = clientAddress(
+          server.requestIP(req)?.address ?? null,
+          req.headers.get("x-forwarded-for"),
+          trustProxy,
+        );
         const mailbox = await onMailboxHttp(req, mailboxes, ip ? { ip, allow: writeAllowed } : {});
         if (mailbox) return mailbox;
         const backup = await onBackupHttp(req, backups, { human, allow: backupAllowed });
@@ -249,7 +327,18 @@ export function startRelay(
         // No fingerprint: 426 before the room file is opened.
         const early = missingFingerprint(req.method, route.rest, url);
         if (early) return withCors(errorResponse(early));
-        if (pageCache && PAGE_PATH.test(route.rest)) return withCors(await edgePage(req, route.roomId, route.rest, policy.pageKey, pageCache, () => pageFromRoom(req, route.roomId, route.rest), clock()));
+        if (pageCache && PAGE_PATH.test(route.rest))
+          return withCors(
+            await edgePage(
+              req,
+              route.roomId,
+              route.rest,
+              policy.pageKey,
+              pageCache,
+              () => pageFromRoom(req, route.roomId, route.rest),
+              clock(),
+            ),
+          );
         const isCreate = route.rest === "/create";
         const db = storeFor(route.roomId, isCreate);
         if (isCreate) creating.set(route.roomId, (creating.get(route.roomId) ?? 0) + 1);
@@ -269,7 +358,21 @@ export function startRelay(
             }
             const pk = await runRoom(relay, db, authenticateSocket(req));
             const since = Number(url.searchParams.get("since") ?? 0) || 0;
-            if (server.upgrade(req, { data: { roomId: route.roomId, pk, since, presence: takesPresence(url), reads: wantsReads(url), echo: wantsEcho(url), watch: wantsWatch(url) }, headers: wsHeaders(req) })) return undefined;
+            if (
+              server.upgrade(req, {
+                data: {
+                  roomId: route.roomId,
+                  pk,
+                  since,
+                  presence: takesPresence(url),
+                  reads: wantsReads(url),
+                  echo: wantsEcho(url),
+                  watch: wantsWatch(url),
+                },
+                headers: wsHeaders(req),
+              })
+            )
+              return undefined;
             return withCors(errorResponse(new UpdateRequired({ message: "expected websocket" })));
           }
           const result = await onHttp(relay, db, req, route.rest);
@@ -286,7 +389,8 @@ export function startRelay(
             if (!left && (empty ?? noRoom())) {
               dbs.get(route.roomId)?.close();
               dbs.delete(route.roomId);
-              for (const suffix of ["", "-wal", "-shm"]) rmSync(file(route.roomId) + suffix, { force: true });
+              for (const suffix of ["", "-wal", "-shm"])
+                rmSync(file(route.roomId) + suffix, { force: true });
             }
           }
         }
@@ -302,7 +406,12 @@ export function startRelay(
         set.add(ws);
         const db = storeFor(ws.data.roomId, false);
         try {
-          for (const f of runRoomSync(relay, db, welcomeFrames(ws.data.since, ws.data.reads, ws.data.watch))) ws.send(f);
+          for (const f of runRoomSync(
+            relay,
+            db,
+            welcomeFrames(ws.data.since, ws.data.reads, ws.data.watch),
+          ))
+            ws.send(f);
           // A connection counts as activity for idle expiry.
           runRoomSync(relay, db, touch);
         } finally {
@@ -330,7 +439,10 @@ export function startRelay(
   return Object.assign(server, { sweep });
 }
 
-function memoryPages(maxBytes: number, now: () => number): PageCache & { forget(roomId: string): void } {
+function memoryPages(
+  maxBytes: number,
+  now: () => number,
+): PageCache & { forget(roomId: string): void } {
   const entries = new Map<string, { body: string; at: number }>();
   let bytes = 0;
   const drop = (key: string) => {
@@ -371,7 +483,8 @@ function memoryPages(maxBytes: number, now: () => number): PageCache & { forget(
  */
 function webApp(app: WebApp): (pathname: string) => Response {
   const root = resolve(app.dir);
-  if (!existsSync(join(root, "index.html"))) throw new Error(`no index.html in ${root} (build it with: bun run web:build)`);
+  if (!existsSync(join(root, "index.html")))
+    throw new Error(`no index.html in ${root} (build it with: bun run web:build)`);
   const connect = ["'self'", ...(app.connect ?? [])].join(" ");
   const security = {
     "content-security-policy": `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ${connect}; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
@@ -389,18 +502,25 @@ function webApp(app: WebApp): (pathname: string) => Response {
     }
     const path = resolve(root, "." + rel);
     // Never outside the dashboard folder, and never Cloudflare's own config files.
-    const inside = path.startsWith(root + sep) && !["_headers", "_redirects"].includes(basename(path));
+    const inside =
+      path.startsWith(root + sep) && !["_headers", "_redirects"].includes(basename(path));
     if (inside && isFile(path)) {
       const headers: Record<string, string> = { ...security };
       // Vite fingerprints everything under /assets; the rest must be rechecked each time.
-      headers["cache-control"] = rel.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache";
+      headers["cache-control"] = rel.startsWith("/assets/")
+        ? "public, max-age=31536000, immutable"
+        : "no-cache";
       // The installers are fetched with curl | sh and must read as text.
-      if (/^\/install(\.sh|\.ps1)?$/.test(rel)) headers["content-type"] = "text/plain; charset=utf-8";
+      if (/^\/install(\.sh|\.ps1)?$/.test(rel))
+        headers["content-type"] = "text/plain; charset=utf-8";
       return new Response(Bun.file(path), { headers });
     }
     // A missing file (it has an extension) is a 404, not the app: a stale script must fail loudly.
-    if (/\.[A-Za-z0-9]+$/.test(basename(rel))) return new Response("not found\n", { status: 404, headers: security });
-    return new Response(Bun.file(join(root, "index.html")), { headers: { ...security, "cache-control": "no-cache" } });
+    if (/\.[A-Za-z0-9]+$/.test(basename(rel)))
+      return new Response("not found\n", { status: 404, headers: security });
+    return new Response(Bun.file(join(root, "index.html")), {
+      headers: { ...security, "cache-control": "no-cache" },
+    });
   };
 }
 
@@ -445,7 +565,9 @@ export function runRelay(argv: string[], cmd = "bun src/relay/bun.ts"): void {
   const hostname = arg("--hostname", "KIWI_HOSTNAME");
   const dev = argv.includes("--dev-sign-in");
   if (dev && !devHostOk(hostname)) {
-    process.stderr.write("--dev-sign-in lets anyone sign in as anyone: it needs --hostname 127.0.0.1 (or localhost).\n");
+    process.stderr.write(
+      "--dev-sign-in lets anyone sign in as anyone: it needs --hostname 127.0.0.1 (or localhost).\n",
+    );
     process.exit(2);
   }
   let trustProxy: TrustProxy;
@@ -455,10 +577,20 @@ export function runRelay(argv: string[], cmd = "bun src/relay/bun.ts"): void {
     process.stderr.write(`${err instanceof Error ? err.message : "bad --trust-proxy"}\n`);
     process.exit(2);
   }
-  const human = dev ? devHumanAuth() : workosFromSettings({ clientId: arg("--workos-client-id", "WORKOS_CLIENT_ID"), authkitDomain, apiKey: process.env.WORKOS_API_KEY || undefined });
+  const human = dev
+    ? devHumanAuth()
+    : workosFromSettings({
+        clientId: arg("--workos-client-id", "WORKOS_CLIENT_ID"),
+        authkitDomain,
+        apiKey: process.env.WORKOS_API_KEY || undefined,
+      });
   const siteDir = resolve(import.meta.dir, "../../site");
   const builtWeb = resolve(import.meta.dir, "../../web/dist");
-  const defaultSite = existsSync(join(siteDir, "index.html")) ? siteDir : existsSync(join(builtWeb, "index.html")) ? builtWeb : undefined;
+  const defaultSite = existsSync(join(siteDir, "index.html"))
+    ? siteDir
+    : existsSync(join(builtWeb, "index.html"))
+      ? builtWeb
+      : undefined;
   const webDir = argv.includes("--no-web") ? undefined : (arg("--web", "KIWI_WEB") ?? defaultSite);
   const connect = human ? ["https://api.workos.com", ...authkitDomains(authkitDomain)] : [];
   const server = startRelay({
@@ -470,7 +602,9 @@ export function runRelay(argv: string[], cmd = "bun src/relay/bun.ts"): void {
     trustProxy,
   });
   console.log(`Kiwi Channels relay listening on ${server.url}`);
-  console.log(`  sign-in: ${human?.dev ? 'DEV: the token "dev:<name>" is <name>, no password (this machine only)' : human ? `WorkOS ${human.clientId}${human.profile ? " (with emails, for the beta list)" : ""}` : "off"}`);
+  console.log(
+    `  sign-in: ${human?.dev ? 'DEV: the token "dev:<name>" is <name>, no password (this machine only)' : human ? `WorkOS ${human.clientId}${human.profile ? " (with emails, for the beta list)" : ""}` : "off"}`,
+  );
   console.log(`  site: ${webDir ? resolve(webDir) : "not served"}`);
 }
 

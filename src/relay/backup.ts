@@ -16,7 +16,8 @@ export interface BackupStore {
 export const BACKUP_PATH = "/v1/backup";
 export const BACKUP_PER_HOUR = 20;
 
-const refuse = (status: number, tag: string, error: string) => withCors(Response.json({ error, tag }, { status }));
+const refuse = (status: number, tag: string, error: string) =>
+  withCors(Response.json({ error, tag }, { status }));
 
 export function hourlyLimit(max: number, now: () => number = Date.now): (user: string) => boolean {
   const seen = new Map<string, number[]>();
@@ -35,22 +36,34 @@ export function hourlyLimit(max: number, now: () => number = Date.now): (user: s
 export async function onBackupHttp(
   req: Request,
   store: BackupStore,
-  opts: { human: HumanAuth | null; allow?: (user: string) => boolean | Promise<boolean>; now?: () => number },
+  opts: {
+    human: HumanAuth | null;
+    allow?: (user: string) => boolean | Promise<boolean>;
+    now?: () => number;
+  },
 ): Promise<Response | null> {
   if (new URL(req.url).pathname !== BACKUP_PATH) return null;
-  if (!opts.human) return refuse(404, "NotFound", "this relay has no sign-in, so it keeps no backups");
-  const token = req.headers.get(HUMAN_HEADER) ?? req.headers.get("authorization")?.replace(/^Bearer /i, "") ?? "";
+  if (!opts.human)
+    return refuse(404, "NotFound", "this relay has no sign-in, so it keeps no backups");
+  const token =
+    req.headers.get(HUMAN_HEADER) ??
+    req.headers.get("authorization")?.replace(/^Bearer /i, "") ??
+    "";
   const user = token ? await opts.human.verify(token).catch(() => null) : null;
   if (!user) return refuse(401, "Unauthorized", "sign in to reach your backup");
-  if (opts.allow && !(await opts.allow(user))) return refuse(429, "TooMany", "too many backup requests; try again later");
+  if (opts.allow && !(await opts.allow(user)))
+    return refuse(429, "TooMany", "too many backup requests; try again later");
 
   if (req.method === "GET") {
     const rec = await store.load(user);
-    return rec ? withCors(Response.json({ envelope: rec.envelope, at: rec.at })) : refuse(404, "NotFound", "no backup");
+    return rec
+      ? withCors(Response.json({ envelope: rec.envelope, at: rec.at }))
+      : refuse(404, "NotFound", "no backup");
   }
   if (req.method === "PUT") {
     const text = await req.text();
-    if (new TextEncoder().encode(text).length > BACKUP_MAX_BYTES) return refuse(413, "TooLarge", "a backup holds at most 256 KiB");
+    if (new TextEncoder().encode(text).length > BACKUP_MAX_BYTES)
+      return refuse(413, "TooLarge", "a backup holds at most 256 KiB");
     let body: unknown;
     try {
       body = JSON.parse(text);
