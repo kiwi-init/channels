@@ -6,7 +6,7 @@ import { useTheme } from "../theme/useTheme"
 import { Sheet } from "../ui/Sheet"
 import { Text } from "../ui/Text"
 
-export const QUICK_EMOJI = ["👍", "❤️", "😂", "🎉", "👀", "🙏"] as const
+const QUICK_EMOJI = ["👍", "❤️", "😂", "🎉", "👀", "🙏"] as const
 
 export interface ReactionPickerProps {
   visible: boolean

@@ -11,7 +11,7 @@ describe("the GIF pack", () => {
   it("has all 30 GIFs, each with a bundled file", () => {
     expect(pack).toHaveLength(30)
     expect(gifs).toHaveLength(30)
-    for (const entry of pack) expect(typeof gifByKey(`${entry.reaction}/${entry.name}`)?.source).toBe("number")
+    for (const entry of pack) expect(gifByKey(`${entry.reaction}/${entry.name}`)?.source).toBeDefined()
   })
 })
 

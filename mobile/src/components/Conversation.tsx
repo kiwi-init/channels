@@ -3,10 +3,12 @@ import type { ChannelState } from "@mc/state.ts"
 import { memo, useCallback, useMemo, useRef, useState, type ReactNode } from "react"
 import { FlatList, Pressable, StyleSheet, View, type FlatListProps, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native"
 
+import { chipsFor } from "../lib/reactions"
 import { buildRows, type Row } from "../lib/timeline"
 import { useTheme } from "../theme/useTheme"
 import { Text } from "../ui/Text"
 import { Bubble } from "./Bubble"
+import { MessageMenu } from "./MessageMenu"
 
 export interface ConversationProps {
   messages: readonly Message[]
@@ -19,6 +21,7 @@ export interface ConversationProps {
   receipt?: (m: Message) => string | undefined
   face?: (m: Message) => ReactNode
   onReply?: (m: Message) => void
+  onReact?: (m: Message) => void
   onOpenTask?: (task: number) => void
   contentContainerStyle?: FlatListProps<Row>["contentContainerStyle"]
 }
@@ -52,10 +55,11 @@ const EventRow = memo(function EventRow({ text, task, forged, onOpenTask }: { te
   )
 })
 
-export function Conversation({ messages, state, me, nameOf, group = true, revealed, highlight = null, receipt, face, onReply, onOpenTask, contentContainerStyle }: ConversationProps) {
+export function Conversation({ messages, state, me, nameOf, group = true, revealed, highlight = null, receipt, face, onReply, onReact, onOpenTask, contentContainerStyle }: ConversationProps) {
   const theme = useTheme()
   const list = useRef<FlatList<Row>>(null)
   const [away, setAway] = useState(false)
+  const [menu, setMenu] = useState<Message | null>(null)
   const rows = useMemo(() => buildRows(messages, state, { me, revealed }).reverse(), [messages, state, me, revealed])
   const bySeq = useMemo(() => new Map(messages.map((m) => [m.seq, m])), [messages])
   const quoted = useCallback((seq: number) => bySeq.get(seq), [bySeq])
@@ -90,15 +94,17 @@ export function Conversation({ messages, state, me, nameOf, group = true, reveal
           adjacentReply={item.adjacentReply}
           highlighted={highlight === item.m.seq}
           receipt={receipt?.(item.m)}
+          reactions={chipsFor(state, item.m.seq, me, nameOf)}
           face={face?.(item.m)}
           quoted={quoted}
           nameOf={nameOf}
           onJump={onJump}
           onReply={onReply}
+          onMenu={onReply || onReact ? setMenu : undefined}
         />
       )
     },
-    [state, me, group, highlight, receipt, face, quoted, nameOf, onJump, onReply, onOpenTask]
+    [state, me, group, highlight, receipt, face, quoted, nameOf, onJump, onReply, onReact, onOpenTask]
   )
 
   return (
@@ -131,6 +137,7 @@ export function Conversation({ messages, state, me, nameOf, group = true, reveal
           </Text>
         </Pressable>
       ) : null}
+      <MessageMenu message={menu} onClose={() => setMenu(null)} onReply={onReply} onReact={onReact} />
     </View>
   )
 }

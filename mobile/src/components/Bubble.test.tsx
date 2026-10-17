@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react-native"
+import { fireEvent, render, screen } from "@testing-library/react-native"
 import { fold } from "@mc/state.ts"
 
 import { fixtureMessages, fixtureRoster, SELF } from "../fixtures/channel"
@@ -86,5 +86,17 @@ describe("Bubble", () => {
     await render(<Bubble {...base({ ...m, body: m.imgs!.map((i) => i.name).join(", ") })} />)
     expect(screen.getByLabelText("composer.png")).toBeTruthy()
     expect(screen.queryByText("composer.png")).toBeNull()
+  })
+
+  it("a long press opens the menu, or falls back to reply", async () => {
+    const m = chat[0]!
+    const onMenu = jest.fn()
+    await render(<Bubble {...base(m, { onMenu })} />)
+    await fireEvent(screen.getByLabelText("Message"), "longPress")
+    expect(onMenu).toHaveBeenCalledWith(m)
+    const onReply = jest.fn()
+    await render(<Bubble {...base(m, { onReply })} />)
+    await fireEvent(screen.getByLabelText("Message"), "longPress")
+    expect(onReply).toHaveBeenCalledWith(m)
   })
 })
