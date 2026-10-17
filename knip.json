@@ -11,15 +11,13 @@
         "scripts/*.ts",
         "scripts/bench-sh/run.ts",
         "test/**/*.test.ts",
-        "test/owner-cli.ts",
-        ".github/bus/{tick,resolve,stage,land,ladder}.ts"
+        "test/owner-cli.ts"
       ],
       "project": [
         "src/**/*.ts",
         "scripts/**/*.ts",
         "test/**/*.ts",
-        ".github/jev-ci/**/*.ts",
-        ".github/bus/**/*.ts"
+        ".github/jev-ci/**/*.ts"
       ],
       "ignoreDependencies": [
         "cloudflare"
