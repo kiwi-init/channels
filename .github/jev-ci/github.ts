@@ -1,4 +1,3 @@
-// What jev-ci needs from GitHub: the pass cache, job outputs, the run summary and one PR comment.
 import { appendFileSync } from "node:fs"
 import type { Decision, Plan } from "./plan.ts"
 
@@ -16,7 +15,6 @@ async function api(path: string, init: RequestInit = {}): Promise<Response> {
   })
 }
 
-/** Jobs that passed before, as `job:hash`, read from the Actions cache keys each passing job saves. */
 export async function passedJobs(repo: string, jobs: string[]): Promise<Set<string>> {
   const passed = new Set<string>()
   for (let page = 1; page <= 10; page++) {
@@ -40,7 +38,6 @@ export function summary(markdown: string) {
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, markdown + "\n")
 }
 
-/** The pull request this run is for, from the event payload. */
 export async function pullRequest(): Promise<number | undefined> {
   const path = process.env.GITHUB_EVENT_PATH
   if (!path) return undefined
@@ -48,7 +45,6 @@ export async function pullRequest(): Promise<number | undefined> {
   return event.pull_request?.number
 }
 
-/** Create or update this workflow's one comment on the PR. A fork's read-only token can't; that's fine. */
 export async function upsertComment(repo: string, pr: number, body: string) {
   const text = `${MARKER}\n${body}`
   const res = await api(`/repos/${repo}/issues/${pr}/comments?per_page=100`)
@@ -63,7 +59,6 @@ export async function upsertComment(repo: string, pr: number, body: string) {
 const LAYER: Record<string, string> = { L0: "rule", L1: "cache", L2: "Jev", fallback: "fallback" }
 const pct = (p?: number) => (p === undefined ? "" : `${Math.round(p * 100)}%`)
 
-/** The plan as a markdown table, with each job's result once it's known. */
 export function planTable(decisions: Decision[], names: Record<string, string>, results?: Record<string, string>): string {
   const icon = (d: Decision) => {
     const r = results?.[d.job]
@@ -71,11 +66,14 @@ export function planTable(decisions: Decision[], names: Record<string, string>, 
     if (!d.run) return "⏭️ skipped"
     return r === "success" ? "✅ passed" : r === "failure" ? "❌ failed" : `⚪ ${r}`
   }
-  const rows = decisions.map((d) => `| ${names[d.job] ?? d.job} | ${icon(d)} | ${LAYER[d.layer]} | ${pct(d.p)} | ${d.reason.replace(/\|/g, "\\|")} |`)
+  const order = [...decisions].sort((a, b) => Number(b.run) - Number(a.run))
+  const rows = order.map((d) => `| ${names[d.job] ?? d.job} | ${icon(d)} | ${LAYER[d.layer]} | ${pct(d.p)} | ${d.reason.replace(/\|/g, "\\|")} |`)
   return ["| Job | | Decided by | Jev | Why |", "|---|---|---|---|---|", ...rows].join("\n")
 }
 
-export function headline(p: Pick<Plan, "decisions" | "jevCalls" | "inputTokens">): string {
+type Summary = Pick<Plan, "decisions" | "jevCalls" | "inputTokens"> & Partial<Pick<Plan, "changed" | "moved" | "notes">>
+
+export function headline(p: Summary): string {
   const run = p.decisions.filter((d) => d.run).length
   const by = (l: string) => p.decisions.filter((d) => !d.run && d.layer === l).length
   const shadow = p.decisions.filter((d) => d.wouldSkip).length
@@ -83,6 +81,25 @@ export function headline(p: Pick<Plan, "decisions" | "jevCalls" | "inputTokens">
   const skips = [["L0", "rules"], ["L1", "cache"], ["L2", "Jev"]].filter(([l]) => by(l!)).map(([l, w]) => `${by(l!)} by ${w}`)
   if (skips.length) parts.push(`Skipped ${skips.join(", ")}.`)
   if (shadow) parts.push(`Jev would also skip ${shadow} (shadow mode).`)
+  if (p.changed !== undefined) parts.push(`${p.changed} file${p.changed === 1 ? "" : "s"} changed${p.moved ? `, ${p.moved} lines of it code moved verbatim` : ""}.`)
   if (p.jevCalls) parts.push(`${p.jevCalls} Jev calls, ${p.inputTokens.toLocaleString("en-US")} tokens.`)
   return parts.join(" ")
+}
+
+export const LEGEND = [
+  "<details><summary>How jev-ci decides</summary>",
+  "",
+  "In order, per job (`.github/jev-ci.yml`, `.github/jev-ci/README.md`):",
+  "",
+  "1. **rule**: a planner change runs everything. A job runs when its own job in `ci.yml` (or a local action or workflow it uses) changed, when a file under its `always` changed, or, for static checks, when any file it checks changed. A job none of whose files changed is skipped. A `concurrency`, `on` or `name` edit in `ci.yml`, and a change to a job's description in `jev-ci.yml`, run nothing by themselves.",
+  "2. **cache**: the job passed before on exactly these inputs, so it is skipped.",
+  "3. **Jev**: for each changed file the job reads, Jev gives the chance the change makes that job fail. Code moved verbatim between files is shown to Jev as moved, not as new. The job runs when the combined chance reaches its threshold.",
+  "4. **fallback**: Jev can't judge (too big, binary, unreachable), so the job runs.",
+  "",
+  "Pushes to main run everything, and if planning fails, everything runs.",
+  "</details>",
+].join("\n")
+
+export function notesBlock(notes: string[] | undefined): string {
+  return notes?.length ? `\n${notes.map((n) => `- ${n}`).join("\n")}\n` : ""
 }

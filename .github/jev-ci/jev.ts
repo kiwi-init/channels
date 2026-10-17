@@ -5,7 +5,6 @@ import { dirname, join } from "node:path"
 
 const ENDPOINT = "https://api.typesafe.ai/v1/systemone"
 export const MODEL = "jev-1.13.0"
-/** Answers already paid for, keyed by request. Outside the repo, so a checkout stays clean. */
 const CACHE = process.env.JEV_CI_CACHE ?? join(tmpdir(), "jev-ci", "answers.json")
 
 type Noul = { type: "noul"; noul: number }
@@ -19,7 +18,6 @@ async function loadCache() {
   return (cache = (await f.exists()) ? await f.json() : {})
 }
 
-/** Ask Jev. Identical requests are answered from a local cache, so re-running a backtest costs nothing. */
 export async function ask(body: Request): Promise<Response & { cached: boolean }> {
   const c = await loadCache()
   const key = createHash("sha256").update(JSON.stringify(body)).digest("hex")
