@@ -1,4 +1,4 @@
-import type { Message } from "@mc/protocol.ts"
+import type { ImageAttachment, Message } from "@mc/protocol.ts"
 import type { ChannelState } from "@mc/state.ts"
 import { useMemo, useState } from "react"
 import { StyleSheet, View } from "react-native"
@@ -15,9 +15,11 @@ export interface TaskThreadProps {
   nameOf: (name: string) => string
   blocked?: string | null
   onSend: (text: string) => Promise<void>
+  onOpenImage?: (img: ImageAttachment) => void
+  loadImage?: (img: ImageAttachment) => Promise<string | null>
 }
 
-export function TaskThread({ messages, state, me, nameOf, blocked, onSend }: TaskThreadProps) {
+export function TaskThread({ messages, state, me, nameOf, blocked, onSend, onOpenImage, loadImage }: TaskThreadProps) {
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
   const bySeq = useMemo(() => new Map(messages.map((m) => [m.seq, m])), [messages])
@@ -58,6 +60,8 @@ export function TaskThread({ messages, state, me, nameOf, blocked, onSend }: Tas
               quoted={quoted}
               nameOf={nameOf}
               onJump={() => {}}
+              onOpenImage={onOpenImage}
+              loadImage={loadImage}
             />
           ))}
         </View>

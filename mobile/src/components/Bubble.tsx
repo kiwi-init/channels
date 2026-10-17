@@ -1,6 +1,6 @@
 import type { ImageAttachment, Message, Trust } from "@mc/protocol.ts"
 import { ignored } from "@mc/protocol.ts"
-import { memo, type ReactNode } from "react"
+import { memo, useEffect, useState, type ReactNode } from "react"
 import { Image, Pressable, StyleSheet, View } from "react-native"
 import Svg, { Path } from "react-native-svg"
 
@@ -35,6 +35,7 @@ export interface BubbleProps {
   onReply?: (m: Message) => void
   onMenu?: (m: Message) => void
   onOpenImage?: (img: ImageAttachment) => void
+  loadImage?: (img: ImageAttachment) => Promise<string | null>
 }
 
 const TAIL = "M0 20V0H20C20 9 22 15.5 27.5 19.6C23 20.4 19.5 19.8 16.6 18.3C13.7 16.8 8 20 0 20Z"
@@ -49,21 +50,34 @@ function Tail({ mine, color }: { mine: boolean; color: string }) {
   )
 }
 
-function Attached({ img, onOpen }: { img: ImageAttachment; onOpen?: (img: ImageAttachment) => void }) {
+function Attached({ img, load, onOpen }: { img: ImageAttachment; load?: (img: ImageAttachment) => Promise<string | null>; onOpen?: (img: ImageAttachment) => void }) {
   const theme = useTheme()
-  if (!img.data) {
+  const [data, setData] = useState<string | null>(img.data ?? null)
+  const [failed, setFailed] = useState(false)
+  useEffect(() => {
+    if (img.data !== undefined || !load) return
+    let live = true
+    load(img).then(
+      (d) => live && (d ? setData(d) : setFailed(true)),
+      () => live && setFailed(true)
+    )
+    return () => {
+      live = false
+    }
+  }, [img, load])
+  if (!data) {
     return (
       <View style={[styles.imageHolder, { backgroundColor: theme.colors.wash, borderRadius: theme.radius.bubble }]}>
         <Text variant="stamp" tone="ink3">
-          Loading image…
+          {failed ? "Image no longer available" : "Loading image…"}
         </Text>
       </View>
     )
   }
-  const picture = <Image accessibilityLabel={img.name} source={{ uri: `data:${img.mime};base64,${img.data}` }} style={[styles.image, { borderRadius: theme.radius.bubble }]} />
+  const picture = <Image accessibilityLabel={img.name} source={{ uri: `data:${img.mime};base64,${data}` }} style={[styles.image, { borderRadius: theme.radius.bubble }]} />
   if (!onOpen) return picture
   return (
-    <Pressable accessibilityRole="imagebutton" accessibilityLabel={`Open ${img.name}`} onPress={() => onOpen(img)}>
+    <Pressable accessibilityRole="imagebutton" accessibilityLabel={`Open ${img.name}`} onPress={() => onOpen({ ...img, data })}>
       {picture}
     </Pressable>
   )
@@ -91,6 +105,7 @@ export const Bubble = memo(function Bubble({
   onReply,
   onMenu,
   onOpenImage,
+  loadImage,
 }: BubbleProps) {
   const theme = useTheme()
   const forged = ignored(trust)
@@ -164,7 +179,7 @@ export const Bubble = memo(function Bubble({
           {m.imgs?.length ? (
             <View style={[styles.images, { justifyContent: align }]}>
               {m.imgs.map((img, index) => (
-                <Attached key={index} img={img} onOpen={onOpenImage} />
+                <Attached key={index} img={img} load={loadImage} onOpen={onOpenImage} />
               ))}
             </View>
           ) : null}

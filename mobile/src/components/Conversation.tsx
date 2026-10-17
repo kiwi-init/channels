@@ -26,6 +26,7 @@ export interface ConversationProps {
   onOpenThread?: (root: number) => void
   onOpenTask?: (task: number) => void
   onOpenImage?: (img: ImageAttachment, m: Message) => void
+  loadImage?: (img: ImageAttachment) => Promise<string | null>
   contentContainerStyle?: FlatListProps<Row>["contentContainerStyle"]
 }
 
@@ -73,6 +74,7 @@ export function Conversation({
   onOpenThread,
   onOpenTask,
   onOpenImage,
+  loadImage,
   contentContainerStyle,
 }: ConversationProps) {
   const theme = useTheme()
@@ -126,10 +128,11 @@ export function Conversation({
           replies={threads.replies.get(item.m.seq)?.length}
           onOpenThread={onOpenThread}
           onOpenImage={onOpenImage ? (img) => onOpenImage(img, item.m) : undefined}
+          loadImage={loadImage}
         />
       )
     },
-    [state, me, group, highlight, opened, receipt, face, quoted, nameOf, onJump, onReply, onReact, onOpenThread, onOpenTask, onOpenImage, threads]
+    [state, me, group, highlight, opened, receipt, face, quoted, nameOf, onJump, onReply, onReact, onOpenThread, onOpenTask, onOpenImage, loadImage, threads]
   )
 
   return (

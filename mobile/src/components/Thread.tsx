@@ -1,4 +1,4 @@
-import type { Message } from "@mc/protocol.ts"
+import type { ImageAttachment, Message } from "@mc/protocol.ts"
 import type { ChannelState } from "@mc/state.ts"
 import { useMemo, type ReactNode } from "react"
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, View } from "react-native"
@@ -17,9 +17,11 @@ export interface ThreadProps {
   nameOf: (name: string) => string
   composer: ReactNode
   onClose: () => void
+  onOpenImage?: (img: ImageAttachment) => void
+  loadImage?: (img: ImageAttachment) => Promise<string | null>
 }
 
-export function Thread({ root, replies, state, me, nameOf, composer, onClose }: ThreadProps) {
+export function Thread({ root, replies, state, me, nameOf, composer, onClose, onOpenImage, loadImage }: ThreadProps) {
   const { colors } = useTheme()
   const all = useMemo(() => [root, ...replies], [root, replies])
   const bySeq = useMemo(() => new Map(all.map((m) => [m.seq, m])), [all])
@@ -56,6 +58,8 @@ export function Thread({ root, replies, state, me, nameOf, composer, onClose }: 
               quoted={quoted}
               nameOf={nameOf}
               onJump={() => {}}
+              onOpenImage={onOpenImage}
+              loadImage={loadImage}
             />
           )}
         />

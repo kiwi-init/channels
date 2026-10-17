@@ -38,6 +38,7 @@ export function ChannelScreen({ code, onBack }: { code: string; onBack?: () => v
   const seat = engine.joined().find((entry) => entry.code === code)
   const channel = useMemo(() => engine.channel(code), [engine, code])
   const live = useChannel(channel, seat?.pk ?? "", history, sql)
+  const loadImage = useCallback((img: ImageAttachment) => (channel ? channel.image(img) : Promise.resolve(null)), [channel])
   const me = channel?.identity.name ?? ""
   const [threadRoot, setThreadRoot] = useState<number | null>(null)
   const threads = useMemo(() => threadIndex(live.messages, live.state), [live.messages, live.state])
@@ -106,18 +107,33 @@ export function ChannelScreen({ code, onBack }: { code: string; onBack?: () => v
     }
   }
 
+  const viewer = (
+    <ImageViewer
+      visible={viewing !== null}
+      onClose={() => setViewing(null)}
+      uri={viewing ? `data:${viewing.mime};base64,${viewing.data}` : ""}
+      title={viewing?.name}
+      onShare={viewing ? () => void shareImage(viewing).catch(() => toast("Could not share the image", "error")) : undefined}
+    />
+  )
+
   if (channel && root) {
     const last = replies.length ? replies[replies.length - 1]!.seq : root.seq
     return (
-      <Thread
-        root={root}
-        replies={replies}
-        state={live.state}
-        me={me}
-        nameOf={nameOf}
-        onClose={() => setThreadRoot(null)}
-        composer={<Composer me={me} people={people} placeholder="Reply in thread" onSend={(draft) => send(draft, [last])} />}
-      />
+      <>
+        <Thread
+          root={root}
+          replies={replies}
+          state={live.state}
+          me={me}
+          nameOf={nameOf}
+          onClose={() => setThreadRoot(null)}
+          onOpenImage={setViewing}
+          loadImage={loadImage}
+          composer={<Composer me={me} people={people} placeholder="Reply in thread" onSend={(draft) => send(draft, [last])} />}
+        />
+        {viewer}
+      </>
     )
   }
 
@@ -173,6 +189,7 @@ export function ChannelScreen({ code, onBack }: { code: string; onBack?: () => v
             group={people.length > 1}
             onOpenThread={setThreadRoot}
             onOpenImage={setViewing}
+            loadImage={loadImage}
             onReact={setReactTo}
             onReply={setReplyTo}
             onOpenTask={(id) => (setView("tasks"), setOpenTask(id))}
@@ -204,6 +221,8 @@ export function ChannelScreen({ code, onBack }: { code: string; onBack?: () => v
                 state={live.state}
                 me={me}
                 nameOf={nameOf}
+                onOpenImage={setViewing}
+                loadImage={loadImage}
                 onSend={async (text) => void (await live.post(text, sendFrom(live.state, { kind: "task", task: openTask }, me)))}
               />
             }
@@ -259,13 +278,7 @@ export function ChannelScreen({ code, onBack }: { code: string; onBack?: () => v
           if (reactTo) void live.post("reaction", { kind: "event", ev: { op: "react", seq: reactTo.seq, emoji } }).catch(() => toast("Could not react", "error"))
         }}
       />
-      <ImageViewer
-        visible={viewing !== null}
-        onClose={() => setViewing(null)}
-        uri={viewing ? `data:${viewing.mime};base64,${viewing.data}` : ""}
-        title={viewing?.name}
-        onShare={viewing ? () => void shareImage(viewing).catch(() => toast("Could not share the image", "error")) : undefined}
-      />
+      {viewer}
     </SafeAreaView>
   )
 }

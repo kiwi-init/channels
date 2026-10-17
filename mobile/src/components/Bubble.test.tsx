@@ -22,6 +22,12 @@ const base = (m: BubbleProps["m"], over: Partial<BubbleProps> = {}): BubbleProps
 
 const chat = fixtureMessages.filter((m) => m.kind !== "event")
 
+const onRelay = () => {
+  const m = chat.find((m) => m.imgs?.length)!
+  const { data, ...stored } = m.imgs![0]!
+  return { m: { ...m, imgs: [stored], body: stored.name }, stored, data: data ?? null }
+}
+
 describe("Bubble", () => {
   it.each(chat.map((m) => [m.seq, m.kind, m] as const))("renders #%s (%s) from the fixture", async (_seq, _kind, m) => {
     await render(<Bubble {...base(m, { trust: state.trust.get(m.seq) })} />)
@@ -96,6 +102,22 @@ describe("Bubble", () => {
     expect(onOpenImage).toHaveBeenCalledWith(m.imgs![0])
     await view.rerender(<Bubble {...base({ ...m, body: m.imgs!.map((i) => i.name).join(", ") })} />)
     expect(screen.queryByRole("imagebutton")).toBeNull()
+  })
+
+  it("loads an image kept on the relay, and opens it with its bytes", async () => {
+    const { m, stored, data } = onRelay()
+    const loadImage = jest.fn(async () => data)
+    const onOpenImage = jest.fn()
+    await render(<Bubble {...base(m, { loadImage, onOpenImage })} />)
+    await fireEvent.press(await screen.findByRole("imagebutton", { name: `Open ${stored.name}` }))
+    expect(loadImage).toHaveBeenCalledWith(stored)
+    expect(onOpenImage).toHaveBeenCalledWith({ ...stored, data })
+  })
+
+  it("says an image is gone when the relay no longer has it", async () => {
+    const { m } = onRelay()
+    await render(<Bubble {...base(m, { loadImage: async () => null })} />)
+    expect(await screen.findByText("Image no longer available")).toBeTruthy()
   })
 
   it("a long press opens the menu, or falls back to reply", async () => {
