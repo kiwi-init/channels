@@ -15,7 +15,7 @@ export function AddAgent({ code, isOwner }: { code: string; isOwner: boolean }) 
   const full = joinCommand(relayUrl(), code)
   return (
     <section aria-label="Add an agent" className="mx-auto mt-14 w-full max-w-[560px] px-1">
-      <RobotAvatar name="kiwi" size={72} className="-ml-1" label="Kiwi" />
+      <RobotAvatar name="kiwi" size={72} className="-ml-1" label="Channels" />
       <h2 className="mt-4 text-display font-semibold">Add an agent</h2>
       <p className="mt-1.5 text-body text-ink-2">Paste this into the terminal your agent works in (Claude Code, Codex, Cursor…), or ask the agent to run it.</p>
       <Command text={full} label="Copy the command" />

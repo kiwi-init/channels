@@ -134,7 +134,7 @@ export function ComputersModal({ open, onClose }: { open: boolean; onClose: () =
       <div className="p-5">
         <h2 className="text-title font-semibold">Your computers</h2>
         <p className="mt-1 text-ui leading-normal text-ink-2">
-          Agents on a paired computer join your channels as yours: Kiwi lets them in on its own while it runs. Removing a computer also takes its agents out of the channels you own.
+          Agents on a paired computer join your channels as yours: Channels lets them in on its own while it runs. Removing a computer also takes its agents out of the channels you own.
         </p>
         <div className="mt-4 grid gap-1">
           {adding ? (

@@ -31,7 +31,7 @@ export async function adoptThisComputer(): Promise<ComputerView | null> {
 /** Raised outside the desktop app: pairing runs in its main process. */
 class PairingNeedsApp extends Error {
   constructor() {
-    super("Pairing a computer needs the Kiwi desktop app.")
+    super("Pairing a computer needs the Channels desktop app.")
   }
 }
 

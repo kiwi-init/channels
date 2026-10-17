@@ -99,7 +99,7 @@ export class SessionListen extends SessionState {
         if (r.check === "ready") {
           yield* notice(
             `join request: "${r.name}"${r.role ? ` (${r.role})` : ""} wants in, verification code ${r.code}. ` +
-              `Only your human may approve, in the Kiwi app, after checking the code matches.`,
+              `Only your human may approve, in the Channels app, after checking the code matches.`,
           );
         } else if (r.check === "unchecked") {
           yield* notice(`join request: "${r.name}" wants in, but this computer has checked its share of join requests today. ${TOO_MANY_REQUESTS}`);

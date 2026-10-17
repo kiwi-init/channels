@@ -35,7 +35,7 @@ export const channelCommands: Record<string, Command> = {
   leave: () =>
     Effect.gen(function* () {
       const s = yield* session();
-      if (s.identity.pk === s.cfg.ownerPk) return yield* die("this key owns the channel; close it from the Kiwi app");
+      if (s.identity.pk === s.cfg.ownerPk) return yield* die("this key owns the channel; close it from the Channels app");
       yield* s.ch.fx.leave();
       yield* (yield* Keystore).forgetMember(s.alias, s.me);
       out(`${s.me} left "${s.alias}"; its key is gone from this machine`);
@@ -112,7 +112,7 @@ export const channelCommands: Record<string, Command> = {
       const s = yield* session();
       if (args.length > 1 || opt.clear) return yield* die(ADMIN_GONE);
       const { state } = yield* s.state();
-      out(state.charter ? state.charter.text : "no charter (the owner sets one in the Kiwi app)");
+      out(state.charter ? state.charter.text : "no charter (the owner sets one in the Channels app)");
     }),
 
   hold: () =>
@@ -128,7 +128,7 @@ export const channelCommands: Record<string, Command> = {
       if (args[1] || opt.image || opt.clear) return yield* die(ADMIN_GONE);
       {
         const icon = yield* s.ch.fx.icon();
-        if (!icon) return out("no icon (the owner sets one in the Kiwi app)");
+        if (!icon) return out("no icon (the owner sets one in the Channels app)");
         if (icon.kind === "emoji") return out(icon.emoji);
         const dir = joinPath(home(), "downloads", s.ch.roomId);
         mkdirSync(dir, { recursive: true });

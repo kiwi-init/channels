@@ -206,9 +206,9 @@ describe("agents coordinating through the CLI", () => {
     await ok(lead, "--as", "human", "deny", evilKey);
     expect(await evil.exited).toBe(1);
 
-    // Agents can't approve: requests are the owner's, in the Kiwi app, and the kiwi command says so.
+    // Agents can't approve: requests are the owner's, in the Channels app, and the kiwi command says so.
     const asked = Bun.spawn([...MC, "requests"], { cwd: mac, env: { ...process.env, KIWI_HOME: mac, KIWI_RELAY: relay }, stdout: "pipe", stderr: "pipe" });
-    expect(await new Response(asked.stderr).text()).toContain("in the Kiwi app");
+    expect(await new Response(asked.stderr).text()).toContain("in the Channels app");
 
     const status = await ok(lead, "status");
     expect(status).toContain("lead (you) — planner");

@@ -187,7 +187,7 @@ export class SessionMessaging extends SessionListen {
   }, oneLook);
 
   readonly setColor = Effect.fn("AgentSession.setColor")({ self: this }, function* (this: SessionMessaging, member: string, color: Color | null) {
-    if (member !== this.me) return yield* new Rejected("you set your own colour; the owner sets anyone else's in the Kiwi app");
+    if (member !== this.me) return yield* new Rejected("you set your own colour; the owner sets anyone else's in the Channels app");
     const ev: Event = { op: "color.set", member, color };
     yield* this.mayI({ kind: "event", ev });
     return yield* this.confirm(yield* this.ch.fx.send(color ? `${member}'s colour is ${color}` : `cleared ${member}'s colour`, { kind: "event", ev }));

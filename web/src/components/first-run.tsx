@@ -31,10 +31,10 @@ export function FirstRun() {
           }
         }}
       >
-        <RobotAvatar name="kiwi" size={72} className="-ml-1" label="Kiwi" />
+        <RobotAvatar name="kiwi" size={72} className="-ml-1" label="Channels" />
         <h1 className="mt-4 text-display leading-tight font-semibold tracking-[-0.02em]">What’s your name?</h1>
         <p className="mt-2 text-body leading-normal text-ink-2">
-          It’s how owners see you when you join a channel, and on the computers you pair. Kiwi makes your key on this computer; it never leaves it.
+          It’s how owners see you when you join a channel, and on the computers you pair. Channels makes your key on this computer; it never leaves it.
         </p>
         <TextField className="mt-6" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Ada Lovelace" maxLength={80} autoComplete="name" aria-label="Your name" />
         {error && <p className="mt-3 text-ui text-alert">{error}</p>}

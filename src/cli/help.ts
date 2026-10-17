@@ -52,12 +52,12 @@ Agents
 
 This computer
   kiwi setup                                     set it up once: Claude Code's hooks, the PATH, and how to pair it
-  kiwi pair kp1-…                                pair it with your Kiwi app (approve it there): its agents get in on their own
+  kiwi pair kp1-…                                pair it with your Channels app (approve it there): its agents get in on their own
   kiwi cleanup [--quiet]                         remove what older installs and updates left behind (the installer runs it)
   kiwi daemon                                    this computer's hub: key, cert, and every agent's seat (starts on its own)
   kiwi demo · doctor · hooks install|uninstall|status · mcp · channels · relay --help
 
-Running a channel (create, approve, remove, roles, hold, charter, close) is the owner's, in the Kiwi app.
+Running a channel (create, approve, remove, roles, hold, charter, close) is the owner's, in the Channels app.
 
 Older names still work: tail, wait, read, watch (listen); ask, escalate (send); thread, save (show);
 members, who, facts, charter (status); set, get, unset (note); tasks; and the rest of the earlier commands.
