@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { encodeJoinCode, newRoomId } from "../../../src/crypto.ts"
+import { encodeJoinCode, newRoomId } from "@mc/crypto.ts"
 
 import { joinCodeFromLink } from "./deep-link"
 

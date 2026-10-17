@@ -2,10 +2,10 @@
 // and a hole or a seq past the relay head is thrown out instead of shown.
 
 import { afterAll, beforeEach, expect, test } from "bun:test"
-import { b64url, seal } from "../../../src/crypto.ts"
-import { generateIdentity, sign } from "../../../src/identity.ts"
-import { PROTOCOL_VERSION, type Message } from "../../../src/protocol.ts"
-import { openRow, openRows, packRow } from "../../../src/cache-row.ts"
+import { b64url, seal } from "@mc/crypto.ts"
+import { generateIdentity, sign } from "@mc/identity.ts"
+import { PROTOCOL_VERSION, type Message } from "@mc/protocol.ts"
+import { openRow, openRows, packRow } from "@mc/cache-row.ts"
 import { forgetAllHistory, forgetHistory, readCached, rememberRow, useHistoryDb, type CachedRow, type HistoryDb } from "./history.ts"
 
 const SENTINEL = "SENTINEL-plain-text-should-not-rest"

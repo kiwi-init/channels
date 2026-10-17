@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
-import { PROTOCOL_VERSION, type Event, type Message } from "../../../src/protocol.ts"
-import type { TaskState } from "../../../src/state.ts"
+import { PROTOCOL_VERSION, type Event, type Message } from "@mc/protocol.ts"
+import type { TaskState } from "@mc/state.ts"
 
 import { foldTaskEvents, isTaskCard, taskOfEvent } from "./task-cards"
 
