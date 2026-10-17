@@ -126,6 +126,7 @@ export function describeEvent(m: Message, state?: ChannelState): string {
     case "release":
       return ev.paths?.length ? `released ${ev.paths.join(", ")}` : "released all claims";
     case "fact.set":
+      if (/^answering #\d+$/.test(ev.key) && ev.value === m.from) return `is ${ev.key}`;
       return `set ${ev.key} = ${ev.value}`;
     case "fact.del":
       return `unset ${ev.key}`;

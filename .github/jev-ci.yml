@@ -95,7 +95,11 @@ jobs:
       test/core-package.test.ts: packages/core imports nothing outside itself but effect/*,
       node: builtins only under packages/core/src/node, no Node or Bun globals elsewhere in it,
       web/src never imports @kiwi/core/node/, and nothing reaches packages/core by a relative
-      path. Fails if a tested module's behavior,
+      path. And test/slots.test.ts: task claims and `kiwi answering N` are compare-and-set on a
+      local relay (two racing claims or markers: exactly one lands, the loser is told who holds it
+      and leaves nothing in the log; a drop frees the claim; a marker doesn't answer an ask), and
+      the relay refuses a malformed slot with 400 and someone else's slot with 423 Taken.
+      Fails if a tested module's behavior,
       output text or exported names change. TMPDIR points through a symlink, as macOS's does,
       so a test that compares a tmp path with its realpath or process.cwd() fails here too.
 

@@ -51,6 +51,25 @@ export const PAGE_LIMIT = 1_000;
 
 export const MORE_REFUSED = "too many page requests; slow down";
 
+export interface SlotTake {
+  id: string;
+  ttl: number;
+}
+
+export const SLOT_ID_RE = /^[A-Za-z0-9_-]{16,64}$/;
+export const MAX_SLOT_TTL = 24 * 3_600_000;
+export const MAX_SLOTS_FREED = 8;
+
+export function wellFormedSlot(x: unknown): x is SlotTake {
+  if (!x || typeof x !== "object") return false;
+  const t = x as Record<string, unknown>;
+  return typeof t.id === "string" && SLOT_ID_RE.test(t.id) && Number.isSafeInteger(t.ttl) && (t.ttl as number) >= 1_000 && (t.ttl as number) <= MAX_SLOT_TTL;
+}
+
+export function wellFormedFreed(x: unknown): x is string[] {
+  return Array.isArray(x) && x.length <= MAX_SLOTS_FREED && x.every((id) => typeof id === "string" && SLOT_ID_RE.test(id));
+}
+
 /**
  * WebSocket subprotocol. Clients offer [WS_PROTOCOL, token] so the token
  * travels in a header (browsers can't set Authorization on WebSockets, and
