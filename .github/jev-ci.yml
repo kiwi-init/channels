@@ -344,7 +344,7 @@ jobs:
 
   cli-macos:
     name: cli / macos
-    inputs: ["src/**", "test/**", "web/src/**", "web/public/**", "site/install", "site/install.sh", "site/install.ps1", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "desktop/src/**"]
+    inputs: ["src/**", "test/**", "site/install", "site/install.sh", "site/install.ps1", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "desktop/src/**"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "web/bun.lock"]
     description: >-
       On a macOS runner, does what the release's cli job does: runs the whole bun test suite
