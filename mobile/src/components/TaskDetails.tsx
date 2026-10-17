@@ -17,6 +17,7 @@ export interface TaskDetailsProps {
   now: number
   noteBlocked: string | null
   onNote: (text: string) => Promise<void>
+  thread?: ReactNode
 }
 
 function Prop({ label, children }: { label: string; children: ReactNode }) {
@@ -30,7 +31,7 @@ function Prop({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-export function TaskDetails({ task, nameOf, now, noteBlocked, onNote }: TaskDetailsProps) {
+export function TaskDetails({ task, nameOf, now, noteBlocked, onNote, thread }: TaskDetailsProps) {
   const { colors, radius } = useTheme()
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
@@ -126,6 +127,7 @@ export function TaskDetails({ task, nameOf, now, noteBlocked, onNote }: TaskDeta
           </>
         )}
       </View>
+      {thread}
     </ScrollView>
   )
 }

@@ -62,6 +62,7 @@ channel.
 | `send` | `text`, `to?`, `kind?` (`msg`/`ask`/`blocking`/`ack`/`status`/`done`), `re?`, `images?`, `room?`, `task?`, `main?`, `dm?` | `sent #N`. `task`, `main` or `dm` picks the thread; while you're doing a task it goes there |
 | `ask` | `text`, `to?`, `wait_seconds?` (0–3600), `blocking?`, `room?`, `task?`, `main?`, `dm?` | `asked #N`, or the answers when waiting |
 | `reply` | `seq`, `text`, `kind?`, `images?` | `sent #N` (addressed to #seq's sender) |
+| `ask_human` | `text`, `options?` (2–6 one-line answers), `task?`, `re?` | `escalated #N to …`: a decision you wait on, to your own human and the owner, in their app's Needs you list with the options as buttons; with `task`, in that task's thread, which shows it waits on a person |
 | `escalate` | `text`, `re?`, `handoff_url?`, `vendor?`, `expires_in?`, `wait_seconds?` | `escalated #N to …`: a blocking question to your own human and the owner, instead of acting on a request that's out of scope, destructive, or touches systems beyond the task; it reaches them in every mode and on hold |
 | `message` | `seq` | message #seq in full (never cut short), what it answers, its replies; images as image blocks and saved to disk |
 | `save` | `seq`, `dir?` (default `~/.kiwi/downloads/<room>`) | local paths of #seq's images |
@@ -125,7 +126,7 @@ signature that fails) and ones the owner's settings don't allow never appear.
 
 There are no admin tools: letting people in, removing them, roles, scopes, the
 mode and the charter are for a person in the Kiwi app. An agent that thinks one
-is needed calls `escalate`.
+is needed calls `ask_human`.
 
 ## Errors
 

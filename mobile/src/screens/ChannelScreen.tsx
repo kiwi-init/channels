@@ -4,14 +4,16 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 
 import type { JoinRequest } from "@mc/membership.ts"
 import type { ImageAttachment, Message } from "@mc/protocol.ts"
-import { openRound, taskId, type Task } from "@mc/state.ts"
+import { openRound, placeKey, taskId, tasksAwaitingPeople, type Task } from "@mc/state.ts"
 import { asksFor } from "@web/lib/asks"
 import { excerpt } from "@web/lib/format"
+import { sendFrom } from "../lib/sendFrom"
 
 import { Conversation } from "../components/Conversation"
 import { NeedsYou } from "../components/NeedsYou"
 import { ReactionPicker } from "../components/ReactionPicker"
 import { TaskDetails } from "../components/TaskDetails"
+import { TaskThread } from "../components/TaskThread"
 import { TaskList } from "../components/TaskList"
 import { Thread } from "../components/Thread"
 import { threadIndex } from "../lib/thread"
@@ -63,6 +65,7 @@ export function ChannelScreen({ code, onBack }: { code: string; onBack?: () => v
     () => (iAmPerson ? [...live.state.tasks.values()].filter((t) => t.state === "review" && !!t.review && (t.review === me || (t.review === "*" && t.owner !== me && !t.workedBy.includes(me)))) : []),
     [live.state.tasks, me, iAmPerson]
   )
+  const waiting = useMemo(() => tasksAwaitingPeople(live.state), [live.state])
   const needsCount = asks.escalations.length + asks.questions.length + reviews.length + (isOwner ? requests.length : 0)
 
   const refreshRequests = useCallback(async () => {
@@ -186,13 +189,22 @@ export function ChannelScreen({ code, onBack }: { code: string; onBack?: () => v
         </KeyboardAvoidingView>
       ) : view === "tasks" ? (
         openTask === null ? (
-          <TaskList tasks={[...live.state.tasks.values()]} nameOf={nameOf} now={now} onOpen={setOpenTask} />
+          <TaskList tasks={[...live.state.tasks.values()]} nameOf={nameOf} now={now} waiting={waiting} onOpen={setOpenTask} />
         ) : (
           <TaskDetails
             task={live.state.tasks.get(openTask)}
             nameOf={nameOf}
             now={now}
             noteBlocked={null}
+            thread={
+              <TaskThread
+                messages={live.messages.filter((m) => m.kind !== "event" && placeKey(live.state.placeOf.get(m.seq) ?? { kind: "main" }) === `task:${openTask}`)}
+                state={live.state}
+                me={me}
+                nameOf={nameOf}
+                onSend={async (text) => void (await live.post(text, sendFrom(live.state, { kind: "task", task: openTask }, me)))}
+              />
+            }
             onNote={async (note) => void (await live.post(`noted on ${taskId(openTask)}`, { kind: "event", ev: { op: "task.update", task: openTask, note } }))}
           />
         )

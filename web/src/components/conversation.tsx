@@ -5,7 +5,7 @@ import { droppedCount } from "@mc/format.ts"
 import { memberLoad } from "@mc/load.ts"
 import { ignored, isReaction, type Color, type ImageAttachment, type Message } from "@mc/protocol.ts"
 import { describeScopes, wireScopes } from "@mc/scopes.ts"
-import { colorOf, keptFromPeople, openRound, taskId, type Task } from "@mc/state.ts"
+import { colorOf, keptFromPeople, taskId, type Task } from "@mc/state.ts"
 import { recentPrs } from "@mc/work.ts"
 import { secrets } from "@/lib/secrets"
 import { channelTitle, forgetChannel, loadMember, loadRecent, renameChannel, saveRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
@@ -14,6 +14,7 @@ import type { Gif } from "@/lib/gifs"
 import { lastPreview } from "@/lib/preview"
 import { markSeen, setOpenNews } from "@/lib/news"
 import { asksFor } from "@/lib/asks"
+import { approveTask, cancelTask, changeReviewer, reviewsFor, sendBackTask, type TaskSend } from "@/lib/task-actions"
 import { useIcons, useLiveIcon } from "@/lib/icons"
 import { excerpt, formatShort, formatTime, memberName } from "@/lib/format"
 import { coordinatorMood, ERROR_MS, moodInputs, SPEAKING_MS, type Mood } from "@/lib/coordinator-mood"
@@ -81,11 +82,6 @@ type Side = { kind: "thread"; root: number } | { kind: "info" } | { kind: "tasks
 
 const CLEAR = "xl:pr-[min(var(--float),max(0px,calc(792px_+_2*var(--float)_-_100%)))]"
 
-function roundOf(t: Task): { round: number; at?: string } | Record<string, never> {
-  const open = openRound(t)
-  return open ? { round: open.n, ...(open.at ? { at: open.at } : {}) } : {}
-}
-
 export function Conversation({ member, onBack, onGone }: { member: StoredMember; onBack: () => void; onGone: () => void }) {
   const me = member.identity.name
   const { ch, connection, gone, messages, roster, state, online, isOwner, requests, send, refreshRequests, refreshRoster, head, marks, pkOf } = useChannel(member)
@@ -144,10 +140,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const needs = escalations.length + questions.length
   useChannelNews(roomId, Math.max(head, messages.at(-1)?.seq ?? 0), arrivals, 0, needs)
 
-  const reviews = useMemo(
-    () => (iAmPerson ? [...state.tasks.values()].filter((t) => t.state === "review" && !!t.review && (t.review === me || (t.review === "*" && t.owner !== me && !t.workedBy.includes(me)))) : []),
-    [state.tasks, me, iAmPerson]
-  )
+  const reviews = useMemo(() => reviewsFor(state.tasks.values(), me, iAmPerson), [state.tasks, me, iAmPerson])
+  const sendTask = useCallback(async ({ body, opts }: TaskSend) => void (await send(body, opts)), [send])
   // Nobody to talk to yet: the conversation opens on how to add an agent.
   const noAgents = !active.some((m) => isAgent(m))
   // A brand-new channel: nothing said and nobody to say it. The stop button waits for agents.
@@ -755,20 +749,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                   nameOf={nameOf}
                   agentOf={(name) => isAgent(state.members.get(name))}
                   onReply={async (m, text) => void (await send(text, { to: [m.from], re: [m.seq], kind: "msg" }))}
-                  onApproveTask={async (t: Task) =>
-                    void (await send(`${taskId(t.id)} approved`, {
-                      kind: "event",
-                      ev: { op: "task.update", task: t.id, state: "done", verdict: "approved", note: "approved", ...roundOf(t) },
-                      ...(t.owner ? { to: [t.owner] } : {}),
-                    }))
-                  }
-                  onSendBack={async (t: Task, why: string) =>
-                    void (await send(`${taskId(t.id)} rejected`, {
-                      kind: "event",
-                      ev: { op: "task.update", task: t.id, state: "doing", verdict: "rejected", note: why, ...roundOf(t) },
-                      ...(t.owner ? { to: [t.owner] } : {}),
-                    }))
-                  }
+                  onApproveTask={(t: Task) => sendTask(approveTask(t))}
+                  onSendBack={(t: Task, why: string) => sendTask(sendBackTask(t, why))}
                   onOpenTask={openTask}
                   onJump={jump}
                 />
@@ -978,8 +960,13 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                   me={me}
                   now={now}
                   highlighted={highlight === shownTask}
+                  person={iAmPerson}
                   noteBlocked={state.members.get(me)?.scopes.includes("tasks") === false ? "The owner hasn’t let you change tasks here, so you can’t comment on one." : null}
                   onNote={async (note) => void (await send(`noted on ${taskId(shownTask)}`, { kind: "event", ev: { op: "task.update", task: shownTask, note } }))}
+                  onApprove={(t) => sendTask(approveTask(t))}
+                  onSendBack={(t, why) => sendTask(sendBackTask(t, why))}
+                  onCancel={(t, note) => sendTask(cancelTask(t, note, me))}
+                  onReviewer={(t, review) => sendTask(changeReviewer(t, review, me))}
                 />
                 {task && !saidInTask && <p className="mt-4 text-center text-meta text-ink-3">What the agents on it say to each other shows up here.</p>}
                 {taskRows}

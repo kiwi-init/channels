@@ -24,7 +24,7 @@ import { ChannelGone, goneText, reason, type Channel, type Refused, type Relay }
 import { ago, cardLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, missingImages, formatTask, formatTasks, looksLikeLine, mayDo, parseDuration, presenceWords, runsStatus, taskStateWord } from "./format.ts";
 import { isWakeVia } from "./wake.ts";
 import { SCOPES } from "./scopes.ts";
-import { CHAT_KINDS, HANDOFF_DEFAULT_SECONDS, HANDOFF_MAX_SECONDS, HANDOFF_MAX_VENDOR, handoffUrl, ignored, type InlineImage, type Kind, type Message } from "./protocol.ts";
+import { CHAT_KINDS, CHOICE_MAX_LENGTH, CHOICES_MAX, CHOICES_MIN, HANDOFF_DEFAULT_SECONDS, HANDOFF_MAX_SECONDS, HANDOFF_MAX_VENDOR, handoffUrl, ignored, wellFormedChoices, type InlineImage, type Kind, type Message } from "./protocol.ts";
 import { inlineText } from "./membership.ts";
 import { chooseThread, parseTaskId, similarOpenTasks, taskId, wentTo } from "./state.ts";
 import { detectCard } from "./card.ts";
@@ -427,6 +427,29 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         if (wait_seconds === undefined) return sent;
         const { outcome } = yield* s.awaitHandoff(seq, head, expiresAt, wait_seconds);
         return `${sent}\nhandoff ${outcome === "waiting" ? "still waiting: the link is open, listen for the answer" : outcome}`;
+      }),
+    ),
+  );
+
+  server.registerTool(
+    "ask_human",
+    {
+      description:
+        "Ask your own human and the channel owner for a decision you are waiting on: it shows in their app's Needs you list, with your options as buttons, in every mode and during a hold. Use it whenever you stop until a person decides, instead of ending a message with \"reply A, B or C\"; then wait for their answer. " +
+        'Example: ask_human {"task":251,"text":"Edits clear the old evidence. Which way?","options":["A: keep clearing, refuse until a forced audit","B: keep clearing, the audit rebuilds dedup","C: a stale flag the audit clears"]}.',
+      inputSchema: {
+        text: z.string().describe("the decision, with what each choice costs; the person reads it outside the thread"),
+        options: z.array(z.string()).optional().describe(`${CHOICES_MIN} to ${CHOICES_MAX} answers to pick from, one line of up to ${CHOICE_MAX_LENGTH} characters each; picking one replies with its text`),
+        task: z.number().int().positive().optional().describe("the task this blocks: the question goes in its thread and the task shows it waits on a person"),
+        re: z.number().int().optional().describe("the message this is about"),
+      },
+    },
+    tool(({ text, options, task, re }) =>
+      Effect.gen(function* () {
+        const choices = options?.map((o) => o.trim());
+        if (choices && !wellFormedChoices(choices)) return yield* new Rejected(`options takes ${CHOICES_MIN} to ${CHOICES_MAX} different answers, one line of up to ${CHOICE_MAX_LENGTH} characters each`);
+        const { seq, to } = yield* s.escalate(text, re, undefined, { ...(choices ? { choices } : {}), ...(task !== undefined ? { task } : {}) });
+        return `escalated #${seq} to ${to.join(" and ")}${choices ? ` with ${choices.length} options` : ""}; wait for their answer before acting on it`;
       }),
     ),
   );
