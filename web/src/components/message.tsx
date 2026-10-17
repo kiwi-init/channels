@@ -374,6 +374,13 @@ export const Bubble = memo(function Bubble({
               )}
             >
               <Markdown refs={refs}>{m.body}</Markdown>
+              {m.esc && m.choices?.length ? (
+                <ul aria-label="Options" className="mt-1.5 list-disc pl-5 text-ui">
+                  {m.choices.map((c) => (
+                    <li key={c}>{c}</li>
+                  ))}
+                </ul>
+              ) : null}
               {last && <Tail mine={mine} />}
             </div>
           )}

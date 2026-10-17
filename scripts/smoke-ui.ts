@@ -318,7 +318,7 @@ async function run(part: Part): Promise<string[]> {
     await page.getByRole("button", { name: "Close thread" }).click()
     log(`ok  ${at}`)
 
-    await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke task", "--owner", "bot"])
+    const smokeTask = /T\d+/.exec(await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke task", "--owner", "bot"]))?.[0] ?? "T0"
     at = "Task in the Tasks panel"
     const conversations = page.getByRole("main").getByRole("navigation", { name: "Conversations" })
     const tasksPanel = page.getByRole("complementary", { name: "Tasks" })
@@ -330,6 +330,15 @@ async function run(part: Part): Promise<string[]> {
     await tasksPanel.getByText("smoke in the task", { exact: true }).first().waitFor()
     await tasksPanel.getByRole("button", { name: "Close tasks" }).click()
     if (await page.getByText("smoke in the task", { exact: true }).count()) throw new Error("a message in a task's conversation showed in main")
+    log(`ok  ${at}`)
+
+    at = "ask-human: options as buttons, and the task waits on a person until one is picked"
+    await kiwi(["-c", "smoke", "--as", "bot", "ask-human", "--task", smokeTask, "--option", "A: ship it", "--option", "B: wait a day", "Ship the smoke build now?"])
+    const awaiting = overview.getByRole("region", { name: "Tasks" }).getByText("Needs a decision")
+    await awaiting.first().waitFor({ timeout: 15000 })
+    await needsOpen()
+    await needs.getByRole("list", { name: "Options" }).getByRole("button", { name: "B: wait a day" }).click()
+    await awaiting.first().waitFor({ state: "detached", timeout: 15000 })
     log(`ok  ${at}`)
 
     for (const item of ["Change nickname…", "Set role…", "Remove from channel…"])
