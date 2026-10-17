@@ -85,11 +85,13 @@ jobs:
         run: bun scripts/action-pins.ts
       - name: no comments
         if: ${{ !cancelled() }}
-        run: |
-          python -m pip install mypy==2.3.1
-          python -m mypy --strict scripts/ci
-          python -m unittest discover -s scripts/ci -p 'test_*.py'
-          python scripts/ci/no_comments.py --base HEAD^1
+        run: python scripts/ci/no_comments.py --base HEAD^1
+      - name: scripts/ci types
+        if: ${{ !cancelled() }}
+        run: python -m pip install mypy==2.3.1 && python -m mypy --strict scripts/ci
+      - name: scripts/ci tests
+        if: ${{ !cancelled() }}
+        run: python -m unittest discover -s scripts/ci -p 'test_*.py'
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         with:
