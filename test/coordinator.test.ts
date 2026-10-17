@@ -129,7 +129,7 @@ describe("what each member is told", () => {
   });
 
   test("the prompt says what coordinator-only asks of this agent, only when the channel is in it", async () => {
-    const { agentPrompt } = await import("../src/cli/main.ts");
+    const { agentPrompt } = await import("../src/cli/brief.ts");
     const { modeLine } = await import("../src/format.ts");
     const state = fold([await makeCoord("coord"), await on()], roster);
     expect(agentPrompt("c", "dev", { mode: modeLine(state, "dev") })).toContain("coordinator-only");

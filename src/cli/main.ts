@@ -21,24 +21,24 @@ import { homedir } from "node:os";
 import { AgentLive, oneLook, openSession, type Agent, type AgentSession, type Delivery } from "../agent.ts";
 import { loadImages, saveImages } from "../attach.ts";
 import { Channel, ChannelGone, goneText, reason, RelayError } from "../client.ts";
-import { Cursor, DEFAULT_RELAY, home, Keystore, loadConfig, updateConfig, type ChannelConfig } from "../config.ts";
+import { Cursor, DEFAULT_RELAY, home, Keystore, updateConfig, type ChannelConfig } from "../config.ts";
 import { decodeJoinCode, type ChannelAccess } from "../crypto.ts";
 import { describeMember, freeAgentName, handleFor, inlineText } from "../membership.ts";
 import { freeHandle } from "../handles.ts";
 import { baseName, here, seatsNear } from "../seats.ts";
-import { daemonHello, daemonSeat, ensureDaemon, reportRead, stopDaemon, wakeOn, type DaemonSeat } from "../daemon.ts";
+import { daemonHello, daemonSeat, ensureDaemon, reportRead, stopDaemon, type DaemonSeat } from "../daemon.ts";
 import { cleanup } from "../cleanup.ts";
 import { asOption, channelOption, isWakeVia, wakeKey, wakeWords } from "../wake.ts";
 import { ago, cardLine, charterLines, describeEvent, holdLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, missingImages, formatTask, formatTasks, looksLikeLine, modeLine, parseDuration, presenceWords, taskStateWord, statusJson } from "../format.ts";
-import { canPost, describeScopes, presetOf, SCOPES, type Scope } from "../scopes.ts";
+import { canPost, describeScopes, presetOf, SCOPES } from "../scopes.ts";
 import { fingerprint } from "../identity.ts";
 import reactionPack from "../../assets/reactions/index.json";
 import { CHAT_KINDS, CHOICE_MAX_LENGTH, CHOICES_MAX, CHOICES_MIN, COLORS, HANDOFF_DEFAULT_SECONDS, HANDOFF_MAX_SECONDS, HANDOFF_MAX_VENDOR, handoffUrl, ignored, wellFormedChoices, isGifReaction, isColor, type InlineImage, type Kind, type Message, type TaskState } from "../protocol.ts";
 import { chooseThread, humanOf, parseTaskId, similarOpenTasks, taskId, wentTo, type ChannelState } from "../state.ts";
 import { VERSION } from "../version.ts";
 import { computerClaimFor } from "../machine.ts";
-import { briefText } from "../brief.ts";
-import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor, EXTRA_HARNESSES, extraInstalled, hooksInstalled, hooksStatus, howMessagesReachYou, IDENTITY_ARG, installDetected, installExtra, installHooks, mcFor, refreshListeners, runHook, selfIdentity, seatsFor, uninstallDetected, uninstallExtra, uninstallHooks, type ExtraHarness } from "../hooks.ts";
+import { agentPrompt, joinedText } from "./brief.ts";
+import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor, EXTRA_HARNESSES, extraInstalled, hooksInstalled, hooksStatus, IDENTITY_ARG, installDetected, installExtra, installHooks, mcFor, refreshListeners, runHook, selfIdentity, seatsFor, uninstallDetected, uninstallExtra, uninstallHooks, type ExtraHarness } from "../hooks.ts";
 import { BadName } from "../refusals.ts";
 import { binDir, ensureOnPath, profileFor } from "../shell-path.ts";
 import { detectCard, detectModel, detectRuns, mergeCard } from "../card.ts";
@@ -1377,29 +1377,6 @@ function wakeLine(w: DaemonSeat["wake"]): string {
   const how = w.path.kind === "hooks" ? `wakes via ${wakeWords("hooks")}` : w.path.kind === "command" ? `wakes via ${wakeWords(w.path.via)}` : `can't be woken: ${w.path.why}`;
   const last = w.last ? ` · last wake ${ago(w.last.at)} via ${wakeWords(w.last.via)}, ${w.last.unread} unread, ${w.last.ok ? "ok" : "failed"}` : "";
   return `wake ${w.on ? "on" : "off"} · ${how}${last}`;
-}
-
-function listenLine(mc: string, alias: string, agent: string): string {
-  return howMessagesReachYou(mc, wakeOn(loadConfig(), alias, agent));
-}
-
-/** What an agent reads when it gets in (brief.ts): who it is, who directs it, how messages reach it, and where the rest is. */
-export function joinedText(
-  alias: string,
-  agent: string,
-  as: { scopes?: readonly Scope[]; hold?: string | null; charter?: string | null; mode?: string | null; human?: string | null; role?: string; about?: string } = {},
-): string {
-  const mc = mcFor(alias, agent);
-  return briefText({ alias, agent, mc, listen: listenLine(mc, alias, agent), ...as });
-}
-
-/** `kiwi prompt`: the same brief, to paste into an agent that didn't join from here. */
-export function agentPrompt(
-  alias: string,
-  agent: string,
-  as: { role?: string; about?: string; scopes?: readonly Scope[]; human?: string | null; hold?: string | null; charter?: string | null; mode?: string | null } = {},
-): string {
-  return joinedText(alias, agent, as);
 }
 
 /** Stop: `kiwi: <message>` on stderr, and this exit code. */
