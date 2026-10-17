@@ -7,7 +7,9 @@ import Svg, { Path } from "react-native-svg"
 import { excerpt, forgedNote, isImageOnly, phrase } from "../lib/bubble"
 import { useTheme } from "../theme/useTheme"
 import { Text } from "../ui/Text"
+import type { Chip } from "../lib/reactions"
 import { Markdown } from "./Markdown"
+import { ReactionChip } from "./ReactionChip"
 
 export interface BubbleProps {
   m: Message
@@ -20,6 +22,7 @@ export interface BubbleProps {
   highlighted?: boolean
   receipt?: string
   direct?: string
+  reactions?: Chip[]
   face?: ReactNode
   quoted: (seq: number) => Message | undefined
   nameOf: (name: string) => string
@@ -53,7 +56,7 @@ function Attached({ img }: { img: ImageAttachment }) {
   return <Image accessibilityLabel={img.name} source={{ uri: `data:${img.mime};base64,${img.data}` }} style={[styles.image, { borderRadius: theme.radius.bubble }]} />
 }
 
-export const Bubble = memo(function Bubble({ m, me, trust, first, last, group, adjacentReply, highlighted, receipt, direct, face, quoted, nameOf, onJump, onReply }: BubbleProps) {
+export const Bubble = memo(function Bubble({ m, me, trust, first, last, group, adjacentReply, highlighted, receipt, direct, reactions, face, quoted, nameOf, onJump, onReply }: BubbleProps) {
   const theme = useTheme()
   const forged = ignored(trust)
   const mine = m.from === me
@@ -121,6 +124,13 @@ export const Bubble = memo(function Bubble({ m, me, trust, first, last, group, a
           </View>
         ) : null}
 
+        {reactions?.length && !forged ? (
+          <View style={[styles.reactions, { justifyContent: align }]}>
+            {reactions.map((chip) => (
+              <ReactionChip key={chip.emoji} chip={chip} />
+            ))}
+          </View>
+        ) : null}
         {receipt && mine && !forged ? (
           <Text variant="stamp" tone="ink3" style={styles.note}>
             {receipt}
@@ -153,6 +163,7 @@ const styles = StyleSheet.create({
   images: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 2 },
   image: { width: 180, height: 180 },
   imageHolder: { width: 128, height: 96, alignItems: "center", justifyContent: "center" },
+  reactions: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 2, paddingHorizontal: 8 },
   note: { paddingHorizontal: 12, marginTop: 2 },
   tail: { position: "absolute", bottom: 0, zIndex: -1, width: 28, height: 20 },
   tailRight: { right: -8 },

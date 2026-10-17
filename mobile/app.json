@@ -19,7 +19,8 @@
       "react-native-quick-crypto",
       "expo-build-properties",
       "expo-sqlite",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-image"
     ]
   }
 }
