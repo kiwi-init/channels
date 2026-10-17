@@ -2,14 +2,14 @@ name: ci
 
 on:
   push:
-    branches: [main, bus/staging]
+    branches: [main, "bus/**"]
   pull_request:
   workflow_dispatch:
 
 # A new push to a pull request cancels its run still in progress. Main and bus/staging keep every run.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || format('{0}-{1}', github.ref_name, github.sha) }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ci-${{ github.event.pull_request.number || (startsWith(github.ref, 'refs/heads/bus/') && github.ref != 'refs/heads/bus/staging' && github.ref_name) || format('{0}-{1}', github.ref_name, github.sha) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (startsWith(github.ref, 'refs/heads/bus/') && github.ref != 'refs/heads/bus/staging') }}
 
 permissions:
   contents: read
@@ -32,7 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          fetch-depth: ${{ github.ref == 'refs/heads/bus/staging' && '0' || '2' }}
+          fetch-depth: ${{ startsWith(github.ref, 'refs/heads/bus/') && '0' || '2' }}
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.4.2
