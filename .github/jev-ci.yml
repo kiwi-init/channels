@@ -3,11 +3,21 @@
 # `push: false`, which run on pull requests and manual runs only. `version_bumps: true` runs a
 # job when a change only bumps a version number, which otherwise counts as no change.
 #
-# For each job: `inputs` are the files it reads (a change elsewhere skips it), `always` are
-# files that run it by rule (config, dependencies), and `description` says in plain words
-# what it checks and what makes it fail. Jev reads the description, so keep it true.
-# `jev: false` marks static checks (types, lint): any edit to their files can fail them, so
-# they run whenever those files change and Jev only judges tests, flows and builds.
+# For each job: `inputs` are the files it reads (a change elsewhere skips it), `imports_from`
+# are entry files whose static imports (followed through the repo) count as inputs too,
+# `always` are files that run it by rule (config, dependencies), and `description` says in
+# plain words what it checks and what makes it fail. Jev reads the description, so keep it
+# true. `question` and `criteria` replace the question Jev is asked for that job, and
+# `threshold` replaces the global one. `jev: false` marks static checks (types, lint): any
+# edit to their files can fail them, so they run whenever those files change and Jev only
+# judges tests, flows and builds.
+#
+# A job also runs when its own job in the workflow changed, or a local action or reusable
+# workflow it uses (`uses: ./...`). A change to the workflow's `name`, `run-name`, `on` or
+# `concurrency` runs nothing by itself; `permissions` runs the jobs that inherit them; any
+# other top-level change runs every job. In this file, a change to a job's `description` or
+# `name` runs nothing by itself, a change to its other fields runs that job, and a change to
+# a setting above `jobs` runs every job.
 
 # enforce: jobs Jev judges unaffected are skipped. shadow: they run anyway and the plan says so.
 mode: enforce
@@ -15,13 +25,13 @@ mode: enforce
 threshold: 0.3
 
 workflow: .github/workflows/ci.yml
+# Jobs in the workflow that aren't checks: they run on every pull request, so a change to
+# them needs no other job. Any other job in the workflow without an entry here always runs.
 planner_jobs: [plan, ci-ok]
 
-# The planner itself, its config and the shared setup: a change here runs every job.
+# The planner itself: a change here runs every job.
 run_all_when_changed:
-  - ".github/jev-ci/**"
-  - ".github/jev-ci.yml"
-  - ".github/actions/**"
+  - ".github/jev-ci/**/*.ts"
 
 # A release bump changes only these lines; it counts as no change.
 version_only:
@@ -31,6 +41,7 @@ version_only:
 summarize_files: ["bun.lock"]
 
 # Above this many changed lines, or a single file above max_file_lines, Jev isn't asked: the jobs run.
+# Lines moved verbatim from one place to another don't count: Jev sees them as moved.
 max_jev_lines: 800
 max_file_lines: 300
 
@@ -55,8 +66,8 @@ jobs:
 
   test-unit:
     name: test / unit
-    inputs: ["src/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "site/install.ps1", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/action-pins.ts", "desktop/src/**", "desktop/build/entitlements.mac.plist"]
-    always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts"]
+    inputs: ["src/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "site/install.ps1", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/action-pins.ts", "desktop/src/**", "desktop/build/entitlements.mac.plist", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
+    always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs the unit tests with bun test: every test/*.test.ts except the slow suites in
       scripts/ci-tests.ts's flows groups, plus the dashboard's tests in web/src (task-cards
@@ -72,15 +83,18 @@ jobs:
       or keys server outside web/src/lib/channel-local.ts. And test/desktop-voice.test.ts: the desktop voice
       store's CSP allows api.x.ai only when an xAI key is saved, the project key never reaches
       the snapshot or the token IPC result, consent defaults off, and
-      desktop/build/entitlements.mac.plist has the audio-input entitlement.
+      desktop/build/entitlements.mac.plist has the audio-input entitlement. And
+      test/jev-ci.test.ts: the CI planner in .github/jev-ci, which plans synthetic changes
+      against the real .github/jev-ci.yml and .github/workflows/ci.yml in a scratch git repo.
       Fails if a tested module's behavior,
       output text or exported names change. TMPDIR points through a symlink, as macOS's does,
       so a test that compares a tmp path with its realpath or process.cwd() fails here too.
 
   test-flows-a:
     name: test / flows-a
-    inputs: ["src/**", "test/**", "web/src/**", "web/public/**"]
-    always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts"]
+    inputs: ["src/**", "test/owner-cli.ts"]
+    imports_from: ["test/e2e.test.ts", "test/verbs.test.ts", "test/threads.test.ts", "test/reconnect.test.ts", "test/budget-*.test.ts"]
+    always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs slow end-to-end tests that start a real local relay (src/relay/bun.ts) and drive the
       kiwi CLI and client: e2e (create a channel, join, send and listen through the relay),
@@ -94,8 +108,9 @@ jobs:
 
   test-flows-b:
     name: test / flows-b
-    inputs: ["src/**", "test/**", "web/src/**", "web/public/**"]
-    always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts"]
+    inputs: ["src/**", "test/owner-cli.ts"]
+    imports_from: ["test/join-seats.test.ts", "test/read-receipts.test.ts", "test/daemon-pair.test.ts", "test/sh-escape.test.ts", "test/coordinator-follows.test.ts", "test/reclaim.test.ts", "test/wake-yourself.test.ts", "test/seats.test.ts", "test/multi-seat.test.ts", "test/handoff.test.ts"]
+    always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs slow agent-flow tests against a real local relay and the kiwi CLI: join-seats
       (joining, one seat per agent, Claude Code hooks doing the listening), read-receipts,
@@ -132,8 +147,8 @@ jobs:
 
   desktop:
     name: desktop / package
-    inputs: ["desktop/**", "src/**", "web/src/**", "web/index.html", "scripts/build-cli.ts", "scripts/cli-bundle.ts"]
-    always: ["desktop/package.json", "desktop/tsconfig*.json", "desktop/scripts/fuses.ts", "desktop/scripts/smoke.ts", "package.json", "bun.lock", "web/package.json"]
+    inputs: ["desktop/**", "src/**", "web/src/**", "web/index.html", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "package.json", "bun.lock", "web/package.json"]
+    always: ["desktop/package.json", "desktop/tsconfig*.json", "desktop/scripts/fuses.ts", "desktop/scripts/smoke.ts"]
     description: >-
       Bundles the Electron shell's main, preload and channels (key process) scripts with bun
       build, then packages the Linux app with electron-builder --dir from desktop/package.json's
@@ -149,8 +164,22 @@ jobs:
 
   cli-macos:
     name: cli / macos
-    inputs: ["src/**", "test/**", "site/install", "site/install.sh", "site/install.ps1", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "desktop/src/**"]
-    always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json"]
+    inputs: ["src/**", "test/**", "site/install", "site/install.sh", "site/install.ps1", "desktop/src/**", "package.json", "bun.lock", "bunfig.toml", "web/package.json"]
+    always: ["scripts/build-cli.ts", "scripts/cli-bundle.ts"]
+    question: >-
+      Could this change to `file` make the job described in `job` fail on macOS, or fail to
+      cross-compile a darwin or windows target, while the same tests and the Linux build pass
+      in test / unit, test / flows-a, test / flows-b and build / bundles?
+    criteria:
+      true: >-
+        The change touches behavior that differs on macOS: tmp paths behind the /var to
+        /private/var symlink, realpath or process.cwd() compared with a tmp path, home under
+        /Users, a case-insensitive file system, a unix socket path near 104 bytes, BSD shell
+        tools, signals, child processes, file watching, the name the CLI prints for itself, or
+        the darwin or windows build targets, in a way that could fail only there.
+      false: >-
+        The change behaves the same on macOS as on Linux: a failure it causes would fail the
+        Linux jobs too, which catch it, or it can't fail at all.
     description: >-
       On a macOS runner, does what the release's cli job does: runs the whole bun test suite
       (every test/*.test.ts and web/src test, the agent flows included), compiles the kiwi CLI

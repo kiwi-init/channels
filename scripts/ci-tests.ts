@@ -2,12 +2,7 @@ import { Glob } from "bun"
 import { mkdtempSync, realpathSync, rmSync, symlinkSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
-
-const budget = [...new Glob("test/budget-*.test.ts").scanSync()].map((f) => f.slice("test/".length, -".test.ts".length)).sort()
-const FLOWS: Record<string, string[]> = {
-  "flows-a": ["e2e", "verbs", "threads", "reconnect", ...budget],
-  "flows-b": ["join-seats", "read-receipts", "daemon-pair", "sh-escape", "coordinator-follows", "reclaim", "wake-yourself", "seats", "multi-seat", "handoff"],
-}
+import { FLOWS } from "./ci-flows.ts"
 
 const group = process.argv[2] ?? ""
 const all = [...new Glob("test/*.test.ts").scanSync(), ...new Glob("web/src/**/*.test.{ts,tsx}").scanSync()].sort()
