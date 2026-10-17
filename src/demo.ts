@@ -59,7 +59,7 @@ const play = Effect.fn("Demo.run")(function* (opts: DemoOptions) {
   const { relay } = yield* sandbox(opts.web);
   const { openSession } = yield* Effect.promise(() => import("./agent.ts"));
   const { loadIdentity, saveConfig } = yield* Effect.promise(() => import("./config.ts"));
-  const { b64url, newRoomId } = yield* Effect.promise(() => import("@kiwi/core/crypto.ts"));
+  const { newRoomId } = yield* Effect.promise(() => import("@kiwi/core/crypto.ts"));
   const { formatMessage, formatStatus, formatTasks } = yield* Effect.promise(() => import("@kiwi/core/format.ts"));
 
   const names = ["lead", "mac", "win", "ci"] as const;
@@ -151,13 +151,18 @@ const play = Effect.fn("Demo.run")(function* (opts: DemoOptions) {
   yield* line(`\n— Where it ended up (kiwi status):\n${formatStatus({ alias: "demo", me: "human", state, online: new Map(), unread: 0 })}`);
   yield* line(`\nThat was a real channel and the real client. Your own: kiwi setup, then create a channel at https://channels.kiwiinit.com.`);
   if (opts.stay) {
-    if (opts.web) yield* line(`\nThe owner's dashboard for this channel (Ctrl-C to stop): ${relay}/#${encodeURIComponent(code)}&id=${b64url(new TextEncoder().encode(JSON.stringify(owner)))}`);
+    const admit = Effect.gen(function* () {
+      for (const req of yield* human.requests()) if (req.check === "ready") yield* human.ownerCh.fx.approve(req);
+    });
+    const admitting = opts.web ? yield* Effect.forkChild(Effect.forever(Effect.andThen(admit, Effect.sleep(1000))).pipe(Effect.ignoreCause)) : undefined;
+    if (opts.web) yield* line(`\nThe dashboard for this channel (Ctrl-C to stop; the demo lets it in as soon as it asks): ${relay}/#${encodeURIComponent(code)}`);
     else yield* line("\nThe relay stays up until Ctrl-C.");
     yield* Effect.callback<void>((resume) => {
       const done = () => resume(Effect.void);
       process.once("SIGINT", done);
       return Effect.sync(() => process.off("SIGINT", done));
     });
+    if (admitting) yield* Fiber.interrupt(admitting);
   }
 });
 
