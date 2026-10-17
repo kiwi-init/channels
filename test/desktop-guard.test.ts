@@ -141,7 +141,7 @@ describe.skipIf(process.platform === "win32")("the saved keys are a 0600 file in
   test("even when the folder was already there and open to others", () => {
     const root = mkdtempSync(join(tmpdir(), "kiwi-store-"));
     try {
-      const dir = join(root, "Kiwi");
+      const dir = join(root, "Channels");
       mkdirSync(dir, { mode: 0o755 });
       chmodSync(dir, 0o755);
       const file = join(dir, "kiwi-store.bin");

@@ -160,8 +160,9 @@ jobs:
     description: >-
       Bundles the Electron shell's main, preload and channels (key process) scripts with bun
       build, then packages the Linux app with electron-builder --dir from desktop/package.json's
-      build config (its electronFuses block included). desktop/scripts/fuses.ts reads the
-      packaged binary's Electron fuses and fails unless RunAsNode,
+      build config (its electronFuses block included: appId com.kiwiinit.channels, productName
+      Channels, executable channels-desktop). desktop/scripts/fuses.ts reads the packaged
+      binary's (release/linux-unpacked/channels-desktop) Electron fuses and fails unless RunAsNode,
       EnableNodeOptionsEnvironmentVariable and EnableNodeCliInspectArguments are off and
       EnableCookieEncryption, EnableEmbeddedAsarIntegrityValidation and OnlyLoadAppFromAsar are
       on. desktop/scripts/smoke.ts starts the packaged app under Xvfb and fails unless its
@@ -212,7 +213,8 @@ jobs:
       rehearsal: true and a read-only token, uploading nothing: the version and changelog checks
       (taking v<src/version.ts> as the tag), the cli job on macOS (bun test, five builds), and
       the desktop app packaged on macOS (arm64 and x64) and Linux (AppImage and deb), with each
-      package's contents and fuses checked. On a pull request the macOS app is unsigned; a
+      package's contents and fuses checked (release/mac*/Channels.app and
+      release/*-unpacked/channels-desktop). On a pull request the macOS app is unsigned; a
       manual run of ci.yml passes the signing secrets, so the app is signed, notarized and
       checked as on a tag. Fails where the tag would: versions that disagree, no changelog
       section, a test failing on macOS, an electron-builder error, a package missing the web

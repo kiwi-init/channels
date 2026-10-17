@@ -20,7 +20,7 @@ async function wrongFuses(app: string): Promise<string[]> {
 
 const apps = process.argv.slice(2).map((a) => resolve(a))
 if (apps.length === 0) {
-  console.error("usage: bun desktop/scripts/fuses.ts <Kiwi.app | linux executable>...")
+  console.error("usage: bun desktop/scripts/fuses.ts <Channels.app | linux executable>...")
   process.exit(2)
 }
 let failed = false

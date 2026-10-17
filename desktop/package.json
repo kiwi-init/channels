@@ -2,14 +2,14 @@
   "name": "kiwi-desktop",
   "version": "0.16.2",
   "private": true,
-  "description": "Kiwi desktop app: an Electron shell hosting web/ for people (auto-approval, pairing, admin).",
+  "description": "Channels desktop app: an Electron shell hosting web/ for people (auto-approval, pairing, admin).",
   "homepage": "https://github.com/ojowwalker77/channels",
   "author": {
     "name": "Jow",
     "email": "ojowwalker77@users.noreply.github.com"
   },
   "main": "dist/main.js",
-  "desktopName": "kiwi-desktop.desktop",
+  "desktopName": "channels-desktop.desktop",
   "scripts": {
     "build:main": "bun build src/main.ts --outfile dist/main.js --target node --format cjs --external electron",
     "build:preload": "bun build src/preload.ts --outfile dist/preload.js --target node --format cjs --external electron",
@@ -31,8 +31,8 @@
     "typescript": "^7.0.2"
   },
   "build": {
-    "appId": "com.kiwiinit.kiwi",
-    "productName": "Kiwi",
+    "appId": "com.kiwiinit.channels",
+    "productName": "Channels",
     "files": [
       "dist/**"
     ],
@@ -56,7 +56,7 @@
       "resetAdHocDarwinSignature": true
     },
     "protocols": {
-      "name": "Kiwi",
+      "name": "Channels",
       "schemes": [
         "kiwi"
       ]
@@ -82,7 +82,7 @@
     "linux": {
       "category": "Utility",
       "icon": "build/icons",
-      "executableName": "kiwi-desktop",
+      "executableName": "channels-desktop",
       "syncDesktopName": true,
       "target": [
         "AppImage",
@@ -95,7 +95,7 @@
         }
       ]
     },
-    "artifactName": "Kiwi-${version}-${os}-${arch}.${ext}",
+    "artifactName": "Channels-${version}-${os}-${arch}.${ext}",
     "directories": {
       "output": "release"
     }

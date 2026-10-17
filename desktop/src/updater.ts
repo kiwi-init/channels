@@ -31,12 +31,12 @@ let staged: { version: string; path: string } | null = null;
 let current: UpdateState | null = null;
 let notify: (s: UpdateState) => void = () => {};
 
-/** The Kiwi.app this runs from (…/Kiwi.app/Contents/MacOS/Kiwi). */
+/** The Channels.app this runs from (…/Channels.app/Contents/MacOS/Channels). */
 const macBundle = () => path.resolve(app.getPath("exe"), "..", "..", "..");
 
 async function check(): Promise<void> {
   if (staged) return;
-  const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { accept: "application/vnd.github+json", "user-agent": "kiwi-desktop" } });
+  const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { accept: "application/vnd.github+json", "user-agent": "channels-desktop" } });
   if (!res.ok) return;
   const rel = (await res.json()) as { tag_name?: string; html_url?: string; prerelease?: boolean; draft?: boolean; assets?: { name: string; browser_download_url: string }[] };
   const version = rel.tag_name?.replace(/^v/, "");
@@ -76,7 +76,7 @@ async function download(assetUrl: string, sumsUrl: string, name: string, dir: st
   if (process.platform === "darwin") {
     // ditto keeps the bundle's symlinks and modes (the frameworks need both).
     await run("/usr/bin/ditto", ["-x", "-k", file, dir]);
-    const next = path.join(dir, "Kiwi.app");
+    const next = path.join(dir, "Channels.app");
     return fs.existsSync(next) && (await signedLikeThisApp(macBundle(), next)) ? next : null;
   }
   fs.chmodSync(file, 0o755);

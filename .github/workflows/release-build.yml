@@ -188,7 +188,7 @@ jobs:
           # Signed: prove it before anything ships. A valid Developer ID signature on every file, the
           # notarization ticket stapled, and Gatekeeper accepting the app as it would on a user's Mac.
           if [ ${#sign[@]} -gt 0 ]; then
-            for app in release/mac*/Kiwi.app; do
+            for app in release/mac*/Channels.app; do
               codesign --verify --deep --strict --verbose=2 "$app"
               # -dvv: codesign names the signing authorities only from two v's up.
               kiwi_sig=$(codesign -dvv "$app/Contents/Resources/kiwi" 2>&1)
@@ -207,7 +207,7 @@ jobs:
             [ -f "$r/kiwi" ] || { echo "kiwi binary missing from $r"; exit 1; }
           done
           echo "checked: $apps"
-          bins=$(find release -maxdepth 2 \( -path 'release/mac*/Kiwi.app' -o -path 'release/*-unpacked/kiwi-desktop' \))
+          bins=$(find release -maxdepth 2 \( -path 'release/mac*/Channels.app' -o -path 'release/*-unpacked/channels-desktop' \))
           [ -n "$bins" ] || { echo "no packaged app found to read the fuses of"; exit 1; }
           bun scripts/fuses.ts $bins
 

@@ -9,13 +9,13 @@ const KIWI_ENV = {
   DISPLAY: ":0",
   WAYLAND_DISPLAY: "wayland-0",
   XDG_CURRENT_DESKTOP: "GNOME",
-  CHROME_DESKTOP: "kiwi-desktop.desktop",
-  GIO_LAUNCHED_DESKTOP_FILE: "/usr/share/applications/kiwi-desktop.desktop",
+  CHROME_DESKTOP: "channels-desktop.desktop",
+  GIO_LAUNCHED_DESKTOP_FILE: "/usr/share/applications/channels-desktop.desktop",
   GIO_LAUNCHED_DESKTOP_FILE_PID: "42",
-  BAMF_DESKTOP_FILE_HINT: "/usr/share/applications/kiwi-desktop.desktop",
-  APPIMAGE: "/home/a/Kiwi.AppImage",
-  APPDIR: "/tmp/.mount_Kiwi",
-  ARGV0: "Kiwi.AppImage",
+  BAMF_DESKTOP_FILE_HINT: "/usr/share/applications/channels-desktop.desktop",
+  APPIMAGE: "/home/a/Channels.AppImage",
+  APPDIR: "/tmp/.mount_Channels",
+  ARGV0: "Channels.AppImage",
   OWD: "/home/a",
   ELECTRON_RUN_AS_NODE: "1",
 };
@@ -32,7 +32,7 @@ function fakeLaunch(fail = false) {
 }
 
 describe("links leave the app for the person's own browser", () => {
-  test("the browser gets the session's environment without Kiwi's desktop identity", () => {
+  test("the browser gets the session's environment without the app's desktop identity", () => {
     expect(browserEnv(KIWI_ENV)).toEqual({ PATH: "/usr/bin", HOME: "/home/a", DISPLAY: ":0", WAYLAND_DISPLAY: "wayland-0", XDG_CURRENT_DESKTOP: "GNOME" });
   });
 

@@ -47,7 +47,7 @@ export function loadStore(): void {
   store.relayUrl = normalizeRelay(store.relayUrl) ?? DEFAULT_RELAY;
 }
 
-const brokenError = () => new Error(`Kiwi can't read its saved keys (${storeBroken}), so it saves nothing over them. Unlock your keychain, then quit and reopen Kiwi. The file is ${storePath()}.`);
+const brokenError = () => new Error(`Channels can't read its saved keys (${storeBroken}), so it saves nothing over them. Unlock your keychain, then quit and reopen Channels. The file is ${storePath()}.`);
 
 function saveStore(): void {
   if (storeBroken) throw brokenError();
@@ -58,7 +58,7 @@ function saveStore(): void {
 
 export function warnIfBroken(): void {
   if (!storeBroken) return;
-  void dialog.showMessageBox({ type: "error", message: "Kiwi can't read its saved keys", detail: brokenError().message });
+  void dialog.showMessageBox({ type: "error", message: "Channels can't read its saved keys", detail: brokenError().message });
 }
 
 export const snapshot = (): StoreSnapshot => snapshotOf(store);

@@ -1,4 +1,4 @@
-# Kiwi desktop app (Electron shell)
+# Channels desktop app (Electron shell)
 
 The app half of 0.11: it holds the person key, every channel identity, and
 paired computers, and hosts `web/`'s build. Admin lives here; the CLI is for
@@ -32,7 +32,7 @@ window says so. Closing the window keeps the app in the tray (background auto-ap
 - `build/icon.svg` — the app icon. `bun desktop/scripts/icons.ts` (on a Mac) makes every
   size from it: `build/icon.icns`, `build/icons/NxN.png` for Linux, and `assets/icon.png`
   for the window. On Linux the window finds its icon through `desktopName` in
-  `package.json`: Wayland matches the window's app_id to `kiwi-desktop.desktop`.
+  `package.json`: Wayland matches the window's app_id to `channels-desktop.desktop`.
 
 ## Renderer relay URL
 
