@@ -1,0 +1,197 @@
+import type { Member as MemberRecord, Runs } from "../membership.ts";
+import type { Card, Color, Message, TaskState, Trust, Verdict } from "../protocol.ts";
+import type { Scope } from "../scopes.ts";
+
+export interface Member {
+  name: string;
+  kind?: "human" | "agent" | "computer";
+  display?: string;
+  sponsor?: { user: string; name: string; handle?: string };
+  pk: string;
+  role?: string;
+  about?: string;
+  color?: Color;
+  scopes: Scope[];
+  card?: Card & { at: number };
+  runs?: Runs;
+  owner: boolean;
+  joined: number;
+  active: boolean;
+  lastSeen: number;
+  messages: number;
+}
+
+export type Roster = {
+  name: string;
+  pk: string;
+  role?: string;
+  about?: string;
+  owner: boolean;
+  at: number;
+  active: boolean;
+  kind?: "human" | "agent" | "computer";
+  display?: string;
+  sponsor?: { user: string; name: string; handle?: string };
+  color?: Color;
+  scopes?: Scope[];
+  later?: { scopes: Scope[]; since: number };
+  laterRole?: { role: string | null; about?: string | null; since: number };
+  runs?: Runs;
+}[];
+
+export const toRoster = (m: MemberRecord): Roster[number] => ({
+  name: m.name,
+  pk: m.pk,
+  role: m.role,
+  about: m.about,
+  owner: m.owner,
+  at: m.at,
+  active: m.active,
+  kind: m.kind,
+  display: m.display,
+  sponsor: m.sponsor,
+  color: m.color,
+  ...(m.scopes ? { scopes: m.scopes } : {}),
+  ...(m.later ? { later: m.later } : {}),
+  ...(m.laterRole ? { laterRole: m.laterRole } : {}),
+  ...(m.runs ? { runs: m.runs } : {}),
+});
+
+interface TaskNote {
+  seq: number;
+  by: string;
+  ts: number;
+  text: string;
+}
+
+type RoundResult = { kind: "open" } | { kind: Verdict; by: string; seq: number; ts: number } | { kind: "withdrawn"; seq: number };
+
+export interface ReviewRound {
+  n: number;
+  at?: string;
+  by: string;
+  seq: number;
+  ts: number;
+  result: RoundResult;
+}
+
+export interface Task {
+  id: number;
+  title: string;
+  detail?: string;
+  state: TaskState;
+  owner?: string;
+  createdBy: string;
+  createdAt: number;
+  updatedAt: number;
+  notes: TaskNote[];
+  review?: string;
+  approvedBy?: string;
+  cancelled?: boolean;
+  workedBy: string[];
+  rounds: ReviewRound[];
+  source?: number;
+}
+
+export interface Reaction {
+  emoji: string;
+  seq: number;
+  at: number;
+}
+
+export interface Fact {
+  key: string;
+  value: string;
+  by: string;
+  ts: number;
+  seq: number;
+  expires?: number;
+}
+
+export type Place = { kind: "main" } | { kind: "task"; task: number } | { kind: "dm"; with: [string, string] };
+
+export interface PlaceSummary {
+  place: Place;
+  last: number;
+  count: number;
+  done?: boolean;
+}
+
+export interface ChannelState {
+  members: Map<string, Member>;
+  tasks: Map<number, Task>;
+  facts: Map<string, Fact>;
+  trust: Map<number, Trust>;
+  rejected: Map<number, string>;
+  scopeSets: Map<string, { seq: number; scopes: Scope[] }>;
+  roleSets: Map<string, { seq: number; role: string | null; about?: string | null }>;
+  openAsks: Message[];
+  threadOf: Map<number, number>;
+  threadPeople: Map<number, Set<string>>;
+  mode: { coordinatorOnly: boolean; strict: boolean };
+  coordinator: string | null;
+  direct: Set<number>;
+  rooms: Map<string, Room>;
+  roomOf: Map<number, string>;
+  placeOf: Map<number, Place>;
+  places: Map<string, PlaceSummary>;
+  charter: Charter | null;
+  hold: Hold | null;
+  reactions: Map<number, Map<string, Reaction>>;
+  head: number;
+}
+
+export interface Charter {
+  text: string;
+  by: string;
+  at: number;
+}
+
+export interface Hold {
+  note?: string;
+  by: string;
+  at: number;
+}
+
+export interface GuardFloor {
+  charter: { text: string | null; since: number } | null;
+  hold: { on: boolean; note?: string; since: number } | null;
+}
+
+export interface Room {
+  id: string;
+  name: string;
+  createdBy: string | null;
+  at: number;
+}
+
+export interface FoldBase {
+  n: number;
+  members: { name: string; role?: string; about?: string; color?: Color; card?: Card & { at: number }; lastSeen: number; messages: number }[];
+  coordinator: string | null;
+  mode: { coordinatorOnly: boolean; strict: boolean };
+  charter: Charter | null;
+  hold: Hold | null;
+  scopesByKey: [string, Scope[]][];
+  scopeSets: [string, { seq: number; scopes: Scope[] }][];
+  roleSets: [string, { seq: number; role: string | null; about?: string | null }][];
+  tasks: Task[];
+  facts: Fact[];
+  reactions: [number, [string, Reaction][]][];
+  reactSeqs: number[];
+  trust: [number, Trust][];
+  rejected: [number, string][];
+  asks: Message[];
+  answered: [number, string[]][];
+  threadOf: [number, number][];
+  threadPeople: [number, string[]][];
+  direct: number[];
+  rooms: Room[];
+  roomOf: [number, string][];
+  placeOf: [number, Place][];
+}
+
+export interface RoomsFloor {
+  list: { id: string; name: string }[];
+  since: number;
+}
