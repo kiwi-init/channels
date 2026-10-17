@@ -1,5 +1,5 @@
 import type { JoinRequest } from "@mc/membership.ts"
-import type { Message } from "@mc/protocol.ts"
+import { HANDOFF_DONE, HANDOFF_FAILED, type Message } from "@mc/protocol.ts"
 import { taskId, type Task } from "@mc/state.ts"
 import { askLabel } from "@web/lib/asks"
 import { excerpt, formatAgo } from "@web/lib/format"
@@ -99,37 +99,63 @@ function AskCard({
   onReply: (m: Message, text: string) => Promise<void>
   onJump: (seq: number) => void
 }) {
-  const [text, setText] = useState("")
+  const [draft, setDraft] = useState<string | null>(null)
   const [busy, run] = useBusy()
   const handoff = handoffOf(m)
+  const live = !!handoff && handoffOpen(handoff, now)
   const link = handoff ? safeUrl(handoff.url) : undefined
+  const choices = !handoff && m.choices?.length ? m.choices : []
+  const answer = (text: string) => run(() => onReply(m, text))
   return (
-    <Card title={`${askLabel(m, me)} from ${nameOf(m.from)}`} meta={formatAgo(m.ts, now)}>
+    <Card
+      title={`${handoff ? "Browser for you" : askLabel(m, me)} from ${nameOf(m.from)}`}
+      meta={`${formatAgo(m.ts, now)}${handoff ? ` · ${handoffLabel(handoff)} · ${live ? handoffLeft(handoff, now) : "link expired"}` : ""}`}
+    >
       <Text tone="ink2" accessibilityRole="button" onPress={() => onJump(m.seq)}>
-        {excerpt(m.body, 160)}
+        {excerpt(m.body, 220)}
       </Text>
-      {handoff && handoffOpen(handoff, now) && link ? (
+      {choices.length ? (
+        <View accessibilityLabel="Options" style={styles.options}>
+          {choices.map((choice) => (
+            <Button key={choice} title={choice} variant="secondary" size="sm" disabled={busy} accessibilityLabel={`Answer: ${choice}`} onPress={() => void answer(choice)} />
+          ))}
+        </View>
+      ) : null}
+      {handoff && live && link ? (
         <View style={styles.actions}>
           <Button title="Open browser" size="sm" onPress={() => void Linking.openURL(link)} />
-          <Text variant="meta" tone="ink3">{`${handoffLabel(handoff)} · ${handoffLeft(handoff, now)}`}</Text>
+          <Button title="Done" size="sm" variant="secondary" disabled={busy} onPress={() => void answer(HANDOFF_DONE)} />
+          <Button title="Couldn’t" size="sm" variant="ghost" disabled={busy} onPress={() => void answer(HANDOFF_FAILED)} />
         </View>
       ) : handoff ? (
         <Text variant="meta" tone="ink3">
           Link expired
         </Text>
       ) : null}
-      <TextField label={`Reply to ${nameOf(m.from)}`} value={text} onChangeText={setText} multiline />
-      <Button
-        title="Send reply"
-        size="sm"
-        disabled={!text.trim() || busy}
-        onPress={() =>
-          void run(async () => {
-            await onReply(m, text.trim())
-            setText("")
-          })
-        }
-      />
+      {draft === null ? (
+        <View style={styles.actions}>
+          <Button title={choices.length ? "Something else" : "Answer"} size="sm" variant={choices.length ? "ghost" : "secondary"} onPress={() => setDraft("")} />
+          <Button title="Show" size="sm" variant="ghost" onPress={() => onJump(m.seq)} />
+        </View>
+      ) : (
+        <>
+          <TextField label={`Reply to ${nameOf(m.from)}`} value={draft} onChangeText={setDraft} multiline autoFocus />
+          <View style={styles.actions}>
+            <Button
+              title="Send reply"
+              size="sm"
+              disabled={!draft.trim() || busy}
+              onPress={() =>
+                void run(async () => {
+                  await onReply(m, draft.trim())
+                  setDraft(null)
+                })
+              }
+            />
+            <Button title="Cancel" size="sm" variant="ghost" onPress={() => setDraft(null)} />
+          </View>
+        </>
+      )}
     </Card>
   )
 }
@@ -212,5 +238,6 @@ export function NeedsYou({
 const styles = StyleSheet.create({
   pad: { padding: 16, gap: 12 },
   card: { padding: 14, gap: 8, borderWidth: StyleSheet.hairlineWidth },
+  options: { gap: 6 },
   actions: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
 })

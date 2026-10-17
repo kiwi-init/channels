@@ -37,6 +37,11 @@ describe("TaskList", () => {
     expect(onOpen).toHaveBeenCalledWith(4)
   })
 
+  it("marks a task that waits on a person with Needs a decision", async () => {
+    await render(<TaskList tasks={[task(1, "doing"), task(2, "doing")]} nameOf={nameOf} now={NOW} waiting={new Set([2])} onOpen={() => {}} />)
+    expect(screen.getAllByLabelText("Needs a decision")).toHaveLength(1)
+  })
+
   it("says a cancelled task was cancelled, and an empty list is empty", async () => {
     await render(<TaskList tasks={[task(5, "done", { cancelled: true })]} nameOf={nameOf} now={NOW} onOpen={() => {}} />)
     expect(screen.getByText(/Cancelled/)).toBeTruthy()

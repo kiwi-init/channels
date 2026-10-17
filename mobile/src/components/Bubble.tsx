@@ -152,6 +152,15 @@ export const Bubble = memo(function Bubble({
             </Pressable>
           )}
 
+          {m.choices?.length && !m.handoff ? (
+            <View accessibilityLabel="Options" style={styles.choices}>
+              {m.choices.map((choice) => (
+                <Text key={choice} variant="stamp" tone="ink3">
+                  {`• ${choice}`}
+                </Text>
+              ))}
+            </View>
+          ) : null}
           {m.imgs?.length ? (
             <View style={[styles.images, { justifyContent: align }]}>
               {m.imgs.map((img, index) => (
@@ -208,6 +217,7 @@ const styles = StyleSheet.create({
   image: { width: 180, height: 180 },
   imageHolder: { width: 128, height: 96, alignItems: "center", justifyContent: "center" },
   reactions: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 2, paddingHorizontal: 8 },
+  choices: { paddingHorizontal: 12, marginBottom: 2, gap: 1 },
   thread: { paddingHorizontal: 12, paddingVertical: 6 },
   note: { paddingHorizontal: 12, marginTop: 2 },
   tail: { position: "absolute", bottom: 0, zIndex: -1, width: 28, height: 20 },

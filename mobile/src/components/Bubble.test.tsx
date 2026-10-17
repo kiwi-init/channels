@@ -109,4 +109,11 @@ describe("Bubble", () => {
     await fireEvent(screen.getByLabelText("Message"), "longPress")
     expect(onReply).toHaveBeenCalledWith(m)
   })
+
+  it("lists an ask-human decision's options in the bubble", async () => {
+    const m = { ...chat.find((c) => c.kind === "ask")!, esc: true as const, choices: ["Use A", "Use B"] }
+    await render(<Bubble {...base(m)} />)
+    expect(screen.getByText("• Use A")).toBeTruthy()
+    expect(screen.getByText("• Use B")).toBeTruthy()
+  })
 })

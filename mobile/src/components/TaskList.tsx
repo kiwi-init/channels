@@ -17,14 +17,26 @@ export function StateMark({ state }: { state: TaskState }) {
   )
 }
 
+function DecisionMark() {
+  const { colors } = useTheme()
+  return (
+    <View accessibilityLabel="Needs a decision" style={[styles.decision, { backgroundColor: colors.decideWash }]}>
+      <Text variant="meta" weight="semibold" tone="decide">
+        Needs a decision
+      </Text>
+    </View>
+  )
+}
+
 export interface TaskListProps {
   tasks: readonly Task[]
   nameOf: (name: string) => string
   now: number
+  waiting?: ReadonlySet<number>
   onOpen: (id: number) => void
 }
 
-export function TaskList({ tasks, nameOf, now, onOpen }: TaskListProps) {
+export function TaskList({ tasks, nameOf, now, waiting, onOpen }: TaskListProps) {
   const { colors } = useTheme()
   return (
     <FlatList
@@ -41,6 +53,7 @@ export function TaskList({ tasks, nameOf, now, onOpen }: TaskListProps) {
           <View style={[styles.body, { borderBottomColor: colors.line }]}>
             <View style={styles.text}>
               <Text tone={task.state === "done" ? "ink2" : "ink"}>{task.title}</Text>
+              {waiting?.has(task.id) ? <DecisionMark /> : null}
               <Text variant="meta" tone="ink3" numbers numberOfLines={1}>
                 {`${taskId(task.id)}${task.cancelled ? " · Cancelled" : ""}${task.notes.length ? ` · ${task.notes.length === 1 ? "1 note" : `${task.notes.length} notes`}` : ""} · ${formatAgo(task.updatedAt, now)}`}
               </Text>
@@ -63,4 +76,5 @@ const styles = StyleSheet.create({
   body: { flex: 1, flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, paddingRight: 16, borderBottomWidth: StyleSheet.hairlineWidth },
   text: { flex: 1, gap: 2 },
   owner: { maxWidth: 110 },
+  decision: { alignSelf: "flex-start", borderRadius: 999, paddingHorizontal: 8, marginTop: 2 },
 })
