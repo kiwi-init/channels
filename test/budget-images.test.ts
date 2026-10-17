@@ -60,11 +60,19 @@ async function until(pred: () => boolean | Promise<boolean>, label: string, ms =
 
 const cacheFile = (home: string, roomId: string) => join(home, "cache", `${roomId}.jsonl`);
 const cacheSize = (home: string, roomId: string) => (existsSync(cacheFile(home, roomId)) ? statSync(cacheFile(home, roomId)).size : 0);
+const parsedSeq = (line: string): number | undefined => {
+  try {
+    return (JSON.parse(line) as { seq: number }).seq;
+  } catch {
+    return undefined;
+  }
+};
+
 const cached = (home: string, roomId: string, seq: number) =>
   existsSync(cacheFile(home, roomId)) &&
   readFileSync(cacheFile(home, roomId), "utf8")
     .split("\n")
-    .some((l) => l.startsWith(`{`) && (JSON.parse(l) as { seq: number }).seq === seq);
+    .some((l) => l.startsWith(`{`) && parsedSeq(l) === seq);
 
 interface Run {
   traffic: Traffic;

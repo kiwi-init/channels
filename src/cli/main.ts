@@ -33,7 +33,7 @@ import { ago, cardLine, charterLines, describeEvent, holdLine, formatFact, forma
 import { canPost, describeScopes, presetOf, SCOPES, type Scope } from "../scopes.ts";
 import { fingerprint } from "../identity.ts";
 import reactionPack from "../../assets/reactions/index.json";
-import { CHAT_KINDS, CHOICE_MAX_LENGTH, CHOICES_MAX, CHOICES_MIN, COLORS, HANDOFF_DEFAULT_SECONDS, HANDOFF_MAX_SECONDS, HANDOFF_MAX_VENDOR, handoffUrl, ignored, wellFormedChoices, isGifReaction, isColor, type Kind, type Message, type TaskState } from "../protocol.ts";
+import { CHAT_KINDS, CHOICE_MAX_LENGTH, CHOICES_MAX, CHOICES_MIN, COLORS, HANDOFF_DEFAULT_SECONDS, HANDOFF_MAX_SECONDS, HANDOFF_MAX_VENDOR, handoffUrl, ignored, wellFormedChoices, isGifReaction, isColor, type InlineImage, type Kind, type Message, type TaskState } from "../protocol.ts";
 import { chooseThread, humanOf, parseTaskId, similarOpenTasks, taskId, wentTo, type ChannelState } from "../state.ts";
 import { VERSION } from "../version.ts";
 import { computerClaimFor } from "../machine.ts";
@@ -946,13 +946,16 @@ const commands: Record<string, Command> = {
       // Forged messages, and ones the owner doesn't allow, are left out everywhere (status counts them).
       const found = yield* s.message(seq, messages);
       const m = found && !ignored(state.trust.get(seq)) ? found : yield* die(`no message #${seq}`);
-      // Images land under the channel's own folder (closing it deletes them), or where asked.
-      const saved = m.imgs?.length ? saveImages(seq, yield* s.ch.fx.images(m.imgs), args[2] ?? joinPath(home(), "downloads", s.ch.roomId)) : [];
-      out(formatShown(m, messages, state, saved, s.me, !!opt.reveal && !!m.to?.includes(s.me)));
-      // The rest of its thread, when there's more of it than #N, what it answers and its replies.
       const root = state.threadOf.get(seq) ?? seq;
-      const near = new Set([seq, ...(m.re ?? []), ...messages.filter((x) => x.re?.includes(seq)).map((x) => x.seq)]);
-      const rest = messages.filter((x) => state.threadOf.get(x.seq) === root && !near.has(x.seq) && !ignored(state.trust.get(x.seq)));
+      const thread = yield* s.threadMessages(root, messages, state);
+      const known = [...messages, ...thread.filter((x) => !messages.some((y) => y.seq === x.seq))];
+      const fetched = m.imgs?.length
+        ? yield* Effect.forEach(m.imgs, (img) => s.ch.fx.images([img]).pipe(Effect.orElseSucceed((): InlineImage[] => [])), { concurrency: 4 }).pipe(Effect.map((lists) => lists.flat()))
+        : [];
+      const saved = fetched.length ? saveImages(seq, fetched, args[2] ?? joinPath(home(), "downloads", s.ch.roomId)) : [];
+      out(formatShown(m, known, state, saved, s.me, !!opt.reveal && !!m.to?.includes(s.me)));
+      const near = new Set([seq, ...(m.re ?? []), ...known.filter((x) => x.re?.includes(seq)).map((x) => x.seq)]);
+      const rest = thread.filter((x) => !near.has(x.seq) && !ignored(state.trust.get(x.seq)));
       if (rest.length) {
         out(`the rest of thread #${root}:`);
         for (const x of rest) out(`  ${render(x, state)}`);
