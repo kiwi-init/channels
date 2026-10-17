@@ -10,6 +10,7 @@ import { recentPrs } from "@mc/work.ts"
 import { secrets } from "@/lib/secrets"
 import { channelTitle, forgetChannel, loadMember, loadRecent, renameChannel, saveRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { howHere } from "@/lib/presence"
+import { foldTaskEvents, isTaskCard } from "@/lib/task-cards"
 import type { Gif } from "@/lib/gifs"
 import { lastPreview } from "@/lib/preview"
 import { markSeen, setOpenNews } from "@/lib/news"
@@ -35,6 +36,7 @@ import { NeedsYou } from "./needs-you"
 import { FLOAT_GAP, FLOAT_W, Overview } from "./side-panel"
 import { Notes, Tasks } from "./tasks"
 import { Annotator, InfoPanel, TaskDetails, TasksPanel, ThreadPanel } from "./lazy"
+import { LiveTaskCard } from "./live-task-card"
 
 /** Messages this close together from one sender read as one run. */
 const RUN_GAP = 5 * 60_000
@@ -447,16 +449,23 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     />
   )
   // A run of messages as rows: the main column's, and (anchored "k") the open task's in the panel.
-  const timeline = (list: Message[], anchor?: string) => {
+  const timeline = (all: Message[], anchor?: string) => {
+    const cards = !anchor && hereKey === "main"
+    const list = cards ? foldTaskEvents(all, state.tasks) : all
     const out: ReactNode[] = []
     for (let i = 0; i < list.length; i++) {
       const m = list[i]!
       const prev = list[i - 1]
       if (!prev || !sameDay(prev.ts, m.ts) || m.ts - prev.ts > STAMP_GAP) out.push(<TimeMark key={`s${m.seq}`} ts={m.ts} />)
+      if (cards && isTaskCard(m, state.tasks)) {
+        out.push(<LiveTaskCard key={`card${m.seq}`} id={m.seq} state={state} messages={messages} me={me} now={now} onOpen={openTask} />)
+        continue
+      }
       if (m.kind === "event") {
         const batch: Message[] = [m]
         let j = i + 1
-        while (j < list.length && list[j]!.kind === "event" && sameDay(m.ts, list[j]!.ts) && list[j]!.ts - list[j - 1]!.ts <= STAMP_GAP) batch.push(list[j++]!)
+        while (j < list.length && list[j]!.kind === "event" && !(cards && isTaskCard(list[j]!, state.tasks)) && sameDay(m.ts, list[j]!.ts) && list[j]!.ts - list[j - 1]!.ts <= STAMP_GAP)
+          batch.push(list[j++]!)
         i = j - 1
         const alone = batch.filter((ev) => standsAlone(ev, state, me))
         const rest = batch.filter((ev) => !standsAlone(ev, state, me))
