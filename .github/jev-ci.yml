@@ -28,7 +28,7 @@ version_only:
   files: ["package.json", "web/package.json", "desktop/package.json", "src/version.ts"]
   pattern: '^\s*("version"\s*:|export const VERSION\s*=)'
 
-summarize_files: ["bun.lock", "web/bun.lock", "desktop/bun.lock"]
+summarize_files: ["bun.lock"]
 
 # Above this many changed lines, or a single file above max_file_lines, Jev isn't asked: the jobs run.
 max_jev_lines: 800
@@ -39,7 +39,7 @@ jobs:
     jev: false
     name: repo / static
     inputs: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,css,py}", "web/index.html", ".github/workflows/**", ".github/actions/**"]
-    always: ["tsconfig.json", "tsconfig.worker.json", "package.json", "bun.lock", "web/package.json", "web/bun.lock", "web/tsconfig*.json", "web/vite.config.ts", "web/.oxlintrc.json", "web/.oxfmtrc.json", "desktop/package.json", "desktop/bun.lock", "desktop/tsconfig*.json", "knip.json", "scripts/ci/**"]
+    always: ["tsconfig.json", "tsconfig.worker.json", "package.json", "bun.lock", "web/package.json", "web/tsconfig*.json", "web/vite.config.ts", "web/.oxlintrc.json", "web/.oxfmtrc.json", "desktop/package.json", "desktop/tsconfig*.json", "knip.json", "scripts/ci/**"]
     description: >-
       The static checks, one after another, each run even when an earlier one failed.
       Types: tsc --noEmit over src/ and test/ (and the jev-ci planner test/ imports), again over
@@ -59,7 +59,7 @@ jobs:
   test-unit:
     name: test / unit
     inputs: ["src/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "site/install.ps1", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/action-pins.ts", "desktop/src/**", "desktop/build/entitlements.mac.plist"]
-    always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "web/bun.lock", "scripts/ci-tests.ts"]
+    always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts"]
     description: >-
       Runs the unit tests with bun test: every test/*.test.ts except the slow suites in
       scripts/ci-tests.ts's flows groups, plus the dashboard's tests in web/src (task-cards
@@ -115,7 +115,7 @@ jobs:
   build:
     name: build / bundles
     inputs: ["src/**", "web/**", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/smoke-cli.ts", "scripts/smoke-ui.ts", "scripts/web-bundle.ts", "test/owner.ts", "test/owner-cli.ts", "test/check.ts"]
-    always: ["package.json", "bun.lock", "web/package.json", "web/bun.lock", "web/vite.config.ts", "wrangler.jsonc", "scripts/smoke-ui.ts", "scripts/web-bundle.ts"]
+    always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "wrangler.jsonc", "scripts/smoke-ui.ts", "scripts/web-bundle.ts"]
     description: >-
       Builds the web dashboard for production (vite build in web/) and fails when the JS the
       first screen loads (the entry script plus every chunk it modulepreloads) is over
@@ -136,7 +136,7 @@ jobs:
   desktop:
     name: desktop / package
     inputs: ["desktop/**", "src/**", "web/src/**", "web/index.html", "scripts/build-cli.ts", "scripts/cli-bundle.ts"]
-    always: ["desktop/package.json", "desktop/bun.lock", "desktop/tsconfig*.json", "desktop/scripts/fuses.ts", "desktop/scripts/smoke.ts", "package.json", "bun.lock", "web/package.json", "web/bun.lock"]
+    always: ["desktop/package.json", "desktop/tsconfig*.json", "desktop/scripts/fuses.ts", "desktop/scripts/smoke.ts", "package.json", "bun.lock", "web/package.json"]
     description: >-
       Bundles the Electron shell's main, preload and channels (key process) scripts with bun
       build, then packages the Linux app with electron-builder --dir from desktop/package.json's
@@ -153,7 +153,7 @@ jobs:
   cli-macos:
     name: cli / macos
     inputs: ["src/**", "test/**", "site/install", "site/install.sh", "site/install.ps1", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "desktop/src/**"]
-    always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "web/bun.lock"]
+    always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json"]
     description: >-
       On a macOS runner, does what the release's cli job does: runs the whole bun test suite
       (every test/*.test.ts and web/src test, the agent flows included), compiles the kiwi CLI
@@ -172,7 +172,7 @@ jobs:
     push: false
     version_bumps: true
     inputs: []
-    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/bun.lock", "desktop/scripts/fuses.ts", "scripts/changelog.ts"]
+    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/scripts/fuses.ts", "scripts/changelog.ts"]
     description: >-
       Runs .github/workflows/release-build.yml, the build a tag's release.yml runs, with
       rehearsal: true and a read-only token, uploading nothing: the version and changelog checks

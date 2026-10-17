@@ -1,5 +1,5 @@
-import type { SendOptions } from "../../../src/client.ts"
-import { openRound, taskId, type Task } from "../../../src/state.ts"
+import type { SendOptions } from "@mc/client.ts"
+import { openRound, taskId, type Task } from "@mc/state.ts"
 
 export const ANYONE = "*"
 

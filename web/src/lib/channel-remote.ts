@@ -1,5 +1,5 @@
-import { ChannelGone, RelayError } from "../../../src/client.ts"
-import type { Message } from "../../../src/protocol.ts"
+import { ChannelGone, RelayError } from "@mc/client.ts"
+import type { Message } from "@mc/protocol.ts"
 
 import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, ChannelView, FollowEvent, FollowOptions, JoinCheck, KeysAsk, KeysPort, WireError } from "../../../desktop/src/bridge.ts"
 import { fromWire, toWire } from "../../../desktop/src/wire.ts"
