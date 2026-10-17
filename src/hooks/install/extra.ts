@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { kimiCodePid } from "../../ancestry.ts";
 import { loadConfig } from "../../config.ts";
-import { readJson, writeJson } from "../files.ts";
+import { isRecord, readJson, writeJson } from "../files.ts";
 import { EVENTS, hookCommand, isOurHook, isOurHookCommand } from "../self.ts";
 import { hooksInstalled, installHooks, uninstallHooks, withoutOurs, type Settings } from "./claude.ts";
 import { editKimiConfig, kimiConfigInstalled } from "./kimi-toml.ts";
@@ -95,7 +95,8 @@ type CursorFile = { version?: number; hooks?: Record<string, CursorHook[]> } & R
 
 function cursorHooks(list: unknown): CursorHook[] {
   if (!Array.isArray(list)) return [];
-  return list.filter((h) => !h || typeof h.command !== "string" || !isOurHookCommand(h.command));
+  const items: unknown[] = list;
+  return items.filter((h): h is CursorHook => !isRecord(h) || typeof h.command !== "string" || !isOurHookCommand(h.command));
 }
 
 function installCursorFile(path: string): void {

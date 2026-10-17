@@ -42,8 +42,33 @@ afterEach(() => {
   made.length = 0;
 });
 
-function read(path: string): any {
-  return JSON.parse(readFileSync(path, "utf8"));
+interface Hook {
+  command: string;
+  timeout?: number;
+  loop_limit?: number;
+}
+
+interface HookGroup {
+  matcher?: string;
+  hooks: Hook[];
+}
+
+interface GroupedHooks {
+  theme?: string;
+  hooks: { Stop: HookGroup[]; UserPromptSubmit?: HookGroup[]; SessionStart?: HookGroup[]; BeforeAgent: HookGroup[]; AfterAgent: HookGroup[]; PostToolUse: HookGroup[] };
+}
+
+interface CursorHooks {
+  version: number;
+  hooks: { stop: Hook[]; preToolUse: Hook[]; sessionStart?: Hook[] };
+}
+
+function read(path: string): GroupedHooks {
+  return JSON.parse(readFileSync(path, "utf8")) as GroupedHooks;
+}
+
+function readCursor(path: string): CursorHooks {
+  return JSON.parse(readFileSync(path, "utf8")) as CursorHooks;
 }
 
 function realHomeStamp(): string {
@@ -184,25 +209,25 @@ test("codex, gemini, cursor, and grok install, re-install once, and uninstall ke
   const before = gem.hooks.BeforeAgent.flatMap((e: { hooks: { command: string; timeout?: number }[] }) => e.hooks);
   expect(before.map((h: { command: string }) => h.command)).toContain("echo gemini-user");
   expect(before.filter((h: { command: string }) => h.command.endsWith(" hook prompt # kiwi"))).toHaveLength(1);
-  expect(before.find((h: { command: string }) => h.command.endsWith(" hook prompt # kiwi")).timeout).toBe(20_000);
-  expect(gem.hooks.AfterAgent[0].matcher).toBe("*");
-  expect(gem.hooks.AfterAgent[0].hooks[0].timeout).toBe(30_000);
+  expect(before.find((h: { command: string }) => h.command.endsWith(" hook prompt # kiwi"))?.timeout).toBe(20_000);
+  expect(gem.hooks.AfterAgent[0]?.matcher).toBe("*");
+  expect(gem.hooks.AfterAgent[0]?.hooks[0]?.timeout).toBe(30_000);
   expect(gem.hooks.UserPromptSubmit).toBeUndefined();
 
-  const cur = read(join(cursor, "hooks.json"));
+  const cur = readCursor(join(cursor, "hooks.json"));
   expect(cur.version).toBe(1);
   const curStop = cur.hooks.stop.map((h: { command: string; loop_limit?: number }) => h);
   expect(curStop.map((h: { command: string }) => h.command)).toContain("echo cursor-user # kiwi");
   expect(curStop.filter((h: { command: string }) => h.command.endsWith(" hook stop # kiwi"))).toHaveLength(1);
-  expect(curStop.find((h: { command: string }) => h.command.endsWith(" hook stop # kiwi")).loop_limit).toBe(5);
+  expect(curStop.find((h: { command: string }) => h.command.endsWith(" hook stop # kiwi"))?.loop_limit).toBe(5);
   expect(cur.hooks.preToolUse).toEqual([{ command: "echo tool" }]);
-  expect(cur.hooks.sessionStart.some((h: { command: string }) => h.command.endsWith(" hook session-start # kiwi"))).toBe(true);
+  expect(cur.hooks.sessionStart?.some((h: { command: string }) => h.command.endsWith(" hook session-start # kiwi"))).toBe(true);
 
   const claudeStop = read(join(claude, "settings.json")).hooks.Stop.flatMap((e: { hooks: { command: string }[] }) => e.hooks.map((h) => h.command));
   const grokStop = read(join(grok, "hooks", "kiwi.json")).hooks.Stop.flatMap((e: { hooks: { command: string }[] }) => e.hooks.map((h) => h.command));
   const ours = (list: string[]) => list.find((c) => c.endsWith(" hook stop # kiwi"));
   expect(ours(grokStop)).toBe(ours(claudeStop));
-  expect(read(join(grok, "hooks", "kiwi.json")).hooks.PostToolUse[0].hooks[0].command).toBe("echo grok-user");
+  expect(read(join(grok, "hooks", "kiwi.json")).hooks.PostToolUse[0]?.hooks[0]?.command).toBe("echo grok-user");
   expect(read(join(grok, "hooks", "kiwi.json")).hooks.UserPromptSubmit).toBeUndefined();
   expect(read(join(grok, "hooks", "kiwi.json")).hooks.SessionStart).toBeUndefined();
 
@@ -217,12 +242,12 @@ test("codex, gemini, cursor, and grok install, re-install once, and uninstall ke
   expect(gemLeft.theme).toBe("dark");
   expect(gemLeft.hooks.BeforeAgent.flatMap((e: { hooks: { command: string }[] }) => e.hooks.map((h) => h.command))).toEqual(["echo gemini-user"]);
   expect(gemLeft.hooks.AfterAgent).toBeUndefined();
-  const curLeft = read(join(cursor, "hooks.json"));
+  const curLeft = readCursor(join(cursor, "hooks.json"));
   expect(curLeft.version).toBe(1);
   expect(curLeft.hooks.stop).toEqual([{ command: "echo cursor-user # kiwi" }]);
   expect(curLeft.hooks.preToolUse).toEqual([{ command: "echo tool" }]);
   expect(curLeft.hooks.sessionStart).toBeUndefined();
-  expect(read(join(grok, "hooks", "kiwi.json")).hooks.PostToolUse[0].hooks[0].command).toBe("echo grok-user");
+  expect(read(join(grok, "hooks", "kiwi.json")).hooks.PostToolUse[0]?.hooks[0]?.command).toBe("echo grok-user");
   expect(read(join(grok, "hooks", "kiwi.json")).hooks.Stop).toBeUndefined();
   expect(extraInstalled("codex")).toBe(false);
   expect(extraInstalled("grok")).toBe(false);
