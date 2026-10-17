@@ -19,8 +19,7 @@ import { BLOB_ID_RE, type Message } from "./protocol.ts";
 import type { FoldBase } from "./state.ts";
 import type { Signed, SigningBudget } from "./sas.ts";
 
-/** Public relay used when neither --relay nor KIWI_RELAY is given. */
-export const DEFAULT_RELAY = "https://channels.kiwiinit.com";
+export { DEFAULT_RELAY } from "./relay-url.ts";
 
 export interface ChannelConfig extends ChannelAccess {
   relay: string;

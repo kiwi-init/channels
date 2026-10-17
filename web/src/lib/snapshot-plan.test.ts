@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { SNAPSHOT_EVERY } from "../../../src/protocol.ts"
+import { SNAPSHOT_EVERY } from "@mc/protocol.ts"
 import { nextSnapshotTry } from "./snapshot-plan"
 
 describe("when the owner's app next tries a snapshot", () => {

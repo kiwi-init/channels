@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { PROTOCOL_VERSION, type Message } from "../../../src/protocol.ts"
+import { PROTOCOL_VERSION, type Message } from "@mc/protocol.ts"
 
 import { lastPreview } from "./preview"
 
