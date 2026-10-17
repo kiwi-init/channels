@@ -4,8 +4,8 @@ import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Channel } from "../src/client.ts";
-import { generateIdentity } from "../src/identity.ts";
+import { Channel } from "@kiwi/core/client.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
 
 setDefaultTimeout(30_000);

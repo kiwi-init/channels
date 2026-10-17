@@ -2,10 +2,10 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Channel } from "../src/client.ts";
-import { fromB64url, MAX_UNPACKED, newChannelKey, newRoomId, open, PACK_FROM, b64url } from "../src/crypto.ts";
-import { generateIdentity, sign } from "../src/identity.ts";
-import { PROTOCOL_VERSION, type Event } from "../src/protocol.ts";
+import type { Channel } from "@kiwi/core/client.ts";
+import { fromB64url, MAX_UNPACKED, newChannelKey, newRoomId, open, PACK_FROM, b64url } from "@kiwi/core/crypto.ts";
+import { generateIdentity, sign } from "@kiwi/core/identity.ts";
+import { PROTOCOL_VERSION, type Event } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { joinAgent, pairComputer, setupChannel, type OwnerSetup } from "./owner.ts";
 

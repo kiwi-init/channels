@@ -1,9 +1,9 @@
 import * as Effect from "effect/Effect";
 import type { AgentSession, Delivery } from "../agent.ts";
 import { loadImages } from "../attach.ts";
-import { formatMessage } from "../format.ts";
-import type { Message } from "../protocol.ts";
-import { parseTaskId, type ChannelState } from "../state.ts";
+import { formatMessage } from "@kiwi/core/format.ts";
+import type { Message } from "@kiwi/core/protocol.ts";
+import { parseTaskId, type ChannelState } from "@kiwi/core/state.ts";
 import { args, opt } from "./args.ts";
 import { acting, die, Quit } from "./context.ts";
 

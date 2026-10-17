@@ -2,9 +2,9 @@
 // main.ts and preload.ts; renderer-neutral on purpose (no electron/node imports),
 // so web/ can type against it without touching this process.
 
-import type { CachedRow } from "../../src/cache-row.ts";
-import type { Channel, OpenKind, PresenceFields } from "../../src/client.ts";
-import type { Message, Presence, ReadMark } from "../../src/protocol.ts";
+import type { CachedRow } from "@kiwi/core/cache-row.ts";
+import type { Channel, OpenKind, PresenceFields } from "@kiwi/core/client.ts";
+import type { Message, Presence, ReadMark } from "@kiwi/core/protocol.ts";
 import type { Wire } from "./wire.ts";
 
 /** The person's own key. Same JSON shape as Identity in src/identity.ts. */

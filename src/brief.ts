@@ -3,9 +3,9 @@
 // ask, how messages reach it, and where the rest is. Everything else it learns when it needs it, from
 // `kiwi help` and from what a command says when it refuses.
 
-import { mayDo } from "./format.ts";
-import { inlineText } from "./membership.ts";
-import { canPost, presetOf, type Scope } from "./scopes.ts";
+import { mayDo } from "@kiwi/core/format.ts";
+import { inlineText } from "@kiwi/core/membership.ts";
+import { canPost, presetOf, type Scope } from "@kiwi/core/scopes.ts";
 
 /** The commands the brief names, as `mc` (the command this agent types) plus each one. */
 export const COMMANDS = {

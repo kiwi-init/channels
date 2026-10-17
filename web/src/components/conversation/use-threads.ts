@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react"
 
-import { ignored, type Color, type Message } from "@mc/protocol.ts"
-import { colorOf, type ChannelState } from "@mc/state.ts"
+import { ignored, type Color, type Message } from "@kiwi/core/protocol.ts"
+import { colorOf, type ChannelState } from "@kiwi/core/state.ts"
 import { MAIN, placeKey } from "@/lib/threads"
 import { isAgent, type ThreadSummary } from "../message"
 

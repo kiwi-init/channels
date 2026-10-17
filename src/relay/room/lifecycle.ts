@@ -1,7 +1,7 @@
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
-import { encodeJoinCode, ownerFingerprint } from "../../crypto.ts";
-import { verify } from "../../identity.ts";
+import { encodeJoinCode, ownerFingerprint } from "@kiwi/core/crypto.ts";
+import { verify } from "@kiwi/core/identity.ts";
 import { BadRequest, Conflict, TooLarge, TooMany, Unauthorized, type ChannelGone } from "../failures.ts";
 import { Policy } from "../policy.ts";
 import { fits, SealedIcon, SealedSnapshot } from "../schema.ts";

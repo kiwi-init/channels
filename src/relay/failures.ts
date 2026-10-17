@@ -6,7 +6,7 @@
 // The texts are API (test/error-texts.test.ts); so is the tag on the wire.
 
 import * as Schema from "effect/Schema";
-import type { ErrorTag } from "../errors.ts";
+import type { ErrorTag } from "@kiwi/core/errors.ts";
 
 const text = { message: Schema.String };
 

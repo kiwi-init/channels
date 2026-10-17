@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test"
 
-import { encodeJoinCode, newRoomId } from "@mc/crypto.ts"
-import { generateIdentity } from "@mc/identity.ts"
-import { checkPerson } from "@mc/person.ts"
+import { encodeJoinCode, newRoomId } from "@kiwi/core/crypto.ts"
+import { generateIdentity } from "@kiwi/core/identity.ts"
+import { checkPerson } from "@kiwi/core/person.ts"
 
 import { personClaimFor } from "./person-claim"
 

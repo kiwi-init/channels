@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, updateConfig, wipeChannel } from "../src/config.ts";
-import { freeAgentName } from "../src/membership.ts";
+import { freeAgentName } from "@kiwi/core/membership.ts";
 import { baseName, bindDirectory, bindingFor, canonicalHarness, here, sameHarness, seatsAt, seatsFor, seatsHeldAnywhere } from "../src/seats.ts";
 
 let home = "";

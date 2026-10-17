@@ -1,6 +1,6 @@
 import { useEffect } from "react"
 
-import { TOO_MANY_REQUESTS } from "@mc/sas.ts"
+import { TOO_MANY_REQUESTS } from "@kiwi/core/sas.ts"
 import { formatAgo } from "@/lib/format"
 import { AgentFacts } from "../agent-facts"
 import { Button, Monogram } from "../kit"

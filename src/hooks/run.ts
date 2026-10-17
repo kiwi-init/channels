@@ -1,7 +1,7 @@
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import { ChannelGone } from "../client.ts";
+import { ChannelGone } from "@kiwi/core/client.ts";
 import { Keystore } from "../config.ts";
 import { here, kimiHookHere, sameSeat, seatsHeldAnywhere, type Here } from "../seats.ts";
 import { answer, hookOutput, kimiReason, tellKimi, type HookInput } from "./answer.ts";

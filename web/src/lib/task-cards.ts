@@ -1,5 +1,5 @@
-import type { Message } from "@mc/protocol.ts"
-import type { Task } from "@mc/state.ts"
+import type { Message } from "@kiwi/core/protocol.ts"
+import type { Task } from "@kiwi/core/state.ts"
 
 type Tasks = ReadonlyMap<number, Pick<Task, "state">>
 

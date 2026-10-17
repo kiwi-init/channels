@@ -1,8 +1,8 @@
 import { join } from "node:path";
-import type { Info, MemberRow } from "../client.ts";
+import type { Info, MemberRow } from "@kiwi/core/client.ts";
 import { home } from "../config.ts";
-import type { Reach } from "../protocol.ts";
-import type { WakeCommand, WakePath } from "../wake.ts";
+import type { Reach } from "@kiwi/core/protocol.ts";
+import type { WakeCommand, WakePath } from "@kiwi/core/wake.ts";
 import type { PairedPerson } from "./pair.ts";
 
 export function daemonSock(dir = home()): string {

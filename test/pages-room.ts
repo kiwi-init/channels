@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { join } from "node:path";
-import { Channel } from "../src/client.ts";
-import { generateIdentity, type Identity } from "../src/identity.ts";
+import { Channel } from "@kiwi/core/client.ts";
+import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 
 export interface PagedRoom {
   roomId: string;

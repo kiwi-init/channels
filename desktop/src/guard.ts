@@ -5,9 +5,9 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import { decodeJoinCode } from "../../src/crypto.ts";
-import type { Identity } from "../../src/identity.ts";
-import { provePerson, type PersonClaim } from "../../src/person.ts";
+import { decodeJoinCode } from "@kiwi/core/crypto.ts";
+import type { Identity } from "@kiwi/core/identity.ts";
+import { provePerson, type PersonClaim } from "@kiwi/core/person.ts";
 import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, PublicPerson, StoreSnapshot } from "./bridge.ts";
 import { publicChannel } from "./seats.ts";
 import { voiceViewOf, type VoiceStore } from "./voice.ts";

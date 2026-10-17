@@ -7,9 +7,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadPairedMachine, pairComputer, PairError } from "../src/daemon.ts";
-import { generateIdentity } from "../src/identity.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
 import { loadMachine } from "../src/machine.ts";
-import { answerPair, newSecret, openMailbox, pairCode, readPairAsk } from "../src/mailbox.ts";
+import { answerPair, newSecret, openMailbox, pairCode, readPairAsk } from "@kiwi/core/mailbox.ts";
 import { startRelay } from "../src/relay/bun.ts";
 
 setDefaultTimeout(30_000);

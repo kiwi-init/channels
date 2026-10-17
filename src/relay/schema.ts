@@ -4,8 +4,8 @@
 // (the texts are API; see test/error-texts.test.ts).
 
 import * as Schema from "effect/Schema";
-import { MAX_SNAPSHOT_LENGTH } from "../protocol.ts";
-import { NONCE_RE } from "../sas.ts";
+import { MAX_SNAPSHOT_LENGTH } from "@kiwi/core/protocol.ts";
+import { NONCE_RE } from "@kiwi/core/sas.ts";
 
 /** A public key (Ed25519 or X25519): 32 bytes, base64url without padding. */
 const Key = Schema.String.check(Schema.isPattern(/^[A-Za-z0-9_-]{43}$/));

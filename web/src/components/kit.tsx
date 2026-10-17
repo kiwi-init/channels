@@ -1,7 +1,7 @@
 import { Dialog } from "@base-ui/react/dialog"
 import { Component, useSyncExternalStore, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type Ref } from "react"
 
-import type { Color } from "@mc/protocol.ts"
+import type { Color } from "@kiwi/core/protocol.ts"
 import { PALETTE } from "@/lib/characters"
 import { initials } from "@/lib/format"
 import { noteSignInGone } from "@/lib/session"

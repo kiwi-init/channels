@@ -1,8 +1,8 @@
 import * as Effect from "effect/Effect";
-import { TASK_STATES, ignored, type TaskState, type Verdict } from "../protocol.ts";
-import { omit } from "../omit.ts";
-import { Rejected } from "../refusals.ts";
-import { isPerson, openRound, revisedOut, taskId, type ChannelState, type ReviewRound, type Task } from "../state.ts";
+import { TASK_STATES, ignored, type TaskState, type Verdict } from "@kiwi/core/protocol.ts";
+import { omit } from "@kiwi/core/omit.ts";
+import { Rejected } from "@kiwi/core/refusals.ts";
+import { isPerson, openRound, revisedOut, taskId, type ChannelState, type ReviewRound, type Task } from "@kiwi/core/state.ts";
 import { SessionMessaging } from "./messaging.ts";
 import { oneLook } from "./shared.ts";
 

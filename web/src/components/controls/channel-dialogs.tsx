@@ -1,7 +1,7 @@
 import { Dialog } from "@base-ui/react/dialog"
 import { useState } from "react"
 
-import { MAX_CHARTER } from "@mc/protocol.ts"
+import { MAX_CHARTER } from "@kiwi/core/protocol.ts"
 import { Button, Modal, TextField, errorText, toast } from "../kit"
 
 export function CharterDialog({ text, onClose, onSave }: { text: string; onClose: () => void; onSave?: (text: string | null) => Promise<void> }) {

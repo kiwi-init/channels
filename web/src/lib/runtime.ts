@@ -1,4 +1,4 @@
-import { Relay, fetchRelay, settle } from "@mc/client.ts"
+import { Relay, fetchRelay, settle } from "@kiwi/core/client.ts"
 import * as Effect from "effect/Effect"
 import * as Fiber from "effect/Fiber"
 import * as Layer from "effect/Layer"

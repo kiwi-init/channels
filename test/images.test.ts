@@ -5,12 +5,12 @@ import { existsSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadImages } from "../src/attach.ts";
-import { signRequest } from "../src/auth.ts";
-import { Channel, keepBlobsIn } from "../src/client.ts";
+import { signRequest } from "@kiwi/core/auth.ts";
+import { Channel, keepBlobsIn } from "@kiwi/core/client.ts";
 import { fileBlobs } from "../src/config.ts";
-import { seal } from "../src/crypto.ts";
-import { generateIdentity, sign, type Identity } from "../src/identity.ts";
-import { MAX_BLOB_BYTES, PROTOCOL_VERSION, type ImageAttachment } from "../src/protocol.ts";
+import { seal } from "@kiwi/core/crypto.ts";
+import { generateIdentity, sign, type Identity } from "@kiwi/core/identity.ts";
+import { MAX_BLOB_BYTES, PROTOCOL_VERSION, type ImageAttachment } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { incoming, readCapped } from "../src/relay/http.ts";
 import { checked } from "./check.ts";
@@ -37,7 +37,7 @@ beforeAll(async () => {
   const ask = await Channel.requestJoin(relay, made.code, member, { name: "win" });
   await ownerCh.approve((await checked(ownerCh, relay, made.code, [{ id: member, requestId: ask.requestId }]))[0]!);
   const st = await Channel.joinStatus(relay, made.code, member, ask.requestId);
-  memberCh = new Channel((st as { access: import("../src/crypto.ts").ChannelAccess }).access, relay, member);
+  memberCh = new Channel((st as { access: import("@kiwi/core/crypto.ts").ChannelAccess }).access, relay, member);
 });
 afterAll(() => {
   server.stop(true);

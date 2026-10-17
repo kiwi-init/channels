@@ -1,7 +1,7 @@
 // Reactions: each member's one emoji on a message (the react event). Under a bubble they read as a few
 // chips, one per emoji, oldest first, with who reacted on hover.
 
-import type { ChannelState } from "@mc/state.ts"
+import type { ChannelState } from "@kiwi/core/state.ts"
 
 /** One emoji on a message and who put it there. */
 export interface Chip {

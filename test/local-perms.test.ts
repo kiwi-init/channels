@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { saveImages } from "../src/attach.ts";
 import { home, writeCursor, writePrivate } from "../src/config.ts";
 import { installHooks, uninstallHooks } from "../src/hooks.ts";
-import type { InlineImage } from "../src/protocol.ts";
+import type { InlineImage } from "@kiwi/core/protocol.ts";
 
 const prev = { KIWI_HOME: process.env.KIWI_HOME, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR };
 const trash: string[] = [];

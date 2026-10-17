@@ -1,8 +1,8 @@
 import { ArrowDown01Icon, GitPullRequestIcon } from "@hugeicons/core-free-icons"
 import { useState, type ReactNode } from "react"
 
-import { taskId, tasksAwaitingPeople, type ChannelState, type Task } from "@mc/state.ts"
-import type { RecentPr } from "@mc/work.ts"
+import { taskId, tasksAwaitingPeople, type ChannelState, type Task } from "@kiwi/core/state.ts"
+import type { RecentPr } from "@kiwi/core/work.ts"
 import { formatAgo, formatFull } from "@/lib/format"
 import { remember, remembered } from "@/lib/side"
 import { cx } from "@/lib/utils"

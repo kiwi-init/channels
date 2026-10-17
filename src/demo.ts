@@ -12,7 +12,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Agent, AgentSession } from "./agent.ts";
-import { Channel, eachLive, reason } from "./client.ts";
+import { Channel, eachLive, reason } from "@kiwi/core/client.ts";
 
 export interface DemoOptions {
   /** Pause between beats, in ms. */
@@ -56,8 +56,8 @@ const play = Effect.fn("Demo.run")(function* (opts: DemoOptions) {
   const { relay } = yield* sandbox(opts.web);
   const { openSession } = yield* Effect.promise(() => import("./agent.ts"));
   const { loadIdentity, saveConfig } = yield* Effect.promise(() => import("./config.ts"));
-  const { b64url, newRoomId } = yield* Effect.promise(() => import("./crypto.ts"));
-  const { formatMessage, formatStatus, formatTasks } = yield* Effect.promise(() => import("./format.ts"));
+  const { b64url, newRoomId } = yield* Effect.promise(() => import("@kiwi/core/crypto.ts"));
+  const { formatMessage, formatStatus, formatTasks } = yield* Effect.promise(() => import("@kiwi/core/format.ts"));
 
   const names = ["lead", "mac", "win", "ci"] as const;
   const roomId = newRoomId();

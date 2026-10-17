@@ -7,9 +7,9 @@ import { Database } from "bun:sqlite";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Channel, ownerStatement } from "../src/client.ts";
-import { seal, type ChannelAccess } from "../src/crypto.ts";
-import { generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
+import { Channel, ownerStatement } from "@kiwi/core/client.ts";
+import { seal, type ChannelAccess } from "@kiwi/core/crypto.ts";
+import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { checked } from "./check.ts";
 

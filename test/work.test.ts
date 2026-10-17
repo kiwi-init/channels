@@ -2,10 +2,10 @@
 // including what strict coordinator-only mode keeps from people.
 
 import { beforeAll, describe, expect, test } from "bun:test";
-import { generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
-import type { Event, Kind, Message } from "../src/protocol.ts";
-import { fold, type Roster } from "../src/state.ts";
-import { agentRows, needsPerson, prLinks, prsIn, recentPrs, taskFeed, taskPrs } from "../src/work.ts";
+import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
+import type { Event, Kind, Message } from "@kiwi/core/protocol.ts";
+import { fold, type Roster } from "@kiwi/core/state.ts";
+import { agentRows, needsPerson, prLinks, prsIn, recentPrs, taskFeed, taskPrs } from "@kiwi/core/work.ts";
 
 let seq = 0;
 const T0 = 1_700_000_000_000;

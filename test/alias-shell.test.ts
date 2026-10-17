@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig } from "../src/config.ts";
 import { mcFor } from "../src/hooks.ts";
-import { asOption, channelOption } from "../src/wake.ts";
+import { asOption, channelOption } from "@kiwi/core/wake.ts";
 
 const home = mkdtempSync(join(tmpdir(), "kiwi-alias-home-"));
 const dir = mkdtempSync(join(tmpdir(), "kiwi-alias-dir-"));

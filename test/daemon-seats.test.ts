@@ -4,13 +4,13 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import * as Effect from "effect/Effect";
 import { AgentSession, runAgent } from "../src/agent.ts";
-import { Channel } from "../src/client.ts";
+import { Channel } from "@kiwi/core/client.ts";
 import { forgetIdentity, identitiesIn, loadConfig, saveConfig, saveIdentity, type SeatRecord } from "../src/config.ts";
 import { activityEnv, reachOf, daemonHello, daemonListening, daemonSock, listenDaemon, reportRead, startDaemon, stopDaemon, type Daemon } from "../src/daemon.ts";
-import { presenceAnswers, presenceWords } from "../src/format.ts";
-import { generateIdentity, type Identity } from "../src/identity.ts";
-import { omit } from "../src/omit.ts";
-import type { Presence } from "../src/protocol.ts";
+import { presenceAnswers, presenceWords } from "@kiwi/core/format.ts";
+import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
+import { omit } from "@kiwi/core/omit.ts";
+import type { Presence } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { checked } from "./check.ts";
 

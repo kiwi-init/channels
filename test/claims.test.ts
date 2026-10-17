@@ -6,9 +6,9 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Channel } from "../src/client.ts";
-import { generateIdentity } from "../src/identity.ts";
-import { claimComputer, provePerson } from "../src/person.ts";
+import { Channel } from "@kiwi/core/client.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
+import { claimComputer, provePerson } from "@kiwi/core/person.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { memoryBudget } from "./check.ts";
 import { joinAgent, joinPerson, pairComputer, setupChannel, type OwnerSetup } from "./owner.ts";

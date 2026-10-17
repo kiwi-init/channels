@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
 
-import { nameKey } from "@mc/membership.ts"
-import type { Event } from "@mc/protocol.ts"
-import { SCOPES, type Scope } from "@mc/scopes.ts"
-import { COORDINATOR, firstAgent, isPerson } from "@mc/state.ts"
+import { nameKey } from "@kiwi/core/membership.ts"
+import type { Event } from "@kiwi/core/protocol.ts"
+import { SCOPES, type Scope } from "@kiwi/core/scopes.ts"
+import { COORDINATOR, firstAgent, isPerson } from "@kiwi/core/state.ts"
 import { noteAgentWorked } from "@/lib/channel"
 import { Modal, errorText, toast } from "../kit"
 import { defaultScopes } from "../scopes"

@@ -1,8 +1,8 @@
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
-import { describeEvent, parseDuration } from "../../format.ts";
-import type { Message } from "../../protocol.ts";
-import type { ChannelState } from "../../state.ts";
+import { describeEvent, parseDuration } from "@kiwi/core/format.ts";
+import type { Message } from "@kiwi/core/protocol.ts";
+import type { ChannelState } from "@kiwi/core/state.ts";
 import { mcFor } from "../../hooks.ts";
 import { detectCard } from "../../card.ts";
 import { args, opt } from "../args.ts";

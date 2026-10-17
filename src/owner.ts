@@ -4,12 +4,12 @@
 
 import * as Effect from "effect/Effect";
 import { AgentSession } from "./agent.ts";
-import { Channel, keepAnswersIn, keepRecordsIn, type Relay } from "./client.ts";
+import { Channel, keepAnswersIn, keepRecordsIn, type Relay } from "@kiwi/core/client.ts";
 import { Keystore, type ChannelConfig } from "./config.ts";
-import { Rejected } from "./refusals.ts";
-import { describeScopes, wireScopes, type Scope } from "./scopes.ts";
-import { GENERAL_ROOM, MAX_CHARTER, SNAPSHOT_EVERY, type Event } from "./protocol.ts";
-import { COORDINATOR, firstAgent, fold, newRoomId, type FoldBase } from "./state.ts";
+import { Rejected } from "@kiwi/core/refusals.ts";
+import { describeScopes, wireScopes, type Scope } from "@kiwi/core/scopes.ts";
+import { GENERAL_ROOM, MAX_CHARTER, SNAPSHOT_EVERY, type Event } from "@kiwi/core/protocol.ts";
+import { COORDINATOR, firstAgent, fold, newRoomId, type FoldBase } from "@kiwi/core/state.ts";
 
 class OwnerSession extends AgentSession {
   private snapshotAt: number | null = null;

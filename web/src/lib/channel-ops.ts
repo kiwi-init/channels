@@ -1,5 +1,5 @@
-import type { CachedRow } from "@mc/cache-row.ts"
-import type { PresenceFields } from "@mc/client.ts"
+import type { CachedRow } from "@kiwi/core/cache-row.ts"
+import type { PresenceFields } from "@kiwi/core/client.ts"
 
 import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, FollowEvent } from "../../../desktop/src/bridge.ts"
 import { localOps } from "./channel-local"

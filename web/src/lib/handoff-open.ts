@@ -1,4 +1,4 @@
-import type { Handoff } from "@mc/protocol.ts"
+import type { Handoff } from "@kiwi/core/protocol.ts"
 import { handoffOpen } from "./handoff"
 import { bridge } from "./secrets"
 

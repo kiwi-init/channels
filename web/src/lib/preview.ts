@@ -1,4 +1,4 @@
-import { ignored, type Message, type Trust } from "@mc/protocol.ts"
+import { ignored, type Message, type Trust } from "@kiwi/core/protocol.ts"
 
 /**
  * The last thing said that this viewer actually sees: not events, not a note

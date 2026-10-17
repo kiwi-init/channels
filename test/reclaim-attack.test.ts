@@ -6,11 +6,11 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Channel, RelayError } from "../src/client.ts";
-import { generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
-import type { Message } from "../src/protocol.ts";
+import { Channel, RelayError } from "@kiwi/core/client.ts";
+import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
+import type { Message } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { fold } from "../src/state.ts";
+import { fold } from "@kiwi/core/state.ts";
 
 setDefaultTimeout(60_000);
 

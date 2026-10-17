@@ -1,8 +1,8 @@
 import * as Effect from "effect/Effect";
 import { openSession } from "../../agent.ts";
-import { cardLine, charterLines, holdLine, modeLine } from "../../format.ts";
-import { COLORS, isColor } from "../../protocol.ts";
-import { humanOf } from "../../state.ts";
+import { cardLine, charterLines, holdLine, modeLine } from "@kiwi/core/format.ts";
+import { COLORS, isColor } from "@kiwi/core/protocol.ts";
+import { humanOf } from "@kiwi/core/state.ts";
 import { agentPrompt } from "../brief.ts";
 import { detectCard } from "../../card.ts";
 import { args, opt } from "../args.ts";

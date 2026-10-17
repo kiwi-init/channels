@@ -1,7 +1,7 @@
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
-import { blobId } from "../../crypto.ts";
-import { MAX_BLOB_BYTES, MAX_CT_LENGTH, ROOM_RETENTION, type Envelope, type ReadMark } from "../../protocol.ts";
+import { blobId } from "@kiwi/core/crypto.ts";
+import { MAX_BLOB_BYTES, MAX_CT_LENGTH, ROOM_RETENTION, type Envelope, type ReadMark } from "@kiwi/core/protocol.ts";
 import { BadRequest, Conflict, ReadOnly, TooLarge, TooMany } from "../failures.ts";
 import { Policy } from "../policy.ts";
 import { fits, StoredEnvelope } from "../schema.ts";

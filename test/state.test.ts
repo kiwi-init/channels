@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { canonical, generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
-import type { Event, Kind, Message } from "../src/protocol.ts";
-import { fold as foldWith, parseTaskId, type Roster } from "../src/state.ts";
+import { canonical, generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
+import type { Event, Kind, Message } from "@kiwi/core/protocol.ts";
+import { fold as foldWith, parseTaskId, type Roster } from "@kiwi/core/state.ts";
 
 /** Everyone a test identity was generated for is a member, unless dropped. */
 const roster: Roster = [];
@@ -204,7 +204,7 @@ describe("roles", () => {
     expect(s.members.get("pixel")).toMatchObject({ role: "reviewer", about: "reads every PR" });
     expect(s.rejected.has(refuse.seq)).toBe(false);
     // A hello names a role only when it's the one held: never "joined as owner" from someone who isn't.
-    const { describeEvent } = await import("../src/format.ts");
+    const { describeEvent } = await import("@kiwi/core/format.ts");
     const grab = await msg(pixel, "pixel", { ev: { op: "hello", role: "owner" } });
     const st = foldWith([ask, self, set, refuse, grab], r);
     expect(describeEvent(grab, st)).toBe("joined");

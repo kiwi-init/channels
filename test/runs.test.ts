@@ -5,9 +5,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { detectModel, detectRuns } from "../src/card.ts";
-import { newChannelKey } from "../src/crypto.ts";
-import { generateIdentity, sign } from "../src/identity.ts";
-import { makeRecord, openRecord, readRecord, readRuns, runsLine, sealRecord } from "../src/membership.ts";
+import { newChannelKey } from "@kiwi/core/crypto.ts";
+import { generateIdentity, sign } from "@kiwi/core/identity.ts";
+import { makeRecord, openRecord, readRecord, readRuns, runsLine, sealRecord } from "@kiwi/core/membership.ts";
 
 const made: string[] = [];
 const scratch = (tag: string) => {

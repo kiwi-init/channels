@@ -5,7 +5,7 @@ import { DEFAULT_RELAY, Keystore, type ChannelConfig } from "../config.ts";
 import { here, seatsNear } from "../seats.ts";
 import { ensureDaemon, reportRead } from "../daemon.ts";
 import { seatsFor } from "../hooks.ts";
-import { BadName } from "../refusals.ts";
+import { BadName } from "@kiwi/core/refusals.ts";
 import { opt } from "./args.ts";
 
 export class Quit extends Data.TaggedError("Quit")<{ readonly message: string; readonly code: number }> {}

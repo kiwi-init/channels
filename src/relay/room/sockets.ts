@@ -1,6 +1,6 @@
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
-import { MAX_EPH_LENGTH, MORE_REFUSED, type ClientFrame, type Envelope, type ServerFrame } from "../../protocol.ts";
+import { MAX_EPH_LENGTH, MORE_REFUSED, type ClientFrame, type Envelope, type ServerFrame } from "@kiwi/core/protocol.ts";
 import { isRefusal } from "../failures.ts";
 import { RoomStore } from "./db.ts";
 import type { Effects } from "./directory.ts";

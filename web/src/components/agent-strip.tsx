@@ -6,9 +6,9 @@
 import { ArrowUp01Icon } from "@hugeicons/core-free-icons"
 import { useState } from "react"
 
-import type { Load } from "@mc/load.ts"
-import type { Activity, Color } from "@mc/protocol.ts"
-import { taskId } from "@mc/state.ts"
+import type { Load } from "@kiwi/core/load.ts"
+import type { Activity, Color } from "@kiwi/core/protocol.ts"
+import { taskId } from "@kiwi/core/state.ts"
 import { formatAgo, shortTitle } from "@/lib/format"
 import { howWords, type How } from "@/lib/presence"
 import { cx } from "@/lib/utils"

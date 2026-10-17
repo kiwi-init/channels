@@ -1,10 +1,10 @@
 // One colour per person, unique in the channel; agents wear their person's.
 
 import { beforeAll, describe, expect, test } from "bun:test";
-import { describeEvent } from "../src/format.ts";
-import { generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
-import { wellFormedEvent, type Event, type Message } from "../src/protocol.ts";
-import { colorOf, fold, type Roster } from "../src/state.ts";
+import { describeEvent } from "@kiwi/core/format.ts";
+import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
+import { wellFormedEvent, type Event, type Message } from "@kiwi/core/protocol.ts";
+import { colorOf, fold, type Roster } from "@kiwi/core/state.ts";
 
 const ids: Record<string, Identity> = {};
 const roster: Roster = [];

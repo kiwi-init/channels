@@ -5,7 +5,7 @@
 // server proxies /v1 to the relay). Nothing else in the renderer may use
 // location.origin for relay traffic: call relayUrl() here instead.
 
-import { DEFAULT_RELAY } from "@mc/relay-url.ts"
+import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts"
 
 export function relayOrigin(raw: unknown): string | null {
   if (typeof raw !== "string") return null

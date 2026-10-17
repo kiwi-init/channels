@@ -1,4 +1,4 @@
-import type { Handoff, Message } from "@mc/protocol.ts"
+import type { Handoff, Message } from "@kiwi/core/protocol.ts"
 
 export const handoffOf = (m: Message): Handoff | null => (m.esc && m.handoff ? m.handoff : null)
 

@@ -4,10 +4,10 @@ import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { signRequest } from "../src/auth.ts";
-import { Channel, RelayError } from "../src/client.ts";
-import { tagForStatus } from "../src/errors.ts";
-import { generateIdentity } from "../src/identity.ts";
+import { signRequest } from "@kiwi/core/auth.ts";
+import { Channel, RelayError } from "@kiwi/core/client.ts";
+import { tagForStatus } from "@kiwi/core/errors.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
 import { checked } from "./check.ts";
@@ -36,7 +36,7 @@ test("not the owner, not a member, removed, gone: each says so", async () => {
   const ask = await Channel.requestJoin(relay, made.code, agent, { name: "win" });
   await ownerCh.approve((await checked(ownerCh, relay, made.code, [{ id: agent, requestId: ask.requestId }]))[0]!);
   const st = await Channel.joinStatus(relay, made.code, agent, ask.requestId);
-  const memberCh = new Channel((st as { access: import("../src/crypto.ts").ChannelAccess }).access, relay, agent);
+  const memberCh = new Channel((st as { access: import("@kiwi/core/crypto.ts").ChannelAccess }).access, relay, agent);
 
   // A member signing an owner route: the relay says NotOwner.
   const body = JSON.stringify({ icon: null });
@@ -58,7 +58,7 @@ test("not the owner, not a member, removed, gone: each says so", async () => {
   const leaverAsk = await Channel.requestJoin(relay, made.code, leaver, { name: "lee" });
   await ownerCh.approve((await checked(ownerCh, relay, made.code, [{ id: leaver, requestId: leaverAsk.requestId }]))[0]!);
   const leaverSt = await Channel.joinStatus(relay, made.code, leaver, leaverAsk.requestId);
-  const leaverCh = new Channel((leaverSt as { access: import("../src/crypto.ts").ChannelAccess }).access, relay, leaver);
+  const leaverCh = new Channel((leaverSt as { access: import("@kiwi/core/crypto.ts").ChannelAccess }).access, relay, leaver);
   await leaverCh.leave();
   expect(await leaverCh.head().then(() => null, (e: unknown) => e)).toMatchObject({ why: "removed", how: "left", message: "you left this channel" });
 

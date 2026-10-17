@@ -3,10 +3,10 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Channel } from "../src/client.ts";
+import { Channel } from "@kiwi/core/client.ts";
 import { daemonListeners, daemonSock } from "../src/daemon.ts";
-import { generateIdentity } from "../src/identity.ts";
-import type { Message } from "../src/protocol.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
+import type { Message } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 
 // KIWI_TEST_RELAY=http://localhost:8787 runs the suite against another relay,

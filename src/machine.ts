@@ -5,8 +5,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join } from "node:path";
 import { home, writePrivate } from "./config.ts";
-import { generateIdentity, type Identity } from "./identity.ts";
-import { claimComputer, type ComputerClaim, type MachineCert } from "./person.ts";
+import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
+import { claimComputer, type ComputerClaim, type MachineCert } from "@kiwi/core/person.ts";
 
 export interface MachineFile {
   identity: Identity;

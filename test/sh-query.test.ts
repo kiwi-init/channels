@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
-import type { Event, Kind, Message } from "../src/protocol.ts";
+import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
+import type { Event, Kind, Message } from "@kiwi/core/protocol.ts";
 import { channelFiles, channelTables, runSh, type ChannelView } from "../src/sh.ts";
-import { fold, type Roster } from "../src/state.ts";
+import { fold, type Roster } from "@kiwi/core/state.ts";
 
 const T0 = 1_700_000_000_000;
 

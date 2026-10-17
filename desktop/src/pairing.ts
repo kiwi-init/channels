@@ -1,4 +1,4 @@
-import { answerPair, newSecret, openMailbox, pairCode, readPairAsk, type Mailbox, type PairAsk } from "../../src/mailbox.ts";
+import { answerPair, newSecret, openMailbox, pairCode, readPairAsk, type Mailbox, type PairAsk } from "@kiwi/core/mailbox.ts";
 import type { PairAskView } from "./bridge.ts";
 import { requirePerson, store, upsertComputer } from "./store.ts";
 

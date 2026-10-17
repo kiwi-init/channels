@@ -3,7 +3,7 @@
 // channels reads as faces, as Grok's list does, not a column of grey. The tile is always the same
 // size, so a row doesn't jump when an icon arrives.
 
-import type { ChannelIcon } from "@mc/protocol.ts"
+import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 import { PALETTE } from "@/lib/characters"
 import { cx } from "@/lib/utils"
 import { hueOf } from "./kit"

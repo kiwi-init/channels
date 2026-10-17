@@ -7,16 +7,16 @@
 //   role NAME ROLE|none [--about A] | room create NAME | room rename NAME|ID NEWNAME
 import * as Effect from "effect/Effect";
 import { runAgent, type Agent } from "../src/agent.ts";
-import { Channel } from "../src/client.ts";
+import { Channel } from "@kiwi/core/client.ts";
 import { Cursor, DEFAULT_RELAY, Keystore } from "../src/config.ts";
-import { newRoomId } from "../src/crypto.ts";
+import { newRoomId } from "@kiwi/core/crypto.ts";
 import { bindDirectory } from "../src/hooks.ts";
-import { fingerprint } from "../src/identity.ts";
-import { runsLine } from "../src/membership.ts";
+import { fingerprint } from "@kiwi/core/identity.ts";
+import { runsLine } from "@kiwi/core/membership.ts";
 import { openOwnerSession } from "../src/owner.ts";
 import { baseName, here } from "../src/seats.ts";
 import { join } from "node:path";
-import { COORDINATOR } from "../src/state.ts";
+import { COORDINATOR } from "@kiwi/core/state.ts";
 
 const OWNER = "human";
 const argv = process.argv.slice(2);

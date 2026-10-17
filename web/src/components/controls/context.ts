@@ -1,9 +1,9 @@
 import { createContext, useContext } from "react"
 
-import type { JoinRequest, Member as RosterMember } from "@mc/membership.ts"
-import type { Event } from "@mc/protocol.ts"
-import type { Scope } from "@mc/scopes.ts"
-import { COORDINATOR, type ChannelState } from "@mc/state.ts"
+import type { JoinRequest, Member as RosterMember } from "@kiwi/core/membership.ts"
+import type { Event } from "@kiwi/core/protocol.ts"
+import type { Scope } from "@kiwi/core/scopes.ts"
+import { COORDINATOR, type ChannelState } from "@kiwi/core/state.ts"
 
 export type Confirm =
   | { kind: "approve"; req: JoinRequest }

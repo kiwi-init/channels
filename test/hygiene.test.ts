@@ -1,10 +1,10 @@
 // Facts are shared and can expire.
 
 import { describe, expect, test } from "bun:test";
-import { formatFact, parseDuration } from "../src/format.ts";
-import { wellFormedEvent, type Event, type Kind, type Message } from "../src/protocol.ts";
-import { fold as foldWith, type Roster } from "../src/state.ts";
-import { generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
+import { formatFact, parseDuration } from "@kiwi/core/format.ts";
+import { wellFormedEvent, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
+import { fold as foldWith, type Roster } from "@kiwi/core/state.ts";
+import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 
 const roster: Roster = [];
 async function member(name: string, owner = false): Promise<Identity> {

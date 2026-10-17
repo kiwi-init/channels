@@ -8,9 +8,9 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import type { ChannelIdentityView, ComputerView, PersonView } from "../desktop/src/bridge.ts";
 import { claimFor, csp, externalUrl, fileFor, isAppUrl, mergeChannels, normalizeRelay, publicComputer, readStore, snapshotOf, writePrivate } from "../desktop/src/guard.ts";
-import { encodeJoinCode, newRoomId } from "../src/crypto.ts";
-import { generateIdentity } from "../src/identity.ts";
-import { checkPerson } from "../src/person.ts";
+import { encodeJoinCode, newRoomId } from "@kiwi/core/crypto.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
+import { checkPerson } from "@kiwi/core/person.ts";
 
 describe("the window shows the app and nothing else (T183)", () => {
   test("only kiwi-app://app/ is the app", () => {

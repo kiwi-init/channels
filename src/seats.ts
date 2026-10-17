@@ -18,7 +18,7 @@ import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { kimiAncestor, kimiCodePid, mimoHere, type ProcessTree } from "./ancestry.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord } from "./config.ts";
-import { omit } from "./omit.ts";
+import { omit } from "@kiwi/core/omit.ts";
 
 type Harness = NonNullable<SeatRecord["harness"]>;
 

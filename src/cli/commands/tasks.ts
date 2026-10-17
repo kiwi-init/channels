@@ -1,10 +1,10 @@
 import * as Effect from "effect/Effect";
 import { oneLook, openSession } from "../../agent.ts";
 import { Keystore } from "../../config.ts";
-import { inlineText } from "../../membership.ts";
-import { formatTask, formatTasks, looksLikeLine, taskStateWord } from "../../format.ts";
-import type { TaskState } from "../../protocol.ts";
-import { similarOpenTasks, taskId, type ChannelState } from "../../state.ts";
+import { inlineText } from "@kiwi/core/membership.ts";
+import { formatTask, formatTasks, looksLikeLine, taskStateWord } from "@kiwi/core/format.ts";
+import type { TaskState } from "@kiwi/core/protocol.ts";
+import { similarOpenTasks, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import { bindingFor } from "../../hooks.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, keepDaemon, out, session } from "../context.ts";

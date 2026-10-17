@@ -4,14 +4,14 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 
-import { openRows as openSealedRows, packRow, type CachedRow } from "../../src/cache-row.ts";
-import { Channel, ChannelGone, RelayError, Relay, Unreachable, eachLive, fetchRelay, type Live, type PresenceFields } from "../../src/client.ts";
-import type { ChannelAccess } from "../../src/crypto.ts";
-import { generateIdentity, type Identity } from "../../src/identity.ts";
-import { handleFor, type Member, type MemberInfo } from "../../src/membership.ts";
-import type { PersonClaim } from "../../src/person.ts";
-import type { Message } from "../../src/protocol.ts";
-import type { SigningBudget } from "../../src/sas.ts";
+import { openRows as openSealedRows, packRow, type CachedRow } from "@kiwi/core/cache-row.ts";
+import { Channel, ChannelGone, RelayError, Relay, Unreachable, eachLive, fetchRelay, type Live, type PresenceFields } from "@kiwi/core/client.ts";
+import type { ChannelAccess } from "@kiwi/core/crypto.ts";
+import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
+import { handleFor, type Member, type MemberInfo } from "@kiwi/core/membership.ts";
+import type { PersonClaim } from "@kiwi/core/person.ts";
+import type { Message } from "@kiwi/core/protocol.ts";
+import type { SigningBudget } from "@kiwi/core/sas.ts";
 import { CHANNEL_CALLS, type CallResult, type ChannelCallName, type ChannelCalls, type ChannelIdentityView, type ChannelOps, type ChannelView, type FollowEvent, type FollowOptions, type JoinCheck, type WireError } from "./bridge.ts";
 import { channelAccess, publicChannel } from "./seats.ts";
 

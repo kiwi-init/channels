@@ -1,13 +1,13 @@
 import * as Effect from "effect/Effect";
-import { Channel, type Info, type MemberRow, type Refused, type Relay } from "../client.ts";
+import { Channel, type Info, type MemberRow, type Refused, type Relay } from "@kiwi/core/client.ts";
 import { Cache, Cursor, type ChannelConfig } from "../config.ts";
-import type { ChannelAccess } from "../crypto.ts";
-import type { Identity } from "../identity.ts";
+import type { ChannelAccess } from "@kiwi/core/crypto.ts";
+import type { Identity } from "@kiwi/core/identity.ts";
 import type { DaemonPeek } from "../daemon/protocol.ts";
 import { daemonMark, daemonPeek } from "../daemon/rpc.ts";
-import { GENERAL_ROOM, PAGE_LIMIT, type Message } from "../protocol.ts";
-import { Rejected } from "../refusals.ts";
-import { findRoom, fold, toRoster, type ChannelState, type FoldBase, type GuardFloor, type Roster, type RoomsFloor } from "../state.ts";
+import { GENERAL_ROOM, PAGE_LIMIT, type Message } from "@kiwi/core/protocol.ts";
+import { Rejected } from "@kiwi/core/refusals.ts";
+import { findRoom, fold, toRoster, type ChannelState, type FoldBase, type GuardFloor, type Roster, type RoomsFloor } from "@kiwi/core/state.ts";
 import { LAST_MARK_MS, lastSeq, Look, orNone, type Agent, type Delivery } from "./shared.ts";
 import { wants } from "./wants.ts";
 

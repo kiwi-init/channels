@@ -4,7 +4,7 @@ import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import pack from "../assets/reactions/index.json";
-import { isGifReaction, wellFormedEvent, wellFormedReaction } from "../src/protocol.ts";
+import { isGifReaction, wellFormedEvent, wellFormedReaction } from "@kiwi/core/protocol.ts";
 
 describe("gif reactions", () => {
   test("a reaction is an emoji or a gif key, nothing else", () => {

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 
-import type { ImageAttachment, Message } from "@mc/protocol.ts"
-import { colorOf, type ChannelState } from "@mc/state.ts"
+import type { ImageAttachment, Message } from "@kiwi/core/protocol.ts"
+import { colorOf, type ChannelState } from "@kiwi/core/state.ts"
 import type { ChannelHandle } from "@/lib/channel"
 import { formatTime } from "@/lib/format"
 import { chipsFor } from "@/lib/reactions"

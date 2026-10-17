@@ -3,10 +3,10 @@
 
 import { beforeAll, describe, expect, test } from "bun:test";
 import { wants } from "../src/agent.ts";
-import { modeLine } from "../src/format.ts";
-import { generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
-import type { Event, Kind, Message } from "../src/protocol.ts";
-import { fold, type Roster } from "../src/state.ts";
+import { modeLine } from "@kiwi/core/format.ts";
+import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
+import type { Event, Kind, Message } from "@kiwi/core/protocol.ts";
+import { fold, type Roster } from "@kiwi/core/state.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
@@ -130,7 +130,7 @@ describe("what each member is told", () => {
 
   test("the prompt says what coordinator-only asks of this agent, only when the channel is in it", async () => {
     const { agentPrompt } = await import("../src/cli/brief.ts");
-    const { modeLine } = await import("../src/format.ts");
+    const { modeLine } = await import("@kiwi/core/format.ts");
     const state = fold([await makeCoord("coord"), await on()], roster);
     expect(agentPrompt("c", "dev", { mode: modeLine(state, "dev") })).toContain("coordinator-only");
     expect(agentPrompt("c", "dev")).not.toContain("coordinator-only");
@@ -141,7 +141,7 @@ describe("what each member is told", () => {
 
 describe("strict holds however an agent spells its recipients", () => {
   test("a broadcast, *, or a thread reply from another agent never reaches a person", async () => {
-    const { keptFromPeople } = await import("../src/state.ts");
+    const { keptFromPeople } = await import("@kiwi/core/state.ts");
     const setup = [await makeCoord("coord"), await on()];
     const ask = await msg("ana", "msg", "status?")
     const broadcast = await msg("dev", "msg", "everyone: shipping now");
@@ -162,7 +162,7 @@ describe("strict holds however an agent spells its recipients", () => {
   });
 
   test("not strict, a person still gets them", async () => {
-    const { keptFromPeople } = await import("../src/state.ts");
+    const { keptFromPeople } = await import("@kiwi/core/state.ts");
     const broadcast = await msg("dev", "msg", "everyone: shipping");
     const s = fold([await makeCoord("coord"), await on(false), broadcast], roster);
     expect(keptFromPeople(s, broadcast)).toBe(false);
@@ -192,7 +192,7 @@ describe("at the relay", () => {
     const { mkdtempSync, rmSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
-    const { Channel } = await import("../src/client.ts");
+    const { Channel } = await import("@kiwi/core/client.ts");
     const { startRelay } = await import("../src/relay/bun.ts");
     const { checked } = await import("./check.ts");
     const dataDir = mkdtempSync(join(tmpdir(), "kiwi-coord-relay-"));
@@ -220,7 +220,7 @@ describe("at the relay", () => {
       expect(await ownerCh.mode()).toBeNull();
       await ownerCh.setMode({ coordinatorOnly: true, strict: true, since: 7 });
       const st = await Channel.joinStatus(relay, made.code, other.id, other.ask.requestId);
-      const memberCh = new Channel((st as { access: import("../src/crypto.ts").ChannelAccess }).access, relay, other.id);
+      const memberCh = new Channel((st as { access: import("@kiwi/core/crypto.ts").ChannelAccess }).access, relay, other.id);
       expect(await memberCh.mode()).toEqual({ coordinatorOnly: true, strict: true, since: 7 });
       await expect(memberCh.setMode({ coordinatorOnly: false, strict: false, since: 8 })).rejects.toThrow();
     } finally {

@@ -1,7 +1,7 @@
 import type { Dispatch, ReactNode, SetStateAction } from "react"
 
-import type { ChannelIcon, ImageAttachment, Message } from "@mc/protocol.ts"
-import { taskId, type ChannelState, type Task } from "@mc/state.ts"
+import type { ChannelIcon, ImageAttachment, Message } from "@kiwi/core/protocol.ts"
+import { taskId, type ChannelState, type Task } from "@kiwi/core/state.ts"
 import type { ChannelHandle } from "@/lib/channel"
 import { formatShort } from "@/lib/format"
 import { approveTask, cancelTask, changeReviewer, sendBackTask, type TaskSend } from "@/lib/task-actions"

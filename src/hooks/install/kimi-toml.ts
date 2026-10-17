@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { omit } from "../../omit.ts";
+import { omit } from "@kiwi/core/omit.ts";
 import { isRecord, parseToml } from "../files.ts";
 import { hookCommand, isOurHook, isOurHookCommand, KIMI_STOP } from "../self.ts";
 

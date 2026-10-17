@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, type Config } from "../config.ts";
 import { listenHooksInstalled } from "../hooks/install/claude.ts";
-import { wakeArgv, wakePath, wakePrompt, type WakePath } from "../wake.ts";
+import { wakeArgv, wakePath, wakePrompt, type WakePath } from "@kiwi/core/wake.ts";
 import { withDeadline, type DaemonWake } from "./protocol.ts";
 import { seatRecordFor, wakeOn } from "./reach.ts";
 import type { Seat } from "./seat.ts";

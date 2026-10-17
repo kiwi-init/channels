@@ -2,13 +2,13 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Channel } from "../src/client.ts";
-import { who } from "../src/format.ts";
-import { freeHandle, seededPick } from "../src/handles.ts";
-import { generateIdentity } from "../src/identity.ts";
-import { describeMember, NAME_RE } from "../src/membership.ts";
+import { Channel } from "@kiwi/core/client.ts";
+import { who } from "@kiwi/core/format.ts";
+import { freeHandle, seededPick } from "@kiwi/core/handles.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
+import { describeMember, NAME_RE } from "@kiwi/core/membership.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { fold } from "../src/state.ts";
+import { fold } from "@kiwi/core/state.ts";
 import { checked } from "./check.ts";
 
 setDefaultTimeout(60_000);

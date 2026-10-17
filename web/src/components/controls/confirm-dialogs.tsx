@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from "react"
 
-import type { Event } from "@mc/protocol.ts"
-import type { Scope } from "@mc/scopes.ts"
+import type { Event } from "@kiwi/core/protocol.ts"
+import type { Scope } from "@kiwi/core/scopes.ts"
 import { memberName } from "@/lib/format"
 import { AgentFacts } from "../agent-facts"
 import { Alert, Button, TextField } from "../kit"

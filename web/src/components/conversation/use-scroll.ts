@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type UIEvent } from "react"
 
-import type { Message } from "@mc/protocol.ts"
+import type { Message } from "@kiwi/core/protocol.ts"
 
 export function useScroll({ messages, visible, hereKey }: { messages: Message[]; visible: Message[]; hereKey: string }) {
   const [behind, setBehind] = useState(0)

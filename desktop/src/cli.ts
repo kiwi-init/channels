@@ -7,7 +7,7 @@ import { execFile } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { ensureOnPath as ensureShellPath } from "../../src/shell-path.ts";
+import { ensureOnPath as ensureShellPath } from "@kiwi/core/node/shell-path.ts";
 
 /** Where the CLI lives: the install script's place (KIWI_INSTALL moves both). */
 function cliPath(): string {

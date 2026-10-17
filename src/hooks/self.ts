@@ -2,9 +2,9 @@ import { accessSync, closeSync, constants as fsConstants, existsSync, mkdtempSyn
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import { here, seatsNear, type Here } from "../seats.ts";
-import { binDir } from "../shell-path.ts";
+import { binDir } from "@kiwi/core/node/shell-path.ts";
 import { VERSION } from "../version.ts";
-import { asOption, channelOption } from "../wake.ts";
+import { asOption, channelOption } from "@kiwi/core/wake.ts";
 import { bindingFor } from "./listeners.ts";
 
 const MARK = "# kiwi";

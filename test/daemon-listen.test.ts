@@ -7,11 +7,11 @@ import { Database } from "bun:sqlite";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Channel } from "../src/client.ts";
+import { Channel } from "@kiwi/core/client.ts";
 import { loadConfig, saveConfig, saveIdentity } from "../src/config.ts";
 import { daemonListening, listenDaemon, startDaemon, type Daemon, type DaemonEvent, type DaemonSubscription } from "../src/daemon.ts";
-import { generateIdentity } from "../src/identity.ts";
-import type { Message, Presence } from "../src/protocol.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
+import type { Message, Presence } from "@kiwi/core/protocol.ts";
 import { checked } from "./check.ts";
 import { startRelay } from "../src/relay/bun.ts";
 

@@ -2,9 +2,9 @@
 // members. Structure, not secrecy: every place is readable, and older clients see all of it in main.
 
 import { beforeAll, describe, expect, test } from "bun:test";
-import { generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
-import { wellFormed, type Event, type Kind, type Message } from "../src/protocol.ts";
-import { dmPlace, firstAgent, fold, placeFromKey, placeKey, threadMembers, type Roster } from "../src/state.ts";
+import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
+import { wellFormed, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
+import { dmPlace, firstAgent, fold, placeFromKey, placeKey, threadMembers, type Roster } from "@kiwi/core/state.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;

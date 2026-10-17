@@ -4,8 +4,8 @@ import * as Fiber from "effect/Fiber";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Channel, eachLive, fetchRelay, Relay, type Live } from "../src/client.ts";
-import { generateIdentity } from "../src/identity.ts";
+import { Channel, eachLive, fetchRelay, Relay, type Live } from "@kiwi/core/client.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
 
 setDefaultTimeout(30_000);

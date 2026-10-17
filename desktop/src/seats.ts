@@ -1,4 +1,4 @@
-import { decodeJoinCode, type ChannelAccess } from "../../src/crypto.ts";
+import { decodeJoinCode, type ChannelAccess } from "@kiwi/core/crypto.ts";
 import type { ChannelIdentityView, ChannelView, PublicAccess } from "./bridge.ts";
 
 const str = (v: unknown): v is string => typeof v === "string";

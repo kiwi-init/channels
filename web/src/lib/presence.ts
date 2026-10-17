@@ -1,4 +1,4 @@
-import type { Reach } from "@mc/protocol.ts"
+import type { Reach } from "@kiwi/core/protocol.ts"
 
 export type How = "listening" | "running" | "wakes" | "unknown"
 

@@ -7,7 +7,7 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Stream from "effect/Stream";
 import { AgentLive } from "../src/agent.ts";
-import { Channel } from "../src/client.ts";
+import { Channel } from "@kiwi/core/client.ts";
 import { loadConfig, loadIdentity } from "../src/config.ts";
 import { daemonSock, stopDaemon } from "../src/daemon.ts";
 import { startRelay } from "../src/relay/bun.ts";

@@ -1,4 +1,4 @@
-import { presetOf, SCOPES, type Scope } from "@mc/scopes.ts"
+import { presetOf, SCOPES, type Scope } from "@kiwi/core/scopes.ts"
 
 // What a member may do besides read: everything, or nothing but read. The owner signs the choice;
 // every client enforces it. A grant from before the two levels (some scopes, not all) keeps working

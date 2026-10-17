@@ -2,8 +2,8 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, setSystemTime
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Channel, INFO_MAX_AGE_MS } from "../src/client.ts";
-import { generateIdentity } from "../src/identity.ts";
+import { Channel, INFO_MAX_AGE_MS } from "@kiwi/core/client.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { kiwiCmd } from "./owner.ts";
 import { trafficProxy } from "./traffic.ts";

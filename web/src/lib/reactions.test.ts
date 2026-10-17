@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import type { ChannelState, Reaction } from "@mc/state.ts"
+import type { ChannelState, Reaction } from "@kiwi/core/state.ts"
 
 import { chipLabel, chipsFor } from "./reactions"
 

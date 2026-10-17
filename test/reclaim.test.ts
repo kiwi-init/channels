@@ -7,8 +7,8 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Channel, RelayError } from "../src/client.ts";
-import { generateIdentity } from "../src/identity.ts";
+import { Channel, RelayError } from "@kiwi/core/client.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { memoryBudget } from "./check.ts";
 

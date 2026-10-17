@@ -1,7 +1,7 @@
 import path from "node:path";
 import { app, MessageChannelMain, utilityProcess } from "electron";
 
-import type { PersonClaim } from "../../src/person.ts";
+import type { PersonClaim } from "@kiwi/core/person.ts";
 import { acceptSeat, claimFor, withAccess } from "./guard.ts";
 import type { HostToKeys, KeysToHost } from "./keys-server.ts";
 import { mutate, requirePerson, store } from "./store.ts";

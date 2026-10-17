@@ -2,12 +2,12 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import type * as Scoped from "effect/Scope";
-import { ChannelGone, fetchRelay, Relay, RelayError, settle } from "../client.ts";
+import { ChannelGone, fetchRelay, Relay, RelayError, settle } from "@kiwi/core/client.ts";
 import { Cache, Cursor, Keystore, LocalFiles } from "../config.ts";
 import { holdListening } from "../hooks/listeners.ts";
-import type { Message } from "../protocol.ts";
-import { isLocalRefusal } from "../refusals.ts";
-import type { ChannelState, GuardFloor, Roster, RoomsFloor } from "../state.ts";
+import type { Message } from "@kiwi/core/protocol.ts";
+import { isLocalRefusal } from "@kiwi/core/refusals.ts";
+import type { ChannelState, GuardFloor, Roster, RoomsFloor } from "@kiwi/core/state.ts";
 import type { SessionState } from "./state.ts";
 
 export const MARK_EVERY_MS = 1_000;

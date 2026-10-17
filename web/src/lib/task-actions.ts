@@ -1,5 +1,5 @@
-import type { SendOptions } from "@mc/client.ts"
-import { openRound, taskId, type Task } from "@mc/state.ts"
+import type { SendOptions } from "@kiwi/core/client.ts"
+import { openRound, taskId, type Task } from "@kiwi/core/state.ts"
 
 export const ANYONE = "*"
 

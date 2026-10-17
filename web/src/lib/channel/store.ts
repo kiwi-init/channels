@@ -1,4 +1,4 @@
-import { decodeJoinCode } from "@mc/crypto.ts"
+import { decodeJoinCode } from "@kiwi/core/crypto.ts"
 import type { PublicAccess } from "../../../../desktop/src/bridge.ts"
 import { ops } from "../channel-ops"
 import { forgetHistory } from "../history"

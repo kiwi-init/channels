@@ -1,8 +1,8 @@
 import { Add01Icon, ArrowUp02Icon, Cancel01Icon, Mic01Icon, SmileIcon } from "@hugeicons/core-free-icons"
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
-import type { SendOptions } from "@mc/client.ts"
-import { MAX_IMAGE_BYTES, RASTER_MIMES, type Color, type Message } from "@mc/protocol.ts"
+import type { SendOptions } from "@kiwi/core/client.ts"
+import { MAX_IMAGE_BYTES, RASTER_MIMES, type Color, type Message } from "@kiwi/core/protocol.ts"
 import { compressImage, needsCompressing, renamed } from "@/lib/compress-image"
 import { appendDictation, useDictation } from "@/lib/dictation"
 import { excerpt } from "@/lib/format"

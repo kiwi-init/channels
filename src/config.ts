@@ -11,4 +11,4 @@ export { forgetIdentity, identitiesIn, loadIdentity, saveIdentity } from "./conf
 export { hasKiwiState, home, writePrivate } from "./config/paths.ts";
 export { Cache, Cursor, Keystore, LocalFiles } from "./config/services.ts";
 export { wipeChannel } from "./config/wipe.ts";
-export { DEFAULT_RELAY } from "./relay-url.ts";
+export { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts";

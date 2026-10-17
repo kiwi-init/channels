@@ -16,7 +16,7 @@ import {
 } from "@hugeicons/core-free-icons"
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react"
 
-import { MAX_IMAGE_BYTES } from "@mc/protocol.ts"
+import { MAX_IMAGE_BYTES } from "@kiwi/core/protocol.ts"
 import { arrowHead, base64Bytes, fitSide, INKS, markedName, meaningful, penPath, rect, strokeWidth, textSize, toImage, TOOL_KEYS, type Ink, type Mark, type Point, type Tool } from "@/lib/annotate"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"

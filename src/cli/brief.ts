@@ -2,7 +2,7 @@ import { briefText } from "../brief.ts";
 import { loadConfig } from "../config.ts";
 import { wakeOn } from "../daemon.ts";
 import { howMessagesReachYou, mcFor } from "../hooks.ts";
-import type { Scope } from "../scopes.ts";
+import type { Scope } from "@kiwi/core/scopes.ts";
 
 function listenLine(mc: string, alias: string, agent: string): string {
   return howMessagesReachYou(mc, wakeOn(loadConfig(), alias, agent));
