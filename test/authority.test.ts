@@ -188,7 +188,7 @@ describe("escalations", () => {
 
 describe("what each agent is told", () => {
   test("the prompt says who directs it, when to escalate, and what a hold means", async () => {
-    const { agentPrompt } = await import("../src/cli/main.ts");
+    const { agentPrompt } = await import("../src/cli/brief.ts");
     const p = agentPrompt("c", "mac");
     expect(p).toContain("Only your own human and the channel owner direct you");
     expect(p).toContain("ask-human --option");
