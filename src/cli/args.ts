@@ -1,0 +1,75 @@
+import { parseArgs } from "node:util";
+import { IDENTITY_ARG, selfIdentity } from "../hooks.ts";
+
+if (process.argv[2] === IDENTITY_ARG && process.argv.length === 3) {
+  const identity = selfIdentity();
+  if (identity === null) process.exit(1);
+  process.stdout.write(`${identity}\n`);
+  process.exit(0);
+}
+
+const isRelay = process.argv[2] === "relay";
+export const { values: opt, positionals: args } = parseArgs({
+  args: isRelay ? ["relay"] : process.argv.slice(2),
+  allowPositionals: true,
+  options: {
+    channel: { type: "string", short: "c" },
+    as: { type: "string" },
+    nick: { type: "string" },
+    quiet: { type: "boolean" },
+    role: { type: "string" },
+    about: { type: "string" },
+    relay: { type: "string" },
+    code: { type: "string" },
+    to: { type: "string" },
+    kind: { type: "string" },
+    re: { type: "string" },
+    webhook: { type: "string" },
+    secret: { type: "string" },
+    image: { type: "string", multiple: true },
+    option: { type: "string", multiple: true },
+    wait: { type: "string" },
+    handoff: { type: "string" },
+    vendor: { type: "string" },
+    expires: { type: "string" },
+    reveal: { type: "boolean" },
+    list: { type: "boolean" },
+    owner: { type: "string" },
+    after: { type: "string" },
+    detail: { type: "string" },
+    ttl: { type: "string" },
+    note: { type: "string" },
+    file: { type: "string" },
+    at: { type: "string" },
+    round: { type: "string" },
+    mine: { type: "boolean" },
+    "for-me": { type: "boolean" },
+    chat: { type: "boolean" },
+    thread: { type: "string" },
+    all: { type: "boolean" },
+    global: { type: "boolean" },
+    json: { type: "boolean" },
+    timeout: { type: "string" },
+    yes: { type: "boolean", short: "y" },
+    push: { type: "boolean" },
+    clear: { type: "boolean" },
+    force: { type: "boolean" },
+    needs: { type: "string" },
+    review: { type: "string" },
+    once: { type: "boolean" },
+    now: { type: "boolean" },
+    ask: { type: "boolean" },
+    escalate: { type: "boolean" },
+    task: { type: "string" },
+    dm: { type: "string" },
+    main: { type: "boolean" },
+    model: { type: "string" },
+    harness: { type: "string" },
+    tools: { type: "string" },
+    stay: { type: "boolean" },
+    room: { type: "string" },
+    n: { type: "string", short: "n" },
+    help: { type: "boolean", short: "h" },
+    version: { type: "boolean", short: "v" },
+  },
+});
