@@ -1,4 +1,4 @@
-import type { Color } from "@mc/protocol.ts"
+import type { Color } from "@kiwi/core/protocol.ts"
 
 // The colours a member can wear on their avatar (a person's pick; their agents wear it too).
 

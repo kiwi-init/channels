@@ -1,11 +1,11 @@
 import { chmodSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import type { Socket } from "bun";
-import type { Channel, PresenceFields, Probe } from "../client.ts";
+import type { Channel, PresenceFields, Probe } from "@kiwi/core/client.ts";
 import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity, saveAccess, type Config } from "../config.ts";
 import { saveMachine } from "../machine.ts";
-import { readMachineCert } from "../person.ts";
+import { readMachineCert } from "@kiwi/core/person.ts";
 import { VERSION } from "../version.ts";
-import { pullsWake, viaOf } from "../wake.ts";
+import { pullsWake, viaOf } from "@kiwi/core/wake.ts";
 import { ensureMachine, loadPairedMachine, PairError, type PairedMachine, type PairedPerson } from "./pair.ts";
 import { DAEMON_PROTOCOL, daemonSock, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
 import { activityEnv, reachOf, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
@@ -229,7 +229,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   const beaconMs = opts.beaconMs ?? 60_000;
 
   const firstHead = async (ch: Channel, waiting: Waiting): Promise<number> => {
-    const { ChannelGone, RelayError } = await import("../client.ts");
+    const { ChannelGone, RelayError } = await import("@kiwi/core/client.ts");
     const answered = (err: unknown): boolean => err instanceof ChannelGone || (err instanceof RelayError && err.status < 500 && err.status !== 429);
     const since = Date.now();
     let told = false;
@@ -296,7 +296,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       alive: () => [...waiters].some((w) => w.alive()),
     };
     const open = (async (): Promise<Seat> => {
-      const { Channel } = await import("../client.ts");
+      const { Channel } = await import("@kiwi/core/client.ts");
       const ch = new Channel(c, c.relay, id, (a) => saveAccess(alias, a));
       const head = await firstHead(ch, anyone);
       if (stopped) throw new Error("the daemon is stopping");

@@ -18,7 +18,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { kimiCodePid, mimoHere, type ProcessTree } from "./ancestry.ts";
-import type { Activity } from "./protocol.ts";
+import type { Activity } from "@kiwi/core/protocol.ts";
 
 type Env = Record<string, string | undefined>;
 

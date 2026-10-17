@@ -5,12 +5,12 @@
 // claims. Tests that set channels up with raw create/approve calls should use this instead.
 
 import { join } from "node:path";
-import { Channel } from "../src/client.ts";
-import type { JoinRequest } from "../src/membership.ts";
-import type { ChannelAccess } from "../src/crypto.ts";
-import { generateIdentity, type Identity } from "../src/identity.ts";
-import type { Member } from "../src/membership.ts";
-import { certifyMachine, claimComputer, provePerson, type MachineCert } from "../src/person.ts";
+import { Channel } from "@kiwi/core/client.ts";
+import type { JoinRequest } from "@kiwi/core/membership.ts";
+import type { ChannelAccess } from "@kiwi/core/crypto.ts";
+import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
+import type { Member } from "@kiwi/core/membership.ts";
+import { certifyMachine, claimComputer, provePerson, type MachineCert } from "@kiwi/core/person.ts";
 import { checked, memoryBudget } from "./check.ts";
 
 /** A channel made the way the app makes one: the owner's record carries their person key. */

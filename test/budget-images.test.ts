@@ -2,10 +2,10 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { packRow } from "../src/cache-row.ts";
-import { Channel } from "../src/client.ts";
+import { packRow } from "@kiwi/core/cache-row.ts";
+import { Channel } from "@kiwi/core/client.ts";
 import { loadConfig, loadIdentity } from "../src/config.ts";
-import type { Message } from "../src/protocol.ts";
+import type { Message } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { kiwiCmd } from "./owner.ts";
 import { sum, trafficProxy, type Traffic } from "./traffic.ts";

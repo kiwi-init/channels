@@ -1,6 +1,6 @@
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
-import { ChannelGone, goneText, reason, RelayError } from "../client.ts";
+import { ChannelGone, goneText, reason, RelayError } from "@kiwi/core/client.ts";
 import { Keystore } from "../config.ts";
 import { acting, Quit } from "./context.ts";
 

@@ -1,10 +1,10 @@
 // kiwi show / the MCP message tool: one message in full, with what it answers and its replies.
 
 import { describe, expect, test } from "bun:test";
-import { formatShown } from "../src/format.ts";
-import { generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
-import type { Message } from "../src/protocol.ts";
-import { fold, type Roster } from "../src/state.ts";
+import { formatShown } from "@kiwi/core/format.ts";
+import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
+import type { Message } from "@kiwi/core/protocol.ts";
+import { fold, type Roster } from "@kiwi/core/state.ts";
 
 const roster: Roster = [];
 let seq = 0;

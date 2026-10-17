@@ -8,8 +8,8 @@ import { cpus, totalmem } from "node:os";
 
 import { kimiCodePid, mimoHere, type ProcessTree } from "./ancestry.ts";
 import { harnessModel } from "./harness.ts";
-import type { Runs } from "./membership.ts";
-import type { Card } from "./protocol.ts";
+import type { Runs } from "@kiwi/core/membership.ts";
+import type { Card } from "@kiwi/core/protocol.ts";
 import { canonicalHarness } from "./seats.ts";
 
 /** Tools worth showing, as the binary that shows each one is here. */

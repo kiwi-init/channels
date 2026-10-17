@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { Signed, SigningBudget } from "../sas.ts";
+import type { Signed, SigningBudget } from "@kiwi/core/sas.ts";
 
 export function home(): string {
   if (process.env.KIWI_HOME) {

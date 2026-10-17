@@ -1,4 +1,4 @@
-import { DEFAULT_RELAY } from "@mc/relay-url.ts"
+import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts"
 
 const word = (s: string) => (/^[A-Za-z0-9_.@%+=:,/-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`)
 

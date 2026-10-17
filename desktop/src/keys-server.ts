@@ -1,6 +1,6 @@
-import type { PresenceFields } from "../../src/client.ts";
-import type { ChannelAccess } from "../../src/crypto.ts";
-import type { PersonClaim } from "../../src/person.ts";
+import type { PresenceFields } from "@kiwi/core/client.ts";
+import type { ChannelAccess } from "@kiwi/core/crypto.ts";
+import type { PersonClaim } from "@kiwi/core/person.ts";
 import type { ChannelIdentityView, KeysPush, KeysReply } from "./bridge.ts";
 import { isCall, wireError, type Keyring } from "./keyring.ts";
 import { fromWire, toWire } from "./wire.ts";

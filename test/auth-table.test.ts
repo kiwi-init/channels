@@ -6,11 +6,11 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { signRequest } from "../src/auth.ts";
-import { Channel } from "../src/client.ts";
-import { decodeJoinCode } from "../src/crypto.ts";
-import { generateIdentity, type Identity } from "../src/identity.ts";
-import { CLOSE_REMOVED, WS_PROTOCOL } from "../src/protocol.ts";
+import { signRequest } from "@kiwi/core/auth.ts";
+import { Channel } from "@kiwi/core/client.ts";
+import { decodeJoinCode } from "@kiwi/core/crypto.ts";
+import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
+import { CLOSE_REMOVED, WS_PROTOCOL } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
 import { checked } from "./check.ts";

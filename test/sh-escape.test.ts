@@ -10,13 +10,13 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AgentSession } from "../src/agent.ts";
-import { Channel } from "../src/client.ts";
+import { Channel } from "@kiwi/core/client.ts";
 import { loadConfig, updateConfig, writeCursor } from "../src/config.ts";
-import { generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
-import type { Event, Kind, Message } from "../src/protocol.ts";
+import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
+import type { Event, Kind, Message } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { channelFiles, channelView, runSh, type ChannelView } from "../src/sh.ts";
-import { fold, type Roster } from "../src/state.ts";
+import { fold, type Roster } from "@kiwi/core/state.ts";
 
 setDefaultTimeout(25_000);
 

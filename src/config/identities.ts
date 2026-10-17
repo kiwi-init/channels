@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { generateIdentity, withExchangeKey, type Identity } from "../identity.ts";
+import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
 import { home, safe, writePrivate } from "./paths.ts";
 
 export async function loadIdentity(name: string, roomId: string): Promise<Identity> {

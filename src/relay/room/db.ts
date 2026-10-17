@@ -1,6 +1,6 @@
 import * as Context from "effect/Context";
-import { b64url, fromB64url } from "../../crypto.ts";
-import { PAGE_LIMIT, type Envelope, type ReadMark } from "../../protocol.ts";
+import { b64url, fromB64url } from "@kiwi/core/crypto.ts";
+import { PAGE_LIMIT, type Envelope, type ReadMark } from "@kiwi/core/protocol.ts";
 import type { Policy } from "../policy.ts";
 import type { DirectoryUpdate } from "./directory.ts";
 import { utcDay } from "./limits.ts";

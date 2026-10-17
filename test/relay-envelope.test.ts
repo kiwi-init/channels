@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 import { runAgent } from "../src/agent.ts";
-import { Channel } from "../src/client.ts";
-import { seal } from "../src/crypto.ts";
-import { generateIdentity, sign } from "../src/identity.ts";
-import type { Envelope } from "../src/protocol.ts";
+import { Channel } from "@kiwi/core/client.ts";
+import { seal } from "@kiwi/core/crypto.ts";
+import { generateIdentity, sign } from "@kiwi/core/identity.ts";
+import type { Envelope } from "@kiwi/core/protocol.ts";
 
 const KEY = "A".repeat(43);
 

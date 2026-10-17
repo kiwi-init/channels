@@ -6,7 +6,7 @@ import { writeSync } from "node:fs";
 import { openSession } from "../agent.ts";
 import { Cursor, loadConfig, type ChannelConfig } from "../config.ts";
 import { wakeOn } from "../daemon/reach.ts";
-import { formatMessage } from "../format.ts";
+import { formatMessage } from "@kiwi/core/format.ts";
 import type { Binding, Here } from "../seats.ts";
 import { MAX_CONTEXT } from "./answer.ts";
 import { deliveredUpTo, noteDelivered } from "./delivered.ts";

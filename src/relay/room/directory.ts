@@ -1,5 +1,5 @@
 import * as Context from "effect/Context";
-import type { GoneHow } from "../../protocol.ts";
+import type { GoneHow } from "@kiwi/core/protocol.ts";
 
 export interface Effects {
   broadcast?: string[];

@@ -1,12 +1,12 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import type { AnswerMemory, BlobMemory, RecordMemory } from "../client.ts";
-import type { ChannelAccess } from "../crypto.ts";
-import type { Identity } from "../identity.ts";
-import type { Message } from "../protocol.ts";
-import type { SigningBudget } from "../sas.ts";
-import type { FoldBase } from "../state.ts";
+import type { AnswerMemory, BlobMemory, RecordMemory } from "@kiwi/core/client.ts";
+import type { ChannelAccess } from "@kiwi/core/crypto.ts";
+import type { Identity } from "@kiwi/core/identity.ts";
+import type { Message } from "@kiwi/core/protocol.ts";
+import type { SigningBudget } from "@kiwi/core/sas.ts";
+import type { FoldBase } from "@kiwi/core/state.ts";
 import { appendCache, dropBase, fileAnswerMemory, fileBlobMemory, fileRecordMemory, keepBase, readBase, readCache } from "./cache.ts";
 import { markSeen, readCursor, readSeen, writeCursor } from "./cursors.ts";
 import { loadConfig, saveAccess, updateConfig, type Config } from "./file.ts";

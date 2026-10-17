@@ -2,9 +2,9 @@
 // against an in-memory mailbox that behaves like the relay's: write-once slots, 404 when empty.
 
 import { describe, expect, test } from "bun:test";
-import { generateIdentity } from "../src/identity.ts";
-import { answerPair, askToPair, mailboxId, newSecret, openMailbox, pairCode, readPairAnswer, readPairAsk, readPairCode, type PairAsk } from "../src/mailbox.ts";
-import { certifyMachine, checkComputer, checkPerson, claimComputer, provePerson, readMachineCert } from "../src/person.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
+import { answerPair, askToPair, mailboxId, newSecret, openMailbox, pairCode, readPairAnswer, readPairAsk, readPairCode, type PairAsk } from "@kiwi/core/mailbox.ts";
+import { certifyMachine, checkComputer, checkPerson, claimComputer, provePerson, readMachineCert } from "@kiwi/core/person.ts";
 
 const ROOM = "0123456789abcdef0123456789abcdef";
 

@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import { formatFact, parseDuration } from "../../format.ts";
+import { formatFact, parseDuration } from "@kiwi/core/format.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, out, session } from "../context.ts";
 

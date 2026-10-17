@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import type { GoneHow } from "../../protocol.ts";
+import type { GoneHow } from "@kiwi/core/protocol.ts";
 import { BadRequest, Conflict, NotFound, TooLarge, TooMany } from "../failures.ts";
 import { Policy } from "../policy.ts";
 import { fits, MAX_RECORD, MAX_WRAPPED, MemberRecord } from "../schema.ts";

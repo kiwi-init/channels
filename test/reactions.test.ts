@@ -7,11 +7,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as Effect from "effect/Effect";
 import { ACK, AgentLive, AgentSession, answersPeople, wants } from "../src/agent.ts";
-import { describeEvent } from "../src/format.ts";
-import { generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
-import { isReaction, wellFormedEvent, type Event, type Kind, type Message } from "../src/protocol.ts";
+import { describeEvent } from "@kiwi/core/format.ts";
+import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
+import { isReaction, wellFormedEvent, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { fold, type Roster } from "../src/state.ts";
+import { fold, type Roster } from "@kiwi/core/state.ts";
 import { joinAgent, pairComputer, setupChannel } from "./owner.ts";
 
 setDefaultTimeout(60_000);

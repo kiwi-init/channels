@@ -13,9 +13,9 @@
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import type * as Layer from "effect/Layer";
-import { verifyRequest } from "../auth.ts";
-import { ownerFingerprint } from "../crypto.ts";
-import { MAX_BLOB_BYTES, PAGE_LIMIT } from "../protocol.ts";
+import { verifyRequest } from "@kiwi/core/auth.ts";
+import { ownerFingerprint } from "@kiwi/core/crypto.ts";
+import { MAX_BLOB_BYTES, PAGE_LIMIT } from "@kiwi/core/protocol.ts";
 import { ChannelGone, BadRequest, Forbidden, NotFound, NotOwner, SignInRequired, TooLarge, TooMany, Unauthorized, UpdateRequired, type Refusal } from "./failures.ts";
 import { answer, buildContext, describeRoutes, dispatch, incoming, json, readCapped, Request_, type Route } from "./http.ts";
 import { Human, HUMAN_HEADER } from "./human.ts";

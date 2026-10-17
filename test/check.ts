@@ -1,9 +1,9 @@
 // The join code check (src/sas.ts), run the way both sides' clients run it.
 
-import { Channel } from "../src/client.ts";
-import type { Identity } from "../src/identity.ts";
-import type { JoinRequest } from "../src/membership.ts";
-import type { Signed, SigningBudget } from "../src/sas.ts";
+import { Channel } from "@kiwi/core/client.ts";
+import type { Identity } from "@kiwi/core/identity.ts";
+import type { JoinRequest } from "@kiwi/core/membership.ts";
+import type { Signed, SigningBudget } from "@kiwi/core/sas.ts";
 
 /** One owner device's record of what it signed, in memory. */
 export function memoryBudget(): SigningBudget {

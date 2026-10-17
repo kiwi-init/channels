@@ -1,9 +1,9 @@
 import { join } from "node:path";
 import { DEFAULT_RELAY, home } from "../config.ts";
-import { withExchangeKey } from "../identity.ts";
+import { withExchangeKey } from "@kiwi/core/identity.ts";
 import { loadMachine, newMachine, saveMachine, type MachineFile } from "../machine.ts";
-import { MAILBOX_TTL_MS, MailboxError, askToPair, openMailbox, readPairAnswer, readPairCode } from "../mailbox.ts";
-import type { MachineCert } from "../person.ts";
+import { MAILBOX_TTL_MS, MailboxError, askToPair, openMailbox, readPairAnswer, readPairCode } from "@kiwi/core/mailbox.ts";
+import type { MachineCert } from "@kiwi/core/person.ts";
 
 export interface PairedPerson {
   pk: string;

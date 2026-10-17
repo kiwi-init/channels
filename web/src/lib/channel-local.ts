@@ -1,7 +1,7 @@
-import { keepRecordsIn } from "@mc/client.ts"
-import { generateIdentity } from "@mc/identity.ts"
-import type { Member } from "@mc/membership.ts"
-import type { Signed, SigningBudget } from "@mc/sas.ts"
+import { keepRecordsIn } from "@kiwi/core/client.ts"
+import { generateIdentity } from "@kiwi/core/identity.ts"
+import type { Member } from "@kiwi/core/membership.ts"
+import type { Signed, SigningBudget } from "@kiwi/core/sas.ts"
 
 import type { ChannelIdentityView, ChannelOps, ComputerView, PendingItem, PersonView } from "../../../desktop/src/bridge.ts"
 import { Keyring } from "../../../desktop/src/keyring.ts"

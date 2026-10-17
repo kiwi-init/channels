@@ -6,9 +6,9 @@ import { chmodSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { adoptDaemon, daemonHello, daemonListening, daemonSock, ensureDaemon, loadPairedMachine, startDaemon, stopDaemon, type Daemon } from "../src/daemon.ts";
-import { generateIdentity } from "../src/identity.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
 import { saveMachine } from "../src/machine.ts";
-import { certifyMachine } from "../src/person.ts";
+import { certifyMachine } from "@kiwi/core/person.ts";
 import { VERSION } from "../src/version.ts";
 
 setDefaultTimeout(30_000);

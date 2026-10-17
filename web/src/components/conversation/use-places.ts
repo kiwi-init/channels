@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react"
 
-import { ignored, type Message } from "@mc/protocol.ts"
-import type { ChannelState } from "@mc/state.ts"
+import { ignored, type Message } from "@kiwi/core/protocol.ts"
+import type { ChannelState } from "@kiwi/core/state.ts"
 import { markSeenIn, MAIN, placeFromKey, placeKey, seenIn, threadMembers, useSeen } from "@/lib/threads"
 import type { Here, Unread } from "./types"
 

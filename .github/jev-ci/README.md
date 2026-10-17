@@ -15,8 +15,9 @@ CI's `plan` job decides which checks a pull request can break, and only those ru
      `name` runs nothing by itself (the plan already uses the new wording); a change to its
      other fields runs that job; a change to a setting above `jobs` runs everything.
    - A job none of whose files changed is skipped. A job's files are its `inputs` globs plus,
-     with `imports_from`, every file those entry files import, followed through relative,
-     `@mc/` and `@/` imports (type-only imports don't count: they don't run). That's how the
+     with `imports_from`, every file those entry files import, followed through relative
+     and `@/` imports and through workspace packages by name (`@kiwi/core/...`, resolved with
+     the `exports` of each `packages/*/package.json`) (type-only imports don't count: they don't run). That's how the
      flows jobs read only the `web/src` modules their tests import.
    - Files under a job's `always` run it. A release bump (only version numbers) skips
      everything but the jobs marked `version_bumps`. Static checks (`jev: false`: types,

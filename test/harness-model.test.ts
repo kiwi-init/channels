@@ -9,7 +9,7 @@ import { join } from "node:path";
 
 import { detectModel } from "../src/card.ts";
 import { harnessActivity, harnessModel } from "../src/harness.ts";
-import { cleanActivity, cleanCard } from "../src/protocol.ts";
+import { cleanActivity, cleanCard } from "@kiwi/core/protocol.ts";
 
 const dir = () => mkdtempSync(join(tmpdir(), "kiwi-harness-"));
 

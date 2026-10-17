@@ -7,12 +7,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { wants } from "../src/agent.ts";
-import { Channel } from "../src/client.ts";
-import { formatMessage } from "../src/format.ts";
-import { generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
-import { MAX_ROOMS, wellFormed, type Event, type Kind, type Message } from "../src/protocol.ts";
+import { Channel } from "@kiwi/core/client.ts";
+import { formatMessage } from "@kiwi/core/format.ts";
+import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
+import { MAX_ROOMS, wellFormed, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { findRoom, fold, newRoomId, type Roster } from "../src/state.ts";
+import { findRoom, fold, newRoomId, type Roster } from "@kiwi/core/state.ts";
 
 let seq = 0;
 async function msg(id: Identity, init: { kind?: Kind; ev?: Event; room?: string; re?: number[]; to?: string[]; body?: string } = {}): Promise<Message> {

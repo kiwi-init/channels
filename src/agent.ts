@@ -11,10 +11,10 @@
 // stops the presence beacon with it.
 
 import * as Effect from "effect/Effect";
-import { keepAnswersIn, keepBlobsIn, keepRecordsIn } from "./client.ts";
+import { keepAnswersIn, keepBlobsIn, keepRecordsIn } from "@kiwi/core/client.ts";
 import { Keystore, type ChannelConfig } from "./config.ts";
-import type { Presence } from "./protocol.ts";
-import { Rejected } from "./refusals.ts";
+import type { Presence } from "@kiwi/core/protocol.ts";
+import { Rejected } from "@kiwi/core/refusals.ts";
 import { runAgent } from "./agent/shared.ts";
 import { SessionTasks } from "./agent/tasks.ts";
 

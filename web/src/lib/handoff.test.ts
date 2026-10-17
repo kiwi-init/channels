@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import type { Handoff } from "@mc/protocol.ts"
+import type { Handoff } from "@kiwi/core/protocol.ts"
 import { handoffLabel, handoffLeft, handoffOpen } from "./handoff"
 
 const link = (expiresAt: number, over: Partial<Handoff> = {}): Handoff => ({ url: "https://live.example.com/x", vendor: "cloudflare", expiresAt, ...over })

@@ -1,9 +1,9 @@
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, utimesSync } from "node:fs";
 import { join } from "node:path";
-import type { AnswerMemory, BlobMemory } from "../client.ts";
-import type { Member } from "../membership.ts";
-import { BLOB_ID_RE, type Message } from "../protocol.ts";
-import type { FoldBase } from "../state.ts";
+import type { AnswerMemory, BlobMemory } from "@kiwi/core/client.ts";
+import type { Member } from "@kiwi/core/membership.ts";
+import { BLOB_ID_RE, type Message } from "@kiwi/core/protocol.ts";
+import type { FoldBase } from "@kiwi/core/state.ts";
 import { withLock } from "./file.ts";
 import { home, safe, writePrivate } from "./paths.ts";
 

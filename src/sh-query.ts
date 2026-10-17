@@ -1,9 +1,9 @@
 import { Database } from "bun:sqlite";
 import { decodeBytesToUtf8, defineCommand, type Command } from "just-bash";
-import { loadJson, memberLoad } from "./load.ts";
-import { ignored, type Message } from "./protocol.ts";
-import { reviewBody } from "./format.ts";
-import { taskId } from "./state.ts";
+import { loadJson, memberLoad } from "@kiwi/core/load.ts";
+import { ignored, type Message } from "@kiwi/core/protocol.ts";
+import { reviewBody } from "@kiwi/core/format.ts";
+import { taskId } from "@kiwi/core/state.ts";
 import type { ChannelView } from "./sh.ts";
 
 type Cell = string | number | null;

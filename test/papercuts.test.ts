@@ -2,12 +2,12 @@
 // warns, and an empty kiwi sh glob says so.
 
 import { describe, expect, test } from "bun:test";
-import { describeEvent, formatStatus, formatTask, formatTasks } from "../src/format.ts";
-import { memberLoad } from "../src/load.ts";
-import { wellFormedEvent, type Event, type Kind, type Message } from "../src/protocol.ts";
+import { describeEvent, formatStatus, formatTask, formatTasks } from "@kiwi/core/format.ts";
+import { memberLoad } from "@kiwi/core/load.ts";
+import { wellFormedEvent, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
 import { runSh } from "../src/sh.ts";
-import { fold as foldWith, similarOpenTasks, titlesLookAlike, type Roster, type Task } from "../src/state.ts";
-import { generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
+import { fold as foldWith, similarOpenTasks, titlesLookAlike, type Roster, type Task } from "@kiwi/core/state.ts";
+import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 
 const roster: Roster = [];
 async function member(name: string): Promise<Identity> {

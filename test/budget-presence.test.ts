@@ -6,8 +6,8 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Stream from "effect/Stream";
 import { AgentLive } from "../src/agent.ts";
-import { Channel, type Live, type PresenceFields } from "../src/client.ts";
-import { generateIdentity } from "../src/identity.ts";
+import { Channel, type Live, type PresenceFields } from "@kiwi/core/client.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { trafficProxy } from "./traffic.ts";
 

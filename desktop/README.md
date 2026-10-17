@@ -19,7 +19,8 @@ window says so. Closing the window keeps the app in the tray (background auto-ap
 - `src/main.ts` — window, tray, `kiwi-app://` hosting, safeStorage store, WorkOS device
   sign-in, pairing sessions, daemon ensure/adopt, `kiwi://join/<code>` links. Identity
   (`generateIdentity`) and pairing (`newSecret`/`pairCode`/`openMailbox`/`answerPair`)
-  are imported from `src/` and bundled with `bun build`: one scheme, no copies.
+  are imported from `@kiwi/core` (`packages/core`) and bundled with `bun build`: one scheme,
+  no copies.
 - `src/preload.ts` — context-isolated `window.kiwi` (see `src/bridge.ts` for the shape).
 - `src/bridge.ts` — the shared bridge type; renderer-neutral, no electron/node imports.
 - `src/daemon-client.ts` — the local socket client (`hello`, `adopt`) and the JSON wire

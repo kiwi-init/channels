@@ -5,9 +5,9 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { AUTH_SKEW_MS } from "../src/auth.ts";
-import { Channel, RelayError } from "../src/client.ts";
-import { generateIdentity } from "../src/identity.ts";
+import { AUTH_SKEW_MS } from "@kiwi/core/auth.ts";
+import { Channel, RelayError } from "@kiwi/core/client.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
 
 const dataDir = mkdtempSync(join(tmpdir(), "mc-resign-"));

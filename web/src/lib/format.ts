@@ -1,4 +1,4 @@
-import type { Member } from "@mc/state.ts"
+import type { Member } from "@kiwi/core/state.ts"
 
 /** One or two letters for a monogram: "Jonatas Filho" → "JF", "claude" → "C". */
 export function initials(name: string): string {

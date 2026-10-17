@@ -1,5 +1,5 @@
-import { RelayError } from "@mc/client.ts"
-import { decodeJoinCode, ownerFingerprint } from "@mc/crypto.ts"
+import { RelayError } from "@kiwi/core/client.ts"
+import { decodeJoinCode, ownerFingerprint } from "@kiwi/core/crypto.ts"
 import { ops } from "../channel-ops"
 import { relayUrl } from "../relay"
 import type { ChannelView } from "../secrets"

@@ -6,10 +6,10 @@
 
 import { beforeAll, describe, expect, test } from "bun:test";
 import { wants } from "../src/agent.ts";
-import { charterLines, formatMessage, formatStatus, holdLine, who } from "../src/format.ts";
-import { generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
-import { wellFormed, type Event, type Kind, type Message } from "../src/protocol.ts";
-import { fold, humanOf, keptFromPeople, ownerOf, type Roster } from "../src/state.ts";
+import { charterLines, formatMessage, formatStatus, holdLine, who } from "@kiwi/core/format.ts";
+import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
+import { wellFormed, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
+import { fold, humanOf, keptFromPeople, ownerOf, type Roster } from "@kiwi/core/state.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
@@ -204,7 +204,7 @@ describe("at the relay", () => {
     const { mkdtempSync, rmSync } = await import("node:fs");
     const { tmpdir } = await import("node:os");
     const { join } = await import("node:path");
-    const { Channel } = await import("../src/client.ts");
+    const { Channel } = await import("@kiwi/core/client.ts");
     const { startRelay } = await import("../src/relay/bun.ts");
     const { checked } = await import("./check.ts");
     const dataDir = mkdtempSync(join(tmpdir(), "kiwi-authority-relay-"));
@@ -219,7 +219,7 @@ describe("at the relay", () => {
       const [req] = await checked(ownerCh, relay, made.code, [{ id, requestId: ask.requestId }]);
       await ownerCh.approve(req!);
       const st = await Channel.joinStatus(relay, made.code, id, ask.requestId);
-      const mac = new Channel((st as { access: import("../src/crypto.ts").ChannelAccess }).access, relay, id);
+      const mac = new Channel((st as { access: import("@kiwi/core/crypto.ts").ChannelAccess }).access, relay, id);
 
       expect(await mac.guard()).toBeNull();
       // The mode lives in the same signed record: setting one keeps the others.

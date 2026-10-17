@@ -3,7 +3,7 @@ import * as Cause from "effect/Cause"
 import * as Effect from "effect/Effect"
 import * as Fiber from "effect/Fiber"
 
-import { ChannelGone, Unreachable } from "@mc/client.ts"
+import { ChannelGone, Unreachable } from "@kiwi/core/client.ts"
 
 import { untilOpen } from "./until-open"
 

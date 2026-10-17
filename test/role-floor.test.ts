@@ -5,12 +5,12 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Channel } from "../src/client.ts";
-import { generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
-import { makeRecord, openRecord, sealRecord } from "../src/membership.ts";
-import type { Event, Message } from "../src/protocol.ts";
+import { Channel } from "@kiwi/core/client.ts";
+import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
+import { makeRecord, openRecord, sealRecord } from "@kiwi/core/membership.ts";
+import type { Event, Message } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { fold, type Roster } from "../src/state.ts";
+import { fold, type Roster } from "@kiwi/core/state.ts";
 import { checked } from "./check.ts";
 
 let seq = 0;

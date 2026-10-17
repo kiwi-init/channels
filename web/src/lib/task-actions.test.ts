@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test"
 
-import { generateIdentity, sign, verify, type Identity } from "@mc/identity.ts"
-import type { Event, Message } from "@mc/protocol.ts"
-import { fold, type ChannelState, type Roster, type Task } from "@mc/state.ts"
+import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts"
+import type { Event, Message } from "@kiwi/core/protocol.ts"
+import { fold, type ChannelState, type Roster, type Task } from "@kiwi/core/state.ts"
 
 import { ANYONE, approveTask, cancelTask, changeReviewer, reviewerChoices, reviewsFor, sendBackTask, taskActions, type TaskSend } from "./task-actions"
 

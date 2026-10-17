@@ -1,9 +1,9 @@
 import { ArrowTurnBackwardIcon, Copy01Icon, SmileIcon } from "@hugeicons/core-free-icons"
 import { memo, useEffect, useMemo, useState, type ReactNode } from "react"
 
-import { describeEvent } from "@mc/format.ts"
-import { ignored, isGifReaction, type Color, type Handoff, type ImageAttachment, type Message, type Trust } from "@mc/protocol.ts"
-import type { ChannelState, Member } from "@mc/state.ts"
+import { describeEvent } from "@kiwi/core/format.ts"
+import { ignored, isGifReaction, type Color, type Handoff, type ImageAttachment, type Message, type Trust } from "@kiwi/core/protocol.ts"
+import type { ChannelState, Member } from "@kiwi/core/state.ts"
 import { useClock } from "@/lib/channel"
 import { excerpt, formatAgo, formatFull, formatStamp, memberName } from "@/lib/format"
 import { openHandoff } from "@/lib/handoff-open"

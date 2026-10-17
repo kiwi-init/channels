@@ -1,6 +1,6 @@
-import { isDirectedAt, isForAgent } from "../client.ts";
-import { GENERAL_ROOM, ignored, type Message } from "../protocol.ts";
-import { isPerson, keptFromPeople, threadMembers, type ChannelState } from "../state.ts";
+import { isDirectedAt, isForAgent } from "@kiwi/core/client.ts";
+import { GENERAL_ROOM, ignored, type Message } from "@kiwi/core/protocol.ts";
+import { isPerson, keptFromPeople, threadMembers, type ChannelState } from "@kiwi/core/state.ts";
 import type { Delivery } from "./shared.ts";
 
 export function wants(me: string, m: Message, state: ChannelState | null, d: Delivery = {}): boolean {

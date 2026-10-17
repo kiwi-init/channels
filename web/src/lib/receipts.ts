@@ -3,8 +3,8 @@
 // hand messages on), the relay passes each mark to every client, and this works out what a message's
 // own recipients have read. People don't send marks, so only agents are counted.
 
-import type { Message, ReadMark } from "@mc/protocol.ts"
-import { isPerson, threadMembers, type ChannelState } from "@mc/state.ts"
+import type { Message, ReadMark } from "@kiwi/core/protocol.ts"
+import { isPerson, threadMembers, type ChannelState } from "@kiwi/core/state.ts"
 
 /**
  * A mark as this view heard it. One from the snapshot on connect (`snapshot`) says how far that member

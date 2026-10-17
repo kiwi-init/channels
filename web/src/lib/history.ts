@@ -12,8 +12,8 @@
 // page loads the usual window. The cache does not fill a gap or sort ahead of
 // the relay. See history-plan.ts.
 
-import type { CachedRow } from "@mc/cache-row.ts"
-import type { Message } from "@mc/protocol.ts"
+import type { CachedRow } from "@kiwi/core/cache-row.ts"
+import type { Message } from "@kiwi/core/protocol.ts"
 import { planReload } from "./history-plan"
 
 export type { CachedRow }

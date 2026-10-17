@@ -2,9 +2,9 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Channel, keepAnswersIn } from "../src/client.ts";
-import { decodeJoinCode } from "../src/crypto.ts";
-import { generateIdentity } from "../src/identity.ts";
+import { Channel, keepAnswersIn } from "@kiwi/core/client.ts";
+import { decodeJoinCode } from "@kiwi/core/crypto.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { kiwiCmd } from "./owner.ts";
 import { trafficProxy, type Traffic } from "./traffic.ts";

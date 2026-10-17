@@ -1,6 +1,6 @@
 import { Add01Icon, ComputerIcon, Download04Icon, LockIcon, Settings01Icon } from "@hugeicons/core-free-icons"
 
-import type { ChannelIcon } from "@mc/protocol.ts"
+import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 import type { ChannelRow } from "@/lib/channel"
 import type { RowNews } from "@/lib/news"
 import { useIcons } from "@/lib/icons"

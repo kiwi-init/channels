@@ -5,9 +5,9 @@ import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Channel } from "../src/client.ts";
-import { decodeJoinCode } from "../src/crypto.ts";
-import { generateIdentity } from "../src/identity.ts";
+import { Channel } from "@kiwi/core/client.ts";
+import { decodeJoinCode } from "@kiwi/core/crypto.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
 

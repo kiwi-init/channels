@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 
-import type { ChannelIcon } from "@mc/protocol.ts"
+import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 
 import { loadMember, type StoredMember } from "./channel"
 import { linkOf } from "./channel-ops"

@@ -59,7 +59,7 @@ async function until(pred: () => boolean | Promise<boolean>, label: string, ms =
 }
 
 const seqOf = (out: string) => /#(\d+)/.exec(out)![1]!;
-import { wellFormed, type Payload } from "../src/protocol.ts";
+import { wellFormed, type Payload } from "@kiwi/core/protocol.ts";
 
 const LINK = "https://live.example.com/devtools/inspector.html?jwt=SECRET-TOKEN-1234";
 
@@ -160,8 +160,8 @@ describe("handoff escalation", () => {
   });
 });
 
-import { tasksAwaitingPeople } from "../src/state.ts";
-import type { Message } from "../src/protocol.ts";
+import { tasksAwaitingPeople } from "@kiwi/core/state.ts";
+import type { Message } from "@kiwi/core/protocol.ts";
 
 describe("ask-human options payload", () => {
   test("only an escalation without a browser link offers options: 2 to 6 different one-line answers", () => {

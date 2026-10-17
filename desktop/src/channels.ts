@@ -2,10 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import type { MessagePortMain } from "electron";
 
-import { keepRecordsIn, type RecordMemory } from "../../src/client.ts";
-import type { Member } from "../../src/membership.ts";
-import type { PersonClaim } from "../../src/person.ts";
-import type { Signed, SigningBudget } from "../../src/sas.ts";
+import { keepRecordsIn, type RecordMemory } from "@kiwi/core/client.ts";
+import type { Member } from "@kiwi/core/membership.ts";
+import type { PersonClaim } from "@kiwi/core/person.ts";
+import type { Signed, SigningBudget } from "@kiwi/core/sas.ts";
 import type { ChannelIdentityView } from "./bridge.ts";
 import { writePrivate } from "./guard.ts";
 import { Keyring } from "./keyring.ts";

@@ -7,7 +7,7 @@ import { daemonHello, stopDaemon } from "../../daemon.ts";
 import { cleanup } from "../../cleanup.ts";
 import { VERSION } from "../../version.ts";
 import { hooksInstalled, installHooks } from "../../hooks.ts";
-import { binDir, ensureOnPath, profileFor } from "../../shell-path.ts";
+import { binDir, ensureOnPath, profileFor } from "@kiwi/core/node/shell-path.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, out, Quit, relayUrl } from "../context.ts";
 import { confirm } from "../input.ts";

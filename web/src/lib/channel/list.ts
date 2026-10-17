@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 
-import { decodeJoinCode } from "@mc/crypto.ts"
+import { decodeJoinCode } from "@kiwi/core/crypto.ts"
 import { ops, watches } from "../channel-ops"
 import { withHeads } from "../news"
 import { useSecrets } from "../secrets"

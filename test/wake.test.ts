@@ -3,14 +3,14 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AgentSession, runAgent } from "../src/agent.ts";
-import { Channel } from "../src/client.ts";
+import { Channel } from "@kiwi/core/client.ts";
 import { loadConfig, saveConfig, saveIdentity, updateConfig, type Config, type SeatRecord } from "../src/config.ts";
 import { daemonListening, seatRecordFor, startDaemon, type Daemon } from "../src/daemon.ts";
 import { howMessagesReachYou } from "../src/hooks.ts";
-import { generateIdentity } from "../src/identity.ts";
-import type { Presence } from "../src/protocol.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
+import type { Presence } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { wakeArgv, wakeKey, wakePath, wakePrompt } from "../src/wake.ts";
+import { wakeArgv, wakeKey, wakePath, wakePrompt } from "@kiwi/core/wake.ts";
 
 setDefaultTimeout(60_000);
 

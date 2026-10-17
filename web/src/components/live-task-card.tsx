@@ -1,7 +1,7 @@
 import { ArrowRight01Icon } from "@hugeicons/core-free-icons"
 
-import type { Message } from "@mc/protocol.ts"
-import { colorOf, placeKey, taskId, type ChannelState } from "@mc/state.ts"
+import type { Message } from "@kiwi/core/protocol.ts"
+import { colorOf, placeKey, taskId, type ChannelState } from "@kiwi/core/state.ts"
 import { excerpt, formatAgo, memberName } from "@/lib/format"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"

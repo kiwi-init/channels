@@ -49,6 +49,9 @@ jobs:
           test "$pkg" = "$v" || { echo "package.json says $pkg, src/version.ts says $v"; exit 1; }
           test "$app" = "$v" || { echo "desktop/package.json says $app, src/version.ts says $v"; exit 1; }
 
+      - name: Install
+        run: bun install --frozen-lockfile
+
       # Required: a release ships with its changelog. CHANGELOG.md must have this version's section
       # (`bun run changelog --write` in the release PR); a pre-release without one gets notes made
       # from its commits. Checked here so nothing builds for a tag that can't be published.

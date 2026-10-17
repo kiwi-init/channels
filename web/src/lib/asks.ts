@@ -1,4 +1,4 @@
-import type { Message } from "@mc/protocol.ts"
+import type { Message } from "@kiwi/core/protocol.ts"
 
 export interface AsksForMe {
   escalations: Message[]

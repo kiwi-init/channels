@@ -1,8 +1,8 @@
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
-import { verifyRequest } from "../auth.ts";
-import { b64url, fromB64url } from "../crypto.ts";
-import { PAGE_LIMIT, type Envelope } from "../protocol.ts";
+import { verifyRequest } from "@kiwi/core/auth.ts";
+import { b64url, fromB64url } from "@kiwi/core/crypto.ts";
+import { PAGE_LIMIT, type Envelope } from "@kiwi/core/protocol.ts";
 import { Forbidden, NotFound, Unauthorized } from "./failures.ts";
 import { Request_ } from "./http.ts";
 import { Policy } from "./policy.ts";

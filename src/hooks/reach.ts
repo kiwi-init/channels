@@ -1,6 +1,6 @@
 import { COMMANDS } from "../brief.ts";
 import { here, type Here } from "../seats.ts";
-import { wakePath, wakeWords } from "../wake.ts";
+import { wakePath, wakeWords } from "@kiwi/core/wake.ts";
 import { hooksListen } from "./install/claude.ts";
 
 function checkEachTurn(mc: string): string {

@@ -5,7 +5,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ensureOnPath, profileFor } from "../src/shell-path.ts";
+import { ensureOnPath, profileFor } from "@kiwi/core/node/shell-path.ts";
 
 const MARK = "# Added by a test.";
 

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import * as Effect from "effect/Effect";
 import { oneLook, openSession, runAgent, type Agent, type AgentSession } from "../src/agent.ts";
 import { appendCache, Cache, Keystore, readCache } from "../src/config.ts";
-import type { Message } from "../src/protocol.ts";
+import type { Message } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { kiwiCmd } from "./owner.ts";
 import { trafficProxy, type Traffic } from "./traffic.ts";

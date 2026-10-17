@@ -10,12 +10,12 @@ import { serveKeys } from "../desktop/src/keys-server.ts";
 import { acceptSeat, mergePublicChannels, migrateEntries, publicChannel, withAccess } from "../desktop/src/seats.ts";
 import { fromWire, toWire } from "../desktop/src/wire.ts";
 import { remoteOps } from "../web/src/lib/channel-remote.ts";
-import { ChannelGone } from "../src/client.ts";
-import { decodeJoinCode, encodeJoinCode, newRoomId } from "../src/crypto.ts";
-import { generateIdentity, type Identity } from "../src/identity.ts";
-import type { CachedRow } from "../src/cache-row.ts";
-import type { Member } from "../src/membership.ts";
-import { provePerson } from "../src/person.ts";
+import { ChannelGone } from "@kiwi/core/client.ts";
+import { decodeJoinCode, encodeJoinCode, newRoomId } from "@kiwi/core/crypto.ts";
+import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
+import type { CachedRow } from "@kiwi/core/cache-row.ts";
+import type { Member } from "@kiwi/core/membership.ts";
+import { provePerson } from "@kiwi/core/person.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { memoryBudget } from "./check.ts";
 

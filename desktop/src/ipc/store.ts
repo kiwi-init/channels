@@ -1,6 +1,6 @@
 import { ipcMain } from "electron";
 
-import { generateIdentity } from "../../../src/identity.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
 import type { ComputerView, PendingItem, PersonView } from "../bridge.ts";
 import { mergePublicChannels, migrateEntries, normalizeRelay, publicComputer, publicPerson } from "../guard.ts";
 import { connectKeys, tellKeys } from "../keys-process.ts";

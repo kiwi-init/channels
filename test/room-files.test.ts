@@ -6,10 +6,10 @@ import { Database } from "bun:sqlite";
 import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { signRequest } from "../src/auth.ts";
-import { Channel } from "../src/client.ts";
-import { decodeJoinCode } from "../src/crypto.ts";
-import { generateIdentity } from "../src/identity.ts";
+import { signRequest } from "@kiwi/core/auth.ts";
+import { Channel } from "@kiwi/core/client.ts";
+import { decodeJoinCode } from "@kiwi/core/crypto.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
 
 setDefaultTimeout(30_000);

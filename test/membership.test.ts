@@ -2,12 +2,12 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Channel, ChannelGone, RelayError } from "../src/client.ts";
-import { decodeJoinCode, encodeJoinCode, open, ownerFingerprint } from "../src/crypto.ts";
-import { generateIdentity, type Identity } from "../src/identity.ts";
-import type { Message } from "../src/protocol.ts";
+import { Channel, ChannelGone, RelayError } from "@kiwi/core/client.ts";
+import { decodeJoinCode, encodeJoinCode, open, ownerFingerprint } from "@kiwi/core/crypto.ts";
+import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
+import type { Message } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { fold, type Roster } from "../src/state.ts";
+import { fold, type Roster } from "@kiwi/core/state.ts";
 import { checked } from "./check.ts";
 
 setDefaultTimeout(30_000);
@@ -158,7 +158,7 @@ describe("membership channels", () => {
 });
 
 async function rawLast(ch: Channel): Promise<{ iv: string; ct: string }> {
-  const { signRequest } = await import("../src/auth.ts");
+  const { signRequest } = await import("@kiwi/core/auth.ts");
   const res = await fetch(new URL(`/v1/rooms/${ch.roomId}/messages?since=0`, ch.relay), {
     headers: { authorization: `Bearer ${await signRequest(ch.identity, ch.roomId, "GET", "/messages?since=0")}` },
   });

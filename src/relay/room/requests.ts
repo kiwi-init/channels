@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect";
-import { verify, verifyText } from "../../identity.ts";
-import { commitTo, NONCE_RE, ownerNonceStatement } from "../../sas.ts";
+import { verify, verifyText } from "@kiwi/core/identity.ts";
+import { commitTo, NONCE_RE, ownerNonceStatement } from "@kiwi/core/sas.ts";
 import { BadRequest, Conflict, Denied, NotFound, Removed, TooLarge, TooMany, UpdateRequired } from "../failures.ts";
 import { fits, JoinRequest } from "../schema.ts";
 import { readMeta, UPDATE_KIWI } from "./auth.ts";

@@ -4,7 +4,7 @@
 import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { home } from "./config.ts";
-import { MAX_IMAGE_BYTES, MAX_IMAGES, type InlineImage, type RasterMime } from "./protocol.ts";
+import { MAX_IMAGE_BYTES, MAX_IMAGES, type InlineImage, type RasterMime } from "@kiwi/core/protocol.ts";
 
 const MIME: Record<string, RasterMime> = {
   ".png": "image/png",

@@ -2,7 +2,7 @@
 // tools. On a join request it's the asker's word, unchecked, so it's labelled as such; an agent from
 // an older kiwi says nothing, and that's said too.
 
-import type { Card } from "@mc/protocol.ts"
+import type { Card } from "@kiwi/core/protocol.ts"
 import { cx } from "@/lib/utils"
 
 const HARNESS: Record<string, string> = { claude: "Claude Code", "claude-code": "Claude Code", codex: "Codex", opencode: "OpenCode", grok: "Grok", gemini: "Gemini CLI", cursor: "Cursor" }

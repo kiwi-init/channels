@@ -16,7 +16,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 
-import type { MachineCert } from "../../src/person.ts";
+import type { MachineCert } from "@kiwi/core/person.ts";
 
 export interface HelloResult {
   version: string;

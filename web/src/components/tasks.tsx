@@ -1,8 +1,8 @@
 import { ArrowDown01Icon, Cancel01Icon, Note01Icon, Search01Icon } from "@hugeicons/core-free-icons"
 import { useState } from "react"
 
-import type { TaskState } from "@mc/protocol.ts"
-import { colorOf, taskId, tasksAwaitingPeople, type ChannelState, type Task } from "@mc/state.ts"
+import type { TaskState } from "@kiwi/core/protocol.ts"
+import { colorOf, taskId, tasksAwaitingPeople, type ChannelState, type Task } from "@kiwi/core/state.ts"
 import { formatAgo } from "@/lib/format"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"

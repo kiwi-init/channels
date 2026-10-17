@@ -17,7 +17,7 @@
 // Shared by the Cloudflare and Bun relays. Nothing here touches storage
 // directly: each adapter implements MailboxStore with its own tables.
 
-import { MAILBOX_ID_RE, MAILBOX_MAX_BYTES, MAILBOX_TTL_MS } from "../mailbox.ts";
+import { MAILBOX_ID_RE, MAILBOX_MAX_BYTES, MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 
 interface MailboxSlots {
   a: string | null;

@@ -5,13 +5,13 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Channel, RelayError } from "../src/client.ts";
-import type { ChannelAccess } from "../src/crypto.ts";
-import { generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
-import { ignored, type Event, type Kind, type Message } from "../src/protocol.ts";
+import { Channel, RelayError } from "@kiwi/core/client.ts";
+import type { ChannelAccess } from "@kiwi/core/crypto.ts";
+import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
+import { ignored, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { parseScopes, readScopes, refusal, wireScopes, type Scope } from "../src/scopes.ts";
-import { fold, type Roster } from "../src/state.ts";
+import { parseScopes, readScopes, refusal, wireScopes, type Scope } from "@kiwi/core/scopes.ts";
+import { fold, type Roster } from "@kiwi/core/state.ts";
 import { checked } from "./check.ts";
 
 setDefaultTimeout(60_000);
@@ -297,13 +297,13 @@ describe("scopes at the relay", () => {
     const { id } = await admit("pinned")
     const served = (await ownerCh.members()).find((m) => m.pk === id.pk)!
     const newer = { ...served, at: served.at + 1000, later: { scopes: [] as Scope[], since: 1 } }
-    const kept = new Map<string, import("../src/membership.ts").Member>([[`${ownerCh.roomId}/${id.pk}`, newer]])
-    const { keepRecordsIn } = await import("../src/client.ts")
+    const kept = new Map<string, import("@kiwi/core/membership.ts").Member>([[`${ownerCh.roomId}/${id.pk}`, newer]])
+    const { keepRecordsIn } = await import("@kiwi/core/client.ts")
     keepRecordsIn({ get: (room, pk) => kept.get(`${room}/${pk}`) ?? null, set: (room, pk, m) => void kept.set(`${room}/${pk}`, m) })
     try {
       expect((await ownerCh.members()).find((m) => m.pk === id.pk)!.later).toEqual({ scopes: [], since: 1 })
     } finally {
-      const fresh = new Map<string, import("../src/membership.ts").Member>()
+      const fresh = new Map<string, import("@kiwi/core/membership.ts").Member>()
       keepRecordsIn({ get: (room, pk) => fresh.get(`${room}/${pk}`) ?? null, set: (room, pk, m) => void fresh.set(`${room}/${pk}`, m) })
     }
   })

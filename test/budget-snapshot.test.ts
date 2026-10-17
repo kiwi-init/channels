@@ -4,13 +4,13 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openSession, runAgent, type AgentSession } from "../src/agent.ts";
-import { signRequest } from "../src/auth.ts";
+import { signRequest } from "@kiwi/core/auth.ts";
 import { loadConfig } from "../src/config.ts";
 import { openOwnerSession } from "../src/owner.ts";
-import type { Event } from "../src/protocol.ts";
+import type { Event } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { sealSnapshot } from "../src/snapshot.ts";
-import { fold, type ChannelState, type FoldBase } from "../src/state.ts";
+import { sealSnapshot } from "@kiwi/core/snapshot.ts";
+import { fold, type ChannelState, type FoldBase } from "@kiwi/core/state.ts";
 import { kiwiCmd } from "./owner.ts";
 import { sum, trafficProxy, type Traffic } from "./traffic.ts";
 

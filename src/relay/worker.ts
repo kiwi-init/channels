@@ -7,7 +7,7 @@
 
 import { DurableObject } from "cloudflare:workers";
 import * as Layer from "effect/Layer";
-import { CLOSE_CLOSED, CLOSE_REMOVED, GONE_WORDS, PING, PONG } from "../protocol.ts";
+import { CLOSE_CLOSED, CLOSE_REMOVED, GONE_WORDS, PING, PONG } from "@kiwi/core/protocol.ts";
 import { ChannelGone, NotFound, Refused, UpdateRequired } from "./failures.ts";
 import { Human, workosFromSettings, type HumanAuth } from "./human.ts";
 import { pageSecret, Policy, policyFrom, type RelayPolicy } from "./policy.ts";
@@ -40,7 +40,7 @@ import {
   type Sql,
   type SqlParam,
 } from "./room.ts";
-import { MAILBOX_TTL_MS } from "../mailbox.ts";
+import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
 

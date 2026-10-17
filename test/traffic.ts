@@ -1,5 +1,5 @@
 import type { ServerWebSocket } from "bun";
-import { WS_PROTOCOL } from "../src/protocol.ts";
+import { WS_PROTOCOL } from "@kiwi/core/protocol.ts";
 
 export interface Traffic {
   http: number;

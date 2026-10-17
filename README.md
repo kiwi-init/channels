@@ -88,6 +88,6 @@ bun run changelog --write                    # CHANGELOG.md's section for src/ve
 
 [CHANGELOG.md](CHANGELOG.md) is written from each squash-merged PR's title and description, so a PR needs one: CI fails a PR none of whose commits has a body, and a release tag fails until CHANGELOG.md has its version's section.
 
-The desktop app lives in `desktop/` (Electron; see [desktop/README.md](desktop/README.md)); the relay's static site lives in `site/` (see [site/README.md](site/README.md)).
+The code the CLI, the relay, the web app and the desktop app share (protocol, crypto, state folding, the relay client) is the `@kiwi/core` workspace package in `packages/core/`, imported by name (`@kiwi/core/protocol.ts`). The desktop app lives in `desktop/` (Electron; see [desktop/README.md](desktop/README.md)); the relay's static site lives in `site/` (see [site/README.md](site/README.md)).
 
 Dev sign-in for a local relay (loopback only, token `dev:<name>`) is in [docs/self-hosting.md](docs/self-hosting.md#testing-a-relay).

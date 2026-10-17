@@ -2,7 +2,7 @@ import { hasBridge, relayUrl } from "../lib/relay"
 import { CheckListIcon, LockIcon } from "@hugeicons/core-free-icons"
 import { useEffect, useState, type ReactNode } from "react"
 
-import { handleFor, NAME_RE } from "@mc/membership.ts"
+import { handleFor, NAME_RE } from "@kiwi/core/membership.ts"
 import { tokenForCreate, useSignInMode } from "@/lib/auth"
 import { isJoinBlip } from "@/lib/join-blip"
 import { bridge, useSecrets } from "@/lib/secrets"

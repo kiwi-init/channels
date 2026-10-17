@@ -9,9 +9,9 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AgentSession } from "../src/agent.ts";
-import { Channel } from "../src/client.ts";
+import { Channel } from "@kiwi/core/client.ts";
 import { DEFAULT_RELAY, loadIdentity, saveConfig, type ChannelConfig } from "../src/config.ts";
-import { b64url, newRoomId } from "../src/crypto.ts";
+import { b64url, newRoomId } from "@kiwi/core/crypto.ts";
 
 process.env.KIWI_HOME ??= mkdtempSync(join(tmpdir(), "mc-demo-"));
 const relay = (process.env.KIWI_RELAY ?? DEFAULT_RELAY).replace(/\/+$/, "");

@@ -4,11 +4,11 @@
 
 import { beforeAll, describe, expect, test } from "bun:test";
 import { detectHarness, mergeCard, repoName, sameCard } from "../src/card.ts";
-import { cardLine, describeEvent, formatMessage, formatStatus, formatTask, formatTasks } from "../src/format.ts";
-import { generateIdentity, sign, verify, type Identity } from "../src/identity.ts";
-import { wellFormed, type Event, type Kind, type Message } from "../src/protocol.ts";
-import { fold, type Roster } from "../src/state.ts";
-import { taskFeed } from "../src/work.ts";
+import { cardLine, describeEvent, formatMessage, formatStatus, formatTask, formatTasks } from "@kiwi/core/format.ts";
+import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
+import { wellFormed, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
+import { fold, type Roster } from "@kiwi/core/state.ts";
+import { taskFeed } from "@kiwi/core/work.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;

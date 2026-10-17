@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
-import type { ChannelAccess } from "../crypto.ts";
+import type { ChannelAccess } from "@kiwi/core/crypto.ts";
 import { home, writePrivate } from "./paths.ts";
 
 export interface ChannelConfig extends ChannelAccess {

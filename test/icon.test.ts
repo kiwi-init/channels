@@ -4,10 +4,10 @@ import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Channel } from "../src/client.ts";
-import { decodeJoinCode } from "../src/crypto.ts";
-import { generateIdentity } from "../src/identity.ts";
-import { wellFormedIcon } from "../src/protocol.ts";
+import { Channel } from "@kiwi/core/client.ts";
+import { decodeJoinCode } from "@kiwi/core/crypto.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
+import { wellFormedIcon } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { checked } from "./check.ts";
 
@@ -30,7 +30,7 @@ beforeAll(async () => {
   const ask = await Channel.requestJoin(relay, code, agent, { name: "win" });
   await ownerCh.approve((await checked(ownerCh, relay, code, [{ id: agent, requestId: ask.requestId }]))[0]!);
   const st = await Channel.joinStatus(relay, code, agent, ask.requestId);
-  memberCh = new Channel((st as { access: import("../src/crypto.ts").ChannelAccess }).access, relay, agent);
+  memberCh = new Channel((st as { access: import("@kiwi/core/crypto.ts").ChannelAccess }).access, relay, agent);
 });
 afterAll(() => {
   server.stop(true);
@@ -66,7 +66,7 @@ test("only the owner sets it, only members read it, and only sane icons go in", 
 });
 
 test("an icon a member sealed themself (for a colluding relay to serve) is ignored: it must be the owner's", async () => {
-  const { seal } = await import("../src/crypto.ts");
+  const { seal } = await import("@kiwi/core/crypto.ts");
   const e = memberCh.access.epoch;
   const forged = { e, ...(await seal(memberCh.access.keys[String(e)]!, memberCh.roomId, { what: "channel-icon", room: memberCh.roomId, icon: { kind: "emoji", emoji: "💀" } })) };
   // Straight into the relay's storage, as a relay that colludes with a member would.

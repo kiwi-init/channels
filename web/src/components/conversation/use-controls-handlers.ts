@@ -1,4 +1,4 @@
-import { describeScopes, wireScopes } from "@mc/scopes.ts"
+import { describeScopes, wireScopes } from "@kiwi/core/scopes.ts"
 import { forgetChannel, loadMember, renameChannel, type ChannelHandle, type StoredMember } from "@/lib/channel"
 import { secrets } from "@/lib/secrets"
 import type { ControlsProps } from "../controls"

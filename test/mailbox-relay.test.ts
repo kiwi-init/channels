@@ -6,10 +6,10 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { generateIdentity } from "../src/identity.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { answerPair, askToPair, mailboxId, newSecret, openMailbox, readPairAnswer, readPairAsk } from "../src/mailbox.ts";
-import { MAILBOX_MAX_BYTES } from "../src/mailbox.ts";
+import { answerPair, askToPair, mailboxId, newSecret, openMailbox, readPairAnswer, readPairAsk } from "@kiwi/core/mailbox.ts";
+import { MAILBOX_MAX_BYTES } from "@kiwi/core/mailbox.ts";
 import { onMailboxHttp, type MailboxStore } from "../src/relay/mailbox.ts";
 
 const dataDir = mkdtempSync(join(tmpdir(), "kiwi-mailbox-relay-"));

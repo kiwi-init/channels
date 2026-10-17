@@ -6,14 +6,14 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Channel, relayConfig } from "../src/client.ts";
-import { b64url } from "../src/crypto.ts";
-import { generateIdentity } from "../src/identity.ts";
+import { Channel, relayConfig } from "@kiwi/core/client.ts";
+import { b64url } from "@kiwi/core/crypto.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { authkitDomains, workosHumanAuth } from "../src/relay/human.ts";
 import { HOLD_MS, holdEntry, reserveSlot } from "../src/relay/room.ts";
-import { signRequest } from "../src/auth.ts";
-import { claimComputer, provePerson } from "../src/person.ts";
+import { signRequest } from "@kiwi/core/auth.ts";
+import { claimComputer, provePerson } from "@kiwi/core/person.ts";
 import { checked, checkedByHand } from "./check.ts";
 import { joinAgent, joinPerson, pairComputer, setupChannel } from "./owner.ts";
 
@@ -177,7 +177,7 @@ describe("agents join with computer claims, people with person claims", () => {
 
 describe("names", () => {
   test("people get the name they asked under, and the owner can't admit a name twice", async () => {
-    const { handleFor } = await import("../src/membership.ts");
+    const { handleFor } = await import("@kiwi/core/membership.ts");
     expect(handleFor("Jonatas Filho")).toBe("jonatas-filho");
     expect(handleFor("Jonatas Walker")).toBe("jonatas-walker");
     expect(handleFor("  José  da Silva ")).toBe("jose-da-silva");

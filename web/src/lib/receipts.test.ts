@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
-import type { Message } from "@mc/protocol.ts"
-import type { ChannelState } from "@mc/state.ts"
+import type { Message } from "@kiwi/core/protocol.ts"
+import type { ChannelState } from "@kiwi/core/state.ts"
 
 import { addMarks, readAt, receipt, recipients, type Marks } from "./receipts"
 

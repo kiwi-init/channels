@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect";
-import { verifyRequest } from "../../auth.ts";
-import { GONE_WORDS, WS_PROTOCOL, type GoneHow } from "../../protocol.ts";
+import { verifyRequest } from "@kiwi/core/auth.ts";
+import { GONE_WORDS, WS_PROTOCOL, type GoneHow } from "@kiwi/core/protocol.ts";
 import { ChannelGone, NotMember, Unauthorized, UpdateRequired } from "../failures.ts";
 import { RoomStore, type RoomDb } from "./db.ts";
 

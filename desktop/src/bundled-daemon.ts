@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { app } from "electron";
 
-import { certifyMachine } from "../../src/person.ts";
+import { certifyMachine } from "@kiwi/core/person.ts";
 import type { ComputerView } from "./bridge.ts";
 import { compareVersions, ensureOnPath, keepCli } from "./cli.ts";
 import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, spawnDaemon, type HelloResult } from "./daemon-client.ts";

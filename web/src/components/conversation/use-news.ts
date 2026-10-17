@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 
-import type { Message } from "@mc/protocol.ts"
-import type { ChannelState, Member } from "@mc/state.ts"
+import type { Message } from "@kiwi/core/protocol.ts"
+import type { ChannelState, Member } from "@kiwi/core/state.ts"
 import { loadRecent, saveRecent, type StoredMember } from "@/lib/channel"
 import { excerpt, memberName } from "@/lib/format"
 import { markSeen, setOpenNews } from "@/lib/news"

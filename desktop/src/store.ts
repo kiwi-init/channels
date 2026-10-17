@@ -2,8 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { app, dialog, safeStorage } from "electron";
 
-import type { Identity } from "../../src/identity.ts";
-import { DEFAULT_RELAY } from "../../src/relay-url.ts";
+import type { Identity } from "@kiwi/core/identity.ts";
+import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts";
 import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, StoreSnapshot } from "./bridge.ts";
 import { normalizeRelay, readStore, snapshotOf, writePrivate } from "./guard.ts";
 import { tellKeys } from "./keys-process.ts";

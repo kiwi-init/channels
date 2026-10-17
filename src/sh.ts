@@ -3,11 +3,11 @@ import * as Exit from "effect/Exit";
 import { Bash, InMemoryFs, type CommandName, type IFileSystem } from "just-bash";
 import { Cursor, Keystore } from "./config.ts";
 import { openSession, runAgent, wants, type AgentSession } from "./agent.ts";
-import { describeEvent, formatMessage, formatStatus, formatTask, markedText, memberJson, reviewBody, statusJson } from "./format.ts";
-import { ignored, type Message } from "./protocol.ts";
-import { omit } from "./omit.ts";
+import { describeEvent, formatMessage, formatStatus, formatTask, markedText, memberJson, reviewBody, statusJson } from "@kiwi/core/format.ts";
+import { ignored, type Message } from "@kiwi/core/protocol.ts";
+import { omit } from "@kiwi/core/omit.ts";
 import { queryCommand, queryTables, reviewTexts, type Tables } from "./sh-query.ts";
-import { taskId, type ChannelState, type Place, type ReviewRound } from "./state.ts";
+import { taskId, type ChannelState, type Place, type ReviewRound } from "@kiwi/core/state.ts";
 
 /**
  * Read-only text tools. Anything that writes, waits, archives or reaches out is left out.
