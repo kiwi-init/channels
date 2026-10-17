@@ -20,7 +20,8 @@
       "expo-build-properties",
       "expo-sqlite",
       "expo-secure-store",
-      "expo-image"
+      "expo-image",
+      ["expo-local-authentication", { "faceIDPermission": "Kiwi asks for Face ID before it opens the keys on this phone." }]
     ]
   }
 }

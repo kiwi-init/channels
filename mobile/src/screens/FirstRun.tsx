@@ -8,7 +8,7 @@ import { Text } from "../ui/Text"
 import { TextField } from "../ui/TextField"
 import { toast } from "../ui/Toast"
 
-export function FirstRun({ onContinue }: { onContinue: (name: string) => Promise<void> | void }) {
+export function FirstRun({ onContinue, onRestore }: { onContinue: (name: string) => Promise<void> | void; onRestore?: () => void }) {
   const { colors } = useTheme()
   const [name, setName] = useState("")
   const [busy, setBusy] = useState(false)
@@ -33,6 +33,7 @@ export function FirstRun({ onContinue }: { onContinue: (name: string) => Promise
         </Text>
         <TextField label="Your name" value={name} onChangeText={setName} autoFocus autoCapitalize="words" returnKeyType="done" onSubmitEditing={() => ready && void go()} />
         <Button title="Continue" disabled={!ready} onPress={() => void go()} />
+        {onRestore ? <Button title="I already use Kiwi: sign in" variant="ghost" onPress={onRestore} /> : null}
       </View>
     </SafeAreaView>
   )
