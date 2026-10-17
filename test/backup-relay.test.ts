@@ -3,9 +3,21 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { BackupError, deleteBackup, getBackup, openBackup, putBackup, sealBackup } from "../src/backup.ts";
+import {
+  BackupError,
+  deleteBackup,
+  getBackup,
+  openBackup,
+  putBackup,
+  sealBackup,
+} from "../src/backup.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
-import { hourlyLimit, onBackupHttp, type BackupRecord, type BackupStore } from "../src/relay/backup.ts";
+import {
+  hourlyLimit,
+  onBackupHttp,
+  type BackupRecord,
+  type BackupStore,
+} from "../src/relay/backup.ts";
 import { startRelay } from "../src/relay/bun.ts";
 
 const dataDir = mkdtempSync(join(tmpdir(), "kiwi-backup-relay-"));
@@ -13,7 +25,8 @@ let server: ReturnType<typeof startRelay> | undefined;
 let relay = "";
 const fast = { N: 2 ** 14, r: 8, p: 1 };
 const words = "alpha bravo charlie delta echo foxtrot";
-const isKeys = (v: unknown): v is { person: string } => !!v && typeof v === "object" && "person" in v;
+const isKeys = (v: unknown): v is { person: string } =>
+  !!v && typeof v === "object" && "person" in v;
 
 beforeAll(() => {
   server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir, human: devHumanAuth() });
@@ -36,7 +49,9 @@ describe("the relay's backup", () => {
   test("the relay's copy holds no key material and no passphrase", async () => {
     const env = await sealBackup(words, { person: "THE-KEY" }, fast);
     await putBackup(relay, "dev:bo", env);
-    const raw = await (await fetch(`${relay}/v1/backup`, { headers: { "x-human-token": "dev:bo" } })).text();
+    const raw = await (
+      await fetch(`${relay}/v1/backup`, { headers: { "x-human-token": "dev:bo" } })
+    ).text();
     expect(raw).not.toContain("THE-KEY");
     expect(raw).not.toContain("alpha");
   });
@@ -59,7 +74,8 @@ describe("the relay's backup", () => {
   });
 
   test("it refuses what is not a backup, and a backup that is too large", async () => {
-    const put = (body: string) => fetch(`${relay}/v1/backup`, { method: "PUT", headers: { "x-human-token": "dev:fay" }, body });
+    const put = (body: string) =>
+      fetch(`${relay}/v1/backup`, { method: "PUT", headers: { "x-human-token": "dev:fay" }, body });
     expect((await put(JSON.stringify({ envelope: { v: 1 } }))).status).toBe(400);
     expect((await put("not json")).status).toBe(400);
     expect((await put("x".repeat(300 * 1024))).status).toBe(413);
@@ -69,17 +85,30 @@ describe("the relay's backup", () => {
 describe("the backup route alone", () => {
   const memory = (): BackupStore => {
     const rows = new Map<string, BackupRecord>();
-    return { load: async (u) => rows.get(u) ?? null, save: async (u, r) => void rows.set(u, r), drop: async (u) => void rows.delete(u) };
+    return {
+      load: async (u) => rows.get(u) ?? null,
+      save: async (u, r) => void rows.set(u, r),
+      drop: async (u) => void rows.delete(u),
+    };
   };
 
   test("a relay without sign-in keeps no backups, and other paths are not its", async () => {
-    expect((await onBackupHttp(new Request("http://x/v1/backup"), memory(), { human: null }))?.status).toBe(404);
-    expect(await onBackupHttp(new Request("http://x/v1/other"), memory(), { human: devHumanAuth() })).toBeNull();
+    expect(
+      (await onBackupHttp(new Request("http://x/v1/backup"), memory(), { human: null }))?.status,
+    ).toBe(404);
+    expect(
+      await onBackupHttp(new Request("http://x/v1/other"), memory(), { human: devHumanAuth() }),
+    ).toBeNull();
   });
 
   test("requests over the hourly limit are turned away, and the limit is per person", async () => {
     const allow = hourlyLimit(2);
-    const ask = (token: string) => onBackupHttp(new Request("http://x/v1/backup", { headers: { "x-human-token": token } }), memory(), { human: devHumanAuth(), allow });
+    const ask = (token: string) =>
+      onBackupHttp(
+        new Request("http://x/v1/backup", { headers: { "x-human-token": token } }),
+        memory(),
+        { human: devHumanAuth(), allow },
+      );
     expect((await ask("dev:a"))?.status).toBe(404);
     expect((await ask("dev:a"))?.status).toBe(404);
     expect((await ask("dev:a"))?.status).toBe(429);

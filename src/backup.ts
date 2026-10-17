@@ -51,24 +51,44 @@ export function normalizePassphrase(text: string): string {
 export function passphraseProblem(text: string): string | null {
   const words = normalizePassphrase(text).split(" ").filter(Boolean);
   const chars = words.join(" ").length;
-  return words.length >= 5 || chars >= 20 ? null : "Use the six words the app gave you, or at least five words or twenty characters of your own.";
+  return words.length >= 5 || chars >= 20
+    ? null
+    : "Use the six words the app gave you, or at least five words or twenty characters of your own.";
 }
 
-const aad = (env: Pick<BackupEnvelope, "v" | "kdf" | "N" | "r" | "p" | "salt">): string => `kiwi-backup\n${env.v}\n${env.kdf}\n${env.N}\n${env.r}\n${env.p}\n${env.salt}`;
+const aad = (env: Pick<BackupEnvelope, "v" | "kdf" | "N" | "r" | "p" | "salt">): string =>
+  `kiwi-backup\n${env.v}\n${env.kdf}\n${env.N}\n${env.r}\n${env.p}\n${env.salt}`;
 
-async function keyFor(passphrase: string, salt: Uint8Array, params: { N: number; r: number; p: number }): Promise<string> {
-  const raw = await scryptAsync(enc.encode(normalizePassphrase(passphrase)), salt, { ...params, dkLen: 32, maxmem: 160 * params.N * params.r });
+async function keyFor(
+  passphrase: string,
+  salt: Uint8Array,
+  params: { N: number; r: number; p: number },
+): Promise<string> {
+  const raw = await scryptAsync(enc.encode(normalizePassphrase(passphrase)), salt, {
+    ...params,
+    dkLen: 32,
+    maxmem: 160 * params.N * params.r,
+  });
   return b64url(raw);
 }
 
-export async function sealBackup(passphrase: string, payload: object, params: { N: number; r: number; p: number } = BACKUP_KDF): Promise<BackupEnvelope> {
+export async function sealBackup(
+  passphrase: string,
+  payload: object,
+  params: { N: number; r: number; p: number } = BACKUP_KDF,
+): Promise<BackupEnvelope> {
   const problem = passphraseProblem(passphrase);
   if (problem) throw new Error(problem);
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const head = { v: 1 as const, kdf: "scrypt" as const, ...params, salt: b64url(salt) };
-  const { iv, ct } = await sealBytes(await keyFor(passphrase, salt, params), enc.encode(JSON.stringify(payload)), aad(head));
+  const { iv, ct } = await sealBytes(
+    await keyFor(passphrase, salt, params),
+    enc.encode(JSON.stringify(payload)),
+    aad(head),
+  );
   const env: BackupEnvelope = { ...head, iv, ct };
-  if (enc.encode(JSON.stringify(env)).length > BACKUP_MAX_BYTES) throw new Error("the backup is too large");
+  if (enc.encode(JSON.stringify(env)).length > BACKUP_MAX_BYTES)
+    throw new Error("the backup is too large");
   return env;
 }
 
@@ -86,11 +106,21 @@ export function readEnvelope(value: unknown): BackupEnvelope | null {
     typeof e.ct === "string";
   if (!ok) return null;
   const env = e as unknown as BackupEnvelope;
-  const sane = Number.isInteger(env.N) && env.N >= 2 ** 14 && env.N <= 2 ** 20 && (env.N & (env.N - 1)) === 0 && env.r === 8 && env.p === 1;
+  const sane =
+    Number.isInteger(env.N) &&
+    env.N >= 2 ** 14 &&
+    env.N <= 2 ** 20 &&
+    (env.N & (env.N - 1)) === 0 &&
+    env.r === 8 &&
+    env.p === 1;
   return sane ? env : null;
 }
 
-export async function openBackup<T extends object>(passphrase: string, env: BackupEnvelope, check: (v: unknown) => v is T): Promise<T> {
+export async function openBackup<T extends object>(
+  passphrase: string,
+  env: BackupEnvelope,
+  check: (v: unknown) => v is T,
+): Promise<T> {
   const key = await keyFor(passphrase, fromB64url(env.salt), env);
   const plain = await openBytes(key, env.iv, env.ct, aad(env));
   if (!plain) throw new WrongPassphrase();
@@ -109,7 +139,13 @@ export class BackupError extends Error {
   }
 }
 
-async function call(relay: string, token: string, method: "GET" | "PUT" | "DELETE", body?: object, fetchImpl: typeof fetch = fetch): Promise<Response> {
+async function call(
+  relay: string,
+  token: string,
+  method: "GET" | "PUT" | "DELETE",
+  body?: object,
+  fetchImpl: typeof fetch = fetch,
+): Promise<Response> {
   const res = await fetchImpl(`${relay}/v1/backup`, {
     method,
     headers: { "x-human-token": token, ...(body ? { "content-type": "application/json" } : {}) },
@@ -122,13 +158,25 @@ async function call(relay: string, token: string, method: "GET" | "PUT" | "DELET
   return res;
 }
 
-export async function putBackup(relay: string, token: string, envelope: BackupEnvelope, fetchImpl?: typeof fetch): Promise<void> {
+export async function putBackup(
+  relay: string,
+  token: string,
+  envelope: BackupEnvelope,
+  fetchImpl?: typeof fetch,
+): Promise<void> {
   await call(relay, token, "PUT", { envelope }, fetchImpl);
 }
 
-export async function getBackup(relay: string, token: string, fetchImpl?: typeof fetch): Promise<{ envelope: BackupEnvelope; at: number } | null> {
+export async function getBackup(
+  relay: string,
+  token: string,
+  fetchImpl?: typeof fetch,
+): Promise<{ envelope: BackupEnvelope; at: number } | null> {
   try {
-    const body = (await (await call(relay, token, "GET", undefined, fetchImpl)).json()) as { envelope?: unknown; at?: unknown };
+    const body = (await (await call(relay, token, "GET", undefined, fetchImpl)).json()) as {
+      envelope?: unknown;
+      at?: unknown;
+    };
     const envelope = readEnvelope(body.envelope);
     return envelope && typeof body.at === "number" ? { envelope, at: body.at } : null;
   } catch (e) {
@@ -137,6 +185,10 @@ export async function getBackup(relay: string, token: string, fetchImpl?: typeof
   }
 }
 
-export async function deleteBackup(relay: string, token: string, fetchImpl?: typeof fetch): Promise<void> {
+export async function deleteBackup(
+  relay: string,
+  token: string,
+  fetchImpl?: typeof fetch,
+): Promise<void> {
   await call(relay, token, "DELETE", undefined, fetchImpl);
 }
