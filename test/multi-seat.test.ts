@@ -105,7 +105,12 @@ describe("one Claude Code session that holds two seats", () => {
   test("its hooks serve both seats, and the bare CLI names both instead of picking one", async () => {
     const { ownerA, ownerB, h } = await twoSeats();
     const config = JSON.parse(readFileSync(join(h, "config.json"), "utf8")) as { bindings: Record<string, { as: string; session?: string }[]> };
-    expect(Object.values(config.bindings).flat().map((b) => `${b.as}:${b.session}`).sort()).toEqual(["planner:M", "reviewer:M"]);
+    expect(
+      Object.values(config.bindings)
+        .flat()
+        .map((b) => `${b.as}:${b.session}`)
+        .sort(),
+    ).toEqual(["planner:M", "reviewer:M"]);
 
     const input = JSON.stringify({ session_id: "M", cwd: h });
     const start = (await run(h, ["hook", "session-start"], S, h, input)).out;
@@ -239,8 +244,27 @@ describe("one Claude Code session that joined its second seat from another folde
 test("answers from several seats make one hook answer of the same shape", () => {
   expect(hookOutput([])).toBeNull();
   expect(hookOutput([{ kind: "prompt", text: "a" }])).toBe("a");
-  expect(hookOutput([{ kind: "prompt", text: "a" }, { kind: "prompt", text: "b" }])).toBe("a\n\nb");
-  expect(JSON.parse(hookOutput([{ kind: "block", text: "a" }, { kind: "block", text: "b" }]) ?? "")).toEqual({ decision: "block", reason: "a\n\nb" });
+  expect(
+    hookOutput([
+      { kind: "prompt", text: "a" },
+      { kind: "prompt", text: "b" },
+    ]),
+  ).toBe("a\n\nb");
+  expect(
+    JSON.parse(
+      hookOutput([
+        { kind: "block", text: "a" },
+        { kind: "block", text: "b" },
+      ]) ?? "",
+    ),
+  ).toEqual({ decision: "block", reason: "a\n\nb" });
   expect(JSON.parse(hookOutput([{ kind: "start", text: "a" }]) ?? "")).toEqual({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: "a" } });
-  expect(JSON.parse(hookOutput([{ kind: "followup", text: "a" }, { kind: "followup", text: "b" }]) ?? "")).toEqual({ followup_message: "a b" });
+  expect(
+    JSON.parse(
+      hookOutput([
+        { kind: "followup", text: "a" },
+        { kind: "followup", text: "b" },
+      ]) ?? "",
+    ),
+  ).toEqual({ followup_message: "a b" });
 });

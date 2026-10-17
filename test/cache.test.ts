@@ -13,7 +13,10 @@ afterAll(() => {
 });
 
 const msg = (seq: number) => ({ v: 1, id: String(seq), from: "a", kind: "msg", body: `m${seq}`, ts: seq, seq, sigOk: true }) as never;
-const lines = (room: string) => readFileSync(join(dir, "cache", `${room}.jsonl`), "utf8").trim().split("\n").length;
+const lines = (room: string) =>
+  readFileSync(join(dir, "cache", `${room}.jsonl`), "utf8")
+    .trim()
+    .split("\n").length;
 
 test("two listeners appending the same messages store each one once", () => {
   const room = "a".repeat(32);

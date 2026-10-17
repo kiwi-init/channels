@@ -79,8 +79,7 @@ export const QUIET_DROP_MS = 30_000;
 
 const backoff = Schedule.min([Schedule.exponential("500 millis"), Schedule.spaced("30 seconds")]);
 
-const outlasted = ({ attempt, elapsed, elapsedSincePrevious }: Schedule.InputMetadata<unknown>, quietMs: number) =>
-  elapsed >= quietMs && (attempt === 1 || elapsed - elapsedSincePrevious < quietMs);
+const outlasted = ({ attempt, elapsed, elapsedSincePrevious }: Schedule.InputMetadata<unknown>, quietMs: number) => elapsed >= quietMs && (attempt === 1 || elapsed - elapsedSincePrevious < quietMs);
 
 interface Resume {
   seq: number;
@@ -108,7 +107,19 @@ function clockFrom(now: () => number): Clock.Clock {
   };
 }
 
-const FRAME: Record<Live["_tag"], string> = { Open: "open", Ready: "ready", Message: "msg", Head: "head", Presence: "eph", Info: "info", Roster: "roster", Request: "request", Read: "read", Down: "status", Skipped: "status" };
+const FRAME: Record<Live["_tag"], string> = {
+  Open: "open",
+  Ready: "ready",
+  Message: "msg",
+  Head: "head",
+  Presence: "eph",
+  Info: "info",
+  Roster: "roster",
+  Request: "request",
+  Read: "read",
+  Down: "status",
+  Skipped: "status",
+};
 const failedFrame = (frame: string, err: unknown) => `dropped a ${frame} frame whose handling failed: ${reason(err)}`;
 
 export function reason(err: unknown): string {
@@ -214,7 +225,9 @@ export class ChannelLive {
   private session(at: Resume, quietMs: number, presence: boolean, reads: boolean, send: boolean, watch: boolean): Stream.Stream<Live, Dropped | ChannelGone, Relay> {
     return Stream.callback<Incoming, Dropped | ChannelGone, Relay>((q) => this.socket(at, presence, reads, q, send, watch)).pipe(
       Stream.mapEffect((f) =>
-        (watch && f.t !== "open" && f.t !== "epoch" ? Effect.succeed(this.watched(f, at)) : this.read(f, at, quietMs, presence, reads)).pipe(Effect.catchCause((cause) => Effect.succeed<Live>({ _tag: "Skipped", frame: f.t, error: Cause.squash(cause) }))),
+        (watch && f.t !== "open" && f.t !== "epoch" ? Effect.succeed(this.watched(f, at)) : this.read(f, at, quietMs, presence, reads)).pipe(
+          Effect.catchCause((cause) => Effect.succeed<Live>({ _tag: "Skipped", frame: f.t, error: Cause.squash(cause) })),
+        ),
       ),
       Stream.filter((x): x is Live => x !== null),
     );

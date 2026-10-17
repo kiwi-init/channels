@@ -49,7 +49,7 @@ test("an image, and the relay never sees it", async () => {
   const data = Buffer.from(new Uint8Array(2048).map((_, i) => i % 251)).toString("base64");
   await ownerCh.setIcon({ kind: "image", mime: "image/png", data });
   expect(await memberCh.icon()).toEqual({ kind: "image", mime: "image/png", data });
-  const raw = (await (await fetch(`${relay}/v1/rooms/${ownerCh.roomId}/info?fp=${decodeJoinCode(code).ownerFp}`)).text());
+  const raw = await (await fetch(`${relay}/v1/rooms/${ownerCh.roomId}/info?fp=${decodeJoinCode(code).ownerFp}`)).text();
   expect(raw).toContain("ownerPk");
   expect(raw).not.toContain(data.slice(0, 40));
 });
@@ -96,4 +96,3 @@ test("members are told when it changes", async () => {
   await listening;
   expect(told).toBe(1);
 });
-

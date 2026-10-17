@@ -66,7 +66,15 @@ const verbs: Record<string, () => Effect.Effect<void, unknown, Agent>> = {
       const [o, agent] = yield* Effect.all([keys.identity(OWNER, roomId), keys.identity(name, roomId)]);
       const role = str("role");
       const about = str("about");
-      const { code, access } = yield* Channel.fx.create(relay, o, { name: OWNER, role: "owner" }, [{ ...agent, info: { name, ...(role ? { role } : {}), ...(about ? { about } : {}) } }], roomId, null, args[1]);
+      const { code, access } = yield* Channel.fx.create(
+        relay,
+        o,
+        { name: OWNER, role: "owner" },
+        [{ ...agent, info: { name, ...(role ? { role } : {}), ...(about ? { about } : {}) } }],
+        roomId,
+        null,
+        args[1],
+      );
       const alias = args[1] ?? "channel";
       const cfg = yield* keys.update((c) => {
         c.channels[alias] = { ...access, relay, code, as: name, owner: OWNER };

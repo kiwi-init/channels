@@ -1,4 +1,3 @@
-
 import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -63,8 +62,7 @@ import { wellFormed, type Payload } from "@kiwi/core/protocol.ts";
 
 const LINK = "https://live.example.com/devtools/inspector.html?jwt=SECRET-TOKEN-1234";
 
-const payload = (extra: Record<string, unknown>): Payload =>
-  ({ v: 1, id: "x", from: "dev", kind: "blocking", body: "log in", ts: 1, ...extra }) as Payload;
+const payload = (extra: Record<string, unknown>): Payload => ({ v: 1, id: "x", from: "dev", kind: "blocking", body: "log in", ts: 1, ...extra }) as Payload;
 
 const handoff = (over: Record<string, unknown> = {}) => ({ url: LINK, vendor: "cloudflare", expiresAt: Date.now() + 600_000, ...over });
 

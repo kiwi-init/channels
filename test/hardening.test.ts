@@ -219,7 +219,10 @@ describe("the join code check", () => {
   test("clients from before the check are told to update", async () => {
     const { access, ownerCh } = await ownedChannel();
     // With the code's fingerprint, so it's the old body that's refused, not the missing fp.
-    const ask = await fetch(`${relay}/v1/rooms/${access.roomId}/requests?fp=${await ownerFingerprint(access.ownerPk)}`, { method: "POST", body: JSON.stringify({ pk: "x", xpk: "x", box: "x", ts: Date.now(), sig: "x" }) });
+    const ask = await fetch(`${relay}/v1/rooms/${access.roomId}/requests?fp=${await ownerFingerprint(access.ownerPk)}`, {
+      method: "POST",
+      body: JSON.stringify({ pk: "x", xpk: "x", box: "x", ts: Date.now(), sig: "x" }),
+    });
     expect(ask.status).toBe(426);
     expect(((await ask.json()) as { error: string }).error).toContain("update kiwi");
     // An old owner CLI lists requests without asking for the checked kind.

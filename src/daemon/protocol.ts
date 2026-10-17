@@ -7,7 +7,11 @@ import type { PairedPerson } from "./pair.ts";
 
 export function daemonSock(dir = home()): string {
   if (process.platform === "win32") {
-    const tag = dir.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(-64) || "kiwi";
+    const tag =
+      dir
+        .replace(/[^A-Za-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(-64) || "kiwi";
     return `\\\\.\\pipe\\kiwi-daemon-${tag}`;
   }
   return join(dir, "daemon.sock");

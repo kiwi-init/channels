@@ -8,11 +8,10 @@ import { startRelay } from "../src/relay/bun.ts";
 import { workosHumanAuth } from "../src/relay/human.ts";
 
 // A stand-in for WorkOS, same shape as test/human.test.ts: the relay can confirm and remove a computer.
-const rsa = (await crypto.subtle.generateKey(
-  { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
-  true,
-  ["sign", "verify"],
-)) as CryptoKeyPair;
+const rsa = (await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, [
+  "sign",
+  "verify",
+])) as CryptoKeyPair;
 const jwk = (await crypto.subtle.exportKey("jwk", rsa.publicKey)) as { n: string; e: string };
 const jwks = Bun.serve({
   port: 0,

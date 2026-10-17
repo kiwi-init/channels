@@ -107,7 +107,9 @@ describe("channel files", () => {
   });
 
   test("the inbox is unread messages for me after the cursor, minus my own", () => {
-    const inbox = Object.keys(files).filter((p) => p.startsWith("/channel/inbox/")).sort();
+    const inbox = Object.keys(files)
+      .filter((p) => p.startsWith("/channel/inbox/"))
+      .sort();
     // #3/#4 are fact events not addressed to mac; #5 is forged; #6 is the real ask.
     expect(inbox).toEqual(["/channel/inbox/", "/channel/inbox/000006.txt"]);
     expect(files["/channel/inbox/000006.txt"]).toContain("which port for the PC edge?");
@@ -155,7 +157,7 @@ describe("the shell", () => {
   });
 
   test("sees none of the real machine", async () => {
-    const r = await runSh(files, "cat /etc/passwd; ls /Users /home /tmp /proc /etc; cat ~/.kiwi/config.json; echo \"$HOME $KIWI_HOME $KIWI_AS $PATH\"");
+    const r = await runSh(files, 'cat /etc/passwd; ls /Users /home /tmp /proc /etc; cat ~/.kiwi/config.json; echo "$HOME $KIWI_HOME $KIWI_AS $PATH"');
     expect(r.stdout.trim()).toBe("/channel   /usr/bin:/bin"); // the KIWI_* vars are empty
     expect((await runSh(files, "ls /")).stdout).toBe("channel\ndev\n");
   });

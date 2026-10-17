@@ -75,11 +75,7 @@ export function ownMessage(p: unknown, seq: number, rts: number): Message | null
   return { ...p, ...(imgs?.length ? { imgs } : { imgs: undefined }), seq, rts, sigOk: true };
 }
 
-export const keepAlive = (ping: () => boolean) =>
-  Effect.sleep("25 seconds").pipe(
-    Effect.andThen(Effect.sync(ping)),
-    Effect.forever,
-  );
+export const keepAlive = (ping: () => boolean) => Effect.sleep("25 seconds").pipe(Effect.andThen(Effect.sync(ping)), Effect.forever);
 
 export interface Probe {
   readonly head: number;

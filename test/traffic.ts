@@ -18,7 +18,12 @@ const empty = (): Traffic => ({ http: 0, routes: {}, statuses: {}, routeBytes: {
 const bump = (into: Record<string, number>, key: string) => void (into[key] = (into[key] ?? 0) + 1);
 
 const routeOf = (method: string, path: string) =>
-  `${method} ${path.replace(/^\/v1\/rooms\/[0-9a-f]{32}/, "").replace(/\/[0-9a-f-]{36}(?=\/|$)/g, "/:id").replace(/\/[A-Za-z0-9_-]{40,}(?=\/|$)/g, "/:pk") || "/"}`;
+  `${method} ${
+    path
+      .replace(/^\/v1\/rooms\/[0-9a-f]{32}/, "")
+      .replace(/\/[0-9a-f-]{36}(?=\/|$)/g, "/:id")
+      .replace(/\/[A-Za-z0-9_-]{40,}(?=\/|$)/g, "/:pk") || "/"
+  }`;
 
 const frameType = (data: string | ArrayBuffer | Uint8Array): string => {
   if (typeof data !== "string") return "binary";
@@ -48,7 +53,10 @@ export function trafficProxy(target: string): { url: string; stats: Traffic; res
       const body = req.method === "GET" || req.method === "HEAD" ? undefined : new Uint8Array(await req.arrayBuffer());
       if (req.headers.get("upgrade") === "websocket") {
         stats.sockets++;
-        const protocols = (req.headers.get("sec-websocket-protocol") ?? "").split(",").map((p) => p.trim()).filter(Boolean);
+        const protocols = (req.headers.get("sec-websocket-protocol") ?? "")
+          .split(",")
+          .map((p) => p.trim())
+          .filter(Boolean);
         const headers = protocols.includes(WS_PROTOCOL) ? { "sec-websocket-protocol": WS_PROTOCOL } : undefined;
         if (srv.upgrade(req, { data: { path: url.pathname + url.search, protocols }, headers })) return undefined;
       }

@@ -96,7 +96,14 @@ describe("who coordinates by default", () => {
     ];
     // dev joined first, but it's Eve's agent: dev2, Jon's own, coordinates.
     expect(firstAgent(fold([], signed))).toBe("dev2");
-    expect(firstAgent(fold([], signed.filter((m) => m.name !== "dev2")))).toBeUndefined();
+    expect(
+      firstAgent(
+        fold(
+          [],
+          signed.filter((m) => m.name !== "dev2"),
+        ),
+      ),
+    ).toBeUndefined();
     // No sign-in, so nobody provably the owner's.
     expect(firstAgent(fold([], roster))).toBeUndefined();
   });

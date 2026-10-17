@@ -20,11 +20,10 @@ import { joinAgent, joinPerson, pairComputer, setupChannel } from "./owner.ts";
 setDefaultTimeout(30_000);
 
 // A stand-in for WorkOS: an RSA key, its JWKS endpoint, and tokens signed like AuthKit's.
-const rsa = (await crypto.subtle.generateKey(
-  { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
-  true,
-  ["sign", "verify"],
-)) as CryptoKeyPair;
+const rsa = (await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, [
+  "sign",
+  "verify",
+])) as CryptoKeyPair;
 const jwk = (await crypto.subtle.exportKey("jwk", rsa.publicKey)) as { n: string; e: string };
 const jwks = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => Response.json({ keys: [{ kty: "RSA", kid: "k1", alg: "RS256", use: "sig", n: jwk.n, e: jwk.e }] }) });
 
@@ -58,11 +57,10 @@ describe("WorkOS token verification", () => {
   test("accepts a valid token, rejects expired, forged and tampered ones", async () => {
     expect(await human.verify(await token("user_a"))).toBe("user_a");
     expect(await human.verify(await token("user_a", { exp: Math.floor(Date.now() / 1000) - 120 }))).toBeNull();
-    const other = (await crypto.subtle.generateKey(
-      { name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" },
-      true,
-      ["sign", "verify"],
-    )) as CryptoKeyPair;
+    const other = (await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, [
+      "sign",
+      "verify",
+    ])) as CryptoKeyPair;
     expect(await human.verify(await token("user_a", { key: other.privateKey }))).toBeNull();
     const [h, , s] = (await token("user_a")).split(".");
     const forgedBody = b64url(new TextEncoder().encode(JSON.stringify({ sub: "admin", exp: 9999999999 })));
@@ -86,7 +84,10 @@ describe("AuthKit domains", () => {
       const old = jwks.url.origin;
       const now = custom.url.origin;
       // What workosFromSettings builds for `${now},${old}`, minus api.workos.com's JWKS (no network in tests).
-      const auth = workosHumanAuth("client_test", authkitDomains(`${now},${old}/`).map((d) => `${d}/oauth2/jwks`));
+      const auth = workosHumanAuth(
+        "client_test",
+        authkitDomains(`${now},${old}/`).map((d) => `${d}/oauth2/jwks`),
+      );
       expect(await auth.verify(await token("user_a", { iss: old }))).toBe("user_a");
       expect(await auth.verify(await token("user_a", { iss: `${now}/` }))).toBe("user_a");
       expect(await auth.verify(await token("user_a", { iss: `${now}/user_management/client_test` }))).toBe("user_a");
@@ -200,7 +201,12 @@ describe("names", () => {
     expect(taken.name).toMatch(/^[a-z]+-[a-z]+$/);
     expect(taken.display).toBeUndefined();
     await s.ownerCh.approve(taken);
-    expect((await s.ownerCh.members()).filter((m) => m.active).map((m) => m.name).sort()).toEqual([taken.name, "alice", "owner"].sort());
+    expect(
+      (await s.ownerCh.members())
+        .filter((m) => m.active)
+        .map((m) => m.name)
+        .sort(),
+    ).toEqual([taken.name, "alice", "owner"].sort());
     await s.ownerCh.close();
   });
 });

@@ -26,7 +26,11 @@ afterAll(() => {
   rmSync(dataDir, { recursive: true, force: true });
 });
 
-const caught = (p: Promise<unknown>) => p.then(() => null, (e: unknown) => e as RelayError);
+const caught = (p: Promise<unknown>) =>
+  p.then(
+    () => null,
+    (e: unknown) => e as RelayError,
+  );
 
 test("not the owner, not a member, removed, gone: each says so", async () => {
   const owner = await generateIdentity("human");
@@ -60,12 +64,22 @@ test("not the owner, not a member, removed, gone: each says so", async () => {
   const leaverSt = await Channel.joinStatus(relay, made.code, leaver, leaverAsk.requestId);
   const leaverCh = new Channel((leaverSt as { access: import("@kiwi/core/crypto.ts").ChannelAccess }).access, relay, leaver);
   await leaverCh.leave();
-  expect(await leaverCh.head().then(() => null, (e: unknown) => e)).toMatchObject({ why: "removed", how: "left", message: "you left this channel" });
+  expect(
+    await leaverCh.head().then(
+      () => null,
+      (e: unknown) => e,
+    ),
+  ).toMatchObject({ why: "removed", how: "left", message: "you left this channel" });
 
   await ownerCh.remove(agent.pk);
   const asRemoved = await fetch(`${relay}/v1/rooms/${made.access.roomId}/`, { headers: { authorization: `Bearer ${await signRequest(agent, made.access.roomId, "GET", "/")}` } });
   expect(await asRemoved.json()).toEqual({ error: "not a member of this channel: the owner removed this key", tag: "NotMember" });
-  expect(await memberCh.head().then(() => null, (e: unknown) => e)).toMatchObject({ why: "removed", how: "owner", message: "the owner removed you from this channel" });
+  expect(
+    await memberCh.head().then(
+      () => null,
+      (e: unknown) => e,
+    ),
+  ).toMatchObject({ why: "removed", how: "owner", message: "the owner removed you from this channel" });
   expect((await caught(Channel.requestJoin(relay, made.code, agent, { name: "win" })))?.tag).toBe("Removed");
 
   await ownerCh.close();

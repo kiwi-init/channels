@@ -26,7 +26,15 @@ export class ChannelGone extends Error {
     readonly why: "removed" | "closed",
     readonly how: GoneHow | null = null,
   ) {
-    super(why === "closed" ? "the owner closed this channel" : how === "owner" ? "the owner removed you from this channel" : how === "left" ? "you left this channel" : "you are no longer a member of this channel");
+    super(
+      why === "closed"
+        ? "the owner closed this channel"
+        : how === "owner"
+          ? "the owner removed you from this channel"
+          : how === "left"
+            ? "you left this channel"
+            : "you are no longer a member of this channel",
+    );
   }
   get _tag(): "ChannelGone" {
     return "ChannelGone";

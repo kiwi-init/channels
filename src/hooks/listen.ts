@@ -22,14 +22,25 @@ export interface Served {
 const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, woke: Effect.Effect<void, never, Scope.Scope>) {
   const s = yield* openSession(b.alias, cfg, b.as);
   const real = yield* Cursor;
-  let at = Math.max((yield* s.cursor()), deliveredUpTo(b.alias, b.as, who.session ?? ""));
+  let at = Math.max(yield* s.cursor(), deliveredUpTo(b.alias, b.as, who.session ?? ""));
   const peek = Cursor.of({ read: () => Effect.succeed(at), write: (_c, _a, seq) => Effect.sync(() => void (at = Math.max(at, seq))), seen: real.seen, markSeen: () => Effect.void });
   const got: string[] = [];
   const hearing = s
-    .listen((m, state) => Effect.andThen(Effect.sync(() => void got.push(formatMessage(m, state.trust.get(m.seq), state, s.me))), woke), {
-      onNotice: (text) => Effect.andThen(Effect.sync(() => void got.push(`* ${text}`)), woke),
-      marks: false,
-    })
+    .listen(
+      (m, state) =>
+        Effect.andThen(
+          Effect.sync(() => void got.push(formatMessage(m, state.trust.get(m.seq), state, s.me))),
+          woke,
+        ),
+      {
+        onNotice: (text) =>
+          Effect.andThen(
+            Effect.sync(() => void got.push(`* ${text}`)),
+            woke,
+          ),
+        marks: false,
+      },
+    )
     .pipe(Effect.provideService(Cursor, peek));
   return { b, got, hearing, reached: () => at };
 });
@@ -70,7 +81,12 @@ export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Serv
   const [first, ...rest] = armed.map(hear);
   if (!first) return 0;
   const hearing = rest.reduce((all, h) => Effect.raceFirst(all, h), first);
-  const sessionGone = who.pid ? Effect.repeat(Effect.sync(() => alive(who.pid!)), { while: (up) => up, schedule: Schedule.spaced("2 seconds") }) : Effect.never;
+  const sessionGone = who.pid
+    ? Effect.repeat(
+        Effect.sync(() => alive(who.pid!)),
+        { while: (up) => up, schedule: Schedule.spaced("2 seconds") },
+      )
+    : Effect.never;
   const ended = yield* Effect.raceFirst(
     hearing,
     Effect.raceFirst(Effect.as(Deferred.await(enough), "heard" as const), Effect.raceFirst(Effect.as(Effect.sleep(LISTEN_SECONDS * 1000), "day" as const), Effect.as(sessionGone, "gone" as const))),

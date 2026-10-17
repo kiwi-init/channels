@@ -145,7 +145,7 @@ export class SessionState {
       .sort((a, b) => a - b);
     const wanted = new Set(missing);
     const older: Message[] = [];
-    for (let i = 0; i < missing.length; ) {
+    for (let i = 0; i < missing.length;) {
       const from = missing[i]!;
       let j = i;
       while (j + 1 < missing.length && missing[j + 1]! - from < PAGE_LIMIT && missing[j + 1]! - missing[j]! <= 50) j++;

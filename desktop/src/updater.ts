@@ -64,7 +64,10 @@ async function check(): Promise<void> {
 async function download(assetUrl: string, sumsUrl: string, name: string, dir: string): Promise<string | null> {
   const sums = await fetch(sumsUrl);
   if (!sums.ok) return null;
-  const want = (await sums.text()).split("\n").map((l) => l.trim().split(/\s+/)).find(([, f]) => f === name)?.[0];
+  const want = (await sums.text())
+    .split("\n")
+    .map((l) => l.trim().split(/\s+/))
+    .find(([, f]) => f === name)?.[0];
   if (!want) return null;
   const body = await fetch(assetUrl);
   if (!body.ok) return null;

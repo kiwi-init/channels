@@ -56,9 +56,11 @@ describe("moveOver", () => {
 
   test("a copy that fails leaves the target as it was and nothing beside it", () => {
     const { dir, from, to } = place();
-    spies.push(spyOn(fs, "renameSync").mockImplementation(() => {
-      throw exdev();
-    }));
+    spies.push(
+      spyOn(fs, "renameSync").mockImplementation(() => {
+        throw exdev();
+      }),
+    );
     expect(() => moveOver(from, to)).toThrow("EXDEV");
     expect(fs.readFileSync(to, "utf8")).toBe("old");
     expect(fs.readFileSync(from, "utf8")).toBe("new");

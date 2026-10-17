@@ -28,9 +28,10 @@ const CACHE_SENTINEL = "CACHE_SENTINEL_do_not_mount";
 const CURSOR_SENTINEL = "CURSOR_SENTINEL_do_not_mount";
 const OTHER_CHANNEL = "BETA_ONLY_SECRET_do_not_mount";
 
-const hostPasswdLine = readFileSync("/etc/passwd", "utf8")
-  .split("\n")
-  .find((line) => line.startsWith("root:")) ?? "root:";
+const hostPasswdLine =
+  readFileSync("/etc/passwd", "utf8")
+    .split("\n")
+    .find((line) => line.startsWith("root:")) ?? "root:";
 
 function leaked(out: { stdout: string; stderr: string }, ...needles: string[]): string | undefined {
   const blob = `${out.stdout}\n${out.stderr}`;
@@ -114,10 +115,7 @@ describe("runSh fail closed", () => {
   test("infinite loops, deep recursion and fork bombs are cut off", async () => {
     const scripts = ["while true; do true; done", "f(){ f; }; f", ":(){ :|:& };:"];
     for (const script of scripts) {
-      const out = await Promise.race([
-        runSh(files, script, { cwd: "/channel" }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`not cut off: ${script}`)), 15_000)),
-      ]);
+      const out = await Promise.race([runSh(files, script, { cwd: "/channel" }), new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`not cut off: ${script}`)), 15_000))]);
       expect([script, out.exitCode]).not.toEqual([script, 0]);
     }
   });
@@ -139,10 +137,7 @@ describe("runSh fail closed", () => {
   test("a long hash loop is stopped by the execution deadline, under the command cap", async () => {
     const started = Date.now();
     const out = await Promise.race([
-      runSh(
-        { "/channel/big": "x".repeat(8_000_000) },
-        'i=0; while [ "$i" -lt 1500 ]; do sha256sum /channel/big >/dev/null; i=$((i+1)); done; echo done',
-      ),
+      runSh({ "/channel/big": "x".repeat(8_000_000) }, 'i=0; while [ "$i" -lt 1500 ]; do sha256sum /channel/big >/dev/null; i=$((i+1)); done; echo done'),
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error("sha256 loop was not stopped")), 12_000)),
     ]);
     const ms = Date.now() - started;
@@ -159,10 +154,7 @@ describe("runSh fail closed", () => {
     ]);
     expect(out.stdout.length).toBeLessThan(80_000);
     expect(out.stdout).toContain("output cut");
-    const seq = await Promise.race([
-      runSh(files, "seq 1 100000000"),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("seq was not cut off")), 15_000)),
-    ]);
+    const seq = await Promise.race([runSh(files, "seq 1 100000000"), new Promise<never>((_, reject) => setTimeout(() => reject(new Error("seq was not cut off")), 15_000))]);
     expect(seq.exitCode).not.toBe(0);
     expect(seq.stdout.length).toBeLessThan(80_000);
   });
@@ -193,7 +185,9 @@ describe("channelFiles", () => {
   }
 
   function blob(files: Record<string, string>): string {
-    return Object.entries(files).map(([path, body]) => `${path}\n${body}`).join("\n");
+    return Object.entries(files)
+      .map(([path, body]) => `${path}\n${body}`)
+      .join("\n");
   }
 
   test("mounts only this identity's channel and drops forged messages", async () => {
@@ -245,9 +239,15 @@ describe("channelFiles", () => {
       const human = await generateIdentity("human");
       const intern = await generateIdentity("intern");
       const evil = await generateIdentity("evil");
-      const { code, access } = await Channel.create(relay, human, { name: "human", kind: "human" }, [
-        { ...intern, info: { name: "intern", role: "intern", kind: "agent" } },
-      ], undefined, null, "escape");
+      const { code, access } = await Channel.create(
+        relay,
+        human,
+        { name: "human", kind: "human" },
+        [{ ...intern, info: { name: "intern", role: "intern", kind: "agent" } }],
+        undefined,
+        null,
+        "escape",
+      );
       updateConfig((cfg) => {
         cfg.channels.escape = { ...access, relay, code, as: "intern", owner: "human", title: "escape" };
       });
@@ -268,11 +268,7 @@ describe("channelFiles", () => {
       const session = await AgentSession.open("escape", loadConfig().channels.escape!, "intern");
       const files = channelFiles([await channelView(session)]);
       const text = blob(files);
-      const secrets = [
-        human.sk, human.xsk!, intern.sk, intern.xsk!, evil.sk,
-        ...Object.values(access.keys),
-        kiwiHome, relay, FORGED, CACHE_SENTINEL, CURSOR_SENTINEL, hostPasswdLine,
-      ];
+      const secrets = [human.sk, human.xsk!, intern.sk, intern.xsk!, evil.sk, ...Object.values(access.keys), kiwiHome, relay, FORGED, CACHE_SENTINEL, CURSOR_SENTINEL, hostPasswdLine];
       for (const secret of secrets) {
         if (text.includes(secret)) throw new Error(`channel FS leaked ${secret.slice(0, 24)}`);
       }

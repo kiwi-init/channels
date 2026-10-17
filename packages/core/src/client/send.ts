@@ -63,7 +63,8 @@ export class ChannelSending {
       if (imgs?.some((i) => !isRasterMime(i.mime))) return yield* new Rejected("an image must be png, jpg, gif or webp");
       if (imgs?.some((i) => !rasterAttachment(i))) return yield* new Rejected("an image needs its bytes or a stored reference");
       if (opts.handoff && (!opts.esc || !wellFormedHandoff(opts.handoff))) return yield* new Rejected("a browser handoff goes only on an escalation, with an https link, a vendor and an expiry");
-      if (opts.choices && (!opts.esc || opts.handoff || !wellFormedChoices(opts.choices))) return yield* new Rejected(`options go only on an escalation without a browser link: ${CHOICES_MIN} to ${CHOICES_MAX} different ones, one line of up to ${CHOICE_MAX_LENGTH} characters each`);
+      if (opts.choices && (!opts.esc || opts.handoff || !wellFormedChoices(opts.choices)))
+        return yield* new Rejected(`options go only on an escalation without a browser link: ${CHOICES_MIN} to ${CHOICES_MAX} different ones, one line of up to ${CHOICE_MAX_LENGTH} characters each`);
       const attached = imgs?.length ? yield* this.images.stored(imgs) : undefined;
       const payload: Payload = {
         v: PROTOCOL_VERSION,
@@ -96,7 +97,12 @@ export class ChannelSending {
         return yield* this.ch.request<{ seq: number; ts?: number }>("/messages", { method: "POST", body: JSON.stringify({ ...sealed, e }) });
       });
       const posted = Effect.gen({ self: this }, function* () {
-        const stored = yield* post.pipe(Effect.catchIf((err) => err instanceof RelayError && err.status === 409, () => Effect.andThen(this.ch.fx.refreshKeys(), post)));
+        const stored = yield* post.pipe(
+          Effect.catchIf(
+            (err) => err instanceof RelayError && err.status === 409,
+            () => Effect.andThen(this.ch.fx.refreshKeys(), post),
+          ),
+        );
         if (this.onSent) {
           const p: unknown = JSON.parse(JSON.stringify(signed));
           const kept = typeof stored.ts === "number" && Number.isFinite(stored.ts) && wellFormed(p) ? received(p, stored.seq, stored.ts, yield* Effect.promise(() => verify(p))) : null;

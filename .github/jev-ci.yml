@@ -50,7 +50,7 @@ jobs:
     jev: false
     name: repo / static
     inputs: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,css}", "web/index.html", ".github/workflows/**", ".github/actions/**"]
-    always: ["tsconfig.json", "tsconfig.worker.json", "package.json", "packages/core/package.json", "bun.lock", ".oxlintrc.json", "web/package.json", "web/tsconfig*.json", "web/vite.config.ts", "web/.oxlintrc.json", "web/.oxfmtrc.json", "desktop/package.json", "desktop/tsconfig*.json", "knip.json"]
+    always: ["tsconfig.json", "tsconfig.worker.json", "package.json", "packages/core/package.json", "bun.lock", ".oxlintrc.json", ".oxfmtrc.json", "web/package.json", "web/tsconfig*.json", "web/vite.config.ts", "web/.oxlintrc.json", "web/.oxfmtrc.json", "desktop/package.json", "desktop/tsconfig*.json", "knip.json"]
     description: >-
       The static checks, one after another, each run even when an earlier one failed.
       Types: tsc --noEmit over src/, packages/core/src (the @kiwi/core workspace package) and
@@ -59,11 +59,12 @@ jobs:
       packages/core modules the dashboard imports as @kiwi/core/*), and tsc --noEmit in
       desktop/. scripts/ui-tokens.ts fails on an arbitrary text-[Npx] or rounded-[Npx] Tailwind
       class in web/src. oxlint (root .oxlintrc.json) on src/, packages/core/src, desktop/src, desktop/scripts,
-      scripts/, test/ and .github/jev-ci/: unused variables or imports, an empty block or catch,
+      scripts/, test/, .github/jev-ci/ and site/app.js: unused variables or imports, an empty block or catch,
       explicit any, a useless assignment or escape, a rethrow without its cause. oxlint on web/src
       (web/.oxlintrc.json extends the root config and adds the React rules: conditional hooks,
-      setState in an effect, impure calls in render). oxfmt
-      --check on web/src. Knip (knip.json) over the root, packages/core, web/ and desktop/: a file nothing
+      setState in an effect, impure calls in render). oxfmt --check on web/src (web/.oxfmtrc.json:
+      no semicolons) and on the same root paths as oxlint (root .oxfmtrc.json: semicolons, trailing
+      commas, 200 columns). Knip (knip.json) over the root, packages/core, web/ and desktop/: a file nothing
       imports, an export nothing outside its file uses, an unused dependency, an unlisted package.
       scripts/action-pins.ts: every uses: in .github/workflows and .github/actions names a
       third-party action by a full commit SHA. Fails on any of these.

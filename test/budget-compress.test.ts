@@ -86,7 +86,7 @@ const taskText = [
   "## Acceptance",
   "",
   "- Opening a channel after a rotation shows the same messages as a fresh client, in the same order, with no duplicates.",
-  "- A relay that serves a lower head than before cannot make the app hide cached messages without saying so: show the existing \"history was reset\" notice.",
+  '- A relay that serves a lower head than before cannot make the app hide cached messages without saying so: show the existing "history was reset" notice.',
   "- No new network requests on a warm open (check with the traffic proxy in `test/traffic.ts`).",
   "- `bun scripts/ci-tests.ts core` and `cd web && bunx tsc -b && bun oxlint src` pass.",
   "",
@@ -149,7 +149,10 @@ const typicalEvents: Item[] = [
   { body: "card", ev: card },
   { body: "card", ev: { op: "card", os: "linux", arch: "x64", harness: "codex", model: "gpt-5-codex", tools: ["bun", "git"] } },
   { body: "added task: fix the reconnect backoff", ev: { op: "task.add", title: "fix the reconnect backoff", owner: "otter-gentle" } },
-  { body: "added task: cache the info call", ev: { op: "task.add", title: "cache the info call", detail: "kiwi send fetches GET /info six times; fetch it once per process and reuse it.", review: "*" } },
+  {
+    body: "added task: cache the info call",
+    ev: { op: "task.add", title: "cache the info call", detail: "kiwi send fetches GET /info six times; fetch it once per process and reuse it.", review: "*" },
+  },
   { body: "claimed T7", ev: { op: "task.claim", task: 7 } },
   { body: "T7 doing", ev: { op: "task.update", task: 7, state: "doing" } },
   { body: "T7 review at 51c8938", ev: { op: "task.update", task: 7, state: "review", at: "51c8938a4f0e2d1b7c6a9e8f0d1c2b3a4e5f6a7b", note: "ready for review" } },
@@ -163,7 +166,10 @@ const typicalEvents: Item[] = [
   { body: "coordinator-only on (strict)", ev: { op: "mode.set", coordinatorOnly: true, strict: true } },
   { body: "made the room #relay", ev: { op: "room.create", id: "4f1e2d3c4b5a6978", name: "relay" } },
   { body: "set what fox-quiet may do: tasks, facts", ev: { op: "scope.set", member: "fox-quiet", pk: "x8Kq1u2V3w4X5y6Z7a8B9c0D1e2F3g4H5i6J7k8L9m0", scopes: ["tasks", "facts"] } },
-  { body: "charter: Get onemouse working end to end", ev: { op: "charter.set", text: "Get onemouse working end to end between a Mac and a PC. This repo only; nothing in production; ask before adding dependencies." } },
+  {
+    body: "charter: Get onemouse working end to end",
+    ev: { op: "charter.set", text: "Get onemouse working end to end between a Mac and a PC. This repo only; nothing in production; ask before adding dependencies." },
+  },
   { body: "on hold: checking who asked for a production push", ev: { op: "hold.set", on: true, note: "checking who asked for a production push" } },
 ];
 

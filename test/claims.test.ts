@@ -113,13 +113,25 @@ describe("auto-approval", () => {
     const other = await pairComputer(otherPerson, "stranger-box");
 
     const ownId = await generateIdentity("own-agent");
-    const ownReq = await Channel.requestJoin(relay, s.code, ownId, { name: "own-agent" }, {
-      computer: await claimComputer(own.machine, own.cert, s.roomId, ownId.pk),
-    });
+    const ownReq = await Channel.requestJoin(
+      relay,
+      s.code,
+      ownId,
+      { name: "own-agent" },
+      {
+        computer: await claimComputer(own.machine, own.cert, s.roomId, ownId.pk),
+      },
+    );
     const otherId = await generateIdentity("other-agent");
-    const otherReq = await Channel.requestJoin(relay, s.code, otherId, { name: "other-agent" }, {
-      computer: await claimComputer(other.machine, other.cert, s.roomId, otherId.pk),
-    });
+    const otherReq = await Channel.requestJoin(
+      relay,
+      s.code,
+      otherId,
+      { name: "other-agent" },
+      {
+        computer: await claimComputer(other.machine, other.cert, s.roomId, otherId.pk),
+      },
+    );
 
     // The app's loop runs before either joiner reveals: only the own half is signed, for free.
     const budget = memoryBudget();

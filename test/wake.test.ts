@@ -189,7 +189,11 @@ describe("waking an agent in its own session", () => {
   test("kiwi wake off keeps it asleep, presence stops saying it wakes, and kiwi wake on brings it back", async () => {
     await readAll();
     const cli = async (...args: string[]): Promise<string> => {
-      const p = Bun.spawn([process.execPath, join(import.meta.dir, "../src/cli/main.ts"), "-c", "test", "--as", "claude", ...args], { env: { ...process.env, KIWI_RELAY: relay }, stdout: "pipe", stderr: "pipe" });
+      const p = Bun.spawn([process.execPath, join(import.meta.dir, "../src/cli/main.ts"), "-c", "test", "--as", "claude", ...args], {
+        env: { ...process.env, KIWI_RELAY: relay },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
       const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
       expect(await p.exited, err).toBe(0);
       return out;
@@ -341,7 +345,9 @@ describe("wake paths, commands and words", () => {
     expect(kimi).toContain("call the Bash tool with command `kiwi -c ch --as k3 listen --once`, run_in_background: true, disable_timeout: true");
     expect(kimi).toContain("from your main session (not a subagent)");
     expect(kimi).toContain("If the notice names an output file, read that whole file: it holds your messages.");
-    expect(kimi).toContain("If it shows the output inline instead and says it is truncated, the start is cut off: run `kiwi -c ch --as k3 log -n 100` (it marks nothing read) and read back to the last message you handled before this wake.");
+    expect(kimi).toContain(
+      "If it shows the output inline instead and says it is truncated, the start is cut off: run `kiwi -c ch --as k3 log -n 100` (it marks nothing read) and read back to the last message you handled before this wake.",
+    );
     expect(kimi).toContain("If the oldest message it shows is still newer than that one, run it again with a larger -n until it reaches it.");
     expect(kimi).toContain("won't be shown again");
     expect(kimi).not.toContain("the notice shows the messages");
@@ -349,7 +355,7 @@ describe("wake paths, commands and words", () => {
     expect(kimi).toContain("check TaskList shows it running");
     expect(kimi).not.toContain("listen --now");
     const grok = howMessagesReachYou("kiwi", true, { harness: "grok", session: "g" });
-    expect(grok).toContain("start the monitor tool with command `kiwi listen`, description \"kiwi listen\", persistent: true");
+    expect(grok).toContain('start the monitor tool with command `kiwi listen`, description "kiwi listen", persistent: true');
     expect(grok).toContain("start it again the same way");
     expect(grok).not.toContain("listen --once");
     expect(grok).not.toContain("leader");

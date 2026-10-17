@@ -193,7 +193,9 @@ describe("review", () => {
     expect(line).toContain(`rejected T${t} “api” (round 1 @ c0ffee): ## Review`);
     expect(line).toContain("│ 1. BLOCKING: the cache never expires");
     expect(line).toContain("│ Verdict: REVISE");
-    expect(taskFeed(s, [add, r1, review], t, "jon").find((i) => i.type === "event" && i.seq === review.seq)).toMatchObject({ review: "## Review\n\n1. BLOCKING: the cache never expires\n\nVerdict: REVISE" });
+    expect(taskFeed(s, [add, r1, review], t, "jon").find((i) => i.type === "event" && i.seq === review.seq)).toMatchObject({
+      review: "## Review\n\n1. BLOCKING: the cache never expires\n\nVerdict: REVISE",
+    });
     expect(wellFormed({ ...review, ev: { op: "task.update", task: t, note: "x", body: "review" } })).toBe(false);
     expect(wellFormed({ ...r1, ev: { op: "task.update", task: t, state: "review", at: "two\nlines" } })).toBe(false);
   });

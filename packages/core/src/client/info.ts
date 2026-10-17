@@ -107,7 +107,13 @@ export class ChannelInfo {
       if (!this.ch.access.keys[String(icon.e)]) yield* this.ch.fx.refreshKeys();
       const key = this.ch.access.keys[String(icon.e)];
       if (!key) return null;
-      const opened = (yield* Effect.promise(() => open(key, this.ch.roomId, icon.iv, icon.ct).catch(() => null))) as { what?: unknown; room?: unknown; icon?: unknown; pk?: string; sig?: string } | null;
+      const opened = (yield* Effect.promise(() => open(key, this.ch.roomId, icon.iv, icon.ct).catch(() => null))) as {
+        what?: unknown;
+        room?: unknown;
+        icon?: unknown;
+        pk?: string;
+        sig?: string;
+      } | null;
       if (!opened || opened.what !== "channel-icon" || opened.room !== this.ch.roomId || opened.pk !== this.ch.access.ownerPk || !(yield* Effect.promise(() => verify(opened)))) return null;
       return wellFormedIcon(opened.icon) ? opened.icon : null;
     }),

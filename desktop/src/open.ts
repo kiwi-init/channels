@@ -8,13 +8,23 @@ export function browserEnv(env: NodeJS.ProcessEnv): Record<string, string> {
   return out;
 }
 
-export type Launch = (cmd: string, args: string[], opts: { env: Record<string, string>; detached: boolean; stdio: "ignore" }) => {
+export type Launch = (
+  cmd: string,
+  args: string[],
+  opts: { env: Record<string, string>; detached: boolean; stdio: "ignore" },
+) => {
   once(event: "spawn", cb: () => void): unknown;
   once(event: "error", cb: (err: Error) => void): unknown;
   unref(): void;
 };
 
-export function openInBrowser(url: string, fallback: (url: string) => Promise<void>, platform: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env, launch: Launch = spawn): Promise<void> {
+export function openInBrowser(
+  url: string,
+  fallback: (url: string) => Promise<void>,
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+  launch: Launch = spawn,
+): Promise<void> {
   if (platform !== "linux") return fallback(url);
   return new Promise((resolve, reject) => {
     const child = launch("xdg-open", [url], { env: browserEnv(env), detached: true, stdio: "ignore" });

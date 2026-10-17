@@ -94,7 +94,9 @@ beforeAll(async () => {
   proxy = trafficProxy(server.url.origin);
   const before = new Set(readdirSync(dataDir));
   const code = /join code: (\S+)/.exec(await ok(owner, "create", "reads", "--as", "lead", "--open"))![1]!;
-  roomId = readdirSync(dataDir).find((f) => !before.has(f) && /^[0-9a-f]{32}\.sqlite$/.test(f))!.slice(0, 32);
+  roomId = readdirSync(dataDir)
+    .find((f) => !before.has(f) && /^[0-9a-f]{32}\.sqlite$/.test(f))!
+    .slice(0, 32);
   for (const a of agents) {
     const joining = spawn(a.home, ["join", code, "--as", a.name]);
     let listed = "";

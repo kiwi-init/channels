@@ -1,5 +1,3 @@
-
-
 export const utcDay = (ts: number) => new Date(ts).toISOString().slice(0, 10);
 
 export function untilUtcMidnight(ts: number): string {

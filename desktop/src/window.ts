@@ -74,7 +74,7 @@ function trayMenu(): Electron.Menu {
     { label: "Open Channels", click: showWindow },
     ...(u?.state === "ready" ? [{ label: `Restart to update to ${u.version}`, click: restartToUpdate }] : []),
     { type: "separator" },
-    { label: "Quit", click: () => (quitting = true, app.quit()) },
+    { label: "Quit", click: () => ((quitting = true), app.quit()) },
   ]);
 }
 

@@ -5,7 +5,18 @@ import { wakeKey } from "@kiwi/core/wake.ts";
 
 type Env = Record<string, string | undefined>;
 
-const HARNESS_ENV = ["CLAUDECODE", "CLAUDE_PID", "CLAUDE_CODE_SESSION_ID", "CODEX_THREAD_ID", "OPENCODE_SESSION_ID", "GROK_SESSION_ID", "GEMINI_CLI", "CURSOR_AGENT", "MIMOCODE", "MIMOCODE_PID"] as const;
+const HARNESS_ENV = [
+  "CLAUDECODE",
+  "CLAUDE_PID",
+  "CLAUDE_CODE_SESSION_ID",
+  "CODEX_THREAD_ID",
+  "OPENCODE_SESSION_ID",
+  "GROK_SESSION_ID",
+  "GEMINI_CLI",
+  "CURSOR_AGENT",
+  "MIMOCODE",
+  "MIMOCODE_PID",
+] as const;
 
 export function seatRecordFor(cfg: Config, alias: string, agent: string): SeatRecord | null {
   const records = Object.values(cfg.bindings ?? {}).flatMap((v) => (Array.isArray(v) ? v : [v]));

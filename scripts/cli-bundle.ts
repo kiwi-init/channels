@@ -1,25 +1,25 @@
-import type { BunPlugin } from "bun"
+import type { BunPlugin } from "bun";
 
-const ENTRY = /name:"([a-z0-9_.-]+)",load:async\(\)=>\(await import\("\.\/chunks\/([A-Za-z0-9_-]+\.js)"\)\)/g
+const ENTRY = /name:"([a-z0-9_.-]+)",load:async\(\)=>\(await import\("\.\/chunks\/([A-Za-z0-9_-]+\.js)"\)\)/g;
 
 export interface RegistryEntry {
-  name: string
-  chunk: string
+  name: string;
+  chunk: string;
 }
 
 export function registryEntries(source: string): RegistryEntry[] {
-  return [...source.matchAll(ENTRY)].map(([, name = "", chunk = ""]) => ({ name, chunk }))
+  return [...source.matchAll(ENTRY)].map(([, name = "", chunk = ""]) => ({ name, chunk }));
 }
 
-const COVERAGE = /import\("\.\/chunks\/(flag-coverage-[A-Za-z0-9_-]+\.js)"\)/g
+const COVERAGE = /import\("\.\/chunks\/(flag-coverage-[A-Za-z0-9_-]+\.js)"\)/g;
 
 export function coverageChunks(source: string): string[] {
-  return [...source.matchAll(COVERAGE)].map(([, chunk = ""]) => chunk)
+  return [...source.matchAll(COVERAGE)].map(([, chunk = ""]) => chunk);
 }
 
 export function stubbedChunks(entries: RegistryEntry[], allowed: ReadonlySet<string>, extra: string[] = []): Set<string> {
-  const kept = new Set(entries.filter((e) => allowed.has(e.name)).map((e) => e.chunk))
-  return new Set([...entries.map((e) => e.chunk).filter((chunk) => !kept.has(chunk)), ...extra])
+  const kept = new Set(entries.filter((e) => allowed.has(e.name)).map((e) => e.chunk));
+  return new Set([...entries.map((e) => e.chunk).filter((chunk) => !kept.has(chunk)), ...extra]);
 }
 
 const SH_PROBES: Record<string, string> = {
@@ -40,14 +40,14 @@ const SH_PROBES: Record<string, string> = {
   basename: "basename /channel/README",
   dirname: "dirname /channel/README",
   stat: "stat -c %s /channel/README",
-}
+};
 
-export const shProbe = (command: string): string => SH_PROBES[command] ?? `${command} /channel/README`
+export const shProbe = (command: string): string => SH_PROBES[command] ?? `${command} /channel/README`;
 
-export const HEAVY = ["run", "sql.js", "turndown", "@mixmark-io/domino"] as const
+export const HEAVY = ["run", "sql.js", "turndown", "@mixmark-io/domino"] as const;
 
 export function heavyIn(sources: string[]): string[] {
-  return HEAVY.filter((pkg) => sources.some((source) => source.includes(`node_modules/${pkg}/`)))
+  return HEAVY.filter((pkg) => sources.some((source) => source.includes(`node_modules/${pkg}/`)));
 }
 
 export function stubPlugin(stubbed: ReadonlySet<string>): BunPlugin {
@@ -55,11 +55,11 @@ export function stubPlugin(stubbed: ReadonlySet<string>): BunPlugin {
     name: "stub-sh-commands",
     setup(build) {
       build.onResolve({ filter: /^\.\/chunks\/[A-Za-z0-9_-]+\.js$/ }, (args) => {
-        const chunk = args.path.slice("./chunks/".length)
-        if (!args.importer.includes("/just-bash/") || !stubbed.has(chunk)) return undefined
-        return { path: chunk, namespace: "sh-stub" }
-      })
-      build.onLoad({ filter: /.*/, namespace: "sh-stub" }, () => ({ contents: "export {}", loader: "js" }))
+        const chunk = args.path.slice("./chunks/".length);
+        if (!args.importer.includes("/just-bash/") || !stubbed.has(chunk)) return undefined;
+        return { path: chunk, namespace: "sh-stub" };
+      });
+      build.onLoad({ filter: /.*/, namespace: "sh-stub" }, () => ({ contents: "export {}", loader: "js" }));
     },
-  }
+  };
 }

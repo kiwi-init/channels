@@ -8,7 +8,9 @@ import { args, opt } from "./args.ts";
 import { acting, die, Quit } from "./context.ts";
 
 export function render(m: Message, state?: ChannelState | null): string {
-  return opt.json ? JSON.stringify({ ...m, ...(m.handoff ? { handoff: { vendor: m.handoff.vendor, expiresAt: m.handoff.expiresAt } } : {}), trust: state?.trust.get(m.seq) }) : formatMessage(m, state?.trust.get(m.seq), state ?? undefined, acting.name);
+  return opt.json
+    ? JSON.stringify({ ...m, ...(m.handoff ? { handoff: { vendor: m.handoff.vendor, expiresAt: m.handoff.expiresAt } } : {}), trust: state?.trust.get(m.seq) })
+    : formatMessage(m, state?.trust.get(m.seq), state ?? undefined, acting.name);
 }
 
 export const delivery = Effect.fn("kiwi.delivery")(function* (s: AgentSession) {
@@ -19,7 +21,10 @@ export const delivery = Effect.fn("kiwi.delivery")(function* (s: AgentSession) {
 });
 
 export function list(s: string | undefined): string[] | undefined {
-  const items = s?.split(",").map((x) => x.trim()).filter(Boolean);
+  const items = s
+    ?.split(",")
+    .map((x) => x.trim())
+    .filter(Boolean);
   return items?.length ? items : undefined;
 }
 
@@ -43,14 +48,21 @@ export const readText = (file: string) =>
 
 const fileText = (from: number, file: string) => (args.length > from ? die("give the text as words or with --file, not both") : readText(file));
 
-export const firstLine = (text: string) => text.split("\n").map((l) => l.trim()).find(Boolean)?.slice(0, 200);
+export const firstLine = (text: string) =>
+  text
+    .split("\n")
+    .map((l) => l.trim())
+    .find(Boolean)
+    ?.slice(0, 200);
 
 export const text = (from: number) =>
-  opt.file !== undefined ? fileText(from, opt.file) : Effect.promise(async () => {
-    if (args.length > from && args[from] !== "-") return args.slice(from).join(" ");
-    if (args[from] !== "-" && process.stdin.isTTY) return "";
-    return (await new Response(Bun.stdin.stream()).text()).replace(/\n$/, "");
-  });
+  opt.file !== undefined
+    ? fileText(from, opt.file)
+    : Effect.promise(async () => {
+        if (args.length > from && args[from] !== "-") return args.slice(from).join(" ");
+        if (args[from] !== "-" && process.stdin.isTTY) return "";
+        return (await new Response(Bun.stdin.stream()).text()).replace(/\n$/, "");
+      });
 
 export const confirm = (question: string) =>
   Effect.promise(async () => {

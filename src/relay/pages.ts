@@ -86,15 +86,7 @@ export const servePage = Effect.fn("Room.servePage")(function* (pk: string, page
   return { messages: db.range(page * PAGE_LIMIT, (page + 1) * PAGE_LIMIT) };
 });
 
-export async function edgePage(
-  req: Request,
-  roomId: string,
-  rest: string,
-  secret: string | null,
-  cache: PageCache | null,
-  forward: () => Promise<Response>,
-  now: number,
-): Promise<Response> {
+export async function edgePage(req: Request, roomId: string, rest: string, secret: string | null, cache: PageCache | null, forward: () => Promise<Response>, now: number): Promise<Response> {
   const page = PAGE_PATH.exec(rest)?.[1];
   if (!secret || !cache || req.method !== "GET" || page === undefined) return forward();
   const url = new URL(req.url);

@@ -33,13 +33,7 @@ export async function wrapAllFor(owner: Identity, roomId: string, keys: Record<s
   return out;
 }
 
-export async function unwrapKeys(
-  id: Identity,
-  roomId: string,
-  wrapped: Record<string, string>,
-  ownerPk: string,
-  signedOnly: boolean,
-): Promise<Record<string, string>> {
+export async function unwrapKeys(id: Identity, roomId: string, wrapped: Record<string, string>, ownerPk: string, signedOnly: boolean): Promise<Record<string, string>> {
   if (!id.xsk) throw new Error("identity has no exchange key");
   const out: Record<string, string> = {};
   for (const [e, w] of Object.entries(wrapped)) {

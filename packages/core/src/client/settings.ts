@@ -88,7 +88,10 @@ export class ChannelSettings {
       if (!o) return null;
       const c = o.charter as { text?: unknown; since?: unknown } | undefined;
       const h = o.hold as { on?: unknown; note?: unknown; since?: unknown } | undefined;
-      const charter = c && (c.text === null || typeof c.text === "string") && Number.isInteger(c.since) ? { text: c.text === null ? null : (c.text as string).slice(0, MAX_CHARTER), since: c.since as number } : null;
+      const charter =
+        c && (c.text === null || typeof c.text === "string") && Number.isInteger(c.since)
+          ? { text: c.text === null ? null : (c.text as string).slice(0, MAX_CHARTER), since: c.since as number }
+          : null;
       const hold = h && typeof h.on === "boolean" && Number.isInteger(h.since) ? { on: h.on, ...(typeof h.note === "string" ? { note: h.note.slice(0, 500) } : {}), since: h.since as number } : null;
       const floor: GuardFloor | null = charter || hold ? { charter, hold } : null;
       return floor;
@@ -124,7 +127,9 @@ export class ChannelSettings {
       const s = (info ?? (yield* this.ch.fx.info())).settings;
       const key = this.ch.access.keys["0"];
       if (!s || !key) return null;
-      const o = (yield* Effect.promise(() => open(key, this.ch.roomId, s.iv, s.ct).catch(() => null))) as ({ what?: unknown; room?: unknown; pk?: string; sig?: string } & Record<string, unknown>) | null;
+      const o = (yield* Effect.promise(() => open(key, this.ch.roomId, s.iv, s.ct).catch(() => null))) as
+        | ({ what?: unknown; room?: unknown; pk?: string; sig?: string } & Record<string, unknown>)
+        | null;
       if (!o || o.what !== "channel-settings" || o.room !== this.ch.roomId || o.pk !== this.ch.access.ownerPk || !(yield* Effect.promise(() => verify(o as never)))) return null;
       this.packs = o.compress === true;
       return o;

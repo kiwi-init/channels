@@ -130,7 +130,10 @@ function oldRelay(target: string, refusal = "unknown frame"): { url: string; soc
       const url = new URL(req.url);
       if (req.headers.get("upgrade") === "websocket") {
         sockets++;
-        const protocols = (req.headers.get("sec-websocket-protocol") ?? "").split(",").map((p) => p.trim()).filter(Boolean);
+        const protocols = (req.headers.get("sec-websocket-protocol") ?? "")
+          .split(",")
+          .map((p) => p.trim())
+          .filter(Boolean);
         if (srv.upgrade(req, { data: { path: url.pathname + url.search, protocols }, headers: { "sec-websocket-protocol": WS_PROTOCOL } })) return undefined;
       }
       return fetch(target + url.pathname + url.search, { method: req.method, headers: req.headers, body: req.method === "GET" ? undefined : req.body });
@@ -209,11 +212,7 @@ test("the relay answers a member's page asks only so often", async () => {
       all: <T>(q: string, ...p: (string | number | null)[]) => file.query(q).all(...p) as T[],
     };
     const ctx = makeRelay(
-      Layer.mergeAll(
-        Layer.succeed(Human, null),
-        Layer.succeed(Policy, OPEN_POLICY),
-        Layer.succeed(Directory, { list: async () => [], reserve: async () => true, release: async () => {} }),
-      ),
+      Layer.mergeAll(Layer.succeed(Human, null), Layer.succeed(Policy, OPEN_POLICY), Layer.succeed(Directory, { list: async () => [], reserve: async () => true, release: async () => {} })),
     );
     const ask = () => runRoomSync(ctx, new RoomDb(sql, seed.access.roomId), onClientFrame(JSON.stringify({ t: "more", since: seed.head - 1 }), seed.owner.pk)).reply;
     for (let i = 0; i < MORE_PER_MINUTE; i++) expect(String(ask())).toContain('"t":"page"');

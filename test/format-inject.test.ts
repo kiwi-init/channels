@@ -24,7 +24,9 @@ function blank(): ChannelState {
     coordinator: null,
     direct: new Set(),
     rooms: new Map([["general", { id: "general", name: "general", createdBy: null, at: 0 }]]),
-    roomOf: new Map(), placeOf: new Map(), places: new Map(),
+    roomOf: new Map(),
+    placeOf: new Map(),
+    places: new Map(),
     charter: null,
     hold: null,
     reactions: new Map(),
@@ -76,14 +78,22 @@ test("a newline, CR, line separator and RTL override cannot start a new row", ()
 
   noFakeRow(formatTasks(state));
   noFakeRow(formatTask(state, task, 0));
-  expect(formatTask(state, task, 0).split("\n").some((l) => l.startsWith("  │ #999"))).toBe(true);
+  expect(
+    formatTask(state, task, 0)
+      .split("\n")
+      .some((l) => l.startsWith("  │ #999")),
+  ).toBe(true);
 
   const factText = formatFact(fact, 0);
   noFakeRow(factText);
   expect(factText.split("\n")[0]).not.toContain("\n");
   expect(factText).toContain("  │ #999");
 
-  expect(markedText(PWN).split("\n").every((l, i) => i === 0 || l.startsWith("  │ "))).toBe(true);
+  expect(
+    markedText(PWN)
+      .split("\n")
+      .every((l, i) => i === 0 || l.startsWith("  │ ")),
+  ).toBe(true);
 });
 
 const ESCAPES = "\u001b]8;;https://evil.example\u0007open\u001b]8;;\u0007 \u001b[2J\u202eevil\u200b";

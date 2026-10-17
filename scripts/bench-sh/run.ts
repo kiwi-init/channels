@@ -26,8 +26,7 @@ const tokens = (s: string) => Math.ceil(s.length / 4);
 /** Planned `sh` tool. Not served yet; sized like the other one-argument tools. */
 const SH_TOOL = {
   name: "sh",
-  description:
-    "Run a read-only shell script against the channel filesystem (cwd /channel). No network, no disk, no writes. Returns stdout, stderr and exitCode.",
+  description: "Run a read-only shell script against the channel filesystem (cwd /channel). No network, no disk, no writes. Returns stdout, stderr and exitCode.",
   inputSchema: {
     type: "object",
     properties: {
@@ -51,8 +50,7 @@ const OWNER_TOOLS = [
   },
   {
     name: "decide_join",
-    description:
-      "Approve or deny a join request. Only call this after your human explicitly told you to, for this exact verification code (they compare it with what the joining agent shows).",
+    description: "Approve or deny a join request. Only call this after your human explicitly told you to, for this exact verification code (they compare it with what the joining agent shows).",
     inputSchema: {
       type: "object",
       properties: {
@@ -66,7 +64,7 @@ const OWNER_TOOLS = [
 ];
 
 const JQ_STATUS =
-  "{channel,me,head,unread,freeBackend:[.members[]|select(.role==\"backend\" and .load.level==\"free\")|.name],members:[.members[]|{name,role,online,load:.load.level,doing:[.load.current[].id]}]}";
+  '{channel,me,head,unread,freeBackend:[.members[]|select(.role=="backend" and .load.level=="free")|.name],members:[.members[]|{name,role,online,load:.load.level,doing:[.load.current[].id]}]}';
 
 function kiwi(args: string[], timeoutMs = 30_000): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((resolve, reject) => {
@@ -114,7 +112,10 @@ async function mcpList(): Promise<{ tools: { name: string; description?: string 
   proc.stdin.end();
   const code = await Promise.race([closed, new Promise<number>((_, reject) => setTimeout(() => reject(new Error(`mcp timed out: ${stderr.slice(0, 200)}`)), 20_000))]);
   if (!stdout.trim()) throw new Error(`mcp produced no stdout (exit ${code}): ${stderr.slice(0, 300)}`);
-  const messages = stdout.split("\n").filter(Boolean).map((line) => JSON.parse(line) as { id?: number; result?: { tools?: { name: string; description?: string }[]; instructions?: string } });
+  const messages = stdout
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as { id?: number; result?: { tools?: { name: string; description?: string }[]; instructions?: string } });
   const init = messages.find((m) => m.id === 1);
   const listed = messages.find((m) => m.id === 2);
   return { tools: listed?.result?.tools ?? [], instructions: init?.result?.instructions ?? "" };
@@ -156,7 +157,10 @@ function parseTasks(extracted: string): Record<string, string[]> {
 }
 
 function parseAsks(extracted: string): string[] {
-  return extracted.split("\n").filter((l) => /^\s*#\d+/.test(l)).map((l) => l.trim());
+  return extracted
+    .split("\n")
+    .filter((l) => /^\s*#\d+/.test(l))
+    .map((l) => l.trim());
 }
 
 function pctFewer(base: number, next: number): string {
@@ -167,13 +171,7 @@ function pctFewer(base: number, next: number): string {
 
 const script = readFileSync(join(here, "sh-session.sh"), "utf8");
 
-const [statusJson, statusText, tasksGlobal, prompt, listed] = await Promise.all([
-  kiwi(["status", "--json"]),
-  kiwi(["status"]),
-  kiwi(["tasks", "--global"]),
-  kiwi(["prompt"]),
-  mcpList(),
-]);
+const [statusJson, statusText, tasksGlobal, prompt, listed] = await Promise.all([kiwi(["status", "--json"]), kiwi(["status"]), kiwi(["tasks", "--global"]), kiwi(["prompt"]), mcpList()]);
 
 if (statusJson.code !== 0) throw new Error(`status --json failed: ${statusJson.stderr}`);
 if (statusText.code !== 0) throw new Error(`status failed: ${statusText.stderr}`);
@@ -212,7 +210,10 @@ const extracted = extractStatus(statusText.stdout);
 const tasksByOwner = parseTasks(extracted);
 const asks = parseAsks(extracted);
 const shRun = await kiwi(["sh", script], 20_000);
-const sh = shRun.code === 0 ? { stdout: shRun.stdout, stderr: shRun.stderr, exitCode: shRun.code } : { pending: shRun.stderr || `exit ${shRun.code}`, stdout: shRun.stdout, stderr: shRun.stderr, exitCode: shRun.code };
+const sh =
+  shRun.code === 0
+    ? { stdout: shRun.stdout, stderr: shRun.stderr, exitCode: shRun.code }
+    : { pending: shRun.stderr || `exit ${shRun.code}`, stdout: shRun.stdout, stderr: shRun.stderr, exitCode: shRun.code };
 
 const mcpTools = listed.tools;
 const ownerExtra = OWNER_TOOLS.filter((t) => !mcpTools.some((m) => m.name === t.name));
@@ -225,11 +226,7 @@ const cliVisible = [jqOut, extracted, tasksGlobal.stdout].join("\n");
 const mcpVisible = [statusText.stdout, tasksGlobal.stdout].join("\n");
 const shVisible = sh.stdout ?? "";
 
-const cliCalls = [
-  `kiwi status --json | jq '${JQ_STATUS}'`,
-  "kiwi status  # model reads only the tasks and waiting-on-you sections",
-  "kiwi tasks --global",
-];
+const cliCalls = [`kiwi status --json | jq '${JQ_STATUS}'`, "kiwi status  # model reads only the tasks and waiting-on-you sections", "kiwi tasks --global"];
 const mcpCalls = ["status", "tasks {global:true}"];
 
 const report = {
@@ -335,7 +332,9 @@ console.log(`total  mcp=${report.totals.mcp}  cli+jq=${report.totals.cli_jq}  sh
 console.log(`sh vs mcp steps: ${report.fewerThanMcp.steps_sh} fewer`);
 console.log(`cli vs mcp session output: ${report.fewerThanMcp.sessionOutput_cli} fewer`);
 console.log(`sh schema vs 17 mcp schemas: ${report.fewerThanMcp.fixed_shSchema_vs_mcpSchemas} fewer`);
-console.log(`write+sh tools=${report.writePlusSh.kept.length} fixed+output=${report.writePlusSh.fixedPlusOutput ?? "pending"} vs 17: ${report.writePlusSh.versus17} fewer  clears25=${report.writePlusSh.clears25}`);
+console.log(
+  `write+sh tools=${report.writePlusSh.kept.length} fixed+output=${report.writePlusSh.fixedPlusOutput ?? "pending"} vs 17: ${report.writePlusSh.versus17} fewer  clears25=${report.writePlusSh.clears25}`,
+);
 console.log(`sh run: ${sh.pending ?? `exit ${sh.exitCode}`}`);
 console.log(`free backend: ${JSON.stringify(report.session.answers.freeBackend)}`);
 console.log(`tasks parsed: ${Object.keys(tasksByOwner).length ? "yes" : "NONE"}`);

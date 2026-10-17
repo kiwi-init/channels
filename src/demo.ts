@@ -40,7 +40,10 @@ const sandbox = (web: string | undefined) =>
       Effect.sync(() => {
         server.stop(true);
         rmSync(root, { recursive: true, force: true });
-        for (const [k, v] of [["KIWI_HOME", was.home], ["KIWI_NO_HOOKS", was.hooks]] as const) {
+        for (const [k, v] of [
+          ["KIWI_HOME", was.home],
+          ["KIWI_NO_HOOKS", was.hooks],
+        ] as const) {
           if (v === undefined) delete process.env[k];
           else process.env[k] = v;
         }
@@ -63,7 +66,15 @@ const play = Effect.fn("Demo.run")(function* (opts: DemoOptions) {
   const roomId = newRoomId();
   const owner = yield* Effect.promise(() => loadIdentity("human", roomId));
   const ids = yield* Effect.promise(() => Promise.all(names.map((n) => loadIdentity(n, roomId))));
-  const { code, access } = yield* Channel.fx.create(relay, owner, { name: "human", role: "owner" }, ids.map((id) => ({ ...id, info: { name: id.name } })), roomId, null, "onemouse");
+  const { code, access } = yield* Channel.fx.create(
+    relay,
+    owner,
+    { name: "human", role: "owner" },
+    ids.map((id) => ({ ...id, info: { name: id.name } })),
+    roomId,
+    null,
+    "onemouse",
+  );
   const cfg = { ...access, relay, code, owner: "human" };
   saveConfig({ default: "demo", channels: { demo: cfg } });
   // The owner is played in-process with the client library, as the Kiwi app does; the rest are agents.

@@ -224,7 +224,9 @@ function claudeActivity(env: Env): Activity | undefined {
   const session = env.CLAUDE_CODE_SESSION_ID || r.sessionId;
   if (session && /^[\w-]+$/.test(session)) {
     const projects = join(dir, "projects");
-    const file = readdirSync(projects).map((p) => join(projects, p, `${session}.jsonl`)).find((f) => existsSync(f));
+    const file = readdirSync(projects)
+      .map((p) => join(projects, p, `${session}.jsonl`))
+      .find((f) => existsSync(f));
     for (const line of file ? tailLines(file, 128 * 1024) : []) {
       if (!line.trim()) continue;
       try {
@@ -249,7 +251,10 @@ async function codexActivity(env: Env): Promise<Activity | undefined> {
   const thread = env.CODEX_THREAD_ID;
   if (!thread) return undefined;
   const home = env.CODEX_HOME || join(homedir(), ".codex");
-  const db = readdirSync(home).filter((f) => /^state_\d+\.sqlite$/.test(f)).sort().at(-1);
+  const db = readdirSync(home)
+    .filter((f) => /^state_\d+\.sqlite$/.test(f))
+    .sort()
+    .at(-1);
   if (!db) return undefined;
   const row = (await sqliteOne(join(home, db), "SELECT rollout_path FROM threads WHERE id = ?", thread)) as { rollout_path?: unknown } | null;
   if (typeof row?.rollout_path !== "string" || !existsSync(row.rollout_path)) return undefined;

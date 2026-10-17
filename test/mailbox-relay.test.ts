@@ -95,8 +95,7 @@ describe("mailbox expiry and write limiting", () => {
     };
     return store;
   };
-  const call = (store: MailboxStore, path: string, init?: RequestInit, opts?: Parameters<typeof onMailboxHttp>[2]) =>
-    onMailboxHttp(new Request(`http://relay.test${path}`, init), store, opts);
+  const call = (store: MailboxStore, path: string, init?: RequestInit, opts?: Parameters<typeof onMailboxHttp>[2]) => onMailboxHttp(new Request(`http://relay.test${path}`, init), store, opts);
 
   test("a mailbox read after ten minutes is empty, and a write starts it over", async () => {
     const store = fakeStore();

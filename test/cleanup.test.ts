@@ -74,7 +74,10 @@ describe("kiwi cleanup", () => {
   test("an old Bun install of kiwi loses its command; anyone else's Bun commands stay", () => {
     const s = sandbox();
     const globals = join(s.bun, "install", "global", "node_modules");
-    for (const [pkg, name] of [["channel-one", "channel-one"], ["other", "something-else"]] as const) {
+    for (const [pkg, name] of [
+      ["channel-one", "channel-one"],
+      ["other", "something-else"],
+    ] as const) {
       mkdirSync(join(globals, pkg, "src", "cli"), { recursive: true });
       writeFileSync(join(globals, pkg, "package.json"), JSON.stringify({ name }));
       writeFileSync(join(globals, pkg, "src", "cli", "main.ts"), "");

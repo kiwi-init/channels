@@ -48,7 +48,9 @@ export const channelCommands: Record<string, Command> = {
       const here = seatsFor(process.cwd());
       for (const [alias, c] of Object.entries(cfg.channels)) {
         const agents = (yield* keys.identitiesIn(c.roomId)).filter((n) => n !== c.owner && n !== c.person);
-        out(`${here.some((b) => b.alias === alias) ? "*" : " "} ${alias}${c.title && c.title !== alias ? ` (${c.title})` : ""}  ${agents.length ? `agents here: ${agents.join(", ")}` : "no agent keys"}  ${c.relay}`);
+        out(
+          `${here.some((b) => b.alias === alias) ? "*" : " "} ${alias}${c.title && c.title !== alias ? ` (${c.title})` : ""}  ${agents.length ? `agents here: ${agents.join(", ")}` : "no agent keys"}  ${c.relay}`,
+        );
       }
     }),
 
@@ -88,7 +90,12 @@ export const channelCommands: Record<string, Command> = {
     Effect.gen(function* () {
       const s = yield* session();
       const [{ messages, state }, online] = yield* Effect.all([s.state(), s.who()], { concurrency: "unbounded" });
-      const on = new Map([...online].map(([n, p]) => [n, { client: p.client, role: p.role, ...(p.reach ? { reach: p.reach } : {}), ...(p.readAt === undefined ? {} : { readAt: p.readAt }), ...(isWakeVia(p.wake) ? { wake: p.wake } : {}) }]));
+      const on = new Map(
+        [...online].map(([n, p]) => [
+          n,
+          { client: p.client, role: p.role, ...(p.reach ? { reach: p.reach } : {}), ...(p.readAt === undefined ? {} : { readAt: p.readAt }), ...(isWakeVia(p.wake) ? { wake: p.wake } : {}) },
+        ]),
+      );
       const snap = { alias: s.alias, me: s.me, state, online: on, unread: yield* s.unreadCount(state, messages) };
       out(opt.json ? JSON.stringify(statusJson(snap)) : formatStatus(snap));
       yield* noteRead(s);

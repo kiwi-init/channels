@@ -4,7 +4,20 @@ import { mergeCard, sameCard } from "../card.ts";
 import { eachLive, type Live, type SendOptions } from "@kiwi/core/client.ts";
 import { Cursor } from "../config.ts";
 import { cardLine } from "@kiwi/core/format.ts";
-import { HANDOFF_DONE, HANDOFF_FAILED, HANDOFF_MAX_SECONDS, ignored, wellFormedReaction, type Card, type Color, type Event, type Handoff, type ImageAttachment, type Kind, type Message } from "@kiwi/core/protocol.ts";
+import {
+  HANDOFF_DONE,
+  HANDOFF_FAILED,
+  HANDOFF_MAX_SECONDS,
+  ignored,
+  wellFormedReaction,
+  type Card,
+  type Color,
+  type Event,
+  type Handoff,
+  type ImageAttachment,
+  type Kind,
+  type Message,
+} from "@kiwi/core/protocol.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { canPost, describeScopes, refusal } from "@kiwi/core/scopes.ts";
 import { allowedOnHold, humanOf, isPerson, ON_HOLD, ownerOf, taskId, type ChannelState } from "@kiwi/core/state.ts";
@@ -30,20 +43,24 @@ export class SessionMessaging extends SessionListen {
     return [...out];
   });
 
-  readonly send = Effect.fn("AgentSession.send")({ self: this }, function* (this: SessionMessaging, body: string, opts: SendOptions = {}) {
-    const to = yield* this.resolveTo(opts.to);
-    yield* this.mayI({ kind: opts.kind ?? "msg", ev: opts.ev, to });
-    if (opts.kind !== "event" && !opts.esc) yield* this.mayTalkTo(to);
-    const { state } = yield* this.state();
-    const parent = !opts.room && opts.re?.length ? state.roomOf.get(opts.re[0]!) : undefined;
-    const room = opts.ev ? undefined : (parent ?? (yield* this.roomId(opts.room)));
-    if (opts.task !== undefined && !state.tasks.has(opts.task)) return yield* new Rejected(`no task ${taskId(opts.task)}`);
-    if (opts.dm && (to?.length !== 1 || to[0] === this.me || !state.members.get(to[0]!)?.active)) return yield* new Rejected("a direct message goes to exactly one other member: --dm NAME");
-    const inThread = !!opts.re?.length;
-    const seq = yield* this.ch.fx.send(body, { ...opts, to, room, ...(inThread ? { task: undefined, dm: undefined } : {}) });
-    if (opts.kind !== "event" && opts.re?.length) yield* this.ack(opts.re);
-    return seq;
-  }, oneLook);
+  readonly send = Effect.fn("AgentSession.send")(
+    { self: this },
+    function* (this: SessionMessaging, body: string, opts: SendOptions = {}) {
+      const to = yield* this.resolveTo(opts.to);
+      yield* this.mayI({ kind: opts.kind ?? "msg", ev: opts.ev, to });
+      if (opts.kind !== "event" && !opts.esc) yield* this.mayTalkTo(to);
+      const { state } = yield* this.state();
+      const parent = !opts.room && opts.re?.length ? state.roomOf.get(opts.re[0]!) : undefined;
+      const room = opts.ev ? undefined : (parent ?? (yield* this.roomId(opts.room)));
+      if (opts.task !== undefined && !state.tasks.has(opts.task)) return yield* new Rejected(`no task ${taskId(opts.task)}`);
+      if (opts.dm && (to?.length !== 1 || to[0] === this.me || !state.members.get(to[0]!)?.active)) return yield* new Rejected("a direct message goes to exactly one other member: --dm NAME");
+      const inThread = !!opts.re?.length;
+      const seq = yield* this.ch.fx.send(body, { ...opts, to, room, ...(inThread ? { task: undefined, dm: undefined } : {}) });
+      if (opts.kind !== "event" && opts.re?.length) yield* this.ack(opts.re);
+      return seq;
+    },
+    oneLook,
+  );
 
   private mayTalkTo(to: string[] | undefined) {
     return Effect.gen({ self: this }, function* () {
@@ -56,7 +73,10 @@ export class SessionMessaging extends SessionListen {
         const p = state.members.get(n);
         return !!p && (p.kind === "human" || p.owner);
       });
-      if (people.length) return yield* new Rejected(`this channel is coordinator-only: only ${state.coordinator} messages people. Send it to ${state.coordinator}, who passes it on, or for a decision only a person can make: kiwi ask-human --re N "the decision".`);
+      if (people.length)
+        return yield* new Rejected(
+          `this channel is coordinator-only: only ${state.coordinator} messages people. Send it to ${state.coordinator}, who passes it on, or for a decision only a person can make: kiwi ask-human --re N "the decision".`,
+        );
     });
   }
 
@@ -76,17 +96,23 @@ export class SessionMessaging extends SessionListen {
     });
   }
 
-  readonly ask = Effect.fn("AgentSession.ask")({ self: this }, function* (
-    this: SessionMessaging,
-    body: string,
-    opts: { to?: string[]; kind?: Kind; waitSec?: number; imgs?: ImageAttachment[]; room?: string; task?: number; dm?: boolean },
-  ) {
-    const head = yield* this.ch.fx.head();
-    const seq = yield* this.send(body, { to: opts.to, kind: opts.kind ?? "ask", imgs: opts.imgs, room: opts.room, ...(opts.task !== undefined ? { task: opts.task } : {}), ...(opts.dm ? { dm: true } : {}) });
-    if (!opts.waitSec) return { seq, replies: [] as Message[] };
-    const replies = yield* this.awaitReplies(seq, head, opts.waitSec);
-    return { seq, replies };
-  });
+  readonly ask = Effect.fn("AgentSession.ask")(
+    { self: this },
+    function* (this: SessionMessaging, body: string, opts: { to?: string[]; kind?: Kind; waitSec?: number; imgs?: ImageAttachment[]; room?: string; task?: number; dm?: boolean }) {
+      const head = yield* this.ch.fx.head();
+      const seq = yield* this.send(body, {
+        to: opts.to,
+        kind: opts.kind ?? "ask",
+        imgs: opts.imgs,
+        room: opts.room,
+        ...(opts.task !== undefined ? { task: opts.task } : {}),
+        ...(opts.dm ? { dm: true } : {}),
+      });
+      if (!opts.waitSec) return { seq, replies: [] as Message[] };
+      const replies = yield* this.awaitReplies(seq, head, opts.waitSec);
+      return { seq, replies };
+    },
+  );
 
   readonly awaitReplies = Effect.fn("AgentSession.awaitReplies")({ self: this }, function* (this: SessionMessaging, seq: number, since: number, waitSec: number) {
     const replies: Message[] = [];
@@ -109,28 +135,40 @@ export class SessionMessaging extends SessionListen {
       });
     const listening = eachLive(this.ch.fx.live(since, { presence: false, reads: false }), handle, () => Effect.void);
     yield* Effect.raceFirst(listening, Effect.raceFirst(Deferred.await(answered), Effect.sleep(waitSec * 1000))).pipe(Effect.scoped);
-    yield* (yield* Cursor).markSeen(this.alias, this.me, replies.map((r) => r.seq));
+    yield* (yield* Cursor).markSeen(
+      this.alias,
+      this.me,
+      replies.map((r) => r.seq),
+    );
     return replies;
   });
 
-  readonly reply = Effect.fn("AgentSession.reply")({ self: this }, function* (this: SessionMessaging, seq: number, body: string, kind: Kind = "msg", imgs?: ImageAttachment[]) {
-    const { messages, state } = yield* this.state();
-    const orig = yield* this.message(seq, messages);
-    if (!orig) return yield* new Rejected(`no message #${seq}`);
-    const to = orig.from === this.me ? orig.to : [orig.from];
-    yield* this.mayI({ kind, to });
-    yield* this.mayTalkTo(to);
-    const sent = yield* this.ch.fx.send(body, { to, kind, re: [seq], imgs, room: state.roomOf.get(seq) ?? orig.room });
-    yield* this.ack([seq]);
-    return sent;
-  }, oneLook);
+  readonly reply = Effect.fn("AgentSession.reply")(
+    { self: this },
+    function* (this: SessionMessaging, seq: number, body: string, kind: Kind = "msg", imgs?: ImageAttachment[]) {
+      const { messages, state } = yield* this.state();
+      const orig = yield* this.message(seq, messages);
+      if (!orig) return yield* new Rejected(`no message #${seq}`);
+      const to = orig.from === this.me ? orig.to : [orig.from];
+      yield* this.mayI({ kind, to });
+      yield* this.mayTalkTo(to);
+      const sent = yield* this.ch.fx.send(body, { to, kind, re: [seq], imgs, room: state.roomOf.get(seq) ?? orig.room });
+      yield* this.ack([seq]);
+      return sent;
+    },
+    oneLook,
+  );
 
-  readonly react = Effect.fn("AgentSession.react")({ self: this }, function* (this: SessionMessaging, seq: number, emoji: string | null) {
-    if (emoji !== null && !wellFormedReaction(emoji)) return yield* new Rejected("a reaction is one emoji, or a GIF key like ok/trailer (kiwi react --list)");
-    const { state } = yield* this.state();
-    if (!state.placeOf.has(seq) || ignored(state.trust.get(seq))) return yield* new Rejected(`no message #${seq} to react to`);
-    return yield* this.confirm(yield* this.event({ op: "react", seq, emoji }, "reaction"));
-  }, oneLook);
+  readonly react = Effect.fn("AgentSession.react")(
+    { self: this },
+    function* (this: SessionMessaging, seq: number, emoji: string | null) {
+      if (emoji !== null && !wellFormedReaction(emoji)) return yield* new Rejected("a reaction is one emoji, or a GIF key like ok/trailer (kiwi react --list)");
+      const { state } = yield* this.state();
+      if (!state.placeOf.has(seq) || ignored(state.trust.get(seq))) return yield* new Rejected(`no message #${seq} to react to`);
+      return yield* this.confirm(yield* this.event({ op: "react", seq, emoji }, "reaction"));
+    },
+    oneLook,
+  );
 
   protected ack(re: readonly number[]) {
     return Effect.ignoreCause(
@@ -150,48 +188,68 @@ export class SessionMessaging extends SessionListen {
     return yield* this.event({ op: "hello", role, about }, `joined${role ? ` as ${role}` : ""}`);
   });
 
-  readonly escalate = Effect.fn("AgentSession.escalate")({ self: this }, function* (this: SessionMessaging, body: string, re?: number, handoff?: Handoff, ask: { choices?: string[]; task?: number } = {}) {
-    if (!body.trim()) return yield* new Rejected("say what needs deciding: the text is empty");
-    const { messages, state } = yield* this.state();
-    const me = state.members.get(this.me);
-    if (me && isPerson(me)) return yield* new Rejected("escalating is for agents: you're a person, so you decide");
-    if (handoff && handoff.expiresAt - Date.now() > HANDOFF_MAX_SECONDS * 1000 + 5000) return yield* new Rejected(`a browser handoff link lasts at most ${HANDOFF_MAX_SECONDS / 60} minutes`);
-    if (re !== undefined && !(yield* this.message(re, messages))) return yield* new Rejected(`no message #${re}`);
-    const to = [...new Set([humanOf(state, this.me), ownerOf(state)].filter((n): n is string => !!n))];
-    if (!to.length) return yield* new Rejected("there's no person in this channel to escalate to");
-    if (ask.choices && handoff) return yield* new Rejected("a browser handoff has its own Done and Couldn't answers; leave out the options");
-    if (ask.task !== undefined && re !== undefined) {
-      const place = state.placeOf.get(re);
-      if (place?.kind !== "task" || place.task !== ask.task) {
-        const where = place?.kind === "task" ? `in ${taskId(place.task)}'s thread` : place?.kind === "dm" ? "in a direct thread" : "in the main conversation";
-        return yield* new Rejected(`#${re} is ${where}, and an answer to it goes there, not in ${taskId(ask.task)}'s thread: leave out the task or the message it answers`);
+  readonly escalate = Effect.fn("AgentSession.escalate")(
+    { self: this },
+    function* (this: SessionMessaging, body: string, re?: number, handoff?: Handoff, ask: { choices?: string[]; task?: number } = {}) {
+      if (!body.trim()) return yield* new Rejected("say what needs deciding: the text is empty");
+      const { messages, state } = yield* this.state();
+      const me = state.members.get(this.me);
+      if (me && isPerson(me)) return yield* new Rejected("escalating is for agents: you're a person, so you decide");
+      if (handoff && handoff.expiresAt - Date.now() > HANDOFF_MAX_SECONDS * 1000 + 5000) return yield* new Rejected(`a browser handoff link lasts at most ${HANDOFF_MAX_SECONDS / 60} minutes`);
+      if (re !== undefined && !(yield* this.message(re, messages))) return yield* new Rejected(`no message #${re}`);
+      const to = [...new Set([humanOf(state, this.me), ownerOf(state)].filter((n): n is string => !!n))];
+      if (!to.length) return yield* new Rejected("there's no person in this channel to escalate to");
+      if (ask.choices && handoff) return yield* new Rejected("a browser handoff has its own Done and Couldn't answers; leave out the options");
+      if (ask.task !== undefined && re !== undefined) {
+        const place = state.placeOf.get(re);
+        if (place?.kind !== "task" || place.task !== ask.task) {
+          const where = place?.kind === "task" ? `in ${taskId(place.task)}'s thread` : place?.kind === "dm" ? "in a direct thread" : "in the main conversation";
+          return yield* new Rejected(`#${re} is ${where}, and an answer to it goes there, not in ${taskId(ask.task)}'s thread: leave out the task or the message it answers`);
+        }
       }
-    }
-    const seq = yield* this.send(body, { to, kind: "blocking", esc: true, ...(handoff ? { handoff } : {}), ...(ask.choices ? { choices: ask.choices } : {}), ...(ask.task !== undefined ? { task: ask.task } : {}), ...(re !== undefined ? { re: [re] } : {}) });
-    return { seq, to };
-  }, oneLook);
+      const seq = yield* this.send(body, {
+        to,
+        kind: "blocking",
+        esc: true,
+        ...(handoff ? { handoff } : {}),
+        ...(ask.choices ? { choices: ask.choices } : {}),
+        ...(ask.task !== undefined ? { task: ask.task } : {}),
+        ...(re !== undefined ? { re: [re] } : {}),
+      });
+      return { seq, to };
+    },
+    oneLook,
+  );
 
-  readonly awaitHandoff = Effect.fn("AgentSession.awaitHandoff")({ self: this }, function* (this: SessionMessaging, seq: number, since: number, expiresAt: number, waitSec: number) {
-    const deadline = Math.min(expiresAt, Date.now() + waitSec * 1000);
-    let from = since;
-    const heard: Message[] = [];
-    while (Date.now() < deadline) {
-      const replies = yield* this.awaitReplies(seq, from, Math.max(1, Math.ceil((deadline - Date.now()) / 1000)));
-      if (!replies.length) break;
-      heard.push(...replies);
-      from = Math.max(from, ...replies.map((r) => r.seq));
-      const final = replies.find((r) => r.body.startsWith(HANDOFF_DONE) || r.body.startsWith(HANDOFF_FAILED));
-      if (final) return { outcome: final.body.startsWith(HANDOFF_DONE) ? ("done" as const) : ("failed" as const), replies: heard };
-    }
-    return { outcome: Date.now() >= expiresAt ? ("expired" as const) : ("waiting" as const), replies: heard };
-  }, oneLook);
+  readonly awaitHandoff = Effect.fn("AgentSession.awaitHandoff")(
+    { self: this },
+    function* (this: SessionMessaging, seq: number, since: number, expiresAt: number, waitSec: number) {
+      const deadline = Math.min(expiresAt, Date.now() + waitSec * 1000);
+      let from = since;
+      const heard: Message[] = [];
+      while (Date.now() < deadline) {
+        const replies = yield* this.awaitReplies(seq, from, Math.max(1, Math.ceil((deadline - Date.now()) / 1000)));
+        if (!replies.length) break;
+        heard.push(...replies);
+        from = Math.max(from, ...replies.map((r) => r.seq));
+        const final = replies.find((r) => r.body.startsWith(HANDOFF_DONE) || r.body.startsWith(HANDOFF_FAILED));
+        if (final) return { outcome: final.body.startsWith(HANDOFF_DONE) ? ("done" as const) : ("failed" as const), replies: heard };
+      }
+      return { outcome: Date.now() >= expiresAt ? ("expired" as const) : ("waiting" as const), replies: heard };
+    },
+    oneLook,
+  );
 
-  readonly setColor = Effect.fn("AgentSession.setColor")({ self: this }, function* (this: SessionMessaging, member: string, color: Color | null) {
-    if (member !== this.me) return yield* new Rejected("you set your own colour; the owner sets anyone else's in the Channels app");
-    const ev: Event = { op: "color.set", member, color };
-    yield* this.mayI({ kind: "event", ev });
-    return yield* this.confirm(yield* this.ch.fx.send(color ? `${member}'s colour is ${color}` : `cleared ${member}'s colour`, { kind: "event", ev }));
-  }, oneLook);
+  readonly setColor = Effect.fn("AgentSession.setColor")(
+    { self: this },
+    function* (this: SessionMessaging, member: string, color: Color | null) {
+      if (member !== this.me) return yield* new Rejected("you set your own colour; the owner sets anyone else's in the Channels app");
+      const ev: Event = { op: "color.set", member, color };
+      yield* this.mayI({ kind: "event", ev });
+      return yield* this.confirm(yield* this.ch.fx.send(color ? `${member}'s colour is ${color}` : `cleared ${member}'s colour`, { kind: "event", ev }));
+    },
+    oneLook,
+  );
 
   protected event(ev: Event, body: string, to?: string[], re?: number) {
     return Effect.gen({ self: this }, function* () {
@@ -209,18 +267,18 @@ export class SessionMessaging extends SessionListen {
     });
   }
 
-  readonly refreshCard = Effect.fn("AgentSession.refreshCard")({ self: this }, function* (
-    this: SessionMessaging,
-    detected: Card,
-    given: { model?: string; note?: string; tools?: string[] } = {},
-  ) {
-    const { state } = yield* this.state();
-    const me = state.members.get(this.me);
-    const card = mergeCard(detected, me?.card, given);
-    if (!me || isPerson(me) || !canPost(me.scopes) || state.hold || sameCard(me.card, card)) return { sent: false, card };
-    yield* this.event({ op: "card", ...card }, `card: ${cardLine(card)}`);
-    return { sent: true, card };
-  }, oneLook);
+  readonly refreshCard = Effect.fn("AgentSession.refreshCard")(
+    { self: this },
+    function* (this: SessionMessaging, detected: Card, given: { model?: string; note?: string; tools?: string[] } = {}) {
+      const { state } = yield* this.state();
+      const me = state.members.get(this.me);
+      const card = mergeCard(detected, me?.card, given);
+      if (!me || isPerson(me) || !canPost(me.scopes) || state.hold || sameCard(me.card, card)) return { sent: false, card };
+      yield* this.event({ op: "card", ...card }, `card: ${cardLine(card)}`);
+      return { sent: true, card };
+    },
+    oneLook,
+  );
 
   readonly setFact = Effect.fn("AgentSession.setFact")({ self: this }, function* (this: SessionMessaging, key: string, value: string, ttlSec?: number) {
     return yield* this.event({ op: "fact.set", key, value, ...(ttlSec ? { ttl: ttlSec } : {}) }, `${key} = ${value}`);

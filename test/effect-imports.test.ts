@@ -15,6 +15,8 @@ function sources(dir: string): string[] {
 
 test("nothing imports from the root of 'effect'", () => {
   const root = join(import.meta.dir, "..");
-  const offenders = [...sources(join(root, "src")), ...sources(join(root, "packages/core/src")), ...sources(join(root, "web/src"))].filter((f) => /from\s+["']effect["']/.test(readFileSync(f, "utf8")));
+  const offenders = [...sources(join(root, "src")), ...sources(join(root, "packages/core/src")), ...sources(join(root, "web/src"))].filter((f) =>
+    /from\s+["']effect["']/.test(readFileSync(f, "utf8")),
+  );
   expect(offenders.map((f) => relative(root, f))).toEqual([]);
 });

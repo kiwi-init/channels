@@ -1,6 +1,19 @@
 import * as Effect from "effect/Effect";
 import { Keystore } from "../../config.ts";
-import { EXTRA_HARNESSES, extraInstalled, hooksInstalled, hooksStatus, installDetected, installExtra, installHooks, runHook, uninstallDetected, uninstallExtra, uninstallHooks, type ExtraHarness } from "../../hooks.ts";
+import {
+  EXTRA_HARNESSES,
+  extraInstalled,
+  hooksInstalled,
+  hooksStatus,
+  installDetected,
+  installExtra,
+  installHooks,
+  runHook,
+  uninstallDetected,
+  uninstallExtra,
+  uninstallHooks,
+  type ExtraHarness,
+} from "../../hooks.ts";
 import { args } from "../args.ts";
 import { type Command, die, out } from "../context.ts";
 

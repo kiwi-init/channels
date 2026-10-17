@@ -10,4 +10,18 @@ export { allowedOnHold, colorOf, COORDINATOR, firstAgent, humanOf, isPerson, kep
 export { chooseThread, dmPlace, MAIN, placeFromKey, placeKey, tasksAwaitingPeople, threadMembers, wentTo } from "./state/places.ts";
 export { findRoom, newRoomId } from "./state/rooms.ts";
 export { currentState, openRound, parseTaskId, revisedOut, similarOpenTasks, taskId, titlesLookAlike } from "./state/tasks.ts";
-export { toRoster, type ChannelState, type Fact, type FoldBase, type GuardFloor, type Member, type Place, type PlaceSummary, type Reaction, type ReviewRound, type RoomsFloor, type Roster, type Task } from "./state/types.ts";
+export {
+  toRoster,
+  type ChannelState,
+  type Fact,
+  type FoldBase,
+  type GuardFloor,
+  type Member,
+  type Place,
+  type PlaceSummary,
+  type Reaction,
+  type ReviewRound,
+  type RoomsFloor,
+  type Roster,
+  type Task,
+} from "./state/types.ts";

@@ -28,7 +28,12 @@ export function wireStoreIpc(): void {
     if (store.person || makingPerson) throw new Error("this app already has your person key");
     makingPerson = true;
     try {
-      const clean = name.replace(/[\u0000-\u001f\u007f-\u009f\u2028-\u2069]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "someone";
+      const clean =
+        name
+          .replace(/[\u0000-\u001f\u007f-\u009f\u2028-\u2069]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 80) || "someone";
       const id = await generateIdentity(clean);
       const person: PersonView = { name: clean, pk: id.pk, sk: id.sk, xpk: id.xpk as string, xsk: id.xsk as string };
       if (store.person) throw new Error("this app already has your person key");

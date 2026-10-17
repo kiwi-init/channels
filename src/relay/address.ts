@@ -177,7 +177,12 @@ export function trustProxyFromArgs(argv: readonly string[], envValue: string | u
   const env = envValue?.trim();
   if (!env || env === "0") return false;
   if (env === "1") return true;
-  return parseTrustProxy(env.split(",").map((part) => part.trim()).filter(Boolean));
+  return parseTrustProxy(
+    env
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean),
+  );
 }
 
 function proxyPeer(peerIp: string, trust: TrustProxy): boolean {

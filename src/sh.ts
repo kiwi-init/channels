@@ -15,11 +15,60 @@ import { taskId, type ChannelState, type Place, type ReviewRound } from "@kiwi/c
  * just-bash would import them at runtime from wherever kiwi runs.
  */
 export const COMMANDS: CommandName[] = [
-  "cat", "echo", "printf", "ls", "pwd", "readlink", "stat", "file", "find", "tree", "du", "basename", "dirname",
-  "head", "tail", "wc", "grep", "fgrep", "egrep", "rg", "sed", "awk", "sort", "uniq", "comm", "cut", "paste",
-  "tr", "rev", "nl", "fold", "expand", "unexpand", "strings", "column", "join", "tac", "od", "diff",
-  "jq", "yq", "xan", "base64", "md5sum", "sha1sum", "sha256sum", "xargs", "seq", "expr", "date",
-  "true", "false", "which", "help",
+  "cat",
+  "echo",
+  "printf",
+  "ls",
+  "pwd",
+  "readlink",
+  "stat",
+  "file",
+  "find",
+  "tree",
+  "du",
+  "basename",
+  "dirname",
+  "head",
+  "tail",
+  "wc",
+  "grep",
+  "fgrep",
+  "egrep",
+  "rg",
+  "sed",
+  "awk",
+  "sort",
+  "uniq",
+  "comm",
+  "cut",
+  "paste",
+  "tr",
+  "rev",
+  "nl",
+  "fold",
+  "expand",
+  "unexpand",
+  "strings",
+  "column",
+  "join",
+  "tac",
+  "od",
+  "diff",
+  "jq",
+  "yq",
+  "xan",
+  "base64",
+  "md5sum",
+  "sha1sum",
+  "sha256sum",
+  "xargs",
+  "seq",
+  "expr",
+  "date",
+  "true",
+  "false",
+  "which",
+  "help",
 ];
 
 export const MAX_SCRIPT_BYTES = 16 * 1024;
@@ -107,7 +156,7 @@ function channelTree(v: ChannelView, now: number): Record<string, string> {
   }
   for (const t of state.tasks.values()) {
     files[`tasks/${taskId(t.id)}.md`] = formatTask(state, t, now) + "\n";
-    for (const r of t.rounds) files[`tasks/${taskId(t.id)}/rounds/${r.n}.md`] = roundFile(t.id, r, reviews)
+    for (const r of t.rounds) files[`tasks/${taskId(t.id)}/rounds/${r.n}.md`] = roundFile(t.id, r, reviews);
   }
   for (const m of state.members.values()) {
     if (!m.active) continue;

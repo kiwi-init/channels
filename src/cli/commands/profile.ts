@@ -29,14 +29,18 @@ export const profileCommands: Record<string, Command> = {
   card: () =>
     Effect.gen(function* () {
       const s = yield* session();
-      const { sent, card } = yield* s.refreshCard(detectCard(), { ...(opt.model ? { model: opt.model } : {}), ...(opt.note ? { note: opt.note } : {}), ...(opt.tools ? { tools: list(opt.tools) } : {}) });
+      const { sent, card } = yield* s.refreshCard(detectCard(), {
+        ...(opt.model ? { model: opt.model } : {}),
+        ...(opt.note ? { note: opt.note } : {}),
+        ...(opt.tools ? { tools: list(opt.tools) } : {}),
+      });
       out(`${sent ? "card" : "card unchanged"}: ${cardLine(card)}`);
     }),
 
   hello: () =>
     Effect.gen(function* () {
       const s = yield* session();
-      if (opt.role || opt.about) return yield* die("the owner sets roles and rules: ask them in a message (kiwi send --to human \"…\")");
+      if (opt.role || opt.about) return yield* die('the owner sets roles and rules: ask them in a message (kiwi send --to human "…")');
       yield* s.hello();
       const me = (yield* s.state()).state.members.get(s.me);
       out(`announced ${s.me}${me?.role ? ` as ${me.role}` : ""}`);

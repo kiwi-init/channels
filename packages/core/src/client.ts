@@ -48,13 +48,7 @@ export class Channel {
   private readonly sending: ChannelSending;
   readonly fx: ChannelFx;
 
-  constructor(
-    access: ChannelAccess,
-    relay: string,
-    identity: Identity,
-    onAccess?: (a: ChannelAccess) => void,
-    opts: { keepInfo?: boolean; infoMaxAgeMs?: number } = {},
-  ) {
+  constructor(access: ChannelAccess, relay: string, identity: Identity, onAccess?: (a: ChannelAccess) => void, opts: { keepInfo?: boolean; infoMaxAgeMs?: number } = {}) {
     this.core = new ChannelCore(access, relay, identity, onAccess);
     this.cache = new ChannelInfo(this.core, opts);
     const settings = new ChannelSettings(this.core, this.cache);

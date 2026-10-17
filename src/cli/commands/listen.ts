@@ -40,14 +40,23 @@ export const listenCommands: Record<string, Command> = {
       yield* Effect.forkDetach(Effect.ignoreCause(s.refreshCard(detectCard())));
       let got = 0;
       const enough = yield* Deferred.make<void>();
-      const woke = Effect.suspend(() =>
-        got++ === 0 ? Effect.asVoid(Effect.forkScoped(Effect.andThen(Effect.sleep(400), Deferred.succeed(enough, undefined)))) : Effect.void,
+      const woke = Effect.suspend(() => (got++ === 0 ? Effect.asVoid(Effect.forkScoped(Effect.andThen(Effect.sleep(400), Deferred.succeed(enough, undefined)))) : Effect.void));
+      const listening = s.listen(
+        (m, state) =>
+          Effect.andThen(
+            Effect.sync(() => out(render(m, state))),
+            woke,
+          ),
+        {
+          ...(yield* delivery(s)),
+          onStatus: (msg) => Effect.sync(() => void process.stderr.write(`kiwi: ${msg}\n`)),
+          onNotice: (text) =>
+            Effect.andThen(
+              Effect.sync(() => out(`* ${text}`)),
+              woke,
+            ),
+        },
       );
-      const listening = s.listen((m, state) => Effect.andThen(Effect.sync(() => out(render(m, state))), woke), {
-        ...(yield* delivery(s)),
-        onStatus: (msg) => Effect.sync(() => void process.stderr.write(`kiwi: ${msg}\n`)),
-        onNotice: (text) => Effect.andThen(Effect.sync(() => out(`* ${text}`)), woke),
-      });
       const timeout = opt.timeout ? Effect.sleep(parseDuration(opt.timeout) * 1000) : Effect.never;
       yield* Effect.raceFirst(listening, Effect.raceFirst(Deferred.await(enough), timeout)).pipe(Effect.scoped);
       if (got) return yield* noteRead(s);
@@ -91,7 +100,9 @@ export const listenCommands: Record<string, Command> = {
         ...(!opt["for-me"] && opt.thread === undefined ? { chat: true } : {}),
         onStatus: (msg) => Effect.sync(() => void process.stderr.write(`kiwi: ${msg}\n`)),
         onNotice: (text) =>
-          Effect.sync(() => void fetch(url, { method: "POST", headers, body: JSON.stringify({ channel: s.alias, kind: "notice", text, ts: Date.now() }), signal: AbortSignal.timeout(10_000) }).catch(() => {})),
+          Effect.sync(
+            () => void fetch(url, { method: "POST", headers, body: JSON.stringify({ channel: s.alias, kind: "notice", text, ts: Date.now() }), signal: AbortSignal.timeout(10_000) }).catch(() => {}),
+          ),
       });
     }),
 };

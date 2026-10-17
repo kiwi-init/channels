@@ -98,8 +98,7 @@ export class SessionListen extends SessionState {
       for (const r of yield* owner.fx.requests({ budget })) {
         if (r.check === "ready") {
           yield* notice(
-            `join request: "${r.name}"${r.role ? ` (${r.role})` : ""} wants in, verification code ${r.code}. ` +
-              `Only your human may approve, in the Channels app, after checking the code matches.`,
+            `join request: "${r.name}"${r.role ? ` (${r.role})` : ""} wants in, verification code ${r.code}. ` + `Only your human may approve, in the Channels app, after checking the code matches.`,
           );
         } else if (r.check === "unchecked") {
           yield* notice(`join request: "${r.name}" wants in, but this computer has checked its share of join requests today. ${TOO_MANY_REQUESTS}`);
@@ -153,12 +152,30 @@ export class SessionListen extends SessionState {
         if (!found.has(p.from)) yield* heard;
         const role = typeof p.role === "string" ? inlineText(p.role, 80) || undefined : undefined;
         const { readAt, wake, ...rest } = p;
-        found.set(p.from, { ...rest, ...(typeof p.role === "string" ? { role } : {}), ...(typeof readAt === "number" && Number.isFinite(readAt) ? { readAt } : {}), ...(isWakeVia(wake) ? { wake } : {}) });
+        found.set(p.from, {
+          ...rest,
+          ...(typeof p.role === "string" ? { role } : {}),
+          ...(typeof readAt === "number" && Number.isFinite(readAt) ? { readAt } : {}),
+          ...(isWakeVia(wake) ? { wake } : {}),
+        });
       });
     const probing = eachLive(this.ch.fx.live(head, { presence: true, reads: false }), handle, () => Effect.void);
-    const [mine] = yield* Effect.all([Effect.promise(() => daemonSeat(this.alias, this.me)), Effect.raceFirst(probing, Effect.raceFirst(Deferred.await(quiet), Effect.sleep(waitMs))).pipe(Effect.ignoreCause, Effect.scoped)], { concurrency: "unbounded" });
+    const [mine] = yield* Effect.all(
+      [Effect.promise(() => daemonSeat(this.alias, this.me)), Effect.raceFirst(probing, Effect.raceFirst(Deferred.await(quiet), Effect.sleep(waitMs))).pipe(Effect.ignoreCause, Effect.scoped)],
+      { concurrency: "unbounded" },
+    );
     const myWake = mine?.wake.on ? viaOf(mine.wake.path) : null;
-    if (mine) found.set(this.me, { v: PROTOCOL_VERSION, type: "presence", from: this.me, client: "daemon", ts: Date.now(), ...(isReach(mine.reach) ? { reach: mine.reach } : {}), ...(mine.read ? { readAt: mine.read.at } : {}), ...(myWake ? { wake: myWake } : {}) });
+    if (mine)
+      found.set(this.me, {
+        v: PROTOCOL_VERSION,
+        type: "presence",
+        from: this.me,
+        client: "daemon",
+        ts: Date.now(),
+        ...(isReach(mine.reach) ? { reach: mine.reach } : {}),
+        ...(mine.read ? { readAt: mine.read.at } : {}),
+        ...(myWake ? { wake: myWake } : {}),
+      });
     return found;
   });
 }

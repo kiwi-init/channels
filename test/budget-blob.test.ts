@@ -38,11 +38,7 @@ const craft = (iv: string, ct: string, ivAs: Kind, ctAs: Kind): void => {
 };
 
 const relayCtx = makeRelay(
-  Layer.mergeAll(
-    Layer.succeed(Human, null),
-    Layer.succeed(Policy, OPEN_POLICY),
-    Layer.succeed(Directory, { list: async () => [], reserve: async () => true, release: async () => {} }),
-  ),
+  Layer.mergeAll(Layer.succeed(Human, null), Layer.succeed(Policy, OPEN_POLICY), Layer.succeed(Directory, { list: async () => [], reserve: async () => true, release: async () => {} })),
 );
 
 const sqlOf = (db: Database): Sql => ({
@@ -163,16 +159,7 @@ describe("message ciphertext stored as bytes", () => {
     fresh.forEach((ct, i) => db.insert(old.length + i + 1, 0, "aXZpdml2aXZpdml2", ct, 0));
     const all = [...old, ...fresh];
     expect(db.since(0)).toEqual(all.map((ct, i) => ({ seq: i + 1, ts: 0, iv: "aXZpdml2aXZpdml2", ct, e: 0 })));
-    expect((mem.query("SELECT typeof(ct) AS t FROM msgs ORDER BY seq").all() as { t: string }[]).map((r) => r.t)).toEqual([
-      "text",
-      "text",
-      "text",
-      "text",
-      "blob",
-      "blob",
-      "text",
-      "blob",
-    ]);
+    expect((mem.query("SELECT typeof(ct) AS t FROM msgs ORDER BY seq").all() as { t: string }[]).map((r) => r.t)).toEqual(["text", "text", "text", "text", "blob", "blob", "text", "blob"]);
     const chars = (xs: string[]): number => xs.reduce((n, s) => n + s.length, 0);
     expect(db.storedBytes()).toBe(chars(all));
     expect(db.dropThrough(2)).toBe(chars(all.slice(0, 2)));

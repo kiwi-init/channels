@@ -11,7 +11,8 @@ describe("gif reactions", () => {
     expect(wellFormedReaction("👍")).toBe(true);
     expect(wellFormedReaction("ok/trailer")).toBe(true);
     expect(wellFormedReaction("thinking/the-bear-help")).toBe(true);
-    for (const bad of ["ok", "OK/trailer", "ok/../x", "ok/trailer/x", "/trailer", "ok/", "ok/trailer ", "ok/<b>", "a".repeat(30) + "/x", "ok/" + "a".repeat(49)]) expect(wellFormedReaction(bad)).toBe(false);
+    for (const bad of ["ok", "OK/trailer", "ok/../x", "ok/trailer/x", "/trailer", "ok/", "ok/trailer ", "ok/<b>", "a".repeat(30) + "/x", "ok/" + "a".repeat(49)])
+      expect(wellFormedReaction(bad)).toBe(false);
   });
 
   test("only a key is a gif reaction", () => {

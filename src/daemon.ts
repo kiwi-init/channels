@@ -13,7 +13,35 @@
 // shares it. A CLI that finds an older daemon stops it and starts its own.
 
 export { loadPairedMachine, pairComputer, PairError, type PairedMachine, type PairedPerson } from "./daemon/pair.ts";
-export { DAEMON_PROTOCOL, daemonSock, type DaemonEvent, type DaemonHello, type DaemonListener, type DaemonPeek, type DaemonRead, type DaemonSeat, type DaemonVerb, type DaemonWake, type ListenerKind } from "./daemon/protocol.ts";
+export {
+  DAEMON_PROTOCOL,
+  daemonSock,
+  type DaemonEvent,
+  type DaemonHello,
+  type DaemonListener,
+  type DaemonPeek,
+  type DaemonRead,
+  type DaemonSeat,
+  type DaemonVerb,
+  type DaemonWake,
+  type ListenerKind,
+} from "./daemon/protocol.ts";
 export { activityEnv, reachOf, seatRecordFor, wakeOn, type Attached } from "./daemon/reach.ts";
-export { adoptDaemon, daemonHello, daemonListeners, daemonListening, daemonMark, daemonPeek, daemonSeat, ensureDaemon, holdListener, listenDaemon, reportRead, spawnDaemon, stopDaemon, type DaemonSubscription, type HeldListener } from "./daemon/rpc.ts";
+export {
+  adoptDaemon,
+  daemonHello,
+  daemonListeners,
+  daemonListening,
+  daemonMark,
+  daemonPeek,
+  daemonSeat,
+  ensureDaemon,
+  holdListener,
+  listenDaemon,
+  reportRead,
+  spawnDaemon,
+  stopDaemon,
+  type DaemonSubscription,
+  type HeldListener,
+} from "./daemon/rpc.ts";
 export { ACTIVITY_EVERY_MS, runDaemonForeground, startDaemon, type Daemon, type DaemonOptions } from "./daemon/server.ts";

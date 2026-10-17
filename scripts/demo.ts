@@ -21,7 +21,13 @@ const names = ["lead", "mac", "win", "reviewer"] as const;
 const roomId = newRoomId();
 const owner = await loadIdentity("human", roomId);
 const ids = await Promise.all(names.map((n) => loadIdentity(n, roomId)));
-const { code, access } = await Channel.create(relay, owner, { name: "human", role: "owner" }, ids.map((id) => ({ ...id, info: { name: id.name } })), roomId);
+const { code, access } = await Channel.create(
+  relay,
+  owner,
+  { name: "human", role: "owner" },
+  ids.map((id) => ({ ...id, info: { name: id.name } })),
+  roomId,
+);
 const cfg: ChannelConfig = { ...access, relay, code, owner: "human" };
 saveConfig({ default: "demo", channels: { demo: cfg } });
 

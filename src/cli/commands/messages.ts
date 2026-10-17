@@ -5,7 +5,22 @@ import { saveImages } from "../../attach.ts";
 import { home } from "../../config.ts";
 import { formatShown, missingImages, parseDuration } from "@kiwi/core/format.ts";
 import reactionPack from "../../../assets/reactions/index.json";
-import { CHAT_KINDS, CHOICE_MAX_LENGTH, CHOICES_MAX, CHOICES_MIN, HANDOFF_DEFAULT_SECONDS, HANDOFF_MAX_SECONDS, HANDOFF_MAX_VENDOR, handoffUrl, ignored, wellFormedChoices, isGifReaction, type InlineImage, type Kind, type Message } from "@kiwi/core/protocol.ts";
+import {
+  CHAT_KINDS,
+  CHOICE_MAX_LENGTH,
+  CHOICES_MAX,
+  CHOICES_MIN,
+  HANDOFF_DEFAULT_SECONDS,
+  HANDOFF_MAX_SECONDS,
+  HANDOFF_MAX_VENDOR,
+  handoffUrl,
+  ignored,
+  wellFormedChoices,
+  isGifReaction,
+  type InlineImage,
+  type Kind,
+  type Message,
+} from "@kiwi/core/protocol.ts";
 import { chooseThread, parseTaskId, wentTo } from "@kiwi/core/state.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, noteRead, out, session } from "../context.ts";
@@ -13,35 +28,47 @@ import { images, list, render, text } from "../input.ts";
 
 export const messageCommands: Record<string, Command> = {
   send: () =>
-    oneLook(Effect.gen(function* () {
-      if (opt.escalate) {
-        const extra = (["to", "image", "kind", "room", "ask", ...(opt.handoff === undefined ? (["wait"] as const) : [])] as const).filter((f) => opt[f] !== undefined);
-        if (extra.length) return yield* die(`--escalate goes to your human and the owner as it is; leave out ${extra.map((f) => `--${f}`).join(", ")}`);
-        return yield* messageCommands.escalate!();
-      }
-      if (opt.handoff !== undefined) return yield* die("--handoff goes with --escalate");
-      if (opt.option !== undefined) return yield* die("--option goes with kiwi ask-human");
-      const s = yield* session();
-      const body = yield* text(1);
-      if (!body.trim()) return yield* die("empty message");
-      if (opt.dm && opt.to) return yield* die("--dm NAME names who it goes to; leave out --to");
-      const { state } = yield* s.state();
-      const named = opt.task === undefined ? undefined : (parseTaskId(opt.task) ?? (yield* die(`"${opt.task}" isn't a task id (like T12)`)));
-      const chosen = chooseThread(state, s.me, { ...(named !== undefined ? { task: named } : {}), main: opt.main, ...(opt.dm ? { dm: opt.dm } : {}), reply: !!opt.re });
-      if (typeof chosen === "string") return yield* die(chosen);
-      const to = chosen.to ?? list(opt.to);
-      const kind = (opt.kind ?? "msg") as Kind;
-      if (!CHAT_KINDS.includes(kind)) return yield* die(`kind must be one of: ${CHAT_KINDS.join(", ")}`);
-      const re = list(opt.re)?.map((x) => Number(x.replace(/^#/, ""))).filter((n) => n > 0);
-      const imgs = yield* images;
-      const asking = opt.ask || !!opt.wait;
-      const head = asking && opt.wait ? yield* s.ch.fx.head() : 0;
-      const seq = yield* s.send(body, { to, kind: asking && !opt.kind ? "ask" : kind, re, imgs, room: opt.room, ...(chosen.task !== undefined ? { task: chosen.task } : {}), ...(chosen.dm ? { dm: true } : {}) });
-      if (!asking || !opt.wait) return out(`${asking ? "asked" : "sent"} #${seq}${wentTo(chosen)}`);
-      const replies = yield* s.awaitReplies(seq, head, parseDuration(opt.wait));
-      if (!replies.length) return yield* die(`no answer to #${seq} within ${opt.wait}; replies will still arrive when you listen`, 2);
-      for (const r of replies) out(render(r));
-    })),
+    oneLook(
+      Effect.gen(function* () {
+        if (opt.escalate) {
+          const extra = (["to", "image", "kind", "room", "ask", ...(opt.handoff === undefined ? (["wait"] as const) : [])] as const).filter((f) => opt[f] !== undefined);
+          if (extra.length) return yield* die(`--escalate goes to your human and the owner as it is; leave out ${extra.map((f) => `--${f}`).join(", ")}`);
+          return yield* messageCommands.escalate!();
+        }
+        if (opt.handoff !== undefined) return yield* die("--handoff goes with --escalate");
+        if (opt.option !== undefined) return yield* die("--option goes with kiwi ask-human");
+        const s = yield* session();
+        const body = yield* text(1);
+        if (!body.trim()) return yield* die("empty message");
+        if (opt.dm && opt.to) return yield* die("--dm NAME names who it goes to; leave out --to");
+        const { state } = yield* s.state();
+        const named = opt.task === undefined ? undefined : (parseTaskId(opt.task) ?? (yield* die(`"${opt.task}" isn't a task id (like T12)`)));
+        const chosen = chooseThread(state, s.me, { ...(named !== undefined ? { task: named } : {}), main: opt.main, ...(opt.dm ? { dm: opt.dm } : {}), reply: !!opt.re });
+        if (typeof chosen === "string") return yield* die(chosen);
+        const to = chosen.to ?? list(opt.to);
+        const kind = (opt.kind ?? "msg") as Kind;
+        if (!CHAT_KINDS.includes(kind)) return yield* die(`kind must be one of: ${CHAT_KINDS.join(", ")}`);
+        const re = list(opt.re)
+          ?.map((x) => Number(x.replace(/^#/, "")))
+          .filter((n) => n > 0);
+        const imgs = yield* images;
+        const asking = opt.ask || !!opt.wait;
+        const head = asking && opt.wait ? yield* s.ch.fx.head() : 0;
+        const seq = yield* s.send(body, {
+          to,
+          kind: asking && !opt.kind ? "ask" : kind,
+          re,
+          imgs,
+          room: opt.room,
+          ...(chosen.task !== undefined ? { task: chosen.task } : {}),
+          ...(chosen.dm ? { dm: true } : {}),
+        });
+        if (!asking || !opt.wait) return out(`${asking ? "asked" : "sent"} #${seq}${wentTo(chosen)}`);
+        const replies = yield* s.awaitReplies(seq, head, parseDuration(opt.wait));
+        if (!replies.length) return yield* die(`no answer to #${seq} within ${opt.wait}; replies will still arrive when you listen`, 2);
+        for (const r of replies) out(render(r));
+      }),
+    ),
 
   ask: () => {
     opt.ask = true;
@@ -50,29 +77,33 @@ export const messageCommands: Record<string, Command> = {
   },
 
   reply: () =>
-    oneLook(Effect.gen(function* () {
-      const s = yield* session();
-      const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die('usage: kiwi reply N "text"'));
-      const body = yield* text(2);
-      if (!body.trim()) return yield* die("empty reply");
-      const imgs = yield* images;
-      out(`sent #${yield* s.reply(seq, body, (opt.kind ?? "msg") as Kind, imgs)}`);
-    })),
+    oneLook(
+      Effect.gen(function* () {
+        const s = yield* session();
+        const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die('usage: kiwi reply N "text"'));
+        const body = yield* text(2);
+        if (!body.trim()) return yield* die("empty reply");
+        const imgs = yield* images;
+        out(`sent #${yield* s.reply(seq, body, (opt.kind ?? "msg") as Kind, imgs)}`);
+      }),
+    ),
 
   react: () =>
-    oneLook(Effect.gen(function* () {
-      if (args[1] === "--list" || opt.list) {
-        for (const g of reactionPack) out(`${g.reaction}/${g.name}  ${g.feeling}`);
-        return;
-      }
-      const s = yield* session();
-      const usage = "usage: kiwi react N ok/trailer (kiwi react --list shows the GIFs), or an emoji; --clear takes it back";
-      const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die(usage));
-      const emoji = opt.clear ? null : (args[2]?.trim() || (yield* die(usage)));
-      if (emoji && isGifReaction(emoji) && !reactionPack.some((g) => `${g.reaction}/${g.name}` === emoji)) return yield* die(`no GIF ${emoji}: kiwi react --list shows them`);
-      yield* s.react(seq, emoji);
-      out(emoji ? `reacted ${emoji} to #${seq}` : `took back your reaction on #${seq}`);
-    })),
+    oneLook(
+      Effect.gen(function* () {
+        if (args[1] === "--list" || opt.list) {
+          for (const g of reactionPack) out(`${g.reaction}/${g.name}  ${g.feeling}`);
+          return;
+        }
+        const s = yield* session();
+        const usage = "usage: kiwi react N ok/trailer (kiwi react --list shows the GIFs), or an emoji; --clear takes it back";
+        const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die(usage));
+        const emoji = opt.clear ? null : args[2]?.trim() || (yield* die(usage));
+        if (emoji && isGifReaction(emoji) && !reactionPack.some((g) => `${g.reaction}/${g.name}` === emoji)) return yield* die(`no GIF ${emoji}: kiwi react --list shows them`);
+        yield* s.react(seq, emoji);
+        out(emoji ? `reacted ${emoji} to #${seq}` : `took back your reaction on #${seq}`);
+      }),
+    ),
 
   save: () =>
     Effect.gen(function* () {
@@ -165,7 +196,8 @@ export const messageCommands: Record<string, Command> = {
       if (opt.option !== undefined) return yield* die("--handoff has its own Done and Couldn't answers; leave out --option");
       if (!handoffUrl(opt.handoff)) return yield* die("--handoff takes an https link without a user name or password, up to 2048 characters");
       const vendor = opt.vendor ?? new URL(opt.handoff).hostname;
-      if (/steel/i.test(vendor) || /(^|\.)steel\.dev$/i.test(new URL(opt.handoff).hostname)) process.stderr.write("kiwi: steel live links are not authenticated; anyone with the link can use the tab\n");
+      if (/steel/i.test(vendor) || /(^|\.)steel\.dev$/i.test(new URL(opt.handoff).hostname))
+        process.stderr.write("kiwi: steel live links are not authenticated; anyone with the link can use the tab\n");
       const seconds = opt.expires === undefined ? HANDOFF_DEFAULT_SECONDS : parseDuration(opt.expires);
       if (seconds < 1 || seconds > HANDOFF_MAX_SECONDS) return yield* die(`--expires must be between 1s and ${HANDOFF_MAX_SECONDS / 60}m`);
       const expiresAt = Date.now() + seconds * 1000;

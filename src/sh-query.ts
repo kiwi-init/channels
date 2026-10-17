@@ -79,7 +79,14 @@ export function queryTables(v: ChannelView): Tables {
       columns: SCHEMA.members!,
       rows: [...state.members.values()]
         .filter((m) => m.active)
-        .map((m) => [m.name, m.role ?? null, m.kind ?? (m.owner ? "human" : "agent"), m.owner ? 1 : 0, m.lastSeen ? new Date(m.lastSeen).toISOString() : null, loadJson(memberLoad(state, m.name)).level]),
+        .map((m) => [
+          m.name,
+          m.role ?? null,
+          m.kind ?? (m.owner ? "human" : "agent"),
+          m.owner ? 1 : 0,
+          m.lastSeen ? new Date(m.lastSeen).toISOString() : null,
+          loadJson(memberLoad(state, m.name)).level,
+        ]),
     },
     facts: {
       columns: SCHEMA.facts!,
@@ -99,7 +106,10 @@ function database(tables: Tables): Database {
   return db;
 }
 
-const schemaText = () => Object.entries(SCHEMA).map(([name, cols]) => `${name}(${cols.join(", ")})`).join("\n") + "\n";
+const schemaText = () =>
+  Object.entries(SCHEMA)
+    .map(([name, cols]) => `${name}(${cols.join(", ")})`)
+    .join("\n") + "\n";
 
 const fail = (stderr: string, exitCode = 1) => ({ stdout: "", stderr, exitCode });
 

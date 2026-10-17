@@ -281,7 +281,13 @@ export const MAX_TAGS = 40;
 export function cleanCard(x: unknown): Card | null {
   if (!x || typeof x !== "object") return null;
   const r = x as Record<string, unknown>;
-  const line = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ").trim().slice(0, max) : "");
+  const line = (v: unknown, max: number) =>
+    typeof v === "string"
+      ? v
+          .replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ")
+          .trim()
+          .slice(0, max)
+      : "";
   const out: Card = {};
   for (const k of ["os", "arch", "harness", "model", "cpu", "memory", "repo", "branch"] as const) {
     const v = line(r[k], 120);
@@ -290,7 +296,10 @@ export function cleanCard(x: unknown): Card | null {
   const note = line(r.note, 500);
   if (note) out.note = note;
   if (Array.isArray(r.tools)) {
-    const tools = r.tools.map((t) => line(t, 40)).filter(Boolean).slice(0, MAX_TAGS);
+    const tools = r.tools
+      .map((t) => line(t, 40))
+      .filter(Boolean)
+      .slice(0, MAX_TAGS);
     if (tools.length) out.tools = tools;
   }
   return Object.keys(out).length ? out : null;
@@ -333,7 +342,15 @@ export const BLOB_ID_RE = /^[0-9a-f]{64}$/;
 function wellFormedRef(x: unknown): x is ImageRef {
   if (!x || typeof x !== "object") return false;
   const r = x as Record<string, unknown>;
-  return typeof r.id === "string" && BLOB_ID_RE.test(r.id) && typeof r.key === "string" && /^[A-Za-z0-9_-]{43}$/.test(r.key) && Number.isSafeInteger(r.size) && (r.size as number) >= 0 && (r.size as number) <= MAX_IMAGE_BYTES;
+  return (
+    typeof r.id === "string" &&
+    BLOB_ID_RE.test(r.id) &&
+    typeof r.key === "string" &&
+    /^[A-Za-z0-9_-]{43}$/.test(r.key) &&
+    Number.isSafeInteger(r.size) &&
+    (r.size as number) >= 0 &&
+    (r.size as number) <= MAX_IMAGE_BYTES
+  );
 }
 
 /** An attachment worth keeping: a named raster image. Anything else (including SVG) is dropped. */
@@ -384,7 +401,13 @@ export function handoffUrl(x: unknown): x is string {
 export function wellFormedHandoff(x: unknown): x is Handoff {
   if (!x || typeof x !== "object") return false;
   const h = x as Record<string, unknown>;
-  return handoffUrl(h.url) && str(h.vendor, HANDOFF_MAX_VENDOR) && Number.isFinite(h.expiresAt) && Number.isFinite(new Date(h.expiresAt as number).getTime()) && (h.mode === undefined || h.mode === "tab" || h.mode === "full");
+  return (
+    handoffUrl(h.url) &&
+    str(h.vendor, HANDOFF_MAX_VENDOR) &&
+    Number.isFinite(h.expiresAt) &&
+    Number.isFinite(new Date(h.expiresAt as number).getTime()) &&
+    (h.mode === undefined || h.mode === "tab" || h.mode === "full")
+  );
 }
 
 export const CHOICES_MIN = 2;
@@ -473,7 +496,13 @@ export function cleanActivity(x: unknown): Activity | null {
   if (!x || typeof x !== "object") return null;
   const r = x as Record<string, unknown>;
   if (r.state !== "working" && r.state !== "waiting" && r.state !== "idle") return null;
-  const line = (v: unknown, max: number) => (typeof v === "string" ? v.replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ").trim().slice(0, max) : "");
+  const line = (v: unknown, max: number) =>
+    typeof v === "string"
+      ? v
+          .replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ")
+          .trim()
+          .slice(0, max)
+      : "";
   const tool = line(r.tool, 60);
   const model = line(r.model, 120);
   const since = typeof r.since === "number" && Number.isFinite(r.since) ? r.since : undefined;
@@ -524,12 +553,7 @@ export function wellFormedEvent(ev: unknown): ev is Event {
     case "hello":
       return opt(e.role, (x): x is string => str(x, 200)) && opt(e.about, (x): x is string => str(x, 2000));
     case "task.add":
-      return (
-        str(e.title, 500) &&
-        opt(e.detail, (x): x is string => str(x)) &&
-        opt(e.owner, (x): x is string => str(x, 64)) &&
-        opt(e.review, (x): x is string => str(x, 64))
-      );
+      return str(e.title, 500) && opt(e.detail, (x): x is string => str(x)) && opt(e.owner, (x): x is string => str(x, 64)) && opt(e.review, (x): x is string => str(x, 64));
     case "task.claim":
       return n(e.task);
     case "task.update":
@@ -552,7 +576,15 @@ export function wellFormedEvent(ev: unknown): ev is Event {
         opt(e.note, (x): x is string => str(x, 500))
       );
     case "claim":
-      return strs(e.paths, 100) && (e.paths as string[]).length > 0 && Number.isFinite(e.ttl) && (e.ttl as number) > 0 && opt(e.note, (x): x is string => str(x, 500)) && opt(e.machine, (x): x is string => str(x, 80)) && opt(e.checkout, (x): x is string => str(x, 2000));
+      return (
+        strs(e.paths, 100) &&
+        (e.paths as string[]).length > 0 &&
+        Number.isFinite(e.ttl) &&
+        (e.ttl as number) > 0 &&
+        opt(e.note, (x): x is string => str(x, 500)) &&
+        opt(e.machine, (x): x is string => str(x, 80)) &&
+        opt(e.checkout, (x): x is string => str(x, 2000))
+      );
     case "release":
       return opt(e.paths, (x): x is string[] => strs(x, 100));
     case "fact.set":

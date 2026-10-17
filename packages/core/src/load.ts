@@ -38,8 +38,7 @@ export function memberLoad(state: ChannelState, name: string): Load {
   const current = mine.filter((t) => t.state === "doing");
   const queued = mine.filter((t) => t.state === "todo");
   const waiting = mine.filter((t) => t.state === "review");
-  const level: LoadLevel =
-    current.length >= OVERLOADED_DOING || current.length + queued.length >= OVERLOADED_TOTAL ? "overloaded" : current.length + queued.length > 0 ? "busy" : "free";
+  const level: LoadLevel = current.length >= OVERLOADED_DOING || current.length + queued.length >= OVERLOADED_TOTAL ? "overloaded" : current.length + queued.length > 0 ? "busy" : "free";
   return { level, current, queued, waiting };
 }
 

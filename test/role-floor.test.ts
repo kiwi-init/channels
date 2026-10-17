@@ -96,6 +96,14 @@ describe("over a relay", () => {
     expect(changed).toContain(ann.pk);
     expect((await annRec()).laterRole).toEqual({ role: "backend", since: set });
     // Nothing more to do the second time.
-    expect(await owner.reconcilePosting(fold(messages, (await owner.members()).map((m) => ({ ...m }))), await owner.members())).toEqual([]);
+    expect(
+      await owner.reconcilePosting(
+        fold(
+          messages,
+          (await owner.members()).map((m) => ({ ...m })),
+        ),
+        await owner.members(),
+      ),
+    ).toEqual([]);
   });
 });

@@ -213,8 +213,15 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: Member, at
         break;
       }
       const cancel = ev.state === "cancelled" && task.state !== "done";
-      const state = ev.state === "cancelled" ? (cancel && (mayFinish || (ev.round !== undefined && revisedOut(task, m.from, open) === ev.round)) ? "done" : undefined) : ev.state && currentState(ev.state);
-      if (open && state && state !== "review") open.result = ev.verdict && mayFinish ? { kind: ev.verdict, by: m.from, seq: m.seq, ts: at } : state === "done" && !cancel ? { kind: "approved", by: m.from, seq: m.seq, ts: at } : { kind: "withdrawn", seq: m.seq };
+      const state =
+        ev.state === "cancelled" ? (cancel && (mayFinish || (ev.round !== undefined && revisedOut(task, m.from, open) === ev.round)) ? "done" : undefined) : ev.state && currentState(ev.state);
+      if (open && state && state !== "review")
+        open.result =
+          ev.verdict && mayFinish
+            ? { kind: ev.verdict, by: m.from, seq: m.seq, ts: at }
+            : state === "done" && !cancel
+              ? { kind: "approved", by: m.from, seq: m.seq, ts: at }
+              : { kind: "withdrawn", seq: m.seq };
       if (state === "review") {
         if (open) open.result = { kind: "withdrawn", seq: m.seq };
         task.rounds.push({ n: (task.rounds.at(-1)?.n ?? 0) + 1, ...(ev.at ? { at: ev.at.trim() } : {}), by: m.from, seq: m.seq, ts: at, result: { kind: "open" } });

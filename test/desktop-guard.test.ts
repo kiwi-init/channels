@@ -99,7 +99,7 @@ describe("the person key stays in main (T203)", () => {
   test("the renderer's snapshot has the person's public keys only", () => {
     const snap = snapshotOf({ relayUrl: "https://r.example", person, channels: [], computers: [], pending: [] });
     expect(snap.person).toEqual({ name: "jow", pk: "PK", xpk: "XPK" });
-    expect(JSON.stringify(snap)).not.toContain("SK\"");
+    expect(JSON.stringify(snap)).not.toContain('SK"');
     expect(snapshotOf({ relayUrl: "https://r.example", person: null, channels: [], computers: [], pending: [] }).person).toBeNull();
   });
 
@@ -114,7 +114,16 @@ describe("the person key stays in main (T203)", () => {
 });
 
 describe("the renderer can't change a saved channel's keys (T203)", () => {
-  const ch = (keys: Record<string, string>, over: Partial<ChannelIdentityView> = {}): ChannelIdentityView => ({ label: "c", pk: "pk1", sk: "sk1", xpk: "x1", xsk: "xs1", roomId: "r1", access: { roomId: "r1", keys }, ...over });
+  const ch = (keys: Record<string, string>, over: Partial<ChannelIdentityView> = {}): ChannelIdentityView => ({
+    label: "c",
+    pk: "pk1",
+    sk: "sk1",
+    xpk: "x1",
+    xsk: "xs1",
+    roomId: "r1",
+    access: { roomId: "r1", keys },
+    ...over,
+  });
   const stored = [ch({ "0": "k0" })];
 
   test("adding a channel, removing one, and adding the next epoch's key are kept", () => {

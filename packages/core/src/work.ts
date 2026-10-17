@@ -46,8 +46,7 @@ export function prLinks(text: string): { url: string; repo: string; number: numb
 /** What a message says about a PR's fate: its URL (or "#N" next to the word) with "merged" or "closed". */
 function fateIn(text: string, pr: { url: string; number: number }): "merged" | "closed" | null {
   const near = (word: string) =>
-    (text.includes(pr.url) && new RegExp(`\\b${word}\\b`, "i").test(text)) ||
-    new RegExp(`\\b${word}\\b[^.\\n]{0,40}#${pr.number}\\b|#${pr.number}\\b[^.\\n]{0,40}\\b${word}\\b`, "i").test(text);
+    (text.includes(pr.url) && new RegExp(`\\b${word}\\b`, "i").test(text)) || new RegExp(`\\b${word}\\b[^.\\n]{0,40}#${pr.number}\\b|#${pr.number}\\b[^.\\n]{0,40}\\b${word}\\b`, "i").test(text);
   return near("merged") ? "merged" : near("closed") ? "closed" : null;
 }
 
@@ -137,8 +136,7 @@ export function agentRows(state: ChannelState, messages: Message[], viewer: stri
       const doing = mine.find((t) => t.state === "doing");
       const blockingAsk = state.openAsks.find((m) => m.from === a.name && m.kind === "blocking" && visibleTo(state, viewer, m));
       const said = [...messages].reverse().filter((m) => m.from === a.name && visibleTo(state, viewer, m));
-      const line =
-        said.find((m) => m.kind === "status") ?? said.find((m) => m.ev?.op === "task.update" && !!m.ev.note) ?? said.find((m) => m.kind !== "event");
+      const line = said.find((m) => m.kind === "status") ?? said.find((m) => m.ev?.op === "task.update" && !!m.ev.note) ?? said.find((m) => m.kind !== "event");
       const statusLine = line ? { text: inlineText(textOf(line), 140), seq: line.seq, at: at(line) } : undefined;
       const lastActive = a.lastSeen;
       const status: AgentStatus = blockingAsk ? "blocked" : doing ? "working" : online.has(a.name) ? "idle" : now - lastActive < IDLE_AFTER_MS ? "idle" : "offline";

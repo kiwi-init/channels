@@ -43,7 +43,7 @@ function inside(parent: string, child: string): boolean {
 /** chmod `dir` and each parent up through `root`. Stops at `root`. Skips anything that isn't a real directory. */
 function lockDirs(dir: string, root: string): void {
   const top = resolve(root);
-  for (let cur = resolve(dir); ; ) {
+  for (let cur = resolve(dir); ;) {
     if (cur !== top && !inside(top, cur)) break;
     try {
       if (lstatSync(cur).isDirectory()) chmodSync(cur, 0o700);
