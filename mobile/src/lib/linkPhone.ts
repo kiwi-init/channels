@@ -21,8 +21,8 @@ export interface LinkDeps {
 export const NOT_A_LINK_CODE = "That isn’t a link code. Link codes start with kl1-."
 export const CODE_USED = "That code was already used. Make a new one on your desktop."
 export const NO_ANSWER = "Your desktop didn’t answer in time. Make a new code and try again."
-export const DID_NOT_OPEN = "What came back didn’t open. It was not made for this phone, or was changed on the way. Make a new code."
-export const DEFAULT_WAIT_MS = 9 * 60_000
+const DID_NOT_OPEN = "What came back didn’t open. It was not made for this phone, or was changed on the way. Make a new code."
+const DEFAULT_WAIT_MS = 9 * 60_000
 
 export function toChannelIdentity(c: LinkChannel): ChannelIdentityView {
   const text = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined)

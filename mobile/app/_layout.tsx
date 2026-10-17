@@ -1,14 +1,25 @@
 import "../src/platform/install"
 import { Stack } from "expo-router"
+import type { ReactNode } from "react"
 import { StatusBar } from "expo-status-bar"
 
-import { createEngine, EngineProvider, type Services } from "../src/lib/EngineProvider"
+import { deviceAuth } from "../src/lib/deviceAuth"
+import { createEngine, EngineProvider, usePerson, type Services } from "../src/lib/EngineProvider"
 import { secrets } from "../src/lib/keychain"
 import { history, sql } from "../src/lib/sqlite"
 import { useInter } from "../src/ui/fonts"
+import { AppLock } from "../src/ui/AppLock"
 import { Toaster } from "../src/ui/Toast"
 
 const services: Services = { engine: createEngine(secrets), history, sql }
+
+function Gate({ children }: { children: ReactNode }) {
+  return (
+    <AppLock enabled={!!usePerson()} auth={deviceAuth}>
+      {children}
+    </AppLock>
+  )
+}
 
 export default function Layout() {
   const ready = useInter()
@@ -16,7 +27,9 @@ export default function Layout() {
   return (
     <EngineProvider services={services}>
       <StatusBar style="auto" />
-      <Stack screenOptions={{ headerShown: false }} />
+      <Gate>
+        <Stack screenOptions={{ headerShown: false }} />
+      </Gate>
       <Toaster />
     </EngineProvider>
   )

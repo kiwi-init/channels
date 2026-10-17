@@ -9,7 +9,7 @@ export default function Home() {
   const engine = useEngine()
   const person = usePerson()
   const { joined, waiting } = useSeats()
-  if (!person) return <FirstRun onContinue={async (name) => void (await engine.createPerson(name))} />
+  if (!person) return <FirstRun onContinue={async (name) => void (await engine.createPerson(name))} onLink={() => router.push("/link")} />
   return (
     <ChannelList
       joined={joined}
