@@ -3,13 +3,12 @@ import path from "node:path";
 import { app, dialog, safeStorage } from "electron";
 
 import type { Identity } from "../../src/identity.ts";
+import { DEFAULT_RELAY } from "../../src/relay-url.ts";
 import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, StoreSnapshot } from "./bridge.ts";
 import { normalizeRelay, readStore, snapshotOf, writePrivate } from "./guard.ts";
 import { tellKeys } from "./keys-process.ts";
 import type { VoiceStore } from "./voice.ts";
 import { currentWindow } from "./window.ts";
-
-const PUBLIC_RELAY = "https://channels.kiwiinit.com";
 
 export interface StoreFile {
   relayUrl: string;
@@ -25,7 +24,7 @@ export interface StoreFile {
 const storePath = () => path.join(app.getPath("userData"), "kiwi-store.bin");
 
 function defaults(): StoreFile {
-  return { relayUrl: PUBLIC_RELAY, person: null, channels: [], computers: [], pending: [] };
+  return { relayUrl: DEFAULT_RELAY, person: null, channels: [], computers: [], pending: [] };
 }
 
 export let store: StoreFile = defaults();
@@ -45,7 +44,7 @@ export function loadStore(): void {
     store = defaults();
     if (read?.kind === "unreadable") storeBroken = read.why;
   }
-  store.relayUrl = normalizeRelay(store.relayUrl) ?? PUBLIC_RELAY;
+  store.relayUrl = normalizeRelay(store.relayUrl) ?? DEFAULT_RELAY;
 }
 
 const brokenError = () => new Error(`Kiwi can't read its saved keys (${storeBroken}), so it saves nothing over them. Unlock your keychain, then quit and reopen Kiwi. The file is ${storePath()}.`);
