@@ -236,14 +236,14 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         return head;
       } catch (err) {
         if (err instanceof ChannelGone) throw err;
-        if (answered(err) || stopped || !waiting.alive()) throw new Error(why(err));
+        if (answered(err) || stopped || !waiting.alive()) throw new Error(why(err), { cause: err });
         if (!told) {
           told = true;
           waiting.tell(`can't reach the relay (${why(err)}); still retrying`);
         }
         const until = Date.now() + backoff;
         while (Date.now() < until) {
-          if (stopped || !waiting.alive()) throw new Error(why(err));
+          if (stopped || !waiting.alive()) throw new Error(why(err), { cause: err });
           await Bun.sleep(Math.min(250, until - Date.now()));
         }
       }

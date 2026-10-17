@@ -87,7 +87,10 @@ function lines(p: ReturnType<typeof mc>) {
       if (done) return;
       buf += new TextDecoder().decode(value);
       let i;
-      while ((i = buf.indexOf("\n")) >= 0) (got.push(buf.slice(0, i)), (buf = buf.slice(i + 1)));
+      while ((i = buf.indexOf("\n")) >= 0) {
+        got.push(buf.slice(0, i));
+        buf = buf.slice(i + 1);
+      }
     }
   })();
   return {
