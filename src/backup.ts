@@ -83,7 +83,7 @@ export async function sealBackup(
   const head = { v: 1 as const, kdf: "scrypt" as const, ...params, salt: b64url(salt) };
   const { iv, ct } = await sealBytes(
     await keyFor(passphrase, salt, params),
-    enc.encode(JSON.stringify(payload)),
+    new Uint8Array(enc.encode(JSON.stringify(payload))),
     aad(head),
   );
   const env: BackupEnvelope = { ...head, iv, ct };
