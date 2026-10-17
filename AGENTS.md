@@ -2,7 +2,7 @@
 
 ## Code
 
-- Comments in code are forbidden, including tool directives (`@ts-expect-error`, `@ts-ignore`, `oxlint-disable`, `eslint-disable`, `type: ignore`, `noqa`, `pragma` etc.). Only exception: a Python docstring strictly required at runtime, listed in `ALLOWED_DOCSTRINGS` in `scripts/ci/no_comments.py` (empty today) and justified in the PR; anything else fails the `repo / comments` guard. Context goes in the commit and the PR.
+- No comments in code: context goes in the commit and the PR. One exception: a comment inside a `catch` block, saying why the error is ignored or handled that way. Tool directives (`@ts-expect-error`, `@ts-ignore`, `oxlint-disable`, `eslint-disable`, `type: ignore`, `noqa`, `pragma` etc.) stay forbidden. CI does not check this; review does.
 - Everything strictly typed. No `any`, no implicit `any`, no untyped code, in TypeScript and in Python. In Python, every function has parameter and return types, with no `Any`.
 - Front end: lint with oxlint and format with oxfmt (no Biome, no Prettier).
 - UI work follows `DESIGN.md` (theme, colors, radius, typography, motion).
