@@ -12,7 +12,6 @@ import { taskId } from "@mc/state.ts"
 import { formatAgo, shortTitle } from "@/lib/format"
 import { howWords, type How } from "@/lib/presence"
 import { cx } from "@/lib/utils"
-import { CoordinatorAvatar } from "./coordinator-head"
 import { Icon } from "./icon"
 import { Monogram } from "./kit"
 
@@ -44,8 +43,7 @@ export const busy = (a: AgentNow) => !!a.here && (doingNow(a)?.busy ?? a.load.cu
 
 export const byBusy = (agents: AgentNow[]) => [...agents].sort((a, b) => Number(busy(b)) - Number(busy(a)) || Number(!!b.here) - Number(!!a.here))
 
-const face = (a: AgentNow, size: number) =>
-  a.coordinator ? <CoordinatorAvatar size={size} /> : <Monogram name={a.label} hue={a.name} agent color={a.color} size={size} online={size > 20 && !!a.here} />
+const face = (a: AgentNow, size: number) => <Monogram name={a.label} hue={a.name} agent color={a.color} size={size} online={size > 20 && !!a.here} />
 
 export function AgentLine({ a, now, onOpenTask, brief }: { a: AgentNow; now: number; onOpenTask: (id: number) => void; brief?: boolean }) {
   return (

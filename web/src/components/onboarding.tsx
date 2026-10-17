@@ -11,7 +11,7 @@ import { askToJoin, checkJoin, createChannel, forgetPending, inviteInfo, isJoinC
 import { Conversation } from "./conversation"
 import { installLine } from "@/lib/join-line"
 import { Command } from "./add-agent"
-import { CoordinatorHead } from "./coordinator-head"
+import { RobotAvatar } from "./robot"
 import { Icon } from "./icon"
 import { Button, Modal, Monogram, Spinner, TextField, Wordmark, errorText } from "./kit"
 
@@ -78,7 +78,7 @@ export function Welcome({ onNew, onJoin }: { onNew: () => void; onJoin: () => vo
   if (person)
     return (
       <Stage width={460}>
-        <CoordinatorHead size={88} live loop interactive seed={0.6} className="-ml-1" label="Kiwi" />
+        <RobotAvatar name="kiwi" size={88} className="-ml-1" label="Kiwi" />
         <h1 className="mt-4 text-display font-semibold">Nothing open</h1>
         <p className="mt-1.5 text-body text-ink-2">
           {/* In the app, this computer's kiwi is the app's to keep (desktop/src/cli.ts). */}
