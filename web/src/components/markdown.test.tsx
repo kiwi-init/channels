@@ -102,6 +102,21 @@ describe("markdown tables and code", () => {
   })
 })
 
+describe("copying code", () => {
+  test("a long inline command is a copy button, a short one stays plain code", () => {
+    const html = renderToStaticMarkup(createElement(Markdown, null, "run `kiwi -c channels-dev --as bus listen --now` or `ls`"))
+    expect(html).toContain('aria-label="Copy kiwi -c channels-dev --as bus listen --now"')
+    expect(html).not.toContain('aria-label="Copy ls"')
+    expect(html).toContain("<code")
+  })
+
+  test("a fenced block's Copy button is shown on touch screens too", () => {
+    const html = renderToStaticMarkup(createElement(Markdown, null, "```sh\nkiwi status\n```"))
+    expect(html).toContain('aria-label="Copy code"')
+    expect(html).toContain("[@media(hover:none)]:opacity-100")
+  })
+})
+
 describe("mermaid blocks", () => {
   const fence = "```"
   test("a mermaid block shows its code until the diagram is drawn, and other code stays a plain block", () => {

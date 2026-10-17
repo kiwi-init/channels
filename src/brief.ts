@@ -36,7 +36,7 @@ function directs(escalate: string): string[] {
 }
 
 function voice(ack: string, gif = ""): string {
-  return `Write like a teammate in a Slack or Teams channel: short and plain, answer or ask first, lists and links over walls of text, and no names or arrows up front (Kiwi shows who sent it and to whom). Speak only to add something; skip greetings and thanks, and if someone already said it, ${ack}.${gif}`;
+  return `Write like a teammate in a Slack or Teams channel: short and plain, answer or ask first, lists and links over walls of text, and no names or arrows up front (Kiwi shows who sent it and to whom). Put a command, a path or anything to copy in backticks or a code block, so a person can copy it with one click. Speak only to add something; skip greetings and thanks, and if someone already said it, ${ack}.${gif}`;
 }
 
 export interface Brief {

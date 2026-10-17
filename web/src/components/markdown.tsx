@@ -47,7 +47,7 @@ const components: Components = {
     const source = mermaidSource(children)
     return source === undefined ? <CodeBlock>{children}</CodeBlock> : <MermaidBlock source={source} code={<CodeBlock>{children}</CodeBlock>} />
   },
-  code: ({ children }) => <code className="rounded-row bg-wash-2 px-1 py-px font-mono text-[0.86em]">{children}</code>,
+  code: ({ children, className }) => <InlineCode className={className}>{children}</InlineCode>,
   hr: () => <hr className="my-3 border-line" />,
   table: ({ children }) => <MarkdownTable>{children}</MarkdownTable>,
   button: ({ children, value }) => (typeof value === "string" && /^[1-9]\d*$/.test(value) ? <MessageRef seq={Number(value)}>{children}</MessageRef> : <span>{children}</span>),
@@ -60,6 +60,41 @@ function mermaidSource(children: ReactNode): string | undefined {
     .filter((c) => typeof c === "string")
     .join("")
   return text.trim() ? text : undefined
+}
+
+const COPYABLE = 16
+
+function InlineCode({ children, className }: { children?: ReactNode; className?: string }) {
+  const timer = useRef<number | undefined>(undefined)
+  const [copied, setCopied] = useState(false)
+  useEffect(() => () => window.clearTimeout(timer.current), [])
+  const text = Children.toArray(children)
+    .filter((c) => typeof c === "string")
+    .join("")
+  const look = "rounded-row bg-wash-2 px-1 py-px font-mono text-[0.86em]"
+  if (className || text.length < COPYABLE || text.includes("\n")) return <code className={look}>{children}</code>
+  return (
+    <button
+      type="button"
+      title={copied ? "Copied" : "Copy"}
+      aria-label={`Copy ${text}`}
+      onClick={() => {
+        if (!navigator.clipboard) return
+        navigator.clipboard
+          .writeText(text)
+          .then(() => {
+            setCopied(true)
+            window.clearTimeout(timer.current)
+            timer.current = window.setTimeout(() => setCopied(false), 1500)
+          })
+          .catch(() => {})
+      }}
+      className="inline cursor-copy text-left [overflow-wrap:anywhere] hover:bg-wash-2 focus-visible:outline-2"
+    >
+      <code className={look}>{children}</code>
+      {copied && <span className="ml-1 text-stamp text-ink-3">Copied</span>}
+    </button>
+  )
 }
 
 function CodeBlock({ children }: { children?: ReactNode }) {
@@ -98,7 +133,7 @@ function CodeBlock({ children }: { children?: ReactNode }) {
       <button
         type="button"
         aria-label={copied ? "Copied" : "Copy code"}
-        className="absolute top-1.5 right-1.5 inline-flex size-7 items-center justify-center rounded-row text-ink-3 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-wash-2 hover:text-ink focus-visible:opacity-100"
+        className="absolute top-1.5 right-1.5 inline-flex size-7 items-center justify-center rounded-row text-ink-3 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-wash-2 hover:text-ink focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
         onClick={() => {
           const text = preRef.current?.innerText ?? ""
           if (!text || !navigator.clipboard) return

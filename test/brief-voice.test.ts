@@ -6,6 +6,7 @@ test("both briefs tell an agent to write like a chat teammate", () => {
   const mcp = mcpBrief("c", "mac", false);
   for (const brief of [cli, mcp]) {
     expect(brief).toContain("Write like a teammate in a Slack or Teams channel");
+    expect(brief).toContain("Put a command, a path or anything to copy in backticks or a code block");
     expect(brief).toContain("no names or arrows up front");
     expect(brief).toContain("if someone already said it");
   }
