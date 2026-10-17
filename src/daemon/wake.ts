@@ -2,6 +2,7 @@ import { appendFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, type Config } from "../config.ts";
+import { listenHooksInstalled } from "../hooks/install/claude.ts";
 import { wakeArgv, wakePath, wakePrompt, type WakePath } from "../wake.ts";
 import { withDeadline, type DaemonWake } from "./protocol.ts";
 import { seatRecordFor, wakeOn } from "./reach.ts";
@@ -21,7 +22,6 @@ function oneLine(text: string): string {
 const UNREAD_CHECK_MS = 30_000;
 
 export const pathOf = async (cfg: Config, alias: string, agent: string): Promise<WakePath> => {
-  const { listenHooksInstalled } = await import("../hooks.ts");
   return wakePath(seatRecordFor(cfg, alias, agent), listenHooksInstalled());
 };
 

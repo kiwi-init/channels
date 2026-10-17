@@ -4,6 +4,7 @@ import * as Layer from "effect/Layer";
 import type * as Scoped from "effect/Scope";
 import { ChannelGone, fetchRelay, Relay, RelayError, settle } from "../client.ts";
 import { Cache, Cursor, Keystore, LocalFiles } from "../config.ts";
+import { holdListening } from "../hooks/listeners.ts";
 import type { Message } from "../protocol.ts";
 import { isLocalRefusal } from "../refusals.ts";
 import type { ChannelState, GuardFloor, Roster, RoomsFloor } from "../state.ts";
@@ -39,7 +40,6 @@ export const isAnswer = (err: unknown) => err instanceof ChannelGone || isLocalR
 
 export const holding = (alias: string, as: string): Effect.Effect<void, never, Scoped.Scope> =>
   Effect.gen(function* () {
-    const { holdListening } = yield* Effect.promise(() => import("../hooks.ts"));
     yield* Effect.acquireRelease(
       Effect.promise(() => holdListening(alias, as)),
       (held) => Effect.sync(() => held.close()),
