@@ -1,4 +1,4 @@
-import type { Message, Trust } from "@mc/protocol.ts"
+import type { ImageAttachment, Message, Trust } from "@mc/protocol.ts"
 import type { ChannelState } from "@mc/state.ts"
 import { memo, useCallback, useMemo, useRef, useState, type ReactNode } from "react"
 import { FlatList, Pressable, StyleSheet, View, type FlatListProps, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native"
@@ -23,6 +23,7 @@ export interface ConversationProps {
   onReply?: (m: Message) => void
   onReact?: (m: Message) => void
   onOpenTask?: (task: number) => void
+  onOpenImage?: (img: ImageAttachment, m: Message) => void
   contentContainerStyle?: FlatListProps<Row>["contentContainerStyle"]
 }
 
@@ -55,7 +56,22 @@ const EventRow = memo(function EventRow({ text, task, forged, onOpenTask }: { te
   )
 })
 
-export function Conversation({ messages, state, me, nameOf, group = true, revealed, highlight = null, receipt, face, onReply, onReact, onOpenTask, contentContainerStyle }: ConversationProps) {
+export function Conversation({
+  messages,
+  state,
+  me,
+  nameOf,
+  group = true,
+  revealed,
+  highlight = null,
+  receipt,
+  face,
+  onReply,
+  onReact,
+  onOpenTask,
+  onOpenImage,
+  contentContainerStyle,
+}: ConversationProps) {
   const theme = useTheme()
   const list = useRef<FlatList<Row>>(null)
   const [away, setAway] = useState(false)
@@ -101,10 +117,11 @@ export function Conversation({ messages, state, me, nameOf, group = true, reveal
           onJump={onJump}
           onReply={onReply}
           onMenu={onReply || onReact ? setMenu : undefined}
+          onOpenImage={onOpenImage ? (img) => onOpenImage(img, item.m) : undefined}
         />
       )
     },
-    [state, me, group, highlight, receipt, face, quoted, nameOf, onJump, onReply, onReact, onOpenTask]
+    [state, me, group, highlight, receipt, face, quoted, nameOf, onJump, onReply, onReact, onOpenTask, onOpenImage]
   )
 
   return (

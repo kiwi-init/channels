@@ -29,6 +29,7 @@ export interface BubbleProps {
   onJump: (seq: number) => void
   onReply?: (m: Message) => void
   onMenu?: (m: Message) => void
+  onOpenImage?: (img: ImageAttachment) => void
 }
 
 const TAIL = "M0 20V0H20C20 9 22 15.5 27.5 19.6C23 20.4 19.5 19.8 16.6 18.3C13.7 16.8 8 20 0 20Z"
@@ -43,7 +44,7 @@ function Tail({ mine, color }: { mine: boolean; color: string }) {
   )
 }
 
-function Attached({ img }: { img: ImageAttachment }) {
+function Attached({ img, onOpen }: { img: ImageAttachment; onOpen?: (img: ImageAttachment) => void }) {
   const theme = useTheme()
   if (!img.data) {
     return (
@@ -54,10 +55,35 @@ function Attached({ img }: { img: ImageAttachment }) {
       </View>
     )
   }
-  return <Image accessibilityLabel={img.name} source={{ uri: `data:${img.mime};base64,${img.data}` }} style={[styles.image, { borderRadius: theme.radius.bubble }]} />
+  const picture = <Image accessibilityLabel={img.name} source={{ uri: `data:${img.mime};base64,${img.data}` }} style={[styles.image, { borderRadius: theme.radius.bubble }]} />
+  if (!onOpen) return picture
+  return (
+    <Pressable accessibilityRole="imagebutton" accessibilityLabel={`Open ${img.name}`} onPress={() => onOpen(img)}>
+      {picture}
+    </Pressable>
+  )
 }
 
-export const Bubble = memo(function Bubble({ m, me, trust, first, last, group, adjacentReply, highlighted, receipt, direct, reactions, face, quoted, nameOf, onJump, onReply, onMenu }: BubbleProps) {
+export const Bubble = memo(function Bubble({
+  m,
+  me,
+  trust,
+  first,
+  last,
+  group,
+  adjacentReply,
+  highlighted,
+  receipt,
+  direct,
+  reactions,
+  face,
+  quoted,
+  nameOf,
+  onJump,
+  onReply,
+  onMenu,
+  onOpenImage,
+}: BubbleProps) {
   const theme = useTheme()
   const forged = ignored(trust)
   const mine = m.from === me
@@ -120,7 +146,7 @@ export const Bubble = memo(function Bubble({ m, me, trust, first, last, group, a
         {m.imgs?.length ? (
           <View style={[styles.images, { justifyContent: align }]}>
             {m.imgs.map((img, index) => (
-              <Attached key={index} img={img} />
+              <Attached key={index} img={img} onOpen={onOpenImage} />
             ))}
           </View>
         ) : null}
