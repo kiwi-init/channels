@@ -1,0 +1,126 @@
+name: mobile-ios-dev
+
+on:
+  push:
+    branches: [mobile-ios-dev]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch to build
+        default: mobile
+      udid:
+        description: iPhone UDID to register (blank if already registered)
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-ios-dev
+  cancel-in-progress: true
+
+jobs:
+  ipa:
+    name: development ipa
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+      DEVICE_UDID: ${{ inputs.udid || vars.IPHONE_UDID }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+      - name: Check what the build needs
+        env:
+          HAVE_P8: ${{ secrets.APPLE_API_KEY_P8 != '' }}
+          HAVE_KEY_ID: ${{ secrets.APPLE_API_KEY_ID != '' }}
+          HAVE_ISSUER: ${{ secrets.APPLE_API_ISSUER != '' }}
+        run: |
+          missing=""
+          [ -n "$APPLE_TEAM_ID" ] || missing="$missing APPLE_TEAM_ID (repository variable)"
+          [ "$HAVE_P8" = true ] || missing="$missing APPLE_API_KEY_P8"
+          [ "$HAVE_KEY_ID" = true ] || missing="$missing APPLE_API_KEY_ID"
+          [ "$HAVE_ISSUER" = true ] || missing="$missing APPLE_API_ISSUER"
+          if [ -n "$missing" ]; then echo "::error::missing:$missing"; exit 1; fi
+      - name: Write the App Store Connect key
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          printf '%s' "$APPLE_API_KEY_P8" > "$RUNNER_TEMP/AuthKey.p8"
+          chmod 600 "$RUNNER_TEMP/AuthKey.p8"
+      - name: Register the iPhone
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_FILE: ${{ runner.temp }}/AuthKey.p8
+        run: bun .github/mobile/register-device.ts
+      - name: Install
+        run: |
+          bun install --frozen-lockfile
+          cd mobile && bun install --frozen-lockfile
+      - name: Generate the iOS project
+        working-directory: mobile
+        run: bunx expo prebuild --platform ios --no-install --clean
+      - name: Pods
+        working-directory: mobile/ios
+        run: pod install
+      - name: Archive
+        working-directory: mobile/ios
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          workspace=$(ls -d *.xcworkspace | head -1)
+          scheme="${workspace%.xcworkspace}"
+          xcodebuild archive \
+            -workspace "$workspace" \
+            -scheme "$scheme" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Kiwi.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$APPLE_API_KEY_ID" \
+            -authenticationKeyIssuerID "$APPLE_API_ISSUER" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic
+      - name: Export the development ipa
+        working-directory: mobile/ios
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          cat > "$RUNNER_TEMP/export.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>development</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>compileBitcode</key><false/>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Kiwi.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/export.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/AuthKey.p8" \
+            -authenticationKeyID "$APPLE_API_KEY_ID" \
+            -authenticationKeyIssuerID "$APPLE_API_ISSUER"
+          ls "$RUNNER_TEMP/export"
+      - name: Remove the key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/AuthKey.p8"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: kiwi-development-ipa
+          path: ${{ runner.temp }}/export/*.ipa
+          retention-days: 3
+          if-no-files-found: error
