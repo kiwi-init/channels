@@ -18,6 +18,7 @@ export interface Engine {
   load(): Promise<void>
   createPerson(name: string): Promise<PersonView>
   requestJoin(code: string, name?: string): Promise<ChannelView>
+  createChannel(name: string): Promise<string>
   checkJoin(code: string): Promise<JoinCheck>
   channel(code: string): Channel | null
   forget(code: string): Promise<void>
@@ -103,6 +104,11 @@ export function createEngine(secrets: Secrets, relay: () => string = relayUrl): 
     requestJoin(code, name) {
       if (!person) throw new Error("make your person key first")
       return keyring.requestJoin(code, name ?? person.name)
+    },
+    async createChannel(name) {
+      if (!person) throw new Error("make your person key first")
+      const made = await keyring.create(name, null, { name: person.name })
+      return made.code ?? ""
     },
     checkJoin: (code) => keyring.joinStatus(code),
     channel(code) {

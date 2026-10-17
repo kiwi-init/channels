@@ -1,22 +1,75 @@
 import { useRouter } from "expo-router"
+import { useMemo, useState } from "react"
+import { StyleSheet, View } from "react-native"
+import { SafeAreaView } from "react-native-safe-area-context"
 
+import { JoinSheet } from "../src/components/JoinSheet"
+import { NewChannelSheet } from "../src/components/NewChannelSheet"
 import { useEngine, usePerson, useSeats } from "../src/lib/EngineProvider"
-import { ChannelList } from "../src/screens/ChannelList"
+import { joinCodeFromInput } from "../src/lib/deep-link"
 import { FirstRun } from "../src/screens/FirstRun"
+import { useTheme } from "../src/theme/useTheme"
+import { ChannelList, type ChannelRowView } from "../src/ui/ChannelList"
+import { Text } from "../src/ui/Text"
+import { toast } from "../src/ui/Toast"
 
 export default function Home() {
   const router = useRouter()
   const engine = useEngine()
   const person = usePerson()
+  const { colors } = useTheme()
   const { joined, waiting } = useSeats()
+  const [creating, setCreating] = useState(false)
+  const [joining, setJoining] = useState(false)
+  const [now] = useState(() => Date.now())
+
+  const rows: ChannelRowView[] = useMemo(
+    () => [
+      ...waiting.map((seat) => ({ code: seat.code ?? "", room: seat.roomId ?? "", title: seat.name || seat.label || "Channel", state: "pending" as const, agents: 0, ts: seat.at ?? 0, recent: null })),
+      ...joined.map((seat) => ({ code: seat.code ?? "", room: seat.roomId ?? "", title: seat.name || seat.label || "Channel", state: "member" as const, agents: 0, ts: seat.at ?? 0, recent: null })),
+    ],
+    [joined, waiting]
+  )
+  const news = useMemo(() => rows.map(() => ({ fresh: false, needs: 0 })), [rows])
+
   if (!person) return <FirstRun onContinue={async (name) => void (await engine.createPerson(name))} />
+
+  const open = (code: string) => {
+    const waitingSeat = waiting.find((seat) => seat.code === code)
+    router.push(waitingSeat ? { pathname: "/join/[code]", params: { code } } : { pathname: "/channel/[code]", params: { code } })
+  }
+
   return (
-    <ChannelList
-      joined={joined}
-      waiting={waiting}
-      onOpen={(code) => router.push({ pathname: "/channel/[code]", params: { code } })}
-      onOpenWaiting={(code) => router.push({ pathname: "/join/[code]", params: { code } })}
-      onJoin={() => router.push("/join")}
-    />
+    <SafeAreaView style={[styles.screen, { backgroundColor: colors.canvas }]}>
+      <View style={styles.header}>
+        <Text variant="display">Channels</Text>
+      </View>
+      <ChannelList rows={rows} news={news} now={now} onSelect={open} onNew={() => setCreating(true)} />
+      <NewChannelSheet
+        visible={creating}
+        onClose={() => setCreating(false)}
+        onCreate={(name) => engine.createChannel(name)}
+        onCreated={(code) => router.push({ pathname: "/channel/[code]", params: { code } })}
+        onJoin={() => {
+          setCreating(false)
+          setJoining(true)
+        }}
+      />
+      <JoinSheet
+        visible={joining}
+        onClose={() => setJoining(false)}
+        onJoin={(text) => {
+          const code = joinCodeFromInput(text)
+          if (!code) return toast("That isn’t a join code.", "error")
+          setJoining(false)
+          router.push({ pathname: "/join/[code]", params: { code } })
+        }}
+      />
+    </SafeAreaView>
   )
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1 },
+  header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 },
+})
