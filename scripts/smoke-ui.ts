@@ -329,7 +329,10 @@ async function run(part: Part): Promise<string[]> {
     await page.keyboard.press("Enter")
     await tasksPanel.getByText("smoke in the task", { exact: true }).first().waitFor()
     await tasksPanel.getByRole("button", { name: "Close tasks" }).click()
-    if (await page.getByText("smoke in the task", { exact: true }).count()) throw new Error("a message in a task's conversation showed in main")
+    await tasksPanel.waitFor({ state: "detached" })
+    const said = page.getByText("smoke in the task", { exact: true })
+    const inCard = page.getByRole("button", { name: /^Open T\d+, Smoke task/ }).getByText("smoke in the task", { exact: true })
+    if ((await said.count()) !== (await inCard.count())) throw new Error("a message in a task's conversation showed in main outside its task card")
     log(`ok  ${at}`)
 
     at = "ask-human: options as buttons, and the task waits on a person until one is picked"
