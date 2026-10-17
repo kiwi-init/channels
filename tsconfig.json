@@ -10,7 +10,10 @@
     "skipLibCheck": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    "paths": {
+      "@mc/*": ["./src/*"]
+    }
   },
   "include": ["src", "test"],
   "exclude": ["src/relay/worker.ts"]
