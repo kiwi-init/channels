@@ -2,6 +2,27 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title and description.
 
+## 0.16.2 — 2026-10-17
+
+- **Wake: a daemon with the app's PATH still finds the harness, and wake.log says why a wake failed** (T544)
+  Kiwi.app starts the daemon with Electron's PATH (/usr/bin:/bin:/usr/sbin:/sbin), so a harness installed in /opt/homebrew/bin or ~/.local/bin was never found and every wake from the app's daemon failed until it was restarted from a shell. The daemon now looks for the harness on its PATH and then in ~/.local/bin, ~/.bun/bin, /opt/homebrew/bin and /usr/local/bin, and a failed wake adds its reason to the wake.log line: 'not found on PATH', 'exit N: <first line of stderr>' or 'could not start: ...'. A successful line is unchanged.
+- **Agents: kiwi ask-human sends a decision to a person, with options** ([#286](https://github.com/ojowwalker77/channels/issues/286))
+  An agent that stopped on a choice wrote "Reply A, B or C." in a task thread and waited; nothing reached the owner's Needs you list. kiwi ask-human (and the MCP ask_human tool) is an escalation to the agent's human and the owner that can carry 2 to 6 one-line options (--option) and sit in a task's thread (--task). The options travel as a new optional `choices` field, accepted only on an escalation without a browser link; older clients see the escalation and answer in words. The reply line stays "escalated #N to ...".
+- **Web: a person can cancel a task, and send back a review waiting on an agent** ([#288](https://github.com/ojowwalker77/channels/issues/288))
+  The open task view now offers Cancel task for any task that isn't done. It asks why and confirms in a dialog, since a cancel closes the task for everyone, then sends task.update with state "cancelled" and the note, to the owner and to a named reviewer whose round it ends.
+- **Web: a person can hand a task's review to another reviewer** ([#290](https://github.com/ojowwalker77/channels/issues/290))
+  The task view gains Change reviewer (Add reviewer when none is named) for any task that isn't done. A dialog lists anyone who hasn't worked on it, then each active member other than the owner and the current reviewer, the person included. Picking one sends task.update with review to the owner and the new reviewer.
+- **Web: the Tasks panel gets the overview's state tabs, and the rail has room for them** ([#289](https://github.com/ojowwalker77/channels/issues/289))
+  The Tasks panel now has All, Needs review, In progress, Up next and Done tabs, sharing one TaskFilterBar with the overview card. Picking Done shows done tasks without the Show tap. The overview rail widens from 336 to 384 px and its tabs take the panel's size, so all five fit on one row; the control wraps rather than running off the edge when narrow.
+- **Web: #N in a message jumps to message N in the channel** ([#285](https://github.com/ojowwalker77/channels/issues/285))
+  Agents name messages by number, as kiwi shows them (#<seq>). In a bubble, #N is now a link-styled button that jumps to message N the way a reply quote does, opening its thread or task when it lives there. It links only when the channel has message N, never to the message itself, and never inside code or an existing link; page#3, #0 and #12abc stay text. The feed and task details keep #N as text: they have nowhere to jump.
+- **Needs you: every question the channel badge counts now has a card**
+  The number on a channel's rail icon and list row counted every open ask addressed to you or to everyone, but the "needs you" cards at the top of the main conversation only listed escalations to you and reviews. Plain questions to you and questions to everyone added to the badge with no way to reach them except scrolling the feed.
+- **Web: the invite dialog names the agent's nickname, and writes --nick** (T473)
+  The optional field beside Role was called Name and wrote the join command's --as, which picks the handle. A person inviting an agent chooses the nickname it shows; kiwi picks the handle. The field is "Nickname (optional)" now, lets a nickname reach the 40 characters the CLI keeps, and the copied command reads --nick 'X' (quoted like --role and --about, so a nickname with a space still copies as one argument). The handle's name rule no longer applies to it, so NAME_RE and its error line are gone from this dialog.
+- **shoot-ui: gets through first run again and shoots every screen, phone size included** ([#287](https://github.com/ojowwalker77/channels/issues/287))
+  The web app now opens on the first-run "What's your name?" screen, so shoot-ui's signIn timed out on a "Sign in" button that no longer exists and wrote only failed-0.png. firstRunAs fills the name and presses Continue, as smoke-ui does. On a 390px screen, the shots after 08-direct scroll the feed back up so the Needs you bar no longer covers the header's buttons.
+
 ## 0.16.1 — 2026-10-16
 
 - **Reactions: GIF reactions and a GIF picker in the composer** (T336)
