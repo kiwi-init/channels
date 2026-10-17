@@ -1,8 +1,10 @@
 import { KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 
 import { Conversation } from "../components/Conversation"
+import { Thread } from "../components/Thread"
+import { threadIndex } from "../lib/thread"
 import { useServices } from "../lib/EngineProvider"
 import { useChannel } from "../lib/useChannel"
 import { useTheme } from "../theme/useTheme"
@@ -17,6 +19,8 @@ export function ChannelScreen({ code, onBack }: { code: string; onBack?: () => v
   const channel = useMemo(() => engine.channel(code), [engine, code])
   const live = useChannel(channel, seat?.pk ?? "", history, sql)
   const me = channel?.identity.name ?? ""
+  const [threadRoot, setThreadRoot] = useState<number | null>(null)
+  const threads = useMemo(() => threadIndex(live.messages, live.state), [live.messages, live.state])
 
   const people: Person[] = useMemo(
     () =>
@@ -26,6 +30,33 @@ export function ChannelScreen({ code, onBack }: { code: string; onBack?: () => v
     [live.state, me]
   )
   const nameOf = useMemo(() => (name: string) => live.state.members.get(name)?.display || name, [live.state])
+
+  const root = threadRoot === null ? undefined : live.messages.find((m) => m.seq === threadRoot)
+  const replies = threadRoot === null ? [] : (threads.replies.get(threadRoot) ?? [])
+
+  const send = async ({ body, to }: { body: string; to: string[] }, re?: number[]) => {
+    try {
+      await live.send(body, to, re)
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not send", "error")
+      throw err
+    }
+  }
+
+  if (channel && root) {
+    const last = replies.length ? replies[replies.length - 1]!.seq : root.seq
+    return (
+      <Thread
+        root={root}
+        replies={replies}
+        state={live.state}
+        me={me}
+        nameOf={nameOf}
+        onClose={() => setThreadRoot(null)}
+        composer={<Composer me={me} people={people} placeholder="Reply in thread" onSend={(draft) => send(draft, [last])} />}
+      />
+    )
+  }
 
   if (!channel) {
     return (
@@ -51,19 +82,8 @@ export function ChannelScreen({ code, onBack }: { code: string; onBack?: () => v
         </Text>
       </View>
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <Conversation messages={live.messages} state={live.state} me={me} nameOf={nameOf} group={people.length > 1} />
-        <Composer
-          me={me}
-          people={people}
-          onSend={async ({ body, to }) => {
-            try {
-              await live.send(body, to)
-            } catch (err) {
-              toast(err instanceof Error ? err.message : "Could not send", "error")
-              throw err
-            }
-          }}
-        />
+        <Conversation messages={live.messages} state={live.state} me={me} nameOf={nameOf} group={people.length > 1} onOpenThread={setThreadRoot} />
+        <Composer me={me} people={people} onSend={(draft) => send(draft)} />
       </KeyboardAvoidingView>
     </SafeAreaView>
   )

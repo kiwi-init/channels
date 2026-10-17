@@ -4,6 +4,7 @@ import { memo, useCallback, useMemo, useRef, useState, type ReactNode } from "re
 import { FlatList, Pressable, StyleSheet, View, type FlatListProps, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native"
 
 import { chipsFor } from "../lib/reactions"
+import { threadIndex } from "../lib/thread"
 import { buildRows, type Row } from "../lib/timeline"
 import { useTheme } from "../theme/useTheme"
 import { Text } from "../ui/Text"
@@ -22,6 +23,7 @@ export interface ConversationProps {
   face?: (m: Message) => ReactNode
   onReply?: (m: Message) => void
   onReact?: (m: Message) => void
+  onOpenThread?: (root: number) => void
   onOpenTask?: (task: number) => void
   contentContainerStyle?: FlatListProps<Row>["contentContainerStyle"]
 }
@@ -55,12 +57,28 @@ const EventRow = memo(function EventRow({ text, task, forged, onOpenTask }: { te
   )
 })
 
-export function Conversation({ messages, state, me, nameOf, group = true, revealed, highlight = null, receipt, face, onReply, onReact, onOpenTask, contentContainerStyle }: ConversationProps) {
+export function Conversation({
+  messages,
+  state,
+  me,
+  nameOf,
+  group = true,
+  revealed,
+  highlight = null,
+  receipt,
+  face,
+  onReply,
+  onReact,
+  onOpenThread,
+  onOpenTask,
+  contentContainerStyle,
+}: ConversationProps) {
   const theme = useTheme()
   const list = useRef<FlatList<Row>>(null)
   const [away, setAway] = useState(false)
   const [menu, setMenu] = useState<Message | null>(null)
-  const rows = useMemo(() => buildRows(messages, state, { me, revealed }).reverse(), [messages, state, me, revealed])
+  const threads = useMemo(() => threadIndex(messages, state, { revealed }), [messages, state, revealed])
+  const rows = useMemo(() => buildRows(messages, state, { me, revealed, hide: (seq) => threads.rootOf(seq) !== null }).reverse(), [messages, state, me, revealed, threads])
   const bySeq = useMemo(() => new Map(messages.map((m) => [m.seq, m])), [messages])
   const quoted = useCallback((seq: number) => bySeq.get(seq), [bySeq])
   const indexOf = useMemo(() => new Map(rows.flatMap((row, index) => (row.type === "bubble" ? [[row.m.seq, index] as const] : []))), [rows])
@@ -101,10 +119,12 @@ export function Conversation({ messages, state, me, nameOf, group = true, reveal
           onJump={onJump}
           onReply={onReply}
           onMenu={onReply || onReact ? setMenu : undefined}
+          replies={threads.replies.get(item.m.seq)?.length}
+          onOpenThread={onOpenThread}
         />
       )
     },
-    [state, me, group, highlight, receipt, face, quoted, nameOf, onJump, onReply, onReact, onOpenTask]
+    [state, me, group, highlight, receipt, face, quoted, nameOf, onJump, onReply, onReact, onOpenThread, onOpenTask, threads]
   )
 
   return (
