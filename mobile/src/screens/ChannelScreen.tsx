@@ -2,13 +2,17 @@ import { KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { useMemo, useState } from "react"
 
+import type { ImageAttachment } from "@mc/protocol.ts"
+
 import { Conversation } from "../components/Conversation"
 import { Thread } from "../components/Thread"
 import { threadIndex } from "../lib/thread"
 import { useServices } from "../lib/EngineProvider"
+import { shareImage } from "../lib/shareImage"
 import { useChannel } from "../lib/useChannel"
 import { useTheme } from "../theme/useTheme"
 import { Composer, type Person } from "../ui/Composer"
+import { ImageViewer } from "../ui/ImageViewer"
 import { Text } from "../ui/Text"
 import { toast } from "../ui/Toast"
 
@@ -21,6 +25,7 @@ export function ChannelScreen({ code, onBack }: { code: string; onBack?: () => v
   const me = channel?.identity.name ?? ""
   const [threadRoot, setThreadRoot] = useState<number | null>(null)
   const threads = useMemo(() => threadIndex(live.messages, live.state), [live.messages, live.state])
+  const [viewing, setViewing] = useState<ImageAttachment | null>(null)
 
   const people: Person[] = useMemo(
     () =>
@@ -82,9 +87,16 @@ export function ChannelScreen({ code, onBack }: { code: string; onBack?: () => v
         </Text>
       </View>
       <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <Conversation messages={live.messages} state={live.state} me={me} nameOf={nameOf} group={people.length > 1} onOpenThread={setThreadRoot} />
+        <Conversation messages={live.messages} state={live.state} me={me} nameOf={nameOf} group={people.length > 1} onOpenThread={setThreadRoot} onOpenImage={setViewing} />
         <Composer me={me} people={people} onSend={(draft) => send(draft)} />
       </KeyboardAvoidingView>
+      <ImageViewer
+        visible={viewing !== null}
+        onClose={() => setViewing(null)}
+        uri={viewing ? `data:${viewing.mime};base64,${viewing.data}` : ""}
+        title={viewing?.name}
+        onShare={viewing ? () => void shareImage(viewing).catch(() => toast("Could not share the image", "error")) : undefined}
+      />
     </SafeAreaView>
   )
 }

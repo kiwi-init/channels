@@ -88,6 +88,16 @@ describe("Bubble", () => {
     expect(screen.queryByText("composer.png")).toBeNull()
   })
 
+  it("opens an image when it is tapped, and is plain when nothing can open it", async () => {
+    const m = chat.find((m) => m.imgs?.length)!
+    const onOpenImage = jest.fn()
+    const view = await render(<Bubble {...base({ ...m, body: m.imgs!.map((i) => i.name).join(", ") }, { onOpenImage })} />)
+    await fireEvent.press(screen.getByRole("imagebutton", { name: "Open composer.png" }))
+    expect(onOpenImage).toHaveBeenCalledWith(m.imgs![0])
+    await view.rerender(<Bubble {...base({ ...m, body: m.imgs!.map((i) => i.name).join(", ") })} />)
+    expect(screen.queryByRole("imagebutton")).toBeNull()
+  })
+
   it("a long press opens the menu, or falls back to reply", async () => {
     const m = chat[0]!
     const onMenu = jest.fn()
