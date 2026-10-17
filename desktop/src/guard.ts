@@ -10,6 +10,7 @@ import type { Identity } from "../../src/identity.ts";
 import { provePerson, type PersonClaim } from "../../src/person.ts";
 import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, PublicPerson, StoreSnapshot } from "./bridge.ts";
 import { publicChannel } from "./seats.ts";
+import { voiceViewOf, type VoiceStore } from "./voice.ts";
 
 export { acceptSeat, mergeChannels, mergePublicChannels, migrateEntries, withAccess } from "./seats.ts";
 
@@ -75,11 +76,12 @@ export function fileFor(root: string, pathname: string): string | null {
  * WorkOS: in the app, sign-in runs in main (the device flow), never in the page. No eval, no inline
  * script, nothing framed, no form posts: script that got in some other way can't phone anywhere else.
  */
-export function csp(relay: string): string {
+export function csp(relay: string, voiceOrigins: readonly string[] = []): string {
   const origin = normalizeRelay(relay);
   const socket = origin ? origin.replace(/^http/, "ws") : null;
-  const connect = ["'self'", ...(origin ? [origin, socket!] : [])].join(" ");
-  return [
+  const extra = voiceOrigins.filter((o) => o.length > 0);
+  const connect = ["'self'", ...(origin ? [origin, socket!] : []), ...extra].join(" ");
+  const parts = [
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
@@ -90,7 +92,13 @@ export function csp(relay: string): string {
     "base-uri 'none'",
     "form-action 'none'",
     "frame-ancestors 'none'",
-  ].join("; ");
+  ];
+  if (extra.length) parts.push("worker-src 'self' blob:");
+  return parts.join("; ");
+}
+
+export function mediaAllowed(url: string, permission: string): boolean {
+  return permission === "media" && isAppUrl(url);
 }
 
 /** What reading the store found: nothing yet (a first run), the saved JSON, or a file it couldn't read. */
@@ -133,10 +141,11 @@ export interface StoredKeys {
   channels: ChannelIdentityView[];
   computers: ComputerView[];
   pending: PendingItem[];
+  voice?: VoiceStore;
 }
 
 export function snapshotOf(s: StoredKeys): StoreSnapshot {
-  return { relayUrl: s.relayUrl, person: publicPerson(s.person), channels: s.channels.map(publicChannel), computers: s.computers, pending: s.pending };
+  return { relayUrl: s.relayUrl, person: publicPerson(s.person), channels: s.channels.map(publicChannel), computers: s.computers, pending: s.pending, voice: voiceViewOf(s.voice) };
 }
 
 export function publicComputer(c: ComputerView): ComputerView {

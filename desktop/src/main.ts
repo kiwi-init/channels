@@ -9,19 +9,20 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { app, BrowserWindow, dialog, ipcMain, Menu, MessageChannelMain, nativeImage, nativeTheme, Notification, protocol, safeStorage, shell, Tray, utilityProcess } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, MessageChannelMain, nativeImage, nativeTheme, Notification, protocol, safeStorage, session, shell, Tray, utilityProcess } from "electron";
 
 import { generateIdentity, type Identity } from "../../src/identity.ts";
 import { answerPair, newSecret, openMailbox, pairCode, readPairAsk, type Mailbox, type PairAsk } from "../../src/mailbox.ts";
 import { certifyMachine } from "../../src/person.ts";
 import { compareVersions, ensureOnPath, keepCli } from "./cli.ts";
-import { acceptSeat, APP_HOST, APP_SCHEME, claimFor, csp, externalUrl, fileFor, isAppUrl, mergePublicChannels, migrateEntries, normalizeRelay, publicComputer, publicPerson, readStore, snapshotOf, withAccess, writePrivate } from "./guard.ts";
+import { acceptSeat, APP_HOST, APP_SCHEME, claimFor, csp, externalUrl, fileFor, isAppUrl, mediaAllowed, mergePublicChannels, migrateEntries, normalizeRelay, publicComputer, publicPerson, readStore, snapshotOf, withAccess, writePrivate } from "./guard.ts";
 import type { HostToKeys, KeysToHost } from "./keyring.ts";
 import { openInBrowser } from "./open.ts";
 import { applyUpdate, startUpdates, updateState } from "./updater.ts";
 import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, spawnDaemon, type HelloResult } from "./daemon-client.ts";
 import type { ChannelIdentityView, ComputerView, DaemonStatus, PairAskView, PendingItem, PersonView, SignInResult, StoreSnapshot } from "./bridge.ts";
 import type { PersonClaim } from "../../src/person.ts";
+import { voiceOriginsFor, voiceToken, type VoiceStore } from "./voice.ts";
 
 const PUBLIC_RELAY = "https://channels.kiwiinit.com";
 const JOIN_SCHEME = "kiwi";
@@ -41,6 +42,7 @@ interface StoreFile {
   pending: PendingItem[];
   signin?: { access: string; refresh: string; exp: number };
   migrated?: boolean;
+  voice?: VoiceStore;
 }
 
 const storePath = () => path.join(app.getPath("userData"), "kiwi-store.bin");
@@ -189,7 +191,7 @@ const MIME: Record<string, string> = { ".html": "text/html", ".js": "text/javasc
 /** Headers for everything kiwi-app:// serves: the type, and the CSP (guard.ts), so script that got in can't reach out. */
 const webHeaders = (type: string): Record<string, string> => ({
   "content-type": type,
-  "content-security-policy": csp(store.relayUrl),
+  "content-security-policy": csp(store.relayUrl, voiceOriginsFor(store.voice)),
   "x-content-type-options": "nosniff",
   "referrer-policy": "no-referrer",
 });
@@ -634,6 +636,34 @@ function wireIpc(): void {
     deepLink = null;
     return link;
   });
+  ipcMain.handle("kiwi:voice-set-key", (_e, key: unknown) => {
+    if (typeof key !== "string") throw new Error("bad voice key");
+    const clean = key.trim().slice(0, 256);
+    mutate((s) => {
+      s.voice = { ...s.voice, key: clean.length ? clean : undefined };
+    });
+    win?.loadURL(entryUrl());
+  });
+  ipcMain.handle("kiwi:voice-set-consent", (_e, roomId: unknown, on: unknown) => {
+    if (typeof roomId !== "string" || !roomId || typeof on !== "boolean") throw new Error("bad voice consent");
+    if (!store.channels.some((c) => c.roomId === roomId)) throw new Error("unknown channel");
+    mutate((s) => {
+      const consent = { ...(s.voice?.consent ?? {}) };
+      if (on) consent[roomId] = true;
+      else delete consent[roomId];
+      s.voice = { ...s.voice, consent };
+    });
+    win?.loadURL(entryUrl());
+  });
+  ipcMain.handle("kiwi:voice-token", (_e, roomId: unknown) => {
+    if (typeof roomId !== "string" || !roomId) throw new Error("no consent");
+    return voiceToken({
+      key: store.voice?.key,
+      consent: store.voice?.consent,
+      roomId,
+      http: (url, init) => fetch(url, init),
+    });
+  });
 }
 
 // Bring the window back: recreate it if it was destroyed, restore, show and focus.
@@ -667,6 +697,9 @@ else {
     loadStore();
     warnIfBroken();
     serveWeb();
+    session.defaultSession.setPermissionRequestHandler((wc, permission, callback) => {
+      callback(mediaAllowed(wc.getURL(), permission));
+    });
     wireIpc();
     startKeys();
     createWindow();

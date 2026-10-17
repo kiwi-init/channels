@@ -28,6 +28,7 @@ const publicOf = (l: Local): StoreSnapshot => ({
   channels: l.channels.map(publicChannel),
   computers: l.computers,
   pending: l.pending,
+  voice: { configured: false, consent: {} },
 })
 
 let snapshot: StoreSnapshot = (() => {

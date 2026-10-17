@@ -270,6 +270,23 @@ jobs:
           job: desktop-keys
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-keys'] }}
 
+  desktop-voice:
+    name: desktop / voice
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['desktop-voice']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup
+        with:
+          web: "false"
+      - run: bun scripts/ci-tests.ts desktop-voice
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: desktop-voice
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-voice'] }}
+
   site-test:
     name: site / test
     needs: plan
@@ -490,7 +507,7 @@ jobs:
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, desktop-fuses, cli-build, relay-worker, relay-budget, cli-seats, cli-handoff, repo-comments, desktop-keys, repo-knip, web-bundle, web-task-cards, site-test, repo-pins, bus-test, cli-macos, release-rehearsal]
+    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, desktop-fuses, cli-build, relay-worker, relay-budget, cli-seats, cli-handoff, repo-comments, desktop-keys, desktop-voice, repo-knip, web-bundle, web-task-cards, site-test, repo-pins, bus-test, cli-macos, release-rehearsal]
     if: always()
     runs-on: ubuntu-latest
     permissions:
