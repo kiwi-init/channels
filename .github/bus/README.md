@@ -1,17 +1,24 @@
 # bus
 
-The merge bus is the one writer to main. Agents push `bus/<task>` and go back to work; the bus
-merges each branch onto main, resolves what it can, tests the exact merged tree on `bus/staging`
-and fast-forwards main. Everything it decides becomes a `bus.*` event in the team's Kiwi channel.
+The merge bus is the one writer to main. Agents push `bus/<task>` and go back to work; `ci.yml`
+runs on the branch itself, in parallel with every other branch. The bus merges each branch
+onto main and resolves what it can. A branch whose own CI is green and that merges cleanly
+lands at once (the fast path); anything else is tested on `bus/staging` first, and the bus
+then fast-forwards main. Everything it decides becomes a `bus.*` event in the team's Kiwi channel.
 
 Each run of [`bus.yml`](../workflows/bus.yml) is one stateless tick (bors): it reads the state
 from GitHub and does the next step.
 
 1. **tick** (read-only): if `bus/staging` sits on main and its item is unchanged, wait for its
-   CI, then land it or diagnose it. Otherwise take the oldest `bus/*` branch (or a PR a
+   CI, then land it or diagnose it. Otherwise look at each branch's own CI run (the one for
+   exactly its head): a branch still being tested waits (for 20 minutes at most), one with a
+   green `ci-ok` goes first, and the rest follow by age. Take the first `bus/*` branch (or a PR a
    maintainer labelled `queue`, never a fork), ahead of it any branch Jev's `needs_order` says
-   it needs first, and merge it onto main: git, then mergiraf on `*.ts`/`*.tsx`, then
-   keep-both for hunks whose base was empty when Jev's `keep_both` is high.
+   it needs first, and merge it onto main: git, then
+   keep-both for hunks whose base was empty when Jev's `keep_both` is high. A branch with a
+   green own CI that git merges with no conflicts, where main changed none of its files and
+   neither side touched `.github/`, a `package.json` or a lockfile, is marked **fast**: stage
+   then lands it without a staging run.
 2. **resolve** (read-only, model keys only): Haiku resolves each hunk left, sampled 3 times,
    and may abstain. A hunk Haiku abstains on or disagrees with itself on, that Jev's
    `intent_shift` rates high, or whose merged tree fails a check, goes back to its author.
@@ -21,8 +28,9 @@ from GitHub and does the next step.
 3. **stage** (App token, no model): redoes the merge, checks the patch fits only the
    conflicts, runs [`validate.ts`](validate.ts) (no markers, parses, no duplicate class
    members, `tsc` on the touched projects), commits the merge with an `Agent:` trailer and
-   pushes `bus/staging`. `ci.yml` runs on it, and jev-ci plans from the item's fork point,
-   so the jobs either side can break run.
+   pushes `bus/staging`. `ci.yml` runs on it, and jev-ci plans from main, so the jobs the item
+   adds run. A fast item skips this: stage pushes the commit to main itself (the same check as
+   land: main and the branch are unchanged) and emits `bus.landed`.
 4. **land** (App token): ci-ok green fast-forwards main and emits `bus.landed`. Red runs
    **doctor** (read-only): Jev's `unrelated_failure` reruns a flake once, otherwise Haiku
    writes the cause in one line, and **settle** bounces the item (`bus/T7` moves to

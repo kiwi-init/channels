@@ -39,7 +39,7 @@ max_file_lines: 300
 # Jev only sets the numbers below; it never approves a merge.
 bus:
   # Resolution tiers, cheapest first. A hunk none of them resolves bounces the item to its author.
-  ladder: [git, mergiraf, keep-both, haiku]
+  ladder: [git, keep-both, haiku]
   # A pull request joins the bus with this label, added by someone with one of these roles or listed in maintainers. Never a fork.
   label: queue
   label_roles: [admin, maintain]
@@ -344,7 +344,7 @@ jobs:
 
   cli-macos:
     name: cli / macos
-    inputs: ["src/**", "test/**", "web/src/**", "web/public/**", "site/install", "site/install.sh", "site/install.ps1", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "desktop/src/**"]
+    inputs: ["src/**", "test/**", "site/install", "site/install.sh", "site/install.ps1", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "desktop/src/**"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "web/bun.lock"]
     description: >-
       On a macOS runner, does what the release's cli job does: runs the whole bun test suite
@@ -382,9 +382,9 @@ jobs:
   bus-test:
     name: bus / test
     inputs: [".github/bus/**", ".github/jev-ci/**", "test/bus-*.test.ts"]
-    always: ["package.json", "bun.lock", "scripts/ci-tests.ts", ".github/actions/mergiraf/**"]
+    always: ["package.json", "bun.lock", "scripts/ci-tests.ts"]
     description: >-
-      Runs test/bus-*.test.ts against the merge bus in .github/bus, with mergiraf installed: it
+      Runs test/bus-*.test.ts against the merge bus in .github/bus: it
       builds small git repositories with conflicting branches and checks the conflict parser, the
       resolution patch (which may only replace whole conflicts), the validation checks (markers,
       parse errors, duplicate class members), the resolution ladder with Jev and Claude stubbed

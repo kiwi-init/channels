@@ -6,7 +6,7 @@ import { loadBus, type BusConfig, type Tier } from "./config.ts"
 import { applyPatch, blocks, readPatch } from "./conflicts.ts"
 import { emit } from "./events.ts"
 import { fetchItem, push, type Item } from "./github.ts"
-import { bounce } from "./land.ts"
+import { bounce, land } from "./land.ts"
 import { checkTexts, dispose, mergeTrees, touched } from "./ladder.ts"
 import type { Verdict } from "./resolve.ts"
 import { must, run } from "./sh.ts"
@@ -83,7 +83,10 @@ if (import.meta.main) {
     console.log(JSON.stringify(staged))
   } else if (positionals[0] === "push") {
     const staged = JSON.parse(readFileSync(join(values.out, "staged.json"), "utf8")) as Staged
-    if (staged.action === "push") {
+    if (staged.action === "push" && ticket.fast) {
+      for (const e of ticket.events) emit(e)
+      await land(values.repo, { ...ticket, staging: staged.sha })
+    } else if (staged.action === "push") {
       push(values.repo, [`--force-with-lease=refs/heads/bus/staging:${ticket.staging ?? ""}`, `${staged.sha}:refs/heads/bus/staging`])
       for (const e of ticket.events) emit(e)
       emit({ what: "bus.staged", task: staged.item.task, branch: staged.item.key, sha: staged.sha.slice(0, 7), tier: staged.tier, hunks: staged.hunks })

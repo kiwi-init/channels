@@ -4,7 +4,7 @@ import { parseArgs } from "node:util"
 import { setOutput, summary } from "../jev-ci/github.ts"
 import { loadBus, type BusConfig, type Tier } from "./config.ts"
 import type { BusEvent } from "./events.ts"
-import { busBranches, ciRun, fetchBus, queuedPulls, runJobs, type Item, type Run } from "./github.ts"
+import { busBranches, ciRun, ciState, fetchBus, queuedPulls, runJobs, type Ci, type Item, type Run } from "./github.ts"
 import { contexts, dispose, keepBoth, liveDeps, mergeTrees, patchOf } from "./ladder.ts"
 import { judge } from "./questions.ts"
 import { clip, must, run } from "./sh.ts"
@@ -20,6 +20,7 @@ export type Ticket = {
   staging?: string
   run?: Run
   tier?: Tier
+  fast?: boolean
   hunks?: number
   pending?: number
   bounce?: { reason: string; hunks: number; tried: string[] }
@@ -39,12 +40,41 @@ export function inFlight(repo: string, main: string, staging: string | undefined
   return items.find((i) => i.key === t["Bus-Item"] && i.sha === t["Bus-Head"])
 }
 
+const PENDING_MAX_SECONDS = 20 * 60
+
+const PLUMBING = /^(\.github\/|package\.json$|bun\.lock$|[^/]+\/package\.json$|[^/]+\/bun\.lock$|tsconfig[^/]*\.json$|bunfig\.toml$)/
+
+export function fastBlock(repo: string, main: string, fork: string, sha: string): string | undefined {
+  const lines = (a: string, b: string) => must(["git", "diff", "--name-only", `${a}..${b}`], repo).split("\n").filter(Boolean)
+  const mine = lines(fork, sha)
+  const theirs = lines(fork, main)
+  const config = mine.find((f) => PLUMBING.test(f))
+  if (config) return `it changes ${config}, which is tested on the merged tree`
+  const plumbing = theirs.find((f) => PLUMBING.test(f))
+  if (plumbing) return `main changed ${plumbing} since its CI ran`
+  const shared = mine.filter((f) => theirs.includes(f))
+  if (shared.length) return `main changed ${shared[0]} too since its CI ran`
+  return undefined
+}
+
+export function ready(items: Item[], ci: ReadonlyMap<string, Ci>, now = Math.floor(Date.now() / 1000)): Item[] {
+  return items.filter((i) => {
+    const c = ci.get(i.key)
+    return !(c?.state === "pending" && c.startedAt !== undefined && now - c.startedAt < PENDING_MAX_SECONDS)
+  })
+}
+
+export function ranked(items: Item[], ci: ReadonlyMap<string, Ci>): Item[] {
+  const green = items.filter((i) => ci.get(i.key)?.state === "green")
+  return [...order(green), ...order(items.filter((i) => ci.get(i.key)?.state !== "green"))]
+}
+
 export function order(items: Item[]): Item[] {
   return [...items].sort((a, b) => a.since - b.since || a.key.localeCompare(b.key))
 }
 
 async function pick(repo: string, main: string, items: Item[], cfg: BusConfig): Promise<{ item: Item; events: BusEvent[] }> {
-  const [first, ...rest] = order(items)
+  const [first, ...rest] = items
   const files = changedFiles(repo, main, first!.sha)
   const events: BusEvent[] = []
   for (const other of rest.slice(0, 5)) {
@@ -85,7 +115,10 @@ export async function tick(repo: string, cfg: BusConfig): Promise<{ ticket: Tick
   }
   if (!items.length) return { ticket: { ...base, action: "idle", why: "nothing is queued" }, patch: "" }
 
-  const { item, events } = await pick(repo, main, items, cfg)
+  const ci = new Map(await Promise.all(items.map(async (i) => [i.key, i.kind === "branch" ? await ciState(i.sha, i.key).catch((): Ci => ({ state: "none" })) : ({ state: "none" } as Ci)] as const)))
+  const waiting = ready(items, ci)
+  if (!waiting.length) return { ticket: { ...base, action: "wait", why: `${items.map((i) => i.key).join(", ")} wait for their own CI` }, patch: "" }
+  const { item, events } = await pick(repo, main, ranked(waiting, ci), cfg)
   const fork = must(["git", "merge-base", main, item.sha], repo).trim()
   const plain = mergeTrees(repo, main, item.sha, { mergiraf: false, lockfiles: cfg.lockfiles })
   const gitLeft = plain.hunks.length + plain.unmergeable.length
@@ -102,8 +135,10 @@ export async function tick(repo: string, cfg: BusConfig): Promise<{ ticket: Tick
     const pending = m.hunks.length - kb.resolved.length
     const tier: Tier = !gitLeft ? "git" : !m.hunks.length ? "mergiraf" : !pending ? "keep-both" : "haiku"
     const action: Action = pending ? "resolve" : "stage"
-    const why = !m.hunks.length ? `merges with ${tier}` : `${m.hunks.length} conflicts after mergiraf, ${pending} left after keep-both${kb.note ? ` (${kb.note})` : ""}`
-    return { ticket: { ...head, action, why, tier, hunks: m.hunks.length, pending }, patch: patchOf(m, kb.fixes) }
+    const block = ci.get(item.key)?.state !== "green" ? "its own CI is not green" : gitLeft ? "git left conflicts" : fastBlock(repo, main, fork, item.sha)
+    const fast = action === "stage" && !block
+    const why = fast ? "its own CI is green and it merges cleanly: lands without a staging run" : !m.hunks.length ? `merges with ${tier}${block ? ` (staging run: ${block})` : ""}` : `${m.hunks.length} conflicts after mergiraf, ${pending} left after keep-both${kb.note ? ` (${kb.note})` : ""}`
+    return { ticket: { ...head, action, why, tier, ...(fast ? { fast: true } : {}), hunks: m.hunks.length, pending }, patch: patchOf(m, kb.fixes) }
   } finally {
     dispose(m)
   }
