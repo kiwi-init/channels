@@ -39,6 +39,10 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      - name: Install
+        working-directory: repo
+        run: bun install --frozen-lockfile
+
       - name: Attest build provenance
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
