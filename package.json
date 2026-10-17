@@ -21,7 +21,8 @@
     "smoke:ui": "bun scripts/smoke-ui.ts",
     "ci:plan": "bun .github/jev-ci/cli.ts plan",
     "shots:ui": "bun scripts/shoot-ui.ts",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json && bun scripts/ui-tokens.ts && cd web && tsc -b && bun oxlint src && bun oxfmt --check src && cd ../desktop && tsc --noEmit",
+    "lint": "oxlint src desktop/src desktop/scripts scripts test .github/jev-ci",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json && bun run lint && bun scripts/ui-tokens.ts && cd web && tsc -b && bun oxlint src && bun oxfmt --check src && cd ../desktop && tsc --noEmit",
     "web:dev": "cd web && bun run dev",
     "web:build": "cd web && bun run build",
     "demo": "bun scripts/demo.ts",
@@ -33,6 +34,7 @@
     "@cloudflare/workers-types": "^5.20261015.1",
     "@types/bun": "^1.4.3",
     "knip": "6.41.0",
+    "oxlint": "1.86.0",
     "playwright-core": "1.64.1",
     "typescript": "^7.0.2",
     "wrangler": "^4.151.0"

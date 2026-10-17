@@ -39,15 +39,18 @@ jobs:
     jev: false
     name: repo / static
     inputs: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,css}", "web/index.html", ".github/workflows/**", ".github/actions/**"]
-    always: ["tsconfig.json", "tsconfig.worker.json", "package.json", "bun.lock", "web/package.json", "web/tsconfig*.json", "web/vite.config.ts", "web/.oxlintrc.json", "web/.oxfmtrc.json", "desktop/package.json", "desktop/tsconfig*.json", "knip.json"]
+    always: ["tsconfig.json", "tsconfig.worker.json", "package.json", "bun.lock", ".oxlintrc.json", "web/package.json", "web/tsconfig*.json", "web/vite.config.ts", "web/.oxlintrc.json", "web/.oxfmtrc.json", "desktop/package.json", "desktop/tsconfig*.json", "knip.json"]
     description: >-
       The static checks, one after another, each run even when an earlier one failed.
       Types: tsc --noEmit over src/ and test/ (and the jev-ci planner test/ imports), again over
       the Cloudflare worker with the Workers types (tsconfig.worker.json), tsc -b in web/ (which
       also compiles the src/ modules the dashboard imports through @mc/*), and tsc --noEmit in
       desktop/. scripts/ui-tokens.ts fails on an arbitrary text-[Npx] or rounded-[Npx] Tailwind
-      class in web/src. oxlint on web/src (web/.oxlintrc.json: unused variables or imports,
-      conditional hooks, setState in an effect, impure calls in render, explicit any). oxfmt
+      class in web/src. oxlint (root .oxlintrc.json) on src/, desktop/src, desktop/scripts,
+      scripts/, test/ and .github/jev-ci/: unused variables or imports, an empty block or catch,
+      explicit any, a useless assignment or escape, a rethrow without its cause. oxlint on web/src
+      (web/.oxlintrc.json extends the root config and adds the React rules: conditional hooks,
+      setState in an effect, impure calls in render). oxfmt
       --check on web/src. Knip (knip.json) over the root, web/ and desktop/: a file nothing
       imports, an export nothing outside its file uses, an unused dependency, an unlisted package.
       scripts/action-pins.ts: every uses: in .github/workflows and .github/actions names a
