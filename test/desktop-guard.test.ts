@@ -82,6 +82,8 @@ describe("kiwi-app:// sends a CSP (T184)", () => {
     // A relay that isn't one adds nothing to connect to.
     expect(csp("http://attacker.example")).not.toContain("attacker");
     for (const p of [csp("https://r.example")]) expect(p).not.toMatch(/unsafe-eval|script-src[^;]*unsafe-inline/);
+    expect(csp("https://r.example")).not.toContain("api.x.ai");
+    expect(csp("https://r.example")).not.toContain("worker-src");
   });
   test("it allows what the hosted web's CSP does (web/public/_headers), except WorkOS: in the app, main signs in", () => {
     const hosted = /Content-Security-Policy: (.*)/.exec(readFileSync(new URL("../web/public/_headers", import.meta.url), "utf8"))![1]!;

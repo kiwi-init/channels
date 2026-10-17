@@ -254,6 +254,10 @@ test("an outage checks membership now and then, not before every retry, and stil
   try {
     await until(() => seen.upgrades > BUDGET.outage.retries, "retries during the outage", 60_000);
     counted = { ...seen };
+  } catch (err) {
+    ac.abort();
+    await listening;
+    throw err;
   } finally {
     clearInterval(jump);
     down.stop(true);

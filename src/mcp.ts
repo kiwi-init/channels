@@ -46,11 +46,22 @@ const task = (id: string): Effect.Effect<number, Rejected> => {
 const kind = z.enum(CHAT_KINDS as [Kind, ...Kind[]]);
 
 /** Text plus one image block per attached image (newest first, at most a few). */
-function withImages(ch: Channel, text: string, messages: Message[]): Effect.Effect<Result, never, Relay> {
+function withImages(ch: Channel, text: string, messages: Message[], notices = true): Effect.Effect<Result, never, Relay> {
   const imgs = messages.filter((m) => m.imgs?.length).slice(-3);
   return Effect.map(
-    Effect.forEach(imgs, (m) => ch.fx.images(m.imgs!.slice(0, 3)).pipe(Effect.orElseSucceed((): InlineImage[] => []))),
-    (lists): Result => ({ content: [{ type: "text", text }, ...lists.flat().map((img): Content => ({ type: "image", data: img.data, mimeType: img.mime }))] }),
+    Effect.forEach(imgs, (m) => {
+      const wanted = m.imgs!.slice(0, 3);
+      return ch.fx.images(wanted).pipe(
+        Effect.orElseSucceed((): InlineImage[] => []),
+        Effect.map((got) => ({ got, notice: missingImages(m.seq, wanted.length, got.length) })),
+      );
+    }),
+    (results): Result => {
+      const lines = notices ? results.flatMap((r) => (r.notice ? [r.notice] : [])) : [];
+      return {
+        content: [{ type: "text", text: [text, ...lines].join("\n") }, ...results.flatMap((r) => r.got).map((img): Content => ({ type: "image", data: img.data, mimeType: img.mime }))],
+      };
+    },
   );
 }
 
@@ -490,8 +501,9 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         if (!m.imgs?.length) return yield* new Rejected(`message #${seq} has no images`);
         // Under the channel's own folder, so closing the channel deletes them too.
         const imgs = yield* s.ch.fx.images(m.imgs);
-        if (!imgs.length) return yield* new Rejected(`message #${seq}'s images are no longer on the relay`);
-        return [...saveImages(seq, imgs, dir ?? join(home(), "downloads", s.ch.roomId)), ...(missingImages(seq, m.imgs.length, imgs.length) ?? [])].join("\n");
+        if (!imgs.length) return yield* new Rejected(missingImages(seq, m.imgs.length, 0) ?? `message #${seq}'s images are no longer on the relay`);
+        const missing = missingImages(seq, m.imgs.length, imgs.length);
+        return [...saveImages(seq, imgs, dir ?? join(home(), "downloads", s.ch.roomId)), ...(missing ? [missing] : [])].join("\n");
       }),
     ),
   );
@@ -509,7 +521,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         if (!m || ignored(state.trust.get(seq))) return fail(`no message #${seq}`);
         const images = m.imgs?.length ? yield* s.ch.fx.images(m.imgs).pipe(Effect.orElseSucceed((): InlineImage[] => [])) : [];
         const saved = images.length ? saveImages(seq, images, join(home(), "downloads", s.ch.roomId)) : [];
-        return yield* withImages(s.ch, formatShown(m, messages, state, saved, s.me), [m]);
+        return yield* withImages(s.ch, formatShown(m, messages, state, saved, s.me), [m], false);
       }),
     ),
   );

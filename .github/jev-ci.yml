@@ -58,7 +58,7 @@ jobs:
 
   test-unit:
     name: test / unit
-    inputs: ["src/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "site/install.ps1", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/action-pins.ts", "desktop/src/**"]
+    inputs: ["src/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "site/install.ps1", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/action-pins.ts", "desktop/src/**", "desktop/build/entitlements.mac.plist"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "web/bun.lock", "scripts/ci-tests.ts"]
     description: >-
       Runs the unit tests with bun test: every test/*.test.ts except the slow suites in
@@ -72,7 +72,11 @@ jobs:
       wire web/src/lib/channel-remote.ts uses) against a local relay, failing if any member,
       owner, person or channel key reaches the window, plus the seat rules, the wire codec, the
       allowed calls and a scan of web/src for imports of Channel, seal/open or the keyring
-      outside web/src/lib/channel-local.ts. Fails if a tested module's behavior,
+      outside web/src/lib/channel-local.ts. And test/desktop-voice.test.ts: the desktop voice
+      store's CSP allows api.x.ai only when an xAI key is saved, the project key never reaches
+      the snapshot or the token IPC result, consent defaults off, and
+      desktop/build/entitlements.mac.plist has the audio-input entitlement.
+      Fails if a tested module's behavior,
       output text or exported names change. TMPDIR points through a symlink, as macOS's does,
       so a test that compares a tmp path with its realpath or process.cwd() fails here too.
 

@@ -5,6 +5,7 @@ import { setAccessibilityOption, useAccessibilityOption } from "@/lib/accessibil
 import { cx } from "@/lib/utils"
 import { useState } from "react"
 import { relayUrl } from "@/lib/relay"
+import { bridge, useSecrets } from "@/lib/secrets"
 import { version } from "../../../package.json"
 import { Button, Modal, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from "./kit"
 
@@ -72,6 +73,83 @@ function RelayField() {
   )
 }
 
+function VoiceFields() {
+  const b = bridge()
+  const snap = useSecrets()
+  const [key, setKey] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  if (!b?.setVoiceKey) return null
+  const fail = (e: unknown) => setError(e instanceof Error ? e.message.replace(/^.*?Error: /, "") : String(e))
+  const save = () => {
+    setError(null)
+    b.setVoiceKey(key).catch(fail)
+  }
+  const clear = () => {
+    setError(null)
+    setKey("")
+    b.setVoiceKey("").catch(fail)
+  }
+  const rooms = snap.channels.filter((c) => c.roomId)
+  return (
+    <div>
+      <p className="mb-2 text-ui font-medium text-ink">Voice</p>
+      <p className="mb-2 text-ui leading-normal text-ink-2">An xAI key lets this Mac talk with Grok Voice. Each channel stays off until you turn it on.</p>
+      <label htmlFor="voice-key" className="mb-2 block text-ui font-medium text-ink">
+        xAI key
+      </label>
+      <div className="flex gap-2">
+        <input
+          id="voice-key"
+          type="password"
+          value={key}
+          onChange={(e) => setKey(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && key.trim() && save()}
+          spellCheck={false}
+          autoComplete="off"
+          className="h-8 min-w-0 flex-1 rounded-row border border-line bg-transparent px-2 font-mono text-ui text-ink"
+        />
+        <Button variant="secondary" onClick={save} disabled={!key.trim()}>
+          Save
+        </Button>
+        {snap.voice.configured && (
+          <Button variant="secondary" onClick={clear}>
+            Remove
+          </Button>
+        )}
+      </div>
+      {snap.voice.configured && <p className="mt-1 text-ui text-ink-2">A key is saved on this Mac.</p>}
+      {rooms.length > 0 && (
+        <div className="mt-4 grid gap-1">
+          {rooms.map((c) => {
+            const id = c.roomId
+            if (!id) return null
+            const on = snap.voice.consent[id] === true
+            return (
+              <label key={id} className="flex items-center gap-2 text-ui text-ink">
+                <input
+                  type="checkbox"
+                  checked={on}
+                  onChange={(e) => {
+                    setError(null)
+                    b.setVoiceConsent(id, e.target.checked).catch(fail)
+                  }}
+                  className="size-4 accent-[var(--accent)]"
+                />
+                {c.name ?? c.label}
+              </label>
+            )
+          })}
+        </div>
+      )}
+      {error && (
+        <p className="mt-1 text-ui text-ink-2" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
+
 export function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const appearance = useAppearance()
   const size = useTextSize()
@@ -113,6 +191,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
             ]}
           />
           <RelayField />
+          <VoiceFields />
         </div>
         <div className="mt-6 flex items-center justify-between gap-3">
           <p className="min-w-0 truncate text-ui text-ink-2">Channels {version}</p>

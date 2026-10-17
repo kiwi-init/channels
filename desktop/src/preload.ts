@@ -6,7 +6,7 @@
 
 import { contextBridge, ipcRenderer } from "electron";
 
-import type { ChannelIdentityView, ChannelView, ComputerView, DaemonStatus, KeysPort, KeysPush, KeysReply, KeysRequest, KiwiBridge, PairAskView, PendingItem, PublicPerson, SignInResult, StoreSnapshot, UpdateView } from "./bridge.ts";
+import type { ChannelIdentityView, ChannelView, ComputerView, DaemonStatus, KeysPort, KeysPush, KeysReply, KeysRequest, KiwiBridge, PairAskView, PendingItem, PublicPerson, SignInResult, StoreSnapshot, UpdateView, VoiceAuth } from "./bridge.ts";
 
 const relayUrl = (ipcRenderer.sendSync("kiwi:snapshot-sync") as StoreSnapshot).relayUrl;
 
@@ -94,6 +94,9 @@ const kiwi: KiwiBridge = {
   openExternal: (url: string) => ipcRenderer.invoke("kiwi:open-external", url) as Promise<void>,
   getDeepLink: () => ipcRenderer.invoke("kiwi:deep-link") as Promise<string | null>,
   onDeepLink: (cb) => on("kiwi:deep-link", cb),
+  setVoiceKey: (key: string) => ipcRenderer.invoke("kiwi:voice-set-key", key) as Promise<void>,
+  setVoiceConsent: (roomId: string, on: boolean) => ipcRenderer.invoke("kiwi:voice-set-consent", roomId, on) as Promise<void>,
+  voiceToken: (roomId: string) => ipcRenderer.invoke("kiwi:voice-token", roomId) as Promise<VoiceAuth>,
 };
 
 contextBridge.exposeInMainWorld("kiwi", kiwi);

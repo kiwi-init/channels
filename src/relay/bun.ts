@@ -256,7 +256,7 @@ export function startRelay(
             }
             const pk = await runRoom(relay, db, authenticateSocket(req));
             const since = Number(url.searchParams.get("since") ?? 0) || 0;
-            if (server.upgrade(req, { data: { roomId: route.roomId, pk, since, presence: takesPresence(url), reads: wantsReads(url), echo: wantsEcho(url), watch: wantsWatch(url) }, headers: wsHeaders(req) })) return undefined;
+            if (server.upgrade(req, { data: { roomId: route.roomId, pk, since, presence: takesPresence(url) && !wantsWatch(url), reads: wantsReads(url), echo: wantsEcho(url), watch: wantsWatch(url) }, headers: wsHeaders(req) })) return undefined;
             return withCors(errorResponse(new UpdateRequired({ message: "expected websocket" })));
           }
           const result = await onHttp(relay, db, req, route.rest);

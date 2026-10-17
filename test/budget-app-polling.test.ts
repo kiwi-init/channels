@@ -107,16 +107,21 @@ const tendPass = async () => {
 
 describe("the app's sidebar and approval, idle, for 5 channels (3 owned)", () => {
   let before = 0;
-
-  test("before: GET / per channel every 15s and autoApprove + requests per owned channel every 20s", async () => {
+  const baseline = async (): Promise<number> => {
     const heads = await measure(headTick);
     const pass = await measure(tendPass);
-    before = (heads.http * 60_000) / HEADS_EVERY_BEFORE + (pass.http * 60_000) / TEND_EVERY_BEFORE;
-    console.log(`before: ${heads.http} http per 15s head tick ${JSON.stringify(heads.routes)}, ${pass.http} http per 20s approval pass ${JSON.stringify(pass.routes)} -> ${before} http/min idle`);
+    const rate = (heads.http * 60_000) / HEADS_EVERY_BEFORE + (pass.http * 60_000) / TEND_EVERY_BEFORE;
+    console.log(`before: ${heads.http} http per 15s head tick ${JSON.stringify(heads.routes)}, ${pass.http} http per 20s approval pass ${JSON.stringify(pass.routes)} -> ${rate} http/min idle`);
+    return rate;
+  };
+
+  test("before: GET / per channel every 15s and autoApprove + requests per owned channel every 20s", async () => {
+    before = await baseline();
     expect(before).toBeGreaterThan(BUDGET.idleHttpPerMinute);
   });
 
   test("after: one watch socket per channel, pushed heads and requests, a 5-minute safety poll", async () => {
+    if (!before) before = await baseline();
     let live = 0;
     const via: Pick<ChannelOps, "follow"> = {
       follow: (code, since, on, opts) => {

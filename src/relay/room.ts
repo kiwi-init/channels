@@ -775,6 +775,7 @@ export const storeBlob = Effect.fn("Room.storeBlob")(function* (id: string, byte
   let stored = db.storedBytes();
   if (stored + bytes.length > cap) stored -= db.dropOldest(stored + bytes.length - cap) + db.pruneBlobs();
   if (stored + bytes.length > cap) stored -= db.dropOldestBlobs(stored + bytes.length - cap);
+  if (stored + bytes.length > cap) stored -= db.dropSnapshot();
   db.putBlob(id, bytes, at);
   const u = db.counters();
   db.setCounters({ bytes: stored + bytes.length, day: u?.day ?? "", n: u?.n ?? 0, head });
