@@ -1,9 +1,9 @@
-import type { Channel, Live, OpenKind } from "@mc/client.ts"
+import type { Channel, Live, OpenKind, PresenceFields } from "@mc/client.ts"
 import { eachLive } from "@mc/client.ts"
-import type { Message } from "@mc/protocol.ts"
+import type { Message, Presence } from "@mc/protocol.ts"
 import { relayOrigin } from "@web/lib/relay"
 import * as Effect from "effect/Effect"
-import { fork } from "./runtime"
+import { fork, run } from "./runtime"
 
 export const PUBLIC_RELAY = "https://channels.kiwiinit.com"
 
@@ -23,7 +23,8 @@ export function setRelayUrl(raw: string): boolean {
 export interface Watch {
   message?: (m: Message) => void
   ready?: (head: number) => void
-  open?: (kind: OpenKind, outage: number | null) => void
+  open?: (kind: OpenKind, outage: number | null, announce?: (fields: PresenceFields) => void) => void
+  presence?: (p: Presence & { sigOk: boolean }) => void
   down?: (line: string) => void
   changed?: (what: "Info" | "Roster" | "Request") => void
   gone?: () => void
@@ -40,7 +41,10 @@ function hear(on: Watch, ev: Live): void {
       on.ready?.(ev.head)
       return
     case "Open":
-      on.open?.(ev.kind, ev.outage)
+      on.open?.(ev.kind, ev.outage, (fields) => void run(ev.presence(fields)).catch(() => {}))
+      return
+    case "Presence":
+      on.presence?.(ev.presence)
       return
     case "Down":
       on.down?.(`the relay has been out of reach for ${Math.round(ev.after / 1000)}s`)
@@ -60,7 +64,7 @@ export function watchChannel(ch: Channel, since: number, on: Watch): () => void 
   watching.get(room)?.()
   const stop = fork(
     eachLive(
-      ch.fx.live(since, { presence: false, reads: false }),
+      ch.fx.live(since, { presence: !!on.presence, reads: false }),
       (ev) => Effect.sync(() => hear(on, ev)),
       (line) => Effect.sync(() => on.down?.(line))
     ).pipe(Effect.catch(() => Effect.sync(() => on.gone?.())))
