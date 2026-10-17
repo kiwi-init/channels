@@ -3,6 +3,7 @@ import type { ChannelState } from "@mc/state.ts"
 import { memo, useCallback, useMemo, useRef, useState, type ReactNode } from "react"
 import { FlatList, Pressable, StyleSheet, View, type FlatListProps, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native"
 
+import { chipsFor } from "../lib/reactions"
 import { buildRows, type Row } from "../lib/timeline"
 import { useTheme } from "../theme/useTheme"
 import { Text } from "../ui/Text"
@@ -93,6 +94,7 @@ export function Conversation({ messages, state, me, nameOf, group = true, reveal
           adjacentReply={item.adjacentReply}
           highlighted={highlight === item.m.seq}
           receipt={receipt?.(item.m)}
+          reactions={chipsFor(state, item.m.seq, me, nameOf)}
           face={face?.(item.m)}
           quoted={quoted}
           nameOf={nameOf}
