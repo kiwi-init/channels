@@ -40,7 +40,7 @@ export const setupCommands: Record<string, Command> = {
         else if (process.platform === "win32") out(`PATH: to type plain kiwi, add ${binDir()} to your user Path (install.ps1 does it for you).\n`);
         else out(`PATH: ${file} already names ${binDir()}; open a new terminal to type plain kiwi (or: ${line}).\n`);
       }
-      out("To let this computer's agents in on their own, pair it with your Kiwi app: Your computers → Add a computer,");
+      out("To let this computer's agents in on their own, pair it with your Channels app: Your computers → Add a computer,");
       out("then run the kiwi pair kp1-… command it shows, here.");
     }),
 

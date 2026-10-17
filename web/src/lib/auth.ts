@@ -61,7 +61,7 @@ export async function tokenForCreate(fresh = false): Promise<string | null> {
     return (await b.devSignIn(devName())).token
   }
   if (m === "dev") return `dev:${devName()}`
-  throw new SignInUnavailable("Creating a channel on this relay needs sign-in, which the Kiwi desktop app does.")
+  throw new SignInUnavailable("Creating a channel on this relay needs sign-in, which the Channels desktop app does.")
 }
 
 /** The person's name as a dev relay's user (letters, digits, - and _). */

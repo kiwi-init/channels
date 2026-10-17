@@ -108,7 +108,7 @@ const signedIn = Effect.gen(function* () {
   const { req } = yield* Request_;
   if (!human) return null;
   const user = yield* Effect.promise(() => human.verify(req.headers.get(HUMAN_HEADER) ?? ""));
-  if (!user) return yield* new SignInRequired({ message: "sign in required: channels on this relay are owned and run by a signed-in human (sign in from the Kiwi app)" });
+  if (!user) return yield* new SignInRequired({ message: "sign in required: channels on this relay are owned and run by a signed-in human (sign in from the Channels app)" });
   return user;
 });
 

@@ -134,7 +134,11 @@ export function Sidebar({
               className={cx("glass flex h-9 items-center gap-2 rounded-full pr-4 pl-3 text-ui font-medium", update.state === "ready" ? "text-accent-text" : "text-ink-2")}
             >
               <Icon icon={Download04Icon} size={16} className="shrink-0" />
-              {update.state === "downloading" ? `Downloading Kiwi ${update.version}…` : update.state === "ready" ? `Restart to update to ${update.version}` : `Kiwi ${update.version} is out · Get it`}
+              {update.state === "downloading"
+                ? `Downloading Channels ${update.version}…`
+                : update.state === "ready"
+                  ? `Restart to update to ${update.version}`
+                  : `Channels ${update.version} is out · Get it`}
             </button>
           )}
           <Menu
@@ -250,12 +254,16 @@ export function Rail({
           <Tooltip
             side="right"
             label={
-              update.state === "downloading" ? `Downloading Kiwi ${update.version}…` : update.state === "ready" ? `Restart to update to ${update.version}` : `Kiwi ${update.version} is out · Get it`
+              update.state === "downloading"
+                ? `Downloading Channels ${update.version}…`
+                : update.state === "ready"
+                  ? `Restart to update to ${update.version}`
+                  : `Channels ${update.version} is out · Get it`
             }
           >
             <button
               type="button"
-              aria-label={update.state === "ready" ? `Restart to update to ${update.version}` : `Kiwi ${update.version} is out`}
+              aria-label={update.state === "ready" ? `Restart to update to ${update.version}` : `Channels ${update.version} is out`}
               disabled={update.state === "downloading"}
               onClick={() => (update.state === "ready" ? restartToUpdate() : openRelease(update))}
               className={cx(RAIL_BUTTON, "relative", update.state === "ready" && "text-accent-text")}

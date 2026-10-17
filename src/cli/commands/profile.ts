@@ -19,7 +19,7 @@ export const profileCommands: Record<string, Command> = {
         const held = new Map([...state.members.values()].filter((m) => m.active && m.color).map((m) => [m.color!, m.name]));
         return out(COLORS.map((c) => `${c.padEnd(7)} ${held.get(c) ?? "free"}`).join("\n"));
       }
-      if (b !== undefined && a !== s.me) return yield* die("you pick your own colour; the owner sets anyone else's in the Kiwi app");
+      if (b !== undefined && a !== s.me) return yield* die("you pick your own colour; the owner sets anyone else's in the Channels app");
       const pick = b ?? a;
       const color = pick === "none" ? null : isColor(pick) ? pick : yield* die(`"${pick}" isn't a colour: ${COLORS.join(", ")} (or none)`);
       yield* s.setColor(s.me, color);

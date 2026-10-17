@@ -62,7 +62,7 @@ export function remoteOps(port: KeysPort): ChannelOps {
     byRemote.clear()
     for (const s of subs) {
       s.remote = null
-      s.on({ _tag: "Status", line: "reconnecting to the part of Kiwi that holds your keys" })
+      s.on({ _tag: "Status", line: "reconnecting to the part of Channels that holds your keys" })
       start(s)
     }
   })

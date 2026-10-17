@@ -31,7 +31,7 @@ exports[`the relay's error texts are exactly these 1`] = `
   "400 the owner's record isn't changed this way",
   "401 bad or expired signature",
   "401 create must be signed by the owner",
-  "401 sign in required: channels on this relay are owned and run by a signed-in human (sign in from the Kiwi app)",
+  "401 sign in required: channels on this relay are owned and run by a signed-in human (sign in from the Channels app)",
   "403 <betaMessage(policy)>",
   "403 not a member of this channel",
   "403 not a member of this channel: \${GONE_WORDS[how]}",

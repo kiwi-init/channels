@@ -78,7 +78,7 @@ export function Welcome({ onNew, onJoin }: { onNew: () => void; onJoin: () => vo
   if (person)
     return (
       <Stage width={460}>
-        <RobotAvatar name="kiwi" size={88} className="-ml-1" label="Kiwi" />
+        <RobotAvatar name="kiwi" size={88} className="-ml-1" label="Channels" />
         <h1 className="mt-4 text-display font-semibold">Nothing open</h1>
         <p className="mt-1.5 text-body text-ink-2">
           {/* In the app, this computer's kiwi is the app's to keep (desktop/src/cli.ts). */}
@@ -153,7 +153,7 @@ export function NewChannel({
     } catch (err) {
       const gone = isSignInGone(err)
       setNeedSignIn(gone && !!bridge())
-      setError(gone ? (bridge() ? "You need to sign in to create a channel on this relay." : "Creating a channel on this relay needs sign-in, which the Kiwi desktop app does.") : errorText(err))
+      setError(gone ? (bridge() ? "You need to sign in to create a channel on this relay." : "Creating a channel on this relay needs sign-in, which the Channels desktop app does.") : errorText(err))
     } finally {
       setBusy(false)
     }
