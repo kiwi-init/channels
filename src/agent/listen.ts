@@ -6,7 +6,7 @@ import * as Fiber from "effect/Fiber";
 import type * as Scoped from "effect/Scope";
 import { Channel, eachLive, QUIET_DROP_MS, reason, type ChannelGone, type Live, type Refused } from "../client.ts";
 import { Cache, Cursor, Keystore } from "../config.ts";
-import { daemonSeat } from "../daemon.ts";
+import { daemonSeat } from "../daemon/rpc.ts";
 import { inlineText } from "../membership.ts";
 import { isReach, PROTOCOL_VERSION, type Message, type Presence } from "../protocol.ts";
 import { TOO_MANY_REQUESTS } from "../sas.ts";

@@ -3,7 +3,8 @@ import { Channel, type Info, type MemberRow, type Refused, type Relay } from "..
 import { Cache, Cursor, type ChannelConfig } from "../config.ts";
 import type { ChannelAccess } from "../crypto.ts";
 import type { Identity } from "../identity.ts";
-import { daemonMark, daemonPeek, type DaemonPeek } from "../daemon.ts";
+import type { DaemonPeek } from "../daemon/protocol.ts";
+import { daemonMark, daemonPeek } from "../daemon/rpc.ts";
 import { GENERAL_ROOM, PAGE_LIMIT, type Message } from "../protocol.ts";
 import { Rejected } from "../refusals.ts";
 import { findRoom, fold, toRoster, type ChannelState, type FoldBase, type GuardFloor, type Roster, type RoomsFloor } from "../state.ts";
