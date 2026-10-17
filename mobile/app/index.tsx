@@ -80,6 +80,9 @@ export default function Home() {
         <Text variant="display">Channels</Text>
       </View>
       <ChannelList rows={rows} news={news} now={now} onSelect={open} onNew={() => setCreating(true)} />
+      <Text variant="body" tone="accentText" accessibilityRole="button" accessibilityLabel="Link this phone to your desktop" onPress={() => router.push("/link")} style={styles.gallery}>
+        Link to desktop (scan QR)
+      </Text>
       <Text variant="meta" tone="ink3" accessibilityRole="button" accessibilityLabel="Open the gallery" onPress={() => router.push("/gallery")} style={styles.gallery}>
         Gallery
       </Text>
