@@ -223,7 +223,7 @@ describe("the join code check", () => {
     expect(ask.status).toBe(426);
     expect(((await ask.json()) as { error: string }).error).toContain("update kiwi");
     // An old owner CLI lists requests without asking for the checked kind.
-    const request = (ownerCh as unknown as { request: (path: string) => Effect.Effect<unknown, unknown, Relay> }).request("/requests");
+    const request = (ownerCh as unknown as { core: { request: (path: string) => Effect.Effect<unknown, unknown, Relay> } }).core.request("/requests");
     const listOld = Effect.runPromise(Effect.provideService(request, Relay, fetchRelay));
     await expect(listOld).rejects.toMatchObject({ status: 426 });
   });
@@ -238,7 +238,7 @@ describe("the join code check", () => {
     await checked(ownerCh, relay, code, [{ id: thief, requestId: thiefAsk.requestId }]);
     // The old reclaim: the owner's own signature, a checked request, and the seat to move.
     const body = JSON.stringify({ pk: thief.pk, xpk: thief.xpk, rec: "sealed", keys: { "0": "wrapped" }, request: thiefAsk.requestId, replaces: win.pk });
-    const post = (ownerCh as unknown as { request: (path: string, init: RequestInit) => Effect.Effect<unknown, unknown, Relay> }).request("/members", { method: "POST", body });
+    const post = (ownerCh as unknown as { core: { request: (path: string, init: RequestInit) => Effect.Effect<unknown, unknown, Relay> } }).core.request("/members", { method: "POST", body });
     await expect(Effect.runPromise(Effect.provideService(post, Relay, fetchRelay))).rejects.toMatchObject({ status: 400 });
     const members = await ownerCh.members();
     expect(members.find((m) => m.pk === win.pk)?.active).toBe(true);
