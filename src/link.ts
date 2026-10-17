@@ -15,6 +15,7 @@ export interface LinkCode {
   secret: string;
   dxpk: string;
   personFp: string;
+  relay: string;
 }
 
 export interface LinkKeys {
@@ -69,15 +70,25 @@ export async function personFingerprint(personPk: string): Promise<string> {
 }
 
 export function linkCode(c: LinkCode): string {
-  return `${LINK_PREFIX}${c.secret}.${c.dxpk}.${c.personFp}`;
+  return `${LINK_PREFIX}${c.secret}.${c.dxpk}.${c.personFp}.${b64url(enc.encode(c.relay))}`;
+}
+
+function relayOf(text: string): string | null {
+  try {
+    const u = new URL(dec.decode(fromB64url(text)));
+    return (u.protocol === "https:" || u.protocol === "http:") && u.hostname ? u.origin : null;
+  } catch {
+    return null;
+  }
 }
 
 export function readLinkCode(text: string): LinkCode | null {
   const t = text.trim();
   if (!t.startsWith(LINK_PREFIX)) return null;
-  const [secret, dxpk, personFp, ...extra] = t.slice(LINK_PREFIX.length).split(".");
-  if (extra.length || !secret || !dxpk || !personFp) return null;
-  return B43.test(secret) && B43.test(dxpk) && FP16.test(personFp) ? { secret, dxpk, personFp } : null;
+  const [secret, dxpk, personFp, where, ...extra] = t.slice(LINK_PREFIX.length).split(".");
+  if (extra.length || !secret || !dxpk || !personFp || !where || where.length > 300) return null;
+  const relay = relayOf(where);
+  return relay && B43.test(secret) && B43.test(dxpk) && FP16.test(personFp) ? { secret, dxpk, personFp, relay } : null;
 }
 
 export const newLinkSecret = newSecret;

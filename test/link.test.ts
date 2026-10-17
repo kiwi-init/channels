@@ -44,7 +44,7 @@ async function desktop(channels = 3, fat = 0) {
   const person = await generateIdentity("Ada Lovelace");
   const secret = newLinkSecret();
   const keys = await newLinkKeys();
-  const code: LinkCode = { secret, dxpk: keys.xpk, personFp: await personFingerprint(person.pk) };
+  const code: LinkCode = { secret, dxpk: keys.xpk, personFp: await personFingerprint(person.pk), relay };
   const chans: LinkChannel[] = await Promise.all(
     Array.from({ length: channels }, async (_, i) => {
       const id = await generateIdentity(`member-${i}`);
@@ -68,7 +68,10 @@ describe("the link code", () => {
     expect(linkCode(d.code).startsWith(LINK_PREFIX)).toBe(true);
     expect(readLinkCode(linkCode(d.code))).toEqual(d.code);
     expect(readLinkCode(`  ${linkCode(d.code)}\n`)).toEqual(d.code);
-    for (const bad of ["", "kp1-" + d.secret, `${LINK_PREFIX}${d.secret}`, `${LINK_PREFIX}${d.secret}.${d.keys.xpk}`, `${LINK_PREFIX}${d.secret}.${d.keys.xpk}.short`, `${linkCode(d.code)}.extra`, `${LINK_PREFIX}bad.${d.keys.xpk}.${d.code.personFp}`]) expect(readLinkCode(bad)).toBeNull();
+    const where = linkCode(d.code).split(".")[3]!;
+    const ok = `${LINK_PREFIX}${d.secret}.${d.keys.xpk}.${d.code.personFp}`;
+    for (const bad of ["", "kp1-" + d.secret, `${LINK_PREFIX}${d.secret}`, `${LINK_PREFIX}${d.secret}.${d.keys.xpk}`, `${LINK_PREFIX}${d.secret}.${d.keys.xpk}.short.${where}`, ok, `${ok}.`, `${ok}.${where}.extra`, `${LINK_PREFIX}bad.${d.keys.xpk}.${d.code.personFp}.${where}`, `${ok}.${Buffer.from("ftp://relay.example").toString("base64url")}`, `${ok}.${Buffer.from("not a url").toString("base64url")}`]) expect(readLinkCode(bad)).toBeNull();
+    expect(readLinkCode(linkCode({ ...d.code, relay: "https://relay.example.com:8443/some/path" }))?.relay).toBe("https://relay.example.com:8443");
   });
 });
 
