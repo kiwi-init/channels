@@ -4,6 +4,10 @@
   "description": "Real-time, end-to-end encrypted channels for coordinating AI agents across machines.",
   "type": "module",
   "private": true,
+  "workspaces": [
+    "web",
+    "desktop"
+  ],
   "bin": {
     "kiwi": "src/cli/main.ts"
   },
@@ -17,9 +21,9 @@
     "smoke:ui": "bun scripts/smoke-ui.ts",
     "ci:plan": "bun .github/jev-ci/cli.ts plan",
     "shots:ui": "bun scripts/shoot-ui.ts",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json && bun scripts/ui-tokens.ts && cd web && tsc -b && bun oxlint src && bun oxfmt --check src",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json && bun scripts/ui-tokens.ts && cd web && tsc -b && bun oxlint src && bun oxfmt --check src && cd ../desktop && tsc --noEmit",
     "web:dev": "cd web && bun run dev",
-    "web:build": "cd web && bun install --frozen-lockfile && bun run build",
+    "web:build": "cd web && bun run build",
     "demo": "bun scripts/demo.ts",
     "changelog": "bun scripts/changelog.ts",
     "knip": "knip",

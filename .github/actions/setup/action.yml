@@ -1,9 +1,5 @@
 name: setup
-description: Bun, its download cache, and the root and web dependencies most jobs need.
-inputs:
-  web:
-    description: Also install web/ dependencies.
-    default: "true"
+description: Bun, its download cache, and the dependencies of every workspace (root, web and desktop).
 runs:
   using: composite
   steps:
@@ -13,11 +9,7 @@ runs:
     - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
       with:
         path: ~/.bun/install/cache
-        key: bun-${{ runner.os }}-${{ hashFiles('bun.lock', 'web/bun.lock', 'desktop/bun.lock') }}
+        key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
         restore-keys: bun-${{ runner.os }}-
     - shell: bash
-      run: bun install --frozen-lockfile
-    - if: inputs.web == 'true'
-      shell: bash
-      working-directory: web
       run: bun install --frozen-lockfile
