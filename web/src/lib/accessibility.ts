@@ -72,10 +72,6 @@ export function useAccessibilityOption(option: AccessibilityOption): boolean {
   )
 }
 
-export function useReducedMotionActive(): boolean {
-  return useSyncExternalStore(subscribe, reducedMotionActive, () => false)
-}
-
 function subscribe(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
