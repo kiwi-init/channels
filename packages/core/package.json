@@ -1,0 +1,12 @@
+{
+  "name": "@kiwi/core",
+  "private": true,
+  "description": "Protocol, crypto, state folding and the relay client, shared by the kiwi CLI, the relay, the web dashboard and the desktop app.",
+  "type": "module",
+  "exports": {
+    "./*": "./src/*"
+  },
+  "dependencies": {
+    "effect": "4.0.5"
+  }
+}

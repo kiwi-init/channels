@@ -26,6 +26,12 @@
         "src/relay/bun.ts"
       ]
     },
+    "packages/core": {
+      "includeEntryExports": true,
+      "project": [
+        "src/**/*.ts"
+      ]
+    },
     "web": {
       "entry": [
         "src/**/*.test.{ts,tsx}"

@@ -1,6 +1,6 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "types": ["@cloudflare/workers-types"] },
-  "include": ["src/relay/worker.ts", "src/relay/room.ts", "src/protocol.ts"],
+  "include": ["src/relay/worker.ts", "src/relay/room.ts", "packages/core/src/protocol.ts"],
   "exclude": []
 }

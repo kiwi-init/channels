@@ -5,6 +5,7 @@
   "type": "module",
   "private": true,
   "workspaces": [
+    "packages/*",
     "web",
     "desktop"
   ],
@@ -21,7 +22,7 @@
     "smoke:ui": "bun scripts/smoke-ui.ts",
     "ci:plan": "bun .github/jev-ci/cli.ts plan",
     "shots:ui": "bun scripts/shoot-ui.ts",
-    "lint": "oxlint src desktop/src desktop/scripts scripts test .github/jev-ci",
+    "lint": "oxlint src packages/core/src desktop/src desktop/scripts scripts test .github/jev-ci",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json && bun run lint && bun scripts/ui-tokens.ts && cd web && tsc -b && bun oxlint src && bun oxfmt --check src && cd ../desktop && tsc --noEmit",
     "web:dev": "cd web && bun run dev",
     "web:build": "cd web && bun run build",
@@ -40,6 +41,7 @@
     "wrangler": "^4.151.0"
   },
   "dependencies": {
+    "@kiwi/core": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "effect": "4.0.5",
     "just-bash": "3.6.0",

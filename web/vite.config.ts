@@ -8,12 +8,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": resolve(import.meta.dirname, "./src"),
-      // Protocol, crypto and client code shared with the CLI.
-      "@mc": resolve(import.meta.dirname, "../src"),
     },
   },
   server: {
-    fs: { allow: [resolve(import.meta.dirname, "..")] },
     // `bun run relay:dev` in the repo root serves the relay on :8787.
     proxy: { "/v1": { target: "http://localhost:8787", ws: true } },
   },
