@@ -14,6 +14,7 @@ export interface TimelineOptions {
   me: string
   revealed?: boolean
   now?: number
+  hide?: (seq: number) => boolean
 }
 
 function dayStart(ts: number): number {
@@ -58,8 +59,8 @@ function shows(m: Message, state: ChannelState, revealed: boolean): boolean {
   return true
 }
 
-export function buildRows(messages: readonly Message[], state: ChannelState, { me, revealed = false, now = Date.now() }: TimelineOptions): Row[] {
-  const visible = messages.filter((m) => shows(m, state, revealed))
+export function buildRows(messages: readonly Message[], state: ChannelState, { me, revealed = false, now = Date.now(), hide }: TimelineOptions): Row[] {
+  const visible = messages.filter((m) => shows(m, state, revealed) && !hide?.(m.seq))
   const rows: Row[] = []
   let day = -1
   let previous: Message | null = null

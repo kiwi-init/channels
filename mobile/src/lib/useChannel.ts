@@ -11,7 +11,7 @@ export interface ChannelHandle {
   messages: readonly Message[]
   state: ChannelState
   connected: boolean
-  send(body: string, to?: string[]): Promise<void>
+  send(body: string, to?: string[], re?: number[]): Promise<void>
   unread: number
 }
 
@@ -85,9 +85,9 @@ export function useChannel(channel: Channel | null, memberPk: string, history: H
   const state = useMemo(() => fold([...messages], roster, now), [messages, roster, now])
 
   const send = useCallback(
-    async (body: string, to?: string[]) => {
+    async (body: string, to?: string[], re?: number[]) => {
       if (!channel) return
-      await channel.send(body, to && to.length ? { to } : {})
+      await channel.send(body, { ...(to && to.length ? { to } : {}), ...(re && re.length ? { re } : {}) })
     },
     [channel]
   )

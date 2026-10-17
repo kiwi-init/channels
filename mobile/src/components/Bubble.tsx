@@ -8,6 +8,7 @@ import { excerpt, forgedNote, isImageOnly, phrase } from "../lib/bubble"
 import { useTheme } from "../theme/useTheme"
 import { Text } from "../ui/Text"
 import type { Chip } from "../lib/reactions"
+import { repliesLabel } from "../lib/thread"
 import { Markdown } from "./Markdown"
 import { ReactionChip } from "./ReactionChip"
 
@@ -23,6 +24,8 @@ export interface BubbleProps {
   receipt?: string
   direct?: string
   reactions?: Chip[]
+  replies?: number
+  onOpenThread?: (root: number) => void
   face?: ReactNode
   quoted: (seq: number) => Message | undefined
   nameOf: (name: string) => string
@@ -57,7 +60,27 @@ function Attached({ img }: { img: ImageAttachment }) {
   return <Image accessibilityLabel={img.name} source={{ uri: `data:${img.mime};base64,${img.data}` }} style={[styles.image, { borderRadius: theme.radius.bubble }]} />
 }
 
-export const Bubble = memo(function Bubble({ m, me, trust, first, last, group, adjacentReply, highlighted, receipt, direct, reactions, face, quoted, nameOf, onJump, onReply, onMenu }: BubbleProps) {
+export const Bubble = memo(function Bubble({
+  m,
+  me,
+  trust,
+  first,
+  last,
+  group,
+  adjacentReply,
+  highlighted,
+  receipt,
+  direct,
+  reactions,
+  replies,
+  onOpenThread,
+  face,
+  quoted,
+  nameOf,
+  onJump,
+  onReply,
+  onMenu,
+}: BubbleProps) {
   const theme = useTheme()
   const forged = ignored(trust)
   const mine = m.from === me
@@ -132,6 +155,13 @@ export const Bubble = memo(function Bubble({ m, me, trust, first, last, group, a
             ))}
           </View>
         ) : null}
+        {replies && onOpenThread ? (
+          <Pressable accessibilityRole="button" accessibilityLabel={`Open thread, ${repliesLabel(replies)}`} onPress={() => onOpenThread(m.seq)} style={styles.thread}>
+            <Text variant="meta" weight="medium" tone="ink2">
+              {repliesLabel(replies)}
+            </Text>
+          </Pressable>
+        ) : null}
         {receipt && mine && !forged ? (
           <Text variant="stamp" tone="ink3" style={styles.note}>
             {receipt}
@@ -165,6 +195,7 @@ const styles = StyleSheet.create({
   image: { width: 180, height: 180 },
   imageHolder: { width: 128, height: 96, alignItems: "center", justifyContent: "center" },
   reactions: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 2, paddingHorizontal: 8 },
+  thread: { paddingHorizontal: 12, paddingVertical: 6 },
   note: { paddingHorizontal: 12, marginTop: 2 },
   tail: { position: "absolute", bottom: 0, zIndex: -1, width: 28, height: 20 },
   tailRight: { right: -8 },
