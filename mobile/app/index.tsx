@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { StyleSheet, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 
@@ -7,6 +7,7 @@ import { JoinSheet } from "../src/components/JoinSheet"
 import { NewChannelSheet } from "../src/components/NewChannelSheet"
 import { useEngine, usePerson, useSeats } from "../src/lib/EngineProvider"
 import { joinCodeFromInput } from "../src/lib/deep-link"
+import { takeJoin } from "../src/lib/pendingJoin"
 import { FirstRun } from "../src/screens/FirstRun"
 import { useTheme } from "../src/theme/useTheme"
 import { ChannelList, type ChannelRowView } from "../src/ui/ChannelList"
@@ -30,6 +31,12 @@ export default function Home() {
     ],
     [joined, waiting]
   )
+  const hasPerson = !!person
+  useEffect(() => {
+    if (!hasPerson) return
+    const held = takeJoin()
+    if (held) router.replace({ pathname: "/join/[code]", params: { code: held } })
+  }, [hasPerson, router])
   const news = useMemo(() => rows.map(() => ({ fresh: false, needs: 0 })), [rows])
 
   if (!person) return <FirstRun onContinue={async (name) => void (await engine.createPerson(name))} />
