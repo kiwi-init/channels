@@ -14,6 +14,7 @@ export type Item = {
   title: string
   body: string
   number?: number
+  branch?: string
 }
 
 export async function gh(path: string, init: RequestInit = {}): Promise<Response> {
@@ -64,7 +65,7 @@ export function busBranches(repo: string, main: string): Item[] {
     })
 }
 
-type Pull = { number: number; title: string; body: string | null; head: { sha: string; repo: { full_name: string } | null }; base: { ref: string } }
+type Pull = { number: number; title: string; body: string | null; head: { sha: string; ref: string; repo: { full_name: string } | null }; base: { ref: string } }
 type IssueEvent = { event: string; label?: { name: string }; actor: { login: string } | null; created_at: string }
 
 export type Queued = { items: Item[]; failed: { key: string; error: string }[] }
@@ -96,6 +97,7 @@ export async function queuedPulls(repo: string, cfg: BusConfig): Promise<Queued>
         title: `${pr.title} (#${pr.number})`,
         body: (pr.body ?? "").trim(),
         number: pr.number,
+        branch: pr.head.ref,
       })
     } catch (e) {
       const error = (e as Error).message
