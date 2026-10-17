@@ -16,7 +16,7 @@ import { answerPair, newSecret, openMailbox, pairCode, readPairAsk, type Mailbox
 import { certifyMachine } from "../../src/person.ts";
 import { compareVersions, ensureOnPath, keepCli } from "./cli.ts";
 import { acceptSeat, APP_HOST, APP_SCHEME, claimFor, csp, externalUrl, fileFor, isAppUrl, mediaAllowed, mergePublicChannels, migrateEntries, normalizeRelay, publicComputer, publicPerson, readStore, snapshotOf, withAccess, writePrivate } from "./guard.ts";
-import type { HostToKeys, KeysToHost } from "./keyring.ts";
+import type { HostToKeys, KeysToHost } from "./keys-server.ts";
 import { openInBrowser } from "./open.ts";
 import { applyUpdate, startUpdates, updateState } from "./updater.ts";
 import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, spawnDaemon, type HelloResult } from "./daemon-client.ts";

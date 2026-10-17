@@ -68,11 +68,11 @@ jobs:
       signing, scopes and roles, routing and auth tables, error texts, the install scripts,
       hooks and harness detection, the history cache, the desktop app's node-only helpers, the
       public site's invite parsing (site/app.js, test/site.test.ts), scripts/action-pins.ts.
-      Also test/desktop-keys.test.ts: the desktop key process (desktop/src/keyring.ts, over the
-      wire web/src/lib/channel-remote.ts uses) against a local relay, failing if any member,
+      Also test/desktop-keys.test.ts: the desktop key process (desktop/src/keyring.ts and keys-server.ts,
+      over the wire web/src/lib/channel-remote.ts uses) against a local relay, failing if any member,
       owner, person or channel key reaches the window, plus the seat rules, the wire codec, the
       allowed calls and a scan of web/src for imports of Channel, seal/open or the keyring
-      outside web/src/lib/channel-local.ts. And test/desktop-voice.test.ts: the desktop voice
+      or keys server outside web/src/lib/channel-local.ts. And test/desktop-voice.test.ts: the desktop voice
       store's CSP allows api.x.ai only when an xAI key is saved, the project key never reaches
       the snapshot or the token IPC result, consent defaults off, and
       desktop/build/entitlements.mac.plist has the audio-input entitlement.
