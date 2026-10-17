@@ -17,6 +17,7 @@ export interface Engine {
   subscribe(listener: () => void): () => void
   load(): Promise<void>
   createPerson(name: string): Promise<PersonView>
+  adopt(person: PersonView, channels: readonly ChannelIdentityView[]): Promise<void>
   requestJoin(code: string, name?: string): Promise<ChannelView>
   checkJoin(code: string): Promise<JoinCheck>
   channel(code: string): Channel | null
@@ -99,6 +100,13 @@ export function createEngine(secrets: Secrets, relay: () => string = relayUrl): 
       person = made
       emit()
       return made
+    },
+    async adopt(next, entries) {
+      await secrets.savePerson(next)
+      for (const entry of entries) await secrets.saveChannel(entry)
+      person = next
+      seats = [...seats.filter((seat) => !entries.some((entry) => entry.code === seat.code && entry.pk === seat.pk)), ...entries]
+      emit()
     },
     requestJoin(code, name) {
       if (!person) throw new Error("make your person key first")
