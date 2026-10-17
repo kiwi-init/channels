@@ -16,7 +16,7 @@ export function out(line: string): void {
   process.stdout.write(line + "\n");
 }
 
-export const NAME_RE = /^[\p{L}\p{N}_.\-]{1,32}$/u;
+export const NAME_RE = /^[\p{L}\p{N}_.-]{1,32}$/u;
 
 export function relayUrl(): string {
   return (opt.relay ?? process.env.KIWI_RELAY ?? DEFAULT_RELAY).replace(/\/+$/, "");

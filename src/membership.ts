@@ -139,7 +139,7 @@ export interface Member extends MemberInfo {
   signedBy?: string;
 }
 
-export const NAME_RE = /^[\p{L}\p{N}_.\-]{1,32}$/u;
+export const NAME_RE = /^[\p{L}\p{N}_.-]{1,32}$/u;
 
 /** Names nobody may be admitted under: they'd read as someone or something else. */
 export const RESERVED_NAMES = new Set(["human", "owner", "you", "me", "all", "everyone", "system", "kiwi", "admin"]);
