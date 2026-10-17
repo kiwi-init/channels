@@ -76,8 +76,6 @@ function RelayField() {
   )
 }
 
-// Backs the person key and channel identities up to the person's account, sealed under six words only
-// they hold. The words are shown once, here; the relay keeps ciphertext it cannot open.
 function BackupField() {
   const bridge = (window as unknown as { kiwi?: RelayBridge }).kiwi
   const [at, setAt] = useState<number | null>(null)
