@@ -167,7 +167,9 @@ export function autoInstallExtraHooks(): string | null {
     try {
       if (extraInstalled(h)) continue;
       wrote.push(`${HARNESS_LABEL[h]} hooks (${installExtra(h)})`);
-    } catch {}
+    } catch {
+      // A corrupt file must not fail join.
+    }
   }
   return wrote.length ? wrote.join(", ") : null;
 }

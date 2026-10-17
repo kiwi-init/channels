@@ -60,7 +60,9 @@ export function editKimiConfig(path: string, add: boolean): void {
   let same = false;
   try {
     same = Bun.deepEquals(parseToml(after), kimiExpected(parseToml(before), add));
-  } catch {}
+  } catch {
+    // Either side isn't valid TOML: same stays false and the edit is refused below.
+  }
   if (!same) throw new Error(`kiwi can't edit ${path} safely; ${add ? "add" : "remove"} its [[hooks]] entry for \`${hookCommand(KIMI_STOP)}\` by hand`);
   if (after === before) return;
   if (!after) {

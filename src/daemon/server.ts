@@ -47,13 +47,17 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   if (process.platform !== "win32") {
     try {
       rmSync(sock, { force: true });
-    } catch {}
+    } catch {
+      // Giving up a stale path is the next line's error, not this one's.
+    }
   }
   await ensureMachine(process.env.KIWI_RELAY ?? DEFAULT_RELAY);
   if (process.platform !== "win32" && (!existed || ours)) {
     try {
       chmodSync(dir, 0o700);
-    } catch {}
+    } catch {
+      // A directory this user can't chmod must not stop the daemon.
+    }
   }
 
   const seats = new Map<string, Seat>();
@@ -599,7 +603,9 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   if (process.platform !== "win32") {
     try {
       chmodSync(sock, 0o600);
-    } catch {}
+    } catch {
+      // Same as the home chmod: a mode this user can't set must not stop the daemon.
+    }
   }
 
   const tick = setInterval(() => {
@@ -615,18 +621,24 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     for (const conn of [...conns]) {
       try {
         conn.socket.end();
-      } catch {}
+      } catch {
+        // Already gone; killConn below still reaps it.
+      }
       killConn(conn);
     }
     for (const seat of seats.values()) endSeat(seat);
     seats.clear();
     try {
       server.stop();
-    } catch {}
+    } catch {
+      // Already stopped; the socket file below is what matters.
+    }
     if (process.platform !== "win32") {
       try {
         rmSync(sock, { force: true });
-      } catch {}
+      } catch {
+        // A stale socket file is harmless: the next start removes it.
+      }
     }
   };
 

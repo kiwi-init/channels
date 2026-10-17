@@ -22,7 +22,9 @@ export const fileRecordMemory = {
       let all: Record<string, Member> = {};
       try {
         all = JSON.parse(readFileSync(path, "utf8")) as Record<string, Member>;
-      } catch {}
+      } catch {
+        // First record for this room, or a torn file: start over (the relay serves them all again).
+      }
       all[pk] = m;
       writePrivate(path, JSON.stringify(all));
     });
@@ -87,7 +89,9 @@ export function fileBlobs(most = BLOB_CACHE_BYTES): BlobMemory {
       try {
         writePrivate(join(blobDir(room), id), blob);
         trimBlobs(blobDir(room), most);
-      } catch {}
+      } catch {
+        // Only a cache: a blob not kept here is fetched from the relay again.
+      }
     },
     drop(room, id) {
       if (!BLOB_ID_RE.test(id)) return;
@@ -113,7 +117,9 @@ export function readCache(roomId: string): Message[] {
     try {
       const m = JSON.parse(line) as Message;
       bySeq.set(m.seq, m);
-    } catch {}
+    } catch {
+      // A torn final line from a crash mid-write; the next sync refetches it.
+    }
   }
   const messages = [...bySeq.values()].sort((a, b) => a.seq - b.seq);
   if (lines > messages.length) {

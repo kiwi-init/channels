@@ -81,7 +81,9 @@ export function withLock<T>(lock: string, fn: () => T): T {
       try {
         const age = Date.now() - statSync(lock).mtimeMs;
         if (age > 5_000) rmSync(lock, { recursive: true, force: true });
-      } catch {}
+      } catch {
+        // The lock went away before it could be checked: the next try takes it.
+      }
       if (Date.now() > deadline) throw new Error(`couldn't lock ${lock}; if no kiwi is running, delete it`);
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 15);
     }
