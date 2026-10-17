@@ -3,7 +3,7 @@ import { newSecret, openMailbox, type Mailbox } from "./mailbox.ts";
 
 export const LINK_PREFIX = "kl1-";
 export const LINK_CHUNK_BYTES = 24 * 1024;
-export const LINK_MAX_CHUNKS = 64;
+const LINK_MAX_CHUNKS = 64;
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
@@ -22,7 +22,7 @@ export interface LinkKeys {
   xsk: string;
 }
 
-export interface LinkPerson {
+interface LinkPerson {
   name: string;
   pk: string;
   sk: string;
@@ -96,7 +96,7 @@ export async function linkDigits(secret: string, dxpk: string, pxpk: string): Pr
   return String(n % 1_000_000).padStart(6, "0");
 }
 
-export async function chunkSecret(secret: string, i: number): Promise<string> {
+async function chunkSecret(secret: string, i: number): Promise<string> {
   if (!B43.test(secret) || !Number.isInteger(i) || i < 0 || i >= LINK_MAX_CHUNKS) throw new Error("bad link mailbox");
   return b64url(new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode(`kiwi-link-chunk\n${i}\n${secret}`))));
 }
