@@ -43,8 +43,9 @@ export function createLinkHost(deps: LinkHostDeps): LinkHost {
       if (linking) await drop(linking);
       const secret = newLinkSecret();
       const keys = await newLinkKeys();
-      linking = { secret, keys, relay: deps.relayUrl(), ask: null, stop: new AbortController() };
-      return { code: linkCode({ secret, dxpk: keys.xpk, personFp: await personFingerprint(person.pk) }) };
+      const relay = deps.relayUrl();
+      linking = { secret, keys, relay, ask: null, stop: new AbortController() };
+      return { code: linkCode({ secret, dxpk: keys.xpk, personFp: await personFingerprint(person.pk), relay }) };
     },
 
     async poll() {
