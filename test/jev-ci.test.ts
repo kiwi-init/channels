@@ -54,7 +54,11 @@ const SEED: Record<string, string> = {
   "src/version.ts": 'export const VERSION = "1.0.0"\n',
   "src/a.ts": "export const a = 1\n",
   "src/big.ts": big,
-  "test/e2e.test.ts": 'import { w } from "../web/src/lib/w.ts"\nimport { a } from "../src/a.ts"\nexport const used = [w, a]\n',
+  "test/e2e.test.ts": 'import { w } from "../web/src/lib/w.ts"\nimport { a } from "../src/a.ts"\nimport { k } from "@fixture/kit/k.ts"\nexport const used = [w, a, k]\n',
+  "packages/kit/package.json": '{\n  "name": "@fixture/kit",\n  "exports": { "./*": "./src/*" }\n}\n',
+  "packages/kit/src/k.ts": 'import { deeper } from "./deeper.ts"\nexport const k = deeper\n',
+  "packages/kit/src/deeper.ts": "export const deeper = 6\n",
+  "packages/kit/src/unused.ts": "export const unused = 7\n",
   "test/join-seats.test.ts": 'import { a } from "../src/a.ts"\nexport const used = a\n',
   "test/unit-only.test.ts": "export const unit = 1\n",
   "web/src/lib/w.ts": 'import { deep } from "./deep"\nexport const w = deep\n',
@@ -215,6 +219,18 @@ describe("what each job reads", () => {
   test("a web file a flows-a test imports, even indirectly, reaches flows-a only", async () => {
     const { by } = await planFor({ "web/src/lib/deep.ts": "export const deep = 5\n" })
     expect(by("test-flows-a").layer).toBe("L2")
+    expect(by("test-flows-b")).toMatchObject({ run: false, layer: "L0" })
+  })
+
+  test("a workspace package module a flows-a test imports by package name reaches flows-a only", async () => {
+    const { by } = await planFor({ "packages/kit/src/deeper.ts": "export const deeper = 8\n" })
+    expect(by("test-flows-a").layer).toBe("L2")
+    expect(by("test-flows-b")).toMatchObject({ run: false, layer: "L0" })
+  })
+
+  test("a workspace package module no flows test imports skips both flows jobs by rule", async () => {
+    const { by } = await planFor({ "packages/kit/src/unused.ts": "export const unused = 9\n" })
+    expect(by("test-flows-a")).toMatchObject({ run: false, layer: "L0" })
     expect(by("test-flows-b")).toMatchObject({ run: false, layer: "L0" })
   })
 
