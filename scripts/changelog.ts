@@ -1,15 +1,12 @@
 // The changelog writes itself from main's history. Every PR is squash-merged into one commit whose
-// subject is the PR's title (… (#N)) and whose body is its description, so a release's entries are
-// the commits since the last release: the title, a link, and the description's first paragraph.
-// Version bumps ("kiwi 0.11.0 (#98)") and trailers (Co-authored-by) are left out.
+// subject is the PR's title (… (#N)), so a release's entries are the commits since the last release:
+// each one's title and a link to its PR. Version bumps ("kiwi 0.11.0 (#98)") are left out.
 //
-// A description is required: CI fails a pull request whose commits have none (--check), and the
-// release workflow fails a tag whose version has no section in CHANGELOG.md (--notes).
+// The release workflow fails a tag whose version has no section in CHANGELOG.md (--notes).
 //
 //   bun scripts/changelog.ts                  print the section for src/version.ts's version, from the last release to HEAD
 //   bun scripts/changelog.ts --write          put that section into CHANGELOG.md (replacing one for the same version)
 //   bun scripts/changelog.ts --all --write    rebuild CHANGELOG.md from every release tag
-//   bun scripts/changelog.ts --check A..B     fail unless some commit in A..B has a description
 //   bun scripts/changelog.ts --notes vX.Y.Z   the release notes for a tag: its CHANGELOG.md section
 //                                             (a pre-release with none gets one made from its commits)
 
@@ -21,47 +18,23 @@ import { compareVersions } from "../desktop/src/cli.ts";
 const ROOT = resolve(import.meta.dir, "..");
 const FILE = resolve(ROOT, "CHANGELOG.md");
 const REPO = "https://github.com/ojowwalker77/channels";
-const HEADER = `# Changelog\n\nWritten by \`bun scripts/changelog.ts\` from each squash-merged pull request's title and description.\n`;
+const HEADER = `# Changelog\n\nWritten by \`bun scripts/changelog.ts\` from each squash-merged pull request's title.\n`;
 
-export type Entry = { title: string; pr: number | null; description: string };
+export type Entry = { title: string; pr: number | null };
 
 /** A version-bump commit: "kiwi 0.11.0", "kiwi 0.11.0-rc.8 (#97)". Not a change of its own. */
 export const isBump = (subject: string) => /^kiwi v?\d+\.\d+\.\d+(?:-[\w.]+)?(?: \(#\d+\))?$/.test(subject.trim());
 
 const isPre = (version: string) => version.replace(/^v/, "").includes("-");
 
-/**
- * One commit as an entry. The description is the body's first paragraph, unwrapped, after dropping
- * trailers and GitHub's "---------" line. A squash of several commits lists them as "* subject" with
- * each body under it: the first commit's body is the description then.
- */
-export function entryOf(subject: string, body: string): Entry {
+export function entryOf(subject: string): Entry {
   const m = /^(.*?)\s*\(#(\d+)\)$/.exec(subject.trim());
-  const title = m ? m[1]! : subject.trim();
-  const lines = body
-    .replace(/\r/g, "")
-    .split("\n")
-    .filter((l) => !/^(co-authored-by|signed-off-by|reviewed-by|change-id):/i.test(l.trim()) && !/^-{3,}$/.test(l.trim()));
-  let paragraphs = lines
-    .join("\n")
-    .split(/\n\s*\n/)
-    .map((p) => p.trim())
-    .filter(Boolean);
-  // "* First commit's subject" then its body: skip the subject line, keep the body.
-  if (paragraphs[0]?.startsWith("* ")) paragraphs = paragraphs.slice(1).filter((p) => !p.startsWith("* "));
-  const first = paragraphs[0] ?? "";
-  const list = first.split("\n").every((l) => /^\s*[-*] |^\s{2,}\S/.test(l));
-  const description = list ? first.split("\n").map((l) => l.replace(/^\s*\* /, "- ").trimEnd()).join("\n") : first.replace(/\s*\n\s*/g, " ");
-  return { title, pr: m ? Number(m[2]) : null, description };
+  return { title: m ? m[1]! : subject.trim(), pr: m ? Number(m[2]) : null };
 }
 
 /** The changelog section for one release. */
 export function section(version: string, date: string, entries: Entry[]): string {
-  const items = entries.map((e) => {
-    const head = `- **${e.title}**${e.pr ? ` ([#${e.pr}](${REPO}/pull/${e.pr}))` : ""}`;
-    if (!e.description) return head;
-    return `${head}\n${e.description.split("\n").map((l) => `  ${l}`).join("\n")}`;
-  });
+  const items = entries.map((e) => `- **${e.title}**${e.pr ? ` ([#${e.pr}](${REPO}/pull/${e.pr}))` : ""}`);
   return `## ${version.replace(/^v/, "")} — ${date}\n\n${items.join("\n") || "- No changes."}\n`;
 }
 
@@ -89,20 +62,10 @@ function git(...args: string[]): string {
   return r.stdout.toString();
 }
 
-/**
- * Commits in a range, oldest first. On main, first-parent: the squash merges, not the commits inside
- * a PR. In a PR (firstParent false): its own commits, without the merge commit CI checks out.
- */
-function commits(range: string, firstParent = true): { subject: string; body: string }[] {
-  const out = git("log", firstParent ? "--first-parent" : "--no-merges", "--reverse", "--format=%s%x1f%b%x1e", range);
-  return out
-    .split("\x1e")
-    .map((c) => c.replace(/^\n/, ""))
-    .filter((c) => c.includes("\x1f"))
-    .map((c) => {
-      const [subject = "", body = ""] = c.split("\x1f");
-      return { subject, body };
-    });
+function subjects(range: string): string[] {
+  return git("log", "--first-parent", "--reverse", "--format=%s", range)
+    .split("\n")
+    .filter((s) => s.trim());
 }
 
 /** The release before this version among tags reachable from `ref`: the last real one, or for a pre-release, the last of any kind. */
@@ -116,9 +79,9 @@ function previousTag(version: string, ref: string): string | null {
 
 function sectionFor(version: string, ref: string, date: string): string {
   const prev = previousTag(version, ref);
-  const entries = commits(prev ? `${prev}..${ref}` : ref)
-    .filter((c) => !isBump(c.subject))
-    .map((c) => entryOf(c.subject, c.body));
+  const entries = subjects(prev ? `${prev}..${ref}` : ref)
+    .filter((s) => !isBump(s))
+    .map(entryOf);
   return section(version, date, entries);
 }
 
@@ -127,24 +90,12 @@ const tagDate = (ref: string) => git("log", "-1", "--format=%cs", ref).trim();
 if (import.meta.main) {
   const { values } = parseArgs({
     args: Bun.argv.slice(2),
-    options: { write: { type: "boolean" }, all: { type: "boolean" }, check: { type: "string" }, notes: { type: "string" } },
+    options: { write: { type: "boolean" }, all: { type: "boolean" }, notes: { type: "string" } },
   });
   const { VERSION } = await import("../src/version.ts");
   const current = existsSync(FILE) ? readFileSync(FILE, "utf8") : HEADER;
 
-  if (values.check) {
-    const missing = commits(values.check, false).filter((c) => !isBump(c.subject) && !entryOf(c.subject, c.body).description);
-    const all = commits(values.check, false).filter((c) => !isBump(c.subject));
-    if (all.length && missing.length === all.length) {
-      console.error(
-        `No commit in ${values.check} has a description, and the squash-merged commit's description is what the changelog prints.\n` +
-          `Add one: a blank line after the subject, then a paragraph saying what changed and why (git commit --amend, or a new commit).\n` +
-          missing.map((c) => `  ${c.subject}`).join("\n"),
-      );
-      process.exit(1);
-    }
-    console.log(`changelog: ok (${all.length - missing.length} of ${all.length} commits described)`);
-  } else if (values.notes) {
+  if (values.notes) {
     const tag = values.notes;
     const sec = sectionIn(current, tag);
     if (sec) console.log(sec.replace(/^## .*\n\n/, ""));
