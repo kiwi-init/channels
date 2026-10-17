@@ -18,8 +18,7 @@ jobs:
   # Decides which jobs this pull request can break (.github/jev-ci.yml): rules first, then a
   # cache of inputs that already passed, then Jev for the rest. Pushes to main run everything,
   # and if planning fails, everything runs. Every check below runs only if the plan says so.
-  # On bus/staging (the merge bus's test merge) it plans from the item's fork point with main,
-  # so the jobs either side can break run on the merged tree.
+  # On bus/staging (the merge bus's test merge) it plans from main, so only what the item adds runs.
   plan:
     runs-on: ubuntu-latest
     permissions:
