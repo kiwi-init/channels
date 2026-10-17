@@ -8,7 +8,7 @@ import path from "node:path";
 import { decodeJoinCode } from "../../src/crypto.ts";
 import type { Identity } from "../../src/identity.ts";
 import { provePerson, type PersonClaim } from "../../src/person.ts";
-import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, PublicPerson, StoreSnapshot } from "./bridge.ts";
+import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, PhoneView, PublicPerson, StoreSnapshot } from "./bridge.ts";
 import { publicChannel } from "./seats.ts";
 
 export { acceptSeat, mergeChannels, mergePublicChannels, migrateEntries, withAccess } from "./seats.ts";
@@ -132,11 +132,12 @@ export interface StoredKeys {
   person: PersonView | null;
   channels: ChannelIdentityView[];
   computers: ComputerView[];
+  phones?: PhoneView[];
   pending: PendingItem[];
 }
 
 export function snapshotOf(s: StoredKeys): StoreSnapshot {
-  return { relayUrl: s.relayUrl, person: publicPerson(s.person), channels: s.channels.map(publicChannel), computers: s.computers, pending: s.pending };
+  return { relayUrl: s.relayUrl, person: publicPerson(s.person), channels: s.channels.map(publicChannel), computers: s.computers, phones: (s.phones ?? []).map((p) => ({ label: p.label, at: p.at })), pending: s.pending };
 }
 
 export function publicComputer(c: ComputerView): ComputerView {

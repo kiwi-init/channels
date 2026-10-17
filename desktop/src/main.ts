@@ -20,7 +20,8 @@ import type { HostToKeys, KeysToHost } from "./keyring.ts";
 import { openInBrowser } from "./open.ts";
 import { applyUpdate, startUpdates, updateState } from "./updater.ts";
 import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, spawnDaemon, type HelloResult } from "./daemon-client.ts";
-import type { ChannelIdentityView, ComputerView, DaemonStatus, PairAskView, PendingItem, PersonView, SignInResult, StoreSnapshot } from "./bridge.ts";
+import type { ChannelIdentityView, ComputerView, DaemonStatus, PairAskView, PendingItem, PersonView, PhoneView, SignInResult, StoreSnapshot } from "./bridge.ts";
+import { createLinkHost } from "./link-host.ts";
 import type { PersonClaim } from "../../src/person.ts";
 
 const PUBLIC_RELAY = "https://channels.kiwiinit.com";
@@ -38,6 +39,7 @@ interface StoreFile {
   person: PersonView | null;
   channels: ChannelIdentityView[];
   computers: ComputerView[];
+  phones?: PhoneView[];
   pending: PendingItem[];
   signin?: { access: string; refresh: string; exp: number };
   migrated?: boolean;
@@ -600,6 +602,22 @@ function wireIpc(): void {
     p?.stop.abort();
     await p?.mailbox.drop().catch(() => {});
   });
+  const linkHost = createLinkHost({
+    relayUrl: () => store.relayUrl,
+    person: () => {
+      requirePerson();
+      return store.person as PersonView;
+    },
+    channels: () => store.channels,
+    linked: (phone) =>
+      mutate((s) => {
+        s.phones = [...(s.phones ?? []), phone];
+      }),
+  });
+  ipcMain.handle("kiwi:link-begin", () => linkHost.begin());
+  ipcMain.handle("kiwi:link-poll", () => linkHost.poll());
+  ipcMain.handle("kiwi:link-answer", (_e, accept: boolean) => linkHost.answer(accept));
+  ipcMain.handle("kiwi:link-cancel", () => linkHost.cancel());
   ipcMain.handle("kiwi:daemon-status", async (): Promise<DaemonStatus> => {
     const hello = await daemonHello();
     if (!hello) return { running: false };

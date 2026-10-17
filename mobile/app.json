@@ -20,7 +20,9 @@
       "expo-build-properties",
       "expo-sqlite",
       "expo-secure-store",
-      "expo-image"
+      "expo-image",
+      ["expo-camera", { "cameraPermission": "Kiwi uses the camera to scan the code that links this phone to your desktop." }],
+      ["expo-local-authentication", { "faceIDPermission": "Kiwi asks for Face ID before it opens the keys on this phone." }]
     ]
   }
 }

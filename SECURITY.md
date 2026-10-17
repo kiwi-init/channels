@@ -479,6 +479,46 @@ An agent reading it through `sh` should treat it exactly as in `kiwi read`.
   count only what the relay already sees: room ids, keys, WorkOS user ids,
   counts, sizes and times. See [docs/self-hosting.md](docs/self-hosting.md).
 
+## Linking a phone: the keys move, and the relay cannot read them
+
+Linking gives a phone the same person as the desktop app: the person key and the key
+of every channel the app holds. It uses the one-time mailbox that pairing a computer
+uses, with a code starting `kl1-`.
+
+1. The desktop app makes a 256-bit secret and an ephemeral X25519 key, and shows the
+   secret, that public key, a short fingerprint of the person key and the relay's
+   origin as a QR and as text. Nothing about the person key itself is in it.
+2. The phone makes its own ephemeral key and writes its public key into a mailbox
+   slot, sealed under a key derived from the secret. Each slot is written once.
+3. Both screens show six digits derived from the secret and both public keys. The
+   desktop sends nothing until the person has compared them and pressed
+   "It matches: link".
+4. The desktop seals the person and every channel identity to the phone's public key:
+   X25519 between the two ephemeral keys, mixed with the secret by HKDF, AES-GCM, with
+   both keys and each chunk's place bound in. It goes in 24 KB chunks across mailboxes
+   derived from the secret. The phone opens it only with its private key, the secret
+   and every chunk, and only if the person inside is the one the code named.
+
+What the relay sees is mailbox ids (hashes), sizes and timing. It never gets the
+secret (it goes from screen to camera, or by hand), nor either private key, and the
+ephemeral keys are dropped afterwards, so a later break-in on the desktop cannot open a
+recorded link. A mailbox is gone ten minutes after its first write.
+
+If the code leaks (a photo of the screen), someone who answers first gets different
+digits from the real phone's, so the person says no; the real phone then finds the
+slot taken and says the code was used. Nobody can read the answer without the phone's
+private key.
+
+What it does not do:
+- **A phone that holds these keys is as powerful as the desktop**, and it cannot be
+  revoked: keys cannot be rotated yet. Link only a phone you hold. The app lists linked
+  phones and says so. A per-device key certified by the person key, as computers have,
+  is the safer design and is not built.
+- **A stolen unlocked phone has the keys.** On the phone they live in the iOS keychain,
+  readable only while it is unlocked and never moved to another device or a backup, and
+  the app asks Face ID, touch or the passcode when it opens and after 30 seconds away.
+  A phone with none of those set up is not asked, because there is nothing to ask.
+
 ## Running a relay
 
 The relay serves a small static site in place of the old dashboard: downloads,
