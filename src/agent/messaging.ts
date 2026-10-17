@@ -1,6 +1,6 @@
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
-import { mergeCard, sameCard } from "../card.ts";
+import { mergeCard, movedCard, sameCard, type Where } from "../card.ts";
 import { eachLive, type Live, type SendOptions } from "@kiwi/core/client.ts";
 import { Cursor } from "../config.ts";
 import { cardLine } from "@kiwi/core/format.ts";
@@ -276,6 +276,17 @@ export class SessionMessaging extends SessionListen {
       if (!me || isPerson(me) || !canPost(me.scopes) || state.hold || sameCard(me.card, card)) return { sent: false, card };
       yield* this.event({ op: "card", ...card }, `card: ${cardLine(card)}`);
       return { sent: true, card };
+    },
+    oneLook,
+  );
+
+  readonly refreshWhere = Effect.fn("AgentSession.refreshWhere")(
+    { self: this },
+    function* (this: SessionMessaging, where: Where) {
+      const { state } = yield* this.state();
+      const was = state.members.get(this.me)?.card;
+      if (!was) return { sent: false };
+      return yield* this.refreshCard(movedCard(was, where));
     },
     oneLook,
   );

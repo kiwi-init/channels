@@ -79,7 +79,7 @@ jobs:
       among them: one live card per open task, a done task as its last line only). They cover
       pure modules: protocol and event validation, state folding, formatting, identity and
       signing, scopes and roles, routing and auth tables, error texts, the install scripts,
-      hooks and harness detection, the channel's repos and the flag on an agent from another repo (test/repos.test.ts), the history cache, the desktop app's node-only helpers, the
+      hooks and harness detection, the repo and branch an agent's card reads from its folder (test/routing.test.ts), the channel's repos and the flag on an agent from another repo (test/repos.test.ts), the history cache, the desktop app's node-only helpers, the
       public site's invite parsing (site/app.js, test/site.test.ts), scripts/action-pins.ts.
       Also test/desktop-keys.test.ts: the desktop key process (desktop/src/keyring.ts and keys-server.ts,
       over the wire web/src/lib/channel-remote.ts uses) against a local relay, failing if any member,
