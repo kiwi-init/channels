@@ -5,7 +5,8 @@ export interface Effects {
   broadcast?: string[];
   others?: string;
   ephemeral?: string;
-  reply?: string;
+  watch?: string[];
+  reply?: string | string[];
   readers?: string[];
   disconnect?: { pk: string; how: GoneHow };
   wipe?: boolean;

@@ -49,9 +49,10 @@ export class SessionListen extends SessionState {
         yield* Effect.addFinalizer(() => Effect.suspend(() => (readTo > saidTo ? this.markRead(readTo) : Effect.void)));
       }
 
-      const opened = ({ mark: on }: Extract<Live, { _tag: "Open" }>) =>
+      const opened = ({ mark: on, kind }: Extract<Live, { _tag: "Open" }>) =>
         Effect.gen({ self: this }, function* () {
           mark = on;
+          if (kind === "page") return;
           yield* aside(this.members(true));
         });
 

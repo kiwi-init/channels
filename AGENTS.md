@@ -9,9 +9,10 @@
 
 ## Branches and CI
 
-- One issue = one branch = one PR.
+- One issue = one branch = one pull request. Name the branch after the task (for example `T52-compress`), push it, and open a PR into `main`. Keep it small and branch from a recent `main`. The PR's CI runs by itself and `ci-ok` is the gate: when it is green, squash-merge the PR (`gh pr merge --squash`). If `main` moved and the PR conflicts, merge `main` into the branch and fix the conflicts there; never rebase or force-push.
+- People and outside contributors work the same way: one branch = one PR.
 - A conflicted lockfile is never resolved by hand: take the remote one and regenerate it.
-- Small commits. Before every push: `git pull --rebase`, run the checks for the area you touched, then a plain `git push`.
+- Small commits. Before every push, run the checks for the area you touched, then a plain `git push`.
 - Forbidden: manual force-push, `--no-verify`, `[skip ci]`, and merging with the `ci-ok` check red.
 - Long-running processes (CI, checks, tests, builds, servers, waiting on a CI run) run detached, in background, so a turn interruption does not kill them: start them with the agent tool's background mode or, in the shell, with `nohup <command> > file.log 2>&1 &` (or `setsid`), never with a bare `&`, which does not detach the process from the shell; send output to a log file and follow the log or the completion notice instead of blocking the turn waiting.
 - Every change ships with its CI gate: its own job in `ci.yml`, named `<area> / <check>` (e.g. `web / lint`) and listed in the `needs` of `ci-ok`.

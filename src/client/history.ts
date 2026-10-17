@@ -22,7 +22,8 @@ export interface HistoryFx {
   head(): Effect.Effect<number, MemberRefusal, Relay>;
   markRead(seq: number): Effect.Effect<void, never, Relay>;
   decrypt(env: Envelope): Effect.Effect<Message | null, never, Relay>;
-  history(since: number): Effect.Effect<{ head: number; messages: Message[] }, MemberRefusal, Relay>;
+  history(since: number): Effect.Effect<{ head: number; messages: Message[]; first: number | null }, MemberRefusal, Relay>;
+  page(since: number, limit: number): Effect.Effect<Message[], MemberRefusal, Relay>;
 }
 
 export class ChannelHistory {
@@ -65,10 +66,12 @@ export class ChannelHistory {
           }
         });
       let ask: Record<string, number> = { pages: 1 };
+      let first: number | null = null;
       for (;;) {
         const page = yield* this.ch.request<{ head: number; messages: Envelope[]; pages?: PageOffer }>("/messages", {}, { since, ...ask });
         ask = {};
         head = page.head;
+        first ??= page.messages[0]?.seq ?? null;
         yield* take(page.messages);
         const offer = page.pages;
         if (offer && typeof offer.cap === "string" && Number.isSafeInteger(offer.next) && offer.next % PAGE_LIMIT === 0 && offer.next >= since && offer.next < head) {
@@ -84,11 +87,17 @@ export class ChannelHistory {
         }
         if (!page.messages.length || since >= head) break;
       }
-      return { head, messages };
+      return { head, messages, first };
+    }),
+
+    page: Effect.fn("Channel.page")({ self: this }, function* (this: ChannelHistory, since: number, limit: number) {
+      const page = yield* this.ch.request<{ head: number; messages: Envelope[] }>("/messages", {}, { since, limit });
+      const decrypted = yield* Effect.forEach(page.messages, (e) => this.ch.fx.decrypt(e), { concurrency: "unbounded" });
+      return decrypted.filter((m): m is Message => !!m);
     }),
   };
 
-  private keyFor(e: number): Effect.Effect<string | undefined, never, Relay> {
+  keyFor(e: number): Effect.Effect<string | undefined, never, Relay> {
     return Effect.gen({ self: this }, function* () {
       if (!this.ch.access.keys[String(e)]) yield* Effect.ignoreCause(this.ch.fx.refreshKeys());
       return this.ch.access.keys[String(e)];

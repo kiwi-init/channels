@@ -1,10 +1,10 @@
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
-import { MAX_EPH_LENGTH, type ClientFrame, type Envelope, type ServerFrame } from "../../protocol.ts";
+import { MAX_EPH_LENGTH, MORE_REFUSED, type ClientFrame, type Envelope, type ServerFrame } from "../../protocol.ts";
 import { isRefusal } from "../failures.ts";
 import { RoomStore } from "./db.ts";
 import type { Effects } from "./directory.ts";
-import { allow, EPHEMERAL_PER_MINUTE, MESSAGES_PER_MINUTE, READS_PER_MINUTE } from "./limits.ts";
+import { allow, EPHEMERAL_PER_MINUTE, MESSAGES_PER_MINUTE, MORE_PER_MINUTE, READS_PER_MINUTE } from "./limits.ts";
 import { append, markRead, touch } from "./messages.ts";
 
 export const frame = (f: ServerFrame) => JSON.stringify(f);
@@ -17,8 +17,13 @@ export function msgFrame(e: Envelope): string {
   return frame({ t: "msg", ...e });
 }
 
-export const welcomeFrames = (since: number, reads = true): Effect.Effect<string[], never, RoomStore> =>
+export const watchFrame = (e: Envelope): Pick<Effects, "watch"> => ({ watch: [frame({ t: "head", seq: e.seq, ts: e.ts })] });
+
+export const wantsWatch = (url: URL): boolean => url.searchParams.get("watch") === "1";
+
+export const welcomeFrames = (since: number, reads = true, watch = false): Effect.Effect<string[], never, RoomStore> =>
   Effect.map(RoomStore, (db) => {
+    if (watch) return [frame({ t: "ready", head: db.head(), more: false })];
     const backlog = db.since(since);
     const head = db.head();
     const last = backlog.at(-1)?.seq ?? since;
@@ -51,6 +56,10 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
       ),
     );
   }
+  if (f.t === "more") {
+    if (!allow(`more:${db.roomId}:${sender}`, MORE_PER_MINUTE)) return { reply: frame({ t: "err", error: MORE_REFUSED }) } satisfies Effects;
+    return { reply: [frame({ t: "page" }), ...(yield* welcomeFrames(Number(f.since) || 0))] } satisfies Effects;
+  }
   if (f.t !== "send") return { reply: frame({ t: "err", error: "unknown frame" }) } satisfies Effects;
   if (!allow(`${db.roomId}:${sender}`, MESSAGES_PER_MINUTE)) return { reply: frame({ t: "err", error: "too many messages; wait a minute", id: f.id }) } satisfies Effects;
   const send = f;
@@ -66,7 +75,7 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
     ),
   );
   const reply = frame({ t: "ack", id: send.id, seq: e.seq, ts: e.ts });
-  const fx: Effects = { ...(echo ? { broadcast: [msgFrame(e)] } : { others: msgFrame(e) }), reply, expireAt: expireAt ?? undefined };
+  const fx: Effects = { ...(echo ? { broadcast: [msgFrame(e)] } : { others: msgFrame(e) }), ...watchFrame(e), reply, expireAt: expireAt ?? undefined };
   return fx;
 });
 

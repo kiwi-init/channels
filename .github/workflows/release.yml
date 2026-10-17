@@ -10,228 +10,20 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
+  contents: read
 
 jobs:
-  # src/version.ts is the version; the two package.json files must agree so the
-  # binaries and the app carry the same tag.
-  version:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          fetch-depth: 0
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: 1.4.2
-
-      - name: Check the version matches the tag
-        run: |
-          v=$(bun -e 'console.log((await import("./src/version.ts")).VERSION)')
-          pkg=$(bun -e 'console.log(JSON.parse(await Bun.file("package.json").text()).version)')
-          app=$(bun -e 'console.log(JSON.parse(await Bun.file("desktop/package.json").text()).version)')
-          test "v$v" = "$GITHUB_REF_NAME" || { echo "src/version.ts says $v, tag is $GITHUB_REF_NAME"; exit 1; }
-          test "$pkg" = "$v" || { echo "package.json says $pkg, src/version.ts says $v"; exit 1; }
-          test "$app" = "$v" || { echo "desktop/package.json says $app, src/version.ts says $v"; exit 1; }
-
-      # Required: a release ships with its changelog. CHANGELOG.md must have this version's section
-      # (`bun run changelog --write` in the release PR); a pre-release without one gets notes made
-      # from its commits. Checked here so nothing builds for a tag that can't be published.
-      - name: Check the changelog has this version
-        run: bun scripts/changelog.ts --notes "$GITHUB_REF_NAME" > /dev/null
-
-  cli:
-    needs: version
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: 1.4.2
-
-      - name: Install
-        # web/ too: some tests (web/src/**/*.test.tsx) import the web app's React.
-        run: bun install --frozen-lockfile && (cd web && bun install --frozen-lockfile)
-
-      - name: Test
-        run: bun test
-
-      - name: Build
-        run: |
-          mkdir -p dist
-          for t in darwin-arm64 darwin-x64 linux-x64 linux-arm64 windows-x64; do
-            ext=""; [ "$t" = windows-x64 ] && ext=".exe"
-            bun scripts/build-cli.ts --target "bun-$t" --outfile "dist/kiwi-$t$ext"
-          done
-          # Apple Silicon only runs signed code: give the macOS builds an ad-hoc signature.
-          codesign --force --sign - dist/kiwi-darwin-arm64 dist/kiwi-darwin-x64
-          ./dist/kiwi-darwin-arm64 --version
-
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
-        with:
-          subject-path: "dist/kiwi-*"
-
-      - name: Upload
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: cli
-          path: dist/kiwi-*
-
-  # The Electron app builds on each OS for that OS: dmg/zip on macOS, AppImage/deb
-  # on Linux. Unsigned for now. No Windows app (the kiwi CLI still ships for Windows).
-  desktop:
-    needs: version
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            target: macos
-          - os: ubuntu-latest
-            target: linux
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: 1.4.2
-
-      - name: Install
-        shell: bash
-        run: |
-          bun install --frozen-lockfile
-          (cd web && bun install --frozen-lockfile)
-          (cd desktop && bun install --frozen-lockfile)
-
-      - name: Build the renderer
-        run: bun run web:build
-
-      - name: Package
-        working-directory: desktop
-        shell: bash
-        env:
-          # macOS: signed with the Developer ID and notarized when these secrets are set; without them
-          # (a fork, or before they're added) it builds unsigned.
-          # Not CSC_LINK / CSC_KEY_PASSWORD: electron-builder 26's own keychain setup passes the
-          # certificate's password where the keychain's belongs (set-key-partition-list fails with
-          # "SecKeychainUnlock"). The keychain is made below instead, and handed over as CSC_KEYCHAIN.
-          MAC_CERT_P12_BASE64: ${{ secrets.MAC_CERT_P12_BASE64 }}
-          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
-          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-        run: |
-          # The app bundles the kiwi binary through extraResources (`../dist/kiwi`);
-          # build it for the platform (and architecture) being packaged.
-          cli() { bun ../scripts/build-cli.ts --target "$1" --outfile ../dist/kiwi; }
-          mkdir -p ../dist
-          bun run build
-          sign=()
-          if [ "${{ runner.os }}" = macOS ] && [ -n "$MAC_CERT_P12_BASE64" ] && [ -n "$APPLE_API_KEY_P8" ]; then
-            # A keychain of our own for this job: the certificate in it, codesign allowed to use its key
-            # without asking, and on the search list so codesign finds it. electron-builder then signs the
-            # app and everything in it (the bundled kiwi too) with the hardened runtime from that keychain,
-            # and notarizes it with the API key.
-            kc="$RUNNER_TEMP/kiwi-signing.keychain-db"
-            kcpass=$(openssl rand -base64 32)
-            security create-keychain -p "$kcpass" "$kc"
-            security set-keychain-settings -lut 21600 "$kc"
-            security unlock-keychain -p "$kcpass" "$kc"
-            printf '%s' "$MAC_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-            security import "$RUNNER_TEMP/cert.p12" -k "$kc" -P "$MAC_CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security -f pkcs12 \
-              || { echo "the certificate didn't import: check MAC_CERT_P12_BASE64 and MAC_CERT_PASSWORD"; exit 1; }
-            rm -f "$RUNNER_TEMP/cert.p12"
-            # Apple's Developer ID intermediate (G2 issues the current certificates), so the chain validates.
-            curl -fsSL https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer -o "$RUNNER_TEMP/DeveloperIDG2CA.cer"
-            security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$kc" -T /usr/bin/codesign || true
-            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$kcpass" "$kc" > /dev/null
-            # With electron-builder's bundled keychain of Apple's intermediates (it adds that itself only
-            # when it makes the keychain), so the Developer ID identity validates.
-            security list-keychains -d user -s "$kc" "$PWD/node_modules/app-builder-lib/certs/root_certs.keychain" $(security list-keychains -d user | tr -d '"')
-            # (Captured, not piped into grep -q: under pipefail an early-quitting grep fails the pipe.)
-            ids=$(security find-identity -v -p codesigning "$kc")
-            [[ "$ids" == *"Developer ID Application"* ]] \
-              || { echo "no Developer ID Application identity in the certificate (export it from My Certificates, with its key)"; exit 1; }
-            export CSC_KEYCHAIN="$kc"
-            unset MAC_CERT_P12_BASE64 MAC_CERT_PASSWORD
-            printf '%s' "$APPLE_API_KEY_P8" > "$RUNNER_TEMP/apple-api-key.p8"
-            export APPLE_API_KEY="$RUNNER_TEMP/apple-api-key.p8"
-            sign=(-c.mac.notarize=true)
-            echo "signing and notarizing with the Developer ID"
-          else
-            unset MAC_CERT_P12_BASE64 MAC_CERT_PASSWORD
-            export CSC_IDENTITY_AUTO_DISCOVERY=false
-            echo "no signing secrets: building unsigned"
-          fi
-          case "${{ runner.os }}" in
-            macOS)
-              cli bun-darwin-arm64 && codesign --force --sign - ../dist/kiwi && bunx electron-builder --mac --arm64 --publish never "${sign[@]}"
-              cli bun-darwin-x64 && codesign --force --sign - ../dist/kiwi && bunx electron-builder --mac --x64 --publish never "${sign[@]}"
-              ;;
-            *)
-              cli bun-linux-x64 && bunx electron-builder --linux --publish never
-              ;;
-          esac
-          # Signed: prove it before anything ships. A valid Developer ID signature on every file, the
-          # notarization ticket stapled, and Gatekeeper accepting the app as it would on a user's Mac.
-          if [ ${#sign[@]} -gt 0 ]; then
-            for app in release/mac*/Kiwi.app; do
-              codesign --verify --deep --strict --verbose=2 "$app"
-              # -dvv: codesign names the signing authorities only from two v's up.
-              kiwi_sig=$(codesign -dvv "$app/Contents/Resources/kiwi" 2>&1)
-              [[ "$kiwi_sig" == *"Authority=Developer ID Application"* ]] || { echo "the bundled kiwi isn't signed with the Developer ID:"; echo "$kiwi_sig"; exit 1; }
-              xcrun stapler validate "$app"
-              spctl --assess --type execute --verbose=2 "$app"
-            done
-          fi
-          # The app is useless without these: fail here, not on a user's machine. Every app built
-          # (two on macOS) must carry both: a Mac app keeps them in Contents/Resources, Linux's
-          # unpacked app in resources. No `find | grep -q`: under pipefail, grep quitting early fails it.
-          apps=$(find release -maxdepth 4 -type d \( -path 'release/*-unpacked/resources' -o -path 'release/*/*.app/Contents/Resources' \))
-          [ -n "$apps" ] || { echo "no packaged app found under release/"; exit 1; }
-          for r in $apps; do
-            [ -f "$r/web/dist/index.html" ] || { echo "web/dist missing from $r"; exit 1; }
-            [ -f "$r/kiwi" ] || { echo "kiwi binary missing from $r"; exit 1; }
-          done
-          echo "checked: $apps"
-          bins=$(find release -maxdepth 2 \( -path 'release/mac*/Kiwi.app' -o -path 'release/*-unpacked/kiwi-desktop' \))
-          [ -n "$bins" ] || { echo "no packaged app found to read the fuses of"; exit 1; }
-          bun scripts/fuses.ts $bins
-
-      - name: Collect
-        shell: bash
-        run: |
-          bun -e '
-            const fs = require("fs");
-            fs.mkdirSync("out", { recursive: true });
-            const exts = [".dmg", ".zip", ".appimage", ".deb"];
-            const dir = "desktop/release";
-            const names = fs.readdirSync(dir).filter((f) => exts.some((e) => f.toLowerCase().endsWith(e)));
-            for (const n of names) fs.copyFileSync(`${dir}/${n}`, `out/${n}`);
-            console.log(names.join("\n") || "(nothing collected)");
-          '
-
-      - name: Attest build provenance
-        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
-        with:
-          subject-path: "out/*"
-
-      - name: Upload
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: desktop-${{ matrix.target }}
-          path: out/*
-          if-no-files-found: error
+  build:
+    uses: ./.github/workflows/release-build.yml
+    secrets: inherit
 
   publish:
-    needs: [cli, desktop]
+    needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -246,6 +38,11 @@ jobs:
         with:
           path: artifacts
           merge-multiple: true
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: "artifacts/*"
 
       - name: Checksums
         run: |

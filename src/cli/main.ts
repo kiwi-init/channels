@@ -29,15 +29,16 @@ import { baseName, here, seatsNear } from "../seats.ts";
 import { daemonHello, daemonSeat, ensureDaemon, reportRead, stopDaemon, wakeOn, type DaemonSeat } from "../daemon.ts";
 import { cleanup } from "../cleanup.ts";
 import { asOption, channelOption, isWakeVia, wakeKey, wakeWords } from "../wake.ts";
-import { ago, cardLine, charterLines, describeEvent, holdLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, modeLine, parseDuration, presenceWords, taskStateWord, statusJson } from "../format.ts";
+import { ago, cardLine, charterLines, describeEvent, holdLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, missingImages, formatTask, formatTasks, looksLikeLine, modeLine, parseDuration, presenceWords, taskStateWord, statusJson } from "../format.ts";
 import { canPost, describeScopes, presetOf, SCOPES, type Scope } from "../scopes.ts";
 import { fingerprint } from "../identity.ts";
-import { CHAT_KINDS, COLORS, ignored, isColor, type Kind, type Message, type TaskState } from "../protocol.ts";
+import reactionPack from "../../assets/reactions/index.json";
+import { CHAT_KINDS, CHOICE_MAX_LENGTH, CHOICES_MAX, CHOICES_MIN, COLORS, HANDOFF_DEFAULT_SECONDS, HANDOFF_MAX_SECONDS, HANDOFF_MAX_VENDOR, handoffUrl, ignored, wellFormedChoices, isGifReaction, isColor, type InlineImage, type Kind, type Message, type TaskState } from "../protocol.ts";
 import { chooseThread, humanOf, parseTaskId, similarOpenTasks, taskId, wentTo, type ChannelState } from "../state.ts";
 import { VERSION } from "../version.ts";
 import { computerClaimFor } from "../machine.ts";
 import { briefText } from "../brief.ts";
-import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor, EXTRA_HARNESSES, extraInstalled, hooksInstalled, hooksStatus, howMessagesReachYou, installDetected, installExtra, installHooks, mcFor, refreshListeners, runHook, uninstallDetected, uninstallExtra, uninstallHooks, type ExtraHarness } from "../hooks.ts";
+import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor, EXTRA_HARNESSES, extraInstalled, hooksInstalled, hooksStatus, howMessagesReachYou, IDENTITY_ARG, installDetected, installExtra, installHooks, mcFor, refreshListeners, runHook, selfIdentity, seatsFor, uninstallDetected, uninstallExtra, uninstallHooks, type ExtraHarness } from "../hooks.ts";
 import { BadName } from "../refusals.ts";
 import { binDir, ensureOnPath, profileFor } from "../shell-path.ts";
 import { detectCard, detectModel, detectRuns, mergeCard } from "../card.ts";
@@ -69,9 +70,16 @@ Agents
                                                  thread with NAME (while you're doing a task, it goes to its thread)
      --escalate [--re N]                         to your own human and the owner, in every mode and during a hold:
                                                  for anything outside the charter, destructive, or not yours
+     --handoff URL [--vendor NAME] [--expires 10m]  with --escalate: hand a live browser tab to a person (https link,
+                                                 up to 1h); --wait 15m blocks until they press Done (exit 0),
+                                                 Couldn't or the link expires (exit 4)
      --image f.png · --room R · --kind K
+  kiwi ask-human "question"                      a decision you wait on a person for: to your own human and the
+                                                 owner, in the app's Needs you list, in every mode and during a hold
+     --option "A: …" --option "B: …"             2 to 6 answers the person picks from with one click
+     --task T7 · --re N                          in that task's thread (it shows on the task) · about message #N
   kiwi reply N "text"                            answer message #N: to its sender, in its room
-  kiwi react N 👍 [--clear]                       react to message #N with one emoji (--clear takes it back)
+  kiwi react N ok/trailer [--clear]              react to message #N with a GIF (kiwi react --list shows them) or one emoji
   kiwi show N [dir]                              message #N in full, with its whole thread; its images saved
   kiwi log [-n 30] [--all] [--room R]            recent history (marks nothing read)
   kiwi status [--json]                           one screen: who's here and online, the charter, tasks, notes,
@@ -83,6 +91,7 @@ Agents
      task approve|reject T7 --round N|--at SHA ["note"] [--file review.md]   the verdict on the round you reviewed,
                                                  refused unless it's still the open one; --file sends the review with it
      task assign T7 NAME ["what's next"] · drop T7 (back to the board)   (kiwi task alone: the board)
+     task cancel T7 "why"                        closes it, marked cancelled, if you may finish it (else it's only a note)
   kiwi note [KEY [VALUE] [--ttl 7d] | KEY --clear]   shared notes: all of them, one, set one, or remove one
   kiwi leave                                     leave the channel and forget it on this machine
 
@@ -101,6 +110,13 @@ Claims, task dependencies (--after) and matching by --needs are gone: say what y
 
 Options: -c/--channel ALIAS, --as NAME (or KIWI_CHANNEL / KIWI_AS) only when a folder has several agents and no session
 tells them apart; --relay URL (or KIWI_RELAY)`;
+
+if (process.argv[2] === IDENTITY_ARG && process.argv.length === 3) {
+  const identity = selfIdentity();
+  if (identity === null) process.exit(1);
+  process.stdout.write(`${identity}\n`);
+  process.exit(0);
+}
 
 // `kiwi relay` takes the relay's own flags (see src/relay/bun.ts), not these.
 const isRelay = process.argv[2] === "relay";
@@ -122,7 +138,13 @@ const { values: opt, positionals: args } = parseArgs({
     webhook: { type: "string" },
     secret: { type: "string" },
     image: { type: "string", multiple: true },
+    option: { type: "string", multiple: true },
     wait: { type: "string" },
+    handoff: { type: "string" },
+    vendor: { type: "string" },
+    expires: { type: "string" },
+    reveal: { type: "boolean" },
+    list: { type: "boolean" },
     owner: { type: "string" },
     after: { type: "string" },
     detail: { type: "string" },
@@ -213,7 +235,15 @@ const channelAlias = Effect.fn("kiwi.channelAlias")(function* () {
   const all = Object.keys(cfg.channels);
   // Explicit flags win; otherwise the channel this directory is bound to; otherwise the only one.
   // Never a machine-wide default: other agents on this machine are in other channels.
-  const alias = opt.channel ?? process.env.KIWI_CHANNEL ?? bindingFor(process.cwd())?.alias ?? (all.length === 1 ? all[0] : undefined);
+  const explicit = opt.channel ?? process.env.KIWI_CHANNEL;
+  const ours = explicit ? [] : seatsFor(process.cwd());
+  const named = opt.as ?? process.env.KIWI_AS;
+  const fits = ours.length > 1 && named ? ours.filter((b) => b.as === named) : ours;
+  const [seat, ...others] = fits;
+  if (others.length || (ours.length > 1 && !seat)) {
+    return yield* die(`this session is several agents here (${ours.map((b) => `${b.as} in ${b.alias}`).join(", ")}); pass -c ALIAS --as NAME to say which`);
+  }
+  const alias = explicit ?? seat?.alias ?? (all.length === 1 ? all[0] : undefined);
   if (!alias) {
     if (!all.length) return yield* die("no channel: join one first (kiwi join <code>)");
     return yield* die(`this directory isn't bound to a channel, and this machine is in several (${all.join(", ")}); pass -c ALIAS --as NAME, or run kiwi from the directory you joined in`);
@@ -229,10 +259,12 @@ const agentName = Effect.fn("kiwi.agentName")(function* (ch?: ChannelConfig) {
   let raw = explicit;
   if (!raw && ch) {
     // Several agents can share a machine (and a channel): never guess between them.
-    const bound = bindingFor(process.cwd());
+    const ours = seatsFor(process.cwd());
     const cfg = yield* keys.config;
-    const held = bound ? [] : seatsNear(process.cwd()).filter((b) => cfg.channels[b.alias]?.roomId === ch.roomId);
-    if (bound && ch.roomId === cfg.channels[bound.alias]?.roomId) raw = bound.as;
+    const [bound, ...also] = ours.filter((b) => cfg.channels[b.alias]?.roomId === ch.roomId);
+    if (bound && also.length) return yield* die(`this session is several agents in this channel (${[bound, ...also].map((b) => b.as).join(", ")}); pass --as NAME to say which`);
+    const held = ours.length ? [] : seatsNear(process.cwd()).filter((b) => cfg.channels[b.alias]?.roomId === ch.roomId);
+    if (bound) raw = bound.as;
     else if (held.length && here().session) {
       // This folder's agents are other live sessions: acting as one of them would be speaking for it.
       return yield* die(`${held.map((b) => b.as).join(", ")} ${held.length > 1 ? "work" : "works"} from this folder in another session; to take part yourself, run kiwi join with the channel's code (or pass --as NAME)`);
@@ -272,7 +304,7 @@ const keepDaemon = Effect.promise(() =>
 const noteRead = (s: { alias: string; me: string }) => Effect.promise(() => reportRead(s.alias, s.me, here().session));
 
 function render(m: Message, state?: ChannelState | null): string {
-  return opt.json ? JSON.stringify({ ...m, trust: state?.trust.get(m.seq) }) : formatMessage(m, state?.trust.get(m.seq), state ?? undefined, acting.name);
+  return opt.json ? JSON.stringify({ ...m, ...(m.handoff ? { handoff: { vendor: m.handoff.vendor, expiresAt: m.handoff.expiresAt } } : {}), trust: state?.trust.get(m.seq) }) : formatMessage(m, state?.trust.get(m.seq), state ?? undefined, acting.name);
 }
 
 /** Which messages tail/wait/read/watch hand over: --chat, --for-me, --all or --thread N (default: those for you), in every room unless --room. */
@@ -340,14 +372,14 @@ const joinedAlias = Effect.fn("kiwi.joinedAlias")(function* (roomId: string, ali
  * This process's seat as `name` on `alias`: its harness, session and process when the harness says. An agent
  * that joins from a process naming no harness is that process's (`plain`): no session takes it over later.
  */
-function seatHere(alias: string, name: string, plain: boolean) {
+function seatHere(alias: string, name: string, plain: boolean, model?: string) {
   const who = here();
-  return { alias, as: name, ...(who.harness ? { harness: who.harness } : plain ? { plain: true as const } : {}), ...(who.session ? { session: who.session } : {}), ...(who.pid ? { pid: who.pid } : {}) };
+  return { alias, as: name, ...(who.harness ? { harness: who.harness } : plain ? { plain: true as const } : {}), ...(who.session ? { session: who.session } : {}), ...(who.pid ? { pid: who.pid } : {}), ...(model ? { model } : {}) };
 }
 
 /** Give the agent its seat in this directory (beside any other agents here), and make sure its harness keeps it listening. */
-function settleIn(alias: string, name: string): void {
-  if (!bindDirectory(process.cwd(), seatHere(alias, name, true))) {
+function settleIn(alias: string, name: string, model: string): void {
+  if (!bindDirectory(process.cwd(), seatHere(alias, name, true, model))) {
     process.stderr.write(`kiwi: not binding ${process.cwd()} (too broad); run kiwi from your project folder, or pass ${channelOption(alias)} ${asOption(name)}\n`);
   }
   const installed = autoInstallHooks();
@@ -518,7 +550,7 @@ const commands: Record<string, Command> = {
             yield* cursor.write(alias, name, yield* s.ch.fx.head());
             yield* hello(opt.role, opt.about);
           }
-          settleIn(alias, name);
+          settleIn(alias, name, model);
           // Say what this agent runs on, so work that needs it finds it. Never worth failing a join over.
           if (canPost(scopes)) yield* Effect.ignoreCause(s.refreshCard(detectCard(), { model }));
           process.stderr.write(`${how === "resumed" ? "back in" : "joined"} "${alias}" as ${name} (key ${fingerprint(id.pk)})\n`);
@@ -664,7 +696,7 @@ const commands: Record<string, Command> = {
       const keys = yield* Keystore;
       const sub = args[1] ?? "status";
       const raw = args[2];
-      const usage = "usage: kiwi hooks install|uninstall|status [claude|codex|gemini|cursor|grok]";
+      const usage = "usage: kiwi hooks install|uninstall|status [claude|codex|gemini|cursor|grok|kimi]";
       let name: "claude" | ExtraHarness | undefined;
       if (raw) {
         if (raw !== "claude" && !EXTRA_HARNESSES.includes(raw as ExtraHarness)) return yield* die(usage);
@@ -754,10 +786,10 @@ const commands: Record<string, Command> = {
     Effect.gen(function* () {
       const keys = yield* Keystore;
       const cfg = yield* keys.config;
-      const here = bindingFor(process.cwd());
+      const here = seatsFor(process.cwd());
       for (const [alias, c] of Object.entries(cfg.channels)) {
         const agents = (yield* keys.identitiesIn(c.roomId)).filter((n) => n !== c.owner && n !== c.person);
-        out(`${here?.alias === alias ? "*" : " "} ${alias}${c.title && c.title !== alias ? ` (${c.title})` : ""}  ${agents.length ? `agents here: ${agents.join(", ")}` : "no agent keys"}  ${c.relay}`);
+        out(`${here.some((b) => b.alias === alias) ? "*" : " "} ${alias}${c.title && c.title !== alias ? ` (${c.title})` : ""}  ${agents.length ? `agents here: ${agents.join(", ")}` : "no agent keys"}  ${c.relay}`);
       }
     }),
 
@@ -827,10 +859,12 @@ const commands: Record<string, Command> = {
     oneLook(Effect.gen(function* () {
       if (opt.escalate) {
         // It goes to your human and the owner, as it is: nothing else to choose.
-        const extra = (["to", "image", "kind", "room", "ask", "wait"] as const).filter((f) => opt[f] !== undefined);
+        const extra = (["to", "image", "kind", "room", "ask", ...(opt.handoff === undefined ? (["wait"] as const) : [])] as const).filter((f) => opt[f] !== undefined);
         if (extra.length) return yield* die(`--escalate goes to your human and the owner as it is; leave out ${extra.map((f) => `--${f}`).join(", ")}`);
         return yield* commands.escalate!();
       }
+      if (opt.handoff !== undefined) return yield* die("--handoff goes with --escalate");
+      if (opt.option !== undefined) return yield* die("--option goes with kiwi ask-human");
       const s = yield* session();
       const body = yield* text(1);
       if (!body.trim()) return yield* die("empty message");
@@ -876,9 +910,15 @@ const commands: Record<string, Command> = {
 
   react: () =>
     oneLook(Effect.gen(function* () {
+      if (args[1] === "--list" || opt.list) {
+        for (const g of reactionPack) out(`${g.reaction}/${g.name}  ${g.feeling}`);
+        return;
+      }
       const s = yield* session();
-      const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi react N 👍 (or --clear)"));
-      const emoji = opt.clear ? null : (args[2]?.trim() || (yield* die("usage: kiwi react N 👍 (or --clear)")));
+      const usage = "usage: kiwi react N ok/trailer (kiwi react --list shows the GIFs), or an emoji; --clear takes it back";
+      const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die(usage));
+      const emoji = opt.clear ? null : (args[2]?.trim() || (yield* die(usage)));
+      if (emoji && isGifReaction(emoji) && !reactionPack.some((g) => `${g.reaction}/${g.name}` === emoji)) return yield* die(`no GIF ${emoji}: kiwi react --list shows them`);
       yield* s.react(seq, emoji);
       out(emoji ? `reacted ${emoji} to #${seq}` : `took back your reaction on #${seq}`);
     })),
@@ -888,9 +928,14 @@ const commands: Record<string, Command> = {
       const s = yield* session();
       const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi save N [dir]"));
       const { messages, state } = yield* s.state();
-      const m = messages.find((x) => x.seq === seq && !ignored(state.trust.get(x.seq))) ?? (yield* die(`no message #${seq}`));
+      const found = yield* s.message(seq, messages);
+      const m = found && !ignored(state.trust.get(seq)) ? found : yield* die(`no message #${seq}`);
       if (!m.imgs?.length) return yield* die(`message #${seq} has no images`);
-      for (const path of saveImages(seq, m.imgs, args[2] ?? ".")) out(path);
+      const imgs = yield* s.ch.fx.images(m.imgs);
+      if (!imgs.length) return yield* die(`message #${seq}'s images are no longer on the relay`);
+      for (const path of saveImages(seq, imgs, args[2] ?? ".")) out(path);
+      const missing = missingImages(seq, m.imgs.length, imgs.length);
+      if (missing) process.stderr.write(`kiwi: ${missing}\n`);
     }),
 
   show: () =>
@@ -899,14 +944,18 @@ const commands: Record<string, Command> = {
       const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi show N [dir]"));
       const { messages, state } = yield* s.state();
       // Forged messages, and ones the owner doesn't allow, are left out everywhere (status counts them).
-      const m = messages.find((x) => x.seq === seq && !ignored(state.trust.get(x.seq))) ?? (yield* die(`no message #${seq}`));
-      // Images land under the channel's own folder (closing it deletes them), or where asked.
-      const saved = m.imgs?.length ? saveImages(seq, m.imgs, args[2] ?? joinPath(home(), "downloads", s.ch.roomId)) : [];
-      out(formatShown(m, messages, state, saved, s.me));
-      // The rest of its thread, when there's more of it than #N, what it answers and its replies.
+      const found = yield* s.message(seq, messages);
+      const m = found && !ignored(state.trust.get(seq)) ? found : yield* die(`no message #${seq}`);
       const root = state.threadOf.get(seq) ?? seq;
-      const near = new Set([seq, ...(m.re ?? []), ...messages.filter((x) => x.re?.includes(seq)).map((x) => x.seq)]);
-      const rest = messages.filter((x) => state.threadOf.get(x.seq) === root && !near.has(x.seq) && !ignored(state.trust.get(x.seq)));
+      const thread = yield* s.threadMessages(root, messages, state);
+      const known = [...messages, ...thread.filter((x) => !messages.some((y) => y.seq === x.seq))];
+      const fetched = m.imgs?.length
+        ? yield* Effect.forEach(m.imgs, (img) => s.ch.fx.images([img]).pipe(Effect.orElseSucceed((): InlineImage[] => [])), { concurrency: 4 }).pipe(Effect.map((lists) => lists.flat()))
+        : [];
+      const saved = fetched.length ? saveImages(seq, fetched, args[2] ?? joinPath(home(), "downloads", s.ch.roomId)) : [];
+      out(formatShown(m, known, state, saved, s.me, !!opt.reveal && !!m.to?.includes(s.me)));
+      const near = new Set([seq, ...(m.re ?? []), ...known.filter((x) => x.re?.includes(seq)).map((x) => x.seq)]);
+      const rest = thread.filter((x) => !near.has(x.seq) && !ignored(state.trust.get(x.seq)));
       if (rest.length) {
         out(`the rest of thread #${root}:`);
         for (const x of rest) out(`  ${render(x, state)}`);
@@ -917,11 +966,11 @@ const commands: Record<string, Command> = {
   log: () =>
     Effect.gen(function* () {
       const s = yield* session();
-      const { messages, state } = yield* s.state();
+      const { messages: held, state } = yield* s.state();
       const room = opt.room === undefined ? undefined : yield* s.roomId(opt.room, state);
-      const shown = (opt.all ? messages : messages.filter((m) => m.kind !== "event" || m.ev?.op !== "hello")).filter(
-        (m) => !ignored(state.trust.get(m.seq)) && (room === undefined || (m.kind !== "event" && state.roomOf.get(m.seq) === room)),
-      );
+      const visible = (m: Message) =>
+        (opt.all || m.kind !== "event" || m.ev?.op !== "hello") && !ignored(state.trust.get(m.seq)) && (room === undefined || (m.kind !== "event" && state.roomOf.get(m.seq) === room));
+      const shown = (yield* s.earlier(held, Number(opt.n ?? 30), visible)).filter(visible);
       for (const m of shown.slice(-Number(opt.n ?? 30))) out(render(m, state));
     }),
 
@@ -929,9 +978,9 @@ const commands: Record<string, Command> = {
     Effect.gen(function* () {
       const s = yield* session();
       const script = (yield* text(1)) || (yield* die("usage: kiwi sh 'SCRIPT' (start with: kiwi sh 'cat README')"));
-      const { channelFiles, runSh, sessionViews } = yield* Effect.promise(() => import("../sh.ts"));
+      const { channelFiles, runSh, sessionViews, channelTables } = yield* Effect.promise(() => import("../sh.ts"));
       const views = yield* sessionViews(s, script);
-      const r = yield* Effect.promise(() => runSh(channelFiles(views), script));
+      const r = yield* Effect.promise(() => runSh(channelFiles(views), script, { tables: channelTables(views) }));
       process.stdout.write(r.stdout);
       process.stderr.write(r.stderr);
       return r.exitCode;
@@ -969,15 +1018,39 @@ const commands: Record<string, Command> = {
       out(holdLine((yield* s.state()).state) ?? "not on hold");
     }),
 
+  "ask-human": () => commands.escalate!(),
+
   /** Hand a decision to people instead of acting on it. */
   escalate: () =>
     Effect.gen(function* () {
       const s = yield* session();
       const body = yield* text(1);
-      if (!body.trim()) return yield* die('usage: kiwi escalate [--re N] "why this needs a person"');
+      if (!body.trim()) return yield* die('usage: kiwi ask-human [--option "A: …" --option "B: …"] [--task T7] [--re N] "the decision you need"');
       const re = opt.re === undefined ? undefined : Number(opt.re.replace(/^#/, "")) || (yield* die("--re takes a message number"));
-      const { seq, to } = yield* s.escalate(body, re);
-      out(`escalated #${seq} to ${to.join(" and ")}; wait for their answer before acting on it`);
+      const task = opt.task === undefined ? undefined : (parseTaskId(opt.task) ?? (yield* die(`"${opt.task}" isn't a task id (like T12)`)));
+      if (opt.handoff === undefined) {
+        for (const f of ["vendor", "expires", "wait"] as const) if (opt[f] !== undefined) return yield* die(`--${f} goes with --handoff URL`);
+        const choices = opt.option?.map((o) => o.trim());
+        if (choices && !wellFormedChoices(choices)) return yield* die(`--option takes ${CHOICES_MIN} to ${CHOICES_MAX} different answers, one line of up to ${CHOICE_MAX_LENGTH} characters each`);
+        const { seq, to } = yield* s.escalate(body, re, undefined, { ...(choices ? { choices } : {}), ...(task !== undefined ? { task } : {}) });
+        return out(`escalated #${seq} to ${to.join(" and ")}${choices ? ` with ${choices.length} options` : ""}; wait for their answer before acting on it`);
+      }
+      if (opt.option !== undefined) return yield* die("--handoff has its own Done and Couldn't answers; leave out --option");
+      if (!handoffUrl(opt.handoff)) return yield* die("--handoff takes an https link without a user name or password, up to 2048 characters");
+      const vendor = opt.vendor ?? new URL(opt.handoff).hostname;
+      if (/steel/i.test(vendor) || /(^|\.)steel\.dev$/i.test(new URL(opt.handoff).hostname)) process.stderr.write("kiwi: steel live links are not authenticated; anyone with the link can use the tab\n");
+      const seconds = opt.expires === undefined ? HANDOFF_DEFAULT_SECONDS : parseDuration(opt.expires);
+      if (seconds < 1 || seconds > HANDOFF_MAX_SECONDS) return yield* die(`--expires must be between 1s and ${HANDOFF_MAX_SECONDS / 60}m`);
+      const expiresAt = Date.now() + seconds * 1000;
+      const head = opt.wait === undefined ? 0 : yield* s.ch.fx.head();
+      const { seq, to } = yield* s.escalate(body, re, { url: opt.handoff, vendor: vendor.slice(0, HANDOFF_MAX_VENDOR), expiresAt }, task !== undefined ? { task } : {});
+      out(`escalated #${seq} to ${to.join(" and ")} with a browser link that opens for ${opt.expires ?? "10m"}; wait for their answer before acting on it`);
+      if (opt.wait === undefined) return;
+      const { outcome, replies } = yield* s.awaitHandoff(seq, head, expiresAt, parseDuration(opt.wait));
+      for (const r of replies) out(render(r));
+      if (outcome === "done") return;
+      if (outcome === "waiting") return yield* die(`no answer to the handoff #${seq} within ${opt.wait}; the link is still open, so replies will still arrive when you listen`, 2);
+      return yield* die(outcome === "failed" ? `the person couldn't finish the handoff #${seq}` : `no answer to the handoff #${seq} before it expired`, 4);
     }),
 
   icon: () =>
@@ -1001,9 +1074,9 @@ const commands: Record<string, Command> = {
       const s = yield* session();
       const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi thread N"));
       const { messages, state } = yield* s.state();
-      if (!messages.some((m) => m.seq === seq)) return yield* die(`no message #${seq}`);
+      if (!(yield* s.message(seq, messages))) return yield* die(`no message #${seq}`);
       const root = state.threadOf.get(seq) ?? seq;
-      for (const m of messages) if (state.threadOf.get(m.seq) === root && !ignored(state.trust.get(m.seq))) out(render(m, state));
+      for (const m of yield* s.threadMessages(root, messages, state)) if (!ignored(state.trust.get(m.seq))) out(render(m, state));
     }),
 
   /** One verb for hearing the channel: streams (tail); --once waits for the next (wait); --now doesn't wait (read); --webhook posts (watch). */

@@ -20,11 +20,11 @@ import { mcpBrief } from "./brief.ts";
 import { loadImages, saveImages } from "./attach.ts";
 import { loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { Cursor, home, Keystore } from "./config.ts";
-import { ChannelGone, goneText, reason, type Refused } from "./client.ts";
-import { ago, cardLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, formatTask, formatTasks, looksLikeLine, mayDo, parseDuration, presenceWords, runsStatus, taskStateWord } from "./format.ts";
+import { ChannelGone, goneText, reason, type Channel, type Refused, type Relay } from "./client.ts";
+import { ago, cardLine, formatFact, formatMessage, formatRooms, formatShown, formatStatus, missingImages, formatTask, formatTasks, looksLikeLine, mayDo, parseDuration, presenceWords, runsStatus, taskStateWord } from "./format.ts";
 import { isWakeVia } from "./wake.ts";
 import { SCOPES } from "./scopes.ts";
-import { CHAT_KINDS, ignored, type Kind, type Message } from "./protocol.ts";
+import { CHAT_KINDS, CHOICE_MAX_LENGTH, CHOICES_MAX, CHOICES_MIN, HANDOFF_DEFAULT_SECONDS, HANDOFF_MAX_SECONDS, HANDOFF_MAX_VENDOR, handoffUrl, ignored, wellFormedChoices, type InlineImage, type Kind, type Message } from "./protocol.ts";
 import { inlineText } from "./membership.ts";
 import { chooseThread, parseTaskId, similarOpenTasks, taskId, wentTo } from "./state.ts";
 import { detectCard } from "./card.ts";
@@ -46,11 +46,23 @@ const task = (id: string): Effect.Effect<number, Rejected> => {
 const kind = z.enum(CHAT_KINDS as [Kind, ...Kind[]]);
 
 /** Text plus one image block per attached image (newest first, at most a few). */
-function withImages(text: string, messages: Message[]): Result {
-  const content: Content[] = [{ type: "text", text }];
+function withImages(ch: Channel, text: string, messages: Message[], notices = true): Effect.Effect<Result, never, Relay> {
   const imgs = messages.filter((m) => m.imgs?.length).slice(-3);
-  for (const m of imgs) for (const img of m.imgs!.slice(0, 3)) content.push({ type: "image", data: img.data, mimeType: img.mime });
-  return { content };
+  return Effect.map(
+    Effect.forEach(imgs, (m) => {
+      const wanted = m.imgs!.slice(0, 3);
+      return ch.fx.images(wanted).pipe(
+        Effect.orElseSucceed((): InlineImage[] => []),
+        Effect.map((got) => ({ got, notice: missingImages(m.seq, wanted.length, got.length) })),
+      );
+    }),
+    (results): Result => {
+      const lines = notices ? results.flatMap((r) => (r.notice ? [r.notice] : [])) : [];
+      return {
+        content: [{ type: "text", text: [text, ...lines].join("\n") }, ...results.flatMap((r) => r.got).map((img): Content => ({ type: "image", data: img.data, mimeType: img.mime }))],
+      };
+    },
+  );
 }
 
 /** Done once the MCP client cancels the call. */
@@ -270,8 +282,8 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
       },
     },
     shaped(({ chat, all, thread }) =>
-      Effect.map(s.read({ chat, all, ...(thread !== undefined ? { thread } : {}) }), ({ messages, state }) =>
-        messages.length ? withImages(messages.map((m) => formatMessage(m, state.trust.get(m.seq), state, s.me)).join("\n"), messages) : ok("no unread messages.\nNext: call wait_for_messages."),
+      Effect.flatMap(s.read({ chat, all, ...(thread !== undefined ? { thread } : {}) }), ({ messages, state }) =>
+        messages.length ? withImages(s.ch, messages.map((m) => formatMessage(m, state.trust.get(m.seq), state, s.me)).join("\n"), messages) : Effect.succeed(ok("no unread messages.\nNext: call wait_for_messages.")),
       ),
     ),
   );
@@ -280,11 +292,13 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     "log",
     { description: "Recent channel history (doesn't mark anything read). Images come back as image blocks. Example: log {\"n\":30}.", inputSchema: { n: z.number().int().min(1).max(500).optional() } },
     shaped(({ n }) =>
-      Effect.map(s.state(), ({ messages, state }) => {
+      Effect.gen(function* () {
+        const { messages: held, state } = yield* s.state();
+        const visible = (m: Message) => !ignored(state.trust.get(m.seq));
         // Forged messages, and ones the owner doesn't allow, are left out (status counts them for people).
-        const shown = messages.filter((m) => !ignored(state.trust.get(m.seq))).slice(-(n ?? 30));
+        const shown = (yield* s.earlier(held, n ?? 30, visible)).filter(visible).slice(-(n ?? 30));
         if (!shown.length) return ok("no messages");
-        return withImages(shown.map((m) => formatMessage(m, state.trust.get(m.seq), state, s.me)).join("\n"), shown);
+        return yield* withImages(s.ch, shown.map((m) => formatMessage(m, state.trust.get(m.seq), state, s.me)).join("\n"), shown);
       }),
     ),
   );
@@ -301,9 +315,9 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     },
     shaped(({ script }) =>
       Effect.gen(function* () {
-        const { channelFiles, runSh, sessionViews } = yield* Effect.promise(() => import("./sh.ts"));
+        const { channelFiles, runSh, sessionViews, channelTables } = yield* Effect.promise(() => import("./sh.ts"));
         const views = yield* sessionViews(s, script);
-        const r = yield* Effect.promise(() => runSh(channelFiles(views), script));
+        const r = yield* Effect.promise(() => runSh(channelFiles(views), script, { tables: channelTables(views) }));
         const text = [r.stdout.trimEnd(), r.stderr.trimEnd() && `[stderr]\n${r.stderr.trimEnd()}`, r.exitCode && `[exit ${r.exitCode}]`].filter(Boolean).join("\n");
         return r.exitCode ? fail(text) : ok(text || "(no output)");
       }),
@@ -401,9 +415,54 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
       inputSchema: {
         text: z.string().describe("what was asked, by whom, and why it needs a person"),
         re: z.number().int().optional().describe("the message this is about"),
+        handoff_url: z.string().optional().describe("an https live-view link to a browser tab the person must act in (a login, 2FA, CAPTCHA or consent wall); the person opens it from the app, you never try the step yourself"),
+        vendor: z.string().optional().describe("who hosts the tab, e.g. cloudflare, browserbase, steel, local"),
+        expires_in: z.number().int().positive().optional().describe(`seconds the link opens for; default ${HANDOFF_DEFAULT_SECONDS}, at most ${HANDOFF_MAX_SECONDS}`),
+        wait_seconds: z.number().int().positive().optional().describe("with handoff_url: block until the person presses Done or Couldn't, or the link expires"),
       },
     },
-    tool(({ text, re }) => Effect.map(s.escalate(text, re), ({ seq, to }) => `escalated #${seq} to ${to.join(" and ")}; wait for their answer before acting on it`)),
+    tool(({ text, re, handoff_url, vendor, expires_in, wait_seconds }) =>
+      Effect.gen(function* () {
+        if (handoff_url === undefined) {
+          if (vendor !== undefined || expires_in !== undefined || wait_seconds !== undefined) return yield* new Rejected("vendor, expires_in and wait_seconds go with handoff_url");
+          const { seq, to } = yield* s.escalate(text, re);
+          return `escalated #${seq} to ${to.join(" and ")}; wait for their answer before acting on it`;
+        }
+        if (!handoffUrl(handoff_url)) return yield* new Rejected("handoff_url must be an https link without a user name or password");
+        if (expires_in !== undefined && expires_in > HANDOFF_MAX_SECONDS) return yield* new Rejected(`expires_in is at most ${HANDOFF_MAX_SECONDS} seconds`);
+        const seconds = expires_in ?? HANDOFF_DEFAULT_SECONDS;
+        const expiresAt = Date.now() + seconds * 1000;
+        const head = wait_seconds === undefined ? 0 : yield* s.ch.fx.head();
+        const { seq, to } = yield* s.escalate(text, re, { url: handoff_url, vendor: (vendor ?? new URL(handoff_url).hostname).slice(0, HANDOFF_MAX_VENDOR), expiresAt });
+        const sent = `escalated #${seq} to ${to.join(" and ")} with a browser link; wait for their answer before acting on it`;
+        if (wait_seconds === undefined) return sent;
+        const { outcome } = yield* s.awaitHandoff(seq, head, expiresAt, wait_seconds);
+        return `${sent}\nhandoff ${outcome === "waiting" ? "still waiting: the link is open, listen for the answer" : outcome}`;
+      }),
+    ),
+  );
+
+  server.registerTool(
+    "ask_human",
+    {
+      description:
+        "Ask your own human and the channel owner for a decision you are waiting on: it shows in their app's Needs you list, with your options as buttons, in every mode and during a hold. Use it whenever you stop until a person decides, instead of ending a message with \"reply A, B or C\"; then wait for their answer. " +
+        'Example: ask_human {"task":251,"text":"Edits clear the old evidence. Which way?","options":["A: keep clearing, refuse until a forced audit","B: keep clearing, the audit rebuilds dedup","C: a stale flag the audit clears"]}.',
+      inputSchema: {
+        text: z.string().describe("the decision, with what each choice costs; the person reads it outside the thread"),
+        options: z.array(z.string()).optional().describe(`${CHOICES_MIN} to ${CHOICES_MAX} answers to pick from, one line of up to ${CHOICE_MAX_LENGTH} characters each; picking one replies with its text`),
+        task: z.number().int().positive().optional().describe("the task this blocks: the question goes in its thread and the task shows it waits on a person"),
+        re: z.number().int().optional().describe("the message this is about"),
+      },
+    },
+    tool(({ text, options, task, re }) =>
+      Effect.gen(function* () {
+        const choices = options?.map((o) => o.trim());
+        if (choices && !wellFormedChoices(choices)) return yield* new Rejected(`options takes ${CHOICES_MIN} to ${CHOICES_MAX} different answers, one line of up to ${CHOICE_MAX_LENGTH} characters each`);
+        const { seq, to } = yield* s.escalate(text, re, undefined, { ...(choices ? { choices } : {}), ...(task !== undefined ? { task } : {}) });
+        return `escalated #${seq} to ${to.join(" and ")}${choices ? ` with ${choices.length} options` : ""}; wait for their answer before acting on it`;
+      }),
+    ),
   );
 
   server.registerTool(
@@ -437,11 +496,14 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     tool(({ seq, dir }) =>
       Effect.gen(function* () {
         const { messages, state } = yield* s.state();
-        const m = messages.find((x) => x.seq === seq && !ignored(state.trust.get(x.seq)));
-        if (!m) return yield* new Rejected(`no message #${seq}`);
+        const m = yield* s.message(seq, messages);
+        if (!m || ignored(state.trust.get(seq))) return yield* new Rejected(`no message #${seq}`);
         if (!m.imgs?.length) return yield* new Rejected(`message #${seq} has no images`);
         // Under the channel's own folder, so closing the channel deletes them too.
-        return saveImages(seq, m.imgs, dir ?? join(home(), "downloads", s.ch.roomId)).join("\n");
+        const imgs = yield* s.ch.fx.images(m.imgs);
+        if (!imgs.length) return yield* new Rejected(missingImages(seq, m.imgs.length, 0) ?? `message #${seq}'s images are no longer on the relay`);
+        const missing = missingImages(seq, m.imgs.length, imgs.length);
+        return [...saveImages(seq, imgs, dir ?? join(home(), "downloads", s.ch.roomId)), ...(missing ? [missing] : [])].join("\n");
       }),
     ),
   );
@@ -453,11 +515,13 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
       inputSchema: { seq: z.number().int() },
     },
     shaped(({ seq }) =>
-      Effect.map(s.state(), ({ messages, state }) => {
-        const m = messages.find((x) => x.seq === seq && !ignored(state.trust.get(x.seq)));
-        if (!m) return fail(`no message #${seq}`);
-        const saved = m.imgs?.length ? saveImages(seq, m.imgs, join(home(), "downloads", s.ch.roomId)) : [];
-        return withImages(formatShown(m, messages, state, saved, s.me), [m]);
+      Effect.gen(function* () {
+        const { messages, state } = yield* s.state();
+        const m = yield* s.message(seq, messages);
+        if (!m || ignored(state.trust.get(seq))) return fail(`no message #${seq}`);
+        const images = m.imgs?.length ? yield* s.ch.fx.images(m.imgs).pipe(Effect.orElseSucceed((): InlineImage[] => [])) : [];
+        const saved = images.length ? saveImages(seq, images, join(home(), "downloads", s.ch.roomId)) : [];
+        return yield* withImages(s.ch, formatShown(m, messages, state, saved, s.me), [m], false);
       }),
     ),
   );

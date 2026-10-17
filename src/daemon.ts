@@ -15,11 +15,12 @@
 
 import { spawn } from "node:child_process";
 import { appendFileSync, chmodSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import type { Socket, Subprocess } from "bun";
 // The channel stack (client.ts) loads lazily in seatFor, where the multiplex needs it: pairing,
 // hello/adopt and the socket itself never touch it, so `kiwi pair` works without it.
-import type { Channel, PresenceFields } from "./client.ts";
+import type { Channel, Info, MemberRow, PresenceFields, Probe } from "./client.ts";
 import type { Activity, Message, Reach } from "./protocol.ts";
 import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity, saveAccess, type Config, type SeatRecord } from "./config.ts";
 import { withExchangeKey } from "./identity.ts";
@@ -28,7 +29,7 @@ import { MAILBOX_TTL_MS, MailboxError, askToPair, openMailbox, readPairAnswer, r
 import { readMachineCert, type MachineCert } from "./person.ts";
 import { pidAlive } from "./seats.ts";
 import { VERSION } from "./version.ts";
-import { viaOf, wakeArgv, wakeKey, wakePath, wakePrompt, type WakeCommand, type WakePath, type WakeVia } from "./wake.ts";
+import { pullsWake, viaOf, wakeArgv, wakeKey, wakePath, wakePrompt, type WakeCommand, type WakePath, type WakeVia } from "./wake.ts";
 
 /** Who paired this computer: the person's key, exchange key and name, as their app answered. */
 export interface PairedPerson {
@@ -85,7 +86,7 @@ export function daemonSock(dir = home()): string {
 
 // ---------- the socket protocol ----------
 
-export type DaemonVerb = "hello" | "adopt" | "listen" | "listening" | "hold" | "listeners" | "read" | "mark" | "stop";
+export type DaemonVerb = "hello" | "adopt" | "listen" | "listening" | "hold" | "listeners" | "read" | "mark" | "peek" | "stop";
 
 export const DAEMON_PROTOCOL = 4;
 
@@ -182,6 +183,22 @@ interface Seat {
   wakeAgain: boolean;
   wakeChild: Subprocess | null;
   lastWake: DaemonWake | null;
+  probe: ((ms: number) => Promise<Probe | null>) | null;
+  rows: SeatRows | null;
+  fetchingRows: boolean;
+}
+
+interface SeatRows {
+  probe: (ms: number) => Promise<Probe | null>;
+  changes: number;
+  members: MemberRow[];
+  info: Info;
+}
+
+export interface DaemonPeek {
+  head: number;
+  members: MemberRow[] | null;
+  info: Info | null;
 }
 
 type Env = Record<string, string | undefined>;
@@ -190,6 +207,8 @@ const HARNESS_ENV = ["CLAUDECODE", "CLAUDE_PID", "CLAUDE_CODE_SESSION_ID", "CODE
 
 export const ACTIVITY_EVERY_MS = 3_000;
 const PROBE_ANSWER_GAP_MS = 500;
+const PEEK_PROBE_MS = 250;
+const PEEK_MS = 300;
 const TICK_MS = 5_000;
 const RETRY_FIRST_MS = 5_000;
 const RETRY_MAX_MS = 30 * 60_000;
@@ -274,6 +293,16 @@ export interface DaemonOptions {
 const WAKE_DELAY_MS = 2_000;
 const WAKE_GAP_MS = 60_000;
 const WAKE_RUN_MS = 60_000;
+
+function findExecutable(cmd: string): string | null {
+  const user = process.env.HOME || homedir();
+  const dirs = [process.env.PATH ?? "", join(user, ".local", "bin"), join(user, ".bun", "bin"), "/opt/homebrew/bin", "/usr/local/bin"].filter(Boolean).join(":");
+  return Bun.which(cmd, { PATH: dirs });
+}
+
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, " ").trim().slice(0, 200);
+}
 const UNREAD_CHECK_MS = 30_000;
 
 function withDeadline<T>(work: Promise<T>, ms: number): Promise<T> {
@@ -368,8 +397,10 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     const env = record ? activityEnv(record, process.env) : null;
     const { harnessActivity } = await import("./harness.ts");
     const now = env ? await harnessActivity(env) : undefined;
-    const via = wakeOn(cfg, seat.alias, seat.agent) ? viaOf(await pathOf(cfg, seat.alias, seat.agent)) : null;
-    const reach = reachOf(attachedTo(seat), record, now);
+    const attached = attachedTo(seat);
+    const pulled = attached === "listener" && pullsWake(record?.harness);
+    const via = wakeOn(cfg, seat.alias, seat.agent) ? (viaOf(await pathOf(cfg, seat.alias, seat.agent)) ?? (pulled ? "listener" : null)) : null;
+    const reach = reachOf(attached, record, now);
     if (!force && JSON.stringify(now) === JSON.stringify(seat.activity) && via === seat.wakeVia && reach === seat.reach) return;
     seat.activity = now;
     seat.wakeVia = via;
@@ -389,25 +420,25 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     return runAgent(s.unreadCount(state, messages));
   };
 
-  const runWake = async (seat: Seat, [cmd, ...rest]: string[]): Promise<boolean> => {
-    const exe = cmd ? Bun.which(cmd, { PATH: process.env.PATH ?? "" }) : null;
-    if (!exe) return false;
+  const runWake = async (seat: Seat, [cmd, ...rest]: string[]): Promise<string | null> => {
+    const exe = cmd ? findExecutable(cmd) : null;
+    if (!exe) return `${cmd ?? "command"} not found on PATH`;
     try {
-      const child = Bun.spawn([exe, ...rest], { env: { ...process.env }, stdin: "ignore", stdout: "ignore", stderr: "ignore" });
+      const child = Bun.spawn([exe, ...rest], { env: { ...process.env }, stdin: "ignore", stdout: "ignore", stderr: "pipe" });
       seat.wakeChild = child;
       const timer = setTimeout(() => child.kill(), WAKE_RUN_MS);
-      const code = await child.exited;
+      const [code, err] = await Promise.all([child.exited, new Response(child.stderr).text()]);
       clearTimeout(timer);
       if (seat.wakeChild === child) seat.wakeChild = null;
-      return code === 0;
-    } catch {
-      return false;
+      return code === 0 ? null : `exit ${code}${oneLine(err) ? `: ${oneLine(err)}` : ""}`;
+    } catch (err) {
+      return `could not start: ${oneLine(err instanceof Error ? err.message : String(err))}`;
     }
   };
 
-  const logWake = (seat: Seat, w: DaemonWake): void => {
+  const logWake = (seat: Seat, w: DaemonWake, why: string | null): void => {
     try {
-      appendFileSync(join(dir, "wake.log"), `${new Date(w.at).toISOString()}\t${seat.alias}\t${seat.agent}\t${w.via}\t${w.unread}\t${w.ok ? "ok" : "failed"}\n`, { mode: 0o600 });
+      appendFileSync(join(dir, "wake.log"), `${new Date(w.at).toISOString()}\t${seat.alias}\t${seat.agent}\t${w.via}\t${w.unread}\t${w.ok ? "ok" : "failed"}${why ? `\t${why}` : ""}\n`, { mode: 0o600 });
     } catch {
       return;
     }
@@ -449,10 +480,10 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       if (!unread || !current(seat)) return;
       const path = await commandPath(seat);
       if (!path || !current(seat)) return;
-      const ok = await runWake(seat, wakeArgv(path.via, path.session, wakePrompt(seat.alias, seat.agent)));
+      const why = await runWake(seat, wakeArgv(path.via, path.session, wakePrompt(seat.alias, seat.agent)));
       if (!current(seat)) return;
-      seat.lastWake = { at: Date.now(), via: path.via, unread, ok };
-      logWake(seat, seat.lastWake);
+      seat.lastWake = { at: Date.now(), via: path.via, unread, ok: why === null };
+      logWake(seat, seat.lastWake, why);
     } finally {
       seat.waking = false;
       if (seat.wakeAgain && current(seat)) {
@@ -506,6 +537,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     seat.markTimer = null;
     seat.announce = null;
     seat.mark = null;
+    seat.probe = null;
+    seat.rows = null;
   };
 
   const tell = (seat: Seat, line: { event: DaemonEvent } | { status: string }): void => {
@@ -595,9 +628,11 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
   };
 
-  const opened = (seat: Seat, presence: (p: PresenceFields) => Promise<void>, mark: (seq: number) => boolean): void => {
+  const opened = (seat: Seat, presence: (p: PresenceFields) => Promise<void>, mark: (seq: number) => boolean, probe: (ms: number) => Promise<Probe | null>): void => {
     if (seats.get(seat.key) !== seat || seat.ctl.signal.aborted) return;
     seat.mark = mark;
+    seat.probe = probe;
+    seat.rows = null;
     seat.announce = () => void presence(fieldsOf(seat)).catch(() => {});
     void refreshActivity(seat, true).catch(() => seat.announce?.());
     stopBeacon(seat);
@@ -669,6 +704,9 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         wakeAgain: false,
         wakeChild: null,
         lastWake: null,
+        probe: null,
+        rows: null,
+        fetchingRows: false,
       };
       seats.set(key, seat);
       // stop() may have run between the check and the set: don't leave a stream behind it.
@@ -689,7 +727,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         },
         {
           signal: seat.ctl.signal,
-          onOpen: ({ presence, mark }) => opened(seat, presence, mark),
+          onOpen: ({ presence, mark, probe }) => opened(seat, presence, mark, probe),
           onPresence: (p) => {
             if (!p.query || Date.now() - seat.lastProbe < PROBE_ANSWER_GAP_MS) return;
             seat.lastProbe = Date.now();
@@ -739,6 +777,33 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       dropSub(sub);
       sendLine(conn, JSON.stringify({ id, ok: false, error: why(err) }));
     }
+  };
+
+  const refreshRows = (seat: Seat, probe: (ms: number) => Promise<Probe | null>, changes: number): void => {
+    if (seat.fetchingRows) return;
+    seat.fetchingRows = true;
+    void Promise.all([seat.ch.memberRows(), seat.ch.info()])
+      .then(([members, info]) => {
+        if (seat.probe === probe) seat.rows = { probe, changes, members, info };
+      })
+      .catch(() => {})
+      .finally(() => {
+        seat.fetchingRows = false;
+      });
+  };
+
+  const onPeek = async (conn: ConnState, id: number, params: Record<string, unknown>): Promise<void> => {
+    const { channel, as, room } = params;
+    const seat = [...seats.values()].find((s) => s.alias === channel && s.agent === as && s.ch.roomId === room);
+    const probe = seat?.probe ?? null;
+    const seen = seat && probe ? await probe(PEEK_PROBE_MS) : null;
+    if (!seat || !probe || !seen || seat.probe !== probe || !current(seat)) {
+      sendLine(conn, JSON.stringify({ id, ok: true, live: false }));
+      return;
+    }
+    const rows = seat.rows && seat.rows.probe === probe && seat.rows.changes === seen.changes ? seat.rows : null;
+    if (!rows) refreshRows(seat, probe, seen.changes);
+    sendLine(conn, JSON.stringify({ id, ok: true, live: true, head: seen.head, ...(rows ? { members: rows.members, info: rows.info } : {}) }));
   };
 
   const seatNamed = (params: Record<string, unknown>): Seat => {
@@ -850,6 +915,9 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           sendLine(conn, JSON.stringify({ id, ok: true }));
           break;
         }
+        case "peek":
+          await onPeek(conn, id, params);
+          break;
         case "listening":
           sendLine(
             conn,
@@ -1258,6 +1326,57 @@ export async function daemonSeat(channel: string, agent: string, sock = daemonSo
     return (await daemonListening(sock)).find((s) => s.channel === channel && s.agent === agent) ?? null;
   } catch {
     return null;
+  }
+}
+
+const isText = (v: unknown): v is string => typeof v === "string";
+
+function memberRows(v: unknown): MemberRow[] | null {
+  if (!Array.isArray(v)) return null;
+  const rows: MemberRow[] = [];
+  for (const x of v as unknown[]) {
+    if (!x || typeof x !== "object") return null;
+    const r = x as Record<string, unknown>;
+    if (!isText(r.pk) || !isText(r.xpk) || !isText(r.rec) || !Number.isSafeInteger(r.e) || typeof r.active !== "number") return null;
+    rows.push({ pk: r.pk, xpk: r.xpk, rec: r.rec, e: r.e as number, active: r.active, ...(typeof r.read_only === "number" ? { read_only: r.read_only } : {}) });
+  }
+  return rows;
+}
+
+function infoOf(v: unknown): Info | null {
+  if (!v || typeof v !== "object") return null;
+  const i = v as Record<string, unknown>;
+  const sealed = (x: unknown): boolean => x === undefined || x === null || (!!x && typeof x === "object" && isText((x as Record<string, unknown>).iv) && isText((x as Record<string, unknown>).ct));
+  if (!isText(i.ownerPk) || !isText(i.ownerXpk) || !isText(i.ownerSig) || !Number.isSafeInteger(i.epoch) || typeof i.rotate !== "boolean" || !sealed(i.settings) || !sealed(i.title)) return null;
+  return v as Info;
+}
+
+export async function daemonPeek(channel: string, agent: string, room: string, sock = daemonSock()): Promise<DaemonPeek | null> {
+  if (process.platform !== "win32" && !existsSync(sock)) return null;
+  const ask = async (): Promise<DaemonPeek | null> => {
+    const c = await openConn(sock, PEEK_MS);
+    try {
+      const r = await c.call("peek", { channel, as: agent, room });
+      if (r.live !== true || typeof r.head !== "number" || !Number.isSafeInteger(r.head)) return null;
+      return { head: r.head, members: memberRows(r.members), info: infoOf(r.info) };
+    } finally {
+      c.close();
+    }
+  };
+  return withDeadline(ask(), PEEK_MS).catch(() => null);
+}
+
+export async function daemonMark(channel: string, agent: string, seq: number, sock = daemonSock()): Promise<boolean> {
+  try {
+    const c = await openConn(sock, PEEK_MS);
+    try {
+      await c.call("mark", { channel, as: agent, seq });
+      return true;
+    } finally {
+      c.close();
+    }
+  } catch {
+    return false;
   }
 }
 

@@ -8,14 +8,15 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { randomBytes } from "node:crypto";
-import { appendFileSync, chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { AnswerMemory, RecordMemory } from "./client.ts";
+import type { AnswerMemory, BlobMemory, RecordMemory } from "./client.ts";
 import type { ChannelAccess } from "./crypto.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "./identity.ts";
 import type { Member } from "./membership.ts";
-import type { Message } from "./protocol.ts";
+import { BLOB_ID_RE, type Message } from "./protocol.ts";
+import type { FoldBase } from "./state.ts";
 import type { Signed, SigningBudget } from "./sas.ts";
 
 /** Public relay used when neither --relay nor KIWI_RELAY is given. */
@@ -51,6 +52,7 @@ export interface SeatRecord {
   seen?: number;
   /** Joined from a process that named no harness (a plain terminal, an unknown tool): no session ever takes it over. */
   plain?: true;
+  model?: string;
 }
 
 /** Drop the seats `drop` matches from every directory. */
@@ -87,11 +89,7 @@ export interface Config {
   bindings?: Record<string, SeatRecord | SeatRecord[]>;
   /** What this computer's person chose in `kiwi setup` about Claude Code hooks. */
   claudeHooks?: "on" | "off";
-  /**
-   * Codex, Gemini, Cursor, and Grok hook choice. Missing means on when that
-   * harness is installed. `kiwi hooks uninstall <name>` sets one to off.
-   */
-  harnessHooks?: Partial<Record<"codex" | "gemini" | "cursor" | "grok", "on" | "off">>;
+  harnessHooks?: Partial<Record<"codex" | "gemini" | "cursor" | "grok" | "kimi", "on" | "off">>;
   wakeOff?: string[];
 }
 
@@ -240,7 +238,7 @@ export const signingBudget: SigningBudget = {
   },
 };
 
-export function writePrivate(path: string, data: string): void {
+export function writePrivate(path: string, data: string | Uint8Array): void {
   mkdirSync(join(path, ".."), { recursive: true, mode: 0o700 });
   // Exclusive create. The first name is predictable, so a symlink planted there
   // must fail the open instead of being followed. Leave it in place and use a
@@ -461,9 +459,10 @@ export function wipeChannel(alias: string): void {
   });
   if (c) {
     rmSync(identityDir(c.roomId), { recursive: true, force: true });
-    for (const suffix of ["", ".seq"]) rmSync(cachePath(c.roomId) + suffix, { force: true });
+    for (const suffix of ["", ".seq", ".base"]) rmSync(cachePath(c.roomId) + suffix, { force: true });
     rmSync(join(home(), "downloads", c.roomId), { recursive: true, force: true });
     rmSync(join(home(), "answers", safe(c.roomId)), { recursive: true, force: true });
+    rmSync(blobDir(c.roomId), { recursive: true, force: true });
   }
   rmSync(cursorDir(alias), { recursive: true, force: true });
 }
@@ -534,6 +533,61 @@ export const fileAnswerMemory: AnswerMemory = {
   },
 };
 
+const blobDir = (room: string) => join(home(), "cache", `${safe(room)}.blobs`);
+
+export const BLOB_CACHE_BYTES = 128 * 1024 ** 2;
+
+function trimBlobs(dir: string, most: number): void {
+  const files = readdirSync(dir)
+    .filter((f) => BLOB_ID_RE.test(f))
+    .flatMap((f) => {
+      try {
+        const s = statSync(join(dir, f));
+        return [{ path: join(dir, f), size: s.size, used: s.mtimeMs }];
+      } catch {
+        return [];
+      }
+    });
+  let total = files.reduce((n, f) => n + f.size, 0);
+  if (total <= most) return;
+  files.sort((a, b) => a.used - b.used);
+  for (const f of files) {
+    if (total <= most) return;
+    rmSync(f.path, { force: true });
+    total -= f.size;
+  }
+}
+
+export function fileBlobs(most = BLOB_CACHE_BYTES): BlobMemory {
+  return {
+    get(room, id) {
+      if (!BLOB_ID_RE.test(id)) return null;
+      const path = join(blobDir(room), id);
+      try {
+        const blob = new Uint8Array(readFileSync(path));
+        const now = new Date();
+        utimesSync(path, now, now);
+        return blob;
+      } catch {
+        return null;
+      }
+    },
+    set(room, id, blob) {
+      if (!BLOB_ID_RE.test(id)) return;
+      try {
+        writePrivate(join(blobDir(room), id), blob);
+        trimBlobs(blobDir(room), most);
+      } catch {}
+    },
+    drop(room, id) {
+      if (!BLOB_ID_RE.test(id)) return;
+      rmSync(join(blobDir(room), id), { force: true });
+    },
+  };
+}
+
+const fileBlobMemory = fileBlobs();
+
 function cachePath(roomId: string): string {
   return join(home(), "cache", `${roomId}.jsonl`);
 }
@@ -583,6 +637,27 @@ export function appendCache(roomId: string, messages: Message[]): void {
   });
 }
 
+function readBase(roomId: string): FoldBase | null {
+  try {
+    return JSON.parse(readFileSync(`${cachePath(roomId)}.base`, "utf8")) as FoldBase;
+  } catch {
+    return null;
+  }
+}
+
+function dropBase(roomId: string): void {
+  rmSync(`${cachePath(roomId)}.base`, { force: true });
+}
+
+function keepBase(roomId: string, base: FoldBase): void {
+  const path = cachePath(roomId);
+  mkdirSync(join(path, ".."), { recursive: true, mode: 0o700 });
+  withLock(`${path}.lock`, () => {
+    if ((readBase(roomId)?.n ?? 0) >= base.n) return;
+    writePrivate(`${path}.base`, JSON.stringify(base));
+  });
+}
+
 // ---------- the same files, as services ----------
 //
 // The agent session and the commands reach ~/.kiwi through these, so a test (or
@@ -612,6 +687,7 @@ export interface KeystoreApi {
   /** The newest member record seen per key. */
   readonly records: RecordMemory;
   readonly answers?: AnswerMemory;
+  readonly blobs: BlobMemory;
 }
 
 export class Keystore extends Context.Service<Keystore, KeystoreApi>()("kiwi/Keystore") {}
@@ -622,6 +698,9 @@ export class Cache extends Context.Service<
   {
     readonly read: (roomId: string) => Effect.Effect<Message[]>;
     readonly append: (roomId: string, messages: Message[]) => Effect.Effect<void>;
+    readonly base: (roomId: string) => Effect.Effect<FoldBase | null>;
+    readonly keepBase: (roomId: string, base: FoldBase) => Effect.Effect<void>;
+    readonly dropBase: (roomId: string) => Effect.Effect<void>;
   }
 >()("kiwi/Cache") {}
 
@@ -651,6 +730,7 @@ export const fileKeystore: KeystoreApi = {
   budget: signingBudget,
   records: fileRecordMemory,
   answers: fileAnswerMemory,
+  blobs: fileBlobMemory,
 };
 
 /** The three, on this computer's disk. */
@@ -659,6 +739,9 @@ export const LocalFiles: Layer.Layer<Keystore | Cache | Cursor> = Layer.mergeAll
   Layer.succeed(Cache, {
     read: (roomId) => Effect.sync(() => readCache(roomId)),
     append: (roomId, messages) => Effect.sync(() => appendCache(roomId, messages)),
+    base: (roomId) => Effect.sync(() => readBase(roomId)),
+    keepBase: (roomId, base) => Effect.sync(() => keepBase(roomId, base)),
+    dropBase: (roomId) => Effect.sync(() => dropBase(roomId)),
   }),
   Layer.succeed(Cursor, {
     read: (channel, agent) => Effect.sync(() => readCursor(channel, agent)),

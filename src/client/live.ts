@@ -16,6 +16,7 @@ import {
   cleanActivity,
   goneHow,
   isReach,
+  MORE_REFUSED,
   PROTOCOL_VERSION,
   WS_PROTOCOL,
   wellFormedRead,
@@ -28,7 +29,7 @@ import type { ChannelCore } from "./core.ts";
 import { ChannelGone, Dropped, Unreachable } from "./errors.ts";
 import type { ChannelInfo } from "./info.ts";
 import type { Relay } from "./relay.ts";
-import { keepAlive, markOn, ownMessage, wireOn, type Inbox, type Incoming, type Wire } from "./wire.ts";
+import { keepAlive, markOn, ownMessage, wireOf, wireOn, type Inbox, type Incoming, type Probe, type Wire } from "./wire.ts";
 
 export interface StreamOptions {
   signal?: AbortSignal;
@@ -36,12 +37,14 @@ export interface StreamOptions {
   onStatus?: (s: string) => void;
   quietMs?: number;
   now?: () => number;
-  onOpen?: (live: { presence: (p: PresenceFields) => Promise<void>; mark: (seq: number) => boolean }) => void;
+  onOpen?: (live: { presence: (p: PresenceFields) => Promise<void>; mark: (seq: number) => boolean; probe: (ms: number) => Promise<Probe | null> }) => void;
   onPresence?: (p: Presence & { sigOk: boolean }) => void;
   onInfo?: () => void;
   onRoster?: () => void;
   onRequest?: () => void;
 }
+
+export type OpenKind = "first" | "page" | "reconnect";
 
 export type PresenceFields = Omit<Presence, "v" | "type" | "from" | "ts">;
 
@@ -50,10 +53,13 @@ export type Live =
       readonly _tag: "Open";
       readonly presence: (p: PresenceFields) => Effect.Effect<void>;
       readonly mark: (seq: number) => boolean;
+      readonly probe: (ms: number) => Promise<Probe | null>;
       readonly outage: number | null;
+      readonly kind: OpenKind;
     }
   | { readonly _tag: "Ready"; readonly head: number }
   | { readonly _tag: "Message"; readonly message: Message }
+  | { readonly _tag: "Head"; readonly seq: number }
   | { readonly _tag: "Presence"; readonly presence: Presence & { sigOk: boolean } }
   | { readonly _tag: "Read"; readonly reads: readonly ReadMark[]; readonly snapshot: boolean }
   | { readonly _tag: "Info" | "Roster" | "Request" }
@@ -65,6 +71,7 @@ export interface LiveOptions {
   presence?: boolean;
   reads?: boolean;
   send?: boolean;
+  watch?: boolean;
 }
 
 export const QUIET_DROP_MS = 30_000;
@@ -73,6 +80,13 @@ const backoff = Schedule.min([Schedule.exponential("500 millis"), Schedule.space
 
 const outlasted = ({ attempt, elapsed, elapsedSincePrevious }: Schedule.InputMetadata<unknown>, quietMs: number) =>
   elapsed >= quietMs && (attempt === 1 || elapsed - elapsedSincePrevious < quietMs);
+
+interface Resume {
+  seq: number;
+  next: OpenKind;
+}
+
+const STILL_IN_EVERY = 5;
 
 const tick = Effect.callback<void>((resume) => {
   const t = setTimeout(() => resume(Effect.void), 10);
@@ -93,7 +107,7 @@ function clockFrom(now: () => number): Clock.Clock {
   };
 }
 
-const FRAME: Record<Live["_tag"], string> = { Open: "open", Ready: "ready", Message: "msg", Presence: "eph", Info: "info", Roster: "roster", Request: "request", Read: "read", Down: "status", Skipped: "status" };
+const FRAME: Record<Live["_tag"], string> = { Open: "open", Ready: "ready", Message: "msg", Head: "head", Presence: "eph", Info: "info", Roster: "roster", Request: "request", Read: "read", Down: "status", Skipped: "status" };
 const failedFrame = (frame: string, err: unknown) => `dropped a ${frame} frame whose handling failed: ${reason(err)}`;
 
 export function reason(err: unknown): string {
@@ -130,6 +144,7 @@ export interface LiveFx {
 
 export class ChannelLive {
   readonly wires = new Set<Wire>();
+  private moreUnknown = false;
 
   constructor(
     private readonly ch: ChannelCore,
@@ -143,7 +158,7 @@ export class ChannelLive {
       const handle = (ev: Live): Effect.Effect<void> => {
         switch (ev._tag) {
           case "Open":
-            return Effect.sync(() => opts.onOpen?.({ presence: (p) => Effect.runPromise(ev.presence(p)), mark: ev.mark }));
+            return Effect.sync(() => opts.onOpen?.({ presence: (p) => Effect.runPromise(ev.presence(p)), mark: ev.mark, probe: ev.probe }));
           case "Ready":
             return Effect.sync(() => opts.onReady?.(ev.head));
           case "Message":
@@ -165,10 +180,10 @@ export class ChannelLive {
     }),
   };
 
-  private live(since: number, { quietMs = QUIET_DROP_MS, presence = true, reads = true, send = false }: LiveOptions): Stream.Stream<Live, ChannelGone, Relay> {
-    const at = { seq: since };
+  private live(since: number, { quietMs = QUIET_DROP_MS, presence = true, reads = true, send = false, watch = false }: LiveOptions): Stream.Stream<Live, ChannelGone, Relay> {
+    const at: Resume = { seq: since, next: "first" };
     return Stream.callback<Live, ChannelGone, Relay>((out) =>
-      Stream.suspend(() => this.session(at, quietMs, presence, reads, send)).pipe(
+      Stream.suspend(() => this.session(at, quietMs, presence, reads, send, watch)).pipe(
         Stream.retry(this.reconnect(out, quietMs)),
         Stream.catchTag("Dropped", (d) => Stream.die(d)),
         Stream.forever,
@@ -184,7 +199,7 @@ export class ChannelLive {
       Schedule.tap((meta) =>
         meta.input instanceof Dropped && outlasted(meta, quietMs) ? Queue.offer(out, { _tag: "Down", after: meta.elapsed, code: meta.input.code, reason: meta.input.reason }) : Effect.void,
       ),
-      Schedule.tap(() => this.stillIn()),
+      Schedule.tap(({ attempt }) => (attempt === 1 || attempt % STILL_IN_EVERY === 0 ? this.stillIn() : Effect.void)),
     );
   }
 
@@ -195,42 +210,49 @@ export class ChannelLive {
     });
   }
 
-  private session(at: { seq: number }, quietMs: number, presence: boolean, reads: boolean, send: boolean): Stream.Stream<Live, Dropped | ChannelGone, Relay> {
-    return Stream.callback<Incoming, Dropped | ChannelGone, Relay>((q) => this.socket(at.seq, presence, reads, q, send)).pipe(
+  private session(at: Resume, quietMs: number, presence: boolean, reads: boolean, send: boolean, watch: boolean): Stream.Stream<Live, Dropped | ChannelGone, Relay> {
+    return Stream.callback<Incoming, Dropped | ChannelGone, Relay>((q) => this.socket(at, presence, reads, q, send, watch)).pipe(
       Stream.mapEffect((f) =>
-        this.read(f, at, quietMs, presence, reads).pipe(Effect.catchCause((cause) => Effect.succeed<Live>({ _tag: "Skipped", frame: f.t, error: Cause.squash(cause) }))),
+        (watch && f.t !== "open" && f.t !== "epoch" ? Effect.succeed(this.watched(f, at)) : this.read(f, at, quietMs, presence, reads)).pipe(Effect.catchCause((cause) => Effect.succeed<Live>({ _tag: "Skipped", frame: f.t, error: Cause.squash(cause) }))),
       ),
       Stream.filter((x): x is Live => x !== null),
     );
   }
 
-  private socket(since: number, presence: boolean, reads: boolean, q: Inbox, send: boolean) {
+  private socket(at: Resume, presence: boolean, reads: boolean, q: Inbox, send: boolean, watch: boolean) {
     return Effect.gen({ self: this }, function* () {
       const auth = yield* Effect.promise(() => signRequest(this.ch.identity, this.ch.roomId, "GET", "/ws"));
       const u = new URL(`/v1/rooms/${this.ch.roomId}/ws`, this.ch.relay);
-      u.searchParams.set("since", String(since));
+      u.searchParams.set("since", String(at.seq));
+      if (watch) u.searchParams.set("watch", "1");
       if (!presence) u.searchParams.set("presence", "0");
       if (!reads) u.searchParams.set("reads", "0");
       if (send) u.searchParams.set("echo", "0");
       u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
-      const { ws, closed } = yield* Effect.acquireRelease(
-        Effect.sync(() => this.connect(u, auth, q, send)),
+      const { closed, ping } = yield* Effect.acquireRelease(
+        Effect.sync(() => this.connect(u, auth, q, at, send)),
         ({ ws }) => Effect.sync(() => ws.close(1000, "aborted")),
       );
-      yield* Effect.forkScoped(keepAlive(ws));
+      yield* Effect.forkScoped(keepAlive(ping));
       const { code, reason } = yield* Effect.promise(() => closed);
-      if (code === 4000) return yield* Queue.end(q);
+      if (code === 4000) {
+        at.next = "page";
+        return yield* Queue.end(q);
+      }
+      if (at.next === "page") at.next = "reconnect";
       if (code === CLOSE_REMOVED) return yield* Queue.fail(q, new ChannelGone("removed", goneHow(reason)));
       if (code === CLOSE_CLOSED) return yield* Queue.fail(q, new ChannelGone("closed"));
       return yield* Queue.fail(q, new Dropped({ code, reason }));
     });
   }
 
-  private connect(u: URL, auth: string, q: Inbox, send: boolean) {
+  private connect(u: URL, auth: string, q: Inbox, at: Resume, send: boolean) {
     const ws = new WebSocket(u, [WS_PROTOCOL, auth]);
+    const sock = wireOf(ws, at.seq);
     const wire = send ? wireOn(ws, q) : null;
     const closed = new Promise<{ code: number; reason: string }>((resolve) => {
       ws.onclose = (ev) => {
+        sock.closed();
         if (wire) {
           this.wires.delete(wire);
           wire.drop();
@@ -239,7 +261,20 @@ export class ChannelLive {
       };
     });
     ws.onerror = () => {};
-    ws.onopen = () => void Queue.offerUnsafe(q, { t: "open", presence: this.presenceOn(ws), mark: markOn(ws) });
+    let openedAs: OpenKind = at.next;
+    ws.onopen = () => {
+      openedAs = at.next;
+      at.next = "reconnect";
+      Queue.offerUnsafe(q, { t: "open", presence: this.presenceOn(ws), mark: markOn(ws), probe: sock.probe, kind: openedAs });
+    };
+    let paging = false;
+    let inPage = false;
+    let asked = false;
+    const ask = (since: number) => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      asked = true;
+      ws.send(JSON.stringify({ t: "more", since }));
+    };
     ws.onmessage = (ev) => {
       let f: ServerFrame | { t: "pong" };
       try {
@@ -247,12 +282,30 @@ export class ChannelLive {
       } catch {
         return;
       }
+      sock.frame(f);
       if (wire?.answer(f)) return;
+      if (f.t === "page") return void (inPage = true);
+      if (f.t === "msg" && paging && !inPage) return;
+      if (f.t === "err" && asked && (f.error === "unknown frame" || f.error === MORE_REFUSED)) {
+        if (f.error === "unknown frame") this.moreUnknown = true;
+        return void ws.close(4000, "more");
+      }
       Queue.offerUnsafe(q, f);
-      if (f.t === "ready" && f.more) ws.close(4000, "more");
-      else if (f.t === "ready" && wire) this.wires.add(wire);
+      if (f.t !== "ready") return;
+      paging = f.more;
+      inPage = false;
+      asked = false;
+      if (f.more && this.moreUnknown) ws.close(4000, "more");
+      else if (f.more) Queue.offerUnsafe(q, { t: "more", ask });
+      else {
+        if (wire) this.wires.add(wire);
+        if (openedAs === "page") {
+          Queue.offerUnsafe(q, { t: "roster" });
+          Queue.offerUnsafe(q, { t: "request" });
+        }
+      }
     };
-    return { ws, closed };
+    return { ws, closed, ping: sock.ping };
   }
 
   private presenceOn(ws: WebSocket) {
@@ -266,15 +319,18 @@ export class ChannelLive {
       });
   }
 
-  private read(f: Incoming, at: { seq: number }, quietMs: number, presence: boolean, reads: boolean): Effect.Effect<Live | null, never, Relay> {
+  private read(f: Incoming, at: Resume, quietMs: number, presence: boolean, reads: boolean): Effect.Effect<Live | null, never, Relay> {
     return Effect.gen({ self: this }, function* () {
       switch (f.t) {
         case "open": {
           const { attempt, elapsed, start } = yield* Schedule.CurrentMetadata;
           if (attempt > 0) this.info.forgetInfo();
           const now = yield* Clock.currentTimeMillis;
-          return { _tag: "Open", presence: f.presence, mark: f.mark, outage: attempt > 0 && elapsed >= quietMs ? now - start : null } satisfies Live;
+          return { _tag: "Open", presence: f.presence, mark: f.mark, probe: f.probe, outage: attempt > 0 && elapsed >= quietMs ? now - start : null, kind: f.kind } satisfies Live;
         }
+        case "more":
+          f.ask(at.seq);
+          return null;
         case "msg": {
           if (f.seq <= at.seq) return null;
           const m = yield* this.ch.fx.decrypt(f);
@@ -316,6 +372,27 @@ export class ChannelLive {
           return null;
       }
     });
+  }
+
+  private watched(f: Incoming, at: { seq: number }): Live | null {
+    switch (f.t) {
+      case "msg":
+      case "head":
+        if (!Number.isSafeInteger(f.seq) || f.seq <= at.seq) return null;
+        at.seq = f.seq;
+        return { _tag: "Head", seq: f.seq };
+      case "ready":
+        at.seq = Math.max(at.seq, f.head);
+        return { _tag: "Ready", head: f.head };
+      case "info":
+        return { _tag: "Info" };
+      case "roster":
+        return { _tag: "Roster" };
+      case "request":
+        return { _tag: "Request" };
+      default:
+        return null;
+    }
   }
 
   private presenceIn(f: { iv: string; ct: string }): Effect.Effect<Live | null> {

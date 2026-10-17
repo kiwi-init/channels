@@ -11,7 +11,7 @@
 // stops the presence beacon with it.
 
 import * as Effect from "effect/Effect";
-import { keepAnswersIn, keepRecordsIn } from "./client.ts";
+import { keepAnswersIn, keepBlobsIn, keepRecordsIn } from "./client.ts";
 import { Keystore, type ChannelConfig } from "./config.ts";
 import type { Presence } from "./protocol.ts";
 import { Rejected } from "./refusals.ts";
@@ -35,6 +35,7 @@ export const openSession = Effect.fn("AgentSession.open")(function* (alias: stri
   // Member records: the newest this machine has seen per key wins, across runs.
   keepRecordsIn(keys.records);
   keepAnswersIn(keys.answers ?? null);
+  keepBlobsIn(keys.blobs);
   // Join creates the key first (loadIdentity). Everything else must use a name this machine already holds.
   if (!(yield* keys.identitiesIn(cfg.roomId)).includes(name)) {
     return yield* Effect.fail(new Error(`${name} has no key in "${alias}" on this machine`));

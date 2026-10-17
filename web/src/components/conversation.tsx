@@ -3,34 +3,38 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 
 import { droppedCount } from "@mc/format.ts"
 import { memberLoad } from "@mc/load.ts"
-import { ignored, isReaction, type Color, type Message } from "@mc/protocol.ts"
+import { ignored, isReaction, type Color, type ImageAttachment, type Message } from "@mc/protocol.ts"
 import { describeScopes, wireScopes } from "@mc/scopes.ts"
-import { colorOf, keptFromPeople, openRound, taskId, type Task } from "@mc/state.ts"
+import { colorOf, keptFromPeople, taskId, type Task } from "@mc/state.ts"
 import { recentPrs } from "@mc/work.ts"
 import { secrets } from "@/lib/secrets"
 import { channelTitle, forgetChannel, loadMember, loadRecent, renameChannel, saveRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { howHere } from "@/lib/presence"
+import { foldTaskEvents, isTaskCard } from "@/lib/task-cards"
+import type { Gif } from "@/lib/gifs"
 import { lastPreview } from "@/lib/preview"
 import { markSeen, setOpenNews } from "@/lib/news"
+import { asksFor } from "@/lib/asks"
+import { approveTask, cancelTask, changeReviewer, reviewsFor, sendBackTask, type TaskSend } from "@/lib/task-actions"
 import { useIcons, useLiveIcon } from "@/lib/icons"
-import { excerpt, formatTime, memberName } from "@/lib/format"
-import { coordinatorMood, ERROR_MS, moodInputs, SPEAKING_MS, type Mood } from "@/lib/coordinator-mood"
+import { excerpt, formatShort, formatTime, memberName } from "@/lib/format"
 import { chipsFor } from "@/lib/reactions"
 import { receipt } from "@/lib/receipts"
 import { dmPlace, markSeenIn, MAIN, placeFromKey, placeKey, seenIn, sendFrom, useSeen, threadMembers, type Place, type PlaceSummary } from "@/lib/threads"
 import { cx } from "@/lib/utils"
-import { CoordinatorAvatar } from "./coordinator-head"
 import { Composer } from "./composer"
 import { AddAgent } from "./add-agent"
 import { AgentStrip, type AgentNow } from "./agent-strip"
 import { ChannelControls, HoldBanner, HoldDialog } from "./controls"
 import { Icon } from "./icon"
-import { Button, IconButton, Spinner } from "./kit"
+import { Button, IconButton, Spinner, errorText, toast } from "./kit"
+import { GifPicker } from "./gif-picker"
 import { Bubble, EventGroup, EventRow, TimeMark, isAgent, standsAlone, type ThreadSummary } from "./message"
 import { NeedsYou } from "./needs-you"
 import { FLOAT_GAP, FLOAT_W, Overview } from "./side-panel"
 import { Notes, Tasks } from "./tasks"
-import { InfoPanel, TaskDetails, TasksPanel, ThreadPanel } from "./lazy"
+import { Annotator, InfoPanel, TaskDetails, TasksPanel, ThreadPanel } from "./lazy"
+import { LiveTaskCard } from "./live-task-card"
 
 /** Messages this close together from one sender read as one run. */
 const RUN_GAP = 5 * 60_000
@@ -78,11 +82,6 @@ type Side = { kind: "thread"; root: number } | { kind: "info" } | { kind: "tasks
 
 const CLEAR = "xl:pr-[min(var(--float),max(0px,calc(792px_+_2*var(--float)_-_100%)))]"
 
-function roundOf(t: Task): { round: number; at?: string } | Record<string, never> {
-  const open = openRound(t)
-  return open ? { round: open.n, ...(open.at ? { at: open.at } : {}) } : {}
-}
-
 export function Conversation({ member, onBack, onGone }: { member: StoredMember; onBack: () => void; onGone: () => void }) {
   const me = member.identity.name
   const { ch, connection, gone, messages, roster, state, online, isOwner, requests, send, refreshRequests, refreshRoster, head, marks, pkOf } = useChannel(member)
@@ -90,11 +89,12 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const roomId = member.access.roomId
   const icon = useIcons().get(roomId) ?? null
   const now = useNow()
+  const [reacting, setReacting] = useState<Message | null>(null)
   // Where you are in the channel: its main conversation, or a direct one.
   const [here, setHere] = useState<string>("main")
   const [side, setSide] = useState<Side>(null)
   const floating = side === null
-  const threadRoot = side?.kind === "thread" ? side.root : null
+  const sideRoot = side?.kind === "thread" ? side.root : null
   const info = side?.kind === "info"
   /** The task open in the Tasks panel, if one is (else the panel lists them, if it's open). */
   const shownTask = side?.kind === "tasks" ? side.task : null
@@ -103,6 +103,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const [pausing, setPausing] = useState(false)
   const [search, setSearch] = useState<string | null>(null)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
+  const [picture, setPicture] = useState<{ m: Message; img: ImageAttachment; src: string } | null>(null)
   const [highlight, setHighlight] = useState<number | null>(null)
   /** New messages below while scrolled up. */
   const [behind, setBehind] = useState(0)
@@ -135,15 +136,12 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   // A reaction isn't news.
   const arrivals = useMemo(() => messages.filter((m) => m.from !== me && !isReaction(m) && reaches(m)).length, [messages, me, reaches])
   // Needs you: a question to you (or to everyone) that nobody else has answered yet.
-  const needs = useMemo(() => openAsks.filter((m) => m.from !== me && (m.to?.includes(me) || m.to?.includes("*"))).length, [openAsks, me])
+  const { escalations, questions } = useMemo(() => asksFor(openAsks, me), [openAsks, me])
+  const needs = escalations.length + questions.length
   useChannelNews(roomId, Math.max(head, messages.at(-1)?.seq ?? 0), arrivals, 0, needs)
 
-  // Needs you: escalations to this person nobody answered, and work waiting on their review.
-  const escalations = useMemo(() => openAsks.filter((m) => m.esc && m.from !== me && m.to?.includes(me)), [openAsks, me])
-  const reviews = useMemo(
-    () => (iAmPerson ? [...state.tasks.values()].filter((t) => t.state === "review" && !!t.review && (t.review === me || (t.review === "*" && t.owner !== me && !t.workedBy.includes(me)))) : []),
-    [state.tasks, me, iAmPerson]
-  )
+  const reviews = useMemo(() => reviewsFor(state.tasks.values(), me, iAmPerson), [state.tasks, me, iAmPerson])
+  const sendTask = useCallback(async ({ body, opts }: TaskSend) => void (await send(body, opts)), [send])
   // Nobody to talk to yet: the conversation opens on how to add an agent.
   const noAgents = !active.some((m) => isAgent(m))
   // A brand-new channel: nothing said and nobody to say it. The stop button waits for agents.
@@ -163,20 +161,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       ...(last && state.coordinator && last.from === state.coordinator ? { byCoordinator: true } : {}),
     })
   }, [messages, others, state.trust, state.coordinator, member.code, member.at, nameOf, me, reaches])
-
-  // ---------- the coordinator's face: what it's doing right now ----------
-  const coord = state.coordinator
-  const said = useMemo(() => (coord ? moodInputs(state, messages, online, coord) : null), [coord, state, messages, online])
-  // A fresh message or refusal shows for a few seconds: wake the clock when that window closes.
-  const [clock, setClock] = useState(() => Date.now())
-  useEffect(() => {
-    // Read the clock as soon as something new is said, and again when its moment is over.
-    const now = Date.now()
-    const ends = [said?.saidAt != null ? said.saidAt + SPEAKING_MS : 0, said?.failedAt != null ? said.failedAt + ERROR_MS : 0].filter((t) => t > now)
-    const timers = [setTimeout(() => setClock(Date.now()), 0), ...(ends.length ? [setTimeout(() => setClock(Date.now()), Math.min(...ends) - now + 50)] : [])]
-    return () => timers.forEach(clearTimeout)
-  }, [said])
-  const mood: Mood | undefined = coord && said ? coordinatorMood({ ...said, online: online.has(coord), hold: !!state.hold, now: clock }) : undefined
 
   // ---------- places: main, each task's conversation, direct ones ----------
   const { placeOf, places } = state
@@ -247,11 +231,13 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     (seq: number) => {
       const root = state.threadOf.get(seq)
       if (root === undefined || root === seq) return null
+      if (coordinator && (state.placeOf.get(seq) ?? MAIN).kind === "main") return null
       const r = bySeqAll.get(root)
       return r && r.kind !== "event" ? root : null
     },
-    [state.threadOf, bySeqAll]
+    [state.threadOf, state.placeOf, bySeqAll, coordinator]
   )
+  const threadRoot = sideRoot !== null && coordinator && (state.placeOf.get(sideRoot) ?? MAIN).kind === "main" ? null : sideRoot
   // The owner can look at what every view leaves out (forged, or not allowed), tagged; nobody else can.
   const [showDropped, setShowDropped] = useState(false)
   const revealed = isOwner && showDropped
@@ -364,7 +350,22 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   )
 
   // Replying opens the message's thread, so the answer doesn't land in the conversation.
-  const onReply = useCallback((m: Message) => openThread(rootOf(m.seq) ?? m.seq), [rootOf, openThread])
+  const onReply = useCallback(
+    (m: Message) => {
+      if (coordinator && (state.placeOf.get(m.seq) ?? MAIN).kind === "main") setReplyTo(m)
+      else openThread(rootOf(m.seq) ?? m.seq)
+    },
+    [coordinator, state.placeOf, rootOf, openThread]
+  )
+  const react = useCallback(
+    (g: Gif) => {
+      const on = reacting
+      setReacting(null)
+      if (!on) return
+      void send("reaction", { kind: "event", ev: { op: "react", seq: on.seq, emoji: `${g.reaction}/${g.name}` } }).catch((err) => toast(`Not sent: ${errorText(err)}`, "error"))
+    },
+    [reacting, send]
+  )
   const peopleOf = useCallback(
     (list: Message[]) => {
       const seenNames = new Map<string, { name: string; label: string; agent: boolean; color: Color | null }>()
@@ -419,26 +420,35 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       quoted={quoted}
       nameOf={nameOf}
       onReply={anchor ? undefined : onReply}
+      onReact={anchor ? undefined : setReacting}
       onJump={jump}
       thread={search || anchor ? undefined : summaryOf(m.seq)}
       onOpenThread={openThread}
       receipt={showsReceipt(m, anchor) ? (receipt(m, state, marks, pkOf, formatTime) ?? undefined) : undefined}
       reactions={chipsFor(state, m.seq, me, nameOf)}
+      image={ch.image}
+      onOpenImage={(pm, img, src) => setPicture({ m: pm, img, src })}
       // The coordinator's runs end on its face; only the latest one moves.
-      face={coord && m.from === coord ? <CoordinatorAvatar size={28} mood={mood} live={m.seq >= (said?.last ?? 0) && !anchor} seed={0.3} /> : undefined}
     />
   )
   // A run of messages as rows: the main column's, and (anchored "k") the open task's in the panel.
-  const timeline = (list: Message[], anchor?: string) => {
+  const timeline = (all: Message[], anchor?: string) => {
+    const cards = !anchor && hereKey === "main"
+    const list = cards ? foldTaskEvents(all, state.tasks) : all
     const out: ReactNode[] = []
     for (let i = 0; i < list.length; i++) {
       const m = list[i]!
       const prev = list[i - 1]
       if (!prev || !sameDay(prev.ts, m.ts) || m.ts - prev.ts > STAMP_GAP) out.push(<TimeMark key={`s${m.seq}`} ts={m.ts} />)
+      if (cards && isTaskCard(m, state.tasks)) {
+        out.push(<LiveTaskCard key={`card${m.seq}`} id={m.seq} state={state} messages={messages} me={me} now={now} onOpen={openTask} />)
+        continue
+      }
       if (m.kind === "event") {
         const batch: Message[] = [m]
         let j = i + 1
-        while (j < list.length && list[j]!.kind === "event" && sameDay(m.ts, list[j]!.ts) && list[j]!.ts - list[j - 1]!.ts <= STAMP_GAP) batch.push(list[j++]!)
+        while (j < list.length && list[j]!.kind === "event" && !(cards && isTaskCard(list[j]!, state.tasks)) && sameDay(m.ts, list[j]!.ts) && list[j]!.ts - list[j - 1]!.ts <= STAMP_GAP)
+          batch.push(list[j++]!)
         i = j - 1
         const alone = batch.filter((ev) => standsAlone(ev, state, me))
         const rest = batch.filter((ev) => !standsAlone(ev, state, me))
@@ -520,7 +530,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       lastAt: lastAt.get(m.name),
     }))
   const prs = floating ? recentPrs(state, messages, me, 5) : []
-  const needsMe = escalations.length + reviews.length + (isOwner ? requests.length : 0)
+  const needsMe = escalations.length + questions.length + reviews.length + (isOwner ? requests.length : 0)
   // The header's capsule is the channel's, wherever you are in it, so this line is the channel's too.
   const headline =
     connection === "connecting" || connection === "reconnecting"
@@ -724,24 +734,15 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                 <NeedsYou
                   now={now}
                   roomId={roomId}
+                  me={me}
                   escalations={escalations}
+                  questions={questions}
                   reviews={reviews}
                   nameOf={nameOf}
+                  agentOf={(name) => isAgent(state.members.get(name))}
                   onReply={async (m, text) => void (await send(text, { to: [m.from], re: [m.seq], kind: "msg" }))}
-                  onApproveTask={async (t: Task) =>
-                    void (await send(`${taskId(t.id)} approved`, {
-                      kind: "event",
-                      ev: { op: "task.update", task: t.id, state: "done", verdict: "approved", note: "approved", ...roundOf(t) },
-                      ...(t.owner ? { to: [t.owner] } : {}),
-                    }))
-                  }
-                  onSendBack={async (t: Task, why: string) =>
-                    void (await send(`${taskId(t.id)} rejected`, {
-                      kind: "event",
-                      ev: { op: "task.update", task: t.id, state: "doing", verdict: "rejected", note: why, ...roundOf(t) },
-                      ...(t.owner ? { to: [t.owner] } : {}),
-                    }))
-                  }
+                  onApproveTask={(t: Task) => sendTask(approveTask(t))}
+                  onSendBack={(t: Task, why: string) => sendTask(sendBackTask(t, why))}
                   onOpenTask={openTask}
                   onJump={jump}
                 />
@@ -795,6 +796,9 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
           {/* The composer floats on glass at the foot; messages scroll under it too. */}
           <div ref={footRef} className={cx("absolute inset-x-0 bottom-0 z-20", floating && CLEAR)}>
             <div aria-hidden className="scrim-bottom absolute inset-x-0 -top-6 bottom-0" />
+            {reacting && (
+              <GifPicker onPick={react} onClose={() => setReacting(null)} className="absolute right-3 bottom-[calc(100%+4px)] left-3 md:right-auto md:left-1/2 md:w-[420px] md:-translate-x-1/2" />
+            )}
             <div className="relative">
               {mayWrite ? (
                 <Composer
@@ -856,6 +860,34 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
           </ThreadPanel>
         )}
 
+        {picture && (
+          <Annotator
+            picture={{ src: picture.src, name: picture.img.name, mime: picture.img.mime }}
+            sender={nameOf(picture.m.from)}
+            agent={isAgent(state.members.get(picture.m.from))}
+            when={formatShort(picture.m.ts)}
+            replyTo={mayWrite ? nameOf(picture.m.from) : undefined}
+            onSend={
+              mayWrite
+                ? async (note, image) => {
+                    const pm = picture.m
+                    let to = pm.from !== me ? [pm.from] : extra?.to
+                    if (coordinator && place.kind === "main" && to?.length && !to.includes(coordinator)) to = [...to, coordinator]
+                    await send(note || image.name, {
+                      to,
+                      kind: "msg",
+                      re: [pm.seq],
+                      ...(extra?.task !== undefined ? { task: extra.task } : {}),
+                      ...(extra?.dm ? { to: extra.to, dm: true } : {}),
+                      imgs: [image],
+                    })
+                  }
+                : undefined
+            }
+            onClose={() => setPicture(null)}
+          />
+        )}
+
         {info && (
           <InfoPanel
             title={title}
@@ -864,7 +896,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             onClose={() => setSide(null)}
             onPause={hold && !state.hold ? () => setPausing(true) : undefined}
             onMessage={(name) => go(dmPlace(me, name))}
-            mood={mood}
             notes={<Notes state={state} now={now} onClear={async (key) => void (await send(`cleared ${key}`, { kind: "event", ev: { op: "fact.del", key } }))} />}
           />
         )}
@@ -920,8 +951,13 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                   me={me}
                   now={now}
                   highlighted={highlight === shownTask}
+                  person={iAmPerson}
                   noteBlocked={state.members.get(me)?.scopes.includes("tasks") === false ? "The owner hasn’t let you change tasks here, so you can’t comment on one." : null}
                   onNote={async (note) => void (await send(`noted on ${taskId(shownTask)}`, { kind: "event", ev: { op: "task.update", task: shownTask, note } }))}
+                  onApprove={(t) => sendTask(approveTask(t))}
+                  onSendBack={(t, why) => sendTask(sendBackTask(t, why))}
+                  onCancel={(t, note) => sendTask(cancelTask(t, note, me))}
+                  onReviewer={(t, review) => sendTask(changeReviewer(t, review, me))}
                 />
                 {task && !saidInTask && <p className="mt-4 text-center text-meta text-ink-3">What the agents on it say to each other shows up here.</p>}
                 {taskRows}

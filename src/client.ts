@@ -12,13 +12,14 @@
 import { newRoomId, type ChannelAccess } from "./crypto.ts";
 import type { Identity } from "./identity.ts";
 import type { JoinClaims, JoinRequest, Member, MemberInfo } from "./membership.ts";
-import type { ChannelIcon, Envelope, Message } from "./protocol.ts";
+import type { ChannelIcon, Envelope, ImageAttachment, Message } from "./protocol.ts";
 import type { SigningBudget } from "./sas.ts";
 import type { Scope } from "./scopes.ts";
 import type { ChannelState, GuardFloor } from "./state.ts";
 import { ChannelCore, type ChannelFx } from "./client/core.ts";
 import { ChannelHistory } from "./client/history.ts";
-import { ChannelInfo, type Info } from "./client/info.ts";
+import { ChannelImages } from "./client/images.ts";
+import { ChannelInfo, type Info, type MemberRow } from "./client/info.ts";
 import { joinFx, type JoinStatus } from "./client/join.ts";
 import { ChannelKeys } from "./client/keys.ts";
 import { ChannelLive, type StreamOptions } from "./client/live.ts";
@@ -27,12 +28,15 @@ import { run, runUntil } from "./client/relay.ts";
 import { ChannelRequests } from "./client/requests.ts";
 import { ChannelSending, type SendOptions } from "./client/send.ts";
 import { ChannelSettings, type ModeSetting, type RoomsSetting } from "./client/settings.ts";
+import { ChannelSnapshots } from "./client/snapshots.ts";
 
 export { ChannelGone, goneText, RelayError, Unreachable, type Refused } from "./client/errors.ts";
 export { fetchRelay, fx, keepAnswersIn, Relay, relayConfig, settle, type AnswerMemory, type HumanSession } from "./client/relay.ts";
-export { eachLive, QUIET_DROP_MS, reason, type Live, type PresenceFields, type StreamOptions } from "./client/live.ts";
+export { eachLive, QUIET_DROP_MS, reason, type Live, type OpenKind, type PresenceFields, type StreamOptions } from "./client/live.ts";
+export type { Probe } from "./client/wire.ts";
 export { ownerStatement } from "./client/keys.ts";
-export { INFO_MAX_AGE_MS, keepRecordsIn, type Info, type RecordMemory } from "./client/info.ts";
+export { INFO_MAX_AGE_MS, keepRecordsIn, type Info, type MemberRow, type RecordMemory } from "./client/info.ts";
+export { keepBlobsIn, type BlobMemory } from "./client/images.ts";
 export type { ModeSetting, RoomsSetting } from "./client/settings.ts";
 export type { JoinStatus } from "./client/join.ts";
 export type { SendOptions } from "./client/send.ts";
@@ -53,16 +57,21 @@ export class Channel {
   ) {
     this.core = new ChannelCore(access, relay, identity, onAccess);
     this.cache = new ChannelInfo(this.core, opts);
+    const settings = new ChannelSettings(this.core, this.cache);
+    const history = new ChannelHistory(this.core);
+    const images = new ChannelImages(this.core, settings);
     const live = new ChannelLive(this.core, this.cache);
-    this.sending = new ChannelSending(this.core, live);
+    this.sending = new ChannelSending(this.core, live, settings, images);
     this.fx = {
       ...new ChannelKeys(this.core).fx,
       ...this.cache.fx,
-      ...new ChannelSettings(this.core, this.cache).fx,
+      ...settings.fx,
       ...new ChannelRequests(this.core).fx,
       ...new ChannelMembers(this.core, this.cache).fx,
-      ...new ChannelHistory(this.core).fx,
+      ...history.fx,
+      ...new ChannelSnapshots(this.core, history).fx,
       ...this.sending.fx,
+      ...images.fx,
       ...live.fx,
     };
     this.core.fx = this.fx;
@@ -229,6 +238,14 @@ export class Channel {
     return run(this.fx.setHold(hold));
   }
 
+  compress(): Promise<boolean> {
+    return run(this.fx.compress());
+  }
+
+  setCompress(on: boolean): Promise<void> {
+    return run(this.fx.setCompress(on));
+  }
+
   /** The channel's icon, if the owner set one (only members can read it). */
   icon(): Promise<ChannelIcon | null> {
     return run(this.fx.icon());
@@ -242,6 +259,10 @@ export class Channel {
   /** The verified member list. Records that fail verification are dropped. */
   members(): Promise<Member[]> {
     return run(this.fx.members());
+  }
+
+  memberRows(): Promise<MemberRow[]> {
+    return run(this.fx.memberRows());
   }
 
   /** Leave the channel. Access is revoked at once; the owner rotates the key. */
@@ -338,6 +359,14 @@ export class Channel {
     return run(this.fx.rotateIfDue());
   }
 
+  snapshotIfDue(): Promise<number | null> {
+    return run(this.fx.snapshotIfDue());
+  }
+
+  snapshotAt(): Promise<number | null> {
+    return run(this.fx.snapshotAt());
+  }
+
   /** Delete the channel at the relay: messages, members, keys, everything. */
   close(): Promise<void> {
     return run(this.fx.close());
@@ -351,12 +380,24 @@ export class Channel {
     return run(this.fx.send(body, opts));
   }
 
+  imageRefs(): Promise<boolean> {
+    return run(this.fx.imageRefs());
+  }
+
+  setImageRefs(on: boolean): Promise<void> {
+    return run(this.fx.setImageRefs(on));
+  }
+
+  image(img: ImageAttachment): Promise<string | null> {
+    return run(this.fx.image(img));
+  }
+
   decrypt(env: Envelope): Promise<Message | null> {
     return run(this.fx.decrypt(env));
   }
 
   /** Messages after `since`, oldest first, following pages to the head. */
-  history(since: number): Promise<{ head: number; messages: Message[] }> {
+  history(since: number): Promise<{ head: number; messages: Message[]; first: number | null }> {
     return run(this.fx.history(since));
   }
 

@@ -8,7 +8,7 @@ on:
 
 # A new push to a pull request cancels its run still in progress. Main keeps every run.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.sha }}
+  group: ci-${{ github.event.pull_request.number || format('{0}-{1}', github.ref_name, github.sha) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -150,6 +150,21 @@ jobs:
           job: web-format
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['web-format'] }}
 
+  web-task-cards:
+    name: web / task-cards
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['web-task-cards']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup
+      - run: bun test web/src/lib/task-cards.test.ts
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: web-task-cards
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['web-task-cards'] }}
+
   web-bundle:
     name: web / bundle
     needs: plan
@@ -176,14 +191,21 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: ./.github/actions/setup
-      - run: bunx playwright-core install --with-deps --only-shell chromium
+      - id: playwright
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - run: bunx playwright-core install-deps chromium-headless-shell
+      - if: steps.playwright.outputs.cache-hit != 'true'
+        run: bunx playwright-core install --only-shell chromium
       - run: cd web && bun run build
       - run: bun run smoke:ui
       - if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ui-smoke-failure
-          path: /tmp/kiwi-smoke-failure.png
+          path: /tmp/kiwi-smoke-failure-*.png
           if-no-files-found: ignore
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
@@ -246,6 +268,23 @@ jobs:
           job: desktop-keys
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-keys'] }}
 
+  desktop-voice:
+    name: desktop / voice
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['desktop-voice']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup
+        with:
+          web: "false"
+      - run: bun scripts/ci-tests.ts desktop-voice
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: desktop-voice
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['desktop-voice'] }}
+
   site-test:
     name: site / test
     needs: plan
@@ -282,6 +321,43 @@ jobs:
           job: cli-build
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['cli-build'] }}
 
+  cli-macos:
+    name: cli / macos
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['cli-macos']
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup
+      - run: bun test
+      - run: |
+          mkdir -p dist
+          for t in darwin-arm64 darwin-x64 linux-x64 linux-arm64 windows-x64; do
+            ext=""; [ "$t" = windows-x64 ] && ext=".exe"
+            bun scripts/build-cli.ts --target "bun-$t" --outfile "dist/kiwi-$t$ext"
+          done
+          codesign --force --sign - dist/kiwi-darwin-arm64 dist/kiwi-darwin-x64
+          ./dist/kiwi-darwin-arm64 --version
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: cli-macos
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['cli-macos'] }}
+
+  release-rehearsal:
+    name: release / rehearsal
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['release-rehearsal']
+    uses: ./.github/workflows/release-build.yml
+    with:
+      rehearsal: true
+    secrets:
+      MAC_CERT_P12_BASE64: ${{ github.event_name == 'workflow_dispatch' && secrets.MAC_CERT_P12_BASE64 || '' }}
+      MAC_CERT_PASSWORD: ${{ github.event_name == 'workflow_dispatch' && secrets.MAC_CERT_PASSWORD || '' }}
+      APPLE_API_KEY_P8: ${{ github.event_name == 'workflow_dispatch' && secrets.APPLE_API_KEY_P8 || '' }}
+      APPLE_API_KEY_ID: ${{ github.event_name == 'workflow_dispatch' && secrets.APPLE_API_KEY_ID || '' }}
+      APPLE_API_ISSUER: ${{ github.event_name == 'workflow_dispatch' && secrets.APPLE_API_ISSUER || '' }}
+
   relay-worker:
     name: relay / worker
     needs: plan
@@ -316,6 +392,40 @@ jobs:
         with:
           job: relay-budget
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['relay-budget'] }}
+
+  cli-seats:
+    name: cli / seats
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['cli-seats']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup
+        with:
+          web: "false"
+      - run: bun scripts/ci-tests.ts seats
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: cli-seats
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['cli-seats'] }}
+
+  cli-handoff:
+    name: cli / handoff
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['cli-handoff']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup
+        with:
+          web: "false"
+      - run: bun scripts/ci-tests.ts handoff
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: cli-handoff
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['cli-handoff'] }}
 
   repo-comments:
     name: repo / comments
@@ -373,11 +483,9 @@ jobs:
           job: repo-pins
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['repo-pins'] }}
 
-  # The one check to require: passes when every job the plan ran passed and the rest were skipped.
-  # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, desktop-fuses, cli-build, relay-worker, relay-budget, repo-comments, desktop-keys, repo-knip, web-bundle, site-test, repo-pins]
+    needs: [plan, core-types, core-test, flows-a, flows-b, web-types, web-lint, web-format, ui-smoke, desktop, desktop-fuses, cli-build, relay-worker, relay-budget, cli-seats, cli-handoff, repo-comments, desktop-keys, desktop-voice, repo-knip, web-bundle, web-task-cards, site-test, repo-pins, cli-macos, release-rehearsal]
     if: always()
     runs-on: ubuntu-latest
     permissions:

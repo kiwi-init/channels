@@ -6,6 +6,7 @@ import { PALETTE } from "@/lib/characters"
 import { initials } from "@/lib/format"
 import { noteSignInGone } from "@/lib/session"
 import { cx } from "@/lib/utils"
+import { RobotAvatar } from "./robot"
 import { Tooltip } from "./ui/tooltip"
 
 // The few pieces everything is built from. Neutral by default; the accent
@@ -133,23 +134,29 @@ export function Monogram({
   working?: boolean
   className?: string
 }) {
-  const tone = color ? PALETTE[color] : agent ? PALETTE[hueOf(hue ?? name)] : null
+  const tone = color ? PALETTE[color] : null
   const letters = initials(name)
   return (
     <span className={cx("relative inline-flex shrink-0", className)} style={{ width: size, height: size }}>
-      <span
-        className={cx(
-          "flex size-full items-center justify-center rounded-full font-semibold tracking-[-0.01em] text-white select-none",
-          !tone && "bg-[linear-gradient(180deg,var(--avatar-top),var(--avatar-bottom))]",
-          working && "shadow-[0_0_0_1.5px_var(--canvas),0_0_0_3px_var(--doing)]"
-        )}
-        style={{
-          ...(tone && { background: `linear-gradient(180deg, ${tone.fill}, color-mix(in srgb, ${tone.fill} 72%, black))`, color: tone.ink }),
-          fontSize: Math.round(size * (letters.length > 1 ? 0.38 : 0.44)),
-        }}
-      >
-        {letters}
-      </span>
+      {agent ? (
+        <span className={cx("flex size-full items-center justify-center rounded-full", working && "shadow-[0_0_0_1.5px_var(--canvas),0_0_0_3px_var(--doing)]")}>
+          <RobotAvatar name={hue ?? name} size={size} />
+        </span>
+      ) : (
+        <span
+          className={cx(
+            "flex size-full items-center justify-center rounded-full font-semibold tracking-[-0.01em] text-white select-none",
+            !tone && "bg-[linear-gradient(180deg,var(--avatar-top),var(--avatar-bottom))]",
+            working && "shadow-[0_0_0_1.5px_var(--canvas),0_0_0_3px_var(--doing)]"
+          )}
+          style={{
+            ...(tone && { background: `linear-gradient(180deg, ${tone.fill}, color-mix(in srgb, ${tone.fill} 72%, black))`, color: tone.ink }),
+            fontSize: Math.round(size * (letters.length > 1 ? 0.38 : 0.44)),
+          }}
+        >
+          {letters}
+        </span>
+      )}
       {online && (
         <span
           className="absolute -right-0.5 -bottom-0.5 rounded-full bg-live shadow-[0_0_0_2px_var(--canvas)]"

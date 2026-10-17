@@ -29,6 +29,8 @@ function unpacked(v: Stored): string {
 
 const DROP_BATCH = 64;
 
+const BLOB_GRACE_MS = 3_600_000;
+
 const READS_TABLE = "CREATE TABLE reads (pk TEXT PRIMARY KEY, seq INTEGER NOT NULL, at INTEGER NOT NULL)";
 
 const REQUEST_COLUMNS = [
@@ -41,6 +43,16 @@ const REQUEST_COLUMNS = [
   ["owner_nonce", "TEXT"],
   ["reveal", "TEXT"],
 ] as const;
+
+export interface StoredSnapshot {
+  n: number;
+  e: number;
+  iv: string;
+  ct: string;
+  hash: string;
+  sig: string;
+  at: number;
+}
 
 interface Counters {
   bytes: number;
@@ -57,13 +69,14 @@ interface Warm {
   head: number | null;
   members: Map<string, { active: boolean; readOnly: boolean } | null>;
   reads: Map<string, number>;
+  blobs: boolean | null;
 }
 
 const warmRooms = new WeakMap<Sql, Warm>();
 
 type Revised = "roster" | "info";
 
-const coldRoom = (): Warm => ({ exists: null, meta: new Map(), head: null, members: new Map(), reads: new Map() });
+const coldRoom = (): Warm => ({ exists: null, meta: new Map(), head: null, members: new Map(), reads: new Map(), blobs: null });
 
 export function forgetRoom(sql: Sql): void {
   warmRooms.delete(sql);
@@ -98,7 +111,7 @@ export class RoomDb {
   }
 
   init(): void {
-    warmRooms.set(this.sql, { ...coldRoom(), exists: true, head: 0 });
+    warmRooms.set(this.sql, { ...coldRoom(), exists: true, head: 0, blobs: false });
     this.sql.run("CREATE TABLE meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)");
     this.sql.run("CREATE TABLE msgs (seq INTEGER PRIMARY KEY, ts INTEGER NOT NULL, iv TEXT NOT NULL, ct TEXT NOT NULL, e INTEGER NOT NULL)");
     this.sql.run(
@@ -224,18 +237,22 @@ export class RoomDb {
     return total;
   }
 
+  bytesThrough(seq: number): number {
+    return this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM msgs WHERE seq <= ?`, seq)[0]?.n ?? 0;
+  }
+
   dropThrough(seq: number): number {
     if (seq <= 0) return 0;
-    const freed = this.sql.all<{ n: number }>(`SELECT COALESCE(SUM(${CT_CHARS}), 0) AS n FROM msgs WHERE seq <= ?`, seq)[0]?.n ?? 0;
+    const freed = this.bytesThrough(seq);
     if (freed) this.sql.run("DELETE FROM msgs WHERE seq <= ?", seq);
     return freed;
   }
 
-  dropOldest(need: number): number {
+  dropOldest(need: number, upTo = Number.MAX_SAFE_INTEGER): number {
     let freed = 0;
     let through = 0;
     while (freed < need) {
-      const batch = this.sql.all<{ seq: number; n: number }>(`SELECT seq, ${CT_CHARS} AS n FROM msgs WHERE seq > ? ORDER BY seq LIMIT ?`, through, DROP_BATCH);
+      const batch = this.sql.all<{ seq: number; n: number }>(`SELECT seq, ${CT_CHARS} AS n FROM msgs WHERE seq > ? AND seq <= ? ORDER BY seq LIMIT ?`, through, upTo, DROP_BATCH);
       for (const r of batch) {
         freed += r.n;
         through = r.seq;
@@ -244,6 +261,53 @@ export class RoomDb {
       if (batch.length < DROP_BATCH) break;
     }
     if (through) this.sql.run("DELETE FROM msgs WHERE seq <= ?", through);
+    return freed;
+  }
+
+  private hasBlobs(): boolean {
+    const w = this.warm;
+    w.blobs ??= this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'blobs'").length > 0;
+    return w.blobs;
+  }
+
+  blob(id: string): Uint8Array<ArrayBuffer> | null {
+    if (!this.hasBlobs()) return null;
+    const b = this.sql.all<{ bytes: Uint8Array<ArrayBuffer> | ArrayBuffer }>("SELECT bytes FROM blobs WHERE id = ?", id)[0]?.bytes;
+    return b === undefined ? null : b instanceof Uint8Array ? b : new Uint8Array(b);
+  }
+
+  hasBlob(id: string): boolean {
+    return this.hasBlobs() && this.sql.all("SELECT 1 FROM blobs WHERE id = ?", id).length > 0;
+  }
+
+  putBlob(id: string, bytes: Uint8Array<ArrayBuffer>, at: number): void {
+    if (!this.hasBlobs()) {
+      this.sql.run("CREATE TABLE IF NOT EXISTS blobs (id TEXT PRIMARY KEY, bytes BLOB NOT NULL, size INTEGER NOT NULL, at INTEGER NOT NULL)");
+      this.warm.blobs = true;
+    }
+    this.sql.run("INSERT OR IGNORE INTO blobs (id, bytes, size, at) VALUES (?, ?, ?, ?)", id, bytes, bytes.length, at);
+  }
+
+  pruneBlobs(): number {
+    if (!this.hasBlobs()) return 0;
+    const oldest = this.sql.all<{ ts: number }>("SELECT ts FROM msgs ORDER BY seq LIMIT 1")[0]?.ts;
+    if (oldest === undefined) return 0;
+    const before = oldest - BLOB_GRACE_MS;
+    const freed = this.sql.all<{ n: number }>("SELECT COALESCE(SUM(size), 0) AS n FROM blobs WHERE at < ?", before)[0]?.n ?? 0;
+    if (freed) this.sql.run("DELETE FROM blobs WHERE at < ?", before);
+    return freed;
+  }
+
+  dropOldestBlobs(need: number): number {
+    if (!this.hasBlobs()) return 0;
+    let freed = 0;
+    const gone: string[] = [];
+    for (const r of this.sql.all<{ id: string; size: number }>("SELECT id, size FROM blobs ORDER BY at")) {
+      if (freed >= need) break;
+      freed += r.size;
+      gone.push(r.id);
+    }
+    for (const id of gone) this.sql.run("DELETE FROM blobs WHERE id = ?", id);
     return freed;
   }
 
@@ -296,6 +360,21 @@ export class RoomDb {
   settings(): { iv: string; ct: string } | null {
     const t = this.get("settings");
     return t ? (JSON.parse(t) as { iv: string; ct: string }) : null;
+  }
+
+  snapshot(): StoredSnapshot | null {
+    const t = this.sql.all<{ v: string }>("SELECT v FROM meta WHERE k = 'snapshot'")[0]?.v;
+    return t ? (JSON.parse(t) as StoredSnapshot) : null;
+  }
+
+  setSnapshot(s: StoredSnapshot): void {
+    this.sql.run("INSERT INTO meta (k, v) VALUES ('snapshot', ?) ON CONFLICT (k) DO UPDATE SET v = excluded.v", JSON.stringify(s));
+  }
+
+  dropSnapshot(): number {
+    const freed = this.snapshot()?.ct.length ?? 0;
+    if (freed) this.sql.run("DELETE FROM meta WHERE k = 'snapshot'");
+    return freed;
   }
 
   unlinkAll(): DirectoryUpdate[] {

@@ -4,6 +4,7 @@ import type { Identity } from "../identity.ts";
 import { OwnerOnly } from "../refusals.ts";
 import { gone, type MemberRefusal } from "./errors.ts";
 import type { HistoryFx } from "./history.ts";
+import type { ImagesFx } from "./images.ts";
 import type { InfoFx } from "./info.ts";
 import type { KeysFx } from "./keys.ts";
 import type { LiveFx } from "./live.ts";
@@ -12,8 +13,9 @@ import { callRelay, type CallInit, type Relay } from "./relay.ts";
 import type { RequestsFx } from "./requests.ts";
 import type { SendFx } from "./send.ts";
 import type { SettingsFx } from "./settings.ts";
+import type { SnapshotsFx } from "./snapshots.ts";
 
-export interface ChannelFx extends KeysFx, InfoFx, SettingsFx, RequestsFx, MembersFx, HistoryFx, SendFx, LiveFx {}
+export interface ChannelFx extends KeysFx, InfoFx, SettingsFx, RequestsFx, MembersFx, HistoryFx, SnapshotsFx, SendFx, ImagesFx, LiveFx {}
 
 export class ChannelCore {
   readonly name: string;

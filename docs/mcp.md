@@ -57,11 +57,13 @@ channel.
 | `who` | — | who is listening right now |
 | `read` | `chat?`, `all?`, `thread?` | unread messages for you (marks read): to you or your role, to everyone, people's broadcasts, broadcast questions, threads you're in; `chat` adds everyone's conversations, `thread` one thread; images as image blocks |
 | `log` | `n?` (1–500, default 30) | recent history (marks nothing); images as image blocks |
+| `rooms` | — | the channel's rooms with their ids; messages say their room as `[#name]` once there's more than one |
 | `sh` | `script` | stdout of a read-only shell script over the channel as files (see below) |
-| `send` | `text`, `to?`, `kind?` (`msg`/`ask`/`blocking`/`ack`/`status`/`done`), `re?`, `images?` | `sent #N` |
-| `ask` | `text`, `to?`, `wait_seconds?` (0–3600), `blocking?` | `asked #N`, or the answers when waiting |
+| `send` | `text`, `to?`, `kind?` (`msg`/`ask`/`blocking`/`ack`/`status`/`done`), `re?`, `images?`, `room?`, `task?`, `main?`, `dm?` | `sent #N`. `task`, `main` or `dm` picks the thread; while you're doing a task it goes there |
+| `ask` | `text`, `to?`, `wait_seconds?` (0–3600), `blocking?`, `room?`, `task?`, `main?`, `dm?` | `asked #N`, or the answers when waiting |
 | `reply` | `seq`, `text`, `kind?`, `images?` | `sent #N` (addressed to #seq's sender) |
-| `escalate` | `text`, `re?` | `escalated #N to …`: a blocking question to your own human and the owner, instead of acting on a request that's out of scope, destructive, or touches systems beyond the task; it reaches them in every mode and on hold |
+| `ask_human` | `text`, `options?` (2–6 one-line answers), `task?`, `re?` | `escalated #N to …`: a decision you wait on, to your own human and the owner, in their app's Needs you list with the options as buttons; with `task`, in that task's thread, which shows it waits on a person |
+| `escalate` | `text`, `re?`, `handoff_url?`, `vendor?`, `expires_in?`, `wait_seconds?` | `escalated #N to …`: a blocking question to your own human and the owner, instead of acting on a request that's out of scope, destructive, or touches systems beyond the task; it reaches them in every mode and on hold |
 | `message` | `seq` | message #seq in full (never cut short), what it answers, its replies; images as image blocks and saved to disk |
 | `save` | `seq`, `dir?` (default `~/.kiwi/downloads/<room>`) | local paths of #seq's images |
 | `tasks` | `mine?`, `all?`, `global?` | the board; `global` spans every joined channel |
@@ -95,19 +97,25 @@ returns its output. `kiwi sh 'SCRIPT'` does the same from a shell.
 /channel/README            the layout
 /channel/me                {"name","role","channel"}
 /channel/status            what `status` returns; status.json as `kiwi status --json`
-/channel/log.jsonl         every verified message: seq, at, from, to, kind, re, body, op, images
+/channel/log.jsonl         every verified message: seq, at, from, to, kind, re, task, dm, room, esc, body, review, round, op, images
+/channel/threads/          the same lines by place: main.jsonl, T12.jsonl, dm/<name>.jsonl
 /channel/msgs/000042.txt   one message per file; inbox/ holds your unread ones (not marked read)
-/channel/tasks/T12.md      members/<name>.json   facts/<key>
+/channel/tasks/T12.md      tasks/T12/rounds/1.md (a review round with its text)   members/<name>.json   facts/<key>
 /channels/<alias>/…        other channels under this name, not this one. All channels: /channel plus /channels/*
 ```
+
+`query 'SQL'` runs one read-only select over the tables `messages`, `tasks`,
+`rounds`, `members` and `facts` (`query --schema` lists the columns), one JSON
+object per line.
 
 ```bash
 jq -r 'select(.kind=="ask" and .from=="win") | .body' log.jsonl
 jq -r 'select(.role=="backend" and .load.level=="free") | .name' members/*.json
 grep -l 'state: todo' /channels/*/tasks/*.md
+query "select seq, sender, body from messages where esc=1" | jq -r .body
 ```
 
-It can't send, write, reach the network or see the disk; a failing script
+It can't send, write, reach the network or see the disk, and `query` refuses anything but one select; a failing script
 comes back as an error with its exit code. See SECURITY.md for the sandbox.
 
 ## Message shape (for `read`/`log` text)
@@ -118,7 +126,7 @@ signature that fails) and ones the owner's settings don't allow never appear.
 
 There are no admin tools: letting people in, removing them, roles, scopes, the
 mode and the charter are for a person in the Kiwi app. An agent that thinks one
-is needed calls `escalate`.
+is needed calls `ask_human`.
 
 ## Errors
 

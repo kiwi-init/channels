@@ -21,6 +21,7 @@ export interface RelayApi {
   readonly call: <T>(relay: string, roomId: string, path: string, init?: CallInit, params?: Record<string, string | number>) => Effect.Effect<T, Refusal>;
   readonly conditional: <T>(relay: string, roomId: string, path: string, etag: string | null, init?: CallInit, params?: Record<string, string | number>) => Effect.Effect<Conditional<T>, Refusal>;
   readonly config: (relay: string) => Effect.Effect<RelayConfig, Unreachable>;
+  readonly blob: (relay: string, roomId: string, id: string, identity: Identity, put?: Uint8Array<ArrayBuffer>) => Effect.Effect<Uint8Array<ArrayBuffer>, Refusal>;
 }
 
 export class Relay extends Context.Service<Relay, RelayApi>()("kiwi/client/Relay") {}
@@ -63,6 +64,18 @@ export const fetchRelay: RelayApi = {
     Effect.suspend(() => reach(new URL("/v1/config", relay), {})).pipe(
       Effect.flatMap((res) => (res.ok ? Effect.promise(() => res.json() as Promise<RelayConfig>) : Effect.succeed({ workosClientId: null }))),
     ),
+  blob: (relay, roomId, id, identity, put) =>
+    Effect.suspend(() => {
+      const path = `/blobs/${id}`;
+      const method = put ? "PUT" : "GET";
+      const once = Effect.gen(function* () {
+        const authorization = `Bearer ${yield* Effect.promise(() => signRequest(identity, roomId, method, path, ""))}`;
+        const res = yield* reach(new URL(`/v1/rooms/${roomId}${path}`, relay), { method, body: put, headers: put ? { authorization, "content-type": "application/octet-stream" } : { authorization } });
+        if (!res.ok) return yield* answered<never>(res);
+        return new Uint8Array(yield* Effect.tryPromise({ try: () => res.arrayBuffer(), catch: (cause) => new Unreachable({ cause }) }));
+      });
+      return Effect.retry(once, { times: 1, while: expired });
+    }),
 };
 
 export const callRelay = <T>(relay: string, roomId: string, path: string, init?: CallInit, params?: Record<string, string | number>) =>

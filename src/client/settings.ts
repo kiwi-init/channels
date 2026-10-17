@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import * as Semaphore from "effect/Semaphore";
 import { open, seal } from "../crypto.ts";
 import { sign, verify } from "../identity.ts";
 import { MAX_CHARTER, MAX_ROOM_NAME, ROOM_ID_RE } from "../protocol.ts";
@@ -6,7 +7,7 @@ import { MissingKey } from "../refusals.ts";
 import type { GuardFloor } from "../state.ts";
 import type { ChannelCore } from "./core.ts";
 import type { Refusal, Refused } from "./errors.ts";
-import type { ChannelInfo } from "./info.ts";
+import type { ChannelInfo, Info } from "./info.ts";
 import type { Relay } from "./relay.ts";
 
 interface RoomEntry {
@@ -27,16 +28,23 @@ export interface ModeSetting {
 
 export interface SettingsFx {
   mode(): Effect.Effect<ModeSetting | null, Refusal, Relay>;
-  rooms(): Effect.Effect<RoomsSetting | null, Refusal, Relay>;
+  rooms(info?: Info): Effect.Effect<RoomsSetting | null, Refusal, Relay>;
   setMode(mode: ModeSetting): Effect.Effect<void, Refused, Relay>;
   setRooms(rooms: RoomsSetting): Effect.Effect<void, Refused, Relay>;
-  guard(): Effect.Effect<GuardFloor | null, Refusal, Relay>;
+  guard(info?: Info): Effect.Effect<GuardFloor | null, Refusal, Relay>;
   setCharter(charter: NonNullable<GuardFloor["charter"]>): Effect.Effect<void, Refused, Relay>;
   setHold(hold: NonNullable<GuardFloor["hold"]>): Effect.Effect<void, Refused, Relay>;
+  compress(): Effect.Effect<boolean, Refusal, Relay>;
+  setCompress(on: boolean): Effect.Effect<void, Refused, Relay>;
+  imageRefs(): Effect.Effect<boolean, Refusal, Relay>;
+  setImageRefs(on: boolean): Effect.Effect<void, Refused, Relay>;
   startCoordinated(): Effect.Effect<void, Refused, Relay>;
 }
 
 export class ChannelSettings {
+  packs = false;
+  private readonly settingsWrites = Semaphore.makeUnsafe(1);
+
   constructor(
     private readonly ch: ChannelCore,
     private readonly info: ChannelInfo,
@@ -50,8 +58,8 @@ export class ChannelSettings {
       return mode;
     }),
 
-    rooms: Effect.fn("Channel.rooms")({ self: this }, function* (this: ChannelSettings) {
-      const r = (yield* this.settings())?.rooms as Partial<RoomsSetting> | undefined;
+    rooms: Effect.fn("Channel.rooms")({ self: this }, function* (this: ChannelSettings, info?: Info) {
+      const r = (yield* this.settings(info))?.rooms as Partial<RoomsSetting> | undefined;
       if (!r || !Array.isArray(r.list) || !Number.isInteger(r.since)) return null;
       const list = r.list.filter((x): x is RoomEntry => !!x && typeof x === "object" && ROOM_ID_RE.test((x as RoomEntry).id) && typeof (x as RoomEntry).name === "string");
       const rooms: RoomsSetting = { list: list.map((x) => ({ id: x.id, name: x.name.slice(0, MAX_ROOM_NAME) })), since: r.since! };
@@ -74,8 +82,8 @@ export class ChannelSettings {
       yield* this.putSettings({ rooms });
     }),
 
-    guard: Effect.fn("Channel.guard")({ self: this }, function* (this: ChannelSettings) {
-      const o = yield* this.settings();
+    guard: Effect.fn("Channel.guard")({ self: this }, function* (this: ChannelSettings, info?: Info) {
+      const o = yield* this.settings(info);
       if (!o) return null;
       const c = o.charter as { text?: unknown; since?: unknown } | undefined;
       const h = o.hold as { on?: unknown; note?: unknown; since?: unknown } | undefined;
@@ -92,15 +100,32 @@ export class ChannelSettings {
     setHold: Effect.fn("Channel.setHold")({ self: this }, function* (this: ChannelSettings, hold: NonNullable<GuardFloor["hold"]>) {
       yield* this.putSettings({ hold });
     }),
+
+    compress: Effect.fn("Channel.compress")({ self: this }, function* (this: ChannelSettings) {
+      return (yield* this.settings())?.compress === true;
+    }),
+
+    setCompress: Effect.fn("Channel.setCompress")({ self: this }, function* (this: ChannelSettings, on: boolean) {
+      yield* this.putSettings({ compress: on });
+    }),
+
+    imageRefs: Effect.fn("Channel.imageRefs")({ self: this }, function* (this: ChannelSettings) {
+      return (yield* this.settings())?.imageRefs === true;
+    }),
+
+    setImageRefs: Effect.fn("Channel.setImageRefs")({ self: this }, function* (this: ChannelSettings, on: boolean) {
+      yield* this.putSettings({ imageRefs: on });
+    }),
   };
 
-  private settings(): Effect.Effect<Record<string, unknown> | null, Refusal, Relay> {
+  settings(info?: Info): Effect.Effect<Record<string, unknown> | null, Refusal, Relay> {
     return Effect.gen({ self: this }, function* () {
-      const s = (yield* this.ch.fx.info()).settings;
+      const s = (info ?? (yield* this.ch.fx.info())).settings;
       const key = this.ch.access.keys["0"];
       if (!s || !key) return null;
       const o = (yield* Effect.promise(() => open(key, this.ch.roomId, s.iv, s.ct).catch(() => null))) as ({ what?: unknown; room?: unknown; pk?: string; sig?: string } & Record<string, unknown>) | null;
       if (!o || o.what !== "channel-settings" || o.room !== this.ch.roomId || o.pk !== this.ch.access.ownerPk || !(yield* Effect.promise(() => verify(o as never)))) return null;
+      this.packs = o.compress === true;
       return o;
     });
   }
@@ -112,8 +137,10 @@ export class ChannelSettings {
       if (!key) return yield* new MissingKey("missing the channel key");
       this.info.forgetInfo();
       const { what: _w, room: _r, pk: _p, sig: _s, ...kept } = (yield* this.settings()) ?? {};
-      const sealed = yield* Effect.promise(async () => seal(key, this.ch.roomId, await sign(this.ch.identity, { ...kept, ...change, what: "channel-settings", room: this.ch.roomId })));
+      const next = { ...kept, ...change };
+      const sealed = yield* Effect.promise(async () => seal(key, this.ch.roomId, await sign(this.ch.identity, { ...next, what: "channel-settings", room: this.ch.roomId })));
       yield* this.ch.request("/settings", { method: "PUT", body: JSON.stringify({ settings: sealed }) }).pipe(Effect.ensuring(Effect.sync(() => this.info.forgetInfo())));
-    });
+      this.packs = next.compress === true;
+    }).pipe(Semaphore.withPermit(this.settingsWrites));
   }
 }

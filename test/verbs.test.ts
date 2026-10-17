@@ -82,6 +82,7 @@ describe("ten verbs", () => {
     const help = await ok(agent, "help");
     for (const v of ["kiwi join", "kiwi listen", "kiwi send", "kiwi reply", "kiwi show", "kiwi log", "kiwi status", "kiwi task", "kiwi note", "kiwi leave"]) expect(help).toContain(v);
     expect(help).not.toContain("kiwi tail [");
+    expect(help).toContain("task cancel T7");
     expect(help).toContain("Older names still work");
   });
 

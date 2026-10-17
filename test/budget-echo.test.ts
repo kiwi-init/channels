@@ -30,7 +30,7 @@ const IMAGE = Buffer.from(new Uint8Array(75_000).map((_, i) => (i * 31) % 251)).
 
 const BUDGET = {
   socket: { echo: { msgDown: K }, noEcho: { msgDown: 0, bytesDown: 2_000 } },
-  app: { http: 0, msgDown: 0, bytesDown: 4_000 },
+  app: { http: 1, msgDown: 0, bytesDown: 4_000 },
 } as const;
 
 const dataDir = mkdtempSync(join(tmpdir(), "kiwi-budget-echo-"));

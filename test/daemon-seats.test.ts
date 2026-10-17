@@ -131,6 +131,22 @@ describe("seats always on", () => {
     await until("an unreachable presence", () => from(claudePk).slice(after).some((p) => p.reach === "unreachable"));
   });
 
+  test("a Kimi Code seat is announced as woken by its background listener only while one runs", async () => {
+    saveConfig({ ...loadConfig(), bindings: { "/kimi": { alias: "test", as: "claude", harness: "kimi", session: "kimi-pid-1", pid: process.pid } } });
+    try {
+      const s = await AgentSession.open("test", loadConfig().channels.test!, "claude");
+      const seen = from(claudePk).length;
+      const heardWake = () => from(claudePk).slice(seen).some((p) => p.wake === "listener");
+      await runAgent(Effect.raceFirst(s.listen(() => Effect.void, {}), Effect.promise(() => until("a presence with the listener wake", heardWake))));
+      expect(heardWake()).toBe(true);
+      const after = from(claudePk).length;
+      await until("the wake to go with the listener", () => from(claudePk).slice(after).some((p) => p.wake === undefined));
+    } finally {
+      const { "/kimi": _kimi, ...bindings } = loadConfig().bindings ?? {};
+      saveConfig({ ...loadConfig(), bindings });
+    }
+  });
+
   test("the daemon reports a Claude seat's activity from its record, even with no session id", async () => {
     const claudeDir = mkdtempSync(join(tmpdir(), "kiwi-daemon-seats-claude-"));
     mkdirSync(join(claudeDir, "sessions"), { recursive: true });
@@ -141,6 +157,8 @@ describe("seats always on", () => {
       saveConfig({ ...loadConfig(), bindings: { "/work": { alias: "test", as: "claude", harness: "claude", pid: 4242 } } });
       await until("idle activity in claude's presence", () => from(claudePk).some((p) => p.activity?.state === "idle"));
     } finally {
+      const { "/work": _work, ...bindings } = loadConfig().bindings ?? {};
+      saveConfig({ ...loadConfig(), bindings });
       if (prev === undefined) delete process.env.CLAUDE_CONFIG_DIR;
       else process.env.CLAUDE_CONFIG_DIR = prev;
       rmSync(claudeDir, { recursive: true, force: true });
@@ -256,6 +274,7 @@ describe("presenceWords", () => {
     expect(presenceWords({ client: "daemon", reach: "unreachable", wake: "opencode-api" }, now)).toStartWith("reachable · wakes via ");
     expect(presenceWords({ client: "daemon", reach: "unreachable", wake: "hooks" }, now)).toStartWith("not listening · wakes via ");
     expect(presenceWords({ client: "daemon", reach: "listening" }, now)).toBe("reachable · can't be woken · not read yet");
+    expect(presenceWords({ client: "daemon", reach: "listening", wake: "listener" }, now)).toBe("reachable · wakes via its background listener · not read yet");
     expect(presenceWords({ client: "daemon", reach: "running" }, now)).toBe("reachable · can't be woken · not read yet");
   });
 

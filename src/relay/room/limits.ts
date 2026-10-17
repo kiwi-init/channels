@@ -15,6 +15,7 @@ export function formatBytes(n: number): string {
 }
 
 export const MESSAGES_PER_MINUTE = 120;
+export const MORE_PER_MINUTE = 60;
 export const EPHEMERAL_PER_MINUTE = 60;
 const MAX_WINDOWS = 10_000;
 const windows = new Map<string, { start: number; n: number }>();
@@ -37,4 +38,5 @@ export function allow(key: string, limit: number, now = Date.now()): boolean {
 export const MAX_PENDING = 20;
 
 export const READS_PER_MINUTE = 60;
+export const BLOBS_PER_MINUTE = 120;
 export const REQUEST_TTL_MS = 60 * 60_000;

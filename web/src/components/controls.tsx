@@ -4,7 +4,7 @@ import { Copy01Icon, PauseIcon } from "@hugeicons/core-free-icons"
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react"
 
 import { memberLoad, showsLoad, type Load } from "@mc/load.ts"
-import { NAME_RE, nameKey, type JoinRequest, type Member as RosterMember } from "@mc/membership.ts"
+import { nameKey, type JoinRequest, type Member as RosterMember } from "@mc/membership.ts"
 import { MAX_CHARTER, type ChannelIcon, type Color, type Event } from "@mc/protocol.ts"
 import { TOO_MANY_REQUESTS } from "@mc/sas.ts"
 import { SCOPES, type Scope } from "@mc/scopes.ts"
@@ -468,18 +468,16 @@ const ROLES = ["designer", "frontend", "backend", "reviewer", "tester", "docs", 
 function Invite({ onDone }: { onDone: () => void }) {
   const { p } = useControls()
   const [who, setWho] = useState<"person" | "agent">("agent")
-  const [name, setName] = useState("")
+  const [nick, setNick] = useState("")
   const [role, setRole] = useState("")
   const [rules, setRules] = useState("")
   const [newScopes, setNewScopes] = useState<Scope[]>(() => (p.roomId ? defaultScopes(p.roomId) : [...SCOPES]))
-  const n = name.trim()
-  const badName = !!n && !NAME_RE.test(n)
+  const nickname = nick.trim()
   const command = [
     `kiwi join ${p.code}`,
     // On any other relay, the agent's CLI has to be told where to go.
     relayUrl() !== PUBLIC_RELAY && `--relay ${relayUrl()}`,
-    // No name: the agent is called by what it runs in (claude, codex…), made unique when you approve it.
-    n && !badName && `--as ${n}`,
+    nickname && `--nick ${quoted(nickname)}`,
     role.trim() && `--role ${quoted(role.trim())}`,
     rules.trim() && `--about ${quoted(rules.trim())}`,
   ]
@@ -510,23 +508,10 @@ function Invite({ onDone }: { onDone: () => void }) {
       ) : (
         <div role="tabpanel" aria-label="An agent" className="mt-4 grid gap-2">
           <div className="grid grid-cols-2 gap-2">
-            <TextField
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Name (optional)"
-              maxLength={32}
-              aria-invalid={badName}
-              aria-label="Agent name"
-              aria-describedby={badName ? "invite-name-error" : undefined}
-            />
+            <TextField value={nick} onChange={(e) => setNick(e.target.value)} placeholder="Nickname (optional)" maxLength={40} aria-label="Nickname" />
             <TextField value={role} onChange={(e) => setRole(e.target.value)} placeholder="Role" maxLength={60} list="kiwi-roles" aria-label="Role" />
           </div>
           <TextField value={rules} onChange={(e) => setRules(e.target.value)} placeholder="Rules, e.g. only web/; ask before changing APIs" maxLength={200} aria-label="Rules" />
-          {badName && (
-            <p id="invite-name-error" role="alert" className="text-meta text-ink-2">
-              Names are letters, digits, dot, dash or underscore, up to 32.
-            </p>
-          )}
           <CopyBox text={command} label="Copy command" done="Join command copied" />
           <p className="text-meta text-ink-3">
             Run it on a computer set up with <span className="font-mono">kiwi setup</span>.

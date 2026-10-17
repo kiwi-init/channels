@@ -3,13 +3,14 @@ import * as Effect from "effect/Effect";
 import * as Queue from "effect/Queue";
 import { PING, rasterAttachment, wellFormed, type Message, type ServerFrame } from "../protocol.ts";
 import { Unreachable, type ChannelGone, type Dropped } from "./errors.ts";
-import type { PresenceFields } from "./live.ts";
+import type { OpenKind, PresenceFields } from "./live.ts";
 
 export type Incoming =
   | ServerFrame
   | { t: "pong" }
   | { t: "own"; seq: number; ts: number; payload: unknown }
-  | { t: "open"; presence: (p: PresenceFields) => Effect.Effect<void>; mark: (seq: number) => boolean };
+  | { t: "open"; presence: (p: PresenceFields) => Effect.Effect<void>; mark: (seq: number) => boolean; probe: (ms: number) => Promise<Probe | null>; kind: OpenKind }
+  | { t: "more"; ask: (since: number) => void };
 
 export type Inbox = Queue.Queue<Incoming, Dropped | ChannelGone | Cause.Done>;
 
@@ -74,11 +75,72 @@ export function ownMessage(p: unknown, seq: number, rts: number): Message | null
   return { ...p, ...(imgs?.length ? { imgs } : { imgs: undefined }), seq, rts, sigOk: true };
 }
 
-export const keepAlive = (ws: WebSocket) =>
+export const keepAlive = (ping: () => boolean) =>
   Effect.sleep("25 seconds").pipe(
-    Effect.andThen(Effect.sync(() => ws.readyState === WebSocket.OPEN && ws.send(PING))),
+    Effect.andThen(Effect.sync(ping)),
     Effect.forever,
   );
+
+export interface Probe {
+  readonly head: number;
+  readonly changes: number;
+}
+
+export function wireOf(ws: WebSocket, since: number) {
+  let head = since;
+  let ready = false;
+  let changes = 0;
+  let sent = 0;
+  let answered = 0;
+  const waiting = new Set<{ n: number; done: (p: Probe | null) => void }>();
+  const ping = (): boolean => {
+    if (ws.readyState !== WebSocket.OPEN) return false;
+    ws.send(PING);
+    sent++;
+    return true;
+  };
+  const settle = (all: boolean): void => {
+    for (const w of [...waiting]) {
+      if (!all && w.n > answered) continue;
+      waiting.delete(w);
+      w.done(all || !ready ? null : { head, changes });
+    }
+  };
+  return {
+    ping,
+    closed: () => {
+      ready = false;
+      settle(true);
+    },
+    frame: (f: ServerFrame | { t: "pong" }): void => {
+      if (f.t === "msg") head = Number.isSafeInteger(f.seq) ? Math.max(head, f.seq) : head;
+      else if (f.t === "ready") {
+        if (Number.isSafeInteger(f.head) && f.head > head) head = f.head;
+        ready = !f.more;
+      } else if (f.t === "roster" || f.t === "info" || f.t === "epoch") changes++;
+      else if (f.t === "pong") {
+        answered++;
+        settle(false);
+      }
+    },
+    probe: (ms: number): Promise<Probe | null> =>
+      new Promise<Probe | null>((resolve) => {
+        if (!ready || !ping()) return resolve(null);
+        const timer = setTimeout(() => {
+          waiting.delete(w);
+          resolve(null);
+        }, ms);
+        const w = {
+          n: sent,
+          done: (p: Probe | null) => {
+            clearTimeout(timer);
+            resolve(p);
+          },
+        };
+        waiting.add(w);
+      }),
+  };
+}
 
 export function markOn(ws: WebSocket): (seq: number) => boolean {
   return (seq) => {

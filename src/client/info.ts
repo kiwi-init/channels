@@ -23,9 +23,10 @@ export interface Info {
   title?: { iv: string; ct: string } | null;
   iconAt?: number | null;
   settings?: { iv: string; ct: string } | null;
+  blobs?: boolean;
 }
 
-type MemberRow = { pk: string; xpk: string; rec: string; e: number; active: number; read_only?: number };
+export type MemberRow = { pk: string; xpk: string; rec: string; e: number; active: number; read_only?: number };
 
 export interface InfoFx {
   info(fp?: string): Effect.Effect<Info, Refusal, Relay>;
@@ -33,7 +34,8 @@ export interface InfoFx {
   setTitle(name: string): Effect.Effect<void, Refused, Relay>;
   icon(): Effect.Effect<ChannelIcon | null, MemberRefusal, Relay>;
   setIcon(icon: ChannelIcon | null): Effect.Effect<void, Refused, Relay>;
-  members(): Effect.Effect<Member[], MemberRefusal, Relay>;
+  members(rows?: readonly MemberRow[]): Effect.Effect<Member[], MemberRefusal, Relay>;
+  memberRows(): Effect.Effect<MemberRow[], MemberRefusal, Relay>;
 }
 
 export class ChannelInfo {
@@ -119,8 +121,13 @@ export class ChannelInfo {
       yield* this.ch.request("/icon", { method: "PUT", body: JSON.stringify({ icon: sealed }) }).pipe(Effect.ensuring(Effect.sync(() => this.forgetInfo())));
     }),
 
-    members: Effect.fn("Channel.members")({ self: this }, function* (this: ChannelInfo) {
+    memberRows: Effect.fn("Channel.memberRows")({ self: this }, function* (this: ChannelInfo) {
       const { members } = yield* callUnlessUnchanged<{ members: MemberRow[] }>(this.ch.relay, this.ch.roomId, "members", "/members", { identity: this.ch.identity }).pipe(Effect.mapError(gone));
+      return members;
+    }),
+
+    members: Effect.fn("Channel.members")({ self: this }, function* (this: ChannelInfo, rows?: readonly MemberRow[]) {
+      const members = rows ?? (yield* this.ch.fx.memberRows());
       const out: Member[] = [];
       for (const m of members) {
         if (!this.ch.access.keys[String(m.e)]) yield* this.ch.fx.refreshKeys();

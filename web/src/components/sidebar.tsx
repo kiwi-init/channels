@@ -9,9 +9,8 @@ import { useSecrets } from "@/lib/secrets"
 import { openRelease, restartToUpdate, useUpdate } from "@/lib/update"
 import { cx } from "@/lib/utils"
 import { ChannelIconTile } from "./channel-icon"
-import { CoordinatorAvatar } from "./coordinator-head"
+import { RobotAvatar } from "./robot"
 import { Icon } from "./icon"
-import { SidebarToggle } from "./chrome"
 import { Monogram, Wordmark } from "./kit"
 import { Tooltip } from "./ui/tooltip"
 import { Menu, MenuItem, MenuNote, MenuSeparator } from "./ui/menu"
@@ -58,7 +57,6 @@ export function Sidebar({
       <header className="drag flex h-(--chrome-h) shrink-0 items-center gap-2 px-3 shell-mac:pl-(--lights-w)">
         {!person && !rows.length && <Wordmark className="pl-1 text-title" />}
         <span className="flex-1" />
-        <SidebarToggle />
       </header>
 
       {/* New, inline as the list's first row (as Grok has "New chat"), on the rows' grid: its + where a
@@ -90,7 +88,7 @@ export function Sidebar({
               className={cx("flex h-16 w-full items-center gap-3 rounded-card px-3 text-left transition-colors", selected ? "bg-pick" : "hover:bg-wash")}
             >
               {c.recent?.byCoordinator && reachable ? (
-                <CoordinatorAvatar size={40} label="The coordinator spoke last" />
+                <RobotAvatar name="coordinator" size={40} label="The coordinator spoke last" />
               ) : (
                 <ChannelIconTile icon={icons.get(c.room) ?? null} title={c.title} size={40} />
               )}
@@ -192,7 +190,7 @@ function RailChannel({ c, n, selected, icon, onSelect }: { c: ChannelRow; n: Row
         className={cx("relative flex size-14 shrink-0 items-center justify-center rounded-card transition-colors", selected ? "bg-pick" : "hover:bg-wash")}
       >
         <span className={cx("flex", !reachable && "grayscale")}>
-          {c.recent?.byCoordinator && reachable ? <CoordinatorAvatar size={40} label="The coordinator spoke last" /> : <ChannelIconTile icon={icon} title={c.title} size={40} />}
+          {c.recent?.byCoordinator && reachable ? <RobotAvatar name="coordinator" size={40} label="The coordinator spoke last" /> : <ChannelIconTile icon={icon} title={c.title} size={40} />}
         </span>
         {needs > 0 ? (
           <span className="absolute top-1 right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-stamp font-semibold text-accent-ink tabular-nums shadow-[0_0_0_2px_var(--rail)]">
@@ -267,7 +265,6 @@ export function Rail({
             </button>
           </Tooltip>
         )}
-        <SidebarToggle className={RAIL_BUTTON} />
         {person && (
           <Menu
             side="right"

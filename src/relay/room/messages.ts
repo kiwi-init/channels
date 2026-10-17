@@ -1,6 +1,7 @@
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
-import { MAX_CT_LENGTH, ROOM_RETENTION, type Envelope, type ReadMark } from "../../protocol.ts";
+import { blobId } from "../../crypto.ts";
+import { MAX_BLOB_BYTES, MAX_CT_LENGTH, ROOM_RETENTION, type Envelope, type ReadMark } from "../../protocol.ts";
 import { BadRequest, Conflict, ReadOnly, TooLarge, TooMany } from "../failures.ts";
 import { Policy } from "../policy.ts";
 import { fits, StoredEnvelope } from "../schema.ts";
@@ -32,14 +33,40 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
   if (ct.length > cap) return yield* new TooLarge({ message: `that message is bigger than this channel may hold (${formatBytes(cap)})` });
   const seq = db.head() + 1;
   let bytes = db.storedBytes();
-  if (bytes + ct.length > cap) bytes -= db.dropOldest(bytes + ct.length - cap);
+  if (bytes + ct.length > cap) bytes -= db.dropOldest(bytes + ct.length - cap) + db.pruneBlobs();
+  if (bytes + ct.length > cap) bytes -= db.dropOldestBlobs(bytes + ct.length - cap);
+  if (bytes + ct.length > cap) bytes -= db.dropSnapshot();
 
   db.insert(seq, ts, iv, ct, e);
   bytes += ct.length;
-  if (seq % 100 === 0) bytes -= db.dropThrough(seq - ROOM_RETENTION);
+  if (seq % 100 === 0) {
+    const freed = db.dropThrough(seq - ROOM_RETENTION);
+    if (freed) bytes -= freed + db.pruneBlobs();
+  }
   db.setCounters({ bytes, day, n: today + 1, head: seq });
   const stored: Envelope = { seq, ts, iv, ct, e };
   return stored;
+});
+
+export const storeBlob = Effect.fn("Room.storeBlob")(function* (id: string, bytes: Uint8Array<ArrayBuffer>, sender: string) {
+  const db = yield* RoomStore;
+  const policy = yield* Policy;
+  if (db.isReadOnly(sender)) return yield* new ReadOnly({ message: READ_ONLY });
+  if (!bytes.length) return yield* new BadRequest({ message: "send the image's encrypted bytes" });
+  if (bytes.length > MAX_BLOB_BYTES) return yield* new TooLarge({ message: "image too large" });
+  if ((yield* Effect.promise(() => blobId(bytes))) !== id) return yield* new BadRequest({ message: "the image's bytes don't match its id" });
+  if (db.hasBlob(id)) return;
+  const cap = policy.bytesPerChannel;
+  if (bytes.length > cap) return yield* new TooLarge({ message: `that image is bigger than this channel may hold (${formatBytes(cap)})` });
+  const at = yield* Clock.currentTimeMillis;
+  const head = db.head();
+  let stored = db.storedBytes();
+  if (stored + bytes.length > cap) stored -= db.dropOldest(stored + bytes.length - cap) + db.pruneBlobs();
+  if (stored + bytes.length > cap) stored -= db.dropOldestBlobs(stored + bytes.length - cap);
+  if (stored + bytes.length > cap) stored -= db.dropSnapshot();
+  db.putBlob(id, bytes, at);
+  const u = db.counters();
+  db.setCounters({ bytes: stored + bytes.length, day: u?.day ?? "", n: u?.n ?? 0, head });
 });
 
 export const touch: Effect.Effect<number | null, never, RoomServices> = Effect.gen(function* () {

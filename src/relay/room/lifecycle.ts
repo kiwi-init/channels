@@ -1,12 +1,14 @@
+import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import { encodeJoinCode, ownerFingerprint } from "../../crypto.ts";
 import { verify } from "../../identity.ts";
-import { BadRequest, Conflict, TooMany, Unauthorized, type ChannelGone } from "../failures.ts";
+import { BadRequest, Conflict, TooLarge, TooMany, Unauthorized, type ChannelGone } from "../failures.ts";
 import { Policy } from "../policy.ts";
-import { fits, SealedIcon } from "../schema.ts";
+import { fits, SealedIcon, SealedSnapshot } from "../schema.ts";
 import { readMeta } from "./auth.ts";
 import { RoomStore } from "./db.ts";
 import type { DirectoryUpdate } from "./directory.ts";
+import { formatBytes } from "./limits.ts";
 import { putMember, type MemberBody } from "./members.ts";
 
 export const create = Effect.fn("Room.create")(function* (signer: string | null, body: CreateBody, ownerUser: string | null = null) {
@@ -68,6 +70,28 @@ export const setSettings = Effect.fn("Room.setSettings")(function* (settings: un
   if (!t) return yield* new BadRequest({ message: "bad settings" });
   db.set("settings", JSON.stringify(t));
   db.changed("info");
+});
+
+export const setSnapshot = Effect.fn("Room.setSnapshot")(function* (snapshot: unknown) {
+  const db = yield* RoomStore;
+  const { epoch } = yield* readMeta;
+  if (!fits(SealedSnapshot, snapshot) || snapshot.e > epoch || snapshot.n > db.head()) {
+    return yield* new BadRequest({ message: "bad snapshot (at most 512KB, sealed with a channel key, at a seq the channel has)" });
+  }
+  const stored = db.snapshot();
+  if (stored && snapshot.n < stored.n) return yield* new Conflict({ message: `this channel has a newer snapshot (#${stored.n})` });
+  const cap = (yield* Policy).bytesPerChannel;
+  if (snapshot.ct.length > cap) return yield* new TooLarge({ message: `that snapshot is bigger than this channel may hold (${formatBytes(cap)})` });
+  const grows = snapshot.ct.length - (stored?.ct.length ?? 0);
+  let bytes = db.storedBytes();
+  if (bytes + grows > cap) {
+    if (bytes + grows - db.bytesThrough(snapshot.n) > cap) return yield* new TooLarge({ message: "the messages that snapshot covers don't free enough room for it" });
+    bytes -= db.dropOldest(bytes + grows - cap, snapshot.n);
+  }
+  const { n, e, iv, ct, hash, sig } = snapshot;
+  db.setSnapshot({ n, e, iv, ct, hash, sig, at: yield* Clock.currentTimeMillis });
+  db.setCounters({ ...(db.counters() ?? { day: "", n: 0 }), bytes: Math.max(0, bytes + grows) });
+  return n;
 });
 
 export const directory: Effect.Effect<DirectoryUpdate[], ChannelGone, RoomStore> = Effect.gen(function* () {

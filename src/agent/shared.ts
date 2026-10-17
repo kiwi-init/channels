@@ -4,7 +4,6 @@ import * as Layer from "effect/Layer";
 import type * as Scoped from "effect/Scope";
 import { ChannelGone, fetchRelay, Relay, RelayError, settle } from "../client.ts";
 import { Cache, Cursor, Keystore, LocalFiles } from "../config.ts";
-import type { Member } from "../membership.ts";
 import type { Message } from "../protocol.ts";
 import { isLocalRefusal } from "../refusals.ts";
 import type { ChannelState, GuardFloor, Roster, RoomsFloor } from "../state.ts";
@@ -37,24 +36,6 @@ export const AgentLive: Layer.Layer<Agent> = Layer.mergeAll(Layer.succeed(Relay,
 export const runAgent = <A, E>(effect: Effect.Effect<A, E, Agent>): Promise<A> => Effect.runPromiseExit(Effect.provide(effect, AgentLive)).then(settle);
 
 export const isAnswer = (err: unknown) => err instanceof ChannelGone || isLocalRefusal(err) || (err instanceof RelayError && err.status < 500 && err.status !== 429);
-
-export const toRoster = (m: Member): Roster[number] => ({
-  name: m.name,
-  pk: m.pk,
-  role: m.role,
-  about: m.about,
-  owner: m.owner,
-  at: m.at,
-  active: m.active,
-  kind: m.kind,
-  display: m.display,
-  sponsor: m.sponsor,
-  color: m.color,
-  ...(m.scopes ? { scopes: m.scopes } : {}),
-  ...(m.later ? { later: m.later } : {}),
-  ...(m.laterRole ? { laterRole: m.laterRole } : {}),
-  ...(m.runs ? { runs: m.runs } : {}),
-});
 
 export const holding = (alias: string, as: string): Effect.Effect<void, never, Scoped.Scope> =>
   Effect.gen(function* () {

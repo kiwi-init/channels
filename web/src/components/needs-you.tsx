@@ -3,10 +3,13 @@ import { useEffect, useRef, useState, type ReactNode } from "react"
 
 import { freeHandle, seededPick } from "@mc/handles.ts"
 import { nameKey, type JoinRequest } from "@mc/membership.ts"
-import type { Message } from "@mc/protocol.ts"
+import { HANDOFF_DONE, HANDOFF_FAILED, type Message } from "@mc/protocol.ts"
 import { TOO_MANY_REQUESTS } from "@mc/sas.ts"
 import { taskId, type Task } from "@mc/state.ts"
+import { askLabel } from "@/lib/asks"
 import { excerpt, formatAgo } from "@/lib/format"
+import { openHandoff } from "@/lib/handoff-open"
+import { handoffLabel, handoffLeft, handoffOf, handoffOpen } from "@/lib/handoff"
 import { cx } from "@/lib/utils"
 import { useControls } from "./controls"
 import { Icon } from "./icon"
@@ -21,9 +24,12 @@ import { AgentFacts } from "./agent-facts"
 export function NeedsYou({
   now,
   roomId,
+  me,
   escalations,
+  questions,
   reviews,
   nameOf,
+  agentOf,
   onReply,
   onApproveTask,
   onSendBack,
@@ -32,11 +38,14 @@ export function NeedsYou({
 }: {
   now: number
   roomId: string
+  me: string
   /** Escalations to this person nobody has answered yet. */
   escalations: Message[]
+  questions: Message[]
   /** Tasks in review that this person may approve. */
   reviews: Task[]
   nameOf: (name: string) => string
+  agentOf: (name: string) => boolean
   onReply: (m: Message, text: string) => Promise<void>
   onApproveTask: (t: Task) => Promise<void>
   onSendBack: (t: Task, why: string) => Promise<void>
@@ -64,7 +73,12 @@ export function NeedsYou({
     ...escalations.map((m) => ({
       key: `e${m.seq}`,
       summary: `${nameOf(m.from)} needs a decision`,
-      node: <EscalationItem m={m} now={now} nameOf={nameOf} onReply={onReply} onJump={(seq) => (setOpen(false), onJump(seq))} />,
+      node: <AskItem m={m} me={me} now={now} nameOf={nameOf} agent={agentOf(m.from)} onReply={onReply} onJump={(seq) => (setOpen(false), onJump(seq))} />,
+    })),
+    ...questions.map((m) => ({
+      key: `q${m.seq}`,
+      summary: `${nameOf(m.from)} asked ${m.to?.includes(me) ? "you" : "everyone"}`,
+      node: <AskItem m={m} me={me} now={now} nameOf={nameOf} agent={agentOf(m.from)} onReply={onReply} onJump={(seq) => (setOpen(false), onJump(seq))} />,
     })),
     ...reviews.map((t) => ({
       key: `t${t.id}`,
@@ -190,26 +204,32 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
 }
 
 /** An agent handing a decision to its person: what it says, and an answer right here. */
-function EscalationItem({
+function AskItem({
   m,
+  me,
   now,
   nameOf,
+  agent,
   onReply,
   onJump,
 }: {
   m: Message
+  me: string
   now: number
   nameOf: (n: string) => string
+  agent: boolean
   onReply: (m: Message, text: string) => Promise<void>
   onJump: (seq: number) => void
 }) {
   const [draft, setDraft] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const send = async () => {
-    if (!draft?.trim()) return
+  const handoff = handoffOf(m)
+  const live = !!handoff && handoffOpen(handoff, now)
+  const send = async (text = draft?.trim() ?? "") => {
+    if (!text) return
     setBusy(true)
     try {
-      await onReply(m, draft.trim())
+      await onReply(m, text)
       setDraft(null)
       toast(`Answered ${nameOf(m.from)}`)
     } catch (err) {
@@ -220,19 +240,48 @@ function EscalationItem({
   }
   return (
     <Row
-      lead={<Monogram name={m.from} agent size={24} />}
+      lead={<Monogram name={m.from} agent={agent} size={24} />}
       title={
         <>
-          <span className="mr-1.5 rounded-full bg-decide-wash px-1.5 text-meta font-semibold text-decide">Decision for you</span>
+          <span className="mr-1.5 rounded-full bg-decide-wash px-1.5 text-meta font-semibold text-decide">{handoff ? "Browser for you" : askLabel(m, me)}</span>
           <span className="font-medium">{nameOf(m.from)}</span>: {excerpt(m.body, 220)}
         </>
       }
-      detail={formatAgo(m.ts, now)}
+      detail={handoff ? `${formatAgo(m.ts, now)} · ${handoffLabel(handoff)} · ${live ? handoffLeft(handoff, now) : "link expired"}` : formatAgo(m.ts, now)}
     >
       {draft === null ? (
         <>
-          <Button size="sm" variant="secondary" onClick={() => setDraft("")}>
-            Answer
+          {!handoff && m.choices?.length ? (
+            <ul aria-label="Options" className="flex w-full flex-col gap-1.5">
+              {m.choices.map((c) => (
+                <li key={c}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void send(c)}
+                    className="w-full rounded-row bg-field px-3 py-1.5 text-left text-ui leading-snug [overflow-wrap:anywhere] transition-colors hover:bg-wash-2 disabled:pointer-events-none disabled:opacity-40"
+                  >
+                    {c}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {handoff && live && (
+            <>
+              <Button size="sm" variant="secondary" onClick={() => !openHandoff(handoff) && toast("The link has expired", "error")}>
+                Open browser
+              </Button>
+              <Button size="sm" variant="secondary" disabled={busy} onClick={() => void send(HANDOFF_DONE)}>
+                Done
+              </Button>
+              <Button size="sm" variant="ghost" disabled={busy} onClick={() => void send(HANDOFF_FAILED)}>
+                Couldn’t
+              </Button>
+            </>
+          )}
+          <Button size="sm" variant={m.choices?.length ? "ghost" : "secondary"} onClick={() => setDraft("")}>
+            {m.choices?.length ? "Something else" : "Answer"}
           </Button>
           <Button size="sm" variant="ghost" onClick={() => onJump(m.seq)}>
             Show
@@ -243,7 +292,7 @@ function EscalationItem({
           className="flex w-full items-center gap-2"
           onSubmit={(e) => {
             e.preventDefault()
-            void send()
+            void send(draft?.trim())
           }}
         >
           <TextField

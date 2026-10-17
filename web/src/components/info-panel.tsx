@@ -7,9 +7,8 @@ import { colorOf } from "@mc/state.ts"
 import { memberLoad } from "@mc/load.ts"
 import { memberName } from "@/lib/format"
 import { cx } from "@/lib/utils"
-import type { Mood } from "@/lib/coordinator-mood"
 import { ChannelIconTile } from "./channel-icon"
-import { CoordinatorAvatar, CoordinatorHead } from "./coordinator-head"
+import { RobotAvatar } from "./robot"
 import { MemberActions, loadDetail, memberDetail, useControls } from "./controls"
 import { Icon, type IconSvgElement } from "./icon"
 import { IconButton, Button, Modal, Monogram, errorText, toast } from "./kit"
@@ -26,7 +25,6 @@ export function InfoPanel({
   onPause,
   notes,
   onMessage,
-  mood,
 }: {
   title: string
   icon: ChannelIcon | null
@@ -38,8 +36,6 @@ export function InfoPanel({
   notes?: ReactNode
   /** Open the direct conversation with a member. */
   onMessage?: (name: string) => void
-  /** What the coordinator is doing, for its head. */
-  mood?: Mood
 }) {
   const { p, ask, openInvite, openRequests, openDialog } = useControls()
   const active = p.roster
@@ -60,7 +56,7 @@ export function InfoPanel({
       <div className="flex-1 overflow-y-auto px-4 pb-6">
         <div className="flex flex-col items-center text-center">
           {/* The channel's face is its coordinator, when it has one: the one people talk with. */}
-          {coordinator ? <CoordinatorHead size={112} mood={mood} live interactive seed={0.5} /> : <ChannelIconTile icon={icon} title={title} size={64} />}
+          {coordinator ? <RobotAvatar name={coordinator} size={112} label="The coordinator" /> : <ChannelIconTile icon={icon} title={title} size={64} />}
           <h2 className="mt-2 max-w-full truncate text-display font-semibold">{title}</h2>
           <p className="mt-0.5 text-meta text-ink-3">{subtitle}</p>
         </div>
@@ -103,7 +99,6 @@ export function InfoPanel({
             {active.map((m) => {
               const face = (
                 <Face
-                  head={coordinator === m.name ? <CoordinatorAvatar size={52} mood={mood} seed={0.2} /> : undefined}
                   name={memberName(m)}
                   handle={m.name}
                   agent={m.kind !== "human"}

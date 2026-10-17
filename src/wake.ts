@@ -4,9 +4,9 @@ export type WakeCommand = "codex-queue" | "opencode-api";
 
 export type WakePath = { kind: "hooks" } | { kind: "command"; via: WakeCommand; session: string } | { kind: "none"; why: string };
 
-export type WakeVia = "hooks" | WakeCommand;
+export type WakeVia = "hooks" | "listener" | WakeCommand;
 
-const WAKE_VIA: readonly WakeVia[] = ["hooks", "codex-queue", "opencode-api"];
+const WAKE_VIA: readonly WakeVia[] = ["hooks", "listener", "codex-queue", "opencode-api"];
 
 export function isWakeVia(v: unknown): v is WakeVia {
   return typeof v === "string" && (WAKE_VIA as readonly string[]).includes(v);
@@ -16,11 +16,17 @@ export function wakeWords(via: WakeVia): string {
   switch (via) {
     case "hooks":
       return "Claude Code's hooks";
+    case "listener":
+      return "its background listener";
     case "codex-queue":
       return "codex queue";
     case "opencode-api":
       return "OpenCode's service";
   }
+}
+
+export function pullsWake(harness: WakeHarness | undefined): boolean {
+  return harness === "kimi";
 }
 
 export function viaOf(path: WakePath): WakeVia | null {
