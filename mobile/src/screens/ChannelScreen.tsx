@@ -8,6 +8,7 @@ import { openRound, taskId, type Task } from "@mc/state.ts"
 import { asksFor } from "@web/lib/asks"
 import { excerpt } from "@web/lib/format"
 
+import { AgentStrip } from "../components/AgentStrip"
 import { Conversation } from "../components/Conversation"
 import { NeedsYou } from "../components/NeedsYou"
 import { ReactionPicker } from "../components/ReactionPicker"
@@ -173,6 +174,7 @@ export function ChannelScreen({ code, onBack }: { code: string; onBack?: () => v
             onReply={setReplyTo}
             onOpenTask={(id) => (setView("tasks"), setOpenTask(id))}
           />
+          <AgentStrip agents={live.agents} now={now} onOpenTask={(id) => (setView("tasks"), setOpenTask(id))} />
           <Composer
             me={me}
             people={people}

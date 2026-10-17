@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { loadHistory, merge, readMark, saveMessage, setReadMark, type Room } from "./channel"
 import type { HistoryDb, Sql } from "./history"
+import { agentsNow as agentsOf, onlineFrom, trusted, type Online } from "./agentsNow"
+import type { AgentNow } from "./agents"
 import { watchChannel } from "./relay"
 
 export interface ChannelHandle {
@@ -15,6 +17,7 @@ export interface ChannelHandle {
   post(body: string, options: SendOptions): Promise<void>
   channel: Channel | null
   unread: number
+  agents: AgentNow[]
 }
 
 function rosterOf(members: Awaited<ReturnType<Channel["members"]>>): Roster {
@@ -40,6 +43,7 @@ export function useChannel(channel: Channel | null, memberPk: string, history: H
   const [messages, setMessages] = useState<readonly Message[]>([])
   const [roster, setRoster] = useState<Roster>([])
   const [connected, setConnected] = useState(false)
+  const [online, setOnline] = useState<ReadonlyMap<string, Online>>(new Map())
   const [mark, setMark] = useState(0)
   const [now, setNow] = useState(() => Date.now())
   const keysRef = useRef<Record<string, string>>({})
@@ -68,7 +72,15 @@ export function useChannel(channel: Channel | null, memberPk: string, history: H
           setMessages((current) => merge(current, [m]))
           void saveMessage(history, room, channel.access.epoch, m).catch(() => {})
         },
-        open: () => live && setConnected(true),
+        open: (_kind, _outage, announce) => {
+          if (!live) return
+          setConnected(true)
+          announce?.({ client: "probe", query: true })
+        },
+        presence: (p) => {
+          if (!live || p.client === "probe" || !p.sigOk) return
+          setOnline((prev) => new Map(prev).set(p.from, onlineFrom(p, Date.now())))
+        },
         down: () => live && setConnected(false),
         changed: (what) => what === "Roster" && refreshRoster(),
       })
@@ -110,5 +122,8 @@ export function useChannel(channel: Channel | null, memberPk: string, history: H
     void setReadMark(sql, room, messages[messages.length - 1]!.seq).catch(() => {})
   }, [sql, room, messages])
 
-  return { messages, state, connected, send, post, channel, unread }
+  const keyOf = useMemo(() => new Map(roster.filter((r) => r.active).map((r) => [r.name, r.pk])), [roster])
+  const agents = useMemo(() => agentsOf(state, messages, trusted(online, keyOf, now), now), [state, messages, online, keyOf, now])
+
+  return { messages, state, connected, send, post, channel, unread, agents }
 }
