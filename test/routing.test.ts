@@ -3,7 +3,10 @@
 // older clients sent for routing (needs, dependencies, a handoff's branch and files) is ignored.
 
 import { beforeAll, describe, expect, test } from "bun:test";
-import { detectHarness, mergeCard, repoName, sameCard } from "../src/card.ts";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { detectHarness, detectWhere, mergeCard, movedCard, repoName, sameCard } from "../src/card.ts";
 import { cardLine, describeEvent, formatMessage, formatStatus, formatTask, formatTasks } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { wellFormed, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
@@ -283,6 +286,31 @@ describe("reading the machine", () => {
     expect(detectHarness({ MIMOCODE: "1", CLAUDECODE: "1" })).toBe("mimocode");
     expect(detectHarness({ TERM: "dumb", NO_COLOR: "1", CLAUDECODE: "1" }, { from: 9, lookup: () => ({ ppid: 1, name: "kimi-code" }) })).toBe("kimi-code");
     expect(detectHarness({})).toBeUndefined();
+  });
+
+  test("the repo and branch of a folder, none when HEAD is detached or there's no repo", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-where-"));
+    const git = (...args: string[]) => Bun.spawnSync(["git", "-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: dir });
+    try {
+      expect(detectWhere(dir)).toEqual({});
+      git("init", "-q", "-b", "main");
+      git("remote", "add", "origin", "git@github.com:ojow/channels.git");
+      git("commit", "-q", "--allow-empty", "-m", "one");
+      expect(detectWhere(dir)).toEqual({ repo: "ojow/channels", branch: "main" });
+      git("switch", "-q", "-c", "T39-repo");
+      expect(detectWhere(dir)).toEqual({ repo: "ojow/channels", branch: "T39-repo" });
+      git("switch", "-q", "--detach");
+      expect(detectWhere(dir)).toEqual({ repo: "ojow/channels" });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a card that moves keeps everything but where it is", () => {
+    const was = { os: "macos", tools: ["git"], model: "opus", note: "design work", repo: "ojow/channels", branch: "main" };
+    expect(movedCard(was, { repo: "ojow/channels", branch: "T39" })).toEqual({ ...was, branch: "T39" });
+    expect(movedCard(was, { repo: "ojow/site" })).toEqual({ os: "macos", tools: ["git"], model: "opus", note: "design work", repo: "ojow/site" });
+    expect(sameCard(was, movedCard(was, { repo: "ojow/channels", branch: "main" }))).toBe(true);
   });
 
   test("what was said by hand stays until said again; detected tools follow the machine", () => {

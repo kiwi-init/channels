@@ -2,6 +2,7 @@ import * as Effect from "effect/Effect";
 import { writeSync } from "node:fs";
 import { openSession, type AgentSession } from "../agent.ts";
 import { briefText, COMMANDS } from "../brief.ts";
+import { detectWhere } from "../card.ts";
 import { loadConfig, type ChannelConfig } from "../config.ts";
 import { wakeOn } from "../daemon/reach.ts";
 import { charterLines, formatMessage, holdLine, modeLine } from "@kiwi/core/format.ts";
@@ -153,6 +154,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
   const mc = mcFor(b.alias, b.as, input.cwd ?? process.cwd(), who);
   const s = yield* openSession(b.alias, cfg, b.as);
   if (who.session) yield* commitDelivered(s, who.session);
+  if (event === "prompt" || event === "stop") yield* Effect.ignoreCause(s.refreshWhere(detectWhere(input.cwd ?? process.cwd())));
 
   if (event === "session-start") {
     const { state } = yield* s.state();
