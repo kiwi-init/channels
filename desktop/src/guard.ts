@@ -8,10 +8,23 @@ import path from "node:path";
 import { decodeJoinCode } from "../../src/crypto.ts";
 import type { Identity } from "../../src/identity.ts";
 import { provePerson, type PersonClaim } from "../../src/person.ts";
-import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, PublicPerson, StoreSnapshot } from "./bridge.ts";
+import type {
+  ChannelIdentityView,
+  ComputerView,
+  PendingItem,
+  PersonView,
+  PublicPerson,
+  StoreSnapshot,
+} from "./bridge.ts";
 import { publicChannel } from "./seats.ts";
 
-export { acceptSeat, mergeChannels, mergePublicChannels, migrateEntries, withAccess } from "./seats.ts";
+export {
+  acceptSeat,
+  mergeChannels,
+  mergePublicChannels,
+  migrateEntries,
+  withAccess,
+} from "./seats.ts";
 
 export const APP_SCHEME = "kiwi-app";
 export const APP_HOST = "app";
@@ -42,7 +55,11 @@ export function normalizeRelay(url: string): string | null {
     const u = new URL(url.trim());
     if (!/^(?:[a-z0-9-]+\.)*[a-z0-9-]+\.?$|^\[[0-9a-f:.]+\]$/.test(u.hostname)) return null;
     if (u.protocol === "https:") return u.origin;
-    if (u.protocol === "http:" && (u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "[::1]")) return u.origin;
+    if (
+      u.protocol === "http:" &&
+      (u.hostname === "localhost" || u.hostname === "127.0.0.1" || u.hostname === "[::1]")
+    )
+      return u.origin;
     return null;
   } catch {
     return null;
@@ -94,7 +111,10 @@ export function csp(relay: string): string {
 }
 
 /** What reading the store found: nothing yet (a first run), the saved JSON, or a file it couldn't read. */
-export type StoreRead = { kind: "none" } | { kind: "ok"; json: unknown; encrypted: boolean } | { kind: "unreadable"; why: string };
+export type StoreRead =
+  | { kind: "none" }
+  | { kind: "ok"; json: unknown; encrypted: boolean }
+  | { kind: "unreadable"; why: string };
 
 /**
  * Read the store's bytes: decrypted when encryption works (and they were encrypted), else as the plain
@@ -136,14 +156,32 @@ export interface StoredKeys {
 }
 
 export function snapshotOf(s: StoredKeys): StoreSnapshot {
-  return { relayUrl: s.relayUrl, person: publicPerson(s.person), channels: s.channels.map(publicChannel), computers: s.computers, pending: s.pending };
+  return {
+    relayUrl: s.relayUrl,
+    person: publicPerson(s.person),
+    channels: s.channels.map(publicChannel),
+    computers: s.computers,
+    pending: s.pending,
+  };
 }
 
 export function publicComputer(c: ComputerView): ComputerView {
-  return { label: c.label, os: c.os, machinePk: c.machinePk, machineXpk: c.machineXpk, personPk: c.personPk, at: c.at, ...(c.own ? { own: true } : {}) };
+  return {
+    label: c.label,
+    os: c.os,
+    machinePk: c.machinePk,
+    machineXpk: c.machineXpk,
+    personPk: c.personPk,
+    at: c.at,
+    ...(c.own ? { own: true } : {}),
+  };
 }
 
-export function writePrivate(file: string, raw: Buffer, platform: NodeJS.Platform = process.platform): void {
+export function writePrivate(
+  file: string,
+  raw: Buffer,
+  platform: NodeJS.Platform = process.platform,
+): void {
   const dir = path.dirname(file);
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   if (platform !== "win32") fs.chmodSync(dir, 0o700);
@@ -159,6 +197,7 @@ export function writePrivate(file: string, raw: Buffer, platform: NodeJS.Platfor
 }
 
 export function claimFor(person: Identity, code: unknown, memberPk: unknown): Promise<PersonClaim> {
-  if (typeof code !== "string" || typeof memberPk !== "string") throw new Error("bad person claim request");
+  if (typeof code !== "string" || typeof memberPk !== "string")
+    throw new Error("bad person claim request");
   return provePerson(person, decodeJoinCode(code).roomId, memberPk);
 }

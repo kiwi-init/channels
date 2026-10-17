@@ -36,11 +36,20 @@ const macBundle = () => path.resolve(app.getPath("exe"), "..", "..", "..");
 
 async function check(): Promise<void> {
   if (staged) return;
-  const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { accept: "application/vnd.github+json", "user-agent": "kiwi-desktop" } });
+  const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
+    headers: { accept: "application/vnd.github+json", "user-agent": "kiwi-desktop" },
+  });
   if (!res.ok) return;
-  const rel = (await res.json()) as { tag_name?: string; html_url?: string; prerelease?: boolean; draft?: boolean; assets?: { name: string; browser_download_url: string }[] };
+  const rel = (await res.json()) as {
+    tag_name?: string;
+    html_url?: string;
+    prerelease?: boolean;
+    draft?: boolean;
+    assets?: { name: string; browser_download_url: string }[];
+  };
   const version = rel.tag_name?.replace(/^v/, "");
-  if (!version || rel.prerelease || rel.draft || compareVersions(version, app.getVersion()) <= 0) return;
+  if (!version || rel.prerelease || rel.draft || compareVersions(version, app.getVersion()) <= 0)
+    return;
   const url = rel.html_url ?? `https://github.com/${REPO}/releases/latest`;
   const name = swapAsset(version, process.platform, process.arch);
   const asset = name ? rel.assets?.find((a) => a.name === name) : undefined;
@@ -61,10 +70,18 @@ async function check(): Promise<void> {
 }
 
 /** The release's file for this install, checked against its SHA256SUMS and unpacked in `dir`: what goes in place, or null. */
-async function download(assetUrl: string, sumsUrl: string, name: string, dir: string): Promise<string | null> {
+async function download(
+  assetUrl: string,
+  sumsUrl: string,
+  name: string,
+  dir: string,
+): Promise<string | null> {
   const sums = await fetch(sumsUrl);
   if (!sums.ok) return null;
-  const want = (await sums.text()).split("\n").map((l) => l.trim().split(/\s+/)).find(([, f]) => f === name)?.[0];
+  const want = (await sums.text())
+    .split("\n")
+    .map((l) => l.trim().split(/\s+/))
+    .find(([, f]) => f === name)?.[0];
   if (!want) return null;
   const body = await fetch(assetUrl);
   if (!body.ok) return null;

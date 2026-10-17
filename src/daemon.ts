@@ -15,6 +15,7 @@
 
 import { spawn } from "node:child_process";
 import { appendFileSync, chmodSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import type { Socket, Subprocess } from "bun";
 // The channel stack (client.ts) loads lazily in seatFor, where the multiplex needs it: pairing,
@@ -292,6 +293,16 @@ export interface DaemonOptions {
 const WAKE_DELAY_MS = 2_000;
 const WAKE_GAP_MS = 60_000;
 const WAKE_RUN_MS = 60_000;
+
+function findExecutable(cmd: string): string | null {
+  const user = process.env.HOME || homedir();
+  const dirs = [process.env.PATH ?? "", join(user, ".local", "bin"), join(user, ".bun", "bin"), "/opt/homebrew/bin", "/usr/local/bin"].filter(Boolean).join(":");
+  return Bun.which(cmd, { PATH: dirs });
+}
+
+function oneLine(text: string): string {
+  return text.replace(/\s+/g, " ").trim().slice(0, 200);
+}
 const UNREAD_CHECK_MS = 30_000;
 
 function withDeadline<T>(work: Promise<T>, ms: number): Promise<T> {
@@ -409,25 +420,25 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     return runAgent(s.unreadCount(state, messages));
   };
 
-  const runWake = async (seat: Seat, [cmd, ...rest]: string[]): Promise<boolean> => {
-    const exe = cmd ? Bun.which(cmd, { PATH: process.env.PATH ?? "" }) : null;
-    if (!exe) return false;
+  const runWake = async (seat: Seat, [cmd, ...rest]: string[]): Promise<string | null> => {
+    const exe = cmd ? findExecutable(cmd) : null;
+    if (!exe) return `${cmd ?? "command"} not found on PATH`;
     try {
-      const child = Bun.spawn([exe, ...rest], { env: { ...process.env }, stdin: "ignore", stdout: "ignore", stderr: "ignore" });
+      const child = Bun.spawn([exe, ...rest], { env: { ...process.env }, stdin: "ignore", stdout: "ignore", stderr: "pipe" });
       seat.wakeChild = child;
       const timer = setTimeout(() => child.kill(), WAKE_RUN_MS);
-      const code = await child.exited;
+      const [code, err] = await Promise.all([child.exited, new Response(child.stderr).text()]);
       clearTimeout(timer);
       if (seat.wakeChild === child) seat.wakeChild = null;
-      return code === 0;
-    } catch {
-      return false;
+      return code === 0 ? null : `exit ${code}${oneLine(err) ? `: ${oneLine(err)}` : ""}`;
+    } catch (err) {
+      return `could not start: ${oneLine(err instanceof Error ? err.message : String(err))}`;
     }
   };
 
-  const logWake = (seat: Seat, w: DaemonWake): void => {
+  const logWake = (seat: Seat, w: DaemonWake, why: string | null): void => {
     try {
-      appendFileSync(join(dir, "wake.log"), `${new Date(w.at).toISOString()}\t${seat.alias}\t${seat.agent}\t${w.via}\t${w.unread}\t${w.ok ? "ok" : "failed"}\n`, { mode: 0o600 });
+      appendFileSync(join(dir, "wake.log"), `${new Date(w.at).toISOString()}\t${seat.alias}\t${seat.agent}\t${w.via}\t${w.unread}\t${w.ok ? "ok" : "failed"}${why ? `\t${why}` : ""}\n`, { mode: 0o600 });
     } catch {
       return;
     }
@@ -469,10 +480,10 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       if (!unread || !current(seat)) return;
       const path = await commandPath(seat);
       if (!path || !current(seat)) return;
-      const ok = await runWake(seat, wakeArgv(path.via, path.session, wakePrompt(seat.alias, seat.agent)));
+      const why = await runWake(seat, wakeArgv(path.via, path.session, wakePrompt(seat.alias, seat.agent)));
       if (!current(seat)) return;
-      seat.lastWake = { at: Date.now(), via: path.via, unread, ok };
-      logWake(seat, seat.lastWake);
+      seat.lastWake = { at: Date.now(), via: path.via, unread, ok: why === null };
+      logWake(seat, seat.lastWake, why);
     } finally {
       seat.waking = false;
       if (seat.wakeAgain && current(seat)) {

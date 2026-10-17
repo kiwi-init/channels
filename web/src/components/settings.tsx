@@ -3,7 +3,7 @@ import { Dialog } from "@base-ui/react/dialog"
 import { setAppearance, setTextSize, useAppearance, useTextSize, type Appearance, type TextSize } from "@/lib/theme"
 import { setAccessibilityOption, useAccessibilityOption } from "@/lib/accessibility"
 import { cx } from "@/lib/utils"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { relayUrl } from "@/lib/relay"
 import { version } from "../../../package.json"
 import { Button, Modal, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from "./kit"
@@ -33,7 +33,11 @@ function Choice<T extends string>({ label, value, options, onChange }: { label: 
   )
 }
 
-type RelayBridge = { setRelayUrl?: (url: string) => Promise<string> }
+type RelayBridge = {
+  setRelayUrl?: (url: string) => Promise<string>
+  backupStatus?: () => Promise<{ at: number } | null>
+  backupRun?: () => Promise<{ passphrase: string; at: number }>
+}
 
 // The relay this app talks to. Only the desktop app can change it; saving reloads the app on the new relay.
 function RelayField() {
@@ -63,6 +67,60 @@ function RelayField() {
           Use
         </Button>
       </div>
+      {error && (
+        <p className="mt-1 text-ui text-ink-2" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
+
+// Backs the person key and channel identities up to the person's account, sealed under six words only
+// they hold. The words are shown once, here; the relay keeps ciphertext it cannot open.
+function BackupField() {
+  const bridge = (window as unknown as { kiwi?: RelayBridge }).kiwi
+  const [at, setAt] = useState<number | null>(null)
+  const [words, setWords] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    bridge?.backupStatus?.().then(
+      (s) => setAt(s?.at ?? null),
+      () => {}
+    )
+  }, [bridge])
+  if (!bridge?.backupRun) return null
+  const run = () => {
+    setBusy(true)
+    setError(null)
+    bridge.backupRun!().then(
+      (r) => {
+        setWords(r.passphrase)
+        setAt(r.at)
+        setBusy(false)
+      },
+      (e: unknown) => {
+        setError(e instanceof Error ? e.message.replace(/^.*?Error: /, "") : String(e))
+        setBusy(false)
+      }
+    )
+  }
+  return (
+    <div>
+      <p className="mb-2 text-ui font-medium text-ink">Account backup</p>
+      <p className="mb-2 text-ui leading-normal text-ink-2">
+        {at ? `Backed up ${new Date(at).toLocaleString()}.` : "Not backed up."} Lets you open your channels on your phone after signing in. Sealed under six words only you hold.
+      </p>
+      {words && (
+        <p className="mb-2 select-all rounded-row border border-line p-2 font-mono text-ui text-ink" data-testid="backup-words">
+          {words}
+        </p>
+      )}
+      {words && <p className="mb-2 text-ui text-ink-2">Write these down now. They are shown once and Kiwi cannot recover them.</p>}
+      <Button variant="secondary" onClick={run} disabled={busy}>
+        {at ? "Back up again (new words)" : "Back up"}
+      </Button>
       {error && (
         <p className="mt-1 text-ui text-ink-2" role="alert">
           {error}
@@ -113,6 +171,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
             ]}
           />
           <RelayField />
+          <BackupField />
         </div>
         <div className="mt-6 flex items-center justify-between gap-3">
           <p className="min-w-0 truncate text-ui text-ink-2">Channels {version}</p>

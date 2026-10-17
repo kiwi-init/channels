@@ -5,14 +5,38 @@ import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 
 import { openRows as openSealedRows, packRow, type CachedRow } from "../../src/cache-row.ts";
-import { Channel, ChannelGone, RelayError, Relay, Unreachable, eachLive, fetchRelay, type Live, type PresenceFields } from "../../src/client.ts";
+import {
+  Channel,
+  ChannelGone,
+  RelayError,
+  Relay,
+  Unreachable,
+  eachLive,
+  fetchRelay,
+  type Live,
+  type PresenceFields,
+} from "../../src/client.ts";
 import type { ChannelAccess } from "../../src/crypto.ts";
 import { generateIdentity, type Identity } from "../../src/identity.ts";
 import { handleFor, type Member, type MemberInfo } from "../../src/membership.ts";
 import type { PersonClaim } from "../../src/person.ts";
 import type { Message } from "../../src/protocol.ts";
 import type { SigningBudget } from "../../src/sas.ts";
-import { CHANNEL_CALLS, type CallResult, type ChannelCallName, type ChannelCalls, type ChannelIdentityView, type ChannelOps, type ChannelView, type FollowEvent, type FollowOptions, type JoinCheck, type KeysPush, type KeysReply, type WireError } from "./bridge.ts";
+import {
+  CHANNEL_CALLS,
+  type CallResult,
+  type ChannelCallName,
+  type ChannelCalls,
+  type ChannelIdentityView,
+  type ChannelOps,
+  type ChannelView,
+  type FollowEvent,
+  type FollowOptions,
+  type JoinCheck,
+  type KeysPush,
+  type KeysReply,
+  type WireError,
+} from "./bridge.ts";
 import { channelAccess, publicChannel } from "./seats.ts";
 import { fromWire, toWire } from "./wire.ts";
 
@@ -29,13 +53,26 @@ export interface KeyHost {
 
 const runtime = ManagedRuntime.make(Layer.succeed(Relay, fetchRelay));
 
-const identityOf = (c: ChannelIdentityView): Identity => ({ name: c.idName ?? c.label, pk: c.pk, sk: c.sk, ...(c.xpk ? { xpk: c.xpk } : {}), ...(c.xsk ? { xsk: c.xsk } : {}) });
+const identityOf = (c: ChannelIdentityView): Identity => ({
+  name: c.idName ?? c.label,
+  pk: c.pk,
+  sk: c.sk,
+  ...(c.xpk ? { xpk: c.xpk } : {}),
+  ...(c.xsk ? { xsk: c.xsk } : {}),
+});
 
-const keysOf = (id: Identity): Pick<ChannelIdentityView, "pk" | "sk" | "xpk" | "xsk"> => ({ pk: id.pk, sk: id.sk, ...(id.xpk ? { xpk: id.xpk } : {}), ...(id.xsk ? { xsk: id.xsk } : {}) });
+const keysOf = (id: Identity): Pick<ChannelIdentityView, "pk" | "sk" | "xpk" | "xsk"> => ({
+  pk: id.pk,
+  sk: id.sk,
+  ...(id.xpk ? { xpk: id.xpk } : {}),
+  ...(id.xsk ? { xsk: id.xsk } : {}),
+});
 
-const isCall = (name: unknown): name is ChannelCallName => typeof name === "string" && (CHANNEL_CALLS as readonly string[]).includes(name);
+const isCall = (name: unknown): name is ChannelCallName =>
+  typeof name === "string" && (CHANNEL_CALLS as readonly string[]).includes(name);
 
-const field = (v: unknown, k: string): unknown => (v && typeof v === "object" ? (v as Record<string, unknown>)[k] : undefined);
+const field = (v: unknown, k: string): unknown =>
+  v && typeof v === "object" ? (v as Record<string, unknown>)[k] : undefined;
 
 function asOf(v: unknown): Partial<MemberInfo> | undefined {
   if (v === undefined || v === null) return undefined;
@@ -44,14 +81,25 @@ function asOf(v: unknown): Partial<MemberInfo> | undefined {
 }
 
 export function editable(m: Member | undefined): Member {
-  if (!m || !m.active || m.unverified || m.owner) throw new Error("that member isn't one whose record you can change");
+  if (!m || !m.active || m.unverified || m.owner)
+    throw new Error("that member isn't one whose record you can change");
   return m;
 }
 
 function wireError(e: unknown): WireError {
   if (e instanceof ChannelGone) return { kind: "gone", why: e.why };
-  if (e instanceof RelayError) return { kind: "relay", status: e.status, message: e.message, ...(e.tagged ? { tag: e.tag } : {}) };
-  if (e instanceof Unreachable) return { kind: "unreachable", message: e.cause instanceof Error ? e.cause.message : "can't reach the relay" };
+  if (e instanceof RelayError)
+    return {
+      kind: "relay",
+      status: e.status,
+      message: e.message,
+      ...(e.tagged ? { tag: e.tag } : {}),
+    };
+  if (e instanceof Unreachable)
+    return {
+      kind: "unreachable",
+      message: e.cause instanceof Error ? e.cause.message : "can't reach the relay",
+    };
   if (e instanceof TypeError) return { kind: "unreachable", message: e.message };
   if (e instanceof Error) {
     const tag: unknown = (e as { _tag?: unknown })._tag;
@@ -91,7 +139,10 @@ export class Keyring implements ChannelOps {
 
   private seat(code: string, member: boolean): ChannelIdentityView {
     const s = this.host.seats().find((c) => c.code === code && (member ? !!c.access : !c.access));
-    if (!s) throw new Error(member ? "this app isn't in that channel" : "this app has no join request for that channel");
+    if (!s)
+      throw new Error(
+        member ? "this app isn't in that channel" : "this app has no join request for that channel",
+      );
     return s;
   }
 
@@ -103,10 +154,19 @@ export class Keyring implements ChannelOps {
     const relay = this.host.relay();
     const had = this.open.get(key);
     if (had && had.relay === relay) {
-      if (access.epoch > had.access.epoch || Object.keys(access.keys).some((e) => !had.access.keys[e])) had.access = { ...had.access, ...access, keys: { ...had.access.keys, ...access.keys } };
+      if (
+        access.epoch > had.access.epoch ||
+        Object.keys(access.keys).some((e) => !had.access.keys[e])
+      )
+        had.access = { ...had.access, ...access, keys: { ...had.access.keys, ...access.keys } };
       return had;
     }
-    const ch = new Channel(access, relay, identityOf(seat), (a) => void this.host.access(code, seat.pk, a).catch(() => {}));
+    const ch = new Channel(
+      access,
+      relay,
+      identityOf(seat),
+      (a) => void this.host.access(code, seat.pk, a).catch(() => {}),
+    );
     this.open.set(key, ch);
     return ch;
   }
@@ -119,12 +179,18 @@ export class Keyring implements ChannelOps {
     return fn.apply(ch, list);
   }
 
-  private async trusted(ch: Channel, op: ChannelCallName, args: readonly unknown[]): Promise<unknown[]> {
+  private async trusted(
+    ch: Channel,
+    op: ChannelCallName,
+    args: readonly unknown[],
+  ): Promise<unknown[]> {
     const person = this.host.person();
     const who = person ? { person } : {};
     switch (op) {
       case "requests":
-        return [{ budget: this.host.budget, ...(field(args[0], "person") !== undefined ? who : {}) }];
+        return [
+          { budget: this.host.budget, ...(field(args[0], "person") !== undefined ? who : {}) },
+        ];
       case "autoApprove":
         if (!person) throw new Error("make your person key first");
         return [person];
@@ -148,16 +214,43 @@ export class Keyring implements ChannelOps {
     }
   }
 
-  call<K extends ChannelCallName>(code: string, op: K, ...args: Parameters<ChannelCalls[K]>): Promise<CallResult<K>> {
+  call<K extends ChannelCallName>(
+    code: string,
+    op: K,
+    ...args: Parameters<ChannelCalls[K]>
+  ): Promise<CallResult<K>> {
     return this.callRaw(code, op, args) as Promise<CallResult<K>>;
   }
 
-  async create(name: string, token: string | null, me: { name: string } | null): Promise<ChannelView> {
+  async create(
+    name: string,
+    token: string | null,
+    me: { name: string } | null,
+  ): Promise<ChannelView> {
     const handle = me ? handleFor(me.name) : "human";
     const owner = await generateIdentity(handle);
-    const info = me ? { name: handle, role: "owner", kind: "human" as const, display: me.name } : { name: "human", role: "owner" };
-    const { code, access } = await Channel.create(this.host.relay(), owner, info, [], undefined, token, name);
-    const entry: ChannelIdentityView = { label: name, idName: owner.name, ...keysOf(owner), roomId: access.roomId, code, access, at: Date.now(), name };
+    const info = me
+      ? { name: handle, role: "owner", kind: "human" as const, display: me.name }
+      : { name: "human", role: "owner" };
+    const { code, access } = await Channel.create(
+      this.host.relay(),
+      owner,
+      info,
+      [],
+      undefined,
+      token,
+      name,
+    );
+    const entry: ChannelIdentityView = {
+      label: name,
+      idName: owner.name,
+      ...keysOf(owner),
+      roomId: access.roomId,
+      code,
+      access,
+      at: Date.now(),
+      name,
+    };
     await this.host.save(entry);
     await this.channel(code)
       .startCoordinated()
@@ -167,10 +260,25 @@ export class Keyring implements ChannelOps {
 
   async requestJoin(code: string, name: string, role?: string): Promise<ChannelView> {
     const prior = this.host.seats().find((c) => c.code === code && !c.access && !c.imported);
-    const identity = prior && (prior.idName ?? prior.label) === name ? identityOf(prior) : await generateIdentity(name);
+    const identity =
+      prior && (prior.idName ?? prior.label) === name
+        ? identityOf(prior)
+        : await generateIdentity(name);
     const claim = await this.host.prove(code, identity.pk);
-    const r = await Channel.requestJoin(this.host.relay(), code, identity, { name, ...(role ? { role } : {}) }, claim ? { person: claim } : undefined);
-    const entry: ChannelIdentityView = { label: identity.name, idName: identity.name, ...keysOf(identity), code, requestId: r.requestId };
+    const r = await Channel.requestJoin(
+      this.host.relay(),
+      code,
+      identity,
+      { name, ...(role ? { role } : {}) },
+      claim ? { person: claim } : undefined,
+    );
+    const entry: ChannelIdentityView = {
+      label: identity.name,
+      idName: identity.name,
+      ...keysOf(identity),
+      code,
+      requestId: r.requestId,
+    };
     await this.host.save(entry);
     return publicChannel(entry);
   }
@@ -181,10 +289,20 @@ export class Keyring implements ChannelOps {
     const st = await Channel.joinStatus(this.host.relay(), code, id, seat.requestId ?? "");
     if (st.status === "denied") return { status: "denied" };
     if (st.status === "pending") return { status: "pending", code: st.code };
-    const members: Member[] = await new Channel(st.access, this.host.relay(), id).members().catch(() => []);
+    const members: Member[] = await new Channel(st.access, this.host.relay(), id)
+      .members()
+      .catch(() => []);
     const record = members.find((x) => x.pk === id.pk);
     const idName = record && record.name !== id.name ? record.name : id.name;
-    const entry: ChannelIdentityView = { label: idName, idName, ...keysOf(id), roomId: st.access.roomId, code, access: st.access, at: Date.now() };
+    const entry: ChannelIdentityView = {
+      label: idName,
+      idName,
+      ...keysOf(id),
+      roomId: st.access.roomId,
+      code,
+      access: st.access,
+      at: Date.now(),
+    };
     await this.host.save(entry);
     return { status: "in", channel: publicChannel(entry) };
   }
@@ -210,7 +328,12 @@ export class Keyring implements ChannelOps {
     return openSealedRows(rows, access.roomId, access.keys);
   }
 
-  follow(code: string, since: number, on: (e: FollowEvent) => void, opts: FollowOptions = {}): () => void {
+  follow(
+    code: string,
+    since: number,
+    on: (e: FollowEvent) => void,
+    opts: FollowOptions = {},
+  ): () => void {
     let ch: Channel;
     try {
       ch = this.channel(code);
@@ -226,9 +349,21 @@ export class Keyring implements ChannelOps {
         const out = watch ? watched(ev) : await this.event(ch, ev, f);
         if (out) on(out);
       });
-    const status = (line: string): Effect.Effect<void> => Effect.sync(() => on({ _tag: "Status", line }));
-    const program = eachLive(ch.fx.live(Math.max(0, since), watch ? { presence: false, watch } : { presence: true, send: true }), handle, status).pipe(
-      Effect.catchCause((cause) => (Cause.hasInterruptsOnly(cause) ? Effect.void : Effect.sync(() => on({ _tag: "Failed", error: wireError(Cause.squash(cause)) })))),
+    const status = (line: string): Effect.Effect<void> =>
+      Effect.sync(() => on({ _tag: "Status", line }));
+    const program = eachLive(
+      ch.fx.live(
+        Math.max(0, since),
+        watch ? { presence: false, watch } : { presence: true, send: true },
+      ),
+      handle,
+      status,
+    ).pipe(
+      Effect.catchCause((cause) =>
+        Cause.hasInterruptsOnly(cause)
+          ? Effect.void
+          : Effect.sync(() => on({ _tag: "Failed", error: wireError(Cause.squash(cause)) })),
+      ),
     );
     const fiber = runtime.runFork(program);
     f.stop = () => void Effect.runFork(Fiber.interrupt(fiber));
@@ -246,7 +381,10 @@ export class Keyring implements ChannelOps {
         return { _tag: "Open", kind: ev.kind };
       case "Message": {
         const key = ch.access.keys[String(ch.access.epoch)];
-        const row: CachedRow | null = key && Number.isSafeInteger(ev.message.seq) && ev.message.seq > 0 ? await packRow(key, ch.roomId, ch.access.epoch, ev.message).catch(() => null) : null;
+        const row: CachedRow | null =
+          key && Number.isSafeInteger(ev.message.seq) && ev.message.seq > 0
+            ? await packRow(key, ch.roomId, ch.access.epoch, ev.message).catch(() => null)
+            : null;
         return { _tag: "Message", message: ev.message, row };
       }
       case "Presence":
@@ -301,7 +439,11 @@ export function serveKeys(k: Keyring, push: (p: KeysPush) => void): KeysSession 
       case "create":
         return k.create(text(r.name), r.token === null ? null : text(r.token), meOf(r.me));
       case "requestJoin":
-        return k.requestJoin(text(r.code), text(r.name), r.role === undefined ? undefined : text(r.role));
+        return k.requestJoin(
+          text(r.code),
+          text(r.name),
+          r.role === undefined ? undefined : text(r.role),
+        );
       case "joinStatus":
         return k.joinStatus(text(r.code));
       case "forget":
@@ -316,7 +458,12 @@ export function serveKeys(k: Keyring, push: (p: KeysPush) => void): KeysSession 
         return k.openRows(text(r.code), Array.isArray(rows) ? rows : []);
       }
       case "follow": {
-        const stop = k.follow(text(r.code), count(r.since), (event) => push({ sub: id, event: toWire(event) }), { watch: r.watch === true });
+        const stop = k.follow(
+          text(r.code),
+          count(r.since),
+          (event) => push({ sub: id, event: toWire(event) }),
+          { watch: r.watch === true },
+        );
         subs.set(id, stop);
         return id;
       }
@@ -350,7 +497,13 @@ export function serveKeys(k: Keyring, push: (p: KeysPush) => void): KeysSession 
 }
 
 export type HostToKeys =
-  | { type: "init"; relay: string; dir: string; seats: ChannelIdentityView[]; person: string | null }
+  | {
+      type: "init";
+      relay: string;
+      dir: string;
+      seats: ChannelIdentityView[];
+      person: string | null;
+    }
   | { type: "seats"; seats: ChannelIdentityView[]; person: string | null }
   | { type: "flush" }
   | { type: "relay"; relay: string }

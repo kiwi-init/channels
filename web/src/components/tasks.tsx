@@ -7,7 +7,7 @@ import { formatAgo } from "@/lib/format"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 import { isAgent } from "./message"
-import { Alert, Button, IconButton, Monogram, errorText, toast } from "./kit"
+import { Alert, Button, IconButton, Monogram, SEGMENTED, SEGMENT_OFF, SEGMENT_ON, errorText, toast } from "./kit"
 
 const LABEL: Record<TaskState, string> = { doing: "In progress", review: "In review", todo: "Open", done: "Done" }
 
@@ -146,6 +146,43 @@ export function Notes({ state, now, onClear }: { state: ChannelState; now: numbe
   )
 }
 
+export type TaskFilter = "all" | TaskState
+
+export function TaskFilterBar({ value, options, onChange, className }: { value: TaskFilter; options: [TaskFilter, string][]; onChange: (f: TaskFilter) => void; className?: string }) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Show tasks"
+      className={cx("flex flex-wrap gap-0.5", SEGMENTED, className)}
+      onKeyDown={(e) => {
+        const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0
+        if (!step) return
+        e.preventDefault()
+        const at = options.findIndex(([f]) => f === value)
+        const next = options[(at + step + options.length) % options.length]
+        if (!next) return
+        onChange(next[0])
+        const group = e.currentTarget
+        requestAnimationFrame(() => group.querySelector<HTMLElement>('[aria-checked="true"]')?.focus())
+      }}
+    >
+      {options.map(([f, word]) => (
+        <button
+          key={f}
+          type="button"
+          role="radio"
+          aria-checked={value === f}
+          tabIndex={value === f ? 0 : -1}
+          onClick={() => onChange(f)}
+          className={cx("h-7 flex-auto rounded-row px-3 text-ui font-medium whitespace-nowrap transition-colors", value === f ? SEGMENT_ON : SEGMENT_OFF)}
+        >
+          {word}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 /** The board's groups, in the order they ask for attention. */
 const GROUPS: [TaskState, string][] = [
   ["review", "Needs review"],
@@ -169,9 +206,11 @@ export function Tasks({
   onOpen: (id: number) => void
 }) {
   const [showDone, setShowDone] = useState(false)
+  const [filter, setFilter] = useState<TaskFilter>("all")
   const [query, setQuery] = useState("")
   const q = query.trim().toLowerCase()
   const all = [...state.tasks.values()]
+    .filter((t) => filter === "all" || t.state === filter)
     .filter((t) => !q || t.title.toLowerCase().includes(q) || taskId(t.id).toLowerCase().includes(q) || (!!t.owner && nameOf(t.owner).toLowerCase().includes(q)))
     .sort((a, b) => b.updatedAt - a.updatedAt)
 
@@ -204,12 +243,13 @@ export function Tasks({
           className="min-w-0 flex-1 bg-transparent text-body text-ink outline-none placeholder:text-ink-3 focus-visible:outline-none"
         />
       </label>
-      {q && !all.length && <p className="py-6 text-center text-ui text-ink-3">No task matches “{query}”.</p>}
+      <TaskFilterBar value={filter} options={[["all", "All"], ...GROUPS]} onChange={setFilter} className="mb-4" />
+      {!all.length && <p className="py-6 text-center text-ui text-ink-3">{q ? `No task matches “${query}”.` : "Nothing here right now."}</p>}
       {GROUPS.map(([s, word]) => {
         const list = all.filter((t) => t.state === s)
         if (!list.length) return null
         // Done ones wait behind a tap, unless you're looking for one.
-        const closed = s === "done" && !q
+        const closed = s === "done" && !q && filter === "all"
         return (
           <section key={s} aria-label={word} className="mb-5">
             <div className="mb-1.5 flex items-baseline gap-2 px-3">
