@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { briefText, mcpBrief } from "../src/brief.ts";
+import { HELP } from "../src/cli/help.ts";
 
 test("both briefs tell an agent to write like a chat teammate", () => {
   const cli = briefText({ alias: "c", agent: "mac", mc: "kiwi", listen: "" });
@@ -21,4 +22,11 @@ test("both briefs send every decision an agent waits on to ask-human, never a qu
   expect(mcp).toContain("call ask_human");
   expect(cli).not.toContain("send --escalate");
   [cli, mcp].map((brief) => expect(brief).toContain('never end a message with "reply A, B or C"'));
+});
+
+test("help names ask-human as the way to ask a person, and --escalate as its older form", () => {
+  const escalate = HELP.slice(HELP.indexOf("--escalate [--re N]"), HELP.indexOf("--handoff URL"));
+  expect(escalate).toContain("use");
+  expect(escalate).toContain("ask-human");
+  expect(HELP).toContain('kiwi ask-human "question"');
 });

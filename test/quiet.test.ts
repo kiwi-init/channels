@@ -4,10 +4,12 @@ import { isQuiet, type Event, type Message } from "@kiwi/core/protocol.ts";
 const event = (ev: Event): Pick<Message, "kind" | "ev"> => ({ kind: "event", ev });
 
 describe("quiet events", () => {
-  test("live state changes stay out of the conversation: notes, claims, reactions, joins, cards", () => {
+  test("live state changes stay out of the conversation: notes, leases, claims, reactions, joins, cards", () => {
     const quiet: Event[] = [
       { op: "fact.set", key: "build-lock", value: "ann" },
       { op: "fact.del", key: "build-lock" },
+      { op: "lease.take", name: "build", ttl: 600 },
+      { op: "lease.free", name: "build" },
       { op: "task.claim", task: 7 },
       { op: "react", seq: 3, emoji: "👍" },
       { op: "hello" },

@@ -5,7 +5,8 @@ import { allowedOnHold, isLeadRole, isPerson, LEAD, ON_HOLD } from "./people.ts"
 import { dmPlace, MAIN, summarize } from "./places.ts";
 import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
-import type { ChannelState, Fact, FoldBase, GuardFloor, Member, Place, Reaction, Room, RoomsFloor, Roster, Task } from "./types.ts";
+import { settle } from "./leases.ts";
+import type { ChannelState, Fact, FoldBase, GuardFloor, Lease, Member, Place, Reaction, Room, RoomsFloor, Roster, Task } from "./types.ts";
 
 export function fold(
   messages: Message[],
@@ -139,6 +140,7 @@ export function fold(
   };
   const tasks = new Map<number, Task>(from?.tasks.map((t) => [t.id, t]));
   const facts = new Map<string, Fact>(from?.facts.map((f) => [f.key, f]));
+  const leases = new Map<string, Lease>(from?.leases.map((l) => [l.name, l]));
   const reactions = new Map<number, Map<string, Reaction>>(from?.reactions.map(([seq, by]) => [seq, new Map(by)]));
   const reactSeqs = new Set<number>(from?.reactSeqs);
   const trust = new Map<number, Trust>(from?.trust);
@@ -169,6 +171,7 @@ export function fold(
     setRole,
     tasks,
     facts,
+    leases,
     rooms,
     roomsSince,
     nameTaken,
@@ -299,6 +302,7 @@ export function fold(
       roleSets: [...roleSets],
       tasks: [...tasks.values()],
       facts: [...facts.values()],
+      leases: [...leases.values()],
       reactions: [...reactions].map(([seq, by]): [number, [string, Reaction][]] => [seq, [...by]]),
       reactSeqs: [...reactSeqs],
       trust: [...trust],
@@ -317,6 +321,10 @@ export function fold(
   passRoleFloors(Infinity);
   for (const member of members.values()) member.scopes = scopesByKey.get(member.pk) ?? [];
   for (const [key, fact] of facts) if (fact.expires !== undefined && fact.expires <= now) facts.delete(key);
+  for (const [name, lease] of leases) {
+    settle(lease, now);
+    if (!lease.holder && !lease.queue.length) leases.delete(name);
+  }
 
   passGuard(Infinity);
 
@@ -324,6 +332,7 @@ export function fold(
     members,
     tasks,
     facts,
+    leases,
     trust,
     scopeSets,
     roleSets,

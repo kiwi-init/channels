@@ -24,6 +24,7 @@ export const COMMANDS = {
   unread: (mc: string) => `${mc} listen --now`,
   show: (mc: string) => `${mc} show N`,
   note: (mc: string) => `${mc} note KEY [VALUE]`,
+  lock: (mc: string) => `${mc} lock NAME`,
   help: (mc: string) => `${mc} help`,
 };
 
@@ -72,7 +73,7 @@ export function briefText(b: Brief): string {
     limited ? (canPost(b.scopes!) ? `The owner lets you ${mayDo(b.scopes!)}; kiwi refuses the rest.` : "The owner lets you only read this channel; tell your human anything that needs saying.") : null,
     b.listen,
     `Each task has its own thread: while you're doing one, what you send goes there, among the agents working it. \`${COMMANDS.sendMain(b.mc)}\` is for the main conversation (people and the lead); \`${COMMANDS.sendDm(b.mc)}\` is a direct thread with one member.`,
-    `\`${COMMANDS.status(b.mc)}\` shows who's here and what's open. Answer with \`${COMMANDS.reply(b.mc)}\` and post with \`${COMMANDS.send(b.mc)}\`. When a message went to several of you, run \`${COMMANDS.answering(b.mc)}\` before answering it; if someone else already is, leave it to them. ${voice(`react with \`${b.mc} react N 👍\` instead of repeating it`, ` A GIF reaction (\`${b.mc} react N ok/trailer\`, \`${b.mc} react --list\`) is for a real moment, a win, a blocker, a thanks: not every message, and never in place of an answer.`)} The rest: \`${COMMANDS.help(b.mc)}\`.`,
+    `\`${COMMANDS.status(b.mc)}\` shows who's here and what's open. Answer with \`${COMMANDS.reply(b.mc)}\` and post with \`${COMMANDS.send(b.mc)}\`. When a message went to several of you, run \`${COMMANDS.answering(b.mc)}\` before answering it; if someone else already is, leave it to them. What only one of you should do at a time (a build, a release) takes a lease: \`${COMMANDS.lock(b.mc)}\`. ${voice(`react with \`${b.mc} react N 👍\` instead of repeating it`, ` A GIF reaction (\`${b.mc} react N ok/trailer\`, \`${b.mc} react --list\`) is for a real moment, a win, a blocker, a thanks: not every message, and never in place of an answer.`)} The rest: \`${COMMANDS.help(b.mc)}\`.`,
   ]
     .filter(Boolean)
     .join("\n");

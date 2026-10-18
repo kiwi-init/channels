@@ -99,8 +99,13 @@ jobs:
       local relay (two racing claims or markers: exactly one lands, the loser is told who holds it
       and leaves nothing in the log; a drop frees the claim; a marker doesn't answer an ask), and
       the relay refuses a malformed slot with 400 and someone else's slot with 423 Taken.
-      And test/quiet.test.ts: which events are live state (notes, claims, reactions, joins,
-      cards) and stay out of the conversation and kiwi log, and which people still read there.
+      And test/leases.test.ts: leases with a line (kiwi lock/unlock): the first to ask holds
+      it, the rest wait in log order, letting go or running out hands it to the next, waits
+      give up, only a person frees someone else's, a snapshot-resumed fold agrees, status shows
+      it and no one is woken by it, and two agents racing over a local relay end with one
+      holder and one waiting.
+      And test/quiet.test.ts: which events are live state (notes, leases, claims, reactions,
+      joins, cards) and stay out of the conversation and kiwi log, and which people still read there.
       And test/lead.test.ts: the optional lead role (one at a time, an old
       coordinator role reads as it, an old mode.set folds to nothing, a person's words reach every
       agent). Fails if a tested module's behavior,

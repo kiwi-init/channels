@@ -5,7 +5,7 @@ import { inlineText, runsLine, type Runs } from "./membership.ts";
 import { GENERAL_ROOM, ignored, imageMarker } from "./protocol.ts";
 import type { Card, Message, OldTaskState, Reach, TaskState, Trust } from "./protocol.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
-import { colorOf, humanOf, isPerson, outsideRepos, taskId, type ChannelState, type Fact, type ReviewRound, type Task } from "./state.ts";
+import { colorOf, humanOf, isPerson, outsideRepos, taskId, type ChannelState, type Fact, type Lease, type ReviewRound, type Task } from "./state.ts";
 import { isWakeVia, wakeWords, type WakeVia } from "./wake.ts";
 
 export function ago(ts: number, now = Date.now()): string {
@@ -20,6 +20,11 @@ export function ago(ts: number, now = Date.now()): string {
 export function left(expires: number, now = Date.now()): string {
   const m = Math.max(0, Math.round((expires - now) / 60_000));
   return m < 60 ? `${m}m left` : `${Math.floor(m / 60)}h${m % 60 ? `${m % 60}m` : ""} left`;
+}
+
+function span(seconds: number): string {
+  const m = Math.max(1, Math.round(seconds / 60));
+  return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${m % 60 ? `${m % 60}m` : ""}`;
 }
 
 /** Parse "30m", "2h", "90s", "1h30m" or plain seconds. */
@@ -130,6 +135,10 @@ export function describeEvent(m: Message, state?: ChannelState): string {
       return `set ${ev.key} = ${ev.value}`;
     case "fact.del":
       return `unset ${ev.key}`;
+    case "lease.take":
+      return `asked for ${ev.name} for ${span(ev.ttl)}${note(ev.note)}`;
+    case "lease.free":
+      return `let go of ${ev.name}`;
     case "charter.set":
       return ev.text ? `set the charter: ${ev.text}` : "cleared the charter";
     case "repos.set":
@@ -241,6 +250,12 @@ function taskLine(t: Task): string {
 }
 
 /** `build.cmd = cargo test  (win, 2h ago, 5h left)`. A value with several lines keeps its tail marked. */
+export function leaseLine(l: Lease, me: string, now = Date.now()): string {
+  const who = (n: string) => (n === me ? "you" : inlineText(n, 40));
+  const held = l.holder ? `${who(l.holder)}, ${left(l.until, now)}${l.note ? `: ${inlineText(l.note, 120)}` : ""}` : "free";
+  return `${l.name}: ${held}${l.queue.length ? ` · next: ${l.queue.map((q) => who(q.name)).join(", ")}` : ""}`;
+}
+
 export function formatFact(f: Fact, now = Date.now()): string {
   const remain = f.expires ? `, ${left(f.expires, now)}` : "";
   const lines = cleanBody(String(f.value ?? "")).split("\n");
@@ -316,6 +331,7 @@ export function statusJson({ alias, me, state, online, unread }: Snapshot) {
     lead: state.lead,
     charter: state.charter?.text ?? null,
     repos: state.repos,
+    leases: [...state.leases.values()].map((l) => ({ name: l.name, holder: l.holder ?? null, until: l.holder ? l.until : null, note: l.note ?? null, queue: l.queue.map((q) => q.name) })),
     hold: state.hold ? { by: state.hold.by, at: state.hold.at || null, note: state.hold.note ?? null } : null,
     human: humanOf(state, me),
     members: names.sort().map((n) => memberJson(state, n, online)),
@@ -407,6 +423,10 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
   const order = ["doing", "review", "todo"];
   active.sort((a, b) => order.indexOf(a.state) - order.indexOf(b.state) || a.id - b.id);
   for (const t of active) out.push(taskLine(t));
+  if (state.leases.size) {
+    out.push("", "leases:");
+    for (const l of [...state.leases.values()].sort((a, b) => a.name.localeCompare(b.name))) out.push(`  ${leaseLine(l, me, now)}`);
+  }
   if (state.facts.size) {
     out.push("", "facts:");
     for (const f of [...state.facts.values()].sort((a, b) => a.key.localeCompare(b.key))) {

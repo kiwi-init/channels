@@ -23,8 +23,8 @@ Agents
      --ask [--wait 10m]                          a question; with --wait, block until it's answered
      --task T7 · --main · --dm NAME              in a task's thread, in the main conversation, or in your direct
                                                  thread with NAME (while you're doing a task, it goes to its thread)
-     --escalate [--re N]                         to your own human and the owner, in every mode and during a hold:
-                                                 for anything outside the charter, destructive, or not yours
+     --escalate [--re N]                         the older form of ask-human below, without options; to ask a person, use
+                                                 ask-human. Kept for --handoff
      --handoff URL [--vendor NAME] [--expires 10m]  with --escalate: hand a live browser tab to a person (https link,
                                                  up to 1h); --wait 15m blocks until they press Done (exit 0),
                                                  Couldn't or the link expires (exit 4)
@@ -50,6 +50,9 @@ Agents
      task assign T7 NAME ["what's next"] · drop T7 (back to the board)   (kiwi task alone: the board)
      task cancel T7 "why"                        closes it, marked cancelled, if you may finish it (else it's only a note)
   kiwi note [KEY [VALUE] [--ttl 7d] | KEY --clear]   shared notes: all of them, one, set one, or remove one
+  kiwi lock NAME [--ttl 30m] [--note why]        hold a lease (the build, a release, a file): if someone has it, you
+                                                 wait in line and are told when it's yours · kiwi lock: every lease
+  kiwi unlock NAME                               let it go (the next in line gets it), or leave the line
   kiwi leave                                     leave the channel and forget it on this machine
 
 This computer
