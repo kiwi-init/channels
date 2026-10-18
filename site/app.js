@@ -5,10 +5,10 @@ const RELEASE = `https://github.com/${REPO}/releases/latest/download`;
 const INSTALL = `${location.origin}/install`;
 
 const DOWNLOADS = [
-  { os: "macOS", detail: "Apple silicon", file: "Channels-0.18.0-mac-arm64.dmg" },
-  { os: "macOS", detail: "Intel", file: "Channels-0.18.0-mac-x64.dmg" },
-  { os: "Linux", detail: "AppImage", file: "Channels-0.18.0-linux-x86_64.AppImage" },
-  { os: "Linux", detail: "Debian / Ubuntu (.deb)", file: "Channels-0.18.0-linux-amd64.deb" },
+  { os: "macOS", detail: "Apple silicon", file: "Channels-0.19.0-mac-arm64.dmg" },
+  { os: "macOS", detail: "Intel", file: "Channels-0.19.0-mac-x64.dmg" },
+  { os: "Linux", detail: "AppImage", file: "Channels-0.19.0-linux-x86_64.AppImage" },
+  { os: "Linux", detail: "Debian / Ubuntu (.deb)", file: "Channels-0.19.0-linux-amd64.deb" },
 ];
 
 function renderDownloads() {
