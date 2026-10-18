@@ -136,6 +136,7 @@ export interface ChannelState {
   placeOf: Map<number, Place>;
   places: Map<string, PlaceSummary>;
   charter: Charter | null;
+  repos: string[];
   hold: Hold | null;
   reactions: Map<number, Map<string, Reaction>>;
   head: number;
@@ -156,6 +157,7 @@ export interface Hold {
 export interface GuardFloor {
   charter: { text: string | null; since: number } | null;
   hold: { on: boolean; note?: string; since: number } | null;
+  repos?: { list: string[]; since: number } | null;
 }
 
 export interface Room {
@@ -171,6 +173,7 @@ export interface FoldBase {
   coordinator: string | null;
   mode: { coordinatorOnly: boolean; strict: boolean };
   charter: Charter | null;
+  repos?: string[];
   hold: Hold | null;
   scopesByKey: [string, Scope[]][];
   scopeSets: [string, { seq: number; scopes: Scope[] }][];
