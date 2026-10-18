@@ -28,19 +28,19 @@ afterAll(() => {
 });
 
 describe("handles", () => {
-  test("a handle is an animal and a nice adjective, and a valid name", () => {
+  test("a handle is a nice adjective and an animal, in that order, and a valid name", () => {
     for (let i = 0; i < 200; i++) {
       const h = freeHandle([]);
       expect(h).toMatch(HANDLE);
       expect(NAME_RE.test(h)).toBe(true);
     }
-    expect(freeHandle([], () => 0)).toBe("otter-gentle");
+    expect(freeHandle([], () => 0)).toBe("gentle-otter");
   });
 
   test("a handle anyone holds, in any case, is never offered again", () => {
     const picks = [0, 0, 0, 0, 1, 1];
     const pick = () => picks.shift() ?? 0;
-    expect(freeHandle([{ name: "Otter-Gentle" }], pick)).toBe("heron-brave");
+    expect(freeHandle([{ name: "Gentle-Otter" }], pick)).toBe("brave-heron");
   });
 
   test("a handle seeded by a key is the same every time it's offered, and differs between keys", () => {
@@ -53,7 +53,7 @@ describe("handles", () => {
   });
 
   test("when every pick is taken, a numbered one is offered instead", () => {
-    expect(freeHandle([{ name: "otter-gentle" }], () => 0)).toBe("otter-gentle-2");
+    expect(freeHandle([{ name: "gentle-otter" }], () => 0)).toBe("gentle-otter-2");
   });
 });
 
