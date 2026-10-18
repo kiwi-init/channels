@@ -41,6 +41,8 @@ import { useChannelNews, useRecentPreview } from "./use-news"
 import { usePlaces } from "./use-places"
 import { useScroll } from "./use-scroll"
 import { useThreads } from "./use-threads"
+import { useWindow } from "./use-window"
+import { useLatest } from "@/lib/use-latest"
 
 function useNow(intervalMs = 30_000): number {
   return useClock(intervalMs)
@@ -75,7 +77,11 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const [headRef, headH] = useHeight()
   const [footRef, footH] = useHeight()
 
-  const nameOf = useCallback((name: string) => memberName(state.members.get(name), name), [state.members])
+  const names = useMemo(() => JSON.stringify([...state.members].map(([name, m]) => [name, memberName(m, name)])), [state.members])
+  const nameOf = useMemo(() => {
+    const byName = new Map(JSON.parse(names) as [string, string][])
+    return (name: string) => byName.get(name) ?? name
+  }, [names])
   const byKey = useMemo(() => new Map(roster.map((r) => [r.pk, r])), [roster])
   const memberCount = roster.filter((r) => r.active).length || state.members.size
   const active = useMemo(() => [...state.members.values()].filter((m) => m.active), [state.members])
@@ -182,6 +188,9 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     },
     [send, nameOf]
   )
+  const onAnswer = useLatest(answer)
+  const onJump = useLatest(jump)
+  const onOpenImage = useLatest((pm: Message, img: ImageAttachment, src: string) => setPicture({ m: pm, img, src }))
   const handlers = useControlsHandlers({ live, member, onGone })
   const voiceTools = useMemo<ToolCtx>(
     () => ({
@@ -231,6 +240,10 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     [hold, state.hold, state.lead, me, send, nameOf]
   )
 
+  const folded = hereKey === "main" && !search && state.compact ? state.compact : null
+  const shown = folded && !earlier ? visible.filter((m) => m.seq > folded.through) : visible
+  const { tail, hidden, more, sentinel } = useWindow(shown, hereKey, scroller, highlight, !!search)
+
   if (gone) {
     return (
       <Centered>
@@ -271,12 +284,12 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     showsReceipt,
     onReply,
     decisions: decided,
-    onAnswer: answer,
+    onAnswer,
     onReact: setReacting,
-    onJump: jump,
+    onJump,
     openThread,
     openTask,
-    onOpenImage: (pm, img, src) => setPicture({ m: pm, img, src }),
+    onOpenImage,
   })
   const rows: ReactNode[] = []
   const dropped = isOwner ? droppedCount(state) : 0
@@ -289,11 +302,9 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
         </button>
       </p>
     )
-  const folded = hereKey === "main" && !search && state.compact ? state.compact : null
   const proposal = hereKey === "main" && !search ? state.compactProposal : null
   if (folded) rows.push(<CompactBlock key="compact" compact={folded} byName={nameOf(folded.by)} earlier={earlier} onToggle={() => setEarlier((v) => !v)} />)
-  const shown = folded && !earlier ? visible.filter((m) => m.seq > folded.through) : visible
-  const at = proposal ? shown.findIndex((m) => m.seq === proposal.seq) : -1
+  const at = proposal ? tail.findIndex((m) => m.seq === proposal.seq) : -1
   const approve =
     proposal && isOwner
       ? () =>
@@ -302,8 +313,16 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
           )
       : undefined
   const card = proposal ? <ProposalCard key="proposal" proposal={proposal} byName={nameOf(proposal.by)} approve={approve} /> : null
-  if (card && at >= 0) rows.push(...timeline(shown.slice(0, at)), card, ...timeline(shown.slice(at + 1)))
-  else rows.push(...timeline(shown), ...(card ? [card] : []))
+  if (hidden)
+    rows.push(
+      <div key="earlier" ref={sentinel} className="py-3 text-center">
+        <button type="button" onClick={more} className="text-ui font-medium text-accent-text hover:underline">
+          Earlier messages
+        </button>
+      </div>
+    )
+  if (card && at >= 0) rows.push(...timeline(tail.slice(0, at)), card, ...timeline(tail.slice(at + 1)))
+  else rows.push(...timeline(tail), ...(card ? [card] : []))
 
   const root = threadRoot === null ? undefined : bySeq.get(threadRoot)
   const replies = threadRoot === null ? [] : (threads.get(threadRoot) ?? [])
