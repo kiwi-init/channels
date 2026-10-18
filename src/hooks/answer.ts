@@ -6,10 +6,10 @@ import { detectWhere } from "../card.ts";
 import { loadConfig, type ChannelConfig } from "../config.ts";
 import { wakeOn } from "../daemon/reach.ts";
 import { charterLines, formatMessage, holdLine, leadLine } from "@kiwi/core/format.ts";
-import type { Binding, Here } from "../seats.ts";
+import { here, type Binding, type Here } from "../seats.ts";
 import { humanOf } from "@kiwi/core/state.ts";
 import { asOption, channelOption } from "@kiwi/core/wake.ts";
-import { commitDelivered } from "./delivered.ts";
+import { commitDelivered, noteHeard } from "./delivered.ts";
 import { isRecord } from "./files.ts";
 import { liveListeners, refreshListeners } from "./listeners.ts";
 import { howMessagesReachYou, wakeYourself } from "./reach.ts";
@@ -94,6 +94,12 @@ const rearmText = Effect.fn("Hooks.rearmText")(function* (input: HookInput, b: B
 
 const unreadText = Effect.fn("Hooks.unreadText")(function* (s: AgentSession) {
   const { messages, state } = yield* s.read();
+  noteHeard(
+    here().session,
+    s.alias,
+    s.me,
+    messages.map((m) => m.seq),
+  );
   const text = messages.map((m) => formatMessage(m, state.trust.get(m.seq), state, s.me)).join("\n");
   return text.length > MAX_CONTEXT ? `${text.slice(0, MAX_CONTEXT)}\n… (more: run \`kiwi log\`)` : text;
 });

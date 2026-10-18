@@ -24,6 +24,7 @@ import { messageCommands } from "./commands/messages.ts";
 import { profileCommands } from "./commands/profile.ts";
 import { listenCommands } from "./commands/listen.ts";
 import { factCommands } from "./commands/facts.ts";
+import { leaseCommands } from "./commands/leases.ts";
 import { taskCommands } from "./commands/tasks.ts";
 import { toolCommands } from "./commands/tools.ts";
 import { fail } from "./fail.ts";
@@ -59,6 +60,7 @@ const commands: Record<string, Command> = {
   ...profileCommands,
   ...listenCommands,
   ...factCommands,
+  ...leaseCommands,
   ...taskCommands,
   ...toolCommands,
 };

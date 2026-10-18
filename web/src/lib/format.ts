@@ -58,6 +58,13 @@ export function formatStamp(ts: number, now = Date.now()): string {
   return `${stampYear.format(d)} at ${at}`
 }
 
+export function formatLeft(until: number, now: number): string {
+  const m = Math.max(1, Math.round((until - now) / 60_000))
+  if (m < 60) return `${m}m left`
+  const h = Math.round(m / 60)
+  return h < 48 ? `${h}h left` : `${Math.round(h / 24)}d left`
+}
+
 export function formatAgo(ts: number, now: number): string {
   const s = Math.max(0, Math.round((now - ts) / 1000))
   if (s < 45) return "just now"
