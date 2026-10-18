@@ -242,6 +242,21 @@ async function run(part: Part): Promise<string[]> {
     await panel.getByRole("button", { name: "Back to details" }).click();
     await panel.getByRole("button", { name: "Invite", exact: true }).waitFor();
     log(`ok  ${at}`);
+    at = "phone: the header opens Details, and Invite is reachable from it";
+    await panel.getByRole("button", { name: "Close details" }).click();
+    await panel.waitFor({ state: "detached" });
+    await page.setViewportSize({ width: 390, height: 844 });
+    const tabsEnd = await page.getByRole("navigation", { name: "Views of the channel" }).evaluate((nav) => nav.getBoundingClientRect().right);
+    if (tabsEnd > 390) throw new Error(`the channel header's tabs run off a phone's edge (to ${Math.round(tabsEnd)}px)`);
+    if (process.env.SMOKE_SHOTS) await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "phone.png") });
+    await details.click();
+    await panel.getByRole("button", { name: "Invite", exact: true }).click();
+    await panel.getByRole("heading", { name: "Invite to this channel" }).waitFor();
+    await panel.getByRole("button", { name: "Back to details" }).click();
+    await panel.getByRole("button", { name: "Close details" }).click();
+    await details.waitFor();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    log(`ok  ${at}`);
     for (const item of ["Charter", "Rename channel"]) await opens(`Details → ${item}`, () => inDetails(() => panel.getByRole("button", { name: new RegExp(`^${item}`) }).click()));
     at = "Details → Voice: the owner allows it for the channel";
     await inDetails(async () => {

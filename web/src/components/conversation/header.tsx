@@ -1,4 +1,4 @@
-import { ArrowLeft01Icon, Search01Icon } from "@hugeicons/core-free-icons"
+import { ArrowLeft01Icon, InformationCircleIcon, Search01Icon } from "@hugeicons/core-free-icons"
 import type { Dispatch, SetStateAction } from "react"
 
 import { TABS, type Tab } from "@/lib/views"
@@ -34,7 +34,7 @@ export function Header({
 }) {
   return (
     <header ref={headRef} className="absolute inset-x-0 top-0 z-20 bg-canvas">
-      <div className="drag relative flex h-(--chrome-h) items-center gap-3 px-3 md:px-6">
+      <div className="drag relative flex h-(--chrome-h) items-center gap-1 px-2 sm:gap-3 sm:px-3 md:px-6">
         <IconButton label="Channels" round className="size-9 text-ink md:hidden" onClick={onBack}>
           <Icon icon={ArrowLeft01Icon} size={20} />
         </IconButton>
@@ -45,6 +45,9 @@ export function Header({
         <span className="flex-1" />
         <IconButton label="Search" round className={cx("size-9 md:hidden", search === null && "text-ink")} active={search !== null} onClick={() => setSearch((s) => (s === null ? "" : null))}>
           <Icon icon={Search01Icon} size={18} />
+        </IconButton>
+        <IconButton label={headingLabel} round className="size-9 text-ink sm:hidden" onClick={onTitle}>
+          <Icon icon={InformationCircleIcon} size={19} />
         </IconButton>
         <nav aria-label="Views of the channel" className="no-drag flex items-center gap-1">
           {TABS.map(([t, label]) => (
