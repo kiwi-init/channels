@@ -174,22 +174,17 @@ function reviewPhrase(review: string): string {
   return review === "*" ? "review by anyone who hasn't worked on it" : `review by ${inlineText(review, 40)}`;
 }
 
-/**
- * "runs claude-code · claude-fable-5-1 (owner-signed)": what the owner attested at approval, and when the
- * agent's own card now names another model, that too, so a reader sees the record and the claim apart.
- */
-export function runsStatus(runs: Runs, card: Card | undefined): string {
-  const says = card?.model && card.model !== runs.model ? `; its card says ${inlineText(card.model, 60)}` : "";
-  return `runs ${runsLine(runs)} (owner-signed)${says}`;
+export function runsStatus(runs: Runs): string {
+  return `runs ${runsLine(runs)} (owner-signed)`;
 }
 
 /** "macos arm64 · claude-code · ojow/channels@main · tools: docker, gpu · note", one line. */
-export function cardLine(c: Card | undefined): string {
+export function cardLine(c: Card | undefined, runs?: Runs): string {
   if (!c) return "";
   const where = c.repo ? `${inlineText(c.repo, 80)}${c.branch ? `@${inlineText(c.branch, 80)}` : ""}` : "";
   const parts = [
-    inlineText(c.model, 60),
-    inlineText(c.harness, 40),
+    runs ? "" : inlineText(c.model, 60),
+    runs ? "" : inlineText(c.harness, 40),
     [c.os, c.arch]
       .filter(Boolean)
       .map((x) => inlineText(x, 40))
@@ -432,8 +427,8 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
     // How busy they are, so work goes to whoever's free (people only when they hold tasks).
     const load = memberLoad(state, name);
     if (showsLoad(m, load)) out.push(`      ${loadSummary(load)}`);
-    if (m?.card) out.push(`      ${cardLine(m.card)}${outsideRepos(state, m.card) ? " · not one of this channel's repos" : ""}`);
-    if (m?.runs) out.push(`      ${runsStatus(m.runs, m.card)}`);
+    if (m?.card && cardLine(m.card, m.runs)) out.push(`      ${cardLine(m.card, m.runs)}${outsideRepos(state, m.card) ? " · not one of this channel's repos" : ""}`);
+    if (m?.runs) out.push(`      ${runsStatus(m.runs)}`);
   }
   if (left.length) out.push(`  left or removed: ${left.sort().join(", ")}`);
 

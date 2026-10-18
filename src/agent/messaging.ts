@@ -1,3 +1,4 @@
+import { omit } from "@kiwi/core/omit.ts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import { mergeCard, movedCard, sameCard, type Where } from "../card.ts";
@@ -280,7 +281,8 @@ export class SessionMessaging extends SessionListen {
     function* (this: SessionMessaging, detected: Card, given: { model?: string; note?: string; tools?: string[]; fresh?: number } = {}) {
       const { state } = yield* this.state();
       const me = state.members.get(this.me);
-      const card = mergeCard(detected, me?.card, given);
+      const merged = mergeCard(detected, me?.card, given);
+      const card = me?.runs ? omit(merged, "harness", "model") : merged;
       if (!me || isPerson(me) || !canPost(me.scopes) || state.hold || sameCard(me.card, card)) return { sent: false, card };
       yield* this.event({ op: "card", ...card }, `card: ${cardLine(card)}`);
       return { sent: true, card };

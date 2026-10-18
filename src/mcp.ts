@@ -225,9 +225,9 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
             // What they may do, when it's less than everything (what the owner set, as every client enforces it).
             const scopes = m.active && !m.owner ? state.members.get(m.name)?.scopes : undefined;
             const may = scopes && scopes.length < SCOPES.length ? `\n    may: ${mayDo(scopes)}` : "";
-            const card = m.active && rec?.card ? `\n    ${cardLine(rec.card)}` : "";
+            const card = m.active && rec?.card && cardLine(rec.card, rec.runs) ? `\n    ${cardLine(rec.card, rec.runs)}` : "";
             // What the owner signed as running it: the line to trust when a review must come from another model.
-            const runs = m.active && rec?.runs ? `\n    ${runsStatus(rec.runs, rec.card)}` : "";
+            const runs = m.active && rec?.runs ? `\n    ${runsStatus(rec.runs)}` : "";
             return (m.active && showsLoad(m, load) ? `${head}\n    ${loadSummary(load)}` : head) + may + card + runs;
           })
           .join("\n");

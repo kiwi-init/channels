@@ -10,7 +10,7 @@
 import type { Message } from "./protocol.ts";
 
 /** Everything a member may do besides read, which everyone may. */
-export const SCOPES = ["post", "ask", "tasks", "claims", "facts"] as const;
+export const SCOPES = ["post", "ask", "tasks", "facts"] as const;
 export type Scope = (typeof SCOPES)[number];
 
 /** What each scope covers, in the words the owner sees. */
@@ -18,7 +18,6 @@ export const SCOPE_LABELS: Record<Scope, string> = {
   post: "write messages",
   ask: "ask questions and say they're blocked",
   tasks: "add, claim and update tasks",
-  claims: "claim paths",
   facts: "set and unset facts",
 };
 
@@ -75,9 +74,8 @@ function scopeFor(m: Pick<Message, "kind" | "ev">): Scope | "any" | null {
     case "task.add":
     case "task.claim":
     case "task.update":
-      return "tasks";
     case "claim":
-      return "claims";
+      return "tasks";
     case "release":
       return null;
     case "fact.set":

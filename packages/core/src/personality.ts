@@ -68,7 +68,7 @@ export function personaOf(p: Personality): Persona {
 
 export function personaScopes(p: Pick<Persona, "capabilities">): Scope[] {
   const has = (c: Capability) => p.capabilities.includes(c);
-  return [...(has("write") ? (["post", "ask"] as const) : []), ...(has("tasks") ? (["tasks", "claims"] as const) : []), ...(has("notes") ? (["facts"] as const) : [])];
+  return [...(has("write") ? (["post", "ask"] as const) : []), ...(has("tasks") ? (["tasks"] as const) : []), ...(has("notes") ? (["facts"] as const) : [])];
 }
 
 export function personaLines(p: Persona): string[] {

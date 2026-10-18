@@ -124,7 +124,7 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
       detail={
         <>
           {who} · asked {formatAgo(r.ts, now)}
-          {r.kind !== "human" && <AgentFacts card={r.card} said repos={p.state.repos} className="mt-1" />}
+          {r.kind !== "human" && <AgentFacts card={r.card} runs={r.runs} said repos={p.state.repos} className="mt-1" />}
           {r.check === "ready" && r.code && (
             <span className="mt-1.5 flex items-baseline gap-2">
               <span>Let in only if {r.kind === "human" ? "they see" : "its terminal shows"}</span>

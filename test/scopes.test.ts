@@ -12,7 +12,7 @@ import type { ChannelAccess } from "@kiwi/core/crypto.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { ignored, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { parseScopes, readScopes, refusal, wireScopes, type Scope } from "@kiwi/core/scopes.ts";
+import { parseScopes, readScopes, refusal, wireScopes, type Scope, presetOf } from "@kiwi/core/scopes.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 import { checked } from "./check.ts";
 
@@ -79,8 +79,8 @@ describe("scopes in fold", () => {
     expect(s.rejected.get(ms[0]!.seq)).toBe("ro may not write messages");
     expect(s.rejected.get(ms[1]!.seq)).toBe("ro can only read");
     expect(s.members.get("ro")!.scopes).toEqual([]);
-    expect(s.members.get("full")!.scopes).toEqual(["post", "ask", "tasks", "claims", "facts"]);
-    expect(s.members.get("jon")!.scopes).toEqual(["post", "ask", "tasks", "claims", "facts"]);
+    expect(s.members.get("full")!.scopes).toEqual(["post", "ask", "tasks", "facts"]);
+    expect(s.members.get("jon")!.scopes).toEqual(["post", "ask", "tasks", "facts"]);
   });
 
   test("scope.set is the owner's, applies from where it lands, and history before it stands", async () => {
@@ -129,22 +129,32 @@ describe("scopes in fold", () => {
     ];
     const s = fold(ms, r);
     expect(ms.map((m) => s.trust.get(m.seq))).toEqual(["refused", "verified", "verified", "refused"]);
-    expect(s.members.get("win")!.scopes).toEqual(["post", "ask", "tasks", "claims", "facts"]);
+    expect(s.members.get("win")!.scopes).toEqual(["post", "ask", "tasks", "facts"]);
   });
 
   test("garbled or unknown scopes give no more than they can be read as", () => {
     expect(readScopes(["post", "admin", "facts"])).toEqual(["post", "facts"]);
     expect(readScopes("post")).toBeNull();
     expect(readScopes(Array(40).fill("post"))).toBeNull();
-    expect(wireScopes(["post", "ask", "tasks", "claims", "facts"])).toBeNull();
+    expect(wireScopes(["post", "ask", "tasks", "facts"])).toBeNull();
     expect(wireScopes([])).toEqual([]);
     // Two levels to choose from: member or read-only. A list isn't offered any more.
     expect(parseScopes("read-only")).toEqual([]);
-    expect(parseScopes("member")).toEqual(["post", "ask", "tasks", "claims", "facts"]);
-    expect(parseScopes("full")).toEqual(["post", "ask", "tasks", "claims", "facts"]);
+    expect(parseScopes("member")).toEqual(["post", "ask", "tasks", "facts"]);
+    expect(parseScopes("full")).toEqual(["post", "ask", "tasks", "facts"]);
     expect(parseScopes("post, claims")).toBeNull();
     expect(parseScopes("contributor")).toBeNull();
     expect(refusal([], { kind: "event", ev: { op: "release", paths: ["x"] } })).toBeNull();
+  });
+
+  test("the claims scope is gone: a grant that still carries it reads without it, and a full one stays full", () => {
+    const old = readScopes(["post", "ask", "tasks", "claims", "facts"])!;
+    expect(old).toEqual(["post", "ask", "tasks", "facts"]);
+    expect(presetOf(old)).toBe("full");
+    expect(wireScopes(old)).toBeNull();
+    expect(readScopes(["post", "claims"])).toEqual(["post"]);
+    expect(refusal(["post"], { kind: "event", ev: { op: "claim", paths: ["x"], ttl: 60 } })).toBe("may not add, claim and update tasks");
+    expect(refusal(["tasks"], { kind: "event", ev: { op: "claim", paths: ["x"], ttl: 60 } })).toBeNull();
   });
 
   test("the record's later scopes are the floor for a client holding only the log's tail", async () => {
@@ -372,11 +382,11 @@ describe("scopes at the relay", () => {
 describe("the agent's prompt", () => {
   test("says what it may do when that's less than everything, and nothing when it's everything", async () => {
     const { agentPrompt } = await import("../src/cli/brief.ts");
-    expect(agentPrompt("c", "bot", { scopes: ["post", "ask", "tasks", "claims", "facts"] })).not.toContain("The owner lets you");
+    expect(agentPrompt("c", "bot", { scopes: ["post", "ask", "tasks", "facts"] })).not.toContain("The owner lets you");
     expect(agentPrompt("c", "bot")).not.toContain("The owner lets you");
-    const some = agentPrompt("c", "bot", { scopes: ["post", "claims"] });
+    const some = agentPrompt("c", "bot", { scopes: ["post", "facts"] });
     expect(some).toContain("The owner lets you");
-    expect(some).toContain("write messages; claim paths");
+    expect(some).toContain("write messages; set and unset facts");
     const none = agentPrompt("c", "bot", { scopes: [] });
     expect(none).toContain("lets you only read this channel");
   });

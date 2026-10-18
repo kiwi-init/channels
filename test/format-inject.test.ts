@@ -40,7 +40,7 @@ function blank(): ChannelState {
 }
 
 function member(name: string, role: string): Member {
-  return { name, pk: "k".repeat(32), role, owner: false, joined: 0, active: true, lastSeen: 0, messages: 0, scopes: ["post", "ask", "tasks", "claims", "facts"] };
+  return { name, pk: "k".repeat(32), role, owner: false, joined: 0, active: true, lastSeen: 0, messages: 0, scopes: ["post", "ask", "tasks", "facts"] };
 }
 
 function noFakeRow(s: string) {
