@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import { TASK_STATES, TASK_TITLE_MAX_LENGTH, ignored, type TaskState, type Verdict } from "@kiwi/core/protocol.ts";
+import { PROOF_LABEL_MAX_LENGTH, PROOF_URL_MAX_LENGTH, TASK_STATES, TASK_TITLE_MAX_LENGTH, ignored, type TaskState, type Verdict } from "@kiwi/core/protocol.ts";
 import { omit } from "@kiwi/core/omit.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { isPerson, openRound, revisedOut, taskId, type ChannelState, type ReviewRound, type Task } from "@kiwi/core/state.ts";
@@ -76,7 +76,17 @@ export class SessionTasks extends SessionMessaging {
     function* (
       this: SessionTasks,
       id: number,
-      change: { state?: TaskState | "cancelled"; owner?: string | null; title?: string; note?: string; review?: string | null; verdict?: Verdict; at?: string; round?: number },
+      change: {
+        state?: TaskState | "cancelled";
+        owner?: string | null;
+        title?: string;
+        note?: string;
+        review?: string | null;
+        verdict?: Verdict;
+        at?: string;
+        round?: number;
+        proof?: { url: string; label?: string };
+      },
       reviewText?: string,
     ) {
       const { state } = yield* this.state();
@@ -84,6 +94,13 @@ export class SessionTasks extends SessionMessaging {
       if (!t) return yield* new Rejected(`no task ${taskId(id)}`);
       if (change.title !== undefined && change.title.length > TASK_TITLE_MAX_LENGTH)
         return yield* new Rejected(`the title is ${change.title.length} characters, the most a task takes is ${TASK_TITLE_MAX_LENGTH}: shorten it and put the rest in a note`);
+      if (change.proof) {
+        const { url, label } = change.proof;
+        if (url.length > PROOF_URL_MAX_LENGTH || !/^https:\/\/[^\s]+$/.test(url))
+          return yield* new Rejected(`proof is a link that starts with https:// (at most ${PROOF_URL_MAX_LENGTH} characters, no spaces)`);
+        if (label !== undefined && (label.length > PROOF_LABEL_MAX_LENGTH || /[\r\n]/.test(label)))
+          return yield* new Rejected(`the proof label is one line of at most ${PROOF_LABEL_MAX_LENGTH} characters`);
+      }
       if (change.state && change.state !== "cancelled" && !TASK_STATES.includes(change.state)) return yield* new Rejected(`state must be one of ${TASK_STATES.join(", ")}`);
       const owner = change.owner ? (yield* this.resolveTo([change.owner], state))?.[0] : change.owner;
       const review = change.review ? yield* this.reviewer(state, change.review) : change.review;

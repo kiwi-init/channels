@@ -38,6 +38,7 @@ export const { values: opt, positionals: args } = parseArgs({
     after: { type: "string" },
     detail: { type: "string" },
     ttl: { type: "string" },
+    label: { type: "string" },
     note: { type: "string" },
     file: { type: "string" },
     at: { type: "string" },

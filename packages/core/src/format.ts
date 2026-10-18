@@ -60,6 +60,15 @@ export function looksLikeLine(ids: number[]): string {
   return `looks like ${ids.map(taskId).join(", ")}`;
 }
 
+export function proofLabel(p: { url: string; label?: string }): string {
+  if (p.label) return p.label;
+  try {
+    return new URL(p.url).hostname;
+  } catch {
+    return p.url;
+  }
+}
+
 /**
  * The one-line meaning of a coordination event. Pass `state` to name tasks
  * by title as well as id.
@@ -123,6 +132,7 @@ export function describeEvent(m: Message, state?: ChannelState): string {
       if (ev.owner) return `assigned ${task(ev.task)} to ${ev.owner}${note(ev.note)}`;
       if (ev.owner === null) return `unassigned ${task(ev.task)}${note(ev.note)}`;
       if (ev.title) return `renamed ${taskId(ev.task)} to “${ev.title}”`;
+      if (ev.proof) return `added proof to ${task(ev.task)}: ${proofLabel(ev.proof)} ${ev.proof.url}${note(ev.note)}`;
       return `noted on ${task(ev.task)}${note(ev.note)}`;
     }
     // Older clients' claims: still said, though they hold nothing now.

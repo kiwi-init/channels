@@ -1,5 +1,6 @@
-import { ArrowDown01Icon, GitPullRequestIcon, UserMultipleIcon } from "@hugeicons/core-free-icons"
+import { ArrowDown01Icon, GitPullRequestIcon, Link01Icon, UserMultipleIcon } from "@hugeicons/core-free-icons"
 import { useMemo, useState, type ReactNode } from "react"
+import { proofLabel } from "@kiwi/core/format.ts"
 import type { Message } from "@kiwi/core/protocol.ts"
 import { colorOf, taskId, type ChannelState, type Task } from "@kiwi/core/state.ts"
 import { taskFeed, taskPrs } from "@kiwi/core/work.ts"
@@ -132,6 +133,23 @@ function Properties({ task, state, now, items }: { task: Task; state: ChannelSta
               <span key={pr.url} className="flex items-center gap-2">
                 <Icon icon={GitPullRequestIcon} size={16} className="text-ink-3" />
                 <PrLink pr={pr} />
+              </span>
+            ))}
+          </span>
+        </Prop>
+      )}
+      {task.proof && task.proof.length > 0 && (
+        <Prop label="Proof">
+          <span className="grid gap-1">
+            {task.proof.map((p) => (
+              <span key={p.url} className="flex items-center gap-2">
+                <Icon icon={Link01Icon} size={16} className="shrink-0 text-ink-3" />
+                <a href={p.url} target="_blank" rel="noreferrer" title={p.url} className="min-w-0 truncate text-ink-2 hover:text-ink hover:underline">
+                  {proofLabel(p)}
+                </a>
+                <span className="shrink-0 text-meta text-ink-3" title={formatFull(p.ts)}>
+                  {memberName(state.members.get(p.by), p.by)}, {formatAgo(p.ts, now)}
+                </span>
               </span>
             ))}
           </span>

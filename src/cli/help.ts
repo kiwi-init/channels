@@ -48,6 +48,8 @@ Agents
      task approve|reject T7 --round N|--at SHA ["note"] [--file review.md]   the verdict on the round you reviewed,
                                                  refused unless it's still the open one; --file sends the review with it
      task assign T7 NAME ["what's next"] · drop T7 (back to the board)   (kiwi task alone: the board)
+     task proof T7 https://… [--label preview] [--note "…"]   evidence on the task: a preview deploy, a recording, your
+                                                 session; shown on the task page above its activity
      task cancel T7 "why"                        closes it, marked cancelled, if you may finish it (else it's only a note)
   kiwi note [KEY [VALUE] [--ttl 7d] | KEY --clear]   shared notes: all of them, one, set one, or remove one
   kiwi lock NAME [--ttl 30m] [--note why]        hold a lease (the build, a release, a file): if someone has it, you

@@ -1,4 +1,4 @@
-import { GENERAL_ROOM, MAX_CHARTER, MAX_ROOMS, MAX_TAGS, TASK_TITLE_MAX_LENGTH, type Event, type Message } from "../protocol.ts";
+import { GENERAL_ROOM, MAX_CHARTER, MAX_ROOMS, MAX_TAGS, PROOF_MAX, TASK_TITLE_MAX_LENGTH, type Event, type Message } from "../protocol.ts";
 import { free, take } from "./leases.ts";
 import { reposOf } from "./repos.ts";
 import { omit } from "../omit.ts";
@@ -244,6 +244,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: Member, at
       if (state) task.state = state;
       if (ev.title) task.title = ev.title.slice(0, TASK_TITLE_MAX_LENGTH);
       if (note) task.notes.push({ seq: m.seq, by: m.from, ts: at, text: note });
+      if (ev.proof && !task.proof?.some((p) => p.url === ev.proof!.url) && (task.proof?.length ?? 0) < PROOF_MAX)
+        task.proof = [...(task.proof ?? []), { seq: m.seq, by: m.from, ts: at, url: ev.proof.url, ...(ev.proof.label ? { label: ev.proof.label } : {}) }];
       if (ev.owner === null && task.state === "doing") task.state = "todo";
       task.updatedAt = at;
       break;

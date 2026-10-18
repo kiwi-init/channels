@@ -3,7 +3,7 @@
 // client already holds; nothing new crosses the relay. What a person may not see in strict
 // coordinator-only mode (an agent's chat with another agent) stays out of every part of it.
 
-import { cleanBody, describeEvent, reviewBody, roundTag } from "./format.ts";
+import { cleanBody, describeEvent, proofLabel, reviewBody, roundTag } from "./format.ts";
 import { inlineText } from "./membership.ts";
 import { ignored, type Message } from "./protocol.ts";
 import type { OldTaskState, TaskState } from "./protocol.ts";
@@ -253,6 +253,7 @@ function onTask(m: Message, state: ChannelState): { text: string; mark: EventMar
       if (ev.owner) return { text: `assigned it to ${ev.owner}`, mark: "assign", ...note };
       if (ev.owner === null) return { text: "unassigned it", mark: "assign", ...note };
       if (ev.title) return { text: `renamed it to “${inlineText(ev.title, 200)}”`, mark: "other", ...note };
+      if (ev.proof) return { text: `added proof: ${inlineText(proofLabel(ev.proof), 80)}`, mark: "note", ...note };
       return { text: "added a note", mark: "note", ...note };
     default:
       return { text: describeEvent(m, state), mark: "other" };

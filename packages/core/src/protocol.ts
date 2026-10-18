@@ -201,6 +201,7 @@ export type Event =
       round?: number;
       at?: string;
       body?: "review";
+      proof?: { url: string; label?: string };
     }
   /** What a member is and has, said by itself: where it runs, what runs it, what it can use. Shown in People. */
   | ({ op: "card" } & Card)
@@ -437,6 +438,9 @@ export function wellFormedHandoff(x: unknown): x is Handoff {
 }
 
 export const TASK_TITLE_MAX_LENGTH = 200;
+export const PROOF_URL_MAX_LENGTH = 2000;
+export const PROOF_LABEL_MAX_LENGTH = 80;
+export const PROOF_MAX = 50;
 export const CHOICES_MIN = 2;
 export const CHOICES_MAX = 6;
 export const CHOICE_MAX_LENGTH = 200;
@@ -594,7 +598,17 @@ export function wellFormedEvent(ev: unknown): ev is Event {
         (e.verdict === undefined || e.verdict === "approved" || e.verdict === "rejected") &&
         (e.round === undefined || (Number.isSafeInteger(e.round) && (e.round as number) > 0)) &&
         opt(e.at, (x): x is string => str(x, 200) && x.trim().length > 0 && !/[\r\n]/.test(x)) &&
-        (e.body === undefined || (e.body === "review" && e.verdict !== undefined))
+        (e.body === undefined || (e.body === "review" && e.verdict !== undefined)) &&
+        opt(e.proof, (x): x is { url: string; label?: string } => {
+          const p = x as { url?: unknown; label?: unknown } | null;
+          return (
+            !!p &&
+            typeof p === "object" &&
+            str(p.url, PROOF_URL_MAX_LENGTH) &&
+            /^https:\/\/[^\s]+$/.test(p.url) &&
+            opt(p.label, (l): l is string => str(l, PROOF_LABEL_MAX_LENGTH) && !/[\r\n]/.test(l))
+          );
+        })
       );
     case "card":
       return (
