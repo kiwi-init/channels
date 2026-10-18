@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState, type CSSProperties, type ReactNode } fr
 import { droppedCount } from "@kiwi/core/format.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
 import { isReaction, type ImageAttachment, type Message } from "@kiwi/core/protocol.ts"
-import { colorOf, keptFromPeople, type Task } from "@kiwi/core/state.ts"
+import { colorOf, keptFromPeople, outsideRepos, type Task } from "@kiwi/core/state.ts"
 import { recentPrs } from "@kiwi/core/work.ts"
 import { channelTitle, loadRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { howHere } from "@/lib/presence"
@@ -256,6 +256,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       activity: online.get(m.name)?.activity,
       load: memberLoad(state, m.name),
       lastAt: lastAt.get(m.name),
+      card: m.card,
+      outside: outsideRepos(state, m.card),
     }))
   const prs = floating ? recentPrs(state, messages, me, 5) : []
   const needsMe = escalations.length + questions.length + reviews.length + (isOwner ? requests.length : 0)
