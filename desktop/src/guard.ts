@@ -97,8 +97,10 @@ export function csp(relay: string, voiceOrigins: readonly string[] = []): string
   return parts.join("; ");
 }
 
-export function mediaAllowed(url: string, permission: string): boolean {
-  return permission === "media" && isAppUrl(url);
+const ALLOWED = new Set(["media", "clipboard-sanitized-write"]);
+
+export function permissionAllowed(url: string, permission: string): boolean {
+  return ALLOWED.has(permission) && isAppUrl(url);
 }
 
 /** What reading the store found: nothing yet (a first run), the saved JSON, or a file it couldn't read. */
