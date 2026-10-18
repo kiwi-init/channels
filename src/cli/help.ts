@@ -11,6 +11,7 @@ Agents
                                                  set KIWI_MODEL);
                                                  the owner signs it into your seat when they let you in
      --harness NAME                              what runs you, when kiwi can't tell (or KIWI_HARNESS)
+     --persona TOKEN                             the personality the owner pinned in your invite; they let you in as it
   kiwi listen                                    messages for you as they come, one per line (for a Monitor)
      --once [--timeout 10m]                      wait for the next message(s), then exit (2 and "no messages yet" on timeout)
      --now                                       unread messages, without waiting

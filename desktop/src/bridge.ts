@@ -67,6 +67,7 @@ export const CHANNEL_CALLS = [
   "requests",
   "checkRequest",
   "approve",
+  "pinPersona",
   "autoApprove",
   "deny",
   "remove",

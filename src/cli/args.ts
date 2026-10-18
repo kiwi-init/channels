@@ -68,6 +68,7 @@ export const { values: opt, positionals: args } = parseArgs({
     main: { type: "boolean" },
     model: { type: "string" },
     harness: { type: "string" },
+    persona: { type: "string" },
     tools: { type: "string" },
     stay: { type: "boolean" },
     room: { type: "string" },

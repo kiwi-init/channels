@@ -1,12 +1,15 @@
 import { Dialog } from "@base-ui/react/dialog"
 import { Copy01Icon } from "@hugeicons/core-free-icons"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
+import type { Persona } from "@kiwi/core/personality.ts"
+import { PRESETS } from "@kiwi/core/presets.ts"
 import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts"
 import { SCOPES, type Scope } from "@kiwi/core/scopes.ts"
 import { relayUrl } from "@/lib/relay"
 import { Icon } from "../icon"
 import { Button, IconButton, Tabs, TextField, toast } from "../kit"
+import { PersonalityPicker } from "../personality-picker"
 import { defaultScopes, saveDefaultScopes, ScopePicker } from "../scopes"
 import { useControls } from "./context"
 
@@ -40,6 +43,23 @@ export function Invite({ onDone }: { onDone: () => void }) {
   const [role, setRole] = useState("")
   const [rules, setRules] = useState("")
   const [newScopes, setNewScopes] = useState<Scope[]>(() => (p.roomId ? defaultScopes(p.roomId) : [...SCOPES]))
+  const [joinsAs, setJoinsAs] = useState<Persona | null>(null)
+  const [pin, setPin] = useState<string | null>(null)
+  const onPin = p.onPin
+  useEffect(() => {
+    const chosen = joinsAs && PRESETS.find((x) => x.name === joinsAs.name)
+    if (!chosen || !onPin) return setPin(null)
+    let live = true
+    onPin(chosen)
+      .then((t) => live && setPin(t))
+      .catch(() => {
+        // Without a pin the command still works: the owner picks the personality at Let in.
+        if (live) setPin(null)
+      })
+    return () => {
+      live = false
+    }
+  }, [joinsAs, onPin])
   const nickname = nick.trim()
   const command = [
     `kiwi join ${p.code}`,
@@ -47,6 +67,7 @@ export function Invite({ onDone }: { onDone: () => void }) {
     nickname && `--nick ${quoted(nickname)}`,
     role.trim() && `--role ${quoted(role.trim())}`,
     rules.trim() && `--about ${quoted(rules.trim())}`,
+    pin && `--persona ${pin}`,
   ]
     .filter(Boolean)
     .join(" ")
@@ -79,6 +100,14 @@ export function Invite({ onDone }: { onDone: () => void }) {
             <TextField value={role} onChange={(e) => setRole(e.target.value)} placeholder="Role" maxLength={60} list="kiwi-roles" aria-label="Role" />
           </div>
           <TextField value={rules} onChange={(e) => setRules(e.target.value)} placeholder="Rules, e.g. only web/; ask before changing APIs" maxLength={200} aria-label="Rules" />
+          {onPin && (
+            <>
+              <span className="mt-2 text-ui font-medium text-ink">
+                Joins as <span className="font-normal text-ink-3">· pinned in the command; you let it in as this</span>
+              </span>
+              <PersonalityPicker value={joinsAs} onChange={setJoinsAs} lead={p.state.lead} />
+            </>
+          )}
           <CopyBox text={command} label="Copy command" done="Join command copied" />
           <p className="text-meta text-ink-3">
             Run it on a computer set up with <span className="font-mono">kiwi setup</span>.

@@ -24,6 +24,7 @@ const repos = later(() => import("./controls/repos-dialog").then((m) => m.ReposD
 const compactBlock = later(() => import("./compact").then((m) => m.CompactBlock))
 const proposalCard = later(() => import("./compact").then((m) => m.ProposalCard))
 const confirmDialogs = later(() => import("./controls/confirm-dialogs").then((m) => m.ConfirmDialogs))
+const invite = later(() => import("./controls/invite").then((m) => m.Invite))
 
 export const Markdown = markdown.View
 export const SettingsModal = settings.View
@@ -45,6 +46,7 @@ export const ReposDialog = repos.View
 export const CompactBlock = compactBlock.View
 export const ProposalCard = proposalCard.View
 export const ConfirmDialogs = confirmDialogs.View
+export const Invite = invite.View
 
 export const loadMarkdown = markdown.load
 

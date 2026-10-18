@@ -7,6 +7,7 @@ import { nameKey, type JoinRequest } from "@kiwi/core/membership.ts"
 import { HANDOFF_DONE, HANDOFF_FAILED, type Message } from "@kiwi/core/protocol.ts"
 import { TOO_MANY_REQUESTS } from "@kiwi/core/sas.ts"
 import { taskId, type Task } from "@kiwi/core/state.ts"
+import { usePinned } from "@/lib/pinned"
 import { askLabel } from "@/lib/asks"
 import { excerpt, formatAgo } from "@/lib/format"
 import { openHandoff } from "@/lib/handoff-open"
@@ -105,6 +106,7 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
   // Whose computer it runs on, from its verified computer claim (not the relay's word).
   const who = r.kind === "human" ? (r.person ? `A person · key ${r.person.slice(0, 8)}` : "A person") : r.computer ? `An agent on ${r.computer.personName}’s ${r.computer.label}` : "An agent"
   const lead = <Monogram name={r.display || r.name} hue={r.name} agent={r.kind !== "human"} size={28} />
+  const pinnedAs = usePinned(r.pin)
   return (
     <Row
       lead={lead}
@@ -112,7 +114,11 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
         <>
           <span className="font-medium">{r.display || r.name}</span>
           {r.display && <span className="text-ink-3"> @{r.name}</span>} wants to join
-          {r.role && <span className="text-ink-2">, as {r.role}</span>}
+          {r.pin ? (
+            <span className="text-ink-2">{pinnedAs === null ? `, pinned as ${r.pin.name}, which isn't on your account as it was` : `, pinned as ${r.pin.name}`}</span>
+          ) : (
+            r.role && <span className="text-ink-2">, as {r.role}</span>
+          )}
         </>
       }
       detail={
@@ -145,8 +151,13 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
         </form>
       ) : r.check === "ready" ? (
         <>
-          <Button size="sm" variant="secondary" disabled={busy} onClick={() => run(() => p.onApprove(r, defaultScopes(roomId)), `${r.name} joined`)}>
-            It matches: let in
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={busy || (!!r.pin && pinnedAs === undefined)}
+            onClick={() => run(() => p.onApprove(r, defaultScopes(roomId), pinnedAs ?? undefined), pinnedAs ? `${r.name} joined as ${pinnedAs.name}` : `${r.name} joined`)}
+          >
+            {pinnedAs ? `It matches: let in as ${pinnedAs.name}` : "It matches: let in"}
           </Button>
           <Button size="sm" variant="ghost" onClick={() => ask({ kind: "approve", req: r })}>
             Choose what it can do…

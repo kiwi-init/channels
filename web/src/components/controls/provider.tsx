@@ -8,10 +8,9 @@ import { noteAgentWorked } from "@/lib/channel"
 import { Modal, errorText, toast } from "../kit"
 import type { Persona } from "@kiwi/core/personality.ts"
 import { defaultScopes } from "../scopes"
-import { ConfirmDialogs, ReposDialog } from "../lazy"
+import { ConfirmDialogs, Invite, ReposDialog } from "../lazy"
 import { CharterDialog, RenameDialog } from "./channel-dialogs"
 import { Ctx, type Api, type Confirm, type ControlsProps } from "./context"
-import { Invite } from "./invite"
 import { Requests } from "./requests"
 
 export function ChannelControls({ children, ...p }: ControlsProps & { children: ReactNode }) {

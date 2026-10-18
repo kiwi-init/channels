@@ -6,6 +6,7 @@
 // the owner key pinned in the join code, so neither the relay nor a member
 // can mint a name: "win" is whoever the owner approved as "win", full stop.
 
+import type { Pin } from "./pin.ts";
 import { cleanPersona, type Persona } from "./personality.ts";
 import { openWith, sealWith } from "./crypto.ts";
 import { sign, verify, type Identity } from "./identity.ts";
@@ -275,6 +276,7 @@ export interface JoinClaims {
    * unlike the two claims above, nothing here is checked. Read through cleanCard.
    */
   card?: Card;
+  pin?: string;
 }
 
 /** A verified computer claim, as the owner shows the computer: whose it is, and what it's called. */
@@ -343,6 +345,7 @@ export interface JoinRequest extends MemberInfo {
    * one like it ("claude-2"). Approval picks again if that one was taken in the meantime.
    */
   askedAs?: string;
+  pin?: Pin;
   /**
    * The computer this agent runs on, when its claim (its person's cert for it, and its signature
    * over this channel and this agent's key) checks out. `person` is the person key that certified

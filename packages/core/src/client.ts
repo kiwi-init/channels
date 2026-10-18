@@ -9,7 +9,7 @@
 // `Channel.fx` and `fx` are those Effects. The Promise methods, which the CLI, the
 // agent and the dashboard call, run them and resolve or reject exactly as before.
 
-import type { Persona } from "./personality.ts";
+import type { Persona, Personality } from "./personality.ts";
 import { newRoomId, type ChannelAccess } from "./crypto.ts";
 import type { Identity } from "./identity.ts";
 import type { JoinClaims, JoinRequest, Member, MemberInfo } from "./membership.ts";
@@ -278,6 +278,10 @@ export class Channel {
   /** Admit a requester: sign its record, and wrap every epoch key to it. */
   approve(req: JoinRequest, as?: Partial<MemberInfo>, opts?: { person?: string }): Promise<Member> {
     return run(this.fx.approve(req, as, opts));
+  }
+
+  pinPersona(p: Personality): Promise<string> {
+    return run(this.fx.pinPersona(p));
   }
 
   /**

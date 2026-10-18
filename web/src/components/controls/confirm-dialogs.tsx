@@ -1,7 +1,8 @@
-import type { Dispatch, SetStateAction } from "react"
+import { useEffect, type Dispatch, type SetStateAction } from "react"
 
 import type { Event } from "@kiwi/core/protocol.ts"
 import type { Scope } from "@kiwi/core/scopes.ts"
+import { usePinned } from "@/lib/pinned"
 import { memberName } from "@/lib/format"
 import { AgentFacts } from "../agent-facts"
 import { Alert, Button, TextField } from "../kit"
@@ -44,6 +45,10 @@ export function ConfirmDialogs({
   setPersonaDraft: Dispatch<SetStateAction<Persona | null>>
 }) {
   const chosen = personaDraft
+  const pinnedAs = usePinned(confirm?.kind === "approve" ? confirm.req.pin : undefined)
+  useEffect(() => {
+    if (pinnedAs) setPersonaDraft(pinnedAs)
+  }, [pinnedAs, setPersonaDraft])
   return (
     <>
       <Alert
