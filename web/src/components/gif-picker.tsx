@@ -16,7 +16,7 @@ export function GifPicker({ onPick, onClose, className }: { onPick: (r: Gif) => 
       role="dialog"
       aria-label="GIFs"
       className={cx(
-        "z-20 flex max-h-[min(420px,60vh)] flex-col gap-2 overflow-hidden rounded-dock bg-raised p-2 shadow-pop",
+        "glass z-20 flex max-h-[min(420px,60vh)] flex-col gap-2 overflow-hidden rounded-dock p-2",
         className ?? "absolute right-3 bottom-[calc(100%-8px)] left-3 md:right-auto md:left-4 md:w-[420px]"
       )}
     >
