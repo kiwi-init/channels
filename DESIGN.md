@@ -14,8 +14,9 @@ Canonical sources: `web/src/index.css` (`:root`, `:root[data-theme]`,
 
 A quiet Messages-like conversation. White `#ffffff` / near-black `#161618`
 canvas, Apple system blue `#007aff` (light) / `#0a84ff` (dark), Inter only,
-small purposeful motion, one pop shadow. The sidebar alone wears prism
-glass, after the app icon and the agents' heads.
+small purposeful motion, one pop shadow. One intentional mark: the open
+channel and the chosen view wear lit prism glass, after the app icon and the
+agents' heads; everything around them is plain, so it reads as meant.
 
 ## 2. Theme architecture
 
@@ -103,7 +104,7 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   pictures `bubble`; the composer `dock`. Arbitrary `rounded-[Npx]` fails
   `ui-tokens.ts`.
 - One shadow: `pop` (`0 0 0 1px pop-edge, 0 16px 40px -12px pop-shade`).
-  No other shadows; the orb's glow is the only coloured one.
+  No other shadows, and no coloured ones.
 - Two tones: the rails (the channel list and a channel's sidebar) sit on
   `rail`, a step darker, and the page beside them is a sheet of `canvas`
   (the `sheet` utility: 8px in from the window's edges, `card` radius, a
@@ -119,23 +120,16 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 - Liquid glass (`glass`), for what floats over the conversation (the
   header's round controls, the place pills, the composer): a translucent
   `glass-fill` over a blur, a bright `glass-rim` on top, a hairline round it.
-- Prism glass (`index.css`, `@layer components`), the sidebar's only (the
-  rail and a channel's sidebar). Nothing else wears it; `test/prism.test.ts`
-  keeps the kit, the header, the side panels, Settings and Personalities
-  off it:
-  - `prism`: a clear slab, `prism-fill` with a 1px `prism-edge` and a lit
-    edge (`prism-glint`) bright at one corner and fading along the sides,
-    the way the icon's prisms catch light. The rail's tiles and round
-    buttons, the channel sidebar's search.
-  - `prism-lit`: what's chosen. A brighter fill and edge, and a thin
-    spectrum band (`spectrum-1..7`) inside it, at `--band` (70% by
-    default) across the control, the way light splits in the heads. The
-    open channel, and the channel sidebar's chosen view or conversation.
-  - `orb-pill`: the heads' blue orb light round a dark core (`orb-core`,
-    `orb-blue`, `orb-cyan`), for the sidebar's "needs you" counts. Its
-    `orb-glow` is the one coloured glow.
-  - Under `prefers-contrast: more` all of them fall back to solid fills: no
-    band, no glint, the orb as `accent`.
+- Prism glass (`index.css`, `@layer components`): one class, `prism-lit`, on
+  what's chosen in the sidebar and nothing else: the open channel (its tile
+  in the rail, its row in the list) and the channel sidebar's chosen view or
+  conversation. A brighter fill, a lit edge bright at one corner
+  (`prism-glint-lit`), and a thin spectrum band (`spectrum-1..7`) inside it
+  at `--band` (70% by default), the way light splits in the heads. Search,
+  the rail's buttons, idle tiles and counts are plain, so the one lit thing
+  reads as meant. `test/prism.test.ts` keeps it that way. Under
+  `prefers-contrast: more` it falls back to a solid fill with a 2px `ink`
+  ring: no band, no glint.
 - Fall back to solid fills under `prefers-contrast: more`.
 
 ## 6. Motion
@@ -340,8 +334,9 @@ Do: use vars, tabular numerals for times and counts, one accent at a time,
 a flat sidebar on `rail` beside the page's round sheet, inline composer panels, quiet placeholders, `Boundary` around
 channel views.
 Don't: hard-code hex, add font families, ship gradient marketing styling,
-build floating composer menus, use colored shadows (the orb's glow aside),
-spread the spectrum beyond a thin band in what's chosen, or put hairlines
+build floating composer menus, use colored shadows, put prism on anything
+but what's chosen in the sidebar, spread the spectrum beyond a thin band
+in it, or put hairlines
 between the rails.
 
 ## 14. New-surface checklist
