@@ -276,6 +276,10 @@ export class Keyring implements ChannelOps {
     }
   }
 
+  nudge(): void {
+    for (const ch of this.open.values()) ch.nudge();
+  }
+
   stopAll(): void {
     for (const f of this.follows.values()) f.stop();
     this.follows.clear();

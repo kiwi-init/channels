@@ -77,6 +77,7 @@ export function remoteOps(port: KeysPort): ChannelOps {
     forget: async (code) => void (await ask({ op: "forget", code })),
     presence: async (code, p) => void (await ask({ op: "presence", code, p: toWire(p) })),
     openRows: (code, rows) => ask({ op: "openRows", code, rows: toWire(rows) }) as Promise<(Message | Unread | null)[]>,
+    nudge: () => void port.request({ op: "nudge" }),
     follow: (code, since, on, opts?: FollowOptions) => {
       const s: Sub = { code, on, last: since, remote: null, stopped: false, watch: opts?.watch === true }
       subs.add(s)

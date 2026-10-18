@@ -84,3 +84,68 @@ test("an upgrade nobody answers is given up and tried again", async () => {
   }
   expect(accepted).toBeGreaterThanOrEqual(2);
 });
+
+test("a nudge drops an open socket that doesn't answer a ping within 5s", async () => {
+  const { access, owner } = await seat();
+  let upgrades = 0;
+  const quiet = Bun.serve({
+    port: 0,
+    hostname: "127.0.0.1",
+    fetch(req, srv) {
+      if (req.headers.get("upgrade") === "websocket") {
+        upgrades++;
+        return srv.upgrade(req, { headers: { "sec-websocket-protocol": WS_PROTOCOL } }) ? undefined : new Response("no", { status: 400 });
+      }
+      return new Response("busy", { status: 503 });
+    },
+    websocket: { message() {}, sendPings: false },
+  });
+  const ac = new AbortController();
+  const ch = new Channel(access, quiet.url.origin, owner);
+  const listening = ch.stream(0, () => {}, { signal: ac.signal }).catch(() => {});
+  try {
+    await until(() => upgrades === 1, "the first socket", 5_000);
+    const at = Date.now();
+    ch.nudge();
+    await until(() => upgrades >= 2, "a second socket after the nudge", 8_000);
+    expect(Date.now() - at).toBeLessThan(7_000);
+  } finally {
+    ac.abort();
+    await listening;
+    quiet.stop(true);
+  }
+});
+
+test("a nudge cuts a long reconnect wait short", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "kiwi-nudge-"));
+  let server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir });
+  const port = server.port;
+  const owner = await generateIdentity("human");
+  const { access } = await Channel.create(server.url.origin, owner, { name: "human" });
+  const ch = new Channel(access, server.url.origin, owner);
+  const got: string[] = [];
+  let ahead = 0;
+  const ac = new AbortController();
+  let ready!: () => void;
+  const opened = new Promise<void>((r) => (ready = r));
+  const listening = ch.stream(0, (m) => void got.push(m.body), { signal: ac.signal, now: () => Date.now() + ahead, onReady: () => ready() }).catch(() => {});
+  try {
+    await opened;
+    server.stop(true);
+    const jump = setInterval(() => (ahead += 1_000), 10);
+    await Bun.sleep(1_500);
+    clearInterval(jump);
+    ahead -= 60_000;
+    server = startRelay({ port, hostname: "127.0.0.1", dataDir: dir });
+    await new Channel(access, server.url.origin, owner).send("back");
+    const at = Date.now();
+    ch.nudge();
+    await until(() => got.includes("back"), "the message after the nudge", 5_000);
+    expect(Date.now() - at).toBeLessThan(3_000);
+  } finally {
+    ac.abort();
+    await listening;
+    server.stop(true);
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

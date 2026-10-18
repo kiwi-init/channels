@@ -57,6 +57,9 @@ export function serveKeys(k: Keyring, push: (p: KeysPush) => void): KeysSession 
         subs.set(id, stop);
         return id;
       }
+      case "nudge":
+        k.nudge();
+        return null;
       case "unfollow": {
         const sub = count(r.sub);
         subs.get(sub)?.();
@@ -91,6 +94,7 @@ export type HostToKeys =
   | { type: "seats"; seats: ChannelIdentityView[]; person: string | null }
   | { type: "flush" }
   | { type: "relay"; relay: string }
+  | { type: "nudge" }
   | { type: "port" }
   | { type: "done"; id: number; error?: string; claim?: PersonClaim | null };
 
