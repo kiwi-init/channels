@@ -1,7 +1,8 @@
 import { useMemo } from "react"
 
 import { cleanPersonalities } from "@kiwi/core/personalities.ts"
-import { PRESETS, type Personality } from "@kiwi/core/personality.ts"
+import { type Personality } from "@kiwi/core/personality.ts"
+import { PRESETS } from "@kiwi/core/presets.ts"
 
 import { writeLocal } from "./channel-local"
 import { bridge, useSecrets } from "./secrets"

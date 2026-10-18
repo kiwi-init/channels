@@ -1,6 +1,7 @@
 import type { Member as MemberRecord, Runs } from "../membership.ts";
 import type { Card, Color, IssueRef, Message, TaskState, Trust, Verdict } from "../protocol.ts";
 import type { GithubCheck, GithubIssue, GithubPr, GithubState } from "./github.ts";
+import type { Persona } from "../personality.ts";
 import type { Scope } from "../scopes.ts";
 
 export interface Member {
@@ -15,6 +16,7 @@ export interface Member {
   scopes: Scope[];
   card?: Card & { at: number };
   runs?: Runs;
+  persona?: Persona;
   owner: boolean;
   joined: number;
   active: boolean;
@@ -38,6 +40,7 @@ export type Roster = {
   later?: { scopes: Scope[]; since: number };
   laterRole?: { role: string | null; about?: string | null; since: number };
   runs?: Runs;
+  persona?: Persona;
 }[];
 
 export const toRoster = (m: MemberRecord): Roster[number] => ({
@@ -56,6 +59,7 @@ export const toRoster = (m: MemberRecord): Roster[number] => ({
   ...(m.later ? { later: m.later } : {}),
   ...(m.laterRole ? { laterRole: m.laterRole } : {}),
   ...(m.runs ? { runs: m.runs } : {}),
+  ...(m.persona ? { persona: m.persona } : {}),
 });
 
 interface TaskNote {
@@ -101,6 +105,7 @@ export interface Task {
   closedSeq?: number;
   issue?: IssueRef;
   from?: number;
+  areas?: string[];
   workedBy: string[];
   rounds: ReviewRound[];
   source?: number;

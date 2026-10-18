@@ -6,6 +6,7 @@
 // the owner key pinned in the join code, so neither the relay nor a member
 // can mint a name: "win" is whoever the owner approved as "win", full stop.
 
+import { cleanPersona, type Persona } from "./personality.ts";
 import { openWith, sealWith } from "./crypto.ts";
 import { sign, verify, type Identity } from "./identity.ts";
 import { checkComputer, checkPerson, type ComputerClaim, type PersonClaim } from "./person.ts";
@@ -74,6 +75,7 @@ export interface MemberInfo {
    * card may say another model; the record keeps what was approved.
    */
   runs?: Runs;
+  persona?: Persona;
 }
 
 /** What runs an agent: its harness (claude-code, codex, opencode…) and the model id it answers with. */
@@ -190,6 +192,7 @@ export async function makeRecord(owner: Identity, room: string, m: MemberInfo & 
     ...(!m.owner && m.laterRole ? { laterRole: m.laterRole } : {}),
     // An agent's only: never the owner's or a person's record.
     ...(!m.owner && m.kind !== "human" && m.runs ? { runs: { harness: m.runs.harness, model: m.runs.model } } : {}),
+    ...(!m.owner && m.kind !== "human" && m.persona ? { persona: m.persona } : {}),
     at: Date.now(),
   });
 }
@@ -220,6 +223,7 @@ export async function readRecord(key: string, sealed: string, room: string, pk: 
     const kind = rec.kind === "human" ? "human" : rec.kind === "agent" ? "agent" : undefined;
     // What runs it is the owner's to attest, and only for an agent: kept from the owner's record alone.
     const runs = owner || kind === "human" || rec.pk !== ownerPk ? undefined : readRuns((rec as { runs?: unknown }).runs);
+    const persona = owner || kind === "human" || rec.pk !== ownerPk ? undefined : (cleanPersona((rec as { persona?: unknown }).persona) ?? undefined);
     const person = typeof rec.person === "string" && rec.person.length <= 64 ? rec.person : undefined;
     const from = readFrom((rec as { from?: unknown }).from);
     return {
@@ -241,6 +245,7 @@ export async function readRecord(key: string, sealed: string, room: string, pk: 
         ...(later ? { later } : {}),
         ...(laterRole ? { laterRole } : {}),
         ...(runs ? { runs } : {}),
+        ...(persona ? { persona } : {}),
         owner,
         at: rec.at,
         active: true,

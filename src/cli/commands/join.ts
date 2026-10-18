@@ -170,7 +170,18 @@ export const joinCommands: Record<string, Command> = {
           if (how === "resumed") out("this key is already a member: resumed, nothing new was granted.");
           const { state } = yield* s.state();
           const seat = state.members.get(name);
-          out(joinedText(alias, name, { scopes, hold: holdLine(state), charter: charterLines(state), lead: leadLine(state, name), human: humanOf(state, name), role: seat?.role, about: seat?.about }));
+          out(
+            joinedText(alias, name, {
+              scopes,
+              hold: holdLine(state),
+              charter: charterLines(state),
+              lead: leadLine(state, name),
+              human: humanOf(state, name),
+              role: seat?.role,
+              about: seat?.about,
+              ...(seat?.persona ? { persona: seat.persona } : {}),
+            }),
+          );
           yield* keepDaemon;
         });
 

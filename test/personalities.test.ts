@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { cleanPersonalities, cleanPersonality, copyOf, freeId, MAX_PERSONALITIES, PRESET_IDS } from "@kiwi/core/personalities.ts";
-import { PRESETS, type Personality } from "@kiwi/core/personality.ts";
+import { type Personality } from "@kiwi/core/personality.ts";
+import { PRESETS } from "@kiwi/core/presets.ts";
 import { snapshotOf } from "../desktop/src/guard.ts";
 
 const webOnly: Personality = {

@@ -35,6 +35,7 @@ export function fold(
       color: r.color,
       scopes: scopesOf(r),
       ...(r.runs ? { runs: r.runs } : {}),
+      ...(r.persona ? { persona: r.persona } : {}),
       owner: r.owner,
       joined: r.at,
       lastSeen: r.at,

@@ -1,4 +1,5 @@
-import { cleanPersona, PRESETS, type Personality } from "./personality.ts";
+import { cleanPersona, type Personality } from "./personality.ts";
+import { PRESETS } from "./presets.ts";
 
 const MAX_ID = 40;
 export const MAX_PERSONALITIES = 50;
