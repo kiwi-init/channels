@@ -513,6 +513,19 @@ async function run(part: Part): Promise<string[]> {
     await general.and(page.locator("[aria-current=page]")).waitFor();
     log(`ok  ${at} and a direct conversation`);
 
+    at = "change helper's personality from its menu";
+    await inDetails(async () => {
+      await panel.getByRole("button", { name: "More for helper" }).click();
+      await page.getByRole("menuitem", { name: "Personality: Reviewer…" }).click();
+    });
+    const changing = page.getByRole("dialog", { name: /personality$/ });
+    await changing.getByRole("radiogroup", { name: "Personality" }).getByText("Builder", { exact: true }).click();
+    await changing.getByRole("button", { name: "Save" }).click();
+    await changing.waitFor({ state: "detached" });
+    for (let i = 0; i < 50 && !(await kiwi(["-c", "smoke", "--as", "helper", "status"])).includes("helper (you) — Builder (Builder)"); i++) await page.waitForTimeout(200);
+    if (!(await kiwi(["-c", "smoke", "--as", "helper", "status"])).includes("helper (you) — Builder (Builder)")) throw new Error("the personality changed from the menu isn't on the agent's seat");
+    log(`ok  ${at}`);
+
     at = "Tasks panel";
     await sidebar.getByRole("region", { name: "Agents" }).waitFor();
     await sidebar
