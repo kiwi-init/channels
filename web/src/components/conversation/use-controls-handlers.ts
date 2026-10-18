@@ -9,6 +9,7 @@ type Handlers = Pick<
   | "onApprove"
   | "onScopes"
   | "onPersona"
+  | "onPin"
   | "onRole"
   | "onNickname"
   | "onDeny"
@@ -61,6 +62,7 @@ export function useControlsHandlers({
       await ch.updateScopes(m, scopes, seq)
       await refreshRoster()
     },
+    onPin: (p) => ch.pinPersona(p),
     onPersona: async (m, persona) => {
       const scopes = persona ? personaScopes(persona) : [...SCOPES]
       const wire = wireScopes(scopes)

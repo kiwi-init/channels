@@ -1,4 +1,5 @@
-import { cleanPersona, personaScopes } from "../personality.ts";
+import { makePin, readPin } from "../pin.ts";
+import { cleanPersona, personaScopes, type Personality } from "../personality.ts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import { openFrom } from "../crypto.ts";
@@ -46,6 +47,7 @@ export interface RequestsFx {
   requests(opts?: { budget?: SigningBudget; person?: string }): Effect.Effect<JoinRequest[], Refused, Relay>;
   checkRequest(req: Pick<JoinRequest, "id" | "pk" | "commit">): Effect.Effect<void, Refused, Relay>;
   approve(req: JoinRequest, as?: Partial<MemberInfo>, opts?: { person?: string }): Effect.Effect<Member, Refused, Relay>;
+  pinPersona(p: Personality): Effect.Effect<string, Refused, Relay>;
   autoApprove(person: string): Effect.Effect<Member[], Refused, Relay>;
   deny(requestId: string): Effect.Effect<void, Refused, Relay>;
 }
@@ -72,6 +74,7 @@ export class ChannelRequests {
         }
         const computer = yield* Effect.promise(() => verifiedComputer(this.ch.roomId, r.pk, info.computer));
         const person = yield* Effect.promise(() => verifiedPerson(this.ch.roomId, r.pk, info.person));
+        const pin = person ? null : yield* Effect.promise(() => readPin(info.pin, this.ch.roomId, this.ch.identity.pk));
         const kind = person ? "human" : "agent";
         const asked = inlineText(info.name, 40);
         const allowed = NAME_RE.test(asked) && !RESERVED_NAMES.has(nameKey(asked));
@@ -103,6 +106,7 @@ export class ChannelRequests {
           ...(person ? { person } : {}),
           ...(cleanCard(info.card) ? { card: cleanCard(info.card)! } : {}),
           ...(kind !== "human" && readRuns(info.runs) ? { runs: readRuns(info.runs)! } : {}),
+          ...(pin ? { pin } : {}),
         });
       }
       return out;
@@ -111,6 +115,11 @@ export class ChannelRequests {
     checkRequest: Effect.fn("Channel.checkRequest")({ self: this }, function* (this: ChannelRequests, req: Pick<JoinRequest, "id" | "pk" | "commit">) {
       yield* this.ch.ownerOnly();
       yield* this.signHalf(req.id, ownerNonceStatement(this.ch.roomId, req.pk, req.commit));
+    }),
+
+    pinPersona: Effect.fn("Channel.pinPersona")({ self: this }, function* (this: ChannelRequests, p: Personality) {
+      yield* this.ch.ownerOnly();
+      return yield* Effect.promise(() => makePin(this.ch.identity, this.ch.roomId, p));
     }),
 
     approve: Effect.fn("Channel.approve")({ self: this }, function* (this: ChannelRequests, req: JoinRequest, as?: Partial<MemberInfo>, opts: { person?: string } = {}) {

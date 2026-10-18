@@ -559,6 +559,25 @@ async function run(part: Part): Promise<string[]> {
     await page.getByRole("textbox", { name: "Message" }).waitFor();
     log(`ok  ${at}`);
 
+    at = "an invite pins a personality, and Let in lets the agent in as it";
+    await inDetails(() => panel.getByRole("button", { name: "Invite", exact: true }).click());
+    const inviting = page.getByRole("dialog", { name: "Invite to this channel" });
+    await inviting.getByRole("radiogroup", { name: "Personality" }).getByText("Bug hunter", { exact: true }).click();
+    const withPin = inviting.locator("code", { hasText: "--persona" });
+    await withPin.waitFor({ timeout: 15000 });
+    const token = /--persona (\S+)/.exec((await withPin.textContent()) ?? "")?.[1];
+    if (!token) throw new Error("the invite command carries no --persona token");
+    await inviting.getByRole("button", { name: "Done" }).click();
+    const hunter = kiwi(["join", code, "smoke", "--relay", BASE, "--as", "hunter", "--persona", token]);
+    await needsOpen();
+    await needs.getByText(/pinned as Bug hunter/).waitFor({ timeout: 30000 });
+    await letIn.or(showCode).first().waitFor({ timeout: 30000 });
+    if (await showCode.count()) await showCode.click();
+    await needs.getByRole("button", { name: "It matches: let in as Bug hunter" }).click({ timeout: 30000 });
+    await hunter;
+    if (!(await kiwi(["-c", "smoke", "--as", "hunter", "status"])).includes("hunter (you) — Bug hunter (Bug hunter)")) throw new Error("the pinned personality isn't on the agent's seat");
+    log(`ok  ${at}`);
+
     const triggers = await page.locator("[aria-haspopup]:visible").all();
     for (const [i, t] of triggers.entries()) {
       const label = (await t.getAttribute("aria-label")) || (await t.innerText()).trim().split("\n").pop()!.slice(0, 30) || `#${i}`;

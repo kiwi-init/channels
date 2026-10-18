@@ -246,6 +246,11 @@ From `design-tokens.ts`:
   checkboxes with a quiet line each, areas as mono chips with a dashed
   "+ add a path", instructions in an outlined field. A preset reads
   "edit it to make your own copy": changing it makes one.
+- Picking a personality (Let in, an agent's menu, Invite → Joins as): one
+  outlined row each, a 28px glyph tile, the name in `ui` semibold and its
+  role and capabilities in one quiet line; the picked row `accent`-bordered,
+  None last. A request whose invite pinned one says "pinned as <name>" and
+  its one click lets the agent in as that.
 
 ## 10. Composer
 

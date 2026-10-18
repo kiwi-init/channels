@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react"
 
 import type { JoinRequest, Member as RosterMember } from "@kiwi/core/membership.ts"
-import type { Persona } from "@kiwi/core/personality.ts"
+import type { Persona, Personality } from "@kiwi/core/personality.ts"
 import type { Event } from "@kiwi/core/protocol.ts"
 import type { Scope } from "@kiwi/core/scopes.ts"
 import type { ChannelState } from "@kiwi/core/state.ts"
@@ -32,6 +32,7 @@ export interface ControlsProps {
   onRemove: (m: RosterMember) => Promise<void>
   onScopes?: (m: RosterMember, scopes: Scope[]) => Promise<void>
   onPersona?: (m: RosterMember, persona: Persona | null) => Promise<void>
+  onPin?: (p: Personality) => Promise<string>
   onRole: (ev: Extract<Event, { op: "role.set" | "role.refuse" }>) => Promise<void>
   onNickname?: (m: RosterMember, nickname: string | null) => Promise<void>
   onCloseChannel: () => Promise<void>
