@@ -297,7 +297,8 @@ export function fold(
     if (m.kind !== "ask" && m.kind !== "blocking") return false;
     if (ignored(trust.get(m.seq))) return false;
     const by = answered.get(m.seq);
-    return !by || [...by].every((n) => n === m.from);
+    const answers = (n: string) => (m.esc ? !!m.to?.includes(n) : n !== m.from);
+    return !by || ![...by].some(answers);
   });
 
   keep?.(
