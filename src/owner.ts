@@ -9,7 +9,7 @@ import { Keystore, type ChannelConfig } from "./config.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { describeScopes, wireScopes, type Scope } from "@kiwi/core/scopes.ts";
 import { GENERAL_ROOM, MAX_CHARTER, SNAPSHOT_EVERY, type Event } from "@kiwi/core/protocol.ts";
-import { COORDINATOR, firstAgent, fold, newRoomId, type FoldBase } from "@kiwi/core/state.ts";
+import { fold, newRoomId, type FoldBase } from "@kiwi/core/state.ts";
 
 class OwnerSession extends AgentSession {
   private snapshotAt: number | null = null;
@@ -40,7 +40,7 @@ class OwnerSession extends AgentSession {
       // the roster changes or a scope.set's second step failed. (Not state(): it calls this.)
       if (this.postingChecked) return;
       const [messages, roster] = yield* Effect.all([this.sync(), this.members()], { concurrency: "unbounded" });
-      yield* owner.fx.reconcilePosting(fold(messages, roster, Date.now(), undefined, undefined, undefined, this.base));
+      yield* owner.fx.reconcilePosting(fold(messages, roster, Date.now(), undefined, undefined, this.base));
       this.postingChecked = true;
     });
   }
@@ -103,20 +103,6 @@ class OwnerSession extends AgentSession {
     });
   }
 
-  /**
-   * Owner, a person: in coordinator mode with nobody holding the role, the earliest agent still here
-   * becomes the coordinator (the first one in, unless the owner picks another). Returns who, or null.
-   */
-  readonly ensureCoordinator = Effect.fn("OwnerSession.ensureCoordinator")({ self: this }, function* (this: OwnerSession) {
-    // The roster as it is now: someone may have just joined or been removed.
-    yield* this.members(true);
-    const { state } = yield* this.state();
-    const next = firstAgent(state);
-    if (!state.mode.coordinatorOnly || state.coordinator || !next) return null;
-    yield* this.decideRole(next, { role: COORDINATOR });
-    return next;
-  });
-
   /** Owner: set a member's role and rules. Sent as the owner, so every client checks it's the owner's word. */
   readonly decideRole = Effect.fn("OwnerSession.decideRole")({ self: this }, function* (this: OwnerSession, member: string, decision: { role: string | null; about?: string | null }) {
     const owner = this.ch;
@@ -124,7 +110,7 @@ class OwnerSession extends AgentSession {
     const m = state.members.get(member);
     if (!m?.active) return yield* new Rejected(`no member named ${member}`);
     const ev = { op: "role.set" as const, member, ...decision };
-    // Addressed to them: a role (the coordinator's, handed out unasked) is news they have to get.
+    // Addressed to them: a role (the lead's, handed out unasked) is news they have to get.
     const seq = yield* owner.fx.send(`made ${member} ${ev.role ?? "unassigned"}`, { kind: "event", ev, to: [member] });
     // Then the member's record says it too, for clients holding only the log's tail. If this fails,
     // the owner's next reconcile puts it right; the role.set already counts for every client.
@@ -158,20 +144,6 @@ class OwnerSession extends AgentSession {
     });
     yield* rec ? owner.fx.updateScopes(rec, after.members.get(member)?.scopes ?? [], seq).pipe(Effect.catchCause(() => recheck)) : recheck;
     return after;
-  });
-
-  /**
-   * Owner: coordinator-only on or off. On, people talk only with the member whose role is
-   * coordinator; strict (the default) has every client refuse other agents' messages to people.
-   */
-  readonly setMode = Effect.fn("OwnerSession.setMode")({ self: this }, function* (this: OwnerSession, coordinatorOnly: boolean, strict = true) {
-    const owner = this.ch;
-    const ev = { op: "mode.set" as const, coordinatorOnly, strict: coordinatorOnly && strict };
-    const body = coordinatorOnly ? `coordinator-only on${ev.strict ? " (strict)" : ""}` : "coordinator-only off";
-    const since = yield* owner.fx.send(body, { kind: "event", ev });
-    // Then the channel's settings say it too, for clients holding only the log's tail.
-    yield* owner.fx.setMode({ coordinatorOnly, strict: ev.strict, since });
-    return yield* this.confirm(since);
   });
 
   /**

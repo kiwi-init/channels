@@ -10,7 +10,7 @@ import { Composer, type Person } from "../composer"
 import { Annotator, InfoPanel, TaskDetails, TasksPanel, ThreadPanel } from "../lazy"
 import { isAgent } from "../message"
 import { Notes, Tasks } from "../tasks"
-import type { Here, Side, Unread } from "./types"
+import type { Side, Unread } from "./types"
 
 type Send = ChannelHandle["send"]
 
@@ -24,8 +24,6 @@ export function ThreadSide({
   nameOf,
   connecting,
   send,
-  coordinator,
-  place,
 }: {
   root: Message
   count: number
@@ -36,27 +34,12 @@ export function ThreadSide({
   nameOf: (name: string) => string
   connecting: boolean
   send: Send
-  coordinator: string | null
-  place: Here
 }) {
   return (
     <ThreadPanel
       count={count}
       onClose={onClose}
-      composer={
-        <Composer
-          key={root.seq}
-          thread
-          me={me}
-          people={people}
-          replyTo={root}
-          nameOf={nameOf}
-          onClearReply={() => undefined}
-          disabled={connecting}
-          send={send}
-          route={coordinator && place.kind === "main" ? { coordinator, label: nameOf(coordinator), view: "everything" } : undefined}
-        />
-      }
+      composer={<Composer key={root.seq} thread me={me} people={people} replyTo={root} nameOf={nameOf} onClearReply={() => undefined} disabled={connecting} send={send} />}
     >
       {rows}
     </ThreadPanel>
@@ -70,8 +53,6 @@ export function PictureSide({
   mayWrite,
   me,
   extra,
-  coordinator,
-  place,
   send,
   onClose,
 }: {
@@ -81,8 +62,6 @@ export function PictureSide({
   mayWrite: boolean
   me: string
   extra: ReturnType<typeof sendFrom> | undefined
-  coordinator: string | null
-  place: Here
   send: Send
   onClose: () => void
 }) {
@@ -97,8 +76,7 @@ export function PictureSide({
         mayWrite
           ? async (note, image) => {
               const pm = picture.m
-              let to = pm.from !== me ? [pm.from] : extra?.to
-              if (coordinator && place.kind === "main" && to?.length && !to.includes(coordinator)) to = [...to, coordinator]
+              const to = pm.from !== me ? [pm.from] : extra?.to
               await send(note || image.name, {
                 to,
                 kind: "msg",

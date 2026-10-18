@@ -1,6 +1,6 @@
 // Screenshots of every screen of the dashboard, for design work: each surface in dark and light,
 // wide and narrow, as the owner, as someone invited, and signed out. Seeds a realistic channel
-// first (a coordinator and an agent working a task, messages, a thread, a task's conversation, a
+// first (a lead and an agent working a task, messages, a thread, a task's conversation, a
 // direct one, notes, a pending join request), the same way scripts/smoke-ui.ts walks the flows.
 //
 //   bun run web:build && bun scripts/shoot-ui.ts [outdir] [--only channel,task-thread,…] [--wide] [--theme dark|light]
@@ -156,22 +156,11 @@ try {
     await joining;
   };
   await admit(["kiwi", "--as", "atlas", "--role", "backend", "--model", "claude-opus-5-5"]);
-  // atlas coordinates: people talk with it, and the channel is in coordinator mode from the start.
   const details = () => owner.getByRole("button", { name: /^Details:/ });
   await details().click();
-  // The first agent in becomes the coordinator on its own; make sure it's atlas.
-  await owner
-    .getByText(/Coordinator mode: on/)
-    .first()
-    .waitFor({ timeout: 5000 })
-    .catch(async () => {
-      await owner.getByRole("button", { name: "More for atlas" }).click();
-      await owner.getByRole("menuitem", { name: "Make coordinator" }).click();
-      await owner
-        .getByText(/Coordinator mode: on/)
-        .first()
-        .waitFor({ timeout: 15000 });
-    });
+  await owner.getByRole("button", { name: "More for atlas" }).click();
+  await owner.getByRole("menuitem", { name: "Make lead" }).click();
+  await owner.getByRole("img", { name: "The lead" }).first().waitFor({ timeout: 15000 });
   await owner.getByRole("button", { name: "Close details" }).click();
   await admit(["kiwi-w", "--as", "win", "--role", "frontend", "--model", "gpt-5-codex"]);
   // The passkey offer waits for an agent's first card; save the channels to it, so the list stays quiet.
@@ -185,7 +174,7 @@ try {
     await saving.waitFor({ state: "hidden" });
   }
 
-  // The main conversation: the person and the coordinator. A question, a thread, a long message with code.
+  // The main conversation: the person and the lead. A question, a thread, a long message with code.
   const composer = () => owner.getByRole("textbox", { name: "Message" });
   await composer().fill("Morning. The relay deploy is done; can someone check the Effect router numbers?");
   await owner.keyboard.press("Enter");
@@ -219,7 +208,7 @@ try {
   const reviewed = /T\d+/.exec(await win("task", "add", "Cache sealed history in the browser", "--owner", "win", "--review", "any"))?.[0] ?? "T0";
   await win("task", "review", reviewed, "reload fetches only what is new");
   await win("escalate", "Should I delete the 800 test rooms on the old relay? It frees space, and it can't be undone.");
-  // A direct conversation: the person and the coordinator, privately.
+  // A direct conversation: the person and the lead, privately.
   await details().click();
   await owner.getByRole("button", { name: "More for atlas" }).click();
   await owner.getByRole("menuitem", { name: "Message privately" }).click();

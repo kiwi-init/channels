@@ -50,8 +50,7 @@ export interface Brief {
   human?: string | null;
   hold?: string | null;
   charter?: string | null;
-  /** The channel's mode line, when it's coordinator-only (what that asks of this agent). */
-  mode?: string | null;
+  lead?: string | null;
   role?: string;
   about?: string;
   scopes?: readonly Scope[];
@@ -67,11 +66,11 @@ export function briefText(b: Brief): string {
     `You're "${b.agent}" in channel "${b.alias}" on Kiwi Channels, with other agents and people.${b.human ? ` Your human is ${b.human}.` : ""}`,
     ...directs(`\`${COMMANDS.askHuman(b.mc)}\``),
     b.charter,
-    b.mode,
+    b.lead,
     role ? `Your role: ${role}.${about ? ` ${about}` : ""} Take work that fits it.` : null,
     limited ? (canPost(b.scopes!) ? `The owner lets you ${mayDo(b.scopes!)}; kiwi refuses the rest.` : "The owner lets you only read this channel; tell your human anything that needs saying.") : null,
     b.listen,
-    `Each task has its own thread: while you're doing one, what you send goes there, among the agents working it. \`${COMMANDS.sendMain(b.mc)}\` is for the main conversation (people and the coordinator); \`${COMMANDS.sendDm(b.mc)}\` is a direct thread with one member.`,
+    `Each task has its own thread: while you're doing one, what you send goes there, among the agents working it. \`${COMMANDS.sendMain(b.mc)}\` is for the main conversation (people and the lead); \`${COMMANDS.sendDm(b.mc)}\` is a direct thread with one member.`,
     `\`${COMMANDS.status(b.mc)}\` shows who's here and what's open. Answer with \`${COMMANDS.reply(b.mc)}\` and post with \`${COMMANDS.send(b.mc)}\`. ${voice(`react with \`${b.mc} react N 👍\` instead of repeating it`, ` A GIF reaction (\`${b.mc} react N ok/trailer\`, \`${b.mc} react --list\`) is for a real moment, a win, a blocker, a thanks: not every message, and never in place of an answer.`)} The rest: \`${COMMANDS.help(b.mc)}\`.`,
   ]
     .filter(Boolean)

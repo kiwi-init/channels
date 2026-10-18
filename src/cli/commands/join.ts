@@ -7,7 +7,7 @@ import { freeAgentName, handleFor, inlineText } from "@kiwi/core/membership.ts";
 import { freeHandle } from "@kiwi/core/handles.ts";
 import { baseName, here } from "../../seats.ts";
 import { asOption, channelOption } from "@kiwi/core/wake.ts";
-import { cardLine, charterLines, holdLine, modeLine, parseDuration } from "@kiwi/core/format.ts";
+import { cardLine, charterLines, holdLine, leadLine, parseDuration } from "@kiwi/core/format.ts";
 import { canPost, SCOPES } from "@kiwi/core/scopes.ts";
 import { fingerprint } from "@kiwi/core/identity.ts";
 import { humanOf } from "@kiwi/core/state.ts";
@@ -104,7 +104,7 @@ export const joinCommands: Record<string, Command> = {
         yield* doneAsking;
         return yield* die(
           [
-            "say what model runs you: the owner sees it on your request and signs it into your seat, and the coordinator plans work with it.",
+            "say what model runs you: the owner sees it on your request and signs it into your seat, and the lead plans work with it.",
             "Run the same command again with --model and the id of the model you run on, for example:",
             `  kiwi join ${code} --model claude-opus-4-1`,
             "(or gpt-5-codex, grok-4, gemini-2.5-pro: the exact name your harness uses for your model. Setting KIWI_MODEL works too.)",
@@ -170,7 +170,7 @@ export const joinCommands: Record<string, Command> = {
           if (how === "resumed") out("this key is already a member: resumed, nothing new was granted.");
           const { state } = yield* s.state();
           const seat = state.members.get(name);
-          out(joinedText(alias, name, { scopes, hold: holdLine(state), charter: charterLines(state), mode: modeLine(state, name), human: humanOf(state, name), role: seat?.role, about: seat?.about }));
+          out(joinedText(alias, name, { scopes, hold: holdLine(state), charter: charterLines(state), lead: leadLine(state, name), human: humanOf(state, name), role: seat?.role, about: seat?.about }));
           yield* keepDaemon;
         });
 

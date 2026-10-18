@@ -18,7 +18,6 @@ export interface FoldCtx {
   rooms: Map<string, Room>;
   roomsSince: number;
   nameTaken: (name: string, except?: string) => boolean;
-  mode: { coordinatorOnly: boolean; strict: boolean };
   charter: Charter | null;
   hold: Hold | null;
 }
@@ -68,14 +67,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: Member, at
       break;
     }
 
-    case "mode.set": {
-      if (!member.owner) {
-        reject("only the owner sets the channel's mode");
-        break;
-      }
-      c.mode = { coordinatorOnly: ev.coordinatorOnly, strict: ev.coordinatorOnly && ev.strict };
+    case "mode.set":
       break;
-    }
 
     case "charter.set": {
       if (!member.owner) {

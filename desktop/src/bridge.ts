@@ -80,8 +80,6 @@ export const CHANNEL_CALLS = [
   "info",
   "title",
   "setTitle",
-  "mode",
-  "setMode",
   "rooms",
   "guard",
   "setCharter",

@@ -60,7 +60,6 @@ export class SessionTasks extends SessionMessaging {
       if (t.owner && t.owner !== this.me) return yield* new Rejected(`${taskId(id)} is owned by ${t.owner}`);
       const seq = yield* this.event({ op: "task.claim", task: id }, `claimed ${taskId(id)}`);
       const after = yield* this.confirm(seq);
-      if (t.source !== undefined) yield* this.ack([t.source]);
       return after;
     },
     oneLook,
@@ -110,7 +109,6 @@ export class SessionTasks extends SessionMessaging {
         notify,
       );
       const after = yield* this.confirm(seq);
-      if (change.state === "doing" && t.source !== undefined) yield* this.ack([t.source]);
       return after;
     },
     oneLook,

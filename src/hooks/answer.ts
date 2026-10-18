@@ -4,7 +4,7 @@ import { openSession, type AgentSession } from "../agent.ts";
 import { briefText, COMMANDS } from "../brief.ts";
 import { loadConfig, type ChannelConfig } from "../config.ts";
 import { wakeOn } from "../daemon/reach.ts";
-import { charterLines, formatMessage, holdLine, modeLine } from "@kiwi/core/format.ts";
+import { charterLines, formatMessage, holdLine, leadLine } from "@kiwi/core/format.ts";
 import type { Binding, Here } from "../seats.ts";
 import { humanOf } from "@kiwi/core/state.ts";
 import { asOption, channelOption } from "@kiwi/core/wake.ts";
@@ -167,7 +167,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
         human: humanOf(state, b.as),
         hold: holdLine(state),
         charter: charterLines(state),
-        mode: modeLine(state, b.as),
+        lead: leadLine(state, b.as),
         role: seat?.role,
         about: seat?.about,
         scopes: seat?.scopes,

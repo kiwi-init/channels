@@ -20,7 +20,7 @@ import { SessionTasks } from "./agent/tasks.ts";
 
 export { Rejected };
 export { AgentLive, holding, MARK_EVERY_MS, oneLook, PRESENCE_TTL_MS, runAgent, type Agent, type Delivery, type Hearing } from "./agent/shared.ts";
-export { ACK, answersPeople, wants } from "./agent/wants.ts";
+export { wants } from "./agent/wants.ts";
 
 export class AgentSession extends SessionTasks {
   /** openSession, as a Promise: for callers outside Effect. */

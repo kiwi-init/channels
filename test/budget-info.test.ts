@@ -108,16 +108,16 @@ describe("GET /info at most once per agent command (one shared read per process)
 });
 
 describe("the app's reads of one channel", () => {
-  test("title, mode, guard and rooms asked together share one GET /info, and the next ask reads afresh", async () => {
+  test("title, guard and rooms asked together share one GET /info, and the next ask reads afresh", async () => {
     const owner = await generateIdentity("human");
     const made = await Channel.create(proxy!.url, owner, { name: "human" }, [], undefined, undefined, "first");
     const app = new Channel(made.access, proxy!.url, owner);
     const other = new Channel(made.access, proxy!.url, owner);
     await Bun.sleep(100);
     proxy!.reset();
-    const [title] = await Promise.all([app.title(), app.mode(), app.guard(), app.rooms(), app.info()]);
+    const [title] = await Promise.all([app.title(), app.guard(), app.rooms(), app.info()]);
     const together = proxy!.reset().routes["GET /info"] ?? 0;
-    console.log(`app open: ${together} GET /info for title, mode, guard, rooms and info`);
+    console.log(`app open: ${together} GET /info for title, guard, rooms and info`);
     expect(title).toBe("first");
     expect(together).toBe(1);
     await other.setTitle("second");
@@ -131,7 +131,7 @@ describe("the app's reads of one channel", () => {
     await Bun.sleep(100);
     proxy!.reset();
     expect(await kept.title()).toBe("first");
-    await kept.mode();
+    await kept.rooms();
     await kept.guard();
     expect(proxy!.reset().routes["GET /info"] ?? 0).toBe(1);
     await kept.setTitle("second");

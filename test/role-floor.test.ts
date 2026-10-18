@@ -46,10 +46,10 @@ describe("fold", () => {
     expect(fold([set], roster(floor)).roleSets.get("ann")).toEqual({ seq: set.seq, role: "backend" });
   });
 
-  test("the coordinator role comes through the floor too", async () => {
+  test("the lead role comes through the floor too, and an old coordinator role reads as it", async () => {
     const set = await msg(owner, { op: "role.set", member: "ann", role: "coordinator" });
     const s = fold([await msg(ann, { op: "hello" })], roster({ role: "coordinator", since: set.seq }));
-    expect(s.coordinator).toBe("ann");
+    expect(s.lead).toBe("ann");
   });
 });
 

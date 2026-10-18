@@ -23,7 +23,6 @@ import { canPost, describeScopes, refusal } from "@kiwi/core/scopes.ts";
 import { allowedOnHold, humanOf, isPerson, ON_HOLD, ownerOf, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import { SessionListen } from "./listen.ts";
 import { EVERYONE, oneLook } from "./shared.ts";
-import { ACK, answersPeople } from "./wants.ts";
 
 export class SessionMessaging extends SessionListen {
   readonly resolveTo = Effect.fn("AgentSession.resolveTo")({ self: this }, function* (this: SessionMessaging, to: string[] | undefined, state?: ChannelState) {
@@ -48,7 +47,6 @@ export class SessionMessaging extends SessionListen {
     function* (this: SessionMessaging, body: string, opts: SendOptions = {}) {
       const to = yield* this.resolveTo(opts.to);
       yield* this.mayI({ kind: opts.kind ?? "msg", ev: opts.ev, to });
-      if (opts.kind !== "event" && !opts.esc) yield* this.mayTalkTo(to);
       const { state } = yield* this.state();
       const parent = !opts.room && opts.re?.length ? state.roomOf.get(opts.re[0]!) : undefined;
       const room = opts.ev ? undefined : (parent ?? (yield* this.roomId(opts.room)));
@@ -56,29 +54,10 @@ export class SessionMessaging extends SessionListen {
       if (opts.dm && (to?.length !== 1 || to[0] === this.me || !state.members.get(to[0]!)?.active)) return yield* new Rejected("a direct message goes to exactly one other member: --dm NAME");
       const inThread = !!opts.re?.length;
       const seq = yield* this.ch.fx.send(body, { ...opts, to, room, ...(inThread ? { task: undefined, dm: undefined } : {}) });
-      if (opts.kind !== "event" && opts.re?.length) yield* this.ack(opts.re);
       return seq;
     },
     oneLook,
   );
-
-  private mayTalkTo(to: string[] | undefined) {
-    return Effect.gen({ self: this }, function* () {
-      if (!to?.length) return;
-      const { state } = yield* this.state();
-      const me = state.members.get(this.me);
-      const { coordinatorOnly, strict } = state.mode;
-      if (!coordinatorOnly || !strict || !state.coordinator || !me || me.kind === "human" || me.owner || this.me === state.coordinator) return;
-      const people = to.filter((n) => {
-        const p = state.members.get(n);
-        return !!p && (p.kind === "human" || p.owner);
-      });
-      if (people.length)
-        return yield* new Rejected(
-          `this channel is coordinator-only: only ${state.coordinator} messages people. Send it to ${state.coordinator}, who passes it on, or for a decision only a person can make: kiwi ask-human --re N "the decision".`,
-        );
-    });
-  }
 
   private mayI(m: { kind: Kind; ev?: Event; to?: string[] }) {
     return Effect.gen({ self: this }, function* () {
@@ -151,9 +130,7 @@ export class SessionMessaging extends SessionListen {
       if (!orig) return yield* new Rejected(`no message #${seq}`);
       const to = orig.from === this.me ? orig.to : [orig.from];
       yield* this.mayI({ kind, to });
-      yield* this.mayTalkTo(to);
       const sent = yield* this.ch.fx.send(body, { to, kind, re: [seq], imgs, room: state.roomOf.get(seq) ?? orig.room });
-      yield* this.ack([seq]);
       return sent;
     },
     oneLook,
@@ -169,20 +146,6 @@ export class SessionMessaging extends SessionListen {
     },
     oneLook,
   );
-
-  protected ack(re: readonly number[]) {
-    return Effect.ignoreCause(
-      Effect.gen({ self: this }, function* () {
-        const { messages, state } = yield* this.state();
-        const me = state.members.get(this.me);
-        if (!state.mode.coordinatorOnly || !state.coordinator || this.me === state.coordinator || !me || isPerson(me) || state.hold) return;
-        for (const seq of answersPeople(state, messages, re)) {
-          if (state.reactions.get(seq)?.has(this.me)) continue;
-          yield* this.event({ op: "react", seq, emoji: ACK }, "reaction");
-        }
-      }),
-    );
-  }
 
   readonly hello = Effect.fn("AgentSession.hello")({ self: this }, function* (this: SessionMessaging, role?: string, about?: string) {
     return yield* this.event({ op: "hello", role, about }, `joined${role ? ` as ${role}` : ""}`);

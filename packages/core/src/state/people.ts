@@ -21,15 +21,12 @@ export function colorOf(state: ChannelState, name: string): Color | null {
   return person ? (person.color ?? null) : null;
 }
 
-export const COORDINATOR = "coordinator";
-export const isCoordinatorRole = (role: string | undefined) => role?.trim().toLowerCase() === COORDINATOR;
-
-export function firstAgent(state: Pick<ChannelState, "members">): string | undefined {
-  const owner = [...state.members.values()].find((m) => m.owner && m.active)?.sponsor?.user;
-  if (!owner) return undefined;
-  const agents = [...state.members.values()].filter((m) => m.active && !isPerson(m) && (m.kind as string | undefined) !== "computer" && m.sponsor?.user === owner).sort((a, b) => a.joined - b.joined);
-  return agents.find((m) => !m.role)?.name;
-}
+export const LEAD = "lead";
+const LEGACY_LEAD = "coordinator";
+export const isLeadRole = (role: string | undefined) => {
+  const r = role?.trim().toLowerCase();
+  return r === LEAD || r === LEGACY_LEAD;
+};
 
 export function allowedOnHold(m: Pick<Message, "kind" | "to" | "ev">, isPersonName: (name: string) => boolean): boolean {
   if (m.kind === "event") return m.ev?.op === "hello" || m.ev?.op === "release";
@@ -37,9 +34,3 @@ export function allowedOnHold(m: Pick<Message, "kind" | "to" | "ev">, isPersonNa
 }
 
 export const ON_HOLD = "the owner put the channel on hold: agents may only answer people until it's lifted";
-
-export function keptFromPeople(state: ChannelState, m: Message): boolean {
-  if (!state.mode.coordinatorOnly || !state.mode.strict || !state.coordinator || m.kind === "event" || m.esc) return false;
-  const from = state.members.get(m.from);
-  return !!from && !isPerson(from) && m.from !== state.coordinator;
-}
