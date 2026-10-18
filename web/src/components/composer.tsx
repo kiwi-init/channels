@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 
 import type { SendOptions } from "@kiwi/core/client.ts"
 import { MAX_IMAGE_BYTES, RASTER_MIMES, type Color, type Message } from "@kiwi/core/protocol.ts"
+import { matchCommands, parseCommand, type Command } from "@/lib/commands"
 import { compressImage, needsCompressing, renamed } from "@/lib/compress-image"
 import { appendDictation, UNAVAILABLE_MESSAGE, useDictation } from "@/lib/dictation"
 import { excerpt } from "@/lib/format"
@@ -10,7 +11,7 @@ import { gifFile, type Gif } from "@/lib/gifs"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 import { GifPicker } from "./gif-picker"
-import { ComposerQuestion } from "./lazy"
+import { CommandBar, CommandList, ComposerQuestion } from "./lazy"
 import { Monogram, errorText, toast } from "./kit"
 
 const MENTION = /(^|\s)@([\p{L}\p{N}_.-]*)$/u
@@ -36,6 +37,8 @@ interface Props {
   replyTo: Message | null
   /** The oldest open decision for you: it sits above the field, can't be dismissed, and what you send answers it. */
   asking?: Message
+  /** Typing a slash at the start lists these; one run with its arguments instead of sending a message. */
+  commands?: readonly Command[]
   more?: number
   onAnswer?: (m: Message, text: string) => void
   nameOf: (name: string) => string
@@ -58,7 +61,7 @@ function recipients(body: string, names: Set<string>): string[] {
   return [...lead.matchAll(/@([\p{L}\p{N}_.-]+)/gu)].map((m) => m[1]!).filter((n) => names.has(n))
 }
 
-export function Composer({ me, people, replyTo, asking, more = 0, onAnswer, nameOf, onClearReply, disabled, send, thread, extra, placeholder, footer }: Props) {
+export function Composer({ me, people, replyTo, asking, commands = [], more = 0, onAnswer, nameOf, onClearReply, disabled, send, thread, extra, placeholder, footer }: Props) {
   const [body, setBody] = useState("")
   const [files, setFiles] = useState<{ name: string; mime: string; data: string }[]>([])
   const [dropping, setDropping] = useState(false)
@@ -68,6 +71,8 @@ export function Composer({ me, people, replyTo, asking, more = 0, onAnswer, name
     query: string
     index: number
   } | null>(null)
+  const [slash, setSlash] = useState(0)
+  const [slashOff, setSlashOff] = useState(false)
   const area = useRef<HTMLTextAreaElement>(null)
   const dictation = useDictation(
     (text) => setBody((current) => appendDictation(current, text)),
@@ -108,6 +113,10 @@ export function Composer({ me, people, replyTo, asking, more = 0, onAnswer, name
       window.removeEventListener("drop", block)
     }
   }, [])
+
+  const listed = thread || slashOff ? [] : matchCommands(commands, body)
+  const picked = listed.length ? listed[Math.min(slash, listed.length - 1)] : undefined
+  const running = thread ? null : parseCommand(commands, body)
 
   const canSend = !disabled && !sending && (body.trim().length > 0 || files.length > 0)
 
@@ -178,6 +187,16 @@ export function Composer({ me, people, replyTo, asking, more = 0, onAnswer, name
 
   const submit = async () => {
     if (!canSend) return
+    if (running) {
+      setBody("")
+      try {
+        await running.command.run(running.args)
+      } catch (err) {
+        toast(`/${running.command.name} failed: ${errorText(err)}`, "error")
+      }
+      area.current?.focus()
+      return
+    }
     setSending(true)
     try {
       const text = body.trim() || files.map((f) => f.name).join(", ")
@@ -231,6 +250,10 @@ export function Composer({ me, people, replyTo, asking, more = 0, onAnswer, name
       )}
 
       {asking && !thread && <ComposerQuestion m={asking} more={more} nameOf={nameOf} disabled={disabled} onChoose={(c) => onAnswer?.(asking, c)} onElse={() => area.current?.focus()} />}
+
+      {listed.length > 0 && picked && <CommandList commands={listed} picked={picked} onPick={(c) => setBody(`/${c.name} `)} />}
+
+      {running && <CommandBar command={running.command} args={running.args} />}
 
       {replyTo && !thread && (
         <div className="mb-1.5 ml-3 flex items-center gap-2 rounded-ctl px-2 text-meta text-ink-2">
@@ -325,6 +348,8 @@ export function Composer({ me, people, replyTo, asking, more = 0, onAnswer, name
               placeholder={hint}
               onChange={(e) => {
                 setBody(e.target.value)
+                setSlash(0)
+                setSlashOff(false)
                 trackMention(e.target.value, e.target.selectionStart)
               }}
               onPaste={(e) => {
@@ -356,6 +381,22 @@ export function Composer({ me, people, replyTo, asking, more = 0, onAnswer, name
                   if (e.key === "Escape") {
                     e.stopPropagation()
                     return setMention(null)
+                  }
+                }
+                if (picked) {
+                  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                    e.preventDefault()
+                    setSlash((Math.min(slash, listed.length - 1) + (e.key === "ArrowDown" ? 1 : -1) + listed.length) % listed.length)
+                    return
+                  }
+                  if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && body.trim().slice(1).toLowerCase() !== picked.name)) {
+                    e.preventDefault()
+                    setBody(`/${picked.name} `)
+                    return
+                  }
+                  if (e.key === "Escape") {
+                    e.stopPropagation()
+                    return setSlashOff(true)
                   }
                 }
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
