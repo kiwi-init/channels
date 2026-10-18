@@ -211,6 +211,12 @@ async function run(part: Part): Promise<string[]> {
       }),
     );
     for (const item of ["Charter", "Rename channel"]) await opens(`Details → ${item}`, () => inDetails(() => panel.getByRole("button", { name: new RegExp(`^${item}`) }).click()));
+    at = "Details → Voice: the owner allows it for the channel";
+    await inDetails(async () => {
+      await panel.getByRole("button", { name: /^Voice/ }).click();
+      await panel.getByText(/^Allowed: each person/).waitFor({ timeout: 15000 });
+    });
+    log(`ok  ${at}`);
     if (await panel.isVisible()) await panel.getByRole("button", { name: "Close details" }).click();
 
     at = "send and reply";

@@ -161,6 +161,8 @@ export function describeEvent(m: Message, state?: ChannelState): string {
       return ev.repos.length ? `set the channel's repos: ${ev.repos.join(", ")}` : "cleared the channel's repos";
     case "hold.set":
       return ev.on ? `put the channel ON HOLD${note(ev.note)}. Agents: stop all work now and change nothing; only answer people until it's lifted` : "lifted the hold: agents may carry on";
+    case "voice.set":
+      return ev.on ? "allowed voice in the channel: each person still turns it on for themselves" : "turned voice off for the channel";
     case "react":
       return ev.emoji ? `reacted ${ev.emoji} to #${ev.seq}` : `took back the reaction on #${ev.seq}`;
   }

@@ -106,7 +106,8 @@ function wellFormedWire(x: unknown, n: number): x is Wire {
     (b.lead === null || typeof b.lead === "string") &&
     (b.charter === null || typeof b.charter === "object") &&
     (b.repos === undefined || Array.isArray(b.repos)) &&
-    (b.hold === null || typeof b.hold === "object")
+    (b.hold === null || typeof b.hold === "object") &&
+    (b.voice === undefined || typeof b.voice === "boolean")
   );
 }
 

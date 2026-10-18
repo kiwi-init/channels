@@ -53,6 +53,7 @@ interface Props {
   placeholder?: string
   /** Under the field, inside the composer: what the agents are doing (agent-strip.tsx). */
   footer?: ReactNode
+  talk?: { button: ReactNode; bar: ReactNode }
 }
 
 /** Who a message is for: the people @mentioned at its start. */
@@ -61,7 +62,7 @@ function recipients(body: string, names: Set<string>): string[] {
   return [...lead.matchAll(/@([\p{L}\p{N}_.-]+)/gu)].map((m) => m[1]!).filter((n) => names.has(n))
 }
 
-export function Composer({ me, people, replyTo, asking, commands = [], more = 0, onAnswer, nameOf, onClearReply, disabled, send, thread, extra, placeholder, footer }: Props) {
+export function Composer({ me, people, replyTo, asking, commands = [], more = 0, onAnswer, nameOf, onClearReply, disabled, send, thread, extra, placeholder, footer, talk }: Props) {
   const [body, setBody] = useState("")
   const [files, setFiles] = useState<{ name: string; mime: string; data: string }[]>([])
   const [dropping, setDropping] = useState(false)
@@ -255,6 +256,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
 
       {running && <CommandBar command={running.command} args={running.args} />}
 
+      {talk?.bar}
       {replyTo && !thread && (
         <div className="mb-1.5 ml-3 flex items-center gap-2 rounded-ctl px-2 text-meta text-ink-2">
           <span className="min-w-0 truncate">
@@ -411,6 +413,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
               }}
               className="bubble-text block max-h-[220px] min-h-[48px] min-w-0 flex-1 resize-none bg-transparent py-[13px] pr-1 pl-1 text-body outline-none placeholder:truncate placeholder:text-ink-3 focus-visible:outline-none"
             />
+            {talk?.button}
             {dictation.supported && (
               <button
                 type="button"

@@ -56,6 +56,8 @@ function shortEvent(m: Message, state: ChannelState): string {
       return !ev.role ? `${name(ev.member)} has no role now` : isLeadRole(ev.role) ? `${name(ev.member)} is the lead` : `${name(ev.member)} is ${ev.role}`
     case "hold.set":
       return ev.on ? `${who} paused every agent${ev.note ? `: ${ev.note}` : ""}` : `${who} let the agents carry on`
+    case "voice.set":
+      return ev.on ? `${who} allowed voice here` : `${who} turned voice off here`
     case "charter.set":
       return ev.text ? `${who} updated the charter` : `${who} cleared the charter`
     case "fact.set":
