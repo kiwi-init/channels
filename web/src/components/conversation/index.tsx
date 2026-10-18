@@ -4,7 +4,8 @@ import { useCallback, useMemo, useState, type CSSProperties, type ReactNode } fr
 import { droppedCount } from "@kiwi/core/format.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
 import { GENERAL_ROOM, isReaction, type ImageAttachment, type Message } from "@kiwi/core/protocol.ts"
-import { colorOf, outsideRepos, tasksAwaitingPeople, type Task } from "@kiwi/core/state.ts"
+import { colorOf, outsideRepos, taskId, tasksAwaitingPeople, type Task } from "@kiwi/core/state.ts"
+import { taskPr } from "@kiwi/core/work.ts"
 import { channelTitle, loadRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { howHere } from "@/lib/presence"
 import type { Gif } from "@/lib/gifs"
@@ -24,7 +25,7 @@ import { AgentStrip, type AgentNow } from "../agent-strip"
 import { ChannelControls, HoldDialog } from "../controls"
 import { Icon } from "../icon"
 import { Button, Spinner, errorText, toast } from "../kit"
-import { AgentLanes, CompactBlock, ProposalCard, TalkBar, TalkButton } from "../lazy"
+import { AgentLanes, CompactBlock, ProposalCard, TaskInline, TalkBar, TalkButton } from "../lazy"
 import { bridge } from "@/lib/secrets"
 import type { ToolCtx } from "@/lib/voice/tools"
 import { defaultScopes } from "../scopes"
@@ -64,7 +65,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const [earlier, setEarlier] = useState(false)
   const sideRoot = side?.kind === "thread" ? side.root : null
   const info = side?.kind === "info"
-  const shownTask = side?.kind === "tasks" ? side.task : null
+  const [expanded, setExpanded] = useState<number | null>(null)
+  const shownTask = side?.kind === "tasks" ? side.task : tab === "tasks" ? expanded : null
   const openThread = useCallback((root: number) => setSide({ kind: "thread", root }), [])
   const openTask = useCallback((task: number) => setSide({ kind: "tasks", task }), [])
   const [pausing, setPausing] = useState(false)
@@ -463,7 +465,38 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             <div className="absolute inset-0 overflow-y-auto pt-[calc(var(--head)+8px)]">
               <div className={cx("mx-auto w-full px-2 md:px-4", tab === "tasks" && "max-w-[960px]")}>
                 {tab === "tasks" ? (
-                  <TasksView state={state} now={now} view={view} agents={agentsNow} needs={needsHere ? needsYou : null} onOpen={openTask} />
+                  <TasksView
+                    state={state}
+                    now={now}
+                    view={view}
+                    agents={agentsNow}
+                    needs={needsHere ? needsYou : null}
+                    open={side?.kind === "tasks" ? null : expanded}
+                    onOpen={(id) => setExpanded((e) => (e === id ? null : id))}
+                    detail={(id) => (
+                      <TaskInline
+                        pr={taskPr(state, id)?.pr}
+                        state={state}
+                        rows={taskRows}
+                        load={ch.githubDiff}
+                        onDetails={() => openTask(id)}
+                        composer={
+                          <Composer
+                            key={`task:${id}`}
+                            me={me}
+                            people={people}
+                            replyTo={null}
+                            nameOf={nameOf}
+                            onClearReply={() => undefined}
+                            disabled={connection === "connecting"}
+                            extra={sendFrom(state, { kind: "task", task: id }, me)}
+                            placeholder={`Reply in ${taskId(id)}`}
+                            send={send}
+                          />
+                        }
+                      />
+                    )}
+                  />
                 ) : agentsNow.length ? (
                   <AgentLanes agents={agentsNow} state={state} messages={messages} now={now} nameOf={nameOf} onOpenTask={openTask} />
                 ) : (

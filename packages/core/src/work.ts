@@ -38,7 +38,7 @@ export interface PrChecks {
   running: number;
 }
 
-const FAILED = new Set(["failure", "timed_out", "cancelled", "action_required", "startup_failure"]);
+export const FAILED = new Set(["failure", "timed_out", "cancelled", "action_required", "startup_failure"]);
 
 function checksOf(state: ChannelState, pr: GithubPr): PrChecks | undefined {
   const runs = prChecks(state.github, pr);

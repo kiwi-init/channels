@@ -105,6 +105,7 @@ export interface Task {
   closedSeq?: number;
   issue?: IssueRef;
   from?: number;
+  areas?: string[];
   workedBy: string[];
   rounds: ReviewRound[];
   source?: number;

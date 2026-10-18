@@ -202,6 +202,7 @@ export type Event =
       at?: string;
       body?: "review";
       proof?: { url: string; label?: string };
+      areas?: string[];
     }
   /** What a member is and has, said by itself: where it runs, what runs it, what it can use. Shown in People. */
   | ({ op: "card" } & Card)
@@ -369,6 +370,11 @@ export interface IssueRef {
   repo: string;
   number: number;
 }
+
+export const MAX_AREAS = 20;
+const AREA_RE = /^(?!(?:.*\/)?\.\.?(?:\/|$))[\w.@+-]+(?:\/[\w.@+-]+)*$/;
+
+const isAreas = (x: unknown): x is string[] => Array.isArray(x) && x.length <= MAX_AREAS && x.every((a) => typeof a === "string" && a.length <= 120 && AREA_RE.test(a));
 
 function isIssueRef(x: unknown): x is IssueRef {
   const r = x as { repo?: unknown; number?: unknown } | null;
@@ -684,6 +690,7 @@ export function wellFormedEvent(ev: unknown): ev is Event {
         (e.round === undefined || (Number.isSafeInteger(e.round) && (e.round as number) > 0)) &&
         opt(e.at, (x): x is string => str(x, 200) && x.trim().length > 0 && !/[\r\n]/.test(x)) &&
         (e.body === undefined || (e.body === "review" && e.verdict !== undefined)) &&
+        opt(e.areas, isAreas) &&
         opt(e.proof, (x): x is { url: string; label?: string } => {
           const p = x as { url?: unknown; label?: unknown } | null;
           return (

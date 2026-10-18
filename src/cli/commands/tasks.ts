@@ -104,6 +104,7 @@ export const taskCommands: Record<string, Command> = {
         } else return yield* die(`unknown task command "${sub}"`);
         const t = state.tasks.get(id)!;
         out(`${taskId(id)} ${taskStateWord(t)}${t.owner ? ` @${t.owner}` : ""}: ${inlineText(t.title, 200)}`);
+        if ((sub === "done" || sub === "review") && t.areas?.length) out(`folders it changed (for kiwi task who): ${t.areas.join(", ")}`);
       }),
     ),
 
