@@ -83,6 +83,8 @@ jobs:
       public site's invite parsing (site/app.js, test/site.test.ts), scripts/action-pins.ts.
       Also test/silent-socket.test.ts: a live socket that goes quiet after opening (no answer to
       a ping) and an upgrade nobody answers are both dropped and opened again.
+      Also test/web-core-barrel.test.ts: web/src takes values from @kiwi/core's client submodules
+      (errors, relay, info), never the client.ts barrel, which pulls the whole Channel into the first load.
       Also test/desktop-keys.test.ts: the desktop key process (desktop/src/keyring.ts and keys-server.ts,
       over the wire web/src/lib/channel-remote.ts uses) against a local relay, failing if any member,
       owner, person or channel key reaches the window, plus the seat rules, the wire codec, the
@@ -174,7 +176,7 @@ jobs:
     description: >-
       Builds the web dashboard for production (vite build in web/) and fails when the JS the
       first screen loads (the entry script plus every chunk it modulepreloads) is over
-      BUDGET_BYTES (790,000) in scripts/web-bundle.ts, a budget that doesn't go up for a feature; code reached only through
+      BUDGET_BYTES (745,000) in scripts/web-bundle.ts, a budget that doesn't go up for a feature; code reached only through
       web/src/components/lazy.tsx doesn't count. Then ui smoke: starts the relay and the kiwi CLI
       as a test computer and drives the built dashboard in headless Chromium, opening every
       menu, popover and dialog, setting up a passkey, previewing an invite, Settings → Personalities duplicating a preset into the person's own, the owner allowing voice from Details, the Agents tab showing a lane per agent with what's next on it, Needs you as rows always in view (an agent asking in is let in from its row), an answered ask saying who chose what on the ask itself, replying inline (the reply quotes what it answers, "1 Reply" opens the thread), linking a computer

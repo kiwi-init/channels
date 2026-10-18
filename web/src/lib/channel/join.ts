@@ -1,4 +1,4 @@
-import { RelayError } from "@kiwi/core/client.ts"
+import { RelayError } from "@kiwi/core/client/errors.ts"
 import { decodeJoinCode, ownerFingerprint } from "@kiwi/core/crypto.ts"
 import { ops } from "../channel-ops"
 import { relayUrl } from "../relay"
