@@ -5,9 +5,12 @@ import { formatMessage } from "@kiwi/core/format.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { parseTaskId, type ChannelState } from "@kiwi/core/state.ts";
 import { args, opt } from "./args.ts";
+import { here } from "../seats.ts";
+import { noteHeard } from "../hooks/delivered.ts";
 import { acting, die, Quit } from "./context.ts";
 
 export function render(m: Message, state?: ChannelState | null): string {
+  if (acting.alias && acting.name) noteHeard(here().session, acting.alias, acting.name, [m.seq]);
   return opt.json
     ? JSON.stringify({ ...m, ...(m.handoff ? { handoff: { vendor: m.handoff.vendor, expiresAt: m.handoff.expiresAt } } : {}), trust: state?.trust.get(m.seq) })
     : formatMessage(m, state?.trust.get(m.seq), state ?? undefined, acting.name);

@@ -269,6 +269,12 @@ export function isReaction(m: Pick<Message, "kind" | "ev">): boolean {
   return m.kind === "event" && m.ev?.op === "react";
 }
 
+const QUIET_OPS: ReadonlySet<string> = new Set(["hello", "card", "react", "fact.set", "fact.del", "lease.take", "lease.free", "task.claim", "claim", "release"]);
+
+export function isQuiet(m: Pick<Message, "kind" | "ev">): boolean {
+  return m.kind === "event" && !!m.ev && QUIET_OPS.has(m.ev.op);
+}
+
 /** What a member says about itself (see the card event). Every field is optional and short. */
 export interface Card {
   /** macos, windows, linux. */

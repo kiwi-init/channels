@@ -355,6 +355,17 @@ async function run(part: Part): Promise<string[]> {
     if ((await said.count()) !== (await inCard.count())) throw new Error("a message in a task's conversation showed in main outside its task card");
     log(`ok  ${at}`);
 
+    at = "the task's card in the conversation shows its last line, and a click opens the Tasks panel";
+    const taskCard = page.getByRole("main").getByRole("button", { name: new RegExp(`^Open ${smokeTask}, Smoke task`) });
+    await taskCard.waitFor({ timeout: 15000 });
+    if ((await taskCard.count()) !== 1) throw new Error(`${smokeTask} has more than one card in the main column`);
+    await taskCard.getByText("smoke in the task", { exact: true }).waitFor();
+    await taskCard.click();
+    await tasksPanel.getByRole("region", { name: new RegExp(`^Task ${smokeTask}`) }).waitFor({ timeout: 15000 });
+    await tasksPanel.getByRole("button", { name: "Close tasks" }).click();
+    await tasksPanel.waitFor({ state: "detached" });
+    log(`ok  ${at}`);
+
     at = "ask-human: options as buttons, and the task waits on a person until one is picked";
     await kiwi(["-c", "smoke", "--as", "bot", "ask-human", "--task", smokeTask, "--option", "A: ship it", "--option", "B: wait a day", "Ship the smoke build now?"]);
     const awaiting = overview.getByRole("region", { name: "Tasks" }).getByText("Needs a decision");

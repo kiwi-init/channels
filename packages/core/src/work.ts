@@ -12,7 +12,7 @@ import { currentState, isPerson, type ChannelState, type Task } from "./state.ts
 /** Quiet this long, with nothing in progress, and an agent reads as idle. */
 const IDLE_AFTER_MS = 15 * 60_000;
 
-function visible(state: ChannelState, m: Message): boolean {
+export function visible(state: ChannelState, m: Message): boolean {
   return !ignored(state.trust.get(m.seq));
 }
 
@@ -45,7 +45,7 @@ function fateIn(text: string, pr: { url: string; number: number }): "merged" | "
 }
 
 /** The text a message carries for links: its body, or a task note. */
-const textOf = (m: Message): string => (m.ev?.op === "task.update" ? (m.ev.note ?? "") : m.kind === "event" ? "" : m.body);
+export const textOf = (m: Message): string => (m.ev?.op === "task.update" ? (m.ev.note ?? "") : m.kind === "event" ? "" : m.body);
 
 /** PRs linked in these messages, with what later messages (any visible one) say happened to them. */
 export function prsIn(state: ChannelState, messages: Message[], linkedBy: (m: Message) => boolean): PrRef[] {

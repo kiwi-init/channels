@@ -104,6 +104,8 @@ jobs:
       give up, only a person frees someone else's, a snapshot-resumed fold agrees, status shows
       it and no one is woken by it, and two agents racing over a local relay end with one
       holder and one waiting.
+      And test/quiet.test.ts: which events are live state (notes, leases, claims, reactions,
+      joins, cards) and stay out of the conversation and kiwi log, and which people still read there.
       And test/lead.test.ts: the optional lead role (one at a time, an old
       coordinator role reads as it, an old mode.set folds to nothing, a person's words reach every
       agent). Fails if a tested module's behavior,
