@@ -83,8 +83,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const iAmPerson = !isAgent(state.members.get(me))
 
   const arrivals = useMemo(() => messages.filter((m) => m.from !== me && !isReaction(m)).length, [messages, me])
-  const { escalations, questions } = useMemo(() => asksFor(state.openAsks, me), [state.openAsks, me])
-  const needs = escalations.length + questions.length
+  const { decisions, escalations, questions } = useMemo(() => asksFor(state.openAsks, me), [state.openAsks, me])
+  const needs = decisions.length + escalations.length + questions.length
   useChannelNews(roomId, Math.max(head, messages.at(-1)?.seq ?? 0), arrivals, 0, needs)
 
   const reviews = useMemo(() => reviewsFor(state.tasks.values(), me, iAmPerson), [state.tasks, me, iAmPerson])
@@ -163,6 +163,16 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     },
     [reacting, send]
   )
+  const decided = useMemo(() => new Set(decisions.map((m) => m.seq)), [decisions])
+  const answer = useCallback(
+    (m: Message, text: string) => {
+      send(text, { to: [m.from], re: [m.seq], kind: "msg" }).then(
+        () => toast(`Answered ${nameOf(m.from)}`),
+        (err) => toast(`Not sent: ${errorText(err)}`, "error")
+      )
+    },
+    [send, nameOf]
+  )
   const handlers = useControlsHandlers({ live, member, onGone })
   const hold = handlers.onHold
 
@@ -206,6 +216,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     summaryOf,
     showsReceipt,
     onReply,
+    decisions: decided,
+    onAnswer: answer,
     onReact: setReacting,
     onJump: jump,
     openThread,
@@ -257,7 +269,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       outside: outsideRepos(state, m.card),
     }))
   const prs = floating ? recentPrs(state, messages, 5) : []
-  const needsMe = escalations.length + questions.length + reviews.length + (isOwner ? requests.length : 0)
+  const needsMe = decisions.length + escalations.length + questions.length + reviews.length + (isOwner ? requests.length : 0)
   const headline =
     connection === "connecting" || connection === "reconnecting"
       ? subtitle
@@ -389,6 +401,9 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                   me={me}
                   people={people}
                   replyTo={replyTo}
+                  asking={place.kind === "main" ? decisions[0] : undefined}
+                  more={Math.max(decisions.length - 1, 0)}
+                  onAnswer={answer}
                   nameOf={nameOf}
                   onClearReply={() => setReplyTo(null)}
                   disabled={connection === "connecting"}

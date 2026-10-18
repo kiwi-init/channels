@@ -10,6 +10,7 @@ import { gifFile, type Gif } from "@/lib/gifs"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 import { GifPicker } from "./gif-picker"
+import { ComposerQuestion } from "./lazy"
 import { Monogram, errorText, toast } from "./kit"
 
 const MENTION = /(^|\s)@([\p{L}\p{N}_.-]*)$/u
@@ -33,6 +34,10 @@ interface Props {
   me: string
   people: Person[]
   replyTo: Message | null
+  /** The oldest open decision for you: it sits above the field, can't be dismissed, and what you send answers it. */
+  asking?: Message
+  more?: number
+  onAnswer?: (m: Message, text: string) => void
   nameOf: (name: string) => string
   onClearReply: () => void
   disabled: boolean
@@ -53,7 +58,7 @@ function recipients(body: string, names: Set<string>): string[] {
   return [...lead.matchAll(/@([\p{L}\p{N}_.-]+)/gu)].map((m) => m[1]!).filter((n) => names.has(n))
 }
 
-export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, send, thread, extra, placeholder, footer }: Props) {
+export function Composer({ me, people, replyTo, asking, more = 0, onAnswer, nameOf, onClearReply, disabled, send, thread, extra, placeholder, footer }: Props) {
   const [body, setBody] = useState("")
   const [files, setFiles] = useState<{ name: string; mime: string; data: string }[]>([])
   const [dropping, setDropping] = useState(false)
@@ -177,12 +182,13 @@ export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, 
     try {
       const text = body.trim() || files.map((f) => f.name).join(", ")
       const named = recipients(text, names)
-      const to = named.length ? named : replyTo && replyTo.from !== me ? [replyTo.from] : extra?.to
+      const answering = !replyTo && !thread ? asking : undefined
+      const to = named.length ? named : answering ? [answering.from] : replyTo && replyTo.from !== me ? [replyTo.from] : extra?.to
       await send(text, {
         to,
         // A person's message is just a message: a question needs no menu to be one.
         kind: "msg",
-        re: replyTo ? [replyTo.seq] : undefined,
+        re: replyTo ? [replyTo.seq] : answering ? [answering.seq] : undefined,
         ...(extra?.task !== undefined ? { task: extra.task } : {}),
         // A direct thread's message is to the other one only: an @ or a reply can't widen it.
         ...(extra?.dm ? { to: extra.to, dm: true } : {}),
@@ -199,7 +205,8 @@ export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, 
     }
   }
 
-  const hint = disabled ? "Connecting…" : thread ? "Reply" : replyTo ? `Reply to ${nameOf(replyTo.from)}` : (placeholder ?? "Message")
+  const asked = !thread && !replyTo ? asking : undefined
+  const hint = disabled ? "Connecting…" : thread ? "Reply" : replyTo ? `Reply to ${nameOf(replyTo.from)}` : asked ? `Answer ${nameOf(asked.from)}` : (placeholder ?? "Message")
 
   return (
     <div className={cx("relative mx-auto w-full shrink-0", thread ? "px-3 pt-2 pb-3" : "max-w-[792px] px-3 pt-2 pb-4 md:px-4")}>
@@ -222,6 +229,8 @@ export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, 
           ))}
         </div>
       )}
+
+      {asking && !thread && <ComposerQuestion m={asking} more={more} nameOf={nameOf} disabled={disabled} onChoose={(c) => onAnswer?.(asking, c)} onElse={() => area.current?.focus()} />}
 
       {replyTo && !thread && (
         <div className="mb-1.5 ml-3 flex items-center gap-2 rounded-ctl px-2 text-meta text-ink-2">

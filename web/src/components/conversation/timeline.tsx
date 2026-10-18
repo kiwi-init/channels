@@ -38,6 +38,8 @@ export interface RowsContext {
   summaryOf: (seq: number) => ThreadSummary | undefined
   showsReceipt: (m: Message, anchor: string | undefined) => boolean
   onReply: (m: Message) => void
+  decisions: ReadonlySet<number>
+  onAnswer: (m: Message, text: string) => void
   onReact: (m: Message) => void
   onJump: (seq: number) => void
   openThread: (root: number) => void
@@ -68,6 +70,8 @@ export function rowMakers(c: RowsContext) {
     summaryOf,
     showsReceipt,
     onReply,
+    decisions,
+    onAnswer,
     onReact,
     onJump,
     openThread,
@@ -93,6 +97,7 @@ export function rowMakers(c: RowsContext) {
       quoted={quoted}
       nameOf={nameOf}
       onReply={anchor ? undefined : onReply}
+      onChoose={!anchor && decisions.has(m.seq) ? (choice) => onAnswer(m, choice) : undefined}
       onReact={anchor ? undefined : onReact}
       onJump={onJump}
       thread={search || anchor ? undefined : summaryOf(m.seq)}

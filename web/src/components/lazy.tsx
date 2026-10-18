@@ -13,6 +13,7 @@ const tasks = later(() => import("./tasks-panel").then((m) => m.TasksPanel))
 const taskDetails = later(() => import("./task-details").then((m) => m.TaskDetails))
 const thread = later(() => import("./thread").then((m) => m.ThreadPanel))
 const annotator = later(() => import("./annotator").then((m) => m.Annotator))
+const composerQuestion = later(() => import("./composer-question").then((m) => m.ComposerQuestion))
 const repos = later(() => import("./controls/repos-dialog").then((m) => m.ReposDialog))
 
 export const Markdown = markdown.View
@@ -24,6 +25,7 @@ export const TasksPanel = tasks.View
 export const TaskDetails = taskDetails.View
 export const ThreadPanel = thread.View
 export const Annotator = annotator.View
+export const ComposerQuestion = composerQuestion.View
 export const ReposDialog = repos.View
 
 export const loadMarkdown = markdown.load
