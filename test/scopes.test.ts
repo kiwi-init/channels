@@ -261,6 +261,11 @@ describe("scopes at the relay", () => {
     const seat = (await ownerCh.members()).find((m) => m.name === "builder")!;
     expect(seat.persona).toEqual(builder);
     expect(seat.scopes).toBeUndefined();
+    const boss = await generateIdentity("boss");
+    const asked = await Channel.requestJoin(relay, code, boss, { name: "boss" });
+    const [req] = await checked(ownerCh, relay, code, [{ id: boss, requestId: asked.requestId }]);
+    await expect(ownerCh.approve(req!, { name: "boss", persona: { ...builder, role: "boss" as Persona["role"] } })).rejects.toThrow(/isn't one a record can carry/);
+    await ownerCh.deny(req!.id);
   });
 
   test("an agent the owner creates the channel with, read-only, can't post from the first message", async () => {

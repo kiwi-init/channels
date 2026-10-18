@@ -1,4 +1,4 @@
-import { personaScopes } from "../personality.ts";
+import { cleanPersona, personaScopes } from "../personality.ts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import { openFrom } from "../crypto.ts";
@@ -140,7 +140,8 @@ export class ChannelRequests {
       }
       const nick = inlineText(as?.display ?? req.display, 40);
       yield* this.assertNamesFree([as?.name ?? req.name]);
-      const persona = kind === "agent" ? as?.persona : undefined;
+      const persona = kind === "agent" && as?.persona !== undefined ? cleanPersona(as.persona) : undefined;
+      if (persona === null) return yield* new Rejected("that personality isn't one a record can carry: check its name, role, capabilities, areas and instructions");
       const scopes = persona ? personaScopes(persona) : as?.scopes;
       const info: MemberInfo = {
         name: as?.name ?? req.name,
