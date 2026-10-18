@@ -277,7 +277,7 @@ export class SessionMessaging extends SessionListen {
 
   readonly refreshCard = Effect.fn("AgentSession.refreshCard")(
     { self: this },
-    function* (this: SessionMessaging, detected: Card, given: { model?: string; note?: string; tools?: string[] } = {}) {
+    function* (this: SessionMessaging, detected: Card, given: { model?: string; note?: string; tools?: string[]; fresh?: number } = {}) {
       const { state } = yield* this.state();
       const me = state.members.get(this.me);
       const card = mergeCard(detected, me?.card, given);
@@ -295,6 +295,17 @@ export class SessionMessaging extends SessionListen {
       const was = state.members.get(this.me)?.card;
       if (!was) return { sent: false };
       return yield* this.refreshCard(movedCard(was, where));
+    },
+    oneLook,
+  );
+
+  readonly markFresh = Effect.fn("AgentSession.markFresh")(
+    { self: this },
+    function* (this: SessionMessaging, where: Where, at: number) {
+      const { state } = yield* this.state();
+      const was = state.members.get(this.me)?.card;
+      if (!was) return { sent: false };
+      return yield* this.refreshCard(movedCard(was, where), { fresh: at });
     },
     oneLook,
   );

@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as Effect from "effect/Effect";
 import { AgentLive, AgentSession } from "../src/agent.ts";
-import { describeEvent, formatCandidates, formatTask } from "@kiwi/core/format.ts";
+import { describeEvent, formatTask } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { wellFormedEvent, type Event, type Message } from "@kiwi/core/protocol.ts";
-import { pickFor, taskCandidates } from "@kiwi/core/routing.ts";
+import { formatCandidates, pickFor, taskCandidates } from "@kiwi/core/routing.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { joinAgent, pairComputer, setupChannel } from "./owner.ts";
@@ -59,9 +59,9 @@ describe("who has a task's context", () => {
     const s = fold([parent, sibling, next, busy], roster);
     const ranked = taskCandidates(s, next.seq);
     expect(ranked).toEqual([
-      { name: "ana", score: 3, queue: 1, reasons: [`worked T${parent.seq}, where it came from`] },
-      { name: "bo", score: 2, queue: 1, reasons: [`worked T${sibling.seq}, also from T${parent.seq}`] },
-      { name: "cy", score: 0, queue: 1, reasons: [] },
+      { name: "ana", score: 3, queue: 1, reasons: [`worked T${parent.seq}, where it came from`], warm: false },
+      { name: "bo", score: 2, queue: 1, reasons: [`worked T${sibling.seq}, also from T${parent.seq}`], warm: false },
+      { name: "cy", score: 0, queue: 1, reasons: [], warm: false },
     ]);
     expect(pickFor(ranked)?.name).toBe("ana");
     expect(taskCandidates(s, parent.seq)[0]).toMatchObject({ name: "ana", reasons: [`worked T${parent.seq} before`] });
@@ -114,5 +114,46 @@ describe("--from on a live channel", () => {
     const { state } = await run(dev.state());
     expect(state.tasks.get(child)?.from).toBe(parent);
     expect(await run(dev.taskAdd("nowhere", { from: 9999 })).then(String, (e: unknown) => (e instanceof Error ? e.message : String(e)))).toBe("no task T9999 to come from");
+  });
+});
+
+describe("warm: work this session still holds", () => {
+  test("an agent whose context reset after it last touched the task ranks it cold; one that touched it since, warm and first", async () => {
+    const parent = await ev("jon", { op: "task.add", title: "Old part" });
+    const anaWorks = await ev("ana", { op: "task.claim", task: parent.seq });
+    seq++;
+    const said = await sign(ids.bo!, { v: 1 as const, id: crypto.randomUUID(), from: "bo", kind: "msg" as const, body: "I can take the rest", ts: seq, task: parent.seq });
+    const boWorks: Message = { ...said, seq, rts: seq, sigOk: await verify(said) };
+    const anaReset = await ev("ana", { op: "card", harness: "claude-code", fresh: anaWorks.ts + 1 });
+    const boReset = await ev("bo", { op: "card", harness: "claude-code", fresh: boWorks.ts - 1 });
+    const next = await ev("jon", { op: "task.add", title: "Next part", from: parent.seq });
+    const s = fold([parent, anaWorks, boWorks, anaReset, boReset, next], roster);
+    expect(s.tasks.get(parent.seq)?.touched).toEqual({ ana: anaWorks.ts, bo: boWorks.ts });
+    expect(s.members.get("ana")?.card?.fresh).toBe(anaWorks.ts + 1);
+    const ranked = taskCandidates(s, next.seq);
+    expect(ranked.slice(0, 2)).toEqual([
+      { name: "bo", score: 7, queue: 0, reasons: [`worked T${parent.seq}, where it came from (this session)`], warm: true },
+      { name: "ana", score: 3, queue: 1, reasons: [`worked T${parent.seq}, where it came from`], warm: false },
+    ]);
+  });
+
+  test("a message in a task's thread counts as touching it; a refused event, or one from someone not on it (the lead assigning), doesn't", async () => {
+    const t = await ev("jon", { op: "task.add", title: "Thread work" });
+    seq++;
+    const p = await sign(ids.cy!, { v: 1 as const, id: crypto.randomUUID(), from: "cy", kind: "msg" as const, body: "on it", ts: seq, task: t.seq });
+    const said: Message = { ...p, seq, rts: seq, sigOk: await verify(p) };
+    const refused = await ev("ana", { op: "task.update", task: t.seq, state: "done", verdict: "approved", round: 9 });
+    const assigned = await ev("bo", { op: "task.update", task: t.seq, owner: "cy", note: "yours" });
+    const s = fold([t, said, refused, assigned], roster);
+    expect(s.tasks.get(t.seq)?.touched).toEqual({ cy: said.ts });
+  });
+
+  test("the hook marks a fresh context on startup, clear and compact, not on resume", async () => {
+    const { freshAt } = await import("../src/hooks/answer.ts");
+    expect(freshAt({ source: "startup" }, 5)).toBe(5);
+    expect(freshAt({ source: "compact" }, 5)).toBe(5);
+    expect(freshAt({ source: "clear" }, 5)).toBe(5);
+    expect(freshAt({}, 5)).toBe(5);
+    expect(freshAt({ source: "resume" }, 5)).toBeNull();
   });
 });

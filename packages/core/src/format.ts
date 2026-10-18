@@ -4,7 +4,6 @@ import { loadJson, loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { inlineText, runsLine, type Runs } from "./membership.ts";
 import { GENERAL_ROOM, ignored, imageMarker } from "./protocol.ts";
 import type { Card, GithubNote, Message, OldTaskState, Reach, TaskState, Trust } from "./protocol.ts";
-import { BUSY_QUEUE, pickFor, type Candidate } from "./routing.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
 import { colorOf, humanOf, isPerson, issueOf, outsideRepos, taskId, type ChannelState, type Fact, type Lease, type ReviewRound, type Task } from "./state.ts";
 import { isWakeVia, wakeWords, type WakeVia } from "./wake.ts";
@@ -362,7 +361,7 @@ export function leadLine(state: ChannelState, me: string): string | null {
   const lead = state.lead;
   if (!lead) return null;
   if (lead === me)
-    return "you are the lead: keep the board tidy, hand out what nobody has taken to whoever has its context (kiwi task who T7 ranks them; say why when you pick someone else), and follow up on what stalls. Everyone still talks to people directly";
+    return "you are the lead: keep the board tidy, hand out what nobody has taken to whoever has its context, best one whose session still holds it (kiwi task who T7 ranks them; say why when you pick someone else), and follow up on what stalls. Everyone still talks to people directly";
   return `lead: ${lead}, who keeps the board. Talk to people directly; mention ${lead} for anything nobody owns`;
 }
 
@@ -526,19 +525,6 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now()): stri
     out.push("", "notes:");
     for (const n of t.notes) out.push(`  #${n.seq} ${inlineText(n.by, 40)}, ${ago(n.ts, now)}: ${markedText(n.text)}`);
   }
-  return out.join("\n");
-}
-
-export function formatCandidates(t: Task, candidates: readonly Candidate[]): string {
-  const out = [`who has ${taskId(t.id)}'s context (${inlineText(t.title, 120)}):`];
-  if (!candidates.length) out.push("  no agents here");
-  for (const c of candidates) {
-    const ahead = c.queue === 1 ? "1 task ahead" : `${c.queue} tasks ahead`;
-    const busy = c.score > 0 && c.queue >= BUSY_QUEUE ? " (busy: the lead decides)" : "";
-    out.push(`  ${inlineText(c.name, 40)} · ${c.reasons.length ? c.reasons.join("; ") : "no context"} · ${ahead}${busy}`);
-  }
-  const top = pickFor(candidates);
-  out.push(top ? `kiwi task assign ${taskId(t.id)} (no name) gives it to ${top.name}` : `nobody free has its context: name someone, kiwi task assign ${taskId(t.id)} NAME`);
   return out.join("\n");
 }
 

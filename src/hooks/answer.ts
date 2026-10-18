@@ -31,6 +31,7 @@ export function cursorStopFollowup(mc: string, unread: boolean): string | null {
 
 export interface HookInput {
   session_id?: string;
+  source?: string;
   cwd?: string;
   stop_hook_active?: boolean;
   hook_event_name?: string;
@@ -42,6 +43,10 @@ export interface HookInput {
   reason?: string;
   backgroundTasks?: unknown;
   model?: unknown;
+}
+
+export function freshAt(input: Pick<HookInput, "source">, now: number): number | null {
+  return input.source === "resume" ? null : now;
 }
 
 export interface BackgroundTask {
@@ -163,6 +168,8 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
   if (event === "prompt" || event === "stop") yield* Effect.ignoreCause(s.refreshWhere(detectWhere(input.cwd ?? process.cwd())));
 
   if (event === "session-start") {
+    const fresh = freshAt(input, Date.now());
+    if (fresh !== null) yield* Effect.ignoreCause(s.markFresh(detectWhere(input.cwd ?? process.cwd()), fresh));
     const { state } = yield* s.state();
     const seat = state.members.get(b.as);
     const listen = howMessagesReachYou(mc, wakeOn(loadConfig(), b.alias, b.as), who);

@@ -102,6 +102,7 @@ export interface Task {
   issue?: IssueRef;
   from?: number;
   areas?: string[];
+  touched?: Record<string, number>;
   workedBy: string[];
   rounds: ReviewRound[];
   source?: number;

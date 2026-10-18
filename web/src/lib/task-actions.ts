@@ -81,6 +81,13 @@ export function changeReviewer(t: Task, review: string, me: string): TaskSend {
   }
 }
 
+export function assignTask(t: Task, to: string, why: string): TaskSend {
+  return {
+    body: `${taskId(t.id)} is ${to}'s now: ${why}`,
+    opts: { kind: "event", ev: { op: "task.update", task: t.id, owner: to, note: `assigned to ${to}: ${why}` }, to: [to] },
+  }
+}
+
 export function closedDigest(state: ChannelState, messages: Message[], t: Task, how: { by: string; cancelled?: string }): TaskSend {
   const closed: Task = how.cancelled
     ? { ...t, state: "done", cancelled: true, notes: [...t.notes, { seq: 0, by: how.by, ts: 0, text: how.cancelled }] }
