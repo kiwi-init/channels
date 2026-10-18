@@ -1,0 +1,123 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css">
+<style>
+.needs { display: flex; gap: 12px; padding: 0 20px 16px; }
+.need { flex: 1; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.need .k { display: flex; align-items: center; gap: 6px; }
+.need p { font-size: 13px; line-height: 18px; color: var(--ink); }
+.need .row { display: flex; gap: 6px; margin-top: auto; }
+.lanes { flex: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 0 20px 20px; min-height: 0; }
+.lane { display: flex; flex-direction: column; gap: 10px; padding: 14px; min-height: 0; }
+.who { display: flex; gap: 10px; align-items: center; }
+.who img { width: 36px; height: 36px; }
+.now { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-radius: 10px; background: var(--field); }
+.now .mono { color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.task { padding: 10px 12px; border-radius: 10px; background: var(--wash); display: flex; flex-direction: column; gap: 7px; }
+.task .t { font-weight: 600; font-size: 13px; line-height: 18px; }
+.line { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.queue { display: flex; flex-direction: column; gap: 4px; }
+.queue div { display: flex; gap: 8px; color: var(--ink-2); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.queue span { color: var(--ink-3); font-variant-numeric: tabular-nums; width: 34px; flex: none; }
+.feed { margin-top: auto; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 10px; }
+.feed div { display: flex; gap: 8px; font-size: 12px; color: var(--ink-2); line-height: 16px; }
+.feed time { color: var(--ink-3); width: 34px; flex: none; font-variant-numeric: tabular-nums; }
+.drawer { width: 320px; flex: none; background: var(--canvas); box-shadow: -1px 0 0 var(--line); display: flex; flex-direction: column; padding: 14px 0 0; }
+.drawer h3 { font: 600 13px inherit; padding: 0 16px 10px; display: flex; justify-content: space-between; }
+.msgs { flex: 1; padding: 0 16px; display: flex; flex-direction: column; gap: 10px; justify-content: flex-end; }
+.m { display: flex; gap: 8px; align-items: flex-end; }
+.m img { width: 20px; height: 20px; }
+.b { background: #1f1f21; border-radius: 18px; padding: 7px 12px; font-size: 13px; line-height: 18px; max-width: 260px; }
+.me { justify-content: flex-end; } .me .b { background: var(--accent); color: #fff; }
+.compose { margin: 12px; height: 40px; border-radius: 20px; background: var(--field); color: var(--ink-3); display: flex; align-items: center; padding: 0 14px; font-size: 13px; }
+</style></head>
+<body>
+<div class="rail"><div class="ch on"><img src="../../assets/avatars/robot-03-red.svg"></div><div class="ch"><img src="../../assets/avatars/robot-06-sky.svg"></div><div class="sp"></div><div class="me">J</div></div>
+<div class="main">
+  <div class="top">
+    <div class="title">channels-dev</div>
+    <span class="chip"><span class="dot doing"></span><b>3</b> of 4 agents working</span>
+    <span class="chip"><b>3</b> PRs open</span>
+    <span class="chip"><span class="dot alert"></span><b>1</b> CI red</span>
+    <span class="chip"><b>13</b> tasks · <b>4</b> in progress</span>
+    <span style="flex:1"></span>
+    <span class="chip">⌘K</span>
+  </div>
+  <div class="needs">
+    <div class="card need">
+      <div class="k"><span class="dot decide"></span><span class="tag" style="color:var(--decide)">Decision</span><span class="meta">· T596 · from claude</span></div>
+      <p>Who signs the Linux updates (SHA256SUMS)?</p>
+      <div class="row"><button class="btn primary">A secret in CI</button><button class="btn">My own key</button></div>
+    </div>
+    <div class="card need">
+      <div class="k"><span class="dot doing"></span><span class="tag" style="color:var(--doing)">Review</span><span class="meta">· T600 · PR #369</span></div>
+      <p>Glass avatars, no background, no ring in chat</p>
+      <div class="row"><button class="btn primary">See the diff</button><span class="checks" style="align-self:center;margin-left:4px"><i></i><i></i><i></i><i class="d"></i><i class="p"></i><i class="p"></i><i class="p"></i></span></div>
+    </div>
+    <div class="card need">
+      <div class="k"><span class="dot alert"></span><span class="tag" style="color:var(--alert)">CI red</span><span class="meta">· T430 · PR #367</span></div>
+      <p>ui smoke failed on the inline quotes: the flake T489 fixes</p>
+      <div class="row"><button class="btn">Open the log</button><button class="btn">Re-run</button></div>
+    </div>
+  </div>
+  <div class="lanes">
+    <div class="card lane">
+      <div class="who"><img src="../../assets/avatars/robot-07-mint.svg"><div><div class="semi">claude-one</div><div class="meta">gallant-wren · opus 5.5</div></div></div>
+      <div class="now"><span class="dot doing"></span><span class="mono">waiting on ci · gh pr checks 368</span></div>
+      <div class="task">
+        <div class="meta">T489 · in progress · 41 min</div>
+        <div class="t">Flaky UI smoke: a task's message showed in main</div>
+        <div class="line"><span class="pr">PR #368 · <span class="add">+18</span> <span class="del">−9</span></span><span class="checks"><i></i><i></i><i></i><i></i><i class="d"></i><i class="p"></i><i class="p"></i></span></div>
+      </div>
+      <div class="queue"><div class="meta" style="color:var(--ink-3)">Up next</div><div><span>T581</span>Copy buttons do nothing</div><div><span>T51</span>CI red becomes a task</div></div>
+      <div class="feed"><div><time>13:12</time>opened PR #368</div><div><time>13:05</time>found the race: two reads of the page</div><div><time>12:40</time>started T489</div></div>
+    </div>
+    <div class="card lane">
+      <div class="who"><img src="../../assets/avatars/robot-01-blue.svg"><div><div class="semi">claude-two</div><div class="meta">warm-gazelle · opus 5.5</div></div></div>
+      <div class="now"><span class="dot doing"></span><span class="mono">bun test web/src/lib/voice</span></div>
+      <div class="task">
+        <div class="meta">T12 · in progress · 6 min</div>
+        <div class="t">Voice: Grok Voice Realtime adapter</div>
+        <div class="line"><span class="pr">no PR yet · 3 commits</span></div>
+      </div>
+      <div class="task">
+        <div class="meta">T430 · waiting on CI</div>
+        <div class="t">--re threads become inline quotes</div>
+        <div class="line"><span class="pr">PR #367 · <span class="add">+212</span> <span class="del">−40</span></span><span class="checks"><i></i><i></i><i></i><i class="r"></i><i></i><i></i><i class="r"></i></span></div>
+      </div>
+      <div class="queue"><div class="meta">Up next</div><div><span>T14</span>Voice: inject live events</div><div><span>T15</span>Voice: Talk on the shell</div><div><span>T16</span>Voice: spoken verbs</div></div>
+      <div class="feed"><div><time>13:10</time>ci-ok red on #367 (smoke flake)</div><div><time>13:02</time>closed T11: already on main</div></div>
+    </div>
+    <div class="card lane">
+      <div class="who"><img src="../../assets/avatars/robot-02-purple.svg"><div><div class="semi">claude-helper</div><div class="meta">warm-marten · opus 5.5</div></div></div>
+      <div class="now"><span class="dot live"></span><span class="mono">thinking</span></div>
+      <div class="task">
+        <div class="meta">T453 · in progress · 4 min</div>
+        <div class="t">GitHub: issues ↔ tasks</div>
+        <div class="line"><span class="pr">no PR yet</span></div>
+      </div>
+      <div class="queue"><div class="meta">Up next</div><div><span>T13</span>Voice: fast-tier tools</div></div>
+      <div class="feed"><div><time>13:08</time>issue sweep: closed 6, #203 → T596</div><div><time>12:58</time>joined</div></div>
+    </div>
+    <div class="card lane">
+      <div class="who"><img src="../../assets/avatars/robot-03-red.svg"><div><div class="semi">claude <span class="meta">lead</span></div><div class="meta">puma-curious · opus 5.5</div></div></div>
+      <div class="now"><span class="dot doing"></span><span class="mono">drawing layout mockups</span></div>
+      <div class="task">
+        <div class="meta">T600 · in review</div>
+        <div class="t">Glass avatars</div>
+        <div class="line"><span class="pr">PR #369 · <span class="add">+776</span> <span class="del">−16</span></span><span class="checks"><i></i><i></i><i></i><i class="d"></i><i class="p"></i><i class="p"></i><i class="p"></i></span></div>
+      </div>
+      <div class="queue"><div class="meta">Watching</div><div><span>#368</span>merge on green</div><div><span>#367</span>merge on green</div></div>
+      <div class="feed"><div><time>13:14</time>assigned T12 to claude-two</div><div><time>13:11</time>T203 → T596, asked you</div></div>
+    </div>
+  </div>
+</div>
+<div class="drawer">
+  <h3>Conversation <span class="meta">#general</span></h3>
+  <div class="msgs">
+    <div class="m me"><div class="b">other more complex tasks that need my approval for design…</div></div>
+    <div class="m"><img src="../../assets/avatars/robot-03-red.svg"><div class="b">Vou montar duas direções de layout como mockup.</div></div>
+    <div class="m"><img src="../../assets/avatars/robot-07-mint.svg"><div class="b">PR #368 is up: one waitForFunction until the page settles.</div></div>
+  </div>
+  <div class="compose">Message the channel…</div>
+</div>
+</body></html>
