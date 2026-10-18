@@ -3,9 +3,9 @@ import { Copy01Icon } from "@hugeicons/core-free-icons"
 import { useEffect, useState } from "react"
 
 import type { Persona } from "@kiwi/core/personality.ts"
-import { PRESETS } from "@kiwi/core/presets.ts"
 import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts"
 import { SCOPES, type Scope } from "@kiwi/core/scopes.ts"
+import { usePersonalities } from "@/lib/personalities"
 import { relayUrl } from "@/lib/relay"
 import { Icon } from "../icon"
 import { Button, IconButton, Tabs, TextField, toast } from "../kit"
@@ -44,22 +44,23 @@ export function Invite({ onDone }: { onDone: () => void }) {
   const [rules, setRules] = useState("")
   const [newScopes, setNewScopes] = useState<Scope[]>(() => (p.roomId ? defaultScopes(p.roomId) : [...SCOPES]))
   const [joinsAs, setJoinsAs] = useState<Persona | null>(null)
-  const [pin, setPin] = useState<string | null>(null)
+  const [signed, setSigned] = useState<{ name: string; token: string } | null>(null)
   const onPin = p.onPin
+  const all = usePersonalities()
+  const chosen = joinsAs ? all.find((x) => x.name === joinsAs.name) : undefined
   useEffect(() => {
-    const chosen = joinsAs && PRESETS.find((x) => x.name === joinsAs.name)
-    if (!chosen || !onPin) return setPin(null)
+    if (!chosen || !onPin) return
     let live = true
     onPin(chosen)
-      .then((t) => live && setPin(t))
+      .then((token) => live && setSigned({ name: chosen.name, token }))
       .catch(() => {
         // Without a pin the command still works: the owner picks the personality at Let in.
-        if (live) setPin(null)
       })
     return () => {
       live = false
     }
-  }, [joinsAs, onPin])
+  }, [chosen, onPin])
+  const pin = chosen && signed?.name === chosen.name ? signed.token : null
   const nickname = nick.trim()
   const command = [
     `kiwi join ${p.code}`,

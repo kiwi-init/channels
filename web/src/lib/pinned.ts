@@ -2,18 +2,23 @@ import { useEffect, useState } from "react"
 
 import type { Persona } from "@kiwi/core/personality.ts"
 import { pinned, type Pin } from "@kiwi/core/pin.ts"
+import { useSecrets } from "./secrets"
 
 export function usePinned(pin: Pin | undefined): Persona | null | undefined {
-  const [persona, setPersona] = useState<Persona | null | undefined>(undefined)
+  const [got, setGot] = useState<{ key: string; persona: Persona | null } | null>(null)
+  const kept = useSecrets().personalities
   const id = pin?.id
   const hash = pin?.hash
+  const key = id && hash ? `${id}:${hash}` : null
   useEffect(() => {
-    if (!id || !hash) return setPersona(undefined)
+    if (!key || !id || !hash) return
     let live = true
-    void import("@kiwi/core/presets.ts").then(({ PRESETS }) => pinned({ id, hash }, PRESETS)).then((p) => live && setPersona(p))
+    void Promise.all([import("@kiwi/core/presets.ts"), import("@kiwi/core/personalities.ts")])
+      .then(([{ PRESETS }, { cleanPersonalities }]) => pinned({ id, hash }, [...PRESETS, ...cleanPersonalities(kept)]))
+      .then((persona) => live && setGot({ key, persona }))
     return () => {
       live = false
     }
-  }, [id, hash])
-  return persona
+  }, [key, id, hash, kept])
+  return key && got?.key === key ? got.persona : undefined
 }

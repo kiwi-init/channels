@@ -279,6 +279,22 @@ describe("scopes at the relay", () => {
     await expect(ownerCh.updatePersona(changed, { ...builder, capabilities: ["root" as Persona["capabilities"][number]] }, seq)).rejects.toThrow(/isn't one a record can carry/);
   });
 
+  test("a personality pinned in the invite comes back on the request, checked against the owner's signature", async () => {
+    const reviewer = PRESETS.find((p) => p.id === "reviewer")!;
+    const token = await ownerCh.pinPersona(reviewer);
+    const id = await generateIdentity("pinned");
+    const ask = await Channel.requestJoin(relay, code, id, { name: "pinned" }, { pin: token });
+    const plain = await generateIdentity("plain");
+    const askPlain = await Channel.requestJoin(relay, code, plain, { name: "plain" }, { pin: "bm90IGEgcGlu" });
+    const reqs = await checked(ownerCh, relay, code, [
+      { id, requestId: ask.requestId },
+      { id: plain, requestId: askPlain.requestId },
+    ]);
+    expect(reqs.find((r) => r.pk === id.pk)?.pin).toMatchObject({ id: "reviewer", name: "Reviewer" });
+    expect(reqs.find((r) => r.pk === plain.pk)?.pin).toBeUndefined();
+    for (const r of reqs.filter((x) => x.pk === id.pk || x.pk === plain.pk)) await ownerCh.deny(r.id);
+  });
+
   test("an agent the owner creates the channel with, read-only, can't post from the first message", async () => {
     const agent = await generateIdentity("quiet");
     const made = await Channel.create(relay, owner, { name: "human" }, [{ ...agent, info: { name: "quiet", scopes: [] } }]);
