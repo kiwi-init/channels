@@ -162,6 +162,15 @@ From `design-tokens.ts`:
   shown, the channel's status (working, merged today, needs you), and the
   Tasks / Agents / Conversation tabs. A view opens Tasks; a conversation
   opens Conversation. The approved mockups are in `docs/ui/`.
+- Tasks, the tab a channel opens on: Needs you's rows first, then the
+  board in groups (In progress with what is in review, Up next, Done
+  today; a view shows only its own). A row is two lines on the canvas,
+  split from the next by `line`: the owner's face, the title in `body`, and
+  under it the task id, the owner and what the agent is doing now (in
+  `doing` with a pulse while it works) or the task's state; then its PR
+  (number, a 48px diff bar in `live` and `alert`, the additions), its
+  checks in a word and the time, short. The PR and checks columns drop on
+  narrow windows.
 - On a wide window the list is an 80px icon rail, as Grok's
   collapsed one: the Mac traffic lights on its header row, each channel
   as its 40px tile in a 56px `card`-round cell (`pick` when open), a blue

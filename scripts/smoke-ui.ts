@@ -141,12 +141,16 @@ async function run(part: Part): Promise<string[]> {
     log(`ok  ${at}`);
   };
 
+  const toTab = (name: "Tasks" | "Agents" | "Conversation") => page.getByRole("navigation", { name: "Views of the channel" }).getByRole("button", { name, exact: true }).click();
+
   const createChannel = async () => {
     at = "create a channel";
     await newChannel.click();
     await page.getByRole("dialog").getByRole("textbox").fill("smoke");
     await page.getByRole("button", { name: "Create channel" }).click();
     await page.waitForURL(/#mc2-/);
+    await page.getByRole("navigation", { name: "Views of the channel" }).getByRole("button", { name: "Tasks", exact: true }).and(page.locator("[aria-current=page]")).waitFor();
+    await toTab("Conversation");
     await page.getByRole("textbox", { name: "Message" }).waitFor();
   };
 
@@ -276,6 +280,7 @@ async function run(part: Part): Promise<string[]> {
       page.on("websocket", onWs);
     });
     await page.reload();
+    await toTab("Conversation");
     await page.getByText("smoke test", { exact: true }).first().waitFor();
     const since = await sinceOnReload;
     if (!(Number(since) > 0)) throw new Error(`reload streamed since ${since}; expected only newer seqs`);
@@ -290,7 +295,6 @@ async function run(part: Part): Promise<string[]> {
     await send("smoke test");
 
     const sidebar = page.getByRole("complementary", { name: "Channel" });
-    const toTab = (name: "Tasks" | "Agents" | "Conversation") => page.getByRole("navigation", { name: "Views of the channel" }).getByRole("button", { name, exact: true }).click();
     const addAgent = page.getByRole("region", { name: "Add an agent" });
     const channel = page.url();
     const code = new URL(channel).hash.slice(1);
@@ -322,6 +326,7 @@ async function run(part: Part): Promise<string[]> {
 
     at = "a second agent";
     await page.goto(channel);
+    await toTab("Conversation");
     await page.getByText("smoke test", { exact: true }).first().waitFor();
     const helper = kiwi(["join", code, "smoke", "--relay", BASE, "--as", "helper"]);
     await needsOpen();

@@ -6,6 +6,7 @@ import type { ChannelState } from "@kiwi/core/state.ts"
 import { bridge } from "@/lib/secrets"
 import { cx } from "@/lib/utils"
 import type { Talk, TalkChannel, TalkView } from "@/lib/voice/talk"
+import type { ToolCtx } from "@/lib/voice/tools"
 import { Icon } from "./icon"
 import { toast } from "./kit"
 
@@ -62,12 +63,15 @@ export function TalkButton({ channel, disabled }: { channel: TalkChannel; disabl
   )
 }
 
-export function TalkBar({ messages, state, nameOf, me }: { messages: Message[]; state: ChannelState; nameOf: (name: string) => string; me: string }) {
+export function TalkBar({ messages, state, nameOf, me, tools }: { messages: Message[]; state: ChannelState; nameOf: (name: string) => string; me: string; tools?: ToolCtx }) {
   const v = useSyncExternalStore(subscribe, snapshot, snapshot)
   useEffect(() => {
     if (v.status === "off" || !loading) return
-    void loading.then((t) => t.seen(messages, state))
-  }, [messages, state, v.status])
+    void loading.then((t) => {
+      if (tools) t.use(tools)
+      t.seen(messages, state)
+    })
+  }, [messages, state, tools, v.status])
   if (v.status === "off") return null
   const caption = v.saying ? v.saying : v.heard ? `${nameOf(me)}: ${v.heard}` : v.status === "connecting" ? "Connecting to Grok Voice…" : "Listening"
   return (

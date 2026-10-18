@@ -14,7 +14,7 @@ import { approveTask, closedDigest, reviewsFor, sendBackTask, type TaskSend } fr
 import { useIcons, useLiveIcon } from "@/lib/icons"
 import { memberName } from "@/lib/format"
 import { dmPlace, MAIN, placeFromKey, placeKey, sendFrom, type Place } from "@/lib/threads"
-import { inView, mergedSince, startOfDay, viewCounts, VIEWS, type Tab, type View } from "@/lib/views"
+import { mergedSince, startOfDay, viewCounts, VIEWS, type Tab, type View } from "@/lib/views"
 import { cx } from "@/lib/utils"
 import { useHeight } from "@/hooks/use-height"
 import { Composer } from "../composer"
@@ -26,10 +26,11 @@ import { Icon } from "../icon"
 import { Button, Spinner, errorText, toast } from "../kit"
 import { AgentLanes, CompactBlock, ProposalCard, TalkBar, TalkButton } from "../lazy"
 import { bridge } from "@/lib/secrets"
+import type { ToolCtx } from "@/lib/voice/tools"
 import { GifPicker } from "../gif-picker"
 import { isAgent } from "../message"
 import { NeedsYou } from "../needs-you"
-import { Tasks } from "../tasks"
+import { TasksView } from "../tasks-view"
 import { ChannelSidebar, type Conversation as ConversationRow } from "./channel-sidebar"
 import { Header } from "./header"
 import { InfoSide, PictureSide, TasksSide, ThreadSide } from "./side-panels"
@@ -57,7 +58,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const [here, setHere] = useState<string>("main")
   const [cardRoom, setCardRoom] = useState<string>(GENERAL_ROOM)
   const [side, setSide] = useState<Side>(null)
-  const [tab, setTab] = useState<Tab>("conversation")
+  const [tab, setTab] = useState<Tab>("tasks")
   const [view, setView] = useState<View>("everything")
   const [earlier, setEarlier] = useState(false)
   const sideRoot = side?.kind === "thread" ? side.root : null
@@ -181,6 +182,10 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     [send, nameOf]
   )
   const handlers = useControlsHandlers({ live, member, onGone })
+  const voiceTools = useMemo<ToolCtx>(
+    () => ({ state, me, channel: title, isOwner, online: new Set(online.keys()), requests: isOwner ? requests : [], nameOf, send, hold: handlers.onHold }),
+    [state, me, title, isOwner, online, requests, nameOf, send, handlers.onHold]
+  )
   const hold = handlers.onHold
   const commands = useMemo<Command[]>(
     () => [
@@ -355,6 +360,24 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     go(placeFromKey(key) ?? MAIN)
   }
   const roomName = state.rooms.get(cardRoom)?.name ?? GENERAL_ROOM
+  const needsYou = (
+    <NeedsYou
+      now={now}
+      roomId={roomId}
+      me={me}
+      escalations={escalations}
+      questions={questions}
+      reviews={reviews}
+      nameOf={nameOf}
+      agentOf={(name) => isAgent(state.members.get(name))}
+      onReply={async (m, text) => void (await send(text, { to: [m.from], re: [m.seq], kind: "msg" }))}
+      onApproveTask={(t: Task) => sendTask(approveTask(t), closedDigest(state, messages, t, { by: me }))}
+      onSendBack={(t: Task, why: string) => sendTask(sendBackTask(t, why))}
+      onOpenTask={openTask}
+      onJump={jump}
+    />
+  )
+  const needsHere = escalations.length + questions.length + reviews.length + (isOwner ? requests.length : 0)
   const heading = tab === "tasks" ? (VIEWS.find(([v]) => v === view)?.[1] ?? "Tasks") : tab === "agents" ? "Agents" : place.kind === "dm" ? placeTitle : rooms.length > 1 ? `# ${roomName}` : title
 
   return (
@@ -421,15 +444,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             <div className="absolute inset-0 overflow-y-auto pt-[calc(var(--head)+8px)]">
               <div className={cx("mx-auto w-full px-2 md:px-4", tab === "tasks" && "max-w-[960px]")}>
                 {tab === "tasks" ? (
-                  <Tasks
-                    key={view}
-                    state={state}
-                    now={now}
-                    nameOf={nameOf}
-                    only={(t) => inView(t, view, now, waiting)}
-                    unreadIn={(id) => unreadIn(placeKey({ kind: "task", task: id }))}
-                    onOpen={openTask}
-                  />
+                  <TasksView state={state} now={now} view={view} agents={agentsNow} needs={needsHere ? needsYou : null} onOpen={openTask} />
                 ) : agentsNow.length ? (
                   <AgentLanes agents={agentsNow} state={state} messages={messages} now={now} nameOf={nameOf} onOpenTask={openTask} />
                 ) : (
@@ -441,23 +456,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             <>
               <div ref={scroller} className="absolute inset-0 overflow-y-auto" onScroll={onScroll}>
                 <div className="relative mx-auto w-full max-w-[792px] px-4 pt-[calc(var(--head)+8px)] pb-[calc(var(--foot)+16px)]">
-                  {hereKey === "main" && (
-                    <NeedsYou
-                      now={now}
-                      roomId={roomId}
-                      me={me}
-                      escalations={escalations}
-                      questions={questions}
-                      reviews={reviews}
-                      nameOf={nameOf}
-                      agentOf={(name) => isAgent(state.members.get(name))}
-                      onReply={async (m, text) => void (await send(text, { to: [m.from], re: [m.seq], kind: "msg" }))}
-                      onApproveTask={(t: Task) => sendTask(approveTask(t), closedDigest(state, messages, t, { by: me }))}
-                      onSendBack={(t: Task, why: string) => sendTask(sendBackTask(t, why))}
-                      onOpenTask={openTask}
-                      onJump={jump}
-                    />
-                  )}
+                  {hereKey === "main" && needsYou}
                   {hereKey === "main" && state.rooms.size > 1 && !search && <RoomChips rooms={[...state.rooms.values()]} value={cardRoom} onChange={setCardRoom} />}
                   {connection === "connecting" && messages.length === 0 ? (
                     <Centered>
@@ -520,8 +519,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                       talk={
                         place.kind === "main" && state.voice && typeof bridge()?.voiceToken === "function"
                           ? {
-                              button: <TalkButton channel={{ roomId, channel: title, me, nameOf, state, messages }} disabled={connection === "connecting"} />,
-                              bar: <TalkBar messages={messages} state={state} nameOf={nameOf} me={me} />,
+                              button: <TalkButton channel={{ roomId, channel: title, me, nameOf, state, messages, tools: voiceTools }} disabled={connection === "connecting"} />,
+                              bar: <TalkBar messages={messages} state={state} nameOf={nameOf} me={me} tools={voiceTools} />,
                             }
                           : undefined
                       }

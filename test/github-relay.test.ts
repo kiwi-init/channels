@@ -5,6 +5,9 @@ import { join } from "node:path";
 import { signRequest } from "@kiwi/core/auth.ts";
 import { Channel } from "@kiwi/core/client.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
+import { cleanGithubNote } from "@kiwi/core/protocol.ts";
+import { prKey } from "@kiwi/core/state.ts";
+import { applyGithub, type GithubState } from "@kiwi/core/state/github.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { githubItem, githubLinks, githubRepos, GITHUB_WEBHOOK_PATH } from "../src/relay/github.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
@@ -60,6 +63,9 @@ const pr = (repo: string) => ({
     state: "closed",
     merged: true,
     head: { ref: "T39", sha: "a".repeat(40) },
+    additions: 214,
+    deletions: 12,
+    changed_files: 9,
     body: "x".repeat(5000),
   },
 });
@@ -84,6 +90,9 @@ describe("GitHub webhooks into a channel's queue", () => {
       url: "https://github.com/ojow/channels/pull/331",
       state: "closed",
       merged: true,
+      additions: 214,
+      deletions: 12,
+      files: 9,
       branch: "T39",
       sha: "a".repeat(40),
       by: "octocat",
@@ -154,6 +163,16 @@ describe("what's kept of an event", () => {
     const wf = { action: "completed", repository: { full_name: "o/r" }, workflow_run: { name: "CI", status: "completed", conclusion: "success", head_sha: "d".repeat(40), head_branch: "main" } };
     expect(githubItem("workflow_run", wf, 6)).toMatchObject({ event: "workflow_run", name: "CI", conclusion: "success", branch: "main" });
     expect(githubItem("pull_request", { repository: { full_name: "not-a-repo" } }, 1)).toBeNull();
+  });
+
+  test("a PR's size rides along: a count of zero or more, kept on the PR the channel folds", () => {
+    const note = cleanGithubNote({ event: "pull_request", repo: "o/r", number: 7, state: "open", additions: 30, deletions: 0, files: 2, at: 1 });
+    expect(note).toMatchObject({ additions: 30, deletions: 0, files: 2 });
+    expect(cleanGithubNote({ event: "pull_request", repo: "o/r", additions: -1, at: 1 })).toBeNull();
+    expect(cleanGithubNote({ event: "pull_request", repo: "o/r", deletions: 1.5, at: 1 })).toBeNull();
+    const g: GithubState = { prs: new Map(), checks: new Map(), issues: new Map() };
+    applyGithub(g, [note!], 5);
+    expect(g.prs.get(prKey("o/r", 7))).toMatchObject({ additions: 30, deletions: 0, files: 2 });
   });
 
   test("repos are owner/name, lowercased, at most 20; links say what was added and removed", () => {

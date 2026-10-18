@@ -34,7 +34,7 @@ export interface AgentNow {
 }
 
 /** What it's doing now, in a few words: live from its harness when it says, else from its tasks. */
-function doingNow(a: AgentNow): { text: string; busy: boolean } | null {
+export function doingNow(a: AgentNow): { text: string; busy: boolean } | null {
   const act = a.here ? a.activity : undefined
   if (act?.state === "working") return { text: act.tool ? `Running ${act.tool}` : "Thinking", busy: true }
   if (act?.state === "waiting") return { text: "Waiting for a person", busy: false }
