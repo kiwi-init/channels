@@ -23,6 +23,7 @@ import type {
   SignInResult,
   GithubStatus,
   StoreSnapshot,
+  UpdateCheckView,
   UpdateView,
   VoiceAuth,
 } from "./bridge.ts";
@@ -113,6 +114,7 @@ const kiwi: KiwiBridge = {
   getUpdate: () => ipcRenderer.invoke("kiwi:update-state") as Promise<UpdateView | null>,
   onUpdate: (cb) => on("kiwi:update", cb),
   installUpdate: () => ipcRenderer.invoke("kiwi:update-install") as Promise<void>,
+  checkUpdate: () => ipcRenderer.invoke("kiwi:update-check") as Promise<UpdateCheckView>,
   notify: (title: string, body: string) => ipcRenderer.invoke("kiwi:notify", title, body) as Promise<void>,
   openExternal: (url: string) => ipcRenderer.invoke("kiwi:open-external", url) as Promise<void>,
   getDeepLink: () => ipcRenderer.invoke("kiwi:deep-link") as Promise<string | null>,

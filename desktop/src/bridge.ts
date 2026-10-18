@@ -270,6 +270,7 @@ export interface KiwiBridge {
   onUpdate(cb: (u: UpdateView) => void): () => void;
   /** Restart into the downloaded update. */
   installUpdate(): Promise<void>;
+  checkUpdate(): Promise<UpdateCheckView>;
   notify(title: string, body: string): Promise<void>;
   openExternal(url: string): Promise<void>;
   /** The kiwi://join/<code> link waiting to be opened, if any; taking it clears it. */
@@ -288,6 +289,8 @@ export interface UpdateView {
   /** The release's page. */
   url: string;
 }
+
+export type UpdateCheckView = UpdateView | { state: "current"; version: string } | { state: "failed" };
 
 declare global {
   interface Window {

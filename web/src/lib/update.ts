@@ -3,9 +3,9 @@
 
 import { useEffect, useState } from "react"
 
-import { bridge, type UpdateView } from "./secrets"
+import { bridge, type UpdateCheckView, type UpdateView } from "./secrets"
 
-export type { UpdateView }
+export type { UpdateCheckView, UpdateView }
 
 export function useUpdate(): UpdateView | null {
   const [u, setU] = useState<UpdateView | null>(null)

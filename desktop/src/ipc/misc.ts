@@ -3,12 +3,13 @@ import { ipcMain, Notification, shell } from "electron";
 import { takeDeepLink } from "../deep-links.ts";
 import { externalUrl } from "../guard.ts";
 import { openInBrowser } from "../open.ts";
-import { updateState } from "../updater.ts";
+import { checkForUpdate, updateState } from "../updater.ts";
 import { restartToUpdate, showWindow } from "../window.ts";
 
 export function wireMiscIpc(): void {
   ipcMain.handle("kiwi:update-state", () => updateState());
   ipcMain.handle("kiwi:update-install", () => restartToUpdate());
+  ipcMain.handle("kiwi:update-check", () => checkForUpdate());
   const shown = new Set<Notification>();
   ipcMain.handle("kiwi:notify", (_e, title: string, body: string) => {
     const n = new Notification({ title, body });

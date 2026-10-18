@@ -27,22 +27,26 @@ export interface UpdateState {
   url: string;
 }
 
+export type UpdateCheck = UpdateState | { state: "current"; version: string } | { state: "failed" };
+
 let staged: { version: string; path: string } | null = null;
 let current: UpdateState | null = null;
 let notify: (s: UpdateState) => void = () => {};
+let running: Promise<UpdateCheck> | null = null;
 
 /** The Channels.app this runs from (…/Channels.app/Contents/MacOS/Channels). */
 const macBundle = () => path.resolve(app.getPath("exe"), "..", "..", "..");
 
-async function check(): Promise<void> {
-  if (staged) return;
+async function check(): Promise<UpdateCheck> {
+  if (staged && current) return current;
   const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { accept: "application/vnd.github+json", "user-agent": "channels-desktop" } });
-  if (!res.ok) return;
+  if (!res.ok) return { state: "failed" };
   const rel = (await res.json()) as { tag_name?: string; html_url?: string; prerelease?: boolean; draft?: boolean; assets?: { name: string; browser_download_url: string }[] };
   const version = rel.tag_name?.replace(/^v/, "");
-  if (!version || rel.prerelease || rel.draft || compareVersions(version, app.getVersion()) <= 0) return;
+  if (!version) return { state: "failed" };
+  if (rel.prerelease || rel.draft || compareVersions(version, app.getVersion()) <= 0) return { state: "current", version: app.getVersion() };
   const url = rel.html_url ?? `https://github.com/${REPO}/releases/latest`;
-  const name = swapAsset(version, process.platform, process.arch);
+  const name = app.isPackaged ? swapAsset(version, process.platform, process.arch) : null;
   const asset = name ? rel.assets?.find((a) => a.name === name) : undefined;
   const sums = rel.assets?.find((a) => a.name === "SHA256SUMS");
   if (!asset || !sums) return set({ version, state: "available", url });
@@ -58,6 +62,7 @@ async function check(): Promise<void> {
     if (!staged) fs.rmSync(dir, { recursive: true, force: true });
     set({ version, state: staged ? "ready" : "available", url });
   }
+  return current ?? { state: "failed" };
 }
 
 /** The release's file for this install, checked against its SHA256SUMS and unpacked in `dir`: what goes in place, or null. */
@@ -86,9 +91,10 @@ async function download(assetUrl: string, sumsUrl: string, name: string, dir: st
   return file;
 }
 
-function set(s: UpdateState): void {
+function set(s: UpdateState): UpdateState {
   current = s;
   notify(s);
+  return s;
 }
 
 function run(cmd: string, args: string[]): Promise<void> {
@@ -146,7 +152,7 @@ export function applyUpdate(relaunch: boolean): boolean {
 export function startUpdates(onChange: (s: UpdateState) => void): void {
   notify = onChange;
   if (!app.isPackaged) return;
-  const tick = () => void check().catch(() => {});
+  const tick = () => void checkForUpdate();
   setTimeout(tick, 20_000);
   setInterval(tick, EVERY_MS);
   // Whatever's ready goes in when the app quits on its own terms.
@@ -154,3 +160,10 @@ export function startUpdates(onChange: (s: UpdateState) => void): void {
 }
 
 export const updateState = (): UpdateState | null => current;
+
+export function checkForUpdate(): Promise<UpdateCheck> {
+  running ??= check()
+    .catch((): UpdateCheck => ({ state: "failed" }))
+    .finally(() => (running = null));
+  return running;
+}
