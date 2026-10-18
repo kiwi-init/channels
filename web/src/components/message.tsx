@@ -405,10 +405,10 @@ export const Bubble = memo(function Bubble({
             >
               <Markdown refs={refs}>{m.body}</Markdown>
               {m.esc && m.choices?.length ? (
-                onChoose ? (
-                  <ul aria-label="Options" className="mt-2 flex flex-col gap-1.5">
-                    {m.choices.map((c) => (
-                      <li key={c}>
+                <ul aria-label="Options" className={onChoose ? "mt-2 flex flex-col gap-1.5" : "mt-1.5 list-disc pl-5 text-ui"}>
+                  {m.choices.map((c) => (
+                    <li key={c}>
+                      {onChoose ? (
                         <button
                           type="button"
                           onClick={() => onChoose(c)}
@@ -416,16 +416,12 @@ export const Bubble = memo(function Bubble({
                         >
                           {c}
                         </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <ul aria-label="Options" className="mt-1.5 list-disc pl-5 text-ui">
-                    {m.choices.map((c) => (
-                      <li key={c}>{c}</li>
-                    ))}
-                  </ul>
-                )
+                      ) : (
+                        c
+                      )}
+                    </li>
+                  ))}
+                </ul>
               ) : null}
               {last && <Tail mine={mine} />}
             </div>

@@ -10,7 +10,7 @@ import { gifFile, type Gif } from "@/lib/gifs"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 import { GifPicker } from "./gif-picker"
-import { ComposerQuestion } from "./composer-question"
+import { ComposerQuestion } from "./lazy"
 import { Monogram, errorText, toast } from "./kit"
 
 const MENTION = /(^|\s)@([\p{L}\p{N}_.-]*)$/u
