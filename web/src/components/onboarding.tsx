@@ -143,7 +143,6 @@ function AskToJoin({ code, listed, onAsked, onCancel }: { code: string; listed?:
   // People join under their own name, from their person key.
   const suggested = person ? handleFor(person.name) : ""
   const [name, setName] = useState(suggested)
-  const [role, setRole] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const valid = NAME_RE.test(name.trim()) && name.trim() !== "human"
@@ -185,7 +184,7 @@ function AskToJoin({ code, listed, onAsked, onCancel }: { code: string; listed?:
         setBusy(true)
         setError(null)
         try {
-          onAsked(await askToJoin(code, name.trim(), role.trim() || undefined))
+          onAsked(await askToJoin(code, name.trim()))
         } catch (err) {
           setError(errorText(err))
         } finally {
@@ -198,10 +197,6 @@ function AskToJoin({ code, listed, onAsked, onCancel }: { code: string; listed?:
         Your name in the channel
       </label>
       <TextField id="ask-name" className="mt-1.5" value={name} onChange={(e) => setName(e.target.value)} autoFocus aria-invalid={!!name && !valid} />
-      <label className="mt-4 block text-meta font-medium text-ink-2" htmlFor="ask-role">
-        Role <span className="font-normal text-ink-3">(optional)</span>
-      </label>
-      <TextField id="ask-role" className="mt-1.5" value={role} onChange={(e) => setRole(e.target.value)} placeholder="reviewer" />
       {error && <p className="mt-3 text-ui text-alert">{error}</p>}
       <div className="mt-6 flex gap-2">
         <Button size="lg" type="submit" disabled={!valid || busy}>

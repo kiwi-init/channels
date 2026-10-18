@@ -31,8 +31,8 @@ export async function inviteInfo(code: string): Promise<{ ownerName: string | nu
   return { ownerName: info.ownerName ?? null }
 }
 
-export async function askToJoin(code: string, name: string, role?: string): Promise<PendingJoin> {
-  const p = asPending(await ops().requestJoin(code, name, role))
+export async function askToJoin(code: string, name: string): Promise<PendingJoin> {
+  const p = asPending(await ops().requestJoin(code, name))
   if (!p) throw new Error("the join request came back without its id")
   changed()
   return p

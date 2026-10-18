@@ -28,7 +28,6 @@ export function Requests({ onDone }: { onDone: () => void }) {
                 <p className="truncate text-ui font-medium">
                   {r.display || r.name}
                   {r.display && <span className="font-normal text-ink-3"> @{r.name}</span>}
-                  {r.role && <span className="font-normal text-ink-2">, {r.role}</span>}
                   {r.askedAs && r.askedAs !== r.name && <span className="font-normal text-ink-2"> (asked as {r.askedAs}, which is taken)</span>}
                 </p>
               }

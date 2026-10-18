@@ -194,8 +194,8 @@ export class SessionMessaging extends SessionListen {
     oneLook,
   );
 
-  readonly hello = Effect.fn("AgentSession.hello")({ self: this }, function* (this: SessionMessaging, role?: string, about?: string) {
-    return yield* this.event({ op: "hello", role, about }, `joined${role ? ` as ${role}` : ""}`);
+  readonly hello = Effect.fn("AgentSession.hello")({ self: this }, function* (this: SessionMessaging) {
+    return yield* this.event({ op: "hello" }, "joined");
   });
 
   readonly escalate = Effect.fn("AgentSession.escalate")(

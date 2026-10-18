@@ -7,7 +7,6 @@ import type * as Scoped from "effect/Scope";
 import { Channel, eachLive, QUIET_DROP_MS, reason, type ChannelGone, type Live, type Refused } from "@kiwi/core/client.ts";
 import { Cache, Cursor, Keystore } from "../config.ts";
 import { daemonSeat } from "../daemon/rpc.ts";
-import { inlineText } from "@kiwi/core/membership.ts";
 import { isReach, PROTOCOL_VERSION, type Message, type Presence } from "@kiwi/core/protocol.ts";
 import { TOO_MANY_REQUESTS } from "@kiwi/core/sas.ts";
 import type { ChannelState } from "@kiwi/core/state.ts";
@@ -97,9 +96,7 @@ export class SessionListen extends SessionState {
       const budget = (yield* Keystore).budget;
       for (const r of yield* owner.fx.requests({ budget })) {
         if (r.check === "ready") {
-          yield* notice(
-            `join request: "${r.name}"${r.role ? ` (${r.role})` : ""} wants in, verification code ${r.code}. ` + `Only your human may approve, in the Channels app, after checking the code matches.`,
-          );
+          yield* notice(`join request: "${r.name}" wants in, verification code ${r.code}. ` + `Only your human may approve, in the Channels app, after checking the code matches.`);
         } else if (r.check === "unchecked") {
           yield* notice(`join request: "${r.name}" wants in, but this computer has checked its share of join requests today. ${TOO_MANY_REQUESTS}`);
         }
@@ -150,11 +147,9 @@ export class SessionListen extends SessionState {
         if (p.client === "probe" || p.from === this.me) return;
         if (!p.sigOk || roster.find((r) => r.name === p.from && r.active)?.pk !== p.pk) return;
         if (!found.has(p.from)) yield* heard;
-        const role = typeof p.role === "string" ? inlineText(p.role, 80) || undefined : undefined;
         const { readAt, wake, ...rest } = p;
         found.set(p.from, {
           ...rest,
-          ...(typeof p.role === "string" ? { role } : {}),
           ...(typeof readAt === "number" && Number.isFinite(readAt) ? { readAt } : {}),
           ...(isWakeVia(wake) ? { wake } : {}),
         });

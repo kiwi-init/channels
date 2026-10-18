@@ -31,7 +31,6 @@ type Connection = "connecting" | "live" | "reconnecting"
 
 interface Online {
   client: string
-  role?: string
   at: number
   pk?: string
   activity?: Activity
@@ -163,7 +162,6 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
           setOnline((prev) =>
             new Map(prev).set(p.from, {
               client: p.client,
-              role: p.role,
               at: Date.now(),
               pk: p.pk,
               ...(p.activity ? { activity: p.activity } : {}),

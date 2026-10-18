@@ -148,7 +148,6 @@ export class Keyring implements ChannelOps {
       }
       case "updateScopes":
       case "updatePersona":
-      case "updateRole":
       case "updateNickname": {
         const pk = field(args[0], "pk");
         return [editable((await ch.members()).find((x) => x.pk === pk)), ...args.slice(1)];
@@ -174,11 +173,11 @@ export class Keyring implements ChannelOps {
     return publicChannel(entry);
   }
 
-  async requestJoin(code: string, name: string, role?: string): Promise<ChannelView> {
+  async requestJoin(code: string, name: string): Promise<ChannelView> {
     const prior = this.host.seats().find((c) => c.code === code && !c.access && !c.imported);
     const identity = prior && (prior.idName ?? prior.label) === name ? identityOf(prior) : await generateIdentity(name);
     const claim = await this.host.prove(code, identity.pk);
-    const r = await Channel.requestJoin(this.host.relay(), code, identity, { name, ...(role ? { role } : {}) }, claim ? { person: claim } : undefined);
+    const r = await Channel.requestJoin(this.host.relay(), code, identity, { name }, claim ? { person: claim } : undefined);
     const entry: ChannelIdentityView = { label: identity.name, idName: identity.name, ...keysOf(identity), code, requestId: r.requestId };
     await this.host.save(entry);
     return publicChannel(entry);

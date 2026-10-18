@@ -9,7 +9,6 @@ import * as Stream from "effect/Stream";
 import { signRequest } from "../auth.ts";
 import { open, seal } from "../crypto.ts";
 import { sign, verify } from "../identity.ts";
-import { inlineText } from "../membership.ts";
 import { omit } from "../omit.ts";
 import {
   CLOSE_CLOSED,
@@ -416,12 +415,11 @@ export class ChannelLive {
         if (p?.type === "presence" && typeof p.from === "string") {
           const rest = omit(p, "e");
           const sigOk = yield* Effect.promise(() => verify(rest));
-          const role = typeof rest.role === "string" ? inlineText(rest.role, 80) || undefined : undefined;
-          const { activity: said, reach, ...fields } = rest;
+          const { activity: said, reach, ...fields } = omit(rest as Presence & { role?: unknown }, "role");
           const activity = cleanActivity(said);
           return {
             _tag: "Presence",
-            presence: { ...fields, ...(typeof rest.role === "string" ? { role } : {}), ...(activity ? { activity } : {}), ...(isReach(reach) ? { reach } : {}), sigOk },
+            presence: { ...fields, ...(activity ? { activity } : {}), ...(isReach(reach) ? { reach } : {}), sigOk },
           } satisfies Live;
         }
       }

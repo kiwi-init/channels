@@ -138,11 +138,11 @@ async function codeShown(owner: string, l: { got: string[]; until: (f: (x: strin
  * sees the request, matches the verification code and approves.
  */
 async function joinVia(owner: string, joiner: string, code: string, alias: string, name: string, role?: string): Promise<string> {
-  const p = mc(joiner, "join", code, alias, "--as", name, ...(role ? ["--role", role] : []));
+  const p = mc(joiner, "join", code, alias, "--as", name);
   const l = lines(p);
   const v = await codeShown(owner, l);
   expect(await ok(owner, "--as", "human", "requests")).toContain(`${v}  ${name}`);
-  await ok(owner, "--as", "human", "approve", v, "--yes");
+  await ok(owner, "--as", "human", "approve", v, "--yes", ...(role ? ["--role", role] : []));
   expect(await p.exited).toBe(0);
   await l.until((x) => x.some((y) => y.includes("You're \"")));
   return l.got.join("\n");
@@ -229,7 +229,7 @@ describe("agents coordinating through the CLI", () => {
 
   test("ask --wait returns the answer in one call, without a duplicate wake-up", async () => {
     const backlog = await ok(mac, "read");
-    expect(backlog).toContain("win → all [event]: joined as windows");
+    expect(backlog).toContain("win → all [event]: joined");
     expect(backlog).not.toContain("forged");
     const asker = mc(mac, "ask", "--to", "win", "--wait", "30s", "which edge is the PC on?");
     const wait = await ok(win, "wait", "--timeout", "20s");

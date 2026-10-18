@@ -23,7 +23,7 @@ function lazyLocalOps(): ChannelOps {
   return {
     call: (code, op, ...args) => local().then((o) => o.call(code, op, ...args)),
     create: (name, token, me) => local().then((o) => o.create(name, token, me)),
-    requestJoin: (code, name, role) => local().then((o) => o.requestJoin(code, name, role)),
+    requestJoin: (code, name) => local().then((o) => o.requestJoin(code, name)),
     joinStatus: (code) => local().then((o) => o.joinStatus(code)),
     forget: (code) => local().then((o) => o.forget(code)),
     presence: (code, p) => local().then((o) => o.presence(code, p)),
@@ -80,7 +80,6 @@ export class ChannelLink {
   updateScopes = (...a: Args<"updateScopes">) => this.c("updateScopes", ...a)
   updatePersona = (...a: Args<"updatePersona">) => this.c("updatePersona", ...a)
   pinPersona = (...a: Args<"pinPersona">) => this.c("pinPersona", ...a)
-  updateRole = (...a: Args<"updateRole">) => this.c("updateRole", ...a)
   updateNickname = (...a: Args<"updateNickname">) => this.c("updateNickname", ...a)
   reconcilePosting = (...a: Args<"reconcilePosting">) => this.c("reconcilePosting", ...a)
   rotateIfDue = () => this.c("rotateIfDue")

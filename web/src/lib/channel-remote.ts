@@ -69,7 +69,7 @@ export function remoteOps(port: KeysPort): ChannelOps {
   return {
     call: <K extends ChannelCallName>(code: string, op: K, ...args: Parameters<ChannelCalls[K]>) => ask({ op: "call", code, name: op, args: toWire(args) }) as Promise<CallResult<K>>,
     create: (name, token, me) => ask({ op: "create", name, token, me }) as Promise<ChannelView>,
-    requestJoin: (code, name, role) => ask({ op: "requestJoin", code, name, ...(role ? { role } : {}) }) as Promise<ChannelView>,
+    requestJoin: (code, name) => ask({ op: "requestJoin", code, name }) as Promise<ChannelView>,
     joinStatus: (code) => ask({ op: "joinStatus", code }) as Promise<JoinCheck>,
     forget: async (code) => void (await ask({ op: "forget", code })),
     presence: async (code, p) => void (await ask({ op: "presence", code, p: toWire(p) })),

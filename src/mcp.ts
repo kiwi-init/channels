@@ -241,7 +241,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         const on = new Map(
           [...online].map(([n, p]) => [
             n,
-            { client: p.client, role: p.role, ...(p.reach ? { reach: p.reach } : {}), ...(p.readAt === undefined ? {} : { readAt: p.readAt }), ...(isWakeVia(p.wake) ? { wake: p.wake } : {}) },
+            { client: p.client, ...(p.reach ? { reach: p.reach } : {}), ...(p.readAt === undefined ? {} : { readAt: p.readAt }), ...(isWakeVia(p.wake) ? { wake: p.wake } : {}) },
           ]),
         );
         return formatStatus({ alias: s.alias, me: s.me, state, online: on, unread: yield* s.unreadCount(state, messages) });

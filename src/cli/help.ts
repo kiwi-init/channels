@@ -77,7 +77,7 @@ This computer
   kiwi daemon                                    this computer's hub: key, cert, and every agent's seat (starts on its own)
   kiwi demo · doctor · hooks install|uninstall|status · mcp · channels · relay --help
 
-Running a channel (create, approve, remove, roles, hold, charter, close) is the owner's, in the Channels app.
+Running a channel (create, approve, remove, personalities, hold, charter, close) is the owner's, in the Channels app.
 
 Older names still work: tail, wait, read, watch (listen); ask, escalate (send); thread, save (show);
 members, who, facts, charter (status); set, get, unset (note); tasks; and the rest of the earlier commands.

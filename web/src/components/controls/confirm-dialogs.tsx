@@ -1,6 +1,5 @@
 import { useEffect, type Dispatch, type SetStateAction } from "react"
 
-import type { Event } from "@kiwi/core/protocol.ts"
 import type { Scope } from "@kiwi/core/scopes.ts"
 import { usePinned } from "@/lib/pinned"
 import { memberName } from "@/lib/format"
@@ -17,10 +16,7 @@ export function ConfirmDialogs({
   setConfirm,
   busy,
   run,
-  setRole,
   taken,
-  roleDraft,
-  setRoleDraft,
   scopeDraft,
   setScopeDraft,
   nickDraft,
@@ -33,10 +29,7 @@ export function ConfirmDialogs({
   setConfirm: Dispatch<SetStateAction<Confirm>>
   busy: boolean
   run: (fn: () => Promise<void>, done: string) => Promise<void>
-  setRole: (ev: Extract<Event, { op: "role.set" | "role.refuse" }>) => Promise<void>
   taken: boolean
-  roleDraft: { role: string; about: string }
-  setRoleDraft: Dispatch<SetStateAction<{ role: string; about: string }>>
   scopeDraft: Scope[]
   setScopeDraft: Dispatch<SetStateAction<Scope[]>>
   nickDraft: string
@@ -51,41 +44,6 @@ export function ConfirmDialogs({
   }, [pinnedAs, setPersonaDraft])
   return (
     <>
-      <Alert
-        open={confirm?.kind === "role"}
-        onClose={() => setConfirm(null)}
-        title={confirm?.kind === "role" ? `${confirm.member.name}’s role` : ""}
-        message={
-          <span className="mt-3 grid gap-2">
-            <TextField
-              value={roleDraft.role}
-              onChange={(e) => setRoleDraft((d) => ({ ...d, role: e.target.value }))}
-              placeholder="Role, e.g. reviewer"
-              maxLength={60}
-              list="kiwi-roles"
-              aria-label="Role"
-              autoFocus
-            />
-            <TextField value={roleDraft.about} onChange={(e) => setRoleDraft((d) => ({ ...d, about: e.target.value }))} placeholder="Rules (optional)" maxLength={200} aria-label="Rules" />
-            <span className="text-meta text-ink-3">Everyone sees the role, and agents route work by it.</span>
-          </span>
-        }
-      >
-        <Button variant="secondary" onClick={() => setConfirm(null)}>
-          Cancel
-        </Button>
-        <Button
-          disabled={busy}
-          onClick={() => {
-            if (confirm?.kind !== "role") return
-            const name = confirm.member.name
-            void run(() => setRole({ op: "role.set", member: name, role: roleDraft.role.trim() || null, about: roleDraft.about.trim() || null }), `Saved ${name}’s role`)
-          }}
-        >
-          Save
-        </Button>
-      </Alert>
-
       <Alert
         open={confirm?.kind === "persona"}
         onClose={() => setConfirm(null)}

@@ -173,15 +173,14 @@ function topNeed(ctx: ToolCtx): Top | null {
   const join = ctx.isOwner ? ctx.requests[0] : undefined
   if (join) {
     const who = join.display || join.name
-    const as = join.role ? `, as ${join.role}` : ""
     if (join.check !== "ready" || !join.code || !ctx.letIn)
-      return { key: `join:${join.id}`, readback: `${who} wants to join${as}, but its code isn't in yet.`, refuse: "Its code isn't in yet: let it in from the app once it is." }
+      return { key: `join:${join.id}`, readback: `${who} wants to join, but its code isn't in yet.`, refuse: "Its code isn't in yet: let it in from the app once it is." }
     const digits = join.code.replace(/\D/g, "").split("").join(" ")
     const id = join.id
     const letIn = ctx.letIn
     return {
       key: `join:${id}`,
-      readback: `${who} wants to join${as}. Let ${join.kind === "human" ? "them" : "it"} in only if ${join.kind === "human" ? "they see" : "its terminal shows"} ${digits}. Say yes to let ${join.kind === "human" ? "them" : "it"} in.`,
+      readback: `${who} wants to join. Let ${join.kind === "human" ? "them" : "it"} in only if ${join.kind === "human" ? "they see" : "its terminal shows"} ${digits}. Say yes to let ${join.kind === "human" ? "them" : "it"} in.`,
       act: async () => (await letIn(id), { let_in: who }),
     }
   }
