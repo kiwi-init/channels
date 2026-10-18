@@ -11,7 +11,7 @@ import { gifFile, type Gif } from "@/lib/gifs"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 import { GifPicker } from "./gif-picker"
-import { ComposerQuestion } from "./lazy"
+import { CommandBar, CommandList, ComposerQuestion } from "./lazy"
 import { Monogram, errorText, toast } from "./kit"
 
 const MENTION = /(^|\s)@([\p{L}\p{N}_.-]*)$/u
@@ -251,32 +251,9 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
 
       {asking && !thread && <ComposerQuestion m={asking} more={more} nameOf={nameOf} disabled={disabled} onChoose={(c) => onAnswer?.(asking, c)} onElse={() => area.current?.focus()} />}
 
-      {listed.length > 0 && (
-        <div role="listbox" aria-label="Commands" className="animate-rise absolute bottom-full left-14 z-20 mb-1 w-80 max-w-[calc(100%-4rem)] overflow-hidden rounded-card bg-raised p-1 shadow-pop">
-          {listed.map((c) => (
-            <button
-              key={c.name}
-              type="button"
-              role="option"
-              aria-selected={c === picked}
-              onMouseDown={(e) => (e.preventDefault(), setBody(`/${c.name} `))}
-              className={cx("flex w-full items-baseline gap-2 rounded-row px-2.5 py-1.5 text-left text-ui", c === picked ? "bg-wash-2" : "hover:bg-wash")}
-            >
-              <span className="shrink-0 font-medium">/{c.name}</span>
-              {c.args && <span className="shrink-0 text-ink-3">{c.args}</span>}
-              <span className="min-w-0 truncate text-ink-3">{c.summary}</span>
-            </button>
-          ))}
-        </div>
-      )}
+      {listed.length > 0 && picked && <CommandList commands={listed} picked={picked} onPick={(c) => setBody(`/${c.name} `)} />}
 
-      {running && (
-        <p className="mb-1.5 ml-3 flex items-baseline gap-2 px-2 text-meta text-ink-2">
-          <span className="font-medium text-ink">/{running.command.name}</span>
-          <span className="min-w-0 truncate">{running.command.summary}</span>
-          <span className="ml-auto shrink-0 text-ink-3">Return runs it{running.command.args && !running.args ? ` · ${running.command.args}` : ""}</span>
-        </p>
-      )}
+      {running && <CommandBar command={running.command} args={running.args} />}
 
       {replyTo && !thread && (
         <div className="mb-1.5 ml-3 flex items-center gap-2 rounded-ctl px-2 text-meta text-ink-2">

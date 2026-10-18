@@ -14,6 +14,8 @@ const taskDetails = later(() => import("./task-details").then((m) => m.TaskDetai
 const thread = later(() => import("./thread").then((m) => m.ThreadPanel))
 const annotator = later(() => import("./annotator").then((m) => m.Annotator))
 const composerQuestion = later(() => import("./composer-question").then((m) => m.ComposerQuestion))
+const commandList = later(() => import("./composer-commands").then((m) => m.CommandList))
+const commandBar = later(() => import("./composer-commands").then((m) => m.CommandBar))
 const repos = later(() => import("./controls/repos-dialog").then((m) => m.ReposDialog))
 
 export const Markdown = markdown.View
@@ -26,6 +28,8 @@ export const TaskDetails = taskDetails.View
 export const ThreadPanel = thread.View
 export const Annotator = annotator.View
 export const ComposerQuestion = composerQuestion.View
+export const CommandList = commandList.View
+export const CommandBar = commandBar.View
 export const ReposDialog = repos.View
 
 export const loadMarkdown = markdown.load
