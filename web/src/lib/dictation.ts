@@ -40,6 +40,14 @@ function dictationCtor(): DictationCtor | undefined {
   return undefined
 }
 
+export const UNAVAILABLE_MESSAGE = "Dictation isn’t available in this browser."
+
+export function dictationProblem(error: string): { unavailable: boolean; message: string } | null {
+  if (UNAVAILABLE.has(error)) return { unavailable: true, message: UNAVAILABLE_MESSAGE }
+  if (BLOCKED.has(error)) return { unavailable: false, message: "Microphone blocked: allow it for this site to dictate." }
+  return null
+}
+
 export function appendDictation(body: string, transcript: string): string {
   const text = transcript.trim()
   if (!text) return body
@@ -49,6 +57,7 @@ export function appendDictation(body: string, transcript: string): string {
 
 export function useDictation(onText: (text: string) => void, onProblem: (message: string) => void) {
   const [supported, setSupported] = useState(() => dictationCtor() !== undefined)
+  const [unavailable, setUnavailable] = useState(false)
   const [listening, setListening] = useState(false)
   const active = useRef<Dictation | null>(null)
   const text = useRef(onText)
@@ -83,8 +92,10 @@ export function useDictation(onText: (text: string) => void, onProblem: (message
       }
     }
     recognition.onerror = (event) => {
-      if (UNAVAILABLE.has(event.error)) setSupported(false)
-      else if (BLOCKED.has(event.error)) problem.current("Microphone blocked: allow it for this site to dictate.")
+      const found = dictationProblem(event.error)
+      if (!found) return
+      if (found.unavailable) setUnavailable(true)
+      problem.current(found.message)
     }
     recognition.onend = () => {
       if (active.current === recognition) active.current = null
@@ -96,9 +107,10 @@ export function useDictation(onText: (text: string) => void, onProblem: (message
       setListening(true)
     } catch {
       active.current = null
-      setSupported(false)
+      setUnavailable(true)
+      problem.current(UNAVAILABLE_MESSAGE)
     }
   }, [])
 
-  return { supported, listening, toggle }
+  return { supported, unavailable, listening, toggle }
 }
