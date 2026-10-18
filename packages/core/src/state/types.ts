@@ -100,6 +100,7 @@ export interface Task {
   cancelled?: boolean;
   closedSeq?: number;
   issue?: IssueRef;
+  from?: number;
   workedBy: string[];
   rounds: ReviewRound[];
   source?: number;

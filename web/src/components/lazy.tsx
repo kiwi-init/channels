@@ -14,6 +14,7 @@ const taskDetails = later(() => import("./task-details").then((m) => m.TaskDetai
 const taskInline = later(() => import("./task-inline").then((m) => m.TaskInline))
 const thread = later(() => import("./thread").then((m) => m.ThreadPanel))
 const annotator = later(() => import("./annotator").then((m) => m.Annotator))
+const agentLanes = later(() => import("./agent-lanes").then((m) => m.AgentLanes))
 const talkButton = later(() => import("./talk").then((m) => m.TalkButton))
 const talkBar = later(() => import("./talk").then((m) => m.TalkBar))
 const composerQuestion = later(() => import("./composer-question").then((m) => m.ComposerQuestion))
@@ -33,6 +34,7 @@ export const TaskDetails = taskDetails.View
 export const TaskInline = taskInline.View
 export const ThreadPanel = thread.View
 export const Annotator = annotator.View
+export const AgentLanes = agentLanes.View
 export const TalkButton = talkButton.View
 export const TalkBar = talkBar.View
 export const ComposerQuestion = composerQuestion.View

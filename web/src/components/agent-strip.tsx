@@ -42,6 +42,10 @@ export function doingNow(a: AgentNow): { text: string; busy: boolean } | null {
   return null
 }
 
+export function agentNow(a: AgentNow): { text: string; busy: boolean } {
+  return doingNow(a) ?? { text: a.here ? (howWords(a.here) ?? "Idle") : "Away", busy: false }
+}
+
 const busy = (a: AgentNow) => !!a.here && (doingNow(a)?.busy ?? a.load.current.length > 0)
 
 export const byBusy = (agents: AgentNow[]) => [...agents].sort((a, b) => Number(busy(b)) - Number(busy(a)) || Number(!!b.here) - Number(!!a.here))
@@ -51,7 +55,7 @@ const face = (a: AgentNow, size: number) => <Monogram name={a.label} hue={a.name
 export function AgentRow({ a, onOpenTask }: { a: AgentNow; onOpenTask: (id: number) => void }) {
   const doing = doingNow(a)
   const task = a.load.current[0]
-  const what = [task ? taskId(task.id) : null, doing?.text ?? (a.here ? (howWords(a.here) ?? "idle") : "away")].filter(Boolean).join(" · ")
+  const what = [task ? taskId(task.id) : null, agentNow(a).text].filter(Boolean).join(" · ")
   return (
     <li>
       <button
@@ -76,7 +80,7 @@ export function AgentRow({ a, onOpenTask }: { a: AgentNow; onOpenTask: (id: numb
   )
 }
 
-export function AgentLine({ a, now, onOpenTask, brief }: { a: AgentNow; now: number; onOpenTask: (id: number) => void; brief?: boolean }) {
+function AgentLine({ a, now, onOpenTask, brief }: { a: AgentNow; now: number; onOpenTask: (id: number) => void; brief?: boolean }) {
   return (
     <li className="flex items-start gap-3 rounded-ctl px-2 py-2">
       <span className="flex pt-0.5">{face(a, 28)}</span>

@@ -124,6 +124,7 @@ function Properties({
   const repo = round && onDiff ? taskRepo(state, messages, task.id) : null
   const owner = task.owner ? state.members.get(task.owner) : undefined
   const issue = task.issue ? issueOf(state.github, task.issue) : undefined
+  const followUps = [...state.tasks.values()].filter((t) => t.from === task.id)
   return (
     <dl className="grid grid-cols-2 gap-4">
       <Prop label="Status">
@@ -164,6 +165,19 @@ function Properties({
                 {pr.branch && <span className="truncate font-mono text-meta text-ink-3">{pr.branch}</span>}
               </span>
             ))}
+          </span>
+        </Prop>
+      )}
+      {(task.from !== undefined || followUps.length > 0) && (
+        <Prop label="Lineage">
+          <span className="grid gap-1 text-ink-2">
+            {task.from !== undefined && (
+              <span className="truncate" title={state.tasks.get(task.from)?.title}>
+                From <span className="tabular-nums">{taskId(task.from)}</span>
+                {state.tasks.get(task.from) && <span className="text-ink-3"> · {state.tasks.get(task.from)!.title}</span>}
+              </span>
+            )}
+            {followUps.length > 0 && <span className="truncate">Follow-ups: {followUps.map((t) => taskId(t.id)).join(", ")}</span>}
           </span>
         </Prop>
       )}
