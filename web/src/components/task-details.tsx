@@ -3,10 +3,12 @@ import { useMemo, useState, type ReactNode } from "react"
 import { proofLabel } from "@kiwi/core/format.ts"
 import type { Message } from "@kiwi/core/protocol.ts"
 import { colorOf, taskId, type ChannelState, type Task } from "@kiwi/core/state.ts"
-import { taskFeed, taskPrs } from "@kiwi/core/work.ts"
+import type { GithubDiff } from "@kiwi/core/client.ts"
+import { taskFeed, taskPrs, taskRepo } from "@kiwi/core/work.ts"
 import { formatAgo, formatFull, memberName } from "@/lib/format"
 import { ANYONE, reviewerChoices, taskActions } from "@/lib/task-actions"
 import { cx } from "@/lib/utils"
+import { DiffDialog } from "./diff-dialog"
 import { Feed, PrLink } from "./feed"
 import { Icon } from "./icon"
 import { Alert, Button, Monogram, TextField, errorText, toast } from "./kit"
@@ -33,6 +35,7 @@ export function TaskDetails({
   onSendBack,
   onCancel,
   onReviewer,
+  onDiff,
 }: {
   id: number
   state: ChannelState
@@ -48,6 +51,7 @@ export function TaskDetails({
   onSendBack: (t: Task, why: string) => Promise<void>
   onCancel: (t: Task, note: string) => Promise<void>
   onReviewer: (t: Task, review: string) => Promise<void>
+  onDiff?: (repo: string, sha: string) => Promise<GithubDiff>
 }) {
   const task = state.tasks.get(id)
   const items = useMemo(() => taskFeed(state, messages, id), [state, messages, id])
@@ -79,7 +83,7 @@ export function TaskDetails({
         </div>
       )}
       <div className="mt-4">
-        <Properties task={task} state={state} now={now} items={items} />
+        <Properties task={task} state={state} messages={messages} now={now} items={items} onDiff={onDiff} />
       </div>
       {!noteBlocked && <Actions key={task.id} task={task} state={state} me={me} person={person} onApprove={onApprove} onSendBack={onSendBack} onCancel={onCancel} onReviewer={onReviewer} />}
       <h3 className="mt-4 text-ui font-semibold">
@@ -99,8 +103,25 @@ export function TaskDetails({
   )
 }
 
-function Properties({ task, state, now, items }: { task: Task; state: ChannelState; now: number; items: ReturnType<typeof taskFeed> }) {
+function Properties({
+  task,
+  state,
+  messages,
+  now,
+  items,
+  onDiff,
+}: {
+  task: Task
+  state: ChannelState
+  messages: Message[]
+  now: number
+  items: ReturnType<typeof taskFeed>
+  onDiff?: (repo: string, sha: string) => Promise<GithubDiff>
+}) {
   const prs = taskPrs(items)
+  const [diffOpen, setDiffOpen] = useState(false)
+  const round = [...task.rounds].reverse().find((r) => r.at)
+  const repo = round && onDiff ? taskRepo(state, messages, task.id) : null
   const owner = task.owner ? state.members.get(task.owner) : undefined
   return (
     <dl className="grid grid-cols-2 gap-4">
@@ -124,6 +145,12 @@ function Properties({ task, state, now, items }: { task: Task; state: ChannelSta
             {task.review === "*" ? "Anyone who hasn’t worked on it" : memberName(state.members.get(task.review), task.review)}
             {task.approvedBy ? `, approved by ${memberName(state.members.get(task.approvedBy), task.approvedBy)}` : task.state === "review" ? ", waiting" : ""}
           </span>
+          {round?.at && repo && onDiff && (
+            <button type="button" onClick={() => setDiffOpen(true)} className="shrink-0 text-meta font-medium text-accent hover:underline">
+              View diff
+            </button>
+          )}
+          {diffOpen && round?.at && repo && onDiff && <DiffDialog repo={repo} sha={round.at} title={`${taskId(task.id)}, round ${round.n}`} load={onDiff} onClose={() => setDiffOpen(false)} />}
         </Prop>
       )}
       {prs.length > 0 && (
