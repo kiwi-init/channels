@@ -71,7 +71,7 @@ export function AgentRow({ a, onOpenTask }: { a: AgentNow; onOpenTask: (id: numb
             {a.lead && <span className="shrink-0 text-meta text-ink-3">lead</span>}
           </span>
           <span className="flex items-center gap-1.5 text-meta text-ink-3">
-            {doing?.busy && <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-doing" />}
+            {doing?.busy && <span className="size-1.5 shrink-0 rounded-full bg-doing" />}
             <span className="truncate">{what}</span>
           </span>
         </span>
@@ -94,7 +94,7 @@ function AgentLine({ a, now, onOpenTask, brief }: { a: AgentNow; now: number; on
         {a.card?.repo && !brief && <RepoLine card={a.card} outside={!!a.outside} className="text-meta" />}
         {doingNow(a) && (
           <span className="flex items-center gap-1.5 text-meta">
-            <span className={cx("size-1.5 shrink-0 rounded-full", doingNow(a)!.busy ? "animate-pulse bg-doing" : "bg-ink-3")} />
+            <span className={cx("size-1.5 shrink-0 rounded-full", doingNow(a)!.busy ? "bg-doing" : "bg-ink-3")} />
             <span className={doingNow(a)!.busy ? "font-medium text-ink" : "text-ink-3"}>{doingNow(a)!.text}</span>
             {a.activity?.since && <span className="text-ink-3">· {formatAgo(a.activity.since, now)}</span>}
           </span>
