@@ -147,6 +147,21 @@ describe("one Claude Code session that holds two seats", () => {
     expect(await ok(h, ["-c", "beta", "listen", "--now"], S)).toContain("read by channel");
   });
 
+  test("replying to a message the session was shown picks its seat, with no flags", async () => {
+    const { ownerA, ownerB, h, input } = await twoSeats();
+    const sent = await ok(ownerB, ["send", "--to", "reviewer", "which seat am I"], PERSON);
+    const seq = /#(\d+)/.exec(sent)![1]!;
+    const before = await run(h, ["reply", seq, "from nobody yet"], S);
+    expect(before.code).toBe(1);
+    expect(before.err).toContain("this session is several agents here");
+    expect((await run(h, ["hook", "prompt"], S, h, input)).out).toContain("which seat am I");
+    await ok(h, ["reply", seq, "from the seat that heard it"], S);
+    const log = await ok(ownerB, ["--as", "boss", "log"], PERSON);
+    expect(log).toContain("reviewer");
+    expect(log).toContain("from the seat that heard it");
+    expect(await ok(ownerA, ["--as", "boss", "log"], PERSON)).not.toContain("from the seat that heard it");
+  });
+
   test("a seat whose relay hangs doesn't hold back the other seat's answer", async () => {
     const { ownerA, h, input } = await twoSeats();
     await run(h, ["hook", "session-start"], S, h, input);
