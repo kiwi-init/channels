@@ -239,6 +239,14 @@ From `design-tokens.ts`:
   a reply bar that sends the marked-up picture back in its thread. Hide
   is an opaque block, burned into the pixels that are sent.
 
+- Settings → Personalities: a roomy modal, the list on the left (presets
+  for code work, then Yours, each a 36px outlined glyph tile, the name in
+  `ui` semibold and one quiet line) and the editor on the right: role as
+  outlined chips (the picked one `accent`-bordered), capabilities as
+  checkboxes with a quiet line each, areas as mono chips with a dashed
+  "+ add a path", instructions in an outlined field. A preset reads
+  "edit it to make your own copy": changing it makes one.
+
 ## 10. Composer
 
 The composer never opens a floating menu. Panels expand inline above the

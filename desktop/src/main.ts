@@ -11,6 +11,7 @@ import { wirePairingIpc } from "./ipc/pairing.ts";
 import { wireSignInIpc } from "./ipc/signin.ts";
 import { wireStoreIpc } from "./ipc/store.ts";
 import { wireVoiceIpc } from "./ipc/voice.ts";
+import { wirePersonalitiesIpc } from "./ipc/personalities.ts";
 import { closeKeys, keysOpen, startKeys } from "./keys-process.ts";
 import { serveWeb } from "./serve-web.ts";
 import { loadStore, warnIfBroken } from "./store.ts";
@@ -25,6 +26,7 @@ function wireIpc(): void {
   wireDaemonIpc();
   wireMiscIpc();
   wireVoiceIpc();
+  wirePersonalitiesIpc();
 }
 
 if (!app.requestSingleInstanceLock()) app.quit();

@@ -2,6 +2,8 @@
 // here), so they can be tested without an app. main.ts wires them to the window, the kiwi-app://
 // handler and the secrets store.
 
+import { cleanPersonalities } from "@kiwi/core/personalities.ts";
+import type { Personality } from "@kiwi/core/personality.ts";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -144,10 +146,19 @@ export interface StoredKeys {
   computers: ComputerView[];
   pending: PendingItem[];
   voice?: VoiceStore;
+  personalities?: Personality[];
 }
 
 export function snapshotOf(s: StoredKeys): StoreSnapshot {
-  return { relayUrl: s.relayUrl, person: publicPerson(s.person), channels: s.channels.map(publicChannel), computers: s.computers, pending: s.pending, voice: voiceViewOf(s.voice) };
+  return {
+    relayUrl: s.relayUrl,
+    person: publicPerson(s.person),
+    channels: s.channels.map(publicChannel),
+    computers: s.computers,
+    pending: s.pending,
+    voice: voiceViewOf(s.voice),
+    personalities: cleanPersonalities(s.personalities),
+  };
 }
 
 export function publicComputer(c: ComputerView): ComputerView {
