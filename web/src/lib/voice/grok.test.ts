@@ -290,7 +290,7 @@ describe("lazy", () => {
     const src = resolve(import.meta.dir, "../..")
     const here = resolve(import.meta.dir)
     const files = (dir: string): string[] => readdirSync(dir).flatMap((n) => (statSync(join(dir, n)).isDirectory() ? files(join(dir, n)) : /\.tsx?$/.test(n) ? [join(dir, n)] : []))
-    const static_ = /^\s*import\s(?!type\b)[^;]*?from\s+["']([^"']*\/voice(?:\/[^"']*)?)["']/gm
+    const static_ = /^\s*import\s(?!type\b)(?:(?!\bimport\b)[^;])*?from\s+["']([^"']*\/voice(?:\/[^"']*)?)["']/gm
     const bad = files(src)
       .filter((f) => !f.startsWith(here))
       .flatMap((f) => [...readFileSync(f, "utf8").matchAll(static_)].map((m) => `${relative(src, f)}: ${m[1]}`))

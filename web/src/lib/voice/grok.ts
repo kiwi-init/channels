@@ -18,7 +18,7 @@ export interface VoiceSocket {
 
 export type OpenSocket = (url: string, protocols: string[]) => VoiceSocket
 
-interface Playback {
+export interface Playback {
   play(itemId: string, pcm: Int16Array): void
   stop(): { itemId: string; playedMs: number } | null
 }

@@ -5,7 +5,7 @@ import type { ControlsProps } from "../controls"
 
 type Handlers = Pick<
   ControlsProps,
-  "onApprove" | "onScopes" | "onRole" | "onNickname" | "onDeny" | "onCheck" | "onRemove" | "onHold" | "onCharter" | "onRepos" | "onRename" | "onCloseChannel" | "onLeaveChannel"
+  "onApprove" | "onScopes" | "onRole" | "onNickname" | "onDeny" | "onCheck" | "onRemove" | "onHold" | "onCharter" | "onRepos" | "onVoice" | "onRename" | "onCloseChannel" | "onLeaveChannel"
 >
 
 export function useControlsHandlers({
@@ -79,6 +79,11 @@ export function useControlsHandlers({
           const since = await send(repos.length ? `repos: ${repos.join(", ")}` : "cleared the channel's repos", { kind: "event", ev: { op: "repos.set", repos } })
           await ch.setRepos({ list: repos, since })
           await ch.setGithubRepos(repos).catch(() => {})
+        }
+      : undefined,
+    onVoice: isOwner
+      ? async (on) => {
+          await send(on ? "allowed voice in the channel" : "turned voice off for the channel", { kind: "event", ev: { op: "voice.set", on } })
         }
       : undefined,
     onRename: isOwner
