@@ -10,7 +10,7 @@ import { relayUrl } from "@/lib/relay"
 import { bridge, useSecrets } from "@/lib/secrets"
 import { version } from "../../../package.json"
 import { Icon } from "./icon"
-import { Button, IconButton, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from "./kit"
+import { Button, Checkbox, IconButton, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from "./kit"
 import { UpdateCheck } from "./update-check"
 
 // How Channels looks in this browser: the theme and how large everything reads.
@@ -130,14 +130,12 @@ function VoiceFields() {
             const on = snap.voice.consent[id] === true
             return (
               <label key={id} className="flex items-center gap-2 text-ui text-ink">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={on}
                   onChange={(e) => {
                     setError(null)
                     b.setVoiceConsent(id, e.target.checked).catch(fail)
                   }}
-                  className="size-4 accent-[var(--accent)]"
                 />
                 {c.name ?? c.label}
               </label>

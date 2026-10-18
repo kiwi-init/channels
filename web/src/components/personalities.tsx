@@ -5,7 +5,7 @@ import { CAPABILITIES, MAX_AREA, MAX_AREAS, MAX_INSTRUCTIONS, MAX_NAME, ROLE_LAB
 import { PRESETS } from "@kiwi/core/presets.ts"
 import { savePersonalities, useOwnPersonalities, usePersonalities } from "@/lib/personalities"
 import { cx } from "@/lib/utils"
-import { Button, TextField, errorText, toast } from "./kit"
+import { Button, Checkbox, TextField, errorText, toast } from "./kit"
 
 const TAGLINE: Record<string, string> = {
   builder: "Takes a task to a merged PR",
@@ -140,7 +140,7 @@ function Editor({ p, onChange, onDuplicate, onDelete }: { p: Personality; onChan
         <div className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
           {CAPABILITIES.map((c) => (
             <label key={c} className="flex items-start gap-2.5">
-              <input type="checkbox" checked={p.capabilities.includes(c)} onChange={() => toggle(c)} className="mt-0.5 size-4 shrink-0 accent-[var(--accent)]" />
+              <Checkbox checked={p.capabilities.includes(c)} onChange={() => toggle(c)} className="mt-0.5" />
               <span>
                 <span className="block text-ui">{CAPABILITY_TEXT[c][0]}</span>
                 <span className="block text-meta text-ink-3">{CAPABILITY_TEXT[c][1]}</span>

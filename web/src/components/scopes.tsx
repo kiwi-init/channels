@@ -1,4 +1,5 @@
 import { presetOf, SCOPES, type Scope } from "@kiwi/core/scopes.ts"
+import { Checkbox } from "./kit"
 
 // What a member may do besides read: everything, or nothing but read. The owner signs the choice;
 // every client enforces it. A grant from before the two levels (some scopes, not all) keeps working
@@ -18,7 +19,7 @@ export function ScopePicker({ value, onChange, disabled }: { value: Scope[]; onC
   return (
     <div className="grid gap-1">
       <label className="flex items-center gap-2 text-ui text-ink">
-        <input type="checkbox" checked={preset === "read-only"} onChange={(e) => onChange(e.target.checked ? [] : [...SCOPES])} disabled={disabled} className="size-4 accent-[var(--accent)]" />
+        <Checkbox checked={preset === "read-only"} onChange={(e) => onChange(e.target.checked ? [] : [...SCOPES])} disabled={disabled} />
         Can only read
       </label>
       <p className="text-meta leading-snug text-ink-3">
