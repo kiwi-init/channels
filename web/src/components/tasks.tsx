@@ -155,7 +155,7 @@ export function Notes({ state, now, onClear }: { state: ChannelState; now: numbe
 
 export type TaskFilter = "all" | TaskState
 
-export function TaskFilterBar({ value, options, onChange, className }: { value: TaskFilter; options: [TaskFilter, string][]; onChange: (f: TaskFilter) => void; className?: string }) {
+function TaskFilterBar({ value, options, onChange, className }: { value: TaskFilter; options: [TaskFilter, string][]; onChange: (f: TaskFilter) => void; className?: string }) {
   return (
     <div
       role="radiogroup"
@@ -204,12 +204,14 @@ export function Tasks({
   now,
   nameOf,
   unreadIn,
+  only,
   onOpen,
 }: {
   state: ChannelState
   now: number
   nameOf: (n: string) => string
   unreadIn?: (id: number) => { n: number; forMe: boolean }
+  only?: (t: Task) => boolean
   onOpen: (id: number) => void
 }) {
   const [showDone, setShowDone] = useState(false)
@@ -219,7 +221,7 @@ export function Tasks({
   const q = query.trim().toLowerCase()
   const archived = [...state.tasks.values()].filter((t) => t.archived).length
   const all = [...state.tasks.values()]
-    .filter((t) => !t.archived)
+    .filter((t) => !t.archived && (!only || only(t)))
     .filter((t) => filter === "all" || t.state === filter)
     .filter((t) => !q || t.title.toLowerCase().includes(q) || taskId(t.id).toLowerCase().includes(q) || (!!t.owner && nameOf(t.owner).toLowerCase().includes(q)))
     .sort((a, b) => b.updatedAt - a.updatedAt)
@@ -237,7 +239,7 @@ export function Tasks({
   return (
     // Sized by its column (the panel runs 300 to 720 wide), not by the window.
     <div className="@container px-3 pt-1 pb-6">
-      <label className="mb-4 flex h-9 items-center gap-2 rounded-full bg-field px-3.5 text-ink-3 transition-shadow focus-within:shadow-[0_0_0_3px_var(--accent-wash)]">
+      <label className="mb-4 flex h-9 items-center gap-2 rounded-full px-3.5 text-ink-3 edge transition-shadow focus-within:shadow-[0_0_0_3px_var(--accent-wash)]">
         <Icon icon={Search01Icon} size={16} className="shrink-0" />
         <input
           value={query}
@@ -253,7 +255,7 @@ export function Tasks({
           className="min-w-0 flex-1 bg-transparent text-body text-ink outline-none placeholder:text-ink-3 focus-visible:outline-none"
         />
       </label>
-      <TaskFilterBar value={filter} options={[["all", "All"], ...GROUPS]} onChange={setFilter} className="mb-4" />
+      {!only && <TaskFilterBar value={filter} options={[["all", "All"], ...GROUPS]} onChange={setFilter} className="mb-4" />}
       {!all.length && <p className="py-6 text-center text-ui text-ink-3">{q ? `No task matches “${query}”.` : "Nothing here right now."}</p>}
       {GROUPS.map(([s, word]) => {
         const list = all.filter((t) => t.state === s)

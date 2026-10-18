@@ -1,0 +1,141 @@
+import type { Message } from "@kiwi/core/protocol.ts"
+import type { ChannelState } from "@kiwi/core/state.ts"
+
+import { connectGrokVoice, type GrokVoice, type OpenSocket, type Playback } from "./grok"
+import { voiceNewsFeed, voiceSnapshot } from "./news"
+
+export type TalkStatus = "off" | "connecting" | "live"
+
+export interface TalkView {
+  status: TalkStatus
+  heard: string
+  saying: string
+  error: string | null
+}
+
+export interface Mic {
+  stop(): void
+}
+
+export interface TalkDeps {
+  token: (roomId: string) => Promise<{ token: string; expiresAt: number }>
+  mic: (onPcm: (pcm: Int16Array) => void) => Promise<Mic>
+  speaker: () => Playback & { close(): void }
+  open?: OpenSocket
+}
+
+export interface TalkChannel {
+  roomId: string
+  channel: string
+  me: string
+  nameOf: (name: string) => string
+  state: ChannelState
+  messages: Message[]
+}
+
+export interface Talk {
+  view(): TalkView
+  subscribe(listener: () => void): () => void
+  start(c: TalkChannel): Promise<void>
+  stop(): void
+  seen(messages: Message[], state: ChannelState): void
+}
+
+const NEWS = "Channel news. Say it when it fits, in a sentence, without cutting the person off:"
+
+export function instructionsFor(c: TalkChannel): string {
+  return [
+    `You are the voice of a Kiwi channel, where people and AI agents work together. You talk with ${c.nameOf(c.me)}.`,
+    "Speak briefly and plainly, like a teammate on a call. Say task numbers as T and the number.",
+    "You can tell them what's going on in the channel. You can't post, approve or change anything yet: when they ask for that, say they can type it in the composer.",
+    "System messages that start with “Channel news” are things that just happened; mention them when it fits.",
+    "",
+    "Where things stand:",
+    voiceSnapshot(c.state, c.me, c.nameOf, c.channel),
+  ].join("\n")
+}
+
+function reason(err: unknown): string {
+  const text = err instanceof Error ? err.message : String(err)
+  if (/no consent/.test(text)) return "Turn voice on for this channel in Settings → Voice."
+  if (/no voice key/.test(text)) return "Add an xAI key in Settings → Voice."
+  if (/NotAllowedError|Permission|denied/i.test(text)) return "Channels can’t use the microphone. Allow it in System Settings → Privacy & Security → Microphone."
+  return text.replace(/^Error invoking remote method '[^']+': (Error: )?/, "")
+}
+
+export function createTalk(deps: TalkDeps): Talk {
+  let view: TalkView = { status: "off", heard: "", saying: "", error: null }
+  const listeners = new Set<() => void>()
+  let session: { voice: GrokVoice; mic: Mic | null; speaker: Playback & { close(): void }; news: (m: Message, s: ChannelState) => string | null; after: number } | null = null
+  let run = 0
+
+  const set = (next: Partial<TalkView>) => {
+    view = { ...view, ...next }
+    for (const l of listeners) l()
+  }
+  const end = (error: string | null) => {
+    run++
+    const s = session
+    session = null
+    s?.mic?.stop()
+    s?.voice.close()
+    s?.speaker.close()
+    set({ status: "off", saying: "", error })
+  }
+
+  return {
+    view: () => view,
+    subscribe: (l) => {
+      listeners.add(l)
+      return () => listeners.delete(l)
+    },
+    async start(c) {
+      if (session || view.status !== "off") return
+      const mine = ++run
+      set({ status: "connecting", heard: "", saying: "", error: null })
+      try {
+        const { token } = await deps.token(c.roomId)
+        if (mine !== run) return
+        const speaker = deps.speaker()
+        const voice = connectGrokVoice({
+          token,
+          instructions: instructionsFor(c),
+          playback: speaker,
+          open: deps.open,
+          on: {
+            status: (s, why) => {
+              if (mine !== run) return
+              if (s === "live") set({ status: "live" })
+              if (s === "closed") end(why ?? null)
+            },
+            heard: (text) => mine === run && set({ heard: text, saying: "" }),
+            saying: (text) => mine === run && set({ saying: text }),
+            said: (text) => mine === run && set({ saying: text }),
+            interrupted: () => mine === run && set({ saying: "" }),
+            failed: (e) => mine === run && set({ error: e.message }),
+          },
+        })
+        session = { voice, mic: null, speaker, news: voiceNewsFeed(c.me, c.nameOf), after: c.messages.at(-1)?.seq ?? 0 }
+        const mic = await deps.mic((pcm) => voice.append(pcm))
+        if (mine !== run || !session) {
+          mic.stop()
+          return
+        }
+        session.mic = mic
+      } catch (err) {
+        if (mine === run) end(reason(err))
+      }
+    },
+    stop: () => end(null),
+    seen(messages, state) {
+      const s = session
+      if (!s) return
+      for (const m of messages) {
+        if (m.seq <= s.after) continue
+        s.after = m.seq
+        const line = s.news(m, state)
+        if (line) s.voice.note(`${NEWS} ${line}`)
+      }
+    },
+  }
+}

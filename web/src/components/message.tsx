@@ -1,11 +1,14 @@
-import { ArrowTurnBackwardIcon, Copy01Icon, SmileIcon } from "@hugeicons/core-free-icons"
+import { ArrowTurnBackwardIcon, Copy01Icon, GitPullRequestIcon, SmileIcon } from "@hugeicons/core-free-icons"
 import { memo, useEffect, useMemo, useState, type ReactNode } from "react"
 
-import { describeEvent } from "@kiwi/core/format.ts"
+import { describeEvent, githubLine } from "@kiwi/core/format.ts"
 import { ignored, isGifReaction, type Color, type Handoff, type ImageAttachment, type Message, type Trust } from "@kiwi/core/protocol.ts"
 import { isLeadRole, type ChannelState, type Member } from "@kiwi/core/state.ts"
+import type { PrRef } from "@kiwi/core/work.ts"
+import type { Chosen } from "@/lib/asks"
 import { useClock } from "@/lib/channel"
-import { formatAgo, formatFull, formatStamp, memberName } from "@/lib/format"
+import { formatAgo, formatFull, formatStamp, formatTime, memberName } from "@/lib/format"
+import { githubSummary } from "@/lib/github-line"
 import { openHandoff } from "@/lib/handoff-open"
 import { handoffLabel, handoffLeft, handoffOf, handoffOpen } from "@/lib/handoff"
 import { gifByKey } from "@/lib/gifs"
@@ -14,6 +17,8 @@ import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 import { Monogram, toast } from "./kit"
 import { Markdown } from "./lazy"
+import { AskOptions } from "./ask-options"
+import { ChecksWord } from "./pr-checks"
 import { Quote } from "./quote"
 
 /** Anyone who isn't a signed-in person is an agent. */
@@ -22,20 +27,17 @@ export const isAgent = (m: Pick<Member, "kind"> | undefined) => m?.kind !== "hum
 /** Who wrote a message, as far as the transcript needs to know. */
 type Author = Pick<Member, "name" | "kind" | "display" | "sponsor">
 
-/** Time passing in the conversation: a small stamp centred between bubbles, the day set a little heavier, as Messages does. */
-export function TimeMark({ ts }: { ts: number }) {
-  const [day, time] = splitStamp(formatStamp(ts))
+export function DayMark({ ts }: { ts: number }) {
+  const [day] = splitStamp(formatStamp(ts))
   return (
-    <div className="mt-6 mb-2 text-center select-none">
-      <time className="text-stamp text-ink-3" dateTime={new Date(ts).toISOString()} title={formatFull(ts)}>
-        <span className="font-semibold text-ink-2">{day}</span>
-        {time && <span className="tabular-nums"> {time}</span>}
+    <div className="mt-5 mb-1 flex items-center gap-3 text-meta text-ink-3 select-none before:h-px before:flex-1 before:bg-line after:h-px after:flex-1 after:bg-line">
+      <time dateTime={new Date(ts).toISOString()} title={formatFull(ts)}>
+        {day}
       </time>
     </div>
   )
 }
 
-/** "Today at 11:21 AM" as its day and its time. */
 function splitStamp(stamp: string): [string, string] {
   const at = stamp.lastIndexOf(" at ")
   return at < 0 ? [stamp, ""] : [stamp.slice(0, at), stamp.slice(at + 4)]
@@ -54,6 +56,8 @@ function shortEvent(m: Message, state: ChannelState): string {
       return !ev.role ? `${name(ev.member)} has no role now` : isLeadRole(ev.role) ? `${name(ev.member)} is the lead` : `${name(ev.member)} is ${ev.role}`
     case "hold.set":
       return ev.on ? `${who} paused every agent${ev.note ? `: ${ev.note}` : ""}` : `${who} let the agents carry on`
+    case "voice.set":
+      return ev.on ? `${who} allowed voice here` : `${who} turned voice off here`
     case "charter.set":
       return ev.text ? `${who} updated the charter` : `${who} cleared the charter`
     case "fact.set":
@@ -65,13 +69,12 @@ function shortEvent(m: Message, state: ChannelState): string {
   }
 }
 
-/** Something that happened rather than something said: one quiet line centred on the column, as Messages sets them, cut short if long. */
 export function EventRow({ m, state, now, onOpenTask, anchor = "m", more }: { m: Message; state: ChannelState; now: number; onOpenTask?: (id: number) => void; anchor?: string; more?: ReactNode }) {
   const taskRef = m.ev && "task" in m.ev ? m.ev.task : m.ev?.op === "task.add" ? m.seq : null
   const forged = ignored(state.trust.get(m.seq))
   const full = `${memberName(state.members.get(m.from), m.from)} ${describeEvent(m, state)} · ${formatFull(m.ts)} (${formatAgo(m.rts ?? m.ts, now)})`
   return (
-    <p id={`${anchor}${m.seq}`} title={full} className={cx("flex min-w-0 items-baseline justify-center gap-1.5 px-8 py-[3px] text-center text-stamp text-ink-3", forged && "line-through opacity-60")}>
+    <p id={`${anchor}${m.seq}`} title={full} className={cx("flex min-w-0 items-baseline gap-1.5 py-[3px] pr-4 pl-11 text-meta text-ink-3", forged && "line-through opacity-60")}>
       <span className="min-w-0 truncate">{shortEvent(m, state)}</span>
       {taskRef !== null && onOpenTask && (
         <button type="button" onClick={() => onOpenTask(taskRef)} className="shrink-0 font-medium text-ink-2 hover:text-ink hover:underline">
@@ -172,43 +175,31 @@ function phrase(m: Message, me: string, nameOf: (n: string) => string, repliedTo
   }
 }
 
-interface BubbleProps {
+interface MessageProps {
   m: Message
   me: string
-  /** Under your newest message: whether the agents it went to have read it (receipts.ts). */
   receipt?: string
-  /** Members' reactions to it (reactions.ts). */
   reactions?: Chip[]
-  /** Found by the key that signed the message, so two members sharing a name still read right. */
   author?: Author
+  tag?: string
   trust?: Trust
   online: boolean
-  /** The first bubble of a run from one sender: it carries the sender's name (in a group). */
   first: boolean
-  /** The last bubble of a run: the sender's face beside it, and its corner rounds off the run. */
-  last: boolean
-  /** Arrived (or sent) while the conversation was open: it lands with a little motion. */
   fresh?: boolean
-  /** More than two people here: name who's talking. */
-  group: boolean
-  /** The message right above is the one this replies to, so there's no need to quote it. */
   adjacentReply: boolean
   highlighted: boolean
   quoted: (seq: number) => Message | undefined
   nameOf: (name: string) => string
   onReply?: (m: Message) => void
-  /** An open decision for you: its options answer it, and its answer lives in the composer. */
   onChoose?: (choice: string) => void
+  chosen?: Chosen
+  prs?: PrRef[]
   onReact?: (m: Message) => void
   onJump: (seq: number) => void
-  /** The thread this message starts, when it has replies: "1 Reply" under it. */
   thread?: ThreadSummary
   onOpenThread?: (root: number) => void
-  /** Anchor ids are `m<seq>` in the conversation; the thread panel uses its own prefix so a root can appear in both. */
   anchor?: string
-  /** The author's colour: a person's own pick, or their person's for an agent (colorOf). */
   color?: Color | null
-  /** A face other than the monogram at the run's foot: the lead's head. */
   face?: ReactNode
   image?: (img: ImageAttachment) => Promise<string | null>
   onOpenImage?: (m: Message, img: ImageAttachment, src: string) => void
@@ -306,28 +297,81 @@ export interface ThreadSummary {
   forYou: boolean
 }
 
-/**
- * One message as a bubble: yours on the right in system blue, everyone else's on the left in Messages grey,
- * with their face at the foot of the run. Every bubble is round; the last of a run wears Messages'
- * tail, pointing at its sender. An escalation is a plain bubble with an amber "Decision for you"
- * over it; a forged one (shown only when the owner asks) is struck through.
- */
-export const Bubble = memo(function Bubble({
+const LINE_ROW = "flex w-full max-w-[560px] min-w-0 items-center gap-2.5 rounded-row px-3 py-2 text-left text-ui shadow-[inset_0_0_0_1px_var(--line)]"
+
+const PR_STATE: Record<PrRef["state"], { word: string; tone: string }> = {
+  open: { word: "open", tone: "text-doing" },
+  merged: { word: "merged", tone: "text-live" },
+  closed: { word: "closed", tone: "text-ink-3" },
+}
+
+function PrLine({ pr }: { pr: PrRef }) {
+  const st = PR_STATE[pr.state]
+  return (
+    <a
+      href={pr.url}
+      target="_blank"
+      rel="noreferrer"
+      title={`${pr.repo}#${pr.number}${pr.title ? `: ${pr.title}` : ""}`}
+      className={cx(LINE_ROW, "mt-2 text-ink transition-shadow hover:shadow-[inset_0_0_0_1px_var(--edge-strong)]")}
+    >
+      <Icon icon={GitPullRequestIcon} size={16} className="shrink-0 text-ink-3" />
+      <span className="shrink-0 text-ink-3 tabular-nums">#{pr.number}</span>
+      <span className="min-w-0 flex-1 truncate">{pr.title ?? pr.repo}</span>
+      <span className={cx("shrink-0 text-meta", st.tone)}>
+        {st.word}
+        {pr.checks && <ChecksWord checks={pr.checks} />}
+      </span>
+    </a>
+  )
+}
+
+export function GithubRow({ messages, anchor = "m" }: { messages: Message[]; anchor?: string }) {
+  const items = messages.flatMap((m) => (m.ev?.op === "github" ? m.ev.items : []))
+  const parts = githubSummary(items)
+  const title = messages.map((m) => (m.ev?.op === "github" ? githubLine(m.ev.items) : "")).join("\n")
+  return (
+    <p id={`${anchor}${messages[0]!.seq}`} title={title} className="flex min-w-0 items-center gap-2 py-1 pr-4 pl-11 text-meta text-ink-3">
+      <Icon icon={GitPullRequestIcon} size={14} className="shrink-0" />
+      <span className="min-w-0 truncate">
+        GitHub
+        {parts.map((p, i) => (
+          <span key={i}>
+            {i === 0 ? " · " : ", "}
+            {p.ref &&
+              (p.url ? (
+                <a href={p.url} target="_blank" rel="noreferrer" className="font-medium text-accent-text hover:underline">
+                  {p.ref}
+                </a>
+              ) : (
+                <span className="font-medium text-ink-2">{p.ref}</span>
+              ))}
+            {p.ref ? ` ${p.text}` : p.text}
+          </span>
+        ))}
+      </span>
+      {items.length > 1 && <span className="shrink-0 text-ink-2">· {items.length} updates</span>}
+    </p>
+  )
+}
+
+export const MessageRow = memo(function MessageRow({
   m,
   me,
   author,
+  tag,
   trust,
   online,
   first,
-  last,
   fresh,
-  group,
   adjacentReply,
   highlighted,
   quoted,
   nameOf,
   onReply,
   onChoose,
+  chosen,
+  prs,
   onReact,
   onJump,
   thread,
@@ -339,143 +383,89 @@ export const Bubble = memo(function Bubble({
   reactions,
   image,
   onOpenImage,
-}: BubbleProps) {
+}: MessageProps) {
   const forged = ignored(trust)
   const refs = useMemo(() => ({ known: (seq: number) => seq !== m.seq && quoted(seq) !== undefined, open: onJump }), [m.seq, quoted, onJump])
   const mine = m.from === me
   const repliedTo = new Set((m.re ?? []).map((seq) => quoted(seq)?.from).filter((f): f is string => !!f))
-  // Your own bubbles don't need saying who they're to, unless you handed something to people.
   const said = mine && !m.esc ? null : phrase(m, me, nameOf, repliedTo)
   const sponsor = author?.sponsor && isAgent(author) ? `Agent for ${author.sponsor.name}` : isAgent(author) ? "Agent" : "Person"
   const who = memberName(author, m.from)
-  // Image-only messages carry the file names as their body; don't print them.
   const imageOnly = !!m.imgs?.length && m.body === m.imgs.map((i) => i.name).join(", ")
   const decide = !!m.esc
   const handoff = handoffOf(m)
-  // Quote what this answers, unless it's the bubble right above.
   const quotes = adjacentReply ? [] : (m.re ?? []).map((seq) => ({ seq, q: quoted(seq) })).filter(({ q }) => !q || q.kind !== "event")
+  const action = "flex size-7 items-center justify-center rounded-full text-ink-3 transition-colors hover:text-ink"
 
   return (
-    <div id={`${anchor}${m.seq}`} className={cx("group/b relative", first ? "mt-3" : "mt-[2px]", fresh && (mine ? "animate-sent" : "animate-arrived"))}>
-      {/* The bubble and the face beside it: the face sits by the bubble's last line, not by what hangs under it. */}
-      <div className={cx("relative flex items-end gap-2", mine ? "justify-end pl-10 md:pl-16" : "pr-10 md:pr-16")}>
-        {!mine && <div className="w-7 shrink-0 self-end">{last && (face ?? <Monogram name={who} hue={m.from} agent={isAgent(author)} online={online} color={color} size={28} />)}</div>}
+    <div
+      id={`${anchor}${m.seq}`}
+      title={first ? undefined : formatFull(m.ts)}
+      className={cx("group/b relative grid grid-cols-[32px_minmax(0,1fr)] gap-x-3 pr-2", first ? "mt-3" : "mt-0.5", fresh && "animate-arrived", highlighted && "animate-flash rounded-row")}
+    >
+      <div className="pt-0.5">{first && (face ?? <Monogram name={who} hue={m.from} agent={isAgent(author)} online={online} color={color} size={32} />)}</div>
 
-        <div className={cx("flex max-w-[min(80%,600px)] min-w-0 flex-col", mine ? "items-end" : "items-start")}>
-          {first && (!mine || said) && (
-            <p className={cx("mb-1 flex max-w-full items-center gap-1.5 px-3 text-stamp text-ink-3", mine && "justify-end")}>
-              {!mine && group && (
-                <span className="truncate font-medium text-ink-2" title={sponsor}>
-                  {who}
-                  {who !== m.from && isAgent(author) && <span className="ml-1 font-normal text-ink-3">@{m.from}</span>}
-                </span>
-              )}
-              {said &&
-                (said.decide ? (
-                  <span className="shrink-0 rounded-full bg-decide-wash px-1.5 font-semibold text-decide">{said.text}</span>
-                ) : (
-                  <span className={cx("truncate", said.alert && "font-semibold text-alert")}>{said.text}</span>
-                ))}
-            </p>
-          )}
+      <div className="min-w-0">
+        {first && (
+          <p className="flex min-w-0 items-baseline gap-2 text-ui">
+            <span className="truncate font-semibold text-ink" title={sponsor}>
+              {who}
+              {who !== m.from && isAgent(author) && <span className="ml-1 font-normal text-ink-3">@{m.from}</span>}
+            </span>
+            {tag && <span className="shrink-0 text-meta text-ink-3">{tag}</span>}
+            {said && !(said.decide && onChoose && !chosen) && (
+              <span className={cx("min-w-0 truncate text-meta", said.alert ? "font-semibold text-alert" : said.decide ? "font-medium text-decide" : "text-ink-3")}>{said.text}</span>
+            )}
+            <time dateTime={new Date(m.ts).toISOString()} title={formatFull(m.ts)} className="shrink-0 text-stamp text-ink-3 tabular-nums">
+              {formatTime(m.ts)}
+            </time>
+          </p>
+        )}
 
-          {quotes.map(({ seq, q }, i) => (
-            <Quote key={seq} seq={seq} q={q} mine={mine} joined={i === quotes.length - 1} nameOf={nameOf} onJump={onJump} />
-          ))}
+        {quotes.map(({ seq, q }) => (
+          <Quote key={seq} seq={seq} q={q} nameOf={nameOf} onJump={onJump} />
+        ))}
 
-          {!imageOnly && (
-            <div
-              className={cx(
-                // Code keeps its lines: it scrolls inside the bubble rather than wrapping mid-word like prose.
-                "bubble-text relative isolate max-w-full min-w-0 rounded-bubble px-3.5 py-[7px] text-body [&_pre]:max-w-full [&_pre]:[overflow-wrap:normal] [&_pre]:whitespace-pre",
-                mine
-                  ? "bg-bubble-me text-bubble-me-ink [&_[data-ref]]:text-bubble-me-ink [&_[data-ref]]:decoration-white/50 [&_a]:text-bubble-me-ink [&_a]:decoration-white/50 [&_code]:bg-white/18 [&_li]:marker:text-white/70 [&_pre]:border-white/15 [&_pre]:bg-black/15 [&_pre]:text-white"
-                  : "bg-bubble-them text-bubble-them-ink",
-                forged && "line-through opacity-60",
-                highlighted && "animate-flash outline-2 outline-offset-2 outline-[var(--ring)]"
-              )}
-            >
-              <Markdown refs={refs}>{m.body}</Markdown>
-              {m.esc && m.choices?.length ? (
-                <ul aria-label="Options" className={onChoose ? "mt-2 flex flex-col gap-1.5" : "mt-1.5 list-disc pl-5 text-ui"}>
-                  {m.choices.map((c) => (
-                    <li key={c}>
-                      {onChoose ? (
-                        <button
-                          type="button"
-                          onClick={() => onChoose(c)}
-                          className="w-full rounded-row bg-wash-2 px-3 py-1.5 text-left text-ui leading-snug [overflow-wrap:anywhere] transition-colors hover:bg-pick"
-                        >
-                          {c}
-                        </button>
-                      ) : (
-                        c
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              {last && <Tail mine={mine} />}
-            </div>
-          )}
-
-          {m.imgs?.length ? (
-            <div className={cx("mt-0.5 flex flex-wrap gap-1", mine && "justify-end")}>
-              {m.imgs.map((img, i) => (
-                <Attached key={i} img={img} load={image} onOpen={onOpenImage ? (src) => onOpenImage(m, img, src) : undefined} />
-              ))}
-            </div>
-          ) : null}
-        </div>
-
-        {/* Reply and copy, beside the bubble on hover: on its inner side, so they never cover anything. */}
-        <div className={cx("absolute bottom-0 hidden items-center gap-0.5 group-focus-within/b:flex group-hover/b:flex", mine ? "left-0" : "right-0")}>
-          {onReact && (
-            <button
-              type="button"
-              aria-label="React with a GIF"
-              title="React with a GIF"
-              onClick={() => onReact(m)}
-              className="flex size-7 items-center justify-center rounded-full text-ink-3 transition-colors hover:bg-wash-2 hover:text-ink"
-            >
-              <Icon icon={SmileIcon} size={15} />
-            </button>
-          )}
-          {onReply && (
-            <button
-              type="button"
-              aria-label="Reply"
-              title="Reply"
-              onClick={() => onReply(m)}
-              className="flex size-7 items-center justify-center rounded-full text-ink-3 transition-colors hover:bg-wash-2 hover:text-ink"
-            >
-              <Icon icon={ArrowTurnBackwardIcon} size={15} />
-            </button>
-          )}
-          <button
-            type="button"
-            aria-label="Copy text"
-            title="Copy text"
-            onClick={() => navigator.clipboard.writeText(m.body).then(() => toast("Copied"))}
-            className="flex size-7 items-center justify-center rounded-full text-ink-3 transition-colors hover:bg-wash-2 hover:text-ink"
+        {!imageOnly && (
+          <div
+            className={cx(
+              "bubble-text max-w-[760px] min-w-0 text-body text-ink [&_pre]:max-w-full [&_pre]:[overflow-wrap:normal] [&_pre]:whitespace-pre",
+              first && "mt-0.5",
+              forged && "line-through opacity-60"
+            )}
           >
-            <Icon icon={Copy01Icon} size={14} />
-          </button>
-        </div>
-      </div>
+            <Markdown refs={refs}>{m.body}</Markdown>
+          </div>
+        )}
 
-      {/* What hangs off the bubble (its answer link, notes, replies), under it on the bubble's edge. */}
-      <div className={cx("flex flex-col", mine ? "items-end pl-10 md:pl-16" : "items-start pr-10 pl-9 md:pr-16")}>
+        {onChoose && !chosen && (
+          <p className="mt-2 flex items-center gap-1.5 text-meta font-medium text-decide">
+            <span aria-hidden className="size-1.5 rounded-full bg-decide" />
+            Waiting on you
+          </p>
+        )}
+        {m.choices?.length ? <AskOptions choices={m.choices} chosen={chosen} onChoose={onChoose} nameOf={nameOf} /> : null}
+
+        {m.imgs?.length ? (
+          <div className="mt-1.5 flex flex-wrap gap-1">
+            {m.imgs.map((img, i) => (
+              <Attached key={i} img={img} load={image} onOpen={onOpenImage ? (src) => onOpenImage(m, img, src) : undefined} />
+            ))}
+          </div>
+        ) : null}
+
+        {!forged && prs?.map((pr) => <PrLine key={pr.url} pr={pr} />)}
+
         {handoff && !mine && (m.to?.includes(me) || m.to?.includes("*")) && <HandoffLine handoff={handoff} />}
-        {decide && !mine && onReply && !onChoose && (
-          <p className="mt-1 flex items-center gap-1 px-3 text-meta">
+        {decide && !mine && onReply && !onChoose && !chosen && (
+          <p className="mt-1 text-meta">
             <button type="button" onClick={() => onReply(m)} className="font-medium text-decide hover:underline">
               Answer
             </button>
           </p>
         )}
         {!!reactions?.length && !forged && (
-          <p className={cx("mt-0.5 flex flex-wrap gap-1 px-2", mine && "justify-end")}>
+          <p className="mt-1 flex flex-wrap gap-1">
             {reactions.map((c) => {
               const gif = isGifReaction(c.emoji) ? gifByKey(c.emoji) : undefined
               const who = c.who.join(", ")
@@ -491,7 +481,10 @@ export const Bubble = memo(function Bubble({
                   key={c.emoji}
                   title={chipLabel(c)}
                   aria-label={chipLabel(c)}
-                  className={cx("inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-stamp tabular-nums", c.mine ? "bg-accent-wash text-accent-text" : "bg-wash-2 text-ink-2")}
+                  className={cx(
+                    "inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-stamp tabular-nums",
+                    c.mine ? "text-accent-text shadow-[inset_0_0_0_1px_var(--accent)]" : "text-ink-2 shadow-[inset_0_0_0_1px_var(--line)]"
+                  )}
                 >
                   <span aria-hidden>{c.emoji}</span>
                   {c.who.length > 1 && <span aria-hidden>{c.who.length}</span>}
@@ -501,37 +494,40 @@ export const Bubble = memo(function Bubble({
           </p>
         )}
         {receipt && mine && !forged && (
-          <p className="mt-0.5 px-3 text-stamp text-ink-3" aria-live="polite">
+          <p className="mt-0.5 text-stamp text-ink-3" aria-live="polite">
             {receipt}
           </p>
         )}
         {forged && (
-          <p className="mt-0.5 px-3 text-stamp text-alert">
+          <p className="mt-0.5 text-stamp text-alert">
             {trust === "refused" ? `Not allowed by your settings, so every view leaves it out.` : `Forged: not signed by ${m.from}’s key, so every view leaves it out.`}{" "}
             {m.pk ? `Signed by key ${m.pk.slice(0, 8)}.` : "Unsigned."}
           </p>
         )}
 
         {thread && onOpenThread && (
-          <button type="button" onClick={() => onOpenThread(m.seq)} className="mt-2 mb-2 px-3 text-left text-meta font-medium text-ink-2 hover:text-ink hover:underline">
-            {thread.count === 1 ? "1 Reply" : `${thread.count} Replies`}
+          <button type="button" onClick={() => onOpenThread(m.seq)} className="mt-1.5 mb-1 text-left text-meta font-medium text-accent-text hover:underline">
+            {thread.count === 1 ? "1 reply" : `${thread.count} replies`}
             {thread.forYou && <span className="ml-1.5 font-normal text-ink-3">· for you</span>}
           </button>
         )}
       </div>
+
+      <div className="absolute -top-3 right-2 hidden items-center gap-0.5 rounded-full bg-canvas px-0.5 shadow-[0_0_0_1px_var(--line)] group-focus-within/b:flex group-hover/b:flex">
+        {onReact && (
+          <button type="button" aria-label="React with a GIF" title="React with a GIF" onClick={() => onReact(m)} className={action}>
+            <Icon icon={SmileIcon} size={15} />
+          </button>
+        )}
+        {onReply && (
+          <button type="button" aria-label="Reply" title="Reply" onClick={() => onReply(m)} className={action}>
+            <Icon icon={ArrowTurnBackwardIcon} size={15} />
+          </button>
+        )}
+        <button type="button" aria-label="Copy text" title="Copy text" onClick={() => navigator.clipboard.writeText(m.body).then(() => toast("Copied"))} className={action}>
+          <Icon icon={Copy01Icon} size={14} />
+        </button>
+      </div>
     </div>
   )
 })
-
-/**
- * Messages' tail: a small hook off the last bubble of a run, toward its sender, in the bubble's own
- * colour. It starts on the bubble's flat bottom (20px in from its edge, past the rounded corner),
- * fills the corner, and curls out 8px to a point. Behind the text (the bubble isolates it), never over it.
- */
-function Tail({ mine }: { mine: boolean }) {
-  return (
-    <svg aria-hidden viewBox="0 0 28 20" className={cx("pointer-events-none absolute bottom-0 -z-10 h-5 w-7", mine ? "-right-2 fill-bubble-me" : "-left-2 -scale-x-100 fill-bubble-them")}>
-      <path d="M0 20V0H20C20 9 22 15.5 27.5 19.6C23 20.4 19.5 19.8 16.6 18.3C13.7 16.8 8 20 0 20Z" />
-    </svg>
-  )
-}

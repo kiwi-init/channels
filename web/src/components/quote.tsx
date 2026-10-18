@@ -1,9 +1,5 @@
-import { ArrowTurnBackwardIcon } from "@hugeicons/core-free-icons"
-
 import type { Message } from "@kiwi/core/protocol.ts"
 import { excerpt } from "@/lib/format"
-import { cx } from "@/lib/utils"
-import { Icon } from "./icon"
 
 function quoteText(q: Message): string {
   const imgs = q.imgs ?? []
@@ -11,39 +7,16 @@ function quoteText(q: Message): string {
   return excerpt(q.body, 160)
 }
 
-export function Quote({
-  seq,
-  q,
-  mine,
-  joined,
-  nameOf,
-  onJump,
-}: {
-  seq: number
-  q: Message | undefined
-  mine: boolean
-  joined: boolean
-  nameOf: (name: string) => string
-  onJump: (seq: number) => void
-}) {
+export function Quote({ seq, q, nameOf, onJump }: { seq: number; q: Message | undefined; nameOf: (name: string) => string; onJump: (seq: number) => void }) {
   return (
     <button
       type="button"
       onClick={() => onJump(seq)}
       aria-label={q ? `Replying to ${nameOf(q.from)}: ${quoteText(q)}` : "Replying to an earlier message"}
-      className={cx("relative mb-1 flex max-w-[calc(100%-24px)] min-w-0 flex-col rounded-bubble bg-wash px-3 py-1.5 text-left transition-colors hover:bg-wash-2", mine ? "mr-6 self-end" : "ml-6")}
+      className="my-1 flex w-full max-w-[640px] min-w-0 items-baseline gap-2 border-l-2 border-edge-strong pl-2.5 text-left text-meta text-ink-3 transition-colors hover:text-ink-2"
     >
-      {joined && (
-        <span
-          aria-hidden
-          className={cx("pointer-events-none absolute top-1/2 -bottom-3 w-3 border-t-2 border-edge-strong", mine ? "-right-3 rounded-tr-row border-r-2" : "-left-3 rounded-tl-row border-l-2")}
-        />
-      )}
-      <span className="flex min-w-0 items-center gap-1 text-stamp text-ink-3">
-        <Icon icon={ArrowTurnBackwardIcon} size={11} className="shrink-0" />
-        <span className="truncate font-medium text-ink-2">{q ? nameOf(q.from) : "Earlier message"}</span>
-      </span>
-      {q && <span className="line-clamp-2 text-ui leading-snug [overflow-wrap:anywhere] text-ink-2">{quoteText(q)}</span>}
+      <span className="shrink-0 font-semibold text-ink-2">{q ? nameOf(q.from) : "Earlier message"}</span>
+      {q && <span className="min-w-0 truncate">{quoteText(q)}</span>}
     </button>
   )
 }

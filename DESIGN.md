@@ -44,8 +44,8 @@ Light / dark are the two sides of each `light-dark()` in `index.css`:
 |---|---|---|
 | `canvas` (conversation) | `#ffffff` | `#0d0d0e` |
 | `rail` (list and details; the same as `canvas`) | `#ffffff` | `#0d0d0e` |
-| `raised` (cards, popovers) | `#ffffff` | `#1c1c1e` |
-| `field` (inputs) | `#f0f0f3` | `#1a1a1c` |
+| `raised` (cards, popovers) | the canvas | the canvas |
+| `field` (inputs) | the canvas | the canvas |
 | `ink` | `#0f0f11` | `#f3f3f5` |
 | `ink-2` | `#4a4a52` | `#bcbcc3` |
 | `ink-3` (quiet floor, still 4.5:1) | `#6b6b73` | `#8f8f97` |
@@ -95,17 +95,20 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 
 ## 5. Radius, shadow, blur
 
-- Steps: `row 8px`, `ctl 10px`, `card 16px`, `bubble 20px` (a message
-  bubble: rounder than anything else, so a conversation reads as one at a
-  glance) and `dock 26px` (the composer, soft without a pill's half-moon
+- Steps: `row 8px`, `ctl 10px`, `card 16px`, `bubble 20px` (pictures in
+  a message and the annotator) and `dock 26px` (the composer, soft without a pill's half-moon
   ends once it grows to several lines).
 - Buttons and rows use `row`; controls and inputs `ctl`; cards `card`;
-  bubbles `bubble`; the composer `dock`. Arbitrary `rounded-[Npx]` fails
+  pictures `bubble`; the composer `dock`. Arbitrary `rounded-[Npx]` fails
   `ui-tokens.ts`.
 - One shadow: `pop` (`0 0 0 1px pop-edge, 0 16px 40px -12px pop-shade`).
   No other shadows, no colored shadows.
-- No blur in surfaces: surfaces are flat and opaque, separated by steps in
-  tone, never hairlines between areas. (No glass/liquid treatments.)
+- One background: everything sits on `canvas`; `raised` and `field` are
+  the canvas too. Rows, cards, search, inputs and the composer have no grey
+  fill and no background of their own. They are separated by spacing and a
+  thin 1px `line` (the `edge` utility), never by a step in tone, and there
+  is no hairline between the sidebar and the page. Popovers and dialogs lift
+  off the canvas with the `pop` shadow only. (No glass/liquid treatments.)
 - Fall back to solid fills under `prefers-contrast: more`.
 
 ## 6. Motion
@@ -129,8 +132,11 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 - `ui/`: `menu`, `palette` (command palette: channels, actions,
   appearance), `panel`, `popover`, `tooltip` (500ms delay).
 - Rows (channels, tasks): idle transparent, hover `wash`, open `pick`;
-  title `ui` semibold, preview `meta` quiet.
-- Inputs: `field` fill; focus ring is `2px ring` with `1px` offset and
+  title `ui` semibold, preview `meta` quiet. In the channel's sidebar and
+  tabs the chosen item gets only a 2px `accent` mark, never a fill.
+- Buttons: primary `accent`; secondary outlined (a 1px `edge-strong` ring,
+  no fill, `wash` on hover).
+- Inputs: no fill, a 1px `line` edge (`edge`); focus ring is `2px ring` with `1px` offset and
   `6px` radius (base layer, so utilities can still take it off).
 - Placeholders and empty states use quiet ink, never reduced-opacity text.
 
@@ -148,8 +154,14 @@ From `design-tokens.ts`:
 
 ## 9. App patterns
 
-- Shell: flat `rail` sidebar beside one inset `canvas` panel (edge to edge
-  on a phone). No hairlines between areas.
+- Shell: the channel rail, then inside a channel its own sidebar (280px,
+  from 768px wide): the channel's name and who is here, Search, the views
+  with counts (Everything, Needs you, In progress, In review, Done this
+  week), the agents with what each is doing now, and the conversations
+  (rooms and direct ones). The page beside it has one header row: what is
+  shown, the channel's status (working, merged today, needs you), and the
+  Tasks / Agents / Conversation tabs. A view opens Tasks; a conversation
+  opens Conversation. The approved mockups are in `docs/ui/`.
 - On a wide window the list is an 80px icon rail, as Grok's
   collapsed one: the Mac traffic lights on its header row, each channel
   as its 40px tile in a 56px `card`-round cell (`pick` when open), a blue
@@ -158,31 +170,39 @@ From `design-tokens.ts`:
   line. New, the app update and your account sit at its foot. A wide
   window always shows the rail, with no way to expand it; a phone always
   shows the full list.
-- Conversation: your bubbles `accent` with white ink; theirs `bubble-them`
-  with `ink`. Runs stack at `stack` radius on the joined corners.
-- Replies, as in Messages: a reply sits in the conversation where it was
-  sent, never folded away. Above it, on its sender's side, a `wash`
-  `bubble`-round quote of what it answers (the name in `stamp`, two lines
-  of `ui` in `ink-2`), joined to the reply by a 2px `edge-strong` hook;
-  pressing it jumps to the message and flashes it. No quote when the
-  answered message is the bubble right above. Under a message, "N Replies"
-  opens them together in the thread panel, except one reply that already
-  follows it.
+- Conversation: no bubbles, everyone on the left, on the shell's one
+  background. A message is a row: a 32px face, then the name in `ui`
+  semibold, a quiet `owner` or `lead` tag and the time in `stamp`, the
+  text in `body` below (at most 760px wide). A run from one sender within
+  five minutes keeps one header. The day sits between days as a `meta`
+  word between two `line` rules; there are no other time marks.
+- Replies: a reply sits where it was sent, never folded away. Above its
+  text, one `meta` line with a 2px `edge-strong` rule on the left: the
+  name in `ink-2`, the words cut short in `ink-3`; pressing it jumps to
+  the message and flashes it. No quote when the answered message is the
+  one right above. Under a message, "N replies" in `accent-text` opens
+  them in the thread panel, except one reply that already follows it.
+- Things in a message are lines, outlined with a 1px `line` ring at `row`
+  radius, never filled: an ask's options (the shared AskOptions), a PR it
+  links (number, title, GitHub's state and checks), a task's card (its
+  owner, id, title and live state, its last line under it). Reactions are
+  outlined chips. Hover actions float at the row's top right on the
+  canvas, outlined.
+- Events are quiet `meta` lines under the text column. A run of GitHub's
+  news folds into one: "GitHub · #371 opened, 3 pushes, ci-ok passed ·
+  4 updates", each PR or issue a link.
 - Needs-you: approvals, escalations and review-waiting work in one place at
-  the top; `Pause agents` in the header stops every agent at once.
-- Overview cards: always in the chat area from 1280px wide, never behind
-  a button. Cards on the canvas itself, outlined with a 1px `edge-strong`
-  ring at `card` radius, 384px wide, 24px from the window's edge and 12px
-  apart, float at the top right of the conversation, each folding from its
-  header: Agents, Tasks (the 5 last updated, a `SEGMENTED` filter that
-  leaves out a state with no task, wide enough that every tab fits on one
-  row), Pull requests (the last 5 linked in the channel). The Tasks panel
-  has the same filter with every state, and it wraps to a second row
-  rather than cut a tab off. Rows put the time on the right. The conversation stays
-  centered while it has room and moves left only as far as it must. The
-  agent strip under the composer gives way to the Agents card. A thread,
-  the details or a task in the side column hide the cards until it closes.
-  Below 1280px the cards are hidden and the header's Tasks button stays.
+  the top, as rows on the canvas, never folded behind a button: a 36px
+  `row`-round outlined square with the kind's glyph in `decide` (a question,
+  a decision, a review, a face for someone asking in), the question in
+  `body`, a `meta` line in `ink-3` (task, who asked, when), and the answers
+  on the row's right as outlined buttons (below it on a phone). Rows are
+  split by `line`, not by fills. `Pause agents` in the header stops every
+  agent at once.
+- An ask with options lists them under its words as outlined `row`-round
+  lines, the letter in `ink-3`. While it waits on you it says so in
+  `decide` under the bubble and its options answer it; once answered, the
+  chosen line wears an `accent` border and "name chose this · time".
 - Lead: `coordinator-head` (system-blue shell, pale screen, quiet
   steel trim; `robot-heads`); behind it in a round avatar a soft blue field.
 - Command palette wears the same icons as the menus. Dark/light/system and
@@ -203,12 +223,17 @@ Anatomy top to bottom: reply bar, textarea row, mention notes,
 actions row with send.
 
 - Mentions are inline pills.
-- Reply on a bubble opens the reply bar; Escape cancels it. In a thread every
+- Reply on a message opens the reply bar; Escape cancels it. In a thread every
   message answers the root and there is no reply bar.
 - Drag-and-drop and pasted images render inside the composer; sending shows
   in place, never an external spinner.
 - Disabled send and placeholders stay quiet; the send button is the one
   primary accent in the composer.
+- Talk to channel (Grok Voice) sits beside Dictate, only where the owner
+  allowed voice (Details → Voice) and in the Mac app. It turns `accent`
+  while live, and an inline line above the field says "voice: Grok Voice
+  hears this" with a `live` dot, the running caption and an outlined End.
+  Dictate stays its own button: it only types.
 
 ## 11. Accessibility (mandatory)
 

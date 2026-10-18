@@ -211,6 +211,12 @@ async function run(part: Part): Promise<string[]> {
       }),
     );
     for (const item of ["Charter", "Rename channel"]) await opens(`Details → ${item}`, () => inDetails(() => panel.getByRole("button", { name: new RegExp(`^${item}`) }).click()));
+    at = "Details → Voice: the owner allows it for the channel";
+    await inDetails(async () => {
+      await panel.getByRole("button", { name: /^Voice/ }).click();
+      await panel.getByText(/^Allowed: each person/).waitFor({ timeout: 15000 });
+    });
+    log(`ok  ${at}`);
     if (await panel.isVisible()) await panel.getByRole("button", { name: "Close details" }).click();
 
     at = "send and reply";
@@ -283,7 +289,8 @@ async function run(part: Part): Promise<string[]> {
     await createChannel();
     await send("smoke test");
 
-    const overview = page.getByRole("complementary", { name: "Overview" });
+    const sidebar = page.getByRole("complementary", { name: "Channel" });
+    const toTab = (name: "Tasks" | "Agents" | "Conversation") => page.getByRole("navigation", { name: "Views of the channel" }).getByRole("button", { name, exact: true }).click();
     const addAgent = page.getByRole("region", { name: "Add an agent" });
     const channel = page.url();
     const code = new URL(channel).hash.slice(1);
@@ -291,9 +298,7 @@ async function run(part: Part): Promise<string[]> {
     const joining = kiwi(["join", code, "smoke", "--relay", BASE, "--as", "bot", "--role", "tester"]);
     const needs = page.getByRole("region", { name: "Needs you" });
     const needsOpen = async () => {
-      const banner = needs.getByRole("button", { name: /needs? you/ }).first();
-      await banner.waitFor({ timeout: 30000 });
-      if ((await banner.getAttribute("aria-expanded")) !== "true") await banner.click();
+      await needs.getByRole("heading", { name: /^Needs you/ }).waitFor({ timeout: 30000 });
     };
     const letIn = needs.getByRole("button", { name: "It matches: let in" });
     const showCode = needs.getByRole("button", { name: "Show code" });
@@ -302,6 +307,10 @@ async function run(part: Part): Promise<string[]> {
     if (await showCode.count()) await showCode.click();
     await letIn.waitFor({ timeout: 30000 });
     await needs.getByText("claude-sonnet-5-5").first().waitFor({ timeout: 5000 });
+    if (process.env.SMOKE_SHOTS) {
+      await needs.evaluate((el) => el.scrollIntoView({ block: "start" }));
+      await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "needs-you.png") });
+    }
     log(`ok  ${at} (its model shows)`);
     await opens("Needs you → Choose what it can do…", () => needs.getByRole("button", { name: "Choose what it can do…" }).click());
     at = "approve";
@@ -338,10 +347,9 @@ async function run(part: Part): Promise<string[]> {
 
     const smokeTask = /T\d+/.exec(await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke task", "--owner", "bot"]))?.[0] ?? "T0";
     at = "Task in the Tasks panel";
-    const conversations = page.getByRole("main").getByRole("navigation", { name: "Conversations" });
     const tasksPanel = page.getByRole("complementary", { name: "Tasks" });
-    await overview
-      .getByRole("region", { name: "Tasks" })
+    await toTab("Tasks");
+    await page
       .getByRole("button", { name: /Smoke task/ })
       .first()
       .click({ timeout: 15000 });
@@ -355,6 +363,7 @@ async function run(part: Part): Promise<string[]> {
     await tasksPanel.getByText("smoke in the task", { exact: true }).first().waitFor();
     await tasksPanel.getByRole("button", { name: "Close tasks" }).click();
     await tasksPanel.waitFor({ state: "detached" });
+    await toTab("Conversation");
     await page
       .waitForFunction(
         (text) => {
@@ -398,23 +407,39 @@ async function run(part: Part): Promise<string[]> {
 
     at = "ask-human: the question sits in the composer with its options, and the task waits on a person until one is picked";
     await kiwi(["-c", "smoke", "--as", "bot", "ask-human", "--task", smokeTask, "--option", "A: ship it", "--option", "B: wait a day", "Ship the smoke build now?"]);
-    const awaiting = overview.getByRole("region", { name: "Tasks" }).getByText("Needs a decision");
+    const awaiting = page.getByText("Needs a decision");
+    await toTab("Tasks");
     await awaiting.first().waitFor({ timeout: 15000 });
+    await toTab("Conversation");
     const question = page.getByRole("region", { name: "Question" });
     await question.getByText("Ship the smoke build now?").waitFor({ timeout: 15000 });
     if (await needs.count()) throw new Error("a decision for the person showed in Needs you as well as in the composer");
     await question.getByRole("button", { name: "Something else" }).waitFor();
     await question.getByRole("list", { name: "Options" }).getByRole("button", { name: "B: wait a day" }).click();
-    await awaiting.first().waitFor({ state: "detached", timeout: 15000 });
     await question.waitFor({ state: "detached", timeout: 15000 });
+    await toTab("Tasks");
+    await awaiting.first().waitFor({ state: "detached", timeout: 15000 });
+    await toTab("Conversation");
+    log(`ok  ${at}`);
+
+    at = "an answered ask says who chose what, on the ask itself";
+    await kiwi(["-c", "smoke", "--as", "bot", "ask-human", "--option", "A: red", "--option", "B: blue", "Which colour for the smoke?"]);
+    await question.getByText("Which colour for the smoke?").waitFor({ timeout: 15000 });
+    await page.getByRole("main").getByText("Waiting on you").first().waitFor({ timeout: 15000 });
+    await question.getByRole("list", { name: "Options" }).getByRole("button", { name: "B: blue" }).click();
+    await page
+      .getByRole("main")
+      .getByText(/chose this/)
+      .first()
+      .waitFor({ timeout: 15000 });
     log(`ok  ${at}`);
 
     at = "Take over, then cancel, a task waiting on an agent's review";
     const added = /added (T\d+)/.exec(await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke review", "--owner", "bot", "--review", "helper"]))?.[1];
     if (!added) throw new Error("kiwi task add printed no task id");
     await kiwi(["-c", "smoke", "--as", "bot", "task", "review", added]);
-    await overview
-      .getByRole("region", { name: "Tasks" })
+    await toTab("Tasks");
+    await page
       .getByRole("button", { name: /Smoke review/ })
       .first()
       .click({ timeout: 15000 });
@@ -460,15 +485,18 @@ async function run(part: Part): Promise<string[]> {
     await page.getByRole("textbox", { name: "Message" }).fill("smoke, privately");
     await page.keyboard.press("Enter");
     await page.getByText("smoke, privately", { exact: true }).first().waitFor({ timeout: 15000 });
-    await conversations.getByRole("button", { name: "Back to chat" }).click();
-    await conversations.getByRole("button", { name: "Back to chat" }).waitFor({ state: "detached" });
+    const general = sidebar.getByRole("region", { name: "Conversations" }).getByRole("button", { name: /^# general/ });
+    await general.click();
+    await general.and(page.locator("[aria-current=page]")).waitFor();
     log(`ok  ${at} and a direct conversation`);
 
     at = "Tasks panel";
-    await overview.getByRole("region", { name: "Agents" }).waitFor();
-    await overview.getByRole("region", { name: "Pull requests" }).waitFor();
-    await overview.getByRole("button", { name: "All tasks" }).click();
-    await tasksPanel
+    await sidebar.getByRole("region", { name: "Agents" }).waitFor();
+    await sidebar
+      .getByRole("navigation", { name: "Views" })
+      .getByRole("button", { name: /^Everything/ })
+      .click();
+    await page
       .getByRole("button", { name: /Smoke task/ })
       .first()
       .click();
@@ -476,6 +504,7 @@ async function run(part: Part): Promise<string[]> {
     await tasksPanel.getByRole("textbox", { name: "Filter tasks" }).waitFor();
     await page.keyboard.press("Escape");
     await tasksPanel.waitFor({ state: "detached" });
+    await toTab("Conversation");
     await page.getByRole("textbox", { name: "Message" }).waitFor();
     log(`ok  ${at}`);
 

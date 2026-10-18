@@ -5,8 +5,7 @@ import { PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts"
 import { Quote } from "./quote"
 
 const msg = (over: Partial<Message>): Message => ({ v: PROTOCOL_VERSION, id: "m7", seq: 7, ts: 0, from: "otter", kind: "msg", body: "ship it once ci-ok is green", ...over })
-const html = (q: Message | undefined, mine = false, joined = true) =>
-  renderToStaticMarkup(createElement(Quote, { seq: 7, q, mine, joined, nameOf: (n: string) => (n === "otter" ? "Otter" : n), onJump: () => undefined }))
+const html = (q: Message | undefined) => renderToStaticMarkup(createElement(Quote, { seq: 7, q, nameOf: (n: string) => (n === "otter" ? "Otter" : n), onJump: () => undefined }))
 
 describe("a reply quotes what it answers, inline", () => {
   test("names the sender and quotes the words", () => {
@@ -35,9 +34,10 @@ describe("a reply quotes what it answers, inline", () => {
     expect(html(undefined)).toContain("Earlier message")
   })
 
-  test("the line to the reply runs on the sender's side, and only from the last quote", () => {
-    expect(html(msg({}), false)).toContain("border-l-2")
-    expect(html(msg({}), true)).toContain("border-r-2")
-    expect(html(msg({}), false, false)).not.toContain("border-t-2")
+  test("one line: a rule on the left, the name, then the words cut short", () => {
+    const out = html(msg({ body: "x".repeat(400) }))
+    expect(out).toContain("border-l-2")
+    expect(out).toContain("truncate")
+    expect(out).not.toContain("line-clamp")
   })
 })

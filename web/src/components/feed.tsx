@@ -92,7 +92,7 @@ function EventLine({
 function ThreadCard({ messages, room, state, now }: { messages: Message[]; room?: string; state: ChannelState; now: number }) {
   const roomName = room && state.rooms.size > 1 ? state.rooms.get(room)?.name : undefined
   return (
-    <div className="my-2 overflow-hidden rounded-card bg-field">
+    <div className="my-2 overflow-hidden rounded-card edge">
       {messages.map((m, i) => {
         const author = state.members.get(m.from)
         return (
