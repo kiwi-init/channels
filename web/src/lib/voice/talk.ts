@@ -3,7 +3,7 @@ import type { ChannelState } from "@kiwi/core/state.ts"
 
 import { connectGrokVoice, type GrokVoice, type OpenSocket, type Playback } from "./grok"
 import { voiceNewsFeed, voiceSnapshot } from "./news"
-import { VOICE_TOOLS, runVoiceTool, type ToolCtx } from "./tools"
+import { VOICE_TOOLS, runVoiceTool, type ToolCtx, type Verbs } from "./tools"
 
 export type TalkStatus = "off" | "connecting" | "live"
 
@@ -44,6 +44,7 @@ export interface Talk {
   use(tools: ToolCtx): void
 }
 
+const STOP_AFTER_MS = 2500
 const NEWS = "Channel news. Say it when it fits, in a sentence, without cutting the person off:"
 
 export function instructionsFor(c: TalkChannel): string {
@@ -51,7 +52,10 @@ export function instructionsFor(c: TalkChannel): string {
     `You are the voice of a Kiwi channel, where people and AI agents work together. You talk with ${c.nameOf(c.me)}.`,
     "Speak briefly and plainly, like a teammate on a call. Say task numbers as T and the number.",
     c.tools
-      ? "Look things up with your tools rather than guessing. Before you post, answer a question, pause the agents or add a task, read back exactly what you'll do and wait for a yes."
+      ? [
+          "Look things up with your tools rather than guessing. Before you post, answer a question or add a task, read back exactly what you'll do and wait for a yes.",
+          "Three words are verbs. “Yes” with nothing pending: call yes with confirmed false and say its readback word for word; when they say yes to it, call yes with confirmed true. “Hold”: the same with hold. “Stop”: the same with stop, which ends the call.",
+        ].join(" ")
       : "You can tell them what's going on in the channel. You can't post, approve or change anything: when they ask for that, say they can type it in the composer.",
     "System messages that start with “Channel news” are things that just happened; mention them when it fits.",
     "",
@@ -74,6 +78,7 @@ export function createTalk(deps: TalkDeps): Talk {
   let session: { voice: GrokVoice; mic: Mic | null; speaker: Playback & { close(): void }; news: (m: Message, s: ChannelState) => string | null; after: number } | null = null
   let run = 0
   let tools: ToolCtx | null = null
+  let verbs: Verbs = { pending: null }
 
   const set = (next: Partial<TalkView>) => {
     view = { ...view, ...next }
@@ -99,6 +104,7 @@ export function createTalk(deps: TalkDeps): Talk {
       if (session || view.status !== "off") return
       const mine = ++run
       tools = c.tools ?? null
+      verbs = { pending: null }
       set({ status: "connecting", heard: "", saying: "", error: null })
       try {
         const { token } = await deps.token(c.roomId)
@@ -123,7 +129,8 @@ export function createTalk(deps: TalkDeps): Talk {
             call: (call) => {
               const ctx = tools
               if (mine !== run || !ctx) return
-              void runVoiceTool(call.name, call.args, ctx).then((out) => mine === run && voice.answer(call.id, out))
+              const endCall = () => setTimeout(() => mine === run && end(null), STOP_AFTER_MS)
+              void runVoiceTool(call.name, call.args, { ...ctx, endCall }, verbs).then((out) => mine === run && voice.answer(call.id, out))
             },
             failed: (e) => mine === run && set({ error: e.message }),
           },

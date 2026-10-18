@@ -61,7 +61,7 @@ function ctx(over: Partial<ToolCtx> = {}) {
     channel: "channels",
     isOwner: true,
     online: new Set(["wren"]),
-    requests: [{ name: "otter", display: "Otter" }],
+    requests: [{ id: "r1", name: "otter", display: "Otter", kind: "agent", check: "waiting", code: null }],
     nameOf: (n) => names[n] ?? n,
     send: async (body, opts) => {
       sent.push({ body, opts })
@@ -75,7 +75,7 @@ function ctx(over: Partial<ToolCtx> = {}) {
 
 describe("voice tools: what's going on", () => {
   test("every tool is a function with a JSON schema object", () => {
-    expect(VOICE_TOOLS.map((t) => t.name)).toEqual(["channel_status", "open_tasks", "needs_you", "post", "answer_ask", "hold", "enqueue_work"])
+    expect(VOICE_TOOLS.map((t) => t.name)).toEqual(["channel_status", "open_tasks", "needs_you", "post", "answer_ask", "yes", "hold", "stop", "enqueue_work"])
     for (const t of VOICE_TOOLS) expect(t.parameters.type).toBe("object")
   })
 
@@ -113,9 +113,9 @@ describe("voice tools: what's going on", () => {
     expect(await runVoiceTool("needs_you", {}, c)).toEqual({
       count: 3,
       items: [
+        { kind: "join", name: "Otter" },
         { kind: "decision", ask: ask.seq, from: "Wren", text: "Merge now or after the release?", options: ["A: now", "B: after"] },
         { kind: "review", id: `T${avatars.seq}`, title: "Glass avatars", state: "in review", owner: "Puma" },
-        { kind: "join", name: "Otter" },
       ],
     })
     const asAna = await runVoiceTool("needs_you", {}, ctx({ me: "ana", isOwner: false }).c)
@@ -153,11 +153,17 @@ describe("voice tools: acting as the person", () => {
     expect(await runVoiceTool("answer_ask", { ask: 1, answer: "yes" }, c)).toEqual({ error: "#1 isn't a question waiting on Jow." })
   })
 
-  test("hold is the owner's alone", async () => {
+  test("hold is the owner's alone, and only after its readback", async () => {
     const owner = ctx()
-    expect(await runVoiceTool("hold", { on: true, note: "lunch" }, owner.c)).toEqual({ paused: true })
+    const verbs = { pending: null }
+    expect(await runVoiceTool("hold", { on: true, note: "lunch", confirmed: true }, owner.c, verbs)).toEqual({ error: "Read it back first, then confirm." })
+    expect(await runVoiceTool("hold", { on: true, note: "lunch", confirmed: false }, owner.c, verbs)).toEqual({
+      readback: "Pause every agent for “lunch”? They'll stop work until you let them carry on.",
+    })
+    expect(owner.holds).toEqual([])
+    expect(await runVoiceTool("hold", { on: true, note: "lunch", confirmed: true }, owner.c, verbs)).toEqual({ paused: true })
     expect(owner.holds).toEqual([[true, "lunch"]])
-    expect(await runVoiceTool("hold", { on: true }, ctx({ isOwner: false, hold: undefined }).c)).toEqual({ error: "Only the channel's owner can pause the agents." })
+    expect(await runVoiceTool("hold", { on: true, confirmed: false }, ctx({ isOwner: false, hold: undefined }).c)).toEqual({ error: "Only the channel's owner can pause the agents." })
   })
 
   test("enqueue_work adds a task with what they said, for the lead to hand out", async () => {
@@ -174,5 +180,82 @@ describe("voice tools: acting as the person", () => {
     const { c } = ctx({ send: () => Promise.reject(new Error("offline")) })
     expect(await runVoiceTool("post", { text: "hi" }, c)).toEqual({ error: "offline" })
     expect(await runVoiceTool("delete_everything", {}, c)).toEqual({ error: "No tool called delete_everything." })
+  })
+})
+
+describe("spoken verbs: yes, hold and stop act only on what was read back", () => {
+  const ready = { id: "r2", name: "otter", display: "Otter", role: "tester", kind: "agent" as const, check: "ready" as const, code: "810857" }
+
+  test("yes on a join reads back its code, and only a yes to that lets it in", async () => {
+    const letIn: string[] = []
+    const { c } = ctx({ requests: [ready], letIn: async (id) => void letIn.push(id) })
+    const verbs = { pending: null }
+    expect(await runVoiceTool("yes", { confirmed: false }, c, verbs)).toEqual({ readback: "Otter wants to join, as tester. Let it in only if its terminal shows 8 1 0 8 5 7. Say yes to let it in." })
+    expect(await runVoiceTool("yes", { confirmed: true }, c, verbs)).toEqual({ let_in: "Otter" })
+    expect(letIn).toEqual(["r2"])
+  })
+
+  test("a join whose code isn't in yet can't be let in by voice", async () => {
+    const { c } = ctx({ letIn: async () => undefined })
+    const verbs = { pending: null }
+    expect(await runVoiceTool("yes", { confirmed: false }, c, verbs)).toEqual({ readback: "Otter wants to join, but its code isn't in yet." })
+    expect(await runVoiceTool("yes", { confirmed: true }, c, verbs)).toEqual({ error: "Its code isn't in yet: let it in from the app once it is." })
+  })
+
+  test("yes without a readback first, or after the top item changed, does nothing and reads the new one back", async () => {
+    const letIn: string[] = []
+    const verbs = { pending: null }
+    expect(await runVoiceTool("yes", { confirmed: true }, ctx({ requests: [ready], letIn: async (id) => void letIn.push(id) }).c, verbs)).toMatchObject({
+      error: expect.stringContaining("wasn't read back"),
+    })
+    await runVoiceTool("yes", { confirmed: false }, ctx({ requests: [ready], letIn: async () => undefined }).c, verbs)
+    const other = { ...ready, id: "r3", display: "Badger", code: "123456" }
+    expect(await runVoiceTool("yes", { confirmed: true }, ctx({ requests: [other], letIn: async (id) => void letIn.push(id) }).c, verbs)).toMatchObject({ readback: expect.stringContaining("Badger") })
+    expect(letIn).toEqual([])
+  })
+
+  test("doing something else in between drops what was read back", async () => {
+    const letIn: string[] = []
+    const { c } = ctx({ requests: [ready], letIn: async (id) => void letIn.push(id) })
+    const verbs = { pending: null }
+    await runVoiceTool("yes", { confirmed: false }, c, verbs)
+    await runVoiceTool("post", { text: "one sec" }, c, verbs)
+    expect(await runVoiceTool("yes", { confirmed: true }, c, verbs)).toMatchObject({ error: expect.stringContaining("wasn't read back") })
+    expect(letIn).toEqual([])
+  })
+
+  test("yes on a question: a plain one is answered yes; one with options asks which", async () => {
+    const plain = ctx({ me: "ana", isOwner: false, requests: [] })
+    const verbs = { pending: null }
+    expect(await runVoiceTool("yes", { confirmed: false }, plain.c, verbs)).toEqual({ readback: "Wren asks: Anyone seen the relay logs? Say yes to answer yes." })
+    expect(await runVoiceTool("yes", { confirmed: true }, plain.c, verbs)).toMatchObject({ message: "#901" })
+    expect(plain.sent[0]).toMatchObject({ body: "Yes", opts: { to: ["wren"], kind: "msg" } })
+    const options = ctx({ requests: [] })
+    expect(await runVoiceTool("yes", { confirmed: false }, options.c)).toEqual({ readback: "Wren asks: Merge now or after the release? The options are: A: now; B: after. Which one?" })
+    expect(await runVoiceTool("yes", { confirmed: true }, options.c, { pending: `ask:${ask.seq}` })).toEqual({ error: "This one has options: ask which, then use answer_ask." })
+  })
+
+  test("yes on a review approves it, once read back", async () => {
+    const approved: number[] = []
+    const { c } = ctx({ requests: [], state: { ...state(), openAsks: [] }, approve: async (t) => void approved.push(t.id) })
+    const verbs = { pending: null }
+    expect(await runVoiceTool("yes", { confirmed: false }, c, verbs)).toEqual({ readback: `T${avatars.seq}, Glass avatars, done by Puma, is ready for your review. Say yes to approve it.` })
+    expect(await runVoiceTool("yes", { confirmed: true }, c, verbs)).toEqual({ approved: `T${avatars.seq}` })
+    expect(approved).toEqual([avatars.seq])
+  })
+
+  test("nothing waiting is said plainly", async () => {
+    const { c } = ctx({ requests: [], state: { ...state(), openAsks: [], tasks: new Map() } })
+    expect(await runVoiceTool("yes", { confirmed: false }, c)).toEqual({ readback: "Nothing is waiting on Jow." })
+  })
+
+  test("stop reads back, then ends the call", async () => {
+    let ended = 0
+    const { c } = ctx({ endCall: () => void ended++ })
+    const verbs = { pending: null }
+    expect(await runVoiceTool("stop", { confirmed: true }, c, verbs)).toEqual({ error: "Read it back first, then confirm." })
+    expect(await runVoiceTool("stop", { confirmed: false }, c, verbs)).toEqual({ readback: "End the call?" })
+    expect(await runVoiceTool("stop", { confirmed: true }, c, verbs)).toEqual({ ending: true })
+    expect(ended).toBe(1)
   })
 })
