@@ -1,6 +1,6 @@
 import type { Scope } from "./scopes.ts";
 
-export const ROLES = ["builder", "reviewer", "bug-hunter", "explorer", "releaser", "lead"] as const;
+const ROLES = ["builder", "reviewer", "bug-hunter", "explorer", "releaser", "lead"] as const;
 export type Role = (typeof ROLES)[number];
 
 export const ROLE_LABEL: Record<Role, string> = {
@@ -12,10 +12,10 @@ export const ROLE_LABEL: Record<Role, string> = {
   lead: "Lead",
 };
 
-export const CAPABILITIES = ["write", "tasks", "prs", "merge", "review", "release", "assign", "notes"] as const;
-export type Capability = (typeof CAPABILITIES)[number];
+const CAPABILITIES = ["write", "tasks", "prs", "merge", "review", "release", "assign", "notes"] as const;
+type Capability = (typeof CAPABILITIES)[number];
 
-export const CAPABILITY_LABEL: Record<Capability, string> = {
+const CAPABILITY_LABEL: Record<Capability, string> = {
   write: "write and ask",
   tasks: "work tasks",
   prs: "open pull requests",
@@ -28,7 +28,7 @@ export const CAPABILITY_LABEL: Record<Capability, string> = {
 
 export const MAX_NAME = 40;
 export const MAX_AREAS = 20;
-export const MAX_AREA = 100;
+const MAX_AREA = 100;
 export const MAX_INSTRUCTIONS = 2000;
 
 export interface Personality {
