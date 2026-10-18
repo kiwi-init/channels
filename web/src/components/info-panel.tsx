@@ -144,7 +144,7 @@ export function InfoPanel({
           {/* A name in use again (a lost key: removed, then joined anew) reads as the earlier key, never as a second one of them. */}
           {former.length > 0 && (
             <p className="px-3 py-2 text-meta text-ink-3 shadow-[inset_0_1px_0_var(--line)]">
-              Left: {[...new Set(former.map((m) => (active.some((a) => a.name === m.name) ? `${m.name} (an earlier key)` : m.name)))].join(", ")}
+              {[...new Set(former.map((m) => (active.some((a) => a.name === m.name) ? `${m.name} (an earlier key)` : m.name)))].join(", ")} left
             </p>
           )}
         </Section>
