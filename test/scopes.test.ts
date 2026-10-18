@@ -1,7 +1,8 @@
 // Member scopes: what each member may do besides read. Every client enforces
 // them in fold; the relay enforces the one bit it knows ("can post").
 
-import { personaOf, PRESETS, type Persona } from "@kiwi/core/personality.ts";
+import { personaOf, type Persona } from "@kiwi/core/personality.ts";
+import { PRESETS } from "@kiwi/core/presets.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";

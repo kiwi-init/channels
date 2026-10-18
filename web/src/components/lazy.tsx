@@ -23,6 +23,7 @@ const commandBar = later(() => import("./composer-commands").then((m) => m.Comma
 const repos = later(() => import("./controls/repos-dialog").then((m) => m.ReposDialog))
 const compactBlock = later(() => import("./compact").then((m) => m.CompactBlock))
 const proposalCard = later(() => import("./compact").then((m) => m.ProposalCard))
+const confirmDialogs = later(() => import("./controls/confirm-dialogs").then((m) => m.ConfirmDialogs))
 
 export const Markdown = markdown.View
 export const SettingsModal = settings.View
@@ -43,9 +44,10 @@ export const CommandBar = commandBar.View
 export const ReposDialog = repos.View
 export const CompactBlock = compactBlock.View
 export const ProposalCard = proposalCard.View
+export const ConfirmDialogs = confirmDialogs.View
 
 export const loadMarkdown = markdown.load
 
 export function loadSurfaces(): void {
-  for (const surface of [settings, computers, palette, info, tasks, taskDetails, taskInline, thread]) surface.load()
+  for (const surface of [settings, computers, palette, info, tasks, taskDetails, taskInline, thread, confirmDialogs]) surface.load()
 }
