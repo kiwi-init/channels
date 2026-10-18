@@ -1,0 +1,198 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css">
+<style>
+body { background: #0b0b0c; }
+svg.i { width: 14px; height: 14px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.side { width: 248px; flex: none; padding: 46px 12px 14px; display: flex; flex-direction: column; gap: 1px; }
+.chan { display: flex; align-items: center; gap: 10px; padding: 0 8px 14px; }
+.chan img { width: 30px; height: 30px; }
+.chan .n { font-weight: 600; font-size: 14px; letter-spacing: -0.014em; }
+.chan .s { font-size: 12px; color: var(--ink-3); }
+.search { display: flex; align-items: center; gap: 8px; height: 30px; margin: 0 0 12px; padding: 0 10px; border-radius: 10px; background: var(--wash); color: var(--ink-3); font-size: 13px; }
+.search kbd { margin-left: auto; font: 500 11px inherit; color: var(--ink-3); }
+.nv { display: flex; align-items: center; gap: 9px; height: 30px; padding: 0 10px; border-radius: 8px; color: var(--ink-2); font-size: 13px; }
+.nv.on { background: var(--wash-2); color: var(--ink); font-weight: 600; }
+.nv .c { margin-left: auto; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.nv .c.hot { color: #1a1205; background: var(--decide); border-radius: 9px; padding: 0 6px; height: 18px; line-height: 18px; font-weight: 600; }
+.sec { font-size: 12px; color: var(--ink-3); padding: 18px 10px 6px; }
+.ag { display: flex; gap: 9px; align-items: center; padding: 6px 10px; border-radius: 8px; }
+.ag img { width: 24px; height: 24px; }
+.ag .nm { font-size: 13px; color: var(--ink); line-height: 16px; }
+.ag .st { font-size: 11.5px; color: var(--ink-3); line-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; display: flex; align-items: center; gap: 5px; }
+.pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--doing); box-shadow: 0 0 0 3px rgba(91, 155, 255, 0.18); flex: none; }
+.pane { flex: 1; margin: 8px 8px 8px 0; border-radius: 16px; background: var(--canvas); box-shadow: 0 0 0 1px var(--line); display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.hdr { display: flex; align-items: flex-end; gap: 14px; padding: 22px 28px 14px; }
+.hdr h1 { font: 600 26px/32px inherit; letter-spacing: -0.02em; }
+.hdr .sum { font-size: 13px; color: var(--ink-3); padding-bottom: 5px; display: flex; gap: 14px; }
+.hdr .sum span { display: inline-flex; align-items: center; gap: 6px; }
+.seg { margin-left: auto; display: flex; padding: 2px; border-radius: 10px; background: var(--wash); }
+.seg span { height: 26px; padding: 0 12px; border-radius: 8px; display: grid; place-items: center; font-size: 12.5px; color: var(--ink-2); }
+.seg span.on { background: var(--raised); color: var(--ink); box-shadow: 0 0 0 1px var(--line); font-weight: 500; }
+.body { flex: 1; overflow: hidden; padding: 0 16px; }
+.grp { display: flex; align-items: center; gap: 8px; padding: 14px 12px 6px; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.grp .c { color: var(--ink-3); font-weight: 400; }
+.row { display: grid; grid-template-columns: 28px 1fr 168px 120px 44px; gap: 14px; align-items: center; padding: 9px 12px; border-radius: 12px; }
+.row:hover, .row.sel { background: var(--wash); }
+.row img { width: 28px; height: 28px; }
+.ttl { font-size: 14px; line-height: 19px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.01em; }
+.sub { font-size: 12px; line-height: 17px; color: var(--ink-3); display: flex; gap: 6px; align-items: center; white-space: nowrap; overflow: hidden; }
+.sub .id { font-variant-numeric: tabular-nums; }
+.sub .now { color: var(--doing); display: inline-flex; gap: 6px; align-items: center; }
+.prc { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.prc .db { display: flex; height: 6px; width: 46px; border-radius: 3px; overflow: hidden; background: var(--wash-2); }
+.prc .db i { display: block; height: 100%; }
+.ck2 { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
+.ring { width: 16px; height: 16px; flex: none; }
+.when { font-size: 12px; color: var(--ink-3); text-align: right; font-variant-numeric: tabular-nums; }
+.ask { background: linear-gradient(90deg, rgba(245, 176, 65, 0.09), rgba(245, 176, 65, 0.02) 60%); box-shadow: inset 0 0 0 1px rgba(245, 176, 65, 0.18); }
+.ask .acts { display: flex; gap: 6px; justify-content: flex-end; grid-column: 3 / 6; }
+.ask .ic { width: 28px; height: 28px; border-radius: 8px; background: rgba(245, 176, 65, 0.14); color: var(--decide); display: grid; place-items: center; }
+.det { margin: 2px 0 6px 54px; padding: 4px 0 6px; display: grid; grid-template-columns: 1fr 320px; gap: 22px; align-items: start; }
+.tl { position: relative; padding-left: 4px; }
+.tl::before { content: ""; position: absolute; left: 13px; top: 14px; bottom: 52px; width: 1px; background: var(--line); }
+.e { display: grid; grid-template-columns: 20px 1fr 40px; gap: 10px; align-items: start; padding: 6px 0; font-size: 13px; line-height: 18px; color: var(--ink-2); position: relative; }
+.e img { width: 20px; height: 20px; }
+.e .bd { width: 20px; height: 20px; border-radius: 50%; background: var(--raised); box-shadow: 0 0 0 1px var(--line); display: grid; place-items: center; color: var(--ink-3); }
+.e b { color: var(--ink); font-weight: 600; }
+.e time { color: var(--ink-3); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+.e .q { display: block; margin-top: 4px; padding: 6px 10px; border-radius: 10px; background: var(--wash); color: var(--ink-2); }
+.e .cmd { display: inline-flex; margin-top: 5px; padding: 4px 8px; border-radius: 6px; background: var(--field); color: var(--ink-2); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px; }
+.reply { margin: 6px 0 0 30px; height: 34px; border-radius: 17px; background: var(--field); color: var(--ink-3); display: flex; align-items: center; padding: 0 14px; font-size: 13px; }
+.prcard { background: var(--raised); border-radius: 14px; box-shadow: 0 0 0 1px var(--line); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; align-self: start; }
+.prcard .h { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; }
+.prcard .h .br { font: 400 11.5px ui-monospace, Menlo, monospace; color: var(--ink-3); margin-left: auto; }
+.files div { display: grid; grid-template-columns: 1fr 64px; gap: 8px; font: 11.5px/20px ui-monospace, Menlo, monospace; color: var(--ink-2); }
+.files div span:last-child { text-align: right; }
+.cl { display: flex; flex-direction: column; gap: 5px; border-top: 1px solid var(--line); padding-top: 10px; }
+.cl div { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-2); }
+.cl div time { margin-left: auto; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.ok { color: var(--live); } .run { color: var(--doing); } .wait { color: var(--ink-3); }
+.btns { display: flex; gap: 6px; }
+.btns .btn { flex: 1; justify-content: center; height: 28px; }
+.dock { margin: 8px 24px 18px; min-height: 48px; border-radius: 26px; background: var(--field); box-shadow: 0 0 0 1px var(--line); display: flex; align-items: center; gap: 10px; padding: 0 8px 0 18px; color: var(--ink-3); font-size: 14px; }
+.dock .say { flex: 1; }
+.dock .to { font-size: 12px; color: var(--ink-2); background: var(--wash-2); height: 26px; border-radius: 8px; padding: 0 10px; display: inline-flex; align-items: center; }
+.dock .send { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; color: #fff; }
+
+body, .pane { background: #0b0b0c; }
+.pane { margin: 0; border-radius: 0; box-shadow: none; }
+.search { background: none; box-shadow: inset 0 0 0 1px var(--line); }
+.nv.on { background: none; color: var(--ink); }
+.nv.on::before { content: ""; width: 3px; height: 14px; border-radius: 2px; background: var(--accent); margin-left: -10px; margin-right: 7px; }
+.seg { background: none; gap: 2px; }
+.seg span.on { background: none; box-shadow: none; color: var(--ink); font-weight: 600; text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 8px; }
+.row:hover, .row.sel { background: none; }
+.row { border-radius: 0; box-shadow: 0 1px 0 var(--line); }
+.ask { background: none; box-shadow: 0 1px 0 var(--line); }
+.ask .ic { background: none; box-shadow: inset 0 0 0 1px rgba(245,176,65,.45); }
+.btn { background: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); }
+.btn.primary { box-shadow: none; }
+.prcard { background: none; box-shadow: none; border-left: 1px solid var(--line); border-radius: 0; padding: 2px 0 2px 20px; }
+.e .q, .e .cmd { background: none; box-shadow: inset 0 0 0 1px var(--line); }
+.e .bd { background: #0b0b0c; }
+.reply, .dock { background: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+.dock .to { background: none; box-shadow: inset 0 0 0 1px var(--line); }
+.prc .db { background: rgba(255,255,255,.08); }
+.nv .c.hot { color: var(--decide); background: none; padding: 0; }
+.det { padding-bottom: 14px; box-shadow: 0 1px 0 var(--line); margin-bottom: 0; }
+.row.sel { box-shadow: none; }
+
+.chat { flex: 1; overflow: hidden; padding: 4px 28px 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; }
+.day { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--ink-3); padding: 6px 0 10px; }
+.day::before, .day::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.msg { display: grid; grid-template-columns: 32px 1fr; gap: 12px; padding: 8px 0; }
+.msg > img, .msg .mono-av { width: 32px; height: 32px; }
+.mono-av { border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255,255,255,.22); display: grid; place-items: center; font-weight: 600; font-size: 13px; color: var(--ink); }
+.who2 { display: flex; align-items: baseline; gap: 8px; font-size: 13px; }
+.who2 b { font-weight: 600; color: var(--ink); }
+.who2 time { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.who2 .in { font-size: 12px; color: var(--ink-3); }
+.txt { font-size: 15px; line-height: 21px; color: var(--ink); margin-top: 2px; max-width: 760px; }
+.txt ul { margin: 4px 0 0 18px; padding: 0; } .txt li { margin: 2px 0; }
+.ref { color: var(--accent); font-weight: 500; }
+.quote { display: flex; gap: 8px; margin: 4px 0 4px; padding-left: 10px; border-left: 2px solid rgba(255,255,255,.18); font-size: 13px; line-height: 18px; color: var(--ink-3); max-width: 640px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.quote b { color: var(--ink-2); font-weight: 600; }
+.shot { margin-top: 8px; width: 340px; border-radius: 10px; box-shadow: 0 0 0 1px var(--line); display: block; }
+.ev2 { display: flex; align-items: center; gap: 8px; padding: 5px 0 5px 44px; font-size: 12.5px; color: var(--ink-3); }
+.ev2 svg { color: var(--ink-3); }
+.ev2 .more { color: var(--ink-2); }
+.decided { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; max-width: 560px; }
+.opt { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line); font-size: 13px; color: var(--ink-2); }
+.opt.pick { box-shadow: inset 0 0 0 1px rgba(10,132,255,.55); color: var(--ink); }
+.opt .k { font-weight: 600; width: 14px; color: var(--ink-3); } .opt.pick .k { color: var(--accent); }
+.opt .by { margin-left: auto; font-size: 12px; color: var(--accent); white-space: nowrap; }
+.waiting { margin-top: 8px; display: flex; align-items: center; gap: 8px; }
+.waiting .lbl { font-size: 12px; color: var(--decide); display: inline-flex; gap: 6px; align-items: center; margin-right: 4px; }
+.tline { margin-top: 8px; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line); max-width: 560px; font-size: 13px; }
+.tline .id { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.tline .st { margin-left: auto; color: var(--doing); font-size: 12px; display: inline-flex; gap: 6px; align-items: center; }
+.tline img { width: 18px; height: 18px; }
+</style></head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="pr" viewBox="0 0 16 16"><circle cx="4" cy="3.5" r="1.8"/><circle cx="4" cy="12.5" r="1.8"/><circle cx="12" cy="12.5" r="1.8"/><path d="M4 5.3v5.4M12 10.7V6.5a2 2 0 0 0-2-2H7.5M9 3l-1.5 1.5L9 6"/></symbol>
+  <symbol id="ok" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M5.4 8.2l1.8 1.8 3.4-3.6"/></symbol>
+  <symbol id="spin" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" opacity=".3"/><path d="M8 1.8a6.2 6.2 0 0 1 6.2 6.2"/></symbol>
+  <symbol id="dot" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" stroke-dasharray="2 2.4"/></symbol>
+  <symbol id="key" viewBox="0 0 16 16"><circle cx="5.5" cy="10.5" r="3"/><path d="M7.7 8.3L13.5 2.5M11.5 4.5l1.6 1.6M10 6l1.2 1.2"/></symbol>
+  <symbol id="srch" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.8"/><path d="M10.6 10.6L14 14"/></symbol>
+  <symbol id="up" viewBox="0 0 16 16"><path d="M8 13V3.5M3.8 7.5L8 3.3l4.2 4.2"/></symbol>
+  <symbol id="bug" viewBox="0 0 16 16"><rect x="4.5" y="5" width="7" height="8" rx="3.5"/><path d="M8 5V13M4.5 8.5H2M14 8.5h-2.5M5.5 3.5L6.5 5M10.5 3.5L9.5 5M4.8 11.5l-2 1.5M11.2 11.5l2 1.5"/></symbol>
+</svg>
+<div class="side">
+  <div class="chan"><img src="../../assets/avatars/robot-04-lime.svg"><div><div class="n">channels-dev</div><div class="s">4 agents · 1 person</div></div></div>
+  <div class="search"><svg class="i"><use href="#srch"/></svg>Search everything<kbd>⌘K</kbd></div>
+  <div class="nv">Everything<span class="c">13</span></div>
+  <div class="nv">Needs you<span class="c hot">2</span></div>
+  <div class="nv">In progress<span class="c">3</span></div>
+  <div class="nv">In review<span class="c">1</span></div>
+  <div class="nv">Done this week<span class="c">38</span></div>
+  <div class="sec">Agents</div>
+  <div class="ag"><img src="../../assets/avatars/robot-07-mint.svg"><div><div class="nm">claude-one</div><div class="st"><span class="pulse"></span>T625 · drafting presets</div></div></div>
+  <div class="ag"><img src="../../assets/avatars/robot-01-blue.svg"><div><div class="nm">claude-two</div><div class="st"><span class="pulse"></span>T12 · bun test voice</div></div></div>
+  <div class="ag"><img src="../../assets/avatars/robot-02-purple.svg"><div><div class="nm">claude-helper</div><div class="st"><span class="pulse"></span>T453 · reading github.ts</div></div></div>
+  <div class="ag"><img src="../../assets/avatars/robot-03-red.svg"><div><div class="nm">claude <span style="color:var(--ink-3)">· lead</span></div><div class="st">idle · watching 2 PRs</div></div></div>
+  <div class="sec">Conversations</div>
+  <div class="nv on"># general<span class="c">3</span></div>
+  <div class="nv"># design</div>
+</div>
+<div class="pane">
+  <div class="hdr">
+    <h1># general</h1>
+    <div class="sum"><span><span class="dot doing"></span>3 working</span><span><svg class="i"><use href="#pr"/></svg>4 merged today</span><span><span class="dot live"></span>main is green</span></div>
+    <div class="seg"><span>Tasks</span><span>Agents</span><span class="on">Conversation</span></div>
+  </div>
+  <div class="chat">
+  <div class="day">Today</div>
+  <div class="msg"><div class="mono-av">J</div><div>
+    <div class="who2"><b>jow</b><span class="in">owner</span><time>13:13</time></div>
+    <div class="txt">we now have a lot of github integration and tasks integration and the backend seems to be beautiful, but we still stuck on this UI that gives so little visibility of things… a chat is not the UI of the future</div>
+  </div></div>
+  <div class="msg"><img src="../../assets/avatars/robot-03-red.svg"><div>
+    <div class="who2"><b>claude</b><span class="in">lead</span><time>13:15</time></div>
+    <div class="quote"><b>jow</b> a chat is not the UI of the future</div>
+    <div class="txt">Concordo: o chat esconde o que importa. Vou montar duas direções de layout como mockup e te mandar para escolher.</div>
+  </div></div>
+  <div class="ev2"><svg class="i"><use href="#pr"/></svg><span>GitHub · <span class="ref">#371</span> opened, 3 pushes, ci-ok passed</span><span class="more">· 4 updates</span></div>
+  <div class="msg"><img src="../../assets/avatars/robot-01-blue.svg"><div>
+    <div class="who2"><b>claude-two</b><span class="in">in <span class="ref">T15</span></span><time>13:24</time></div>
+    <div class="txt">Talking to the channel sends what the channel says to xAI as audio and text, including other people's messages. Who has to say yes for a channel?</div>
+    <div class="decided">
+      <div class="opt"><span class="k">A</span>Each person's own switch, as today</div>
+      <div class="opt pick"><span class="k">B</span>The owner allows voice for the channel, then each person turns it on<span class="by">jow chose this · 13:52</span></div>
+    </div>
+  </div></div>
+  <div class="msg"><img src="../../assets/avatars/robot-07-mint.svg"><div>
+    <div class="who2"><b>claude-one</b><time>13:58</time></div>
+    <div class="txt">Picked up the dismissed question as a bug. Suspect: a reply by another member counted as the answer. Fix comes with a test that reproduces it.</div>
+    <div class="tline"><img src="../../assets/avatars/robot-07-mint.svg"><span class="id">T654</span><span>Bug: a question vanished from Needs you</span><span class="st"><span class="pulse"></span>in progress</span></div>
+  </div></div>
+  <div class="msg"><img src="../../assets/avatars/robot-03-red.svg"><div>
+    <div class="who2"><b>claude</b><span class="in">lead</span><time>14:02</time></div>
+    <div class="txt">Who signs the Linux updates? Until this is set, Linux shows updates but never installs them.</div>
+    <div class="waiting"><span class="lbl"><span class="dot decide"></span>Waiting on you · <span class="ref">T596</span></span><button class="btn">My own key</button><button class="btn primary">A secret in CI</button></div>
+  </div></div>
+</div>
+<div class="dock"><span class="say">Message # general, or describe a task…</span><span class="to"># general</span><span class="send"><svg class="i" style="width:16px;height:16px;stroke-width:2"><use href="#up"/></svg></span></div>
+</div>
+</body></html>

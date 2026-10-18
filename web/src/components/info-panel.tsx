@@ -134,7 +134,7 @@ export function InfoPanel({
             })}
             {p.isOwner && (
               <button type="button" onClick={openInvite} className="flex flex-col items-center rounded-card py-1 transition-colors hover:bg-wash">
-                <span className="flex size-[52px] items-center justify-center rounded-full bg-field text-ink-2">
+                <span className="flex size-[52px] items-center justify-center rounded-full text-ink-2 edge">
                   <Icon icon={Add01Icon} size={22} />
                 </span>
                 <span className="mt-1.5 text-meta font-medium">Add</span>

@@ -4,8 +4,7 @@ import { useCallback, useMemo, useState, type CSSProperties, type ReactNode } fr
 import { droppedCount } from "@kiwi/core/format.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
 import { GENERAL_ROOM, isReaction, type ImageAttachment, type Message } from "@kiwi/core/protocol.ts"
-import { colorOf, outsideRepos, type Task } from "@kiwi/core/state.ts"
-import { recentPrs } from "@kiwi/core/work.ts"
+import { colorOf, outsideRepos, tasksAwaitingPeople, type Task } from "@kiwi/core/state.ts"
 import { channelTitle, loadRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { howHere } from "@/lib/presence"
 import type { Gif } from "@/lib/gifs"
@@ -14,13 +13,14 @@ import type { Command } from "@/lib/commands"
 import { approveTask, closedDigest, reviewsFor, sendBackTask, type TaskSend } from "@/lib/task-actions"
 import { useIcons, useLiveIcon } from "@/lib/icons"
 import { memberName } from "@/lib/format"
-import { dmPlace, placeKey, sendFrom, type Place } from "@/lib/threads"
+import { dmPlace, MAIN, placeFromKey, placeKey, sendFrom, type Place } from "@/lib/threads"
+import { inView, mergedSince, startOfDay, viewCounts, VIEWS, type Tab, type View } from "@/lib/views"
 import { cx } from "@/lib/utils"
 import { useHeight } from "@/hooks/use-height"
 import { Composer } from "../composer"
 import { AddAgent } from "../add-agent"
 import { RoomChips } from "../room-chips"
-import { AgentStrip, type AgentNow } from "../agent-strip"
+import { AgentLine, AgentStrip, byBusy, type AgentNow } from "../agent-strip"
 import { ChannelControls, HoldDialog } from "../controls"
 import { Icon } from "../icon"
 import { Button, Spinner, errorText, toast } from "../kit"
@@ -29,7 +29,8 @@ import { bridge } from "@/lib/secrets"
 import { GifPicker } from "../gif-picker"
 import { isAgent } from "../message"
 import { NeedsYou } from "../needs-you"
-import { FLOAT_GAP, FLOAT_W, Overview } from "../side-panel"
+import { Tasks } from "../tasks"
+import { ChannelSidebar, type Conversation as ConversationRow } from "./channel-sidebar"
 import { Header } from "./header"
 import { InfoSide, PictureSide, TasksSide, ThreadSide } from "./side-panels"
 import { Centered, rowMakers, threadRowsOf } from "./timeline"
@@ -44,8 +45,6 @@ function useNow(intervalMs = 30_000): number {
   return useClock(intervalMs)
 }
 
-const CLEAR = "xl:pr-[min(var(--float),max(0px,calc(792px_+_2*var(--float)_-_100%)))]"
-
 export function Conversation({ member, onBack, onGone }: { member: StoredMember; onBack: () => void; onGone: () => void }) {
   const me = member.identity.name
   const live = useChannel(member)
@@ -58,8 +57,9 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const [here, setHere] = useState<string>("main")
   const [cardRoom, setCardRoom] = useState<string>(GENERAL_ROOM)
   const [side, setSide] = useState<Side>(null)
+  const [tab, setTab] = useState<Tab>("conversation")
+  const [view, setView] = useState<View>("everything")
   const [earlier, setEarlier] = useState(false)
-  const floating = side === null
   const sideRoot = side?.kind === "thread" ? side.root : null
   const info = side?.kind === "info"
   const shownTask = side?.kind === "tasks" ? side.task : null
@@ -122,6 +122,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const go = useCallback(
     (p: Place) => {
       if (p.kind === "task") return openTask(p.task)
+      setTab("conversation")
       setHere(placeKey(p))
       setBehind(0)
       setSide((s) => (s?.kind === "tasks" ? s : null))
@@ -311,20 +312,50 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       card: m.card,
       outside: outsideRepos(state, m.card),
     }))
-  const prs = floating ? recentPrs(state, messages, 5) : []
   const needsMe = decisions.length + escalations.length + questions.length + reviews.length + (isOwner ? requests.length : 0)
-  const headline =
-    connection === "connecting" || connection === "reconnecting"
-      ? subtitle
-      : [state.lead && state.lead !== me ? `${nameOf(state.lead)} leads` : null, working ? `${working} working` : null, needsMe ? `${needsMe} ${needsMe === 1 ? "needs" : "need"} you` : null]
-          .filter(Boolean)
-          .join(" · ") || subtitle
-
   const placeTitle = place.kind === "main" ? title : place.with.includes(me) ? nameOf(place.with.find((n) => n !== me) ?? me) : place.with.map(nameOf).join(" & ")
   const mayWrite = place.kind !== "dm" || place.with.includes(me)
   const extra = place.kind === "main" ? undefined : sendFrom(state, place, me)
   const task = shownTask === null ? undefined : state.tasks.get(shownTask)
   const openCount = [...state.tasks.values()].filter((t) => t.state !== "done").length
+  const waiting = tasksAwaitingPeople(state)
+  const counts = viewCounts(state, now, needsMe, waiting)
+  const merged = mergedSince(state, startOfDay(now))
+  const status =
+    connection === "connecting" || connection === "reconnecting"
+      ? [subtitle]
+      : [working ? `${working} working` : null, merged ? `${merged} merged today` : null, needsMe ? `${needsMe} ${needsMe === 1 ? "needs" : "need"} you` : null].filter((x): x is string => !!x)
+  const agentCount = active.filter((m) => isAgent(m)).length
+  const personCount = active.length - agentCount
+  const peopleLine = [agentCount ? `${agentCount} ${agentCount === 1 ? "agent" : "agents"}` : null, personCount ? `${personCount} ${personCount === 1 ? "person" : "people"}` : null]
+    .filter(Boolean)
+    .join(" · ")
+  const rooms = [...state.rooms.values()]
+  const roomKey = (id: string) => `room:${id}`
+  const conversations: ConversationRow[] = [
+    ...(rooms.length > 1
+      ? rooms.map((r) => ({ key: roomKey(r.id), label: `# ${r.name}`, unread: r.id === GENERAL_ROOM ? unreadIn("main").n : 0, forMe: r.id === GENERAL_ROOM && unreadIn("main").forMe }))
+      : [{ key: "main", label: `# ${GENERAL_ROOM}`, unread: unreadIn("main").n, forMe: unreadIn("main").forMe }]),
+    ...[...places]
+      .filter(([, p]) => p.place.kind === "dm")
+      .map(([key, p]) => {
+        const w = p.place.kind === "dm" ? p.place.with : ["", ""]
+        const u = unreadIn(key)
+        return { key, label: w.includes(me) ? nameOf(w.find((n) => n !== me) ?? me) : w.map(nameOf).join(" & "), unread: u.n, forMe: u.forMe }
+      }),
+  ]
+  const currentConversation = tab !== "conversation" ? null : hereKey !== "main" ? hereKey : rooms.length > 1 ? roomKey(cardRoom) : "main"
+  const openConversation = (key: string) => {
+    setTab("conversation")
+    if (key.startsWith("room:")) {
+      setCardRoom(key.slice(5))
+      go(MAIN)
+      return
+    }
+    go(placeFromKey(key) ?? MAIN)
+  }
+  const roomName = state.rooms.get(cardRoom)?.name ?? GENERAL_ROOM
+  const heading = tab === "tasks" ? (VIEWS.find(([v]) => v === view)?.[1] ?? "Tasks") : tab === "agents" ? "Agents" : place.kind === "dm" ? placeTitle : rooms.length > 1 ? `# ${roomName}` : title
 
   return (
     <ChannelControls
@@ -341,143 +372,178 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       {...handlers}
     >
       <div className="flex h-full min-w-0 flex-1">
+        <ChannelSidebar
+          title={title}
+          icon={icon}
+          people={peopleLine}
+          onTitle={() => setSide((s) => (s?.kind === "info" ? null : { kind: "info" }))}
+          onSearch={() => {
+            setTab("conversation")
+            setSearch((q) => q ?? "")
+          }}
+          view={tab === "tasks" ? view : null}
+          counts={counts}
+          onView={(v) => {
+            setView(v)
+            setTab("tasks")
+            setSearch(null)
+          }}
+          agents={agentsNow}
+          onOpenTask={openTask}
+          conversations={conversations}
+          current={currentConversation}
+          onConversation={openConversation}
+        />
         <div
           className={cx("relative flex min-w-0 flex-1 flex-col bg-canvas", (root || info || side?.kind === "tasks") && "hidden md:flex")}
-          style={{ "--head": `${headH}px`, "--foot": `${footH}px`, "--float": `${FLOAT_W + 2 * FLOAT_GAP}px` } as CSSProperties}
+          style={{ "--head": `${headH}px`, "--foot": `${footH}px` } as CSSProperties}
         >
           <Header
             headRef={headRef}
             onBack={onBack}
             search={search}
             setSearch={setSearch}
-            places={places}
-            unreadIn={unreadIn}
-            taskKey={taskKey}
-            side={side}
-            setSide={setSide}
-            hereKey={hereKey}
-            title={title}
-            subtitle={subtitle}
-            headline={headline}
-            info={info}
-            onPick={go}
-            place={place}
-            placeTitle={placeTitle}
+            tab={tab}
+            onTab={(t) => {
+              setTab(t)
+              if (t !== "conversation") setSearch(null)
+            }}
+            heading={heading}
+            headingLabel={`Details: ${title}, ${subtitle}`}
+            status={status}
+            onTitle={() => setSide((s) => (s?.kind === "info" ? null : { kind: "info" }))}
+            searchHint={place.kind === "main" ? "Search this channel" : `Search ${placeTitle}`}
           />
 
           {pausing && hold && <HoldDialog onClose={() => setPausing(false)} onSave={(note) => hold(true, note)} />}
 
-          <div ref={scroller} className={cx("absolute inset-0 overflow-y-auto", floating && CLEAR)} onScroll={onScroll}>
-            <div className="relative mx-auto w-full max-w-[792px] px-4 pt-[calc(var(--head)+8px)] pb-[calc(var(--foot)+16px)]">
-              {hereKey === "main" && (
-                <NeedsYou
-                  now={now}
-                  roomId={roomId}
-                  me={me}
-                  escalations={escalations}
-                  questions={questions}
-                  reviews={reviews}
-                  nameOf={nameOf}
-                  agentOf={(name) => isAgent(state.members.get(name))}
-                  onReply={async (m, text) => void (await send(text, { to: [m.from], re: [m.seq], kind: "msg" }))}
-                  onApproveTask={(t: Task) => sendTask(approveTask(t), closedDigest(state, messages, t, { by: me }))}
-                  onSendBack={(t: Task, why: string) => sendTask(sendBackTask(t, why))}
-                  onOpenTask={openTask}
-                  onJump={jump}
-                />
-              )}
-              {hereKey === "main" && state.rooms.size > 1 && !search && <RoomChips rooms={[...state.rooms.values()]} value={cardRoom} onChange={setCardRoom} />}
-              {connection === "connecting" && messages.length === 0 ? (
-                <Centered>
-                  <Spinner />
-                </Centered>
-              ) : hereKey === "main" && noAgents && !search ? (
-                <>
+          {tab === "tasks" || tab === "agents" ? (
+            <div className="absolute inset-0 overflow-y-auto pt-[calc(var(--head)+8px)]">
+              <div className="mx-auto w-full max-w-[960px] px-2 md:px-4">
+                {tab === "tasks" ? (
+                  <Tasks
+                    key={view}
+                    state={state}
+                    now={now}
+                    nameOf={nameOf}
+                    only={(t) => inView(t, view, now, waiting)}
+                    unreadIn={(id) => unreadIn(placeKey({ kind: "task", task: id }))}
+                    onOpen={openTask}
+                  />
+                ) : agentsNow.length ? (
+                  <ul aria-label="What the agents are doing" className="px-2 pb-6">
+                    {byBusy(agentsNow).map((a) => (
+                      <AgentLine key={a.name} a={a} now={now} onOpenTask={openTask} />
+                    ))}
+                  </ul>
+                ) : (
                   <AddAgent code={member.code} isOwner={isOwner} />
-                  {!quiet && rows}
-                </>
-              ) : visible.length === 0 ? (
-                <Centered>
-                  <p className="text-body font-semibold">{search ? "No results" : "No messages yet"}</p>
-                  <p className="mt-1 max-w-xs text-ui leading-normal text-ink-2">
-                    {search ? `No message here mentions “${search}”.` : place.kind === "dm" ? "What these two say to each other shows up here." : "What’s said here shows up the moment it’s sent."}
-                  </p>
-                </Centered>
-              ) : (
-                rows
-              )}
+                )}
+              </div>
             </div>
-          </div>
+          ) : (
+            <>
+              <div ref={scroller} className="absolute inset-0 overflow-y-auto" onScroll={onScroll}>
+                <div className="relative mx-auto w-full max-w-[792px] px-4 pt-[calc(var(--head)+8px)] pb-[calc(var(--foot)+16px)]">
+                  {hereKey === "main" && (
+                    <NeedsYou
+                      now={now}
+                      roomId={roomId}
+                      me={me}
+                      escalations={escalations}
+                      questions={questions}
+                      reviews={reviews}
+                      nameOf={nameOf}
+                      agentOf={(name) => isAgent(state.members.get(name))}
+                      onReply={async (m, text) => void (await send(text, { to: [m.from], re: [m.seq], kind: "msg" }))}
+                      onApproveTask={(t: Task) => sendTask(approveTask(t), closedDigest(state, messages, t, { by: me }))}
+                      onSendBack={(t: Task, why: string) => sendTask(sendBackTask(t, why))}
+                      onOpenTask={openTask}
+                      onJump={jump}
+                    />
+                  )}
+                  {hereKey === "main" && state.rooms.size > 1 && !search && <RoomChips rooms={[...state.rooms.values()]} value={cardRoom} onChange={setCardRoom} />}
+                  {connection === "connecting" && messages.length === 0 ? (
+                    <Centered>
+                      <Spinner />
+                    </Centered>
+                  ) : hereKey === "main" && noAgents && !search ? (
+                    <>
+                      <AddAgent code={member.code} isOwner={isOwner} />
+                      {!quiet && rows}
+                    </>
+                  ) : visible.length === 0 ? (
+                    <Centered>
+                      <p className="text-body font-semibold">{search ? "No results" : "No messages yet"}</p>
+                      <p className="mt-1 max-w-xs text-ui leading-normal text-ink-2">
+                        {search ? `No message here mentions “${search}”.` : place.kind === "dm" ? "What these two say to each other shows up here." : "What’s said here shows up the moment it’s sent."}
+                      </p>
+                    </Centered>
+                  ) : (
+                    rows
+                  )}
+                </div>
+              </div>
 
-          {floating && (
-            <Overview
-              state={state}
-              agents={agentsNow}
-              prs={prs}
-              now={now}
-              nameOf={nameOf}
-              onOpenTask={(task) => setSide({ kind: "tasks", task, via: "overview" })}
-              onAllTasks={() => setSide({ kind: "tasks", task: null, via: "overview" })}
-            />
-          )}
-
-          {behind > 0 && (
-            <button
-              type="button"
-              onClick={toBottom}
-              className="glass animate-rise absolute bottom-[calc(var(--foot)+10px)] left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full py-1.5 pr-3.5 pl-2.5 text-ui font-medium text-accent-text"
-            >
-              <Icon icon={ArrowDown01Icon} size={15} />
-              {behind === 1 ? "1 new message" : `${behind} new messages`}
-            </button>
-          )}
-
-          <div ref={footRef} className={cx("absolute inset-x-0 bottom-0 z-20", floating && CLEAR)}>
-            <div aria-hidden className="scrim-bottom absolute inset-x-0 -top-6 bottom-0" />
-            {reacting && (
-              <GifPicker onPick={react} onClose={() => setReacting(null)} className="absolute right-3 bottom-[calc(100%+4px)] left-3 md:right-auto md:left-1/2 md:w-[420px] md:-translate-x-1/2" />
-            )}
-            <div className="relative">
-              {mayWrite ? (
-                <Composer
-                  key={hereKey}
-                  me={me}
-                  people={people}
-                  replyTo={replyTo}
-                  commands={commands}
-                  asking={place.kind === "main" ? decisions[0] : undefined}
-                  more={Math.max(decisions.length - 1, 0)}
-                  onAnswer={answer}
-                  nameOf={nameOf}
-                  onClearReply={() => setReplyTo(null)}
-                  disabled={connection === "connecting"}
-                  extra={extra}
-                  placeholder={place.kind === "main" ? "Message everyone" : `Message ${nameOf(place.with.find((n) => n !== me) ?? "")} privately`}
-                  send={async (body, opts) => {
-                    stick()
-                    return send(body, opts)
-                  }}
-                  talk={
-                    place.kind === "main" && state.voice && typeof bridge()?.voiceToken === "function"
-                      ? {
-                          button: <TalkButton channel={{ roomId, channel: title, me, nameOf, state, messages }} disabled={connection === "connecting"} />,
-                          bar: <TalkBar messages={messages} state={state} nameOf={nameOf} me={me} />,
-                        }
-                      : undefined
-                  }
-                  footer={
-                    <div className="xl:hidden">
-                      <AgentStrip agents={agentsNow} now={now} onOpenTask={openTask} />
-                    </div>
-                  }
-                />
-              ) : (
-                <p className="shrink-0 px-6 pt-2 pb-4 text-center text-meta text-ink-3">
-                  Between {place.kind === "dm" ? place.with.map(nameOf).join(" and ") : ""}. You can read along; talk with them in the main conversation.
-                </p>
+              {behind > 0 && (
+                <button
+                  type="button"
+                  onClick={toBottom}
+                  className="glass animate-rise absolute bottom-[calc(var(--foot)+10px)] left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full py-1.5 pr-3.5 pl-2.5 text-ui font-medium text-accent-text"
+                >
+                  <Icon icon={ArrowDown01Icon} size={15} />
+                  {behind === 1 ? "1 new message" : `${behind} new messages`}
+                </button>
               )}
-            </div>
-          </div>
+
+              <div ref={footRef} className="absolute inset-x-0 bottom-0 z-20">
+                <div aria-hidden className="scrim-bottom absolute inset-x-0 -top-6 bottom-0" />
+                {reacting && (
+                  <GifPicker onPick={react} onClose={() => setReacting(null)} className="absolute right-3 bottom-[calc(100%+4px)] left-3 md:right-auto md:left-1/2 md:w-[420px] md:-translate-x-1/2" />
+                )}
+                <div className="relative">
+                  {mayWrite ? (
+                    <Composer
+                      key={hereKey}
+                      me={me}
+                      people={people}
+                      replyTo={replyTo}
+                      commands={commands}
+                      asking={place.kind === "main" ? decisions[0] : undefined}
+                      more={Math.max(decisions.length - 1, 0)}
+                      onAnswer={answer}
+                      nameOf={nameOf}
+                      onClearReply={() => setReplyTo(null)}
+                      disabled={connection === "connecting"}
+                      extra={extra}
+                      placeholder={place.kind === "main" ? "Message everyone" : `Message ${nameOf(place.with.find((n) => n !== me) ?? "")} privately`}
+                      send={async (body, opts) => {
+                        stick()
+                        return send(body, opts)
+                      }}
+                      talk={
+                        place.kind === "main" && state.voice && typeof bridge()?.voiceToken === "function"
+                          ? {
+                              button: <TalkButton channel={{ roomId, channel: title, me, nameOf, state, messages }} disabled={connection === "connecting"} />,
+                              bar: <TalkBar messages={messages} state={state} nameOf={nameOf} me={me} />,
+                            }
+                          : undefined
+                      }
+                      footer={
+                        <div className="xl:hidden">
+                          <AgentStrip agents={agentsNow} now={now} onOpenTask={openTask} />
+                        </div>
+                      }
+                    />
+                  ) : (
+                    <p className="shrink-0 px-6 pt-2 pb-4 text-center text-meta text-ink-3">
+                      Between {place.kind === "dm" ? place.with.map(nameOf).join(" and ") : ""}. You can read along; talk with them in the main conversation.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {root && (

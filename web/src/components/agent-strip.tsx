@@ -42,11 +42,39 @@ function doingNow(a: AgentNow): { text: string; busy: boolean } | null {
   return null
 }
 
-export const busy = (a: AgentNow) => !!a.here && (doingNow(a)?.busy ?? a.load.current.length > 0)
+const busy = (a: AgentNow) => !!a.here && (doingNow(a)?.busy ?? a.load.current.length > 0)
 
 export const byBusy = (agents: AgentNow[]) => [...agents].sort((a, b) => Number(busy(b)) - Number(busy(a)) || Number(!!b.here) - Number(!!a.here))
 
 const face = (a: AgentNow, size: number) => <Monogram name={a.label} hue={a.name} agent color={a.color} size={size} online={size > 20 && !!a.here} />
+
+export function AgentRow({ a, onOpenTask }: { a: AgentNow; onOpenTask: (id: number) => void }) {
+  const doing = doingNow(a)
+  const task = a.load.current[0]
+  const what = [task ? taskId(task.id) : null, doing?.text ?? (a.here ? (howWords(a.here) ?? "idle") : "away")].filter(Boolean).join(" · ")
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => task && onOpenTask(task.id)}
+        disabled={!task}
+        className="flex w-full items-center gap-3 rounded-row px-2 py-1.5 text-left transition-colors enabled:hover:bg-wash"
+      >
+        {face(a, 28)}
+        <span className="min-w-0 flex-1">
+          <span className="flex items-baseline gap-1.5">
+            <span className="truncate text-ui font-medium text-ink">{a.label}</span>
+            {a.lead && <span className="shrink-0 text-meta text-ink-3">lead</span>}
+          </span>
+          <span className="flex items-center gap-1.5 text-meta text-ink-3">
+            {doing?.busy && <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-doing" />}
+            <span className="truncate">{what}</span>
+          </span>
+        </span>
+      </button>
+    </li>
+  )
+}
 
 export function AgentLine({ a, now, onOpenTask, brief }: { a: AgentNow; now: number; onOpenTask: (id: number) => void; brief?: boolean }) {
   return (
