@@ -48,7 +48,7 @@ export function createWindow(): void {
     autoHideMenuBar: true,
     ...(process.platform === "linux" ? { icon: path.join(assetsDir(), "icon.png") } : {}),
     ...(process.platform === "darwin" ? { titleBarStyle: "hiddenInset" as const, trafficLightPosition: { x: 20, y: 20 } } : {}),
-    backgroundColor: nativeTheme.shouldUseDarkColors ? "#0d0d0e" : "#ffffff",
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#000000" : "#f2f2f5",
     webPreferences: { preload: preloadPath(), contextIsolation: true, sandbox: true },
   });
   void win.loadURL(entryUrl());

@@ -50,7 +50,7 @@ export function Sidebar({
   const icons = useIcons()
 
   return (
-    <aside className={cx("relative h-full w-full shrink-0 flex-col bg-rail md:w-[300px]", className)}>
+    <aside className={cx("relative h-full w-full shrink-0 flex-col bg-canvas md:w-[300px]", className)}>
       {/* The list's part of the window's one header row: past a Mac's traffic lights, and the toggle
           that hides the list at its far edge, by the conversation. The row moves the window in the
           desktop app. (⌘K still searches everything.) */}

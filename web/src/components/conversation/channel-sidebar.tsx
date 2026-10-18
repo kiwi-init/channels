@@ -73,7 +73,7 @@ export function ChannelSidebar({
   onConversation: (key: string) => void
 }) {
   return (
-    <aside aria-label="Channel" className="hidden h-full w-[280px] shrink-0 flex-col overflow-y-auto bg-canvas px-3 pt-(--chrome-h) pb-4 md:flex">
+    <aside aria-label="Channel" className="hidden h-full w-[280px] shrink-0 flex-col overflow-y-auto bg-rail px-3 pt-(--chrome-h) pb-4 md:flex">
       <button type="button" onClick={onTitle} className="flex items-center gap-3 rounded-row px-2 py-1.5 text-left transition-colors hover:bg-wash">
         <ChannelIconTile icon={icon} title={title} size={36} />
         <span className="min-w-0 flex-1">
