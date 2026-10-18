@@ -121,6 +121,7 @@ export function keepAnswersIn(memory: AnswerMemory | null): void {
 export interface RelayConfig {
   workosClientId: string | null;
   dev?: boolean;
+  githubClientId?: string;
 }
 
 export const fx = {

@@ -5,6 +5,7 @@ import { keepDaemon } from "./bundled-daemon.ts";
 import { handleDeepLink, JOIN_SCHEME, rememberDeepLink } from "./deep-links.ts";
 import { APP_SCHEME, mediaAllowed } from "./guard.ts";
 import { wireDaemonIpc } from "./ipc/daemon.ts";
+import { wireGithubIpc } from "./ipc/github.ts";
 import { wireMiscIpc } from "./ipc/misc.ts";
 import { wirePairingIpc } from "./ipc/pairing.ts";
 import { wireSignInIpc } from "./ipc/signin.ts";
@@ -19,6 +20,7 @@ import { createTray, createWindow, currentWindow, guardContents, markQuitting, r
 function wireIpc(): void {
   wireStoreIpc();
   wireSignInIpc();
+  wireGithubIpc();
   wirePairingIpc();
   wireDaemonIpc();
   wireMiscIpc();

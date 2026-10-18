@@ -3,7 +3,7 @@ import { Dialog } from "@base-ui/react/dialog"
 import { setAppearance, setTextSize, useAppearance, useTextSize, type Appearance, type TextSize } from "@/lib/theme"
 import { setAccessibilityOption, useAccessibilityOption } from "@/lib/accessibility"
 import { cx } from "@/lib/utils"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { relayUrl } from "@/lib/relay"
 import { bridge, useSecrets } from "@/lib/secrets"
 import { version } from "../../../package.json"
@@ -150,6 +150,57 @@ function VoiceFields() {
   )
 }
 
+function GithubFields() {
+  const b = bridge()
+  const [status, setStatus] = useState<{ available: boolean; account: { login: string } | null } | null>(null)
+  const [code, setCode] = useState<{ code: string; url: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!b?.githubStatus) return
+    void b.githubStatus().then(setStatus, () => setStatus(null))
+    return b.onGithubCode(setCode)
+  }, [b])
+  if (!b?.githubStatus || !status || (!status.available && !status.account)) return null
+  const run = (go: () => Promise<{ available: boolean; account: { login: string } | null }>) => {
+    setError(null)
+    setBusy(true)
+    go()
+      .then(setStatus, (e: unknown) => setError(e instanceof Error ? e.message.replace(/^.*?Error: /, "") : String(e)))
+      .finally(() => (setBusy(false), setCode(null)))
+  }
+  return (
+    <div>
+      <p className="mb-2 text-ui font-medium text-ink">GitHub</p>
+      <p className="mb-2 text-ui leading-normal text-ink-2">Link your account so what has to come from you, like approving a pull request, can. The token stays on this Mac; agents never get it.</p>
+      {status.account ? (
+        <div className="flex items-center gap-2">
+          <p className="min-w-0 flex-1 truncate text-ui text-ink">Linked as @{status.account.login}</p>
+          <Button variant="secondary" disabled={busy} onClick={() => run(b.githubUnlink)}>
+            Unlink
+          </Button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" disabled={busy} onClick={() => run(b.githubLink)}>
+            {busy ? "Waiting for GitHub…" : "Link GitHub"}
+          </Button>
+          {busy && code && (
+            <p className="min-w-0 text-ui text-ink-2">
+              Enter <span className="font-mono font-medium text-ink">{code.code}</span> at {code.url.replace(/^https:\/\//, "")}
+            </p>
+          )}
+        </div>
+      )}
+      {error && (
+        <p className="mt-1 text-ui text-ink-2" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
+
 export function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const appearance = useAppearance()
   const size = useTextSize()
@@ -191,6 +242,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
             ]}
           />
           <RelayField />
+          <GithubFields />
           <VoiceFields />
         </div>
         <div className="mt-6 flex items-center justify-between gap-3">
