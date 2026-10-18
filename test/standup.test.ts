@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import type { Event, Kind, Message } from "@kiwi/core/protocol.ts";
 import { fold, placeKey, type Roster } from "@kiwi/core/state.ts";
-import { lastLine, liveCard, unreadIn } from "@kiwi/core/standup.ts";
+import { cardShown, lastLine, liveCard, taskRoom, unreadIn } from "@kiwi/core/standup.ts";
 
 let seq = 0;
 const T0 = 1_700_000_000_000;
@@ -99,5 +99,22 @@ describe("the live card", () => {
     expect(liveCard(s, ms, add.seq, "bob")).toMatchObject({ people: ["ann"], said: 1, lastLine: { text: "ready" }, waiting: true });
     expect(liveCard(s, ms, add.seq, "ann")?.waiting).toBe(false);
     expect(liveCard(s, ms, 9999, "bob")).toBeUndefined();
+  });
+});
+
+describe("a task's room", () => {
+  test("is the room its conversation is in, and general when it has none", async () => {
+    const create = await msg(owner, { ev: { op: "room.create", id: "design", name: "design" } });
+    const add = await msg(ann, { ev: { op: "task.add", title: "A", owner: "ann" } });
+    const quiet = await msg(ann, { ev: { op: "task.add", title: "B", owner: "ann" } });
+    const said = { ...(await msg(ann, { task: add.seq, body: "sketching" })), room: "design" };
+    const ms = [create, add, quiet, said];
+    const s = fold(ms, roster);
+    expect(taskRoom(s, ms, add.seq)).toBe("design");
+    expect(taskRoom(s, ms, quiet.seq)).toBe("general");
+    expect(cardShown(s, ms, add.seq, "general")).toBe(true);
+    expect(cardShown(s, ms, quiet.seq, "general")).toBe(true);
+    expect(cardShown(s, ms, add.seq, "design")).toBe(true);
+    expect(cardShown(s, ms, quiet.seq, "design")).toBe(false);
   });
 });

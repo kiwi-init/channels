@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 
 import type { ImageAttachment, Message } from "@kiwi/core/protocol.ts"
+import { cardShown } from "@kiwi/core/standup.ts"
 import { colorOf, type ChannelState } from "@kiwi/core/state.ts"
 import type { ChannelHandle } from "@/lib/channel"
 import { formatTime } from "@/lib/format"
@@ -27,6 +28,7 @@ export interface RowsContext {
   now: number
   group: boolean
   hereKey: string
+  cardRoom: string
   search: string | null
   highlight: number | null
   bySeq: Map<number, Message>
@@ -56,6 +58,7 @@ export function rowMakers(c: RowsContext) {
     now,
     group,
     hereKey,
+    cardRoom,
     search,
     highlight,
     bySeq,
@@ -107,6 +110,7 @@ export function rowMakers(c: RowsContext) {
     for (let i = 0; i < list.length; i++) {
       const m = list[i]!
       const prev = list[i - 1]
+      if (cards && isTaskCard(m, state.tasks) && !cardShown(state, messages, m.seq, cardRoom)) continue
       if (!prev || !sameDay(prev.ts, m.ts) || m.ts - prev.ts > STAMP_GAP) out.push(<TimeMark key={`s${m.seq}`} ts={m.ts} />)
       if (cards && isTaskCard(m, state.tasks)) {
         out.push(<LiveTaskCard key={`card${m.seq}`} id={m.seq} state={state} messages={messages} me={me} now={now} onOpen={openTask} />)
