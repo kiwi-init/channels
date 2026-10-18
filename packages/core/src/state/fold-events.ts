@@ -210,6 +210,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: Member, at
         notes: [],
         ...(ev.review?.trim() ? { review: ev.review.trim() } : {}),
         ...(ev.issue ? { issue: { repo: ev.issue.repo, number: ev.issue.number } } : {}),
+        ...(ev.from !== undefined && tasks.has(ev.from) ? { from: ev.from } : {}),
         workedBy: ev.owner ? [ev.owner] : [],
         rounds: [],
         ...(m.re?.length ? { source: m.re[0] } : {}),

@@ -4,6 +4,7 @@ import { loadJson, loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { inlineText, runsLine, type Runs } from "./membership.ts";
 import { GENERAL_ROOM, ignored, imageMarker } from "./protocol.ts";
 import type { Card, GithubNote, Message, OldTaskState, Reach, TaskState, Trust } from "./protocol.ts";
+import { BUSY_QUEUE, pickFor, type Candidate } from "./routing.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
 import { colorOf, humanOf, isPerson, issueOf, outsideRepos, taskId, type ChannelState, type Fact, type Lease, type ReviewRound, type Task } from "./state.ts";
 import { isWakeVia, wakeWords, type WakeVia } from "./wake.ts";
@@ -114,7 +115,7 @@ export function describeEvent(m: Message, state?: ChannelState): string {
     case "seat.reclaim":
       return `moved ${ev.member}'s seat to a new key (${ev.from} → ${ev.to}): the old key is out`;
     case "task.add":
-      return `added task ${taskId(m.seq)} “${ev.title}”${ev.issue ? ` from ${ev.issue.repo}#${ev.issue.number}` : ""}${ev.owner ? ` for ${ev.owner}` : ""}${ev.review ? `; ${reviewPhrase(ev.review)}` : ""}`;
+      return `added task ${taskId(m.seq)} “${ev.title}”${ev.from !== undefined ? ` (from ${taskId(ev.from)})` : ""}${ev.issue ? ` from ${ev.issue.repo}#${ev.issue.number}` : ""}${ev.owner ? ` for ${ev.owner}` : ""}${ev.review ? `; ${reviewPhrase(ev.review)}` : ""}`;
     case "card":
       return `described itself: ${cardLine(ev) || "nothing"}`;
     case "task.claim":
@@ -360,7 +361,8 @@ export function statusJson({ alias, me, state, online, unread }: Snapshot) {
 export function leadLine(state: ChannelState, me: string): string | null {
   const lead = state.lead;
   if (!lead) return null;
-  if (lead === me) return "you are the lead: keep the board tidy, hand out what nobody has taken, and follow up on what stalls. Everyone still talks to people directly";
+  if (lead === me)
+    return "you are the lead: keep the board tidy, hand out what nobody has taken to whoever has its context (kiwi task who T7 ranks them; say why when you pick someone else), and follow up on what stalls. Everyone still talks to people directly";
   return `lead: ${lead}, who keeps the board. Talk to people directly; mention ${lead} for anything nobody owns`;
 }
 
@@ -509,6 +511,9 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now()): stri
     `${taskId(t.id)} ${inlineText(t.title, 200)}`,
     `  state: ${taskStateWord(t)}${t.owner ? ` · owner: ${inlineText(t.owner, 40)}` : " · unassigned"} · created by ${inlineText(t.createdBy, 40)} ${ago(t.createdAt, now)}`,
   ];
+  if (t.from !== undefined) out.push(`  from ${taskId(t.from)}${state.tasks.get(t.from) ? `: ${inlineText(state.tasks.get(t.from)!.title, 120)}` : ""}`);
+  const followUps = [...state.tasks.values()].filter((x) => x.from === t.id).map((x) => taskId(x.id));
+  if (followUps.length) out.push(`  follow-ups: ${followUps.join(", ")}`);
   if (t.issue) out.push(`  issue: ${t.issue.repo}#${t.issue.number}${issueOf(state.github, t.issue)?.state === "closed" ? " (closed)" : ""}; closing either one closes the other`);
   if (t.review) out.push(`  ${reviewPhrase(t.review)}${t.approvedBy ? `; approved by ${inlineText(t.approvedBy, 40)}` : t.state === "review" ? "; waiting for it" : ""}`);
   if (t.rounds.length) {
@@ -520,6 +525,19 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now()): stri
     out.push("", "notes:");
     for (const n of t.notes) out.push(`  #${n.seq} ${inlineText(n.by, 40)}, ${ago(n.ts, now)}: ${markedText(n.text)}`);
   }
+  return out.join("\n");
+}
+
+export function formatCandidates(t: Task, candidates: readonly Candidate[]): string {
+  const out = [`who has ${taskId(t.id)}'s context (${inlineText(t.title, 120)}):`];
+  if (!candidates.length) out.push("  no agents here");
+  for (const c of candidates) {
+    const ahead = c.queue === 1 ? "1 task ahead" : `${c.queue} tasks ahead`;
+    const busy = c.score > 0 && c.queue >= BUSY_QUEUE ? " (busy: the lead decides)" : "";
+    out.push(`  ${inlineText(c.name, 40)} · ${c.reasons.length ? c.reasons.join("; ") : "no context"} · ${ahead}${busy}`);
+  }
+  const top = pickFor(candidates);
+  out.push(top ? `kiwi task assign ${taskId(t.id)} (no name) gives it to ${top.name}` : `nobody free has its context: name someone, kiwi task assign ${taskId(t.id)} NAME`);
   return out.join("\n");
 }
 

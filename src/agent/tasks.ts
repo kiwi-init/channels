@@ -25,11 +25,12 @@ function judgedRound(t: Task, open: ReviewRound | undefined, round: number | und
 export class SessionTasks extends SessionMessaging {
   readonly taskAdd = Effect.fn("AgentSession.taskAdd")(
     { self: this },
-    function* (this: SessionTasks, title: string, opts: { detail?: string; owner?: string; review?: string; re?: number; issue?: IssueRef } = {}) {
+    function* (this: SessionTasks, title: string, opts: { detail?: string; owner?: string; review?: string; re?: number; issue?: IssueRef; from?: number } = {}) {
       if (title.length > TASK_TITLE_MAX_LENGTH)
         return yield* new Rejected(`the title is ${title.length} characters, the most a task takes is ${TASK_TITLE_MAX_LENGTH}: shorten it and put the rest in --detail`);
       const { state } = yield* this.state();
       if (opts.re !== undefined && (!state.placeOf.has(opts.re) || ignored(state.trust.get(opts.re)))) return yield* new Rejected(`no message #${opts.re}`);
+      if (opts.from !== undefined && !state.tasks.has(opts.from)) return yield* new Rejected(`no task ${taskId(opts.from)} to come from`);
       const owner = opts.owner && (yield* this.resolveTo([opts.owner], state))?.[0];
       const review = opts.review === undefined ? undefined : yield* this.reviewer(state, opts.review);
       return yield* this.event(
@@ -40,6 +41,7 @@ export class SessionTasks extends SessionMessaging {
           ...(owner ? { owner } : {}),
           ...(review ? { review } : {}),
           ...(opts.issue ? { issue: opts.issue } : {}),
+          ...(opts.from !== undefined ? { from: opts.from } : {}),
         },
         `task: ${title}`,
         [...(owner ? [owner] : []), ...(review && review !== "*" ? [review] : [])],
@@ -51,7 +53,7 @@ export class SessionTasks extends SessionMessaging {
 
   readonly taskFromIssue = Effect.fn("AgentSession.taskFromIssue")(
     { self: this },
-    function* (this: SessionTasks, ref: string, opts: { title?: string; detail?: string; owner?: string; review?: string; re?: number } = {}) {
+    function* (this: SessionTasks, ref: string, opts: { title?: string; detail?: string; owner?: string; review?: string; re?: number; from?: number } = {}) {
       const { state } = yield* this.state();
       const issue = parseIssueRef(ref, state.repos);
       if (typeof issue === "string") return yield* new Rejected(issue);

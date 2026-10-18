@@ -2,9 +2,10 @@ import * as Effect from "effect/Effect";
 import { oneLook, openSession } from "../../agent.ts";
 import { Keystore } from "../../config.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
-import { formatTask, formatTasks, looksLikeLine, taskStateWord } from "@kiwi/core/format.ts";
+import { formatCandidates, formatTask, formatTasks, looksLikeLine, taskStateWord } from "@kiwi/core/format.ts";
 import type { TaskState } from "@kiwi/core/protocol.ts";
-import { similarOpenTasks, taskId, type ChannelState } from "@kiwi/core/state.ts";
+import { parseTaskId, similarOpenTasks, taskId, type ChannelState } from "@kiwi/core/state.ts";
+import { pickFor, taskCandidates } from "@kiwi/core/routing.ts";
 import { bindingFor } from "../../hooks.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, keepDaemon, out, session } from "../context.ts";
@@ -22,6 +23,7 @@ export const taskCommands: Record<string, Command> = {
         const STATE_FOR: Record<string, TaskState> = { start: "doing", review: "review", done: "done" };
         if (sub === "add") {
           const re = opt.re === undefined ? undefined : Number(opt.re.replace(/^#/, "")) || (yield* die("--re takes a message number"));
+          const from = opt.from === undefined ? undefined : (parseTaskId(opt.from) ?? (yield* die("--from takes a task: --from T72")));
           if (opt.issue !== undefined) {
             const made = yield* s.taskFromIssue(opt.issue, {
               title: args.slice(2).join(" ") || undefined,
@@ -29,6 +31,7 @@ export const taskCommands: Record<string, Command> = {
               detail: opt.detail,
               ...(opt.review !== undefined ? { review: opt.review } : {}),
               ...(re !== undefined ? { re } : {}),
+              ...(from !== undefined ? { from } : {}),
             });
             return out(`added ${taskId(made.id)} from ${made.issue}: ${made.title}\nclosing either one closes the other`);
           }
@@ -37,7 +40,13 @@ export const taskCommands: Record<string, Command> = {
           for (const gone of ["after", "needs"] as const)
             if (opt[gone] !== undefined) process.stderr.write(`kiwi: --${gone} is gone (tasks don't wait on or match anything now); put it in the title or --detail\n`);
           const { state: before } = yield* s.state();
-          const id = yield* s.taskAdd(title, { owner: opt.owner, detail: opt.detail, ...(opt.review !== undefined ? { review: opt.review } : {}), ...(re !== undefined ? { re } : {}) });
+          const id = yield* s.taskAdd(title, {
+            owner: opt.owner,
+            detail: opt.detail,
+            ...(opt.review !== undefined ? { review: opt.review } : {}),
+            ...(re !== undefined ? { re } : {}),
+            ...(from !== undefined ? { from } : {}),
+          });
           const like = similarOpenTasks(before, title).map((t) => t.id);
           const lines = [`added ${taskId(id)}`];
           if (like.length) lines.push(looksLikeLine(like));
@@ -51,12 +60,20 @@ export const taskCommands: Record<string, Command> = {
           return out(opt.json ? JSON.stringify(shown) : formatTask(state, shown));
         }
         if (sub === "match" || sub === "after") return yield* die(`kiwi task ${sub} is gone: tasks don't wait on or match anything now. Pick what you can do from the board (kiwi task)`);
+        if (sub === "who") {
+          const { state } = yield* s.state();
+          const t = state.tasks.get(id) ?? (yield* die(`no task ${taskId(id)}`));
+          return out(formatCandidates(t, taskCandidates(state, id)));
+        }
         if (sub === "assign" || sub === "handoff") {
-          const to = args[3] ?? (yield* die('usage: kiwi task assign T7 NAME ["where it stands, what\'s next"]'));
+          const { state: now } = yield* s.state();
+          const top = args[3] ? null : pickFor(taskCandidates(now, id));
+          const to = args[3] ?? top?.name ?? (yield* die(`nobody free has ${taskId(id)}'s context (kiwi task who ${taskId(id)}): name someone, kiwi task assign ${taskId(id)} NAME`));
           const next = args.slice(4).join(" ") || opt.note || undefined;
           const state = yield* s.taskHandoff(id, to, next);
           const t = state.tasks.get(id)!;
-          return out(`${taskId(id)} is ${t.owner}'s now${next ? "" : ' (add where it stands next time: kiwi task assign T7 NAME "…")'}`);
+          const why = top ? `: ${top.reasons.join("; ")}` : "";
+          return out(`${taskId(id)} is ${t.owner}'s now${why}${next ? "" : ' (add where it stands next time: kiwi task assign T7 NAME "…")'}`);
         }
         const verdictOf = { approve: "approved", reject: "rejected" } as const;
         const verdict = sub === "approve" || sub === "reject" ? verdictOf[sub] : undefined;
