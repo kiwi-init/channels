@@ -6,19 +6,11 @@ import type { PrChecks, PrRef } from "@kiwi/core/work.ts"
 import { formatAgo, formatTime } from "@/lib/format"
 import { laneWork, type LaneTask } from "@/lib/lanes"
 import { cx } from "@/lib/utils"
-import { byBusy, type AgentNow } from "./agent-strip"
+import { agentNow, byBusy, type AgentNow } from "./agent-strip"
 import { Monogram } from "./kit"
 
 const STATE_WORD: Record<Task["state"], string> = { todo: "open", doing: "in progress", review: "in review", done: "done" }
 const MAX_TICKS = 8
-
-function nowLine(a: AgentNow): { text: string; tone: "busy" | "live" | "quiet" } {
-  const act = a.here ? a.activity : undefined
-  if (act?.state === "working") return { text: act.tool ? `running ${act.tool}` : "thinking", tone: act.tool ? "busy" : "live" }
-  if (act?.state === "waiting") return { text: "waiting for a person", tone: "quiet" }
-  if (act?.state === "idle" || a.here) return { text: "idle", tone: "quiet" }
-  return { text: "not listening", tone: "quiet" }
-}
 
 function Ticks({ checks }: { checks: PrChecks }) {
   const ticks = [...checks.failed.map(() => "bg-alert"), ...Array.from({ length: checks.running }, () => "bg-doing"), ...Array.from({ length: checks.passed }, () => "bg-live")].slice(0, MAX_TICKS)
@@ -75,7 +67,7 @@ function Lane({
   onOpenTask: (id: number) => void
 }) {
   const work = useMemo(() => laneWork(state, messages, a.name), [state, messages, a.name])
-  const line = nowLine(a)
+  const line = agentNow(a)
   const sponsor = state.members.get(a.name)?.sponsor?.name
   return (
     <section aria-label={a.label} className="flex min-h-0 w-72 shrink-0 flex-col gap-4 px-4 py-3 md:w-auto md:min-w-64 md:flex-1">
@@ -91,8 +83,8 @@ function Lane({
       </header>
 
       <p className="flex items-center gap-2 border-y border-line py-2 font-mono text-meta">
-        <span className={cx("size-1.5 shrink-0 rounded-full", line.tone === "busy" ? "animate-pulse bg-doing" : line.tone === "live" ? "bg-live" : "bg-ink-3")} />
-        <span className={cx("truncate", line.tone === "quiet" ? "text-ink-3" : "text-ink")}>{line.text}</span>
+        <span className={cx("size-1.5 shrink-0 rounded-full", line.busy ? "animate-pulse bg-doing" : a.here ? "bg-live" : "bg-ink-3")} />
+        <span className={cx("truncate", line.busy ? "text-ink" : "text-ink-3")}>{line.text}</span>
       </p>
 
       {work.current.length > 0 && (
