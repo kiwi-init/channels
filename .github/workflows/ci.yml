@@ -189,6 +189,38 @@ jobs:
           job: build
           hash: ${{ fromJSON(needs.plan.outputs.hashes)['build'] }}
 
+  shots:
+    name: build / shots
+    needs: plan
+    if: fromJSON(needs.plan.outputs.run)['shots']
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: ./.github/actions/setup
+      - id: playwright
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+      - run: bunx playwright-core install-deps chromium-headless-shell
+      - if: steps.playwright.outputs.cache-hit != 'true'
+        run: bunx playwright-core install --only-shell chromium
+      - run: bun run web:build
+      - name: ui shots
+        run: bun scripts/shoot-ui.ts --wide --theme dark "$RUNNER_TEMP/shots"
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ui-shots
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: ignore
+      - uses: ./.github/actions/jev-ci-pass
+        continue-on-error: true
+        with:
+          job: shots
+          hash: ${{ fromJSON(needs.plan.outputs.hashes)['shots'] }}
+
   desktop:
     name: desktop / package
     needs: plan
@@ -253,7 +285,7 @@ jobs:
   # It also finishes the plan's comment on the pull request with each job's result.
   ci-ok:
     name: ci-ok
-    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, desktop, cli-macos, release-rehearsal]
+    needs: [plan, static, test-unit, test-flows-a, test-flows-b, build, shots, desktop, cli-macos, release-rehearsal]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

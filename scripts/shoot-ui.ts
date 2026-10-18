@@ -8,6 +8,8 @@
 // Shots are taken at 2x (Retina), as most people see the dashboard. --only keeps the screens whose
 // name contains one of the words (and skips the signed-out ones unless named), --wide skips the phone
 // size, --theme keeps one theme: for a quick look at a few screens while working on them.
+// A screen that can't be reached is saved as skipped-<name>.png and fails the run. CI's
+// `build / shots` runs it --wide --theme dark and uploads the shots as the ui-shots artifact.
 //
 // Needs Playwright's Chromium: bunx playwright-core install --only-shell chromium
 // (or set SMOKE_CHROMIUM to a Chrome binary).
@@ -114,6 +116,7 @@ async function shoot(page: Page, tag: string, name: string, open?: () => Promise
     console.log(`shot ${tag}-${name}`);
   } catch (e) {
     skipped.push(`${tag}-${name}`);
+    await page.screenshot({ path: join(OUT, `skipped-${tag}-${name}.png`) }).catch(() => {});
     console.log(`skip ${tag}-${name}: ${e instanceof Error ? e.message.split("\n")[0] : e}`);
   } finally {
     await close().catch(() => {});
@@ -255,9 +258,10 @@ try {
       const closeDetails = () => owner.getByRole("button", { name: "Close details" }).click();
       const tasksPanel = () => owner.getByRole("complementary", { name: "Tasks" });
       const account = () => owner.getByRole("complementary").getByRole("button", { name: /Jonatas/ });
-      /** The channel as it opens on the conversation, scrolled to the latest. */
+      /** The channel as it opens on the conversation, scrolled to the latest. Reloaded: the hash alone keeps a panel open. */
       const toChannel = async () => {
         await owner.goto(channel);
+        await owner.reload();
         await toTab("Conversation");
         await owner
           .getByText("Ship it as 0.8.12")
@@ -279,18 +283,17 @@ try {
         await owner.keyboard.press("Escape");
         if (narrow) await toChannel();
       };
-      /** Settings and Personalities are dialogs or pages in the main area: Escape closes the one, the Close button the other. */
       const closeSettings = async () => {
-        await owner.keyboard.press("Escape");
-        const close = owner.getByRole("button", { name: "Close settings" });
-        if (await close.count()) await close.click();
-        await fromList();
+        const back = owner.getByRole("button", { name: "Back to Settings" });
+        if (await back.count()) await back.click();
+        await owner.getByRole("button", { name: "Close settings" }).click();
+        if (narrow) await toChannel();
       };
       const openSettings = async () => {
         await toList();
         await account().click();
-        await owner.getByRole("menuitem", { name: /^Settings…?$/ }).click();
-        await owner.getByText("Text size").first().waitFor();
+        await owner.getByRole("menuitem", { name: "Settings" }).click();
+        await owner.getByRole("region", { name: "Settings" }).waitFor();
       };
       await toChannel();
 
@@ -345,30 +348,32 @@ try {
         () => toTab("Agents"),
         () => toTab("Conversation"),
       );
-      await shoot(owner, tag, "07-details", () => detailsBtn().click(), closeDetails);
-      await shoot(
-        owner,
-        tag,
-        "08-direct",
-        async () => {
-          await detailsBtn().click();
-          await owner.getByRole("button", { name: "More for atlas" }).click();
-          await owner.getByRole("menuitem", { name: "Message privately" }).click();
-          await owner.getByText("Between us: is win overloaded?").first().waitFor({ timeout: 15000 });
-        },
-        toChannel,
-      );
-      await shoot(
-        owner,
-        tag,
-        "09-invite",
-        async () => {
-          await detailsBtn().click();
-          await owner.getByRole("button", { name: "Invite", exact: true }).click();
-          await owner.getByText("Invite to this channel").first().waitFor();
-        },
-        toChannel,
-      );
+      if (!narrow) await shoot(owner, tag, "07-details", () => detailsBtn().click(), closeDetails);
+      if (!narrow)
+        await shoot(
+          owner,
+          tag,
+          "08-direct",
+          async () => {
+            await detailsBtn().click();
+            await owner.getByRole("button", { name: "More for atlas" }).click();
+            await owner.getByRole("menuitem", { name: "Message privately" }).click();
+            await owner.getByPlaceholder(/privately$/).waitFor({ timeout: 15000 });
+          },
+          toChannel,
+        );
+      if (!narrow)
+        await shoot(
+          owner,
+          tag,
+          "09-invite",
+          async () => {
+            await detailsBtn().click();
+            await details().getByRole("button", { name: "Invite", exact: true }).click();
+            await details().getByRole("heading", { name: "Invite to this channel" }).waitFor();
+          },
+          toChannel,
+        );
       await shoot(
         owner,
         tag,
@@ -389,26 +394,28 @@ try {
         },
         fromList,
       );
-      await shoot(
-        owner,
-        tag,
-        "12-notes",
-        async () => {
-          await detailsBtn().click();
-          await details().getByRole("heading", { name: "Notes" }).scrollIntoViewIfNeeded();
-        },
-        closeDetails,
-      );
-      await shoot(
-        owner,
-        tag,
-        "13-pause",
-        async () => {
-          await detailsBtn().click();
-          await details().getByRole("button", { name: "Pause agents" }).click();
-        },
-        toChannel,
-      );
+      if (!narrow)
+        await shoot(
+          owner,
+          tag,
+          "12-notes",
+          async () => {
+            await detailsBtn().click();
+            await details().getByRole("heading", { name: "Notes" }).scrollIntoViewIfNeeded();
+          },
+          closeDetails,
+        );
+      if (!narrow)
+        await shoot(
+          owner,
+          tag,
+          "13-pause",
+          async () => {
+            await detailsBtn().click();
+            await details().getByRole("button", { name: "Pause agents" }).click();
+          },
+          toChannel,
+        );
       await shoot(owner, tag, "14-list", toList, async () => {
         if (narrow) await toChannel();
       });
@@ -419,13 +426,10 @@ try {
         "19-personalities",
         async () => {
           await openSettings();
-          await owner.getByRole("button", { name: /^Open…?$/ }).click();
-          await owner.getByText("Presets for code work").first().waitFor();
+          await owner.getByRole("button", { name: "Open" }).click();
+          await owner.getByRole("region", { name: "Personalities" }).waitFor();
         },
-        async () => {
-          await owner.keyboard.press("Escape");
-          await closeSettings();
-        },
+        closeSettings,
       );
       await owner.goto(fresh);
       await owner
