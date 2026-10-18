@@ -114,7 +114,7 @@ export function ConfirmDialogs({
         message={
           confirm?.kind === "approve" && (
             <>
-              {confirm.req.kind !== "human" && <AgentFacts card={confirm.req.card} said repos={p.state.repos} className="mb-3" />}
+              {confirm.req.kind !== "human" && <AgentFacts card={confirm.req.card} runs={confirm.req.runs} said repos={p.state.repos} className="mb-3" />}
               Approve only if {confirm.req.kind === "human" ? "they show" : "its terminal shows"} this exact code.
               <span className="mt-4 mb-4 block text-[34px] leading-none font-semibold tracking-[0.04em] text-ink tabular-nums">{confirm.req.code}</span>
               {confirm.req.kind === "human" ? (

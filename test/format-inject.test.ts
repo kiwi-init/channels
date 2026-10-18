@@ -49,7 +49,7 @@ function member(name: string, role: string): Member {
     active: true,
     lastSeen: 0,
     messages: 0,
-    scopes: ["post", "ask", "tasks", "claims", "facts"],
+    scopes: ["post", "ask", "tasks", "facts"],
   };
 }
 

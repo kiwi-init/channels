@@ -96,7 +96,7 @@ async function world(count: number, seed: number): Promise<World> {
   let lastRoom = -1;
   let lastCharter: { text: string | null; since: number } | null = null;
   let lastHold: { on: boolean; note?: string; since: number } | null = null;
-  let lastScope: { scopes: ("post" | "ask" | "tasks" | "claims" | "facts")[]; since: number } | null = null;
+  let lastScope: { scopes: ("post" | "ask" | "tasks" | "facts")[]; since: number } | null = null;
   const send = async (from: string, init: { kind?: Kind; ev?: Event; to?: string[]; re?: number[]; room?: string; task?: number; dm?: true; signer?: string }) => {
     seq++;
     const at = T0 + 1000 + seq * 1000;
@@ -187,7 +187,7 @@ async function world(count: number, seed: number): Promise<World> {
       } else if (k === 6) {
         const scopes = pick([["post"], ["post", "ask", "tasks"], null] as const);
         const s = await send("own", { ev: { op: "scope.set", member: "ro", pk: ids.ro!.pk, scopes: scopes ? [...scopes] : null } });
-        lastScope = { scopes: scopes ? [...scopes] : ["post", "ask", "tasks", "claims", "facts"], since: s };
+        lastScope = { scopes: scopes ? [...scopes] : ["post", "ask", "tasks", "facts"], since: s };
       } else if (k === 7) {
         await send(who, { ev: { op: "room.create", id: `bad${seq}`, name: "not owner" } });
       } else {

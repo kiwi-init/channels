@@ -34,7 +34,7 @@ export function Requests({ onDone }: { onDone: () => void }) {
               <p className="text-meta leading-snug text-ink-2">
                 {r.kind === "human" ? "A person" : r.computer ? `Agent on ${r.computer.personName}’s ${r.computer.label}` : "Agent"} · asked {formatAgo(r.ts, p.now)}
               </p>
-              {r.kind !== "human" && <AgentFacts card={r.card} said repos={p.state.repos} className="mt-1" />}
+              {r.kind !== "human" && <AgentFacts card={r.card} runs={r.runs} said repos={p.state.repos} className="mt-1" />}
               <div className="mt-2 flex gap-2">
                 <Button size="sm" variant="secondary" onClick={() => run(() => p.onDeny(r), `Declined ${r.name}`)}>
                   Decline

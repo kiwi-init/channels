@@ -431,10 +431,10 @@ describe("what runs an agent", () => {
     // Approved: the seat's record says so, owner-signed, and status shows it beside the card.
     const status = await ok(owner, ["--as", "human", "status"]);
     expect(status).toContain("runs claude-code · claude-fable-5-1 (owner-signed)");
-    // The agent's card is its own word: naming another model there changes the card, not the record.
     await ok(h, ["card", "--model", "claude-opus-5-5"], S);
     const later = await ok(owner, ["--as", "human", "status"]);
-    expect(later).toContain("runs claude-code · claude-fable-5-1 (owner-signed); its card says claude-opus-5-5");
+    expect(later).toContain("runs claude-code · claude-fable-5-1 (owner-signed)");
+    expect(later).not.toContain("claude-opus-5-5");
   });
 
   test("a harness kiwi can't tell apart declares itself with --harness and --model", async () => {

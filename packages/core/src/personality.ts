@@ -68,7 +68,7 @@ export function personaOf(p: Personality): Persona {
 
 export function personaScopes(p: Pick<Persona, "capabilities">): Scope[] {
   const has = (c: Capability) => p.capabilities.includes(c);
-  return [...(has("write") ? (["post", "ask"] as const) : []), ...(has("tasks") ? (["tasks", "claims"] as const) : []), ...(has("notes") ? (["facts"] as const) : [])];
+  return [...(has("write") ? (["post", "ask"] as const) : []), ...(has("tasks") ? (["tasks"] as const) : []), ...(has("notes") ? (["facts"] as const) : [])];
 }
 
 const UNSAFE = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g;

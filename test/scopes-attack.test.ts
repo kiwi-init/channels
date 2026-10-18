@@ -112,7 +112,7 @@ describe("a member cannot do more than the owner signed", () => {
     expect(s.trust.get(after.seq)).toBe("refused");
     expect(s.trust.get(fromNew.seq)).toBe("verified");
     expect(s.members.get("mac")?.pk).toBe(again.pk);
-    expect(s.members.get("mac")?.scopes).toEqual(["post", "ask", "tasks", "claims", "facts"]);
+    expect(s.members.get("mac")?.scopes).toEqual(["post", "ask", "tasks", "facts"]);
   });
 
   test("unknown scope names grant nothing, and a garbled value grants nothing", async () => {
