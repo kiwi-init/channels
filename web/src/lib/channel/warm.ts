@@ -1,7 +1,7 @@
 import type { RoomsSetting } from "@kiwi/core/client.ts"
 import type { JoinRequest, Member } from "@kiwi/core/membership.ts"
 import type { Message } from "@kiwi/core/protocol.ts"
-import type { GuardFloor } from "@kiwi/core/state.ts"
+import type { FoldBase, GuardFloor } from "@kiwi/core/state.ts"
 import { planReload } from "../history-plan"
 import type { Marks } from "../receipts"
 
@@ -12,6 +12,7 @@ export interface Warm {
   marks: Marks
   guardFloor: GuardFloor | null
   roomsFloor: RoomsSetting | null
+  base: FoldBase | null
 }
 
 const warm = new Map<string, Warm>()
