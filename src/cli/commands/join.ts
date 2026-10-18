@@ -182,8 +182,6 @@ export const joinCommands: Record<string, Command> = {
               charter: charterLines(state),
               lead: leadLine(state, name),
               human: humanOf(state, name),
-              role: seat?.role,
-              about: seat?.about,
               ...(seat?.persona ? { persona: seat.persona } : {}),
             }),
           );

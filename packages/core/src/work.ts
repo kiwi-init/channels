@@ -164,7 +164,7 @@ export function agentRows(state: ChannelState, messages: Message[], online: Set<
       const since = status === "blocked" && blockingAsk ? at(blockingAsk) : lastActive;
       return {
         name: a.name,
-        ...(a.role ? { role: a.role } : {}),
+        ...(a.persona ? { role: a.persona?.name } : {}),
         ...(doing ? { doing } : {}),
         ...(statusLine?.text ? { statusLine } : {}),
         status,

@@ -71,14 +71,47 @@ export function personaScopes(p: Pick<Persona, "capabilities">): Scope[] {
   return [...(has("write") ? (["post", "ask"] as const) : []), ...(has("tasks") ? (["tasks"] as const) : []), ...(has("notes") ? (["facts"] as const) : [])];
 }
 
+const UNSAFE = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g;
+const oneLine = (s: string) =>
+  s
+    .replace(UNSAFE, " ")
+    .replace(/[\s\u2028\u2029]+/g, " ")
+    .trim();
+
 export function personaLines(p: Persona): string[] {
   const may = p.capabilities.map((c) => CAPABILITY_LABEL[c]);
+  const told = p.instructions
+    .replace(/\r\n?|[\u2028\u2029]/g, "\n")
+    .replace(UNSAFE, "")
+    .split("\n")
+    .map((l) => l.trimEnd())
+    .join("\n  │ ")
+    .trim();
   return [
-    `You join as ${p.name} (${ROLE_LABEL[p.role]}).${may.length ? ` You may ${may.join(", ")}.` : " You may only read."}${p.areas.length ? ` You work in ${p.areas.join(", ")}.` : ""}`,
-    ...(p.instructions.trim() ? [p.instructions.trim()] : []),
+    `You join as ${oneLine(personaLabel(p) ?? "")}.${may.length ? ` You may ${may.join(", ")}.` : " You may only read."}${p.areas.length ? ` You work in ${p.areas.map(oneLine).join(", ")}.` : ""}`,
+    ...(told ? [`Your instructions: ${told}`] : []),
   ];
 }
 
 export function capabilityLine(p: Pick<Persona, "capabilities">): string {
   return p.capabilities.length ? p.capabilities.map((c) => CAPABILITY_LABEL[c]).join(" · ") : "reads only";
+}
+
+export function carriedPersona(lead: boolean, role: string | undefined, about: string | undefined, scopes: readonly Scope[]): Persona | undefined {
+  const name = role?.replace(/\s+/g, " ").trim().slice(0, MAX_NAME);
+  if (!lead && !name && !about?.trim()) return undefined;
+  const capabilities = CAPABILITIES.filter(
+    (c) => (c === "write" && scopes.includes("post")) || (c === "tasks" && scopes.includes("tasks")) || (c === "notes" && scopes.includes("facts")) || (c === "assign" && lead),
+  );
+  return { name: lead ? "Lead" : name || "Member", role: lead ? "lead" : "builder", capabilities, areas: [], instructions: (about ?? "").slice(0, MAX_INSTRUCTIONS) };
+}
+
+function personaLabel(p: Pick<Persona, "name" | "role"> | undefined): string | undefined {
+  if (!p) return undefined;
+  return p.name === ROLE_LABEL[p.role] ? p.name : `${p.name} (${ROLE_LABEL[p.role]})`;
+}
+
+export function personaAnswers(p: Pick<Persona, "name" | "role"> | undefined, role: string): boolean {
+  const r = role.trim().toLowerCase();
+  return !!p && !!r && (p.role === r || p.name.toLowerCase() === r);
 }

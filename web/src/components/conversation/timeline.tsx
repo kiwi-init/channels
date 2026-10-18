@@ -2,7 +2,7 @@ import type { ReactNode } from "react"
 
 import type { ImageAttachment, Message } from "@kiwi/core/protocol.ts"
 import { cardShown } from "@kiwi/core/standup.ts"
-import { colorOf, isLeadRole, type ChannelState } from "@kiwi/core/state.ts"
+import { colorOf, type ChannelState } from "@kiwi/core/state.ts"
 import { prsIn } from "@kiwi/core/work.ts"
 import type { Chosen } from "@/lib/asks"
 import type { ChannelHandle } from "@/lib/channel"
@@ -86,7 +86,7 @@ export function rowMakers(c: RowsContext) {
   }
   const tagOf = (name: string) => {
     const member = state.members.get(name)
-    return member?.owner ? "owner" : member?.role && isLeadRole(member.role) ? "lead" : undefined
+    return member?.owner ? "owner" : state.lead === name ? "lead" : undefined
   }
   const prsOf = (m: Message) => {
     if (!m.body.includes("github.com/")) return undefined

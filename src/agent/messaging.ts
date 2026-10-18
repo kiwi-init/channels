@@ -1,4 +1,5 @@
 import { omit } from "@kiwi/core/omit.ts";
+import { personaAnswers } from "@kiwi/core/personality.ts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import { mergeCard, movedCard, sameCard, type Where } from "../card.ts";
@@ -44,7 +45,7 @@ export class SessionMessaging extends SessionListen {
         continue;
       }
       const role = t.slice(5).toLowerCase();
-      for (const m of s.members.values()) if (m.role?.toLowerCase() === role) out.add(m.name);
+      for (const m of s.members.values()) if (personaAnswers(m.persona, role)) out.add(m.name);
     }
     if (!out.size) return yield* new Rejected(`no member has role ${to.filter((t) => t.startsWith("role:")).join(", ")}`);
     return [...out];

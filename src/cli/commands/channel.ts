@@ -108,10 +108,10 @@ export const channelCommands: Record<string, Command> = {
       const away = [...state.members.values()].filter((m) => m.active && !online.has(m.name));
       if (!online.size && !away.length) return out("nobody else is in this channel");
       for (const [name, p] of online) {
-        const role = p.role ?? state.members.get(name)?.role;
+        const role = state.members.get(name)?.persona?.name;
         out(`${name}${role ? ` — ${role}` : ""} · ${presenceWords(p)}`);
       }
-      for (const m of away) out(`${m.name}${m.role ? ` — ${m.role}` : ""} · last seen ${ago(m.lastSeen)}`);
+      for (const m of away) out(`${m.name}${m.persona ? ` — ${m.persona?.name}` : ""} · last seen ${ago(m.lastSeen)}`);
     }),
 
   charter: () =>

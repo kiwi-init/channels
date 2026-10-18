@@ -87,11 +87,9 @@ export function describeEvent(m: Message, state?: ChannelState): string {
   const round = ev.op === "task.update" ? roundTag(state?.tasks.get(ev.task), m.seq, ev.round) : "";
   switch (ev.op) {
     case "hello": {
-      // Only the owner's word sets a role: anyone else's hello shows the role only when it's the one they
-      // hold (an older client's hello that asked for another, or a role approval left out, says nothing).
       const who = state?.members.get(m.from);
-      const role = ev.role && (who?.owner || who?.role === ev.role) ? ev.role : undefined;
-      const about = ev.about && (who?.owner || who?.about === ev.about) ? ev.about : undefined;
+      const role = ev.role && (who?.owner || who?.persona?.name === ev.role) ? ev.role : undefined;
+      const about = ev.about && (who?.owner || who?.persona?.instructions === ev.about) ? ev.about : undefined;
       return `joined${role ? ` as ${role}` : ""}${about ? ` (${about})` : ""}`;
     }
     case "role.set":
@@ -302,8 +300,8 @@ export function memberJson(state: ChannelState, name: string, online: Snapshot["
   const on = online.get(name);
   return {
     name,
-    role: inlineText(m?.role ?? on?.role, 80) || null,
-    about: inlineText(m?.about, 200) || null,
+    role: m?.persona?.name ?? null,
+    about: inlineText(m?.persona?.instructions, 200) || null,
     kind: m?.kind ?? (m?.owner ? "human" : "agent"),
     owner: !!m?.owner,
     sponsor: m?.sponsor ? inlineText(m.sponsor.handle ?? m.sponsor.name, 80) || null : null,
@@ -389,7 +387,7 @@ export function charterLines(state: ChannelState): string | null {
 export function formatStatus({ alias, me, state, online, unread, now = Date.now() }: Snapshot): string {
   const out: string[] = [];
   const meM = state.members.get(me);
-  out.push(`channel ${alias} · you are ${me}${meM?.role ? ` (${inlineText(meM.role, 80)})` : ""} · head #${state.head}${unread ? ` · ${unread} unread` : ""}`);
+  out.push(`channel ${alias} · you are ${me}${meM?.persona ? ` (${inlineText(meM.persona?.name, 80)})` : ""} · head #${state.head}${unread ? ` · ${unread} unread` : ""}`);
   const hold = holdLine(state, now);
   if (hold) out.push(hold);
   if (state.compact) out.push(`history compacted through #${state.compact.through} by ${inlineText(state.compact.by, 40)}: ${inlineText(state.compact.summary, 400)} (kiwi compact shows it all)`);
@@ -415,7 +413,7 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
     const m = state.members.get(name);
     const on = online.get(name);
     const where = on ? presenceWords(on, now) : m ? `last seen ${ago(m.lastSeen, now)}` : "online";
-    const role = m?.persona ? `${inlineText(m.persona.name, 40)} (${ROLE_LABEL[m.persona.role]})` : inlineText(m?.role ?? on?.role, 80);
+    const role = m?.persona ? `${inlineText(m.persona.name, 40)} (${ROLE_LABEL[m.persona.role]})` : "";
     const key = m?.pk ? ` · key ${m.pk.slice(0, 8)}` : "";
     const kind =
       m?.kind === "human"

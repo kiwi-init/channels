@@ -32,17 +32,17 @@ describe("fold", () => {
   test("the role.set scrolled out of the loaded tail: the record's later role still holds", async () => {
     const set = await msg(owner, { op: "role.set", member: "ann", role: "backend", about: "relay only" });
     const tail = [await msg(ann, { op: "hello" })];
-    expect(fold(tail, roster()).members.get("ann")?.role).toBe("intern"); // without the floor: the approval's role
+    expect(fold(tail, roster()).members.get("ann")?.persona?.name).toBe("intern");
     const s = fold(tail, roster({ role: "backend", about: "relay only", since: set.seq }));
-    expect(s.members.get("ann")).toMatchObject({ role: "backend", about: "relay only" });
+    expect(s.members.get("ann")?.persona).toMatchObject({ name: "backend", role: "builder", instructions: "relay only" });
   });
 
   test("a role.set after the floor still wins, and the full log agrees with the floor", async () => {
     const set = await msg(owner, { op: "role.set", member: "ann", role: "backend" });
     const later = await msg(owner, { op: "role.set", member: "ann", role: "frontend" });
     const floor = { role: "backend", since: set.seq };
-    expect(fold([later], roster(floor)).members.get("ann")?.role).toBe("frontend");
-    expect(fold([set, later], roster(floor)).members.get("ann")?.role).toBe("frontend");
+    expect(fold([later], roster(floor)).members.get("ann")?.persona?.name).toBe("frontend");
+    expect(fold([set, later], roster(floor)).members.get("ann")?.persona?.name).toBe("frontend");
     expect(fold([set], roster(floor)).roleSets.get("ann")).toEqual({ seq: set.seq, role: "backend" });
   });
 
