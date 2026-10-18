@@ -91,6 +91,9 @@ jobs:
       desktop/build/entitlements.mac.plist has the audio-input entitlement. And
       test/offscreen.test.ts: a message's content column is content-visibility auto with a remembered
       size, so off-screen messages skip layout and paint when the column's width changes. And
+      test/replay.test.ts: a signed message counts once and near the time it was signed (fold
+      refuses a second copy of a message id, across incremental folds and their snapshot, and one
+      signed more than a day before the relay received it). And
       test/prism.test.ts: prism means one thing (prism-lit only on the open channel and the
       sidebar's chosen view or conversation, no plain prism or orb anywhere, solid
       prefers-contrast fallbacks, the spectrum and segment tokens written once, the kit the quiet
