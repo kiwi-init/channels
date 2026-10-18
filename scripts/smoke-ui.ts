@@ -151,9 +151,11 @@ async function run(part: Part): Promise<string[]> {
   };
 
   const send = async (text: string) => {
-    await page.getByRole("textbox", { name: "Message" }).fill(text);
+    const box = page.getByRole("textbox", { name: "Message" });
+    await box.fill(text);
     await page.keyboard.press("Enter");
     await page.getByText(text, { exact: true }).first().waitFor();
+    for (let i = 0; i < 100 && (await box.inputValue()) !== ""; i++) await page.waitForTimeout(100);
   };
 
   const menus = async () => {
@@ -213,7 +215,14 @@ async function run(part: Part): Promise<string[]> {
 
     at = "send and reply";
     await send("smoke test");
+    await send("smoke, a second line");
     await page.locator("button[aria-label='Reply']").first().dispatchEvent("click");
+    await page.getByText("Replying to").first().waitFor();
+    await send("smoke, an inline reply");
+    await page.getByRole("button", { name: /^Replying to .+: smoke test$/ }).waitFor();
+    if (process.env.SMOKE_SHOTS) await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "reply.png") });
+    log("ok  a reply quotes what it answers, inline");
+    await page.getByRole("button", { name: "1 Reply" }).click();
     await page.getByRole("button", { name: "Close thread" }).waitFor();
     await page.getByRole("button", { name: "Close thread" }).click();
     log("ok  Thread panel");
@@ -320,15 +329,11 @@ async function run(part: Part): Promise<string[]> {
     if (process.env.SMOKE_SHOTS) await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "read.png") });
     log(`ok  ${at}`);
 
-    at = "read receipt in a thread";
+    at = "read receipt on a reply";
     await page.locator("button[aria-label='Reply']").last().dispatchEvent("click");
-    const thread = page.getByRole("complementary", { name: "Thread" });
-    await thread.getByRole("textbox", { name: "Message" }).fill("smoke, read my reply");
-    await page.keyboard.press("Enter");
-    await thread.getByText("smoke, read my reply", { exact: true }).waitFor();
+    await send("smoke, read my reply");
     for (const as of ["bot", "helper"]) await kiwi(["-c", "smoke", "--as", as, "listen", "--now"]);
-    await thread.getByText(/^Read( by|\s\d|$)/).waitFor({ timeout: 15000 });
-    await page.getByRole("button", { name: "Close thread" }).click();
+    await page.getByText(/^Read( by|\s\d|$)/).waitFor({ timeout: 15000 });
     log(`ok  ${at}`);
 
     const smokeTask = /T\d+/.exec(await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke task", "--owner", "bot"]))?.[0] ?? "T0";

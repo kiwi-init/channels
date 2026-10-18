@@ -160,6 +160,14 @@ From `design-tokens.ts`:
   shows the full list.
 - Conversation: your bubbles `accent` with white ink; theirs `bubble-them`
   with `ink`. Runs stack at `stack` radius on the joined corners.
+- Replies, as in Messages: a reply sits in the conversation where it was
+  sent, never folded away. Above it, on its sender's side, a `wash`
+  `bubble`-round quote of what it answers (the name in `stamp`, two lines
+  of `ui` in `ink-2`), joined to the reply by a 2px `edge-strong` hook;
+  pressing it jumps to the message and flashes it. No quote when the
+  answered message is the bubble right above. Under a message, "N Replies"
+  opens them together in the thread panel, except one reply that already
+  follows it.
 - Needs-you: approvals, escalations and review-waiting work in one place at
   the top; `Pause agents` in the header stops every agent at once.
 - Overview cards: always in the chat area from 1280px wide, never behind
@@ -195,8 +203,8 @@ Anatomy top to bottom: reply bar, textarea row, mention notes,
 actions row with send.
 
 - Mentions are inline pills.
-- Reply cancels with Escape; in a thread every message answers the root and
-  there is no reply bar.
+- Reply on a bubble opens the reply bar; Escape cancels it. In a thread every
+  message answers the root and there is no reply bar.
 - Drag-and-drop and pasted images render inside the composer; sending shows
   in place, never an external spinner.
 - Disabled send and placeholders stay quiet; the send button is the one
