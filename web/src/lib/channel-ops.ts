@@ -23,7 +23,7 @@ function lazyLocalOps(): ChannelOps {
   return {
     call: (code, op, ...args) => local().then((o) => o.call(code, op, ...args)),
     create: (name, token, me) => local().then((o) => o.create(name, token, me)),
-    requestJoin: (code, name, role) => local().then((o) => o.requestJoin(code, name, role)),
+    requestJoin: (code, name) => local().then((o) => o.requestJoin(code, name)),
     joinStatus: (code) => local().then((o) => o.joinStatus(code)),
     forget: (code) => local().then((o) => o.forget(code)),
     presence: (code, p) => local().then((o) => o.presence(code, p)),
