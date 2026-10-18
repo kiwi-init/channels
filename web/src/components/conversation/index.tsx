@@ -219,7 +219,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     )
   }
 
-  const group = memberCount > 2
   const lastMine = visible.findLast((m) => m.from === me && m.kind !== "event")?.seq
   const lastMineReply = threadRoot === null ? undefined : (threads.get(threadRoot) ?? []).findLast((m) => m.from === me && m.kind !== "event")?.seq
   const showsReceipt = (m: Message, anchor: string | undefined): boolean => (anchor === undefined && m.seq === lastMine) || (anchor === "t" && m.seq === lastMineReply)
@@ -233,7 +232,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     pkOf,
     image: ch.image,
     now,
-    group,
     hereKey,
     cardRoom,
     search,
