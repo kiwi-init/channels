@@ -108,7 +108,9 @@ jobs:
       joins, cards) and stay out of the conversation and kiwi log, and which people still read there.
       And test/lead.test.ts: the optional lead role (one at a time, an old
       coordinator role reads as it, an old mode.set folds to nothing, a person's words reach every
-      agent). Fails if a tested module's behavior,
+      agent). And test/push-pull.test.ts: what an agent is sent (all of #general, rooms and task
+      threads once it has posted there, so an answer to its question in a task's thread reaches
+      it, and @mentions anywhere) and how a mention is read. Fails if a tested module's behavior,
       output text or exported names change. TMPDIR points through a symlink, as macOS's does,
       so a test that compares a tmp path with its realpath or process.cwd() fails here too.
 

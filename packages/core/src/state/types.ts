@@ -100,6 +100,7 @@ export interface Task {
   workedBy: string[];
   rounds: ReviewRound[];
   source?: number;
+  posters?: string[];
 }
 
 export interface Reaction {
@@ -182,6 +183,7 @@ export interface Room {
   name: string;
   createdBy: string | null;
   at: number;
+  posters?: string[];
 }
 
 export interface FoldBase {

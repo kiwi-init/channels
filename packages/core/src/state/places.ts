@@ -26,7 +26,7 @@ export function threadMembers(state: Pick<ChannelState, "members" | "tasks" | "l
   if (place.kind === "dm") return place.with.filter(active);
   const t = state.tasks.get(place.task);
   if (!t) return [];
-  return [...new Set([t.owner, ...t.workedBy, t.review !== "*" ? t.review : undefined, state.lead ?? undefined].filter(active))];
+  return [...new Set([t.owner, ...t.workedBy, t.review !== "*" ? t.review : undefined, state.lead ?? undefined, ...(t.posters ?? [])].filter(active))];
 }
 
 export function summarize(placeOf: Map<number, Place>, tasks: Map<number, Task>, trust: Map<number, Trust>): Map<string, PlaceSummary> {
