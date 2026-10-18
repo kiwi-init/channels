@@ -429,6 +429,7 @@ export function wellFormedHandoff(x: unknown): x is Handoff {
   );
 }
 
+export const TASK_TITLE_MAX_LENGTH = 200;
 export const CHOICES_MIN = 2;
 export const CHOICES_MAX = 6;
 export const CHOICE_MAX_LENGTH = 200;

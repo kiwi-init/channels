@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import { TASK_STATES, ignored, type TaskState, type Verdict } from "@kiwi/core/protocol.ts";
+import { TASK_STATES, TASK_TITLE_MAX_LENGTH, ignored, type TaskState, type Verdict } from "@kiwi/core/protocol.ts";
 import { omit } from "@kiwi/core/omit.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { isPerson, openRound, revisedOut, taskId, type ChannelState, type ReviewRound, type Task } from "@kiwi/core/state.ts";
@@ -24,6 +24,8 @@ export class SessionTasks extends SessionMessaging {
   readonly taskAdd = Effect.fn("AgentSession.taskAdd")(
     { self: this },
     function* (this: SessionTasks, title: string, opts: { detail?: string; owner?: string; review?: string; re?: number } = {}) {
+      if (title.length > TASK_TITLE_MAX_LENGTH)
+        return yield* new Rejected(`the title is ${title.length} characters, the most a task takes is ${TASK_TITLE_MAX_LENGTH}: shorten it and put the rest in --detail`);
       const { state } = yield* this.state();
       if (opts.re !== undefined && (!state.placeOf.has(opts.re) || ignored(state.trust.get(opts.re)))) return yield* new Rejected(`no message #${opts.re}`);
       const owner = opts.owner && (yield* this.resolveTo([opts.owner], state))?.[0];
@@ -81,6 +83,8 @@ export class SessionTasks extends SessionMessaging {
       const { state } = yield* this.state();
       const t = state.tasks.get(id);
       if (!t) return yield* new Rejected(`no task ${taskId(id)}`);
+      if (change.title !== undefined && change.title.length > TASK_TITLE_MAX_LENGTH)
+        return yield* new Rejected(`the title is ${change.title.length} characters, the most a task takes is ${TASK_TITLE_MAX_LENGTH}: shorten it and put the rest in a note`);
       if (change.state && change.state !== "cancelled" && !TASK_STATES.includes(change.state)) return yield* new Rejected(`state must be one of ${TASK_STATES.join(", ")}`);
       const owner = change.owner ? (yield* this.resolveTo([change.owner], state))?.[0] : change.owner;
       const review = change.review ? yield* this.reviewer(state, change.review) : change.review;
