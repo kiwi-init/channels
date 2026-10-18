@@ -89,6 +89,10 @@ export function IconButton({
   )
 }
 
+export function Checkbox({ className, ...props }: Omit<InputHTMLAttributes<HTMLInputElement>, "type">) {
+  return <input type="checkbox" className={cx("prism-check size-4 shrink-0", className)} {...props} />
+}
+
 export function TextField({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input

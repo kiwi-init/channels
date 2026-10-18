@@ -427,6 +427,36 @@ html.reduce-motion ::after {
       inset 0 0 14px var(--orb-blue),
       0 0 18px -4px var(--orb-glow);
   }
+  .prism-check {
+    appearance: none;
+    -webkit-appearance: none;
+    margin: 0;
+    border-radius: 5px;
+    background-color: var(--prism-fill);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 12px;
+    box-shadow: inset 0 0 0 1px var(--edge-strong);
+    cursor: pointer;
+    transition:
+      background-color 120ms,
+      box-shadow 120ms;
+  }
+  .prism-check:hover {
+    background-color: var(--prism-fill-lit);
+  }
+  .prism-check:checked {
+    background-color: var(--orb-core);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--orb-cyan) 85%, transparent),
+      inset 0 0 6px var(--orb-blue),
+      0 0 10px -3px var(--orb-glow);
+  }
+  .prism-check:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
   .orb-pill:hover {
     box-shadow:
       inset 0 0 0 1px var(--orb-cyan),
@@ -456,6 +486,10 @@ html.reduce-motion ::after {
   .orb,
   .orb-pill {
     background: var(--accent);
+    box-shadow: none;
+  }
+  .prism-check:checked {
+    background-color: var(--accent);
     box-shadow: none;
   }
 }

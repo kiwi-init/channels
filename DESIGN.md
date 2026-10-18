@@ -131,6 +131,8 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   - `orb`: the heads' blue orb (`orb-core`, `orb-blue`, `orb-cyan`), round:
     send. `orb-pill`: the same light round a dark core, for the primary
     button and an unread count. Its `orb-glow` is the one coloured glow.
+  - `prism-check` (the kit's `Checkbox`, the only checkbox): a `prism`
+    square, checked as the orb with a white tick.
   - Under `prefers-contrast: more` all of them fall back to solid fills: no
     band, no glint, the orb as `accent`.
 - Fall back to solid fills under `prefers-contrast: more`.
