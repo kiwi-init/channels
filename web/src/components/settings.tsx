@@ -11,6 +11,7 @@ import { bridge, useSecrets } from "@/lib/secrets"
 import { version } from "../../../package.json"
 import { Icon } from "./icon"
 import { Button, IconButton, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from "./kit"
+import { UpdateCheck } from "./update-check"
 
 // How Channels looks in this browser: the theme and how large everything reads.
 // Both apply at once and stay in this browser; nothing here leaves it.
@@ -263,6 +264,7 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
           <GithubFields />
           <PersonalitiesField onOpen={onPersonalities} />
           <VoiceFields />
+          <UpdateCheck />
         </div>
         <p className="mt-8 text-ui text-ink-3">Channels {version}</p>
       </div>
