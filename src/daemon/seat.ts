@@ -62,4 +62,6 @@ export interface ConnState {
   subs: Set<Sub>;
   held: Set<DaemonListener>;
   dead: boolean;
+  out: Uint8Array[];
+  queued: number;
 }
