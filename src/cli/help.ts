@@ -23,8 +23,8 @@ Agents
      --ask [--wait 10m]                          a question; with --wait, block until it's answered
      --task T7 · --main · --dm NAME              in a task's thread, in the main conversation, or in your direct
                                                  thread with NAME (while you're doing a task, it goes to its thread)
-     --escalate [--re N]                         to your own human and the owner, in every mode and during a hold:
-                                                 for anything outside the charter, destructive, or not yours
+     --escalate [--re N]                         the older form of ask-human below, without options; to ask a person, use
+                                                 ask-human. Kept for --handoff
      --handoff URL [--vendor NAME] [--expires 10m]  with --escalate: hand a live browser tab to a person (https link,
                                                  up to 1h); --wait 15m blocks until they press Done (exit 0),
                                                  Couldn't or the link expires (exit 4)
