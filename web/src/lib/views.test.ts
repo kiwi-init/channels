@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
 import type { ChannelState, GithubPr, Task, TaskState } from "@kiwi/core/state.ts"
-import { inView, mergedSince, startOfDay, viewCounts } from "./views"
+import { inView, mergedSince, startOfDay, taskGroups, viewCounts } from "./views"
 
 const DAY = 24 * 60 * 60 * 1000
 const NOW = Date.UTC(2026, 9, 18, 15)
@@ -22,7 +22,7 @@ const task = (id: number, state: TaskState, updatedAt = NOW, extra: Partial<Task
 describe("the sidebar's views", () => {
   test("each counts its tasks; done counts only this week; archived counts nowhere", () => {
     const tasks = new Map(
-      [task(1, "open"), task(2, "doing"), task(3, "doing"), task(4, "review"), task(5, "done", NOW - DAY), task(6, "done", NOW - 8 * DAY), task(7, "doing", NOW, { archived: true })].map((t) => [
+      [task(1, "todo"), task(2, "doing"), task(3, "doing"), task(4, "review"), task(5, "done", NOW - DAY), task(6, "done", NOW - 8 * DAY), task(7, "doing", NOW, { archived: true })].map((t) => [
         t.id,
         t,
       ])
@@ -40,7 +40,24 @@ describe("the sidebar's views", () => {
 
   test("merged today counts the PRs merged since the day began", () => {
     const pr = (number: number, state: GithubPr["state"], at: number): GithubPr => ({ repo: "o/r", number, state, at, seq: number })
-    const github: ChannelState["github"] = { prs: new Map([pr(1, "merged", NOW - 60_000), pr(2, "merged", NOW - 2 * DAY), pr(3, "open", NOW)].map((p) => [String(p.number), p])), checks: new Map(), issues: new Map() }
+    const github: ChannelState["github"] = {
+      prs: new Map([pr(1, "merged", NOW - 60_000), pr(2, "merged", NOW - 2 * DAY), pr(3, "open", NOW)].map((p) => [String(p.number), p])),
+      checks: new Map(),
+      issues: new Map(),
+    }
     expect(mergedSince({ github }, startOfDay(NOW))).toBe(1)
+  })
+
+  test("Everything groups the board: in progress (review too), up next, done today; a view shows only its own", () => {
+    const tasks = new Map([task(1, "doing", NOW - 5), task(2, "review", NOW - 1), task(3, "todo"), task(4, "done", NOW - 60_000), task(5, "done", NOW - 2 * DAY)].map((t) => [t.id, t]))
+    const ids = (view: Parameters<typeof taskGroups>[1]) => taskGroups({ tasks }, view, NOW).map((g) => [g.label, g.tasks.map((t) => t.id)])
+    expect(ids("everything")).toEqual([
+      ["In progress", [2, 1]],
+      ["Up next", [3]],
+      ["Done today", [4]],
+    ])
+    expect(ids("review")).toEqual([["In review", [2]]])
+    expect(ids("done")).toEqual([["Done this week", [4, 5]]])
+    expect(ids("needs")).toEqual([])
   })
 })

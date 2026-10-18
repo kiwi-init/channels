@@ -204,14 +204,12 @@ export function Tasks({
   now,
   nameOf,
   unreadIn,
-  only,
   onOpen,
 }: {
   state: ChannelState
   now: number
   nameOf: (n: string) => string
   unreadIn?: (id: number) => { n: number; forMe: boolean }
-  only?: (t: Task) => boolean
   onOpen: (id: number) => void
 }) {
   const [showDone, setShowDone] = useState(false)
@@ -221,7 +219,7 @@ export function Tasks({
   const q = query.trim().toLowerCase()
   const archived = [...state.tasks.values()].filter((t) => t.archived).length
   const all = [...state.tasks.values()]
-    .filter((t) => !t.archived && (!only || only(t)))
+    .filter((t) => !t.archived)
     .filter((t) => filter === "all" || t.state === filter)
     .filter((t) => !q || t.title.toLowerCase().includes(q) || taskId(t.id).toLowerCase().includes(q) || (!!t.owner && nameOf(t.owner).toLowerCase().includes(q)))
     .sort((a, b) => b.updatedAt - a.updatedAt)
@@ -255,7 +253,7 @@ export function Tasks({
           className="min-w-0 flex-1 bg-transparent text-body text-ink outline-none placeholder:text-ink-3 focus-visible:outline-none"
         />
       </label>
-      {!only && <TaskFilterBar value={filter} options={[["all", "All"], ...GROUPS]} onChange={setFilter} className="mb-4" />}
+      <TaskFilterBar value={filter} options={[["all", "All"], ...GROUPS]} onChange={setFilter} className="mb-4" />
       {!all.length && <p className="py-6 text-center text-ui text-ink-3">{q ? `No task matches “${query}”.` : "Nothing here right now."}</p>}
       {GROUPS.map(([s, word]) => {
         const list = all.filter((t) => t.state === s)

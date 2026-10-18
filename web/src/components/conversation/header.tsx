@@ -38,7 +38,7 @@ export function Header({
         <IconButton label="Channels" round className="size-9 text-ink md:hidden" onClick={onBack}>
           <Icon icon={ArrowLeft01Icon} size={20} />
         </IconButton>
-        <button type="button" aria-label={headingLabel} onClick={onTitle} className="no-drag min-w-0 truncate text-left text-title">
+        <button type="button" aria-label={headingLabel} onClick={onTitle} className="no-drag hidden min-w-0 truncate text-left text-title sm:block">
           {heading}
         </button>
         {status.length > 0 && <span className="hidden min-w-0 truncate text-meta text-ink-3 lg:block">{status.join(" · ")}</span>}
@@ -54,8 +54,8 @@ export function Header({
               aria-current={tab === t ? "page" : undefined}
               onClick={() => onTab(t)}
               className={cx(
-                "relative h-9 rounded-row px-2.5 text-ui transition-colors hover:text-ink",
-                tab === t ? "font-semibold text-ink after:absolute after:inset-x-2.5 after:bottom-0.5 after:h-0.5 after:rounded-full after:bg-accent" : "text-ink-2"
+                "relative h-9 rounded-row px-2 text-ui transition-colors hover:text-ink sm:px-2.5",
+                tab === t ? "font-semibold text-ink after:absolute after:inset-x-2 after:bottom-0.5 after:h-0.5 after:rounded-full after:bg-accent sm:after:inset-x-2.5" : "text-ink-2"
               )}
             >
               {label}
