@@ -4,6 +4,7 @@ import { memo, useEffect, useMemo, useState, type ReactNode } from "react"
 import { describeEvent } from "@kiwi/core/format.ts"
 import { ignored, isGifReaction, type Color, type Handoff, type ImageAttachment, type Message, type Trust } from "@kiwi/core/protocol.ts"
 import { isLeadRole, type ChannelState, type Member } from "@kiwi/core/state.ts"
+import type { Chosen } from "@/lib/asks"
 import { useClock } from "@/lib/channel"
 import { formatAgo, formatFull, formatStamp, memberName } from "@/lib/format"
 import { openHandoff } from "@/lib/handoff-open"
@@ -15,6 +16,7 @@ import { Icon } from "./icon"
 import { Monogram, toast } from "./kit"
 import { Markdown } from "./lazy"
 import { Quote } from "./quote"
+import { AskOptions } from "./ask-options"
 
 /** Anyone who isn't a signed-in person is an agent. */
 export const isAgent = (m: Pick<Member, "kind"> | undefined) => m?.kind !== "human"
@@ -199,6 +201,7 @@ interface BubbleProps {
   onReply?: (m: Message) => void
   /** An open decision for you: its options answer it, and its answer lives in the composer. */
   onChoose?: (choice: string) => void
+  chosen?: Chosen
   onReact?: (m: Message) => void
   onJump: (seq: number) => void
   /** The thread this message starts, when it has replies: "1 Reply" under it. */
@@ -328,6 +331,7 @@ export const Bubble = memo(function Bubble({
   nameOf,
   onReply,
   onChoose,
+  chosen,
   onReact,
   onJump,
   thread,
@@ -396,25 +400,7 @@ export const Bubble = memo(function Bubble({
               )}
             >
               <Markdown refs={refs}>{m.body}</Markdown>
-              {m.esc && m.choices?.length ? (
-                <ul aria-label="Options" className={onChoose ? "mt-2 flex flex-col gap-1.5" : "mt-1.5 list-disc pl-5 text-ui"}>
-                  {m.choices.map((c) => (
-                    <li key={c}>
-                      {onChoose ? (
-                        <button
-                          type="button"
-                          onClick={() => onChoose(c)}
-                          className="w-full rounded-row bg-wash-2 px-3 py-1.5 text-left text-ui leading-snug [overflow-wrap:anywhere] transition-colors hover:bg-pick"
-                        >
-                          {c}
-                        </button>
-                      ) : (
-                        c
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
+              {m.choices?.length ? <AskOptions choices={m.choices} chosen={chosen} onChoose={onChoose} nameOf={nameOf} /> : null}
               {last && <Tail mine={mine} />}
             </div>
           )}
@@ -467,7 +453,13 @@ export const Bubble = memo(function Bubble({
       {/* What hangs off the bubble (its answer link, notes, replies), under it on the bubble's edge. */}
       <div className={cx("flex flex-col", mine ? "items-end pl-10 md:pl-16" : "items-start pr-10 pl-9 md:pr-16")}>
         {handoff && !mine && (m.to?.includes(me) || m.to?.includes("*")) && <HandoffLine handoff={handoff} />}
-        {decide && !mine && onReply && !onChoose && (
+        {onChoose && !chosen && (
+          <p className="mt-1 flex items-center gap-1.5 px-3 text-meta font-medium text-decide">
+            <span aria-hidden className="size-1.5 rounded-full bg-decide" />
+            Waiting on you
+          </p>
+        )}
+        {decide && !mine && onReply && !onChoose && !chosen && (
           <p className="mt-1 flex items-center gap-1 px-3 text-meta">
             <button type="button" onClick={() => onReply(m)} className="font-medium text-decide hover:underline">
               Answer
