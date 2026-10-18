@@ -1,0 +1,166 @@
+[
+  {
+    "event_id": "event_001",
+    "type": "session.created",
+    "session": {
+      "id": "sess_001",
+      "object": "realtime.session",
+      "model": "grok-voice-latest"
+    }
+  },
+  {
+    "event_id": "event_9101",
+    "type": "conversation.created",
+    "conversation": {
+      "id": "conv_001",
+      "object": "realtime.conversation"
+    }
+  },
+  {
+    "event_id": "event_123",
+    "type": "session.updated",
+    "session": {
+      "model": "grok-voice-latest",
+      "instructions": "You are Kiwi's voice in the channel.",
+      "voice": "eve",
+      "turn_detection": {
+        "type": "server_vad"
+      }
+    }
+  },
+  {
+    "event_id": "event_1516",
+    "type": "input_audio_buffer.speech_started",
+    "item_id": "msg_003"
+  },
+  {
+    "event_id": "event_1517",
+    "type": "input_audio_buffer.speech_stopped",
+    "item_id": "msg_003"
+  },
+  {
+    "event_id": "event_1121",
+    "type": "input_audio_buffer.committed",
+    "previous_item_id": "msg_001",
+    "item_id": "msg_003"
+  },
+  {
+    "event_id": "event_2122",
+    "type": "conversation.item.input_audio_transcription.completed",
+    "item_id": "msg_003",
+    "transcript": "What's open on the board?"
+  },
+  {
+    "event_id": "event_2930",
+    "type": "response.created",
+    "response": {
+      "id": "resp_001",
+      "object": "realtime.response",
+      "status": "in_progress",
+      "output": []
+    }
+  },
+  {
+    "event_id": "event_3334",
+    "type": "response.output_item.added",
+    "response_id": "resp_001",
+    "output_index": 0,
+    "item": {
+      "id": "msg_008",
+      "object": "realtime.item",
+      "type": "message",
+      "status": "in_progress",
+      "role": "assistant",
+      "content": []
+    }
+  },
+  {
+    "event_id": "event_3336",
+    "type": "response.content_part.added",
+    "response_id": "resp_001",
+    "item_id": "msg_008",
+    "output_index": 0,
+    "content_index": 0,
+    "part": {
+      "type": "audio"
+    }
+  },
+  {
+    "event_id": "event_4950",
+    "type": "response.output_audio.delta",
+    "response_id": "resp_001",
+    "item_id": "msg_008",
+    "output_index": 0,
+    "content_index": 0,
+    "delta": "AADoAxj8/38="
+  },
+  {
+    "event_id": "event_4951",
+    "type": "response.output_audio_transcript.delta",
+    "response_id": "resp_001",
+    "item_id": "msg_008",
+    "delta": "Three tasks "
+  },
+  {
+    "event_id": "event_4952",
+    "type": "response.output_audio.delta",
+    "response_id": "resp_001",
+    "item_id": "msg_008",
+    "output_index": 0,
+    "content_index": 0,
+    "delta": "AIAAAAAADAA="
+  },
+  {
+    "event_id": "event_4953",
+    "type": "response.output_audio_transcript.delta",
+    "response_id": "resp_001",
+    "item_id": "msg_008",
+    "delta": "are open."
+  },
+  {
+    "event_id": "event_5152",
+    "type": "response.output_audio.done",
+    "response_id": "resp_001",
+    "item_id": "msg_008"
+  },
+  {
+    "event_id": "event_5153",
+    "type": "response.output_audio_transcript.done",
+    "response_id": "resp_001",
+    "item_id": "msg_008"
+  },
+  {
+    "event_id": "event_3337",
+    "type": "response.content_part.done",
+    "response_id": "resp_001",
+    "item_id": "msg_008",
+    "output_index": 0,
+    "content_index": 0,
+    "part": {
+      "type": "audio"
+    }
+  },
+  {
+    "event_id": "event_3335",
+    "type": "response.output_item.done",
+    "response_id": "resp_001",
+    "output_index": 0,
+    "item": {
+      "id": "msg_008",
+      "object": "realtime.item",
+      "type": "message",
+      "status": "completed",
+      "role": "assistant",
+      "content": []
+    }
+  },
+  {
+    "event_id": "event_3132",
+    "type": "response.done",
+    "response": {
+      "id": "resp_001",
+      "object": "realtime.response",
+      "status": "completed"
+    }
+  }
+]

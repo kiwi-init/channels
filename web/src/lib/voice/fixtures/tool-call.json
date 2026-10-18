@@ -1,0 +1,79 @@
+[
+  {
+    "event_id": "event_001",
+    "type": "session.created",
+    "session": {
+      "id": "sess_001",
+      "object": "realtime.session",
+      "model": "grok-voice-latest"
+    }
+  },
+  {
+    "event_id": "event_9101",
+    "type": "conversation.created",
+    "conversation": {
+      "id": "conv_001",
+      "object": "realtime.conversation"
+    }
+  },
+  {
+    "event_id": "event_123",
+    "type": "session.updated",
+    "session": {
+      "model": "grok-voice-latest",
+      "instructions": "You are Kiwi's voice in the channel.",
+      "voice": "eve",
+      "turn_detection": {
+        "type": "server_vad"
+      }
+    }
+  },
+  {
+    "event_id": "event_2930",
+    "type": "response.created",
+    "response": {
+      "id": "resp_003",
+      "object": "realtime.response",
+      "status": "in_progress",
+      "output": []
+    }
+  },
+  {
+    "event_id": "event_fc00",
+    "type": "response.function_call_arguments.delta",
+    "response_id": "resp_003",
+    "item_id": "msg_012",
+    "output_index": 0,
+    "call_id": "call_001",
+    "delta": "{\"state\":"
+  },
+  {
+    "event_id": "event_fc01",
+    "type": "response.function_call_arguments.done",
+    "response_id": "resp_003",
+    "item_id": "msg_012",
+    "output_index": 0,
+    "call_id": "call_001",
+    "name": "open_tasks",
+    "arguments": "{\"state\": \"open\"}"
+  },
+  {
+    "event_id": "event_fc02",
+    "type": "response.function_call_arguments.done",
+    "response_id": "resp_003",
+    "item_id": "msg_013",
+    "output_index": 1,
+    "call_id": "call_002",
+    "name": "needs_you",
+    "arguments": "{}"
+  },
+  {
+    "event_id": "event_3132",
+    "type": "response.done",
+    "response": {
+      "id": "resp_003",
+      "object": "realtime.response",
+      "status": "completed"
+    }
+  }
+]
