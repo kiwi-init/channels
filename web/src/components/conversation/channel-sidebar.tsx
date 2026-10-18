@@ -31,10 +31,7 @@ function Item({ on, label, count, alert, onClick }: { on: boolean; label: string
         type="button"
         onClick={onClick}
         aria-current={on ? "page" : undefined}
-        className={cx(
-          "relative flex h-8 w-full items-center gap-2 rounded-row px-3 text-left text-ui transition-colors hover:bg-wash",
-          on ? "font-semibold text-ink before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-accent" : "text-ink-2"
-        )}
+        className={cx("flex h-9 w-full items-center gap-2 rounded-ctl px-3 text-left text-ui transition-colors", on ? "prism-lit font-semibold text-ink" : "text-ink-2 hover:bg-wash hover:text-ink")}
       >
         <span className="min-w-0 flex-1 truncate">{label}</span>
         {!!count && <span className={cx("shrink-0 text-meta tabular-nums", alert ? "font-semibold text-decide" : "text-ink-3")}>{count}</span>}
@@ -84,13 +81,13 @@ export function ChannelSidebar({
         </span>
       </button>
 
-      <button type="button" onClick={onSearch} className="mt-3 flex h-9 items-center gap-2 rounded-ctl px-3 text-left text-ui text-ink-3 edge transition-colors hover:text-ink-2">
+      <button type="button" onClick={onSearch} className="prism mt-3 flex h-9 items-center gap-2 rounded-ctl px-3 text-left text-ui text-ink-3 transition-colors hover:text-ink-2">
         <Icon icon={Search01Icon} size={16} className="shrink-0" />
         <span className="flex-1">Search this channel</span>
       </button>
 
       <nav aria-label="Views" className="mt-4">
-        <ul>
+        <ul className="space-y-0.5">
           {VIEWS.map(([v, label]) => (
             <Item key={v} on={view === v} label={label} count={counts[v]} alert={v === "needs"} onClick={() => onView(v)} />
           ))}

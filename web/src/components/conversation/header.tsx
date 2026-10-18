@@ -46,17 +46,14 @@ export function Header({
         <IconButton label="Search" round className={cx("size-9 md:hidden", search === null && "text-ink")} active={search !== null} onClick={() => setSearch((s) => (s === null ? "" : null))}>
           <Icon icon={Search01Icon} size={18} />
         </IconButton>
-        <nav aria-label="Views of the channel" className="no-drag flex items-center gap-1">
+        <nav aria-label="Views of the channel" className="no-drag prism flex items-center gap-0.5 rounded-ctl p-0.5">
           {TABS.map(([t, label]) => (
             <button
               key={t}
               type="button"
               aria-current={tab === t ? "page" : undefined}
               onClick={() => onTab(t)}
-              className={cx(
-                "relative h-9 rounded-row px-2 text-ui transition-colors hover:text-ink sm:px-2.5",
-                tab === t ? "font-semibold text-ink after:absolute after:inset-x-2 after:bottom-0.5 after:h-0.5 after:rounded-full after:bg-accent sm:after:inset-x-2.5" : "text-ink-2"
-              )}
+              className={cx("h-8 rounded-row px-2 text-ui transition-colors sm:px-3", tab === t ? "prism-lit font-semibold text-ink" : "text-ink-2 hover:text-ink")}
             >
               {label}
             </button>

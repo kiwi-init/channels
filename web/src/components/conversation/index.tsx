@@ -437,11 +437,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
           current={currentConversation}
           onConversation={openConversation}
         />
-        <div className="relative flex min-w-0 flex-1 md:sheet">
-          <div
-            className={cx("relative flex min-w-0 flex-1 flex-col bg-canvas", (root || info || side?.kind === "tasks") && "hidden md:flex")}
-            style={{ "--head": `${headH}px`, "--foot": `${footH}px` } as CSSProperties}
-          >
+        <div className={cx("relative flex min-w-0 flex-1 md:sheet", (root || info || side?.kind === "tasks") && "hidden md:flex")}>
+          <div className="relative flex min-w-0 flex-1 flex-col bg-canvas" style={{ "--head": `${headH}px`, "--foot": `${footH}px` } as CSSProperties}>
             <Header
               headRef={headRef}
               onBack={onBack}
@@ -600,63 +597,53 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
               </>
             )}
           </div>
-
-          {root && (
-            <ThreadSide
-              root={root}
-              count={replies.length}
-              rows={threadRows}
-              onClose={() => setSide(null)}
-              me={me}
-              people={people}
-              nameOf={nameOf}
-              connecting={connection === "connecting"}
-              send={send}
-            />
-          )}
-
-          {picture && <PictureSide picture={picture} nameOf={nameOf} state={state} mayWrite={mayWrite} me={me} extra={extra} send={send} onClose={() => setPicture(null)} />}
-
-          {info && (
-            <InfoSide
-              title={title}
-              icon={icon}
-              subtitle={subtitle}
-              onClose={() => setSide(null)}
-              onPause={hold && !state.hold ? () => setPausing(true) : undefined}
-              onMessage={(name) => go(dmPlace(me, name))}
-              state={state}
-              now={now}
-              send={send}
-            />
-          )}
-
-          {side?.kind === "tasks" && (
-            <TasksSide
-              side={side}
-              setSide={setSide}
-              shownTask={shownTask}
-              task={task}
-              taskKey={taskKey}
-              inTask={inTask}
-              rows={taskRows}
-              openCount={openCount}
-              me={me}
-              people={people}
-              nameOf={nameOf}
-              connecting={connection === "connecting"}
-              send={send}
-              sendTask={sendTask}
-              githubDiff={ch.githubDiff}
-              state={state}
-              messages={messages}
-              now={now}
-              highlight={highlight}
-              iAmPerson={iAmPerson}
-              unreadIn={unreadIn}
-            />
-          )}
         </div>
+
+        {root && (
+          <ThreadSide root={root} count={replies.length} rows={threadRows} onClose={() => setSide(null)} me={me} people={people} nameOf={nameOf} connecting={connection === "connecting"} send={send} />
+        )}
+
+        {picture && <PictureSide picture={picture} nameOf={nameOf} state={state} mayWrite={mayWrite} me={me} extra={extra} send={send} onClose={() => setPicture(null)} />}
+
+        {info && (
+          <InfoSide
+            title={title}
+            icon={icon}
+            subtitle={subtitle}
+            onClose={() => setSide(null)}
+            onPause={hold && !state.hold ? () => setPausing(true) : undefined}
+            onMessage={(name) => go(dmPlace(me, name))}
+            state={state}
+            now={now}
+            send={send}
+          />
+        )}
+
+        {side?.kind === "tasks" && (
+          <TasksSide
+            side={side}
+            setSide={setSide}
+            shownTask={shownTask}
+            task={task}
+            taskKey={taskKey}
+            inTask={inTask}
+            rows={taskRows}
+            openCount={openCount}
+            me={me}
+            people={people}
+            nameOf={nameOf}
+            connecting={connection === "connecting"}
+            send={send}
+            sendTask={sendTask}
+            githubDiff={ch.githubDiff}
+            state={state}
+            messages={messages}
+            now={now}
+            highlight={highlight}
+            iAmPerson={iAmPerson}
+            unreadIn={unreadIn}
+          />
+        )}
       </div>
     </ChannelControls>
   )

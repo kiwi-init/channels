@@ -36,7 +36,7 @@ function tagline(p: Personality): string {
 
 function Tile({ glyph, size = 36 }: { glyph: string; size?: number }) {
   return (
-    <span aria-hidden style={{ width: size, height: size }} className="flex shrink-0 items-center justify-center rounded-row border border-edge-strong text-body text-ink">
+    <span aria-hidden style={{ width: size, height: size }} className="prism flex shrink-0 items-center justify-center rounded-row text-body text-ink">
       {glyph}
     </span>
   )
@@ -49,7 +49,7 @@ function Row({ p, picked, onPick }: { p: Personality; picked: boolean; onPick: (
         type="button"
         aria-current={picked}
         onClick={onPick}
-        className={cx("flex w-full items-start gap-3 rounded-ctl border px-3 py-2 text-left transition-colors", picked ? "border-accent bg-accent-wash" : "border-transparent hover:bg-wash")}
+        className={cx("flex w-full items-start gap-3 rounded-ctl border px-3 py-2 text-left transition-colors", picked ? "prism-lit border-transparent" : "border-transparent hover:bg-wash")}
       >
         <Tile glyph={p.glyph} />
         <span className="min-w-0">
@@ -126,7 +126,7 @@ function Editor({ p, onChange, onDuplicate, onDelete }: { p: Personality; onChan
               onClick={() => p.role !== r && set({ role: r })}
               className={cx(
                 "rounded-row border px-2.5 py-1 text-ui transition-colors",
-                p.role === r ? "border-accent bg-accent-wash font-medium text-accent-text" : "border-edge-strong text-ink-2 hover:bg-wash hover:text-ink"
+                p.role === r ? "prism-lit border-transparent font-medium text-ink" : "prism border-transparent text-ink-2 hover:text-ink"
               )}
             >
               {ROLE_LABEL[r]}
