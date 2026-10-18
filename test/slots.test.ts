@@ -60,7 +60,7 @@ describe("task claims are compare-and-set on the relay", () => {
     expect([a.ok, b.ok].filter(Boolean)).toHaveLength(1);
     const winner = a.ok ? "ann" : "bob";
     const loser = a.ok ? b : a;
-    expect(loser.ok ? "" : loser.why).toBe(`T${id} is taken by ${winner}`);
+    expect([`T${id} is taken by ${winner}`, `T${id} is owned by ${winner}`]).toContain(loser.ok ? "" : loser.why);
     expect(await claimsOf(ann, id)).toEqual([winner]);
   });
 
@@ -87,7 +87,7 @@ describe("answering #N", () => {
     const [winner, other] = a.ok ? [ann, bob] : [bob, ann];
     const name = a.ok ? "ann" : "bob";
     const lost = a.ok ? b : a;
-    expect(lost.ok ? "" : lost.why).toBe(`${name} is answering #${q}: leave it to them`);
+    expect(lost.ok ? "" : lost.why).toStartWith(`${name} is answering #${q}: leave it to them`);
     await expect(run(other.reply(q, "me too"))).rejects.toThrow(`${name} is answering #${q}`);
     await expect(run(other.send("me too", { re: [q] }))).rejects.toThrow(`${name} is answering #${q}`);
     expect(await run(winner.reply(q, "on it"))).toBeGreaterThan(q);

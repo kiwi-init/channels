@@ -355,6 +355,22 @@ async function run(part: Part): Promise<string[]> {
     if ((await said.count()) !== (await inCard.count())) throw new Error("a message in a task's conversation showed in main outside its task card");
     log(`ok  ${at}`);
 
+    at = "a slash in the composer lists the commands, and one runs instead of being sent";
+    const typed = page.getByRole("textbox", { name: "Message" });
+    await typed.fill("/");
+    await page
+      .getByRole("listbox", { name: "Commands" })
+      .getByRole("option", { name: /\/tasks/ })
+      .waitFor({ timeout: 15000 });
+    await typed.fill("/tasks");
+    await typed.press("Enter");
+    await tasksPanel.waitFor({ timeout: 15000 });
+    if ((await typed.inputValue()) !== "") throw new Error("a command stayed in the composer after it ran");
+    await tasksPanel.getByRole("button", { name: "Close tasks" }).click();
+    await tasksPanel.waitFor({ state: "detached" });
+    if (await page.getByText("/tasks", { exact: true }).count()) throw new Error("a command was sent as a message");
+    log(`ok  ${at}`);
+
     at = "the task's card in the conversation shows its last line, and a click opens the Tasks panel";
     const taskCard = page.getByRole("main").getByRole("button", { name: new RegExp(`^Open ${smokeTask}, Smoke task`) });
     await taskCard.waitFor({ timeout: 15000 });

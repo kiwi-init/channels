@@ -10,6 +10,7 @@ import { channelTitle, loadRecent, useChannel, useClock, useKnownChannels, type 
 import { howHere } from "@/lib/presence"
 import type { Gif } from "@/lib/gifs"
 import { asksFor } from "@/lib/asks"
+import type { Command } from "@/lib/commands"
 import { approveTask, closedDigest, reviewsFor, sendBackTask, type TaskSend } from "@/lib/task-actions"
 import { useIcons, useLiveIcon } from "@/lib/icons"
 import { memberName } from "@/lib/format"
@@ -175,6 +176,14 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   )
   const handlers = useControlsHandlers({ live, member, onGone })
   const hold = handlers.onHold
+  const commands = useMemo<Command[]>(
+    () => [
+      { name: "tasks", summary: "Open the tasks", run: () => setSide({ kind: "tasks", task: null }) },
+      ...(hold && !state.hold ? [{ name: "pause", summary: "Pause the agents", args: "note", run: (note: string) => hold(true, note || undefined) }] : []),
+      ...(hold && state.hold ? [{ name: "resume", summary: "Let the agents work again", run: () => hold(false) }] : []),
+    ],
+    [hold, state.hold]
+  )
 
   if (gone) {
     return (
@@ -401,6 +410,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                   me={me}
                   people={people}
                   replyTo={replyTo}
+                  commands={commands}
                   asking={place.kind === "main" ? decisions[0] : undefined}
                   more={Math.max(decisions.length - 1, 0)}
                   onAnswer={answer}
