@@ -1,8 +1,11 @@
 import { ArrowLeft01Icon, Search01Icon } from "@hugeicons/core-free-icons"
 import type { Dispatch, SetStateAction } from "react"
 
+import type { ChannelIcon } from "@kiwi/core/protocol.ts"
+
 import { TABS, type Tab } from "@/lib/views"
 import { cx } from "@/lib/utils"
+import { ChannelFace } from "../channel-icon"
 import { HoldBanner } from "../controls"
 import { Icon } from "../icon"
 import { IconButton } from "../kit"
@@ -16,6 +19,7 @@ export function Header({
   onTab,
   heading,
   headingLabel,
+  face,
   status,
   onTitle,
   searchHint,
@@ -28,16 +32,20 @@ export function Header({
   onTab: (t: Tab) => void
   heading: string
   headingLabel: string
+  face: { icon: ChannelIcon | null; lead: string | null; title: string }
   status: string[]
   onTitle: () => void
   searchHint: string
 }) {
   return (
     <header ref={headRef} className="absolute inset-x-0 top-0 z-20 bg-canvas">
-      <div className="drag relative flex h-(--chrome-h) items-center gap-3 px-3 md:px-6">
+      <div className="drag relative flex h-(--chrome-h) items-center gap-1 px-2 sm:gap-3 sm:px-3 md:px-6">
         <IconButton label="Channels" round className="size-9 text-ink md:hidden" onClick={onBack}>
           <Icon icon={ArrowLeft01Icon} size={20} />
         </IconButton>
+        <button type="button" aria-label={headingLabel} onClick={onTitle} className="no-drag shrink-0 rounded-full sm:hidden">
+          <ChannelFace icon={face.icon} lead={face.lead} title={face.title} size={28} />
+        </button>
         <button type="button" aria-label={headingLabel} onClick={onTitle} className="no-drag hidden min-w-0 truncate text-left text-title sm:block">
           {heading}
         </button>
