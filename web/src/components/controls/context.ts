@@ -53,7 +53,7 @@ export interface Api {
   editNickname: (m: RosterMember) => void
   lastSeenOf: (name: string) => number | null
   onlineNow: (name: string) => boolean
-  openDialog: (d: "rename" | "charter" | "repos") => void
+  openDialog: (d: "rename" | "charter") => void
 }
 
 export const Ctx = createContext<Api | null>(null)

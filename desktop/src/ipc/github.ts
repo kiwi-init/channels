@@ -1,7 +1,7 @@
 import { ipcMain, shell } from "electron";
 
-import type { GithubStatus } from "../bridge.ts";
-import { finishDevice, startDevice } from "../github-flow.ts";
+import type { GithubRepoView, GithubStatus } from "../bridge.ts";
+import { finishDevice, listRepos, startDevice } from "../github-flow.ts";
 import { openInBrowser } from "../open.ts";
 import { relayConfig } from "../signin.ts";
 import { mutate, store } from "../store.ts";
@@ -32,6 +32,11 @@ async function link(): Promise<GithubStatus> {
 export function wireGithubIpc(): void {
   ipcMain.handle("kiwi:github-status", () => status());
   ipcMain.handle("kiwi:github-link", () => (linking ??= link().finally(() => (linking = null))));
+  ipcMain.handle("kiwi:github-repos", (): Promise<GithubRepoView[]> => {
+    const token = store.github?.token;
+    if (!token) return Promise.reject(new Error("link GitHub in Settings first"));
+    return listRepos(token);
+  });
   ipcMain.handle("kiwi:github-unlink", async () => {
     mutate((s) => (s.github = undefined));
     return status();

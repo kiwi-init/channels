@@ -22,6 +22,7 @@ import { untilOpen } from "../until-open"
 import { useClock } from "./clock"
 import { noteAgentWorked } from "./recent"
 import { forgetChannel, loadMember, renameChannel, type StoredMember } from "./store"
+import { dropWarm, heldWindow, keepWarm, warmOf } from "./warm"
 
 const HISTORY = 2_000
 
@@ -63,20 +64,25 @@ const merged = (prev: Message[], more: Message[]) => {
 
 export function useChannel(member: StoredMember, human?: HumanSession | null): ChannelHandle {
   const ch = useMemo(() => linkOf(member), [member])
+  const [was] = useState(() => warmOf(member.code))
   const [connection, setConnection] = useState<Connection>("connecting")
   const [start, setStart] = useState<{ head: number; whole: boolean } | null>(null)
   const [gone, setGone] = useState<"removed" | "closed" | null>(null)
-  const [messages, setMessages] = useState<Message[]>([])
-  const [roster, setRoster] = useState<Member[]>([])
+  const [messages, setMessages] = useState<Message[]>(was?.messages ?? [])
+  const [roster, setRoster] = useState<Member[]>(was?.roster ?? [])
   const [online, setOnline] = useState<Map<string, Online>>(new Map())
-  const [marks, setMarks] = useState<Marks>(new Map())
-  const [requests, setRequests] = useState<JoinRequest[]>([])
+  const [marks, setMarks] = useState<Marks>(was?.marks ?? new Map())
+  const [requests, setRequests] = useState<JoinRequest[]>(was?.requests ?? [])
   const now = useClock(15_000)
   const isOwner = ch.isOwner
 
   const [infoAt, setInfoAt] = useState(0)
-  const [guardFloor, setGuardFloor] = useState<GuardFloor | null>(null)
-  const [roomsFloor, setRoomsFloor] = useState<RoomsSetting | null>(null)
+  const [guardFloor, setGuardFloor] = useState<GuardFloor | null>(was?.guardFloor ?? null)
+  const [roomsFloor, setRoomsFloor] = useState<RoomsSetting | null>(was?.roomsFloor ?? null)
+  useEffect(() => {
+    if (gone) dropWarm(member.code)
+    else keepWarm(member.code, { messages, roster, requests, marks, guardFloor, roomsFloor })
+  }, [member.code, gone, messages, roster, requests, marks, guardFloor, roomsFloor])
   useEffect(() => {
     const title = ch.title()
     const guard = ch.guard()
@@ -197,6 +203,8 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
         try: async () => {
           await Promise.all([refreshRoster(), refreshRequests()])
           const head = await ch.head()
+          const held = heldWindow(was, head, HISTORY)
+          if (held) return { head, cached: null, since: held.since, firstSeq: held.firstSeq }
           const cached = await readCached(ch.roomId, ch.pk, ch.openRows, head, HISTORY).catch(() => null)
           const since = cached ? cached.since : Math.max(0, head - HISTORY)
           return { head, cached, since, firstSeq: cached?.messages[0]?.seq }
@@ -229,7 +237,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
       clearTimeout(flush)
       lent.release()
     }
-  }, [ch, refreshRoster, refreshRequests, onGone, human, member.code])
+  }, [ch, refreshRoster, refreshRequests, onGone, human, member.code, was])
 
   const keyOf = useMemo(() => new Map(roster.filter((r) => r.active).map((r) => [r.name, r.pk])), [roster])
   const rosterForFold: Roster = useMemo(

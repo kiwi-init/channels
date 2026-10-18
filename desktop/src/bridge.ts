@@ -225,6 +225,12 @@ export interface DaemonStatus {
 
 export type SignInResult = { token: string } | { dev: true };
 
+export interface GithubRepoView {
+  fullName: string;
+  private: boolean;
+  pushedAt: number;
+}
+
 export interface GithubStatus {
   available: boolean;
   account: { login: string; id: number; at: number } | null;
@@ -254,6 +260,8 @@ export interface KiwiBridge {
   /** GitHub's device flow: onGithubCode gets the code to type, then this resolves once it's typed and approved. */
   githubLink(): Promise<GithubStatus>;
   githubUnlink(): Promise<GithubStatus>;
+  /** The repos the linked account can reach through the App, most recently pushed first. The token stays in main. */
+  githubRepos(): Promise<GithubRepoView[]>;
   onGithubCode(cb: (c: { code: string; url: string }) => void): () => void;
   /** Pairing: show the code, poll slot a, answer into slot b. */
   pairBegin(): Promise<{ code: string }>;
