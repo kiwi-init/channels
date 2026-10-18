@@ -63,6 +63,7 @@ export function remoteOps(port: KeysPort): ChannelOps {
     for (const s of subs) {
       s.remote = null
       s.on({ _tag: "Status", line: "reconnecting to the part of Channels that holds your keys" })
+      s.on({ _tag: "Down" })
       start(s)
     }
   })

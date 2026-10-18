@@ -76,6 +76,10 @@ export interface LiveOptions {
 
 export const QUIET_DROP_MS = 30_000;
 
+const OPEN_WAIT = "15 seconds";
+
+const CLOSE_SILENT = 4001;
+
 const backoff = Schedule.min([Schedule.exponential("500 millis"), Schedule.spaced("30 seconds")]);
 
 const outlasted = ({ attempt, elapsed, elapsedSincePrevious }: Schedule.InputMetadata<unknown>, quietMs: number) => elapsed >= quietMs && (attempt === 1 || elapsed - elapsedSincePrevious < quietMs);
@@ -215,7 +219,7 @@ export class ChannelLive {
   }
 
   private stillIn(): Effect.Effect<void, ChannelGone, Relay> {
-    return Effect.flatMap(Effect.exit(this.ch.fx.head()), (exit) => {
+    return Effect.flatMap(Effect.exit(Effect.timeout(this.ch.fx.head(), OPEN_WAIT)), (exit) => {
       const err = Exit.isFailure(exit) ? Cause.squash(exit.cause) : null;
       return err instanceof ChannelGone ? Effect.fail(err) : Effect.void;
     });
@@ -242,11 +246,12 @@ export class ChannelLive {
       if (!reads) u.searchParams.set("reads", "0");
       if (send) u.searchParams.set("echo", "0");
       u.protocol = u.protocol === "https:" ? "wss:" : "ws:";
-      const { closed, ping } = yield* Effect.acquireRelease(
+      const { ws, closed, ping, heard, silent } = yield* Effect.acquireRelease(
         Effect.sync(() => this.connect(u, auth, q, at, send)),
         ({ ws }) => Effect.sync(() => ws.close(1000, "aborted")),
       );
-      yield* Effect.forkScoped(keepAlive(ping));
+      yield* Effect.forkScoped(Effect.sleep(OPEN_WAIT).pipe(Effect.andThen(Effect.sync(() => (ws.readyState === WebSocket.CONNECTING ? silent("no answer to the upgrade") : undefined)))));
+      yield* Effect.forkScoped(keepAlive({ ping, heard, silent: () => silent("no answer to a ping") }));
       const { code, reason } = yield* Effect.promise(() => closed);
       if (code === 4000) {
         at.next = "page";
@@ -263,16 +268,31 @@ export class ChannelLive {
     const ws = new WebSocket(u, [WS_PROTOCOL, auth]);
     const sock = wireOf(ws, at.seq);
     const wire = send ? wireOn(ws, q) : null;
+    let ended = false;
+    let end!: (c: { code: number; reason: string }) => void;
     const closed = new Promise<{ code: number; reason: string }>((resolve) => {
-      ws.onclose = (ev) => {
+      end = (c) => {
+        if (ended) return;
+        ended = true;
         sock.closed();
         if (wire) {
           this.wires.delete(wire);
           wire.drop();
         }
-        resolve({ code: ev.code, reason: ev.reason });
+        resolve(c);
       };
+      ws.onclose = (ev) => end({ code: ev.code, reason: ev.reason });
     });
+    const silent = (reason: string) => {
+      ws.onopen = null;
+      ws.onmessage = null;
+      end({ code: CLOSE_SILENT, reason });
+      try {
+        ws.close(CLOSE_SILENT, reason);
+      } catch {
+        // The socket is already gone; the session has ended either way.
+      }
+    };
     ws.onerror = () => {};
     let openedAs: OpenKind = at.next;
     ws.onopen = () => {
@@ -318,7 +338,7 @@ export class ChannelLive {
         }
       }
     };
-    return { ws, closed, ping: sock.ping };
+    return { ws, closed, ping: sock.ping, heard: sock.heard, silent };
   }
 
   private presenceOn(ws: WebSocket) {
