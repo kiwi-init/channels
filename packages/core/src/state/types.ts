@@ -64,6 +64,14 @@ interface TaskNote {
   text: string;
 }
 
+interface TaskProof {
+  seq: number;
+  by: string;
+  ts: number;
+  url: string;
+  label?: string;
+}
+
 type RoundResult = { kind: "open" } | { kind: Verdict; by: string; seq: number; ts: number } | { kind: "withdrawn"; seq: number };
 
 export interface ReviewRound {
@@ -85,6 +93,7 @@ export interface Task {
   createdAt: number;
   updatedAt: number;
   notes: TaskNote[];
+  proof?: TaskProof[];
   review?: string;
   approvedBy?: string;
   cancelled?: boolean;

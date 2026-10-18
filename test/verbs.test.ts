@@ -223,6 +223,17 @@ describe("review rounds through the CLI", () => {
     await joinAs(rev, code, "rev");
   });
 
+  test("task proof puts a link on the task, and refuses one that isn't https", async () => {
+    const t = /T(\d+)/.exec(await ok(dev, "task", "add", "show the preview"))![1]!;
+    await ok(dev, "task", "proof", `T${t}`, "https://preview.example.com/pr-1", "--label", "preview");
+    const shown = await ok(dev, "task", "show", `T${t}`, "--json");
+    expect(JSON.parse(shown).proof).toEqual([expect.objectContaining({ url: "https://preview.example.com/pr-1", label: "preview" })]);
+    const insecure = await run(dev, "task", "proof", `T${t}`, "http://preview.example.com");
+    expect(insecure.code).not.toBe(0);
+    expect(insecure.err).toContain("starts with https");
+    expect((await run(dev, "task", "proof", `T${t}`)).err).toContain("usage: kiwi task proof");
+  });
+
   test("review --at opens a round, a verdict with --file carries the review, a stale one is refused, and REVISE can leave the board", async () => {
     const t = /T(\d+)/.exec(await ok(dev, "task", "add", "stage 6 for QE-1", "--review", "rev"))![1]!;
     await ok(dev, "task", "claim", `T${t}`);
