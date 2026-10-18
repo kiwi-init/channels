@@ -355,9 +355,18 @@ async function run(part: Part): Promise<string[]> {
     await tasksPanel.getByText("smoke in the task", { exact: true }).first().waitFor();
     await tasksPanel.getByRole("button", { name: "Close tasks" }).click();
     await tasksPanel.waitFor({ state: "detached" });
-    const said = page.getByText("smoke in the task", { exact: true });
-    const inCard = page.getByRole("button", { name: /^Open T\d+, Smoke task/ }).getByText("smoke in the task", { exact: true });
-    if ((await said.count()) !== (await inCard.count())) throw new Error("a message in a task's conversation showed in main outside its task card");
+    await page
+      .waitForFunction(
+        (text) => {
+          const said = [...document.querySelectorAll("body *")].filter((e) => e.textContent?.trim() === text && ![...e.children].some((c) => c.textContent?.trim() === text));
+          return said.length > 0 && said.every((e) => /^Open T\d+, Smoke task/.test(e.closest("button")?.getAttribute("aria-label") ?? ""));
+        },
+        "smoke in the task",
+        { timeout: 15000 },
+      )
+      .catch(() => {
+        throw new Error("a message in a task's conversation showed in main outside its task card");
+      });
     log(`ok  ${at}`);
 
     at = "a slash in the composer lists the commands, and one runs instead of being sent";
