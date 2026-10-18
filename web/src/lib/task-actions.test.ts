@@ -2,9 +2,10 @@ import { describe, expect, test } from "bun:test"
 
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts"
 import type { Event, Message } from "@kiwi/core/protocol.ts"
+import { taskDigest } from "@kiwi/core/work.ts"
 import { fold, type ChannelState, type Roster, type Task } from "@kiwi/core/state.ts"
 
-import { ANYONE, approveTask, cancelTask, changeReviewer, reviewerChoices, reviewsFor, sendBackTask, taskActions, type TaskSend } from "./task-actions"
+import { ANYONE, approveTask, cancelTask, changeReviewer, closedDigest, reviewerChoices, reviewsFor, sendBackTask, taskActions, type TaskSend } from "./task-actions"
 
 const roster: Roster = []
 const ids = new Map<string, Identity>()
@@ -189,5 +190,24 @@ describe("handing a review to someone else", () => {
     const at = await sendAs("dev", changeReviewer(task(id), "codex", "dev"))
     expect(state().rejected.get(at)).toBeDefined()
     expect(task(id).review).toBe("grok-reviewer")
+  })
+})
+
+describe("the digest a person posts when they close a task", () => {
+  test("says what the task will say once the approval lands", async () => {
+    const id = await inReview("jon")
+    const before = task(id)
+    const digest = closedDigest(state(), log, before, { by: "jon" })
+    await sendAs("jon", approveTask(before))
+    expect(digest.opts).toEqual({ kind: "done" })
+    expect(digest.body).toBe(taskDigest(state(), log, task(id)))
+    expect(digest.body).toContain("done: checked by jon")
+    expect(digest.body).toContain("approved by jon")
+  })
+
+  test("a cancel says so, with why, and nobody approved it", async () => {
+    const id = await inReview("grok-reviewer")
+    const digest = closedDigest(state(), log, task(id), { by: "jon", cancelled: "not needed after all" })
+    expect(digest.body).toMatch(/^T\d+ cancelled: checked by grok-reviewer · not needed after all · by dev$/)
   })
 })

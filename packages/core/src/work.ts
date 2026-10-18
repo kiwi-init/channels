@@ -7,7 +7,7 @@ import { cleanBody, describeEvent, reviewBody, roundTag } from "./format.ts";
 import { inlineText } from "./membership.ts";
 import { ignored, type Message } from "./protocol.ts";
 import type { OldTaskState, TaskState } from "./protocol.ts";
-import { currentState, isPerson, type ChannelState, type Task } from "./state.ts";
+import { currentState, isPerson, taskId, type ChannelState, type Task } from "./state.ts";
 
 /** Quiet this long, with nothing in progress, and an agent reads as idle. */
 const IDLE_AFTER_MS = 15 * 60_000;
@@ -262,4 +262,20 @@ function onTask(m: Message, state: ChannelState): { text: string; mark: EventMar
 /** The pull requests a task's feed links, for the task page's side panel. */
 export function taskPrs(items: FeedItem[]): PrRef[] {
   return items.flatMap((i) => (i.type === "pr" ? [i.pr] : []));
+}
+
+export function taskDigest(state: ChannelState, messages: Message[], t: Task): string {
+  const feed = taskFeed(state, messages, t.id);
+  const prs = [...new Map(taskPrs(feed).map((p) => [p.url, `${p.repo}#${p.number}`])).values()];
+  const said = feed.reduce((n, i) => n + (i.type === "thread" ? i.messages.length : 0), 0);
+  const note = [...t.notes].reverse().find((n) => n.text.trim().toLowerCase() !== "approved")?.text;
+  const by = [...new Set([...t.workedBy, ...(t.owner ? [t.owner] : [])])];
+  return [
+    `${taskId(t.id)} ${t.cancelled ? "cancelled" : "done"}: ${inlineText(t.title, 120)}`,
+    ...(note ? [inlineText(note, 240)] : []),
+    ...(prs.length ? [`PR ${prs.join(", ")}`] : []),
+    ...(by.length ? [`by ${by.join(", ")}`] : []),
+    ...(t.approvedBy && !t.cancelled ? [`approved by ${t.approvedBy}`] : []),
+    ...(said ? [`${said} message${said === 1 ? "" : "s"} in its threads`] : []),
+  ].join(" · ");
 }
