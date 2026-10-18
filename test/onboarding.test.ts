@@ -2,6 +2,11 @@
 // (Agents from the owner's own computers coming in with no code: test/grant.test.ts.)
 
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Channel } from "@kiwi/core/client.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
 import { runDemo } from "../src/demo.ts";
 
 describe("kiwi demo", () => {
@@ -21,4 +26,39 @@ describe("kiwi demo", () => {
     expect(all).toContain("lifted the hold");
     expect(process.env.KIWI_HOME).toBe(home);
   }, 60_000);
+
+  test("--stay prints a dashboard link that is a plain join code, and lets the dashboard in when it asks", async () => {
+    const lines: string[] = [];
+    const web = mkdtempSync(join(tmpdir(), "kiwi-demo-web-"));
+    writeFileSync(join(web, "index.html"), "<!doctype html><title>kiwi</title>");
+    const staying = runDemo({ pace: 0, stay: true, web, print: (l) => lines.push(l) });
+    try {
+      const link = await waitFor(() => lines.join("\n").match(/https?:\/\/\S+#\S+/)?.[0]);
+      const url = new URL(link);
+      const code = decodeURIComponent(url.hash.slice(1));
+      expect(code).toStartWith("mc2-");
+      expect(link).not.toContain("&id=");
+      const id = await generateIdentity("dashboard");
+      const { requestId } = await Channel.requestJoin(url.origin, code, id, { name: "dashboard" });
+      const status = await waitFor(async () => {
+        const st = await Channel.joinStatus(url.origin, code, id, requestId);
+        return st.status === "approved" ? st : undefined;
+      });
+      expect(status.status).toBe("approved");
+    } finally {
+      process.emit("SIGINT");
+      await staying;
+      rmSync(web, { recursive: true, force: true });
+    }
+  }, 60_000);
 });
+
+async function waitFor<T>(look: () => T | undefined | Promise<T | undefined>, ms = 30_000): Promise<T> {
+  const until = Date.now() + ms;
+  while (Date.now() < until) {
+    const got = await look();
+    if (got !== undefined) return got;
+    await Bun.sleep(200);
+  }
+  throw new Error("timed out waiting");
+}
