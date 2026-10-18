@@ -165,7 +165,7 @@ async function run(part: Part): Promise<string[]> {
 
   const openInline = async (title: RegExp) => {
     await toTab("Tasks");
-    const row = page.getByRole("button", { name: title }).first();
+    const row = page.getByRole("button", { name: title }).and(page.locator("[aria-expanded]")).first();
     await row.waitFor({ timeout: 15000 });
     if ((await row.getAttribute("aria-expanded")) !== "true") await row.click();
     return page
