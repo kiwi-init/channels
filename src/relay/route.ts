@@ -430,6 +430,20 @@ const routes: RoomRoute[] = [
       }),
   },
   {
+    method: "GET",
+    path: "/github/check-log",
+    guard: "owner",
+    run: () =>
+      Effect.gen(function* () {
+        const { url } = yield* Request_;
+        const { repo, sha } = yield* connectedCommit(url.searchParams.get("repo"), url.searchParams.get("sha"));
+        const name = url.searchParams.get("name")?.trim();
+        if (!name || name.length > 200) return yield* new BadRequest({ message: "name: the check's name" });
+        const app = yield* githubApp;
+        return { data: yield* replied(yield* Effect.promise(() => app.checkLog(repo, sha, name))) };
+      }),
+  },
+  {
     method: "POST",
     path: "/github/check",
     guard: "owner",

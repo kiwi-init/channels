@@ -320,6 +320,18 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
     })
   })
   useEffect(() => postReviewChecks(), [state.head, caughtUp])
+  const redsBusy = useRef(false)
+  const postCiReds = useEffectEvent(() => {
+    if (!ch.isOwner || !caughtUp || !state.repos.length || redsBusy.current) return
+    redsBusy.current = true
+    void import("../ci-red")
+      .then((red) => red.postCiReds(ch, state, messages))
+      .catch(() => {})
+      .finally(() => {
+        redsBusy.current = false
+      })
+  })
+  useEffect(() => postCiReds(), [state.head, caughtUp])
   const drainGithub = useEffectEvent(() => {
     if (ch.isOwner && state.repos.length) ch.drainGithub().catch(() => {})
   })
