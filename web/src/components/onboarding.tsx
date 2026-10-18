@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useState, type ReactNode } from "react"
 
 import { handleFor, NAME_RE } from "@kiwi/core/membership.ts"
 import { isJoinBlip } from "@/lib/join-blip"
@@ -31,36 +31,27 @@ function VerifyCode({ code }: { code: string }) {
   return <div className="my-6 text-[44px] leading-none font-semibold tracking-[0.04em] tabular-nums">{code}</div>
 }
 
-type Phase =
-  | { kind: "loading" }
-  | { kind: "ask" }
-  | { kind: "waiting"; pending: PendingJoin; code: string | null }
-  | { kind: "denied" }
-  | { kind: "member"; member: StoredMember }
-  | { kind: "error"; message: string }
+type Phase = { kind: "ask" } | { kind: "waiting"; pending: PendingJoin; code: string | null } | { kind: "denied" } | { kind: "member"; member: StoredMember } | { kind: "error"; message: string }
 
 /** Decide what this browser is in a channel: a member, waiting for approval, or a visitor who may ask. */
-export function ChannelGate({ code, listed, onBack, onGone }: { code: string; listed?: ChannelRow; onBack: () => void; onGone: () => void }) {
-  const [phase, setPhase] = useState<Phase>({ kind: "loading" })
-  const [unreachable, setUnreachable] = useState(false)
+function decide(code: string): Phase {
+  if (!isJoinCode(code)) return { kind: "error", message: "That isn’t a join code. Join codes start with mc2-." }
+  try {
+    const stored = loadMember(code)
+    if (stored) return { kind: "member", member: stored }
+    const pending = loadPending(code)
+    return pending ? { kind: "waiting", pending, code: null } : { kind: "ask" }
+  } catch (err) {
+    return { kind: "error", message: errorText(err) }
+  }
+}
 
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      if (!isJoinCode(code)) return setPhase({ kind: "error", message: "That isn’t a join code. Join codes start with mc2-." })
-      try {
-        const stored = loadMember(code)
-        if (stored) return setPhase({ kind: "member", member: stored })
-        const pending = loadPending(code)
-        setPhase(pending ? { kind: "waiting", pending, code: null } : { kind: "ask" })
-      } catch (err) {
-        if (!cancelled) setPhase({ kind: "error", message: errorText(err) })
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [code])
+export function ChannelGate({ code, listed, onBack, onGone }: { code: string; listed?: ChannelRow; onBack: () => void; onGone: () => void }) {
+  const [at, setAt] = useState<{ code: string; phase: Phase }>(() => ({ code, phase: decide(code) }))
+  if (at.code !== code) setAt({ code, phase: decide(code) })
+  const phase = at.code === code ? at.phase : decide(code)
+  const setPhase = useCallback((next: Phase) => setAt({ code, phase: next }), [code])
+  const [unreachable, setUnreachable] = useState(false)
 
   // Poll a pending request until the owner decides. A blip stays on waiting.
   useEffect(() => {
@@ -86,7 +77,7 @@ export function ChannelGate({ code, listed, onBack, onGone }: { code: string; li
     return () => {
       stop = true
     }
-  }, [phase])
+  }, [phase, setPhase])
 
   if (phase.kind === "member") return <Conversation member={phase.member} onBack={onBack} onGone={onGone} />
 
@@ -99,7 +90,6 @@ export function ChannelGate({ code, listed, onBack, onGone }: { code: string; li
   return (
     <div className="flex min-w-0 flex-1 md:sheet">
       <Stage>
-        {phase.kind === "loading" && <Spinner />}
         {phase.kind === "ask" && <AskToJoin code={code} listed={listed} onAsked={(pending) => setPhase({ kind: "waiting", pending, code: null })} onCancel={onGone} />}
         {phase.kind === "waiting" && (
           <>
