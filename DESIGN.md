@@ -229,6 +229,11 @@ actions row with send.
   in place, never an external spinner.
 - Disabled send and placeholders stay quiet; the send button is the one
   primary accent in the composer.
+- Talk to channel (Grok Voice) sits beside Dictate, only where the owner
+  allowed voice (Details → Voice) and in the Mac app. It turns `accent`
+  while live, and an inline line above the field says "voice: Grok Voice
+  hears this" with a `live` dot, the running caption and an outlined End.
+  Dictate stays its own button: it only types.
 
 ## 11. Accessibility (mandatory)
 
