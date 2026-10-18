@@ -1,6 +1,6 @@
 import { inlineText } from "./membership.ts";
 import { MAIN, placeFromKey, placeKey, threadMembers, type ChannelState, type Task } from "./state.ts";
-import type { Message } from "./protocol.ts";
+import { GENERAL_ROOM, type Message } from "./protocol.ts";
 import { textOf, visible } from "./work.ts";
 
 const LAST_LINE_MAX = 140;
@@ -26,6 +26,16 @@ export interface LiveCard {
 }
 
 const taskKey = (id: number): string => placeKey({ kind: "task", task: id });
+
+export function taskRoom(state: ChannelState, messages: readonly Message[], id: number): string {
+  const key = taskKey(id);
+  const first = messages.find((m) => m.kind !== "event" && placeKey(state.placeOf.get(m.seq) ?? MAIN) === key);
+  return (first && state.roomOf.get(first.seq)) ?? GENERAL_ROOM;
+}
+
+export function cardShown(state: ChannelState, messages: readonly Message[], id: number, room: string): boolean {
+  return room === GENERAL_ROOM || taskRoom(state, messages, id) === room;
+}
 
 export function lastLine(state: ChannelState, messages: readonly Message[], id: number): LastLine | undefined {
   const key = taskKey(id);

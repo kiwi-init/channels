@@ -3,7 +3,7 @@ import { useCallback, useMemo, useState, type CSSProperties, type ReactNode } fr
 
 import { droppedCount } from "@kiwi/core/format.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
-import { isReaction, type ImageAttachment, type Message } from "@kiwi/core/protocol.ts"
+import { GENERAL_ROOM, isReaction, type ImageAttachment, type Message } from "@kiwi/core/protocol.ts"
 import { colorOf, outsideRepos, type Task } from "@kiwi/core/state.ts"
 import { recentPrs } from "@kiwi/core/work.ts"
 import { channelTitle, loadRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
@@ -18,6 +18,7 @@ import { cx } from "@/lib/utils"
 import { useHeight } from "@/hooks/use-height"
 import { Composer } from "../composer"
 import { AddAgent } from "../add-agent"
+import { RoomChips } from "../room-chips"
 import { AgentStrip, type AgentNow } from "../agent-strip"
 import { ChannelControls, HoldDialog } from "../controls"
 import { Icon } from "../icon"
@@ -52,6 +53,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const now = useNow()
   const [reacting, setReacting] = useState<Message | null>(null)
   const [here, setHere] = useState<string>("main")
+  const [cardRoom, setCardRoom] = useState<string>(GENERAL_ROOM)
   const [side, setSide] = useState<Side>(null)
   const floating = side === null
   const sideRoot = side?.kind === "thread" ? side.root : null
@@ -189,6 +191,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     now,
     group,
     hereKey,
+    cardRoom,
     search,
     highlight,
     bySeq,
@@ -323,6 +326,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                   onJump={jump}
                 />
               )}
+              {hereKey === "main" && state.rooms.size > 1 && !search && <RoomChips rooms={[...state.rooms.values()]} value={cardRoom} onChange={setCardRoom} />}
               {connection === "connecting" && messages.length === 0 ? (
                 <Centered>
                   <Spinner />
