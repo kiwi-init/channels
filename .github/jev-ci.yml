@@ -85,6 +85,8 @@ jobs:
       didn't take and flush it on drain (src/daemon/server.ts), so a catch-up of thirty
       messages with 50 KB ones among them, and big live messages back to back, arrive whole
       and in order.
+      Also test/silent-socket.test.ts: a live socket that goes quiet after opening (no answer to
+      a ping) and an upgrade nobody answers are both dropped and opened again.
       Also test/web-core-barrel.test.ts: web/src takes values from @kiwi/core's client submodules
       (errors, relay, info), never the client.ts barrel, which pulls the whole Channel into the first load.
       Also test/desktop-keys.test.ts: the desktop key process (desktop/src/keyring.ts and keys-server.ts,
@@ -97,6 +99,9 @@ jobs:
       desktop/build/entitlements.mac.plist has the audio-input entitlement. And
       test/offscreen.test.ts: a message's content column is content-visibility auto with a remembered
       size, so off-screen messages skip layout and paint when the column's width changes. And
+      test/snapshot-base.test.ts: a window of recent messages folded on the channel's snapshot keeps
+      the tasks and facts from before it, as a whole-history fold does (web base-plan.test.ts: a
+      snapshot older than the window isn't used). And
       test/replay.test.ts: a signed message counts once and near the time it was signed (fold
       refuses a second copy of a message id, across incremental folds and their snapshot, and one
       signed more than a day before the relay received it). And
@@ -156,7 +161,7 @@ jobs:
   test-flows-b:
     name: test / flows-b
     inputs: ["src/**", "packages/core/**", "test/owner-cli.ts"]
-    imports_from: ["test/join-seats.test.ts", "test/read-receipts.test.ts", "test/daemon-pair.test.ts", "test/sh-escape.test.ts", "test/reclaim.test.ts", "test/wake-yourself.test.ts", "test/seats.test.ts", "test/multi-seat.test.ts", "test/handoff.test.ts"]
+    imports_from: ["test/join-seats.test.ts", "test/read-receipts.test.ts", "test/daemon-pair.test.ts", "test/sh-escape.test.ts", "test/reclaim.test.ts", "test/wake-yourself.test.ts", "test/seats.test.ts", "test/multi-seat.test.ts", "test/handoff.test.ts", "test/hooks-once.test.ts"]
     always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs slow agent-flow tests against a real local relay and the kiwi CLI: join-seats
@@ -168,7 +173,10 @@ jobs:
       (src/seats.ts), one session holding seats in two channels, hooks serving the right seat
       from sibling folders. Then handoff: an escalation's live browser link (packages/core/src/protocol.ts),
       `kiwi send --escalate --handoff URL --wait` exit codes, and the link kept out of log, show,
-      listen --json except `kiwi show N --reveal`. Fails if joining, seats, hooks, pairing, the
+      listen --json except `kiwi show N --reveal`. Then hooks-once: a message the prompt or stop hook
+      hands over never wakes the session a second time from the listener started with it
+      (src/hooks/listen.ts waits for the session's answering hook, src/hooks/delivered.ts), and the
+      listener keeps listening for the next one. Fails if joining, seats, hooks, pairing, the
       daemon, kiwi sh, handoff or the relay change behavior.
 
   build:
