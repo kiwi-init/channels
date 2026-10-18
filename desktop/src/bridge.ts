@@ -87,6 +87,7 @@ export const CHANNEL_CALLS = [
   "githubCheckLog",
   "closeIssue",
   "snapshotAt",
+  "snapshot",
   "info",
   "title",
   "setTitle",
