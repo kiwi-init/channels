@@ -18,6 +18,7 @@ import { ownerFingerprint } from "@kiwi/core/crypto.ts";
 import { MAX_BLOB_BYTES, PAGE_LIMIT, wellFormedFreed, wellFormedSlot } from "@kiwi/core/protocol.ts";
 import { ChannelGone, BadRequest, Forbidden, NotFound, NotOwner, SignInRequired, TooLarge, TooMany, Unauthorized, UpdateRequired, type Refusal } from "./failures.ts";
 import { answer, buildContext, describeRoutes, dispatch, incoming, json, readCapped, Request_, type Route } from "./http.ts";
+import { githubLinks, githubRepos, type GithubItem } from "./github.ts";
 import { Human, HUMAN_HEADER } from "./human.ts";
 import { betaMessage, inBeta, Policy } from "./policy.ts";
 import { offerPages, PAGE_PATH, servePage } from "./pages.ts";
@@ -372,6 +373,42 @@ const routes: RoomRoute[] = [
       }),
   },
   {
+    method: "PUT",
+    path: "/github/repos",
+    guard: "owner",
+    run: () =>
+      Effect.gen(function* () {
+        const db = yield* RoomStore;
+        const repos = githubRepos((yield* json<{ repos?: unknown }>()).repos);
+        if (!repos) return yield* new BadRequest({ message: "repos: up to 20 owner/name" });
+        const links = githubLinks(db.roomId, db.githubRepos(), repos);
+        db.setGithubRepos(repos);
+        return { data: { repos }, fx: { github: links } };
+      }),
+  },
+  {
+    method: "GET",
+    path: "/github/queue",
+    guard: "owner",
+    run: () =>
+      withRoom((db) => ({
+        data: { repos: db.githubRepos(), items: db.githubQueue(100).map((r) => ({ id: r.id, ...(JSON.parse(r.item) as GithubItem) })) },
+      })),
+  },
+  {
+    method: "POST",
+    path: "/github/ack",
+    guard: "owner",
+    run: () =>
+      Effect.gen(function* () {
+        const db = yield* RoomStore;
+        const { upTo } = yield* json<{ upTo?: unknown }>();
+        if (typeof upTo !== "number" || !Number.isSafeInteger(upTo) || upTo < 0) return yield* new BadRequest({ message: "upTo: the last item id drained" });
+        db.ackGithub(upTo);
+        return { data: { ok: true } };
+      }),
+  },
+  {
     method: "GET",
     path: "/snapshot",
     guard: "member",
@@ -498,7 +535,7 @@ const routes: RoomRoute[] = [
     method: "DELETE",
     path: "/",
     guard: "owner",
-    run: () => withRoom((db) => ({ data: { closed: true }, fx: { directory: db.unlinkAll(), wipe: true } })),
+    run: () => withRoom((db) => ({ data: { closed: true }, fx: { directory: db.unlinkAll(), github: githubLinks(db.roomId, db.githubRepos(), []), wipe: true } })),
   },
 ];
 
