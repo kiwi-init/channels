@@ -9,7 +9,7 @@ type Handlers = Pick<
   | "onApprove"
   | "onScopes"
   | "onPersona"
-  | "onRole"
+  | "onPin"
   | "onNickname"
   | "onDeny"
   | "onCheck"
@@ -28,11 +28,11 @@ export function useControlsHandlers({
   member,
   onGone,
 }: {
-  live: Pick<ChannelHandle, "ch" | "send" | "roster" | "isOwner" | "refreshRequests" | "refreshRoster">
+  live: Pick<ChannelHandle, "ch" | "send" | "isOwner" | "refreshRequests" | "refreshRoster">
   member: StoredMember
   onGone: () => void
 }): Handlers {
-  const { ch, send, roster, isOwner, refreshRequests, refreshRoster } = live
+  const { ch, send, isOwner, refreshRequests, refreshRoster } = live
   const hold = isOwner
     ? async (on: boolean, note?: string) => {
         const ev = { op: "hold.set" as const, on, ...(note ? { note } : {}) }
@@ -61,17 +61,13 @@ export function useControlsHandlers({
       await ch.updateScopes(m, scopes, seq)
       await refreshRoster()
     },
+    onPin: (p) => ch.pinPersona(p),
     onPersona: async (m, persona) => {
       const scopes = persona ? personaScopes(persona) : [...SCOPES]
       const wire = wireScopes(scopes)
       const seq = await send(persona ? `made ${m.name} ${persona.name}` : `took ${m.name}'s personality away`, { kind: "event", ev: { op: "scope.set", member: m.name, pk: m.pk, scopes: wire } })
       await ch.updatePersona(m, persona, seq)
       await refreshRoster()
-    },
-    onRole: async (ev) => {
-      const seq = await send(ev.op === "role.set" ? `made ${ev.member} ${ev.role ?? "unassigned"}` : `kept ${ev.member}'s role`, { kind: "event", ev, to: [ev.member] })
-      const target = ev.op === "role.set" ? roster.find((m) => m.active && m.name === ev.member && !m.owner) : undefined
-      if (ev.op === "role.set" && target) await ch.updateRole(target, ev.role, ev.about, seq).catch(() => {})
     },
     onNickname: async (m, nickname) => {
       await ch.updateNickname(m, nickname)

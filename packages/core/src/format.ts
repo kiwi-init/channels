@@ -87,11 +87,9 @@ export function describeEvent(m: Message, state?: ChannelState): string {
   const round = ev.op === "task.update" ? roundTag(state?.tasks.get(ev.task), m.seq, ev.round) : "";
   switch (ev.op) {
     case "hello": {
-      // Only the owner's word sets a role: anyone else's hello shows the role only when it's the one they
-      // hold (an older client's hello that asked for another, or a role approval left out, says nothing).
       const who = state?.members.get(m.from);
-      const role = ev.role && (who?.owner || who?.role === ev.role) ? ev.role : undefined;
-      const about = ev.about && (who?.owner || who?.about === ev.about) ? ev.about : undefined;
+      const role = ev.role && (who?.owner || who?.persona?.name === ev.role) ? ev.role : undefined;
+      const about = ev.about && (who?.owner || who?.persona?.instructions === ev.about) ? ev.about : undefined;
       return `joined${role ? ` as ${role}` : ""}${about ? ` (${about})` : ""}`;
     }
     case "role.set":
@@ -174,22 +172,17 @@ function reviewPhrase(review: string): string {
   return review === "*" ? "review by anyone who hasn't worked on it" : `review by ${inlineText(review, 40)}`;
 }
 
-/**
- * "runs claude-code · claude-fable-5-1 (owner-signed)": what the owner attested at approval, and when the
- * agent's own card now names another model, that too, so a reader sees the record and the claim apart.
- */
-export function runsStatus(runs: Runs, card: Card | undefined): string {
-  const says = card?.model && card.model !== runs.model ? `; its card says ${inlineText(card.model, 60)}` : "";
-  return `runs ${runsLine(runs)} (owner-signed)${says}`;
+export function runsStatus(runs: Runs): string {
+  return `runs ${runsLine(runs)} (owner-signed)`;
 }
 
 /** "macos arm64 · claude-code · ojow/channels@main · tools: docker, gpu · note", one line. */
-export function cardLine(c: Card | undefined): string {
+export function cardLine(c: Card | undefined, runs?: Runs): string {
   if (!c) return "";
   const where = c.repo ? `${inlineText(c.repo, 80)}${c.branch ? `@${inlineText(c.branch, 80)}` : ""}` : "";
   const parts = [
-    inlineText(c.model, 60),
-    inlineText(c.harness, 40),
+    runs ? "" : inlineText(c.model, 60),
+    runs ? "" : inlineText(c.harness, 40),
     [c.os, c.arch]
       .filter(Boolean)
       .map((x) => inlineText(x, 40))
@@ -307,8 +300,8 @@ export function memberJson(state: ChannelState, name: string, online: Snapshot["
   const on = online.get(name);
   return {
     name,
-    role: inlineText(m?.role ?? on?.role, 80) || null,
-    about: inlineText(m?.about, 200) || null,
+    role: m?.persona?.name ?? null,
+    about: inlineText(m?.persona?.instructions, 200) || null,
     kind: m?.kind ?? (m?.owner ? "human" : "agent"),
     owner: !!m?.owner,
     sponsor: m?.sponsor ? inlineText(m.sponsor.handle ?? m.sponsor.name, 80) || null : null,
@@ -394,7 +387,7 @@ export function charterLines(state: ChannelState): string | null {
 export function formatStatus({ alias, me, state, online, unread, now = Date.now() }: Snapshot): string {
   const out: string[] = [];
   const meM = state.members.get(me);
-  out.push(`channel ${alias} · you are ${me}${meM?.role ? ` (${inlineText(meM.role, 80)})` : ""} · head #${state.head}${unread ? ` · ${unread} unread` : ""}`);
+  out.push(`channel ${alias} · you are ${me}${meM?.persona ? ` (${inlineText(meM.persona?.name, 80)})` : ""} · head #${state.head}${unread ? ` · ${unread} unread` : ""}`);
   const hold = holdLine(state, now);
   if (hold) out.push(hold);
   if (state.compact) out.push(`history compacted through #${state.compact.through} by ${inlineText(state.compact.by, 40)}: ${inlineText(state.compact.summary, 400)} (kiwi compact shows it all)`);
@@ -420,7 +413,7 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
     const m = state.members.get(name);
     const on = online.get(name);
     const where = on ? presenceWords(on, now) : m ? `last seen ${ago(m.lastSeen, now)}` : "online";
-    const role = m?.persona ? `${inlineText(m.persona.name, 40)} (${ROLE_LABEL[m.persona.role]})` : inlineText(m?.role ?? on?.role, 80);
+    const role = m?.persona ? `${inlineText(m.persona.name, 40)} (${ROLE_LABEL[m.persona.role]})` : "";
     const key = m?.pk ? ` · key ${m.pk.slice(0, 8)}` : "";
     const kind =
       m?.kind === "human"
@@ -432,8 +425,8 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
     // How busy they are, so work goes to whoever's free (people only when they hold tasks).
     const load = memberLoad(state, name);
     if (showsLoad(m, load)) out.push(`      ${loadSummary(load)}`);
-    if (m?.card) out.push(`      ${cardLine(m.card)}${outsideRepos(state, m.card) ? " · not one of this channel's repos" : ""}`);
-    if (m?.runs) out.push(`      ${runsStatus(m.runs, m.card)}`);
+    if (m?.card && cardLine(m.card, m.runs)) out.push(`      ${cardLine(m.card, m.runs)}${outsideRepos(state, m.card) ? " · not one of this channel's repos" : ""}`);
+    if (m?.runs) out.push(`      ${runsStatus(m.runs)}`);
   }
   if (left.length) out.push(`  left or removed: ${left.sort().join(", ")}`);
 

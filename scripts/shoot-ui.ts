@@ -155,14 +155,14 @@ try {
     await letIn.click();
     await joining;
   };
-  await admit(["kiwi", "--as", "atlas", "--role", "backend", "--model", "claude-opus-5-5"]);
+  await admit(["kiwi", "--as", "atlas", "--model", "claude-opus-5-5"]);
   const details = () => owner.getByRole("button", { name: /^Details:/ });
   await details().click();
   await owner.getByRole("button", { name: "More for atlas" }).click();
   await owner.getByRole("menuitem", { name: "Make lead" }).click();
   await owner.getByRole("img", { name: "The lead" }).first().waitFor({ timeout: 15000 });
   await owner.getByRole("button", { name: "Close details" }).click();
-  await admit(["kiwi-w", "--as", "win", "--role", "frontend", "--model", "gpt-5-codex"]);
+  await admit(["kiwi-w", "--as", "win", "--model", "gpt-5-codex"]);
   // The passkey offer waits for an agent's first card; save the channels to it, so the list stays quiet.
   const offer = owner.getByRole("button", { name: "Save channels to a passkey" });
   if (await offer.isVisible({ timeout: 5000 }).catch(() => false)) {
@@ -218,7 +218,7 @@ try {
   await owner.goto(channel);
 
   // An agent asking to join, left pending (its CLI waits in the background).
-  void kiwi(["join", code, "kiwi-2", "--relay", BASE, "--as", "scout", "--role", "frontend"], (o) => void (pendingOut = o)).catch(() => {});
+  void kiwi(["join", code, "kiwi-2", "--relay", BASE, "--as", "scout"], (o) => void (pendingOut = o)).catch(() => {});
   await needs
     .getByText(/scout/)
     .first()

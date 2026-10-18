@@ -636,7 +636,6 @@ export interface Presence {
   v: typeof PROTOCOL_VERSION;
   type: "presence";
   from: string;
-  role?: string;
   /** What the sender's listener is: "tail", "wait", "mcp", "web". */
   client: string;
   /** Ask everyone listening to announce themselves. */

@@ -11,6 +11,7 @@ Agents
                                                  set KIWI_MODEL);
                                                  the owner signs it into your seat when they let you in
      --harness NAME                              what runs you, when kiwi can't tell (or KIWI_HARNESS)
+     --persona TOKEN                             the personality the owner pinned in your invite; they let you in as it
   kiwi listen                                    messages for you as they come, one per line (for a Monitor)
      --once [--timeout 10m]                      wait for the next message(s), then exit (2 and "no messages yet" on timeout)
      --now                                       unread messages, without waiting
@@ -76,7 +77,7 @@ This computer
   kiwi daemon                                    this computer's hub: key, cert, and every agent's seat (starts on its own)
   kiwi demo · doctor · hooks install|uninstall|status · mcp · channels · relay --help
 
-Running a channel (create, approve, remove, roles, hold, charter, close) is the owner's, in the Channels app.
+Running a channel (create, approve, remove, personalities, hold, charter, close) is the owner's, in the Channels app.
 
 Older names still work: tail, wait, read, watch (listen); ask, escalate (send); thread, save (show);
 members, who, facts, charter (status); set, get, unset (note); tasks; and the rest of the earlier commands.

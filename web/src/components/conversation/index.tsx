@@ -19,17 +19,15 @@ import { mergedSince, startOfDay, viewCounts, VIEWS, type Tab, type View } from 
 import { cx } from "@/lib/utils"
 import { useHeight } from "@/hooks/use-height"
 import { Composer } from "../composer"
-import { AddAgent } from "../add-agent"
 import { RoomChips } from "../room-chips"
 import { AgentStrip, type AgentNow } from "../agent-strip"
 import { ChannelControls, HoldDialog } from "../controls"
 import { Icon } from "../icon"
 import { Button, Spinner, errorText, toast } from "../kit"
-import { AgentLanes, CompactBlock, ProposalCard, TaskInline, TalkBar, TalkButton } from "../lazy"
+import { AddAgent, AgentLanes, CompactBlock, GifPicker, ProposalCard, TalkBar, TalkButton, TaskInline } from "../lazy"
 import { bridge } from "@/lib/secrets"
 import type { ToolCtx } from "@/lib/voice/tools"
 import { defaultScopes } from "../scopes"
-import { GifPicker } from "../gif-picker"
 import { isAgent } from "../message"
 import { NeedsYou } from "../needs-you"
 import { TasksView } from "../tasks-view"
@@ -331,7 +329,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       color: colorOf(state, m.name),
       here: howHere(online.get(m.name)),
       lead: m.name === state.lead,
-      model: online.get(m.name)?.activity?.model ?? m.card?.model,
+      model: m.runs?.model ?? online.get(m.name)?.activity?.model ?? m.card?.model,
       activity: online.get(m.name)?.activity,
       load: memberLoad(state, m.name),
       lastAt: lastAt.get(m.name),

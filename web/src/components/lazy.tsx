@@ -5,6 +5,11 @@ const markdown = later(
   () => import("./markdown").then((m) => m.Markdown),
   ({ children }: { children: string; refs?: MessageRefs }) => <div className="[overflow-wrap:anywhere] break-words whitespace-pre-wrap">{children}</div>
 )
+const addAgent = later(() => import("./add-agent").then((m) => m.AddAgent))
+const gifPicker = later(() => import("./gif-picker").then((m) => m.GifPicker))
+const welcome = later(() => import("./welcome").then((m) => m.Welcome))
+const newChannel = later(() => import("./welcome").then((m) => m.NewChannel))
+const joinWithCode = later(() => import("./welcome").then((m) => m.JoinWithCode))
 const settings = later(() => import("./settings").then((m) => m.SettingsModal))
 const computers = later(() => import("./computers").then((m) => m.ComputersModal))
 const palette = later(() => import("./ui/palette").then((m) => m.Palette))
@@ -24,8 +29,14 @@ const repos = later(() => import("./controls/repos-dialog").then((m) => m.ReposD
 const compactBlock = later(() => import("./compact").then((m) => m.CompactBlock))
 const proposalCard = later(() => import("./compact").then((m) => m.ProposalCard))
 const confirmDialogs = later(() => import("./controls/confirm-dialogs").then((m) => m.ConfirmDialogs))
+const invite = later(() => import("./controls/invite").then((m) => m.Invite))
 
 export const Markdown = markdown.View
+export const AddAgent = addAgent.View
+export const GifPicker = gifPicker.View
+export const Welcome = welcome.View
+export const NewChannel = newChannel.View
+export const JoinWithCode = joinWithCode.View
 export const SettingsModal = settings.View
 export const ComputersModal = computers.View
 export const Palette = palette.View
@@ -45,6 +56,7 @@ export const ReposDialog = repos.View
 export const CompactBlock = compactBlock.View
 export const ProposalCard = proposalCard.View
 export const ConfirmDialogs = confirmDialogs.View
+export const Invite = invite.View
 
 export const loadMarkdown = markdown.load
 

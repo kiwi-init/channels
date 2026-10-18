@@ -9,6 +9,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AgentSession } from "../src/agent.ts";
+import { personaOf } from "@kiwi/core/personality.ts";
+import { PRESETS } from "@kiwi/core/presets.ts";
 import { Channel } from "@kiwi/core/client.ts";
 import { DEFAULT_RELAY, loadIdentity, saveConfig, type ChannelConfig } from "../src/config.ts";
 import { b64url, newRoomId } from "@kiwi/core/crypto.ts";
@@ -37,18 +39,16 @@ const beat = () => Bun.sleep(pace);
 
 console.log(`owner dashboard: ${relay}/#${encodeURIComponent(code)}&id=${b64url(new TextEncoder().encode(JSON.stringify(owner)))}\n`);
 
-await lead.hello("planner", "breaks work down and unblocks people");
-await mac.hello("macos", "input capture and edge switching on the Mac");
-await win.hello("windows", "input injection on the PC");
-await review.hello("reviewer", "reviews every PR before merge");
+await Promise.all([lead.hello(), mac.hello(), win.hello(), review.hello()]);
 await beat();
 
 // Hello only asks for a role. The owner grants the ones this script addresses.
 const human = await AgentSession.open("demo", cfg, "human", { person: true });
-await human.decideRole("lead", { role: "planner", about: "breaks work down and unblocks people" });
-await human.decideRole("mac", { role: "macos", about: "input capture and edge switching on the Mac" });
-await human.decideRole("win", { role: "windows", about: "input injection on the PC" });
-await human.decideRole("reviewer", { role: "reviewer", about: "reviews every PR before merge" });
+const preset = (role: string) => personaOf(PRESETS.find((p) => p.role === role)!);
+await human.givePersona("lead", { ...preset("lead"), instructions: "breaks work down and unblocks people" });
+await human.givePersona("mac", { ...preset("builder"), name: "macos", instructions: "input capture and edge switching on the Mac" });
+await human.givePersona("win", { ...preset("builder"), name: "windows", instructions: "input injection on the PC" });
+await human.givePersona("reviewer", { ...preset("reviewer"), instructions: "reviews every PR before merge" });
 await beat();
 
 await lead.send("Goal for today: first end-to-end test of onemouse. I'm putting the plan on the board; take what you can do.", { kind: "status" });

@@ -184,13 +184,13 @@ describe("voice tools: acting as the person", () => {
 })
 
 describe("spoken verbs: yes, hold and stop act only on what was read back", () => {
-  const ready = { id: "r2", name: "otter", display: "Otter", role: "tester", kind: "agent" as const, check: "ready" as const, code: "810857" }
+  const ready = { id: "r2", name: "otter", display: "Otter", kind: "agent" as const, check: "ready" as const, code: "810857" }
 
   test("yes on a join reads back its code, and only a yes to that lets it in", async () => {
     const letIn: string[] = []
     const { c } = ctx({ requests: [ready], letIn: async (id) => void letIn.push(id) })
     const verbs = { pending: null }
-    expect(await runVoiceTool("yes", { confirmed: false }, c, verbs)).toEqual({ readback: "Otter wants to join, as tester. Let it in only if its terminal shows 8 1 0 8 5 7. Say yes to let it in." })
+    expect(await runVoiceTool("yes", { confirmed: false }, c, verbs)).toEqual({ readback: "Otter wants to join. Let it in only if its terminal shows 8 1 0 8 5 7. Say yes to let it in." })
     expect(await runVoiceTool("yes", { confirmed: true }, c, verbs)).toEqual({ let_in: "Otter" })
     expect(letIn).toEqual(["r2"])
   })

@@ -17,6 +17,16 @@ import { openOwnerSession } from "../src/owner.ts";
 import { baseName, here } from "../src/seats.ts";
 import { join } from "node:path";
 import { isLeadRole } from "@kiwi/core/state.ts";
+import { personaOf, type Persona } from "@kiwi/core/personality.ts";
+import { PRESETS } from "@kiwi/core/presets.ts";
+
+const personaFor = (role: string, about?: string): Persona => {
+  if (isLeadRole(role)) {
+    const lead = personaOf(PRESETS.find((p) => p.role === "lead")!);
+    return about === undefined ? lead : { ...lead, instructions: about };
+  }
+  return { name: role, role: "builder", capabilities: ["write", "tasks", "notes"], areas: [], instructions: about ?? "" };
+};
 
 const OWNER = "human";
 const argv = process.argv.slice(2);
@@ -70,7 +80,7 @@ const verbs: Record<string, () => Effect.Effect<void, unknown, Agent>> = {
         relay,
         o,
         { name: OWNER, role: "owner" },
-        [{ ...agent, info: { name, ...(role ? { role } : {}), ...(about ? { about } : {}) } }],
+        [{ ...agent, info: { name, ...(role ? { persona: personaFor(role, about) } : {}) } }],
         roomId,
         null,
         args[1],
@@ -84,7 +94,7 @@ const verbs: Record<string, () => Effect.Effect<void, unknown, Agent>> = {
       yield* (yield* Cursor).write(alias, name, yield* ownerCh.fx.head());
       const { openSession } = yield* Effect.promise(() => import("../src/agent.ts"));
       const s = yield* openSession(alias, cfg.channels[alias]!, name);
-      yield* s.hello(role, about);
+      yield* s.hello();
       const who = here();
       bindDirectory(process.cwd(), { alias, as: name, ...(who.harness ? { harness: who.harness } : { plain: true as const }) });
       out(`join code: ${code}`);
@@ -102,14 +112,14 @@ const verbs: Record<string, () => Effect.Effect<void, unknown, Agent>> = {
         const asked = r.askedAs && r.askedAs !== r.name ? ` (asked as ${r.askedAs}, which is taken)` : "";
         // What it says runs it, which approving signs into its seat; an agent that said nothing is worth a second look.
         const runs = r.kind === "human" ? "" : r.runs ? ` · runs ${runsLine(r.runs)}` : " · says nothing about what runs it";
-        out(`${(r.code ?? (r.check === "waiting" ? "waiting" : "unchecked")).padEnd(8)} ${r.name}${asked}${r.role ? ` (${r.role})` : ""}${runs} · key ${fingerprint(r.pk)}`);
+        out(`${(r.code ?? (r.check === "waiting" ? "waiting" : "unchecked")).padEnd(8)} ${r.name}${asked}${runs} · key ${fingerprint(r.pk)}`);
       }
     }),
   approve: () =>
     Effect.gen(function* () {
       const { s, r } = yield* findRequest(args[1] ?? (yield* die("usage: approve CODE")));
-      const role = str("role") ?? (isLeadRole(r.role) ? undefined : r.role);
-      const admitted = yield* s.ownerCh.fx.approve(r, { name: str("name") ?? r.name, role, about: r.about });
+      const role = str("role");
+      const admitted = yield* s.ownerCh.fx.approve(r, { name: str("name") ?? r.name, ...(role ? { persona: personaFor(role, str("about")) } : {}) });
       out(`approved ${admitted.name} (${r.code})`);
     }),
   deny: () =>
@@ -140,7 +150,7 @@ const verbs: Record<string, () => Effect.Effect<void, unknown, Agent>> = {
       const [member, role] = args.slice(1);
       if (!member || !role) return yield* die("usage: role NAME ROLE|none");
       const clear = role.toLowerCase() === "none";
-      yield* s.decideRole(member, { role: clear ? null : role, ...(str("about") !== undefined ? { about: str("about") } : {}) });
+      yield* s.givePersona(member, clear ? null : personaFor(role, str("about")));
       out(clear ? `cleared ${member}'s role` : `made ${member} ${role}`);
     }),
   room: () =>

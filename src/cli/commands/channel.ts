@@ -22,7 +22,8 @@ export const channelCommands: Record<string, Command> = {
         if (m.kind === "computer") continue;
         const scopes = m.active ? state.members.get(m.name)?.scopes : undefined;
         const may = scopes && presetOf(scopes) !== "full" ? ` · may: ${describeScopes(scopes)}` : "";
-        out(`${describeMember(m)}${m.name === s.me ? " (you)" : ""}${m.role ? ` — ${m.role}` : ""}${may}${m.active ? "" : "  (left)"}`);
+        const persona = m.active ? state.members.get(m.name)?.persona : undefined;
+        out(`${describeMember(m)}${m.name === s.me ? " (you)" : ""}${persona ? ` — ${persona.name}` : ""}${may}${m.active ? "" : "  (left)"}`);
       }
     }),
 
@@ -93,7 +94,7 @@ export const channelCommands: Record<string, Command> = {
       const on = new Map(
         [...online].map(([n, p]) => [
           n,
-          { client: p.client, role: p.role, ...(p.reach ? { reach: p.reach } : {}), ...(p.readAt === undefined ? {} : { readAt: p.readAt }), ...(isWakeVia(p.wake) ? { wake: p.wake } : {}) },
+          { client: p.client, ...(p.reach ? { reach: p.reach } : {}), ...(p.readAt === undefined ? {} : { readAt: p.readAt }), ...(isWakeVia(p.wake) ? { wake: p.wake } : {}) },
         ]),
       );
       const snap = { alias: s.alias, me: s.me, state, online: on, unread: yield* s.unreadCount(state, messages) };
@@ -108,10 +109,10 @@ export const channelCommands: Record<string, Command> = {
       const away = [...state.members.values()].filter((m) => m.active && !online.has(m.name));
       if (!online.size && !away.length) return out("nobody else is in this channel");
       for (const [name, p] of online) {
-        const role = p.role ?? state.members.get(name)?.role;
+        const role = state.members.get(name)?.persona?.name;
         out(`${name}${role ? ` — ${role}` : ""} · ${presenceWords(p)}`);
       }
-      for (const m of away) out(`${m.name}${m.role ? ` — ${m.role}` : ""} · last seen ${ago(m.lastSeen)}`);
+      for (const m of away) out(`${m.name}${m.persona ? ` — ${m.persona?.name}` : ""} · last seen ${ago(m.lastSeen)}`);
     }),
 
   charter: () =>

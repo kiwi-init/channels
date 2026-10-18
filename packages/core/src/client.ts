@@ -9,7 +9,7 @@
 // `Channel.fx` and `fx` are those Effects. The Promise methods, which the CLI, the
 // agent and the dashboard call, run them and resolve or reject exactly as before.
 
-import type { Persona } from "./personality.ts";
+import type { Persona, Personality } from "./personality.ts";
 import { newRoomId, type ChannelAccess } from "./crypto.ts";
 import type { Identity } from "./identity.ts";
 import type { JoinClaims, JoinRequest, Member, MemberInfo } from "./membership.ts";
@@ -280,6 +280,10 @@ export class Channel {
     return run(this.fx.approve(req, as, opts));
   }
 
+  pinPersona(p: Personality): Promise<string> {
+    return run(this.fx.pinPersona(p));
+  }
+
   /**
    * The app's background approval: given the owner's person key, approve every request from the
    * owner's own computers whose code is ready, as agents sponsored by the owner, without spending
@@ -309,15 +313,6 @@ export class Channel {
 
   updatePersona(m: Member, persona: Persona | null, since: number): Promise<void> {
     return run(this.fx.updatePersona(m, persona, since));
-  }
-
-  /**
-   * Owner: after a role.set at log position `since`, re-sign the member's record with that role (and
-   * rules), so a client holding only the tail of the log still knows it. Everything else the record
-   * says, scopes included, stays as it was.
-   */
-  updateRole(m: Member, role: string | null, about: string | null | undefined, since: number): Promise<void> {
-    return run(this.fx.updateRole(m, role, about, since));
   }
 
   updateNickname(m: Member, nickname: string | null): Promise<void> {

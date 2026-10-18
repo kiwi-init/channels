@@ -2,7 +2,6 @@ import type { CachedRow } from "@kiwi/core/cache-row.ts"
 import type { PresenceFields } from "@kiwi/core/client.ts"
 
 import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, FollowEvent } from "../../../desktop/src/bridge.ts"
-import { localOps } from "./channel-local"
 import { errorOf, remoteOps } from "./channel-remote"
 import { bridge } from "./secrets"
 import { makeWatches, type Watches } from "./watch"
@@ -18,10 +17,35 @@ export function watches(): Watches {
   return watching
 }
 
+function lazyLocalOps(): ChannelOps {
+  let real: Promise<ChannelOps> | null = null
+  const local = () => (real ??= import("./channel-local").then((m) => m.localOps()))
+  return {
+    call: (code, op, ...args) => local().then((o) => o.call(code, op, ...args)),
+    create: (name, token, me) => local().then((o) => o.create(name, token, me)),
+    requestJoin: (code, name) => local().then((o) => o.requestJoin(code, name)),
+    joinStatus: (code) => local().then((o) => o.joinStatus(code)),
+    forget: (code) => local().then((o) => o.forget(code)),
+    presence: (code, p) => local().then((o) => o.presence(code, p)),
+    openRows: (code, rows) => local().then((o) => o.openRows(code, rows)),
+    follow: (code, since, on, opts) => {
+      let stop: (() => void) | null = null
+      let gone = false
+      void local().then((o) => {
+        if (!gone) stop = o.follow(code, since, on, opts)
+      })
+      return () => {
+        gone = true
+        stop?.()
+      }
+    },
+  }
+}
+
 export function ops(): ChannelOps {
   if (!picked) {
     const b = bridge()
-    picked = b ? remoteOps(b.channels) : localOps()
+    picked = b ? remoteOps(b.channels) : lazyLocalOps()
   }
   return picked
 }
@@ -55,7 +79,7 @@ export class ChannelLink {
   remove = (...a: Args<"remove">) => this.c("remove", ...a)
   updateScopes = (...a: Args<"updateScopes">) => this.c("updateScopes", ...a)
   updatePersona = (...a: Args<"updatePersona">) => this.c("updatePersona", ...a)
-  updateRole = (...a: Args<"updateRole">) => this.c("updateRole", ...a)
+  pinPersona = (...a: Args<"pinPersona">) => this.c("pinPersona", ...a)
   updateNickname = (...a: Args<"updateNickname">) => this.c("updateNickname", ...a)
   reconcilePosting = (...a: Args<"reconcilePosting">) => this.c("reconcilePosting", ...a)
   rotateIfDue = () => this.c("rotateIfDue")

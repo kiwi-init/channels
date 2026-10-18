@@ -62,8 +62,7 @@ describe("fold", () => {
     const s = fold(ms);
     expect(ms.map((m) => s.trust.get(m.seq))).toEqual(["verified", "forged", "forged", "forged"]);
     expect(s.facts.size).toBe(0);
-    // An agent's hello doesn't give it a role: the owner sets roles (see "roles" below).
-    expect(s.members.get("mac")?.role).toBeUndefined();
+    expect(s.members.get("mac")?.persona).toBeUndefined();
     expect(s.members.has("ghost")).toBe(false);
   });
 
@@ -190,20 +189,19 @@ describe("roles", () => {
     // An older client's hello asking for a role: just an announcement now.
     const ask = await msg(pixel, "pixel", { ev: { op: "hello", role: "reviewer", about: "reads every PR" } });
     let s = foldWith([ask], r);
-    expect(s.members.get("pixel")?.role).toBe("designer");
+    expect(s.members.get("pixel")?.persona?.name).toBe("designer");
 
     // pixel can't grant itself the role.
     const self = await msg(pixel, "pixel", { ev: { op: "role.set", member: "pixel", role: "reviewer" } });
     s = foldWith([ask, self], r);
-    expect(s.members.get("pixel")?.role).toBe("designer");
+    expect(s.members.get("pixel")?.persona?.name).toBe("designer");
     expect(s.rejected.get(self.seq)).toBe("only the owner decides roles");
 
     const set = await msg(boss, "boss", { ev: { op: "role.set", member: "pixel", role: "reviewer", about: "reads every PR" } });
     const refuse = await msg(boss, "boss", { ev: { op: "role.refuse", member: "pixel" } });
     s = foldWith([ask, self, set, refuse], r);
-    expect(s.members.get("pixel")).toMatchObject({ role: "reviewer", about: "reads every PR" });
+    expect(s.members.get("pixel")?.persona).toMatchObject({ name: "reviewer", role: "builder", instructions: "reads every PR" });
     expect(s.rejected.has(refuse.seq)).toBe(false);
-    // A hello names a role only when it's the one held: never "joined as owner" from someone who isn't.
     const { describeEvent } = await import("@kiwi/core/format.ts");
     const grab = await msg(pixel, "pixel", { ev: { op: "hello", role: "owner" } });
     const st = foldWith([ask, self, set, refuse, grab], r);
@@ -211,9 +209,10 @@ describe("roles", () => {
     expect(describeEvent(ask, st)).toBe("joined as reviewer (reads every PR)");
   });
 
-  test("the owner sets its own role with hello", async () => {
+  test("an owner's old hello with a role leaves people without one: roles live on agents' personalities", async () => {
     const { boss, r } = await channel();
     const s = foldWith([await msg(boss, "boss", { ev: { op: "hello", role: "coordinator" } })], r);
-    expect(s.members.get("boss")?.role).toBe("coordinator");
+    expect(s.members.get("boss")?.persona).toBeUndefined();
+    expect(s.lead).toBeNull();
   });
 });

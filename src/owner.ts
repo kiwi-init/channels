@@ -7,7 +7,8 @@ import { AgentSession } from "./agent.ts";
 import { Channel, keepAnswersIn, keepRecordsIn, type Relay } from "@kiwi/core/client.ts";
 import { Keystore, type ChannelConfig } from "./config.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
-import { describeScopes, wireScopes, type Scope } from "@kiwi/core/scopes.ts";
+import { personaScopes, type Persona } from "@kiwi/core/personality.ts";
+import { describeScopes, SCOPES, wireScopes, type Scope } from "@kiwi/core/scopes.ts";
 import { GENERAL_ROOM, MAX_CHARTER, SNAPSHOT_EVERY, type Event } from "@kiwi/core/protocol.ts";
 import { fold, newRoomId, type FoldBase } from "@kiwi/core/state.ts";
 
@@ -103,22 +104,18 @@ class OwnerSession extends AgentSession {
     });
   }
 
-  /** Owner: set a member's role and rules. Sent as the owner, so every client checks it's the owner's word. */
-  readonly decideRole = Effect.fn("OwnerSession.decideRole")({ self: this }, function* (this: OwnerSession, member: string, decision: { role: string | null; about?: string | null }) {
+  readonly givePersona = Effect.fn("OwnerSession.givePersona")({ self: this }, function* (this: OwnerSession, member: string, persona: Persona | null) {
     const owner = this.ch;
     const { state } = yield* this.state();
     const m = state.members.get(member);
     if (!m?.active) return yield* new Rejected(`no member named ${member}`);
-    const ev = { op: "role.set" as const, member, ...decision };
-    // Addressed to them: a role (the lead's, handed out unasked) is news they have to get.
-    const seq = yield* owner.fx.send(`made ${member} ${ev.role ?? "unassigned"}`, { kind: "event", ev, to: [member] });
-    // Then the member's record says it too, for clients holding only the log's tail. If this fails,
-    // the owner's next reconcile puts it right; the role.set already counts for every client.
-    if (!m.owner) {
-      const rec = (yield* owner.fx.members()).find((x) => x.active && x.name === member && x.pk === m.pk);
-      if (rec) yield* Effect.ignoreCause(owner.fx.updateRole(rec, ev.role, ev.about, seq));
-    }
-    return seq;
+    const rec = (yield* owner.fx.members()).find((x) => x.active && x.name === member && x.pk === m.pk);
+    if (!rec || rec.owner || rec.kind === "human") return yield* new Rejected("only an agent carries a personality");
+    const scopes = wireScopes(persona ? personaScopes(persona) : [...SCOPES]);
+    const ev: Event = { op: "scope.set", member, pk: m.pk, scopes };
+    const seq = yield* owner.fx.send(persona ? `made ${member} ${persona.name}` : `took ${member}'s personality away`, { kind: "event", ev, to: [member] });
+    yield* owner.fx.updatePersona(rec, persona, seq);
+    return yield* this.confirm(seq);
   });
 
   /**

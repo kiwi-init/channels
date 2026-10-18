@@ -68,12 +68,12 @@ export const CHANNEL_CALLS = [
   "requests",
   "checkRequest",
   "approve",
+  "pinPersona",
   "autoApprove",
   "deny",
   "remove",
   "updateScopes",
   "updatePersona",
-  "updateRole",
   "updateNickname",
   "reconcilePosting",
   "rotateIfDue",
@@ -123,7 +123,7 @@ export type FollowEvent =
 export interface ChannelOps {
   call<K extends ChannelCallName>(code: string, op: K, ...args: Parameters<ChannelCalls[K]>): Promise<CallResult<K>>;
   create(name: string, token: string | null, me: { name: string } | null): Promise<ChannelView>;
-  requestJoin(code: string, name: string, role?: string): Promise<ChannelView>;
+  requestJoin(code: string, name: string): Promise<ChannelView>;
   joinStatus(code: string): Promise<JoinCheck>;
   forget(code: string): Promise<void>;
   presence(code: string, p: PresenceFields): Promise<void>;
@@ -144,7 +144,7 @@ export type WireError =
 export type KeysAsk =
   | { op: "call"; code: string; name: ChannelCallName; args: Wire }
   | { op: "create"; name: string; token: string | null; me: { name: string } | null }
-  | { op: "requestJoin"; code: string; name: string; role?: string }
+  | { op: "requestJoin"; code: string; name: string }
   | { op: "joinStatus"; code: string }
   | { op: "forget"; code: string }
   | { op: "presence"; code: string; p: Wire }

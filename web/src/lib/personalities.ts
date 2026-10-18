@@ -4,7 +4,7 @@ import { cleanPersonalities } from "@kiwi/core/personalities.ts"
 import { type Personality } from "@kiwi/core/personality.ts"
 import { PRESETS } from "@kiwi/core/presets.ts"
 
-import { writeLocal } from "./channel-local"
+import { writeLocal } from "./local-store"
 import { bridge, useSecrets } from "./secrets"
 
 export function useOwnPersonalities(): Personality[] {

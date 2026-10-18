@@ -118,12 +118,13 @@ describe("agents in threads", () => {
     await join_(owner, dev, code, "dev");
     await ok(dev, "listen", "--now");
     await ok(owner, "--as", "human", "role", "dev", "lead", "--yes");
-    expect(await ok(dev, "listen", "--now")).toContain("made dev lead");
+    expect(await ok(dev, "listen", "--now")).toContain("set what dev may do");
     expect(await ok(dev, "status")).toContain("you are the lead");
     expect(await ok(owner, "--as", "human", "status")).toContain("lead — builder");
     await ok(owner, "--as", "human", "role", "dev", "none", "--yes");
     const log = await ok(owner, "--as", "human", "log", "--all", "-n", "10");
-    expect(log).toContain("cleared dev's role");
+    expect(log).toContain("set what dev may do: full");
+    expect(await ok(dev, "status")).not.toContain("you are the lead");
     expect(log).not.toContain("coordinator-only");
   });
 });

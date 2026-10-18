@@ -131,7 +131,7 @@ function channelTree(v: ChannelView, now: number): Record<string, string> {
   const verified = v.messages.filter((m) => !ignored(state.trust.get(m.seq)));
   // A key ending in "/" is a directory, so empty ones (no unread, no facts) still exist.
   const files: Record<string, string> = { "inbox/": "", "msgs/": "", "tasks/": "", "members/": "", "facts/": "" };
-  const role = state.members.get(me)?.role ?? null;
+  const role = state.members.get(me)?.persona?.name ?? null;
   files["README"] = README + "\n";
   files["me"] = JSON.stringify({ name: me, role, channel: v.alias }) + "\n";
   files["status"] = formatStatus({ alias: v.alias, me, state, online: new Map(), unread: 0, now }) + "\n";

@@ -4,6 +4,8 @@
 // through the real client: the owner's charter, agents' cards, the task board, a
 // question and its answer, a review gate, a handover, an escalation, and the hold.
 
+import { personaOf } from "@kiwi/core/personality.ts";
+import { PRESETS } from "@kiwi/core/presets.ts";
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
@@ -109,8 +111,8 @@ const play = Effect.fn("Demo.run")(function* (opts: DemoOptions) {
   yield* mac.refreshCard({ os: "macos", arch: "arm64", harness: "claude-code", tools: ["git", "rust", "xcode"], repo: "ojow/onemouse" });
   yield* win.refreshCard({ os: "windows", arch: "x64", harness: "codex", tools: ["git", "rust", "dotnet"], repo: "ojow/onemouse" });
   yield* ci.refreshCard({ os: "linux", arch: "x64", tools: ["git", "docker", "rust"], note: "the CI box" });
-  yield* lead.hello("planner", "breaks work down and unblocks people");
-  yield* human.decideRole("lead", { role: "lead" });
+  yield* lead.hello();
+  yield* human.givePersona("lead", personaOf(PRESETS.find((p) => p.role === "lead")!));
 
   yield* say("The planner puts work on the board: open, then doing, then done.");
   const proto = yield* lead.taskAdd("Freeze protocol v1 wire format", { review: "any" });

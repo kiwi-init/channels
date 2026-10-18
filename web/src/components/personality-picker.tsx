@@ -1,5 +1,5 @@
 import { capabilityLine, personaOf, ROLE_LABEL, type Persona } from "@kiwi/core/personality.ts"
-import { PRESETS } from "@kiwi/core/presets.ts"
+import { usePersonalities } from "@/lib/personalities"
 import { cx } from "@/lib/utils"
 
 export function PersonalityPicker({
@@ -15,9 +15,10 @@ export function PersonalityPicker({
   lead?: string | null
   disabled?: boolean
 }) {
-  const options = PRESETS.map(personaOf)
+  const all = usePersonalities()
+  const options = all.map(personaOf)
   const shown = current && !options.some((o) => o.name === current.name) ? [current, ...options] : options
-  const glyph = (p: Persona) => PRESETS.find((x) => x.name === p.name)?.glyph ?? "•"
+  const glyph = (p: Persona) => all.find((x) => x.name === p.name)?.glyph ?? "•"
   const row = (key: string, on: boolean, mark: string, name: string, line: string, pick: () => void, off?: string) => (
     <label
       key={key}

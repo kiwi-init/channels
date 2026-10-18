@@ -28,14 +28,13 @@ export function Requests({ onDone }: { onDone: () => void }) {
                 <p className="truncate text-ui font-medium">
                   {r.display || r.name}
                   {r.display && <span className="font-normal text-ink-3"> @{r.name}</span>}
-                  {r.role && <span className="font-normal text-ink-2">, {r.role}</span>}
                   {r.askedAs && r.askedAs !== r.name && <span className="font-normal text-ink-2"> (asked as {r.askedAs}, which is taken)</span>}
                 </p>
               }
               <p className="text-meta leading-snug text-ink-2">
                 {r.kind === "human" ? "A person" : r.computer ? `Agent on ${r.computer.personName}’s ${r.computer.label}` : "Agent"} · asked {formatAgo(r.ts, p.now)}
               </p>
-              {r.kind !== "human" && <AgentFacts card={r.card} said repos={p.state.repos} className="mt-1" />}
+              {r.kind !== "human" && <AgentFacts card={r.card} runs={r.runs} said repos={p.state.repos} className="mt-1" />}
               <div className="mt-2 flex gap-2">
                 <Button size="sm" variant="secondary" onClick={() => run(() => p.onDeny(r), `Declined ${r.name}`)}>
                   Decline

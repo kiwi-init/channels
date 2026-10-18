@@ -1,7 +1,7 @@
-import type { Dispatch, SetStateAction } from "react"
+import { useEffect, type Dispatch, type SetStateAction } from "react"
 
-import type { Event } from "@kiwi/core/protocol.ts"
 import type { Scope } from "@kiwi/core/scopes.ts"
+import { usePinned } from "@/lib/pinned"
 import { memberName } from "@/lib/format"
 import { AgentFacts } from "../agent-facts"
 import { Alert, Button, TextField } from "../kit"
@@ -16,10 +16,7 @@ export function ConfirmDialogs({
   setConfirm,
   busy,
   run,
-  setRole,
   taken,
-  roleDraft,
-  setRoleDraft,
   scopeDraft,
   setScopeDraft,
   nickDraft,
@@ -32,10 +29,7 @@ export function ConfirmDialogs({
   setConfirm: Dispatch<SetStateAction<Confirm>>
   busy: boolean
   run: (fn: () => Promise<void>, done: string) => Promise<void>
-  setRole: (ev: Extract<Event, { op: "role.set" | "role.refuse" }>) => Promise<void>
   taken: boolean
-  roleDraft: { role: string; about: string }
-  setRoleDraft: Dispatch<SetStateAction<{ role: string; about: string }>>
   scopeDraft: Scope[]
   setScopeDraft: Dispatch<SetStateAction<Scope[]>>
   nickDraft: string
@@ -44,43 +38,12 @@ export function ConfirmDialogs({
   setPersonaDraft: Dispatch<SetStateAction<Persona | null>>
 }) {
   const chosen = personaDraft
+  const pinnedAs = usePinned(confirm?.kind === "approve" ? confirm.req.pin : undefined)
+  useEffect(() => {
+    if (pinnedAs) setPersonaDraft(pinnedAs)
+  }, [pinnedAs, setPersonaDraft])
   return (
     <>
-      <Alert
-        open={confirm?.kind === "role"}
-        onClose={() => setConfirm(null)}
-        title={confirm?.kind === "role" ? `${confirm.member.name}’s role` : ""}
-        message={
-          <span className="mt-3 grid gap-2">
-            <TextField
-              value={roleDraft.role}
-              onChange={(e) => setRoleDraft((d) => ({ ...d, role: e.target.value }))}
-              placeholder="Role, e.g. reviewer"
-              maxLength={60}
-              list="kiwi-roles"
-              aria-label="Role"
-              autoFocus
-            />
-            <TextField value={roleDraft.about} onChange={(e) => setRoleDraft((d) => ({ ...d, about: e.target.value }))} placeholder="Rules (optional)" maxLength={200} aria-label="Rules" />
-            <span className="text-meta text-ink-3">Everyone sees the role, and agents route work by it.</span>
-          </span>
-        }
-      >
-        <Button variant="secondary" onClick={() => setConfirm(null)}>
-          Cancel
-        </Button>
-        <Button
-          disabled={busy}
-          onClick={() => {
-            if (confirm?.kind !== "role") return
-            const name = confirm.member.name
-            void run(() => setRole({ op: "role.set", member: name, role: roleDraft.role.trim() || null, about: roleDraft.about.trim() || null }), `Saved ${name}’s role`)
-          }}
-        >
-          Save
-        </Button>
-      </Alert>
-
       <Alert
         open={confirm?.kind === "persona"}
         onClose={() => setConfirm(null)}
@@ -151,7 +114,7 @@ export function ConfirmDialogs({
         message={
           confirm?.kind === "approve" && (
             <>
-              {confirm.req.kind !== "human" && <AgentFacts card={confirm.req.card} said repos={p.state.repos} className="mb-3" />}
+              {confirm.req.kind !== "human" && <AgentFacts card={confirm.req.card} runs={confirm.req.runs} said repos={p.state.repos} className="mb-3" />}
               Approve only if {confirm.req.kind === "human" ? "they show" : "its terminal shows"} this exact code.
               <span className="mt-4 mb-4 block text-[34px] leading-none font-semibold tracking-[0.04em] text-ink tabular-nums">{confirm.req.code}</span>
               {confirm.req.kind === "human" ? (

@@ -1,3 +1,4 @@
+import { MAX_PIN } from "@kiwi/core/pin.ts";
 import * as Effect from "effect/Effect";
 import { openSession } from "../../agent.ts";
 import { Channel, RelayError } from "@kiwi/core/client.ts";
@@ -51,7 +52,7 @@ export const joinCommands: Record<string, Command> = {
     Effect.gen(function* () {
       const keys = yield* Keystore;
       const cursor = yield* Cursor;
-      const code = (args[1] ?? (yield* die("usage: kiwi join <code> [alias] --model MODEL [--harness NAME] [--nick NAME] [--as HANDLE] [--role ROLE]"))).trim();
+      const code = (args[1] ?? (yield* die("usage: kiwi join <code> [alias] --model MODEL [--harness NAME] [--nick NAME] [--as HANDLE]"))).trim();
       try {
         decodeJoinCode(code);
       } catch {
@@ -98,7 +99,8 @@ export const joinCommands: Record<string, Command> = {
       const hadKey = local.includes(name);
       let id = yield* keys.identity(name, roomId);
       const nick = inlineText(opt.nick ?? (auto ? baseName(who) : ""), 40);
-      const info = { name, ...(nick ? { display: nick } : {}), ...(opt.role ? { role: opt.role } : {}), ...(opt.about ? { about: opt.about } : {}), ...(auto ? { auto: true } : {}) };
+      if (opt.role !== undefined || opt.about !== undefined) process.stderr.write("kiwi: --role and --about are gone: the owner gives you a personality when they let you in\n");
+      const info = { name, ...(nick ? { display: nick } : {}), ...(auto ? { auto: true } : {}) };
       const model = opt.model?.trim() || (yield* Effect.promise(() => detectModel()));
       if (!model) {
         yield* doneAsking;
@@ -111,6 +113,10 @@ export const joinCommands: Record<string, Command> = {
           ].join("\n"),
           2,
         );
+      }
+      if (opt.persona !== undefined && (opt.persona.length > MAX_PIN || !/^[A-Za-z0-9_-]+$/.test(opt.persona))) {
+        yield* doneAsking;
+        return yield* die("--persona takes the token from the owner's invite, as it was copied");
       }
       const card = mergeCard(detectCard(), undefined, { model });
       const runs = yield* Effect.promise(() => detectRuns(process.env, { ...(opt.harness ? { harness: opt.harness } : {}), model }));
@@ -156,13 +162,11 @@ export const joinCommands: Record<string, Command> = {
           });
           const s = yield* openSession(alias, cfg.channels[alias]!, name);
           const scopes = (yield* s.state()).state.members.get(name)?.scopes ?? [...SCOPES];
-          const hello = (role?: string, about?: string) => (canPost(scopes) ? s.hello(role, about) : Effect.succeed(0));
           if (how === "resumed") {
             if ((yield* cursor.read(alias, name)) === null) yield* cursor.write(alias, name, yield* s.ch.fx.head());
-            if (opt.role || opt.about) yield* hello(opt.role, opt.about);
           } else {
             yield* cursor.write(alias, name, yield* s.ch.fx.head());
-            yield* hello(opt.role, opt.about);
+            if (canPost(scopes)) yield* s.hello();
           }
           settleIn(alias, name, model);
           if (canPost(scopes)) yield* Effect.ignoreCause(s.refreshCard(detectCard(), { model }));
@@ -177,8 +181,6 @@ export const joinCommands: Record<string, Command> = {
               charter: charterLines(state),
               lead: leadLine(state, name),
               human: humanOf(state, name),
-              role: seat?.role,
-              about: seat?.about,
               ...(seat?.persona ? { persona: seat.persona } : {}),
             }),
           );
@@ -195,7 +197,7 @@ export const joinCommands: Record<string, Command> = {
         const local = Object.values((yield* keys.config).channels).find((c) => c.roomId === roomId);
         if (access && (access.keys[String(access.epoch)] ?? local?.keys[String(access.epoch)])) return yield* settle(access, "resumed");
       }
-      const claims = () => Effect.promise(async () => ({ ...(await computerClaimFor(roomId, id.pk)), card }));
+      const claims = () => Effect.promise(async () => ({ ...(await computerClaimFor(roomId, id.pk)), card, ...(opt.persona ? { pin: opt.persona } : {}) }));
       const req = yield* Channel.fx.requestJoin(relay, code, id, info, yield* claims()).pipe(
         Effect.catchIf(outForGood, () =>
           Effect.gen(function* () {

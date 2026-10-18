@@ -38,7 +38,7 @@ export function serveKeys(k: Keyring, push: (p: KeysPush) => void): KeysSession 
       case "create":
         return k.create(text(r.name), r.token === null ? null : text(r.token), meOf(r.me));
       case "requestJoin":
-        return k.requestJoin(text(r.code), text(r.name), r.role === undefined ? undefined : text(r.role));
+        return k.requestJoin(text(r.code), text(r.name));
       case "joinStatus":
         return k.joinStatus(text(r.code));
       case "forget":

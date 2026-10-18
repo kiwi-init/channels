@@ -35,19 +35,19 @@ describe("the lead", () => {
     const ms = [await makeLead("lead"), await makeLead("dev2")];
     const s = fold(ms, roster);
     expect(s.lead).toBe("dev2");
-    expect(s.members.get("lead")!.role).toBeUndefined();
+    expect(s.members.get("lead")!.persona).toBeUndefined();
     expect(fold([ms[0]!], roster).lead).toBe("lead");
     expect(fold([ms[0]!, await ev("jon", { op: "role.set", member: "lead", role: null })], roster).lead).toBeNull();
   });
 
   test("an old coordinator role reads as the lead, from a record or a role.set", async () => {
     expect(fold([await makeLead("dev2", "coordinator")], roster)).toMatchObject({ lead: "dev2" });
-    expect(fold([await makeLead("dev2", "coordinator")], roster).members.get("dev2")!.role).toBe("lead");
+    expect(fold([await makeLead("dev2", "coordinator")], roster).members.get("dev2")!.persona?.role).toBe("lead");
     const r = roster.map((x) => (x.name === "lead" || x.name === "dev2" ? { ...x, role: "Coordinator" } : x));
     const s = fold([], r);
     expect(s.lead).toBe("lead");
-    expect(s.members.get("lead")!.role).toBe("lead");
-    expect(s.members.get("dev2")!.role).toBeUndefined();
+    expect(s.members.get("lead")!.persona?.role).toBe("lead");
+    expect(s.members.get("dev2")!.persona).toBeUndefined();
   });
 
   test("no lead by default", () => {

@@ -1,3 +1,5 @@
+import { omit } from "@kiwi/core/omit.ts";
+import { personaAnswers } from "@kiwi/core/personality.ts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import { mergeCard, movedCard, sameCard, type Where } from "../card.ts";
@@ -43,7 +45,7 @@ export class SessionMessaging extends SessionListen {
         continue;
       }
       const role = t.slice(5).toLowerCase();
-      for (const m of s.members.values()) if (m.role?.toLowerCase() === role) out.add(m.name);
+      for (const m of s.members.values()) if (personaAnswers(m.persona, role)) out.add(m.name);
     }
     if (!out.size) return yield* new Rejected(`no member has role ${to.filter((t) => t.startsWith("role:")).join(", ")}`);
     return [...out];
@@ -192,8 +194,8 @@ export class SessionMessaging extends SessionListen {
     oneLook,
   );
 
-  readonly hello = Effect.fn("AgentSession.hello")({ self: this }, function* (this: SessionMessaging, role?: string, about?: string) {
-    return yield* this.event({ op: "hello", role, about }, `joined${role ? ` as ${role}` : ""}`);
+  readonly hello = Effect.fn("AgentSession.hello")({ self: this }, function* (this: SessionMessaging) {
+    return yield* this.event({ op: "hello" }, "joined");
   });
 
   readonly escalate = Effect.fn("AgentSession.escalate")(
@@ -280,7 +282,8 @@ export class SessionMessaging extends SessionListen {
     function* (this: SessionMessaging, detected: Card, given: { model?: string; note?: string; tools?: string[]; fresh?: number } = {}) {
       const { state } = yield* this.state();
       const me = state.members.get(this.me);
-      const card = mergeCard(detected, me?.card, given);
+      const merged = mergeCard(detected, me?.card, given);
+      const card = me?.runs ? omit(merged, "harness", "model") : merged;
       if (!me || isPerson(me) || !canPost(me.scopes) || state.hold || sameCard(me.card, card)) return { sent: false, card };
       yield* this.event({ op: "card", ...card }, `card: ${cardLine(card)}`);
       return { sent: true, card };

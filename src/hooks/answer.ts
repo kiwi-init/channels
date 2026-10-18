@@ -183,8 +183,6 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
         hold: holdLine(state),
         charter: charterLines(state),
         lead: leadLine(state, b.as),
-        role: seat?.role,
-        about: seat?.about,
         scopes: seat?.scopes,
         ...(seat?.persona ? { persona: seat.persona } : {}),
       }),

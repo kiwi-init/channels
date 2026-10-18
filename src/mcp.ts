@@ -213,21 +213,18 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         const [members, { state }] = yield* Effect.all([s.members(true), s.state()], { concurrency: "unbounded" });
         return members
           .map((m) => {
-            // The role as the owner last set it (role events fold on top of the signed record).
-            // Member-written fields are one line, so a newline cannot pose as another member.
             const rec = state.members.get(m.name);
-            const role = inlineText(rec?.role ?? m.role, 80);
-            const about = inlineText(rec?.about ?? m.about, 200);
+            const role = inlineText(rec?.persona?.name, 80);
             const sponsor = rec?.sponsor ?? m.sponsor;
             const sponsorName = sponsor ? inlineText(sponsor.handle ?? sponsor.name, 80) : "";
-            const head = `${m.name}${m.name === s.me ? " (you)" : ""}${m.owner ? " — owner" : role ? ` — ${role}` : ""}${about ? ` (${about})` : ""}${sponsorName ? ` · agent of @${sponsorName}` : ""}  key ${m.pk.slice(0, 8)}${m.active ? "" : "  (left)"}`;
+            const head = `${m.name}${m.name === s.me ? " (you)" : ""}${m.owner ? " — owner" : role ? ` — ${role}` : ""}${sponsorName ? ` · agent of @${sponsorName}` : ""}  key ${m.pk.slice(0, 8)}${m.active ? "" : "  (left)"}`;
             const load = memberLoad(state, m.name);
             // What they may do, when it's less than everything (what the owner set, as every client enforces it).
             const scopes = m.active && !m.owner ? state.members.get(m.name)?.scopes : undefined;
             const may = scopes && scopes.length < SCOPES.length ? `\n    may: ${mayDo(scopes)}` : "";
-            const card = m.active && rec?.card ? `\n    ${cardLine(rec.card)}` : "";
+            const card = m.active && rec?.card && cardLine(rec.card, rec.runs) ? `\n    ${cardLine(rec.card, rec.runs)}` : "";
             // What the owner signed as running it: the line to trust when a review must come from another model.
-            const runs = m.active && rec?.runs ? `\n    ${runsStatus(rec.runs, rec.card)}` : "";
+            const runs = m.active && rec?.runs ? `\n    ${runsStatus(rec.runs)}` : "";
             return (m.active && showsLoad(m, load) ? `${head}\n    ${loadSummary(load)}` : head) + may + card + runs;
           })
           .join("\n");
@@ -244,7 +241,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         const on = new Map(
           [...online].map(([n, p]) => [
             n,
-            { client: p.client, role: p.role, ...(p.reach ? { reach: p.reach } : {}), ...(p.readAt === undefined ? {} : { readAt: p.readAt }), ...(isWakeVia(p.wake) ? { wake: p.wake } : {}) },
+            { client: p.client, ...(p.reach ? { reach: p.reach } : {}), ...(p.readAt === undefined ? {} : { readAt: p.readAt }), ...(isWakeVia(p.wake) ? { wake: p.wake } : {}) },
           ]),
         );
         return formatStatus({ alias: s.alias, me: s.me, state, online: on, unread: yield* s.unreadCount(state, messages) });
@@ -547,12 +544,11 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         return [...online]
           .map(([name, p]) => {
             const rec = state.members.get(name);
-            const role = inlineText(p.role ?? rec?.role, 80);
-            const about = inlineText(rec?.about, 200);
+            const role = inlineText(rec?.persona?.name, 80);
             const sponsorName = rec?.sponsor ? inlineText(rec.sponsor.handle ?? rec.sponsor.name, 80) : "";
-            return `${name}${role ? ` — ${role}` : ""}${about ? ` (${about})` : ""}${sponsorName ? ` · agent of @${sponsorName}` : ""} · ${presenceWords(p)}`;
+            return `${name}${role ? ` — ${role}` : ""}${sponsorName ? ` · agent of @${sponsorName}` : ""} · ${presenceWords(p)}`;
           })
-          .concat(away.map((m) => `${m.name}${m.role ? ` — ${inlineText(m.role, 80)}` : ""} · last seen ${ago(m.lastSeen)}`))
+          .concat(away.map((m) => `${m.name}${m.persona ? ` — ${inlineText(m.persona?.name, 80)}` : ""} · last seen ${ago(m.lastSeen)}`))
           .join("\n");
       }),
     ),
