@@ -1,8 +1,9 @@
 import { ArrowRight01Icon } from "@hugeicons/core-free-icons"
 
 import type { Message } from "@kiwi/core/protocol.ts"
-import { colorOf, placeKey, taskId, type ChannelState } from "@kiwi/core/state.ts"
-import { excerpt, formatAgo, memberName } from "@/lib/format"
+import { liveCard } from "@kiwi/core/standup.ts"
+import { colorOf, taskId, type ChannelState } from "@kiwi/core/state.ts"
+import { formatAgo, memberName } from "@/lib/format"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 import { Monogram } from "./kit"
@@ -10,12 +11,9 @@ import { isAgent } from "./message"
 import { DecisionMark, labelOf, StateMark } from "./tasks"
 
 export function LiveTaskCard({ id, state, messages, me, now, onOpen }: { id: number; state: ChannelState; messages: readonly Message[]; me: string; now: number; onOpen: (task: number) => void }) {
-  const task = state.tasks.get(id)
-  if (!task) return null
-  const said = messages.filter((m) => m.kind !== "event" && placeKey(state.placeOf.get(m.seq) ?? { kind: "main" }) === `task:${id}`)
-  const lastSaid = said[said.length - 1]
-  const people = [...new Set([task.owner, ...task.workedBy].filter((n): n is string => !!n))]
-  const waiting = task.state === "review" && (task.review === me || (task.review === "*" && !task.workedBy.includes(me)))
+  const card = liveCard(state, messages, id, me)
+  if (!card) return null
+  const { task, people, said, lastLine, waiting } = card
   return (
     <div className="flex justify-start pl-9">
       <button
@@ -40,10 +38,10 @@ export function LiveTaskCard({ id, state, messages, me, now, onOpen }: { id: num
           </span>
           {waiting ? <DecisionMark /> : <Icon icon={ArrowRight01Icon} size={16} className="mt-0.5 shrink-0 text-ink-3 transition-transform group-hover:translate-x-0.5" />}
         </span>
-        {lastSaid && (
+        {lastLine && (
           <span className="flex items-start gap-2 rounded-bubble bg-field px-2.5 py-1.5">
-            <span className="shrink-0 text-meta font-medium text-ink-2">{memberName(state.members.get(lastSaid.from), lastSaid.from)}</span>
-            <span className="min-w-0 truncate text-meta text-ink-2">{excerpt(lastSaid.body, 120)}</span>
+            <span className="shrink-0 text-meta font-medium text-ink-2">{memberName(state.members.get(lastLine.from), lastLine.from)}</span>
+            <span className="min-w-0 truncate text-meta text-ink-2">{lastLine.text}</span>
           </span>
         )}
         <span className="flex items-center gap-2">
@@ -52,7 +50,7 @@ export function LiveTaskCard({ id, state, messages, me, now, onOpen }: { id: num
               <Monogram key={n} name={memberName(state.members.get(n), n)} agent={isAgent(state.members.get(n))} color={colorOf(state, n)} size={20} className="ring-2 ring-raised" />
             ))}
           </span>
-          <span className="text-meta text-ink-3 tabular-nums">{said.length === 0 ? "No messages yet" : said.length === 1 ? "1 message" : `${said.length} messages`}</span>
+          <span className="text-meta text-ink-3 tabular-nums">{said === 0 ? "No messages yet" : said === 1 ? "1 message" : `${said} messages`}</span>
         </span>
       </button>
     </div>
