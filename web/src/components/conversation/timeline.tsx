@@ -4,13 +4,14 @@ import type { ImageAttachment, Message } from "@kiwi/core/protocol.ts"
 import { cardShown } from "@kiwi/core/standup.ts"
 import { colorOf, isLeadRole, type ChannelState } from "@kiwi/core/state.ts"
 import { prsIn } from "@kiwi/core/work.ts"
+import type { Chosen } from "@/lib/asks"
 import type { ChannelHandle } from "@/lib/channel"
 import { formatTime } from "@/lib/format"
 import { chipsFor } from "@/lib/reactions"
 import { receipt } from "@/lib/receipts"
 import { foldTaskEvents, isTaskCard } from "@/lib/task-cards"
 import { LiveTaskCard } from "../live-task-card"
-import { DayMark, EventGroup, EventRow, GithubRow, MessageRow, standsAlone, type Chosen, type ThreadSummary } from "../message"
+import { DayMark, EventGroup, EventRow, GithubRow, MessageRow, standsAlone, type ThreadSummary } from "../message"
 
 const RUN_GAP = 5 * 60_000
 
@@ -33,6 +34,7 @@ export interface RowsContext {
   highlight: number | null
   bySeq: Map<number, Message>
   quoted: (seq: number) => Message | undefined
+  chosen: (m: Message) => Chosen | undefined
   nameOf: (name: string) => string
   isFresh: (seq: number) => boolean
   summaryOf: (seq: number) => ThreadSummary | undefined
@@ -64,6 +66,7 @@ export function rowMakers(c: RowsContext) {
     highlight,
     bySeq,
     quoted,
+    chosen,
     nameOf,
     isFresh,
     summaryOf,
@@ -80,15 +83,6 @@ export function rowMakers(c: RowsContext) {
   const threadOf = (m: Message, next: Message | undefined) => {
     const s = summaryOf(m.seq)
     return s && !(s.count === 1 && next?.seq === s.first) ? s : undefined
-  }
-  const answers = new Map<number, Chosen>()
-  for (const m of messages) {
-    if (m.kind === "event" || !m.re?.length) continue
-    for (const r of m.re) {
-      const q = bySeq.get(r)
-      const choice = m.body.trim()
-      if (q?.esc && q.choices?.includes(choice) && !answers.has(r)) answers.set(r, { choice, by: m.from, at: m.ts })
-    }
   }
   const tagOf = (name: string) => {
     const member = state.members.get(name)
@@ -118,7 +112,7 @@ export function rowMakers(c: RowsContext) {
       nameOf={nameOf}
       onReply={anchor ? undefined : onReply}
       onChoose={!anchor && decisions.has(m.seq) ? (choice) => onAnswer(m, choice) : undefined}
-      chosen={answers.get(m.seq)}
+      chosen={chosen(m)}
       prs={prsOf(m)}
       onReact={anchor ? undefined : onReact}
       onJump={onJump}

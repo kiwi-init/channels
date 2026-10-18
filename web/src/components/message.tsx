@@ -5,6 +5,7 @@ import { describeEvent, githubLine } from "@kiwi/core/format.ts"
 import { ignored, isGifReaction, type Color, type Handoff, type ImageAttachment, type Message, type Trust } from "@kiwi/core/protocol.ts"
 import { isLeadRole, type ChannelState, type Member } from "@kiwi/core/state.ts"
 import type { PrRef } from "@kiwi/core/work.ts"
+import type { Chosen } from "@/lib/asks"
 import { useClock } from "@/lib/channel"
 import { formatAgo, formatFull, formatStamp, formatTime, memberName } from "@/lib/format"
 import { githubSummary } from "@/lib/github-line"
@@ -16,6 +17,7 @@ import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 import { Monogram, toast } from "./kit"
 import { Markdown } from "./lazy"
+import { AskOptions } from "./ask-options"
 import { ChecksWord } from "./pr-checks"
 import { Quote } from "./quote"
 
@@ -171,12 +173,6 @@ function phrase(m: Message, me: string, nameOf: (n: string) => string, repliedTo
   }
 }
 
-export interface Chosen {
-  choice: string
-  by: string
-  at: number
-}
-
 interface MessageProps {
   m: Message
   me: string
@@ -301,45 +297,6 @@ export interface ThreadSummary {
 
 const LINE_ROW = "flex w-full max-w-[560px] min-w-0 items-center gap-2.5 rounded-row px-3 py-2 text-left text-ui shadow-[inset_0_0_0_1px_var(--line)]"
 
-function optionOf(choice: string, i: number): [string, string] {
-  const m = /^([A-Fa-f])\s*[:.)]\s*([\s\S]+)$/.exec(choice.trim())
-  return m ? [m[1]!.toUpperCase(), m[2]!] : [String.fromCharCode(65 + i), choice]
-}
-
-function Options({ choices, onChoose, chosen, nameOf }: { choices: string[]; onChoose?: (choice: string) => void; chosen?: Chosen; nameOf: (name: string) => string }) {
-  return (
-    <ul aria-label="Options" className="mt-2 flex flex-col gap-1.5">
-      {choices.map((c, i) => {
-        const [key, text] = optionOf(c, i)
-        const picked = chosen?.choice === c
-        const inner = (
-          <>
-            <span className={cx("w-3.5 shrink-0 font-semibold", picked ? "text-accent-text" : "text-ink-3")}>{key}</span>
-            <span className="min-w-0 flex-1 leading-snug [overflow-wrap:anywhere]">{text}</span>
-            {picked && (
-              <span className="shrink-0 text-meta text-accent-text" title={formatFull(chosen.at)}>
-                {nameOf(chosen.by)} chose this · {formatTime(chosen.at)}
-              </span>
-            )}
-          </>
-        )
-        const look = cx(LINE_ROW, picked ? "text-ink shadow-[inset_0_0_0_1px_var(--accent)]" : "text-ink-2")
-        return (
-          <li key={c}>
-            {onChoose ? (
-              <button type="button" onClick={() => onChoose(c)} className={cx(look, "transition-shadow hover:text-ink hover:shadow-[inset_0_0_0_1px_var(--edge-strong)]")}>
-                {inner}
-              </button>
-            ) : (
-              <div className={look}>{inner}</div>
-            )}
-          </li>
-        )
-      })}
-    </ul>
-  )
-}
-
 const PR_STATE: Record<PrRef["state"], { word: string; tone: string }> = {
   open: { word: "open", tone: "text-doing" },
   merged: { word: "merged", tone: "text-live" },
@@ -448,7 +405,7 @@ export const MessageRow = memo(function MessageRow({
               {who !== m.from && isAgent(author) && <span className="ml-1 font-normal text-ink-3">@{m.from}</span>}
             </span>
             {tag && <span className="shrink-0 text-meta text-ink-3">{tag}</span>}
-            {said && !(said.decide && onChoose) && (
+            {said && !(said.decide && onChoose && !chosen) && (
               <span className={cx("min-w-0 truncate text-meta", said.alert ? "font-semibold text-alert" : said.decide ? "font-medium text-decide" : "text-ink-3")}>{said.text}</span>
             )}
             <time dateTime={new Date(m.ts).toISOString()} title={formatFull(m.ts)} className="shrink-0 text-stamp text-ink-3 tabular-nums">
@@ -467,13 +424,13 @@ export const MessageRow = memo(function MessageRow({
           </div>
         )}
 
-        {onChoose && (
+        {onChoose && !chosen && (
           <p className="mt-2 flex items-center gap-1.5 text-meta font-medium text-decide">
             <span aria-hidden className="size-1.5 rounded-full bg-decide" />
             Waiting on you
           </p>
         )}
-        {m.esc && m.choices?.length ? <Options choices={m.choices} onChoose={onChoose} chosen={chosen} nameOf={nameOf} /> : null}
+        {m.choices?.length ? <AskOptions choices={m.choices} chosen={chosen} onChoose={onChoose} nameOf={nameOf} /> : null}
 
         {m.imgs?.length ? (
           <div className="mt-1.5 flex flex-wrap gap-1">
@@ -486,7 +443,7 @@ export const MessageRow = memo(function MessageRow({
         {!forged && prs?.map((pr) => <PrLine key={pr.url} pr={pr} />)}
 
         {handoff && !mine && (m.to?.includes(me) || m.to?.includes("*")) && <HandoffLine handoff={handoff} />}
-        {decide && !mine && onReply && !onChoose && (
+        {decide && !mine && onReply && !onChoose && !chosen && (
           <p className="mt-1 text-meta">
             <button type="button" onClick={() => onReply(m)} className="font-medium text-decide hover:underline">
               Answer

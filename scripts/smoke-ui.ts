@@ -291,9 +291,7 @@ async function run(part: Part): Promise<string[]> {
     const joining = kiwi(["join", code, "smoke", "--relay", BASE, "--as", "bot", "--role", "tester"]);
     const needs = page.getByRole("region", { name: "Needs you" });
     const needsOpen = async () => {
-      const banner = needs.getByRole("button", { name: /needs? you/ }).first();
-      await banner.waitFor({ timeout: 30000 });
-      if ((await banner.getAttribute("aria-expanded")) !== "true") await banner.click();
+      await needs.getByRole("heading", { name: /^Needs you/ }).waitFor({ timeout: 30000 });
     };
     const letIn = needs.getByRole("button", { name: "It matches: let in" });
     const showCode = needs.getByRole("button", { name: "Show code" });
@@ -302,6 +300,10 @@ async function run(part: Part): Promise<string[]> {
     if (await showCode.count()) await showCode.click();
     await letIn.waitFor({ timeout: 30000 });
     await needs.getByText("claude-sonnet-5-5").first().waitFor({ timeout: 5000 });
+    if (process.env.SMOKE_SHOTS) {
+      await needs.evaluate((el) => el.scrollIntoView({ block: "start" }));
+      await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "needs-you.png") });
+    }
     log(`ok  ${at} (its model shows)`);
     await opens("Needs you → Choose what it can do…", () => needs.getByRole("button", { name: "Choose what it can do…" }).click());
     at = "approve";
@@ -407,6 +409,18 @@ async function run(part: Part): Promise<string[]> {
     await question.getByRole("list", { name: "Options" }).getByRole("button", { name: "B: wait a day" }).click();
     await awaiting.first().waitFor({ state: "detached", timeout: 15000 });
     await question.waitFor({ state: "detached", timeout: 15000 });
+    log(`ok  ${at}`);
+
+    at = "an answered ask says who chose what, on the ask itself";
+    await kiwi(["-c", "smoke", "--as", "bot", "ask-human", "--option", "A: red", "--option", "B: blue", "Which colour for the smoke?"]);
+    await question.getByText("Which colour for the smoke?").waitFor({ timeout: 15000 });
+    await page.getByRole("main").getByText("Waiting on you").first().waitFor({ timeout: 15000 });
+    await question.getByRole("list", { name: "Options" }).getByRole("button", { name: "B: blue" }).click();
+    await page
+      .getByRole("main")
+      .getByText(/chose this/)
+      .first()
+      .waitFor({ timeout: 15000 });
     log(`ok  ${at}`);
 
     at = "Take over, then cancel, a task waiting on an agent's review";

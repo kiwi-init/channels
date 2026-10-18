@@ -9,7 +9,7 @@ import { recentPrs } from "@kiwi/core/work.ts"
 import { channelTitle, loadRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { howHere } from "@/lib/presence"
 import type { Gif } from "@/lib/gifs"
-import { asksFor } from "@/lib/asks"
+import { asksFor, chosenOf } from "@/lib/asks"
 import type { Command } from "@/lib/commands"
 import { approveTask, closedDigest, reviewsFor, sendBackTask, type TaskSend } from "@/lib/task-actions"
 import { useIcons, useLiveIcon } from "@/lib/icons"
@@ -163,6 +163,12 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     [reacting, send]
   )
   const decided = useMemo(() => new Set(decisions.map((m) => m.seq)), [decisions])
+  const repliesTo = useMemo(() => {
+    const out = new Map<number, Message[]>()
+    for (const m of messages) for (const seq of m.re ?? []) out.set(seq, [...(out.get(seq) ?? []), m])
+    return out
+  }, [messages])
+  const chosen = useCallback((m: Message) => (m.choices?.length ? chosenOf(m, repliesTo.get(m.seq) ?? []) : undefined), [repliesTo])
   const answer = useCallback(
     (m: Message, text: string) => {
       send(text, { to: [m.from], re: [m.seq], kind: "msg" }).then(
@@ -232,6 +238,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     highlight,
     bySeq,
     quoted,
+    chosen,
     nameOf,
     isFresh,
     summaryOf,

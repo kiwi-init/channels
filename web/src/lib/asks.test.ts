@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 
 import { PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts"
 
-import { askLabel, asksFor } from "./asks"
+import { askLabel, asksFor, choiceIn, chosenOf } from "./asks"
 
 const ask = (seq: number, from: string, extra: Partial<Message> = {}): Message => ({
   v: PROTOCOL_VERSION,
@@ -49,5 +49,28 @@ describe("askLabel", () => {
     expect(askLabel(ask(2, "bot", { to: ["jon"] }), "jon")).toBe("Question for you")
     expect(askLabel(ask(3, "bot", { to: ["*"] }), "jon")).toBe("Question for everyone")
     expect(askLabel(ask(4, "bot", { to: ["*"], esc: true }), "jon")).toBe("Question for everyone")
+  })
+})
+
+describe("who chose what", () => {
+  const options = ["A: Each person's own switch", "B: The owner allows voice first"]
+  const asked = ask(10, "bot", { to: ["jon"], esc: true, choices: options })
+  const reply = (seq: number, from: string, body: string, extra: Partial<Message> = {}): Message => ({ ...ask(seq, from), kind: "msg", body, ts: seq * 1000, re: [10], ...extra })
+
+  test("a reply that is one of the options, word for word or by its letter, is the choice", () => {
+    expect(chosenOf(asked, [reply(11, "jon", "B: The owner allows voice first")])).toEqual({ choice: options[1]!, by: "jon", at: 11000 })
+    expect(chosenOf(asked, [reply(12, "jon", "B")])).toEqual({ choice: options[1]!, by: "jon", at: 12000 })
+    expect(chosenOf(asked, [reply(13, "jon", "a: sure")])).toBeUndefined()
+    expect(choiceIn("A) yes", options)).toBe(options[0])
+  })
+
+  test("only someone it was asked of chooses; the asker, other people and other threads don't", () => {
+    expect(chosenOf(asked, [reply(14, "bot", "A"), reply(15, "ana", "A"), reply(16, "jon", "A", { re: [99] })])).toBeUndefined()
+    expect(chosenOf({ ...asked, to: ["*"] }, [reply(17, "ana", "A")])).toEqual({ choice: options[0]!, by: "ana", at: 17000 })
+  })
+
+  test("the first choice counts, and an ask without options has none", () => {
+    expect(chosenOf(asked, [reply(18, "jon", "something else first"), reply(19, "jon", "A"), reply(20, "jon", "B")])?.choice).toBe(options[0])
+    expect(chosenOf({ ...asked, choices: undefined }, [reply(21, "jon", "A")])).toBeUndefined()
   })
 })
