@@ -5,7 +5,7 @@ import { isPerson, type ChannelState } from "@kiwi/core/state.ts"
 import type { ChannelHandle } from "@/lib/channel"
 import { bridge } from "@/lib/secrets"
 
-export const samePicture = (a: MemberPicture | null | undefined, b: MemberPicture | null | undefined): boolean => (a?.mime ?? null) === (b?.mime ?? null) && (a?.data ?? null) === (b?.data ?? null)
+const samePicture = (a: MemberPicture | null | undefined, b: MemberPicture | null | undefined): boolean => (a?.mime ?? null) === (b?.mime ?? null) && (a?.data ?? null) === (b?.data ?? null)
 
 /** People's pictures in this channel, by member name, for the faces drawn in it. */
 export function usePictures(state: ChannelState): ReadonlyMap<string, MemberPicture> {
