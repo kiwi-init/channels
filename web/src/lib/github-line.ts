@@ -39,10 +39,5 @@ export function githubSummary(items: readonly GithubNote[]): GithubPart[] {
     } else if (i.event === "push") pushes++
   }
   const pushed = pushes || syncs
-  return [
-    ...prs.values(),
-    ...issues.values(),
-    ...(pushed ? [{ text: pushed === 1 ? "1 push" : `${pushed} pushes` }] : []),
-    ...[...checks].map(([name, word]) => ({ text: `${name} ${word}` })),
-  ]
+  return [...prs.values(), ...issues.values(), ...(pushed ? [{ text: pushed === 1 ? "1 push" : `${pushed} pushes` }] : []), ...[...checks].map(([name, word]) => ({ text: `${name} ${word}` }))]
 }

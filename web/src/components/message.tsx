@@ -303,10 +303,16 @@ const PR_STATE: Record<PrRef["state"], { word: string; tone: string }> = {
   closed: { word: "closed", tone: "text-ink-3" },
 }
 
-export function PrLine({ pr }: { pr: PrRef }) {
+function PrLine({ pr }: { pr: PrRef }) {
   const st = PR_STATE[pr.state]
   return (
-    <a href={pr.url} target="_blank" rel="noreferrer" title={`${pr.repo}#${pr.number}${pr.title ? `: ${pr.title}` : ""}`} className={cx(LINE_ROW, "mt-2 text-ink transition-shadow hover:shadow-[inset_0_0_0_1px_var(--edge-strong)]")}>
+    <a
+      href={pr.url}
+      target="_blank"
+      rel="noreferrer"
+      title={`${pr.repo}#${pr.number}${pr.title ? `: ${pr.title}` : ""}`}
+      className={cx(LINE_ROW, "mt-2 text-ink transition-shadow hover:shadow-[inset_0_0_0_1px_var(--edge-strong)]")}
+    >
       <Icon icon={GitPullRequestIcon} size={16} className="shrink-0 text-ink-3" />
       <span className="shrink-0 text-ink-3 tabular-nums">#{pr.number}</span>
       <span className="min-w-0 flex-1 truncate">{pr.title ?? pr.repo}</span>
@@ -419,7 +425,13 @@ export const MessageRow = memo(function MessageRow({
         ))}
 
         {!imageOnly && (
-          <div className={cx("bubble-text max-w-[760px] min-w-0 text-body text-ink [&_pre]:max-w-full [&_pre]:[overflow-wrap:normal] [&_pre]:whitespace-pre", first && "mt-0.5", forged && "line-through opacity-60")}>
+          <div
+            className={cx(
+              "bubble-text max-w-[760px] min-w-0 text-body text-ink [&_pre]:max-w-full [&_pre]:[overflow-wrap:normal] [&_pre]:whitespace-pre",
+              first && "mt-0.5",
+              forged && "line-through opacity-60"
+            )}
+          >
             <Markdown refs={refs}>{m.body}</Markdown>
           </div>
         )}
