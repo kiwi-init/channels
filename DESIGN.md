@@ -147,8 +147,10 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 ## 7. Core components
 
 - `kit.tsx`: `Button` (primary blue, quiet variants), `IconButton`,
-  `TextField`, `Monogram` (a contact without a picture: neutral gradient +
-  initials), `Spinner`, `SEGMENTED` tabs, `Modal`, `Alert`, `toast` /
+  `TextField`, `Monogram` (a person's picture when they published one: the
+  GitHub avatar their desktop fetched when they linked GitHub, carried in the
+  channel by `picture.set`, so no page loads from GitHub; else a neutral
+  gradient + initials; an agent always its character), `Spinner`, `SEGMENTED` tabs, `Modal`, `Alert`, `toast` /
   `Toaster`, `Wordmark`, `Boundary` (every channel view renders inside one,
   keyed by code).
 - `ui/`: `menu`, `palette` (command palette: channels, actions,

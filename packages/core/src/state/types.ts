@@ -1,5 +1,5 @@
 import type { Member as MemberRecord, Runs } from "../membership.ts";
-import type { Card, Color, IssueRef, Message, TaskState, Trust, Verdict } from "../protocol.ts";
+import type { Card, Color, IssueRef, MemberPicture, Message, TaskState, Trust, Verdict } from "../protocol.ts";
 import type { GithubCheck, GithubIssue, GithubPr, GithubState } from "./github.ts";
 import type { Persona } from "../personality.ts";
 import type { Scope } from "../scopes.ts";
@@ -11,6 +11,7 @@ export interface Member {
   sponsor?: { user: string; name: string; handle?: string };
   pk: string;
   color?: Color;
+  picture?: MemberPicture;
   scopes: Scope[];
   card?: Card & { at: number };
   runs?: Runs;
@@ -211,7 +212,7 @@ export interface Room {
 
 export interface FoldBase {
   n: number;
-  members: { name: string; role?: string; about?: string; color?: Color; card?: Card & { at: number }; lastSeen: number; messages: number }[];
+  members: { name: string; role?: string; about?: string; color?: Color; picture?: MemberPicture; card?: Card & { at: number }; lastSeen: number; messages: number }[];
   lead: string | null;
   charter: Charter | null;
   repos?: string[];

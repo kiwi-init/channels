@@ -1,3 +1,5 @@
+import { isRasterMime, wellFormedPicture, type MemberPicture } from "@kiwi/core/protocol.ts";
+
 import type { GithubRepoView } from "./bridge.ts";
 
 const DEVICE_URL = "https://github.com/login/device/code";
@@ -82,4 +84,20 @@ export async function listRepos(token: string, f: typeof fetch = fetch): Promise
     if (body.length < 100) break;
   }
   return out;
+}
+
+const AVATAR_SIZES = [96, 64];
+
+/** The account's GitHub avatar as a small picture the person can publish: fetched here, so no page loads from GitHub. */
+export async function avatar(id: number, f: typeof fetch = fetch): Promise<MemberPicture | null> {
+  for (const size of AVATAR_SIZES) {
+    const res = await f(`https://avatars.githubusercontent.com/u/${id}?s=${size}&v=4`, { headers: { "user-agent": "channels-desktop" } });
+    if (!res.ok) return null;
+    const mime = (res.headers.get("content-type") ?? "").split(";")[0]!.trim();
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    const picture = { mime, data: Buffer.from(bytes).toString("base64") };
+    if (wellFormedPicture(picture)) return picture;
+    if (!isRasterMime(mime)) return null;
+  }
+  return null;
 }

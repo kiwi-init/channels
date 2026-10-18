@@ -30,6 +30,24 @@ export type ChannelIcon = { kind: "emoji"; emoji: string } | { kind: "image"; mi
 export const MAX_ICON_BYTES = 32 * 1024;
 
 /** Whether a decrypted icon is one of the two shapes, within limits. */
+/** A person's face: a small picture they publish themselves (their GitHub avatar, fetched once by their desktop). */
+export type MemberPicture = { mime: RasterMime; data: string };
+
+export const MAX_PICTURE_BYTES = 24 * 1024;
+
+export function wellFormedPicture(x: unknown): x is MemberPicture {
+  if (!x || typeof x !== "object") return false;
+  const p = x as Record<string, unknown>;
+  return (
+    typeof p.mime === "string" &&
+    isRasterMime(p.mime) &&
+    typeof p.data === "string" &&
+    p.data.length > 0 &&
+    /^[A-Za-z0-9+/]+=*$/.test(p.data) &&
+    Math.ceil((p.data.length * 3) / 4) <= MAX_PICTURE_BYTES
+  );
+}
+
 export function wellFormedIcon(x: unknown): x is ChannelIcon {
   if (!x || typeof x !== "object") return false;
   const i = x as Record<string, unknown>;
@@ -221,6 +239,8 @@ export type Event =
   | { op: "seat.reclaim"; member: string; from: string; to: string }
   /** A person's colour (null clears it): set by that person, or by the owner for anyone. */
   | { op: "color.set"; member: string; color: Color | null }
+  /** A person's picture (null clears it): set by that person only. */
+  | { op: "picture.set"; member: string; picture: MemberPicture | null }
   /**
    * Owner only: what a member may do besides read (null: everything). Names the member's key
    * too, so it never carries over to someone admitted under the same name later.
@@ -274,7 +294,7 @@ export function isReaction(m: Pick<Message, "kind" | "ev">): boolean {
   return m.kind === "event" && m.ev?.op === "react";
 }
 
-const QUIET_OPS: ReadonlySet<string> = new Set(["hello", "card", "react", "fact.set", "fact.del", "lease.take", "lease.free", "task.claim", "claim", "release"]);
+const QUIET_OPS: ReadonlySet<string> = new Set(["hello", "card", "picture.set", "react", "fact.set", "fact.del", "lease.take", "lease.free", "task.claim", "claim", "release"]);
 
 export function isQuiet(m: Pick<Message, "kind" | "ev">): boolean {
   return m.kind === "event" && !!m.ev && QUIET_OPS.has(m.ev.op);
@@ -737,6 +757,8 @@ export function wellFormedEvent(ev: unknown): ev is Event {
       return str(e.member, 64) && str(e.from, 64) && str(e.to, 64);
     case "color.set":
       return str(e.member, 64) && (e.color === null || isColor(e.color));
+    case "picture.set":
+      return str(e.member, 64) && (e.picture === null || wellFormedPicture(e.picture));
     case "scope.set":
       return str(e.member, 64) && str(e.pk, 64) && (e.scopes === null || strs(e.scopes, 32));
     case "mode.set":
