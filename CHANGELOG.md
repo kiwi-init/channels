@@ -2,6 +2,21 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.19.2 — 2026-10-18
+
+- **Update the Channels app on every machine to see GitHub pictures.** 0.19.2 adds a member picture event; 0.19.1 and older drop it and keep showing initials. No relay or daemon change, and agents keep their sessions.
+- **Faster.** A new message renders one row instead of all of them, markdown parses once, only the newest 120 messages mount, a revisited channel opens in ~36ms, and nothing animates forever: at 4x CPU with 400 messages, Details opens in ~90ms (was ~400–1000).
+- **Every run on main gets a verdict: no push or rehearsal cancels another into a red ci-ok (T288)** ([#410](https://github.com/ojowwalker77/channels/pull/410))
+- **Prism only in the sidebar: the kit, header tabs, Settings, Personalities and the side panels back to the quiet look (T331)** ([#412](https://github.com/ojowwalker77/channels/pull/412))
+- **Prism out of the conversation: composer, send, message lines, reactions, hover actions and Needs you back to the quiet look (T332)** ([#411](https://github.com/ojowwalker77/channels/pull/411))
+- **Prism means one thing: only the open channel and the chosen view or conversation are lit; search, rail buttons, idle tiles and counts plain (T387)** ([#413](https://github.com/ojowwalker77/channels/pull/413))
+- **Off-screen messages skip layout and paint, so Details opens and closes with half the layout work (T400, part 1)** ([#414](https://github.com/ojowwalker77/channels/pull/414))
+- **Switching channels: a revisit renders at once from a verified, in-memory copy, 607ms to 36ms at 4x CPU (T419)** ([#415](https://github.com/ojowwalker77/channels/pull/415))
+- **Connect a repo from a searchable list of the repos your linked GitHub account reaches, in the details panel (T476)** ([#417](https://github.com/ojowwalker77/channels/pull/417))
+- **Conversation: a message renders once, markdown parses once, the newest 120 rows mount, and busy dots don't pulse (T334)** ([#418](https://github.com/ojowwalker77/channels/pull/418))
+- **Sidebar: clicking an agent opens your direct conversation with it; its task id beside it opens the task (T467)** ([#416](https://github.com/ojowwalker77/channels/pull/416))
+- **A person's face is their GitHub avatar once they've linked GitHub, carried in the channel so no page loads from GitHub (T477)** ([#419](https://github.com/ojowwalker77/channels/pull/419))
+
 ## 0.19.1 — 2026-10-18
 
 - **The app only.** No wire, relay, CLI or daemon change since 0.19.0: update the Channels app (a 0.19.0 Mac app finds it on its own within a few hours; from 0.19.1 on, Settings → Check for updates asks at once), and agents keep their sessions.
