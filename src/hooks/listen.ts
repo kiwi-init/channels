@@ -9,7 +9,7 @@ import { wakeOn } from "../daemon/reach.ts";
 import { formatMessage } from "@kiwi/core/format.ts";
 import type { Binding, Here } from "../seats.ts";
 import { MAX_CONTEXT } from "./answer.ts";
-import { deliveredUpTo, noteDelivered, noteHeard } from "./delivered.ts";
+import { answeringNow, deliveredUpTo, noteDelivered, noteHeard } from "./delivered.ts";
 import { hooksListen } from "./install/claude.ts";
 import { alive, isListening, takeListenSlot } from "./listeners.ts";
 import { LISTEN_SECONDS, mcFor } from "./self.ts";
@@ -19,31 +19,44 @@ export interface Served {
   cfg: ChannelConfig;
 }
 
+interface Heard {
+  seq: number | null;
+  text: string;
+}
+
+const ANSWERED_WAIT_MS = 20_000;
+
 const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, woke: Effect.Effect<void, never, Scope.Scope>) {
   const s = yield* openSession(b.alias, cfg, b.as);
   const real = yield* Cursor;
   let at = Math.max(yield* s.cursor(), deliveredUpTo(b.alias, b.as, who.session ?? ""));
   const peek = Cursor.of({ read: () => Effect.succeed(at), write: (_c, _a, seq) => Effect.sync(() => void (at = Math.max(at, seq))), seen: real.seen, markSeen: () => Effect.void });
-  const got: string[] = [];
-  const seqs: number[] = [];
+  const got: Heard[] = [];
   const hearing = s
     .listen(
       (m, state) =>
         Effect.andThen(
-          Effect.sync(() => void (got.push(formatMessage(m, state.trust.get(m.seq), state, s.me)), seqs.push(m.seq))),
+          Effect.sync(() => void got.push({ seq: m.seq, text: formatMessage(m, state.trust.get(m.seq), state, s.me) })),
           woke,
         ),
       {
         onNotice: (text) =>
           Effect.andThen(
-            Effect.sync(() => void got.push(`* ${text}`)),
+            Effect.sync(() => void got.push({ seq: null, text: `* ${text}` })),
             woke,
           ),
         marks: false,
       },
     )
     .pipe(Effect.provideService(Cursor, peek));
-  return { b, got, seqs, hearing, reached: () => at };
+  const dropShown = Effect.gen(function* () {
+    const shown = (yield* real.read(b.alias, b.as)) ?? 0;
+    const seen = yield* real.seen(b.alias, b.as);
+    const left = got.filter((g) => g.seq === null || (g.seq > shown && !seen.has(g.seq)));
+    got.splice(0, got.length, ...left);
+    at = Math.max(at, shown);
+  });
+  return { b, got, hearing, dropShown, reached: () => at };
 });
 
 const arm = Effect.fn("Hooks.arm")(function* (seat: Served, who: Here, woke: Effect.Effect<void, never, Scope.Scope>) {
@@ -61,7 +74,7 @@ const arm = Effect.fn("Hooks.arm")(function* (seat: Served, who: Here, woke: Eff
 
 export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Served[], who: Here) {
   if (!hooksListen()) return 0;
-  const enough = yield* Deferred.make<void>();
+  let enough = yield* Deferred.make<void>();
   let heard = 0;
   const woke = Effect.suspend(() => {
     heard += 1;
@@ -88,15 +101,30 @@ export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Serv
         { while: (up) => up, schedule: Schedule.spaced("2 seconds") },
       )
     : Effect.never;
-  const ended = yield* Effect.raceFirst(
-    hearing,
-    Effect.raceFirst(Effect.as(Deferred.await(enough), "heard" as const), Effect.raceFirst(Effect.as(Effect.sleep(LISTEN_SECONDS * 1000), "day" as const), Effect.as(sessionGone, "gone" as const))),
-  ).pipe(Effect.scoped);
-  if (ended === "gone" || ended === "failed" || (who.pid && !alive(who.pid))) return 0;
+  const answered = Effect.repeat(
+    Effect.sync(() => answeringNow(who.session)),
+    { while: (busy) => busy, schedule: Schedule.spaced("50 millis") },
+  ).pipe(Effect.timeoutOption(ANSWERED_WAIT_MS));
+  const dayEnds = Date.now() + LISTEN_SECONDS * 1000;
+  for (;;) {
+    const ended = yield* Effect.raceFirst(
+      hearing,
+      Effect.raceFirst(
+        Effect.as(Deferred.await(enough), "settled" as const),
+        Effect.raceFirst(Effect.as(Effect.sleep(Math.max(0, dayEnds - Date.now())), "day" as const), Effect.as(sessionGone, "gone" as const)),
+      ),
+    ).pipe(Effect.scoped);
+    if (ended === "gone" || ended === "failed" || (who.pid && !alive(who.pid))) return 0;
+    yield* answered;
+    for (const a of armed) yield* a.dropShown;
+    if (ended !== "settled" || armed.some((a) => a.got.length)) break;
+    heard = 0;
+    enough = yield* Deferred.make<void>();
+  }
   const told = armed.filter((a) => a.got.length);
   const blocks = told.map(({ b, got }) => {
     const mc = mcFor(b.alias, b.as, process.cwd(), who);
-    const text = got.join("\n");
+    const text = got.map((g) => g.text).join("\n");
     return `New Kiwi Channels messages for you (${b.alias}). Handle them; answer with \`${mc} reply N "…"\`:\n${text.length > MAX_CONTEXT ? `${text.slice(0, MAX_CONTEXT)}\n… (more: run \`${mc} log\`)` : text}\n`;
   });
   try {
@@ -104,9 +132,14 @@ export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Serv
   } catch {
     return 0;
   }
-  for (const { b, reached, seqs } of told) {
+  for (const { b, reached, got } of told) {
     noteDelivered(b.alias, b.as, who.session ?? "", reached());
-    noteHeard(who.session, b.alias, b.as, seqs);
+    noteHeard(
+      who.session,
+      b.alias,
+      b.as,
+      got.flatMap((g) => (g.seq === null ? [] : [g.seq])),
+    );
   }
   return 2;
 });

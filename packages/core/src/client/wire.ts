@@ -75,7 +75,17 @@ export function ownMessage(p: unknown, seq: number, rts: number): Message | null
   return { ...p, ...(imgs?.length ? { imgs } : { imgs: undefined }), seq, rts, sigOk: true };
 }
 
-export const keepAlive = (ping: () => boolean) => Effect.sleep("25 seconds").pipe(Effect.andThen(Effect.sync(ping)), Effect.forever);
+const PING_EVERY = "25 seconds";
+const PONG_WAIT = "10 seconds";
+
+export const keepAlive = (sock: { ping: () => boolean; heard: () => number; silent: () => void }) =>
+  Effect.gen(function* () {
+    yield* Effect.sleep(PING_EVERY);
+    const before = sock.heard();
+    if (!sock.ping()) return;
+    yield* Effect.sleep(PONG_WAIT);
+    if (sock.heard() === before) sock.silent();
+  }).pipe(Effect.forever);
 
 export interface Probe {
   readonly head: number;
@@ -88,6 +98,7 @@ export function wireOf(ws: WebSocket, since: number) {
   let changes = 0;
   let sent = 0;
   let answered = 0;
+  let heard = 0;
   const waiting = new Set<{ n: number; done: (p: Probe | null) => void }>();
   const ping = (): boolean => {
     if (ws.readyState !== WebSocket.OPEN) return false;
@@ -104,11 +115,13 @@ export function wireOf(ws: WebSocket, since: number) {
   };
   return {
     ping,
+    heard: () => heard,
     closed: () => {
       ready = false;
       settle(true);
     },
     frame: (f: ServerFrame | { t: "pong" }): void => {
+      heard++;
       if (f.t === "msg") head = Number.isSafeInteger(f.seq) ? Math.max(head, f.seq) : head;
       else if (f.t === "ready") {
         if (Number.isSafeInteger(f.head) && f.head > head) head = f.head;

@@ -5,6 +5,7 @@ import { ChannelGone } from "@kiwi/core/client.ts";
 import { Keystore } from "../config.ts";
 import { here, kimiHookHere, sameSeat, seatsHeldAnywhere, type Here } from "../seats.ts";
 import { answer, hookOutput, kimiReason, tellKimi, type HookInput } from "./answer.ts";
+import { holdAnswering } from "./delivered.ts";
 import { listen, type Served } from "./listen.ts";
 import { refreshListeners, seatsFor } from "./listeners.ts";
 import { KIMI_STOP, LISTEN } from "./self.ts";
@@ -25,6 +26,7 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
   const kimi = event === KIMI_STOP;
   const model = typeof input.model === "string" && input.model.trim() ? input.model.trim() : undefined;
   const who: Here = kimi ? kimiHookHere() : { ...here(), ...(input.session_id ? { session: input.session_id } : {}), ...(model ? { model } : {}) };
+  const release = event === LISTEN ? () => {} : holdAnswering(who.session);
   yield* Effect.promise(() => refreshListeners());
   const project = seatsFor(process.env.CLAUDE_PROJECT_DIR ?? input.cwd ?? process.cwd(), { who });
   const near = project.length ? project : seatsFor(input.cwd ?? process.cwd(), { who });
@@ -35,7 +37,7 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
     const cfg = channels[b.alias];
     return cfg ? [{ b, cfg }] : [];
   });
-  if (!served.length) return 0;
+  if (!served.length) return (release(), 0);
   if (event === LISTEN)
     return yield* listen(served, who).pipe(
       Effect.scoped,
@@ -57,5 +59,5 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
     const out = hookOutput(got);
     return out === null ? Effect.succeed(0) : Effect.as(say(out), 0);
   });
-  return yield* Effect.raceFirst(work, Effect.as(Effect.sleep(HOOK_MS), 0));
+  return yield* Effect.raceFirst(work, Effect.as(Effect.sleep(HOOK_MS), 0)).pipe(Effect.ensuring(Effect.sync(release)));
 });

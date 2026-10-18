@@ -4,5 +4,5 @@ const budget = [...new Glob("test/budget-*.test.ts").scanSync()].map((f) => f.sl
 
 export const FLOWS: Record<string, string[]> = {
   "flows-a": ["e2e", "verbs", "threads", "reconnect", ...budget],
-  "flows-b": ["join-seats", "read-receipts", "daemon-pair", "sh-escape", "reclaim", "wake-yourself", "seats", "multi-seat", "handoff"],
+  "flows-b": ["join-seats", "read-receipts", "daemon-pair", "sh-escape", "reclaim", "wake-yourself", "seats", "multi-seat", "handoff", "hooks-once"],
 };

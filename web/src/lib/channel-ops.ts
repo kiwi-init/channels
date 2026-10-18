@@ -93,6 +93,7 @@ export class ChannelLink {
   githubCheckLog = (...a: Args<"githubCheckLog">) => this.c("githubCheckLog", ...a)
   closeIssue = (...a: Args<"closeIssue">) => this.c("closeIssue", ...a)
   snapshotAt = () => this.c("snapshotAt")
+  snapshot = () => this.c("snapshot")
   info = () => this.c("info")
   title = () => this.c("title")
   setTitle = (...a: Args<"setTitle">) => this.c("setTitle", ...a)

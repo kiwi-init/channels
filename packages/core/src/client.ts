@@ -16,7 +16,7 @@ import type { JoinClaims, JoinRequest, Member, MemberInfo } from "./membership.t
 import type { ChannelIcon, Envelope, ImageAttachment, Message } from "./protocol.ts";
 import type { SigningBudget } from "./sas.ts";
 import type { Scope } from "./scopes.ts";
-import type { ChannelState, GuardFloor } from "./state.ts";
+import type { ChannelState, FoldBase, GuardFloor } from "./state.ts";
 import { ChannelCore, type ChannelFx } from "./client/core.ts";
 import { ChannelGithub, type GithubCheckLog, type GithubDiff, type GithubIssueInfo, type ReviewCheck } from "./client/github.ts";
 import { ChannelHistory } from "./client/history.ts";
@@ -377,6 +377,10 @@ export class Channel {
 
   closeIssue(c: { repo: string; number: number; reason: "completed" | "not_planned"; body: string }): Promise<{ url: string | null }> {
     return run(this.fx.closeIssue(c));
+  }
+
+  snapshot(): Promise<FoldBase | null> {
+    return run(this.fx.snapshot());
   }
 
   snapshotAt(): Promise<number | null> {

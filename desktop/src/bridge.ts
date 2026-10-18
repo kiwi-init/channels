@@ -87,6 +87,7 @@ export const CHANNEL_CALLS = [
   "githubCheckLog",
   "closeIssue",
   "snapshotAt",
+  "snapshot",
   "info",
   "title",
   "setTitle",
@@ -118,6 +119,7 @@ export type FollowEvent =
   | { _tag: "Roster" }
   | { _tag: "Request" }
   | { _tag: "Status"; line: string }
+  | { _tag: "Down" }
   | { _tag: "Failed"; error: WireError };
 
 export interface ChannelOps {

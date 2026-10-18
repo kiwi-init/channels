@@ -6,7 +6,7 @@ import { ChannelGone } from "@kiwi/core/client/errors.ts"
 import type { HumanSession, RoomsSetting, SendOptions } from "@kiwi/core/client.ts"
 import type { JoinRequest, Member } from "@kiwi/core/membership.ts"
 import type { Activity, Message, Reach } from "@kiwi/core/protocol.ts"
-import { fold, type ChannelState, type GuardFloor, type Roster } from "@kiwi/core/state.ts"
+import { fold, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts"
 import { isWakeVia } from "@kiwi/core/wake.ts"
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "../channel-ops"
 import { readCached, rememberRow } from "../history"
@@ -23,6 +23,7 @@ import { untilOpen } from "../until-open"
 import { useClock } from "./clock"
 import { noteAgentWorked } from "./recent"
 import { forgetChannel, loadMember, renameChannel, type StoredMember } from "./store"
+import { baseFrom, usableBase } from "./base-plan"
 import { dropWarm, heldWindow, keepWarm, warmOf } from "./warm"
 
 const HISTORY = 2_000
@@ -80,10 +81,11 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
   const [infoAt, setInfoAt] = useState(0)
   const [guardFloor, setGuardFloor] = useState<GuardFloor | null>(was?.guardFloor ?? null)
   const [roomsFloor, setRoomsFloor] = useState<RoomsSetting | null>(was?.roomsFloor ?? null)
+  const [base, setBase] = useState<FoldBase | null>(was?.base ?? null)
   useEffect(() => {
     if (gone) dropWarm(member.code)
-    else keepWarm(member.code, { messages, roster, requests, marks, guardFloor, roomsFloor })
-  }, [member.code, gone, messages, roster, requests, marks, guardFloor, roomsFloor])
+    else keepWarm(member.code, { messages, roster, requests, marks, guardFloor, roomsFloor, base })
+  }, [member.code, gone, messages, roster, requests, marks, guardFloor, roomsFloor, base])
   useEffect(() => {
     const title = ch.title()
     const guard = ch.guard()
@@ -192,6 +194,8 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
           window.dispatchEvent(new CustomEvent(ICON_LIVE, { detail: member.code }))
           return
         case "Status":
+          return
+        case "Down":
           setConnection("reconnecting")
           return
         case "Failed":
@@ -205,10 +209,12 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
           await Promise.all([refreshRoster(), refreshRequests()])
           const head = await ch.head()
           const held = heldWindow(was, head, HISTORY)
-          if (held) return { head, cached: null, since: held.since, firstSeq: held.firstSeq }
-          const cached = await readCached(ch.roomId, ch.pk, ch.openRows, head, HISTORY).catch(() => null)
-          const since = cached ? cached.since : Math.max(0, head - HISTORY)
-          return { head, cached, since, firstSeq: cached?.messages[0]?.seq }
+          const cached = held ? null : await readCached(ch.roomId, ch.pk, ch.openRows, head, HISTORY).catch(() => null)
+          const since = held ? held.since : cached ? cached.since : Math.max(0, head - HISTORY)
+          const firstSeq = held ? held.firstSeq : cached?.messages[0]?.seq
+          const from = baseFrom(since, firstSeq)
+          const snap = from > 0 && !was?.base ? await ch.snapshot().catch(() => null) : null
+          return { head, cached, since, firstSeq, base: usableBase(snap, from) }
         },
         catch: (err) => err,
       }),
@@ -224,6 +230,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
               setMessages((prev) => merged(prev, cached))
               if (cached.some((m) => m.kind === "event" && m.ev?.op === "card")) noteAgentWorked()
             }
+            if (opened.base) setBase(opened.base)
             setStart({ head: opened.head, whole: wholeLog(opened.head, HISTORY, opened.firstSeq) })
             stopLive = ch.follow(opened.since, onEvent)
           })
@@ -262,7 +269,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
       })),
     [roster]
   )
-  const state = useMemo(() => fold(messages, rosterForFold, now, roomsFloor, guardFloor), [messages, rosterForFold, now, roomsFloor, guardFloor])
+  const state = useMemo(() => fold(messages, rosterForFold, now, roomsFloor, guardFloor, base), [messages, rosterForFold, now, roomsFloor, guardFloor, base])
 
   const scopesKey = useMemo(() => [...state.members.values()].map((m) => `${m.pk}:${m.scopes.join(",")}`).join("|"), [state])
   const bitsKey = useMemo(() => roster.map((m) => `${m.pk}:${m.readOnly ? 0 : 1}`).join("|"), [roster])
