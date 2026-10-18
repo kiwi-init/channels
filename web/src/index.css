@@ -12,8 +12,9 @@
  * under AA 4.5 for small text; the owner asked to mirror Apple, so it stays. Red is for alerts, amber for
  * a decision someone is waiting on; neither decorates.
  *
- * One chrome colour: the list, the conversation and the panels beside it are all the canvas (rail
- * is the canvas), and share one header row. Raised is for cards, popovers and grouped lists. What
+ * Two tones: the rails (the channel list and a channel's sidebar) sit on the darker rail, and the
+ * page beside them is one sheet of canvas with round corners, holding the conversation, its header
+ * and the panels beside it. Raised is for cards, popovers and grouped lists. What
  * floats over the conversation (its header, the composer) is liquid glass: the canvas blurred and
  * saturated through a translucent fill, a bright rim on top. Others' bubbles are Messages grey, a step
  * from the canvas, so their words read as bubbles and yours as the blue answer.
@@ -25,7 +26,7 @@
 .dark-stage {
   color-scheme: light dark;
   --canvas: light-dark(#ffffff, #0d0d0e);
-  --rail: var(--canvas);
+  --rail: light-dark(#f2f2f5, #000000);
   --raised: var(--canvas);
   --field: var(--canvas);
   --ink: light-dark(#0f0f11, #f3f3f5);
@@ -379,4 +380,12 @@ html.reduce-motion ::after {
 
 @utility edge {
   box-shadow: inset 0 0 0 1px var(--line);
+}
+
+@utility sheet {
+  margin: 8px 8px 8px 0;
+  border-radius: var(--radius-card);
+  background: var(--canvas);
+  box-shadow: 0 0 0 1px var(--line);
+  overflow: clip;
 }

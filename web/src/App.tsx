@@ -133,8 +133,8 @@ export default function App() {
             className={cx(code ? "hidden" : "flex", "md:hidden")}
           />
           <Rail rows={rows} news={news} active={code} onSelect={open} onNew={() => setSheet("new")} onComputers={() => setSheet("computers")} onSettings={() => setSheet("settings")} />
-          {/* The app: the conversation beside the list, in the same colour, under the same header row. */}
-          <main className={cx("relative min-w-0 flex-1 overflow-clip bg-canvas", code ? "flex" : "hidden md:flex")}>
+          {/* The app: the rails on the darker tone, the page beside them one round sheet of canvas. */}
+          <main className={cx("relative min-w-0 flex-1 overflow-clip bg-canvas md:bg-rail", code ? "flex" : "hidden md:flex")}>
             {/* No conversation, no header: the top row still moves the window. */}
             {!code && <div aria-hidden className="drag absolute inset-x-0 top-0 h-(--chrome-h)" />}
             {code ? (
@@ -142,7 +142,9 @@ export default function App() {
                 <ChannelGate key={code} code={code} listed={rows.find((r) => r.code === code)} onBack={close} onGone={close} />
               </Boundary>
             ) : (
-              <Welcome onNew={() => setSheet("new")} onJoin={() => setSheet("join")} />
+              <div className="flex min-w-0 flex-1 md:sheet">
+                <Welcome onNew={() => setSheet("new")} onJoin={() => setSheet("join")} />
+              </div>
             )}
             {/* Last in the document, not just on top: the desktop app works out what drags the window
                 in document order, whatever the z-index, so a header after these would swallow their clicks. */}

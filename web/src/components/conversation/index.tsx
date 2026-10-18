@@ -436,206 +436,226 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
           current={currentConversation}
           onConversation={openConversation}
         />
-        <div
-          className={cx("relative flex min-w-0 flex-1 flex-col bg-canvas", (root || info || side?.kind === "tasks") && "hidden md:flex")}
-          style={{ "--head": `${headH}px`, "--foot": `${footH}px` } as CSSProperties}
-        >
-          <Header
-            headRef={headRef}
-            onBack={onBack}
-            search={search}
-            setSearch={setSearch}
-            tab={tab}
-            onTab={(t) => {
-              setTab(t)
-              if (t !== "conversation") setSearch(null)
-            }}
-            heading={heading}
-            headingLabel={`Details: ${title}, ${subtitle}`}
-            status={status}
-            onTitle={() => setSide((s) => (s?.kind === "info" ? null : { kind: "info" }))}
-            searchHint={place.kind === "main" ? "Search this channel" : `Search ${placeTitle}`}
-          />
+        <div className="relative flex min-w-0 flex-1 md:sheet">
+          <div
+            className={cx("relative flex min-w-0 flex-1 flex-col bg-canvas", (root || info || side?.kind === "tasks") && "hidden md:flex")}
+            style={{ "--head": `${headH}px`, "--foot": `${footH}px` } as CSSProperties}
+          >
+            <Header
+              headRef={headRef}
+              onBack={onBack}
+              search={search}
+              setSearch={setSearch}
+              tab={tab}
+              onTab={(t) => {
+                setTab(t)
+                if (t !== "conversation") setSearch(null)
+              }}
+              heading={heading}
+              headingLabel={`Details: ${title}, ${subtitle}`}
+              status={status}
+              onTitle={() => setSide((s) => (s?.kind === "info" ? null : { kind: "info" }))}
+              searchHint={place.kind === "main" ? "Search this channel" : `Search ${placeTitle}`}
+            />
 
-          {pausing && hold && <HoldDialog onClose={() => setPausing(false)} onSave={(note) => hold(true, note)} />}
+            {pausing && hold && <HoldDialog onClose={() => setPausing(false)} onSave={(note) => hold(true, note)} />}
 
-          {tab === "tasks" || tab === "agents" ? (
-            <div className="absolute inset-0 overflow-y-auto pt-[calc(var(--head)+8px)]">
-              <div className={cx("mx-auto w-full px-2 md:px-4", tab === "tasks" && "max-w-[960px]")}>
-                {tab === "tasks" ? (
-                  <TasksView
-                    state={state}
-                    now={now}
-                    view={view}
-                    agents={agentsNow}
-                    needs={needsHere ? needsYou : null}
-                    open={side?.kind === "tasks" ? null : expanded}
-                    onOpen={(id) => setExpanded((e) => (e === id ? null : id))}
-                    detail={(id) => (
-                      <TaskInline
-                        pr={taskPr(state, id)?.pr}
-                        state={state}
-                        rows={taskRows}
-                        load={ch.githubDiff}
-                        onDetails={() => openTask(id)}
-                        composer={
-                          <Composer
-                            key={`task:${id}`}
-                            me={me}
-                            people={people}
-                            replyTo={null}
-                            nameOf={nameOf}
-                            onClearReply={() => undefined}
-                            disabled={connection === "connecting"}
-                            extra={sendFrom(state, { kind: "task", task: id }, me)}
-                            placeholder={`Reply in ${taskId(id)}`}
-                            send={send}
-                          />
+            {tab === "tasks" || tab === "agents" ? (
+              <div className="absolute inset-0 overflow-y-auto pt-[calc(var(--head)+8px)]">
+                <div className={cx("mx-auto w-full px-2 md:px-4", tab === "tasks" && "max-w-[960px]")}>
+                  {tab === "tasks" ? (
+                    <TasksView
+                      state={state}
+                      now={now}
+                      view={view}
+                      agents={agentsNow}
+                      needs={needsHere ? needsYou : null}
+                      open={side?.kind === "tasks" ? null : expanded}
+                      onOpen={(id) => setExpanded((e) => (e === id ? null : id))}
+                      detail={(id) => (
+                        <TaskInline
+                          pr={taskPr(state, id)?.pr}
+                          state={state}
+                          rows={taskRows}
+                          load={ch.githubDiff}
+                          onDetails={() => openTask(id)}
+                          composer={
+                            <Composer
+                              key={`task:${id}`}
+                              me={me}
+                              people={people}
+                              replyTo={null}
+                              nameOf={nameOf}
+                              onClearReply={() => undefined}
+                              disabled={connection === "connecting"}
+                              extra={sendFrom(state, { kind: "task", task: id }, me)}
+                              placeholder={`Reply in ${taskId(id)}`}
+                              send={send}
+                            />
+                          }
+                        />
+                      )}
+                    />
+                  ) : agentsNow.length ? (
+                    <AgentLanes agents={agentsNow} state={state} messages={messages} now={now} nameOf={nameOf} onOpenTask={openTask} />
+                  ) : (
+                    <AddAgent code={member.code} isOwner={isOwner} />
+                  )}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div ref={scroller} className="absolute inset-0 overflow-y-auto" onScroll={onScroll}>
+                  <div className="relative mx-auto w-full max-w-[792px] px-4 pt-[calc(var(--head)+8px)] pb-[calc(var(--foot)+16px)]">
+                    {hereKey === "main" && needsYou}
+                    {hereKey === "main" && state.rooms.size > 1 && !search && <RoomChips rooms={[...state.rooms.values()]} value={cardRoom} onChange={setCardRoom} />}
+                    {connection === "connecting" && messages.length === 0 ? (
+                      <Centered>
+                        <Spinner />
+                      </Centered>
+                    ) : hereKey === "main" && noAgents && !search ? (
+                      <>
+                        <AddAgent code={member.code} isOwner={isOwner} />
+                        {!quiet && rows}
+                      </>
+                    ) : visible.length === 0 ? (
+                      <Centered>
+                        <p className="text-body font-semibold">{search ? "No results" : "No messages yet"}</p>
+                        <p className="mt-1 max-w-xs text-ui leading-normal text-ink-2">
+                          {search
+                            ? `No message here mentions “${search}”.`
+                            : place.kind === "dm"
+                              ? "What these two say to each other shows up here."
+                              : "What’s said here shows up the moment it’s sent."}
+                        </p>
+                      </Centered>
+                    ) : (
+                      rows
+                    )}
+                  </div>
+                </div>
+
+                {behind > 0 && (
+                  <button
+                    type="button"
+                    onClick={toBottom}
+                    className="glass animate-rise absolute bottom-[calc(var(--foot)+10px)] left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full py-1.5 pr-3.5 pl-2.5 text-ui font-medium text-accent-text"
+                  >
+                    <Icon icon={ArrowDown01Icon} size={15} />
+                    {behind === 1 ? "1 new message" : `${behind} new messages`}
+                  </button>
+                )}
+
+                <div ref={footRef} className="absolute inset-x-0 bottom-0 z-20">
+                  <div aria-hidden className="scrim-bottom absolute inset-x-0 -top-6 bottom-0" />
+                  {reacting && (
+                    <GifPicker
+                      onPick={react}
+                      onClose={() => setReacting(null)}
+                      className="absolute right-3 bottom-[calc(100%+4px)] left-3 md:right-auto md:left-1/2 md:w-[420px] md:-translate-x-1/2"
+                    />
+                  )}
+                  <div className="relative">
+                    {mayWrite ? (
+                      <Composer
+                        key={hereKey}
+                        me={me}
+                        people={people}
+                        replyTo={replyTo}
+                        commands={commands}
+                        asking={place.kind === "main" ? decisions[0] : undefined}
+                        more={Math.max(decisions.length - 1, 0)}
+                        onAnswer={answer}
+                        nameOf={nameOf}
+                        onClearReply={() => setReplyTo(null)}
+                        disabled={connection === "connecting"}
+                        extra={extra}
+                        placeholder={place.kind === "main" ? "Message everyone" : `Message ${nameOf(place.with.find((n) => n !== me) ?? "")} privately`}
+                        send={async (body, opts) => {
+                          stick()
+                          return send(body, opts)
+                        }}
+                        talk={
+                          place.kind === "main" && state.voice && typeof bridge()?.voiceToken === "function"
+                            ? {
+                                button: <TalkButton channel={{ roomId, channel: title, me, nameOf, state, messages, tools: voiceTools }} disabled={connection === "connecting"} />,
+                                bar: <TalkBar messages={messages} state={state} nameOf={nameOf} me={me} tools={voiceTools} />,
+                              }
+                            : undefined
+                        }
+                        footer={
+                          <div className="xl:hidden">
+                            <AgentStrip agents={agentsNow} now={now} onOpenTask={openTask} />
+                          </div>
                         }
                       />
-                    )}
-                  />
-                ) : agentsNow.length ? (
-                  <AgentLanes agents={agentsNow} state={state} messages={messages} now={now} nameOf={nameOf} onOpenTask={openTask} />
-                ) : (
-                  <AddAgent code={member.code} isOwner={isOwner} />
-                )}
-              </div>
-            </div>
-          ) : (
-            <>
-              <div ref={scroller} className="absolute inset-0 overflow-y-auto" onScroll={onScroll}>
-                <div className="relative mx-auto w-full max-w-[792px] px-4 pt-[calc(var(--head)+8px)] pb-[calc(var(--foot)+16px)]">
-                  {hereKey === "main" && needsYou}
-                  {hereKey === "main" && state.rooms.size > 1 && !search && <RoomChips rooms={[...state.rooms.values()]} value={cardRoom} onChange={setCardRoom} />}
-                  {connection === "connecting" && messages.length === 0 ? (
-                    <Centered>
-                      <Spinner />
-                    </Centered>
-                  ) : hereKey === "main" && noAgents && !search ? (
-                    <>
-                      <AddAgent code={member.code} isOwner={isOwner} />
-                      {!quiet && rows}
-                    </>
-                  ) : visible.length === 0 ? (
-                    <Centered>
-                      <p className="text-body font-semibold">{search ? "No results" : "No messages yet"}</p>
-                      <p className="mt-1 max-w-xs text-ui leading-normal text-ink-2">
-                        {search ? `No message here mentions “${search}”.` : place.kind === "dm" ? "What these two say to each other shows up here." : "What’s said here shows up the moment it’s sent."}
+                    ) : (
+                      <p className="shrink-0 px-6 pt-2 pb-4 text-center text-meta text-ink-3">
+                        Between {place.kind === "dm" ? place.with.map(nameOf).join(" and ") : ""}. You can read along; talk with them in the main conversation.
                       </p>
-                    </Centered>
-                  ) : (
-                    rows
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
+              </>
+            )}
+          </div>
 
-              {behind > 0 && (
-                <button
-                  type="button"
-                  onClick={toBottom}
-                  className="glass animate-rise absolute bottom-[calc(var(--foot)+10px)] left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full py-1.5 pr-3.5 pl-2.5 text-ui font-medium text-accent-text"
-                >
-                  <Icon icon={ArrowDown01Icon} size={15} />
-                  {behind === 1 ? "1 new message" : `${behind} new messages`}
-                </button>
-              )}
+          {root && (
+            <ThreadSide
+              root={root}
+              count={replies.length}
+              rows={threadRows}
+              onClose={() => setSide(null)}
+              me={me}
+              people={people}
+              nameOf={nameOf}
+              connecting={connection === "connecting"}
+              send={send}
+            />
+          )}
 
-              <div ref={footRef} className="absolute inset-x-0 bottom-0 z-20">
-                <div aria-hidden className="scrim-bottom absolute inset-x-0 -top-6 bottom-0" />
-                {reacting && (
-                  <GifPicker onPick={react} onClose={() => setReacting(null)} className="absolute right-3 bottom-[calc(100%+4px)] left-3 md:right-auto md:left-1/2 md:w-[420px] md:-translate-x-1/2" />
-                )}
-                <div className="relative">
-                  {mayWrite ? (
-                    <Composer
-                      key={hereKey}
-                      me={me}
-                      people={people}
-                      replyTo={replyTo}
-                      commands={commands}
-                      asking={place.kind === "main" ? decisions[0] : undefined}
-                      more={Math.max(decisions.length - 1, 0)}
-                      onAnswer={answer}
-                      nameOf={nameOf}
-                      onClearReply={() => setReplyTo(null)}
-                      disabled={connection === "connecting"}
-                      extra={extra}
-                      placeholder={place.kind === "main" ? "Message everyone" : `Message ${nameOf(place.with.find((n) => n !== me) ?? "")} privately`}
-                      send={async (body, opts) => {
-                        stick()
-                        return send(body, opts)
-                      }}
-                      talk={
-                        place.kind === "main" && state.voice && typeof bridge()?.voiceToken === "function"
-                          ? {
-                              button: <TalkButton channel={{ roomId, channel: title, me, nameOf, state, messages, tools: voiceTools }} disabled={connection === "connecting"} />,
-                              bar: <TalkBar messages={messages} state={state} nameOf={nameOf} me={me} tools={voiceTools} />,
-                            }
-                          : undefined
-                      }
-                      footer={
-                        <div className="xl:hidden">
-                          <AgentStrip agents={agentsNow} now={now} onOpenTask={openTask} />
-                        </div>
-                      }
-                    />
-                  ) : (
-                    <p className="shrink-0 px-6 pt-2 pb-4 text-center text-meta text-ink-3">
-                      Between {place.kind === "dm" ? place.with.map(nameOf).join(" and ") : ""}. You can read along; talk with them in the main conversation.
-                    </p>
-                  )}
-                </div>
-              </div>
-            </>
+          {picture && <PictureSide picture={picture} nameOf={nameOf} state={state} mayWrite={mayWrite} me={me} extra={extra} send={send} onClose={() => setPicture(null)} />}
+
+          {info && (
+            <InfoSide
+              title={title}
+              icon={icon}
+              subtitle={subtitle}
+              onClose={() => setSide(null)}
+              onPause={hold && !state.hold ? () => setPausing(true) : undefined}
+              onMessage={(name) => go(dmPlace(me, name))}
+              state={state}
+              now={now}
+              send={send}
+            />
+          )}
+
+          {side?.kind === "tasks" && (
+            <TasksSide
+              side={side}
+              setSide={setSide}
+              shownTask={shownTask}
+              task={task}
+              taskKey={taskKey}
+              inTask={inTask}
+              rows={taskRows}
+              openCount={openCount}
+              me={me}
+              people={people}
+              nameOf={nameOf}
+              connecting={connection === "connecting"}
+              send={send}
+              sendTask={sendTask}
+              githubDiff={ch.githubDiff}
+              state={state}
+              messages={messages}
+              now={now}
+              highlight={highlight}
+              iAmPerson={iAmPerson}
+              unreadIn={unreadIn}
+            />
           )}
         </div>
-
-        {root && (
-          <ThreadSide root={root} count={replies.length} rows={threadRows} onClose={() => setSide(null)} me={me} people={people} nameOf={nameOf} connecting={connection === "connecting"} send={send} />
-        )}
-
-        {picture && <PictureSide picture={picture} nameOf={nameOf} state={state} mayWrite={mayWrite} me={me} extra={extra} send={send} onClose={() => setPicture(null)} />}
-
-        {info && (
-          <InfoSide
-            title={title}
-            icon={icon}
-            subtitle={subtitle}
-            onClose={() => setSide(null)}
-            onPause={hold && !state.hold ? () => setPausing(true) : undefined}
-            onMessage={(name) => go(dmPlace(me, name))}
-            state={state}
-            now={now}
-            send={send}
-          />
-        )}
-
-        {side?.kind === "tasks" && (
-          <TasksSide
-            side={side}
-            setSide={setSide}
-            shownTask={shownTask}
-            task={task}
-            taskKey={taskKey}
-            inTask={inTask}
-            rows={taskRows}
-            openCount={openCount}
-            me={me}
-            people={people}
-            nameOf={nameOf}
-            connecting={connection === "connecting"}
-            send={send}
-            sendTask={sendTask}
-            githubDiff={ch.githubDiff}
-            state={state}
-            messages={messages}
-            now={now}
-            highlight={highlight}
-            iAmPerson={iAmPerson}
-            unreadIn={unreadIn}
-          />
-        )}
       </div>
     </ChannelControls>
   )
