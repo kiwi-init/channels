@@ -213,7 +213,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
         ...(extra?.dm ? { to: extra.to, dm: true } : {}),
         imgs: files.length ? files : undefined,
       })
-      setBody("")
+      setBody((now) => (now === body ? "" : now))
       setFiles([])
       if (!thread) onClearReply()
     } catch (err) {

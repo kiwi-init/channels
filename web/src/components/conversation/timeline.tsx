@@ -78,7 +78,11 @@ export function rowMakers(c: RowsContext) {
     openTask,
     onOpenImage,
   } = c
-  const bubble = (m: Message, first: boolean, last: boolean, prev: Message | undefined, anchor?: string) => (
+  const threadOf = (m: Message, next: Message | undefined) => {
+    const s = summaryOf(m.seq)
+    return s && !(s.count === 1 && next?.seq === s.first) ? s : undefined
+  }
+  const bubble = (m: Message, first: boolean, last: boolean, prev: Message | undefined, anchor?: string, next?: Message) => (
     <Bubble
       key={m.seq}
       anchor={anchor}
@@ -100,7 +104,7 @@ export function rowMakers(c: RowsContext) {
       onChoose={!anchor && decisions.has(m.seq) ? (choice) => onAnswer(m, choice) : undefined}
       onReact={anchor ? undefined : onReact}
       onJump={onJump}
-      thread={search || anchor ? undefined : summaryOf(m.seq)}
+      thread={search || anchor ? undefined : threadOf(m, next)}
       onOpenThread={openThread}
       receipt={showsReceipt(m, anchor) ? (receipt(m, state, marks, pkOf, formatTime) ?? undefined) : undefined}
       reactions={chipsFor(state, m.seq, me, nameOf)}
@@ -138,7 +142,7 @@ export function rowMakers(c: RowsContext) {
       const runs = (a: Message | undefined, b: Message) => !!a && a.kind !== "event" && b.kind !== "event" && a.from === b.from && sameDay(a.ts, b.ts) && b.ts - a.ts <= RUN_GAP
       const first = !runs(prev, m) || m.ts - (prev?.ts ?? 0) > STAMP_GAP
       const last = !next || !runs(m, next) || next.ts - m.ts > STAMP_GAP
-      out.push(bubble(m, first, last, prev, anchor))
+      out.push(bubble(m, first, last, prev, anchor, next))
     }
     return out
   }

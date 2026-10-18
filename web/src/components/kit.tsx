@@ -139,9 +139,7 @@ export function Monogram({
   return (
     <span className={cx("relative inline-flex shrink-0", className)} style={{ width: size, height: size }}>
       {agent ? (
-        <span className={cx("flex size-full items-center justify-center rounded-full", working && "shadow-[0_0_0_1.5px_var(--canvas),0_0_0_3px_var(--doing)]")}>
-          <RobotAvatar name={hue ?? name} size={size} />
-        </span>
+        <RobotAvatar name={hue ?? name} size={size} />
       ) : (
         <span
           className={cx(
@@ -156,6 +154,13 @@ export function Monogram({
         >
           {letters}
         </span>
+      )}
+      {agent && working && (
+        <span
+          className="absolute -top-0.5 -right-0.5 rounded-full bg-doing shadow-[0_0_0_2px_var(--canvas)]"
+          style={{ width: Math.max(7, Math.round(size * 0.26)), height: Math.max(7, Math.round(size * 0.26)) }}
+          title="Working"
+        />
       )}
       {online && (
         <span
