@@ -9,7 +9,7 @@ import { fold, type ChannelState, type GuardFloor, type Roster } from "@kiwi/cor
 import { isWakeVia } from "@kiwi/core/wake.ts"
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "../channel-ops"
 import { readCached, rememberRow } from "../history"
-import { checksToPost, issuesToPost, linksToPost, setCheckedUpTo, tasksToClose } from "../review-checks"
+import { checkedUpTo, checksToPost, issuesToPost, linksToPost, setCheckedUpTo, tasksToClose } from "../review-checks"
 import { closeFromGithub } from "../task-actions"
 import { wholeLog } from "../history-plan"
 import { ICON_LIVE } from "../icon-event"
@@ -320,6 +320,19 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
     })
   })
   useEffect(() => postReviewChecks(), [state.head, caughtUp])
+  const redsBusy = useRef(false)
+  const postCiReds = useEffectEvent(() => {
+    if (!ch.isOwner || !caughtUp || !state.repos.length || redsBusy.current) return
+    redsBusy.current = true
+    const mark = { get: () => checkedUpTo(ch.roomId, "ciRed"), set: (seq: number) => setCheckedUpTo(ch.roomId, seq, "ciRed") }
+    void import("../ci-red")
+      .then((red) => red.postCiReds(ch, mark, state, messages))
+      .catch(() => {})
+      .finally(() => {
+        redsBusy.current = false
+      })
+  })
+  useEffect(() => postCiReds(), [state.head, caughtUp])
   const drainGithub = useEffectEvent(() => {
     if (ch.isOwner && state.repos.length) ch.drainGithub().catch(() => {})
   })
