@@ -36,7 +36,7 @@ export function PersonalityPicker({
       key={key}
       className={cx(
         "flex cursor-pointer items-center gap-3 rounded-ctl px-3 py-2 transition-colors has-focus-visible:outline-2 has-focus-visible:outline-offset-1 has-focus-visible:outline-ring",
-        on ? "prism-lit" : "prism hover:bg-(--prism-fill-lit)",
+        on ? "bg-accent-wash shadow-[inset_0_0_0_1.5px_var(--accent)]" : "shadow-[inset_0_0_0_1px_var(--line)] hover:bg-wash",
         (disabled || off) && "cursor-default opacity-50"
       )}
     >
@@ -48,7 +48,7 @@ export function PersonalityPicker({
         <span className="block truncate text-ui font-semibold text-ink">{name}</span>
         <span className="block truncate text-meta text-ink-3">{off ?? line}</span>
       </span>
-      {on && <Icon icon={Tick02Icon} size={16} className="shrink-0 text-ink" />}
+      {on && <Icon icon={Tick02Icon} size={16} className="shrink-0 text-accent-text" />}
     </label>
   )
   return (

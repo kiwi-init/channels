@@ -89,9 +89,10 @@ jobs:
       store's CSP allows api.x.ai only when an xAI key is saved, the project key never reaches
       the snapshot or the token IPC result, consent defaults off, and
       desktop/build/entitlements.mac.plist has the audio-input entitlement. And
-      test/prism.test.ts: the prism glass in web/src/index.css (every prism, glass and orb
-      surface has its solid prefers-contrast fallback, the spectrum and orb are tokens written
-      once) and the kit's buttons and segments wearing it. And
+      test/prism.test.ts: prism glass stays in the sidebar (every prism, glass and orb
+      surface has its solid prefers-contrast fallback, the spectrum, orb and segment are tokens
+      written once, the kit is the quiet look, and the kit, header, side panels, Settings and
+      Personalities don't wear prism). And
       test/desktop-update-check.test.ts: Settings' check for updates (desktop/src/updater.ts's
       checkForUpdate, with electron and fetch faked): the latest release says current, a
       pre-release or draft never counts, an unpackaged app only offers the release link and
