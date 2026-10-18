@@ -245,7 +245,9 @@ From `design-tokens.ts`:
   `row`-round outlined square with the kind's glyph in `decide` (a question,
   a decision, a review, a face for someone asking in), the question in
   `body`, a `meta` line in `ink-3` (task, who asked, when), and the answers
-  on the row's right as outlined buttons (below it on a phone). Rows are
+  on the row's right (below it on a phone): the first, the one thing to do
+  next (let in, show code, approve, open the browser), the `orb-pill`
+  primary, the rest `prism`; an ask's options stay equal, all `prism`. Rows are
   split by `line`, not by fills. `Pause agents` in the header stops every
   agent at once.
 - Agents tab: one lane per agent, side by side on the canvas, split by
