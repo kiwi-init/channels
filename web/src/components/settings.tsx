@@ -1,4 +1,4 @@
-import { ArrowLeft01Icon, Cancel01Icon } from "@hugeicons/core-free-icons"
+import { ArrowLeft01Icon } from "@hugeicons/core-free-icons"
 import { useOwnPersonalities } from "@/lib/personalities"
 import { Personalities } from "./personalities"
 
@@ -270,7 +270,7 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
   )
 }
 
-export function SettingsPage({ onClose }: { onClose: () => void }) {
+export function SettingsPage({ backTo, onClose }: { backTo: string; onClose: () => void }) {
   const [view, setView] = useState<"general" | "personalities">("general")
   const self = useRef<HTMLElement>(null)
   const inner = view === "personalities"
@@ -296,9 +296,9 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
     >
       <header className="drag flex h-(--chrome-h) shrink-0 items-center gap-2 px-3">
         <IconButton label={inner ? "Back to Settings" : "Close settings"} round className="glass size-9 text-ink" onClick={back}>
-          <Icon icon={inner ? ArrowLeft01Icon : Cancel01Icon} size={inner ? 18 : 16} />
+          <Icon icon={ArrowLeft01Icon} size={18} />
         </IconButton>
-        {inner && <span className="min-w-0 flex-1 truncate text-ui font-semibold">Settings</span>}
+        <span className="min-w-0 flex-1 truncate text-ui font-semibold">{inner ? "Settings" : backTo}</span>
       </header>
       {inner ? <Personalities /> : <General onPersonalities={() => setView("personalities")} />}
     </section>

@@ -142,7 +142,7 @@ export default function App() {
           <main className={cx("relative min-w-0 flex-1 overflow-clip bg-canvas", code || settings ? "flex" : "hidden md:flex")}>
             {/* No conversation, no header: the top row still moves the window. */}
             {!code && !settings && <div aria-hidden className="drag absolute inset-x-0 top-0 h-(--chrome-h)" />}
-            {settings && <SettingsPage onClose={() => setSettings(false)} />}
+            {settings && <SettingsPage backTo={rows.find((r) => r.code === code)?.title ?? "Channels"} onClose={() => setSettings(false)} />}
             <div className={cx("min-w-0 flex-1", settings ? "hidden" : "flex")}>
               {code ? (
                 <Boundary resetKey={code}>
