@@ -9,6 +9,7 @@
 // `Channel.fx` and `fx` are those Effects. The Promise methods, which the CLI, the
 // agent and the dashboard call, run them and resolve or reject exactly as before.
 
+import type { Persona } from "./personality.ts";
 import { newRoomId, type ChannelAccess } from "./crypto.ts";
 import type { Identity } from "./identity.ts";
 import type { JoinClaims, JoinRequest, Member, MemberInfo } from "./membership.ts";
@@ -304,6 +305,10 @@ export class Channel {
    */
   updateScopes(m: Member, scopes: readonly Scope[], since: number): Promise<void> {
     return run(this.fx.updateScopes(m, scopes, since));
+  }
+
+  updatePersona(m: Member, persona: Persona | null, since: number): Promise<void> {
+    return run(this.fx.updatePersona(m, persona, since));
   }
 
   /**

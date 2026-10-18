@@ -12,6 +12,7 @@ const info = later(() => import("./info-panel").then((m) => m.InfoPanel))
 const tasks = later(() => import("./tasks-panel").then((m) => m.TasksPanel))
 const taskDetails = later(() => import("./task-details").then((m) => m.TaskDetails))
 const taskInline = later(() => import("./task-inline").then((m) => m.TaskInline))
+const personalityPicker = later(() => import("./personality-picker").then((m) => m.PersonalityPicker))
 const thread = later(() => import("./thread").then((m) => m.ThreadPanel))
 const annotator = later(() => import("./annotator").then((m) => m.Annotator))
 const agentLanes = later(() => import("./agent-lanes").then((m) => m.AgentLanes))
@@ -32,6 +33,7 @@ export const InfoPanel = info.View
 export const TasksPanel = tasks.View
 export const TaskDetails = taskDetails.View
 export const TaskInline = taskInline.View
+export const PersonalityPicker = personalityPicker.View
 export const ThreadPanel = thread.View
 export const Annotator = annotator.View
 export const AgentLanes = agentLanes.View

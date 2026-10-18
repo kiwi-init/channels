@@ -1,11 +1,26 @@
-import { describeScopes, wireScopes } from "@kiwi/core/scopes.ts"
+import { personaScopes } from "@kiwi/core/personality.ts"
+import { describeScopes, SCOPES, wireScopes } from "@kiwi/core/scopes.ts"
 import { forgetChannel, loadMember, renameChannel, type ChannelHandle, type StoredMember } from "@/lib/channel"
 import { secrets } from "@/lib/secrets"
 import type { ControlsProps } from "../controls"
 
 type Handlers = Pick<
   ControlsProps,
-  "onApprove" | "onScopes" | "onRole" | "onNickname" | "onDeny" | "onCheck" | "onRemove" | "onHold" | "onCharter" | "onRepos" | "onVoice" | "onRename" | "onCloseChannel" | "onLeaveChannel"
+  | "onApprove"
+  | "onScopes"
+  | "onPersona"
+  | "onRole"
+  | "onNickname"
+  | "onDeny"
+  | "onCheck"
+  | "onRemove"
+  | "onHold"
+  | "onCharter"
+  | "onRepos"
+  | "onVoice"
+  | "onRename"
+  | "onCloseChannel"
+  | "onLeaveChannel"
 >
 
 export function useControlsHandlers({
@@ -27,8 +42,8 @@ export function useControlsHandlers({
     : undefined
 
   return {
-    onApprove: async (r, scopes) => {
-      const as = wireScopes(scopes) ? { scopes } : undefined
+    onApprove: async (r, scopes, persona) => {
+      const as = persona ? { persona } : wireScopes(scopes) ? { scopes } : undefined
       try {
         await ch.approve(r, as, { person: secrets().person?.pk })
       } catch (err) {
@@ -44,6 +59,13 @@ export function useControlsHandlers({
       const wire = wireScopes(scopes)
       const seq = await send(`set what ${m.name} may do: ${wire ? describeScopes(wire) : "full"}`, { kind: "event", ev: { op: "scope.set", member: m.name, pk: m.pk, scopes: wire } })
       await ch.updateScopes(m, scopes, seq)
+      await refreshRoster()
+    },
+    onPersona: async (m, persona) => {
+      const scopes = persona ? personaScopes(persona) : [...SCOPES]
+      const wire = wireScopes(scopes)
+      const seq = await send(persona ? `made ${m.name} ${persona.name}` : `took ${m.name}'s personality away`, { kind: "event", ev: { op: "scope.set", member: m.name, pk: m.pk, scopes: wire } })
+      await ch.updatePersona(m, persona, seq)
       await refreshRoster()
     },
     onRole: async (ev) => {

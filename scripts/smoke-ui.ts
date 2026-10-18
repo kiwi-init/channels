@@ -343,9 +343,14 @@ async function run(part: Part): Promise<string[]> {
     await needsOpen();
     await letIn.or(showCode).first().waitFor({ timeout: 30000 });
     if (await showCode.count()) await showCode.click();
-    await letIn.click({ timeout: 30000 });
+    await letIn.waitFor({ timeout: 30000 });
+    await needs.getByRole("button", { name: "Choose what it can do…" }).click();
+    const letting = page.getByRole("dialog", { name: /^Let helper in\?/ });
+    await letting.getByRole("radiogroup", { name: "Personality" }).getByText("Reviewer", { exact: true }).click();
+    await letting.getByRole("button", { name: "Let in as Reviewer" }).click();
     await helper;
-    log(`ok  ${at}`);
+    if (!(await kiwi(["-c", "smoke", "--as", "helper", "status"])).includes("helper (you) — Reviewer (Reviewer)")) throw new Error("the personality picked at Let in isn't on the agent's seat");
+    log(`ok  ${at}, let in as Reviewer`);
 
     at = "read receipt";
     await send("smoke, read me");

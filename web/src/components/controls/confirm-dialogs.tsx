@@ -5,6 +5,8 @@ import type { Scope } from "@kiwi/core/scopes.ts"
 import { memberName } from "@/lib/format"
 import { AgentFacts } from "../agent-facts"
 import { Alert, Button, TextField } from "../kit"
+import type { Persona } from "@kiwi/core/personality.ts"
+import { PersonalityPicker } from "../lazy"
 import { ScopePicker } from "../scopes"
 import type { Confirm, ControlsProps } from "./context"
 
@@ -22,6 +24,8 @@ export function ConfirmDialogs({
   setScopeDraft,
   nickDraft,
   setNickDraft,
+  personaDraft,
+  setPersonaDraft,
 }: {
   p: ControlsProps
   confirm: Confirm
@@ -36,7 +40,10 @@ export function ConfirmDialogs({
   setScopeDraft: Dispatch<SetStateAction<Scope[]>>
   nickDraft: string
   setNickDraft: Dispatch<SetStateAction<string>>
+  personaDraft: Persona | null
+  setPersonaDraft: Dispatch<SetStateAction<Persona | null>>
 }) {
+  const chosen = personaDraft
   return (
     <>
       <Alert
@@ -72,6 +79,42 @@ export function ConfirmDialogs({
         >
           Save
         </Button>
+      </Alert>
+
+      <Alert
+        open={confirm?.kind === "persona"}
+        onClose={() => setConfirm(null)}
+        title={confirm?.kind === "persona" ? `${confirm.member.name}’s personality` : ""}
+        message={
+          confirm?.kind === "persona" && (
+            <span className="mt-3 grid gap-2">
+              <PersonalityPicker
+                current={p.state.members.get(confirm.member.name)?.persona}
+                value={personaDraft}
+                onChange={setPersonaDraft}
+                lead={p.state.lead === confirm.member.name ? null : p.state.lead}
+                disabled={busy}
+              />
+              <span className="text-meta text-ink-3">Every member's client holds it to what this personality may do from now on; what it sent before stands.</span>
+            </span>
+          )
+        }
+      >
+        <Button variant="secondary" onClick={() => setConfirm(null)}>
+          Cancel
+        </Button>
+        {confirm?.kind === "persona" && p.onPersona && (
+          <Button
+            disabled={busy}
+            onClick={() => {
+              const m = confirm.member
+              const next = personaDraft
+              void run(() => p.onPersona!(m, next), next ? `${m.name} is ${next.name} now` : `${m.name} has no personality now`)
+            }}
+          >
+            Save
+          </Button>
+        )}
       </Alert>
 
       <Alert
@@ -111,8 +154,17 @@ export function ConfirmDialogs({
               {confirm.req.kind !== "human" && <AgentFacts card={confirm.req.card} said repos={p.state.repos} className="mb-3" />}
               Approve only if {confirm.req.kind === "human" ? "they show" : "its terminal shows"} this exact code.
               <span className="mt-4 mb-4 block text-[34px] leading-none font-semibold tracking-[0.04em] text-ink tabular-nums">{confirm.req.code}</span>
-              <span className="mb-2 block text-ui font-medium text-ink">What {confirm.req.kind === "human" ? "they" : "it"} can do</span>
-              <ScopePicker value={scopeDraft} onChange={setScopeDraft} disabled={busy} />
+              {confirm.req.kind === "human" ? (
+                <>
+                  <span className="mb-2 block text-ui font-medium text-ink">What they can do</span>
+                  <ScopePicker value={scopeDraft} onChange={setScopeDraft} disabled={busy} />
+                </>
+              ) : (
+                <>
+                  <span className="mb-2 block text-ui font-medium text-ink">Personality</span>
+                  <PersonalityPicker value={personaDraft} onChange={setPersonaDraft} lead={p.state.lead} disabled={busy} />
+                </>
+              )}
             </>
           )
         }
@@ -121,8 +173,16 @@ export function ConfirmDialogs({
           Cancel
         </Button>
         {confirm?.kind === "approve" && (
-          <Button disabled={busy || taken} onClick={() => run(() => p.onApprove(confirm.req, scopeDraft), `${confirm.req.name} joined`)}>
-            {taken ? "That name is taken" : "Approve"}
+          <Button
+            disabled={busy || taken}
+            onClick={() =>
+              run(
+                () => (confirm.req.kind !== "human" && chosen ? p.onApprove(confirm.req, undefined, chosen) : p.onApprove(confirm.req, scopeDraft)),
+                confirm.req.kind !== "human" && chosen ? `${confirm.req.name} joined as ${chosen.name}` : `${confirm.req.name} joined`
+              )
+            }
+          >
+            {taken ? "That name is taken" : confirm.req.kind !== "human" && chosen ? `Let in as ${chosen.name}` : "Approve"}
           </Button>
         )}
       </Alert>
