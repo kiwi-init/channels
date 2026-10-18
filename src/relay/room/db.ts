@@ -400,6 +400,31 @@ export class RoomDb {
     return freed;
   }
 
+  githubRepos(): string[] {
+    const v = this.get("github_repos");
+    return v ? (JSON.parse(v) as string[]) : [];
+  }
+
+  setGithubRepos(repos: string[]): void {
+    this.set("github_repos", JSON.stringify(repos));
+  }
+
+  enqueueGithub(item: string, now: number, ttlMs: number, most: number): void {
+    this.sql.run("CREATE TABLE IF NOT EXISTS github_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, item TEXT NOT NULL)");
+    this.sql.run("DELETE FROM github_queue WHERE at < ?", now - ttlMs);
+    this.sql.run("INSERT INTO github_queue (at, item) VALUES (?, ?)", now, item);
+    this.sql.run("DELETE FROM github_queue WHERE id <= (SELECT id FROM github_queue ORDER BY id DESC LIMIT 1 OFFSET ?)", most);
+  }
+
+  githubQueue(limit: number): { id: number; item: string }[] {
+    if (!this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'github_queue'").length) return [];
+    return this.sql.all("SELECT id, item FROM github_queue ORDER BY id LIMIT ?", limit);
+  }
+
+  ackGithub(upTo: number): void {
+    if (this.sql.all("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'github_queue'").length) this.sql.run("DELETE FROM github_queue WHERE id <= ?", upTo);
+  }
+
   unlinkAll(): DirectoryUpdate[] {
     const owner = this.ownerUser();
     return owner ? [{ user: owner, room: this.roomId, entry: null }] : [];

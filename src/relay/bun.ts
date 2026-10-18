@@ -42,6 +42,7 @@ import {
   type SqlParam,
 } from "./room.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync } from "./route.ts";
+import { GITHUB_QUEUE_MAX, GITHUB_QUEUE_TTL_MS, onGithubHttp, type GithubRoutes } from "./github.ts";
 import { edgePage, PAGE_CACHE_SECONDS, PAGE_PATH, type PageCache } from "./pages.ts";
 
 interface SocketData {
@@ -61,7 +62,17 @@ export interface WebApp {
 }
 
 export function startRelay(
-  opts: { port?: number; hostname?: string; dataDir?: string; human?: HumanAuth | null; policy?: RelayPolicy; web?: WebApp | null; now?: () => number; trustProxy?: TrustProxy } = {},
+  opts: {
+    port?: number;
+    hostname?: string;
+    dataDir?: string;
+    human?: HumanAuth | null;
+    policy?: RelayPolicy;
+    web?: WebApp | null;
+    now?: () => number;
+    trustProxy?: TrustProxy;
+    githubSecret?: string | null;
+  } = {},
 ) {
   const human = opts.human ?? null;
   // Settings come from the caller, or else from the environment, the same keys the Worker reads.
@@ -80,6 +91,8 @@ export function startRelay(
   // One-time pairing mailboxes (src/relay/mailbox.ts): id-hashed, sealed
   // boxes the relay can't read. Expired rows are deleted on read and below.
   people.run("CREATE TABLE IF NOT EXISTS mailboxes (id TEXT PRIMARY KEY, rec TEXT NOT NULL)");
+  people.run("CREATE TABLE IF NOT EXISTS github_routes (repo TEXT NOT NULL, room TEXT NOT NULL, PRIMARY KEY (repo, room))");
+  const githubSecret = opts.githubSecret === undefined ? (process.env.GITHUB_WEBHOOK_SECRET ?? null) : opts.githubSecret;
   const mailboxes: MailboxStore = {
     load: async (id) => {
       const row = people.query("SELECT rec FROM mailboxes WHERE id = ?").get(id) as { rec: string } | null;
@@ -161,6 +174,17 @@ export function startRelay(
   );
   const relay = makeRelay(services);
   const clock = opts.now ?? Date.now;
+  const githubRoutes: GithubRoutes = {
+    rooms: async (repo) => (people.query("SELECT room FROM github_routes WHERE repo = ?").all(repo) as { room: string }[]).map((r) => r.room),
+    enqueue: async (room, item) => {
+      if (!existsSync(file(room))) return false;
+      const db = storeFor(room, false);
+      if (!db.exists() || db.isLegacy()) return false;
+      db.enqueueGithub(JSON.stringify(item), clock(), GITHUB_QUEUE_TTL_MS, GITHUB_QUEUE_MAX);
+      return true;
+    },
+    drop: async (repo, room) => void people.query("DELETE FROM github_routes WHERE repo = ? AND room = ?").run(repo, room),
+  };
   const pageCache = policy.pageKey ? memoryPages(64 * 1024 ** 2, clock) : null;
   const pageFromRoom = async (req: Request, roomId: string, rest: string): Promise<Response> => {
     const db = storeFor(roomId, false);
@@ -178,6 +202,10 @@ export function startRelay(
     if (fx.ephemeral) for (const ws of room) if (ws !== sender && ws.data.presence) ws.send(fx.ephemeral);
     for (const f of fx.readers ?? []) for (const ws of room) if (ws.data.reads && !ws.data.watch) ws.send(f);
     if (fx.disconnect) for (const ws of room) if (ws.data.pk === fx.disconnect.pk) ws.close(CLOSE_REMOVED, GONE_WORDS[fx.disconnect.how]);
+    for (const l of fx.github ?? []) {
+      if (l.on) people.query("INSERT OR IGNORE INTO github_routes (repo, room) VALUES (?, ?)").run(l.repo, l.room);
+      else people.query("DELETE FROM github_routes WHERE repo = ? AND room = ?").run(l.repo, l.room);
+    }
     for (const u of fx.directory ?? []) {
       if (u.entry) people.query("INSERT OR REPLACE INTO owned (user, room, entry) VALUES (?, ?, ?)").run(u.user, u.room, JSON.stringify(u.entry));
       else people.query("DELETE FROM owned WHERE user = ? AND room = ?").run(u.user, u.room);
@@ -231,6 +259,8 @@ export function startRelay(
         const ip = clientAddress(server.requestIP(req)?.address ?? null, req.headers.get("x-forwarded-for"), trustProxy);
         const mailbox = await onMailboxHttp(req, mailboxes, ip ? { ip, allow: writeAllowed } : {});
         if (mailbox) return mailbox;
+        const github = await onGithubHttp(req, githubSecret, githubRoutes, clock);
+        if (github) return github;
         const route = parseRoomPath(url.pathname);
         if (!route) return withCors(errorResponse(new NotFound({ message: "not found" })));
         // No fingerprint: 426 before the room file is opened.

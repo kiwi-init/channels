@@ -1,5 +1,6 @@
 import * as Context from "effect/Context";
 import type { GoneHow } from "@kiwi/core/protocol.ts";
+import type { GithubLink } from "../github.ts";
 
 export interface Effects {
   broadcast?: string[];
@@ -11,6 +12,7 @@ export interface Effects {
   disconnect?: { pk: string; how: GoneHow };
   wipe?: boolean;
   directory?: DirectoryUpdate[];
+  github?: GithubLink[];
   expireAt?: number;
 }
 

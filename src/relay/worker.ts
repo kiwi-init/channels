@@ -43,6 +43,7 @@ import {
 import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
+import { GITHUB_QUEUE_MAX, GITHUB_QUEUE_TTL_MS, onGithubHttp, type GithubItem, type GithubLink, type GithubRoutes } from "./github.ts";
 
 interface Env {
   CHANNELS: DurableObjectNamespace<Channel>;
@@ -61,6 +62,8 @@ interface Env {
   /** "off": don't retry a room request the platform refused (to count refusals, e.g. on a canary). */
   KIWI_ROOM_RETRY?: string;
   KIWI_PAGE_KEY?: string;
+  REPOS: DurableObjectNamespace<Repos>;
+  GITHUB_WEBHOOK_SECRET?: string;
 }
 
 const edgeCache: PageCache = {
@@ -193,6 +196,9 @@ export class Channel extends DurableObject<Env> {
         if ((ws.deserializeAttachment() as { pk?: string } | null)?.pk === fx.disconnect.pk) close(ws, CLOSE_REMOVED, GONE_WORDS[fx.disconnect.how]);
       }
     }
+    if (fx.github?.length) {
+      await Promise.allSettled(fx.github.map((l) => this.env.REPOS.get(this.env.REPOS.idFromName(l.repo)).fetch("https://repos/apply", { method: "POST", body: JSON.stringify(l) })));
+    }
     // Owned-channel counts are best-effort: a failure there must never stop a close from wiping.
     if (fx.directory?.length) {
       await Promise.allSettled(fx.directory.map((u) => this.env.OWNERS.get(this.env.OWNERS.idFromName(u.user)).fetch("https://owners/apply", { method: "POST", body: JSON.stringify(u) })));
@@ -208,6 +214,13 @@ export class Channel extends DurableObject<Env> {
     }
   }
 
+  async enqueueGithub(roomId: string, item: GithubItem): Promise<boolean> {
+    const db = this.store(roomId);
+    if (!db.exists() || db.isLegacy()) return false;
+    db.enqueueGithub(JSON.stringify(item), Date.now(), GITHUB_QUEUE_TTL_MS, GITHUB_QUEUE_MAX);
+    return true;
+  }
+
   /** An idle room's expiry check: expire it if nobody's connected and nothing was stored since. */
   override async alarm(): Promise<void> {
     const room = (this.sql.all<{ v: string }>("SELECT v FROM meta WHERE k = 'room'")[0] ?? null)?.v;
@@ -220,6 +233,33 @@ export class Channel extends DurableObject<Env> {
     if (runRoomSync(this.relay, db, idleExpired)) await this.apply(runRoomSync(this.relay, db, expire));
     else await this.ctx.storage.setAlarm(Number(this.sql.all<{ v: string }>("SELECT v FROM meta WHERE k = 'active'")[0]?.v ?? Date.now()) + days * 86_400_000);
   }
+}
+
+export class Repos extends DurableObject<Env> {
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS rooms (room TEXT PRIMARY KEY)");
+  }
+
+  override async fetch(req: Request): Promise<Response> {
+    const sql = this.ctx.storage.sql;
+    if (req.method === "POST") {
+      const l = (await req.json()) as GithubLink;
+      if (l.on) sql.exec("INSERT OR IGNORE INTO rooms (room) VALUES (?)", l.room);
+      else sql.exec("DELETE FROM rooms WHERE room = ?", l.room);
+      return Response.json({ ok: true });
+    }
+    return Response.json((sql.exec("SELECT room FROM rooms").toArray() as { room: string }[]).map((r) => r.room));
+  }
+}
+
+function githubRoutes(env: Env): GithubRoutes {
+  const repos = (repo: string) => env.REPOS.get(env.REPOS.idFromName(repo));
+  return {
+    rooms: async (repo) => (await repos(repo).fetch("https://repos/")).json(),
+    enqueue: (room, item) => env.CHANNELS.get(env.CHANNELS.idFromName(room)).enqueueGithub(room, item),
+    drop: async (repo, room) => void (await repos(repo).fetch("https://repos/apply", { method: "POST", body: JSON.stringify({ repo, room, on: false }) })),
+  };
 }
 
 /** One signed-in person's owned channels: room ids and join codes only, for the quota on POST /create. */
@@ -334,6 +374,8 @@ export default {
       if (!id) return withCors(errorResponse(new NotFound({ message: "not found" })));
       return env.MAILBOX.get(env.MAILBOX.idFromName(id)).fetch(req);
     }
+    const github = await onGithubHttp(req, env.GITHUB_WEBHOOK_SECRET, githubRoutes(env));
+    if (github) return github;
     const route = parseRoomPath(url.pathname);
     if (!route) return withCors(errorResponse(new NotFound({ message: "not found" })));
     // No fingerprint: 426 before the room's object is woken.

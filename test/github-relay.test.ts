@@ -1,0 +1,167 @@
+import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { signRequest } from "@kiwi/core/auth.ts";
+import { Channel } from "@kiwi/core/client.ts";
+import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
+import { startRelay } from "../src/relay/bun.ts";
+import { githubItem, githubLinks, githubRepos, GITHUB_WEBHOOK_PATH } from "../src/relay/github.ts";
+import { devHumanAuth } from "../src/relay/human.ts";
+import { checked } from "./check.ts";
+
+setDefaultTimeout(30_000);
+
+const SECRET = "webhook-secret-for-tests";
+const dataDir = mkdtempSync(join(tmpdir(), "kiwi-github-"));
+let server: ReturnType<typeof startRelay>;
+let relay: string;
+let roomId: string;
+let owner: Identity;
+let member: Identity;
+
+beforeAll(async () => {
+  server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir, human: devHumanAuth(), githubSecret: SECRET });
+  relay = server.url.origin;
+  owner = await generateIdentity("alice");
+  member = await generateIdentity("win");
+  const made = await Channel.create(relay, owner, { name: "alice", kind: "human" }, [], undefined, "dev:alice");
+  roomId = made.access.roomId;
+  const ownerCh = new Channel(made.access, relay, owner);
+  const ask = await Channel.requestJoin(relay, made.code, member, { name: "win" });
+  await ownerCh.approve((await checked(ownerCh, relay, made.code, [{ id: member, requestId: ask.requestId }]))[0]!);
+});
+afterAll(() => {
+  server.stop(true);
+  rmSync(dataDir, { recursive: true, force: true });
+});
+
+async function room(method: string, path: string, as: Identity, body?: unknown): Promise<Response> {
+  const text = body === undefined ? "" : JSON.stringify(body);
+  const headers = { "content-type": "application/json", authorization: `Bearer ${await signRequest(as, roomId, method, path, text)}` };
+  return fetch(`${relay}/v1/rooms/${roomId}${path}`, { method, headers, body: text || undefined });
+}
+
+async function hook(event: string, payload: unknown, secret = SECRET): Promise<Response> {
+  const body = JSON.stringify(payload);
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = [...new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body)))].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return fetch(`${relay}${GITHUB_WEBHOOK_PATH}`, { method: "POST", headers: { "x-github-event": event, "x-hub-signature-256": `sha256=${sig}` }, body });
+}
+
+const pr = (repo: string) => ({
+  action: "closed",
+  repository: { full_name: repo },
+  sender: { login: "octocat" },
+  pull_request: {
+    number: 331,
+    title: "Cards follow the branch",
+    html_url: `https://github.com/${repo}/pull/331`,
+    state: "closed",
+    merged: true,
+    head: { ref: "T39", sha: "a".repeat(40) },
+    body: "x".repeat(5000),
+  },
+});
+
+type Queue = { repos: string[]; items: ({ id: number } & Record<string, unknown>)[] };
+
+describe("GitHub webhooks into a channel's queue", () => {
+  test("the owner connects repos; a signed event for one lands, trimmed, in the queue only the owner reads", async () => {
+    const set = await room("PUT", "/github/repos", owner, { repos: ["Ojow/Channels", "ojow/site"] });
+    expect(await set.json()).toEqual({ repos: ["ojow/channels", "ojow/site"] });
+    expect(await (await hook("pull_request", pr("ojow/channels"))).json()).toEqual({ queued: 1 });
+    const q = (await (await room("GET", "/github/queue", owner)).json()) as Queue;
+    expect(q.repos).toEqual(["ojow/channels", "ojow/site"]);
+    expect(q.items).toHaveLength(1);
+    const { id, at, ...item } = q.items[0]!;
+    expect(item).toEqual({
+      event: "pull_request",
+      repo: "ojow/channels",
+      action: "closed",
+      number: 331,
+      title: "Cards follow the branch",
+      url: "https://github.com/ojow/channels/pull/331",
+      state: "closed",
+      merged: true,
+      branch: "T39",
+      sha: "a".repeat(40),
+      by: "octocat",
+    });
+    expect(typeof at).toBe("number");
+    expect((await room("GET", "/github/queue", member)).status).toBe(403);
+    expect((await room("POST", "/github/ack", owner, { upTo: id })).status).toBe(200);
+    expect(((await (await room("GET", "/github/queue", owner)).json()) as Queue).items).toEqual([]);
+  });
+
+  test("refused: a bad signature, a repo nobody connected, an event it doesn't take; a ping is fine", async () => {
+    expect((await hook("pull_request", pr("ojow/channels"), "wrong")).status).toBe(401);
+    expect(await (await hook("pull_request", pr("someone/else"))).json()).toEqual({ queued: 0 });
+    expect(await (await hook("issues", pr("ojow/channels"))).json()).toEqual({ ignored: "issues" });
+    expect((await hook("ping", { zen: "hi" })).status).toBe(200);
+    expect(((await (await room("GET", "/github/queue", owner)).json()) as Queue).items).toEqual([]);
+  });
+
+  test("dropping a repo stops its events; closing the channel unlinks the rest", async () => {
+    await room("PUT", "/github/repos", owner, { repos: ["ojow/site"] });
+    expect(await (await hook("pull_request", pr("ojow/channels"))).json()).toEqual({ queued: 0 });
+    expect(await (await hook("push", { ref: "refs/heads/main", after: "b".repeat(40), repository: { full_name: "ojow/site" } })).json()).toEqual({ queued: 1 });
+    expect((await room("PUT", "/github/repos", owner, { repos: ["not a repo"] })).status).toBe(400);
+    expect((await room("DELETE", "/", owner)).status).toBe(200);
+    expect(await (await hook("push", { ref: "refs/heads/main", repository: { full_name: "ojow/site" } })).json()).toEqual({ queued: 0 });
+  });
+
+  test("a relay without the secret has no webhook", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-github-off-"));
+    const off = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, githubSecret: null });
+    try {
+      expect((await fetch(`${off.url.origin}${GITHUB_WEBHOOK_PATH}`, { method: "POST", body: "{}" })).status).toBe(404);
+    } finally {
+      off.stop(true);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("what's kept of an event", () => {
+  test("checks and workflow runs: name, status, conclusion, commit, branch", () => {
+    const run = {
+      action: "completed",
+      repository: { full_name: "o/r" },
+      check_run: {
+        name: "ci-ok",
+        status: "completed",
+        conclusion: "failure",
+        head_sha: "c".repeat(40),
+        html_url: "https://github.com/o/r/runs/1",
+        check_suite: { head_branch: "T37" },
+        output: { text: "x".repeat(9000) },
+      },
+    };
+    expect(githubItem("check_run", run, 5)).toEqual({
+      event: "check_run",
+      repo: "o/r",
+      at: 5,
+      action: "completed",
+      name: "ci-ok",
+      url: "https://github.com/o/r/runs/1",
+      status: "completed",
+      conclusion: "failure",
+      sha: "c".repeat(40),
+      branch: "T37",
+    });
+    const wf = { action: "completed", repository: { full_name: "o/r" }, workflow_run: { name: "CI", status: "completed", conclusion: "success", head_sha: "d".repeat(40), head_branch: "main" } };
+    expect(githubItem("workflow_run", wf, 6)).toMatchObject({ event: "workflow_run", name: "CI", conclusion: "success", branch: "main" });
+    expect(githubItem("pull_request", { repository: { full_name: "not-a-repo" } }, 1)).toBeNull();
+  });
+
+  test("repos are owner/name, lowercased, at most 20; links say what was added and removed", () => {
+    expect(githubRepos(["A/B", "a/b", "c/d"])).toEqual(["a/b", "c/d"]);
+    expect(githubRepos(["a"])).toBeNull();
+    expect(githubRepos(Array.from({ length: 21 }, (_, i) => `o/r${i}`))).toBeNull();
+    expect(githubLinks("room1", ["a/b", "c/d"], ["c/d", "e/f"])).toEqual([
+      { repo: "e/f", room: "room1", on: true },
+      { repo: "a/b", room: "room1", on: false },
+    ]);
+  });
+});
