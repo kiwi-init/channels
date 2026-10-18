@@ -18,6 +18,7 @@ export interface GithubPr {
   sha?: string;
   by?: string;
   at: number;
+  seq: number;
 }
 
 export interface GithubState {
@@ -30,7 +31,7 @@ const MAX_SHAS = 300;
 export const prKey = (repo: string, number: number): string => `${repo.toLowerCase()}#${number}`;
 const shaKey = (repo: string, sha: string): string => `${repo.toLowerCase()}@${sha}`;
 
-export function applyGithub(g: GithubState, items: readonly GithubNote[]): void {
+export function applyGithub(g: GithubState, items: readonly GithubNote[], seq: number): void {
   for (const i of items) {
     if (i.event === "pull_request" && i.number) {
       const key = prKey(i.repo, i.number);
@@ -42,6 +43,7 @@ export function applyGithub(g: GithubState, items: readonly GithubNote[]): void 
         number: i.number,
         state,
         at: i.at,
+        seq: was?.seq ?? seq,
         ...(i.title ? { title: i.title } : {}),
         ...(i.url ? { url: i.url } : {}),
         ...(i.branch ? { branch: i.branch } : {}),

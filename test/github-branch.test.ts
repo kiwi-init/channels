@@ -1,0 +1,64 @@
+import { beforeAll, describe, expect, test } from "bun:test";
+import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
+import type { Event, Message } from "@kiwi/core/protocol.ts";
+import { fold, type Roster } from "@kiwi/core/state.ts";
+import { taskFeed, taskOfBranch, taskPrs } from "@kiwi/core/work.ts";
+
+const ids: Record<string, Identity> = {};
+let seq = 0;
+async function ev(from: string, e: Event): Promise<Message> {
+  seq++;
+  const p = await sign(ids[from]!, { v: 1 as const, id: crypto.randomUUID(), from, kind: "event" as const, body: "", ts: seq, ev: e });
+  return { ...p, seq, rts: seq, sigOk: await verify(p) };
+}
+
+let roster: Roster;
+beforeAll(async () => {
+  for (const n of ["jon", "mac"]) ids[n] = await generateIdentity(n);
+  roster = [
+    { name: "jon", pk: ids.jon!.pk, owner: true, at: 0, active: true, kind: "human" },
+    { name: "mac", pk: ids.mac!.pk, owner: false, at: 1, active: true, kind: "agent" },
+  ];
+});
+
+describe("a PR finds its task by its branch", () => {
+  test("branch names that carry a task id, and ones that don't", () => {
+    expect(taskOfBranch("T72-branch-prs")).toBe(72);
+    expect(taskOfBranch("bus/T11-voice-desktop")).toBe(11);
+    expect(taskOfBranch("grok1/t101-daemon-sigterm")).toBe(101);
+    expect(taskOfBranch("T5")).toBe(5);
+    expect(taskOfBranch("main")).toBeNull();
+    expect(taskOfBranch("T5x-thing")).toBeNull();
+    expect(taskOfBranch("fix-T5")).toBeNull();
+    expect(taskOfBranch(undefined)).toBeNull();
+  });
+
+  test("a PR GitHub reported on branch T<n>-… shows on task T<n>, with its branch, though nobody linked it", async () => {
+    const add = await ev("jon", { op: "task.add", title: "Branch PRs", owner: "mac" });
+    const other = await ev("jon", { op: "task.add", title: "Something else" });
+    const news = await ev("jon", {
+      op: "github",
+      items: [
+        {
+          event: "pull_request",
+          repo: "ojow/channels",
+          action: "opened",
+          number: 360,
+          title: "Branch PRs",
+          url: "https://github.com/ojow/channels/pull/360",
+          state: "open",
+          branch: `T${add.seq}-branch-prs`,
+          sha: "e".repeat(40),
+          at: 1,
+        },
+        { event: "pull_request", repo: "ojow/channels", action: "opened", number: 361, state: "open", branch: "main-fixes", at: 2 },
+      ],
+    });
+    const log = [add, other, news];
+    const s = fold(log, roster);
+    expect(taskPrs(taskFeed(s, log, add.seq))).toEqual([
+      { url: "https://github.com/ojow/channels/pull/360", repo: "ojow/channels", number: 360, state: "open", seq: news.seq, title: "Branch PRs", branch: `T${add.seq}-branch-prs` },
+    ]);
+    expect(taskPrs(taskFeed(s, log, other.seq))).toEqual([]);
+  });
+});
