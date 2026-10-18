@@ -290,6 +290,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: Member, at
       if (note) task.notes.push({ seq: m.seq, by: m.from, ts: at, text: note });
       if (ev.proof && !task.proof?.some((p) => p.url === ev.proof!.url) && (task.proof?.length ?? 0) < PROOF_MAX)
         task.proof = [...(task.proof ?? []), { seq: m.seq, by: m.from, ts: at, url: ev.proof.url, ...(ev.proof.label ? { label: ev.proof.label } : {}) }];
+      if (ev.areas?.length) task.areas = [...new Set(ev.areas)];
       if (ev.owner === null && task.state === "doing") task.state = "todo";
       task.updatedAt = at;
       break;
