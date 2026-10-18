@@ -83,7 +83,7 @@ function Lane({
       </header>
 
       <p className="flex items-center gap-2 border-y border-line py-2 font-mono text-meta">
-        <span className={cx("size-1.5 shrink-0 rounded-full", line.busy ? "animate-pulse bg-doing" : a.here ? "bg-live" : "bg-ink-3")} />
+        <span className={cx("size-1.5 shrink-0 rounded-full", line.busy ? "bg-doing" : a.here ? "bg-live" : "bg-ink-3")} />
         <span className={cx("truncate", line.busy ? "text-ink" : "text-ink-3")}>{line.text}</span>
       </p>
 

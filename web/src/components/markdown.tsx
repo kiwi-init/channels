@@ -3,7 +3,7 @@ import { Children, createContext, isValidElement, memo, useCallback, useContext,
 import ReactMarkdown, { type Components } from "react-markdown"
 import remarkBreaks from "remark-breaks"
 import remarkGfm from "remark-gfm"
-import { compareCells, messageRefs, nextSort, sanitizeMarkdownUrl, type SortDir } from "../lib/markdown"
+import { compareCells, knownRefs, messageRefs, nextSort, Recent, sanitizeMarkdownUrl, type SortDir } from "../lib/markdown"
 import { cx } from "../lib/utils"
 import { Icon } from "./icon"
 import { MermaidBlock } from "./mermaid"
@@ -292,16 +292,28 @@ function linkMessageRefs(node: MdNode, known: (seq: number) => boolean): void {
   })
 }
 
+const PLAIN = [remarkGfm, remarkBreaks]
+const urlTransform = (url: string) => sanitizeMarkdownUrl(url) ?? ""
+const rendered = new Recent<ReactElement>(3000)
+
+export function renderMarkdown(body: string, known?: (seq: number) => boolean): ReactElement {
+  const linked = known ? knownRefs(body, known) : ""
+  const key = `${linked}\u0000${body}`
+  const hit = rendered.get(key)
+  if (hit) return hit
+  const ids = new Set(linked ? linked.split(",").map(Number) : [])
+  const plugins = ids.size ? [...PLAIN, () => (tree: MdNode) => linkMessageRefs(tree, (seq) => ids.has(seq))] : PLAIN
+  const tree = ReactMarkdown({ skipHtml: true, remarkPlugins: plugins, components, urlTransform, children: body })
+  rendered.set(key, tree)
+  return tree
+}
+
 export const Markdown = memo(function Markdown({ children, refs }: { children: string; refs?: MessageRefs }) {
   const known = refs?.known
-  const plugins = useMemo(() => (known ? [remarkGfm, remarkBreaks, () => (tree: MdNode) => linkMessageRefs(tree, known)] : [remarkGfm, remarkBreaks]), [known])
+  const tree = useMemo(() => renderMarkdown(children, known), [children, known])
   return (
     <div className="[overflow-wrap:anywhere] break-words">
-      <OpenRef.Provider value={refs?.open}>
-        <ReactMarkdown skipHtml remarkPlugins={plugins} components={components} urlTransform={(url) => sanitizeMarkdownUrl(url) ?? ""}>
-          {children}
-        </ReactMarkdown>
-      </OpenRef.Provider>
+      <OpenRef.Provider value={refs?.open}>{tree}</OpenRef.Provider>
     </div>
   )
 })

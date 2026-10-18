@@ -139,7 +139,8 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   lands: 0.24s spring), `arrived` (theirs rises: 0.22s).
 - Eases: `cubic-bezier(0.2, 0.8, 0.2, 1)` generally, `(0.3, 1.35, 0.5, 1)`
   for sent.
-- Motion only answers an action. All animation disables under
+- Motion only answers an action. Nothing animates forever: a busy agent's
+  dot is steady (a running animation keeps the GPU drawing every frame). All animation disables under
   `html.reduce-motion`, the persisted reduce-motion toggle, or OS
   reduced-motion.
 
@@ -203,7 +204,7 @@ From `design-tokens.ts`:
   today; a view shows only its own). A row is two lines on the canvas,
   split from the next by `line`: the owner's face, the title in `body`, and
   under it the task id, the owner and what the agent is doing now (in
-  `doing` with a pulse while it works) or the task's state; then its PR
+  `doing` with a steady dot while it works) or the task's state; then its PR
   (number, a 48px diff bar in `live` and `alert`, the additions), its
   checks in a word and the time, short. The PR and checks columns drop on
   narrow windows.
@@ -256,7 +257,7 @@ From `design-tokens.ts`:
 - Agents tab: one lane per agent, side by side on the canvas, split by
   `line` (no cards, no fills; the lead's lane last). A lane: face, name,
   `@handle · for person · model`; a mono `meta` line of what it runs now
-  between two `line`s (`doing` dot pulsing while a tool runs, `live` while
+  between two `line`s (a steady `doing` dot while a tool runs, `live` while
   it thinks); its tasks in progress and in review as `card`-round outlined
   blocks (`T7 · in progress · 41 min`, the title in `ui` semibold, `PR #n`
   and a tick per check: `alert` failed, `doing` running, `live` passed);

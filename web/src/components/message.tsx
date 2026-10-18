@@ -9,6 +9,7 @@ import type { Chosen } from "@/lib/asks"
 import { useClock } from "@/lib/channel"
 import { formatAgo, formatFull, formatStamp, formatTime, memberName } from "@/lib/format"
 import { githubSummary } from "@/lib/github-line"
+import { sameRow } from "./message-memo"
 import { openHandoff } from "@/lib/handoff-open"
 import { handoffLabel, handoffLeft, handoffOf, handoffOpen } from "@/lib/handoff"
 import { gifByKey } from "@/lib/gifs"
@@ -175,7 +176,7 @@ function phrase(m: Message, me: string, nameOf: (n: string) => string, repliedTo
   }
 }
 
-interface MessageProps {
+export interface MessageProps {
   m: Message
   me: string
   receipt?: string
@@ -530,4 +531,4 @@ export const MessageRow = memo(function MessageRow({
       </div>
     </div>
   )
-})
+}, sameRow)

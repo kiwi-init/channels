@@ -35,6 +35,32 @@ export function messageRefs(text: string, known: (seq: number) => boolean): RefP
   return parts
 }
 
+export function knownRefs(text: string, known: (seq: number) => boolean): string {
+  const seqs: number[] = []
+  for (const match of text.matchAll(MESSAGE_REF)) {
+    const seq = Number(match[1])
+    if (known(seq)) seqs.push(seq)
+  }
+  return seqs.join(",")
+}
+
+export class Recent<V> {
+  private readonly items = new Map<string, V>()
+  constructor(private readonly max: number) {}
+  get(key: string): V | undefined {
+    const v = this.items.get(key)
+    if (v === undefined) return undefined
+    this.items.delete(key)
+    this.items.set(key, v)
+    return v
+  }
+  set(key: string, v: V): void {
+    this.items.delete(key)
+    this.items.set(key, v)
+    if (this.items.size > this.max) this.items.delete(this.items.keys().next().value!)
+  }
+}
+
 export type SortDir = "asc" | "desc"
 
 /** None, then ascending, then descending, then back to the author's order. */
