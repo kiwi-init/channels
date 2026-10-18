@@ -139,6 +139,10 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 - Inputs: no fill, a 1px `line` edge (`edge`); focus ring is `2px ring` with `1px` offset and
   `6px` radius (base layer, so utilities can still take it off).
 - Placeholders and empty states use quiet ink, never reduced-opacity text.
+- A dialog is for one decision (an `Alert`, a confirm, a short form). What you
+  work in opens in place: Settings and Personalities as a page in the main
+  area beside the sidebar (Escape or the back button returns), Invite and join
+  requests as a view of the details panel, with a back arrow to the details.
 
 ## 8. Semantic and chart colors
 

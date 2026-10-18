@@ -4,17 +4,15 @@ import { nameKey } from "@kiwi/core/membership.ts"
 import { SCOPES, type Scope } from "@kiwi/core/scopes.ts"
 import { isPerson } from "@kiwi/core/state.ts"
 import { noteAgentWorked } from "@/lib/channel"
-import { Modal, errorText, toast } from "../kit"
+import { errorText, toast } from "../kit"
 import type { Persona } from "@kiwi/core/personality.ts"
 import { defaultScopes } from "../scopes"
-import { ConfirmDialogs, Invite, ReposDialog } from "../lazy"
+import { ConfirmDialogs, ReposDialog } from "../lazy"
 import { CharterDialog, RenameDialog } from "./channel-dialogs"
 import { Ctx, type Api, type Confirm, type ControlsProps } from "./context"
-import { Requests } from "./requests"
 
 export function ChannelControls({ children, ...p }: ControlsProps & { children: ReactNode }) {
   const [confirm, setConfirm] = useState<Confirm>(null)
-  const [sheet, setSheet] = useState<"requests" | "invite" | null>(null)
   const [busy, setBusy] = useState(false)
   const [dialog, setDialog] = useState<"rename" | "charter" | "repos" | null>(null)
   const [scopeDraft, setScopeDraft] = useState<Scope[]>([...SCOPES])
@@ -55,8 +53,6 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
       }
       setConfirm(c)
     },
-    openRequests: () => setSheet("requests"),
-    openInvite: () => setSheet("invite"),
     editScopes: (m) => {
       const now = p.state.members.get(m.name)?.scopes
       setScopeDraft(now && now.length === 0 ? [] : [...SCOPES])
@@ -82,13 +78,6 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
       {p.onRename && dialog === "rename" && <RenameDialog title={p.title ?? ""} onClose={() => setDialog(null)} onSave={p.onRename} />}
       {dialog === "charter" && <CharterDialog text={p.state.charter?.text ?? ""} onClose={() => setDialog(null)} onSave={p.isOwner ? p.onCharter : undefined} />}
       {dialog === "repos" && <ReposDialog repos={p.state.repos} onClose={() => setDialog(null)} onSave={p.isOwner ? p.onRepos : undefined} />}
-
-      <Modal open={sheet === "requests" && confirm === null} onClose={() => setSheet(null)} wide>
-        <Requests onDone={() => setSheet(null)} />
-      </Modal>
-      <Modal open={sheet === "invite"} onClose={() => setSheet(null)} wide>
-        <Invite onDone={() => setSheet(null)} />
-      </Modal>
 
       {confirm !== null && (
         <ConfirmDialogs

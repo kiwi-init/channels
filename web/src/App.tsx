@@ -10,7 +10,7 @@ import { useMemberIcons } from "@/lib/icons"
 import { useIcons } from "@/lib/icons"
 import type { Command } from "@/components/ui/palette"
 import { usePaletteShortcut } from "@/components/ui/palette-shortcut"
-import { ComputersModal, Palette, SettingsModal } from "@/components/lazy"
+import { ComputersModal, Palette, SettingsPage } from "@/components/lazy"
 import { Add01Icon, ComputerIcon, Login01Icon, Moon02Icon, Settings01Icon, Sun03Icon } from "@hugeicons/core-free-icons"
 import { Icon, type IconSvgElement } from "@/components/icon"
 import { useAutoApproval } from "@/lib/approval"
@@ -26,16 +26,21 @@ import { cx } from "@/lib/utils"
 // The join code lives in the URL fragment, which never leaves the app.
 const readHash = () => parseHash(location.hash)
 
-const open = (code: string) => (location.hash = encodeURIComponent(code))
+const go = (code: string) => (location.hash = encodeURIComponent(code))
 
 export default function App() {
   const person = useSecrets().person
   const [{ code }, setHash] = useState(readHash)
-  const [sheet, setSheet] = useState<"new" | "join" | "computers" | "settings" | null>(null)
+  const [sheet, setSheet] = useState<"new" | "join" | "computers" | null>(null)
+  const [settings, setSettings] = useState(false)
   const rows = useChannelList()
   const icons = useIcons()
   const [palette, setPalette] = useState(false)
   usePaletteShortcut(useCallback(() => setPalette(true), []))
+  const open = useCallback((c: string) => {
+    setSettings(false)
+    go(c)
+  }, [])
   useMemberIcons(rows.filter((c) => c.state === "member").map((c) => c.code))
   // Every owned channel, watched in the background: your computers' agents in, a notification otherwise.
   useAutoApproval(rows)
@@ -74,14 +79,14 @@ export default function App() {
     act("new", "New channel", Add01Icon, () => setSheet("new"))
     act("join", "Join with a code", Login01Icon, () => setSheet("join"))
     act("computers", "Your computers", ComputerIcon, () => setSheet("computers"))
-    act("settings", "Settings", Settings01Icon, () => setSheet("settings"))
+    act("settings", "Settings", Settings01Icon, () => setSettings(true))
     list.push(
       { id: "light", group: "Appearance", label: "Light", run: () => setAppearance("light"), leading: lead(Sun03Icon) },
       { id: "dark", group: "Appearance", label: "Dark", run: () => setAppearance("dark"), leading: lead(Moon02Icon) },
       { id: "system", group: "Appearance", label: "System", run: () => setAppearance("system"), leading: lead(ComputerIcon) }
     )
     return list
-  }, [rows, icons])
+  }, [rows, icons, open])
 
   useEffect(() => {
     const onHash = () => {
@@ -106,7 +111,7 @@ export default function App() {
         .catch(() => {})
     take()
     return b.onDeepLink(take)
-  }, [])
+  }, [open])
 
   const close = () => {
     history.replaceState(null, "", location.pathname)
@@ -129,21 +134,24 @@ export default function App() {
             onSelect={open}
             onNew={() => setSheet("new")}
             onComputers={() => setSheet("computers")}
-            onSettings={() => setSheet("settings")}
-            className={cx(code ? "hidden" : "flex", "md:hidden")}
+            onSettings={() => setSettings(true)}
+            className={cx(code || settings ? "hidden" : "flex", "md:hidden")}
           />
-          <Rail rows={rows} news={news} active={code} onSelect={open} onNew={() => setSheet("new")} onComputers={() => setSheet("computers")} onSettings={() => setSheet("settings")} />
+          <Rail rows={rows} news={news} active={code} onSelect={open} onNew={() => setSheet("new")} onComputers={() => setSheet("computers")} onSettings={() => setSettings(true)} />
           {/* The app: the conversation beside the list, in the same colour, under the same header row. */}
-          <main className={cx("relative min-w-0 flex-1 overflow-clip bg-canvas", code ? "flex" : "hidden md:flex")}>
+          <main className={cx("relative min-w-0 flex-1 overflow-clip bg-canvas", code || settings ? "flex" : "hidden md:flex")}>
             {/* No conversation, no header: the top row still moves the window. */}
-            {!code && <div aria-hidden className="drag absolute inset-x-0 top-0 h-(--chrome-h)" />}
-            {code ? (
-              <Boundary resetKey={code}>
-                <ChannelGate key={code} code={code} listed={rows.find((r) => r.code === code)} onBack={close} onGone={close} />
-              </Boundary>
-            ) : (
-              <Welcome onNew={() => setSheet("new")} onJoin={() => setSheet("join")} />
-            )}
+            {!code && !settings && <div aria-hidden className="drag absolute inset-x-0 top-0 h-(--chrome-h)" />}
+            {settings && <SettingsPage onClose={() => setSettings(false)} />}
+            <div className={cx("min-w-0 flex-1", settings ? "hidden" : "flex")}>
+              {code ? (
+                <Boundary resetKey={code}>
+                  <ChannelGate key={code} code={code} listed={rows.find((r) => r.code === code)} onBack={close} onGone={close} />
+                </Boundary>
+              ) : (
+                <Welcome onNew={() => setSheet("new")} onJoin={() => setSheet("join")} />
+              )}
+            </div>
             {/* Last in the document, not just on top: the desktop app works out what drags the window
                 in document order, whatever the z-index, so a header after these would swallow their clicks. */}
           </main>
@@ -167,7 +175,6 @@ export default function App() {
         }}
       />
       <ComputersModal open={sheet === "computers"} onClose={() => setSheet(null)} />
-      <SettingsModal open={sheet === "settings"} onClose={() => setSheet(null)} />
       <Palette open={palette} onClose={() => setPalette(false)} commands={commands} />
       <Toaster />
     </>

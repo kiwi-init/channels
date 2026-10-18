@@ -39,7 +39,7 @@ export function PersonalityPicker({
     </label>
   )
   return (
-    <div role="radiogroup" aria-label="Personality" className="grid max-h-[46vh] gap-1.5 overflow-y-auto p-px">
+    <div role="radiogroup" aria-label="Personality" className="grid max-h-[46vh] grid-cols-[minmax(0,1fr)] gap-1.5 overflow-y-auto p-px">
       {shown.map((o) =>
         row(o.name, value?.name === o.name, glyph(o), o.name, `${ROLE_LABEL[o.role]} · ${capabilityLine(o)}`, () => onChange(o), o.role === "lead" && lead ? `${lead} is the lead` : undefined)
       )}
