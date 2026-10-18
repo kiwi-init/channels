@@ -60,7 +60,7 @@ export interface ThreadChoice {
 }
 
 export function chooseThread(state: Pick<ChannelState, "tasks" | "lead">, me: string, a: ThreadAsk): ThreadChoice | string {
-  if ([a.task !== undefined, !!a.main, !!a.dm].filter(Boolean).length > 1) return "say one of: a task (--task), main (--main) or a direct thread (--dm)";
+  if ([a.task !== undefined, !!a.main, !!a.dm].filter(Boolean).length > 1) return "say one place: a task (--to T7), #general (--to #general) or a direct thread (--to @name)";
   if (a.dm) return { to: [a.dm], dm: true };
   if (a.task !== undefined) return { task: a.task };
   if (a.main || a.reply || state.lead === me) return {};
@@ -71,8 +71,8 @@ export function chooseThread(state: Pick<ChannelState, "tasks" | "lead">, me: st
 
 export function wentTo(c: ThreadChoice): string {
   if (c.dm && c.to) return ` to ${c.to[0]} (direct)`;
-  if (c.task !== undefined) return ` in ${taskId(c.task)}'s thread${c.doing !== undefined ? " (the task you're doing; --main for the main conversation)" : ""}`;
-  if (c.several) return ` in the main conversation: you're doing ${c.several.map(taskId).join(" and ")}, so say which with --task`;
+  if (c.task !== undefined) return ` in ${taskId(c.task)}'s thread${c.doing !== undefined ? " (the task you're doing; --to #general for the main conversation)" : ""}`;
+  if (c.several) return ` in the main conversation: you're doing ${c.several.map(taskId).join(" and ")}, so say which with --to T7`;
   return "";
 }
 

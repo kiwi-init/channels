@@ -24,6 +24,7 @@ import {
 } from "@kiwi/core/protocol.ts";
 import { chooseThread, parseTaskId, wentTo } from "@kiwi/core/state.ts";
 import { args, opt } from "../args.ts";
+import { parseWhere } from "../where.ts";
 import { type Command, die, noteRead, out, session } from "../context.ts";
 import { images, list, render, text } from "../input.ts";
 
@@ -41,26 +42,28 @@ export const messageCommands: Record<string, Command> = {
         const s = yield* session();
         const body = yield* text(1);
         if (!body.trim()) return yield* die("empty message");
-        if (opt.dm && opt.to) return yield* die("--dm NAME names who it goes to; leave out --to");
+        if (opt.dm && opt.to) return yield* die("--dm NAME already says where it goes; leave out --to (or use --to @NAME alone)");
+        const where = parseWhere(opt.to);
+        if (typeof where === "string") return yield* die(where);
         const { state } = yield* s.state();
-        const named = opt.task === undefined ? undefined : (parseTaskId(opt.task) ?? (yield* die(`"${opt.task}" isn't a task id (like T12)`)));
-        const chosen = chooseThread(state, s.me, { ...(named !== undefined ? { task: named } : {}), main: opt.main, ...(opt.dm ? { dm: opt.dm } : {}), reply: !!opt.re });
+        const named = opt.task === undefined ? where.task : (parseTaskId(opt.task) ?? (yield* die(`"${opt.task}" isn't a task id (like T12)`)));
+        const dm = opt.dm ?? where.dm;
+        const reArgs = [...(list(opt.re) ?? []), ...(where.re ?? []).map(String)];
+        const chosen = chooseThread(state, s.me, { ...(named !== undefined ? { task: named } : {}), main: opt.main || where.main, ...(dm ? { dm } : {}), reply: reArgs.length > 0 });
         if (typeof chosen === "string") return yield* die(chosen);
-        const to = chosen.to ?? list(opt.to);
+        const to = chosen.to ?? where.to;
         const kind = (opt.kind ?? "msg") as Kind;
         if (!CHAT_KINDS.includes(kind)) return yield* die(`kind must be one of: ${CHAT_KINDS.join(", ")}`);
-        const re = list(opt.re)
-          ?.map((x) => Number(x.replace(/^#/, "")))
-          .filter((n) => n > 0);
+        const re = reArgs.map((x) => Number(x.replace(/^#/, ""))).filter((n) => n > 0);
         const imgs = yield* images;
         const asking = opt.ask || !!opt.wait;
         const head = asking && opt.wait ? yield* s.ch.fx.head() : 0;
         const seq = yield* s.send(body, {
           to,
           kind: asking && !opt.kind ? "ask" : kind,
-          re,
+          ...(re.length ? { re } : {}),
           imgs,
-          room: opt.room,
+          room: opt.room ?? where.room,
           ...(chosen.task !== undefined ? { task: chosen.task } : {}),
           ...(chosen.dm ? { dm: true } : {}),
         });
