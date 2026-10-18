@@ -17,6 +17,7 @@ export interface StoreFile {
   computers: ComputerView[];
   pending: PendingItem[];
   signin?: { access: string; refresh: string; exp: number };
+  github?: { login: string; id: number; token: string; at: number };
   migrated?: boolean;
   voice?: VoiceStore;
 }

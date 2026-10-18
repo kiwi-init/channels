@@ -65,6 +65,7 @@ interface Env {
   KIWI_PAGE_KEY?: string;
   REPOS: DurableObjectNamespace<Repos>;
   GITHUB_WEBHOOK_SECRET?: string;
+  GITHUB_APP_CLIENT_ID?: string;
   GITHUB_APP_ID?: string;
   GITHUB_APP_PRIVATE_KEY?: string;
 }
@@ -375,7 +376,7 @@ function close(ws: WebSocket, code: number, reason: string): void {
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
-    if (url.pathname === "/v1/config") return withCors(relayConfig(human(env)));
+    if (url.pathname === "/v1/config") return withCors(relayConfig(human(env), env.GITHUB_APP_CLIENT_ID));
     // The desktop app's renderer isn't served by the relay: /v1/* answers any origin.
     if (req.method === "OPTIONS" && url.pathname.startsWith("/v1/")) return corsPreflight();
     if (url.pathname.startsWith("/v1/mailbox")) {

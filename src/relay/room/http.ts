@@ -12,6 +12,6 @@ export function parseRoomPath(pathname: string): { roomId: string; rest: string 
   return m ? { roomId: m[1]!, rest: m[2] ?? "/" } : null;
 }
 
-export function relayConfig(human: HumanAuth | null): Response {
-  return Response.json({ workosClientId: human?.clientId ?? null, ...(human?.dev ? { dev: true } : {}) });
+export function relayConfig(human: HumanAuth | null, githubClientId?: string | null): Response {
+  return Response.json({ workosClientId: human?.clientId ?? null, ...(human?.dev ? { dev: true } : {}), ...(githubClientId ? { githubClientId } : {}) });
 }

@@ -20,6 +20,7 @@ import type {
   PendingItem,
   PublicPerson,
   SignInResult,
+  GithubStatus,
   StoreSnapshot,
   UpdateView,
   VoiceAuth,
@@ -27,7 +28,7 @@ import type {
 
 const relayUrl = (ipcRenderer.sendSync("kiwi:snapshot-sync") as StoreSnapshot).relayUrl;
 
-const on = (channel: "kiwi:store" | "kiwi:deep-link" | "kiwi:update", cb: (v: never) => void): (() => void) => {
+const on = (channel: "kiwi:store" | "kiwi:deep-link" | "kiwi:update" | "kiwi:github-code", cb: (v: never) => void): (() => void) => {
   const fn = (_e: unknown, v: never) => cb(v);
   ipcRenderer.on(channel, fn as (...args: unknown[]) => void);
   return () => ipcRenderer.removeListener(channel, fn as (...args: unknown[]) => void);
@@ -97,6 +98,10 @@ const kiwi: KiwiBridge = {
   devSignIn: (name: string) => ipcRenderer.invoke("kiwi:dev-sign-in", name) as Promise<{ token: string }>,
   getToken: () => ipcRenderer.invoke("kiwi:token") as Promise<string | null>,
   signOut: () => ipcRenderer.invoke("kiwi:sign-out") as Promise<void>,
+  githubStatus: () => ipcRenderer.invoke("kiwi:github-status") as Promise<GithubStatus>,
+  githubLink: () => ipcRenderer.invoke("kiwi:github-link") as Promise<GithubStatus>,
+  githubUnlink: () => ipcRenderer.invoke("kiwi:github-unlink") as Promise<GithubStatus>,
+  onGithubCode: (cb) => on("kiwi:github-code", cb),
   pairBegin: () => ipcRenderer.invoke("kiwi:pair-begin") as Promise<{ code: string }>,
   pairPoll: () => ipcRenderer.invoke("kiwi:pair-poll") as Promise<PairAskView | null>,
   pairCancel: () => ipcRenderer.invoke("kiwi:pair-cancel") as Promise<void>,

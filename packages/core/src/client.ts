@@ -17,7 +17,7 @@ import type { SigningBudget } from "./sas.ts";
 import type { Scope } from "./scopes.ts";
 import type { ChannelState, GuardFloor } from "./state.ts";
 import { ChannelCore, type ChannelFx } from "./client/core.ts";
-import { ChannelGithub } from "./client/github.ts";
+import { ChannelGithub, type GithubDiff, type ReviewCheck } from "./client/github.ts";
 import { ChannelHistory } from "./client/history.ts";
 import { ChannelImages } from "./client/images.ts";
 import { ChannelInfo, type Info, type MemberRow } from "./client/info.ts";
@@ -42,6 +42,7 @@ export type { RoomsSetting } from "./client/settings.ts";
 export type { JoinStatus } from "./client/join.ts";
 export type { SendOptions } from "./client/send.ts";
 export type { ChannelFx } from "./client/core.ts";
+export type { GithubDiff, ReviewCheck } from "./client/github.ts";
 
 export class Channel {
   private readonly core: ChannelCore;
@@ -352,6 +353,18 @@ export class Channel {
 
   drainGithub(): Promise<number> {
     return run(this.fx.drainGithub());
+  }
+
+  githubDiff(repo: string, sha: string): Promise<GithubDiff> {
+    return run(this.fx.githubDiff(repo, sha));
+  }
+
+  postReviewCheck(c: ReviewCheck): Promise<{ url: string | null }> {
+    return run(this.fx.postReviewCheck(c));
+  }
+
+  commentOnPr(repo: string, number: number, body: string): Promise<{ url: string | null }> {
+    return run(this.fx.commentOnPr(repo, number, body));
   }
 
   snapshotAt(): Promise<number | null> {

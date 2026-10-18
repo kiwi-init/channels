@@ -4,6 +4,7 @@
 // coordinator-only mode (an agent's chat with another agent) stays out of every part of it.
 
 import { cleanBody, describeEvent, proofLabel, reviewBody, roundTag } from "./format.ts";
+import type { ReviewCheck } from "./client/github.ts";
 import { inlineText } from "./membership.ts";
 import { ignored, type Message } from "./protocol.ts";
 import type { OldTaskState, TaskState } from "./protocol.ts";
@@ -319,4 +320,35 @@ export function taskDigest(state: ChannelState, messages: Message[], t: Task): s
     ...(t.approvedBy && !t.cancelled ? [`approved by ${t.approvedBy}`] : []),
     ...(said ? [`${said} message${said === 1 ? "" : "s"} in its threads`] : []),
   ].join(" · ");
+}
+
+export function taskRepo(state: ChannelState, messages: Message[], id: number): string | null {
+  const pr = taskPrs(taskFeed(state, messages, id))[0];
+  return pr ? pr.repo.toLowerCase() : state.repos.length === 1 ? state.repos[0]!.toLowerCase() : null;
+}
+
+export function verdictsAfter(state: ChannelState, messages: Message[], after: number): (ReviewCheck & { seq: number })[] {
+  const out: (ReviewCheck & { seq: number })[] = [];
+  for (const t of state.tasks.values()) {
+    for (const r of t.rounds) {
+      if (!r.at || (r.result.kind !== "approved" && r.result.kind !== "rejected") || r.result.seq <= after) continue;
+      const repo = taskRepo(state, messages, t.id);
+      if (!repo) continue;
+      const seq = r.result.seq;
+      const note = t.notes.find((n) => n.seq === seq)?.text;
+      out.push({ repo, sha: r.at, verdict: r.result.kind, task: t.id, seq, ...(note ? { note } : {}) });
+    }
+  }
+  return out.sort((a, b) => a.seq - b.seq);
+}
+
+export function prsToLinkBack(state: ChannelState, after: number): { repo: string; number: number; task: number; seq: number; body: string }[] {
+  const out: { repo: string; number: number; task: number; seq: number; body: string }[] = [];
+  for (const pr of state.github.prs.values()) {
+    const id = taskOfBranch(pr.branch);
+    const t = id === null ? undefined : state.tasks.get(id);
+    if (!t || pr.seq <= after || pr.state !== "open") continue;
+    out.push({ repo: pr.repo, number: pr.number, task: t.id, seq: pr.seq, body: `Kiwi task ${taskId(t.id)}: ${inlineText(t.title, 200)}` });
+  }
+  return out.sort((a, b) => a.seq - b.seq);
 }

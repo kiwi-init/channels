@@ -9,6 +9,7 @@ const WORKOS_TOKEN_URL = "https://api.workos.com/user_management/authenticate";
 
 interface RelayConfig {
   workosClientId?: string | null;
+  githubClientId?: string;
   dev?: boolean;
 }
 
