@@ -81,7 +81,7 @@ export function ChannelSidebar({
         </span>
       </button>
 
-      <button type="button" onClick={onSearch} className="prism mt-3 flex h-9 items-center gap-2 rounded-ctl px-3 text-left text-ui text-ink-3 transition-colors hover:text-ink-2">
+      <button type="button" onClick={onSearch} className="mt-3 flex h-9 items-center gap-2 rounded-ctl px-3 text-left text-ui text-ink-3 edge transition-colors hover:text-ink-2">
         <Icon icon={Search01Icon} size={16} className="shrink-0" />
         <span className="flex-1">Search this channel</span>
       </button>
