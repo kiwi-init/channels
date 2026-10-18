@@ -5,7 +5,7 @@ import { CAPABILITIES, MAX_AREA, MAX_AREAS, MAX_INSTRUCTIONS, MAX_NAME, ROLE_LAB
 import { PRESETS } from "@kiwi/core/presets.ts"
 import { savePersonalities, useOwnPersonalities, usePersonalities } from "@/lib/personalities"
 import { cx } from "@/lib/utils"
-import { Button, Checkbox, SEGMENTED, SEGMENT_OFF, SEGMENT_ON, TextField, errorText, toast } from "./kit"
+import { Button, Checkbox, TextField, errorText, toast } from "./kit"
 
 const TAGLINE: Record<string, string> = {
   builder: "Takes a task to a merged PR",
@@ -36,7 +36,7 @@ function tagline(p: Personality): string {
 
 function Tile({ glyph, size = 36 }: { glyph: string; size?: number }) {
   return (
-    <span aria-hidden style={{ width: size, height: size }} className="prism flex shrink-0 items-center justify-center rounded-row text-body text-ink">
+    <span aria-hidden style={{ width: size, height: size }} className="flex shrink-0 items-center justify-center rounded-row border border-edge-strong text-body text-ink">
       {glyph}
     </span>
   )
@@ -49,7 +49,7 @@ function Row({ p, picked, onPick }: { p: Personality; picked: boolean; onPick: (
         type="button"
         aria-current={picked}
         onClick={onPick}
-        className={cx("flex w-full items-start gap-3 rounded-ctl border px-3 py-2 text-left transition-colors", picked ? "prism-lit border-transparent" : "border-transparent hover:bg-wash")}
+        className={cx("flex w-full items-start gap-3 rounded-ctl border px-3 py-2 text-left transition-colors", picked ? "border-accent bg-accent-wash" : "border-transparent hover:bg-wash")}
       >
         <Tile glyph={p.glyph} />
         <span className="min-w-0">
@@ -116,7 +116,7 @@ function Editor({ p, onChange, onDuplicate, onDelete }: { p: Personality; onChan
 
       <div>
         <p className="mb-2 text-meta font-medium text-ink-2">Role · what it is for the board</p>
-        <div role="radiogroup" aria-label="Role" className={cx("inline-flex flex-wrap gap-0.5", SEGMENTED)}>
+        <div role="radiogroup" aria-label="Role" className="flex flex-wrap gap-1.5">
           {ROLES.map((r) => (
             <button
               key={r}
@@ -124,7 +124,10 @@ function Editor({ p, onChange, onDuplicate, onDelete }: { p: Personality; onChan
               role="radio"
               aria-checked={p.role === r}
               onClick={() => p.role !== r && set({ role: r })}
-              className={cx("h-7 rounded-row px-3 text-ui font-medium transition-colors", p.role === r ? SEGMENT_ON : SEGMENT_OFF)}
+              className={cx(
+                "rounded-row border px-2.5 py-1 text-ui transition-colors",
+                p.role === r ? "border-accent bg-accent-wash font-medium text-accent-text" : "border-edge-strong text-ink-2 hover:bg-wash hover:text-ink"
+              )}
             >
               {ROLE_LABEL[r]}
             </button>

@@ -15,9 +15,9 @@
  * Two tones: the rails (the channel list and a channel's sidebar) sit on the darker rail, and the
  * page beside them is one sheet of canvas with round corners, holding the conversation, its header
  * and the panels beside it. Raised is for cards, popovers and grouped lists. What
- * floats over the conversation (its header, the composer) and every control is prism glass, after the
- * app icon and the agents' heads: clear, with a lit edge bright at one corner; what's chosen shows a
- * thin spectrum band inside it, and the one thing to do next is the heads' blue orb. Others' bubbles are Messages grey, a step
+ * floats over the conversation (its header, the composer) is liquid glass: the canvas blurred and
+ * saturated through a translucent fill, a bright rim on top. The sidebar alone is prism glass, after the
+ * app icon and the agents' heads. Others' bubbles are Messages grey, a step
  * from the canvas, so their words read as bubbles and yours as the blue answer.
  *
  * Each token is written once as light-dark(day, night). The system picks the side, unless
@@ -66,6 +66,7 @@
   /* The open channel in the list: a soft filled pill, as Grok marks the open chat. */
   --pick: light-dark(rgba(15, 15, 17, 0.07), rgba(255, 255, 255, 0.08));
   --pick-edge: transparent;
+  --segment: light-dark(#ffffff, #3a3a3c);
   /* A contact without a picture: a soft neutral gradient, as Messages draws one. */
   --avatar-top: light-dark(#a8a8b0, #78787f);
   --avatar-bottom: light-dark(#8a8a92, #55555c);
@@ -74,9 +75,14 @@
   --shadow-pop: 0 0 0 1px var(--pop-edge), 0 16px 40px -12px var(--pop-shade);
   /* The composer: a hairline round it, lifted a touch off the canvas. */
   --shadow-dock: 0 0 0 1px var(--line), 0 6px 20px -12px var(--pop-shade);
+  /* Liquid glass: a translucent fill over a blur, a bright rim on its top edge, a hairline round it, a soft drop. */
+  --glass-fill: light-dark(rgba(255, 255, 255, 0.64), rgba(40, 40, 44, 0.52));
+  --glass-fill-hover: light-dark(rgba(255, 255, 255, 0.8), rgba(52, 52, 57, 0.62));
+  --glass-rim: light-dark(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.11));
+  --glass-edge: light-dark(rgba(15, 15, 17, 0.07), rgba(255, 255, 255, 0.07));
+  --glass-shade: light-dark(rgba(15, 15, 17, 0.14), rgba(0, 0, 0, 0.55));
   --prism-fill: light-dark(rgba(15, 15, 17, 0.018), rgba(255, 255, 255, 0.045));
   --prism-fill-lit: light-dark(rgba(15, 15, 17, 0.045), rgba(255, 255, 255, 0.09));
-  --prism-float: light-dark(rgba(255, 255, 255, 0.74), rgba(16, 16, 19, 0.66));
   --prism-edge: light-dark(rgba(15, 15, 17, 0.1), rgba(255, 255, 255, 0.08));
   --prism-glint: light-dark(rgba(15, 15, 17, 0.4), rgba(255, 255, 255, 0.78));
   --prism-glint-lit: light-dark(rgba(15, 15, 17, 0.72), #ffffff);
@@ -175,6 +181,7 @@
   --color-warn: var(--warn);
   --color-overlay: var(--overlay);
   --color-pick: var(--pick);
+  --color-segment: var(--segment);
   --color-bubble-me: var(--bubble-me);
   --color-bubble-me-ink: var(--bubble-me-ink);
   --color-bubble-them: var(--bubble-them);
@@ -343,17 +350,28 @@ html.reduce-motion ::after {
 }
 
 @layer components {
-  .prism,
-  .prism-lit,
   .glass {
+    background: var(--glass-fill);
+    -webkit-backdrop-filter: blur(20px) saturate(1.8);
+    backdrop-filter: blur(20px) saturate(1.8);
+    box-shadow:
+      inset 0 1px 0 var(--glass-rim),
+      inset 0 0 0 1px var(--glass-edge),
+      0 8px 24px -12px var(--glass-shade);
+  }
+  button.glass:hover,
+  .glass-hover:hover {
+    background: var(--glass-fill-hover);
+  }
+  .prism,
+  .prism-lit {
     position: relative;
     isolation: isolate;
     background: var(--prism-fill);
     box-shadow: inset 0 0 0 1px var(--prism-edge);
   }
   .prism::before,
-  .prism-lit::before,
-  .glass::before {
+  .prism-lit::before {
     content: "";
     position: absolute;
     inset: 0;
@@ -368,14 +386,7 @@ html.reduce-motion ::after {
     mask-composite: exclude;
     pointer-events: none;
   }
-  .glass {
-    background: var(--prism-float);
-    -webkit-backdrop-filter: blur(20px) saturate(1.6);
-    backdrop-filter: blur(20px) saturate(1.6);
-  }
-  button.glass:hover,
-  button.prism:hover,
-  .glass-hover:hover {
+  button.prism:hover {
     background: var(--prism-fill-lit);
   }
   .prism-lit {
@@ -427,36 +438,6 @@ html.reduce-motion ::after {
       inset 0 0 14px var(--orb-blue),
       0 0 18px -4px var(--orb-glow);
   }
-  .prism-check {
-    appearance: none;
-    -webkit-appearance: none;
-    margin: 0;
-    border-radius: 5px;
-    background-color: var(--prism-fill);
-    background-position: center;
-    background-repeat: no-repeat;
-    background-size: 12px;
-    box-shadow: inset 0 0 0 1px var(--edge-strong);
-    cursor: pointer;
-    transition:
-      background-color 120ms,
-      box-shadow 120ms;
-  }
-  .prism-check:hover {
-    background-color: var(--prism-fill-lit);
-  }
-  .prism-check:checked {
-    background-color: var(--orb-core);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-6.5' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-    box-shadow:
-      inset 0 0 0 1px color-mix(in srgb, var(--orb-cyan) 85%, transparent),
-      inset 0 0 6px var(--orb-blue),
-      0 0 10px -3px var(--orb-glow);
-  }
-  .prism-check:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
   .orb-pill:hover {
     box-shadow:
       inset 0 0 0 1px var(--orb-cyan),
@@ -479,17 +460,12 @@ html.reduce-motion ::after {
   }
   .prism::before,
   .prism-lit::before,
-  .prism-lit::after,
-  .glass::before {
+  .prism-lit::after {
     content: none;
   }
   .orb,
   .orb-pill {
     background: var(--accent);
-    box-shadow: none;
-  }
-  .prism-check:checked {
-    background-color: var(--accent);
     box-shadow: none;
   }
 }
@@ -530,32 +506,9 @@ html.reduce-motion ::after {
 }
 
 @utility sheet {
-  position: relative;
-  isolation: isolate;
   margin: 8px 8px 8px 0;
   border-radius: var(--radius-card);
   background: var(--canvas);
-  box-shadow: 0 0 0 1px var(--prism-edge);
+  box-shadow: 0 0 0 1px var(--line);
   overflow: clip;
-  &::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: 30;
-    border-radius: inherit;
-    padding: 1px;
-    background: linear-gradient(var(--glint-angle, 150deg), var(--prism-glint), transparent 18%, transparent 70%, color-mix(in srgb, var(--prism-glint) 35%, transparent));
-    -webkit-mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    pointer-events: none;
-  }
-  @media (prefers-contrast: more) {
-    box-shadow: 0 0 0 1px var(--edge-strong);
-    &::before {
-      content: none;
-    }
-  }
 }

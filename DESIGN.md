@@ -12,11 +12,10 @@ Canonical sources: `web/src/index.css` (`:root`, `:root[data-theme]`,
 
 ## 1. Identity in one line
 
-A quiet Messages-like conversation in prism glass, after the app icon and
-the agents' heads: clear controls with a lit edge on black (or white), a thin
-spectrum band inside what's chosen, and the heads' blue orb on the one thing
-to do next. Apple system blue `#007aff` / `#0a84ff` for links and marks,
-Inter only, small purposeful motion, one pop shadow.
+A quiet Messages-like conversation. White `#ffffff` / near-black `#161618`
+canvas, Apple system blue `#007aff` (light) / `#0a84ff` (dark), Inter only,
+small purposeful motion, one pop shadow. The sidebar alone wears prism
+glass, after the app icon and the agents' heads.
 
 ## 2. Theme architecture
 
@@ -108,7 +107,7 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 - Two tones: the rails (the channel list and a channel's sidebar) sit on
   `rail`, a step darker, and the page beside them is a sheet of `canvas`
   (the `sheet` utility: 8px in from the window's edges, `card` radius, a
-  1px `prism-edge` ring and the prism's lit edge), holding the header, the
+  1px `line` ring), holding the header, the
   conversation and the tasks. A side panel (details, a thread, the tasks
   panel) is a sheet of its own beside it, 8px apart. `raised` and `field`
   are the canvas. Inside a sheet,
@@ -117,22 +116,24 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   `line` (the `edge` utility). Popovers and dialogs lift off the canvas
   with the `pop` shadow only. A phone has no sheet: one screen at a time,
   on the canvas.
-- Prism glass (`index.css`, `@layer components`), the only glass:
+- Liquid glass (`glass`), for what floats over the conversation (the
+  header's round controls, the place pills, the composer): a translucent
+  `glass-fill` over a blur, a bright `glass-rim` on top, a hairline round it.
+- Prism glass (`index.css`, `@layer components`), the sidebar's only (the
+  rail and a channel's sidebar). Nothing else wears it; `test/prism.test.ts`
+  keeps the kit, the header, the side panels, Settings and Personalities
+  off it:
   - `prism`: a clear slab, `prism-fill` with a 1px `prism-edge` and a lit
     edge (`prism-glint`) bright at one corner and fading along the sides,
-    the way the icon's prisms catch light. Secondary buttons, segmented
-    tracks, outlined controls.
+    the way the icon's prisms catch light. The rail's tiles and round
+    buttons, the channel sidebar's search.
   - `prism-lit`: what's chosen. A brighter fill and edge, and a thin
     spectrum band (`spectrum-1..7`) inside it, at `--band` (70% by
-    default) across the control, the way light splits in the heads. One
-    chosen thing per group; never on a whole row of text.
-  - `glass`: `prism` that floats over the conversation (the header's round
-    controls, the place pills): `prism-float` over a blur.
-  - `orb`: the heads' blue orb (`orb-core`, `orb-blue`, `orb-cyan`), round:
-    send. `orb-pill`: the same light round a dark core, for the primary
-    button and an unread count. Its `orb-glow` is the one coloured glow.
-  - `prism-check` (the kit's `Checkbox`, the only checkbox): a `prism`
-    square, checked as the orb with a white tick.
+    default) across the control, the way light splits in the heads. The
+    open channel, and the channel sidebar's chosen view or conversation.
+  - `orb-pill`: the heads' blue orb light round a dark core (`orb-core`,
+    `orb-blue`, `orb-cyan`), for the sidebar's "needs you" counts. Its
+    `orb-glow` is the one coloured glow.
   - Under `prefers-contrast: more` all of them fall back to solid fills: no
     band, no glint, the orb as `accent`.
 - Fall back to solid fills under `prefers-contrast: more`.
@@ -158,20 +159,18 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 - `ui/`: `menu`, `palette` (command palette: channels, actions,
   appearance), `panel`, `popover`, `tooltip` (500ms delay).
 - Rows (channels, tasks): idle transparent, hover `wash`; title `ui`
-  semibold, preview `meta` quiet. The open channel (in the list and the
-  rail), the channel sidebar's chosen view or conversation, and the
-  personality being edited are `prism-lit`; the rail's other channels and
-  its round buttons are `prism`. The header's tabs are a segmented control.
-- A chosen option you pick from a set reads as chosen at a glance, not just
-  as a thin ring. Segmented controls (Theme, the header's tabs, a
-  personality's role) are a `prism` track with the chosen segment
-  `prism-lit`. Joins as / Let in rows are `prism`, the chosen one
-  `prism-lit` with a check. In the conversation, an ask's chosen option and
-  a room chip wear `accent-wash` with an `accent` edge.
-- Settings groups its fields in `prism` cards; the details panel's round
-  actions and grouped rows are `prism` too.
-- Buttons: primary `orb-pill`; secondary `prism` (`prism-fill-lit` on
-  hover).
+  semibold, preview `meta` quiet. In the sidebar the open channel and the
+  chosen view or conversation are `prism-lit`. The header's tabs are text,
+  the current one in ink with a 2px `accent` mark under it.
+- A chosen option you pick from a set (role chips, personality rows, Joins
+  as, an ask's options, room chips) wears `accent-wash` with an `accent`
+  edge, and its label in `accent-text` or a check: it reads as chosen at a
+  glance, not just as having a thin ring. Segmented controls are a `wash`
+  track with the chosen segment on `segment` (white / `#3a3a3c`), so it
+  rises off the track in both themes.
+- Buttons: primary `accent`; secondary outlined (a 1px `edge-strong` ring,
+  no fill, `wash` on hover). The kit's `Checkbox` is the one checkbox, in
+  `accent`.
 - Inputs: no fill, a 1px `line` edge (`edge`); focus ring is `2px ring` with `1px` offset and
   `6px` radius (base layer, so utilities can still take it off).
 - Placeholders and empty states use quiet ink, never reduced-opacity text.
