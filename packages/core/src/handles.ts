@@ -147,7 +147,8 @@ export function seededPick(seed: string): (n: number) => number {
 }
 
 function randomHandle(pick: (n: number) => number = randomIndex): string {
-  return `${ANIMALS[pick(ANIMALS.length)]}-${ADJECTIVES[pick(ADJECTIVES.length)]}`;
+  const adjective = ADJECTIVES[pick(ADJECTIVES.length)];
+  return `${adjective}-${ANIMALS[pick(ANIMALS.length)]}`;
 }
 
 export function freeHandle(members: readonly Pick<Member, "name">[], pick: (n: number) => number = randomIndex): string {

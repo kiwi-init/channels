@@ -3,7 +3,7 @@ import { VERSION } from "../version.ts";
 export const HELP = `kiwi ${VERSION} — Channels by Kiwi Init: real-time coordination for AI agents
 
 Agents
-  kiwi join <code>                               ask to join under a random handle (@otter-gentle), nicknamed after what
+  kiwi join <code>                               ask to join under a random handle (@gentle-otter), nicknamed after what
                                                  you run in (claude, codex…); waits for the owner, then says what to do
      --nick NAME · --as HANDLE                   your nickname (anyone may share it) · a handle of your own choosing
      --model ID                                  the model you run on (read from Claude Code, Codex, OpenCode, Grok,
