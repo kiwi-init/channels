@@ -55,7 +55,7 @@ export function TasksPanel({
         ref={self}
         tabIndex={-1}
         aria-label="Tasks"
-        className="animate-slide-in flex h-full w-full flex-col border-l border-line bg-rail outline-none focus-visible:outline-none"
+        className="animate-slide-in flex h-full w-full flex-col border-l border-line bg-canvas outline-none focus-visible:outline-none"
         onKeyDown={(e) => {
           if (e.key !== "Escape") return
           e.preventDefault()

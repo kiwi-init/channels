@@ -66,7 +66,7 @@ export function InfoPanel({
   return (
     <aside
       aria-label="Details"
-      className={cx("animate-slide-in flex h-full w-full flex-col border-l border-line bg-rail", view === "invite" ? "md:w-[420px]" : "md:w-[340px]")}
+      className={cx("animate-slide-in flex h-full w-full flex-col border-l border-line bg-canvas", view === "invite" ? "md:w-[420px]" : "md:w-[340px]")}
       onKeyDown={(e) => e.key === "Escape" && (view === "details" ? onClose() : setView("details"))}
     >
       <header className="drag flex h-(--chrome-h) shrink-0 items-center gap-2 px-3">

@@ -43,7 +43,7 @@ Light / dark are the two sides of each `light-dark()` in `index.css`:
 | Token | Light | Dark |
 |---|---|---|
 | `canvas` (conversation) | `#ffffff` | `#0d0d0e` |
-| `rail` (list and details; the same as `canvas`) | `#ffffff` | `#0d0d0e` |
+| `rail` (the channel list and a channel's sidebar, a step darker) | `#f2f2f5` | `#000000` |
 | `raised` (cards, popovers) | the canvas | the canvas |
 | `field` (inputs) | the canvas | the canvas |
 | `ink` | `#0f0f11` | `#f3f3f5` |
@@ -103,12 +103,16 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   `ui-tokens.ts`.
 - One shadow: `pop` (`0 0 0 1px pop-edge, 0 16px 40px -12px pop-shade`).
   No other shadows, no colored shadows.
-- One background: everything sits on `canvas`; `raised` and `field` are
-  the canvas too. Rows, cards, search, inputs and the composer have no grey
-  fill and no background of their own. They are separated by spacing and a
-  thin 1px `line` (the `edge` utility), never by a step in tone, and there
-  is no hairline between the sidebar and the page. Popovers and dialogs lift
-  off the canvas with the `pop` shadow only. (No glass/liquid treatments.)
+- Two tones: the rails (the channel list and a channel's sidebar) sit on
+  `rail`, a step darker, and the page beside them is one sheet of `canvas`
+  (the `sheet` utility: 8px in from the window's edges, `card` radius, a
+  1px `line` ring), holding the header, the conversation, the tasks and the
+  panels beside them. `raised` and `field` are the canvas. Inside the sheet,
+  rows, cards, search, inputs and the composer have no grey fill and no
+  background of their own; they are separated by spacing and a thin 1px
+  `line` (the `edge` utility). Popovers and dialogs lift off the canvas
+  with the `pop` shadow only. A phone has no sheet: one screen at a time,
+  on the canvas. (No glass/liquid treatments.)
 - Fall back to solid fills under `prefers-contrast: more`.
 
 ## 6. Motion
@@ -159,7 +163,8 @@ From `design-tokens.ts`:
 ## 9. App patterns
 
 - Shell: the channel rail, then inside a channel its own sidebar (280px,
-  from 768px wide): the channel's name and who is here, Search, the views
+  from 768px wide), both on `rail`; the page is the round `sheet` beside
+  them: the channel's name and who is here, Search, the views
   with counts (Everything, Needs you, In progress, In review, Done this
   week), the agents with what each is doing now, and the conversations
   (rooms and direct ones). The page beside it has one header row: what is
@@ -299,11 +304,11 @@ omit the head; never replace it with stock art.
 ## 13. Do and don't
 
 Do: use vars, tabular numerals for times and counts, one accent at a time,
-flat sidebar, inline composer panels, quiet placeholders, `Boundary` around
+a flat sidebar on `rail` beside the page's round sheet, inline composer panels, quiet placeholders, `Boundary` around
 channel views.
 Don't: hard-code hex, add font families, ship gradient marketing styling,
 build floating composer menus, use colored shadows, or put hairlines
-between the list and the conversation.
+between the rails.
 
 ## 14. New-surface checklist
 

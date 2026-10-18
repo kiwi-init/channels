@@ -97,44 +97,46 @@ export function ChannelGate({ code, listed, onBack, onGone }: { code: string; li
   }
 
   return (
-    <Stage>
-      {phase.kind === "loading" && <Spinner />}
-      {phase.kind === "ask" && <AskToJoin code={code} listed={listed} onAsked={(pending) => setPhase({ kind: "waiting", pending, code: null })} onCancel={onGone} />}
-      {phase.kind === "waiting" && (
-        <>
-          <Heading title="Waiting for the owner">
-            {phase.code ? (
-              <>
-                They see your request as <span className="font-medium text-ink">{phase.pending.identity.name}</span>, next to this number. If they ask, make sure it matches.
-              </>
-            ) : (
-              <>
-                Your request is in as <span className="font-medium text-ink">{phase.pending.identity.name}</span>. When the owner opens it, a 6-digit code shows here and next to your request. They let
-                you in once the two match.
-              </>
-            )}
-          </Heading>
-          {phase.code && <VerifyCode code={phase.code} />}
-          <div className="flex items-center gap-3">
-            <Spinner />
-            <span className="text-ui text-ink-2">{unreachable ? "Can’t reach the relay. Still waiting." : "This page updates the moment you’re in."}</span>
-          </div>
-          <Button variant="ghost" className="mt-6 -ml-3.5" onClick={giveUp}>
-            Cancel request
-          </Button>
-        </>
-      )}
-      {(phase.kind === "denied" || phase.kind === "error") && (
-        <>
-          <Heading title={phase.kind === "denied" ? "The owner didn’t let you in" : "This channel won’t open"}>
-            {phase.kind === "denied" ? "Your request was declined. Ask the owner for a new code if that was a mistake." : phase.message}
-          </Heading>
-          <Button variant="secondary" className="mt-6" onClick={phase.kind === "denied" ? giveUp : onBack}>
-            Back to channels
-          </Button>
-        </>
-      )}
-    </Stage>
+    <div className="flex min-w-0 flex-1 md:sheet">
+      <Stage>
+        {phase.kind === "loading" && <Spinner />}
+        {phase.kind === "ask" && <AskToJoin code={code} listed={listed} onAsked={(pending) => setPhase({ kind: "waiting", pending, code: null })} onCancel={onGone} />}
+        {phase.kind === "waiting" && (
+          <>
+            <Heading title="Waiting for the owner">
+              {phase.code ? (
+                <>
+                  They see your request as <span className="font-medium text-ink">{phase.pending.identity.name}</span>, next to this number. If they ask, make sure it matches.
+                </>
+              ) : (
+                <>
+                  Your request is in as <span className="font-medium text-ink">{phase.pending.identity.name}</span>. When the owner opens it, a 6-digit code shows here and next to your request. They
+                  let you in once the two match.
+                </>
+              )}
+            </Heading>
+            {phase.code && <VerifyCode code={phase.code} />}
+            <div className="flex items-center gap-3">
+              <Spinner />
+              <span className="text-ui text-ink-2">{unreachable ? "Can’t reach the relay. Still waiting." : "This page updates the moment you’re in."}</span>
+            </div>
+            <Button variant="ghost" className="mt-6 -ml-3.5" onClick={giveUp}>
+              Cancel request
+            </Button>
+          </>
+        )}
+        {(phase.kind === "denied" || phase.kind === "error") && (
+          <>
+            <Heading title={phase.kind === "denied" ? "The owner didn’t let you in" : "This channel won’t open"}>
+              {phase.kind === "denied" ? "Your request was declined. Ask the owner for a new code if that was a mistake." : phase.message}
+            </Heading>
+            <Button variant="secondary" className="mt-6" onClick={phase.kind === "denied" ? giveUp : onBack}>
+              Back to channels
+            </Button>
+          </>
+        )}
+      </Stage>
+    </div>
   )
 }
 
