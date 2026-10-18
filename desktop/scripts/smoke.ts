@@ -30,6 +30,7 @@ function children(): { pid: number; args: string }[] {
 }
 
 const renderer = (): number | null => children().find((p) => p.args.startsWith(exe) && p.args.includes("--type=renderer"))?.pid ?? null;
+const codeCacheEntries = (): number => spawnSync("find", [root, "-path", "*/Code Cache/js/*", "-type", "f"], { encoding: "utf8" }).stdout.split("\n").filter(Boolean).length;
 const keyProcess = (): number | null => children().find((p) => p.args.startsWith(exe) && p.args.includes("--type=utility") && p.args.includes("node.mojom.NodeService"))?.pid ?? null;
 
 async function until<T>(what: string, ms: number, probe: () => Promise<T | null> | T | null): Promise<T | null> {
@@ -87,6 +88,11 @@ try {
   const hello = await until("the bundled kiwi daemon", 60_000, () => daemonHello(home, 1_000));
   const window = await until("the window's renderer", 60_000, renderer);
   if (window !== null) console.log(`window: rendering (pid ${window})`);
+  const cached = await until("the page's scripts in the V8 code cache (kiwi-app:// is registered with codeCache)", 30_000, () => {
+    const n = codeCacheEntries();
+    return n > 10 ? n : null;
+  });
+  if (cached !== null) console.log(`code cache: ${cached} entries`);
   if (keys !== null) {
     await sleep(5_000);
     if (keyProcess() === keys) console.log(`key process: running (pid ${keys})`);

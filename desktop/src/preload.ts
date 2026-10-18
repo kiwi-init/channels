@@ -30,7 +30,9 @@ import type {
   VoiceAuth,
 } from "./bridge.ts";
 
-const relayUrl = (ipcRenderer.sendSync("kiwi:snapshot-sync") as StoreSnapshot).relayUrl;
+let latest = ipcRenderer.sendSync("kiwi:snapshot-sync") as StoreSnapshot;
+ipcRenderer.on("kiwi:store", (_e, v: StoreSnapshot) => (latest = v));
+const relayUrl = latest.relayUrl;
 
 const on = (channel: "kiwi:store" | "kiwi:deep-link" | "kiwi:update" | "kiwi:github-code", cb: (v: never) => void): (() => void) => {
   const fn = (_e: unknown, v: never) => cb(v);
@@ -89,7 +91,7 @@ const channels: KeysPort = {
 
 const kiwi: KiwiBridge = {
   relayUrl,
-  getSnapshot: () => ipcRenderer.sendSync("kiwi:snapshot-sync") as StoreSnapshot,
+  getSnapshot: () => latest,
   onStore: (cb) => on("kiwi:store", cb),
   setRelayUrl: (url: string) => ipcRenderer.invoke("kiwi:set-relay-url", url) as Promise<string>,
   createPerson: (name: string) => ipcRenderer.invoke("kiwi:create-person", name) as Promise<PublicPerson>,

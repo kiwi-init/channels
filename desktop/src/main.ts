@@ -44,17 +44,17 @@ else {
   if (process.defaultApp && process.argv.length >= 2) app.setAsDefaultProtocolClient(JOIN_SCHEME, process.execPath, [path.resolve(process.argv[1] as string)]);
 
   app.on("web-contents-created", (_e, wc) => guardContents(wc));
-  protocol.registerSchemesAsPrivileged([{ scheme: APP_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
+  protocol.registerSchemesAsPrivileged([{ scheme: APP_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, codeCache: true } }]);
   void app.whenReady().then(async () => {
-    loadStore();
-    warnIfBroken();
     serveWeb();
     session.defaultSession.setPermissionRequestHandler((wc, permission, callback) => {
       callback(permissionAllowed(wc.getURL(), permission));
     });
     wireIpc();
-    startKeys();
     createWindow();
+    loadStore();
+    warnIfBroken();
+    startKeys();
     createTray();
     startUpdates((u) => {
       currentWindow()?.webContents.send("kiwi:update", u);

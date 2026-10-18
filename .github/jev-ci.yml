@@ -220,8 +220,10 @@ jobs:
       EnableNodeOptionsEnvironmentVariable and EnableNodeCliInspectArguments are off and
       EnableCookieEncryption, EnableEmbeddedAsarIntegrityValidation and OnlyLoadAppFromAsar are
       on. desktop/scripts/smoke.ts starts the packaged app under Xvfb and fails unless its
-      window renders, its key process (utilityProcess.fork of dist/channels.js from app.asar)
-      stays up and the bundled kiwi daemon answers on its socket, and fails if
+      window renders, the page's scripts land in the V8 code cache (kiwi-app:// registered with
+      codeCache, so a launch after the first skips compiling them), its key process
+      (utilityProcess.fork of dist/channels.js from app.asar) stays up and the bundled kiwi
+      daemon answers on its socket, and fails if
       ELECTRON_RUN_AS_NODE=1 runs JavaScript or --inspect opens a debugger. Fails on a bundling
       or packaging error, a fuse changed or dropped, or an app that no longer starts.
 
