@@ -346,6 +346,11 @@ async function run(part: Part): Promise<string[]> {
     log(`ok  ${at}`);
 
     const smokeTask = /T\d+/.exec(await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke task", "--owner", "bot"]))?.[0] ?? "T0";
+    at = "Agents: a lane per agent, with what's next on it";
+    await toTab("Agents");
+    await page.getByRole("region", { name: "Agent lanes" }).getByText("Smoke task").first().waitFor({ timeout: 15000 });
+    if (process.env.SMOKE_SHOTS) await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "lanes.png") });
+    log(`ok  ${at}`);
     at = "Task in the Tasks panel";
     const tasksPanel = page.getByRole("complementary", { name: "Tasks" });
     await toTab("Tasks");

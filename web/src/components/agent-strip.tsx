@@ -76,7 +76,7 @@ export function AgentRow({ a, onOpenTask }: { a: AgentNow; onOpenTask: (id: numb
   )
 }
 
-export function AgentLine({ a, now, onOpenTask, brief }: { a: AgentNow; now: number; onOpenTask: (id: number) => void; brief?: boolean }) {
+function AgentLine({ a, now, onOpenTask, brief }: { a: AgentNow; now: number; onOpenTask: (id: number) => void; brief?: boolean }) {
   return (
     <li className="flex items-start gap-3 rounded-ctl px-2 py-2">
       <span className="flex pt-0.5">{face(a, 28)}</span>

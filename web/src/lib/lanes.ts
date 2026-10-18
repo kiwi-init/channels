@@ -10,7 +10,7 @@ export interface LaneTask {
   pr?: PrRef
 }
 
-export interface LaneEvent {
+interface LaneEvent {
   seq: number
   at: number
   text: string

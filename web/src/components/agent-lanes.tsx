@@ -22,7 +22,9 @@ function nowLine(a: AgentNow): { text: string; tone: "busy" | "live" | "quiet" }
 
 function Ticks({ checks }: { checks: PrChecks }) {
   const ticks = [...checks.failed.map(() => "bg-alert"), ...Array.from({ length: checks.running }, () => "bg-doing"), ...Array.from({ length: checks.passed }, () => "bg-live")].slice(0, MAX_TICKS)
-  const label = [checks.passed ? `${checks.passed} passed` : null, checks.failed.length ? `${checks.failed.length} failed` : null, checks.running ? `${checks.running} running` : null].filter(Boolean).join(", ")
+  const label = [checks.passed ? `${checks.passed} passed` : null, checks.failed.length ? `${checks.failed.length} failed` : null, checks.running ? `${checks.running} running` : null]
+    .filter(Boolean)
+    .join(", ")
   return (
     <span role="img" aria-label={`Checks: ${label}`} title={checks.failed.length ? `Failed: ${checks.failed.join(", ")}` : label} className="flex items-center gap-0.5">
       {ticks.map((c, i) => (
@@ -57,7 +59,21 @@ function TaskBlock({ c, now, onOpen }: { c: LaneTask; now: number; onOpen: (id: 
   )
 }
 
-function Lane({ a, state, messages, now, nameOf, onOpenTask }: { a: AgentNow; state: ChannelState; messages: Message[]; now: number; nameOf: (n: string) => string; onOpenTask: (id: number) => void }) {
+function Lane({
+  a,
+  state,
+  messages,
+  now,
+  nameOf,
+  onOpenTask,
+}: {
+  a: AgentNow
+  state: ChannelState
+  messages: Message[]
+  now: number
+  nameOf: (n: string) => string
+  onOpenTask: (id: number) => void
+}) {
   const work = useMemo(() => laneWork(state, messages, a.name), [state, messages, a.name])
   const line = nowLine(a)
   const sponsor = state.members.get(a.name)?.sponsor?.name
@@ -113,7 +129,11 @@ function Lane({ a, state, messages, now, nameOf, onOpenTask }: { a: AgentNow; st
                   #{pr.number}
                 </a>
                 <span className="min-w-0 truncate">{pr.title ?? pr.branch ?? pr.repo}</span>
-                {pr.checks && <span className="ml-auto self-center"><Ticks checks={pr.checks} /></span>}
+                {pr.checks && (
+                  <span className="ml-auto self-center">
+                    <Ticks checks={pr.checks} />
+                  </span>
+                )}
               </li>
             ))}
           </ul>
@@ -126,7 +146,7 @@ function Lane({ a, state, messages, now, nameOf, onOpenTask }: { a: AgentNow; st
         <ul aria-label="Recent" className="mt-auto border-t border-line pt-2">
           {work.events.map((e) => (
             <li key={e.seq} className="flex gap-3 py-0.5 text-meta">
-              <time className="w-12 shrink-0 text-ink-3 tabular-nums">{formatTime(e.at)}</time>
+              <time className="w-16 shrink-0 whitespace-nowrap text-ink-3 tabular-nums">{formatTime(e.at)}</time>
               <span className="min-w-0 text-ink-2">{e.text}</span>
             </li>
           ))}
@@ -154,7 +174,7 @@ export function AgentLanes({
   if (!agents.length) return <p className="py-12 text-center text-ui text-ink-3">No agent has joined yet.</p>
   const ordered = byBusy(agents).sort((a, b) => Number(a.lead) - Number(b.lead))
   return (
-    <div role="region" aria-label="Agents" className="-mx-4 flex min-h-[60vh] divide-x divide-line overflow-x-auto">
+    <div role="region" aria-label="Agent lanes" className="-mx-4 flex min-h-[calc(100dvh-var(--head)-16px)] divide-x divide-line overflow-x-auto">
       {ordered.map((a) => (
         <Lane key={a.name} a={a} state={state} messages={messages} now={now} nameOf={nameOf} onOpenTask={onOpenTask} />
       ))}

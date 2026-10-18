@@ -20,11 +20,11 @@ import { useHeight } from "@/hooks/use-height"
 import { Composer } from "../composer"
 import { AddAgent } from "../add-agent"
 import { RoomChips } from "../room-chips"
-import { AgentLine, AgentStrip, byBusy, type AgentNow } from "../agent-strip"
+import { AgentStrip, type AgentNow } from "../agent-strip"
 import { ChannelControls, HoldDialog } from "../controls"
 import { Icon } from "../icon"
 import { Button, Spinner, errorText, toast } from "../kit"
-import { CompactBlock, ProposalCard, TalkBar, TalkButton } from "../lazy"
+import { AgentLanes, CompactBlock, ProposalCard, TalkBar, TalkButton } from "../lazy"
 import { bridge } from "@/lib/secrets"
 import { GifPicker } from "../gif-picker"
 import { isAgent } from "../message"
@@ -419,7 +419,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
 
           {tab === "tasks" || tab === "agents" ? (
             <div className="absolute inset-0 overflow-y-auto pt-[calc(var(--head)+8px)]">
-              <div className="mx-auto w-full max-w-[960px] px-2 md:px-4">
+              <div className={cx("mx-auto w-full px-2 md:px-4", tab === "tasks" && "max-w-[960px]")}>
                 {tab === "tasks" ? (
                   <Tasks
                     key={view}
@@ -431,11 +431,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                     onOpen={openTask}
                   />
                 ) : agentsNow.length ? (
-                  <ul aria-label="What the agents are doing" className="px-2 pb-6">
-                    {byBusy(agentsNow).map((a) => (
-                      <AgentLine key={a.name} a={a} now={now} onOpenTask={openTask} />
-                    ))}
-                  </ul>
+                  <AgentLanes agents={agentsNow} state={state} messages={messages} now={now} nameOf={nameOf} onOpenTask={openTask} />
                 ) : (
                   <AddAgent code={member.code} isOwner={isOwner} />
                 )}
