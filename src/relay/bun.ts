@@ -43,6 +43,7 @@ import {
 } from "./room.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync } from "./route.ts";
 import { GITHUB_QUEUE_MAX, GITHUB_QUEUE_TTL_MS, onGithubHttp, type GithubRoutes } from "./github.ts";
+import { GithubApp, githubAppFrom, type GithubAppApi } from "./github-app.ts";
 import { edgePage, PAGE_CACHE_SECONDS, PAGE_PATH, type PageCache } from "./pages.ts";
 
 interface SocketData {
@@ -72,6 +73,7 @@ export function startRelay(
     now?: () => number;
     trustProxy?: TrustProxy;
     githubSecret?: string | null;
+    githubApp?: GithubAppApi | null;
   } = {},
 ) {
   const human = opts.human ?? null;
@@ -156,6 +158,7 @@ export function startRelay(
   const services = Layer.mergeAll(
     Layer.succeed(Human, human),
     Layer.succeed(Policy, policy),
+    Layer.succeed(GithubApp, opts.githubApp === undefined ? githubAppFrom({ appId: process.env.GITHUB_APP_ID, privateKey: process.env.GITHUB_APP_PRIVATE_KEY }) : opts.githubApp),
     Layer.succeed(Directory, {
       list: async (user: string) => listOf(user),
       // Synchronous SQLite: the count and the hold happen with nothing in between.
