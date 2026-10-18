@@ -43,6 +43,7 @@ import {
 import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
+import { GithubApp, githubAppFrom } from "./github-app.ts";
 import { GITHUB_QUEUE_MAX, GITHUB_QUEUE_TTL_MS, onGithubHttp, type GithubItem, type GithubLink, type GithubRoutes } from "./github.ts";
 
 interface Env {
@@ -65,6 +66,8 @@ interface Env {
   REPOS: DurableObjectNamespace<Repos>;
   GITHUB_WEBHOOK_SECRET?: string;
   GITHUB_APP_CLIENT_ID?: string;
+  GITHUB_APP_ID?: string;
+  GITHUB_APP_PRIVATE_KEY?: string;
 }
 
 const edgeCache: PageCache = {
@@ -116,7 +119,14 @@ export class Channel extends DurableObject<Env> {
       all: <T>(q: string, ...p: SqlParam[]) => ctx.storage.sql.exec(q, ...p).toArray() as T[],
     };
     this.policy = policyFrom(env as unknown as Record<string, string | undefined>);
-    this.relay = makeRelay(Layer.mergeAll(Layer.succeed(Human, human(env)), Layer.succeed(Policy, this.policy), Layer.succeed(ChannelLists, owned(env))));
+    this.relay = makeRelay(
+      Layer.mergeAll(
+        Layer.succeed(Human, human(env)),
+        Layer.succeed(Policy, this.policy),
+        Layer.succeed(ChannelLists, owned(env)),
+        Layer.succeed(GithubApp, githubAppFrom({ appId: env.GITHUB_APP_ID, privateKey: env.GITHUB_APP_PRIVATE_KEY })),
+      ),
+    );
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));
   }
 

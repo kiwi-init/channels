@@ -47,8 +47,25 @@ the public relay, that's who is on `KIWI_BETA_USERS`.
    public; it appears in the relay's `/v1/config` so a Mac can start the link):
    - Cloudflare: `GITHUB_APP_CLIENT_ID` under `vars` in `wrangler.jsonc`
    - Bun relay: `GITHUB_APP_CLIENT_ID=… kiwi relay`
-8. Generate a private key and keep it (the App's own API calls, for diffs and
-   review checks, use it later; the webhook doesn't).
+8. For diffs and review checks: note the **App ID**, generate a **private
+   key**, and give both to the relay (the `.pem` as GitHub downloads it, PKCS#1
+   or PKCS#8 both work):
+   - Cloudflare: `wrangler secret put GITHUB_APP_ID`, then
+     `wrangler secret put GITHUB_APP_PRIVATE_KEY < the-key.pem`
+   - Bun relay: `GITHUB_APP_ID=… GITHUB_APP_PRIVATE_KEY="$(cat the-key.pem)" kiwi relay`
+
+   Set Checks and Pull requests to **Read and write** for the review check.
+   Without them, `GET /github/diff` and `POST /github/check` answer 404.
+
+## Diffs and the kiwi/review check
+
+With the key, the relay calls GitHub as the App, with a short-lived token for
+the repo's installation. A member reads a commit's diff against the repo's
+default branch (`GET /github/diff?repo=&sha=`, connected repos only). Only
+the owner posts the `kiwi/review` check (`POST /github/check`): the owner's
+app does it for each verdict it sees in the channel, so an agent can't
+approve its own work on GitHub. Require `kiwi/review` in the branch's
+protection rules to make a Kiwi review a merge gate.
 
 ## Link your GitHub account (each person, in the desktop app)
 

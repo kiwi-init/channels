@@ -13,6 +13,7 @@ import { generateIdentity } from "@kiwi/core/identity.ts";
 import * as Layer from "effect/Layer";
 import { MORE_REFUSED, WS_PROTOCOL } from "@kiwi/core/protocol.ts";
 import { Human } from "../src/relay/human.ts";
+import { GithubApp } from "../src/relay/github-app.ts";
 import { OPEN_POLICY, Policy } from "../src/relay/policy.ts";
 import { Directory, MORE_PER_MINUTE, onClientFrame, RoomDb, type Sql } from "../src/relay/room.ts";
 import { makeRelay, runRoomSync } from "../src/relay/route.ts";
@@ -212,7 +213,12 @@ test("the relay answers a member's page asks only so often", async () => {
       all: <T>(q: string, ...p: (string | number | null)[]) => file.query(q).all(...p) as T[],
     };
     const ctx = makeRelay(
-      Layer.mergeAll(Layer.succeed(Human, null), Layer.succeed(Policy, OPEN_POLICY), Layer.succeed(Directory, { list: async () => [], reserve: async () => true, release: async () => {} })),
+      Layer.mergeAll(
+        Layer.succeed(Human, null),
+        Layer.succeed(GithubApp, null),
+        Layer.succeed(Policy, OPEN_POLICY),
+        Layer.succeed(Directory, { list: async () => [], reserve: async () => true, release: async () => {} }),
+      ),
     );
     const ask = () => runRoomSync(ctx, new RoomDb(sql, seed.access.roomId), onClientFrame(JSON.stringify({ t: "more", since: seed.head - 1 }), seed.owner.pk)).reply;
     for (let i = 0; i < MORE_PER_MINUTE; i++) expect(String(ask())).toContain('"t":"page"');
