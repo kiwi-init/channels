@@ -10,6 +10,8 @@ import { settle } from "./leases.ts";
 import { carriedPersona } from "../personality.ts";
 import type { ChannelState, Fact, FoldBase, FoldMember, GuardFloor, Lease, Member, Place, Reaction, Room, RoomsFloor, Roster, Task } from "./types.ts";
 
+const STALE_MS = 24 * 3_600_000;
+
 function touch(task: Task | undefined, name: string, at: number): void {
   if (task && (task.touched?.[name] ?? 0) < at) task.touched = { ...task.touched, [name]: at };
 }
@@ -154,6 +156,7 @@ export function fold(
   const reactSeqs = new Set<number>(from?.reactSeqs);
   const trust = new Map<number, Trust>(from?.trust);
   const rejected = new Map<number, string>(from?.rejected);
+  const sent = new Map<string, number>(from?.sent);
   const answered = new Map<number, Set<string>>(from?.answered.map(([seq, by]) => [seq, new Set(by)]));
   const threadOf = new Map<number, number>(from?.threadOf);
   const threadPeople = new Map<number, Set<string>>(from?.threadPeople.map(([seq, people]) => [seq, new Set(people)]));
@@ -213,6 +216,18 @@ export function fold(
         rejected.set(m.seq, member ? `not signed by ${m.from}'s key` : `${m.from} isn't a member`);
         continue;
       }
+      const first = sent.get(m.id);
+      if (first !== undefined && first !== m.seq) {
+        trust.set(m.seq, "refused");
+        rejected.set(m.seq, `a copy of #${first}, sent again`);
+        continue;
+      }
+      if (m.rts !== undefined && m.rts - m.ts > STALE_MS) {
+        trust.set(m.seq, "refused");
+        rejected.set(m.seq, `signed more than a day before the relay got it`);
+        continue;
+      }
+      sent.set(m.id, m.seq);
       const refused = refusal(scopesByKey.get(m.pk!) ?? [], m);
       if (refused) {
         trust.set(m.seq, "refused");
@@ -337,6 +352,7 @@ export function fold(
       reactSeqs: [...reactSeqs],
       trust: [...trust],
       rejected: [...rejected],
+      sent: [...sent],
       asks: openAsks,
       answered: openAsks.flatMap((m): [number, string[]][] => [[m.seq, [...(answered.get(m.seq) ?? [])]]]),
       threadOf: [...threadOf],
