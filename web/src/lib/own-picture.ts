@@ -9,18 +9,9 @@ export function useOwnPicture(): MemberPicture | null {
   useEffect(() => {
     const b = bridge()
     if (!b?.githubPicture) return
-    let live = true
-    const load = () =>
-      void b.githubPicture().then(
-        (p) => live && setPicture(p),
-        () => live && setPicture(null)
-      )
+    const load = () => void b.githubPicture().then(setPicture, () => setPicture(null))
     load()
-    const off = b.onStore(load)
-    return () => {
-      live = false
-      off()
-    }
+    return b.onStore(load)
   }, [])
   return picture
 }
