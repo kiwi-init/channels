@@ -4,7 +4,8 @@ import { useCallback, useMemo, useState, type CSSProperties, type ReactNode } fr
 import { droppedCount } from "@kiwi/core/format.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
 import { GENERAL_ROOM, isReaction, type ImageAttachment, type Message } from "@kiwi/core/protocol.ts"
-import { colorOf, outsideRepos, tasksAwaitingPeople, type Task } from "@kiwi/core/state.ts"
+import { colorOf, outsideRepos, taskId, tasksAwaitingPeople, type Task } from "@kiwi/core/state.ts"
+import { taskPr } from "@kiwi/core/work.ts"
 import { channelTitle, loadRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { howHere } from "@/lib/presence"
 import type { Gif } from "@/lib/gifs"
@@ -30,6 +31,7 @@ import type { ToolCtx } from "@/lib/voice/tools"
 import { GifPicker } from "../gif-picker"
 import { isAgent } from "../message"
 import { NeedsYou } from "../needs-you"
+import { TaskInline } from "../task-inline"
 import { TasksView } from "../tasks-view"
 import { ChannelSidebar, type Conversation as ConversationRow } from "./channel-sidebar"
 import { Header } from "./header"
@@ -63,7 +65,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const [earlier, setEarlier] = useState(false)
   const sideRoot = side?.kind === "thread" ? side.root : null
   const info = side?.kind === "info"
-  const shownTask = side?.kind === "tasks" ? side.task : null
+  const [expanded, setExpanded] = useState<number | null>(null)
+  const shownTask = side?.kind === "tasks" ? side.task : tab === "tasks" ? expanded : null
   const openThread = useCallback((root: number) => setSide({ kind: "thread", root }), [])
   const openTask = useCallback((task: number) => setSide({ kind: "tasks", task }), [])
   const [pausing, setPausing] = useState(false)
@@ -444,7 +447,37 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             <div className="absolute inset-0 overflow-y-auto pt-[calc(var(--head)+8px)]">
               <div className="mx-auto w-full max-w-[960px] px-2 md:px-4">
                 {tab === "tasks" ? (
-                  <TasksView state={state} now={now} view={view} agents={agentsNow} needs={needsHere ? needsYou : null} onOpen={openTask} />
+                  <TasksView
+                    state={state}
+                    now={now}
+                    view={view}
+                    agents={agentsNow}
+                    needs={needsHere ? needsYou : null}
+                    open={side?.kind === "tasks" ? null : expanded}
+                    onOpen={(id) => setExpanded((e) => (e === id ? null : id))}
+                    detail={(id) => (
+                      <TaskInline
+                        pr={taskPr(state, id)?.pr}
+                        state={state}
+                        rows={taskRows}
+                        load={ch.githubDiff}
+                        composer={
+                          <Composer
+                            key={`task:${id}`}
+                            me={me}
+                            people={people}
+                            replyTo={null}
+                            nameOf={nameOf}
+                            onClearReply={() => undefined}
+                            disabled={connection === "connecting"}
+                            extra={sendFrom(state, { kind: "task", task: id }, me)}
+                            placeholder={`Reply in ${taskId(id)}`}
+                            send={send}
+                          />
+                        }
+                      />
+                    )}
+                  />
                 ) : agentsNow.length ? (
                   <ul aria-label="What the agents are doing" className="px-2 pb-6">
                     {byBusy(agentsNow).map((a) => (

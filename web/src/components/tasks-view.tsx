@@ -83,7 +83,25 @@ function ChecksCell({ pr }: { pr: Pr | undefined }) {
   )
 }
 
-function TaskRow({ task, state, now, agent, waiting, onOpen }: { task: Task; state: ChannelState; now: number; agent: AgentNow | undefined; waiting: boolean; onOpen: (id: number) => void }) {
+function TaskRow({
+  task,
+  state,
+  now,
+  agent,
+  waiting,
+  open,
+  detail,
+  onOpen,
+}: {
+  task: Task
+  state: ChannelState
+  now: number
+  agent: AgentNow | undefined
+  waiting: boolean
+  open: boolean
+  detail: ReactNode
+  onOpen: (id: number) => void
+}) {
   const owner = task.owner ? state.members.get(task.owner) : undefined
   const doing = agent && agent.load.current.some((t) => t.id === task.id) ? doingNow(agent) : null
   const pr = taskPr(state, task.id)
@@ -92,10 +110,14 @@ function TaskRow({ task, state, now, agent, waiting, onOpen }: { task: Task; sta
       <div
         role="button"
         tabIndex={0}
+        aria-expanded={open}
         aria-label={`${taskId(task.id)}, ${task.title}`}
         onClick={() => onOpen(task.id)}
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpen(task.id))}
-        className="grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_44px] items-center gap-x-3.5 rounded-row px-3 py-2.5 transition-colors hover:bg-wash md:grid-cols-[28px_minmax(0,1fr)_168px_44px] lg:grid-cols-[28px_minmax(0,1fr)_168px_128px_44px]"
+        className={cx(
+          "grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_44px] items-center gap-x-3.5 rounded-row px-3 py-2.5 transition-colors hover:bg-wash md:grid-cols-[28px_minmax(0,1fr)_168px_44px] lg:grid-cols-[28px_minmax(0,1fr)_168px_128px_44px]",
+          open && "bg-wash"
+        )}
       >
         {task.owner ? (
           <Monogram name={memberName(owner, task.owner)} hue={task.owner} agent={isAgent(owner)} color={colorOf(state, task.owner)} size={28} />
@@ -131,6 +153,7 @@ function TaskRow({ task, state, now, agent, waiting, onOpen }: { task: Task; sta
         </span>
         <time className="text-right text-meta text-ink-3 tabular-nums">{formatAgoShort(task.updatedAt, now)}</time>
       </div>
+      {open && detail}
     </li>
   )
 }
@@ -146,7 +169,25 @@ function Group({ label, count, children }: { label: string; count: number; child
   )
 }
 
-export function TasksView({ state, now, view, agents, needs, onOpen }: { state: ChannelState; now: number; view: View; agents: AgentNow[]; needs: ReactNode; onOpen: (id: number) => void }) {
+export function TasksView({
+  state,
+  now,
+  view,
+  agents,
+  needs,
+  open,
+  detail,
+  onOpen,
+}: {
+  state: ChannelState
+  now: number
+  view: View
+  agents: AgentNow[]
+  needs: ReactNode
+  open: number | null
+  detail: (id: number) => ReactNode
+  onOpen: (id: number) => void
+}) {
   const groups = taskGroups(state, view, now)
   const byName = new Map(agents.map((a) => [a.name, a]))
   const showNeeds = view === "everything" || view === "needs"
@@ -170,7 +211,17 @@ export function TasksView({ state, now, view, agents, needs, onOpen }: { state: 
             {g.tasks.length ? (
               <ul className="divide-y divide-line">
                 {g.tasks.map((t) => (
-                  <TaskRow key={t.id} task={t} state={state} now={now} agent={t.owner ? byName.get(t.owner) : undefined} waiting={waiting.has(t.id)} onOpen={onOpen} />
+                  <TaskRow
+                    key={t.id}
+                    task={t}
+                    state={state}
+                    now={now}
+                    agent={t.owner ? byName.get(t.owner) : undefined}
+                    waiting={waiting.has(t.id)}
+                    open={open === t.id}
+                    detail={open === t.id ? detail(t.id) : null}
+                    onOpen={onOpen}
+                  />
                 ))}
               </ul>
             ) : (
