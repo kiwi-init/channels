@@ -114,7 +114,10 @@ function TaskRow({
         aria-label={`${taskId(task.id)}, ${task.title}`}
         onClick={() => onOpen(task.id)}
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpen(task.id))}
-        className="grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_44px] items-center gap-x-3.5 rounded-row px-3 py-2.5 transition-colors hover:bg-wash md:grid-cols-[28px_minmax(0,1fr)_168px_44px] lg:grid-cols-[28px_minmax(0,1fr)_168px_128px_44px]"
+        className={cx(
+          "relative grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_44px] items-center gap-x-3.5 rounded-row px-3 py-2.5 transition-colors hover:bg-wash md:grid-cols-[28px_minmax(0,1fr)_168px_44px] lg:grid-cols-[28px_minmax(0,1fr)_168px_128px_44px]",
+          open && "before:absolute before:inset-y-2.5 before:left-0 before:w-0.5 before:rounded-full before:bg-accent"
+        )}
       >
         {task.owner ? (
           <Monogram name={memberName(owner, task.owner)} hue={task.owner} agent={isAgent(owner)} color={colorOf(state, task.owner)} size={28} />
@@ -124,7 +127,7 @@ function TaskRow({
           </span>
         )}
         <span className="min-w-0">
-          <span className={cx("block truncate text-body leading-snug", task.state === "done" ? "text-ink-2" : "text-ink")}>{task.title}</span>
+          <span className={cx("block truncate text-body leading-snug", task.state === "done" ? "text-ink-2" : "text-ink", open && "font-semibold")}>{task.title}</span>
           <span className="flex min-w-0 items-center gap-1.5 text-meta text-ink-3">
             <span className="shrink-0 tabular-nums">{taskId(task.id)}</span>
             <span aria-hidden>·</span>
