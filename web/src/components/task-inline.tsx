@@ -107,7 +107,12 @@ function PrCard({ pr, state, load }: { pr: GithubPr; state: ChannelState; load: 
             See the diff
           </Button>
         )}
-        <a href={url} target="_blank" rel="noreferrer" className="inline-flex h-8 flex-1 items-center justify-center rounded-row text-ui font-medium text-ink edge transition-colors hover:bg-wash">
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex h-7 flex-1 items-center justify-center rounded-row px-2.5 text-ui font-medium text-ink shadow-[inset_0_0_0_1px_var(--edge-strong)] transition-colors hover:bg-wash"
+        >
           GitHub
         </a>
       </div>
