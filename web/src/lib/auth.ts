@@ -7,7 +7,7 @@
 import * as Effect from "effect/Effect"
 import { useEffect, useState } from "react"
 
-import { fx as relayFx } from "@kiwi/core/client.ts"
+import { fx as relayFx } from "@kiwi/core/client/relay.ts"
 
 import { relayUrl } from "./relay"
 import { run } from "./runtime"

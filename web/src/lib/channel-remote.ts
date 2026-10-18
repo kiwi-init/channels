@@ -1,4 +1,4 @@
-import { ChannelGone, RelayError } from "@kiwi/core/client.ts"
+import { ChannelGone, RelayError } from "@kiwi/core/client/errors.ts"
 import type { Message } from "@kiwi/core/protocol.ts"
 
 import type { CallResult, ChannelCallName, ChannelCalls, ChannelOps, ChannelView, FollowEvent, FollowOptions, JoinCheck, KeysAsk, KeysPort, WireError } from "../../../desktop/src/bridge.ts"

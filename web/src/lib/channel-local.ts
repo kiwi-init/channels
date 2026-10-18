@@ -1,4 +1,4 @@
-import { keepRecordsIn } from "@kiwi/core/client.ts"
+import { keepRecordsIn } from "@kiwi/core/client/info.ts"
 import { generateIdentity } from "@kiwi/core/identity.ts"
 import type { Member } from "@kiwi/core/membership.ts"
 import type { Signed, SigningBudget } from "@kiwi/core/sas.ts"

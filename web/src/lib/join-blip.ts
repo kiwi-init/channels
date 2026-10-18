@@ -1,4 +1,4 @@
-import { ChannelGone, RelayError, Unreachable } from "@kiwi/core/client.ts"
+import { ChannelGone, RelayError, Unreachable } from "@kiwi/core/client/errors.ts"
 
 /** A relay outage or overload: stay on waiting and poll again. */
 export function isJoinBlip(err: unknown): boolean {
