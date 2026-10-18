@@ -1,6 +1,6 @@
 import { join, resolve } from "node:path";
 
-const BUDGET_BYTES = 795_000;
+const BUDGET_BYTES = 790_000;
 
 const dist = resolve(import.meta.dir, "../web/dist");
 const html = await Bun.file(join(dist, "index.html")).text();
@@ -17,7 +17,7 @@ for (const s of sizes) console.log(`${String(s.bytes).padStart(9)}  ${s.path}`);
 console.log(`first-load JS: ${total} bytes in ${sizes.length} files (budget ${BUDGET_BYTES})`);
 if (total > BUDGET_BYTES) {
   console.error(
-    `the dashboard's first-load JS is ${total} bytes, over its ${BUDGET_BYTES}-byte budget: load the new code lazily (web/src/components/lazy.tsx), or raise BUDGET_BYTES in scripts/web-bundle.ts on purpose`,
+    `the dashboard's first-load JS is ${total} bytes, over its ${BUDGET_BYTES}-byte budget. Load the new code lazily (web/src/components/lazy.tsx), or take as much off the first load as you add; the budget doesn't go up for a feature.`,
   );
   process.exit(1);
 }

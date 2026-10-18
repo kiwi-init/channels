@@ -7,7 +7,7 @@ import { useSyncExternalStore } from "react"
 
 import type { ChannelIdentityView, ChannelView, ComputerView, KiwiBridge, PairAskView, PublicPerson, StoreSnapshot, UpdateView } from "../../../desktop/src/bridge.ts"
 import { mergePublicChannels, migrateEntries, publicChannel } from "../../../desktop/src/seats.ts"
-import { makeLocalPerson, onLocalChange, readLocal, writeLocal, type Local } from "./channel-local"
+import { onLocalChange, readLocal, writeLocal, type Local } from "./local-store"
 import { persistQueue } from "./persist-queue"
 
 export type { ChannelView, ComputerView, KiwiBridge, PairAskView, PublicPerson, StoreSnapshot, UpdateView }
@@ -68,7 +68,7 @@ export async function createPerson(name: string): Promise<PublicPerson> {
     publish({ ...snapshot, person: p })
     return p
   }
-  const p = await makeLocalPerson(name)
+  const p = await import("./channel-local").then((m) => m.makeLocalPerson(name))
   return { name: p.name, pk: p.pk, xpk: p.xpk }
 }
 
