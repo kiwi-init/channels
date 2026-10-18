@@ -187,6 +187,28 @@ describe("Talk to channel", () => {
     expect(slow.talk.view().status).toBe("off")
   })
 
+  test("stop, once read back and confirmed, ends the call after the goodbye", async () => {
+    const r = rig()
+    await r.talk.start({ ...channel(), tools: toolCtx([]) })
+    const ws = r.sockets[0]!
+    ws.open()
+    const call = (id: string, args: string) => {
+      ws.say({ type: "response.created", response: { id: `r-${id}` } })
+      ws.say({ type: "response.function_call_arguments.done", response_id: `r-${id}`, call_id: id, name: "stop", arguments: args })
+      ws.say({ type: "response.done", response: { id: `r-${id}`, status: "completed" } })
+    }
+    call("c1", '{"confirmed":true}')
+    await new Promise((ok) => setTimeout(ok, 0))
+    expect(ws.sent.some((e) => JSON.stringify(e).includes("Read it back first"))).toBe(true)
+    call("c2", '{"confirmed":false}')
+    call("c3", '{"confirmed":true}')
+    await new Promise((ok) => setTimeout(ok, 0))
+    expect(r.talk.view().status).toBe("live")
+    await new Promise((ok) => setTimeout(ok, 2700))
+    expect(r.talk.view().status).toBe("off")
+    expect(ws.closed).toBe(true)
+  })
+
   test("without tools it says it can't act; with them it reads back before acting", () => {
     expect(instructionsFor(channel())).toContain("You can't post, approve or change anything")
     expect(instructionsFor({ ...channel(), tools: toolCtx([]) })).toContain("read back exactly what you'll do and wait for a yes")

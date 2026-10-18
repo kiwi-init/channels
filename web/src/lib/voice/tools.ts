@@ -3,6 +3,8 @@ import { taskId, type ChannelState, type Task } from "@kiwi/core/state.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
 import type { SendOptions } from "@kiwi/core/client.ts"
 
+import type { JoinRequest } from "@kiwi/core/membership.ts"
+
 import { asksFor } from "../asks"
 import type { VoiceTool } from "./events"
 
@@ -12,10 +14,17 @@ export interface ToolCtx {
   channel: string
   isOwner: boolean
   online: ReadonlySet<string>
-  requests: readonly { name: string; display?: string }[]
+  requests: readonly Pick<JoinRequest, "id" | "name" | "display" | "role" | "kind" | "check" | "code">[]
   nameOf: (name: string) => string
   send: (body: string, opts: SendOptions) => Promise<number>
   hold?: (on: boolean, note?: string) => Promise<void>
+  letIn?: (requestId: string) => Promise<void>
+  approve?: (task: Task) => Promise<void>
+  endCall?: () => void
+}
+
+export interface Verbs {
+  pending: string | null
 }
 
 type Args = Record<string, unknown>
@@ -45,9 +54,21 @@ export const VOICE_TOOLS: VoiceTool[] = [
     parameters: { type: "object", properties: { ask: { type: "number" }, answer: { type: "string" } }, required: ["ask", "answer"] },
   },
   {
+    name: "yes",
+    description:
+      "The person said yes with nothing else pending: call with confirmed false to get the top thing waiting on them and a readback, say the readback word for word, then call with confirmed true only when they say yes to it.",
+    parameters: { type: "object", properties: { confirmed: { type: "boolean" } }, required: ["confirmed"] },
+  },
+  {
     name: "hold",
-    description: "Pause every agent (on) or let them carry on (off). Only the channel's owner can, and only after they confirmed.",
-    parameters: { type: "object", properties: { on: { type: "boolean" }, note: { type: "string" } }, required: ["on"] },
+    description:
+      "The person said hold: pause every agent (on), or let them carry on (off). Call with confirmed false for the readback, say it word for word, then confirmed true when they say yes. Only the channel's owner can.",
+    parameters: { type: "object", properties: { on: { type: "boolean" }, note: { type: "string" }, confirmed: { type: "boolean" } }, required: ["on", "confirmed"] },
+  },
+  {
+    name: "stop",
+    description: "The person said stop: end this call. Call with confirmed false for the readback, say it, then confirmed true when they say yes.",
+    parameters: { type: "object", properties: { confirmed: { type: "boolean" } }, required: ["confirmed"] },
   },
   {
     name: "enqueue_work",
@@ -122,7 +143,7 @@ function needsYou(ctx: ToolCtx) {
   }))
   const reviews = reviewsOf(ctx).map((t) => ({ kind: "review", ...taskLine(t, ctx.nameOf) }))
   const joins = ctx.isOwner ? ctx.requests.map((r) => ({ kind: "join", name: r.display || r.name })) : []
-  return { count: asks.length + reviews.length + joins.length, items: [...asks, ...reviews, ...joins] }
+  return { count: asks.length + reviews.length + joins.length, items: [...joins, ...asks, ...reviews] }
 }
 
 async function post(ctx: ToolCtx, a: Args) {
@@ -146,11 +167,88 @@ async function answerAsk(ctx: ToolCtx, a: Args) {
   return { answered: `#${ask.seq}`, with: choice ?? answer, message: `#${sent}` }
 }
 
-async function hold(ctx: ToolCtx, a: Args) {
+type Top = { key: string; readback: string; act: () => Promise<unknown> } | { key: string; readback: string; refuse: string }
+
+function topNeed(ctx: ToolCtx): Top | null {
+  const join = ctx.isOwner ? ctx.requests[0] : undefined
+  if (join) {
+    const who = join.display || join.name
+    const as = join.role ? `, as ${join.role}` : ""
+    if (join.check !== "ready" || !join.code || !ctx.letIn)
+      return { key: `join:${join.id}`, readback: `${who} wants to join${as}, but its code isn't in yet.`, refuse: "Its code isn't in yet: let it in from the app once it is." }
+    const digits = join.code.replace(/\D/g, "").split("").join(" ")
+    const id = join.id
+    const letIn = ctx.letIn
+    return {
+      key: `join:${id}`,
+      readback: `${who} wants to join${as}. Let ${join.kind === "human" ? "them" : "it"} in only if ${join.kind === "human" ? "they see" : "its terminal shows"} ${digits}. Say yes to let ${join.kind === "human" ? "them" : "it"} in.`,
+      act: async () => (await letIn(id), { let_in: who }),
+    }
+  }
+  const ask = waiting(ctx)[0]
+  if (ask) {
+    const from = ctx.nameOf(ask.from)
+    if (ask.choices?.length)
+      return { key: `ask:${ask.seq}`, readback: `${from} asks: ${ask.body} The options are: ${ask.choices.join("; ")}. Which one?`, refuse: "This one has options: ask which, then use answer_ask." }
+    return {
+      key: `ask:${ask.seq}`,
+      readback: `${from} asks: ${ask.body} Say yes to answer yes.`,
+      act: async () => ({ answered: `#${ask.seq}`, message: `#${await ctx.send("Yes", { to: [ask.from], re: [ask.seq], kind: "msg" })}` }),
+    }
+  }
+  const t = reviewsOf(ctx)[0]
+  if (t) {
+    if (!ctx.approve) return { key: `review:${t.id}`, readback: `${taskId(t.id)}, ${t.title}, waits on your review.`, refuse: "Approve it from the app." }
+    const approve = ctx.approve
+    return {
+      key: `review:${t.id}`,
+      readback: `${taskId(t.id)}, ${t.title}${t.owner ? `, done by ${ctx.nameOf(t.owner)}` : ""}, is ready for your review. Say yes to approve it.`,
+      act: async () => (await approve(t), { approved: taskId(t.id) }),
+    }
+  }
+  return null
+}
+
+async function yes(ctx: ToolCtx, a: Args, verbs: Verbs) {
+  const top = topNeed(ctx)
+  if (a.confirmed !== true) {
+    verbs.pending = top && "act" in top ? top.key : null
+    return top ? { readback: top.readback } : { readback: `Nothing is waiting on ${ctx.nameOf(ctx.me)}.` }
+  }
+  const was = verbs.pending
+  verbs.pending = null
+  if (!top) return { error: "Nothing is waiting any more." }
+  if (!("act" in top)) return { error: top.refuse }
+  if (was !== top.key) return { error: "That wasn't read back, or the top item changed. Read back the new top item first.", readback: top.readback }
+  return await top.act()
+}
+
+async function hold(ctx: ToolCtx, a: Args, verbs: Verbs) {
   if (!ctx.isOwner || !ctx.hold) return { error: "Only the channel's owner can pause the agents." }
   if (typeof a.on !== "boolean") return { error: "Say whether to pause (on) or carry on (off)." }
-  await ctx.hold(a.on, str(a, "note"))
+  const note = str(a, "note")
+  const key = `hold:${a.on}`
+  if (a.confirmed !== true) {
+    verbs.pending = key
+    return { readback: a.on ? `Pause every agent${note ? ` for “${note}”` : ""}? They'll stop work until you let them carry on.` : "Let the agents carry on?" }
+  }
+  const was = verbs.pending
+  verbs.pending = null
+  if (was !== key) return { error: "Read it back first, then confirm." }
+  await ctx.hold(a.on, note)
   return { paused: a.on }
+}
+
+function stop(ctx: ToolCtx, a: Args, verbs: Verbs) {
+  if (a.confirmed !== true) {
+    verbs.pending = "stop"
+    return { readback: "End the call?" }
+  }
+  const was = verbs.pending
+  verbs.pending = null
+  if (was !== "stop" || !ctx.endCall) return { error: "Read it back first, then confirm." }
+  ctx.endCall()
+  return { ending: true }
 }
 
 async function enqueue(ctx: ToolCtx, a: Args) {
@@ -161,8 +259,9 @@ async function enqueue(ctx: ToolCtx, a: Args) {
   return { task: taskId(seq), title, for: ctx.state.lead ? ctx.nameOf(ctx.state.lead) : "whoever takes it" }
 }
 
-export async function runVoiceTool(name: string, raw: unknown, ctx: ToolCtx): Promise<unknown> {
+export async function runVoiceTool(name: string, raw: unknown, ctx: ToolCtx, verbs: Verbs = { pending: null }): Promise<unknown> {
   const a = argsOf(raw)
+  if (name === "post" || name === "answer_ask" || name === "enqueue_work") verbs.pending = null
   try {
     switch (name) {
       case "channel_status":
@@ -175,8 +274,12 @@ export async function runVoiceTool(name: string, raw: unknown, ctx: ToolCtx): Pr
         return await post(ctx, a)
       case "answer_ask":
         return await answerAsk(ctx, a)
+      case "yes":
+        return await yes(ctx, a, verbs)
       case "hold":
-        return await hold(ctx, a)
+        return await hold(ctx, a, verbs)
+      case "stop":
+        return stop(ctx, a, verbs)
       case "enqueue_work":
         return await enqueue(ctx, a)
       default:
