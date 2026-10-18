@@ -1,4 +1,6 @@
 import { beforeAll, describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import type { Event, GithubNote, Message } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
@@ -94,5 +96,13 @@ describe("CI red becomes a task", () => {
     expect(ciRedTitle("test / unit", "T51-ci")).toBe("CI red: test / unit on T51-ci");
     expect(ciRedTitle("lint")).toBe("CI red: lint");
     expect(ciCommitLine("ojow/channels", "0123456789abcdef0123")).toBe("Commit ojow/channels@0123456789ab");
+  });
+});
+
+describe("runs on main", () => {
+  test("each has a concurrency group of its own, so no push or rehearsal cancels it into a red ci-ok; a pull request's newest push still cancels its older run", () => {
+    const ci = Bun.YAML.parse(readFileSync(join(import.meta.dir, "../.github/workflows/ci.yml"), "utf8")) as { concurrency: { group: string; "cancel-in-progress": boolean } };
+    expect(ci.concurrency.group).toBe("ci-${{ github.event.pull_request.number || github.run_id }}");
+    expect(ci.concurrency["cancel-in-progress"]).toBe(true);
   });
 });
