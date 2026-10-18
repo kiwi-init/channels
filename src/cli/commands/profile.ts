@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect";
 import { openSession } from "../../agent.ts";
-import { cardLine, charterLines, holdLine, modeLine } from "@kiwi/core/format.ts";
+import { cardLine, charterLines, holdLine, leadLine } from "@kiwi/core/format.ts";
 import { COLORS, isColor } from "@kiwi/core/protocol.ts";
 import { humanOf } from "@kiwi/core/state.ts";
 import { agentPrompt } from "../brief.ts";
@@ -63,7 +63,7 @@ export const profileCommands: Record<string, Command> = {
         agentPrompt(
           alias,
           name,
-          state ? { scopes: me?.scopes, hold: holdLine(state), charter: charterLines(state), mode: modeLine(state, name), human: humanOf(state, name), role: me?.role, about: me?.about } : {},
+          state ? { scopes: me?.scopes, hold: holdLine(state), charter: charterLines(state), lead: leadLine(state, name), human: humanOf(state, name), role: me?.role, about: me?.about } : {},
         ),
       );
     }),

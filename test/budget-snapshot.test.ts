@@ -84,7 +84,7 @@ function plain(x: unknown): unknown {
 async function fullFold(s: AgentSession): Promise<ChannelState> {
   const { messages } = await s.ch.history(0);
   const roster = await runAgent(s.members(true));
-  return fold(messages, roster, Date.now(), undefined, await s.ch.rooms(), await s.ch.guard());
+  return fold(messages, roster, Date.now(), await s.ch.rooms(), await s.ch.guard());
 }
 
 const measure = async (label: string, run: () => Promise<unknown>): Promise<Traffic> => {
@@ -196,7 +196,7 @@ describe("a fresh agent's cold start with the owner's snapshot", () => {
     let made: FoldBase | undefined;
     await inHome(agent, async () => {
       const { messages } = await dev.ch.history(0);
-      fold(messages, await runAgent(dev.members()), Date.now(), undefined, null, null, null, (b) => void (made = b));
+      fold(messages, await runAgent(dev.members()), Date.now(), null, null, null, (b) => void (made = b));
     });
     if (!made) throw new Error("the fold made no base");
     const base = made;

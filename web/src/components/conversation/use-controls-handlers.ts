@@ -5,7 +5,7 @@ import type { ControlsProps } from "../controls"
 
 type Handlers = Pick<
   ControlsProps,
-  "onApprove" | "onScopes" | "onRole" | "onNickname" | "onDeny" | "onCheck" | "onRemove" | "onMode" | "onHold" | "onCharter" | "onRepos" | "onRename" | "onCloseChannel" | "onLeaveChannel"
+  "onApprove" | "onScopes" | "onRole" | "onNickname" | "onDeny" | "onCheck" | "onRemove" | "onHold" | "onCharter" | "onRepos" | "onRename" | "onCloseChannel" | "onLeaveChannel"
 >
 
 export function useControlsHandlers({
@@ -67,13 +67,6 @@ export function useControlsHandlers({
       await ch.remove(m.pk)
       await refreshRoster()
     },
-    onMode: isOwner
-      ? async (coordinatorOnly, strict) => {
-          const ev = { op: "mode.set" as const, coordinatorOnly, strict: coordinatorOnly && strict }
-          const since = await send(coordinatorOnly ? `coordinator-only on${ev.strict ? " (strict)" : ""}` : "coordinator-only off", { kind: "event", ev })
-          await ch.setMode({ coordinatorOnly, strict: ev.strict, since })
-        }
-      : undefined,
     onHold: hold,
     onCharter: isOwner
       ? async (text) => {

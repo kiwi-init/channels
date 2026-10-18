@@ -21,16 +21,8 @@ export interface RoomsSetting {
   since: number;
 }
 
-export interface ModeSetting {
-  coordinatorOnly: boolean;
-  strict: boolean;
-  since: number;
-}
-
 export interface SettingsFx {
-  mode(): Effect.Effect<ModeSetting | null, Refusal, Relay>;
   rooms(info?: Info): Effect.Effect<RoomsSetting | null, Refusal, Relay>;
-  setMode(mode: ModeSetting): Effect.Effect<void, Refused, Relay>;
   setRooms(rooms: RoomsSetting): Effect.Effect<void, Refused, Relay>;
   guard(info?: Info): Effect.Effect<GuardFloor | null, Refusal, Relay>;
   setCharter(charter: NonNullable<GuardFloor["charter"]>): Effect.Effect<void, Refused, Relay>;
@@ -40,7 +32,6 @@ export interface SettingsFx {
   setCompress(on: boolean): Effect.Effect<void, Refused, Relay>;
   imageRefs(): Effect.Effect<boolean, Refusal, Relay>;
   setImageRefs(on: boolean): Effect.Effect<void, Refused, Relay>;
-  startCoordinated(): Effect.Effect<void, Refused, Relay>;
 }
 
 export class ChannelSettings {
@@ -53,31 +44,12 @@ export class ChannelSettings {
   ) {}
 
   readonly fx: SettingsFx = {
-    mode: Effect.fn("Channel.mode")({ self: this }, function* (this: ChannelSettings) {
-      const o = yield* this.settings();
-      if (!o || typeof o.coordinatorOnly !== "boolean" || typeof o.strict !== "boolean" || !Number.isInteger(o.since)) return null;
-      const mode: ModeSetting = { coordinatorOnly: o.coordinatorOnly, strict: o.coordinatorOnly && o.strict, since: o.since as number };
-      return mode;
-    }),
-
     rooms: Effect.fn("Channel.rooms")({ self: this }, function* (this: ChannelSettings, info?: Info) {
       const r = (yield* this.settings(info))?.rooms as Partial<RoomsSetting> | undefined;
       if (!r || !Array.isArray(r.list) || !Number.isInteger(r.since)) return null;
       const list = r.list.filter((x): x is RoomEntry => !!x && typeof x === "object" && ROOM_ID_RE.test((x as RoomEntry).id) && typeof (x as RoomEntry).name === "string");
       const rooms: RoomsSetting = { list: list.map((x) => ({ id: x.id, name: x.name.slice(0, MAX_ROOM_NAME) })), since: r.since! };
       return rooms;
-    }),
-
-    startCoordinated: Effect.fn("Channel.startCoordinated")({ self: this }, function* (this: ChannelSettings) {
-      yield* this.ch.ownerOnly();
-      const ev = { op: "mode.set" as const, coordinatorOnly: true, strict: true };
-      const since = yield* this.ch.fx.send("coordinator-only on (strict)", { kind: "event", ev });
-      yield* this.putSettings({ coordinatorOnly: true, strict: true, since });
-    }),
-
-    setMode: Effect.fn("Channel.setMode")({ self: this }, function* (this: ChannelSettings, mode: ModeSetting) {
-      const { coordinatorOnly, strict, since } = mode;
-      yield* this.putSettings({ coordinatorOnly, strict, since });
     }),
 
     setRooms: Effect.fn("Channel.setRooms")({ self: this }, function* (this: ChannelSettings, rooms: RoomsSetting) {

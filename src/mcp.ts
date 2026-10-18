@@ -323,7 +323,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
       description:
         "Unread messages for you (marks them read): to you or your role, to everyone, people's broadcasts, broadcast questions, and threads you're in. Images come back as image blocks. Example: call read.",
       inputSchema: {
-        chat: z.boolean().optional().describe("also everyone's conversations (for coordinators)"),
+        chat: z.boolean().optional().describe("also everyone's conversations (for the lead)"),
         all: z.boolean().optional().describe("every message and event"),
         thread: z.number().int().optional().describe("only the thread this message is in"),
       },

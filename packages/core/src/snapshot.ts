@@ -12,11 +12,11 @@ export interface SealedSnapshot {
   sig: string;
 }
 
-const VERSION = 2;
+const VERSION = 3;
 const MAX_PLAIN = 64 * 1024 * 1024;
 const enc = new TextEncoder();
 
-const LISTS = ["members", "scopesByKey", "scopeSets", "roleSets", "tasks", "facts", "reactions", "reactSeqs", "rejected", "asks", "answered", "threadPeople", "direct", "rooms"] as const;
+const LISTS = ["members", "scopesByKey", "scopeSets", "roleSets", "tasks", "facts", "reactions", "reactSeqs", "rejected", "asks", "answered", "threadPeople", "rooms"] as const;
 
 interface Column<V> {
   d: number[];
@@ -100,14 +100,10 @@ async function squeeze(bytes: Uint8Array<ArrayBuffer>, stream: CompressionStream
 function wellFormedWire(x: unknown, n: number): x is Wire {
   if (!x || typeof x !== "object") return false;
   const b = x as Record<string, unknown>;
-  const mode = b.mode as Record<string, unknown> | null | undefined;
   return (
     b.n === n &&
     LISTS.every((k) => Array.isArray(b[k])) &&
-    (b.coordinator === null || typeof b.coordinator === "string") &&
-    !!mode &&
-    typeof mode.coordinatorOnly === "boolean" &&
-    typeof mode.strict === "boolean" &&
+    (b.lead === null || typeof b.lead === "string") &&
     (b.charter === null || typeof b.charter === "object") &&
     (b.repos === undefined || Array.isArray(b.repos)) &&
     (b.hold === null || typeof b.hold === "object")

@@ -401,27 +401,14 @@ async function run(part: Part): Promise<string[]> {
         }),
       );
 
-    at = "Coordinator mode off and on";
-    await page.locator('[title*="turned on coordinator-only"]').first().waitFor({ state: "attached", timeout: 15000 });
-    const relays = await panel
-      .getByText(/relays/)
-      .innerText({ timeout: 1000 })
-      .catch(() => "");
-    const relaying = /on \((.*) relays\)/.exec(relays)?.[1];
+    at = "Make bot the lead";
     await inDetails(async () => {
-      await panel.getByRole("button", { name: "Turn off" }).click();
+      await panel.getByRole("button", { name: "More for bot" }).click();
+      await page.getByRole("menuitem", { name: "Make lead" }).click();
     });
-    if (relaying) {
-      await page.getByText(`${relaying} has no role now`).first().waitFor({ timeout: 15000 });
-    }
-    await panel.getByText(/Coordinator mode: off/).waitFor({ timeout: 15000 });
-    await inDetails(async () => {
-      await panel.getByRole("button", { name: "Turn on" }).click();
-      await page.getByRole("dialog").getByRole("button", { name: /bot/ }).click();
-    });
-    await panel.getByText(/Coordinator mode: on \(bot relays\)/).waitFor({ timeout: 15000 });
-    await panel.getByRole("img", { name: "The coordinator" }).waitFor({ timeout: 15000 });
-    log("ok  the coordinator wears a robot avatar");
+    await page.getByText("bot is the lead").first().waitFor({ timeout: 15000 });
+    await panel.getByRole("img", { name: "The lead" }).waitFor({ timeout: 15000 });
+    log("ok  the lead wears a robot avatar");
 
     await panel.getByRole("button", { name: "More for bot" }).click();
     await page.getByRole("menuitem", { name: "Message privately" }).click();

@@ -58,21 +58,21 @@ describe("the channel's repos", () => {
   test("the signed setting stands in for a repos.set the tail doesn't hold; a later one wins", async () => {
     const tail = [await ev("mac", { op: "card", os: "macos" })];
     const floor = { charter: null, hold: null, repos: { list: ["ojow/channels"], since: tail[0]!.seq - 1 } };
-    expect(fold(tail, roster, Date.now(), null, null, floor).repos).toEqual(["ojow/channels"]);
+    expect(fold(tail, roster, Date.now(), null, floor).repos).toEqual(["ojow/channels"]);
     expect(fold(tail, roster).repos).toEqual([]);
     const later = await ev("jon", { op: "repos.set", repos: ["ojow/site"] });
-    expect(fold([...tail, later], roster, Date.now(), null, null, floor).repos).toEqual(["ojow/site"]);
+    expect(fold([...tail, later], roster, Date.now(), null, floor).repos).toEqual(["ojow/site"]);
   });
 
   test("a snapshot carries them, and one from before repos folds to none", async () => {
     const kept: { base?: FoldBase } = {};
     const msgs = [await ev("jon", { op: "repos.set", repos: ["ojow/channels"] })];
-    fold(msgs, roster, Date.now(), null, null, null, null, (b) => void (kept.base = b));
+    fold(msgs, roster, Date.now(), null, null, null, (b) => void (kept.base = b));
     expect(kept.base!.repos).toEqual(["ojow/channels"]);
-    expect(fold([], roster, Date.now(), null, null, null, kept.base).repos).toEqual(["ojow/channels"]);
+    expect(fold([], roster, Date.now(), null, null, kept.base).repos).toEqual(["ojow/channels"]);
     const older = { ...kept.base! };
     delete older.repos;
-    expect(fold([], roster, Date.now(), null, null, null, older).repos).toEqual([]);
+    expect(fold([], roster, Date.now(), null, null, older).repos).toEqual([]);
   });
 
   test("owner/name only, at most 20", () => {

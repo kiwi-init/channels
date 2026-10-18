@@ -39,19 +39,11 @@ export function readAt(marks: Marks, pk: string | undefined, seq: number): { at:
 
 /**
  * The agents a message went to: the ones it names, else a task's agents for a word in its thread,
- * else the coordinator for a person's word in coordinator mode, else every agent. Only agents that
- * were in the channel when it was sent, and never its sender.
+ * else every agent. Only agents that were in the channel when it was sent, and never its sender.
  */
-export function recipients(m: Message, state: Pick<ChannelState, "members" | "tasks" | "coordinator">): string[] {
+export function recipients(m: Message, state: Pick<ChannelState, "members" | "tasks" | "lead">): string[] {
   const named = m.to?.length && !m.to.includes("*") ? m.to : null
-  const sender = state.members.get(m.from)
-  const base = named
-    ? named
-    : m.task !== undefined && state.tasks.has(m.task)
-      ? threadMembers(state, { kind: "task", task: m.task })
-      : state.coordinator && sender && isPerson(sender)
-        ? [state.coordinator]
-        : [...state.members.keys()]
+  const base = named ? named : m.task !== undefined && state.tasks.has(m.task) ? threadMembers(state, { kind: "task", task: m.task }) : [...state.members.keys()]
   const at = m.rts ?? m.ts
   return [...new Set(base)].filter((n) => {
     const who = state.members.get(n)
@@ -64,13 +56,7 @@ export function recipients(m: Message, state: Pick<ChannelState, "members" | "ta
  * Only recipients that have ever sent a mark count (an older kiwi never does, and would read as unread for
  * good); none of them: nothing. A time only when this view heard it happen.
  */
-export function receipt(
-  m: Message,
-  state: Pick<ChannelState, "members" | "tasks" | "coordinator">,
-  marks: Marks,
-  pkOf: (name: string) => string | undefined,
-  time: (ts: number) => string
-): string | null {
+export function receipt(m: Message, state: Pick<ChannelState, "members" | "tasks" | "lead">, marks: Marks, pkOf: (name: string) => string | undefined, time: (ts: number) => string): string | null {
   const to = recipients(m, state).filter((n) => {
     const pk = pkOf(n)
     return !!pk && marks.has(pk)

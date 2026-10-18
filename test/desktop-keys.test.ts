@@ -128,6 +128,7 @@ describe("channel keys stay out of the window (T203 step 2)", () => {
     const code = made.code!;
     expect(made.access?.roomId).toBe(decodeJoinCode(code).roomId);
     expect(keyNames(made).has("sk")).toBe(false);
+    expect((await aw.ops.call(code, "head")) ?? 0).toBe(0);
 
     const planted: ChannelIdentityView = { label: "bo", idName: "bo", pk: "planted-pk", sk: "planted-sk", code, requestId: "r", imported: true };
     b.store.seats = [planted];

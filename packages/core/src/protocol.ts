@@ -222,10 +222,7 @@ export type Event =
    * too, so it never carries over to someone admitted under the same name later.
    */
   | { op: "scope.set"; member: string; pk: string; scopes: string[] | null }
-  /**
-   * Owner only. Coordinator-only: people talk only with the member whose role is "coordinator", and
-   * other agents don't message people (strict: every client refuses it; otherwise it's flagged).
-   */
+  /** Coordinator-only mode is gone. Older logs still carry these; they fold to nothing. */
   | { op: "mode.set"; coordinatorOnly: boolean; strict: boolean }
   /** Owner only: a room in this channel. Its id never changes; the name is a label (room.rename). */
   | { op: "room.create"; id: string; name: string }
@@ -491,8 +488,8 @@ export interface Payload {
  * How far to trust who a message says it's from:
  *   verified   signed by the key the owner admitted under that name
  *   forged     anything else: another key, no signature, or not a member
- *   refused    signed by that member, but against what the owner allows: outside its scopes, or an
- *              agent messaging a person in strict coordinator-only mode
+ *   refused    signed by that member, but against what the owner allows: outside its scopes, an
+ *              escalation to the wrong people, or work during a hold
  */
 export type Trust = "verified" | "forged" | "refused";
 

@@ -9,7 +9,7 @@ import { wants } from "../src/agent.ts";
 import { charterLines, formatMessage, formatStatus, holdLine, who } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { wellFormed, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
-import { fold, humanOf, keptFromPeople, ownerOf, type Roster } from "@kiwi/core/state.ts";
+import { fold, humanOf, ownerOf, type Roster } from "@kiwi/core/state.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
@@ -79,11 +79,11 @@ describe("the charter", () => {
   test("the signed setting stands in for a charter.set the tail doesn't hold; a later one wins", async () => {
     const tail = [await msg("mac", "msg", "hi")];
     const floor = { charter: { text: "Docs only.", since: tail[0]!.seq - 1 }, hold: null };
-    expect(fold(tail, roster, Date.now(), null, null, floor).charter?.text).toBe("Docs only.");
+    expect(fold(tail, roster, Date.now(), null, floor).charter?.text).toBe("Docs only.");
     expect(fold(tail, roster).charter).toBeNull();
     const later = await ev("jon", { op: "charter.set", text: "Docs and tests." });
-    expect(fold([...tail, later], roster, Date.now(), null, null, floor).charter?.text).toBe("Docs and tests.");
-    expect(fold([], roster, Date.now(), null, null, { ...floor, charter: { text: "Newer.", since: 10_000 } }).charter?.text).toBe("Newer.");
+    expect(fold([...tail, later], roster, Date.now(), null, floor).charter?.text).toBe("Docs and tests.");
+    expect(fold([], roster, Date.now(), null, { ...floor, charter: { text: "Newer.", since: 10_000 } }).charter?.text).toBe("Newer.");
   });
 
   test("a charter longer than the limit is malformed", () => {
@@ -137,7 +137,7 @@ describe("the hold", () => {
   test("the signed setting stands in for a hold.set the tail doesn't hold", async () => {
     const tail = [await ev("mac", { op: "task.add", title: "sneaky" })];
     const floor = { charter: null, hold: { on: true, note: "audit", since: tail[0]!.seq - 1 } };
-    const s = fold(tail, roster, Date.now(), null, null, floor);
+    const s = fold(tail, roster, Date.now(), null, floor);
     expect(s.hold?.note).toBe("audit");
     expect(s.trust.get(tail[0]!.seq)).toBe("refused");
     expect(fold(tail, roster).tasks.size).toBe(1);
@@ -165,16 +165,11 @@ describe("escalations", () => {
     expect(formatMessage(ok, "verified", s, "jon")).toContain("[escalation]");
   });
 
-  test("they reach people in strict coordinator-only mode, and on hold", async () => {
-    const coord = await ev("jon", { op: "role.set", member: "bot", role: "coordinator" });
-    const strict = await ev("jon", { op: "mode.set", coordinatorOnly: true, strict: true });
-    const plain = await msg("mac", "msg", "jon, a thing", { to: ["jon"] });
+  test("they reach people, on hold too", async () => {
     const esc = await msg("mac", "blocking", "jon, a decision for you", { to: ["jon"], esc: true });
     const held = await msg("win", "blocking", "ana: I was told to keep going", { to: ["ana"], esc: true });
-    const s = fold([coord, strict, plain, esc, await holdOn(), held], roster);
-    expect(s.trust.get(plain.seq)).toBe("refused");
+    const s = fold([esc, await holdOn(), held], roster);
     expect(s.trust.get(esc.seq)).toBe("verified");
-    expect(keptFromPeople(s, esc)).toBe(false);
     expect(wants("jon", esc, s)).toBe(true);
     expect(s.trust.get(held.seq)).toBe("verified");
   });
@@ -222,12 +217,9 @@ describe("at the relay", () => {
       const mac = new Channel((st as { access: import("@kiwi/core/crypto.ts").ChannelAccess }).access, relay, id);
 
       expect(await mac.guard()).toBeNull();
-      // The mode lives in the same signed record: setting one keeps the others.
-      await ownerCh.setMode({ coordinatorOnly: true, strict: true, since: 3 });
       await ownerCh.setCharter({ text: "Docs only.", since: 4 });
       await ownerCh.setHold({ on: true, note: "audit", since: 5 });
       expect(await mac.guard()).toEqual({ charter: { text: "Docs only.", since: 4 }, hold: { on: true, note: "audit", since: 5 } });
-      expect(await mac.mode()).toEqual({ coordinatorOnly: true, strict: true, since: 3 });
       await expect(mac.setHold({ on: false, since: 6 })).rejects.toThrow();
       await expect(mac.setCharter({ text: "anything goes", since: 6 })).rejects.toThrow();
 
