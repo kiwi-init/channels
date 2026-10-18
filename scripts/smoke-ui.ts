@@ -283,7 +283,8 @@ async function run(part: Part): Promise<string[]> {
     await createChannel();
     await send("smoke test");
 
-    const overview = page.getByRole("complementary", { name: "Overview" });
+    const sidebar = page.getByRole("complementary", { name: "Channel" });
+    const toTab = (name: "Tasks" | "Agents" | "Conversation") => page.getByRole("navigation", { name: "Views of the channel" }).getByRole("button", { name, exact: true }).click();
     const addAgent = page.getByRole("region", { name: "Add an agent" });
     const channel = page.url();
     const code = new URL(channel).hash.slice(1);
@@ -338,10 +339,9 @@ async function run(part: Part): Promise<string[]> {
 
     const smokeTask = /T\d+/.exec(await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke task", "--owner", "bot"]))?.[0] ?? "T0";
     at = "Task in the Tasks panel";
-    const conversations = page.getByRole("main").getByRole("navigation", { name: "Conversations" });
     const tasksPanel = page.getByRole("complementary", { name: "Tasks" });
-    await overview
-      .getByRole("region", { name: "Tasks" })
+    await toTab("Tasks");
+    await page
       .getByRole("button", { name: /Smoke task/ })
       .first()
       .click({ timeout: 15000 });
@@ -355,6 +355,7 @@ async function run(part: Part): Promise<string[]> {
     await tasksPanel.getByText("smoke in the task", { exact: true }).first().waitFor();
     await tasksPanel.getByRole("button", { name: "Close tasks" }).click();
     await tasksPanel.waitFor({ state: "detached" });
+    await toTab("Conversation");
     await page
       .waitForFunction(
         (text) => {
@@ -398,23 +399,25 @@ async function run(part: Part): Promise<string[]> {
 
     at = "ask-human: the question sits in the composer with its options, and the task waits on a person until one is picked";
     await kiwi(["-c", "smoke", "--as", "bot", "ask-human", "--task", smokeTask, "--option", "A: ship it", "--option", "B: wait a day", "Ship the smoke build now?"]);
-    const awaiting = overview.getByRole("region", { name: "Tasks" }).getByText("Needs a decision");
+    const awaiting = page.getByText("Needs a decision");
+    await toTab("Tasks");
     await awaiting.first().waitFor({ timeout: 15000 });
+    await toTab("Conversation");
     const question = page.getByRole("region", { name: "Question" });
     await question.getByText("Ship the smoke build now?").waitFor({ timeout: 15000 });
     if (await needs.count()) throw new Error("a decision for the person showed in Needs you as well as in the composer");
     await question.getByRole("button", { name: "Something else" }).waitFor();
     await question.getByRole("list", { name: "Options" }).getByRole("button", { name: "B: wait a day" }).click();
-    await awaiting.first().waitFor({ state: "detached", timeout: 15000 });
     await question.waitFor({ state: "detached", timeout: 15000 });
+    await toTab("Tasks");
+    await awaiting.first().waitFor({ state: "detached", timeout: 15000 });
     log(`ok  ${at}`);
 
     at = "Take over, then cancel, a task waiting on an agent's review";
     const added = /added (T\d+)/.exec(await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke review", "--owner", "bot", "--review", "helper"]))?.[1];
     if (!added) throw new Error("kiwi task add printed no task id");
     await kiwi(["-c", "smoke", "--as", "bot", "task", "review", added]);
-    await overview
-      .getByRole("region", { name: "Tasks" })
+    await page
       .getByRole("button", { name: /Smoke review/ })
       .first()
       .click({ timeout: 15000 });
@@ -460,15 +463,18 @@ async function run(part: Part): Promise<string[]> {
     await page.getByRole("textbox", { name: "Message" }).fill("smoke, privately");
     await page.keyboard.press("Enter");
     await page.getByText("smoke, privately", { exact: true }).first().waitFor({ timeout: 15000 });
-    await conversations.getByRole("button", { name: "Back to chat" }).click();
-    await conversations.getByRole("button", { name: "Back to chat" }).waitFor({ state: "detached" });
+    const general = sidebar.getByRole("region", { name: "Conversations" }).getByRole("button", { name: /^# general/ });
+    await general.click();
+    await general.and(page.locator("[aria-current=page]")).waitFor();
     log(`ok  ${at} and a direct conversation`);
 
     at = "Tasks panel";
-    await overview.getByRole("region", { name: "Agents" }).waitFor();
-    await overview.getByRole("region", { name: "Pull requests" }).waitFor();
-    await overview.getByRole("button", { name: "All tasks" }).click();
-    await tasksPanel
+    await sidebar.getByRole("region", { name: "Agents" }).waitFor();
+    await sidebar
+      .getByRole("navigation", { name: "Views" })
+      .getByRole("button", { name: /^Everything/ })
+      .click();
+    await page
       .getByRole("button", { name: /Smoke task/ })
       .first()
       .click();
@@ -476,6 +482,7 @@ async function run(part: Part): Promise<string[]> {
     await tasksPanel.getByRole("textbox", { name: "Filter tasks" }).waitFor();
     await page.keyboard.press("Escape");
     await tasksPanel.waitFor({ state: "detached" });
+    await toTab("Conversation");
     await page.getByRole("textbox", { name: "Message" }).waitFor();
     log(`ok  ${at}`);
 

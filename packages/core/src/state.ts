@@ -24,7 +24,6 @@ export {
   type GuardFloor,
   type Member,
   type Place,
-  type PlaceSummary,
   type Reaction,
   type ReviewRound,
   type RoomsFloor,
