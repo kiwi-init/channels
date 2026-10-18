@@ -10,7 +10,7 @@ import { channelTitle, loadRecent, useChannel, useClock, useKnownChannels, type 
 import { howHere } from "@/lib/presence"
 import type { Gif } from "@/lib/gifs"
 import { asksFor } from "@/lib/asks"
-import { approveTask, reviewsFor, sendBackTask, type TaskSend } from "@/lib/task-actions"
+import { approveTask, closedDigest, reviewsFor, sendBackTask, type TaskSend } from "@/lib/task-actions"
 import { useIcons, useLiveIcon } from "@/lib/icons"
 import { memberName } from "@/lib/format"
 import { dmPlace, placeKey, sendFrom, type Place } from "@/lib/threads"
@@ -86,7 +86,12 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   useChannelNews(roomId, Math.max(head, messages.at(-1)?.seq ?? 0), arrivals, 0, needs)
 
   const reviews = useMemo(() => reviewsFor(state.tasks.values(), me, iAmPerson), [state.tasks, me, iAmPerson])
-  const sendTask = useCallback(async ({ body, opts }: TaskSend) => void (await send(body, opts)), [send])
+  const sendTask = useCallback(
+    async (...sends: TaskSend[]) => {
+      for (const { body, opts } of sends) await send(body, opts)
+    },
+    [send]
+  )
   const noAgents = !active.some((m) => isAgent(m))
   const quiet = noAgents && !messages.some((m) => m.kind !== "event")
 
@@ -317,7 +322,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                   nameOf={nameOf}
                   agentOf={(name) => isAgent(state.members.get(name))}
                   onReply={async (m, text) => void (await send(text, { to: [m.from], re: [m.seq], kind: "msg" }))}
-                  onApproveTask={(t: Task) => sendTask(approveTask(t))}
+                  onApproveTask={(t: Task) => sendTask(approveTask(t), closedDigest(state, messages, t, { by: me }))}
                   onSendBack={(t: Task, why: string) => sendTask(sendBackTask(t, why))}
                   onOpenTask={openTask}
                   onJump={jump}

@@ -3,6 +3,7 @@ import { TASK_STATES, TASK_TITLE_MAX_LENGTH, ignored, type TaskState, type Verdi
 import { omit } from "@kiwi/core/omit.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { isPerson, openRound, revisedOut, taskId, type ChannelState, type ReviewRound, type Task } from "@kiwi/core/state.ts";
+import { taskDigest } from "@kiwi/core/work.ts";
 import { SessionMessaging } from "./messaging.ts";
 import { oneLook } from "./shared.ts";
 
@@ -119,6 +120,11 @@ export class SessionTasks extends SessionMessaging {
         t.owner === this.me && (owner !== undefined || finishing || change.state === "todo") ? { free: [`task:${id}`] } : {},
       );
       const after = yield* this.confirm(seq);
+      const closed = after.tasks.get(id);
+      if (finishing && t.state !== "done" && closed?.state === "done") {
+        const { messages } = yield* this.state();
+        yield* Effect.ignoreCause(this.send(taskDigest(after, messages, closed), { kind: "done" }));
+      }
       return after;
     },
     oneLook,
