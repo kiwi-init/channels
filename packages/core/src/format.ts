@@ -5,7 +5,7 @@ import { inlineText, runsLine, type Runs } from "./membership.ts";
 import { GENERAL_ROOM, ignored, imageMarker } from "./protocol.ts";
 import type { Card, GithubNote, Message, OldTaskState, Reach, TaskState, Trust } from "./protocol.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
-import { colorOf, humanOf, isPerson, outsideRepos, taskId, type ChannelState, type Fact, type Lease, type ReviewRound, type Task } from "./state.ts";
+import { colorOf, humanOf, isPerson, issueOf, outsideRepos, taskId, type ChannelState, type Fact, type Lease, type ReviewRound, type Task } from "./state.ts";
 import { isWakeVia, wakeWords, type WakeVia } from "./wake.ts";
 
 export function ago(ts: number, now = Date.now()): string {
@@ -114,7 +114,7 @@ export function describeEvent(m: Message, state?: ChannelState): string {
     case "seat.reclaim":
       return `moved ${ev.member}'s seat to a new key (${ev.from} → ${ev.to}): the old key is out`;
     case "task.add":
-      return `added task ${taskId(m.seq)} “${ev.title}”${ev.owner ? ` for ${ev.owner}` : ""}${ev.review ? `; ${reviewPhrase(ev.review)}` : ""}`;
+      return `added task ${taskId(m.seq)} “${ev.title}”${ev.issue ? ` from ${ev.issue.repo}#${ev.issue.number}` : ""}${ev.owner ? ` for ${ev.owner}` : ""}${ev.review ? `; ${reviewPhrase(ev.review)}` : ""}`;
     case "card":
       return `described itself: ${cardLine(ev) || "nothing"}`;
     case "task.claim":
@@ -375,6 +375,7 @@ export function githubLine(items: readonly GithubNote[]): string {
   const said = items.map((i) => {
     if (i.event === "pull_request") return `PR ${i.repo}#${i.number ?? "?"}${i.title ? ` “${inlineText(i.title, 80)}”` : ""} ${i.merged ? "merged" : (i.action ?? "updated")}`;
     if (i.event === "push") return `push to ${i.branch ?? "a branch"} in ${i.repo}`;
+    if (i.event === "issues") return `issue ${i.repo}#${i.number ?? "?"}${i.title ? ` “${inlineText(i.title, 80)}”` : ""} ${i.action ?? "updated"}`;
     const how = i.conclusion ?? i.status ?? "updated";
     return `${inlineText(i.name ?? "a check", 60)} ${how}${i.branch ? ` on ${i.branch}` : ""}`;
   });
@@ -503,11 +504,12 @@ export function reviewBody(m: Message): string | null {
 }
 
 /** One task in full. `_state` is kept so callers needn't change (it used to resolve dependencies). */
-export function formatTask(_state: ChannelState, t: Task, now = Date.now()): string {
+export function formatTask(state: ChannelState, t: Task, now = Date.now()): string {
   const out = [
     `${taskId(t.id)} ${inlineText(t.title, 200)}`,
     `  state: ${taskStateWord(t)}${t.owner ? ` · owner: ${inlineText(t.owner, 40)}` : " · unassigned"} · created by ${inlineText(t.createdBy, 40)} ${ago(t.createdAt, now)}`,
   ];
+  if (t.issue) out.push(`  issue: ${t.issue.repo}#${t.issue.number}${issueOf(state.github, t.issue)?.state === "closed" ? " (closed)" : ""}; closing either one closes the other`);
   if (t.review) out.push(`  ${reviewPhrase(t.review)}${t.approvedBy ? `; approved by ${inlineText(t.approvedBy, 40)}` : t.state === "review" ? "; waiting for it" : ""}`);
   if (t.rounds.length) {
     out.push("", "review rounds:");

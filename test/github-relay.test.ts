@@ -97,6 +97,7 @@ describe("GitHub webhooks into a channel's queue", () => {
   test("refused: a bad signature, a repo nobody connected, an event it doesn't take; a ping is fine", async () => {
     expect((await hook("pull_request", pr("ojow/channels"), "wrong")).status).toBe(401);
     expect(await (await hook("pull_request", pr("someone/else"))).json()).toEqual({ queued: 0 });
+    expect(await (await hook("star", pr("ojow/channels"))).json()).toEqual({ ignored: "star" });
     expect(await (await hook("issues", pr("ojow/channels"))).json()).toEqual({ ignored: "issues" });
     expect((await hook("ping", { zen: "hi" })).status).toBe(200);
     expect(((await (await room("GET", "/github/queue", owner)).json()) as Queue).items).toEqual([]);

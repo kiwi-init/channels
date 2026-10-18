@@ -37,6 +37,7 @@ export const { values: opt, positionals: args } = parseArgs({
     owner: { type: "string" },
     after: { type: "string" },
     detail: { type: "string" },
+    issue: { type: "string" },
     ttl: { type: "string" },
     label: { type: "string" },
     note: { type: "string" },

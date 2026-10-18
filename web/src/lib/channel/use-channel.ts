@@ -9,7 +9,8 @@ import { fold, type ChannelState, type GuardFloor, type Roster } from "@kiwi/cor
 import { isWakeVia } from "@kiwi/core/wake.ts"
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "../channel-ops"
 import { readCached, rememberRow } from "../history"
-import { checksToPost, linksToPost, setCheckedUpTo } from "../review-checks"
+import { checksToPost, issuesToPost, linksToPost, setCheckedUpTo, tasksToClose } from "../review-checks"
+import { closeFromGithub } from "../task-actions"
 import { wholeLog } from "../history-plan"
 import { ICON_LIVE } from "../icon-event"
 import { howHere } from "../presence"
@@ -289,7 +290,9 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
     if (!ch.isOwner || !caughtUp || !state.repos.length || checksBusy.current) return
     const due = checksToPost(ch.roomId, state, messages)
     const links = linksToPost(ch.roomId, state)
-    if (!due.length && !links.length) return
+    const issues = issuesToPost(ch.roomId, state)
+    const closes = tasksToClose(ch.roomId, state)
+    if (!due.length && !links.length && !issues.length && !closes.length) return
     checksBusy.current = true
     void (async () => {
       for (const c of due) {
@@ -299,6 +302,18 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
       for (const l of links) {
         await ch.commentOnPr(l.repo, l.number, l.body).catch(() => {})
         setCheckedUpTo(ch.roomId, l.seq, "prLinks")
+      }
+      for (const i of issues) {
+        await ch.closeIssue(i).catch(() => {})
+        setCheckedUpTo(ch.roomId, i.seq, "issueCloses")
+      }
+      for (const c of closes) {
+        const t = state.tasks.get(c.task)
+        if (t) {
+          const { body, opts } = closeFromGithub(t, c)
+          await ch.send(body, opts).catch(() => {})
+        }
+        setCheckedUpTo(ch.roomId, c.seq, "issueTasks")
       }
     })().finally(() => {
       checksBusy.current = false

@@ -165,6 +165,16 @@ describe("escalations", () => {
     expect(formatMessage(ok, "verified", s, "jon")).toContain("[escalation]");
   });
 
+  test("only the people it went to answer it: a reply from anyone else leaves it waiting", async () => {
+    const esc = await msg("mac", "blocking", "jon, A or B?", { to: ["jon"], esc: true });
+    const aside = await msg("win", "msg", "I'd pick B", { re: [esc.seq] });
+    const more = await msg("mac", "msg", "context: B costs more", { re: [esc.seq] });
+    const waiting = fold([esc, aside, more], roster);
+    expect(waiting.openAsks.map((m) => m.seq)).toContain(esc.seq);
+    const answer = await msg("jon", "msg", "B", { re: [esc.seq] });
+    expect(fold([esc, aside, more, answer], roster).openAsks.map((m) => m.seq)).not.toContain(esc.seq);
+  });
+
   test("they reach people, on hold too", async () => {
     const esc = await msg("mac", "blocking", "jon, a decision for you", { to: ["jon"], esc: true });
     const held = await msg("win", "blocking", "ana: I was told to keep going", { to: ["ana"], esc: true });

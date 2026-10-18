@@ -21,9 +21,19 @@ export const taskCommands: Record<string, Command> = {
         const sub = args[1];
         const STATE_FOR: Record<string, TaskState> = { start: "doing", review: "review", done: "done" };
         if (sub === "add") {
-          const title = yield* text(2);
-          if (!title.trim()) return yield* die('usage: kiwi task add "title" [--owner NAME] [--review NAME|any] [--re N]');
           const re = opt.re === undefined ? undefined : Number(opt.re.replace(/^#/, "")) || (yield* die("--re takes a message number"));
+          if (opt.issue !== undefined) {
+            const made = yield* s.taskFromIssue(opt.issue, {
+              title: args.slice(2).join(" ") || undefined,
+              owner: opt.owner,
+              detail: opt.detail,
+              ...(opt.review !== undefined ? { review: opt.review } : {}),
+              ...(re !== undefined ? { re } : {}),
+            });
+            return out(`added ${taskId(made.id)} from ${made.issue}: ${made.title}\nclosing either one closes the other`);
+          }
+          const title = yield* text(2);
+          if (!title.trim()) return yield* die('usage: kiwi task add "title" [--owner NAME] [--review NAME|any] [--re N] [--issue 12|owner/repo#12]');
           for (const gone of ["after", "needs"] as const)
             if (opt[gone] !== undefined) process.stderr.write(`kiwi: --${gone} is gone (tasks don't wait on or match anything now); put it in the title or --detail\n`);
           const { state: before } = yield* s.state();

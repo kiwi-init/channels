@@ -183,6 +183,7 @@ export function fold(
     github: {
       prs: new Map(from?.github?.prs.map((p) => [prKey(p.repo, p.number), p])),
       checks: new Map(from?.github?.checks.map(([k, runs]) => [k, new Map(runs.map((r) => [r.name, r]))])),
+      issues: new Map(from?.github?.issues?.map((i) => [prKey(i.repo, i.number), i])),
     },
     hold: from?.hold ?? null,
     voice: from?.voice ?? false,
@@ -298,7 +299,8 @@ export function fold(
     if (m.kind !== "ask" && m.kind !== "blocking") return false;
     if (ignored(trust.get(m.seq))) return false;
     const by = answered.get(m.seq);
-    return !by || [...by].every((n) => n === m.from);
+    const answers = (n: string) => (m.esc ? !!m.to?.includes(n) : n !== m.from);
+    return !by || ![...by].some(answers);
   });
 
   keep?.(
@@ -310,7 +312,7 @@ export function fold(
       compact: ctx.compact,
       compactProposal: ctx.compactProposal,
       repos: ctx.repos,
-      github: { prs: [...ctx.github.prs.values()], checks: [...ctx.github.checks].map(([k, runs]) => [k, [...runs.values()]]) },
+      github: { prs: [...ctx.github.prs.values()], checks: [...ctx.github.checks].map(([k, runs]) => [k, [...runs.values()]]), issues: [...ctx.github.issues.values()] },
       hold: ctx.hold,
       voice: ctx.voice,
       scopesByKey: [...scopesByKey],
