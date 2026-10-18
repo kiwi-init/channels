@@ -160,7 +160,14 @@ export const messageCommands: Record<string, Command> = {
       const s = yield* session();
       const { messages: held, state } = yield* s.state();
       const room = opt.room === undefined ? undefined : yield* s.roomId(opt.room, state);
-      const visible = (m: Message) => (opt.all || !isQuiet(m)) && !ignored(state.trust.get(m.seq)) && (room === undefined || (m.kind !== "event" && state.roomOf.get(m.seq) === room));
+      const task = opt.task === undefined ? undefined : (parseTaskId(opt.task) ?? (yield* die(`no task ${opt.task}`)));
+      if (task !== undefined && !state.tasks.has(task)) return yield* die(`no task T${task}`);
+      const inTask = (m: Message) => {
+        const place = state.placeOf.get(m.seq);
+        return (place?.kind === "task" && place.task === task) || m.seq === task || (!!m.ev && "task" in m.ev && m.ev.task === task);
+      };
+      const visible = (m: Message) =>
+        (opt.all || !isQuiet(m)) && !ignored(state.trust.get(m.seq)) && (room === undefined || (m.kind !== "event" && state.roomOf.get(m.seq) === room)) && (task === undefined || inTask(m));
       const shown = (yield* s.earlier(held, Number(opt.n ?? 30), visible)).filter(visible);
       for (const m of shown.slice(-Number(opt.n ?? 30))) out(render(m, state));
     }),

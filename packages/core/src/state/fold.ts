@@ -233,7 +233,11 @@ export function fold(
         roomOf.set(m.seq, room);
         const parentPlace = parent !== undefined ? placeOf.get(parent) : undefined;
         const to = m.to?.length === 1 ? m.to[0]! : undefined;
-        placeOf.set(m.seq, parentPlace ?? (m.task !== undefined && tasks.has(m.task) ? { kind: "task", task: m.task } : m.dm && to && to !== m.from && members.has(to) ? dmPlace(m.from, to) : MAIN));
+        const place =
+          parentPlace ?? (m.task !== undefined && tasks.has(m.task) ? { kind: "task" as const, task: m.task } : m.dm && to && to !== m.from && members.has(to) ? dmPlace(m.from, to) : MAIN);
+        placeOf.set(m.seq, place);
+        const posted = place.kind === "task" ? tasks.get(place.task) : place.kind === "main" && room !== GENERAL_ROOM ? rooms.get(room) : undefined;
+        if (posted && !posted.posters?.includes(m.from)) posted.posters = [...(posted.posters ?? []), m.from];
       }
       member.lastSeen = Math.max(member.lastSeen, at);
       if (!isReaction(m)) member.messages++;

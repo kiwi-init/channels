@@ -1,5 +1,5 @@
 import { isDirectedAt, isForAgent } from "@kiwi/core/client.ts";
-import { GENERAL_ROOM, ignored, type Message } from "@kiwi/core/protocol.ts";
+import { GENERAL_ROOM, ignored, mentionsOf, type Message } from "@kiwi/core/protocol.ts";
 import { threadMembers, type ChannelState } from "@kiwi/core/state.ts";
 import type { Delivery } from "./shared.ts";
 
@@ -14,12 +14,13 @@ export function wants(me: string, m: Message, state: ChannelState | null, d: Del
   if (m.kind === "event")
     return addressed || m.ev?.op === "hello" || m.ev?.op === "room.create" || m.ev?.op === "room.rename" || m.ev?.op === "charter.set" || m.ev?.op === "repos.set" || m.ev?.op === "hold.set";
   if (d.chat) return true;
+  if (mentionsOf(m.body).has(me.toLowerCase())) return true;
   const place = state?.placeOf.get(m.seq);
-  if (state && place && place.kind !== "main") return isDirectedAt(m, me) || threadMembers(state, place).includes(me) || !!state.threadPeople.get(state.threadOf.get(m.seq) ?? m.seq)?.has(me);
-  const sender = state?.members.get(m.from);
+  const inMyThread = !!state?.threadPeople.get(state.threadOf.get(m.seq) ?? m.seq)?.has(me);
+  if (state && place && place.kind !== "main") return isDirectedAt(m, me) || threadMembers(state, place).includes(me) || inMyThread;
   const asking = isForAgent(m, me) && (m.kind === "ask" || m.kind === "blocking");
   if (d.forMe) return addressed || asking;
-  const fromPerson = !m.to?.length && (sender?.kind === "human" || !!sender?.owner);
-  const inMyThread = !!state?.threadPeople.get(state.threadOf.get(m.seq) ?? m.seq)?.has(me);
-  return addressed || asking || fromPerson || inMyThread;
+  const room = state?.roomOf.get(m.seq) ?? m.room ?? GENERAL_ROOM;
+  const mine = room === GENERAL_ROOM || !!state?.rooms.get(room)?.posters?.includes(me);
+  return addressed || asking || inMyThread || (mine && !m.to?.length);
 }
