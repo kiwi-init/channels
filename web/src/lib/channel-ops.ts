@@ -63,6 +63,7 @@ export class ChannelLink {
   drainGithub = () => this.c("drainGithub")
   githubDiff = (...a: Args<"githubDiff">) => this.c("githubDiff", ...a)
   postReviewCheck = (...a: Args<"postReviewCheck">) => this.c("postReviewCheck", ...a)
+  commentOnPr = (...a: Args<"commentOnPr">) => this.c("commentOnPr", ...a)
   snapshotAt = () => this.c("snapshotAt")
   info = () => this.c("info")
   title = () => this.c("title")

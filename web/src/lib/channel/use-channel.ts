@@ -9,7 +9,7 @@ import { fold, type ChannelState, type GuardFloor, type Roster } from "@kiwi/cor
 import { isWakeVia } from "@kiwi/core/wake.ts"
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "../channel-ops"
 import { readCached, rememberRow } from "../history"
-import { checksToPost, setCheckedUpTo } from "../review-checks"
+import { checksToPost, linksToPost, setCheckedUpTo } from "../review-checks"
 import { wholeLog } from "../history-plan"
 import { ICON_LIVE } from "../icon-event"
 import { howHere } from "../presence"
@@ -288,12 +288,17 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
   const postReviewChecks = useEffectEvent(() => {
     if (!ch.isOwner || !caughtUp || !state.repos.length || checksBusy.current) return
     const due = checksToPost(ch.roomId, state, messages)
-    if (!due.length) return
+    const links = linksToPost(ch.roomId, state)
+    if (!due.length && !links.length) return
     checksBusy.current = true
     void (async () => {
       for (const c of due) {
         await ch.postReviewCheck(c).catch(() => {})
         setCheckedUpTo(ch.roomId, c.seq)
+      }
+      for (const l of links) {
+        await ch.commentOnPr(l.repo, l.number, l.body).catch(() => {})
+        setCheckedUpTo(ch.roomId, l.seq, "prLinks")
       }
     })().finally(() => {
       checksBusy.current = false

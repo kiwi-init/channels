@@ -26,6 +26,7 @@ test("every route declares its check", () => {
     "GET /github/queue owner",
     "GET /github/diff member",
     "POST /github/check owner",
+    "POST /github/comment owner",
     "POST /github/ack owner",
     "GET /snapshot member",
     "PUT /snapshot owner",

@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import type { Event, Message } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
-import { taskFeed, taskOfBranch, taskPrs } from "@kiwi/core/work.ts";
+import { prsToLinkBack, taskFeed, taskOfBranch, taskPrs } from "@kiwi/core/work.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
@@ -60,5 +60,7 @@ describe("a PR finds its task by its branch", () => {
       { url: "https://github.com/ojow/channels/pull/360", repo: "ojow/channels", number: 360, state: "open", seq: news.seq, title: "Branch PRs", branch: `T${add.seq}-branch-prs` },
     ]);
     expect(taskPrs(taskFeed(s, log, other.seq))).toEqual([]);
+    expect(prsToLinkBack(s, 0)).toEqual([{ repo: "ojow/channels", number: 360, task: add.seq, seq: news.seq, body: `Kiwi task T${add.seq}: Branch PRs` }]);
+    expect(prsToLinkBack(s, news.seq)).toEqual([]);
   });
 });

@@ -4,7 +4,7 @@ import { generateIdentity, sign, verify } from "@kiwi/core/identity.ts"
 import type { Event, Message } from "@kiwi/core/protocol.ts"
 import { fold } from "@kiwi/core/state.ts"
 import { diffLineClass } from "./diff"
-import { checkedUpTo, checksToPost } from "./review-checks"
+import { checkedUpTo, checksToPost, linksToPost } from "./review-checks"
 
 describe("posting review checks from the owner's app", () => {
   test("the first look marks where the channel is and posts nothing old; later verdicts are due", async () => {
@@ -27,6 +27,23 @@ describe("posting review checks from the owner's app", () => {
     expect(checkedUpTo(room)).toBe(3)
     log.push(await ev(rev, "rev", { op: "task.update", task: 2, state: "done", verdict: "approved", round: 1 }))
     expect(checksToPost(room, fold(log, roster), log)).toMatchObject([{ repo: "o/r", sha: "d".repeat(40), verdict: "approved", task: 2 }])
+  })
+
+  test("a PR on branch T<n>-… is linked back once, and not on the first look", async () => {
+    const jon = await generateIdentity("jon")
+    const roster = [{ name: "jon", pk: jon.pk, owner: true, at: 0, active: true, kind: "human" as const }]
+    let seq = 0
+    const ev = async (e: Event): Promise<Message> => {
+      seq++
+      const p = await sign(jon, { v: 1 as const, id: crypto.randomUUID(), from: "jon", kind: "event" as const, body: "", ts: seq, ev: e })
+      return { ...p, seq, rts: seq, sigOk: await verify(p) }
+    }
+    const room = `room-${crypto.randomUUID()}`
+    const log = [await ev({ op: "task.add", title: "Link back" })]
+    expect(linksToPost(room, fold(log, roster))).toEqual([])
+    log.push(await ev({ op: "github", items: [{ event: "pull_request", repo: "o/r", action: "opened", number: 5, state: "open", branch: "T1-link", at: 1 }] }))
+    expect(linksToPost(room, fold(log, roster))).toEqual([{ repo: "o/r", number: 5, task: 1, seq: 2, body: "Kiwi task T1: Link back" }])
+    expect(checkedUpTo(room, "prLinks")).toBe(1)
   })
 
   test("diff lines: additions and removals marked at the edge, headers bold, hunks quiet", () => {

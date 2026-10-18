@@ -363,6 +363,10 @@ export class Channel {
     return run(this.fx.postReviewCheck(c));
   }
 
+  commentOnPr(repo: string, number: number, body: string): Promise<{ url: string | null }> {
+    return run(this.fx.commentOnPr(repo, number, body));
+  }
+
   snapshotAt(): Promise<number | null> {
     return run(this.fx.snapshotAt());
   }

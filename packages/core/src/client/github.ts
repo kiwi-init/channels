@@ -23,6 +23,7 @@ export interface GithubFx {
   drainGithub(): Effect.Effect<number, Refused, Relay>;
   githubDiff(repo: string, sha: string): Effect.Effect<GithubDiff, Refused, Relay>;
   postReviewCheck(c: ReviewCheck): Effect.Effect<{ url: string | null }, Refused, Relay>;
+  commentOnPr(repo: string, number: number, body: string): Effect.Effect<{ url: string | null }, Refused, Relay>;
 }
 
 const PR_ACTIONS = new Set(["opened", "reopened", "closed", "ready_for_review", "synchronize", "edited", "converted_to_draft"]);
@@ -49,6 +50,11 @@ export class ChannelGithub {
     postReviewCheck: Effect.fn("Channel.postReviewCheck")({ self: this }, function* (this: ChannelGithub, c: ReviewCheck) {
       yield* this.ch.ownerOnly();
       return yield* this.ch.request<{ url: string | null }>("/github/check", { method: "POST", body: JSON.stringify(c) });
+    }),
+
+    commentOnPr: Effect.fn("Channel.commentOnPr")({ self: this }, function* (this: ChannelGithub, repo: string, number: number, body: string) {
+      yield* this.ch.ownerOnly();
+      return yield* this.ch.request<{ url: string | null }>("/github/comment", { method: "POST", body: JSON.stringify({ repo, number, body }) });
     }),
 
     drainGithub: Effect.fn("Channel.drainGithub")({ self: this }, function* (this: ChannelGithub) {

@@ -64,6 +64,7 @@ beforeAll(async () => {
       if (path === "/repos/ojow/channels") return Response.json({ default_branch: "main" });
       if (path === `/repos/ojow/channels/compare/main...${sha}`) return new Response("diff --git a/x b/x\n+hello\n");
       if (path === "/repos/ojow/channels/check-runs") return Response.json({ html_url: "https://github.com/ojow/channels/runs/1" }, { status: 201 });
+      if (path === "/repos/ojow/channels/issues/7/comments") return Response.json({ html_url: "https://github.com/ojow/channels/pull/7#issuecomment-1" }, { status: 201 });
       return new Response("nope", { status: 404 });
     },
   });
@@ -134,6 +135,14 @@ describe("diffs and review checks through the relay", () => {
       output: { title: "T45: changes requested in Kiwi", summary: "Changes requested." },
     });
     expect((await room("POST", "/github/check", owner, { ...body, verdict: "maybe" })).status).toBe(400);
+  });
+
+  test("only the owner comments on a PR of a connected repo (the link back to its task)", async () => {
+    const body = { repo: "ojow/channels", number: 7, body: "Kiwi task T72: Branch PRs" };
+    expect((await room("POST", "/github/comment", member, body)).status).toBe(403);
+    expect((await room("POST", "/github/comment", owner, { ...body, repo: "someone/else" })).status).toBe(400);
+    expect(await (await room("POST", "/github/comment", owner, body)).json()).toEqual({ url: "https://github.com/ojow/channels/pull/7#issuecomment-1" });
+    expect(JSON.parse(calls.filter((c) => c.path === "/repos/ojow/channels/issues/7/comments").at(-1)!.body)).toEqual({ body: "Kiwi task T72: Branch PRs" });
   });
 
   test("a relay without the App answers 404", async () => {
