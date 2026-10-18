@@ -141,7 +141,7 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
         >
           <span className="text-meta text-ink-2">{r.name} is taken here. It matches: let in as</span>
           <TextField value={rename} onChange={(e) => setRename(e.target.value)} maxLength={32} aria-label="Name to let it in as" className="w-36" />
-          <Button size="sm" variant="primary" type="submit" disabled={busy || !rename.trim() || p.roster.some((m) => m.active && nameKey(m.name) === nameKey(rename.trim()))}>
+          <Button size="sm" variant="secondary" type="submit" disabled={busy || !rename.trim() || p.roster.some((m) => m.active && nameKey(m.name) === nameKey(rename.trim()))}>
             Let in
           </Button>
         </form>
@@ -149,7 +149,7 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
         <>
           <Button
             size="sm"
-            variant="primary"
+            variant="secondary"
             disabled={busy || (!!r.pin && pinnedAs === undefined)}
             onClick={() => run(() => p.onApprove(r, defaultScopes(roomId), pinnedAs ?? undefined), pinnedAs ? `${r.name} joined as ${pinnedAs.name}` : `${r.name} joined`)}
           >
@@ -160,7 +160,7 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
           </Button>
         </>
       ) : r.check === "unchecked" ? (
-        <Button size="sm" variant="primary" disabled={busy} onClick={() => run(() => p.onCheck(r), `Asked ${r.name} for its code`)}>
+        <Button size="sm" variant="secondary" disabled={busy} onClick={() => run(() => p.onCheck(r), `Asked ${r.name} for its code`)}>
           Show code
         </Button>
       ) : (
@@ -231,7 +231,7 @@ function AskItem({
             ))}
           {handoff && live && (
             <>
-              <Button size="sm" variant="primary" onClick={() => !openHandoff(handoff) && toast("The link has expired", "error")}>
+              <Button size="sm" variant="secondary" onClick={() => !openHandoff(handoff) && toast("The link has expired", "error")}>
                 Open browser
               </Button>
               <Button size="sm" variant="secondary" disabled={busy} onClick={() => void send(HANDOFF_DONE)}>
@@ -307,7 +307,7 @@ function ReviewItem({
     <Row icon={CheckmarkCircle02Icon} title={t.title} detail={`${taskId(t.id)} · ready for your review${t.owner ? ` · done by ${nameOf(t.owner)}` : ""} · check the work itself, not just the word`}>
       {why === null ? (
         <>
-          <Button size="sm" variant="primary" disabled={busy} onClick={() => act(() => onApprove(t), `Approved ${taskId(t.id)}`)}>
+          <Button size="sm" variant="secondary" disabled={busy} onClick={() => act(() => onApprove(t), `Approved ${taskId(t.id)}`)}>
             Approve
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setWhy("")}>

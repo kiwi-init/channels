@@ -28,7 +28,7 @@ test("the kit is the quiet look: an accent primary, an outlined secondary, a was
   expect(kit).toContain('type="checkbox" className={cx("size-4 shrink-0 accent-[var(--accent)]"');
 });
 
-test("prism stays in the sidebar: the kit, the header, the side panels, Settings and Personalities don't wear it", () => {
+test("prism stays in the sidebar: the kit, the header, the side panels, Settings, Personalities and the conversation don't wear it", () => {
   const shell = [
     "components/kit.tsx",
     "components/conversation/header.tsx",
@@ -39,6 +39,14 @@ test("prism stays in the sidebar: the kit, the header, the side panels, Settings
     "components/update-check.tsx",
     "components/personalities.tsx",
     "components/personality-picker.tsx",
+    "components/composer.tsx",
+    "components/composer-question.tsx",
+    "components/message.tsx",
+    "components/ask-options.tsx",
+    "components/live-task-card.tsx",
+    "components/needs-you.tsx",
+    "components/gif-picker.tsx",
+    "components/conversation/index.tsx",
   ];
   const wearing = shell.filter((f) => /\b(prism|prism-lit|orb|orb-pill)\b/.test(readFileSync(resolve(web, f), "utf8").replace(/--prism-[a-z-]+/g, "")));
   expect(wearing).toEqual([]);
