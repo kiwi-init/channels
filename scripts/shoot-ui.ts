@@ -355,32 +355,30 @@ try {
         () => toTab("Agents"),
         () => toTab("Conversation"),
       );
-      if (!narrow) await shoot(owner, tag, "07-details", () => detailsBtn().click(), closeDetails);
-      if (!narrow)
-        await shoot(
-          owner,
-          tag,
-          "08-direct",
-          async () => {
-            await detailsBtn().click();
-            await owner.getByRole("button", { name: "More for atlas" }).click();
-            await owner.getByRole("menuitem", { name: "Message privately" }).click();
-            await owner.getByPlaceholder(/privately$/).waitFor({ timeout: 15000 });
-          },
-          toChannel,
-        );
-      if (!narrow)
-        await shoot(
-          owner,
-          tag,
-          "09-invite",
-          async () => {
-            await detailsBtn().click();
-            await details().getByRole("button", { name: "Invite", exact: true }).click();
-            await details().getByRole("heading", { name: "Invite to this channel" }).waitFor();
-          },
-          toChannel,
-        );
+      await shoot(owner, tag, "07-details", () => detailsBtn().click(), closeDetails);
+      await shoot(
+        owner,
+        tag,
+        "08-direct",
+        async () => {
+          await detailsBtn().click();
+          await owner.getByRole("button", { name: "More for atlas" }).click();
+          await owner.getByRole("menuitem", { name: "Message privately" }).click();
+          await owner.getByPlaceholder(/privately$/).waitFor({ timeout: 15000 });
+        },
+        toChannel,
+      );
+      await shoot(
+        owner,
+        tag,
+        "09-invite",
+        async () => {
+          await detailsBtn().click();
+          await details().getByRole("button", { name: "Invite", exact: true }).click();
+          await details().getByRole("heading", { name: "Invite to this channel" }).waitFor();
+        },
+        toChannel,
+      );
       await shoot(
         owner,
         tag,
@@ -401,28 +399,26 @@ try {
         },
         fromList,
       );
-      if (!narrow)
-        await shoot(
-          owner,
-          tag,
-          "12-notes",
-          async () => {
-            await detailsBtn().click();
-            await details().getByRole("heading", { name: "Notes" }).scrollIntoViewIfNeeded();
-          },
-          closeDetails,
-        );
-      if (!narrow)
-        await shoot(
-          owner,
-          tag,
-          "13-pause",
-          async () => {
-            await detailsBtn().click();
-            await details().getByRole("button", { name: "Pause agents" }).click();
-          },
-          toChannel,
-        );
+      await shoot(
+        owner,
+        tag,
+        "12-notes",
+        async () => {
+          await detailsBtn().click();
+          await details().getByRole("heading", { name: "Notes" }).scrollIntoViewIfNeeded();
+        },
+        closeDetails,
+      );
+      await shoot(
+        owner,
+        tag,
+        "13-pause",
+        async () => {
+          await detailsBtn().click();
+          await details().getByRole("button", { name: "Pause agents" }).click();
+        },
+        toChannel,
+      );
       await shoot(owner, tag, "14-list", toList, async () => {
         if (narrow) await toChannel();
       });
