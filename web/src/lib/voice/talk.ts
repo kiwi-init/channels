@@ -3,6 +3,7 @@ import type { ChannelState } from "@kiwi/core/state.ts"
 
 import { connectGrokVoice, type GrokVoice, type OpenSocket, type Playback } from "./grok"
 import { voiceNewsFeed, voiceSnapshot } from "./news"
+import { VOICE_TOOLS, runVoiceTool, type ToolCtx } from "./tools"
 
 export type TalkStatus = "off" | "connecting" | "live"
 
@@ -31,6 +32,7 @@ export interface TalkChannel {
   nameOf: (name: string) => string
   state: ChannelState
   messages: Message[]
+  tools?: ToolCtx
 }
 
 export interface Talk {
@@ -39,6 +41,7 @@ export interface Talk {
   start(c: TalkChannel): Promise<void>
   stop(): void
   seen(messages: Message[], state: ChannelState): void
+  use(tools: ToolCtx): void
 }
 
 const NEWS = "Channel news. Say it when it fits, in a sentence, without cutting the person off:"
@@ -47,7 +50,9 @@ export function instructionsFor(c: TalkChannel): string {
   return [
     `You are the voice of a Kiwi channel, where people and AI agents work together. You talk with ${c.nameOf(c.me)}.`,
     "Speak briefly and plainly, like a teammate on a call. Say task numbers as T and the number.",
-    "You can tell them what's going on in the channel. You can't post, approve or change anything yet: when they ask for that, say they can type it in the composer.",
+    c.tools
+      ? "Look things up with your tools rather than guessing. Before you post, answer a question, pause the agents or add a task, read back exactly what you'll do and wait for a yes."
+      : "You can tell them what's going on in the channel. You can't post, approve or change anything: when they ask for that, say they can type it in the composer.",
     "System messages that start with “Channel news” are things that just happened; mention them when it fits.",
     "",
     "Where things stand:",
@@ -68,6 +73,7 @@ export function createTalk(deps: TalkDeps): Talk {
   const listeners = new Set<() => void>()
   let session: { voice: GrokVoice; mic: Mic | null; speaker: Playback & { close(): void }; news: (m: Message, s: ChannelState) => string | null; after: number } | null = null
   let run = 0
+  let tools: ToolCtx | null = null
 
   const set = (next: Partial<TalkView>) => {
     view = { ...view, ...next }
@@ -92,6 +98,7 @@ export function createTalk(deps: TalkDeps): Talk {
     async start(c) {
       if (session || view.status !== "off") return
       const mine = ++run
+      tools = c.tools ?? null
       set({ status: "connecting", heard: "", saying: "", error: null })
       try {
         const { token } = await deps.token(c.roomId)
@@ -102,6 +109,7 @@ export function createTalk(deps: TalkDeps): Talk {
           instructions: instructionsFor(c),
           playback: speaker,
           open: deps.open,
+          tools: c.tools ? VOICE_TOOLS : [],
           on: {
             status: (s, why) => {
               if (mine !== run) return
@@ -112,6 +120,11 @@ export function createTalk(deps: TalkDeps): Talk {
             saying: (text) => mine === run && set({ saying: text }),
             said: (text) => mine === run && set({ saying: text }),
             interrupted: () => mine === run && set({ saying: "" }),
+            call: (call) => {
+              const ctx = tools
+              if (mine !== run || !ctx) return
+              void runVoiceTool(call.name, call.args, ctx).then((out) => mine === run && voice.answer(call.id, out))
+            },
             failed: (e) => mine === run && set({ error: e.message }),
           },
         })
@@ -127,6 +140,9 @@ export function createTalk(deps: TalkDeps): Talk {
       }
     },
     stop: () => end(null),
+    use(next) {
+      if (tools) tools = next
+    },
     seen(messages, state) {
       const s = session
       if (!s) return
