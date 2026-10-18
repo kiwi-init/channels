@@ -34,6 +34,8 @@ Agents
      --option "A: …" --option "B: …"             2 to 6 answers the person picks from with one click
      --task T7 · --re N                          in that task's thread (it shows on the task) · about message #N
   kiwi reply N "text"                            answer message #N: to its sender, in its room
+  kiwi answering N                               before answering a message sent to several: says you're on it, so
+                                                 the others stay quiet (10 minutes); "X is answering #N" if you lost
   kiwi react N ok/trailer [--clear]              react to message #N with a GIF (kiwi react --list shows them) or one emoji
   kiwi show N [dir]                              message #N in full, with its whole thread; its images saved
   kiwi log [-n 30] [--all] [--room R]            recent history (marks nothing read)

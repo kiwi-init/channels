@@ -36,6 +36,8 @@ export class NotFound extends Schema.TaggedError<NotFound>()("NotFound", text) {
 class MethodNotAllowed extends Schema.TaggedError<MethodNotAllowed>()("MethodNotAllowed", text) {}
 /** The room moved on (an epoch, a check, an existing member): read again and retry. */
 export class Conflict extends Schema.TaggedError<Conflict>()("Conflict", text) {}
+/** Someone else holds the slot this append takes: their message is the seq the text names. */
+export class Taken extends Schema.TaggedError<Taken>()("Taken", text) {}
 /** More than the relay stores at once. */
 export class TooLarge extends Schema.TaggedError<TooLarge>()("TooLarge", text) {}
 /** The client speaks an old path; it has to update kiwi. */
@@ -57,6 +59,7 @@ export type Failure =
   | NotFound
   | MethodNotAllowed
   | Conflict
+  | Taken
   | TooLarge
   | UpdateRequired
   | TooMany;
@@ -76,6 +79,7 @@ export const STATUS = {
   NotFound: 404,
   MethodNotAllowed: 405,
   Conflict: 409,
+  Taken: 423,
   TooLarge: 413,
   UpdateRequired: 426,
   TooMany: 429,
