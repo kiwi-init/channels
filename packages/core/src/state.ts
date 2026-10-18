@@ -10,11 +10,13 @@ export { allowedOnHold, colorOf, humanOf, isLeadRole, isPerson, LEAD, ON_HOLD, o
 export { chooseThread, dmPlace, MAIN, placeFromKey, placeKey, tasksAwaitingPeople, threadMembers, wentTo } from "./state/places.ts";
 export { outsideRepos, reposOf } from "./state/repos.ts";
 export { LEASE_WAIT_MS, nextIn, placeIn } from "./state/leases.ts";
+export { unnamedAsks, unnamedTasks } from "./state/compact.ts";
 export { findRoom, newRoomId } from "./state/rooms.ts";
 export { currentState, openRound, parseTaskId, revisedOut, similarOpenTasks, taskId, titlesLookAlike } from "./state/tasks.ts";
 export {
   toRoster,
   type ChannelState,
+  type Compact,
   type Fact,
   type Lease,
   type FoldBase,

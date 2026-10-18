@@ -101,6 +101,7 @@ export interface Task {
   rounds: ReviewRound[];
   source?: number;
   posters?: string[];
+  archived?: boolean;
 }
 
 export interface Reaction {
@@ -156,8 +157,18 @@ export interface ChannelState {
   charter: Charter | null;
   repos: string[];
   hold: Hold | null;
+  compact: Compact | null;
+  compactProposal: Compact | null;
   reactions: Map<number, Map<string, Reaction>>;
   head: number;
+}
+
+export interface Compact {
+  summary: string;
+  through: number;
+  by: string;
+  at: number;
+  seq: number;
 }
 
 export interface Charter {
@@ -193,6 +204,8 @@ export interface FoldBase {
   charter: Charter | null;
   repos?: string[];
   hold: Hold | null;
+  compact: Compact | null;
+  compactProposal: Compact | null;
   scopesByKey: [string, Scope[]][];
   scopeSets: [string, { seq: number; scopes: Scope[] }][];
   roleSets: [string, { seq: number; role: string | null; about?: string | null }][];

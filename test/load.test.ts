@@ -32,6 +32,8 @@ const board = (tasks: Task[]): ChannelState =>
     placeOf: new Map(),
     places: new Map(),
     charter: null,
+    compact: null,
+    compactProposal: null,
     repos: [],
     hold: null,
     reactions: new Map(),

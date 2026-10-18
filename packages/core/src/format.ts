@@ -151,6 +151,10 @@ export function describeEvent(m: Message, state?: ChannelState): string {
       return `let go of ${ev.name}`;
     case "charter.set":
       return ev.text ? `set the charter: ${ev.text}` : "cleared the charter";
+    case "compact.propose":
+      return `proposed compacting the history through #${ev.through}: ${inlineText(ev.summary, 200)}`;
+    case "compact":
+      return `compacted the history through #${ev.through}: ${inlineText(ev.summary, 200)}`;
     case "repos.set":
       return ev.repos.length ? `set the channel's repos: ${ev.repos.join(", ")}` : "cleared the channel's repos";
     case "hold.set":
@@ -375,6 +379,7 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
   out.push(`channel ${alias} · you are ${me}${meM?.role ? ` (${inlineText(meM.role, 80)})` : ""} · head #${state.head}${unread ? ` · ${unread} unread` : ""}`);
   const hold = holdLine(state, now);
   if (hold) out.push(hold);
+  if (state.compact) out.push(`history compacted through #${state.compact.through} by ${inlineText(state.compact.by, 40)}: ${inlineText(state.compact.summary, 400)} (kiwi compact shows it all)`);
   if (meM && presetOf(meM.scopes) !== "full") out.push(`the owner lets you: ${mayDo(meM.scopes)}`);
   const lead = leadLine(state, me);
   if (lead) out.push(lead);
@@ -426,9 +431,10 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
 
   const tasks = [...state.tasks.values()];
   const active = tasks.filter((t) => t.state !== "done");
-  const done = tasks.filter((t) => t.state === "done").length;
-  const cancelled = tasks.filter((t) => t.state === "done" && t.cancelled).length;
-  out.push("", `tasks (${active.length} open${done ? `, ${done} done${cancelled ? ` (${cancelled} cancelled)` : ""}` : ""}):`);
+  const done = tasks.filter((t) => t.state === "done" && !t.archived).length;
+  const cancelled = tasks.filter((t) => t.state === "done" && !t.archived && t.cancelled).length;
+  const archived = tasks.filter((t) => t.archived).length;
+  out.push("", `tasks (${active.length} open${done ? `, ${done} done${cancelled ? ` (${cancelled} cancelled)` : ""}` : ""}${archived ? `, ${archived} archived` : ""}):`);
   if (!active.length) out.push('  none — add one with: kiwi task add "…"');
   const order = ["doing", "review", "todo"];
   active.sort((a, b) => order.indexOf(a.state) - order.indexOf(b.state) || a.id - b.id);
@@ -450,7 +456,7 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
 
 export function formatTasks(state: ChannelState, opts: { all?: boolean; owner?: string } = {}): string {
   let tasks = [...state.tasks.values()];
-  if (!opts.all) tasks = tasks.filter((t) => t.state !== "done");
+  if (!opts.all) tasks = tasks.filter((t) => t.state !== "done" && !t.archived);
   if (opts.owner) tasks = tasks.filter((t) => t.owner === opts.owner);
   if (!tasks.length) return "no tasks";
   return tasks.map((t) => taskLine(t).trimStart()).join("\n");

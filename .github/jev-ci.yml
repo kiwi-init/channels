@@ -110,7 +110,10 @@ jobs:
       coordinator role reads as it, an old mode.set folds to nothing, a person's words reach every
       agent). And test/push-pull.test.ts: what an agent is sent (all of #general, rooms and task
       threads once it has posted there, so an answer to its question in a task's thread reaches
-      it, and @mentions anywhere) and how a mention is read. Fails if a tested module's behavior,
+      it, and @mentions anywhere) and how a mention is read. And test/compact.test.ts:
+      /compact (a proposal names every open task and question; only the owner compacts; done
+      tasks archive off the board; a snapshot-resumed fold agrees; propose and approve over a
+      local relay). Fails if a tested module's behavior,
       output text or exported names change. TMPDIR points through a symlink, as macOS's does,
       so a test that compares a tmp path with its realpath or process.cwd() fails here too.
 

@@ -103,7 +103,7 @@ function TaskLine({ task, now, nameOf, waiting, onOpen }: { task: Task; now: num
 
 function Tasks({ state, now, nameOf, onOpen, onAll }: { state: ChannelState; now: number; nameOf: (n: string) => string; onOpen: (id: number) => void; onAll: () => void }) {
   const [filter, setFilter] = useState<TaskFilter>("all")
-  const all = [...state.tasks.values()].sort((a, b) => b.updatedAt - a.updatedAt)
+  const all = [...state.tasks.values()].filter((t) => !t.archived).sort((a, b) => b.updatedAt - a.updatedAt)
   const list = all.filter((t) => filter === "all" || t.state === filter)
   const open = all.filter((t) => t.state !== "done").length
   const shown = FILTERS.filter(([f]) => f === "all" || f === filter || all.some((t) => t.state === f))

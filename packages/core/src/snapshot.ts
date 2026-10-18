@@ -12,7 +12,7 @@ export interface SealedSnapshot {
   sig: string;
 }
 
-const VERSION = 4;
+const VERSION = 5;
 const MAX_PLAIN = 64 * 1024 * 1024;
 const enc = new TextEncoder();
 

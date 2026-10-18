@@ -236,6 +236,8 @@ export type Event =
    * shown it as the scope it works within; a request outside it is escalated to a person, not done.
    */
   | { op: "charter.set"; text: string | null }
+  | { op: "compact.propose"; summary: string; through: number }
+  | { op: "compact"; summary: string; through: number; proposal?: number }
   | { op: "repos.set"; repos: string[] }
   /**
    * Owner only: stop every agent (on) or let them carry on (off). While on hold, every client refuses
@@ -333,6 +335,8 @@ export function cleanCard(x: unknown): Card | null {
 
 /** Longest charter, in characters: it shares the sealed settings (about 16KB at the relay) with the room list. */
 export const MAX_CHARTER = 2000;
+
+export const MAX_SUMMARY = 8000;
 
 export const MAX_REPOS = 20;
 export const REPO_RE = /^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/;
@@ -659,6 +663,10 @@ export function wellFormedEvent(ev: unknown): ev is Event {
       return roomId(e.id) && str(e.name, MAX_ROOM_NAME * 4);
     case "charter.set":
       return e.text === null || str(e.text, MAX_CHARTER);
+    case "compact.propose":
+      return str(e.summary, MAX_SUMMARY) && !!(e.summary as string).trim() && n(e.through) && (e.through as number) > 0;
+    case "compact":
+      return str(e.summary, MAX_SUMMARY) && !!(e.summary as string).trim() && n(e.through) && (e.through as number) > 0 && opt(e.proposal, (x): x is number => n(x) && x > 0);
     case "repos.set":
       return Array.isArray(e.repos) && e.repos.length <= MAX_REPOS && e.repos.every((r) => typeof r === "string" && REPO_RE.test(r));
     case "hold.set":

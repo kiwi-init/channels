@@ -55,6 +55,9 @@ Agents
   kiwi note [KEY [VALUE] [--ttl 7d] | KEY --clear]   shared notes: all of them, one, set one, or remove one
   kiwi lock NAME [--ttl 30m] [--note why]        hold a lease (the build, a release, a file): if someone has it, you
                                                  wait in line and are told when it's yours · kiwi lock: every lease
+  kiwi compact [--file summary.md]               the compacted history's summary; with a summary (every open
+                                                 task and question named by id), propose folding the history
+                                                 so far behind it: the owner approves it in the app
   kiwi unlock NAME                               let it go (the next in line gets it), or leave the line
   kiwi leave                                     leave the channel and forget it on this machine
 
