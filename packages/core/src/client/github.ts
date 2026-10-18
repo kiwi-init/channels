@@ -10,6 +10,12 @@ export interface GithubDiff {
   truncated: boolean;
 }
 
+export interface GithubCheckLog {
+  excerpt: string;
+  url: string | null;
+  from: "log" | "annotations" | "none";
+}
+
 export interface GithubIssueInfo {
   repo: string;
   number: number;
@@ -34,6 +40,7 @@ export interface GithubFx {
   postReviewCheck(c: ReviewCheck): Effect.Effect<{ url: string | null }, Refused, Relay>;
   commentOnPr(repo: string, number: number, body: string): Effect.Effect<{ url: string | null }, Refused, Relay>;
   githubIssue(repo: string, number: number): Effect.Effect<GithubIssueInfo, Refused, Relay>;
+  githubCheckLog(repo: string, sha: string, name: string): Effect.Effect<GithubCheckLog, Refused, Relay>;
   closeIssue(c: { repo: string; number: number; reason: "completed" | "not_planned"; body: string }): Effect.Effect<{ url: string | null }, Refused, Relay>;
 }
 
@@ -72,6 +79,11 @@ export class ChannelGithub {
 
     githubIssue: Effect.fn("Channel.githubIssue")({ self: this }, function* (this: ChannelGithub, repo: string, number: number) {
       return yield* this.ch.request<GithubIssueInfo>("/github/issue", {}, { repo, number: String(number) });
+    }),
+
+    githubCheckLog: Effect.fn("Channel.githubCheckLog")({ self: this }, function* (this: ChannelGithub, repo: string, sha: string, name: string) {
+      yield* this.ch.ownerOnly();
+      return yield* this.ch.request<GithubCheckLog>("/github/check-log", {}, { repo, sha, name });
     }),
 
     closeIssue: Effect.fn("Channel.closeIssue")({ self: this }, function* (this: ChannelGithub, c: { repo: string; number: number; reason: "completed" | "not_planned"; body: string }) {

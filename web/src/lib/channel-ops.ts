@@ -65,6 +65,7 @@ export class ChannelLink {
   postReviewCheck = (...a: Args<"postReviewCheck">) => this.c("postReviewCheck", ...a)
   commentOnPr = (...a: Args<"commentOnPr">) => this.c("commentOnPr", ...a)
   githubIssue = (...a: Args<"githubIssue">) => this.c("githubIssue", ...a)
+  githubCheckLog = (...a: Args<"githubCheckLog">) => this.c("githubCheckLog", ...a)
   closeIssue = (...a: Args<"closeIssue">) => this.c("closeIssue", ...a)
   snapshotAt = () => this.c("snapshotAt")
   info = () => this.c("info")
