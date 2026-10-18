@@ -114,10 +114,7 @@ function TaskRow({
         aria-label={`${taskId(task.id)}, ${task.title}`}
         onClick={() => onOpen(task.id)}
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpen(task.id))}
-        className={cx(
-          "grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_44px] items-center gap-x-3.5 rounded-row px-3 py-2.5 transition-colors hover:bg-wash md:grid-cols-[28px_minmax(0,1fr)_168px_44px] lg:grid-cols-[28px_minmax(0,1fr)_168px_128px_44px]",
-          open && "bg-wash"
-        )}
+        className="grid cursor-pointer grid-cols-[28px_minmax(0,1fr)_44px] items-center gap-x-3.5 rounded-row px-3 py-2.5 transition-colors hover:bg-wash md:grid-cols-[28px_minmax(0,1fr)_168px_44px] lg:grid-cols-[28px_minmax(0,1fr)_168px_128px_44px]"
       >
         {task.owner ? (
           <Monogram name={memberName(owner, task.owner)} hue={task.owner} agent={isAgent(owner)} color={colorOf(state, task.owner)} size={28} />

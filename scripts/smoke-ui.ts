@@ -143,6 +143,17 @@ async function run(part: Part): Promise<string[]> {
 
   const toTab = (name: "Tasks" | "Agents" | "Conversation") => page.getByRole("navigation", { name: "Views of the channel" }).getByRole("button", { name, exact: true }).click();
 
+  const openInline = async (title: RegExp) => {
+    await toTab("Tasks");
+    const row = page.getByRole("button", { name: title }).first();
+    await row.waitFor({ timeout: 15000 });
+    if ((await row.getAttribute("aria-expanded")) !== "true") await row.click();
+    return page
+      .getByRole("listitem")
+      .filter({ has: page.getByRole("button", { name: title }) })
+      .first();
+  };
+
   const createChannel = async () => {
     at = "create a channel";
     await newChannel.click();
@@ -353,11 +364,12 @@ async function run(part: Part): Promise<string[]> {
     const smokeTask = /T\d+/.exec(await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke task", "--owner", "bot"]))?.[0] ?? "T0";
     at = "Task in the Tasks panel";
     const tasksPanel = page.getByRole("complementary", { name: "Tasks" });
-    await toTab("Tasks");
-    await page
-      .getByRole("button", { name: /Smoke task/ })
-      .first()
-      .click({ timeout: 15000 });
+    const inline = await openInline(/Smoke task/);
+    await inline.getByRole("textbox", { name: "Message" }).fill("smoke, inline");
+    await page.keyboard.press("Enter");
+    await inline.getByText("smoke, inline", { exact: true }).first().waitFor({ timeout: 15000 });
+    log("ok  a task opens inline in Tasks, and its reply box talks in it");
+    await inline.getByRole("button", { name: "Details", exact: true }).click();
     await tasksPanel
       .getByRole("region", { name: /^Task T\d+/ })
       .getByRole("button", { name: /^Activity/ })
@@ -443,11 +455,7 @@ async function run(part: Part): Promise<string[]> {
     const added = /added (T\d+)/.exec(await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke review", "--owner", "bot", "--review", "helper"]))?.[1];
     if (!added) throw new Error("kiwi task add printed no task id");
     await kiwi(["-c", "smoke", "--as", "bot", "task", "review", added]);
-    await toTab("Tasks");
-    await page
-      .getByRole("button", { name: /Smoke review/ })
-      .first()
-      .click({ timeout: 15000 });
+    await (await openInline(/Smoke review/)).getByRole("button", { name: "Details", exact: true }).click();
     const reviewed = tasksPanel.getByRole("region", { name: `Task ${added}` });
     await reviewed.getByRole("button", { name: "Send back" }).waitFor({ timeout: 15000 });
     if (await reviewed.getByRole("button", { name: "Approve" }).count()) throw new Error("Approve showed for a review waiting on an agent");
@@ -501,10 +509,7 @@ async function run(part: Part): Promise<string[]> {
       .getByRole("navigation", { name: "Views" })
       .getByRole("button", { name: /^Everything/ })
       .click();
-    await page
-      .getByRole("button", { name: /Smoke task/ })
-      .first()
-      .click();
+    await (await openInline(/Smoke task/)).getByRole("button", { name: "Details", exact: true }).click();
     await tasksPanel.getByRole("button", { name: "All tasks" }).click();
     await tasksPanel.getByRole("textbox", { name: "Filter tasks" }).waitFor();
     await page.keyboard.press("Escape");

@@ -25,13 +25,12 @@ import { AgentLine, AgentStrip, byBusy, type AgentNow } from "../agent-strip"
 import { ChannelControls, HoldDialog } from "../controls"
 import { Icon } from "../icon"
 import { Button, Spinner, errorText, toast } from "../kit"
-import { CompactBlock, ProposalCard, TalkBar, TalkButton } from "../lazy"
+import { CompactBlock, ProposalCard, TaskInline, TalkBar, TalkButton } from "../lazy"
 import { bridge } from "@/lib/secrets"
 import type { ToolCtx } from "@/lib/voice/tools"
 import { GifPicker } from "../gif-picker"
 import { isAgent } from "../message"
 import { NeedsYou } from "../needs-you"
-import { TaskInline } from "../task-inline"
 import { TasksView } from "../tasks-view"
 import { ChannelSidebar, type Conversation as ConversationRow } from "./channel-sidebar"
 import { Header } from "./header"
@@ -461,6 +460,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                         state={state}
                         rows={taskRows}
                         load={ch.githubDiff}
+                        onDetails={() => openTask(id)}
                         composer={
                           <Composer
                             key={`task:${id}`}

@@ -116,12 +116,29 @@ function PrCard({ pr, state, load }: { pr: GithubPr; state: ChannelState; load: 
   )
 }
 
-export function TaskInline({ pr, state, rows, composer, load }: { pr: GithubPr | undefined; state: ChannelState; rows: ReactNode[]; composer: ReactNode; load: Load | undefined }) {
+export function TaskInline({
+  pr,
+  state,
+  rows,
+  composer,
+  load,
+  onDetails,
+}: {
+  pr: GithubPr | undefined
+  state: ChannelState
+  rows: ReactNode[]
+  composer: ReactNode
+  load: Load | undefined
+  onDetails: () => void
+}) {
   return (
     <div className={cx("grid gap-5 pt-1 pr-3 pb-4 pl-[54px]", pr && "lg:grid-cols-[minmax(0,1fr)_320px]")}>
       <div className="min-w-0">
         {rows.length ? rows : <p className="py-2 text-ui text-ink-3">Nothing said in this task yet.</p>}
         <div className="-mx-3 pt-1">{composer}</div>
+        <Button variant="secondary" size="sm" className="mt-1" onClick={onDetails}>
+          Details
+        </Button>
       </div>
       {pr && <PrCard pr={pr} state={state} load={load} />}
     </div>

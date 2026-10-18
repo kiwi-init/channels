@@ -171,6 +171,13 @@ From `design-tokens.ts`:
   (number, a 48px diff bar in `live` and `alert`, the additions), its
   checks in a word and the time, short. The PR and checks columns drop on
   narrow windows.
+- A task opens in place, under its row (a click again folds it): its
+  conversation as the conversation draws it, a reply box that talks in the
+  task, and Details for the Tasks panel (review, reviewer, cancel). Beside
+  it from 1024px, the PR card: outlined, no fill; its branch in mono, the
+  files with their additions and deletions (four, then "+n more"), each
+  check by name with how it went, and See the diff and GitHub as outlined
+  buttons.
 - On a wide window the list is an 80px icon rail, as Grok's
   collapsed one: the Mac traffic lights on its header row, each channel
   as its 40px tile in a 56px `card`-round cell (`pick` when open), a blue
