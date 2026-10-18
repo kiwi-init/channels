@@ -242,7 +242,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
 
   const folded = hereKey === "main" && !search && state.compact ? state.compact : null
   const shown = folded && !earlier ? visible.filter((m) => m.seq > folded.through) : visible
-  const { tail, hidden, more, sentinel } = useWindow(shown, hereKey, scroller, highlight, !!search)
+  const { tail, hidden, more, onScrolled } = useWindow(shown, hereKey, scroller, highlight, !!search)
 
   if (gone) {
     return (
@@ -315,7 +315,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const card = proposal ? <ProposalCard key="proposal" proposal={proposal} byName={nameOf(proposal.by)} approve={approve} /> : null
   if (hidden)
     rows.push(
-      <div key="earlier" ref={sentinel} className="py-3 text-center">
+      <div key="earlier" className="py-3 text-center">
         <button type="button" onClick={more} className="text-ui font-medium text-accent-text hover:underline">
           Earlier messages
         </button>
@@ -523,7 +523,14 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
               </div>
             ) : (
               <>
-                <div ref={scroller} className="absolute inset-0 overflow-y-auto" onScroll={onScroll}>
+                <div
+                  ref={scroller}
+                  className="absolute inset-0 overflow-y-auto"
+                  onScroll={(e) => {
+                    onScroll(e)
+                    onScrolled(e.currentTarget)
+                  }}
+                >
                   <div className="relative mx-auto w-full max-w-[792px] px-4 pt-[calc(var(--head)+8px)] pb-[calc(var(--foot)+16px)]">
                     {hereKey === "main" && needsYou}
                     {hereKey === "main" && state.rooms.size > 1 && !search && <RoomChips rooms={[...state.rooms.values()]} value={cardRoom} onChange={setCardRoom} />}
