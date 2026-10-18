@@ -135,7 +135,10 @@ async function run(part: Part): Promise<string[]> {
     const settings = page.getByRole("region", { name: "Settings" });
     await settings.getByRole("radio", { name: "Dark" }).click();
     await settings.getByRole("radio", { name: "Larger" }).click();
-    if (process.env.SMOKE_SHOTS) await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "settings.png") });
+    if (process.env.SMOKE_SHOTS) {
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "settings.png") });
+    }
     await settings.getByRole("button", { name: "Close settings" }).click();
     await settings.waitFor({ state: "detached" });
     if ((await page.evaluate(() => document.documentElement.style.getPropertyValue("--text-scale"))) !== "1.22") throw new Error("the text size didn't apply");

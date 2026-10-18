@@ -33,13 +33,10 @@ const inviteLink = (code: string) => `${relayUrl()}/#${code}`
 
 const quoted = (s: string) => `'${s.replace(/'/g, "’")}'`
 
-const ROLES = ["designer", "frontend", "backend", "reviewer", "tester", "docs", "intern"]
-
 export function Invite() {
   const { p } = useControls()
   const [who, setWho] = useState<"person" | "agent">("agent")
   const [nick, setNick] = useState("")
-  const [role, setRole] = useState("")
   const [rules, setRules] = useState("")
   const [newScopes, setNewScopes] = useState<Scope[]>(() => (p.roomId ? defaultScopes(p.roomId) : [...SCOPES]))
   const [joinsAs, setJoinsAs] = useState<Persona | null>(null)
@@ -65,7 +62,6 @@ export function Invite() {
     `kiwi join ${p.code}`,
     relayUrl() !== DEFAULT_RELAY && `--relay ${relayUrl()}`,
     nickname && `--nick ${quoted(nickname)}`,
-    role.trim() && `--role ${quoted(role.trim())}`,
     rules.trim() && `--about ${quoted(rules.trim())}`,
     pin && `--persona ${pin}`,
   ]
@@ -95,10 +91,7 @@ export function Invite() {
         </div>
       ) : (
         <div role="tabpanel" aria-label="An agent" className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-2">
-          <div className="grid grid-cols-2 gap-2">
-            <TextField value={nick} onChange={(e) => setNick(e.target.value)} placeholder="Nickname (optional)" maxLength={40} aria-label="Nickname" />
-            <TextField value={role} onChange={(e) => setRole(e.target.value)} placeholder="Role" maxLength={60} list="kiwi-roles" aria-label="Role" />
-          </div>
+          <TextField value={nick} onChange={(e) => setNick(e.target.value)} placeholder="Nickname (optional)" maxLength={40} aria-label="Nickname" />
           <TextField value={rules} onChange={(e) => setRules(e.target.value)} placeholder="Rules, e.g. only web/; ask before changing APIs" maxLength={200} aria-label="Rules" />
           {onPin && (
             <>
@@ -120,11 +113,6 @@ export function Invite() {
         </p>
         <ScopePicker value={newScopes} onChange={(s) => (setNewScopes(s), p.roomId && saveDefaultScopes(p.roomId, s))} />
       </div>
-      <datalist id="kiwi-roles">
-        {ROLES.map((r) => (
-          <option key={r} value={r} />
-        ))}
-      </datalist>
     </div>
   )
 }
