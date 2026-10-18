@@ -17,6 +17,7 @@ import {
   ignored,
   wellFormedChoices,
   isGifReaction,
+  isQuiet,
   type InlineImage,
   type Kind,
   type Message,
@@ -159,8 +160,7 @@ export const messageCommands: Record<string, Command> = {
       const s = yield* session();
       const { messages: held, state } = yield* s.state();
       const room = opt.room === undefined ? undefined : yield* s.roomId(opt.room, state);
-      const visible = (m: Message) =>
-        (opt.all || m.kind !== "event" || m.ev?.op !== "hello") && !ignored(state.trust.get(m.seq)) && (room === undefined || (m.kind !== "event" && state.roomOf.get(m.seq) === room));
+      const visible = (m: Message) => (opt.all || !isQuiet(m)) && !ignored(state.trust.get(m.seq)) && (room === undefined || (m.kind !== "event" && state.roomOf.get(m.seq) === room));
       const shown = (yield* s.earlier(held, Number(opt.n ?? 30), visible)).filter(visible);
       for (const m of shown.slice(-Number(opt.n ?? 30))) out(render(m, state));
     }),
