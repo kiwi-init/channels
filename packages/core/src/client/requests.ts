@@ -1,3 +1,4 @@
+import { personaScopes } from "../personality.ts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import { openFrom } from "../crypto.ts";
@@ -139,6 +140,8 @@ export class ChannelRequests {
       }
       const nick = inlineText(as?.display ?? req.display, 40);
       yield* this.assertNamesFree([as?.name ?? req.name]);
+      const persona = kind === "agent" ? as?.persona : undefined;
+      const scopes = persona ? personaScopes(persona) : as?.scopes;
       const info: MemberInfo = {
         name: as?.name ?? req.name,
         role: as?.role ?? (isLeadRole(req.role) ? undefined : req.role),
@@ -149,7 +152,8 @@ export class ChannelRequests {
         ...(kind === "human" && req.person ? { person: req.person } : {}),
         ...(kind === "agent" && req.computer ? { from: { pk: req.computer.pk, label: req.computer.label } } : {}),
         ...(kind === "agent" && req.runs ? { runs: req.runs } : {}),
-        ...(wireScopes(as?.scopes) ? { scopes: wireScopes(as?.scopes)! } : {}),
+        ...(persona ? { persona } : {}),
+        ...(wireScopes(scopes) ? { scopes: wireScopes(scopes)! } : {}),
       };
       const current = this.ch.access.keys[String(this.ch.access.epoch)]!;
       const rec = yield* Effect.promise(() => makeRecord(this.ch.identity, this.ch.roomId, { ...info, pk: req.pk, xpk: req.xpk }));

@@ -63,7 +63,18 @@ export const profileCommands: Record<string, Command> = {
         agentPrompt(
           alias,
           name,
-          state ? { scopes: me?.scopes, hold: holdLine(state), charter: charterLines(state), lead: leadLine(state, name), human: humanOf(state, name), role: me?.role, about: me?.about } : {},
+          state
+            ? {
+                scopes: me?.scopes,
+                hold: holdLine(state),
+                charter: charterLines(state),
+                lead: leadLine(state, name),
+                human: humanOf(state, name),
+                role: me?.role,
+                about: me?.about,
+                ...(me?.persona ? { persona: me.persona } : {}),
+              }
+            : {},
         ),
       );
     }),

@@ -179,6 +179,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
         role: seat?.role,
         about: seat?.about,
         scopes: seat?.scopes,
+        ...(seat?.persona ? { persona: seat.persona } : {}),
       }),
     ];
     const unread = yield* unreadText(s);
