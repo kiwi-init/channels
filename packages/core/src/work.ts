@@ -27,6 +27,7 @@ export interface PrRef {
   /** The message that first linked it. */
   seq: number;
   title?: string;
+  branch?: string;
   checks?: PrChecks;
 }
 
@@ -50,7 +51,7 @@ function fromGithub(state: ChannelState, pr: PrRef): PrRef {
   const real = state.github.prs.get(prKey(pr.repo, pr.number));
   if (!real) return pr;
   const checks = checksOf(state, real);
-  return { ...pr, state: real.state, ...(real.title ? { title: real.title } : {}), ...(checks ? { checks } : {}) };
+  return { ...pr, state: real.state, ...(real.title ? { title: real.title } : {}), ...(real.branch ? { branch: real.branch } : {}), ...(checks ? { checks } : {}) };
 }
 
 const PR_URL = /https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)/g;
@@ -207,6 +208,11 @@ export type FeedItem =
   | { type: "pr"; seq: number; at: number; actor: string; pr: PrRef }
   | { type: "thread"; seq: number; at: number; root: number; room?: string; messages: Message[] };
 
+export function taskOfBranch(branch: string | undefined): number | null {
+  const m = branch && /^(?:[\w.-]+\/)?T(\d{1,9})(?:$|[-_/.])/i.exec(branch);
+  return m ? Number(m[1]) : null;
+}
+
 /** Whether a message names task `id` ("T12"). */
 function mentions(m: Message, id: number): boolean {
   return new RegExp(`\\bT${id}\\b`).test(textOf(m));
@@ -241,9 +247,18 @@ export function taskFeed(state: ChannelState, messages: Message[], id: number): 
     items.push({ type: "thread", seq: first.seq, at: at(first), root, ...(room ? { room } : {}), messages: thread });
   }
   const linked = (m: Message) => (m.ev?.op === "task.update" && m.ev.task === id) || (m.kind !== "event" && mentioning.has(state.threadOf.get(m.seq) ?? m.seq));
+  const shown = new Set<string>();
   for (const pr of prsIn(state, messages, linked)) {
     const m = messages.find((x) => x.seq === pr.seq)!;
+    shown.add(prKey(pr.repo, pr.number));
     items.push({ type: "pr", seq: pr.seq, at: at(m), actor: m.from, pr });
+  }
+  for (const [key, gh] of state.github.prs) {
+    if (shown.has(key) || taskOfBranch(gh.branch) !== id) continue;
+    const m = messages.find((x) => x.seq === gh.seq);
+    if (!m) continue;
+    const pr = fromGithub(state, { url: gh.url ?? `https://github.com/${gh.repo}/pull/${gh.number}`, repo: gh.repo, number: gh.number, state: gh.state, seq: gh.seq });
+    items.push({ type: "pr", seq: gh.seq, at: at(m), actor: m.from, pr });
   }
   return items.sort((a, b) => a.seq - b.seq || (a.type === "pr" ? 1 : 0) - (b.type === "pr" ? 1 : 0));
 }

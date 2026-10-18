@@ -133,6 +133,7 @@ function Properties({ task, state, now, items }: { task: Task; state: ChannelSta
               <span key={pr.url} className="flex items-center gap-2">
                 <Icon icon={GitPullRequestIcon} size={16} className="text-ink-3" />
                 <PrLink pr={pr} />
+                {pr.branch && <span className="truncate font-mono text-meta text-ink-3">{pr.branch}</span>}
               </span>
             ))}
           </span>

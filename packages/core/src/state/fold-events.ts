@@ -91,7 +91,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: Member, at
         reject("only the owner's app posts GitHub's news");
         break;
       }
-      applyGithub(c.github, ev.items);
+      applyGithub(c.github, ev.items, m.seq);
       break;
     }
 
