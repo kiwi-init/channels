@@ -6,6 +6,7 @@ import { fold, type ChannelState, type Roster } from "@kiwi/core/state.ts"
 
 import type { OpenSocket, VoiceSocket } from "./grok"
 import { createTalk, instructionsFor, type TalkChannel, type TalkDeps } from "./talk"
+import type { ToolCtx } from "./tools"
 
 class FakeSocket implements VoiceSocket {
   readyState = 0
@@ -55,6 +56,19 @@ await post("jow", { op: "voice.set", on: true })
 const task = await post("wren", { op: "task.add", title: "Glass avatars", owner: "wren" })
 const state = (): ChannelState => fold(log, roster)
 const nameOf = (n: string) => (n === "jow" ? "Jow" : n)
+const toolCtx = (posted: string[], tag = "first"): ToolCtx => ({
+  state: state(),
+  me: "jow",
+  channel: "channels",
+  isOwner: true,
+  online: new Set(),
+  requests: [],
+  nameOf,
+  send: async (body) => {
+    posted.push(`${tag}: ${body}`)
+    return 77
+  },
+})
 const channel = (): TalkChannel => ({ roomId: "room-1", channel: "channels", me: "jow", nameOf, state: state(), messages: [...log] })
 
 function rig(over: Partial<TalkDeps> = {}) {
@@ -173,7 +187,25 @@ describe("Talk to channel", () => {
     expect(slow.talk.view().status).toBe("off")
   })
 
-  test("the instructions say what it can't do yet", () => {
-    expect(instructionsFor(channel())).toContain("You can't post, approve or change anything yet")
+  test("without tools it says it can't act; with them it reads back before acting", () => {
+    expect(instructionsFor(channel())).toContain("You can't post, approve or change anything")
+    expect(instructionsFor({ ...channel(), tools: toolCtx([]) })).toContain("read back exactly what you'll do and wait for a yes")
+  })
+
+  test("with tools, the session offers them and answers each call from the latest channel", async () => {
+    const r = rig()
+    const posted: string[] = []
+    await r.talk.start({ ...channel(), tools: toolCtx(posted) })
+    const ws = r.sockets[0]!
+    ws.open()
+    const update = ws.sent[0] as { session: { tools: { name: string }[] } }
+    expect(update.session.tools.map((t) => t.name)).toContain("needs_you")
+    r.talk.use(toolCtx(posted, "later"))
+    ws.say({ type: "response.created", response: { id: "r1" } })
+    ws.say({ type: "response.function_call_arguments.done", response_id: "r1", call_id: "c1", name: "post", arguments: '{"text":"on my way"}' })
+    ws.say({ type: "response.done", response: { id: "r1", status: "completed" } })
+    await new Promise((ok) => setTimeout(ok, 0))
+    expect(posted).toEqual(["later: on my way"])
+    expect(ws.sent.slice(-2)).toEqual([{ type: "conversation.item.create", item: { type: "function_call_output", call_id: "c1", output: '{"posted":"#77"}' } }, { type: "response.create" }])
   })
 })
