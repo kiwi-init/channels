@@ -10,6 +10,7 @@ import { relayUrl } from "@/lib/relay"
 import { bridge, useSecrets } from "@/lib/secrets"
 import { version } from "../../../package.json"
 import { Button, Modal, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from "./kit"
+import { UpdateCheck } from "./update-check"
 
 // How Channels looks in this browser: the theme and how large everything reads.
 // Both apply at once and stay in this browser; nothing here leaves it.
@@ -264,6 +265,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
           <GithubFields />
           <PersonalitiesField />
           <VoiceFields />
+          <UpdateCheck />
         </div>
         <div className="mt-6 flex items-center justify-between gap-3">
           <p className="min-w-0 truncate text-ui text-ink-2">Channels {version}</p>

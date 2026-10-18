@@ -89,6 +89,10 @@ jobs:
       store's CSP allows api.x.ai only when an xAI key is saved, the project key never reaches
       the snapshot or the token IPC result, consent defaults off, and
       desktop/build/entitlements.mac.plist has the audio-input entitlement. And
+      test/desktop-update-check.test.ts: Settings' check for updates (desktop/src/updater.ts's
+      checkForUpdate, with electron and fetch faked): the latest release says current, a
+      pre-release or draft never counts, an unpackaged app only offers the release link and
+      downloads nothing, GitHub failing is a failed check, and two checks at once share one. And
       test/jev-ci.test.ts: the CI planner in .github/jev-ci, which plans synthetic changes
       against the real .github/jev-ci.yml and .github/workflows/ci.yml in a scratch git repo,
       following imports into workspace packages (@kiwi/core) by name. And
