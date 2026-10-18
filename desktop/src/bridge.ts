@@ -130,6 +130,7 @@ export interface ChannelOps {
   presence(code: string, p: PresenceFields): Promise<void>;
   openRows(code: string, rows: CachedRow[]): Promise<(Message | null)[]>;
   follow(code: string, since: number, on: (e: FollowEvent) => void, opts?: FollowOptions): () => void;
+  nudge(): void;
 }
 
 export interface FollowOptions {
@@ -151,7 +152,8 @@ export type KeysAsk =
   | { op: "presence"; code: string; p: Wire }
   | { op: "openRows"; code: string; rows: Wire }
   | { op: "follow"; code: string; since: number; watch?: boolean }
-  | { op: "unfollow"; sub: number };
+  | { op: "unfollow"; sub: number }
+  | { op: "nudge" };
 
 export type KeysRequest = KeysAsk & { id: number };
 export type KeysReply = { id: number; ok: true; value: Wire } | { id: number; ok: false; error: WireError };

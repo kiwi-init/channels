@@ -28,6 +28,9 @@ function lazyLocalOps(): ChannelOps {
     forget: (code) => local().then((o) => o.forget(code)),
     presence: (code, p) => local().then((o) => o.presence(code, p)),
     openRows: (code, rows) => local().then((o) => o.openRows(code, rows)),
+    nudge: () => {
+      if (real) void real.then((o) => o.nudge())
+    },
     follow: (code, since, on, opts) => {
       let stop: (() => void) | null = null
       let gone = false

@@ -80,6 +80,8 @@ const OPEN_WAIT = "15 seconds";
 
 const CLOSE_SILENT = 4001;
 
+const NUDGE_WAIT_MS = 5_000;
+
 const backoff = Schedule.min([Schedule.exponential("500 millis"), Schedule.spaced("30 seconds")]);
 
 const outlasted = ({ attempt, elapsed, elapsedSincePrevious }: Schedule.InputMetadata<unknown>, quietMs: number) => elapsed >= quietMs && (attempt === 1 || elapsed - elapsedSincePrevious < quietMs);
@@ -160,6 +162,9 @@ export interface LiveFx {
 export class ChannelLive {
   readonly wires = new Set<Wire>();
   private moreUnknown = false;
+  private readonly waits = new Set<() => void>();
+  private readonly checks = new Set<() => void>();
+  private kicked = false;
 
   constructor(
     private readonly ch: ChannelCore,
@@ -207,6 +212,25 @@ export class ChannelLive {
     );
   }
 
+  nudge(): void {
+    this.kicked = true;
+    for (const wake of [...this.waits]) wake();
+    for (const check of [...this.checks]) check();
+  }
+
+  private waitOrNudge(delay: Duration.Duration): Effect.Effect<Duration.Duration> {
+    const nudged = Effect.callback<void>((resume) => {
+      const wake = () => resume(Effect.void);
+      this.waits.add(wake);
+      return Effect.sync(() => void this.waits.delete(wake));
+    });
+    return Effect.suspend(() => {
+      if (!this.kicked) return Effect.raceFirst(Effect.sleep(delay), nudged);
+      this.kicked = false;
+      return Effect.void;
+    }).pipe(Effect.as(Duration.zero));
+  }
+
   private reconnect(out: Queue.Queue<Live, ChannelGone | Cause.Done>, quietMs: number) {
     return backoff.pipe(
       Schedule.setInputType<Dropped | ChannelGone>(),
@@ -215,6 +239,7 @@ export class ChannelLive {
         meta.input instanceof Dropped && outlasted(meta, quietMs) ? Queue.offer(out, { _tag: "Down", after: meta.elapsed, code: meta.input.code, reason: meta.input.reason }) : Effect.void,
       ),
       Schedule.tap(({ attempt }) => (attempt === 1 || attempt % STILL_IN_EVERY === 0 ? this.stillIn() : Effect.void)),
+      Schedule.modifyDelay(({ duration }) => this.waitOrNudge(duration)),
     );
   }
 
@@ -252,6 +277,22 @@ export class ChannelLive {
       );
       yield* Effect.forkScoped(Effect.sleep(OPEN_WAIT).pipe(Effect.andThen(Effect.sync(() => (ws.readyState === WebSocket.CONNECTING ? silent("no answer to the upgrade") : undefined)))));
       yield* Effect.forkScoped(keepAlive({ ping, heard, silent: () => silent("no answer to a ping") }));
+      let checking: ReturnType<typeof setTimeout> | undefined;
+      const check = () => {
+        if (ws.readyState === WebSocket.CONNECTING) return silent("the network came back while opening");
+        const before = heard();
+        if (!ping()) return;
+        clearTimeout(checking);
+        checking = setTimeout(() => (heard() === before ? silent("no answer after a wake") : undefined), NUDGE_WAIT_MS);
+      };
+      yield* Effect.acquireRelease(
+        Effect.sync(() => void this.checks.add(check)),
+        () =>
+          Effect.sync(() => {
+            this.checks.delete(check);
+            clearTimeout(checking);
+          }),
+      );
       const { code, reason } = yield* Effect.promise(() => closed);
       if (code === 4000) {
         at.next = "page";

@@ -131,6 +131,9 @@ parent.on("message", (e) => {
     case "relay":
       relay = m.relay;
       return;
+    case "nudge":
+      keyring.nudge();
+      return;
     case "port": {
       const port = e.ports[0];
       if (port) attach(port);
