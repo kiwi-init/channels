@@ -16,8 +16,8 @@ import { Tooltip } from "./ui/tooltip"
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger"
 
 const BUTTON: Record<ButtonVariant, string> = {
-  primary: "bg-accent text-accent-ink hover:opacity-90 active:opacity-80",
-  secondary: "text-ink shadow-[inset_0_0_0_1px_var(--edge-strong)] hover:bg-wash",
+  primary: "orb-pill active:opacity-80",
+  secondary: "prism text-ink",
   ghost: "text-ink-2 hover:bg-wash hover:text-ink",
   danger: "text-alert hover:bg-[color-mix(in_srgb,var(--alert)_9%,transparent)]",
 }
@@ -77,7 +77,7 @@ export function IconButton({
           glass
             ? active
               ? "bg-ink text-canvas"
-              : "data-popup-open:bg-(--glass-fill-hover)"
+              : "data-popup-open:bg-(--prism-fill-lit)"
             : active
               ? "bg-wash-2 text-ink"
               : "text-ink-2 hover:bg-wash hover:text-ink data-popup-open:bg-wash-2 data-popup-open:text-ink",
@@ -178,9 +178,9 @@ export function Spinner({ className }: { className?: string }) {
 }
 
 /** Text tabs: the current one in ink, the rest quiet. Arrow keys move between them. */
-/** One segmented control, everywhere: a wash track, and the chosen option raised on it. */
-export const SEGMENTED = "rounded-ctl bg-wash p-0.5"
-export const SEGMENT_ON = "bg-segment text-ink shadow-[0_0_0_1px_var(--edge-strong)]"
+/** One segmented control, everywhere: a prism track, and the chosen option lit in it. */
+export const SEGMENTED = "prism rounded-ctl p-0.5"
+export const SEGMENT_ON = "prism-lit text-ink"
 export const SEGMENT_OFF = "text-ink-2 hover:text-ink"
 
 export function Tabs<T extends string>({
@@ -223,7 +223,7 @@ export function Tabs<T extends string>({
           className={cx(
             "flex h-7 items-center justify-center gap-1.5 rounded-row px-2.5 text-ui font-medium transition-colors duration-120",
             stretch && "flex-1",
-            o.value === value ? (stretch ? SEGMENT_ON : "bg-wash-2 text-ink") : SEGMENT_OFF
+            o.value === value ? SEGMENT_ON : SEGMENT_OFF
           )}
         >
           {o.label}
