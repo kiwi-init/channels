@@ -37,6 +37,9 @@ Written by `bun scripts/changelog.ts` from each squash-merged pull request's tit
 - **/compact: fold the history behind an approved summary and archive finished tasks (T326)** ([#357](https://github.com/ojowwalker77/channels/pull/357))
 - **The relay calls GitHub as the App: diffs for members, the kiwi/review check for the owner (T45, relay half)** ([#361](https://github.com/ojowwalker77/channels/pull/361))
 - **CLI: one way to say where a message goes, kiwi send --to WHERE (T80)** ([#362](https://github.com/ojowwalker77/channels/pull/362))
+- **GitHub: a person links their GitHub account in the desktop app, by device flow (T41)** ([#360](https://github.com/ojowwalker77/channels/pull/360))
+- **A review round shows its diff, and the owner's app posts each verdict as the kiwi/review check (T45, app half)** ([#363](https://github.com/ojowwalker77/channels/pull/363))
+- **A PR on a T<n>-… branch links back to its task: the owner's app comments once (T72, second part)** ([#365](https://github.com/ojowwalker77/channels/pull/365))
 
 ## 0.17.0 — 2026-10-17
 
