@@ -5,7 +5,8 @@ import type { ReactNode } from "react"
 import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 import { colorOf } from "@kiwi/core/state.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
-import { memberName } from "@/lib/format"
+import { formatAgo, formatLeft, memberName } from "@/lib/format"
+import { useClock } from "@/lib/channel/clock"
 import { cx } from "@/lib/utils"
 import { ChannelIconTile } from "./channel-icon"
 import { RobotAvatar } from "./robot"
@@ -148,6 +149,12 @@ export function InfoPanel({
           )}
         </Section>
 
+        {p.state.facts.size > 0 && (
+          <Section label="Notes">
+            <Notes />
+          </Section>
+        )}
+
         <Section>
           {(p.isOwner || p.state.charter) && (
             <Row icon={BookOpen01Icon} onClick={() => openDialog("charter")} detail={p.state.charter?.text}>
@@ -197,6 +204,30 @@ function RoundAction({ icon, label, onClick, tone }: { icon: IconSvgElement; lab
       </span>
       <span className="text-stamp font-medium text-ink-2">{label}</span>
     </button>
+  )
+}
+
+function Notes() {
+  const { p } = useControls()
+  const now = useClock(60_000)
+  const facts = [...p.state.facts.values()].sort((a, b) => a.key.localeCompare(b.key))
+  return (
+    <>
+      {facts.map((f) => (
+        <div key={f.key} className="px-3 py-2.5">
+          <p className="flex items-baseline gap-2 text-ui">
+            <span className="shrink-0 font-medium">{f.key}</span>
+            <span className="min-w-0 truncate text-ink-2" title={f.value}>
+              {f.value}
+            </span>
+          </p>
+          <p className="mt-0.5 text-meta text-ink-3">
+            {memberName(p.state.members.get(f.by), f.by)} · {formatAgo(f.ts, now)}
+            {f.expires !== undefined && ` · ${formatLeft(f.expires, now)}`}
+          </p>
+        </div>
+      ))}
+    </>
   )
 }
 

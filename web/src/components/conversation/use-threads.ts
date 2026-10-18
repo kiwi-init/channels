@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react"
 
-import { ignored, type Color, type Message } from "@kiwi/core/protocol.ts"
+import { ignored, isQuiet, type Color, type Message } from "@kiwi/core/protocol.ts"
 import { colorOf, type ChannelState } from "@kiwi/core/state.ts"
 import { MAIN, placeKey } from "@/lib/threads"
 import { isAgent, type ThreadSummary } from "../message"
@@ -62,7 +62,7 @@ export function useThreads({
       const at = placeKey(placeOf.get(m.seq) ?? MAIN)
       const inHere = at === hereKey || (hereKey === "main" && at.startsWith("task:") && summarised(m))
       if (!inHere) return false
-      if (m.ev?.op === "hello" || m.ev?.op === "card" || m.ev?.op === "react") return false
+      if (isQuiet(m)) return false
       if (!revealed && ignored(state.trust.get(m.seq))) return false
       return true
     })
