@@ -12,7 +12,6 @@ const info = later(() => import("./info-panel").then((m) => m.InfoPanel))
 const tasks = later(() => import("./tasks-panel").then((m) => m.TasksPanel))
 const taskDetails = later(() => import("./task-details").then((m) => m.TaskDetails))
 const taskInline = later(() => import("./task-inline").then((m) => m.TaskInline))
-const personalityPicker = later(() => import("./personality-picker").then((m) => m.PersonalityPicker))
 const thread = later(() => import("./thread").then((m) => m.ThreadPanel))
 const annotator = later(() => import("./annotator").then((m) => m.Annotator))
 const agentLanes = later(() => import("./agent-lanes").then((m) => m.AgentLanes))
@@ -24,6 +23,7 @@ const commandBar = later(() => import("./composer-commands").then((m) => m.Comma
 const repos = later(() => import("./controls/repos-dialog").then((m) => m.ReposDialog))
 const compactBlock = later(() => import("./compact").then((m) => m.CompactBlock))
 const proposalCard = later(() => import("./compact").then((m) => m.ProposalCard))
+const confirmDialogs = later(() => import("./controls/confirm-dialogs").then((m) => m.ConfirmDialogs))
 
 export const Markdown = markdown.View
 export const SettingsModal = settings.View
@@ -33,7 +33,6 @@ export const InfoPanel = info.View
 export const TasksPanel = tasks.View
 export const TaskDetails = taskDetails.View
 export const TaskInline = taskInline.View
-export const PersonalityPicker = personalityPicker.View
 export const ThreadPanel = thread.View
 export const Annotator = annotator.View
 export const AgentLanes = agentLanes.View
@@ -45,9 +44,10 @@ export const CommandBar = commandBar.View
 export const ReposDialog = repos.View
 export const CompactBlock = compactBlock.View
 export const ProposalCard = proposalCard.View
+export const ConfirmDialogs = confirmDialogs.View
 
 export const loadMarkdown = markdown.load
 
 export function loadSurfaces(): void {
-  for (const surface of [settings, computers, palette, info, tasks, taskDetails, taskInline, thread]) surface.load()
+  for (const surface of [settings, computers, palette, info, tasks, taskDetails, taskInline, thread, confirmDialogs]) surface.load()
 }

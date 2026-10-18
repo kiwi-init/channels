@@ -6,7 +6,7 @@ import { memberName } from "@/lib/format"
 import { AgentFacts } from "../agent-facts"
 import { Alert, Button, TextField } from "../kit"
 import type { Persona } from "@kiwi/core/personality.ts"
-import { PersonalityPicker } from "../lazy"
+import { PersonalityPicker } from "../personality-picker"
 import { ScopePicker } from "../scopes"
 import type { Confirm, ControlsProps } from "./context"
 

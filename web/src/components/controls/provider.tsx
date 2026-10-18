@@ -8,9 +8,8 @@ import { noteAgentWorked } from "@/lib/channel"
 import { Modal, errorText, toast } from "../kit"
 import type { Persona } from "@kiwi/core/personality.ts"
 import { defaultScopes } from "../scopes"
-import { ReposDialog } from "../lazy"
+import { ConfirmDialogs, ReposDialog } from "../lazy"
 import { CharterDialog, RenameDialog } from "./channel-dialogs"
-import { ConfirmDialogs } from "./confirm-dialogs"
 import { Ctx, type Api, type Confirm, type ControlsProps } from "./context"
 import { Invite } from "./invite"
 import { Requests } from "./requests"
@@ -103,23 +102,25 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
         <Invite onDone={() => setSheet(null)} />
       </Modal>
 
-      <ConfirmDialogs
-        p={p}
-        confirm={confirm}
-        setConfirm={setConfirm}
-        busy={busy}
-        run={run}
-        setRole={setRole}
-        taken={taken}
-        roleDraft={roleDraft}
-        setRoleDraft={setRoleDraft}
-        scopeDraft={scopeDraft}
-        setScopeDraft={setScopeDraft}
-        nickDraft={nickDraft}
-        setNickDraft={setNickDraft}
-        personaDraft={personaDraft}
-        setPersonaDraft={setPersonaDraft}
-      />
+      {confirm !== null && (
+        <ConfirmDialogs
+          p={p}
+          confirm={confirm}
+          setConfirm={setConfirm}
+          busy={busy}
+          run={run}
+          setRole={setRole}
+          taken={taken}
+          roleDraft={roleDraft}
+          setRoleDraft={setRoleDraft}
+          scopeDraft={scopeDraft}
+          setScopeDraft={setScopeDraft}
+          nickDraft={nickDraft}
+          setNickDraft={setNickDraft}
+          personaDraft={personaDraft}
+          setPersonaDraft={setPersonaDraft}
+        />
+      )}
     </Ctx.Provider>
   )
 }
