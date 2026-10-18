@@ -1,8 +1,9 @@
 import * as Effect from "effect/Effect";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentSession } from "../agent.ts";
 import { Cursor, home } from "../config.ts";
+import { alive } from "./listeners.ts";
 
 function deliveredFile(alias: string, as: string, session: string): string {
   return join(home(), "listen-hooks", `${encodeURIComponent(alias)}.${encodeURIComponent(as)}.${encodeURIComponent(session)}.delivered`);
@@ -19,6 +20,49 @@ export function deliveredUpTo(alias: string, as: string, session: string): numbe
 export function noteDelivered(alias: string, as: string, session: string, seq: number): void {
   mkdirSync(join(home(), "listen-hooks"), { recursive: true, mode: 0o700 });
   writeFileSync(deliveredFile(alias, as, session), String(Math.max(seq, deliveredUpTo(alias, as, session))));
+}
+
+const ANSWERING = ".answering";
+
+function answeringDir(): string {
+  return join(home(), "hook-state");
+}
+
+function answeringPrefix(session: string): string {
+  return `${encodeURIComponent(session)}.`;
+}
+
+export function holdAnswering(session: string | undefined): () => void {
+  if (!session) return () => {};
+  const file = join(answeringDir(), `${answeringPrefix(session)}${process.pid}${ANSWERING}`);
+  try {
+    mkdirSync(answeringDir(), { recursive: true, mode: 0o700 });
+    writeFileSync(file, String(process.pid));
+  } catch {
+    // Without the marker a listener may hand the same message over again: a repeat, never a loss.
+    return () => {};
+  }
+  return () => rmSync(file, { force: true });
+}
+
+export function answeringNow(session: string | undefined): boolean {
+  if (!session) return false;
+  const prefix = answeringPrefix(session);
+  let names: string[];
+  try {
+    names = readdirSync(answeringDir());
+  } catch {
+    return false;
+  }
+  let busy = false;
+  for (const name of names) {
+    if (!name.startsWith(prefix) || !name.endsWith(ANSWERING)) continue;
+    const mid = name.slice(prefix.length, -ANSWERING.length);
+    if (!/^\d+$/.test(mid)) continue;
+    if (alive(Number(mid))) busy = true;
+    else rmSync(join(answeringDir(), name), { force: true });
+  }
+  return busy;
 }
 
 export const commitDelivered = Effect.fn("Hooks.commitDelivered")(function* (s: AgentSession, session: string) {
