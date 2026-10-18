@@ -95,12 +95,11 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 
 ## 5. Radius, shadow, blur
 
-- Steps: `row 8px`, `ctl 10px`, `card 16px`, `bubble 20px` (a message
-  bubble: rounder than anything else, so a conversation reads as one at a
-  glance) and `dock 26px` (the composer, soft without a pill's half-moon
+- Steps: `row 8px`, `ctl 10px`, `card 16px`, `bubble 20px` (pictures in
+  a message and the annotator) and `dock 26px` (the composer, soft without a pill's half-moon
   ends once it grows to several lines).
 - Buttons and rows use `row`; controls and inputs `ctl`; cards `card`;
-  bubbles `bubble`; the composer `dock`. Arbitrary `rounded-[Npx]` fails
+  pictures `bubble`; the composer `dock`. Arbitrary `rounded-[Npx]` fails
   `ui-tokens.ts`.
 - One shadow: `pop` (`0 0 0 1px pop-edge, 0 16px 40px -12px pop-shade`).
   No other shadows, no colored shadows.
@@ -171,16 +170,27 @@ From `design-tokens.ts`:
   line. New, the app update and your account sit at its foot. A wide
   window always shows the rail, with no way to expand it; a phone always
   shows the full list.
-- Conversation: your bubbles `accent` with white ink; theirs `bubble-them`
-  with `ink`. Runs stack at `stack` radius on the joined corners.
-- Replies, as in Messages: a reply sits in the conversation where it was
-  sent, never folded away. Above it, on its sender's side, a `wash`
-  `bubble`-round quote of what it answers (the name in `stamp`, two lines
-  of `ui` in `ink-2`), joined to the reply by a 2px `edge-strong` hook;
-  pressing it jumps to the message and flashes it. No quote when the
-  answered message is the bubble right above. Under a message, "N Replies"
-  opens them together in the thread panel, except one reply that already
-  follows it.
+- Conversation: no bubbles, everyone on the left, on the shell's one
+  background. A message is a row: a 32px face, then the name in `ui`
+  semibold, a quiet `owner` or `lead` tag and the time in `stamp`, the
+  text in `body` below (at most 760px wide). A run from one sender within
+  five minutes keeps one header. The day sits between days as a `meta`
+  word between two `line` rules; there are no other time marks.
+- Replies: a reply sits where it was sent, never folded away. Above its
+  text, one `meta` line with a 2px `edge-strong` rule on the left: the
+  name in `ink-2`, the words cut short in `ink-3`; pressing it jumps to
+  the message and flashes it. No quote when the answered message is the
+  one right above. Under a message, "N replies" in `accent-text` opens
+  them in the thread panel, except one reply that already follows it.
+- Things in a message are lines, outlined with a 1px `line` ring at `row`
+  radius, never filled: an ask's options (the shared AskOptions), a PR it
+  links (number, title, GitHub's state and checks), a task's card (its
+  owner, id, title and live state, its last line under it). Reactions are
+  outlined chips. Hover actions float at the row's top right on the
+  canvas, outlined.
+- Events are quiet `meta` lines under the text column. A run of GitHub's
+  news folds into one: "GitHub · #371 opened, 3 pushes, ci-ok passed ·
+  4 updates", each PR or issue a link.
 - Needs-you: approvals, escalations and review-waiting work in one place at
   the top, as rows on the canvas, never folded behind a button: a 36px
   `row`-round outlined square with the kind's glyph in `decide` (a question,
@@ -213,7 +223,7 @@ Anatomy top to bottom: reply bar, textarea row, mention notes,
 actions row with send.
 
 - Mentions are inline pills.
-- Reply on a bubble opens the reply bar; Escape cancels it. In a thread every
+- Reply on a message opens the reply bar; Escape cancels it. In a thread every
   message answers the root and there is no reply bar.
 - Drag-and-drop and pasted images render inside the composer; sending shows
   in place, never an external spinner.
