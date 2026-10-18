@@ -191,7 +191,7 @@ jobs:
       personality, lets win in, a conversation with an ask, a reply, two tasks and a task's
       conversation, a review and an escalation under Needs you, a direct conversation, notes, a
       pending join request and a second empty channel) and shoots every screen of the wide
-      window in the dark: the conversation, the reply bar, the Tasks tab, a task opened inline
+      window in the dark: the conversation, the reply bar, the composer with words in it, the Tasks tab, a task opened inline
       and in the Tasks panel, Needs you, the Agents tab, Details, the direct conversation,
       Invite, the account menu, the command palette, Notes, Pause, Settings, Personalities, Add
       an agent, first run, signed in with nothing open, Join with a code and the invite preview.
