@@ -16,9 +16,10 @@ import type * as Layer from "effect/Layer";
 import { verifyRequest } from "@kiwi/core/auth.ts";
 import { ownerFingerprint } from "@kiwi/core/crypto.ts";
 import { MAX_BLOB_BYTES, PAGE_LIMIT, wellFormedFreed, wellFormedSlot } from "@kiwi/core/protocol.ts";
-import { ChannelGone, BadRequest, Forbidden, NotFound, NotOwner, SignInRequired, TooLarge, TooMany, Unauthorized, UpdateRequired, type Refusal } from "./failures.ts";
+import { ChannelGone, BadRequest, Forbidden, NotFound, NotOwner, Refused, SignInRequired, TooLarge, TooMany, Unauthorized, UpdateRequired, type Refusal } from "./failures.ts";
 import { answer, buildContext, describeRoutes, dispatch, incoming, json, readCapped, Request_, type Route } from "./http.ts";
 import { githubLinks, githubRepos, type GithubItem } from "./github.ts";
+import { GithubApp, type GithubReply } from "./github-app.ts";
 import { Human, HUMAN_HEADER } from "./human.ts";
 import { betaMessage, inBeta, Policy } from "./policy.ts";
 import { offerPages, PAGE_PATH, servePage } from "./pages.ts";
@@ -70,7 +71,7 @@ import {
 // ---------- the relay's services ----------
 
 /** What a relay runs its rooms with, from its adapter. */
-export type RelayServices = Human | Policy | Directory;
+export type RelayServices = Human | Policy | Directory | GithubApp;
 
 /** The relay's services, built once from the adapter's Layer. */
 export type Relay = Context.Context<RelayServices>;
@@ -173,6 +174,18 @@ const BLOB = /^\/blobs\/([0-9a-f]{64})$/;
 
 /** A handler that only reads the room. */
 const withRoom = <A>(f: (db: RoomDb) => A) => Effect.map(RoomStore, f);
+
+const githubApp = Effect.flatMap(GithubApp, (app) => (app ? Effect.succeed(app) : Effect.fail(new NotFound({ message: "the GitHub App isn't set up on this relay" }))));
+
+const connectedCommit = (repo: unknown, sha: unknown) =>
+  Effect.gen(function* () {
+    const db = yield* RoomStore;
+    if (typeof sha !== "string" || !/^[0-9a-f]{7,40}$/i.test(sha)) return yield* new BadRequest({ message: "sha: a commit id" });
+    if (typeof repo !== "string" || !db.githubRepos().includes(repo.toLowerCase())) return yield* new BadRequest({ message: "repo: one of the channel's connected repos" });
+    return { repo: repo.toLowerCase(), sha: sha.toLowerCase() };
+  });
+
+const replied = <T>(r: GithubReply<T>) => (r.ok ? Effect.succeed(r.value) : Effect.fail(new Refused({ status: r.status, message: r.error, tag: r.status === 404 ? "NotFound" : "Internal" })));
 
 const holds = (req: Request, etag: string) => (req.headers.get("if-none-match") ?? "").split(",").some((t) => t.trim() === "*" || t.trim().replace(/^W\//, "") === etag);
 
@@ -394,6 +407,41 @@ const routes: RoomRoute[] = [
       withRoom((db) => ({
         data: { repos: db.githubRepos(), items: db.githubQueue(100).map((r) => ({ id: r.id, ...(JSON.parse(r.item) as GithubItem) })) },
       })),
+  },
+  {
+    method: "GET",
+    path: "/github/diff",
+    guard: "member",
+    run: () =>
+      Effect.gen(function* () {
+        const { url } = yield* Request_;
+        const { repo, sha } = yield* connectedCommit(url.searchParams.get("repo"), url.searchParams.get("sha"));
+        const app = yield* githubApp;
+        return { data: yield* replied(yield* Effect.promise(() => app.diff(repo, sha))) };
+      }),
+  },
+  {
+    method: "POST",
+    path: "/github/check",
+    guard: "owner",
+    run: () =>
+      Effect.gen(function* () {
+        const b = yield* json<{ repo?: unknown; sha?: unknown; verdict?: unknown; task?: unknown; note?: unknown }>();
+        const { repo, sha } = yield* connectedCommit(b.repo, b.sha);
+        if (b.verdict !== "approved" && b.verdict !== "rejected") return yield* new BadRequest({ message: "verdict: approved or rejected" });
+        if (typeof b.task !== "number" || !Number.isSafeInteger(b.task) || b.task <= 0) return yield* new BadRequest({ message: "task: the task's number" });
+        const note = typeof b.note === "string" ? b.note.slice(0, 1000) : "";
+        const app = yield* githubApp;
+        const approved = b.verdict === "approved";
+        const reply = yield* Effect.promise(() =>
+          app.check(repo, sha, {
+            conclusion: approved ? "success" : "failure",
+            title: approved ? `T${b.task} approved in Kiwi` : `T${b.task}: changes requested in Kiwi`,
+            summary: note || (approved ? "Approved." : "Changes requested."),
+          }),
+        );
+        return { data: yield* replied(reply) };
+      }),
   },
   {
     method: "POST",

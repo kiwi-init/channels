@@ -16,6 +16,7 @@ import { WS_PROTOCOL, type Message, type ServerFrame } from "@kiwi/core/protocol
 import { startRelay } from "../src/relay/bun.ts";
 import * as Layer from "effect/Layer";
 import { Human } from "../src/relay/human.ts";
+import { GithubApp } from "../src/relay/github-app.ts";
 import { OPEN_POLICY, Policy } from "../src/relay/policy.ts";
 import { Directory, onClientFrame, RoomDb, type Effects, type Sql } from "../src/relay/room.ts";
 import { makeRelay, runRoomSync } from "../src/relay/route.ts";
@@ -367,6 +368,7 @@ describe("a socket send the relay stored", () => {
       const ctx = makeRelay(
         Layer.mergeAll(
           Layer.succeed(Human, null),
+          Layer.succeed(GithubApp, null),
           Layer.succeed(Policy, { ...OPEN_POLICY, expireAfterDays: 30 }),
           Layer.succeed(Directory, { list: async () => [], reserve: async () => true, release: async () => {} }),
         ),
