@@ -432,6 +432,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             setSearch(null)
           }}
           agents={agentsNow}
+          onMessage={(name) => go(dmPlace(me, name))}
           onOpenTask={openTask}
           conversations={conversations}
           current={currentConversation}

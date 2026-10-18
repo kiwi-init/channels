@@ -51,6 +51,7 @@ export function ChannelSidebar({
   counts,
   onView,
   agents,
+  onMessage,
   onOpenTask,
   conversations,
   current,
@@ -66,6 +67,7 @@ export function ChannelSidebar({
   counts: Record<View, number>
   onView: (v: View) => void
   agents: AgentNow[]
+  onMessage: (name: string) => void
   onOpenTask: (id: number) => void
   conversations: Conversation[]
   current: string | null
@@ -98,7 +100,7 @@ export function ChannelSidebar({
         <Section title="Agents">
           <ul>
             {byBusy(agents).map((a) => (
-              <AgentRow key={a.name} a={a} onOpenTask={onOpenTask} />
+              <AgentRow key={a.name} a={a} onMessage={onMessage} onOpenTask={onOpenTask} />
             ))}
           </ul>
         </Section>
