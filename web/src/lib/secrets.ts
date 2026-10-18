@@ -29,6 +29,7 @@ const publicOf = (l: Local): StoreSnapshot => ({
   computers: l.computers,
   pending: l.pending,
   voice: { configured: false, consent: {} },
+  personalities: l.personalities,
 })
 
 let snapshot: StoreSnapshot = (() => {

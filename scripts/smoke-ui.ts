@@ -141,6 +141,23 @@ async function run(part: Part): Promise<string[]> {
     log(`ok  ${at}`);
   };
 
+  const personalities = async () => {
+    at = "Settings → Personalities: a preset duplicated is yours";
+    await account.click();
+    await page.getByRole("menuitem", { name: "Settings…" }).click();
+    const settings = page.getByRole("dialog").filter({ hasText: "Text size" });
+    await settings.getByRole("button", { name: "Open…" }).click();
+    const editor = page.getByRole("dialog", { name: "Personalities" });
+    await editor.getByRole("button", { name: "Duplicate" }).click();
+    await editor.getByRole("list", { name: "Yours" }).getByText("Builder copy").waitFor({ timeout: 10000 });
+    if (process.env.SMOKE_SHOTS) await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "personalities.png") });
+    await editor.getByRole("button", { name: "Done" }).click();
+    await editor.waitFor({ state: "hidden" });
+    await settings.getByRole("button", { name: "Done" }).click();
+    await settings.waitFor({ state: "hidden" });
+    log(`ok  ${at}`);
+  };
+
   const toTab = (name: "Tasks" | "Agents" | "Conversation") => page.getByRole("navigation", { name: "Views of the channel" }).getByRole("button", { name, exact: true }).click();
 
   const openInline = async (title: RegExp) => {
@@ -178,6 +195,7 @@ async function run(part: Part): Promise<string[]> {
     await opens("Account menu", () => account.click());
     await eachItem("Account menu", account, () => true);
     await darkAndLarger();
+    await personalities();
     await opens("Search palette", () => page.keyboard.press("ControlOrMeta+k"));
     await opens("Join with a code", async () => {
       await newChannel.click();
