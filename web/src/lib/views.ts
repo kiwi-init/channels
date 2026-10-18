@@ -37,6 +37,36 @@ export function inView(t: Task, view: View, now: number, waiting: ReadonlySet<nu
   }
 }
 
+type GroupKey = "doing" | "review" | "next" | "done"
+
+export interface TaskGroup {
+  key: GroupKey
+  label: string
+  tasks: Task[]
+}
+
+export function taskGroups(state: Pick<ChannelState, "tasks">, view: View, now: number): TaskGroup[] {
+  const live = [...state.tasks.values()].filter((t) => !t.archived).sort((a, b) => b.updatedAt - a.updatedAt)
+  const today = startOfDay(now)
+  const of = (key: GroupKey, label: string, keep: (t: Task) => boolean): TaskGroup => ({ key, label, tasks: live.filter(keep) })
+  switch (view) {
+    case "everything":
+      return [
+        of("doing", "In progress", (t) => t.state === "doing" || t.state === "review"),
+        of("next", "Up next", (t) => t.state === "todo"),
+        of("done", "Done today", (t) => t.state === "done" && t.updatedAt >= today),
+      ]
+    case "needs":
+      return []
+    case "doing":
+      return [of("doing", "In progress", (t) => t.state === "doing")]
+    case "review":
+      return [of("review", "In review", (t) => t.state === "review")]
+    case "done":
+      return [of("done", "Done this week", (t) => t.state === "done" && now - t.updatedAt < WEEK)]
+  }
+}
+
 export function viewCounts(state: Pick<ChannelState, "tasks">, now: number, needs: number, waiting: ReadonlySet<number>): Record<View, number> {
   const tasks = [...state.tasks.values()]
   const count = (v: View) => tasks.filter((t) => inView(t, v, now, waiting)).length

@@ -75,6 +75,10 @@ export function formatAgo(ts: number, now: number): string {
   return `${Math.round(h / 24)}d ago`
 }
 
+export function formatAgoShort(ts: number, now: number): string {
+  return formatAgo(ts, now).replace("just now", "now").replace(" ago", "")
+}
+
 /** Past this, a short title gives up its tail after a colon for the head before it. */
 const SHORT_TITLE = 48
 
