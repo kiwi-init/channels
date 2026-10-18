@@ -27,6 +27,7 @@ import { Button, Spinner, errorText, toast } from "../kit"
 import { AgentLanes, CompactBlock, ProposalCard, TalkBar, TalkButton } from "../lazy"
 import { bridge } from "@/lib/secrets"
 import type { ToolCtx } from "@/lib/voice/tools"
+import { defaultScopes } from "../scopes"
 import { GifPicker } from "../gif-picker"
 import { isAgent } from "../message"
 import { NeedsYou } from "../needs-you"
@@ -183,8 +184,26 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   )
   const handlers = useControlsHandlers({ live, member, onGone })
   const voiceTools = useMemo<ToolCtx>(
-    () => ({ state, me, channel: title, isOwner, online: new Set(online.keys()), requests: isOwner ? requests : [], nameOf, send, hold: handlers.onHold }),
-    [state, me, title, isOwner, online, requests, nameOf, send, handlers.onHold]
+    () => ({
+      state,
+      me,
+      channel: title,
+      isOwner,
+      online: new Set(online.keys()),
+      requests: isOwner ? requests : [],
+      nameOf,
+      send,
+      hold: handlers.onHold,
+      letIn: isOwner
+        ? async (id: string) => {
+            const r = requests.find((x) => x.id === id)
+            if (!r) throw new Error("That request is gone.")
+            await handlers.onApprove(r, defaultScopes(roomId))
+          }
+        : undefined,
+      approve: (t: Task) => sendTask(approveTask(t), closedDigest(state, messages, t, { by: me })),
+    }),
+    [state, me, title, isOwner, online, requests, nameOf, send, handlers, roomId, sendTask, messages]
   )
   const hold = handlers.onHold
   const commands = useMemo<Command[]>(
