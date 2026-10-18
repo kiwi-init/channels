@@ -13,7 +13,7 @@ async function ev(from: string, e: Event, to?: string[]): Promise<Message> {
   return { ...p, seq, rts: seq, sigOk: await verify(p) };
 }
 
-const ALL = ["post", "ask", "tasks", "claims", "facts"] as const;
+const ALL = ["post", "ask", "tasks", "facts"] as const;
 let roster: Roster;
 let log: Message[];
 

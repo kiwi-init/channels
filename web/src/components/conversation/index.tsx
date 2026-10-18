@@ -331,7 +331,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       color: colorOf(state, m.name),
       here: howHere(online.get(m.name)),
       lead: m.name === state.lead,
-      model: online.get(m.name)?.activity?.model ?? m.card?.model,
+      model: m.runs?.model ?? online.get(m.name)?.activity?.model ?? m.card?.model,
       activity: online.get(m.name)?.activity,
       load: memberLoad(state, m.name),
       lastAt: lastAt.get(m.name),
