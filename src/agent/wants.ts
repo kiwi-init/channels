@@ -1,3 +1,4 @@
+import { personaAnswers } from "@kiwi/core/personality.ts";
 import { isDirectedAt, isForAgent } from "@kiwi/core/client.ts";
 import { GENERAL_ROOM, ignored, type Message } from "@kiwi/core/protocol.ts";
 import { threadMembers, type ChannelState } from "@kiwi/core/state.ts";
@@ -15,8 +16,8 @@ export function wants(me: string, m: Message, state: ChannelState | null, d: Del
   if (d.room !== undefined && m.kind !== "event" && (state?.roomOf.get(m.seq) ?? m.room ?? GENERAL_ROOM) !== d.room) return false;
   if (d.all) return true;
   if (d.thread !== undefined) return m.kind !== "event" && (state?.threadOf.get(m.seq) ?? m.seq) === (state?.threadOf.get(d.thread) ?? d.thread);
-  const role = state?.members.get(me)?.role;
-  const addressed = isDirectedAt(m, me) || !!m.to?.includes("*") || (!!role && !!m.to?.includes(`role:${role}`));
+  const persona = state?.members.get(me)?.persona;
+  const addressed = isDirectedAt(m, me) || !!m.to?.includes("*") || !!m.to?.some((t) => t.startsWith("role:") && personaAnswers(persona, t.slice(5)));
   if (m.kind === "event")
     return addressed || m.ev?.op === "hello" || m.ev?.op === "room.create" || m.ev?.op === "room.rename" || m.ev?.op === "charter.set" || m.ev?.op === "repos.set" || m.ev?.op === "hold.set";
   if (d.chat) return true;

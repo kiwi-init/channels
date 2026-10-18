@@ -12,7 +12,7 @@ function listenLine(mc: string, alias: string, agent: string): string {
 export function joinedText(
   alias: string,
   agent: string,
-  as: { scopes?: readonly Scope[]; hold?: string | null; charter?: string | null; lead?: string | null; human?: string | null; role?: string; about?: string; persona?: Persona } = {},
+  as: { scopes?: readonly Scope[]; hold?: string | null; charter?: string | null; lead?: string | null; human?: string | null; persona?: Persona } = {},
 ): string {
   const mc = mcFor(alias, agent);
   return briefText({ alias, agent, mc, listen: listenLine(mc, alias, agent), ...as });
@@ -21,7 +21,7 @@ export function joinedText(
 export function agentPrompt(
   alias: string,
   agent: string,
-  as: { role?: string; about?: string; scopes?: readonly Scope[]; human?: string | null; hold?: string | null; charter?: string | null; lead?: string | null; persona?: Persona } = {},
+  as: { scopes?: readonly Scope[]; human?: string | null; hold?: string | null; charter?: string | null; lead?: string | null; persona?: Persona } = {},
 ): string {
   return joinedText(alias, agent, as);
 }

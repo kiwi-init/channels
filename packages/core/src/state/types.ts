@@ -10,8 +10,6 @@ export interface Member {
   display?: string;
   sponsor?: { user: string; name: string; handle?: string };
   pk: string;
-  role?: string;
-  about?: string;
   color?: Color;
   scopes: Scope[];
   card?: Card & { at: number };
@@ -23,6 +21,8 @@ export interface Member {
   lastSeen: number;
   messages: number;
 }
+
+export type FoldMember = Member & { role?: string; about?: string };
 
 export type Roster = {
   name: string;

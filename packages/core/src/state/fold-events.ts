@@ -8,15 +8,15 @@ import { readScopes, SCOPES, type Scope } from "../scopes.ts";
 import { isPerson } from "./people.ts";
 import { roomName } from "./rooms.ts";
 import { currentState, openRound, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
-import type { Charter, Compact, Fact, Hold, Lease, Member, Room, Task } from "./types.ts";
+import type { Charter, Compact, Fact, FoldMember, Hold, Lease, Room, Task } from "./types.ts";
 
 export interface FoldCtx {
-  members: Map<string, Member>;
+  members: Map<string, FoldMember>;
   keysByName: Map<string, Set<string>>;
   scopesByKey: Map<string, Scope[]>;
   scopeSets: Map<string, { seq: number; scopes: Scope[] }>;
   roleSets: Map<string, { seq: number; role: string | null; about?: string | null }>;
-  setRole: (target: Member, role: string | null, about: string | null | undefined) => void;
+  setRole: (target: FoldMember, role: string | null, about: string | null | undefined) => void;
   tasks: Map<number, Task>;
   facts: Map<string, Fact>;
   leases: Map<string, Lease>;
@@ -32,7 +32,7 @@ export interface FoldCtx {
   compactProposal: Compact | null;
 }
 
-export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: Member, at: number, reject: (why: string) => void): void {
+export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember, at: number, reject: (why: string) => void): void {
   const { members, keysByName, scopesByKey, scopeSets, roleSets, setRole, tasks, facts, rooms, roomsSince, nameTaken } = c;
   switch (ev.op) {
     case "hello": {

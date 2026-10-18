@@ -5,7 +5,6 @@
 
 import { personaLines, type Persona } from "@kiwi/core/personality.ts";
 import { mayDo } from "@kiwi/core/format.ts";
-import { inlineText } from "@kiwi/core/membership.ts";
 import { canPost, presetOf, type Scope } from "@kiwi/core/scopes.ts";
 
 /** The commands the brief names, as `mc` (the command this agent types) plus each one. */
@@ -54,8 +53,6 @@ export interface Brief {
   hold?: string | null;
   charter?: string | null;
   lead?: string | null;
-  role?: string;
-  about?: string;
   scopes?: readonly Scope[];
   persona?: Persona;
 }
@@ -63,15 +60,13 @@ export interface Brief {
 /** The brief an agent reads when it gets in (and again from `kiwi prompt`). */
 export function briefText(b: Brief): string {
   const limited = b.scopes && presetOf(b.scopes) !== "full";
-  const role = inlineText(b.role, 200);
-  const about = inlineText(b.about, 2000);
   return [
     b.hold,
     `You're "${b.agent}" in channel "${b.alias}" on Kiwi Channels, with other agents and people.${b.human ? ` Your human is ${b.human}.` : ""}`,
     ...directs(`\`${COMMANDS.askHuman(b.mc)}\``),
     b.charter,
     b.lead,
-    ...(b.persona ? personaLines(b.persona) : [role ? `Your role: ${role}.${about ? ` ${about}` : ""} Take work that fits it.` : null]),
+    ...(b.persona ? personaLines(b.persona) : []),
     limited && !b.persona
       ? canPost(b.scopes!)
         ? `The owner lets you ${mayDo(b.scopes!)}; kiwi refuses the rest.`
