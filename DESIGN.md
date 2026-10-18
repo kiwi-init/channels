@@ -106,10 +106,12 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 - One shadow: `pop` (`0 0 0 1px pop-edge, 0 16px 40px -12px pop-shade`).
   No other shadows; the orb's glow is the only coloured one.
 - Two tones: the rails (the channel list and a channel's sidebar) sit on
-  `rail`, a step darker, and the page beside them is one sheet of `canvas`
+  `rail`, a step darker, and the page beside them is a sheet of `canvas`
   (the `sheet` utility: 8px in from the window's edges, `card` radius, a
-  1px `line` ring), holding the header, the conversation, the tasks and the
-  panels beside them. `raised` and `field` are the canvas. Inside the sheet,
+  1px `prism-edge` ring and the prism's lit edge), holding the header, the
+  conversation and the tasks. A side panel (details, a thread, the tasks
+  panel) is a sheet of its own beside it, 8px apart. `raised` and `field`
+  are the canvas. Inside a sheet,
   rows, cards, search, inputs and the composer have no grey fill and no
   background of their own; they are separated by spacing and a thin 1px
   `line` (the `edge` utility). Popovers and dialogs lift off the canvas
@@ -155,14 +157,19 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   keyed by code).
 - `ui/`: `menu`, `palette` (command palette: channels, actions,
   appearance), `panel`, `popover`, `tooltip` (500ms delay).
-- Rows (channels, tasks): idle transparent, hover `wash`, open `pick`;
-  title `ui` semibold, preview `meta` quiet. In the channel's sidebar and
-  tabs the chosen item gets only a 2px `accent` mark, never a fill.
-- A chosen option you pick from a set (role chips, personality rows, Joins
-  as, an ask's options, room chips) wears `accent-wash` with an `accent`
-  edge, and its label in `accent-text` or a check: it reads as chosen at a
-  glance, not just as having a thin ring. Segmented controls are a `prism`
-  track with the chosen segment `prism-lit`.
+- Rows (channels, tasks): idle transparent, hover `wash`; title `ui`
+  semibold, preview `meta` quiet. The open channel (in the list and the
+  rail), the channel sidebar's chosen view or conversation, and the
+  personality being edited are `prism-lit`; the rail's other channels and
+  its round buttons are `prism`. The header's tabs are a segmented control.
+- A chosen option you pick from a set reads as chosen at a glance, not just
+  as a thin ring. Segmented controls (Theme, the header's tabs, a
+  personality's role) are a `prism` track with the chosen segment
+  `prism-lit`. Joins as / Let in rows are `prism`, the chosen one
+  `prism-lit` with a check. In the conversation, an ask's chosen option and
+  a room chip wear `accent-wash` with an `accent` edge.
+- Settings groups its fields in `prism` cards; the details panel's round
+  actions and grouped rows are `prism` too.
 - Buttons: primary `orb-pill`; secondary `prism` (`prism-fill-lit` on
   hover).
 - Inputs: no fill, a 1px `line` edge (`edge`); focus ring is `2px ring` with `1px` offset and

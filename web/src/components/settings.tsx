@@ -16,6 +16,8 @@ import { UpdateCheck } from "./update-check"
 // How Channels looks in this browser: the theme and how large everything reads.
 // Both apply at once and stay in this browser; nothing here leaves it.
 
+const CARD = "prism rounded-card p-4"
+
 function Choice<T extends string>({ label, value, options, onChange }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void }) {
   return (
     <div>
@@ -51,7 +53,7 @@ function RelayField() {
     bridge.setRelayUrl!(value.trim()).catch((e: unknown) => setError(e instanceof Error ? e.message.replace(/^.*?Error: /, "") : String(e)))
   }
   return (
-    <div>
+    <div className={CARD}>
       <label htmlFor="relay-url" className="mb-2 block text-ui font-medium text-ink">
         Relay
       </label>
@@ -95,7 +97,7 @@ function VoiceFields() {
   }
   const rooms = snap.channels.filter((c) => c.roomId)
   return (
-    <div>
+    <div className={CARD}>
       <p className="mb-2 text-ui font-medium text-ink">Voice</p>
       <p className="mb-2 text-ui leading-normal text-ink-2">An xAI key lets this Mac talk with Grok Voice. Each channel stays off until you turn it on.</p>
       <label htmlFor="voice-key" className="mb-2 block text-ui font-medium text-ink">
@@ -172,7 +174,7 @@ function GithubFields() {
       .finally(() => (setBusy(false), setCode(null)))
   }
   return (
-    <div>
+    <div className={CARD}>
       <p className="mb-2 text-ui font-medium text-ink">GitHub</p>
       <p className="mb-2 text-ui leading-normal text-ink-2">Link your account so what has to come from you, like approving a pull request, can. The token stays on this Mac; agents never get it.</p>
       {status.account ? (
@@ -206,7 +208,7 @@ function GithubFields() {
 function PersonalitiesField({ onOpen }: { onOpen: () => void }) {
   const count = useOwnPersonalities().length
   return (
-    <div>
+    <div className={CARD}>
       <p className="mb-2 text-ui font-medium text-ink">Personalities</p>
       <div className="flex items-center gap-3">
         <p className="min-w-0 flex-1 text-ui leading-normal text-ink-2">Six presets for code work{count ? `, and ${count} of your own` : ""}. An agent takes one when you let it in.</p>
@@ -227,37 +229,39 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
       <div className="mx-auto w-full max-w-xl px-6 pt-2 pb-12">
         <h1 className="text-display font-semibold tracking-[-0.014em]">Settings</h1>
         <p className="mt-1 text-ui leading-normal text-ink-2">How Channels looks in this browser. Changes apply at once.</p>
-        <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-6">
-          <Choice<Appearance>
-            label="Theme"
-            value={appearance}
-            onChange={setAppearance}
-            options={[
-              { value: "system", label: "System" },
-              { value: "light", label: "Light" },
-              { value: "dark", label: "Dark" },
-            ]}
-          />
-          <Choice<TextSize>
-            label="Text size"
-            value={size}
-            onChange={setTextSize}
-            options={[
-              { value: "small", label: "Small" },
-              { value: "default", label: "Default" },
-              { value: "large", label: "Large" },
-              { value: "larger", label: "Larger" },
-            ]}
-          />
-          <Choice<"on" | "off">
-            label="Motion"
-            value={reduceMotion ? "on" : "off"}
-            onChange={(v) => setAccessibilityOption("reduce-motion", v === "on")}
-            options={[
-              { value: "off", label: "Full" },
-              { value: "on", label: "Reduced" },
-            ]}
-          />
+        <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-3">
+          <div className={cx(CARD, "grid gap-5")}>
+            <Choice<Appearance>
+              label="Theme"
+              value={appearance}
+              onChange={setAppearance}
+              options={[
+                { value: "system", label: "System" },
+                { value: "light", label: "Light" },
+                { value: "dark", label: "Dark" },
+              ]}
+            />
+            <Choice<TextSize>
+              label="Text size"
+              value={size}
+              onChange={setTextSize}
+              options={[
+                { value: "small", label: "Small" },
+                { value: "default", label: "Default" },
+                { value: "large", label: "Large" },
+                { value: "larger", label: "Larger" },
+              ]}
+            />
+            <Choice<"on" | "off">
+              label="Motion"
+              value={reduceMotion ? "on" : "off"}
+              onChange={(v) => setAccessibilityOption("reduce-motion", v === "on")}
+              options={[
+                { value: "off", label: "Full" },
+                { value: "on", label: "Reduced" },
+              ]}
+            />
+          </div>
           <RelayField />
           <GithubFields />
           <PersonalitiesField onOpen={onPersonalities} />

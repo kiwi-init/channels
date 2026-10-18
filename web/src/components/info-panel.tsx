@@ -66,7 +66,7 @@ export function InfoPanel({
   return (
     <aside
       aria-label="Details"
-      className={cx("animate-slide-in flex h-full w-full flex-col border-l border-line bg-canvas", view === "invite" ? "md:w-[420px]" : "md:w-[340px]")}
+      className={cx("animate-slide-in flex w-full shrink-0 flex-col border-l border-line bg-canvas md:sheet md:border-l-0", view === "invite" ? "md:w-[420px]" : "md:w-[340px]")}
       onKeyDown={(e) => e.key === "Escape" && (view === "details" ? onClose() : setView("details"))}
     >
       <header className="drag flex h-(--chrome-h) shrink-0 items-center gap-2 px-3">
@@ -246,7 +246,7 @@ export function InfoPanel({
 function RoundAction({ icon, label, onClick, tone }: { icon: IconSvgElement; label: string; onClick: () => void; tone?: "alert" }) {
   return (
     <button type="button" onClick={onClick} aria-label={label === "Pause" ? "Pause agents" : label === "Resume" ? "Resume agents" : label} className="group flex w-14 flex-col items-center gap-1">
-      <span className={cx("flex size-10 items-center justify-center rounded-full bg-raised transition-colors group-hover:bg-wash-2", tone === "alert" ? "text-alert" : "text-ink")}>
+      <span className={cx("prism flex size-10 items-center justify-center rounded-full transition-colors group-hover:bg-(--prism-fill-lit)", tone === "alert" ? "text-alert" : "text-ink")}>
         <Icon icon={icon} size={18} />
       </span>
       <span className="text-stamp font-medium text-ink-2">{label}</span>
@@ -282,7 +282,7 @@ function Section({ label, children }: { label?: string; children: ReactNode }) {
   return (
     <section className="mt-4">
       {label && <h3 className="mb-1.5 px-3 text-stamp font-semibold tracking-[0.04em] text-ink-3 uppercase">{label}</h3>}
-      <div className="overflow-hidden rounded-card bg-raised [&>*+*]:shadow-[inset_0_1px_0_var(--line)]">{children}</div>
+      <div className="prism overflow-hidden rounded-card [&>*+*]:shadow-[inset_0_1px_0_var(--line)]">{children}</div>
     </section>
   )
 }

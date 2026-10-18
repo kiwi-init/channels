@@ -34,7 +34,7 @@ export function UpdateCheck() {
       .finally(() => setBusy(false))
   }
   return (
-    <div>
+    <div className="prism rounded-card p-4">
       <p className="mb-2 text-ui font-medium text-ink">Updates</p>
       <div className="flex items-center gap-3">
         <p className="min-w-0 flex-1 text-ui leading-normal text-ink-2" role="status">
