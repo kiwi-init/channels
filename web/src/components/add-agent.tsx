@@ -45,13 +45,13 @@ export function Command({ text, label }: { text: string; label: string }) {
       () => toast("Couldn’t copy: select the command and copy it", "error")
     )
   return (
-    <div className="mt-4 flex items-stretch overflow-hidden rounded-card edge">
+    <div className="mt-4 flex items-start overflow-hidden rounded-card edge">
       <code className="min-w-0 flex-1 px-3.5 py-3 font-mono text-ui leading-snug [overflow-wrap:anywhere] select-all">{text}</code>
       <button
         type="button"
         onClick={() => void copy()}
         aria-label={label}
-        className="m-1 flex shrink-0 items-center gap-1.5 rounded-ctl bg-accent px-3.5 text-ui font-semibold text-accent-ink hover:opacity-90"
+        className="m-1.5 flex h-8 shrink-0 items-center gap-1.5 rounded-row bg-accent px-3 text-ui font-semibold text-accent-ink hover:opacity-90"
       >
         <Icon icon={copied ? Tick02Icon : Copy01Icon} size={15} />
         {copied ? "Copied" : "Copy"}

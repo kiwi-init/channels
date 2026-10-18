@@ -130,14 +130,14 @@ export default function App() {
           <Sidebar
             rows={rows}
             news={news}
-            active={code}
+            active={settings ? "" : code}
             onSelect={open}
             onNew={() => setSheet("new")}
             onComputers={() => setSheet("computers")}
             onSettings={() => setSettings(true)}
             className={cx(code || settings ? "hidden" : "flex", "md:hidden")}
           />
-          <Rail rows={rows} news={news} active={code} onSelect={open} onNew={() => setSheet("new")} onComputers={() => setSheet("computers")} onSettings={() => setSettings(true)} />
+          <Rail rows={rows} news={news} active={settings ? "" : code} onSelect={open} onNew={() => setSheet("new")} onComputers={() => setSheet("computers")} onSettings={() => setSettings(true)} />
           {/* The app: the rails on the darker tone, the page beside them one round sheet of canvas. */}
           <main className={cx("relative min-w-0 flex-1 overflow-clip bg-canvas md:bg-rail", code || settings ? "flex" : "hidden md:flex")}>
             {/* No conversation, no header: the top row still moves the window. */}

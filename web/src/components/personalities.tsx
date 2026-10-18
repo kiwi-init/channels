@@ -49,7 +49,7 @@ function Row({ p, picked, onPick }: { p: Personality; picked: boolean; onPick: (
         type="button"
         aria-current={picked}
         onClick={onPick}
-        className={cx("flex w-full items-start gap-3 rounded-ctl border px-3 py-2 text-left transition-colors", picked ? "border-accent" : "border-transparent hover:bg-wash")}
+        className={cx("flex w-full items-start gap-3 rounded-ctl border px-3 py-2 text-left transition-colors", picked ? "border-accent bg-accent-wash" : "border-transparent hover:bg-wash")}
       >
         <Tile glyph={p.glyph} />
         <span className="min-w-0">
@@ -124,7 +124,10 @@ function Editor({ p, onChange, onDuplicate, onDelete }: { p: Personality; onChan
               role="radio"
               aria-checked={p.role === r}
               onClick={() => p.role !== r && set({ role: r })}
-              className={cx("rounded-row border px-2.5 py-1 text-ui transition-colors", p.role === r ? "border-accent text-ink" : "border-edge-strong text-ink-2 hover:text-ink")}
+              className={cx(
+                "rounded-row border px-2.5 py-1 text-ui transition-colors",
+                p.role === r ? "border-accent bg-accent-wash font-medium text-accent-text" : "border-edge-strong text-ink-2 hover:bg-wash hover:text-ink"
+              )}
             >
               {ROLE_LABEL[r]}
             </button>
