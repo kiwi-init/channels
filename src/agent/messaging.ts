@@ -1,7 +1,7 @@
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import { mergeCard, movedCard, sameCard, type Where } from "../card.ts";
-import { eachLive, type Live, type SendOptions } from "@kiwi/core/client.ts";
+import { eachLive, RelayError, type Live, type SendOptions } from "@kiwi/core/client.ts";
 import { Cursor } from "../config.ts";
 import { cardLine } from "@kiwi/core/format.ts";
 import {
@@ -23,6 +23,10 @@ import { canPost, describeScopes, refusal } from "@kiwi/core/scopes.ts";
 import { allowedOnHold, humanOf, isPerson, ON_HOLD, ownerOf, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import { SessionListen } from "./listen.ts";
 import { EVERYONE, oneLook } from "./shared.ts";
+
+const ANSWERING_TTL = 600_000;
+
+const answeringKey = (seq: number): string => `answering #${seq}`;
 
 export class SessionMessaging extends SessionListen {
   readonly resolveTo = Effect.fn("AgentSession.resolveTo")({ self: this }, function* (this: SessionMessaging, to: string[] | undefined, state?: ChannelState) {
@@ -52,6 +56,7 @@ export class SessionMessaging extends SessionListen {
       const room = opts.ev ? undefined : (parent ?? (yield* this.roomId(opts.room)));
       if (opts.task !== undefined && !state.tasks.has(opts.task)) return yield* new Rejected(`no task ${taskId(opts.task)}`);
       if (opts.dm && (to?.length !== 1 || to[0] === this.me || !state.members.get(to[0]!)?.active)) return yield* new Rejected("a direct message goes to exactly one other member: --dm NAME");
+      if (opts.kind !== "event") for (const re of opts.re ?? []) yield* this.notAnsweredByOthers(state, re);
       const inThread = !!opts.re?.length;
       const seq = yield* this.ch.fx.send(body, { ...opts, to, room, ...(inThread ? { task: undefined, dm: undefined } : {}) });
       return seq;
@@ -128,6 +133,7 @@ export class SessionMessaging extends SessionListen {
       const { messages, state } = yield* this.state();
       const orig = yield* this.message(seq, messages);
       if (!orig) return yield* new Rejected(`no message #${seq}`);
+      yield* this.notAnsweredByOthers(state, seq);
       const to = orig.from === this.me ? orig.to : [orig.from];
       yield* this.mayI({ kind, to });
       const sent = yield* this.ch.fx.send(body, { to, kind, re: [seq], imgs, room: state.roomOf.get(seq) ?? orig.room });
@@ -135,6 +141,42 @@ export class SessionMessaging extends SessionListen {
     },
     oneLook,
   );
+
+  readonly answering = Effect.fn("AgentSession.answering")(
+    { self: this },
+    function* (this: SessionMessaging, seq: number) {
+      const { messages, state } = yield* this.state();
+      if (!(yield* this.message(seq, messages)) || ignored(state.trust.get(seq))) return yield* new Rejected(`no message #${seq}`);
+      yield* this.notAnsweredByOthers(state, seq);
+      const sent = yield* this.event({ op: "fact.set", key: answeringKey(seq), value: this.me, ttl: ANSWERING_TTL / 1000 }, `answering #${seq}`, undefined, undefined, {
+        slot: { name: `re:${seq}`, ttl: ANSWERING_TTL },
+      }).pipe(this.taken((who) => `${who} is answering #${seq}: leave it to them`));
+      return yield* this.confirm(sent);
+    },
+    oneLook,
+  );
+
+  private notAnsweredByOthers(state: ChannelState, seq: number) {
+    const held = state.facts.get(answeringKey(seq));
+    const me = state.members.get(this.me);
+    if (!held || held.value === this.me || (me && isPerson(me))) return Effect.void;
+    return Effect.fail(new Rejected(`${held.value} is answering #${seq}: leave it to them, or react to it`));
+  }
+
+  protected taken(what: (who: string) => string) {
+    return <A, E, R>(eff: Effect.Effect<A, E, R>) =>
+      eff.pipe(
+        Effect.catchIf(
+          (err): err is Extract<E, RelayError> => err instanceof RelayError && err.tag === "Taken",
+          (err) =>
+            Effect.gen({ self: this }, function* () {
+              const at = Number(/#(\d+)/.exec(err.message)?.[1] ?? 0);
+              const held = at ? yield* this.ch.fx.page(at - 1, 1).pipe(Effect.orElseSucceed((): Message[] => [])) : [];
+              return yield* new Rejected(what(held.find((m) => m.seq === at)?.from ?? "someone else"));
+            }),
+        ),
+      );
+  }
 
   readonly react = Effect.fn("AgentSession.react")(
     { self: this },
@@ -214,10 +256,10 @@ export class SessionMessaging extends SessionListen {
     oneLook,
   );
 
-  protected event(ev: Event, body: string, to?: string[], re?: number) {
+  protected event(ev: Event, body: string, to?: string[], re?: number, slots: Pick<SendOptions, "slot" | "free"> = {}) {
     return Effect.gen({ self: this }, function* () {
       yield* this.mayI({ kind: "event", ev });
-      return yield* this.ch.fx.send(body, { kind: "event", ev, to: to?.length ? [...new Set(to)].filter((n) => n !== this.me) : undefined, ...(re !== undefined ? { re: [re] } : {}) });
+      return yield* this.ch.fx.send(body, { kind: "event", ev, to: to?.length ? [...new Set(to)].filter((n) => n !== this.me) : undefined, ...(re !== undefined ? { re: [re] } : {}), ...slots });
     });
   }
 

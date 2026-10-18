@@ -3,12 +3,13 @@
 // an older kiwi says nothing, and that's said too.
 
 import type { Card } from "@kiwi/core/protocol.ts"
+import { outsideRepos } from "@kiwi/core/state.ts"
 import { cx } from "@/lib/utils"
 
 const HARNESS: Record<string, string> = { claude: "Claude Code", "claude-code": "Claude Code", codex: "Codex", opencode: "OpenCode", grok: "Grok", gemini: "Gemini CLI", cursor: "Cursor" }
 const OS: Record<string, string> = { macos: "macOS", linux: "Linux", windows: "Windows" }
 
-export function AgentFacts({ card, said, className }: { card: Card | undefined; /** Its own word, not checked: a join request's. */ said?: boolean; className?: string }) {
+export function AgentFacts({ card, said, repos, className }: { card: Card | undefined; /** Its own word, not checked: a join request's. */ said?: boolean; repos?: string[]; className?: string }) {
   if (!card) return <p className={cx("text-meta text-ink-3", className)}>Didn’t say its model (an older kiwi)</p>
   const machine = [[card.os && (OS[card.os] ?? card.os), card.arch].filter(Boolean).join(" "), card.cpu, card.memory].filter(Boolean).join(" · ")
   return (
@@ -18,8 +19,21 @@ export function AgentFacts({ card, said, className }: { card: Card | undefined; 
         {card.harness && <span className="text-ink-2"> · {HARNESS[card.harness] ?? card.harness}</span>}
         {said && <span className="text-ink-3"> · its word</span>}
       </p>
+      {card.repo && <RepoLine card={card} outside={!!repos && outsideRepos({ repos }, card)} />}
       {machine && <p className="truncate text-ink-3">{machine}</p>}
       {card.tools?.length ? <p className="truncate text-ink-3">{card.tools.join(", ")}</p> : null}
     </div>
+  )
+}
+
+export function RepoLine({ card, outside, className }: { card: Pick<Card, "repo" | "branch">; outside: boolean; className?: string }) {
+  return (
+    <span className={cx("block truncate", className)}>
+      <span className="font-mono text-ink-2">
+        {card.repo}
+        {card.branch && <span className="text-ink-3">@{card.branch}</span>}
+      </span>
+      {outside && <span className="font-medium text-decide"> · not one of this channel’s repos</span>}
+    </span>
   )
 }

@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import { seal } from "../crypto.ts";
+import { seal, slotId } from "../crypto.ts";
 import { sign, verify } from "../identity.ts";
 import {
   CHOICE_MAX_LENGTH,
@@ -41,6 +41,8 @@ export interface SendOptions {
   choices?: string[];
   task?: number;
   dm?: boolean;
+  slot?: { name: string; ttl: number };
+  free?: string[];
 }
 
 export interface SendFx {
@@ -90,11 +92,17 @@ export class ChannelSending {
         const e = this.ch.access.epoch;
         const key = this.ch.access.keys[String(e)];
         if (!key) return yield* new MissingKey(`no key for epoch ${e}`);
-        return { e, sealed: yield* Effect.promise(() => seal(key, this.ch.roomId, signed, { pack: this.settings.packs })) };
+        return { e, key, sealed: yield* Effect.promise(() => seal(key, this.ch.roomId, signed, { pack: this.settings.packs })) };
       });
+      const take = opts.slot;
+      const freeing = opts.free ?? [];
+      const slotted = !!take || freeing.length > 0;
       const post = Effect.gen({ self: this }, function* () {
-        const { e, sealed } = yield* sealNow;
-        return yield* this.ch.request<{ seq: number; ts?: number }>("/messages", { method: "POST", body: JSON.stringify({ ...sealed, e }) });
+        const { e, key, sealed } = yield* sealNow;
+        const roomId = this.ch.roomId;
+        const slot = take ? { slot: { id: yield* Effect.promise(() => slotId(key, roomId, take.name)), ttl: take.ttl } } : {};
+        const free = freeing.length ? { free: yield* Effect.promise(() => Promise.all(freeing.map((n) => slotId(key, roomId, n)))) } : {};
+        return yield* this.ch.request<{ seq: number; ts?: number }>("/messages", { method: "POST", body: JSON.stringify({ ...sealed, e, ...slot, ...free }) });
       });
       const posted = Effect.gen({ self: this }, function* () {
         const stored = yield* post.pipe(
@@ -110,7 +118,7 @@ export class ChannelSending {
         }
         return stored.seq;
       });
-      const wire = [...this.live.wires].at(-1);
+      const wire = slotted ? undefined : [...this.live.wires].at(-1);
       if (!wire) return yield* posted;
       const { e, sealed } = yield* sealNow;
       const acked = yield* wire.send(sealed, e, signed);

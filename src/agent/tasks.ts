@@ -6,6 +6,8 @@ import { isPerson, openRound, revisedOut, taskId, type ChannelState, type Review
 import { SessionMessaging } from "./messaging.ts";
 import { oneLook } from "./shared.ts";
 
+const CLAIM_TTL = 120_000;
+
 function judgedRound(t: Task, open: ReviewRound | undefined, round: number | undefined, at: string | undefined): Effect.Effect<ReviewRound, Rejected> {
   const id = taskId(t.id);
   const wanted = at?.trim() || undefined;
@@ -60,7 +62,9 @@ export class SessionTasks extends SessionMessaging {
       if (!t) return yield* new Rejected(`no task ${taskId(id)}`);
       if (t.state === "done") return yield* new Rejected(`${taskId(id)} is already done`);
       if (t.owner && t.owner !== this.me) return yield* new Rejected(`${taskId(id)} is owned by ${t.owner}`);
-      const seq = yield* this.event({ op: "task.claim", task: id }, `claimed ${taskId(id)}`);
+      const seq = yield* this.event({ op: "task.claim", task: id }, `claimed ${taskId(id)}`, undefined, undefined, { slot: { name: `task:${id}`, ttl: CLAIM_TTL } }).pipe(
+        this.taken((who) => `${taskId(id)} is taken by ${who}`),
+      );
       const after = yield* this.confirm(seq);
       return after;
     },
@@ -111,6 +115,8 @@ export class SessionTasks extends SessionMessaging {
         { op: "task.update", task: id, ...rest, ...opening, ...(owner !== undefined ? { owner } : {}), ...(review !== undefined ? { review } : {}), ...round, ...body },
         body.body ? (reviewText ?? "") : `${taskId(id)} ${change.verdict ?? change.state ?? "updated"}`,
         notify,
+        undefined,
+        t.owner === this.me && (owner !== undefined || finishing || change.state === "todo") ? { free: [`task:${id}`] } : {},
       );
       const after = yield* this.confirm(seq);
       return after;
