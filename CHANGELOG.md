@@ -2,6 +2,45 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.18.0 — 2026-10-18
+
+- **Update every machine and start a new session for each agent.** 0.18.0 adds events that older clients drop, and the relay must be deployed for claims, leases and the GitHub App; the owner's GitHub setup is in docs/0.18-release.md.
+- **Release: the publish job installs dependencies before it writes the notes** ([#330](https://github.com/ojowwalker77/channels/pull/330))
+- **Cards follow the agent's branch: the prompt and stop hooks re-send repo@branch when it changed** ([#331](https://github.com/ojowwalker77/channels/pull/331))
+- **Tasks: a title past 200 characters is refused with a reason, not announced as added (T56)** ([#335](https://github.com/ojowwalker77/channels/pull/335))
+- **Demo: --stay prints a plain join link and lets the dashboard in itself (T58)** ([#336](https://github.com/ojowwalker77/channels/pull/336))
+- **A channel records its repos, and status flags an agent working from another one** ([#332](https://github.com/ojowwalker77/channels/pull/332))
+- **The app shows an agent's repo@branch, and flags one from a repo the channel doesn't list** ([#337](https://github.com/ojowwalker77/channels/pull/337))
+- **Coordination: task claims and answering #N are compare-and-set on the relay (T27)** ([#333](https://github.com/ojowwalker77/channels/pull/333))
+- **Coordinator-only mode is gone; the coordinator role becomes an optional lead (T33)** ([#338](https://github.com/ojowwalker77/channels/pull/338))
+- **One verb for asking a person: help and the MCP escalate tool point to ask-human (T66)** ([#342](https://github.com/ojowwalker77/channels/pull/342))
+- **git blame skips the oxfmt reformat (.git-blame-ignore-revs)** ([#328](https://github.com/ojowwalker77/channels/pull/328))
+- **Coordination: leases with a line, kiwi lock and kiwi unlock (T29)** ([#339](https://github.com/ojowwalker77/channels/pull/339))
+- **CLI: reply, react and show pick the seat that was shown the message (T64)** ([#340](https://github.com/ojowwalker77/channels/pull/340))
+- **Timeline: notes, claims and reactions leave the conversation (T31)** ([#341](https://github.com/ojowwalker77/channels/pull/341))
+- **ui-smoke: a task's card in the conversation shows its last line, and a click opens the Tasks panel (T8)** ([#343](https://github.com/ojowwalker77/channels/pull/343))
+- **Standup: the live-card model moves into core (T6)** ([#334](https://github.com/ojowwalker77/channels/pull/334))
+- **Digest: closing a task posts a one-line summary in the main conversation (T87)** ([#344](https://github.com/ojowwalker77/channels/pull/344))
+- **Standup: room chips on the canvas filter the task cards (T9)** ([#345](https://github.com/ojowwalker77/channels/pull/345))
+- **Tasks: proof on the task, a link a reviewer can open (T74)** ([#346](https://github.com/ojowwalker77/channels/pull/346))
+- **Web: an agent's question lives in the composer, with clickable options (T23)** ([#348](https://github.com/ojowwalker77/channels/pull/348))
+- **Fix typos in AGENTS.md** ([#347](https://github.com/ojowwalker77/channels/pull/347))
+- **Web: the microphone says why dictation can't run and stays, instead of vanishing (T304)** ([#350](https://github.com/ojowwalker77/channels/pull/350))
+- **Handles: a new handle is adjective-animal (gentle-otter), not animal-adjective (T349)** ([#353](https://github.com/ojowwalker77/channels/pull/353))
+- **Delivery: #general, your rooms and threads, and @mentions are pushed; the rest is pulled (T35)** ([#349](https://github.com/ojowwalker77/channels/pull/349))
+- **GitHub App webhooks reach a channel's queue at the relay (T37, design B, relay half)** ([#351](https://github.com/ojowwalker77/channels/pull/351))
+- **Web: a slash in the composer lists commands, and one runs instead of being sent (T325)** ([#354](https://github.com/ojowwalker77/channels/pull/354))
+- **test/slots: the loser of a race may be refused before sending, so accept that text too** ([#355](https://github.com/ojowwalker77/channels/pull/355))
+- **GitHub's news reaches the channel: the owner's app drains the relay's queue into signed events (T37)** ([#356](https://github.com/ojowwalker77/channels/pull/356))
+- **A PR on a task shows GitHub's state, title and checks, not the chat's guess (T43)** ([#358](https://github.com/ojowwalker77/channels/pull/358))
+- **A PR on a branch named T<n>-… shows on task T<n>, with its branch (T72, first part)** ([#359](https://github.com/ojowwalker77/channels/pull/359))
+- **/compact: fold the history behind an approved summary and archive finished tasks (T326)** ([#357](https://github.com/ojowwalker77/channels/pull/357))
+- **The relay calls GitHub as the App: diffs for members, the kiwi/review check for the owner (T45, relay half)** ([#361](https://github.com/ojowwalker77/channels/pull/361))
+- **CLI: one way to say where a message goes, kiwi send --to WHERE (T80)** ([#362](https://github.com/ojowwalker77/channels/pull/362))
+- **GitHub: a person links their GitHub account in the desktop app, by device flow (T41)** ([#360](https://github.com/ojowwalker77/channels/pull/360))
+- **A review round shows its diff, and the owner's app posts each verdict as the kiwi/review check (T45, app half)** ([#363](https://github.com/ojowwalker77/channels/pull/363))
+- **A PR on a T<n>-… branch links back to its task: the owner's app comments once (T72, second part)** ([#365](https://github.com/ojowwalker77/channels/pull/365))
+
 ## 0.17.0 — 2026-10-17
 
 - **The desktop app is now Channels, with a new icon and its own bundle ID.** Kiwi.app does not update to it: install Channels from the release, pair this computer again, then remove Kiwi.app (both answer kiwi:// links). The `kiwi` CLI, `kiwi://` links and `~/.kiwi` are unchanged.
