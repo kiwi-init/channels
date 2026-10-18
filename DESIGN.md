@@ -12,9 +12,11 @@ Canonical sources: `web/src/index.css` (`:root`, `:root[data-theme]`,
 
 ## 1. Identity in one line
 
-A quiet Messages-like conversation. White `#ffffff` / near-black `#161618`
-canvas, Apple system blue `#007aff` (light) / `#0a84ff` (dark), Inter only,
-small purposeful motion, one pop shadow.
+A quiet Messages-like conversation in prism glass, after the app icon and
+the agents' heads: clear controls with a lit edge on black (or white), a thin
+spectrum band inside what's chosen, and the heads' blue orb on the one thing
+to do next. Apple system blue `#007aff` / `#0a84ff` for links and marks,
+Inter only, small purposeful motion, one pop shadow.
 
 ## 2. Theme architecture
 
@@ -59,9 +61,7 @@ Light / dark are the two sides of each `light-dark()` in `index.css`:
 
 Supporting chrome: `line` (7% ink/white), `wash` (4/5%), `wash-2` (7/8%),
 `accent-wash` (10/16%), `pick` (the open channel: a neutral step, never a
-block of colour), `segment` (the chosen segment of a segmented control:
-white / `#3a3a3c`, so it rises off its `wash` track in both themes),
-`bubble-them` (Messages grey `#e9e9eb` / `#1f1f21`).
+block of colour), `bubble-them` (Messages grey `#e9e9eb` / `#1f1f21`).
 
 White on the light accent is ~4:1, Apple's own choice and just under AA 4.5
 for small text; the owner asked to mirror Apple, so it stays. As text on the
@@ -104,7 +104,7 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   pictures `bubble`; the composer `dock`. Arbitrary `rounded-[Npx]` fails
   `ui-tokens.ts`.
 - One shadow: `pop` (`0 0 0 1px pop-edge, 0 16px 40px -12px pop-shade`).
-  No other shadows, no colored shadows.
+  No other shadows; the orb's glow is the only coloured one.
 - Two tones: the rails (the channel list and a channel's sidebar) sit on
   `rail`, a step darker, and the page beside them is one sheet of `canvas`
   (the `sheet` utility: 8px in from the window's edges, `card` radius, a
@@ -114,7 +114,23 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   background of their own; they are separated by spacing and a thin 1px
   `line` (the `edge` utility). Popovers and dialogs lift off the canvas
   with the `pop` shadow only. A phone has no sheet: one screen at a time,
-  on the canvas. (No glass/liquid treatments.)
+  on the canvas.
+- Prism glass (`index.css`, `@layer components`), the only glass:
+  - `prism`: a clear slab, `prism-fill` with a 1px `prism-edge` and a lit
+    edge (`prism-glint`) bright at one corner and fading along the sides,
+    the way the icon's prisms catch light. Secondary buttons, segmented
+    tracks, outlined controls.
+  - `prism-lit`: what's chosen. A brighter fill and edge, and a thin
+    spectrum band (`spectrum-1..7`) inside it, at `--band` (70% by
+    default) across the control, the way light splits in the heads. One
+    chosen thing per group; never on a whole row of text.
+  - `glass`: `prism` that floats over the conversation (the header's round
+    controls, the place pills): `prism-float` over a blur.
+  - `orb`: the heads' blue orb (`orb-core`, `orb-blue`, `orb-cyan`), round:
+    send. `orb-pill`: the same light round a dark core, for the primary
+    button and an unread count. Its `orb-glow` is the one coloured glow.
+  - Under `prefers-contrast: more` all of them fall back to solid fills: no
+    band, no glint, the orb as `accent`.
 - Fall back to solid fills under `prefers-contrast: more`.
 
 ## 6. Motion
@@ -143,9 +159,10 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 - A chosen option you pick from a set (role chips, personality rows, Joins
   as, an ask's options, room chips) wears `accent-wash` with an `accent`
   edge, and its label in `accent-text` or a check: it reads as chosen at a
-  glance, not just as having a thin ring. Segmented controls use `segment`.
-- Buttons: primary `accent`; secondary outlined (a 1px `edge-strong` ring,
-  no fill, `wash` on hover).
+  glance, not just as having a thin ring. Segmented controls are a `prism`
+  track with the chosen segment `prism-lit`.
+- Buttons: primary `orb-pill`; secondary `prism` (`prism-fill-lit` on
+  hover).
 - Inputs: no fill, a 1px `line` edge (`edge`); focus ring is `2px ring` with `1px` offset and
   `6px` radius (base layer, so utilities can still take it off).
 - Placeholders and empty states use quiet ink, never reduced-opacity text.
@@ -315,7 +332,8 @@ Do: use vars, tabular numerals for times and counts, one accent at a time,
 a flat sidebar on `rail` beside the page's round sheet, inline composer panels, quiet placeholders, `Boundary` around
 channel views.
 Don't: hard-code hex, add font families, ship gradient marketing styling,
-build floating composer menus, use colored shadows, or put hairlines
+build floating composer menus, use colored shadows (the orb's glow aside),
+spread the spectrum beyond a thin band in what's chosen, or put hairlines
 between the rails.
 
 ## 14. New-surface checklist
