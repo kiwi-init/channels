@@ -78,3 +78,7 @@ export function personaLines(p: Persona): string[] {
     ...(p.instructions.trim() ? [p.instructions.trim()] : []),
   ];
 }
+
+export function capabilityLine(p: Pick<Persona, "capabilities">): string {
+  return p.capabilities.length ? p.capabilities.map((c) => CAPABILITY_LABEL[c]).join(" · ") : "reads only";
+}

@@ -71,6 +71,7 @@ export const CHANNEL_CALLS = [
   "deny",
   "remove",
   "updateScopes",
+  "updatePersona",
   "updateRole",
   "updateNickname",
   "reconcilePosting",

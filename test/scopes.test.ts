@@ -267,6 +267,16 @@ describe("scopes at the relay", () => {
     const [req] = await checked(ownerCh, relay, code, [{ id: boss, requestId: asked.requestId }]);
     await expect(ownerCh.approve(req!, { name: "boss", persona: { ...builder, role: "boss" as Persona["role"] } })).rejects.toThrow(/isn't one a record can carry/);
     await ownerCh.deny(req!.id);
+
+    const changed = (await ownerCh.members()).find((m) => m.name === "builder")!;
+    const reading = { ...builder, name: "Reader", capabilities: [] };
+    const seq = await ownerCh.send("made builder Reader", { ev: { op: "scope.set", member: "builder", pk: changed.pk, scopes: [] } });
+    await ownerCh.updatePersona(changed, reading, seq);
+    await expect(doer.send("still here?")).rejects.toThrow(/only read/);
+    const now = (await ownerCh.members()).find((m) => m.name === "builder")!;
+    expect(now.persona).toEqual(reading);
+    expect(now.later?.scopes).toEqual([]);
+    await expect(ownerCh.updatePersona(changed, { ...builder, capabilities: ["root" as Persona["capabilities"][number]] }, seq)).rejects.toThrow(/isn't one a record can carry/);
   });
 
   test("an agent the owner creates the channel with, read-only, can't post from the first message", async () => {

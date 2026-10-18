@@ -6,6 +6,7 @@ import { SCOPES, type Scope } from "@kiwi/core/scopes.ts"
 import { isPerson, LEAD } from "@kiwi/core/state.ts"
 import { noteAgentWorked } from "@/lib/channel"
 import { Modal, errorText, toast } from "../kit"
+import type { Persona } from "@kiwi/core/personality.ts"
 import { defaultScopes } from "../scopes"
 import { ConfirmDialogs, ReposDialog } from "../lazy"
 import { CharterDialog, RenameDialog } from "./channel-dialogs"
@@ -21,6 +22,7 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
   const [roleDraft, setRoleDraft] = useState({ role: "", about: "" })
   const [scopeDraft, setScopeDraft] = useState<Scope[]>([...SCOPES])
   const [nickDraft, setNickDraft] = useState("")
+  const [personaDraft, setPersonaDraft] = useState<Persona | null>(null)
   const active = p.roster.filter((m) => m.active)
   if (confirm?.kind === "approve" && active.some((m) => m.pk === confirm.req.pk)) setConfirm(null)
   const taken = confirm?.kind === "approve" && active.some((m) => m.pk !== confirm.req.pk && nameKey(m.name) === nameKey(confirm.req.name))
@@ -54,6 +56,7 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
     ask: (c) => {
       if (c?.kind === "approve") {
         setScopeDraft(p.roomId ? defaultScopes(p.roomId) : [...SCOPES])
+        setPersonaDraft(null)
       }
       setConfirm(c)
     },
@@ -70,6 +73,10 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
       const now = p.state.members.get(m.name)?.scopes
       setScopeDraft(now && now.length === 0 ? [] : [...SCOPES])
       setConfirm({ kind: "scopes", member: m })
+    },
+    editPersona: (m) => {
+      setPersonaDraft(p.state.members.get(m.name)?.persona ?? null)
+      setConfirm({ kind: "persona", member: m })
     },
     editNickname: (m) => {
       setNickDraft(m.display ?? "")
@@ -110,6 +117,8 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
           setScopeDraft={setScopeDraft}
           nickDraft={nickDraft}
           setNickDraft={setNickDraft}
+          personaDraft={personaDraft}
+          setPersonaDraft={setPersonaDraft}
         />
       )}
     </Ctx.Provider>

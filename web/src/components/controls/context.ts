@@ -1,6 +1,7 @@
 import { createContext, useContext } from "react"
 
 import type { JoinRequest, Member as RosterMember } from "@kiwi/core/membership.ts"
+import type { Persona } from "@kiwi/core/personality.ts"
 import type { Event } from "@kiwi/core/protocol.ts"
 import type { Scope } from "@kiwi/core/scopes.ts"
 import type { ChannelState } from "@kiwi/core/state.ts"
@@ -10,6 +11,7 @@ export type Confirm =
   | { kind: "remove"; member: RosterMember }
   | { kind: "role"; member: RosterMember }
   | { kind: "scopes"; member: RosterMember }
+  | { kind: "persona"; member: RosterMember }
   | { kind: "nickname"; member: RosterMember }
   | { kind: "close" }
   | { kind: "leave" }
@@ -24,11 +26,12 @@ export interface ControlsProps {
   online: Map<string, unknown>
   state: ChannelState
   now: number
-  onApprove: (r: JoinRequest, scopes?: Scope[]) => Promise<void>
+  onApprove: (r: JoinRequest, scopes?: Scope[], persona?: Persona) => Promise<void>
   onDeny: (r: JoinRequest) => Promise<void>
   onCheck: (r: JoinRequest) => Promise<void>
   onRemove: (m: RosterMember) => Promise<void>
   onScopes?: (m: RosterMember, scopes: Scope[]) => Promise<void>
+  onPersona?: (m: RosterMember, persona: Persona | null) => Promise<void>
   onRole: (ev: Extract<Event, { op: "role.set" | "role.refuse" }>) => Promise<void>
   onNickname?: (m: RosterMember, nickname: string | null) => Promise<void>
   onCloseChannel: () => Promise<void>
@@ -53,6 +56,7 @@ export interface Api {
   setRole: (ev: Extract<Event, { op: "role.set" | "role.refuse" }>) => Promise<void>
   editRole: (m: RosterMember) => void
   editScopes: (m: RosterMember) => void
+  editPersona: (m: RosterMember) => void
   editNickname: (m: RosterMember) => void
   lastSeenOf: (name: string) => number | null
   onlineNow: (name: string) => boolean

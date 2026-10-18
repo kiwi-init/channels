@@ -343,9 +343,14 @@ async function run(part: Part): Promise<string[]> {
     await needsOpen();
     await letIn.or(showCode).first().waitFor({ timeout: 30000 });
     if (await showCode.count()) await showCode.click();
-    await letIn.click({ timeout: 30000 });
+    await letIn.waitFor({ timeout: 30000 });
+    await needs.getByRole("button", { name: "Choose what it can do…" }).click();
+    const letting = page.getByRole("dialog", { name: /^Let helper in\?/ });
+    await letting.getByRole("radiogroup", { name: "Personality" }).getByText("Reviewer", { exact: true }).click();
+    await letting.getByRole("button", { name: "Let in as Reviewer" }).click();
     await helper;
-    log(`ok  ${at}`);
+    if (!(await kiwi(["-c", "smoke", "--as", "helper", "status"])).includes("helper (you) — Reviewer (Reviewer)")) throw new Error("the personality picked at Let in isn't on the agent's seat");
+    log(`ok  ${at}, let in as Reviewer`);
 
     at = "read receipt";
     await send("smoke, read me");
@@ -507,6 +512,19 @@ async function run(part: Part): Promise<string[]> {
     await general.click();
     await general.and(page.locator("[aria-current=page]")).waitFor();
     log(`ok  ${at} and a direct conversation`);
+
+    at = "change helper's personality from its menu";
+    await inDetails(async () => {
+      await panel.getByRole("button", { name: "More for helper" }).click();
+      await page.getByRole("menuitem", { name: "Personality: Reviewer…" }).click();
+    });
+    const changing = page.getByRole("dialog", { name: /personality$/ });
+    await changing.getByRole("radiogroup", { name: "Personality" }).getByText("Builder", { exact: true }).click();
+    await changing.getByRole("button", { name: "Save" }).click();
+    await changing.waitFor({ state: "detached" });
+    for (let i = 0; i < 50 && !(await kiwi(["-c", "smoke", "--as", "helper", "status"])).includes("helper (you) — Builder (Builder)"); i++) await page.waitForTimeout(200);
+    if (!(await kiwi(["-c", "smoke", "--as", "helper", "status"])).includes("helper (you) — Builder (Builder)")) throw new Error("the personality changed from the menu isn't on the agent's seat");
+    log(`ok  ${at}`);
 
     at = "Tasks panel";
     await sidebar.getByRole("region", { name: "Agents" }).waitFor();
