@@ -48,8 +48,6 @@ export interface Api {
   busy: boolean
   run: (fn: () => Promise<void>, done: string) => Promise<void>
   ask: (c: Confirm) => void
-  openRequests: () => void
-  openInvite: () => void
   editScopes: (m: RosterMember) => void
   editPersona: (m: RosterMember) => void
   editNickname: (m: RosterMember) => void

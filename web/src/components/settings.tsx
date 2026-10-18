@@ -1,15 +1,16 @@
+import { ArrowLeft01Icon } from "@hugeicons/core-free-icons"
 import { useOwnPersonalities } from "@/lib/personalities"
-import { PersonalitiesModal } from "./personalities"
-import { Dialog } from "@base-ui/react/dialog"
+import { Personalities } from "./personalities"
 
 import { setAppearance, setTextSize, useAppearance, useTextSize, type Appearance, type TextSize } from "@/lib/theme"
 import { setAccessibilityOption, useAccessibilityOption } from "@/lib/accessibility"
 import { cx } from "@/lib/utils"
-import { useEffect, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { relayUrl } from "@/lib/relay"
 import { bridge, useSecrets } from "@/lib/secrets"
 import { version } from "../../../package.json"
-import { Button, Modal, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from "./kit"
+import { Icon } from "./icon"
+import { Button, IconButton, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from "./kit"
 import { UpdateCheck } from "./update-check"
 
 // How Channels looks in this browser: the theme and how large everything reads.
@@ -204,33 +205,31 @@ function GithubFields() {
   )
 }
 
-function PersonalitiesField() {
-  const [open, setOpen] = useState(false)
+function PersonalitiesField({ onOpen }: { onOpen: () => void }) {
   const count = useOwnPersonalities().length
   return (
     <div>
       <p className="mb-2 text-ui font-medium text-ink">Personalities</p>
       <div className="flex items-center gap-3">
         <p className="min-w-0 flex-1 text-ui leading-normal text-ink-2">Six presets for code work{count ? `, and ${count} of your own` : ""}. An agent takes one when you let it in.</p>
-        <Button variant="secondary" onClick={() => setOpen(true)}>
-          Open…
+        <Button variant="secondary" onClick={onOpen}>
+          Open
         </Button>
       </div>
-      <PersonalitiesModal open={open} onClose={() => setOpen(false)} />
     </div>
   )
 }
 
-export function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+function General({ onPersonalities }: { onPersonalities: () => void }) {
   const appearance = useAppearance()
   const size = useTextSize()
   const reduceMotion = useAccessibilityOption("reduce-motion")
   return (
-    <Modal open={open} onClose={onClose}>
-      <div className="p-5">
-        <Dialog.Title className="text-title font-semibold tracking-[-0.01em]">Settings</Dialog.Title>
-        <Dialog.Description className="mt-1 text-ui leading-normal text-ink-2">How Channels looks in this browser. Changes apply at once.</Dialog.Description>
-        <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-5">
+    <div className="flex-1 overflow-y-auto">
+      <div className="mx-auto w-full max-w-xl px-6 pt-2 pb-12">
+        <h1 className="text-display font-semibold tracking-[-0.014em]">Settings</h1>
+        <p className="mt-1 text-ui leading-normal text-ink-2">How Channels looks in this browser. Changes apply at once.</p>
+        <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-6">
           <Choice<Appearance>
             label="Theme"
             value={appearance}
@@ -263,17 +262,47 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
           />
           <RelayField />
           <GithubFields />
-          <PersonalitiesField />
+          <PersonalitiesField onOpen={onPersonalities} />
           <VoiceFields />
           <UpdateCheck />
         </div>
-        <div className="mt-6 flex items-center justify-between gap-3">
-          <p className="min-w-0 truncate text-ui text-ink-2">Channels {version}</p>
-          <Button variant="secondary" onClick={onClose}>
-            Done
-          </Button>
-        </div>
+        <p className="mt-8 text-ui text-ink-3">Channels {version}</p>
       </div>
-    </Modal>
+    </div>
+  )
+}
+
+export function SettingsPage({ backTo, onClose }: { backTo: string; onClose: () => void }) {
+  const [view, setView] = useState<"general" | "personalities">("general")
+  const self = useRef<HTMLElement>(null)
+  const inner = view === "personalities"
+  const back = inner ? () => setView("general") : onClose
+  useLayoutEffect(() => {
+    const prev = document.activeElement
+    self.current?.focus({ preventScroll: true })
+    return () => {
+      if (prev instanceof HTMLElement && prev.isConnected) prev.focus()
+    }
+  }, [])
+  return (
+    <section
+      ref={self}
+      tabIndex={-1}
+      aria-label={inner ? "Personalities" : "Settings"}
+      className="animate-rise flex h-full w-full min-w-0 flex-col outline-none"
+      onKeyDown={(e) => {
+        if (e.key !== "Escape" || e.defaultPrevented) return
+        e.preventDefault()
+        back()
+      }}
+    >
+      <header className="drag flex h-(--chrome-h) shrink-0 items-center gap-2 px-3">
+        <IconButton label={inner ? "Back to Settings" : "Close settings"} round className="glass size-9 text-ink" onClick={back}>
+          <Icon icon={ArrowLeft01Icon} size={18} />
+        </IconButton>
+        <span className="min-w-0 flex-1 truncate text-ui font-semibold">{inner ? "Settings" : backTo}</span>
+      </header>
+      {inner ? <Personalities /> : <General onPersonalities={() => setView("personalities")} />}
+    </section>
   )
 }

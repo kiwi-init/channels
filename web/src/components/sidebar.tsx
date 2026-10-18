@@ -152,7 +152,7 @@ export function Sidebar({
             </MenuItem>
             <MenuSeparator />
             <MenuItem icon={Settings01Icon} onClick={onSettings}>
-              Settings…
+              Settings
             </MenuItem>
           </Menu>
         </div>
@@ -288,7 +288,7 @@ export function Rail({
             </MenuItem>
             <MenuSeparator />
             <MenuItem icon={Settings01Icon} onClick={onSettings}>
-              Settings…
+              Settings
             </MenuItem>
           </Menu>
         )}

@@ -14,7 +14,7 @@ export function Requests({ onDone }: { onDone: () => void }) {
     if (empty) onDone()
   }, [empty, onDone])
   return (
-    <div className="p-5">
+    <div className="px-4 pt-1 pb-6">
       <h2 className="text-title font-semibold tracking-[-0.01em]">{requests.length > 1 ? `${requests.length} want to join` : "Wants to join"}</h2>
       <p className="mt-1 text-ui leading-normal text-ink-2">Show the code, compare it with theirs, then approve.</p>
       {requests.some((r) => r.check === "unchecked") && <p className="mt-3 rounded-card bg-wash p-3 text-ui leading-normal text-ink-2">{TOO_MANY_REQUESTS}</p>}
@@ -54,11 +54,6 @@ export function Requests({ onDone }: { onDone: () => void }) {
             </div>
           </div>
         ))}
-      </div>
-      <div className="mt-5 flex justify-end">
-        <Button variant="secondary" onClick={onDone}>
-          Done
-        </Button>
       </div>
     </div>
   )

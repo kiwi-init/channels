@@ -1,4 +1,3 @@
-import { Dialog } from "@base-ui/react/dialog"
 import { useState } from "react"
 
 import { copyOf, freeId, PRESET_IDS } from "@kiwi/core/personalities.ts"
@@ -6,7 +5,7 @@ import { CAPABILITIES, MAX_AREA, MAX_AREAS, MAX_INSTRUCTIONS, MAX_NAME, ROLE_LAB
 import { PRESETS } from "@kiwi/core/presets.ts"
 import { savePersonalities, useOwnPersonalities, usePersonalities } from "@/lib/personalities"
 import { cx } from "@/lib/utils"
-import { Button, Modal, TextField, errorText, toast } from "./kit"
+import { Button, TextField, errorText, toast } from "./kit"
 
 const TAGLINE: Record<string, string> = {
   builder: "Takes a task to a merged PR",
@@ -199,7 +198,7 @@ function Editor({ p, onChange, onDuplicate, onDelete }: { p: Personality; onChan
   )
 }
 
-export function PersonalitiesModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function Personalities() {
   const own = useOwnPersonalities()
   const all = usePersonalities()
   const [pickedId, setPickedId] = useState<string>(PRESETS[0]!.id)
@@ -231,42 +230,35 @@ export function PersonalitiesModal({ open, onClose }: { open: boolean; onClose: 
     )
 
   return (
-    <Modal open={open} onClose={onClose} roomy>
-      <div className="flex max-h-[88svh] flex-col md:h-[min(88svh,760px)] md:flex-row">
-        <aside className="flex w-full shrink-0 flex-col gap-2 border-b border-line p-4 md:w-80 md:overflow-y-auto md:border-r md:border-b-0">
-          <div className="flex items-center justify-between">
-            <Dialog.Title className="text-title font-semibold">Personalities</Dialog.Title>
-            <Button size="sm" variant="secondary" onClick={() => void create()}>
-              New
-            </Button>
-          </div>
-          <Dialog.Description className="text-meta text-ink-3">What an agent can be when you let it in: its role, what it may do, where it works, what it's told.</Dialog.Description>
-          <p className="mt-2 text-meta font-medium text-ink-3">Presets for code work</p>
-          <ul className="flex flex-col gap-0.5">
-            {PRESETS.map((p) => (
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
+      <aside className="flex w-full shrink-0 flex-col gap-2 border-b border-line px-4 pt-2 pb-4 md:w-80 md:overflow-y-auto md:border-r md:border-b-0">
+        <div className="flex items-center justify-between">
+          <h1 className="text-display font-semibold tracking-[-0.014em]">Personalities</h1>
+          <Button size="sm" variant="secondary" onClick={() => void create()}>
+            New
+          </Button>
+        </div>
+        <p className="text-meta text-ink-3">What an agent can be when you let it in: its role, what it may do, where it works, what it's told.</p>
+        <p className="mt-2 text-meta font-medium text-ink-3">Presets for code work</p>
+        <ul className="flex flex-col gap-0.5">
+          {PRESETS.map((p) => (
+            <Row key={p.id} p={p} picked={p.id === picked.id} onPick={() => setPickedId(p.id)} />
+          ))}
+        </ul>
+        <p className="mt-3 border-t border-line pt-3 text-meta font-medium text-ink-3">Yours</p>
+        {own.length ? (
+          <ul aria-label="Yours" className="flex flex-col gap-0.5">
+            {own.map((p) => (
               <Row key={p.id} p={p} picked={p.id === picked.id} onPick={() => setPickedId(p.id)} />
             ))}
           </ul>
-          <p className="mt-3 border-t border-line pt-3 text-meta font-medium text-ink-3">Yours</p>
-          {own.length ? (
-            <ul aria-label="Yours" className="flex flex-col gap-0.5">
-              {own.map((p) => (
-                <Row key={p.id} p={p} picked={p.id === picked.id} onPick={() => setPickedId(p.id)} />
-              ))}
-            </ul>
-          ) : (
-            <p className="text-meta text-ink-3">None yet. Edit a preset or press New.</p>
-          )}
-        </aside>
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
-          <Editor key={picked.id} p={picked} onChange={(n) => void change(n)} onDuplicate={() => void duplicate()} onDelete={PRESET_IDS.has(picked.id) ? undefined : () => void remove()} />
-          <div className="flex justify-end border-t border-line px-5 py-3">
-            <Button variant="secondary" onClick={onClose}>
-              Done
-            </Button>
-          </div>
-        </div>
+        ) : (
+          <p className="text-meta text-ink-3">None yet. Edit a preset or press New.</p>
+        )}
+      </aside>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col md:overflow-y-auto">
+        <Editor key={picked.id} p={picked} onChange={(n) => void change(n)} onDuplicate={() => void duplicate()} onDelete={PRESET_IDS.has(picked.id) ? undefined : () => void remove()} />
       </div>
-    </Modal>
+    </div>
   )
 }
