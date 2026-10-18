@@ -187,7 +187,7 @@ export type Event =
    * A task. `review`: who must approve it before it's done (a member's name, or "*" for anyone who hasn't
    * worked on it). Logs from older clients may also carry `after`, `needs` and `handoff`: they're ignored.
    */
-  | { op: "task.add"; title: string; detail?: string; owner?: string; review?: string; issue?: IssueRef }
+  | { op: "task.add"; title: string; detail?: string; owner?: string; review?: string; issue?: IssueRef; from?: number }
   | { op: "task.claim"; task: number }
   | {
       op: "task.update";
@@ -654,7 +654,12 @@ export function wellFormedEvent(ev: unknown): ev is Event {
       return opt(e.role, (x): x is string => str(x, 200)) && opt(e.about, (x): x is string => str(x, 2000));
     case "task.add":
       return (
-        str(e.title, 500) && opt(e.detail, (x): x is string => str(x)) && opt(e.owner, (x): x is string => str(x, 64)) && opt(e.review, (x): x is string => str(x, 64)) && opt(e.issue, isIssueRef)
+        str(e.title, 500) &&
+        opt(e.detail, (x): x is string => str(x)) &&
+        opt(e.owner, (x): x is string => str(x, 64)) &&
+        opt(e.review, (x): x is string => str(x, 64)) &&
+        opt(e.issue, isIssueRef) &&
+        opt(e.from, (x): x is number => Number.isSafeInteger(x) && (x as number) > 0)
       );
     case "task.claim":
       return n(e.task);

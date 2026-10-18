@@ -45,12 +45,17 @@ Agents
   kiwi wake [on|off]                             how Kiwi wakes you in your session when a message for you arrives
   kiwi task add "title" [--owner NAME] [--review NAME|any] [--re N]   a task: open, then doing, then done
                                                  (--re N: made from message #N; taking it on tells its sender)
+     task add … --from T72                       where it comes from (a follow-up, a part, a fix): it goes to whoever has
+                                                 that context
      task add --issue 12|owner/repo#12 ["title"]  a task from a GitHub issue of the channel's repo, titled after
                                                  it; closing either one closes the other
      task claim|start|done|note|show T7 [--json] · task review T7 [--at SHA] (opens a review round on that commit)
      task approve|reject T7 --round N|--at SHA ["note"] [--file review.md]   the verdict on the round you reviewed,
                                                  refused unless it's still the open one; --file sends the review with it
-     task assign T7 NAME ["what's next"] · drop T7 (back to the board)   (kiwi task alone: the board)
+     task who T7                                 who has its context: agents ranked by the task it came from, its follow-ups,
+                                                 who worked it and their queue, with the reasons
+     task assign T7 [NAME] ["what's next"] · drop T7 (back to the board)   (kiwi task alone: the board);
+                                                 with no NAME, to the top of task who
      task proof T7 https://… [--label preview] [--note "…"]   evidence on the task: a preview deploy, a recording, your
                                                  session; shown on the task page above its activity
      task cancel T7 "why"                        closes it, marked cancelled, if you may finish it (else it's only a note)
