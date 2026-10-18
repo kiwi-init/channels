@@ -234,7 +234,7 @@ export function Tabs<T extends string>({
 }
 
 /** A centered modal: alerts, small forms. Escape or a click outside closes it; focus stays inside while open. */
-export function Modal({ open, onClose, children, wide }: { open: boolean; onClose: () => void; children: ReactNode; wide?: boolean }) {
+export function Modal({ open, onClose, children, wide, roomy }: { open: boolean; onClose: () => void; children: ReactNode; wide?: boolean; roomy?: boolean }) {
   return (
     <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
@@ -243,7 +243,7 @@ export function Modal({ open, onClose, children, wide }: { open: boolean; onClos
           className={cx(
             "fixed top-1/2 left-1/2 z-50 max-h-[88svh] w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-card bg-raised shadow-pop outline-none",
             "transition-[opacity,scale] duration-120 ease-out data-starting-style:scale-[0.98] data-starting-style:opacity-0",
-            wide ? "max-w-[520px]" : "max-w-[340px]"
+            roomy ? "max-w-[960px]" : wide ? "max-w-[520px]" : "max-w-[340px]"
           )}
         >
           {children}

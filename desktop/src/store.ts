@@ -3,6 +3,7 @@ import path from "node:path";
 import { app, dialog, safeStorage } from "electron";
 
 import type { Identity } from "@kiwi/core/identity.ts";
+import type { Personality } from "@kiwi/core/personality.ts";
 import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts";
 import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, StoreSnapshot } from "./bridge.ts";
 import { normalizeRelay, readStore, snapshotOf, writePrivate } from "./guard.ts";
@@ -20,6 +21,7 @@ export interface StoreFile {
   github?: { login: string; id: number; token: string; at: number };
   migrated?: boolean;
   voice?: VoiceStore;
+  personalities?: Personality[];
 }
 
 const storePath = () => path.join(app.getPath("userData"), "kiwi-store.bin");

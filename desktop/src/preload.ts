@@ -5,6 +5,7 @@
 // getToken hands out would go to it).
 
 import { contextBridge, ipcRenderer } from "electron";
+import type { Personality } from "@kiwi/core/personality.ts";
 
 import type {
   ChannelIdentityView,
@@ -119,6 +120,7 @@ const kiwi: KiwiBridge = {
   setVoiceKey: (key: string) => ipcRenderer.invoke("kiwi:voice-set-key", key) as Promise<void>,
   setVoiceConsent: (roomId: string, on: boolean) => ipcRenderer.invoke("kiwi:voice-set-consent", roomId, on) as Promise<void>,
   voiceToken: (roomId: string) => ipcRenderer.invoke("kiwi:voice-token", roomId) as Promise<VoiceAuth>,
+  setPersonalities: (list: Personality[]) => ipcRenderer.invoke("kiwi:personalities-set", list) as Promise<void>,
 };
 
 contextBridge.exposeInMainWorld("kiwi", kiwi);

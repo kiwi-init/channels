@@ -2,6 +2,7 @@
 // main.ts and preload.ts; renderer-neutral on purpose (no electron/node imports),
 // so web/ can type against it without touching this process.
 
+import type { Personality } from "@kiwi/core/personality.ts";
 import type { CachedRow } from "@kiwi/core/cache-row.ts";
 import type { Channel, OpenKind, PresenceFields } from "@kiwi/core/client.ts";
 import type { Message, Presence, ReadMark } from "@kiwi/core/protocol.ts";
@@ -203,6 +204,7 @@ export interface StoreSnapshot {
   computers: ComputerView[];
   pending: PendingItem[];
   voice: VoiceView;
+  personalities: Personality[];
 }
 
 /** A computer asking to pair, for the person to confirm. */
@@ -277,6 +279,7 @@ export interface KiwiBridge {
   setVoiceKey(key: string): Promise<void>;
   setVoiceConsent(roomId: string, on: boolean): Promise<void>;
   voiceToken(roomId: string): Promise<VoiceAuth>;
+  setPersonalities(list: Personality[]): Promise<void>;
 }
 
 export interface UpdateView {
