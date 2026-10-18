@@ -39,11 +39,6 @@ interface Props {
   send: (body: string, opts: SendOptions) => Promise<number>
   /** In a thread: every message answers replyTo (the root), and there's no reply bar to cancel. */
   thread?: boolean
-  /**
-   * Coordinator-only, for a person: in the coordinator's view everything goes to the coordinator
-   * (an @agent stays in the text for them to pass on); in Everything it goes as written, copied to them.
-   */
-  route?: { coordinator: string; label: string; view: "coordinator" | "everything" }
   /** What every message from here carries, so it lands in this conversation (a task's thread, a direct thread). */
   extra?: Pick<SendOptions, "to" | "task" | "dm">
   /** Placeholder for this conversation ("Message T12", "Message win"). */
@@ -58,7 +53,7 @@ function recipients(body: string, names: Set<string>): string[] {
   return [...lead.matchAll(/@([\p{L}\p{N}_.-]+)/gu)].map((m) => m[1]!).filter((n) => names.has(n))
 }
 
-export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, send, thread, route, extra, placeholder, footer }: Props) {
+export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, send, thread, extra, placeholder, footer }: Props) {
   const [body, setBody] = useState("")
   const [files, setFiles] = useState<{ name: string; mime: string; data: string }[]>([])
   const [dropping, setDropping] = useState(false)
@@ -82,13 +77,6 @@ export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, 
     const q = mention.query.toLowerCase()
     return others.filter((p) => p.name.toLowerCase().startsWith(q) || p.label.toLowerCase().startsWith(q)).slice(0, 6)
   }, [mention, others])
-  // Coordinator-only: say plainly where an @agent message goes.
-  const routeNote = useMemo(() => {
-    if (!route) return null
-    const named = recipients(body.trim(), names).filter((n) => n !== route.coordinator)
-    if (!named.length) return null
-    return route.view === "coordinator" ? `Goes to ${route.label} as @${named.join(", @")}: …` : `Goes to @${named.join(", @")}, copied to ${route.label}`
-  }, [route, body, names])
 
   // Grow with the text, up to a point.
   useLayoutEffect(() => {
@@ -189,9 +177,7 @@ export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, 
     try {
       const text = body.trim() || files.map((f) => f.name).join(", ")
       const named = recipients(text, names)
-      let to = named.length ? named : replyTo && replyTo.from !== me ? [replyTo.from] : extra?.to
-      if (route?.view === "coordinator") to = [route.coordinator]
-      else if (route && to?.length && !to.includes(route.coordinator)) to = [...to, route.coordinator]
+      const to = named.length ? named : replyTo && replyTo.from !== me ? [replyTo.from] : extra?.to
       await send(text, {
         to,
         // A person's message is just a message: a question needs no menu to be one.
@@ -213,7 +199,7 @@ export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, 
     }
   }
 
-  const hint = disabled ? "Connecting…" : thread ? "Reply" : replyTo ? `Reply to ${nameOf(replyTo.from)}` : (placeholder ?? (route?.view === "coordinator" ? `Message ${route.label}` : "Message"))
+  const hint = disabled ? "Connecting…" : thread ? "Reply" : replyTo ? `Reply to ${nameOf(replyTo.from)}` : (placeholder ?? "Message")
 
   return (
     <div className={cx("relative mx-auto w-full shrink-0", thread ? "px-3 pt-2 pb-3" : "max-w-[792px] px-3 pt-2 pb-4 md:px-4")}>
@@ -408,7 +394,6 @@ export function Composer({ me, people, replyTo, nameOf, onClearReply, disabled, 
           {footer}
         </div>
       </div>
-      {routeNote && <p className="mt-1.5 ml-4 truncate text-stamp text-ink-3">{routeNote}</p>}
     </div>
   )
 }

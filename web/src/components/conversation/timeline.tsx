@@ -81,7 +81,6 @@ export function rowMakers(c: RowsContext) {
       trust={state.trust.get(m.seq)}
       online={online.has(m.from)}
       color={colorOf(state, m.from)}
-      direct={state.direct.has(m.seq) ? (state.coordinator ?? undefined) : undefined}
       first={first}
       last={last}
       fresh={!anchor && isFresh(m.seq)}

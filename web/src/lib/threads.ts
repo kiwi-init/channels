@@ -13,7 +13,7 @@ export { MAIN, dmPlace, placeFromKey, placeKey, threadMembers, type Place, type 
  * What a message sent from a place carries so it lands there, chosen the way every client chooses it
  * (state.ts chooseThread): a task's thread, the direct thread with the other one, or main.
  */
-export function sendFrom(state: Pick<ChannelState, "tasks" | "coordinator">, place: Place, me: string): Pick<SendOptions, "to" | "task" | "dm"> {
+export function sendFrom(state: Pick<ChannelState, "tasks" | "lead">, place: Place, me: string): Pick<SendOptions, "to" | "task" | "dm"> {
   const asked = place.kind === "task" ? { task: place.task } : place.kind === "dm" ? { dm: place.with[0] === me ? place.with[1] : place.with[0] } : { main: true }
   const c = chooseThread(state, me, asked)
   if (typeof c === "string") return {}

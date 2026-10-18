@@ -1,7 +1,7 @@
 import { GENERAL_ROOM, ignored, isReaction, MAX_ROOMS, ROOM_ID_RE, type Message, type Trust } from "../protocol.ts";
 import { refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
-import { allowedOnHold, isCoordinatorRole, isPerson, ON_HOLD } from "./people.ts";
+import { allowedOnHold, isLeadRole, isPerson, LEAD, ON_HOLD } from "./people.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
 import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
@@ -12,7 +12,6 @@ export function fold(
   messages: Message[],
   roster: Roster,
   now = Date.now(),
-  modeFloor?: { coordinatorOnly: boolean; strict: boolean; since: number } | null,
   roomsFloor?: RoomsFloor | null,
   guardFloor?: GuardFloor | null,
   given?: FoldBase | null,
@@ -47,20 +46,26 @@ export function fold(
     if (m.color && worn.has(m.color)) m.color = undefined;
     else if (m.color) worn.add(m.color);
   }
-  let coordinator: string | null = null;
-  for (const m of [...members.values()].filter((x) => x.active && isCoordinatorRole(x.role)).sort((a, b) => a.joined - b.joined)) {
-    if (coordinator) m.role = undefined;
-    else coordinator = m.name;
+  let lead: string | null = null;
+  for (const m of [...members.values()].filter((x) => x.active && isLeadRole(x.role)).sort((a, b) => a.joined - b.joined)) {
+    if (lead) m.role = undefined;
+    else {
+      m.role = LEAD;
+      lead = m.name;
+    }
   }
   if (from) {
     const prior = new Map(from.members.map((p) => [p.name, p]));
-    coordinator = from.coordinator;
+    lead = from.lead;
     for (const m of [...members.values()].sort((a, b) => a.joined - b.joined)) {
       const p = prior.get(m.name);
       if (!p) {
-        if (m.active && isCoordinatorRole(m.role)) {
-          if (coordinator && coordinator !== m.name) m.role = undefined;
-          else coordinator = m.name;
+        if (m.active && isLeadRole(m.role)) {
+          if (lead && lead !== m.name) m.role = undefined;
+          else {
+            m.role = LEAD;
+            lead = m.name;
+          }
         }
         continue;
       }
@@ -72,13 +77,6 @@ export function fold(
       m.messages = p.messages;
     }
   }
-  let floor = ahead(modeFloor);
-  const passFloor = (seq: number) => {
-    if (floor && floor.since < seq) {
-      ctx.mode = { coordinatorOnly: floor.coordinatorOnly, strict: floor.coordinatorOnly && floor.strict };
-      floor = null;
-    }
-  };
   const ownerName = [...members.values()].find((x) => x.owner)?.name ?? "owner";
   let charterFloor = ahead(guardFloor?.charter);
   let holdFloor = ahead(guardFloor?.hold);
@@ -97,7 +95,6 @@ export function fold(
       reposFloor = null;
     }
   };
-  const direct = new Set<number>(from?.direct);
   const humanFor = (a: Member) => (a.sponsor ? [...members.values()].find((x) => x.active && isPerson(x) && x.sponsor?.user === a.sponsor!.user)?.name : undefined);
   const keysByName = new Map<string, Set<string>>();
   for (const r of roster) {
@@ -121,12 +118,13 @@ export function fold(
   const scopeSets = new Map<string, { seq: number; scopes: Scope[] }>(from?.scopeSets);
   const roleSets = new Map<string, { seq: number; role: string | null; about?: string | null }>(from?.roleSets);
   const setRole = (target: Member, role: string | null, about: string | null | undefined) => {
-    if (isCoordinatorRole(role ?? undefined)) {
-      const was = coordinator && members.get(coordinator);
+    const leads = isLeadRole(role ?? undefined);
+    if (leads) {
+      const was = lead && members.get(lead);
       if (was && was !== target) was.role = undefined;
-      coordinator = target.name;
-    } else if (coordinator === target.name) coordinator = null;
-    target.role = role || undefined;
+      lead = target.name;
+    } else if (lead === target.name) lead = null;
+    target.role = leads ? LEAD : role || undefined;
     if (about !== undefined) target.about = about || undefined;
   };
   const roleFloors = roster
@@ -177,7 +175,6 @@ export function fold(
     rooms,
     roomsSince,
     nameTaken,
-    mode: from ? { ...from.mode } : { coordinatorOnly: false, strict: false },
     charter: from?.charter ?? null,
     repos: reposOf(from?.repos ?? []),
     hold: from?.hold ?? null,
@@ -187,7 +184,6 @@ export function fold(
     if (m.seq <= after) continue;
     passFloors(m.seq);
     passRoleFloors(m.seq);
-    passFloor(m.seq);
     passGuard(m.seq);
     try {
       head = Math.max(head, m.seq);
@@ -212,20 +208,6 @@ export function fold(
           trust.set(m.seq, "refused");
           rejected.set(m.seq, "an escalation goes from an agent to its own human and the owner, no one else");
           continue;
-        }
-      }
-      if (ctx.mode.coordinatorOnly && coordinator && members.get(coordinator)?.active && m.kind !== "event" && !m.esc && !isPerson(member) && m.from !== coordinator) {
-        const people = (m.to ?? []).filter((n) => {
-          const p = members.get(n);
-          return !!p && isPerson(p);
-        });
-        if (people.length) {
-          if (ctx.mode.strict) {
-            trust.set(m.seq, "refused");
-            rejected.set(m.seq, `only the coordinator (${coordinator}) messages people here`);
-            continue;
-          }
-          direct.add(m.seq);
         }
       }
       if (
@@ -311,8 +293,7 @@ export function fold(
     structuredClone({
       n: head,
       members: [...members.values()].map((m) => ({ name: m.name, role: m.role, about: m.about, color: m.color, card: m.card, lastSeen: m.lastSeen, messages: m.messages })),
-      coordinator,
-      mode: ctx.mode,
+      lead,
       charter: ctx.charter,
       repos: ctx.repos,
       hold: ctx.hold,
@@ -330,7 +311,6 @@ export function fold(
       answered: openAsks.flatMap((m): [number, string[]][] => [[m.seq, [...(answered.get(m.seq) ?? [])]]]),
       threadOf: [...threadOf],
       threadPeople: [...threadPeople].map(([seq, people]): [number, string[]] => [seq, [...people]]),
-      direct: [...direct],
       rooms: [...rooms.values()],
       roomOf: [...roomOf],
       placeOf: [...placeOf],
@@ -346,7 +326,6 @@ export function fold(
     if (!lease.holder && !lease.queue.length) leases.delete(name);
   }
 
-  passFloor(Infinity);
   passGuard(Infinity);
 
   return {
@@ -361,9 +340,7 @@ export function fold(
     openAsks,
     threadOf,
     threadPeople,
-    mode: ctx.mode,
-    coordinator: coordinator && members.get(coordinator)?.active ? coordinator : null,
-    direct,
+    lead: lead && members.get(lead)?.active ? lead : null,
     rooms,
     roomOf,
     placeOf,

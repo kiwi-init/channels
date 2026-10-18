@@ -114,13 +114,13 @@ export class SessionState {
       this.guardFloor ??= yield* orNone(this.ch.fx.guard(info));
       const kept: { base?: FoldBase } = {};
       const keep = this.snapshotDue?.(messages.at(-1)?.seq ?? 0) ? (b: FoldBase) => void (kept.base = b) : undefined;
-      let state = fold(messages, roster, Date.now(), undefined, this.roomsFloor, this.guardFloor, this.base, keep);
+      let state = fold(messages, roster, Date.now(), this.roomsFloor, this.guardFloor, this.base, keep);
       const unknown = [...state.rejected].some(([seq, why]) => seq > this.roomsCheckedAt && why.startsWith("no room "));
       if (unknown) {
         this.roomsCheckedAt = state.head;
         this.ch.forgetInfo();
         this.roomsFloor = yield* orNone(this.ch.fx.rooms());
-        state = fold(messages, roster, Date.now(), undefined, this.roomsFloor, this.guardFloor, this.base, keep);
+        state = fold(messages, roster, Date.now(), this.roomsFloor, this.guardFloor, this.base, keep);
       }
       if (kept.base && this.publish) yield* this.publish(kept.base);
       return state;

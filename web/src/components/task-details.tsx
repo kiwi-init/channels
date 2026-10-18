@@ -49,7 +49,7 @@ export function TaskDetails({
   onReviewer: (t: Task, review: string) => Promise<void>
 }) {
   const task = state.tasks.get(id)
-  const items = useMemo(() => taskFeed(state, messages, id, me), [state, messages, id, me])
+  const items = useMemo(() => taskFeed(state, messages, id), [state, messages, id])
   const [story, setStory] = useState(false)
 
   if (!task)

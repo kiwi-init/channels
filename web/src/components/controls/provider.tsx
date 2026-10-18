@@ -1,16 +1,16 @@
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 
 import { nameKey } from "@kiwi/core/membership.ts"
 import type { Event } from "@kiwi/core/protocol.ts"
 import { SCOPES, type Scope } from "@kiwi/core/scopes.ts"
-import { COORDINATOR, firstAgent, isPerson } from "@kiwi/core/state.ts"
+import { isPerson, LEAD } from "@kiwi/core/state.ts"
 import { noteAgentWorked } from "@/lib/channel"
 import { Modal, errorText, toast } from "../kit"
 import { defaultScopes } from "../scopes"
 import { ReposDialog } from "../lazy"
 import { CharterDialog, RenameDialog } from "./channel-dialogs"
 import { ConfirmDialogs } from "./confirm-dialogs"
-import { Ctx, isCoordinator, type Api, type Confirm, type ControlsProps } from "./context"
+import { Ctx, type Api, type Confirm, type ControlsProps } from "./context"
 import { Invite } from "./invite"
 import { Requests } from "./requests"
 
@@ -41,33 +41,12 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
     }
   }
 
-  const changing = useRef(false)
-  const setRole = async (ev: Extract<Event, { op: "role.set" | "role.refuse" }>) => {
-    changing.current = true
-    try {
-      const becomes = ev.op === "role.set" && isCoordinator(ev.role)
-      const was = ev.op === "role.set" && p.state.coordinator === ev.member
-      if (!becomes && was && p.onMode && p.state.mode.coordinatorOnly) await p.onMode(false, true)
-      await p.onRole(ev)
-      if (becomes && p.onMode && !p.state.mode.coordinatorOnly) await p.onMode(true, true)
-    } finally {
-      changing.current = false
-    }
-  }
+  const setRole = (ev: Extract<Event, { op: "role.set" | "role.refuse" }>) => p.onRole(ev)
 
   const agentHere = [...p.state.members.values()].some((m) => m.active && !isPerson(m) && !!m.card)
   useEffect(() => {
     if (agentHere) noteAgentWorked()
   }, [agentHere])
-
-  const tried = useRef("")
-  const next = p.state.mode.coordinatorOnly && !p.state.coordinator ? firstAgent(p.state) : undefined
-  const { isOwner, onRole } = p
-  useEffect(() => {
-    if (!isOwner || !next || tried.current === next || changing.current) return
-    tried.current = next
-    void onRole({ op: "role.set", member: next, role: COORDINATOR }).catch(() => {})
-  }, [isOwner, onRole, next])
 
   const api: Api = {
     p,
@@ -81,8 +60,7 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
     },
     openRequests: () => setSheet("requests"),
     openInvite: () => setSheet("invite"),
-    setCoordinator: (m, on) =>
-      run(() => setRole({ op: "role.set", member: m.name, role: on ? COORDINATOR : null }), on ? `${m.name} is the coordinator: people talk with them` : `${m.name} isn't the coordinator any more`),
+    setLead: (m, on) => run(() => setRole({ op: "role.set", member: m.name, role: on ? LEAD : null }), on ? `${m.name} is the lead` : `${m.name} isn't the lead any more`),
     setRole,
     editRole: (m) => {
       const live = p.state.members.get(m.name)

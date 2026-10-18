@@ -80,10 +80,10 @@ describe("a lease in fold", () => {
   test("a fold resumed from a snapshot base agrees with the whole log", async () => {
     const ms = [await take("ann", T0, 10), await take("bob", T0 + 1000, 20), await take("cat", T0 + 2000), await free("ann", T0 + 3 * MIN)];
     let base: FoldBase | null = null;
-    fold(ms.slice(0, 2), roster, T0 + MIN, null, null, null, null, (b) => {
+    fold(ms.slice(0, 2), roster, T0 + MIN, null, null, null, (b) => {
       base = b;
     });
-    expect(fold(ms, roster, T0 + 4 * MIN, null, null, null, base).leases).toEqual(fold(ms, roster, T0 + 4 * MIN).leases);
+    expect(fold(ms, roster, T0 + 4 * MIN, null, null, base).leases).toEqual(fold(ms, roster, T0 + 4 * MIN).leases);
   });
 
   test("names and times are checked on the wire", () => {

@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState, type CSSProperties, type ReactNode } fr
 import { droppedCount } from "@kiwi/core/format.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
 import { isReaction, type ImageAttachment, type Message } from "@kiwi/core/protocol.ts"
-import { colorOf, keptFromPeople, outsideRepos, type Task } from "@kiwi/core/state.ts"
+import { colorOf, outsideRepos, type Task } from "@kiwi/core/state.ts"
 import { recentPrs } from "@kiwi/core/work.ts"
 import { channelTitle, loadRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { howHere } from "@/lib/presence"
@@ -13,7 +13,7 @@ import { asksFor } from "@/lib/asks"
 import { approveTask, reviewsFor, sendBackTask, type TaskSend } from "@/lib/task-actions"
 import { useIcons, useLiveIcon } from "@/lib/icons"
 import { memberName } from "@/lib/format"
-import { dmPlace, MAIN, placeKey, sendFrom, type Place } from "@/lib/threads"
+import { dmPlace, placeKey, sendFrom, type Place } from "@/lib/threads"
 import { cx } from "@/lib/utils"
 import { useHeight } from "@/hooks/use-height"
 import { Composer } from "../composer"
@@ -79,13 +79,9 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     others.length ? { from: "", text: "", ts: 0, people: others.map((m) => memberName(m)) } : loadRecent(member.code)
   )
   const iAmPerson = !isAgent(state.members.get(me))
-  const reaches = useCallback((m: Message) => !(iAmPerson && keptFromPeople(state, m)), [iAmPerson, state])
-  const openAsks = useMemo(() => state.openAsks.filter(reaches), [state.openAsks, reaches])
 
-  const meM = state.members.get(me)
-  const coordinator = state.mode.coordinatorOnly && meM && !isAgent(meM) && state.coordinator !== me ? state.coordinator : null
-  const arrivals = useMemo(() => messages.filter((m) => m.from !== me && !isReaction(m) && reaches(m)).length, [messages, me, reaches])
-  const { escalations, questions } = useMemo(() => asksFor(openAsks, me), [openAsks, me])
+  const arrivals = useMemo(() => messages.filter((m) => m.from !== me && !isReaction(m)).length, [messages, me])
+  const { escalations, questions } = useMemo(() => asksFor(state.openAsks, me), [state.openAsks, me])
   const needs = escalations.length + questions.length
   useChannelNews(roomId, Math.max(head, messages.at(-1)?.seq ?? 0), arrivals, 0, needs)
 
@@ -94,15 +90,14 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const noAgents = !active.some((m) => isAgent(m))
   const quiet = noAgents && !messages.some((m) => m.kind !== "event")
 
-  useRecentPreview({ member, messages, others, state, me, nameOf, reaches })
+  useRecentPreview({ member, messages, others, state, me, nameOf })
 
   const { placeOf, places } = state
-  const { place, hereKey, unreadIn, taskKey } = usePlaces({ here, roomId, messages, me, state, reaches, shownTask })
+  const { place, hereKey, unreadIn, taskKey } = usePlaces({ here, roomId, messages, me, state, shownTask })
   const { bySeq, rootOf, threadRoot, showDropped, setShowDropped, threads, visible, inTask, quoted, summaryOf } = useThreads({
     messages,
     state,
     me,
-    coordinator,
     sideRoot,
     isOwner,
     search,
@@ -110,7 +105,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     taskKey,
     shownTask,
     nameOf,
-    reaches,
   })
   const { behind, setBehind, isFresh, scroller, stick, toBottom, onScroll } = useScroll({ messages, visible, hereKey })
 
@@ -152,13 +146,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     [rootOf, placeOf, hereKey, openTask, openThread]
   )
 
-  const onReply = useCallback(
-    (m: Message) => {
-      if (coordinator && (state.placeOf.get(m.seq) ?? MAIN).kind === "main") setReplyTo(m)
-      else openThread(rootOf(m.seq) ?? m.seq)
-    },
-    [coordinator, state.placeOf, rootOf, openThread]
-  )
+  const onReply = useCallback((m: Message) => openThread(rootOf(m.seq) ?? m.seq), [rootOf, openThread])
   const react = useCallback(
     (g: Gif) => {
       const on = reacting
@@ -239,8 +227,9 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       ? "Connecting…"
       : connection === "reconnecting"
         ? "Reconnecting…"
-        : (online.size ? `${memberCount} members, ${online.size} online` : `${memberCount} ${memberCount === 1 ? "member" : "members"}`) +
-          (state.mode.coordinatorOnly ? (state.coordinator ? " · coordinator mode" : " · coordinator mode, no coordinator yet") : "")
+        : online.size
+          ? `${memberCount} members, ${online.size} online`
+          : `${memberCount} ${memberCount === 1 ? "member" : "members"}`
   const working = active.filter((m) => isAgent(m) && memberLoad(state, m.name).current.length > 0).length
   const lastAt = new Map<string, number>()
   for (const m of messages) if (m.kind !== "event") lastAt.set(m.from, m.ts)
@@ -251,7 +240,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       label: memberName(m),
       color: colorOf(state, m.name),
       here: howHere(online.get(m.name)),
-      coordinator: m.name === state.coordinator,
+      lead: m.name === state.lead,
       model: online.get(m.name)?.activity?.model ?? m.card?.model,
       activity: online.get(m.name)?.activity,
       load: memberLoad(state, m.name),
@@ -259,16 +248,12 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       card: m.card,
       outside: outsideRepos(state, m.card),
     }))
-  const prs = floating ? recentPrs(state, messages, me, 5) : []
+  const prs = floating ? recentPrs(state, messages, 5) : []
   const needsMe = escalations.length + questions.length + reviews.length + (isOwner ? requests.length : 0)
   const headline =
     connection === "connecting" || connection === "reconnecting"
       ? subtitle
-      : [
-          state.coordinator && state.coordinator !== me ? `${nameOf(state.coordinator)} coordinating` : null,
-          working ? `${working} working` : null,
-          needsMe ? `${needsMe} ${needsMe === 1 ? "needs" : "need"} you` : null,
-        ]
+      : [state.lead && state.lead !== me ? `${nameOf(state.lead)} leads` : null, working ? `${working} working` : null, needsMe ? `${needsMe} ${needsMe === 1 ? "needs" : "need"} you` : null]
           .filter(Boolean)
           .join(" · ") || subtitle
 
@@ -398,15 +383,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                   nameOf={nameOf}
                   onClearReply={() => setReplyTo(null)}
                   disabled={connection === "connecting"}
-                  route={coordinator && place.kind === "main" ? { coordinator, label: nameOf(coordinator), view: "coordinator" } : undefined}
                   extra={extra}
-                  placeholder={
-                    place.kind === "main"
-                      ? state.coordinator && state.coordinator !== me
-                        ? `Message ${nameOf(state.coordinator)}`
-                        : "Message everyone"
-                      : `Message ${nameOf(place.with.find((n) => n !== me) ?? "")} privately`
-                  }
+                  placeholder={place.kind === "main" ? "Message everyone" : `Message ${nameOf(place.with.find((n) => n !== me) ?? "")} privately`}
                   send={async (body, opts) => {
                     stick()
                     return send(body, opts)
@@ -427,24 +405,10 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
         </div>
 
         {root && (
-          <ThreadSide
-            root={root}
-            count={replies.length}
-            rows={threadRows}
-            onClose={() => setSide(null)}
-            me={me}
-            people={people}
-            nameOf={nameOf}
-            connecting={connection === "connecting"}
-            send={send}
-            coordinator={coordinator}
-            place={place}
-          />
+          <ThreadSide root={root} count={replies.length} rows={threadRows} onClose={() => setSide(null)} me={me} people={people} nameOf={nameOf} connecting={connection === "connecting"} send={send} />
         )}
 
-        {picture && (
-          <PictureSide picture={picture} nameOf={nameOf} state={state} mayWrite={mayWrite} me={me} extra={extra} coordinator={coordinator} place={place} send={send} onClose={() => setPicture(null)} />
-        )}
+        {picture && <PictureSide picture={picture} nameOf={nameOf} state={state} mayWrite={mayWrite} me={me} extra={extra} send={send} onClose={() => setPicture(null)} />}
 
         {info && (
           <InfoSide

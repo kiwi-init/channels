@@ -138,9 +138,7 @@ export interface ChannelState {
   openAsks: Message[];
   threadOf: Map<number, number>;
   threadPeople: Map<number, Set<string>>;
-  mode: { coordinatorOnly: boolean; strict: boolean };
-  coordinator: string | null;
-  direct: Set<number>;
+  lead: string | null;
   rooms: Map<string, Room>;
   roomOf: Map<number, string>;
   placeOf: Map<number, Place>;
@@ -180,8 +178,7 @@ export interface Room {
 export interface FoldBase {
   n: number;
   members: { name: string; role?: string; about?: string; color?: Color; card?: Card & { at: number }; lastSeen: number; messages: number }[];
-  coordinator: string | null;
-  mode: { coordinatorOnly: boolean; strict: boolean };
+  lead: string | null;
   charter: Charter | null;
   repos?: string[];
   hold: Hold | null;
@@ -199,7 +196,6 @@ export interface FoldBase {
   answered: [number, string[]][];
   threadOf: [number, number][];
   threadPeople: [number, string[]][];
-  direct: number[];
   rooms: Room[];
   roomOf: [number, string][];
   placeOf: [number, Place][];

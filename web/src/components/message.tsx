@@ -3,7 +3,7 @@ import { memo, useEffect, useMemo, useState, type ReactNode } from "react"
 
 import { describeEvent } from "@kiwi/core/format.ts"
 import { ignored, isGifReaction, type Color, type Handoff, type ImageAttachment, type Message, type Trust } from "@kiwi/core/protocol.ts"
-import type { ChannelState, Member } from "@kiwi/core/state.ts"
+import { isLeadRole, type ChannelState, type Member } from "@kiwi/core/state.ts"
 import { useClock } from "@/lib/channel"
 import { excerpt, formatAgo, formatFull, formatStamp, memberName } from "@/lib/format"
 import { openHandoff } from "@/lib/handoff-open"
@@ -48,9 +48,9 @@ function shortEvent(m: Message, state: ChannelState): string {
   if (!ev) return m.body
   switch (ev.op) {
     case "mode.set":
-      return ev.coordinatorOnly ? "Coordinator mode on" : "Coordinator mode off"
+      return ev.coordinatorOnly ? "Coordinator mode on (no longer used)" : "Coordinator mode off (no longer used)"
     case "role.set":
-      return !ev.role ? `${name(ev.member)} has no role now` : ev.role.trim().toLowerCase() === "coordinator" ? `${name(ev.member)} is the coordinator` : `${name(ev.member)} is ${ev.role}`
+      return !ev.role ? `${name(ev.member)} has no role now` : isLeadRole(ev.role) ? `${name(ev.member)} is the lead` : `${name(ev.member)} is ${ev.role}`
     case "hold.set":
       return ev.on ? `${who} paused every agent${ev.note ? `: ${ev.note}` : ""}` : `${who} let the agents carry on`
     case "charter.set":
@@ -176,8 +176,6 @@ interface BubbleProps {
   me: string
   /** Under your newest message: whether the agents it went to have read it (receipts.ts). */
   receipt?: string
-  /** Coordinator-only: an agent sent this to a person directly, not through this coordinator. */
-  direct?: string
   /** Members' reactions to it (reactions.ts). */
   reactions?: Chip[]
   /** Found by the key that signed the message, so two members sharing a name still read right. */
@@ -207,7 +205,7 @@ interface BubbleProps {
   anchor?: string
   /** The author's colour: a person's own pick, or their person's for an agent (colorOf). */
   color?: Color | null
-  /** A face other than the monogram at the run's foot: the coordinator's head. */
+  /** A face other than the monogram at the run's foot: the lead's head. */
   face?: ReactNode
   image?: (img: ImageAttachment) => Promise<string | null>
   onOpenImage?: (m: Message, img: ImageAttachment, src: string) => void
@@ -331,7 +329,6 @@ export const Bubble = memo(function Bubble({
   onOpenThread,
   anchor = "m",
   color,
-  direct,
   face,
   receipt,
   reactions,
@@ -501,7 +498,6 @@ export const Bubble = memo(function Bubble({
             {receipt}
           </p>
         )}
-        {direct && !forged && <p className="mt-0.5 px-3 text-stamp text-ink-3">Sent directly, not through {nameOf(direct)}.</p>}
         {forged && (
           <p className="mt-0.5 px-3 text-stamp text-alert">
             {trust === "refused" ? `Not allowed by your settings, so every view leaves it out.` : `Forged: not signed by ${m.from}’s key, so every view leaves it out.`}{" "}

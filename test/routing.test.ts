@@ -97,7 +97,7 @@ describe("review", () => {
     expect(s.tasks.get(t)!.state).toBe("doing");
     expect(describeEvent(reject, s)).toBe(`rejected T${t} “driver” (round 1): 3 blocking`);
     expect(describeEvent(restart, s)).toBe(`started T${t} “driver”`);
-    expect(taskFeed(s, ms, t, "jon").flatMap((i) => (i.type === "event" ? [i.text] : []))).toEqual(["created the task for win", "sent it for review (round 1)", "rejected it (round 1)", "started it"]);
+    expect(taskFeed(s, ms, t).flatMap((i) => (i.type === "event" ? [i.text] : []))).toEqual(["created the task for win", "sent it for review (round 1)", "rejected it (round 1)", "started it"]);
     expect(wellFormed({ ...reject, ev: { op: "task.update", task: t, verdict: "maybe" } })).toBe(false);
   });
 
@@ -196,7 +196,7 @@ describe("review", () => {
     expect(line).toContain(`rejected T${t} “api” (round 1 @ c0ffee): ## Review`);
     expect(line).toContain("│ 1. BLOCKING: the cache never expires");
     expect(line).toContain("│ Verdict: REVISE");
-    expect(taskFeed(s, [add, r1, review], t, "jon").find((i) => i.type === "event" && i.seq === review.seq)).toMatchObject({
+    expect(taskFeed(s, [add, r1, review], t).find((i) => i.type === "event" && i.seq === review.seq)).toMatchObject({
       review: "## Review\n\n1. BLOCKING: the cache never expires\n\nVerdict: REVISE",
     });
     expect(wellFormed({ ...review, ev: { op: "task.update", task: t, note: "x", body: "review" } })).toBe(false);
