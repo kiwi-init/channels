@@ -1,5 +1,6 @@
 import { GENERAL_ROOM, MAX_CHARTER, MAX_ROOMS, MAX_TAGS, PROOF_MAX, TASK_TITLE_MAX_LENGTH, type Event, type Message } from "../protocol.ts";
 import { free, take } from "./leases.ts";
+import { unnamedTasks } from "./compact.ts";
 import { applyGithub, type GithubState } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { omit } from "../omit.ts";
@@ -7,7 +8,7 @@ import { readScopes, SCOPES, type Scope } from "../scopes.ts";
 import { isPerson } from "./people.ts";
 import { roomName } from "./rooms.ts";
 import { currentState, openRound, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
-import type { Charter, Fact, Hold, Lease, Member, Room, Task } from "./types.ts";
+import type { Charter, Compact, Fact, Hold, Lease, Member, Room, Task } from "./types.ts";
 
 export interface FoldCtx {
   members: Map<string, Member>;
@@ -26,6 +27,8 @@ export interface FoldCtx {
   repos: string[];
   github: GithubState;
   hold: Hold | null;
+  compact: Compact | null;
+  compactProposal: Compact | null;
 }
 
 export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: Member, at: number, reject: (why: string) => void): void {
@@ -83,6 +86,22 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: Member, at
       }
       const text = ev.text?.trim().slice(0, MAX_CHARTER);
       c.charter = text ? { text, by: m.from, at } : null;
+      break;
+    }
+
+    case "compact.propose":
+    case "compact": {
+      const since = c.compact?.through ?? 0;
+      const missing = unnamedTasks(ev.summary, tasks.values());
+      if (ev.op === "compact" && !member.owner) reject("only the owner compacts the history");
+      else if (ev.through >= m.seq || ev.through <= since) reject(`a compact folds history after #${since} and before itself`);
+      else if (missing.length) reject(`the summary leaves out open ${missing.map((id) => `T${id}`).join(", ")}`);
+      else if (ev.op === "compact.propose") c.compactProposal = { summary: ev.summary, through: ev.through, by: m.from, at, seq: m.seq };
+      else {
+        c.compact = { summary: ev.summary, through: ev.through, by: m.from, at, seq: m.seq };
+        c.compactProposal = null;
+        for (const t of tasks.values()) if (t.state === "done") t.archived = true;
+      }
       break;
     }
 

@@ -11,6 +11,7 @@ import {
   ignored,
   LEASE_NAME_RE,
   MAX_LEASE_SECONDS,
+  MAX_SUMMARY,
   wellFormedReaction,
   type Card,
   type Color,
@@ -22,7 +23,7 @@ import {
 } from "@kiwi/core/protocol.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { canPost, describeScopes, refusal } from "@kiwi/core/scopes.ts";
-import { allowedOnHold, humanOf, isPerson, nextIn, ON_HOLD, ownerOf, placeIn, taskId, type ChannelState } from "@kiwi/core/state.ts";
+import { allowedOnHold, humanOf, isPerson, nextIn, ON_HOLD, ownerOf, placeIn, taskId, unnamedAsks, unnamedTasks, type ChannelState } from "@kiwi/core/state.ts";
 import { SessionListen } from "./listen.ts";
 import { EVERYONE, oneLook } from "./shared.ts";
 
@@ -305,6 +306,24 @@ export class SessionMessaging extends SessionListen {
   readonly delFact = Effect.fn("AgentSession.delFact")({ self: this }, function* (this: SessionMessaging, key: string) {
     return yield* this.event({ op: "fact.del", key }, `unset ${key}`);
   });
+
+  readonly proposeCompact = Effect.fn("AgentSession.proposeCompact")(
+    { self: this },
+    function* (this: SessionMessaging, summary: string) {
+      const text = summary.trim();
+      if (!text) return yield* new Rejected("write the summary: what happened, what's decided, and every open task (T7) and open question (#123) by its id");
+      if (text.length > MAX_SUMMARY) return yield* new Rejected(`a summary is at most ${MAX_SUMMARY} characters`);
+      const { state } = yield* this.state();
+      const tasks = unnamedTasks(text, state.tasks.values());
+      const asks = unnamedAsks(text, state.openAsks);
+      if (tasks.length || asks.length)
+        return yield* new Rejected(`the summary must name everything still open; it leaves out ${[...tasks.map((id) => `T${id}`), ...asks.map((seq) => `#${seq}`)].join(", ")}`);
+      const owner = ownerOf(state);
+      const seq = yield* this.event({ op: "compact.propose", summary: text, through: state.head }, `proposed compacting the history through #${state.head}`, owner ? [owner] : undefined);
+      return { seq, through: state.head, state: yield* this.confirm(seq) };
+    },
+    oneLook,
+  );
 
   readonly lease = Effect.fn("AgentSession.lease")(
     { self: this },

@@ -166,8 +166,14 @@ export const messageCommands: Record<string, Command> = {
         const place = state.placeOf.get(m.seq);
         return (place?.kind === "task" && place.task === task) || m.seq === task || (!!m.ev && "task" in m.ev && m.ev.task === task);
       };
+      const since = opt.all || task !== undefined || room !== undefined ? 0 : (state.compact?.through ?? 0);
+      if (since) out(`(history compacted through #${since}: kiwi compact shows the summary, kiwi log --all everything)`);
       const visible = (m: Message) =>
-        (opt.all || !isQuiet(m)) && !ignored(state.trust.get(m.seq)) && (room === undefined || (m.kind !== "event" && state.roomOf.get(m.seq) === room)) && (task === undefined || inTask(m));
+        m.seq > since &&
+        (opt.all || !isQuiet(m)) &&
+        !ignored(state.trust.get(m.seq)) &&
+        (room === undefined || (m.kind !== "event" && state.roomOf.get(m.seq) === room)) &&
+        (task === undefined || inTask(m));
       const shown = (yield* s.earlier(held, Number(opt.n ?? 30), visible)).filter(visible);
       for (const m of shown.slice(-Number(opt.n ?? 30))) out(render(m, state));
     }),

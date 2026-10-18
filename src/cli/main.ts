@@ -23,6 +23,7 @@ import { channelCommands } from "./commands/channel.ts";
 import { messageCommands } from "./commands/messages.ts";
 import { profileCommands } from "./commands/profile.ts";
 import { listenCommands } from "./commands/listen.ts";
+import { compactCommands } from "./commands/compact.ts";
 import { factCommands } from "./commands/facts.ts";
 import { leaseCommands } from "./commands/leases.ts";
 import { taskCommands } from "./commands/tasks.ts";
@@ -59,6 +60,7 @@ const commands: Record<string, Command> = {
   ...messageCommands,
   ...profileCommands,
   ...listenCommands,
+  ...compactCommands,
   ...factCommands,
   ...leaseCommands,
   ...taskCommands,

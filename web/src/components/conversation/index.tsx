@@ -24,6 +24,7 @@ import { AgentStrip, type AgentNow } from "../agent-strip"
 import { ChannelControls, HoldDialog } from "../controls"
 import { Icon } from "../icon"
 import { Button, Spinner, errorText, toast } from "../kit"
+import { CompactBlock, ProposalCard } from "../lazy"
 import { GifPicker } from "../gif-picker"
 import { isAgent } from "../message"
 import { NeedsYou } from "../needs-you"
@@ -56,6 +57,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const [here, setHere] = useState<string>("main")
   const [cardRoom, setCardRoom] = useState<string>(GENERAL_ROOM)
   const [side, setSide] = useState<Side>(null)
+  const [earlier, setEarlier] = useState(false)
   const floating = side === null
   const sideRoot = side?.kind === "thread" ? side.root : null
   const info = side?.kind === "info"
@@ -181,8 +183,24 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       { name: "tasks", summary: "Open the tasks", run: () => setSide({ kind: "tasks", task: null }) },
       ...(hold && !state.hold ? [{ name: "pause", summary: "Pause the agents", args: "note", run: (note: string) => hold(true, note || undefined) }] : []),
       ...(hold && state.hold ? [{ name: "resume", summary: "Let the agents work again", run: () => hold(false) }] : []),
+      {
+        name: "compact",
+        summary: "Ask for a summary to fold the history behind",
+        run: async () => {
+          const lead = state.lead && state.lead !== me ? state.lead : null
+          try {
+            await send(
+              "Please draft a /compact summary of the history so far: name every open task (T7) and open question (#123) by its id, then run kiwi compact --file summary.md. I'll approve it here.",
+              lead ? { to: [lead], kind: "ask" } : { kind: "ask" }
+            )
+            toast(lead ? `Asked ${nameOf(lead)} for a summary` : "Asked the agents for a summary")
+          } catch (err) {
+            toast(`Not sent: ${errorText(err)}`, "error")
+          }
+        },
+      },
     ],
-    [hold, state.hold]
+    [hold, state.hold, state.lead, me, send, nameOf]
   )
 
   if (gone) {
@@ -244,7 +262,21 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
         </button>
       </p>
     )
-  rows.push(...timeline(visible))
+  const folded = hereKey === "main" && !search && state.compact ? state.compact : null
+  const proposal = hereKey === "main" && !search ? state.compactProposal : null
+  if (folded) rows.push(<CompactBlock key="compact" compact={folded} byName={nameOf(folded.by)} earlier={earlier} onToggle={() => setEarlier((v) => !v)} />)
+  const shown = folded && !earlier ? visible.filter((m) => m.seq > folded.through) : visible
+  const at = proposal ? shown.findIndex((m) => m.seq === proposal.seq) : -1
+  const approve =
+    proposal && isOwner
+      ? () =>
+          send(`compacted the history through #${proposal.through}`, { kind: "event", ev: { op: "compact", summary: proposal.summary, through: proposal.through, proposal: proposal.seq } }).then(
+            () => undefined
+          )
+      : undefined
+  const card = proposal ? <ProposalCard key="proposal" proposal={proposal} byName={nameOf(proposal.by)} approve={approve} /> : null
+  if (card && at >= 0) rows.push(...timeline(shown.slice(0, at)), card, ...timeline(shown.slice(at + 1)))
+  else rows.push(...timeline(shown), ...(card ? [card] : []))
 
   const root = threadRoot === null ? undefined : bySeq.get(threadRoot)
   const replies = threadRoot === null ? [] : (threads.get(threadRoot) ?? [])

@@ -236,6 +236,8 @@ export type Event =
    * shown it as the scope it works within; a request outside it is escalated to a person, not done.
    */
   | { op: "charter.set"; text: string | null }
+  | { op: "compact.propose"; summary: string; through: number }
+  | { op: "compact"; summary: string; through: number; proposal?: number }
   | { op: "repos.set"; repos: string[] }
   | { op: "github"; items: GithubNote[] }
   /**
@@ -334,6 +336,8 @@ export function cleanCard(x: unknown): Card | null {
 
 /** Longest charter, in characters: it shares the sealed settings (about 16KB at the relay) with the room list. */
 export const MAX_CHARTER = 2000;
+
+export const MAX_SUMMARY = 8000;
 
 export const GITHUB_EVENTS = ["pull_request", "check_run", "push", "workflow_run"] as const;
 export const MAX_GITHUB_ITEMS = 50;
@@ -706,6 +710,10 @@ export function wellFormedEvent(ev: unknown): ev is Event {
       return roomId(e.id) && str(e.name, MAX_ROOM_NAME * 4);
     case "charter.set":
       return e.text === null || str(e.text, MAX_CHARTER);
+    case "compact.propose":
+      return str(e.summary, MAX_SUMMARY) && !!(e.summary as string).trim() && n(e.through) && (e.through as number) > 0;
+    case "compact":
+      return str(e.summary, MAX_SUMMARY) && !!(e.summary as string).trim() && n(e.through) && (e.through as number) > 0 && opt(e.proposal, (x): x is number => n(x) && x > 0);
     case "github":
       return Array.isArray(e.items) && e.items.length > 0 && e.items.length <= MAX_GITHUB_ITEMS && e.items.every((i) => cleanGithubNote(i) !== null);
     case "repos.set":

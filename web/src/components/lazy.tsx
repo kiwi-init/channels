@@ -17,6 +17,8 @@ const composerQuestion = later(() => import("./composer-question").then((m) => m
 const commandList = later(() => import("./composer-commands").then((m) => m.CommandList))
 const commandBar = later(() => import("./composer-commands").then((m) => m.CommandBar))
 const repos = later(() => import("./controls/repos-dialog").then((m) => m.ReposDialog))
+const compactBlock = later(() => import("./compact").then((m) => m.CompactBlock))
+const proposalCard = later(() => import("./compact").then((m) => m.ProposalCard))
 
 export const Markdown = markdown.View
 export const SettingsModal = settings.View
@@ -31,6 +33,8 @@ export const ComposerQuestion = composerQuestion.View
 export const CommandList = commandList.View
 export const CommandBar = commandBar.View
 export const ReposDialog = repos.View
+export const CompactBlock = compactBlock.View
+export const ProposalCard = proposalCard.View
 
 export const loadMarkdown = markdown.load
 

@@ -217,7 +217,9 @@ export function Tasks({
   const [query, setQuery] = useState("")
   const waiting = tasksAwaitingPeople(state)
   const q = query.trim().toLowerCase()
+  const archived = [...state.tasks.values()].filter((t) => t.archived).length
   const all = [...state.tasks.values()]
+    .filter((t) => !t.archived)
     .filter((t) => filter === "all" || t.state === filter)
     .filter((t) => !q || t.title.toLowerCase().includes(q) || taskId(t.id).toLowerCase().includes(q) || (!!t.owner && nameOf(t.owner).toLowerCase().includes(q)))
     .sort((a, b) => b.updatedAt - a.updatedAt)
@@ -279,6 +281,7 @@ export function Tasks({
           </section>
         )
       })}
+      {archived > 0 && <p className="px-1.5 pt-2 text-meta text-ink-3">{archived === 1 ? "1 finished task archived" : `${archived} finished tasks archived`} by a compact</p>}
     </div>
   )
 }

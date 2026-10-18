@@ -27,6 +27,8 @@ function blank(): ChannelState {
     placeOf: new Map(),
     places: new Map(),
     charter: null,
+    compact: null,
+    compactProposal: null,
     repos: [],
     github: { prs: new Map(), checks: new Map() },
     hold: null,
