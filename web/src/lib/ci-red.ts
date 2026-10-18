@@ -3,7 +3,6 @@ import type { ChannelState } from "@kiwi/core/state.ts"
 import { ciCommitLine, ciRedAfter, ciRedTitle, type CiRed } from "@kiwi/core/ci-red.ts"
 import type { Message } from "@kiwi/core/protocol.ts"
 
-import { checkedUpTo, setCheckedUpTo } from "./review-checks"
 import type { ChannelLink } from "./channel-ops"
 import type { TaskSend } from "./task-actions"
 
@@ -21,23 +20,28 @@ export function ciRedSend(r: CiRed, log: GithubCheckLog | null, task: number | u
   return { body: `added task ${ciRedTitle(r.name, r.branch)}`, opts: { kind: "event", ev: { op: "task.add", title: ciRedTitle(r.name, r.branch), detail, ...(r.owner ? { owner: r.owner } : {}) } } }
 }
 
-function ciRedToPost(roomId: string, state: ChannelState, messages: Message[]): CiRed[] {
-  const after = checkedUpTo(roomId, "ciRed")
+export interface Mark {
+  get(): number | null
+  set(seq: number): void
+}
+
+function ciRedToPost(mark: Mark, state: ChannelState, messages: Message[]): CiRed[] {
+  const after = mark.get()
   if (after === null) {
-    setCheckedUpTo(roomId, state.head, "ciRed")
+    mark.set(state.head)
     return []
   }
   return ciRedAfter(state, messages, after)
 }
 
-export async function postCiReds(ch: Pick<ChannelLink, "roomId" | "githubCheckLog" | "send">, state: ChannelState, messages: Message[]): Promise<void> {
+export async function postCiReds(ch: Pick<ChannelLink, "githubCheckLog" | "send">, mark: Mark, state: ChannelState, messages: Message[]): Promise<void> {
   const opened = new Map<string, number>()
-  for (const r of ciRedToPost(ch.roomId, state, messages)) {
+  for (const r of ciRedToPost(mark, state, messages)) {
     const commit = `${r.repo.toLowerCase()}@${r.sha}`
     const log = await ch.githubCheckLog(r.repo, r.sha, r.name).catch(() => null)
     const { body, opts } = ciRedSend(r, log, r.task ?? opened.get(commit))
     const seq = await ch.send(body, opts).catch(() => null)
     if (seq !== null && opts.ev?.op === "task.add") opened.set(commit, seq)
-    setCheckedUpTo(ch.roomId, r.seq, "ciRed")
+    mark.set(r.seq)
   }
 }
