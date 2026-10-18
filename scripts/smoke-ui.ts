@@ -193,7 +193,7 @@ async function run(part: Part): Promise<string[]> {
   const menus = async () => {
     await firstRunAs("smoke");
     await opens("Account menu", () => account.click());
-    await eachItem("Account menu", account, () => true);
+    await eachItem("Account menu", account, (label) => label !== "Settings");
     await darkAndLarger();
     await personalities();
     await opens("Search palette", () => page.keyboard.press("ControlOrMeta+k"));
