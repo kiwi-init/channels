@@ -180,7 +180,7 @@ export function Spinner({ className }: { className?: string }) {
 /** Text tabs: the current one in ink, the rest quiet. Arrow keys move between them. */
 /** One segmented control, everywhere: a wash track, and the chosen option raised on it. */
 export const SEGMENTED = "rounded-ctl bg-wash p-0.5"
-export const SEGMENT_ON = "bg-raised text-ink shadow-[0_0_0_1px_var(--line)]"
+export const SEGMENT_ON = "bg-segment text-ink shadow-[0_0_0_1px_var(--edge-strong)]"
 export const SEGMENT_OFF = "text-ink-2 hover:text-ink"
 
 export function Tabs<T extends string>({

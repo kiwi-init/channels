@@ -24,7 +24,7 @@ export function AskOptions({ choices, chosen, onChoose, nameOf }: { choices: rea
             )}
           </>
         )
-        const look = cx("flex w-full items-baseline gap-2 rounded-row border px-3 py-1.5 text-left text-ui leading-snug", picked ? "border-accent" : "border-edge-strong")
+        const look = cx("flex w-full items-baseline gap-2 rounded-row border px-3 py-1.5 text-left text-ui leading-snug", picked ? "border-accent bg-accent-wash" : "border-edge-strong")
         return (
           <li key={c}>
             {onChoose && !chosen ? (

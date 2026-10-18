@@ -131,12 +131,16 @@ async function run(part: Part): Promise<string[]> {
   const darkAndLarger = async () => {
     at = "Settings → Dark, Larger";
     await account.click();
-    await page.getByRole("menuitem", { name: "Settings…" }).click();
-    const settings = page.getByRole("dialog").filter({ hasText: "Text size" });
+    await page.getByRole("menuitem", { name: "Settings" }).click();
+    const settings = page.getByRole("region", { name: "Settings" });
     await settings.getByRole("radio", { name: "Dark" }).click();
     await settings.getByRole("radio", { name: "Larger" }).click();
-    await settings.getByRole("button", { name: "Done" }).click();
-    await settings.waitFor({ state: "hidden" });
+    if (process.env.SMOKE_SHOTS) {
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "settings.png") });
+    }
+    await settings.getByRole("button", { name: "Close settings" }).click();
+    await settings.waitFor({ state: "detached" });
     if ((await page.evaluate(() => document.documentElement.style.getPropertyValue("--text-scale"))) !== "1.22") throw new Error("the text size didn't apply");
     log(`ok  ${at}`);
   };
@@ -144,17 +148,16 @@ async function run(part: Part): Promise<string[]> {
   const personalities = async () => {
     at = "Settings → Personalities: a preset duplicated is yours";
     await account.click();
-    await page.getByRole("menuitem", { name: "Settings…" }).click();
-    const settings = page.getByRole("dialog").filter({ hasText: "Text size" });
-    await settings.getByRole("button", { name: "Open…" }).click();
-    const editor = page.getByRole("dialog", { name: "Personalities" });
+    await page.getByRole("menuitem", { name: "Settings" }).click();
+    const settings = page.getByRole("region", { name: "Settings" });
+    await settings.getByRole("button", { name: "Open", exact: true }).click();
+    const editor = page.getByRole("region", { name: "Personalities" });
     await editor.getByRole("button", { name: "Duplicate" }).click();
     await editor.getByRole("list", { name: "Yours" }).getByText("Builder copy").waitFor({ timeout: 10000 });
     if (process.env.SMOKE_SHOTS) await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "personalities.png") });
-    await editor.getByRole("button", { name: "Done" }).click();
-    await editor.waitFor({ state: "hidden" });
-    await settings.getByRole("button", { name: "Done" }).click();
-    await settings.waitFor({ state: "hidden" });
+    await editor.getByRole("button", { name: "Back to Settings" }).click();
+    await settings.getByRole("button", { name: "Close settings" }).click();
+    await settings.waitFor({ state: "detached" });
     log(`ok  ${at}`);
   };
 
@@ -193,7 +196,7 @@ async function run(part: Part): Promise<string[]> {
   const menus = async () => {
     await firstRunAs("smoke");
     await opens("Account menu", () => account.click());
-    await eachItem("Account menu", account, () => true);
+    await eachItem("Account menu", account, (label) => label !== "Settings");
     await darkAndLarger();
     await personalities();
     await opens("Search palette", () => page.keyboard.press("ControlOrMeta+k"));
@@ -231,18 +234,14 @@ async function run(part: Part): Promise<string[]> {
     at = "Details";
     await inDetails(async () => {});
     log(`ok  ${at}`);
-    await opens("Invite", () => inDetails(() => panel.getByRole("button", { name: "Invite", exact: true }).click()));
-    await opens("Invite → A person", () =>
-      inDetails(async () => {
-        await panel.getByRole("button", { name: "Invite", exact: true }).click();
-        await page
-          .getByRole("dialog")
-          .getByRole("tab", { name: "A person" })
-          .or(page.getByRole("dialog").getByRole("button", { name: "A person" }))
-          .first()
-          .click();
-      }),
-    );
+    at = "Invite → A person, in the details panel";
+    await inDetails(() => panel.getByRole("button", { name: "Invite", exact: true }).click());
+    await panel.getByRole("heading", { name: "Invite to this channel" }).waitFor();
+    if (process.env.SMOKE_SHOTS) await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "invite.png") });
+    await panel.getByRole("tab", { name: "A person" }).click();
+    await panel.getByRole("button", { name: "Back to details" }).click();
+    await panel.getByRole("button", { name: "Invite", exact: true }).waitFor();
+    log(`ok  ${at}`);
     for (const item of ["Charter", "Rename channel"]) await opens(`Details → ${item}`, () => inDetails(() => panel.getByRole("button", { name: new RegExp(`^${item}`) }).click()));
     at = "Details → Voice: the owner allows it for the channel";
     await inDetails(async () => {
@@ -565,13 +564,13 @@ async function run(part: Part): Promise<string[]> {
 
     at = "an invite pins a personality, and Let in lets the agent in as it";
     await inDetails(() => panel.getByRole("button", { name: "Invite", exact: true }).click());
-    const inviting = page.getByRole("dialog", { name: "Invite to this channel" });
+    const inviting = panel;
     await inviting.getByRole("radiogroup", { name: "Personality" }).getByText("Bug hunter", { exact: true }).click();
     const withPin = inviting.locator("code", { hasText: "--persona" });
     await withPin.waitFor({ timeout: 15000 });
     const token = /--persona (\S+)/.exec((await withPin.textContent()) ?? "")?.[1];
     if (!token) throw new Error("the invite command carries no --persona token");
-    await inviting.getByRole("button", { name: "Done" }).click();
+    await inviting.getByRole("button", { name: "Back to details" }).click();
     const hunter = kiwi(["join", code, "smoke", "--relay", BASE, "--as", "hunter", "--persona", token]);
     await needsOpen();
     await needs.getByText(/pinned as Bug hunter/).waitFor({ timeout: 30000 });

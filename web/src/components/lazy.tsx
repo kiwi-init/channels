@@ -10,7 +10,7 @@ const gifPicker = later(() => import("./gif-picker").then((m) => m.GifPicker))
 const welcome = later(() => import("./welcome").then((m) => m.Welcome))
 const newChannel = later(() => import("./welcome").then((m) => m.NewChannel))
 const joinWithCode = later(() => import("./welcome").then((m) => m.JoinWithCode))
-const settings = later(() => import("./settings").then((m) => m.SettingsModal))
+const settings = later(() => import("./settings").then((m) => m.SettingsPage))
 const computers = later(() => import("./computers").then((m) => m.ComputersModal))
 const palette = later(() => import("./ui/palette").then((m) => m.Palette))
 const info = later(() => import("./info-panel").then((m) => m.InfoPanel))
@@ -37,7 +37,7 @@ export const GifPicker = gifPicker.View
 export const Welcome = welcome.View
 export const NewChannel = newChannel.View
 export const JoinWithCode = joinWithCode.View
-export const SettingsModal = settings.View
+export const SettingsPage = settings.View
 export const ComputersModal = computers.View
 export const Palette = palette.View
 export const InfoPanel = info.View

@@ -59,7 +59,9 @@ Light / dark are the two sides of each `light-dark()` in `index.css`:
 
 Supporting chrome: `line` (7% ink/white), `wash` (4/5%), `wash-2` (7/8%),
 `accent-wash` (10/16%), `pick` (the open channel: a neutral step, never a
-block of colour), `bubble-them` (Messages grey `#e9e9eb` / `#1f1f21`).
+block of colour), `segment` (the chosen segment of a segmented control:
+white / `#3a3a3c`, so it rises off its `wash` track in both themes),
+`bubble-them` (Messages grey `#e9e9eb` / `#1f1f21`).
 
 White on the light accent is ~4:1, Apple's own choice and just under AA 4.5
 for small text; the owner asked to mirror Apple, so it stays. As text on the
@@ -138,11 +140,19 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 - Rows (channels, tasks): idle transparent, hover `wash`, open `pick`;
   title `ui` semibold, preview `meta` quiet. In the channel's sidebar and
   tabs the chosen item gets only a 2px `accent` mark, never a fill.
+- A chosen option you pick from a set (role chips, personality rows, Joins
+  as, an ask's options, room chips) wears `accent-wash` with an `accent`
+  edge, and its label in `accent-text` or a check: it reads as chosen at a
+  glance, not just as having a thin ring. Segmented controls use `segment`.
 - Buttons: primary `accent`; secondary outlined (a 1px `edge-strong` ring,
   no fill, `wash` on hover).
 - Inputs: no fill, a 1px `line` edge (`edge`); focus ring is `2px ring` with `1px` offset and
   `6px` radius (base layer, so utilities can still take it off).
 - Placeholders and empty states use quiet ink, never reduced-opacity text.
+- A dialog is for one decision (an `Alert`, a confirm, a short form). What you
+  work in opens in place: Settings and Personalities as a page in the main
+  area beside the sidebar (Escape or the back button returns), Invite and join
+  requests as a view of the details panel, with a back arrow to the details.
 
 ## 8. Semantic and chart colors
 
