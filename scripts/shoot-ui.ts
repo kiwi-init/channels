@@ -73,6 +73,7 @@ const browser = await chromium.launch({ executablePath: process.env.SMOKE_CHROMI
 const WIDE = { width: 1440, height: 900 };
 const NARROW = { width: 390, height: 844 };
 const shots: string[] = [];
+const skipped: string[] = [];
 /** Retina, as the owner sees it: the crispness of type and edges is half of what the shots are for. */
 const page = (viewport: { width: number; height: number }) => browser.newPage({ viewport, deviceScaleFactor: 2 });
 const wanted = (name: string) => !only || only.some((w) => name.includes(w));
@@ -112,6 +113,7 @@ async function shoot(page: Page, tag: string, name: string, open?: () => Promise
     shots.push(file);
     console.log(`shot ${tag}-${name}`);
   } catch (e) {
+    skipped.push(`${tag}-${name}`);
     console.log(`skip ${tag}-${name}: ${e instanceof Error ? e.message.split("\n")[0] : e}`);
   } finally {
     await close().catch(() => {});
@@ -135,6 +137,7 @@ try {
   await owner.waitForURL(/#mc2-/);
   const channel = owner.url();
   const code = decodeURIComponent(new URL(channel).hash.slice(1));
+  const toTab = (name: "Tasks" | "Agents" | "Conversation") => owner.getByRole("navigation", { name: "Views of the channel" }).getByRole("button", { name, exact: true }).click();
 
   const needs = owner.getByRole("region", { name: "Needs you" });
   /** An agent asks in; the owner compares its code under Needs you and lets it in. */
@@ -143,9 +146,6 @@ try {
     const joining = kiwi(["join", code, ...args, "--relay", BASE], (o) => void (pendingOut = o));
     const letIn = needs.getByRole("button", { name: "It matches: let in" });
     const showCode = needs.getByRole("button", { name: "Show code" });
-    const banner = needs.getByRole("button", { name: /needs? you/ }).first();
-    await banner.waitFor({ timeout: 30000 });
-    if ((await banner.getAttribute("aria-expanded")) !== "true") await banner.click();
     await letIn.or(showCode).first().waitFor({ timeout: 30000 });
     if (await showCode.count()) await showCode.click();
     await letIn.waitFor({ timeout: 30000 });
@@ -159,7 +159,11 @@ try {
   const details = () => owner.getByRole("button", { name: /^Details:/ });
   await details().click();
   await owner.getByRole("button", { name: "More for atlas" }).click();
-  await owner.getByRole("menuitem", { name: "Make lead" }).click();
+  await owner.getByRole("menuitem", { name: "Give a personality…" }).click();
+  const leading = owner.getByRole("dialog", { name: /personality$/ });
+  await leading.getByRole("radiogroup", { name: "Personality" }).getByText("Lead", { exact: true }).click();
+  await leading.getByRole("button", { name: "Save" }).click();
+  await leading.waitFor({ state: "detached" });
   await owner.getByRole("img", { name: "The lead" }).first().waitFor({ timeout: 15000 });
   await owner.getByRole("button", { name: "Close details" }).click();
   await admit(["kiwi-w", "--as", "win", "--model", "gpt-5-codex"]);
@@ -175,6 +179,7 @@ try {
   }
 
   // The main conversation: the person and the lead. A question, a thread, a long message with code.
+  await toTab("Conversation");
   const composer = () => owner.getByRole("textbox", { name: "Message" });
   await composer().fill("Morning. The relay deploy is done; can someone check the Effect router numbers?");
   await owner.keyboard.press("Enter");
@@ -197,13 +202,12 @@ try {
   await bot("set", "relay.version", "667ce081");
   await bot("set", "canary", "off");
   await owner.reload();
+  await toTab("Conversation");
   await owner.getByText("Ship it as 0.8.12").first().waitFor({ timeout: 15000 });
   await owner.locator("button[aria-label='Reply']").last().dispatchEvent("click");
-  await owner.getByRole("button", { name: "Close thread" }).waitFor();
   await owner.getByPlaceholder(/^Reply/).fill("Ship it. The web follows tomorrow.");
   await owner.keyboard.press("Enter");
   await owner.waitForTimeout(400);
-  await owner.getByRole("button", { name: "Close thread" }).click();
   // Work waiting on a person's review, and a decision an agent hands to its person: both under Needs you.
   const reviewed = /T\d+/.exec(await win("task", "add", "Cache sealed history in the browser", "--owner", "win", "--review", "any"))?.[0] ?? "T0";
   await win("task", "review", reviewed, "reload fetches only what is new");
@@ -245,97 +249,103 @@ try {
       await owner.setViewportSize(size);
       await owner.goto(channel);
       await setTheme(owner, theme);
-      await owner
-        .getByText("Ship it as 0.8.12")
-        .first()
-        .waitFor({ timeout: 15000 })
-        .catch(() => {});
-
       const narrow = vp === "narrow";
       const detailsBtn = () => owner.getByRole("button", { name: /^Details:/ });
-      const convs = () => owner.getByRole("main").getByRole("navigation", { name: "Conversations" });
-      const tasksBtn = () => owner.getByRole("main").getByRole("button", { name: "Tasks", exact: true });
-      const overview = () => owner.getByRole("complementary", { name: "Overview" });
+      const details = () => owner.getByRole("complementary", { name: "Details" });
+      const closeDetails = () => owner.getByRole("button", { name: "Close details" }).click();
       const tasksPanel = () => owner.getByRole("complementary", { name: "Tasks" });
-      const openOverview = async () => {
-        if (await tasksPanel().count()) await tasksPanel().getByRole("button", { name: "Close tasks" }).click();
-        await overview().waitFor();
-      };
-      const closeTasks = () => tasksPanel().getByRole("button", { name: "Close tasks" }).click();
-      /** Back to main from a direct conversation: the name's capsule leads with the way back. */
-      const toTop = async () => {
-        await owner.getByRole("main").hover();
-        await owner.mouse.wheel(0, -4000);
-      };
+      const account = () => owner.getByRole("complementary").getByRole("button", { name: /Jonatas/ });
+      /** The channel as it opens on the conversation, scrolled to the latest. */
       const toChannel = async () => {
         await owner.goto(channel);
-        await toTop();
+        await toTab("Conversation");
+        await owner
+          .getByText("Ship it as 0.8.12")
+          .first()
+          .waitFor({ timeout: 15000 })
+          .catch(() => {});
       };
-      const toChat = async () => {
-        const back = convs().getByRole("button", { name: "Back to chat" });
-        if (await back.count()) await back.click();
+      /** A task's row on the Tasks tab, opened in place under it. */
+      const openInline = async (title: RegExp) => {
+        await toTab("Tasks");
+        const row = owner.getByRole("button", { name: title }).first();
+        await row.waitFor({ timeout: 15000 });
+        if ((await row.getAttribute("aria-expanded")) !== "true") await row.click();
       };
-      /** A task opens in the Tasks panel, from its list. */
-      const toTask = async (name: RegExp) => {
-        if (!(await tasksPanel().count())) {
-          if (narrow) await tasksBtn().click();
-          else {
-            await openOverview();
-            await overview().getByRole("button", { name: "All tasks" }).click();
-          }
-        }
-        await tasksPanel().getByRole("button", { name }).first().click();
+      const toList = async () => {
+        if (narrow) await owner.getByRole("button", { name: "Channels" }).click();
       };
+      const fromList = async () => {
+        await owner.keyboard.press("Escape");
+        if (narrow) await toChannel();
+      };
+      /** Settings and Personalities are dialogs or pages in the main area: Escape closes the one, the Close button the other. */
+      const closeSettings = async () => {
+        await owner.keyboard.press("Escape");
+        const close = owner.getByRole("button", { name: "Close settings" });
+        if (await close.count()) await close.click();
+        await fromList();
+      };
+      const openSettings = async () => {
+        await toList();
+        await account().click();
+        await owner.getByRole("menuitem", { name: /^Settings…?$/ }).click();
+        await owner.getByText("Text size").first().waitFor();
+      };
+      await toChannel();
+
       await shoot(owner, tag, "01-channel");
       await owner.mouse.wheel(0, -4000);
       await shoot(owner, tag, "02-channel-top");
-      await shoot(
-        owner,
-        tag,
-        "03-thread",
-        async () => {
-          await owner.locator("button[aria-label='Reply']").last().dispatchEvent("click");
-          await owner.getByRole("button", { name: "Close thread" }).waitFor();
-        },
-        () => owner.getByRole("button", { name: "Close thread" }).click(),
-      );
-      await shoot(owner, tag, narrow ? "04-tasks" : "04-overview", narrow ? () => tasksBtn().click() : openOverview, narrow ? closeTasks : undefined);
-      await shoot(
-        owner,
-        tag,
-        "05-task-thread",
-        () => toTask(/Write fewer rows/),
-        async () => {},
-      );
-      await shoot(
-        owner,
-        tag,
-        "06-task-page",
-        async () => {
-          await tasksPanel()
-            .getByRole("region", { name: /^Task T\d+/ })
-            .getByRole("button", { name: /^Activity/ })
-            .click();
-          await tasksPanel()
-            .getByRole("textbox", { name: /^Comment on T\d+/ })
-            .waitFor();
-        },
-        closeTasks,
-      );
-      await shoot(owner, tag, "15-needs-you", async () => {
-        await owner
-          .getByRole("region", { name: "Needs you" })
-          .getByRole("button", { name: /needs? you/ })
-          .first()
-          .click();
+      await shoot(owner, tag, "03-reply", async () => {
+        await owner.locator("button[aria-label='Reply']").last().dispatchEvent("click");
+        await owner.getByPlaceholder(/^Reply/).waitFor();
       });
       await shoot(
         owner,
         tag,
-        "07-details",
-        () => detailsBtn().click(),
-        () => owner.getByRole("button", { name: "Close details" }).click(),
+        "04-tasks",
+        () => toTab("Tasks"),
+        () => toTab("Conversation"),
       );
+      await shoot(owner, tag, "05-task-inline", () => openInline(/Write fewer rows/), toChannel);
+      await shoot(
+        owner,
+        tag,
+        "06-task-panel",
+        async () => {
+          await openInline(/Write fewer rows/);
+          await owner.getByRole("button", { name: "Details", exact: true }).first().click();
+          await tasksPanel()
+            .getByRole("region", { name: /^Task T\d+/ })
+            .waitFor();
+        },
+        toChannel,
+      );
+      await shoot(
+        owner,
+        tag,
+        "15-needs-you",
+        async () => {
+          if (narrow) await toTab("Tasks");
+          else
+            await owner
+              .getByRole("complementary", { name: "Channel" })
+              .getByRole("navigation", { name: "Views" })
+              .getByRole("button", { name: /^Needs you/ })
+              .click();
+          await owner.getByRole("region", { name: "Needs you" }).waitFor();
+        },
+        toChannel,
+      );
+      await shoot(
+        owner,
+        tag,
+        "17-agents",
+        () => toTab("Agents"),
+        () => toTab("Conversation"),
+      );
+      await shoot(owner, tag, "07-details", () => detailsBtn().click(), closeDetails);
       await shoot(
         owner,
         tag,
@@ -344,12 +354,9 @@ try {
           await detailsBtn().click();
           await owner.getByRole("button", { name: "More for atlas" }).click();
           await owner.getByRole("menuitem", { name: "Message privately" }).click();
-          await convs().getByRole("button", { name: "Back to chat" }).waitFor();
+          await owner.getByText("Between us: is win overloaded?").first().waitFor({ timeout: 15000 });
         },
-        async () => {
-          await toChat();
-          await toTop();
-        },
+        toChannel,
       );
       await shoot(
         owner,
@@ -358,40 +365,29 @@ try {
         async () => {
           await detailsBtn().click();
           await owner.getByRole("button", { name: "Invite", exact: true }).click();
+          await owner.getByText("Invite to this channel").first().waitFor();
         },
-        async () => {
-          await owner.keyboard.press("Escape");
-          await owner.getByRole("button", { name: "Close details" }).click();
-        },
+        toChannel,
       );
       await shoot(
         owner,
         tag,
         "10-account-menu",
         async () => {
-          if (narrow) await owner.getByRole("button", { name: "Channels" }).click();
-          await owner
-            .getByRole("complementary")
-            .getByRole("button", { name: /Jonatas/ })
-            .click();
+          await toList();
+          await account().click();
         },
-        async () => {
-          await owner.keyboard.press("Escape");
-          if (narrow) await toChannel();
-        },
+        fromList,
       );
       await shoot(
         owner,
         tag,
         "11-palette",
         async () => {
-          if (narrow) await owner.getByRole("button", { name: "Channels" }).click();
+          await toList();
           await owner.keyboard.press("ControlOrMeta+k");
         },
-        async () => {
-          await owner.keyboard.press("Escape");
-          if (narrow) await toChannel();
-        },
+        fromList,
       );
       await shoot(
         owner,
@@ -399,9 +395,9 @@ try {
         "12-notes",
         async () => {
           await detailsBtn().click();
-          await owner.getByRole("button", { name: /^Notes/ }).click();
+          await details().getByRole("heading", { name: "Notes" }).scrollIntoViewIfNeeded();
         },
-        () => owner.getByRole("button", { name: "Close details" }).click(),
+        closeDetails,
       );
       await shoot(
         owner,
@@ -409,25 +405,26 @@ try {
         "13-pause",
         async () => {
           await detailsBtn().click();
-          await owner
-            .getByRole("complementary", { name: "Details" })
-            .getByRole("button", { name: /^Pause (all )?agents$/ })
-            .click();
+          await details().getByRole("button", { name: "Pause agents" }).click();
         },
-        async () => {
-          await owner.keyboard.press("Escape");
-          await owner.getByRole("button", { name: "Close details" }).click();
-        },
+        toChannel,
       );
+      await shoot(owner, tag, "14-list", toList, async () => {
+        if (narrow) await toChannel();
+      });
+      await shoot(owner, tag, "18-settings", openSettings, closeSettings);
       await shoot(
         owner,
         tag,
-        "14-list",
+        "19-personalities",
         async () => {
-          if (narrow) await owner.getByRole("button", { name: "Channels" }).click();
+          await openSettings();
+          await owner.getByRole("button", { name: /^Open…?$/ }).click();
+          await owner.getByText("Presets for code work").first().waitFor();
         },
         async () => {
-          if (narrow) await owner.goto(channel);
+          await owner.keyboard.press("Escape");
+          await closeSettings();
         },
       );
       await owner.goto(fresh);
@@ -470,3 +467,7 @@ try {
   rmSync(data, { recursive: true, force: true });
 }
 console.log(`\n${shots.length} screenshots in ${OUT}`);
+if (skipped.length) {
+  console.log(`skipped ${skipped.length}: ${skipped.join(", ")}`);
+  process.exit(1);
+}
