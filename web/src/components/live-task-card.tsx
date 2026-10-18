@@ -39,7 +39,7 @@ export function LiveTaskCard({ id, state, messages, me, now, onOpen }: { id: num
           {waiting ? <DecisionMark /> : <Icon icon={ArrowRight01Icon} size={16} className="mt-0.5 shrink-0 text-ink-3 transition-transform group-hover:translate-x-0.5" />}
         </span>
         {lastLine && (
-          <span className="flex items-start gap-2 rounded-bubble bg-field px-2.5 py-1.5">
+          <span className="flex items-start gap-2 rounded-bubble px-2.5 py-1.5 edge">
             <span className="shrink-0 text-meta font-medium text-ink-2">{memberName(state.members.get(lastLine.from), lastLine.from)}</span>
             <span className="min-w-0 truncate text-meta text-ink-2">{lastLine.text}</span>
           </span>

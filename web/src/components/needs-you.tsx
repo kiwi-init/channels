@@ -94,7 +94,7 @@ export function NeedsYou({
         type="button"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
-        className={cx("flex h-9 w-full items-center gap-2.5 rounded-full bg-field pr-3 pl-3.5 text-left text-ui transition-colors hover:bg-wash-2", open && "bg-wash-2")}
+        className={cx("flex h-9 w-full items-center gap-2.5 rounded-full pr-3 pl-3.5 text-left text-ui edge transition-colors hover:bg-wash-2", open && "bg-wash-2")}
       >
         <span aria-hidden className="size-2 shrink-0 rounded-full bg-decide" />
         <span className="shrink-0 font-semibold">{n === 1 ? "1 thing needs you" : `${n} things need you`}</span>
@@ -259,7 +259,7 @@ function AskItem({
                     type="button"
                     disabled={busy}
                     onClick={() => void send(c)}
-                    className="w-full rounded-row bg-field px-3 py-1.5 text-left text-ui leading-snug [overflow-wrap:anywhere] transition-colors hover:bg-wash-2 disabled:pointer-events-none disabled:opacity-40"
+                    className="w-full rounded-row px-3 py-1.5 text-left text-ui leading-snug [overflow-wrap:anywhere] edge transition-colors hover:bg-wash-2 disabled:pointer-events-none disabled:opacity-40"
                   >
                     {c}
                   </button>

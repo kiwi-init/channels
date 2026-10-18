@@ -365,7 +365,7 @@ function Prop({ label, children }: { label: string; children: ReactNode }) {
 function NoteBox({ task, blocked, onNote }: { task: Task; blocked: string | null; onNote: (note: string) => Promise<void> }) {
   const [text, setText] = useState("")
   const [busy, setBusy] = useState(false)
-  if (blocked) return <p className="mt-3 rounded-card bg-field px-3.5 py-2.5 text-ui text-ink-3">{blocked}</p>
+  if (blocked) return <p className="mt-3 rounded-card px-3.5 py-2.5 text-ui text-ink-3 edge">{blocked}</p>
   const submit = async () => {
     if (!text.trim() || busy) return
     setBusy(true)
@@ -378,7 +378,7 @@ function NoteBox({ task, blocked, onNote }: { task: Task; blocked: string | null
   }
   return (
     <form
-      className="mt-3 flex items-end gap-2 rounded-card bg-field px-3.5 py-2.5"
+      className="mt-3 flex items-end gap-2 rounded-card px-3.5 py-2.5 edge"
       onSubmit={(e) => {
         e.preventDefault()
         void submit()
