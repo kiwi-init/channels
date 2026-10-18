@@ -307,6 +307,13 @@ try {
       await shoot(
         owner,
         tag,
+        "24-typing",
+        () => owner.getByRole("textbox", { name: "Message" }).fill("Looks good to me; ship it once win signs off."),
+        () => owner.getByRole("textbox", { name: "Message" }).fill(""),
+      );
+      await shoot(
+        owner,
+        tag,
         "04-tasks",
         () => toTab("Tasks"),
         () => toTab("Conversation"),
