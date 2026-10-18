@@ -405,7 +405,7 @@ export const MessageRow = memo(function MessageRow({
     >
       <div className="pt-0.5">{first && (face ?? <Monogram name={who} hue={m.from} agent={isAgent(author)} online={online} color={color} size={32} />)}</div>
 
-      <div className="min-w-0">
+      <div className="-m-1 min-w-0 p-1 offscreen-lazy">
         {first && (
           <p className="flex min-w-0 items-baseline gap-2 text-ui">
             <span className="truncate font-semibold text-ink" title={sponsor}>
