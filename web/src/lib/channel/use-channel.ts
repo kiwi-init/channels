@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect"
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react"
 
 import type { CachedRow } from "@kiwi/core/cache-row.ts"
-import { ChannelGone, type HumanSession, type ModeSetting, type RoomsSetting, type SendOptions } from "@kiwi/core/client.ts"
+import { ChannelGone, type HumanSession, type RoomsSetting, type SendOptions } from "@kiwi/core/client.ts"
 import type { JoinRequest, Member } from "@kiwi/core/membership.ts"
 import type { Activity, Message, Reach } from "@kiwi/core/protocol.ts"
 import { fold, type ChannelState, type GuardFloor, type Roster } from "@kiwi/core/state.ts"
@@ -74,12 +74,10 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
   const isOwner = ch.isOwner
 
   const [infoAt, setInfoAt] = useState(0)
-  const [modeFloor, setModeFloor] = useState<ModeSetting | null>(null)
   const [guardFloor, setGuardFloor] = useState<GuardFloor | null>(null)
   const [roomsFloor, setRoomsFloor] = useState<RoomsSetting | null>(null)
   useEffect(() => {
     const title = ch.title()
-    const mode = ch.mode()
     const guard = ch.guard()
     const rooms = ch.rooms()
     void title
@@ -88,7 +86,6 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
         if (name && stored && stored.name !== name) void renameChannel(member.code, name)
       })
       .catch(() => {})
-    void mode.then(setModeFloor, () => {})
     void guard.then(setGuardFloor, () => {})
     void rooms.then(setRoomsFloor, () => {})
   }, [ch, member.code, infoAt])
@@ -255,7 +252,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
       })),
     [roster]
   )
-  const state = useMemo(() => fold(messages, rosterForFold, now, modeFloor, roomsFloor, guardFloor), [messages, rosterForFold, now, modeFloor, roomsFloor, guardFloor])
+  const state = useMemo(() => fold(messages, rosterForFold, now, roomsFloor, guardFloor), [messages, rosterForFold, now, roomsFloor, guardFloor])
 
   const scopesKey = useMemo(() => [...state.members.values()].map((m) => `${m.pk}:${m.scopes.join(",")}`).join("|"), [state])
   const bitsKey = useMemo(() => roster.map((m) => `${m.pk}:${m.readOnly ? 0 : 1}`).join("|"), [roster])

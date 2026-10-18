@@ -22,7 +22,7 @@ import { cleanCard } from "../protocol.ts";
 import { BadName, Rejected } from "../refusals.ts";
 import { commitTo, joinCheckCode, ownerNonceStatement, spendAuto, type SigningBudget } from "../sas.ts";
 import { canPost, scopesOf, wireScopes } from "../scopes.ts";
-import { COORDINATOR } from "../state.ts";
+import { isLeadRole } from "../state.ts";
 import type { ChannelCore } from "./core.ts";
 import type { MemberRefusal, Refused } from "./errors.ts";
 import { requestInfo, wrapAllFor } from "./keys.ts";
@@ -141,7 +141,7 @@ export class ChannelRequests {
       yield* this.assertNamesFree([as?.name ?? req.name]);
       const info: MemberInfo = {
         name: as?.name ?? req.name,
-        role: as?.role ?? (req.role?.trim().toLowerCase() === COORDINATOR ? undefined : req.role),
+        role: as?.role ?? (isLeadRole(req.role) ? undefined : req.role),
         about: as?.about ?? req.about,
         kind,
         ...(kind === "human" ? (as?.display ? { display: as.display } : {}) : nick ? { display: nick } : {}),

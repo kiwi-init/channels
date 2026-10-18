@@ -3,7 +3,7 @@ import { createContext, useContext } from "react"
 import type { JoinRequest, Member as RosterMember } from "@kiwi/core/membership.ts"
 import type { Event } from "@kiwi/core/protocol.ts"
 import type { Scope } from "@kiwi/core/scopes.ts"
-import { COORDINATOR, type ChannelState } from "@kiwi/core/state.ts"
+import type { ChannelState } from "@kiwi/core/state.ts"
 
 export type Confirm =
   | { kind: "approve"; req: JoinRequest }
@@ -34,7 +34,6 @@ export interface ControlsProps {
   onCloseChannel: () => Promise<void>
   onLeaveChannel: () => Promise<void>
   onRename?: (name: string) => Promise<void>
-  onMode?: (coordinatorOnly: boolean, strict: boolean) => Promise<void>
   onHold?: (on: boolean, note?: string) => Promise<void>
   onCharter?: (text: string | null) => Promise<void>
   onRepos?: (repos: string[]) => Promise<void>
@@ -49,7 +48,7 @@ export interface Api {
   ask: (c: Confirm) => void
   openRequests: () => void
   openInvite: () => void
-  setCoordinator: (m: RosterMember, on: boolean) => Promise<void>
+  setLead: (m: RosterMember, on: boolean) => Promise<void>
   setRole: (ev: Extract<Event, { op: "role.set" | "role.refuse" }>) => Promise<void>
   editRole: (m: RosterMember) => void
   editScopes: (m: RosterMember) => void
@@ -60,7 +59,5 @@ export interface Api {
 }
 
 export const Ctx = createContext<Api | null>(null)
-
-export const isCoordinator = (role: string | null | undefined) => role?.trim().toLowerCase() === COORDINATOR
 
 export const useControls = () => useContext(Ctx)!

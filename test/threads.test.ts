@@ -1,5 +1,5 @@
-// Agents in threads (T1460): a channel starts coordinated; what an agent says while doing a task goes
-// to that task's thread, among the agents working it (and the coordinator); --main and --dm say where
+// Agents in threads (T1460): what an agent says while doing a task goes
+// to that task's thread, among the agents working it (and the lead); --main and --dm say where
 // else; listening delivers your task threads and your direct thread, not other tasks' talk.
 import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
@@ -60,6 +60,7 @@ describe("agents in threads", () => {
     const code = /join code: (\S+)/.exec(await ok(owner, "create", "th", "--as", "lead"))![1]!;
     await join_(owner, dev, code, "dev");
     await join_(owner, dev2, code, "dev2");
+    await ok(owner, "--as", "human", "role", "lead", "lead", "--yes");
     // Everyone catches up first, so what follows is all that's new.
     for (const h of [owner, dev, dev2]) await ok(h, "listen", "--now");
     await ok(owner, "--as", "lead", "listen", "--now");
@@ -73,7 +74,7 @@ describe("agents in threads", () => {
     expect(await ok(dev2, "send", "--dm", "lead", "got a minute?")).toContain("to lead (direct)");
 
     const leadHeard = await ok(owner, "--as", "lead", "listen", "--now");
-    // The coordinator hears the task's thread, main, and its direct thread.
+    // The lead hears the task's thread, main, and its direct thread.
     expect(leadHeard).toContain(`[${task}]`);
     expect(leadHeard).toContain("found it: a stale lockfile");
     expect(leadHeard).toContain("[direct]");
@@ -97,18 +98,19 @@ describe("agents in threads", () => {
     expect(await ok(dev, "send", "both under way")).toContain(`you're doing ${task} and ${second}, so say which with --task`);
   });
 
-  test("a coordinator handed the role is told; taking it away turns the mode off before the role", async () => {
+  test("a lead handed the role is told, and status says who leads; clearing it changes no mode", async () => {
     const owner = scratch("owner2");
     const code = /join code: (\S+)/.exec(await ok(owner, "create", "th2", "--as", "lead", "--role", "builder"))![1]!;
     const dev = scratch("dev3");
     await join_(owner, dev, code, "dev");
     await ok(dev, "listen", "--now");
-    await ok(owner, "--as", "human", "role", "dev", "coordinator", "--yes");
-    expect(await ok(dev, "listen", "--now")).toContain("made dev coordinator");
-    // lead kept its role: a role given at creation isn't taken over by the default.
+    await ok(owner, "--as", "human", "role", "dev", "lead", "--yes");
+    expect(await ok(dev, "listen", "--now")).toContain("made dev lead");
+    expect(await ok(dev, "status")).toContain("you are the lead");
     expect(await ok(owner, "--as", "human", "status")).toContain("lead — builder");
     await ok(owner, "--as", "human", "role", "dev", "none", "--yes");
     const log = await ok(owner, "--as", "human", "log", "--all", "-n", "10");
-    expect(log.indexOf("turned off coordinator-only")).toBeLessThan(log.lastIndexOf("cleared dev's role"));
+    expect(log).toContain("cleared dev's role");
+    expect(log).not.toContain("coordinator-only");
   });
 });

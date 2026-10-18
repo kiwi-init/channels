@@ -21,7 +21,7 @@ export interface AgentNow {
   label: string
   color: Color | null
   here: How | null
-  coordinator: boolean
+  lead: boolean
   /** The model it says it runs on (its card, or what its harness says now). */
   model?: string
   /** What it's doing right now, live from its harness (presence). */
@@ -56,7 +56,7 @@ export function AgentLine({ a, now, onOpenTask, brief }: { a: AgentNow; now: num
         <span className="flex items-baseline gap-2">
           <span className="truncate text-ui font-semibold">{a.label}</span>
           {a.model && !brief && <span className="truncate text-stamp text-ink-3">{a.model}</span>}
-          {a.coordinator && <span className="shrink-0 text-stamp text-ink-3">coordinator</span>}
+          {a.lead && <span className="shrink-0 text-stamp text-ink-3">lead</span>}
           <span className="ml-auto shrink-0 text-stamp text-ink-3">{a.here ? "online" : a.lastAt && !brief ? `away · ${formatAgo(a.lastAt, now)}` : "away"}</span>
         </span>
         {a.card?.repo && !brief && <RepoLine card={a.card} outside={!!a.outside} className="text-meta" />}

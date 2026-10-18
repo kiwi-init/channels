@@ -66,7 +66,6 @@ export class SessionTasks extends SessionMessaging {
         this.taken((who) => `${taskId(id)} is taken by ${who}`),
       );
       const after = yield* this.confirm(seq);
-      if (t.source !== undefined) yield* this.ack([t.source]);
       return after;
     },
     oneLook,
@@ -120,7 +119,6 @@ export class SessionTasks extends SessionMessaging {
         t.owner === this.me && (owner !== undefined || finishing || change.state === "todo") ? { free: [`task:${id}`] } : {},
       );
       const after = yield* this.confirm(seq);
-      if (change.state === "doing" && t.source !== undefined) yield* this.ack([t.source]);
       return after;
     },
     oneLook,
