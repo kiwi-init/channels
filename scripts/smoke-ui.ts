@@ -328,7 +328,7 @@ async function run(part: Part): Promise<string[]> {
     const channel = page.url();
     const code = new URL(channel).hash.slice(1);
     at = "an agent asks";
-    const joining = kiwi(["join", code, "smoke", "--relay", BASE, "--as", "bot", "--role", "tester"]);
+    const joining = kiwi(["join", code, "smoke", "--relay", BASE, "--as", "bot"]);
     const needs = page.getByRole("region", { name: "Needs you" });
     const needsOpen = async () => {
       await needs.getByRole("heading", { name: /^Needs you/ }).waitFor({ timeout: 30000 });
@@ -504,7 +504,7 @@ async function run(part: Part): Promise<string[]> {
     await tasksPanel.getByRole("button", { name: "Close tasks" }).click();
     log(`ok  ${at}`);
 
-    for (const item of ["Change nickname…", "Set role…", "Remove from channel…"])
+    for (const item of ["Change nickname…", "Remove from channel…"])
       await opens(`Details → bot → ${item}`, () =>
         inDetails(async () => {
           await panel.getByRole("button", { name: "More for bot" }).click();
@@ -515,9 +515,13 @@ async function run(part: Part): Promise<string[]> {
     at = "Make bot the lead";
     await inDetails(async () => {
       await panel.getByRole("button", { name: "More for bot" }).click();
-      await page.getByRole("menuitem", { name: "Make lead" }).click();
+      await page.getByRole("menuitem", { name: "Give a personality…" }).click();
     });
-    await page.getByText("bot is the lead").first().waitFor({ timeout: 15000 });
+    const leading = page.getByRole("dialog", { name: /personality$/ });
+    await leading.getByRole("radiogroup", { name: "Personality" }).getByText("Lead", { exact: true }).click();
+    await leading.getByRole("button", { name: "Save" }).click();
+    await leading.waitFor({ state: "detached" });
+    await page.getByText("bot is Lead now").first().waitFor({ timeout: 15000 });
     await panel.getByRole("img", { name: "The lead" }).waitFor({ timeout: 15000 });
     log("ok  the lead wears a robot avatar");
 

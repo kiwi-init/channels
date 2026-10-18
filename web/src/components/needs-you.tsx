@@ -114,11 +114,7 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
         <>
           <span className="font-medium">{r.display || r.name}</span>
           {r.display && <span className="text-ink-3"> @{r.name}</span>} wants to join
-          {r.pin ? (
-            <span className="text-ink-2">{pinnedAs === null ? `, pinned as ${r.pin.name}, which isn't on your account as it was` : `, pinned as ${r.pin.name}`}</span>
-          ) : (
-            r.role && <span className="text-ink-2">, as {r.role}</span>
-          )}
+          {r.pin && <span className="text-ink-2">{pinnedAs === null ? `, pinned as ${r.pin.name}, which isn't on your account as it was` : `, pinned as ${r.pin.name}`}</span>}
         </>
       }
       detail={

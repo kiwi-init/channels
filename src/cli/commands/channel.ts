@@ -22,7 +22,8 @@ export const channelCommands: Record<string, Command> = {
         if (m.kind === "computer") continue;
         const scopes = m.active ? state.members.get(m.name)?.scopes : undefined;
         const may = scopes && presetOf(scopes) !== "full" ? ` · may: ${describeScopes(scopes)}` : "";
-        out(`${describeMember(m)}${m.name === s.me ? " (you)" : ""}${m.role ? ` — ${m.role}` : ""}${may}${m.active ? "" : "  (left)"}`);
+        const persona = m.active ? state.members.get(m.name)?.persona : undefined;
+        out(`${describeMember(m)}${m.name === s.me ? " (you)" : ""}${persona ? ` — ${persona.name}` : ""}${may}${m.active ? "" : "  (left)"}`);
       }
     }),
 
@@ -93,7 +94,7 @@ export const channelCommands: Record<string, Command> = {
       const on = new Map(
         [...online].map(([n, p]) => [
           n,
-          { client: p.client, role: p.role, ...(p.reach ? { reach: p.reach } : {}), ...(p.readAt === undefined ? {} : { readAt: p.readAt }), ...(isWakeVia(p.wake) ? { wake: p.wake } : {}) },
+          { client: p.client, ...(p.reach ? { reach: p.reach } : {}), ...(p.readAt === undefined ? {} : { readAt: p.readAt }), ...(isWakeVia(p.wake) ? { wake: p.wake } : {}) },
         ]),
       );
       const snap = { alias: s.alias, me: s.me, state, online: on, unread: yield* s.unreadCount(state, messages) };

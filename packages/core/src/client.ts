@@ -315,15 +315,6 @@ export class Channel {
     return run(this.fx.updatePersona(m, persona, since));
   }
 
-  /**
-   * Owner: after a role.set at log position `since`, re-sign the member's record with that role (and
-   * rules), so a client holding only the tail of the log still knows it. Everything else the record
-   * says, scopes included, stays as it was.
-   */
-  updateRole(m: Member, role: string | null, about: string | null | undefined, since: number): Promise<void> {
-    return run(this.fx.updateRole(m, role, about, since));
-  }
-
   updateNickname(m: Member, nickname: string | null): Promise<void> {
     return run(this.fx.updateNickname(m, nickname));
   }

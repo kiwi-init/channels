@@ -159,12 +159,12 @@ describe("channel keys stay out of the window (T203 step 2)", () => {
 
     const roster = await aw.ops.call(code, "members");
     const owner = roster.find((m) => m.owner)!;
-    await expect(aw.ops.call(code, "updateRole", owner, "x", null, 0)).rejects.toThrow("can change");
+    await expect(aw.ops.call(code, "updateNickname", owner, "x")).rejects.toThrow("can change");
     await expect(aw.ops.call(code, "updateScopes", { ...owner, pk: "not-a-member" }, [], 0)).rejects.toThrow("can change");
     await aw.ops.call(code, "remove", asked.pk);
     const gone = (await aw.ops.call(code, "members")).find((m) => m.pk === asked.pk);
     expect(gone?.active).toBeFalsy();
-    if (gone) await expect(aw.ops.call(code, "updateRole", gone, "x", null, 0)).rejects.toThrow("can change");
+    if (gone) await expect(aw.ops.call(code, "updateNickname", gone, "x")).rejects.toThrow("can change");
     const seat = a.store.seats.find((c) => c.code === code)!;
     expect(publicChannel(seat).access?.epoch).toBe(1);
     expect(Object.keys((seat.access as { keys: Record<string, string> }).keys).sort()).toEqual(["0", "1"]);
