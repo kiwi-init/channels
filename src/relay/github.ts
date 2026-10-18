@@ -55,6 +55,7 @@ type Json = Record<string, unknown>;
 const obj = (x: unknown): Json => (x && typeof x === "object" && !Array.isArray(x) ? (x as Json) : {});
 const str = (x: unknown, max = 200): string | undefined => (typeof x === "string" && x.trim() ? x.trim().slice(0, max) : undefined);
 const int = (x: unknown): number | undefined => (typeof x === "number" && Number.isSafeInteger(x) && x > 0 ? x : undefined);
+const count = (x: unknown): number | undefined => (typeof x === "number" && Number.isSafeInteger(x) && x >= 0 ? x : undefined);
 const defined = (o: GithubItem): GithubItem => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as GithubItem;
 
 export function githubItem(event: string, payload: unknown, now: number): GithubItem | null {
@@ -74,6 +75,9 @@ export function githubItem(event: string, payload: unknown, now: number): Github
       url: str(pr.html_url, 300),
       state: str(pr.state, 20),
       merged: typeof pr.merged === "boolean" ? pr.merged : undefined,
+      additions: count(pr.additions),
+      deletions: count(pr.deletions),
+      files: count(pr.changed_files),
       branch: str(obj(pr.head).ref),
       sha: str(obj(pr.head).sha, 40),
     });

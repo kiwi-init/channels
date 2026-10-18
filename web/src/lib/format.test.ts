@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { shortTitle } from "./format"
+import { formatAgoShort, shortTitle } from "./format"
 
 describe("shortTitle", () => {
   test("keeps a title that is already short", () => {
@@ -31,4 +31,12 @@ describe("shortTitle", () => {
     expect(shortTitle("Fix the build\nmore detail")).toBe("Fix the build")
     expect(shortTitle("(draft)")).toBe("(draft)")
   })
+})
+
+test("a row's time is short: now, then minutes, hours and days without the ago", () => {
+  const now = 10_000_000
+  expect(formatAgoShort(now - 5_000, now)).toBe("now")
+  expect(formatAgoShort(now - 4 * 60_000, now)).toBe("4m")
+  expect(formatAgoShort(now - 3 * 3_600_000, now)).toBe("3h")
+  expect(formatAgoShort(now - 2 * 86_400_000, now)).toBe("2d")
 })

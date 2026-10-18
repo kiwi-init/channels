@@ -162,6 +162,15 @@ From `design-tokens.ts`:
   shown, the channel's status (working, merged today, needs you), and the
   Tasks / Agents / Conversation tabs. A view opens Tasks; a conversation
   opens Conversation. The approved mockups are in `docs/ui/`.
+- Tasks, the tab a channel opens on: Needs you's rows first, then the
+  board in groups (In progress with what is in review, Up next, Done
+  today; a view shows only its own). A row is two lines on the canvas,
+  split from the next by `line`: the owner's face, the title in `body`, and
+  under it the task id, the owner and what the agent is doing now (in
+  `doing` with a pulse while it works) or the task's state; then its PR
+  (number, a 48px diff bar in `live` and `alert`, the additions), its
+  checks in a word and the time, short. The PR and checks columns drop on
+  narrow windows.
 - On a wide window the list is an 80px icon rail, as Grok's
   collapsed one: the Mac traffic lights on its header row, each channel
   as its 40px tile in a 56px `card`-round cell (`pick` when open), a blue
@@ -199,6 +208,15 @@ From `design-tokens.ts`:
   on the row's right as outlined buttons (below it on a phone). Rows are
   split by `line`, not by fills. `Pause agents` in the header stops every
   agent at once.
+- Agents tab: one lane per agent, side by side on the canvas, split by
+  `line` (no cards, no fills; the lead's lane last). A lane: face, name,
+  `@handle · for person · model`; a mono `meta` line of what it runs now
+  between two `line`s (`doing` dot pulsing while a tool runs, `live` while
+  it thinks); its tasks in progress and in review as `card`-round outlined
+  blocks (`T7 · in progress · 41 min`, the title in `ui` semibold, `PR #n`
+  and a tick per check: `alert` failed, `doing` running, `live` passed);
+  Up next; Watching (the lead's other open PRs); and its last three moves
+  at the foot, times in tabular `meta`.
 - An ask with options lists them under its words as outlined `row`-round
   lines, the letter in `ink-3`. While it waits on you it says so in
   `decide` under the bubble and its options answer it; once answered, the
