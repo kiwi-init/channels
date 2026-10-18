@@ -8,16 +8,19 @@ const kit = readFileSync(resolve(web, "components/kit.tsx"), "utf8");
 
 const contrast = css.slice(css.indexOf("@media (prefers-contrast: more)"));
 
-test("every prism and glass surface falls back to a solid fill under prefers-contrast: more", () => {
+const files = (d: string): string[] => readdirSync(d).flatMap((n) => (statSync(resolve(d, n)).isDirectory() ? files(resolve(d, n)) : n.endsWith(".tsx") ? [resolve(d, n)] : []));
+
+test("the lit prism and glass fall back to a solid fill under prefers-contrast: more", () => {
   expect(contrast.length).toBeLessThan(css.length);
-  for (const cls of [".prism", ".prism-lit", ".glass", ".orb", ".orb-pill"]) expect(contrast).toContain(cls);
-  for (const glint of [".prism::before", ".prism-lit::before", ".prism-lit::after"]) expect(contrast).toContain(glint);
+  for (const sel of [".prism-lit", ".glass", ".prism-lit::before", ".prism-lit::after"]) expect(contrast).toContain(sel);
 });
 
-test("the spectrum and the orb are tokens, written once in :root", () => {
-  for (const token of ["--spectrum-1", "--spectrum-7", "--orb-core", "--orb-blue", "--orb-cyan", "--orb-glow", "--prism-glint", "--segment"]) {
+test("the spectrum is tokens, written once in :root, and the plain prism and the orb are gone", () => {
+  for (const token of ["--spectrum-1", "--spectrum-7", "--prism-glint-lit", "--prism-fill-lit", "--segment"]) {
     expect(css.match(new RegExp(`^\\s*${token}:`, "gm"))).toHaveLength(1);
   }
+  expect(css).not.toMatch(/\.(prism|orb|orb-pill)\b(?!-)/);
+  expect(css).not.toContain("--orb-");
 });
 
 test("the kit is the quiet look: an accent primary, an outlined secondary, a wash segmented track, an accent checkbox", () => {
@@ -28,33 +31,16 @@ test("the kit is the quiet look: an accent primary, an outlined secondary, a was
   expect(kit).toContain('type="checkbox" className={cx("size-4 shrink-0 accent-[var(--accent)]"');
 });
 
-test("prism stays in the sidebar: the kit, the header, the side panels, Settings, Personalities and the conversation don't wear it", () => {
-  const shell = [
-    "components/kit.tsx",
-    "components/conversation/header.tsx",
-    "components/info-panel.tsx",
-    "components/tasks-panel.tsx",
-    "components/thread.tsx",
-    "components/settings.tsx",
-    "components/update-check.tsx",
-    "components/personalities.tsx",
-    "components/personality-picker.tsx",
-    "components/composer.tsx",
-    "components/composer-question.tsx",
-    "components/message.tsx",
-    "components/ask-options.tsx",
-    "components/live-task-card.tsx",
-    "components/needs-you.tsx",
-    "components/gif-picker.tsx",
-    "components/conversation/index.tsx",
-  ];
-  const wearing = shell.filter((f) => /\b(prism|prism-lit|orb|orb-pill)\b/.test(readFileSync(resolve(web, f), "utf8").replace(/--prism-[a-z-]+/g, "")));
-  expect(wearing).toEqual([]);
+test("the prism means one thing: the open channel and the sidebar's chosen view or conversation wear prism-lit, nothing else does", () => {
+  const sidebar = ["components/sidebar.tsx", "components/conversation/channel-sidebar.tsx"].map((f) => resolve(web, f));
+  const lit = files(web).filter((f) => readFileSync(f, "utf8").includes("prism-lit"));
+  expect(lit.sort()).toEqual(sidebar.sort());
+  const plain = files(web).filter((f) => /\b(prism|orb|orb-pill)\b(?!-)/.test(readFileSync(f, "utf8").replace(/--prism-[a-z-]+/g, "")));
+  expect(plain).toEqual([]);
   expect(css.slice(css.indexOf("@utility sheet"))).not.toContain("prism");
 });
 
 test("no checkbox outside the kit's: one place to style it", () => {
-  const files = (d: string): string[] => readdirSync(d).flatMap((n) => (statSync(resolve(d, n)).isDirectory() ? files(resolve(d, n)) : n.endsWith(".tsx") ? [resolve(d, n)] : []));
   const stray = files(web).filter((f) => !f.endsWith("kit.tsx") && readFileSync(f, "utf8").includes('type="checkbox"'));
   expect(stray).toEqual([]);
 });
