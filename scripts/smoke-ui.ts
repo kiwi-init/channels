@@ -242,6 +242,17 @@ async function run(part: Part): Promise<string[]> {
     await panel.getByRole("button", { name: "Back to details" }).click();
     await panel.getByRole("button", { name: "Invite", exact: true }).waitFor();
     log(`ok  ${at}`);
+    at = "Details → Repos: a repo typed by name joins the channel";
+    await panel.getByRole("button", { name: /^Repos/ }).click();
+    await panel.getByRole("heading", { name: "Repos" }).waitFor();
+    await panel.getByRole("textbox", { name: "Find a repo" }).fill("octo/kiwi");
+    await panel.getByRole("textbox", { name: "Find a repo" }).press("Enter");
+    await panel.getByRole("list", { name: "This channel's repos" }).getByText("octo/kiwi").waitFor();
+    await panel.getByRole("button", { name: "Save", exact: true }).click();
+    await page.getByText("Repos saved").waitFor();
+    await panel.getByRole("button", { name: "Back to details" }).click();
+    await panel.getByRole("button", { name: /^Repos.*octo\/kiwi/ }).waitFor();
+    log(`ok  ${at}`);
     at = "phone: the header opens Details, and Invite is reachable from it";
     await panel.getByRole("button", { name: "Close details" }).click();
     await panel.waitFor({ state: "detached" });

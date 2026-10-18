@@ -23,7 +23,7 @@ import { useClock } from "@/lib/channel/clock"
 import { cx } from "@/lib/utils"
 import { ChannelIconTile } from "./channel-icon"
 import { RobotAvatar } from "./robot"
-import { MemberActions, Requests, loadDetail, memberDetail, useControls } from "./controls"
+import { MemberActions, Repos, Requests, loadDetail, memberDetail, useControls } from "./controls"
 import { Icon, type IconSvgElement } from "./icon"
 import { IconButton, Monogram, errorText, toast } from "./kit"
 import { Invite } from "./lazy"
@@ -53,7 +53,7 @@ export function InfoPanel({
   onMessage?: (name: string) => void
 }) {
   const { p, ask, openDialog } = useControls()
-  const [view, setView] = useState<"details" | "invite" | "requests">("details")
+  const [view, setView] = useState<"details" | "invite" | "requests" | "repos">("details")
   const openInvite = () => setView("invite")
   const openRequests = () => setView("requests")
   const active = p.roster
@@ -66,7 +66,7 @@ export function InfoPanel({
   return (
     <aside
       aria-label="Details"
-      className={cx("animate-slide-in flex w-full shrink-0 flex-col border-l border-line bg-canvas md:sheet md:border-l-0", view === "invite" ? "md:w-[420px]" : "md:w-[340px]")}
+      className={cx("animate-slide-in flex w-full shrink-0 flex-col border-l border-line bg-canvas md:sheet md:border-l-0", view === "invite" || view === "repos" ? "md:w-[420px]" : "md:w-[340px]")}
       onKeyDown={(e) => e.key === "Escape" && (view === "details" ? onClose() : setView("details"))}
     >
       <header className="drag flex h-(--chrome-h) shrink-0 items-center gap-2 px-3">
@@ -84,6 +84,10 @@ export function InfoPanel({
       {view === "invite" ? (
         <div className="flex-1 overflow-y-auto">
           <Invite />
+        </div>
+      ) : view === "repos" ? (
+        <div className="flex-1 overflow-y-auto">
+          <Repos repos={p.state.repos} onSave={p.isOwner ? p.onRepos : undefined} />
         </div>
       ) : view === "requests" ? (
         <div className="flex-1 overflow-y-auto">
@@ -198,7 +202,7 @@ export function InfoPanel({
               </Row>
             )}
             {(p.isOwner || p.state.repos.length > 0) && (
-              <Row icon={GithubIcon} onClick={() => openDialog("repos")} detail={p.state.repos.join(", ") || undefined}>
+              <Row icon={GithubIcon} onClick={() => setView("repos")} detail={p.state.repos.join(", ") || undefined}>
                 Repos
               </Row>
             )}
