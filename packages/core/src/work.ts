@@ -7,7 +7,7 @@ import { cleanBody, describeEvent, proofLabel, reviewBody, roundTag } from "./fo
 import { inlineText } from "./membership.ts";
 import { ignored, type Message } from "./protocol.ts";
 import type { OldTaskState, TaskState } from "./protocol.ts";
-import { currentState, isPerson, taskId, type ChannelState, type Task } from "./state.ts";
+import { currentState, isPerson, prChecks, prKey, taskId, type ChannelState, type GithubPr, type Task } from "./state.ts";
 
 /** Quiet this long, with nothing in progress, and an agent reads as idle. */
 const IDLE_AFTER_MS = 15 * 60_000;
@@ -22,10 +22,35 @@ export interface PrRef {
   url: string;
   repo: string;
   number: number;
-  /** Open until a later message or note says it was merged (or closed). No call to GitHub is made. */
+  /** GitHub's word when the channel's GitHub events have it; else open until a later message or note says it was merged (or closed). */
   state: "open" | "merged" | "closed";
   /** The message that first linked it. */
   seq: number;
+  title?: string;
+  checks?: PrChecks;
+}
+
+export interface PrChecks {
+  passed: number;
+  failed: string[];
+  running: number;
+}
+
+const FAILED = new Set(["failure", "timed_out", "cancelled", "action_required", "startup_failure"]);
+
+function checksOf(state: ChannelState, pr: GithubPr): PrChecks | undefined {
+  const runs = prChecks(state.github, pr);
+  if (!runs.length) return undefined;
+  const failed = runs.filter((r) => r.conclusion && FAILED.has(r.conclusion)).map((r) => r.name);
+  const running = runs.filter((r) => !r.conclusion).length;
+  return { passed: runs.length - failed.length - running, failed, running };
+}
+
+function fromGithub(state: ChannelState, pr: PrRef): PrRef {
+  const real = state.github.prs.get(prKey(pr.repo, pr.number));
+  if (!real) return pr;
+  const checks = checksOf(state, real);
+  return { ...pr, state: real.state, ...(real.title ? { title: real.title } : {}), ...(checks ? { checks } : {}) };
 }
 
 const PR_URL = /https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)/g;
@@ -61,7 +86,7 @@ export function prsIn(state: ChannelState, messages: Message[], linkedBy: (m: Me
       if (fate) pr.state = fate;
     }
   }
-  return [...prs.values()];
+  return [...prs.values()].map((pr) => fromGithub(state, pr));
 }
 
 export interface RecentPr extends PrRef {

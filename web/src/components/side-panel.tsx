@@ -8,6 +8,7 @@ import { remember, remembered } from "@/lib/side"
 import { cx } from "@/lib/utils"
 import { AgentLine, busy, byBusy, type AgentNow } from "./agent-strip"
 import { Icon } from "./icon"
+import { ChecksWord } from "./pr-checks"
 import { DecisionMark, StateMark, TaskFilterBar, type TaskFilter } from "./tasks"
 
 const SHOWN = 5
@@ -153,10 +154,11 @@ function Pulls({ prs, state, now, nameOf }: { prs: RecentPr[]; state: ChannelSta
                   <Icon icon={GitPullRequestIcon} size={15} className={cx("mt-0.5 shrink-0", FATE[pr.state].color)} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-ui leading-snug text-ink">
-                      <span className="font-semibold tabular-nums">#{pr.number}</span> {task ? task.title : `Linked by ${nameOf(pr.by)}`}
+                      <span className="font-semibold tabular-nums">#{pr.number}</span> {task ? task.title : (pr.title ?? `Linked by ${nameOf(pr.by)}`)}
                     </span>
                     <span className="mt-0.5 block truncate text-meta text-ink-3">
                       {FATE[pr.state].word}
+                      {pr.checks && <ChecksWord checks={pr.checks} />}
                       {task && (
                         <>
                           {" · "}

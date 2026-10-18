@@ -7,6 +7,7 @@ import { colorOf } from "@kiwi/core/state.ts"
 import { formatAgo, formatFull, memberName } from "@/lib/format"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
+import { ChecksWord } from "./pr-checks"
 import { Monogram } from "./kit"
 import { Markdown } from "./lazy"
 import { isAgent } from "./message"
@@ -111,16 +112,16 @@ function ThreadCard({ messages, room, state, now }: { messages: Message[]; room?
   )
 }
 
-/** A pull request by its link text; its state comes from what the channel said, never from GitHub. */
 export function PrLink({ pr }: { pr: PrRef }) {
   return (
-    <a href={pr.url} target="_blank" rel="noreferrer" className="text-ink-2 hover:text-ink hover:underline">
+    <a href={pr.url} target="_blank" rel="noreferrer" title={pr.title} className="text-ink-2 hover:text-ink hover:underline">
       #{pr.number}
       <span className="text-ink-3">
         {" "}
         in {pr.repo.split("/").pop()}
         {pr.state !== "open" && `, ${pr.state}`}
       </span>
+      {pr.checks && <ChecksWord checks={pr.checks} />}
     </a>
   )
 }
