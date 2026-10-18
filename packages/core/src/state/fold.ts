@@ -9,6 +9,10 @@ import { roomName } from "./rooms.ts";
 import { settle } from "./leases.ts";
 import type { ChannelState, Fact, FoldBase, GuardFloor, Lease, Member, Place, Reaction, Room, RoomsFloor, Roster, Task } from "./types.ts";
 
+function touch(task: Task | undefined, name: string, at: number): void {
+  if (task && (task.touched?.[name] ?? 0) < at) task.touched = { ...task.touched, [name]: at };
+}
+
 export function fold(
   messages: Message[],
   roster: Roster,
@@ -248,6 +252,7 @@ export function fold(
         placeOf.set(m.seq, place);
         const posted = place.kind === "task" ? tasks.get(place.task) : place.kind === "main" && room !== GENERAL_ROOM ? rooms.get(room) : undefined;
         if (posted && !posted.posters?.includes(m.from)) posted.posters = [...(posted.posters ?? []), m.from];
+        if (place.kind === "task") touch(tasks.get(place.task), m.from, at);
       }
       member.lastSeen = Math.max(member.lastSeen, at);
       if (!isReaction(m)) member.messages++;
@@ -290,6 +295,9 @@ export function fold(
       placeOf.set(m.seq, ev.op === "task.add" ? { kind: "task", task: m.seq } : (ev.op === "task.update" || ev.op === "task.claim") && tasks.has(ev.task) ? { kind: "task", task: ev.task } : MAIN);
 
       applyEvent(ctx, m, ev, member, at, reject);
+      const evPlace = placeOf.get(m.seq);
+      const evTask = evPlace?.kind === "task" && !rejected.has(m.seq) ? tasks.get(evPlace.task) : undefined;
+      if (evTask && (evTask.owner === m.from || evTask.workedBy.includes(m.from))) touch(evTask, m.from, at);
     } catch {
       trust.set(m.seq, "forged");
       rejected.set(m.seq, "malformed message");

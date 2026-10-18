@@ -300,6 +300,7 @@ export interface Card {
   branch?: string;
   /** Anything else worth knowing about it, in its own words. */
   note?: string;
+  fresh?: number;
 }
 
 /** Most tools a card lists. */
@@ -706,7 +707,8 @@ export function wellFormedEvent(ev: unknown): ev is Event {
       return (
         ["os", "arch", "harness", "model", "cpu", "memory", "repo", "branch"].every((k) => opt(e[k], (x): x is string => str(x, 120))) &&
         opt(e.tools, (x): x is string[] => tags(x)) &&
-        opt(e.note, (x): x is string => str(x, 500))
+        opt(e.note, (x): x is string => str(x, 500)) &&
+        opt(e.fresh, (x): x is number => Number.isSafeInteger(x) && (x as number) >= 0)
       );
     case "claim":
       return (

@@ -5,7 +5,7 @@ import type { Event, Message } from "@kiwi/core/protocol.ts"
 import { taskDigest } from "@kiwi/core/work.ts"
 import { fold, type ChannelState, type Roster, type Task } from "@kiwi/core/state.ts"
 
-import { ANYONE, approveTask, cancelTask, changeReviewer, closedDigest, reviewerChoices, reviewsFor, sendBackTask, taskActions, type TaskSend } from "./task-actions"
+import { ANYONE, approveTask, assignTask, cancelTask, changeReviewer, closedDigest, reviewerChoices, reviewsFor, sendBackTask, taskActions, type TaskSend } from "./task-actions"
 
 const roster: Roster = []
 const ids = new Map<string, Identity>()
@@ -161,6 +161,15 @@ describe("handing a review to someone else", () => {
     expect(reviewerChoices(task(id), state().members.values())).toEqual([ANYONE, "jon", "codex"])
     const open = await inReview(ANYONE)
     expect(reviewerChoices(task(open), state().members.values())).toEqual(["jon", "grok-reviewer", "codex"])
+  })
+
+  test("a person assigns a task to the suggested agent, with the reason in its note", async () => {
+    const id = await inReview("grok-reviewer")
+    const sent = assignTask(task(id), "codex", "worked T1, where it came from")
+    expect(sent.opts).toEqual({ kind: "event", ev: { op: "task.update", task: id, owner: "codex", note: "assigned to codex: worked T1, where it came from" }, to: ["codex"] })
+    const at = await sendAs("jon", sent)
+    expect(state().rejected.get(at)).toBeUndefined()
+    expect(task(id).owner).toBe("codex")
   })
 
   test("a person moves an open round to a new reviewer, whose verdict counts and the old one's doesn't", async () => {

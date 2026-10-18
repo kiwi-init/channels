@@ -40,12 +40,13 @@ const DETECTED_TOOLS = new Set(TOOLS.map(([tag]) => tag));
  * The card to show: what's detected now, plus what was said by hand before (a model, a note, tools it
  * can't detect), unless said again.
  */
-export function mergeCard(detected: Card, was: Card | undefined, given: { model?: string; note?: string; tools?: string[] } = {}): Card {
+export function mergeCard(detected: Card, was: Card | undefined, given: { model?: string; note?: string; tools?: string[]; fresh?: number } = {}): Card {
   const kept = (was?.tools ?? []).filter((t) => !DETECTED_TOOLS.has(t));
   const tools = [...new Set([...(detected.tools ?? []), ...kept, ...(given.tools ?? []).map((t) => t.trim().toLowerCase()).filter(Boolean)])];
   const model = given.model ?? was?.model;
   const note = given.note ?? was?.note;
-  return { ...detected, ...(model ? { model } : {}), ...(tools.length ? { tools } : {}), ...(note ? { note } : {}) };
+  const fresh = given.fresh ?? was?.fresh;
+  return { ...detected, ...(model ? { model } : {}), ...(tools.length ? { tools } : {}), ...(note ? { note } : {}), ...(fresh !== undefined ? { fresh } : {}) };
 }
 
 /** The harness running this process, from the markers each one sets for its shell commands. */
@@ -131,7 +132,7 @@ export async function detectRuns(env: Record<string, string | undefined> = proce
 /** Whether two cards say the same thing (tool order aside). */
 export function sameCard(a: Card | undefined, b: Card): boolean {
   if (!a) return false;
-  const keys: (keyof Card)[] = ["os", "arch", "harness", "model", "cpu", "memory", "repo", "branch", "note"];
+  const keys: (keyof Card)[] = ["os", "arch", "harness", "model", "cpu", "memory", "repo", "branch", "note", "fresh"];
   if (keys.some((k) => (a[k] ?? undefined) !== (b[k] ?? undefined))) return false;
   const ta = [...(a.tools ?? [])].sort().join(",");
   const tb = [...(b.tools ?? [])]

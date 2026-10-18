@@ -4,6 +4,7 @@ import { proofLabel } from "@kiwi/core/format.ts"
 import type { Message } from "@kiwi/core/protocol.ts"
 import { colorOf, issueOf, taskId, type ChannelState, type Task } from "@kiwi/core/state.ts"
 import type { GithubDiff } from "@kiwi/core/client.ts"
+import { pickFor, taskCandidates } from "@kiwi/core/routing.ts"
 import { taskFeed, taskPrs, taskRepo } from "@kiwi/core/work.ts"
 import { formatAgo, formatFull, memberName } from "@/lib/format"
 import { ANYONE, reviewerChoices, taskActions } from "@/lib/task-actions"
@@ -35,6 +36,7 @@ export function TaskDetails({
   onSendBack,
   onCancel,
   onReviewer,
+  onAssign,
   onDiff,
 }: {
   id: number
@@ -51,6 +53,7 @@ export function TaskDetails({
   onSendBack: (t: Task, why: string) => Promise<void>
   onCancel: (t: Task, note: string) => Promise<void>
   onReviewer: (t: Task, review: string) => Promise<void>
+  onAssign: (t: Task, to: string, why: string) => Promise<void>
   onDiff?: (repo: string, sha: string) => Promise<GithubDiff>
 }) {
   const task = state.tasks.get(id)
@@ -85,6 +88,7 @@ export function TaskDetails({
       <div className="mt-4">
         <Properties task={task} state={state} messages={messages} now={now} items={items} onDiff={onDiff} />
       </div>
+      {person && !noteBlocked && <Suggested task={task} state={state} onAssign={onAssign} />}
       {!noteBlocked && <Actions key={task.id} task={task} state={state} me={me} person={person} onApprove={onApprove} onSendBack={onSendBack} onCancel={onCancel} onReviewer={onReviewer} />}
       <h3 className="mt-4 text-ui font-semibold">
         <button type="button" aria-expanded={story} onClick={() => setStory((v) => !v)} className="flex w-full items-center gap-2 text-left">
@@ -100,6 +104,36 @@ export function TaskDetails({
         </div>
       )}
     </section>
+  )
+}
+
+function Suggested({ task, state, onAssign }: { task: Task; state: ChannelState; onAssign: (t: Task, to: string, why: string) => Promise<void> }) {
+  const [busy, setBusy] = useState(false)
+  const top = task.state === "done" || task.owner ? null : pickFor(taskCandidates(state, task.id))
+  if (!top) return null
+  const why = top.reasons[0] ?? "has its context"
+  return (
+    <p className="mt-3 flex min-w-0 items-center gap-2 text-ui">
+      <span className="shrink-0 text-ink-3">Suggested</span>
+      <span className="min-w-0 truncate text-ink-2" title={top.reasons.join("; ")}>
+        <span className="font-medium text-ink">{memberName(state.members.get(top.name), top.name)}</span> · {why}
+      </span>
+      <Button
+        variant="secondary"
+        size="sm"
+        className="ml-auto shrink-0"
+        disabled={busy}
+        onClick={() => {
+          setBusy(true)
+          onAssign(task, top.name, why)
+            .then(() => toast(`${taskId(task.id)} is ${memberName(state.members.get(top.name), top.name)}’s now`))
+            .catch((err: unknown) => toast(`Not assigned: ${errorText(err)}`, "error"))
+            .finally(() => setBusy(false))
+        }}
+      >
+        Assign
+      </Button>
+    </p>
   )
 }
 

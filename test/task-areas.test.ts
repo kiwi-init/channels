@@ -63,8 +63,8 @@ describe("the folders a task changed", () => {
     const next = await ev("jon", { op: "task.add", title: "Webhook retries in src/relay/github.ts" });
     const s = fold([a, aDone, b, bDone, next], roster);
     expect(taskCandidates(s, next.seq)).toEqual([
-      { name: "ana", score: 2, queue: 0, reasons: [`touched src/relay in T${a.seq}`] },
-      { name: "bo", score: 0, queue: 0, reasons: [] },
+      { name: "ana", score: 2, queue: 0, reasons: [`touched src/relay in T${a.seq}`], warm: false },
+      { name: "bo", score: 0, queue: 0, reasons: [], warm: false },
     ]);
   });
 });
