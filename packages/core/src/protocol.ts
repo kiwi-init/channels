@@ -237,6 +237,7 @@ export type Event =
    */
   | { op: "charter.set"; text: string | null }
   | { op: "repos.set"; repos: string[] }
+  | { op: "github"; items: GithubNote[] }
   /**
    * Owner only: stop every agent (on) or let them carry on (off). While on hold, every client refuses
    * an agent's work (tasks, facts, messages to other agents); agents may still answer people.
@@ -333,6 +334,52 @@ export function cleanCard(x: unknown): Card | null {
 
 /** Longest charter, in characters: it shares the sealed settings (about 16KB at the relay) with the room list. */
 export const MAX_CHARTER = 2000;
+
+export const GITHUB_EVENTS = ["pull_request", "check_run", "push", "workflow_run"] as const;
+export const MAX_GITHUB_ITEMS = 50;
+
+export interface GithubNote {
+  event: (typeof GITHUB_EVENTS)[number];
+  repo: string;
+  action?: string;
+  number?: number;
+  title?: string;
+  url?: string;
+  state?: string;
+  merged?: boolean;
+  branch?: string;
+  sha?: string;
+  name?: string;
+  status?: string;
+  conclusion?: string;
+  by?: string;
+  at: number;
+}
+
+const GITHUB_TEXT: Record<string, number> = { action: 40, title: 200, url: 300, state: 20, branch: 200, sha: 40, name: 200, status: 20, conclusion: 20, by: 100 };
+
+export function cleanGithubNote(x: unknown): GithubNote | null {
+  if (!x || typeof x !== "object") return null;
+  const r = x as Record<string, unknown>;
+  if (!(GITHUB_EVENTS as readonly unknown[]).includes(r.event) || typeof r.repo !== "string" || !REPO_RE.test(r.repo)) return null;
+  if (typeof r.at !== "number" || !Number.isSafeInteger(r.at) || r.at < 0) return null;
+  const out: Record<string, unknown> = { event: r.event, repo: r.repo, at: r.at };
+  for (const [k, max] of Object.entries(GITHUB_TEXT)) {
+    const v = r[k];
+    if (v === undefined) continue;
+    if (typeof v !== "string" || v.length > max || /[\u0000-\u001f\u007f]/.test(v)) return null;
+    out[k] = v;
+  }
+  if (r.number !== undefined) {
+    if (typeof r.number !== "number" || !Number.isSafeInteger(r.number) || r.number <= 0) return null;
+    out.number = r.number;
+  }
+  if (r.merged !== undefined) {
+    if (typeof r.merged !== "boolean") return null;
+    out.merged = r.merged;
+  }
+  return out as unknown as GithubNote;
+}
 
 export const MAX_REPOS = 20;
 export const REPO_RE = /^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/;
@@ -659,6 +706,8 @@ export function wellFormedEvent(ev: unknown): ev is Event {
       return roomId(e.id) && str(e.name, MAX_ROOM_NAME * 4);
     case "charter.set":
       return e.text === null || str(e.text, MAX_CHARTER);
+    case "github":
+      return Array.isArray(e.items) && e.items.length > 0 && e.items.length <= MAX_GITHUB_ITEMS && e.items.every((i) => cleanGithubNote(i) !== null);
     case "repos.set":
       return Array.isArray(e.repos) && e.repos.length <= MAX_REPOS && e.repos.every((r) => typeof r === "string" && REPO_RE.test(r));
     case "hold.set":

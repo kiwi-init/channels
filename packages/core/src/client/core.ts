@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import type { GithubFx } from "./github.ts";
 import type { ChannelAccess } from "../crypto.ts";
 import type { Identity } from "../identity.ts";
 import { OwnerOnly } from "../refusals.ts";
@@ -15,7 +16,7 @@ import type { SendFx } from "./send.ts";
 import type { SettingsFx } from "./settings.ts";
 import type { SnapshotsFx } from "./snapshots.ts";
 
-export interface ChannelFx extends KeysFx, InfoFx, SettingsFx, RequestsFx, MembersFx, HistoryFx, SnapshotsFx, SendFx, ImagesFx, LiveFx {}
+export interface ChannelFx extends KeysFx, InfoFx, SettingsFx, RequestsFx, MembersFx, HistoryFx, SnapshotsFx, SendFx, ImagesFx, LiveFx, GithubFx {}
 
 export class ChannelCore {
   readonly name: string;

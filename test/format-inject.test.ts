@@ -28,6 +28,7 @@ function blank(): ChannelState {
     places: new Map(),
     charter: null,
     repos: [],
+    github: { prs: new Map(), checks: new Map() },
     hold: null,
     reactions: new Map(),
     roleSets: new Map(),

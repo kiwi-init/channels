@@ -17,6 +17,7 @@ import type { SigningBudget } from "./sas.ts";
 import type { Scope } from "./scopes.ts";
 import type { ChannelState, GuardFloor } from "./state.ts";
 import { ChannelCore, type ChannelFx } from "./client/core.ts";
+import { ChannelGithub } from "./client/github.ts";
 import { ChannelHistory } from "./client/history.ts";
 import { ChannelImages } from "./client/images.ts";
 import { ChannelInfo, type Info, type MemberRow } from "./client/info.ts";
@@ -67,6 +68,7 @@ export class Channel {
       ...this.sending.fx,
       ...images.fx,
       ...live.fx,
+      ...new ChannelGithub(this.core).fx,
     };
     this.core.fx = this.fx;
   }
@@ -342,6 +344,14 @@ export class Channel {
 
   snapshotIfDue(): Promise<number | null> {
     return run(this.fx.snapshotIfDue());
+  }
+
+  setGithubRepos(repos: string[]): Promise<string[]> {
+    return run(this.fx.setGithubRepos(repos));
+  }
+
+  drainGithub(): Promise<number> {
+    return run(this.fx.drainGithub());
   }
 
   snapshotAt(): Promise<number | null> {

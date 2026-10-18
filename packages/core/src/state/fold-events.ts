@@ -1,5 +1,6 @@
 import { GENERAL_ROOM, MAX_CHARTER, MAX_ROOMS, MAX_TAGS, PROOF_MAX, TASK_TITLE_MAX_LENGTH, type Event, type Message } from "../protocol.ts";
 import { free, take } from "./leases.ts";
+import { applyGithub, type GithubState } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { omit } from "../omit.ts";
 import { readScopes, SCOPES, type Scope } from "../scopes.ts";
@@ -23,6 +24,7 @@ export interface FoldCtx {
   nameTaken: (name: string, except?: string) => boolean;
   charter: Charter | null;
   repos: string[];
+  github: GithubState;
   hold: Hold | null;
 }
 
@@ -81,6 +83,15 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: Member, at
       }
       const text = ev.text?.trim().slice(0, MAX_CHARTER);
       c.charter = text ? { text, by: m.from, at } : null;
+      break;
+    }
+
+    case "github": {
+      if (!member.owner) {
+        reject("only the owner's app posts GitHub's news");
+        break;
+      }
+      applyGithub(c.github, ev.items);
       break;
     }
 
