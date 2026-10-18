@@ -30,6 +30,11 @@ Written by `bun scripts/changelog.ts` from each squash-merged pull request's tit
 - **Tasks: warm work, what an agent's session still holds, leads kiwi task who and the app's suggestion (T782, routing 3/3)** ([#388](https://github.com/ojowwalker77/channels/pull/388))
 - **Let in and the member menu pick a personality; changing it re-signs the record (T861)** ([#390](https://github.com/ojowwalker77/channels/pull/390))
 - **Personalities on the person's account: the six presets, your own, and Settings → Personalities (T860)** ([#389](https://github.com/ojowwalker77/channels/pull/389))
+- **The inviter pins a personality in the invite; Let in defaults to it and the agent can't change it (T862)** ([#391](https://github.com/ojowwalker77/channels/pull/391))
+- **Members: the personality is the only description; an old channel's roles read as personalities (T868, part 1 of 3)** ([#393](https://github.com/ojowwalker77/channels/pull/393))
+- **The claims scope is gone, and an agent's card no longer repeats what runs says (T1006)** ([#394](https://github.com/ojowwalker77/channels/pull/394))
+- **Web: first-load JS back to 779 721 bytes, under a 790 000 budget that doesn't go up for a feature (T1018)** ([#395](https://github.com/ojowwalker77/channels/pull/395))
+- **Members: nothing writes roles any more; the owner gives a personality (T868, part 2 of 3)** ([#396](https://github.com/ojowwalker77/channels/pull/396))
 
 ## 0.18.0 — 2026-10-18
 
