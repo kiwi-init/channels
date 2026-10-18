@@ -65,6 +65,11 @@ beforeAll(async () => {
       if (path === `/repos/ojow/channels/compare/main...${sha}`) return new Response("diff --git a/x b/x\n+hello\n");
       if (path === "/repos/ojow/channels/check-runs") return Response.json({ html_url: "https://github.com/ojow/channels/runs/1" }, { status: 201 });
       if (path === "/repos/ojow/channels/issues/7/comments") return Response.json({ html_url: "https://github.com/ojow/channels/pull/7#issuecomment-1" }, { status: 201 });
+      if (path === "/repos/ojow/channels/issues/12" && req.method === "GET")
+        return Response.json({ title: "Copy icons do nothing", body: "On code blocks and the invite.", html_url: "https://github.com/ojow/channels/issues/12", state: "open" });
+      if (path === "/repos/ojow/channels/issues/12" && req.method === "PATCH") return Response.json({ html_url: "https://github.com/ojow/channels/issues/12", state: "closed" });
+      if (path === "/repos/ojow/channels/issues/12/comments") return Response.json({ html_url: "https://github.com/ojow/channels/issues/12#issuecomment-2" }, { status: 201 });
+      if (path === "/repos/ojow/channels/issues/7") return Response.json({ title: "A PR", html_url: "https://github.com/ojow/channels/pull/7", state: "open", pull_request: {} });
       return new Response("nope", { status: 404 });
     },
   });
@@ -143,6 +148,37 @@ describe("diffs and review checks through the relay", () => {
     expect((await room("POST", "/github/comment", owner, { ...body, repo: "someone/else" })).status).toBe(400);
     expect(await (await room("POST", "/github/comment", owner, body)).json()).toEqual({ url: "https://github.com/ojow/channels/pull/7#issuecomment-1" });
     expect(JSON.parse(calls.filter((c) => c.path === "/repos/ojow/channels/issues/7/comments").at(-1)!.body)).toEqual({ body: "Kiwi task T72: Branch PRs" });
+  });
+
+  test("a member reads an issue of a connected repo, to import it as a task; a PR's number isn't an issue", async () => {
+    expect(await (await room("GET", "/github/issue?repo=ojow/channels&number=12", member)).json()).toEqual({
+      repo: "ojow/channels",
+      number: 12,
+      title: "Copy icons do nothing",
+      body: "On code blocks and the invite.",
+      url: "https://github.com/ojow/channels/issues/12",
+      state: "open",
+    });
+    const pr = await room("GET", "/github/issue?repo=ojow/channels&number=7", member);
+    expect(pr.status).toBe(400);
+    expect(((await pr.json()) as { error: string }).error).toBe("ojow/channels#7 is a pull request, not an issue");
+    expect((await room("GET", "/github/issue?repo=someone/else&number=12", member)).status).toBe(400);
+    expect((await room("GET", "/github/issue?repo=ojow/channels&number=x", member)).status).toBe(400);
+    expect((await room("GET", "/github/issue?repo=ojow/channels&number=99", member)).status).toBe(404);
+  });
+
+  test("only the owner closes an issue: a comment saying why, then closed with GitHub's reason", async () => {
+    const body = { repo: "ojow/channels", number: 12, reason: "not_planned", body: "Kiwi task T9 cancelled: duplicate" };
+    expect((await room("POST", "/github/issue/close", member, body)).status).toBe(403);
+    expect((await room("POST", "/github/issue/close", owner, { ...body, reason: "done" })).status).toBe(400);
+    expect((await room("POST", "/github/issue/close", owner, { ...body, repo: "someone/else" })).status).toBe(400);
+    const before = calls.length;
+    expect(await (await room("POST", "/github/issue/close", owner, body)).json()).toEqual({ url: "https://github.com/ojow/channels/issues/12" });
+    const made = calls.slice(before).filter((c) => c.path.startsWith("/repos/ojow/channels/issues/12"));
+    expect(made.map((c) => [c.method, c.path, JSON.parse(c.body)])).toEqual([
+      ["POST", "/repos/ojow/channels/issues/12/comments", { body: "Kiwi task T9 cancelled: duplicate" }],
+      ["PATCH", "/repos/ojow/channels/issues/12", { state: "closed", state_reason: "not_planned" }],
+    ]);
   });
 
   test("a relay without the App answers 404", async () => {

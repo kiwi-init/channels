@@ -1,6 +1,6 @@
 import type { Member as MemberRecord, Runs } from "../membership.ts";
-import type { Card, Color, Message, TaskState, Trust, Verdict } from "../protocol.ts";
-import type { GithubCheck, GithubPr, GithubState } from "./github.ts";
+import type { Card, Color, IssueRef, Message, TaskState, Trust, Verdict } from "../protocol.ts";
+import type { GithubCheck, GithubIssue, GithubPr, GithubState } from "./github.ts";
 import type { Scope } from "../scopes.ts";
 
 export interface Member {
@@ -98,6 +98,8 @@ export interface Task {
   review?: string;
   approvedBy?: string;
   cancelled?: boolean;
+  closedSeq?: number;
+  issue?: IssueRef;
   workedBy: string[];
   rounds: ReviewRound[];
   source?: number;
@@ -205,7 +207,7 @@ export interface FoldBase {
   lead: string | null;
   charter: Charter | null;
   repos?: string[];
-  github?: { prs: GithubPr[]; checks: [string, GithubCheck[]][] };
+  github?: { prs: GithubPr[]; checks: [string, GithubCheck[]][]; issues?: GithubIssue[] };
   hold: Hold | null;
   compact: Compact | null;
   compactProposal: Compact | null;

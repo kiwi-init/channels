@@ -638,16 +638,23 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
       description:
         "Add a task to the shared board: it's open until someone takes it, then doing, then done. Returns its id (like T12), and warns when an open task has a near-identical title. " +
         "`review` is who must approve it before it's done (a member, or any). " +
+        "`issue` imports a GitHub issue of the channel's repo (12, owner/repo#12 or its link): the title defaults to the issue's, and closing either one closes the other. " +
         'Example: task_add {"title":"test the driver on Windows","review":"any"}.',
       inputSchema: {
-        title: z.string(),
+        title: z.string().optional(),
         detail: z.string().optional(),
         owner: z.string().optional(),
         review: z.string().optional().describe("who must approve it before it's done: a member's name, or any"),
+        issue: z.string().optional().describe("a GitHub issue to import: 12, owner/repo#12 or its link"),
       },
     },
-    tool(({ title, detail, owner, review }) =>
+    tool(({ title, detail, owner, review, issue }) =>
       Effect.gen(function* () {
+        if (issue !== undefined) {
+          const made = yield* s.taskFromIssue(issue, { title, detail, owner, review });
+          return `added ${taskId(made.id)} from ${made.issue}: ${made.title}\nclosing either one closes the other`;
+        }
+        if (!title?.trim()) return yield* new Rejected("a task needs a title (or an issue to import)");
         const { state } = yield* s.state();
         const id = yield* s.taskAdd(title, { detail, owner, review });
         const like = similarOpenTasks(state, title).map((t) => t.id);

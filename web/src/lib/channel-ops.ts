@@ -64,6 +64,8 @@ export class ChannelLink {
   githubDiff = (...a: Args<"githubDiff">) => this.c("githubDiff", ...a)
   postReviewCheck = (...a: Args<"postReviewCheck">) => this.c("postReviewCheck", ...a)
   commentOnPr = (...a: Args<"commentOnPr">) => this.c("commentOnPr", ...a)
+  githubIssue = (...a: Args<"githubIssue">) => this.c("githubIssue", ...a)
+  closeIssue = (...a: Args<"closeIssue">) => this.c("closeIssue", ...a)
   snapshotAt = () => this.c("snapshotAt")
   info = () => this.c("info")
   title = () => this.c("title")

@@ -10,6 +10,15 @@ export interface GithubDiff {
   truncated: boolean;
 }
 
+export interface GithubIssueInfo {
+  repo: string;
+  number: number;
+  title: string;
+  body: string;
+  url: string;
+  state: "open" | "closed";
+}
+
 export interface ReviewCheck {
   repo: string;
   sha: string;
@@ -24,12 +33,16 @@ export interface GithubFx {
   githubDiff(repo: string, sha: string): Effect.Effect<GithubDiff, Refused, Relay>;
   postReviewCheck(c: ReviewCheck): Effect.Effect<{ url: string | null }, Refused, Relay>;
   commentOnPr(repo: string, number: number, body: string): Effect.Effect<{ url: string | null }, Refused, Relay>;
+  githubIssue(repo: string, number: number): Effect.Effect<GithubIssueInfo, Refused, Relay>;
+  closeIssue(c: { repo: string; number: number; reason: "completed" | "not_planned"; body: string }): Effect.Effect<{ url: string | null }, Refused, Relay>;
 }
 
 const PR_ACTIONS = new Set(["opened", "reopened", "closed", "ready_for_review", "synchronize", "edited", "converted_to_draft"]);
+const ISSUE_ACTIONS = new Set(["opened", "reopened", "closed", "edited"]);
 
 function worthSaying(i: GithubNote): boolean {
   if (i.event === "pull_request") return !i.action || PR_ACTIONS.has(i.action);
+  if (i.event === "issues") return !i.action || ISSUE_ACTIONS.has(i.action);
   if (i.event === "check_run" || i.event === "workflow_run") return i.action === "completed";
   return true;
 }
@@ -55,6 +68,15 @@ export class ChannelGithub {
     commentOnPr: Effect.fn("Channel.commentOnPr")({ self: this }, function* (this: ChannelGithub, repo: string, number: number, body: string) {
       yield* this.ch.ownerOnly();
       return yield* this.ch.request<{ url: string | null }>("/github/comment", { method: "POST", body: JSON.stringify({ repo, number, body }) });
+    }),
+
+    githubIssue: Effect.fn("Channel.githubIssue")({ self: this }, function* (this: ChannelGithub, repo: string, number: number) {
+      return yield* this.ch.request<GithubIssueInfo>("/github/issue", {}, { repo, number: String(number) });
+    }),
+
+    closeIssue: Effect.fn("Channel.closeIssue")({ self: this }, function* (this: ChannelGithub, c: { repo: string; number: number; reason: "completed" | "not_planned"; body: string }) {
+      yield* this.ch.ownerOnly();
+      return yield* this.ch.request<{ url: string | null }>("/github/issue/close", { method: "POST", body: JSON.stringify(c) });
     }),
 
     drainGithub: Effect.fn("Channel.drainGithub")({ self: this }, function* (this: ChannelGithub) {
