@@ -271,12 +271,6 @@ export function isReaction(m: Pick<Message, "kind" | "ev">): boolean {
 
 const QUIET_OPS: ReadonlySet<string> = new Set(["hello", "card", "react", "fact.set", "fact.del", "lease.take", "lease.free", "task.claim", "claim", "release"]);
 
-const MENTION_RE = /(?:^|[^\w@/.-])@([a-z0-9][a-z0-9._-]*[a-z0-9]|[a-z0-9])/gi;
-
-export function mentionsOf(body: string): Set<string> {
-  return new Set([...body.matchAll(MENTION_RE)].map((m) => m[1]!.toLowerCase()));
-}
-
 export function isQuiet(m: Pick<Message, "kind" | "ev">): boolean {
   return m.kind === "event" && !!m.ev && QUIET_OPS.has(m.ev.op);
 }

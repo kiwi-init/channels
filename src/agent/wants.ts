@@ -1,7 +1,13 @@
 import { isDirectedAt, isForAgent } from "@kiwi/core/client.ts";
-import { GENERAL_ROOM, ignored, mentionsOf, type Message } from "@kiwi/core/protocol.ts";
+import { GENERAL_ROOM, ignored, type Message } from "@kiwi/core/protocol.ts";
 import { threadMembers, type ChannelState } from "@kiwi/core/state.ts";
 import type { Delivery } from "./shared.ts";
+
+const MENTION_RE = /(?:^|[^\w@/.-])@([a-z0-9][a-z0-9._-]*[a-z0-9]|[a-z0-9])/gi;
+
+function mentionsOf(body: string): Set<string> {
+  return new Set([...body.matchAll(MENTION_RE)].map((m) => m[1]!.toLowerCase()));
+}
 
 export function wants(me: string, m: Message, state: ChannelState | null, d: Delivery = {}): boolean {
   if (m.from === me) return false;

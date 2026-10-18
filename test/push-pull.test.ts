@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { wants } from "../src/agent.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import { mentionsOf, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
+import type { Event, Kind, Message } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 
 const ids: Record<string, Identity> = {};
@@ -71,9 +71,12 @@ describe("what an agent is sent", () => {
     expect(wants("bob", answer, s)).toBe(false);
   });
 
-  test("mentions are names after an @ that starts a word", () => {
-    expect([...mentionsOf("@ann and @Bob-2, see #12 (@cat).")]).toEqual(["ann", "bob-2", "cat"]);
-    expect(mentionsOf("ann@example.com path/@scope/pkg ./@x").size).toBe(0);
-    expect([...mentionsOf("@beaver-festive.")]).toEqual(["beaver-festive"]);
+  test("a mention is a name after an @ that starts a word, any case, trailing punctuation aside", async () => {
+    const reaches = async (body: string) => {
+      const m = await msg("ann", { to: ["jon"], body });
+      return wants("cat", m, fold([m], roster));
+    };
+    for (const body of ["@cat look", "see #12 (@Cat).", "ok @cat-"]) expect(await reaches(body)).toBe(true);
+    for (const body of ["cat@example.com", "path/@cat/pkg", "./@cat", "@catalog"]) expect(await reaches(body)).toBe(false);
   });
 });
