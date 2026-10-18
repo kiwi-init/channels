@@ -5,7 +5,7 @@
 import type { Personality } from "@kiwi/core/personality.ts";
 import type { CachedRow } from "@kiwi/core/cache-row.ts";
 import type { Channel, OpenKind, PresenceFields } from "@kiwi/core/client.ts";
-import type { Message, Presence, ReadMark } from "@kiwi/core/protocol.ts";
+import type { MemberPicture, Message, Presence, ReadMark } from "@kiwi/core/protocol.ts";
 import type { Wire } from "./wire.ts";
 
 /** The person's own key. Same JSON shape as Identity in src/identity.ts. */
@@ -262,6 +262,8 @@ export interface KiwiBridge {
   githubUnlink(): Promise<GithubStatus>;
   /** The repos the linked account can reach through the App, most recently pushed first. The token stays in main. */
   githubRepos(): Promise<GithubRepoView[]>;
+  /** The linked account's GitHub avatar, fetched by main (no page loads from GitHub), or null when nothing is linked. */
+  githubPicture(): Promise<MemberPicture | null>;
   onGithubCode(cb: (c: { code: string; url: string }) => void): () => void;
   /** Pairing: show the code, poll slot a, answer into slot b. */
   pairBegin(): Promise<{ code: string }>;

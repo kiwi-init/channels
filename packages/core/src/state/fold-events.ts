@@ -197,6 +197,15 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       break;
     }
 
+    case "picture.set": {
+      const target = members.get(ev.member);
+      if (!target?.active) reject(`no member named ${ev.member}`);
+      else if (ev.member !== m.from) reject("only that person sets their picture");
+      else if (!isPerson(target)) reject("agents wear their character; they don't have a picture");
+      else target.picture = ev.picture ?? undefined;
+      break;
+    }
+
     case "task.add":
       tasks.set(m.seq, {
         id: m.seq,

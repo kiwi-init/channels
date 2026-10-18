@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { relayConfig } from "../src/relay/room/http.ts";
-import { finishDevice, listRepos, startDevice, type DeviceStart, type FlowDeps } from "../desktop/src/github-flow.ts";
+import { avatar, finishDevice, listRepos, startDevice, type DeviceStart, type FlowDeps } from "../desktop/src/github-flow.ts";
 
 const json = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
@@ -120,5 +120,31 @@ describe("listing the repos the linked account can reach", () => {
     await expect(listRepos("t", (async () => json({ message: "Bad credentials" }, 401)) as unknown as typeof fetch)).rejects.toThrow("link it again in Settings");
     await expect(listRepos("t", (async () => json({ message: "nope" }, 500)) as unknown as typeof fetch)).rejects.toThrow("didn’t list the repos");
     expect(await listRepos("t", (async () => json([{ full_name: 7 }, repo(1)])) as unknown as typeof fetch)).toEqual([{ fullName: "octo/repo-1", private: false, pushedAt: 1_700_000_000_001 }]);
+  });
+});
+
+describe("the linked account's picture", () => {
+  const image = (bytes: number, mime = "image/jpeg"): Response => new Response(new Uint8Array(bytes).fill(7), { headers: { "content-type": mime } });
+  const fetchOf = (replies: Response[], urls: string[]) =>
+    (async (url: string | URL | Request) => {
+      urls.push(String(url));
+      return replies.shift() ?? new Response(null, { status: 404 });
+    }) as typeof fetch;
+
+  test("fetched by the account's id at 96px, as base64 the person can publish", async () => {
+    const urls: string[] = [];
+    const p = await avatar(42, fetchOf([image(3000)], urls));
+    expect(urls).toEqual(["https://avatars.githubusercontent.com/u/42?s=96&v=4"]);
+    expect(p?.mime).toBe("image/jpeg");
+    expect(Buffer.from(p!.data, "base64").length).toBe(3000);
+  });
+
+  test("too big at 96px, it tries 64px; still too big, or not an image, or not there, it's null", async () => {
+    const urls: string[] = [];
+    expect((await avatar(42, fetchOf([image(40_000), image(5000)], urls)))?.mime).toBe("image/jpeg");
+    expect(urls.map((u) => new URL(u).searchParams.get("s"))).toEqual(["96", "64"]);
+    expect(await avatar(42, fetchOf([image(40_000), image(40_000)], []))).toBeNull();
+    expect(await avatar(42, fetchOf([image(3000, "image/svg+xml")], []))).toBeNull();
+    expect(await avatar(42, fetchOf([new Response(null, { status: 404 })], []))).toBeNull();
   });
 });

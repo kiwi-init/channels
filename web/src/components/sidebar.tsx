@@ -4,6 +4,7 @@ import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 import type { ChannelRow } from "@/lib/channel"
 import type { RowNews } from "@/lib/news"
 import { useIcons } from "@/lib/icons"
+import { useOwnPicture } from "@/lib/own-picture"
 import { formatShort } from "@/lib/format"
 import { useSecrets } from "@/lib/secrets"
 import { openRelease, restartToUpdate, useUpdate } from "@/lib/update"
@@ -44,6 +45,7 @@ export function Sidebar({
   className?: string
 }) {
   const person = useSecrets().person
+  const picture = useOwnPicture()
   const update = useUpdate()
   const newsOf = new Map(rows.map((c, i) => [c.room, news[i]]))
   const icons = useIcons()
@@ -141,7 +143,7 @@ export function Sidebar({
             className="w-60"
             trigger={
               <button type="button" className="glass flex h-10 max-w-full items-center gap-2 rounded-full pr-4 pl-1 transition-colors">
-                <Monogram name={person.name} size={32} />
+                <Monogram name={person.name} size={32} picture={picture} />
                 <span className="truncate text-ui font-semibold">{person.name}</span>
               </button>
             }
@@ -228,6 +230,7 @@ export function Rail({
   onSettings: () => void
 }) {
   const person = useSecrets().person
+  const picture = useOwnPicture()
   const update = useUpdate()
   const newsOf = new Map(rows.map((c, i) => [c.room, news[i]]))
   const icons = useIcons()
@@ -275,7 +278,7 @@ export function Rail({
             className="w-60"
             trigger={
               <button type="button" className="mt-1 flex rounded-full">
-                <Monogram name={person.name} size={36} />
+                <Monogram name={person.name} size={36} picture={picture} />
                 <span className="sr-only">{person.name}</span>
               </button>
             }

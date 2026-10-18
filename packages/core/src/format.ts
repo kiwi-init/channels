@@ -96,6 +96,8 @@ export function describeEvent(m: Message, state?: ChannelState): string {
       return ev.role ? `made ${ev.member} ${ev.role}${ev.about ? ` (${ev.about})` : ""}` : `cleared ${ev.member}'s role`;
     case "role.refuse":
       return `kept ${ev.member}'s role as it was`;
+    case "picture.set":
+      return ev.picture ? "set their picture" : "cleared their picture";
     case "color.set":
       return ev.color ? `${ev.member === m.from ? "picked" : `gave ${ev.member}`} the colour ${ev.color}` : `cleared ${ev.member === m.from ? "their" : `${ev.member}'s`} colour`;
     case "scope.set":

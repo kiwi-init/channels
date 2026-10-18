@@ -80,6 +80,7 @@ export function fold(
       m.role = p.role;
       m.about = p.about;
       m.color = p.color;
+      if (p.picture) m.picture = p.picture;
       if (p.card) m.card = p.card;
       m.lastSeen = Math.max(m.lastSeen, p.lastSeen);
       m.messages = p.messages;
@@ -317,7 +318,7 @@ export function fold(
   keep?.(
     structuredClone({
       n: head,
-      members: [...members.values()].map((m) => ({ name: m.name, role: m.role, about: m.about, color: m.color, card: m.card, lastSeen: m.lastSeen, messages: m.messages })),
+      members: [...members.values()].map((m) => ({ name: m.name, role: m.role, about: m.about, color: m.color, picture: m.picture, card: m.card, lastSeen: m.lastSeen, messages: m.messages })),
       lead,
       charter: ctx.charter,
       compact: ctx.compact,

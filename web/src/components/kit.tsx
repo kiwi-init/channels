@@ -1,7 +1,7 @@
 import { Dialog } from "@base-ui/react/dialog"
-import { Component, useSyncExternalStore, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type Ref } from "react"
+import { Component, createContext, useContext, useSyncExternalStore, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type Ref } from "react"
 
-import type { Color } from "@kiwi/core/protocol.ts"
+import type { Color, MemberPicture } from "@kiwi/core/protocol.ts"
 import { PALETTE } from "@/lib/characters"
 import { initials } from "@/lib/format"
 import { noteSignInGone } from "@/lib/session"
@@ -113,8 +113,11 @@ export function hueOf(name: string): Color {
   return HUES[h % HUES.length]!
 }
 
+/** People's pictures in the open channel, by member name: a person with one wears it instead of initials. */
+export const Pictures = createContext<ReadonlyMap<string, MemberPicture>>(new Map())
+
 /**
- * Who someone is, at a glance: a circle with their initials. A person wears their own pick (their
+ * Who someone is, at a glance: a circle with their initials, or the picture they published. A person wears their own pick (their
  * agents wear it too), or a quiet grey; an agent with no pick gets a steady hue from its name.
  * `working` puts a ring in the in-progress blue around an agent's.
  */
@@ -126,10 +129,13 @@ export function Monogram({
   online,
   color,
   working,
+  picture,
   className,
 }: {
   name: string
   hue?: string
+  /** This person's picture, when it isn't the open channel's to know (your own face in the list). */
+  picture?: MemberPicture | null
   /** An agent: with no colour of its own, it wears a steady hue from its name. */
   agent?: boolean
   size?: number
@@ -140,10 +146,19 @@ export function Monogram({
 }) {
   const tone = color ? PALETTE[color] : null
   const letters = initials(name)
+  const known = useContext(Pictures).get(hue ?? name)
+  const face = agent ? null : (picture ?? known ?? null)
   return (
     <span className={cx("relative inline-flex shrink-0", className)} style={{ width: size, height: size }}>
       {agent ? (
         <RobotAvatar name={hue ?? name} size={size} />
+      ) : face ? (
+        <img
+          src={`data:${face.mime};base64,${face.data}`}
+          alt=""
+          draggable={false}
+          className={cx("size-full rounded-full bg-wash-2 object-cover select-none", working && "shadow-[0_0_0_1.5px_var(--canvas),0_0_0_3px_var(--doing)]")}
+        />
       ) : (
         <span
           className={cx(

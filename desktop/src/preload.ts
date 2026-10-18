@@ -6,6 +6,7 @@
 
 import { contextBridge, ipcRenderer } from "electron";
 import type { Personality } from "@kiwi/core/personality.ts";
+import type { MemberPicture } from "@kiwi/core/protocol.ts";
 
 import type {
   ChannelIdentityView,
@@ -105,6 +106,7 @@ const kiwi: KiwiBridge = {
   githubLink: () => ipcRenderer.invoke("kiwi:github-link") as Promise<GithubStatus>,
   githubUnlink: () => ipcRenderer.invoke("kiwi:github-unlink") as Promise<GithubStatus>,
   githubRepos: () => ipcRenderer.invoke("kiwi:github-repos") as Promise<GithubRepoView[]>,
+  githubPicture: () => ipcRenderer.invoke("kiwi:github-picture") as Promise<MemberPicture | null>,
   onGithubCode: (cb) => on("kiwi:github-code", cb),
   pairBegin: () => ipcRenderer.invoke("kiwi:pair-begin") as Promise<{ code: string }>,
   pairPoll: () => ipcRenderer.invoke("kiwi:pair-poll") as Promise<PairAskView | null>,
