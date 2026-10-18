@@ -351,6 +351,9 @@ export interface GithubNote {
   url?: string;
   state?: string;
   merged?: boolean;
+  additions?: number;
+  deletions?: number;
+  files?: number;
   branch?: string;
   sha?: string;
   name?: string;
@@ -392,6 +395,12 @@ export function cleanGithubNote(x: unknown): GithubNote | null {
   if (r.merged !== undefined) {
     if (typeof r.merged !== "boolean") return null;
     out.merged = r.merged;
+  }
+  for (const k of ["additions", "deletions", "files"] as const) {
+    const v = r[k];
+    if (v === undefined) continue;
+    if (typeof v !== "number" || !Number.isSafeInteger(v) || v < 0) return null;
+    out[k] = v;
   }
   return out as unknown as GithubNote;
 }

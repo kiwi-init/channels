@@ -17,6 +17,9 @@ export interface GithubPr {
   branch?: string;
   sha?: string;
   by?: string;
+  additions?: number;
+  deletions?: number;
+  files?: number;
   at: number;
   seq: number;
 }
@@ -62,6 +65,9 @@ export function applyGithub(g: GithubState, items: readonly GithubNote[], seq: n
         ...(i.branch ? { branch: i.branch } : {}),
         ...(i.sha ? { sha: i.sha } : {}),
         ...(i.by && !was?.by ? { by: i.by } : {}),
+        ...(i.additions !== undefined ? { additions: i.additions } : {}),
+        ...(i.deletions !== undefined ? { deletions: i.deletions } : {}),
+        ...(i.files !== undefined ? { files: i.files } : {}),
       });
     } else if ((i.event === "check_run" || i.event === "workflow_run") && i.sha && i.name) {
       const key = shaKey(i.repo, i.sha);

@@ -40,7 +40,7 @@ describe("the sidebar's views", () => {
 
   test("merged today counts the PRs merged since the day began", () => {
     const pr = (number: number, state: GithubPr["state"], at: number): GithubPr => ({ repo: "o/r", number, state, at, seq: number })
-    const github: ChannelState["github"] = { prs: new Map([pr(1, "merged", NOW - 60_000), pr(2, "merged", NOW - 2 * DAY), pr(3, "open", NOW)].map((p) => [String(p.number), p])), checks: new Map() }
+    const github: ChannelState["github"] = { prs: new Map([pr(1, "merged", NOW - 60_000), pr(2, "merged", NOW - 2 * DAY), pr(3, "open", NOW)].map((p) => [String(p.number), p])), checks: new Map(), issues: new Map() }
     expect(mergedSince({ github }, startOfDay(NOW))).toBe(1)
   })
 })
