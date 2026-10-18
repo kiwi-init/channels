@@ -5,7 +5,7 @@ import { CAPABILITIES, MAX_AREA, MAX_AREAS, MAX_INSTRUCTIONS, MAX_NAME, ROLE_LAB
 import { PRESETS } from "@kiwi/core/presets.ts"
 import { savePersonalities, useOwnPersonalities, usePersonalities } from "@/lib/personalities"
 import { cx } from "@/lib/utils"
-import { Button, TextField, errorText, toast } from "./kit"
+import { Button, SEGMENTED, SEGMENT_OFF, SEGMENT_ON, TextField, errorText, toast } from "./kit"
 
 const TAGLINE: Record<string, string> = {
   builder: "Takes a task to a merged PR",
@@ -116,7 +116,7 @@ function Editor({ p, onChange, onDuplicate, onDelete }: { p: Personality; onChan
 
       <div>
         <p className="mb-2 text-meta font-medium text-ink-2">Role · what it is for the board</p>
-        <div role="radiogroup" aria-label="Role" className="flex flex-wrap gap-1.5">
+        <div role="radiogroup" aria-label="Role" className={cx("inline-flex flex-wrap gap-0.5", SEGMENTED)}>
           {ROLES.map((r) => (
             <button
               key={r}
@@ -124,10 +124,7 @@ function Editor({ p, onChange, onDuplicate, onDelete }: { p: Personality; onChan
               role="radio"
               aria-checked={p.role === r}
               onClick={() => p.role !== r && set({ role: r })}
-              className={cx(
-                "rounded-row border px-2.5 py-1 text-ui transition-colors",
-                p.role === r ? "prism-lit border-transparent font-medium text-ink" : "prism border-transparent text-ink-2 hover:text-ink"
-              )}
+              className={cx("h-7 rounded-row px-3 text-ui font-medium transition-colors", p.role === r ? SEGMENT_ON : SEGMENT_OFF)}
             >
               {ROLE_LABEL[r]}
             </button>
