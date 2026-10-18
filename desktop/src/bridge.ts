@@ -76,6 +76,8 @@ export const CHANNEL_CALLS = [
   "reconcilePosting",
   "rotateIfDue",
   "snapshotIfDue",
+  "setGithubRepos",
+  "drainGithub",
   "snapshotAt",
   "info",
   "title",

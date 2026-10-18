@@ -33,6 +33,7 @@ const board = (tasks: Task[]): ChannelState =>
     places: new Map(),
     charter: null,
     repos: [],
+    github: { prs: new Map(), checks: new Map() },
     hold: null,
     reactions: new Map(),
     head: 0,

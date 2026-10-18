@@ -283,6 +283,14 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
       })
   })
   useEffect(() => snapshotIfDue(), [state.head])
+  const drainGithub = useEffectEvent(() => {
+    if (ch.isOwner && state.repos.length) ch.drainGithub().catch(() => {})
+  })
+  useEffect(() => {
+    drainGithub()
+    const every = setInterval(drainGithub, 60_000)
+    return () => clearInterval(every)
+  }, [])
   const live = useMemo(() => new Map([...online].filter(([name, o]) => !!o.pk && keyOf.get(name) === o.pk && now - o.at < PRESENCE_TTL && howHere(o) !== null)), [online, keyOf, now])
 
   const chRef = useRef(ch)

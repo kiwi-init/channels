@@ -1,5 +1,6 @@
 import type { Member as MemberRecord, Runs } from "../membership.ts";
 import type { Card, Color, Message, TaskState, Trust, Verdict } from "../protocol.ts";
+import type { GithubCheck, GithubPr, GithubState } from "./github.ts";
 import type { Scope } from "../scopes.ts";
 
 export interface Member {
@@ -155,6 +156,7 @@ export interface ChannelState {
   places: Map<string, PlaceSummary>;
   charter: Charter | null;
   repos: string[];
+  github: GithubState;
   hold: Hold | null;
   reactions: Map<number, Map<string, Reaction>>;
   head: number;
@@ -192,6 +194,7 @@ export interface FoldBase {
   lead: string | null;
   charter: Charter | null;
   repos?: string[];
+  github?: { prs: GithubPr[]; checks: [string, GithubCheck[]][] };
   hold: Hold | null;
   scopesByKey: [string, Scope[]][];
   scopeSets: [string, { seq: number; scopes: Scope[] }][];
