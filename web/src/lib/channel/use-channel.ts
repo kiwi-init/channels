@@ -192,6 +192,8 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
           window.dispatchEvent(new CustomEvent(ICON_LIVE, { detail: member.code }))
           return
         case "Status":
+          return
+        case "Down":
           setConnection("reconnecting")
           return
         case "Failed":

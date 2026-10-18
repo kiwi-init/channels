@@ -264,6 +264,7 @@ export class Keyring implements ChannelOps {
       case "Info":
       case "Roster":
       case "Request":
+      case "Down":
         return { _tag: ev._tag };
       default:
         return null;
