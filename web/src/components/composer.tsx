@@ -274,10 +274,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
 
       <div>
         <div
-          className={cx(
-            "relative min-w-0 overflow-hidden rounded-dock bg-canvas shadow-[inset_0_0_0_1px_var(--edge-strong)] transition-shadow focus-within:shadow-[inset_0_0_0_1px_var(--ring)]",
-            dropping && "shadow-[0_0_0_1.5px_var(--ring)]"
-          )}
+          className={cx("glass min-w-0 overflow-hidden rounded-dock transition-shadow focus-within:shadow-[inset_0_0_0_1px_var(--ring)]", dropping && "shadow-[0_0_0_1.5px_var(--ring)]")}
           onDragEnter={(e) => {
             if (disabled || !e.dataTransfer.types.includes("Files")) return
             e.preventDefault()
@@ -423,7 +420,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
                 disabled={disabled || dictation.unavailable}
                 className={cx(
                   "my-1.5 ml-1.5 flex size-9 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-40",
-                  dictation.listening ? "bg-accent text-accent-ink" : "text-ink-2 hover:bg-wash hover:text-ink"
+                  dictation.listening ? "prism-lit text-ink" : "text-ink-2 hover:bg-wash hover:text-ink"
                 )}
               >
                 <Icon icon={Mic01Icon} size={17} strokeWidth={2} />
@@ -437,7 +434,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
               onClick={() => void submit()}
               className={cx(
                 "m-1.5 flex size-9 shrink-0 items-center justify-center rounded-full transition-[background-color,color,transform] duration-150",
-                canSend ? "bg-accent text-accent-ink hover:opacity-90 active:scale-95" : "text-ink-3 shadow-[inset_0_0_0_1px_var(--line)]"
+                canSend ? "orb active:scale-95" : "prism text-ink-3"
               )}
             >
               <Icon icon={ArrowUp02Icon} size={18} strokeWidth={2.2} />

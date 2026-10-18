@@ -232,12 +232,11 @@ From `design-tokens.ts`:
   the message and flashes it. No quote when the answered message is the
   one right above. Under a message, "N replies" in `accent-text` opens
   them in the thread panel, except one reply that already follows it.
-- Things in a message are lines, outlined with a 1px `line` ring at `row`
-  radius, never filled: an ask's options (the shared AskOptions), a PR it
-  links (number, title, GitHub's state and checks), a task's card (its
-  owner, id, title and live state, its last line under it). Reactions are
-  outlined chips. Hover actions float at the row's top right on the
-  canvas, outlined.
+- Things in a message are `prism` lines at `row` radius: an ask's options
+  (the shared AskOptions), a PR it links (number, title, GitHub's state and
+  checks), a task's card (its owner, id, title and live state, its last line
+  under it). Reactions are `prism` chips, yours `prism-lit`. Hover actions
+  float at the row's top right in a `glass` pill.
 - Events are quiet `meta` lines under the text column. A run of GitHub's
   news folds into one: "GitHub · #371 opened, 3 pushes, ci-ok passed ·
   4 updates", each PR or issue a link.
@@ -258,10 +257,10 @@ From `design-tokens.ts`:
   and a tick per check: `alert` failed, `doing` running, `live` passed);
   Up next; Watching (the lead's other open PRs); and its last three moves
   at the foot, times in tabular `meta`.
-- An ask with options lists them under its words as outlined `row`-round
+- An ask with options lists them under its words as `prism` `row`-round
   lines, the letter in `ink-3`. While it waits on you it says so in
   `decide` under the bubble and its options answer it; once answered, the
-  chosen line wears an `accent` border and "name chose this · time".
+  chosen line is `prism-lit` and says "name chose this · time".
 - Lead: `coordinator-head` (system-blue shell, pale screen, quiet
   steel trim; `robot-heads`); behind it in a round avatar a soft blue field.
 - Command palette wears the same icons as the menus. Dark/light/system and
@@ -299,8 +298,10 @@ actions row with send.
   message answers the root and there is no reply bar.
 - Drag-and-drop and pasted images render inside the composer; sending shows
   in place, never an external spinner.
-- Disabled send and placeholders stay quiet; the send button is the one
-  primary accent in the composer.
+- The composer is `glass` at `dock` radius, floating over the
+  conversation. Send is the `orb` once there's something to send, a quiet
+  `prism` until then; it is the one orb in the composer. Dictate turns
+  `prism-lit` while it listens.
 - Talk to channel (Grok Voice) sits beside Dictate, only where the owner
   allowed voice (Details → Voice) and in the Mac app. It turns `accent`
   while live, and an inline line above the field says "voice: Grok Voice
