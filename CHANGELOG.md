@@ -2,6 +2,22 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.19.1 — 2026-10-18
+
+- **The app only.** No wire, relay, CLI or daemon change since 0.19.0: update the Channels app (a 0.19.0 Mac app finds it on its own within a few hours; from 0.19.1 on, Settings → Check for updates asks at once), and agents keep their sessions.
+- **The shell in two tones: the rails darker, the page a round sheet (T12)** ([#398](https://github.com/ojowwalker77/channels/pull/398))
+- **Settings: Check for updates, on demand (T13)** ([#397](https://github.com/ojowwalker77/channels/pull/397))
+- **A channel wears its lead's head everywhere, not only when the lead spoke last (T28)** ([#400](https://github.com/ojowwalker77/channels/pull/400))
+- **No modals: Settings and Personalities are pages, Invite a view of the details panel (T11)** ([#399](https://github.com/ojowwalker77/channels/pull/399))
+- **Selected states read clearly: segments rise off their track, chosen chips and rows wear the accent (T14)** ([#401](https://github.com/ojowwalker77/channels/pull/401))
+- **Prism glass: the look of the app icon and the agents' heads, as tokens and primitives (T142)** ([#402](https://github.com/ojowwalker77/channels/pull/402))
+- **UI shots follow today's dashboard and run in CI, as build / shots (T38)** ([#404](https://github.com/ojowwalker77/channels/pull/404))
+- **Phone: an info button in the channel header opens Details (T153)** ([#403](https://github.com/ojowwalker77/channels/pull/403))
+- **Prism on the shell: rails, rows, tabs, side panels, Settings and Personalities (T143)** ([#406](https://github.com/ojowwalker77/channels/pull/406))
+- **Prism in the conversation: the composer floats in glass, send is the orb (T144)** ([#405](https://github.com/ojowwalker77/channels/pull/405))
+- **Shots: the Details screens on a phone again, now that T153 opens Details there** ([#407](https://github.com/ojowwalker77/channels/pull/407))
+- **Checkbox: the prism square, checked as the orb (T220)** ([#408](https://github.com/ojowwalker77/channels/pull/408))
+
 ## 0.19.0 — 2026-10-18
 
 - **Update every machine and start a new session for each agent.** 0.19.0 adds events and fields that older clients drop, and the relay must be deployed for the CI-red log excerpt and GitHub issues; the owner's steps are in docs/0.19-release.md.
