@@ -26,6 +26,7 @@ import { Icon } from "../icon"
 import { Button, Spinner, errorText, toast } from "../kit"
 import { CompactBlock, ProposalCard, TalkBar, TalkButton } from "../lazy"
 import { bridge } from "@/lib/secrets"
+import type { ToolCtx } from "@/lib/voice/tools"
 import { GifPicker } from "../gif-picker"
 import { isAgent } from "../message"
 import { NeedsYou } from "../needs-you"
@@ -181,6 +182,10 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     [send, nameOf]
   )
   const handlers = useControlsHandlers({ live, member, onGone })
+  const voiceTools = useMemo<ToolCtx>(
+    () => ({ state, me, channel: title, isOwner, online: new Set(online.keys()), requests: isOwner ? requests : [], nameOf, send, hold: handlers.onHold }),
+    [state, me, title, isOwner, online, requests, nameOf, send, handlers.onHold]
+  )
   const hold = handlers.onHold
   const commands = useMemo<Command[]>(
     () => [
@@ -524,8 +529,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                       talk={
                         place.kind === "main" && state.voice && typeof bridge()?.voiceToken === "function"
                           ? {
-                              button: <TalkButton channel={{ roomId, channel: title, me, nameOf, state, messages }} disabled={connection === "connecting"} />,
-                              bar: <TalkBar messages={messages} state={state} nameOf={nameOf} me={me} />,
+                              button: <TalkButton channel={{ roomId, channel: title, me, nameOf, state, messages, tools: voiceTools }} disabled={connection === "connecting"} />,
+                              bar: <TalkBar messages={messages} state={state} nameOf={nameOf} me={me} tools={voiceTools} />,
                             }
                           : undefined
                       }
