@@ -62,7 +62,7 @@ export function Sidebar({
           channel's face is, its words where a name is. Joining with a code is in its dialog (and ⌘K). */}
       <div className="shrink-0 px-3 pb-1">
         <button type="button" onClick={onNew} className="flex h-12 w-full items-center gap-3 rounded-card px-3 text-left text-ink-2 transition-colors hover:bg-wash hover:text-ink">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-full shadow-[inset_0_0_0_1.5px_var(--edge-strong)]">
+          <span className="prism flex size-10 shrink-0 items-center justify-center rounded-full">
             <Icon icon={Add01Icon} size={18} />
           </span>
           <span className="text-body font-medium">New channel</span>
@@ -84,7 +84,7 @@ export function Sidebar({
               onClick={() => onSelect(c.code)}
               aria-current={selected ? "page" : undefined}
               title={rowNote(c)}
-              className={cx("flex h-16 w-full items-center gap-3 rounded-card px-3 text-left transition-colors", selected ? "bg-pick" : "hover:bg-wash")}
+              className={cx("flex h-16 w-full items-center gap-3 rounded-card px-3 text-left transition-colors", selected ? "prism-lit" : "hover:bg-wash")}
             >
               <ChannelFace icon={icons.get(c.room) ?? null} lead={reachable ? (c.recent?.lead ?? null) : null} title={c.title} size={40} />
               <span className="min-w-0 flex-1">
@@ -101,7 +101,7 @@ export function Sidebar({
                   {n?.needs ? (
                     <span
                       aria-label={n.needs === 1 ? "A question for you" : `${n.needs} questions for you`}
-                      className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-stamp font-semibold text-accent-ink tabular-nums"
+                      className="orb-pill flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-stamp font-semibold tabular-nums"
                     >
                       {n.needs}
                     </span>
@@ -186,15 +186,13 @@ function RailChannel({ c, n, selected, icon, onSelect }: { c: ChannelRow; n: Row
         onClick={onSelect}
         aria-current={selected ? "page" : undefined}
         aria-label={`${c.title}, ${when}: ${note}${needs ? `, ${needs} for you` : fresh ? ", new messages" : ""}`}
-        className={cx("relative flex size-14 shrink-0 items-center justify-center rounded-card transition-colors", selected ? "bg-pick" : "hover:bg-wash")}
+        className={cx("relative flex size-14 shrink-0 items-center justify-center rounded-card transition-colors", selected ? "prism-lit" : "prism")}
       >
         <span className={cx("flex", !reachable && "grayscale")}>
           <ChannelFace icon={icon} lead={reachable ? (c.recent?.lead ?? null) : null} title={c.title} size={40} />
         </span>
         {needs > 0 ? (
-          <span className="absolute top-1 right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-stamp font-semibold text-accent-ink tabular-nums shadow-[0_0_0_2px_var(--rail)]">
-            {needs}
-          </span>
+          <span className="orb-pill absolute top-1 right-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-stamp font-semibold tabular-nums">{needs}</span>
         ) : fresh ? (
           <span className="absolute top-2 right-2 size-2.5 rounded-full bg-accent shadow-[0_0_0_2px_var(--rail)]" />
         ) : null}
@@ -208,7 +206,7 @@ function RailChannel({ c, n, selected, icon, onSelect }: { c: ChannelRow; n: Row
   )
 }
 
-const RAIL_BUTTON = "flex size-10 items-center justify-center rounded-full text-ink-2 transition-colors hover:bg-wash hover:text-ink"
+const RAIL_BUTTON = "prism flex size-10 items-center justify-center rounded-full text-ink-2 transition-colors hover:text-ink"
 
 export function Rail({
   rows,
@@ -241,7 +239,7 @@ export function Rail({
       </nav>
       <div className="flex shrink-0 flex-col items-center gap-1.5 pt-2 pb-3">
         <Tooltip side="right" label="New channel">
-          <button type="button" aria-label="New channel" onClick={onNew} className={cx(RAIL_BUTTON, "shadow-[inset_0_0_0_1.5px_var(--edge-strong)]")}>
+          <button type="button" aria-label="New channel" onClick={onNew} className={RAIL_BUTTON}>
             <Icon icon={Add01Icon} size={18} />
           </button>
         </Tooltip>

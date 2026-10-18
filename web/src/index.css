@@ -496,9 +496,32 @@ html.reduce-motion ::after {
 }
 
 @utility sheet {
+  position: relative;
+  isolation: isolate;
   margin: 8px 8px 8px 0;
   border-radius: var(--radius-card);
   background: var(--canvas);
-  box-shadow: 0 0 0 1px var(--line);
+  box-shadow: 0 0 0 1px var(--prism-edge);
   overflow: clip;
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 30;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(var(--glint-angle, 150deg), var(--prism-glint), transparent 18%, transparent 70%, color-mix(in srgb, var(--prism-glint) 35%, transparent));
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+  @media (prefers-contrast: more) {
+    box-shadow: 0 0 0 1px var(--edge-strong);
+    &::before {
+      content: none;
+    }
+  }
 }
