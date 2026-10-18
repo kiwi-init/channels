@@ -89,6 +89,8 @@ jobs:
       store's CSP allows api.x.ai only when an xAI key is saved, the project key never reaches
       the snapshot or the token IPC result, consent defaults off, and
       desktop/build/entitlements.mac.plist has the audio-input entitlement. And
+      test/offscreen.test.ts: a message's content column is content-visibility auto with a remembered
+      size, so off-screen messages skip layout and paint when the column's width changes. And
       test/prism.test.ts: prism means one thing (prism-lit only on the open channel and the
       sidebar's chosen view or conversation, no plain prism or orb anywhere, solid
       prefers-contrast fallbacks, the spectrum and segment tokens written once, the kit the quiet
