@@ -3,7 +3,7 @@ import { app, protocol, session } from "electron";
 
 import { keepDaemon } from "./bundled-daemon.ts";
 import { handleDeepLink, JOIN_SCHEME, rememberDeepLink } from "./deep-links.ts";
-import { APP_SCHEME, mediaAllowed } from "./guard.ts";
+import { APP_SCHEME, permissionAllowed } from "./guard.ts";
 import { wireDaemonIpc } from "./ipc/daemon.ts";
 import { wireGithubIpc } from "./ipc/github.ts";
 import { wireMiscIpc } from "./ipc/misc.ts";
@@ -48,7 +48,7 @@ else {
     warnIfBroken();
     serveWeb();
     session.defaultSession.setPermissionRequestHandler((wc, permission, callback) => {
-      callback(mediaAllowed(wc.getURL(), permission));
+      callback(permissionAllowed(wc.getURL(), permission));
     });
     wireIpc();
     startKeys();

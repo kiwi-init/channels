@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { csp, mediaAllowed, snapshotOf } from "../desktop/src/guard.ts";
+import { csp, permissionAllowed, snapshotOf } from "../desktop/src/guard.ts";
 import { mintVoiceToken, VOICE_MINT_URL, VOICE_ORIGINS, voiceOriginsFor, voiceToken, voiceViewOf, type VoiceHttp } from "../desktop/src/voice.ts";
 
 const PROJECT_KEY = "xai-project-secret-never-leave-main";
@@ -58,11 +58,13 @@ describe("desktop voice (T11)", () => {
     });
   });
 
-  test("media is allowed only from kiwi-app://", () => {
-    expect(mediaAllowed("kiwi-app://app/index.html", "media")).toBe(true);
-    expect(mediaAllowed("kiwi-app://app/", "notifications")).toBe(false);
-    expect(mediaAllowed("https://api.x.ai/", "media")).toBe(false);
-    expect(mediaAllowed("https://evil.example/", "media")).toBe(false);
+  test("media and copying are allowed only from kiwi-app://", () => {
+    expect(permissionAllowed("kiwi-app://app/index.html", "media")).toBe(true);
+    expect(permissionAllowed("kiwi-app://app/index.html", "clipboard-sanitized-write")).toBe(true);
+    expect(permissionAllowed("kiwi-app://app/", "notifications")).toBe(false);
+    expect(permissionAllowed("kiwi-app://app/", "clipboard-read")).toBe(false);
+    expect(permissionAllowed("https://api.x.ai/", "media")).toBe(false);
+    expect(permissionAllowed("https://evil.example/", "clipboard-sanitized-write")).toBe(false);
   });
 
   test("mint maps value and expires_at and never returns the project key", async () => {
