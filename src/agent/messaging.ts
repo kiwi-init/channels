@@ -58,7 +58,7 @@ export class SessionMessaging extends SessionListen {
       const parent = !opts.room && opts.re?.length ? state.roomOf.get(opts.re[0]!) : undefined;
       const room = opts.ev ? undefined : (parent ?? (yield* this.roomId(opts.room)));
       if (opts.task !== undefined && !state.tasks.has(opts.task)) return yield* new Rejected(`no task ${taskId(opts.task)}`);
-      if (opts.dm && (to?.length !== 1 || to[0] === this.me || !state.members.get(to[0]!)?.active)) return yield* new Rejected("a direct message goes to exactly one other member: --dm NAME");
+      if (opts.dm && (to?.length !== 1 || to[0] === this.me || !state.members.get(to[0]!)?.active)) return yield* new Rejected("a direct message goes to exactly one other member: --to @name");
       if (opts.kind !== "event") for (const re of opts.re ?? []) yield* this.notAnsweredByOthers(state, re);
       const inThread = !!opts.re?.length;
       const seq = yield* this.ch.fx.send(body, { ...opts, to, room, ...(inThread ? { task: undefined, dm: undefined } : {}) });

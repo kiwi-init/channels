@@ -41,6 +41,13 @@ async function ok(home: string, ...args: string[]): Promise<string> {
   return out;
 }
 
+async function fails(home: string, ...args: string[]): Promise<string> {
+  const p = spawn(home, args);
+  const err = await new Response(p.stderr).text();
+  if ((await p.exited) === 0) throw new Error(`kiwi ${args.join(" ")} should have failed`);
+  return err;
+}
+
 async function join_(owner: string, joiner: string, code: string, name: string) {
   const p = spawn(joiner, ["join", code, "--as", name]);
   let listed = "";
@@ -86,6 +93,12 @@ describe("agents in threads", () => {
     // Anyone can still read any place.
     expect(await ok(dev2, "log", "-n", "50")).toContain("stale lockfile");
 
+    // One word says where: #general, a task, a direct thread; never two places.
+    expect(await ok(dev, "send", "--to", "#general", "and in main")).not.toContain("thread");
+    expect(await ok(dev2, "send", "--to", `${task}`, "watching it")).toContain(`in ${task}'s thread`);
+    expect(await ok(dev2, "send", "--to", "@lead", "one more")).toContain("to lead (direct)");
+    expect(await fails(dev2, "send", "--to", `@lead,${task}`, "both")).toContain("--to names one place");
+
     // dev2, not on the task, asks in its thread: the answer in that conversation reaches dev2.
     const q = /#(\d+)/.exec(await ok(dev2, "send", "--task", task, "which lockfile?"))![1]!;
     await ok(dev, "send", "--re", q, "bun.lock");
@@ -95,7 +108,7 @@ describe("agents in threads", () => {
     expect(await ok(dev, "ask", "--to", "dev2", "can you review?")).toContain(`in ${task}'s thread`);
     const second = /T(\d+)/.exec(await ok(owner, "--as", "lead", "task", "add", "and the tests", "--owner", "dev"))![0];
     await ok(dev, "task", "start", second);
-    expect(await ok(dev, "send", "both under way")).toContain(`you're doing ${task} and ${second}, so say which with --task`);
+    expect(await ok(dev, "send", "both under way")).toContain(`you're doing ${task} and ${second}, so say which with --to T7`);
   });
 
   test("a lead handed the role is told, and status says who leads; clearing it changes no mode", async () => {

@@ -18,11 +18,11 @@ Agents
      --chat (everyone's conversations) · --all (every event) · --thread N · --room R · --json
   kiwi send "text"                               to the people and the lead (text from stdin if omitted)
      --file PATH                                 the text from a file (also for reply, ask, escalate and sh)
-     --to a,b|role:x|all                         to them instead
-     --re N                                      in message #N's thread
+     --to WHERE                                  where it goes: #general, #room, T7 (a task's thread), @name (your
+                                                 direct thread with them), #123 (a reply to it), or names, role:x,
+                                                 all; while you're doing a task it goes to its thread unless you say
+                                                 (--main, --room R, --task T7, --dm NAME and --re N still work)
      --ask [--wait 10m]                          a question; with --wait, block until it's answered
-     --task T7 · --main · --dm NAME              in a task's thread, in the main conversation, or in your direct
-                                                 thread with NAME (while you're doing a task, it goes to its thread)
      --escalate [--re N]                         the older form of ask-human below, without options; to ask a person, use
                                                  ask-human. Kept for --handoff
      --handoff URL [--vendor NAME] [--expires 10m]  with --escalate: hand a live browser tab to a person (https link,

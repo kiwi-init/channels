@@ -113,7 +113,8 @@ jobs:
       it, and @mentions anywhere) and how a mention is read. And test/compact.test.ts:
       /compact (a proposal names every open task and question; only the owner compacts; done
       tasks archive off the board; a snapshot-resumed fold agrees; propose and approve over a
-      local relay). Fails if a tested module's behavior,
+      local relay). And test/where.test.ts: kiwi send --to WHERE (one word for #general, a room,
+      a task, a direct thread or a reply; names beside it; two places refused). Fails if a tested module's behavior,
       output text or exported names change. TMPDIR points through a symlink, as macOS's does,
       so a test that compares a tmp path with its realpath or process.cwd() fails here too.
 
