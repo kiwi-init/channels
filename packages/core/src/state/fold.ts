@@ -185,6 +185,7 @@ export function fold(
       checks: new Map(from?.github?.checks.map(([k, runs]) => [k, new Map(runs.map((r) => [r.name, r]))])),
     },
     hold: from?.hold ?? null,
+    voice: from?.voice ?? false,
   };
 
   for (const m of messages) {
@@ -311,6 +312,7 @@ export function fold(
       repos: ctx.repos,
       github: { prs: [...ctx.github.prs.values()], checks: [...ctx.github.checks].map(([k, runs]) => [k, [...runs.values()]]) },
       hold: ctx.hold,
+      voice: ctx.voice,
       scopesByKey: [...scopesByKey],
       scopeSets: [...scopeSets],
       roleSets: [...roleSets],
@@ -365,6 +367,7 @@ export function fold(
     repos: ctx.repos,
     github: ctx.github,
     hold: ctx.hold,
+    voice: ctx.voice,
     reactions,
     head,
   };
