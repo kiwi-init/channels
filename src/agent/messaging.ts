@@ -9,6 +9,8 @@ import {
   HANDOFF_FAILED,
   HANDOFF_MAX_SECONDS,
   ignored,
+  LEASE_NAME_RE,
+  MAX_LEASE_SECONDS,
   wellFormedReaction,
   type Card,
   type Color,
@@ -20,7 +22,7 @@ import {
 } from "@kiwi/core/protocol.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { canPost, describeScopes, refusal } from "@kiwi/core/scopes.ts";
-import { allowedOnHold, humanOf, isPerson, ON_HOLD, ownerOf, taskId, type ChannelState } from "@kiwi/core/state.ts";
+import { allowedOnHold, humanOf, isPerson, nextIn, ON_HOLD, ownerOf, placeIn, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import { SessionListen } from "./listen.ts";
 import { EVERYONE, oneLook } from "./shared.ts";
 import { ACK, answersPeople } from "./wants.ts";
@@ -340,4 +342,33 @@ export class SessionMessaging extends SessionListen {
   readonly delFact = Effect.fn("AgentSession.delFact")({ self: this }, function* (this: SessionMessaging, key: string) {
     return yield* this.event({ op: "fact.del", key }, `unset ${key}`);
   });
+
+  readonly lease = Effect.fn("AgentSession.lease")(
+    { self: this },
+    function* (this: SessionMessaging, name: string, ttlSec: number, note?: string) {
+      if (!LEASE_NAME_RE.test(name)) return yield* new Rejected("a lease is named in lowercase letters, digits and . _ / -, up to 64 characters: kiwi lock build");
+      if (ttlSec < 60 || ttlSec > MAX_LEASE_SECONDS) return yield* new Rejected(`a lease lasts from a minute to ${MAX_LEASE_SECONDS / 3600}h`);
+      const seq = yield* this.event({ op: "lease.take", name, ttl: Math.round(ttlSec), ...(note ? { note } : {}) }, `asked for ${name}`);
+      const after = yield* this.confirm(seq);
+      const lease = after.leases.get(name);
+      if (!lease) return yield* new Rejected(`${name} didn't take`);
+      return lease;
+    },
+    oneLook,
+  );
+
+  readonly unlease = Effect.fn("AgentSession.unlease")(
+    { self: this },
+    function* (this: SessionMessaging, name: string) {
+      const { state } = yield* this.state();
+      const lease = state.leases.get(name);
+      const me = state.members.get(this.me);
+      const person = !!me && isPerson(me);
+      if (!lease || (lease.holder !== this.me && !placeIn(lease, this.me) && !person)) return yield* new Rejected(`you neither hold nor wait for ${name}`);
+      const next = lease.holder && (lease.holder === this.me || person) ? nextIn(lease, Date.now()) : undefined;
+      const seq = yield* this.event({ op: "lease.free", name }, next ? `${name} is yours now, ${next}` : `let go of ${name}`, next ? [next] : undefined);
+      return { state: yield* this.confirm(seq), next };
+    },
+    oneLook,
+  );
 }

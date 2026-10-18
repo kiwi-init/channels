@@ -209,6 +209,8 @@ export type Event =
   | { op: "release"; paths?: string[] }
   | { op: "fact.set"; key: string; value: string; ttl?: number }
   | { op: "fact.del"; key: string }
+  | { op: "lease.take"; name: string; ttl: number; note?: string }
+  | { op: "lease.free"; name: string }
   /** Owner only: set a member's role (and rules), or allow the one they asked for. */
   | { op: "role.set"; member: string; role: string | null; about?: string | null }
   /** Owner only: turn down the role a member asked for. */
@@ -332,6 +334,10 @@ export const MAX_REPOS = 20;
 export const REPO_RE = /^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/;
 
 /** The room every channel has, and where a message that names none belongs (every message from before rooms). */
+export const LEASE_NAME_RE = /^[a-z0-9][a-z0-9._/-]{0,63}$/;
+export const MAX_LEASE_SECONDS = 24 * 3600;
+const leaseName = (x: unknown): x is string => typeof x === "string" && LEASE_NAME_RE.test(x);
+
 export const GENERAL_ROOM = "general";
 /** A room id: chosen once by the owner's client, never changed, so a room can later move without breaking references. */
 export const ROOM_ID_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
@@ -615,6 +621,10 @@ export function wellFormedEvent(ev: unknown): ev is Event {
       return str(e.key, 200) && str(e.value, 10_000) && opt(e.ttl, (x): x is number => typeof x === "number" && Number.isFinite(x) && x > 0);
     case "fact.del":
       return str(e.key, 200);
+    case "lease.take":
+      return leaseName(e.name) && Number.isSafeInteger(e.ttl) && (e.ttl as number) >= 60 && (e.ttl as number) <= MAX_LEASE_SECONDS && opt(e.note, (x): x is string => str(x, 500));
+    case "lease.free":
+      return leaseName(e.name);
     case "role.set":
       return str(e.member, 64) && (e.role === null || str(e.role, 200)) && (e.about === undefined || e.about === null || str(e.about, 2000));
     case "role.refuse":

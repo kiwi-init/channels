@@ -12,11 +12,11 @@ export interface SealedSnapshot {
   sig: string;
 }
 
-const VERSION = 2;
+const VERSION = 3;
 const MAX_PLAIN = 64 * 1024 * 1024;
 const enc = new TextEncoder();
 
-const LISTS = ["members", "scopesByKey", "scopeSets", "roleSets", "tasks", "facts", "reactions", "reactSeqs", "rejected", "asks", "answered", "threadPeople", "direct", "rooms"] as const;
+const LISTS = ["members", "scopesByKey", "scopeSets", "roleSets", "tasks", "facts", "leases", "reactions", "reactSeqs", "rejected", "asks", "answered", "threadPeople", "direct", "rooms"] as const;
 
 interface Column<V> {
   d: number[];

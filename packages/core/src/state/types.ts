@@ -99,6 +99,15 @@ export interface Reaction {
   at: number;
 }
 
+export interface Lease {
+  name: string;
+  holder?: string;
+  since: number;
+  until: number;
+  note?: string;
+  queue: { name: string; ttl: number; joined: number; note?: string }[];
+}
+
 export interface Fact {
   key: string;
   value: string;
@@ -121,6 +130,7 @@ export interface ChannelState {
   members: Map<string, Member>;
   tasks: Map<number, Task>;
   facts: Map<string, Fact>;
+  leases: Map<string, Lease>;
   trust: Map<number, Trust>;
   rejected: Map<number, string>;
   scopeSets: Map<string, { seq: number; scopes: Scope[] }>;
@@ -180,6 +190,7 @@ export interface FoldBase {
   roleSets: [string, { seq: number; role: string | null; about?: string | null }][];
   tasks: Task[];
   facts: Fact[];
+  leases: Lease[];
   reactions: [number, [string, Reaction][]][];
   reactSeqs: number[];
   trust: [number, Trust][];

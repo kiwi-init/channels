@@ -1,11 +1,12 @@
 import { GENERAL_ROOM, MAX_CHARTER, MAX_ROOMS, MAX_TAGS, TASK_TITLE_MAX_LENGTH, type Event, type Message } from "../protocol.ts";
+import { free, take } from "./leases.ts";
 import { reposOf } from "./repos.ts";
 import { omit } from "../omit.ts";
 import { readScopes, SCOPES, type Scope } from "../scopes.ts";
 import { isPerson } from "./people.ts";
 import { roomName } from "./rooms.ts";
 import { currentState, openRound, revisedOut, taskId, verdictRefusal, worked } from "./tasks.ts";
-import type { Charter, Fact, Hold, Member, Room, Task } from "./types.ts";
+import type { Charter, Fact, Hold, Lease, Member, Room, Task } from "./types.ts";
 
 export interface FoldCtx {
   members: Map<string, Member>;
@@ -16,6 +17,7 @@ export interface FoldCtx {
   setRole: (target: Member, role: string | null, about: string | null | undefined) => void;
   tasks: Map<number, Task>;
   facts: Map<string, Fact>;
+  leases: Map<string, Lease>;
   rooms: Map<string, Room>;
   roomsSince: number;
   nameTaken: (name: string, except?: string) => boolean;
@@ -267,6 +269,20 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: Member, at
     case "fact.del":
       facts.delete(ev.key);
       break;
+
+    case "lease.take": {
+      let lease = c.leases.get(ev.name);
+      if (!lease) c.leases.set(ev.name, (lease = { name: ev.name, since: at, until: at, queue: [] }));
+      take(lease, m.from, ev.ttl * 1000, at, ev.note);
+      break;
+    }
+
+    case "lease.free": {
+      const lease = c.leases.get(ev.name);
+      if (!lease || !free(lease, m.from, at, isPerson(member))) reject(`${m.from} neither holds nor waits for ${ev.name}`);
+      else if (!lease.holder && !lease.queue.length) c.leases.delete(ev.name);
+      break;
+    }
   }
 }
 
