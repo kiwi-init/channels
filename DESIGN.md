@@ -180,7 +180,9 @@ From `design-tokens.ts`:
   buttons.
 - On a wide window the list is an 80px icon rail, as Grok's
   collapsed one: the Mac traffic lights on its header row, each channel
-  as its 40px tile in a 56px `card`-round cell (`pick` when open), a blue
+  as its 40px tile in a 56px `card`-round cell (`pick` when open); a
+  channel with a lead wears the lead's head there, in its own sidebar and
+  in its details, the same face everywhere, a blue
   dot or a count for news and questions, a lock on a channel you can't
   open yet. A hover card says what the full row says: name, time, last
   line. New, the app update and your account sit at its foot. A wide

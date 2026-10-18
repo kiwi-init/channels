@@ -7,6 +7,7 @@ import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 import { PALETTE } from "@/lib/characters"
 import { cx } from "@/lib/utils"
 import { hueOf } from "./kit"
+import { RobotAvatar } from "./robot"
 
 const SIZE: Record<number, string> = {
   20: "size-5 text-meta",
@@ -44,6 +45,10 @@ export function ChannelIconTile({ icon, title, size }: { icon: ChannelIcon | nul
       {letterOf(title)}
     </span>
   )
+}
+
+export function ChannelFace({ icon, lead, title, size }: { icon: ChannelIcon | null; lead: string | null; title: string; size: 36 | 40 }) {
+  return lead ? <RobotAvatar name={lead} size={size} label="The lead" /> : <ChannelIconTile icon={icon} title={title} size={size} />
 }
 
 function letterOf(title: string): string {

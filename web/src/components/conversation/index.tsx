@@ -417,6 +417,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
         <ChannelSidebar
           title={title}
           icon={icon}
+          lead={state.lead}
           people={peopleLine}
           onTitle={() => setSide((s) => (s?.kind === "info" ? null : { kind: "info" }))}
           onSearch={() => {
