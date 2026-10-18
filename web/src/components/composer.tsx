@@ -276,7 +276,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
       <div>
         <div
           className={cx(
-            "glass relative min-w-0 overflow-hidden rounded-dock transition-shadow focus-within:shadow-[inset_0_1px_0_var(--glass-rim),inset_0_0_0_1px_var(--edge-strong),0_8px_24px_-12px_var(--glass-shade)]",
+            "relative min-w-0 overflow-hidden rounded-dock bg-canvas shadow-[inset_0_0_0_1px_var(--edge-strong)] transition-shadow focus-within:shadow-[inset_0_0_0_1px_var(--ring)]",
             dropping && "shadow-[0_0_0_1.5px_var(--ring)]"
           )}
           onDragEnter={(e) => {
@@ -326,7 +326,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
               title="Attach images"
               onClick={() => picker.current?.click()}
               disabled={disabled || files.length >= 8}
-              className="m-1.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-wash-2 text-ink-2 transition-colors hover:bg-pick hover:text-ink disabled:opacity-40"
+              className="m-1.5 flex size-9 shrink-0 items-center justify-center rounded-full text-ink-2 transition-colors hover:bg-wash hover:text-ink disabled:opacity-40"
             >
               <Icon icon={Add01Icon} size={17} strokeWidth={2} />
             </button>
@@ -424,7 +424,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
                 disabled={disabled || dictation.unavailable}
                 className={cx(
                   "my-1.5 ml-1.5 flex size-9 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-40",
-                  dictation.listening ? "bg-accent text-accent-ink" : "bg-wash-2 text-ink-2 hover:bg-pick hover:text-ink"
+                  dictation.listening ? "bg-accent text-accent-ink" : "text-ink-2 hover:bg-wash hover:text-ink"
                 )}
               >
                 <Icon icon={Mic01Icon} size={17} strokeWidth={2} />
@@ -438,7 +438,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
               onClick={() => void submit()}
               className={cx(
                 "m-1.5 flex size-9 shrink-0 items-center justify-center rounded-full transition-[background-color,color,transform] duration-150",
-                canSend ? "bg-accent text-accent-ink hover:opacity-90 active:scale-95" : "bg-wash-2 text-ink-3"
+                canSend ? "bg-accent text-accent-ink hover:opacity-90 active:scale-95" : "text-ink-3 shadow-[inset_0_0_0_1px_var(--line)]"
               )}
             >
               <Icon icon={ArrowUp02Icon} size={18} strokeWidth={2.2} />

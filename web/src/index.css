@@ -26,8 +26,8 @@
   color-scheme: light dark;
   --canvas: light-dark(#ffffff, #0d0d0e);
   --rail: var(--canvas);
-  --raised: light-dark(#ffffff, #1c1c1e);
-  --field: light-dark(#f0f0f3, #1a1a1c);
+  --raised: var(--canvas);
+  --field: var(--canvas);
   --ink: light-dark(#0f0f11, #f3f3f5);
   /* Quiet text still clears 4.5:1 on canvas, rail, raised and field. ink-3 is that floor; ink-2 a step stronger. */
   --ink-2: light-dark(#4a4a52, #bcbcc3);
@@ -375,4 +375,8 @@ html.reduce-motion ::after {
 .no-drag * {
   -webkit-app-region: no-drag;
   app-region: no-drag;
+}
+
+@utility edge {
+  box-shadow: inset 0 0 0 1px var(--line);
 }

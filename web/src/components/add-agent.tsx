@@ -45,7 +45,7 @@ export function Command({ text, label }: { text: string; label: string }) {
       () => toast("Couldn’t copy: select the command and copy it", "error")
     )
   return (
-    <div className="mt-4 flex items-stretch overflow-hidden rounded-card bg-field">
+    <div className="mt-4 flex items-stretch overflow-hidden rounded-card edge">
       <code className="min-w-0 flex-1 px-3.5 py-3 font-mono text-ui leading-snug [overflow-wrap:anywhere] select-all">{text}</code>
       <button
         type="button"

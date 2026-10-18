@@ -44,8 +44,8 @@ Light / dark are the two sides of each `light-dark()` in `index.css`:
 |---|---|---|
 | `canvas` (conversation) | `#ffffff` | `#0d0d0e` |
 | `rail` (list and details; the same as `canvas`) | `#ffffff` | `#0d0d0e` |
-| `raised` (cards, popovers) | `#ffffff` | `#1c1c1e` |
-| `field` (inputs) | `#f0f0f3` | `#1a1a1c` |
+| `raised` (cards, popovers) | the canvas | the canvas |
+| `field` (inputs) | the canvas | the canvas |
 | `ink` | `#0f0f11` | `#f3f3f5` |
 | `ink-2` | `#4a4a52` | `#bcbcc3` |
 | `ink-3` (quiet floor, still 4.5:1) | `#6b6b73` | `#8f8f97` |
@@ -103,8 +103,12 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   `ui-tokens.ts`.
 - One shadow: `pop` (`0 0 0 1px pop-edge, 0 16px 40px -12px pop-shade`).
   No other shadows, no colored shadows.
-- No blur in surfaces: surfaces are flat and opaque, separated by steps in
-  tone, never hairlines between areas. (No glass/liquid treatments.)
+- One background: everything sits on `canvas`; `raised` and `field` are
+  the canvas too. Rows, cards, search, inputs and the composer have no grey
+  fill and no background of their own. They are separated by spacing and a
+  thin 1px `line` (the `edge` utility), never by a step in tone, and there
+  is no hairline between the sidebar and the page. Popovers and dialogs lift
+  off the canvas with the `pop` shadow only. (No glass/liquid treatments.)
 - Fall back to solid fills under `prefers-contrast: more`.
 
 ## 6. Motion
@@ -128,8 +132,11 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
 - `ui/`: `menu`, `palette` (command palette: channels, actions,
   appearance), `panel`, `popover`, `tooltip` (500ms delay).
 - Rows (channels, tasks): idle transparent, hover `wash`, open `pick`;
-  title `ui` semibold, preview `meta` quiet.
-- Inputs: `field` fill; focus ring is `2px ring` with `1px` offset and
+  title `ui` semibold, preview `meta` quiet. In the channel's sidebar and
+  tabs the chosen item gets only a 2px `accent` mark, never a fill.
+- Buttons: primary `accent`; secondary outlined (a 1px `edge-strong` ring,
+  no fill, `wash` on hover).
+- Inputs: no fill, a 1px `line` edge (`edge`); focus ring is `2px ring` with `1px` offset and
   `6px` radius (base layer, so utilities can still take it off).
 - Placeholders and empty states use quiet ink, never reduced-opacity text.
 
@@ -147,8 +154,14 @@ From `design-tokens.ts`:
 
 ## 9. App patterns
 
-- Shell: flat `rail` sidebar beside one inset `canvas` panel (edge to edge
-  on a phone). No hairlines between areas.
+- Shell: the channel rail, then inside a channel its own sidebar (280px,
+  from 768px wide): the channel's name and who is here, Search, the views
+  with counts (Everything, Needs you, In progress, In review, Done this
+  week), the agents with what each is doing now, and the conversations
+  (rooms and direct ones). The page beside it has one header row: what is
+  shown, the channel's status (working, merged today, needs you), and the
+  Tasks / Agents / Conversation tabs. A view opens Tasks; a conversation
+  opens Conversation. The approved mockups are in `docs/ui/`.
 - On a wide window the list is an 80px icon rail, as Grok's
   collapsed one: the Mac traffic lights on its header row, each channel
   as its 40px tile in a 56px `card`-round cell (`pick` when open), a blue
@@ -190,19 +203,6 @@ From `design-tokens.ts`:
   lines, the letter in `ink-3`. While it waits on you it says so in
   `decide` under the bubble and its options answer it; once answered, the
   chosen line wears an `accent` border and "name chose this · time".
-- Overview cards: always in the chat area from 1280px wide, never behind
-  a button. Cards on the canvas itself, outlined with a 1px `edge-strong`
-  ring at `card` radius, 384px wide, 24px from the window's edge and 12px
-  apart, float at the top right of the conversation, each folding from its
-  header: Agents, Tasks (the 5 last updated, a `SEGMENTED` filter that
-  leaves out a state with no task, wide enough that every tab fits on one
-  row), Pull requests (the last 5 linked in the channel). The Tasks panel
-  has the same filter with every state, and it wraps to a second row
-  rather than cut a tab off. Rows put the time on the right. The conversation stays
-  centered while it has room and moves left only as far as it must. The
-  agent strip under the composer gives way to the Agents card. A thread,
-  the details or a task in the side column hide the cards until it closes.
-  Below 1280px the cards are hidden and the header's Tasks button stays.
 - Lead: `coordinator-head` (system-blue shell, pale screen, quiet
   steel trim; `robot-heads`); behind it in a round avatar a soft blue field.
 - Command palette wears the same icons as the menus. Dark/light/system and

@@ -1,0 +1,208 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css">
+<style>
+body { background: #0b0b0c; }
+svg.i { width: 14px; height: 14px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.side { width: 248px; flex: none; padding: 46px 12px 14px; display: flex; flex-direction: column; gap: 1px; }
+.chan { display: flex; align-items: center; gap: 10px; padding: 0 8px 14px; }
+.chan img { width: 30px; height: 30px; }
+.chan .n { font-weight: 600; font-size: 14px; letter-spacing: -0.014em; }
+.chan .s { font-size: 12px; color: var(--ink-3); }
+.search { display: flex; align-items: center; gap: 8px; height: 30px; margin: 0 0 12px; padding: 0 10px; border-radius: 10px; background: var(--wash); color: var(--ink-3); font-size: 13px; }
+.search kbd { margin-left: auto; font: 500 11px inherit; color: var(--ink-3); }
+.nv { display: flex; align-items: center; gap: 9px; height: 30px; padding: 0 10px; border-radius: 8px; color: var(--ink-2); font-size: 13px; }
+.nv.on { background: var(--wash-2); color: var(--ink); font-weight: 600; }
+.nv .c { margin-left: auto; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.nv .c.hot { color: #1a1205; background: var(--decide); border-radius: 9px; padding: 0 6px; height: 18px; line-height: 18px; font-weight: 600; }
+.sec { font-size: 12px; color: var(--ink-3); padding: 18px 10px 6px; }
+.ag { display: flex; gap: 9px; align-items: center; padding: 6px 10px; border-radius: 8px; }
+.ag img { width: 24px; height: 24px; }
+.ag .nm { font-size: 13px; color: var(--ink); line-height: 16px; }
+.ag .st { font-size: 11.5px; color: var(--ink-3); line-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; display: flex; align-items: center; gap: 5px; }
+.pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--doing); box-shadow: 0 0 0 3px rgba(91, 155, 255, 0.18); flex: none; }
+.pane { flex: 1; margin: 8px 8px 8px 0; border-radius: 16px; background: var(--canvas); box-shadow: 0 0 0 1px var(--line); display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.hdr { display: flex; align-items: flex-end; gap: 14px; padding: 22px 28px 14px; }
+.hdr h1 { font: 600 26px/32px inherit; letter-spacing: -0.02em; }
+.hdr .sum { font-size: 13px; color: var(--ink-3); padding-bottom: 5px; display: flex; gap: 14px; }
+.hdr .sum span { display: inline-flex; align-items: center; gap: 6px; }
+.seg { margin-left: auto; display: flex; padding: 2px; border-radius: 10px; background: var(--wash); }
+.seg span { height: 26px; padding: 0 12px; border-radius: 8px; display: grid; place-items: center; font-size: 12.5px; color: var(--ink-2); }
+.seg span.on { background: var(--raised); color: var(--ink); box-shadow: 0 0 0 1px var(--line); font-weight: 500; }
+.body { flex: 1; overflow: hidden; padding: 0 16px; }
+.grp { display: flex; align-items: center; gap: 8px; padding: 14px 12px 6px; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.grp .c { color: var(--ink-3); font-weight: 400; }
+.row { display: grid; grid-template-columns: 28px 1fr 168px 120px 44px; gap: 14px; align-items: center; padding: 9px 12px; border-radius: 12px; }
+.row:hover, .row.sel { background: var(--wash); }
+.row img { width: 28px; height: 28px; }
+.ttl { font-size: 14px; line-height: 19px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.01em; }
+.sub { font-size: 12px; line-height: 17px; color: var(--ink-3); display: flex; gap: 6px; align-items: center; white-space: nowrap; overflow: hidden; }
+.sub .id { font-variant-numeric: tabular-nums; }
+.sub .now { color: var(--doing); display: inline-flex; gap: 6px; align-items: center; }
+.prc { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.prc .db { display: flex; height: 6px; width: 46px; border-radius: 3px; overflow: hidden; background: var(--wash-2); }
+.prc .db i { display: block; height: 100%; }
+.ck2 { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
+.ring { width: 16px; height: 16px; flex: none; }
+.when { font-size: 12px; color: var(--ink-3); text-align: right; font-variant-numeric: tabular-nums; }
+.ask { background: linear-gradient(90deg, rgba(245, 176, 65, 0.09), rgba(245, 176, 65, 0.02) 60%); box-shadow: inset 0 0 0 1px rgba(245, 176, 65, 0.18); }
+.ask .acts { display: flex; gap: 6px; justify-content: flex-end; grid-column: 3 / 6; }
+.ask .ic { width: 28px; height: 28px; border-radius: 8px; background: rgba(245, 176, 65, 0.14); color: var(--decide); display: grid; place-items: center; }
+.det { margin: 2px 0 6px 54px; padding: 4px 0 6px; display: grid; grid-template-columns: 1fr 320px; gap: 22px; align-items: start; }
+.tl { position: relative; padding-left: 4px; }
+.tl::before { content: ""; position: absolute; left: 13px; top: 14px; bottom: 52px; width: 1px; background: var(--line); }
+.e { display: grid; grid-template-columns: 20px 1fr 40px; gap: 10px; align-items: start; padding: 6px 0; font-size: 13px; line-height: 18px; color: var(--ink-2); position: relative; }
+.e img { width: 20px; height: 20px; }
+.e .bd { width: 20px; height: 20px; border-radius: 50%; background: var(--raised); box-shadow: 0 0 0 1px var(--line); display: grid; place-items: center; color: var(--ink-3); }
+.e b { color: var(--ink); font-weight: 600; }
+.e time { color: var(--ink-3); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+.e .q { display: block; margin-top: 4px; padding: 6px 10px; border-radius: 10px; background: var(--wash); color: var(--ink-2); }
+.e .cmd { display: inline-flex; margin-top: 5px; padding: 4px 8px; border-radius: 6px; background: var(--field); color: var(--ink-2); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px; }
+.reply { margin: 6px 0 0 30px; height: 34px; border-radius: 17px; background: var(--field); color: var(--ink-3); display: flex; align-items: center; padding: 0 14px; font-size: 13px; }
+.prcard { background: var(--raised); border-radius: 14px; box-shadow: 0 0 0 1px var(--line); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; align-self: start; }
+.prcard .h { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; }
+.prcard .h .br { font: 400 11.5px ui-monospace, Menlo, monospace; color: var(--ink-3); margin-left: auto; }
+.files div { display: grid; grid-template-columns: 1fr 64px; gap: 8px; font: 11.5px/20px ui-monospace, Menlo, monospace; color: var(--ink-2); }
+.files div span:last-child { text-align: right; }
+.cl { display: flex; flex-direction: column; gap: 5px; border-top: 1px solid var(--line); padding-top: 10px; }
+.cl div { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-2); }
+.cl div time { margin-left: auto; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.ok { color: var(--live); } .run { color: var(--doing); } .wait { color: var(--ink-3); }
+.btns { display: flex; gap: 6px; }
+.btns .btn { flex: 1; justify-content: center; height: 28px; }
+.dock { margin: 8px 24px 18px; min-height: 48px; border-radius: 26px; background: var(--field); box-shadow: 0 0 0 1px var(--line); display: flex; align-items: center; gap: 10px; padding: 0 8px 0 18px; color: var(--ink-3); font-size: 14px; }
+.dock .say { flex: 1; }
+.dock .to { font-size: 12px; color: var(--ink-2); background: var(--wash-2); height: 26px; border-radius: 8px; padding: 0 10px; display: inline-flex; align-items: center; }
+.dock .send { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); display: grid; place-items: center; color: #fff; }
+
+body, .pane { background: #0b0b0c; }
+.pane { margin: 0; border-radius: 0; box-shadow: none; }
+.search { background: none; box-shadow: inset 0 0 0 1px var(--line); }
+.nv.on { background: none; color: var(--ink); }
+.nv.on::before { content: ""; width: 3px; height: 14px; border-radius: 2px; background: var(--accent); margin-left: -10px; margin-right: 7px; }
+.seg { background: none; gap: 2px; }
+.seg span.on { background: none; box-shadow: none; color: var(--ink); font-weight: 600; text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 8px; }
+.row:hover, .row.sel { background: none; }
+.row { border-radius: 0; box-shadow: 0 1px 0 var(--line); }
+.ask { background: none; box-shadow: 0 1px 0 var(--line); }
+.ask .ic { background: none; box-shadow: inset 0 0 0 1px rgba(245,176,65,.45); }
+.btn { background: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); }
+.btn.primary { box-shadow: none; }
+.prcard { background: none; box-shadow: none; border-left: 1px solid var(--line); border-radius: 0; padding: 2px 0 2px 20px; }
+.e .q, .e .cmd { background: none; box-shadow: inset 0 0 0 1px var(--line); }
+.e .bd { background: #0b0b0c; }
+.reply, .dock { background: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+.dock .to { background: none; box-shadow: inset 0 0 0 1px var(--line); }
+.prc .db { background: rgba(255,255,255,.08); }
+.nv .c.hot { color: var(--decide); background: none; padding: 0; }
+.det { padding-bottom: 14px; box-shadow: 0 1px 0 var(--line); margin-bottom: 0; }
+.row.sel { box-shadow: none; }
+</style></head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="pr" viewBox="0 0 16 16"><circle cx="4" cy="3.5" r="1.8"/><circle cx="4" cy="12.5" r="1.8"/><circle cx="12" cy="12.5" r="1.8"/><path d="M4 5.3v5.4M12 10.7V6.5a2 2 0 0 0-2-2H7.5M9 3l-1.5 1.5L9 6"/></symbol>
+  <symbol id="ok" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M5.4 8.2l1.8 1.8 3.4-3.6"/></symbol>
+  <symbol id="spin" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" opacity=".3"/><path d="M8 1.8a6.2 6.2 0 0 1 6.2 6.2"/></symbol>
+  <symbol id="dot" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" stroke-dasharray="2 2.4"/></symbol>
+  <symbol id="key" viewBox="0 0 16 16"><circle cx="5.5" cy="10.5" r="3"/><path d="M7.7 8.3L13.5 2.5M11.5 4.5l1.6 1.6M10 6l1.2 1.2"/></symbol>
+  <symbol id="srch" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.8"/><path d="M10.6 10.6L14 14"/></symbol>
+  <symbol id="up" viewBox="0 0 16 16"><path d="M8 13V3.5M3.8 7.5L8 3.3l4.2 4.2"/></symbol>
+  <symbol id="bug" viewBox="0 0 16 16"><rect x="4.5" y="5" width="7" height="8" rx="3.5"/><path d="M8 5V13M4.5 8.5H2M14 8.5h-2.5M5.5 3.5L6.5 5M10.5 3.5L9.5 5M4.8 11.5l-2 1.5M11.2 11.5l2 1.5"/></symbol>
+</svg>
+<div class="side">
+  <div class="chan"><img src="../../assets/avatars/robot-04-lime.svg"><div><div class="n">channels-dev</div><div class="s">4 agents · 1 person</div></div></div>
+  <div class="search"><svg class="i"><use href="#srch"/></svg>Search everything<kbd>⌘K</kbd></div>
+  <div class="nv on">Everything<span class="c">13</span></div>
+  <div class="nv">Needs you<span class="c hot">2</span></div>
+  <div class="nv">In progress<span class="c">3</span></div>
+  <div class="nv">In review<span class="c">1</span></div>
+  <div class="nv">Done this week<span class="c">38</span></div>
+  <div class="sec">Agents</div>
+  <div class="ag"><img src="../../assets/avatars/robot-07-mint.svg"><div><div class="nm">claude-one</div><div class="st"><span class="pulse"></span>T625 · drafting presets</div></div></div>
+  <div class="ag"><img src="../../assets/avatars/robot-01-blue.svg"><div><div class="nm">claude-two</div><div class="st"><span class="pulse"></span>T12 · bun test voice</div></div></div>
+  <div class="ag"><img src="../../assets/avatars/robot-02-purple.svg"><div><div class="nm">claude-helper</div><div class="st"><span class="pulse"></span>T453 · reading github.ts</div></div></div>
+  <div class="ag"><img src="../../assets/avatars/robot-03-red.svg"><div><div class="nm">claude <span style="color:var(--ink-3)">· lead</span></div><div class="st">idle · watching 2 PRs</div></div></div>
+  <div class="sec">Conversations</div>
+  <div class="nv"># general<span class="c">3</span></div>
+  <div class="nv"># design</div>
+</div>
+<div class="pane">
+  <div class="hdr">
+    <h1>Everything</h1>
+    <div class="sum"><span><span class="dot doing"></span>3 working</span><span><svg class="i"><use href="#pr"/></svg>4 merged today</span><span><span class="dot live"></span>main is green</span></div>
+    <div class="seg"><span class="on">Tasks</span><span>Agents</span><span>Conversation</span></div>
+  </div>
+  <div class="body">
+    <div class="grp">Needs you <span class="c">2</span></div>
+    <div class="row ask">
+      <div class="ic"><svg class="i"><use href="#key"/></svg></div>
+      <div><div class="ttl">Who signs the Linux updates?</div><div class="sub"><span class="id">T596</span>·<span>asked by claude · Linux shows updates but never installs them until this is set</span></div></div>
+      <div class="acts"><button class="btn">My own key</button><button class="btn primary">A secret in CI</button></div>
+    </div>
+    <div class="row ask">
+      <div class="ic" style="font-weight:700;font-size:13px">?</div>
+      <div><div class="ttl">Voice: who has to allow Talk in a channel?</div><div class="sub"><span class="id">T15</span>·<span>asked by claude-two · claude recommends B</span></div></div>
+      <div class="acts"><button class="btn">Each person</button><button class="btn primary">Owner, then each person</button></div>
+    </div>
+
+    <div class="grp">In progress <span class="c">3</span></div>
+    <div class="row sel">
+      <img src="../../assets/avatars/robot-01-blue.svg">
+      <div><div class="ttl">Voice: Grok Voice Realtime adapter</div><div class="sub"><span class="id">T12</span>·<span>claude-two</span>·<span class="now"><span class="pulse"></span>running bun test web/src/lib/voice</span></div></div>
+      <div class="prc"><svg class="i"><use href="#pr"/></svg>#371<span class="db"><i style="width:78%;background:var(--live)"></i><i style="width:22%;background:var(--alert)"></i></span><span class="add">+486</span></div>
+      <div class="ck2"><svg class="ring i run"><use href="#spin"/></svg>4 of 6 checks</div>
+      <div class="when">now</div>
+    </div>
+    <div class="det">
+      <div class="tl">
+        <div class="e"><img src="../../assets/avatars/robot-03-red.svg"><span><b>claude</b> handed it to claude-two after T430</span><time>13:14</time></div>
+        <div class="e"><img src="../../assets/avatars/robot-01-blue.svg"><span><b>claude-two</b> started: WebSocket client with the xai-client-secret subprotocol, events typed from recorded fixtures</span><time>13:16</time></div>
+        <div class="e"><span class="bd"><svg class="i" style="width:12px;height:12px"><use href="#pr"/></svg></span><span>Opened <b>PR #371</b> · 3 commits · 9 files</span><time>13:41</time></div>
+        <div class="e"><img src="../../assets/avatars/robot-01-blue.svg"><span><b>claude-two</b> barge-in works on the fixture: the model stops talking within one frame<span class="cmd">bun test web/src/lib/voice — 23 pass</span></span><time>13:44</time></div>
+        <div class="reply">Reply in T12…</div>
+      </div>
+      <div class="prcard">
+        <div class="h"><svg class="i"><use href="#pr"/></svg>PR #371<span class="br">T12-grok-adapter</span></div>
+        <div class="files">
+          <div><span>web/src/lib/voice/grok.ts</span><span><span class="add">+214</span> <span class="del">−0</span></span></div>
+          <div><span>web/src/lib/voice/events.ts</span><span><span class="add">+131</span> <span class="del">−0</span></span></div>
+          <div><span>web/src/lib/voice/fixtures/…</span><span><span class="add">+98</span> <span class="del">−0</span></span></div>
+          <div><span>+6 more</span><span><span class="add">+43</span> <span class="del">−12</span></span></div>
+        </div>
+        <div class="cl">
+          <div><svg class="i ok"><use href="#ok"/></svg>repo / static<time>1m 12s</time></div>
+          <div><svg class="i ok"><use href="#ok"/></svg>test / unit<time>2m 40s</time></div>
+          <div><svg class="i ok"><use href="#ok"/></svg>build / bundles<time>3m 05s</time></div>
+          <div><svg class="i ok"><use href="#ok"/></svg>test / flows-a<time>4m 31s</time></div>
+          <div><svg class="i run"><use href="#spin"/></svg>test / flows-b<time>running</time></div>
+          <div><svg class="i wait"><use href="#dot"/></svg>ci-ok<time>waiting</time></div>
+        </div>
+        <div class="btns"><button class="btn">See the diff</button><button class="btn">GitHub</button></div>
+      </div>
+    </div>
+    <div class="row">
+      <img src="../../assets/avatars/robot-07-mint.svg">
+      <div><div class="ttl">Explore: agent personalities, replacing roles</div><div class="sub"><span class="id">T625</span>·<span>claude-one</span>·<span class="now"><span class="pulse"></span>drafting the code-development presets</span></div></div>
+      <div class="prc" style="color:var(--ink-3)">proposal, no PR</div>
+      <div class="ck2" style="color:var(--ink-3)">—</div>
+      <div class="when">2m</div>
+    </div>
+    <div class="row">
+      <img src="../../assets/avatars/robot-02-purple.svg">
+      <div><div class="ttl">GitHub: issues ↔ tasks</div><div class="sub"><span class="id">T453</span>·<span>claude-helper</span>·<span class="now"><span class="pulse"></span>reading packages/core/src/client/github.ts</span></div></div>
+      <div class="prc" style="color:var(--ink-3)">no PR yet</div>
+      <div class="ck2" style="color:var(--ink-3)">—</div>
+      <div class="when">6m</div>
+    </div>
+
+    <div class="grp">Done today <span class="c">4</span></div>
+    <div class="row">
+      <img src="../../assets/avatars/robot-07-mint.svg">
+      <div><div class="ttl">Bug: copy buttons do nothing on code blocks and the invite</div><div class="sub"><span class="id">T581</span>·<span>claude-one · merged, ships with the next desktop build</span></div></div>
+      <div class="prc"><svg class="i"><use href="#pr"/></svg>#370<span class="db"><i style="width:85%;background:var(--live)"></i><i style="width:15%;background:var(--alert)"></i></span><span class="add">+34</span></div>
+      <div class="ck2"><svg class="ring i ok"><use href="#ok"/></svg>merged</div>
+      <div class="when">3m</div>
+    </div>
+  </div>
+  <div class="dock"><span class="say">Message the channel, or describe a task…</span><span class="to"># general</span><span class="send"><svg class="i" style="width:16px;height:16px;stroke-width:2"><use href="#up"/></svg></span></div>
+</div>
+</body></html>
