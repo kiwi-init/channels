@@ -9,7 +9,7 @@ import { wakeOn } from "../daemon/reach.ts";
 import { formatMessage } from "@kiwi/core/format.ts";
 import type { Binding, Here } from "../seats.ts";
 import { MAX_CONTEXT } from "./answer.ts";
-import { deliveredUpTo, noteDelivered } from "./delivered.ts";
+import { deliveredUpTo, noteDelivered, noteHeard } from "./delivered.ts";
 import { hooksListen } from "./install/claude.ts";
 import { alive, isListening, takeListenSlot } from "./listeners.ts";
 import { LISTEN_SECONDS, mcFor } from "./self.ts";
@@ -25,11 +25,12 @@ const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, w
   let at = Math.max(yield* s.cursor(), deliveredUpTo(b.alias, b.as, who.session ?? ""));
   const peek = Cursor.of({ read: () => Effect.succeed(at), write: (_c, _a, seq) => Effect.sync(() => void (at = Math.max(at, seq))), seen: real.seen, markSeen: () => Effect.void });
   const got: string[] = [];
+  const seqs: number[] = [];
   const hearing = s
     .listen(
       (m, state) =>
         Effect.andThen(
-          Effect.sync(() => void got.push(formatMessage(m, state.trust.get(m.seq), state, s.me))),
+          Effect.sync(() => void (got.push(formatMessage(m, state.trust.get(m.seq), state, s.me)), seqs.push(m.seq))),
           woke,
         ),
       {
@@ -42,7 +43,7 @@ const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, w
       },
     )
     .pipe(Effect.provideService(Cursor, peek));
-  return { b, got, hearing, reached: () => at };
+  return { b, got, seqs, hearing, reached: () => at };
 });
 
 const arm = Effect.fn("Hooks.arm")(function* (seat: Served, who: Here, woke: Effect.Effect<void, never, Scope.Scope>) {
@@ -103,6 +104,9 @@ export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Serv
   } catch {
     return 0;
   }
-  for (const { b, reached } of told) noteDelivered(b.alias, b.as, who.session ?? "", reached());
+  for (const { b, reached, seqs } of told) {
+    noteDelivered(b.alias, b.as, who.session ?? "", reached());
+    noteHeard(who.session, b.alias, b.as, seqs);
+  }
   return 2;
 });

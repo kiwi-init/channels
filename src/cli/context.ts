@@ -5,8 +5,9 @@ import { DEFAULT_RELAY, Keystore, type ChannelConfig } from "../config.ts";
 import { here, seatsNear } from "../seats.ts";
 import { ensureDaemon, reportRead } from "../daemon.ts";
 import { seatsFor } from "../hooks.ts";
+import { heardFrom } from "../hooks/delivered.ts";
 import { BadName } from "@kiwi/core/refusals.ts";
-import { opt } from "./args.ts";
+import { args, opt } from "./args.ts";
 
 export class Quit extends Data.TaggedError("Quit")<{ readonly message: string; readonly code: number }> {}
 
@@ -28,6 +29,16 @@ export const config = Effect.gen(function* () {
   return yield* (yield* Keystore).config;
 });
 
+const ANSWERING = new Set(["reply", "react", "show"]);
+
+function answered(): { alias: string; as: string } | undefined {
+  const raw = ANSWERING.has(args[0] ?? "") ? args[1] : opt.re;
+  const seq = Number(raw?.replace(/^#/, ""));
+  if (!Number.isInteger(seq) || seq < 1) return undefined;
+  const from = heardFrom(here().session, seq);
+  return from.length === 1 ? from[0] : undefined;
+}
+
 export const channelAlias = Effect.fn("kiwi.channelAlias")(function* () {
   const cfg = yield* config;
   const all = Object.keys(cfg.channels);
@@ -36,10 +47,13 @@ export const channelAlias = Effect.fn("kiwi.channelAlias")(function* () {
   const named = opt.as ?? process.env.KIWI_AS;
   const fits = ours.length > 1 && named ? ours.filter((b) => b.as === named) : ours;
   const [seat, ...others] = fits;
+  const heard = explicit ? undefined : answered();
+  const told = heard && cfg.channels[heard.alias] ? heard.alias : undefined;
   if (others.length || (ours.length > 1 && !seat)) {
+    if (told) return (acting.alias = told);
     return yield* die(`this session is several agents here (${ours.map((b) => `${b.as} in ${b.alias}`).join(", ")}); pass -c ALIAS --as NAME to say which`);
   }
-  const alias = explicit ?? seat?.alias ?? (all.length === 1 ? all[0] : undefined);
+  const alias = explicit ?? seat?.alias ?? (all.length === 1 ? all[0] : undefined) ?? told;
   if (!alias) {
     if (!all.length) return yield* die("no channel: join one first (kiwi join <code>)");
     return yield* die(`this directory isn't bound to a channel, and this machine is in several (${all.join(", ")}); pass -c ALIAS --as NAME, or run kiwi from the directory you joined in`);
@@ -57,17 +71,21 @@ export const agentName = Effect.fn("kiwi.agentName")(function* (ch?: ChannelConf
     const ours = seatsFor(process.cwd());
     const cfg = yield* keys.config;
     const [bound, ...also] = ours.filter((b) => cfg.channels[b.alias]?.roomId === ch.roomId);
-    if (bound && also.length) return yield* die(`this session is several agents in this channel (${[bound, ...also].map((b) => b.as).join(", ")}); pass --as NAME to say which`);
+    const heard = answered();
+    const told = heard && cfg.channels[heard.alias]?.roomId === ch.roomId ? heard.as : undefined;
+    const several = bound !== undefined && also.length > 0;
+    if (several && !told) return yield* die(`this session is several agents in this channel (${[bound, ...also].map((b) => b.as).join(", ")}); pass --as NAME to say which`);
     const held = ours.length ? [] : seatsNear(process.cwd()).filter((b) => cfg.channels[b.alias]?.roomId === ch.roomId);
-    if (bound) raw = bound.as;
+    if (several) raw = told;
+    else if (bound) raw = bound.as;
     else if (held.length && here().session) {
       return yield* die(
         `${held.map((b) => b.as).join(", ")} ${held.length > 1 ? "work" : "works"} from this folder in another session; to take part yourself, run kiwi join with the channel's code (or pass --as NAME)`,
       );
     } else {
       const mine = (yield* keys.identitiesIn(ch.roomId)).filter((n) => n !== ch.owner && n !== ch.person);
-      if (mine.length > 1) return yield* die(`several agents on this machine are in this channel (${mine.join(", ")}); pass --as NAME`);
-      raw = mine[0] ?? ch.as;
+      if (mine.length > 1 && !told) return yield* die(`several agents on this machine are in this channel (${mine.join(", ")}); pass --as NAME`);
+      raw = mine.length > 1 ? told : (mine[0] ?? ch.as);
     }
   }
   raw ??= process.env.USER ?? process.env.USERNAME ?? "human";
