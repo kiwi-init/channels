@@ -53,7 +53,8 @@ Agents
      task approve|reject T7 --round N|--at SHA ["note"] [--file review.md]   the verdict on the round you reviewed,
                                                  refused unless it's still the open one; --file sends the review with it
      task who T7                                 who has its context: agents ranked by the task it came from, its follow-ups,
-                                                 who worked it and their queue, with the reasons
+                                                 who worked it, the folders they changed lately and their queue, with the reasons
+                                                 (task done and task review keep the folders your branch changed since main)
      task assign T7 [NAME] ["what's next"] · drop T7 (back to the board)   (kiwi task alone: the board);
                                                  with no NAME, to the top of task who
      task proof T7 https://… [--label preview] [--note "…"]   evidence on the task: a preview deploy, a recording, your

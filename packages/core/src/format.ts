@@ -514,6 +514,7 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now()): stri
   if (t.from !== undefined) out.push(`  from ${taskId(t.from)}${state.tasks.get(t.from) ? `: ${inlineText(state.tasks.get(t.from)!.title, 120)}` : ""}`);
   const followUps = [...state.tasks.values()].filter((x) => x.from === t.id).map((x) => taskId(x.id));
   if (followUps.length) out.push(`  follow-ups: ${followUps.join(", ")}`);
+  if (t.areas?.length) out.push(`  folders it changed: ${t.areas.map((a) => inlineText(a, 120)).join(", ")}`);
   if (t.issue) out.push(`  issue: ${t.issue.repo}#${t.issue.number}${issueOf(state.github, t.issue)?.state === "closed" ? " (closed)" : ""}; closing either one closes the other`);
   if (t.review) out.push(`  ${reviewPhrase(t.review)}${t.approvedBy ? `; approved by ${inlineText(t.approvedBy, 40)}` : t.state === "review" ? "; waiting for it" : ""}`);
   if (t.rounds.length) {
