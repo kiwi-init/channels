@@ -45,12 +45,13 @@ export function useRecentPreview({
     const last = lastPreview(messages, (seq) => state.trust.get(seq))
     const prior = loadRecent(member.code)
     if (!last && !others.length) return
+    const lead = last ? state.lead : prior?.lead
     saveRecent(member.code, {
       from: last ? (last.from === me ? "You" : nameOf(last.from)) : (prior?.from ?? ""),
       text: last ? (last.imgs?.length && last.body === last.imgs.map((i) => i.name).join(", ") ? "Image" : excerpt(last.body, 120)) : (prior?.text ?? ""),
       ts: last?.ts ?? prior?.ts ?? member.at,
       people: others.length ? others.map((m) => memberName(m)) : (prior?.people ?? []),
-      ...(last && state.lead && last.from === state.lead ? { lead: last.from } : {}),
+      ...(lead ? { lead } : {}),
     })
   }, [messages, others, state.trust, state.lead, member.code, member.at, nameOf, me])
 }
