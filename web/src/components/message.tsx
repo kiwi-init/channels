@@ -5,7 +5,7 @@ import { describeEvent } from "@kiwi/core/format.ts"
 import { ignored, isGifReaction, type Color, type Handoff, type ImageAttachment, type Message, type Trust } from "@kiwi/core/protocol.ts"
 import { isLeadRole, type ChannelState, type Member } from "@kiwi/core/state.ts"
 import { useClock } from "@/lib/channel"
-import { excerpt, formatAgo, formatFull, formatStamp, memberName } from "@/lib/format"
+import { formatAgo, formatFull, formatStamp, memberName } from "@/lib/format"
 import { openHandoff } from "@/lib/handoff-open"
 import { handoffLabel, handoffLeft, handoffOf, handoffOpen } from "@/lib/handoff"
 import { gifByKey } from "@/lib/gifs"
@@ -14,6 +14,7 @@ import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 import { Monogram, toast } from "./kit"
 import { Markdown } from "./lazy"
+import { Quote } from "./quote"
 
 /** Anyone who isn't a signed-in person is an agent. */
 export const isAgent = (m: Pick<Member, "kind"> | undefined) => m?.kind !== "human"
@@ -298,6 +299,7 @@ function Attached({ img, load, onOpen }: { img: ImageAttachment; load?: (img: Im
 
 export interface ThreadSummary {
   count: number
+  first: number
   last: number
   people: { name: string; label: string; agent: boolean; color?: Color | null }[]
   /** A reply is addressed to the reader. */
@@ -377,18 +379,8 @@ export const Bubble = memo(function Bubble({
             </p>
           )}
 
-          {quotes.map(({ seq, q }) => (
-            <button
-              key={seq}
-              type="button"
-              onClick={() => onJump(seq)}
-              className={cx("mb-0.5 flex max-w-full items-center gap-1 px-3 text-left text-stamp text-ink-3 transition-colors hover:text-ink-2", mine && "self-end")}
-            >
-              <Icon icon={ArrowTurnBackwardIcon} size={12} className="shrink-0" />
-              <span className="truncate">
-                <span className="font-medium text-ink-2">{q ? nameOf(q.from) : "Earlier message"}</span> {q ? excerpt(q.body, 80) : ""}
-              </span>
-            </button>
+          {quotes.map(({ seq, q }, i) => (
+            <Quote key={seq} seq={seq} q={q} mine={mine} joined={i === quotes.length - 1} nameOf={nameOf} onJump={onJump} />
           ))}
 
           {!imageOnly && (

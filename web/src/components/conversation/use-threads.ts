@@ -67,9 +67,8 @@ export function useThreads({
       return true
     })
     if (q) list = list.filter((m) => m.body.toLowerCase().includes(q) || nameOf(m.from).toLowerCase().includes(q))
-    else list = list.filter((m) => m.kind === "event" || rootOf(m.seq) === null)
     return list
-  }, [messages, placeOf, hereKey, search, nameOf, rootOf, state, revealed])
+  }, [messages, placeOf, hereKey, search, nameOf, state, revealed])
   const inTask = useMemo(
     () => (taskKey === null ? [] : messages.filter((m) => m.seq !== shownTask && placeKey(placeOf.get(m.seq) ?? MAIN) === taskKey && (revealed || !ignored(state.trust.get(m.seq))))),
     [messages, placeOf, taskKey, shownTask, state.trust, revealed]
@@ -88,8 +87,8 @@ export function useThreads({
   const summaryOf = (seq: number): ThreadSummary | undefined => {
     const list = threads.get(seq)
     if (!list?.length) return undefined
-    return { count: list.length, last: list[list.length - 1]!.ts, people: peopleOf(list), forYou: list.some((r) => r.from !== me && r.to?.includes(me)) }
+    return { count: list.length, first: list[0]!.seq, last: list[list.length - 1]!.ts, people: peopleOf(list), forYou: list.some((r) => r.from !== me && r.to?.includes(me)) }
   }
 
-  return { bySeq, rootOf, threadRoot: sideRoot, showDropped, setShowDropped, threads, visible, inTask, quoted, summaryOf }
+  return { bySeq, threadRoot: sideRoot, showDropped, setShowDropped, threads, visible, inTask, quoted, summaryOf }
 }

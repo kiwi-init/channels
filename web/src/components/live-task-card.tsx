@@ -47,7 +47,14 @@ export function LiveTaskCard({ id, state, messages, me, now, onOpen }: { id: num
         <span className="flex items-center gap-2">
           <span className="flex -space-x-1.5">
             {people.slice(0, 4).map((n) => (
-              <Monogram key={n} name={memberName(state.members.get(n), n)} agent={isAgent(state.members.get(n))} color={colorOf(state, n)} size={20} className="ring-2 ring-raised" />
+              <Monogram
+                key={n}
+                name={memberName(state.members.get(n), n)}
+                agent={isAgent(state.members.get(n))}
+                color={colorOf(state, n)}
+                size={20}
+                className={isAgent(state.members.get(n)) ? undefined : "ring-2 ring-raised"}
+              />
             ))}
           </span>
           <span className="text-meta text-ink-3 tabular-nums">{said === 0 ? "No messages yet" : said === 1 ? "1 message" : `${said} messages`}</span>
