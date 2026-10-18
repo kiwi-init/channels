@@ -255,7 +255,7 @@ export function startRelay(
         if (url.pathname === "/") return new Response("Kiwi Channels relay (bun)\n");
         // The desktop app's renderer isn't served by the relay: /v1/* answers any origin.
         if (req.method === "OPTIONS" && url.pathname.startsWith("/v1/")) return corsPreflight();
-        if (url.pathname === "/v1/config") return withCors(await relayConfig(human));
+        if (url.pathname === "/v1/config") return withCors(await relayConfig(human, process.env.GITHUB_APP_CLIENT_ID));
         const ip = clientAddress(server.requestIP(req)?.address ?? null, req.headers.get("x-forwarded-for"), trustProxy);
         const mailbox = await onMailboxHttp(req, mailboxes, ip ? { ip, allow: writeAllowed } : {});
         if (mailbox) return mailbox;

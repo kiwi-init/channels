@@ -216,6 +216,11 @@ export interface DaemonStatus {
 
 export type SignInResult = { token: string } | { dev: true };
 
+export interface GithubStatus {
+  available: boolean;
+  account: { login: string; id: number; at: number } | null;
+}
+
 export interface KiwiBridge {
   /** The relay URL injected at load (query param, else the default). */
   readonly relayUrl: string;
@@ -235,6 +240,12 @@ export interface KiwiBridge {
   devSignIn(name: string): Promise<{ token: string }>;
   getToken(): Promise<string | null>;
   signOut(): Promise<void>;
+  /** Whether this relay has a GitHub App, and who this Mac is linked to. The token never leaves main. */
+  githubStatus(): Promise<GithubStatus>;
+  /** GitHub's device flow: onGithubCode gets the code to type, then this resolves once it's typed and approved. */
+  githubLink(): Promise<GithubStatus>;
+  githubUnlink(): Promise<GithubStatus>;
+  onGithubCode(cb: (c: { code: string; url: string }) => void): () => void;
   /** Pairing: show the code, poll slot a, answer into slot b. */
   pairBegin(): Promise<{ code: string }>;
   pairPoll(): Promise<PairAskView | null>;

@@ -15,10 +15,10 @@ until the owner's app drains them. GitHub already has both.
 **Not checked yet:** whether a channel's owner may see a repo. Any channel
 owner on the relay can connect any repo name and receive the trimmed events
 of every repo the App is installed on under that name (titles, branches,
-check results; never code). Until a channel owner's GitHub account is linked
-and checked (T41), install the App only on repos whose PR titles every
-channel owner on your relay may see: on the public relay, that's who is on
-`KIWI_BETA_USERS`.
+check results; never code). Linking a GitHub account (below) is in, but
+nothing yet checks a repo list against the linked account, so install the App
+only on repos whose PR titles every channel owner on your relay may see: on
+the public relay, that's who is on `KIWI_BETA_USERS`.
 
 ## Register the App (once, by whoever runs the relay)
 
@@ -39,8 +39,25 @@ channel owner on your relay may see: on the public relay, that's who is on
    - Bun relay: `GITHUB_WEBHOOK_SECRET=… kiwi relay`
 
    Without it, `/v1/github/webhook` answers 404 and nothing is queued.
-7. Generate a private key and keep it (the App's own API calls, for diffs and
+7. Under **Identifying and authorizing users**, tick **Enable Device Flow**
+   and untick **Expire user authorization tokens**: a Mac links by GitHub's
+   device flow, which needs only the public client id, and without the App's
+   client secret it can't refresh a token that expires after 8 hours.
+   Account permissions: none. Give the relay the App's **Client ID** (it is
+   public; it appears in the relay's `/v1/config` so a Mac can start the link):
+   - Cloudflare: `GITHUB_APP_CLIENT_ID` under `vars` in `wrangler.jsonc`
+   - Bun relay: `GITHUB_APP_CLIENT_ID=… kiwi relay`
+8. Generate a private key and keep it (the App's own API calls, for diffs and
    review checks, use it later; the webhook doesn't).
+
+## Link your GitHub account (each person, in the desktop app)
+
+Settings → **GitHub** → **Link GitHub** shows a code, opens
+`github.com/login/device`, and finishes when you type it there and approve.
+The app then names the account it linked (`Linked as @you`). The token is kept
+in the app's encrypted store on that Mac: it is not sent to the relay, put in
+a channel or handed to an agent, and **Unlink** forgets it. The row appears
+only when the relay has a `GITHUB_APP_CLIENT_ID`.
 
 ## Connect a repo to a channel
 
