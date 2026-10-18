@@ -341,3 +341,14 @@ export function verdictsAfter(state: ChannelState, messages: Message[], after: n
   }
   return out.sort((a, b) => a.seq - b.seq);
 }
+
+export function prsToLinkBack(state: ChannelState, after: number): { repo: string; number: number; task: number; seq: number; body: string }[] {
+  const out: { repo: string; number: number; task: number; seq: number; body: string }[] = [];
+  for (const pr of state.github.prs.values()) {
+    const id = taskOfBranch(pr.branch);
+    const t = id === null ? undefined : state.tasks.get(id);
+    if (!t || pr.seq <= after || pr.state !== "open") continue;
+    out.push({ repo: pr.repo, number: pr.number, task: t.id, seq: pr.seq, body: `Kiwi task ${taskId(t.id)}: ${inlineText(t.title, 200)}` });
+  }
+  return out.sort((a, b) => a.seq - b.seq);
+}

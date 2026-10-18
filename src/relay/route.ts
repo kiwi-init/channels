@@ -445,6 +445,21 @@ const routes: RoomRoute[] = [
   },
   {
     method: "POST",
+    path: "/github/comment",
+    guard: "owner",
+    run: () =>
+      Effect.gen(function* () {
+        const b = yield* json<{ repo?: unknown; number?: unknown; body?: unknown }>();
+        const db = yield* RoomStore;
+        if (typeof b.repo !== "string" || !db.githubRepos().includes(b.repo.toLowerCase())) return yield* new BadRequest({ message: "repo: one of the channel's connected repos" });
+        if (typeof b.number !== "number" || !Number.isSafeInteger(b.number) || b.number <= 0) return yield* new BadRequest({ message: "number: the pull request's number" });
+        if (typeof b.body !== "string" || !b.body.trim() || b.body.length > 2000) return yield* new BadRequest({ message: "body: up to 2000 characters" });
+        const app = yield* githubApp;
+        return { data: yield* replied(yield* Effect.promise(() => app.comment(b.repo as string, b.number as number, b.body as string))) };
+      }),
+  },
+  {
+    method: "POST",
     path: "/github/ack",
     guard: "owner",
     run: () =>

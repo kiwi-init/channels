@@ -80,6 +80,7 @@ export const CHANNEL_CALLS = [
   "drainGithub",
   "githubDiff",
   "postReviewCheck",
+  "commentOnPr",
   "snapshotAt",
   "info",
   "title",

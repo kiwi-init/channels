@@ -107,6 +107,7 @@ describe("owner routes need the owner key's signature, and nothing else", () => 
     ["PUT", "/github/repos"],
     ["GET", "/github/queue"],
     ["POST", "/github/check"],
+    ["POST", "/github/comment"],
     ["POST", "/github/ack"],
     ["PUT", "/snapshot"],
     ["GET", "/requests?v=2"],

@@ -8,6 +8,7 @@ export type GithubReply<T> = { ok: true; value: T } | { ok: false; status: numbe
 export interface GithubAppApi {
   diff(repo: string, sha: string): Promise<GithubReply<{ diff: string; base: string; truncated: boolean }>>;
   check(repo: string, sha: string, c: { conclusion: "success" | "failure"; title: string; summary: string }): Promise<GithubReply<{ url: string | null }>>;
+  comment(repo: string, number: number, body: string): Promise<GithubReply<{ url: string | null }>>;
 }
 
 export class GithubApp extends Context.Service<GithubApp, GithubAppApi | null>()("kiwi/relay/GithubApp") {}
@@ -94,6 +95,13 @@ export function githubAppFrom(opts: { appId?: string | null; privateKey?: string
         body: JSON.stringify({ name: REVIEW_CHECK, head_sha: sha, status: "completed", conclusion: c.conclusion, output: { title: c.title, summary: c.summary } }),
       });
       if (!res.ok) return fail(res, "the check");
+      return { ok: true, value: { url: ((await res.json()) as { html_url?: string }).html_url ?? null } };
+    },
+    comment: async (repo, number, body) => {
+      const t = await token(repo);
+      if (!t.ok) return t;
+      const res = await get(`${api}/repos/${repo}/issues/${number}/comments`, { method: "POST", headers: { ...headers(t.value), "content-type": "application/json" }, body: JSON.stringify({ body }) });
+      if (!res.ok) return fail(res, "the comment");
       return { ok: true, value: { url: ((await res.json()) as { html_url?: string }).html_url ?? null } };
     },
   };
