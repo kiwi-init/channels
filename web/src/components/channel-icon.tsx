@@ -47,7 +47,7 @@ export function ChannelIconTile({ icon, title, size }: { icon: ChannelIcon | nul
   )
 }
 
-export function ChannelFace({ icon, lead, title, size }: { icon: ChannelIcon | null; lead: string | null; title: string; size: 36 | 40 }) {
+export function ChannelFace({ icon, lead, title, size }: { icon: ChannelIcon | null; lead: string | null; title: string; size: 28 | 36 | 40 }) {
   return lead ? <RobotAvatar name={lead} size={size} label="The lead" /> : <ChannelIconTile icon={icon} title={title} size={size} />
 }
 
