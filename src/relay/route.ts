@@ -185,7 +185,16 @@ const connectedCommit = (repo: unknown, sha: unknown) =>
     return { repo: repo.toLowerCase(), sha: sha.toLowerCase() };
   });
 
-const replied = <T>(r: GithubReply<T>) => (r.ok ? Effect.succeed(r.value) : Effect.fail(new Refused({ status: r.status, message: r.error, tag: r.status === 404 ? "NotFound" : "Internal" })));
+const replied = <T>(r: GithubReply<T>) =>
+  r.ok ? Effect.succeed(r.value) : Effect.fail(new Refused({ status: r.status, message: r.error, tag: r.status === 404 ? "NotFound" : r.status === 400 ? "BadRequest" : "Internal" }));
+
+const connectedIssue = (repo: unknown, number: unknown) =>
+  Effect.gen(function* () {
+    const db = yield* RoomStore;
+    if (typeof repo !== "string" || !db.githubRepos().includes(repo.toLowerCase())) return yield* new BadRequest({ message: "repo: one of the channel's connected repos" });
+    if (typeof number !== "number" || !Number.isSafeInteger(number) || number <= 0) return yield* new BadRequest({ message: "number: the issue's number" });
+    return { repo: repo.toLowerCase(), number };
+  });
 
 const holds = (req: Request, etag: string) => (req.headers.get("if-none-match") ?? "").split(",").some((t) => t.trim() === "*" || t.trim().replace(/^W\//, "") === etag);
 
@@ -456,6 +465,33 @@ const routes: RoomRoute[] = [
         if (typeof b.body !== "string" || !b.body.trim() || b.body.length > 2000) return yield* new BadRequest({ message: "body: up to 2000 characters" });
         const app = yield* githubApp;
         return { data: yield* replied(yield* Effect.promise(() => app.comment(b.repo as string, b.number as number, b.body as string))) };
+      }),
+  },
+  {
+    method: "GET",
+    path: "/github/issue",
+    guard: "member",
+    run: () =>
+      Effect.gen(function* () {
+        const { url } = yield* Request_;
+        const n = url.searchParams.get("number");
+        const { repo, number } = yield* connectedIssue(url.searchParams.get("repo"), n && /^\d{1,9}$/.test(n) ? Number(n) : null);
+        const app = yield* githubApp;
+        return { data: yield* replied(yield* Effect.promise(() => app.issue(repo, number))) };
+      }),
+  },
+  {
+    method: "POST",
+    path: "/github/issue/close",
+    guard: "owner",
+    run: () =>
+      Effect.gen(function* () {
+        const b = yield* json<{ repo?: unknown; number?: unknown; reason?: unknown; body?: unknown }>();
+        const { repo, number } = yield* connectedIssue(b.repo, b.number);
+        if (b.reason !== "completed" && b.reason !== "not_planned") return yield* new BadRequest({ message: "reason: completed or not_planned" });
+        if (typeof b.body !== "string" || !b.body.trim() || b.body.length > 2000) return yield* new BadRequest({ message: "body: up to 2000 characters" });
+        const app = yield* githubApp;
+        return { data: yield* replied(yield* Effect.promise(() => app.closeIssue(repo, number, b.reason as "completed" | "not_planned", b.body as string))) };
       }),
   },
   {

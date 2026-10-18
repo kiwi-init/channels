@@ -6,9 +6,9 @@
 import { cleanBody, describeEvent, proofLabel, reviewBody, roundTag } from "./format.ts";
 import type { ReviewCheck } from "./client/github.ts";
 import { inlineText } from "./membership.ts";
-import { ignored, type Message } from "./protocol.ts";
+import { ignored, type IssueRef, type Message } from "./protocol.ts";
 import type { OldTaskState, TaskState } from "./protocol.ts";
-import { currentState, isPerson, prChecks, prKey, taskId, type ChannelState, type GithubPr, type Task } from "./state.ts";
+import { currentState, isPerson, issueOf, prChecks, prKey, taskId, type ChannelState, type GithubPr, type Task } from "./state.ts";
 
 /** Quiet this long, with nothing in progress, and an agent reads as idle. */
 const IDLE_AFTER_MS = 15 * 60_000;
@@ -351,4 +351,70 @@ export function prsToLinkBack(state: ChannelState, after: number): { repo: strin
     out.push({ repo: pr.repo, number: pr.number, task: t.id, seq: pr.seq, body: `Kiwi task ${taskId(t.id)}: ${inlineText(t.title, 200)}` });
   }
   return out.sort((a, b) => a.seq - b.seq);
+}
+
+export interface IssueClose {
+  repo: string;
+  number: number;
+  task: number;
+  seq: number;
+  reason: "completed" | "not_planned";
+  body: string;
+}
+
+export function issuesToClose(state: ChannelState, after: number): IssueClose[] {
+  const out: IssueClose[] = [];
+  for (const t of state.tasks.values()) {
+    if (!t.issue || t.state !== "done" || !t.closedSeq || t.closedSeq <= after || issueOf(state.github, t.issue)?.state === "closed") continue;
+    const note = t.notes.find((n) => n.seq === t.closedSeq)?.text;
+    const said = note && note !== "cancelled" ? `: ${inlineText(note, 500)}` : "";
+    out.push({
+      repo: t.issue.repo,
+      number: t.issue.number,
+      task: t.id,
+      seq: t.closedSeq,
+      reason: t.cancelled ? "not_planned" : "completed",
+      body: `Kiwi task ${taskId(t.id)} ${t.cancelled ? "cancelled" : "done"}${said}`,
+    });
+  }
+  return out.sort((a, b) => a.seq - b.seq);
+}
+
+export interface TaskClose {
+  task: number;
+  seq: number;
+  cancelled: boolean;
+  note: string;
+}
+
+export function tasksClosedOnGithub(state: ChannelState, after: number): TaskClose[] {
+  const out: TaskClose[] = [];
+  for (const t of state.tasks.values()) {
+    const issue = t.issue && issueOf(state.github, t.issue);
+    if (!issue || issue.state !== "closed" || issue.seq <= after || t.state === "done") continue;
+    const how = issue.reason === "not_planned" ? "closed as not planned" : "closed";
+    out.push({ task: t.id, seq: issue.seq, cancelled: issue.reason === "not_planned", note: `${issue.repo}#${issue.number} ${how} on GitHub${issue.by ? ` by @${issue.by}` : ""}` });
+  }
+  return out.sort((a, b) => a.seq - b.seq || a.task - b.task);
+}
+
+export function taskOfIssue(state: ChannelState, ref: IssueRef): Task | undefined {
+  const key = prKey(ref.repo, ref.number);
+  return [...state.tasks.values()].find((t) => t.issue && t.state !== "done" && prKey(t.issue.repo, t.issue.number) === key);
+}
+
+export function parseIssueRef(s: string, repos: readonly string[]): IssueRef | string {
+  const t = s.trim();
+  const url = /^https:\/\/github\.com\/([^/\s]+\/[^/\s]+)\/issues\/(\d{1,9})\/?(?:[?#].*)?$/i.exec(t);
+  const named = /^([^/\s#]+\/[^/\s#]+)#(\d{1,9})$/.exec(t);
+  const bare = /^#?(\d{1,9})$/.exec(t);
+  const repo = url?.[1] ?? named?.[1] ?? (bare ? (repos.length === 1 ? repos[0] : null) : undefined);
+  const number = Number(url?.[2] ?? named?.[2] ?? bare?.[1]);
+  if (repo === undefined) return `"${t}" isn't an issue: say 12, owner/repo#12 or its GitHub link`;
+  if (repo === null)
+    return repos.length ? `say which repo: ${repos.map((r) => `${r}#${number}`).join(" or ")}` : "the channel has no repo connected: the owner connects one in the app's GitHub settings";
+  const known = repos.find((r) => r.toLowerCase() === repo.toLowerCase());
+  if (!known) return `${repo} isn't one of the channel's repos${repos.length ? ` (${repos.join(", ")})` : ""}`;
+  if (!number) return `"${t}" has no issue number`;
+  return { repo: known, number };
 }

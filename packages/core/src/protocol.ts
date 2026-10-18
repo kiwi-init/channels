@@ -187,7 +187,7 @@ export type Event =
    * A task. `review`: who must approve it before it's done (a member's name, or "*" for anyone who hasn't
    * worked on it). Logs from older clients may also carry `after`, `needs` and `handoff`: they're ignored.
    */
-  | { op: "task.add"; title: string; detail?: string; owner?: string; review?: string }
+  | { op: "task.add"; title: string; detail?: string; owner?: string; review?: string; issue?: IssueRef }
   | { op: "task.claim"; task: number }
   | {
       op: "task.update";
@@ -339,7 +339,7 @@ export const MAX_CHARTER = 2000;
 
 export const MAX_SUMMARY = 8000;
 
-export const GITHUB_EVENTS = ["pull_request", "check_run", "push", "workflow_run"] as const;
+export const GITHUB_EVENTS = ["pull_request", "check_run", "push", "workflow_run", "issues"] as const;
 export const MAX_GITHUB_ITEMS = 50;
 
 export interface GithubNote {
@@ -356,11 +356,22 @@ export interface GithubNote {
   name?: string;
   status?: string;
   conclusion?: string;
+  reason?: string;
   by?: string;
   at: number;
 }
 
-const GITHUB_TEXT: Record<string, number> = { action: 40, title: 200, url: 300, state: 20, branch: 200, sha: 40, name: 200, status: 20, conclusion: 20, by: 100 };
+export interface IssueRef {
+  repo: string;
+  number: number;
+}
+
+function isIssueRef(x: unknown): x is IssueRef {
+  const r = x as { repo?: unknown; number?: unknown } | null;
+  return !!r && typeof r === "object" && typeof r.repo === "string" && REPO_RE.test(r.repo) && Number.isSafeInteger(r.number) && (r.number as number) > 0;
+}
+
+const GITHUB_TEXT: Record<string, number> = { action: 40, title: 200, url: 300, state: 20, branch: 200, sha: 40, name: 200, status: 20, conclusion: 20, reason: 20, by: 100 };
 
 export function cleanGithubNote(x: unknown): GithubNote | null {
   if (!x || typeof x !== "object") return null;
@@ -641,7 +652,9 @@ export function wellFormedEvent(ev: unknown): ev is Event {
     case "hello":
       return opt(e.role, (x): x is string => str(x, 200)) && opt(e.about, (x): x is string => str(x, 2000));
     case "task.add":
-      return str(e.title, 500) && opt(e.detail, (x): x is string => str(x)) && opt(e.owner, (x): x is string => str(x, 64)) && opt(e.review, (x): x is string => str(x, 64));
+      return (
+        str(e.title, 500) && opt(e.detail, (x): x is string => str(x)) && opt(e.owner, (x): x is string => str(x, 64)) && opt(e.review, (x): x is string => str(x, 64)) && opt(e.issue, isIssueRef)
+      );
     case "task.claim":
       return n(e.task);
     case "task.update":

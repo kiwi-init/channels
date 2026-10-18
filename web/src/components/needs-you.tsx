@@ -1,5 +1,6 @@
-import { ArrowDown01Icon } from "@hugeicons/core-free-icons"
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { CheckmarkCircle02Icon, Globe02Icon, HelpCircleIcon, Key01Icon } from "@hugeicons/core-free-icons"
+import type { IconSvgElement } from "@hugeicons/react"
+import { useState, type ReactNode } from "react"
 
 import { freeHandle, seededPick } from "@kiwi/core/handles.ts"
 import { nameKey, type JoinRequest } from "@kiwi/core/membership.ts"
@@ -10,7 +11,6 @@ import { askLabel } from "@/lib/asks"
 import { excerpt, formatAgo } from "@/lib/format"
 import { openHandoff } from "@/lib/handoff-open"
 import { handoffLabel, handoffLeft, handoffOf, handoffOpen } from "@/lib/handoff"
-import { cx } from "@/lib/utils"
 import { useControls } from "./controls"
 import { Icon } from "./icon"
 import { Button, Monogram, TextField, errorText, toast } from "./kit"
@@ -53,82 +53,45 @@ export function NeedsYou({
   onJump: (seq: number) => void
 }) {
   const { p } = useControls()
-  const [open, setOpen] = useState(false)
-  const box = useRef<HTMLElement>(null)
   const requests = p.isOwner ? p.requests : []
-  // Closes on a click elsewhere, or Escape, like any popover.
-  useEffect(() => {
-    if (!open) return
-    const away = (e: PointerEvent) => !box.current?.contains(e.target as Node) && setOpen(false)
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false)
-    document.addEventListener("pointerdown", away)
-    document.addEventListener("keydown", esc)
-    return () => {
-      document.removeEventListener("pointerdown", away)
-      document.removeEventListener("keydown", esc)
-    }
-  }, [open])
-  const items: { key: string; summary: string; node: ReactNode }[] = [
-    ...requests.map((r) => ({ key: `r${r.id}`, summary: `${r.name} wants to join`, node: <RequestItem r={r} roomId={roomId} now={now} /> })),
-    ...escalations.map((m) => ({
-      key: `e${m.seq}`,
-      summary: `${nameOf(m.from)} needs a decision`,
-      node: <AskItem m={m} me={me} now={now} nameOf={nameOf} agent={agentOf(m.from)} onReply={onReply} onJump={(seq) => (setOpen(false), onJump(seq))} />,
-    })),
-    ...questions.map((m) => ({
-      key: `q${m.seq}`,
-      summary: `${nameOf(m.from)} asked ${m.to?.includes(me) ? "you" : "everyone"}`,
-      node: <AskItem m={m} me={me} now={now} nameOf={nameOf} agent={agentOf(m.from)} onReply={onReply} onJump={(seq) => (setOpen(false), onJump(seq))} />,
+  const items: { key: string; node: ReactNode }[] = [
+    ...requests.map((r) => ({ key: `r${r.id}`, node: <RequestItem r={r} roomId={roomId} now={now} /> })),
+    ...[...escalations, ...questions].map((m) => ({
+      key: `a${m.seq}`,
+      node: <AskItem m={m} me={me} now={now} nameOf={nameOf} agent={agentOf(m.from)} onReply={onReply} onJump={onJump} />,
     })),
     ...reviews.map((t) => ({
       key: `t${t.id}`,
-      summary: `${taskId(t.id)} is ready for review`,
-      node: <ReviewItem t={t} nameOf={nameOf} onApprove={onApproveTask} onSendBack={onSendBack} onOpen={(id) => (setOpen(false), onOpenTask(id))} />,
+      node: <ReviewItem t={t} nameOf={nameOf} onApprove={onApproveTask} onSendBack={onSendBack} onOpen={onOpenTask} />,
     })),
   ]
   if (!items.length) return null
-  const n = items.length
   return (
-    <section ref={box} aria-label="Needs you" className="sticky top-0 z-20 bg-canvas pt-3 pb-2">
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-        className={cx("flex h-9 w-full items-center gap-2.5 rounded-full pr-3 pl-3.5 text-left text-ui edge transition-colors hover:bg-wash-2", open && "bg-wash-2")}
-      >
-        <span aria-hidden className="size-2 shrink-0 rounded-full bg-decide" />
-        <span className="shrink-0 font-semibold">{n === 1 ? "1 thing needs you" : `${n} things need you`}</span>
-        <span className="min-w-0 flex-1 truncate text-ink-3">
-          {items[0]!.summary}
-          {n > 1 ? `, and ${n - 1} more` : ""}
-        </span>
-        <Icon icon={ArrowDown01Icon} size={14} className={cx("shrink-0 text-ink-3 transition-transform", open && "rotate-180")} />
-      </button>
-      {open && (
-        <div className="animate-rise absolute inset-x-0 top-full z-20 -mt-1 overflow-hidden rounded-card bg-raised shadow-pop">
-          {requests.some((r) => r.check === "unchecked") && <p className="mx-4 mt-3 text-meta leading-normal text-ink-3">{TOO_MANY_REQUESTS}</p>}
-          <ul className="max-h-[60vh] divide-y divide-line overflow-y-auto">
-            {items.map((i) => (
-              <li key={i.key} className="px-4 py-3">
-                {i.node}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+    <section aria-label="Needs you" className="pt-3 pb-2">
+      <h2 className="flex items-baseline gap-2 text-ui font-semibold">
+        Needs you <span className="font-normal text-ink-3 tabular-nums">{items.length}</span>
+      </h2>
+      {requests.some((r) => r.check === "unchecked") && <p className="mt-1 text-meta leading-normal text-ink-3">{TOO_MANY_REQUESTS}</p>}
+      <ul className="divide-y divide-line border-b border-line">
+        {items.map((i) => (
+          <li key={i.key}>{i.node}</li>
+        ))}
+      </ul>
     </section>
   )
 }
 
-function Row({ lead, title, detail, children }: { lead: ReactNode; title: ReactNode; detail?: ReactNode; children?: ReactNode }) {
+function Row({ icon, lead, title, detail, children }: { icon?: IconSvgElement; lead?: ReactNode; title: ReactNode; detail?: ReactNode; children?: ReactNode }) {
   return (
-    <div className="flex items-start gap-3">
-      <span className="pt-0.5">{lead}</span>
-      <div className="min-w-0 flex-1">
-        <p className="text-ui leading-snug">{title}</p>
-        {detail && <div className="mt-0.5 text-meta leading-snug text-ink-2">{detail}</div>}
-        {children && <div className="mt-2 flex flex-wrap items-center gap-2">{children}</div>}
+    <div className="flex flex-col gap-2 py-3 md:flex-row md:items-center md:gap-4">
+      <div className="flex min-w-0 flex-1 items-start gap-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-row border border-edge-strong text-decide">{lead ?? (icon && <Icon icon={icon} size={17} />)}</span>
+        <div className="min-w-0 flex-1">
+          <p className="text-body leading-snug [overflow-wrap:anywhere]">{title}</p>
+          {detail && <div className="mt-0.5 text-meta leading-snug text-ink-3">{detail}</div>}
+        </div>
       </div>
+      {children && <div className="flex flex-wrap items-center gap-2 pl-12 md:max-w-[45%] md:shrink-0 md:justify-end md:pl-0">{children}</div>}
     </div>
   )
 }
@@ -141,7 +104,7 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
   const [rename, setRename] = useState(() => (taken ? freeHandle(p.roster, seededPick(r.pk)) : ""))
   // Whose computer it runs on, from its verified computer claim (not the relay's word).
   const who = r.kind === "human" ? (r.person ? `A person · key ${r.person.slice(0, 8)}` : "A person") : r.computer ? `An agent on ${r.computer.personName}’s ${r.computer.label}` : "An agent"
-  const lead = <Monogram name={r.display || r.name} hue={r.name} agent={r.kind !== "human"} size={24} />
+  const lead = <Monogram name={r.display || r.name} hue={r.name} agent={r.kind !== "human"} size={28} />
   return (
     <Row
       lead={lead}
@@ -159,7 +122,7 @@ function RequestItem({ r, roomId, now }: { r: JoinRequest; roomId: string; now: 
           {r.check === "ready" && r.code && (
             <span className="mt-1.5 flex items-baseline gap-2">
               <span>Let in only if {r.kind === "human" ? "they see" : "its terminal shows"}</span>
-              <span className="text-title font-semibold tracking-[0.04em] text-ink tabular-nums">{r.code}</span>
+              <span className="text-title font-semibold tracking-[0.04em] whitespace-nowrap text-ink tabular-nums">{r.code}</span>
             </span>
           )}
         </>
@@ -240,33 +203,25 @@ function AskItem({
   }
   return (
     <Row
-      lead={<Monogram name={m.from} agent={agent} size={24} />}
-      title={
-        <>
-          <span className="mr-1.5 rounded-full bg-decide-wash px-1.5 text-meta font-semibold text-decide">{handoff ? "Browser for you" : askLabel(m, me)}</span>
-          <span className="font-medium">{nameOf(m.from)}</span>: {excerpt(m.body, 220)}
-        </>
-      }
-      detail={handoff ? `${formatAgo(m.ts, now)} · ${handoffLabel(handoff)} · ${live ? handoffLeft(handoff, now) : "link expired"}` : formatAgo(m.ts, now)}
+      icon={handoff ? Globe02Icon : m.esc ? Key01Icon : HelpCircleIcon}
+      title={excerpt(m.body, 220)}
+      detail={[
+        m.task ? taskId(m.task) : null,
+        `${handoff ? "Browser for you" : askLabel(m, me)} from ${nameOf(m.from)}${agent ? "" : " (a person)"}`,
+        formatAgo(m.ts, now),
+        handoff ? `${handoffLabel(handoff)} · ${live ? handoffLeft(handoff, now) : "link expired"}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")}
     >
       {draft === null ? (
         <>
-          {!handoff && m.choices?.length ? (
-            <ul aria-label="Options" className="flex w-full flex-col gap-1.5">
-              {m.choices.map((c) => (
-                <li key={c}>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void send(c)}
-                    className="w-full rounded-row px-3 py-1.5 text-left text-ui leading-snug [overflow-wrap:anywhere] edge transition-colors hover:bg-wash-2 disabled:pointer-events-none disabled:opacity-40"
-                  >
-                    {c}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
+          {!handoff &&
+            m.choices?.map((c) => (
+              <Button key={c} size="sm" variant="secondary" disabled={busy} title={c} onClick={() => void send(c)} className="max-w-60 min-w-0">
+                <span className="truncate">{c}</span>
+              </Button>
+            ))}
           {handoff && live && (
             <>
               <Button size="sm" variant="secondary" onClick={() => !openHandoff(handoff) && toast("The link has expired", "error")}>
@@ -342,15 +297,7 @@ function ReviewItem({
     }
   }
   return (
-    <Row
-      lead={<span className="flex size-6 items-center justify-center text-meta font-semibold text-ink-2 tabular-nums">{taskId(t.id)}</span>}
-      title={
-        <>
-          <span className="font-medium">{t.title}</span> is ready for your review
-        </>
-      }
-      detail={t.owner ? `Done by ${nameOf(t.owner)}. Check the work itself, not just their word.` : "Check the work itself, not just the word of whoever did it."}
-    >
+    <Row icon={CheckmarkCircle02Icon} title={t.title} detail={`${taskId(t.id)} · ready for your review${t.owner ? ` · done by ${nameOf(t.owner)}` : ""} · check the work itself, not just the word`}>
       {why === null ? (
         <>
           <Button size="sm" variant="secondary" disabled={busy} onClick={() => act(() => onApprove(t), `Approved ${taskId(t.id)}`)}>

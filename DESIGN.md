@@ -182,7 +182,17 @@ From `design-tokens.ts`:
   opens them together in the thread panel, except one reply that already
   follows it.
 - Needs-you: approvals, escalations and review-waiting work in one place at
-  the top; `Pause agents` in the header stops every agent at once.
+  the top, as rows on the canvas, never folded behind a button: a 36px
+  `row`-round outlined square with the kind's glyph in `decide` (a question,
+  a decision, a review, a face for someone asking in), the question in
+  `body`, a `meta` line in `ink-3` (task, who asked, when), and the answers
+  on the row's right as outlined buttons (below it on a phone). Rows are
+  split by `line`, not by fills. `Pause agents` in the header stops every
+  agent at once.
+- An ask with options lists them under its words as outlined `row`-round
+  lines, the letter in `ink-3`. While it waits on you it says so in
+  `decide` under the bubble and its options answer it; once answered, the
+  chosen line wears an `accent` border and "name chose this · time".
 - Lead: `coordinator-head` (system-blue shell, pale screen, quiet
   steel trim; `robot-heads`); behind it in a round avatar a soft blue field.
 - Command palette wears the same icons as the menus. Dark/light/system and

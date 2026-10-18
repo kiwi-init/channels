@@ -3,6 +3,7 @@ import type { ReactNode } from "react"
 import type { ImageAttachment, Message } from "@kiwi/core/protocol.ts"
 import { cardShown } from "@kiwi/core/standup.ts"
 import { colorOf, type ChannelState } from "@kiwi/core/state.ts"
+import type { Chosen } from "@/lib/asks"
 import type { ChannelHandle } from "@/lib/channel"
 import { formatTime } from "@/lib/format"
 import { chipsFor } from "@/lib/reactions"
@@ -33,6 +34,7 @@ export interface RowsContext {
   highlight: number | null
   bySeq: Map<number, Message>
   quoted: (seq: number) => Message | undefined
+  chosen: (m: Message) => Chosen | undefined
   nameOf: (name: string) => string
   isFresh: (seq: number) => boolean
   summaryOf: (seq: number) => ThreadSummary | undefined
@@ -65,6 +67,7 @@ export function rowMakers(c: RowsContext) {
     highlight,
     bySeq,
     quoted,
+    chosen,
     nameOf,
     isFresh,
     summaryOf,
@@ -102,6 +105,7 @@ export function rowMakers(c: RowsContext) {
       nameOf={nameOf}
       onReply={anchor ? undefined : onReply}
       onChoose={!anchor && decisions.has(m.seq) ? (choice) => onAnswer(m, choice) : undefined}
+      chosen={chosen(m)}
       onReact={anchor ? undefined : onReact}
       onJump={onJump}
       thread={search || anchor ? undefined : threadOf(m, next)}

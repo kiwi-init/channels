@@ -78,6 +78,20 @@ export function githubItem(event: string, payload: unknown, now: number): Github
       sha: str(obj(pr.head).sha, 40),
     });
   }
+  if (event === "issues") {
+    const issue = obj(p.issue);
+    if (!int(issue.number)) return null;
+    return defined({
+      ...base,
+      event: "issues",
+      action: str(p.action, 40),
+      number: int(issue.number),
+      title: str(issue.title),
+      url: str(issue.html_url, 300),
+      state: str(issue.state, 20),
+      reason: str(issue.state_reason, 20),
+    });
+  }
   if (event === "check_run") {
     const run = obj(p.check_run);
     return defined({

@@ -1,8 +1,8 @@
-import { ArrowDown01Icon, GitPullRequestIcon, Link01Icon, UserMultipleIcon } from "@hugeicons/core-free-icons"
+import { ArrowDown01Icon, GithubIcon, GitPullRequestIcon, Link01Icon, UserMultipleIcon } from "@hugeicons/core-free-icons"
 import { useMemo, useState, type ReactNode } from "react"
 import { proofLabel } from "@kiwi/core/format.ts"
 import type { Message } from "@kiwi/core/protocol.ts"
-import { colorOf, taskId, type ChannelState, type Task } from "@kiwi/core/state.ts"
+import { colorOf, issueOf, taskId, type ChannelState, type Task } from "@kiwi/core/state.ts"
 import type { GithubDiff } from "@kiwi/core/client.ts"
 import { taskFeed, taskPrs, taskRepo } from "@kiwi/core/work.ts"
 import { formatAgo, formatFull, memberName } from "@/lib/format"
@@ -123,6 +123,7 @@ function Properties({
   const round = [...task.rounds].reverse().find((r) => r.at)
   const repo = round && onDiff ? taskRepo(state, messages, task.id) : null
   const owner = task.owner ? state.members.get(task.owner) : undefined
+  const issue = task.issue ? issueOf(state.github, task.issue) : undefined
   return (
     <dl className="grid grid-cols-2 gap-4">
       <Prop label="Status">
@@ -164,6 +165,21 @@ function Properties({
               </span>
             ))}
           </span>
+        </Prop>
+      )}
+      {task.issue && (
+        <Prop label="Issue">
+          <Icon icon={GithubIcon} size={16} className="shrink-0 text-ink-3" />
+          <a
+            href={issue?.url ?? `https://github.com/${task.issue.repo}/issues/${task.issue.number}`}
+            target="_blank"
+            rel="noreferrer"
+            title={issue?.title}
+            className="min-w-0 truncate text-ink-2 hover:text-ink hover:underline"
+          >
+            {task.issue.repo}#{task.issue.number}
+          </a>
+          {issue?.state === "closed" && <span className="shrink-0 text-meta text-ink-3">closed</span>}
         </Prop>
       )}
       {task.proof && task.proof.length > 0 && (

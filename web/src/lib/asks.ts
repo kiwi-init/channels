@@ -24,3 +24,31 @@ export function askLabel(m: Message, me: string): string {
   if (isEscalationTo(m, me)) return "Decision for you"
   return m.to?.includes(me) ? "Question for you" : "Question for everyone"
 }
+
+export interface Chosen {
+  choice: string
+  by: string
+  at: number
+}
+
+const letterOf = (choice: string) => /^([A-Z])\s*[:.)-]/.exec(choice)?.[1]
+
+export function choiceIn(body: string, choices: readonly string[]): string | undefined {
+  const said = body.trim()
+  const exact = choices.find((c) => c.trim() === said)
+  if (exact) return exact
+  const letter = /^([A-Z])(?:\s*[:.)-]|\s*$)/.exec(said)?.[1]
+  return letter ? choices.find((c) => letterOf(c) === letter) : undefined
+}
+
+export function chosenOf(ask: Message, replies: readonly Message[]): Chosen | undefined {
+  if (!ask.choices?.length) return undefined
+  const asked = ask.to ?? []
+  for (const r of replies) {
+    if (r.from === ask.from || r.kind === "event" || !r.re?.includes(ask.seq)) continue
+    if (asked.length && !asked.includes("*") && !asked.includes(r.from)) continue
+    const choice = choiceIn(r.body, ask.choices)
+    if (choice) return { choice, by: r.from, at: r.ts }
+  }
+  return undefined
+}

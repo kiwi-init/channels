@@ -73,6 +73,7 @@ describe("member routes refuse anyone who isn't a member", () => {
     ["GET", "/snapshot"],
     ["GET", "/members"],
     ["GET", "/github/diff"],
+    ["GET", "/github/issue"],
     ["DELETE", "/members/me"],
     ["GET", `/blobs/${"0".repeat(64)}`],
   ];
@@ -108,6 +109,7 @@ describe("owner routes need the owner key's signature, and nothing else", () => 
     ["GET", "/github/queue"],
     ["POST", "/github/check"],
     ["POST", "/github/comment"],
+    ["POST", "/github/issue/close"],
     ["POST", "/github/ack"],
     ["PUT", "/snapshot"],
     ["GET", "/requests?v=2"],

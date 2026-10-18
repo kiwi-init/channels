@@ -1,10 +1,10 @@
 import type { ChannelState } from "@kiwi/core/state.ts"
 import type { Message } from "@kiwi/core/protocol.ts"
-import { prsToLinkBack, verdictsAfter } from "@kiwi/core/work.ts"
+import { issuesToClose, prsToLinkBack, tasksClosedOnGithub, verdictsAfter } from "@kiwi/core/work.ts"
 import type { ReviewCheck } from "@kiwi/core/client.ts"
 
 const memory = new Map<string, number>()
-type Mark = "reviewChecks" | "prLinks"
+type Mark = "reviewChecks" | "prLinks" | "issueCloses" | "issueTasks"
 const keyOf = (mark: Mark, roomId: string) => `kiwi.${mark}.${roomId}`
 
 export function checkedUpTo(roomId: string, mark: Mark = "reviewChecks"): number | null {
@@ -26,14 +26,20 @@ export function setCheckedUpTo(roomId: string, seq: number, mark: Mark = "review
   }
 }
 
-export function linksToPost(roomId: string, state: ChannelState): ReturnType<typeof prsToLinkBack> {
-  const after = checkedUpTo(roomId, "prLinks")
+function dueAfter<T>(roomId: string, state: ChannelState, mark: Mark, pick: (state: ChannelState, after: number) => T[]): T[] {
+  const after = checkedUpTo(roomId, mark)
   if (after === null) {
-    setCheckedUpTo(roomId, state.head, "prLinks")
+    setCheckedUpTo(roomId, state.head, mark)
     return []
   }
-  return prsToLinkBack(state, after)
+  return pick(state, after)
 }
+
+export const linksToPost = (roomId: string, state: ChannelState) => dueAfter(roomId, state, "prLinks", prsToLinkBack)
+
+export const issuesToPost = (roomId: string, state: ChannelState) => dueAfter(roomId, state, "issueCloses", issuesToClose)
+
+export const tasksToClose = (roomId: string, state: ChannelState) => dueAfter(roomId, state, "issueTasks", tasksClosedOnGithub)
 
 export function checksToPost(roomId: string, state: ChannelState, messages: Message[]): (ReviewCheck & { seq: number })[] {
   const after = checkedUpTo(roomId)
