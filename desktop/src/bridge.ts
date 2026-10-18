@@ -83,6 +83,7 @@ export const CHANNEL_CALLS = [
   "postReviewCheck",
   "commentOnPr",
   "githubIssue",
+  "githubCheckLog",
   "closeIssue",
   "snapshotAt",
   "info",

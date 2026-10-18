@@ -4,6 +4,31 @@ export const REVIEW_CHECK = "kiwi/review";
 const MAX_DIFF = 2 << 20;
 
 const MAX_ISSUE_BODY = 8000;
+const MAX_EXCERPT = 3000;
+const EXCERPT_LINES = 25;
+const MAX_ANNOTATIONS = 10;
+
+interface CheckLog {
+  excerpt: string;
+  url: string | null;
+  from: "log" | "annotations" | "none";
+}
+
+const STAMP = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z ?/;
+const ANSI = /\u001b\[[0-9;]*m/g;
+
+export function logExcerpt(log: string): string {
+  const lines = log
+    .split(/\r?\n/)
+    .map((l) => l.replace(STAMP, "").replace(ANSI, "").trimEnd())
+    .filter((l) => l && !/^##\[(?:group|endgroup)\]/.test(l));
+  const at = lines.findIndex((l) => l.startsWith("##[error]"));
+  if (at < 0) return "";
+  return lines
+    .slice(Math.max(0, at - EXCERPT_LINES), at + 1)
+    .join("\n")
+    .slice(-MAX_EXCERPT);
+}
 
 interface GithubIssueInfo {
   repo: string;
@@ -22,6 +47,7 @@ export interface GithubAppApi {
   comment(repo: string, number: number, body: string): Promise<GithubReply<{ url: string | null }>>;
   issue(repo: string, number: number): Promise<GithubReply<GithubIssueInfo>>;
   closeIssue(repo: string, number: number, reason: "completed" | "not_planned", body: string): Promise<GithubReply<{ url: string | null }>>;
+  checkLog(repo: string, sha: string, name: string): Promise<GithubReply<CheckLog>>;
 }
 
 export class GithubApp extends Context.Service<GithubApp, GithubAppApi | null>()("kiwi/relay/GithubApp") {}
@@ -135,6 +161,29 @@ export function githubAppFrom(opts: { appId?: string | null; privateKey?: string
           state: i.state === "closed" ? "closed" : "open",
         },
       };
+    },
+    checkLog: async (repo, sha, name) => {
+      const t = await token(repo);
+      if (!t.ok) return t;
+      const runs = await get(`${api}/repos/${repo}/commits/${sha}/check-runs?check_name=${encodeURIComponent(name)}&filter=latest`, { headers: headers(t.value) });
+      if (!runs.ok) return fail(runs, "check runs for that commit");
+      const run = ((await runs.json()) as { check_runs?: { id: number; html_url?: string; output?: { title?: string | null; summary?: string | null } }[] }).check_runs?.[0];
+      if (!run) return { ok: false, status: 404, error: `GitHub has no check named ${name} on that commit` };
+      const url = run.html_url ?? null;
+      const log = await get(`${api}/repos/${repo}/actions/jobs/${run.id}/logs`, { headers: headers(t.value) });
+      const fromLog = log.ok ? logExcerpt(await log.text()) : "";
+      if (fromLog) return { ok: true, value: { excerpt: fromLog, url, from: "log" } };
+      const notes = await get(`${api}/repos/${repo}/check-runs/${run.id}/annotations`, { headers: headers(t.value) });
+      const said = notes.ok ? ((await notes.json()) as { path?: string; start_line?: number; message?: string; annotation_level?: string }[]) : [];
+      const lines = [
+        ...[run.output?.title, run.output?.summary].filter((x): x is string => !!x?.trim()),
+        ...said
+          .filter((a) => a.annotation_level === "failure" && a.message)
+          .slice(0, MAX_ANNOTATIONS)
+          .map((a) => (a.path && a.path !== ".github" ? `${a.path}${a.start_line ? `:${a.start_line}` : ""}: ${a.message}` : a.message!)),
+      ];
+      const excerpt = lines.join("\n").slice(0, MAX_EXCERPT);
+      return { ok: true, value: { excerpt, url, from: excerpt ? "annotations" : "none" } };
     },
     closeIssue: async (repo, number, reason, body) => {
       const t = await token(repo);

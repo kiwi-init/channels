@@ -4,7 +4,7 @@ import { issuesToClose, prsToLinkBack, tasksClosedOnGithub, verdictsAfter } from
 import type { ReviewCheck } from "@kiwi/core/client.ts"
 
 const memory = new Map<string, number>()
-type Mark = "reviewChecks" | "prLinks" | "issueCloses" | "issueTasks"
+type Mark = "reviewChecks" | "prLinks" | "issueCloses" | "issueTasks" | "ciRed"
 const keyOf = (mark: Mark, roomId: string) => `kiwi.${mark}.${roomId}`
 
 export function checkedUpTo(roomId: string, mark: Mark = "reviewChecks"): number | null {
