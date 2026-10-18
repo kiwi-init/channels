@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import type { Event, Message } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
-import { prsToLinkBack, taskFeed, taskOfBranch, taskPrs } from "@kiwi/core/work.ts";
+import { prsToLinkBack, taskFeed, taskOfBranch, taskPr, taskPrs } from "@kiwi/core/work.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
@@ -62,5 +62,22 @@ describe("a PR finds its task by its branch", () => {
     expect(taskPrs(taskFeed(s, log, other.seq))).toEqual([]);
     expect(prsToLinkBack(s, 0)).toEqual([{ repo: "ojow/channels", number: 360, task: add.seq, seq: news.seq, body: `Kiwi task T${add.seq}: Branch PRs` }]);
     expect(prsToLinkBack(s, news.seq)).toEqual([]);
+  });
+
+  test("a task's row picks its open PR over an older merged one, with its size and checks", async () => {
+    const add = await ev("jon", { op: "task.add", title: "Row PR", owner: "mac" });
+    const branch = `T${add.seq}-row-pr`;
+    const news = await ev("jon", {
+      op: "github",
+      items: [
+        { event: "pull_request", repo: "o/r", number: 1, state: "closed", merged: true, branch, sha: "a".repeat(40), at: 1 },
+        { event: "pull_request", repo: "o/r", number: 2, state: "open", branch, sha: "b".repeat(40), additions: 40, deletions: 4, files: 3, at: 2 },
+        { event: "check_run", repo: "o/r", action: "completed", name: "unit", status: "completed", conclusion: "success", sha: "b".repeat(40), at: 3 },
+        { event: "check_run", repo: "o/r", action: "created", name: "smoke", status: "in_progress", sha: "b".repeat(40), at: 4 },
+      ],
+    });
+    const s = fold([add, news], roster);
+    expect(taskPr(s, add.seq)).toMatchObject({ pr: { number: 2, additions: 40, deletions: 4, files: 3 }, checks: { passed: 1, failed: [], running: 1 } });
+    expect(taskPr(s, add.seq + 100)).toBeUndefined();
   });
 });

@@ -209,6 +209,14 @@ export type FeedItem =
   | { type: "pr"; seq: number; at: number; actor: string; pr: PrRef }
   | { type: "thread"; seq: number; at: number; root: number; room?: string; messages: Message[] };
 
+export function taskPr(state: ChannelState, id: number): { pr: GithubPr; checks?: PrChecks } | undefined {
+  const rank = (p: GithubPr) => (p.state === "open" ? 1 : 0);
+  const pr = [...state.github.prs.values()].filter((p) => taskOfBranch(p.branch) === id).sort((a, b) => rank(b) - rank(a) || b.at - a.at)[0];
+  if (!pr) return undefined;
+  const checks = checksOf(state, pr);
+  return checks ? { pr, checks } : { pr };
+}
+
 export function taskOfBranch(branch: string | undefined): number | null {
   const m = branch && /^(?:[\w.-]+\/)?T(\d{1,9})(?:$|[-_/.])/i.exec(branch);
   return m ? Number(m[1]) : null;
