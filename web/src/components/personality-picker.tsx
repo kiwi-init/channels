@@ -1,4 +1,5 @@
 import { Tick02Icon } from "@hugeicons/core-free-icons"
+import { useLayoutEffect, useRef } from "react"
 
 import { capabilityLine, personaOf, ROLE_LABEL, type Persona } from "@kiwi/core/personality.ts"
 import { usePersonalities } from "@/lib/personalities"
@@ -19,6 +20,14 @@ export function PersonalityPicker({
   disabled?: boolean
 }) {
   const all = usePersonalities()
+  const list = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const box = list.current
+    const on = box?.querySelector<HTMLElement>("label:has(input:checked)")
+    if (!box || !on) return
+    const top = on.offsetTop - box.offsetTop
+    if (top < box.scrollTop || top + on.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTop = top - 4
+  }, [])
   const options = all.map(personaOf)
   const shown = current && !options.some((o) => o.name === current.name) ? [current, ...options] : options
   const glyph = (p: Persona) => all.find((x) => x.name === p.name)?.glyph ?? "•"
@@ -43,11 +52,11 @@ export function PersonalityPicker({
     </label>
   )
   return (
-    <div role="radiogroup" aria-label="Personality" className="grid max-h-[46vh] grid-cols-[minmax(0,1fr)] gap-1.5 overflow-y-auto p-px">
+    <div ref={list} role="radiogroup" aria-label="Personality" className="grid max-h-[46vh] grid-cols-[minmax(0,1fr)] gap-1.5 overflow-y-auto p-px">
+      {row("none", value === null, "–", "None", "A plain member: no personality, no instructions", () => onChange(null))}
       {shown.map((o) =>
         row(o.name, value?.name === o.name, glyph(o), o.name, `${ROLE_LABEL[o.role]} · ${capabilityLine(o)}`, () => onChange(o), o.role === "lead" && lead ? `${lead} is the lead` : undefined)
       )}
-      {row("none", value === null, "–", "None", "A plain member: no personality, no instructions", () => onChange(null))}
     </div>
   )
 }
