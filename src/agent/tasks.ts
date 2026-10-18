@@ -5,6 +5,7 @@ import { Rejected } from "@kiwi/core/refusals.ts";
 import { isPerson, openRound, revisedOut, taskId, type ChannelState, type ReviewRound, type Task } from "@kiwi/core/state.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { parseIssueRef, taskDigest, taskOfIssue } from "@kiwi/core/work.ts";
+import { branchAreas } from "../areas.ts";
 import { SessionMessaging } from "./messaging.ts";
 import { oneLook } from "./shared.ts";
 
@@ -23,6 +24,8 @@ function judgedRound(t: Task, open: ReviewRound | undefined, round: number | und
 }
 
 export class SessionTasks extends SessionMessaging {
+  areasHere: (task: number, owner: boolean) => string[] | null = branchAreas;
+
   readonly taskAdd = Effect.fn("AgentSession.taskAdd")(
     { self: this },
     function* (this: SessionTasks, title: string, opts: { detail?: string; owner?: string; review?: string; re?: number; issue?: IssueRef; from?: number } = {}) {
@@ -146,6 +149,9 @@ export class SessionTasks extends SessionMessaging {
       const body = change.verdict && reviewText?.trim() ? { body: "review" as const } : {};
       const rest = omit(change, "round", "at");
       const opening = change.state === "review" && change.at?.trim() ? { at: change.at.trim() } : {};
+      const worker = t.owner === this.me || t.workedBy.includes(this.me);
+      const found = (change.state === "done" || change.state === "review") && worker && me && !isPerson(me) ? this.areasHere(id, t.owner === this.me) : null;
+      const areas = found && found.join("\n") !== (t.areas ?? []).join("\n") ? { areas: found } : {};
       const notify: string[] = [];
       if (owner) notify.push(owner);
       if (t.owner && t.owner !== this.me) notify.push(t.owner);
@@ -153,7 +159,7 @@ export class SessionTasks extends SessionMessaging {
       if ((change.state === "review" || review) && reviewerName) notify.push(reviewerName);
       if (finishing) notify.push(t.createdBy);
       const seq = yield* this.event(
-        { op: "task.update", task: id, ...rest, ...opening, ...(owner !== undefined ? { owner } : {}), ...(review !== undefined ? { review } : {}), ...round, ...body },
+        { op: "task.update", task: id, ...rest, ...opening, ...areas, ...(owner !== undefined ? { owner } : {}), ...(review !== undefined ? { review } : {}), ...round, ...body },
         body.body ? (reviewText ?? "") : `${taskId(id)} ${change.verdict ?? change.state ?? "updated"}`,
         notify,
         undefined,
