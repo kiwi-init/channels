@@ -59,7 +59,7 @@ export class ChannelMembers {
       if (clean === null && persona !== null) return yield* new Rejected("that personality isn't one a record can carry: check its name, role, capabilities, areas and instructions");
       const e = this.ch.access.epoch;
       const key = this.ch.access.keys[String(e)]!;
-      const { persona: _was, ...info } = omit(m, "active", "readOnly", "unverified", "at");
+      const info = omit(m, "active", "readOnly", "unverified", "at", "persona");
       const scopes = clean ? personaScopes(clean) : [...SCOPES];
       const rec = yield* Effect.promise(async () => sealRecord(key, await makeRecord(this.ch.identity, this.ch.roomId, { ...info, ...(clean ? { persona: clean } : {}), later: { scopes, since } })));
       yield* this.ch.request(`/members/${m.pk}/record`, { method: "PUT", body: JSON.stringify({ rec, e, post: canPost(scopes) }) });
