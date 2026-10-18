@@ -7,14 +7,14 @@ import { noteAgentWorked } from "@/lib/channel"
 import { errorText, toast } from "../kit"
 import type { Persona } from "@kiwi/core/personality.ts"
 import { defaultScopes } from "../scopes"
-import { ConfirmDialogs, ReposDialog } from "../lazy"
+import { ConfirmDialogs } from "../lazy"
 import { CharterDialog, RenameDialog } from "./channel-dialogs"
 import { Ctx, type Api, type Confirm, type ControlsProps } from "./context"
 
 export function ChannelControls({ children, ...p }: ControlsProps & { children: ReactNode }) {
   const [confirm, setConfirm] = useState<Confirm>(null)
   const [busy, setBusy] = useState(false)
-  const [dialog, setDialog] = useState<"rename" | "charter" | "repos" | null>(null)
+  const [dialog, setDialog] = useState<"rename" | "charter" | null>(null)
   const [scopeDraft, setScopeDraft] = useState<Scope[]>([...SCOPES])
   const [nickDraft, setNickDraft] = useState("")
   const [personaDraft, setPersonaDraft] = useState<Persona | null>(null)
@@ -77,7 +77,6 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
 
       {p.onRename && dialog === "rename" && <RenameDialog title={p.title ?? ""} onClose={() => setDialog(null)} onSave={p.onRename} />}
       {dialog === "charter" && <CharterDialog text={p.state.charter?.text ?? ""} onClose={() => setDialog(null)} onSave={p.isOwner ? p.onCharter : undefined} />}
-      {dialog === "repos" && <ReposDialog repos={p.state.repos} onClose={() => setDialog(null)} onSave={p.isOwner ? p.onRepos : undefined} />}
 
       {confirm !== null && (
         <ConfirmDialogs

@@ -81,10 +81,8 @@
   --glass-rim: light-dark(rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.11));
   --glass-edge: light-dark(rgba(15, 15, 17, 0.07), rgba(255, 255, 255, 0.07));
   --glass-shade: light-dark(rgba(15, 15, 17, 0.14), rgba(0, 0, 0, 0.55));
-  --prism-fill: light-dark(rgba(15, 15, 17, 0.018), rgba(255, 255, 255, 0.045));
   --prism-fill-lit: light-dark(rgba(15, 15, 17, 0.045), rgba(255, 255, 255, 0.09));
   --prism-edge: light-dark(rgba(15, 15, 17, 0.1), rgba(255, 255, 255, 0.08));
-  --prism-glint: light-dark(rgba(15, 15, 17, 0.4), rgba(255, 255, 255, 0.78));
   --prism-glint-lit: light-dark(rgba(15, 15, 17, 0.72), #ffffff);
   --spectrum-1: #ff3b5c;
   --spectrum-2: #ffb02e;
@@ -93,11 +91,6 @@
   --spectrum-5: #39d4ff;
   --spectrum-6: #3d5bff;
   --spectrum-7: #b04dff;
-  --orb-core: #020206;
-  --orb-blue: #1b2cff;
-  --orb-cyan: #8fe6ff;
-  --orb-ink: #ffffff;
-  --orb-glow: rgba(40, 70, 255, 0.75);
   /*
    * The chrome's grid, on 4px: one header row every column shares (52px), every round control on it
    * 36px (8px above and below), 8px between controls, a 12px gutter from every edge (header, rows,
@@ -363,14 +356,12 @@ html.reduce-motion ::after {
   .glass-hover:hover {
     background: var(--glass-fill-hover);
   }
-  .prism,
   .prism-lit {
     position: relative;
     isolation: isolate;
-    background: var(--prism-fill);
+    background: var(--prism-fill-lit);
     box-shadow: inset 0 0 0 1px var(--prism-edge);
   }
-  .prism::before,
   .prism-lit::before {
     content: "";
     position: absolute;
@@ -378,21 +369,12 @@ html.reduce-motion ::after {
     z-index: -1;
     border-radius: inherit;
     padding: 1px;
-    background: linear-gradient(var(--glint-angle, 140deg), var(--prism-glint), transparent 26%, transparent 62%, color-mix(in srgb, var(--prism-glint) 45%, transparent));
     -webkit-mask:
       linear-gradient(#000 0 0) content-box,
       linear-gradient(#000 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;
     pointer-events: none;
-  }
-  button.prism:hover {
-    background: var(--prism-fill-lit);
-  }
-  .prism-lit {
-    background: var(--prism-fill-lit);
-  }
-  .prism-lit::before {
     background: linear-gradient(
       var(--glint-angle, 140deg),
       var(--prism-glint-lit),
@@ -424,30 +406,9 @@ html.reduce-motion ::after {
       transparent calc(var(--band, 70%) + 8%)
     );
   }
-  .orb {
-    border-radius: 9999px;
-    color: var(--orb-ink);
-    background: radial-gradient(circle, var(--orb-core) 50%, var(--orb-blue) 72%, var(--orb-cyan) 86%, var(--orb-ink) 95%, transparent 100%);
-    box-shadow: 0 0 22px -2px var(--orb-glow);
-  }
-  .orb-pill {
-    color: var(--orb-ink);
-    background: var(--orb-core);
-    box-shadow:
-      inset 0 0 0 1px color-mix(in srgb, var(--orb-cyan) 85%, transparent),
-      inset 0 0 14px var(--orb-blue),
-      0 0 18px -4px var(--orb-glow);
-  }
-  .orb-pill:hover {
-    box-shadow:
-      inset 0 0 0 1px var(--orb-cyan),
-      inset 0 0 18px var(--orb-blue),
-      0 0 22px -4px var(--orb-glow);
-  }
 }
 
 @media (prefers-contrast: more) {
-  .prism,
   .prism-lit,
   .glass {
     background: var(--canvas);
@@ -458,15 +419,9 @@ html.reduce-motion ::after {
   .prism-lit {
     box-shadow: inset 0 0 0 2px var(--ink);
   }
-  .prism::before,
   .prism-lit::before,
   .prism-lit::after {
     content: none;
-  }
-  .orb,
-  .orb-pill {
-    background: var(--accent);
-    box-shadow: none;
   }
 }
 
@@ -499,6 +454,11 @@ html.reduce-motion ::after {
 .no-drag * {
   -webkit-app-region: no-drag;
   app-region: no-drag;
+}
+
+@utility offscreen-lazy {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
 }
 
 @utility edge {

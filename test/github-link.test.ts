@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { relayConfig } from "../src/relay/room/http.ts";
-import { finishDevice, startDevice, type DeviceStart, type FlowDeps } from "../desktop/src/github-flow.ts";
+import { finishDevice, listRepos, startDevice, type DeviceStart, type FlowDeps } from "../desktop/src/github-flow.ts";
 
 const json = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
@@ -83,5 +83,42 @@ describe("the relay's config", () => {
     expect(await relayConfig(null, "Iv23abc").json()).toEqual({ workosClientId: null, githubClientId: "Iv23abc" });
     expect(await relayConfig(null).json()).toEqual({ workosClientId: null });
     expect(await relayConfig(null, "").json()).toEqual({ workosClientId: null });
+  });
+});
+
+describe("listing the repos the linked account can reach", () => {
+  const repo = (n: number) => ({ full_name: `octo/repo-${n}`, private: n % 2 === 0, pushed_at: new Date(1_700_000_000_000 + n).toISOString() });
+
+  test("pages through them, most recently pushed first, with the token only in the header", async () => {
+    const urls: string[] = [];
+    const auth: (string | null)[] = [];
+    const pages = [Array.from({ length: 100 }, (_, i) => repo(i)), [repo(100), repo(101)]];
+    const f = (async (url: string | URL | Request, init?: RequestInit) => {
+      urls.push(String(url));
+      auth.push(new Headers(init?.headers).get("authorization"));
+      return json(pages.shift() ?? []);
+    }) as unknown as typeof fetch;
+    const repos = await listRepos("ghu_secret", f);
+    expect(repos).toHaveLength(102);
+    expect(repos[0]).toEqual({ fullName: "octo/repo-0", private: true, pushedAt: 1_700_000_000_000 });
+    expect(urls).toEqual(["https://api.github.com/user/repos?per_page=100&sort=pushed&page=1", "https://api.github.com/user/repos?per_page=100&sort=pushed&page=2"]);
+    expect(urls.some((u) => u.includes("ghu_secret"))).toBe(false);
+    expect(auth).toEqual(["Bearer ghu_secret", "Bearer ghu_secret"]);
+  });
+
+  test("stops at five pages", async () => {
+    let calls = 0;
+    const f = (async () => {
+      calls++;
+      return json(Array.from({ length: 100 }, (_, i) => repo(i)));
+    }) as unknown as typeof fetch;
+    expect(await listRepos("t", f)).toHaveLength(500);
+    expect(calls).toBe(5);
+  });
+
+  test("says to link again when the token has expired, and skips what isn't a repo", async () => {
+    await expect(listRepos("t", (async () => json({ message: "Bad credentials" }, 401)) as unknown as typeof fetch)).rejects.toThrow("link it again in Settings");
+    await expect(listRepos("t", (async () => json({ message: "nope" }, 500)) as unknown as typeof fetch)).rejects.toThrow("didn’t list the repos");
+    expect(await listRepos("t", (async () => json([{ full_name: 7 }, repo(1)])) as unknown as typeof fetch)).toEqual([{ fullName: "octo/repo-1", private: false, pushedAt: 1_700_000_000_001 }]);
   });
 });
