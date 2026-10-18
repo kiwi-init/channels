@@ -104,7 +104,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
 
   const { placeOf, places } = state
   const { place, hereKey, unreadIn, taskKey } = usePlaces({ here, roomId, messages, me, state, shownTask })
-  const { bySeq, rootOf, threadRoot, showDropped, setShowDropped, threads, visible, inTask, quoted, summaryOf } = useThreads({
+  const { bySeq, threadRoot, showDropped, setShowDropped, threads, visible, inTask, quoted, summaryOf } = useThreads({
     messages,
     state,
     me,
@@ -136,15 +136,11 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       setTimeout(() => setHighlight((h) => (h === seq ? null : h)), 1600)
       const at = placeOf.get(seq)
       const inTask = at?.kind === "task" ? at.task : null
-      const inThread = inTask === null ? rootOf(seq) : null
       if (inTask !== null) openTask(inTask)
-      else {
-        if (inThread !== null) openThread(inThread)
-        if (at && placeKey(at) !== hereKey) setHere(placeKey(at))
-      }
+      else if (at && placeKey(at) !== hereKey) setHere(placeKey(at))
       setSearch(null)
       const find = (left: number) => {
-        const el = document.getElementById(`${inTask !== null ? "k" : inThread !== null ? "t" : "m"}${seq}`)
+        const el = document.getElementById(`${inTask !== null ? "k" : "m"}${seq}`)
         if (!el) {
           if (left > 0) requestAnimationFrame(() => find(left - 1))
           return
@@ -153,10 +149,10 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       }
       requestAnimationFrame(() => requestAnimationFrame(() => find(3)))
     },
-    [rootOf, placeOf, hereKey, openTask, openThread]
+    [placeOf, hereKey, openTask]
   )
 
-  const onReply = useCallback((m: Message) => openThread(rootOf(m.seq) ?? m.seq), [rootOf, openThread])
+  const onReply = useCallback((m: Message) => setReplyTo(m), [])
   const react = useCallback(
     (g: Gif) => {
       const on = reacting
