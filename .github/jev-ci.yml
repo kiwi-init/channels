@@ -85,6 +85,8 @@ jobs:
       a ping) and an upgrade nobody answers are both dropped and opened again; a nudge (the network or
       the Mac coming back) cuts a long reconnect wait short and drops a socket that doesn't answer a
       ping in 5s, and web lib/wake.test.ts: coming back online or to a visible page nudges.
+      Also test/web-core-barrel.test.ts: web/src takes values from @kiwi/core's client submodules
+      (errors, relay, info), never the client.ts barrel, which pulls the whole Channel into the first load.
       Also test/desktop-keys.test.ts: the desktop key process (desktop/src/keyring.ts and keys-server.ts,
       over the wire web/src/lib/channel-remote.ts uses) against a local relay, failing if any member,
       owner, person or channel key reaches the window, plus the seat rules, the wire codec, the
@@ -95,6 +97,9 @@ jobs:
       desktop/build/entitlements.mac.plist has the audio-input entitlement. And
       test/offscreen.test.ts: a message's content column is content-visibility auto with a remembered
       size, so off-screen messages skip layout and paint when the column's width changes. And
+      test/replay.test.ts: a signed message counts once and near the time it was signed (fold
+      refuses a second copy of a message id, across incremental folds and their snapshot, and one
+      signed more than a day before the relay received it). And
       test/prism.test.ts: prism means one thing (prism-lit only on the open channel and the
       sidebar's chosen view or conversation, no plain prism or orb anywhere, solid
       prefers-contrast fallbacks, the spectrum and segment tokens written once, the kit the quiet
@@ -173,7 +178,7 @@ jobs:
     description: >-
       Builds the web dashboard for production (vite build in web/) and fails when the JS the
       first screen loads (the entry script plus every chunk it modulepreloads) is over
-      BUDGET_BYTES (790,000) in scripts/web-bundle.ts, a budget that doesn't go up for a feature; code reached only through
+      BUDGET_BYTES (745,000) in scripts/web-bundle.ts, a budget that doesn't go up for a feature; code reached only through
       web/src/components/lazy.tsx doesn't count. Then ui smoke: starts the relay and the kiwi CLI
       as a test computer and drives the built dashboard in headless Chromium, opening every
       menu, popover and dialog, setting up a passkey, previewing an invite, Settings → Personalities duplicating a preset into the person's own, the owner allowing voice from Details, the Agents tab showing a lane per agent with what's next on it, Needs you as rows always in view (an agent asking in is let in from its row), an answered ask saying who chose what on the ask itself, replying inline (the reply quotes what it answers, "1 Reply" opens the thread), linking a computer
