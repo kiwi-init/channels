@@ -3,6 +3,7 @@ import { refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
 import { allowedOnHold, isLeadRole, isPerson, LEAD, ON_HOLD } from "./people.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
+import { prKey } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
 import { settle } from "./leases.ts";
@@ -179,6 +180,10 @@ export function fold(
     compact: from?.compact ?? null,
     compactProposal: from?.compactProposal ?? null,
     repos: reposOf(from?.repos ?? []),
+    github: {
+      prs: new Map(from?.github?.prs.map((p) => [prKey(p.repo, p.number), p])),
+      checks: new Map(from?.github?.checks.map(([k, runs]) => [k, new Map(runs.map((r) => [r.name, r]))])),
+    },
     hold: from?.hold ?? null,
   };
 
@@ -304,6 +309,7 @@ export function fold(
       compact: ctx.compact,
       compactProposal: ctx.compactProposal,
       repos: ctx.repos,
+      github: { prs: [...ctx.github.prs.values()], checks: [...ctx.github.checks].map(([k, runs]) => [k, [...runs.values()]]) },
       hold: ctx.hold,
       scopesByKey: [...scopesByKey],
       scopeSets: [...scopeSets],
@@ -357,6 +363,7 @@ export function fold(
     compact: ctx.compact,
     compactProposal: ctx.compactProposal,
     repos: ctx.repos,
+    github: ctx.github,
     hold: ctx.hold,
     reactions,
     head,

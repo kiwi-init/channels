@@ -8,6 +8,7 @@
 export { fold } from "./state/fold.ts";
 export { allowedOnHold, colorOf, humanOf, isLeadRole, isPerson, LEAD, ON_HOLD, ownerOf } from "./state/people.ts";
 export { chooseThread, dmPlace, MAIN, placeFromKey, placeKey, tasksAwaitingPeople, threadMembers, wentTo } from "./state/places.ts";
+export { prChecks } from "./state/github.ts";
 export { outsideRepos, reposOf } from "./state/repos.ts";
 export { LEASE_WAIT_MS, nextIn, placeIn } from "./state/leases.ts";
 export { unnamedAsks, unnamedTasks } from "./state/compact.ts";

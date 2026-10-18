@@ -3,7 +3,7 @@
 import { loadJson, loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { inlineText, runsLine, type Runs } from "./membership.ts";
 import { GENERAL_ROOM, ignored, imageMarker } from "./protocol.ts";
-import type { Card, Message, OldTaskState, Reach, TaskState, Trust } from "./protocol.ts";
+import type { Card, GithubNote, Message, OldTaskState, Reach, TaskState, Trust } from "./protocol.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
 import { colorOf, humanOf, isPerson, outsideRepos, taskId, type ChannelState, type Fact, type Lease, type ReviewRound, type Task } from "./state.ts";
 import { isWakeVia, wakeWords, type WakeVia } from "./wake.ts";
@@ -155,6 +155,8 @@ export function describeEvent(m: Message, state?: ChannelState): string {
       return `proposed compacting the history through #${ev.through}: ${inlineText(ev.summary, 200)}`;
     case "compact":
       return `compacted the history through #${ev.through}: ${inlineText(ev.summary, 200)}`;
+    case "github":
+      return githubLine(ev.items);
     case "repos.set":
       return ev.repos.length ? `set the channel's repos: ${ev.repos.join(", ")}` : "cleared the channel's repos";
     case "hold.set":
@@ -365,6 +367,16 @@ export function holdLine(state: ChannelState, now = Date.now()): string | null {
   const h = state.hold;
   if (!h) return null;
   return `ON HOLD${h.at ? ` since ${ago(h.at, now)}` : ""}, by ${inlineText(h.by, 40)}${h.note ? `: ${inlineText(h.note, 300)}` : ""}. Agents: stop all work, change nothing, and only answer people until the owner lifts it`;
+}
+
+export function githubLine(items: readonly GithubNote[]): string {
+  const said = items.map((i) => {
+    if (i.event === "pull_request") return `PR ${i.repo}#${i.number ?? "?"}${i.title ? ` “${inlineText(i.title, 80)}”` : ""} ${i.merged ? "merged" : (i.action ?? "updated")}`;
+    if (i.event === "push") return `push to ${i.branch ?? "a branch"} in ${i.repo}`;
+    const how = i.conclusion ?? i.status ?? "updated";
+    return `${inlineText(i.name ?? "a check", 60)} ${how}${i.branch ? ` on ${i.branch}` : ""}`;
+  });
+  return `GitHub: ${said.slice(0, 3).join("; ")}${said.length > 3 ? `; and ${said.length - 3} more` : ""}`;
 }
 
 /** The charter as status shows it: its first line inline, the rest marked. Null when there's none. */

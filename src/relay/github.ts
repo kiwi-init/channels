@@ -1,31 +1,12 @@
-import { REPO_RE } from "@kiwi/core/protocol.ts";
+import { GITHUB_EVENTS, REPO_RE, type GithubNote } from "@kiwi/core/protocol.ts";
 import { withCors } from "./mailbox.ts";
 
 export const GITHUB_WEBHOOK_PATH = "/v1/github/webhook";
-const GITHUB_EVENTS = ["pull_request", "check_run", "push", "workflow_run"] as const;
 export const GITHUB_QUEUE_MAX = 500;
 export const GITHUB_QUEUE_TTL_MS = 7 * 24 * 3_600_000;
 const MAX_BODY = 1 << 20;
 
-type GithubEvent = (typeof GITHUB_EVENTS)[number];
-
-export interface GithubItem {
-  event: GithubEvent;
-  repo: string;
-  action?: string;
-  number?: number;
-  title?: string;
-  url?: string;
-  state?: string;
-  merged?: boolean;
-  branch?: string;
-  sha?: string;
-  name?: string;
-  status?: string;
-  conclusion?: string;
-  by?: string;
-  at: number;
-}
+export type GithubItem = GithubNote;
 
 export interface GithubRoutes {
   rooms(repo: string): Promise<string[]>;

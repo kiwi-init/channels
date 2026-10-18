@@ -59,6 +59,8 @@ export class ChannelLink {
   reconcilePosting = (...a: Args<"reconcilePosting">) => this.c("reconcilePosting", ...a)
   rotateIfDue = () => this.c("rotateIfDue")
   snapshotIfDue = () => this.c("snapshotIfDue")
+  setGithubRepos = (...a: Args<"setGithubRepos">) => this.c("setGithubRepos", ...a)
+  drainGithub = () => this.c("drainGithub")
   snapshotAt = () => this.c("snapshotAt")
   info = () => this.c("info")
   title = () => this.c("title")

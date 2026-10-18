@@ -1,6 +1,6 @@
 import { join, resolve } from "node:path";
 
-const BUDGET_BYTES = 782_000;
+const BUDGET_BYTES = 786_000;
 
 const dist = resolve(import.meta.dir, "../web/dist");
 const html = await Bun.file(join(dist, "index.html")).text();

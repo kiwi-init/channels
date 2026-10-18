@@ -35,6 +35,7 @@ const board = (tasks: Task[]): ChannelState =>
     compact: null,
     compactProposal: null,
     repos: [],
+    github: { prs: new Map(), checks: new Map() },
     hold: null,
     reactions: new Map(),
     head: 0,
