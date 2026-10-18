@@ -2,12 +2,12 @@ import { REPO_RE } from "@kiwi/core/protocol.ts";
 import { withCors } from "./mailbox.ts";
 
 export const GITHUB_WEBHOOK_PATH = "/v1/github/webhook";
-export const GITHUB_EVENTS = ["pull_request", "check_run", "push", "workflow_run"] as const;
+const GITHUB_EVENTS = ["pull_request", "check_run", "push", "workflow_run"] as const;
 export const GITHUB_QUEUE_MAX = 500;
 export const GITHUB_QUEUE_TTL_MS = 7 * 24 * 3_600_000;
 const MAX_BODY = 1 << 20;
 
-export type GithubEvent = (typeof GITHUB_EVENTS)[number];
+type GithubEvent = (typeof GITHUB_EVENTS)[number];
 
 export interface GithubItem {
   event: GithubEvent;
@@ -39,7 +39,7 @@ export interface GithubLink {
   on: boolean;
 }
 
-export const repoKey = (repo: string): string => repo.toLowerCase();
+const repoKey = (repo: string): string => repo.toLowerCase();
 
 export function githubRepos(x: unknown): string[] | null {
   if (!Array.isArray(x) || x.length > 20) return null;
@@ -59,7 +59,7 @@ export function githubLinks(room: string, before: readonly string[], after: read
 
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
 
-export async function signatureOk(secret: string, body: string, header: string | null): Promise<boolean> {
+async function signatureOk(secret: string, body: string, header: string | null): Promise<boolean> {
   if (!header?.startsWith("sha256=")) return false;
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const want = hex(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body)));
