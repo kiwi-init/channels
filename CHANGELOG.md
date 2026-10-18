@@ -2,6 +2,35 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.19.0 — 2026-10-18
+
+- **Update every machine and start a new session for each agent.** 0.19.0 adds events and fields that older clients drop, and the relay must be deployed for the CI-red log excerpt and GitHub issues; the owner's steps are in docs/0.19-release.md.
+- **Linux: the app says an update is ready but doesn't install it itself.** Signing the AppImage's updates (T596) isn't in 0.19; download the new AppImage or .deb from the release.
+- **Replies sit in the conversation with an inline quote, as in Messages (T430)** ([#367](https://github.com/ojowwalker77/channels/pull/367))
+- **UI smoke: a task's message is checked outside its card in one read of the page, until it settles (T489)** ([#368](https://github.com/ojowwalker77/channels/pull/368))
+- **Agents wear glass fragments in the app icon's style, with no ring around them (T600)** ([#369](https://github.com/ojowwalker77/channels/pull/369))
+- **Desktop: the app's own pages may write to the clipboard, so copy buttons copy again (T581)** ([#370](https://github.com/ojowwalker77/channels/pull/370))
+- **Voice: a Grok Voice realtime adapter in web/src/lib/voice, tested on JSON fixtures (T12)** ([#371](https://github.com/ojowwalker77/channels/pull/371))
+- **Voice: what the live session is told as the channel moves, and the snapshot it starts from (T14)** ([#372](https://github.com/ojowwalker77/channels/pull/372))
+- **An escalation waits until one of the people it went to answers it, not anyone who replies (T654)** ([#373](https://github.com/ojowwalker77/channels/pull/373))
+- **GitHub: a task imported from an issue, and closing either one closes the other (T453)** ([#374](https://github.com/ojowwalker77/channels/pull/374))
+- **Needs you as rows with the answers on them, and an answered ask says who chose what (T686)** ([#375](https://github.com/ojowwalker77/channels/pull/375))
+- **Web: the conversation without bubbles (T687, UI 5/6)** ([#377](https://github.com/ojowwalker77/channels/pull/377))
+- **Voice: Talk to channel, once the owner allows it and the person turns it on (T15)** ([#376](https://github.com/ojowwalker77/channels/pull/376))
+- **Web: the new channel shell, one flat background, sidebar and Tasks / Agents / Conversation tabs (T683)** ([#378](https://github.com/ojowwalker77/channels/pull/378))
+- **Voice: the fast tools, answered from the channel the app already holds (T13)** ([#379](https://github.com/ojowwalker77/channels/pull/379))
+- **Web: the Tasks view, the board in groups with two-line rows: live activity, PR with diff bar, checks (T684)** ([#381](https://github.com/ojowwalker77/channels/pull/381))
+- **Agents tab: one lane per agent, with what it runs now, its tasks and PRs, its queue and last moves (T688)** ([#380](https://github.com/ojowwalker77/channels/pull/380))
+- **Tasks: where a task comes from (--from), and kiwi task who ranks who has its context (T780, routing 1/3)** ([#383](https://github.com/ojowwalker77/channels/pull/383))
+- **Voice: spoken verbs, yes, hold and stop, each acting only on what was just read back (T16)** ([#382](https://github.com/ojowwalker77/channels/pull/382))
+- **Web: a task opens inline in Tasks: its conversation, a reply box, and the PR card with files, diff and each check (T685)** ([#384](https://github.com/ojowwalker77/channels/pull/384))
+- **Tasks: a task keeps the folders its branch changed, and kiwi task who ranks whoever changed them lately (T781, routing 2/3)** ([#385](https://github.com/ojowwalker77/channels/pull/385))
+- **CI red becomes a task: the failing check, a log excerpt and the commit, for whoever pushed (T51)** ([#386](https://github.com/ojowwalker77/channels/pull/386))
+- **Personality on the owner-signed member record: role, capabilities held like scopes, areas, instructions in the brief (T873)** ([#387](https://github.com/ojowwalker77/channels/pull/387))
+- **Tasks: warm work, what an agent's session still holds, leads kiwi task who and the app's suggestion (T782, routing 3/3)** ([#388](https://github.com/ojowwalker77/channels/pull/388))
+- **Let in and the member menu pick a personality; changing it re-signs the record (T861)** ([#390](https://github.com/ojowwalker77/channels/pull/390))
+- **Personalities on the person's account: the six presets, your own, and Settings → Personalities (T860)** ([#389](https://github.com/ojowwalker77/channels/pull/389))
+
 ## 0.18.0 — 2026-10-18
 
 - **Update every machine and start a new session for each agent.** 0.18.0 adds events that older clients drop, and the relay must be deployed for claims, leases and the GitHub App; the owner's GitHub setup is in docs/0.18-release.md.
