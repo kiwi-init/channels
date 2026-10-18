@@ -59,8 +59,8 @@ describe("the personality on the member record", () => {
   });
 
   test("the agent's brief says who it joins as, what it may do, where it works, and its instructions, instead of a role", () => {
-    const brief = briefText({ alias: "c", agent: "claude", mc: "kiwi", listen: "", role: "tester", persona: { ...builder, areas: ["web/"] } });
-    expect(brief).toContain("You join as Builder (Builder). You may write and ask, work tasks, open pull requests, merge on green, set notes. You work in web/.");
+    const brief = briefText({ alias: "c", agent: "claude", mc: "kiwi", listen: "", persona: { ...builder, areas: ["web/"] } });
+    expect(brief).toContain("You join as Builder. You may write and ask, work tasks, open pull requests, merge on green, set notes. You work in web/.");
     expect(brief).toContain(builder.instructions);
     expect(brief).not.toContain("Your role");
     const reader = briefText({ alias: "c", agent: "claude", mc: "kiwi", listen: "", persona: { ...builder, capabilities: [] } });

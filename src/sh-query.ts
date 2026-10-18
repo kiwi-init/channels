@@ -81,7 +81,7 @@ export function queryTables(v: ChannelView): Tables {
         .filter((m) => m.active)
         .map((m) => [
           m.name,
-          m.role ?? null,
+          m.persona?.name ?? null,
           m.kind ?? (m.owner ? "human" : "agent"),
           m.owner ? 1 : 0,
           m.lastSeen ? new Date(m.lastSeen).toISOString() : null,

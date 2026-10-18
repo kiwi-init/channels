@@ -213,14 +213,11 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         const [members, { state }] = yield* Effect.all([s.members(true), s.state()], { concurrency: "unbounded" });
         return members
           .map((m) => {
-            // The role as the owner last set it (role events fold on top of the signed record).
-            // Member-written fields are one line, so a newline cannot pose as another member.
             const rec = state.members.get(m.name);
-            const role = inlineText(rec?.role ?? m.role, 80);
-            const about = inlineText(rec?.about ?? m.about, 200);
+            const role = inlineText(rec?.persona?.name, 80);
             const sponsor = rec?.sponsor ?? m.sponsor;
             const sponsorName = sponsor ? inlineText(sponsor.handle ?? sponsor.name, 80) : "";
-            const head = `${m.name}${m.name === s.me ? " (you)" : ""}${m.owner ? " — owner" : role ? ` — ${role}` : ""}${about ? ` (${about})` : ""}${sponsorName ? ` · agent of @${sponsorName}` : ""}  key ${m.pk.slice(0, 8)}${m.active ? "" : "  (left)"}`;
+            const head = `${m.name}${m.name === s.me ? " (you)" : ""}${m.owner ? " — owner" : role ? ` — ${role}` : ""}${sponsorName ? ` · agent of @${sponsorName}` : ""}  key ${m.pk.slice(0, 8)}${m.active ? "" : "  (left)"}`;
             const load = memberLoad(state, m.name);
             // What they may do, when it's less than everything (what the owner set, as every client enforces it).
             const scopes = m.active && !m.owner ? state.members.get(m.name)?.scopes : undefined;
@@ -547,12 +544,11 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         return [...online]
           .map(([name, p]) => {
             const rec = state.members.get(name);
-            const role = inlineText(p.role ?? rec?.role, 80);
-            const about = inlineText(rec?.about, 200);
+            const role = inlineText(rec?.persona?.name, 80);
             const sponsorName = rec?.sponsor ? inlineText(rec.sponsor.handle ?? rec.sponsor.name, 80) : "";
-            return `${name}${role ? ` — ${role}` : ""}${about ? ` (${about})` : ""}${sponsorName ? ` · agent of @${sponsorName}` : ""} · ${presenceWords(p)}`;
+            return `${name}${role ? ` — ${role}` : ""}${sponsorName ? ` · agent of @${sponsorName}` : ""} · ${presenceWords(p)}`;
           })
-          .concat(away.map((m) => `${m.name}${m.role ? ` — ${inlineText(m.role, 80)}` : ""} · last seen ${ago(m.lastSeen)}`))
+          .concat(away.map((m) => `${m.name}${m.persona ? ` — ${inlineText(m.persona?.name, 80)}` : ""} · last seen ${ago(m.lastSeen)}`))
           .join("\n");
       }),
     ),

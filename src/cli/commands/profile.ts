@@ -43,7 +43,7 @@ export const profileCommands: Record<string, Command> = {
       if (opt.role || opt.about) return yield* die('the owner sets roles and rules: ask them in a message (kiwi send --to human "…")');
       yield* s.hello();
       const me = (yield* s.state()).state.members.get(s.me);
-      out(`announced ${s.me}${me?.role ? ` as ${me.role}` : ""}`);
+      out(`announced ${s.me}${me?.persona ? ` as ${me.persona?.name}` : ""}`);
     }),
 
   prompt: () =>
@@ -70,8 +70,6 @@ export const profileCommands: Record<string, Command> = {
                 charter: charterLines(state),
                 lead: leadLine(state, name),
                 human: humanOf(state, name),
-                role: me?.role,
-                about: me?.about,
                 ...(me?.persona ? { persona: me.persona } : {}),
               }
             : {},

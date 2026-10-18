@@ -7,7 +7,8 @@ import { prKey } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
 import { settle } from "./leases.ts";
-import type { ChannelState, Fact, FoldBase, GuardFloor, Lease, Member, Place, Reaction, Room, RoomsFloor, Roster, Task } from "./types.ts";
+import { carriedPersona } from "../personality.ts";
+import type { ChannelState, Fact, FoldBase, FoldMember, GuardFloor, Lease, Member, Place, Reaction, Room, RoomsFloor, Roster, Task } from "./types.ts";
 
 function touch(task: Task | undefined, name: string, at: number): void {
   if (task && (task.touched?.[name] ?? 0) < at) task.touched = { ...task.touched, [name]: at };
@@ -25,7 +26,8 @@ export function fold(
   const from = given ? structuredClone(given) : null;
   const after = from?.n ?? -1;
   const ahead = <F extends { since: number }>(f: F | null | undefined): F | null => (f && f.since >= after ? f : null);
-  const members = new Map<string, Member>();
+  const members = new Map<string, FoldMember>();
+  const signed = new Set(roster.filter((r) => r.persona && r.kind !== "computer").map((r) => r.name));
   for (const r of [...roster].sort((a, b) => Number(a.active) - Number(b.active))) {
     if (r.kind === "computer") continue;
     members.set(r.name, {
@@ -123,7 +125,7 @@ export function fold(
   };
   const scopeSets = new Map<string, { seq: number; scopes: Scope[] }>(from?.scopeSets);
   const roleSets = new Map<string, { seq: number; role: string | null; about?: string | null }>(from?.roleSets);
-  const setRole = (target: Member, role: string | null, about: string | null | undefined) => {
+  const setRole = (target: FoldMember, role: string | null, about: string | null | undefined) => {
     const leads = isLeadRole(role ?? undefined);
     if (leads) {
       const was = lead && members.get(lead);
@@ -347,6 +349,20 @@ export function fold(
   passFloors(Infinity);
   passRoleFloors(Infinity);
   for (const member of members.values()) member.scopes = scopesByKey.get(member.pk) ?? [];
+  const signedLead = [...members.values()].filter((m) => m.active && signed.has(m.name) && m.persona?.role === "lead").sort((a, b) => a.joined - b.joined)[0]?.name;
+  const legacyLead = lead && members.get(lead)?.active && !signed.has(lead) ? lead : null;
+  const theLead = signedLead ?? legacyLead;
+  for (const m of members.values()) {
+    if (!signed.has(m.name)) {
+      const leads = m.name === theLead;
+      const wasLead = isLeadRole(m.role);
+      const persona = (isPerson(m) || wasLead) && !leads ? undefined : carriedPersona(leads, wasLead ? undefined : m.role, m.about, m.scopes);
+      if (persona) m.persona = persona;
+      else delete m.persona;
+    }
+    delete m.role;
+    delete m.about;
+  }
   for (const [key, fact] of facts) if (fact.expires !== undefined && fact.expires <= now) facts.delete(key);
   for (const [name, lease] of leases) {
     settle(lease, now);
@@ -367,7 +383,7 @@ export function fold(
     openAsks,
     threadOf,
     threadPeople,
-    lead: lead && members.get(lead)?.active ? lead : null,
+    lead: theLead ?? null,
     rooms,
     roomOf,
     placeOf,

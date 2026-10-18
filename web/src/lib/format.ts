@@ -17,10 +17,10 @@ export function memberName(m: Pick<Member, "name" | "kind" | "display"> | undefi
 }
 
 /** Who a member is, in a phrase: "Owner", "Reviewer for Jonatas Filho", "Agent for Jonatas Walker". */
-export function memberLine(m: Pick<Member, "name" | "kind" | "display" | "sponsor" | "role" | "owner">): string {
+export function memberLine(m: Pick<Member, "name" | "kind" | "display" | "sponsor" | "persona" | "owner">): string {
   if (m.owner) return "Owner"
   if (m.kind === "human") return "Person"
-  const role = m.role ? m.role[0]!.toUpperCase() + m.role.slice(1) : "Agent"
+  const role = m.persona ? m.persona.name : "Agent"
   return m.sponsor ? `${role} for ${m.sponsor.name}` : role
 }
 

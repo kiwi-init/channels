@@ -66,7 +66,7 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
     setRole,
     editRole: (m) => {
       const live = p.state.members.get(m.name)
-      setRoleDraft({ role: live?.role ?? "", about: live?.about ?? "" })
+      setRoleDraft({ role: live?.persona?.name ?? "", about: live?.persona?.instructions ?? "" })
       setConfirm({ kind: "role", member: m })
     },
     editScopes: (m) => {
