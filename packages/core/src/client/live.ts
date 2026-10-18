@@ -219,7 +219,7 @@ export class ChannelLive {
   }
 
   private stillIn(): Effect.Effect<void, ChannelGone, Relay> {
-    return Effect.flatMap(Effect.exit(Effect.timeout(this.ch.fx.head(), OPEN_WAIT)), (exit) => {
+    return Effect.flatMap(Effect.raceFirst(Effect.exit(this.ch.fx.head()), Effect.as(Effect.sleep(OPEN_WAIT), Exit.void)), (exit) => {
       const err = Exit.isFailure(exit) ? Cause.squash(exit.cause) : null;
       return err instanceof ChannelGone ? Effect.fail(err) : Effect.void;
     });
