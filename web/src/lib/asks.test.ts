@@ -17,7 +17,7 @@ const ask = (seq: number, from: string, extra: Partial<Message> = {}): Message =
 })
 
 describe("asksFor", () => {
-  test("every ask the badge counts lands in escalations or questions", () => {
+  test("every ask the badge counts lands in decisions, escalations or questions", () => {
     const escalated = ask(1, "bot", { to: ["jon"], esc: true })
     const direct = ask(2, "bot", { to: ["jon"] })
     const broadcast = ask(3, "bot", { to: ["*"] })
@@ -25,13 +25,21 @@ describe("asksFor", () => {
     const own = ask(5, "jon", { to: ["*"] })
     const elsewhere = ask(6, "bot", { to: ["ana"] })
     const noRecipient = ask(7, "bot")
-    const { escalations, questions } = asksFor([escalated, direct, broadcast, broadcastEsc, own, elsewhere, noRecipient], "jon")
-    expect(escalations).toEqual([escalated])
-    expect(questions).toEqual([direct, broadcast, broadcastEsc])
+    const { decisions, escalations, questions } = asksFor([escalated, direct, broadcast, broadcastEsc, own, elsewhere, noRecipient], "jon")
+    expect(decisions).toEqual([escalated, direct])
+    expect(escalations).toEqual([])
+    expect(questions).toEqual([broadcast, broadcastEsc])
+  })
+
+  test("a browser handoff to you stays in Needs you, not the composer", () => {
+    const handoff = ask(1, "bot", { to: ["jon"], esc: true, handoff: { url: "https://example.com/x", vendor: "x", expires: 1 } })
+    const { decisions, escalations } = asksFor([handoff], "jon")
+    expect(decisions).toEqual([])
+    expect(escalations).toEqual([handoff])
   })
 
   test("nothing open is nothing to show", () => {
-    expect(asksFor([], "jon")).toEqual({ escalations: [], questions: [] })
+    expect(asksFor([], "jon")).toEqual({ decisions: [], escalations: [], questions: [] })
   })
 })
 

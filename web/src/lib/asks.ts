@@ -1,6 +1,8 @@
 import type { Message } from "@kiwi/core/protocol.ts"
+import { handoffOf } from "./handoff"
 
 export interface AsksForMe {
+  decisions: Message[]
   escalations: Message[]
   questions: Message[]
 }
@@ -9,9 +11,12 @@ const isEscalationTo = (m: Message, me: string) => !!m.esc && !!m.to?.includes(m
 
 export function asksFor(openAsks: Message[], me: string): AsksForMe {
   const mine = openAsks.filter((m) => m.from !== me && (m.to?.includes(me) || m.to?.includes("*")))
+  const decisions = mine.filter((m) => !!m.to?.includes(me) && !handoffOf(m))
+  const rest = mine.filter((m) => !decisions.includes(m))
   return {
-    escalations: mine.filter((m) => isEscalationTo(m, me)),
-    questions: mine.filter((m) => !isEscalationTo(m, me)),
+    decisions,
+    escalations: rest.filter((m) => isEscalationTo(m, me)),
+    questions: rest.filter((m) => !isEscalationTo(m, me)),
   }
 }
 

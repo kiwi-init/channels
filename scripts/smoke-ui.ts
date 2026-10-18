@@ -366,13 +366,17 @@ async function run(part: Part): Promise<string[]> {
     await tasksPanel.waitFor({ state: "detached" });
     log(`ok  ${at}`);
 
-    at = "ask-human: options as buttons, and the task waits on a person until one is picked";
+    at = "ask-human: the question sits in the composer with its options, and the task waits on a person until one is picked";
     await kiwi(["-c", "smoke", "--as", "bot", "ask-human", "--task", smokeTask, "--option", "A: ship it", "--option", "B: wait a day", "Ship the smoke build now?"]);
     const awaiting = overview.getByRole("region", { name: "Tasks" }).getByText("Needs a decision");
     await awaiting.first().waitFor({ timeout: 15000 });
-    await needsOpen();
-    await needs.getByRole("list", { name: "Options" }).getByRole("button", { name: "B: wait a day" }).click();
+    const question = page.getByRole("region", { name: "Question" });
+    await question.getByText("Ship the smoke build now?").waitFor({ timeout: 15000 });
+    if (await needs.count()) throw new Error("a decision for the person showed in Needs you as well as in the composer");
+    await question.getByRole("button", { name: "Something else" }).waitFor();
+    await question.getByRole("list", { name: "Options" }).getByRole("button", { name: "B: wait a day" }).click();
     await awaiting.first().waitFor({ state: "detached", timeout: 15000 });
+    await question.waitFor({ state: "detached", timeout: 15000 });
     log(`ok  ${at}`);
 
     at = "Take over, then cancel, a task waiting on an agent's review";
