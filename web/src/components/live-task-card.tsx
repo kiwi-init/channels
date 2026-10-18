@@ -27,7 +27,10 @@ export function LiveTaskCard({ id, state, messages, me, now, onOpen }: { id: num
         onClick={() => onOpen(id)}
         aria-label={`Open ${taskId(id)}, ${task.title}`}
         title={`${labelOf(task)} · ${formatAgo(task.updatedAt, now)}`}
-        className={cx("prism my-1 flex w-full max-w-[560px] min-w-0 flex-col gap-1 rounded-row px-3 py-2 text-left text-ui transition-colors", waiting && "shadow-[inset_0_0_0_1px_var(--decide)]")}
+        className={cx(
+          "my-1 flex w-full max-w-[560px] min-w-0 flex-col gap-1 rounded-row px-3 py-2 text-left text-ui shadow-[inset_0_0_0_1px_var(--line)] transition-shadow hover:shadow-[inset_0_0_0_1px_var(--edge-strong)]",
+          waiting && "shadow-[inset_0_0_0_1px_var(--decide)]"
+        )}
       >
         <span className="flex min-w-0 items-center gap-2.5">
           {task.owner ? <Monogram name={memberName(owner, task.owner)} agent={isAgent(owner)} color={colorOf(state, task.owner)} size={18} /> : <StateMark state={task.state} />}

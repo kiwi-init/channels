@@ -297,7 +297,7 @@ export interface ThreadSummary {
   forYou: boolean
 }
 
-const LINE_ROW = "prism flex w-full max-w-[560px] min-w-0 items-center gap-2.5 rounded-row px-3 py-2 text-left text-ui"
+const LINE_ROW = "flex w-full max-w-[560px] min-w-0 items-center gap-2.5 rounded-row px-3 py-2 text-left text-ui shadow-[inset_0_0_0_1px_var(--line)]"
 
 const PR_STATE: Record<PrRef["state"], { word: string; tone: string }> = {
   open: { word: "open", tone: "text-doing" },
@@ -308,7 +308,13 @@ const PR_STATE: Record<PrRef["state"], { word: string; tone: string }> = {
 function PrLine({ pr }: { pr: PrRef }) {
   const st = PR_STATE[pr.state]
   return (
-    <a href={pr.url} target="_blank" rel="noreferrer" title={`${pr.repo}#${pr.number}${pr.title ? `: ${pr.title}` : ""}`} className={cx(LINE_ROW, "glass-hover mt-2 text-ink transition-colors")}>
+    <a
+      href={pr.url}
+      target="_blank"
+      rel="noreferrer"
+      title={`${pr.repo}#${pr.number}${pr.title ? `: ${pr.title}` : ""}`}
+      className={cx(LINE_ROW, "mt-2 text-ink transition-shadow hover:shadow-[inset_0_0_0_1px_var(--edge-strong)]")}
+    >
       <Icon icon={GitPullRequestIcon} size={16} className="shrink-0 text-ink-3" />
       <span className="shrink-0 text-ink-3 tabular-nums">#{pr.number}</span>
       <span className="min-w-0 flex-1 truncate">{pr.title ?? pr.repo}</span>
@@ -475,7 +481,10 @@ export const MessageRow = memo(function MessageRow({
                   key={c.emoji}
                   title={chipLabel(c)}
                   aria-label={chipLabel(c)}
-                  className={cx("inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-stamp tabular-nums", c.mine ? "prism-lit text-ink" : "prism text-ink-2")}
+                  className={cx(
+                    "inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-stamp tabular-nums",
+                    c.mine ? "text-accent-text shadow-[inset_0_0_0_1px_var(--accent)]" : "text-ink-2 shadow-[inset_0_0_0_1px_var(--line)]"
+                  )}
                 >
                   <span aria-hidden>{c.emoji}</span>
                   {c.who.length > 1 && <span aria-hidden>{c.who.length}</span>}
@@ -504,7 +513,7 @@ export const MessageRow = memo(function MessageRow({
         )}
       </div>
 
-      <div className="glass absolute -top-3 right-2 hidden items-center gap-0.5 rounded-full px-0.5 group-focus-within/b:flex group-hover/b:flex">
+      <div className="absolute -top-3 right-2 hidden items-center gap-0.5 rounded-full bg-canvas px-0.5 shadow-[0_0_0_1px_var(--line)] group-focus-within/b:flex group-hover/b:flex">
         {onReact && (
           <button type="button" aria-label="React with a GIF" title="React with a GIF" onClick={() => onReact(m)} className={action}>
             <Icon icon={SmileIcon} size={15} />

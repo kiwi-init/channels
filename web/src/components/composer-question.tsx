@@ -33,7 +33,7 @@ export function ComposerQuestion({
                 type="button"
                 disabled={disabled}
                 onClick={() => onChoose(c)}
-                className="prism w-full rounded-row px-3 py-1.5 text-left text-ui leading-snug [overflow-wrap:anywhere] transition-colors disabled:pointer-events-none disabled:opacity-40"
+                className="w-full rounded-row px-3 py-1.5 text-left text-ui leading-snug [overflow-wrap:anywhere] edge transition-colors hover:bg-wash-2 disabled:pointer-events-none disabled:opacity-40"
               >
                 {c}
               </button>
