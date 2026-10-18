@@ -3,7 +3,10 @@ import { forgetChannel, loadMember, renameChannel, type ChannelHandle, type Stor
 import { secrets } from "@/lib/secrets"
 import type { ControlsProps } from "../controls"
 
-type Handlers = Pick<ControlsProps, "onApprove" | "onScopes" | "onRole" | "onNickname" | "onDeny" | "onCheck" | "onRemove" | "onHold" | "onCharter" | "onRename" | "onCloseChannel" | "onLeaveChannel">
+type Handlers = Pick<
+  ControlsProps,
+  "onApprove" | "onScopes" | "onRole" | "onNickname" | "onDeny" | "onCheck" | "onRemove" | "onHold" | "onCharter" | "onRepos" | "onRename" | "onCloseChannel" | "onLeaveChannel"
+>
 
 export function useControlsHandlers({
   live,
@@ -69,6 +72,12 @@ export function useControlsHandlers({
       ? async (text) => {
           const since = await send(text ? `charter: ${text}` : "cleared the charter", { kind: "event", ev: { op: "charter.set", text } })
           await ch.setCharter({ text, since })
+        }
+      : undefined,
+    onRepos: isOwner
+      ? async (repos) => {
+          const since = await send(repos.length ? `repos: ${repos.join(", ")}` : "cleared the channel's repos", { kind: "event", ev: { op: "repos.set", repos } })
+          await ch.setRepos({ list: repos, since })
         }
       : undefined,
     onRename: isOwner

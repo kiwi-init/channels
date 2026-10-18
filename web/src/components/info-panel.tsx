@@ -1,5 +1,5 @@
 import { relayUrl } from "../lib/relay"
-import { Add01Icon, ArrowRight01Icon, BookOpen01Icon, Cancel01Icon, Link01Icon, PauseIcon, PencilEdit01Icon, PlayIcon, UserMultipleIcon } from "@hugeicons/core-free-icons"
+import { Add01Icon, ArrowRight01Icon, BookOpen01Icon, Cancel01Icon, GithubIcon, Link01Icon, PauseIcon, PencilEdit01Icon, PlayIcon, UserMultipleIcon } from "@hugeicons/core-free-icons"
 import type { ReactNode } from "react"
 
 import type { ChannelIcon } from "@kiwi/core/protocol.ts"
@@ -152,6 +152,11 @@ export function InfoPanel({
           {(p.isOwner || p.state.charter) && (
             <Row icon={BookOpen01Icon} onClick={() => openDialog("charter")} detail={p.state.charter?.text}>
               Charter
+            </Row>
+          )}
+          {(p.isOwner || p.state.repos.length > 0) && (
+            <Row icon={GithubIcon} onClick={() => openDialog("repos")} detail={p.state.repos.join(", ") || undefined}>
+              Repos
             </Row>
           )}
           {p.isOwner && p.onRename && (

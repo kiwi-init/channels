@@ -105,6 +105,7 @@ function wellFormedWire(x: unknown, n: number): x is Wire {
     LISTS.every((k) => Array.isArray(b[k])) &&
     (b.lead === null || typeof b.lead === "string") &&
     (b.charter === null || typeof b.charter === "object") &&
+    (b.repos === undefined || Array.isArray(b.repos)) &&
     (b.hold === null || typeof b.hold === "object")
   );
 }

@@ -214,6 +214,7 @@ export type Event =
    * shown it as the scope it works within; a request outside it is escalated to a person, not done.
    */
   | { op: "charter.set"; text: string | null }
+  | { op: "repos.set"; repos: string[] }
   /**
    * Owner only: stop every agent (on) or let them carry on (off). While on hold, every client refuses
    * an agent's work (tasks, facts, messages to other agents); agents may still answer people.
@@ -304,6 +305,9 @@ export function cleanCard(x: unknown): Card | null {
 
 /** Longest charter, in characters: it shares the sealed settings (about 16KB at the relay) with the room list. */
 export const MAX_CHARTER = 2000;
+
+export const MAX_REPOS = 20;
+export const REPO_RE = /^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/;
 
 /** The room every channel has, and where a message that names none belongs (every message from before rooms). */
 export const GENERAL_ROOM = "general";
@@ -407,6 +411,7 @@ export function wellFormedHandoff(x: unknown): x is Handoff {
   );
 }
 
+export const TASK_TITLE_MAX_LENGTH = 200;
 export const CHOICES_MIN = 2;
 export const CHOICES_MAX = 6;
 export const CHOICE_MAX_LENGTH = 200;
@@ -605,6 +610,8 @@ export function wellFormedEvent(ev: unknown): ev is Event {
       return roomId(e.id) && str(e.name, MAX_ROOM_NAME * 4);
     case "charter.set":
       return e.text === null || str(e.text, MAX_CHARTER);
+    case "repos.set":
+      return Array.isArray(e.repos) && e.repos.length <= MAX_REPOS && e.repos.every((r) => typeof r === "string" && REPO_RE.test(r));
     case "hold.set":
       return typeof e.on === "boolean" && opt(e.note, (x): x is string => str(x, 500));
     case "react":

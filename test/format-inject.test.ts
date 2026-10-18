@@ -26,6 +26,7 @@ function blank(): ChannelState {
     placeOf: new Map(),
     places: new Map(),
     charter: null,
+    repos: [],
     hold: null,
     reactions: new Map(),
     roleSets: new Map(),

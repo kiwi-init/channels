@@ -36,6 +36,7 @@ export interface ControlsProps {
   onRename?: (name: string) => Promise<void>
   onHold?: (on: boolean, note?: string) => Promise<void>
   onCharter?: (text: string | null) => Promise<void>
+  onRepos?: (repos: string[]) => Promise<void>
   title?: string
   roomId?: string
 }
@@ -54,7 +55,7 @@ export interface Api {
   editNickname: (m: RosterMember) => void
   lastSeenOf: (name: string) => number | null
   onlineNow: (name: string) => boolean
-  openDialog: (d: "rename" | "charter") => void
+  openDialog: (d: "rename" | "charter" | "repos") => void
 }
 
 export const Ctx = createContext<Api | null>(null)

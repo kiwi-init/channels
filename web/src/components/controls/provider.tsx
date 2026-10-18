@@ -7,6 +7,7 @@ import { isPerson, LEAD } from "@kiwi/core/state.ts"
 import { noteAgentWorked } from "@/lib/channel"
 import { Modal, errorText, toast } from "../kit"
 import { defaultScopes } from "../scopes"
+import { ReposDialog } from "../lazy"
 import { CharterDialog, RenameDialog } from "./channel-dialogs"
 import { ConfirmDialogs } from "./confirm-dialogs"
 import { Ctx, type Api, type Confirm, type ControlsProps } from "./context"
@@ -17,7 +18,7 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
   const [confirm, setConfirm] = useState<Confirm>(null)
   const [sheet, setSheet] = useState<"requests" | "invite" | null>(null)
   const [busy, setBusy] = useState(false)
-  const [dialog, setDialog] = useState<"rename" | "charter" | null>(null)
+  const [dialog, setDialog] = useState<"rename" | "charter" | "repos" | null>(null)
   const [roleDraft, setRoleDraft] = useState({ role: "", about: "" })
   const [scopeDraft, setScopeDraft] = useState<Scope[]>([...SCOPES])
   const [nickDraft, setNickDraft] = useState("")
@@ -86,6 +87,7 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
 
       {p.onRename && dialog === "rename" && <RenameDialog title={p.title ?? ""} onClose={() => setDialog(null)} onSave={p.onRename} />}
       {dialog === "charter" && <CharterDialog text={p.state.charter?.text ?? ""} onClose={() => setDialog(null)} onSave={p.isOwner ? p.onCharter : undefined} />}
+      {dialog === "repos" && <ReposDialog repos={p.state.repos} onClose={() => setDialog(null)} onSave={p.isOwner ? p.onRepos : undefined} />}
 
       <Modal open={sheet === "requests" && confirm === null} onClose={() => setSheet(null)} wide>
         <Requests onDone={() => setSheet(null)} />

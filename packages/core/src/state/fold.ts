@@ -3,6 +3,7 @@ import { refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
 import { allowedOnHold, isLeadRole, isPerson, LEAD, ON_HOLD } from "./people.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
+import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
 import type { ChannelState, Fact, FoldBase, GuardFloor, Member, Place, Reaction, Room, RoomsFloor, Roster, Task } from "./types.ts";
 
@@ -78,6 +79,7 @@ export function fold(
   const ownerName = [...members.values()].find((x) => x.owner)?.name ?? "owner";
   let charterFloor = ahead(guardFloor?.charter);
   let holdFloor = ahead(guardFloor?.hold);
+  let reposFloor = ahead(guardFloor?.repos);
   const passGuard = (seq: number) => {
     if (charterFloor && charterFloor.since < seq) {
       ctx.charter = charterFloor.text ? { text: charterFloor.text, by: ownerName, at: ctx.charter?.at ?? 0 } : null;
@@ -86,6 +88,10 @@ export function fold(
     if (holdFloor && holdFloor.since < seq) {
       ctx.hold = holdFloor.on ? { ...(holdFloor.note ? { note: holdFloor.note } : {}), by: ownerName, at: ctx.hold?.at ?? 0 } : null;
       holdFloor = null;
+    }
+    if (reposFloor && reposFloor.since < seq) {
+      ctx.repos = reposOf(reposFloor.list);
+      reposFloor = null;
     }
   };
   const humanFor = (a: Member) => (a.sponsor ? [...members.values()].find((x) => x.active && isPerson(x) && x.sponsor?.user === a.sponsor!.user)?.name : undefined);
@@ -167,6 +173,7 @@ export function fold(
     roomsSince,
     nameTaken,
     charter: from?.charter ?? null,
+    repos: reposOf(from?.repos ?? []),
     hold: from?.hold ?? null,
   };
 
@@ -285,6 +292,7 @@ export function fold(
       members: [...members.values()].map((m) => ({ name: m.name, role: m.role, about: m.about, color: m.color, card: m.card, lastSeen: m.lastSeen, messages: m.messages })),
       lead,
       charter: ctx.charter,
+      repos: ctx.repos,
       hold: ctx.hold,
       scopesByKey: [...scopesByKey],
       scopeSets: [...scopeSets],
@@ -329,6 +337,7 @@ export function fold(
     placeOf,
     places: summarize(placeOf, tasks, trust),
     charter: ctx.charter,
+    repos: ctx.repos,
     hold: ctx.hold,
     reactions,
     head,

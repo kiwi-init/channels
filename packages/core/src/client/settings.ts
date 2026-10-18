@@ -5,7 +5,7 @@ import { omit } from "../omit.ts";
 import { sign, verify } from "../identity.ts";
 import { MAX_CHARTER, MAX_ROOM_NAME, ROOM_ID_RE } from "../protocol.ts";
 import { MissingKey } from "../refusals.ts";
-import type { GuardFloor } from "../state.ts";
+import { reposOf, type GuardFloor } from "../state.ts";
 import type { ChannelCore } from "./core.ts";
 import type { Refusal, Refused } from "./errors.ts";
 import type { ChannelInfo, Info } from "./info.ts";
@@ -27,6 +27,7 @@ export interface SettingsFx {
   guard(info?: Info): Effect.Effect<GuardFloor | null, Refusal, Relay>;
   setCharter(charter: NonNullable<GuardFloor["charter"]>): Effect.Effect<void, Refused, Relay>;
   setHold(hold: NonNullable<GuardFloor["hold"]>): Effect.Effect<void, Refused, Relay>;
+  setRepos(repos: NonNullable<GuardFloor["repos"]>): Effect.Effect<void, Refused, Relay>;
   compress(): Effect.Effect<boolean, Refusal, Relay>;
   setCompress(on: boolean): Effect.Effect<void, Refused, Relay>;
   imageRefs(): Effect.Effect<boolean, Refusal, Relay>;
@@ -65,7 +66,9 @@ export class ChannelSettings {
           ? { text: c.text === null ? null : (c.text as string).slice(0, MAX_CHARTER), since: c.since as number }
           : null;
       const hold = h && typeof h.on === "boolean" && Number.isInteger(h.since) ? { on: h.on, ...(typeof h.note === "string" ? { note: h.note.slice(0, 500) } : {}), since: h.since as number } : null;
-      const floor: GuardFloor | null = charter || hold ? { charter, hold } : null;
+      const r = o.repos as { list?: unknown; since?: unknown } | undefined;
+      const repos = r && Array.isArray(r.list) && Number.isInteger(r.since) ? { list: reposOf(r.list), since: r.since as number } : null;
+      const floor: GuardFloor | null = charter || hold || repos ? { charter, hold, ...(repos ? { repos } : {}) } : null;
       return floor;
     }),
 
@@ -75,6 +78,10 @@ export class ChannelSettings {
 
     setHold: Effect.fn("Channel.setHold")({ self: this }, function* (this: ChannelSettings, hold: NonNullable<GuardFloor["hold"]>) {
       yield* this.putSettings({ hold });
+    }),
+
+    setRepos: Effect.fn("Channel.setRepos")({ self: this }, function* (this: ChannelSettings, repos: NonNullable<GuardFloor["repos"]>) {
+      yield* this.putSettings({ repos });
     }),
 
     compress: Effect.fn("Channel.compress")({ self: this }, function* (this: ChannelSettings) {
