@@ -4,9 +4,25 @@ import type { ChannelCore } from "./core.ts";
 import type { Refused } from "./errors.ts";
 import type { Relay } from "./relay.ts";
 
+export interface GithubDiff {
+  diff: string;
+  base: string;
+  truncated: boolean;
+}
+
+export interface ReviewCheck {
+  repo: string;
+  sha: string;
+  verdict: "approved" | "rejected";
+  task: number;
+  note?: string;
+}
+
 export interface GithubFx {
   setGithubRepos(repos: string[]): Effect.Effect<string[], Refused, Relay>;
   drainGithub(): Effect.Effect<number, Refused, Relay>;
+  githubDiff(repo: string, sha: string): Effect.Effect<GithubDiff, Refused, Relay>;
+  postReviewCheck(c: ReviewCheck): Effect.Effect<{ url: string | null }, Refused, Relay>;
 }
 
 const PR_ACTIONS = new Set(["opened", "reopened", "closed", "ready_for_review", "synchronize", "edited", "converted_to_draft"]);
@@ -24,6 +40,15 @@ export class ChannelGithub {
     setGithubRepos: Effect.fn("Channel.setGithubRepos")({ self: this }, function* (this: ChannelGithub, repos: string[]) {
       yield* this.ch.ownerOnly();
       return (yield* this.ch.request<{ repos: string[] }>("/github/repos", { method: "PUT", body: JSON.stringify({ repos }) })).repos;
+    }),
+
+    githubDiff: Effect.fn("Channel.githubDiff")({ self: this }, function* (this: ChannelGithub, repo: string, sha: string) {
+      return yield* this.ch.request<GithubDiff>("/github/diff", {}, { repo, sha });
+    }),
+
+    postReviewCheck: Effect.fn("Channel.postReviewCheck")({ self: this }, function* (this: ChannelGithub, c: ReviewCheck) {
+      yield* this.ch.ownerOnly();
+      return yield* this.ch.request<{ url: string | null }>("/github/check", { method: "POST", body: JSON.stringify(c) });
     }),
 
     drainGithub: Effect.fn("Channel.drainGithub")({ self: this }, function* (this: ChannelGithub) {

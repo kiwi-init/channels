@@ -61,6 +61,8 @@ export class ChannelLink {
   snapshotIfDue = () => this.c("snapshotIfDue")
   setGithubRepos = (...a: Args<"setGithubRepos">) => this.c("setGithubRepos", ...a)
   drainGithub = () => this.c("drainGithub")
+  githubDiff = (...a: Args<"githubDiff">) => this.c("githubDiff", ...a)
+  postReviewCheck = (...a: Args<"postReviewCheck">) => this.c("postReviewCheck", ...a)
   snapshotAt = () => this.c("snapshotAt")
   info = () => this.c("info")
   title = () => this.c("title")

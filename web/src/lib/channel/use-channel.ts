@@ -9,6 +9,7 @@ import { fold, type ChannelState, type GuardFloor, type Roster } from "@kiwi/cor
 import { isWakeVia } from "@kiwi/core/wake.ts"
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "../channel-ops"
 import { readCached, rememberRow } from "../history"
+import { checksToPost, setCheckedUpTo } from "../review-checks"
 import { wholeLog } from "../history-plan"
 import { ICON_LIVE } from "../icon-event"
 import { howHere } from "../presence"
@@ -283,6 +284,22 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
       })
   })
   useEffect(() => snapshotIfDue(), [state.head])
+  const checksBusy = useRef(false)
+  const postReviewChecks = useEffectEvent(() => {
+    if (!ch.isOwner || !caughtUp || !state.repos.length || checksBusy.current) return
+    const due = checksToPost(ch.roomId, state, messages)
+    if (!due.length) return
+    checksBusy.current = true
+    void (async () => {
+      for (const c of due) {
+        await ch.postReviewCheck(c).catch(() => {})
+        setCheckedUpTo(ch.roomId, c.seq)
+      }
+    })().finally(() => {
+      checksBusy.current = false
+    })
+  })
+  useEffect(() => postReviewChecks(), [state.head, caughtUp])
   const drainGithub = useEffectEvent(() => {
     if (ch.isOwner && state.repos.length) ch.drainGithub().catch(() => {})
   })

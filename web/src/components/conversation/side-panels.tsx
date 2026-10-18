@@ -1,5 +1,6 @@
 import type { Dispatch, ReactNode, SetStateAction } from "react"
 
+import type { GithubDiff } from "@kiwi/core/client.ts"
 import type { ChannelIcon, ImageAttachment, Message } from "@kiwi/core/protocol.ts"
 import { taskId, type ChannelState, type Task } from "@kiwi/core/state.ts"
 import type { ChannelHandle } from "@/lib/channel"
@@ -142,6 +143,7 @@ export function TasksSide({
   connecting,
   send,
   sendTask,
+  githubDiff,
   state,
   messages,
   now,
@@ -163,6 +165,7 @@ export function TasksSide({
   connecting: boolean
   send: Send
   sendTask: (...s: TaskSend[]) => Promise<void>
+  githubDiff: (repo: string, sha: string) => Promise<GithubDiff>
   state: ChannelState
   messages: Message[]
   now: number
@@ -229,6 +232,7 @@ export function TasksSide({
             onSendBack={(t, why) => sendTask(sendBackTask(t, why))}
             onCancel={(t, note) => sendTask(cancelTask(t, note, me), closedDigest(state, messages, t, { by: me, cancelled: note }))}
             onReviewer={(t, review) => sendTask(changeReviewer(t, review, me))}
+            onDiff={githubDiff}
           />
           {task && !saidInTask && <p className="mt-4 text-center text-meta text-ink-3">What the agents on it say to each other shows up here.</p>}
           {rows}

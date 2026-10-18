@@ -506,6 +506,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             connecting={connection === "connecting"}
             send={send}
             sendTask={sendTask}
+            githubDiff={ch.githubDiff}
             state={state}
             messages={messages}
             now={now}
