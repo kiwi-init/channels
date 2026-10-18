@@ -1,3 +1,4 @@
+import type { Personality } from "@kiwi/core/personality.ts"
 import { keepRecordsIn } from "@kiwi/core/client.ts"
 import { generateIdentity } from "@kiwi/core/identity.ts"
 import type { Member } from "@kiwi/core/membership.ts"
@@ -14,6 +15,7 @@ export interface Local {
   channels: ChannelIdentityView[]
   computers: ComputerView[]
   pending: PendingItem[]
+  personalities: Personality[]
 }
 
 const LOCAL_KEY = "kiwi.secrets"
@@ -29,7 +31,7 @@ function read<T>(key: string): T | null {
 
 export function readLocal(): Local {
   const v = read<Partial<Local>>(LOCAL_KEY)
-  return { person: v?.person ?? null, channels: v?.channels ?? [], computers: v?.computers ?? [], pending: v?.pending ?? [] }
+  return { person: v?.person ?? null, channels: v?.channels ?? [], computers: v?.computers ?? [], pending: v?.pending ?? [], personalities: Array.isArray(v?.personalities) ? v.personalities : [] }
 }
 
 export function writeLocal(patch: Partial<Local>): Local {

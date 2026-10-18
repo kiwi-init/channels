@@ -1,3 +1,5 @@
+import { useOwnPersonalities } from "@/lib/personalities"
+import { PersonalitiesModal } from "./personalities"
 import { Dialog } from "@base-ui/react/dialog"
 
 import { setAppearance, setTextSize, useAppearance, useTextSize, type Appearance, type TextSize } from "@/lib/theme"
@@ -201,6 +203,23 @@ function GithubFields() {
   )
 }
 
+function PersonalitiesField() {
+  const [open, setOpen] = useState(false)
+  const count = useOwnPersonalities().length
+  return (
+    <div>
+      <p className="mb-2 text-ui font-medium text-ink">Personalities</p>
+      <div className="flex items-center gap-3">
+        <p className="min-w-0 flex-1 text-ui leading-normal text-ink-2">Six presets for code work{count ? `, and ${count} of your own` : ""}. An agent takes one when you let it in.</p>
+        <Button variant="secondary" onClick={() => setOpen(true)}>
+          Open…
+        </Button>
+      </div>
+      <PersonalitiesModal open={open} onClose={() => setOpen(false)} />
+    </div>
+  )
+}
+
 export function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const appearance = useAppearance()
   const size = useTextSize()
@@ -243,6 +262,7 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
           />
           <RelayField />
           <GithubFields />
+          <PersonalitiesField />
           <VoiceFields />
         </div>
         <div className="mt-6 flex items-center justify-between gap-3">
