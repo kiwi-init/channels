@@ -272,7 +272,7 @@ try {
       /** A task's row on the Tasks tab, opened in place under it. */
       const openInline = async (title: RegExp) => {
         await toTab("Tasks");
-        const row = owner.getByRole("button", { name: title }).first();
+        const row = owner.getByRole("button", { name: title }).and(owner.locator("[aria-expanded]")).first();
         await row.waitFor({ timeout: 15000 });
         if ((await row.getAttribute("aria-expanded")) !== "true") await row.click();
       };

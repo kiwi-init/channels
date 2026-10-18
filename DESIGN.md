@@ -192,7 +192,8 @@ From `design-tokens.ts`:
   from 768px wide), both on `rail`; the page is the round `sheet` beside
   them: the channel's name and who is here, Search, the views
   with counts (Everything, Needs you, In progress, In review, Done this
-  week), the agents with what each is doing now, and the conversations
+  week), the agents with what each is doing now (a click opens your direct
+  conversation with it; the task id beside it opens its task), and the conversations
   (rooms and direct ones). The page beside it has one header row: what is
   shown, the channel's status (working, merged today, needs you), and the
   Tasks / Agents / Conversation tabs. A view opens Tasks; a conversation

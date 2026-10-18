@@ -52,18 +52,12 @@ export const byBusy = (agents: AgentNow[]) => [...agents].sort((a, b) => Number(
 
 const face = (a: AgentNow, size: number) => <Monogram name={a.label} hue={a.name} agent color={a.color} size={size} online={size > 20 && !!a.here} />
 
-export function AgentRow({ a, onOpenTask }: { a: AgentNow; onOpenTask: (id: number) => void }) {
+export function AgentRow({ a, onMessage, onOpenTask }: { a: AgentNow; onMessage: (name: string) => void; onOpenTask: (id: number) => void }) {
   const doing = doingNow(a)
   const task = a.load.current[0]
-  const what = [task ? taskId(task.id) : null, agentNow(a).text].filter(Boolean).join(" · ")
   return (
-    <li>
-      <button
-        type="button"
-        onClick={() => task && onOpenTask(task.id)}
-        disabled={!task}
-        className="flex w-full items-center gap-3 rounded-row px-2 py-1.5 text-left transition-colors enabled:hover:bg-wash"
-      >
+    <li className="flex items-center rounded-row transition-colors hover:bg-wash">
+      <button type="button" onClick={() => onMessage(a.name)} aria-label={`Message ${a.label} privately`} className="flex min-w-0 flex-1 items-center gap-3 px-2 py-1.5 text-left">
         {face(a, 28)}
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-1.5">
@@ -72,10 +66,21 @@ export function AgentRow({ a, onOpenTask }: { a: AgentNow; onOpenTask: (id: numb
           </span>
           <span className="flex items-center gap-1.5 text-meta text-ink-3">
             {doing?.busy && <span className="size-1.5 shrink-0 rounded-full bg-doing" />}
-            <span className="truncate">{what}</span>
+            <span className="truncate">{agentNow(a).text}</span>
           </span>
         </span>
       </button>
+      {task && (
+        <button
+          type="button"
+          onClick={() => onOpenTask(task.id)}
+          aria-label={`Open ${taskId(task.id)}, ${task.title}`}
+          title={task.title}
+          className="mr-1 shrink-0 rounded-row px-1.5 py-0.5 text-meta text-ink-3 tabular-nums transition-colors hover:bg-wash-2 hover:text-ink"
+        >
+          {taskId(task.id)}
+        </button>
+      )}
     </li>
   )
 }
