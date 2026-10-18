@@ -116,6 +116,11 @@ export async function open(key: string, roomId: string, iv: string, ct: string):
   }
 }
 
+export async function slotId(key: string, roomId: string, name: string): Promise<string> {
+  const hk = await crypto.subtle.importKey("raw", fromB64url(key), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return b64url(new Uint8Array(await crypto.subtle.sign("HMAC", hk, enc.encode(`kiwi-slot:${roomId}:${name}`))));
+}
+
 // ---------- membership channels (mc2) ----------
 //
 // An mc2 join code names a room and pins its owner: `mc2-<room>-<owner fp>`.

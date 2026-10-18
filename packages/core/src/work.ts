@@ -7,19 +7,13 @@ import { cleanBody, describeEvent, reviewBody, roundTag } from "./format.ts";
 import { inlineText } from "./membership.ts";
 import { ignored, type Message } from "./protocol.ts";
 import type { OldTaskState, TaskState } from "./protocol.ts";
-import { currentState, isPerson, keptFromPeople, type ChannelState, type Task } from "./state.ts";
+import { currentState, isPerson, type ChannelState, type Task } from "./state.ts";
 
 /** Quiet this long, with nothing in progress, and an agent reads as idle. */
 const IDLE_AFTER_MS = 15 * 60_000;
 
-/**
- * Whether `viewer` may see message `m` here: nothing forged or refused, and for a person in
- * strict coordinator-only mode, no agent's chat except the coordinator's. Events always show.
- */
-export function visibleTo(state: ChannelState, viewer: string, m: Message): boolean {
-  if (ignored(state.trust.get(m.seq))) return false;
-  const me = state.members.get(viewer);
-  return !(me && isPerson(me) && keptFromPeople(state, m));
+export function visible(state: ChannelState, m: Message): boolean {
+  return !ignored(state.trust.get(m.seq));
 }
 
 // ---------- pull requests ----------
@@ -54,10 +48,10 @@ function fateIn(text: string, pr: { url: string; number: number }): "merged" | "
 export const textOf = (m: Message): string => (m.ev?.op === "task.update" ? (m.ev.note ?? "") : m.kind === "event" ? "" : m.body);
 
 /** PRs linked in these messages, with what later messages (any visible one) say happened to them. */
-export function prsIn(state: ChannelState, messages: Message[], viewer: string, linkedBy: (m: Message) => boolean): PrRef[] {
+export function prsIn(state: ChannelState, messages: Message[], linkedBy: (m: Message) => boolean): PrRef[] {
   const prs = new Map<string, PrRef>();
   for (const m of messages) {
-    if (!visibleTo(state, viewer, m)) continue;
+    if (!visible(state, m)) continue;
     const text = textOf(m);
     if (!text) continue;
     if (linkedBy(m)) for (const l of prLinks(text)) if (!prs.has(l.url)) prs.set(l.url, { ...l, state: "open", seq: m.seq });
@@ -86,10 +80,10 @@ function taskOf(state: ChannelState, m: Message, text: string): number | undefin
   return m.task ?? (place?.kind === "task" ? place.task : undefined);
 }
 
-export function recentPrs(state: ChannelState, messages: Message[], viewer: string, limit: number): RecentPr[] {
+export function recentPrs(state: ChannelState, messages: Message[], limit: number): RecentPr[] {
   const seen = new Map<string, { by: string; last: number; task?: number }>();
   for (const m of messages) {
-    if (!visibleTo(state, viewer, m)) continue;
+    if (!visible(state, m)) continue;
     const text = textOf(m);
     if (!text) continue;
     for (const l of prLinks(text)) {
@@ -97,7 +91,7 @@ export function recentPrs(state: ChannelState, messages: Message[], viewer: stri
       seen.set(l.url, { by: m.from, last: at(m), ...(task !== undefined ? { task } : {}) });
     }
   }
-  return prsIn(state, messages, viewer, () => true)
+  return prsIn(state, messages, () => true)
     .flatMap((pr) => {
       const s = seen.get(pr.url);
       return s ? [{ ...pr, ...s }] : [];
@@ -115,7 +109,7 @@ export interface AgentRow {
   role?: string;
   /** Their first task in progress. */
   doing?: Task;
-  /** What they last said about their work, from what this viewer may see (a status message, a task note, else their latest message). */
+  /** What they last said about their work, from what they said (a status message, a task note, else their latest message). */
   statusLine?: { text: string; seq: number; at: number };
   status: AgentStatus;
   /** Since when they've been blocked or idle (for "Blocked 20 min"). */
@@ -128,14 +122,14 @@ export interface AgentRow {
 const at = (m: Message) => m.rts ?? m.ts;
 
 /** One row per agent in the channel: what it's doing, its status line, and whether it's working, blocked, idle or away. */
-export function agentRows(state: ChannelState, messages: Message[], viewer: string, online: Set<string>, now = Date.now()): AgentRow[] {
+export function agentRows(state: ChannelState, messages: Message[], online: Set<string>, now = Date.now()): AgentRow[] {
   const agents = [...state.members.values()].filter((m) => m.active && !isPerson(m));
   return agents
     .map((a): AgentRow => {
       const mine = [...state.tasks.values()].filter((t) => t.owner === a.name).sort((x, y) => x.id - y.id);
       const doing = mine.find((t) => t.state === "doing");
-      const blockingAsk = state.openAsks.find((m) => m.from === a.name && m.kind === "blocking" && visibleTo(state, viewer, m));
-      const said = [...messages].reverse().filter((m) => m.from === a.name && visibleTo(state, viewer, m));
+      const blockingAsk = state.openAsks.find((m) => m.from === a.name && m.kind === "blocking" && visible(state, m));
+      const said = [...messages].reverse().filter((m) => m.from === a.name && visible(state, m));
       const line = said.find((m) => m.kind === "status") ?? said.find((m) => m.ev?.op === "task.update" && !!m.ev.note) ?? said.find((m) => m.kind !== "event");
       const statusLine = line ? { text: inlineText(textOf(line), 140), seq: line.seq, at: at(line) } : undefined;
       const lastActive = a.lastSeen;
@@ -148,7 +142,7 @@ export function agentRows(state: ChannelState, messages: Message[], viewer: stri
         ...(statusLine?.text ? { statusLine } : {}),
         status,
         since,
-        prs: prsIn(state, messages, viewer, (m) => m.from === a.name).filter((p) => p.state === "open"),
+        prs: prsIn(state, messages, (m) => m.from === a.name).filter((p) => p.state === "open"),
         lastActive,
         online: online.has(a.name),
       };
@@ -167,15 +161,12 @@ export interface Need {
   kind: "ask" | "blocking";
 }
 
-/**
- * Open questions waiting on a person: asks and blockers addressed to people (or to everyone), and
- * in coordinator-only mode the coordinator's open asks, which is how a question reaches people there.
- */
-export function needsPerson(state: ChannelState, viewer: string): Need[] {
+/** Open questions waiting on a person: asks and blockers addressed to people, or to everyone. */
+export function needsPerson(state: ChannelState): Need[] {
   const people = new Set([...state.members.values()].filter((m) => m.active && isPerson(m)).map((m) => m.name));
   return state.openAsks
-    .filter((m) => visibleTo(state, viewer, m) && !people.has(m.from))
-    .filter((m) => !m.to?.length || m.to.some((t) => people.has(t) || t === "*") || (state.mode.coordinatorOnly && m.from === state.coordinator))
+    .filter((m) => visible(state, m) && !people.has(m.from))
+    .filter((m) => !m.to?.length || m.to.some((t) => people.has(t) || t === "*"))
     .map((m) => ({ seq: m.seq, at: at(m), from: m.from, text: inlineText(m.body, 140), kind: m.kind === "blocking" ? ("blocking" as const) : ("ask" as const) }))
     .reverse();
 }
@@ -200,12 +191,12 @@ function mentions(m: Message, id: number): boolean {
  * Everything about one task, in log order: its own events (made, claimed, updated, noted), every
  * thread that mentions it (whole, as one card, in any room), and the pull requests linked there.
  */
-export function taskFeed(state: ChannelState, messages: Message[], id: number, viewer: string): FeedItem[] {
+export function taskFeed(state: ChannelState, messages: Message[], id: number): FeedItem[] {
   const items: FeedItem[] = [];
   const threads = new Map<number, Message[]>();
   const mentioning = new Set<number>();
   for (const m of messages) {
-    if (!visibleTo(state, viewer, m)) continue;
+    if (!visible(state, m)) continue;
     const ev = m.ev;
     if (m.kind === "event") {
       const own = ev && ((ev.op === "task.add" && m.seq === id) || ("task" in ev && ev.task === id));
@@ -225,7 +216,7 @@ export function taskFeed(state: ChannelState, messages: Message[], id: number, v
     items.push({ type: "thread", seq: first.seq, at: at(first), root, ...(room ? { room } : {}), messages: thread });
   }
   const linked = (m: Message) => (m.ev?.op === "task.update" && m.ev.task === id) || (m.kind !== "event" && mentioning.has(state.threadOf.get(m.seq) ?? m.seq));
-  for (const pr of prsIn(state, messages, viewer, linked)) {
+  for (const pr of prsIn(state, messages, linked)) {
     const m = messages.find((x) => x.seq === pr.seq)!;
     items.push({ type: "pr", seq: pr.seq, at: at(m), actor: m.from, pr });
   }

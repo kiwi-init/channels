@@ -7,11 +7,12 @@ import { ArrowUp01Icon } from "@hugeicons/core-free-icons"
 import { useState } from "react"
 
 import type { Load } from "@kiwi/core/load.ts"
-import type { Activity, Color } from "@kiwi/core/protocol.ts"
+import type { Activity, Card, Color } from "@kiwi/core/protocol.ts"
 import { taskId } from "@kiwi/core/state.ts"
 import { formatAgo, shortTitle } from "@/lib/format"
 import { howWords, type How } from "@/lib/presence"
 import { cx } from "@/lib/utils"
+import { RepoLine } from "./agent-facts"
 import { Icon } from "./icon"
 import { Monogram } from "./kit"
 
@@ -20,7 +21,7 @@ export interface AgentNow {
   label: string
   color: Color | null
   here: How | null
-  coordinator: boolean
+  lead: boolean
   /** The model it says it runs on (its card, or what its harness says now). */
   model?: string
   /** What it's doing right now, live from its harness (presence). */
@@ -28,6 +29,8 @@ export interface AgentNow {
   load: Load
   /** When they last said something in the channel. */
   lastAt?: number
+  card?: Pick<Card, "repo" | "branch">
+  outside?: boolean
 }
 
 /** What it's doing now, in a few words: live from its harness when it says, else from its tasks. */
@@ -53,9 +56,10 @@ export function AgentLine({ a, now, onOpenTask, brief }: { a: AgentNow; now: num
         <span className="flex items-baseline gap-2">
           <span className="truncate text-ui font-semibold">{a.label}</span>
           {a.model && !brief && <span className="truncate text-stamp text-ink-3">{a.model}</span>}
-          {a.coordinator && <span className="shrink-0 text-stamp text-ink-3">coordinator</span>}
+          {a.lead && <span className="shrink-0 text-stamp text-ink-3">lead</span>}
           <span className="ml-auto shrink-0 text-stamp text-ink-3">{a.here ? "online" : a.lastAt && !brief ? `away · ${formatAgo(a.lastAt, now)}` : "away"}</span>
         </span>
+        {a.card?.repo && !brief && <RepoLine card={a.card} outside={!!a.outside} className="text-meta" />}
         {doingNow(a) && (
           <span className="flex items-center gap-1.5 text-meta">
             <span className={cx("size-1.5 shrink-0 rounded-full", doingNow(a)!.busy ? "animate-pulse bg-doing" : "bg-ink-3")} />

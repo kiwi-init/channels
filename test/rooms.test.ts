@@ -112,12 +112,12 @@ describe("fold", () => {
     const tail = [inWindow, rename, after];
     expect(fold(tail, roster).trust.get(inWindow.seq)).toBe("refused");
     // With the owner's signed list as it stood after the create, they're in the room, and the rename applies.
-    const s = fold(tail, roster, Date.now(), null, { list: [{ id: "old00001", name: "old" }], since: create.seq });
+    const s = fold(tail, roster, Date.now(), { list: [{ id: "old00001", name: "old" }], since: create.seq });
     expect(s.trust.get(inWindow.seq)).toBe("verified");
     expect(s.roomOf.get(after.seq)).toBe("old00001");
     expect(s.rooms.get("old00001")?.name).toBe("older");
     // The full log with the same floor agrees: events up to `since` are already in the list.
-    const full = fold([create, early, inWindow, rename, after], roster, Date.now(), null, { list: [{ id: "old00001", name: "old" }], since: create.seq });
+    const full = fold([create, early, inWindow, rename, after], roster, Date.now(), { list: [{ id: "old00001", name: "old" }], since: create.seq });
     expect(full.rooms.get("old00001")).toMatchObject({ name: "older", createdBy: "human" });
     expect(full.rejected.has(create.seq)).toBe(false);
   });
@@ -160,15 +160,15 @@ describe("over a relay", () => {
     rmSync(dataDir, { recursive: true, force: true });
   });
 
-  test("the room list and the mode share the signed settings; setting one keeps the other", async () => {
+  test("the room list and the charter share the signed settings; setting one keeps the other", async () => {
     const human = await generateIdentity("human");
     const { access } = await Channel.create(server.url.origin, human, { name: "human" });
     const ch = new Channel(access, server.url.origin, human);
-    await ch.setMode({ coordinatorOnly: true, strict: true, since: 3 });
+    await ch.setCharter({ text: "Docs only.", since: 3 });
     await ch.setRooms({ list: [{ id: "design01", name: "design" }], since: 5 });
-    expect(await ch.mode()).toEqual({ coordinatorOnly: true, strict: true, since: 3 });
+    expect((await ch.guard())?.charter).toEqual({ text: "Docs only.", since: 3 });
     expect(await ch.rooms()).toEqual({ list: [{ id: "design01", name: "design" }], since: 5 });
-    await ch.setMode({ coordinatorOnly: false, strict: false, since: 7 });
+    await ch.setCharter({ text: null, since: 7 });
     expect(await ch.rooms()).toEqual({ list: [{ id: "design01", name: "design" }], since: 5 });
   });
 

@@ -75,12 +75,25 @@ export function repoName(url: string | null): string | null {
   return m ? m[1]! : null;
 }
 
+export type Where = Pick<Card, "repo" | "branch">;
+
+export function detectWhere(cwd = process.cwd()): Where {
+  const repo = repoName(git(["remote", "get-url", "origin"], cwd));
+  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"], cwd);
+  return { ...(repo ? { repo } : {}), ...(branch && branch !== "HEAD" ? { branch } : {}) };
+}
+
+export function movedCard(was: Card, where: Where): Card {
+  const card: Card = { ...was };
+  delete card.repo;
+  delete card.branch;
+  return { ...card, ...where };
+}
+
 /** This machine's card, as far as it can tell. */
 export function detectCard(env: Record<string, string | undefined> = process.env): Card {
   const os = ({ darwin: "macos", win32: "windows", linux: "linux" } as Record<string, string>)[process.platform] ?? process.platform;
   const tools = TOOLS.filter(([, bin]) => !!Bun.which(bin)).map(([tag]) => tag);
-  const repo = repoName(git(["remote", "get-url", "origin"]));
-  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
   const harness = detectHarness(env);
   const cores = cpus();
   const chip = cores[0]?.model.replace(/\s+/g, " ").trim();
@@ -91,8 +104,7 @@ export function detectCard(env: Record<string, string | undefined> = process.env
     memory: `${Math.round(totalmem() / 2 ** 30)} GB`,
     ...(harness ? { harness } : {}),
     ...(tools.length ? { tools } : {}),
-    ...(repo ? { repo } : {}),
-    ...(branch && branch !== "HEAD" ? { branch } : {}),
+    ...detectWhere(),
   };
 }
 

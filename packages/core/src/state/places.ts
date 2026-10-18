@@ -20,13 +20,13 @@ export function dmPlace(a: string, b: string): Place {
   return { kind: "dm", with: a < b ? [a, b] : [b, a] };
 }
 
-export function threadMembers(state: Pick<ChannelState, "members" | "tasks" | "coordinator">, place: Place): string[] {
+export function threadMembers(state: Pick<ChannelState, "members" | "tasks" | "lead">, place: Place): string[] {
   const active = (n: string | undefined): n is string => !!n && !!state.members.get(n)?.active;
   if (place.kind === "main") return [...state.members.values()].filter((m) => m.active).map((m) => m.name);
   if (place.kind === "dm") return place.with.filter(active);
   const t = state.tasks.get(place.task);
   if (!t) return [];
-  return [...new Set([t.owner, ...t.workedBy, t.review !== "*" ? t.review : undefined, state.coordinator ?? undefined].filter(active))];
+  return [...new Set([t.owner, ...t.workedBy, t.review !== "*" ? t.review : undefined, state.lead ?? undefined].filter(active))];
 }
 
 export function summarize(placeOf: Map<number, Place>, tasks: Map<number, Task>, trust: Map<number, Trust>): Map<string, PlaceSummary> {
@@ -59,11 +59,11 @@ export interface ThreadChoice {
   several?: number[];
 }
 
-export function chooseThread(state: Pick<ChannelState, "tasks" | "coordinator">, me: string, a: ThreadAsk): ThreadChoice | string {
+export function chooseThread(state: Pick<ChannelState, "tasks" | "lead">, me: string, a: ThreadAsk): ThreadChoice | string {
   if ([a.task !== undefined, !!a.main, !!a.dm].filter(Boolean).length > 1) return "say one of: a task (--task), main (--main) or a direct thread (--dm)";
   if (a.dm) return { to: [a.dm], dm: true };
   if (a.task !== undefined) return { task: a.task };
-  if (a.main || a.reply || state.coordinator === me) return {};
+  if (a.main || a.reply || state.lead === me) return {};
   const doing = [...state.tasks.values()].filter((t) => t.owner === me && t.state === "doing").map((t) => t.id);
   if (doing.length === 1) return { task: doing[0]!, doing: doing[0]! };
   return doing.length > 1 ? { several: doing } : {};

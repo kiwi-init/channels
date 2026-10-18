@@ -26,7 +26,7 @@ export interface Recent {
   text: string
   ts: number
   people: string[]
-  byCoordinator?: boolean
+  lead?: string
 }
 
 export function loadRecent(code: string): Recent | null {

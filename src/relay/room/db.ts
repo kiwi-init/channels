@@ -33,6 +33,8 @@ const BLOB_GRACE_MS = 3_600_000;
 
 const READS_TABLE = "CREATE TABLE reads (pk TEXT PRIMARY KEY, seq INTEGER NOT NULL, at INTEGER NOT NULL)";
 
+const SLOTS_TABLE = "CREATE TABLE slots (id TEXT PRIMARY KEY, holder TEXT NOT NULL, seq INTEGER NOT NULL, until INTEGER NOT NULL)";
+
 const REQUEST_COLUMNS = [
   ["kind", "TEXT NOT NULL DEFAULT 'agent'"],
   ["sponsor_user", "TEXT"],
@@ -122,6 +124,7 @@ export class RoomDb {
       `CREATE TABLE requests (id TEXT PRIMARY KEY, pk TEXT NOT NULL UNIQUE, xpk TEXT NOT NULL, box TEXT NOT NULL, sig TEXT NOT NULL, ts INTEGER NOT NULL, status TEXT NOT NULL, ${REQUEST_COLUMNS.map(([col, def]) => `${col} ${def}`).join(", ")})`,
     );
     this.sql.run(READS_TABLE);
+    this.sql.run(SLOTS_TABLE);
   }
 
   migrate(): void {
@@ -136,6 +139,7 @@ export class RoomDb {
       if (!cols.has(col)) this.sql.run(`ALTER TABLE requests ADD COLUMN ${col} ${def}`);
     }
     this.sql.run(READS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
+    this.sql.run(SLOTS_TABLE.replace("CREATE TABLE", "CREATE TABLE IF NOT EXISTS"));
     migrated.add(this.sql);
   }
 
@@ -197,6 +201,25 @@ export class RoomDb {
   insert(seq: number, ts: number, iv: string, ct: string, e: number): void {
     this.sql.run("INSERT INTO msgs (seq, ts, iv, ct, e) VALUES (?, ?, ?, ?, ?)", seq, ts, packed(iv), packed(ct), e);
     this.warm.head = seq;
+  }
+
+  slotHolder(id: string, now: number): { holder: string; seq: number } | null {
+    return this.sql.all<{ holder: string; seq: number }>("SELECT holder, seq FROM slots WHERE id = ? AND until > ?", id, now)[0] ?? null;
+  }
+
+  takeSlot(id: string, holder: string, seq: number, until: number, now: number): void {
+    this.sql.run("DELETE FROM slots WHERE until <= ?", now);
+    this.sql.run(
+      "INSERT INTO slots (id, holder, seq, until) VALUES (?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET holder = excluded.holder, seq = excluded.seq, until = excluded.until",
+      id,
+      holder,
+      seq,
+      until,
+    );
+  }
+
+  freeSlots(ids: readonly string[], holder: string): void {
+    if (ids.length) this.sql.run(`DELETE FROM slots WHERE holder = ? AND id IN (${ids.map(() => "?").join(", ")})`, holder, ...ids);
   }
 
   readThrough(pk: string): number {

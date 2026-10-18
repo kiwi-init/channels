@@ -31,7 +31,7 @@ function rng(seed: number): () => number {
   };
 }
 
-type Floors = { mode: { coordinatorOnly: boolean; strict: boolean; since: number } | null; rooms: RoomsFloor | null; guard: GuardFloor | null };
+type Floors = { rooms: RoomsFloor | null; guard: GuardFloor | null };
 
 function plain(x: unknown): unknown {
   if (x instanceof Map) return [...x].map(([k, v]) => [k, plain(v)]).sort((a, b) => (String(a[0]) < String(b[0]) ? -1 : String(a[0]) > String(b[0]) ? 1 : 0));
@@ -52,7 +52,6 @@ function capture(messages: Message[], roster: Roster, floors: Floors, n: number,
     messages.filter((m) => m.seq <= n),
     roster,
     NOW,
-    floors.mode,
     floors.rooms,
     floors.guard,
     from,
@@ -98,7 +97,6 @@ async function world(count: number, seed: number): Promise<World> {
   let lastCharter: { text: string | null; since: number } | null = null;
   let lastHold: { on: boolean; note?: string; since: number } | null = null;
   let lastScope: { scopes: ("post" | "ask" | "tasks" | "claims" | "facts")[]; since: number } | null = null;
-  let lastMode: { coordinatorOnly: boolean; strict: boolean; since: number } | null = null;
   const send = async (from: string, init: { kind?: Kind; ev?: Event; to?: string[]; re?: number[]; room?: string; task?: number; dm?: true; signer?: string }) => {
     seq++;
     const at = T0 + 1000 + seq * 1000;
@@ -177,7 +175,7 @@ async function world(count: number, seed: number): Promise<World> {
       } else if (k === 2) {
         const coordinatorOnly = r() < 0.5;
         const strict = r() < 0.5;
-        lastMode = { coordinatorOnly, strict: coordinatorOnly && strict, since: await send("own", { ev: { op: "mode.set", coordinatorOnly, strict } }) };
+        await send("own", { ev: { op: "mode.set", coordinatorOnly, strict } });
       } else if (k === 3) {
         const text = r() < 0.7 ? `charter ${seq}` : null;
         lastCharter = { text, since: await send("own", { ev: { op: "charter.set", text } }) };
@@ -205,7 +203,6 @@ async function world(count: number, seed: number): Promise<World> {
     roster,
     messages,
     floors: {
-      mode: lastMode,
       rooms: lastRoom > 0 ? { list, since: lastRoom } : null,
       guard: lastCharter || lastHold ? { charter: lastCharter, hold: lastHold } : null,
     },
@@ -216,12 +213,12 @@ describe("a fold resumed from a snapshot folds to the same state as the whole lo
   for (const seed of [1, 2, 3]) {
     test(`seed ${seed}: every cut point`, async () => {
       const w = await world(260, seed);
-      const full = fold(w.messages, w.roster, NOW, w.floors.mode, w.floors.rooms, w.floors.guard);
+      const full = fold(w.messages, w.roster, NOW, w.floors.rooms, w.floors.guard);
       expect(full.tasks.size).toBeGreaterThan(5);
       for (let n = 1; n <= w.messages.length; n += 3) {
         const base = capture(w.messages, w.roster, w.floors, n);
         expect(base.n).toBe(n);
-        const resumed = fold(w.messages, w.roster, NOW, w.floors.mode, w.floors.rooms, w.floors.guard, base);
+        const resumed = fold(w.messages, w.roster, NOW, w.floors.rooms, w.floors.guard, base);
         same(resumed, full);
       }
     });
@@ -229,7 +226,7 @@ describe("a fold resumed from a snapshot folds to the same state as the whole lo
 
   test("a snapshot made from an older snapshot, and only the tail past each", async () => {
     const w = await world(200, 7);
-    const full = fold(w.messages, w.roster, NOW, w.floors.mode, w.floors.rooms, w.floors.guard);
+    const full = fold(w.messages, w.roster, NOW, w.floors.rooms, w.floors.guard);
     const first = capture(w.messages, w.roster, w.floors, 60);
     const second = capture(
       w.messages.filter((m) => m.seq > 60),
@@ -244,7 +241,6 @@ describe("a fold resumed from a snapshot folds to the same state as the whole lo
         w.messages.filter((m) => m.seq > 140),
         w.roster,
         NOW,
-        w.floors.mode,
         w.floors.rooms,
         w.floors.guard,
         second,
@@ -255,20 +251,20 @@ describe("a fold resumed from a snapshot folds to the same state as the whole lo
 
   test("one base folds the same tail twice to the same state", async () => {
     const w = await world(200, 13);
-    const full = fold(w.messages, w.roster, NOW, w.floors.mode, w.floors.rooms, w.floors.guard);
+    const full = fold(w.messages, w.roster, NOW, w.floors.rooms, w.floors.guard);
     const base = capture(w.messages, w.roster, w.floors, 100);
     const kept = structuredClone(base);
     const tail = w.messages.filter((m) => m.seq > 100);
     expect(tail.some((m) => m.ev?.op === "task.update" && !!m.ev.note)).toBe(true);
-    for (let i = 0; i < 2; i++) same(fold(tail, w.roster, NOW, w.floors.mode, w.floors.rooms, w.floors.guard, base), full);
+    for (let i = 0; i < 2; i++) same(fold(tail, w.roster, NOW, w.floors.rooms, w.floors.guard, base), full);
     expect(base).toEqual(kept);
   });
 
   test("with no settings floors (an agent's fold without the owner's signed settings)", async () => {
     const w = await world(150, 11);
-    const none: Floors = { mode: null, rooms: null, guard: null };
+    const none: Floors = { rooms: null, guard: null };
     const full = fold(w.messages, w.roster, NOW);
-    for (const n of [10, 75, 149]) same(fold(w.messages, w.roster, NOW, null, null, null, capture(w.messages, w.roster, none, n)), full);
+    for (const n of [10, 75, 149]) same(fold(w.messages, w.roster, NOW, null, null, capture(w.messages, w.roster, none, n)), full);
   });
 
   test("a settings floor older than the snapshot doesn't undo what came after it", async () => {
@@ -287,11 +283,10 @@ describe("a fold resumed from a snapshot folds to the same state as the whole lo
       await event(44, { op: "charter.set", text: "new" }),
       await event(45, { op: "hello" }),
     ];
-    const floors: Floors = { mode: { coordinatorOnly: true, strict: true, since: 41 }, rooms: null, guard: { charter: { text: "old", since: 42 }, hold: null } };
-    const full = fold(log, w.roster, NOW, floors.mode, floors.rooms, floors.guard);
-    expect(full.mode.coordinatorOnly).toBe(false);
+    const floors: Floors = { rooms: null, guard: { charter: { text: "old", since: 42 }, hold: null } };
+    const full = fold(log, w.roster, NOW, floors.rooms, floors.guard);
     expect(full.charter?.text).toBe("new");
-    same(fold(log, w.roster, NOW, floors.mode, floors.rooms, floors.guard, capture(log, w.roster, floors, 44)), full);
+    same(fold(log, w.roster, NOW, floors.rooms, floors.guard, capture(log, w.roster, floors, 44)), full);
   });
 
   test("members admitted or removed after the snapshot", async () => {
@@ -302,7 +297,7 @@ describe("a fold resumed from a snapshot folds to the same state as the whole lo
     const base = capture(w.messages, w.roster, w.floors, 120);
     const p = await sign(late, { v: 1 as const, id: "late", from: "a3", kind: "msg" as const, body: "hi", ts: at });
     const tail: Message[] = [...w.messages, { ...p, seq: 121, rts: at, sigOk: true }];
-    same(fold(tail, later, NOW, w.floors.mode, w.floors.rooms, w.floors.guard, base), fold(tail, later, NOW, w.floors.mode, w.floors.rooms, w.floors.guard));
+    same(fold(tail, later, NOW, w.floors.rooms, w.floors.guard, base), fold(tail, later, NOW, w.floors.rooms, w.floors.guard));
   });
 });
 
@@ -320,7 +315,7 @@ describe("sealed snapshots", () => {
     expect(sealed!.e).toBe(1);
     const opened = await openSnapshot(access, sealed);
     expect(canonical(opened)).toBe(canonical(base));
-    same(fold(w.messages, w.roster, NOW, w.floors.mode, w.floors.rooms, w.floors.guard, opened), fold(w.messages, w.roster, NOW, w.floors.mode, w.floors.rooms, w.floors.guard));
+    same(fold(w.messages, w.roster, NOW, w.floors.rooms, w.floors.guard, opened), fold(w.messages, w.roster, NOW, w.floors.rooms, w.floors.guard));
     const again = await sealSnapshot(w.ids.own!, access, opened!);
     expect(again!.hash).toBe(sealed!.hash);
   });
@@ -367,7 +362,7 @@ describe("the relay keeps one snapshot per channel", () => {
       const { messages } = await s.ownerCh.history(0);
       const roster: Roster = (await s.ownerCh.members()).map((m) => ({ name: m.name, pk: m.pk, owner: m.owner, at: m.at, active: m.active, kind: m.kind }));
       let base: FoldBase | null = null;
-      fold(messages, roster, NOW, null, null, null, null, (b) => {
+      fold(messages, roster, NOW, null, null, null, (b) => {
         base = b;
       });
       expect(await runAgent(s.ownerCh.fx.snapshotAt())).toBeNull();
@@ -485,7 +480,7 @@ describe("the relay keeps one snapshot per channel", () => {
       const s = await setupChannel(server.url.origin);
       const full = async () => {
         const { messages } = await s.ownerCh.history(0);
-        return fold(messages, (await s.ownerCh.members()).map(toRoster), NOW, null, await s.ownerCh.rooms(), await s.ownerCh.guard());
+        return fold(messages, (await s.ownerCh.members()).map(toRoster), NOW, await s.ownerCh.rooms(), await s.ownerCh.guard());
       };
       for (let i = 0; i < 4; i++) await s.ownerCh.send(`one ${i}`, { kind: i % 2 ? "ask" : "msg" });
       expect(await runAgent(s.ownerCh.fx.snapshotIfDue(5))).toBeNull();
@@ -496,7 +491,7 @@ describe("the relay keeps one snapshot per channel", () => {
       const opened = await runAgent(s.ownerCh.fx.snapshot());
       expect(opened?.n).toBe(7);
       expect(opened?.facts.length).toBe(3);
-      same(fold([], (await s.ownerCh.members()).map(toRoster), NOW, null, null, null, opened), await full());
+      same(fold([], (await s.ownerCh.members()).map(toRoster), NOW, null, null, opened), await full());
     } finally {
       server.stop(true);
       rmSync(dir, { recursive: true, force: true });

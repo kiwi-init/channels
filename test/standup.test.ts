@@ -45,7 +45,7 @@ describe("the live card's last line", () => {
     const chat = await msg(bob, { task: add.seq, body: "looks good" });
     const ms = [add, status, note, chat];
     const s = fold(ms, roster);
-    expect(lastLine(s, ms, add.seq, "jonatas")).toMatchObject({ from: "ann", text: "halfway through the rows", seq: status.seq });
+    expect(lastLine(s, ms, add.seq)).toMatchObject({ from: "ann", text: "halfway through the rows", seq: status.seq });
   });
 
   test("without a status, the newest task.update note, then chat", async () => {
@@ -54,9 +54,9 @@ describe("the live card's last line", () => {
     const note = await msg(ann, { ev: { op: "task.update", task: add.seq, note: "measuring" } });
     const later = await msg(bob, { task: add.seq, body: "ping" });
     const s = fold([add, chat, note, later], roster);
-    expect(lastLine(s, [add, chat, note, later], add.seq, "jonatas")).toMatchObject({ text: "measuring", seq: note.seq });
-    expect(lastLine(s, [add, chat, later], add.seq, "jonatas")).toMatchObject({ from: "bob", text: "ping" });
-    expect(lastLine(s, [add], add.seq, "jonatas")).toBeUndefined();
+    expect(lastLine(s, [add, chat, note, later], add.seq)).toMatchObject({ text: "measuring", seq: note.seq });
+    expect(lastLine(s, [add, chat, later], add.seq)).toMatchObject({ from: "bob", text: "ping" });
+    expect(lastLine(s, [add], add.seq)).toBeUndefined();
   });
 
   test("a line is one line of at most 140 characters, and other tasks' talk is not this task's", async () => {
@@ -66,19 +66,9 @@ describe("the live card's last line", () => {
     const elsewhere = await msg(ann, { kind: "status", task: other.seq, body: "on the other one" });
     const ms = [add, other, long, elsewhere];
     const s = fold(ms, roster);
-    const line = lastLine(s, ms, add.seq, "jonatas")!;
+    const line = lastLine(s, ms, add.seq)!;
     expect(line.text.length).toBe(140);
     expect(line.text.startsWith("first xxx")).toBe(true);
-  });
-
-  test("a person does not see an agent's chat that strict coordinator-only mode keeps from them", async () => {
-    const add = await msg(ann, { ev: { op: "task.add", title: "A", owner: "ann" } });
-    const set = await msg(owner, { ev: { op: "mode.set", coordinatorOnly: true, strict: true } });
-    const aside = await msg(ann, { task: add.seq, to: ["bob"], body: "between us" });
-    const ms = [add, set, aside];
-    const s = fold(ms, roster);
-    expect(lastLine(s, ms, add.seq, "bob")?.text).toBe("between us");
-    expect(lastLine(s, ms, add.seq, "jonatas")?.text).not.toBe("between us");
   });
 });
 

@@ -1,10 +1,12 @@
 import * as Effect from "effect/Effect";
-import { TASK_STATES, ignored, type TaskState, type Verdict } from "@kiwi/core/protocol.ts";
+import { TASK_STATES, TASK_TITLE_MAX_LENGTH, ignored, type TaskState, type Verdict } from "@kiwi/core/protocol.ts";
 import { omit } from "@kiwi/core/omit.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { isPerson, openRound, revisedOut, taskId, type ChannelState, type ReviewRound, type Task } from "@kiwi/core/state.ts";
 import { SessionMessaging } from "./messaging.ts";
 import { oneLook } from "./shared.ts";
+
+const CLAIM_TTL = 120_000;
 
 function judgedRound(t: Task, open: ReviewRound | undefined, round: number | undefined, at: string | undefined): Effect.Effect<ReviewRound, Rejected> {
   const id = taskId(t.id);
@@ -22,6 +24,8 @@ export class SessionTasks extends SessionMessaging {
   readonly taskAdd = Effect.fn("AgentSession.taskAdd")(
     { self: this },
     function* (this: SessionTasks, title: string, opts: { detail?: string; owner?: string; review?: string; re?: number } = {}) {
+      if (title.length > TASK_TITLE_MAX_LENGTH)
+        return yield* new Rejected(`the title is ${title.length} characters, the most a task takes is ${TASK_TITLE_MAX_LENGTH}: shorten it and put the rest in --detail`);
       const { state } = yield* this.state();
       if (opts.re !== undefined && (!state.placeOf.has(opts.re) || ignored(state.trust.get(opts.re)))) return yield* new Rejected(`no message #${opts.re}`);
       const owner = opts.owner && (yield* this.resolveTo([opts.owner], state))?.[0];
@@ -58,9 +62,10 @@ export class SessionTasks extends SessionMessaging {
       if (!t) return yield* new Rejected(`no task ${taskId(id)}`);
       if (t.state === "done") return yield* new Rejected(`${taskId(id)} is already done`);
       if (t.owner && t.owner !== this.me) return yield* new Rejected(`${taskId(id)} is owned by ${t.owner}`);
-      const seq = yield* this.event({ op: "task.claim", task: id }, `claimed ${taskId(id)}`);
+      const seq = yield* this.event({ op: "task.claim", task: id }, `claimed ${taskId(id)}`, undefined, undefined, { slot: { name: `task:${id}`, ttl: CLAIM_TTL } }).pipe(
+        this.taken((who) => `${taskId(id)} is taken by ${who}`),
+      );
       const after = yield* this.confirm(seq);
-      if (t.source !== undefined) yield* this.ack([t.source]);
       return after;
     },
     oneLook,
@@ -77,6 +82,8 @@ export class SessionTasks extends SessionMessaging {
       const { state } = yield* this.state();
       const t = state.tasks.get(id);
       if (!t) return yield* new Rejected(`no task ${taskId(id)}`);
+      if (change.title !== undefined && change.title.length > TASK_TITLE_MAX_LENGTH)
+        return yield* new Rejected(`the title is ${change.title.length} characters, the most a task takes is ${TASK_TITLE_MAX_LENGTH}: shorten it and put the rest in a note`);
       if (change.state && change.state !== "cancelled" && !TASK_STATES.includes(change.state)) return yield* new Rejected(`state must be one of ${TASK_STATES.join(", ")}`);
       const owner = change.owner ? (yield* this.resolveTo([change.owner], state))?.[0] : change.owner;
       const review = change.review ? yield* this.reviewer(state, change.review) : change.review;
@@ -108,9 +115,10 @@ export class SessionTasks extends SessionMessaging {
         { op: "task.update", task: id, ...rest, ...opening, ...(owner !== undefined ? { owner } : {}), ...(review !== undefined ? { review } : {}), ...round, ...body },
         body.body ? (reviewText ?? "") : `${taskId(id)} ${change.verdict ?? change.state ?? "updated"}`,
         notify,
+        undefined,
+        t.owner === this.me && (owner !== undefined || finishing || change.state === "todo") ? { free: [`task:${id}`] } : {},
       );
       const after = yield* this.confirm(seq);
-      if (change.state === "doing" && t.source !== undefined) yield* this.ack([t.source]);
       return after;
     },
     oneLook,

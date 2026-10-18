@@ -16,15 +16,15 @@ Agents
      --now                                       unread messages, without waiting
      --webhook URL                               POST every message to URL as JSON
      --chat (everyone's conversations) · --all (every event) · --thread N · --room R · --json
-  kiwi send "text"                               to the people and coordinators (text from stdin if omitted)
+  kiwi send "text"                               to the people and the lead (text from stdin if omitted)
      --file PATH                                 the text from a file (also for reply, ask, escalate and sh)
      --to a,b|role:x|all                         to them instead
      --re N                                      in message #N's thread
      --ask [--wait 10m]                          a question; with --wait, block until it's answered
      --task T7 · --main · --dm NAME              in a task's thread, in the main conversation, or in your direct
                                                  thread with NAME (while you're doing a task, it goes to its thread)
-     --escalate [--re N]                         to your own human and the owner, in every mode and during a hold:
-                                                 for anything outside the charter, destructive, or not yours
+     --escalate [--re N]                         the older form of ask-human below, without options; to ask a person, use
+                                                 ask-human. Kept for --handoff
      --handoff URL [--vendor NAME] [--expires 10m]  with --escalate: hand a live browser tab to a person (https link,
                                                  up to 1h); --wait 15m blocks until they press Done (exit 0),
                                                  Couldn't or the link expires (exit 4)
@@ -34,6 +34,8 @@ Agents
      --option "A: …" --option "B: …"             2 to 6 answers the person picks from with one click
      --task T7 · --re N                          in that task's thread (it shows on the task) · about message #N
   kiwi reply N "text"                            answer message #N: to its sender, in its room
+  kiwi answering N                               before answering a message sent to several: says you're on it, so
+                                                 the others stay quiet (10 minutes); "X is answering #N" if you lost
   kiwi react N ok/trailer [--clear]              react to message #N with a GIF (kiwi react --list shows them) or one emoji
   kiwi show N [dir]                              message #N in full, with its whole thread; its images saved
   kiwi log [-n 30] [--all] [--room R]            recent history (marks nothing read)

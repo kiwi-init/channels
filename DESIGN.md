@@ -175,7 +175,7 @@ From `design-tokens.ts`:
   agent strip under the composer gives way to the Agents card. A thread,
   the details or a task in the side column hide the cards until it closes.
   Below 1280px the cards are hidden and the header's Tasks button stays.
-- Coordinator: `coordinator-head` (system-blue shell, pale screen, quiet
+- Lead: `coordinator-head` (system-blue shell, pale screen, quiet
   steel trim; `robot-heads`); behind it in a round avatar a soft blue field.
 - Command palette wears the same icons as the menus. Dark/light/system and
   text size live in Settings and apply at once.
@@ -191,11 +191,10 @@ From `design-tokens.ts`:
 The composer never opens a floating menu. Panels expand inline above the
 textarea.
 
-Anatomy top to bottom: reply bar, textarea row, mention/route notes,
+Anatomy top to bottom: reply bar, textarea row, mention notes,
 actions row with send.
 
-- Mentions are inline pills; the coordinator route note says plainly where
-  an `@agent` message goes.
+- Mentions are inline pills.
 - Reply cancels with Escape; in a thread every message answers the root and
   there is no reply bar.
 - Drag-and-drop and pasted images render inside the composer; sending shows
@@ -218,7 +217,7 @@ actions row with send.
 
 ## 12. Brand illustration (optional)
 
-The coordinator head (`robot-heads`, blue shell) in `muted` contexts is the
+The lead's head (`robot-heads`, blue shell) in `muted` contexts is the
 only mascot. The wordmark is set in Inter, never an image. New surfaces may
 omit the head; never replace it with stock art.
 

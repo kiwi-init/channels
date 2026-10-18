@@ -16,7 +16,7 @@ import { runsLine } from "@kiwi/core/membership.ts";
 import { openOwnerSession } from "../src/owner.ts";
 import { baseName, here } from "../src/seats.ts";
 import { join } from "node:path";
-import { COORDINATOR } from "@kiwi/core/state.ts";
+import { isLeadRole } from "@kiwi/core/state.ts";
 
 const OWNER = "human";
 const argv = process.argv.slice(2);
@@ -81,10 +81,6 @@ const verbs: Record<string, () => Effect.Effect<void, unknown, Agent>> = {
         c.default ??= alias;
       });
       const ownerCh = new Channel(access, relay, o);
-      if (!opt.open) {
-        yield* ownerCh.fx.startCoordinated();
-        if (!role) yield* ownerCh.fx.send(`made ${name} ${COORDINATOR}`, { kind: "event", ev: { op: "role.set", member: name, role: COORDINATOR }, to: [name] });
-      }
       yield* (yield* Cursor).write(alias, name, yield* ownerCh.fx.head());
       const { openSession } = yield* Effect.promise(() => import("../src/agent.ts"));
       const s = yield* openSession(alias, cfg.channels[alias]!, name);
@@ -112,12 +108,9 @@ const verbs: Record<string, () => Effect.Effect<void, unknown, Agent>> = {
   approve: () =>
     Effect.gen(function* () {
       const { s, r } = yield* findRequest(args[1] ?? (yield* die("usage: approve CODE")));
-      const askedCoordinator = r.role?.trim().toLowerCase() === COORDINATOR && str("role")?.trim().toLowerCase() !== COORDINATOR;
-      const role = str("role") ?? (askedCoordinator ? undefined : r.role);
+      const role = str("role") ?? (isLeadRole(r.role) ? undefined : r.role);
       const admitted = yield* s.ownerCh.fx.approve(r, { name: str("name") ?? r.name, role, about: r.about });
       out(`approved ${admitted.name} (${r.code})`);
-      const coordinator = yield* s.ensureCoordinator().pipe(Effect.catchCause(() => Effect.succeed(null)));
-      if (coordinator) out(`${coordinator} is the coordinator`);
     }),
   deny: () =>
     Effect.gen(function* () {
@@ -130,13 +123,8 @@ const verbs: Record<string, () => Effect.Effect<void, unknown, Agent>> = {
       const s = yield* owner;
       const name = args[1] ?? (yield* die("usage: kick NAME"));
       const m = (yield* s.members(true)).find((x) => x.name === name && x.active) ?? (yield* die(`"${name}" isn't a member`));
-      const { state } = yield* s.state();
       yield* s.ownerCh.fx.remove(m.pk);
       out(`removed ${name}; rotated the channel key so they can't read anything new`);
-      if (state.coordinator === name && state.mode.coordinatorOnly) {
-        const next = yield* s.ensureCoordinator().pipe(Effect.catchCause(() => Effect.succeed(null)));
-        out(next ? `${next} is the coordinator now` : "nobody coordinates now");
-      }
     }),
   close: () =>
     Effect.gen(function* () {
@@ -152,12 +140,8 @@ const verbs: Record<string, () => Effect.Effect<void, unknown, Agent>> = {
       const [member, role] = args.slice(1);
       if (!member || !role) return yield* die("usage: role NAME ROLE|none");
       const clear = role.toLowerCase() === "none";
-      const { state } = yield* s.state();
-      const becomes = !clear && role.trim().toLowerCase() === COORDINATOR;
-      if (state.coordinator === member && !becomes && state.mode.coordinatorOnly) yield* s.setMode(false);
       yield* s.decideRole(member, { role: clear ? null : role, ...(str("about") !== undefined ? { about: str("about") } : {}) });
       out(clear ? `cleared ${member}'s role` : `made ${member} ${role}`);
-      if (becomes && !state.mode.coordinatorOnly) yield* s.setMode(true);
     }),
   room: () =>
     Effect.gen(function* () {

@@ -15,7 +15,7 @@ import * as Effect from "effect/Effect";
 import type * as Layer from "effect/Layer";
 import { verifyRequest } from "@kiwi/core/auth.ts";
 import { ownerFingerprint } from "@kiwi/core/crypto.ts";
-import { MAX_BLOB_BYTES, PAGE_LIMIT } from "@kiwi/core/protocol.ts";
+import { MAX_BLOB_BYTES, PAGE_LIMIT, wellFormedFreed, wellFormedSlot } from "@kiwi/core/protocol.ts";
 import { ChannelGone, BadRequest, Forbidden, NotFound, NotOwner, SignInRequired, TooLarge, TooMany, Unauthorized, UpdateRequired, type Refusal } from "./failures.ts";
 import { answer, buildContext, describeRoutes, dispatch, incoming, json, readCapped, Request_, type Route } from "./http.ts";
 import { Human, HUMAN_HEADER } from "./human.ts";
@@ -289,8 +289,10 @@ const routes: RoomRoute[] = [
       Effect.gen(function* () {
         const db = yield* RoomStore;
         if (!allow(`${db.roomId}:${me}`, MESSAGES_PER_MINUTE)) return yield* new TooMany({ message: "too many messages; wait a minute" });
-        const b = yield* json<{ iv?: string; ct?: string; e?: number }>();
-        const e = yield* append(b.iv as string, b.ct as string, Number(b.e ?? 0), me);
+        const b = yield* json<{ iv?: string; ct?: string; e?: number; slot?: unknown; free?: unknown }>();
+        if (b.slot !== undefined && !wellFormedSlot(b.slot)) return yield* new BadRequest({ message: "bad slot" });
+        if (b.free !== undefined && !wellFormedFreed(b.free)) return yield* new BadRequest({ message: "bad slots to free" });
+        const e = yield* append(b.iv as string, b.ct as string, Number(b.e ?? 0), me, { ...(b.slot ? { take: b.slot } : {}), ...(b.free ? { free: b.free } : {}) });
         return { data: { seq: e.seq, ts: e.ts }, fx: { broadcast: [msgFrame(e)], ...watchFrame(e), expireAt: (yield* touch) ?? undefined } };
       }),
   },

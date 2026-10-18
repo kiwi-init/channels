@@ -2,9 +2,10 @@ import * as Effect from "effect/Effect";
 import { writeSync } from "node:fs";
 import { openSession, type AgentSession } from "../agent.ts";
 import { briefText, COMMANDS } from "../brief.ts";
+import { detectWhere } from "../card.ts";
 import { loadConfig, type ChannelConfig } from "../config.ts";
 import { wakeOn } from "../daemon/reach.ts";
-import { charterLines, formatMessage, holdLine, modeLine } from "@kiwi/core/format.ts";
+import { charterLines, formatMessage, holdLine, leadLine } from "@kiwi/core/format.ts";
 import type { Binding, Here } from "../seats.ts";
 import { humanOf } from "@kiwi/core/state.ts";
 import { asOption, channelOption } from "@kiwi/core/wake.ts";
@@ -153,6 +154,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
   const mc = mcFor(b.alias, b.as, input.cwd ?? process.cwd(), who);
   const s = yield* openSession(b.alias, cfg, b.as);
   if (who.session) yield* commitDelivered(s, who.session);
+  if (event === "prompt" || event === "stop") yield* Effect.ignoreCause(s.refreshWhere(detectWhere(input.cwd ?? process.cwd())));
 
   if (event === "session-start") {
     const { state } = yield* s.state();
@@ -167,7 +169,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
         human: humanOf(state, b.as),
         hold: holdLine(state),
         charter: charterLines(state),
-        mode: modeLine(state, b.as),
+        lead: leadLine(state, b.as),
         role: seat?.role,
         about: seat?.about,
         scopes: seat?.scopes,

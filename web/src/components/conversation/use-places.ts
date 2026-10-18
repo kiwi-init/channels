@@ -6,23 +6,7 @@ import type { ChannelState } from "@kiwi/core/state.ts"
 import { markSeenIn, placeFromKey, placeKey, seenIn, useSeen } from "@/lib/threads"
 import type { Here, Unread } from "./types"
 
-export function usePlaces({
-  here,
-  roomId,
-  messages,
-  me,
-  state,
-  reaches,
-  shownTask,
-}: {
-  here: string
-  roomId: string
-  messages: Message[]
-  me: string
-  state: ChannelState
-  reaches: (m: Message) => boolean
-  shownTask: number | null
-}) {
+export function usePlaces({ here, roomId, messages, me, state, shownTask }: { here: string; roomId: string; messages: Message[]; me: string; state: ChannelState; shownTask: number | null }) {
   const { places } = state
   const place: Here = useMemo(() => {
     const p = placeFromKey(here)
@@ -37,7 +21,7 @@ export function usePlaces({
     firstVisit.current = false
     markSeenIn(roomId, Object.fromEntries([...places].map(([k, v]) => [k, v.last])))
   }, [messages.length, places, roomId])
-  const unreadIn = useCallback((key: string): Unread => unreadInPlace(state, messages, me, key, seen[key] ?? 0, reaches), [seen, messages, me, reaches, state])
+  const unreadIn = useCallback((key: string): Unread => unreadInPlace(state, messages, me, key, seen[key] ?? 0), [seen, messages, me, state])
   const lastHere = places.get(hereKey)?.last ?? 0
   useEffect(() => {
     if (!document.hidden && lastHere) markSeenIn(roomId, { [hereKey]: lastHere })
