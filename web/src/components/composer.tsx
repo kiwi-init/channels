@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import type { SendOptions } from "@kiwi/core/client.ts"
 import { MAX_IMAGE_BYTES, RASTER_MIMES, type Color, type Message } from "@kiwi/core/protocol.ts"
 import { compressImage, needsCompressing, renamed } from "@/lib/compress-image"
-import { appendDictation, useDictation } from "@/lib/dictation"
+import { appendDictation, UNAVAILABLE_MESSAGE, useDictation } from "@/lib/dictation"
 import { excerpt } from "@/lib/format"
 import { gifFile, type Gif } from "@/lib/gifs"
 import { cx } from "@/lib/utils"
@@ -375,9 +375,9 @@ export function Composer({ me, people, replyTo, asking, more = 0, onAnswer, name
                 type="button"
                 aria-label={dictation.listening ? "Stop dictation" : "Dictate"}
                 aria-pressed={dictation.listening}
-                title={dictation.listening ? "Stop dictation" : "Dictate"}
+                title={dictation.unavailable ? UNAVAILABLE_MESSAGE : dictation.listening ? "Stop dictation" : "Dictate"}
                 onClick={dictation.toggle}
-                disabled={disabled}
+                disabled={disabled || dictation.unavailable}
                 className={cx(
                   "my-1.5 ml-1.5 flex size-9 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-40",
                   dictation.listening ? "bg-accent text-accent-ink" : "bg-wash-2 text-ink-2 hover:bg-pick hover:text-ink"
