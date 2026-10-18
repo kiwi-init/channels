@@ -1,8 +1,11 @@
-import { ArrowLeft01Icon, InformationCircleIcon, Search01Icon } from "@hugeicons/core-free-icons"
+import { ArrowLeft01Icon, Search01Icon } from "@hugeicons/core-free-icons"
 import type { Dispatch, SetStateAction } from "react"
+
+import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 
 import { TABS, type Tab } from "@/lib/views"
 import { cx } from "@/lib/utils"
+import { ChannelFace } from "../channel-icon"
 import { HoldBanner } from "../controls"
 import { Icon } from "../icon"
 import { IconButton } from "../kit"
@@ -16,6 +19,7 @@ export function Header({
   onTab,
   heading,
   headingLabel,
+  face,
   status,
   onTitle,
   searchHint,
@@ -28,6 +32,7 @@ export function Header({
   onTab: (t: Tab) => void
   heading: string
   headingLabel: string
+  face: { icon: ChannelIcon | null; lead: string | null; title: string }
   status: string[]
   onTitle: () => void
   searchHint: string
@@ -38,6 +43,9 @@ export function Header({
         <IconButton label="Channels" round className="size-9 text-ink md:hidden" onClick={onBack}>
           <Icon icon={ArrowLeft01Icon} size={20} />
         </IconButton>
+        <button type="button" aria-label={headingLabel} onClick={onTitle} className="no-drag shrink-0 rounded-full sm:hidden">
+          <ChannelFace icon={face.icon} lead={face.lead} title={face.title} size={28} />
+        </button>
         <button type="button" aria-label={headingLabel} onClick={onTitle} className="no-drag hidden min-w-0 truncate text-left text-title sm:block">
           {heading}
         </button>
@@ -45,9 +53,6 @@ export function Header({
         <span className="flex-1" />
         <IconButton label="Search" round className={cx("size-9 md:hidden", search === null && "text-ink")} active={search !== null} onClick={() => setSearch((s) => (s === null ? "" : null))}>
           <Icon icon={Search01Icon} size={18} />
-        </IconButton>
-        <IconButton label={headingLabel} round className="size-9 text-ink sm:hidden" onClick={onTitle}>
-          <Icon icon={InformationCircleIcon} size={19} />
         </IconButton>
         <nav aria-label="Views of the channel" className="no-drag flex items-center gap-1">
           {TABS.map(([t, label]) => (

@@ -454,6 +454,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
               }}
               heading={heading}
               headingLabel={`Details: ${title}, ${subtitle}`}
+              face={{ icon, lead: state.lead, title }}
               status={status}
               onTitle={() => setSide((s) => (s?.kind === "info" ? null : { kind: "info" }))}
               searchHint={place.kind === "main" ? "Search this channel" : `Search ${placeTitle}`}
