@@ -24,7 +24,8 @@ import { AgentStrip, type AgentNow } from "../agent-strip"
 import { ChannelControls, HoldDialog } from "../controls"
 import { Icon } from "../icon"
 import { Button, Spinner, errorText, toast } from "../kit"
-import { CompactBlock, ProposalCard } from "../lazy"
+import { CompactBlock, ProposalCard, TalkBar, TalkButton } from "../lazy"
+import { bridge } from "@/lib/secrets"
 import { GifPicker } from "../gif-picker"
 import { isAgent } from "../message"
 import { NeedsYou } from "../needs-you"
@@ -458,6 +459,14 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                     stick()
                     return send(body, opts)
                   }}
+                  talk={
+                    place.kind === "main" && state.voice && typeof bridge()?.voiceToken === "function"
+                      ? {
+                          button: <TalkButton channel={{ roomId, channel: title, me, nameOf, state, messages }} disabled={connection === "connecting"} />,
+                          bar: <TalkBar messages={messages} state={state} nameOf={nameOf} me={me} />,
+                        }
+                      : undefined
+                  }
                   footer={
                     <div className="xl:hidden">
                       <AgentStrip agents={agentsNow} now={now} onOpenTask={openTask} />

@@ -13,6 +13,8 @@ const tasks = later(() => import("./tasks-panel").then((m) => m.TasksPanel))
 const taskDetails = later(() => import("./task-details").then((m) => m.TaskDetails))
 const thread = later(() => import("./thread").then((m) => m.ThreadPanel))
 const annotator = later(() => import("./annotator").then((m) => m.Annotator))
+const talkButton = later(() => import("./talk").then((m) => m.TalkButton))
+const talkBar = later(() => import("./talk").then((m) => m.TalkBar))
 const composerQuestion = later(() => import("./composer-question").then((m) => m.ComposerQuestion))
 const commandList = later(() => import("./composer-commands").then((m) => m.CommandList))
 const commandBar = later(() => import("./composer-commands").then((m) => m.CommandBar))
@@ -29,6 +31,8 @@ export const TasksPanel = tasks.View
 export const TaskDetails = taskDetails.View
 export const ThreadPanel = thread.View
 export const Annotator = annotator.View
+export const TalkButton = talkButton.View
+export const TalkBar = talkBar.View
 export const ComposerQuestion = composerQuestion.View
 export const CommandList = commandList.View
 export const CommandBar = commandBar.View

@@ -28,7 +28,7 @@ export async function openMic(onPcm: (pcm: Int16Array) => void): Promise<Mic> {
 
 export function openSpeaker(): Playback & { close(): void } {
   const ctx = new AudioContext({ sampleRate: VOICE_RATE })
-  let playing: { itemId: string; startedAt: number; endsAt: number; sources: AudioBufferSourceNode[] } | null = null
+  let playing: { itemId: string; startedAt: number; endsAt: number; heard: number; sources: AudioBufferSourceNode[] } | null = null
 
   return {
     play(itemId, pcm) {
@@ -40,7 +40,9 @@ export function openSpeaker(): Playback & { close(): void } {
       source.buffer = buffer
       source.connect(ctx.destination)
       const now = ctx.currentTime
-      if (!playing || playing.itemId !== itemId || playing.endsAt < now) playing = { itemId, startedAt: Math.max(now, playing?.endsAt ?? now), endsAt: Math.max(now, playing?.endsAt ?? now), sources: [] }
+      if (!playing || playing.itemId !== itemId)
+        playing = { itemId, startedAt: Math.max(now, playing?.endsAt ?? now), endsAt: Math.max(now, playing?.endsAt ?? now), heard: 0, sources: playing && playing.endsAt > now ? playing.sources : [] }
+      else if (playing.endsAt < now) playing = { ...playing, heard: playing.heard + (playing.endsAt - playing.startedAt), startedAt: now, endsAt: now }
       source.start(playing.endsAt)
       playing.endsAt += buffer.duration
       playing.sources.push(source)
@@ -52,7 +54,7 @@ export function openSpeaker(): Playback & { close(): void } {
       const now = ctx.currentTime
       for (const s of p.sources) s.stop()
       if (now >= p.endsAt) return null
-      return { itemId: p.itemId, playedMs: Math.max(0, (now - p.startedAt) * 1000) }
+      return { itemId: p.itemId, playedMs: Math.max(0, (p.heard + now - p.startedAt) * 1000) }
     },
     close() {
       playing = null

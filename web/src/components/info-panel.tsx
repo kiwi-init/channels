@@ -1,5 +1,5 @@
 import { relayUrl } from "../lib/relay"
-import { Add01Icon, ArrowRight01Icon, BookOpen01Icon, Cancel01Icon, GithubIcon, Link01Icon, PauseIcon, PencilEdit01Icon, PlayIcon, UserMultipleIcon } from "@hugeicons/core-free-icons"
+import { Add01Icon, ArrowRight01Icon, BookOpen01Icon, Cancel01Icon, GithubIcon, Link01Icon, Mic01Icon, PauseIcon, PencilEdit01Icon, PlayIcon, UserMultipleIcon } from "@hugeicons/core-free-icons"
 import type { ReactNode } from "react"
 
 import type { ChannelIcon } from "@kiwi/core/protocol.ts"
@@ -164,6 +164,16 @@ export function InfoPanel({
           {(p.isOwner || p.state.repos.length > 0) && (
             <Row icon={GithubIcon} onClick={() => openDialog("repos")} detail={p.state.repos.join(", ") || undefined}>
               Repos
+            </Row>
+          )}
+          {(p.isOwner || p.state.voice) && (
+            <Row
+              icon={Mic01Icon}
+              onClick={() => (p.isOwner && p.onVoice ? void p.onVoice(!p.state.voice).catch((err: unknown) => toast(errorText(err), "error")) : undefined)}
+              detail={p.state.voice ? "Allowed: each person turns it on for themselves in Settings → Voice" : "Off: nobody here can talk to the channel with Grok Voice"}
+              trailing={p.isOwner ? <span className="shrink-0 text-meta font-medium text-accent-text">{p.state.voice ? "Turn off" : "Allow"}</span> : <span />}
+            >
+              Voice
             </Row>
           )}
           {p.isOwner && p.onRename && (
