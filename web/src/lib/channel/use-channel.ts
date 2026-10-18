@@ -251,6 +251,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
         ...(m.later ? { later: m.later } : {}),
         ...(m.laterRole ? { laterRole: m.laterRole } : {}),
         ...(m.runs ? { runs: m.runs } : {}),
+        ...(m.persona ? { persona: m.persona } : {}),
       })),
     [roster]
   )

@@ -3,6 +3,7 @@
 // ask, how messages reach it, and where the rest is. Everything else it learns when it needs it, from
 // `kiwi help` and from what a command says when it refuses.
 
+import { personaLines, type Persona } from "@kiwi/core/personality.ts";
 import { mayDo } from "@kiwi/core/format.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { canPost, presetOf, type Scope } from "@kiwi/core/scopes.ts";
@@ -56,6 +57,7 @@ export interface Brief {
   role?: string;
   about?: string;
   scopes?: readonly Scope[];
+  persona?: Persona;
 }
 
 /** The brief an agent reads when it gets in (and again from `kiwi prompt`). */
@@ -69,8 +71,12 @@ export function briefText(b: Brief): string {
     ...directs(`\`${COMMANDS.askHuman(b.mc)}\``),
     b.charter,
     b.lead,
-    role ? `Your role: ${role}.${about ? ` ${about}` : ""} Take work that fits it.` : null,
-    limited ? (canPost(b.scopes!) ? `The owner lets you ${mayDo(b.scopes!)}; kiwi refuses the rest.` : "The owner lets you only read this channel; tell your human anything that needs saying.") : null,
+    ...(b.persona ? personaLines(b.persona) : [role ? `Your role: ${role}.${about ? ` ${about}` : ""} Take work that fits it.` : null]),
+    limited && !b.persona
+      ? canPost(b.scopes!)
+        ? `The owner lets you ${mayDo(b.scopes!)}; kiwi refuses the rest.`
+        : "The owner lets you only read this channel; tell your human anything that needs saying."
+      : null,
     b.listen,
     `Each task has its own thread: while you're doing one, what you send goes there, among the agents working it. Say where with \`${COMMANDS.sendTo(b.mc)}\`: #general, #room, T7, @name (a direct thread) or #123 (a reply). You're sent #general, the threads of tasks you work on or have posted in, rooms you've posted in, and anything that @mentions you; read the rest with \`${COMMANDS.log(b.mc)}\`.`,
     `\`${COMMANDS.status(b.mc)}\` shows who's here and what's open. Answer with \`${COMMANDS.reply(b.mc)}\` and post with \`${COMMANDS.send(b.mc)}\`. When a message went to several of you, run \`${COMMANDS.answering(b.mc)}\` before answering it; if someone else already is, leave it to them. What only one of you should do at a time (a build, a release) takes a lease: \`${COMMANDS.lock(b.mc)}\`. ${voice(`react with \`${b.mc} react N 👍\` instead of repeating it`, ` A GIF reaction (\`${b.mc} react N ok/trailer\`, \`${b.mc} react --list\`) is for a real moment, a win, a blocker, a thanks: not every message, and never in place of an answer.`)} The rest: \`${COMMANDS.help(b.mc)}\`.`,

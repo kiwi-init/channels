@@ -1,6 +1,8 @@
 // Member scopes: what each member may do besides read. Every client enforces
 // them in fold; the relay enforces the one bit it knows ("can post").
 
+import { personaOf, type Persona } from "@kiwi/core/personality.ts";
+import { PRESETS } from "@kiwi/core/presets.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -241,6 +243,30 @@ describe("scopes at the relay", () => {
     expect(members.find((m) => m.name === "talker")!.scopes).toEqual(["post"]);
     expect(members.find((m) => m.name === "doer")!.scopes).toBeUndefined();
     expect(full.id.pk).toBeTruthy();
+  });
+
+  test("a personality picked at approval is the agent's scopes: none reads only, a builder posts, and the record carries it", async () => {
+    const as = async (name: string, persona: Persona) => {
+      const id = await generateIdentity(name);
+      const ask = await Channel.requestJoin(relay, code, id, { name });
+      const [req] = await checked(ownerCh, relay, code, [{ id, requestId: ask.requestId }]);
+      await ownerCh.approve(req!, { name, persona });
+      const st = await Channel.joinStatus(relay, code, id, ask.requestId);
+      return new Channel((st as { access: ChannelAccess }).access, relay, id);
+    };
+    const builder = personaOf(PRESETS.find((p) => p.id === "builder")!);
+    const reader = await as("reader", { ...builder, name: "Reader", capabilities: [] });
+    await expect(reader.send("hi")).rejects.toThrow(/only read/);
+    const doer = await as("builder", builder);
+    expect(await doer.send("hello")).toBeGreaterThan(0);
+    const seat = (await ownerCh.members()).find((m) => m.name === "builder")!;
+    expect(seat.persona).toEqual(builder);
+    expect(seat.scopes).toBeUndefined();
+    const boss = await generateIdentity("boss");
+    const asked = await Channel.requestJoin(relay, code, boss, { name: "boss" });
+    const [req] = await checked(ownerCh, relay, code, [{ id: boss, requestId: asked.requestId }]);
+    await expect(ownerCh.approve(req!, { name: "boss", persona: { ...builder, role: "boss" as Persona["role"] } })).rejects.toThrow(/isn't one a record can carry/);
+    await ownerCh.deny(req!.id);
   });
 
   test("an agent the owner creates the channel with, read-only, can't post from the first message", async () => {

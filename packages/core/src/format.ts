@@ -1,5 +1,6 @@
 // Plain-text rendering for agents: compact, greppable, one header line per message.
 
+import { ROLE_LABEL } from "./personality.ts";
 import { loadJson, loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { inlineText, runsLine, type Runs } from "./membership.ts";
 import { GENERAL_ROOM, ignored, imageMarker } from "./protocol.ts";
@@ -321,6 +322,7 @@ export function memberJson(state: ChannelState, name: string, online: Snapshot["
     card: m?.card ? { ...m.card } : null,
     // What the owner signed at approval as running this agent; the card above is the agent's own word.
     runs: m?.runs ? { ...m.runs } : null,
+    persona: m?.persona ? { name: m.persona.name, role: m.persona.role, capabilities: [...m.persona.capabilities], areas: [...m.persona.areas] } : null,
   };
 }
 
@@ -419,14 +421,15 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
     const m = state.members.get(name);
     const on = online.get(name);
     const where = on ? presenceWords(on, now) : m ? `last seen ${ago(m.lastSeen, now)}` : "online";
-    const role = inlineText(m?.role ?? on?.role, 80);
+    const role = m?.persona ? `${inlineText(m.persona.name, 40)} (${ROLE_LABEL[m.persona.role]})` : inlineText(m?.role ?? on?.role, 80);
     const key = m?.pk ? ` · key ${m.pk.slice(0, 8)}` : "";
     const kind =
       m?.kind === "human"
         ? ` · human${m.display ? ` (${inlineText(m.display, 80)})` : ""}${m.owner ? ", owner" : ""}`
         : `${m?.display ? ` · nickname ${inlineText(m.display, 40)}` : ""}${m?.sponsor ? ` · agent of @${inlineText(m.sponsor.handle ?? m.sponsor.name, 80)}` : ""}`;
     const may = m && presetOf(m.scopes) !== "full" ? ` · may: ${describeScopes(m.scopes)}` : "";
-    out.push(`  ${name}${name === me ? " (you)" : ""}${role ? ` — ${role}` : ""}${kind}${may} · ${where}${key}`);
+    const areas = m?.persona?.areas.length ? ` · works in ${m.persona.areas.map((x) => inlineText(x, 100)).join(", ")}` : "";
+    out.push(`  ${name}${name === me ? " (you)" : ""}${role ? ` — ${role}` : ""}${kind}${may}${areas} · ${where}${key}`);
     // How busy they are, so work goes to whoever's free (people only when they hold tasks).
     const load = memberLoad(state, name);
     if (showsLoad(m, load)) out.push(`      ${loadSummary(load)}`);
