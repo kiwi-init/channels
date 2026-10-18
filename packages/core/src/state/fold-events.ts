@@ -199,6 +199,7 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: Member, at
         updatedAt: at,
         notes: [],
         ...(ev.review?.trim() ? { review: ev.review.trim() } : {}),
+        ...(ev.issue ? { issue: { repo: ev.issue.repo, number: ev.issue.number } } : {}),
         workedBy: ev.owner ? [ev.owner] : [],
         rounds: [],
         ...(m.re?.length ? { source: m.re[0] } : {}),
@@ -268,6 +269,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: Member, at
       if (state && state !== "done") task.approvedBy = undefined;
       if (state === "done" && task.state !== "done") task.cancelled = ev.state === "cancelled" || undefined;
       if (state && state !== "done") task.cancelled = undefined;
+      if (state === "done" && task.state !== "done") task.closedSeq = m.seq;
+      if (state && state !== "done") task.closedSeq = undefined;
       if (ev.owner !== undefined) task.owner = ev.owner || undefined;
       if (ev.owner) worked(task, ev.owner);
       if (state && state !== "done" && (m.from === task.owner || state === "review")) worked(task, m.from);

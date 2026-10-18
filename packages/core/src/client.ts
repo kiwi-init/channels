@@ -17,7 +17,7 @@ import type { SigningBudget } from "./sas.ts";
 import type { Scope } from "./scopes.ts";
 import type { ChannelState, GuardFloor } from "./state.ts";
 import { ChannelCore, type ChannelFx } from "./client/core.ts";
-import { ChannelGithub, type GithubDiff, type ReviewCheck } from "./client/github.ts";
+import { ChannelGithub, type GithubDiff, type GithubIssueInfo, type ReviewCheck } from "./client/github.ts";
 import { ChannelHistory } from "./client/history.ts";
 import { ChannelImages } from "./client/images.ts";
 import { ChannelInfo, type Info, type MemberRow } from "./client/info.ts";
@@ -42,7 +42,7 @@ export type { RoomsSetting } from "./client/settings.ts";
 export type { JoinStatus } from "./client/join.ts";
 export type { SendOptions } from "./client/send.ts";
 export type { ChannelFx } from "./client/core.ts";
-export type { GithubDiff, ReviewCheck } from "./client/github.ts";
+export type { GithubDiff, GithubIssueInfo, ReviewCheck } from "./client/github.ts";
 
 export class Channel {
   private readonly core: ChannelCore;
@@ -365,6 +365,14 @@ export class Channel {
 
   commentOnPr(repo: string, number: number, body: string): Promise<{ url: string | null }> {
     return run(this.fx.commentOnPr(repo, number, body));
+  }
+
+  githubIssue(repo: string, number: number): Promise<GithubIssueInfo> {
+    return run(this.fx.githubIssue(repo, number));
+  }
+
+  closeIssue(c: { repo: string; number: number; reason: "completed" | "not_planned"; body: string }): Promise<{ url: string | null }> {
+    return run(this.fx.closeIssue(c));
   }
 
   snapshotAt(): Promise<number | null> {

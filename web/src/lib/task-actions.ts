@@ -61,6 +61,13 @@ export function cancelTask(t: Task, note: string, me: string): TaskSend {
   }
 }
 
+export function closeFromGithub(t: Task, c: { cancelled: boolean; note: string }): TaskSend {
+  return {
+    body: `${taskId(t.id)} ${c.cancelled ? "cancelled" : "done"}: ${c.note}`,
+    opts: { kind: "event", ev: { op: "task.update", task: t.id, state: c.cancelled ? "cancelled" : "done", note: c.note }, ...toOwner(t) },
+  }
+}
+
 export function reviewerChoices(t: Task, members: Iterable<{ name: string; active: boolean }>): string[] {
   const named = [...members].filter((m) => m.active && m.name !== t.owner && m.name !== t.review).map((m) => m.name)
   return t.review === ANYONE ? named : [ANYONE, ...named]

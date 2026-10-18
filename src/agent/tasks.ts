@@ -1,9 +1,10 @@
 import * as Effect from "effect/Effect";
-import { PROOF_LABEL_MAX_LENGTH, PROOF_URL_MAX_LENGTH, TASK_STATES, TASK_TITLE_MAX_LENGTH, ignored, type TaskState, type Verdict } from "@kiwi/core/protocol.ts";
+import { PROOF_LABEL_MAX_LENGTH, PROOF_URL_MAX_LENGTH, TASK_STATES, TASK_TITLE_MAX_LENGTH, ignored, type IssueRef, type TaskState, type Verdict } from "@kiwi/core/protocol.ts";
 import { omit } from "@kiwi/core/omit.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { isPerson, openRound, revisedOut, taskId, type ChannelState, type ReviewRound, type Task } from "@kiwi/core/state.ts";
-import { taskDigest } from "@kiwi/core/work.ts";
+import { inlineText } from "@kiwi/core/membership.ts";
+import { parseIssueRef, taskDigest, taskOfIssue } from "@kiwi/core/work.ts";
 import { SessionMessaging } from "./messaging.ts";
 import { oneLook } from "./shared.ts";
 
@@ -24,7 +25,7 @@ function judgedRound(t: Task, open: ReviewRound | undefined, round: number | und
 export class SessionTasks extends SessionMessaging {
   readonly taskAdd = Effect.fn("AgentSession.taskAdd")(
     { self: this },
-    function* (this: SessionTasks, title: string, opts: { detail?: string; owner?: string; review?: string; re?: number } = {}) {
+    function* (this: SessionTasks, title: string, opts: { detail?: string; owner?: string; review?: string; re?: number; issue?: IssueRef } = {}) {
       if (title.length > TASK_TITLE_MAX_LENGTH)
         return yield* new Rejected(`the title is ${title.length} characters, the most a task takes is ${TASK_TITLE_MAX_LENGTH}: shorten it and put the rest in --detail`);
       const { state } = yield* this.state();
@@ -38,11 +39,31 @@ export class SessionTasks extends SessionMessaging {
           ...(opts.detail ? { detail: opts.detail } : {}),
           ...(owner ? { owner } : {}),
           ...(review ? { review } : {}),
+          ...(opts.issue ? { issue: opts.issue } : {}),
         },
         `task: ${title}`,
         [...(owner ? [owner] : []), ...(review && review !== "*" ? [review] : [])],
         opts.re,
       );
+    },
+    oneLook,
+  );
+
+  readonly taskFromIssue = Effect.fn("AgentSession.taskFromIssue")(
+    { self: this },
+    function* (this: SessionTasks, ref: string, opts: { title?: string; detail?: string; owner?: string; review?: string; re?: number } = {}) {
+      const { state } = yield* this.state();
+      const issue = parseIssueRef(ref, state.repos);
+      if (typeof issue === "string") return yield* new Rejected(issue);
+      const name = `${issue.repo}#${issue.number}`;
+      const already = taskOfIssue(state, issue);
+      if (already) return yield* new Rejected(`${name} is already ${taskId(already.id)}: ${inlineText(already.title, 80)}`);
+      const found = yield* this.ch.fx.githubIssue(issue.repo, issue.number);
+      if (found.state === "closed") return yield* new Rejected(`${name} is closed on GitHub: reopen it first, or add the task without --issue`);
+      const title = (opts.title?.trim() || found.title.trim() || name).slice(0, TASK_TITLE_MAX_LENGTH);
+      const detail = opts.detail ?? [found.body.trim(), found.url].filter(Boolean).join("\n\n");
+      const id = yield* this.taskAdd(title, { ...opts, detail, issue });
+      return { id, title, issue: name };
     },
     oneLook,
   );

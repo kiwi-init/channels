@@ -3,12 +3,25 @@ import * as Context from "effect/Context";
 export const REVIEW_CHECK = "kiwi/review";
 const MAX_DIFF = 2 << 20;
 
+const MAX_ISSUE_BODY = 8000;
+
+interface GithubIssueInfo {
+  repo: string;
+  number: number;
+  title: string;
+  body: string;
+  url: string;
+  state: "open" | "closed";
+}
+
 export type GithubReply<T> = { ok: true; value: T } | { ok: false; status: number; error: string };
 
 export interface GithubAppApi {
   diff(repo: string, sha: string): Promise<GithubReply<{ diff: string; base: string; truncated: boolean }>>;
   check(repo: string, sha: string, c: { conclusion: "success" | "failure"; title: string; summary: string }): Promise<GithubReply<{ url: string | null }>>;
   comment(repo: string, number: number, body: string): Promise<GithubReply<{ url: string | null }>>;
+  issue(repo: string, number: number): Promise<GithubReply<GithubIssueInfo>>;
+  closeIssue(repo: string, number: number, reason: "completed" | "not_planned", body: string): Promise<GithubReply<{ url: string | null }>>;
 }
 
 export class GithubApp extends Context.Service<GithubApp, GithubAppApi | null>()("kiwi/relay/GithubApp") {}
@@ -102,6 +115,35 @@ export function githubAppFrom(opts: { appId?: string | null; privateKey?: string
       if (!t.ok) return t;
       const res = await get(`${api}/repos/${repo}/issues/${number}/comments`, { method: "POST", headers: { ...headers(t.value), "content-type": "application/json" }, body: JSON.stringify({ body }) });
       if (!res.ok) return fail(res, "the comment");
+      return { ok: true, value: { url: ((await res.json()) as { html_url?: string }).html_url ?? null } };
+    },
+    issue: async (repo, number) => {
+      const t = await token(repo);
+      if (!t.ok) return t;
+      const res = await get(`${api}/repos/${repo}/issues/${number}`, { headers: headers(t.value) });
+      if (!res.ok) return fail(res, "issue with that number");
+      const i = (await res.json()) as { title?: string; body?: string | null; html_url?: string; state?: string; pull_request?: unknown };
+      if (i.pull_request) return { ok: false, status: 400, error: `${repo}#${number} is a pull request, not an issue` };
+      return {
+        ok: true,
+        value: {
+          repo,
+          number,
+          title: i.title ?? "",
+          body: (i.body ?? "").slice(0, MAX_ISSUE_BODY),
+          url: i.html_url ?? `https://github.com/${repo}/issues/${number}`,
+          state: i.state === "closed" ? "closed" : "open",
+        },
+      };
+    },
+    closeIssue: async (repo, number, reason, body) => {
+      const t = await token(repo);
+      if (!t.ok) return t;
+      const json = { ...headers(t.value), "content-type": "application/json" };
+      const said = await get(`${api}/repos/${repo}/issues/${number}/comments`, { method: "POST", headers: json, body: JSON.stringify({ body }) });
+      if (!said.ok) return fail(said, "the comment");
+      const res = await get(`${api}/repos/${repo}/issues/${number}`, { method: "PATCH", headers: json, body: JSON.stringify({ state: "closed", state_reason: reason }) });
+      if (!res.ok) return fail(res, "closing the issue");
       return { ok: true, value: { url: ((await res.json()) as { html_url?: string }).html_url ?? null } };
     },
   };
