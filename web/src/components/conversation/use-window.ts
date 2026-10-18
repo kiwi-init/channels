@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type RefObject } from "react"
 
-export const WINDOW_STEP = 120
+const WINDOW_STEP = 120
 const NEAR_TOP = 600
 
 const startOf = <T extends { seq: number }>(items: T[], count: number): number => items[Math.max(0, items.length - count)]?.seq ?? 0
