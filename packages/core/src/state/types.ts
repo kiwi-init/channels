@@ -64,7 +64,7 @@ interface TaskNote {
   text: string;
 }
 
-export interface TaskProof {
+interface TaskProof {
   seq: number;
   by: string;
   ts: number;
