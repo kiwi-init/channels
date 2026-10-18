@@ -51,6 +51,25 @@ export const PAGE_LIMIT = 1_000;
 
 export const MORE_REFUSED = "too many page requests; slow down";
 
+export interface SlotTake {
+  id: string;
+  ttl: number;
+}
+
+const SLOT_ID_RE = /^[A-Za-z0-9_-]{16,64}$/;
+const MAX_SLOT_TTL = 24 * 3_600_000;
+const MAX_SLOTS_FREED = 8;
+
+export function wellFormedSlot(x: unknown): x is SlotTake {
+  if (!x || typeof x !== "object") return false;
+  const t = x as Record<string, unknown>;
+  return typeof t.id === "string" && SLOT_ID_RE.test(t.id) && Number.isSafeInteger(t.ttl) && (t.ttl as number) >= 1_000 && (t.ttl as number) <= MAX_SLOT_TTL;
+}
+
+export function wellFormedFreed(x: unknown): x is string[] {
+  return Array.isArray(x) && x.length <= MAX_SLOTS_FREED && x.every((id) => typeof id === "string" && SLOT_ID_RE.test(id));
+}
+
 /**
  * WebSocket subprotocol. Clients offer [WS_PROTOCOL, token] so the token
  * travels in a header (browsers can't set Authorization on WebSockets, and
@@ -203,10 +222,7 @@ export type Event =
    * too, so it never carries over to someone admitted under the same name later.
    */
   | { op: "scope.set"; member: string; pk: string; scopes: string[] | null }
-  /**
-   * Owner only. Coordinator-only: people talk only with the member whose role is "coordinator", and
-   * other agents don't message people (strict: every client refuses it; otherwise it's flagged).
-   */
+  /** Coordinator-only mode is gone. Older logs still carry these; they fold to nothing. */
   | { op: "mode.set"; coordinatorOnly: boolean; strict: boolean }
   /** Owner only: a room in this channel. Its id never changes; the name is a label (room.rename). */
   | { op: "room.create"; id: string; name: string }
@@ -217,6 +233,7 @@ export type Event =
    * shown it as the scope it works within; a request outside it is escalated to a person, not done.
    */
   | { op: "charter.set"; text: string | null }
+  | { op: "repos.set"; repos: string[] }
   /**
    * Owner only: stop every agent (on) or let them carry on (off). While on hold, every client refuses
    * an agent's work (tasks, facts, messages to other agents); agents may still answer people.
@@ -307,6 +324,9 @@ export function cleanCard(x: unknown): Card | null {
 
 /** Longest charter, in characters: it shares the sealed settings (about 16KB at the relay) with the room list. */
 export const MAX_CHARTER = 2000;
+
+export const MAX_REPOS = 20;
+export const REPO_RE = /^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/;
 
 /** The room every channel has, and where a message that names none belongs (every message from before rooms). */
 export const GENERAL_ROOM = "general";
@@ -462,8 +482,8 @@ export interface Payload {
  * How far to trust who a message says it's from:
  *   verified   signed by the key the owner admitted under that name
  *   forged     anything else: another key, no signature, or not a member
- *   refused    signed by that member, but against what the owner allows: outside its scopes, or an
- *              agent messaging a person in strict coordinator-only mode
+ *   refused    signed by that member, but against what the owner allows: outside its scopes, an
+ *              escalation to the wrong people, or work during a hold
  */
 export type Trust = "verified" | "forged" | "refused";
 
@@ -609,6 +629,8 @@ export function wellFormedEvent(ev: unknown): ev is Event {
       return roomId(e.id) && str(e.name, MAX_ROOM_NAME * 4);
     case "charter.set":
       return e.text === null || str(e.text, MAX_CHARTER);
+    case "repos.set":
+      return Array.isArray(e.repos) && e.repos.length <= MAX_REPOS && e.repos.every((r) => typeof r === "string" && REPO_RE.test(r));
     case "hold.set":
       return typeof e.on === "boolean" && opt(e.note, (x): x is string => str(x, 500));
     case "react":

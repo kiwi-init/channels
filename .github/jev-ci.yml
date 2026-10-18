@@ -76,10 +76,10 @@ jobs:
     description: >-
       Runs the unit tests with bun test: every test/*.test.ts except the slow suites in
       scripts/ci-tests.ts's flows groups, plus the dashboard's tests in web/src (task-cards
-      among them: one live card per open task, a done task as its last line only). They cover
+      among them: one live card per open task, a done task as its last line only; agent-facts: an agent's repo@branch, flagged when the channel doesn't list its repo). They cover
       pure modules: protocol and event validation, state folding, formatting, identity and
       signing, scopes and roles, routing and auth tables, error texts, the install scripts,
-      hooks and harness detection, the repo and branch an agent's card reads from its folder (test/routing.test.ts), the history cache, the desktop app's node-only helpers, the
+      hooks and harness detection, the repo and branch an agent's card reads from its folder (test/routing.test.ts), the channel's repos and the flag on an agent from another repo (test/repos.test.ts), the history cache, the desktop app's node-only helpers, the
       public site's invite parsing (site/app.js, test/site.test.ts), scripts/action-pins.ts.
       Also test/desktop-keys.test.ts: the desktop key process (desktop/src/keyring.ts and keys-server.ts,
       over the wire web/src/lib/channel-remote.ts uses) against a local relay, failing if any member,
@@ -95,7 +95,13 @@ jobs:
       test/core-package.test.ts: packages/core imports nothing outside itself but effect/*,
       node: builtins only under packages/core/src/node, no Node or Bun globals elsewhere in it,
       web/src never imports @kiwi/core/node/, and nothing reaches packages/core by a relative
-      path. Fails if a tested module's behavior,
+      path. And test/slots.test.ts: task claims and `kiwi answering N` are compare-and-set on a
+      local relay (two racing claims or markers: exactly one lands, the loser is told who holds it
+      and leaves nothing in the log; a drop frees the claim; a marker doesn't answer an ask), and
+      the relay refuses a malformed slot with 400 and someone else's slot with 423 Taken.
+      And test/lead.test.ts: the optional lead role (one at a time, an old
+      coordinator role reads as it, an old mode.set folds to nothing, a person's words reach every
+      agent). Fails if a tested module's behavior,
       output text or exported names change. TMPDIR points through a symlink, as macOS's does,
       so a test that compares a tmp path with its realpath or process.cwd() fails here too.
 
@@ -118,13 +124,13 @@ jobs:
   test-flows-b:
     name: test / flows-b
     inputs: ["src/**", "packages/core/**", "test/owner-cli.ts"]
-    imports_from: ["test/join-seats.test.ts", "test/read-receipts.test.ts", "test/daemon-pair.test.ts", "test/sh-escape.test.ts", "test/coordinator-follows.test.ts", "test/reclaim.test.ts", "test/wake-yourself.test.ts", "test/seats.test.ts", "test/multi-seat.test.ts", "test/handoff.test.ts"]
+    imports_from: ["test/join-seats.test.ts", "test/read-receipts.test.ts", "test/daemon-pair.test.ts", "test/sh-escape.test.ts", "test/reclaim.test.ts", "test/wake-yourself.test.ts", "test/seats.test.ts", "test/multi-seat.test.ts", "test/handoff.test.ts"]
     always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs slow agent-flow tests against a real local relay and the kiwi CLI: join-seats
       (joining, one seat per agent, Claude Code hooks doing the listening), read-receipts,
       daemon-pair (kiwi pair through the relay's pairing mailbox: src/daemon/pair.ts, src/machine.ts,
-      packages/core/src/mailbox.ts), sh-escape (the sandboxed kiwi sh), coordinator-follows, reclaim,
+      packages/core/src/mailbox.ts), sh-escape (the sandboxed kiwi sh), reclaim,
       wake-yourself (the Stop hooks that keep a Kimi Code or Grok agent's listener running).
       Then seats and multi-seat: which agent a command or hook acts for in a folder
       (src/seats.ts), one session holding seats in two channels, hooks serving the right seat

@@ -4,7 +4,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { wellFormed, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
-import { dmPlace, firstAgent, fold, placeFromKey, placeKey, threadMembers, type Roster } from "@kiwi/core/state.ts";
+import { dmPlace, fold, placeFromKey, placeKey, threadMembers, type Roster } from "@kiwi/core/state.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
@@ -57,7 +57,7 @@ describe("places", () => {
   });
 
   test("who a place is for", async () => {
-    const coord = await ev("jon", { op: "role.set", member: "coord", role: "coordinator" });
+    const coord = await ev("jon", { op: "role.set", member: "coord", role: "lead" });
     const add = await ev("jon", { op: "task.add", title: "review the docs", owner: "dev", review: "dev2" });
     const s = fold([coord, add], roster);
     expect(threadMembers(s, { kind: "task", task: add.seq }).sort()).toEqual(["coord", "dev", "dev2"]);
@@ -65,15 +65,12 @@ describe("places", () => {
     expect(threadMembers(s, { kind: "main" }).length).toBe(5);
   });
 
-  test("a direct message to a person still obeys strict coordinator-only", async () => {
-    const coord = await ev("jon", { op: "role.set", member: "coord", role: "coordinator" });
+  test("an agent's direct message to a person is a direct thread like any other", async () => {
     const mode = await ev("jon", { op: "mode.set", coordinatorOnly: true, strict: true });
     const toAna = await msg("dev", "msg", "psst", { to: ["ana"], dm: true });
-    const fromCoord = await msg("coord", "msg", "update for you", { to: ["ana"], dm: true });
-    const s = fold([coord, mode, toAna, fromCoord], roster);
-    expect(s.trust.get(toAna.seq)).toBe("refused");
-    expect(placeKey(s.placeOf.get(fromCoord.seq)!)).toBe("dm:ana~coord");
-    expect(s.places.has("dm:ana~dev")).toBe(false);
+    const s = fold([mode, toAna], roster);
+    expect(s.trust.get(toAna.seq)).toBe("verified");
+    expect(placeKey(s.placeOf.get(toAna.seq)!)).toBe("dm:ana~dev");
   });
 
   test("keys round-trip, and the wire fields are checked", () => {
@@ -83,28 +80,5 @@ describe("places", () => {
     expect(wellFormed({ ...base, task: 12, dm: true })).toBe(true);
     expect(wellFormed({ ...base, task: -1 })).toBe(false);
     expect(wellFormed({ ...base, dm: "yes" })).toBe(false);
-  });
-});
-
-describe("who coordinates by default", () => {
-  test("only the owner's own agent, by sign-in: never someone else's, and nobody where nobody is signed in", () => {
-    const jon = { user: "user_jon", name: "Jon" };
-    const signed: Roster = [
-      { name: "jon", pk: ids.jon!.pk, owner: true, at: 0, active: true, kind: "human", sponsor: jon },
-      { name: "dev", pk: ids.dev!.pk, owner: false, at: 1, active: true, kind: "agent", sponsor: { user: "user_eve", name: "Eve" } },
-      { name: "dev2", pk: ids.dev2!.pk, owner: false, at: 2, active: true, kind: "agent", sponsor: jon },
-    ];
-    // dev joined first, but it's Eve's agent: dev2, Jon's own, coordinates.
-    expect(firstAgent(fold([], signed))).toBe("dev2");
-    expect(
-      firstAgent(
-        fold(
-          [],
-          signed.filter((m) => m.name !== "dev2"),
-        ),
-      ),
-    ).toBeUndefined();
-    // No sign-in, so nobody provably the owner's.
-    expect(firstAgent(fold([], roster))).toBeUndefined();
   });
 });

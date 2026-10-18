@@ -50,20 +50,14 @@ export class ChannelSnapshots {
       if ((yield* this.ch.fx.head()) - at < Math.max(every, 1)) return null;
       const from = at ? yield* this.ch.fx.snapshot() : null;
       const since = from?.n ?? 0;
-      const [{ messages, head: top }, members, mode, rooms, guard] = yield* Effect.all(
-        [
-          this.ch.fx.history(since),
-          this.ch.fx.members(),
-          Effect.orElseSucceed(this.ch.fx.mode(), () => null),
-          Effect.orElseSucceed(this.ch.fx.rooms(), () => null),
-          Effect.orElseSucceed(this.ch.fx.guard(), () => null),
-        ],
+      const [{ messages, head: top }, members, rooms, guard] = yield* Effect.all(
+        [this.ch.fx.history(since), this.ch.fx.members(), Effect.orElseSucceed(this.ch.fx.rooms(), () => null), Effect.orElseSucceed(this.ch.fx.guard(), () => null)],
         { concurrency: "unbounded" },
       );
       const contiguous = messages.every((m, i) => m.seq === since + 1 + i) && messages.length === top - since;
       if (!contiguous) return null;
       const kept: { base?: FoldBase } = {};
-      fold(messages, members.map(toRoster), Date.now(), mode, rooms, guard, from, (b) => void (kept.base = b));
+      fold(messages, members.map(toRoster), Date.now(), rooms, guard, from, (b) => void (kept.base = b));
       return kept.base && kept.base.n > at ? yield* this.ch.fx.putSnapshot(kept.base) : null;
     }),
   };

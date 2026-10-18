@@ -1,5 +1,5 @@
 // The Work view's data (src/work.ts): agent rows, what needs a person, PRs, and a task's feed,
-// including what strict coordinator-only mode keeps from people.
+// as every member sees them.
 
 import { beforeAll, describe, expect, test } from "bun:test";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
@@ -47,7 +47,7 @@ describe("pull requests", () => {
     const merged = await msg(coord, { body: "Merged #49 and shipped it." });
     const ms = [linked, merged];
     const s = fold(ms, roster);
-    expect(prsIn(s, ms, "jonatas", (m) => m.from === "ann")).toMatchObject([{ number: 49, state: "merged", seq: linked.seq }]);
+    expect(prsIn(s, ms, (m) => m.from === "ann")).toMatchObject([{ number: 49, state: "merged", seq: linked.seq }]);
   });
 
   test("recent PRs: newest mention first, cut to the limit, with the task that named them", async () => {
@@ -59,7 +59,7 @@ describe("pull requests", () => {
     const again = await msg(coord, { body: "back on https://github.com/o/r/pull/1" });
     const ms = [add, a, b, c, merged, again];
     const s = fold(ms, roster);
-    const recent = recentPrs(s, ms, "jonatas", 2);
+    const recent = recentPrs(s, ms, 2);
     expect(recent.map((p) => p.number)).toEqual([1, 3]);
     expect(recent[0]).toMatchObject({ by: "coord", last: again.rts, task: add.seq, state: "open" });
     expect(recent[1]).toMatchObject({ state: "merged" });
@@ -71,7 +71,7 @@ describe("pull requests", () => {
     const link = await msg(ann, { task: doing.seq, body: `T${other.seq} is up: https://github.com/o/r/pull/7` });
     const ms = [doing, other, link];
     const s = fold(ms, roster);
-    expect(recentPrs(s, ms, "jonatas", 5)[0]).toMatchObject({ number: 7, task: other.seq });
+    expect(recentPrs(s, ms, 5)[0]).toMatchObject({ number: 7, task: other.seq });
   });
 
   test("recent PRs: a reply in a task's thread ties its PR to that task", async () => {
@@ -80,7 +80,7 @@ describe("pull requests", () => {
     const reply = await msg(bob, { re: [root.seq], body: "up: https://github.com/o/r/pull/9" });
     const ms = [add, root, reply];
     const s = fold(ms, roster);
-    expect(recentPrs(s, ms, "jonatas", 5)[0]).toMatchObject({ number: 9, task: add.seq });
+    expect(recentPrs(s, ms, 5)[0]).toMatchObject({ number: 9, task: add.seq });
   });
 });
 
@@ -96,7 +96,7 @@ describe("agent rows", () => {
     const ms = [add, start, status, chat, addB, block];
     const s = fold(ms, roster);
     const now = T0 + 60 * 60_000;
-    const rows = agentRows(s, ms, "jonatas", new Set(["ann"]), now);
+    const rows = agentRows(s, ms, new Set(["ann"]), now);
     const ann_ = rows.find((r) => r.name === "ann")!;
     const bob_ = rows.find((r) => r.name === "bob")!;
     const coord_ = rows.find((r) => r.name === "coord")!;
@@ -107,29 +107,25 @@ describe("agent rows", () => {
     expect(rows.some((r) => r.name === "jonatas")).toBe(false); // people aren't agent rows
   });
 
-  test("strict coordinator-only: a person's view never takes a status line from an agent's chat with another agent", async () => {
+  test("an agent's chat with another agent is a status line people see too, whatever an old mode.set said", async () => {
     const mode = await msg(owner, { ev: { op: "mode.set", coordinatorOnly: true, strict: true } });
-    const toPeer = await msg(ann, { body: "secret plan for bob", to: ["bob"] });
+    const toPeer = await msg(ann, { body: "plan for bob", to: ["bob"] });
     const ms = [mode, toPeer];
     const s = fold(ms, roster);
-    const person = agentRows(s, ms, "jonatas", new Set(), T0 + 120_000).find((r) => r.name === "ann")!;
-    expect(person.statusLine).toBeUndefined();
-    // An agent may see it (strict only hides it from people).
-    expect(agentRows(s, ms, "coord", new Set(), T0 + 120_000).find((r) => r.name === "ann")!.statusLine?.text).toBe("secret plan for bob");
+    expect(agentRows(s, ms, new Set(), T0 + 120_000).find((r) => r.name === "ann")!.statusLine?.text).toBe("plan for bob");
   });
 });
 
 describe("needs a person", () => {
-  test("asks to people count; asks between agents don't; in coordinator-only, the coordinator's asks do", async () => {
+  test("asks to people or to everyone count; asks between agents don't", async () => {
     const toOwner = await msg(ann, { kind: "ask", body: "ship it?", to: ["jonatas"] });
     const toAgent = await msg(ann, { kind: "ask", body: "which port?", to: ["bob"] });
     const ms = [toOwner, toAgent];
-    expect(needsPerson(fold(ms, roster), "jonatas").map((n) => n.text)).toEqual(["ship it?"]);
+    expect(needsPerson(fold(ms, roster)).map((n) => n.text)).toEqual(["ship it?"]);
 
-    const mode = await msg(owner, { ev: { op: "mode.set", coordinatorOnly: true, strict: true } });
     const viaCoord = await msg(coord, { kind: "blocking", body: "need your OK on the deploy" });
-    const ms2 = [mode, viaCoord];
-    expect(needsPerson(fold(ms2, roster), "jonatas")).toMatchObject([{ from: "coord", kind: "blocking", text: "need your OK on the deploy" }]);
+    const ms2 = [viaCoord];
+    expect(needsPerson(fold(ms2, roster))).toMatchObject([{ from: "coord", kind: "blocking", text: "need your OK on the deploy" }]);
   });
 });
 
@@ -142,7 +138,7 @@ describe("a task's feed", () => {
     const note = await msg(ann, { ev: { op: "task.update", task: add.seq, state: "doing", note: "PR up: https://github.com/o/r/pull/49" } });
     const ms = [add, other, root, reply, note];
     const s = fold(ms, roster);
-    const feed = taskFeed(s, ms, add.seq, "jonatas");
+    const feed = taskFeed(s, ms, add.seq);
     expect(feed.map((i) => i.type)).toEqual(["event", "thread", "event", "pr"]);
     const thread = feed.find((i) => i.type === "thread")!;
     expect(thread.type === "thread" && thread.messages.map((m) => m.body)).toEqual([`Top priority: T${add.seq}.`, "On it."]);
@@ -154,13 +150,12 @@ describe("a task's feed", () => {
     ]);
   });
 
-  test("strict: a thread an agent kept between agents stays out of a person's task feed", async () => {
+  test("a thread between agents shows in everyone's task feed, whatever an old mode.set said", async () => {
     const mode = await msg(owner, { ev: { op: "mode.set", coordinatorOnly: true, strict: true } });
     const add = await msg(coord, { ev: { op: "task.add", title: "Quiet", owner: "ann" } });
     const peer = await msg(ann, { body: `T${add.seq}: bob, take the CSS`, to: ["bob"] });
     const ms = [mode, add, peer];
     const s = fold(ms, roster);
-    expect(taskFeed(s, ms, add.seq, "jonatas").some((i) => i.type === "thread")).toBe(false);
-    expect(taskFeed(s, ms, add.seq, "coord").some((i) => i.type === "thread")).toBe(true);
+    expect(taskFeed(s, ms, add.seq).some((i) => i.type === "thread")).toBe(true);
   });
 });

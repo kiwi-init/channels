@@ -1,6 +1,6 @@
 // How busy each member is, read from the task board every member
 // already holds (decrypted, in their own folded state). Nothing new crosses the
-// relay: a coordinator, the dashboard and `kiwi status` all compute the same
+// relay: a lead, the dashboard and `kiwi status` all compute the same
 // answer from the same events.
 
 import { taskId, type ChannelState, type Task } from "./state.ts";

@@ -27,7 +27,7 @@ import { ChannelMembers } from "./client/members.ts";
 import { run, runUntil } from "./client/relay.ts";
 import { ChannelRequests } from "./client/requests.ts";
 import { ChannelSending, type SendOptions } from "./client/send.ts";
-import { ChannelSettings, type ModeSetting, type RoomsSetting } from "./client/settings.ts";
+import { ChannelSettings, type RoomsSetting } from "./client/settings.ts";
 import { ChannelSnapshots } from "./client/snapshots.ts";
 
 export { ChannelGone, goneText, RelayError, Unreachable, type Refused } from "./client/errors.ts";
@@ -37,7 +37,7 @@ export type { Probe } from "./client/wire.ts";
 export { ownerStatement } from "./client/keys.ts";
 export { INFO_MAX_AGE_MS, keepRecordsIn, type Info, type MemberRow, type RecordMemory } from "./client/info.ts";
 export { keepBlobsIn, type BlobMemory } from "./client/images.ts";
-export type { ModeSetting, RoomsSetting } from "./client/settings.ts";
+export type { RoomsSetting } from "./client/settings.ts";
 export type { JoinStatus } from "./client/join.ts";
 export type { SendOptions } from "./client/send.ts";
 export type { ChannelFx } from "./client/core.ts";
@@ -195,24 +195,11 @@ export class Channel {
   }
 
   /**
-   * The mode the owner last signed into the channel's settings: the floor for a client holding only
-   * the tail of the log, where the mode.set itself may have scrolled out. Null if never set.
-   */
-  mode(): Promise<ModeSetting | null> {
-    return run(this.fx.mode());
-  }
-
-  /**
    * The rooms the owner last signed into the channel's settings, as they stood after log position
    * `since`: the floor for a client holding only the tail, where a room.create may have scrolled out.
    */
   rooms(): Promise<RoomsSetting | null> {
     return run(this.fx.rooms());
-  }
-
-  /** Owner: sign the mode into the channel's settings, after the mode.set at log position `since`. */
-  setMode(mode: ModeSetting): Promise<void> {
-    return run(this.fx.setMode(mode));
   }
 
   /** Owner: sign the room list into the channel's settings, as it stands after the room event at `since`. */
@@ -230,6 +217,10 @@ export class Channel {
 
   setHold(hold: NonNullable<GuardFloor["hold"]>): Promise<void> {
     return run(this.fx.setHold(hold));
+  }
+
+  setRepos(repos: NonNullable<GuardFloor["repos"]>): Promise<void> {
+    return run(this.fx.setRepos(repos));
   }
 
   compress(): Promise<boolean> {
@@ -337,10 +328,6 @@ export class Channel {
   /** Remove a member and rotate the key so they can't read anything newer. */
   remove(pk: string): Promise<void> {
     return run(this.fx.remove(pk));
-  }
-
-  startCoordinated(): Promise<void> {
-    return run(this.fx.startCoordinated());
   }
 
   /** New channel key, wrapped to every remaining member. */

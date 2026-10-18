@@ -11,7 +11,6 @@ export function useThreads({
   messages,
   state,
   me,
-  coordinator,
   sideRoot,
   isOwner,
   search,
@@ -19,12 +18,10 @@ export function useThreads({
   taskKey,
   shownTask,
   nameOf,
-  reaches,
 }: {
   messages: Message[]
   state: ChannelState
   me: string
-  coordinator: string | null
   sideRoot: number | null
   isOwner: boolean
   search: string | null
@@ -32,7 +29,6 @@ export function useThreads({
   taskKey: string | null
   shownTask: number | null
   nameOf: (name: string) => string
-  reaches: (m: Message) => boolean
 }) {
   const { placeOf } = state
   const bySeq = useMemo(() => new Map(messages.map((m) => [m.seq, m])), [messages])
@@ -40,13 +36,11 @@ export function useThreads({
     (seq: number) => {
       const root = state.threadOf.get(seq)
       if (root === undefined || root === seq) return null
-      if (coordinator && (state.placeOf.get(seq) ?? MAIN).kind === "main") return null
       const r = bySeq.get(root)
       return r && r.kind !== "event" ? root : null
     },
-    [state.threadOf, state.placeOf, bySeq, coordinator]
+    [state.threadOf, bySeq]
   )
-  const threadRoot = sideRoot !== null && coordinator && (state.placeOf.get(sideRoot) ?? MAIN).kind === "main" ? null : sideRoot
   const [showDropped, setShowDropped] = useState(false)
   const revealed = isOwner && showDropped
   const threads = useMemo(() => {
@@ -70,13 +64,12 @@ export function useThreads({
       if (!inHere) return false
       if (m.ev?.op === "hello" || m.ev?.op === "card" || m.ev?.op === "react") return false
       if (!revealed && ignored(state.trust.get(m.seq))) return false
-      if (hereKey === "main" && !reaches(m)) return false
       return true
     })
     if (q) list = list.filter((m) => m.body.toLowerCase().includes(q) || nameOf(m.from).toLowerCase().includes(q))
     else list = list.filter((m) => m.kind === "event" || rootOf(m.seq) === null)
     return list
-  }, [messages, placeOf, hereKey, search, nameOf, rootOf, state, revealed, reaches])
+  }, [messages, placeOf, hereKey, search, nameOf, rootOf, state, revealed])
   const inTask = useMemo(
     () => (taskKey === null ? [] : messages.filter((m) => m.seq !== shownTask && placeKey(placeOf.get(m.seq) ?? MAIN) === taskKey && (revealed || !ignored(state.trust.get(m.seq))))),
     [messages, placeOf, taskKey, shownTask, state.trust, revealed]
@@ -98,5 +91,5 @@ export function useThreads({
     return { count: list.length, last: list[list.length - 1]!.ts, people: peopleOf(list), forYou: list.some((r) => r.from !== me && r.to?.includes(me)) }
   }
 
-  return { bySeq, rootOf, threadRoot, showDropped, setShowDropped, threads, visible, inTask, quoted, summaryOf }
+  return { bySeq, rootOf, threadRoot: sideRoot, showDropped, setShowDropped, threads, visible, inTask, quoted, summaryOf }
 }

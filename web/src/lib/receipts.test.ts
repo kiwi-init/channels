@@ -16,8 +16,7 @@ const members = new Map<string, Who>([
   ["gone", { kind: "agent", active: false, joined: 0 }],
   ["mac", { kind: "computer", active: true, joined: 0 }],
 ])
-const state = (over: Partial<Pick<ChannelState, "coordinator" | "tasks">> = {}) =>
-  ({ members, tasks: new Map(), coordinator: null, ...over }) as unknown as Pick<ChannelState, "members" | "tasks" | "coordinator">
+const state = (over: Partial<Pick<ChannelState, "lead" | "tasks">> = {}) => ({ members, tasks: new Map(), lead: null, ...over }) as unknown as Pick<ChannelState, "members" | "tasks" | "lead">
 const msg = (over: Partial<Message> = {}): Message => ({ v: 1, id: "x", from: "jon", kind: "msg", body: "hi", ts: 1_000, rts: 1_000, seq: 10, sigOk: true, ...over }) as Message
 const pks = (n: string) => `pk-${n}`
 const time = (ts: number) => `t${ts}`
@@ -26,9 +25,8 @@ describe("who a message went to", () => {
   test("the agents it names, never people, the sender, or someone gone", () => {
     expect(recipients(msg({ to: ["atlas", "ana", "gone"] }), state())).toEqual(["atlas"])
   })
-  test("a person's word in coordinator mode goes to the coordinator; otherwise to every agent there when it was sent", () => {
-    expect(recipients(msg(), state({ coordinator: "atlas" }))).toEqual(["atlas"])
-    // late joined after it was sent; the computer's seat is no reader.
+  test("a person's word to everyone goes to every agent there when it was sent, lead or not", () => {
+    expect(recipients(msg(), state({ lead: "atlas" })).sort()).toEqual(["atlas", "dev", "win"])
     expect(recipients(msg(), state()).sort()).toEqual(["atlas", "dev", "win"])
   })
 })
@@ -79,14 +77,14 @@ describe("the line under your message", () => {
   })
 })
 
-describe("a reply in a thread, in coordinator mode", () => {
+describe("a reply in a thread, with a lead", () => {
   const marks = addMarks(new Map(), [
     { pk: "pk-atlas", seq: 30, at: 900 },
     { pk: "pk-win", seq: 12, at: 300 },
   ])
-  const coord = state({ coordinator: "atlas" })
-  test("a reply to the coordinator goes to it, and reads like any message", () => {
-    const reply = msg({ seq: 20, re: [15] })
+  const coord = state({ lead: "atlas" })
+  test("a reply named to the lead goes to it, and reads like any message", () => {
+    const reply = msg({ seq: 20, re: [15], to: ["atlas"] })
     expect(recipients(reply, coord)).toEqual(["atlas"])
     expect(receipt(reply, coord, marks, pks, time)).toBe("Read t900")
   })

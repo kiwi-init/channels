@@ -5,7 +5,7 @@ import { omit } from "../omit.ts";
 import { sign, verify } from "../identity.ts";
 import { MAX_CHARTER, MAX_ROOM_NAME, ROOM_ID_RE } from "../protocol.ts";
 import { MissingKey } from "../refusals.ts";
-import type { GuardFloor } from "../state.ts";
+import { reposOf, type GuardFloor } from "../state.ts";
 import type { ChannelCore } from "./core.ts";
 import type { Refusal, Refused } from "./errors.ts";
 import type { ChannelInfo, Info } from "./info.ts";
@@ -21,25 +21,17 @@ export interface RoomsSetting {
   since: number;
 }
 
-export interface ModeSetting {
-  coordinatorOnly: boolean;
-  strict: boolean;
-  since: number;
-}
-
 export interface SettingsFx {
-  mode(): Effect.Effect<ModeSetting | null, Refusal, Relay>;
   rooms(info?: Info): Effect.Effect<RoomsSetting | null, Refusal, Relay>;
-  setMode(mode: ModeSetting): Effect.Effect<void, Refused, Relay>;
   setRooms(rooms: RoomsSetting): Effect.Effect<void, Refused, Relay>;
   guard(info?: Info): Effect.Effect<GuardFloor | null, Refusal, Relay>;
   setCharter(charter: NonNullable<GuardFloor["charter"]>): Effect.Effect<void, Refused, Relay>;
   setHold(hold: NonNullable<GuardFloor["hold"]>): Effect.Effect<void, Refused, Relay>;
+  setRepos(repos: NonNullable<GuardFloor["repos"]>): Effect.Effect<void, Refused, Relay>;
   compress(): Effect.Effect<boolean, Refusal, Relay>;
   setCompress(on: boolean): Effect.Effect<void, Refused, Relay>;
   imageRefs(): Effect.Effect<boolean, Refusal, Relay>;
   setImageRefs(on: boolean): Effect.Effect<void, Refused, Relay>;
-  startCoordinated(): Effect.Effect<void, Refused, Relay>;
 }
 
 export class ChannelSettings {
@@ -52,31 +44,12 @@ export class ChannelSettings {
   ) {}
 
   readonly fx: SettingsFx = {
-    mode: Effect.fn("Channel.mode")({ self: this }, function* (this: ChannelSettings) {
-      const o = yield* this.settings();
-      if (!o || typeof o.coordinatorOnly !== "boolean" || typeof o.strict !== "boolean" || !Number.isInteger(o.since)) return null;
-      const mode: ModeSetting = { coordinatorOnly: o.coordinatorOnly, strict: o.coordinatorOnly && o.strict, since: o.since as number };
-      return mode;
-    }),
-
     rooms: Effect.fn("Channel.rooms")({ self: this }, function* (this: ChannelSettings, info?: Info) {
       const r = (yield* this.settings(info))?.rooms as Partial<RoomsSetting> | undefined;
       if (!r || !Array.isArray(r.list) || !Number.isInteger(r.since)) return null;
       const list = r.list.filter((x): x is RoomEntry => !!x && typeof x === "object" && ROOM_ID_RE.test((x as RoomEntry).id) && typeof (x as RoomEntry).name === "string");
       const rooms: RoomsSetting = { list: list.map((x) => ({ id: x.id, name: x.name.slice(0, MAX_ROOM_NAME) })), since: r.since! };
       return rooms;
-    }),
-
-    startCoordinated: Effect.fn("Channel.startCoordinated")({ self: this }, function* (this: ChannelSettings) {
-      yield* this.ch.ownerOnly();
-      const ev = { op: "mode.set" as const, coordinatorOnly: true, strict: true };
-      const since = yield* this.ch.fx.send("coordinator-only on (strict)", { kind: "event", ev });
-      yield* this.putSettings({ coordinatorOnly: true, strict: true, since });
-    }),
-
-    setMode: Effect.fn("Channel.setMode")({ self: this }, function* (this: ChannelSettings, mode: ModeSetting) {
-      const { coordinatorOnly, strict, since } = mode;
-      yield* this.putSettings({ coordinatorOnly, strict, since });
     }),
 
     setRooms: Effect.fn("Channel.setRooms")({ self: this }, function* (this: ChannelSettings, rooms: RoomsSetting) {
@@ -93,7 +66,9 @@ export class ChannelSettings {
           ? { text: c.text === null ? null : (c.text as string).slice(0, MAX_CHARTER), since: c.since as number }
           : null;
       const hold = h && typeof h.on === "boolean" && Number.isInteger(h.since) ? { on: h.on, ...(typeof h.note === "string" ? { note: h.note.slice(0, 500) } : {}), since: h.since as number } : null;
-      const floor: GuardFloor | null = charter || hold ? { charter, hold } : null;
+      const r = o.repos as { list?: unknown; since?: unknown } | undefined;
+      const repos = r && Array.isArray(r.list) && Number.isInteger(r.since) ? { list: reposOf(r.list), since: r.since as number } : null;
+      const floor: GuardFloor | null = charter || hold || repos ? { charter, hold, ...(repos ? { repos } : {}) } : null;
       return floor;
     }),
 
@@ -103,6 +78,10 @@ export class ChannelSettings {
 
     setHold: Effect.fn("Channel.setHold")({ self: this }, function* (this: ChannelSettings, hold: NonNullable<GuardFloor["hold"]>) {
       yield* this.putSettings({ hold });
+    }),
+
+    setRepos: Effect.fn("Channel.setRepos")({ self: this }, function* (this: ChannelSettings, repos: NonNullable<GuardFloor["repos"]>) {
+      yield* this.putSettings({ repos });
     }),
 
     compress: Effect.fn("Channel.compress")({ self: this }, function* (this: ChannelSettings) {

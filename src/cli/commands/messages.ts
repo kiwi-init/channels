@@ -88,6 +88,16 @@ export const messageCommands: Record<string, Command> = {
       }),
     ),
 
+  answering: () =>
+    oneLook(
+      Effect.gen(function* () {
+        const s = yield* session();
+        const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die("usage: kiwi answering N"));
+        yield* s.answering(seq);
+        out(`answering #${seq}: the others leave it to you for 10 minutes`);
+      }),
+    ),
+
   react: () =>
     oneLook(
       Effect.gen(function* () {

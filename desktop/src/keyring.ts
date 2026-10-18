@@ -170,9 +170,6 @@ export class Keyring implements ChannelOps {
     const { code, access } = await Channel.create(this.host.relay(), owner, info, [], undefined, token, name);
     const entry: ChannelIdentityView = { label: name, idName: owner.name, ...keysOf(owner), roomId: access.roomId, code, access, at: Date.now(), name };
     await this.host.save(entry);
-    await this.channel(code)
-      .startCoordinated()
-      .catch(() => {});
     return publicChannel(entry);
   }
 

@@ -5,23 +5,7 @@ import type { ChannelState } from "@kiwi/core/state.ts"
 import { markSeenIn, MAIN, placeFromKey, placeKey, seenIn, threadMembers, useSeen } from "@/lib/threads"
 import type { Here, Unread } from "./types"
 
-export function usePlaces({
-  here,
-  roomId,
-  messages,
-  me,
-  state,
-  reaches,
-  shownTask,
-}: {
-  here: string
-  roomId: string
-  messages: Message[]
-  me: string
-  state: ChannelState
-  reaches: (m: Message) => boolean
-  shownTask: number | null
-}) {
+export function usePlaces({ here, roomId, messages, me, state, shownTask }: { here: string; roomId: string; messages: Message[]; me: string; state: ChannelState; shownTask: number | null }) {
   const { placeOf, places } = state
   const place: Here = useMemo(() => {
     const p = placeFromKey(here)
@@ -45,13 +29,12 @@ export function usePlaces({
       let named = 0
       for (const m of messages) {
         if (m.seq <= since || m.kind === "event" || m.from === me || placeKey(placeOf.get(m.seq) ?? MAIN) !== key || ignored(state.trust.get(m.seq))) continue
-        if (key === "main" && !reaches(m)) continue
         n++
         if (m.to?.includes(me)) named++
       }
       return mine ? { n, forMe: n > 0 } : { n: named || n, forMe: named > 0 }
     },
-    [seen, messages, me, placeOf, reaches, state]
+    [seen, messages, me, placeOf, state]
   )
   const lastHere = places.get(hereKey)?.last ?? 0
   useEffect(() => {

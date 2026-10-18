@@ -18,7 +18,7 @@ export function loadDetail(l: Load): string {
 }
 
 export function MemberActions({ m, trigger, onMessage }: { m: RosterMember; trigger: Parameters<typeof Menu>[0]["trigger"]; onMessage?: () => void }) {
-  const { p, ask, editRole, editScopes, editNickname, setCoordinator } = useControls()
+  const { p, ask, editRole, editScopes, editNickname, setLead } = useControls()
   const now = p.state.members.get(m.name)
   return (
     <Menu align="center" trigger={trigger}>
@@ -30,10 +30,10 @@ export function MemberActions({ m, trigger, onMessage }: { m: RosterMember; trig
       )}
       {m.kind !== "human" && p.onNickname && <MenuItem onClick={() => editNickname(m)}>Change nickname…</MenuItem>}
       <MenuItem onClick={() => editRole(m)}>Set role…</MenuItem>
-      {p.state.coordinator === m.name ? (
-        <MenuItem onClick={() => void setCoordinator(m, false)}>No longer coordinator</MenuItem>
+      {p.state.lead === m.name ? (
+        <MenuItem onClick={() => void setLead(m, false)}>No longer lead</MenuItem>
       ) : (
-        m.kind !== "human" && <MenuItem onClick={() => void setCoordinator(m, true)}>Make coordinator</MenuItem>
+        m.kind !== "human" && <MenuItem onClick={() => void setLead(m, true)}>Make lead</MenuItem>
       )}
       {p.onScopes && (
         <MenuItem onClick={() => editScopes(m)}>
@@ -52,7 +52,7 @@ export function memberDetail(p: ControlsProps, m: RosterMember): string {
   const load = memberLoad(p.state, m.name)
   const now = p.state.members.get(m.name)
   if (showsLoad(m, load) && load.level !== "free") return LEVEL[load.level]
-  if (p.state.coordinator === m.name) return "Coordinator"
+  if (p.state.lead === m.name) return "Lead"
   const runs = now?.runs ?? m.runs
   return runs ? `${memberLine(now ?? m)} · ${runs.model}` : memberLine(now ?? m)
 }

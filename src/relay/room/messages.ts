@@ -1,8 +1,8 @@
 import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import { blobId } from "@kiwi/core/crypto.ts";
-import { MAX_BLOB_BYTES, MAX_CT_LENGTH, ROOM_RETENTION, type Envelope, type ReadMark } from "@kiwi/core/protocol.ts";
-import { BadRequest, Conflict, ReadOnly, TooLarge, TooMany } from "../failures.ts";
+import { MAX_BLOB_BYTES, MAX_CT_LENGTH, ROOM_RETENTION, type Envelope, type ReadMark, type SlotTake } from "@kiwi/core/protocol.ts";
+import { BadRequest, Conflict, ReadOnly, Taken, TooLarge, TooMany } from "../failures.ts";
 import { Policy } from "../policy.ts";
 import { fits, StoredEnvelope } from "../schema.ts";
 import { readMeta } from "./auth.ts";
@@ -12,7 +12,12 @@ import { formatBytes, untilUtcMidnight, utcDay } from "./limits.ts";
 
 const READ_ONLY = "the owner lets you only read in this channel";
 
-export const append = Effect.fn("Room.append")(function* (iv: string, ct: string, e: number, sender: string) {
+export interface Slots {
+  take?: SlotTake;
+  free?: readonly string[];
+}
+
+export const append = Effect.fn("Room.append")(function* (iv: string, ct: string, e: number, sender: string, slots: Slots = {}) {
   const db = yield* RoomStore;
   const policy = yield* Policy;
   if (db.isReadOnly(sender)) return yield* new ReadOnly({ message: READ_ONLY });
@@ -21,6 +26,8 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
   const { epoch } = yield* readMeta;
   if (e !== epoch) return yield* new Conflict({ message: `stale key epoch ${e}; current is ${epoch}` });
   const ts = yield* Clock.currentTimeMillis;
+  const held = slots.take ? db.slotHolder(slots.take.id, ts) : null;
+  if (held && held.holder !== sender) return yield* new Taken({ message: `taken at #${held.seq}` });
 
   const day = utcDay(ts);
   const today = db.messagesOn(ts);
@@ -38,6 +45,8 @@ export const append = Effect.fn("Room.append")(function* (iv: string, ct: string
   if (bytes + ct.length > cap) bytes -= db.dropSnapshot();
 
   db.insert(seq, ts, iv, ct, e);
+  if (slots.free?.length) db.freeSlots(slots.free, sender);
+  if (slots.take) db.takeSlot(slots.take.id, sender, seq, ts + slots.take.ttl, ts);
   bytes += ct.length;
   if (seq % 100 === 0) {
     const freed = db.dropThrough(seq - ROOM_RETENTION);

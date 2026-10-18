@@ -6,8 +6,9 @@
 // Conflicts resolve deterministically: the earlier sequence number wins.
 
 export { fold } from "./state/fold.ts";
-export { allowedOnHold, colorOf, COORDINATOR, firstAgent, humanOf, isPerson, keptFromPeople, ON_HOLD, ownerOf } from "./state/people.ts";
+export { allowedOnHold, colorOf, humanOf, isLeadRole, isPerson, LEAD, ON_HOLD, ownerOf } from "./state/people.ts";
 export { chooseThread, dmPlace, MAIN, placeFromKey, placeKey, tasksAwaitingPeople, threadMembers, wentTo } from "./state/places.ts";
+export { outsideRepos, reposOf } from "./state/repos.ts";
 export { findRoom, newRoomId } from "./state/rooms.ts";
 export { currentState, openRound, parseTaskId, revisedOut, similarOpenTasks, taskId, titlesLookAlike } from "./state/tasks.ts";
 export {

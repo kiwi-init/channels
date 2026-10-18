@@ -1,4 +1,5 @@
 import { GENERAL_ROOM, MAX_CHARTER, MAX_ROOMS, MAX_TAGS, TASK_TITLE_MAX_LENGTH, type Event, type Message } from "../protocol.ts";
+import { reposOf } from "./repos.ts";
 import { omit } from "../omit.ts";
 import { readScopes, SCOPES, type Scope } from "../scopes.ts";
 import { isPerson } from "./people.ts";
@@ -18,8 +19,8 @@ export interface FoldCtx {
   rooms: Map<string, Room>;
   roomsSince: number;
   nameTaken: (name: string, except?: string) => boolean;
-  mode: { coordinatorOnly: boolean; strict: boolean };
   charter: Charter | null;
+  repos: string[];
   hold: Hold | null;
 }
 
@@ -68,14 +69,8 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: Member, at
       break;
     }
 
-    case "mode.set": {
-      if (!member.owner) {
-        reject("only the owner sets the channel's mode");
-        break;
-      }
-      c.mode = { coordinatorOnly: ev.coordinatorOnly, strict: ev.coordinatorOnly && ev.strict };
+    case "mode.set":
       break;
-    }
 
     case "charter.set": {
       if (!member.owner) {
@@ -84,6 +79,15 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: Member, at
       }
       const text = ev.text?.trim().slice(0, MAX_CHARTER);
       c.charter = text ? { text, by: m.from, at } : null;
+      break;
+    }
+
+    case "repos.set": {
+      if (!member.owner) {
+        reject("only the owner sets the channel's repos");
+        break;
+      }
+      c.repos = reposOf(ev.repos);
       break;
     }
 

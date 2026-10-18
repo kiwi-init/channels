@@ -33,7 +33,6 @@ export function useRecentPreview({
   state,
   me,
   nameOf,
-  reaches,
 }: {
   member: StoredMember
   messages: Message[]
@@ -41,10 +40,9 @@ export function useRecentPreview({
   state: ChannelState
   me: string
   nameOf: (name: string) => string
-  reaches: (m: Message) => boolean
 }) {
   useEffect(() => {
-    const last = lastPreview(messages, reaches, (seq) => state.trust.get(seq))
+    const last = lastPreview(messages, (seq) => state.trust.get(seq))
     const prior = loadRecent(member.code)
     if (!last && !others.length) return
     saveRecent(member.code, {
@@ -52,7 +50,7 @@ export function useRecentPreview({
       text: last ? (last.imgs?.length && last.body === last.imgs.map((i) => i.name).join(", ") ? "Image" : excerpt(last.body, 120)) : (prior?.text ?? ""),
       ts: last?.ts ?? prior?.ts ?? member.at,
       people: others.length ? others.map((m) => memberName(m)) : (prior?.people ?? []),
-      ...(last && state.coordinator && last.from === state.coordinator ? { byCoordinator: true } : {}),
+      ...(last && state.lead && last.from === state.lead ? { lead: last.from } : {}),
     })
-  }, [messages, others, state.trust, state.coordinator, member.code, member.at, nameOf, me, reaches])
+  }, [messages, others, state.trust, state.lead, member.code, member.at, nameOf, me])
 }

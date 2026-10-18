@@ -1,12 +1,11 @@
-// Reactions (T75): a member's one emoji on a message, and the ðŸ‘€ an agent leaves on a person's message
-// when, in coordinator mode, it takes on what that person asked for, so they know it got through.
+// Reactions (T75): a member's one emoji on a message.
 
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as Effect from "effect/Effect";
-import { ACK, AgentLive, AgentSession, answersPeople, wants } from "../src/agent.ts";
+import { AgentLive, AgentSession, wants } from "../src/agent.ts";
 import { describeEvent } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { isReaction, wellFormedEvent, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
@@ -92,22 +91,7 @@ describe("the react event", () => {
   });
 });
 
-describe("whose words an answer answers", () => {
-  test("a person's message, directly or through what passed it on; never an agent's own", async () => {
-    const ask = await msg("jon", "msg", "fix the build");
-    const fwd = await msg("coord", "msg", "jon asks: fix the build", { to: ["dev"], re: [ask.seq] });
-    const chat = await msg("dev2", "msg", "an agent's own idea");
-    const add = await msg("coord", "event", "task", { ev: { op: "task.add", title: "fix" }, re: [ask.seq] });
-    const ms = [ask, fwd, chat, add];
-    const s = fold(ms, roster);
-    expect(answersPeople(s, ms, [ask.seq])).toEqual([ask.seq]);
-    expect(answersPeople(s, ms, [fwd.seq])).toEqual([ask.seq]);
-    expect(answersPeople(s, ms, [add.seq])).toEqual([ask.seq]);
-    expect(answersPeople(s, ms, [chat.seq])).toEqual([]);
-  });
-});
-
-describe("in coordinator mode, the agent that takes something on says so with ðŸ‘€", () => {
+describe("over a relay", () => {
   const dataDir = mkdtempSync(join(tmpdir(), "kiwi-react-relay-"));
   const home = mkdtempSync(join(tmpdir(), "kiwi-react-home-"));
   const was = process.env.KIWI_HOME;
@@ -128,8 +112,6 @@ describe("in coordinator mode, the agent that takes something on says so with ðŸ
     };
     coord = await session("coord");
     dev = await session("dev");
-    await owner.ownerCh.send("coord coordinates", { kind: "event", ev: { op: "role.set", member: "coord", role: "coordinator" } });
-    await owner.ownerCh.send("coordinator-only on", { kind: "event", ev: { op: "mode.set", coordinatorOnly: true, strict: true } });
   });
   afterAll(() => {
     server.stop(true);
@@ -143,23 +125,13 @@ describe("in coordinator mode, the agent that takes something on says so with ðŸ
     return { emoji: [...(state.reactions.get(on) ?? new Map())].map(([n, r]) => [n, r.emoji]), sent: messages.filter((m) => isReaction(m)).length };
   };
 
-  test("answering the coordinator's forward reacts on the person's message, once", async () => {
+  test("answering a message or claiming a task made from one leaves no reaction by itself", async () => {
     const ask = await owner.ownerCh.send("please fix the build");
     const fwd = await run(coord.send("jon asks: fix the build", { to: ["dev"], re: [ask] }));
-    // The coordinator's own answers reach people already: it doesn't react.
-    expect((await reactionsOn(dev, ask)).emoji).toEqual([]);
-    const before = (await reactionsOn(dev, ask)).sent;
     await run(dev.reply(fwd, "on it"));
-    expect((await reactionsOn(dev, ask)).emoji).toEqual([["dev", ACK]]);
-    await run(dev.reply(fwd, "done"));
-    expect((await reactionsOn(dev, ask)).sent).toBe(before + 1);
-  });
-
-  test("claiming a task made from a person's message reacts on it", async () => {
-    const ask = await owner.ownerCh.send("we need an app icon");
-    const id = await run(coord.taskAdd("app icon", { re: ask }));
+    const id = await run(coord.taskAdd("fix the build", { re: ask }));
     await run(dev.taskClaim(id));
-    expect((await reactionsOn(dev, ask)).emoji).toEqual([["dev", ACK]]);
+    expect((await reactionsOn(dev, ask)).emoji).toEqual([]);
   });
 
   test("by hand, anyone may react, and take it back", async () => {
@@ -170,12 +142,5 @@ describe("in coordinator mode, the agent that takes something on says so with ðŸ
     expect((await reactionsOn(dev, hi)).emoji).toEqual([]);
     await expect(run(dev.react(hi, "nice"))).rejects.toThrow(/one emoji/);
     await expect(run(dev.react(hi + 999, "ðŸ‘"))).rejects.toThrow(/no message/);
-  });
-
-  test("with the mode off, an answer reaches people itself: no reaction", async () => {
-    await owner.ownerCh.send("coordinator-only off", { kind: "event", ev: { op: "mode.set", coordinatorOnly: false, strict: false } });
-    const ask = await owner.ownerCh.send("one more thing");
-    await run(dev.reply(ask, "sure"));
-    expect((await reactionsOn(dev, ask)).emoji).toEqual([]);
   });
 });
