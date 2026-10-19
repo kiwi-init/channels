@@ -310,7 +310,9 @@ jobs:
       and with a backlog of unread messages the stop reason, re-arm reminder included, stays within the
       seat's share of the hook limit).
       Then seats and multi-seat: which agent a command or hook acts for in a folder
-      (src/seats.ts, a Grok Bot's seat from its VM's hostname or KIWI_HARNESS), one session holding seats in two channels, hooks serving the right seat
+      (src/seats.ts, a Grok Bot's seat from its VM's hostname or KIWI_HARNESS), one session holding seats in two channels, each
+      Stop header naming its channel (src/hooks/answer.ts), a session that holds neither seat told the folder has seats in
+      both channels and to pass -c ALIAS --as NAME (src/cli/context.ts), hooks serving the right seat
       from sibling folders, and with a backlog on both seats each hook's whole output (SessionStart,
       prompt, stop) within HOOK_CONTEXT_MAX, the seats sharing it (src/hooks/run.ts). Then handoff: an escalation's live browser link (packages/core/src/protocol.ts),
       `kiwi send --escalate --handoff URL --wait` exit codes, and the link kept out of log, show,

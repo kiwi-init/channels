@@ -57,6 +57,12 @@ export const channelAlias = Effect.fn("kiwi.channelAlias")(function* () {
   const alias = explicit ?? seat?.alias ?? (all.length === 1 ? all[0] : undefined) ?? told;
   if (!alias) {
     if (!all.length) return yield* die("no channel: join one first (kiwi join <code>)");
+    const near = seatsNear(process.cwd());
+    const channels = [...new Set(near.map((b) => b.alias))];
+    if (channels.length > 1)
+      return yield* die(
+        `this folder has seats in ${channels.slice(0, -1).join(", ")} and ${channels.at(-1)} (${near.map((b) => `${b.as} in ${b.alias}`).join(", ")}): pass -c ALIAS --as NAME to say which`,
+      );
     return yield* die(`this directory isn't bound to a channel, and this machine is in several (${all.join(", ")}); pass -c ALIAS --as NAME, or run kiwi from the directory you joined in`);
   }
   if (!cfg.channels[alias]) return yield* die(`unknown channel "${alias}" (see: kiwi channels)`);
