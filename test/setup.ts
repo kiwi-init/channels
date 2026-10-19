@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const root = mkdtempSync(join(tmpdir(), "kiwi-test-harness-"));
-for (const name of ["codex", "gemini", "cursor", "grok", "kimi", "pi", "claude"]) mkdirSync(join(root, name));
+for (const name of ["codex", "gemini", "cursor", "grok", "kimi", "pi", "mimo", "claude"]) mkdirSync(join(root, name));
 
 const DIRS: Record<string, string> = {
   KIWI_CODEX_DIR: join(root, "codex"),
@@ -19,6 +19,7 @@ const DIRS: Record<string, string> = {
   KIWI_GROK_DIR: join(root, "grok"),
   KIWI_KIMI_DIR: join(root, "kimi"),
   KIWI_PI_DIR: join(root, "pi"),
+  KIWI_MIMO_DIR: join(root, "mimo"),
   CLAUDE_CONFIG_DIR: join(root, "claude"),
 };
 
@@ -38,6 +39,9 @@ const SESSION = [
   "PI_CODING_AGENT",
   "KIWI_PI_PID",
   "KIWI_PI_SESSION",
+  "MIMOCODE",
+  "MIMOCODE_PID",
+  "MIMOCODE_SESSION_ID",
 ];
 
 function isolate(): void {

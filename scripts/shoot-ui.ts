@@ -187,7 +187,7 @@ try {
   await composer().fill("Morning. The relay deploy is done; can someone check the Effect router numbers?");
   await owner.keyboard.press("Enter");
   await owner.waitForTimeout(400);
-  await bot("send", "On it. I’ll have win run the steady load first, then the cold runs.");
+  await bot("send", "On it, @jonatas. I’ll have @win run the steady load first, then the cold runs.");
   await bot(
     "send",
     "Numbers are in:\n\n- p50 0.3ms, p95 1ms\n- no refusals in 800 rooms\n\nThe change is in `src/relay/route.ts`, one prebuilt program per request:\n\n```ts\nconst program = answer(dispatch(routes, guards, otherwise))\n```",
@@ -295,7 +295,21 @@ try {
         await owner.getByRole("menuitem", { name: "Settings" }).click();
         await owner.getByRole("region", { name: "Settings" }).waitFor();
       };
+      const atNewest = async (when: string) => {
+        let gap: number | null = null;
+        for (const end = Date.now() + 5000; Date.now() < end; await owner.waitForTimeout(100)) {
+          gap = await owner.evaluate(() => {
+            const row = [...document.querySelectorAll("[id^='m']")].find((e) => /^m\d+$/.test(e.id));
+            const el = row?.closest(".overflow-y-auto");
+            return el ? el.scrollHeight - el.scrollTop - el.clientHeight : null;
+          });
+          if (gap !== null && gap < 80) return;
+        }
+        await owner.screenshot({ path: join(OUT, `${tag}-not-at-newest.png`) });
+        throw new Error(`${tag}: ${when}, the conversation isn't at its newest message (${gap === null ? "no conversation" : `${Math.round(gap)}px above it`})`);
+      };
       await toChannel();
+      await atNewest("opening the channel");
 
       await shoot(owner, tag, "01-channel");
       await owner.mouse.wheel(0, -4000);
@@ -318,6 +332,7 @@ try {
         () => toTab("Tasks"),
         () => toTab("Conversation"),
       );
+      await atNewest("back on the conversation from Tasks");
       await shoot(owner, tag, "05-task-inline", () => openInline(/Write fewer rows/), toChannel);
       await shoot(
         owner,
