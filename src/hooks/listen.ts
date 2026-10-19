@@ -11,6 +11,7 @@ import type { Binding, Here } from "../seats.ts";
 import { fitting, moreNote } from "./answer.ts";
 import { answeringNow, deliveredUpTo, noteDelivered, noteHeard } from "./delivered.ts";
 import { hooksListen, installedListenSeconds } from "./install/claude.ts";
+import { piInstalled } from "./install/pi.ts";
 import { alive, isListening, takeListenSlot } from "./listeners.ts";
 import { LISTEN_SECONDS, mcFor } from "./self.ts";
 
@@ -80,7 +81,8 @@ const arm = Effect.fn("Hooks.arm")(function* (seat: Served, who: Here, woke: Eff
 });
 
 export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Served[], who: Here) {
-  if (!hooksListen()) return 0;
+  const pi = who.harness === "pi";
+  if (pi ? !piInstalled() : !hooksListen()) return 0;
   let enough = yield* Deferred.make<void>();
   let heard = 0;
   const woke = Effect.suspend(() => {
@@ -139,6 +141,7 @@ export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Serv
       const seqs = shown.flatMap((g) => (g.seq === null ? [] : [g.seq]));
       return { b: a.b, seqs, upTo: rest ? Math.max(0, ...seqs) : a.reached(), text: rest ? `${fit.text}\n${moreNote(rest, mc)}` : fit.text, mc };
     });
+  if (pi && !told.length) return 0;
   const blocks = told.map(({ b, text, mc }) => `New Kiwi Channels messages for you (${b.alias}). Handle them; answer with \`${mc} reply N "…"\`:\n${text}\n`);
   try {
     writeSync(2, blocks.length ? blocks.join("\n") : "Kiwi Channels: a day with no messages for you. Nothing to do; just end your turn.\n");

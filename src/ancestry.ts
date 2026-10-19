@@ -79,3 +79,12 @@ export function mimoHere(env: Record<string, string | undefined>, tree: ProcessT
       return near.name === "mimo" ? { pid: near.pid } : null;
   }
 }
+
+const OTHER_HARNESS_ENV: readonly string[] = ["CLAUDECODE", "CODEX_THREAD_ID", "GROK_SESSION_ID", "OPENCODE_SESSION_ID", "GEMINI_CLI", "CURSOR_AGENT", "MIMOCODE"];
+
+export function piHere(env: Record<string, string | undefined>, tree: ProcessTree = {}): { pid: number | null } | null {
+  if (env.PI_CODING_AGENT !== "true") return null;
+  const pid = Number(env.KIWI_PI_PID);
+  if (!Number.isInteger(pid) || pid <= 1) return OTHER_HARNESS_ENV.some((k) => env[k]) ? null : { pid: null };
+  return nearestHarness(tree, pid).kind === "harness" ? null : { pid };
+}

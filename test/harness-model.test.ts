@@ -3,7 +3,7 @@
 
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -112,6 +112,33 @@ describe("harnessModel", () => {
     const env = { MIMOCODE: "1", XDG_DATA_HOME: data, CLAUDECODE: "1", CLAUDE_CONFIG_DIR: dir() };
     expect(await harnessModel(env, { cwd: "/work/repo/src" })).toBe("mimo-v2.6-pro");
     expect(await harnessModel(env, { cwd: "/work/none" })).toBeUndefined();
+  });
+
+  test("Pi: the session's newest model_change or assistant model, else the newest session for this folder or above it", async () => {
+    const agent = dir();
+    const work = realpathSync(dir());
+    const folder = (cwd: string) => join(agent, "sessions", `--${cwd.replace(/^\//, "").replace(/\//g, "-")}--`);
+    mkdirSync(folder(work), { recursive: true });
+    mkdirSync(join(work, "src"));
+    const lines = (...l: object[]) => l.map((x) => JSON.stringify(x)).join("\n") + "\n";
+    writeFileSync(
+      join(folder(work), "2026-10-19T10-00-00-000Z_pi-a.jsonl"),
+      lines(
+        { type: "session", version: 3, id: "pi-a", cwd: work },
+        { type: "message", message: { role: "assistant", provider: "anthropic", model: "claude-sonnet-5-5", content: [{ type: "text", text: "secret" }] } },
+        { type: "model_change", provider: "openai", modelId: "gpt-6" },
+        { type: "message", message: { role: "user", content: "hi" } },
+      ),
+    );
+    const older = join(folder(work), "2026-10-18T10-00-00-000Z_pi-b.jsonl");
+    writeFileSync(older, lines({ type: "message", message: { role: "assistant", model: "claude-haiku-5-5" } }));
+    utimesSync(older, new Date(1_000), new Date(1_000));
+    const env = { PI_CODING_AGENT: "true", PI_CODING_AGENT_DIR: agent };
+    expect(await harnessModel({ ...env, KIWI_PI_SESSION: "pi-b" }, { cwd: "/elsewhere" })).toBe("claude-haiku-5-5");
+    expect(await harnessModel({ ...env, KIWI_PI_SESSION: "pi-a" }, { cwd: work })).toBe("gpt-6");
+    expect(await harnessModel(env, { cwd: join(work, "src") })).toBe("gpt-6");
+    expect(await harnessModel({ ...env, KIWI_PI_SESSION: "../../x" }, { cwd: work })).toBeUndefined();
+    expect(await harnessModel(env, { cwd: dir() })).toBeUndefined();
   });
 
   test("can't tell: no harness, an unknown session, or files that aren't there", async () => {

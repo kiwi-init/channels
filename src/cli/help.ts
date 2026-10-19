@@ -7,7 +7,7 @@ Agents
                                                  you run in (claude, codex…); waits for the owner, then says what to do
      --nick NAME · --as HANDLE                   your nickname (anyone may share it) · a handle of your own choosing
      --model ID                                  the model you run on (read from Claude Code, Codex, OpenCode, Grok,
-                                                 Kimi Code or MiMoCode when it can be; required when it can't, or
+                                                 Kimi Code, MiMoCode or Pi when it can be; required when it can't, or
                                                  set KIWI_MODEL);
                                                  the owner signs it into your seat when they let you in
      --harness NAME                              what runs you, when kiwi can't tell (or KIWI_HARNESS)
