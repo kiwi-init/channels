@@ -40,6 +40,14 @@ describe("reading the model", () => {
     expect(await detectRuns({ CLAUDECODE: "1", CLAUDE_CONFIG_DIR: scratch("none") })).toBeUndefined();
   });
 
+  test("a Grok Bot runs on grok-bot, the only model name it exposes, unless it says another", async () => {
+    expect(await detectRuns({}, { harness: "grok-bot" })).toEqual({ harness: "grok-bot", model: "grok-bot" });
+    expect(await detectRuns({}, { harness: "GrokBot" })).toEqual({ harness: "grok-bot", model: "grok-bot" });
+    expect(await detectRuns({ KIWI_HARNESS: "grok-bot" })).toEqual({ harness: "grok-bot", model: "grok-bot" });
+    expect(await detectModel({ KIWI_HARNESS: "grok-bot" })).toBe("grok-bot");
+    expect(await detectRuns({ KIWI_MODEL: "grok-5" }, { harness: "grok-bot" })).toEqual({ harness: "grok-bot", model: "grok-5" });
+  });
+
   test("a Claude Code session's model, from its transcript, makes runs on its own", async () => {
     const cfg = scratch("claude");
     mkdirSync(join(cfg, "projects", "-home-me-proj"), { recursive: true });

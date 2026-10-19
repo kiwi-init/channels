@@ -288,6 +288,12 @@ describe("reading the machine", () => {
     expect(detectHarness({})).toBeUndefined();
   });
 
+  test("a Grok Bot from its VM's hostname, which no other harness marker overrides", () => {
+    expect(detectHarness({}, {}, "grok-bot-vm-53703001")).toBe("grok-bot");
+    expect(detectHarness({ CLAUDECODE: "1" }, {}, "grok-bot-vm-53703001")).toBe("claude-code");
+    expect(detectHarness({}, {}, "my-grok-bot-vm-laptop")).toBeUndefined();
+  });
+
   test("the repo and branch of a folder, none when HEAD is detached or there's no repo", () => {
     const dir = mkdtempSync(join(tmpdir(), "kiwi-where-"));
     const git = (...args: string[]) => Bun.spawnSync(["git", "-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd: dir });

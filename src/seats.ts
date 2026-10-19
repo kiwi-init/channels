@@ -14,7 +14,7 @@
 //   - a seat an agent joined from a plain terminal is never taken over by a session.
 
 import { realpathSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, hostname } from "node:os";
 import { dirname, resolve } from "node:path";
 import { kimiAncestor, kimiCodePid, mimoHere, type ProcessTree } from "./ancestry.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord } from "./config.ts";
@@ -49,7 +49,11 @@ export interface Listener {
  * Who this process runs for, from the variables each harness sets on its shell
  * commands and hooks (see SESSION_ENV in hooks.ts for where each comes from).
  */
-export function here(env: Record<string, string | undefined> = process.env, tree: ProcessTree = {}): Here {
+export function onGrokBot(env: Record<string, string | undefined> = process.env, host: string = hostname()): boolean {
+  return env.KIWI_HARNESS?.trim().toLowerCase() === "grok-bot" || /^grok-bot-vm-/.test(host);
+}
+
+export function here(env: Record<string, string | undefined> = process.env, tree: ProcessTree = {}, host: string = hostname()): Here {
   const pid = Number(env.CLAUDE_PID);
   const mimo = mimoHere(env, tree);
   if (mimo) return mimo.pid ? heldByProcess("mimo", mimo.pid) : { harness: "mimo" };
@@ -62,6 +66,7 @@ export function here(env: Record<string, string | undefined> = process.env, tree
   if (env.GEMINI_CLI) return { harness: "gemini" };
   if (env.CURSOR_AGENT) return { harness: "cursor" };
   if (env.OPENCODE_SESSION_ID) return { harness: "opencode", session: env.OPENCODE_SESSION_ID };
+  if (onGrokBot(env, host)) return { harness: "grok-bot" };
   return {};
 }
 
@@ -96,7 +101,7 @@ export function baseName(h: Here): string {
  */
 export function canonicalHarness(h: string | undefined): string | undefined {
   if (!h) return undefined;
-  const card: Record<string, string> = { claude: "claude-code", kimi: "kimi-code", mimo: "mimocode" };
+  const card: Record<string, string> = { claude: "claude-code", kimi: "kimi-code", mimo: "mimocode", grokbot: "grok-bot" };
   return card[h] ?? h;
 }
 

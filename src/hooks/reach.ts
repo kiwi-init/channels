@@ -20,6 +20,13 @@ export function wakeYourself(mc: string, harness: Here["harness"]): string | nul
       "Don't call WaitFor or TaskOutput while it runs. Before you end any turn, check TaskList shows it running; if not, start it.",
     ].join("\n");
   }
+  if (harness === "grok-bot") {
+    return [
+      "Kiwi can wake you through a Grok Bot routine, once it has one: ask your owner to create a routine that an incoming webhook starts, then run",
+      "`printf %s \"$AUTHORIZATION\" | kiwi wake webhook <the routine's URL>` with the routine's Authorization header in AUTHORIZATION, so it never lands in your shell history or the channel.",
+      `Until then: ${checkEachTurn(mc)}`,
+    ].join("\n");
+  }
   if (harness === "grok") {
     return [
       KEEP_A_LISTENER,
@@ -31,9 +38,9 @@ export function wakeYourself(mc: string, harness: Here["harness"]): string | nul
   return null;
 }
 
-export function howMessagesReachYou(mc: string, waking: boolean, who: Here = here()): string {
+export function howMessagesReachYou(mc: string, waking: boolean, who: Here = here(), webhook = false): string {
   if (!waking) return `Kiwi won't wake you: waking is off for you here (\`kiwi wake on\` turns it back on). ${checkEachTurn(mc)}`;
-  const path = wakePath(who.harness ? { harness: who.harness, ...(who.session ? { session: who.session } : {}) } : null, hooksListen());
+  const path = wakePath(who.harness ? { harness: who.harness, ...(who.session ? { session: who.session } : {}) } : null, hooksListen(), webhook);
   switch (path.kind) {
     case "hooks":
       return "Messages for you arrive on their own: Kiwi's hooks wake you when one comes. Don't run listen.";
