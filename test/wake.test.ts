@@ -382,6 +382,10 @@ describe("wake paths, commands and words", () => {
     expect(wakeArgv("opencode-api", "s", "p")).toEqual(["opencode", "api", "session.prompt", "--param", "sessionID=s", "-d", '{"text":"p","delivery":"queue"}']);
   });
 
+  test("the prompt holds whether a prompt hook already showed the messages or not", () => {
+    expect(wakePrompt("c", "w")).toBe('New Kiwi messages for you in "c". If they aren\'t shown here, read them with: kiwi -c c --as w listen --now, then act on them.');
+  });
+
   test("the prompt's read command is quoted for a shell", () => {
     expect(wakePrompt("release notes", "worker")).toContain("kiwi -c 'release notes' --as worker listen --now");
     expect(wakePrompt("it's; rm -rf ~", "w")).toContain(`kiwi -c 'it'\\''s; rm -rf ~' --as w listen --now`);

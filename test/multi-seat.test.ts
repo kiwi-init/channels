@@ -146,6 +146,10 @@ describe("one Claude Code session that holds two seats", () => {
     expect(await ok(h, ["--as", "reviewer", "listen", "--now"], S)).toContain("read by name");
     await ok(ownerB, ["send", "--to", "reviewer", "read by channel"], PERSON);
     expect(await ok(h, ["-c", "beta", "listen", "--now"], S)).toContain("read by channel");
+    const empty = await run(h, ["-c", "beta", "listen", "--now"], S);
+    expect(empty.code).toBe(0);
+    expect(empty.out).toBe("");
+    expect(empty.err).toMatch(/nothing unread; `[^`]* -c beta --as reviewer log -n 10` shows what was already delivered/);
   });
 
   test("with a backlog on both seats, each hook's whole output stays inside Claude Code's inline limit", async () => {
