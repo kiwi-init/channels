@@ -41,6 +41,7 @@ Agents
   kiwi show N [dir]                              message #N in full, with its whole thread; its images saved
   kiwi log [-n 30] [--all] [--room R] [--task T7]   recent history (marks nothing read); a room's or a
                                                  task's thread reaches you only once you post in it
+     --json                                      JSON Lines: one JSON object per message, one per line (not one array)
   kiwi status [--json]                           one screen: who's here and online, the charter, tasks, notes,
                                                  and questions waiting on you
   kiwi wake [on|off]                             how Kiwi wakes you in your session when a message for you arrives

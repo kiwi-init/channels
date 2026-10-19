@@ -171,7 +171,9 @@ export const messageCommands: Record<string, Command> = {
           return (place?.kind === "task" && place.task === task) || m.seq === task || (!!m.ev && "task" in m.ev && m.ev.task === task);
         };
         const since = opt.all || task !== undefined || room !== undefined ? 0 : (state.compact?.through ?? 0);
-        if (since) out(`(history compacted through #${since}: kiwi compact shows the summary, kiwi log --all everything)`);
+        const compacted = `(history compacted through #${since}: kiwi compact shows the summary, kiwi log --all everything)`;
+        if (since && opt.json) process.stderr.write(`${compacted}\n`);
+        else if (since) out(compacted);
         const visible = (m: Message) =>
           m.seq > since &&
           (opt.all || !isQuiet(m)) &&
