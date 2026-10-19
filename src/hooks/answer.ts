@@ -27,9 +27,12 @@ export function stopStyle(input: { hook_event_name?: string; status?: string; lo
   return "block";
 }
 
-export function cursorStopFollowup(mc: string, unread: boolean): string | null {
-  if (unread) return `Unread Kiwi messages. Run \`${mc} read\`, answer with \`${mc} reply N "…"\`, then continue.`;
-  return null;
+export function cursorStopFollowup(mc: string, unread: boolean, max = Number.POSITIVE_INFINITY): string | null {
+  if (!unread) return null;
+  const full = `Unread Kiwi messages. Run \`${mc} read\`, answer with \`${mc} reply N "…"\`, then continue.`;
+  if (full.length <= max) return full;
+  const short = `Unread Kiwi messages: \`${mc} read\`.`;
+  return short.length <= max ? short : null;
 }
 
 export interface HookInput {
@@ -124,6 +127,12 @@ export function stopUnreadMax(head: string, reminder: string | null, budget: num
   return Math.max(0, Math.min(MAX_CONTEXT, budget - head.length - 1 - (reminder ? reminder.length + 2 : 0)));
 }
 
+export function cursorFollow(mc: string, unread: boolean, reminder: Reminder | null, budget: number): string {
+  const nudge = cursorStopFollowup(mc, unread, budget);
+  const rearm = fitReminder(reminder, budget - (nudge ? nudge.length + 2 : 0));
+  return [nudge, rearm].filter((t) => t !== null).join("\n\n");
+}
+
 export function stopReason(head: string, unread: string, reminder: string | null): string {
   return [unread ? `${head}\n${unread}` : null, reminder].filter((t) => t !== null).join("\n\n");
 }
@@ -142,7 +151,7 @@ export function fitting(lines: readonly string[], max = MAX_CONTEXT): { count: n
   return { count, text: lines.slice(0, count).join("\n") };
 }
 
-export function moreNote(rest: number, mc: string): string {
+function moreNote(rest: number, mc: string): string {
   return `… ${rest} more unread: they come next, or run \`${mc} read\``;
 }
 
@@ -345,9 +354,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
       if (input.status && input.status !== "completed") return null;
       const { messages, state } = yield* s.state();
       const unread = (yield* s.unreadCount(state, messages)) > 0;
-      const nudge = cursorStopFollowup(mc, unread);
-      const rearm = fitReminder(yield* rearmText(input, b, who, mc), budget - (nudge ? nudge.length + 2 : 0));
-      const follow = [nudge, rearm].filter((t) => t !== null).join("\n\n");
+      const follow = cursorFollow(mc, unread, yield* rearmText(input, b, who, mc), budget);
       return follow ? answered("followup", follow) : null;
     }
     if (who.harness === "grok" && input.reason !== undefined && input.reason !== "end_turn") return null;

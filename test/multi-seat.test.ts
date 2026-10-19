@@ -154,7 +154,16 @@ describe("one Claude Code session that holds two seats", () => {
       await ok(ownerA, ["send", "--to", "planner", `alpha-backlog-${i} ${"a".repeat(1_500)}`], PERSON);
       await ok(ownerB, ["send", "--to", "reviewer", `beta-backlog-${i} ${"b".repeat(1_500)}`], PERSON);
     }
-    const start = JSON.parse((await run(h, ["hook", "session-start"], S, h, JSON.stringify({ session_id: "M", cwd: h, source: "startup" }))).out) as {
+    const listening = spawn(h, ["hook", "listen"], S, h, input);
+    expect(await listening.exited).toBe(2);
+    const woke = await new Response(listening.stderr).text();
+    expect(woke.trimEnd().length).toBeLessThanOrEqual(HOOK_CONTEXT_MAX);
+    expect(woke).toContain("alpha-backlog-0");
+    expect(woke).toContain("beta-backlog-0");
+    expect(woke).toContain("more unread: they come next");
+    const started = await run(h, ["hook", "session-start"], S, h, JSON.stringify({ session_id: "M", cwd: h, source: "startup" }));
+    expect({ code: started.code, err: started.err, empty: started.out === "" }).toEqual({ code: 0, err: "", empty: false });
+    const start = JSON.parse(started.out) as {
       hookSpecificOutput: { additionalContext: string };
     };
     expect(start.hookSpecificOutput.additionalContext.length).toBeLessThanOrEqual(HOOK_CONTEXT_MAX);
@@ -164,8 +173,14 @@ describe("one Claude Code session that holds two seats", () => {
     expect(prompt.length).toBeLessThanOrEqual(HOOK_CONTEXT_MAX);
     expect(prompt).toContain("alpha-backlog-");
     expect(prompt).toContain("beta-backlog-");
+    for (let i = 0; i < 5; i++) {
+      await ok(ownerA, ["send", "--to", "planner", `alpha-late-${i} ${"a".repeat(1_500)}`], PERSON);
+      await ok(ownerB, ["send", "--to", "reviewer", `beta-late-${i} ${"b".repeat(1_500)}`], PERSON);
+    }
     const stop = JSON.parse((await run(h, ["hook", "stop"], S, h, JSON.stringify({ session_id: "M", cwd: h, hook_event_name: "Stop" }))).out) as { reason: string };
     expect(stop.reason.length).toBeLessThanOrEqual(HOOK_CONTEXT_MAX);
+    expect(stop.reason).toContain("alpha-late-0");
+    expect(stop.reason).toContain("beta-late-0");
   });
 
   test("replying to a message the session was shown picks its seat, with no flags", async () => {

@@ -9,7 +9,7 @@ import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identi
 import { CHECKPOINT_MAX_LENGTH, wellFormedEvent, type Event, type Message } from "@kiwi/core/protocol.ts";
 import { REENTRY_MAX, reentryText } from "@kiwi/core/reentry.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
-import { CLIP_MIN, fitReminder, handOver, seatBudget, startBudgets, startContext, stopReason, stopUnreadMax } from "../src/hooks/answer.ts";
+import { CLIP_MIN, cursorFollow, fitReminder, handOver, seatBudget, startBudgets, startContext, stopReason, stopUnreadMax } from "../src/hooks/answer.ts";
 import { startListener, wakeYourself } from "../src/hooks/reach.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { joinAgent, pairComputer, setupChannel } from "./owner.ts";
@@ -228,6 +228,23 @@ describe("what a hook emits stays inside the seat's share", () => {
     };
   };
   const head = `Before stopping: unread Kiwi Channels messages for you. Handle them (answer with \`${mc} reply N "…"\`):`;
+
+  test("Cursor's stop follow-up, nudge and reminder together, never passes the share, from one seat to fifty", () => {
+    const start = startListener(mc, "cursor")!;
+    const r = {
+      full: `Before you end this turn: no Kiwi listener of yours is running for inquizit-workflow, so nothing would wake you when a message for you arrives.\n${wakeYourself(mc, "cursor")!}`,
+      short: `Before you end this turn: no Kiwi listener of yours is running for inquizit-workflow. ${start}`,
+    };
+    for (let seats = 1; seats <= 50; seats++) {
+      const budget = seatBudget(seats);
+      for (const reminder of [r, null])
+        for (const unread of [true, false]) {
+          const follow = cursorFollow(mc, unread, reminder, budget);
+          expect(follow.length).toBeLessThanOrEqual(budget);
+          if (unread && budget >= 200) expect(follow).toContain(`\`${mc} read\``);
+        }
+    }
+  });
 
   test("a stop reason, reminder included, never passes the share, from one seat to fifty", () => {
     for (const harness of ["kimi", "grok"] as const) {
