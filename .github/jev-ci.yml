@@ -281,7 +281,10 @@ jobs:
     description: >-
       Runs slow end-to-end tests that start a real local relay (src/relay/bun.ts) and drive the
       kiwi CLI and client: e2e (create a channel, join, send and listen through the relay),
-      verbs (the agent CLI verbs and their aliases), threads (task threads and direct threads),
+      verbs (the agent CLI verbs and their aliases; review rounds: an agent's task review on a task
+      with no reviewer is refused with how to name one, and its reviewer handing the review on with
+      task review --review NAME keeps the open round and its commit and tells the new reviewer which
+      round), threads (task threads and direct threads),
       reconnect (what a listener says when the relay drops). Then every test/budget-*.test.ts:
       budget-relay counts the SQL statements a stored message, a read mark and a connecting
       socket cost on one Durable Object storage handle; the others drive clients through

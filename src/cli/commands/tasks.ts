@@ -4,7 +4,7 @@ import { Keystore } from "../../config.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { formatTask, formatTasks, looksLikeLine, taskStateWord } from "@kiwi/core/format.ts";
 import type { TaskState } from "@kiwi/core/protocol.ts";
-import { parseTaskId, similarOpenTasks, taskId, type ChannelState } from "@kiwi/core/state.ts";
+import { isPerson, openRound, parseTaskId, similarOpenTasks, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import { formatCandidates, pickFor, taskCandidates } from "@kiwi/core/routing.ts";
 import { bindingFor } from "../../hooks.ts";
 import { args, opt } from "../args.ts";
@@ -82,8 +82,16 @@ export const taskCommands: Record<string, Command> = {
         const note = args.slice(3).join(" ") || opt.note || (review ? firstLine(review) : undefined) || undefined;
         const roundNo = opt.round === undefined ? undefined : /^[1-9]\d{0,8}$/.test(opt.round.trim()) ? Number(opt.round.trim()) : yield* die(`"${opt.round}" isn't a round number`);
         const judged = { ...(roundNo !== undefined ? { round: roundNo } : {}), ...(opt.at?.trim() ? { at: opt.at.trim() } : {}) };
+        const before = sub === "review" ? (yield* s.state()).state : undefined;
+        const reviewed = before?.tasks.get(id);
+        const asker = before?.members.get(s.me);
+        if (reviewed && !reviewed.review && opt.review === undefined && asker && !isPerson(asker))
+          return yield* die(`${taskId(id)} has no reviewer: kiwi task review ${taskId(id)} --review NAME (or any)`);
+        const kept = reviewed && opt.review !== undefined && !opt.at?.trim() && reviewed.owner !== s.me ? openRound(reviewed) : undefined;
+        const keptAt = kept ? `round ${kept.n} stays open ${kept.at ? `at ${kept.at}` : "at no commit"}` : "";
         let state: ChannelState;
         if (sub === "claim") state = yield* s.taskClaim(id);
+        else if (kept) state = yield* s.taskUpdate(id, { note: note ? `${keptAt}; ${note}` : keptAt, ...(opt.review !== undefined ? { review: opt.review } : {}) });
         else if (sub === "review")
           state = yield* s.taskUpdate(id, { state: "review", note, ...(opt.review !== undefined ? { review: opt.review } : {}), ...(opt.at?.trim() ? { at: opt.at.trim() } : {}) });
         else if (sub === "approve") state = yield* s.taskUpdate(id, { state: "done", verdict: "approved", note, ...judged }, review);
@@ -107,6 +115,7 @@ export const taskCommands: Record<string, Command> = {
           state = yield* s.taskUpdate(id, { proof: { url, ...(opt.label ? { label: opt.label } : {}) }, ...(opt.note ? { note: opt.note } : {}) });
         } else return yield* die(`unknown task command "${sub}"`);
         const t = state.tasks.get(id)!;
+        if (kept) return out(`${taskId(id)}'s review moved to ${t.review === "*" ? "anyone who hasn't worked on it" : t.review}: ${keptAt}`);
         out(`${taskId(id)} ${taskStateWord(t)}${t.owner ? ` @${t.owner}` : ""}: ${inlineText(t.title, 200)}`);
         if ((sub === "done" || sub === "review") && t.areas?.length) out(`folders it changed (for kiwi task who): ${t.areas.join(", ")}`);
         if (sub === "checkpoint") out(`checkpoint saved: a new session of yours starts ${taskId(id)} from it`);
