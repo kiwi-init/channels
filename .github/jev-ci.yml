@@ -220,7 +220,7 @@ jobs:
   test-flows-b:
     name: test / flows-b
     inputs: ["src/**", "packages/core/**", "test/owner-cli.ts"]
-    imports_from: ["test/join-seats.test.ts", "test/read-receipts.test.ts", "test/daemon-pair.test.ts", "test/sh-escape.test.ts", "test/reclaim.test.ts", "test/wake-yourself.test.ts", "test/seats.test.ts", "test/multi-seat.test.ts", "test/handoff.test.ts", "test/hooks-once.test.ts", "test/hooks-hung-relay.test.ts"]
+    imports_from: ["test/join-seats.test.ts", "test/read-receipts.test.ts", "test/daemon-pair.test.ts", "test/sh-escape.test.ts", "test/reclaim.test.ts", "test/wake-yourself.test.ts", "test/seats.test.ts", "test/multi-seat.test.ts", "test/handoff.test.ts", "test/hooks-once.test.ts", "test/hooks-hung-relay.test.ts", "test/offline-read.test.ts"]
     always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs slow agent-flow tests against a real local relay and the kiwi CLI: join-seats
@@ -243,7 +243,9 @@ jobs:
       leaving the session deaf. Then hooks-hung-relay: with the relay accepting connections
       but never answering, the prompt and stop hooks each return in under 2s (src/hooks/run.ts
       puts the whole hook under one deadline; packages/core/src/client/relay.ts gives every
-      relay request 30s), and what they couldn't show comes with the next prompt. Fails if joining, seats, hooks, pairing, the
+      relay request 30s), and what they couldn't show comes with the next prompt. Then offline-read: with the relay down, kiwi log and kiwi tasks
+      show the messages and tasks this computer already had and say the relay can't be reached
+      (OfflineReads in packages/core/src/client/relay.ts, src/agent/state.ts, src/cli/context.ts). Fails if joining, seats, hooks, pairing, the
       daemon, kiwi sh, handoff or the relay change behavior.
 
   build:
