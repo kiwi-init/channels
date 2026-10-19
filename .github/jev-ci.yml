@@ -71,7 +71,7 @@ jobs:
 
   test-unit:
     name: test / unit
-    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release-build.yml", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "site/install.ps1", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/action-pins.ts", "desktop/src/**", "desktop/build/entitlements.mac.plist", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
+    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release-build.yml", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "site/install.ps1", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/action-pins.ts", "desktop/src/**", "desktop/build/entitlements.mac.plist", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs the unit tests with bun test: every test/*.test.ts except the slow suites in
@@ -117,6 +117,10 @@ jobs:
       store's CSP allows api.x.ai only when an xAI key is saved, the project key never reaches
       the snapshot or the token IPC result, consent defaults off, and
       desktop/build/entitlements.mac.plist has the audio-input entitlement. And
+      test/perf-check.test.ts: perf-check compares the median of the runs with each gate, counts the
+      soak's limits only in the nightly run and lists what isn't at its 0.20 budget yet;
+      test/mac-size.test.ts: desktop/scripts/mac-size.ts (run by release-build on macOS) fails a dmg,
+      zip or installed app over its gate and lists what isn't at its 0.20 budget. And
       test/retry-after.test.ts: the relay's 429 carries Retry-After (header and body, on the socket
       too), a refused attempt isn't counted, and a rate-limited send waits it out and goes in, over
       the socket without an extra try over HTTP; web lib/github-queue.test.ts: the owner's GitHub
@@ -272,6 +276,21 @@ jobs:
       dashboard or any screen can't be reached (a control renamed, moved or gone), so the shots
       keep up with the UI.
 
+  perf:
+    name: perf / scale
+    inputs: ["web/**", "desktop/**", "packages/core/**", "scripts/perf-scale.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
+    always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "scripts/perf-scale.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
+    description: >-
+      Builds the web dashboard, then runs scripts/perf-scale.ts three times without the soak: a
+      local relay and headless Chromium with 10 agents, 100 tasks and 2000 messages, timing the
+      reload to the first screen, the Tasks, Agents and Conversation tabs at 4x CPU and typing
+      while the agents post. scripts/perf-check.ts takes the medians and fails when one is over
+      its gate in scripts/perf-budgets.json (a ratchet: each gate starts at today's median plus
+      20% and comes down to its 0.20 budget as fixes land), writes the table and the gaps to the
+      0.20 budgets to the job summary and a perf-scale comment on the pull request, and uploads
+      the runs as the perf-scale artifact. The soak's memory slopes are gated by the nightly
+      workflow (.github/workflows/nightly.yml), not here.
+
   desktop:
     name: desktop / package
     inputs: ["desktop/**", "src/**", "packages/core/**", "web/src/**", "web/index.html", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "package.json", "bun.lock", "web/package.json"]
@@ -330,18 +349,19 @@ jobs:
     push: false
     version_bumps: true
     inputs: []
-    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/scripts/fuses.ts", "scripts/changelog.ts"]
+    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/scripts/fuses.ts", "desktop/scripts/mac-size.ts", "scripts/changelog.ts"]
     description: >-
       Runs .github/workflows/release-build.yml, the build a tag's release.yml runs, with
       rehearsal: true and a read-only token, uploading nothing: the version and changelog checks
       (taking v<src/version.ts> as the tag), the cli job on macOS (bun test, five builds), and
       the desktop app packaged on macOS (arm64 and x64) and Linux (AppImage and deb), with each
       package's contents and fuses checked (release/mac*/Channels.app and
-      release/*-unpacked/channels-desktop). On a pull request the macOS app is unsigned; a
+      release/*-unpacked/channels-desktop), and on macOS desktop/scripts/mac-size.ts failing a dmg,
+      zip or installed app over its size gate. On a pull request the macOS app is unsigned; a
       manual run of ci.yml passes the signing secrets, so the app is signed, notarized and
       checked as on a tag. Fails where the tag would: versions that disagree, no changelog
       section, a test failing on macOS, an electron-builder error, a package missing the web
-      app or the kiwi binary, and on a manual run a signing or notarization error. Runs on
+      app or the kiwi binary, a Mac package over its size gate, and on a manual run a signing or notarization error. Runs on
       release PRs (they change CHANGELOG.md), on any change that only bumps a version number,
       and on manual runs of ci.yml, never on a push to main.
 

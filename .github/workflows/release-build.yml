@@ -216,6 +216,11 @@ jobs:
           [ -n "$bins" ] || { echo "no packaged app found to read the fuses of"; exit 1; }
           bun scripts/fuses.ts $bins
 
+      - name: Size
+        if: runner.os == 'macOS'
+        shell: bash
+        run: bun desktop/scripts/mac-size.ts desktop/release
+
       - name: Collect
         shell: bash
         run: |
