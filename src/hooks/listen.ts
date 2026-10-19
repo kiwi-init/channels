@@ -10,7 +10,7 @@ import { formatMessage } from "@kiwi/core/format.ts";
 import type { Binding, Here } from "../seats.ts";
 import { fitting, moreNote } from "./answer.ts";
 import { answeringNow, deliveredUpTo, noteDelivered, noteHeard } from "./delivered.ts";
-import { hooksListen } from "./install/claude.ts";
+import { hooksListen, installedListenSeconds } from "./install/claude.ts";
 import { alive, isListening, takeListenSlot } from "./listeners.ts";
 import { LISTEN_SECONDS, mcFor } from "./self.ts";
 
@@ -112,7 +112,8 @@ export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Serv
     Effect.sync(() => answeringNow(who.session)),
     { while: (busy) => busy, schedule: Schedule.spaced("50 millis") },
   ).pipe(Effect.timeoutOption(ANSWERED_WAIT_MS));
-  const dayEnds = Date.now() + LISTEN_SECONDS * 1000;
+  const installed = installedListenSeconds();
+  const dayEnds = Date.now() + Math.min(LISTEN_SECONDS, installed === null ? LISTEN_SECONDS : installed - 60) * 1000;
   for (;;) {
     const ended = yield* Effect.raceFirst(
       hearing,

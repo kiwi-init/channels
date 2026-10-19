@@ -11,7 +11,7 @@ const MARK = "# kiwi";
 export const EVENTS = { SessionStart: "session-start", UserPromptSubmit: "prompt", Stop: "stop" } as const;
 export const LISTEN = "listen";
 export const KIMI_STOP = "kimi-stop";
-export const LISTEN_SECONDS = 24 * 3600;
+export const LISTEN_SECONDS = 7 * 24 * 3600;
 
 function selfCommand(): string {
   const compiled = !/\.(ts|js)$/.test(Bun.main);
