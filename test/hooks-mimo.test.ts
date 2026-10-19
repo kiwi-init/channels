@@ -2,6 +2,8 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
+import { howMessagesReachYou } from "../src/hooks.ts";
+import { extraInstalled, hooksStatus, installExtra, uninstallExtra } from "../src/hooks/install/extra.ts";
 import { installMimo, mimoConfigRoot, mimoInstalled, mimoPluginPath, mimoPluginSource, uninstallMimo } from "../src/hooks/install/mimo.ts";
 
 const made: string[] = [];
@@ -126,4 +128,20 @@ test("the plugin names a child session's root on the agent's shell, and a messag
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
   await hooks.event({ event: { type: "session.deleted", properties: { info: { id: "ses_root" } } } });
   expect(prompted).toHaveLength(1);
+});
+
+test("kiwi hooks install mimo writes the plugin, status says so, and an agent in a named MiMoCode session is told the plugin wakes it", () => {
+  const dir = scratch("hk-mimo-extra-");
+  setEnv({ KIWI_MIMO_DIR: dir, KIWI_HOME: scratch("hk-mimo-home-") });
+  const before = howMessagesReachYou("kiwi", true, { harness: "mimo", session: "ses_1", pid: 9 });
+  expect(before).toContain("Kiwi's MiMoCode plugin isn't installed (kiwi hooks install mimo, then restart MiMoCode)");
+  expect(installExtra("mimo")).toBe(join(dir, "plugin", "kiwi.ts"));
+  expect(extraInstalled("mimo")).toBe(true);
+  expect(hooksStatus()).toContain("mimo: installed");
+  expect(howMessagesReachYou("kiwi", true, { harness: "mimo", session: "ses_1", pid: 9 })).toBe(
+    "Messages for you arrive on their own: Kiwi's MiMoCode plugin wakes you when one comes. Don't run listen.",
+  );
+  expect(howMessagesReachYou("kiwi", true, { harness: "mimo", session: "mimo-pid-9", pid: 9 })).toContain("restarting MiMoCode loads it");
+  uninstallExtra("mimo");
+  expect(extraInstalled("mimo")).toBe(false);
 });

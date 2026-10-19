@@ -92,6 +92,12 @@ jobs:
       Also test/daemon-lock.test.ts: one daemon per KIWI_HOME (src/daemon/lock.ts): daemons started
       at once leave one, a daemon too busy to answer isn't replaced, and a daemon whose lock and
       socket another took exits without deleting that socket.
+      Also MiMoCode woken in place: test/hooks-mimo.test.ts: Kiwi's MiMoCode plugin (src/hooks/install/mimo.ts)
+      written to MiMoCode's plugin folder (KIWI_MIMO_DIR, MIMOCODE_HOME/config, XDG_CONFIG_HOME/mimocode),
+      counted as installed only while it is current, removed on uninstall without touching a kiwi.ts that
+      isn't Kiwi's, the file passing tsc --strict with one export, and, loaded with a fake MiMoCode client
+      and a fake listener, naming a child session's root on the agent's shell and starting a turn in that
+      root session when its listener exits with messages, then listening again.
       Also Pi as a known harness: test/hooks-pi.test.ts: Kiwi's Pi extension
       (src/hooks/install/pi.ts) written to Pi's extensions folder on join or kiwi hooks install
       pi, counted as installed only while it is current and runs this kiwi's hooks, removed on
