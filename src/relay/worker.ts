@@ -42,6 +42,7 @@ import {
 } from "./room.ts";
 import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
+import { onDictationHttp, type DictationStore } from "./dictation.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
 import { GithubApp, githubAppFrom } from "./github-app.ts";
 import { GITHUB_QUEUE_MAX, GITHUB_QUEUE_TTL_MS, onGithubHttp, type GithubItem, type GithubLink, type GithubRoutes } from "./github.ts";
@@ -60,6 +61,7 @@ interface Env {
   WORKOS_API_KEY?: string;
   /** 20 mailbox writes per minute per client address (pairing codes are pasted by hand). */
   MAILBOX_WRITES: RateLimit;
+  DICTATION_DOWNLOADS: RateLimit;
   /** "off": don't retry a room request the platform refused (to count refusals, e.g. on a canary). */
   KIWI_ROOM_RETRY?: string;
   KIWI_PAGE_KEY?: string;
@@ -373,12 +375,30 @@ function close(ws: WebSocket, code: number, reason: string): void {
   }
 }
 
+const edgeKey = (sha256: string) => `https://dictation.kiwi.invalid/${sha256}`;
+
+const edgeDictation: DictationStore = {
+  read: async (sha256) => {
+    const hit = await caches.default.match(edgeKey(sha256));
+    return hit ? new Uint8Array(await hit.arrayBuffer()) : null;
+  },
+  write: async (sha256, bytes) => {
+    await caches.default.put(edgeKey(sha256), new Response(bytes, { headers: { "cache-control": "public, max-age=31536000, immutable" } }));
+  },
+};
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
     if (url.pathname === "/v1/config") return withCors(relayConfig(human(env), env.GITHUB_APP_CLIENT_ID));
     // The desktop app's renderer isn't served by the relay: /v1/* answers any origin.
     if (req.method === "OPTIONS" && url.pathname.startsWith("/v1/")) return corsPreflight();
+    const spoken = await onDictationHttp(req, {
+      store: edgeDictation,
+      ip: req.headers.get("cf-connecting-ip"),
+      allow: async (key) => (await env.DICTATION_DOWNLOADS.limit({ key })).success,
+    });
+    if (spoken) return spoken;
     if (url.pathname.startsWith("/v1/mailbox")) {
       // One object per mailbox id; a path without one is a 404, never a wake-up.
       const id = /^\/v1\/mailbox\/([A-Za-z0-9_-]{43})(?:\/(?:a|b))?$/.exec(url.pathname)?.[1];
