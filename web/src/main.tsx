@@ -4,7 +4,6 @@ import { createRoot } from "react-dom/client"
 import "./index.css"
 import App from "./App.tsx"
 import { Boundary } from "@/components/kit"
-import { TooltipProvider } from "@/components/ui/tooltip"
 import { noteSignInGone } from "@/lib/session"
 import { applyStoredAppearance } from "@/lib/theme"
 import { migrateChannelsToStore } from "@/lib/channel"
@@ -31,9 +30,7 @@ window.addEventListener("unhandledrejection", (e) => {
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <Boundary whole>
-      <TooltipProvider delay={500}>
-        <App />
-      </TooltipProvider>
+      <App />
     </Boundary>
   </StrictMode>
 )
