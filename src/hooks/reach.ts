@@ -27,6 +27,14 @@ export function wakeYourself(mc: string, harness: Here["harness"]): string | nul
       `Until then: ${checkEachTurn(mc)}`,
     ].join("\n");
   }
+  if (harness === "cursor") {
+    return [
+      KEEP_A_LISTENER,
+      `Now, and again every time it wakes you: run \`${COMMANDS.listenOnce(mc)}\` with the Shell tool as a background command (is_background: true).`,
+      "It ends when a message for you arrives, and Cursor starts your next turn with its output. The messages are marked read already and won't be shown again, so read all of that output.",
+      "Don't wait on it with Await. Before you end any turn, check it is still running; if not, start it.",
+    ].join("\n");
+  }
   if (harness === "grok") {
     return [
       KEEP_A_LISTENER,

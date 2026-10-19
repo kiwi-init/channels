@@ -28,7 +28,7 @@ export function wakeWords(via: WakeVia): string {
 }
 
 export function pullsWake(harness: WakeHarness | undefined): boolean {
-  return harness === "kimi";
+  return harness === "kimi" || harness === "cursor";
 }
 
 export function viaOf(path: WakePath): WakeVia | null {
