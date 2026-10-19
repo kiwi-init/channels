@@ -3,8 +3,9 @@
 #
 # What it does, in order:
 #   1. picks the build for this computer (macOS or Linux, Intel or ARM)
-#   2. downloads it from this project's GitHub release, built from the public source
-#   3. checks its SHA-256 against the release's SHA256SUMS before installing
+#   2. downloads it from this project's GitHub release, built from the public source,
+#      compressed (.xz when xz is installed, else .gz) when the release has it
+#   3. checks the download's SHA-256 against the release's SHA256SUMS before installing
 #   4. puts it at ~/.kiwi/bin/kiwi (nothing outside your home folder, no sudo)
 #   5. adds that folder to PATH in your shell's profile, once (KIWI_NO_MODIFY_PATH=1 skips it)
 # SHA256SUMS comes from the same release as the binary. It catches a bad
@@ -35,7 +36,7 @@ arch=$(uname -m)
 case "$os" in
   Darwin) os=darwin ;;
   Linux) os=linux ;;
-  *) echo "kiwi: $os isn't supported by this script. On Windows, in PowerShell: irm https://channels.kiwiinit.com/install.ps1 | iex" >&2; exit 1 ;;
+  *) echo "kiwi: $os isn't supported: kiwi runs on macOS and Linux" >&2; exit 1 ;;
 esac
 case "$arch" in
   arm64 | aarch64) arch=arm64 ;;
@@ -47,16 +48,28 @@ if [ "$VERSION" = latest ]; then base="https://github.com/$REPO/releases/latest/
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-echo "Downloading $asset ($VERSION) from github.com/$REPO"
-curl -fsSL "$base/$asset" -o "$tmp/kiwi"
 curl -fsSL "$base/SHA256SUMS" -o "$tmp/SHA256SUMS"
+listed() { grep -q " $1\$" "$tmp/SHA256SUMS"; }
+name="$asset"
+if command -v xz >/dev/null 2>&1 && listed "$asset.xz"; then
+  name="$asset.xz"
+elif command -v gzip >/dev/null 2>&1 && listed "$asset.gz"; then
+  name="$asset.gz"
+fi
+echo "Downloading $name ($VERSION) from github.com/$REPO"
+curl -fsSL "$base/$name" -o "$tmp/$name"
 
-want=$(grep " $asset\$" "$tmp/SHA256SUMS" | cut -d' ' -f1)
-if command -v sha256sum >/dev/null 2>&1; then got=$(sha256sum "$tmp/kiwi" | cut -d' ' -f1); else got=$(shasum -a 256 "$tmp/kiwi" | cut -d' ' -f1); fi
+want=$(grep " $name\$" "$tmp/SHA256SUMS" | cut -d' ' -f1)
+if command -v sha256sum >/dev/null 2>&1; then got=$(sha256sum "$tmp/$name" | cut -d' ' -f1); else got=$(shasum -a 256 "$tmp/$name" | cut -d' ' -f1); fi
 if [ -z "$want" ] || [ "$want" != "$got" ]; then
   echo "kiwi: checksum doesn't match the release; not installing" >&2
   exit 1
 fi
+case "$name" in
+  *.xz) xz -dc "$tmp/$name" > "$tmp/kiwi" ;;
+  *.gz) gzip -dc "$tmp/$name" > "$tmp/kiwi" ;;
+  *) mv "$tmp/$name" "$tmp/kiwi" ;;
+esac
 
 # ~/.kiwi is private to this account. bin stays 0755 inside that parent.
 # A symlink is left alone: chmod would follow it.

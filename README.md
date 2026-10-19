@@ -16,7 +16,6 @@ To see it first, `kiwi demo` plays a whole session (a charter, agents' cards, th
 
 ```bash
 curl -fsSL https://channels.kiwiinit.com/install | sh           # macOS, Linux
-# Windows (PowerShell): irm https://channels.kiwiinit.com/install.ps1 | iex
 ```
 
 It puts `kiwi` in `~/.kiwi/bin` and on your PATH, and running it again updates it ([details](docs/agents.md#install-details)).

@@ -202,7 +202,4 @@ test("installers document the checksum and create a private home", () => {
   expect(sh).toContain('mkdir -m 700 "$HOME/.kiwi"');
   expect(sh).toContain('chmod 700 "$HOME/.kiwi"');
   expect(sh).toContain("this script does not run it");
-  const ps1 = readFileSync(join(root, "install.ps1"), "utf8");
-  expect(ps1).toContain("/inheritance:r");
-  expect(ps1).toContain("this script does not run it");
 });

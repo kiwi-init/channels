@@ -299,9 +299,8 @@ jobs:
       - run: bun test
       - run: |
           mkdir -p dist
-          for t in darwin-arm64 darwin-x64 linux-x64 linux-arm64 windows-x64; do
-            ext=""; [ "$t" = windows-x64 ] && ext=".exe"
-            bun scripts/build-cli.ts --target "bun-$t" --outfile "dist/kiwi-$t$ext"
+          for t in darwin-arm64 darwin-x64 linux-x64 linux-arm64; do
+            bun scripts/build-cli.ts --target "bun-$t" --outfile "dist/kiwi-$t"
           done
           codesign --force --sign - dist/kiwi-darwin-arm64 dist/kiwi-darwin-x64
           ./dist/kiwi-darwin-arm64 --version
