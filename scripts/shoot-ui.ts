@@ -305,6 +305,7 @@ try {
           });
           if (gap !== null && gap < 80) return;
         }
+        await owner.screenshot({ path: join(OUT, `${tag}-not-at-newest.png`) });
         throw new Error(`${tag}: ${when}, the conversation isn't at its newest message (${gap === null ? "no conversation" : `${Math.round(gap)}px above it`})`);
       };
       await toChannel();

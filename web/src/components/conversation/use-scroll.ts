@@ -46,8 +46,13 @@ export function useScroll({ messages, visible, hereKey }: { messages: Message[];
     lastCount.current = visible.length
     const smooth = added > 0 && added < 4
     if (atBottom.current) {
-      if (smooth) smoothUntil.current = Date.now() + SMOOTH_MS
       el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "instant" })
+      if (!smooth) return
+      smoothUntil.current = Date.now() + SMOOTH_MS
+      const settle = setTimeout(() => {
+        if (atBottom.current) el.scrollTop = el.scrollHeight
+      }, SMOOTH_MS)
+      return () => clearTimeout(settle)
     } else if (added > 0) setBehind((b) => b + added)
   }, [visible])
   useLayoutEffect(() => {
