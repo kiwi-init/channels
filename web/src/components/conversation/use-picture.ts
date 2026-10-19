@@ -7,7 +7,8 @@ import { bridge } from "@/lib/secrets"
 
 /** People's pictures in this channel, by member name, for the faces drawn in it. */
 export function usePictures(state: ChannelState): ReadonlyMap<string, MemberPicture> {
-  return useMemo(() => new Map([...state.members.values()].flatMap((m) => (m.active && m.picture ? [[m.name, m.picture] as const] : []))), [state.members])
+  const pictures = JSON.stringify([...state.members.values()].flatMap((m) => (m.active && m.picture ? [[m.name, m.picture] as const] : [])))
+  return useMemo(() => new Map(JSON.parse(pictures) as [string, MemberPicture][]), [pictures])
 }
 
 /** Once the channel has loaded: publish the linked GitHub account's picture as yours, or clear it once GitHub is unlinked. */

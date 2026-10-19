@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 
 import type { ImageAttachment, Message } from "@kiwi/core/protocol.ts"
-import { cardShown } from "@kiwi/core/standup.ts"
+import type { TaskCards } from "@kiwi/core/standup.ts"
 import { colorOf, type ChannelState } from "@kiwi/core/state.ts"
 import { prsIn } from "@kiwi/core/work.ts"
 import type { Chosen } from "@/lib/asks"
@@ -21,7 +21,6 @@ const EVENT_GAP = 15 * 60_000
 export interface RowsContext {
   me: string
   state: ChannelState
-  messages: Message[]
   byKey: Map<string, ChannelHandle["roster"][number]>
   online: ChannelHandle["online"]
   marks: ChannelHandle["marks"]
@@ -30,6 +29,7 @@ export interface RowsContext {
   now: number
   hereKey: string
   cardRoom: string
+  cards: TaskCards
   search: string | null
   highlight: number | null
   bySeq: Map<number, Message>
@@ -53,7 +53,6 @@ export function rowMakers(c: RowsContext) {
   const {
     me,
     state,
-    messages,
     byKey,
     online,
     marks,
@@ -62,6 +61,7 @@ export function rowMakers(c: RowsContext) {
     now,
     hereKey,
     cardRoom,
+    cards: taskCards,
     search,
     highlight,
     bySeq,
@@ -131,10 +131,10 @@ export function rowMakers(c: RowsContext) {
     for (let i = 0; i < list.length; i++) {
       const m = list[i]!
       const prev = list[i - 1]
-      if (cards && isTaskCard(m, state.tasks) && !cardShown(state, messages, m.seq, cardRoom)) continue
+      if (cards && isTaskCard(m, state.tasks) && !taskCards.shown(m.seq, cardRoom)) continue
       if (!prev || !sameDay(prev.ts, m.ts)) out.push(<DayMark key={`s${m.seq}`} ts={m.ts} />)
       if (cards && isTaskCard(m, state.tasks)) {
-        out.push(<LiveTaskCard key={`card${m.seq}`} id={m.seq} state={state} messages={messages} me={me} now={now} onOpen={openTask} />)
+        out.push(<LiveTaskCard key={`card${m.seq}`} id={m.seq} card={taskCards.card(m.seq, me)} state={state} now={now} onOpen={openTask} />)
         continue
       }
       if (m.kind === "event") {
