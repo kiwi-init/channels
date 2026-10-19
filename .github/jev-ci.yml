@@ -113,6 +113,8 @@ jobs:
       test/desktop-update-failures.test.ts (macOS): a temp folder that can't be made, or a download
       that doesn't match its checksum, ends at available with the reason in main.log (and a retry in
       30 minutes), and a staged update whose folder went away doesn't throw at quit. And
+      test/desktop-update-stall.test.ts (macOS): a check comes back once the release is known, a
+      stalled download doesn't hold up the next check, and a newer release replaces a staged one. And
       test/desktop-revive.test.ts: a crashed window page reloads by itself up to three times a
       minute, then asks Reload or Quit; a hung one asks Wait or Reload; main-process errors go to
       main.log in the logs folder. And
