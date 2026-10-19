@@ -73,6 +73,15 @@ export function here(env: Record<string, string | undefined> = process.env, tree
   return {};
 }
 
+export type NamedHookHarness = "codex" | "gemini" | "grok";
+
+export function hereAs(harness: string | undefined, env: Record<string, string | undefined> = process.env, tree: ProcessTree = {}, host: string = hostname()): Here {
+  if (harness === "codex") return { harness: "codex", ...(env.CODEX_THREAD_ID ? { session: env.CODEX_THREAD_ID } : {}) };
+  if (harness === "grok") return { harness: "grok", ...(env.GROK_SESSION_ID ? { session: env.GROK_SESSION_ID } : {}) };
+  if (harness === "gemini") return { harness: "gemini" };
+  return here(env, tree, host);
+}
+
 function modelKey(model: string): string {
   return model
     .trim()

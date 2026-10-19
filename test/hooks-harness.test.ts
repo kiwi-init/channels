@@ -247,6 +247,7 @@ test("codex, gemini, cursor, and grok install, re-install once, and uninstall ke
   expect(codexStop).toContain("echo mine # kiwi");
   expect(codexStop).toContain("'/old/kiwi' hook stop # channel-one");
   expect(codexStop.filter((c: string) => c.endsWith(" hook stop # kiwi"))).toHaveLength(1);
+  expect(codexStop.filter((c: string) => c.endsWith(" --harness codex hook stop # kiwi"))).toHaveLength(1);
   expect(read(join(codex, "hooks.json")).hooks.UserPromptSubmit).toBeDefined();
   expect(read(join(codex, "hooks.json")).hooks.SessionStart).toBeDefined();
 
@@ -256,6 +257,7 @@ test("codex, gemini, cursor, and grok install, re-install once, and uninstall ke
   expect(before.map((h: { command: string }) => h.command)).toContain("echo gemini-user");
   expect(before.filter((h: { command: string }) => h.command.endsWith(" hook prompt # kiwi"))).toHaveLength(1);
   expect(before.find((h: { command: string }) => h.command.endsWith(" hook prompt # kiwi"))?.timeout).toBe(20_000);
+  expect(before.filter((h: { command: string }) => h.command.endsWith(" --harness gemini hook prompt # kiwi"))).toHaveLength(1);
   expect(gem.hooks.AfterAgent[0]?.matcher).toBe("*");
   expect(gem.hooks.AfterAgent[0]?.hooks[0]?.timeout).toBe(30_000);
   expect(gem.hooks.UserPromptSubmit).toBeUndefined();
@@ -272,7 +274,8 @@ test("codex, gemini, cursor, and grok install, re-install once, and uninstall ke
   const claudeStop = read(join(claude, "settings.json")).hooks.Stop.flatMap((e: { hooks: { command: string }[] }) => e.hooks.map((h) => h.command));
   const grokStop = read(join(grok, "hooks", "kiwi.json")).hooks.Stop.flatMap((e: { hooks: { command: string }[] }) => e.hooks.map((h) => h.command));
   const ours = (list: string[]) => list.find((c) => c.endsWith(" hook stop # kiwi"));
-  expect(ours(grokStop)).toBe(ours(claudeStop));
+  expect(ours(claudeStop)).not.toContain("--harness");
+  expect(ours(grokStop)).toBe(ours(claudeStop)?.replace(" hook stop # kiwi", " --harness grok hook stop # kiwi"));
   expect(read(join(grok, "hooks", "kiwi.json")).hooks.PostToolUse[0]?.hooks[0]?.command).toBe("echo grok-user");
   expect(read(join(grok, "hooks", "kiwi.json")).hooks.UserPromptSubmit).toBeUndefined();
   expect(read(join(grok, "hooks", "kiwi.json")).hooks.SessionStart).toBeUndefined();
@@ -728,7 +731,7 @@ test("a hook through a wrapper in kiwi's install folder counts only when the wra
       }),
     );
     mkdirSync(join(grok, "hooks"), { recursive: true });
-    writeFileSync(join(grok, "hooks", "kiwi.json"), JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: cmd("stop") }] }] } }));
+    writeFileSync(join(grok, "hooks", "kiwi.json"), JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: `${shellQuoted(program)} --harness grok hook stop # kiwi` }] }] } }));
   };
   const status = () => {
     const r = kiwiCli(["hooks", "status"], env);

@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { ChannelGone } from "@kiwi/core/client.ts";
 import { Keystore } from "../config.ts";
-import { here, kimiHookHere, noteHarnessSession, onGrokBot, sameSeat, seatsHeldAnywhere, type Here } from "../seats.ts";
+import { hereAs, kimiHookHere, noteHarnessSession, onGrokBot, sameSeat, seatsHeldAnywhere, type Here } from "../seats.ts";
 import { writeSync } from "node:fs";
 import { answer, hookOutput, kimiReason, printed, seatBudget, tellKimi, type Answer, type HookInput } from "./answer.ts";
 import { holdAnswering } from "./delivered.ts";
@@ -17,7 +17,7 @@ const START_MS = 5_000;
 
 const say = (text: string) => Effect.sync(() => void writeSync(1, text));
 
-export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
+export const runHook = Effect.fn("Hooks.run")(function* (event: string, harness?: string) {
   const raw = yield* Effect.promise(() => new Response(Bun.stdin.stream()).text().catch(() => ""));
   let input: HookInput = {};
   try {
@@ -32,7 +32,7 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
     ? kimiHookHere()
     : cursor
       ? { harness: "cursor", session: cursor, ...(model ? { model } : {}) }
-      : { ...here(), ...(input.session_id ? { session: input.session_id } : {}), ...(model ? { model } : {}) };
+      : { ...hereAs(harness), ...(input.session_id ? { session: input.session_id } : {}), ...(model ? { model } : {}) };
   const release = event === LISTEN ? () => {} : holdAnswering(who.session);
   const deadline = event === "session-start" || kimi || cursor !== null ? START_MS : HOOK_MS;
   const keys = yield* Keystore;
