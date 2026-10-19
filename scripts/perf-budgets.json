@@ -1,9 +1,9 @@
 {
-  "reloadMs": { "what": "Reload to first screen", "at": ["@1x", "reloadToTasksMs"], "budget": 400, "gate": null },
-  "tasksMs": { "what": "Tasks tab @4x", "at": ["@4x", "switchMedianMs", "Tasks"], "budget": 100, "gate": null },
-  "agentsMs": { "what": "Agents tab @4x", "at": ["@4x", "switchMedianMs", "Agents"], "budget": 100, "gate": null },
-  "conversationMs": { "what": "Conversation tab @4x", "at": ["@4x", "switchMedianMs", "Conversation"], "budget": 100, "gate": null },
-  "typingP95Ms": { "what": "Typing while agents post, p95 key event", "at": ["typing", "p95Ms"], "budget": 32, "gate": null },
+  "reloadMs": { "what": "Reload to first screen", "at": ["@1x", "reloadToTasksMs"], "budget": 400, "gate": 820 },
+  "tasksMs": { "what": "Tasks tab @4x", "at": ["@4x", "switchMedianMs", "Tasks"], "budget": 100, "gate": 220 },
+  "agentsMs": { "what": "Agents tab @4x", "at": ["@4x", "switchMedianMs", "Agents"], "budget": 100, "gate": 115 },
+  "conversationMs": { "what": "Conversation tab @4x", "at": ["@4x", "switchMedianMs", "Conversation"], "budget": 100, "gate": 330 },
+  "typingP95Ms": { "what": "Typing while agents post, p95 key event", "at": ["typing", "p95Ms"], "budget": 32, "gate": 165 },
   "heapMBPerHour": { "what": "Soak: heap growth per hour", "at": ["soak", "heapSlopeMBPerHour"], "budget": 5, "gate": null, "nightly": true },
   "nodesPerHour": { "what": "Soak: DOM nodes per hour", "at": ["soak", "nodesSlopePerHour"], "budget": 5000, "gate": null, "nightly": true },
   "listenersPerHour": { "what": "Soak: listeners per hour", "at": ["soak", "listenersSlopePerHour"], "budget": 500, "gate": null, "nightly": true }
