@@ -14,7 +14,7 @@ import { app } from "electron";
 import { compareVersions } from "./cli.ts";
 import { moveOver } from "./move.ts";
 import { signedLikeThisApp } from "./signer.ts";
-import { swapAsset, swapBlocker, swapScript } from "./update-asset.ts";
+import { cantSwap, swapAsset, swapScript } from "./update-asset.ts";
 
 const REPO = "ojowwalker77/channels";
 const EVERY_MS = 6 * 3_600_000;
@@ -25,7 +25,7 @@ export interface UpdateState {
   /** downloading, ready to restart into, or only available (a .deb: install it from the release). */
   state: "downloading" | "ready" | "available";
   url: string;
-  reason?: string;
+  blocked?: true;
 }
 
 export type UpdateCheck = UpdateState | { state: "current"; version: string } | { state: "failed" };
@@ -70,8 +70,7 @@ async function check(): Promise<UpdateCheck> {
   const name = app.isPackaged ? swapAsset(version, process.platform, process.arch) : null;
   const asset = name ? rel.assets?.find((a) => a.name === name) : undefined;
   const sums = rel.assets?.find((a) => a.name === "SHA256SUMS");
-  const reason = name && process.platform === "darwin" ? swapBlocker(macBundle(), writableDir, failedBefore(version)) : null;
-  if (reason) return set({ version, state: "available", url, reason });
+  if (name && process.platform === "darwin" && cantSwap(macBundle(), writableDir, failedBefore(version))) return set({ version, state: "available", url, blocked: true });
   if (!asset || !sums) return set({ version, state: "available", url });
   set({ version, state: "downloading", url });
 

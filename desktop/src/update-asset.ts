@@ -5,12 +5,8 @@ export function swapAsset(version: string, platform: NodeJS.Platform, arch: stri
   return null;
 }
 
-export function swapBlocker(bundle: string, writable: (dir: string) => boolean, failedBefore: boolean): string | null {
-  if (bundle.includes("/AppTranslocation/")) return "Channels is running from a quarantined copy. Move it to Applications and open it from there to update by itself.";
-  if (bundle.startsWith("/Volumes/")) return "Channels is running from its disk image. Drag it to Applications and open it from there to update by itself.";
-  if (!writable(path.dirname(bundle))) return `Channels can't replace itself in ${path.dirname(bundle)}. Install this one from the release.`;
-  if (failedBefore) return "The last try to put this version in place didn't work. Install it from the release.";
-  return null;
+export function cantSwap(bundle: string, writable: (dir: string) => boolean, failedBefore: boolean): boolean {
+  return bundle.includes("/AppTranslocation/") || bundle.startsWith("/Volumes/") || !writable(path.dirname(bundle)) || failedBefore;
 }
 
 export function swapScript(o: { pid: number; target: string; next: string; dir: string; marker: string; version: string; relaunch: boolean }): string {

@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { swapAsset, swapBlocker, swapScript } from "../desktop/src/update-asset.ts";
+import { cantSwap, swapAsset, swapScript } from "../desktop/src/update-asset.ts";
 
 test("a Mac swaps itself for the zip for its CPU", () => {
   expect(swapAsset("0.14.0", "darwin", "arm64")).toBe("Channels-0.14.0-mac-arm64.zip");
@@ -16,13 +16,13 @@ test("Linux and Windows never swap themselves: the update is only offered with t
   expect(swapAsset("0.14.0", "win32", "x64")).toBeNull();
 });
 
-test("a Mac that can't replace itself says why before downloading anything", () => {
+test("a Mac that's translocated, on its disk image, in a folder it can't write, or whose last swap of this version failed can't swap itself", () => {
   const ok = () => true;
-  expect(swapBlocker("/private/var/folders/x/AppTranslocation/ABC/d/Channels.app", ok, false)).toContain("quarantined copy");
-  expect(swapBlocker("/Volumes/Channels 0.20.0/Channels.app", ok, false)).toContain("disk image");
-  expect(swapBlocker("/Applications/Channels.app", (dir) => dir !== "/Applications", false)).toBe("Channels can't replace itself in /Applications. Install this one from the release.");
-  expect(swapBlocker("/Applications/Channels.app", ok, true)).toContain("last try");
-  expect(swapBlocker("/Applications/Channels.app", ok, false)).toBeNull();
+  expect(cantSwap("/private/var/folders/x/AppTranslocation/ABC/d/Channels.app", ok, false)).toBe(true);
+  expect(cantSwap("/Volumes/Channels 0.20.0/Channels.app", ok, false)).toBe(true);
+  expect(cantSwap("/Applications/Channels.app", (dir) => dir !== "/Applications", false)).toBe(true);
+  expect(cantSwap("/Applications/Channels.app", ok, true)).toBe(true);
+  expect(cantSwap("/Applications/Channels.app", ok, false)).toBe(false);
 });
 
 function swapFixture(): { root: string; parent: string; target: string; next: string; dir: string; marker: string; pid: number } {

@@ -22,7 +22,7 @@ mock.module("electron", () => ({
   },
 }));
 
-type Checked = { state: string; version?: string; url?: string; reason?: string };
+type Checked = { state: string; version?: string; url?: string; blocked?: true };
 const updater = "../desktop/src/updater.ts";
 const { checkForUpdate } = (await import(updater)) as { checkForUpdate: () => Promise<Checked> };
 
@@ -50,10 +50,10 @@ globalThis.fetch = Object.assign(
   { preconnect: realFetch.preconnect },
 );
 
-test.skipIf(process.platform !== "darwin")("a Mac app in a folder it can't write offers the release with the reason, and downloads nothing", async () => {
+test.skipIf(process.platform !== "darwin")("a Mac app in a folder it can't write offers the release, says it can't update itself, and downloads nothing", async () => {
   chmodSync(parent, 0o555);
   const r = await checkForUpdate();
-  expect(r).toEqual({ version: "0.20.0", state: "available", url: "https://example.test/rel", reason: `Channels can't replace itself in ${parent}. Install this one from the release.` });
+  expect(r).toEqual({ version: "0.20.0", state: "available", url: "https://example.test/rel", blocked: true });
   expect(seen.filter((u) => !u.includes("api.github.com"))).toEqual([]);
 });
 
@@ -63,6 +63,6 @@ test.skipIf(process.platform !== "darwin")("after a swap of this version failed,
   seen.length = 0;
   const r = await checkForUpdate();
   expect(r.state).toBe("available");
-  expect(r.reason).toContain("last try");
+  expect(r.blocked).toBe(true);
   expect(seen.filter((u) => !u.includes("api.github.com"))).toEqual([]);
 });

@@ -303,7 +303,7 @@ export interface UpdateView {
   state: "downloading" | "ready" | "available";
   /** The release's page. */
   url: string;
-  reason?: string;
+  blocked?: true;
 }
 
 export type UpdateCheckView = UpdateView | { state: "current"; version: string } | { state: "failed" };
