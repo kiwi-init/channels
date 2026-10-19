@@ -25,6 +25,7 @@ import { useClock } from "./clock"
 import { noteAgentWorked } from "./recent"
 import { forgetChannel, loadMember, renameChannel, type StoredMember } from "./store"
 import { baseFrom, usableBase } from "./base-plan"
+import { trimmed } from "./trim"
 import { dropWarm, heldWindow, keepWarm, warmOf } from "./warm"
 
 const HISTORY = 2_000
@@ -285,6 +286,17 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
     [roster]
   )
   const state = useMemo(() => fold(messages, rosterForFold, now, roomsFloor, guardFloor, base), [messages, rosterForFold, now, roomsFloor, guardFloor, base])
+  const trim = useEffectEvent(() => {
+    const next = trimmed(messages, rosterForFold, now, roomsFloor, guardFloor, base, HISTORY)
+    if (!next) return
+    setBase(next)
+    setMessages((prev) => prev.filter((m) => m.seq > next.n))
+    setUnread((prev) => prev.filter((seq) => seq > next.n))
+  })
+  useEffect(() => {
+    const t = setTimeout(trim, 0)
+    return () => clearTimeout(t)
+  }, [messages.length])
 
   const scopesKey = useMemo(() => [...state.members.values()].map((m) => `${m.pk}:${m.scopes.join(",")}`).join("|"), [state])
   const bitsKey = useMemo(() => roster.map((m) => `${m.pk}:${m.readOnly ? 0 : 1}`).join("|"), [roster])

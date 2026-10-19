@@ -13,7 +13,11 @@ export function trimmedFrom<T extends { seq: number }>(items: T[], hidden: numbe
   return aboveView(from) ? from : null
 }
 
-export function useWindow<T extends { seq: number }>(items: T[], hereKey: string, scroller: RefObject<HTMLDivElement | null>, reveal: number | null, all: boolean) {
+export function awayFrom<T extends { seq: number }>(items: T[], hidden: number): number | null {
+  return items.length - hidden > MOUNTED_MAX ? startOf(items, WINDOW_STEP) : null
+}
+
+export function useWindow<T extends { seq: number }>(items: T[], hereKey: string, scroller: RefObject<HTMLDivElement | null>, reveal: number | null, all: boolean, showing: boolean) {
   const [shownKey, setShownKey] = useState(hereKey)
   const [from, setFrom] = useState(() => startOf(items, WINDOW_STEP))
   if (shownKey !== hereKey) {
@@ -30,6 +34,8 @@ export function useWindow<T extends { seq: number }>(items: T[], hereKey: string
     )
   const first = all ? -1 : items.findIndex((m) => m.seq >= from)
   const hidden = Math.max(0, first)
+  const away = showing || all ? null : awayFrom(items, hidden)
+  if (away !== null && away !== from) setFrom(away)
   const keep = useRef<number | null>(null)
   const more = () => {
     const el = scroller.current

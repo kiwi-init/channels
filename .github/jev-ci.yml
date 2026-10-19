@@ -136,6 +136,10 @@ jobs:
       store's CSP allows api.x.ai only when an xAI key is saved, the project key never reaches
       the snapshot or the token IPC result, consent defaults off, and
       desktop/build/entitlements.mac.plist has the audio-input entitlement. And
+      web lib/channel/trim.test.ts: a long session folds the messages past the 2000-message window
+      (plus 500 of slack) into the fold base, and tasks and facts from before it stay;
+      lib/channel/warm.test.ts: only the last four channels stay warm; lib/threads.test.ts: what's
+      been seen where keeps the newest 500 places. And
       test/perf-check.test.ts: perf-check compares the median of the runs with each gate, counts the
       soak's limits only in the nightly run and lists what isn't at its 0.20 budget yet;
       test/mac-size.test.ts: desktop/scripts/mac-size.ts (run by release-build on macOS) fails a dmg,

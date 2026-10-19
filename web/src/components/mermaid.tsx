@@ -23,23 +23,26 @@ const MIN_SCALE = 0.7
 
 const FONT = '"Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif'
 
-function resolver(): (token: string) => string {
+function resolver(): { color: (token: string) => string; done: () => void } {
   const probe = document.createElement("span")
   probe.style.display = "none"
   document.body.append(probe)
   const ctx = document.createElement("canvas").getContext("2d")
-  return (token) => {
-    probe.style.color = `var(--${token})`
-    const computed = getComputedStyle(probe).color
-    if (!ctx) return computed
-    ctx.fillStyle = "#000"
-    ctx.fillStyle = computed
-    return String(ctx.fillStyle)
+  return {
+    color: (token) => {
+      probe.style.color = `var(--${token})`
+      const computed = getComputedStyle(probe).color
+      if (!ctx) return computed
+      ctx.fillStyle = "#000"
+      ctx.fillStyle = computed
+      return String(ctx.fillStyle)
+    },
+    done: () => probe.remove(),
   }
 }
 
 function themeVariables(): Record<string, string> {
-  const c = resolver()
+  const { color: c, done } = resolver()
   const v = {
     background: c("raised"),
     mainBkg: c("field"),
@@ -79,6 +82,7 @@ function themeVariables(): Record<string, string> {
     fontFamily: FONT,
     fontSize: "13px",
   }
+  done()
   return v
 }
 

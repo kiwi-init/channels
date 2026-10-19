@@ -293,7 +293,7 @@ function linkMessageRefs(node: MdNode, known: (seq: number) => boolean): void {
 
 const PLAIN = [remarkGfm, remarkBreaks]
 const urlTransform = (url: string) => sanitizeMarkdownUrl(url) ?? ""
-const rendered = new Recent<ReactElement>(3000)
+const rendered = new Recent<ReactElement>(500)
 
 export function renderMarkdown(body: string, known?: (seq: number) => boolean): ReactElement {
   const linked = known ? knownRefs(body, known) : ""

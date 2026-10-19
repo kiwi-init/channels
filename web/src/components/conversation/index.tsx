@@ -247,7 +247,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
 
   const folded = hereKey === "main" && !search && state.compact ? state.compact : null
   const shown = folded && !earlier ? visible.filter((m) => m.seq > folded.through) : visible
-  const { tail, hidden, more, onScrolled } = useWindow(shown, hereKey, scroller, highlight, !!search)
+  const { tail, hidden, more, onScrolled } = useWindow(shown, hereKey, scroller, highlight, !!search, tab === "conversation")
 
   if (gone) {
     return (
