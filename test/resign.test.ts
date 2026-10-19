@@ -1,6 +1,3 @@
-// A request signed, then held past the signature's window before it reaches the relay (the
-// machine slept in between): the client signs it again, once. Seen killing `kiwi tail` overnight.
-
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
