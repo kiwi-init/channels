@@ -101,6 +101,7 @@ const inProcess = async (label: string, run: (s: AgentSession) => Effect.Effect<
     base: () => Effect.succeed(null),
     keepBase: () => Effect.void,
     dropBase: () => Effect.void,
+    trim: () => Effect.void,
   };
   const was = process.env.KIWI_HOME;
   process.env.KIWI_HOME = agent;
@@ -169,6 +170,7 @@ describe("one fetch of the log per agent command", () => {
       base: () => Effect.succeed(null),
       keepBase: () => Effect.void,
       dropBase: () => Effect.void,
+      trim: () => Effect.void,
     };
     const was = process.env.KIWI_HOME;
     process.env.KIWI_HOME = agent;

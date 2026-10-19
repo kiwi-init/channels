@@ -144,6 +144,28 @@ export function appendCache(roomId: string, messages: Message[]): void {
   });
 }
 
+export function trimCache(roomId: string, base: FoldBase): number {
+  const path = cachePath(roomId);
+  if (!existsSync(path)) return 0;
+  return withLock(`${path}.lock`, () => {
+    if ((readBase(roomId)?.n ?? 0) < base.n) writePrivate(`${path}.base`, JSON.stringify(base));
+    const kept: string[] = [];
+    let dropped = 0;
+    for (const line of readFileSync(path, "utf8").split("\n")) {
+      if (!line) continue;
+      try {
+        if ((JSON.parse(line) as Message).seq > base.n) kept.push(line);
+        else dropped++;
+      } catch {
+        // A torn line: dropped with the rest, the next sync refetches what it held.
+        dropped++;
+      }
+    }
+    if (dropped) writePrivate(path, kept.join("\n") + (kept.length ? "\n" : ""));
+    return dropped;
+  });
+}
+
 export function readBase(roomId: string): FoldBase | null {
   try {
     return JSON.parse(readFileSync(`${cachePath(roomId)}.base`, "utf8")) as FoldBase;

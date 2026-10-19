@@ -217,7 +217,7 @@ jobs:
   test-flows-a:
     name: test / flows-a
     inputs: ["src/**", "packages/core/**", "test/owner-cli.ts"]
-    imports_from: ["test/e2e.test.ts", "test/verbs.test.ts", "test/threads.test.ts", "test/reconnect.test.ts", "test/budget-*.test.ts"]
+    imports_from: ["test/e2e.test.ts", "test/verbs.test.ts", "test/threads.test.ts", "test/reconnect.test.ts", "test/cache-trim.test.ts", "test/budget-*.test.ts"]
     always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs slow end-to-end tests that start a real local relay (src/relay/bun.ts) and drive the
@@ -227,6 +227,9 @@ jobs:
       budget-relay counts the SQL statements a stored message, a read mark and a connecting
       socket cost on one Durable Object storage handle; the others drive clients through
       test/traffic.ts, a proxy that counts HTTP requests by route, sockets, frames and bytes.
+      cache-trim: past 800 messages a session keeps a local fold base and trims cache/<room>.jsonl to
+      the newest 300 (src/agent/state.ts, src/config/cache.ts), and tasks, charter and log read the
+      same from base and tail as from the full log.
       Fails if the CLI, the client, the relay, the protocol or the text they print changes
       behavior, or an operation costs more requests, frames, bytes or statements than its budget.
 
