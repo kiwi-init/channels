@@ -117,7 +117,9 @@ export const KiwiPlugin = async ({ client }: { client: Client }) => {
         output.env.MIMOCODE_SESSION_ID = id;
         void watch(id, input.cwd ?? process.cwd());
       } catch {
+        // MiMoCode couldn't name the session's parent: the session's own id still reaches its listener.
         output.env.MIMOCODE_SESSION_ID = input.sessionID;
+        void watch(input.sessionID, input.cwd ?? process.cwd());
       }
     },
     event: async ({ event }: { event: Event }) => {

@@ -257,3 +257,34 @@ test("kiwi hooks install mimo writes the plugin, status says so, and an agent in
   uninstallExtra("mimo");
   expect(extraInstalled("mimo")).toBe(false);
 });
+
+test("a session whose lookup fails still gets a listener, on its own id, and a message for it starts a turn there", async () => {
+  const dir = scratch("hk-mimo-lookup-");
+  const calls = join(dir, "calls.log");
+  const fake = join(dir, "listen.sh");
+  writeFileSync(
+    fake,
+    `#!/bin/sh\necho "$MIMOCODE_SESSION_ID" >> ${JSON.stringify(calls)}\nif [ ! -e ${JSON.stringify(join(dir, "once"))} ]; then touch ${JSON.stringify(join(dir, "once"))}; echo "New Kiwi Channels messages for you (ch)" >&2; exit 2; fi\nsleep 30\n`,
+  );
+  chmodSync(fake, 0o755);
+  const file = join(dir, "kiwi.ts");
+  writeFileSync(file, mimoPluginSource(fake));
+  const prompted: Prompted[] = [];
+  const client = {
+    session: {
+      get: async (): Promise<{ data?: { parentID?: string } }> => {
+        throw new Error("connection refused");
+      },
+      promptAsync: async (o: Prompted) => void prompted.push(o),
+    },
+  };
+  const mod = (await import(file)) as { KiwiPlugin: (input: { client: typeof client }) => Promise<Hooks> };
+  const hooks = await mod.KiwiPlugin({ client });
+  const out = { env: {} as Record<string, string> };
+  await hooks["shell.env"]({ cwd: dir, sessionID: "ses_lost" }, out);
+  expect(out.env.MIMOCODE_SESSION_ID).toBe("ses_lost");
+  await until("the wake", () => prompted.length === 1);
+  expect(prompted[0]?.path).toEqual({ id: "ses_lost" });
+  expect(readFileSync(calls, "utf8").trim().split("\n")[0]).toBe("ses_lost");
+  await hooks.event({ event: { type: "session.deleted", properties: { info: { id: "ses_lost" } } } });
+});
