@@ -9,7 +9,10 @@ export function useHarnesses(state: ChannelState, requests: readonly JoinRequest
       const h = m.runs?.harness ?? m.card?.harness
       return m.active && h ? [[m.name, h] as const] : []
     }),
-    ...requests.flatMap((r) => (r.card?.harness ? [[r.name, r.card.harness] as const] : [])),
+    ...requests.flatMap((r) => {
+      const h = r.runs?.harness ?? r.card?.harness
+      return h ? [[r.name, h] as const] : []
+    }),
   ])
   return useMemo(() => new Map(JSON.parse(pairs) as [string, string][]), [pairs])
 }
