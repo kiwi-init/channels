@@ -16,6 +16,7 @@ import { handoffLabel, handoffLeft, handoffOf, handoffOpen } from "@/lib/handoff
 import { useControls } from "./controls"
 import { Icon } from "./icon"
 import { Button, Monogram, TextField, errorText, toast } from "./kit"
+import { ComposerQuestion } from "./lazy"
 import { defaultScopes } from "./scopes"
 import { AgentFacts } from "./agent-facts"
 
@@ -28,6 +29,7 @@ export function NeedsYou({
   roomId,
   me,
   decisions,
+  decisionCards,
   escalations,
   questions,
   reviews,
@@ -45,6 +47,7 @@ export function NeedsYou({
   me: string
   /** Asks to this person by name: the oldest also waits above the composer, where it is answered. */
   decisions: Message[]
+  decisionCards: boolean
   /** Escalations to this person nobody has answered yet. */
   escalations: Message[]
   questions: Message[]
@@ -64,7 +67,8 @@ export function NeedsYou({
   const requests = p.isOwner ? p.requests : []
   const items: { key: string; node: ReactNode }[] = [
     ...requests.map((r) => ({ key: `r${r.id}`, node: <RequestItem r={r} roomId={roomId} now={now} /> })),
-    ...[...decisions, ...escalations, ...questions].map((m) => ({
+    ...(decisionCards ? decisions : []).map((m) => ({ key: `a${m.seq}`, node: <DecisionCard m={m} nameOf={nameOf} onReply={onReply} /> })),
+    ...[...(decisionCards ? [] : decisions), ...escalations, ...questions].map((m) => ({
       key: `a${m.seq}`,
       node: <AskItem m={m} me={me} now={now} nameOf={nameOf} agent={agentOf(m.from)} onReply={onReply} onJump={onJump} />,
     })),
@@ -198,23 +202,9 @@ function AskItem({
   onReply: (m: Message, text: string) => Promise<void>
   onJump: (seq: number) => void
 }) {
-  const [draft, setDraft] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const { draft, setDraft, busy, send } = useAnswer(m, nameOf, onReply, null)
   const handoff = handoffOf(m)
   const live = !!handoff && handoffOpen(handoff, now)
-  const send = async (text = draft?.trim() ?? "") => {
-    if (!text) return
-    setBusy(true)
-    try {
-      await onReply(m, text)
-      setDraft(null)
-      toast(`Answered ${nameOf(m.from)}`)
-    } catch (err) {
-      toast(`Not sent: ${errorText(err)}`, "error")
-    } finally {
-      setBusy(false)
-    }
-  }
   return (
     <Row
       icon={handoff ? Globe02Icon : m.esc ? Key01Icon : HelpCircleIcon}
@@ -257,28 +247,81 @@ function AskItem({
           </Button>
         </>
       ) : (
-        <form
-          className="flex w-full items-center gap-2"
-          onSubmit={(e) => {
-            e.preventDefault()
-            void send(draft?.trim())
-          }}
-        >
-          <TextField
-            autoFocus
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => e.key === "Escape" && setDraft(null)}
-            placeholder={`Answer ${nameOf(m.from)}`}
-            aria-label="Answer"
-            className="flex-1"
-          />
-          <Button size="sm" variant="secondary" type="submit" disabled={busy || !draft.trim()}>
-            Send
-          </Button>
-        </form>
+        <AnswerForm draft={draft} setDraft={setDraft} busy={busy} send={send} to={nameOf(m.from)} autoFocus onEscape={() => setDraft(null)} />
       )}
     </Row>
+  )
+}
+
+function useAnswer(m: Message, nameOf: (n: string) => string, onReply: (m: Message, text: string) => Promise<void>, idle: string | null) {
+  const [draft, setDraft] = useState<string | null>(idle)
+  const [busy, setBusy] = useState(false)
+  const send = async (text = draft?.trim() ?? "") => {
+    if (!text) return
+    setBusy(true)
+    try {
+      await onReply(m, text)
+      setDraft(idle)
+      toast(`Answered ${nameOf(m.from)}`)
+    } catch (err) {
+      toast(`Not sent: ${errorText(err)}`, "error")
+    } finally {
+      setBusy(false)
+    }
+  }
+  return { draft, setDraft, busy, send }
+}
+
+function AnswerForm({
+  draft,
+  setDraft,
+  busy,
+  send,
+  to,
+  autoFocus,
+  onEscape,
+}: {
+  draft: string
+  setDraft: (draft: string) => void
+  busy: boolean
+  send: (text?: string) => Promise<void>
+  to: string
+  autoFocus: boolean
+  onEscape: () => void
+}) {
+  return (
+    <form
+      className="flex w-full items-center gap-2"
+      onSubmit={(e) => {
+        e.preventDefault()
+        void send(draft.trim())
+      }}
+    >
+      <TextField
+        autoFocus={autoFocus}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => e.key === "Escape" && onEscape()}
+        placeholder={`Answer ${to}`}
+        aria-label="Answer"
+        className="flex-1"
+      />
+      <Button size="sm" variant="secondary" type="submit" disabled={busy || !draft.trim()}>
+        Send
+      </Button>
+    </form>
+  )
+}
+
+function DecisionCard({ m, nameOf, onReply }: { m: Message; nameOf: (n: string) => string; onReply: (m: Message, text: string) => Promise<void> }) {
+  const choices = !!m.choices?.length
+  const idle = choices ? null : ""
+  const { draft, setDraft, busy, send } = useAnswer(m, nameOf, onReply, idle)
+  return (
+    <div className="flex flex-col py-3">
+      <ComposerQuestion m={m} more={0} nameOf={nameOf} disabled={busy} onChoose={(c) => void send(c)} onElse={() => setDraft((d) => d ?? "")} />
+      {draft !== null && <AnswerForm draft={draft} setDraft={setDraft} busy={busy} send={send} to={nameOf(m.from)} autoFocus={choices} onEscape={() => setDraft(idle)} />}
+    </div>
   )
 }
 

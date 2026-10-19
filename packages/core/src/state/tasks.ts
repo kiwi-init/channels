@@ -45,8 +45,28 @@ const OPEN_FOR_TITLE = new Set<TaskState>(["todo", "doing", "review"]);
 function normTitle(s: string): string {
   return s
     .toLowerCase()
+    .replace(/(?<![a-z0-9])v(\d)/g, "$1")
+    .replace(/([a-z])-(\d)/g, "$1$2")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+}
+
+const hasDigit = (w: string) => /\d/.test(w);
+
+function titleWords(norm: string): string[] {
+  return [...new Set(norm.split(" ").filter((w) => w.length > 2 || hasDigit(w)))];
+}
+
+const TITLE_ID = /(?<![a-z0-9])(?:([a-z]+)-?)?(\d+(?:[.-]\d+)*[a-z]*)(?![a-z0-9])/g;
+
+function titleIds(title: string): Set<string> {
+  return new Set([...title.toLowerCase().matchAll(TITLE_ID)].map(([, prefix, digits]) => `${prefix && prefix !== "v" ? prefix : ""}${digits}`));
+}
+
+function idsDiffer(a: string, b: string): boolean {
+  const ia = titleIds(a);
+  const ib = titleIds(b);
+  return ia.size > 0 && ib.size > 0 && (ia.size !== ib.size || [...ia].some((id) => !ib.has(id)));
 }
 
 export function titlesLookAlike(a: string, b: string): boolean {
@@ -54,14 +74,15 @@ export function titlesLookAlike(a: string, b: string): boolean {
   const nb = normTitle(b);
   if (!na || !nb) return false;
   if (na === nb) return true;
+  if (idsDiffer(a, b)) return false;
+  const wa = titleWords(na);
+  const wb = titleWords(nb);
   const shorter = na.length <= nb.length ? na : nb;
   const longer = shorter === na ? nb : na;
   if (shorter.length >= 8 && longer.includes(shorter)) return true;
-  const wa = [...new Set(na.split(" ").filter((w) => w.length > 2))];
-  const wb = new Set(nb.split(" ").filter((w) => w.length > 2));
-  if (!wa.length || !wb.size) return false;
-  const shared = wa.filter((w) => wb.has(w)).length;
-  return shared / Math.min(wa.length, wb.size) >= 0.6;
+  if (!wa.length || !wb.length) return false;
+  const shared = wa.filter((w) => wb.includes(w)).length;
+  return shared >= 2 && shared / Math.min(wa.length, wb.length) >= 0.6;
 }
 
 export function similarOpenTasks(state: ChannelState, title: string): Task[] {

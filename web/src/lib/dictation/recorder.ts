@@ -1,11 +1,11 @@
-export const SAMPLE_RATE = 16_000
+const SAMPLE_RATE = 16_000
 
 export interface Recording {
   stop(): Promise<Float32Array>
   cancel(): void
 }
 
-export async function toSpeech(blob: Blob): Promise<Float32Array> {
+async function toSpeech(blob: Blob): Promise<Float32Array> {
   const ctx = new OfflineAudioContext(1, 1, SAMPLE_RATE)
   const audio = await ctx.decodeAudioData(await blob.arrayBuffer())
   return audio.getChannelData(0)

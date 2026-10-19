@@ -40,7 +40,7 @@ export function wakesInSession(via: string | undefined): boolean {
 }
 
 export function pullsWake(harness: WakeHarness | undefined): boolean {
-  return harness === "kimi" || harness === "cursor";
+  return harness === "kimi" || harness === "cursor" || harness === "grok";
 }
 
 export function viaOf(path: WakePath): WakeVia | null {
@@ -107,7 +107,7 @@ export function asOption(name: string): string {
 }
 
 export function wakePrompt(alias: string, agent: string): string {
-  return `New Kiwi messages for you in ${JSON.stringify(alias)}. Read them with: kiwi ${channelOption(alias)} ${asOption(agent)} listen --now, then act on them.`;
+  return `New Kiwi messages for you in ${JSON.stringify(alias)}. If they aren't shown here, read them with: kiwi ${channelOption(alias)} ${asOption(agent)} listen --now, then act on them.`;
 }
 
 export function wakeArgv(via: Exclude<WakeCommand, "webhook" | "kimi-server">, session: string, prompt: string): string[] {

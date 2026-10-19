@@ -4,7 +4,8 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { howMessagesReachYou } from "../src/hooks.ts";
 import { extraInstalled, hooksStatus, installExtra, uninstallExtra } from "../src/hooks/install/extra.ts";
-import { installMimo, mimoConfigRoot, mimoInstalled, mimoPluginPath, mimoPluginSource, uninstallMimo } from "../src/hooks/install/mimo.ts";
+import { updateConfig } from "../src/config.ts";
+import { installMimo, migrateMimo, mimoConfigRoot, mimoInstalled, mimoPluginPath, mimoPluginSource, uninstallMimo } from "../src/hooks/install/mimo.ts";
 import { handoffFrom } from "../src/hooks/listen.ts";
 
 const made: string[] = [];
@@ -287,4 +288,86 @@ test("a session whose lookup fails still gets a listener, on its own id, and a m
   expect(prompted[0]?.path).toEqual({ id: "ses_lost" });
   expect(readFileSync(calls, "utf8").trim().split("\n")[0]).toBe("ses_lost");
   await hooks.event({ event: { type: "session.deleted", properties: { info: { id: "ses_lost" } } } });
+});
+
+test("a session whose lookup failed once and then works keeps one listener, its root's: the one on its own id stops", async () => {
+  const dir = scratch("hk-mimo-relookup-");
+  const calls = join(dir, "calls.log");
+  const fake = join(dir, "listen.sh");
+  writeFileSync(fake, `#!/bin/sh\necho "$MIMOCODE_SESSION_ID $$" >> ${JSON.stringify(calls)}\nsleep 30\n`);
+  chmodSync(fake, 0o755);
+  const file = join(dir, "kiwi.ts");
+  writeFileSync(file, mimoPluginSource(fake));
+  let lookups = 0;
+  const client = {
+    session: {
+      get: async ({ path }: { path: { id: string } }): Promise<{ data?: { parentID?: string } }> => {
+        lookups += 1;
+        if (lookups === 1) throw new Error("connection refused");
+        return { data: path.id === "ses_child" ? { parentID: "ses_root" } : {} };
+      },
+      promptAsync: async () => undefined,
+    },
+  };
+  const mod = (await import(file)) as { KiwiPlugin: (input: { client: typeof client }) => Promise<Hooks> };
+  const hooks = await mod.KiwiPlugin({ client });
+  const started = () => (existsSync(calls) ? readFileSync(calls, "utf8").trim().split("\n") : []);
+  const alive = (pid: number) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      // Signal 0 throws only once no process has that pid.
+      return false;
+    }
+  };
+  await hooks["shell.env"]({ cwd: dir, sessionID: "ses_child" }, { env: {} });
+  await until("the listener on the session's own id", () => started().length === 1);
+  const out = { env: {} as Record<string, string> };
+  await hooks["shell.env"]({ cwd: dir, sessionID: "ses_child" }, out);
+  expect(out.env.MIMOCODE_SESSION_ID).toBe("ses_root");
+  await until("the root's listener", () => started().length === 2);
+  const [own, root] = started().map((line) => line.split(" "));
+  expect(own?.[0]).toBe("ses_child");
+  expect(root?.[0]).toBe("ses_root");
+  await until("the listener on the session's own id to stop", () => !alive(Number(own?.[1])));
+  expect(alive(Number(root?.[1]))).toBe(true);
+  await Bun.sleep(300);
+  expect(started()).toHaveLength(2);
+  await hooks.event({ event: { type: "session.deleted", properties: { info: { id: "ses_root" } } } });
+});
+
+test("a plugin of Kiwi's from an older kiwi is rewritten at the listen hook; a kiwi.ts that isn't Kiwi's, and no kiwi.ts, are left alone", () => {
+  const dir = scratch("hk-mimo-migrate-");
+  setEnv({ KIWI_MIMO_DIR: dir, KIWI_HOME: scratch("hk-mimo-migrate-home-") });
+  const path = installMimo();
+  const current = readFileSync(path, "utf8");
+  const stale = current.replace("RETRY_MS = 30_000", "RETRY_MS = 60_000");
+  writeFileSync(path, stale);
+  expect(mimoInstalled()).toBe(false);
+  expect(migrateMimo()).toBe(path);
+  expect(readFileSync(path, "utf8")).toBe(current);
+  expect(mimoInstalled()).toBe(true);
+  expect(migrateMimo()).toBeNull();
+
+  writeFileSync(path, stale);
+  setEnv({ KIWI_NO_HOOKS: "1" });
+  expect(migrateMimo()).toBeNull();
+  delete process.env.KIWI_NO_HOOKS;
+  updateConfig((c) => {
+    c.harnessHooks = { mimo: "off" };
+  });
+  expect(migrateMimo()).toBeNull();
+  expect(readFileSync(path, "utf8")).toBe(stale);
+  updateConfig((c) => {
+    c.harnessHooks = {};
+  });
+
+  const mine = "export const Mine = async () => ({});\n";
+  writeFileSync(path, mine);
+  expect(migrateMimo()).toBeNull();
+  expect(readFileSync(path, "utf8")).toBe(mine);
+  rmSync(path);
+  expect(migrateMimo()).toBeNull();
+  expect(existsSync(path)).toBe(false);
 });

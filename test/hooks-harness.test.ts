@@ -22,6 +22,7 @@ import {
   installHooks,
   isOurHook,
   kimiReason,
+  migrateListenHooks,
   PROBE_MS,
   PROBE_TTL_MS,
   rewakeCapable,
@@ -246,6 +247,7 @@ test("codex, gemini, cursor, and grok install, re-install once, and uninstall ke
   expect(codexStop).toContain("echo mine # kiwi");
   expect(codexStop).toContain("'/old/kiwi' hook stop # channel-one");
   expect(codexStop.filter((c: string) => c.endsWith(" hook stop # kiwi"))).toHaveLength(1);
+  expect(codexStop.filter((c: string) => c.endsWith(" --harness codex hook stop # kiwi"))).toHaveLength(1);
   expect(read(join(codex, "hooks.json")).hooks.UserPromptSubmit).toBeDefined();
   expect(read(join(codex, "hooks.json")).hooks.SessionStart).toBeDefined();
 
@@ -255,6 +257,7 @@ test("codex, gemini, cursor, and grok install, re-install once, and uninstall ke
   expect(before.map((h: { command: string }) => h.command)).toContain("echo gemini-user");
   expect(before.filter((h: { command: string }) => h.command.endsWith(" hook prompt # kiwi"))).toHaveLength(1);
   expect(before.find((h: { command: string }) => h.command.endsWith(" hook prompt # kiwi"))?.timeout).toBe(20_000);
+  expect(before.filter((h: { command: string }) => h.command.endsWith(" --harness gemini hook prompt # kiwi"))).toHaveLength(1);
   expect(gem.hooks.AfterAgent[0]?.matcher).toBe("*");
   expect(gem.hooks.AfterAgent[0]?.hooks[0]?.timeout).toBe(30_000);
   expect(gem.hooks.UserPromptSubmit).toBeUndefined();
@@ -271,7 +274,8 @@ test("codex, gemini, cursor, and grok install, re-install once, and uninstall ke
   const claudeStop = read(join(claude, "settings.json")).hooks.Stop.flatMap((e: { hooks: { command: string }[] }) => e.hooks.map((h) => h.command));
   const grokStop = read(join(grok, "hooks", "kiwi.json")).hooks.Stop.flatMap((e: { hooks: { command: string }[] }) => e.hooks.map((h) => h.command));
   const ours = (list: string[]) => list.find((c) => c.endsWith(" hook stop # kiwi"));
-  expect(ours(grokStop)).toBe(ours(claudeStop));
+  expect(ours(claudeStop)).not.toContain("--harness");
+  expect(ours(grokStop)).toBe(ours(claudeStop)?.replace(" hook stop # kiwi", " --harness grok hook stop # kiwi"));
   expect(read(join(grok, "hooks", "kiwi.json")).hooks.PostToolUse[0]?.hooks[0]?.command).toBe("echo grok-user");
   expect(read(join(grok, "hooks", "kiwi.json")).hooks.UserPromptSubmit).toBeUndefined();
   expect(read(join(grok, "hooks", "kiwi.json")).hooks.SessionStart).toBeUndefined();
@@ -455,6 +459,91 @@ test("the listener's day is a week; an install with the old one-day timeout coun
   expect(installedListenSeconds()).toBe(7 * 24 * 3600 + 60);
 });
 
+test("a listen hook written by 0.19 (one-day timeout) is migrated on its own and then counts as installed; no kiwi entries stay untouched", () => {
+  hideEnv(["AI_AGENT", "CLAUDE_CODE_EXECPATH", "CLAUDECODE"]);
+  const dir = scratch("kiwi-listen-migrate-");
+  setEnv({ KIWI_HOME: scratch("kiwi-listen-migrate-home-"), CLAUDE_CONFIG_DIR: dir });
+  const file = join(dir, "settings.json");
+  setEnv({ CLAUDECODE: "1", AI_AGENT: "claude-code_2-1-296_agent" });
+  installHooks();
+  writeFileSync(file, readFileSync(file, "utf8").replaceAll(`"timeout": ${7 * 24 * 3600 + 60}`, '"timeout": 86460'));
+  hideEnv(["AI_AGENT", "CLAUDECODE"]);
+  expect(hooksInstalled()).toBe(false);
+  expect(hooksStatus()).toContain("claude: not installed (its listening hooks are from an older kiwi or incomplete: kiwi hooks install)");
+  expect(installHooks()).toBe(file);
+  expect(installedListenSeconds()).toBe(7 * 24 * 3600 + 60);
+  writeFileSync(file, readFileSync(file, "utf8").replaceAll(`"timeout": ${7 * 24 * 3600 + 60}`, '"timeout": 86460'));
+  setEnv({ CLAUDECODE: "1", AI_AGENT: "claude-code_2-1-296_agent" });
+  expect(hooksListen()).toBe(false);
+  expect(migrateListenHooks()).toBe(file);
+  expect(installedListenSeconds()).toBe(7 * 24 * 3600 + 60);
+  expect(hooksInstalled()).toBe(true);
+  expect(hooksListen()).toBe(true);
+  expect(migrateListenHooks()).toBeNull();
+
+  const mine = JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: "echo mine" }] }] } }, null, 2) + "\n";
+  writeFileSync(file, mine);
+  expect(migrateListenHooks()).toBeNull();
+  expect(readFileSync(file, "utf8")).toBe(mine);
+});
+
+type HookFile = { hooks: Record<string, { hooks: { command: string; timeout?: number }[] }[]> };
+
+function listenTimeouts(file: string): Record<string, number[]> {
+  const s = JSON.parse(readFileSync(file, "utf8")) as HookFile;
+  return Object.fromEntries(
+    Object.entries(s.hooks).map(([event, entries]) => [event, entries.flatMap((e) => e.hooks.filter((h) => h.command.endsWith(" hook listen # kiwi")).map((h) => h.timeout ?? 0))]),
+  );
+}
+
+test("a migration repairs every listen entry kiwi has: stale on two events and missing on Stop ends current on all three", () => {
+  hideEnv(["AI_AGENT", "CLAUDE_CODE_EXECPATH", "CLAUDECODE"]);
+  const dir = scratch("kiwi-listen-partial-");
+  setEnv({ KIWI_HOME: scratch("kiwi-listen-partial-home-"), CLAUDE_CONFIG_DIR: dir });
+  const file = join(dir, "settings.json");
+  setEnv({ CLAUDECODE: "1", AI_AGENT: "claude-code_2-1-296_agent" });
+  installHooks();
+  const s = JSON.parse(readFileSync(file, "utf8").replaceAll(`"timeout": ${7 * 24 * 3600 + 60}`, '"timeout": 86460')) as HookFile;
+  s.hooks.Stop = (s.hooks.Stop ?? []).filter((e) => !e.hooks.some((h) => h.command.endsWith(" hook listen # kiwi")));
+  writeFileSync(file, JSON.stringify(s, null, 2) + "\n");
+  expect(listenTimeouts(file)).toEqual({ SessionStart: [86460], UserPromptSubmit: [86460], Stop: [] });
+  hideEnv(["AI_AGENT"]);
+  expect(migrateListenHooks()).toBe(file);
+  const week = 7 * 24 * 3600 + 60;
+  expect(listenTimeouts(file)).toEqual({ SessionStart: [week], UserPromptSubmit: [week], Stop: [week] });
+  expect(hooksStatus()).toContain("claude: installed");
+  expect(hooksListen()).toBe(true);
+});
+
+test("kiwi hooks status and the SessionStart check give the same answer for the same settings", () => {
+  hideEnv(["AI_AGENT", "CLAUDE_CODE_EXECPATH", "CLAUDECODE"]);
+  const dir = scratch("kiwi-listen-agree-");
+  setEnv({ KIWI_HOME: scratch("kiwi-listen-agree-home-"), CLAUDE_CONFIG_DIR: dir });
+  const file = join(dir, "settings.json");
+  const inClaude = { CLAUDECODE: "1", AI_AGENT: "claude-code_2-1-296_agent" };
+  setEnv(inClaude);
+  installHooks();
+  const current = readFileSync(file, "utf8");
+  const stale = current.replaceAll(`"timeout": ${7 * 24 * 3600 + 60}`, '"timeout": 86460');
+  const parsed = JSON.parse(current) as HookFile;
+  for (const event of Object.keys(parsed.hooks)) parsed.hooks[event] = (parsed.hooks[event] ?? []).filter((e) => !e.hooks.some((h) => h.command.endsWith(" hook listen # kiwi")));
+  const absent = JSON.stringify(parsed, null, 2) + "\n";
+  const answers = [current, stale, absent].map((text) => {
+    writeFileSync(file, text);
+    setEnv(inClaude);
+    const sessionStart = hooksListen();
+    const inside = hooksStatus().split("\n")[0];
+    hideEnv(["AI_AGENT", "CLAUDECODE"]);
+    const shell = hooksStatus().split("\n")[0];
+    return { sessionStart, inside: inside === "claude: installed", shell: shell === "claude: installed" };
+  });
+  expect(answers).toEqual([
+    { sessionStart: true, inside: true, shell: true },
+    { sessionStart: false, inside: false, shell: false },
+    { sessionStart: false, inside: false, shell: false },
+  ]);
+});
+
 test("a harness that passes CLAUDECODE through is never taken for Claude Code by its hooks", () => {
   expect(hooksListen({ CLAUDECODE: "1", MIMOCODE: "1" })).toBe(false);
   expect(rewakeCapable({ CLAUDECODE: "1", MIMOCODE: "1", AI_AGENT: "claude-code_9-9-9_agent" })).toBe(false);
@@ -630,18 +719,19 @@ test("a hook through a wrapper in kiwi's install folder counts only when the wra
   const forward = (target: string) => `exec ${shellQuoted(process.execPath)} ${shellQuoted(target)} "$@"`;
   const write = (program: string) => {
     const cmd = (arg: string) => `${shellQuoted(program)} hook ${arg} # kiwi`;
+    const listen = { hooks: [{ type: "command", command: cmd("listen"), async: true, asyncRewake: true, timeout: 7 * 24 * 3600 + 60 }] };
     writeFileSync(
       join(claude, "settings.json"),
       JSON.stringify({
         hooks: {
-          SessionStart: [{ hooks: [{ type: "command", command: cmd("session-start") }] }],
-          UserPromptSubmit: [{ hooks: [{ type: "command", command: cmd("prompt") }] }],
-          Stop: [{ hooks: [{ type: "command", command: cmd("stop") }] }],
+          SessionStart: [{ hooks: [{ type: "command", command: cmd("session-start") }] }, listen],
+          UserPromptSubmit: [{ hooks: [{ type: "command", command: cmd("prompt") }] }, listen],
+          Stop: [{ hooks: [{ type: "command", command: cmd("stop") }] }, listen],
         },
       }),
     );
     mkdirSync(join(grok, "hooks"), { recursive: true });
-    writeFileSync(join(grok, "hooks", "kiwi.json"), JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: cmd("stop") }] }] } }));
+    writeFileSync(join(grok, "hooks", "kiwi.json"), JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: `${shellQuoted(program)} --harness grok hook stop # kiwi` }] }] } }));
   };
   const status = () => {
     const r = kiwiCli(["hooks", "status"], env);

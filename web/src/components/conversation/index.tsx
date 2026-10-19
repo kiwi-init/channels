@@ -412,12 +412,13 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     go(placeFromKey(key) ?? MAIN)
   }
   const roomName = state.rooms.get(cardRoom)?.name ?? GENERAL_ROOM
-  const needsYou = (
+  const needsYou = (decisionCards: boolean) => (
     <NeedsYou
       now={now}
       roomId={roomId}
       me={me}
       decisions={decisions}
+      decisionCards={decisionCards}
       escalations={escalations}
       questions={questions}
       reviews={reviews}
@@ -512,7 +513,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                             now={now}
                             view={view}
                             agents={agentsNow}
-                            needs={needsMe ? needsYou : null}
+                            needs={needsMe ? needsYou(true) : null}
                             empty={noAgents ? <AddAgent code={member.code} isOwner={isOwner} /> : null}
                             open={shownTask}
                             onOpen={openTask}
@@ -535,7 +536,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                         }}
                       >
                         <div className="relative mx-auto w-full max-w-[792px] px-4 pt-[calc(var(--head)+8px)] pb-[calc(var(--foot)+16px)]">
-                          {hereKey === "main" && needsYou}
+                          {hereKey === "main" && needsYou(false)}
                           {hereKey === "main" && state.rooms.size > 1 && !search && <RoomChips rooms={[...state.rooms.values()]} value={cardRoom} onChange={setCardRoom} />}
                           {connection === "connecting" && messages.length === 0 ? (
                             <Centered>

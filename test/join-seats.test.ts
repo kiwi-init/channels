@@ -411,6 +411,30 @@ describe("Claude Code's hooks do the listening", () => {
   });
 });
 
+describe("a harness started from another harness's session", () => {
+  test("a Codex hook run from inside a Claude Code session is Codex's: it serves no Claude seat and leaves its messages unread", async () => {
+    const owner = scratch("own12");
+    const code = created(await ok(owner, ["create", "nested", "--as", "boss"]));
+    const h = scratch("nested");
+    const C = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "sc", CLAUDE_PID: String(process.pid) };
+    const me = youAre((await join_(owner, h, code, C)).out);
+    await ok(owner, ["send", "--to", me, "for the Claude session only"]);
+    const review = join(h, "review");
+    mkdirSync(review);
+    const nested = { ...C, CODEX_THREAD_ID: "cx" };
+    const codexInput = JSON.stringify({ session_id: "cx", cwd: review, hook_event_name: "UserPromptSubmit" });
+    const codex = await run(h, ["--harness", "codex", "hook", "prompt"], nested, review, codexInput);
+    expect(codex.code).toBe(0);
+    expect(codex.out).toBe("");
+    const stop = await run(h, ["--harness", "codex", "hook", "stop"], nested, review, JSON.stringify({ session_id: "cx", cwd: review, hook_event_name: "Stop" }));
+    expect(stop.out).toBe("");
+    const cfg = JSON.parse(readFileSync(join(h, "config.json"), "utf8")) as { bindings?: Record<string, { as: string; session?: string } | { as: string; session?: string }[]> };
+    const seats = Object.values(cfg.bindings ?? {}).flatMap((v) => (Array.isArray(v) ? v : [v]));
+    expect(seats.map((b) => [b.as, b.session])).toEqual([[me, "sc"]]);
+    expect((await run(h, ["hook", "prompt"], C, h, JSON.stringify({ session_id: "sc", cwd: h }))).out).toContain("for the Claude session only");
+  });
+});
+
 describe("what runs an agent", () => {
   test("an agent in a harness says its model or can't ask; the owner sees it, and approving signs it into the seat", async () => {
     const owner = scratch("own6");

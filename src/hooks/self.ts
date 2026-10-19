@@ -1,7 +1,7 @@
 import { accessSync, closeSync, constants as fsConstants, existsSync, mkdtempSync, openSync, readFileSync, realpathSync, rmSync, statSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
-import { here, seatsNear, type Here } from "../seats.ts";
+import { here, seatsNear, type Here, type NamedHookHarness } from "../seats.ts";
 import { binDir } from "@kiwi/core/node/shell-path.ts";
 import { VERSION } from "../version.ts";
 import { asOption, channelOption } from "@kiwi/core/wake.ts";
@@ -109,8 +109,12 @@ export function isOurHookCommand(command: string): boolean {
   return false;
 }
 
-export function hookCommand(arg: string): string {
-  return `${selfCommand()} hook ${arg} ${MARK}`;
+function harnessFlag(harness: NamedHookHarness | undefined): string {
+  return harness ? ` --harness ${harness}` : "";
+}
+
+export function hookCommand(arg: string, harness?: NamedHookHarness): string {
+  return `${selfCommand()}${harnessFlag(harness)} hook ${arg} ${MARK}`;
 }
 
 function runnable(path: string): boolean {
@@ -123,10 +127,10 @@ function runnable(path: string): boolean {
   }
 }
 
-export function isOurHook(command: unknown, arg: string): boolean {
+export function isOurHook(command: unknown, arg: string, harness?: NamedHookHarness): boolean {
   if (typeof command !== "string") return false;
-  if (command === hookCommand(arg)) return selfRunnable();
-  const named = installCandidates().find((p) => command === `${shellQuote(p)} hook ${arg} ${MARK}`);
+  if (command === hookCommand(arg, harness)) return selfRunnable();
+  const named = installCandidates().find((p) => command === `${shellQuote(p)}${harnessFlag(harness)} hook ${arg} ${MARK}`);
   if (named === undefined || !runnable(named)) return false;
   const self = selfIdentity();
   return self !== null && identityOf(named) === self;

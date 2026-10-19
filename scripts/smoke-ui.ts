@@ -76,7 +76,9 @@ async function run(part: Part): Promise<string[]> {
     rmSync(data, { recursive: true, force: true });
     throw e;
   });
-  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  const video = process.env.SMOKE_VIDEO && part === "agents" ? { recordVideo: { dir: process.env.SMOKE_VIDEO, size: { width: 1280, height: 800 } } } : {};
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, ...video });
+  const filmed = Date.now();
   page.on("pageerror", (e) => errors.push(`${at}: ${e.message}`));
   page.on("console", (m) => {
     if (m.type() === "error" && !m.text().startsWith("Failed to load resource")) errors.push(`${at}: console: ${m.text()}`);
@@ -404,13 +406,22 @@ async function run(part: Part): Promise<string[]> {
       await toTab("Conversation");
       const message = page.getByRole("textbox", { name: "Message" });
       await message.fill("");
+      const shot = async (name: string) => {
+        if (process.env.SMOKE_SHOTS) await page.screenshot({ path: join(process.env.SMOKE_SHOTS, `dictation-${name}.png`) });
+      };
+      if (process.env.SMOKE_VIDEO) log(`video: dictation starts at ${(Date.now() - filmed) / 1000}s`);
       await page.getByRole("button", { name: "Dictate", exact: true }).click();
+      await page.getByRole("button", { name: "Download and dictate" }).waitFor();
+      await shot("1-notice");
       await page.getByRole("button", { name: "Download and dictate" }).click();
       const stop = page.getByRole("button", { name: "Stop dictation" });
       await stop.waitFor({ timeout: 180000 });
+      await shot("2-listening");
       await page.waitForTimeout(5000);
       await stop.click();
       await page.waitForFunction(() => /tests pass/i.test((document.querySelector("textarea") as HTMLTextAreaElement | null)?.value ?? ""), null, { timeout: 120000 });
+      await shot("3-text");
+      if (process.env.SMOKE_VIDEO) log(`video: dictation ends at ${(Date.now() - filmed) / 1000}s`);
       log(`ok  ${at}: ${JSON.stringify(await message.inputValue())}`);
       await message.fill("");
     } else log("skip dictation (SMOKE_DICTATION isn't set)");
@@ -511,11 +522,16 @@ async function run(part: Part): Promise<string[]> {
     await tasksPanel.waitFor({ state: "detached" });
     log(`ok  ${at}`);
 
-    at = "ask-human: the question sits in the composer with its options, is one row of Needs you, and the task waits on a person until one is picked";
+    at = "ask-human: the question sits in the composer with its options, is one row of Needs you, Tasks' Needs you shows it as the composer's card, and the task waits on a person until one is picked";
     await kiwi(["-c", "smoke", "--as", "bot", "ask-human", "--task", smokeTask, "--option", "A: ship it", "--option", "B: wait a day", "Ship the smoke build now?"]);
     const awaiting = page.getByText("Needs a decision");
     await toTab("Tasks");
     await awaiting.first().waitFor({ timeout: 15000 });
+    const card = needs.getByRole("region", { name: "Question" });
+    await card.getByText("Ship the smoke build now?").waitFor({ timeout: 15000 });
+    await card.getByRole("list", { name: "Options" }).getByRole("button", { name: "A: ship it" }).waitFor();
+    await card.getByRole("button", { name: "Something else" }).click();
+    await needs.getByRole("textbox", { name: "Answer" }).waitFor();
     await toTab("Conversation");
     const question = page.getByRole("region", { name: "Question" });
     await question.getByText("Ship the smoke build now?").waitFor({ timeout: 15000 });
