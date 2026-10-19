@@ -141,6 +141,9 @@ jobs:
       Also a Kimi Code or Grok seat with a live listener (Grok's persistent kiwi listen monitor) announced as
       woken via its background listener, and as can't be woken again once the listener stops, while Grok's push wake
       stays off (pullsWake in packages/core/src/wake.ts, test/wake.test.ts, test/daemon-seats.test.ts).
+      Also each wake the daemon fires logged to wake.log with its unread count and the seat's read cursor when the
+      daemon counted them, after the result and the why column (empty when it worked), so older readers of the first
+      columns keep working (src/daemon/wake.ts, AgentSession.unreadAt in src/agent/state.ts, test/wake.test.ts).
       Also test/context-line.test.ts: a seat's context in words (tokensWord), the Stop hook's nudge
       once per crossing of CONTEXT_LINE (250k; back under it resets, unknown keeps the state), naming
       each open task the seat owns and the checkpoint command, and an activity's context token
