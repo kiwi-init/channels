@@ -2,8 +2,7 @@ import { readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const BUDGET_BYTES = 30_000_000;
-const TARGETS = ["kiwi-darwin-arm64", "kiwi-darwin-x64", "kiwi-linux-x64", "kiwi-linux-arm64", "kiwi-windows-x64.exe"] as const;
-const WAIVED: Partial<Record<(typeof TARGETS)[number], string>> = {};
+const TARGETS = ["kiwi-darwin-arm64", "kiwi-darwin-x64", "kiwi-linux-x64", "kiwi-linux-arm64"] as const;
 
 const dir = resolve(process.argv[2] ?? "dist");
 const files = new Set(readdirSync(dir));
@@ -23,11 +22,8 @@ for (const target of TARGETS) {
     over = true;
     continue;
   }
-  const waived = WAIVED[target];
   const fits = smallest.bytes <= BUDGET_BYTES;
-  console.log(
-    `${smallest.name}: ${mb(smallest.bytes)} (from ${mb(statSync(join(dir, target)).size)})${fits ? "" : waived ? `, over ${mb(BUDGET_BYTES)}: waived, ${waived}` : `, over the ${mb(BUDGET_BYTES)} budget`}`,
-  );
-  if (!fits && !waived) over = true;
+  console.log(`${smallest.name}: ${mb(smallest.bytes)} (from ${mb(statSync(join(dir, target)).size)})${fits ? "" : `, over the ${mb(BUDGET_BYTES)} budget`}`);
+  if (!fits) over = true;
 }
 if (over) process.exit(1);

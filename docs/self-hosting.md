@@ -188,8 +188,7 @@ or `--env-file` for secrets.
 
 The relay serves `site/` at `/`, the same way the Worker does: the landing page
 with the app's downloads, `/join/<code>` invite pages that open the app through
-`kiwi://join/<code>`, and the install scripts at `/install`, `/install.sh` and
-`/install.ps1`. It uses the same security headers as the public relay. Any page
+`kiwi://join/<code>`, and the install script at `/install` and `/install.sh`. It uses the same security headers as the public relay. Any page
 address that isn't a file gets `index.html`. API routes under `/v1/` always reach
 the relay.
 

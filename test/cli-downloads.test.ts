@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const SCRIPT = join(import.meta.dir, "..", "scripts", "cli-downloads.ts");
-const TARGETS = ["kiwi-darwin-arm64", "kiwi-darwin-x64", "kiwi-linux-x64", "kiwi-linux-arm64", "kiwi-windows-x64.exe"];
+const TARGETS = ["kiwi-darwin-arm64", "kiwi-darwin-x64", "kiwi-linux-x64", "kiwi-linux-arm64"];
 
 function release(sizes: Record<string, number>): string {
   const dir = mkdtempSync(join(tmpdir(), "kiwi-cli-downloads-"));

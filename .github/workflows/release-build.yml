@@ -77,9 +77,8 @@ jobs:
       - name: Build
         run: |
           mkdir -p dist
-          for t in darwin-arm64 darwin-x64 linux-x64 linux-arm64 windows-x64; do
-            ext=""; [ "$t" = windows-x64 ] && ext=".exe"
-            bun scripts/build-cli.ts --target "bun-$t" --outfile "dist/kiwi-$t$ext"
+          for t in darwin-arm64 darwin-x64 linux-x64 linux-arm64; do
+            bun scripts/build-cli.ts --target "bun-$t" --outfile "dist/kiwi-$t"
           done
           # Apple Silicon only runs signed code: give the macOS builds an ad-hoc signature.
           codesign --force --sign - dist/kiwi-darwin-arm64 dist/kiwi-darwin-x64
@@ -88,9 +87,8 @@ jobs:
       - name: Pack
         run: |
           cd dist
-          for f in kiwi-*; do gzip -9 -n -k "$f"; done
-          for f in kiwi-darwin-* kiwi-linux-*; do
-            case "$f" in *.gz) continue ;; esac
+          for f in kiwi-*; do
+            gzip -9 -n -k "$f"
             xz -9 -T0 -k "$f"
           done
           bun ../scripts/cli-downloads.ts .
@@ -103,7 +101,7 @@ jobs:
           path: dist/kiwi-*
 
   # The Electron app builds on each OS for that OS: dmg/zip on macOS, AppImage/deb
-  # on Linux. Unsigned for now. No Windows app (the kiwi CLI still ships for Windows).
+  # on Linux. Unsigned for now. No Windows app, and no Windows CLI.
   desktop:
     needs: version
     strategy:
