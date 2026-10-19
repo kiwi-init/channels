@@ -84,13 +84,17 @@ jobs:
       Also test/daemon-big-lines.test.ts: the daemon's socket writes queue what the socket
       didn't take and flush it on drain (src/daemon/server.ts), so a catch-up of thirty
       messages with 50 KB ones among them, and big live messages back to back, arrive whole
-      and in order.
+      and in order. test/daemon-catchup.test.ts: a message that lands while a subscriber
+      catches up waits until the catch-up is sent, so the rest of the catch-up isn't skipped.
       Also test/silent-socket.test.ts: a live socket that goes quiet after opening (no answer to
       a ping) and an upgrade nobody answers are both dropped and opened again; a nudge (the network or
       the Mac coming back) cuts a long reconnect wait short and drops a socket that doesn't answer a
       ping in 5s, and web lib/wake.test.ts: coming back online or to a visible page nudges.
       Also test/web-core-barrel.test.ts: web/src takes values from @kiwi/core's client submodules
       (errors, relay, info), never the client.ts barrel, which pulls the whole Channel into the first load.
+      Also test/unread-live.test.ts: a stored message this build can't read arrives as Unread with
+      its seq, and web lib/history.test.ts: its sealed row keeps the cache whole (no hole, no reload)
+      and opens as the message once a newer build can read it.
       Also test/desktop-keys.test.ts: the desktop key process (desktop/src/keyring.ts and keys-server.ts,
       over the wire web/src/lib/channel-remote.ts uses) against a local relay, failing if any member,
       owner, person or channel key reaches the window, plus the seat rules, the wire codec, the
@@ -237,8 +241,10 @@ jobs:
       EnableNodeOptionsEnvironmentVariable and EnableNodeCliInspectArguments are off and
       EnableCookieEncryption, EnableEmbeddedAsarIntegrityValidation and OnlyLoadAppFromAsar are
       on. desktop/scripts/smoke.ts starts the packaged app under Xvfb and fails unless its
-      window renders, its key process (utilityProcess.fork of dist/channels.js from app.asar)
-      stays up and the bundled kiwi daemon answers on its socket, and fails if
+      window renders, the page's scripts land in the V8 code cache (kiwi-app:// registered with
+      codeCache, so a launch after the first skips compiling them), its key process
+      (utilityProcess.fork of dist/channels.js from app.asar) stays up and the bundled kiwi
+      daemon answers on its socket, and fails if
       ELECTRON_RUN_AS_NODE=1 runs JavaScript or --inspect opens a debugger. Fails on a bundling
       or packaging error, a fuse changed or dropped, or an app that no longer starts.
 

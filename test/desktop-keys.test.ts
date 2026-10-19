@@ -154,7 +154,7 @@ describe("channel keys stay out of the window (T203 step 2)", () => {
     expect(got.row).not.toBeNull();
     const row = got.row as CachedRow;
     expect(JSON.stringify(row).includes("hello from bo")).toBe(false);
-    expect((await aw.ops.openRows(code, [row]))[0]?.body).toBe("hello from bo");
+    expect((await aw.ops.openRows(code, [row]))[0]).toMatchObject({ body: "hello from bo" });
     stop();
 
     const roster = await aw.ops.call(code, "members");
@@ -173,7 +173,7 @@ describe("channel keys stay out of the window (T203 step 2)", () => {
 
     const again = window(new Keyring(a.host));
     expect(await again.ops.call(code, "head")).toBeGreaterThan(0);
-    expect((await again.ops.openRows(code, [row]))[0]?.body).toBe("hello from bo");
+    expect((await again.ops.openRows(code, [row]))[0]).toMatchObject({ body: "hello from bo" });
 
     const snap = snapshotOf({ relayUrl: relay, person: null, channels: [...a.store.seats, ...b.store.seats], computers: [], pending: [] });
     for (const k of ["sk", "xsk", "keys"]) expect(keyNames(snap).has(k)).toBe(false);

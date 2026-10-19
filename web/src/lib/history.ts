@@ -12,12 +12,12 @@
 // page loads the usual window. The cache does not fill a gap or sort ahead of
 // the relay. See history-plan.ts.
 
-import type { CachedRow } from "@kiwi/core/cache-row.ts"
+import type { CachedRow, Unread } from "@kiwi/core/cache-row.ts"
 import type { Message } from "@kiwi/core/protocol.ts"
 import { planReload } from "./history-plan"
 
 export type { CachedRow }
-export type OpenRows = (rows: CachedRow[]) => Promise<(Message | null)[]>
+export type OpenRows = (rows: CachedRow[]) => Promise<(Message | Unread | null)[]>
 
 export interface HistoryDb {
   put(roomId: string, memberPk: string, row: CachedRow): Promise<void>
@@ -104,9 +104,15 @@ export async function rememberRow(roomId: string, memberPk: string, row: CachedR
  * Messages to paint, and the exclusive seq to stream from. An unusable cache
  * is deleted here, so the next save starts clean.
  */
-export async function readCached(roomId: string, memberPk: string, openRows: OpenRows, head: number, limit: number): Promise<{ messages: Message[]; since: number }> {
+export async function readCached(
+  roomId: string,
+  memberPk: string,
+  openRows: OpenRows,
+  head: number,
+  limit: number
+): Promise<{ messages: Message[]; unread: number[]; firstSeq: number | undefined; since: number }> {
   const stored = await db().rows(roomId, memberPk)
-  const opened = (await openRows(stored)).filter((m): m is Message => m !== null)
+  const opened = (await openRows(stored)).filter((m): m is Message | Unread => m !== null)
   const plan = planReload(
     opened.map((m) => m.seq),
     head,
@@ -121,8 +127,8 @@ export async function readCached(roomId: string, memberPk: string, openRows: Ope
     await db().trimAbove(roomId, memberPk, plan.keep[plan.keep.length - 1]!)
   }
   const keep = new Set(plan.keep)
-  const messages = opened.filter((m) => keep.has(m.seq)).sort((a, b) => a.seq - b.seq)
-  return { messages, since: plan.since }
+  const kept = opened.filter((m) => keep.has(m.seq)).sort((a, b) => a.seq - b.seq)
+  return { messages: kept.filter((m): m is Message => !("unread" in m)), unread: kept.filter((m) => "unread" in m).map((m) => m.seq), firstSeq: kept[0]?.seq, since: plan.since }
 }
 
 export async function forgetHistory(roomId: string, memberPk: string): Promise<void> {
