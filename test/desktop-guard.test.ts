@@ -7,7 +7,22 @@ import { readFileSync } from "node:fs";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import type { ChannelIdentityView, ComputerView, PersonView } from "../desktop/src/bridge.ts";
-import { chooseStore, claimFor, csp, externalUrl, fileFor, isAppUrl, mergeChannels, normalizeRelay, publicComputer, readStore, snapshotOf, writePrivate } from "../desktop/src/guard.ts";
+import {
+  chooseStore,
+  claimFor,
+  csp,
+  externalUrl,
+  fileFor,
+  isAppUrl,
+  mergeChannels,
+  normalizeRelay,
+  publicComputer,
+  readStore,
+  snapshotOf,
+  writePrivate,
+  keyringState,
+  needsResave,
+} from "../desktop/src/guard.ts";
 import { encodeJoinCode, newRoomId } from "@kiwi/core/crypto.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import { checkPerson } from "@kiwi/core/person.ts";
@@ -188,4 +203,25 @@ describe("normalizeRelay", () => {
     expect(normalizeRelay("https://a&b")).toBeNull();
     expect(normalizeRelay("https://ex`id`.com")).toBeNull();
   });
+});
+
+test("on Linux, no encryption or Chromium's basic_text backend means the keys are in plain text; a Mac with encryption has its keychain", () => {
+  expect(keyringState("linux", false, null)).toBe("plain");
+  expect(keyringState("linux", true, "basic_text")).toBe("plain");
+  expect(keyringState("linux", true, "unknown")).toBe("plain");
+  expect(keyringState("linux", true, "gnome_libsecret")).toBe("keyring");
+  expect(keyringState("linux", true, "kwallet5")).toBe("keyring");
+  expect(keyringState("darwin", true, null)).toBe("keyring");
+  expect(keyringState("darwin", false, null)).toBe("plain");
+});
+
+test("a store kept without a keyring is saved again into one once it's there, and only then", () => {
+  const ok = { kind: "ok" as const, json: {}, encrypted: true };
+  const plain = { kind: "ok" as const, json: {}, encrypted: false };
+  expect(needsResave("linux", Buffer.from("{}"), plain, "keyring")).toBe(true);
+  expect(needsResave("linux", Buffer.from("v10xxxx"), ok, "keyring")).toBe(true);
+  expect(needsResave("linux", Buffer.from("v11xxxx"), ok, "keyring")).toBe(false);
+  expect(needsResave("linux", Buffer.from("{}"), plain, "plain")).toBe(false);
+  expect(needsResave("darwin", Buffer.from("v10xxxx"), ok, "keyring")).toBe(false);
+  expect(needsResave("linux", null, { kind: "none" }, "keyring")).toBe(false);
 });

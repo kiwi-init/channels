@@ -6,7 +6,7 @@ import type { Identity } from "@kiwi/core/identity.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
 import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts";
 import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, StoreSnapshot } from "./bridge.ts";
-import { chooseStore, normalizeRelay, snapshotOf, writePrivate } from "./guard.ts";
+import { chooseStore, normalizeRelay, snapshotOf, writePrivate, keyringState, needsResave, type KeyringState } from "./guard.ts";
 import { tellKeys } from "./keys-process.ts";
 import type { VoiceStore } from "./voice.ts";
 import { currentWindow } from "./window.ts";
@@ -34,6 +34,8 @@ export let store: StoreFile = defaults();
 
 let storeBroken: string | null = null;
 
+export let keys: KeyringState = "keyring";
+
 const backupPath = () => `${storePath()}.bak`;
 
 function readBackup(): Buffer | null {
@@ -55,12 +57,15 @@ export function loadStore(): void {
   const choice = storeBroken ? null : chooseStore(raw, readBackup(), safeStorage.isEncryptionAvailable() ? (b) => safeStorage.decryptString(b) : null);
   if (choice?.restore) writePrivate(storePath(), choice.restore);
   const read = choice?.read ?? null;
+  const backend = process.platform === "linux" ? safeStorage.getSelectedStorageBackend() : null;
+  keys = keyringState(process.platform, safeStorage.isEncryptionAvailable(), backend);
   if (read?.kind === "ok") store = { ...defaults(), ...(read.json as Partial<StoreFile>) };
   else {
     store = defaults();
     if (read?.kind === "unreadable") storeBroken = read.why;
   }
   store.relayUrl = normalizeRelay(store.relayUrl) ?? DEFAULT_RELAY;
+  if (read && needsResave(process.platform, choice?.restore ?? raw, read, keys)) saveStore();
 }
 
 const brokenError = () =>

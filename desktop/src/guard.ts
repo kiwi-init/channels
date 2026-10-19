@@ -202,6 +202,19 @@ export interface StoreChoice {
   restore: Buffer | null;
 }
 
+export type KeyringState = "keyring" | "plain";
+
+export function keyringState(platform: NodeJS.Platform, available: boolean, backend: string | null): KeyringState {
+  if (!available) return "plain";
+  if (platform !== "linux") return "keyring";
+  return backend !== null && backend !== "basic_text" && backend !== "unknown" ? "keyring" : "plain";
+}
+
+export function needsResave(platform: NodeJS.Platform, raw: Buffer | null, read: StoreRead, state: KeyringState): boolean {
+  if (state !== "keyring" || read.kind !== "ok" || raw === null) return false;
+  return !read.encrypted || (platform === "linux" && raw.subarray(0, 3).toString("latin1") === "v10");
+}
+
 export function chooseStore(main: Buffer | null, backup: Buffer | null, decrypt: ((b: Buffer) => string) | null): StoreChoice {
   const read = readStore(main, decrypt);
   if (read.kind === "ok" || !backup) return { read, restore: null };
