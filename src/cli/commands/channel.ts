@@ -82,7 +82,26 @@ export const channelCommands: Record<string, Command> = {
         });
         return out(turn === "off" ? `Kiwi won't wake ${s.me} in "${s.alias}"; read with \`kiwi listen --now\`` : `Kiwi wakes ${s.me} in "${s.alias}" when a message for it arrives`);
       }
-      if (turn !== undefined) return yield* die("usage: kiwi wake [on|off]");
+      if (turn === "webhook") {
+        const key = wakeKey(s.alias, s.me);
+        const url = args[2];
+        if (url === "off") {
+          updateConfig((cfg) => {
+            if (cfg.wakeHooks) delete cfg.wakeHooks[key];
+            if (cfg.wakeHooks && !Object.keys(cfg.wakeHooks).length) delete cfg.wakeHooks;
+          });
+          return out(`Kiwi no longer wakes ${s.me} in "${s.alias}" through a webhook`);
+        }
+        if (!url || !/^https:\/\//.test(url)) return yield* die('usage: printf %s "$AUTHORIZATION" | kiwi wake webhook https://… (or: kiwi wake webhook off)');
+        const piped = process.stdin.isTTY ? "" : (yield* Effect.promise(() => Bun.stdin.text())).trim();
+        updateConfig((cfg) => {
+          cfg.wakeHooks = { ...cfg.wakeHooks, [key]: { url, ...(piped ? { authorization: piped } : {}) } };
+        });
+        return out(
+          `Kiwi wakes ${s.me} in "${s.alias}" by POSTing to ${new URL(url).host}${piped ? " with the Authorization header from stdin" : " (no Authorization header: pipe one in if the webhook needs it)"}`,
+        );
+      }
+      if (turn !== undefined) return yield* die("usage: kiwi wake [on|off|webhook URL|webhook off]");
       const seat = yield* Effect.promise(() => daemonSeat(s.alias, s.me));
       out(seat ? wakeLine(seat.wake) : `the daemon holds no seat for ${s.me} in "${s.alias}" yet`);
     }),

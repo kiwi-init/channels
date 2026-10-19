@@ -1,10 +1,10 @@
 import { appendFileSync, renameSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { loadConfig, type Config } from "../config.ts";
+import { loadConfig, type Config, type WakeHook } from "../config.ts";
 import { listenHooksInstalled } from "../hooks/install/claude.ts";
 import { kimiServer, promptKimi } from "../kimi-server.ts";
-import { wakeArgv, wakePath, wakePrompt, type WakePath } from "@kiwi/core/wake.ts";
+import { wakeArgv, wakeKey, wakePath, wakePrompt, type WakePath } from "@kiwi/core/wake.ts";
 import { withDeadline, type DaemonWake } from "./protocol.ts";
 import { seatRecordFor, wakeOn } from "./reach.ts";
 import type { Seat } from "./seat.ts";
@@ -31,8 +31,22 @@ const UNREAD_CHECK_MS = 30_000;
 
 export const pathOf = async (cfg: Config, alias: string, agent: string): Promise<WakePath> => {
   const record = seatRecordFor(cfg, alias, agent);
-  return wakePath(record?.harness === "kimi" ? { ...record, served: !!kimiServer(record.pid) } : record, listenHooksInstalled());
+  return wakePath(record?.harness === "kimi" ? { ...record, served: !!kimiServer(record.pid) } : record, listenHooksInstalled(), !!cfg.wakeHooks?.[wakeKey(alias, agent)]);
 };
+
+async function postWake(hook: WakeHook, body: { channel: string; agent: string; unread: number; prompt: string }): Promise<string | null> {
+  try {
+    const res = await fetch(hook.url, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(hook.authorization ? { authorization: hook.authorization } : {}) },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(WAKE_RUN_MS),
+    });
+    return res.ok ? null : `webhook answered ${res.status}`;
+  } catch (err) {
+    return `webhook unreachable: ${oneLine(err instanceof Error ? err.message : String(err))}`;
+  }
+}
 
 interface WakeContext {
   dir: string;
@@ -116,7 +130,15 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, stopped, current }: Wak
       const path = await commandPath(seat);
       if (!path || !current(seat)) return;
       const prompt = wakePrompt(seat.alias, seat.agent);
-      const why = path.via === "kimi-server" ? await wakeKimi(seat, path.session, prompt) : await runWake(seat, wakeArgv(path.via, path.session, prompt));
+      const hook = loadConfig().wakeHooks?.[wakeKey(seat.alias, seat.agent)];
+      const why =
+        path.via === "webhook"
+          ? hook
+            ? await postWake(hook, { channel: seat.alias, agent: seat.agent, unread, prompt })
+            : "no webhook set"
+          : path.via === "kimi-server"
+            ? await wakeKimi(seat, path.session, prompt)
+            : await runWake(seat, wakeArgv(path.via, path.session, prompt));
       if (!current(seat)) return;
       seat.lastWake = { at: Date.now(), via: path.via, unread, ok: why === null };
       logWake(seat, seat.lastWake, why);

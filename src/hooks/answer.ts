@@ -5,7 +5,7 @@ import { openSession, type AgentSession } from "../agent.ts";
 import { briefText, COMMANDS } from "../brief.ts";
 import { detectWhere } from "../card.ts";
 import { loadConfig, type ChannelConfig } from "../config.ts";
-import { wakeOn } from "../daemon/reach.ts";
+import { wakeHooked, wakeOn } from "../daemon/reach.ts";
 import { charterLines, formatMessage, holdLine, leadLine } from "@kiwi/core/format.ts";
 import { kimiServer } from "../kimi-server.ts";
 import { here, type Binding, type Here } from "../seats.ts";
@@ -206,7 +206,8 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
     if (fresh !== null) yield* Effect.ignoreCause(s.markFresh(detectWhere(input.cwd ?? process.cwd()), fresh));
     const { state } = yield* s.state();
     const seat = state.members.get(b.as);
-    const listen = howMessagesReachYou(mc, wakeOn(loadConfig(), b.alias, b.as), who);
+    const local = loadConfig();
+    const listen = howMessagesReachYou(mc, wakeOn(local, b.alias, b.as), who, wakeHooked(local, b.alias, b.as));
     const lines = [
       briefText({
         alias: b.alias,
