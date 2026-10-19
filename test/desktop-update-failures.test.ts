@@ -29,7 +29,7 @@ mock.module("electron", () => ({
 mock.module(join(import.meta.dir, "../desktop/src/signer.ts"), () => ({ signedLikeThisApp: async () => true }));
 
 type Checked = { state: string; version?: string };
-const updater = "../desktop/src/updater.ts";
+const updater = "../desktop/src/updater.ts?failures";
 const { checkForUpdate, applyUpdate, updateState } = (await import(updater)) as {
   checkForUpdate: () => Promise<Checked>;
   applyUpdate: (relaunch: boolean) => boolean;
