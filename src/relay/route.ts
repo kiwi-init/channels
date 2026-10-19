@@ -25,6 +25,7 @@ import { betaMessage, inBeta, Policy } from "./policy.ts";
 import { offerPages, PAGE_PATH, servePage } from "./pages.ts";
 import {
   allow,
+  take,
   append,
   approve,
   authenticate,
@@ -311,11 +312,14 @@ const routes: RoomRoute[] = [
     run: ({ me }) =>
       Effect.gen(function* () {
         const db = yield* RoomStore;
-        if (!allow(`${db.roomId}:${me}`, MESSAGES_PER_MINUTE)) return yield* new TooMany({ message: "too many messages; wait a minute" });
-        const b = yield* json<{ iv?: string; ct?: string; e?: number; slot?: unknown; free?: unknown }>();
-        if (b.slot !== undefined && !wellFormedSlot(b.slot)) return yield* new BadRequest({ message: "bad slot" });
-        if (b.free !== undefined && !wellFormedFreed(b.free)) return yield* new BadRequest({ message: "bad slots to free" });
-        const e = yield* append(b.iv as string, b.ct as string, Number(b.e ?? 0), me, { ...(b.slot ? { take: b.slot } : {}), ...(b.free ? { free: b.free } : {}) });
+        const counted = take(`${db.roomId}:${me}`, MESSAGES_PER_MINUTE);
+        if ("retryAfter" in counted) return yield* new TooMany({ message: "too many messages; wait a minute", retryAfter: counted.retryAfter });
+        const b = yield* json<{ iv?: string; ct?: string; e?: number; slot?: unknown; free?: unknown }>().pipe(Effect.tapError(() => Effect.sync(counted.refund)));
+        if (b.slot !== undefined && !wellFormedSlot(b.slot)) return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: "bad slot" }));
+        if (b.free !== undefined && !wellFormedFreed(b.free)) return yield* Effect.andThen(Effect.sync(counted.refund), new BadRequest({ message: "bad slots to free" }));
+        const e = yield* append(b.iv as string, b.ct as string, Number(b.e ?? 0), me, { ...(b.slot ? { take: b.slot } : {}), ...(b.free ? { free: b.free } : {}) }).pipe(
+          Effect.tapError(() => Effect.sync(counted.refund)),
+        );
         return { data: { seq: e.seq, ts: e.ts }, fx: { broadcast: [msgFrame(e)], ...watchFrame(e), expireAt: (yield* touch) ?? undefined } };
       }),
   },

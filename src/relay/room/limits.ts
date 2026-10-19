@@ -19,18 +19,25 @@ const MAX_WINDOWS = 10_000;
 const windows = new Map<string, { start: number; n: number }>();
 
 export function allow(key: string, limit: number, now = Date.now()): boolean {
-  const w = windows.get(key);
+  return "refund" in take(key, limit, now);
+}
+
+export function take(key: string, limit: number, now = Date.now()): { refund: () => void } | { retryAfter: number } {
+  let w = windows.get(key);
   if (!w || now - w.start > 60_000) {
     windows.delete(key);
-    windows.set(key, { start: now, n: 1 });
+    w = { start: now, n: 0 };
+    windows.set(key, w);
     while (windows.size > MAX_WINDOWS) {
       const oldest = windows.keys().next().value;
       if (oldest === undefined || oldest === key) break;
       windows.delete(oldest);
     }
-    return true;
   }
-  return ++w.n <= limit;
+  if (w.n >= limit) return { retryAfter: Math.max(1, Math.ceil((w.start + 60_000 - now) / 1000)) };
+  w.n++;
+  const counted = w;
+  return { refund: () => void (counted.n = Math.max(0, counted.n - 1)) };
 }
 
 export const MAX_PENDING = 20;

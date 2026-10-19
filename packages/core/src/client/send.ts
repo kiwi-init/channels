@@ -50,6 +50,18 @@ export interface SendFx {
   send(body: string, opts?: SendOptions): Effect.Effect<number, Refused, Relay>;
 }
 
+const RATE_RETRIES = 2;
+const RATE_WAIT_MAX_S = 60;
+
+const rateWait = (err: unknown): number | null => (err instanceof RelayError && err.status === 429 && err.retryAfter !== null && err.retryAfter <= RATE_WAIT_MAX_S ? err.retryAfter : null);
+
+const patient = <A, E, R>(attempt: Effect.Effect<A, E, R>, left: number): Effect.Effect<A, E, R> =>
+  Effect.catchIf(
+    attempt,
+    (err) => left > 0 && rateWait(err) !== null,
+    (err) => Effect.andThen(Effect.sleep(`${rateWait(err) ?? 0} seconds`), patient(attempt, left - 1)),
+  );
+
 export class ChannelSending {
   onSent: ((seq: number, message: Message | null) => void) | null = null;
 
@@ -120,13 +132,16 @@ export class ChannelSending {
         }
         return stored.seq;
       });
-      const wire = slotted ? undefined : [...this.live.wires].at(-1);
-      if (!wire) return yield* posted;
-      const { e, sealed } = yield* sealNow;
-      const acked = yield* wire.send(sealed, e, signed);
-      if (acked === null) return yield* posted;
-      this.onSent?.(acked, null);
-      return acked;
+      const once = Effect.gen({ self: this }, function* () {
+        const wire = slotted ? undefined : [...this.live.wires].at(-1);
+        if (!wire) return yield* posted;
+        const { e, sealed } = yield* sealNow;
+        const acked = yield* wire.send(sealed, e, signed);
+        if (acked === null) return yield* posted;
+        this.onSent?.(acked, null);
+        return acked;
+      });
+      return yield* patient(once, RATE_RETRIES);
     }),
   };
 }

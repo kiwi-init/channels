@@ -7,14 +7,18 @@ import { asOption } from "../wake.ts";
 export class RelayError extends Error {
   readonly tag: ErrorTag;
   readonly tagged: boolean;
+  readonly retryAfter: number | null;
   constructor(
     readonly status: number,
     message: string,
     tag?: unknown,
+    retryAfter?: unknown,
   ) {
     super(message);
     this.tagged = isErrorTag(tag);
     this.tag = isErrorTag(tag) ? tag : tagForStatus(status);
+    const secs = typeof retryAfter === "string" ? Number(retryAfter) : retryAfter;
+    this.retryAfter = typeof secs === "number" && Number.isFinite(secs) && secs >= 0 ? secs : null;
   }
   get _tag(): "RelayError" {
     return "RelayError";

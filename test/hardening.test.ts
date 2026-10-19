@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as Effect from "effect/Effect";
+import { signRequest } from "@kiwi/core/auth.ts";
 import { Channel, fetchRelay, Relay } from "@kiwi/core/client.ts";
 import { newChannelKey, ownerFingerprint, sealTo } from "@kiwi/core/crypto.ts";
 import { formatMessage } from "@kiwi/core/format.ts";
@@ -112,13 +113,19 @@ describe("messages", () => {
 });
 
 describe("limits", () => {
-  test("one member can't flood a channel", async () => {
+  test("one member can't flood a channel: past the limit the relay refuses, and says when to try again", async () => {
     const { memberAccess, agent } = await channelWithMember();
-    const ch = new Channel(memberAccess, relay, agent);
-    let refused = 0;
-    for (let i = 0; i < 130; i++) await ch.send(`m${i}`).catch(() => refused++);
-    expect(refused).toBeGreaterThan(0);
-    expect(refused).toBeLessThanOrEqual(10);
+    const statuses: number[] = [];
+    let retryAfter: string | null = null;
+    for (let i = 0; i < 130; i++) {
+      const body = JSON.stringify({ iv: `iv${i}`, ct: `ct${i}` });
+      const auth = await signRequest(agent, memberAccess.roomId, "POST", "/messages", body);
+      const res = await fetch(new URL(`/v1/rooms/${memberAccess.roomId}/messages`, relay), { method: "POST", body, headers: { "content-type": "application/json", authorization: `Bearer ${auth}` } });
+      statuses.push(res.status);
+      if (res.status === 429) retryAfter = res.headers.get("retry-after");
+    }
+    expect(statuses.filter((s) => s === 429)).toHaveLength(10);
+    expect(Number(retryAfter)).toBeGreaterThan(0);
   });
 });
 
