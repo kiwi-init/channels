@@ -6,7 +6,7 @@ import { initials } from "@/lib/format"
 import { noteSignInGone } from "@/lib/session"
 import { later } from "@/lib/later"
 import { cx } from "@/lib/utils"
-import { RobotAvatar } from "./robot"
+import { HarnessFace } from "./harness-face"
 import { Tooltip } from "./ui/tooltip"
 
 // The few pieces everything is built from. Neutral by default; the accent
@@ -116,6 +116,8 @@ export function hueOf(name: string): Color {
 /** People's pictures in the open channel, by member name: a person with one wears it instead of initials. */
 export const Pictures = createContext<ReadonlyMap<string, MemberPicture>>(new Map())
 
+export const Harnesses = createContext<ReadonlyMap<string, string>>(new Map())
+
 /**
  * Who someone is, at a glance: a circle with their initials, or the picture they published. A person wears their own pick (their
  * agents wear it too), or a quiet grey; an agent with no pick gets a steady hue from its name.
@@ -147,11 +149,12 @@ export function Monogram({
   const tone = color ? PALETTE[color] : null
   const letters = initials(name)
   const known = useContext(Pictures).get(hue ?? name)
+  const harness = useContext(Harnesses).get(hue ?? name)
   const face = agent ? null : (picture ?? known ?? null)
   return (
     <span className={cx("relative inline-flex shrink-0", className)} style={{ width: size, height: size }}>
       {agent ? (
-        <RobotAvatar name={hue ?? name} size={size} />
+        <HarnessFace harness={harness} size={size} working={working} />
       ) : face ? (
         <img
           src={`data:${face.mime};base64,${face.data}`}

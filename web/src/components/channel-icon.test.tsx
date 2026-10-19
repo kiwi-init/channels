@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from "bun:test"
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 
-mock.module("@/lib/avatars", () => ({ avatarUrl: () => "" }))
+mock.module("@/lib/avatars", () => ({ avatarUrl: () => "", harnessUrl: () => "" }))
 const { ChannelFace } = await import("./channel-icon")
 
 const html = (lead: string | null) => renderToStaticMarkup(createElement(ChannelFace, { icon: { kind: "emoji", emoji: "🥝" }, lead, title: "channels-dev", size: 40 }))

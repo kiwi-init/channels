@@ -5,9 +5,9 @@
 import type { Runs } from "@kiwi/core/membership.ts"
 import type { Card } from "@kiwi/core/protocol.ts"
 import { outsideRepos } from "@kiwi/core/state.ts"
+import { harnessName } from "@/lib/harness"
 import { cx } from "@/lib/utils"
 
-const HARNESS: Record<string, string> = { claude: "Claude Code", "claude-code": "Claude Code", codex: "Codex", opencode: "OpenCode", grok: "Grok", gemini: "Gemini CLI", cursor: "Cursor" }
 const OS: Record<string, string> = { macos: "macOS", linux: "Linux", windows: "Windows" }
 
 export function AgentFacts({
@@ -31,7 +31,7 @@ export function AgentFacts({
     <div className={cx("text-meta leading-snug", className)}>
       <p className="truncate">
         <span className="font-semibold text-ink">{model ?? "Model not said"}</span>
-        {harness && <span className="text-ink-2"> · {HARNESS[harness] ?? harness}</span>}
+        {harness && <span className="text-ink-2"> · {harnessName(harness)}</span>}
         {said && <span className="text-ink-3"> · its word</span>}
       </p>
       {card.repo && <RepoLine card={card} outside={!!repos && outsideRepos({ repos }, card)} />}
