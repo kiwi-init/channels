@@ -198,6 +198,17 @@ const agents = Array.from({ length: AGENTS }, (_, i) => `agent${i}`);
 try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await context.addInitScript(WATCH);
+  await context.addInitScript(
+    (marker: string) => {
+      const w = window as unknown as { __firstScreen?: number };
+      const seen = () => {
+        if (w.__firstScreen === undefined && document.body?.textContent?.includes(marker)) w.__firstScreen = performance.now();
+        return w.__firstScreen !== undefined;
+      };
+      new MutationObserver((_, obs) => seen() && obs.disconnect()).observe(document, { childList: true, subtree: true, characterData: true });
+    },
+    `Task ${TASKS - 1}:`,
+  );
   const page = await context.newPage();
   page.on("pageerror", (e) => log(`page error: ${e.message}`));
   const cdp = await context.newCDPSession(page);
@@ -337,6 +348,16 @@ try {
         throw e;
       });
     const reloadMs = Math.round(performance.now() - reloadAt);
+    const inPage = await page.evaluate(() => {
+      const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming;
+      return {
+        firstScreenMs: Math.round((window as unknown as { __firstScreen?: number }).__firstScreen ?? -1),
+        domContentLoadedMs: Math.round(nav.domContentLoadedEventEnd),
+        fcpMs: Math.round(performance.getEntriesByName("first-contentful-paint")[0]?.startTime ?? -1),
+      };
+    });
+    if (throttle === 1) report["reload, in page"] = inPage;
+    log("reload in page", JSON.stringify(inPage));
     await page.waitForTimeout(2000);
     await drain(page);
     await cdp.send("Emulation.setCPUThrottlingRate", { rate: throttle });
