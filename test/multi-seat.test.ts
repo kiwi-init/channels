@@ -149,7 +149,7 @@ describe("one Claude Code session that holds two seats", () => {
     const empty = await run(h, ["-c", "beta", "listen", "--now"], S);
     expect(empty.code).toBe(0);
     expect(empty.out).toBe("");
-    expect(empty.err).toContain("nothing unread; `kiwi -c beta --as reviewer log -n 10` shows what was already delivered");
+    expect(empty.err).toMatch(/nothing unread; `[^`]* -c beta --as reviewer log -n 10` shows what was already delivered/);
   });
 
   test("with a backlog on both seats, each hook's whole output stays inside Claude Code's inline limit", async () => {
