@@ -28,7 +28,7 @@ export class Relay extends Context.Service<Relay, RelayApi>()("kiwi/client/Relay
 
 const EXPIRED_SIGNATURE = "bad or expired signature";
 
-export const REQUEST_MS = 30_000;
+const REQUEST_MS = 30_000;
 
 const reach = (url: URL, init: RequestInit) => Effect.tryPromise({ try: (signal) => fetch(url, { ...init, signal }), catch: (cause) => new Unreachable({ cause }) });
 
