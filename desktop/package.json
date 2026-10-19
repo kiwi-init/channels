@@ -37,6 +37,7 @@
       "dist/**",
       "!**/node_modules/**/*"
     ],
+    "compression": "maximum",
     "electronLanguages": [
       "en",
       "en-US"
@@ -74,8 +75,8 @@
       ],
       "extraResources": [
         {
-          "from": "../dist/kiwi",
-          "to": "kiwi"
+          "from": "../dist/kiwi.zst",
+          "to": "kiwi.zst"
         }
       ],
       "icon": "build/icon.icns",
@@ -98,8 +99,8 @@
       ],
       "extraResources": [
         {
-          "from": "../dist/kiwi",
-          "to": "kiwi"
+          "from": "../dist/kiwi.zst",
+          "to": "kiwi.zst"
         }
       ]
     },
