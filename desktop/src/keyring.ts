@@ -157,7 +157,7 @@ export class Keyring implements ChannelOps {
       case "reconcilePosting":
         return [args[0]];
       case "setGithubRepos":
-        return [args[0], await this.host.githubToken()];
+        return [args[0], Array.isArray(args[0]) && args[0].length ? await this.host.githubToken() : null];
       default:
         return [...args];
     }

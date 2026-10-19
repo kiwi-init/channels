@@ -82,3 +82,14 @@ test("a create that never reached the relay is forgotten on the next start, once
   await new Keyring(host).finishCreating();
   expect(store.seats).toEqual([]);
 });
+
+test("the owner's GitHub token goes to the relay only to connect repos, never to clear them", async () => {
+  const { host } = memHost();
+  let asked = 0;
+  const keyring = new Keyring({ ...host, githubToken: async () => (asked++, null) });
+  const made = await keyring.create("plans", null, null);
+  await keyring.call(made.code, "setGithubRepos", []);
+  expect(asked).toBe(0);
+  await keyring.call(made.code, "setGithubRepos", ["kiwi/plans"]);
+  expect(asked).toBe(1);
+});
