@@ -241,13 +241,13 @@ describe("what a hook emits stays inside the seat's share", () => {
     for (const cmd of [mc, longMc, hugeMc])
       for (let seats = 1; seats <= 50; seats++) {
         const budget = seatBudget(seats);
-        for (const reminder of [r, null]) for (const unread of [true, false]) expect(cursorFollow(cmd, unread, reminder, budget).length).toBeLessThanOrEqual(budget);
+        for (const reminder of [r, null]) for (const unread of [true, false]) expect(cursorFollow("proj", cmd, unread, reminder, budget).length).toBeLessThanOrEqual(budget);
       }
     const tight = seatBudget(50);
-    expect(cursorFollow(longMc, true, null, seatBudget(1))).toContain(`Run \`${longMc} read\`, answer with`);
-    expect(cursorFollow(longMc, true, null, tight)).toBe(`Unread Kiwi messages: \`${longMc} read\`.`);
-    expect(cursorFollow(hugeMc, true, null, tight)).toBe("");
-    expect(cursorFollow(hugeMc, true, r, tight).length).toBeLessThanOrEqual(tight);
+    expect(cursorFollow("proj", longMc, true, null, seatBudget(1))).toContain(`Unread Kiwi messages (proj). Run \`${longMc} read\`, answer with`);
+    expect(cursorFollow("proj", longMc, true, null, tight)).toBe(`Unread Kiwi messages (proj): \`${longMc} read\`.`);
+    expect(cursorFollow("proj", hugeMc, true, null, tight)).toBe("");
+    expect(cursorFollow("proj", hugeMc, true, r, tight).length).toBeLessThanOrEqual(tight);
   });
 
   test("a listener's block header fits its seat's share: the full one when it fits, else a short one, else cut", () => {
@@ -282,11 +282,14 @@ describe("what a hook emits stays inside the seat's share", () => {
   test("SessionStart lands at or under the share when re-entry and unread messages take all they're given", () => {
     for (const budget of [seatBudget(1), seatBudget(2), seatBudget(3), seatBudget(6)]) {
       for (let brief = 0; brief <= budget; brief += 37) {
-        const b = startBudgets(budget, brief);
-        const reentry = b.reentry ? "r".repeat(b.reentry) : null;
-        const unreadMax = b.unread(reentry?.length ?? 0);
-        const text = startContext("x".repeat(brief), reentry, unreadMax > 0 ? "u".repeat(unreadMax) : "");
-        expect(text.length).toBeLessThanOrEqual(budget);
+        for (const alias of ["p", "a-channel-alias-that-is-32-chars"]) {
+          const b = startBudgets(alias, budget, brief);
+          const reentry = b.reentry ? "r".repeat(b.reentry) : null;
+          const unreadMax = b.unread(reentry?.length ?? 0);
+          const text = startContext(alias, "x".repeat(brief), reentry, unreadMax > 0 ? "u".repeat(unreadMax) : "");
+          expect(text.length).toBeLessThanOrEqual(budget);
+          if (unreadMax > 0) expect(text).toContain(`\nUnread messages for you (${alias}):\n`);
+        }
       }
     }
   });

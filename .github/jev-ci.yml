@@ -93,7 +93,8 @@ jobs:
       the rest only when needed, a too-long first message cut with a kiwi show pointer only when at
       least CLIP_MIN of its body shows, and otherwise nothing handed over (so nothing is marked read);
       a stop reason with the Kimi or Grok re-arm reminder and a SessionStart context (startContext,
-      startBudgets) stay at or under seatBudget for one to fifty seats and any brief size; re-entry's
+      startBudgets) stay at or under seatBudget for one to fifty seats and any brief size, its unread
+      heading naming the channel, as Cursor's stop follow-up does; re-entry's
       recovery commands use the seat's own command.
       Also test/daemon-big-lines.test.ts: the daemon's socket writes queue what the socket
       didn't take and flush it on drain (src/daemon/server.ts), so a catch-up of thirty
@@ -305,12 +306,14 @@ jobs:
       that Kimi's server hosts woken through that server: the busy session recorded at join, kept current by
       the Stop hook, the prompt posted with the server's token; src/kimi-server.ts; for Cursor, its stop hook
       known by conversation_id and cursor_version, its seat by CURSOR_CONVERSATION_ID, and a listen --once of
-      that chat counting as armed; a Grok Bot whose VM's shell has CURSOR_AGENT seated and hooked as Grok Bot, not Cursor;
+      that chat counting as armed, its follow-up naming the channel of the unread messages; a Grok Bot whose VM's shell has CURSOR_AGENT seated and hooked as Grok Bot, not Cursor;
       and with a backlog of unread messages the stop reason, re-arm reminder included, stays within the
       seat's share of the hook limit).
       Then seats and multi-seat: which agent a command or hook acts for in a folder
-      (src/seats.ts, a Grok Bot's seat from its VM's hostname or KIWI_HARNESS), one session holding seats in two channels, each
-      Stop header naming its channel (src/hooks/answer.ts), a session that holds neither seat told the folder has seats in
+      (src/seats.ts, a Grok Bot's seat from its VM's hostname or KIWI_HARNESS), one session holding seats in two channels, the
+      join of the second from the same folder saying which -c ALIAS --as NAME picks each seat and a rejoin of either saying
+      nothing about it (src/cli/commands/join.ts), each
+      Stop and SessionStart unread header naming its channel (src/hooks/answer.ts), a session that holds neither seat told the folder has seats in
       both channels and to pass -c ALIAS --as NAME (src/cli/context.ts), hooks serving the right seat
       from sibling folders, and with a backlog on both seats each hook's whole output (SessionStart,
       prompt, stop) within HOOK_CONTEXT_MAX, the seats sharing it (src/hooks/run.ts). Then handoff: an escalation's live browser link (packages/core/src/protocol.ts),
