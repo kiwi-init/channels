@@ -353,8 +353,8 @@ export class Channel {
     return run(this.fx.snapshotIfDue());
   }
 
-  setGithubRepos(repos: string[]): Promise<string[]> {
-    return run(this.fx.setGithubRepos(repos));
+  setGithubRepos(repos: string[], token: string | null = null): Promise<string[]> {
+    return run(this.fx.setGithubRepos(repos, token));
   }
 
   drainGithub(): Promise<number> {

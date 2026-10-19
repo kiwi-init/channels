@@ -94,9 +94,9 @@ export function useControlsHandlers({
       : undefined,
     onRepos: isOwner
       ? async (repos) => {
+          await ch.setGithubRepos(repos)
           const since = await send(repos.length ? `repos: ${repos.join(", ")}` : "cleared the channel's repos", { kind: "event", ev: { op: "repos.set", repos } })
           await ch.setRepos({ list: repos, since })
-          await ch.setGithubRepos(repos).catch(() => {})
         }
       : undefined,
     onVoice: isOwner

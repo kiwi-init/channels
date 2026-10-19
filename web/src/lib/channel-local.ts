@@ -48,6 +48,7 @@ export function localOps(): ChannelOps {
       const p = readLocal().person
       return p ? personClaimFor(p, code, memberPk) : null
     },
+    githubToken: async () => null,
     person: () => readLocal().person?.pk ?? null,
     budget,
   })
