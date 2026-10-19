@@ -132,7 +132,7 @@ export function describeEvent(m: Message, state?: ChannelState): string {
       if (ev.verdict === "rejected" && ev.state === "doing") return `rejected ${task(ev.task)}${round}${note(ev.note)}`;
       if (ev.state === "review") return `${STATE_VERB.review} ${task(ev.task)}${round}${note(ev.note)}`;
       if (ev.state === "done" && state?.tasks.get(ev.task)?.review && state.tasks.get(ev.task)?.approvedBy === m.from) return `approved ${task(ev.task)}${note(ev.note)}`;
-      if (ev.review !== undefined && !ev.state) return ev.review ? `asked for ${task(ev.task)} to be reviewed: ${reviewPhrase(ev.review)}` : `dropped the review on ${task(ev.task)}`;
+      if (ev.review !== undefined && !ev.state) return ev.review ? `asked for ${task(ev.task)} to be reviewed: ${reviewPhrase(ev.review)}${note(ev.note)}` : `dropped the review on ${task(ev.task)}`;
       if (ev.state === "blocked") return `is blocked on ${task(ev.task)}${note(ev.note)}`;
       // Handed over: given to someone, back to open for them to start.
       if (ev.owner && (!ev.state || ev.state === "todo")) return `assigned ${task(ev.task)} to ${ev.owner}${note(ev.note)}`;

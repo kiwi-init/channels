@@ -61,6 +61,12 @@ async function until(pred: () => boolean | Promise<boolean>, label: string, ms =
 
 const seqOf = (out: string) => /#(\d+)/.exec(out)![1]!;
 
+function taskNo(out: string): string {
+  const m = /T(\d+)/.exec(out);
+  expect(m).not.toBeNull();
+  return m?.[1] ?? "";
+}
+
 describe("ten verbs", () => {
   const owner = scratch("owner");
   const agent = scratch("agent");
@@ -238,21 +244,32 @@ describe("review rounds through the CLI", () => {
 
   test("review --review NAME from the reviewer hands the open round on: same round, same commit, and the new reviewer is told", async () => {
     const at = "3333333333333333333333333333333333333333";
-    const t = /T(\d+)/.exec(await ok(dev, "task", "add", "hand the review on", "--review", "rev"))![1]!;
+    const t = taskNo(await ok(dev, "task", "add", "hand the review on", "--review", "rev"));
     await ok(dev, "task", "claim", `T${t}`);
     await ok(dev, "task", "review", `T${t}`, "--at", at);
     expect(await ok(rev, "task", "review", `T${t}`, "--review", "other")).toContain(`T${t}'s review moved to other: round 1 stays open at ${at}`);
-    type Shown = { review: string; rounds: { n: number; at?: string; result: { kind: string } }[] };
-    const shown = JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json")) as Shown;
-    expect(shown.review).toBe("other");
-    expect(shown.rounds.map((r) => [r.n, r.at, r.result.kind])).toEqual([[1, at, "open"]]);
-    expect(await ok(other, "listen", "--now")).toContain(`asked for T${t} “hand the review on” to be reviewed: review by other`);
+    const shown: unknown = JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"));
+    expect(shown).toMatchObject({ review: "other", rounds: [{ n: 1, at, result: { kind: "open" } }] });
+    expect(await ok(other, "listen", "--now")).toContain(`asked for T${t} “hand the review on” to be reviewed: review by other: round 1 stays open at ${at}`);
     await ok(dev, "task", "review", `T${t}`);
-    const resent = JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json")) as Shown;
-    expect(resent.rounds.map((r) => [r.n, r.result.kind])).toEqual([
-      [1, "withdrawn"],
-      [2, "open"],
-    ]);
+    const resent: unknown = JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"));
+    expect(resent).toMatchObject({
+      rounds: [
+        { n: 1, result: { kind: "withdrawn" } },
+        { n: 2, result: { kind: "open" } },
+      ],
+    });
+  });
+
+  test("review on a task with no reviewer is refused with how to name one, and opens no round", async () => {
+    const t = taskNo(await ok(dev, "task", "add", "nobody reviews this yet"));
+    await ok(dev, "task", "claim", `T${t}`);
+    const unnamed = await run(dev, "task", "review", `T${t}`);
+    expect(unnamed.code).toBe(1);
+    expect(unnamed.err).toContain(`T${t} has no reviewer: kiwi task review T${t} --review NAME (or any)`);
+    expect(JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"))).toMatchObject({ state: "doing", rounds: [] });
+    await ok(dev, "task", "review", `T${t}`, "--review", "rev");
+    expect(JSON.parse(await ok(dev, "task", "show", `T${t}`, "--json"))).toMatchObject({ state: "review", review: "rev", rounds: [{ n: 1, result: { kind: "open" } }] });
   });
 
   test("review --at opens a round, a verdict with --file carries the review, a stale one is refused, and REVISE can leave the board", async () => {
