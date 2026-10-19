@@ -344,6 +344,7 @@ export class RoomDb {
       seq,
       Math.min(Math.max(limit, 1), PAGE_LIMIT),
     );
+    if (!sizes.length) return [];
     let through = seq;
     let bytes = 0;
     for (const r of sizes) {
