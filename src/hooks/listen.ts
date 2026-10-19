@@ -84,6 +84,13 @@ const arm = Effect.fn("Hooks.arm")(function* (seat: Served, who: Here, woke: Eff
 
 export type Handoff = { kind: "at-once" } | { kind: "acked"; landed: string | null };
 
+const TOKEN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+export function handoffFrom(landed: unknown): Handoff {
+  if (landed === undefined) return { kind: "at-once" };
+  return { kind: "acked", landed: typeof landed === "string" && TOKEN.test(landed) ? landed : null };
+}
+
 export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Served[], who: Here, handoff: Handoff) {
   const extension = who.harness === "pi" || who.harness === "mimo";
   if (handoff.kind === "acked" && handoff.landed !== null) for (const { b } of served) settlePending(b.alias, b.as, who.session ?? "", handoff.landed);

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { howMessagesReachYou } from "../src/hooks.ts";
 import { extraInstalled, hooksStatus, installExtra, uninstallExtra } from "../src/hooks/install/extra.ts";
 import { installMimo, mimoConfigRoot, mimoInstalled, mimoPluginPath, mimoPluginSource, uninstallMimo } from "../src/hooks/install/mimo.ts";
+import { handoffFrom } from "../src/hooks/listen.ts";
 
 const made: string[] = [];
 const prev = new Map<string, string | undefined>();
@@ -55,6 +56,17 @@ test("MiMoCode's plugin folder: KIWI_MIMO_DIR, then an absolute MIMOCODE_HOME, t
   expect(mimoConfigRoot({ MIMOCODE_HOME: "relative", XDG_CONFIG_HOME: "/x" })).toBe("/x/mimocode");
   expect(mimoConfigRoot({})).toBe(join(homedir(), ".config", "mimocode"));
   expect(mimoPluginPath({ MIMOCODE_HOME: "/m" })).toBe("/m/config/plugin/kiwi.ts");
+});
+
+test("a listen without landed hands over at once; with it, only a token shaped like the ones the listener prints can settle a handoff", () => {
+  const token = crypto.randomUUID();
+  expect(handoffFrom(undefined)).toEqual({ kind: "at-once" });
+  expect(handoffFrom(null)).toEqual({ kind: "acked", landed: null });
+  expect(handoffFrom(token)).toEqual({ kind: "acked", landed: token });
+  expect(handoffFrom(`extra.${token}`)).toEqual({ kind: "acked", landed: null });
+  expect(handoffFrom(`../${token}`)).toEqual({ kind: "acked", landed: null });
+  expect(handoffFrom(token.toUpperCase())).toEqual({ kind: "acked", landed: null });
+  expect(handoffFrom(42)).toEqual({ kind: "acked", landed: null });
 });
 
 test("install writes the plugin once, uninstall removes only a plugin of Kiwi's", () => {

@@ -98,7 +98,8 @@ jobs:
       isn't Kiwi's, the file passing tsc --strict with one export, and, loaded with a fake MiMoCode client
       and a fake listener, naming a child session's root on the agent's shell and starting a turn in that
       root session when its listener exits with messages, then listening again with the handoff token the
-      listener printed on stdout, so Kiwi counts those messages delivered only once the wake landed; a wake MiMoCode refuses
+      listener printed on stdout, so Kiwi counts those messages delivered only once the wake landed, and
+      only a UUID-shaped landed token settling a handoff (handoffFrom in src/hooks/listen.ts); a wake MiMoCode refuses
       (promptAsync rejecting, or answering with an error) sent again with backoff before the listener runs
       again, and no longer sent once the
       session is deleted; promptAsync asked to throw on an HTTP error, so a client answering with data
