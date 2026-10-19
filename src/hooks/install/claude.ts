@@ -27,10 +27,10 @@ export function withoutOurs(entries: HookEntry[] | undefined): HookEntry[] {
   return (entries ?? []).map((e) => ({ ...e, hooks: e.hooks.filter((h) => !isOurHookCommand(h.command)) })).filter((e) => e.hooks.length > 0);
 }
 
-export function installHooks(): string {
+export function installHooks(keepListen = false): string {
   const s = readSettings();
   s.hooks ??= {};
-  const listen = claudeVersion() ? rewakeCapable() : Object.keys(EVENTS).every((event) => hasHook(s, event, LISTEN));
+  const listen = keepListen || (claudeVersion() ? rewakeCapable() : listenHooksOf(s) !== "absent");
   for (const [event, arg] of Object.entries(EVENTS)) {
     s.hooks[event] = [
       ...withoutOurs(s.hooks[event]),
@@ -58,6 +58,67 @@ function hasHook(s: Settings, event: string, arg: string): boolean {
   return !!s.hooks?.[event]?.some((x) => x.hooks.some((h) => isOurHook(h.command, arg) && (arg !== LISTEN || (h.asyncRewake === true && (h.timeout ?? 0) > LISTEN_SECONDS))));
 }
 
+function hasListenEntry(s: Settings, event: string): boolean {
+  return !!s.hooks?.[event]?.some((x) => x.hooks.some((h) => isOurHook(h.command, LISTEN)));
+}
+
+type ListenHooks = "current" | "stale" | "absent";
+
+function listenHooksOf(s: Settings): ListenHooks {
+  if (Object.keys(EVENTS).every((event) => hasHook(s, event, LISTEN))) return "current";
+  return Object.keys(EVENTS).some((event) => hasListenEntry(s, event)) ? "stale" : "absent";
+}
+
+function claudeHooks(): { events: boolean; listen: ListenHooks } {
+  const s = readSettings();
+  return { events: Object.entries(EVENTS).every(([event, arg]) => hasHook(s, event, arg)), listen: listenHooksOf(s) };
+}
+
+function listenWanted(): boolean {
+  return !claudeVersion() || rewakeCapable();
+}
+
+type ClaudeHooksState = "installed" | "installed-without-listen" | "missing" | "listen-missing" | "listen-stale";
+
+function claudeHooksState(): ClaudeHooksState {
+  const { events, listen } = claudeHooks();
+  if (!events) return "missing";
+  switch (listen) {
+    case "current":
+      return "installed";
+    case "stale":
+      return "listen-stale";
+    case "absent":
+      if (!listenWanted()) return "installed";
+      return claudeVersion() ? "listen-missing" : "installed-without-listen";
+  }
+}
+
+export function claudeHooksStatus(): string {
+  switch (claudeHooksState()) {
+    case "installed":
+      return "installed";
+    case "installed-without-listen":
+      return "installed, without the listening hooks (kiwi hooks install run inside Claude Code 2.1.296 or later adds them)";
+    case "missing":
+      return "not installed";
+    case "listen-missing":
+      return "not installed (the listening hooks are missing: kiwi hooks install)";
+    case "listen-stale":
+      return "not installed (its listening hooks are from an older kiwi or incomplete: kiwi hooks install)";
+  }
+}
+
+export function migrateListenHooks(): string | null {
+  if (process.env.KIWI_NO_HOOKS || here().harness !== "claude" || !listenWanted()) return null;
+  try {
+    if (loadConfig().claudeHooks === "off") return null;
+    return claudeHooks().listen === "stale" ? installHooks(true) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function installedListenSeconds(): number | null {
   const timeouts = Object.keys(EVENTS).flatMap((event) =>
     (readSettings().hooks?.[event] ?? []).flatMap((x) => x.hooks.filter((h) => isOurHook(h.command, LISTEN) && typeof h.timeout === "number").map((h) => h.timeout as number)),
@@ -66,9 +127,8 @@ export function installedListenSeconds(): number | null {
 }
 
 export function hooksInstalled(): boolean {
-  const s = readSettings();
-  const listen = claudeVersion() ? rewakeCapable() : false;
-  return Object.entries(EVENTS).every(([event, arg]) => hasHook(s, event, arg) && (!listen || hasHook(s, event, LISTEN)));
+  const state = claudeHooksState();
+  return state === "installed" || state === "installed-without-listen";
 }
 
 const REWAKE_SINCE = [2, 1, 296] as const;
@@ -92,8 +152,7 @@ export function hooksListen(env: Record<string, string | undefined> = process.en
 
 export function listenHooksInstalled(): boolean {
   try {
-    const s = readSettings();
-    return Object.keys(EVENTS).every((event) => hasHook(s, event, LISTEN));
+    return claudeHooks().listen === "current";
   } catch {
     return false;
   }

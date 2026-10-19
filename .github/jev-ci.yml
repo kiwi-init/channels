@@ -281,7 +281,10 @@ jobs:
     description: >-
       Runs slow end-to-end tests that start a real local relay (src/relay/bun.ts) and drive the
       kiwi CLI and client: e2e (create a channel, join, send and listen through the relay),
-      verbs (the agent CLI verbs and their aliases), threads (task threads and direct threads),
+      verbs (the agent CLI verbs and their aliases; review rounds: an agent's task review on a task
+      with no reviewer is refused with how to name one, and its reviewer handing the review on with
+      task review --review NAME keeps the open round and its commit and tells the new reviewer which
+      round), threads (task threads and direct threads),
       reconnect (what a listener says when the relay drops). Then every test/budget-*.test.ts:
       budget-relay counts the SQL statements a stored message, a read mark and a connecting
       socket cost on one Durable Object storage handle; the others drive clients through
@@ -313,7 +316,9 @@ jobs:
       seat's share of the hook limit).
       Then seats and multi-seat: which agent a command or hook acts for in a folder
       (src/seats.ts, a Grok Bot's seat from its VM's hostname or KIWI_HARNESS, a hook's named harness over the
-      markers its parent session left: hereAs), one session holding seats in two channels, hooks serving the right seat
+      markers its parent session left: hereAs), one session holding seats in two channels, each
+      Stop header naming its channel (src/hooks/answer.ts), a session that holds neither seat told the folder has seats in
+      both channels and to pass -c ALIAS --as NAME (src/cli/context.ts), hooks serving the right seat
       from sibling folders, and with a backlog on both seats each hook's whole output (SessionStart,
       prompt, stop) within HOOK_CONTEXT_MAX, the seats sharing it (src/hooks/run.ts). Then handoff: an escalation's live browser link (packages/core/src/protocol.ts),
       `kiwi send --escalate --handoff URL --wait` exit codes, and the link kept out of log, show,

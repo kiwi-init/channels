@@ -384,7 +384,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
       return follow ? answered("followup", follow) : null;
     }
     if (who.harness === "grok" && input.reason !== undefined && input.reason !== "end_turn") return null;
-    const stopHead = `Before stopping: unread Kiwi Channels messages for you. Handle them (answer with \`${mc} reply N "…"\`):`;
+    const stopHead = `Before stopping: unread Kiwi Channels messages for you (${b.alias}). Handle them (answer with \`${mc} reply N "…"\`):`;
     const nudge = yield* contextNudge(input, s, who, mc, budget);
     const rearm = fitReminder(yield* rearmText(input, b, who, mc), budget - (nudge ? nudge.text.length + 2 : 0));
     const reminder = [nudge?.text ?? null, rearm].filter((t) => t !== null).join("\n\n") || null;
