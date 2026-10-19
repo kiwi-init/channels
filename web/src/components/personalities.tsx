@@ -114,26 +114,28 @@ function Editor({ p, onChange, onDuplicate, onDelete }: { p: Personality; onChan
         )}
       </header>
 
-      <div>
-        <p className="mb-2 text-meta font-medium text-ink-2">Role · what it is for the board</p>
-        <div role="radiogroup" aria-label="Role" className="flex flex-wrap gap-1.5">
-          {ROLES.map((r) => (
-            <button
-              key={r}
-              type="button"
-              role="radio"
-              aria-checked={p.role === r}
-              onClick={() => p.role !== r && set({ role: r })}
-              className={cx(
-                "rounded-row border px-2.5 py-1 text-ui transition-colors",
-                p.role === r ? "border-accent bg-accent-wash font-medium text-accent-text" : "border-edge-strong text-ink-2 hover:bg-wash hover:text-ink"
-              )}
-            >
-              {ROLE_LABEL[r]}
-            </button>
-          ))}
+      {!preset && (
+        <div>
+          <p className="mb-2 text-meta font-medium text-ink-2">Role · what it is for the board</p>
+          <div role="radiogroup" aria-label="Role" className="flex flex-wrap gap-1.5">
+            {ROLES.map((r) => (
+              <button
+                key={r}
+                type="button"
+                role="radio"
+                aria-checked={p.role === r}
+                onClick={() => p.role !== r && set({ role: r })}
+                className={cx(
+                  "rounded-row border px-2.5 py-1 text-ui transition-colors",
+                  p.role === r ? "border-accent bg-accent-wash font-medium text-accent-text" : "border-edge-strong text-ink-2 hover:bg-wash hover:text-ink"
+                )}
+              >
+                {ROLE_LABEL[r]}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <div>
         <p className="mb-2 text-meta font-medium text-ink-2">Capabilities · what it may do, held by every member's client</p>

@@ -8,6 +8,7 @@ import { HANDOFF_DONE, HANDOFF_FAILED, type Message } from "@kiwi/core/protocol.
 import { TOO_MANY_REQUESTS } from "@kiwi/core/sas.ts"
 import { taskId, type Task } from "@kiwi/core/state.ts"
 import { usePinned } from "@/lib/pinned"
+import { cx } from "@/lib/utils"
 import { askLabel } from "@/lib/asks"
 import { excerpt, formatAgo } from "@/lib/format"
 import { openHandoff } from "@/lib/handoff-open"
@@ -37,6 +38,7 @@ export function NeedsYou({
   onSendBack,
   onOpenTask,
   onJump,
+  titled,
 }: {
   now: number
   roomId: string
@@ -55,6 +57,8 @@ export function NeedsYou({
   onSendBack: (t: Task, why: string) => Promise<void>
   onOpenTask: (id: number) => void
   onJump: (seq: number) => void
+  /** The header already names this list (the Needs you view on a phone): its own heading goes there. */
+  titled?: boolean
 }) {
   const { p } = useControls()
   const requests = p.isOwner ? p.requests : []
@@ -72,7 +76,7 @@ export function NeedsYou({
   if (!items.length) return null
   return (
     <section aria-label="Needs you" className="pt-3 pb-2">
-      <h2 className="flex items-baseline gap-2 text-ui font-semibold">
+      <h2 className={cx("flex items-baseline gap-2 text-ui font-semibold", titled && "max-md:hidden")}>
         Needs you <span className="font-normal text-ink-3 tabular-nums">{items.length}</span>
       </h2>
       {requests.some((r) => r.check === "unchecked") && <p className="mt-1 text-meta leading-normal text-ink-3">{TOO_MANY_REQUESTS}</p>}

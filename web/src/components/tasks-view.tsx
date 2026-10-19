@@ -5,7 +5,7 @@ import { colorOf, taskId, tasksAwaitingPeople, type ChannelState, type Task } fr
 import { taskPr, type PrChecks } from "@kiwi/core/work.ts"
 import { formatAgoShort, memberName } from "@/lib/format"
 import { labelOf } from "@/lib/task-labels"
-import { taskGroups, type View } from "@/lib/views"
+import { taskGroups, VIEWS, type View } from "@/lib/views"
 import { cx } from "@/lib/utils"
 import { doingNow, type AgentNow } from "./agent-strip"
 import { Icon } from "./icon"
@@ -111,10 +111,10 @@ function TaskRow({
   )
 }
 
-function Group({ label, count, children }: { label: string; count: number; children: ReactNode }) {
+function Group({ label, count, titled, children }: { label: string; count: number; titled: boolean; children: ReactNode }) {
   return (
     <section aria-label={label} className="pt-4">
-      <h2 className="flex items-baseline gap-2 px-3 pb-1.5 text-ui font-semibold">
+      <h2 className={cx("flex items-baseline gap-2 px-3 pb-1.5 text-ui font-semibold", titled && "max-md:hidden")}>
         {label} <span className="font-normal text-ink-3 tabular-nums">{count}</span>
       </h2>
       {children}
@@ -167,7 +167,7 @@ export function TasksView({
       {view === "needs" && !needs && <p className="px-3 pt-6 text-ui text-ink-3">Nothing needs you right now.</p>}
       {groups.map((g) =>
         g.tasks.length || view !== "everything" ? (
-          <Group key={g.key} label={g.label} count={g.tasks.length}>
+          <Group key={g.key} label={g.label} count={g.tasks.length} titled={g.label === VIEWS.find(([v]) => v === view)?.[1]}>
             {g.tasks.length ? (
               <ul className="divide-y divide-line">
                 {g.tasks.map((t) => (

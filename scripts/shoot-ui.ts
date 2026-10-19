@@ -140,7 +140,15 @@ try {
   await owner.waitForURL(/#mc2-/);
   const channel = owner.url();
   const code = decodeURIComponent(new URL(channel).hash.slice(1));
-  const toTab = (name: "Tasks" | "Agents" | "Conversation") => owner.getByRole("navigation", { name: "Views of the channel" }).getByRole("button", { name, exact: true }).click();
+  /** The header's tabs on a phone; on a wide screen the sidebar is the navigation. */
+  const toTab = async (name: "Tasks" | "Agents" | "Conversation") => {
+    const tabs = owner.getByRole("navigation", { name: "Views of the channel" });
+    if (await tabs.isVisible()) return tabs.getByRole("button", { name, exact: true }).click();
+    const side = owner.getByRole("complementary", { name: "Channel" });
+    if (name === "Tasks") return side.getByRole("navigation", { name: "Views" }).getByRole("button", { name: "Everything" }).click();
+    if (name === "Agents") return side.getByRole("region", { name: "Agents" }).getByRole("button", { name: "Agents", exact: true }).click();
+    return side.getByRole("region", { name: "Conversations" }).getByRole("button").first().click();
+  };
 
   const needs = owner.getByRole("region", { name: "Needs you" });
   /** An agent asks in; the owner compares its code under Needs you and lets it in. */
