@@ -13,6 +13,7 @@ export function useScroll({ messages, visible, hereKey }: { messages: Message[];
   const scroller = useRef<HTMLDivElement>(null)
   const atBottom = useRef(true)
   const lastCount = useRef(0)
+  const lastTop = useRef(0)
 
   useLayoutEffect(() => {
     const el = scroller.current
@@ -36,7 +37,11 @@ export function useScroll({ messages, visible, hereKey }: { messages: Message[];
 
   const onScroll = (e: UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget
-    atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+    const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+    const up = el.scrollTop < lastTop.current - 2
+    lastTop.current = el.scrollTop
+    if (near) atBottom.current = true
+    else if (up) atBottom.current = false
     if (atBottom.current && behind) setBehind(0)
   }
 

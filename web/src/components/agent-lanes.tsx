@@ -2,7 +2,7 @@ import { useMemo } from "react"
 
 import type { Message } from "@kiwi/core/protocol.ts"
 import { taskId, type ChannelState, type Task } from "@kiwi/core/state.ts"
-import type { PrChecks, PrRef } from "@kiwi/core/work.ts"
+import { prsByTask, type PrChecks, type PrRef } from "@kiwi/core/work.ts"
 import { formatAgo, formatTime } from "@/lib/format"
 import { laneWork, type LaneTask } from "@/lib/lanes"
 import { cx } from "@/lib/utils"
@@ -55,6 +55,7 @@ function Lane({
   a,
   state,
   messages,
+  prs,
   now,
   nameOf,
   onOpenTask,
@@ -62,11 +63,12 @@ function Lane({
   a: AgentNow
   state: ChannelState
   messages: Message[]
+  prs: Map<number, PrRef[]>
   now: number
   nameOf: (n: string) => string
   onOpenTask: (id: number) => void
 }) {
-  const work = useMemo(() => laneWork(state, messages, a.name), [state, messages, a.name])
+  const work = useMemo(() => laneWork(state, messages, a.name, prs), [state, messages, a.name, prs])
   const line = agentNow(a)
   const sponsor = state.members.get(a.name)?.sponsor?.name
   return (
@@ -163,12 +165,13 @@ export function AgentLanes({
   nameOf: (name: string) => string
   onOpenTask: (id: number) => void
 }) {
+  const prs = useMemo(() => prsByTask(state, messages), [state, messages])
   if (!agents.length) return <p className="py-12 text-center text-ui text-ink-3">No agent has joined yet.</p>
   const ordered = byBusy(agents).sort((a, b) => Number(a.lead) - Number(b.lead))
   return (
     <div role="region" aria-label="Agent lanes" className="-mx-4 flex min-h-[calc(100dvh-var(--head)-16px)] divide-x divide-line overflow-x-auto">
       {ordered.map((a) => (
-        <Lane key={a.name} a={a} state={state} messages={messages} now={now} nameOf={nameOf} onOpenTask={onOpenTask} />
+        <Lane key={a.name} a={a} state={state} messages={messages} prs={prs} now={now} nameOf={nameOf} onOpenTask={onOpenTask} />
       ))}
     </div>
   )
