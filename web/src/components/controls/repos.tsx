@@ -26,11 +26,18 @@ function useReachable(): Reach {
     const b = bridge()
     if (!b?.githubRepos) return
     let live = true
+    const repos = b.githubRepos().then(
+      (list) => ({ list }),
+      (err: unknown) => ({ err })
+    )
     void b
       .githubStatus()
-      .then((s) =>
-        s.account ? b.githubRepos().then((list) => live && setReach({ kind: "repos", list })) : live && setReach({ kind: "none", why: "Link GitHub in Settings to pick from your repos." })
-      )
+      .then(async (s) => {
+        if (!s.account) return live && setReach({ kind: "none", why: "Link GitHub in Settings to pick from your repos." })
+        const got = await repos
+        if (!live) return
+        setReach("list" in got ? { kind: "repos", list: got.list } : { kind: "none", why: `Couldn’t list your repos: ${errorText(got.err)}` })
+      })
       .catch((err: unknown) => live && setReach({ kind: "none", why: `Couldn’t list your repos: ${errorText(err)}` }))
     return () => {
       live = false
