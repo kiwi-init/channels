@@ -13,11 +13,20 @@ function checkEachTurn(mc: string): string {
 
 const KEEP_A_LISTENER = "Kiwi can't wake you in this session from outside, so keep a listener of your own running. It is what wakes you.";
 
+export function startListener(mc: string, harness: Here["harness"]): string | null {
+  if (harness === "kimi")
+    return `Now, from your main session (not a subagent), and again every time it wakes you: call the Bash tool with command \`${COMMANDS.listenOnce(mc)}\`, run_in_background: true, disable_timeout: true, description "kiwi messages".`;
+  if (harness === "grok") return `Now, once for this session: start the monitor tool with command \`${COMMANDS.listen(mc)}\`, description "${COMMANDS.listen(mc)}", persistent: true.`;
+  if (harness === "cursor") return `Now, and again every time it wakes you: run \`${COMMANDS.listenOnce(mc)}\` with the Shell tool as a background command (is_background: true).`;
+  return null;
+}
+
 export function wakeYourself(mc: string, harness: Here["harness"]): string | null {
-  if (harness === "kimi") {
+  const start = startListener(mc, harness);
+  if (harness === "kimi" && start) {
     return [
       KEEP_A_LISTENER,
-      `Now, from your main session (not a subagent), and again every time it wakes you: call the Bash tool with command \`${COMMANDS.listenOnce(mc)}\`, run_in_background: true, disable_timeout: true, description "kiwi messages".`,
+      start,
       "It ends when a message for you arrives, and Kimi starts your next turn with a notice. The messages are marked read already and won't be shown again, so get all of them:",
       "- If the notice names an output file, read that whole file: it holds your messages.",
       `- If it shows the output inline instead and says it is truncated, the start is cut off: run \`${mc} log -n 100\` (it marks nothing read) and read back to the last message you handled before this wake. If the oldest message it shows is still newer than that one, run it again with a larger -n until it reaches it.`,
@@ -31,18 +40,18 @@ export function wakeYourself(mc: string, harness: Here["harness"]): string | nul
       `Until then: ${checkEachTurn(mc)}`,
     ].join("\n");
   }
-  if (harness === "cursor") {
+  if (harness === "cursor" && start) {
     return [
       KEEP_A_LISTENER,
-      `Now, and again every time it wakes you: run \`${COMMANDS.listenOnce(mc)}\` with the Shell tool as a background command (is_background: true).`,
+      start,
       "It ends when a message for you arrives, and Cursor starts your next turn with its output. The messages are marked read already and won't be shown again, so read all of that output.",
       "Don't wait on it with Await. Before you end any turn, check it is still running; if not, start it.",
     ].join("\n");
   }
-  if (harness === "grok") {
+  if (harness === "grok" && start) {
     return [
       KEEP_A_LISTENER,
-      `Now, once for this session: start the monitor tool with command \`${COMMANDS.listen(mc)}\`, description "${COMMANDS.listen(mc)}", persistent: true.`,
+      start,
       "Each message for you arrives as monitor output and starts a turn. Answer it, then end the turn; the monitor keeps running.",
       "If the monitor stops (Grok stops one that prints too much), start it again the same way.",
     ].join("\n");

@@ -1,4 +1,4 @@
-import { CancelCircleIcon, CheckmarkCircle02Icon, GitMergeIcon, GitPullRequestIcon, Loading03Icon } from "@hugeicons/core-free-icons"
+import { CancelCircleIcon, CheckmarkCircle02Icon, Loading03Icon } from "@hugeicons/core-free-icons"
 import type { ReactNode } from "react"
 
 import { colorOf, taskId, tasksAwaitingPeople, type ChannelState, type Task } from "@kiwi/core/state.ts"
@@ -10,53 +10,8 @@ import { doingNow, type AgentNow } from "./agent-strip"
 import { Icon } from "./icon"
 import { Monogram } from "./kit"
 import { isAgent } from "./message"
+import { PrCell, type Pr } from "./pr-cell"
 import { DecisionMark, labelOf, StateMark } from "./tasks"
-
-type Pr = NonNullable<ReturnType<typeof taskPr>>
-
-function DiffBar({ additions, deletions }: { additions: number; deletions: number }) {
-  const total = additions + deletions
-  const added = total ? Math.max(8, Math.round((additions / total) * 100)) : 0
-  return (
-    <span aria-hidden className="flex h-1.5 w-12 shrink-0 overflow-hidden rounded-full shadow-[inset_0_0_0_1px_var(--line)]">
-      {total > 0 && (
-        <>
-          <span className="h-full bg-live" style={{ width: `${added}%` }} />
-          <span className="h-full flex-1 bg-alert" />
-        </>
-      )}
-    </span>
-  )
-}
-
-function PrCell({ pr, done }: { pr: Pr | undefined; done: boolean }) {
-  if (!pr) return <span className="text-meta text-ink-3">{done ? "no PR" : "no PR yet"}</span>
-  const { additions, deletions } = pr.pr
-  const sized = additions !== undefined && deletions !== undefined
-  return (
-    <a
-      href={`https://github.com/${pr.pr.repo}/pull/${pr.pr.number}`}
-      target="_blank"
-      rel="noreferrer"
-      onClick={(e) => e.stopPropagation()}
-      className="flex min-w-0 items-center gap-2 text-meta text-ink-2 tabular-nums hover:text-ink"
-    >
-      <Icon
-        icon={pr.pr.state === "merged" ? GitMergeIcon : GitPullRequestIcon}
-        size={14}
-        className={cx("shrink-0", pr.pr.state === "merged" ? "text-doing" : pr.pr.state === "closed" ? "text-ink-3" : "text-live")}
-      />
-      <span>#{pr.pr.number}</span>
-      {sized && (
-        <>
-          <DiffBar additions={additions} deletions={deletions} />
-          <span className="text-live">+{additions}</span>
-          {deletions > 0 && <span className="text-alert">−{deletions}</span>}
-        </>
-      )}
-    </a>
-  )
-}
 
 function checksWords(checks: PrChecks): { icon: typeof CheckmarkCircle02Icon; tone: string; text: string } {
   const total = checks.passed + checks.failed.length + checks.running

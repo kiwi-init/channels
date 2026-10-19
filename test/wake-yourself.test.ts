@@ -4,6 +4,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { daemonListeners, daemonSock } from "../src/daemon.ts";
+import { seatBudget } from "../src/hooks/answer.ts";
 import { startRelay } from "../src/relay/bun.ts";
 
 setDefaultTimeout(90_000);
@@ -183,6 +184,13 @@ describe("Kimi Code keeps its own listener running", () => {
     expect(unread.err).toContain("unread at stop");
     expect(unread.err).toContain("no Kiwi listener of yours is running");
     expect(unread.out).toBe("");
+
+    for (let i = 0; i < 8; i++) await ok(owner, ["send", "--to", me, `stop-backlog-${i} ${"s".repeat(1_400)}`]);
+    const crowded = await kimi.hook(["hook", "kimi-stop"], stopInput);
+    expect(crowded.code).toBe(2);
+    expect(crowded.err.trimEnd().length).toBeLessThanOrEqual(seatBudget(1));
+    expect(crowded.err).toContain("no Kiwi listener of yours is running");
+    expect(crowded.err).toContain("more unread: they come next");
 
     expect((await kimi.tool(["hooks", "uninstall", "kimi"])).code).toBe(0);
     expect(readFileSync(join(kimiDir, "config.toml"), "utf8")).toBe(KIMI_USER);
@@ -367,5 +375,39 @@ describe("Cursor keeps its own listener running", () => {
     const unread = await stop();
     expect(unread).toContain("Unread Kiwi messages.");
     expect(unread).toContain("no Kiwi listener of yours is running");
+  });
+});
+
+describe("Grok Bot on a VM whose shell has Cursor's variables", () => {
+  test("its seat is Grok Bot's, and a Cursor-shaped stop hook acts as Grok Bot: unread messages handed over, no listener asked for", async () => {
+    const owner = scratch("gb-own");
+    const code = created(await ok(owner, ["create", "gb-cursor", "--as", "boss"]));
+    const h = scratch("gb");
+    const B = { CURSOR_AGENT: "1", CURSOR_CONVERSATION_ID: "chat-gb", KIWI_HARNESS: "grok-bot", KIWI_MODEL: "grok-bot", KIWI_CURSOR_DIR: scratch("gb-cursor") };
+    const joining = run(h, ["join", code, "--timeout", "40s"], B);
+    await approve(owner);
+    const joined = await joining;
+    expect(joined.code).toBe(0);
+    const me = youAre(joined.out);
+    const config = JSON.parse(readFileSync(join(h, "config.json"), "utf8")) as { bindings: Record<string, { harness?: string } | { harness?: string }[]> };
+    expect(
+      Object.values(config.bindings)
+        .flat()
+        .map((b) => b.harness),
+    ).toEqual(["grok-bot"]);
+    expect((await ok(h, ["wake"], B)).includes("Cursor gives Kiwi no way")).toBe(false);
+
+    await ok(owner, ["send", "--to", me, "for the grok bot"]);
+    const r = await run(
+      h,
+      ["hook", "stop"],
+      { KIWI_HARNESS: "grok-bot" },
+      h,
+      JSON.stringify({ conversation_id: "chat-gb", generation_id: "g", hook_event_name: "stop", cursor_version: "2026.10.18", workspace_roots: [h], status: "completed", loop_count: 0 }),
+    );
+    expect(r.code).toBe(0);
+    const follow = (JSON.parse(r.out) as { followup_message: string }).followup_message;
+    expect(follow).toContain("Unread Kiwi messages.");
+    expect(follow).not.toContain("no Kiwi listener of yours is running");
   });
 });

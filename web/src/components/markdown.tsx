@@ -3,7 +3,8 @@ import { Children, createContext, isValidElement, memo, useCallback, useContext,
 import ReactMarkdown, { type Components } from "react-markdown"
 import remarkBreaks from "remark-breaks"
 import remarkGfm from "remark-gfm"
-import { compareCells, knownRefs, messageRefs, nextSort, Recent, sanitizeMarkdownUrl, type SortDir } from "../lib/markdown"
+import { compareCells, knownRefs, mentionParts, messageRefs, nextSort, Recent, sanitizeMarkdownUrl, type SortDir } from "../lib/markdown"
+import { MentionNames } from "../lib/mentions"
 import { cx } from "../lib/utils"
 import { Icon } from "./icon"
 import { MermaidBlock } from "./mermaid"
@@ -50,6 +51,11 @@ const components: Components = {
   code: ({ children, className }) => <InlineCode className={className}>{children}</InlineCode>,
   hr: () => <hr className="my-3 border-line" />,
   table: ({ children }) => <MarkdownTable>{children}</MarkdownTable>,
+  mark: ({ children, title }) => (
+    <span title={title} className="font-medium text-link">
+      {children}
+    </span>
+  ),
   button: ({ children, value }) => (typeof value === "string" && /^[1-9]\d*$/.test(value) ? <MessageRef seq={Number(value)}>{children}</MessageRef> : <span>{children}</span>),
 }
 
@@ -270,24 +276,29 @@ type MdNode = { type: string; value?: string; data?: { hName?: string; hProperti
 
 const OPAQUE = new Set(["link", "linkReference", "definition", "code", "inlineCode", "html"])
 
-function linkMessageRefs(node: MdNode, known: (seq: number) => boolean): void {
+function mentionNodes(text: string, labelOf: (name: string) => string | undefined): MdNode[] {
+  return mentionParts(text, labelOf).map((part) =>
+    part.kind === "text" ? { type: "text", value: part.text } : { type: "mention", data: { hName: "mark", hProperties: { title: part.text } }, children: [{ type: "text", value: `@${part.label}` }] }
+  )
+}
+
+function linkInline(node: MdNode, known: (seq: number) => boolean, labelOf: (name: string) => string | undefined): void {
   if (!node.children || OPAQUE.has(node.type)) return
   if (node.type === "table") {
-    for (const row of node.children.slice(1)) linkMessageRefs(row, known)
+    for (const row of node.children.slice(1)) linkInline(row, known, labelOf)
     return
   }
   node.children = node.children.flatMap((child): MdNode[] => {
     if (child.type !== "text" || child.value === undefined) {
-      linkMessageRefs(child, known)
+      linkInline(child, known, labelOf)
       return [child]
     }
-    const parts = messageRefs(child.value, known)
-    if (parts.length === 1 && parts[0]?.kind === "text") return [child]
-    return parts.map((part) =>
+    const parts = messageRefs(child.value, known).flatMap((part): MdNode[] =>
       part.kind === "text"
-        ? { type: "text", value: part.text }
-        : { type: "messageRef", data: { hName: "button", hProperties: { value: String(part.seq) } }, children: [{ type: "text", value: part.text }] }
+        ? mentionNodes(part.text, labelOf)
+        : [{ type: "messageRef", data: { hName: "button", hProperties: { value: String(part.seq) } }, children: [{ type: "text", value: part.text }] }]
     )
+    return parts.length === 1 && parts[0]?.type === "text" && parts[0].value === child.value ? [child] : parts
   })
 }
 
@@ -295,13 +306,26 @@ const PLAIN = [remarkGfm, remarkBreaks]
 const urlTransform = (url: string) => sanitizeMarkdownUrl(url) ?? ""
 const rendered = new Recent<ReactElement>(500)
 
-export function renderMarkdown(body: string, known?: (seq: number) => boolean): ReactElement {
+export function renderMarkdown(body: string, known?: (seq: number) => boolean, labelOf?: (name: string) => string | undefined): ReactElement {
   const linked = known ? knownRefs(body, known) : ""
-  const key = `${linked}\u0000${body}`
+  const named = labelOf ? mentionParts(body, labelOf).flatMap((p) => (p.kind === "mention" ? [[p.name, p.label] as const] : [])) : []
+  const key = `${linked}\u0000${JSON.stringify(named)}\u0000${body}`
   const hit = rendered.get(key)
   if (hit) return hit
   const ids = new Set(linked ? linked.split(",").map(Number) : [])
-  const plugins = ids.size ? [...PLAIN, () => (tree: MdNode) => linkMessageRefs(tree, (seq) => ids.has(seq))] : PLAIN
+  const labels = new Map<string, string>(named)
+  const plugins =
+    ids.size || labels.size
+      ? [
+          ...PLAIN,
+          () => (tree: MdNode) =>
+            linkInline(
+              tree,
+              (seq) => ids.has(seq),
+              (name) => labels.get(name)
+            ),
+        ]
+      : PLAIN
   const tree = ReactMarkdown({ skipHtml: true, remarkPlugins: plugins, components, urlTransform, children: body })
   rendered.set(key, tree)
   return tree
@@ -309,7 +333,8 @@ export function renderMarkdown(body: string, known?: (seq: number) => boolean): 
 
 export const Markdown = memo(function Markdown({ children, refs }: { children: string; refs?: MessageRefs }) {
   const known = refs?.known
-  const tree = useMemo(() => renderMarkdown(children, known), [children, known])
+  const labelOf = useContext(MentionNames)
+  const tree = useMemo(() => renderMarkdown(children, known, labelOf), [children, known, labelOf])
   return (
     <div className="[overflow-wrap:anywhere] break-words">
       <OpenRef.Provider value={refs?.open}>{tree}</OpenRef.Provider>
