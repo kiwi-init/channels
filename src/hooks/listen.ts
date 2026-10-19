@@ -10,7 +10,7 @@ import { formatMessage } from "@kiwi/core/format.ts";
 import type { Binding, Here } from "../seats.ts";
 import { fitting, moreNote } from "./answer.ts";
 import { answeringNow, deliveredUpTo, noteDelivered, noteHeard } from "./delivered.ts";
-import { hooksListen } from "./install/claude.ts";
+import { hooksListen, installedListenSeconds } from "./install/claude.ts";
 import { alive, isListening, takeListenSlot } from "./listeners.ts";
 import { LISTEN_SECONDS, mcFor } from "./self.ts";
 
@@ -25,6 +25,8 @@ interface Heard {
 }
 
 const ANSWERED_WAIT_MS = 20_000;
+const SLOT_RETRY_FIRST_MS = 2_000;
+const SLOT_RETRY_MAX_MS = 60_000;
 
 const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, woke: Effect.Effect<void, never, Scope.Scope>) {
   const s = yield* openSession(b.alias, cfg, b.as);
@@ -62,8 +64,13 @@ const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, w
 const arm = Effect.fn("Hooks.arm")(function* (seat: Served, who: Here, woke: Effect.Effect<void, never, Scope.Scope>) {
   const { b } = seat;
   if (!wakeOn(loadConfig(), b.alias, b.as) || isListening(b.alias, b.as)) return null;
-  const slot = yield* Effect.promise(() => takeListenSlot(b.alias, b.as, who.session ?? ""));
-  if (!slot) return null;
+  const slot = yield* Effect.promise(() => takeListenSlot(b.alias, b.as, who.session ?? "")).pipe(
+    Effect.repeat({
+      while: (got) => got === "unreachable" && (!who.pid || alive(who.pid)),
+      schedule: Schedule.min([Schedule.exponential(SLOT_RETRY_FIRST_MS), Schedule.spaced(SLOT_RETRY_MAX_MS)]),
+    }),
+  );
+  if (typeof slot === "string") return null;
   const release = () => slot.close();
   yield* Effect.addFinalizer(() => Effect.sync(release));
   return yield* tune(seat, who, woke).pipe(
@@ -105,7 +112,8 @@ export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Serv
     Effect.sync(() => answeringNow(who.session)),
     { while: (busy) => busy, schedule: Schedule.spaced("50 millis") },
   ).pipe(Effect.timeoutOption(ANSWERED_WAIT_MS));
-  const dayEnds = Date.now() + LISTEN_SECONDS * 1000;
+  const installed = installedListenSeconds();
+  const dayEnds = Date.now() + Math.min(LISTEN_SECONDS, installed === null ? LISTEN_SECONDS : installed - 60) * 1000;
   for (;;) {
     const ended = yield* Effect.raceFirst(
       hearing,

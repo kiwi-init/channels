@@ -8,7 +8,7 @@ import { coverageChunks, heavyIn, registryEntries, stubbedChunks, stubPlugin } f
 
 const ROOT = resolve(import.meta.dir, "..");
 const BUDGET_BYTES = 2_580_000;
-const TARGETS = ["bun-darwin-arm64", "bun-darwin-x64", "bun-linux-x64", "bun-linux-arm64", "bun-windows-x64"] as const satisfies readonly Bun.Build.CompileTarget[];
+const TARGETS = ["bun-darwin-arm64", "bun-darwin-x64", "bun-linux-x64", "bun-linux-arm64"] as const satisfies readonly Bun.Build.CompileTarget[];
 
 const { values } = parseArgs({
   options: {

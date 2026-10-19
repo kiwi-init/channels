@@ -104,7 +104,7 @@ const ran = (r: Plan) =>
     .filter((d) => d.run)
     .map((d) => d.job)
     .sort();
-const CHECKS = ["static", "test-unit", "test-flows-a", "test-flows-b", "build", "shots", "desktop", "cli-macos"];
+const CHECKS = ["static", "test-unit", "test-flows-a", "test-flows-b", "build", "shots", "perf", "desktop", "cli-macos"];
 
 describe("ci.yml edits outside the jobs", () => {
   test("a concurrency-only edit (#315) runs only the static checks, by rule", async () => {
@@ -138,7 +138,7 @@ describe("ci.yml edits outside the jobs", () => {
   test("workflow permissions run the jobs that inherit them", async () => {
     const { result, by } = await planFor({ ".github/workflows/ci.yml": CI.replace("permissions:\n  contents: read\n", "permissions:\n  contents: read\n  issues: read\n") });
     expect(by("cli-macos")).toMatchObject({ run: true, layer: "L0" });
-    expect(ran(result)).toEqual([...CHECKS, "release-rehearsal"].sort());
+    expect(ran(result)).toEqual([...CHECKS.filter((c) => c !== "perf"), "release-rehearsal"].sort());
   });
 });
 

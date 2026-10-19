@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentSession } from "../agent.ts";
 import { Cursor, home } from "../config.ts";
@@ -113,4 +113,27 @@ export function heardFrom(session: string | undefined, seq: number): Heard[] {
   const seats = new Map<string, Heard>();
   for (const h of readHeard(session)) if (h.seq === seq) seats.set(`${h.alias}\0${h.as}`, h);
   return [...seats.values()];
+}
+
+export function pruneHookFiles(base: string, maxAgeMs: number, now = Date.now()): number {
+  let pruned = 0;
+  for (const dir of [join(base, "listen-hooks"), join(base, "hook-state")]) {
+    let names: string[];
+    try {
+      names = readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const name of names) {
+      const file = join(dir, name);
+      try {
+        if (!statSync(file).isFile() || now - statSync(file).mtimeMs <= maxAgeMs) continue;
+        rmSync(file, { force: true });
+        pruned += 1;
+      } catch {
+        // Gone already, or not ours to read: nothing to prune.
+      }
+    }
+  }
+  return pruned;
 }

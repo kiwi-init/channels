@@ -5,7 +5,7 @@ import type { Socket } from "bun";
 import type { Info, MemberRow } from "@kiwi/core/client.ts";
 import { home } from "../config.ts";
 import type { MachineCert } from "@kiwi/core/person.ts";
-import type { Message } from "@kiwi/core/protocol.ts";
+import type { Message, Presence } from "@kiwi/core/protocol.ts";
 import { VERSION } from "../version.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
 import type { PairedPerson } from "./pair.ts";
@@ -315,6 +315,31 @@ function infoOf(v: unknown): Info | null {
   const sealed = (x: unknown): boolean => x === undefined || x === null || (!!x && typeof x === "object" && isText((x as Record<string, unknown>).iv) && isText((x as Record<string, unknown>).ct));
   if (!isText(i.ownerPk) || !isText(i.ownerXpk) || !isText(i.ownerSig) || !Number.isSafeInteger(i.epoch) || typeof i.rotate !== "boolean" || !sealed(i.settings) || !sealed(i.title)) return null;
   return v as Info;
+}
+
+export interface DaemonPresence {
+  since: number;
+  beaconMs: number;
+  presence: { presence: Presence & { sigOk: boolean }; at: number }[];
+}
+
+export async function daemonPresence(channel: string, agent: string, sock = daemonSock()): Promise<DaemonPresence | null> {
+  if (process.platform !== "win32" && !existsSync(sock)) return null;
+  const ask = async (): Promise<DaemonPresence | null> => {
+    const c = await openConn(sock, PEEK_MS);
+    try {
+      const r = await c.call("presence", { channel, as: agent });
+      if (r.live !== true || typeof r.since !== "number" || typeof r.beaconMs !== "number" || !Array.isArray(r.presence)) return null;
+      const presence = (r.presence as unknown[]).filter((h): h is DaemonPresence["presence"][number] => {
+        const { presence: p, at } = (h ?? {}) as { presence?: { from?: unknown; sigOk?: unknown }; at?: unknown };
+        return typeof at === "number" && !!p && typeof p.from === "string" && p.sigOk === true;
+      });
+      return { since: r.since, beaconMs: r.beaconMs, presence };
+    } finally {
+      c.close();
+    }
+  };
+  return withDeadline(ask(), PEEK_MS).catch(() => null);
 }
 
 export async function daemonPeek(channel: string, agent: string, room: string, sock = daemonSock()): Promise<DaemonPeek | null> {

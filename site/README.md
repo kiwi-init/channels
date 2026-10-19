@@ -9,8 +9,8 @@ through `kiwi://join/<code>`), and the install scripts.
   (`/#<code>`, which is what the renderer produces, and `/join/<code>`), fills
   in the download links and the `curl … | sh -s -- join <code>` line, and the
   copy buttons. There is no inline script, so the CSP stays `script-src 'self'`.
-- `install`, `install.sh`, `install.ps1` — the install scripts served at
-  `/install`, `/install.sh` and `/install.ps1`. They install the CLI and then
+- `install`, `install.sh` — the install script, served at `/install` and
+  `/install.sh`. It installs the CLI and then
   run `kiwi join …` or `kiwi pair …` when given one.
 - `_headers` — security headers and the text content type for the install
   scripts, for hosts that read it.
@@ -27,6 +27,6 @@ name, Channels (releases up to v0.16.2 named them `Kiwi-…`):
 The release PR bumps the version in these names; the site deploys only from a tag,
 after its GitHub release exists. Those are `desktop/package.json`'s `artifactName`
 (`Channels-${version}-${os}-${arch}.${ext}`)
-with electron-builder's per-target arch strings. There is no Windows app; the
-CLI is `kiwi-windows-x64.exe`, installed by `install.ps1`. Links point at
+with electron-builder's per-target arch strings. There is no Windows app or
+Windows CLI. Links point at
 `github.com/ojowwalker77/channels/releases/latest/download/<file>`.

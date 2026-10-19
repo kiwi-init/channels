@@ -58,8 +58,8 @@ function legacySlotHeld(alias: string, as: string, session: string): boolean {
   return false;
 }
 
-export async function takeListenSlot(alias: string, as: string, session: string): Promise<HeldListener | null> {
-  if (legacySlotHeld(alias, as, session)) return null;
+export async function takeListenSlot(alias: string, as: string, session: string): Promise<HeldListener | "taken" | "unreachable"> {
+  if (legacySlotHeld(alias, as, session)) return "taken";
   const entry = heldFor(alias, as, "hook", session);
   let slot = await holdListener(entry);
   if (slot.held === null) {
@@ -69,7 +69,7 @@ export async function takeListenSlot(alias: string, as: string, session: string)
   }
   if (slot.held) return slot;
   slot.close();
-  return null;
+  return slot.held === null ? "unreachable" : "taken";
 }
 
 function liveRecords(): { name: string; rec: Record<string, unknown> }[] {

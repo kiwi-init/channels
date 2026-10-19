@@ -8,6 +8,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": resolve(import.meta.dirname, "./src"),
+      "elkjs/lib/elk.bundled.js": resolve(import.meta.dirname, "./src/lib/no-elk.ts"),
     },
   },
   server: {

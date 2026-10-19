@@ -13,8 +13,10 @@ import {
   extraInstalled,
   fitting,
   grokMonitorListens,
+  hooksInstalled,
   hooksListen,
   hooksStatus,
+  installedListenSeconds,
   installDetected,
   installExtra,
   installHooks,
@@ -413,6 +415,21 @@ test("the listener: installed from a Claude Code that runs it, kept by an instal
   setEnv({ CLAUDECODE: "1", AI_AGENT: "claude-code_2-1-100_agent" });
   installHooks();
   expect(has()).toBe(false);
+});
+
+test("the listener's day is a week; an install with the old one-day timeout counts as not installed, and its listener keeps to it until rewritten", () => {
+  hideEnv(["AI_AGENT", "CLAUDE_CODE_EXECPATH", "CLAUDECODE"]);
+  setEnv({ CLAUDE_CONFIG_DIR: scratch("kiwi-listen-day-") });
+  setEnv({ CLAUDECODE: "1", AI_AGENT: "claude-code_2-1-296_agent" });
+  installHooks();
+  expect(hooksInstalled()).toBe(true);
+  expect(installedListenSeconds()).toBe(7 * 24 * 3600 + 60);
+  const file = join(process.env.CLAUDE_CONFIG_DIR!, "settings.json");
+  writeFileSync(file, readFileSync(file, "utf8").replaceAll(`"timeout": ${7 * 24 * 3600 + 60}`, '"timeout": 86460'));
+  expect(installedListenSeconds()).toBe(86460);
+  expect(hooksInstalled()).toBe(false);
+  installHooks();
+  expect(installedListenSeconds()).toBe(7 * 24 * 3600 + 60);
 });
 
 test("a harness that passes CLAUDECODE through is never taken for Claude Code by its hooks", () => {

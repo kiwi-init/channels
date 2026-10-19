@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { relayConfig } from "../src/relay/room/http.ts";
-import { avatar, finishDevice, listRepos, startDevice, type DeviceStart, type FlowDeps } from "../desktop/src/github-flow.ts";
+import { avatar, finishDevice, listRepos, startDevice, tokenForRelay, type DeviceStart, type FlowDeps } from "../desktop/src/github-flow.ts";
 
 const json = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
@@ -147,4 +147,16 @@ describe("the linked account's picture", () => {
     expect(await avatar(42, fetchOf([image(3000, "image/svg+xml")], []))).toBeNull();
     expect(await avatar(42, fetchOf([new Response(null, { status: 404 })], []))).toBeNull();
   });
+});
+
+test("the link token goes only to a relay that advertises the GitHub App", async () => {
+  const relayWith = (config: unknown, ok = true) => (async () => new Response(JSON.stringify(config), { status: ok ? 200 : 500 })) as unknown as typeof fetch;
+  expect(await tokenForRelay("https://relay.example", "gho_x", relayWith({ githubClientId: "Iv1.abc" }))).toBe("gho_x");
+  expect(await tokenForRelay("https://relay.example", "gho_x", relayWith({ workosClientId: "w" }))).toBeNull();
+  expect(await tokenForRelay("https://relay.example", "gho_x", relayWith({}, false))).toBeNull();
+  const down = (async () => {
+    throw new Error("offline");
+  }) as unknown as typeof fetch;
+  expect(await tokenForRelay("https://relay.example", "gho_x", down)).toBeNull();
+  expect(await tokenForRelay("https://relay.example", null, relayWith({ githubClientId: "Iv1.abc" }))).toBeNull();
 });

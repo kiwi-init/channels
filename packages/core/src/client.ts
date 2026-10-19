@@ -33,7 +33,7 @@ import { ChannelSettings, type RoomsSetting } from "./client/settings.ts";
 import { ChannelSnapshots } from "./client/snapshots.ts";
 
 export { ChannelGone, goneText, RelayError, Unreachable, type Refused } from "./client/errors.ts";
-export { fetchRelay, keepAnswersIn, Relay, relayConfig, settle, type AnswerMemory, type HumanSession } from "./client/relay.ts";
+export { downWhy, fetchRelay, keepAnswersIn, OfflineReads, Relay, relayConfig, relayDown, settle, type AnswerMemory, type HumanSession } from "./client/relay.ts";
 export { eachLive, QUIET_DROP_MS, reason, type Live, type OpenKind, type PresenceFields, type StreamOptions } from "./client/live.ts";
 export type { Probe } from "./client/wire.ts";
 export { ownerStatement } from "./client/keys.ts";
@@ -353,8 +353,8 @@ export class Channel {
     return run(this.fx.snapshotIfDue());
   }
 
-  setGithubRepos(repos: string[]): Promise<string[]> {
-    return run(this.fx.setGithubRepos(repos));
+  setGithubRepos(repos: string[], token: string | null = null): Promise<string[]> {
+    return run(this.fx.setGithubRepos(repos, token));
   }
 
   drainGithub(): Promise<number> {

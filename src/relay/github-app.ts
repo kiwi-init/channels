@@ -48,6 +48,7 @@ export interface GithubAppApi {
   issue(repo: string, number: number): Promise<GithubReply<GithubIssueInfo>>;
   closeIssue(repo: string, number: number, reason: "completed" | "not_planned", body: string): Promise<GithubReply<{ url: string | null }>>;
   checkLog(repo: string, sha: string, name: string): Promise<GithubReply<CheckLog>>;
+  canPush(repo: string, userToken: string): Promise<GithubReply<boolean>>;
 }
 
 export class GithubApp extends Context.Service<GithubApp, GithubAppApi | null>()("kiwi/relay/GithubApp") {}
@@ -114,6 +115,13 @@ export function githubAppFrom(opts: { appId?: string | null; privateKey?: string
   };
 
   return {
+    canPush: async (repo, userToken) => {
+      const res = await get(`${api}/repos/${repo}`, { headers: headers(userToken) });
+      if (res.status === 404 || res.status === 403) return { ok: true, value: false };
+      if (!res.ok) return fail(res, "this repo");
+      const r = (await res.json()) as { permissions?: { push?: boolean; admin?: boolean } };
+      return { ok: true, value: !!(r.permissions?.push || r.permissions?.admin) };
+    },
     diff: async (repo, sha) => {
       const t = await token(repo);
       if (!t.ok) return t;
