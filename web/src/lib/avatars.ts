@@ -6,7 +6,7 @@ const robots: string[] = Object.entries(urls)
   .sort(([a], [b]) => a.localeCompare(b))
   .map(([, url]) => url)
 
-const harnesses = import.meta.glob<string>("../../../assets/harness/*.svg", { eager: true, query: "?url", import: "default" })
+const harnesses = import.meta.glob<string>("../../../assets/harness/*.svg", { eager: true, query: "?no-inline", import: "default" })
 
 export function harnessUrl(harness: string): string {
   return harnesses[`../../../assets/harness/${harness}.svg`] ?? ""

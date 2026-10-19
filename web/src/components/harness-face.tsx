@@ -1,9 +1,6 @@
-import { ComputerTerminal01Icon } from "@hugeicons/core-free-icons"
-
 import { harnessUrl } from "@/lib/avatars"
 import { harnessName, knownHarness, monoHarness } from "@/lib/harness"
 import { cx } from "@/lib/utils"
-import { Icon } from "./icon"
 
 export function HarnessFace({ harness, size, working }: { harness: string | undefined; size: number; working?: boolean }) {
   const known = knownHarness(harness)
@@ -38,7 +35,10 @@ export function HarnessFace({ harness, size, working }: { harness: string | unde
           <img src={url} alt="" width={mark} height={mark} draggable={false} />
         )
       ) : (
-        <Icon icon={ComputerTerminal01Icon} size={mark} className="text-ink-2" />
+        <svg aria-hidden width={mark} height={mark} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" className="text-ink-2">
+          <rect x="2.5" y="3.5" width="19" height="17" rx="4" />
+          <path d="M7 9.5l3 2.5-3 2.5M12.5 15h4.5" />
+        </svg>
       )}
     </span>
   )
