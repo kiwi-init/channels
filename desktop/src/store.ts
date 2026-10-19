@@ -6,7 +6,7 @@ import type { Identity } from "@kiwi/core/identity.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
 import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts";
 import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, StoreSnapshot } from "./bridge.ts";
-import { normalizeRelay, readStore, snapshotOf, writePrivate } from "./guard.ts";
+import { chooseStore, normalizeRelay, snapshotOf, writePrivate } from "./guard.ts";
 import { tellKeys } from "./keys-process.ts";
 import type { VoiceStore } from "./voice.ts";
 import { currentWindow } from "./window.ts";
@@ -34,6 +34,17 @@ export let store: StoreFile = defaults();
 
 let storeBroken: string | null = null;
 
+const backupPath = () => `${storePath()}.bak`;
+
+function readBackup(): Buffer | null {
+  try {
+    return fs.readFileSync(backupPath());
+  } catch {
+    // No backup yet, or one this user can't read: the main file alone decides, as before backups.
+    return null;
+  }
+}
+
 export function loadStore(): void {
   let raw: Buffer | null = null;
   try {
@@ -41,7 +52,9 @@ export function loadStore(): void {
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code !== "ENOENT") storeBroken = e instanceof Error ? e.message : String(e);
   }
-  const read = storeBroken ? null : readStore(raw, safeStorage.isEncryptionAvailable() ? (b) => safeStorage.decryptString(b) : null);
+  const choice = storeBroken ? null : chooseStore(raw, readBackup(), safeStorage.isEncryptionAvailable() ? (b) => safeStorage.decryptString(b) : null);
+  if (choice?.restore) writePrivate(storePath(), choice.restore);
+  const read = choice?.read ?? null;
   if (read?.kind === "ok") store = { ...defaults(), ...(read.json as Partial<StoreFile>) };
   else {
     store = defaults();
@@ -58,6 +71,7 @@ function saveStore(): void {
   const json = JSON.stringify(store);
   const raw = safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(json) : Buffer.from(json, "utf8");
   writePrivate(storePath(), raw);
+  writePrivate(backupPath(), raw);
 }
 
 export function warnIfBroken(): void {

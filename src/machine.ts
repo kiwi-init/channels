@@ -15,17 +15,34 @@ export interface MachineFile {
 }
 
 const path = () => join(home(), "machine.json");
+const backup = () => `${path()}.bak`;
 
-export function loadMachine(): MachineFile | null {
+function readMachine(file: string): MachineFile | null {
   try {
-    return existsSync(path()) ? (JSON.parse(readFileSync(path(), "utf8")) as MachineFile) : null;
+    const m = JSON.parse(readFileSync(file, "utf8")) as Partial<MachineFile>;
+    return m && typeof m === "object" && m.identity && typeof m.identity.pk === "string" && typeof m.identity.sk === "string" ? (m as MachineFile) : null;
   } catch {
     return null;
   }
 }
 
+export function loadMachine(): MachineFile | null {
+  const main = existsSync(path());
+  const kept = main ? readMachine(path()) : null;
+  if (kept) return kept;
+  const saved = existsSync(backup()) ? readMachine(backup()) : null;
+  if (saved) {
+    writePrivate(path(), JSON.stringify(saved, null, 2) + "\n");
+    return saved;
+  }
+  if (main) throw new Error(`${path()} is unreadable and there is no backup of it: move it aside to make this computer a new key, and pair it again`);
+  return null;
+}
+
 export function saveMachine(m: MachineFile): void {
-  writePrivate(path(), JSON.stringify(m, null, 2) + "\n");
+  const text = JSON.stringify(m, null, 2) + "\n";
+  writePrivate(path(), text);
+  writePrivate(backup(), text);
 }
 
 /** A fresh machine key, labelled after this computer. */

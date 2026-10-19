@@ -115,7 +115,12 @@ const checkRelay = Effect.fn("Doctor.relay")(function* (relay: string) {
 
 /** Whether this computer is paired with its person's app (machine.json carries their cert). Never a failure: agents still join by approval. */
 function checkPaired(): Finding {
-  const m = loadMachine() as (MachineFile & { cert?: { name?: string } }) | null;
+  let m: (MachineFile & { cert?: { name?: string } }) | null;
+  try {
+    m = loadMachine() as (MachineFile & { cert?: { name?: string } }) | null;
+  } catch (err) {
+    return { ok: false, what: "This computer's key file can't be read.", how: err instanceof Error ? err.message : String(err) };
+  }
   if (m?.cert) return { ok: true, what: `paired   with ${m.cert.name ?? "your app"} (${m.label})` };
   return { ok: true, what: "paired   no: agents here ask to join and wait for the owner (kiwi pair kp1-… pairs this computer with your app)" };
 }
@@ -143,7 +148,15 @@ function checkHooks(): Finding {
 
 /** Every check, relay before link. A link check exists only when the relay requires sign-in. */
 export const checks = Effect.fn("Doctor.checks")(function* () {
-  const relay = (process.env.KIWI_RELAY ?? loadMachine()?.relay ?? DEFAULT_RELAY).replace(/\/+$/, "");
+  const machineRelay = (() => {
+    try {
+      return loadMachine()?.relay;
+    } catch {
+      // checkPaired reports the unreadable key file; the relay falls back to the default here.
+      return undefined;
+    }
+  })();
+  const relay = (process.env.KIWI_RELAY ?? machineRelay ?? DEFAULT_RELAY).replace(/\/+$/, "");
   const found = yield* checkInstall();
   const relayCheck = yield* checkRelay(relay);
   found.push(relayCheck.finding);
