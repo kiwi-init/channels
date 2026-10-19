@@ -332,6 +332,8 @@ try {
         () => toTab("Tasks"),
         () => toTab("Conversation"),
       );
+      await toTab("Tasks");
+      await toTab("Conversation");
       await atNewest("back on the conversation from Tasks");
       await shoot(owner, tag, "05-task-inline", () => openInline(/Write fewer rows/), toChannel);
       await shoot(
