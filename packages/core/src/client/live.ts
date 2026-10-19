@@ -130,9 +130,16 @@ const FRAME: Record<Live["_tag"], string> = {
 };
 const failedFrame = (frame: string, err: unknown) => `dropped a ${frame} frame whose handling failed: ${reason(err)}`;
 
+const PLAIN: readonly (readonly [RegExp, string])[] = [
+  [/^Unable to connect\. Is the computer able to access the url\?/, "connection refused"],
+  [/^The socket connection was closed unexpectedly/, "the connection dropped"],
+  [/^Was there a typo in the url or port\?/, "no such host"],
+];
+
 export function reason(err: unknown): string {
   const e = err instanceof Unreachable ? err.cause : err;
-  return e instanceof Error ? e.message : String(e);
+  const text = e instanceof Error ? e.message : String(e);
+  return PLAIN.find(([re]) => re.test(text))?.[1] ?? text;
 }
 
 function statusLine(ev: Live): string | null {
