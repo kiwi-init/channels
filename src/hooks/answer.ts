@@ -7,6 +7,7 @@ import { detectWhere } from "../card.ts";
 import { loadConfig, type ChannelConfig } from "../config.ts";
 import { wakeHooked, wakeOn } from "../daemon/reach.ts";
 import { charterLines, formatMessage, holdLine, leadLine } from "@kiwi/core/format.ts";
+import { kimiServer } from "../kimi-server.ts";
 import { here, type Binding, type Here } from "../seats.ts";
 import { humanOf } from "@kiwi/core/state.ts";
 import { asOption, channelOption } from "@kiwi/core/wake.ts";
@@ -44,6 +45,8 @@ export interface HookInput {
   reason?: string;
   backgroundTasks?: unknown;
   model?: unknown;
+  conversation_id?: unknown;
+  cursor_version?: unknown;
 }
 
 export function freshAt(input: Pick<HookInput, "source">, now: number): number | null {
@@ -73,7 +76,8 @@ const LISTENER_SETTLE_MS = 1_500;
 type ListenCheck = { kind: "skip" } | { kind: "check"; listens: () => boolean; settles: boolean };
 
 function listenCheck(input: HookInput, b: Binding, who: Here, mc: string): ListenCheck {
-  if (who.harness === "kimi") {
+  if (who.harness === "kimi" || who.harness === "cursor") {
+    if (who.harness === "kimi" && kimiServer(who.pid)) return { kind: "skip" };
     const heard = () => liveListeners().some((l) => l.alias === b.alias && l.as === b.as && ((!!who.session && l.session === who.session) || (!!who.pid && l.pid === who.pid)));
     return { kind: "check", listens: heard, settles: true };
   }
@@ -243,9 +247,9 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
       if (input.status && input.status !== "completed") return null;
       const { messages, state } = yield* s.state();
       const unread = (yield* s.unreadCount(state, messages)) > 0;
-      const follow = cursorStopFollowup(mc, unread);
-      if (!follow) return null;
-      return answered("followup", follow);
+      const rearm = yield* rearmText(input, b, who, mc);
+      const follow = [cursorStopFollowup(mc, unread), rearm].filter((t) => t !== null).join("\n\n");
+      return follow ? answered("followup", follow) : null;
     }
     if (who.harness === "grok" && input.reason !== undefined && input.reason !== "end_turn") return null;
     const unread = yield* unreadText(s, mc);

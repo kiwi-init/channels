@@ -1,7 +1,9 @@
 import { COMMANDS } from "../brief.ts";
+import { kimiServer } from "../kimi-server.ts";
 import { here, type Here } from "../seats.ts";
 import { wakePath, wakeWords } from "@kiwi/core/wake.ts";
 import { hooksListen } from "./install/claude.ts";
+import { extraInstalled } from "./install/extra.ts";
 
 function checkEachTurn(mc: string): string {
   return `Run \`${COMMANDS.unread(mc)}\` at the start of every turn and again before you end one. It prints the messages waiting for you, or nothing.`;
@@ -27,6 +29,14 @@ export function wakeYourself(mc: string, harness: Here["harness"]): string | nul
       `Until then: ${checkEachTurn(mc)}`,
     ].join("\n");
   }
+  if (harness === "cursor") {
+    return [
+      KEEP_A_LISTENER,
+      `Now, and again every time it wakes you: run \`${COMMANDS.listenOnce(mc)}\` with the Shell tool as a background command (is_background: true).`,
+      "It ends when a message for you arrives, and Cursor starts your next turn with its output. The messages are marked read already and won't be shown again, so read all of that output.",
+      "Don't wait on it with Await. Before you end any turn, check it is still running; if not, start it.",
+    ].join("\n");
+  }
   if (harness === "grok") {
     return [
       KEEP_A_LISTENER,
@@ -40,6 +50,7 @@ export function wakeYourself(mc: string, harness: Here["harness"]): string | nul
 
 export function howMessagesReachYou(mc: string, waking: boolean, who: Here = here(), webhook = false): string {
   if (!waking) return `Kiwi won't wake you: waking is off for you here (\`kiwi wake on\` turns it back on). ${checkEachTurn(mc)}`;
+  if (who.harness === "kimi" && kimiServer(who.pid) && extraInstalled("kimi")) return `Kiwi wakes you in this session when a message for you arrives (${wakeWords("kimi-server")}). Don't run listen.`;
   const path = wakePath(who.harness ? { harness: who.harness, ...(who.session ? { session: who.session } : {}) } : null, hooksListen(), webhook);
   switch (path.kind) {
     case "hooks":

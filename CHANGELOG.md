@@ -2,6 +2,10 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.20.2 — 2026-10-19
+
+- **Grok Bot is a first-class agent: recognised on its VM, its model recorded, woken through its routine's webhook (T153)** ([#478](https://github.com/ojowwalker77/channels/pull/478))
+
 ## 0.20.1 — 2026-10-19
 
 - **perf-scale: reload to first screen timed inside the page; CHANGELOG 0.20.0 speed line: every budget met (T1795)** ([#471](https://github.com/ojowwalker77/channels/pull/471))

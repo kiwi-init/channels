@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, type Config, type WakeHook } from "../config.ts";
 import { listenHooksInstalled } from "../hooks/install/claude.ts";
+import { kimiServer, promptKimi } from "../kimi-server.ts";
 import { wakeArgv, wakeKey, wakePath, wakePrompt, type WakePath } from "@kiwi/core/wake.ts";
 import { withDeadline, type DaemonWake } from "./protocol.ts";
 import { seatRecordFor, wakeOn } from "./reach.ts";
@@ -29,7 +30,8 @@ function oneLine(text: string): string {
 const UNREAD_CHECK_MS = 30_000;
 
 export const pathOf = async (cfg: Config, alias: string, agent: string): Promise<WakePath> => {
-  return wakePath(seatRecordFor(cfg, alias, agent), listenHooksInstalled(), !!cfg.wakeHooks?.[wakeKey(alias, agent)]);
+  const record = seatRecordFor(cfg, alias, agent);
+  return wakePath(record?.harness === "kimi" ? { ...record, served: !!kimiServer(record.pid) } : record, listenHooksInstalled(), !!cfg.wakeHooks?.[wakeKey(alias, agent)]);
 };
 
 async function postWake(hook: WakeHook, body: { channel: string; agent: string; unread: number; prompt: string }): Promise<string | null> {
@@ -78,6 +80,11 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, stopped, current }: Wak
     } catch (err) {
       return `could not start: ${oneLine(err instanceof Error ? err.message : String(err))}`;
     }
+  };
+
+  const wakeKimi = async (seat: Seat, session: string, prompt: string): Promise<string | null> => {
+    const server = kimiServer(seatRecordFor(loadConfig(), seat.alias, seat.agent)?.pid);
+    return server ? promptKimi(server, session, prompt, WAKE_RUN_MS) : "Kimi's server for this session is gone";
   };
 
   const logWake = (seat: Seat, w: DaemonWake, why: string | null): void => {
@@ -129,7 +136,9 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, stopped, current }: Wak
           ? hook
             ? await postWake(hook, { channel: seat.alias, agent: seat.agent, unread, prompt })
             : "no webhook set"
-          : await runWake(seat, wakeArgv(path.via, path.session, prompt));
+          : path.via === "kimi-server"
+            ? await wakeKimi(seat, path.session, prompt)
+            : await runWake(seat, wakeArgv(path.via, path.session, prompt));
       if (!current(seat)) return;
       seat.lastWake = { at: Date.now(), via: path.via, unread, ok: why === null };
       logWake(seat, seat.lastWake, why);

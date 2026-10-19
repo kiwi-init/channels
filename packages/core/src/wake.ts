@@ -1,12 +1,12 @@
 export type WakeHarness = "claude" | "codex" | "gemini" | "cursor" | "grok" | "opencode" | "kimi" | "mimo" | "grok-bot";
 
-export type WakeCommand = "codex-queue" | "opencode-api" | "webhook";
+export type WakeCommand = "codex-queue" | "opencode-api" | "webhook" | "kimi-server";
 
 export type WakePath = { kind: "hooks" } | { kind: "command"; via: WakeCommand; session: string } | { kind: "none"; why: string };
 
 export type WakeVia = "hooks" | "listener" | WakeCommand;
 
-const WAKE_VIA: readonly WakeVia[] = ["hooks", "listener", "codex-queue", "opencode-api", "webhook"];
+const WAKE_VIA: readonly WakeVia[] = ["hooks", "listener", "codex-queue", "opencode-api", "webhook", "kimi-server"];
 
 export function isWakeVia(v: unknown): v is WakeVia {
   return typeof v === "string" && (WAKE_VIA as readonly string[]).includes(v);
@@ -24,11 +24,13 @@ export function wakeWords(via: WakeVia): string {
       return "OpenCode's service";
     case "webhook":
       return "its routine's webhook";
+    case "kimi-server":
+      return "Kimi's server";
   }
 }
 
 export function pullsWake(harness: WakeHarness | undefined): boolean {
-  return harness === "kimi";
+  return harness === "kimi" || harness === "cursor";
 }
 
 export function viaOf(path: WakePath): WakeVia | null {
@@ -42,7 +44,7 @@ export function viaOf(path: WakePath): WakeVia | null {
   }
 }
 
-export function wakePath(record: { harness?: WakeHarness; session?: string } | null, claudeHooks: boolean, webhook = false): WakePath {
+export function wakePath(record: { harness?: WakeHarness; session?: string; harnessSession?: string; served?: boolean } | null, claudeHooks: boolean, webhook = false): WakePath {
   if (!record) return { kind: "none", why: "no session of a harness Kiwi knows has used this seat yet" };
   switch (record.harness) {
     case "claude":
@@ -58,7 +60,8 @@ export function wakePath(record: { harness?: WakeHarness; session?: string } | n
     case "cursor":
       return { kind: "none", why: "Cursor gives Kiwi no way to start a turn in a running session" };
     case "kimi":
-      return { kind: "none", why: "Kimi Code gives Kiwi no way to start a turn in a running session" };
+      if (!record.served) return { kind: "none", why: "Kimi Code gives Kiwi no way to start a turn in a session run in its terminal; one opened with kimi web (or /web) can be woken" };
+      return record.harnessSession ? { kind: "command", via: "kimi-server", session: record.harnessSession } : { kind: "none", why: "Kiwi learns which Kimi Code session this is when its turn ends" };
     case "mimo":
       return { kind: "none", why: "MiMoCode gives Kiwi no way to start a turn in a running session" };
     case "grok-bot":
@@ -84,7 +87,7 @@ export function wakePrompt(alias: string, agent: string): string {
   return `New Kiwi messages for you in ${JSON.stringify(alias)}. Read them with: kiwi ${channelOption(alias)} ${asOption(agent)} listen --now, then act on them.`;
 }
 
-export function wakeArgv(via: Exclude<WakeCommand, "webhook">, session: string, prompt: string): string[] {
+export function wakeArgv(via: Exclude<WakeCommand, "webhook" | "kimi-server">, session: string, prompt: string): string[] {
   switch (via) {
     case "codex-queue":
       return ["codex", "queue", "--thread", session, "--message", prompt];

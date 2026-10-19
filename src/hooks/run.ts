@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { ChannelGone } from "@kiwi/core/client.ts";
 import { Keystore } from "../config.ts";
-import { here, kimiHookHere, sameSeat, seatsHeldAnywhere, type Here } from "../seats.ts";
+import { here, kimiHookHere, noteHarnessSession, sameSeat, seatsHeldAnywhere, type Here } from "../seats.ts";
 import { writeSync } from "node:fs";
 import { answer, hookOutput, kimiReason, printed, tellKimi, type Answer, type HookInput } from "./answer.ts";
 import { holdAnswering } from "./delivered.ts";
@@ -26,9 +26,14 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
   }
   const kimi = event === KIMI_STOP;
   const model = typeof input.model === "string" && input.model.trim() ? input.model.trim() : undefined;
-  const who: Here = kimi ? kimiHookHere() : { ...here(), ...(input.session_id ? { session: input.session_id } : {}), ...(model ? { model } : {}) };
+  const cursor = typeof input.cursor_version === "string" && typeof input.conversation_id === "string" && input.conversation_id ? input.conversation_id : null;
+  const who: Here = kimi
+    ? kimiHookHere()
+    : cursor
+      ? { harness: "cursor", session: cursor, ...(model ? { model } : {}) }
+      : { ...here(), ...(input.session_id ? { session: input.session_id } : {}), ...(model ? { model } : {}) };
   const release = event === LISTEN ? () => {} : holdAnswering(who.session);
-  const deadline = event === "session-start" || kimi ? START_MS : HOOK_MS;
+  const deadline = event === "session-start" || kimi || cursor !== null ? START_MS : HOOK_MS;
   const keys = yield* Keystore;
   const seatsServed = Effect.gen(function* () {
     yield* Effect.promise(() => refreshListeners());
@@ -62,6 +67,14 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
   const shown = (answers: readonly Answer[]) => Effect.forEach(answers, (a) => a.shown, { discard: true, concurrency: "unbounded" });
   const work = Effect.gen(function* () {
     const served = yield* seatsServed;
+    const session = input.session_id;
+    if (kimi && session)
+      yield* Effect.sync(() =>
+        noteHarnessSession(
+          served.map((s) => s.b).filter((b) => b.harness === "kimi"),
+          session,
+        ),
+      );
     const got = (yield* Effect.forEach(served, one, { concurrency: "unbounded" })).filter((a) => a !== null);
     if (kimi) {
       if (!got.length) return 0;
