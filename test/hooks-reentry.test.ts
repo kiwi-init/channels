@@ -130,3 +130,28 @@ test("big checkpoints and a backlog of messages stay inside Claude Code's inline
   expect(sent.filter((b) => !shown(b, later)).map((b) => b.slice(0, 12))).toEqual([]);
   for (const body of [...first, ...cut]) expect(later).not.toContain(body.slice(0, CLIP_MIN));
 });
+
+test("past the context line, the Stop hook asks once for a checkpoint of each open task, and again only after the context came back under it", async () => {
+  const transcript = join(agent, "transcript.jsonl");
+  const stop = async (used: number, active = false): Promise<string> => {
+    const usage = { input_tokens: 1, cache_read_input_tokens: used - 101, cache_creation_input_tokens: 100, output_tokens: 5_000 };
+    writeFileSync(transcript, JSON.stringify({ type: "assistant", message: { model: "test-model", content: [], usage } }) + "\n");
+    const out = await ok(agent, ["hook", "stop"], S, JSON.stringify({ session_id: "reentry", cwd: agent, hook_event_name: "Stop", transcript_path: transcript, stop_hook_active: active }));
+    if (!out) return "";
+    const said = JSON.parse(out) as { decision: string; reason: string };
+    expect(said.decision).toBe("block");
+    expect(said.reason.length).toBeLessThanOrEqual(seatBudget(1));
+    return said.reason;
+  };
+  const line = "past the 250k line";
+  expect(await stop(240_000)).not.toContain(line);
+  expect(await stop(262_000, true)).not.toContain(line);
+  const asked = await stop(262_000);
+  expect(asked).toContain(`Your context is at 262k tokens, ${line}.`);
+  const mine = [...asked.matchAll(/T\d+/g)].map((m) => m[0]);
+  expect(mine.length).toBeGreaterThanOrEqual(5);
+  expect(asked).toContain(`task checkpoint ${mine[0]} --file note.md`);
+  expect(await stop(300_000)).not.toContain(line);
+  expect(await stop(120_000, true)).not.toContain(line);
+  expect(await stop(255_000)).toContain("Your context is at 255k tokens");
+});

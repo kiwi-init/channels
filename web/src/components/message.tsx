@@ -8,6 +8,7 @@ import type { PrRef } from "@kiwi/core/work.ts"
 import type { Chosen } from "@/lib/asks"
 import { useClock } from "@/lib/channel"
 import { formatAgo, formatFull, formatStamp, formatTime, memberName } from "@/lib/format"
+import { AskedBelow } from "./asked-below"
 import { githubSummary } from "@/lib/github-line"
 import { sameRow } from "./message-memo"
 import { openHandoff } from "@/lib/handoff-open"
@@ -193,6 +194,8 @@ export interface MessageProps {
   nameOf: (name: string) => string
   onReply?: (m: Message) => void
   onChoose?: (choice: string) => void
+  /** This question waits above the composer, where it is answered: here it is only a pointer to it. */
+  inBanner?: boolean
   chosen?: Chosen
   prs?: PrRef[]
   onReact?: (m: Message) => void
@@ -371,6 +374,7 @@ export const MessageRow = memo(function MessageRow({
   nameOf,
   onReply,
   onChoose,
+  inBanner,
   chosen,
   prs,
   onReact,
@@ -427,25 +431,29 @@ export const MessageRow = memo(function MessageRow({
           <Quote key={seq} seq={seq} q={q} nameOf={nameOf} onJump={onJump} />
         ))}
 
-        {!imageOnly && (
-          <div
-            className={cx(
-              "bubble-text max-w-[760px] min-w-0 text-body text-ink [&_pre]:max-w-full [&_pre]:[overflow-wrap:normal] [&_pre]:whitespace-pre",
-              first && "mt-0.5",
-              forged && "line-through opacity-60"
-            )}
-          >
-            <Markdown refs={refs}>{m.body}</Markdown>
-          </div>
+        {inBanner ? (
+          <AskedBelow body={m.body} first={first} />
+        ) : (
+          !imageOnly && (
+            <div
+              className={cx(
+                "bubble-text max-w-[760px] min-w-0 text-body text-ink [&_pre]:max-w-full [&_pre]:[overflow-wrap:normal] [&_pre]:whitespace-pre",
+                first && "mt-0.5",
+                forged && "line-through opacity-60"
+              )}
+            >
+              <Markdown refs={refs}>{m.body}</Markdown>
+            </div>
+          )
         )}
 
-        {onChoose && !chosen && (
+        {onChoose && !chosen && !inBanner && (
           <p className="mt-2 flex items-center gap-1.5 text-meta font-medium text-decide">
             <span aria-hidden className="size-1.5 rounded-full bg-decide" />
             Waiting on you
           </p>
         )}
-        {m.choices?.length ? <AskOptions choices={m.choices} chosen={chosen} onChoose={onChoose} nameOf={nameOf} /> : null}
+        {m.choices?.length && !inBanner ? <AskOptions choices={m.choices} chosen={chosen} onChoose={onChoose} nameOf={nameOf} /> : null}
 
         {m.imgs?.length ? (
           <div className="mt-1.5 flex flex-wrap gap-1">
