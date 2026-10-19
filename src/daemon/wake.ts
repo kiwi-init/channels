@@ -1,4 +1,4 @@
-import { appendFileSync } from "node:fs";
+import { appendFileSync, renameSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, type Config } from "../config.ts";
@@ -7,6 +7,13 @@ import { wakeArgv, wakePath, wakePrompt, type WakePath } from "@kiwi/core/wake.t
 import { withDeadline, type DaemonWake } from "./protocol.ts";
 import { seatRecordFor, wakeOn } from "./reach.ts";
 import type { Seat } from "./seat.ts";
+
+const WAKE_LOG_KEEP_BYTES = 1_000_000;
+
+export function appendRotated(file: string, line: string, keepBytes = WAKE_LOG_KEEP_BYTES): void {
+  if ((statSync(file, { throwIfNoEntry: false })?.size ?? 0) > keepBytes) renameSync(file, `${file}.1`);
+  appendFileSync(file, line, { mode: 0o600 });
+}
 
 const WAKE_RUN_MS = 60_000;
 
@@ -61,9 +68,7 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, stopped, current }: Wak
 
   const logWake = (seat: Seat, w: DaemonWake, why: string | null): void => {
     try {
-      appendFileSync(join(dir, "wake.log"), `${new Date(w.at).toISOString()}\t${seat.alias}\t${seat.agent}\t${w.via}\t${w.unread}\t${w.ok ? "ok" : "failed"}${why ? `\t${why}` : ""}\n`, {
-        mode: 0o600,
-      });
+      appendRotated(join(dir, "wake.log"), `${new Date(w.at).toISOString()}\t${seat.alias}\t${seat.agent}\t${w.via}\t${w.unread}\t${w.ok ? "ok" : "failed"}${why ? `\t${why}` : ""}\n`);
     } catch {
       return;
     }

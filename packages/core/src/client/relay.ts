@@ -92,11 +92,30 @@ export const callRelay = <T>(relay: string, roomId: string, path: string, init?:
     return yield* (yield* Relay).call<T>(relay, roomId, path, init, params);
   });
 
+export interface OfflineReadsApi {
+  note(why: string): void;
+}
+
+export const OfflineReads = Context.Reference<OfflineReadsApi | null>("kiwi/client/OfflineReads", { defaultValue: () => null });
+
+export const relayDown = (err: unknown): boolean => err instanceof Unreachable || (err instanceof RelayError && (err.status >= 500 || err.status === 429));
+
+export const downWhy = (err: unknown): string => {
+  const e = err instanceof Unreachable ? err.cause : err;
+  return e instanceof Error ? e.message : String(e);
+};
+
 export const callUnlessUnchanged = <T>(relay: string, roomId: string, what: Remembered, path: string, init?: CallInit, params?: Record<string, string | number>) =>
   Effect.gen(function* () {
     const memory = answerMemory;
     const kept = memory?.get(roomId, what) ?? null;
-    const got = yield* (yield* Relay).conditional<T>(relay, roomId, path, kept?.etag ?? null, init, params);
+    const offline = yield* OfflineReads;
+    const got = yield* (yield* Relay).conditional<T>(relay, roomId, path, kept?.etag ?? null, init, params).pipe(
+      Effect.catchIf(
+        (err) => !!offline && !!kept && relayDown(err),
+        (err) => Effect.sync(() => (offline?.note(downWhy(err)), { fresh: false } as const)),
+      ),
+    );
     if (!got.fresh) return kept!.data as T;
     const etag = got.etag;
     if (etag && memory) yield* Effect.ignore(Effect.try({ try: () => memory.set(roomId, what, { etag, data: got.data }), catch: (err) => err }));
