@@ -500,7 +500,16 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                     <div className="absolute inset-0 overflow-y-auto pt-[calc(var(--head)+8px)]">
                       <div className={cx("mx-auto w-full px-2 md:px-4", tab === "tasks" && "max-w-[960px]")}>
                         {tab === "tasks" ? (
-                          <TasksView state={state} now={now} view={view} agents={agentsNow} needs={needsMe ? needsYou : null} open={shownTask} onOpen={openTask} />
+                          <TasksView
+                            state={state}
+                            now={now}
+                            view={view}
+                            agents={agentsNow}
+                            needs={needsMe ? needsYou : null}
+                            empty={noAgents ? <AddAgent code={member.code} isOwner={isOwner} /> : null}
+                            open={shownTask}
+                            onOpen={openTask}
+                          />
                         ) : agentsNow.length ? (
                           <AgentLanes agents={agentsNow} state={state} messages={messages} now={now} nameOf={nameOf} onOpenTask={openTask} />
                         ) : (
@@ -637,6 +646,11 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                   onClose={() => setSide(null)}
                   onPause={hold && !state.hold ? () => setPausing(true) : undefined}
                   onMessage={(name) => go(dmPlace(me, name))}
+                  onJoins={() => {
+                    setSide(null)
+                    setView("everything")
+                    setTab("tasks")
+                  }}
                   state={state}
                   now={now}
                   send={send}

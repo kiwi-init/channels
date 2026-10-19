@@ -412,7 +412,9 @@ try {
         "12-notes",
         async () => {
           await detailsBtn().click();
-          await details().getByRole("heading", { name: "Notes" }).scrollIntoViewIfNeeded();
+          const notes = details().getByRole("region", { name: "Notes" });
+          await notes.scrollIntoViewIfNeeded();
+          await notes.getByRole("button", { name: /^Notes/ }).click();
         },
         closeDetails,
       );

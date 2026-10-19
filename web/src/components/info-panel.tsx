@@ -1,28 +1,13 @@
-import { relayUrl } from "../lib/relay"
-import {
-  Add01Icon,
-  ArrowLeft01Icon,
-  ArrowRight01Icon,
-  BookOpen01Icon,
-  Cancel01Icon,
-  GithubIcon,
-  Link01Icon,
-  Mic01Icon,
-  PauseIcon,
-  PencilEdit01Icon,
-  PlayIcon,
-  UserMultipleIcon,
-} from "@hugeicons/core-free-icons"
+import { Add01Icon, ArrowLeft01Icon, ArrowRight01Icon, BookOpen01Icon, Cancel01Icon, GithubIcon, Mic01Icon, PauseIcon, PencilEdit01Icon, PlayIcon, UserMultipleIcon } from "@hugeicons/core-free-icons"
 import { useState, type ReactNode } from "react"
 
 import type { ChannelIcon, RobotFace } from "@kiwi/core/protocol.ts"
 import { colorOf } from "@kiwi/core/state.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
-import { formatAgo, formatLeft, memberName } from "@/lib/format"
-import { useClock } from "@/lib/channel/clock"
+import { memberName } from "@/lib/format"
 import { cx } from "@/lib/utils"
 import { ChannelIconTile, RobotPicker } from "./channel-icon"
-import { MemberActions, Repos, Requests, loadDetail, memberDetail, useControls } from "./controls"
+import { MemberActions, Repos, loadDetail, memberDetail, useControls } from "./controls"
 import { Icon, type IconSvgElement } from "./icon"
 import { IconButton, Monogram, errorText, toast } from "./kit"
 import { Invite } from "./lazy"
@@ -39,6 +24,7 @@ export function InfoPanel({
   onPause,
   notes,
   onMessage,
+  onJoins,
 }: {
   title: string
   icon: ChannelIcon | null
@@ -50,9 +36,10 @@ export function InfoPanel({
   notes?: ReactNode
   /** Open the direct conversation with a member. */
   onMessage?: (name: string) => void
+  onJoins?: () => void
 }) {
   const { p, ask, openDialog } = useControls()
-  const [view, setView] = useState<"details" | "invite" | "requests" | "repos">("details")
+  const [view, setView] = useState<"details" | "invite" | "repos">("details")
   const [picking, setPicking] = useState(false)
   const [savingIcon, setSavingIcon] = useState(false)
   const pickIcon = (robot: RobotFace) => {
@@ -70,7 +57,6 @@ export function InfoPanel({
       .finally(() => setSavingIcon(false))
   }
   const openInvite = () => setView("invite")
-  const openRequests = () => setView("requests")
   const active = p.roster
     .filter((m) => m.active)
     .sort((a, b) => Number(b.owner) - Number(a.owner) || Number(a.kind !== "human") - Number(b.kind !== "human") || Number(p.online.has(b.name)) - Number(p.online.has(a.name)))
@@ -103,10 +89,6 @@ export function InfoPanel({
       ) : view === "repos" ? (
         <div className="flex-1 overflow-y-auto">
           <Repos repos={p.state.repos} onSave={p.isOwner ? p.onRepos : undefined} />
-        </div>
-      ) : view === "requests" ? (
-        <div className="flex-1 overflow-y-auto">
-          <Requests onDone={() => setView("details")} />
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto px-4 pb-6">
@@ -147,11 +129,11 @@ export function InfoPanel({
             )}
           </div>
 
-          {p.isOwner && p.requests.length > 0 && (
+          {p.isOwner && p.requests.length > 0 && onJoins && (
             <Section>
               <Row
                 icon={UserMultipleIcon}
-                onClick={openRequests}
+                onClick={onJoins}
                 trailing={<span className="rounded-full bg-decide-wash px-1.5 text-meta font-semibold text-decide tabular-nums">{p.requests.length}</span>}
               >
                 {p.requests.length === 1 ? `${p.requests[0]!.name} wants to join` : `${p.requests.length} want to join`}
@@ -198,14 +180,6 @@ export function InfoPanel({
                   </div>
                 )
               })}
-              {p.isOwner && (
-                <button type="button" onClick={openInvite} className="flex flex-col items-center rounded-card py-1 transition-colors hover:bg-wash">
-                  <span className="flex size-[52px] items-center justify-center rounded-full text-ink-2 edge">
-                    <Icon icon={Add01Icon} size={22} />
-                  </span>
-                  <span className="mt-1.5 text-meta font-medium">Add</span>
-                </button>
-              )}
             </div>
             {/* A name in use again (a lost key: removed, then joined anew) reads as the earlier key, never as a second one of them. */}
             {former.length > 0 && (
@@ -214,12 +188,6 @@ export function InfoPanel({
               </p>
             )}
           </Section>
-
-          {p.state.facts.size > 0 && (
-            <Section label="Notes">
-              <Notes />
-            </Section>
-          )}
 
           <Section>
             {(p.isOwner || p.state.charter) && (
@@ -245,11 +213,6 @@ export function InfoPanel({
             {p.isOwner && p.onRename && (
               <Row icon={PencilEdit01Icon} onClick={() => openDialog("rename")}>
                 Rename channel
-              </Row>
-            )}
-            {p.isOwner && (
-              <Row icon={Link01Icon} onClick={() => void navigator.clipboard.writeText(`${relayUrl()}/#${p.code}`).then(() => toast("Invite link copied"))}>
-                Copy invite link
               </Row>
             )}
           </Section>
@@ -281,30 +244,6 @@ function RoundAction({ icon, label, onClick, tone }: { icon: IconSvgElement; lab
       </span>
       <span className="text-stamp font-medium text-ink-2">{label}</span>
     </button>
-  )
-}
-
-function Notes() {
-  const { p } = useControls()
-  const now = useClock(60_000)
-  const facts = [...p.state.facts.values()].sort((a, b) => a.key.localeCompare(b.key))
-  return (
-    <>
-      {facts.map((f) => (
-        <div key={f.key} className="px-3 py-2.5">
-          <p className="flex items-baseline gap-2 text-ui">
-            <span className="shrink-0 font-medium">{f.key}</span>
-            <span className="min-w-0 truncate text-ink-2" title={f.value}>
-              {f.value}
-            </span>
-          </p>
-          <p className="mt-0.5 text-meta text-ink-3">
-            {memberName(p.state.members.get(f.by), f.by)} · {formatAgo(f.ts, now)}
-            {f.expires !== undefined && ` · ${formatLeft(f.expires, now)}`}
-          </p>
-        </div>
-      ))}
-    </>
   )
 }
 

@@ -128,6 +128,7 @@ export function TasksView({
   view,
   agents,
   needs,
+  empty,
   open,
   onOpen,
 }: {
@@ -136,6 +137,7 @@ export function TasksView({
   view: View
   agents: AgentNow[]
   needs: ReactNode
+  empty?: ReactNode
   open: number | null
   onOpen: (id: number) => void
 }) {
@@ -143,6 +145,13 @@ export function TasksView({
   const byName = new Map(agents.map((a) => [a.name, a]))
   const showNeeds = view === "everything" || view === "needs"
   const waiting = tasksAwaitingPeople(state)
+  if (!state.tasks.size && empty)
+    return (
+      <div className="pb-8">
+        {showNeeds && needs && <div className="px-3">{needs}</div>}
+        {empty}
+      </div>
+    )
   if (!state.tasks.size && !(showNeeds && needs))
     return (
       <div className="flex flex-1 items-center justify-center p-10">
