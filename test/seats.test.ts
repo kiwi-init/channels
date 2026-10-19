@@ -40,6 +40,8 @@ test("what each harness says about itself", () => {
   expect(here({ GROK_SESSION_ID: "g1" })).toEqual({ harness: "grok", session: "g1" });
   expect(here({ CLAUDECODE: "1", GROK_SESSION_ID: "g1" })).toEqual({ harness: "grok", session: "g1" });
   expect(here({ GEMINI_CLI: "1" })).toEqual({ harness: "gemini" });
+  expect(here({ CURSOR_AGENT: "1" })).toEqual({ harness: "cursor" });
+  expect(here({ CURSOR_AGENT: "1", CURSOR_CONVERSATION_ID: "chat-1" })).toEqual({ harness: "cursor", session: "chat-1" });
   expect(here({}, {}, "grok-bot-vm-53703001")).toEqual({ harness: "grok-bot" });
   expect(here({ KIWI_HARNESS: "grok-bot" }, {}, "a-mac")).toEqual({ harness: "grok-bot" });
   expect(here({ CODEX_THREAD_ID: "t1" }, {}, "grok-bot-vm-1")).toEqual({ harness: "codex", session: "t1" });

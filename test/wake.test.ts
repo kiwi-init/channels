@@ -10,7 +10,7 @@ import { howMessagesReachYou } from "../src/hooks.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import type { Presence } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { wakeArgv, wakeKey, wakePath, wakePrompt } from "@kiwi/core/wake.ts";
+import { pullsWake, wakeArgv, wakeKey, wakePath, wakePrompt } from "@kiwi/core/wake.ts";
 
 setDefaultTimeout(60_000);
 
@@ -390,6 +390,12 @@ describe("wake paths, commands and words", () => {
     const pi = howMessagesReachYou("kiwi", true, { harness: "pi" });
     expect(pi).toContain("Kiwi can't wake you in this session: Kiwi's Pi extension isn't installed (kiwi hooks install pi, then /reload in Pi).");
     expect(pi).toContain("Run `kiwi listen --now` at the start of every turn");
+    const cursor = howMessagesReachYou("kiwi", true, { harness: "cursor", session: "chat-1" });
+    expect(cursor).toContain("run `kiwi listen --once` with the Shell tool as a background command (is_background: true)");
+    expect(cursor).toContain("Cursor starts your next turn with its output");
+    expect(cursor).not.toContain("listen --now");
+    expect(pullsWake("cursor")).toBe(true);
+    expect(pullsWake("gemini")).toBe(false);
     const off = howMessagesReachYou("kiwi", false, { harness: "codex", session: "t" });
     expect(off).toContain("Kiwi won't wake you");
     expect(off).toContain("Run `kiwi listen --now` at the start of every turn");

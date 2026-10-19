@@ -36,7 +36,7 @@ export function wakesInSession(via: string | undefined): boolean {
 }
 
 export function pullsWake(harness: WakeHarness | undefined): boolean {
-  return harness === "kimi";
+  return harness === "kimi" || harness === "cursor";
 }
 
 export function viaOf(path: WakePath): WakeVia | null {

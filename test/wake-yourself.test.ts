@@ -318,3 +318,54 @@ describe("Grok keeps its own monitor running", () => {
     monitor.kill();
   });
 });
+
+describe("Cursor keeps its own listener running", () => {
+  test("its stop hook asks for `listen --once` in the background until one of this chat runs, and again once it has woken the agent", async () => {
+    const owner = scratch("cursor-own");
+    const code = created(await ok(owner, ["create", "cursor-wake", "--as", "boss"]));
+    const h = scratch("cursor");
+    const C = { CURSOR_AGENT: "1", CURSOR_CONVERSATION_ID: "chat-1", KIWI_CURSOR_DIR: scratch("cursor-home") };
+    const joining = run(h, ["join", code, "--timeout", "40s"], C);
+    await approve(owner);
+    const joined = await joining;
+    expect(joined.code).toBe(0);
+    const me = youAre(joined.out);
+    expect(joined.out).toContain("listen --once` with the Shell tool as a background command (is_background: true)");
+
+    const stop = async (extra: Record<string, unknown> = {}) => {
+      const r = await run(
+        h,
+        ["hook", "stop"],
+        {},
+        h,
+        JSON.stringify({ conversation_id: "chat-1", generation_id: "g", hook_event_name: "stop", cursor_version: "2026.10.18", workspace_roots: [h], status: "completed", loop_count: 0, ...extra }),
+      );
+      expect(r.code).toBe(0);
+      return r.out ? (JSON.parse(r.out) as { followup_message: string }).followup_message : null;
+    };
+
+    const deaf = await stop();
+    expect(deaf).toContain("no Kiwi listener of yours is running for cursor-wake");
+    expect(deaf).toContain("is_background: true");
+    expect(await stop({ status: "aborted" })).toBeNull();
+
+    const listener = spawn(h, ["listen", "--once"], C);
+    shells.push(listener);
+    await until(async () => (await listenersOf(h, me)).some((l) => l.session === "chat-1" && l.harness === "cursor"), "the listener held for this Cursor chat");
+    expect(await stop()).toBeNull();
+    expect(await stop({ conversation_id: "chat-2" })).toBeNull();
+
+    await ok(owner, ["send", "--to", me, "wakes the cursor listener"]);
+    expect(await new Response(listener.stdout).text()).toContain("wakes the cursor listener");
+    expect(await listener.exited).toBe(0);
+    await until(async () => (await listenersOf(h, me)).length === 0, "the listener gone");
+    const rearm = await stop();
+    expect(rearm).toContain("no Kiwi listener of yours is running");
+    expect(rearm).not.toContain("wakes the cursor listener");
+
+    await ok(owner, ["send", "--to", me, "unread at stop"]);
+    const unread = await stop();
+    expect(unread).toContain("Unread Kiwi messages.");
+    expect(unread).toContain("no Kiwi listener of yours is running");
+  });
+});
