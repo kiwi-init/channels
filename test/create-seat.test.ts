@@ -37,6 +37,7 @@ function memHost(opts: { relay?: () => string; failSaveWithAccess?: boolean } = 
     access: async (code, pk, access) => void (store.seats = withAccess(store.seats, code, pk, access)),
     forget: async (code) => void (store.seats = store.seats.filter((c) => c.code !== code)),
     prove: async () => null,
+    githubToken: async () => null,
     person: () => null,
     budget: memoryBudget(),
   };

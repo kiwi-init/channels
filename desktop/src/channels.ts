@@ -95,6 +95,7 @@ const keyring = new Keyring({
   access: async (code, pk, access) => void (await asked({ type: "access", code, pk, access })),
   forget: async (code) => void (await asked({ type: "forget", code })),
   prove: async (code, memberPk): Promise<PersonClaim | null> => (await asked({ type: "prove", code, memberPk })).claim ?? null,
+  githubToken: async () => (await asked({ type: "githubToken" })).token ?? null,
   person: () => person,
   budget,
 });

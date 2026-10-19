@@ -12,13 +12,14 @@ are dropped once drained, and after 7 days or 500 items either way.
 What the relay can see: which repos a channel connected, and those events
 until the owner's app drains them. GitHub already has both.
 
-**Not checked yet:** whether a channel's owner may see a repo. Any channel
-owner on the relay can connect any repo name and receive the trimmed events
-of every repo the App is installed on under that name (titles, branches,
-check results; never code). Linking a GitHub account (below) is in, but
-nothing yet checks a repo list against the linked account, so install the App
-only on repos whose PR titles every channel owner on your relay may see: on
-the public relay, that's who is on `KIWI_BETA_USERS`.
+**Checked:** a channel's owner connects only repos their linked GitHub account
+can push to. When the repo list changes, the owner's app sends the relay its
+GitHub link token with that one request. The relay asks GitHub, as the owner,
+for each repo on the list (`GET /repos/<owner>/<name>`, needing push or admin),
+refuses the whole list if any repo fails, and keeps nothing of the token.
+Every change re-checks the whole list, so a repo the owner lost access to
+can't stay connected past the next change. A relay without the App needs no
+token, since nothing is fetched from GitHub there.
 
 ## Register the App (once, by whoever runs the relay)
 

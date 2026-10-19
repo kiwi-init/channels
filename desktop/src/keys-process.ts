@@ -63,7 +63,7 @@ function onKeys(child: Electron.UtilityProcess, m: KeysToHost): void {
     keysFlushed?.();
     return;
   }
-  const done = (extra: { error?: string; claim?: PersonClaim | null } = {}) => {
+  const done = (extra: { error?: string; claim?: PersonClaim | null; token?: string | null } = {}) => {
     if (keys === child) child.postMessage({ type: "done", id: m.id, ...extra } satisfies HostToKeys);
   };
   const fail = (e: unknown) => done({ error: e instanceof Error ? e.message : String(e) });
@@ -78,6 +78,8 @@ function onKeys(child: Electron.UtilityProcess, m: KeysToHost): void {
       case "forget":
         mutate((s) => (s.channels = s.channels.filter((c) => c.code !== m.code)));
         return done();
+      case "githubToken":
+        return done({ token: store.github?.token ?? null });
       case "prove":
         if (!store.person) return done({ claim: null });
         void claimFor(requirePerson(), m.code, m.memberPk).then((claim) => done({ claim }), fail);

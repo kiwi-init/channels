@@ -139,6 +139,8 @@ jobs:
       test/history-bytes.test.ts: against a local relay, history pages stop at PAGE_BYTES (with at
       least one message each) and still return every message, and a body over MAX_BODY_LENGTH is
       refused at send instead of lost at read. And
+      test/github-app.test.ts also: connecting a repo takes the owner's linked GitHub token and push
+      access, and that token is used for the one GET /repos check only. And
       test/replay.test.ts: a signed message counts once and near the time it was signed (fold
       refuses a second copy of a message id, across incremental folds and their snapshot, and one
       signed more than a day before the relay received it). And

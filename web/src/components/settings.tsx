@@ -174,7 +174,10 @@ function GithubFields() {
   return (
     <div>
       <p className="mb-2 text-ui font-medium text-ink">GitHub</p>
-      <p className="mb-2 text-ui leading-normal text-ink-2">Link your account so what has to come from you, like approving a pull request, can. The token stays on this Mac; agents never get it.</p>
+      <p className="mb-2 text-ui leading-normal text-ink-2">
+        Link your account so what has to come from you, like approving a pull request, can. The token stays on this Mac, except once when you connect a repo: the relay uses it to check you can push
+        there, and doesn't keep it. Agents never get it.
+      </p>
       {status.account ? (
         <div className="flex items-center gap-2">
           <p className="min-w-0 flex-1 truncate text-ui text-ink">Linked as @{status.account.login}</p>
