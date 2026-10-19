@@ -224,7 +224,7 @@ jobs:
   desktop:
     name: desktop / package
     inputs: ["desktop/**", "src/**", "packages/core/**", "web/src/**", "web/index.html", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "package.json", "bun.lock", "web/package.json"]
-    always: ["desktop/package.json", "desktop/tsconfig*.json", "desktop/scripts/fuses.ts", "desktop/scripts/smoke.ts"]
+    always: ["desktop/package.json", "desktop/tsconfig*.json", "desktop/scripts/fuses.ts", "desktop/scripts/size.ts", "desktop/scripts/smoke.ts"]
     description: >-
       Bundles the Electron shell's main, preload and channels (key process) scripts with bun
       build, then packages the Linux app with electron-builder --dir from desktop/package.json's
@@ -233,7 +233,9 @@ jobs:
       binary's (release/linux-unpacked/channels-desktop) Electron fuses and fails unless RunAsNode,
       EnableNodeOptionsEnvironmentVariable and EnableNodeCliInspectArguments are off and
       EnableCookieEncryption, EnableEmbeddedAsarIntegrityValidation and OnlyLoadAppFromAsar are
-      on. desktop/scripts/smoke.ts starts the packaged app under Xvfb and fails unless its
+      on. desktop/scripts/size.ts fails if app.asar ships node_modules (dist/ already bundles
+      them), if more than the English Chromium locales ship (electronLanguages), or if the
+      packaged Linux app is over 375MB on disk or 162MB as a tar.gz. desktop/scripts/smoke.ts starts the packaged app under Xvfb and fails unless its
       window renders, the page's scripts land in the V8 code cache (kiwi-app:// registered with
       codeCache, so a launch after the first skips compiling them), its key process
       (utilityProcess.fork of dist/channels.js from app.asar) stays up and the bundled kiwi
