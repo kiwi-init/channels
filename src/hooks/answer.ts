@@ -7,6 +7,7 @@ import { detectWhere } from "../card.ts";
 import { loadConfig, type ChannelConfig } from "../config.ts";
 import { wakeHooked, wakeOn } from "../daemon/reach.ts";
 import { charterLines, formatMessage, holdLine, leadLine } from "@kiwi/core/format.ts";
+import { kimiServer } from "../kimi-server.ts";
 import { here, type Binding, type Here } from "../seats.ts";
 import { humanOf } from "@kiwi/core/state.ts";
 import { asOption, channelOption } from "@kiwi/core/wake.ts";
@@ -74,6 +75,7 @@ type ListenCheck = { kind: "skip" } | { kind: "check"; listens: () => boolean; s
 
 function listenCheck(input: HookInput, b: Binding, who: Here, mc: string): ListenCheck {
   if (who.harness === "kimi") {
+    if (kimiServer(who.pid)) return { kind: "skip" };
     const heard = () => liveListeners().some((l) => l.alias === b.alias && l.as === b.as && ((!!who.session && l.session === who.session) || (!!who.pid && l.pid === who.pid)));
     return { kind: "check", listens: heard, settles: true };
   }

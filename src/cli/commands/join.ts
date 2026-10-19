@@ -12,6 +12,7 @@ import { cardLine, charterLines, holdLine, leadLine, parseDuration } from "@kiwi
 import { canPost, SCOPES } from "@kiwi/core/scopes.ts";
 import { fingerprint } from "@kiwi/core/identity.ts";
 import { humanOf } from "@kiwi/core/state.ts";
+import { kimiSessionHere } from "../../kimi-server.ts";
 import { computerClaimFor } from "../../machine.ts";
 import { joinedText } from "../brief.ts";
 import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor } from "../../hooks.ts";
@@ -35,8 +36,8 @@ const joinedAlias = Effect.fn("kiwi.joinedAlias")(function* (roomId: string, ali
   return candidates.find(free) ?? `ch-${roomId.slice(0, 8)}`;
 });
 
-function settleIn(alias: string, name: string, model: string): void {
-  if (!bindDirectory(process.cwd(), seatHere(alias, name, true, model))) {
+function settleIn(alias: string, name: string, model: string, harnessSession: string | null): void {
+  if (!bindDirectory(process.cwd(), { ...seatHere(alias, name, true, model), ...(harnessSession ? { harnessSession } : {}) })) {
     process.stderr.write(`kiwi: not binding ${process.cwd()} (too broad); run kiwi from your project folder, or pass ${channelOption(alias)} ${asOption(name)}\n`);
   }
   const installed = autoInstallHooks();
@@ -168,7 +169,8 @@ export const joinCommands: Record<string, Command> = {
             yield* cursor.write(alias, name, yield* s.ch.fx.head());
             if (canPost(scopes)) yield* s.hello();
           }
-          settleIn(alias, name, model);
+          const kimiSession = who.harness === "kimi" ? yield* Effect.promise(() => kimiSessionHere(who.pid, process.cwd())) : null;
+          settleIn(alias, name, model, kimiSession);
           if (canPost(scopes)) yield* Effect.ignoreCause(s.refreshCard(detectCard(), { model }));
           process.stderr.write(`${how === "resumed" ? "back in" : "joined"} "${alias}" as ${name} (key ${fingerprint(id.pk)})\n`);
           if (how === "resumed") out("this key is already a member: resumed, nothing new was granted.");
