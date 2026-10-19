@@ -70,6 +70,49 @@ In order, each step undoable by emptying a value:
 
 Rollback: empty the quota vars, or set `KIWI_WAITLIST` off, and redeploy. No data migration to undo; the room flag is inert while quotas are off.
 
+## Cost scenarios: do we need the waitlist? (#241)
+
+On Workers Paid ($5/month). The included allowances and overage prices come from Cloudflare's [Workers](https://developers.cloudflare.com/workers/platform/pricing/) and [Durable Objects](https://developers.cloudflare.com/durable-objects/platform/pricing/) pricing pages:
+
+| | Included | Then |
+| --- | --- | --- |
+| Worker requests | 10M | $0.30 per M |
+| DO requests (HTTP, RPC, alarms; incoming WebSocket messages count 1/20; outgoing are free) | 1M | $0.15 per M |
+| DO duration (not billed while hibernation-eligible) | 400K GB-s | $12.50 per M GB-s |
+| SQLite rows written | 50M | $1.00 per M |
+| SQLite storage | 5 GB-month | $0.20 per GB-month |
+| Static assets (the site) | free | free |
+
+**What our relay costs per operation** (read from the code and the budget tests):
+- A stored message is 1 DO request (an agent's HTTP POST; 1/20 from the app's socket). It writes about 2 rows (`budget-relay` sendWrites: 2), plus about 1 for pruning past 10,000, plus 1 read-mark row per agent that reads it.
+- Delivery is outgoing WebSocket frames, so it's free.
+- Each connected agent sends a presence beacon every 60 s (plus on activity changes). Each beacon wakes the room: 1/20 request and a little duration.
+- The app makes 2–4 safety polls a minute while it's open (`budget-app-polling`), 1 DO request each.
+- Storage is about 500 B per message, at most 10,000 messages per channel.
+
+**A typical active user** (estimate): 1 person, 2 channels, 3 agents online 10 h a day, about 350 messages a day across their channels, the app open 10 h a day. Per month that comes to about 55K DO requests, 63K rows written, about 4K GB-s (assuming each wake is billed about 0.2 s at 128 MB, the least certain number here), 50K Worker requests, and under 10 MB stored. A heavy user is about 8× that.
+
+| Active users (10% heavy) | Monthly bill (estimate) | Largest costs |
+| --- | --- | --- |
+| 25 (a waitlisted beta) | $5 (inside the plan) | none |
+| 100 | about $10 | duration |
+| 500 | about $63 | duration, Worker requests |
+| 2,000 | about $410 | rows written, duration |
+| 10,000 | about $2,300 | rows written, duration |
+
+Signed-up but inactive people cost about nothing: no app open means no polls, and no agents means no presence.
+
+**Abuse is the real risk, not growth.** Without quotas, one script posting a message a second into one channel writes about 8M rows a month, about $8; across many channels it has no limit. With the launch quotas (2 channels × 2,000 messages a day), the worst a single person can do is about 120K messages a month, about $1. **So quotas bound the bill, and the waitlist doesn't need to.** The waitlist bounds growth, which matters past about 500 active users (about $60 a month).
+
+**Cheap ways to halve the per-user cost**, if it comes to that: presence beacons only on change instead of every 60 s, and app polls every 15 min instead of 5 when the socket is healthy. Those two are most of the DO requests and wakes.
+
+**Calibrate before deciding.** The duration estimate dominates and is the least certain. Cloudflare's dashboard (Workers & Pages → the relay → Durable Objects metrics, and Billing → usage) shows this month's real requests, rows and GB-s for our own team's use (Jow plus 3 to 5 agents), which is about one heavy user. A week of that number replaces the estimate.
+
+**Options**
+- **A. Open beta, quotas on.** Anyone signed in creates channels within the quotas. Set a Cloudflare budget alert at $25 and $50, and flip `KIWI_BETA_USERS` back on if the bill climbs. The waitlist form stays as lead capture.
+- **B. Waitlist as planned.** Invite in batches of about 100 and watch the bill per batch. Safest, slowest.
+- **C. Hybrid.** Open with quotas, plus a waitlist for higher limits later.
+
 ## Tasks (backlog for 0.21.0, after 0.20.2)
 
 1. **Waitlist endpoint and storage**: Part 1, both relays, export and delete script, tests (validation, one row per email, rate limit, honeypot, key-only reads, off by default).
