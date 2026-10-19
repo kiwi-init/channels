@@ -547,8 +547,15 @@ async function run(part: Part): Promise<string[]> {
     await leading.getByRole("button", { name: "Save" }).click();
     await leading.waitFor({ state: "detached" });
     await page.getByText("bot is Lead now").first().waitFor({ timeout: 15000 });
-    await panel.getByRole("img", { name: "The lead" }).waitFor({ timeout: 15000 });
-    log("ok  the lead wears a robot avatar");
+    log("ok  bot is the lead");
+
+    at = "Pick the channel's icon";
+    await inDetails(async () => {
+      await panel.getByRole("button", { name: "Change the channel's icon" }).click();
+      await panel.getByRole("radio", { name: "teal robot" }).click();
+    });
+    await page.getByText("Icon changed").first().waitFor({ timeout: 15000 });
+    log("ok  the owner picks the channel's robot head");
 
     await panel.getByRole("button", { name: "More for bot" }).click();
     await page.getByRole("menuitem", { name: "Message privately" }).click();

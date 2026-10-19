@@ -98,6 +98,7 @@ export const CHANNEL_CALLS = [
   "setHold",
   "setRepos",
   "icon",
+  "setIcon",
   "close",
   "leave",
   "send",

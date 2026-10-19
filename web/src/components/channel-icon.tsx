@@ -1,13 +1,6 @@
-// A channel's avatar: emoji or a small image, or the title's first letter when there is none, on a
-// round tile like a Messages contact. A letter wears a steady hue from the title, so a list of
-// channels reads as faces, as Grok's list does, not a column of grey. The tile is always the same
-// size, so a row doesn't jump when an icon arrives.
-
-import type { ChannelIcon } from "@kiwi/core/protocol.ts"
-import { PALETTE } from "@/lib/characters"
+import { ROBOT_FACES, type ChannelIcon, type RobotFace } from "@kiwi/core/protocol.ts"
+import { robotFor, robotUrl } from "@/lib/avatars"
 import { cx } from "@/lib/utils"
-import { hueOf } from "./kit"
-import { RobotAvatar } from "./robot"
 
 const SIZE: Record<number, string> = {
   20: "size-5 text-meta",
@@ -17,9 +10,12 @@ const SIZE: Record<number, string> = {
   40: "size-10 text-title",
   48: "size-12 text-display",
   64: "size-16 text-display",
+  112: "size-28 text-display",
 }
 
-export function ChannelIconTile({ icon, title, size }: { icon: ChannelIcon | null; title: string; size: 20 | 28 | 32 | 36 | 40 | 48 | 64 }) {
+type TileSize = 20 | 28 | 32 | 36 | 40 | 48 | 64 | 112
+
+export function ChannelIconTile({ icon, title, size }: { icon: ChannelIcon | null; title: string; size: TileSize }) {
   const box = cx("rounded-full", SIZE[size])
   if (icon?.kind === "image") {
     return (
@@ -35,23 +31,27 @@ export function ChannelIconTile({ icon, title, size }: { icon: ChannelIcon | nul
       </span>
     )
   }
-  const tone = PALETTE[hueOf(title.trim().toLowerCase())]
+  const face = icon?.kind === "robot" ? icon.robot : robotFor(title.trim().toLowerCase())
+  return <img src={robotUrl(face)} alt="" width={size} height={size} draggable={false} className={cx(SIZE[size], "shrink-0 select-none")} />
+}
+
+export function RobotPicker({ value, onPick, disabled }: { value: RobotFace | null; onPick: (face: RobotFace) => void; disabled?: boolean }) {
   return (
-    <span
-      aria-hidden
-      className={cx(box, "flex shrink-0 items-center justify-center font-semibold tracking-[-0.02em] select-none")}
-      style={{ background: `linear-gradient(180deg, ${tone.fill}, color-mix(in srgb, ${tone.fill} 72%, black))`, color: tone.ink }}
-    >
-      {letterOf(title)}
-    </span>
+    <div role="radiogroup" aria-label="Channel icon" className="grid grid-cols-6 gap-1.5">
+      {ROBOT_FACES.map((face) => (
+        <button
+          key={face}
+          type="button"
+          role="radio"
+          aria-checked={value === face}
+          aria-label={`${face} robot`}
+          disabled={disabled}
+          onClick={() => onPick(face)}
+          className={cx("flex aspect-square items-center justify-center rounded-full p-0.5 transition-colors hover:bg-wash disabled:opacity-50", value === face && "bg-accent-wash ring-2 ring-accent")}
+        >
+          <img src={robotUrl(face)} alt="" draggable={false} className="size-full select-none" />
+        </button>
+      ))}
+    </div>
   )
-}
-
-export function ChannelFace({ icon, lead, title, size }: { icon: ChannelIcon | null; lead: string | null; title: string; size: 28 | 36 | 40 }) {
-  return lead ? <RobotAvatar name={lead} size={size} label="The lead" /> : <ChannelIconTile icon={icon} title={title} size={size} />
-}
-
-function letterOf(title: string): string {
-  const ch = [...title.trim()][0]
-  return ch ? ch.toUpperCase() : "?"
 }

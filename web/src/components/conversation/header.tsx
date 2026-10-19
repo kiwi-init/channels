@@ -5,7 +5,7 @@ import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 
 import { TABS, type Tab } from "@/lib/views"
 import { cx } from "@/lib/utils"
-import { ChannelFace } from "../channel-icon"
+import { ChannelIconTile } from "../channel-icon"
 import { HoldBanner } from "../controls"
 import { Icon } from "../icon"
 import { IconButton } from "../kit"
@@ -32,7 +32,7 @@ export function Header({
   onTab: (t: Tab) => void
   heading: string
   headingLabel: string
-  face: { icon: ChannelIcon | null; lead: string | null; title: string }
+  face: { icon: ChannelIcon | null; title: string }
   status: string[]
   onTitle: () => void
   searchHint: string
@@ -44,7 +44,7 @@ export function Header({
           <Icon icon={ArrowLeft01Icon} size={20} />
         </IconButton>
         <button type="button" aria-label={headingLabel} onClick={onTitle} className="no-drag shrink-0 rounded-full sm:hidden">
-          <ChannelFace icon={face.icon} lead={face.lead} title={face.title} size={28} />
+          <ChannelIconTile icon={face.icon} title={face.title} size={28} />
         </button>
         <button type="button" aria-label={headingLabel} onClick={onTitle} className="no-drag hidden min-w-0 truncate text-left text-title sm:block">
           {heading}

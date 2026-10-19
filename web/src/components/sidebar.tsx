@@ -9,7 +9,7 @@ import { formatShort } from "@/lib/format"
 import { useSecrets } from "@/lib/secrets"
 import { openRelease, restartToUpdate, useUpdate } from "@/lib/update"
 import { cx } from "@/lib/utils"
-import { ChannelFace } from "./channel-icon"
+import { ChannelIconTile } from "./channel-icon"
 import { Icon } from "./icon"
 import { Monogram, Wordmark } from "./kit"
 import { Tooltip } from "./ui/tooltip"
@@ -88,7 +88,7 @@ export function Sidebar({
               title={rowNote(c)}
               className={cx("flex h-16 w-full items-center gap-3 rounded-card px-3 text-left transition-colors", selected ? "prism-lit" : "hover:bg-wash")}
             >
-              <ChannelFace icon={icons.get(c.room) ?? null} lead={reachable ? (c.recent?.lead ?? null) : null} title={c.title} size={40} />
+              <ChannelIconTile icon={icons.get(c.room) ?? null} title={c.title} size={40} />
               <span className="min-w-0 flex-1">
                 <span className="flex items-baseline gap-2">
                   <span className={cx("min-w-0 flex-1 truncate text-body font-semibold", !reachable && "text-ink-2")}>{c.title}</span>
@@ -191,7 +191,7 @@ function RailChannel({ c, n, selected, icon, onSelect }: { c: ChannelRow; n: Row
         className={cx("relative flex size-14 shrink-0 items-center justify-center rounded-card transition-colors", selected ? "prism-lit" : "hover:bg-wash")}
       >
         <span className={cx("flex", !reachable && "grayscale")}>
-          <ChannelFace icon={icon} lead={reachable ? (c.recent?.lead ?? null) : null} title={c.title} size={40} />
+          <ChannelIconTile icon={icon} title={c.title} size={40} />
         </span>
         {needs > 0 ? (
           <span className="absolute top-1 right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-stamp font-semibold text-accent-ink tabular-nums shadow-[0_0_0_2px_var(--rail)]">
