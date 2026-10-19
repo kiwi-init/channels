@@ -7,6 +7,7 @@ import { here, kimiHookHere, noteHarnessSession, onGrokBot, sameSeat, seatsHeldA
 import { writeSync } from "node:fs";
 import { answer, hookOutput, kimiReason, printed, seatBudget, tellKimi, type Answer, type HookInput } from "./answer.ts";
 import { holdAnswering } from "./delivered.ts";
+import { migrateListenHooks } from "./install/claude.ts";
 import { handoffFrom, listen, type Served } from "./listen.ts";
 import { refreshListeners, seatsFor } from "./listeners.ts";
 import { KIMI_STOP, LISTEN } from "./self.ts";
@@ -66,6 +67,7 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
     );
   const shown = (answers: readonly Answer[]) => Effect.forEach(answers, (a) => a.shown, { discard: true, concurrency: "unbounded" });
   const work = Effect.gen(function* () {
+    if (event === "session-start") yield* Effect.sync(migrateListenHooks);
     const served = yield* seatsServed;
     const session = input.session_id;
     if (kimi && session)

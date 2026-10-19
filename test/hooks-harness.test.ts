@@ -22,6 +22,7 @@ import {
   installHooks,
   isOurHook,
   kimiReason,
+  migrateListenHooks,
   PROBE_MS,
   PROBE_TTL_MS,
   rewakeCapable,
@@ -453,6 +454,33 @@ test("the listener's day is a week; an install with the old one-day timeout coun
   expect(hooksInstalled()).toBe(false);
   installHooks();
   expect(installedListenSeconds()).toBe(7 * 24 * 3600 + 60);
+});
+
+test("a listen hook written by 0.19 (one-day timeout) is migrated on its own and then counts as installed; no kiwi entries stay untouched", () => {
+  hideEnv(["AI_AGENT", "CLAUDE_CODE_EXECPATH", "CLAUDECODE"]);
+  setEnv({ KIWI_HOME: scratch("kiwi-listen-migrate-home-"), CLAUDE_CONFIG_DIR: scratch("kiwi-listen-migrate-") });
+  const file = join(process.env.CLAUDE_CONFIG_DIR!, "settings.json");
+  setEnv({ CLAUDECODE: "1", AI_AGENT: "claude-code_2-1-296_agent" });
+  installHooks();
+  writeFileSync(file, readFileSync(file, "utf8").replaceAll(`"timeout": ${7 * 24 * 3600 + 60}`, '"timeout": 86460'));
+  hideEnv(["AI_AGENT", "CLAUDECODE"]);
+  expect(hooksInstalled()).toBe(false);
+  expect(hooksStatus()).toContain("claude: not installed (its listen hook is from an older kiwi: kiwi hooks install)");
+  expect(installHooks()).toBe(file);
+  expect(installedListenSeconds()).toBe(7 * 24 * 3600 + 60);
+  writeFileSync(file, readFileSync(file, "utf8").replaceAll(`"timeout": ${7 * 24 * 3600 + 60}`, '"timeout": 86460'));
+  setEnv({ CLAUDECODE: "1", AI_AGENT: "claude-code_2-1-296_agent" });
+  expect(hooksListen()).toBe(false);
+  expect(migrateListenHooks()).toBe(file);
+  expect(installedListenSeconds()).toBe(7 * 24 * 3600 + 60);
+  expect(hooksInstalled()).toBe(true);
+  expect(hooksListen()).toBe(true);
+  expect(migrateListenHooks()).toBeNull();
+
+  const mine = JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: "echo mine" }] }] } }, null, 2) + "\n";
+  writeFileSync(file, mine);
+  expect(migrateListenHooks()).toBeNull();
+  expect(readFileSync(file, "utf8")).toBe(mine);
 });
 
 test("a harness that passes CLAUDECODE through is never taken for Claude Code by its hooks", () => {
