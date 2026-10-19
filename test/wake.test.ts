@@ -405,6 +405,7 @@ describe("wake paths, commands and words", () => {
     expect(cursor).toContain("Cursor starts your next turn with its output");
     expect(cursor).not.toContain("listen --now");
     expect(pullsWake("cursor")).toBe(true);
+    expect(pullsWake("grok")).toBe(true);
     expect(pullsWake("gemini")).toBe(false);
     const off = howMessagesReachYou("kiwi", false, { harness: "codex", session: "t" });
     expect(off).toContain("Kiwi won't wake you");
