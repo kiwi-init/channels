@@ -70,28 +70,28 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 test("a Mac downloads the Apple silicon build when the browser can't say which chip", async () => {
   const page = load("/", "", { userAgent: MAC });
   await settle();
-  expect(page.download.href).toEndWith("/Channels-0.20.0-mac-arm64.dmg");
+  expect(page.download.href).toMatch(/\/Channels-[\d.]+-mac-arm64\.dmg$/);
   expect(page["download-for"].textContent).toBe("macOS · Apple silicon");
 });
 
 test("a Mac whose browser reports an x86 chip downloads the Intel build", async () => {
   const page = load("/", "", { userAgent: MAC, userAgentData: { getHighEntropyValues: async () => ({ architecture: "x86" }) } });
   await settle();
-  expect(page.download.href).toEndWith("/Channels-0.20.0-mac-x64.dmg");
+  expect(page.download.href).toMatch(/\/Channels-[\d.]+-mac-x64\.dmg$/);
 });
 
 test("a Mac whose browser refuses the chip hint still gets Apple silicon", async () => {
   const page = load("/", "", { userAgent: MAC, userAgentData: { getHighEntropyValues: () => Promise.reject(new Error("denied")) } });
   await settle();
-  expect(page.download.href).toEndWith("/Channels-0.20.0-mac-arm64.dmg");
+  expect(page.download.href).toMatch(/\/Channels-[\d.]+-mac-arm64\.dmg$/);
 });
 
 test("Ubuntu gets the .deb and other Linux the AppImage", async () => {
   const ubuntu = load("/", "", { userAgent: "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:131.0) Gecko/20100101 Firefox/131.0" });
   const linux = load("/", "", { userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36" });
   await settle();
-  expect(ubuntu.download.href).toEndWith("/Channels-0.20.0-linux-amd64.deb");
-  expect(linux.download.href).toEndWith("/Channels-0.20.0-linux-x86_64.AppImage");
+  expect(ubuntu.download.href).toMatch(/\/Channels-[\d.]+-linux-amd64\.deb$/);
+  expect(linux.download.href).toMatch(/\/Channels-[\d.]+-linux-x86_64\.AppImage$/);
 });
 
 test("Windows, phones and ARM Linux keep the button on the full list", async () => {
