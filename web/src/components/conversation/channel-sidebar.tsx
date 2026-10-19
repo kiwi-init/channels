@@ -5,7 +5,7 @@ import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 import { VIEWS, type View } from "@/lib/views"
 import { cx } from "@/lib/utils"
 import { AgentRow, byBusy, type AgentNow } from "../agent-strip"
-import { ChannelFace } from "../channel-icon"
+import { ChannelIconTile } from "../channel-icon"
 import { Icon } from "../icon"
 
 export interface Conversation {
@@ -43,7 +43,6 @@ function Item({ on, label, count, alert, onClick }: { on: boolean; label: string
 export function ChannelSidebar({
   title,
   icon,
-  lead,
   people,
   onTitle,
   onSearch,
@@ -59,7 +58,6 @@ export function ChannelSidebar({
 }: {
   title: string
   icon: ChannelIcon | null
-  lead: string | null
   people: string
   onTitle: () => void
   onSearch: () => void
@@ -76,7 +74,7 @@ export function ChannelSidebar({
   return (
     <aside aria-label="Channel" className="hidden h-full w-[280px] shrink-0 flex-col overflow-y-auto bg-rail px-3 pt-(--chrome-h) pb-4 md:flex">
       <button type="button" onClick={onTitle} className="flex items-center gap-3 rounded-row px-2 py-1.5 text-left transition-colors hover:bg-wash">
-        <ChannelFace icon={icon} lead={lead} title={title} size={36} />
+        <ChannelIconTile icon={icon} title={title} size={36} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-title">{title}</span>
           <span className="block truncate text-meta text-ink-3">{people}</span>

@@ -15,14 +15,13 @@ import {
 } from "@hugeicons/core-free-icons"
 import { useState, type ReactNode } from "react"
 
-import type { ChannelIcon } from "@kiwi/core/protocol.ts"
+import type { ChannelIcon, RobotFace } from "@kiwi/core/protocol.ts"
 import { colorOf } from "@kiwi/core/state.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
 import { formatAgo, formatLeft, memberName } from "@/lib/format"
 import { useClock } from "@/lib/channel/clock"
 import { cx } from "@/lib/utils"
-import { ChannelIconTile } from "./channel-icon"
-import { RobotAvatar } from "./robot"
+import { ChannelIconTile, RobotPicker } from "./channel-icon"
 import { MemberActions, Repos, Requests, loadDetail, memberDetail, useControls } from "./controls"
 import { Icon, type IconSvgElement } from "./icon"
 import { IconButton, Monogram, errorText, toast } from "./kit"
@@ -54,6 +53,22 @@ export function InfoPanel({
 }) {
   const { p, ask, openDialog } = useControls()
   const [view, setView] = useState<"details" | "invite" | "requests" | "repos">("details")
+  const [picking, setPicking] = useState(false)
+  const [savingIcon, setSavingIcon] = useState(false)
+  const pickIcon = (robot: RobotFace) => {
+    if (!p.onIcon) return
+    setSavingIcon(true)
+    void p
+      .onIcon({ kind: "robot", robot })
+      .then(
+        () => {
+          setPicking(false)
+          toast("Icon changed")
+        },
+        (err) => toast(errorText(err), "error")
+      )
+      .finally(() => setSavingIcon(false))
+  }
   const openInvite = () => setView("invite")
   const openRequests = () => setView("requests")
   const active = p.roster
@@ -96,7 +111,18 @@ export function InfoPanel({
       ) : (
         <div className="flex-1 overflow-y-auto px-4 pb-6">
           <div className="flex flex-col items-center text-center">
-            {lead ? <RobotAvatar name={lead} size={112} label="The lead" /> : <ChannelIconTile icon={icon} title={title} size={64} />}
+            {p.onIcon ? (
+              <button type="button" aria-label="Change the channel's icon" aria-expanded={picking} onClick={() => setPicking((v) => !v)} className="rounded-full transition-opacity hover:opacity-80">
+                <ChannelIconTile icon={icon} title={title} size={112} />
+              </button>
+            ) : (
+              <ChannelIconTile icon={icon} title={title} size={112} />
+            )}
+            {picking && (
+              <div className="mt-3 w-full rounded-card bg-wash p-2">
+                <RobotPicker value={icon?.kind === "robot" ? icon.robot : null} onPick={pickIcon} disabled={savingIcon} />
+              </div>
+            )}
             <h2 className="mt-2 max-w-full truncate text-display font-semibold">{title}</h2>
             <p className="mt-0.5 text-meta text-ink-3">{subtitle}</p>
           </div>

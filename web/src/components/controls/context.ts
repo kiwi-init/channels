@@ -2,6 +2,7 @@ import { createContext, useContext } from "react"
 
 import type { JoinRequest, Member as RosterMember } from "@kiwi/core/membership.ts"
 import type { Persona, Personality } from "@kiwi/core/personality.ts"
+import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 import type { Scope } from "@kiwi/core/scopes.ts"
 import type { ChannelState } from "@kiwi/core/state.ts"
 
@@ -35,6 +36,7 @@ export interface ControlsProps {
   onCloseChannel: () => Promise<void>
   onLeaveChannel: () => Promise<void>
   onRename?: (name: string) => Promise<void>
+  onIcon?: (icon: ChannelIcon | null) => Promise<void>
   onHold?: (on: boolean, note?: string) => Promise<void>
   onCharter?: (text: string | null) => Promise<void>
   onRepos?: (repos: string[]) => Promise<void>

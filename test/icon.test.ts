@@ -54,6 +54,15 @@ test("an image, and the relay never sees it", async () => {
   expect(raw).not.toContain(data.slice(0, 40));
 });
 
+test("a robot head, by its colour", async () => {
+  await ownerCh.setIcon({ kind: "robot", robot: "teal" });
+  expect(await memberCh.icon()).toEqual({ kind: "robot", robot: "teal" });
+  await expect(ownerCh.setIcon({ kind: "robot", robot: "plaid" as "teal" })).rejects.toThrow(/robot head/);
+  expect(wellFormedIcon({ kind: "robot", robot: "coral" })).toBe(true);
+  expect(wellFormedIcon({ kind: "robot", robot: "../../etc" })).toBe(false);
+  expect(wellFormedIcon({ kind: "robot" })).toBe(false);
+});
+
 test("only the owner sets it, only members read it, and only sane icons go in", async () => {
   await expect(memberCh.setIcon({ kind: "emoji", emoji: "💀" })).rejects.toThrow();
   const stranger = new Channel({ ...memberCh.access }, relay, await generateIdentity("x"));

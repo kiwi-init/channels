@@ -28,8 +28,12 @@ export function isRasterMime(mime: string): mime is RasterMime {
   return (RASTER_MIMES as readonly string[]).includes(mime);
 }
 
-/** A channel's icon: an emoji, or a small image (never SVG, which can carry script). Sealed like the title. */
-export type ChannelIcon = { kind: "emoji"; emoji: string } | { kind: "image"; mime: RasterMime; data: string };
+/** The robot heads a channel can wear, by colour, in the order the app shows them. */
+export const ROBOT_FACES = ["blue", "purple", "red", "lime", "orange", "sky", "mint", "pink", "lilac", "teal", "gold", "coral"] as const;
+export type RobotFace = (typeof ROBOT_FACES)[number];
+
+/** A channel's icon: one of the robot heads, an emoji, or a small image (never SVG, which can carry script). Sealed like the title. */
+export type ChannelIcon = { kind: "robot"; robot: RobotFace } | { kind: "emoji"; emoji: string } | { kind: "image"; mime: RasterMime; data: string };
 export const MAX_ICON_BYTES = 32 * 1024;
 
 /** Whether a decrypted icon is one of the two shapes, within limits. */
@@ -54,6 +58,7 @@ export function wellFormedPicture(x: unknown): x is MemberPicture {
 export function wellFormedIcon(x: unknown): x is ChannelIcon {
   if (!x || typeof x !== "object") return false;
   const i = x as Record<string, unknown>;
+  if (i.kind === "robot") return typeof i.robot === "string" && (ROBOT_FACES as readonly string[]).includes(i.robot);
   if (i.kind === "emoji") return typeof i.emoji === "string" && i.emoji.length > 0 && [...new Intl.Segmenter().segment(i.emoji)].length === 1 && i.emoji.length <= 16;
   return i.kind === "image" && typeof i.mime === "string" && isRasterMime(i.mime) && typeof i.data === "string" && Math.ceil((i.data.length * 3) / 4) <= MAX_ICON_BYTES;
 }

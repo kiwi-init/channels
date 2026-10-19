@@ -2,20 +2,31 @@ import { describe, expect, mock, test } from "bun:test"
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 
-mock.module("@/lib/avatars", () => ({ avatarUrl: () => "" }))
-const { ChannelFace } = await import("./channel-icon")
+import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 
-const html = (lead: string | null) => renderToStaticMarkup(createElement(ChannelFace, { icon: { kind: "emoji", emoji: "🥝" }, lead, title: "channels-dev", size: 40 }))
+mock.module("@/lib/avatars", () => ({ avatarUrl: () => "", robotUrl: (face: string) => `/robot-${face}.svg`, robotFor: (key: string) => (key === "channels-dev" ? "teal" : "gold") }))
+const { ChannelIconTile, RobotPicker } = await import("./channel-icon")
+
+const tile = (icon: ChannelIcon | null) => renderToStaticMarkup(createElement(ChannelIconTile, { icon, title: "channels-dev", size: 40 }))
 
 describe("a channel's face", () => {
-  test("with a lead, it is the lead's head, as in the channel's details", () => {
-    const out = html("steady-puffin")
-    expect(out).toContain('alt="The lead"')
-    expect(out).not.toContain("🥝")
+  test("is the robot head its owner picked", () => {
+    expect(tile({ kind: "robot", robot: "coral" })).toContain('src="/robot-coral.svg"')
   })
-  test("without one, it is the channel's icon", () => {
-    const out = html(null)
-    expect(out).toContain("🥝")
-    expect(out).not.toContain("<img")
+  test("without an icon, is a robot head steady for its title, never the lead's", () => {
+    expect(tile(null)).toContain('src="/robot-teal.svg"')
+  })
+  test("an emoji or an image icon still shows as itself", () => {
+    expect(tile({ kind: "emoji", emoji: "🥝" })).toContain("🥝")
+    expect(tile({ kind: "image", mime: "image/png", data: "AAAA" })).toContain('src="data:image/png;base64,AAAA"')
+  })
+})
+
+describe("the robot picker", () => {
+  test("offers all twelve heads and marks the chosen one", () => {
+    const out = renderToStaticMarkup(createElement(RobotPicker, { value: "mint", onPick: () => {} }))
+    expect(out.match(/role="radio"/g)?.length).toBe(12)
+    expect(out.match(/aria-checked="true"/g)?.length).toBe(1)
+    expect(out).toMatch(/aria-checked="true" aria-label="mint robot"/)
   })
 })
