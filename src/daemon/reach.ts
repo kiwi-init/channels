@@ -42,6 +42,8 @@ export function activityEnv(record: SeatRecord, base: Env): Env | null {
     case "cursor":
     case "kimi":
     case "mimo":
+    case "grok-bot":
+    case "pi":
     case undefined:
       return null;
   }
@@ -54,6 +56,10 @@ export function reachOf(attached: Attached, record: SeatRecord | null, activity:
   if (attached === "session") return "running";
   if (record?.pid) return alive(record.pid) ? "running" : "unreachable";
   return record?.harness === "grok" && activity?.state === "working" ? "running" : "unreachable";
+}
+
+export function wakeHooked(cfg: Config, alias: string, agent: string): boolean {
+  return !!cfg.wakeHooks?.[wakeKey(alias, agent)];
 }
 
 export function wakeOn(cfg: Config, alias: string, agent: string): boolean {

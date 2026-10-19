@@ -14,9 +14,9 @@
 //   - a seat an agent joined from a plain terminal is never taken over by a session.
 
 import { realpathSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir, hostname } from "node:os";
 import { dirname, resolve } from "node:path";
-import { kimiAncestor, kimiCodePid, mimoHere, type ProcessTree } from "./ancestry.ts";
+import { kimiAncestor, kimiCodePid, mimoHere, piHere, type ProcessTree } from "./ancestry.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord } from "./config.ts";
 import { omit } from "@kiwi/core/omit.ts";
 
@@ -49,9 +49,16 @@ export interface Listener {
  * Who this process runs for, from the variables each harness sets on its shell
  * commands and hooks (see SESSION_ENV in hooks.ts for where each comes from).
  */
-export function here(env: Record<string, string | undefined> = process.env, tree: ProcessTree = {}): Here {
+export function onGrokBot(env: Record<string, string | undefined> = process.env, host: string = hostname()): boolean {
+  return env.KIWI_HARNESS?.trim().toLowerCase() === "grok-bot" || /^grok-bot-vm-/.test(host);
+}
+
+export function here(env: Record<string, string | undefined> = process.env, tree: ProcessTree = {}, host: string = hostname()): Here {
   const pid = Number(env.CLAUDE_PID);
+  const pi = piHere(env, tree);
+  if (pi) return { harness: "pi", ...(env.KIWI_PI_SESSION ? { session: env.KIWI_PI_SESSION } : {}), ...(pi.pid ? { pid: pi.pid } : {}) };
   const mimo = mimoHere(env, tree);
+  if (mimo && env.MIMOCODE_SESSION_ID) return { harness: "mimo", session: env.MIMOCODE_SESSION_ID, ...(mimo.pid ? { pid: mimo.pid } : {}) };
   if (mimo) return mimo.pid ? heldByProcess("mimo", mimo.pid) : { harness: "mimo" };
   const kimi = kimiCodePid(env, tree);
   if (kimi) return heldByProcess("kimi", kimi);
@@ -60,8 +67,9 @@ export function here(env: Record<string, string | undefined> = process.env, tree
   if (env.CLAUDECODE) return { harness: "claude", ...(env.CLAUDE_CODE_SESSION_ID ? { session: env.CLAUDE_CODE_SESSION_ID } : {}), ...(Number.isInteger(pid) && pid > 0 ? { pid } : {}) };
   if (env.CODEX_THREAD_ID) return { harness: "codex", session: env.CODEX_THREAD_ID };
   if (env.GEMINI_CLI) return { harness: "gemini" };
-  if (env.CURSOR_AGENT) return { harness: "cursor" };
+  if (env.CURSOR_AGENT) return { harness: "cursor", ...(env.CURSOR_CONVERSATION_ID ? { session: env.CURSOR_CONVERSATION_ID } : {}) };
   if (env.OPENCODE_SESSION_ID) return { harness: "opencode", session: env.OPENCODE_SESSION_ID };
+  if (onGrokBot(env, host)) return { harness: "grok-bot" };
   return {};
 }
 
@@ -96,7 +104,7 @@ export function baseName(h: Here): string {
  */
 export function canonicalHarness(h: string | undefined): string | undefined {
   if (!h) return undefined;
-  const card: Record<string, string> = { claude: "claude-code", kimi: "kimi-code", mimo: "mimocode" };
+  const card: Record<string, string> = { claude: "claude-code", kimi: "kimi-code", mimo: "mimocode", grokbot: "grok-bot" };
   return card[h] ?? h;
 }
 
@@ -253,7 +261,7 @@ export function seatsFor(dir: string, opts: SeatOptions = {}): Binding[] {
     if (!pick) return [];
     if (opts.claim !== false && who.session && (pick.session !== who.session || (who.pid && pick.pid !== who.pid))) {
       // The previous holder's process goes with it: this session's, or none.
-      const rest = omit(pick, "pid", "model");
+      const rest = omit(pick, "pid", "model", "harnessSession");
       const taken: Binding = {
         ...rest,
         session: who.session,
@@ -275,6 +283,23 @@ export function seatsFor(dir: string, opts: SeatOptions = {}): Binding[] {
     return [pick];
   }
   return [];
+}
+
+export function noteHarnessSession(seats: readonly Binding[], id: string): void {
+  const stale = seats.filter((s) => s.harnessSession !== id);
+  if (!stale.length) return;
+  const ours = (b: Binding) => stale.some((s) => sameSeat(s, b) && s.session === b.session);
+  updateConfig((c) => {
+    for (const dir of Object.keys(c.bindings ?? {})) {
+      const seats = seatsAt(c, dir);
+      if (seats.some(ours))
+        store(
+          c,
+          dir,
+          seats.map((b) => (ours(b) ? { ...b, harnessSession: id } : b)),
+        );
+    }
+  });
 }
 
 export function bindingFor(dir: string, opts: SeatOptions = {}): Binding | null {

@@ -284,8 +284,16 @@ describe("reading the machine", () => {
     expect(detectHarness({ CLAUDECODE: "1", GROK_SESSION_ID: "g1" })).toBe("grok");
     expect(detectHarness({ CODEX_THREAD_ID: "x" })).toBe("codex");
     expect(detectHarness({ MIMOCODE: "1", CLAUDECODE: "1" })).toBe("mimocode");
+    expect(detectHarness({ PI_CODING_AGENT: "true" })).toBe("pi");
+    expect(detectHarness({ PI_CODING_AGENT: "true", KIWI_PI_PID: "9", CLAUDECODE: "1" }, { from: 9, lookup: () => null })).toBe("pi");
     expect(detectHarness({ TERM: "dumb", NO_COLOR: "1", CLAUDECODE: "1" }, { from: 9, lookup: () => ({ ppid: 1, name: "kimi-code" }) })).toBe("kimi-code");
     expect(detectHarness({})).toBeUndefined();
+  });
+
+  test("a Grok Bot from its VM's hostname, which no other harness marker overrides", () => {
+    expect(detectHarness({}, {}, "grok-bot-vm-53703001")).toBe("grok-bot");
+    expect(detectHarness({ CLAUDECODE: "1" }, {}, "grok-bot-vm-53703001")).toBe("claude-code");
+    expect(detectHarness({}, {}, "my-grok-bot-vm-laptop")).toBeUndefined();
   });
 
   test("the repo and branch of a folder, none when HEAD is detached or there's no repo", () => {

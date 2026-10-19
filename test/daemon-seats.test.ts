@@ -310,11 +310,13 @@ describe("presenceWords", () => {
     expect(presenceWords({ client: "daemon", reach: "listening" }, now)).toBe("reachable · can't be woken · not read yet");
     expect(presenceWords({ client: "daemon", reach: "listening", wake: "listener" }, now)).toBe("reachable · wakes via its background listener · not read yet");
     expect(presenceWords({ client: "daemon", reach: "running" }, now)).toBe("reachable · can't be woken · not read yet");
+    expect(presenceWords({ client: "daemon", reach: "running", wake: "pi-extension" }, now)).toBe("reachable · wakes via Kiwi's Pi extension · not read yet");
   });
 
   test("status --json counts the same seats as answering", () => {
     expect(presenceAnswers({ client: "daemon", reach: "unreachable" })).toBe(false);
     expect(presenceAnswers({ client: "daemon", reach: "unreachable", wake: "hooks" })).toBe(false);
+    expect(presenceAnswers({ client: "daemon", reach: "unreachable", wake: "pi-extension" })).toBe(false);
     expect(presenceAnswers({ client: "daemon", reach: "unreachable", wake: "codex-queue" })).toBe(true);
     expect(presenceAnswers({ client: "daemon" })).toBe(true);
     expect(presenceAnswers({ client: "web" })).toBe(true);

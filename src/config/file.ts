@@ -16,8 +16,9 @@ export interface ChannelConfig extends ChannelAccess {
 export interface SeatRecord {
   alias: string;
   as: string;
-  harness?: "claude" | "codex" | "gemini" | "cursor" | "grok" | "opencode" | "kimi" | "mimo";
+  harness?: "claude" | "codex" | "gemini" | "cursor" | "grok" | "opencode" | "kimi" | "mimo" | "grok-bot" | "pi";
   session?: string;
+  harnessSession?: string;
   pid?: number;
   at?: number;
   seen?: number;
@@ -48,8 +49,14 @@ export interface Config {
   asking?: Record<string, { as: string; at: number }>;
   bindings?: Record<string, SeatRecord | SeatRecord[]>;
   claudeHooks?: "on" | "off";
-  harnessHooks?: Partial<Record<"codex" | "gemini" | "cursor" | "grok" | "kimi", "on" | "off">>;
+  harnessHooks?: Partial<Record<"codex" | "gemini" | "cursor" | "grok" | "kimi" | "pi" | "mimo", "on" | "off">>;
   wakeOff?: string[];
+  wakeHooks?: Record<string, WakeHook>;
+}
+
+export interface WakeHook {
+  url: string;
+  authorization?: string;
 }
 
 export function loadConfig(): Config {

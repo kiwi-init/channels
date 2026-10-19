@@ -1,14 +1,16 @@
 import { existsSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { kimiCodePid } from "../../ancestry.ts";
+import { kimiCodePid, mimoHere, piHere } from "../../ancestry.ts";
 import { loadConfig } from "../../config.ts";
 import { isRecord, readJson, writeJson } from "../files.ts";
 import { EVENTS, hookCommand, isOurHook, isOurHookCommand } from "../self.ts";
 import { hooksInstalled, installHooks, uninstallHooks, withoutOurs, type Settings } from "./claude.ts";
 import { editKimiConfig, kimiConfigInstalled } from "./kimi-toml.ts";
+import { installMimo, mimoConfigRoot, mimoInstalled, mimoPluginPath, uninstallMimo } from "./mimo.ts";
+import { installPi, piExtensionPath, piInstalled, piRoot, uninstallPi } from "./pi.ts";
 
-export const EXTRA_HARNESSES = ["codex", "gemini", "cursor", "grok", "kimi"] as const;
+export const EXTRA_HARNESSES = ["codex", "gemini", "cursor", "grok", "kimi", "pi", "mimo"] as const;
 export type ExtraHarness = (typeof EXTRA_HARNESSES)[number];
 
 const HARNESS_ENV: Record<ExtraHarness, string> = {
@@ -17,9 +19,11 @@ const HARNESS_ENV: Record<ExtraHarness, string> = {
   cursor: "KIWI_CURSOR_DIR",
   grok: "KIWI_GROK_DIR",
   kimi: "KIWI_KIMI_DIR",
+  pi: "KIWI_PI_DIR",
+  mimo: "KIWI_MIMO_DIR",
 };
 
-const SESSION_ENV: Record<Exclude<ExtraHarness, "kimi">, string> = {
+const SESSION_ENV: Record<Exclude<ExtraHarness, "kimi" | "pi" | "mimo">, string> = {
   codex: "CODEX_THREAD_ID",
   gemini: "GEMINI_CLI",
   cursor: "CURSOR_AGENT",
@@ -33,11 +37,16 @@ function harnessRoot(h: ExtraHarness): string {
   if (h === "gemini") return join(homedir(), ".gemini");
   if (h === "cursor") return join(homedir(), ".cursor");
   if (h === "kimi") return process.env.KIMI_CODE_HOME || join(homedir(), ".kimi-code");
+  if (h === "pi") return piRoot();
+  if (h === "mimo") return mimoConfigRoot();
   return join(homedir(), ".grok");
 }
 
 function insideHarness(h: ExtraHarness): boolean {
-  return h === "kimi" ? kimiCodePid(process.env) !== null : !!process.env[SESSION_ENV[h]];
+  if (h === "kimi") return kimiCodePid(process.env) !== null;
+  if (h === "pi") return piHere(process.env) !== null;
+  if (h === "mimo") return mimoHere(process.env) !== null;
+  return !!process.env[SESSION_ENV[h]];
 }
 
 function harnessPath(h: ExtraHarness): string {
@@ -45,6 +54,8 @@ function harnessPath(h: ExtraHarness): string {
   if (h === "gemini") return join(harnessRoot(h), "settings.json");
   if (h === "cursor") return join(harnessRoot(h), "hooks.json");
   if (h === "kimi") return join(harnessRoot(h), "config.toml");
+  if (h === "pi") return piExtensionPath();
+  if (h === "mimo") return mimoPluginPath();
   return join(harnessRoot(h), "hooks", "kiwi.json");
 }
 
@@ -132,6 +143,8 @@ export function installExtra(h: ExtraHarness): string {
   else if (h === "gemini") installClaudeShaped(path, GEMINI_EVENTS, (event) => (event === "BeforeAgent" ? 20_000 : 30_000), "*");
   else if (h === "cursor") installCursorFile(path);
   else if (h === "kimi") editKimiConfig(path, true);
+  else if (h === "pi") installPi();
+  else if (h === "mimo") installMimo();
   else installClaudeShaped(path, { Stop: "stop" }, () => 30);
   return path;
 }
@@ -141,7 +154,9 @@ export function uninstallExtra(h: ExtraHarness): string {
   if (h === "cursor") stripCursorFile(path);
   else if (h === "kimi") {
     if (existsSync(path)) editKimiConfig(path, false);
-  } else stripClaudeShaped(path);
+  } else if (h === "pi") uninstallPi();
+  else if (h === "mimo") uninstallMimo();
+  else stripClaudeShaped(path);
   return path;
 }
 
@@ -150,10 +165,12 @@ export function extraInstalled(h: ExtraHarness): boolean {
   if (h === "gemini") return claudeShapedInstalled(harnessPath(h), GEMINI_EVENTS);
   if (h === "grok") return claudeShapedInstalled(harnessPath(h), { Stop: "stop" });
   if (h === "kimi") return kimiConfigInstalled(harnessPath(h));
+  if (h === "pi") return piInstalled();
+  if (h === "mimo") return mimoInstalled();
   return claudeShapedInstalled(harnessPath(h), EVENTS);
 }
 
-const HARNESS_LABEL: Record<ExtraHarness, string> = { codex: "Codex", gemini: "Gemini", cursor: "Cursor", grok: "Grok", kimi: "Kimi Code" };
+const HARNESS_LABEL: Record<ExtraHarness, string> = { codex: "Codex", gemini: "Gemini", cursor: "Cursor", grok: "Grok", kimi: "Kimi Code", pi: "Pi", mimo: "MiMoCode" };
 
 export function autoInstallExtraHooks(): string | null {
   if (process.env.KIWI_NO_HOOKS) return null;

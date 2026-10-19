@@ -1,6 +1,6 @@
 import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { chmodSync, copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { daemonListeners, daemonSock } from "../src/daemon.ts";
@@ -197,6 +197,69 @@ describe("Kimi Code keeps its own listener running", () => {
   });
 });
 
+describe("A Kimi Code session Kimi's server hosts is woken through that server", () => {
+  test("join records the busy session, its Stop hook keeps it current without asking for a listener, and a message posts the prompt to it", async () => {
+    const owner = scratch("kimi-srv-own");
+    const code = created(await ok(owner, ["create", "kimi-served", "--as", "boss"]));
+    const h = scratch("kimi-srv");
+    const kimiDir = scratch("kimi-srv-home");
+    const posted: { path: string; auth: string | null; body: unknown }[] = [];
+    const kimiServer = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      async fetch(req) {
+        const url = new URL(req.url);
+        if (req.headers.get("authorization") !== "Bearer srv-token") return Response.json({ code: 40100, msg: "unauthorized" }, { status: 401 });
+        if (req.method === "GET" && url.pathname === "/api/v1/sessions" && url.searchParams.get("busy") === "true") {
+          const items = [
+            { id: "session_joined", busy: true, metadata: { cwd: h } },
+            { id: "session_elsewhere", busy: true, metadata: { cwd: kimiDir } },
+          ];
+          return Response.json({ code: 0, msg: "success", data: { items, has_more: false } });
+        }
+        posted.push({ path: url.pathname, auth: req.headers.get("authorization"), body: await req.json() });
+        return Response.json({ code: 0, msg: "success", data: { status: "running" } });
+      },
+    });
+    try {
+      const kimi = fakeKimi(h, h, { KIMI_CODE_HOME: kimiDir });
+      mkdirSync(join(kimiDir, "server", "instances"), { recursive: true });
+      writeFileSync(
+        join(kimiDir, "server", "instances", "01KIMI.json"),
+        JSON.stringify({ server_id: "01KIMI", pid: kimi.pid, host: "127.0.0.1", port: kimiServer.port, started_at: 1, heartbeat_at: 1 }),
+      );
+      writeFileSync(join(kimiDir, "server.token"), "srv-token\n");
+
+      const joining = kimi.tool(["join", code, "--timeout", "40s"]);
+      await approve(owner);
+      const joined = await joining;
+      expect(joined.code).toBe(0);
+      const me = youAre(joined.out);
+      expect(joined.out).toContain("Kiwi wakes you in this session when a message for you arrives (Kimi's server). Don't run listen.");
+      expect(joined.out).not.toContain("listen --once");
+      const seat = () =>
+        Object.values((JSON.parse(readFileSync(join(h, "config.json"), "utf8")) as { bindings: Record<string, { as: string; harnessSession?: string }> }).bindings).find((b) => b.as === me);
+      expect(seat()?.harnessSession).toBe("session_joined");
+
+      const stop = await kimi.hook(["hook", "kimi-stop"], JSON.stringify({ hook_event_name: "Stop", session_id: "session_stopped", cwd: h, stop_hook_active: false }));
+      expect(stop).toEqual({ code: 0, out: "", err: "" });
+      expect(seat()?.harnessSession).toBe("session_stopped");
+
+      await ok(owner, ["send", "--to", me, "the secret is in the attic"]);
+      await until(() => posted.length === 1, "the prompt posted to Kimi's server");
+      expect(posted[0]!.path).toBe("/api/v1/sessions/session_stopped/prompts");
+      expect(posted[0]!.auth).toBe("Bearer srv-token");
+      const text = (posted[0]!.body as { content: { type: string; text: string }[] }).content[0]!;
+      expect(text.type).toBe("text");
+      expect(text.text).toContain(`--as ${me} listen --now`);
+      expect(text.text).not.toContain("attic");
+      await until(() => existsSync(join(h, "wake.log")) && readFileSync(join(h, "wake.log"), "utf8").includes(`\t${me}\tkimi-server\t1\tok`), "the wake log");
+    } finally {
+      kimiServer.stop(true);
+    }
+  });
+});
+
 describe("Grok keeps its own monitor running", () => {
   test("its Stop hook blocks until a monitor runs this seat's listen; SessionStart and prompt hooks, whose output Grok drops, don't use up messages", async () => {
     const owner = scratch("grok-own");
@@ -261,5 +324,56 @@ describe("Grok keeps its own monitor running", () => {
     ).toBe("block");
     expect(await stop({ backgroundTasks: [{ id: "m5", type: "monitor", status: "running", description: listen }] })).toBeNull();
     monitor.kill();
+  });
+});
+
+describe("Cursor keeps its own listener running", () => {
+  test("its stop hook asks for `listen --once` in the background until one of this chat runs, and again once it has woken the agent", async () => {
+    const owner = scratch("cursor-own");
+    const code = created(await ok(owner, ["create", "cursor-wake", "--as", "boss"]));
+    const h = scratch("cursor");
+    const C = { CURSOR_AGENT: "1", CURSOR_CONVERSATION_ID: "chat-1", KIWI_CURSOR_DIR: scratch("cursor-home") };
+    const joining = run(h, ["join", code, "--timeout", "40s"], C);
+    await approve(owner);
+    const joined = await joining;
+    expect(joined.code).toBe(0);
+    const me = youAre(joined.out);
+    expect(joined.out).toContain("listen --once` with the Shell tool as a background command (is_background: true)");
+
+    const stop = async (extra: Record<string, unknown> = {}) => {
+      const r = await run(
+        h,
+        ["hook", "stop"],
+        {},
+        h,
+        JSON.stringify({ conversation_id: "chat-1", generation_id: "g", hook_event_name: "stop", cursor_version: "2026.10.18", workspace_roots: [h], status: "completed", loop_count: 0, ...extra }),
+      );
+      expect(r.code).toBe(0);
+      return r.out ? (JSON.parse(r.out) as { followup_message: string }).followup_message : null;
+    };
+
+    const deaf = await stop();
+    expect(deaf).toContain("no Kiwi listener of yours is running for cursor-wake");
+    expect(deaf).toContain("is_background: true");
+    expect(await stop({ status: "aborted" })).toBeNull();
+
+    const listener = spawn(h, ["listen", "--once"], C);
+    shells.push(listener);
+    await until(async () => (await listenersOf(h, me)).some((l) => l.session === "chat-1" && l.harness === "cursor"), "the listener held for this Cursor chat");
+    expect(await stop()).toBeNull();
+    expect(await stop({ conversation_id: "chat-2" })).toBeNull();
+
+    await ok(owner, ["send", "--to", me, "wakes the cursor listener"]);
+    expect(await new Response(listener.stdout).text()).toContain("wakes the cursor listener");
+    expect(await listener.exited).toBe(0);
+    await until(async () => (await listenersOf(h, me)).length === 0, "the listener gone");
+    const rearm = await stop();
+    expect(rearm).toContain("no Kiwi listener of yours is running");
+    expect(rearm).not.toContain("wakes the cursor listener");
+
+    await ok(owner, ["send", "--to", me, "unread at stop"]);
+    const unread = await stop();
+    expect(unread).toContain("Unread Kiwi messages.");
+    expect(unread).toContain("no Kiwi listener of yours is running");
   });
 });

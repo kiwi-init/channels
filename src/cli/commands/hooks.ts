@@ -35,7 +35,7 @@ export const hookCommands: Record<string, Command> = {
       const keys = yield* Keystore;
       const sub = args[1] ?? "status";
       const raw = args[2];
-      const usage = "usage: kiwi hooks install|uninstall|status [claude|codex|gemini|cursor|grok|kimi]";
+      const usage = "usage: kiwi hooks install|uninstall|status [claude|codex|gemini|cursor|grok|kimi|pi|mimo]";
       let name: "claude" | ExtraHarness | undefined;
       if (raw) {
         if (raw !== "claude" && !EXTRA_HARNESSES.includes(raw as ExtraHarness)) return yield* die(usage);

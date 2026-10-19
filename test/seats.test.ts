@@ -40,6 +40,13 @@ test("what each harness says about itself", () => {
   expect(here({ GROK_SESSION_ID: "g1" })).toEqual({ harness: "grok", session: "g1" });
   expect(here({ CLAUDECODE: "1", GROK_SESSION_ID: "g1" })).toEqual({ harness: "grok", session: "g1" });
   expect(here({ GEMINI_CLI: "1" })).toEqual({ harness: "gemini" });
+  expect(here({ CURSOR_AGENT: "1" })).toEqual({ harness: "cursor" });
+  expect(here({ CURSOR_AGENT: "1", CURSOR_CONVERSATION_ID: "chat-1" })).toEqual({ harness: "cursor", session: "chat-1" });
+  expect(here({}, {}, "grok-bot-vm-53703001")).toEqual({ harness: "grok-bot" });
+  expect(here({ KIWI_HARNESS: "grok-bot" }, {}, "a-mac")).toEqual({ harness: "grok-bot" });
+  expect(here({ CODEX_THREAD_ID: "t1" }, {}, "grok-bot-vm-1")).toEqual({ harness: "codex", session: "t1" });
+  expect(here({}, {}, "a-mac")).toEqual({});
+  expect(canonicalHarness("grokbot")).toBe("grok-bot");
   expect(here({})).toEqual({});
   expect(baseName(here({ CLAUDECODE: "1" }))).toBe("claude");
   expect(baseName(here({ CLAUDECODE: "1", GROK_SESSION_ID: "g1" }))).toBe("grok");
@@ -61,10 +68,27 @@ test("MiMoCode and Kimi Code: the harness's own process holds the seat, over the
   };
   expect(here({ MIMOCODE: "1", MIMOCODE_PID: "99", CLAUDECODE: "1" }, chain("zsh", "mimo", "claude"))).toEqual({ harness: "mimo", session: "mimo-pid-99", pid: 99 });
   expect(here({ MIMOCODE: "1" })).toEqual({ harness: "mimo" });
+  expect(here({ MIMOCODE: "1", MIMOCODE_PID: "99", MIMOCODE_SESSION_ID: "ses_root" }, chain("zsh", "mimo"))).toEqual({ harness: "mimo", session: "ses_root", pid: 99 });
+  expect(here({ MIMOCODE: "1", MIMOCODE_SESSION_ID: "ses_root" })).toEqual({ harness: "mimo", session: "ses_root" });
   expect(here({ TERM: "dumb", NO_COLOR: "1", CLAUDECODE: "1" }, chain("zsh", "kimi-code", "claude"))).toEqual({ harness: "kimi", session: "kimi-pid-99", pid: 99 });
   expect(here({ CLAUDECODE: "1" }, chain("zsh", "kimi-code"))).toEqual({ harness: "claude" });
   expect(here({ TERM: "dumb", NO_COLOR: "1" }, chain("zsh", "bash"))).toEqual({});
   expect(baseName(here({ MIMOCODE: "1", MIMOCODE_PID: "99" }, chain("zsh", "mimo")))).toBe("mimo");
+});
+
+test("Pi: its marker names the harness; its extension's process and session hold the seat, unless a harness runs nearer", () => {
+  const chain = (...names: string[]) => {
+    const procs = new Map(names.map((name, i) => [100 - i, { ppid: i === names.length - 1 ? 1 : 99 - i, name }]));
+    return { from: 100, lookup: (pid: number) => procs.get(pid) ?? null };
+  };
+  expect(here({ PI_CODING_AGENT: "true" })).toEqual({ harness: "pi" });
+  expect(here({ PI_CODING_AGENT: "true", CLAUDECODE: "1" })).toEqual({ harness: "claude" });
+  expect(here({ PI_CODING_AGENT: "1" })).toEqual({});
+  expect(here({ PI_CODING_AGENT: "true", KIWI_PI_PID: "99", KIWI_PI_SESSION: "pi-s1", CLAUDECODE: "1" }, chain("zsh", "node", "claude"))).toEqual({ harness: "pi", session: "pi-s1", pid: 99 });
+  expect(here({ PI_CODING_AGENT: "true", KIWI_PI_PID: "97", KIWI_PI_SESSION: "pi-s1", CLAUDECODE: "1" }, chain("zsh", "claude", "bash", "node"))).toEqual({ harness: "claude" });
+  expect(here({ PI_CODING_AGENT: "true", KIWI_PI_PID: "98", MIMOCODE: "1", MIMOCODE_PID: "96" }, chain("zsh", "node", "bash", "mimo"))).toEqual({ harness: "pi", pid: 98 });
+  expect(baseName(here({ PI_CODING_AGENT: "true" }))).toBe("pi");
+  expect(canonicalHarness("pi")).toBe("pi");
 });
 
 test("the nearest harness process decides when one harness runs inside another", () => {

@@ -10,7 +10,7 @@ import { howMessagesReachYou } from "../src/hooks.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import type { Presence } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { wakeArgv, wakeKey, wakePath, wakePrompt } from "@kiwi/core/wake.ts";
+import { pullsWake, wakeArgv, wakeKey, wakePath, wakePrompt } from "@kiwi/core/wake.ts";
 
 setDefaultTimeout(60_000);
 
@@ -273,6 +273,47 @@ describe("waking an agent in its own session", () => {
     expect((await seat())?.wake.path).toMatchObject({ kind: "none" });
   });
 
+  test("a Grok Bot is woken by POSTing to its routine's webhook, with the Authorization header piped to kiwi wake webhook", async () => {
+    const posts: { auth: string | null; body: { channel: string; agent: string; unread: number; prompt: string } }[] = [];
+    const hook = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch: async (req) => {
+        posts.push({ auth: req.headers.get("authorization"), body: (await req.json()) as (typeof posts)[number]["body"] });
+        return new Response("ok");
+      },
+    });
+    bindAs({ harness: "grok-bot" });
+    const url = `https://example.test/routine`;
+    const p = Bun.spawn([process.execPath, join(import.meta.dir, "../src/cli/main.ts"), "-c", "test", "--as", "claude", "wake", "webhook", url], {
+      env: { ...process.env, KIWI_RELAY: relay },
+      stdin: new Blob(["Bearer routine-secret\n"]),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [said, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
+    expect(await p.exited, err).toBe(0);
+    expect(said).toContain("by POSTing to example.test with the Authorization header from stdin");
+    expect(said).not.toContain("routine-secret");
+    expect(loadConfig().wakeHooks?.[wakeKey("test", "claude")]).toEqual({ url, authorization: "Bearer routine-secret" });
+    updateConfig((cfg) => {
+      cfg.wakeHooks = { [wakeKey("test", "claude")]: { url: hook.url.href, authorization: "Bearer routine-secret" } };
+    });
+    try {
+      await quiet();
+      await ownerCh.send("for grok bot", { to: ["claude"] });
+      await until("a webhook wake", () => posts.length === 1);
+      expect(posts[0]).toEqual({ auth: "Bearer routine-secret", body: { channel: "test", agent: "claude", unread: 1, prompt: wakePrompt("test", "claude") } });
+      expect(JSON.stringify(posts[0]!.body)).not.toContain("for grok bot");
+      await until("the daemon says it wakes via the webhook", async () => (await seat())?.wake.path.kind === "command");
+    } finally {
+      hook.stop(true);
+      updateConfig((cfg) => {
+        delete cfg.wakeHooks;
+      });
+    }
+  });
+
   test("stopping the daemon stops a wake that is still running", async () => {
     bindAs({ harness: "codex", session: "thread-1" });
     const before = await quiet();
@@ -301,8 +342,25 @@ describe("wake paths, commands and words", () => {
     expect(wakePath({ harness: "grok", session: "g" }, true).kind).toBe("none");
     expect(wakePath({ harness: "gemini" }, true).kind).toBe("none");
     expect(wakePath({ harness: "cursor" }, true).kind).toBe("none");
-    expect(wakePath({ harness: "kimi", session: "kimi-pid-9" }, true)).toEqual({ kind: "none", why: "Kimi Code gives Kiwi no way to start a turn in a running session" });
-    expect(wakePath({ harness: "mimo", session: "mimo-pid-9" }, true)).toEqual({ kind: "none", why: "MiMoCode gives Kiwi no way to start a turn in a running session" });
+    expect(wakePath({ harness: "kimi", session: "kimi-pid-9" }, true)).toEqual({
+      kind: "none",
+      why: "Kimi Code gives Kiwi no way to start a turn in a session run in its terminal; one opened with kimi web (or /web) can be woken",
+    });
+    expect(wakePath({ harness: "kimi", session: "kimi-pid-9", served: true }, true)).toEqual({ kind: "none", why: "Kiwi learns which Kimi Code session this is when its turn ends" });
+    expect(wakePath({ harness: "kimi", session: "kimi-pid-9", served: true, harnessSession: "session_1" }, true)).toEqual({ kind: "command", via: "kimi-server", session: "session_1" });
+    expect(wakePath({ harness: "mimo", session: "ses_1" }, true)).toEqual({ kind: "none", why: "Kiwi's MiMoCode plugin isn't installed (kiwi hooks install mimo, then restart MiMoCode)" });
+    expect(wakePath({ harness: "mimo", session: "mimo-pid-9" }, true, false, { mimo: true })).toEqual({
+      kind: "none",
+      why: "this MiMoCode session started before Kiwi's MiMoCode plugin was installed (restarting MiMoCode loads it)",
+    });
+    expect(wakePath({ harness: "mimo", session: "ses_1" }, false, false, { mimo: true })).toEqual({ kind: "extension", via: "mimo-plugin" });
+    expect(wakePath({ harness: "mimo", session: "ses_1" }, true, false, { pi: true }).kind).toBe("none");
+    expect(wakePath({ harness: "grok-bot" }, true)).toEqual({ kind: "none", why: "no routine webhook is set for it yet (kiwi wake webhook URL)" });
+    expect(wakePath({ harness: "grok-bot" }, false, true)).toEqual({ kind: "command", via: "webhook", session: "webhook" });
+    expect(wakePath({ harness: "codex" }, true, true).kind).toBe("none");
+    expect(wakePath({ harness: "pi", session: "pi-s1" }, false, false, { pi: true })).toEqual({ kind: "extension", via: "pi-extension" });
+    expect(wakePath({ harness: "pi" }, true, false, { pi: true })).toEqual({ kind: "none", why: "this Pi session started before Kiwi's Pi extension was installed (/reload in Pi loads it)" });
+    expect(wakePath({ harness: "pi", session: "pi-s1" }, true, true, { mimo: true })).toEqual({ kind: "none", why: "Kiwi's Pi extension isn't installed (kiwi hooks install pi, then /reload in Pi)" });
     expect(wakePath({}, true).kind).toBe("none");
     expect(wakePath(null, true).kind).toBe("none");
   });
@@ -335,6 +393,15 @@ describe("wake paths, commands and words", () => {
     expect(gemini).toContain("Kiwi can't wake you in this session: Gemini CLI gives Kiwi no way to start a turn in a running session.");
     expect(gemini).toContain("Run `kiwi listen --now` at the start of every turn and again before you end one.");
     expect(gemini).not.toContain("Monitor");
+    const pi = howMessagesReachYou("kiwi", true, { harness: "pi" });
+    expect(pi).toContain("Kiwi can't wake you in this session: Kiwi's Pi extension isn't installed (kiwi hooks install pi, then /reload in Pi).");
+    expect(pi).toContain("Run `kiwi listen --now` at the start of every turn");
+    const cursor = howMessagesReachYou("kiwi", true, { harness: "cursor", session: "chat-1" });
+    expect(cursor).toContain("run `kiwi listen --once` with the Shell tool as a background command (is_background: true)");
+    expect(cursor).toContain("Cursor starts your next turn with its output");
+    expect(cursor).not.toContain("listen --now");
+    expect(pullsWake("cursor")).toBe(true);
+    expect(pullsWake("gemini")).toBe(false);
     const off = howMessagesReachYou("kiwi", false, { harness: "codex", session: "t" });
     expect(off).toContain("Kiwi won't wake you");
     expect(off).toContain("Run `kiwi listen --now` at the start of every turn");
@@ -360,5 +427,12 @@ describe("wake paths, commands and words", () => {
     expect(grok).not.toContain("listen --once");
     expect(grok).not.toContain("leader");
     expect(howMessagesReachYou("kiwi", false, { harness: "grok", session: "g" })).toContain("Run `kiwi listen --now`");
+  });
+
+  test("a Grok Bot is told to set up its routine's webhook until it has one, then that Kiwi wakes it", () => {
+    const before = howMessagesReachYou("kiwi", true, { harness: "grok-bot" });
+    expect(before).toContain('printf %s "$AUTHORIZATION" | kiwi wake webhook <the routine\'s URL>');
+    expect(before).toContain("Run `kiwi listen --now` at the start of every turn");
+    expect(howMessagesReachYou("kiwi", true, { harness: "grok-bot" }, true)).toBe("Kiwi wakes you in this session when a message for you arrives (its routine's webhook). Don't run listen.");
   });
 });

@@ -2,6 +2,26 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.20.3 — 2026-10-19
+
+- **Kimi Code sessions in Kimi's server are woken in place by the daemon (T150)** ([#480](https://github.com/ojowwalker77/channels/pull/480))
+- **Cursor keeps its own listener running, so it's woken in place in its session (T152)** ([#483](https://github.com/ojowwalker77/channels/pull/483))
+- **Pi is a known harness: detected, its model read, woken in place by Kiwi's Pi extension, with its logo (T146)** ([#481](https://github.com/ojowwalker77/channels/pull/481))
+- **MiMoCode is woken in place through Kiwi's plugin, and names its own session (T151)** ([#484](https://github.com/ojowwalker77/channels/pull/484))
+
+## 0.20.2 — 2026-10-19
+
+- **Grok Bot is a first-class agent: recognised on its VM, its model recorded, woken through its routine's webhook (T153)** ([#478](https://github.com/ojowwalker77/channels/pull/478))
+
+## 0.20.1 — 2026-10-19
+
+- **perf-scale: reload to first screen timed inside the page; CHANGELOG 0.20.0 speed line: every budget met (T1795)** ([#471](https://github.com/ojowwalker77/channels/pull/471))
+- **Mac downloads under 150 MiB: kiwi bundled zstd-packed (Developer ID signed before packing), maximum compression, release gate at the budget (T1851)** ([#472](https://github.com/ojowwalker77/channels/pull/472))
+- **Desktop on Linux knows when its keys aren't in a keyring, and moves them into one once it's installed (T1744, part 1, no UI)** ([#473](https://github.com/ojowwalker77/channels/pull/473))
+- **Landing page: OLED black, monospace, plain HTML, opening on Jow's Century 21 Calling cut (T30)** ([#474](https://github.com/ojowwalker77/channels/pull/474))
+- **Robot heads become channel icons: picked when creating a channel and from its details (T6)** ([#475](https://github.com/ojowwalker77/channels/pull/475))
+- **Agents wear their harness's logo instead of a robot head (T7)** ([#476](https://github.com/ojowwalker77/channels/pull/476))
+
 ## 0.20.0 — 2026-10-19
 
 - **The first stable release: smaller, faster, sturdier.** What "stable" means is in docs/0.20-stable.md. Every one of its 27 must-fix tasks is in.

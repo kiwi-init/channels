@@ -1,7 +1,11 @@
 import { COMMANDS } from "../brief.ts";
+import { kimiServer } from "../kimi-server.ts";
 import { here, type Here } from "../seats.ts";
 import { wakePath, wakeWords } from "@kiwi/core/wake.ts";
 import { hooksListen } from "./install/claude.ts";
+import { extraInstalled } from "./install/extra.ts";
+import { mimoInstalled } from "./install/mimo.ts";
+import { piInstalled } from "./install/pi.ts";
 
 function checkEachTurn(mc: string): string {
   return `Run \`${COMMANDS.unread(mc)}\` at the start of every turn and again before you end one. It prints the messages waiting for you, or nothing.`;
@@ -13,6 +17,7 @@ export function startListener(mc: string, harness: Here["harness"]): string | nu
   if (harness === "kimi")
     return `Now, from your main session (not a subagent), and again every time it wakes you: call the Bash tool with command \`${COMMANDS.listenOnce(mc)}\`, run_in_background: true, disable_timeout: true, description "kiwi messages".`;
   if (harness === "grok") return `Now, once for this session: start the monitor tool with command \`${COMMANDS.listen(mc)}\`, description "${COMMANDS.listen(mc)}", persistent: true.`;
+  if (harness === "cursor") return `Now, and again every time it wakes you: run \`${COMMANDS.listenOnce(mc)}\` with the Shell tool as a background command (is_background: true).`;
   return null;
 }
 
@@ -28,6 +33,21 @@ export function wakeYourself(mc: string, harness: Here["harness"]): string | nul
       "Don't call WaitFor or TaskOutput while it runs. Before you end any turn, check TaskList shows it running; if not, start it.",
     ].join("\n");
   }
+  if (harness === "grok-bot") {
+    return [
+      "Kiwi can wake you through a Grok Bot routine, once it has one: ask your owner to create a routine that an incoming webhook starts, then run",
+      "`printf %s \"$AUTHORIZATION\" | kiwi wake webhook <the routine's URL>` with the routine's Authorization header in AUTHORIZATION, so it never lands in your shell history or the channel.",
+      `Until then: ${checkEachTurn(mc)}`,
+    ].join("\n");
+  }
+  if (harness === "cursor" && start) {
+    return [
+      KEEP_A_LISTENER,
+      start,
+      "It ends when a message for you arrives, and Cursor starts your next turn with its output. The messages are marked read already and won't be shown again, so read all of that output.",
+      "Don't wait on it with Await. Before you end any turn, check it is still running; if not, start it.",
+    ].join("\n");
+  }
   if (harness === "grok" && start) {
     return [
       KEEP_A_LISTENER,
@@ -39,12 +59,15 @@ export function wakeYourself(mc: string, harness: Here["harness"]): string | nul
   return null;
 }
 
-export function howMessagesReachYou(mc: string, waking: boolean, who: Here = here()): string {
+export function howMessagesReachYou(mc: string, waking: boolean, who: Here = here(), webhook = false): string {
   if (!waking) return `Kiwi won't wake you: waking is off for you here (\`kiwi wake on\` turns it back on). ${checkEachTurn(mc)}`;
-  const path = wakePath(who.harness ? { harness: who.harness, ...(who.session ? { session: who.session } : {}) } : null, hooksListen());
+  if (who.harness === "kimi" && kimiServer(who.pid) && extraInstalled("kimi")) return `Kiwi wakes you in this session when a message for you arrives (${wakeWords("kimi-server")}). Don't run listen.`;
+  const path = wakePath(who.harness ? { harness: who.harness, ...(who.session ? { session: who.session } : {}) } : null, hooksListen(), webhook, { pi: piInstalled(), mimo: mimoInstalled() });
   switch (path.kind) {
     case "hooks":
       return "Messages for you arrive on their own: Kiwi's hooks wake you when one comes. Don't run listen.";
+    case "extension":
+      return `Messages for you arrive on their own: ${wakeWords(path.via)} wakes you when one comes. Don't run listen.`;
     case "command":
       return `Kiwi wakes you in this session when a message for you arrives (${wakeWords(path.via)}). Don't run listen.`;
     case "none":

@@ -15,9 +15,9 @@
 
 import { closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 
-import { kimiCodePid, mimoHere, type ProcessTree } from "./ancestry.ts";
+import { kimiCodePid, mimoHere, piHere, type ProcessTree } from "./ancestry.ts";
 import type { Activity } from "@kiwi/core/protocol.ts";
 
 type Env = Record<string, string | undefined>;
@@ -152,16 +152,22 @@ function realDir(dir: string): string {
 }
 
 async function mimoModel(env: Env, cwd: string): Promise<string | undefined> {
-  const file = join(env.XDG_DATA_HOME || join(homedir(), ".local", "share"), "mimocode", "mimocode.db");
+  const home = env.MIMOCODE_HOME && isAbsolute(env.MIMOCODE_HOME) ? join(env.MIMOCODE_HOME, "data") : join(env.XDG_DATA_HOME || join(homedir(), ".local", "share"), "mimocode");
+  const file = join(home, "mimocode.db");
   if (!existsSync(file)) return undefined;
   const { Database } = await import("bun:sqlite");
   const db = new Database(file, { readonly: true });
   try {
-    const rows = db
-      .query(
-        "SELECT m.data AS data FROM message m JOIN session s ON s.id = m.session_id WHERE s.directory = ?1 OR substr(?1, 1, length(s.directory) + 1) = s.directory || '/' ORDER BY m.time_created DESC LIMIT 20",
-      )
-      .all(realDir(cwd)) as { data?: unknown }[];
+    const session = env.MIMOCODE_SESSION_ID;
+    const rows = (
+      session
+        ? db.query("SELECT data FROM message WHERE session_id = ?1 ORDER BY time_created DESC LIMIT 20").all(session)
+        : db
+            .query(
+              "SELECT m.data AS data FROM message m JOIN session s ON s.id = m.session_id WHERE s.directory = ?1 OR substr(?1, 1, length(s.directory) + 1) = s.directory || '/' ORDER BY m.time_created DESC LIMIT 20",
+            )
+            .all(realDir(cwd))
+    ) as { data?: unknown }[];
     for (const row of rows) {
       if (typeof row.data !== "string") continue;
       const data = JSON.parse(row.data) as { modelID?: unknown; model?: { modelID?: unknown } };
@@ -174,6 +180,51 @@ async function mimoModel(env: Env, cwd: string): Promise<string | undefined> {
   }
 }
 
+function piSessionDir(sessions: string, cwd: string): string {
+  return join(sessions, `--${cwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`);
+}
+
+function piSessionFile(sessions: string, cwd: string, session: string | undefined): string | undefined {
+  if (session) {
+    if (!/^[\w-]+$/.test(session)) return undefined;
+    const own = piSessionDir(sessions, realDir(cwd));
+    const dirs = [
+      own,
+      ...readdirSync(sessions)
+        .map((d) => join(sessions, d))
+        .filter((d) => d !== own),
+    ];
+    for (const dir of dirs) {
+      const name = existsSync(dir) ? readdirSync(dir).find((f) => f.endsWith(`_${session}.jsonl`)) : undefined;
+      if (name) return join(dir, name);
+    }
+    return undefined;
+  }
+  for (let dir = realDir(cwd); ; dir = dirname(dir)) {
+    const here = piSessionDir(sessions, dir);
+    const files = existsSync(here) ? readdirSync(here).filter((f) => f.endsWith(".jsonl")) : [];
+    const newest = files.map((f) => join(here, f)).sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0];
+    if (newest) return newest;
+    if (dirname(dir) === dir) return undefined;
+  }
+}
+
+function piModel(env: Env, cwd: string): string | undefined {
+  const sessions = join(env.PI_CODING_AGENT_DIR || join(homedir(), ".pi", "agent"), "sessions");
+  const file = existsSync(sessions) ? piSessionFile(sessions, cwd, env.KIWI_PI_SESSION) : undefined;
+  for (const line of file ? tailLines(file) : []) {
+    if (!line.includes('"model')) continue;
+    try {
+      const l = JSON.parse(line) as { type?: string; modelId?: unknown; message?: { role?: string; model?: unknown } };
+      const m = l.type === "model_change" ? slug(l.modelId) : l.type === "message" && l.message?.role === "assistant" ? slug(l.message.model) : undefined;
+      if (m) return m;
+    } catch {
+      // A line cut by the tail's start: older lines may still have it.
+    }
+  }
+  return undefined;
+}
+
 export interface HarnessWhere {
   cwd?: string;
   tree?: ProcessTree;
@@ -182,7 +233,8 @@ export interface HarnessWhere {
 /** The model the harness running this command is on, or undefined when it can't be told. */
 export async function harnessModel(env: Env = process.env, where: HarnessWhere = {}): Promise<string | undefined> {
   const tries: (() => string | undefined | Promise<string | undefined>)[] = [];
-  if (mimoHere(env, where.tree)) tries.push(() => mimoModel(env, where.cwd ?? process.cwd()));
+  if (piHere(env, where.tree)) tries.push(() => piModel(env, where.cwd ?? process.cwd()));
+  else if (mimoHere(env, where.tree)) tries.push(() => mimoModel(env, where.cwd ?? process.cwd()));
   else if (kimiCodePid(env, where.tree)) tries.push(() => kimiModel(env));
   else {
     if (env.GROK_SESSION_ID) tries.push(() => grokModel(env));

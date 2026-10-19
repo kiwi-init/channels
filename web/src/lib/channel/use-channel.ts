@@ -7,7 +7,7 @@ import type { HumanSession, RoomsSetting, SendOptions } from "@kiwi/core/client.
 import type { JoinRequest, Member } from "@kiwi/core/membership.ts"
 import type { Activity, Message, Reach } from "@kiwi/core/protocol.ts"
 import { fold, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts"
-import { isWakeVia } from "@kiwi/core/wake.ts"
+import { isWakeVia, wakesInSession } from "@kiwi/core/wake.ts"
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "../channel-ops"
 import { readCached, rememberRow, rememberRows } from "../history"
 import { checkedUpTo, checksToPost, issuesToPost, linksToPost, setCheckedUpTo, tasksToClose } from "../review-checks"
@@ -187,7 +187,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
               pk: p.pk,
               ...(p.activity ? { activity: p.activity } : {}),
               ...(p.reach ? { reach: p.reach } : {}),
-              wakes: isWakeVia(p.wake) && p.wake !== "hooks",
+              wakes: isWakeVia(p.wake) && !wakesInSession(p.wake),
             })
           )
           return
