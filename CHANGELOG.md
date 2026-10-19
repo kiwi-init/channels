@@ -2,6 +2,40 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.20.5 — 2026-10-19
+
+- **Grok Bot's VM is seated as Grok Bot, not Cursor, though its shell has CURSOR_AGENT (T508)** ([#491](https://github.com/ojowwalker77/channels/pull/491))
+- **Mentions read as the person's nickname in the app, while the message keeps the @handle (T547)** ([#494](https://github.com/ojowwalker77/channels/pull/494))
+- **A fresh session starts from its checkpoint, and every hook fits Claude Code's inline limit** ([#488](https://github.com/ojowwalker77/channels/pull/488))
+- **Tests leave the real MiMoCode folder alone: the preload redirects it and drops its session markers** ([#489](https://github.com/ojowwalker77/channels/pull/489))
+- **Tasks board: a PR's diff numbers stay inside their column instead of running into the checks (T615)** ([#495](https://github.com/ojowwalker77/channels/pull/495))
+- **Opening a conversation lands at its newest message, and stays there as it fills in (T534)** ([#493](https://github.com/ojowwalker77/channels/pull/493))
+- **Needs you is one list with one count, and a question waiting for you shows once (T587)** ([#496](https://github.com/ojowwalker77/channels/pull/496))
+- **MiMoCode's plugin sends a refused wake again instead of dropping its messages** ([#492](https://github.com/ojowwalker77/channels/pull/492))
+- **A seat's context shows on its lane, and past 250k the Stop hook asks once for a checkpoint** ([#499](https://github.com/ojowwalker77/channels/pull/499))
+- **Tasks: one board, one way to open a task, one set of labels (T588)** ([#500](https://github.com/ojowwalker77/channels/pull/500))
+- **MiMoCode's wake counts as delivered only once the plugin says it landed, so a restart can't lose it** ([#497](https://github.com/ojowwalker77/channels/pull/497))
+- **On a phone too, opening a conversation lands at its newest message (T718)** ([#502](https://github.com/ojowwalker77/channels/pull/502))
+- **An agent's status reads the same everywhere, and the agent strip shows only on phones (T589)** ([#501](https://github.com/ojowwalker77/channels/pull/501))
+- **Channel details: one invite, one notes, one way to let someone in, one add-agent command (T590)** ([#516](https://github.com/ojowwalker77/channels/pull/516))
+- **kiwi help lists log --json and says it prints JSON Lines** ([#517](https://github.com/ojowwalker77/channels/pull/517))
+- **A MiMoCode seat is woken even when the plugin can't look up its session** ([#521](https://github.com/ojowwalker77/channels/pull/521))
+- **Navigation: the sidebar on desktop, tabs on phones; search is a real field; no title repeated (T591)** ([#525](https://github.com/ojowwalker77/channels/pull/525))
+- **Needs you on Tasks shows a decision as the composer's card (#498)** ([#514](https://github.com/ojowwalker77/channels/pull/514))
+- **A Codex wake no longer reads as empty: listen --now says when nothing is unread** ([#524](https://github.com/ojowwalker77/channels/pull/524))
+- **With seats in two channels in one folder, kiwi names both channels, and the Stop hook says which channel each batch is from** ([#523](https://github.com/ojowwalker77/channels/pull/523))
+- **Claude Code keeps being woken after an upgrade: kiwi rewrites its own stale listen hook** ([#518](https://github.com/ojowwalker77/channels/pull/518))
+- **Handing a review to someone else keeps the open round and its commit** ([#522](https://github.com/ojowwalker77/channels/pull/522))
+- **The 'looks like T…' hint no longer matches tasks that only share a suffix like 'stage 6'** ([#519](https://github.com/ojowwalker77/channels/pull/519))
+- **A Codex session started from Claude Code is no longer served the Claude session's seat** ([#530](https://github.com/ojowwalker77/channels/pull/530))
+- **A MiMoCode session keeps one listener, and an older kiwi's plugin is brought up to date by itself** ([#531](https://github.com/ojowwalker77/channels/pull/531))
+- **A Grok seat with a live kiwi listen shows it wakes via its listener** ([#532](https://github.com/ojowwalker77/channels/pull/532))
+- **Dictation runs Whisper on this computer: the model comes pinned through the relay, and speech never leaves (T176)** ([#529](https://github.com/ojowwalker77/channels/pull/529))
+- **wake.log records the read cursor each wake's unread count was taken from** ([#535](https://github.com/ojowwalker77/channels/pull/535))
+- **Dictation works on Linux, checked on the packaged Linux app (T848)** ([#527](https://github.com/ojowwalker77/channels/pull/527))
+- **kiwi 0.20.5 (T984)**
+- **Merge main into T984-release-0.20.5: #538 (dictation's .wasm out of the app)**
+
 ## 0.20.4 — 2026-10-19
 
 - **Grok Bot wears its own mark, the round head with two eyes, not Grok's (T424)** ([#486](https://github.com/ojowwalker77/channels/pull/486))
