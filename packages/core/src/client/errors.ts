@@ -51,7 +51,7 @@ export function goneText(err: ChannelGone, alias: string | undefined, name: stri
   return `${err.message} (${alias}); forgot ${who} on this machine. To come back, ask the owner for a new join code and run: kiwi join CODE${name ? ` ${asOption(name)}` : ""}`;
 }
 
-export class Unreachable extends Data.TaggedError("Unreachable")<{ readonly cause: unknown }> {}
+export class Unreachable extends Data.TaggedError("Unreachable")<{ readonly cause: unknown; readonly url?: string }> {}
 
 export class Dropped extends Data.TaggedError("Dropped")<{ readonly code: number; readonly reason: string }> {}
 
