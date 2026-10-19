@@ -13,6 +13,7 @@ import { wireStoreIpc } from "./ipc/store.ts";
 import { wireVoiceIpc } from "./ipc/voice.ts";
 import { wirePersonalitiesIpc } from "./ipc/personalities.ts";
 import { closeKeys, keysOpen, startKeys, tellKeys } from "./keys-process.ts";
+import { catchMainErrors } from "./revive.ts";
 import { serveWeb } from "./serve-web.ts";
 import { loadStore, warnIfBroken } from "./store.ts";
 import { startUpdates } from "./updater.ts";
@@ -29,6 +30,7 @@ function wireIpc(): void {
   wirePersonalitiesIpc();
 }
 
+catchMainErrors();
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on("second-instance", (_e, argv) => {
