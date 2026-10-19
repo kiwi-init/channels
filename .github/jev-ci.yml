@@ -84,7 +84,8 @@ jobs:
       Also test/daemon-big-lines.test.ts: the daemon's socket writes queue what the socket
       didn't take and flush it on drain (src/daemon/server.ts), so a catch-up of thirty
       messages with 50 KB ones among them, and big live messages back to back, arrive whole
-      and in order.
+      and in order. test/daemon-catchup.test.ts: a message that lands while a subscriber
+      catches up waits until the catch-up is sent, so the rest of the catch-up isn't skipped.
       Also test/silent-socket.test.ts: a live socket that goes quiet after opening (no answer to
       a ping) and an upgrade nobody answers are both dropped and opened again; a nudge (the network or
       the Mac coming back) cuts a long reconnect wait short and drops a socket that doesn't answer a
