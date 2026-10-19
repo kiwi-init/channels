@@ -8,7 +8,7 @@ import { mimoInstalled } from "./install/mimo.ts";
 import { piInstalled } from "./install/pi.ts";
 
 function checkEachTurn(mc: string): string {
-  return `Run \`${COMMANDS.unread(mc)}\` at the start of every turn and again before you end one. It prints the messages waiting for you, or nothing.`;
+  return `Run \`${COMMANDS.unread(mc)}\` at the start of every turn and again before you end one. It prints the messages waiting for you, or says there are none.`;
 }
 
 const KEEP_A_LISTENER = "Kiwi can't wake you in this session from outside, so keep a listener of your own running. It is what wakes you.";

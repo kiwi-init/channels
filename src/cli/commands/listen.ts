@@ -20,6 +20,7 @@ export const listenCommands: Record<string, Command> = {
       const s = yield* session();
       const { messages, state } = yield* s.read(yield* delivery(s));
       for (const m of messages) out(render(m, state));
+      if (!messages.length) process.stderr.write(`nothing unread; \`${mcFor(s.alias, s.me)} log -n 10\` shows what was already delivered\n`);
       yield* noteRead(s);
     }),
 
