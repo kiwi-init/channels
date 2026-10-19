@@ -8,7 +8,7 @@ import { Cursor, loadConfig, type ChannelConfig } from "../config.ts";
 import { wakeOn } from "../daemon/reach.ts";
 import { formatMessage } from "@kiwi/core/format.ts";
 import type { Binding, Here } from "../seats.ts";
-import { MAX_CONTEXT } from "./answer.ts";
+import { fitting, moreNote } from "./answer.ts";
 import { answeringNow, deliveredUpTo, noteDelivered, noteHeard } from "./delivered.ts";
 import { hooksListen } from "./install/claude.ts";
 import { alive, isListening, takeListenSlot } from "./listeners.ts";
@@ -121,25 +121,25 @@ export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Serv
     heard = 0;
     enough = yield* Deferred.make<void>();
   }
-  const told = armed.filter((a) => a.got.length);
-  const blocks = told.map(({ b, got }) => {
-    const mc = mcFor(b.alias, b.as, process.cwd(), who);
-    const text = got.map((g) => g.text).join("\n");
-    return `New Kiwi Channels messages for you (${b.alias}). Handle them; answer with \`${mc} reply N "…"\`:\n${text.length > MAX_CONTEXT ? `${text.slice(0, MAX_CONTEXT)}\n… (more: run \`${mc} log\`)` : text}\n`;
-  });
+  const told = armed
+    .filter((a) => a.got.length)
+    .map((a) => {
+      const mc = mcFor(a.b.alias, a.b.as, process.cwd(), who);
+      const fit = fitting(a.got.map((g) => g.text));
+      const shown = a.got.slice(0, fit.count);
+      const rest = a.got.slice(fit.count).filter((g) => g.seq !== null).length;
+      const seqs = shown.flatMap((g) => (g.seq === null ? [] : [g.seq]));
+      return { b: a.b, seqs, upTo: rest ? Math.max(0, ...seqs) : a.reached(), text: rest ? `${fit.text}\n${moreNote(rest, mc)}` : fit.text, mc };
+    });
+  const blocks = told.map(({ b, text, mc }) => `New Kiwi Channels messages for you (${b.alias}). Handle them; answer with \`${mc} reply N "…"\`:\n${text}\n`);
   try {
     writeSync(2, blocks.length ? blocks.join("\n") : "Kiwi Channels: a day with no messages for you. Nothing to do; just end your turn.\n");
   } catch {
     return 0;
   }
-  for (const { b, reached, got } of told) {
-    noteDelivered(b.alias, b.as, who.session ?? "", reached());
-    noteHeard(
-      who.session,
-      b.alias,
-      b.as,
-      got.flatMap((g) => (g.seq === null ? [] : [g.seq])),
-    );
+  for (const { b, upTo, seqs } of told) {
+    noteDelivered(b.alias, b.as, who.session ?? "", upTo);
+    noteHeard(who.session, b.alias, b.as, seqs);
   }
   return 2;
 });
