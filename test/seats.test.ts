@@ -76,6 +76,21 @@ test("MiMoCode and Kimi Code: the harness's own process holds the seat, over the
   expect(baseName(here({ MIMOCODE: "1", MIMOCODE_PID: "99" }, chain("zsh", "mimo")))).toBe("mimo");
 });
 
+test("Pi: its marker names the harness; its extension's process and session hold the seat, unless a harness runs nearer", () => {
+  const chain = (...names: string[]) => {
+    const procs = new Map(names.map((name, i) => [100 - i, { ppid: i === names.length - 1 ? 1 : 99 - i, name }]));
+    return { from: 100, lookup: (pid: number) => procs.get(pid) ?? null };
+  };
+  expect(here({ PI_CODING_AGENT: "true" })).toEqual({ harness: "pi" });
+  expect(here({ PI_CODING_AGENT: "true", CLAUDECODE: "1" })).toEqual({ harness: "claude" });
+  expect(here({ PI_CODING_AGENT: "1" })).toEqual({});
+  expect(here({ PI_CODING_AGENT: "true", KIWI_PI_PID: "99", KIWI_PI_SESSION: "pi-s1", CLAUDECODE: "1" }, chain("zsh", "node", "claude"))).toEqual({ harness: "pi", session: "pi-s1", pid: 99 });
+  expect(here({ PI_CODING_AGENT: "true", KIWI_PI_PID: "97", KIWI_PI_SESSION: "pi-s1", CLAUDECODE: "1" }, chain("zsh", "claude", "bash", "node"))).toEqual({ harness: "claude" });
+  expect(here({ PI_CODING_AGENT: "true", KIWI_PI_PID: "98", MIMOCODE: "1", MIMOCODE_PID: "96" }, chain("zsh", "node", "bash", "mimo"))).toEqual({ harness: "pi", pid: 98 });
+  expect(baseName(here({ PI_CODING_AGENT: "true" }))).toBe("pi");
+  expect(canonicalHarness("pi")).toBe("pi");
+});
+
 test("the nearest harness process decides when one harness runs inside another", () => {
   const chain = (...names: string[]) => {
     const procs = new Map(names.map((name, i) => [100 - i, { ppid: i === names.length - 1 ? 1 : 99 - i, name }]));

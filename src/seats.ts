@@ -16,7 +16,7 @@
 import { realpathSync } from "node:fs";
 import { homedir, hostname } from "node:os";
 import { dirname, resolve } from "node:path";
-import { kimiAncestor, kimiCodePid, mimoHere, type ProcessTree } from "./ancestry.ts";
+import { kimiAncestor, kimiCodePid, mimoHere, piHere, type ProcessTree } from "./ancestry.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord } from "./config.ts";
 import { omit } from "@kiwi/core/omit.ts";
 
@@ -55,6 +55,8 @@ export function onGrokBot(env: Record<string, string | undefined> = process.env,
 
 export function here(env: Record<string, string | undefined> = process.env, tree: ProcessTree = {}, host: string = hostname()): Here {
   const pid = Number(env.CLAUDE_PID);
+  const pi = piHere(env, tree);
+  if (pi) return { harness: "pi", ...(env.KIWI_PI_SESSION ? { session: env.KIWI_PI_SESSION } : {}), ...(pi.pid ? { pid: pi.pid } : {}) };
   const mimo = mimoHere(env, tree);
   if (mimo && env.MIMOCODE_SESSION_ID) return { harness: "mimo", session: env.MIMOCODE_SESSION_ID, ...(mimo.pid ? { pid: mimo.pid } : {}) };
   if (mimo) return mimo.pid ? heldByProcess("mimo", mimo.pid) : { harness: "mimo" };
