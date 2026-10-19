@@ -27,6 +27,7 @@ export function sendFrom(state: Pick<ChannelState, "tasks" | "lead">, place: Pla
 // the outside world, not a render.
 
 const seenKey = (room: string) => `mc.places-seen.${room}`
+const SEEN_KEEP = 500
 const seenCache = new Map<string, Record<string, number>>()
 const seenListeners = new Set<() => void>()
 
@@ -52,6 +53,8 @@ export function markSeenIn(room: string, updates: Record<string, number>): void 
   if (Object.entries(updates).every(([k, v]) => (was[k] ?? 0) >= v)) return
   const next = { ...was }
   for (const [k, v] of Object.entries(updates)) next[k] = Math.max(next[k] ?? 0, v)
+  const entries = Object.entries(next)
+  if (entries.length > SEEN_KEEP) for (const [k] of entries.sort((a, b) => a[1] - b[1]).slice(0, entries.length - SEEN_KEEP)) delete next[k]
   seenCache.set(room, next)
   try {
     localStorage.setItem(seenKey(room), JSON.stringify(next))

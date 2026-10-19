@@ -32,3 +32,11 @@ describe("a channel's warm copy, kept for this session", () => {
     expect(heldWindow(held(range(1, 10)), 5000, 2000)).toBeNull()
   })
 })
+
+test("only the last four channels stay warm: a fifth drops the one visited longest ago, and a revisit counts as recent", () => {
+  for (const c of ["lru-a", "lru-b", "lru-c", "lru-d"]) keepWarm(c, held([1]))
+  keepWarm("lru-a", held([1, 2]))
+  keepWarm("lru-e", held([1]))
+  expect(["lru-a", "lru-b", "lru-c", "lru-d", "lru-e"].map((c) => !!warmOf(c))).toEqual([true, false, true, true, true])
+  for (const c of ["lru-a", "lru-c", "lru-d", "lru-e"]) dropWarm(c)
+})

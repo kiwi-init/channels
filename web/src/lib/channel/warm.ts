@@ -20,8 +20,15 @@ const warm = new Map<string, Warm>()
 
 export const warmOf = (code: string): Warm | undefined => warm.get(code)
 
+const WARM_KEEP = 4
+
 export function keepWarm(code: string, w: Warm): void {
+  warm.delete(code)
   warm.set(code, w)
+  for (const old of warm.keys()) {
+    if (warm.size <= WARM_KEEP) break
+    warm.delete(old)
+  }
 }
 
 export function dropWarm(code: string): void {

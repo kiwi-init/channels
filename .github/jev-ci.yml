@@ -109,6 +109,10 @@ jobs:
       store's CSP allows api.x.ai only when an xAI key is saved, the project key never reaches
       the snapshot or the token IPC result, consent defaults off, and
       desktop/build/entitlements.mac.plist has the audio-input entitlement. And
+      web lib/channel/trim.test.ts: a long session folds the messages past the 2000-message window
+      (plus 500 of slack) into the fold base, and tasks and facts from before it stay;
+      lib/channel/warm.test.ts: only the last four channels stay warm; lib/threads.test.ts: what's
+      been seen where keeps the newest 500 places. And
       test/retry-after.test.ts: the relay's 429 carries Retry-After (header and body, on the socket
       too), a refused attempt isn't counted, and a rate-limited send waits it out and goes in, over
       the socket without an extra try over HTTP; web lib/github-queue.test.ts: the owner's GitHub
