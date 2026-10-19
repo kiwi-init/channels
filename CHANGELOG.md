@@ -2,6 +2,10 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.20.4 — 2026-10-19
+
+- **Grok Bot wears its own mark, the round head with two eyes, not Grok's (T424)** ([#486](https://github.com/ojowwalker77/channels/pull/486))
+
 ## 0.20.3 — 2026-10-19
 
 - **Kimi Code sessions in Kimi's server are woken in place by the daemon (T150)** ([#480](https://github.com/ojowwalker77/channels/pull/480))
