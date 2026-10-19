@@ -4,6 +4,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { daemonListeners, daemonSock } from "../src/daemon.ts";
+import { seatBudget } from "../src/hooks/answer.ts";
 import { startRelay } from "../src/relay/bun.ts";
 
 setDefaultTimeout(90_000);
@@ -183,6 +184,13 @@ describe("Kimi Code keeps its own listener running", () => {
     expect(unread.err).toContain("unread at stop");
     expect(unread.err).toContain("no Kiwi listener of yours is running");
     expect(unread.out).toBe("");
+
+    for (let i = 0; i < 8; i++) await ok(owner, ["send", "--to", me, `stop-backlog-${i} ${"s".repeat(1_400)}`]);
+    const crowded = await kimi.hook(["hook", "kimi-stop"], stopInput);
+    expect(crowded.code).toBe(2);
+    expect(crowded.err.trimEnd().length).toBeLessThanOrEqual(seatBudget(1));
+    expect(crowded.err).toContain("no Kiwi listener of yours is running");
+    expect(crowded.err).toContain("more unread: they come next");
 
     expect((await kimi.tool(["hooks", "uninstall", "kimi"])).code).toBe(0);
     expect(readFileSync(join(kimiDir, "config.toml"), "utf8")).toBe(KIMI_USER);

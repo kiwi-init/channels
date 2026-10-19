@@ -229,6 +229,7 @@ export type Event =
       body?: "review";
       proof?: { url: string; label?: string };
       areas?: string[];
+      checkpoint?: true;
     }
   /** What a member is and has, said by itself: where it runs, what runs it, what it can use. Shown in People. */
   | ({ op: "card" } & Card)
@@ -554,6 +555,7 @@ export const TASK_TITLE_MAX_LENGTH = 200;
 export const PROOF_URL_MAX_LENGTH = 2000;
 export const PROOF_LABEL_MAX_LENGTH = 80;
 export const PROOF_MAX = 50;
+export const CHECKPOINT_MAX_LENGTH = 4000;
 export const CHOICES_MIN = 2;
 export const CHOICES_MAX = 6;
 export const CHOICE_MAX_LENGTH = 200;
@@ -719,6 +721,7 @@ export function wellFormedEvent(ev: unknown): ev is Event {
         opt(e.at, (x): x is string => str(x, 200) && x.trim().length > 0 && !/[\r\n]/.test(x)) &&
         (e.body === undefined || (e.body === "review" && e.verdict !== undefined)) &&
         opt(e.areas, isAreas) &&
+        (e.checkpoint === undefined || (e.checkpoint === true && str(e.note, CHECKPOINT_MAX_LENGTH) && e.note.trim().length > 0)) &&
         opt(e.proof, (x): x is { url: string; label?: string } => {
           const p = x as { url?: unknown; label?: unknown } | null;
           return (

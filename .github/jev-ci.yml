@@ -81,6 +81,20 @@ jobs:
       signing, scopes and roles, routing and auth tables, error texts, the install scripts,
       hooks and harness detection (a Grok Bot from its VM's hostname, and its model grok-bot: test/routing.test.ts, test/runs.test.ts), the daemon waking a Grok Bot by POSTing to its routine's webhook with the Authorization header piped to kiwi wake webhook, never the message text (test/wake.test.ts), the repo and branch an agent's card reads from its folder (test/routing.test.ts), the channel's repos and the flag on an agent from another repo (test/repos.test.ts), a closed task's digest (test/digest.test.ts, and the web's in task-actions.test.ts), GitHub webhooks into a channel's queue (test/github-relay.test.ts: signature, routing by connected repo, owner-only queue and ack, trimming), the owner's app draining that queue into github events and the PRs and checks they fold into (test/github-drain.test.ts), a PR's card taking GitHub's state, title and checks over the chat's guess (test/github-prs.test.ts, web pr-checks.test.tsx), a PR on a branch named T<n>-… showing on task T<n> (test/github-branch.test.ts), the GitHub App's key, token and API calls against a fake GitHub: diffs for members, the kiwi/review check for the owner only (test/github-app.test.ts), which verdicts the owner's app posts as checks, once and without backfilling (test/github-review.test.ts, web review-checks.test.ts), a PR on a T<n>-… branch linked back to its task by one owner-only comment (github-app.test.ts, github-branch.test.ts), CI red becoming a task (test/ci-red.test.ts, packages/core/src/ci-red.ts: a failed check once per commit and check, owned by whoever pushed, a note on the commit's open CI task; ci.yml's concurrency giving each run on main a group of its own, so no push or rehearsal cancels one into a red ci-ok, while a pull request's newest push still cancels its older run; github-app.test.ts: the owner-only check log excerpt from the job's log or its failure annotations; web ci-red.test.ts: the task and note it posts), a GitHub issue imported as a task and the two closing each other: issue refs, issue webhooks, the issues and closes they fold into (test/github-issues.test.ts), kiwi task add --issue and the owner closing the issue on a live relay against a fake GitHub (test/github-issues-live.test.ts), the issue routes, read for members and close for the owner only (github-app.test.ts), an old channel's roles read as personalities: the lead stays the lead, a free-text role becomes a Builder named after it with its rules as instructions, from the whole log or a snapshot, and a signed personality wins (test/roles-carry.test.ts), where a task comes from (task.add's from) and who has its context: agents ranked by lineage, who worked it and their queue, the busy rule, task who's text and --from on a live relay, and warm work: a card's fresh (the hook marks a reset on startup, clear and compact, not resume), when each member last touched a task (its thread, or its events from whoever is on it) and the warm bonus (test/task-who.test.ts), the folders a task changed: read from the agent's branch against main in a throwaway git repo, kept on task done and review, borrowed from the parent or the task's text, and whoever changed them lately ranked for a task in them (test/task-areas.test.ts), which closes the owner's app makes, once and without backfilling (web review-checks.test.ts), a person assigning the suggested agent from the task view (web task-actions.test.ts), a run of GitHub's news folded into one line in the conversation (web github-line.test.ts), a reply's one-line quote (web quote.test.tsx), the history cache, a channel's warm copy for the session (web lib/channel/warm.test.ts: a revisit follows from what it holds with no second cache read or verify, and reads the cache on a gap or a stale copy), the channel clock (web lib/channel/clock.test.ts: it holds still within its interval so a re-render refolds nothing, and every subscriber to one interval shares one timer), the desktop app holding the relay's config and the linked account's repo list for a while and asking again after a failure (test/held.test.ts), the history cache writing a burst of messages as one IndexedDB write that keeps only the newest window (web lib/history.test.ts), and localStorage writes held in memory and written once per burst, flushed when the page hides, a dropped one never landing (web lib/write-behind.test.ts), the desktop app's node-only helpers, the
       public site's invite parsing and its Download button's pick by OS and chip (site/app.js, test/site.test.ts), scripts/action-pins.ts.
+      Also test/checkpoint.test.ts: a checkpoint is a task.update note marked checkpoint (text
+      required, at most CHECKPOINT_MAX_LENGTH), folded and labelled in task show, refused before
+      sending when empty or too long; and what a fresh session is told (packages/core/src/reentry.ts):
+      each open task it owns with the newest checkpoint or else the last note, the review round it
+      judges, the board for the lead, the compact summary, multi-line text marked; past its cap
+      whole tasks are left out, never cut mid-line, the text stays within the cap at any size, and
+      it names exactly the tasks (and board) it left out, a checkpoint too long to show is cut with a
+      pointer to all of it. And handOver (src/hooks/answer.ts): the unread messages a hook hands over
+      stay within its limit at any size and any command length, whole messages first, the note about
+      the rest only when needed, a too-long first message cut with a kiwi show pointer only when at
+      least CLIP_MIN of its body shows, and otherwise nothing handed over (so nothing is marked read);
+      a stop reason with the Kimi or Grok re-arm reminder and a SessionStart context (startContext,
+      startBudgets) stay at or under seatBudget for one to fifty seats and any brief size; re-entry's
+      recovery commands use the seat's own command.
       Also test/daemon-big-lines.test.ts: the daemon's socket writes queue what the socket
       didn't take and flush it on drain (src/daemon/server.ts), so a catch-up of thirty
       messages with 50 KB ones among them, and big live messages back to back, arrive whole
@@ -262,7 +276,7 @@ jobs:
   test-flows-b:
     name: test / flows-b
     inputs: ["src/**", "packages/core/**", "test/owner-cli.ts"]
-    imports_from: ["test/join-seats.test.ts", "test/read-receipts.test.ts", "test/daemon-pair.test.ts", "test/sh-escape.test.ts", "test/reclaim.test.ts", "test/wake-yourself.test.ts", "test/seats.test.ts", "test/multi-seat.test.ts", "test/handoff.test.ts", "test/hooks-once.test.ts", "test/hooks-hung-relay.test.ts", "test/offline-read.test.ts"]
+    imports_from: ["test/join-seats.test.ts", "test/read-receipts.test.ts", "test/daemon-pair.test.ts", "test/sh-escape.test.ts", "test/reclaim.test.ts", "test/wake-yourself.test.ts", "test/seats.test.ts", "test/multi-seat.test.ts", "test/handoff.test.ts", "test/hooks-once.test.ts", "test/hooks-hung-relay.test.ts", "test/offline-read.test.ts", "test/hooks-reentry.test.ts"]
     always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs slow agent-flow tests against a real local relay and the kiwi CLI: join-seats
@@ -273,10 +287,13 @@ jobs:
       that Kimi's server hosts woken through that server: the busy session recorded at join, kept current by
       the Stop hook, the prompt posted with the server's token; src/kimi-server.ts; for Cursor, its stop hook
       known by conversation_id and cursor_version, its seat by CURSOR_CONVERSATION_ID, and a listen --once of
-      that chat counting as armed; a Grok Bot whose VM's shell has CURSOR_AGENT seated and hooked as Grok Bot, not Cursor).
+      that chat counting as armed; a Grok Bot whose VM's shell has CURSOR_AGENT seated and hooked as Grok Bot, not Cursor;
+      and with a backlog of unread messages the stop reason, re-arm reminder included, stays within the
+      seat's share of the hook limit).
       Then seats and multi-seat: which agent a command or hook acts for in a folder
       (src/seats.ts, a Grok Bot's seat from its VM's hostname or KIWI_HARNESS), one session holding seats in two channels, hooks serving the right seat
-      from sibling folders. Then handoff: an escalation's live browser link (packages/core/src/protocol.ts),
+      from sibling folders, and with a backlog on both seats each hook's whole output (SessionStart,
+      prompt, stop) within HOOK_CONTEXT_MAX, the seats sharing it (src/hooks/run.ts). Then handoff: an escalation's live browser link (packages/core/src/protocol.ts),
       `kiwi send --escalate --handoff URL --wait` exit codes, and the link kept out of log, show,
       listen --json except `kiwi show N --reveal`. Then hooks-once: a message the prompt or stop hook
       hands over never wakes the session a second time from the listener started with it
@@ -291,7 +308,13 @@ jobs:
       puts the whole hook under one deadline; packages/core/src/client/relay.ts gives every
       relay request 30s), and what they couldn't show comes with the next prompt. Then offline-read: with the relay down, kiwi log and kiwi tasks
       show the messages and tasks this computer already had and say the relay can't be reached
-      (OfflineReads in packages/core/src/client/relay.ts, src/agent/state.ts, src/cli/context.ts). Fails if joining, seats, hooks, pairing, the
+      (OfflineReads in packages/core/src/client/relay.ts, src/agent/state.ts, src/cli/context.ts). Then hooks-reentry: a
+      SessionStart hook for a session that starts fresh (startup, clear, compact) tells the agent its
+      open task and the checkpoint saved with kiwi task checkpoint, and one for a resumed session
+      doesn't (src/hooks/answer.ts, packages/core/src/reentry.ts); with big checkpoints and a
+      backlog of messages the SessionStart context stays within HOOK_CONTEXT_MAX (Claude Code's
+      inline limit, shared between the seats a session serves in src/hooks/run.ts), and every
+      message it left out comes with a later hook. Fails if joining, seats, hooks, pairing, the
       daemon, kiwi sh, handoff or the relay change behavior.
 
   build:

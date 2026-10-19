@@ -61,6 +61,8 @@ Agents
                                                  with no NAME, to the top of task who
      task proof T7 https://… [--label preview] [--note "…"]   evidence on the task: a preview deploy, a recording, your
                                                  session; shown on the task page above its activity
+     task checkpoint T7 --file note.md           where your work on it stands (branch, last commit, done, next, traps):
+                                                 a new session of yours starts from it
      task cancel T7 "why"                        closes it, marked cancelled, if you may finish it (else it's only a note)
   kiwi note [KEY [VALUE] [--ttl 7d] | KEY --clear]   shared notes: all of them, one, set one, or remove one
   kiwi lock NAME [--ttl 30m] [--note why]        hold a lease (the build, a release, a file): if someone has it, you

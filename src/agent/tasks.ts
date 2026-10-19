@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import { PROOF_LABEL_MAX_LENGTH, PROOF_URL_MAX_LENGTH, TASK_STATES, TASK_TITLE_MAX_LENGTH, ignored, type IssueRef, type TaskState, type Verdict } from "@kiwi/core/protocol.ts";
+import { CHECKPOINT_MAX_LENGTH, PROOF_LABEL_MAX_LENGTH, PROOF_URL_MAX_LENGTH, TASK_STATES, TASK_TITLE_MAX_LENGTH, ignored, type IssueRef, type TaskState, type Verdict } from "@kiwi/core/protocol.ts";
 import { omit } from "@kiwi/core/omit.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { isPerson, openRound, revisedOut, taskId, type ChannelState, type ReviewRound, type Task } from "@kiwi/core/state.ts";
@@ -113,6 +113,7 @@ export class SessionTasks extends SessionMessaging {
         at?: string;
         round?: number;
         proof?: { url: string; label?: string };
+        checkpoint?: true;
       },
       reviewText?: string,
     ) {
@@ -121,6 +122,9 @@ export class SessionTasks extends SessionMessaging {
       if (!t) return yield* new Rejected(`no task ${taskId(id)}`);
       if (change.title !== undefined && change.title.length > TASK_TITLE_MAX_LENGTH)
         return yield* new Rejected(`the title is ${change.title.length} characters, the most a task takes is ${TASK_TITLE_MAX_LENGTH}: shorten it and put the rest in a note`);
+      if (change.checkpoint && !change.note?.trim()) return yield* new Rejected("a checkpoint says where the work stands: give its text, or --file note.md");
+      if (change.checkpoint && change.note && change.note.length > CHECKPOINT_MAX_LENGTH)
+        return yield* new Rejected(`the checkpoint is ${change.note.length} characters, the most it takes is ${CHECKPOINT_MAX_LENGTH}: keep what a new session needs to carry on`);
       if (change.proof) {
         const { url, label } = change.proof;
         if (url.length > PROOF_URL_MAX_LENGTH || !/^https:\/\/[^\s]+$/.test(url))
