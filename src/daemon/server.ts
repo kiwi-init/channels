@@ -10,6 +10,7 @@ import { pullsWake, viaOf } from "@kiwi/core/wake.ts";
 import { ensureMachine, loadPairedMachine, PairError, type PairedMachine, type PairedPerson } from "./pair.ts";
 import { DAEMON_PROTOCOL, daemonSock, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
 import { activityEnv, reachOf, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
+import { pruneHookFiles } from "../hooks/delivered.ts";
 import { beatLock, dropLock, lockPath, ownsLock, takeLock } from "./lock.ts";
 import { stopDaemon, tryHello } from "./rpc.ts";
 import { readKey, type ConnState, type Seat, type Sub, type Waiting } from "./seat.ts";
@@ -21,6 +22,8 @@ const PEEK_PROBE_MS = 250;
 const MAX_QUEUED_BYTES = 64 * 1024 * 1024;
 const lineEncoder = new TextEncoder();
 const TICK_MS = 5_000;
+const PRUNE_EVERY_MS = 24 * 3600_000;
+const HOOK_FILES_KEEP_MS = 7 * 24 * 3600_000;
 const ORPHAN_MS = 10 * 60_000;
 const RETRY_FIRST_MS = 5_000;
 const RETRY_MAX_MS = 30 * 60_000;
@@ -687,7 +690,15 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     if (!relays.length || !relays.every(onLoopback)) return false;
     return (await Promise.all(relays.map(answers))).every((up) => !up);
   };
+  let prunedAt = 0;
+  const pruneNow = (): void => {
+    if (Date.now() - prunedAt < PRUNE_EVERY_MS) return;
+    prunedAt = Date.now();
+    pruneHookFiles(dir, HOOK_FILES_KEEP_MS);
+  };
+  pruneNow();
   const tick = setInterval(() => {
+    pruneNow();
     if (!existsSync(dir) || !beatLock(lock)) return void stop();
     void syncSeats();
     void orphaned().then((dead) => {
