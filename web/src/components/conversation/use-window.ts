@@ -1,9 +1,17 @@
 import { useLayoutEffect, useRef, useState, type RefObject } from "react"
 
 const WINDOW_STEP = 120
+const MOUNTED_MAX = 2 * WINDOW_STEP
 const NEAR_TOP = 600
+const NEAR_BOTTOM = 80
 
 const startOf = <T extends { seq: number }>(items: T[], count: number): number => items[Math.max(0, items.length - count)]?.seq ?? 0
+
+export function trimmedFrom<T extends { seq: number }>(items: T[], hidden: number, aboveView: (seq: number) => boolean): number | null {
+  if (items.length - hidden <= MOUNTED_MAX) return null
+  const from = startOf(items, WINDOW_STEP)
+  return aboveView(from) ? from : null
+}
 
 export function useWindow<T extends { seq: number }>(items: T[], hereKey: string, scroller: RefObject<HTMLDivElement | null>, reveal: number | null, all: boolean) {
   const [shownKey, setShownKey] = useState(hereKey)
@@ -28,9 +36,25 @@ export function useWindow<T extends { seq: number }>(items: T[], hereKey: string
     if (el) keep.current = el.scrollHeight - el.scrollTop
     setFrom(startOf(items.slice(0, hidden), WINDOW_STEP))
   }
-  const onScrolled = (el: HTMLDivElement) => {
-    if (hidden && keep.current === null && el.scrollTop < NEAR_TOP) more()
+  const trim = (el: HTMLDivElement) => {
+    const top = el.getBoundingClientRect().top
+    const trimmed = trimmedFrom(items, hidden, (seq) => {
+      const row = el.querySelector(`[id="m${seq}"]`)
+      return row ? row.getBoundingClientRect().top < top : el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM
+    })
+    if (trimmed === null) return
+    keep.current = el.scrollHeight - el.scrollTop
+    setFrom(trimmed)
   }
+  const onScrolled = (el: HTMLDivElement) => {
+    if (keep.current !== null) return
+    if (hidden && el.scrollTop < NEAR_TOP) return more()
+    trim(el)
+  }
+  useLayoutEffect(() => {
+    const el = scroller.current
+    if (el && keep.current === null && !all) trim(el)
+  })
   useLayoutEffect(() => {
     const el = scroller.current
     if (el && keep.current !== null) el.scrollTo({ top: el.scrollHeight - keep.current, behavior: "instant" })

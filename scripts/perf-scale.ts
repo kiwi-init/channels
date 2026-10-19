@@ -97,11 +97,14 @@ const WATCH = () => {
   ).observe({ type: "event", durationThreshold: 16, buffered: true } as PerformanceObserverInit);
 };
 
-async function sample(cdp: CDPSession): Promise<{ heapMB: number; nodes: number; listeners: number; documents: number }> {
+async function sample(cdp: CDPSession): Promise<{ heapMB: number; nodes: number; listeners: number; documents: number; attached: number; rows: number }> {
   await cdp.send("HeapProfiler.collectGarbage");
   const { metrics } = (await cdp.send("Performance.getMetrics")) as { metrics: { name: string; value: number }[] };
   const m = Object.fromEntries(metrics.map((x) => [x.name, x.value]));
-  return { heapMB: mb(m.JSHeapUsedSize ?? 0), nodes: m.Nodes ?? 0, listeners: m.JSEventListeners ?? 0, documents: m.Documents ?? 0 };
+  const { result } = (await cdp.send("Runtime.evaluate", { expression: `[document.querySelectorAll("*").length, document.querySelectorAll("[id^='m']").length]`, returnByValue: true })) as {
+    result: { value: [number, number] };
+  };
+  return { heapMB: mb(m.JSHeapUsedSize ?? 0), nodes: m.Nodes ?? 0, listeners: m.JSEventListeners ?? 0, documents: m.Documents ?? 0, attached: result.value[0], rows: result.value[1] };
 }
 
 async function drain(page: Page): Promise<{ longTasks: number; longMs: number; worstMs: number; events: { name: string; duration: number; delay: number }[] }> {
@@ -383,7 +386,7 @@ try {
     idle.longTasks += d.longTasks;
     idle.longMs += d.longMs;
     idle.worstMs = Math.max(idle.worstMs, d.worstMs);
-    for (const v of ["Tasks", "Agents", "Conversation"]) await tab(page, v, "");
+    if (process.env.PERF_SOAK_TABS !== "0") for (const v of ["Tasks", "Agents", "Conversation"]) await tab(page, v, "");
     await drain(page);
     await mark(`soak minute ${minute}`);
   }
