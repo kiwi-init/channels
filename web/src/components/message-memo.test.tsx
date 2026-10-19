@@ -7,7 +7,7 @@ import { PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts"
 import { knownRefs, Recent } from "../lib/markdown"
 import { Markdown, renderMarkdown } from "./markdown"
 import type { MessageProps } from "./message"
-import { sameRow } from "./message-memo"
+import { sameRow, sameValue } from "./message-memo"
 
 const msg = (seq: number, body: string, extra: Partial<Message> = {}): Message => ({ v: PROTOCOL_VERSION, id: String(seq), from: "atlas", kind: "msg", body, ts: 0, seq, sigOk: true, ...extra })
 
@@ -86,5 +86,21 @@ describe("markdown is parsed once per body", () => {
     expect(r.get("b")).toBeUndefined()
     expect(r.get("a")).toBe(1)
     expect(r.get("c")).toBe(3)
+  })
+})
+
+describe("comparing what a row shows by value", () => {
+  test("same contents in new objects are the same, in any key order, with unset keys ignored", () => {
+    expect(sameValue([{ emoji: "👍", who: ["win"], mine: false }], [{ mine: false, who: ["win"], emoji: "👍" }])).toBe(true)
+    expect(sameValue({ count: 2, forYou: false, color: undefined }, { count: 2, forYou: false })).toBe(true)
+    expect(sameValue({ people: [{ name: "a" }] }, { people: [{ name: "a" }] })).toBe(true)
+  })
+
+  test("any change in a value, a length or a kind is a change", () => {
+    expect(sameValue([{ who: ["win"] }], [{ who: ["win", "jow"] }])).toBe(false)
+    expect(sameValue({ count: 2 }, { count: 3 })).toBe(false)
+    expect(sameValue({ a: 1 }, { a: 1, b: 2 })).toBe(false)
+    expect(sameValue([1], { 0: 1 })).toBe(false)
+    expect(sameValue(null, {})).toBe(false)
   })
 })

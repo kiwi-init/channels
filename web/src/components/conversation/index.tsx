@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState, type CSSProperties, type ReactNode } fr
 import { droppedCount } from "@kiwi/core/format.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
 import { GENERAL_ROOM, isReaction, type ImageAttachment, type Message } from "@kiwi/core/protocol.ts"
+import { taskCards } from "@kiwi/core/standup.ts"
 import { colorOf, outsideRepos, taskId, tasksAwaitingPeople, type Task } from "@kiwi/core/state.ts"
 import { taskPr } from "@kiwi/core/work.ts"
 import { channelTitle, loadRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
@@ -98,6 +99,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const iAmPerson = !isAgent(state.members.get(me))
 
   const arrivals = useMemo(() => messages.filter((m) => m.from !== me && !isReaction(m)).length, [messages, me])
+  const cards = useMemo(() => taskCards(state, messages), [state, messages])
   const { decisions, escalations, questions } = useMemo(() => asksFor(state.openAsks, me), [state.openAsks, me])
   const needs = decisions.length + escalations.length + questions.length
   useChannelNews(roomId, Math.max(head, messages.at(-1)?.seq ?? 0), arrivals, 0, needs)
@@ -267,7 +269,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const { bubble, timeline } = rowMakers({
     me,
     state,
-    messages,
     byKey,
     online,
     marks,
@@ -276,6 +277,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     now,
     hereKey,
     cardRoom,
+    cards,
     search,
     highlight,
     bySeq,
