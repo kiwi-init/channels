@@ -12,7 +12,7 @@ function run(tasksMs: number, i: number): string {
   writeFileSync(
     file,
     JSON.stringify({
-      "@1x": { reloadToTasksMs: 900 },
+      "@1x": { reloadToTasksMs: 500 },
       "@4x": { switchMedianMs: { Tasks: tasksMs, Agents: 90, Conversation: 95 } },
       "typing while 10 agents post": { p95Ms: 30 },
       soak: { heapSlopeMBPerHour: 60, nodesSlopePerHour: 152000, listenersSlopePerHour: 22000 },
