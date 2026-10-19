@@ -137,6 +137,7 @@ export const channelCommands: Record<string, Command> = {
       {
         const icon = yield* s.ch.fx.icon();
         if (!icon) return out("no icon (the owner sets one in the Channels app)");
+        if (icon.kind === "robot") return out(`the ${icon.robot} robot head`);
         if (icon.kind === "emoji") return out(icon.emoji);
         const dir = joinPath(home(), "downloads", s.ch.roomId);
         mkdirSync(dir, { recursive: true });

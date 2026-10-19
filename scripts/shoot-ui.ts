@@ -167,7 +167,7 @@ try {
   await leading.getByRole("radiogroup", { name: "Personality" }).getByText("Lead", { exact: true }).click();
   await leading.getByRole("button", { name: "Save" }).click();
   await leading.waitFor({ state: "detached" });
-  await owner.getByRole("img", { name: "The lead" }).first().waitFor({ timeout: 15000 });
+  await owner.getByText("atlas is Lead now").first().waitFor({ timeout: 15000 });
   await owner.getByRole("button", { name: "Close details" }).click();
   await admit(["kiwi-w", "--as", "win", "--model", "gpt-5-codex"]);
   // The passkey offer waits for an agent's first card; save the channels to it, so the list stays quiet.

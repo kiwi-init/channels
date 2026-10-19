@@ -2,12 +2,16 @@ import { hasBridge, relayUrl } from "../lib/relay"
 import { CheckListIcon, LockIcon } from "@hugeicons/core-free-icons"
 import { useState } from "react"
 
+import { ROBOT_FACES, type RobotFace } from "@kiwi/core/protocol.ts"
+
 import { tokenForCreate, useSignInMode } from "@/lib/auth"
 import { bridge, useSecrets } from "@/lib/secrets"
 import { isSignInGone } from "@/lib/session"
 import { createChannel, isJoinCode } from "@/lib/channel"
+import { linkOf } from "@/lib/channel-ops"
 import { installLine } from "@/lib/join-line"
 import { Command } from "./add-agent"
+import { RobotPicker } from "./channel-icon"
 import { RobotAvatar } from "./robot"
 import { Icon } from "./icon"
 import { Button, Modal, Monogram, Spinner, TextField, Wordmark, errorText } from "./kit"
@@ -110,6 +114,7 @@ export function NewChannel({
   const person = useSecrets().person
   const signIn = useSignInMode()
   const [name, setName] = useState("")
+  const [robot, setRobot] = useState<RobotFace>(() => ROBOT_FACES[Math.floor(Math.random() * ROBOT_FACES.length)]!)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [needSignIn, setNeedSignIn] = useState(false)
@@ -121,6 +126,11 @@ export function NewChannel({
       // The one place sign-in is asked for: a relay with sign-in lets signed-in people create channels.
       const token = await tokenForCreate(fresh)
       const m = await createChannel(name.trim() || "Untitled channel", token, person ? { name: person.name } : null)
+      await linkOf(m)
+        .setIcon({ kind: "robot", robot })
+        .catch(() => {
+          // The channel exists either way; its owner can still pick the icon from its details.
+        })
       setName("")
       setNeedSignIn(false)
       onCreated(m.code)
@@ -144,6 +154,9 @@ export function NewChannel({
       >
         <h2 className="text-title font-semibold">New channel</h2>
         <p className="mt-1 text-ui leading-normal text-ink-2">You own it and approve everyone who joins. Only members can read its name.</p>
+        <div className="mt-4">
+          <RobotPicker value={robot} onPick={setRobot} disabled={busy} />
+        </div>
         <TextField className="mt-4" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="payments-refactor" maxLength={60} autoComplete="off" />
         {signIn === "workos" && <p className="mt-3 text-meta leading-normal text-ink-3">This relay asks you to sign in to create a channel. Your browser opens for it.</p>}
         {error && <p className="mt-3 rounded-ctl bg-wash px-3 py-2.5 text-ui leading-normal text-alert">{error}</p>}

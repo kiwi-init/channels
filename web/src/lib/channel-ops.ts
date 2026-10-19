@@ -106,6 +106,7 @@ export class ChannelLink {
   setHold = (...a: Args<"setHold">) => this.c("setHold", ...a)
   setRepos = (...a: Args<"setRepos">) => this.c("setRepos", ...a)
   icon = () => this.c("icon")
+  setIcon = (...a: Args<"setIcon">) => this.c("setIcon", ...a)
   close = () => this.c("close")
   leave = () => this.c("leave")
   send = (...a: Args<"send">) => this.c("send", ...a)

@@ -447,7 +447,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             <ChannelSidebar
               title={title}
               icon={icon}
-              lead={state.lead}
               people={peopleLine}
               onTitle={() => setSide((s) => (s?.kind === "info" ? null : { kind: "info" }))}
               onSearch={() => {
@@ -482,7 +481,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                   }}
                   heading={heading}
                   headingLabel={`Details: ${title}, ${subtitle}`}
-                  face={{ icon, lead: state.lead, title }}
+                  face={{ icon, title }}
                   status={status}
                   onTitle={() => setSide((s) => (s?.kind === "info" ? null : { kind: "info" }))}
                   searchHint={place.kind === "main" ? "Search this channel" : `Search ${placeTitle}`}

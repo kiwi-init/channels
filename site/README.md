@@ -1,12 +1,15 @@
 # The relay's static site
 
-The relay serves this folder in place of the old dashboard: a landing page with
-the desktop app's downloads, invite pages (`/join/<code>`, which open the app
+The relay serves this folder in place of the old dashboard: a landing page (OLED
+black, monospace, plain HTML: the video and screenshots carry it) with the
+desktop app's downloads, invite pages (`/join/<code>`, which open the app
 through `kiwi://join/<code>`), and the install scripts.
 
 - `index.html`, `styles.css`, `app.js` — hand-written static files, no build
   step. `app.js` routes between the landing page and the invite page
-  (`/#<code>`, which is what the renderer produces, and `/join/<code>`), fills
+  (`/#<code>`, which is what the renderer produces, and `/join/<code>`), picks
+  the header's Download for the visitor's OS and chip (client hints where the
+  browser gives them; Safari can't tell a Mac's chip, so Apple silicon), fills
   in the download links and the `curl … | sh -s -- join <code>` line, and the
   copy buttons. There is no inline script, so the CSP stays `script-src 'self'`.
 - `install`, `install.sh` — the install script, served at `/install` and
@@ -15,6 +18,10 @@ through `kiwi://join/<code>`), and the install scripts.
 - `_headers` — security headers and the text content type for the install
   scripts, for hosts that read it.
 - `icon.svg` — the site icon.
+- `media/` — the landing page's video (`hello-martha.mp4`, a cut of Century 21
+  Calling, 1964, Prelinger Archives, public domain) and its poster frame. Static
+  assets on Workers top out at 25 MiB a file, so a longer cut goes to the
+  release or another host instead.
 
 ## Download links
 

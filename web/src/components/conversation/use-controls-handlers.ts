@@ -19,6 +19,7 @@ type Handlers = Pick<
   | "onRepos"
   | "onVoice"
   | "onRename"
+  | "onIcon"
   | "onCloseChannel"
   | "onLeaveChannel"
 >
@@ -109,6 +110,11 @@ export function useControlsHandlers({
           await ch.setTitle(name)
           const stored = loadMember(member.code)
           if (stored) void renameChannel(stored.code, name.trim().slice(0, 80))
+        }
+      : undefined,
+    onIcon: isOwner
+      ? async (icon) => {
+          await ch.setIcon(icon)
         }
       : undefined,
     onCloseChannel: async () => {

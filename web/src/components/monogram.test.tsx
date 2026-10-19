@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 
 import type { MemberPicture } from "@kiwi/core/protocol.ts"
 
-mock.module("@/lib/avatars", () => ({ avatarUrl: () => "robot.svg", harnessUrl: (h: string) => `/harness/${h}.svg` }))
+mock.module("@/lib/avatars", () => ({ avatarUrl: () => "robot.svg", robotUrl: () => "robot.svg", robotFor: () => "blue", harnessUrl: (h: string) => `/harness/${h}.svg` }))
 const { Harnesses, Monogram, Pictures } = await import("./kit")
 
 const face: MemberPicture = { mime: "image/png", data: "iVBORw0KGgo=" }

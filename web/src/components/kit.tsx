@@ -105,14 +105,6 @@ export function TextField({ className, ...props }: InputHTMLAttributes<HTMLInput
   )
 }
 
-/** An agent with no colour of its own still gets one, the same every time: a channel of agents isn't a wall of grey. */
-const HUES = Object.keys(PALETTE).filter((c) => c !== "yellow") as Color[]
-export function hueOf(name: string): Color {
-  let h = 0
-  for (const ch of name) h = (h * 31 + ch.codePointAt(0)!) >>> 0
-  return HUES[h % HUES.length]!
-}
-
 /** People's pictures in the open channel, by member name: a person with one wears it instead of initials. */
 export const Pictures = createContext<ReadonlyMap<string, MemberPicture>>(new Map())
 

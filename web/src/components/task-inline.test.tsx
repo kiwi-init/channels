@@ -6,7 +6,7 @@ import { generateIdentity, sign, verify } from "@kiwi/core/identity.ts"
 import type { Event, Message } from "@kiwi/core/protocol.ts"
 import { fold, prKey } from "@kiwi/core/state.ts"
 
-mock.module("@/lib/avatars", () => ({ avatarUrl: () => "", harnessUrl: () => "" }))
+mock.module("@/lib/avatars", () => ({ avatarUrl: () => "", robotUrl: () => "", robotFor: () => "blue", harnessUrl: () => "" }))
 const { TaskInline } = await import("./task-inline")
 
 describe("a task opened inline", () => {

@@ -120,7 +120,7 @@ export class ChannelInfo {
 
     setIcon: Effect.fn("Channel.setIcon")({ self: this }, function* (this: ChannelInfo, icon: ChannelIcon | null) {
       yield* this.ch.ownerOnly();
-      if (icon !== null && !wellFormedIcon(icon)) return yield* new Rejected(`an icon is one emoji, or a png, jpg, gif or webp image of at most ${MAX_ICON_BYTES / 1024}KB`);
+      if (icon !== null && !wellFormedIcon(icon)) return yield* new Rejected(`an icon is a robot head, one emoji, or a png, jpg, gif or webp image of at most ${MAX_ICON_BYTES / 1024}KB`);
       const e = this.ch.access.epoch;
       const signed = icon ? yield* Effect.promise(() => sign(this.ch.identity, { what: "channel-icon", room: this.ch.roomId, icon })) : null;
       const sealed = signed ? { e, ...(yield* Effect.promise(() => seal(this.ch.access.keys[String(e)]!, this.ch.roomId, signed))) } : null;
