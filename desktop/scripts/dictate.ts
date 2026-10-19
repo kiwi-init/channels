@@ -42,7 +42,7 @@ await new Promise<void>((ok, fail) => {
 
 const sizeOf = (dir: string): number => {
   if (!existsSync(dir)) return 0;
-  return readdirSync(dir, { withFileTypes: true }).reduce((n, e) => n + (e.isDirectory() ? sizeOf(join(dir, e.name)) : statSync(join(dir, e.name)).size), 0);
+  return readdirSync(dir, { withFileTypes: true }).reduce((n, e) => n + (e.isDirectory() ? sizeOf(join(dir, e.name)) : e.isFile() ? statSync(join(dir, e.name)).size : 0), 0);
 };
 
 const env: Record<string, string> = {
