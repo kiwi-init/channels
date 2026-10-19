@@ -27,7 +27,8 @@ describe("desktop voice (T11)", () => {
   test("CSP names api.x.ai only when a voice key exists", () => {
     const off = csp("https://r.example");
     expect(off).not.toContain("api.x.ai");
-    expect(off).not.toContain("worker-src");
+    expect(off).toMatch(/worker-src 'self'(;|$)/);
+    expect(off).not.toContain("worker-src 'self' blob:");
     const on = csp("https://r.example", VOICE_ORIGINS);
     const connect = /connect-src ([^;]+)/.exec(on)?.[1]?.split(" ");
     expect(connect).toEqual(["'self'", "https://r.example", "wss://r.example", "https://api.x.ai", "wss://api.x.ai"]);

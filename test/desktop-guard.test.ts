@@ -99,7 +99,8 @@ describe("kiwi-app:// sends a CSP (T184)", () => {
   const directives = (p: string) => new Map(p.split("; ").map((d) => [d.split(" ")[0]!, d.split(" ").slice(1)]));
   test("only the app's own script; its relay over HTTP and WebSocket; nothing framed or posted", () => {
     const d = directives(csp("https://channels.kiwiinit.com"));
-    expect(d.get("script-src")).toEqual(["'self'"]);
+    expect(d.get("script-src")).toEqual(["'self'", "'wasm-unsafe-eval'"]);
+    expect(d.get("worker-src")).toEqual(["'self'"]);
     expect(d.get("connect-src")).toEqual(expect.arrayContaining(["'self'", "https://channels.kiwiinit.com", "wss://channels.kiwiinit.com"]));
     expect(d.get("object-src")).toEqual(["'none'"]);
     expect(d.get("frame-ancestors")).toEqual(["'none'"]);
@@ -107,9 +108,10 @@ describe("kiwi-app:// sends a CSP (T184)", () => {
     expect(csp("http://localhost:8787")).toContain("ws://localhost:8787");
     // A relay that isn't one adds nothing to connect to.
     expect(csp("http://attacker.example")).not.toContain("attacker");
-    for (const p of [csp("https://r.example")]) expect(p).not.toMatch(/unsafe-eval|script-src[^;]*unsafe-inline/);
+    for (const p of [csp("https://r.example")]) expect(p).not.toMatch(/(?<!wasm-)unsafe-eval|script-src[^;]*unsafe-inline/);
     expect(csp("https://r.example")).not.toContain("api.x.ai");
-    expect(csp("https://r.example")).not.toContain("worker-src");
+    expect(csp("https://r.example")).not.toContain("blob:'");
+    expect(directives(csp("https://r.example")).get("worker-src")).toEqual(["'self'"]);
   });
   test("it allows what the hosted web's CSP does (web/public/_headers), except WorkOS: in the app, main signs in", () => {
     const hosted = /Content-Security-Policy: (.*)/.exec(readFileSync(new URL("../web/public/_headers", import.meta.url), "utf8"))![1]!;

@@ -5,6 +5,7 @@ import { defineConfig } from "vite"
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  worker: { format: "es" },
   resolve: {
     alias: {
       "@": resolve(import.meta.dirname, "./src"),

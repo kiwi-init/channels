@@ -1,17 +1,17 @@
-import { Add01Icon, ArrowUp02Icon, Cancel01Icon, Mic01Icon, SmileIcon } from "@hugeicons/core-free-icons"
+import { Add01Icon, ArrowUp02Icon, Cancel01Icon, Loading03Icon, Mic01Icon, SmileIcon } from "@hugeicons/core-free-icons"
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 import type { SendOptions } from "@kiwi/core/client.ts"
 import { MAX_IMAGE_BYTES, RASTER_MIMES, type Color, type Message } from "@kiwi/core/protocol.ts"
 import { matchCommands, parseCommand, type Command } from "@/lib/commands"
 import { compressImage, needsCompressing, renamed } from "@/lib/compress-image"
-import { appendDictation, UNAVAILABLE_MESSAGE, useDictation } from "@/lib/dictation"
+import { appendDictation, MODEL_MB, PRESS_LABEL, useDictation } from "@/lib/dictation"
 import { excerpt } from "@/lib/format"
 import { gifFile, type Gif } from "@/lib/gifs"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 import { CommandBar, CommandList, ComposerQuestion, GifPicker } from "./lazy"
-import { Monogram, errorText, toast } from "./kit"
+import { Alert, Button, Monogram, errorText, toast } from "./kit"
 
 const MENTION = /(^|\s)@([\p{L}\p{N}_.-]*)$/u
 const LEADING = /^(?:\s*@([\p{L}\p{N}_.-]+)[\s,]*)+/u
@@ -416,18 +416,36 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
             {dictation.supported && (
               <button
                 type="button"
-                aria-label={dictation.listening ? "Stop dictation" : "Dictate"}
-                aria-pressed={dictation.listening}
-                title={dictation.unavailable ? UNAVAILABLE_MESSAGE : dictation.listening ? "Stop dictation" : "Dictate"}
-                onClick={dictation.toggle}
-                disabled={disabled || dictation.unavailable}
+                aria-label={PRESS_LABEL[dictation.phase]}
+                aria-pressed={dictation.phase === "listening"}
+                title={dictation.phase === "downloading" ? `${PRESS_LABEL.downloading}, ${Math.round(dictation.progress * 100)}%` : PRESS_LABEL[dictation.phase]}
+                onClick={() => void dictation.press()}
+                disabled={disabled || dictation.phase === "downloading" || dictation.phase === "transcribing"}
                 className={cx(
                   "my-1.5 ml-1.5 flex size-9 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-40",
-                  dictation.listening ? "bg-accent text-accent-ink" : "text-ink-2 hover:bg-wash hover:text-ink"
+                  dictation.phase === "listening" ? "bg-accent text-accent-ink" : "text-ink-2 hover:bg-wash hover:text-ink"
                 )}
               >
-                <Icon icon={Mic01Icon} size={17} strokeWidth={2} />
+                <Icon
+                  icon={dictation.phase === "downloading" || dictation.phase === "transcribing" ? Loading03Icon : Mic01Icon}
+                  size={17}
+                  strokeWidth={2}
+                  className={dictation.phase === "downloading" || dictation.phase === "transcribing" ? "animate-spin" : undefined}
+                />
               </button>
+            )}
+            {dictation.phase === "asking" && (
+              <Alert
+                open
+                onClose={dictation.cancel}
+                title="Dictate on this computer?"
+                message={`Dictation turns your voice into text right here, on this computer. The first time, it downloads a ${MODEL_MB} MB speech model through your relay. After that, your audio never leaves this computer.`}
+              >
+                <Button variant="secondary" onClick={dictation.cancel}>
+                  Not now
+                </Button>
+                <Button onClick={() => void dictation.confirm()}>Download and dictate</Button>
+              </Alert>
             )}
             <button
               type="button"
