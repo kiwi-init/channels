@@ -11,6 +11,9 @@ import { findRoom, fold, toRoster, type ChannelState, type FoldBase, type GuardF
 import { LAST_MARK_MS, lastSeq, Look, orNone, type Agent, type Delivery } from "./shared.ts";
 import { wants } from "./wants.ts";
 
+const CACHE_TRIM_AT = 800;
+const CACHE_KEEP = 300;
+
 export class SessionState {
   readonly ch: Channel;
   private roster: Roster | null = null;
@@ -117,7 +120,7 @@ export class SessionState {
     });
   }
 
-  protected foldState(messages: Message[], roster: Roster, info?: Info): Effect.Effect<ChannelState, never, Relay> {
+  protected foldState(messages: Message[], roster: Roster, info?: Info): Effect.Effect<ChannelState, never, Relay | Cache> {
     return Effect.gen({ self: this }, function* () {
       this.roomsFloor ??= yield* orNone(this.ch.fx.rooms(info));
       this.guardFloor ??= yield* orNone(this.ch.fx.guard(info));
@@ -132,6 +135,11 @@ export class SessionState {
         state = fold(messages, roster, Date.now(), this.roomsFloor, this.guardFloor, this.base, keep);
       }
       if (kept.base && this.publish) yield* this.publish(kept.base);
+      if (messages.length > CACHE_TRIM_AT && !this.partial) {
+        const older: { base?: FoldBase } = {};
+        fold(messages.slice(0, messages.length - CACHE_KEEP), roster, Date.now(), this.roomsFloor, this.guardFloor, this.base, (b) => void (older.base = b));
+        if (older.base) yield* (yield* Cache).trim(this.cfg.roomId, older.base);
+      }
       return state;
     });
   }

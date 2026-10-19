@@ -7,7 +7,7 @@ import type { Identity } from "@kiwi/core/identity.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import type { SigningBudget } from "@kiwi/core/sas.ts";
 import type { FoldBase } from "@kiwi/core/state.ts";
-import { appendCache, dropBase, fileAnswerMemory, fileBlobMemory, fileRecordMemory, keepBase, readBase, readCache } from "./cache.ts";
+import { appendCache, dropBase, fileAnswerMemory, fileBlobMemory, fileRecordMemory, keepBase, readBase, readCache, trimCache } from "./cache.ts";
 import { markSeen, readCursor, readSeen, writeCursor } from "./cursors.ts";
 import { loadConfig, saveAccess, updateConfig, type Config } from "./file.ts";
 import { forgetIdentities, forgetIdentity, identitiesIn, loadIdentity, saveIdentity } from "./identities.ts";
@@ -41,6 +41,7 @@ export class Cache extends Context.Service<
     readonly base: (roomId: string) => Effect.Effect<FoldBase | null>;
     readonly keepBase: (roomId: string, base: FoldBase) => Effect.Effect<void>;
     readonly dropBase: (roomId: string) => Effect.Effect<void>;
+    readonly trim: (roomId: string, base: FoldBase) => Effect.Effect<void>;
   }
 >()("kiwi/Cache") {}
 
@@ -79,6 +80,7 @@ export const LocalFiles: Layer.Layer<Keystore | Cache | Cursor> = Layer.mergeAll
     base: (roomId) => Effect.sync(() => readBase(roomId)),
     keepBase: (roomId, base) => Effect.sync(() => keepBase(roomId, base)),
     dropBase: (roomId) => Effect.sync(() => dropBase(roomId)),
+    trim: (roomId, base) => Effect.sync(() => void trimCache(roomId, base)),
   }),
   Layer.succeed(Cursor, {
     read: (channel, agent) => Effect.sync(() => readCursor(channel, agent)),
