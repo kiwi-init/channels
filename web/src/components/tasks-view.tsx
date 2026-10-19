@@ -4,6 +4,7 @@ import type { ReactNode } from "react"
 import { colorOf, taskId, tasksAwaitingPeople, type ChannelState, type Task } from "@kiwi/core/state.ts"
 import { taskPr, type PrChecks } from "@kiwi/core/work.ts"
 import { formatAgoShort, memberName } from "@/lib/format"
+import { labelOf } from "@/lib/task-labels"
 import { taskGroups, type View } from "@/lib/views"
 import { cx } from "@/lib/utils"
 import { doingNow, type AgentNow } from "./agent-strip"
@@ -11,7 +12,7 @@ import { Icon } from "./icon"
 import { Monogram } from "./kit"
 import { isAgent } from "./message"
 import { PrCell, type Pr } from "./pr-cell"
-import { DecisionMark, labelOf, StateMark } from "./tasks"
+import { DecisionMark, StateMark } from "./tasks"
 
 function checksWords(checks: PrChecks): { icon: typeof CheckmarkCircle02Icon; tone: string; text: string } {
   const total = checks.passed + checks.failed.length + checks.running
@@ -45,7 +46,6 @@ function TaskRow({
   agent,
   waiting,
   open,
-  detail,
   onOpen,
 }: {
   task: Task
@@ -54,7 +54,6 @@ function TaskRow({
   agent: AgentNow | undefined
   waiting: boolean
   open: boolean
-  detail: ReactNode
   onOpen: (id: number) => void
 }) {
   const owner = task.owner ? state.members.get(task.owner) : undefined
@@ -65,7 +64,7 @@ function TaskRow({
       <div
         role="button"
         tabIndex={0}
-        aria-expanded={open}
+        aria-current={open || undefined}
         aria-label={`${taskId(task.id)}, ${task.title}`}
         onClick={() => onOpen(task.id)}
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpen(task.id))}
@@ -108,7 +107,6 @@ function TaskRow({
         </span>
         <time className="text-right text-meta text-ink-3 tabular-nums">{formatAgoShort(task.updatedAt, now)}</time>
       </div>
-      {open && detail}
     </li>
   )
 }
@@ -131,7 +129,6 @@ export function TasksView({
   agents,
   needs,
   open,
-  detail,
   onOpen,
 }: {
   state: ChannelState
@@ -140,7 +137,6 @@ export function TasksView({
   agents: AgentNow[]
   needs: ReactNode
   open: number | null
-  detail: (id: number) => ReactNode
   onOpen: (id: number) => void
 }) {
   const groups = taskGroups(state, view, now)
@@ -166,17 +162,7 @@ export function TasksView({
             {g.tasks.length ? (
               <ul className="divide-y divide-line">
                 {g.tasks.map((t) => (
-                  <TaskRow
-                    key={t.id}
-                    task={t}
-                    state={state}
-                    now={now}
-                    agent={t.owner ? byName.get(t.owner) : undefined}
-                    waiting={waiting.has(t.id)}
-                    open={open === t.id}
-                    detail={open === t.id ? detail(t.id) : null}
-                    onOpen={onOpen}
-                  />
+                  <TaskRow key={t.id} task={t} state={state} now={now} agent={t.owner ? byName.get(t.owner) : undefined} waiting={waiting.has(t.id)} open={open === t.id} onOpen={onOpen} />
                 ))}
               </ul>
             ) : (
