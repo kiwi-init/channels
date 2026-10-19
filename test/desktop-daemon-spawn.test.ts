@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { spawnDaemon } from "../desktop/src/daemon-client.ts";
+import { daemonLogPath, noteDaemon, spawnDaemon } from "../desktop/src/daemon-client.ts";
 
 test.skipIf(process.platform === "win32")("starts `kiwi daemon` for the home, on the app's relay", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kiwi-spawn-"));
@@ -28,6 +28,25 @@ test.skipIf(process.platform === "win32")("starts `kiwi daemon` for the home, on
 });
 
 test("a kiwi that won't start is no uncaught error", async () => {
-  spawnDaemon(path.join(os.tmpdir(), "kiwi-spawn-missing", "kiwi"), os.tmpdir(), "https://relay.example");
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "kiwi-spawn-home-"));
+  spawnDaemon(path.join(os.tmpdir(), "kiwi-spawn-missing", "kiwi"), home, "https://relay.example");
   await Bun.sleep(50);
+  fs.rmSync(home, { recursive: true, force: true });
+});
+
+test.skipIf(process.platform === "win32")("the daemon's output and the app's restarts land in KIWI_HOME/daemon.log, and a log over 1 MB moves to daemon.log.1", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kiwi-spawn-log-"));
+  const home = path.join(dir, "home");
+  fs.mkdirSync(home);
+  fs.writeFileSync(daemonLogPath(home), "x".repeat(1_000_001));
+  const bin = path.join(dir, "kiwi");
+  fs.writeFileSync(bin, "#!/bin/sh\necho started on stdout\necho failed on stderr >&2\n");
+  fs.chmodSync(bin, 0o755);
+  spawnDaemon(bin, home, "https://relay.example");
+  for (let i = 0; i < 100 && !fs.readFileSync(daemonLogPath(home), "utf8").includes("stderr"); i++) await Bun.sleep(20);
+  noteDaemon("the daemon wasn't answering; started it again", home);
+  const log = fs.readFileSync(daemonLogPath(home), "utf8");
+  expect(log).toMatch(/^started on stdout\nfailed on stderr\n\S+Z app: the daemon wasn't answering; started it again\n$/);
+  expect(fs.statSync(`${daemonLogPath(home)}.1`).size).toBe(1_000_001);
+  fs.rmSync(dir, { recursive: true, force: true });
 });

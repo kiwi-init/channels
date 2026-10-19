@@ -17,7 +17,7 @@ import { catchMainErrors } from "./revive.ts";
 import { serveWeb } from "./serve-web.ts";
 import { loadStore, warnIfBroken } from "./store.ts";
 import { startUpdates } from "./updater.ts";
-import { createTray, createWindow, currentWindow, guardContents, markQuitting, refreshTray, showWindow } from "./window.ts";
+import { createTray, createWindow, currentWindow, guardContents, isQuitting, markQuitting, refreshTray, showWindow } from "./window.ts";
 
 function wireIpc(): void {
   wireStoreIpc();
@@ -65,7 +65,7 @@ else {
     app.on("activate", showWindow);
     powerMonitor.on("resume", () => tellKeys({ type: "nudge" }));
     powerMonitor.on("unlock-screen", () => tellKeys({ type: "nudge" }));
-    void keepDaemon().catch(() => {});
+    void keepDaemon(isQuitting).catch(() => {});
   });
 
   app.on("window-all-closed", () => {});
