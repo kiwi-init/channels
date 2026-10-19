@@ -4,7 +4,7 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 
-import { openRows as openSealedRows, packRow, type CachedRow } from "@kiwi/core/cache-row.ts";
+import { openRows as openSealedRows, packRow, packUnread, type CachedRow, type Unread } from "@kiwi/core/cache-row.ts";
 import { Channel, ChannelGone, RelayError, Relay, Unreachable, eachLive, fetchRelay, type Live, type PresenceFields } from "@kiwi/core/client.ts";
 import { encodeJoinCode, newRoomId, ownerFingerprint, type ChannelAccess } from "@kiwi/core/crypto.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
@@ -233,7 +233,7 @@ export class Keyring implements ChannelOps {
     if (f?.presence) await Effect.runPromise(f.presence(p));
   }
 
-  async openRows(code: string, rows: readonly unknown[]): Promise<(Message | null)[]> {
+  async openRows(code: string, rows: readonly unknown[]): Promise<(Message | Unread | null)[]> {
     const access = channelAccess(this.seat(code, true));
     if (!access) return rows.map(() => null);
     return openSealedRows(rows, access.roomId, access.keys);
@@ -277,6 +277,11 @@ export class Keyring implements ChannelOps {
         const key = ch.access.keys[String(ch.access.epoch)];
         const row: CachedRow | null = key && Number.isSafeInteger(ev.message.seq) && ev.message.seq > 0 ? await packRow(key, ch.roomId, ch.access.epoch, ev.message).catch(() => null) : null;
         return { _tag: "Message", message: ev.message, row };
+      }
+      case "Unread": {
+        const key = ch.access.keys[String(ch.access.epoch)];
+        const row: CachedRow | null = key ? await packUnread(key, ch.roomId, ch.access.epoch, ev.envelope).catch(() => null) : null;
+        return { _tag: "Unread", seq: ev.envelope.seq, row };
       }
       case "Presence":
         return { _tag: "Presence", presence: ev.presence };
