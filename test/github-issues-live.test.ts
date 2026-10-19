@@ -39,6 +39,7 @@ describe("kiwi task add --issue on a live channel", () => {
         const path = new URL(req.url).pathname;
         calls.push({ method: req.method, path, body: await req.text() });
         if (path === "/repos/ojow/channels/installation") return Response.json({ id: 1 });
+        if (path === "/repos/ojow/channels" && req.method === "GET") return Response.json({ permissions: { push: req.headers.get("authorization") === "Bearer ghu_owner" } });
         if (path === "/app/installations/1/access_tokens") return Response.json({ token: "ghs_x", expires_at: new Date(Date.now() + 3_600_000).toISOString() });
         if (path === "/repos/ojow/channels/issues/12" && req.method === "GET")
           return Response.json({ title: "Copy icons do nothing", body: "On code blocks and the invite.", html_url: "https://github.com/ojow/channels/issues/12", state: "open" });
@@ -52,7 +53,7 @@ describe("kiwi task add --issue on a live channel", () => {
     server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir, githubApp: githubAppFrom({ appId: "1", privateKey: pem, api: github.url.origin }) });
     owner = await setupChannel(server.url.origin, { ownerName: "jon" });
     await owner.ownerCh.send("repos: ojow/channels", { kind: "event", ev: { op: "repos.set", repos: ["ojow/channels"] } });
-    await owner.ownerCh.setGithubRepos(["ojow/channels"]);
+    await owner.ownerCh.setGithubRepos(["ojow/channels"], "ghu_owner");
     const computer = await pairComputer(owner.person);
     const { id, ch } = await joinAgent(owner, "dev", computer);
     dev = new AgentSession("issues", { ...ch.access, relay: owner.relay, code: owner.code }, id, () => {});
