@@ -11,8 +11,8 @@ function failWith(make: string): string {
     const script = join(dir, "fail.ts");
     writeFileSync(
       script,
-      `import * as Cause from "effect/Cause";
-import * as Effect from "effect/Effect";
+      `import * as Cause from ${JSON.stringify(Bun.resolveSync("effect/Cause", ROOT))};
+import * as Effect from ${JSON.stringify(Bun.resolveSync("effect/Effect", ROOT))};
 import { RelayError, Unreachable } from "${ROOT}/packages/core/src/client.ts";
 import { LocalFiles } from "${ROOT}/src/config.ts";
 import { fail } from "${ROOT}/src/cli/fail.ts";
@@ -20,7 +20,7 @@ const err = ${make};
 await Effect.runPromise(Effect.provide(fail(Cause.fail(err)), LocalFiles));
 `,
     );
-    const r = Bun.spawnSync([process.execPath, script], { cwd: ROOT, env: { ...process.env, KIWI_HOME: dir }, stdout: "pipe", stderr: "pipe" });
+    const r = Bun.spawnSync([process.execPath, "--no-install", script], { cwd: ROOT, env: { ...process.env, KIWI_HOME: dir }, stdout: "pipe", stderr: "pipe" });
     return r.stderr.toString().trim();
   } finally {
     rmSync(dir, { recursive: true, force: true });

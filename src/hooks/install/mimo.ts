@@ -22,7 +22,7 @@ type Part = { type: "text"; text: string };
 interface Client {
   session: {
     get(options: { path: { id: string } }): Promise<{ data?: { parentID?: string } }>;
-    promptAsync(options: { path: { id: string }; body: { parts: Part[] } }): Promise<unknown>;
+    promptAsync(options: { path: { id: string }; body: { parts: Part[] }; throwOnError: true }): Promise<unknown>;
   };
 }
 interface Kiwi {
@@ -36,6 +36,7 @@ type Event = { type: string; properties?: { sessionID?: string; info?: { id?: st
 const MARK = "${MARK}";
 const LISTEN = ${JSON.stringify(listen)};
 const RETRY_MS = 30_000;
+const WAKE_RETRY_FIRST_MS = 1_000;
 const holder = globalThis as { __kiwi?: Kiwi };
 const kiwi: Kiwi = (holder.__kiwi ??= { mark: MARK, client: null, parents: new Map(), waiting: new Map() });
 
@@ -74,8 +75,20 @@ async function watch(id: string, cwd: string): Promise<void> {
     if (!kiwi.waiting.has(id)) return;
     kiwi.waiting.set(id, null);
     const text = ran.code === 2 ? ran.err.trim() : "";
-    if (text && kiwi.client) await kiwi.client.session.promptAsync({ path: { id }, body: { parts: [{ type: "text", text }] } }).catch(() => undefined);
+    if (text) await wake(id, text);
     else await new Promise((r) => setTimeout(r, RETRY_MS));
+  }
+}
+
+function landed(sent: unknown): boolean {
+  return !(typeof sent === "object" && sent !== null && "error" in sent && sent.error !== undefined);
+}
+
+async function wake(id: string, text: string): Promise<void> {
+  for (let wait = WAKE_RETRY_FIRST_MS; kiwi.waiting.has(id); wait = Math.min(wait * 2, RETRY_MS)) {
+    const prompt = kiwi.client?.session.promptAsync({ path: { id }, body: { parts: [{ type: "text", text }] }, throwOnError: true });
+    if (prompt && (await prompt.then(landed, () => false))) return;
+    await new Promise((r) => setTimeout(r, wait));
   }
 }
 
