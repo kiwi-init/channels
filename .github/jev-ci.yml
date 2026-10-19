@@ -71,7 +71,7 @@ jobs:
 
   test-unit:
     name: test / unit
-    inputs: ["src/**", ".github/workflows/ci.yml", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "site/install.ps1", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/action-pins.ts", "desktop/src/**", "desktop/build/entitlements.mac.plist", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
+    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release-build.yml", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "site/install.ps1", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/action-pins.ts", "desktop/src/**", "desktop/build/entitlements.mac.plist", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs the unit tests with bun test: every test/*.test.ts except the slow suites in
@@ -109,10 +109,19 @@ jobs:
       store's CSP allows api.x.ai only when an xAI key is saved, the project key never reaches
       the snapshot or the token IPC result, consent defaults off, and
       desktop/build/entitlements.mac.plist has the audio-input entitlement. And
+      test/desktop-daemon-keeper.test.ts: the app checks its daemon every 30s and starts it again
+      when it stops answering, retrying a daemon that won't start from 5s up to every 5 minutes, and
+      test/desktop-daemon-spawn.test.ts: its output and the app's restarts land in
+      KIWI_HOME/daemon.log, rotated at 1 MB. And
+      test/release-signing.test.ts: release-build.yml's Package step fails a tag release that has no
+      Mac signing secrets, while a rehearsal and the Linux build still build unsigned. And
       test/desktop-update-asset.test.ts: a Mac that can't replace itself (translocated, on its disk
       image, in a folder it can't write, or after this version's swap failed) offers the release before
       downloading, and the swap script leaves the old app and a marker when the move fails;
       test/desktop-update-blocked.test.ts (macOS): such an app offers the release and downloads nothing. And
+      test/desktop-update-failures.test.ts (macOS): a temp folder that can't be made, or a download
+      that doesn't match its checksum, ends at available with the reason in main.log (and a retry in
+      30 minutes), and a staged update whose folder went away doesn't throw at quit. And
       test/desktop-revive.test.ts: a crashed window page reloads by itself up to three times a
       minute, then asks Reload or Quit; a hung one asks Wait or Reload; main-process errors go to
       main.log in the logs folder. And
@@ -183,7 +192,7 @@ jobs:
   test-flows-b:
     name: test / flows-b
     inputs: ["src/**", "packages/core/**", "test/owner-cli.ts"]
-    imports_from: ["test/join-seats.test.ts", "test/read-receipts.test.ts", "test/daemon-pair.test.ts", "test/sh-escape.test.ts", "test/reclaim.test.ts", "test/wake-yourself.test.ts", "test/seats.test.ts", "test/multi-seat.test.ts", "test/handoff.test.ts", "test/hooks-once.test.ts"]
+    imports_from: ["test/join-seats.test.ts", "test/read-receipts.test.ts", "test/daemon-pair.test.ts", "test/sh-escape.test.ts", "test/reclaim.test.ts", "test/wake-yourself.test.ts", "test/seats.test.ts", "test/multi-seat.test.ts", "test/handoff.test.ts", "test/hooks-once.test.ts", "test/hooks-hung-relay.test.ts"]
     always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs slow agent-flow tests against a real local relay and the kiwi CLI: join-seats
@@ -200,7 +209,11 @@ jobs:
       (src/hooks/listen.ts waits for the session's answering hook, src/hooks/delivered.ts), and the
       listener keeps listening for the next one; and a prompt hook whose output never reaches the
       session leaves the message unread for the next hook (src/hooks/run.ts commits what was
-      read only after printing it). Fails if joining, seats, hooks, pairing, the
+      read only after printing it), and a hand-over cut at its size limit commits only the
+      messages shown, so the next hook brings the rest. Then hooks-hung-relay: with the relay accepting connections
+      but never answering, the prompt and stop hooks each return in under 2s (src/hooks/run.ts
+      puts the whole hook under one deadline; packages/core/src/client/relay.ts gives every
+      relay request 30s), and what they couldn't show comes with the next prompt. Fails if joining, seats, hooks, pairing, the
       daemon, kiwi sh, handoff or the relay change behavior.
 
   build:

@@ -11,6 +11,7 @@ import {
   backgroundTasks,
   cursorStopFollowup,
   extraInstalled,
+  fitting,
   grokMonitorListens,
   hooksListen,
   hooksStatus,
@@ -701,4 +702,11 @@ test("a Kimi Code Stop reason is the answers' plain text, for stderr", () => {
       { kind: "block", text: "b" },
     ]),
   ).toBe("a\n\nb");
+});
+
+test("a hand-over keeps whole messages up to its size limit, and cuts a single message bigger than the limit", () => {
+  expect(fitting(["aaa", "bbb", "ccc"], 7)).toEqual({ count: 2, text: "aaa\nbbb" });
+  expect(fitting(["aaa", "bbb"], 7)).toEqual({ count: 2, text: "aaa\nbbb" });
+  expect(fitting(["a".repeat(10), "b"], 4)).toEqual({ count: 1, text: "aaaa …" });
+  expect(fitting([], 4)).toEqual({ count: 0, text: "" });
 });
