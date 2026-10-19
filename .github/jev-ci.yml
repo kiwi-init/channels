@@ -111,9 +111,11 @@ jobs:
       counted as installed only while it is current, removed on uninstall without touching a kiwi.ts that
       isn't Kiwi's, the file passing tsc --strict with one export, and, loaded with a fake MiMoCode client
       and a fake listener, naming a child session's root on the agent's shell and starting a turn in that
-      root session when its listener exits with messages, then listening again; a wake MiMoCode refuses
+      root session when its listener exits with messages, then listening again with the handoff token the
+      listener printed on stdout, so Kiwi counts those messages delivered only once the wake landed, and
+      only a UUID-shaped landed token settling a handoff (handoffFrom in src/hooks/listen.ts); a wake MiMoCode refuses
       (promptAsync rejecting, or answering with an error) sent again with backoff before the listener runs
-      again, since the listener already counted those messages delivered, and no longer sent once the
+      again, and no longer sent once the
       session is deleted; promptAsync asked to throw on an HTTP error, so a client answering with data
       only, which returns nothing for one, still has the wake sent again.
       Every test file runs after test/setup.ts, which points each harness's folder, MiMoCode's (KIWI_MIMO_DIR)
@@ -292,7 +294,7 @@ jobs:
   test-flows-b:
     name: test / flows-b
     inputs: ["src/**", "packages/core/**", "test/owner-cli.ts"]
-    imports_from: ["test/join-seats.test.ts", "test/read-receipts.test.ts", "test/daemon-pair.test.ts", "test/sh-escape.test.ts", "test/reclaim.test.ts", "test/wake-yourself.test.ts", "test/seats.test.ts", "test/multi-seat.test.ts", "test/handoff.test.ts", "test/hooks-once.test.ts", "test/hooks-hung-relay.test.ts", "test/offline-read.test.ts", "test/hooks-reentry.test.ts"]
+    imports_from: ["test/join-seats.test.ts", "test/read-receipts.test.ts", "test/daemon-pair.test.ts", "test/sh-escape.test.ts", "test/reclaim.test.ts", "test/wake-yourself.test.ts", "test/seats.test.ts", "test/multi-seat.test.ts", "test/handoff.test.ts", "test/hooks-once.test.ts", "test/hooks-hung-relay.test.ts", "test/offline-read.test.ts", "test/hooks-reentry.test.ts", "test/mimo-wake-restart.test.ts"]
     always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs slow agent-flow tests against a real local relay and the kiwi CLI: join-seats
@@ -332,7 +334,14 @@ jobs:
       inline limit, shared between the seats a session serves in src/hooks/run.ts), and every
       message it left out comes with a later hook; and past the context line the Stop hook asks once
       for a checkpoint of each open task, not while stop_hook_active, and again only after the
-      context came back under it (src/hooks/context-line.ts). Fails if joining, seats, hooks, pairing, the
+      context came back under it (src/hooks/context-line.ts). Then mimo-wake-restart:
+      Kiwi's MiMoCode plugin (src/hooks/install/mimo.ts) loaded against a real listener, whose wake
+      MiMoCode keeps refusing until MiMoCode exits mid-retry; the resumed session still gets those
+      messages, because the listener writes a pending handoff per token (src/hooks/delivered.ts) that becomes
+      the delivered marker only when the plugin's next listen names the token of the wake that landed
+      (src/hooks/listen.ts, src/hooks/run.ts), and the next message isn't repeated with them; and two
+      MiMoCode processes on one session, each landing its wake of the same message, count it delivered
+      once instead of clearing each other's handoff and waking it back and forth. Fails if joining, seats, hooks, pairing, the
       daemon, kiwi sh, handoff or the relay change behavior.
 
   build:

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { howMessagesReachYou } from "../src/hooks.ts";
 import { extraInstalled, hooksStatus, installExtra, uninstallExtra } from "../src/hooks/install/extra.ts";
 import { installMimo, mimoConfigRoot, mimoInstalled, mimoPluginPath, mimoPluginSource, uninstallMimo } from "../src/hooks/install/mimo.ts";
+import { handoffFrom } from "../src/hooks/listen.ts";
 
 const made: string[] = [];
 const prev = new Map<string, string | undefined>();
@@ -57,6 +58,17 @@ test("MiMoCode's plugin folder: KIWI_MIMO_DIR, then an absolute MIMOCODE_HOME, t
   expect(mimoPluginPath({ MIMOCODE_HOME: "/m" })).toBe("/m/config/plugin/kiwi.ts");
 });
 
+test("a listen without landed hands over at once; with it, only a token shaped like the ones the listener prints can settle a handoff", () => {
+  const token = crypto.randomUUID();
+  expect(handoffFrom(undefined)).toEqual({ kind: "at-once" });
+  expect(handoffFrom(null)).toEqual({ kind: "acked", landed: null });
+  expect(handoffFrom(token)).toEqual({ kind: "acked", landed: token });
+  expect(handoffFrom(`extra.${token}`)).toEqual({ kind: "acked", landed: null });
+  expect(handoffFrom(`../${token}`)).toEqual({ kind: "acked", landed: null });
+  expect(handoffFrom(token.toUpperCase())).toEqual({ kind: "acked", landed: null });
+  expect(handoffFrom(42)).toEqual({ kind: "acked", landed: null });
+});
+
 test("install writes the plugin once, uninstall removes only a plugin of Kiwi's", () => {
   const dir = scratch("hk-mimo-");
   setEnv({ KIWI_MIMO_DIR: dir });
@@ -99,7 +111,7 @@ test("the plugin names a child session's root on the agent's shell, and a messag
   const fake = join(dir, "listen.sh");
   writeFileSync(
     fake,
-    `#!/bin/sh\necho "$MIMOCODE_SESSION_ID $(cat)" >> ${JSON.stringify(calls)}\nif [ ! -e ${JSON.stringify(join(dir, "once"))} ]; then touch ${JSON.stringify(join(dir, "once"))}; echo "New Kiwi Channels messages for you (ch)" >&2; exit 2; fi\nsleep 30\n`,
+    `#!/bin/sh\necho "$MIMOCODE_SESSION_ID $(cat)" >> ${JSON.stringify(calls)}\nif [ ! -e ${JSON.stringify(join(dir, "once"))} ]; then touch ${JSON.stringify(join(dir, "once"))}; echo "handoff-1"; echo "New Kiwi Channels messages for you (ch)" >&2; exit 2; fi\nsleep 30\n`,
   );
   chmodSync(fake, 0o755);
   const file = join(dir, "kiwi.ts");
@@ -121,9 +133,10 @@ test("the plugin names a child session's root on the agent's shell, and a messag
   await until("the wake", () => prompted.length === 1);
   expect(prompted[0]).toEqual({ path: { id: "ses_root" }, body: { parts: [{ type: "text", text: "New Kiwi Channels messages for you (ch)" }] }, throwOnError: true });
   await until("the listener started again", () => existsSync(calls) && readFileSync(calls, "utf8").trim().split("\n").length === 2);
-  const [first] = readFileSync(calls, "utf8").trim().split("\n");
+  const [first, second] = readFileSync(calls, "utf8").trim().split("\n");
   expect(first).toStartWith("ses_root ");
-  expect(JSON.parse(first!.slice("ses_root ".length))).toEqual({ session_id: "ses_root", cwd: dir, hook_event_name: "listen" });
+  expect(JSON.parse(first!.slice("ses_root ".length))).toEqual({ session_id: "ses_root", cwd: dir, hook_event_name: "listen", landed: null });
+  expect(JSON.parse(second!.slice("ses_root ".length))).toEqual({ session_id: "ses_root", cwd: dir, hook_event_name: "listen", landed: "handoff-1" });
   await hooks["shell.env"]({ cwd: dir, sessionID: "ses_root" }, { env: {} });
   expect(readFileSync(calls, "utf8").trim().split("\n")).toHaveLength(2);
   await hooks.event({ event: { type: "session.deleted", properties: { info: { id: "ses_root" } } } });

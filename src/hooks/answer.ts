@@ -53,6 +53,7 @@ export interface HookInput {
   conversation_id?: unknown;
   cursor_version?: unknown;
   transcript_path?: unknown;
+  landed?: unknown;
 }
 
 export function freshAt(input: Pick<HookInput, "source">, now: number): number | null {
