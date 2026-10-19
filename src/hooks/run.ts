@@ -3,9 +3,9 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { ChannelGone } from "@kiwi/core/client.ts";
 import { Keystore } from "../config.ts";
-import { here, kimiHookHere, noteHarnessSession, sameSeat, seatsHeldAnywhere, type Here } from "../seats.ts";
+import { here, kimiHookHere, noteHarnessSession, onGrokBot, sameSeat, seatsHeldAnywhere, type Here } from "../seats.ts";
 import { writeSync } from "node:fs";
-import { answer, hookOutput, kimiReason, printed, tellKimi, type Answer, type HookInput } from "./answer.ts";
+import { answer, hookOutput, kimiReason, printed, seatBudget, tellKimi, type Answer, type HookInput } from "./answer.ts";
 import { holdAnswering } from "./delivered.ts";
 import { handoffFrom, listen, type Served } from "./listen.ts";
 import { refreshListeners, seatsFor } from "./listeners.ts";
@@ -26,7 +26,7 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
   }
   const kimi = event === KIMI_STOP;
   const model = typeof input.model === "string" && input.model.trim() ? input.model.trim() : undefined;
-  const cursor = typeof input.cursor_version === "string" && typeof input.conversation_id === "string" && input.conversation_id ? input.conversation_id : null;
+  const cursor = typeof input.cursor_version === "string" && typeof input.conversation_id === "string" && input.conversation_id && !onGrokBot() ? input.conversation_id : null;
   const who: Here = kimi
     ? kimiHookHere()
     : cursor
@@ -54,8 +54,8 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
       Effect.catchCause(() => Effect.succeed(0)),
     );
   }
-  const one = ({ b, cfg }: Served) =>
-    answer(kimi ? "stop" : event, input, b, cfg, who).pipe(
+  const one = ({ b, cfg }: Served, budget: number) =>
+    answer(kimi ? "stop" : event, input, b, cfg, who, budget).pipe(
       Effect.catchCause((cause) => {
         const err = Cause.squash(cause);
         if (err instanceof ChannelGone) return Effect.as(err.why === "closed" ? keys.wipeChannel(b.alias) : keys.forgetMember(b.alias, b.as), null);
@@ -75,7 +75,8 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
           session,
         ),
       );
-    const got = (yield* Effect.forEach(served, one, { concurrency: "unbounded" })).filter((a) => a !== null);
+    const budget = seatBudget(served.length);
+    const got = (yield* Effect.forEach(served, (x) => one(x, budget), { concurrency: "unbounded" })).filter((a) => a !== null);
     if (kimi) {
       if (!got.length) return 0;
       const code = tellKimi(kimiReason(got));

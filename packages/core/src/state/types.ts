@@ -68,6 +68,7 @@ interface TaskNote {
   by: string;
   ts: number;
   text: string;
+  checkpoint?: true;
 }
 
 interface TaskProof {

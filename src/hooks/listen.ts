@@ -7,9 +7,9 @@ import { writeSync } from "node:fs";
 import { openSession } from "../agent.ts";
 import { Cursor, loadConfig, type ChannelConfig } from "../config.ts";
 import { wakeOn } from "../daemon/reach.ts";
-import { formatMessage } from "@kiwi/core/format.ts";
+import { formatMessage, messageHead } from "@kiwi/core/format.ts";
 import type { Binding, Here } from "../seats.ts";
-import { fitting, moreNote } from "./answer.ts";
+import { handOver, seatBudget } from "./answer.ts";
 import { answeringNow, deliveredUpTo, noteDelivered, noteHeard, notePending, settlePending } from "./delivered.ts";
 import { hooksListen, installedListenSeconds } from "./install/claude.ts";
 import { mimoInstalled } from "./install/mimo.ts";
@@ -22,9 +22,17 @@ export interface Served {
   cfg: ChannelConfig;
 }
 
+export function listenHead(alias: string, mc: string, share: number): string {
+  const full = `New Kiwi Channels messages for you (${alias}). Handle them; answer with \`${mc} reply N "…"\`:`;
+  if (full.length + 2 <= share) return full;
+  const short = `New Kiwi Channels messages (${alias}):`;
+  return short.length + 2 <= share ? short : short.slice(0, Math.max(0, share - 2));
+}
+
 interface Heard {
   seq: number | null;
   text: string;
+  head: number;
 }
 
 const ANSWERED_WAIT_MS = 20_000;
@@ -41,13 +49,13 @@ const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, w
     .listen(
       (m, state) =>
         Effect.andThen(
-          Effect.sync(() => void got.push({ seq: m.seq, text: formatMessage(m, state.trust.get(m.seq), state, s.me) })),
+          Effect.sync(() => void got.push({ seq: m.seq, text: formatMessage(m, state.trust.get(m.seq), state, s.me), head: messageHead(m, state.trust.get(m.seq), state, s.me).length + 2 })),
           woke,
         ),
       {
         onNotice: (text) =>
           Effect.andThen(
-            Effect.sync(() => void got.push({ seq: null, text: `* ${text}` })),
+            Effect.sync(() => void got.push({ seq: null, text: `* ${text}`, head: text.length + 2 })),
             woke,
           ),
         marks: false,
@@ -143,18 +151,23 @@ export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Serv
     heard = 0;
     enough = yield* Deferred.make<void>();
   }
-  const told = armed
-    .filter((a) => a.got.length)
-    .map((a) => {
-      const mc = mcFor(a.b.alias, a.b.as, process.cwd(), who);
-      const fit = fitting(a.got.map((g) => g.text));
-      const shown = a.got.slice(0, fit.count);
-      const rest = a.got.slice(fit.count).filter((g) => g.seq !== null).length;
-      const seqs = shown.flatMap((g) => (g.seq === null ? [] : [g.seq]));
-      return { b: a.b, seqs, upTo: rest ? Math.max(0, ...seqs) : a.reached(), text: rest ? `${fit.text}\n${moreNote(rest, mc)}` : fit.text, mc };
-    });
+  const withNews = armed.filter((a) => a.got.length);
+  const share = seatBudget(withNews.length);
+  const told = withNews.map((a) => {
+    const mc = mcFor(a.b.alias, a.b.as, process.cwd(), who);
+    const head = listenHead(a.b.alias, mc, share);
+    const hand = handOver(
+      a.got.map((g) => ({ line: g.text, seq: g.seq ?? 0, head: g.head })),
+      Math.max(0, share - head.length - 2),
+      mc,
+    );
+    const shown = a.got.slice(0, hand.count);
+    const rest = a.got.slice(hand.count).filter((g) => g.seq !== null).length;
+    const seqs = shown.flatMap((g) => (g.seq === null ? [] : [g.seq]));
+    return { b: a.b, seqs, upTo: rest ? Math.max(0, ...seqs) : a.reached(), text: hand.text, head };
+  });
   if (extension && !told.length) return 0;
-  const blocks = told.map(({ b, text, mc }) => `New Kiwi Channels messages for you (${b.alias}). Handle them; answer with \`${mc} reply N "…"\`:\n${text}\n`);
+  const blocks = told.map(({ head, text }) => `${head}\n${text}\n`);
   const token = randomUUID();
   if (handoff.kind === "acked") for (const { b, upTo } of told) notePending(b.alias, b.as, who.session ?? "", token, upTo);
   try {

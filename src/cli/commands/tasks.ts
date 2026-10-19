@@ -98,13 +98,18 @@ export const taskCommands: Record<string, Command> = {
         else if (sub === "cancel") state = yield* s.taskUpdate(id, { state: "cancelled", note });
         else if (sub === "drop") state = yield* s.taskUpdate(id, { owner: null, note });
         else if (sub === "note") state = yield* s.taskUpdate(id, { note: note ?? (yield* die('usage: kiwi task note T7 "…"')) });
-        else if (sub === "proof") {
+        else if (sub === "checkpoint") {
+          const where = opt.file !== undefined ? yield* readText(opt.file) : args.slice(3).join(" ") || opt.note || "";
+          if (!where.trim()) return yield* die("usage: kiwi task checkpoint T7 --file note.md (where the work stands: branch, last commit, done, next, traps)");
+          state = yield* s.taskUpdate(id, { note: where.trim(), checkpoint: true });
+        } else if (sub === "proof") {
           const url = args[3] ?? (yield* die('usage: kiwi task proof T7 https://… [--label "preview"] [--note "…"]'));
           state = yield* s.taskUpdate(id, { proof: { url, ...(opt.label ? { label: opt.label } : {}) }, ...(opt.note ? { note: opt.note } : {}) });
         } else return yield* die(`unknown task command "${sub}"`);
         const t = state.tasks.get(id)!;
         out(`${taskId(id)} ${taskStateWord(t)}${t.owner ? ` @${t.owner}` : ""}: ${inlineText(t.title, 200)}`);
         if ((sub === "done" || sub === "review") && t.areas?.length) out(`folders it changed (for kiwi task who): ${t.areas.join(", ")}`);
+        if (sub === "checkpoint") out(`checkpoint saved: a new session of yours starts ${taskId(id)} from it`);
       }),
     ),
 
