@@ -4,6 +4,7 @@ import { ops } from "../channel-ops"
 import { forgetHistory } from "../history"
 import { migrateLegacy } from "../legacy-seats"
 import { migrateChannels, saveChannels, secrets, type ChannelView } from "../secrets"
+import { dropWrite } from "../write-behind"
 
 export const CHANGED = "mc:channels"
 export function changed(): void {
@@ -92,6 +93,7 @@ export async function forgetChannel(code: string): Promise<void> {
   if (member) void forgetHistory(member.access.roomId, member.identity.pk).catch(() => {})
   localStorage.removeItem(MEMBER_KEY(code))
   localStorage.removeItem(PENDING_KEY(code))
+  dropWrite(RECENT_KEY(code))
   localStorage.removeItem(RECENT_KEY(code))
   changed()
   await ops().forget(code)
