@@ -56,7 +56,21 @@ function hideEnv(keys: string[]): void {
   }
 }
 
-const SESSION_ENVS = ["CODEX_THREAD_ID", "GEMINI_CLI", "CURSOR_AGENT", "GROK_SESSION_ID", "GROK_AGENT", "KIWI_NO_HOOKS", "CLAUDECODE", "PI_CODING_AGENT", "KIWI_PI_PID", "KIWI_PI_SESSION"];
+const SESSION_ENVS = [
+  "CODEX_THREAD_ID",
+  "GEMINI_CLI",
+  "CURSOR_AGENT",
+  "GROK_SESSION_ID",
+  "GROK_AGENT",
+  "KIWI_NO_HOOKS",
+  "CLAUDECODE",
+  "PI_CODING_AGENT",
+  "KIWI_PI_PID",
+  "KIWI_PI_SESSION",
+  "MIMOCODE",
+  "MIMOCODE_PID",
+  "MIMOCODE_SESSION_ID",
+];
 
 afterEach(() => {
   for (const [k, v] of prev) {
@@ -113,6 +127,9 @@ function realHomeStamp(): string {
     join(root, ".kimi-code", "config.toml"),
     join(root, ".pi"),
     join(root, ".pi", "agent", "extensions", "kiwi.ts"),
+    join(root, ".config", "mimocode"),
+    join(root, ".config", "mimocode", "plugin"),
+    join(root, ".config", "mimocode", "plugin", "kiwi.ts"),
     join(root, ".claude"),
     join(root, ".claude", "settings.json"),
   ];
@@ -131,7 +148,7 @@ function realHomeStamp(): string {
 
 test("a harness session during tests does not touch the real home", () => {
   const root = homedir();
-  for (const key of ["KIWI_CODEX_DIR", "KIWI_GEMINI_DIR", "KIWI_CURSOR_DIR", "KIWI_GROK_DIR", "KIWI_KIMI_DIR", "KIWI_PI_DIR", "CLAUDE_CONFIG_DIR"]) {
+  for (const key of ["KIWI_CODEX_DIR", "KIWI_GEMINI_DIR", "KIWI_CURSOR_DIR", "KIWI_GROK_DIR", "KIWI_KIMI_DIR", "KIWI_PI_DIR", "KIWI_MIMO_DIR", "CLAUDE_CONFIG_DIR"]) {
     const dir = process.env[key];
     expect(dir, key).toBeTruthy();
     expect(dir!.startsWith(`${root}/`), key).toBe(false);
@@ -159,6 +176,7 @@ test("a harness session during tests does not touch the real home", () => {
   expect(existsSync(join(process.env.KIWI_GROK_DIR!, "hooks", "kiwi.json"))).toBe(true);
   expect(existsSync(join(process.env.KIWI_KIMI_DIR!, "config.toml"))).toBe(true);
   expect(existsSync(join(process.env.KIWI_PI_DIR!, "extensions", "kiwi.ts"))).toBe(true);
+  expect(existsSync(join(process.env.KIWI_MIMO_DIR!, "plugin", "kiwi.ts"))).toBe(true);
   uninstallDetected();
   expect(realHomeStamp()).toBe(before);
 });
@@ -294,6 +312,7 @@ test("a harness opted out stays out of install, and a named install turns it bac
     KIWI_GROK_DIR: absent,
     KIWI_KIMI_DIR: absent,
     KIWI_PI_DIR: absent,
+    KIWI_MIMO_DIR: absent,
   });
   updateConfig((c) => {
     c.harnessHooks = { codex: "off" };
@@ -606,6 +625,7 @@ test("a hook through a wrapper in kiwi's install folder counts only when the wra
     KIWI_CURSOR_DIR: join(elsewhere, "none"),
     KIWI_KIMI_DIR: join(elsewhere, "none"),
     KIWI_PI_DIR: join(elsewhere, "none"),
+    KIWI_MIMO_DIR: join(elsewhere, "none"),
   };
   const forward = (target: string) => `exec ${shellQuoted(process.execPath)} ${shellQuoted(target)} "$@"`;
   const write = (program: string) => {
