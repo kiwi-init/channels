@@ -26,6 +26,7 @@ export function NeedsYou({
   now,
   roomId,
   me,
+  decisions,
   escalations,
   questions,
   reviews,
@@ -40,6 +41,8 @@ export function NeedsYou({
   now: number
   roomId: string
   me: string
+  /** Asks to this person by name: the oldest also waits above the composer, where it is answered. */
+  decisions: Message[]
   /** Escalations to this person nobody has answered yet. */
   escalations: Message[]
   questions: Message[]
@@ -57,7 +60,7 @@ export function NeedsYou({
   const requests = p.isOwner ? p.requests : []
   const items: { key: string; node: ReactNode }[] = [
     ...requests.map((r) => ({ key: `r${r.id}`, node: <RequestItem r={r} roomId={roomId} now={now} /> })),
-    ...[...escalations, ...questions].map((m) => ({
+    ...[...decisions, ...escalations, ...questions].map((m) => ({
       key: `a${m.seq}`,
       node: <AskItem m={m} me={me} now={now} nameOf={nameOf} agent={agentOf(m.from)} onReply={onReply} onJump={onJump} />,
     })),

@@ -256,7 +256,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
       {running && <CommandBar command={running.command} args={running.args} />}
 
       {talk?.bar}
-      {replyTo && !thread && (
+      {replyTo && !thread && replyTo.seq !== asking?.seq && (
         <div className="mb-1.5 ml-3 flex items-center gap-2 rounded-ctl px-2 text-meta text-ink-2">
           <span className="min-w-0 truncate">
             Replying to <span className="font-medium text-ink">{nameOf(replyTo.from)}</span> <span className="text-ink-3">{excerpt(replyTo.body, 80)}</span>

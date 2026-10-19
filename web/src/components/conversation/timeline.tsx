@@ -41,6 +41,8 @@ export interface RowsContext {
   showsReceipt: (m: Message, anchor: string | undefined) => boolean
   onReply: (m: Message) => void
   decisions: ReadonlySet<number>
+  /** The question waiting above the composer, which the feed shows only as a pointer to it. */
+  banner: number | null
   onAnswer: (m: Message, text: string) => void
   onReact: (m: Message) => void
   onJump: (seq: number) => void
@@ -73,6 +75,7 @@ export function rowMakers(c: RowsContext) {
     showsReceipt,
     onReply,
     decisions,
+    banner,
     onAnswer,
     onReact,
     onJump,
@@ -112,6 +115,7 @@ export function rowMakers(c: RowsContext) {
       nameOf={nameOf}
       onReply={anchor ? undefined : onReply}
       onChoose={!anchor && decisions.has(m.seq) ? (choice) => onAnswer(m, choice) : undefined}
+      inBanner={!anchor && banner === m.seq}
       chosen={chosen(m)}
       prs={prsOf(m)}
       onReact={anchor ? undefined : onReact}

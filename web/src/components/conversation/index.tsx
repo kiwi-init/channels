@@ -108,10 +108,9 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const arrivals = useMemo(() => messages.filter((m) => m.from !== me && !isReaction(m)).length, [messages, me])
   const cards = useMemo(() => taskCards(state, messages), [state, messages])
   const { decisions, escalations, questions } = useMemo(() => asksFor(state.openAsks, me), [state.openAsks, me])
-  const needs = decisions.length + escalations.length + questions.length
-  useChannelNews(roomId, Math.max(head, messages.at(-1)?.seq ?? 0), arrivals, 0, needs)
-
   const reviews = useMemo(() => reviewsFor(state.tasks.values(), me, iAmPerson), [state.tasks, me, iAmPerson])
+  const needsMe = decisions.length + escalations.length + questions.length + reviews.length + (isOwner ? requests.length : 0)
+  useChannelNews(roomId, Math.max(head, messages.at(-1)?.seq ?? 0), arrivals, 0, needsMe)
   const sendTask = useCallback(
     async (...sends: TaskSend[]) => {
       for (const { body, opts } of sends) await send(body, opts)
@@ -296,6 +295,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     showsReceipt,
     onReply,
     decisions: decided,
+    banner: place.kind === "main" ? (decisions[0]?.seq ?? null) : null,
     onAnswer,
     onReact: setReacting,
     onJump,
@@ -369,7 +369,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       card: m.card,
       outside: outsideRepos(state, m.card),
     }))
-  const needsMe = decisions.length + escalations.length + questions.length + reviews.length + (isOwner ? requests.length : 0)
   const placeTitle = place.kind === "main" ? title : place.with.includes(me) ? nameOf(place.with.find((n) => n !== me) ?? me) : place.with.map(nameOf).join(" & ")
   const mayWrite = place.kind !== "dm" || place.with.includes(me)
   const extra = place.kind === "main" ? undefined : sendFrom(state, place, me)
@@ -417,6 +416,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       now={now}
       roomId={roomId}
       me={me}
+      decisions={decisions}
       escalations={escalations}
       questions={questions}
       reviews={reviews}
@@ -429,7 +429,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       onJump={jump}
     />
   )
-  const needsHere = escalations.length + questions.length + reviews.length + (isOwner ? requests.length : 0)
   const heading = tab === "tasks" ? (VIEWS.find(([v]) => v === view)?.[1] ?? "Tasks") : tab === "agents" ? "Agents" : place.kind === "dm" ? placeTitle : rooms.length > 1 ? `# ${roomName}` : title
 
   return (
@@ -504,7 +503,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                             now={now}
                             view={view}
                             agents={agentsNow}
-                            needs={needsHere ? needsYou : null}
+                            needs={needsMe ? needsYou : null}
                             open={side?.kind === "tasks" ? null : expanded}
                             onOpen={(id) => setExpanded((e) => (e === id ? null : id))}
                             detail={(id) => (
