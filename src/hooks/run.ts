@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { ChannelGone } from "@kiwi/core/client.ts";
 import { Keystore } from "../config.ts";
-import { here, kimiHookHere, sameSeat, seatsHeldAnywhere, type Here } from "../seats.ts";
+import { here, kimiHookHere, noteHarnessSession, sameSeat, seatsHeldAnywhere, type Here } from "../seats.ts";
 import { writeSync } from "node:fs";
 import { answer, hookOutput, kimiReason, printed, tellKimi, type Answer, type HookInput } from "./answer.ts";
 import { holdAnswering } from "./delivered.ts";
@@ -62,6 +62,14 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
   const shown = (answers: readonly Answer[]) => Effect.forEach(answers, (a) => a.shown, { discard: true, concurrency: "unbounded" });
   const work = Effect.gen(function* () {
     const served = yield* seatsServed;
+    const session = input.session_id;
+    if (kimi && session)
+      yield* Effect.sync(() =>
+        noteHarnessSession(
+          served.map((s) => s.b).filter((b) => b.harness === "kimi"),
+          session,
+        ),
+      );
     const got = (yield* Effect.forEach(served, one, { concurrency: "unbounded" })).filter((a) => a !== null);
     if (kimi) {
       if (!got.length) return 0;

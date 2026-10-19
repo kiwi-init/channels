@@ -253,7 +253,7 @@ export function seatsFor(dir: string, opts: SeatOptions = {}): Binding[] {
     if (!pick) return [];
     if (opts.claim !== false && who.session && (pick.session !== who.session || (who.pid && pick.pid !== who.pid))) {
       // The previous holder's process goes with it: this session's, or none.
-      const rest = omit(pick, "pid", "model");
+      const rest = omit(pick, "pid", "model", "harnessSession");
       const taken: Binding = {
         ...rest,
         session: who.session,
@@ -275,6 +275,23 @@ export function seatsFor(dir: string, opts: SeatOptions = {}): Binding[] {
     return [pick];
   }
   return [];
+}
+
+export function noteHarnessSession(seats: readonly Binding[], id: string): void {
+  const stale = seats.filter((s) => s.harnessSession !== id);
+  if (!stale.length) return;
+  const ours = (b: Binding) => stale.some((s) => sameSeat(s, b) && s.session === b.session);
+  updateConfig((c) => {
+    for (const dir of Object.keys(c.bindings ?? {})) {
+      const seats = seatsAt(c, dir);
+      if (seats.some(ours))
+        store(
+          c,
+          dir,
+          seats.map((b) => (ours(b) ? { ...b, harnessSession: id } : b)),
+        );
+    }
+  });
 }
 
 export function bindingFor(dir: string, opts: SeatOptions = {}): Binding | null {
