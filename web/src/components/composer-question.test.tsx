@@ -32,6 +32,11 @@ describe("a decision in the composer", () => {
     expect(out).toContain("+2 more")
   })
 
+  test("names the task it was asked in, and no task when it has none", () => {
+    expect(html({ ...decision, task: 12 })).toContain(">T12<")
+    expect(html(decision)).not.toMatch(/>T\d+</)
+  })
+
   test("has no way to dismiss it", () => {
     expect(html(decision)).not.toMatch(/aria-label="(Cancel|Close|Dismiss)/)
   })
