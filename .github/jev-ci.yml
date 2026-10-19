@@ -99,6 +99,9 @@ jobs:
       store's CSP allows api.x.ai only when an xAI key is saved, the project key never reaches
       the snapshot or the token IPC result, consent defaults off, and
       desktop/build/entitlements.mac.plist has the audio-input entitlement. And
+      test/desktop-revive.test.ts: a crashed window page reloads by itself up to three times a
+      minute, then asks Reload or Quit; a hung one asks Wait or Reload; main-process errors go to
+      main.log in the logs folder. And
       test/offscreen.test.ts: a message's content column is content-visibility auto with a remembered
       size, so off-screen messages skip layout and paint when the column's width changes. And
       test/snapshot-base.test.ts: a window of recent messages folded on the channel's snapshot keeps

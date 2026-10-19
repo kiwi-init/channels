@@ -4,6 +4,7 @@ import { app, BrowserWindow, Menu, nativeImage, nativeTheme, shell, Tray } from 
 import { pendingDeepLink } from "./deep-links.ts";
 import { externalUrl, isAppUrl } from "./guard.ts";
 import { openInBrowser } from "./open.ts";
+import { keepRendererAlive } from "./revive.ts";
 import { entryUrl } from "./serve-web.ts";
 import { applyUpdate, updateState } from "./updater.ts";
 
@@ -51,6 +52,7 @@ export function createWindow(): void {
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#000000" : "#f2f2f5",
     webPreferences: { preload: preloadPath(), contextIsolation: true, sandbox: true },
   });
+  keepRendererAlive(win, () => quitting);
   void win.loadURL(entryUrl());
   win.on("close", (e) => {
     if (quitting) return;
