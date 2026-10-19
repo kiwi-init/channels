@@ -65,7 +65,7 @@ async function until(pred: () => boolean | Promise<boolean>, label: string, ms =
 
 const PERSON = { CLAUDECODE: "" };
 
-async function joinAs(owner: string, joiner: string, code: string, name: string, env: Env, cwd = joiner): Promise<void> {
+async function joinAs(owner: string, joiner: string, code: string, name: string, env: Env, cwd = joiner): Promise<string> {
   const p = spawn(joiner, ["join", code, "--as", name, "--timeout", "40s"], env, cwd);
   let listed = "";
   await until(async () => {
@@ -73,8 +73,9 @@ async function joinAs(owner: string, joiner: string, code: string, name: string,
     return /\d{3}-\d{3}/.test(listed);
   }, `${name}'s join request`);
   await ok(owner, ["--as", "boss", "approve", /(\d{3}-\d{3})/.exec(listed)![1]!, "--yes"], PERSON);
-  const code_ = await p.exited;
-  if (code_ !== 0) throw new Error(`join as ${name} exited ${code_}: ${await new Response(p.stderr).text()}`);
+  const [code_, err] = await Promise.all([p.exited, new Response(p.stderr).text()]);
+  if (code_ !== 0) throw new Error(`join as ${name} exited ${code_}: ${err}`);
+  return err;
 }
 
 function created(out: string): string {
@@ -89,9 +90,9 @@ async function twoSeats() {
   const codeA = created(await ok(ownerA, ["create", "alpha", "--as", "boss"], PERSON));
   const codeB = created(await ok(ownerB, ["create", "beta", "--as", "boss"], PERSON));
   const h = scratch("agent");
-  await joinAs(ownerA, h, codeA, "planner", S);
-  await joinAs(ownerB, h, codeB, "reviewer", S);
-  return { ownerA, ownerB, h, input: JSON.stringify({ session_id: "M", cwd: h }) };
+  const first = await joinAs(ownerA, h, codeA, "planner", S);
+  const second = await joinAs(ownerB, h, codeB, "reviewer", S);
+  return { ownerA, ownerB, h, joined: [first, second], input: JSON.stringify({ session_id: "M", cwd: h }) };
 }
 
 async function slots(h: string): Promise<string[]> {
@@ -158,6 +159,19 @@ describe("one Claude Code session that holds two seats", () => {
     expect(restarted.err).not.toContain("isn't bound to a channel");
   });
 
+  test("joining a second channel from a folder that has a seat in another says which flags pick each seat, and binds both", async () => {
+    const { h, joined } = await twoSeats();
+    expect(joined[0]).not.toContain("this folder now has seats in");
+    expect(joined[1]).toContain("kiwi: this folder now has seats in alpha and beta, so commands from it need -c beta --as reviewer (or -c alpha --as planner) to pick one\n");
+    const config = JSON.parse(readFileSync(join(h, "config.json"), "utf8")) as { bindings: Record<string, { alias: string; as: string }[]> };
+    expect(
+      Object.values(config.bindings)
+        .flat()
+        .map((b) => `${b.as}:${b.alias}`)
+        .sort(),
+    ).toEqual(["planner:alpha", "reviewer:beta"]);
+  });
+
   test("with a backlog on both seats, each hook's whole output stays inside Claude Code's inline limit", async () => {
     const { ownerA, ownerB, h, input } = await twoSeats();
     for (let i = 0; i < 5; i++) {
@@ -179,6 +193,8 @@ describe("one Claude Code session that holds two seats", () => {
     expect(start.hookSpecificOutput.additionalContext.length).toBeLessThanOrEqual(HOOK_CONTEXT_MAX);
     expect(start.hookSpecificOutput.additionalContext).toContain("planner");
     expect(start.hookSpecificOutput.additionalContext).toContain("reviewer");
+    expect(start.hookSpecificOutput.additionalContext).toContain("Unread messages for you (alpha):\n");
+    expect(start.hookSpecificOutput.additionalContext).toContain("Unread messages for you (beta):\n");
     const prompt = (await run(h, ["hook", "prompt"], S, h, input)).out;
     expect(prompt.length).toBeLessThanOrEqual(HOOK_CONTEXT_MAX);
     expect(prompt).toContain("alpha-backlog-");
