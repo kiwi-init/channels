@@ -57,7 +57,7 @@ function titleWords(norm: string): string[] {
   return [...new Set(norm.split(" ").filter((w) => w.length > 2 || hasDigit(w)))];
 }
 
-const TITLE_ID = /(?<![a-z0-9])(?:([a-z]+)-?)?(\d+(?:[.-]\d+)*[a-z]?)(?![a-z0-9])/g;
+const TITLE_ID = /(?<![a-z0-9])(?:([a-z]+)-?)?(\d+(?:[.-]\d+)*[a-z]*)(?![a-z0-9])/g;
 
 function titleIds(title: string): Set<string> {
   return new Set([...title.toLowerCase().matchAll(TITLE_ID)].map(([, prefix, digits]) => `${prefix && prefix !== "v" ? prefix : ""}${digits}`));

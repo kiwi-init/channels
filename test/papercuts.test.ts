@@ -105,6 +105,7 @@ describe("near-duplicate titles", () => {
     expect(titlesLookAlike("Release 0.20 stage 6", "Release 20.0 stage 6")).toBe(false);
     expect(titlesLookAlike("Review 2026-10-12 stage 6", "Review 2026-12-10 stage 6")).toBe(false);
     expect(titlesLookAlike("ABC-81A stage 6", "ABC-81B stage 6")).toBe(false);
+    expect(titlesLookAlike("ABC-81AB stage 6", "ABC-82AB stage 6")).toBe(false);
     expect(titlesLookAlike("Release 0.20", "Release v0.20")).toBe(true);
     expect(titlesLookAlike("Deploy", "deploy the site")).toBe(false);
     expect(titlesLookAlike("ABC-81 stage 6 review", "Review ABC-81, stage 6")).toBe(true);
