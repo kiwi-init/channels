@@ -383,6 +383,10 @@ export class Channel {
     return run(this.fx.snapshot());
   }
 
+  page(since: number, limit: number): Promise<Message[]> {
+    return run(this.fx.page(since, limit));
+  }
+
   snapshotAt(): Promise<number | null> {
     return run(this.fx.snapshotAt());
   }
