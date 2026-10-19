@@ -101,6 +101,9 @@ jobs:
       check that every CLI download is 30 MB or less.
       Also test/hooks-harness.test.ts's broken config case: with a config.json that isn't JSON,
       every hook exits 0 and says once which file to fix (src/config/file.ts, src/cli/commands/hooks.ts).
+      Also test/bounded-files.test.ts: the daemon's wake.log starts over past 1 MB keeping one older file
+      (src/daemon/wake.ts), and the daemon prunes hook bookkeeping in listen-hooks and hook-state older
+      than a week, at start and daily (src/hooks/delivered.ts, src/daemon/server.ts).
       Also test/silent-socket.test.ts: a live socket that goes quiet after opening (no answer to
       a ping) and an upgrade nobody answers are both dropped and opened again; a nudge (the network or
       the Mac coming back) cuts a long reconnect wait short and drops a socket that doesn't answer a
