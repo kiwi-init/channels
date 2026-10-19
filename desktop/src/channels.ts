@@ -119,6 +119,7 @@ parent.on("message", (e) => {
       seats = m.seats;
       person = m.person;
       loadMemory();
+      void keyring.finishCreating().catch(() => {});
       return;
     case "seats":
       seats = m.seats;
@@ -130,6 +131,9 @@ parent.on("message", (e) => {
       return;
     case "relay":
       relay = m.relay;
+      return;
+    case "nudge":
+      keyring.nudge();
       return;
     case "port": {
       const port = e.ports[0];

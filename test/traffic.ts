@@ -42,14 +42,17 @@ interface Pipe {
   queued: (string | ArrayBuffer | Uint8Array)[];
 }
 
-export function trafficProxy(target: string): { url: string; stats: Traffic; reset: () => Traffic; stop: () => void } {
+export function trafficProxy(target: string): { url: string; stats: Traffic; reset: () => Traffic; stop: () => void; hang: (on: boolean) => void } {
   let stats = empty();
+  let hanging = false;
   const pipes = new WeakMap<ServerWebSocket<{ path: string; protocols: string[] }>, Pipe>();
   const server = Bun.serve<{ path: string; protocols: string[] }>({
     port: 0,
     hostname: "127.0.0.1",
+    idleTimeout: 0,
     async fetch(req, srv) {
       const url = new URL(req.url);
+      if (hanging && req.headers.get("upgrade") !== "websocket") return new Promise<Response>(() => {});
       const body = req.method === "GET" || req.method === "HEAD" ? undefined : new Uint8Array(await req.arrayBuffer());
       if (req.headers.get("upgrade") === "websocket") {
         stats.sockets++;
@@ -127,6 +130,7 @@ export function trafficProxy(target: string): { url: string; stats: Traffic; res
       return was;
     },
     stop: () => server.stop(true),
+    hang: (on: boolean) => void (hanging = on),
   };
 }
 

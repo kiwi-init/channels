@@ -4,12 +4,13 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 
-import { openRows as openSealedRows, packRow, type CachedRow } from "@kiwi/core/cache-row.ts";
+import { openRows as openSealedRows, packRow, packUnread, type CachedRow, type Unread } from "@kiwi/core/cache-row.ts";
 import { Channel, ChannelGone, RelayError, Relay, Unreachable, eachLive, fetchRelay, type Live, type PresenceFields } from "@kiwi/core/client.ts";
-import type { ChannelAccess } from "@kiwi/core/crypto.ts";
+import { encodeJoinCode, newRoomId, ownerFingerprint, type ChannelAccess } from "@kiwi/core/crypto.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import { handleFor, type Member, type MemberInfo } from "@kiwi/core/membership.ts";
 import type { PersonClaim } from "@kiwi/core/person.ts";
+import { omit } from "@kiwi/core/omit.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import type { SigningBudget } from "@kiwi/core/sas.ts";
 import {
@@ -167,10 +168,30 @@ export class Keyring implements ChannelOps {
     const handle = me ? handleFor(me.name) : "human";
     const owner = await generateIdentity(handle);
     const info = me ? { name: handle, role: "owner", kind: "human" as const, display: me.name } : { name: "human", role: "owner" };
-    const { code, access } = await Channel.create(this.host.relay(), owner, info, [], undefined, token, name);
-    const entry: ChannelIdentityView = { label: name, idName: owner.name, ...keysOf(owner), roomId: access.roomId, code, access, at: Date.now(), name };
+    const roomId = newRoomId();
+    const code = encodeJoinCode({ roomId, ownerFp: await ownerFingerprint(owner.pk) });
+    const seat: ChannelIdentityView = { label: name, idName: owner.name, ...keysOf(owner), roomId, code, at: Date.now(), name };
+    await this.host.save({ ...seat, creating: true });
+    const made = await Channel.create(this.host.relay(), owner, info, [], roomId, token, name).catch(async (e: unknown) => {
+      if (e instanceof RelayError && e.status >= 400 && e.status < 500) await this.host.forget(code);
+      throw e;
+    });
+    const entry: ChannelIdentityView = { ...seat, access: made.access };
     await this.host.save(entry);
     return publicChannel(entry);
+  }
+
+  async finishCreating(): Promise<void> {
+    for (const seat of this.host.seats().filter((c) => c.creating && c.code && !c.access)) {
+      const code = seat.code!;
+      try {
+        const access = await Channel.resume(this.host.relay(), code, identityOf(seat));
+        await this.host.save({ ...omit(seat, "creating"), access });
+      } catch (e) {
+        // A relay that never got the channel says so; anything else keeps the seat for the next start.
+        if (e instanceof RelayError && (e.status === 403 || e.status === 404)) await this.host.forget(code);
+      }
+    }
   }
 
   async requestJoin(code: string, name: string): Promise<ChannelView> {
@@ -212,7 +233,7 @@ export class Keyring implements ChannelOps {
     if (f?.presence) await Effect.runPromise(f.presence(p));
   }
 
-  async openRows(code: string, rows: readonly unknown[]): Promise<(Message | null)[]> {
+  async openRows(code: string, rows: readonly unknown[]): Promise<(Message | Unread | null)[]> {
     const access = channelAccess(this.seat(code, true));
     if (!access) return rows.map(() => null);
     return openSealedRows(rows, access.roomId, access.keys);
@@ -257,6 +278,11 @@ export class Keyring implements ChannelOps {
         const row: CachedRow | null = key && Number.isSafeInteger(ev.message.seq) && ev.message.seq > 0 ? await packRow(key, ch.roomId, ch.access.epoch, ev.message).catch(() => null) : null;
         return { _tag: "Message", message: ev.message, row };
       }
+      case "Unread": {
+        const key = ch.access.keys[String(ch.access.epoch)];
+        const row: CachedRow | null = key ? await packUnread(key, ch.roomId, ch.access.epoch, ev.envelope).catch(() => null) : null;
+        return { _tag: "Unread", seq: ev.envelope.seq, row };
+      }
       case "Presence":
         return { _tag: "Presence", presence: ev.presence };
       case "Read":
@@ -269,6 +295,10 @@ export class Keyring implements ChannelOps {
       default:
         return null;
     }
+  }
+
+  nudge(): void {
+    for (const ch of this.open.values()) ch.nudge();
   }
 
   stopAll(): void {

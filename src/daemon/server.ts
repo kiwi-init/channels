@@ -16,6 +16,8 @@ import { pathOf, seatWakes } from "./wake.ts";
 export const ACTIVITY_EVERY_MS = 3_000;
 const PROBE_ANSWER_GAP_MS = 500;
 const PEEK_PROBE_MS = 250;
+const MAX_QUEUED_BYTES = 64 * 1024 * 1024;
+const lineEncoder = new TextEncoder();
 const TICK_MS = 5_000;
 const RETRY_FIRST_MS = 5_000;
 const RETRY_MAX_MS = 30 * 60_000;
@@ -137,15 +139,49 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     };
   };
 
+  const flush = (conn: ConnState): boolean => {
+    for (let head = conn.out[0]; head; head = conn.out[0]) {
+      const wrote = conn.socket.write(head);
+      if (wrote < 0) return false;
+      conn.queued -= Math.min(wrote, head.byteLength);
+      if (wrote < head.byteLength) {
+        conn.out[0] = head.subarray(wrote);
+        return true;
+      }
+      conn.out.shift();
+    }
+    return true;
+  };
+
+  const dropConn = (conn: ConnState): void => {
+    killConn(conn);
+    try {
+      conn.socket.end();
+    } catch {
+      // Already closed: killConn has reaped it.
+    }
+  };
+
+  const flushOrDrop = (conn: ConnState): boolean => {
+    try {
+      if (flush(conn)) return true;
+    } catch {
+      // The socket went away mid-write: dropped below like any closed connection.
+    }
+    dropConn(conn);
+    return false;
+  };
+
   const sendLine = (conn: ConnState, line: string): boolean => {
     if (conn.dead) return false;
-    try {
-      conn.socket.write(line + "\n");
-      return true;
-    } catch {
-      killConn(conn);
+    const bytes = lineEncoder.encode(line + "\n");
+    if (conn.queued + bytes.byteLength > MAX_QUEUED_BYTES) {
+      dropConn(conn);
       return false;
     }
+    conn.out.push(bytes);
+    conn.queued += bytes.byteLength;
+    return conn.out.length > 1 || flushOrDrop(conn);
   };
 
   const stopBeacon = (seat: Seat): void => {
@@ -352,8 +388,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           if (m.seq > seat.head) seat.head = m.seq;
           if (m.from !== seat.agent) scheduleWake(seat);
           for (const sub of [...seat.subs]) {
-            if (m.seq <= sub.cursor) continue;
-            if (sendLine(sub.conn, JSON.stringify({ id: sub.id, message: m }))) sub.cursor = m.seq;
+            if (sub.held) sub.held.push(m);
+            else if (m.seq > sub.cursor && sendLine(sub.conn, JSON.stringify({ id: sub.id, message: m }))) sub.cursor = m.seq;
           }
         },
         {
@@ -390,14 +426,16 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     if (typeof cursor !== "number" || !Number.isInteger(cursor) || cursor < 0) throw new Error("listen needs a cursor: the last sequence number this subscriber saw (0 for everything)");
     const seat = await seatFor(channel, as, { tell: (s) => sendLine(conn, JSON.stringify({ id, status: s })), alive: () => !conn.dead });
     if (conn.dead || stopped) return;
-    const sub: Sub = { id, cursor, conn, seat };
+    const sub: Sub = { id, cursor, conn, seat, held: [] };
     seat.subs.add(sub);
     conn.subs.add(sub);
     reachMoved(seat.alias, seat.agent);
     sendLine(conn, JSON.stringify({ id, ok: true, stream: true, head: seat.head, channel, agent: as }));
     try {
       const { messages } = await seat.ch.history(cursor);
-      for (const m of messages) {
+      const caught = [...messages, ...(sub.held ?? [])];
+      sub.held = null;
+      for (const m of caught) {
         if (m.seq <= sub.cursor) continue;
         if (sendLine(conn, JSON.stringify({ id, message: m }))) sub.cursor = m.seq;
         else break;
@@ -588,7 +626,11 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     unix: sock,
     socket: {
       open(socket) {
-        conns.add({ socket: socket as Socket, decoder: new TextDecoder(), buf: "", subs: new Set(), held: new Set(), dead: false });
+        conns.add({ socket: socket as Socket, decoder: new TextDecoder(), buf: "", subs: new Set(), held: new Set(), dead: false, out: [], queued: 0 });
+      },
+      drain(socket) {
+        const conn = [...conns].find((c) => c.socket === socket);
+        if (conn && !conn.dead) flushOrDrop(conn);
       },
       data(socket, data) {
         const conn = [...conns].find((c) => c.socket === socket);

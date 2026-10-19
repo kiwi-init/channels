@@ -1,6 +1,6 @@
 import type { Socket, Subprocess } from "bun";
 import type { Channel, Info, MemberRow, Probe } from "@kiwi/core/client.ts";
-import type { Activity, Reach } from "@kiwi/core/protocol.ts";
+import type { Activity, Message, Reach } from "@kiwi/core/protocol.ts";
 import type { WakeVia } from "@kiwi/core/wake.ts";
 import type { DaemonListener, DaemonWake } from "./protocol.ts";
 
@@ -48,6 +48,7 @@ export interface Sub {
   cursor: number;
   conn: ConnState;
   seat: Seat;
+  held: Message[] | null;
 }
 
 export interface Waiting {
@@ -62,4 +63,6 @@ export interface ConnState {
   subs: Set<Sub>;
   held: Set<DaemonListener>;
   dead: boolean;
+  out: Uint8Array[];
+  queued: number;
 }

@@ -1,5 +1,5 @@
 import path from "node:path";
-import { app, protocol, session } from "electron";
+import { app, powerMonitor, protocol, session } from "electron";
 
 import { keepDaemon } from "./bundled-daemon.ts";
 import { handleDeepLink, JOIN_SCHEME, rememberDeepLink } from "./deep-links.ts";
@@ -12,11 +12,12 @@ import { wireSignInIpc } from "./ipc/signin.ts";
 import { wireStoreIpc } from "./ipc/store.ts";
 import { wireVoiceIpc } from "./ipc/voice.ts";
 import { wirePersonalitiesIpc } from "./ipc/personalities.ts";
-import { closeKeys, keysOpen, startKeys } from "./keys-process.ts";
+import { closeKeys, keysOpen, startKeys, tellKeys } from "./keys-process.ts";
+import { catchMainErrors } from "./revive.ts";
 import { serveWeb } from "./serve-web.ts";
 import { loadStore, warnIfBroken } from "./store.ts";
 import { startUpdates } from "./updater.ts";
-import { createTray, createWindow, currentWindow, guardContents, markQuitting, refreshTray, showWindow } from "./window.ts";
+import { createTray, createWindow, currentWindow, guardContents, isQuitting, markQuitting, refreshTray, showWindow } from "./window.ts";
 
 function wireIpc(): void {
   wireStoreIpc();
@@ -29,6 +30,7 @@ function wireIpc(): void {
   wirePersonalitiesIpc();
 }
 
+catchMainErrors();
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on("second-instance", (_e, argv) => {
@@ -44,24 +46,26 @@ else {
   if (process.defaultApp && process.argv.length >= 2) app.setAsDefaultProtocolClient(JOIN_SCHEME, process.execPath, [path.resolve(process.argv[1] as string)]);
 
   app.on("web-contents-created", (_e, wc) => guardContents(wc));
-  protocol.registerSchemesAsPrivileged([{ scheme: APP_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }]);
+  protocol.registerSchemesAsPrivileged([{ scheme: APP_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, codeCache: true } }]);
   void app.whenReady().then(async () => {
-    loadStore();
-    warnIfBroken();
     serveWeb();
     session.defaultSession.setPermissionRequestHandler((wc, permission, callback) => {
       callback(permissionAllowed(wc.getURL(), permission));
     });
     wireIpc();
-    startKeys();
     createWindow();
+    loadStore();
+    warnIfBroken();
+    startKeys();
     createTray();
     startUpdates((u) => {
       currentWindow()?.webContents.send("kiwi:update", u);
       refreshTray();
     });
     app.on("activate", showWindow);
-    void keepDaemon().catch(() => {});
+    powerMonitor.on("resume", () => tellKeys({ type: "nudge" }));
+    powerMonitor.on("unlock-screen", () => tellKeys({ type: "nudge" }));
+    void keepDaemon(isQuitting).catch(() => {});
   });
 
   app.on("window-all-closed", () => {});

@@ -49,6 +49,7 @@ export class Channel {
   private readonly core: ChannelCore;
   private readonly cache: ChannelInfo;
   private readonly sending: ChannelSending;
+  private readonly live: ChannelLive;
   readonly fx: ChannelFx;
 
   constructor(access: ChannelAccess, relay: string, identity: Identity, onAccess?: (a: ChannelAccess) => void, opts: { keepInfo?: boolean; infoMaxAgeMs?: number } = {}) {
@@ -58,6 +59,7 @@ export class Channel {
     const history = new ChannelHistory(this.core);
     const images = new ChannelImages(this.core, settings);
     const live = new ChannelLive(this.core, this.cache);
+    this.live = live;
     this.sending = new ChannelSending(this.core, live, settings, images);
     this.fx = {
       ...new ChannelKeys(this.core).fx,
@@ -105,6 +107,10 @@ export class Channel {
 
   forgetInfo(): void {
     this.cache.forgetInfo();
+  }
+
+  nudge(): void {
+    this.live.nudge();
   }
 
   get roomId(): string {
@@ -381,6 +387,10 @@ export class Channel {
 
   snapshot(): Promise<FoldBase | null> {
     return run(this.fx.snapshot());
+  }
+
+  page(since: number, limit: number): Promise<Message[]> {
+    return run(this.fx.page(since, limit));
   }
 
   snapshotAt(): Promise<number | null> {

@@ -21,7 +21,7 @@
 // one is an Effect (runHook) the CLI runs like any command; installing them is
 // plain file work.
 
-export { backgroundTasks, cursorStopFollowup, grokMonitorListens, hookOutput, kimiReason, stopStyle } from "./hooks/answer.ts";
+export { backgroundTasks, cursorStopFollowup, fitting, grokMonitorListens, hookOutput, kimiReason, stopStyle } from "./hooks/answer.ts";
 export { autoInstallHooks, hooksInstalled, hooksListen, installHooks, rewakeCapable, uninstallHooks } from "./hooks/install/claude.ts";
 export { autoInstallExtraHooks, EXTRA_HARNESSES, extraInstalled, hooksStatus, installDetected, installExtra, uninstallDetected, uninstallExtra, type ExtraHarness } from "./hooks/install/extra.ts";
 export { withKimiHooks, withoutKimiHooks } from "./hooks/install/kimi-toml.ts";

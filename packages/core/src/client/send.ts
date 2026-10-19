@@ -7,6 +7,7 @@ import {
   CHOICES_MIN,
   GENERAL_ROOM,
   isRasterMime,
+  MAX_BODY_LENGTH,
   MAX_IMAGES,
   PROTOCOL_VERSION,
   rasterAttachment,
@@ -61,6 +62,7 @@ export class ChannelSending {
 
   readonly fx: SendFx = {
     send: Effect.fn("Channel.send")({ self: this }, function* (this: ChannelSending, body: string, opts: SendOptions = {}) {
+      if (body.length > MAX_BODY_LENGTH) return yield* new Rejected(`a message is at most ${MAX_BODY_LENGTH.toLocaleString("en")} characters; this one is ${body.length.toLocaleString("en")}`);
       const imgs = opts.imgs?.slice(0, MAX_IMAGES);
       if (imgs?.some((i) => !isRasterMime(i.mime))) return yield* new Rejected("an image must be png, jpg, gif or webp");
       if (imgs?.some((i) => !rasterAttachment(i))) return yield* new Rejected("an image needs its bytes or a stored reference");

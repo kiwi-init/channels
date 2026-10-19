@@ -3,7 +3,7 @@
 // so web/ can type against it without touching this process.
 
 import type { Personality } from "@kiwi/core/personality.ts";
-import type { CachedRow } from "@kiwi/core/cache-row.ts";
+import type { CachedRow, Unread } from "@kiwi/core/cache-row.ts";
 import type { Channel, OpenKind, PresenceFields } from "@kiwi/core/client.ts";
 import type { MemberPicture, Message, Presence, ReadMark } from "@kiwi/core/protocol.ts";
 import type { Wire } from "./wire.ts";
@@ -38,6 +38,7 @@ export interface ChannelIdentityView {
   at?: number;
   requestId?: string;
   imported?: boolean;
+  creating?: true;
 }
 
 export interface PublicAccess {
@@ -112,6 +113,7 @@ export type JoinCheck = { status: "pending"; code: string | null } | { status: "
 export type FollowEvent =
   | { _tag: "Open"; kind?: OpenKind }
   | { _tag: "Message"; message: Message; row: CachedRow | null }
+  | { _tag: "Unread"; seq: number; row: CachedRow | null }
   | { _tag: "Head"; seq: number }
   | { _tag: "Presence"; presence: Presence & { sigOk: boolean } }
   | { _tag: "Read"; reads: ReadMark[]; snapshot: boolean }
@@ -129,8 +131,9 @@ export interface ChannelOps {
   joinStatus(code: string): Promise<JoinCheck>;
   forget(code: string): Promise<void>;
   presence(code: string, p: PresenceFields): Promise<void>;
-  openRows(code: string, rows: CachedRow[]): Promise<(Message | null)[]>;
+  openRows(code: string, rows: CachedRow[]): Promise<(Message | Unread | null)[]>;
   follow(code: string, since: number, on: (e: FollowEvent) => void, opts?: FollowOptions): () => void;
+  nudge(): void;
 }
 
 export interface FollowOptions {
@@ -152,7 +155,8 @@ export type KeysAsk =
   | { op: "presence"; code: string; p: Wire }
   | { op: "openRows"; code: string; rows: Wire }
   | { op: "follow"; code: string; since: number; watch?: boolean }
-  | { op: "unfollow"; sub: number };
+  | { op: "unfollow"; sub: number }
+  | { op: "nudge" };
 
 export type KeysRequest = KeysAsk & { id: number };
 export type KeysReply = { id: number; ok: true; value: Wire } | { id: number; ok: false; error: WireError };
@@ -300,6 +304,7 @@ export interface UpdateView {
   state: "downloading" | "ready" | "available";
   /** The release's page. */
   url: string;
+  blocked?: true;
 }
 
 export type UpdateCheckView = UpdateView | { state: "current"; version: string } | { state: "failed" };

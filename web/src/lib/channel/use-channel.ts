@@ -71,6 +71,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
   const [start, setStart] = useState<{ head: number; whole: boolean } | null>(null)
   const [gone, setGone] = useState<"removed" | "closed" | null>(null)
   const [messages, setMessages] = useState<Message[]>(was?.messages ?? [])
+  const [unread, setUnread] = useState<number[]>(was?.unread ?? [])
   const [roster, setRoster] = useState<Member[]>(was?.roster ?? [])
   const [online, setOnline] = useState<Map<string, Online>>(new Map())
   const [marks, setMarks] = useState<Marks>(was?.marks ?? new Map())
@@ -84,8 +85,8 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
   const [base, setBase] = useState<FoldBase | null>(was?.base ?? null)
   useEffect(() => {
     if (gone) dropWarm(member.code)
-    else keepWarm(member.code, { messages, roster, requests, marks, guardFloor, roomsFloor, base })
-  }, [member.code, gone, messages, roster, requests, marks, guardFloor, roomsFloor, base])
+    else keepWarm(member.code, { messages, unread, roster, requests, marks, guardFloor, roomsFloor, base })
+  }, [member.code, gone, messages, unread, roster, requests, marks, guardFloor, roomsFloor, base])
   useEffect(() => {
     const title = ch.title()
     const guard = ch.guard()
@@ -165,6 +166,10 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
           return
         case "Message":
           return enqueue(ev.message, ev.row)
+        case "Unread":
+          setUnread((prev) => [...prev, ev.seq].slice(-HISTORY))
+          if (ev.row) void rememberRow(ch.roomId, ch.pk, ev.row, HISTORY).catch(() => {})
+          return
         case "Presence": {
           const p = ev.presence
           if (p.client === "probe" || !p.sigOk) return
@@ -211,7 +216,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
           const held = heldWindow(was, head, HISTORY)
           const cached = held ? null : await readCached(ch.roomId, ch.pk, ch.openRows, head, HISTORY).catch(() => null)
           const since = held ? held.since : cached ? cached.since : Math.max(0, head - HISTORY)
-          const firstSeq = held ? held.firstSeq : cached?.messages[0]?.seq
+          const firstSeq = held ? held.firstSeq : cached?.firstSeq
           const from = baseFrom(since, firstSeq)
           const snap = from > 0 && !was?.base ? await ch.snapshot().catch(() => null) : null
           return { head, cached, since, firstSeq, base: usableBase(snap, from) }
@@ -225,6 +230,10 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
         Effect.flatMap((opened) =>
           Effect.sync(() => {
             if (closed) return
+            if (opened.cached?.unread.length) {
+              const seen = opened.cached.unread
+              setUnread((prev) => [...new Set([...prev, ...seen])].slice(-HISTORY))
+            }
             if (opened.cached?.messages.length) {
               const cached = opened.cached.messages
               setMessages((prev) => merged(prev, cached))

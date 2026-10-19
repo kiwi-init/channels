@@ -1,6 +1,6 @@
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
-import { MAX_EPH_LENGTH, MORE_REFUSED, type ClientFrame, type Envelope, type ServerFrame } from "@kiwi/core/protocol.ts";
+import { MAX_EPH_LENGTH, MAX_IV_LENGTH, MORE_REFUSED, type ClientFrame, type Envelope, type ServerFrame } from "@kiwi/core/protocol.ts";
 import { isRefusal } from "../failures.ts";
 import { RoomStore } from "./db.ts";
 import type { Effects } from "./directory.ts";
@@ -42,7 +42,7 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
   }
   if (f.t === "eph") {
     if (!allow(`eph:${db.roomId}:${sender}`, EPHEMERAL_PER_MINUTE)) return { reply: frame({ t: "err", error: "too many ephemeral frames; slow down" }) } satisfies Effects;
-    if (typeof f.iv !== "string" || typeof f.ct !== "string" || f.ct.length > MAX_EPH_LENGTH) {
+    if (typeof f.iv !== "string" || typeof f.ct !== "string" || f.iv.length > MAX_IV_LENGTH || f.ct.length > MAX_EPH_LENGTH) {
       return { reply: frame({ t: "err", error: "bad ephemeral frame" }) } satisfies Effects;
     }
     return { ephemeral: frame({ t: "eph", iv: f.iv, ct: f.ct }) } satisfies Effects;
