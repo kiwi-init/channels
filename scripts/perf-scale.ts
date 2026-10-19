@@ -135,6 +135,35 @@ async function tab(page: Page, label: string, marker: string): Promise<number> {
   );
 }
 
+async function work(cdp: CDPSession): Promise<Record<string, number>> {
+  const { metrics } = (await cdp.send("Performance.getMetrics")) as { metrics: { name: string; value: number }[] };
+  const m = Object.fromEntries(metrics.map((x) => [x.name, x.value]));
+  return { task: m.TaskDuration ?? 0, script: m.ScriptDuration ?? 0, style: m.RecalcStyleDuration ?? 0, layout: m.LayoutDuration ?? 0 };
+}
+
+async function detailsToggle(page: Page, cdp: CDPSession, open: boolean): Promise<{ ms: number; taskMs: number; scriptMs: number; styleMs: number; layoutMs: number }> {
+  const before = await work(cdp);
+  const ms = await page.evaluate(async (opening) => {
+    const button = opening
+      ? [...document.querySelectorAll<HTMLElement>("button")].find((b) => (b.getAttribute("aria-label") ?? "").startsWith("Details:") && b.offsetParent !== null)
+      : document.querySelector<HTMLElement>('button[aria-label="Close details"]');
+    if (!button) return -1;
+    const t0 = performance.now();
+    button.click();
+    const deadline = t0 + 15000;
+    while (performance.now() < deadline) {
+      await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+      if (!!document.querySelector('aside[aria-label="Details"]') === opening) break;
+    }
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    return Math.round(performance.now() - t0);
+  }, open);
+  await page.waitForTimeout(400);
+  const after = await work(cdp);
+  const d = (k: string) => Math.round(((after[k] ?? 0) - (before[k] ?? 0)) * 1000);
+  return { ms, taskMs: d("task"), scriptMs: d("script"), styleMs: d("style"), layoutMs: d("layout") };
+}
+
 async function profile(cdp: CDPSession, run: () => Promise<unknown>): Promise<string[]> {
   await cdp.send("Profiler.enable");
   await cdp.send("Profiler.setSamplingInterval", { interval: 200 });
@@ -318,6 +347,23 @@ try {
         views[v]!.push(await tab(page, v, markers[v]!));
         await page.waitForTimeout(500);
       }
+    await tab(page, "Conversation", markers.Conversation!);
+    await page.waitForTimeout(500);
+    const opens: Awaited<ReturnType<typeof detailsToggle>>[] = [];
+    const closes: Awaited<ReturnType<typeof detailsToggle>>[] = [];
+    for (let i = 0; i < 5; i++) {
+      opens.push(await detailsToggle(page, cdp, true));
+      closes.push(await detailsToggle(page, cdp, false));
+    }
+    const mid = (xs: Awaited<ReturnType<typeof detailsToggle>>[]) => ({
+      ms: median(xs.map((x) => x.ms)),
+      taskMs: median(xs.map((x) => x.taskMs)),
+      scriptMs: median(xs.map((x) => x.scriptMs)),
+      styleMs: median(xs.map((x) => x.styleMs)),
+      layoutMs: median(xs.map((x) => x.layoutMs)),
+    });
+    report[`details @${throttle}x`] = { open: mid(opens), close: mid(closes) };
+    log(`details @${throttle}x`, JSON.stringify(report[`details @${throttle}x`]));
     const after = await drain(page);
     report[`@${throttle}x`] = {
       reloadToTasksMs: throttle === 1 ? reloadMs : undefined,
