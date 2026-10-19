@@ -145,6 +145,13 @@ jobs:
         run: |
           cli() { bun ../scripts/build-cli.ts --target "$1" --outfile ../dist/kiwi; }
           pack() { bun scripts/pack-cli.ts ../dist/kiwi; }
+          signcli() {
+            if [ ${#sign[@]} -gt 0 ]; then
+              codesign --force --options runtime --timestamp --entitlements build/entitlements.mac.plist --keychain "$CSC_KEYCHAIN" --sign "Developer ID Application" ../dist/kiwi
+            else
+              codesign --force --sign - ../dist/kiwi
+            fi
+          }
           mkdir -p ../dist
           bun run build
           sign=()
@@ -190,8 +197,8 @@ jobs:
           fi
           case "${{ runner.os }}" in
             macOS)
-              cli bun-darwin-arm64 && codesign --force --sign - ../dist/kiwi && pack && bunx electron-builder --mac --arm64 --publish never "${sign[@]}"
-              cli bun-darwin-x64 && codesign --force --sign - ../dist/kiwi && pack && bunx electron-builder --mac --x64 --publish never "${sign[@]}"
+              cli bun-darwin-arm64 && signcli && pack && bunx electron-builder --mac --arm64 --publish never "${sign[@]}"
+              cli bun-darwin-x64 && signcli && pack && bunx electron-builder --mac --x64 --publish never "${sign[@]}"
               ;;
             *)
               cli bun-linux-x64 && pack && bunx electron-builder --linux --publish never
@@ -203,7 +210,9 @@ jobs:
             for app in release/mac*/Channels.app; do
               codesign --verify --deep --strict --verbose=2 "$app"
               # -dvv: codesign names the signing authorities only from two v's up.
-              kiwi_sig=$(codesign -dvv "$app/Contents/Resources/kiwi" 2>&1)
+              bun scripts/pack-cli.ts --unpack "$app/Contents/Resources/kiwi.zst" "$RUNNER_TEMP/kiwi-unpacked"
+              codesign --verify --strict --verbose=2 "$RUNNER_TEMP/kiwi-unpacked"
+              kiwi_sig=$(codesign -dvv "$RUNNER_TEMP/kiwi-unpacked" 2>&1)
               [[ "$kiwi_sig" == *"Authority=Developer ID Application"* ]] || { echo "the bundled kiwi isn't signed with the Developer ID:"; echo "$kiwi_sig"; exit 1; }
               xcrun stapler validate "$app"
               spctl --assess --type execute --verbose=2 "$app"
@@ -216,7 +225,7 @@ jobs:
           [ -n "$apps" ] || { echo "no packaged app found under release/"; exit 1; }
           for r in $apps; do
             [ -f "$r/web/dist/index.html" ] || { echo "web/dist missing from $r"; exit 1; }
-            [ -f "$r/kiwi" ] || { echo "kiwi binary missing from $r"; exit 1; }
+            [ -f "$r/kiwi.zst" ] || { echo "kiwi.zst missing from $r"; exit 1; }
           done
           echo "checked: $apps"
           bins=$(find release -maxdepth 2 \( -path 'release/mac*/Channels.app' -o -path 'release/*-unpacked/channels-desktop' \))

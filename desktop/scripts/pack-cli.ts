@@ -2,9 +2,18 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { constants, zstdCompressSync, zstdDecompressSync } from "node:zlib";
 
+if (process.argv[2] === "--unpack") {
+  const [from, to] = [process.argv[3], process.argv[4]];
+  if (!from || !to) {
+    console.error("usage: bun desktop/scripts/pack-cli.ts --unpack <kiwi.zst> <out>");
+    process.exit(2);
+  }
+  writeFileSync(resolve(to), zstdDecompressSync(readFileSync(resolve(from))), { mode: 0o755 });
+  process.exit(0);
+}
 const bin = process.argv[2] ? resolve(process.argv[2]) : "";
 if (!bin) {
-  console.error("usage: bun desktop/scripts/pack-cli.ts <kiwi binary>  (writes <kiwi binary>.zst beside it)");
+  console.error("usage: bun desktop/scripts/pack-cli.ts <kiwi binary>  (writes <kiwi binary>.zst beside it), or --unpack <kiwi.zst> <out>");
   process.exit(2);
 }
 const raw = readFileSync(bin);
