@@ -6,8 +6,9 @@
 import { ArrowUp01Icon } from "@hugeicons/core-free-icons"
 import { useState } from "react"
 
+import { tokensWord } from "@kiwi/core/format.ts"
 import type { Load } from "@kiwi/core/load.ts"
-import type { Activity, Card, Color } from "@kiwi/core/protocol.ts"
+import { CONTEXT_LINE, type Activity, type Card, type Color } from "@kiwi/core/protocol.ts"
 import { taskId } from "@kiwi/core/state.ts"
 import { formatAgo, shortTitle } from "@/lib/format"
 import { howWords, type How } from "@/lib/presence"
@@ -40,6 +41,12 @@ export function doingNow(a: AgentNow): { text: string; busy: boolean } | null {
   if (act?.state === "waiting") return { text: "Waiting for a person", busy: false }
   if (act?.state === "idle") return { text: "Idle", busy: false }
   return null
+}
+
+export function contextNow(a: AgentNow): { text: string; over: boolean } | null {
+  const c = a.here ? a.activity?.context : undefined
+  if (!c) return null
+  return { text: c.window ? `${tokensWord(c.used)} of ${tokensWord(c.window)} context` : `${tokensWord(c.used)} context`, over: c.used >= CONTEXT_LINE }
 }
 
 export function agentNow(a: AgentNow): { text: string; busy: boolean } {
@@ -86,6 +93,7 @@ export function AgentRow({ a, onMessage, onOpenTask }: { a: AgentNow; onMessage:
 }
 
 function AgentLine({ a, now, onOpenTask, brief }: { a: AgentNow; now: number; onOpenTask: (id: number) => void; brief?: boolean }) {
+  const context = contextNow(a)
   return (
     <li className="flex items-start gap-3 rounded-ctl px-2 py-2">
       <span className="flex pt-0.5">{face(a, 28)}</span>
@@ -102,6 +110,7 @@ function AgentLine({ a, now, onOpenTask, brief }: { a: AgentNow; now: number; on
             <span className={cx("size-1.5 shrink-0 rounded-full", doingNow(a)!.busy ? "bg-doing" : "bg-ink-3")} />
             <span className={doingNow(a)!.busy ? "font-medium text-ink" : "text-ink-3"}>{doingNow(a)!.text}</span>
             {a.activity?.since && <span className="text-ink-3">· {formatAgo(a.activity.since, now)}</span>}
+            {context && <span className={cx("tabular-nums", context.over ? "text-alert" : "text-ink-3")}>· {context.text}</span>}
           </span>
         )}
         {a.load.current.length ? (

@@ -1,7 +1,8 @@
 // What an agent's harness says about it on this machine, read the way a command the agent runs can:
 // which model it runs on, and what it's doing right now (working, and with which tool; waiting; idle).
 // Each harness keeps that somewhere local (none puts it in the environment), and kiwi reads only those
-// fields: never a prompt, a reply, or a tool's input or output. Only the tool's name leaves the machine.
+// fields: never a prompt, a reply, or a tool's input or output. Only the tool's name and the context's
+// token counts leave the machine.
 //
 //   Claude Code  CLAUDE_CODE_SESSION_ID (or ~/.claude/sessions/$CLAUDE_PID.json), then the newest
 //                assistant line's message.model in ~/.claude/projects/*/<session>.jsonl
@@ -18,7 +19,7 @@ import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 
 import { kimiCodePid, mimoHere, piHere, type ProcessTree } from "./ancestry.ts";
-import type { Activity } from "@kiwi/core/protocol.ts";
+import type { Activity, ContextUse } from "@kiwi/core/protocol.ts";
 
 type Env = Record<string, string | undefined>;
 
@@ -260,6 +261,34 @@ function toolName(v: unknown): string | undefined {
   return typeof v === "string" && v.trim() && v.length <= 60 ? v.trim() : undefined;
 }
 
+const tokens = (v: unknown): number => (typeof v === "number" && Number.isSafeInteger(v) && v > 0 ? v : 0);
+
+export function claudeContext(file: string): ContextUse | undefined {
+  for (const line of tailLines(file)) {
+    if (!line.includes('"compact_boundary"') && !line.includes('"usage"')) continue;
+    let l: { type?: string; subtype?: string; isSidechain?: boolean; message?: { usage?: Record<string, unknown> } };
+    try {
+      l = JSON.parse(line) as typeof l;
+    } catch {
+      // A line cut by the tail's start: older lines may still have it.
+      continue;
+    }
+    if (l.type === "system" && l.subtype === "compact_boundary") return undefined;
+    const u = l.type === "assistant" && !l.isSidechain ? l.message?.usage : undefined;
+    const used = u ? tokens(u.input_tokens) + tokens(u.cache_read_input_tokens) + tokens(u.cache_creation_input_tokens) : 0;
+    if (used) return { used };
+  }
+  return undefined;
+}
+
+function claudeTranscript(dir: string, session: string | undefined): string | undefined {
+  if (!session || !/^[\w-]+$/.test(session)) return undefined;
+  const projects = join(dir, "projects");
+  return readdirSync(projects)
+    .map((p) => join(projects, p, `${session}.jsonl`))
+    .find((f) => existsSync(f));
+}
+
 /** Claude Code: its process's registry says busy or idle; the transcript's newest lines say which tool is running. */
 function claudeActivity(env: Env): Activity | undefined {
   const dir = env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
@@ -269,33 +298,48 @@ function claudeActivity(env: Env): Activity | undefined {
   if (!existsSync(reg)) return undefined;
   const r = JSON.parse(readFileSync(reg, "utf8")) as { sessionId?: string; status?: string; statusUpdatedAt?: number };
   const since = typeof r.statusUpdatedAt === "number" ? r.statusUpdatedAt : undefined;
-  if (r.status === "idle") return { state: "idle", ...(since ? { since } : {}) };
-  if (r.status && /wait|permission|input/i.test(r.status)) return { state: "waiting", ...(since ? { since } : {}) };
-  // Busy: a tool is running while the newest assistant turn asked for one and no result has come back.
+  const file = claudeTranscript(dir, env.CLAUDE_CODE_SESSION_ID || r.sessionId);
+  const context = file ? claudeContext(file) : undefined;
+  const extra = { ...(since ? { since } : {}), ...(context ? { context } : {}) };
+  if (r.status === "idle") return { state: "idle", ...extra };
+  if (r.status && /wait|permission|input/i.test(r.status)) return { state: "waiting", ...extra };
   let tool: string | undefined;
-  const session = env.CLAUDE_CODE_SESSION_ID || r.sessionId;
-  if (session && /^[\w-]+$/.test(session)) {
-    const projects = join(dir, "projects");
-    const file = readdirSync(projects)
-      .map((p) => join(projects, p, `${session}.jsonl`))
-      .find((f) => existsSync(f));
-    for (const line of file ? tailLines(file, 128 * 1024) : []) {
-      if (!line.trim()) continue;
-      try {
-        const l = JSON.parse(line) as { type?: string; message?: { stop_reason?: string; content?: unknown } };
-        if (l.type === "user") break; // a tool's result (or a prompt): nothing running now
-        if (l.type !== "assistant") continue;
-        if (l.message?.stop_reason === "tool_use" && Array.isArray(l.message.content)) {
-          const use = [...(l.message.content as { type?: string; name?: unknown }[])].reverse().find((c) => c.type === "tool_use");
-          tool = toolName(use?.name);
-        }
-        break;
-      } catch {
-        break;
+  for (const line of file ? tailLines(file, 128 * 1024) : []) {
+    if (!line.trim()) continue;
+    try {
+      const l = JSON.parse(line) as { type?: string; message?: { stop_reason?: string; content?: unknown } };
+      if (l.type === "user") break; // a tool's result (or a prompt): nothing running now
+      if (l.type !== "assistant") continue;
+      if (l.message?.stop_reason === "tool_use" && Array.isArray(l.message.content)) {
+        const use = [...(l.message.content as { type?: string; name?: unknown }[])].reverse().find((c) => c.type === "tool_use");
+        tool = toolName(use?.name);
       }
+      break;
+    } catch {
+      break;
     }
   }
-  return { state: "working", ...(tool ? { tool } : {}), ...(since ? { since } : {}) };
+  return { state: "working", ...(tool ? { tool } : {}), ...extra };
+}
+
+function codexContext(file: string): ContextUse | undefined {
+  for (const line of tailLines(file)) {
+    if (!line.includes('"token_count"') && !line.includes("compact")) continue;
+    let l: { type?: string; payload?: { type?: string; info?: { last_token_usage?: { input_tokens?: unknown }; model_context_window?: unknown } | null } };
+    try {
+      l = JSON.parse(line) as typeof l;
+    } catch {
+      // A line cut by the tail's start: older lines may still have it.
+      continue;
+    }
+    const t = l.payload?.type ?? l.type;
+    if (t === "compacted" || t === "compaction" || l.type === "compacted" || l.type === "compaction") return undefined;
+    if (t !== "token_count") continue;
+    const used = tokens(l.payload?.info?.last_token_usage?.input_tokens);
+    const window = tokens(l.payload?.info?.model_context_window);
+    if (used) return { used, ...(window ? { window } : {}) };
+  }
+  return undefined;
 }
 
 /** Codex: the thread's rollout, newest event first: a task started and not completed is work. */
@@ -310,14 +354,16 @@ async function codexActivity(env: Env): Promise<Activity | undefined> {
   if (!db) return undefined;
   const row = (await sqliteOne(join(home, db), "SELECT rollout_path FROM threads WHERE id = ?", thread)) as { rollout_path?: unknown } | null;
   if (typeof row?.rollout_path !== "string" || !existsSync(row.rollout_path)) return undefined;
+  const ctx = codexContext(row.rollout_path);
+  const context = ctx ? { context: ctx } : {};
   for (const line of tailLines(row.rollout_path, 128 * 1024)) {
     if (!line.trim()) continue;
     try {
       const l = JSON.parse(line) as { type?: string; payload?: { type?: string; name?: unknown } };
       const t = l.payload?.type ?? l.type;
-      if (t === "task_complete" || t === "turn_aborted") return { state: "idle" };
-      if (t === "function_call" || t === "custom_tool_call") return { state: "working", ...(toolName(l.payload?.name) ? { tool: toolName(l.payload?.name) } : {}) };
-      if (t === "task_started" || t === "agent_reasoning" || t === "reasoning" || t === "message") return { state: "working" };
+      if (t === "task_complete" || t === "turn_aborted") return { state: "idle", ...context };
+      if (t === "function_call" || t === "custom_tool_call") return { state: "working", ...(toolName(l.payload?.name) ? { tool: toolName(l.payload?.name) } : {}), ...context };
+      if (t === "task_started" || t === "agent_reasoning" || t === "reasoning" || t === "message") return { state: "working", ...context };
     } catch {
       // A line cut by the tail's start.
     }

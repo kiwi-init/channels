@@ -1,6 +1,6 @@
 # Plan: long-running agent sessions without unbounded context
 
-Status: proposal, 2026-10-19. No `src/` change yet. Facts below were read from `main` at
+Status: items 1 and 2 built, 2026-10-19; the rest is a proposal. Facts below were read from `main` at
 `fcfaabf5`, from Claude Code 2.1.303 and its docs, from transcripts, and from probes on opus-vm.
 
 ## The problem, measured
@@ -127,16 +127,25 @@ gains:
   `packages/core/src/protocol.ts`; `claudeActivity`/`codexActivity`, `src/harness.ts`). Claude:
   `input_tokens + cache_read_input_tokens + cache_creation_input_tokens` on the newest assistant
   line. Codex: the newest `token_count` event (`last_token_usage`, `model_context_window`). Only
-  the numbers leave the transcript, as `harness.ts` promises today.
+  the numbers leave the transcript, as `harness.ts` promises today. Built in item 2. A Claude
+  transcript doesn't record the window, so a Claude seat reports `used` only. Between a compaction
+  and the next reply the size is unknown, never the old one.
 - **Where it shows.** On the agent's own lane in the app's Agents tab, and in the hooks that act on
   it. Not in `kiwi status`: that is the channel's one screen, and a per-agent number there is
-  noise for everyone else.
+  noise for everyone else. Built in item 2: the lane's status line, and the expanded agent list
+  under the composer, as "262k of 1M context", in the alert colour past the line.
 - **The nudge.** When context passes the line (proposed: 250k on 1M models), the Stop hook blocks
   once with: "Context is at N. Write `kiwi checkpoint`, then end your turn." Once per crossing,
-  never in a loop (`stop_hook_active`). The checkpoint then triggers the clear.
+  never in a loop (`stop_hook_active`). The checkpoint then triggers the clear. Built in item 2
+  for Claude Code seats (`src/hooks/context-line.ts`): the line is 250k (`CONTEXT_LINE`), read
+  from the Stop hook's `transcript_path`; the nudge names each open task the seat owns and the
+  `kiwi task checkpoint` command for the first; a seat with no open task isn't nudged. It comes back
+  only after the context fell under the line (a compaction, a `/clear` starts a new session).
 - **The backstop.** `autoCompactWindow` at about 400k in each seat's folder
   (`.claude/settings.local.json`), never in a person's global settings. Rotation should come
-  first; this catches a seat outside tmux or one that never reaches a boundary.
+  first; this catches a seat outside tmux or one that never reaches a boundary. Decided: 400k
+  (owner, 2026-10-19). Kiwi doesn't write it: it is a setting in the seat's folder, set where the
+  seats run, so a channel's other members carry none of it.
 
 ## Per role, at a glance
 
@@ -169,7 +178,7 @@ the task, branch, SHA and round).
 
 ## Decisions for the owner
 
-1. The line (proposed 250k) and the backstop (proposed 400k) on 1M models.
+1. The line and the backstop on 1M models: decided, 250k and 400k (2026-10-19).
 2. Where a checkpoint lives: decided and built as a signed note on the task (item 1).
 3. How rotation is switched on and at what scope. Settled so far: optional, off by default, not
    loaded unless on. Not per seat. To discuss.
@@ -181,7 +190,7 @@ One issue and one PR each, with its CI gate:
 1. Re-entry: task state, checkpoints and the lead line at SessionStart (step 2), with
    `kiwi task checkpoint` (step 1), and every hook's output kept inside Claude Code's inline limit,
    shared between the seats a session serves, with no message marked read that wasn't shown.
-2. Context in activity and on the Agents lane; the Stop-hook nudge.
+2. Context in activity and on the Agents lane; the Stop-hook nudge. Built on the item 1 branch.
 3. The duplicate-listener probe and its fix.
 4. Rotation for Claude Code seats in tmux, behind the switch from decision 3: pane recording, the
    guard, and asking a seat to rotate.
