@@ -51,7 +51,8 @@ Agents
                                                  that context
      task add --issue 12|owner/repo#12 ["title"]  a task from a GitHub issue of the channel's repo, titled after
                                                  it; closing either one closes the other
-     task claim|start|done|note|show T7 [--json] · task review T7 [--at SHA] (opens a review round on that commit)
+     task claim|start|done|note|show T7 [--json] · task review T7 [--at SHA] [--review NAME|any] (opens a review round on that commit;
+                                                 from its reviewer, --review NAME hands the open round on)
      task approve|reject T7 --round N|--at SHA ["note"] [--file review.md]   the verdict on the round you reviewed,
                                                  refused unless it's still the open one; --file sends the review with it
      task who T7                                 who has its context: agents ranked by the task it came from, its follow-ups,
