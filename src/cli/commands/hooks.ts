@@ -4,8 +4,8 @@ import { reason } from "@kiwi/core/client.ts";
 import { Keystore } from "../../config.ts";
 import {
   EXTRA_HARNESSES,
+  claudeHooksStatus,
   extraInstalled,
-  hooksInstalled,
   hooksStatus,
   installDetected,
   installExtra,
@@ -86,7 +86,7 @@ export const hookCommands: Record<string, Command> = {
       }
       if (sub === "status") {
         if (!name) return out(hooksStatus());
-        if (name === "claude") return out(hooksInstalled() ? "claude: installed" : "claude: not installed");
+        if (name === "claude") return out(`claude: ${claudeHooksStatus()}`);
         return out(`${name}: ${extraInstalled(name) ? "installed" : "not installed"}`);
       }
       return yield* die(usage);

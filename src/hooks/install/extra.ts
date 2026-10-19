@@ -5,7 +5,7 @@ import { kimiCodePid, mimoHere, piHere } from "../../ancestry.ts";
 import { loadConfig } from "../../config.ts";
 import { isRecord, readJson, writeJson } from "../files.ts";
 import { EVENTS, hookCommand, isOurHook, isOurHookCommand } from "../self.ts";
-import { hooksInstalled, installHooks, uninstallHooks, withoutOurs, type Settings } from "./claude.ts";
+import { claudeHooksStatus, hooksInstalled, installHooks, uninstallHooks, withoutOurs, type Settings } from "./claude.ts";
 import { editKimiConfig, kimiConfigInstalled } from "./kimi-toml.ts";
 import { installMimo, mimoConfigRoot, mimoInstalled, mimoPluginPath, uninstallMimo } from "./mimo.ts";
 import { installPi, piExtensionPath, piInstalled, piRoot, uninstallPi } from "./pi.ts";
@@ -206,7 +206,7 @@ export function uninstallDetected(): string[] {
 
 export function hooksStatus(): string {
   const choice = loadConfig().harnessHooks ?? {};
-  const claude = loadConfig().claudeHooks === "off" && !hooksInstalled() ? "off" : hooksInstalled() ? "installed" : "not installed";
+  const claude = loadConfig().claudeHooks === "off" && !hooksInstalled() ? "off" : claudeHooksStatus();
   const lines = [`claude: ${claude}`];
   for (const h of EXTRA_HARNESSES) {
     if (extraInstalled(h)) lines.push(`${h}: installed`);
