@@ -21,7 +21,7 @@ async function fakeFile(): Promise<DictationFile> {
 
 function memoryStore(): DictationStore & { kept: Map<string, Uint8Array<ArrayBuffer>> } {
   const kept = new Map<string, Uint8Array<ArrayBuffer>>();
-  return { kept, read: async (sha) => kept.get(sha) ?? null, write: async (sha, b) => void kept.set(sha, b) };
+  return { kept, read: async (sha) => (kept.has(sha) ? new Blob([kept.get(sha)!]) : null), write: async (sha, b) => void kept.set(sha, b) };
 }
 
 const get = (path: string, method = "GET") => new Request(`https://relay.test${path}`, { method });
@@ -54,6 +54,29 @@ describe("the relay's dictation route", () => {
     const head = await onDictationHttp(get(`/v1/dictation/${name}`, "HEAD"), deps);
     expect(head?.status).toBe(200);
     expect(head?.headers.get("content-length")).toBe(String(bytes.byteLength));
+  });
+
+  test("a kept file is streamed as it is, never read whole into memory first", async () => {
+    const file = await fakeFile();
+    let pulls = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(c) {
+        pulls += 1;
+        c.enqueue(bytes);
+        c.close();
+      },
+    });
+    const res = await onDictationHttp(get(`/v1/dictation/${name}`), {
+      store: { read: async () => stream, write: async () => undefined },
+      ip: null,
+      allow: () => true,
+      lookup: () => file,
+      upstream: async () => Promise.reject(new Error("a hit never goes upstream")),
+    });
+    expect(pulls).toBeLessThanOrEqual(1);
+    expect(res?.body).toBe(stream);
+    expect(res?.headers.get("content-length")).toBe(String(file.size));
+    expect(new Uint8Array(await res!.arrayBuffer())).toEqual(bytes);
   });
 
   test("a file that doesn't match its pinned hash or size is refused and never kept", async () => {

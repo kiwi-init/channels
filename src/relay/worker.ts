@@ -380,7 +380,7 @@ const edgeKey = (sha256: string) => `https://dictation.kiwi.invalid/${sha256}`;
 const edgeDictation: DictationStore = {
   read: async (sha256) => {
     const hit = await caches.default.match(edgeKey(sha256));
-    return hit ? new Uint8Array(await hit.arrayBuffer()) : null;
+    return hit?.body ?? null;
   },
   write: async (sha256, bytes) => {
     await caches.default.put(edgeKey(sha256), new Response(bytes, { headers: { "cache-control": "public, max-age=31536000, immutable" } }));

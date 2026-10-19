@@ -2,7 +2,7 @@ import { dictationFile, DICTATION_PATH, sha256Hex, type DictationFile } from "@k
 import { withCors } from "./mailbox.ts";
 
 export interface DictationStore {
-  read(sha256: string): Promise<Uint8Array<ArrayBuffer> | null>;
+  read(sha256: string): Promise<ReadableStream<Uint8Array> | Blob | null>;
   write(sha256: string, bytes: Uint8Array<ArrayBuffer>): Promise<void>;
 }
 
@@ -22,9 +22,10 @@ function said(status: number, message: string): Response {
   return withCors(new Response(`${message}\n`, { status, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } }));
 }
 
-function served(req: Request, bytes: Uint8Array<ArrayBuffer>): Response {
-  const headers = { "content-type": "application/octet-stream", "content-length": String(bytes.byteLength), "cache-control": "no-store" };
-  return withCors(new Response(req.method === "HEAD" ? null : bytes, { headers }));
+function served(req: Request, body: ReadableStream<Uint8Array> | Blob | Uint8Array<ArrayBuffer>, size: number): Response {
+  const headers = { "content-type": "application/octet-stream", "content-length": String(size), "cache-control": "no-store" };
+  if (req.method === "HEAD" && body instanceof ReadableStream) void body.cancel();
+  return withCors(new Response(req.method === "HEAD" ? null : body, { headers }));
 }
 
 export async function onDictationHttp(req: Request, deps: DictationDeps): Promise<Response | null> {
@@ -35,7 +36,7 @@ export async function onDictationHttp(req: Request, deps: DictationDeps): Promis
   if (!file) return said(404, "Not found.");
   if (deps.ip && !(await deps.allow(deps.ip))) return said(429, DICTATION_TOO_MANY);
   const kept = await deps.store.read(file.sha256);
-  if (kept) return served(req, kept);
+  if (kept) return served(req, kept, file.size);
   let bytes: Uint8Array<ArrayBuffer>;
   try {
     const res = await (deps.upstream ?? ((u: string) => fetch(u)))(file.url);
@@ -47,5 +48,5 @@ export async function onDictationHttp(req: Request, deps: DictationDeps): Promis
   }
   if (bytes.byteLength !== file.size || (await sha256Hex(bytes)) !== file.sha256) return said(502, DICTATION_TAMPERED);
   await deps.store.write(file.sha256, bytes);
-  return served(req, bytes);
+  return served(req, bytes, file.size);
 }

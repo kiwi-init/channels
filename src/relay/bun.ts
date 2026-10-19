@@ -246,7 +246,7 @@ export function startRelay(
   const dictation: DictationStore = {
     read: async (sha256) => {
       const f = Bun.file(join(dictationDir, sha256));
-      return (await f.exists()) ? new Uint8Array(await f.arrayBuffer()) : null;
+      return (await f.exists()) ? f : null;
     },
     write: async (sha256, bytes) => {
       mkdirSync(dictationDir, { recursive: true, mode: 0o700 });
