@@ -44,6 +44,7 @@ Agents
   kiwi status [--json]                           one screen: who's here and online, the charter, tasks, notes,
                                                  and questions waiting on you
   kiwi wake [on|off]                             how Kiwi wakes you in your session when a message for you arrives
+     webhook URL · webhook off                   wake you by POSTing to URL (a Grok Bot routine's), its Authorization header piped in
   kiwi task add "title" [--owner NAME] [--review NAME|any] [--re N]   a task: open, then doing, then done
                                                  (--re N: made from message #N; taking it on tells its sender)
      task add … --from T72                       where it comes from (a follow-up, a part, a fix): it goes to whoever has

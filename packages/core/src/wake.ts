@@ -1,12 +1,12 @@
-export type WakeHarness = "claude" | "codex" | "gemini" | "cursor" | "grok" | "opencode" | "kimi" | "mimo" | "pi";
+export type WakeHarness = "claude" | "codex" | "gemini" | "cursor" | "grok" | "opencode" | "kimi" | "mimo" | "grok-bot" | "pi";
 
-export type WakeCommand = "codex-queue" | "opencode-api";
+export type WakeCommand = "codex-queue" | "opencode-api" | "webhook";
 
 export type WakePath = { kind: "hooks" } | { kind: "extension" } | { kind: "command"; via: WakeCommand; session: string } | { kind: "none"; why: string };
 
 export type WakeVia = "hooks" | "pi-extension" | "listener" | WakeCommand;
 
-const WAKE_VIA: readonly WakeVia[] = ["hooks", "pi-extension", "listener", "codex-queue", "opencode-api"];
+const WAKE_VIA: readonly WakeVia[] = ["hooks", "pi-extension", "listener", "codex-queue", "opencode-api", "webhook"];
 
 export function isWakeVia(v: unknown): v is WakeVia {
   return typeof v === "string" && (WAKE_VIA as readonly string[]).includes(v);
@@ -24,6 +24,8 @@ export function wakeWords(via: WakeVia): string {
       return "codex queue";
     case "opencode-api":
       return "OpenCode's service";
+    case "webhook":
+      return "its routine's webhook";
   }
 }
 
@@ -48,7 +50,7 @@ export function viaOf(path: WakePath): WakeVia | null {
   }
 }
 
-export function wakePath(record: { harness?: WakeHarness; session?: string } | null, claudeHooks: boolean, piExtension = false): WakePath {
+export function wakePath(record: { harness?: WakeHarness; session?: string } | null, claudeHooks: boolean, webhook = false, piExtension = false): WakePath {
   if (!record) return { kind: "none", why: "no session of a harness Kiwi knows has used this seat yet" };
   switch (record.harness) {
     case "claude":
@@ -67,6 +69,8 @@ export function wakePath(record: { harness?: WakeHarness; session?: string } | n
       return { kind: "none", why: "Kimi Code gives Kiwi no way to start a turn in a running session" };
     case "mimo":
       return { kind: "none", why: "MiMoCode gives Kiwi no way to start a turn in a running session" };
+    case "grok-bot":
+      return webhook ? { kind: "command", via: "webhook", session: "webhook" } : { kind: "none", why: "no routine webhook is set for it yet (kiwi wake webhook URL)" };
     case "pi":
       if (!piExtension) return { kind: "none", why: "Kiwi's Pi extension isn't installed (kiwi hooks install pi, then /reload in Pi)" };
       return record.session ? { kind: "extension" } : { kind: "none", why: "this Pi session started before Kiwi's Pi extension was installed (/reload in Pi loads it)" };
@@ -91,7 +95,7 @@ export function wakePrompt(alias: string, agent: string): string {
   return `New Kiwi messages for you in ${JSON.stringify(alias)}. Read them with: kiwi ${channelOption(alias)} ${asOption(agent)} listen --now, then act on them.`;
 }
 
-export function wakeArgv(via: WakeCommand, session: string, prompt: string): string[] {
+export function wakeArgv(via: Exclude<WakeCommand, "webhook">, session: string, prompt: string): string[] {
   switch (via) {
     case "codex-queue":
       return ["codex", "queue", "--thread", session, "--message", prompt];

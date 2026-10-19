@@ -4,13 +4,13 @@
 // git repository and branch it's in. Nothing from files, and nothing the person didn't put there.
 
 import { execFileSync } from "node:child_process";
-import { cpus, totalmem } from "node:os";
+import { cpus, hostname, totalmem } from "node:os";
 
 import { kimiCodePid, mimoHere, piHere, type ProcessTree } from "./ancestry.ts";
 import { harnessModel } from "./harness.ts";
 import type { Runs } from "@kiwi/core/membership.ts";
 import type { Card } from "@kiwi/core/protocol.ts";
-import { canonicalHarness } from "./seats.ts";
+import { canonicalHarness, onGrokBot } from "./seats.ts";
 
 /** Tools worth showing, as the binary that shows each one is here. */
 const TOOLS: [tag: string, bin: string][] = [
@@ -50,7 +50,7 @@ export function mergeCard(detected: Card, was: Card | undefined, given: { model?
 }
 
 /** The harness running this process, from the markers each one sets for its shell commands. */
-export function detectHarness(env: Record<string, string | undefined> = process.env, tree: ProcessTree = {}): string | undefined {
+export function detectHarness(env: Record<string, string | undefined> = process.env, tree: ProcessTree = {}, host: string = hostname()): string | undefined {
   if (piHere(env, tree)) return "pi";
   if (mimoHere(env, tree)) return "mimocode";
   if (kimiCodePid(env, tree)) return "kimi-code";
@@ -60,6 +60,7 @@ export function detectHarness(env: Record<string, string | undefined> = process.
   if (env.GEMINI_CLI) return "gemini";
   if (env.CURSOR_AGENT || env.CURSOR_TRACE_ID) return "cursor";
   if (env.OPENCODE_SESSION_ID) return "opencode";
+  if (onGrokBot({}, host)) return "grok-bot";
   return undefined;
 }
 
@@ -116,7 +117,7 @@ export function detectCard(env: Record<string, string | undefined> = process.env
  */
 export async function detectModel(env: Record<string, string | undefined> = process.env): Promise<string | undefined> {
   const said = env.KIWI_MODEL?.trim();
-  return said || (await harnessModel(env));
+  return said || (await harnessModel(env)) || (onGrokBot(env) ? "grok-bot" : undefined);
 }
 
 /**
@@ -126,7 +127,7 @@ export async function detectModel(env: Record<string, string | undefined> = proc
  */
 export async function detectRuns(env: Record<string, string | undefined> = process.env, given: { harness?: string; model?: string } = {}): Promise<Runs | undefined> {
   const harness = canonicalHarness(given.harness?.trim().toLowerCase() || env.KIWI_HARNESS?.trim().toLowerCase() || detectHarness(env));
-  const model = given.model?.trim() || (await detectModel(env));
+  const model = given.model?.trim() || (await detectModel(env)) || (harness === "grok-bot" ? "grok-bot" : undefined);
   return harness && model ? { harness: harness.slice(0, 40), model: model.slice(0, 60) } : undefined;
 }
 
