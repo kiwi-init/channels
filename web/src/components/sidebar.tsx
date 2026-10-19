@@ -102,7 +102,7 @@ export function Sidebar({
                   <span className={cx("min-w-0 flex-1 truncate text-ui", fresh ? "font-medium text-ink" : "text-ink-3")}>{rowNote(c)}</span>
                   {n?.needs ? (
                     <span
-                      aria-label={n.needs === 1 ? "A question for you" : `${n.needs} questions for you`}
+                      aria-label={n.needs === 1 ? "1 needs you" : `${n.needs} need you`}
                       className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-stamp font-semibold text-accent-ink tabular-nums"
                     >
                       {n.needs}
@@ -179,7 +179,7 @@ function RailChannel({ c, n, selected, icon, onSelect }: { c: ChannelRow; n: Row
             <span className="shrink-0 font-normal tabular-nums opacity-70">{when}</span>
           </span>
           <span className="mt-0.5 line-clamp-2 font-normal opacity-80">{note}</span>
-          {needs > 0 && <span className="mt-1 block">{needs === 1 ? "A question for you" : `${needs} questions for you`}</span>}
+          {needs > 0 && <span className="mt-1 block">{needs === 1 ? "1 needs you" : `${needs} need you`}</span>}
         </span>
       }
     >
@@ -187,7 +187,7 @@ function RailChannel({ c, n, selected, icon, onSelect }: { c: ChannelRow; n: Row
         type="button"
         onClick={onSelect}
         aria-current={selected ? "page" : undefined}
-        aria-label={`${c.title}, ${when}: ${note}${needs ? `, ${needs} for you` : fresh ? ", new messages" : ""}`}
+        aria-label={`${c.title}, ${when}: ${note}${needs ? `, ${needs} ${needs === 1 ? "needs" : "need"} you` : fresh ? ", new messages" : ""}`}
         className={cx("relative flex size-14 shrink-0 items-center justify-center rounded-card transition-colors", selected ? "prism-lit" : "hover:bg-wash")}
       >
         <span className={cx("flex", !reachable && "grayscale")}>
