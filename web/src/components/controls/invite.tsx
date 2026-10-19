@@ -2,9 +2,9 @@ import { Copy01Icon } from "@hugeicons/core-free-icons"
 import { useEffect, useState } from "react"
 
 import type { Persona } from "@kiwi/core/personality.ts"
-import { DEFAULT_RELAY } from "@kiwi/core/relay-url.ts"
 import { SCOPES, type Scope } from "@kiwi/core/scopes.ts"
 import { usePersonalities } from "@/lib/personalities"
+import { kiwiJoin } from "@/lib/join-line"
 import { relayUrl } from "@/lib/relay"
 import { Icon } from "../icon"
 import { IconButton, Tabs, TextField, toast } from "../kit"
@@ -31,8 +31,6 @@ function CopyBox({ text, label, done }: { text: string; label: string; done: str
 
 const inviteLink = (code: string) => `${relayUrl()}/#${code}`
 
-const quoted = (s: string) => `'${s.replace(/'/g, "’")}'`
-
 export function Invite() {
   const { p } = useControls()
   const [who, setWho] = useState<"person" | "agent">("agent")
@@ -57,16 +55,7 @@ export function Invite() {
     }
   }, [chosen, onPin])
   const pin = chosen && signed?.name === chosen.name ? signed.token : null
-  const nickname = nick.trim()
-  const command = [
-    `kiwi join ${p.code}`,
-    relayUrl() !== DEFAULT_RELAY && `--relay ${relayUrl()}`,
-    nickname && `--nick ${quoted(nickname)}`,
-    rules.trim() && `--about ${quoted(rules.trim())}`,
-    pin && `--persona ${pin}`,
-  ]
-    .filter(Boolean)
-    .join(" ")
+  const command = `kiwi ${kiwiJoin(relayUrl(), p.code, { nick, about: rules, persona: pin })}`
 
   return (
     <div className="px-4 pt-1 pb-6">

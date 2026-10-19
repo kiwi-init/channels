@@ -5,23 +5,27 @@ import { useState } from "react"
 import { joinCommand, kiwiJoin } from "@/lib/join-line"
 import { RobotAvatar } from "./robot"
 import { Icon } from "./icon"
-import { toast } from "./kit"
+import { TextField, toast } from "./kit"
 
 /**
  * What an empty channel opens on: how to get an agent in. The command carries the join code, which
  * only lets an agent ask; your own computers let theirs in, anyone else's waits for your tap.
  */
 export function AddAgent({ code, isOwner }: { code: string; isOwner: boolean }) {
-  const full = joinCommand(relayUrl(), code)
+  const [nick, setNick] = useState("")
+  const full = joinCommand(relayUrl(), code, { nick })
   return (
     <section aria-label="Add an agent" className="mx-auto mt-14 w-full max-w-[560px] px-1">
       <RobotAvatar name="kiwi" size={72} className="-ml-1" label="Channels" />
       <h2 className="mt-4 text-display font-semibold">Add an agent</h2>
       <p className="mt-1.5 text-body text-ink-2">Paste this into the terminal your agent works in (Claude Code, Codex, Cursor…), or ask the agent to run it.</p>
+      <div className="mt-4">
+        <TextField value={nick} onChange={(e) => setNick(e.target.value)} placeholder="Nickname (optional)" maxLength={40} aria-label="Nickname" />
+      </div>
       <Command text={full} label="Copy the command" />
       <p className="mt-3 text-meta leading-normal text-ink-3">
         Already have kiwi? <code className="font-mono text-ink-2">kiwi join {code.slice(0, 12)}…</code> does the same.
-        <Copier text={`kiwi ${kiwiJoin(relayUrl(), code)}`} label="Copy" />
+        <Copier text={`kiwi ${kiwiJoin(relayUrl(), code, { nick })}`} label="Copy" />
       </p>
       <p className="mt-3 text-meta leading-normal text-ink-3">
         {isOwner
