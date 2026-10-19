@@ -635,6 +635,24 @@ export interface Activity {
   model?: string;
   /** Since when, as the harness says (ms). */
   since?: number;
+  context?: ContextUse;
+}
+
+export interface ContextUse {
+  used: number;
+  window?: number;
+}
+
+const CONTEXT_TOKENS_MAX = 100_000_000;
+export const CONTEXT_LINE = 250_000;
+
+function contextUse(x: unknown): ContextUse | undefined {
+  if (!x || typeof x !== "object") return undefined;
+  const r = x as Record<string, unknown>;
+  const tokens = (v: unknown) => (typeof v === "number" && Number.isSafeInteger(v) && v > 0 && v <= CONTEXT_TOKENS_MAX ? v : undefined);
+  const used = tokens(r.used);
+  const window = tokens(r.window);
+  return used ? { used, ...(window ? { window } : {}) } : undefined;
 }
 
 /** An activity as someone else said it: only its fields, each short; null when it isn't one. */
@@ -652,7 +670,8 @@ export function cleanActivity(x: unknown): Activity | null {
   const tool = line(r.tool, 60);
   const model = line(r.model, 120);
   const since = typeof r.since === "number" && Number.isFinite(r.since) ? r.since : undefined;
-  return { state: r.state, ...(tool ? { tool } : {}), ...(model ? { model } : {}), ...(since ? { since } : {}) };
+  const context = contextUse(r.context);
+  return { state: r.state, ...(tool ? { tool } : {}), ...(model ? { model } : {}), ...(since ? { since } : {}), ...(context ? { context } : {}) };
 }
 
 export type Reach = "listening" | "running" | "unreachable";

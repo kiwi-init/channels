@@ -131,6 +131,13 @@ jobs:
       from PI_CODING_AGENT and the extension's process (test/seats.test.ts, test/routing.test.ts),
       its model from its session file (test/harness-model.test.ts), its wake path and words
       (test/wake.test.ts, test/daemon-seats.test.ts) and its name and logo (web lib/harness.test.ts).
+      Also test/context-line.test.ts: a seat's context in words (tokensWord), the Stop hook's nudge
+      once per crossing of CONTEXT_LINE (250k; back under it resets, unknown keeps the state), naming
+      each open task the seat owns and the checkpoint command, and an activity's context token
+      counts cleaned on the wire (cleanActivity); test/harness-model.test.ts: the context read from
+      Claude Code's newest main-thread reply (input, cache read, cache written, never output) and from
+      Codex's newest token_count with its window, unknown after a compaction (src/harness.ts); web
+      agent-strip.test.tsx: an agent's lane shows its context, flagged past the line.
       Also test/daemon-versions.test.ts: compareVersions (packages/core/src/versions.ts, shared by
       the CLI, the desktop updater and the changelog) orders releases and pre-releases, an older
       kiwi keeps a newer daemon running, and a newer one replaces an older daemon (src/daemon/rpc.ts).
@@ -323,7 +330,9 @@ jobs:
       doesn't (src/hooks/answer.ts, packages/core/src/reentry.ts); with big checkpoints and a
       backlog of messages the SessionStart context stays within HOOK_CONTEXT_MAX (Claude Code's
       inline limit, shared between the seats a session serves in src/hooks/run.ts), and every
-      message it left out comes with a later hook. Fails if joining, seats, hooks, pairing, the
+      message it left out comes with a later hook; and past the context line the Stop hook asks once
+      for a checkpoint of each open task, not while stop_hook_active, and again only after the
+      context came back under it (src/hooks/context-line.ts). Fails if joining, seats, hooks, pairing, the
       daemon, kiwi sh, handoff or the relay change behavior.
 
   build:

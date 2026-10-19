@@ -12,6 +12,7 @@ import { here, type Binding, type Here } from "../seats.ts";
 import { REENTRY_MAX, reentryText } from "@kiwi/core/reentry.ts";
 import { humanOf } from "@kiwi/core/state.ts";
 import { asOption, channelOption } from "@kiwi/core/wake.ts";
+import { crossing, noteOverLine, nudgeText, openTasksOf, overLine } from "./context-line.ts";
 import { commitDelivered, noteHeard } from "./delivered.ts";
 import { isRecord } from "./files.ts";
 import { liveListeners, refreshListeners } from "./listeners.ts";
@@ -51,6 +52,7 @@ export interface HookInput {
   model?: unknown;
   conversation_id?: unknown;
   cursor_version?: unknown;
+  transcript_path?: unknown;
 }
 
 export function freshAt(input: Pick<HookInput, "source">, now: number): number | null {
@@ -132,6 +134,29 @@ export function cursorFollow(mc: string, unread: boolean, reminder: Reminder | n
   const rearm = fitReminder(reminder, budget - (nudge ? nudge.length + 2 : 0));
   return [nudge, rearm].filter((t) => t !== null).join("\n\n");
 }
+
+const contextNudge = Effect.fn("Hooks.contextNudge")(function* (input: HookInput, s: AgentSession, who: Here, mc: string, budget: number) {
+  const session = who.session;
+  const file = input.transcript_path;
+  if (who.harness !== "claude" || !session || typeof file !== "string" || !file) return null;
+  const { claudeContext } = yield* Effect.promise(() => import("../harness.ts"));
+  const context = yield* Effect.sync(() => {
+    try {
+      return claudeContext(file);
+    } catch {
+      // A transcript that can't be read says nothing about the context: no nudge, the line's state kept.
+      return undefined;
+    }
+  });
+  const over = overLine(s.alias, s.me, session);
+  const next = crossing(context?.used, over);
+  if (!next.over && over) noteOverLine(s.alias, s.me, session, false);
+  if (!next.nudge || !context || input.stop_hook_active) return null;
+  const { state } = yield* s.state();
+  const text = nudgeText(context, openTasksOf(state, s.me), mc);
+  if (!text || text.length > budget) return null;
+  return { text, shown: Effect.sync(() => noteOverLine(s.alias, s.me, session, true)) };
+});
 
 export function stopReason(head: string, unread: string, reminder: string | null): string {
   return [unread ? `${head}\n${unread}` : null, reminder].filter((t) => t !== null).join("\n\n");
@@ -359,12 +384,15 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
     }
     if (who.harness === "grok" && input.reason !== undefined && input.reason !== "end_turn") return null;
     const stopHead = `Before stopping: unread Kiwi Channels messages for you. Handle them (answer with \`${mc} reply N "…"\`):`;
-    const reminder = fitReminder(yield* rearmText(input, b, who, mc), budget);
+    const nudge = yield* contextNudge(input, s, who, mc, budget);
+    const rearm = fitReminder(yield* rearmText(input, b, who, mc), budget - (nudge ? nudge.text.length + 2 : 0));
+    const reminder = [nudge?.text ?? null, rearm].filter((t) => t !== null).join("\n\n") || null;
     const unreadMax = stopUnreadMax(stopHead, reminder, budget);
     const unread = unreadMax > 0 ? yield* unreadText(s, mc, unreadMax) : { text: "", shown: Effect.void };
     const decision = style === "gemini" ? "deny" : "block";
     const reason = stopReason(stopHead, unread.text, reminder);
-    if (reason) return answered(decision, reason, unread.shown);
+    const shown = nudge ? Effect.andThen(nudge.shown, unread.shown) : unread.shown;
+    if (reason) return answered(decision, reason, shown);
     yield* unread.shown;
   }
   return null;

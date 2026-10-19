@@ -206,6 +206,47 @@ describe("harnessActivity", () => {
     expect((await harnessActivity(claude("idle", [asked])))?.state).toBe("idle");
   });
 
+  const usage = (input: number, read: number, created: number, extra: object = {}) => ({
+    type: "assistant",
+    ...extra,
+    message: {
+      model: "claude-opus-5-5",
+      content: [{ type: "text", text: "secret" }],
+      usage: { input_tokens: input, cache_read_input_tokens: read, cache_creation_input_tokens: created, output_tokens: 900 },
+    },
+  });
+
+  test("Claude Code: its context is the newest main-thread reply's input, cache read and cache written, never the output", async () => {
+    const a = await harnessActivity(claude("idle", [usage(1, 100_000, 50), usage(2, 261_000, 700), usage(5, 9_000, 0, { isSidechain: true }), { type: "user", message: { content: "next" } }]));
+    expect(a).toEqual({ state: "idle", since: 1000, context: { used: 261_702 }, model: "claude-opus-5-5" });
+    expect(JSON.stringify(a)).not.toContain("secret");
+  });
+
+  test("Claude Code: after a compaction and before its next reply, the context is unknown, not the old size", async () => {
+    const a = await harnessActivity(claude("busy", [usage(2, 900_000, 0), { type: "system", subtype: "compact_boundary" }, { type: "user", message: { content: "summary" } }]));
+    expect(a?.context).toBeUndefined();
+    const b = await harnessActivity(claude("busy", [usage(2, 900_000, 0), { type: "system", subtype: "compact_boundary" }, usage(3, 40_000, 100)]));
+    expect(b?.context).toEqual({ used: 40_103 });
+  });
+
+  test("Codex: the newest token count's input and the model's window; unknown after a compaction", async () => {
+    const home = dir();
+    const rollout = join(home, "rollout.jsonl");
+    const db = new Database(join(home, "state_5.sqlite"));
+    db.run("CREATE TABLE threads (id TEXT, model TEXT, rollout_path TEXT)");
+    db.run("INSERT INTO threads VALUES ('t-1', 'gpt-6-astra', ?)", [rollout]);
+    db.close();
+    const count = (input: number) => ({
+      type: "event_msg",
+      payload: { type: "token_count", info: { last_token_usage: { input_tokens: input, cached_input_tokens: input - 10 }, model_context_window: 258_400 } },
+    });
+    const write = (lines: object[]) => writeFileSync(rollout, lines.map((l) => JSON.stringify(l)).join("\n") + "\n");
+    write([count(10_000), count(64_490), { type: "event_msg", payload: { type: "task_complete" } }]);
+    expect(await harnessActivity({ CODEX_THREAD_ID: "t-1", CODEX_HOME: home })).toEqual({ state: "idle", context: { used: 64_490, window: 258_400 }, model: "gpt-6-astra" });
+    write([count(200_000), { type: "compacted", payload: {} }, { type: "event_msg", payload: { type: "task_started" } }]);
+    expect((await harnessActivity({ CODEX_THREAD_ID: "t-1", CODEX_HOME: home }))?.context).toBeUndefined();
+  });
+
   test("OpenCode: idle once it went idle after its last change, else working", async () => {
     const data = dir();
     mkdirSync(join(data, "opencode"));
