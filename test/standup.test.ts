@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import type { Event, Kind, Message } from "@kiwi/core/protocol.ts";
 import { fold, placeKey, type Roster } from "@kiwi/core/state.ts";
-import { cardShown, lastLine, liveCard, taskRoom, unreadIn } from "@kiwi/core/standup.ts";
+import { cardShown, lastLine, liveCard, taskRoom, unreadAll, unreadIn } from "@kiwi/core/standup.ts";
 
 let seq = 0;
 const T0 = 1_700_000_000_000;
@@ -86,6 +86,30 @@ describe("per-viewer unread", () => {
     expect(unreadIn(s, ms, "bob", key, b.seq).n).toBe(1);
     expect(unreadIn(s, ms, "bob", key, c.seq).n).toBe(0);
     expect(unreadIn(s, ms, "ann", key, 0).n).toBe(1);
+  });
+
+  test("one pass for every place gives what asking each place gives, for every viewer and last look", async () => {
+    const ms: Message[] = [];
+    const tasks: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      const add = await msg([ann, bob][i % 2]!, { ev: { op: "task.add", title: `T${i}`, owner: i % 2 ? "bob" : "ann" } });
+      ms.push(add);
+      tasks.push(add.seq);
+    }
+    for (let i = 0; i < 40; i++) {
+      const from = [ann, bob, owner][i % 3]!;
+      const task = i % 4 === 3 ? undefined : tasks[i % tasks.length];
+      ms.push(await msg(from, { body: `m${i}`, ...(task !== undefined ? { task } : {}), ...(i % 5 === 0 ? { to: [["ann", "bob", "jonatas"][(i + 1) % 3]!] } : {}) }));
+      if (i % 9 === 0) ms.push(await msg(bob, { ev: { op: "react", seq: ms.at(-1)!.seq, emoji: "👀" } }));
+    }
+    const s = fold(ms, roster);
+    const keys = [...s.places.keys(), "main", placeKey({ kind: "task", task: 999 })];
+    for (const viewer of ["ann", "bob", "jonatas"])
+      for (const cut of [0, ms[10]!.seq, ms[30]!.seq]) {
+        const seen = Object.fromEntries(keys.map((k, i) => [k, i % 2 ? cut : 0]));
+        const all = unreadAll(s, ms, viewer, seen);
+        for (const k of keys) expect(all(k)).toEqual(unreadIn(s, ms, viewer, k, seen[k] ?? 0));
+      }
   });
 });
 

@@ -73,6 +73,25 @@ export function unreadIn(state: ChannelState, messages: readonly Message[], view
   return mine ? { n, forMe: n > 0 } : { n: named || n, forMe: named > 0 };
 }
 
+export function unreadAll(state: ChannelState, messages: readonly Message[], viewer: string, seen: Readonly<Record<string, number>>): (key: string) => Unread {
+  const counts = new Map<string, { n: number; named: number }>();
+  for (const m of messages) {
+    if (m.kind === "event" || m.from === viewer || !visible(state, m)) continue;
+    const key = placeKey(state.placeOf.get(m.seq) ?? MAIN);
+    if (m.seq <= (seen[key] ?? 0)) continue;
+    let c = counts.get(key);
+    if (!c) counts.set(key, (c = { n: 0, named: 0 }));
+    c.n++;
+    if (m.to?.includes(viewer)) c.named++;
+  }
+  return (key) => {
+    const { n, named } = counts.get(key) ?? { n: 0, named: 0 };
+    const place = placeFromKey(key) ?? MAIN;
+    const mine = place.kind === "main" || (place.kind === "dm" ? place.with.includes(viewer) : threadMembers(state, place).includes(viewer));
+    return mine ? { n, forMe: n > 0 } : { n: named || n, forMe: named > 0 };
+  };
+}
+
 export function liveCard(state: ChannelState, messages: readonly Message[], id: number, viewer: string): LiveCard | undefined {
   const task = state.tasks.get(id);
   if (!task) return undefined;

@@ -314,6 +314,88 @@ export function taskPrs(items: FeedItem[]): PrRef[] {
   return items.flatMap((i) => (i.type === "pr" ? [i.pr] : []));
 }
 
+const TASK_REF = /\bT(\d+)\b/g;
+const FATE_WORD = /\b(?:merged|closed)\b/i;
+
+export function prsByTask(state: ChannelState, messages: Message[], ids: Iterable<number> = state.tasks.keys()): Map<number, PrRef[]> {
+  type Link = { seq: number; links: { url: string; repo: string; number: number }[] };
+  const rootsOf = new Map<number, Set<number>>();
+  const linksIn = new Map<number, Link[]>();
+  const notes = new Map<number, Link[]>();
+  const fated: { seq: number; text: string }[] = [];
+  const known = new Map<string, { url: string; number: number }>();
+  const seqs = new Set<number>();
+  for (const m of messages) {
+    seqs.add(m.seq);
+    if (!visible(state, m)) continue;
+    const text = textOf(m);
+    const root = m.kind === "event" ? undefined : (state.threadOf.get(m.seq) ?? m.seq);
+    if (root !== undefined && m.body) {
+      for (const hit of m.body.matchAll(TASK_REF)) {
+        const id = Number(hit[1]);
+        if (String(id) !== hit[1]) continue;
+        let roots = rootsOf.get(id);
+        if (!roots) rootsOf.set(id, (roots = new Set()));
+        roots.add(root);
+      }
+    }
+    if (!text) continue;
+    const links = text.includes("/pull/") ? prLinks(text) : [];
+    for (const l of links) known.set(l.url, l);
+    if (links.length) {
+      const into = root !== undefined ? linksIn : m.ev?.op === "task.update" ? notes : null;
+      const key = root ?? (m.ev?.op === "task.update" ? m.ev.task : 0);
+      if (into) {
+        let list = into.get(key);
+        if (!list) into.set(key, (list = []));
+        list.push({ seq: m.seq, links });
+      }
+    }
+    if (FATE_WORD.test(text)) fated.push({ seq: m.seq, text });
+  }
+  const fates = new Map<string, { seq: number; fate: "merged" | "closed" }[]>();
+  for (const { seq, text } of fated)
+    for (const pr of known.values()) {
+      if (!text.includes(pr.url) && !text.includes(`#${pr.number}`)) continue;
+      const fate = fateIn(text, pr);
+      if (!fate) continue;
+      let list = fates.get(pr.url);
+      if (!list) fates.set(pr.url, (list = []));
+      list.push({ seq, fate });
+    }
+  const byBranch = new Map<number, [string, GithubPr][]>();
+  for (const [key, gh] of state.github.prs) {
+    const id = taskOfBranch(gh.branch);
+    if (id === null) continue;
+    let list = byBranch.get(id);
+    if (!list) byBranch.set(id, (list = []));
+    list.push([key, gh]);
+  }
+  const out = new Map<number, PrRef[]>();
+  for (const id of ids) {
+    const linked = [...(notes.get(id) ?? []), ...[...(rootsOf.get(id) ?? [])].flatMap((root) => linksIn.get(root) ?? [])].sort((a, b) => a.seq - b.seq);
+    const prs = new Map<string, PrRef>();
+    for (const { seq, links } of linked) for (const l of links) if (!prs.has(l.url)) prs.set(l.url, { ...l, state: "open", seq });
+    const items: PrRef[] = [];
+    const shown = new Set<string>();
+    for (const pr of prs.values()) {
+      const last = fates.get(pr.url)?.at(-1);
+      if (last && last.seq > pr.seq) pr.state = last.fate;
+      shown.add(prKey(pr.repo, pr.number));
+      items.push(fromGithub(state, pr));
+    }
+    for (const [key, gh] of byBranch.get(id) ?? []) {
+      if (shown.has(key) || !seqs.has(gh.seq)) continue;
+      items.push(fromGithub(state, { url: gh.url ?? `https://github.com/${gh.repo}/pull/${gh.number}`, repo: gh.repo, number: gh.number, state: gh.state, seq: gh.seq }));
+    }
+    out.set(
+      id,
+      items.sort((a, b) => a.seq - b.seq),
+    );
+  }
+  return out;
+}
+
 export function taskDigest(state: ChannelState, messages: Message[], t: Task): string {
   const feed = taskFeed(state, messages, t.id);
   const prs = [...new Map(taskPrs(feed).map((p) => [p.url, `${p.repo}#${p.number}`])).values()];
