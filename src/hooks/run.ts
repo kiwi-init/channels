@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { ChannelGone } from "@kiwi/core/client.ts";
 import { Keystore } from "../config.ts";
-import { here, kimiHookHere, noteHarnessSession, sameSeat, seatsHeldAnywhere, type Here } from "../seats.ts";
+import { here, kimiHookHere, noteHarnessSession, onGrokBot, sameSeat, seatsHeldAnywhere, type Here } from "../seats.ts";
 import { writeSync } from "node:fs";
 import { answer, hookOutput, kimiReason, printed, seatBudget, tellKimi, type Answer, type HookInput } from "./answer.ts";
 import { holdAnswering } from "./delivered.ts";
@@ -26,7 +26,7 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
   }
   const kimi = event === KIMI_STOP;
   const model = typeof input.model === "string" && input.model.trim() ? input.model.trim() : undefined;
-  const cursor = typeof input.cursor_version === "string" && typeof input.conversation_id === "string" && input.conversation_id ? input.conversation_id : null;
+  const cursor = typeof input.cursor_version === "string" && typeof input.conversation_id === "string" && input.conversation_id && !onGrokBot() ? input.conversation_id : null;
   const who: Here = kimi
     ? kimiHookHere()
     : cursor

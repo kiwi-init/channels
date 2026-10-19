@@ -293,6 +293,7 @@ describe("reading the machine", () => {
   test("a Grok Bot from its VM's hostname, which no other harness marker overrides", () => {
     expect(detectHarness({}, {}, "grok-bot-vm-53703001")).toBe("grok-bot");
     expect(detectHarness({ CLAUDECODE: "1" }, {}, "grok-bot-vm-53703001")).toBe("claude-code");
+    expect(detectHarness({ CURSOR_AGENT: "1", CURSOR_TRACE_ID: "x" }, {}, "grok-bot-vm-53703001")).toBe("grok-bot");
     expect(detectHarness({}, {}, "my-grok-bot-vm-laptop")).toBeUndefined();
   });
 
