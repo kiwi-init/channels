@@ -1,4 +1,5 @@
 import type { ChannelState, Task } from "@kiwi/core/state.ts"
+import { DONE_RECENTLY, STATE_LABEL } from "./task-labels"
 
 export type Tab = "tasks" | "agents" | "conversation"
 
@@ -13,9 +14,9 @@ export type View = "everything" | "needs" | "doing" | "review" | "done"
 export const VIEWS: [View, string][] = [
   ["everything", "Everything"],
   ["needs", "Needs you"],
-  ["doing", "In progress"],
-  ["review", "In review"],
-  ["done", "Done this week"],
+  ["doing", STATE_LABEL.doing],
+  ["review", STATE_LABEL.review],
+  ["done", DONE_RECENTLY],
 ]
 
 const WEEK = 7 * 24 * 60 * 60 * 1000
@@ -47,23 +48,23 @@ export interface TaskGroup {
 
 export function taskGroups(state: Pick<ChannelState, "tasks">, view: View, now: number): TaskGroup[] {
   const live = [...state.tasks.values()].filter((t) => !t.archived).sort((a, b) => b.updatedAt - a.updatedAt)
-  const today = startOfDay(now)
   const of = (key: GroupKey, label: string, keep: (t: Task) => boolean): TaskGroup => ({ key, label, tasks: live.filter(keep) })
   switch (view) {
     case "everything":
       return [
-        of("doing", "In progress", (t) => t.state === "doing" || t.state === "review"),
-        of("next", "Up next", (t) => t.state === "todo"),
-        of("done", "Done today", (t) => t.state === "done" && t.updatedAt >= today),
+        of("doing", STATE_LABEL.doing, (t) => t.state === "doing"),
+        of("review", STATE_LABEL.review, (t) => t.state === "review"),
+        of("next", STATE_LABEL.todo, (t) => t.state === "todo"),
+        of("done", DONE_RECENTLY, (t) => t.state === "done" && now - t.updatedAt < WEEK),
       ]
     case "needs":
       return []
     case "doing":
-      return [of("doing", "In progress", (t) => t.state === "doing")]
+      return [of("doing", STATE_LABEL.doing, (t) => t.state === "doing")]
     case "review":
-      return [of("review", "In review", (t) => t.state === "review")]
+      return [of("review", STATE_LABEL.review, (t) => t.state === "review")]
     case "done":
-      return [of("done", "Done this week", (t) => t.state === "done" && now - t.updatedAt < WEEK)]
+      return [of("done", DONE_RECENTLY, (t) => t.state === "done" && now - t.updatedAt < WEEK)]
   }
 }
 

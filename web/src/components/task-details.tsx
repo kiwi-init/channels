@@ -5,7 +5,7 @@ import type { Message } from "@kiwi/core/protocol.ts"
 import { colorOf, issueOf, taskId, type ChannelState, type Task } from "@kiwi/core/state.ts"
 import type { GithubDiff } from "@kiwi/core/client.ts"
 import { pickFor, taskCandidates } from "@kiwi/core/routing.ts"
-import { taskFeed, taskPrs, taskRepo } from "@kiwi/core/work.ts"
+import { taskFeed, taskPr, taskPrs, taskRepo } from "@kiwi/core/work.ts"
 import { formatAgo, formatFull, memberName } from "@/lib/format"
 import { ANYONE, reviewerChoices, taskActions } from "@/lib/task-actions"
 import { cx } from "@/lib/utils"
@@ -14,8 +14,10 @@ import { Feed, PrLink } from "./feed"
 import { Icon } from "./icon"
 import { Alert, Button, Monogram, TextField, errorText, toast } from "./kit"
 import { Markdown } from "./lazy"
+import { PrCard } from "./pr-card"
 import { isAgent } from "./message"
-import { labelOf, StateMark } from "./tasks"
+import { labelOf } from "@/lib/task-labels"
+import { StateMark } from "./tasks"
 
 /**
  * A task at the head of its conversation in the Tasks panel, as a thread opens on its first message:
@@ -58,6 +60,7 @@ export function TaskDetails({
 }) {
   const task = state.tasks.get(id)
   const items = useMemo(() => taskFeed(state, messages, id), [state, messages, id])
+  const pr = useMemo(() => taskPr(state, id)?.pr, [state, id])
   const [story, setStory] = useState(false)
 
   if (!task)
@@ -90,6 +93,11 @@ export function TaskDetails({
       </div>
       {person && !noteBlocked && <Suggested task={task} state={state} onAssign={onAssign} />}
       {!noteBlocked && <Actions key={task.id} task={task} state={state} me={me} person={person} onApprove={onApprove} onSendBack={onSendBack} onCancel={onCancel} onReviewer={onReviewer} />}
+      {pr && (
+        <div className="mt-4">
+          <PrCard pr={pr} state={state} load={onDiff} />
+        </div>
+      )}
       <h3 className="mt-4 text-ui font-semibold">
         <button type="button" aria-expanded={story} onClick={() => setStory((v) => !v)} className="flex w-full items-center gap-2 text-left">
           Activity

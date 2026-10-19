@@ -48,13 +48,14 @@ describe("the sidebar's views", () => {
     expect(mergedSince({ github }, startOfDay(NOW))).toBe(1)
   })
 
-  test("Everything groups the board: in progress (review too), up next, done today; a view shows only its own", () => {
+  test("Everything groups the board by state, review apart from in progress, done this week; a view shows only its own", () => {
     const tasks = new Map([task(1, "doing", NOW - 5), task(2, "review", NOW - 1), task(3, "todo"), task(4, "done", NOW - 60_000), task(5, "done", NOW - 2 * DAY)].map((t) => [t.id, t]))
     const ids = (view: Parameters<typeof taskGroups>[1]) => taskGroups({ tasks }, view, NOW).map((g) => [g.label, g.tasks.map((t) => t.id)])
     expect(ids("everything")).toEqual([
-      ["In progress", [2, 1]],
+      ["In progress", [1]],
+      ["In review", [2]],
       ["Up next", [3]],
-      ["Done today", [4]],
+      ["Done this week", [4, 5]],
     ])
     expect(ids("review")).toEqual([["In review", [2]]])
     expect(ids("done")).toEqual([["Done this week", [4, 5]]])

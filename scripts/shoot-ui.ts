@@ -269,12 +269,15 @@ try {
           .waitFor({ timeout: 15000 })
           .catch(() => {});
       };
-      /** A task's row on the Tasks tab, opened in place under it. */
-      const openInline = async (title: RegExp) => {
+      /** A task's row on the Tasks tab, opened in the Tasks panel beside the board. */
+      const openFromBoard = async (title: RegExp) => {
         await toTab("Tasks");
-        const row = owner.getByRole("button", { name: title }).and(owner.locator("[aria-expanded]")).first();
+        const row = owner.getByRole("button", { name: title }).first();
         await row.waitFor({ timeout: 15000 });
-        if ((await row.getAttribute("aria-expanded")) !== "true") await row.click();
+        await row.click();
+        await tasksPanel()
+          .getByRole("region", { name: /^Task T\d+/ })
+          .waitFor();
       };
       const toList = async () => {
         if (narrow) await owner.getByRole("button", { name: "Channels" }).click();
@@ -333,20 +336,7 @@ try {
         () => toTab("Conversation"),
       );
       await atNewest("back on the conversation from Tasks");
-      await shoot(owner, tag, "05-task-inline", () => openInline(/Write fewer rows/), toChannel);
-      await shoot(
-        owner,
-        tag,
-        "06-task-panel",
-        async () => {
-          await openInline(/Write fewer rows/);
-          await owner.getByRole("button", { name: "Details", exact: true }).first().click();
-          await tasksPanel()
-            .getByRole("region", { name: /^Task T\d+/ })
-            .waitFor();
-        },
-        toChannel,
-      );
+      await shoot(owner, tag, "06-task-panel", () => openFromBoard(/Write fewer rows/), toChannel);
       await shoot(
         owner,
         tag,

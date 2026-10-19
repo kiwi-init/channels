@@ -333,7 +333,7 @@ jobs:
       web/src/components/lazy.tsx doesn't count. Then ui smoke: starts the relay and the kiwi CLI
       as a test computer and drives the built dashboard in headless Chromium, opening every
       menu, popover and dialog, setting up a passkey, previewing an invite, Settings → Personalities duplicating a preset into the person's own, the owner allowing voice from Details, the Agents tab showing a lane per agent with what's next on it, Needs you as rows always in view (an agent asking in is let in from its row), an answered ask saying who chose what on the ask itself, replying inline (the reply quotes what it answers, "1 Reply" opens the thread), linking a computer
-      with `kiwi setup`, approving its agent and opening a task, finding controls by visible
+      with `kiwi setup`, approving its agent and opening a task (a board row opens it in the Tasks panel, with no second task list behind it; /tasks switches to the Tasks tab), finding controls by visible
       names and roles; fails if a page throws while rendering, a control it looks for is renamed
       or missing, or the relay, pairing or join flow breaks. Then compiles the kiwi CLI into one
       Linux binary with scripts/build-cli.ts, runs `kiwi --version`, fails over the minified
@@ -354,8 +354,8 @@ jobs:
       personality, lets win in, a conversation with an ask, a reply, two tasks and a task's
       conversation, a review and an escalation under Needs you, a direct conversation, notes, a
       pending join request and a second empty channel) and shoots every screen of the wide
-      window in the dark: the conversation, the reply bar, the composer with words in it, the Tasks tab, a task opened inline
-      and in the Tasks panel, Needs you, the Agents tab, Details, the direct conversation,
+      window in the dark: the conversation, the reply bar, the composer with words in it, the Tasks tab, a task opened from its board row
+      in the Tasks panel, Needs you, the Agents tab, Details, the direct conversation,
       Invite, the account menu, the command palette, Notes, Pause, Settings, Personalities, Add
       an agent, first run, signed in with nothing open, Join with a code and the invite preview.
       The shots are uploaded as the ui-shots artifact. Fails when the conversation isn't at its newest message (within 80px of the bottom) once the channel opens and again back from the Tasks tab (web/src/components/conversation/use-scroll.ts), or when the seeding can't drive the

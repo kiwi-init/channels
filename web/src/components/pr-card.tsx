@@ -1,5 +1,5 @@
 import { CancelCircleIcon, CheckmarkCircle02Icon, GitPullRequestIcon, Loading03Icon } from "@hugeicons/core-free-icons"
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useState } from "react"
 
 import type { GithubDiff } from "@kiwi/core/client.ts"
 import { prChecks, type ChannelState, type GithubPr } from "@kiwi/core/state.ts"
@@ -40,7 +40,7 @@ function Plus({ additions, deletions }: { additions: number; deletions: number }
   )
 }
 
-function PrCard({ pr, state, load }: { pr: GithubPr; state: ChannelState; load: Load | undefined }) {
+export function PrCard({ pr, state, load }: { pr: GithubPr; state: ChannelState; load: Load | undefined }) {
   const files = useFiles(pr, load)
   const [diffOpen, setDiffOpen] = useState(false)
   const checks = prChecks(state.github, pr)
@@ -48,7 +48,7 @@ function PrCard({ pr, state, load }: { pr: GithubPr; state: ChannelState; load: 
   const rest = Array.isArray(files) ? files.slice(FILES) : []
   const url = pr.url ?? `https://github.com/${pr.repo}/pull/${pr.number}`
   return (
-    <section aria-label={`PR #${pr.number}`} className="flex flex-col gap-3 self-start rounded-card p-3.5 edge">
+    <section aria-label={`PR #${pr.number}`} className="flex flex-col gap-3 rounded-card p-3.5 edge">
       <header className="flex min-w-0 items-center gap-2 text-ui font-semibold">
         <Icon icon={GitPullRequestIcon} size={15} className="shrink-0" />
         <span className="tabular-nums">PR #{pr.number}</span>
@@ -118,34 +118,5 @@ function PrCard({ pr, state, load }: { pr: GithubPr; state: ChannelState; load: 
       </div>
       {diffOpen && pr.sha && load && <DiffDialog repo={pr.repo} sha={pr.sha} title={`PR #${pr.number}`} load={load} onClose={() => setDiffOpen(false)} />}
     </section>
-  )
-}
-
-export function TaskInline({
-  pr,
-  state,
-  rows,
-  composer,
-  load,
-  onDetails,
-}: {
-  pr: GithubPr | undefined
-  state: ChannelState
-  rows: ReactNode[]
-  composer: ReactNode
-  load: Load | undefined
-  onDetails: () => void
-}) {
-  return (
-    <div className={cx("grid gap-5 pt-1 pr-3 pb-4 pl-[54px]", pr && "lg:grid-cols-[minmax(0,1fr)_320px]")}>
-      <div className="min-w-0">
-        {rows.length ? rows : <p className="py-2 text-ui text-ink-3">Nothing said in this task yet.</p>}
-        <div className="-mx-3 pt-1">{composer}</div>
-        <Button variant="secondary" size="sm" className="mt-1" onClick={onDetails}>
-          Details
-        </Button>
-      </div>
-      {pr && <PrCard pr={pr} state={state} load={load} />}
-    </div>
   )
 }

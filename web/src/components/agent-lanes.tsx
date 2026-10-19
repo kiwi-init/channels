@@ -1,15 +1,15 @@
 import { useMemo } from "react"
 
 import type { Message } from "@kiwi/core/protocol.ts"
-import { taskId, type ChannelState, type Task } from "@kiwi/core/state.ts"
+import { taskId, type ChannelState } from "@kiwi/core/state.ts"
 import { prsByTask, type PrChecks, type PrRef } from "@kiwi/core/work.ts"
 import { formatAgo, formatTime } from "@/lib/format"
 import { laneWork, type LaneTask } from "@/lib/lanes"
+import { STATE_LABEL, stateWord } from "@/lib/task-labels"
 import { cx } from "@/lib/utils"
 import { agentNow, byBusy, type AgentNow } from "./agent-strip"
 import { Monogram } from "./kit"
 
-const STATE_WORD: Record<Task["state"], string> = { todo: "open", doing: "in progress", review: "in review", done: "done" }
 const MAX_TICKS = 8
 
 function Ticks({ checks }: { checks: PrChecks }) {
@@ -42,7 +42,7 @@ function TaskBlock({ c, now, onOpen }: { c: LaneTask; now: number; onOpen: (id: 
     <li className="rounded-card border border-line px-3 py-2.5">
       <button type="button" onClick={() => onOpen(c.task.id)} className="block w-full text-left">
         <span className="block text-meta text-ink-3">
-          <span className="tabular-nums">{taskId(c.task.id)}</span> · {STATE_WORD[c.task.state]} · {formatAgo(c.since, now)}
+          <span className="tabular-nums">{taskId(c.task.id)}</span> · {stateWord(c.task)} · {formatAgo(c.since, now)}
         </span>
         <span className="mt-0.5 line-clamp-2 block text-ui font-semibold hover:underline">{c.task.title}</span>
       </button>
@@ -99,7 +99,7 @@ function Lane({
 
       {work.next.length > 0 && (
         <div>
-          <p className="mb-1 text-meta font-medium text-ink-3">Up next</p>
+          <p className="mb-1 text-meta font-medium text-ink-3">{STATE_LABEL.todo}</p>
           <ul>
             {work.next.map((t) => (
               <li key={t.id}>
