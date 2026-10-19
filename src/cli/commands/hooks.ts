@@ -1,4 +1,6 @@
+import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
+import { reason } from "@kiwi/core/client.ts";
 import { Keystore } from "../../config.ts";
 import {
   EXTRA_HARNESSES,
@@ -18,7 +20,15 @@ import { args } from "../args.ts";
 import { type Command, die, out } from "../context.ts";
 
 export const hookCommands: Record<string, Command> = {
-  hook: () => runHook(args[1] ?? ""),
+  hook: () =>
+    runHook(args[1] ?? "").pipe(
+      Effect.catchCause((cause) =>
+        Effect.sync(() => {
+          process.stderr.write(`kiwi: hooks are off until this is fixed: ${reason(Cause.squash(cause))}\n`);
+          return 0;
+        }),
+      ),
+    ),
 
   hooks: () =>
     Effect.gen(function* () {

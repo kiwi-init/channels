@@ -54,7 +54,13 @@ export interface Config {
 export function loadConfig(): Config {
   const path = join(home(), "config.json");
   if (!existsSync(path)) return { channels: {} };
-  return JSON.parse(readFileSync(path, "utf8")) as Config;
+  const text = readFileSync(path, "utf8");
+  try {
+    return JSON.parse(text) as Config;
+  } catch (err) {
+    // A bare parse error names no file; say which one and what to do with it.
+    throw new Error(`${path} isn't valid JSON (${err instanceof Error ? err.message : String(err)}): fix it, or move it aside and join your channels again`, { cause: err });
+  }
 }
 
 export function saveConfig(cfg: Config): void {

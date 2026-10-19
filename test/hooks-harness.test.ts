@@ -710,3 +710,15 @@ test("a hand-over keeps whole messages up to its size limit, and cuts a single m
   expect(fitting(["a".repeat(10), "b"], 4)).toEqual({ count: 1, text: "aaaa …" });
   expect(fitting([], 4)).toEqual({ count: 0, text: "" });
 });
+
+test("a config.json that isn't JSON leaves every hook exiting 0, with one line naming the file", () => {
+  const home = scratch("hk-bad-config-");
+  writeFileSync(join(home, "config.json"), "{ not json");
+  const env = { KIWI_HOME: home, CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "bad", AI_AGENT: "claude-code_2-1-296_agent" };
+  for (const event of ["session-start", "prompt", "stop", "listen"]) {
+    const r = Bun.spawnSync([process.execPath, MAIN_TS, "hook", event], { cwd: home, env: { ...process.env, ...env }, stdin: new TextEncoder().encode("{}"), stdout: "pipe", stderr: "pipe" });
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout.toString()).toBe("");
+    expect(r.stderr.toString()).toContain(`${join(home, "config.json")} isn't valid JSON`);
+  }
+});
