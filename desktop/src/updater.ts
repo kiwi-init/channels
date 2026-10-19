@@ -14,7 +14,7 @@ import { app } from "electron";
 import { compareVersions } from "./cli.ts";
 import { moveOver } from "./move.ts";
 import { signedLikeThisApp } from "./signer.ts";
-import { swapAsset } from "./update-asset.ts";
+import { swapAsset, swapBlocker, swapScript } from "./update-asset.ts";
 
 const REPO = "ojowwalker77/channels";
 const EVERY_MS = 6 * 3_600_000;
@@ -25,6 +25,7 @@ export interface UpdateState {
   /** downloading, ready to restart into, or only available (a .deb: install it from the release). */
   state: "downloading" | "ready" | "available";
   url: string;
+  reason?: string;
 }
 
 export type UpdateCheck = UpdateState | { state: "current"; version: string } | { state: "failed" };
@@ -36,6 +37,26 @@ let running: Promise<UpdateCheck> | null = null;
 
 /** The Channels.app this runs from (…/Channels.app/Contents/MacOS/Channels). */
 const macBundle = () => path.resolve(app.getPath("exe"), "..", "..", "..");
+
+const failedMarker = () => path.join(app.getPath("userData"), "update-failed");
+
+const writableDir = (dir: string): boolean => {
+  try {
+    fs.accessSync(dir, fs.constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const failedBefore = (version: string): boolean => {
+  try {
+    return fs.readFileSync(failedMarker(), "utf8").trim() === version;
+  } catch {
+    // No marker: the last swap went in, or none was tried.
+    return false;
+  }
+};
 
 async function check(): Promise<UpdateCheck> {
   if (staged && current) return current;
@@ -49,6 +70,8 @@ async function check(): Promise<UpdateCheck> {
   const name = app.isPackaged ? swapAsset(version, process.platform, process.arch) : null;
   const asset = name ? rel.assets?.find((a) => a.name === name) : undefined;
   const sums = rel.assets?.find((a) => a.name === "SHA256SUMS");
+  const reason = name && process.platform === "darwin" ? swapBlocker(macBundle(), writableDir, failedBefore(version)) : null;
+  if (reason) return set({ version, state: "available", url, reason });
   if (!asset || !sums) return set({ version, state: "available", url });
   set({ version, state: "downloading", url });
 
@@ -117,20 +140,8 @@ export function applyUpdate(relaunch: boolean): boolean {
   if (process.platform === "darwin") {
     const target = macBundle();
     if (!target.endsWith(".app")) return false;
-    const old = `${target}.old-${process.pid}`;
-    const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
     const script = path.join(dir, "swap.sh");
-    fs.writeFileSync(
-      script,
-      [
-        "#!/bin/sh",
-        `while kill -0 ${process.pid} 2>/dev/null; do sleep 0.2; done`,
-        `mv ${q(target)} ${q(old)} && mv ${q(staged.path)} ${q(target)} && rm -rf ${q(old)} || { [ -e ${q(target)} ] || mv ${q(old)} ${q(target)}; }`,
-        // Relaunch before the cleanup: the cleanup removes this script's own folder.
-        relaunch ? `open ${q(target)}` : "",
-        `rm -rf ${q(dir)}`,
-      ].join("\n"),
-    );
+    fs.writeFileSync(script, swapScript({ pid: process.pid, target, next: staged.path, dir, marker: failedMarker(), version: staged.version, relaunch }));
     spawn("/bin/sh", [script], { detached: true, stdio: "ignore" }).unref();
   } else {
     const target = process.env["APPIMAGE"];
