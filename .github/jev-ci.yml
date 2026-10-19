@@ -188,7 +188,9 @@ jobs:
       listen --json except `kiwi show N --reveal`. Then hooks-once: a message the prompt or stop hook
       hands over never wakes the session a second time from the listener started with it
       (src/hooks/listen.ts waits for the session's answering hook, src/hooks/delivered.ts), and the
-      listener keeps listening for the next one. Fails if joining, seats, hooks, pairing, the
+      listener keeps listening for the next one; and a prompt hook whose output never reaches the
+      session leaves the message unread for the next hook (src/hooks/run.ts commits what was
+      read only after printing it). Fails if joining, seats, hooks, pairing, the
       daemon, kiwi sh, handoff or the relay change behavior.
 
   build:

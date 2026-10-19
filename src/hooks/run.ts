@@ -4,7 +4,8 @@ import * as Option from "effect/Option";
 import { ChannelGone } from "@kiwi/core/client.ts";
 import { Keystore } from "../config.ts";
 import { here, kimiHookHere, sameSeat, seatsHeldAnywhere, type Here } from "../seats.ts";
-import { answer, hookOutput, kimiReason, tellKimi, type HookInput } from "./answer.ts";
+import { writeSync } from "node:fs";
+import { answer, hookOutput, kimiReason, printed, tellKimi, type Answer, type HookInput } from "./answer.ts";
 import { holdAnswering } from "./delivered.ts";
 import { listen, type Served } from "./listen.ts";
 import { refreshListeners, seatsFor } from "./listeners.ts";
@@ -13,7 +14,7 @@ import { KIMI_STOP, LISTEN } from "./self.ts";
 const HOOK_MS = 15_000;
 const SEAT_ANSWER_MS = HOOK_MS - 1_000;
 
-const say = (text: string) => Effect.sync(() => void process.stdout.write(text));
+const say = (text: string) => Effect.sync(() => void writeSync(1, text));
 
 export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
   const raw = yield* Effect.promise(() => new Response(Bun.stdin.stream()).text().catch(() => ""));
@@ -53,11 +54,21 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
       Effect.timeoutOption(SEAT_ANSWER_MS),
       Effect.map(Option.getOrNull),
     );
+  const shown = (answers: readonly Answer[]) => Effect.forEach(answers, (a) => a.shown, { discard: true, concurrency: "unbounded" });
   const work = Effect.flatMap(Effect.forEach(served, one, { concurrency: "unbounded" }), (answers) => {
     const got = answers.filter((a) => a !== null);
-    if (kimi) return got.length ? Effect.sync(() => tellKimi(kimiReason(got))) : Effect.succeed(0);
+    if (kimi) {
+      if (!got.length) return Effect.succeed(0);
+      const code = tellKimi(kimiReason(got));
+      return code ? Effect.as(shown(got), code) : Effect.succeed(code);
+    }
     const out = hookOutput(got);
-    return out === null ? Effect.succeed(0) : Effect.as(say(out), 0);
+    if (out === null) return Effect.succeed(0);
+    return say(out).pipe(
+      Effect.andThen(shown(printed(got))),
+      Effect.catchCause(() => Effect.void),
+      Effect.as(0),
+    );
   });
   return yield* Effect.raceFirst(work, Effect.as(Effect.sleep(HOOK_MS), 0)).pipe(Effect.ensuring(Effect.sync(release)));
 });
