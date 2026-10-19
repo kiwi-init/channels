@@ -1,6 +1,6 @@
 import * as Context from "effect/Context";
 import { b64url, fromB64url } from "@kiwi/core/crypto.ts";
-import { PAGE_LIMIT, type Envelope, type ReadMark } from "@kiwi/core/protocol.ts";
+import { PAGE_BYTES, PAGE_LIMIT, type Envelope, type ReadMark } from "@kiwi/core/protocol.ts";
 import type { Policy } from "../policy.ts";
 import type { DirectoryUpdate } from "./directory.ts";
 import { utcDay } from "./limits.ts";
@@ -339,9 +339,24 @@ export class RoomDb {
   }
 
   since(seq: number, limit = PAGE_LIMIT): Envelope[] {
-    return this.sql
-      .all<{ seq: number; ts: number; iv: Stored; ct: Stored; e: number }>("SELECT seq, ts, iv, ct, e FROM msgs WHERE seq > ? ORDER BY seq LIMIT ?", seq, Math.min(Math.max(limit, 1), PAGE_LIMIT))
-      .map((r) => ({ seq: r.seq, ts: r.ts, iv: unpacked(r.iv), ct: unpacked(r.ct), e: r.e }));
+    const sizes = this.sql.all<{ seq: number; size: number }>(
+      "SELECT seq, length(iv) + length(ct) AS size FROM msgs WHERE seq > ? ORDER BY seq LIMIT ?",
+      seq,
+      Math.min(Math.max(limit, 1), PAGE_LIMIT),
+    );
+    if (!sizes.length) return [];
+    let through = seq;
+    let bytes = 0;
+    for (const r of sizes) {
+      if (through > seq && bytes + r.size > PAGE_BYTES) break;
+      bytes += r.size;
+      through = r.seq;
+    }
+    return this.range(seq, through);
+  }
+
+  rangeBytes(after: number, through: number): number {
+    return this.sql.all<{ n: number | null }>("SELECT SUM(length(iv) + length(ct)) AS n FROM msgs WHERE seq > ? AND seq <= ?", after, through)[0]?.n ?? 0;
   }
 
   range(after: number, through: number): Envelope[] {

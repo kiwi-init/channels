@@ -5,6 +5,7 @@ import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdenti
 import { saveMachine } from "../machine.ts";
 import { readMachineCert } from "@kiwi/core/person.ts";
 import { VERSION } from "../version.ts";
+import { compareVersions } from "@kiwi/core/versions.ts";
 import { pullsWake, viaOf } from "@kiwi/core/wake.ts";
 import { ensureMachine, loadPairedMachine, PairError, type PairedMachine, type PairedPerson } from "./pair.ts";
 import { DAEMON_PROTOCOL, daemonSock, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
@@ -388,8 +389,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           if (m.seq > seat.head) seat.head = m.seq;
           if (m.from !== seat.agent) scheduleWake(seat);
           for (const sub of [...seat.subs]) {
-            if (m.seq <= sub.cursor) continue;
-            if (sendLine(sub.conn, JSON.stringify({ id: sub.id, message: m }))) sub.cursor = m.seq;
+            if (sub.held) sub.held.push(m);
+            else if (m.seq > sub.cursor && sendLine(sub.conn, JSON.stringify({ id: sub.id, message: m }))) sub.cursor = m.seq;
           }
         },
         {
@@ -426,14 +427,16 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     if (typeof cursor !== "number" || !Number.isInteger(cursor) || cursor < 0) throw new Error("listen needs a cursor: the last sequence number this subscriber saw (0 for everything)");
     const seat = await seatFor(channel, as, { tell: (s) => sendLine(conn, JSON.stringify({ id, status: s })), alive: () => !conn.dead });
     if (conn.dead || stopped) return;
-    const sub: Sub = { id, cursor, conn, seat };
+    const sub: Sub = { id, cursor, conn, seat, held: [] };
     seat.subs.add(sub);
     conn.subs.add(sub);
     reachMoved(seat.alias, seat.agent);
     sendLine(conn, JSON.stringify({ id, ok: true, stream: true, head: seat.head, channel, agent: as }));
     try {
       const { messages } = await seat.ch.history(cursor);
-      for (const m of messages) {
+      const caught = [...messages, ...(sub.held ?? [])];
+      sub.held = null;
+      for (const m of caught) {
         if (m.seq <= sub.cursor) continue;
         if (sendLine(conn, JSON.stringify({ id, message: m }))) sub.cursor = m.seq;
         else break;
@@ -701,7 +704,7 @@ export async function runDaemonForeground(dir = home()): Promise<void> {
   });
   sock = daemonSock(dir);
   const live = await tryHello(sock);
-  if (live && live.version === VERSION) throw new PairError(`a daemon is already running (pid ${live.pid}) on ${sock}`);
+  if (live && compareVersions(live.version, VERSION) >= 0) throw new PairError(`a kiwi ${live.version} daemon is already running (pid ${live.pid}) on ${sock}`);
   if (live) await stopDaemon(sock);
   const serving = await startDaemon(dir);
   process.stdout.write(`kiwi daemon ${VERSION} on ${sock} (pid ${process.pid})\n`);

@@ -2,8 +2,8 @@ import * as Clock from "effect/Clock";
 import * as Effect from "effect/Effect";
 import { verifyRequest } from "@kiwi/core/auth.ts";
 import { b64url, fromB64url } from "@kiwi/core/crypto.ts";
-import { PAGE_LIMIT, type Envelope } from "@kiwi/core/protocol.ts";
-import { Forbidden, NotFound, Unauthorized } from "./failures.ts";
+import { PAGE_BYTES, PAGE_LIMIT, type Envelope } from "@kiwi/core/protocol.ts";
+import { Forbidden, NotFound, TooLarge, Unauthorized } from "./failures.ts";
 import { Request_ } from "./http.ts";
 import { Policy } from "./policy.ts";
 import { errorResponse, requestToken, RoomStore } from "./room.ts";
@@ -83,6 +83,7 @@ export const servePage = Effect.fn("Room.servePage")(function* (pk: string, page
   const now = yield* Clock.currentTimeMillis;
   const gen = yield* Effect.promise(() => verifyPageCap(secret, url.searchParams.get("cap") ?? "", db.roomId, pk, page, now));
   if (!gen || gen !== db.storedPageGen()) return yield* new Forbidden({ message: PAGE_REFUSED });
+  if (db.rangeBytes(page * PAGE_LIMIT, (page + 1) * PAGE_LIMIT) > PAGE_BYTES) return yield* new TooLarge({ message: "this page is too large to send whole; page through /messages" });
   return { messages: db.range(page * PAGE_LIMIT, (page + 1) * PAGE_LIMIT) };
 });
 

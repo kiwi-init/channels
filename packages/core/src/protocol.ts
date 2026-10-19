@@ -8,6 +8,9 @@ export const PROTOCOL_VERSION = 1;
 
 /** Largest ciphertext (base64) the relay accepts for a single message. */
 export const MAX_CT_LENGTH = 512 * 1024;
+export const MAX_IV_LENGTH = 64;
+export const MAX_BODY_LENGTH = 100_000;
+export const PAGE_BYTES = 4 * 1024 * 1024;
 
 export const MAX_SNAPSHOT_LENGTH = 512 * 1024;
 
@@ -115,7 +118,7 @@ export type ServerFrame =
   | { t: "eph"; iv: string; ct: string }
   | { t: "ready"; head: number; more: boolean }
   | { t: "ack"; id: string; seq: number; ts?: number }
-  | { t: "err"; error: string; id?: string }
+  | { t: "err"; error: string; id?: string; tag?: string; retryAfter?: number }
   /** Membership channels: the member list changed; refetch it. */
   | { t: "roster" }
   /** Membership channels: the channel key rotated; fetch the new one. */
@@ -795,7 +798,7 @@ export function wellFormed(p: unknown): p is Payload {
     m.v === PROTOCOL_VERSION &&
     str(m.id, 100) &&
     str(m.from, 64) &&
-    str(m.body, 100_000) &&
+    str(m.body, MAX_BODY_LENGTH) &&
     typeof m.kind === "string" &&
     (KINDS as readonly string[]).includes(m.kind) &&
     Number.isFinite(m.ts) &&

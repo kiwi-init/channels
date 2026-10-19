@@ -38,6 +38,7 @@ export interface ChannelIdentityView {
   at?: number;
   requestId?: string;
   imported?: boolean;
+  creating?: true;
 }
 
 export interface PublicAccess {
@@ -303,6 +304,7 @@ export interface UpdateView {
   state: "downloading" | "ready" | "available";
   /** The release's page. */
   url: string;
+  blocked?: true;
 }
 
 export type UpdateCheckView = UpdateView | { state: "current"; version: string } | { state: "failed" };

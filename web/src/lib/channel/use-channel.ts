@@ -11,6 +11,7 @@ import { isWakeVia } from "@kiwi/core/wake.ts"
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "../channel-ops"
 import { readCached, rememberRow } from "../history"
 import { checkedUpTo, checksToPost, issuesToPost, linksToPost, setCheckedUpTo, tasksToClose } from "../review-checks"
+import { drain } from "../github-queue"
 import { closeFromGithub } from "../task-actions"
 import { wholeLog } from "../history-plan"
 import { ICON_LIVE } from "../icon-event"
@@ -319,26 +320,40 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
     if (!due.length && !links.length && !issues.length && !closes.length) return
     checksBusy.current = true
     void (async () => {
-      for (const c of due) {
-        await ch.postReviewCheck(c).catch(() => {})
-        setCheckedUpTo(ch.roomId, c.seq)
-      }
-      for (const l of links) {
-        await ch.commentOnPr(l.repo, l.number, l.body).catch(() => {})
-        setCheckedUpTo(ch.roomId, l.seq, "prLinks")
-      }
-      for (const i of issues) {
-        await ch.closeIssue(i).catch(() => {})
-        setCheckedUpTo(ch.roomId, i.seq, "issueCloses")
-      }
-      for (const c of closes) {
-        const t = state.tasks.get(c.task)
-        if (t) {
+      if (
+        !(await drain(
+          due,
+          (c) => ch.postReviewCheck(c),
+          (seq) => setCheckedUpTo(ch.roomId, seq)
+        ))
+      )
+        return
+      if (
+        !(await drain(
+          links,
+          (l) => ch.commentOnPr(l.repo, l.number, l.body),
+          (seq) => setCheckedUpTo(ch.roomId, seq, "prLinks")
+        ))
+      )
+        return
+      if (
+        !(await drain(
+          issues,
+          (i) => ch.closeIssue(i),
+          (seq) => setCheckedUpTo(ch.roomId, seq, "issueCloses")
+        ))
+      )
+        return
+      await drain(
+        closes,
+        async (c) => {
+          const t = state.tasks.get(c.task)
+          if (!t) return
           const { body, opts } = closeFromGithub(t, c)
-          await ch.send(body, opts).catch(() => {})
-        }
-        setCheckedUpTo(ch.roomId, c.seq, "issueTasks")
-      }
+          await ch.send(body, opts)
+        },
+        (seq) => setCheckedUpTo(ch.roomId, seq, "issueTasks")
+      )
     })().finally(() => {
       checksBusy.current = false
     })

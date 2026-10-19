@@ -43,7 +43,7 @@ export class TooLarge extends Schema.TaggedError<TooLarge>()("TooLarge", text) {
 /** The client speaks an old path; it has to update kiwi. */
 export class UpdateRequired extends Schema.TaggedError<UpdateRequired>()("UpdateRequired", text) {}
 /** A rate limit or quota: the text says when or what frees it. */
-export class TooMany extends Schema.TaggedError<TooMany>()("TooMany", text) {}
+export class TooMany extends Schema.TaggedError<TooMany>()("TooMany", { message: Schema.String, retryAfter: Schema.optional(Schema.Number) }) {}
 
 export type Failure =
   | BadRequest
@@ -100,5 +100,7 @@ export const isRefusal = (u: unknown): u is Refusal => u instanceof Refused || (
 /** A refusal as the response it has always been: { error, tag } and its status. */
 export function refusalResponse(r: Refusal): Response {
   if (r._tag === "Refused") return Response.json({ error: r.message, tag: r.tag }, { status: r.status });
+  if (r._tag === "TooMany" && r.retryAfter !== undefined)
+    return Response.json({ error: r.message, tag: r._tag, retryAfter: r.retryAfter }, { status: STATUS[r._tag], headers: { "retry-after": String(r.retryAfter) } });
   return Response.json({ error: r.message, tag: r._tag }, { status: STATUS[r._tag] });
 }

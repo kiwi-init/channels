@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
 import { writeSync } from "node:fs";
+import type { Relay } from "@kiwi/core/client.ts";
 import { openSession, type AgentSession } from "../agent.ts";
 import { briefText, COMMANDS } from "../brief.ts";
 import { detectWhere } from "../card.ts";
@@ -15,7 +16,7 @@ import { liveListeners, refreshListeners } from "./listeners.ts";
 import { howMessagesReachYou, wakeYourself } from "./reach.ts";
 import { mcBin, mcFor } from "./self.ts";
 
-export const MAX_CONTEXT = 6_000;
+const MAX_CONTEXT = 6_000;
 
 export function stopStyle(input: { hook_event_name?: string; status?: string; loop_count?: number }): "cursor" | "gemini" | "block" {
   if (input.hook_event_name === "AfterAgent") return "gemini";
@@ -97,23 +98,49 @@ const rearmText = Effect.fn("Hooks.rearmText")(function* (input: HookInput, b: B
   return `Before you end this turn: no Kiwi listener of yours is running for ${b.alias}, so nothing would wake you when a message for you arrives.${subagent}\n${how}`;
 });
 
-const unreadText = Effect.fn("Hooks.unreadText")(function* (s: AgentSession) {
-  const { messages, state } = yield* s.read();
-  noteHeard(
-    here().session,
-    s.alias,
-    s.me,
-    messages.map((m) => m.seq),
+export function fitting(lines: readonly string[], max = MAX_CONTEXT): { count: number; text: string } {
+  let count = 0;
+  let size = 0;
+  for (const line of lines) {
+    const next = size + (count ? 1 : 0) + line.length;
+    if (next > max) break;
+    size = next;
+    count += 1;
+  }
+  const first = lines[0];
+  if (!count && first !== undefined) return { count: 1, text: `${first.slice(0, max)} …` };
+  return { count, text: lines.slice(0, count).join("\n") };
+}
+
+export function moreNote(rest: number, mc: string): string {
+  return `… ${rest} more unread: they come next, or run \`${mc} read\``;
+}
+
+const unreadText = Effect.fn("Hooks.unreadText")(function* (s: AgentSession, mc: string) {
+  const { messages, state, commit } = yield* s.unread();
+  const fit = fitting(messages.map((m) => formatMessage(m, state.trust.get(m.seq), state, s.me)));
+  const shownMessages = messages.slice(0, fit.count);
+  const rest = messages.length - fit.count;
+  const shown = Effect.andThen(
+    rest ? commit(shownMessages.at(-1)?.seq ?? 0) : commit(),
+    Effect.sync(() =>
+      noteHeard(
+        here().session,
+        s.alias,
+        s.me,
+        shownMessages.map((m) => m.seq),
+      ),
+    ),
   );
-  const text = messages.map((m) => formatMessage(m, state.trust.get(m.seq), state, s.me)).join("\n");
-  return text.length > MAX_CONTEXT ? `${text.slice(0, MAX_CONTEXT)}\n… (more: run \`kiwi log\`)` : text;
+  return { text: rest ? `${fit.text}\n${moreNote(rest, mc)}` : fit.text, shown };
 });
 
 type AnswerKind = "cursor-start" | "start" | "gemini-prompt" | "prompt" | "followup" | "block" | "deny";
 
-interface Answer {
+export interface Answer {
   kind: AnswerKind;
   text: string;
+  shown: Effect.Effect<void, never, Relay>;
 }
 
 function envelope(kind: AnswerKind, texts: readonly string[]): string {
@@ -134,11 +161,11 @@ function envelope(kind: AnswerKind, texts: readonly string[]): string {
   }
 }
 
-function answered(kind: AnswerKind, text: string): Answer {
-  return { kind, text };
+function answered(kind: AnswerKind, text: string, shown: Effect.Effect<void, never, Relay> = Effect.void): Answer {
+  return { kind, text, shown };
 }
 
-export function kimiReason(answers: readonly Answer[]): string {
+export function kimiReason(answers: readonly Pick<Answer, "kind" | "text">[]): string {
   return answers.map((a) => a.text).join("\n\n");
 }
 
@@ -151,12 +178,17 @@ export function tellKimi(reason: string): number {
   }
 }
 
-export function hookOutput(answers: readonly Answer[]): string | null {
+export function printed<A extends Pick<Answer, "kind">>(answers: readonly A[]): A[] {
+  const [first] = answers;
+  return first ? answers.filter((a) => a.kind === first.kind) : [];
+}
+
+export function hookOutput(answers: readonly Pick<Answer, "kind" | "text">[]): string | null {
   const [first] = answers;
   if (!first) return null;
   return envelope(
     first.kind,
-    answers.filter((a) => a.kind === first.kind).map((a) => a.text),
+    printed(answers).map((a) => a.text),
   );
 }
 
@@ -187,23 +219,21 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
         ...(seat?.persona ? { persona: seat.persona } : {}),
       }),
     ];
-    const unread = yield* unreadText(s);
-    if (unread) lines.push("", "Unread messages for you:", unread);
+    const unread = yield* unreadText(s, mc);
+    if (unread.text) lines.push("", "Unread messages for you:", unread.text);
     const additionalContext = lines.join("\n");
     if (input.hook_event_name === "sessionStart" || input.composer_mode != null || typeof input.is_background_agent === "boolean") {
-      return answered("cursor-start", additionalContext);
+      return answered("cursor-start", additionalContext, unread.shown);
     }
-    return answered("start", additionalContext);
+    return answered("start", additionalContext, unread.shown);
   }
 
   if (event === "prompt") {
-    const unread = yield* unreadText(s);
-    const lines: string[] = [];
-    if (unread) lines.push(`New Kiwi Channels messages for you (${b.alias}):`, unread);
-    if (!lines.length) return null;
-    const text = lines.join("\n");
-    if (input.hook_event_name === "BeforeAgent") return answered("gemini-prompt", text);
-    return answered("prompt", text);
+    const unread = yield* unreadText(s, mc);
+    if (!unread.text) return yield* Effect.as(unread.shown, null);
+    const text = [`New Kiwi Channels messages for you (${b.alias}):`, unread.text].join("\n");
+    if (input.hook_event_name === "BeforeAgent") return answered("gemini-prompt", text, unread.shown);
+    return answered("prompt", text, unread.shown);
   }
 
   if (event === "stop") {
@@ -217,12 +247,13 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
       return answered("followup", follow);
     }
     if (who.harness === "grok" && input.reason !== undefined && input.reason !== "end_turn") return null;
-    const unread = yield* unreadText(s);
+    const unread = yield* unreadText(s, mc);
     const decision = style === "gemini" ? "deny" : "block";
-    const handOver = unread ? `Before stopping: unread Kiwi Channels messages for you. Handle them (answer with \`${mc} reply N "…"\`):\n${unread}` : null;
+    const handOver = unread.text ? `Before stopping: unread Kiwi Channels messages for you. Handle them (answer with \`${mc} reply N "…"\`):\n${unread.text}` : null;
     const rearm = yield* rearmText(input, b, who, mc);
     const reason = [handOver, rearm].filter((t) => t !== null).join("\n\n");
-    if (reason) return answered(decision, reason);
+    if (reason) return answered(decision, reason, unread.shown);
+    yield* unread.shown;
   }
   return null;
 });

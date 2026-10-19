@@ -2,7 +2,7 @@ import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Queue from "effect/Queue";
 import { PING, rasterAttachment, wellFormed, type Message, type ServerFrame } from "../protocol.ts";
-import { Unreachable, type ChannelGone, type Dropped } from "./errors.ts";
+import { RelayError, Unreachable, type ChannelGone, type Dropped } from "./errors.ts";
 import type { OpenKind, PresenceFields } from "./live.ts";
 
 export type Incoming =
@@ -15,7 +15,7 @@ export type Incoming =
 export type Inbox = Queue.Queue<Incoming, Dropped | ChannelGone | Cause.Done>;
 
 export interface Wire {
-  send: (sealed: { iv: string; ct: string }, e: number, payload: object) => Effect.Effect<number | null, Unreachable>;
+  send: (sealed: { iv: string; ct: string }, e: number, payload: object) => Effect.Effect<number | null, Unreachable | RelayError>;
   answer: (f: ServerFrame | { t: "pong" }) => boolean;
   drop: () => void;
 }
@@ -23,11 +23,11 @@ export interface Wire {
 const ACK_WAIT_MS = 30_000;
 
 export function wireOn(ws: WebSocket, q: Inbox): Wire {
-  const waiting = new Map<string, { payload: object; settle: (r: Effect.Effect<number | null, Unreachable>) => void }>();
+  const waiting = new Map<string, { payload: object; settle: (r: Effect.Effect<number | null, Unreachable | RelayError>) => void }>();
   const unsure = (why: string) => Effect.fail(new Unreachable({ cause: new Error(`${why} before the relay confirmed the message; it may still have been sent`) }));
   return {
     send: (sealed, e, payload) =>
-      Effect.callback<number | null, Unreachable>((resume) => {
+      Effect.callback<number | null, Unreachable | RelayError>((resume) => {
         if (ws.readyState !== WebSocket.OPEN) return resume(Effect.succeed(null));
         const id = crypto.randomUUID();
         try {
@@ -37,7 +37,7 @@ export function wireOn(ws: WebSocket, q: Inbox): Wire {
         }
         let pending = true;
         const timer = setTimeout(() => settle(unsure("no answer in time")), ACK_WAIT_MS);
-        const settle = (r: Effect.Effect<number | null, Unreachable>) => {
+        const settle = (r: Effect.Effect<number | null, Unreachable | RelayError>) => {
           if (!pending) return;
           pending = false;
           clearTimeout(timer);
@@ -55,7 +55,7 @@ export function wireOn(ws: WebSocket, q: Inbox): Wire {
       if (!w) return false;
       waiting.delete(f.id);
       if (f.t === "err") {
-        w.settle(Effect.succeed(null));
+        w.settle(f.tag === "TooMany" ? Effect.fail(new RelayError(429, f.error, f.tag, f.retryAfter)) : Effect.succeed(null));
         return true;
       }
       if (Number.isSafeInteger(f.seq) && Number.isFinite(f.ts)) Queue.offerUnsafe(q, { t: "own", seq: f.seq, ts: f.ts!, payload: w.payload });

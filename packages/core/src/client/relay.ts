@@ -28,12 +28,21 @@ export class Relay extends Context.Service<Relay, RelayApi>()("kiwi/client/Relay
 
 const EXPIRED_SIGNATURE = "bad or expired signature";
 
+const REQUEST_MS = 30_000;
+
 const reach = (url: URL, init: RequestInit) => Effect.tryPromise({ try: (signal) => fetch(url, { ...init, signal }), catch: (cause) => new Unreachable({ cause }) });
+
+const inTime = <A, E>(url: URL, request: Effect.Effect<A, E>): Effect.Effect<A, E | Unreachable> =>
+  Effect.timeoutOrElse(request, {
+    duration: REQUEST_MS,
+    orElse: () => Effect.fail(new Unreachable({ cause: new Error(`${url.origin} didn't answer in ${REQUEST_MS / 1000}s`) })),
+  });
 
 const answered = <T>(res: Response) =>
   Effect.flatMap(
-    Effect.promise(() => res.json().catch(() => ({})) as Promise<T & { error?: string; tag?: string }>),
-    (json): Effect.Effect<T, RelayError> => (res.ok ? Effect.succeed(json) : Effect.fail(new RelayError(res.status, json.error ?? `relay returned ${res.status}`, json.tag))),
+    Effect.promise(() => res.json().catch(() => ({})) as Promise<T & { error?: string; tag?: string; retryAfter?: number }>),
+    (json): Effect.Effect<T, RelayError> =>
+      res.ok ? Effect.succeed(json) : Effect.fail(new RelayError(res.status, json.error ?? `relay returned ${res.status}`, json.tag, res.headers.get("retry-after") ?? json.retryAfter)),
   );
 
 const expired = (err: Refusal) => err instanceof RelayError && err.status === 401 && err.message === EXPIRED_SIGNATURE;
@@ -58,10 +67,10 @@ export const fetchRelay: RelayApi = {
         const data = yield* answered<T>(res);
         return { fresh: true, etag: res.headers.get("etag"), data } as const;
       });
-      return Effect.retry(once, { times: 1, while: (err) => !!identity && expired(err) });
+      return Effect.retry(inTime(u, once), { times: 1, while: (err) => !!identity && expired(err) });
     }),
   config: (relay) =>
-    Effect.suspend(() => reach(new URL("/v1/config", relay), {})).pipe(
+    Effect.suspend(() => inTime(new URL(relay), reach(new URL("/v1/config", relay), {}))).pipe(
       Effect.flatMap((res) => (res.ok ? Effect.promise(() => res.json() as Promise<RelayConfig>) : Effect.succeed({ workosClientId: null }))),
     ),
   blob: (relay, roomId, id, identity, put) =>
@@ -74,7 +83,7 @@ export const fetchRelay: RelayApi = {
         if (!res.ok) return yield* answered<never>(res);
         return new Uint8Array(yield* Effect.tryPromise({ try: () => res.arrayBuffer(), catch: (cause) => new Unreachable({ cause }) }));
       });
-      return Effect.retry(once, { times: 1, while: expired });
+      return Effect.retry(inTime(new URL(relay), once), { times: 1, while: expired });
     }),
 };
 

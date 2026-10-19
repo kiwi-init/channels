@@ -12,6 +12,7 @@
 // timed out, so the app never saw its own daemon and never listed this computer.
 
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -118,8 +119,34 @@ export async function daemonAdopt(home: string, params: AdoptParams, timeoutMs =
  * app's own environment rarely says one (KIWI_RELAY), so without it a self-hosted relay's app
  * would adopt a daemon on the public one.
  */
+export const daemonLogPath = (home: string = kiwiHome()): string => path.join(home, "daemon.log");
+
+const LOG_KEEP_BYTES = 1_000_000;
+
+function openDaemonLog(home: string): number | "ignore" {
+  const file = daemonLogPath(home);
+  try {
+    fs.mkdirSync(home, { recursive: true, mode: 0o700 });
+    if ((fs.statSync(file, { throwIfNoEntry: false })?.size ?? 0) > LOG_KEEP_BYTES) fs.renameSync(file, `${file}.1`);
+    return fs.openSync(file, "a", 0o600);
+  } catch {
+    // A home the app can't write still gets a daemon, only without its log.
+    return "ignore";
+  }
+}
+
+export function noteDaemon(line: string, home: string = kiwiHome()): void {
+  try {
+    fs.appendFileSync(daemonLogPath(home), `${new Date().toISOString()} app: ${line}\n`, { mode: 0o600 });
+  } catch {
+    // Same as the daemon's own output: no log is better than no daemon.
+  }
+}
+
 export function spawnDaemon(bin: string, home: string, relay: string): void {
-  const child = spawn(bin, ["daemon"], { env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay }, detached: true, stdio: "ignore", windowsHide: true });
+  const log = openDaemonLog(home);
+  const child = spawn(bin, ["daemon"], { env: { ...process.env, KIWI_HOME: home, KIWI_RELAY: relay }, detached: true, stdio: ["ignore", log, log], windowsHide: true });
+  if (typeof log === "number") fs.closeSync(log);
   // A binary that won't start shows as no hello (the caller waits for one), not an uncaught error.
   child.on("error", () => {});
   child.unref();
