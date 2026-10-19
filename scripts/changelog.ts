@@ -13,7 +13,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
-import { compareVersions } from "../desktop/src/cli.ts";
+import { compareVersions } from "@kiwi/core/versions.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const FILE = resolve(ROOT, "CHANGELOG.md");

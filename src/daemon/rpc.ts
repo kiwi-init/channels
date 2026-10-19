@@ -7,6 +7,7 @@ import { home } from "../config.ts";
 import type { MachineCert } from "@kiwi/core/person.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { VERSION } from "../version.ts";
+import { compareVersions } from "@kiwi/core/versions.ts";
 import type { PairedPerson } from "./pair.ts";
 import { DAEMON_PROTOCOL, daemonSock, isDaemonEvent, readListener, withDeadline, type DaemonEvent, type DaemonHello, type DaemonListener, type DaemonPeek, type DaemonSeat } from "./protocol.ts";
 
@@ -176,7 +177,7 @@ export async function tryHello(sock: string): Promise<DaemonHello | null> {
 
 export async function ensureDaemon(dir = home(), argv?: string[]): Promise<DaemonHello> {
   const sock = daemonSock(dir);
-  const current = (h: DaemonHello | null): h is DaemonHello => !!h && h.version === VERSION && h.protocol >= DAEMON_PROTOCOL;
+  const current = (h: DaemonHello | null): h is DaemonHello => !!h && compareVersions(h.version, VERSION) >= 0 && h.protocol >= DAEMON_PROTOCOL;
   const live = await tryHello(sock);
   if (current(live)) return live;
   if (live) await stopDaemon(sock);

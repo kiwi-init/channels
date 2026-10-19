@@ -75,11 +75,18 @@ function release(): void {
 
 const mac = process.platform !== "darwin";
 
+async function settled(): Promise<string | undefined> {
+  const end = Date.now() + 10_000;
+  while (updateState()?.state === "downloading" && Date.now() < end) await Bun.sleep(10);
+  return updateState()?.state;
+}
+
 test.skipIf(mac)("a temp folder that can't be made ends at available, not stuck on downloading, and says why in main.log", async () => {
   release();
   process.env["TMPDIR"] = join(root, "no-such-dir");
   try {
-    expect((await checkForUpdate()).state).toBe("available");
+    await checkForUpdate();
+    expect(await settled()).toBe("available");
   } finally {
     process.env["TMPDIR"] = tmp;
   }
@@ -90,13 +97,15 @@ test.skipIf(mac)("a temp folder that can't be made ends at available, not stuck 
 test.skipIf(mac)("a download that doesn't match its checksum is logged with that reason", async () => {
   release();
   sums = `${"0".repeat(64)}  ${name}\n`;
-  expect((await checkForUpdate()).state).toBe("available");
+  await checkForUpdate();
+  expect(await settled()).toBe("available");
   expect(readFileSync(join(logs, "main.log"), "utf8")).toContain(`${name} doesn't match its SHA256SUMS line`);
 });
 
 test.skipIf(mac)("a staged update whose folder went away doesn't throw at quit: nothing goes in, and the release is offered", async () => {
   release();
-  expect((await checkForUpdate()).state).toBe("ready");
+  await checkForUpdate();
+  expect(await settled()).toBe("ready");
   for (const d of readdirSync(tmp)) rmSync(join(tmp, d), { recursive: true, force: true });
   expect(applyUpdate(false)).toBe(false);
   expect(updateState()?.state).toBe("available");

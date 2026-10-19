@@ -5,6 +5,7 @@ import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdenti
 import { saveMachine } from "../machine.ts";
 import { readMachineCert } from "@kiwi/core/person.ts";
 import { VERSION } from "../version.ts";
+import { compareVersions } from "@kiwi/core/versions.ts";
 import { pullsWake, viaOf } from "@kiwi/core/wake.ts";
 import { ensureMachine, loadPairedMachine, PairError, type PairedMachine, type PairedPerson } from "./pair.ts";
 import { DAEMON_PROTOCOL, daemonSock, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
@@ -703,7 +704,7 @@ export async function runDaemonForeground(dir = home()): Promise<void> {
   });
   sock = daemonSock(dir);
   const live = await tryHello(sock);
-  if (live && live.version === VERSION) throw new PairError(`a daemon is already running (pid ${live.pid}) on ${sock}`);
+  if (live && compareVersions(live.version, VERSION) >= 0) throw new PairError(`a kiwi ${live.version} daemon is already running (pid ${live.pid}) on ${sock}`);
   if (live) await stopDaemon(sock);
   const serving = await startDaemon(dir);
   process.stdout.write(`kiwi daemon ${VERSION} on ${sock} (pid ${process.pid})\n`);

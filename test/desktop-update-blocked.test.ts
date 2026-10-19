@@ -23,7 +23,7 @@ mock.module("electron", () => ({
 }));
 
 type Checked = { state: string; version?: string; url?: string; blocked?: true };
-const updater = "../desktop/src/updater.ts";
+const updater = "../desktop/src/updater.ts?blocked";
 const { checkForUpdate } = (await import(updater)) as { checkForUpdate: () => Promise<Checked> };
 
 const seen: string[] = [];
