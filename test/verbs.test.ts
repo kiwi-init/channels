@@ -84,6 +84,7 @@ describe("ten verbs", () => {
     expect(help).not.toContain("kiwi tail [");
     expect(help).toContain("task cancel T7");
     expect(help).toContain("Older names still work");
+    expect(help).toMatch(/kiwi log [^\n]*\n[^\n]*\n\s+--json\s+JSON Lines/);
   });
 
   test("send: a message, in a thread (--re), a question (--ask --wait), to a person (--escalate); reply answers the sender", async () => {
