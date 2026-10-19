@@ -408,12 +408,13 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     go(placeFromKey(key) ?? MAIN)
   }
   const roomName = state.rooms.get(cardRoom)?.name ?? GENERAL_ROOM
-  const needsYou = (
+  const needsYou = (decisionCards: boolean) => (
     <NeedsYou
       now={now}
       roomId={roomId}
       me={me}
       decisions={decisions}
+      decisionCards={decisionCards}
       escalations={escalations}
       questions={questions}
       reviews={reviews}
@@ -495,7 +496,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                     <div className="absolute inset-0 overflow-y-auto pt-[calc(var(--head)+8px)]">
                       <div className={cx("mx-auto w-full px-2 md:px-4", tab === "tasks" && "max-w-[960px]")}>
                         {tab === "tasks" ? (
-                          <TasksView state={state} now={now} view={view} agents={agentsNow} needs={needsMe ? needsYou : null} open={shownTask} onOpen={openTask} />
+                          <TasksView state={state} now={now} view={view} agents={agentsNow} needs={needsMe ? needsYou(true) : null} open={shownTask} onOpen={openTask} />
                         ) : agentsNow.length ? (
                           <AgentLanes agents={agentsNow} state={state} messages={messages} now={now} nameOf={nameOf} onOpenTask={openTask} />
                         ) : (
@@ -514,7 +515,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                         }}
                       >
                         <div className="relative mx-auto w-full max-w-[792px] px-4 pt-[calc(var(--head)+8px)] pb-[calc(var(--foot)+16px)]">
-                          {hereKey === "main" && needsYou}
+                          {hereKey === "main" && needsYou(false)}
                           {hereKey === "main" && state.rooms.size > 1 && !search && <RoomChips rooms={[...state.rooms.values()]} value={cardRoom} onChange={setCardRoom} />}
                           {connection === "connecting" && messages.length === 0 ? (
                             <Centered>
