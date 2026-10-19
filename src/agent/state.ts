@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import { Channel, type Info, type MemberRow, type Refused, type Relay } from "@kiwi/core/client.ts";
+import { Channel, downWhy, OfflineReads, relayDown, type Info, type MemberRow, type Refused, type Relay } from "@kiwi/core/client.ts";
 import { Cache, Cursor, type ChannelConfig } from "../config.ts";
 import type { ChannelAccess } from "@kiwi/core/crypto.ts";
 import type { Identity } from "@kiwi/core/identity.ts";
@@ -65,19 +65,28 @@ export class SessionState {
     if (!current && (!look?.fetched.has(this) || lastSeq(this.log) < this.owed)) {
       const fetched = !this.log.length && !this.base ? yield* this.ch.fx.snapshot() : null;
       const from = Math.max(lastSeq(this.log), this.base?.n ?? fetched?.n ?? 0);
-      const { messages, first } = yield* this.ch.fx.history(from);
-      const gap = first !== null && first > from + 1;
-      if (gap) {
-        this.partial = true;
-        this.base = null;
-        yield* cache.dropBase(this.cfg.roomId);
-      } else if (fetched) {
-        yield* cache.keepBase(this.cfg.roomId, fetched);
-        this.base ??= fetched;
+      const offline = yield* OfflineReads;
+      const cachedOnly = !!offline && !fetched && this.log.length > 0;
+      const page = yield* this.ch.fx.history(from).pipe(
+        Effect.catchIf(
+          (err) => cachedOnly && relayDown(err),
+          (err) => Effect.sync(() => (offline?.note(downWhy(err)), null)),
+        ),
+      );
+      if (page) {
+        const gap = page.first !== null && page.first > from + 1;
+        if (gap) {
+          this.partial = true;
+          this.base = null;
+          yield* cache.dropBase(this.cfg.roomId);
+        } else if (fetched) {
+          yield* cache.keepBase(this.cfg.roomId, fetched);
+          this.base ??= fetched;
+        }
+        const fresh = page.messages.filter((m) => m.seq > lastSeq(this.log!));
+        if (fresh.length) this.log = [...this.log!, ...fresh];
+        look?.fetched.add(this);
       }
-      const fresh = messages.filter((m) => m.seq > lastSeq(this.log!));
-      if (fresh.length) this.log = [...this.log!, ...fresh];
-      look?.fetched.add(this);
     }
     const log = this.log!;
     const unsaved = log.filter((m) => m.seq > this.saved);
@@ -163,7 +172,15 @@ export class SessionState {
     for (let seen = out.filter(shown).length; first > 1 && seen < n; seen = out.filter(shown).length) {
       step = Math.min(PAGE_LIMIT, first - 1, Math.max(step * 2, n - seen));
       const since = first - 1 - step;
-      const older = (yield* this.ch.fx.page(since, step)).filter((m) => m.seq <= since + step);
+      const offline = yield* OfflineReads;
+      const page = yield* this.ch.fx.page(since, step).pipe(
+        Effect.catchIf(
+          (err) => !!offline && relayDown(err),
+          (err) => Effect.sync(() => (offline?.note(downWhy(err)), null)),
+        ),
+      );
+      if (!page) break;
+      const older = page.filter((m) => m.seq <= since + step);
       if (!older.length) break;
       out = [...older, ...out];
       first = since + 1;

@@ -1,5 +1,6 @@
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
+import { OfflineReads } from "@kiwi/core/client.ts";
 import { openSession, type Agent } from "../agent.ts";
 import { DEFAULT_RELAY, Keystore, type ChannelConfig } from "../config.ts";
 import { here, seatsNear } from "../seats.ts";
@@ -128,3 +129,16 @@ export function seatHere(alias: string, name: string, plain: boolean, model?: st
 }
 
 export type Command = () => Effect.Effect<void | number, unknown, Agent>;
+
+export const offlineOk = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
+  Effect.suspend(() => {
+    let why: string | null = null;
+    return effect.pipe(
+      Effect.provideService(OfflineReads, { note: (w) => void (why ??= w) }),
+      Effect.tap(() =>
+        Effect.sync(() => {
+          if (why) process.stderr.write(`kiwi: can't reach the relay (${why}): this is what this computer already had, and it may be behind\n`);
+        }),
+      ),
+    );
+  });

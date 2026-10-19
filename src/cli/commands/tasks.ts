@@ -8,7 +8,7 @@ import { parseTaskId, similarOpenTasks, taskId, type ChannelState } from "@kiwi/
 import { formatCandidates, pickFor, taskCandidates } from "@kiwi/core/routing.ts";
 import { bindingFor } from "../../hooks.ts";
 import { args, opt } from "../args.ts";
-import { type Command, die, keepDaemon, out, session } from "../context.ts";
+import { type Command, die, keepDaemon, offlineOk, out, session } from "../context.ts";
 import { firstLine, readText, taskArg, text } from "../input.ts";
 
 const CLAIMS_GONE = "claims are gone: say what you're working on in the task, or post it";
@@ -109,36 +109,38 @@ export const taskCommands: Record<string, Command> = {
     ),
 
   tasks: () =>
-    Effect.gen(function* () {
-      if (opt.global) {
-        const keys = yield* Keystore;
-        const cfg = yield* keys.config;
-        const aliases = Object.keys(cfg.channels).sort();
-        if (!aliases.length) return yield* die("no channels yet (see: kiwi join)");
-        const me = opt.as ?? process.env.KIWI_AS ?? bindingFor(process.cwd())?.as ?? (yield* die("--global needs to know who you are: pass --as NAME, or run it from your bound folder"));
-        yield* keepDaemon;
-        for (const alias of aliases) {
-          const c = cfg.channels[alias]!;
-          if (!(yield* keys.identitiesIn(c.roomId)).includes(me)) continue;
-          const sess = yield* openSession(alias, c, me);
-          const { state } = yield* sess.state();
-          const owner = opt.mine ? sess.me : opt.owner;
-          const lines = formatTasks(state, { all: opt.all, owner });
-          out(`## ${alias}${lines === "no tasks" ? " — no tasks" : ""}`);
-          if (lines !== "no tasks")
-            out(
-              lines
-                .split("\n")
-                .map((l) => `  ${l}`)
-                .join("\n"),
-            );
+    offlineOk(
+      Effect.gen(function* () {
+        if (opt.global) {
+          const keys = yield* Keystore;
+          const cfg = yield* keys.config;
+          const aliases = Object.keys(cfg.channels).sort();
+          if (!aliases.length) return yield* die("no channels yet (see: kiwi join)");
+          const me = opt.as ?? process.env.KIWI_AS ?? bindingFor(process.cwd())?.as ?? (yield* die("--global needs to know who you are: pass --as NAME, or run it from your bound folder"));
+          yield* keepDaemon;
+          for (const alias of aliases) {
+            const c = cfg.channels[alias]!;
+            if (!(yield* keys.identitiesIn(c.roomId)).includes(me)) continue;
+            const sess = yield* openSession(alias, c, me);
+            const { state } = yield* sess.state();
+            const owner = opt.mine ? sess.me : opt.owner;
+            const lines = formatTasks(state, { all: opt.all, owner });
+            out(`## ${alias}${lines === "no tasks" ? " — no tasks" : ""}`);
+            if (lines !== "no tasks")
+              out(
+                lines
+                  .split("\n")
+                  .map((l) => `  ${l}`)
+                  .join("\n"),
+              );
+          }
+          return;
         }
-        return;
-      }
-      const s = yield* session();
-      const { state } = yield* s.state();
-      out(formatTasks(state, { all: opt.all, owner: opt.mine ? s.me : opt.owner }));
-    }),
+        const s = yield* session();
+        const { state } = yield* s.state();
+        out(formatTasks(state, { all: opt.all, owner: opt.mine ? s.me : opt.owner }));
+      }),
+    ),
 
   claim: () => Effect.sync(() => out(CLAIMS_GONE)),
 
