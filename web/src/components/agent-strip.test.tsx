@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 import type { Load } from "@kiwi/core/load.ts"
 import type { Task } from "@kiwi/core/state.ts"
 
-mock.module("@/lib/avatars", () => ({ avatarUrl: () => "", robotUrl: () => "", robotFor: () => "blue" }))
+mock.module("@/lib/avatars", () => ({ avatarUrl: () => "", robotUrl: () => "", robotFor: () => "blue", harnessUrl: () => "" }))
 const { AgentRow } = await import("./agent-strip")
 
 const task = { id: 7, title: "Write fewer rows per message" } as unknown as Task

@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server"
 import type { GithubRepoView } from "@/lib/secrets"
 import type { Reach } from "./repos"
 
-mock.module("@/lib/avatars", () => ({ avatarUrl: () => "", robotUrl: () => "", robotFor: () => "blue" }))
+mock.module("@/lib/avatars", () => ({ avatarUrl: () => "", robotUrl: () => "", robotFor: () => "blue", harnessUrl: () => "" }))
 const { ReposView } = await import("./repos")
 
 const repo = (fullName: string, priv = false): GithubRepoView => ({ fullName, private: priv, pushedAt: 1_760_000_000_000 })

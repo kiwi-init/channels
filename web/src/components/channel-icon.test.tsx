@@ -4,7 +4,12 @@ import { renderToStaticMarkup } from "react-dom/server"
 
 import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 
-mock.module("@/lib/avatars", () => ({ avatarUrl: () => "", robotUrl: (face: string) => `/robot-${face}.svg`, robotFor: (key: string) => (key === "channels-dev" ? "teal" : "gold") }))
+mock.module("@/lib/avatars", () => ({
+  avatarUrl: () => "",
+  harnessUrl: () => "",
+  robotUrl: (face: string) => `/robot-${face}.svg`,
+  robotFor: (key: string) => (key === "channels-dev" ? "teal" : "gold"),
+}))
 const { ChannelIconTile, RobotPicker } = await import("./channel-icon")
 
 const tile = (icon: ChannelIcon | null) => renderToStaticMarkup(createElement(ChannelIconTile, { icon, title: "channels-dev", size: 40 }))
