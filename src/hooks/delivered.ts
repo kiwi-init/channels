@@ -22,30 +22,25 @@ export function noteDelivered(alias: string, as: string, session: string, seq: n
   writeFileSync(deliveredFile(alias, as, session), String(Math.max(seq, deliveredUpTo(alias, as, session))));
 }
 
-function pendingFile(alias: string, as: string, session: string): string {
-  return join(home(), "listen-hooks", `${encodeURIComponent(alias)}.${encodeURIComponent(as)}.${encodeURIComponent(session)}.pending`);
+function pendingFile(alias: string, as: string, session: string, token: string): string {
+  return join(home(), "listen-hooks", `${encodeURIComponent(alias)}.${encodeURIComponent(as)}.${encodeURIComponent(session)}.${encodeURIComponent(token)}.pending`);
 }
 
 export function notePending(alias: string, as: string, session: string, token: string, seq: number): void {
   mkdirSync(join(home(), "listen-hooks"), { recursive: true, mode: 0o700 });
-  writeFileSync(pendingFile(alias, as, session), JSON.stringify({ token, seq }));
+  writeFileSync(pendingFile(alias, as, session, token), String(seq));
 }
 
-function readPending(file: string): { token: string; seq: number } | null {
+export function settlePending(alias: string, as: string, session: string, landed: string): void {
+  const file = pendingFile(alias, as, session, landed);
+  let seq: number;
   try {
-    const got: unknown = JSON.parse(readFileSync(file, "utf8"));
-    if (typeof got !== "object" || got === null || !("token" in got) || !("seq" in got)) return null;
-    return typeof got.token === "string" && typeof got.seq === "number" ? { token: got.token, seq: got.seq } : null;
+    seq = Number(readFileSync(file, "utf8"));
   } catch {
-    // No handoff waiting, or one we can't read: nothing to settle, so its messages are handed over again.
-    return null;
+    // No handoff under that token for this seat: nothing landed here to count as delivered.
+    return;
   }
-}
-
-export function settlePending(alias: string, as: string, session: string, landed: string | null): void {
-  const file = pendingFile(alias, as, session);
-  const pending = readPending(file);
-  if (pending && pending.token === landed) noteDelivered(alias, as, session, pending.seq);
+  if (Number.isInteger(seq) && seq > 0) noteDelivered(alias, as, session, seq);
   rmSync(file, { force: true });
 }
 

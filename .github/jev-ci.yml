@@ -299,9 +299,11 @@ jobs:
       (OfflineReads in packages/core/src/client/relay.ts, src/agent/state.ts, src/cli/context.ts). Then mimo-wake-restart:
       Kiwi's MiMoCode plugin (src/hooks/install/mimo.ts) loaded against a real listener, whose wake
       MiMoCode keeps refusing until MiMoCode exits mid-retry; the resumed session still gets those
-      messages, because the listener writes a pending handoff (src/hooks/delivered.ts) that becomes
+      messages, because the listener writes a pending handoff per token (src/hooks/delivered.ts) that becomes
       the delivered marker only when the plugin's next listen names the token of the wake that landed
-      (src/hooks/listen.ts, src/hooks/run.ts), and the next message isn't repeated with them. Fails if joining, seats, hooks, pairing, the
+      (src/hooks/listen.ts, src/hooks/run.ts), and the next message isn't repeated with them; and two
+      MiMoCode processes on one session, each landing its wake of the same message, count it delivered
+      once instead of clearing each other's handoff and waking it back and forth. Fails if joining, seats, hooks, pairing, the
       daemon, kiwi sh, handoff or the relay change behavior.
 
   build:

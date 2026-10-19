@@ -86,7 +86,7 @@ export type Handoff = { kind: "at-once" } | { kind: "acked"; landed: string | nu
 
 export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Served[], who: Here, handoff: Handoff) {
   const extension = who.harness === "pi" || who.harness === "mimo";
-  if (handoff.kind === "acked") for (const { b } of served) settlePending(b.alias, b.as, who.session ?? "", handoff.landed);
+  if (handoff.kind === "acked" && handoff.landed !== null) for (const { b } of served) settlePending(b.alias, b.as, who.session ?? "", handoff.landed);
   if (who.harness === "pi" ? !piInstalled() : who.harness === "mimo" ? !mimoInstalled() : !hooksListen()) return 0;
   let enough = yield* Deferred.make<void>();
   let heard = 0;
