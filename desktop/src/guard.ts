@@ -85,7 +85,7 @@ export function csp(relay: string, voiceOrigins: readonly string[] = []): string
   const connect = ["'self'", ...(origin ? [origin, socket!] : []), ...extra].join(" ");
   const parts = [
     "default-src 'self'",
-    "script-src 'self'",
+    "script-src 'self' 'wasm-unsafe-eval'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self'",
@@ -95,7 +95,7 @@ export function csp(relay: string, voiceOrigins: readonly string[] = []): string
     "form-action 'none'",
     "frame-ancestors 'none'",
   ];
-  if (extra.length) parts.push("worker-src 'self' blob:");
+  parts.push(extra.length ? "worker-src 'self' blob:" : "worker-src 'self'");
   return parts.join("; ");
 }
 

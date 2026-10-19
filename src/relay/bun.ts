@@ -418,7 +418,7 @@ function webApp(app: WebApp): (pathname: string) => Response {
   if (!existsSync(join(root, "index.html"))) throw new Error(`no index.html in ${root} (build it with: bun run web:build)`);
   const connect = ["'self'", ...(app.connect ?? [])].join(" ");
   const security = {
-    "content-security-policy": `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ${connect}; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+    "content-security-policy": `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ${connect}; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
     "referrer-policy": "no-referrer",
     "x-content-type-options": "nosniff",
   };
