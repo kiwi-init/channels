@@ -13,7 +13,7 @@ import { app } from "electron";
 
 import { compareVersions } from "./cli.ts";
 import { moveOver } from "./move.ts";
-import { logMainError } from "./revive.ts";
+import { logMainError } from "./main-log.ts";
 import { signedLikeThisApp } from "./signer.ts";
 import { cantSwap, swapAsset, swapScript } from "./update-asset.ts";
 
