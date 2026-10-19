@@ -38,6 +38,7 @@ export interface ChannelIdentityView {
   at?: number;
   requestId?: string;
   imported?: boolean;
+  creating?: true;
 }
 
 export interface PublicAccess {

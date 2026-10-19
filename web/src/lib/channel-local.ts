@@ -38,7 +38,7 @@ export function localOps(): ChannelOps {
     set: (room, pk, m) => localStorage.setItem(`mc.rec.${room}.${pk}`, JSON.stringify(m)),
   })
   const seats = () => readLocal().channels
-  return new Keyring({
+  const keyring = new Keyring({
     relay: relayUrl,
     seats,
     save: async (entry) => void writeLocal({ channels: acceptSeat(seats(), entry) }),
@@ -51,4 +51,6 @@ export function localOps(): ChannelOps {
     person: () => readLocal().person?.pk ?? null,
     budget,
   })
+  void keyring.finishCreating().catch(() => {})
+  return keyring
 }
