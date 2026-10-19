@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
 import { writeSync } from "node:fs";
+import type { Relay } from "@kiwi/core/client.ts";
 import { openSession, type AgentSession } from "../agent.ts";
 import { briefText, COMMANDS } from "../brief.ts";
 import { detectWhere } from "../card.ts";
@@ -98,22 +99,28 @@ const rearmText = Effect.fn("Hooks.rearmText")(function* (input: HookInput, b: B
 });
 
 const unreadText = Effect.fn("Hooks.unreadText")(function* (s: AgentSession) {
-  const { messages, state } = yield* s.read();
-  noteHeard(
-    here().session,
-    s.alias,
-    s.me,
-    messages.map((m) => m.seq),
+  const { messages, state, commit } = yield* s.unread();
+  const shown = Effect.andThen(
+    commit,
+    Effect.sync(() =>
+      noteHeard(
+        here().session,
+        s.alias,
+        s.me,
+        messages.map((m) => m.seq),
+      ),
+    ),
   );
   const text = messages.map((m) => formatMessage(m, state.trust.get(m.seq), state, s.me)).join("\n");
-  return text.length > MAX_CONTEXT ? `${text.slice(0, MAX_CONTEXT)}\n… (more: run \`kiwi log\`)` : text;
+  return { text: text.length > MAX_CONTEXT ? `${text.slice(0, MAX_CONTEXT)}\n… (more: run \`kiwi log\`)` : text, shown };
 });
 
 type AnswerKind = "cursor-start" | "start" | "gemini-prompt" | "prompt" | "followup" | "block" | "deny";
 
-interface Answer {
+export interface Answer {
   kind: AnswerKind;
   text: string;
+  shown: Effect.Effect<void, never, Relay>;
 }
 
 function envelope(kind: AnswerKind, texts: readonly string[]): string {
@@ -134,11 +141,11 @@ function envelope(kind: AnswerKind, texts: readonly string[]): string {
   }
 }
 
-function answered(kind: AnswerKind, text: string): Answer {
-  return { kind, text };
+function answered(kind: AnswerKind, text: string, shown: Effect.Effect<void, never, Relay> = Effect.void): Answer {
+  return { kind, text, shown };
 }
 
-export function kimiReason(answers: readonly Answer[]): string {
+export function kimiReason(answers: readonly Pick<Answer, "kind" | "text">[]): string {
   return answers.map((a) => a.text).join("\n\n");
 }
 
@@ -151,12 +158,17 @@ export function tellKimi(reason: string): number {
   }
 }
 
-export function hookOutput(answers: readonly Answer[]): string | null {
+export function printed<A extends Pick<Answer, "kind">>(answers: readonly A[]): A[] {
+  const [first] = answers;
+  return first ? answers.filter((a) => a.kind === first.kind) : [];
+}
+
+export function hookOutput(answers: readonly Pick<Answer, "kind" | "text">[]): string | null {
   const [first] = answers;
   if (!first) return null;
   return envelope(
     first.kind,
-    answers.filter((a) => a.kind === first.kind).map((a) => a.text),
+    printed(answers).map((a) => a.text),
   );
 }
 
@@ -188,22 +200,20 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
       }),
     ];
     const unread = yield* unreadText(s);
-    if (unread) lines.push("", "Unread messages for you:", unread);
+    if (unread.text) lines.push("", "Unread messages for you:", unread.text);
     const additionalContext = lines.join("\n");
     if (input.hook_event_name === "sessionStart" || input.composer_mode != null || typeof input.is_background_agent === "boolean") {
-      return answered("cursor-start", additionalContext);
+      return answered("cursor-start", additionalContext, unread.shown);
     }
-    return answered("start", additionalContext);
+    return answered("start", additionalContext, unread.shown);
   }
 
   if (event === "prompt") {
     const unread = yield* unreadText(s);
-    const lines: string[] = [];
-    if (unread) lines.push(`New Kiwi Channels messages for you (${b.alias}):`, unread);
-    if (!lines.length) return null;
-    const text = lines.join("\n");
-    if (input.hook_event_name === "BeforeAgent") return answered("gemini-prompt", text);
-    return answered("prompt", text);
+    if (!unread.text) return yield* Effect.as(unread.shown, null);
+    const text = [`New Kiwi Channels messages for you (${b.alias}):`, unread.text].join("\n");
+    if (input.hook_event_name === "BeforeAgent") return answered("gemini-prompt", text, unread.shown);
+    return answered("prompt", text, unread.shown);
   }
 
   if (event === "stop") {
@@ -219,10 +229,11 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
     if (who.harness === "grok" && input.reason !== undefined && input.reason !== "end_turn") return null;
     const unread = yield* unreadText(s);
     const decision = style === "gemini" ? "deny" : "block";
-    const handOver = unread ? `Before stopping: unread Kiwi Channels messages for you. Handle them (answer with \`${mc} reply N "…"\`):\n${unread}` : null;
+    const handOver = unread.text ? `Before stopping: unread Kiwi Channels messages for you. Handle them (answer with \`${mc} reply N "…"\`):\n${unread.text}` : null;
     const rearm = yield* rearmText(input, b, who, mc);
     const reason = [handOver, rearm].filter((t) => t !== null).join("\n\n");
-    if (reason) return answered(decision, reason);
+    if (reason) return answered(decision, reason, unread.shown);
+    yield* unread.shown;
   }
   return null;
 });

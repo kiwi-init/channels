@@ -98,3 +98,11 @@ for (const event of ["prompt", "stop"] as const) {
     await ok(agent, ["hook", "prompt"], S, INPUT);
   });
 }
+
+test("a prompt hook whose output never reaches the session leaves the message unread for the next one", async () => {
+  await ok(owner, ["send", "--to", me, "never printed"]);
+  const cut = spawn(agent, ["hook", "prompt"], S, INPUT);
+  await cut.stdout.cancel();
+  await cut.exited;
+  expect(await ok(agent, ["hook", "prompt"], S, INPUT)).toContain("never printed");
+});

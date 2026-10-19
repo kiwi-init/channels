@@ -92,6 +92,9 @@ jobs:
       ping in 5s, and web lib/wake.test.ts: coming back online or to a visible page nudges.
       Also test/web-core-barrel.test.ts: web/src takes values from @kiwi/core's client submodules
       (errors, relay, info), never the client.ts barrel, which pulls the whole Channel into the first load.
+      Also test/create-seat.test.ts: creating a channel saves the owner key before the relay hears of
+      it; a failed save after the relay made it is finished on the next start, and a create that never
+      landed is forgotten.
       Also test/unread-live.test.ts: a stored message this build can't read arrives as Unread with
       its seq, and web lib/history.test.ts: its sealed row keeps the cache whole (no hole, no reload)
       and opens as the message once a newer build can read it.
@@ -107,6 +110,9 @@ jobs:
       image, in a folder it can't write, or after this version's swap failed) offers the release before
       downloading, and the swap script leaves the old app and a marker when the move fails;
       test/desktop-update-blocked.test.ts (macOS): such an app offers the release and downloads nothing. And
+      test/desktop-revive.test.ts: a crashed window page reloads by itself up to three times a
+      minute, then asks Reload or Quit; a hung one asks Wait or Reload; main-process errors go to
+      main.log in the logs folder. And
       test/offscreen.test.ts: a message's content column is content-visibility auto with a remembered
       size, so off-screen messages skip layout and paint when the column's width changes. And
       test/snapshot-base.test.ts: a window of recent messages folded on the channel's snapshot keeps
@@ -189,7 +195,9 @@ jobs:
       listen --json except `kiwi show N --reveal`. Then hooks-once: a message the prompt or stop hook
       hands over never wakes the session a second time from the listener started with it
       (src/hooks/listen.ts waits for the session's answering hook, src/hooks/delivered.ts), and the
-      listener keeps listening for the next one. Fails if joining, seats, hooks, pairing, the
+      listener keeps listening for the next one; and a prompt hook whose output never reaches the
+      session leaves the message unread for the next hook (src/hooks/run.ts commits what was
+      read only after printing it). Fails if joining, seats, hooks, pairing, the
       daemon, kiwi sh, handoff or the relay change behavior.
 
   build:
