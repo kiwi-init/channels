@@ -86,6 +86,9 @@ jobs:
       messages with 50 KB ones among them, and big live messages back to back, arrive whole
       and in order. test/daemon-catchup.test.ts: a message that lands while a subscriber
       catches up waits until the catch-up is sent, so the rest of the catch-up isn't skipped.
+      Also test/daemon-versions.test.ts: compareVersions (packages/core/src/versions.ts, shared by
+      the CLI, the desktop updater and the changelog) orders releases and pre-releases, an older
+      kiwi keeps a newer daemon running, and a newer one replaces an older daemon (src/daemon/rpc.ts).
       Also test/silent-socket.test.ts: a live socket that goes quiet after opening (no answer to
       a ping) and an upgrade nobody answers are both dropped and opened again; a nudge (the network or
       the Mac coming back) cuts a long reconnect wait short and drops a socket that doesn't answer a

@@ -8,6 +8,7 @@ import { cleanup } from "../../cleanup.ts";
 import { VERSION } from "../../version.ts";
 import { hooksInstalled, installHooks } from "../../hooks.ts";
 import { binDir, ensureOnPath, profileFor } from "@kiwi/core/node/shell-path.ts";
+import { compareVersions } from "@kiwi/core/versions.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, out, Quit, relayUrl } from "../context.ts";
 import { confirm } from "../input.ts";
@@ -58,7 +59,7 @@ export const setupCommands: Record<string, Command> = {
     Effect.gen(function* () {
       const done = cleanup({ home: home(), bin: binDir() });
       const running = yield* Effect.promise(() => daemonHello().catch(() => null));
-      if (running && running.version !== VERSION) {
+      if (running && compareVersions(running.version, VERSION) < 0) {
         yield* Effect.promise(() => stopDaemon());
         done.removed.push(`the kiwi ${running.version} daemon (the next kiwi command starts ${VERSION})`);
       }
