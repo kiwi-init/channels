@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, closeSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Signed, SigningBudget } from "@kiwi/core/sas.ts";
@@ -144,7 +144,13 @@ export function writePrivate(path: string, data: string | Uint8Array): void {
   let blocked: unknown;
   for (const tmp of names) {
     try {
-      writeFileSync(tmp, data, { mode: 0o600, flag: "wx" });
+      const fd = openSync(tmp, "wx", 0o600);
+      try {
+        writeFileSync(fd, data);
+        fsyncSync(fd);
+      } finally {
+        closeSync(fd);
+      }
     } catch (err) {
       if (fileExists(err)) {
         blocked = err;
@@ -167,9 +173,24 @@ export function writePrivate(path: string, data: string | Uint8Array): void {
     } catch {
       // Written 0600 already; a mode this user can't set must not fail the write.
     }
+    syncDir(join(path, ".."));
     return;
   }
   throw blocked;
+}
+
+function syncDir(dir: string): void {
+  if (process.platform === "win32") return;
+  try {
+    const fd = openSync(dir, "r");
+    try {
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    // The file itself is synced; a directory this platform won't sync only risks the rename, not the data.
+  }
 }
 
 function fileExists(err: unknown): boolean {

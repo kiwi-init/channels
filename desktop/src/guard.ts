@@ -171,13 +171,42 @@ export function writePrivate(file: string, raw: Buffer, platform: NodeJS.Platfor
   if (platform !== "win32") fs.chmodSync(dir, 0o700);
   const tmp = `${file}.${process.pid}.tmp`;
   try {
-    fs.writeFileSync(tmp, raw, { mode: 0o600 });
+    const fd = fs.openSync(tmp, "w", 0o600);
+    try {
+      fs.writeFileSync(fd, raw);
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
     if (platform !== "win32") fs.chmodSync(tmp, 0o600);
     fs.renameSync(tmp, file);
   } catch (e) {
     fs.rmSync(tmp, { force: true });
     throw e;
   }
+  if (platform === "win32") return;
+  try {
+    const fd = fs.openSync(dir, "r");
+    try {
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    // The file itself is synced; a directory that can't be synced only risks the rename, not the data.
+  }
+}
+
+export interface StoreChoice {
+  read: StoreRead;
+  restore: Buffer | null;
+}
+
+export function chooseStore(main: Buffer | null, backup: Buffer | null, decrypt: ((b: Buffer) => string) | null): StoreChoice {
+  const read = readStore(main, decrypt);
+  if (read.kind === "ok" || !backup) return { read, restore: null };
+  const saved = readStore(backup, decrypt);
+  return saved.kind === "ok" ? { read: saved, restore: backup } : { read, restore: null };
 }
 
 export function claimFor(person: Identity, code: unknown, memberPk: unknown): Promise<PersonClaim> {

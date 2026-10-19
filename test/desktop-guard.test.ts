@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import type { ChannelIdentityView, ComputerView, PersonView } from "../desktop/src/bridge.ts";
-import { claimFor, csp, externalUrl, fileFor, isAppUrl, mergeChannels, normalizeRelay, publicComputer, readStore, snapshotOf, writePrivate } from "../desktop/src/guard.ts";
+import { chooseStore, claimFor, csp, externalUrl, fileFor, isAppUrl, mergeChannels, normalizeRelay, publicComputer, readStore, snapshotOf, writePrivate } from "../desktop/src/guard.ts";
 import { encodeJoinCode, newRoomId } from "@kiwi/core/crypto.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import { checkPerson } from "@kiwi/core/person.ts";
@@ -47,6 +47,17 @@ describe("the saved keys are never lost to a bad read (T186)", () => {
     expect(readStore(Buffer.from(""), decrypt).kind).toBe("unreadable");
     const locked = readStore(Buffer.from("\x00\x01garbage"), decrypt);
     expect(locked.kind === "unreadable" && locked.why).toContain("decrypt");
+  });
+  test("a missing or broken store comes back from its backup, which is never used over a good one or a locked keychain", () => {
+    const good = enc(JSON.stringify(store));
+    const older = enc(JSON.stringify({ ...store, person: { name: "older" } }));
+    const torn = Buffer.from('{"relayUrl": "https://r.exa');
+    expect(chooseStore(good, older, decrypt)).toEqual({ read: { kind: "ok", json: store, encrypted: true }, restore: null });
+    expect(chooseStore(torn, good, decrypt)).toEqual({ read: { kind: "ok", json: store, encrypted: true }, restore: good });
+    expect(chooseStore(null, good, decrypt)).toEqual({ read: { kind: "ok", json: store, encrypted: true }, restore: good });
+    expect(chooseStore(torn, torn, decrypt)).toEqual({ read: readStore(torn, decrypt), restore: null });
+    expect(chooseStore(good, good, null).read.kind).toBe("unreadable");
+    expect(chooseStore(good, good, null).restore).toBeNull();
   });
 });
 

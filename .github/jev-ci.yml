@@ -116,6 +116,10 @@ jobs:
       Also test/hooks-harness.test.ts's listener day: Claude Code's listener waits a week, an install
       whose listener timeout is still the old day counts as not installed so it gets rewritten, and
       a listener never outwaits the timeout installed for it (src/hooks/install/claude.ts, src/hooks/listen.ts).
+      Also test/machine-file.test.ts: saving this computer's key keeps machine.json.bak, a machine.json
+      cut short comes back from it, and one with no backup stops kiwi instead of minting a new key
+      (src/machine.ts); with test/desktop-guard.test.ts's chooseStore: kiwi-store.bin comes back from its
+      backup when it's missing or broken, never over a good file or a locked keychain.
       Also test/silent-socket.test.ts: a live socket that goes quiet after opening (no answer to
       a ping) and an upgrade nobody answers are both dropped and opened again; a nudge (the network or
       the Mac coming back) cuts a long reconnect wait short and drops a socket that doesn't answer a
