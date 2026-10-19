@@ -19,6 +19,7 @@ const PEEK_PROBE_MS = 250;
 const MAX_QUEUED_BYTES = 64 * 1024 * 1024;
 const lineEncoder = new TextEncoder();
 const TICK_MS = 5_000;
+const ORPHAN_MS = 10 * 60_000;
 const RETRY_FIRST_MS = 5_000;
 const RETRY_MAX_MS = 30 * 60_000;
 
@@ -35,6 +36,8 @@ export interface DaemonOptions {
   beaconMs?: number;
   wakeDelayMs?: number;
   wakeGapMs?: number;
+  tickMs?: number;
+  orphanMs?: number;
 }
 
 const WAKE_DELAY_MS = 2_000;
@@ -655,10 +658,28 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
   }
 
+  const tickMs = opts.tickMs ?? TICK_MS;
+  const orphanTicks = Math.ceil((opts.orphanMs ?? ORPHAN_MS) / tickMs);
+  let deadTicks = 0;
+  const orphaned = async (): Promise<boolean> => {
+    if (conns.size) return false;
+    let relays: string[];
+    try {
+      relays = [...new Set(Object.values(loadConfig().channels).map((c) => c.relay ?? DEFAULT_RELAY))];
+    } catch {
+      return false;
+    }
+    if (!relays.length || !relays.every(onLoopback)) return false;
+    return (await Promise.all(relays.map(answers))).every((up) => !up);
+  };
   const tick = setInterval(() => {
-    if (!existsSync(dir)) void stop();
-    else void syncSeats();
-  }, TICK_MS);
+    if (!existsSync(dir)) return void stop();
+    void syncSeats();
+    void orphaned().then((dead) => {
+      deadTicks = dead ? deadTicks + 1 : 0;
+      if (deadTicks >= orphanTicks) void stop();
+    });
+  }, tickMs);
 
   const stop = async (): Promise<void> => {
     if (stopped) return;
@@ -691,6 +712,40 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
 
   await syncSeats();
   return { sock, stop, stopped: stoppedP, beacons: () => beacons };
+}
+
+function onLoopback(relay: string): boolean {
+  try {
+    const host = new URL(relay).hostname;
+    return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
+  } catch {
+    return false;
+  }
+}
+
+function answers(relay: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const u = new URL(relay);
+    const settle = (up: boolean): void => {
+      clearTimeout(late);
+      resolve(up);
+    };
+    const late = setTimeout(() => resolve(false), 1_000);
+    Bun.connect({
+      hostname: u.hostname.replace(/^\[|\]$/g, ""),
+      port: Number(u.port || (u.protocol === "https:" ? 443 : 80)),
+      socket: {
+        open(socket) {
+          socket.end();
+          settle(true);
+        },
+        data() {},
+        connectError() {
+          settle(false);
+        },
+      },
+    }).catch(() => settle(false));
+  });
 }
 
 export async function runDaemonForeground(dir = home()): Promise<void> {
