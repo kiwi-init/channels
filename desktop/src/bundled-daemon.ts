@@ -6,18 +6,32 @@ import { app } from "electron";
 import { certifyMachine } from "@kiwi/core/person.ts";
 import type { ComputerView } from "./bridge.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
-import { ensureOnPath, keepCli } from "./cli.ts";
+import { ensureOnPath, keepCli, place } from "./cli.ts";
 import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, noteDaemon, spawnDaemon, type HelloResult } from "./daemon-client.ts";
 import { keepAlive } from "./daemon-keeper.ts";
 import { requirePerson, store, upsertComputer } from "./store.ts";
 
 function bundledKiwi(): string {
   const exe = process.platform === "win32" ? "kiwi.exe" : "kiwi";
-  const fromPkg = path.join(process.resourcesPath, exe);
-  if (app.isPackaged && fs.existsSync(fromPkg)) return fromPkg;
+  for (const name of [`${exe}.zst`, exe]) {
+    const fromPkg = path.join(process.resourcesPath, name);
+    if (app.isPackaged && fs.existsSync(fromPkg)) return fromPkg;
+  }
   const fromRepo = path.join(__dirname, "..", "..", "dist", exe);
   if (fs.existsSync(fromRepo)) return fromRepo;
   throw new Error("the bundled kiwi binary is missing (repo root `bun run build` makes dist/kiwi)");
+}
+
+async function runnableKiwi(): Promise<string> {
+  const bundled = bundledKiwi();
+  if (!bundled.endsWith(".zst")) return bundled;
+  const dir = path.join(app.getPath("userData"), "bin");
+  const name = `kiwi-${app.getVersion()}`;
+  const unpacked = path.join(dir, name);
+  if (fs.existsSync(unpacked)) return unpacked;
+  await place(bundled, unpacked);
+  for (const old of await fs.promises.readdir(dir)) if (old.startsWith("kiwi-") && old !== name) await fs.promises.rm(path.join(dir, old), { force: true });
+  return unpacked;
 }
 
 let kiwiBin: { path: string; version: string } | null = null;
@@ -30,7 +44,7 @@ async function ensureDaemon(): Promise<HelloResult | null> {
     await daemonStop(home);
     for (let i = 0; i < 20 && (await daemonHello(home, 500)); i++) await new Promise((r) => setTimeout(r, 250));
   }
-  spawnDaemon(kiwiBin?.path ?? bundledKiwi(), home, store.relayUrl);
+  spawnDaemon(kiwiBin?.path ?? (await runnableKiwi()), home, store.relayUrl);
   const until = Date.now() + 10_000;
   for (;;) {
     const hello = await daemonHello(home);

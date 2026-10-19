@@ -146,8 +146,8 @@ jobs:
       been seen where keeps the newest 500 places. And
       test/perf-check.test.ts: perf-check compares the median of the runs with each gate, counts the
       soak's limits only in the nightly run and lists what isn't at its 0.20 budget yet;
-      test/mac-size.test.ts: desktop/scripts/mac-size.ts (run by release-build on macOS) fails a dmg,
-      zip or installed app over its gate and lists what isn't at its 0.20 budget. And
+      test/mac-size.test.ts: desktop/scripts/mac-size.ts (run by release-build on macOS) fails a dmg
+      or zip over 150 MiB or an installed app over 320 MiB, the 0.20 budgets. And
       test/retry-after.test.ts: the relay's 429 carries Retry-After (header and body, on the socket
       too), a refused attempt isn't counted, and a rate-limited send waits it out and goes in, over
       the socket without an extra try over HTTP; web lib/github-queue.test.ts: the owner's GitHub
@@ -330,7 +330,7 @@ jobs:
   desktop:
     name: desktop / package
     inputs: ["desktop/**", "src/**", "packages/core/**", "web/src/**", "web/index.html", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "package.json", "bun.lock", "web/package.json"]
-    always: ["desktop/package.json", "desktop/tsconfig*.json", "desktop/scripts/fuses.ts", "desktop/scripts/size.ts", "desktop/scripts/smoke.ts"]
+    always: ["desktop/package.json", "desktop/tsconfig*.json", "desktop/scripts/fuses.ts", "desktop/scripts/pack-cli.ts", "desktop/scripts/size.ts", "desktop/scripts/smoke.ts"]
     description: >-
       Bundles the Electron shell's main, preload and channels (key process) scripts with bun
       build, then packages the Linux app with electron-builder --dir from desktop/package.json's
@@ -341,7 +341,9 @@ jobs:
       EnableCookieEncryption, EnableEmbeddedAsarIntegrityValidation and OnlyLoadAppFromAsar are
       on. desktop/scripts/size.ts fails if app.asar ships node_modules (dist/ already bundles
       them), if more than the English Chromium locales ship (electronLanguages), or if the
-      packaged Linux app is over 375MB on disk or 162MB as a tar.gz. desktop/scripts/smoke.ts starts the packaged app under Xvfb and fails unless its
+      packaged Linux app is over 375MB on disk or 162MB as a tar.gz. The bundled kiwi is
+      packed by desktop/scripts/pack-cli.ts first (zstd, checked to unpack to the same bytes), and
+      the smoke's daemon runs from the copy the app unpacks. desktop/scripts/smoke.ts starts the packaged app under Xvfb and fails unless its
       window renders, the page's scripts land in the V8 code cache (kiwi-app:// registered with
       codeCache, so a launch after the first skips compiling them), its key process
       (utilityProcess.fork of dist/channels.js from app.asar) stays up and the bundled kiwi
@@ -385,7 +387,7 @@ jobs:
     push: false
     version_bumps: true
     inputs: []
-    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/scripts/fuses.ts", "desktop/scripts/mac-size.ts", "scripts/changelog.ts", "scripts/cli-downloads.ts"]
+    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/scripts/fuses.ts", "desktop/scripts/mac-size.ts", "desktop/scripts/pack-cli.ts", "scripts/changelog.ts", "scripts/cli-downloads.ts"]
     description: >-
       Runs .github/workflows/release-build.yml, the build a tag's release.yml runs, with
       rehearsal: true and a read-only token, uploading nothing: the version and changelog checks
@@ -393,8 +395,9 @@ jobs:
       packed as .gz and .xz, held to 30 MB by scripts/cli-downloads.ts), and
       the desktop app packaged on macOS (arm64 and x64) and Linux (AppImage and deb), with each
       package's contents and fuses checked (release/mac*/Channels.app and
-      release/*-unpacked/channels-desktop), and on macOS desktop/scripts/mac-size.ts failing a dmg,
-      zip or installed app over its size gate. On a pull request the macOS app is unsigned; a
+      release/*-unpacked/channels-desktop), the kiwi binary bundled zstd-packed by
+      desktop/scripts/pack-cli.ts (which checks it unpacks to the same bytes), and on macOS
+      desktop/scripts/mac-size.ts failing a dmg or zip over 150 MiB or an app over 320 MiB. On a pull request the macOS app is unsigned; a
       manual run of ci.yml passes the signing secrets, so the app is signed, notarized and
       checked as on a tag. Fails where the tag would: versions that disagree, no changelog
       section, a test failing on macOS, an electron-builder error, a package missing the web
