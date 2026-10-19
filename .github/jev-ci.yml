@@ -224,7 +224,9 @@ jobs:
       listener keeps listening for the next one; and a prompt hook whose output never reaches the
       session leaves the message unread for the next hook (src/hooks/run.ts commits what was
       read only after printing it), and a hand-over cut at its size limit commits only the
-      messages shown, so the next hook brings the rest. Then hooks-hung-relay: with the relay accepting connections
+      messages shown, so the next hook brings the rest; and a listener that can't reach the daemon
+      keeps retrying its slot (2s doubling to 60s) while its session lives, instead of exiting and
+      leaving the session deaf. Then hooks-hung-relay: with the relay accepting connections
       but never answering, the prompt and stop hooks each return in under 2s (src/hooks/run.ts
       puts the whole hook under one deadline; packages/core/src/client/relay.ts gives every
       relay request 30s), and what they couldn't show comes with the next prompt. Fails if joining, seats, hooks, pairing, the

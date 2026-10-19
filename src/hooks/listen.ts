@@ -25,6 +25,8 @@ interface Heard {
 }
 
 const ANSWERED_WAIT_MS = 20_000;
+const SLOT_RETRY_FIRST_MS = 2_000;
+const SLOT_RETRY_MAX_MS = 60_000;
 
 const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, woke: Effect.Effect<void, never, Scope.Scope>) {
   const s = yield* openSession(b.alias, cfg, b.as);
@@ -62,8 +64,13 @@ const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, w
 const arm = Effect.fn("Hooks.arm")(function* (seat: Served, who: Here, woke: Effect.Effect<void, never, Scope.Scope>) {
   const { b } = seat;
   if (!wakeOn(loadConfig(), b.alias, b.as) || isListening(b.alias, b.as)) return null;
-  const slot = yield* Effect.promise(() => takeListenSlot(b.alias, b.as, who.session ?? ""));
-  if (!slot) return null;
+  const slot = yield* Effect.promise(() => takeListenSlot(b.alias, b.as, who.session ?? "")).pipe(
+    Effect.repeat({
+      while: (got) => got === "unreachable" && (!who.pid || alive(who.pid)),
+      schedule: Schedule.min([Schedule.exponential(SLOT_RETRY_FIRST_MS), Schedule.spaced(SLOT_RETRY_MAX_MS)]),
+    }),
+  );
+  if (typeof slot === "string") return null;
   const release = () => slot.close();
   yield* Effect.addFinalizer(() => Effect.sync(release));
   return yield* tune(seat, who, woke).pipe(

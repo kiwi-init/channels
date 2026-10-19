@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { daemonListeners, daemonListening, daemonSock, stopDaemon } from "../src/daemon.ts";
@@ -116,4 +116,23 @@ test("a hand-over cut at its size limit leaves the rest unread, and the next hoo
   const second = await ok(agent, ["hook", "prompt"], S, INPUT);
   expect(second).toContain("long 9 ");
   expect(second).not.toContain("long 0 ");
+});
+
+test("a listener that can't reach the daemon keeps trying instead of leaving the session deaf", async () => {
+  const sock = daemonSock(agent);
+  await stopDaemon(sock).catch(() => {});
+  await until(async () => !(await daemonListening(sock).catch(() => null)), "the daemon to stop");
+  mkdirSync(sock);
+  const listener = spawn(agent, ["hook", "listen"], S, INPUT);
+  try {
+    const early = await Promise.race([listener.exited, Bun.sleep(3_000).then(() => null)]);
+    expect(early).toBeNull();
+  } finally {
+    rmSync(sock, { recursive: true, force: true });
+  }
+  await until(listening, "the listener's slot once the daemon can start", 30_000);
+  await ok(owner, ["send", "--to", me, "heard after all"]);
+  expect(await listener.exited).toBe(2);
+  expect(await new Response(listener.stderr).text()).toContain("heard after all");
+  await ok(agent, ["hook", "prompt"], S, INPUT);
 });
