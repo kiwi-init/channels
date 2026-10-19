@@ -2,7 +2,7 @@ import { describeEvent } from "@kiwi/core/format.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
 import { ignored, type Message } from "@kiwi/core/protocol.ts"
 import type { ChannelState, Task } from "@kiwi/core/state.ts"
-import { taskFeed, taskPrs, type PrRef } from "@kiwi/core/work.ts"
+import type { PrRef } from "@kiwi/core/work.ts"
 
 export interface LaneTask {
   task: Task
@@ -38,15 +38,15 @@ function sinceOf(t: Task, messages: Message[]): number {
   return t.updatedAt
 }
 
-function prOf(state: ChannelState, messages: Message[], id: number): PrRef | undefined {
-  const prs = taskPrs(taskFeed(state, messages, id))
-  return prs.findLast((p) => p.state === "open") ?? prs.at(-1)
+function prOf(prs: Map<number, PrRef[]>, id: number): PrRef | undefined {
+  const all = prs.get(id) ?? []
+  return all.findLast((p) => p.state === "open") ?? all.at(-1)
 }
 
-export function laneWork(state: ChannelState, messages: Message[], name: string): LaneWork {
+export function laneWork(state: ChannelState, messages: Message[], name: string, prs: Map<number, PrRef[]>): LaneWork {
   const load = memberLoad(state, name)
   const current = [...load.current, ...load.waiting].map((task) => {
-    const pr = prOf(state, messages, task.id)
+    const pr = prOf(prs, task.id)
     return { task, since: sinceOf(task, messages), ...(pr ? { pr } : {}) }
   })
   const mine = new Set(current.flatMap((c) => (c.pr ? [c.pr.url] : [])))
@@ -55,7 +55,7 @@ export function laneWork(state: ChannelState, messages: Message[], name: string)
       ? [...state.tasks.values()]
           .filter((t) => t.state === "review" || t.state === "doing")
           .flatMap((t) => {
-            const pr = prOf(state, messages, t.id)
+            const pr = prOf(prs, t.id)
             return pr && pr.state === "open" && !mine.has(pr.url) ? [pr] : []
           })
       : []

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test"
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts"
 import type { Event, Kind, Message } from "@kiwi/core/protocol.ts"
 import { fold, type ChannelState, type Roster } from "@kiwi/core/state.ts"
+import { prsByTask } from "@kiwi/core/work.ts"
 
 import { laneWork } from "./lanes"
 
@@ -27,6 +28,10 @@ async function post(from: string, ev: Event | null, body = "", kind: Kind = ev ?
 }
 
 const state = (): ChannelState => fold(log, roster)
+const lane = (name: string) => {
+  const s = state()
+  return laneWork(s, log, name, prsByTask(s, log))
+}
 
 await join("jow", "human", true)
 await join("wren", "agent")
@@ -45,7 +50,7 @@ await post("jow", { op: "github", items: [{ event: "check_run", repo: "ojow/chan
 
 describe("an agent's lane", () => {
   test("its tasks in progress and in review, each with its PR, then what's queued", () => {
-    const w = laneWork(state(), log, "wren")
+    const w = lane("wren")
     expect(w.current.map((c) => [c.task.id, c.task.state, c.pr?.number])).toEqual([
       [doing.seq, "doing", 368],
       [review.seq, "review", 370],
@@ -55,25 +60,25 @@ describe("an agent's lane", () => {
   })
 
   test("since when a task has been in its state comes from the update that put it there", () => {
-    const w = laneWork(state(), log, "wren")
+    const w = lane("wren")
     const started = log.find((m) => m.ev?.op === "task.update" && m.ev.task === doing.seq && m.ev.state === "doing")!
     expect(w.current[0]!.since).toBe(started.rts!)
   })
 
   test("its last three moves, newest first, said the way the log says them", () => {
-    const w = laneWork(state(), log, "wren")
+    const w = lane("wren")
     expect(w.events).toHaveLength(3)
     expect(w.events[0]!.text).toContain(`T${review.seq}`)
     expect(w.events.map((e) => e.seq)).toEqual([...w.events.map((e) => e.seq)].sort((a, b) => b - a))
   })
 
   test("the lead also watches the other open PRs on the board", () => {
-    const p = laneWork(state(), log, "puma")
+    const p = lane("puma")
     expect(p.current.map((c) => c.pr?.number)).toEqual([369])
     expect(p.watching.map((pr) => pr.number).sort()).toEqual([368, 370])
   })
 
   test("someone with nothing has an empty lane", () => {
-    expect(laneWork(state(), log, "jow")).toEqual({ current: [], next: [], watching: [], events: [] })
+    expect(lane("jow")).toEqual({ current: [], next: [], watching: [], events: [] })
   })
 })

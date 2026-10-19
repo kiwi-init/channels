@@ -324,8 +324,10 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
         </button>
       </div>
     )
-  if (card && at >= 0) rows.push(...timeline(tail.slice(0, at)), card, ...timeline(tail.slice(at + 1)))
-  else rows.push(...timeline(tail), ...(card ? [card] : []))
+  if (tab === "conversation") {
+    if (card && at >= 0) rows.push(...timeline(tail.slice(0, at)), card, ...timeline(tail.slice(at + 1)))
+    else rows.push(...timeline(tail), ...(card ? [card] : []))
+  }
 
   const root = threadRoot === null ? undefined : bySeq.get(threadRoot)
   const replies = threadRoot === null ? [] : (threads.get(threadRoot) ?? [])

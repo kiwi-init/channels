@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, test } from "bun:test";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import type { Event, Kind, Message } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
-import { agentRows, needsPerson, prLinks, prsIn, recentPrs, taskFeed, taskPrs } from "@kiwi/core/work.ts";
+import { agentRows, needsPerson, prLinks, prsByTask, prsIn, recentPrs, taskFeed, taskPrs } from "@kiwi/core/work.ts";
 
 let seq = 0;
 const T0 = 1_700_000_000_000;
@@ -157,5 +157,59 @@ describe("a task's feed", () => {
     const ms = [mode, add, peer];
     const s = fold(ms, roster);
     expect(taskFeed(s, ms, add.seq).some((i) => i.type === "thread")).toBe(true);
+  });
+});
+
+describe("every task's PRs in one pass", () => {
+  test("match each task's feed: notes, threads that name it, later merged or closed, GitHub branches, forged links", async () => {
+    const mallory = await generateIdentity("mallory");
+    const ms: Message[] = [];
+    const add = async (m: Promise<Message>) => {
+      const got = await m;
+      ms.push(got);
+      return got;
+    };
+    const tasks: number[] = [];
+    for (let i = 0; i < 12; i++) tasks.push((await add(msg(coord, { ev: { op: "task.add", title: `Task ${i}`, owner: i % 2 ? "ann" : "bob" } }))).seq);
+    const url = (n: number) => `https://github.com/o/r/pull/${n}`;
+    const roots: number[] = [];
+    for (let i = 0; i < 60; i++) {
+      const t = tasks[i % tasks.length]!;
+      const who = [ann, bob, coord][i % 3]!;
+      const pr = 10 + (i % 9);
+      const body = [
+        `T${t}: opened ${url(pr)}`,
+        `on it, see T0${t} and xT${t} and T${t}a`,
+        `Merged #${pr} into main`,
+        `closed ${url(pr)} for now`,
+        `#${pr} is merged, T${t} done`,
+        `PR ${url(pr * 10 + 3)} for T${t}`,
+        `reply with ${url(pr + 1)}`,
+      ][i % 7]!;
+      const re = i % 5 === 4 && roots.length ? [roots[i % roots.length]!] : undefined;
+      const m = await add(msg(who, { body, ...(re ? { re } : {}) }));
+      if (!re) roots.push(m.seq);
+      if (i % 6 === 0) await add(msg(who, { ev: { op: "task.update", task: t, note: `PR ${url(pr + 2)}` } }));
+      if (i % 11 === 0) await add(msg(mallory, { body: `T${t} ${url(99)}` }));
+    }
+    await add(
+      msg(owner, {
+        ev: {
+          op: "github",
+          items: [
+            { event: "pull_request", repo: "o/r", number: 12, state: "closed", merged: true, branch: `T${tasks[3]}-fix`, at: 1 },
+            { event: "pull_request", repo: "o/r", number: 77, state: "open", branch: `T${tasks[5]}-new`, at: 2 },
+          ],
+        } as Event,
+      }),
+    );
+    await add(msg(ann, { body: `merged ${url(77)}` }));
+    const s = fold(ms, roster);
+    const all = prsByTask(s, ms);
+    for (const id of [...tasks, 999]) expect(prsByTask(s, ms, [id]).get(id)).toEqual(taskPrs(taskFeed(s, ms, id)));
+    for (const id of tasks) expect(all.get(id)).toEqual(taskPrs(taskFeed(s, ms, id)));
+    expect(tasks.some((id) => (all.get(id) ?? []).some((p) => p.state === "merged"))).toBe(true);
+    expect(tasks.some((id) => (all.get(id) ?? []).some((p) => p.state === "closed"))).toBe(true);
+    expect([...all.values()].flat().some((p) => p.number === 99)).toBe(false);
   });
 });
