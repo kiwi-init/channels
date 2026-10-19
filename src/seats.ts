@@ -56,6 +56,7 @@ export function onGrokBot(env: Record<string, string | undefined> = process.env,
 export function here(env: Record<string, string | undefined> = process.env, tree: ProcessTree = {}, host: string = hostname()): Here {
   const pid = Number(env.CLAUDE_PID);
   const mimo = mimoHere(env, tree);
+  if (mimo && env.MIMOCODE_SESSION_ID) return { harness: "mimo", session: env.MIMOCODE_SESSION_ID, ...(mimo.pid ? { pid: mimo.pid } : {}) };
   if (mimo) return mimo.pid ? heldByProcess("mimo", mimo.pid) : { harness: "mimo" };
   const kimi = kimiCodePid(env, tree);
   if (kimi) return heldByProcess("kimi", kimi);

@@ -15,7 +15,7 @@
 
 import { closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 
 import { kimiCodePid, mimoHere, type ProcessTree } from "./ancestry.ts";
 import type { Activity } from "@kiwi/core/protocol.ts";
@@ -152,16 +152,22 @@ function realDir(dir: string): string {
 }
 
 async function mimoModel(env: Env, cwd: string): Promise<string | undefined> {
-  const file = join(env.XDG_DATA_HOME || join(homedir(), ".local", "share"), "mimocode", "mimocode.db");
+  const home = env.MIMOCODE_HOME && isAbsolute(env.MIMOCODE_HOME) ? join(env.MIMOCODE_HOME, "data") : join(env.XDG_DATA_HOME || join(homedir(), ".local", "share"), "mimocode");
+  const file = join(home, "mimocode.db");
   if (!existsSync(file)) return undefined;
   const { Database } = await import("bun:sqlite");
   const db = new Database(file, { readonly: true });
   try {
-    const rows = db
-      .query(
-        "SELECT m.data AS data FROM message m JOIN session s ON s.id = m.session_id WHERE s.directory = ?1 OR substr(?1, 1, length(s.directory) + 1) = s.directory || '/' ORDER BY m.time_created DESC LIMIT 20",
-      )
-      .all(realDir(cwd)) as { data?: unknown }[];
+    const session = env.MIMOCODE_SESSION_ID;
+    const rows = (
+      session
+        ? db.query("SELECT data FROM message WHERE session_id = ?1 ORDER BY time_created DESC LIMIT 20").all(session)
+        : db
+            .query(
+              "SELECT m.data AS data FROM message m JOIN session s ON s.id = m.session_id WHERE s.directory = ?1 OR substr(?1, 1, length(s.directory) + 1) = s.directory || '/' ORDER BY m.time_created DESC LIMIT 20",
+            )
+            .all(realDir(cwd))
+    ) as { data?: unknown }[];
     for (const row of rows) {
       if (typeof row.data !== "string") continue;
       const data = JSON.parse(row.data) as { modelID?: unknown; model?: { modelID?: unknown } };
