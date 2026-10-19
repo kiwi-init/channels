@@ -58,9 +58,9 @@ export function detectHarness(env: Record<string, string | undefined> = process.
   if (env.CLAUDECODE) return "claude-code";
   if (env.CODEX_THREAD_ID || env.CODEX_SANDBOX) return "codex";
   if (env.GEMINI_CLI) return "gemini";
+  if (onGrokBot({}, host)) return "grok-bot";
   if (env.CURSOR_AGENT || env.CURSOR_TRACE_ID) return "cursor";
   if (env.OPENCODE_SESSION_ID) return "opencode";
-  if (onGrokBot({}, host)) return "grok-bot";
   return undefined;
 }
 

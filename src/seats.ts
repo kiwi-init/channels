@@ -67,9 +67,9 @@ export function here(env: Record<string, string | undefined> = process.env, tree
   if (env.CLAUDECODE) return { harness: "claude", ...(env.CLAUDE_CODE_SESSION_ID ? { session: env.CLAUDE_CODE_SESSION_ID } : {}), ...(Number.isInteger(pid) && pid > 0 ? { pid } : {}) };
   if (env.CODEX_THREAD_ID) return { harness: "codex", session: env.CODEX_THREAD_ID };
   if (env.GEMINI_CLI) return { harness: "gemini" };
+  if (onGrokBot(env, host)) return { harness: "grok-bot" };
   if (env.CURSOR_AGENT) return { harness: "cursor", ...(env.CURSOR_CONVERSATION_ID ? { session: env.CURSOR_CONVERSATION_ID } : {}) };
   if (env.OPENCODE_SESSION_ID) return { harness: "opencode", session: env.OPENCODE_SESSION_ID };
-  if (onGrokBot(env, host)) return { harness: "grok-bot" };
   return {};
 }
 
