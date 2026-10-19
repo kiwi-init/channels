@@ -71,7 +71,7 @@ jobs:
 
   test-unit:
     name: test / unit
-    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release-build.yml", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "site/install.ps1", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/action-pins.ts", "desktop/src/**", "desktop/build/entitlements.mac.plist", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
+    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release-build.yml", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "desktop/src/**", "desktop/build/entitlements.mac.plist", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs the unit tests with bun test: every test/*.test.ts except the slow suites in
@@ -95,6 +95,10 @@ jobs:
       Also test/daemon-versions.test.ts: compareVersions (packages/core/src/versions.ts, shared by
       the CLI, the desktop updater and the changelog) orders releases and pre-releases, an older
       kiwi keeps a newer daemon running, and a newer one replaces an older daemon (src/daemon/rpc.ts).
+      Also test/install.test.ts's download cases: site/install.sh takes the release's .xz when
+      xz is installed, else its .gz, else the plain binary, and checks what it downloaded against
+      SHA256SUMS; and test/cli-downloads.test.ts: scripts/cli-downloads.ts, the release build's
+      check that every CLI download is 30 MB or less.
       Also test/hooks-harness.test.ts's broken config case: with a config.json that isn't JSON,
       every hook exits 0 and says once which file to fix (src/config/file.ts, src/cli/commands/hooks.ts).
       Also test/silent-socket.test.ts: a live socket that goes quiet after opening (no answer to
@@ -296,11 +300,11 @@ jobs:
 
   cli-macos:
     name: cli / macos
-    inputs: ["src/**", "packages/core/**", "test/**", "site/install", "site/install.sh", "site/install.ps1", "desktop/src/**", "package.json", "bun.lock", "bunfig.toml", "web/package.json"]
+    inputs: ["src/**", "packages/core/**", "test/**", "site/install", "site/install.sh", "desktop/src/**", "package.json", "bun.lock", "bunfig.toml", "web/package.json"]
     always: ["scripts/build-cli.ts", "scripts/cli-bundle.ts"]
     question: >-
       Could this change to `file` make the job described in `job` fail on macOS, or fail to
-      cross-compile a darwin or windows target, while the same tests and the Linux build pass
+      cross-compile a darwin target, while the same tests and the Linux build pass
       in test / unit, test / flows-a, test / flows-b and build / bundles?
     criteria:
       true: >-
@@ -308,14 +312,14 @@ jobs:
         /private/var symlink, realpath or process.cwd() compared with a tmp path, home under
         /Users, a case-insensitive file system, a unix socket path near 104 bytes, BSD shell
         tools, signals, child processes, file watching, the name the CLI prints for itself, or
-        the darwin or windows build targets, in a way that could fail only there.
+        the darwin build targets, in a way that could fail only there.
       false: >-
         The change behaves the same on macOS as on Linux: a failure it causes would fail the
         Linux jobs too, which catch it, or it can't fail at all.
     description: >-
       On a macOS runner, does what the release's cli job does: runs the whole bun test suite
       (every test/*.test.ts and web/src test, the agent flows included), compiles the kiwi CLI
-      for darwin-arm64, darwin-x64, linux-x64, linux-arm64 and windows-x64 with
+      for darwin-arm64, darwin-x64, linux-x64 and linux-arm64 with
       scripts/build-cli.ts, ad-hoc signs the macOS binaries and runs `kiwi --version`. The same
       tests run on Linux in test / unit, test / flows-a and test / flows-b, so this job is for what fails only on macOS: paths (os.tmpdir() is under
       /var, a symlink to /private/var, so process.cwd() and realpath spell a folder differently
@@ -330,11 +334,12 @@ jobs:
     push: false
     version_bumps: true
     inputs: []
-    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/scripts/fuses.ts", "scripts/changelog.ts"]
+    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/scripts/fuses.ts", "scripts/changelog.ts", "scripts/cli-downloads.ts"]
     description: >-
       Runs .github/workflows/release-build.yml, the build a tag's release.yml runs, with
       rehearsal: true and a read-only token, uploading nothing: the version and changelog checks
-      (taking v<src/version.ts> as the tag), the cli job on macOS (bun test, five builds), and
+      (taking v<src/version.ts> as the tag), the cli job on macOS (bun test, four builds, each
+      packed as .gz and .xz, held to 30 MB by scripts/cli-downloads.ts), and
       the desktop app packaged on macOS (arm64 and x64) and Linux (AppImage and deb), with each
       package's contents and fuses checked (release/mac*/Channels.app and
       release/*-unpacked/channels-desktop). On a pull request the macOS app is unsigned; a

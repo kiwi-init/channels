@@ -4,7 +4,7 @@ import { GONE_WORDS, WS_PROTOCOL, type GoneHow } from "@kiwi/core/protocol.ts";
 import { ChannelGone, NotMember, Unauthorized, UpdateRequired } from "../failures.ts";
 import { RoomStore, type RoomDb } from "./db.ts";
 
-export const UPDATE_KIWI = "update kiwi to join or approve here: curl -fsSL https://channels.kiwiinit.com/install | sh (Windows: irm https://channels.kiwiinit.com/install.ps1 | iex)";
+export const UPDATE_KIWI = "update kiwi to join or approve here: curl -fsSL https://channels.kiwiinit.com/install | sh";
 
 export function missingFingerprint(method: string, path: string, url: URL): UpdateRequired | null {
   const m = method.toUpperCase();

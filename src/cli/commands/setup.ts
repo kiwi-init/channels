@@ -38,7 +38,7 @@ export const setupCommands: Record<string, Command> = {
         const { file, line } = profileFor({ mark: "" });
         const added = ensureOnPath({ mark: "# Added by kiwi setup: puts the kiwi CLI on your PATH." });
         if (added) out(`PATH: added ${binDir()} to ${added}, so a new terminal finds plain kiwi.\n`);
-        else if (process.platform === "win32") out(`PATH: to type plain kiwi, add ${binDir()} to your user Path (install.ps1 does it for you).\n`);
+        else if (process.platform === "win32") out(`PATH: to type plain kiwi, add ${binDir()} to your user Path.\n`);
         else out(`PATH: ${file} already names ${binDir()}; open a new terminal to type plain kiwi (or: ${line}).\n`);
       }
       out("To let this computer's agents in on their own, pair it with your Channels app: Your computers → Add a computer,");

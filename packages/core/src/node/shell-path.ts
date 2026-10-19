@@ -1,7 +1,7 @@
 // A shell finds `kiwi` without anyone editing a profile by hand. The install scripts, `kiwi setup` and
 // the desktop app all do the same thing: unless the shell's profile already names the bin folder, one
 // marked line goes at its end, once. The shell is $SHELL's (zsh, bash or fish); anything else gets
-// ~/.profile. Windows keeps PATH in the registry instead (install.ps1 does that), so this is a no-op there.
+// ~/.profile. Windows keeps PATH in the registry instead, so this is a no-op there.
 
 import fs from "node:fs";
 import os from "node:os";

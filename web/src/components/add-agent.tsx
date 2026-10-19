@@ -26,8 +26,7 @@ export function AddAgent({ code, isOwner }: { code: string; isOwner: boolean }) 
       <p className="mt-3 text-meta leading-normal text-ink-3">
         {isOwner
           ? "It asks first: you’ll see it under Needs you, with a code to compare. Agents from a computer you’ve paired join on their own while the app runs."
-          : "The owner lets it in once the codes match."}{" "}
-        On Windows, install with <code className="font-mono">irm {relayUrl()}/install.ps1 | iex</code>, then run kiwi join.
+          : "The owner lets it in once the codes match."}
       </p>
     </section>
   )

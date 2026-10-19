@@ -11,16 +11,26 @@ import { joinCommand, kiwiJoin } from "../web/src/lib/join-line.ts";
 
 const SCRIPT = join(import.meta.dir, "..", "site", "install.sh");
 
-function sandbox() {
+const TARGETS = ["kiwi-darwin-arm64", "kiwi-darwin-x64", "kiwi-linux-x64", "kiwi-linux-arm64"];
+
+function sandbox(packed: readonly ("gz" | "xz")[] = []) {
   const dir = mkdtempSync(join(tmpdir(), "kiwi-install-"));
   const fake = `#!/bin/sh\nif [ "$1" = --version ]; then echo 9.9.9; exit 0; fi\necho "ran: $*" >> "${dir}/ran"\n`;
   writeFileSync(join(dir, "fake-kiwi"), fake);
-  const sum = createHash("sha256").update(fake).digest("hex");
-  // curl -fsSL URL -o FILE: the binary for any asset, SHA256SUMS naming that asset.
+  const sha = (b: string | Uint8Array) => createHash("sha256").update(b).digest("hex");
+  const sums = TARGETS.map((a) => `${sha(fake)}  ${a}`);
+  for (const ext of packed) {
+    const tool = ext === "gz" ? "gzip" : "xz";
+    Bun.spawnSync(["sh", "-c", `${tool} -c "${dir}/fake-kiwi" > "${dir}/fake-kiwi.${ext}"`]);
+    const packedSum = sha(readFileSync(join(dir, `fake-kiwi.${ext}`)));
+    sums.push(...TARGETS.map((a) => `${packedSum}  ${a}.${ext}`));
+  }
+  writeFileSync(join(dir, "sums"), sums.join("\n") + "\n");
   writeFileSync(
     join(dir, "curl"),
     `#!/bin/sh\nurl=""; out=""\nwhile [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift 2;; -*) shift;; *) url="$1"; shift;; esac; done\n` +
-      `case "$url" in *SHA256SUMS) for a in kiwi-darwin-arm64 kiwi-darwin-x64 kiwi-linux-x64 kiwi-linux-arm64; do echo "${sum}  $a"; done > "$out";; *) cp "${dir}/fake-kiwi" "$out";; esac\n`,
+      `echo "$url" >> "${dir}/fetched"\n` +
+      `case "$url" in *SHA256SUMS) cp "${dir}/sums" "$out";; *.gz) cp "${dir}/fake-kiwi.gz" "$out";; *.xz) cp "${dir}/fake-kiwi.xz" "$out";; *) cp "${dir}/fake-kiwi" "$out";; esac\n`,
   );
   chmodSync(join(dir, "curl"), 0o755);
   return dir;
@@ -145,6 +155,62 @@ describe("the installer's PATH step", () => {
       expect(r.stdout.toString()).toContain("Couldn't write");
       expect(readFileSync(join(dir, "ran"), "utf8").trim()).toBe("ran: cleanup --quiet\nran: join mc2-abc");
     }));
+});
+
+describe("the installer's download", () => {
+  const fetched = (dir: string) =>
+    readFileSync(join(dir, "fetched"), "utf8")
+      .trim()
+      .split("\n")
+      .filter((u) => !u.endsWith("SHA256SUMS"));
+  const installs = (dir: string) => {
+    const r = install(dir, []);
+    expect(r.exitCode).toBe(0);
+    expect(readFileSync(join(dir, "bin", "kiwi"), "utf8")).toBe(readFileSync(join(dir, "fake-kiwi"), "utf8"));
+  };
+
+  test("takes the release's .xz when xz is installed, checks it and unpacks it", () => {
+    const dir = sandbox(["gz", "xz"]);
+    try {
+      installs(dir);
+      expect(fetched(dir)).toEqual([expect.stringMatching(/\/kiwi-[a-z]+-[a-z0-9]+\.xz$/)]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("takes the .gz when the release has no .xz", () => {
+    const dir = sandbox(["gz"]);
+    try {
+      installs(dir);
+      expect(fetched(dir)).toEqual([expect.stringMatching(/\/kiwi-[a-z]+-[a-z0-9]+\.gz$/)]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("an older release with neither takes the plain binary", () => {
+    const dir = sandbox();
+    try {
+      installs(dir);
+      expect(fetched(dir)).toEqual([expect.stringMatching(/\/kiwi-[a-z]+-[a-z0-9]+$/)]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a compressed download that doesn't match its checksum isn't installed", () => {
+    const dir = sandbox(["gz"]);
+    try {
+      writeFileSync(join(dir, "fake-kiwi.gz"), "not what was summed");
+      const r = install(dir, []);
+      expect(r.exitCode).not.toBe(0);
+      expect(r.stderr.toString()).toContain("checksum doesn't match");
+      expect(existsSync(join(dir, "bin", "kiwi"))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 test("site/install is the same script as site/install.sh", () => {
