@@ -403,7 +403,7 @@ jobs:
   desktop:
     name: desktop / package
     inputs: ["desktop/**", "src/**", "packages/core/**", "web/src/**", "web/index.html", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "package.json", "bun.lock", "web/package.json"]
-    always: ["desktop/package.json", "desktop/tsconfig*.json", "desktop/scripts/fuses.ts", "desktop/scripts/pack-cli.ts", "desktop/scripts/size.ts", "desktop/scripts/smoke.ts", "desktop/scripts/dictate.ts", "desktop/scripts/fixtures/dictate.wav", "packages/core/src/dictation.ts"]
+    always: ["desktop/package.json", "desktop/tsconfig*.json", "desktop/scripts/fuses.ts", "desktop/scripts/pack-cli.ts", "desktop/scripts/size.ts", "desktop/scripts/smoke.ts", "desktop/scripts/dictate.ts", "desktop/scripts/fixtures/dictate.wav", "packages/core/src/dictation.ts", "scripts/dictation-files.ts"]
     description: >-
       Bundles the Electron shell's main, preload and channels (key process) scripts with bun
       build, then packages the Linux app with electron-builder --dir from desktop/package.json's
@@ -423,8 +423,9 @@ jobs:
       daemon answers on its socket, and fails if
       ELECTRON_RUN_AS_NODE=1 runs JavaScript or --inspect opens a debugger. Then
       desktop/scripts/dictate.ts dictates on the packaged Linux app under Xvfb: a local Bun relay
-      with dev sign-in (its dictation files cached by actions/cache, keyed to
-      packages/core/src/dictation.ts's pinned revision and hashes), a new channel, the real
+      with dev sign-in, its dictation files fetched and verified by scripts/dictation-files.ts
+      and cached by actions/cache (keyed to packages/core/src/dictation.ts's pinned revision and
+      hashes), a new channel, the real
       Dictate button with Chromium's fake mic playing desktop/scripts/fixtures/dictate.wav (the
       mic allowed by the app's own permission handler, no fake-UI switch), and fails unless the
       spoken words land in the Message box, the model is kept in the app's data folder

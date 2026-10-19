@@ -1,13 +1,13 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { _electron as electron } from "playwright-core";
 
 const exe = process.argv[2] ? resolve(process.argv[2]) : "";
-const relayData = process.argv[3] ? resolve(process.argv[3]) : "";
-if (!exe || !existsSync(exe) || !relayData) {
-  console.error("usage: bun desktop/scripts/dictate.ts <packaged app executable> <relay data folder, kept between runs for the model>");
+const files = process.argv[3] ? resolve(process.argv[3]) : "";
+if (!exe || !existsSync(exe) || !files || !existsSync(files)) {
+  console.error("usage: bun desktop/scripts/dictate.ts <packaged app executable> <dictation files, from bun scripts/dictation-files.ts>");
   process.exit(2);
 }
 
@@ -25,7 +25,8 @@ const cache = join(root, ".cache");
 const userData = join(config, "kiwi-desktop");
 mkdirSync(userData, { recursive: true });
 mkdirSync(cache, { recursive: true });
-mkdirSync(relayData, { recursive: true });
+const relayData = join(root, "relay");
+cpSync(files, join(relayData, "dictation"), { recursive: true });
 writeFileSync(join(userData, "kiwi-store.bin"), JSON.stringify({ relayUrl: RELAY, person: null, channels: [], computers: [], pending: [] }));
 
 const relay = spawn(process.execPath, [join(ROOT, "src/relay/bun.ts"), "--port", String(PORT), "--hostname", "127.0.0.1", "--data", relayData, "--no-web", "--dev-sign-in"], {
