@@ -104,6 +104,9 @@ jobs:
       Also test/bounded-files.test.ts: the daemon's wake.log starts over past 1 MB keeping one older file
       (src/daemon/wake.ts), and the daemon prunes hook bookkeeping in listen-hooks and hook-state older
       than a week, at start and daily (src/hooks/delivered.ts, src/daemon/server.ts).
+      Also test/who-cached.test.ts: the daemon keeps each member's latest presence beacon, and once it has
+      heard a full beacon round, kiwi who and status answer from it (the daemon's presence verb) without
+      opening a socket to the relay for a probe.
       Also test/silent-socket.test.ts: a live socket that goes quiet after opening (no answer to
       a ping) and an upgrade nobody answers are both dropped and opened again; a nudge (the network or
       the Mac coming back) cuts a long reconnect wait short and drops a socket that doesn't answer a

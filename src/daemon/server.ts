@@ -311,6 +311,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     seat.mark = mark;
     seat.probe = probe;
     seat.rows = null;
+    seat.openedAt = Date.now();
     seat.announce = () => void presence(fieldsOf(seat)).catch(() => {});
     void refreshActivity(seat, true).catch(() => seat.announce?.());
     stopBeacon(seat);
@@ -385,6 +386,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         probe: null,
         rows: null,
         fetchingRows: false,
+        heard: new Map(),
+        openedAt: null,
       };
       seats.set(key, seat);
       if (stopped) {
@@ -406,6 +409,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           signal: seat.ctl.signal,
           onOpen: ({ presence, mark, probe }) => opened(seat, presence, mark, probe),
           onPresence: (p) => {
+            if (!p.query && p.client !== "probe" && p.from !== seat.agent) seat.heard.set(p.from, { presence: p, at: Date.now() });
             if (!p.query || Date.now() - seat.lastProbe < PROBE_ANSWER_GAP_MS) return;
             seat.lastProbe = Date.now();
             seat.announce?.();
@@ -595,6 +599,12 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         case "peek":
           await onPeek(conn, id, params);
           break;
+        case "presence": {
+          const seat = [...seats.values()].find((s) => s.alias === params.channel && s.agent === params.as);
+          const since = seat?.probe ? seat.openedAt : null;
+          sendLine(conn, JSON.stringify(seat && since !== null ? { id, ok: true, live: true, since, beaconMs, presence: [...seat.heard.values()] } : { id, ok: true, live: false }));
+          break;
+        }
         case "listening":
           sendLine(
             conn,
@@ -625,7 +635,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           setTimeout(() => void stop(), 50);
           break;
         default:
-          throw new Error(`unknown verb "${verb}" (hello, adopt, listen, listening, hold, listeners, read, mark, stop)`);
+          throw new Error(`unknown verb "${verb}" (hello, adopt, listen, listening, hold, listeners, read, mark, peek, presence, stop)`);
       }
     } catch (err) {
       sendLine(conn, JSON.stringify({ id, ok: false, error: err instanceof Error ? err.message : String(err) }));
