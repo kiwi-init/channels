@@ -290,6 +290,12 @@ jobs:
           key: dictation-${{ hashFiles('packages/core/src/dictation.ts') }}
       - run: bun scripts/dictation-files.ts .dictation-files
       - run: xvfb-run -a bun desktop/scripts/dictate.ts desktop/release/linux-unpacked/channels-desktop .dictation-files
+      - if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dictate-failure
+          path: /tmp/kiwi-dictate-failure.png
+          if-no-files-found: ignore
       - uses: ./.github/actions/jev-ci-pass
         continue-on-error: true
         with:

@@ -1,8 +1,8 @@
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { _electron as electron } from "playwright-core";
+import { chromium, type Browser, type Page } from "playwright-core";
 
 const exe = process.argv[2] ? resolve(process.argv[2]) : "";
 const files = process.argv[3] ? resolve(process.argv[3]) : "";
@@ -56,15 +56,40 @@ const env: Record<string, string> = {
 delete env["ELECTRON_RUN_AS_NODE"];
 delete env["NODE_OPTIONS"];
 
-const app = await electron.launch({
-  executablePath: exe,
-  args: [...(process.platform === "linux" ? ["--no-sandbox"] : []), "--use-fake-device-for-media-stream", `--use-file-for-fake-audio-capture=${FIXTURE}`],
-  env,
-  timeout: 60_000,
-});
+const DEBUG_PORT = 40000 + Math.floor(Math.random() * 20000);
+const app: ChildProcess = spawn(
+  exe,
+  [...(process.platform === "linux" ? ["--no-sandbox"] : []), `--remote-debugging-port=${DEBUG_PORT}`, "--use-fake-device-for-media-stream", `--use-file-for-fake-audio-capture=${FIXTURE}`],
+  { env, stdio: ["ignore", "inherit", "inherit"] },
+);
+
+async function attach(): Promise<{ browser: Browser; page: Page }> {
+  const end = Date.now() + 60_000;
+  for (;;) {
+    try {
+      const browser = await chromium.connectOverCDP(`http://127.0.0.1:${DEBUG_PORT}`);
+      for (let i = 0; i < 60; i++) {
+        const page = browser
+          .contexts()
+          .flatMap((c) => c.pages())
+          .find((p) => p.url().startsWith("kiwi-app://"));
+        if (page) return { browser, page };
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      throw new Error("the app's window never opened");
+    } catch (err) {
+      if (Date.now() > end) throw err;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+}
+
 let at = "start";
+let shotOf: Page | null = null;
 try {
-  const page = await app.firstWindow();
+  at = "the app's window (over Chromium's remote debugging, which the fuses allow)";
+  const { page } = await attach();
+  shotOf = page;
   page.setDefaultTimeout(30_000);
   at = "first run";
   await page.getByRole("textbox").first().fill("dictate");
@@ -102,11 +127,11 @@ try {
   console.log(`dictation ok: heard ${JSON.stringify(said)}; ${Math.round(kept / 1e6)} MB in ${userData}, ${Math.round(stray / 1e3)} kB in XDG_CACHE_HOME`);
 } catch (err) {
   const shot = join(tmpdir(), "kiwi-dictate-failure.png");
-  await (await app.firstWindow()).screenshot({ path: shot }).catch(() => undefined);
+  await shotOf?.screenshot({ path: shot }).catch(() => undefined);
   console.error(`dictation failed at "${at}": ${err instanceof Error ? err.message : String(err)} (screenshot: ${shot})`);
   process.exitCode = 1;
 } finally {
-  await app.close().catch(() => undefined);
+  app.kill();
   relay.kill();
   rmSync(root, { recursive: true, force: true });
 }
