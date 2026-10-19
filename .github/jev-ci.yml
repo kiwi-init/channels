@@ -140,6 +140,8 @@ jobs:
       store's CSP allows api.x.ai only when an xAI key is saved, the project key never reaches
       the snapshot or the token IPC result, consent defaults off, and
       desktop/build/entitlements.mac.plist has the audio-input entitlement. And
+      test/desktop-guard.test.ts: on Linux, no encryption or the basic_text backend counts as keys kept
+      without a keyring, and such a store is saved again into a keyring once one is there. And
       web lib/channel/trim.test.ts: a long session folds the messages past the 2000-message window
       (plus 500 of slack) into the fold base, and tasks and facts from before it stay;
       lib/channel/warm.test.ts: only the last four channels stay warm; lib/threads.test.ts: what's

@@ -9,6 +9,7 @@ import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, StoreS
 import { chooseStore, normalizeRelay, snapshotOf, writePrivate, keyringState, needsResave, type KeyringState } from "./guard.ts";
 import { tellKeys } from "./keys-process.ts";
 import type { VoiceStore } from "./voice.ts";
+import { logMainError } from "./main-log.ts";
 import { currentWindow } from "./window.ts";
 
 export interface StoreFile {
@@ -34,7 +35,7 @@ export let store: StoreFile = defaults();
 
 let storeBroken: string | null = null;
 
-export let keys: KeyringState = "keyring";
+let keys: KeyringState = "keyring";
 
 const backupPath = () => `${storePath()}.bak`;
 
@@ -66,6 +67,7 @@ export function loadStore(): void {
   }
   store.relayUrl = normalizeRelay(store.relayUrl) ?? DEFAULT_RELAY;
   if (read && needsResave(process.platform, choice?.restore ?? raw, read, keys)) saveStore();
+  if (keys === "plain" && process.platform === "linux") logMainError(new Error(`no keyring (safeStorage backend ${backend ?? "none"}): the keys in ${storePath()} are kept without encryption`));
 }
 
 const brokenError = () =>
