@@ -16,7 +16,7 @@ function said(u: UpdateCheckView | null): string {
     case "ready":
       return `Channels ${u.version} is ready. It goes in when you restart.`
     case "available":
-      return `Channels ${u.version} is out. Install it from the release.`
+      return u.blocked ? "Channels can't update itself here. Get it from the release." : `Channels ${u.version} is out. Install it from the release.`
   }
 }
 
