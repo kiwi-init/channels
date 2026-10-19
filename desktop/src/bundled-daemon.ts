@@ -6,7 +6,8 @@ import { app } from "electron";
 import { certifyMachine } from "@kiwi/core/person.ts";
 import type { ComputerView } from "./bridge.ts";
 import { compareVersions, ensureOnPath, keepCli } from "./cli.ts";
-import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, spawnDaemon, type HelloResult } from "./daemon-client.ts";
+import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, noteDaemon, spawnDaemon, type HelloResult } from "./daemon-client.ts";
+import { keepAlive } from "./daemon-keeper.ts";
 import { requirePerson, store, upsertComputer } from "./store.ts";
 
 function bundledKiwi(): string {
@@ -57,7 +58,7 @@ export async function installCli(): Promise<{ path: string }> {
   return { path: kiwiBin.path };
 }
 
-export async function keepDaemon(): Promise<void> {
+export async function keepDaemon(stopped: () => boolean): Promise<void> {
   if (app.isPackaged) {
     try {
       kiwiBin = await keepCli(bundledKiwi(), app.getVersion());
@@ -66,5 +67,12 @@ export async function keepDaemon(): Promise<void> {
       // The daemon still runs from the app's own copy below.
     }
   }
-  await ensureDaemon();
+  await ensureDaemon().catch(() => null);
+  await keepAlive({
+    hello: async () => (await daemonHello(kiwiHome(), 2_000)) !== null,
+    start: async () => (await ensureDaemon().catch(() => null)) !== null,
+    log: (line) => noteDaemon(line),
+    stopped,
+    wait: (ms) => new Promise((r) => setTimeout(r, ms)),
+  });
 }

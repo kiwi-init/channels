@@ -106,6 +106,10 @@ jobs:
       store's CSP allows api.x.ai only when an xAI key is saved, the project key never reaches
       the snapshot or the token IPC result, consent defaults off, and
       desktop/build/entitlements.mac.plist has the audio-input entitlement. And
+      test/desktop-daemon-keeper.test.ts: the app checks its daemon every 30s and starts it again
+      when it stops answering, retrying a daemon that won't start from 5s up to every 5 minutes, and
+      test/desktop-daemon-spawn.test.ts: its output and the app's restarts land in
+      KIWI_HOME/daemon.log, rotated at 1 MB. And
       test/desktop-update-asset.test.ts: a Mac that can't replace itself (translocated, on its disk
       image, in a folder it can't write, or after this version's swap failed) offers the release before
       downloading, and the swap script leaves the old app and a marker when the move fails;
