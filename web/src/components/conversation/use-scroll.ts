@@ -1,6 +1,8 @@
-import { useLayoutEffect, useRef, useState, type UIEvent } from "react"
+import { useEffect, useLayoutEffect, useRef, useState, type UIEvent } from "react"
 
 import type { Message } from "@kiwi/core/protocol.ts"
+
+const SMOOTH_MS = 500
 
 export function useScroll({ messages, visible, hereKey }: { messages: Message[]; visible: Message[]; hereKey: string }) {
   const [behind, setBehind] = useState(0)
@@ -14,14 +16,39 @@ export function useScroll({ messages, visible, hereKey }: { messages: Message[];
   const atBottom = useRef(true)
   const lastCount = useRef(0)
   const lastTop = useRef(0)
+  const smoothUntil = useRef(0)
+  const followed = useRef<{ el: HTMLDivElement; stop: () => void } | null>(null)
+
+  useLayoutEffect(() => {
+    const el = scroller.current
+    if (followed.current?.el === el) return
+    followed.current?.stop()
+    followed.current = null
+    if (!el) return
+    atBottom.current = true
+    el.scrollTop = el.scrollHeight
+    const content = el.firstElementChild
+    const follow =
+      content && typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => {
+            if (atBottom.current && Date.now() > smoothUntil.current) el.scrollTop = el.scrollHeight
+          })
+        : null
+    if (content) follow?.observe(content)
+    followed.current = { el, stop: () => follow?.disconnect() }
+  })
+  useEffect(() => () => followed.current?.stop(), [])
 
   useLayoutEffect(() => {
     const el = scroller.current
     if (!el) return
     const added = visible.length - lastCount.current
     lastCount.current = visible.length
-    if (atBottom.current) el.scrollTo({ top: el.scrollHeight, behavior: added > 0 && added < 4 ? "smooth" : "instant" })
-    else if (added > 0) setBehind((b) => b + added)
+    const smooth = added > 0 && added < 4
+    if (atBottom.current) {
+      if (smooth) smoothUntil.current = Date.now() + SMOOTH_MS
+      el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "instant" })
+    } else if (added > 0) setBehind((b) => b + added)
   }, [visible])
   useLayoutEffect(() => {
     atBottom.current = true
