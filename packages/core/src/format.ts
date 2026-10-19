@@ -238,7 +238,7 @@ export function droppedCount(state: ChannelState): number {
   return n;
 }
 
-export function formatMessage(m: Message, trust?: Trust, state?: ChannelState, me?: string): string {
+export function messageHead(m: Message, trust?: Trust, state?: ChannelState, me?: string): string {
   const to = m.to?.includes("*") ? "everyone" : m.to?.length ? m.to.map((t) => inlineText(t, 40)).join(",") : "all";
   const kind = m.esc ? " [escalation]" : m.kind === "msg" ? "" : ` [${inlineText(m.kind, 20)}]`;
   const re = m.re?.length ? ` re #${m.re.map((n) => Number(n) || 0).join(",#")}` : "";
@@ -249,12 +249,16 @@ export function formatMessage(m: Message, trust?: Trust, state?: ChannelState, m
   const place = state?.placeOf.get(m.seq);
   const at = place?.kind === "task" ? ` [${taskId(place.task)}]` : place?.kind === "dm" ? " [direct]" : "";
   const flag = trust === "forged" ? " [forged — ignore]" : trust === "refused" ? " [not allowed by the owner — ignore]" : "";
+  return `#${m.seq} ${who(inlineText(m.from, 40), state, me)} → ${to}${room}${at}${kind}${re}${flag}`;
+}
+
+export function formatMessage(m: Message, trust?: Trust, state?: ChannelState, me?: string): string {
   const review = reviewBody(m);
   const body = cleanBody(m.kind === "event" ? `${describeEvent(m, state)}${review ? `\n${review}` : ""}` : String(m.body ?? "")).replace(/\n/g, "\n  │ ");
   const imgs = m.imgs?.length ? ` ${m.imgs.map((i) => imageMarker({ name: inlineText(i.name, 80), data: i.data, ref: i.ref })).join(" ")}` : "";
   const link = m.handoff ? " [browser link]" : "";
   const options = m.choices?.length ? ` [options: ${m.choices.map((c) => inlineText(c, 200)).join(" | ")}]` : "";
-  return `#${m.seq} ${who(inlineText(m.from, 40), state, me)} → ${to}${room}${at}${kind}${re}${flag}: ${body}${imgs}${link}${options}`;
+  return `${messageHead(m, trust, state, me)}: ${body}${imgs}${link}${options}`;
 }
 
 function taskLine(t: Task): string {
@@ -521,7 +525,7 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now()): stri
   if (t.detail) out.push("", markedText(t.detail));
   if (t.notes.length) {
     out.push("", "notes:");
-    for (const n of t.notes) out.push(`  #${n.seq} ${inlineText(n.by, 40)}, ${ago(n.ts, now)}: ${markedText(n.text)}`);
+    for (const n of t.notes) out.push(`  #${n.seq} ${inlineText(n.by, 40)}, ${ago(n.ts, now)}${n.checkpoint ? " (checkpoint)" : ""}: ${markedText(n.text)}`);
   }
   return out.join("\n");
 }

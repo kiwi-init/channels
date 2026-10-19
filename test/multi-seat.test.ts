@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { daemonListeners, daemonSock } from "../src/daemon.ts";
 import { hookOutput } from "../src/hooks.ts";
+import { HOOK_CONTEXT_MAX } from "../src/hooks/answer.ts";
 import { startRelay } from "../src/relay/bun.ts";
 
 setDefaultTimeout(60_000);
@@ -145,6 +146,26 @@ describe("one Claude Code session that holds two seats", () => {
     expect(await ok(h, ["--as", "reviewer", "listen", "--now"], S)).toContain("read by name");
     await ok(ownerB, ["send", "--to", "reviewer", "read by channel"], PERSON);
     expect(await ok(h, ["-c", "beta", "listen", "--now"], S)).toContain("read by channel");
+  });
+
+  test("with a backlog on both seats, each hook's whole output stays inside Claude Code's inline limit", async () => {
+    const { ownerA, ownerB, h, input } = await twoSeats();
+    for (let i = 0; i < 5; i++) {
+      await ok(ownerA, ["send", "--to", "planner", `alpha-backlog-${i} ${"a".repeat(1_500)}`], PERSON);
+      await ok(ownerB, ["send", "--to", "reviewer", `beta-backlog-${i} ${"b".repeat(1_500)}`], PERSON);
+    }
+    const start = JSON.parse((await run(h, ["hook", "session-start"], S, h, JSON.stringify({ session_id: "M", cwd: h, source: "startup" }))).out) as {
+      hookSpecificOutput: { additionalContext: string };
+    };
+    expect(start.hookSpecificOutput.additionalContext.length).toBeLessThanOrEqual(HOOK_CONTEXT_MAX);
+    expect(start.hookSpecificOutput.additionalContext).toContain("planner");
+    expect(start.hookSpecificOutput.additionalContext).toContain("reviewer");
+    const prompt = (await run(h, ["hook", "prompt"], S, h, input)).out;
+    expect(prompt.length).toBeLessThanOrEqual(HOOK_CONTEXT_MAX);
+    expect(prompt).toContain("alpha-backlog-");
+    expect(prompt).toContain("beta-backlog-");
+    const stop = JSON.parse((await run(h, ["hook", "stop"], S, h, JSON.stringify({ session_id: "M", cwd: h, hook_event_name: "Stop" }))).out) as { reason: string };
+    expect(stop.reason.length).toBeLessThanOrEqual(HOOK_CONTEXT_MAX);
   });
 
   test("replying to a message the session was shown picks its seat, with no flags", async () => {

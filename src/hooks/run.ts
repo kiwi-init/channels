@@ -5,7 +5,7 @@ import { ChannelGone } from "@kiwi/core/client.ts";
 import { Keystore } from "../config.ts";
 import { here, kimiHookHere, sameSeat, seatsHeldAnywhere, type Here } from "../seats.ts";
 import { writeSync } from "node:fs";
-import { answer, hookOutput, kimiReason, printed, tellKimi, type Answer, type HookInput } from "./answer.ts";
+import { answer, hookOutput, kimiReason, printed, seatBudget, tellKimi, type Answer, type HookInput } from "./answer.ts";
 import { holdAnswering } from "./delivered.ts";
 import { listen, type Served } from "./listen.ts";
 import { refreshListeners, seatsFor } from "./listeners.ts";
@@ -49,8 +49,8 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
       Effect.catchCause(() => Effect.succeed(0)),
     );
   }
-  const one = ({ b, cfg }: Served) =>
-    answer(kimi ? "stop" : event, input, b, cfg, who).pipe(
+  const one = ({ b, cfg }: Served, budget: number) =>
+    answer(kimi ? "stop" : event, input, b, cfg, who, budget).pipe(
       Effect.catchCause((cause) => {
         const err = Cause.squash(cause);
         if (err instanceof ChannelGone) return Effect.as(err.why === "closed" ? keys.wipeChannel(b.alias) : keys.forgetMember(b.alias, b.as), null);
@@ -62,7 +62,8 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
   const shown = (answers: readonly Answer[]) => Effect.forEach(answers, (a) => a.shown, { discard: true, concurrency: "unbounded" });
   const work = Effect.gen(function* () {
     const served = yield* seatsServed;
-    const got = (yield* Effect.forEach(served, one, { concurrency: "unbounded" })).filter((a) => a !== null);
+    const budget = seatBudget(served.length);
+    const got = (yield* Effect.forEach(served, (x) => one(x, budget), { concurrency: "unbounded" })).filter((a) => a !== null);
     if (kimi) {
       if (!got.length) return 0;
       const code = tellKimi(kimiReason(got));
