@@ -42,11 +42,17 @@ export function doingNow(a: AgentNow): { text: string; busy: boolean } | null {
   return null
 }
 
+/** The one status an agent has everywhere (sidebar, Agents tab, details, the header's count): live from its harness, else its task, else how it's reached. */
 export function agentNow(a: AgentNow): { text: string; busy: boolean } {
-  return doingNow(a) ?? { text: a.here ? (howWords(a.here) ?? "Idle") : "Away", busy: false }
+  const doing = doingNow(a)
+  if (doing) return doing
+  if (!a.here) return { text: "Away", busy: false }
+  const task = a.load.current[0]
+  if (task) return { text: `On ${taskId(task.id)}`, busy: true }
+  return { text: howWords(a.here) ?? "Idle", busy: false }
 }
 
-const busy = (a: AgentNow) => !!a.here && (doingNow(a)?.busy ?? a.load.current.length > 0)
+const busy = (a: AgentNow) => agentNow(a).busy
 
 export const byBusy = (agents: AgentNow[]) => [...agents].sort((a, b) => Number(busy(b)) - Number(busy(a)) || Number(!!b.here) - Number(!!a.here))
 

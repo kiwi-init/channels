@@ -22,7 +22,7 @@ import { cx } from "@/lib/utils"
 import { useHeight } from "@/hooks/use-height"
 import { Composer } from "../composer"
 import { RoomChips } from "../room-chips"
-import { AgentStrip, type AgentNow } from "../agent-strip"
+import { AgentStrip, agentNow, type AgentNow } from "../agent-strip"
 import { ChannelControls } from "../controls"
 import { Icon } from "../icon"
 import { Button, Harnesses, Pictures, Spinner, errorText, toast } from "../kit"
@@ -351,7 +351,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
         : online.size
           ? `${memberCount} members, ${online.size} online`
           : `${memberCount} ${memberCount === 1 ? "member" : "members"}`
-  const working = active.filter((m) => isAgent(m) && memberLoad(state, m.name).current.length > 0).length
   const lastAt = new Map<string, number>()
   for (const m of messages) if (m.kind !== "event") lastAt.set(m.from, m.ts)
   const agentsNow: AgentNow[] = active
@@ -369,6 +368,11 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       card: m.card,
       outside: outsideRepos(state, m.card),
     }))
+  const working = agentsNow.filter((a) => agentNow(a).busy).length
+  const statusOf = (name: string) => {
+    const a = agentsNow.find((x) => x.name === name)
+    return a ? agentNow(a) : undefined
+  }
   const placeTitle = place.kind === "main" ? title : place.with.includes(me) ? nameOf(place.with.find((n) => n !== me) ?? me) : place.with.map(nameOf).join(" & ")
   const mayWrite = place.kind !== "dm" || place.with.includes(me)
   const extra = place.kind === "main" ? undefined : sendFrom(state, place, me)
@@ -442,6 +446,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             roster={roster}
             requests={requests}
             online={online}
+            statusOf={statusOf}
             state={state}
             now={now}
             roomId={member.access.roomId}
@@ -625,7 +630,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                                   : undefined
                               }
                               footer={
-                                <div className="xl:hidden">
+                                <div className="md:hidden">
                                   <AgentStrip agents={agentsNow} now={now} onOpenTask={openTask} />
                                 </div>
                               }
