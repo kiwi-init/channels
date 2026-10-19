@@ -180,7 +180,7 @@ jobs:
   test-flows-b:
     name: test / flows-b
     inputs: ["src/**", "packages/core/**", "test/owner-cli.ts"]
-    imports_from: ["test/join-seats.test.ts", "test/read-receipts.test.ts", "test/daemon-pair.test.ts", "test/sh-escape.test.ts", "test/reclaim.test.ts", "test/wake-yourself.test.ts", "test/seats.test.ts", "test/multi-seat.test.ts", "test/handoff.test.ts", "test/hooks-once.test.ts"]
+    imports_from: ["test/join-seats.test.ts", "test/read-receipts.test.ts", "test/daemon-pair.test.ts", "test/sh-escape.test.ts", "test/reclaim.test.ts", "test/wake-yourself.test.ts", "test/seats.test.ts", "test/multi-seat.test.ts", "test/handoff.test.ts", "test/hooks-once.test.ts", "test/hooks-hung-relay.test.ts"]
     always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs slow agent-flow tests against a real local relay and the kiwi CLI: join-seats
@@ -197,7 +197,10 @@ jobs:
       (src/hooks/listen.ts waits for the session's answering hook, src/hooks/delivered.ts), and the
       listener keeps listening for the next one; and a prompt hook whose output never reaches the
       session leaves the message unread for the next hook (src/hooks/run.ts commits what was
-      read only after printing it). Fails if joining, seats, hooks, pairing, the
+      read only after printing it). Then hooks-hung-relay: with the relay accepting connections
+      but never answering, the prompt and stop hooks each return in under 2s (src/hooks/run.ts
+      puts the whole hook under one deadline; packages/core/src/client/relay.ts gives every
+      relay request 30s), and what they couldn't show comes with the next prompt. Fails if joining, seats, hooks, pairing, the
       daemon, kiwi sh, handoff or the relay change behavior.
 
   build:
