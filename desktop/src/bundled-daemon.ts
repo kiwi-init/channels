@@ -5,7 +5,8 @@ import { app } from "electron";
 
 import { certifyMachine } from "@kiwi/core/person.ts";
 import type { ComputerView } from "./bridge.ts";
-import { compareVersions, ensureOnPath, keepCli } from "./cli.ts";
+import { compareVersions } from "@kiwi/core/versions.ts";
+import { ensureOnPath, keepCli } from "./cli.ts";
 import { daemonAdopt, daemonHello, daemonSocketPath, daemonStop, kiwiHome, spawnDaemon, type HelloResult } from "./daemon-client.ts";
 import { requirePerson, store, upsertComputer } from "./store.ts";
 

@@ -8,39 +8,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { ensureOnPath as ensureShellPath } from "@kiwi/core/node/shell-path.ts";
+import { compareVersions } from "@kiwi/core/versions.ts";
 
 /** Where the CLI lives: the install script's place (KIWI_INSTALL moves both). */
 function cliPath(): string {
   return path.join(process.env["KIWI_INSTALL"] || path.join(os.homedir(), ".kiwi", "bin"), process.platform === "win32" ? "kiwi.exe" : "kiwi");
-}
-
-/** a < b: -1, equal: 0, a > b: 1. Semver, with a release ranking above its own pre-releases (0.11.0 > 0.11.0-rc.5). */
-export function compareVersions(a: string, b: string): number {
-  const parse = (v: string) => {
-    const [core = "", pre] = v.trim().replace(/^v/, "").split("-", 2);
-    return { nums: core.split(".").map((n) => Number(n) || 0), pre: pre ?? null };
-  };
-  const x = parse(a);
-  const y = parse(b);
-  for (let i = 0; i < 3; i++) {
-    const d = (x.nums[i] ?? 0) - (y.nums[i] ?? 0);
-    if (d) return Math.sign(d);
-  }
-  if (x.pre === y.pre) return 0;
-  if (x.pre === null) return 1;
-  if (y.pre === null) return -1;
-  // rc.5 vs rc.12: compare each dotted part, numerically when both are numbers.
-  const xp = x.pre.split(".");
-  const yp = y.pre.split(".");
-  for (let i = 0; i < Math.max(xp.length, yp.length); i++) {
-    const p = xp[i];
-    const q = yp[i];
-    if (p === undefined) return -1;
-    if (q === undefined) return 1;
-    const d = /^\d+$/.test(p) && /^\d+$/.test(q) ? Number(p) - Number(q) : p.localeCompare(q);
-    if (d) return Math.sign(d);
-  }
-  return 0;
 }
 
 /** What a kiwi binary says it is, or null when it won't run. */
