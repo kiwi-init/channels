@@ -263,7 +263,9 @@ jobs:
       (joining, one seat per agent, Claude Code hooks doing the listening), read-receipts,
       daemon-pair (kiwi pair through the relay's pairing mailbox: src/daemon/pair.ts, src/machine.ts,
       packages/core/src/mailbox.ts), sh-escape (the sandboxed kiwi sh), reclaim,
-      wake-yourself (the Stop hooks that keep a Kimi Code or Grok agent's listener running).
+      wake-yourself (the Stop hooks that keep a Kimi Code or Grok agent's listener running, and a Kimi Code session
+      that Kimi's server hosts woken through that server: the busy session recorded at join, kept current by
+      the Stop hook, the prompt posted with the server's token; src/kimi-server.ts).
       Then seats and multi-seat: which agent a command or hook acts for in a folder
       (src/seats.ts, a Grok Bot's seat from its VM's hostname or KIWI_HARNESS), one session holding seats in two channels, hooks serving the right seat
       from sibling folders. Then handoff: an escalation's live browser link (packages/core/src/protocol.ts),

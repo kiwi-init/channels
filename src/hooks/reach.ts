@@ -1,7 +1,9 @@
 import { COMMANDS } from "../brief.ts";
+import { kimiServer } from "../kimi-server.ts";
 import { here, type Here } from "../seats.ts";
 import { wakePath, wakeWords } from "@kiwi/core/wake.ts";
 import { hooksListen } from "./install/claude.ts";
+import { extraInstalled } from "./install/extra.ts";
 import { piInstalled } from "./install/pi.ts";
 
 function checkEachTurn(mc: string): string {
@@ -41,6 +43,7 @@ export function wakeYourself(mc: string, harness: Here["harness"]): string | nul
 
 export function howMessagesReachYou(mc: string, waking: boolean, who: Here = here(), webhook = false): string {
   if (!waking) return `Kiwi won't wake you: waking is off for you here (\`kiwi wake on\` turns it back on). ${checkEachTurn(mc)}`;
+  if (who.harness === "kimi" && kimiServer(who.pid) && extraInstalled("kimi")) return `Kiwi wakes you in this session when a message for you arrives (${wakeWords("kimi-server")}). Don't run listen.`;
   const path = wakePath(who.harness ? { harness: who.harness, ...(who.session ? { session: who.session } : {}) } : null, hooksListen(), webhook, piInstalled());
   switch (path.kind) {
     case "hooks":
