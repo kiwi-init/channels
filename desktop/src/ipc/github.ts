@@ -4,6 +4,7 @@ import type { GithubRepoView, GithubStatus } from "../bridge.ts";
 import type { MemberPicture } from "@kiwi/core/protocol.ts";
 
 import { avatar, finishDevice, listRepos, startDevice } from "../github-flow.ts";
+import { held } from "../held.ts";
 import { openInBrowser } from "../open.ts";
 import { relayConfig } from "../signin.ts";
 import { mutate, store } from "../store.ts";
@@ -19,6 +20,7 @@ async function status(): Promise<GithubStatus> {
 }
 
 let linking: Promise<GithubStatus> | null = null;
+const reposFor = held(5 * 60_000, (token: string) => listRepos(token));
 let face: { id: number; picture: Promise<MemberPicture | null> } | null = null;
 
 function picture(): Promise<MemberPicture | null> {
@@ -45,7 +47,7 @@ export function wireGithubIpc(): void {
   ipcMain.handle("kiwi:github-repos", (): Promise<GithubRepoView[]> => {
     const token = store.github?.token;
     if (!token) return Promise.reject(new Error("link GitHub in Settings first"));
-    return listRepos(token);
+    return reposFor(token);
   });
   ipcMain.handle("kiwi:github-picture", () => picture());
   ipcMain.handle("kiwi:github-unlink", async () => {

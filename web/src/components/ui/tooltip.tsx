@@ -1,21 +1,12 @@
-import { Tooltip as Base } from "@base-ui/react/tooltip"
 import type { ReactElement, ReactNode } from "react"
 
-// A short label on hover or focus, for controls that are only an icon.
+import { later } from "@/lib/later"
 
-export const TooltipProvider = Base.Provider
+type TooltipProps = { label: ReactNode; children: ReactElement; side?: "top" | "bottom" | "left" | "right" }
 
-export function Tooltip({ label, children, side = "bottom" }: { label: ReactNode; children: ReactElement; side?: "top" | "bottom" | "left" | "right" }) {
-  return (
-    <Base.Root>
-      <Base.Trigger render={children} />
-      <Base.Portal>
-        <Base.Positioner side={side} sideOffset={6} className="z-[70]">
-          <Base.Popup className="rounded-row bg-ink px-2 py-1 text-meta font-medium text-canvas shadow-pop transition-opacity duration-100 data-ending-style:opacity-0 data-starting-style:opacity-0">
-            {label}
-          </Base.Popup>
-        </Base.Positioner>
-      </Base.Portal>
-    </Base.Root>
-  )
-}
+const tooltip = later<TooltipProps>(
+  () => import("./tooltip-base").then((m) => m.Tooltip),
+  ({ children }) => children
+)
+
+export const Tooltip = tooltip.View

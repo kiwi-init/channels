@@ -1,6 +1,7 @@
 import { shell } from "electron";
 
 import type { SignInResult } from "./bridge.ts";
+import { held } from "./held.ts";
 import { openInBrowser } from "./open.ts";
 import { mutate, store, type StoreFile } from "./store.ts";
 
@@ -13,11 +14,11 @@ interface RelayConfig {
   dev?: boolean;
 }
 
-export async function relayConfig(relay: string): Promise<RelayConfig> {
+export const relayConfig = held(10 * 60_000, async (relay: string): Promise<RelayConfig> => {
   const res = await fetch(new URL("/v1/config", relay));
   if (!res.ok) throw new Error(`the relay returned ${res.status}`);
   return (await res.json()) as RelayConfig;
-}
+});
 
 async function workosDeviceSignIn(clientId: string): Promise<{ access: string; refresh: string; exp: number }> {
   const start = (await (
