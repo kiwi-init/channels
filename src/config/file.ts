@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ChannelAccess } from "@kiwi/core/crypto.ts";
 import { home, writePrivate } from "./paths.ts";
@@ -77,18 +78,53 @@ export function updateConfig(change: (cfg: Config) => void): Config {
   });
 }
 
-export function withLock<T>(lock: string, fn: () => T): T {
-  const deadline = Date.now() + 5_000;
+const LOCK_WAIT_MS = 5_000;
+const LOCK_STALE_MS = 30_000;
+const LOCK_UNWRITTEN_MS = 2_000;
+
+function lockOwner(lock: string): { token: string; pid: number } | null {
+  try {
+    const token = readFileSync(join(lock, "owner"), "utf8");
+    const pid = Number(token.split(":")[0]);
+    return Number.isInteger(pid) && pid > 0 ? { token, pid } : null;
+  } catch {
+    return null;
+  }
+}
+
+function running(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+function abandoned(lock: string): boolean {
+  let age: number;
+  try {
+    age = Date.now() - statSync(lock).mtimeMs;
+  } catch {
+    return false;
+  }
+  const owner = lockOwner(lock);
+  if (!owner) return age > LOCK_UNWRITTEN_MS;
+  return !running(owner.pid) || age > LOCK_STALE_MS;
+}
+
+export function withLock<T>(lock: string, fn: () => T, waitMs = LOCK_WAIT_MS): T {
+  const token = `${process.pid}:${randomUUID()}`;
+  const deadline = Date.now() + waitMs;
   for (;;) {
     try {
       mkdirSync(lock);
+      writeFileSync(join(lock, "owner"), token);
       break;
     } catch {
-      try {
-        const age = Date.now() - statSync(lock).mtimeMs;
-        if (age > 5_000) rmSync(lock, { recursive: true, force: true });
-      } catch {
-        // The lock went away before it could be checked: the next try takes it.
+      if (abandoned(lock)) {
+        rmSync(lock, { recursive: true, force: true });
+        continue;
       }
       if (Date.now() > deadline) throw new Error(`couldn't lock ${lock}; if no kiwi is running, delete it`);
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 15);
@@ -97,7 +133,7 @@ export function withLock<T>(lock: string, fn: () => T): T {
   try {
     return fn();
   } finally {
-    rmSync(lock, { recursive: true, force: true });
+    if (lockOwner(lock)?.token === token) rmSync(lock, { recursive: true, force: true });
   }
 }
 
