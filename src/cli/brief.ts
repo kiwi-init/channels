@@ -1,12 +1,13 @@
 import { briefText } from "../brief.ts";
 import { loadConfig } from "../config.ts";
-import { wakeOn } from "../daemon.ts";
+import { wakeHooked, wakeOn } from "../daemon.ts";
 import { howMessagesReachYou, mcFor } from "../hooks.ts";
 import type { Persona } from "@kiwi/core/personality.ts";
 import type { Scope } from "@kiwi/core/scopes.ts";
 
 function listenLine(mc: string, alias: string, agent: string): string {
-  return howMessagesReachYou(mc, wakeOn(loadConfig(), alias, agent));
+  const cfg = loadConfig();
+  return howMessagesReachYou(mc, wakeOn(cfg, alias, agent), undefined, wakeHooked(cfg, alias, agent));
 }
 
 export function joinedText(

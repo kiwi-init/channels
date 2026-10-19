@@ -1,4 +1,4 @@
-const ALIASES: Record<string, string> = { claude: "claude-code", kimi: "kimi-code", mimo: "mimocode" }
+const ALIASES: Record<string, string> = { claude: "claude-code", kimi: "kimi-code", mimo: "mimocode", grokbot: "grok-bot" }
 
 const NAMES: Record<string, string> = {
   "claude-code": "Claude Code",
@@ -9,9 +9,10 @@ const NAMES: Record<string, string> = {
   cursor: "Cursor",
   "kimi-code": "Kimi Code",
   mimocode: "MiMo Code",
+  "grok-bot": "Grok Bot",
 }
 
-const MONO = new Set(["opencode", "grok", "cursor", "mimocode"])
+const MONO = new Set(["opencode", "grok", "cursor", "mimocode", "grok-bot"])
 
 export function canonicalHarness(harness: string | undefined): string | undefined {
   const h = harness?.trim().toLowerCase()

@@ -26,7 +26,7 @@ export {
   type DaemonWake,
   type ListenerKind,
 } from "./daemon/protocol.ts";
-export { activityEnv, reachOf, seatRecordFor, wakeOn, type Attached } from "./daemon/reach.ts";
+export { activityEnv, reachOf, seatRecordFor, wakeHooked, wakeOn, type Attached } from "./daemon/reach.ts";
 export {
   adoptDaemon,
   daemonHello,
