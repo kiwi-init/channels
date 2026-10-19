@@ -25,8 +25,12 @@ function bundledKiwi(): string {
 async function runnableKiwi(): Promise<string> {
   const bundled = bundledKiwi();
   if (!bundled.endsWith(".zst")) return bundled;
-  const unpacked = path.join(app.getPath("userData"), "bin", `kiwi-${app.getVersion()}`);
-  if (!fs.existsSync(unpacked)) await place(bundled, unpacked);
+  const dir = path.join(app.getPath("userData"), "bin");
+  const name = `kiwi-${app.getVersion()}`;
+  const unpacked = path.join(dir, name);
+  if (fs.existsSync(unpacked)) return unpacked;
+  await place(bundled, unpacked);
+  for (const old of await fs.promises.readdir(dir)) if (old.startsWith("kiwi-") && old !== name) await fs.promises.rm(path.join(dir, old), { force: true });
   return unpacked;
 }
 

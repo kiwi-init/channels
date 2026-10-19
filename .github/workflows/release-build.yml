@@ -143,8 +143,6 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           REHEARSAL: ${{ inputs.rehearsal }}
         run: |
-          # The app bundles the kiwi binary, zstd-packed, through extraResources (`../dist/kiwi.zst`);
-          # build it for the platform (and architecture) being packaged, sign it, then pack it.
           cli() { bun ../scripts/build-cli.ts --target "$1" --outfile ../dist/kiwi; }
           pack() { bun scripts/pack-cli.ts ../dist/kiwi; }
           mkdir -p ../dist
