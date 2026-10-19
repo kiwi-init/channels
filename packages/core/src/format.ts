@@ -9,6 +9,13 @@ import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "
 import { colorOf, humanOf, isPerson, issueOf, outsideRepos, taskId, type ChannelState, type Fact, type Lease, type ReviewRound, type Task } from "./state.ts";
 import { isWakeVia, wakesInSession, wakeWords, type WakeVia } from "./wake.ts";
 
+export function tokensWord(n: number): string {
+  const k = Math.round(n / 1_000);
+  if (k < 1) return String(n);
+  if (k < 1_000) return `${k}k`;
+  return `${Number((n / 1_000_000).toFixed(1))}M`;
+}
+
 export function ago(ts: number, now = Date.now()): string {
   const s = Math.max(0, Math.round((now - ts) / 1000));
   if (s < 60) return `${s}s ago`;

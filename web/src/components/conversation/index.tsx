@@ -5,8 +5,7 @@ import { droppedCount } from "@kiwi/core/format.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
 import { GENERAL_ROOM, isReaction, type ImageAttachment, type Message } from "@kiwi/core/protocol.ts"
 import { taskCards } from "@kiwi/core/standup.ts"
-import { colorOf, outsideRepos, taskId, tasksAwaitingPeople, type Task } from "@kiwi/core/state.ts"
-import { taskPr } from "@kiwi/core/work.ts"
+import { colorOf, outsideRepos, tasksAwaitingPeople, type Task } from "@kiwi/core/state.ts"
 import { channelTitle, loadRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { howHere } from "@/lib/presence"
 import type { Gif } from "@/lib/gifs"
@@ -26,7 +25,7 @@ import { AgentStrip, agentNow, type AgentNow } from "../agent-strip"
 import { ChannelControls } from "../controls"
 import { Icon } from "../icon"
 import { Button, Harnesses, Pictures, Spinner, errorText, toast } from "../kit"
-import { AddAgent, AgentLanes, CompactBlock, GifPicker, HoldDialog, ProposalCard, TalkBar, TalkButton, TaskInline } from "../lazy"
+import { AddAgent, AgentLanes, CompactBlock, GifPicker, HoldDialog, ProposalCard, TalkBar, TalkButton } from "../lazy"
 import { bridge } from "@/lib/secrets"
 import type { ToolCtx } from "@/lib/voice/tools"
 import { defaultScopes } from "../scopes"
@@ -72,8 +71,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const [earlier, setEarlier] = useState(false)
   const sideRoot = side?.kind === "thread" ? side.root : null
   const info = side?.kind === "info"
-  const [expanded, setExpanded] = useState<number | null>(null)
-  const shownTask = side?.kind === "tasks" ? side.task : tab === "tasks" ? expanded : null
+  const shownTask = side?.kind === "tasks" ? side.task : null
   const openThread = useCallback((root: number) => setSide({ kind: "thread", root }), [])
   const openTask = useCallback((task: number) => setSide({ kind: "tasks", task }), [])
   const [pausing, setPausing] = useState(false)
@@ -228,7 +226,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const hold = handlers.onHold
   const commands = useMemo<Command[]>(
     () => [
-      { name: "tasks", summary: "Open the tasks", run: () => setSide({ kind: "tasks", task: null }) },
+      { name: "tasks", summary: "Open the tasks", run: () => setTab("tasks") },
       ...(hold && !state.hold ? [{ name: "pause", summary: "Pause the agents", args: "note", run: (note: string) => hold(true, note || undefined) }] : []),
       ...(hold && state.hold ? [{ name: "resume", summary: "Let the agents work again", run: () => hold(false) }] : []),
       {
@@ -377,7 +375,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const mayWrite = place.kind !== "dm" || place.with.includes(me)
   const extra = place.kind === "main" ? undefined : sendFrom(state, place, me)
   const task = shownTask === null ? undefined : state.tasks.get(shownTask)
-  const openCount = [...state.tasks.values()].filter((t) => t.state !== "done").length
   const waiting = tasksAwaitingPeople(state)
   const counts = viewCounts(state, now, needsMe, waiting)
   const merged = mergedSince(state, startOfDay(now))
@@ -503,38 +500,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                     <div className="absolute inset-0 overflow-y-auto pt-[calc(var(--head)+8px)]">
                       <div className={cx("mx-auto w-full px-2 md:px-4", tab === "tasks" && "max-w-[960px]")}>
                         {tab === "tasks" ? (
-                          <TasksView
-                            state={state}
-                            now={now}
-                            view={view}
-                            agents={agentsNow}
-                            needs={needsMe ? needsYou : null}
-                            open={side?.kind === "tasks" ? null : expanded}
-                            onOpen={(id) => setExpanded((e) => (e === id ? null : id))}
-                            detail={(id) => (
-                              <TaskInline
-                                pr={taskPr(state, id)?.pr}
-                                state={state}
-                                rows={taskRows}
-                                load={ch.githubDiff}
-                                onDetails={() => openTask(id)}
-                                composer={
-                                  <Composer
-                                    key={`task:${id}`}
-                                    me={me}
-                                    people={people}
-                                    replyTo={null}
-                                    nameOf={nameOf}
-                                    onClearReply={() => undefined}
-                                    disabled={connection === "connecting"}
-                                    extra={sendFrom(state, { kind: "task", task: id }, me)}
-                                    placeholder={`Reply in ${taskId(id)}`}
-                                    send={send}
-                                  />
-                                }
-                              />
-                            )}
-                          />
+                          <TasksView state={state} now={now} view={view} agents={agentsNow} needs={needsMe ? needsYou : null} open={shownTask} onOpen={openTask} />
                         ) : agentsNow.length ? (
                           <AgentLanes agents={agentsNow} state={state} messages={messages} now={now} nameOf={nameOf} onOpenTask={openTask} />
                         ) : (
@@ -681,12 +647,10 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                 <TasksSide
                   side={side}
                   setSide={setSide}
-                  shownTask={shownTask}
                   task={task}
                   taskKey={taskKey}
                   inTask={inTask}
                   rows={taskRows}
-                  openCount={openCount}
                   me={me}
                   people={people}
                   nameOf={nameOf}
@@ -699,7 +663,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                   now={now}
                   highlight={highlight}
                   iAmPerson={iAmPerson}
-                  unreadIn={unreadIn}
                 />
               )}
             </div>

@@ -7,9 +7,9 @@ import type { Event, Message } from "@kiwi/core/protocol.ts"
 import { fold, prKey } from "@kiwi/core/state.ts"
 
 mock.module("@/lib/avatars", () => ({ avatarUrl: () => "", robotUrl: () => "", robotFor: () => "blue", harnessUrl: () => "" }))
-const { TaskInline } = await import("./task-inline")
+const { PrCard } = await import("./pr-card")
 
-describe("a task opened inline", () => {
+describe("a task's PR card", () => {
   test("its PR card names each check with how it went, and links to GitHub", async () => {
     const jon = await generateIdentity("jon")
     const roster = [{ name: "jon", pk: jon.pk, owner: true, at: 0, active: true, kind: "human" as const }]
@@ -32,7 +32,8 @@ describe("a task opened inline", () => {
     ]
     const state = fold(log, roster)
     const pr = state.github.prs.get(prKey("o/r", 9))
-    const html = renderToStaticMarkup(createElement(TaskInline, { pr, state, rows: [], composer: null, load: undefined, onDetails: () => undefined }))
+    if (!pr) throw new Error("the PR wasn't folded")
+    const html = renderToStaticMarkup(createElement(PrCard, { pr, state, load: undefined }))
     expect(html).toContain("PR #9")
     expect(html).toContain("T1-inline")
     for (const [name, word] of [

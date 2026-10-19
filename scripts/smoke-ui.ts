@@ -163,15 +163,14 @@ async function run(part: Part): Promise<string[]> {
 
   const toTab = (name: "Tasks" | "Agents" | "Conversation") => page.getByRole("navigation", { name: "Views of the channel" }).getByRole("button", { name, exact: true }).click();
 
-  const openInline = async (title: RegExp) => {
+  const openFromBoard = async (title: RegExp) => {
     await toTab("Tasks");
-    const row = page.getByRole("button", { name: title }).and(page.locator("[aria-expanded]")).first();
+    const row = page.getByRole("button", { name: title }).first();
     await row.waitFor({ timeout: 15000 });
-    if ((await row.getAttribute("aria-expanded")) !== "true") await row.click();
-    return page
-      .getByRole("listitem")
-      .filter({ has: page.getByRole("button", { name: title }) })
-      .first();
+    await row.click();
+    const panel = page.getByRole("complementary", { name: "Tasks" });
+    await panel.getByRole("region", { name: /^Task T\d+/ }).waitFor({ timeout: 15000 });
+    return panel;
   };
 
   const createChannel = async () => {
@@ -416,13 +415,9 @@ async function run(part: Part): Promise<string[]> {
     if (process.env.SMOKE_SHOTS) await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "lanes.png") });
     log(`ok  ${at}`);
     at = "Task in the Tasks panel";
-    const tasksPanel = page.getByRole("complementary", { name: "Tasks" });
-    const inline = await openInline(/Smoke task/);
-    await inline.getByRole("textbox", { name: "Message" }).fill("smoke, inline");
-    await page.keyboard.press("Enter");
-    await inline.getByText("smoke, inline", { exact: true }).first().waitFor({ timeout: 15000 });
-    log("ok  a task opens inline in Tasks, and its reply box talks in it");
-    await inline.getByRole("button", { name: "Details", exact: true }).click();
+    const tasksPanel = await openFromBoard(/Smoke task/);
+    if (await tasksPanel.getByRole("button", { name: "All tasks" }).count()) throw new Error("the Tasks panel offers a second task list");
+    log("ok  a board row opens its task in the Tasks panel, with no second list behind it");
     await tasksPanel
       .getByRole("region", { name: /^Task T\d+/ })
       .getByRole("button", { name: /^Activity/ })
@@ -457,10 +452,10 @@ async function run(part: Part): Promise<string[]> {
       .waitFor({ timeout: 15000 });
     await typed.fill("/tasks");
     await typed.press("Enter");
-    await tasksPanel.waitFor({ timeout: 15000 });
+    await page.getByRole("navigation", { name: "Views of the channel" }).getByRole("button", { name: "Tasks", exact: true }).and(page.locator('[aria-current="page"]')).waitFor({ timeout: 15000 });
+    if (await tasksPanel.count()) throw new Error("/tasks opened a task list in the side panel instead of the Tasks tab");
+    await toTab("Conversation");
     if ((await typed.inputValue()) !== "") throw new Error("a command stayed in the composer after it ran");
-    await tasksPanel.getByRole("button", { name: "Close tasks" }).click();
-    await tasksPanel.waitFor({ state: "detached" });
     if (await page.getByText("/tasks", { exact: true }).count()) throw new Error("a command was sent as a message");
     log(`ok  ${at}`);
 
@@ -509,7 +504,7 @@ async function run(part: Part): Promise<string[]> {
     const added = /added (T\d+)/.exec(await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke review", "--owner", "bot", "--review", "helper"]))?.[1];
     if (!added) throw new Error("kiwi task add printed no task id");
     await kiwi(["-c", "smoke", "--as", "bot", "task", "review", added]);
-    await (await openInline(/Smoke review/)).getByRole("button", { name: "Details", exact: true }).click();
+    await openFromBoard(/Smoke review/);
     const reviewed = tasksPanel.getByRole("region", { name: `Task ${added}` });
     await reviewed.getByRole("button", { name: "Send back" }).waitFor({ timeout: 15000 });
     if (await reviewed.getByRole("button", { name: "Approve" }).count()) throw new Error("Approve showed for a review waiting on an agent");
@@ -587,9 +582,7 @@ async function run(part: Part): Promise<string[]> {
       .getByRole("navigation", { name: "Views" })
       .getByRole("button", { name: /^Everything/ })
       .click();
-    await (await openInline(/Smoke task/)).getByRole("button", { name: "Details", exact: true }).click();
-    await tasksPanel.getByRole("button", { name: "All tasks" }).click();
-    await tasksPanel.getByRole("textbox", { name: "Filter tasks" }).waitFor();
+    await openFromBoard(/Smoke task/);
     await page.keyboard.press("Escape");
     await tasksPanel.waitFor({ state: "detached" });
     await toTab("Conversation");

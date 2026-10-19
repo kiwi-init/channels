@@ -22,6 +22,28 @@ export function noteDelivered(alias: string, as: string, session: string, seq: n
   writeFileSync(deliveredFile(alias, as, session), String(Math.max(seq, deliveredUpTo(alias, as, session))));
 }
 
+function pendingFile(alias: string, as: string, session: string, token: string): string {
+  return join(home(), "listen-hooks", `${encodeURIComponent(alias)}.${encodeURIComponent(as)}.${encodeURIComponent(session)}.${encodeURIComponent(token)}.pending`);
+}
+
+export function notePending(alias: string, as: string, session: string, token: string, seq: number): void {
+  mkdirSync(join(home(), "listen-hooks"), { recursive: true, mode: 0o700 });
+  writeFileSync(pendingFile(alias, as, session, token), String(seq));
+}
+
+export function settlePending(alias: string, as: string, session: string, landed: string): void {
+  const file = pendingFile(alias, as, session, landed);
+  let seq: number;
+  try {
+    seq = Number(readFileSync(file, "utf8"));
+  } catch {
+    // No handoff under that token for this seat: nothing landed here to count as delivered.
+    return;
+  }
+  if (Number.isInteger(seq) && seq > 0) noteDelivered(alias, as, session, seq);
+  rmSync(file, { force: true });
+}
+
 const ANSWERING = ".answering";
 
 function answeringDir(): string {

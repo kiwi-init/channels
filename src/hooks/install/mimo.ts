@@ -22,7 +22,7 @@ type Part = { type: "text"; text: string };
 interface Client {
   session: {
     get(options: { path: { id: string } }): Promise<{ data?: { parentID?: string } }>;
-    promptAsync(options: { path: { id: string }; body: { parts: Part[] } }): Promise<unknown>;
+    promptAsync(options: { path: { id: string }; body: { parts: Part[] }; throwOnError: true }): Promise<unknown>;
   };
 }
 interface Kiwi {
@@ -36,6 +36,7 @@ type Event = { type: string; properties?: { sessionID?: string; info?: { id?: st
 const MARK = "${MARK}";
 const LISTEN = ${JSON.stringify(listen)};
 const RETRY_MS = 30_000;
+const WAKE_RETRY_FIRST_MS = 1_000;
 const holder = globalThis as { __kiwi?: Kiwi };
 const kiwi: Kiwi = (holder.__kiwi ??= { mark: MARK, client: null, parents: new Map(), waiting: new Map() });
 
@@ -53,30 +54,47 @@ async function rootOf(id: string): Promise<string> {
   return at;
 }
 
-function listenOnce(id: string, cwd: string): Promise<{ code: number | null; err: string }> {
+function listenOnce(id: string, cwd: string, landed: string | null): Promise<{ code: number | null; out: string; err: string }> {
   return new Promise((resolve) => {
-    const child = spawn(LISTEN, { shell: true, detached: true, cwd, env: { ...process.env, MIMOCODE_SESSION_ID: id }, stdio: ["pipe", "ignore", "pipe"] });
+    const child = spawn(LISTEN, { shell: true, detached: true, cwd, env: { ...process.env, MIMOCODE_SESSION_ID: id }, stdio: ["pipe", "pipe", "pipe"] });
     kiwi.waiting.set(id, child);
+    let out = "";
     let err = "";
+    child.stdout?.on("data", (d: Buffer) => void (out += d.toString()));
     child.stderr?.on("data", (d: Buffer) => void (err += d.toString()));
-    child.on("error", () => resolve({ code: null, err }));
-    child.on("close", (code: number | null) => resolve({ code, err }));
+    child.on("error", () => resolve({ code: null, out, err }));
+    child.on("close", (code: number | null) => resolve({ code, out, err }));
     child.stdin?.on("error", () => undefined);
-    child.stdin?.end(JSON.stringify({ session_id: id, cwd, hook_event_name: "listen" }));
+    child.stdin?.end(JSON.stringify({ session_id: id, cwd, hook_event_name: "listen", landed }));
   });
 }
 
 async function watch(id: string, cwd: string): Promise<void> {
   if (kiwi.waiting.has(id)) return;
   kiwi.waiting.set(id, null);
+  let landed: string | null = null;
   while (kiwi.waiting.has(id)) {
-    const ran = await listenOnce(id, cwd);
+    const ran = await listenOnce(id, cwd, landed);
+    landed = null;
     if (!kiwi.waiting.has(id)) return;
     kiwi.waiting.set(id, null);
     const text = ran.code === 2 ? ran.err.trim() : "";
-    if (text && kiwi.client) await kiwi.client.session.promptAsync({ path: { id }, body: { parts: [{ type: "text", text }] } }).catch(() => undefined);
-    else await new Promise((r) => setTimeout(r, RETRY_MS));
+    if (!text) await new Promise((r) => setTimeout(r, RETRY_MS));
+    else if (await wake(id, text)) landed = ran.out.trim() || null;
   }
+}
+
+function landed(sent: unknown): boolean {
+  return !(typeof sent === "object" && sent !== null && "error" in sent && sent.error !== undefined);
+}
+
+async function wake(id: string, text: string): Promise<boolean> {
+  for (let wait = WAKE_RETRY_FIRST_MS; kiwi.waiting.has(id); wait = Math.min(wait * 2, RETRY_MS)) {
+    const prompt = kiwi.client?.session.promptAsync({ path: { id }, body: { parts: [{ type: "text", text }] }, throwOnError: true });
+    if (prompt && (await prompt.then(landed, () => false))) return true;
+    await new Promise((r) => setTimeout(r, wait));
+  }
+  return false;
 }
 
 function stop(id: string): void {

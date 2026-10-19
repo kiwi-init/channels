@@ -7,7 +7,7 @@ import { here, kimiHookHere, noteHarnessSession, onGrokBot, sameSeat, seatsHeldA
 import { writeSync } from "node:fs";
 import { answer, hookOutput, kimiReason, printed, seatBudget, tellKimi, type Answer, type HookInput } from "./answer.ts";
 import { holdAnswering } from "./delivered.ts";
-import { listen, type Served } from "./listen.ts";
+import { handoffFrom, listen, type Served } from "./listen.ts";
 import { refreshListeners, seatsFor } from "./listeners.ts";
 import { KIMI_STOP, LISTEN } from "./self.ts";
 
@@ -49,7 +49,7 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
   if (event === LISTEN) {
     const served = yield* seatsServed;
     if (!served.length) return 0;
-    return yield* listen(served, who).pipe(
+    return yield* listen(served, who, handoffFrom(input.landed)).pipe(
       Effect.scoped,
       Effect.catchCause(() => Effect.succeed(0)),
     );

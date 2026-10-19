@@ -1,82 +1,25 @@
-import { ArrowDown01Icon, Cancel01Icon, Note01Icon, Search01Icon } from "@hugeicons/core-free-icons"
+import { ArrowDown01Icon, Cancel01Icon, Note01Icon } from "@hugeicons/core-free-icons"
 import { useState } from "react"
 
 import type { TaskState } from "@kiwi/core/protocol.ts"
-import { colorOf, taskId, tasksAwaitingPeople, type ChannelState, type Task } from "@kiwi/core/state.ts"
+import type { ChannelState } from "@kiwi/core/state.ts"
 import { formatAgo } from "@/lib/format"
+import { DECISION, STATE_LABEL } from "@/lib/task-labels"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
-import { isAgent } from "./message"
-import { Alert, Button, IconButton, Monogram, SEGMENTED, SEGMENT_OFF, SEGMENT_ON, errorText, toast } from "./kit"
+import { Alert, Button, IconButton, errorText, toast } from "./kit"
 
-const LABEL: Record<TaskState, string> = { doing: "In progress", review: "In review", todo: "Open", done: "Done" }
-
-/** A task's state as a label, saying when a done one was cancelled rather than finished. */
-export const labelOf = (t: Pick<Task, "state" | "cancelled">) => (t.state === "done" && t.cancelled ? "Done (cancelled)" : LABEL[t.state])
-
-/** Where a task stands, as one small dot: grey open, blue in progress, amber in review, green done. */
+/** Where a task stands, as one small dot: grey up next, blue in progress, amber in review, green done. */
 export function StateMark({ state }: { state: TaskState }) {
   return (
-    <span title={LABEL[state]} className="flex size-4 shrink-0 items-center justify-center">
+    <span title={STATE_LABEL[state]} className="flex size-4 shrink-0 items-center justify-center">
       <span className={cx("block size-2 rounded-full", state === "todo" && "bg-ink-3/55", state === "doing" && "bg-doing", state === "review" && "bg-decide", state === "done" && "bg-live")} />
     </span>
   )
 }
 
 export function DecisionMark() {
-  return <span className="shrink-0 rounded-full bg-decide-wash px-1.5 text-meta font-semibold whitespace-nowrap text-decide">Needs a decision</span>
-}
-
-function TaskRow({
-  task,
-  state,
-  now,
-  nameOf,
-  unread,
-  waiting,
-  onOpen,
-}: {
-  task: Task
-  state: ChannelState
-  now: number
-  nameOf: (n: string) => string
-  unread?: { n: number; forMe: boolean }
-  waiting: boolean
-  onOpen: () => void
-}) {
-  return (
-    <button type="button" onClick={onOpen} className="group flex w-full items-center gap-3 pl-4 text-left transition-colors hover:bg-wash">
-      <StateMark state={task.state} />
-      {/* A grouped list's hairline starts at the text, as in iOS. */}
-      <span className="flex min-w-0 flex-1 items-center gap-3 border-b border-line py-3 pr-4 group-last:border-b-0">
-        <span className="min-w-0 flex-1">
-          <span className={cx("block text-body leading-snug", task.state === "done" && "text-ink-2")}>{task.title}</span>
-          <span className="mt-0.5 block truncate text-meta text-ink-3">
-            <span className="tabular-nums">{taskId(task.id)}</span>
-            {task.cancelled && " · Cancelled"}
-            {task.notes.length > 0 && ` · ${task.notes.length === 1 ? "1 note" : `${task.notes.length} notes`}`}
-            {` · ${formatAgo(task.updatedAt, now)}`}
-          </span>
-        </span>
-        {waiting && <DecisionMark />}
-        {unread && unread.n > 0 ? (
-          unread.forMe ? (
-            <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-accent px-1.5 text-stamp font-semibold text-accent-ink tabular-nums">{unread.n}</span>
-          ) : (
-            <span aria-label="New messages" className="size-2 shrink-0 rounded-full bg-ink-3" />
-          )
-        ) : null}
-        <span className="flex shrink-0 items-center gap-2 text-ui text-ink-3">
-          <span className="hidden max-w-32 truncate @sm:block">{task.owner ? nameOf(task.owner) : "Unassigned"}</span>
-          {task.owner ? (
-            <Monogram name={nameOf(task.owner)} agent={isAgent(state.members.get(task.owner))} color={colorOf(state, task.owner)} size={24} />
-          ) : (
-            <span title="Unassigned" className="size-6 shrink-0 rounded-full border border-dashed border-edge-strong" />
-          )}
-        </span>
-      </span>
-    </button>
-  )
+  return <span className="shrink-0 rounded-full bg-decide-wash px-1.5 text-meta font-semibold whitespace-nowrap text-decide">{DECISION}</span>
 }
 
 /**
@@ -150,138 +93,5 @@ export function Notes({ state, now, onClear }: { state: ChannelState; now: numbe
         </Button>
       </Alert>
     </section>
-  )
-}
-
-export type TaskFilter = "all" | TaskState
-
-function TaskFilterBar({ value, options, onChange, className }: { value: TaskFilter; options: [TaskFilter, string][]; onChange: (f: TaskFilter) => void; className?: string }) {
-  return (
-    <div
-      role="radiogroup"
-      aria-label="Show tasks"
-      className={cx("flex flex-wrap gap-0.5", SEGMENTED, className)}
-      onKeyDown={(e) => {
-        const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0
-        if (!step) return
-        e.preventDefault()
-        const at = options.findIndex(([f]) => f === value)
-        const next = options[(at + step + options.length) % options.length]
-        if (!next) return
-        onChange(next[0])
-        const group = e.currentTarget
-        requestAnimationFrame(() => group.querySelector<HTMLElement>('[aria-checked="true"]')?.focus())
-      }}
-    >
-      {options.map(([f, word]) => (
-        <button
-          key={f}
-          type="button"
-          role="radio"
-          aria-checked={value === f}
-          tabIndex={value === f ? 0 : -1}
-          onClick={() => onChange(f)}
-          className={cx("h-7 flex-auto rounded-row px-3 text-ui font-medium whitespace-nowrap transition-colors", value === f ? SEGMENT_ON : SEGMENT_OFF)}
-        >
-          {word}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-/** The board's groups, in the order they ask for attention. */
-const GROUPS: [TaskState, string][] = [
-  ["review", "Needs review"],
-  ["doing", "In progress"],
-  ["todo", "Up next"],
-  ["done", "Done"],
-]
-
-/** Every task by state, with room for whole titles: the Tasks panel's list, and the one list of tasks. */
-export function Tasks({
-  state,
-  now,
-  nameOf,
-  unreadIn,
-  onOpen,
-}: {
-  state: ChannelState
-  now: number
-  nameOf: (n: string) => string
-  unreadIn?: (id: number) => { n: number; forMe: boolean }
-  onOpen: (id: number) => void
-}) {
-  const [showDone, setShowDone] = useState(false)
-  const [filter, setFilter] = useState<TaskFilter>("all")
-  const [query, setQuery] = useState("")
-  const waiting = tasksAwaitingPeople(state)
-  const q = query.trim().toLowerCase()
-  const archived = [...state.tasks.values()].filter((t) => t.archived).length
-  const all = [...state.tasks.values()]
-    .filter((t) => !t.archived)
-    .filter((t) => filter === "all" || t.state === filter)
-    .filter((t) => !q || t.title.toLowerCase().includes(q) || taskId(t.id).toLowerCase().includes(q) || (!!t.owner && nameOf(t.owner).toLowerCase().includes(q)))
-    .sort((a, b) => b.updatedAt - a.updatedAt)
-
-  if (!state.tasks.size)
-    return (
-      <div className="flex flex-1 items-center justify-center p-6">
-        <div className="max-w-xs">
-          <p className="text-body font-semibold">No tasks yet</p>
-          <p className="mt-1 text-ui leading-normal text-ink-2">When agents split up work, each task and who has it shows up here, and in the conversation where it was made.</p>
-        </div>
-      </div>
-    )
-
-  return (
-    // Sized by its column (the panel runs 300 to 720 wide), not by the window.
-    <div className="@container px-3 pt-1 pb-6">
-      <label className="mb-4 flex h-9 items-center gap-2 rounded-full px-3.5 text-ink-3 edge transition-shadow focus-within:shadow-[0_0_0_3px_var(--accent-wash)]">
-        <Icon icon={Search01Icon} size={16} className="shrink-0" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            // Escape clears the filter first; with nothing to clear, it closes the panel.
-            if (e.key !== "Escape" || !query) return
-            e.stopPropagation()
-            setQuery("")
-          }}
-          placeholder="Filter by title, number or who has it"
-          aria-label="Filter tasks"
-          className="min-w-0 flex-1 bg-transparent text-body text-ink outline-none placeholder:text-ink-3 focus-visible:outline-none"
-        />
-      </label>
-      <TaskFilterBar value={filter} options={[["all", "All"], ...GROUPS]} onChange={setFilter} className="mb-4" />
-      {!all.length && <p className="py-6 text-center text-ui text-ink-3">{q ? `No task matches “${query}”.` : "Nothing here right now."}</p>}
-      {GROUPS.map(([s, word]) => {
-        const list = all.filter((t) => t.state === s)
-        if (!list.length) return null
-        // Done ones wait behind a tap, unless you're looking for one.
-        const closed = s === "done" && !q && filter === "all"
-        return (
-          <section key={s} aria-label={word} className="mb-5">
-            <div className="mb-1.5 flex items-baseline gap-2 px-3">
-              <h3 className="text-ui font-semibold text-ink-2">{word}</h3>
-              <span className="text-meta text-ink-3 tabular-nums">{list.length}</span>
-              {closed && (
-                <button type="button" className="ml-auto text-ui font-medium text-accent-text hover:underline" onClick={() => setShowDone((v) => !v)}>
-                  {showDone ? "Hide" : "Show"}
-                </button>
-              )}
-            </div>
-            {(!closed || showDone) && (
-              <div className="overflow-hidden rounded-card bg-raised shadow-[0_0_0_1px_var(--line)]">
-                {list.map((t) => (
-                  <TaskRow key={t.id} task={t} state={state} now={now} nameOf={nameOf} unread={unreadIn?.(t.id)} waiting={waiting.has(t.id)} onOpen={() => onOpen(t.id)} />
-                ))}
-              </div>
-            )}
-          </section>
-        )
-      })}
-      {archived > 0 && <p className="px-1.5 pt-2 text-meta text-ink-3">{archived === 1 ? "1 finished task archived" : `${archived} finished tasks archived`} by a compact</p>}
-    </div>
   )
 }

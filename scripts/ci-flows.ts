@@ -18,5 +18,6 @@ export const FLOWS: Record<string, string[]> = {
     "hooks-hung-relay",
     "offline-read",
     "hooks-reentry",
+    "mimo-wake-restart",
   ],
 };
