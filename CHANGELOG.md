@@ -33,6 +33,8 @@ Written by `bun scripts/changelog.ts` from each squash-merged pull request's tit
 - **Dictation runs Whisper on this computer: the model comes pinned through the relay, and speech never leaves (T176)** ([#529](https://github.com/ojowwalker77/channels/pull/529))
 - **wake.log records the read cursor each wake's unread count was taken from** ([#535](https://github.com/ojowwalker77/channels/pull/535))
 - **Dictation works on Linux, checked on the packaged Linux app (T848)** ([#527](https://github.com/ojowwalker77/channels/pull/527))
+- **kiwi 0.20.5 (T984)**
+- **Merge main into T984-release-0.20.5: #538 (dictation's .wasm out of the app)**
 
 ## 0.20.4 — 2026-10-19
 
