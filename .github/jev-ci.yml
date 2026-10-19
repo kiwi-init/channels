@@ -268,7 +268,10 @@ jobs:
       /compact (a proposal names every open task and question; only the owner compacts; done
       tasks archive off the board; a snapshot-resumed fold agrees; propose and approve over a
       local relay). And test/where.test.ts: kiwi send --to WHERE (one word for #general, a room,
-      a task, a direct thread or a reply; names beside it; two places refused). Fails if a tested module's behavior,
+      a task, a direct thread or a reply; names beside it; two places refused). And test/papercuts.test.ts's
+      near-duplicate titles: task add's "looks like T…" hint, where two titles whose identifiers differ
+      at all (a letter prefix and its digits, abc-81 read as abc81, or a bare number) never look alike,
+      and a word-overlap match needs two shared words. Fails if a tested module's behavior,
       output text or exported names change. TMPDIR points through a symlink, as macOS's does,
       so a test that compares a tmp path with its realpath or process.cwd() fails here too.
 

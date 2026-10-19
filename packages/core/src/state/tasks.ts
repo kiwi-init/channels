@@ -45,6 +45,7 @@ const OPEN_FOR_TITLE = new Set<TaskState>(["todo", "doing", "review"]);
 function normTitle(s: string): string {
   return s
     .toLowerCase()
+    .replace(/([a-z])-(\d)/g, "$1$2")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }
@@ -55,10 +56,14 @@ function titleWords(norm: string): string[] {
   return [...new Set(norm.split(" ").filter((w) => w.length > 2 || hasDigit(w)))];
 }
 
-function idsDiffer(wa: readonly string[], wb: readonly string[]): boolean {
-  const ia = wa.filter(hasDigit);
-  const ib = wb.filter(hasDigit);
-  return ia.length > 0 && ib.length > 0 && !ia.every((w) => ib.includes(w)) && !ib.every((w) => ia.includes(w));
+function titleIds(title: string): Set<string> {
+  return new Set((title.toLowerCase().match(/[a-z]*-?\d+/g) ?? []).map((id) => id.replace("-", "")));
+}
+
+function idsDiffer(a: string, b: string): boolean {
+  const ia = titleIds(a);
+  const ib = titleIds(b);
+  return ia.size > 0 && ib.size > 0 && (ia.size !== ib.size || [...ia].some((id) => !ib.has(id)));
 }
 
 export function titlesLookAlike(a: string, b: string): boolean {
@@ -66,9 +71,9 @@ export function titlesLookAlike(a: string, b: string): boolean {
   const nb = normTitle(b);
   if (!na || !nb) return false;
   if (na === nb) return true;
+  if (idsDiffer(a, b)) return false;
   const wa = titleWords(na);
   const wb = titleWords(nb);
-  if (idsDiffer(wa, wb)) return false;
   const shorter = na.length <= nb.length ? na : nb;
   const longer = shorter === na ? nb : na;
   if (shorter.length >= 8 && longer.includes(shorter)) return true;

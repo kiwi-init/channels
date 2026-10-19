@@ -97,6 +97,10 @@ describe("near-duplicate titles", () => {
     expect(titlesLookAlike("ui", "build the gui")).toBe(false);
     expect(titlesLookAlike("ABC-81 stage 6", "XY-53 stage 6")).toBe(false);
     expect(titlesLookAlike("ABC-81 stage 6", "ABC-82 stage 6")).toBe(false);
+    expect(titlesLookAlike("ABC-6 stage 6", "ABC-53 stage 6")).toBe(false);
+    expect(titlesLookAlike("ABC-81 stage 6", "XY-81 stage 6")).toBe(false);
+    expect(titlesLookAlike("Fix bug 12", "Fix bug 12 and 13")).toBe(false);
+    expect(titlesLookAlike("abc81 stage 6 review", "ABC-81 stage 6")).toBe(true);
     expect(titlesLookAlike("Deploy", "deploy the site")).toBe(false);
     expect(titlesLookAlike("ABC-81 stage 6 review", "Review ABC-81, stage 6")).toBe(true);
 
