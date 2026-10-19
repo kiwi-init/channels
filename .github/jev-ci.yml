@@ -86,6 +86,9 @@ jobs:
       messages with 50 KB ones among them, and big live messages back to back, arrive whole
       and in order. test/daemon-catchup.test.ts: a message that lands while a subscriber
       catches up waits until the catch-up is sent, so the rest of the catch-up isn't skipped.
+      Also test/daemon-lock.test.ts: one daemon per KIWI_HOME (src/daemon/lock.ts): daemons started
+      at once leave one, a daemon too busy to answer isn't replaced, and a daemon whose lock and
+      socket another took exits without deleting that socket.
       Also test/daemon-versions.test.ts: compareVersions (packages/core/src/versions.ts, shared by
       the CLI, the desktop updater and the changelog) orders releases and pre-releases, an older
       kiwi keeps a newer daemon running, and a newer one replaces an older daemon (src/daemon/rpc.ts).
