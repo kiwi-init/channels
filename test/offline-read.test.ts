@@ -48,7 +48,6 @@ async function ok(home: string, args: string[], env: Env = {}, stdin?: string): 
 
 const hook = (event: string) => ok(agent, ["hook", event], SESSION, HOOK_INPUT);
 
-
 async function until(pred: () => Promise<boolean>, label: string, ms = 20_000) {
   const end = Date.now() + ms;
   while (!(await pred())) {
