@@ -358,7 +358,7 @@ jobs:
       and in the Tasks panel, Needs you, the Agents tab, Details, the direct conversation,
       Invite, the account menu, the command palette, Notes, Pause, Settings, Personalities, Add
       an agent, first run, signed in with nothing open, Join with a code and the invite preview.
-      The shots are uploaded as the ui-shots artifact. Fails when the seeding can't drive the
+      The shots are uploaded as the ui-shots artifact. Fails when the conversation isn't at its newest message (within 80px of the bottom) once the channel opens and again back from the Tasks tab (web/src/components/conversation/use-scroll.ts), or when the seeding can't drive the
       dashboard or any screen can't be reached (a control renamed, moved or gone), so the shots
       keep up with the UI.
 
