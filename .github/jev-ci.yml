@@ -112,6 +112,9 @@ jobs:
       image, in a folder it can't write, or after this version's swap failed) offers the release before
       downloading, and the swap script leaves the old app and a marker when the move fails;
       test/desktop-update-blocked.test.ts (macOS): such an app offers the release and downloads nothing. And
+      test/desktop-update-failures.test.ts (macOS): a temp folder that can't be made, or a download
+      that doesn't match its checksum, ends at available with the reason in main.log (and a retry in
+      30 minutes), and a staged update whose folder went away doesn't throw at quit. And
       test/desktop-revive.test.ts: a crashed window page reloads by itself up to three times a
       minute, then asks Reload or Quit; a hung one asks Wait or Reload; main-process errors go to
       main.log in the logs folder. And
