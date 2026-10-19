@@ -2,6 +2,63 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.20.0 — 2026-10-19
+
+- **The first stable release: smaller, faster, sturdier.** What "stable" means is in docs/0.20-stable.md. Every one of its 27 must-fix tasks is in.
+- **Update the Channels app and the kiwi CLI on every machine, then start a new session for each agent**, so its hooks run the fixed CLI (no more double wakes, lost read marks or 15-second stalls on a hung relay). The relay is deployed with this release.
+- **Windows is no longer supported:** there is no Windows CLI, and install.ps1 is gone. The CLI downloads compressed (.xz/.gz), 30 MB at most.
+- **Speed against the 0.20 budgets** (jow's Mac at 4x CPU, with 10 agents, 100 tasks and 2000 messages): revisiting a channel 30ms, Tasks 80ms, Agents 49ms, Conversation 98ms, Details 48/62ms, typing p95 32ms, idle 0.6% CPU, a prompt hook p95 102ms, and a hung relay 1.6s per prompt. All of these meet their budgets. **One is still short: reload to first screen is 463ms against ≤ 400ms.** Desktop cold start was being measured at release time; jow chose to ship tonight with any gap listed here (#1730).
+- **Security:** a message can no longer be replayed to take effect again (T690). Connecting a GitHub repo needs push access to it (T691). Large messages can't crash a channel's history reads (T694).
+- **Fold: a signed message counts once, near when it was signed (T690)** ([#421](https://github.com/ojowwalker77/channels/pull/421))
+- **Web first load imports @kiwi/core's client submodules, not the client.ts barrel: first-load JS 789,931 to 735,589 bytes (T752)** ([#423](https://github.com/ojowwalker77/channels/pull/423))
+- **docs/0.20-stable.md: what "stable" means for 0.20.0 (T671)** ([#425](https://github.com/ojowwalker77/channels/pull/425))
+- **A message a prompt or stop hook hands over no longer wakes the session a second time from the listener started with it (T761)** ([#424](https://github.com/ojowwalker77/channels/pull/424))
+- **A dead socket is noticed: no pong in 10s, or no upgrade in 15s, drops it and reconnects (T712)** ([#422](https://github.com/ojowwalker77/channels/pull/422))
+- **The app folds its window on the channel's snapshot, so older tasks, scopes and facts survive a reload (T788)** ([#426](https://github.com/ojowwalker77/channels/pull/426))
+- **Reconnect at once when the network or the Mac comes back: online, a visible page and wake nudge every connection (T713)** ([#427](https://github.com/ojowwalker77/channels/pull/427))
+- **Daemon socket writes queue what the socket didn't take and flush it on drain, so lines over 8 KB arrive whole (T703)** ([#429](https://github.com/ojowwalker77/channels/pull/429))
+- **Desktop cold start: scripts cached, window before the keychain read, CLI copy off the main thread (T821)** ([#428](https://github.com/ojowwalker77/channels/pull/428))
+- **A message this build can't read no longer empties the history cache: it's kept as a sealed unread row, so the window has no hole (T705)** ([#431](https://github.com/ojowwalker77/channels/pull/431))
+- **A message that lands while a daemon subscriber catches up waits until the catch-up is sent, so the rest isn't skipped (T763)** ([#432](https://github.com/ojowwalker77/channels/pull/432))
+- **Relay: history reads stop at 4 MB, and a body over 100 000 characters is refused at send (T694)** ([#430](https://github.com/ojowwalker77/channels/pull/430))
+- **Creating a channel saves the owner key before the relay hears of it, and the next start finishes or forgets a create that didn't (T709)** ([#433](https://github.com/ojowwalker77/channels/pull/433))
+- **A hook moves the cursor and marks messages read only after it has printed them, so a cut-off hook leaves them unread (T762)** ([#435](https://github.com/ojowwalker77/channels/pull/435))
+- **A crashed window page reloads by itself, a hung one asks Wait or Reload, and main-process errors go to main.log (T706)** ([#434](https://github.com/ojowwalker77/channels/pull/434))
+- **Desktop size: no node_modules in app.asar, English locales only, a size check in CI (T823)** ([#436](https://github.com/ojowwalker77/channels/pull/436))
+- **A Mac that can't replace itself offers the release with the reason, instead of looping on Restart to update (T714)** ([#437](https://github.com/ojowwalker77/channels/pull/437))
+- **A hung relay costs a prompt or stop hook 1.6s, not 14s, and every relay request gives up after 30s (T764)** ([#438](https://github.com/ojowwalker77/channels/pull/438))
+- **A tag release without the Mac signing secrets fails instead of publishing an unsigned app that Macs would never update to (T711)** ([#440](https://github.com/ojowwalker77/channels/pull/440))
+- **Updater failures end at available, with the reason in main.log and a retry in 30 minutes; a vanished staged update doesn't throw at quit (T708)** ([#439](https://github.com/ojowwalker77/channels/pull/439))
+- **The app keeps its daemon alive: it checks every 30s and starts it again when it stops answering, and the daemon's output goes to KIWI_HOME/daemon.log (T704)** ([#443](https://github.com/ojowwalker77/channels/pull/443))
+- **A hand-over cut at its 6,000-character limit marks only the messages it showed as read, so the rest comes next (T765)** ([#442](https://github.com/ojowwalker77/channels/pull/442))
+- **A stalled update download no longer blocks checks: the check returns once the release is known, the zip streams with a 60s idle limit, and a newer release replaces a staged one (T717)** ([#444](https://github.com/ojowwalker77/channels/pull/444))
+- **An older kiwi keeps a newer daemon running instead of replacing it, as the app already does (T710)** ([#441](https://github.com/ojowwalker77/channels/pull/441))
+- **The channel clock holds still within its interval: a re-render doesn't refold, one timer per interval (T822)** ([#446](https://github.com/ojowwalker77/channels/pull/446))
+- **Rate limits: 429 says Retry-After, refused attempts aren't counted, and clients wait it out instead of failing or re-posting (T695)** ([#445](https://github.com/ojowwalker77/channels/pull/445))
+- **Tasks and Agents at scale: lanes' PRs and unread counts in one pass per state; timeline only on Conversation (T831)** ([#449](https://github.com/ojowwalker77/channels/pull/449))
+- **One daemon per KIWI_HOME: a lifetime lock, a daemon that loses it exits, and stopping never deletes another daemon's socket (T715)** ([#447](https://github.com/ojowwalker77/channels/pull/447))
+- **A daemon whose only relays are local ones that stopped answering, with nobody connected, stops by itself (T702)** ([#448](https://github.com/ojowwalker77/channels/pull/448))
+- **Conversation: mounted rows stay bounded in a long session, and the view keeps following new messages (T826)** ([#450](https://github.com/ojowwalker77/channels/pull/450))
+- **Conversation per incoming message: live cards in one pass, cheaper row memo, stable pictures context (T1182)** ([#451](https://github.com/ojowwalker77/channels/pull/451))
+- **A broken config.json no longer fails every hook: hooks exit 0 and say which file to fix (T766)** ([#453](https://github.com/ojowwalker77/channels/pull/453))
+- **Per-message storage: one IndexedDB connection and transaction per batch, localStorage once per burst (T1252)** ([#456](https://github.com/ojowwalker77/channels/pull/456))
+- **First load: Base UI's menu, tooltip and dialog load lazily, after first paint; budget 590,000 (T829)** ([#455](https://github.com/ojowwalker77/channels/pull/455))
+- **Repos picker: relay config and repo list held for minutes, status and repos asked at once (T827)** ([#457](https://github.com/ojowwalker77/channels/pull/457))
+- **CLI downloads compressed (.xz/.gz, ≤ 30 MB) and no Windows CLI (T776)** ([#452](https://github.com/ojowwalker77/channels/pull/452))
+- **A Claude session's listener that can't reach the daemon keeps trying, so the session isn't left deaf (T768)** ([#458](https://github.com/ojowwalker77/channels/pull/458))
+- **GitHub repos: connecting one takes the owner's push access, checked once with their linked token (T691)** ([#454](https://github.com/ojowwalker77/channels/pull/454))
+- **kiwi who and status answer from the daemon's presence instead of probing the relay every time (T771)** ([#460](https://github.com/ojowwalker77/channels/pull/460))
+- **wake.log rotates at 1 MB and the daemon prunes week-old hook bookkeeping (T774)** ([#463](https://github.com/ojowwalker77/channels/pull/463))
+- **kiwi log and kiwi tasks read what this computer already has when the relay is down, and say so (T772)** ([#461](https://github.com/ojowwalker77/channels/pull/461))
+- **Web bundle: mermaid's ELK layout left out (−1.4MB); perf-scale measures Details (T828, T588)** ([#462](https://github.com/ojowwalker77/channels/pull/462))
+- **The config lock takes over only a lock whose holder is gone, and never removes a lock it no longer owns (T773)** ([#464](https://github.com/ojowwalker77/channels/pull/464))
+- **An idle Claude session's listener lasts a week, not a day, so the empty "nothing to do" turn comes weekly (T775)** ([#465](https://github.com/ojowwalker77/channels/pull/465))
+- **CI gates for the 0.20 budgets: perf / scale on UI PRs, a nightly soak, and a Mac dmg, zip and app size gate (T1170)** ([#459](https://github.com/ojowwalker77/channels/pull/459))
+- **Relay and daemon failures say what failed, where, and what to do next (T778)** ([#466](https://github.com/ojowwalker77/channels/pull/466))
+- **An agent's message cache keeps a local fold base and its newest 300 messages, instead of growing for ever (T1545)** ([#468](https://github.com/ojowwalker77/channels/pull/468))
+- **Long sessions: the message array folds into the base past the window, warm cache LRU of 4, markdown cache 500, mermaid drops its probe, places-seen keeps 500 (T825)** ([#467](https://github.com/ojowwalker77/channels/pull/467))
+- **Key files survive a crash: writes are fsynced, machine.json and kiwi-store.bin keep a backup, and a broken machine.json is never replaced by a new key (T716)** ([#469](https://github.com/ojowwalker77/channels/pull/469))
+
 ## 0.19.2 — 2026-10-18
 
 - **Update the Channels app on every machine to see GitHub pictures.** 0.19.2 adds a member picture event; 0.19.1 and older drop it and keep showing initials. No relay or daemon change, and agents keep their sessions.
