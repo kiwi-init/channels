@@ -25,15 +25,15 @@ const size = (dir: string) => {
   return { code: r.exitCode, out: r.stdout.toString() + r.stderr.toString() };
 };
 
-test("a Mac release under its gates passes, and says what isn't at the 0.20 budget yet", () => {
-  const r = size(release("under", 155, 330));
+test("a Mac release at the 0.20 budget passes: dmg and zip up to 150 MiB, the app up to 320 MiB", () => {
+  const r = size(release("under", 145, 300));
   expect(r.code).toBe(0);
-  expect(r.out).toContain("not yet at the 0.20 budget");
+  expect(r.out).toContain("at the 0.20 budget");
 });
 
-test("a dmg or an app over its gate fails the release build", () => {
-  expect(size(release("big-dmg", 170, 300)).code).toBe(1);
-  expect(size(release("big-app", 140, 420)).code).toBe(1);
+test("a dmg, zip or app over the 0.20 budget fails the release build", () => {
+  expect(size(release("big-dmg", 151, 300)).code).toBe(1);
+  expect(size(release("big-app", 140, 321)).code).toBe(1);
 });
 
 test("a release folder without the Mac app or its dmg fails instead of passing empty", () => {

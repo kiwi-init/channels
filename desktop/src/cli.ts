@@ -7,6 +7,8 @@ import { execFile } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { pipeline } from "node:stream/promises";
+import zlib from "node:zlib";
 import { ensureOnPath as ensureShellPath } from "@kiwi/core/node/shell-path.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
 
@@ -31,13 +33,18 @@ export async function keepCli(bundled: string, bundledVersion: string): Promise<
   const dest = cliPath();
   const was = fs.existsSync(dest) ? await versionOf(dest) : null;
   if (was && compareVersions(was, bundledVersion) >= 0) return { path: dest, version: was, updated: false };
-  await fs.promises.mkdir(path.dirname(dest), { recursive: true });
-  const tmp = `${dest}.new-${process.pid}`;
-  await fs.promises.copyFile(bundled, tmp);
-  if (process.platform !== "win32") await fs.promises.chmod(tmp, 0o755);
-  await fs.promises.rename(tmp, dest);
+  await place(bundled, dest);
   void tidy(dest);
   return { path: dest, version: bundledVersion, updated: true };
+}
+
+export async function place(bundled: string, dest: string): Promise<void> {
+  await fs.promises.mkdir(path.dirname(dest), { recursive: true });
+  const tmp = `${dest}.new-${process.pid}`;
+  if (bundled.endsWith(".zst")) await pipeline(fs.createReadStream(bundled), zlib.createZstdDecompress(), fs.createWriteStream(tmp));
+  else await fs.promises.copyFile(bundled, tmp);
+  if (process.platform !== "win32") await fs.promises.chmod(tmp, 0o755);
+  await fs.promises.rename(tmp, dest);
 }
 
 function tidy(bin: string): Promise<void> {

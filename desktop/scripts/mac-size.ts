@@ -3,8 +3,8 @@ import { join, resolve } from "node:path";
 
 const MB = 1024 ** 2;
 const LIMITS = {
-  packed: { gate: 160 * MB, budget: 150 * MB },
-  app: { gate: 400 * MB, budget: 320 * MB },
+  packed: { gate: 150 * MB, budget: 150 * MB },
+  app: { gate: 320 * MB, budget: 320 * MB },
 };
 
 const dir = resolve(process.argv[2] ?? "desktop/release");

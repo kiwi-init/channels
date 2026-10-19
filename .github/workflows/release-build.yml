@@ -143,9 +143,10 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           REHEARSAL: ${{ inputs.rehearsal }}
         run: |
-          # The app bundles the kiwi binary through extraResources (`../dist/kiwi`);
-          # build it for the platform (and architecture) being packaged.
+          # The app bundles the kiwi binary, zstd-packed, through extraResources (`../dist/kiwi.zst`);
+          # build it for the platform (and architecture) being packaged, sign it, then pack it.
           cli() { bun ../scripts/build-cli.ts --target "$1" --outfile ../dist/kiwi; }
+          pack() { bun scripts/pack-cli.ts ../dist/kiwi; }
           mkdir -p ../dist
           bun run build
           sign=()
@@ -191,11 +192,11 @@ jobs:
           fi
           case "${{ runner.os }}" in
             macOS)
-              cli bun-darwin-arm64 && codesign --force --sign - ../dist/kiwi && bunx electron-builder --mac --arm64 --publish never "${sign[@]}"
-              cli bun-darwin-x64 && codesign --force --sign - ../dist/kiwi && bunx electron-builder --mac --x64 --publish never "${sign[@]}"
+              cli bun-darwin-arm64 && codesign --force --sign - ../dist/kiwi && pack && bunx electron-builder --mac --arm64 --publish never "${sign[@]}"
+              cli bun-darwin-x64 && codesign --force --sign - ../dist/kiwi && pack && bunx electron-builder --mac --x64 --publish never "${sign[@]}"
               ;;
             *)
-              cli bun-linux-x64 && bunx electron-builder --linux --publish never
+              cli bun-linux-x64 && pack && bunx electron-builder --linux --publish never
               ;;
           esac
           # Signed: prove it before anything ships. A valid Developer ID signature on every file, the
