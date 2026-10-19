@@ -42,6 +42,7 @@ export function activityEnv(record: SeatRecord, base: Env): Env | null {
     case "cursor":
     case "kimi":
     case "mimo":
+    case "pi":
     case undefined:
       return null;
   }

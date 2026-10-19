@@ -7,7 +7,7 @@ import { GENERAL_ROOM, ignored, imageMarker } from "./protocol.ts";
 import type { Card, GithubNote, Message, OldTaskState, Reach, TaskState, Trust } from "./protocol.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
 import { colorOf, humanOf, isPerson, issueOf, outsideRepos, taskId, type ChannelState, type Fact, type Lease, type ReviewRound, type Task } from "./state.ts";
-import { isWakeVia, wakeWords, type WakeVia } from "./wake.ts";
+import { isWakeVia, wakesInSession, wakeWords, type WakeVia } from "./wake.ts";
 
 export function ago(ts: number, now = Date.now()): string {
   const s = Math.max(0, Math.round((now - ts) / 1000));
@@ -278,7 +278,7 @@ export function formatFact(f: Fact, now = Date.now()): string {
 }
 
 export function presenceAnswers(on: { client: string; reach?: Reach; wake?: string }): boolean {
-  return on.client !== "daemon" || on.reach !== "unreachable" || (isWakeVia(on.wake) && on.wake !== "hooks");
+  return on.client !== "daemon" || on.reach !== "unreachable" || (isWakeVia(on.wake) && !wakesInSession(on.wake));
 }
 
 export function presenceWords(on: { client: string; reach?: Reach; readAt?: number; wake?: string }, now = Date.now()): string {

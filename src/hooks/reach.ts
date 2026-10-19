@@ -2,6 +2,7 @@ import { COMMANDS } from "../brief.ts";
 import { here, type Here } from "../seats.ts";
 import { wakePath, wakeWords } from "@kiwi/core/wake.ts";
 import { hooksListen } from "./install/claude.ts";
+import { piInstalled } from "./install/pi.ts";
 
 function checkEachTurn(mc: string): string {
   return `Run \`${COMMANDS.unread(mc)}\` at the start of every turn and again before you end one. It prints the messages waiting for you, or nothing.`;
@@ -33,10 +34,12 @@ export function wakeYourself(mc: string, harness: Here["harness"]): string | nul
 
 export function howMessagesReachYou(mc: string, waking: boolean, who: Here = here()): string {
   if (!waking) return `Kiwi won't wake you: waking is off for you here (\`kiwi wake on\` turns it back on). ${checkEachTurn(mc)}`;
-  const path = wakePath(who.harness ? { harness: who.harness, ...(who.session ? { session: who.session } : {}) } : null, hooksListen());
+  const path = wakePath(who.harness ? { harness: who.harness, ...(who.session ? { session: who.session } : {}) } : null, hooksListen(), piInstalled());
   switch (path.kind) {
     case "hooks":
       return "Messages for you arrive on their own: Kiwi's hooks wake you when one comes. Don't run listen.";
+    case "extension":
+      return "Messages for you arrive on their own: Kiwi's Pi extension wakes you when one comes. Don't run listen.";
     case "command":
       return `Kiwi wakes you in this session when a message for you arrives (${wakeWords(path.via)}). Don't run listen.`;
     case "none":

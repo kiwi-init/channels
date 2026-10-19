@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, type Config } from "../config.ts";
 import { listenHooksInstalled } from "../hooks/install/claude.ts";
+import { piInstalled } from "../hooks/install/pi.ts";
 import { wakeArgv, wakePath, wakePrompt, type WakePath } from "@kiwi/core/wake.ts";
 import { withDeadline, type DaemonWake } from "./protocol.ts";
 import { seatRecordFor, wakeOn } from "./reach.ts";
@@ -29,7 +30,7 @@ function oneLine(text: string): string {
 const UNREAD_CHECK_MS = 30_000;
 
 export const pathOf = async (cfg: Config, alias: string, agent: string): Promise<WakePath> => {
-  return wakePath(seatRecordFor(cfg, alias, agent), listenHooksInstalled());
+  return wakePath(seatRecordFor(cfg, alias, agent), listenHooksInstalled(), piInstalled());
 };
 
 interface WakeContext {

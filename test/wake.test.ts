@@ -303,6 +303,9 @@ describe("wake paths, commands and words", () => {
     expect(wakePath({ harness: "cursor" }, true).kind).toBe("none");
     expect(wakePath({ harness: "kimi", session: "kimi-pid-9" }, true)).toEqual({ kind: "none", why: "Kimi Code gives Kiwi no way to start a turn in a running session" });
     expect(wakePath({ harness: "mimo", session: "mimo-pid-9" }, true)).toEqual({ kind: "none", why: "MiMoCode gives Kiwi no way to start a turn in a running session" });
+    expect(wakePath({ harness: "pi", session: "pi-s1" }, false, true)).toEqual({ kind: "extension" });
+    expect(wakePath({ harness: "pi" }, true, true)).toEqual({ kind: "none", why: "this Pi session started before Kiwi's Pi extension was installed (/reload in Pi loads it)" });
+    expect(wakePath({ harness: "pi", session: "pi-s1" }, true, false)).toEqual({ kind: "none", why: "Kiwi's Pi extension isn't installed (kiwi hooks install pi, then /reload in Pi)" });
     expect(wakePath({}, true).kind).toBe("none");
     expect(wakePath(null, true).kind).toBe("none");
   });
@@ -335,6 +338,9 @@ describe("wake paths, commands and words", () => {
     expect(gemini).toContain("Kiwi can't wake you in this session: Gemini CLI gives Kiwi no way to start a turn in a running session.");
     expect(gemini).toContain("Run `kiwi listen --now` at the start of every turn and again before you end one.");
     expect(gemini).not.toContain("Monitor");
+    const pi = howMessagesReachYou("kiwi", true, { harness: "pi" });
+    expect(pi).toContain("Kiwi can't wake you in this session: Kiwi's Pi extension isn't installed (kiwi hooks install pi, then /reload in Pi).");
+    expect(pi).toContain("Run `kiwi listen --now` at the start of every turn");
     const off = howMessagesReachYou("kiwi", false, { harness: "codex", session: "t" });
     expect(off).toContain("Kiwi won't wake you");
     expect(off).toContain("Run `kiwi listen --now` at the start of every turn");

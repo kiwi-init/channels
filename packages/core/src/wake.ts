@@ -1,12 +1,12 @@
-export type WakeHarness = "claude" | "codex" | "gemini" | "cursor" | "grok" | "opencode" | "kimi" | "mimo";
+export type WakeHarness = "claude" | "codex" | "gemini" | "cursor" | "grok" | "opencode" | "kimi" | "mimo" | "pi";
 
 export type WakeCommand = "codex-queue" | "opencode-api";
 
-export type WakePath = { kind: "hooks" } | { kind: "command"; via: WakeCommand; session: string } | { kind: "none"; why: string };
+export type WakePath = { kind: "hooks" } | { kind: "extension" } | { kind: "command"; via: WakeCommand; session: string } | { kind: "none"; why: string };
 
-export type WakeVia = "hooks" | "listener" | WakeCommand;
+export type WakeVia = "hooks" | "pi-extension" | "listener" | WakeCommand;
 
-const WAKE_VIA: readonly WakeVia[] = ["hooks", "listener", "codex-queue", "opencode-api"];
+const WAKE_VIA: readonly WakeVia[] = ["hooks", "pi-extension", "listener", "codex-queue", "opencode-api"];
 
 export function isWakeVia(v: unknown): v is WakeVia {
   return typeof v === "string" && (WAKE_VIA as readonly string[]).includes(v);
@@ -16,6 +16,8 @@ export function wakeWords(via: WakeVia): string {
   switch (via) {
     case "hooks":
       return "Claude Code's hooks";
+    case "pi-extension":
+      return "Kiwi's Pi extension";
     case "listener":
       return "its background listener";
     case "codex-queue":
@@ -23,6 +25,10 @@ export function wakeWords(via: WakeVia): string {
     case "opencode-api":
       return "OpenCode's service";
   }
+}
+
+export function wakesInSession(via: string | undefined): boolean {
+  return via === "hooks" || via === "pi-extension";
 }
 
 export function pullsWake(harness: WakeHarness | undefined): boolean {
@@ -33,6 +39,8 @@ export function viaOf(path: WakePath): WakeVia | null {
   switch (path.kind) {
     case "hooks":
       return "hooks";
+    case "extension":
+      return "pi-extension";
     case "command":
       return path.via;
     case "none":
@@ -40,7 +48,7 @@ export function viaOf(path: WakePath): WakeVia | null {
   }
 }
 
-export function wakePath(record: { harness?: WakeHarness; session?: string } | null, claudeHooks: boolean): WakePath {
+export function wakePath(record: { harness?: WakeHarness; session?: string } | null, claudeHooks: boolean, piExtension = false): WakePath {
   if (!record) return { kind: "none", why: "no session of a harness Kiwi knows has used this seat yet" };
   switch (record.harness) {
     case "claude":
@@ -59,6 +67,9 @@ export function wakePath(record: { harness?: WakeHarness; session?: string } | n
       return { kind: "none", why: "Kimi Code gives Kiwi no way to start a turn in a running session" };
     case "mimo":
       return { kind: "none", why: "MiMoCode gives Kiwi no way to start a turn in a running session" };
+    case "pi":
+      if (!piExtension) return { kind: "none", why: "Kiwi's Pi extension isn't installed (kiwi hooks install pi, then /reload in Pi)" };
+      return record.session ? { kind: "extension" } : { kind: "none", why: "this Pi session started before Kiwi's Pi extension was installed (/reload in Pi loads it)" };
     case undefined:
       return { kind: "none", why: "Kiwi doesn't recognise this agent's harness" };
   }

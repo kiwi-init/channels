@@ -6,7 +6,7 @@
 import { execFileSync } from "node:child_process";
 import { cpus, totalmem } from "node:os";
 
-import { kimiCodePid, mimoHere, type ProcessTree } from "./ancestry.ts";
+import { kimiCodePid, mimoHere, piHere, type ProcessTree } from "./ancestry.ts";
 import { harnessModel } from "./harness.ts";
 import type { Runs } from "@kiwi/core/membership.ts";
 import type { Card } from "@kiwi/core/protocol.ts";
@@ -51,6 +51,7 @@ export function mergeCard(detected: Card, was: Card | undefined, given: { model?
 
 /** The harness running this process, from the markers each one sets for its shell commands. */
 export function detectHarness(env: Record<string, string | undefined> = process.env, tree: ProcessTree = {}): string | undefined {
+  if (piHere(env, tree)) return "pi";
   if (mimoHere(env, tree)) return "mimocode";
   if (kimiCodePid(env, tree)) return "kimi-code";
   if (env.GROK_SESSION_ID) return "grok";

@@ -92,6 +92,16 @@ jobs:
       Also test/daemon-lock.test.ts: one daemon per KIWI_HOME (src/daemon/lock.ts): daemons started
       at once leave one, a daemon too busy to answer isn't replaced, and a daemon whose lock and
       socket another took exits without deleting that socket.
+      Also Pi as a known harness: test/hooks-pi.test.ts: Kiwi's Pi extension
+      (src/hooks/install/pi.ts) written to Pi's extensions folder on join or kiwi hooks install
+      pi, counted as installed only while it is current and runs this kiwi's hooks, removed on
+      uninstall without touching a kiwi.ts that isn't Kiwi's, and, loaded with a fake Pi API and
+      fake hooks, exporting KIWI_PI_PID and KIWI_PI_SESSION, briefing a new session, adding unread
+      messages to a prompt, handing them to a turn that would end, starting a turn when its
+      listener wakes, and stopping its listener's process group on shutdown, the file itself passing tsc --strict; Pi's seat and card
+      from PI_CODING_AGENT and the extension's process (test/seats.test.ts, test/routing.test.ts),
+      its model from its session file (test/harness-model.test.ts), its wake path and words
+      (test/wake.test.ts, test/daemon-seats.test.ts) and its name and logo (web lib/harness.test.ts).
       Also test/daemon-versions.test.ts: compareVersions (packages/core/src/versions.ts, shared by
       the CLI, the desktop updater and the changelog) orders releases and pre-releases, an older
       kiwi keeps a newer daemon running, and a newer one replaces an older daemon (src/daemon/rpc.ts).
