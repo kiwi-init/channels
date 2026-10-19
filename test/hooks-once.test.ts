@@ -106,3 +106,14 @@ test("a prompt hook whose output never reaches the session leaves the message un
   await cut.exited;
   expect(await ok(agent, ["hook", "prompt"], S, INPUT)).toContain("never printed");
 });
+
+test("a hand-over cut at its size limit leaves the rest unread, and the next hook brings it", async () => {
+  for (let i = 0; i < 10; i++) await ok(owner, ["send", "--to", me, `long ${i} ${"z".repeat(1_000)}`]);
+  const first = await ok(agent, ["hook", "prompt"], S, INPUT);
+  expect(first).toContain("long 0 ");
+  expect(first).not.toContain("long 9 ");
+  expect(first).toMatch(/… \d+ more unread/);
+  const second = await ok(agent, ["hook", "prompt"], S, INPUT);
+  expect(second).toContain("long 9 ");
+  expect(second).not.toContain("long 0 ");
+});

@@ -198,14 +198,17 @@ export class SessionState {
     const cursor = yield* Cursor;
     const seen = yield* cursor.seen(this.alias, this.me);
     const unread = messages.filter((m) => m.seq > since && !seen.has(m.seq) && this.wants(m, state, d));
-    const last = unread.at(-1)?.seq;
-    const commit: Effect.Effect<void, never, Relay> = Effect.andThen(cursor.write(this.alias, this.me, Math.max(since, state.head)), last === undefined ? Effect.void : this.markRead(last));
+    const commit = (shownTo?: number): Effect.Effect<void, never, Relay> => {
+      const last = (shownTo === undefined ? unread : unread.filter((m) => m.seq <= shownTo)).at(-1)?.seq;
+      const upTo = shownTo === undefined ? Math.max(since, state.head) : Math.max(since, shownTo);
+      return Effect.andThen(cursor.write(this.alias, this.me, upTo), last === undefined ? Effect.void : this.markRead(last));
+    };
     return { messages: unread, state, commit };
   });
 
   readonly read = Effect.fn("AgentSession.read")({ self: this }, function* (this: SessionState, d: Delivery = {}) {
     const { messages, state, commit } = yield* this.unread(d);
-    yield* commit;
+    yield* commit();
     return { messages, state };
   });
 
