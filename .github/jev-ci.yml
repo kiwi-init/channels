@@ -91,6 +91,9 @@ jobs:
       ping in 5s, and web lib/wake.test.ts: coming back online or to a visible page nudges.
       Also test/web-core-barrel.test.ts: web/src takes values from @kiwi/core's client submodules
       (errors, relay, info), never the client.ts barrel, which pulls the whole Channel into the first load.
+      Also test/unread-live.test.ts: a stored message this build can't read arrives as Unread with
+      its seq, and web lib/history.test.ts: its sealed row keeps the cache whole (no hole, no reload)
+      and opens as the message once a newer build can read it.
       Also test/desktop-keys.test.ts: the desktop key process (desktop/src/keyring.ts and keys-server.ts,
       over the wire web/src/lib/channel-remote.ts uses) against a local relay, failing if any member,
       owner, person or channel key reaches the window, plus the seat rules, the wire codec, the
