@@ -21,8 +21,11 @@ export interface Served {
   cfg: ChannelConfig;
 }
 
-function listenHead(alias: string, mc: string): string {
-  return `New Kiwi Channels messages for you (${alias}). Handle them; answer with \`${mc} reply N "…"\`:`;
+export function listenHead(alias: string, mc: string, share: number): string {
+  const full = `New Kiwi Channels messages for you (${alias}). Handle them; answer with \`${mc} reply N "…"\`:`;
+  if (full.length + 2 <= share) return full;
+  const short = `New Kiwi Channels messages (${alias}):`;
+  return short.length + 2 <= share ? short : short.slice(0, Math.max(0, share - 2));
 }
 
 interface Heard {
@@ -141,7 +144,7 @@ export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Serv
   const share = seatBudget(withNews.length);
   const told = withNews.map((a) => {
     const mc = mcFor(a.b.alias, a.b.as, process.cwd(), who);
-    const head = listenHead(a.b.alias, mc);
+    const head = listenHead(a.b.alias, mc, share);
     const hand = handOver(
       a.got.map((g) => ({ line: g.text, seq: g.seq ?? 0, head: g.head })),
       Math.max(0, share - head.length - 2),

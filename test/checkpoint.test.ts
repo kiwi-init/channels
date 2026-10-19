@@ -10,6 +10,7 @@ import { CHECKPOINT_MAX_LENGTH, wellFormedEvent, type Event, type Message } from
 import { REENTRY_MAX, reentryText } from "@kiwi/core/reentry.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 import { CLIP_MIN, cursorFollow, fitReminder, handOver, seatBudget, startBudgets, startContext, stopReason, stopUnreadMax } from "../src/hooks/answer.ts";
+import { listenHead } from "../src/hooks/listen.ts";
 import { startListener, wakeYourself } from "../src/hooks/reach.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { joinAgent, pairComputer, setupChannel } from "./owner.ts";
@@ -235,15 +236,31 @@ describe("what a hook emits stays inside the seat's share", () => {
       full: `Before you end this turn: no Kiwi listener of yours is running for inquizit-workflow, so nothing would wake you when a message for you arrives.\n${wakeYourself(mc, "cursor")!}`,
       short: `Before you end this turn: no Kiwi listener of yours is running for inquizit-workflow. ${start}`,
     };
+    const longMc = `kiwi -c ${"c".repeat(50)} --as ${"a".repeat(55)}`;
+    const hugeMc = `kiwi -c ${"c".repeat(140)} --as ${"a".repeat(145)}`;
+    for (const cmd of [mc, longMc, hugeMc])
+      for (let seats = 1; seats <= 50; seats++) {
+        const budget = seatBudget(seats);
+        for (const reminder of [r, null]) for (const unread of [true, false]) expect(cursorFollow(cmd, unread, reminder, budget).length).toBeLessThanOrEqual(budget);
+      }
+    const tight = seatBudget(50);
+    expect(cursorFollow(longMc, true, null, seatBudget(1))).toContain(`Run \`${longMc} read\`, answer with`);
+    expect(cursorFollow(longMc, true, null, tight)).toBe(`Unread Kiwi messages: \`${longMc} read\`.`);
+    expect(cursorFollow(hugeMc, true, null, tight)).toBe("");
+    expect(cursorFollow(hugeMc, true, r, tight).length).toBeLessThanOrEqual(tight);
+  });
+
+  test("a listener's block header fits its seat's share: the full one when it fits, else a short one, else cut", () => {
+    const alias = "long-running-session-checkpoint-49";
+    const longMc = `kiwi -c ${alias} --as a-handle-that-is-long-on-purpose`;
     for (let seats = 1; seats <= 50; seats++) {
-      const budget = seatBudget(seats);
-      for (const reminder of [r, null])
-        for (const unread of [true, false]) {
-          const follow = cursorFollow(mc, unread, reminder, budget);
-          expect(follow.length).toBeLessThanOrEqual(budget);
-          if (unread && budget >= 200) expect(follow).toContain(`\`${mc} read\``);
-        }
+      const share = seatBudget(seats);
+      const head = listenHead(alias, longMc, share);
+      expect(head.length + 2).toBeLessThanOrEqual(share);
+      if (seats === 1) expect(head).toContain(`answer with \`${longMc} reply N`);
     }
+    expect(listenHead(alias, longMc, seatBudget(50))).toBe(`New Kiwi Channels messages (${alias}):`);
+    expect(listenHead(alias, longMc, 20)).toHaveLength(18);
   });
 
   test("a stop reason, reminder included, never passes the share, from one seat to fifty", () => {
