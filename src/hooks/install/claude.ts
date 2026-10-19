@@ -55,7 +55,14 @@ export function uninstallHooks(): string {
 }
 
 function hasHook(s: Settings, event: string, arg: string): boolean {
-  return !!s.hooks?.[event]?.some((x) => x.hooks.some((h) => isOurHook(h.command, arg) && (arg !== LISTEN || h.asyncRewake === true)));
+  return !!s.hooks?.[event]?.some((x) => x.hooks.some((h) => isOurHook(h.command, arg) && (arg !== LISTEN || (h.asyncRewake === true && (h.timeout ?? 0) > LISTEN_SECONDS))));
+}
+
+export function installedListenSeconds(): number | null {
+  const timeouts = Object.keys(EVENTS).flatMap((event) =>
+    (readSettings().hooks?.[event] ?? []).flatMap((x) => x.hooks.filter((h) => isOurHook(h.command, LISTEN) && typeof h.timeout === "number").map((h) => h.timeout as number)),
+  );
+  return timeouts.length ? Math.min(...timeouts) : null;
 }
 
 export function hooksInstalled(): boolean {
