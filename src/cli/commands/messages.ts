@@ -25,7 +25,7 @@ import {
 import { chooseThread, parseTaskId, wentTo } from "@kiwi/core/state.ts";
 import { args, opt } from "../args.ts";
 import { parseWhere } from "../where.ts";
-import { type Command, die, noteRead, out, session } from "../context.ts";
+import { type Command, die, noteRead, offlineOk, out, session } from "../context.ts";
 import { images, list, render, text } from "../input.ts";
 
 export const messageCommands: Record<string, Command> = {
@@ -159,27 +159,29 @@ export const messageCommands: Record<string, Command> = {
     }),
 
   log: () =>
-    Effect.gen(function* () {
-      const s = yield* session();
-      const { messages: held, state } = yield* s.state();
-      const room = opt.room === undefined ? undefined : yield* s.roomId(opt.room, state);
-      const task = opt.task === undefined ? undefined : (parseTaskId(opt.task) ?? (yield* die(`no task ${opt.task}`)));
-      if (task !== undefined && !state.tasks.has(task)) return yield* die(`no task T${task}`);
-      const inTask = (m: Message) => {
-        const place = state.placeOf.get(m.seq);
-        return (place?.kind === "task" && place.task === task) || m.seq === task || (!!m.ev && "task" in m.ev && m.ev.task === task);
-      };
-      const since = opt.all || task !== undefined || room !== undefined ? 0 : (state.compact?.through ?? 0);
-      if (since) out(`(history compacted through #${since}: kiwi compact shows the summary, kiwi log --all everything)`);
-      const visible = (m: Message) =>
-        m.seq > since &&
-        (opt.all || !isQuiet(m)) &&
-        !ignored(state.trust.get(m.seq)) &&
-        (room === undefined || (m.kind !== "event" && state.roomOf.get(m.seq) === room)) &&
-        (task === undefined || inTask(m));
-      const shown = (yield* s.earlier(held, Number(opt.n ?? 30), visible)).filter(visible);
-      for (const m of shown.slice(-Number(opt.n ?? 30))) out(render(m, state));
-    }),
+    offlineOk(
+      Effect.gen(function* () {
+        const s = yield* session();
+        const { messages: held, state } = yield* s.state();
+        const room = opt.room === undefined ? undefined : yield* s.roomId(opt.room, state);
+        const task = opt.task === undefined ? undefined : (parseTaskId(opt.task) ?? (yield* die(`no task ${opt.task}`)));
+        if (task !== undefined && !state.tasks.has(task)) return yield* die(`no task T${task}`);
+        const inTask = (m: Message) => {
+          const place = state.placeOf.get(m.seq);
+          return (place?.kind === "task" && place.task === task) || m.seq === task || (!!m.ev && "task" in m.ev && m.ev.task === task);
+        };
+        const since = opt.all || task !== undefined || room !== undefined ? 0 : (state.compact?.through ?? 0);
+        if (since) out(`(history compacted through #${since}: kiwi compact shows the summary, kiwi log --all everything)`);
+        const visible = (m: Message) =>
+          m.seq > since &&
+          (opt.all || !isQuiet(m)) &&
+          !ignored(state.trust.get(m.seq)) &&
+          (room === undefined || (m.kind !== "event" && state.roomOf.get(m.seq) === room)) &&
+          (task === undefined || inTask(m));
+        const shown = (yield* s.earlier(held, Number(opt.n ?? 30), visible)).filter(visible);
+        for (const m of shown.slice(-Number(opt.n ?? 30))) out(render(m, state));
+      }),
+    ),
 
   thread: () =>
     Effect.gen(function* () {
