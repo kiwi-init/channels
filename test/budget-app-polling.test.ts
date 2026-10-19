@@ -34,6 +34,7 @@ function keyring(person: Identity | null): Keyring {
     access: async (code, pk, access) => void (seats = withAccess(seats, code, pk, access)),
     forget: async (code) => void (seats = seats.filter((c) => c.code !== code)),
     prove: async (code, memberPk) => (person ? provePerson(person, decodeJoinCode(code).roomId, memberPk) : null),
+    githubToken: async () => null,
     person: () => person?.pk ?? null,
     budget: memoryBudget(),
   };

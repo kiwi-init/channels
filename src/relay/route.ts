@@ -405,8 +405,25 @@ const routes: RoomRoute[] = [
     run: () =>
       Effect.gen(function* () {
         const db = yield* RoomStore;
-        const repos = githubRepos((yield* json<{ repos?: unknown }>()).repos);
+        const body = yield* json<{ repos?: unknown; token?: unknown }>();
+        const repos = githubRepos(body.repos);
         if (!repos) return yield* new BadRequest({ message: "repos: up to 20 owner/name" });
+        const app = yield* GithubApp;
+        if (app && repos.length) {
+          if (typeof body.token !== "string" || !body.token || body.token.length > 512) return yield* new Forbidden({ message: "link GitHub in Settings to connect a repo" });
+          const userToken = body.token;
+          const pushable = yield* Effect.forEach(
+            repos,
+            (r) =>
+              Effect.flatMap(
+                Effect.promise(() => app.canPush(r, userToken)),
+                replied,
+              ),
+            { concurrency: "unbounded" },
+          );
+          const denied = repos.filter((_, i) => !pushable[i]);
+          if (denied.length) return yield* new Forbidden({ message: `your linked GitHub account can't push to ${denied.join(", ")}` });
+        }
         const links = githubLinks(db.roomId, db.githubRepos(), repos);
         db.setGithubRepos(repos);
         return { data: { repos }, fx: { github: links } };

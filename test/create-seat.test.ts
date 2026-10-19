@@ -37,6 +37,7 @@ function memHost(opts: { relay?: () => string; failSaveWithAccess?: boolean } = 
     access: async (code, pk, access) => void (store.seats = withAccess(store.seats, code, pk, access)),
     forget: async (code) => void (store.seats = store.seats.filter((c) => c.code !== code)),
     prove: async () => null,
+    githubToken: async () => null,
     person: () => null,
     budget: memoryBudget(),
   };
@@ -80,4 +81,16 @@ test("a create that never reached the relay is forgotten on the next start, once
   store.seats = offline.store.seats;
   await new Keyring(host).finishCreating();
   expect(store.seats).toEqual([]);
+});
+
+test("the owner's GitHub token goes to the relay only to connect repos, never to clear them", async () => {
+  const { host } = memHost();
+  let asked = 0;
+  const keyring = new Keyring({ ...host, githubToken: async () => (asked++, null) });
+  const { code } = await keyring.create("plans", null, null);
+  if (!code) throw new Error("the channel was made without a join code");
+  await keyring.call(code, "setGithubRepos", []);
+  expect(asked).toBe(0);
+  await keyring.call(code, "setGithubRepos", ["kiwi/plans"]);
+  expect(asked).toBe(1);
 });

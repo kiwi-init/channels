@@ -67,6 +67,15 @@ const REPOS_URL = "https://api.github.com/user/repos";
 const REPO_PAGES = 5;
 
 /** The repos the linked account can reach through the App, most recently pushed first: at most 500. */
+export async function tokenForRelay(relay: string, token: string | null, f: typeof fetch = fetch): Promise<string | null> {
+  if (!token) return null;
+  const config = await f(new URL("/v1/config", relay)).then(
+    (res) => (res.ok ? (res.json() as Promise<{ githubClientId?: unknown }>) : null),
+    () => null,
+  );
+  return typeof config?.githubClientId === "string" && config.githubClientId ? token : null;
+}
+
 export async function listRepos(token: string, f: typeof fetch = fetch): Promise<GithubRepoView[]> {
   const out: GithubRepoView[] = [];
   for (let page = 1; page <= REPO_PAGES; page++) {

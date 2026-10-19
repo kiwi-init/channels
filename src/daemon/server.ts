@@ -10,6 +10,7 @@ import { pullsWake, viaOf } from "@kiwi/core/wake.ts";
 import { ensureMachine, loadPairedMachine, PairError, type PairedMachine, type PairedPerson } from "./pair.ts";
 import { DAEMON_PROTOCOL, daemonSock, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
 import { activityEnv, reachOf, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
+import { pruneHookFiles } from "../hooks/delivered.ts";
 import { beatLock, dropLock, lockPath, ownsLock, takeLock } from "./lock.ts";
 import { stopDaemon, tryHello } from "./rpc.ts";
 import { readKey, type ConnState, type Seat, type Sub, type Waiting } from "./seat.ts";
@@ -21,6 +22,8 @@ const PEEK_PROBE_MS = 250;
 const MAX_QUEUED_BYTES = 64 * 1024 * 1024;
 const lineEncoder = new TextEncoder();
 const TICK_MS = 5_000;
+const PRUNE_EVERY_MS = 24 * 3600_000;
+const HOOK_FILES_KEEP_MS = 7 * 24 * 3600_000;
 const ORPHAN_MS = 10 * 60_000;
 const RETRY_FIRST_MS = 5_000;
 const RETRY_MAX_MS = 30 * 60_000;
@@ -308,6 +311,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     seat.mark = mark;
     seat.probe = probe;
     seat.rows = null;
+    seat.openedAt = Date.now();
     seat.announce = () => void presence(fieldsOf(seat)).catch(() => {});
     void refreshActivity(seat, true).catch(() => seat.announce?.());
     stopBeacon(seat);
@@ -382,6 +386,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         probe: null,
         rows: null,
         fetchingRows: false,
+        heard: new Map(),
+        openedAt: null,
       };
       seats.set(key, seat);
       if (stopped) {
@@ -403,6 +409,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           signal: seat.ctl.signal,
           onOpen: ({ presence, mark, probe }) => opened(seat, presence, mark, probe),
           onPresence: (p) => {
+            if (!p.query && p.client !== "probe" && p.from !== seat.agent) seat.heard.set(p.from, { presence: p, at: Date.now() });
             if (!p.query || Date.now() - seat.lastProbe < PROBE_ANSWER_GAP_MS) return;
             seat.lastProbe = Date.now();
             seat.announce?.();
@@ -592,6 +599,12 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         case "peek":
           await onPeek(conn, id, params);
           break;
+        case "presence": {
+          const seat = [...seats.values()].find((s) => s.alias === params.channel && s.agent === params.as);
+          const since = seat?.probe ? seat.openedAt : null;
+          sendLine(conn, JSON.stringify(seat && since !== null ? { id, ok: true, live: true, since, beaconMs, presence: [...seat.heard.values()] } : { id, ok: true, live: false }));
+          break;
+        }
         case "listening":
           sendLine(
             conn,
@@ -622,7 +635,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           setTimeout(() => void stop(), 50);
           break;
         default:
-          throw new Error(`unknown verb "${verb}" (hello, adopt, listen, listening, hold, listeners, read, mark, stop)`);
+          throw new Error(`unknown verb "${verb}" (hello, adopt, listen, listening, hold, listeners, read, mark, peek, presence, stop)`);
       }
     } catch (err) {
       sendLine(conn, JSON.stringify({ id, ok: false, error: err instanceof Error ? err.message : String(err) }));
@@ -677,7 +690,15 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     if (!relays.length || !relays.every(onLoopback)) return false;
     return (await Promise.all(relays.map(answers))).every((up) => !up);
   };
+  let prunedAt = 0;
+  const pruneNow = (): void => {
+    if (Date.now() - prunedAt < PRUNE_EVERY_MS) return;
+    prunedAt = Date.now();
+    pruneHookFiles(dir, HOOK_FILES_KEEP_MS);
+  };
+  pruneNow();
   const tick = setInterval(() => {
+    pruneNow();
     if (!existsSync(dir) || !beatLock(lock)) return void stop();
     void syncSeats();
     void orphaned().then((dead) => {

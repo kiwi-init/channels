@@ -35,6 +35,7 @@ export interface KeyHost {
   access(code: string, pk: string, access: ChannelAccess): Promise<void>;
   forget(code: string): Promise<void>;
   prove(code: string, memberPk: string): Promise<PersonClaim | null>;
+  githubToken(): Promise<string | null>;
   person(): string | null;
   budget: SigningBudget;
 }
@@ -155,6 +156,8 @@ export class Keyring implements ChannelOps {
       }
       case "reconcilePosting":
         return [args[0]];
+      case "setGithubRepos":
+        return [args[0], Array.isArray(args[0]) && args[0].length ? await this.host.githubToken() : null];
       default:
         return [...args];
     }

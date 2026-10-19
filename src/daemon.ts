@@ -34,6 +34,7 @@ export {
   daemonListening,
   daemonMark,
   daemonPeek,
+  daemonPresence,
   daemonSeat,
   ensureDaemon,
   holdListener,

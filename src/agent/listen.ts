@@ -6,13 +6,15 @@ import * as Fiber from "effect/Fiber";
 import type * as Scoped from "effect/Scope";
 import { Channel, eachLive, QUIET_DROP_MS, reason, type ChannelGone, type Live, type Refused } from "@kiwi/core/client.ts";
 import { Cache, Cursor, Keystore } from "../config.ts";
-import { daemonSeat } from "../daemon/rpc.ts";
+import { daemonPresence, daemonSeat } from "../daemon/rpc.ts";
 import { isReach, PROTOCOL_VERSION, type Message, type Presence } from "@kiwi/core/protocol.ts";
 import { TOO_MANY_REQUESTS } from "@kiwi/core/sas.ts";
 import type { ChannelState } from "@kiwi/core/state.ts";
 import { isWakeVia, viaOf } from "@kiwi/core/wake.ts";
 import { holding, isAnswer, MARK_EVERY_MS, type Agent, type Delivery, type Hearing } from "./shared.ts";
 import { SessionState } from "./state.ts";
+
+const BEACON_SLACK_MS = 5_000;
 
 export class SessionListen extends SessionState {
   listen<R = never>(onMessage: (m: Message, state: ChannelState) => Effect.Effect<void | boolean, unknown, R>, opts: Delivery & Hearing<R>): Effect.Effect<void, Refused | ChannelGone, Agent | R> {
@@ -132,7 +134,22 @@ export class SessionListen extends SessionState {
 
   readonly who = Effect.fn("AgentSession.who")({ self: this }, function* (this: SessionListen, waitMs = 1_500) {
     const found = new Map<string, Presence>();
-    const [head, roster] = yield* Effect.all([this.ch.fx.head(), this.members()], { concurrency: "unbounded" });
+    const [cached, roster] = yield* Effect.all([Effect.promise(() => daemonPresence(this.alias, this.me)), this.members()], { concurrency: "unbounded" });
+    const signed = (p: Presence & { sigOk: boolean }) => p.client !== "probe" && p.from !== this.me && p.sigOk && roster.find((r) => r.name === p.from && r.active)?.pk === p.pk;
+    const keep = (p: Presence & { sigOk: boolean }) => {
+      const { readAt, wake, ...rest } = p;
+      found.set(p.from, {
+        ...rest,
+        ...(typeof readAt === "number" && Number.isFinite(readAt) ? { readAt } : {}),
+        ...(isWakeVia(wake) ? { wake } : {}),
+      });
+    };
+    const now = Date.now();
+    if (cached && now - cached.since >= cached.beaconMs + BEACON_SLACK_MS) {
+      for (const { presence, at } of cached.presence) if (signed(presence) && now - at <= 2 * cached.beaconMs + BEACON_SLACK_MS) keep(presence);
+      return yield* this.withMine(found);
+    }
+    const head = yield* this.ch.fx.head();
     const quiet = yield* Deferred.make<void>();
     let window: Fiber.Fiber<unknown> | null = null;
     const heard = Effect.gen(function* () {
@@ -144,33 +161,31 @@ export class SessionListen extends SessionState {
         if (ev._tag === "Open") return yield* Effect.ignoreCause(ev.presence({ client: "probe", query: true }));
         if (ev._tag !== "Presence") return;
         const p = ev.presence;
-        if (p.client === "probe" || p.from === this.me) return;
-        if (!p.sigOk || roster.find((r) => r.name === p.from && r.active)?.pk !== p.pk) return;
+        if (!signed(p)) return;
         if (!found.has(p.from)) yield* heard;
-        const { readAt, wake, ...rest } = p;
-        found.set(p.from, {
-          ...rest,
-          ...(typeof readAt === "number" && Number.isFinite(readAt) ? { readAt } : {}),
-          ...(isWakeVia(wake) ? { wake } : {}),
-        });
+        keep(p);
       });
     const probing = eachLive(this.ch.fx.live(head, { presence: true, reads: false }), handle, () => Effect.void);
-    const [mine] = yield* Effect.all(
-      [Effect.promise(() => daemonSeat(this.alias, this.me)), Effect.raceFirst(probing, Effect.raceFirst(Deferred.await(quiet), Effect.sleep(waitMs))).pipe(Effect.ignoreCause, Effect.scoped)],
-      { concurrency: "unbounded" },
-    );
-    const myWake = mine?.wake.on ? viaOf(mine.wake.path) : null;
-    if (mine)
-      found.set(this.me, {
-        v: PROTOCOL_VERSION,
-        type: "presence",
-        from: this.me,
-        client: "daemon",
-        ts: Date.now(),
-        ...(isReach(mine.reach) ? { reach: mine.reach } : {}),
-        ...(mine.read ? { readAt: mine.read.at } : {}),
-        ...(myWake ? { wake: myWake } : {}),
-      });
-    return found;
+    yield* Effect.raceFirst(probing, Effect.raceFirst(Deferred.await(quiet), Effect.sleep(waitMs))).pipe(Effect.ignoreCause, Effect.scoped);
+    return yield* this.withMine(found);
   });
+
+  private withMine(found: Map<string, Presence>) {
+    return Effect.gen({ self: this }, function* (this: SessionListen) {
+      const mine = yield* Effect.promise(() => daemonSeat(this.alias, this.me));
+      const myWake = mine?.wake.on ? viaOf(mine.wake.path) : null;
+      if (mine)
+        found.set(this.me, {
+          v: PROTOCOL_VERSION,
+          type: "presence",
+          from: this.me,
+          client: "daemon",
+          ts: Date.now(),
+          ...(isReach(mine.reach) ? { reach: mine.reach } : {}),
+          ...(mine.read ? { readAt: mine.read.at } : {}),
+          ...(myWake ? { wake: myWake } : {}),
+        });
+      return found;
+    });
+  }
 }
