@@ -236,6 +236,7 @@ jobs:
       - working-directory: desktop
         run: bun run build && bunx electron-builder --linux --dir --publish never
       - run: bun desktop/scripts/fuses.ts desktop/release/linux-unpacked/channels-desktop
+      - run: bun desktop/scripts/size.ts desktop/release/linux-unpacked/channels-desktop
       - run: command -v xvfb-run || (sudo apt-get update && sudo apt-get install -y xvfb)
       - run: xvfb-run -a bun desktop/scripts/smoke.ts desktop/release/linux-unpacked/channels-desktop
       - uses: ./.github/actions/jev-ci-pass
