@@ -34,7 +34,8 @@
     },
     "web": {
       "entry": [
-        "src/**/*.test.{ts,tsx}"
+        "src/**/*.test.{ts,tsx}",
+        "src/lib/no-elk.ts"
       ],
       "project": [
         "src/**/*.{ts,tsx,css}"
