@@ -95,7 +95,7 @@ async function seatInMimo(channel: string, session: string): Promise<{ owner: st
     process.env[k] = v;
   }
   const copy = (name: string) => {
-    const file = join(mimoDir, "plugin", `${name}.ts`);
+    const file = join(scratch(name), "kiwi.ts");
     copyFileSync(plugin, file);
     return file;
   };
