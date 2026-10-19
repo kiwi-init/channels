@@ -68,6 +68,8 @@ test("MiMoCode and Kimi Code: the harness's own process holds the seat, over the
   };
   expect(here({ MIMOCODE: "1", MIMOCODE_PID: "99", CLAUDECODE: "1" }, chain("zsh", "mimo", "claude"))).toEqual({ harness: "mimo", session: "mimo-pid-99", pid: 99 });
   expect(here({ MIMOCODE: "1" })).toEqual({ harness: "mimo" });
+  expect(here({ MIMOCODE: "1", MIMOCODE_PID: "99", MIMOCODE_SESSION_ID: "ses_root" }, chain("zsh", "mimo"))).toEqual({ harness: "mimo", session: "ses_root", pid: 99 });
+  expect(here({ MIMOCODE: "1", MIMOCODE_SESSION_ID: "ses_root" })).toEqual({ harness: "mimo", session: "ses_root" });
   expect(here({ TERM: "dumb", NO_COLOR: "1", CLAUDECODE: "1" }, chain("zsh", "kimi-code", "claude"))).toEqual({ harness: "kimi", session: "kimi-pid-99", pid: 99 });
   expect(here({ CLAUDECODE: "1" }, chain("zsh", "kimi-code"))).toEqual({ harness: "claude" });
   expect(here({ TERM: "dumb", NO_COLOR: "1" }, chain("zsh", "bash"))).toEqual({});

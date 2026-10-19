@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, type Config, type WakeHook } from "../config.ts";
 import { listenHooksInstalled } from "../hooks/install/claude.ts";
+import { mimoInstalled } from "../hooks/install/mimo.ts";
 import { piInstalled } from "../hooks/install/pi.ts";
 import { kimiServer, promptKimi } from "../kimi-server.ts";
 import { wakeArgv, wakeKey, wakePath, wakePrompt, type WakePath } from "@kiwi/core/wake.ts";
@@ -32,7 +33,10 @@ const UNREAD_CHECK_MS = 30_000;
 
 export const pathOf = async (cfg: Config, alias: string, agent: string): Promise<WakePath> => {
   const record = seatRecordFor(cfg, alias, agent);
-  return wakePath(record?.harness === "kimi" ? { ...record, served: !!kimiServer(record.pid) } : record, listenHooksInstalled(), !!cfg.wakeHooks?.[wakeKey(alias, agent)], piInstalled());
+  return wakePath(record?.harness === "kimi" ? { ...record, served: !!kimiServer(record.pid) } : record, listenHooksInstalled(), !!cfg.wakeHooks?.[wakeKey(alias, agent)], {
+    pi: piInstalled(),
+    mimo: mimoInstalled(),
+  });
 };
 
 async function postWake(hook: WakeHook, body: { channel: string; agent: string; unread: number; prompt: string }): Promise<string | null> {
