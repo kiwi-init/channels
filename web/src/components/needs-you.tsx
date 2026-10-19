@@ -315,7 +315,7 @@ function DecisionCard({ m, nameOf, onReply }: { m: Message; nameOf: (n: string) 
   const { draft, setDraft, busy, send } = useAnswer(m, nameOf, onReply, idle)
   return (
     <div className="flex flex-col py-3">
-      <ComposerQuestion m={m} more={0} nameOf={nameOf} disabled={busy} onChoose={(c) => void send(c)} onElse={() => setDraft("")} />
+      <ComposerQuestion m={m} more={0} nameOf={nameOf} disabled={busy} onChoose={(c) => void send(c)} onElse={() => setDraft((d) => d ?? "")} />
       {draft !== null && <AnswerForm draft={draft} setDraft={setDraft} busy={busy} send={send} to={nameOf(m.from)} autoFocus={choices} onEscape={() => setDraft(idle)} />}
     </div>
   )
