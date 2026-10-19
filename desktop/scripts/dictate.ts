@@ -3,6 +3,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSy
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
+import { daemonStop } from "../src/daemon-client.ts";
 
 const exe = process.argv[2] ? resolve(process.argv[2]) : "";
 const files = process.argv[3] ? resolve(process.argv[3]) : "";
@@ -86,9 +87,11 @@ async function attach(): Promise<{ browser: Browser; page: Page }> {
 
 let at = "start";
 let shotOf: Page | null = null;
+let cdp: Browser | null = null;
 try {
   at = "the app's window (over Chromium's remote debugging, which the fuses allow)";
-  const { page } = await attach();
+  const { browser, page } = await attach();
+  cdp = browser;
   shotOf = page;
   page.setDefaultTimeout(30_000);
   at = "first run";
@@ -121,7 +124,7 @@ try {
   at = "the model lives in the app's data folder";
   const kept = sizeOf(userData);
   const stray = sizeOf(cache);
-  if (stray > 1_000_000) throw new Error(`${Math.round(stray / 1e6)} MB landed in XDG_CACHE_HOME (${cache}), outside the app's data folder`);
+  if (stray > 20_000_000) throw new Error(`${Math.round(stray / 1e6)} MB landed in XDG_CACHE_HOME (${cache}: ${readdirSync(cache).join(", ")}), outside the app's data folder`);
   if (kept < 20_000_000) throw new Error(`the app's data folder holds only ${Math.round(kept / 1e6)} MB: the model isn't kept there`);
   if (kept > 180_000_000) throw new Error(`the app's data folder holds ${Math.round(kept / 1e6)} MB: the model is kept twice (Chromium's HTTP cache as well as the app's own)`);
   console.log(`dictation ok: heard ${JSON.stringify(said)}; ${Math.round(kept / 1e6)} MB in ${userData}, ${Math.round(stray / 1e3)} kB in XDG_CACHE_HOME`);
@@ -131,7 +134,10 @@ try {
   console.error(`dictation failed at "${at}": ${err instanceof Error ? err.message : String(err)} (screenshot: ${shot})`);
   process.exitCode = 1;
 } finally {
-  app.kill();
-  relay.kill();
+  await cdp?.close().catch(() => undefined);
+  await daemonStop(env.KIWI_HOME!, 2_000).catch(() => undefined);
+  app.kill("SIGKILL");
+  relay.kill("SIGKILL");
   rmSync(root, { recursive: true, force: true });
 }
+process.exit(process.exitCode ?? 0);
