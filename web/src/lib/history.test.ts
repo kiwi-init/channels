@@ -6,7 +6,7 @@ import { b64url, seal } from "@kiwi/core/crypto.ts"
 import { generateIdentity, sign } from "@kiwi/core/identity.ts"
 import { PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts"
 import { openRow, openRows, packRow, packUnread } from "@kiwi/core/cache-row.ts"
-import { forgetAllHistory, forgetHistory, readCached, rememberRow, useHistoryDb, type CachedRow, type HistoryDb } from "./history.ts"
+import { forgetAllHistory, forgetHistory, readCached, rememberRow, rememberRows, useHistoryDb, type CachedRow, type HistoryDb } from "./history.ts"
 
 const SENTINEL = "SENTINEL-plain-text-should-not-rest"
 const ROOM = "a".repeat(32)
@@ -28,6 +28,10 @@ function memoryDb(): HistoryDb {
   return {
     put: async (room, pk, row) => {
       rows.set(id(room, pk, row.seq), row)
+    },
+    putRows: async (room, pk, batch, oldest) => {
+      for (const row of batch) rows.set(id(room, pk, row.seq), row)
+      for (const row of list(room, pk)) if (row.seq < oldest) rows.delete(id(room, pk, row.seq))
     },
     rows: async (room, pk) => list(room, pk),
     trimBelow: async (room, pk, oldest) => {
@@ -160,6 +164,18 @@ test("only the newest limit messages stay, in seq order", async () => {
   const out = await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, keys), 5, 3)
   expect(out.messages.map((m) => m.seq)).toEqual([3, 4, 5])
   expect(out.since).toBe(5)
+})
+
+test("a batch of messages is one write that keeps only the newest limit", async () => {
+  const keys = { "1": key }
+  let writes = 0
+  const counted = { ...store, putRows: (...a: Parameters<HistoryDb["putRows"]>) => (writes++, store.putRows(...a)) }
+  useHistoryDb(counted)
+  await rememberRows(ROOM, PK_A, await Promise.all([1, 2, 3, 4, 5].map((seq) => packRow(key, ROOM, 1, msg(seq, `m${seq}`)))), 3)
+  await rememberRows(ROOM, PK_A, [], 3)
+  expect(writes).toBe(1)
+  const out = await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, keys), 5, 3)
+  expect(out.messages.map((m) => m.seq)).toEqual([3, 4, 5])
 })
 
 test("leave drops one member; sign-out drops every row", async () => {
