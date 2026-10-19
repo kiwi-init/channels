@@ -140,13 +140,16 @@ try {
     await page.waitForTimeout(500);
   }
   if (!HEARD.every((w) => said.includes(w))) throw new Error(`the box says ${JSON.stringify(said)}, without ${HEARD.join(" and ")}`);
-  at = "the model lives in the app's data folder";
-  const kept = sizeOf(userData);
+  at = "the model lives in the app's data folder, once";
+  const model = sizeOf(join(userData, "Service Worker", "CacheStorage"));
+  const http = sizeOf(join(userData, "Cache"));
   const stray = sizeOf(cache);
   if (stray > 20_000_000) throw new Error(`${Math.round(stray / 1e6)} MB landed in XDG_CACHE_HOME (${cache}: ${readdirSync(cache).join(", ")}), outside the app's data folder`);
-  if (kept < 20_000_000) throw new Error(`the app's data folder holds only ${Math.round(kept / 1e6)} MB: the model isn't kept there`);
-  if (kept > 180_000_000) throw new Error(`the app's data folder holds ${Math.round(kept / 1e6)} MB: the model is kept twice (${largest(userData)})`);
-  console.log(`dictation ok: heard ${JSON.stringify(said)}; ${Math.round(kept / 1e6)} MB in ${userData} (${largest(userData)}), ${Math.round(stray / 1e3)} kB in XDG_CACHE_HOME`);
+  if (model < 90_000_000 || model > 130_000_000) throw new Error(`the app's Cache Storage holds ${Math.round(model / 1e6)} MB, not one copy of the ~107 MB model (${largest(userData)})`);
+  if (http > 20_000_000) throw new Error(`Chromium's HTTP cache holds ${Math.round(http / 1e6)} MB: the model is kept twice (${largest(userData)})`);
+  console.log(
+    `dictation ok: heard ${JSON.stringify(said)}; the model ${Math.round(model / 1e6)} MB in ${join(userData, "Service Worker", "CacheStorage")}, HTTP cache ${Math.round(http / 1e6)} MB, ${Math.round(stray / 1e3)} kB in XDG_CACHE_HOME`,
+  );
 } catch (err) {
   const shot = join(tmpdir(), "kiwi-dictate-failure.png");
   await shotOf?.screenshot({ path: shot }).catch(() => undefined);
