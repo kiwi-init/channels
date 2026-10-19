@@ -95,6 +95,8 @@ jobs:
       Also test/daemon-versions.test.ts: compareVersions (packages/core/src/versions.ts, shared by
       the CLI, the desktop updater and the changelog) orders releases and pre-releases, an older
       kiwi keeps a newer daemon running, and a newer one replaces an older daemon (src/daemon/rpc.ts).
+      Also test/hooks-harness.test.ts's broken config case: with a config.json that isn't JSON,
+      every hook exits 0 and says once which file to fix (src/config/file.ts, src/cli/commands/hooks.ts).
       Also test/silent-socket.test.ts: a live socket that goes quiet after opening (no answer to
       a ping) and an upgrade nobody answers are both dropped and opened again; a nudge (the network or
       the Mac coming back) cuts a long reconnect wait short and drops a socket that doesn't answer a
