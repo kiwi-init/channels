@@ -22,7 +22,19 @@ const DIRS: Record<string, string> = {
 };
 
 // The session's id, process and version too: they decide which seat a command acts for, and whether hooks listen.
-const SESSION = ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_PID", "AI_AGENT", "CLAUDE_CODE_EXECPATH", "CODEX_THREAD_ID", "GEMINI_CLI", "CURSOR_AGENT", "GROK_SESSION_ID", "OPENCODE_SESSION_ID"];
+const SESSION = [
+  "CLAUDECODE",
+  "CLAUDE_CODE_SESSION_ID",
+  "CLAUDE_PID",
+  "AI_AGENT",
+  "CLAUDE_CODE_EXECPATH",
+  "CODEX_THREAD_ID",
+  "GEMINI_CLI",
+  "CURSOR_AGENT",
+  "CURSOR_CONVERSATION_ID",
+  "GROK_SESSION_ID",
+  "OPENCODE_SESSION_ID",
+];
 
 function isolate(): void {
   for (const key of SESSION) delete process.env[key];

@@ -26,9 +26,14 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string) {
   }
   const kimi = event === KIMI_STOP;
   const model = typeof input.model === "string" && input.model.trim() ? input.model.trim() : undefined;
-  const who: Here = kimi ? kimiHookHere() : { ...here(), ...(input.session_id ? { session: input.session_id } : {}), ...(model ? { model } : {}) };
+  const cursor = typeof input.cursor_version === "string" && typeof input.conversation_id === "string" && input.conversation_id ? input.conversation_id : null;
+  const who: Here = kimi
+    ? kimiHookHere()
+    : cursor
+      ? { harness: "cursor", session: cursor, ...(model ? { model } : {}) }
+      : { ...here(), ...(input.session_id ? { session: input.session_id } : {}), ...(model ? { model } : {}) };
   const release = event === LISTEN ? () => {} : holdAnswering(who.session);
-  const deadline = event === "session-start" || kimi ? START_MS : HOOK_MS;
+  const deadline = event === "session-start" || kimi || cursor !== null ? START_MS : HOOK_MS;
   const keys = yield* Keystore;
   const seatsServed = Effect.gen(function* () {
     yield* Effect.promise(() => refreshListeners());
