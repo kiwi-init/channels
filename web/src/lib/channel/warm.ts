@@ -7,6 +7,7 @@ import type { Marks } from "../receipts"
 
 export interface Warm {
   messages: Message[]
+  unread: number[]
   roster: Member[]
   requests: JoinRequest[]
   marks: Marks
@@ -30,10 +31,6 @@ export function dropWarm(code: string): void {
 /** Where to follow from when this session already holds the window: no cache read, no second verify. */
 export function heldWindow(w: Warm | undefined, head: number, limit: number): { since: number; firstSeq: number } | null {
   if (!w?.messages.length) return null
-  const plan = planReload(
-    w.messages.map((m) => m.seq),
-    head,
-    limit
-  )
+  const plan = planReload([...w.messages.map((m) => m.seq), ...w.unread], head, limit)
   return plan.keep.length ? { since: plan.since, firstSeq: plan.keep[0]! } : null
 }
