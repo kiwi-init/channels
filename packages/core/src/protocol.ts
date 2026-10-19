@@ -118,7 +118,7 @@ export type ServerFrame =
   | { t: "eph"; iv: string; ct: string }
   | { t: "ready"; head: number; more: boolean }
   | { t: "ack"; id: string; seq: number; ts?: number }
-  | { t: "err"; error: string; id?: string }
+  | { t: "err"; error: string; id?: string; tag?: string; retryAfter?: number }
   /** Membership channels: the member list changed; refetch it. */
   | { t: "roster" }
   /** Membership channels: the channel key rotated; fetch the new one. */

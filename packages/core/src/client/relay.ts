@@ -40,8 +40,9 @@ const inTime = <A, E>(url: URL, request: Effect.Effect<A, E>): Effect.Effect<A, 
 
 const answered = <T>(res: Response) =>
   Effect.flatMap(
-    Effect.promise(() => res.json().catch(() => ({})) as Promise<T & { error?: string; tag?: string }>),
-    (json): Effect.Effect<T, RelayError> => (res.ok ? Effect.succeed(json) : Effect.fail(new RelayError(res.status, json.error ?? `relay returned ${res.status}`, json.tag))),
+    Effect.promise(() => res.json().catch(() => ({})) as Promise<T & { error?: string; tag?: string; retryAfter?: number }>),
+    (json): Effect.Effect<T, RelayError> =>
+      res.ok ? Effect.succeed(json) : Effect.fail(new RelayError(res.status, json.error ?? `relay returned ${res.status}`, json.tag, res.headers.get("retry-after") ?? json.retryAfter)),
   );
 
 const expired = (err: Refusal) => err instanceof RelayError && err.status === 401 && err.message === EXPIRED_SIGNATURE;

@@ -109,6 +109,10 @@ jobs:
       store's CSP allows api.x.ai only when an xAI key is saved, the project key never reaches
       the snapshot or the token IPC result, consent defaults off, and
       desktop/build/entitlements.mac.plist has the audio-input entitlement. And
+      test/retry-after.test.ts: the relay's 429 carries Retry-After (header and body, on the socket
+      too), a refused attempt isn't counted, and a rate-limited send waits it out and goes in, over
+      the socket without an extra try over HTTP; web lib/github-queue.test.ts: the owner's GitHub
+      posts keep a rate-limited or unreachable item to try again. And
       test/desktop-daemon-keeper.test.ts: the app checks its daemon every 30s and starts it again
       when it stops answering, retrying a daemon that won't start from 5s up to every 5 minutes, and
       test/desktop-daemon-spawn.test.ts: its output and the app's restarts land in

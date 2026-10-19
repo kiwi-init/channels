@@ -4,7 +4,7 @@ import { MAX_EPH_LENGTH, MAX_IV_LENGTH, MORE_REFUSED, type ClientFrame, type Env
 import { isRefusal } from "../failures.ts";
 import { RoomStore } from "./db.ts";
 import type { Effects } from "./directory.ts";
-import { allow, EPHEMERAL_PER_MINUTE, MESSAGES_PER_MINUTE, MORE_PER_MINUTE, READS_PER_MINUTE } from "./limits.ts";
+import { allow, EPHEMERAL_PER_MINUTE, MESSAGES_PER_MINUTE, MORE_PER_MINUTE, READS_PER_MINUTE, take } from "./limits.ts";
 import { append, markRead, touch } from "./messages.ts";
 
 export const frame = (f: ServerFrame) => JSON.stringify(f);
@@ -61,10 +61,14 @@ export const onClientFrame = Effect.fn("Room.onClientFrame")(function* (raw: str
     return { reply: [frame({ t: "page" }), ...(yield* welcomeFrames(Number(f.since) || 0))] } satisfies Effects;
   }
   if (f.t !== "send") return { reply: frame({ t: "err", error: "unknown frame" }) } satisfies Effects;
-  if (!allow(`${db.roomId}:${sender}`, MESSAGES_PER_MINUTE)) return { reply: frame({ t: "err", error: "too many messages; wait a minute", id: f.id }) } satisfies Effects;
+  const counted = take(`${db.roomId}:${sender}`, MESSAGES_PER_MINUTE);
+  if ("retryAfter" in counted) return { reply: frame({ t: "err", error: "too many messages; wait a minute", id: f.id, tag: "TooMany", retryAfter: counted.retryAfter }) } satisfies Effects;
   const send = f;
   const stored = yield* Effect.exit(append(send.iv, send.ct, Number(send.e ?? 0), sender));
-  if (stored._tag === "Failure") return { reply: frame({ t: "err", error: socketError(stored.cause), id: send.id }) } satisfies Effects;
+  if (stored._tag === "Failure") {
+    counted.refund();
+    return { reply: frame({ t: "err", error: socketError(stored.cause), id: send.id }) } satisfies Effects;
+  }
   const e = stored.value;
   const expireAt = yield* touch.pipe(
     Effect.catchCause((cause) =>
