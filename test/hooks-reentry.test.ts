@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { daemonListening, daemonSock, stopDaemon } from "../src/daemon.ts";
-import { HOOK_CONTEXT_MAX, seatBudget } from "../src/hooks/answer.ts";
+import { CLIP_MIN, HOOK_CONTEXT_MAX, seatBudget } from "../src/hooks/answer.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { kiwiCmd } from "./owner.ts";
 
@@ -114,13 +114,19 @@ test("big checkpoints and a backlog of messages stay inside Claude Code's inline
   expect(told.length).toBeLessThanOrEqual(seatBudget(1));
   expect(told).toContain("where it stands");
   const first = sent.filter((b) => told.includes(b));
-  expect(first.length).toBeLessThan(sent.length);
+  const cut = sent.filter((b) => !told.includes(b) && told.includes(b.slice(0, CLIP_MIN)));
+  expect(cut.length).toBeLessThanOrEqual(1);
+  if (cut.length) expect(told).toMatch(/\(#(\d+) is cut here: .* show \1 has all of it\)/);
+  expect(first.length + cut.length).toBeLessThan(sent.length);
+  const shown = (b: string, later: string) => told.includes(b) || cut.includes(b) || later.includes(b);
   let later = "";
-  for (let i = 0; i < 6 && !sent.every((b) => told.includes(b) || later.includes(b)); i++) {
+  const end = Date.now() + 20_000;
+  while (!sent.every((b) => shown(b, later)) && Date.now() < end) {
     const out = await ok(agent, ["hook", "prompt"], S, JSON.stringify({ session_id: "reentry", cwd: agent }));
     expect(out.length).toBeLessThanOrEqual(HOOK_CONTEXT_MAX);
     later += out;
+    if (!out) await Bun.sleep(200);
   }
-  for (const body of sent) expect(told.includes(body) || later.includes(body)).toBe(true);
-  for (const body of first) expect(later).not.toContain(body);
+  expect(sent.filter((b) => !shown(b, later)).map((b) => b.slice(0, 12))).toEqual([]);
+  for (const body of [...first, ...cut]) expect(later).not.toContain(body.slice(0, CLIP_MIN));
 });
