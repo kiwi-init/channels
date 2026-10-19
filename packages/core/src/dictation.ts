@@ -2,7 +2,7 @@ export const WHISPER_MODEL = "whisper-base";
 
 const WHISPER_REPO = "onnx-community/whisper-base";
 const WHISPER_REVISION = "1846881b6b3a3024392c1eea3ad983695bc23925";
-export const ORT_VERSION = "1.31.0-dev.20260914-8d85527a0";
+const ORT_VERSION = "1.31.0-dev.20260914-8d85527a0";
 export const ORT_WASM = "ort-wasm-simd-threaded.asyncify.wasm";
 
 export interface DictationFile {
@@ -44,7 +44,7 @@ export function dictationFile(name: string): DictationFile | null {
   return Object.hasOwn(DICTATION_FILES, name) ? DICTATION_FILES[name]! : null;
 }
 
-export function hexOf(digest: ArrayBuffer): string {
+function hexOf(digest: ArrayBuffer): string {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 

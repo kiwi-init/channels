@@ -76,7 +76,9 @@ async function run(part: Part): Promise<string[]> {
     rmSync(data, { recursive: true, force: true });
     throw e;
   });
-  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  const video = process.env.SMOKE_VIDEO && part === "agents" ? { recordVideo: { dir: process.env.SMOKE_VIDEO, size: { width: 1280, height: 800 } } } : {};
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, ...video });
+  const filmed = Date.now();
   page.on("pageerror", (e) => errors.push(`${at}: ${e.message}`));
   page.on("console", (m) => {
     if (m.type() === "error" && !m.text().startsWith("Failed to load resource")) errors.push(`${at}: console: ${m.text()}`);
@@ -404,13 +406,22 @@ async function run(part: Part): Promise<string[]> {
       await toTab("Conversation");
       const message = page.getByRole("textbox", { name: "Message" });
       await message.fill("");
+      const shot = async (name: string) => {
+        if (process.env.SMOKE_SHOTS) await page.screenshot({ path: join(process.env.SMOKE_SHOTS, `dictation-${name}.png`) });
+      };
+      if (process.env.SMOKE_VIDEO) log(`video: dictation starts at ${(Date.now() - filmed) / 1000}s`);
       await page.getByRole("button", { name: "Dictate", exact: true }).click();
+      await page.getByRole("button", { name: "Download and dictate" }).waitFor();
+      await shot("1-notice");
       await page.getByRole("button", { name: "Download and dictate" }).click();
       const stop = page.getByRole("button", { name: "Stop dictation" });
       await stop.waitFor({ timeout: 180000 });
+      await shot("2-listening");
       await page.waitForTimeout(5000);
       await stop.click();
       await page.waitForFunction(() => /tests pass/i.test((document.querySelector("textarea") as HTMLTextAreaElement | null)?.value ?? ""), null, { timeout: 120000 });
+      await shot("3-text");
+      if (process.env.SMOKE_VIDEO) log(`video: dictation ends at ${(Date.now() - filmed) / 1000}s`);
       log(`ok  ${at}: ${JSON.stringify(await message.inputValue())}`);
       await message.fill("");
     } else log("skip dictation (SMOKE_DICTATION isn't set)");

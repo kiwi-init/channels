@@ -166,8 +166,17 @@ jobs:
         run: bun scripts/web-bundle.ts
       # Opens every menu, popover and dialog on the production build: Base UI throws on a
       # misplaced part only at render, which typecheck can't see (the b085ae8 crash).
+      - name: dictation model cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ${{ runner.temp }}/dictation
+          key: dictation-${{ hashFiles('packages/core/src/dictation.ts') }}
+      - name: dictation model, pinned and verified
+        run: bun scripts/dictation-files.ts "$RUNNER_TEMP/dictation"
       - name: ui smoke
         if: ${{ !cancelled() }}
+        env:
+          SMOKE_DICTATION: ${{ runner.temp }}/dictation
         run: bun run smoke:ui
       - if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
