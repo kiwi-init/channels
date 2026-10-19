@@ -138,6 +138,8 @@ describe("one Claude Code session that holds two seats", () => {
     expect(stop.reason).toContain("for the second seat");
     expect(stop.reason).toContain("-c alpha --as planner reply N");
     expect(stop.reason).toContain("-c beta --as reviewer reply N");
+    expect(stop.reason).toContain("unread Kiwi Channels messages for you (alpha)");
+    expect(stop.reason).toContain("unread Kiwi Channels messages for you (beta)");
 
     const bare = await run(h, ["listen", "--now"], S);
     expect(bare.code).toBe(1);
@@ -146,6 +148,14 @@ describe("one Claude Code session that holds two seats", () => {
     expect(await ok(h, ["--as", "reviewer", "listen", "--now"], S)).toContain("read by name");
     await ok(ownerB, ["send", "--to", "reviewer", "read by channel"], PERSON);
     expect(await ok(h, ["-c", "beta", "listen", "--now"], S)).toContain("read by channel");
+  });
+
+  test("a session that holds neither seat, in a folder with seats in two channels, is told both channels and how to pick", async () => {
+    const { h } = await twoSeats();
+    const restarted = await run(h, ["log"], { ...S, CLAUDE_CODE_SESSION_ID: "N" });
+    expect(restarted.code).toBe(1);
+    expect(restarted.err).toContain("this folder has seats in alpha and beta (planner in alpha, reviewer in beta): pass -c ALIAS --as NAME to say which");
+    expect(restarted.err).not.toContain("isn't bound to a channel");
   });
 
   test("with a backlog on both seats, each hook's whole output stays inside Claude Code's inline limit", async () => {
