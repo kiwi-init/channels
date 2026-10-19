@@ -95,7 +95,7 @@ async function channel(page: Page, title: string): Promise<string> {
     await saving.getByRole("button", { name: "Done" }).click();
     await saving.waitFor({ state: "hidden" });
   }
-  await page.getByRole("navigation", { name: "Views of the channel" }).getByRole("button", { name: "Conversation", exact: true }).click();
+  await page.getByRole("complementary", { name: "Channel" }).getByRole("region", { name: "Conversations" }).getByRole("button").first().click();
   return code;
 }
 

@@ -428,6 +428,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       onSendBack={(t: Task, why: string) => sendTask(sendBackTask(t, why))}
       onOpenTask={openTask}
       onJump={jump}
+      titled={tab === "tasks" && view === "needs"}
     />
   )
   const heading = tab === "tasks" ? (VIEWS.find(([v]) => v === view)?.[1] ?? "Tasks") : tab === "agents" ? "Agents" : place.kind === "dm" ? placeTitle : rooms.length > 1 ? `# ${roomName}` : title
@@ -456,9 +457,14 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                 icon={icon}
                 people={peopleLine}
                 onTitle={() => setSide((s) => (s?.kind === "info" ? null : { kind: "info" }))}
-                onSearch={() => {
-                  setTab("conversation")
-                  setSearch((q) => q ?? "")
+                search={search}
+                onSearch={(q) => {
+                  if (q !== null) setTab("conversation")
+                  setSearch(q)
+                }}
+                onAgents={() => {
+                  setTab("agents")
+                  setSearch(null)
                 }}
                 view={tab === "tasks" ? view : null}
                 counts={counts}
@@ -487,6 +493,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                       if (t !== "conversation") setSearch(null)
                     }}
                     heading={heading}
+                    wideHeading={place.kind === "dm" ? placeTitle : rooms.length > 1 ? `# ${roomName}` : title}
                     headingLabel={`Details: ${title}, ${subtitle}`}
                     face={{ icon, title }}
                     status={status}

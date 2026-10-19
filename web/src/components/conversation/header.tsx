@@ -18,6 +18,7 @@ export function Header({
   tab,
   onTab,
   heading,
+  wideHeading,
   headingLabel,
   face,
   status,
@@ -31,6 +32,8 @@ export function Header({
   tab: Tab
   onTab: (t: Tab) => void
   heading: string
+  /** On wide screens the sidebar names the view, so the header names the channel or conversation instead. */
+  wideHeading: string
   headingLabel: string
   face: { icon: ChannelIcon | null; title: string }
   status: string[]
@@ -47,14 +50,15 @@ export function Header({
           <ChannelIconTile icon={face.icon} title={face.title} size={28} />
         </button>
         <button type="button" aria-label={headingLabel} onClick={onTitle} className="no-drag hidden min-w-0 truncate text-left text-title sm:block">
-          {heading}
+          <span className="md:hidden">{heading}</span>
+          <span className="hidden md:inline">{wideHeading}</span>
         </button>
         {status.length > 0 && <span className="hidden min-w-0 truncate text-meta text-ink-3 lg:block">{status.join(" · ")}</span>}
         <span className="flex-1" />
         <IconButton label="Search" round className={cx("size-9 md:hidden", search === null && "text-ink")} active={search !== null} onClick={() => setSearch((s) => (s === null ? "" : null))}>
           <Icon icon={Search01Icon} size={18} />
         </IconButton>
-        <nav aria-label="Views of the channel" className="no-drag flex items-center gap-1">
+        <nav aria-label="Views of the channel" className="no-drag flex items-center gap-1 md:hidden">
           {TABS.map(([t, label]) => (
             <button
               key={t}
@@ -72,7 +76,7 @@ export function Header({
         </nav>
       </div>
       {search !== null && (
-        <div className="relative mx-auto w-full max-w-[792px] px-3 pb-2 md:px-4">
+        <div className="relative mx-auto w-full max-w-[792px] px-3 pb-2 md:hidden">
           <label className="flex h-9 items-center gap-2 rounded-full px-3.5 text-ink-3 edge">
             <Icon icon={Search01Icon} size={16} className="shrink-0" />
             <input

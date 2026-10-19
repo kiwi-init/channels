@@ -15,10 +15,18 @@ export interface Conversation {
   forMe: boolean
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+function Section({ title, onTitle, children }: { title: string; onTitle?: () => void; children: ReactNode }) {
   return (
     <section aria-label={title} className="mt-6">
-      <h2 className="px-3 pb-1.5 text-meta font-medium text-ink-3">{title}</h2>
+      <h2 className="px-3 pb-1.5 text-meta font-medium text-ink-3">
+        {onTitle ? (
+          <button type="button" onClick={onTitle} className="transition-colors hover:text-ink">
+            {title}
+          </button>
+        ) : (
+          title
+        )}
+      </h2>
       {children}
     </section>
   )
@@ -45,7 +53,9 @@ export function ChannelSidebar({
   icon,
   people,
   onTitle,
+  search,
   onSearch,
+  onAgents,
   view,
   counts,
   onView,
@@ -60,7 +70,9 @@ export function ChannelSidebar({
   icon: ChannelIcon | null
   people: string
   onTitle: () => void
-  onSearch: () => void
+  search: string | null
+  onSearch: (q: string | null) => void
+  onAgents: () => void
   view: View | null
   counts: Record<View, number>
   onView: (v: View) => void
@@ -81,10 +93,17 @@ export function ChannelSidebar({
         </span>
       </button>
 
-      <button type="button" onClick={onSearch} className="mt-3 flex h-9 items-center gap-2 rounded-ctl px-3 text-left text-ui text-ink-3 edge transition-colors hover:text-ink-2">
+      <label className="mt-3 flex h-9 items-center gap-2 rounded-ctl px-3 text-ui text-ink-3 edge transition-colors focus-within:text-ink-2 hover:text-ink-2">
         <Icon icon={Search01Icon} size={16} className="shrink-0" />
-        <span className="flex-1">Search this channel</span>
-      </button>
+        <input
+          value={search ?? ""}
+          aria-label="Search this channel"
+          placeholder="Search this channel"
+          onChange={(e) => onSearch(e.target.value)}
+          onKeyDown={(e) => e.key === "Escape" && (onSearch(null), e.currentTarget.blur())}
+          className="min-w-0 flex-1 bg-transparent text-ui text-ink outline-none placeholder:text-ink-3 focus-visible:outline-none"
+        />
+      </label>
 
       <nav aria-label="Views" className="mt-4">
         <ul className="space-y-0.5">
@@ -95,7 +114,7 @@ export function ChannelSidebar({
       </nav>
 
       {agents.length > 0 && (
-        <Section title="Agents">
+        <Section title="Agents" onTitle={onAgents}>
           <ul>
             {byBusy(agents).map((a) => (
               <AgentRow key={a.name} a={a} onMessage={onMessage} onOpenTask={onOpenTask} />

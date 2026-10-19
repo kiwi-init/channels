@@ -161,7 +161,15 @@ async function run(part: Part): Promise<string[]> {
     log(`ok  ${at}`);
   };
 
-  const toTab = (name: "Tasks" | "Agents" | "Conversation") => page.getByRole("navigation", { name: "Views of the channel" }).getByRole("button", { name, exact: true }).click();
+  /** The header's tabs on a phone; on a wide screen the sidebar is the navigation. */
+  const toTab = async (name: "Tasks" | "Agents" | "Conversation") => {
+    const tabs = page.getByRole("navigation", { name: "Views of the channel" });
+    if (await tabs.isVisible()) return tabs.getByRole("button", { name, exact: true }).click();
+    const side = page.getByRole("complementary", { name: "Channel" });
+    if (name === "Tasks") return side.getByRole("navigation", { name: "Views" }).getByRole("button", { name: "Everything" }).click();
+    if (name === "Agents") return side.getByRole("region", { name: "Agents" }).getByRole("button", { name: "Agents", exact: true }).click();
+    return side.getByRole("region", { name: "Conversations" }).getByRole("button").first().click();
+  };
 
   const openFromBoard = async (title: RegExp) => {
     await toTab("Tasks");
@@ -179,7 +187,10 @@ async function run(part: Part): Promise<string[]> {
     await page.getByRole("dialog").getByRole("textbox").fill("smoke");
     await page.getByRole("button", { name: "Create channel" }).click();
     await page.waitForURL(/#mc2-/);
-    await page.getByRole("navigation", { name: "Views of the channel" }).getByRole("button", { name: "Tasks", exact: true }).and(page.locator("[aria-current=page]")).waitFor();
+    await page
+      .locator('nav[aria-label="Views of the channel"]:visible button[aria-current="page"]:text-is("Tasks"), aside[aria-label="Channel"] nav[aria-label="Views"] button[aria-current="page"]')
+      .first()
+      .waitFor();
     await toTab("Conversation");
     await page.getByRole("textbox", { name: "Message" }).waitFor();
   };
@@ -458,7 +469,10 @@ async function run(part: Part): Promise<string[]> {
       .waitFor({ timeout: 15000 });
     await typed.fill("/tasks");
     await typed.press("Enter");
-    await page.getByRole("navigation", { name: "Views of the channel" }).getByRole("button", { name: "Tasks", exact: true }).and(page.locator('[aria-current="page"]')).waitFor({ timeout: 15000 });
+    await page
+      .locator('nav[aria-label="Views of the channel"]:visible button[aria-current="page"]:text-is("Tasks"), aside[aria-label="Channel"] nav[aria-label="Views"] button[aria-current="page"]')
+      .first()
+      .waitFor({ timeout: 15000 });
     if (await tasksPanel.count()) throw new Error("/tasks opened a task list in the side panel instead of the Tasks tab");
     await toTab("Conversation");
     if ((await typed.inputValue()) !== "") throw new Error("a command stayed in the composer after it ran");
