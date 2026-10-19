@@ -142,6 +142,8 @@ jobs:
       test/snapshot-base.test.ts: a window of recent messages folded on the channel's snapshot keeps
       the tasks and facts from before it, as a whole-history fold does (web base-plan.test.ts: a
       snapshot older than the window isn't used). And
+      web use-window.test.ts: the conversation's mounted rows drop back to the newest window once
+      they pass twice its size and the cut is above the view. And
       test/history-bytes.test.ts: against a local relay, history pages stop at PAGE_BYTES (with at
       least one message each) and still return every message, and a body over MAX_BODY_LENGTH is
       refused at send instead of lost at read. And
