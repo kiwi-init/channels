@@ -130,6 +130,70 @@ test("the plugin names a child session's root on the agent's shell, and a messag
   expect(prompted).toHaveLength(1);
 });
 
+test("a wake MiMoCode refuses, by rejecting or by answering with an error, is sent again before the listener runs again, so the messages it carries aren't lost", async () => {
+  const dir = scratch("hk-mimo-refused-");
+  const calls = join(dir, "calls.log");
+  const fake = join(dir, "listen.sh");
+  writeFileSync(
+    fake,
+    `#!/bin/sh\necho "$MIMOCODE_SESSION_ID" >> ${JSON.stringify(calls)}\nif [ ! -e ${JSON.stringify(join(dir, "once"))} ]; then touch ${JSON.stringify(join(dir, "once"))}; echo "New Kiwi Channels messages for you (ch)" >&2; exit 2; fi\nsleep 30\n`,
+  );
+  chmodSync(fake, 0o755);
+  const file = join(dir, "kiwi.ts");
+  writeFileSync(file, mimoPluginSource(fake));
+  const listens = () => (existsSync(calls) ? readFileSync(calls, "utf8").trim().split("\n").length : 0);
+  const tries: { text: string; listens: number }[] = [];
+  const client = {
+    session: {
+      get: async () => ({ data: {} }),
+      promptAsync: async (o: Prompted) => {
+        tries.push({ text: o.body.parts.map((p) => p.text).join(""), listens: listens() });
+        if (tries.length === 1) throw new Error("connection refused");
+        if (tries.length === 2) return { error: { name: "BadRequest" } };
+        return { data: true };
+      },
+    },
+  };
+  const mod = (await import(file)) as { KiwiPlugin: (input: { client: typeof client }) => Promise<Hooks> };
+  const hooks = await mod.KiwiPlugin({ client });
+  await hooks["shell.env"]({ cwd: dir, sessionID: "ses_root" }, { env: {} });
+  await until("the wake that lands", () => tries.length === 3);
+  expect(tries).toEqual([
+    { text: "New Kiwi Channels messages for you (ch)", listens: 1 },
+    { text: "New Kiwi Channels messages for you (ch)", listens: 1 },
+    { text: "New Kiwi Channels messages for you (ch)", listens: 1 },
+  ]);
+  await until("the listener started again", () => listens() === 2);
+  await hooks.event({ event: { type: "session.deleted", properties: { info: { id: "ses_root" } } } });
+  expect(tries).toHaveLength(3);
+}, 20_000);
+
+test("a wake that can't land stops being sent once its session is deleted", async () => {
+  const dir = scratch("hk-mimo-gone-");
+  const fake = join(dir, "listen.sh");
+  writeFileSync(fake, `#!/bin/sh\necho "New Kiwi Channels messages for you (ch)" >&2\nexit 2\n`);
+  chmodSync(fake, 0o755);
+  const file = join(dir, "kiwi.ts");
+  writeFileSync(file, mimoPluginSource(fake));
+  let tries = 0;
+  const client = {
+    session: {
+      get: async () => ({ data: {} }),
+      promptAsync: async () => {
+        tries += 1;
+        throw new Error("connection refused");
+      },
+    },
+  };
+  const mod = (await import(file)) as { KiwiPlugin: (input: { client: typeof client }) => Promise<Hooks> };
+  const hooks = await mod.KiwiPlugin({ client });
+  await hooks["shell.env"]({ cwd: dir, sessionID: "ses_root" }, { env: {} });
+  await until("the first refused wake", () => tries >= 1);
+  await hooks.event({ event: { type: "session.deleted", properties: { info: { id: "ses_root" } } } });
+  await Bun.sleep(1_500);
+  expect(tries).toBe(1);
+}, 20_000);
+
 test("kiwi hooks install mimo writes the plugin, status says so, and an agent in a named MiMoCode session is told the plugin wakes it", () => {
   const dir = scratch("hk-mimo-extra-");
   setEnv({ KIWI_MIMO_DIR: dir, KIWI_HOME: scratch("hk-mimo-home-") });
