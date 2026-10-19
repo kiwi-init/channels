@@ -11,7 +11,7 @@ import path from "node:path";
 
 import { app } from "electron";
 
-import { compareVersions } from "./cli.ts";
+import { compareVersions } from "@kiwi/core/versions.ts";
 import { moveOver } from "./move.ts";
 import { logMainError } from "./main-log.ts";
 import { signedLikeThisApp } from "./signer.ts";
