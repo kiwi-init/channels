@@ -118,7 +118,10 @@ jobs:
       again, and no longer sent once the
       session is deleted; promptAsync asked to throw on an HTTP error, so a client answering with data
       only, which returns nothing for one, still has the wake sent again; and when MiMoCode can't name a
-      session's parent, the plugin still listens for that session under its own id.
+      session's parent, the plugin still listens for that session under its own id, and stops that listener
+      once a later lookup names the root, so one session never has two listeners. A plugin of Kiwi's from
+      an older kiwi is rewritten at the listen hook (migrateMimo), unless KIWI_NO_HOOKS is set or MiMoCode's
+      hooks are off; a kiwi.ts that isn't Kiwi's, and no kiwi.ts, are left alone.
       Every test file runs after test/setup.ts, which points each harness's folder, MiMoCode's (KIWI_MIMO_DIR)
       among them, at a temp directory and drops each harness's session markers (MIMOCODE, MIMOCODE_PID,
       MIMOCODE_SESSION_ID among them), so a run on a machine with ~/.config/mimocode, or from inside MiMoCode,
