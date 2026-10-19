@@ -46,6 +46,25 @@ const sizeOf = (dir: string): number => {
   return readdirSync(dir, { withFileTypes: true }).reduce((n, e) => n + (e.isDirectory() ? sizeOf(join(dir, e.name)) : e.isFile() ? statSync(join(dir, e.name)).size : 0), 0);
 };
 
+const largest = (dir: string): string => {
+  const rows: [string, number][] = [];
+  const walk = (d: string, depth: number) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      if (!e.isDirectory()) continue;
+      const sub = join(d, e.name);
+      rows.push([sub.slice(dir.length + 1), sizeOf(sub)]);
+      if (depth < 3) walk(sub, depth + 1);
+    }
+  };
+  walk(dir, 0);
+  return rows
+    .filter(([, n]) => n > 5_000_000)
+    .sort((x, y) => y[1] - x[1])
+    .slice(0, 8)
+    .map(([p, n]) => `${p} ${Math.round(n / 1e6)} MB`)
+    .join("; ");
+};
+
 const env: Record<string, string> = {
   ...(process.env as Record<string, string>),
   HOME: root,
@@ -126,8 +145,8 @@ try {
   const stray = sizeOf(cache);
   if (stray > 20_000_000) throw new Error(`${Math.round(stray / 1e6)} MB landed in XDG_CACHE_HOME (${cache}: ${readdirSync(cache).join(", ")}), outside the app's data folder`);
   if (kept < 20_000_000) throw new Error(`the app's data folder holds only ${Math.round(kept / 1e6)} MB: the model isn't kept there`);
-  if (kept > 180_000_000) throw new Error(`the app's data folder holds ${Math.round(kept / 1e6)} MB: the model is kept twice (Chromium's HTTP cache as well as the app's own)`);
-  console.log(`dictation ok: heard ${JSON.stringify(said)}; ${Math.round(kept / 1e6)} MB in ${userData}, ${Math.round(stray / 1e3)} kB in XDG_CACHE_HOME`);
+  if (kept > 180_000_000) throw new Error(`the app's data folder holds ${Math.round(kept / 1e6)} MB: the model is kept twice (${largest(userData)})`);
+  console.log(`dictation ok: heard ${JSON.stringify(said)}; ${Math.round(kept / 1e6)} MB in ${userData} (${largest(userData)}), ${Math.round(stray / 1e3)} kB in XDG_CACHE_HOME`);
 } catch (err) {
   const shot = join(tmpdir(), "kiwi-dictate-failure.png");
   await shotOf?.screenshot({ path: shot }).catch(() => undefined);
