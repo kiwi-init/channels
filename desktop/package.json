@@ -34,7 +34,12 @@
     "appId": "com.kiwiinit.channels",
     "productName": "Channels",
     "files": [
-      "dist/**"
+      "dist/**",
+      "!**/node_modules/**/*"
+    ],
+    "electronLanguages": [
+      "en",
+      "en-US"
     ],
     "extraResources": [
       {

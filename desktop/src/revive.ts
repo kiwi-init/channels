@@ -1,6 +1,6 @@
-import fs from "node:fs";
-import path from "node:path";
 import { app, dialog, type BrowserWindow } from "electron";
+
+import { logMainError } from "./main-log.ts";
 
 const CRASH_WINDOW_MS = 60_000;
 const CRASHES_BEFORE_ASKING = 3;
@@ -8,11 +8,6 @@ const CRASHES_BEFORE_ASKING = 3;
 function afterCrash(recent: readonly number[], now: number): { reload: boolean; recent: number[] } {
   const kept = [...recent.filter((t) => now - t < CRASH_WINDOW_MS), now];
   return { reload: kept.length <= CRASHES_BEFORE_ASKING, recent: kept };
-}
-
-function errorLine(err: unknown, at: Date): string {
-  const text = err instanceof Error ? (err.stack ?? `${err.name}: ${err.message}`) : String(err);
-  return `${at.toISOString()} ${text.replace(/\n/g, "\n  ")}\n`;
 }
 
 export function keepRendererAlive(win: BrowserWindow, quitting: () => boolean, now: () => number = Date.now): void {
@@ -41,17 +36,6 @@ export function keepRendererAlive(win: BrowserWindow, quitting: () => boolean, n
       if (reload && !win.isDestroyed()) win.webContents.forcefullyCrashRenderer();
     });
   });
-}
-
-const logFile = (): string => path.join(app.getPath("logs"), "main.log");
-
-export function logMainError(err: unknown): void {
-  try {
-    fs.mkdirSync(path.dirname(logFile()), { recursive: true });
-    fs.appendFileSync(logFile(), errorLine(err, new Date()));
-  } catch {
-    // Nowhere left to write it; the app keeps running either way.
-  }
 }
 
 export function catchMainErrors(): void {
