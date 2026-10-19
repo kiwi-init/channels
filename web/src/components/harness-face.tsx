@@ -4,7 +4,7 @@ import { cx } from "@/lib/utils"
 
 export function HarnessFace({ harness, size, working }: { harness: string | undefined; size: number; working?: boolean }) {
   const known = knownHarness(harness)
-  const mark = Math.round(size * 0.58)
+  const mark = Math.round(size * 0.86)
   const url = known ? harnessUrl(known) : ""
   const mask = `url(${JSON.stringify(url)})`
   return (
@@ -12,7 +12,7 @@ export function HarnessFace({ harness, size, working }: { harness: string | unde
       role="img"
       aria-label={known ? harnessName(known) : "Agent"}
       title={known ? harnessName(known) : undefined}
-      className={cx("flex size-full items-center justify-center rounded-full bg-wash-2 select-none", working && "shadow-[0_0_0_1.5px_var(--canvas),0_0_0_3px_var(--doing)]")}
+      className={cx("flex size-full items-center justify-center rounded-full select-none", working && "shadow-[0_0_0_1.5px_var(--canvas),0_0_0_3px_var(--doing)]")}
     >
       {known && url ? (
         monoHarness(known) ? (
