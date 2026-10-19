@@ -45,6 +45,7 @@ const OPEN_FOR_TITLE = new Set<TaskState>(["todo", "doing", "review"]);
 function normTitle(s: string): string {
   return s
     .toLowerCase()
+    .replace(/(?<![a-z0-9])v(\d)/g, "$1")
     .replace(/([a-z])-(\d)/g, "$1$2")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
@@ -56,8 +57,10 @@ function titleWords(norm: string): string[] {
   return [...new Set(norm.split(" ").filter((w) => w.length > 2 || hasDigit(w)))];
 }
 
+const TITLE_ID = /(?<![a-z0-9])(?:([a-z]+)-?)?(\d+(?:[.-]\d+)*[a-z]?)(?![a-z0-9])/g;
+
 function titleIds(title: string): Set<string> {
-  return new Set((title.toLowerCase().match(/[a-z]*-?\d+/g) ?? []).map((id) => id.replace("-", "")));
+  return new Set([...title.toLowerCase().matchAll(TITLE_ID)].map(([, prefix, digits]) => `${prefix && prefix !== "v" ? prefix : ""}${digits}`));
 }
 
 function idsDiffer(a: string, b: string): boolean {
