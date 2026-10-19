@@ -44,6 +44,33 @@ export function knownRefs(text: string, known: (seq: number) => boolean): string
   return seqs.join(",")
 }
 
+const MENTION = /(?<![\p{L}\p{N}\p{M}_/.@-])@([\p{L}\p{N}_.-]+)/gu
+
+export type MentionPart = { kind: "text"; text: string } | { kind: "mention"; text: string; name: string; label: string }
+
+function mentioned(raw: string, labelOf: (name: string) => string | undefined): { name: string; label: string } | null {
+  for (let name = raw; name; name = name.slice(0, -1)) {
+    const label = labelOf(name)
+    if (label !== undefined) return { name, label }
+    if (!/[._-]$/.test(name)) return null
+  }
+  return null
+}
+
+export function mentionParts(text: string, labelOf: (name: string) => string | undefined): MentionPart[] {
+  const parts: MentionPart[] = []
+  let from = 0
+  for (const match of text.matchAll(MENTION)) {
+    const who = mentioned(match[1]!, labelOf)
+    if (!who) continue
+    if (match.index > from) parts.push({ kind: "text", text: text.slice(from, match.index) })
+    parts.push({ kind: "mention", text: `@${who.name}`, ...who })
+    from = match.index + 1 + who.name.length
+  }
+  if (from < text.length || parts.length === 0) parts.push({ kind: "text", text: text.slice(from) })
+  return parts
+}
+
 export class Recent<V> {
   private readonly items = new Map<string, V>()
   constructor(private readonly max: number) {}

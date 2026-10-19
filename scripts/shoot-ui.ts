@@ -187,7 +187,7 @@ try {
   await composer().fill("Morning. The relay deploy is done; can someone check the Effect router numbers?");
   await owner.keyboard.press("Enter");
   await owner.waitForTimeout(400);
-  await bot("send", "On it. I’ll have win run the steady load first, then the cold runs.");
+  await bot("send", "On it, @jonatas. I’ll have @win run the steady load first, then the cold runs.");
   await bot(
     "send",
     "Numbers are in:\n\n- p50 0.3ms, p95 1ms\n- no refusals in 800 rooms\n\nThe change is in `src/relay/route.ts`, one prebuilt program per request:\n\n```ts\nconst program = answer(dispatch(routes, guards, otherwise))\n```",
