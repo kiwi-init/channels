@@ -138,7 +138,7 @@ export function cursorFollow(mc: string, unread: boolean, reminder: Reminder | n
 const contextNudge = Effect.fn("Hooks.contextNudge")(function* (input: HookInput, s: AgentSession, who: Here, mc: string, budget: number) {
   const session = who.session;
   const file = input.transcript_path;
-  if (who.harness !== "claude" || input.stop_hook_active || !session || typeof file !== "string" || !file) return null;
+  if (who.harness !== "claude" || !session || typeof file !== "string" || !file) return null;
   const { claudeContext } = yield* Effect.promise(() => import("../harness.ts"));
   const context = yield* Effect.sync(() => {
     try {
@@ -150,10 +150,8 @@ const contextNudge = Effect.fn("Hooks.contextNudge")(function* (input: HookInput
   });
   const over = overLine(s.alias, s.me, session);
   const next = crossing(context?.used, over);
-  if (!next.nudge || !context) {
-    if (next.over !== over) noteOverLine(s.alias, s.me, session, next.over);
-    return null;
-  }
+  if (!next.over && over) noteOverLine(s.alias, s.me, session, false);
+  if (!next.nudge || !context || input.stop_hook_active) return null;
   const { state } = yield* s.state();
   const text = nudgeText(context, openTasksOf(state, s.me), mc);
   if (!text || text.length > budget) return null;
@@ -393,7 +391,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
     const unread = unreadMax > 0 ? yield* unreadText(s, mc, unreadMax) : { text: "", shown: Effect.void };
     const decision = style === "gemini" ? "deny" : "block";
     const reason = stopReason(stopHead, unread.text, reminder);
-    const shown = nudge ? Effect.andThen(unread.shown, nudge.shown) : unread.shown;
+    const shown = nudge ? Effect.andThen(nudge.shown, unread.shown) : unread.shown;
     if (reason) return answered(decision, reason, shown);
     yield* unread.shown;
   }

@@ -1,8 +1,7 @@
 // What an agent's harness says about it on this machine, read the way a command the agent runs can:
 // which model it runs on, and what it's doing right now (working, and with which tool; waiting; idle).
 // Each harness keeps that somewhere local (none puts it in the environment), and kiwi reads only those
-// fields: never a prompt, a reply, or a tool's input or output. Only the tool's name and the context's
-// token counts leave the machine.
+// fields: never a prompt, a reply, or a tool's input or output.
 //
 //   Claude Code  CLAUDE_CODE_SESSION_ID (or ~/.claude/sessions/$CLAUDE_PID.json), then the newest
 //                assistant line's message.model in ~/.claude/projects/*/<session>.jsonl

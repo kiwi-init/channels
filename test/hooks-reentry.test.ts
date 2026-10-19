@@ -152,6 +152,6 @@ test("past the context line, the Stop hook asks once for a checkpoint of each op
   expect(mine.length).toBeGreaterThanOrEqual(5);
   expect(asked).toContain(`task checkpoint ${mine[0]} --file note.md`);
   expect(await stop(300_000)).not.toContain(line);
-  expect(await stop(120_000)).not.toContain(line);
+  expect(await stop(120_000, true)).not.toContain(line);
   expect(await stop(255_000)).toContain("Your context is at 255k tokens");
 });
