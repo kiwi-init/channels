@@ -470,7 +470,7 @@ async function run(part: Part): Promise<string[]> {
     await tasksPanel.waitFor({ state: "detached" });
     log(`ok  ${at}`);
 
-    at = "ask-human: the question sits in the composer with its options, and the task waits on a person until one is picked";
+    at = "ask-human: the question sits in the composer with its options, is one row of Needs you, and the task waits on a person until one is picked";
     await kiwi(["-c", "smoke", "--as", "bot", "ask-human", "--task", smokeTask, "--option", "A: ship it", "--option", "B: wait a day", "Ship the smoke build now?"]);
     const awaiting = page.getByText("Needs a decision");
     await toTab("Tasks");
@@ -478,7 +478,7 @@ async function run(part: Part): Promise<string[]> {
     await toTab("Conversation");
     const question = page.getByRole("region", { name: "Question" });
     await question.getByText("Ship the smoke build now?").waitFor({ timeout: 15000 });
-    if (await needs.count()) throw new Error("a decision for the person showed in Needs you as well as in the composer");
+    await needs.getByText("Ship the smoke build now?").waitFor({ timeout: 15000 });
     await question.getByRole("button", { name: "Something else" }).waitFor();
     await question.getByRole("list", { name: "Options" }).getByRole("button", { name: "B: wait a day" }).click();
     await question.waitFor({ state: "detached", timeout: 15000 });
@@ -487,10 +487,11 @@ async function run(part: Part): Promise<string[]> {
     await toTab("Conversation");
     log(`ok  ${at}`);
 
-    at = "an answered ask says who chose what, on the ask itself";
+    at = "an ask in the conversation is only a pointer to the composer while it waits, and once answered says who chose what";
     await kiwi(["-c", "smoke", "--as", "bot", "ask-human", "--option", "A: red", "--option", "B: blue", "Which colour for the smoke?"]);
     await question.getByText("Which colour for the smoke?").waitFor({ timeout: 15000 });
-    await page.getByRole("main").getByText("Waiting on you").first().waitFor({ timeout: 15000 });
+    await page.getByRole("main").getByText("Answer it below").first().waitFor({ timeout: 15000 });
+    if (await page.getByRole("main").getByText("Waiting on you").count()) throw new Error("the question in the composer was also shown whole in the feed");
     await question.getByRole("list", { name: "Options" }).getByRole("button", { name: "B: blue" }).click();
     await page
       .getByRole("main")
