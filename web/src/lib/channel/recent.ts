@@ -1,4 +1,5 @@
 import { changed, read, RECENT_KEY } from "./store"
+import { pendingWrite, writeLater } from "@/lib/write-behind"
 
 const AGENT_WORKED = "mc.agent-worked"
 const AGENT_WORKED_EVENT = "mc:agent-worked"
@@ -30,17 +31,14 @@ export interface Recent {
 }
 
 export function loadRecent(code: string): Recent | null {
-  return read<Recent>(RECENT_KEY(code))
+  const held = pendingWrite(RECENT_KEY(code))
+  return held !== undefined ? (JSON.parse(held) as Recent) : read<Recent>(RECENT_KEY(code))
 }
 
 export function saveRecent(code: string, r: Recent): void {
   const next = JSON.stringify(r)
-  if (localStorage.getItem(RECENT_KEY(code)) === next) return
-  try {
-    localStorage.setItem(RECENT_KEY(code), next)
-  } catch {
-    return changed()
-  }
+  if ((pendingWrite(RECENT_KEY(code)) ?? localStorage.getItem(RECENT_KEY(code))) === next) return
+  writeLater(RECENT_KEY(code), next)
   changed()
 }
 

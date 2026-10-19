@@ -30,6 +30,8 @@ const proposalCard = later(() => import("./compact").then((m) => m.ProposalCard)
 const confirmDialogs = later(() => import("./controls/confirm-dialogs").then((m) => m.ConfirmDialogs))
 const invite = later(() => import("./controls/invite").then((m) => m.Invite))
 const holdDialog = later(() => import("./controls/hold-dialog").then((m) => m.HoldDialog))
+const charterDialog = later(() => import("./controls/channel-dialogs").then((m) => m.CharterDialog))
+const renameDialog = later(() => import("./controls/channel-dialogs").then((m) => m.RenameDialog))
 
 export const Markdown = markdown.View
 export const AddAgent = addAgent.View
@@ -57,9 +59,11 @@ export const ProposalCard = proposalCard.View
 export const ConfirmDialogs = confirmDialogs.View
 export const Invite = invite.View
 export const HoldDialog = holdDialog.View
+export const CharterDialog = charterDialog.View
+export const RenameDialog = renameDialog.View
 
 export const loadMarkdown = markdown.load
 
 export function loadSurfaces(): void {
-  for (const surface of [settings, computers, palette, info, tasks, taskDetails, taskInline, thread, confirmDialogs, holdDialog]) surface.load()
+  for (const surface of [settings, computers, palette, info, tasks, taskDetails, taskInline, thread, confirmDialogs, holdDialog, charterDialog, renameDialog]) surface.load()
 }
