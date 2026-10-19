@@ -171,6 +171,37 @@ export function extraInstalled(h: ExtraHarness): boolean {
   return claudeShapedInstalled(harnessPath(h), "codex", EVENTS);
 }
 
+const NAMED_HOOKS: readonly NamedHookHarness[] = ["codex", "gemini", "grok"];
+
+function ourCommands(path: string): string[] {
+  const hooks = readJson(path).hooks;
+  const entries: unknown[] = isRecord(hooks) ? Object.values(hooks).flatMap((list) => (Array.isArray(list) ? list : [])) : [];
+  return entries
+    .flatMap((e) => (isRecord(e) && Array.isArray(e.hooks) ? e.hooks : []))
+    .flatMap((h) => (isRecord(h) && typeof h.command === "string" && isOurHookCommand(h.command) ? [h.command] : []));
+}
+
+function unflagged(h: NamedHookHarness): boolean {
+  return ourCommands(harnessPath(h)).some((command) => !command.includes(` --harness ${h} hook `));
+}
+
+export function migrateExtraHooks(): string[] {
+  if (process.env.KIWI_NO_HOOKS) return [];
+  try {
+    const choice = loadConfig().harnessHooks ?? {};
+    return NAMED_HOOKS.filter((h) => choice[h] !== "off" && unflagged(h)).map((h) => installExtra(h));
+  } catch {
+    // A hook must not fail over a hooks file it can't read or write.
+    return [];
+  }
+}
+
+export function extraHooksStatus(h: ExtraHarness): string {
+  if (extraInstalled(h)) return "installed";
+  if ((h === "codex" || h === "gemini" || h === "grok") && unflagged(h)) return "not installed (its hooks are from an older kiwi: kiwi hooks install)";
+  return "not installed";
+}
+
 const HARNESS_LABEL: Record<ExtraHarness, string> = { codex: "Codex", gemini: "Gemini", cursor: "Cursor", grok: "Grok", kimi: "Kimi Code", pi: "Pi", mimo: "MiMoCode" };
 
 export function autoInstallExtraHooks(): string | null {
@@ -210,7 +241,8 @@ export function hooksStatus(): string {
   const claude = loadConfig().claudeHooks === "off" && !hooksInstalled() ? "off" : claudeHooksStatus();
   const lines = [`claude: ${claude}`];
   for (const h of EXTRA_HARNESSES) {
-    if (extraInstalled(h)) lines.push(`${h}: installed`);
+    const status = extraHooksStatus(h);
+    if (status !== "not installed") lines.push(`${h}: ${status}`);
     else if (choice[h] === "off") lines.push(`${h}: off`);
     else if (!harnessPresent(h)) lines.push(`${h}: not detected`);
     else lines.push(`${h}: not installed`);

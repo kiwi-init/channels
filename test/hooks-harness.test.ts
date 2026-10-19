@@ -22,6 +22,7 @@ import {
   installHooks,
   isOurHook,
   kimiReason,
+  migrateExtraHooks,
   migrateListenHooks,
   PROBE_MS,
   PROBE_TTL_MS,
@@ -542,6 +543,65 @@ test("kiwi hooks status and the SessionStart check give the same answer for the 
     { sessionStart: false, inside: false, shell: false },
     { sessionStart: false, inside: false, shell: false },
   ]);
+});
+
+function oldCodexHooks(codex: string): string {
+  const file = join(codex, "hooks.json");
+  const entry = (arg: string) => ({ hooks: [{ type: "command", command: `'/old/kiwi' hook ${arg} # kiwi` }] });
+  writeFileSync(
+    file,
+    JSON.stringify({ hooks: { SessionStart: [entry("session-start")], UserPromptSubmit: [entry("prompt")], Stop: [entry("stop"), { hooks: [{ type: "command", command: "echo mine" }] }] } }),
+  );
+  return file;
+}
+
+function codexCommands(file: string): string[] {
+  const { hooks } = read(file);
+  return [...(hooks.SessionStart ?? []), ...(hooks.UserPromptSubmit ?? []), ...hooks.Stop].flatMap((e) => e.hooks.map((h) => h.command));
+}
+
+test("Codex hooks an older kiwi wrote without --harness are stale, and are rewritten flagged without anyone asking", () => {
+  const codex = scratch("hk-old-codex-");
+  const grok = scratch("hk-old-grok-");
+  setEnv({ KIWI_HOME: scratch("hk-old-home-"), KIWI_CODEX_DIR: codex, KIWI_GROK_DIR: grok, KIWI_GEMINI_DIR: scratch("hk-old-gemini-") });
+  hideEnv(["KIWI_NO_HOOKS"]);
+  const file = oldCodexHooks(codex);
+  expect(extraInstalled("codex")).toBe(false);
+  expect(hooksStatus()).toContain("codex: not installed (its hooks are from an older kiwi: kiwi hooks install)");
+  expect(hooksStatus()).toContain("grok: not installed");
+  expect(hooksStatus()).not.toContain("grok: not installed (");
+
+  setEnv({ KIWI_NO_HOOKS: "1" });
+  expect(migrateExtraHooks()).toEqual([]);
+  hideEnv(["KIWI_NO_HOOKS"]);
+  updateConfig((c) => {
+    c.harnessHooks = { codex: "off" };
+  });
+  expect(migrateExtraHooks()).toEqual([]);
+  expect(codexCommands(file).filter((c) => c.startsWith("'/old/kiwi'"))).toHaveLength(3);
+  updateConfig((c) => {
+    c.harnessHooks = {};
+  });
+
+  expect(migrateExtraHooks()).toEqual([file]);
+  const commands = codexCommands(file);
+  expect(commands).toContain("echo mine");
+  expect(commands.filter((c) => c.startsWith("'/old/kiwi'"))).toEqual([]);
+  expect(commands.filter((c) => c.includes(" --harness codex hook "))).toHaveLength(3);
+  expect(extraInstalled("codex")).toBe(true);
+  expect(hooksStatus()).toContain("codex: installed");
+  expect(existsSync(join(grok, "hooks", "kiwi.json"))).toBe(false);
+  expect(migrateExtraHooks()).toEqual([]);
+});
+
+test("an unflagged kiwi hook run rewrites an older kiwi's Codex hooks", () => {
+  const codex = scratch("hk-run-codex-");
+  const env = { KIWI_HOME: scratch("hk-run-home-"), KIWI_CODEX_DIR: codex, KIWI_GROK_DIR: scratch("hk-run-grok-"), KIWI_GEMINI_DIR: scratch("hk-run-gemini-"), KIWI_NO_HOOKS: "", CLAUDECODE: "" };
+  const file = oldCodexHooks(codex);
+  expect(kiwiCli(["hooks", "status", "codex"], env).out.trim()).toBe("codex: not installed (its hooks are from an older kiwi: kiwi hooks install)");
+  expect(kiwiCli(["hook", "stop"], env).code).toBe(0);
+  expect(codexCommands(file).filter((c) => c.includes(" --harness codex hook "))).toHaveLength(3);
+  expect(kiwiCli(["hooks", "status", "codex"], env).out.trim()).toBe("codex: installed");
 });
 
 test("a harness that passes CLAUDECODE through is never taken for Claude Code by its hooks", () => {
