@@ -1,4 +1,5 @@
 import { useEffect, useEffectEvent, useSyncExternalStore } from "react"
+import { pendingWrite, writeLater } from "@/lib/write-behind"
 
 // What's new where. For each channel this browser keeps the last seq it saw there, and how many
 // questions there were waiting on this person when they last looked. A closed channel can only say
@@ -58,11 +59,7 @@ function emit() {
 
 function writeMark(room: string, next: Mark) {
   marks = { ...readMarks(), [room]: next }
-  try {
-    localStorage.setItem(KEY, JSON.stringify(marks))
-  } catch {
-    // A full disk forgets what was read; the channels themselves are unaffected.
-  }
+  writeLater(KEY, JSON.stringify(marks))
   emit()
 }
 
@@ -71,7 +68,7 @@ const subscribe = (l: () => void) => (listeners.add(l), () => void listeners.del
 if (typeof window !== "undefined") {
   // Another tab read a channel: its dot goes here too.
   window.addEventListener("storage", (e) => {
-    if (e.key !== KEY) return
+    if (e.key !== KEY || pendingWrite(KEY) !== undefined) return
     marks = null
     emit()
   })
@@ -90,11 +87,7 @@ export function startMarks(heads: { room: string; head?: number }[]) {
   const fresh = heads.filter((h) => h.head !== undefined && !known[h.room])
   if (!fresh.length) return
   marks = { ...known, ...Object.fromEntries(fresh.map((h) => [h.room, { seen: h.head!, needs: 0 }])) }
-  try {
-    localStorage.setItem(KEY, JSON.stringify(marks))
-  } catch {
-    // As above.
-  }
+  writeLater(KEY, JSON.stringify(marks))
   emit()
 }
 

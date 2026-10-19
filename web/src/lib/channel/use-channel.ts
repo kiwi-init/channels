@@ -9,7 +9,7 @@ import type { Activity, Message, Reach } from "@kiwi/core/protocol.ts"
 import { fold, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts"
 import { isWakeVia } from "@kiwi/core/wake.ts"
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "../channel-ops"
-import { readCached, rememberRow } from "../history"
+import { readCached, rememberRow, rememberRows } from "../history"
 import { checkedUpTo, checksToPost, issuesToPost, linksToPost, setCheckedUpTo, tasksToClose } from "../review-checks"
 import { drain } from "../github-queue"
 import { closeFromGithub } from "../task-actions"
@@ -152,7 +152,12 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
         )
         lent.emit({ _tag: "Head", seq: Math.max(...batch.map((b) => b.message.seq)) })
         if (batch.some((b) => b.message.kind === "event" && b.message.ev?.op === "card")) noteAgentWorked()
-        for (const b of batch) if (b.row) void rememberRow(ch.roomId, ch.pk, b.row, HISTORY).catch(() => {})
+        void rememberRows(
+          ch.roomId,
+          ch.pk,
+          batch.flatMap((b) => (b.row ? [b.row] : [])),
+          HISTORY
+        ).catch(() => {})
       }, 30)
     }
     const onEvent = (ev: FollowEvent) => {

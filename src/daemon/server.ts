@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
 import type { Socket } from "bun";
 import type { Channel, PresenceFields, Probe } from "@kiwi/core/client.ts";
 import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity, saveAccess, type Config } from "../config.ts";
@@ -10,6 +10,7 @@ import { pullsWake, viaOf } from "@kiwi/core/wake.ts";
 import { ensureMachine, loadPairedMachine, PairError, type PairedMachine, type PairedPerson } from "./pair.ts";
 import { DAEMON_PROTOCOL, daemonSock, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
 import { activityEnv, reachOf, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
+import { beatLock, dropLock, lockPath, ownsLock, takeLock } from "./lock.ts";
 import { stopDaemon, tryHello } from "./rpc.ts";
 import { readKey, type ConnState, type Seat, type Sub, type Waiting } from "./seat.ts";
 import { pathOf, seatWakes } from "./wake.ts";
@@ -20,6 +21,7 @@ const PEEK_PROBE_MS = 250;
 const MAX_QUEUED_BYTES = 64 * 1024 * 1024;
 const lineEncoder = new TextEncoder();
 const TICK_MS = 5_000;
+const ORPHAN_MS = 10 * 60_000;
 const RETRY_FIRST_MS = 5_000;
 const RETRY_MAX_MS = 30 * 60_000;
 
@@ -36,6 +38,8 @@ export interface DaemonOptions {
   beaconMs?: number;
   wakeDelayMs?: number;
   wakeGapMs?: number;
+  tickMs?: number;
+  orphanMs?: number;
 }
 
 const WAKE_DELAY_MS = 2_000;
@@ -47,6 +51,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   const existed = existsSync(dir);
   const ours = existed && hasKiwiState(dir);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const lock = lockPath(dir);
+  await takeLock(lock);
   if (process.platform !== "win32") {
     try {
       rmSync(sock, { force: true });
@@ -655,11 +661,30 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       // Same as the home chmod: a mode this user can't set must not stop the daemon.
     }
   }
+  const boundIno = inodeOf(sock);
 
+  const tickMs = opts.tickMs ?? TICK_MS;
+  const orphanTicks = Math.ceil((opts.orphanMs ?? ORPHAN_MS) / tickMs);
+  let deadTicks = 0;
+  const orphaned = async (): Promise<boolean> => {
+    if (conns.size) return false;
+    let relays: string[];
+    try {
+      relays = [...new Set(Object.values(loadConfig().channels).map((c) => c.relay ?? DEFAULT_RELAY))];
+    } catch {
+      return false;
+    }
+    if (!relays.length || !relays.every(onLoopback)) return false;
+    return (await Promise.all(relays.map(answers))).every((up) => !up);
+  };
   const tick = setInterval(() => {
-    if (!existsSync(dir)) void stop();
-    else void syncSeats();
-  }, TICK_MS);
+    if (!existsSync(dir) || !beatLock(lock)) return void stop();
+    void syncSeats();
+    void orphaned().then((dead) => {
+      deadTicks = dead ? deadTicks + 1 : 0;
+      if (deadTicks >= orphanTicks) void stop();
+    });
+  }, tickMs);
 
   const stop = async (): Promise<void> => {
     if (stopped) return;
@@ -676,33 +701,86 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
     for (const seat of seats.values()) endSeat(seat);
     seats.clear();
+    const theirs = boundIno !== null && inodeOf(sock) !== null && inodeOf(sock) !== boundIno ? `${sock}.${process.pid}.aside` : null;
+    const aside = theirs !== null && moved(sock, theirs);
     try {
       server.stop();
     } catch {
       // Already stopped; the socket file below is what matters.
     }
-    if (process.platform !== "win32") {
+    if (aside && theirs) moved(theirs, sock);
+    if (process.platform !== "win32" && !theirs && ownsLock(lock)) {
       try {
         rmSync(sock, { force: true });
       } catch {
         // A stale socket file is harmless: the next start removes it.
       }
     }
+    dropLock(lock);
   };
 
   await syncSeats();
   return { sock, stop, stopped: stoppedP, beacons: () => beacons };
 }
 
+function onLoopback(relay: string): boolean {
+  try {
+    const host = new URL(relay).hostname;
+    return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
+  } catch {
+    return false;
+  }
+}
+
+function inodeOf(path: string): number | null {
+  try {
+    return statSync(path).ino;
+  } catch {
+    return null;
+  }
+}
+
+function moved(from: string, to: string): boolean {
+  try {
+    renameSync(from, to);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function answers(relay: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const u = new URL(relay);
+    const settle = (up: boolean): void => {
+      clearTimeout(late);
+      resolve(up);
+    };
+    const late = setTimeout(() => resolve(false), 1_000);
+    Bun.connect({
+      hostname: u.hostname.replace(/^\[|\]$/g, ""),
+      port: Number(u.port || (u.protocol === "https:" ? 443 : 80)),
+      socket: {
+        open(socket) {
+          socket.end();
+          settle(true);
+        },
+        data() {},
+        connectError() {
+          settle(false);
+        },
+      },
+    }).catch(() => settle(false));
+  });
+}
+
 export async function runDaemonForeground(dir = home()): Promise<void> {
   (globalThis as { __kiwiDisarmEarlySignals?: () => void }).__kiwiDisarmEarlySignals?.();
-  let sock: string | null = null;
   const goodbye = new Promise<void>((resolve) => {
-    const bye = (): void => void (sock ? stopDaemon(sock) : Promise.resolve()).catch(() => {}).then(resolve, resolve);
-    process.once("SIGTERM", bye);
-    process.once("SIGINT", bye);
+    process.once("SIGTERM", () => resolve());
+    process.once("SIGINT", () => resolve());
   });
-  sock = daemonSock(dir);
+  const sock = daemonSock(dir);
   const live = await tryHello(sock);
   if (live && compareVersions(live.version, VERSION) >= 0) throw new PairError(`a kiwi ${live.version} daemon is already running (pid ${live.pid}) on ${sock}`);
   if (live) await stopDaemon(sock);

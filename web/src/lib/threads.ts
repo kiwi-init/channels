@@ -6,6 +6,7 @@ import { useSyncExternalStore } from "react"
 
 import type { SendOptions } from "@kiwi/core/client.ts"
 import { chooseThread, type ChannelState, type Place } from "@kiwi/core/state.ts"
+import { writeLater } from "@/lib/write-behind"
 
 export { MAIN, dmPlace, placeFromKey, placeKey, type Place } from "@kiwi/core/state.ts"
 
@@ -56,11 +57,7 @@ export function markSeenIn(room: string, updates: Record<string, number>): void 
   const entries = Object.entries(next)
   if (entries.length > SEEN_KEEP) for (const [k] of entries.sort((a, b) => a[1] - b[1]).slice(0, entries.length - SEEN_KEEP)) delete next[k]
   seenCache.set(room, next)
-  try {
-    localStorage.setItem(seenKey(room), JSON.stringify(next))
-  } catch {
-    // A private window or full storage: this tab still remembers.
-  }
+  writeLater(seenKey(room), JSON.stringify(next))
   for (const l of seenListeners) l()
 }
 

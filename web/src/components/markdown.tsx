@@ -112,7 +112,6 @@ function CodeBlock({ children }: { children?: ReactNode }) {
   useEffect(() => {
     const el = preRef.current
     if (!el) return
-    measure()
     const watch = new ResizeObserver(measure)
     watch.observe(el)
     return () => watch.disconnect()

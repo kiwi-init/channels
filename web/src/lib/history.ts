@@ -21,6 +21,7 @@ export type OpenRows = (rows: CachedRow[]) => Promise<(Message | Unread | null)[
 
 export interface HistoryDb {
   put(roomId: string, memberPk: string, row: CachedRow): Promise<void>
+  putRows(roomId: string, memberPk: string, rows: CachedRow[], oldestKept: number): Promise<void>
   rows(roomId: string, memberPk: string): Promise<CachedRow[]>
   /** Delete seqs below `oldestKept` for this room and member. */
   trimBelow(roomId: string, memberPk: string, oldestKept: number): Promise<void>
@@ -43,34 +44,59 @@ function rangeAbove(roomId: string, memberPk: string, newestKept: number): IDBKe
 }
 
 function idb(): HistoryDb {
+  let open: Promise<IDBDatabase> | null = null
   const openDb = (): Promise<IDBDatabase> =>
-    new Promise((resolve, reject) => {
+    (open ??= new Promise<IDBDatabase>((resolve, reject) => {
       const req = indexedDB.open(DB, 1)
       req.onupgradeneeded = () => {
         const db = req.result
         if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE)
       }
-      req.onsuccess = () => resolve(req.result)
-      req.onerror = () => reject(req.error)
-    })
+      req.onsuccess = () => {
+        const db = req.result
+        db.onversionchange = () => {
+          db.close()
+          open = null
+        }
+        db.onclose = () => {
+          open = null
+        }
+        resolve(db)
+      }
+      req.onerror = () => {
+        open = null
+        reject(req.error)
+      }
+    }))
 
-  const run = async <T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T> | void): Promise<T> => {
+  const once = async <T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T> | void): Promise<T> => {
     const db = await openDb()
+    return new Promise<T>((resolve, reject) => {
+      const tx = db.transaction(STORE, mode)
+      const out = fn(tx.objectStore(STORE))
+      tx.oncomplete = () => resolve((out && "result" in out ? out.result : undefined) as T)
+      tx.onerror = () => reject(tx.error)
+      tx.onabort = () => reject(tx.error)
+    })
+  }
+  const run = async <T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequest<T> | void): Promise<T> => {
     try {
-      return await new Promise<T>((resolve, reject) => {
-        const tx = db.transaction(STORE, mode)
-        const out = fn(tx.objectStore(STORE))
-        tx.oncomplete = () => resolve((out && "result" in out ? out.result : undefined) as T)
-        tx.onerror = () => reject(tx.error)
-        tx.onabort = () => reject(tx.error)
-      })
-    } finally {
-      db.close()
+      return await once(mode, fn)
+    } catch (err) {
+      if (!(err instanceof DOMException && err.name === "InvalidStateError")) throw err
+      // The kept connection closed under us (another tab upgraded or the browser closed it): open a fresh one, once.
+      open = null
+      return once(mode, fn)
     }
   }
 
   return {
     put: (roomId, memberPk, row) => run<void>("readwrite", (s) => void s.put(row, [roomId, memberPk, row.seq])),
+    putRows: (roomId, memberPk, rows, oldestKept) =>
+      run<void>("readwrite", (s) => {
+        for (const row of rows) s.put(row, [roomId, memberPk, row.seq])
+        s.delete(range(roomId, memberPk, oldestKept, true))
+      }),
     rows: (roomId, memberPk) => run<CachedRow[]>("readonly", (s) => s.getAll(range(roomId, memberPk, Number.MAX_SAFE_INTEGER, false))),
     trimBelow: (roomId, memberPk, oldestKept) => run<void>("readwrite", (s) => void s.delete(range(roomId, memberPk, oldestKept, true))),
     trimAbove: (roomId, memberPk, newestKept) => run<void>("readwrite", (s) => void s.delete(rangeAbove(roomId, memberPk, newestKept))),
@@ -94,11 +120,13 @@ export function useHistoryDb(next: HistoryDb | null): void {
   backing = next
 }
 
-export async function rememberRow(roomId: string, memberPk: string, row: CachedRow, limit: number): Promise<void> {
-  if (!Number.isSafeInteger(row.seq) || row.seq <= 0) return
-  await db().put(roomId, memberPk, row)
-  await db().trimBelow(roomId, memberPk, row.seq - limit + 1)
+export async function rememberRows(roomId: string, memberPk: string, rows: CachedRow[], limit: number): Promise<void> {
+  const kept = rows.filter((row) => Number.isSafeInteger(row.seq) && row.seq > 0)
+  if (!kept.length) return
+  await db().putRows(roomId, memberPk, kept, Math.max(...kept.map((row) => row.seq)) - limit + 1)
 }
+
+export const rememberRow = (roomId: string, memberPk: string, row: CachedRow, limit: number): Promise<void> => rememberRows(roomId, memberPk, [row], limit)
 
 /**
  * Messages to paint, and the exclusive seq to stream from. An unusable cache
