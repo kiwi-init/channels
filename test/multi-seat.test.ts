@@ -3,10 +3,12 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { loadConfig } from "../src/config.ts";
 import { daemonListeners, daemonSock } from "../src/daemon.ts";
 import { hookOutput } from "../src/hooks.ts";
 import { HOOK_CONTEXT_MAX } from "../src/hooks/answer.ts";
 import { startRelay } from "../src/relay/bun.ts";
+import { seatsAt } from "../src/seats.ts";
 
 setDefaultTimeout(60_000);
 
@@ -92,7 +94,22 @@ async function twoSeats() {
   const h = scratch("agent");
   const first = await joinAs(ownerA, h, codeA, "planner", S);
   const second = await joinAs(ownerB, h, codeB, "reviewer", S);
-  return { ownerA, ownerB, h, joined: [first, second], input: JSON.stringify({ session_id: "M", cwd: h }) };
+  return { ownerA, ownerB, h, codeB, joined: [first, second], input: JSON.stringify({ session_id: "M", cwd: h }) };
+}
+
+function seatsIn(h: string): string[] {
+  const before = process.env.KIWI_HOME;
+  process.env.KIWI_HOME = h;
+  try {
+    const cfg = loadConfig();
+    return Object.keys(cfg.bindings ?? {})
+      .flatMap((dir) => seatsAt(cfg, dir))
+      .map((b) => `${b.as}:${b.alias}`)
+      .sort();
+  } finally {
+    if (before === undefined) delete process.env.KIWI_HOME;
+    else process.env.KIWI_HOME = before;
+  }
 }
 
 async function slots(h: string): Promise<string[]> {
@@ -163,13 +180,16 @@ describe("one Claude Code session that holds two seats", () => {
     const { h, joined } = await twoSeats();
     expect(joined[0]).not.toContain("this folder now has seats in");
     expect(joined[1]).toContain("kiwi: this folder now has seats in alpha and beta, so commands from it need -c beta --as reviewer (or -c alpha --as planner) to pick one\n");
-    const config = JSON.parse(readFileSync(join(h, "config.json"), "utf8")) as { bindings: Record<string, { alias: string; as: string }[]> };
-    expect(
-      Object.values(config.bindings)
-        .flat()
-        .map((b) => `${b.as}:${b.alias}`)
-        .sort(),
-    ).toEqual(["planner:alpha", "reviewer:beta"]);
+    expect(seatsIn(h)).toEqual(["planner:alpha", "reviewer:beta"]);
+  });
+
+  test("rejoining a channel the folder already has a seat in says nothing about picking one", async () => {
+    const { h, codeB } = await twoSeats();
+    const rejoined = await run(h, ["join", codeB, "--as", "reviewer", "--timeout", "40s"], S);
+    expect(rejoined.code).toBe(0);
+    expect(rejoined.err).toContain('back in "beta" as reviewer');
+    expect(rejoined.err).not.toContain("this folder now has seats in");
+    expect(seatsIn(h)).toEqual(["planner:alpha", "reviewer:beta"]);
   });
 
   test("with a backlog on both seats, each hook's whole output stays inside Claude Code's inline limit", async () => {

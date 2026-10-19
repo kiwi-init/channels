@@ -37,9 +37,10 @@ const joinedAlias = Effect.fn("kiwi.joinedAlias")(function* (roomId: string, ali
 });
 
 function settleIn(alias: string, name: string, model: string, harnessSession: string | null): void {
+  const hadThisChannel = seatsNear(process.cwd()).some((b) => b.alias === alias);
   if (!bindDirectory(process.cwd(), { ...seatHere(alias, name, true, model), ...(harnessSession ? { harnessSession } : {}) })) {
     process.stderr.write(`kiwi: not binding ${process.cwd()} (too broad); run kiwi from your project folder, or pass ${channelOption(alias)} ${asOption(name)}\n`);
-  } else {
+  } else if (!hadThisChannel) {
     const elsewhere = seatsNear(process.cwd()).filter((b) => b.alias !== alias);
     const channels = [...new Set(elsewhere.map((b) => b.alias)), alias];
     if (elsewhere.length)
