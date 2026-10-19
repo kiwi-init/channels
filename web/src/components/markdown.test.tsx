@@ -2,8 +2,52 @@ import { describe, expect, test } from "bun:test"
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { Markdown } from "./markdown"
+import { MentionNames } from "../lib/mentions"
 import { errorLine } from "./mermaid"
-import { compareCells, messageRefs, nextSort, sanitizeMarkdownUrl } from "../lib/markdown"
+import { compareCells, mentionParts, messageRefs, nextSort, sanitizeMarkdownUrl } from "../lib/markdown"
+
+describe("mentions", () => {
+  const nicks: Record<string, string> = { "jovial-gecko": "claude", "zesty-owl": "grokbot", jow: "Jow" }
+  const labelOf = (name: string) => nicks[name]
+  const render = (body: string) => renderToStaticMarkup(createElement(MentionNames.Provider, { value: labelOf }, createElement(Markdown, null, body)))
+
+  test("@handle of a member becomes their nickname, keeping the handle; trailing punctuation stays text", () => {
+    expect(mentionParts("ask @jovial-gecko, then @zesty-owl.", labelOf)).toEqual([
+      { kind: "text", text: "ask " },
+      { kind: "mention", text: "@jovial-gecko", name: "jovial-gecko", label: "claude" },
+      { kind: "text", text: ", then " },
+      { kind: "mention", text: "@zesty-owl", name: "zesty-owl", label: "grokbot" },
+      { kind: "text", text: "." },
+    ])
+  })
+
+  test("leaves emails, unknown names, @all and lone @ alone", () => {
+    for (const text of ["mail jow@example.com", "@nobody here", "@all", "a @ b", "x/@jow"]) {
+      expect(mentionParts(text, labelOf)).toEqual([{ kind: "text", text }])
+    }
+  })
+
+  test("rendered mentions read as the nickname with the @handle on hover, but not inside code or links", () => {
+    const html = render("@jovial-gecko look\n\n`@jow` and [@zesty-owl](https://example.com)")
+    expect(html).toContain('<span title="@jovial-gecko" class="font-medium text-link">@claude</span>')
+    expect(html).toContain("<code")
+    expect(html).toContain("@jow</code>")
+    expect(html).not.toContain(">@grokbot<")
+    expect(html).not.toContain(">@Jow<")
+  })
+
+  test("without names (outside a conversation) a mention stays the @handle as written", () => {
+    expect(renderToStaticMarkup(createElement(Markdown, null, "@jovial-gecko look"))).toBe(
+      '<div class="[overflow-wrap:anywhere] break-words"><p class="[&amp;:not(:first-child)]:mt-2">@jovial-gecko look</p></div>'
+    )
+  })
+
+  test("mentions and #N references share a line", () => {
+    const html = renderToStaticMarkup(createElement(MentionNames.Provider, { value: labelOf }, createElement(Markdown, { refs: { known: (seq: number) => seq === 5, open: () => {} } }, "@jow see #5")))
+    expect(html).toContain(">@Jow</span> see <button")
+    expect(html).toContain(">#5</button>")
+  })
+})
 
 describe("message references", () => {
   const known = (seq: number) => seq < 1000
