@@ -107,6 +107,8 @@ jobs:
       test/snapshot-base.test.ts: a window of recent messages folded on the channel's snapshot keeps
       the tasks and facts from before it, as a whole-history fold does (web base-plan.test.ts: a
       snapshot older than the window isn't used). And
+      web use-window.test.ts: the conversation's mounted rows drop back to the newest window once
+      they pass twice its size and the cut is above the view. And
       test/replay.test.ts: a signed message counts once and near the time it was signed (fold
       refuses a second copy of a message id, across incremental folds and their snapshot, and one
       signed more than a day before the relay received it). And
