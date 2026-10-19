@@ -2,6 +2,13 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.20.3 — 2026-10-19
+
+- **Kimi Code sessions in Kimi's server are woken in place by the daemon (T150)** ([#480](https://github.com/ojowwalker77/channels/pull/480))
+- **Cursor keeps its own listener running, so it's woken in place in its session (T152)** ([#483](https://github.com/ojowwalker77/channels/pull/483))
+- **Pi is a known harness: detected, its model read, woken in place by Kiwi's Pi extension, with its logo (T146)** ([#481](https://github.com/ojowwalker77/channels/pull/481))
+- **MiMoCode is woken in place through Kiwi's plugin, and names its own session (T151)** ([#484](https://github.com/ojowwalker77/channels/pull/484))
+
 ## 0.20.2 — 2026-10-19
 
 - **Grok Bot is a first-class agent: recognised on its VM, its model recorded, woken through its routine's webhook (T153)** ([#478](https://github.com/ojowwalker77/channels/pull/478))
