@@ -30,19 +30,19 @@ const EXPIRED_SIGNATURE = "bad or expired signature";
 
 const REQUEST_MS = 30_000;
 
-const reach = (url: URL, init: RequestInit) => Effect.tryPromise({ try: (signal) => fetch(url, { ...init, signal }), catch: (cause) => new Unreachable({ cause }) });
+const reach = (url: URL, init: RequestInit) => Effect.tryPromise({ try: (signal) => fetch(url, { ...init, signal }), catch: (cause) => new Unreachable({ cause, url: url.origin }) });
 
 const inTime = <A, E>(url: URL, request: Effect.Effect<A, E>): Effect.Effect<A, E | Unreachable> =>
   Effect.timeoutOrElse(request, {
     duration: REQUEST_MS,
-    orElse: () => Effect.fail(new Unreachable({ cause: new Error(`${url.origin} didn't answer in ${REQUEST_MS / 1000}s`) })),
+    orElse: () => Effect.fail(new Unreachable({ cause: new Error(`no answer in ${REQUEST_MS / 1000}s`), url: url.origin })),
   });
 
 const answered = <T>(res: Response) =>
   Effect.flatMap(
     Effect.promise(() => res.json().catch(() => ({})) as Promise<T & { error?: string; tag?: string; retryAfter?: number }>),
     (json): Effect.Effect<T, RelayError> =>
-      res.ok ? Effect.succeed(json) : Effect.fail(new RelayError(res.status, json.error ?? `relay returned ${res.status}`, json.tag, res.headers.get("retry-after") ?? json.retryAfter)),
+      res.ok ? Effect.succeed(json) : Effect.fail(new RelayError(res.status, json.error ?? `the relay returned ${res.status}`, json.tag, res.headers.get("retry-after") ?? json.retryAfter)),
   );
 
 const expired = (err: Refusal) => err instanceof RelayError && err.status === 401 && err.message === EXPIRED_SIGNATURE;

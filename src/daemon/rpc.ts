@@ -77,7 +77,7 @@ async function openConn(sock: string, timeoutMs = 15_000): Promise<DaemonConn> {
           if (p.onMessage) {
             if (!msg.ok) {
               pending.delete(msg.id);
-              const err = new Error(typeof msg.error === "string" ? msg.error : "the daemon refused");
+              const err = new Error(typeof msg.error === "string" ? msg.error : "the daemon refused without saying why");
               if (p.live) p.onError?.(err);
               else p.reject(err);
             } else if (!p.live) {
@@ -88,7 +88,7 @@ async function openConn(sock: string, timeoutMs = 15_000): Promise<DaemonConn> {
           }
           pending.delete(msg.id);
           if (msg.ok) p.resolve(msg as Reply);
-          else p.reject(new Error(typeof msg.error === "string" ? msg.error : "the daemon refused"));
+          else p.reject(new Error(typeof msg.error === "string" ? msg.error : "the daemon refused without saying why"));
         }
       },
       close() {
@@ -106,7 +106,7 @@ async function openConn(sock: string, timeoutMs = 15_000): Promise<DaemonConn> {
   const send = (body: Record<string, unknown>, entry: Pending): void => {
     const id = next++;
     const timer = setTimeout(() => {
-      if (pending.delete(id)) entry.reject(new Error("the daemon didn't answer in time"));
+      if (pending.delete(id)) entry.reject(new Error(`kiwi daemon on ${sock} didn't answer in ${timeoutMs / 1000}s; it may be busy or stuck: \`kiwi doctor\` checks it`));
     }, timeoutMs);
     pending.set(id, {
       resolve: (r) => {
@@ -186,7 +186,7 @@ export async function ensureDaemon(dir = home(), argv?: string[]): Promise<Daemo
   for (;;) {
     const hello = await tryHello(sock);
     if (current(hello)) return hello;
-    if (Date.now() > until) throw new Error(`kiwi daemon didn't answer on ${sock}`);
+    if (Date.now() > until) throw new Error(`kiwi daemon didn't start on ${sock} within 15s: run \`kiwi daemon\` in a terminal to see why`);
     await Bun.sleep(100);
   }
 }

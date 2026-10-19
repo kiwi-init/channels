@@ -104,6 +104,9 @@ jobs:
       Also test/who-cached.test.ts: the daemon keeps each member's latest presence beacon, and once it has
       heard a full beacon round, kiwi who and status answer from it (the daemon's presence verb) without
       opening a socket to the relay for a probe.
+      Also test/cli-failures.test.ts: what the CLI says when the relay can't be reached (its address and the
+      reason in plain words, not Bun's), fails (5xx) or limits it (429), with what to do next (src/cli/fail.ts,
+      packages/core/src/client/live.ts reason()).
       Also test/silent-socket.test.ts: a live socket that goes quiet after opening (no answer to
       a ping) and an upgrade nobody answers are both dropped and opened again; a nudge (the network or
       the Mac coming back) cuts a long reconnect wait short and drops a socket that doesn't answer a
