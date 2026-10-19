@@ -71,7 +71,7 @@ jobs:
 
   test-unit:
     name: test / unit
-    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release-build.yml", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "site/install.ps1", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/action-pins.ts", "desktop/src/**", "desktop/build/entitlements.mac.plist", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
+    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release-build.yml", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "site/install.ps1", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "desktop/src/**", "desktop/build/entitlements.mac.plist", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs the unit tests with bun test: every test/*.test.ts except the slow suites in
@@ -95,6 +95,10 @@ jobs:
       Also test/daemon-versions.test.ts: compareVersions (packages/core/src/versions.ts, shared by
       the CLI, the desktop updater and the changelog) orders releases and pre-releases, an older
       kiwi keeps a newer daemon running, and a newer one replaces an older daemon (src/daemon/rpc.ts).
+      Also test/install.test.ts's download cases: site/install.sh takes the release's .xz when
+      xz is installed, else its .gz, else the plain binary, and checks what it downloaded against
+      SHA256SUMS; and test/cli-downloads.test.ts: scripts/cli-downloads.ts, the release build's
+      check that every CLI download is 30 MB or less.
       Also test/silent-socket.test.ts: a live socket that goes quiet after opening (no answer to
       a ping) and an upgrade nobody answers are both dropped and opened again; a nudge (the network or
       the Mac coming back) cuts a long reconnect wait short and drops a socket that doesn't answer a
@@ -326,11 +330,12 @@ jobs:
     push: false
     version_bumps: true
     inputs: []
-    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/scripts/fuses.ts", "scripts/changelog.ts"]
+    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/scripts/fuses.ts", "scripts/changelog.ts", "scripts/cli-downloads.ts"]
     description: >-
       Runs .github/workflows/release-build.yml, the build a tag's release.yml runs, with
       rehearsal: true and a read-only token, uploading nothing: the version and changelog checks
-      (taking v<src/version.ts> as the tag), the cli job on macOS (bun test, five builds), and
+      (taking v<src/version.ts> as the tag), the cli job on macOS (bun test, five builds, each
+      packed as .gz and macOS and Linux also as .xz, held to 30 MB by scripts/cli-downloads.ts), and
       the desktop app packaged on macOS (arm64 and x64) and Linux (AppImage and deb), with each
       package's contents and fuses checked (release/mac*/Channels.app and
       release/*-unpacked/channels-desktop). On a pull request the macOS app is unsigned; a

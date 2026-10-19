@@ -85,6 +85,16 @@ jobs:
           codesign --force --sign - dist/kiwi-darwin-arm64 dist/kiwi-darwin-x64
           ./dist/kiwi-darwin-arm64 --version
 
+      - name: Pack
+        run: |
+          cd dist
+          for f in kiwi-*; do gzip -9 -n -k "$f"; done
+          for f in kiwi-darwin-* kiwi-linux-*; do
+            case "$f" in *.gz) continue ;; esac
+            xz -9 -T0 -k "$f"
+          done
+          bun ../scripts/cli-downloads.ts .
+
       - name: Upload
         if: ${{ !inputs.rehearsal }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
