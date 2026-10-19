@@ -18,11 +18,6 @@ afterAll(() => {
   rmSync(dataDir, { recursive: true, force: true });
 });
 
-/**
- * The relay, behind a door that answers the next `times` signed requests the way the relay answers a
- * signature from before its window, and passes everything else through. No clock is touched, so
- * tests running beside this one sign as they always do.
- */
 function staleSignatures(times: number): { url: string; signatures: () => string[]; stop: () => void } {
   let left = times;
   const seen: string[] = [];
