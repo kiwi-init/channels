@@ -127,6 +127,7 @@ jobs:
       MIMOCODE_SESSION_ID among them), so a run on a machine with ~/.config/mimocode, or from inside MiMoCode,
       writes nothing there; test/hooks-harness.test.ts stamps ~/.config/mimocode and its plugin folder with
       the other real harness paths and fails if an install changed them.
+      Also dictation's relay route and client (test/dictation-relay.test.ts, web lib/dictation): /v1/dictation serves only the allowlisted pinned files (no query, no other path, GET and HEAD), checks size and SHA-256 before keeping or serving, never keeps a tampered or short file, streams a kept one without reading it whole, answers no-store, rate-limits per address, says when upstream is down; the manifest pins every file and its runtime matches the one the app bundles; the client downloads each file from the relay, keeps none that fails its hash, and picks WebGPU only from a real GPU adapter.
       Also Pi as a known harness: test/hooks-pi.test.ts: Kiwi's Pi extension
       (src/hooks/install/pi.ts) written to Pi's extensions folder on join or kiwi hooks install
       pi, counted as installed only while it is current and runs this kiwi's hooks, removed on
@@ -366,7 +367,7 @@ jobs:
 
   build:
     name: build / bundles
-    inputs: ["src/**", "packages/core/**", "web/**", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/smoke-cli.ts", "scripts/smoke-ui.ts", "scripts/web-bundle.ts", "test/owner.ts", "test/owner-cli.ts", "test/check.ts"]
+    inputs: ["src/**", "packages/core/**", "web/**", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/smoke-cli.ts", "scripts/smoke-ui.ts", "scripts/dictation-files.ts", "test/fixtures/dictation.wav", "scripts/web-bundle.ts", "test/owner.ts", "test/owner-cli.ts", "test/check.ts"]
     always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "wrangler.jsonc", "scripts/smoke-ui.ts", "scripts/web-bundle.ts"]
     description: >-
       Builds the web dashboard for production (vite build in web/) and fails when the JS the
@@ -375,7 +376,7 @@ jobs:
       web/src/components/lazy.tsx doesn't count. Then ui smoke: starts the relay and the kiwi CLI
       as a test computer and drives the built dashboard in headless Chromium, opening every
       menu, popover and dialog, setting up a passkey, previewing an invite, Settings → Personalities duplicating a preset into the person's own, the owner allowing voice from Details, the Agents tab showing a lane per agent with what's next on it, Needs you as rows always in view (an agent asking in is let in from its row), an answered ask saying who chose what on the ask itself, replying inline (the reply quotes what it answers, "1 Reply" opens the thread), linking a computer
-      with `kiwi setup`, approving its agent and opening a task (a board row opens it in the Tasks panel, with no second task list behind it; /tasks switches to the Tasks tab; the details' wants-to-join row closes them and shows Needs you, where the agent is let in, and details offer no Copy invite link or second approve flow), finding controls by visible
+      with `kiwi setup`, approving its agent and opening a task (a board row opens it in the Tasks panel, with no second task list behind it; /tasks switches to the Tasks tab; the details' wants-to-join row closes them and shows Needs you, where the agent is let in, and details offer no Copy invite link or second approve flow), dictating for real (the pinned Whisper files, fetched and SHA-256-checked by scripts/dictation-files.ts into a cache keyed on packages/core/src/dictation.ts, seed the local relay's /v1/dictation; Chromium's fake mic plays test/fixtures/dictation.wav; the first press asks once, then the model downloads through the relay, web/src/lib/dictation's worker transcribes on WebAssembly, and the words land in the Message box), finding controls by visible
       names and roles; fails if a page throws while rendering, a control it looks for is renamed
       or missing, or the relay, pairing or join flow breaks. Then compiles the kiwi CLI into one
       Linux binary with scripts/build-cli.ts, runs `kiwi --version`, fails over the minified

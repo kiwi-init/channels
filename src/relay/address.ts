@@ -31,6 +31,24 @@ export function writeAllowed(ip: string, now = Date.now()): boolean {
   return true;
 }
 
+const DOWNLOADS_PER_HOUR = 32;
+const HOUR_MS = 60 * 60_000;
+const downloads = new Map<string, number[]>();
+
+export function downloadAllowed(ip: string, now = Date.now()): boolean {
+  const kept = (downloads.get(ip) ?? []).filter((t) => now - t < HOUR_MS);
+  const ok = kept.length < DOWNLOADS_PER_HOUR;
+  if (ok) kept.push(now);
+  downloads.delete(ip);
+  downloads.set(ip, kept);
+  while (downloads.size > MAX_BUCKETS) {
+    const oldest = downloads.keys().next().value;
+    if (oldest === undefined || oldest === ip) break;
+    downloads.delete(oldest);
+  }
+  return ok;
+}
+
 /** An address worth a bucket. Junk is refused so a header cannot mint unlimited keys. */
 function usableIp(raw: string): string | null {
   let ip = raw.trim();

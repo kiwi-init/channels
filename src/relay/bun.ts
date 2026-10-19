@@ -4,7 +4,7 @@
 // Usage: bun src/relay/bun.ts --help
 
 import { Database } from "bun:sqlite";
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, join, resolve, sep } from "node:path";
 import type { ServerWebSocket } from "bun";
 import * as Layer from "effect/Layer";
@@ -14,7 +14,8 @@ import { clockLayer } from "./http.ts";
 import { authkitDomains, devHostOk, devHumanAuth, devRequestOk, Human, HUMAN_HEADER, workosFromSettings, type HumanAuth } from "./human.ts";
 import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
-import { clientAddress, parseTrustProxy, trustProxyFromArgs, writeAllowed, type TrustProxy } from "./address.ts";
+import { clientAddress, downloadAllowed, parseTrustProxy, trustProxyFromArgs, writeAllowed, type TrustProxy } from "./address.ts";
+import { onDictationHttp, type DictationStore } from "./dictation.ts";
 import { Policy, policyFrom, type RelayPolicy } from "./policy.ts";
 import {
   Directory,
@@ -74,6 +75,7 @@ export function startRelay(
     trustProxy?: TrustProxy;
     githubSecret?: string | null;
     githubApp?: GithubAppApi | null;
+    dictationUpstream?: (url: string) => Promise<Response>;
   } = {},
 ) {
   const human = opts.human ?? null;
@@ -240,6 +242,19 @@ export function startRelay(
     }
     return expired;
   };
+  const dictationDir = join(dataDir, "dictation");
+  const dictation: DictationStore = {
+    read: async (sha256) => {
+      const f = Bun.file(join(dictationDir, sha256));
+      return (await f.exists()) ? f : null;
+    },
+    write: async (sha256, bytes) => {
+      mkdirSync(dictationDir, { recursive: true, mode: 0o700 });
+      const tmp = join(dictationDir, `${sha256}.${process.pid}.part`);
+      writeFileSync(tmp, bytes, { mode: 0o600 });
+      renameSync(tmp, join(dictationDir, sha256));
+    },
+  };
   const sweeper = policy.expireAfterDays ? setInterval(sweep, 3_600_000) : undefined;
   sweeper?.unref?.();
 
@@ -260,6 +275,8 @@ export function startRelay(
         if (req.method === "OPTIONS" && url.pathname.startsWith("/v1/")) return corsPreflight();
         if (url.pathname === "/v1/config") return withCors(await relayConfig(human, process.env.GITHUB_APP_CLIENT_ID));
         const ip = clientAddress(server.requestIP(req)?.address ?? null, req.headers.get("x-forwarded-for"), trustProxy);
+        const spoken = await onDictationHttp(req, { store: dictation, ip, allow: downloadAllowed, ...(opts.dictationUpstream ? { upstream: opts.dictationUpstream } : {}) });
+        if (spoken) return spoken;
         const mailbox = await onMailboxHttp(req, mailboxes, ip ? { ip, allow: writeAllowed } : {});
         if (mailbox) return mailbox;
         const github = await onGithubHttp(req, githubSecret, githubRoutes, clock);
@@ -401,7 +418,7 @@ function webApp(app: WebApp): (pathname: string) => Response {
   if (!existsSync(join(root, "index.html"))) throw new Error(`no index.html in ${root} (build it with: bun run web:build)`);
   const connect = ["'self'", ...(app.connect ?? [])].join(" ");
   const security = {
-    "content-security-policy": `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ${connect}; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+    "content-security-policy": `default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src ${connect}; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
     "referrer-policy": "no-referrer",
     "x-content-type-options": "nosniff",
   };
