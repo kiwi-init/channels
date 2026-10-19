@@ -95,6 +95,10 @@ describe("near-duplicate titles", () => {
     expect(titlesLookAlike("Fix login", "Please fix the login flow")).toBe(true);
     expect(titlesLookAlike("Write the docs", "Fix the login button")).toBe(false);
     expect(titlesLookAlike("ui", "build the gui")).toBe(false);
+    expect(titlesLookAlike("ABC-81 stage 6", "XY-53 stage 6")).toBe(false);
+    expect(titlesLookAlike("ABC-81 stage 6", "ABC-82 stage 6")).toBe(false);
+    expect(titlesLookAlike("Deploy", "deploy the site")).toBe(false);
+    expect(titlesLookAlike("ABC-81 stage 6 review", "Review ABC-81, stage 6")).toBe(true);
 
     const a = await member("a");
     const open = await msg(a, "a", { op: "task.add", title: "Fix the login button" });

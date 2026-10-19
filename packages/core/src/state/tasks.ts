@@ -49,19 +49,32 @@ function normTitle(s: string): string {
     .trim();
 }
 
+const hasDigit = (w: string) => /\d/.test(w);
+
+function titleWords(norm: string): string[] {
+  return [...new Set(norm.split(" ").filter((w) => w.length > 2 || hasDigit(w)))];
+}
+
+function idsDiffer(wa: readonly string[], wb: readonly string[]): boolean {
+  const ia = wa.filter(hasDigit);
+  const ib = wb.filter(hasDigit);
+  return ia.length > 0 && ib.length > 0 && !ia.every((w) => ib.includes(w)) && !ib.every((w) => ia.includes(w));
+}
+
 export function titlesLookAlike(a: string, b: string): boolean {
   const na = normTitle(a);
   const nb = normTitle(b);
   if (!na || !nb) return false;
   if (na === nb) return true;
+  const wa = titleWords(na);
+  const wb = titleWords(nb);
+  if (idsDiffer(wa, wb)) return false;
   const shorter = na.length <= nb.length ? na : nb;
   const longer = shorter === na ? nb : na;
   if (shorter.length >= 8 && longer.includes(shorter)) return true;
-  const wa = [...new Set(na.split(" ").filter((w) => w.length > 2))];
-  const wb = new Set(nb.split(" ").filter((w) => w.length > 2));
-  if (!wa.length || !wb.size) return false;
-  const shared = wa.filter((w) => wb.has(w)).length;
-  return shared / Math.min(wa.length, wb.size) >= 0.6;
+  if (!wa.length || !wb.length) return false;
+  const shared = wa.filter((w) => wb.includes(w)).length;
+  return shared >= 2 && shared / Math.min(wa.length, wb.length) >= 0.6;
 }
 
 export function similarOpenTasks(state: ChannelState, title: string): Task[] {
