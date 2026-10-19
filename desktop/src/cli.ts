@@ -59,12 +59,12 @@ export async function keepCli(bundled: string, bundledVersion: string): Promise<
   const dest = cliPath();
   const was = fs.existsSync(dest) ? await versionOf(dest) : null;
   if (was && compareVersions(was, bundledVersion) >= 0) return { path: dest, version: was, updated: false };
-  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  await fs.promises.mkdir(path.dirname(dest), { recursive: true });
   const tmp = `${dest}.new-${process.pid}`;
-  fs.copyFileSync(bundled, tmp);
-  if (process.platform !== "win32") fs.chmodSync(tmp, 0o755);
-  fs.renameSync(tmp, dest);
-  await tidy(dest);
+  await fs.promises.copyFile(bundled, tmp);
+  if (process.platform !== "win32") await fs.promises.chmod(tmp, 0o755);
+  await fs.promises.rename(tmp, dest);
+  void tidy(dest);
   return { path: dest, version: bundledVersion, updated: true };
 }
 
