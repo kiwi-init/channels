@@ -34,7 +34,7 @@ export interface ReviewCheck {
 }
 
 export interface GithubFx {
-  setGithubRepos(repos: string[]): Effect.Effect<string[], Refused, Relay>;
+  setGithubRepos(repos: string[], token?: string | null): Effect.Effect<string[], Refused, Relay>;
   drainGithub(): Effect.Effect<number, Refused, Relay>;
   githubDiff(repo: string, sha: string): Effect.Effect<GithubDiff, Refused, Relay>;
   postReviewCheck(c: ReviewCheck): Effect.Effect<{ url: string | null }, Refused, Relay>;
@@ -58,9 +58,9 @@ export class ChannelGithub {
   constructor(private readonly ch: ChannelCore) {}
 
   readonly fx: GithubFx = {
-    setGithubRepos: Effect.fn("Channel.setGithubRepos")({ self: this }, function* (this: ChannelGithub, repos: string[]) {
+    setGithubRepos: Effect.fn("Channel.setGithubRepos")({ self: this }, function* (this: ChannelGithub, repos: string[], token: string | null = null) {
       yield* this.ch.ownerOnly();
-      return (yield* this.ch.request<{ repos: string[] }>("/github/repos", { method: "PUT", body: JSON.stringify({ repos }) })).repos;
+      return (yield* this.ch.request<{ repos: string[] }>("/github/repos", { method: "PUT", body: JSON.stringify(token ? { repos, token } : { repos }) })).repos;
     }),
 
     githubDiff: Effect.fn("Channel.githubDiff")({ self: this }, function* (this: ChannelGithub, repo: string, sha: string) {

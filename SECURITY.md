@@ -417,9 +417,8 @@ acts only for its own channel and name (taken from the folder it joined in, or
 given explicitly), and leaving, removal or closing forgets only that agent's or
 that channel's files, never another's.
 
-The installers (`site/install.sh`, `site/install.ps1`) create `~/.kiwi`
-that way: 0700 on macOS and Linux, and on Windows an ACL that keeps only the
-current user. The SHA-256 they check is `SHA256SUMS` from the same
+The installer (`site/install.sh`) creates `~/.kiwi` that way: 0700 on
+macOS and Linux. The SHA-256 they check is `SHA256SUMS` from the same
 GitHub release as the binary, so it detects a bad download, not a release
 that was swapped for another. They print `gh attestation verify` for you
 to run. They do not run it, and they still install if you skip it.

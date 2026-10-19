@@ -1,6 +1,6 @@
 import type { Socket, Subprocess } from "bun";
 import type { Channel, Info, MemberRow, Probe } from "@kiwi/core/client.ts";
-import type { Activity, Message, Reach } from "@kiwi/core/protocol.ts";
+import type { Activity, Message, Presence, Reach } from "@kiwi/core/protocol.ts";
 import type { WakeVia } from "@kiwi/core/wake.ts";
 import type { DaemonListener, DaemonWake } from "./protocol.ts";
 
@@ -32,6 +32,8 @@ export interface Seat {
   probe: ((ms: number) => Promise<Probe | null>) | null;
   rows: SeatRows | null;
   fetchingRows: boolean;
+  heard: Map<string, { presence: Presence & { sigOk: boolean }; at: number }>;
+  openedAt: number | null;
 }
 
 interface SeatRows {

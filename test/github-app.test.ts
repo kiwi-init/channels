@@ -41,6 +41,7 @@ function innerOctets(pkcs8: Uint8Array): Uint8Array {
 let keys: CryptoKeyPair;
 let pkcs8: Uint8Array<ArrayBuffer>;
 const calls: { method: string; path: string; auth: string; body: string }[] = [];
+let ownerChannel: Channel;
 let github: ReturnType<typeof Bun.serve>;
 let server: ReturnType<typeof startRelay>;
 let relay: string;
@@ -70,7 +71,10 @@ beforeAll(async () => {
       calls.push({ method: req.method, path, auth: req.headers.get("authorization") ?? "", body: await req.text() });
       if (path === "/repos/ojow/channels/installation") return Response.json({ id: 42 });
       if (path === "/app/installations/42/access_tokens") return Response.json({ token: "ghs_test", expires_at: new Date(Date.now() + 3_600_000).toISOString() });
-      if (path === "/repos/ojow/channels") return Response.json({ default_branch: "main" });
+      if (path === "/repos/ojow/channels") {
+        const user = req.headers.get("authorization");
+        return Response.json({ default_branch: "main", ...(user === "Bearer ghu_owner" ? { permissions: { push: true } } : user === "Bearer ghu_reader" ? { permissions: { push: false } } : {}) });
+      }
       if (path === `/repos/ojow/channels/compare/main...${sha}`) return new Response("diff --git a/x b/x\n+hello\n");
       if (path === "/repos/ojow/channels/check-runs") return Response.json({ html_url: "https://github.com/ojow/channels/runs/1" }, { status: 201 });
       if (path === "/repos/ojow/channels/issues/7/comments") return Response.json({ html_url: "https://github.com/ojow/channels/pull/7#issuecomment-1" }, { status: 201 });
@@ -104,7 +108,8 @@ beforeAll(async () => {
   const ownerCh = new Channel(made.access, relay, owner);
   const ask = await Channel.requestJoin(relay, made.code, member, { name: "win" });
   await ownerCh.approve((await checked(ownerCh, relay, made.code, [{ id: member, requestId: ask.requestId }]))[0]!);
-  await ownerCh.setGithubRepos(["ojow/channels"]);
+  await ownerCh.setGithubRepos(["ojow/channels"], "ghu_owner");
+  ownerChannel = ownerCh;
 });
 afterAll(() => {
   server.stop(true);
@@ -200,6 +205,18 @@ describe("diffs and review checks through the relay", () => {
       ["POST", "/repos/ojow/channels/issues/12/comments", { body: "Kiwi task T9 cancelled: duplicate" }],
       ["PATCH", "/repos/ojow/channels/issues/12", { state: "closed", state_reason: "not_planned" }],
     ]);
+  });
+
+  test("connecting a repo takes the owner's linked GitHub token, and push access to it", async () => {
+    expect(ownerChannel.setGithubRepos(["ojow/channels"])).rejects.toThrow(/link GitHub in Settings/);
+    expect(ownerChannel.setGithubRepos(["ojow/channels"], "ghu_reader")).rejects.toThrow(/can't push to ojow\/channels/);
+    expect(await ownerChannel.setGithubRepos(["ojow/channels"], "ghu_owner")).toEqual(["ojow/channels"]);
+  });
+
+  test("the owner's token is used for that one check and nothing else", () => {
+    const used = calls.filter((c) => c.auth.startsWith("Bearer ghu_"));
+    expect(used.length).toBeGreaterThan(0);
+    expect(used.every((c) => c.method === "GET" && c.path === "/repos/ojow/channels")).toBe(true);
   });
 
   test("a relay without the App answers 404", async () => {

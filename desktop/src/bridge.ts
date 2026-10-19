@@ -261,7 +261,7 @@ export interface KiwiBridge {
   devSignIn(name: string): Promise<{ token: string }>;
   getToken(): Promise<string | null>;
   signOut(): Promise<void>;
-  /** Whether this relay has a GitHub App, and who this Mac is linked to. The token never leaves main. */
+  /** Whether this relay has a GitHub App, and who this Mac is linked to. The token leaves main only to connect repos on a relay that has the App, through the keys process to that relay, which checks push access with it and keeps nothing. */
   githubStatus(): Promise<GithubStatus>;
   /** GitHub's device flow: onGithubCode gets the code to type, then this resolves once it's typed and approved. */
   githubLink(): Promise<GithubStatus>;

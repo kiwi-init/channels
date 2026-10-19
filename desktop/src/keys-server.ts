@@ -96,11 +96,12 @@ export type HostToKeys =
   | { type: "relay"; relay: string }
   | { type: "nudge" }
   | { type: "port" }
-  | { type: "done"; id: number; error?: string; claim?: PersonClaim | null };
+  | { type: "done"; id: number; error?: string; claim?: PersonClaim | null; token?: string | null };
 
 export type KeysToHost =
   | { type: "save"; id: number; entry: ChannelIdentityView }
   | { type: "access"; id: number; code: string; pk: string; access: ChannelAccess }
   | { type: "forget"; id: number; code: string }
   | { type: "prove"; id: number; code: string; memberPk: string }
+  | { type: "githubToken"; id: number }
   | { type: "flushed"; id: 0 };

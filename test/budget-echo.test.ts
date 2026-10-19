@@ -211,6 +211,7 @@ function app(relay: string): Keyring {
     access: async () => {},
     forget: async () => {},
     prove: async () => null,
+    githubToken: async () => null,
     person: () => null,
     budget: memoryBudget(),
   };
