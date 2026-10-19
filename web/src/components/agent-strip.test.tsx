@@ -6,7 +6,7 @@ import type { Load } from "@kiwi/core/load.ts"
 import { fold, type Task } from "@kiwi/core/state.ts"
 
 mock.module("@/lib/avatars", () => ({ avatarUrl: () => "", robotUrl: () => "", robotFor: () => "blue", harnessUrl: () => "" }))
-const { AgentRow, AgentStrip, contextNow } = await import("./agent-strip")
+const { AgentRow, AgentStrip, agentNow, contextNow } = await import("./agent-strip")
 const { AgentLanes } = await import("./agent-lanes")
 
 const task = { id: 7, title: "Write fewer rows per message" } as unknown as Task
@@ -26,6 +26,31 @@ describe("an agent in the channel's sidebar", () => {
     const out = html([])
     expect(out).toContain('aria-label="Message atlas privately"')
     expect(out.match(/<button/g)).toHaveLength(1)
+  })
+})
+
+describe("an agent's one status", () => {
+  const agent = (here: "listening" | null, current: Task[], activity?: { state: "working"; tool?: string }) => ({
+    name: "win",
+    label: "win",
+    color: null,
+    here,
+    lead: false,
+    load: load(current),
+    ...(activity ? { activity } : {}),
+  })
+
+  test("away is away, even holding a task: not counted as working", () => {
+    expect(agentNow(agent(null, [task]))).toEqual({ text: "Away", busy: false })
+  })
+  test("reachable with a task and no live word from its harness: on that task, and working", () => {
+    expect(agentNow(agent("listening", [task]))).toEqual({ text: "On T7", busy: true })
+  })
+  test("what its harness says now wins", () => {
+    expect(agentNow(agent("listening", [task], { state: "working", tool: "Bash" }))).toEqual({ text: "Running Bash", busy: true })
+  })
+  test("reachable with nothing to do says how it's reached", () => {
+    expect(agentNow(agent("listening", []))).toEqual({ text: "Listening", busy: false })
   })
 })
 

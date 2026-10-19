@@ -44,6 +44,8 @@ export function MemberActions({ m, trigger, onMessage }: { m: RosterMember; trig
 }
 
 export function memberDetail(p: ControlsProps, m: RosterMember): string {
+  const status = m.kind !== "human" ? p.statusOf?.(m.name) : undefined
+  if (status) return status.text
   const load = memberLoad(p.state, m.name)
   const now = p.state.members.get(m.name)
   if (showsLoad(m, load) && load.level !== "free") return LEVEL[load.level]

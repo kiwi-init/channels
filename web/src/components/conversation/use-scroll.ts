@@ -34,7 +34,7 @@ export function useScroll({ messages, visible, hereKey }: { messages: Message[];
             if (atBottom.current && Date.now() > smoothUntil.current) el.scrollTop = el.scrollHeight
           })
         : null
-    if (content) follow?.observe(content)
+    if (content) follow?.observe(content, { box: "border-box" })
     followed.current = { el, stop: () => follow?.disconnect() }
   })
   useEffect(() => () => followed.current?.stop(), [])

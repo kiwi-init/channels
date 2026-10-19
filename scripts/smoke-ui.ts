@@ -369,6 +369,12 @@ async function run(part: Part): Promise<string[]> {
       await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "needs-you.png") });
     }
     log(`ok  ${at} (its model shows)`);
+    at = "details: who wants to join is let in from Needs you, the one place";
+    await inDetails(() => panel.getByRole("button", { name: /wants? to join/ }).click());
+    await panel.waitFor({ state: "detached" });
+    await letIn.waitFor({ timeout: 15000 });
+    for (const gone of ["Copy invite link", "Review and approve"]) if (await page.getByRole("button", { name: gone }).count()) throw new Error(`details still offers "${gone}"`);
+    log(`ok  ${at}`);
     await opens("Needs you → Choose what it can do…", () => needs.getByRole("button", { name: "Choose what it can do…" }).click());
     at = "approve";
     await needsOpen();

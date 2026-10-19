@@ -23,6 +23,8 @@ export interface ControlsProps {
   roster: RosterMember[]
   requests: JoinRequest[]
   online: Map<string, unknown>
+  /** An agent's one status (agent-strip.tsx agentNow), so details says what the sidebar and Agents tab say. */
+  statusOf?: (name: string) => { text: string; busy: boolean } | undefined
   state: ChannelState
   now: number
   onApprove: (r: JoinRequest, scopes?: Scope[], persona?: Persona) => Promise<void>

@@ -335,6 +335,8 @@ try {
         () => toTab("Tasks"),
         () => toTab("Conversation"),
       );
+      await toTab("Tasks");
+      await toTab("Conversation");
       await atNewest("back on the conversation from Tasks");
       await shoot(owner, tag, "06-task-panel", () => openFromBoard(/Write fewer rows/), toChannel);
       await shoot(
@@ -410,7 +412,9 @@ try {
         "12-notes",
         async () => {
           await detailsBtn().click();
-          await details().getByRole("heading", { name: "Notes" }).scrollIntoViewIfNeeded();
+          const notes = details().getByRole("region", { name: "Notes" });
+          await notes.scrollIntoViewIfNeeded();
+          await notes.getByRole("button", { name: /^Notes/ }).click();
         },
         closeDetails,
       );
