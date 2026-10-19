@@ -92,6 +92,52 @@ export function unreadAll(state: ChannelState, messages: readonly Message[], vie
   };
 }
 
+export interface TaskCards {
+  card(id: number, viewer: string): LiveCard | undefined;
+  shown(id: number, room: string): boolean;
+}
+
+export function taskCards(state: ChannelState, messages: readonly Message[]): TaskCards {
+  const first = new Map<number, number>();
+  const said = new Map<number, number>();
+  const status = new Map<number, Message>();
+  const note = new Map<number, Message>();
+  const chat = new Map<number, Message>();
+  for (const m of messages) {
+    if (m.kind === "event") {
+      if (m.ev?.op === "task.update" && !!m.ev.note && visible(state, m) && !state.rejected.has(m.seq)) note.set(m.ev.task, m);
+      continue;
+    }
+    const place = state.placeOf.get(m.seq);
+    if (place?.kind !== "task") continue;
+    const id = place.task;
+    if (!first.has(id)) first.set(id, m.seq);
+    if (!visible(state, m)) continue;
+    said.set(id, (said.get(id) ?? 0) + 1);
+    chat.set(id, m);
+    if (m.kind === "status") status.set(id, m);
+  }
+  const roomOf = (id: number): string => {
+    const seq = first.get(id);
+    return (seq !== undefined ? state.roomOf.get(seq) : undefined) ?? GENERAL_ROOM;
+  };
+  return {
+    card(id, viewer) {
+      const task = state.tasks.get(id);
+      if (!task) return undefined;
+      const found = status.get(id) ?? note.get(id) ?? chat.get(id);
+      return {
+        task,
+        people: [...new Set([task.owner, ...task.workedBy].filter((n): n is string => !!n))],
+        said: said.get(id) ?? 0,
+        ...(found ? { lastLine: line(found) } : {}),
+        waiting: task.state === "review" && (task.review === viewer || (task.review === "*" && !task.workedBy.includes(viewer))),
+      };
+    },
+    shown: (id, room) => room === GENERAL_ROOM || roomOf(id) === room,
+  };
+}
+
 export function liveCard(state: ChannelState, messages: readonly Message[], id: number, viewer: string): LiveCard | undefined {
   const task = state.tasks.get(id);
   if (!task) return undefined;

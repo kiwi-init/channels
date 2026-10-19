@@ -1,5 +1,4 @@
-import type { Message } from "@kiwi/core/protocol.ts"
-import { liveCard } from "@kiwi/core/standup.ts"
+import type { LiveCard } from "@kiwi/core/standup.ts"
 import { colorOf, taskId, type ChannelState } from "@kiwi/core/state.ts"
 import { formatAgo, memberName } from "@/lib/format"
 import { cx } from "@/lib/utils"
@@ -14,8 +13,7 @@ const LIVE: Record<string, { word: string; tone: string; pulse?: boolean }> = {
   done: { word: "done", tone: "text-live" },
 }
 
-export function LiveTaskCard({ id, state, messages, me, now, onOpen }: { id: number; state: ChannelState; messages: readonly Message[]; me: string; now: number; onOpen: (task: number) => void }) {
-  const card = liveCard(state, messages, id, me)
+export function LiveTaskCard({ id, card, state, now, onOpen }: { id: number; card: LiveCard | undefined; state: ChannelState; now: number; onOpen: (task: number) => void }) {
   if (!card) return null
   const { task, waiting, lastLine } = card
   const live = LIVE[task.state] ?? LIVE.todo!
