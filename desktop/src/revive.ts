@@ -45,7 +45,7 @@ export function keepRendererAlive(win: BrowserWindow, quitting: () => boolean, n
 
 const logFile = (): string => path.join(app.getPath("logs"), "main.log");
 
-function logMainError(err: unknown): void {
+export function logMainError(err: unknown): void {
   try {
     fs.mkdirSync(path.dirname(logFile()), { recursive: true });
     fs.appendFileSync(logFile(), errorLine(err, new Date()));
