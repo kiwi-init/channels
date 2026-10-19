@@ -2,6 +2,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Schedule from "effect/Schedule";
 import type * as Scope from "effect/Scope";
+import { randomUUID } from "node:crypto";
 import { writeSync } from "node:fs";
 import { openSession } from "../agent.ts";
 import { Cursor, loadConfig, type ChannelConfig } from "../config.ts";
@@ -9,7 +10,7 @@ import { wakeOn } from "../daemon/reach.ts";
 import { formatMessage } from "@kiwi/core/format.ts";
 import type { Binding, Here } from "../seats.ts";
 import { fitting, moreNote } from "./answer.ts";
-import { answeringNow, deliveredUpTo, noteDelivered, noteHeard } from "./delivered.ts";
+import { answeringNow, deliveredUpTo, noteDelivered, noteHeard, notePending, settlePending } from "./delivered.ts";
 import { hooksListen, installedListenSeconds } from "./install/claude.ts";
 import { mimoInstalled } from "./install/mimo.ts";
 import { piInstalled } from "./install/pi.ts";
@@ -81,8 +82,11 @@ const arm = Effect.fn("Hooks.arm")(function* (seat: Served, who: Here, woke: Eff
   );
 });
 
-export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Served[], who: Here) {
+export type Handoff = { kind: "at-once" } | { kind: "acked"; landed: string | null };
+
+export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Served[], who: Here, handoff: Handoff) {
   const extension = who.harness === "pi" || who.harness === "mimo";
+  if (handoff.kind === "acked") for (const { b } of served) settlePending(b.alias, b.as, who.session ?? "", handoff.landed);
   if (who.harness === "pi" ? !piInstalled() : who.harness === "mimo" ? !mimoInstalled() : !hooksListen()) return 0;
   let enough = yield* Deferred.make<void>();
   let heard = 0;
@@ -144,13 +148,16 @@ export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Serv
     });
   if (extension && !told.length) return 0;
   const blocks = told.map(({ b, text, mc }) => `New Kiwi Channels messages for you (${b.alias}). Handle them; answer with \`${mc} reply N "…"\`:\n${text}\n`);
+  const token = randomUUID();
+  if (handoff.kind === "acked") for (const { b, upTo } of told) notePending(b.alias, b.as, who.session ?? "", token, upTo);
   try {
+    if (handoff.kind === "acked") writeSync(1, token);
     writeSync(2, blocks.length ? blocks.join("\n") : "Kiwi Channels: a day with no messages for you. Nothing to do; just end your turn.\n");
   } catch {
     return 0;
   }
   for (const { b, upTo, seqs } of told) {
-    noteDelivered(b.alias, b.as, who.session ?? "", upTo);
+    if (handoff.kind === "at-once") noteDelivered(b.alias, b.as, who.session ?? "", upTo);
     noteHeard(who.session, b.alias, b.as, seqs);
   }
   return 2;

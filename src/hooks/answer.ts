@@ -47,6 +47,7 @@ export interface HookInput {
   model?: unknown;
   conversation_id?: unknown;
   cursor_version?: unknown;
+  landed?: unknown;
 }
 
 export function freshAt(input: Pick<HookInput, "source">, now: number): number | null {

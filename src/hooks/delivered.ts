@@ -22,6 +22,33 @@ export function noteDelivered(alias: string, as: string, session: string, seq: n
   writeFileSync(deliveredFile(alias, as, session), String(Math.max(seq, deliveredUpTo(alias, as, session))));
 }
 
+function pendingFile(alias: string, as: string, session: string): string {
+  return join(home(), "listen-hooks", `${encodeURIComponent(alias)}.${encodeURIComponent(as)}.${encodeURIComponent(session)}.pending`);
+}
+
+export function notePending(alias: string, as: string, session: string, token: string, seq: number): void {
+  mkdirSync(join(home(), "listen-hooks"), { recursive: true, mode: 0o700 });
+  writeFileSync(pendingFile(alias, as, session), JSON.stringify({ token, seq }));
+}
+
+function readPending(file: string): { token: string; seq: number } | null {
+  try {
+    const got: unknown = JSON.parse(readFileSync(file, "utf8"));
+    if (typeof got !== "object" || got === null || !("token" in got) || !("seq" in got)) return null;
+    return typeof got.token === "string" && typeof got.seq === "number" ? { token: got.token, seq: got.seq } : null;
+  } catch {
+    // No handoff waiting, or one we can't read: nothing to settle, so its messages are handed over again.
+    return null;
+  }
+}
+
+export function settlePending(alias: string, as: string, session: string, landed: string | null): void {
+  const file = pendingFile(alias, as, session);
+  const pending = readPending(file);
+  if (pending && pending.token === landed) noteDelivered(alias, as, session, pending.seq);
+  rmSync(file, { force: true });
+}
+
 const ANSWERING = ".answering";
 
 function answeringDir(): string {
