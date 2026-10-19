@@ -87,9 +87,10 @@ test("the owner's GitHub token goes to the relay only to connect repos, never to
   const { host } = memHost();
   let asked = 0;
   const keyring = new Keyring({ ...host, githubToken: async () => (asked++, null) });
-  const made = await keyring.create("plans", null, null);
-  await keyring.call(made.code, "setGithubRepos", []);
+  const { code } = await keyring.create("plans", null, null);
+  if (!code) throw new Error("the channel was made without a join code");
+  await keyring.call(code, "setGithubRepos", []);
   expect(asked).toBe(0);
-  await keyring.call(made.code, "setGithubRepos", ["kiwi/plans"]);
+  await keyring.call(code, "setGithubRepos", ["kiwi/plans"]);
   expect(asked).toBe(1);
 });

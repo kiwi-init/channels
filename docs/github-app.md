@@ -18,8 +18,9 @@ GitHub link token with that one request. The relay asks GitHub, as the owner,
 for each repo on the list (`GET /repos/<owner>/<name>`, needing push or admin),
 refuses the whole list if any repo fails, and keeps nothing of the token.
 Every change re-checks the whole list, so a repo the owner lost access to
-can't stay connected past the next change. A relay without the App needs no
-token, since nothing is fetched from GitHub there.
+can't stay connected past the next change. The app sends the token only to a
+relay whose `/v1/config` names a GitHub App, and never to clear the list; a
+relay without the App fetches nothing from GitHub and gets no token.
 
 ## Register the App (once, by whoever runs the relay)
 
