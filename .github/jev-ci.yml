@@ -100,7 +100,8 @@ jobs:
       root session when its listener exits with messages, then listening again; a wake MiMoCode refuses
       (promptAsync rejecting, or answering with an error) sent again with backoff before the listener runs
       again, since the listener already counted those messages delivered, and no longer sent once the
-      session is deleted.
+      session is deleted; promptAsync asked to throw on an HTTP error, so a client answering with data
+      only, which returns nothing for one, still has the wake sent again.
       Also Pi as a known harness: test/hooks-pi.test.ts: Kiwi's Pi extension
       (src/hooks/install/pi.ts) written to Pi's extensions folder on join or kiwi hooks install
       pi, counted as installed only while it is current and runs this kiwi's hooks, removed on

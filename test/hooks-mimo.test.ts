@@ -35,7 +35,7 @@ afterAll(() => {
   for (const d of made) rmSync(d, { recursive: true, force: true });
 });
 
-type Prompted = { path: { id: string }; body: { parts: { type: string; text: string }[] } };
+type Prompted = { path: { id: string }; body: { parts: { type: string; text: string }[] }; throwOnError?: boolean };
 type Hooks = {
   "shell.env": (input: { cwd?: string; sessionID?: string }, output: { env: Record<string, string> }) => Promise<void>;
   event: (input: { event: { type: string; properties?: { info?: { id?: string; parentID?: string } } } }) => Promise<void>;
@@ -119,7 +119,7 @@ test("the plugin names a child session's root on the agent's shell, and a messag
   await hooks["shell.env"]({ cwd: dir, sessionID: "ses_child" }, out);
   expect(out.env.MIMOCODE_SESSION_ID).toBe("ses_root");
   await until("the wake", () => prompted.length === 1);
-  expect(prompted[0]).toEqual({ path: { id: "ses_root" }, body: { parts: [{ type: "text", text: "New Kiwi Channels messages for you (ch)" }] } });
+  expect(prompted[0]).toEqual({ path: { id: "ses_root" }, body: { parts: [{ type: "text", text: "New Kiwi Channels messages for you (ch)" }] }, throwOnError: true });
   await until("the listener started again", () => existsSync(calls) && readFileSync(calls, "utf8").trim().split("\n").length === 2);
   const [first] = readFileSync(calls, "utf8").trim().split("\n");
   expect(first).toStartWith("ses_root ");
@@ -189,9 +189,44 @@ test("a wake that can't land stops being sent once its session is deleted", asyn
   const hooks = await mod.KiwiPlugin({ client });
   await hooks["shell.env"]({ cwd: dir, sessionID: "ses_root" }, { env: {} });
   await until("the first refused wake", () => tries >= 1);
+  const atDelete = tries;
   await hooks.event({ event: { type: "session.deleted", properties: { info: { id: "ses_root" } } } });
   await Bun.sleep(1_500);
-  expect(tries).toBe(1);
+  expect(atDelete).toBe(1);
+  expect(tries).toBe(atDelete);
+}, 20_000);
+
+test("a client answering with data only, which returns nothing for an HTTP error, is asked to throw instead, so a refused wake is sent again", async () => {
+  const dir = scratch("hk-mimo-data-");
+  const calls = join(dir, "calls.log");
+  const fake = join(dir, "listen.sh");
+  writeFileSync(
+    fake,
+    `#!/bin/sh\necho "$MIMOCODE_SESSION_ID" >> ${JSON.stringify(calls)}\nif [ ! -e ${JSON.stringify(join(dir, "once"))} ]; then touch ${JSON.stringify(join(dir, "once"))}; echo "New Kiwi Channels messages for you (ch)" >&2; exit 2; fi\nsleep 30\n`,
+  );
+  chmodSync(fake, 0o755);
+  const file = join(dir, "kiwi.ts");
+  writeFileSync(file, mimoPluginSource(fake));
+  const listens = () => (existsSync(calls) ? readFileSync(calls, "utf8").trim().split("\n").length : 0);
+  const tries: number[] = [];
+  const client = {
+    session: {
+      get: async () => ({ data: {} }),
+      promptAsync: async (o: Prompted) => {
+        tries.push(listens());
+        if (tries.length > 1) return undefined;
+        if (o.throwOnError) throw { name: "BadRequest" };
+        return undefined;
+      },
+    },
+  };
+  const mod = (await import(file)) as { KiwiPlugin: (input: { client: typeof client }) => Promise<Hooks> };
+  const hooks = await mod.KiwiPlugin({ client });
+  await hooks["shell.env"]({ cwd: dir, sessionID: "ses_root" }, { env: {} });
+  await until("the wake that lands", () => tries.length === 2);
+  expect(tries).toEqual([1, 1]);
+  await until("the listener started again", () => listens() === 2);
+  await hooks.event({ event: { type: "session.deleted", properties: { info: { id: "ses_root" } } } });
 }, 20_000);
 
 test("kiwi hooks install mimo writes the plugin, status says so, and an agent in a named MiMoCode session is told the plugin wakes it", () => {

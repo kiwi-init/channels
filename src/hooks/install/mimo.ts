@@ -22,7 +22,7 @@ type Part = { type: "text"; text: string };
 interface Client {
   session: {
     get(options: { path: { id: string } }): Promise<{ data?: { parentID?: string } }>;
-    promptAsync(options: { path: { id: string }; body: { parts: Part[] } }): Promise<unknown>;
+    promptAsync(options: { path: { id: string }; body: { parts: Part[] }; throwOnError: true }): Promise<unknown>;
   };
 }
 interface Kiwi {
@@ -86,7 +86,7 @@ function landed(sent: unknown): boolean {
 
 async function wake(id: string, text: string): Promise<void> {
   for (let wait = WAKE_RETRY_FIRST_MS; kiwi.waiting.has(id); wait = Math.min(wait * 2, RETRY_MS)) {
-    const prompt = kiwi.client?.session.promptAsync({ path: { id }, body: { parts: [{ type: "text", text }] } });
+    const prompt = kiwi.client?.session.promptAsync({ path: { id }, body: { parts: [{ type: "text", text }] }, throwOnError: true });
     if (prompt && (await prompt.then(landed, () => false))) return;
     await new Promise((r) => setTimeout(r, wait));
   }
