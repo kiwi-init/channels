@@ -16,12 +16,12 @@ import {
   uninstallHooks,
   type ExtraHarness,
 } from "../../hooks.ts";
-import { args } from "../args.ts";
+import { args, opt } from "../args.ts";
 import { type Command, die, out } from "../context.ts";
 
 export const hookCommands: Record<string, Command> = {
   hook: () =>
-    runHook(args[1] ?? "").pipe(
+    runHook(args[1] ?? "", opt.harness).pipe(
       Effect.catchCause((cause) =>
         Effect.sync(() => {
           process.stderr.write(`kiwi: hooks are off until this is fixed: ${reason(Cause.squash(cause))}\n`);
