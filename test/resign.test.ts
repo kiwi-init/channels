@@ -82,14 +82,12 @@ test("only once: a second stale signature is refused as it always was", async ()
   }
 });
 
-test("other refusals are not retried", async () => {
+test("other refusals are not retried: a key never admitted gets the relay's 403 after one signature", async () => {
   const relay = staleSignatures(0);
   try {
     const ch = await channel(relay.url);
-    // Someone holding the channel's access but whose key was never admitted.
-    const outsider = new Channel((ch as unknown as { access: ConstructorParameters<typeof Channel>[0] }).access, relay.url, await generateIdentity("mallory"));
-    // The relay's 403 (not a member) reaches the caller as it always has, after one signature.
-    await expect(outsider.head()).rejects.toThrow(/no longer a member/);
+    const unadmitted = new Channel((ch as unknown as { access: ConstructorParameters<typeof Channel>[0] }).access, relay.url, await generateIdentity("mallory"));
+    await expect(unadmitted.head()).rejects.toThrow(/no longer a member/);
     expect(relay.signatures()).toHaveLength(1);
   } finally {
     relay.stop();
