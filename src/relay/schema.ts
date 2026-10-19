@@ -4,7 +4,7 @@
 // (the texts are API; see test/error-texts.test.ts).
 
 import * as Schema from "effect/Schema";
-import { MAX_SNAPSHOT_LENGTH } from "@kiwi/core/protocol.ts";
+import { MAX_IV_LENGTH, MAX_SNAPSHOT_LENGTH } from "@kiwi/core/protocol.ts";
 import { NONCE_RE } from "@kiwi/core/sas.ts";
 
 /** A public key (Ed25519 or X25519): 32 bytes, base64url without padding. */
@@ -37,7 +37,7 @@ export const MemberRecord = Schema.Struct({
 });
 
 /** A message as stored: AES-GCM iv and ciphertext. */
-export const StoredEnvelope = Schema.Struct({ iv: Schema.NonEmptyString, ct: Schema.NonEmptyString });
+export const StoredEnvelope = Schema.Struct({ iv: Schema.NonEmptyString.check(Schema.isMaxLength(MAX_IV_LENGTH)), ct: Schema.NonEmptyString });
 
 /** A sealed icon: the epoch whose key sealed it, and the sealed bytes (about a 32KB image at most). */
 export const SealedIcon = Schema.Struct({

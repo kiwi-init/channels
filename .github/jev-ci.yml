@@ -108,6 +108,9 @@ jobs:
       test/snapshot-base.test.ts: a window of recent messages folded on the channel's snapshot keeps
       the tasks and facts from before it, as a whole-history fold does (web base-plan.test.ts: a
       snapshot older than the window isn't used). And
+      test/history-bytes.test.ts: against a local relay, history pages stop at PAGE_BYTES (with at
+      least one message each) and still return every message, and a body over MAX_BODY_LENGTH is
+      refused at send instead of lost at read. And
       test/replay.test.ts: a signed message counts once and near the time it was signed (fold
       refuses a second copy of a message id, across incremental folds and their snapshot, and one
       signed more than a day before the relay received it). And

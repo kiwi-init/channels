@@ -76,6 +76,7 @@ exports[`the relay's error texts are exactly these 1`] = `
   "413 that message is bigger than this channel may hold (\${formatBytes(cap)})",
   "413 that snapshot is bigger than this channel may hold (\${formatBytes(cap)})",
   "413 the messages that snapshot covers don't free enough room for it",
+  "413 this page is too large to send whole; page through /messages",
   "423 taken at #\${held.seq}",
   "426 <UPDATE_KIWI>",
   "426 expected websocket",
