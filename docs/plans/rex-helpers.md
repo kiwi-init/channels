@@ -1,7 +1,10 @@
 # Plan: Rex helpers (Settings → Install Rex Helpers)
 
-Status: proposal, 2026-10-20. Nothing built; the owner's four decisions taken the same day, and
-item 4 reviewed against #548. Facts below were read from `main` at `9db1595e`
+Status: built, 2026-10-20. Items 1 and 2 landed in #554, items 3 to 6 in #557 (with #560), and
+Settings → Install Rex Helpers in its own pull request. Probes 1, 3, 4, 6 and 7 ran against
+Rex `0.0.1792433367-g93d474` (API revision 4) and Claude Code 2.1.304 on jow's Mac; the results
+are under "Probes before building", and what they changed in the build under "What the probes
+changed". The plan below is kept as it was decided. Facts below were read from `main` at `9db1595e`
 (kiwi 0.21.0), from Rex `0.0.1792158932-g88fd41` (the Rex Beta app 0.1.0 (1282), server build
 1203) on jow's Mac, from Claude Code 2.1.304, from the Rex docs at
 `https://www.superlogical.com/rex/docs/llms.txt`, and from probes run in a Rex pane.
@@ -255,6 +258,12 @@ other computers don't get the button.
 `blocked` one, else the oldest `done`. It is loaded by one line in `init.lua` that names Kiwi in a comment, so removing it
 takes only what Kiwi wrote, as `rex skill remove` does (probe 6).
 
+As built: an action in `init.lua` can't reach another session (every call there answers "stream
+is not attached", and `rex.session.attach` exists only in scripts). So `kiwi.lua` holds only the
+action, which runs `kiwi-find.lua` beside it with `rex do`. The finder attaches to each session,
+picks the block by its records' `updated_at`, and focuses it; the action then queues
+`session.select` on the client that ran it, so the app switches sessions without Remote Control.
+
 ## Settings → Install Rex Helpers
 
 A section in Settings, desktop only, shown when the bridge has `rexStatus` and Rex is on this
@@ -309,22 +318,44 @@ computer:
 
 ## Probes before building
 
-1. `/clear` in a Claude Code seat in Rex, with `rex events --json` running: does Claude Code clear
-   every record (Kiwi's included)? If so, the daemon rewrites after SessionStart (`clear`).
-2. A permission prompt in Claude Code: is it `blocked`, `kind=permission`?
-3. `format {format: "vt"}` against `inputText`: does the dimmed placeholder come out as
-   `\x1b[2m…\x1b[0m`, or does the reader need a second pattern?
-4. Which bytes Claude Code takes as Enter in a Rex pane while it has the kitty keyboard protocol
-   on: `\r` from `write`, as tmux's `send-keys Enter` gives it today, or what `rex send-key enter`
-   sends (a press and a release, encoded for the pane's keyboard mode).
-5. Records written ten times a second into a Claude Code pane while it streams: any garbled
-   frame?
-6. Whether `require("kiwi")` in `init.lua` finds a file beside it.
-7. The Stop and SessionStart hooks' own environment in Rex: `REX_SERVER`, `REX_SESSION`,
-   `REX_BLOCK`, `REX_BIN_DIR` and `TERM_PROGRAM` present (seen in a tool process, not yet in a
-   hook; `paneOf` runs in the Stop hook).
-8. Ghostty: the release and `TERM_PROGRAM_VERSION` from which it takes 7501, once the pull request
-   adding it to libghostty lands.
+Run on 2026-10-20 against Rex `0.0.1792433367-g93d474` and Claude Code 2.1.304, in detached
+blocks and a throwaway Rex server with its own config, all removed afterwards.
+
+1. **`/clear` keeps Kiwi's records.** A `kiwi/probe/ask` record written into an idle Claude Code's
+   terminal was still there after rotation typed `/clear` and Enter, and Claude Code's root
+   record stayed `idle`. Nothing needs rewriting after SessionStart.
+2. Not run: it needs a model turn that asks for permission.
+3. **`format {format: "vt"}` reads as the tmux capture does.** Lines end in CRLF, every style
+   starts with a reset, and the dim placeholder comes out as `\x1b[2m…\x1b[0m`. `inputText` reads
+   Claude Code's box with its placeholder as empty, and a draft as the draft.
+4. **Enter is `\r`.** Claude Code turns on kitty keyboard flags 5 (disambiguate, report alternate
+   keys), which keep Enter and Backspace in their legacy bytes. `rex send-key enter` sends `\r`,
+   `backspace` sends `\x7f`, several keys go in one call, and Enter submitted `/clear` for real.
+5. Not run: it needs a streaming turn to watch for garbled frames.
+6. **`require("kiwi")` finds `kiwi.lua` beside `init.lua`,** checked with `rex config check` on a
+   copy. Rex's check also caught that `keywords` must be a string.
+7. **The hooks get Rex's variables.** Claude Code's own process carries `TERM_PROGRAM`,
+   `REX_SERVER`, `REX_SESSION`, `REX_BLOCK` and `REX_BIN_DIR`, and its hooks inherit its
+   environment.
+8. Ghostty: still waiting on its 7501 release.
+
+### What the probes changed
+
+- **Rotation in Rex works end to end.** Against an idle Claude Code in a Rex block, `kiwi rotate
+  send`'s Rex backend waited for two empty reads 10 s apart, typed `/clear`, saw it in the box,
+  pressed Enter, and the session id changed, in 11.5 s. With a draft in the box it typed nothing
+  and timed out.
+- **The event stream's shape:** `{type: "session_event", payload: {session_id, event: {type:
+  "block_event", payload: {block_id, name, payload}}}}`, with `child_exited` and
+  `process_changed` as block events and `block_closed` as a session event. `--all` carries block
+  events too, and a lot of `client_joined` lines, one per `rex` call.
+- **The API's shapes:** `program_status` gives `{records: [...]}`, the root record without `id`
+  and `msg` already decoded; `process` gives `{child: {pid}, foreground: {pid, name, …}}`;
+  `server.status` has `instance_id`; `session.list_blocks` has `placement`.
+- **Show in Rex:** `session.focus_block` works without Remote Control. `rex do session.select`
+  reaches the app and, with Remote Control off, exits 1 with "Rex.app is not accepting
+  actions". With no app client connected, Needs you now says to open the app.
+- **`rex --version` is not a flag;** `rex version` prints `rex <version>`.
 
 ## Decisions for the owner
 
@@ -340,10 +371,11 @@ All taken by the owner, 2026-10-20:
 
 One issue and one PR each, with its CI gate:
 
-1. Probes 1 to 8, results into this plan.
+1. Probes 1 to 8, results into this plan: done here, except 2, 5 and 8.
 2. Where a seat runs (item 1), `kiwi rex on|off|status`, and the status records (item 2), in Rex
-   and in the terminals on the list.
-3. Settings → Install Rex Helpers, the bridge, and the palette action (item 6).
-4. The sender split and the Rex backend for rotation (item 4), reviewed against #548's guard.
-5. Show in Rex from Needs you (item 5).
-6. Seat state from Rex events (item 3).
+   and in the terminals on the list: #554.
+3. Settings → Install Rex Helpers, the bridge, and the palette action (item 6): the palette in
+   #557 (#560), Settings in its own pull request.
+4. The sender split and the Rex backend for rotation (item 4), reviewed against #548's guard: #557.
+5. Show in Rex from Needs you (item 5): #557 (#560).
+6. Seat state from Rex events (item 3): #557.
