@@ -1,14 +1,16 @@
-import { realpathSync, statSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import { delimiter } from "node:path";
 import { KNOWN_HARNESSES, type HarnessRow, type KnownHarness } from "@kiwi/core/harnesses.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
 import { viaOf, wakePath, wakeWords } from "@kiwi/core/wake.ts";
 import { REWAKE_SINCE } from "../hooks/install/claude.ts";
+import { kimiHome } from "../kimi-server.ts";
 import { loginPath } from "./shell.ts";
 
 interface Binary {
   bin: string;
   vouch?: RegExp;
+  home?: () => string;
   not?: RegExp;
 }
 
@@ -19,7 +21,7 @@ const BINARIES: Record<KnownHarness, readonly Binary[]> = {
   cursor: [{ bin: "cursor-agent" }, { bin: "agent", vouch: /cursor-agent/, not: /grok/i }],
   grok: [{ bin: "grok" }],
   opencode: [{ bin: "opencode" }],
-  kimi: [{ bin: "kimi", vouch: /kimi-code/ }, { bin: "kimi-code" }],
+  kimi: [{ bin: "kimi", vouch: /kimi-code/, home: kimiHome }, { bin: "kimi-code" }],
   mimo: [{ bin: "mimo" }],
   pi: [{ bin: "pi", vouch: /pi-coding-agent/ }],
 };
@@ -80,11 +82,11 @@ function realOf(path: string): string {
   }
 }
 
-function vouched({ vouch, not }: Binary, path: string, text: string | null): boolean {
+function vouched({ vouch, home, not }: Binary, path: string, text: string | null): boolean {
   if (!vouch && !not) return true;
   const real = realOf(path);
   if (not && (text === null || not.test(`${real}\n${text}`))) return false;
-  return !vouch || vouch.test(real) || BARE_VERSION.test(text?.split("\n")[0]?.trim() ?? "");
+  return !vouch || vouch.test(real) || BARE_VERSION.test(text?.split("\n")[0]?.trim() ?? "") || (!!home && existsSync(home()));
 }
 
 async function binaryOf(harness: KnownHarness, PATH: string): Promise<{ path: string; text: string | null } | null> {
