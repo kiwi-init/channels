@@ -16,6 +16,7 @@ import { kimiSessionHere } from "../../kimi-server.ts";
 import { computerClaimFor } from "../../machine.ts";
 import { joinedText } from "../brief.ts";
 import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor } from "../../hooks.ts";
+import { notePersonaTold, personaMark } from "../../hooks/persona-line.ts";
 import { detectCard, detectModel, detectRuns, mergeCard } from "../../card.ts";
 import { args, opt } from "../args.ts";
 import { agentName, type Command, config, die, keepDaemon, NAME_RE, out, relayUrl, seatHere } from "../context.ts";
@@ -194,6 +195,7 @@ export const joinCommands: Record<string, Command> = {
               ...(seat?.persona ? { persona: seat.persona } : {}),
             }),
           );
+          if (who.session) notePersonaTold(alias, name, who.session, personaMark(seat?.persona));
           yield* keepDaemon;
         });
 
