@@ -597,6 +597,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                           {mayWrite ? (
                             <Composer
                               key={hereKey}
+                              draftKey={`${roomId}:${hereKey}`}
                               me={me}
                               people={people}
                               replyTo={replyTo}

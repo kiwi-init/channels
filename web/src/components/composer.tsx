@@ -6,6 +6,7 @@ import { MAX_IMAGE_BYTES, RASTER_MIMES, type Color, type Message } from "@kiwi/c
 import { matchCommands, parseCommand, type Command } from "@/lib/commands"
 import { answered } from "@/lib/asks"
 import { compressImage, needsCompressing, renamed } from "@/lib/compress-image"
+import { draftOf, keepDraft, type DraftFile } from "@/lib/drafts"
 import { appendDictation, MODEL_MB, PRESS_LABEL, useDictation } from "@/lib/dictation"
 import { excerpt } from "@/lib/format"
 import { composerMentions, mentionText, withHandles } from "@/lib/mentions"
@@ -55,6 +56,7 @@ interface Props {
   /** Under the field, inside the composer: what the agents are doing (agent-strip.tsx). */
   footer?: ReactNode
   talk?: { button: ReactNode; bar: ReactNode }
+  draftKey?: string
 }
 
 /** Who a message is for: the people @mentioned at its start. */
@@ -63,9 +65,10 @@ function recipients(body: string, names: Set<string>): string[] {
   return [...lead.matchAll(/@([\p{L}\p{N}_.-]+)/gu)].map((m) => m[1]!).filter((n) => names.has(n))
 }
 
-export function Composer({ me, people, replyTo, asking, commands = [], more = 0, onAnswer, nameOf, onClearReply, disabled, send, thread, extra, placeholder, footer, talk }: Props) {
-  const [body, setBody] = useState("")
-  const [files, setFiles] = useState<{ name: string; mime: string; data: string }[]>([])
+export function Composer({ me, people, replyTo, asking, commands = [], more = 0, onAnswer, nameOf, onClearReply, disabled, send, thread, extra, placeholder, footer, talk, draftKey }: Props) {
+  const [body, setBody] = useState(() => draftOf(draftKey)?.body ?? "")
+  const [files, setFiles] = useState<DraftFile[]>(() => draftOf(draftKey)?.files ?? [])
+  useEffect(() => keepDraft(draftKey, { body, files }), [draftKey, body, files])
   const [dropping, setDropping] = useState(false)
   const [gifsOpen, setGifsOpen] = useState(false)
   const [sending, setSending] = useState(false)
