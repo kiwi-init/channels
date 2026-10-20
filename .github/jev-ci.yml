@@ -163,6 +163,13 @@ jobs:
       channel, once each, and a request seen while nobody follows it isn't remembered; web
       channel-sidebar.test.tsx: New agent on the Agents heading for the owner's desktop app, shown
       even before any agent joins, and absent otherwise.
+      Also the composer and conversation (audit M): web composer-question.test.tsx: a question's
+      option answers once (choiceGate refuses a click within 400 ms of the question showing or
+      while its answer is on its way, and frees it when the send fails), and a message @addressed
+      to others isn't the waiting question's answer (answered in lib/asks.ts); web
+      lib/drafts.test.ts: a draft (text or images) is kept per channel and place until emptied;
+      web conversation/use-scroll.test.ts: only messages newer than the newest seen count as new
+      (arrivedAfter), and a hidden window's unread never goes below zero (unreadOf).
       Also test/daemon-big-lines.test.ts: the daemon's socket writes queue what the socket
       didn't take and flush it on drain (src/daemon/server.ts), so a catch-up of thirty
       messages with 50 KB ones among them, and big live messages back to back, arrive whole
