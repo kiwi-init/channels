@@ -103,6 +103,7 @@ exports[`the relay's error texts are exactly these 1`] = `
   "body \${repo}#\${number} is a pull request, not an issue",
   "body GitHub has no check named \${name} on that commit",
   "body GitHub isn't set up on this relay",
+  "body GitHub refused this repo (\${res.status})",
   "body POST only",
   "body bad ephemeral frame",
   "body bad json",
