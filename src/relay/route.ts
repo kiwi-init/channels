@@ -226,6 +226,7 @@ const routes: RoomRoute[] = [
           settings: db.settings(),
           iconAt: db.iconAt(),
           blobs: true,
+          sealedEpoch: true,
         }));
       }),
   },
