@@ -5,7 +5,7 @@ import { afterAll, beforeEach, expect, test } from "bun:test"
 import { b64url, seal } from "@kiwi/core/crypto.ts"
 import { generateIdentity, sign } from "@kiwi/core/identity.ts"
 import { PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts"
-import { openRow, openRows, packRow, packUnread } from "@kiwi/core/cache-row.ts"
+import { openRow, openRows, packRow, packEnvelope } from "@kiwi/core/cache-row.ts"
 import { forgetAllHistory, forgetHistory, readCached, rememberRow, rememberRows, useHistoryDb, type CachedRow, type HistoryDb } from "./history.ts"
 
 const SENTINEL = "SENTINEL-plain-text-should-not-rest"
@@ -209,7 +209,7 @@ test("a message this build can't read is kept as an unread row: no hole, so the 
   const keys = { "1": key }
   await rememberMessage(ROOM, PK_A, 1, key, msg(1, "one"), 10)
   const future = await sealedPayload(key, { ...msg(2, ""), kind: "event", ev: { op: "future.op" } })
-  await rememberRow(ROOM, PK_A, await packUnread(key, ROOM, 1, { seq: 2, ts: 30, e: 1, ...future }), 10)
+  await rememberRow(ROOM, PK_A, await packEnvelope(key, ROOM, 1, { seq: 2, ts: 30, e: 1, ...future }), 10)
   await rememberMessage(ROOM, PK_A, 1, key, msg(3, "three"), 10)
 
   const out = await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, keys), 3, 10)
@@ -222,12 +222,12 @@ test("a message this build can't read is kept as an unread row: no hole, so the 
 
 test("an unread row opens as the message once the build can read it, and a moved one doesn't open", async () => {
   const readable = await sealedPayload(key, { v: PROTOCOL_VERSION, id: "id-7", from: "Ada", kind: "msg", body: SENTINEL, ts: 7 })
-  const row = await packUnread(key, ROOM, 1, { seq: 7, ts: 70, e: 1, ...readable })
+  const row = await packEnvelope(key, ROOM, 1, { seq: 7, ts: 70, e: 1, ...readable })
   expect(JSON.stringify(row).includes(SENTINEL)).toBe(false)
   expect(await openRow(row, ROOM, { "1": key })).toMatchObject({ body: SENTINEL, seq: 7, rts: 70 })
 
   const unreadable = await sealedPayload(key, { v: PROTOCOL_VERSION, id: "id-8", from: "Ada", kind: "event", body: "", ts: 8, ev: { op: "future.op" } })
-  const later = await packUnread(key, ROOM, 1, { seq: 8, ts: 80, e: 1, ...unreadable })
+  const later = await packEnvelope(key, ROOM, 1, { seq: 8, ts: 80, e: 1, ...unreadable })
   expect(await openRow(later, ROOM, { "1": key })).toEqual({ seq: 8, unread: true })
   expect(await openRow({ ...later, seq: 9 }, ROOM, { "1": key })).toBeNull()
 })

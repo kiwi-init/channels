@@ -323,7 +323,9 @@ jobs:
       it; a failed save after the relay made it is finished on the next start, and a create that never
       landed is forgotten.
       Also test/unread-live.test.ts: a stored message this build can't read arrives as Unread with
-      its seq, and web lib/history.test.ts: its sealed row keeps the cache whole (no hole, no reload)
+      its seq, a live message carries its envelope, and one whose attachments the client filtered
+      stays authentic after a reload because the cache keeps its envelope (a filtered row would read
+      as forged); test/snapshot.test.ts: one message the owner can't open doesn't stop its snapshots; and web lib/history.test.ts: its sealed row keeps the cache whole (no hole, no reload)
       and opens as the message once a newer build can read it.
       Also web lib/log-export.test.ts: a channel's log kept before it closes, one JSON line per message
       with its key and signature, under a file name from the channel's title and the day; every seq from the
