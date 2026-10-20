@@ -385,6 +385,14 @@ jobs:
       KIWI_HOME/daemon.log, rotated at 1 MB. And
       test/release-signing.test.ts: release-build.yml's Package step fails a tag release that has no
       Mac signing secrets, while a rehearsal and the Linux build still build unsigned. And
+      test/bun-relay-store.test.ts: the Bun relay keeps one store per room (src/relay/bun.ts), so a
+      message costs at most 3 SQL statements, a row another connection commits is read rather
+      than a warm copy, and the idle sweep closes the rooms it opened only to check them. And
+      test/human.test.ts's relay cases: a failed WorkOS key refetch is forgotten, so the next token
+      loads the keys again (src/relay/human.ts); a create with one bad member writes nothing
+      (src/relay/room/lifecycle.ts); and a channel's idle days count from when its last socket
+      closes. And test/github-relay.test.ts: on a relay without the App's key, connecting a repo
+      still takes the owner's token and push access to it (src/relay/route.ts, GithubPush). And
       test/release-on-main.test.ts: release.yml's on-main job refuses a tag whose commit isn't on
       main, and every other job waits for it, so nothing is built, signed or published from such a
       tag; bump-main pushes a stamp only when it edits scripts/stamp.ts's files and CHANGELOG.md,
