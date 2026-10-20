@@ -281,6 +281,15 @@ export async function daemonLaunch(req: LaunchRequest, sock = daemonSock()): Pro
   }
 }
 
+export async function daemonUnpair(sock = daemonSock()): Promise<void> {
+  const c = await openConn(sock);
+  try {
+    await c.call("unpair");
+  } finally {
+    c.close();
+  }
+}
+
 export interface HeldListener {
   readonly held: boolean | null;
   close(): void;

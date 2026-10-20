@@ -13,7 +13,10 @@ import { activityEnv, reachOf, readsRex, seatRecordFor, wakeOn, type Attached } 
 import { readRexInto } from "./rex-reads.ts";
 import type { RexActivity, RexPlace } from "../rex.ts";
 import { pruneHookFiles } from "../hooks/delivered.ts";
+import { seatFolders } from "../launch/folders.ts";
 import { harnessInventory } from "../launch/harnesses.ts";
+import { forgetAtRelay, startMachineInbox } from "./inbox.ts";
+import { remoteRunner } from "./remote.ts";
 import { launchAgent } from "../launch/launch.ts";
 import { readLaunchRequest } from "../launch/wire.ts";
 import { beatLock, dropLock, lockPath, ownsLock, takeLock } from "./lock.ts";
@@ -680,6 +683,15 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         case "harnesses":
           sendLine(conn, JSON.stringify({ id, ok: true, harnesses: await harnessInventory() }));
           break;
+        case "folders": {
+          const room = typeof params.room === "string" && /^[0-9a-f]{32}$/.test(params.room) ? params.room : undefined;
+          sendLine(conn, JSON.stringify({ id, ok: true, folders: seatFolders(loadConfig(), room) }));
+          break;
+        }
+        case "unpair":
+          await unpairHere();
+          sendLine(conn, JSON.stringify({ id, ok: true }));
+          break;
         case "launch": {
           const launch = readLaunchRequest(params);
           if (!launch) throw new Error('launch needs {"harness", "folder", "code", "relay"?, "nick"?, "persona"?, "launch"?: an id of 8 to 64 of A-Z a-z 0-9 _ -}');
@@ -691,7 +703,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           setTimeout(() => void stop(), 50);
           break;
         default:
-          throw new Error(`unknown verb "${verb}" (hello, adopt, listen, listening, hold, listeners, read, mark, peek, presence, harnesses, launch, stop)`);
+          throw new Error(`unknown verb "${verb}" (hello, adopt, listen, listening, hold, listeners, read, mark, peek, presence, harnesses, folders, launch, unpair, stop)`);
       }
     } catch (err) {
       sendLine(conn, JSON.stringify({ id, ok: false, error: err instanceof Error ? err.message : String(err) }));
@@ -747,6 +759,20 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     return (await Promise.all(relays.map(answers))).every((up) => !up);
   };
   let statusWatch: { stop(): void } | null = null;
+  const unpairHere = async (): Promise<void> => {
+    const m = loadPairedMachine();
+    if (m?.cert) {
+      await forgetAtRelay(m);
+      saveMachine({ identity: m.identity, label: m.label, relay: m.relay });
+    }
+    inbox.close();
+  };
+  const inbox = startMachineInbox({
+    dir,
+    machine: loadPairedMachine,
+    unpaired: unpairHere,
+    run: remoteRunner({ inventory: () => harnessInventory(), folders: (room) => seatFolders(loadConfig(), room), launch: (req) => launchAgent(req) }),
+  });
   let rexWatch: { stop(): void } | null = null;
   const rexSeat = (server: string, block: string, gone: boolean): void => {
     let cfg: Config;
@@ -828,6 +854,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     clearInterval(tick);
     statusWatch?.stop();
     statusWatch = null;
+    inbox.stop();
     rexWatch?.stop();
     rexWatch = null;
     resolveStopped();
