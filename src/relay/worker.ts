@@ -44,7 +44,7 @@ import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
 import { onDictationHttp, type DictationStore } from "./dictation.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
-import { GithubApp, githubAppFrom } from "./github-app.ts";
+import { GithubApp, githubAppFrom, GithubPush, githubPushFrom } from "./github-app.ts";
 import { GITHUB_QUEUE_MAX, GITHUB_QUEUE_TTL_MS, onGithubHttp, type GithubItem, type GithubLink, type GithubRoutes } from "./github.ts";
 
 interface Env {
@@ -127,6 +127,7 @@ export class Channel extends DurableObject<Env> {
         Layer.succeed(Policy, this.policy),
         Layer.succeed(ChannelLists, owned(env)),
         Layer.succeed(GithubApp, githubAppFrom({ appId: env.GITHUB_APP_ID, privateKey: env.GITHUB_APP_PRIVATE_KEY })),
+        Layer.succeed(GithubPush, env.GITHUB_WEBHOOK_SECRET ? githubPushFrom() : null),
       ),
     );
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));
@@ -182,12 +183,14 @@ export class Channel extends DurableObject<Env> {
     await this.apply(fx, ws);
   }
 
-  override webSocketClose(ws: WebSocket, code: number): void {
+  override async webSocketClose(ws: WebSocket, code: number): Promise<void> {
     try {
       ws.close(code === 1005 ? 1000 : code);
     } catch {
       // Already closed: closing back is only a courtesy.
     }
+    const { room } = ws.deserializeAttachment() as { room: string };
+    await this.apply({ expireAt: runRoomSync(this.relay, this.store(room), touch) ?? undefined });
   }
 
   private async apply(fx: Effects, sender?: WebSocket): Promise<void> {

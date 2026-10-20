@@ -11,7 +11,7 @@ import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import type { Envelope } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { Human } from "../src/relay/human.ts";
-import { GithubApp } from "../src/relay/github-app.ts";
+import { GithubApp, GithubPush, githubPushFrom } from "../src/relay/github-app.ts";
 import { OPEN_POLICY, Policy } from "../src/relay/policy.ts";
 import { Directory, msgFrame, RoomDb, welcomeFrames, type Sql, type SqlParam } from "../src/relay/room.ts";
 import { makeRelay, runRoomSync } from "../src/relay/route.ts";
@@ -42,6 +42,7 @@ const relayCtx = makeRelay(
   Layer.mergeAll(
     Layer.succeed(Human, null),
     Layer.succeed(GithubApp, null),
+    Layer.succeed(GithubPush, githubPushFrom()),
     Layer.succeed(Policy, OPEN_POLICY),
     Layer.succeed(Directory, { list: async () => [], reserve: async () => true, release: async () => {} }),
   ),

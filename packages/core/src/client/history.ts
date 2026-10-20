@@ -61,15 +61,18 @@ export class ChannelHistory {
         Effect.gen({ self: this }, function* () {
           const decrypted = yield* Effect.forEach(envelopes, (e) => this.ch.fx.decrypt(e), { concurrency: "unbounded" });
           for (let i = 0; i < envelopes.length; i++) {
+            const at = envelopes[i]!.seq;
+            if (!Number.isSafeInteger(at) || at <= since) continue;
             const m = decrypted[i];
             if (m) messages.push(m);
-            since = envelopes[i]!.seq;
+            since = at;
             if (since === through + 1) through = since;
           }
         });
       let ask: Record<string, number> = { pages: 1 };
       let first: number | null = null;
       for (;;) {
+        const from = since;
         const page = yield* this.ch.request<{ head: number; messages: Envelope[]; pages?: PageOffer }>("/messages", {}, { since, ...ask });
         ask = {};
         head = page.head;
@@ -87,7 +90,7 @@ export class ChannelHistory {
           if (since >= head) break;
           continue;
         }
-        if (!page.messages.length || since >= head) break;
+        if (since <= from || since >= head) break;
       }
       return { head, messages, first, through };
     }),

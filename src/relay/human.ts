@@ -176,21 +176,21 @@ export function workosHumanAuth(clientId: string, jwksUrls: string | string[] = 
     return out;
   };
 
+  const refetch = (): Promise<Map<string, CryptoKey>> => {
+    fetchedAt = Date.now();
+    const loading = loadKeys().catch((e: unknown) => {
+      if (keys === loading) keys = null;
+      throw e;
+    });
+    keys = loading;
+    return loading;
+  };
+
   const keyFor = async (kid: string): Promise<CryptoKey | undefined> => {
-    if (!keys || Date.now() - fetchedAt > 3600_000) {
-      fetchedAt = Date.now();
-      keys = loadKeys().catch((e) => {
-        keys = null;
-        throw e;
-      });
-    }
-    let k = (await keys).get(kid);
+    const current = !keys || Date.now() - fetchedAt > 3600_000 ? refetch() : keys;
+    const k = (await current).get(kid);
     // Key rotation: refetch once (at most every 30s) for a kid we haven't seen.
-    if (!k && Date.now() - fetchedAt > 30_000) {
-      fetchedAt = Date.now();
-      keys = loadKeys();
-      k = (await keys).get(kid);
-    }
+    if (!k && Date.now() - fetchedAt > 30_000) return (await refetch()).get(kid);
     return k;
   };
 

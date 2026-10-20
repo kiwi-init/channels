@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { keepHeld } from "@kiwi/core/client.ts";
 import type { ChannelAccess } from "@kiwi/core/crypto.ts";
 import type { RexPlace, TerminalPlace } from "../rex.ts";
 import { home, writePrivate } from "./paths.ts";
@@ -152,6 +153,6 @@ export function withLock<T>(lock: string, fn: () => T, waitMs = LOCK_WAIT_MS): T
 export function saveAccess(alias: string, access: ChannelAccess): void {
   updateConfig((cfg) => {
     const c = cfg.channels[alias];
-    if (c) cfg.channels[alias] = { ...c, epoch: access.epoch, keys: { ...c.keys, ...access.keys }, ...(access.signedTitle ? { signedTitle: true } : {}) };
+    if (c) cfg.channels[alias] = { ...c, ...keepHeld(c, access), ...(access.signedTitle ? { signedTitle: true } : {}) };
   });
 }

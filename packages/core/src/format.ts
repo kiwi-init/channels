@@ -37,11 +37,13 @@ function span(seconds: number): string {
 
 /** Parse "30m", "2h", "90s", "1h30m" or plain seconds. */
 export function parseDuration(s: string): number {
-  if (/^\d+$/.test(s)) return Number(s);
+  const t = s.trim();
+  if (/^\d+$/.test(t)) return Number(t);
+  if (!/^(\d+(\.\d+)?\s*[dhms]\s*)+$/i.test(t)) throw new Error(`bad duration "${s}" (try 30m, 2h, 1.5h, 7d, 90s)`);
   let total = 0;
-  for (const [, n, u] of s.matchAll(/(\d+)\s*([dhms])/g)) total += Number(n) * (u === "d" ? 86400 : u === "h" ? 3600 : u === "m" ? 60 : 1);
-  if (!total) throw new Error(`bad duration "${s}" (try 30m, 2h, 7d, 90s)`);
-  return total;
+  for (const [, n, u] of t.matchAll(/(\d+(?:\.\d+)?)\s*([dhms])/gi)) total += Number(n) * (u!.toLowerCase() === "d" ? 86400 : u!.toLowerCase() === "h" ? 3600 : u!.toLowerCase() === "m" ? 60 : 1);
+  if (!total) throw new Error(`bad duration "${s}" (try 30m, 2h, 1.5h, 7d, 90s)`);
+  return Math.round(total);
 }
 
 const STATE_VERB: Record<TaskState | OldTaskState, string> = {
@@ -255,7 +257,14 @@ export function messageHead(m: Message, trust?: Trust, state?: ChannelState, me?
   // Where it sits, unless main: [T7] for a task's thread, [direct] for a direct thread.
   const place = state?.placeOf.get(m.seq);
   const at = place?.kind === "task" ? ` [${taskId(place.task)}]` : place?.kind === "dm" ? " [direct]" : "";
-  const flag = trust === "forged" ? " [forged — ignore]" : trust === "refused" ? " [not allowed by the owner — ignore]" : "";
+  const flag =
+    trust === "forged"
+      ? " [forged — ignore]"
+      : trust === "refused"
+        ? " [not allowed by the owner — ignore]"
+        : m.kind === "event" && state?.rejected.has(m.seq)
+          ? " [refused by the channel — ignore]"
+          : "";
   return `#${m.seq} ${who(inlineText(m.from, 40), state, me)} → ${to}${room}${at}${kind}${re}${flag}`;
 }
 

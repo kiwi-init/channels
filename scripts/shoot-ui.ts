@@ -447,7 +447,7 @@ try {
         "19-personalities",
         async () => {
           await openSettings();
-          await owner.getByRole("button", { name: "Open" }).click();
+          await owner.getByRole("button", { name: /^Personalities/ }).click();
           await owner.getByRole("region", { name: "Personalities" }).waitFor();
         },
         closeSettings,

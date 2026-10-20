@@ -19,7 +19,7 @@ import { MAX_BLOB_BYTES, PAGE_LIMIT, wellFormedFreed, wellFormedSlot } from "@ki
 import { ChannelGone, BadRequest, Forbidden, NotFound, NotOwner, Refused, SignInRequired, TooLarge, TooMany, Unauthorized, UpdateRequired, type Refusal } from "./failures.ts";
 import { answer, buildContext, describeRoutes, dispatch, incoming, json, readCapped, Request_, type Route } from "./http.ts";
 import { githubLinks, githubRepos, type GithubItem } from "./github.ts";
-import { GithubApp, type GithubReply } from "./github-app.ts";
+import { GithubApp, GithubPush, type GithubReply } from "./github-app.ts";
 import { Human, HUMAN_HEADER } from "./human.ts";
 import { betaMessage, inBeta, Policy } from "./policy.ts";
 import { offerPages, PAGE_PATH, servePage } from "./pages.ts";
@@ -29,7 +29,10 @@ import {
   append,
   approve,
   authenticate,
+  ASKS_PER_MINUTE,
   BLOBS_PER_MINUTE,
+  GITHUB_READS_PER_MINUTE,
+  PAGES_PER_MINUTE,
   create,
   directory,
   Directory,
@@ -72,7 +75,7 @@ import {
 // ---------- the relay's services ----------
 
 /** What a relay runs its rooms with, from its adapter. */
-export type RelayServices = Human | Policy | Directory | GithubApp;
+export type RelayServices = Human | Policy | Directory | GithubApp | GithubPush;
 
 /** The relay's services, built once from the adapter's Layer. */
 export type Relay = Context.Context<RelayServices>;
@@ -266,6 +269,7 @@ const routes: RoomRoute[] = [
         const { url } = yield* Request_;
         const m = yield* readMeta;
         if (url.searchParams.get("fp") !== (yield* Effect.promise(() => ownerFingerprint(m.ownerPk)))) return yield* new ChannelGone({ message: "no such channel" });
+        if (!allow(`ask:${(yield* RoomStore).roomId}`, ASKS_PER_MINUTE)) return yield* new TooMany({ message: "too many join requests to this channel; try again in a minute" });
         const b = yield* json<RequestBody>();
         const { id, fresh } = yield* request(b);
         return { data: { id }, fx: fresh ? { broadcast: [frame({ t: "request" })] } : undefined };
@@ -296,6 +300,7 @@ const routes: RoomRoute[] = [
     run: ({ me }) =>
       Effect.gen(function* () {
         const db = yield* RoomStore;
+        if (!allow(`pages:${db.roomId}:${me}`, PAGES_PER_MINUTE)) return yield* new TooMany({ message: "too many history reads; wait a minute" });
         const { url } = yield* Request_;
         const since = Number(url.searchParams.get("since") ?? 0) || 0;
         const limit = Number(url.searchParams.get("limit") ?? PAGE_LIMIT) || PAGE_LIMIT;
@@ -410,14 +415,15 @@ const routes: RoomRoute[] = [
         const repos = githubRepos(body.repos);
         if (!repos) return yield* new BadRequest({ message: "repos: up to 20 owner/name" });
         const app = yield* GithubApp;
-        if (app && repos.length) {
+        const canPush = app ? app.canPush : yield* GithubPush;
+        if (canPush && repos.length) {
           if (typeof body.token !== "string" || !body.token || body.token.length > 512) return yield* new Forbidden({ message: "link GitHub in Settings to connect a repo" });
           const userToken = body.token;
           const pushable = yield* Effect.forEach(
             repos,
             (r) =>
               Effect.flatMap(
-                Effect.promise(() => app.canPush(r, userToken)),
+                Effect.promise(() => canPush(r, userToken)),
                 replied,
               ),
             { concurrency: "unbounded" },
@@ -443,8 +449,9 @@ const routes: RoomRoute[] = [
     method: "GET",
     path: "/github/diff",
     guard: "member",
-    run: () =>
+    run: ({ me }) =>
       Effect.gen(function* () {
+        if (!allow(`gh:${(yield* RoomStore).roomId}:${me}`, GITHUB_READS_PER_MINUTE)) return yield* new TooMany({ message: "too many GitHub lookups; wait a minute" });
         const { url } = yield* Request_;
         const { repo, sha } = yield* connectedCommit(url.searchParams.get("repo"), url.searchParams.get("sha"));
         const app = yield* githubApp;
@@ -507,8 +514,9 @@ const routes: RoomRoute[] = [
     method: "GET",
     path: "/github/issue",
     guard: "member",
-    run: () =>
+    run: ({ me }) =>
       Effect.gen(function* () {
+        if (!allow(`gh:${(yield* RoomStore).roomId}:${me}`, GITHUB_READS_PER_MINUTE)) return yield* new TooMany({ message: "too many GitHub lookups; wait a minute" });
         const { url } = yield* Request_;
         const n = url.searchParams.get("number");
         const { repo, number } = yield* connectedIssue(url.searchParams.get("repo"), n && /^\d{1,9}$/.test(n) ? Number(n) : null);
@@ -696,7 +704,9 @@ export async function onHttp(relay: Relay, db: RoomDb, req: Request, path: strin
   // Shared-code rooms from before owners existed: delete them outright the first time anything touches them.
   if (db.isLegacy()) return { res: Response.json({ error: "no such channel", tag: "ChannelGone" }, { status: 404 }), fx: { wipe: true } };
   // One context for this request, handed to the runtime as is (cheaper than layering provides).
-  const context = inRoom(relay, db).pipe(Context.add(Request_, await incoming(req, path)));
+  const got = await incoming(req, path);
+  if (!got) return { res: Response.json({ error: "request too large", tag: "TooLarge" }, { status: 413 }) };
+  const context = inRoom(relay, db).pipe(Context.add(Request_, got));
   // Anything else (a bug, a storage error) propagates, and the adapter answers 500 as before.
   return Effect.runPromiseWith(context)(program);
 }

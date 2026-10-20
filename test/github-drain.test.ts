@@ -23,7 +23,7 @@ let ownerCh: Channel;
 let memberCh: Channel;
 
 beforeAll(async () => {
-  server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir, human: devHumanAuth(), githubSecret: SECRET });
+  server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir, human: devHumanAuth(), githubSecret: SECRET, githubPush: async (_, token) => ({ ok: true, value: token === "ghu_owner" }) });
   relay = server.url.origin;
   owner = await generateIdentity("alice");
   const member = await generateIdentity("win");
@@ -50,7 +50,7 @@ const sha = "a".repeat(40);
 
 describe("the owner's app drains GitHub's queue into the channel", () => {
   test("a PR and its finished check land as one signed event; started checks are left out; the queue empties", async () => {
-    expect(await ownerCh.setGithubRepos(["ojow/channels"])).toEqual(["ojow/channels"]);
+    expect(await ownerCh.setGithubRepos(["ojow/channels"], "ghu_owner")).toEqual(["ojow/channels"]);
     await hook("pull_request", {
       action: "opened",
       repository,

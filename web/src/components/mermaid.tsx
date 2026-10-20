@@ -97,6 +97,13 @@ export function errorLine(e: unknown): string {
   )
 }
 
+export function linksApart(svg: string): string {
+  return svg.replace(
+    /<a\b([^>]*?)(\/?)>/g,
+    (_, attrs: string, close: string) => `<a${attrs.replace(/\s(?:target|rel)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/g, "")} target="_blank" rel="noopener noreferrer"${close}>`
+  )
+}
+
 function draw(source: string): Promise<Drawn> {
   const run = queue.then(async (): Promise<Drawn> => {
     const m = await load()
@@ -133,7 +140,7 @@ function draw(source: string): Promise<Drawn> {
     try {
       await m.parse(source)
       const { svg } = await m.render(`kiwi-mermaid-${next++}`, source)
-      return { kind: "svg", svg }
+      return { kind: "svg", svg: linksApart(svg) }
     } catch (e) {
       return { kind: "error", message: errorLine(e) }
     }

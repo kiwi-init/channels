@@ -1,7 +1,7 @@
 import { MAX_PIN } from "@kiwi/core/pin.ts";
 import * as Effect from "effect/Effect";
 import { openSession } from "../../agent.ts";
-import { Channel, RelayError } from "@kiwi/core/client.ts";
+import { Channel, keepHeld, RelayError } from "@kiwi/core/client.ts";
 import { Cursor, Keystore } from "../../config.ts";
 import { decodeJoinCode, type ChannelAccess } from "@kiwi/core/crypto.ts";
 import { freeAgentName, handleFor, inlineText, readLaunch } from "@kiwi/core/membership.ts";
@@ -169,7 +169,7 @@ export const joinCommands: Record<string, Command> = {
             const prior = c.channels[alias];
             c.channels[alias] =
               prior?.roomId === access.roomId
-                ? { ...prior, ...access, keys: { ...prior.keys, ...access.keys }, as: prior.as ?? name, ...(title ? { title } : {}) }
+                ? { ...prior, ...access, ...keepHeld(prior, access), as: prior.as ?? name, ...(title ? { title } : {}) }
                 : { ...access, relay, code, as: name, ...(title ? { title } : {}) };
           });
           const s = yield* openSession(alias, cfg.channels[alias]!, name);
