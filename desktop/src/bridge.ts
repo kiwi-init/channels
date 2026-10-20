@@ -244,6 +244,17 @@ export interface GithubStatus {
   account: { login: string; id: number; at: number } | null;
 }
 
+export interface RexSeatView {
+  alias: string;
+  agent: string;
+  room?: string;
+  server: string;
+  session: string;
+  block: string;
+}
+
+export type RexShowResult = { ok: true } | { ok: false; why: "no-rex" | "no-server" | "remote-control" | "failed" };
+
 export interface KiwiBridge {
   /** The relay URL injected at load (query param, else the default). */
   readonly relayUrl: string;
@@ -299,6 +310,8 @@ export interface KiwiBridge {
   setVoiceConsent(roomId: string, on: boolean): Promise<void>;
   voiceToken(roomId: string): Promise<VoiceAuth>;
   setPersonalities(list: Personality[]): Promise<void>;
+  rexSeats(): Promise<RexSeatView[]>;
+  rexShow(seat: RexSeatView): Promise<RexShowResult>;
 }
 
 export interface UpdateView {

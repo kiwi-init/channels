@@ -128,14 +128,14 @@ function parse(stdout: string): unknown {
   }
 }
 
-function api(place: RexPlace, method: string, args: Record<string, unknown>, bin: string | null = rexBinary(), session = true, timeout = 5_000): unknown {
+export function rexApi(place: RexPlace, method: string, args: Record<string, unknown>, bin: string | null = rexBinary(), session = true, timeout = 5_000): unknown {
   if (!bin) return null;
   const r = run(bin, ["-S", place.server, "api", "call", ...(session ? ["-s", place.session] : []), method, JSON.stringify(args)], timeout);
   return r.status === 0 ? parse(r.stdout) : null;
 }
 
 function blockCall(place: RexPlace, method: string, args: Record<string, unknown>, bin: string | null = rexBinary(), timeout = 5_000): unknown {
-  return api(place, `com.superlogical.terminal.${method}`, { block_id: place.block, args }, bin, true, timeout);
+  return rexApi(place, `com.superlogical.terminal.${method}`, { block_id: place.block, args }, bin, true, timeout);
 }
 
 function object(v: unknown): Record<string, unknown> | null {
@@ -217,7 +217,7 @@ export function rexActivity(place: RexPlace, bin: string | null = rexBinary()): 
 }
 
 export function rexInstance(place: RexPlace, bin: string | null = rexBinary()): string | null {
-  const got = api(place, "server.status", {}, bin, false);
+  const got = rexApi(place, "server.status", {}, bin, false);
   const id = nested(got, "instance_id") ?? nested(got, "instanceId") ?? nested(got, "server", "instance_id");
   return typeof id === "string" && id ? id : null;
 }
@@ -239,7 +239,7 @@ function listIn(v: unknown): unknown[] | null {
 }
 
 export function rexBlockPresent(place: RexPlace, bin: string | null = rexBinary()): boolean | null {
-  const list = listIn(api(place, "session.list_blocks", {}, bin));
+  const list = listIn(rexApi(place, "session.list_blocks", {}, bin));
   if (!list) return null;
   return list.some((item) => {
     if (typeof item === "string") return item === place.block;
