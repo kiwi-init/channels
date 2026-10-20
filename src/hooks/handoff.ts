@@ -39,6 +39,21 @@ function offered(file: string): Offer | null {
 
 const within = (born: number, o: Offer) => born >= o.at - CLOCK_MS && born <= o.at + NEW_THREAD_MS;
 
+function canonical(dir: string): string | null {
+  try {
+    return realpathSync(dir);
+  } catch {
+    // A folder that can't be resolved can't be told apart from the new thread's.
+    return null;
+  }
+}
+
+function sameFolder(a: string, b: string): boolean {
+  const ra = canonical(a);
+  const rb = canonical(b);
+  return ra === null || rb === null || ra === rb;
+}
+
 function startedWith(rollout: string, o: Offer, mine: SessionMeta): string[] {
   const dir = dirname(rollout);
   let names: string[];
@@ -53,7 +68,7 @@ function startedWith(rollout: string, o: Offer, mine: SessionMeta): string[] {
     const born = id ? createdAt(id) : null;
     if (!id || born === null || id === o.from || !within(born, o)) return [];
     const meta = sessionMeta(join(dir, n));
-    return !meta || (meta.originator === mine.originator && meta.cwd === mine.cwd) ? [id] : [];
+    return !meta || (meta.originator === mine.originator && sameFolder(meta.cwd, mine.cwd)) ? [id] : [];
   });
 }
 

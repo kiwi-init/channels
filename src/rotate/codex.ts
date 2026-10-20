@@ -67,8 +67,23 @@ function shownPaths(cwd: string): string[] {
 
 function isFooter(line: string, cwd: string): boolean {
   const all = runs(line);
-  const text = plain(line);
-  return shownPaths(cwd).some((p) => text.includes(` · ${p}`) && all.some((r) => r.color && r.text.trim() === p));
+  const paths = shownPaths(cwd);
+  return all.some((r, i) => {
+    if (!r.color || !paths.includes(r.text)) return false;
+    const before = plain(
+      all
+        .slice(0, i)
+        .map((x) => x.text)
+        .join(""),
+    );
+    const after = plain(
+      all
+        .slice(i + 1)
+        .map((x) => x.text)
+        .join(""),
+    );
+    return before.endsWith(" · ") && (after.trim() === "" || after.startsWith(" · "));
+  });
 }
 
 export const isRecord = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null;

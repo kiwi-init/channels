@@ -55,6 +55,8 @@ describe("Codex's input box", () => {
     expect(boxOf(WORK, [composer("hello"), "", "  personal draft"].join("\n"))).toBeNull();
     expect(boxOf(WORK, [box, "", "  a · personal draft"].join("\n"))).toBeNull();
     expect(boxOf(WORK, [box, "", "  notes · \x1b[36m[Pasted Content 1234 chars]\x1b[39m"].join("\n"))).toBeNull();
+    expect(boxOf(WORK, [box, "", "  notes · \x1b[36m~/work\x1b[39m personal text"].join("\n"))).toBeNull();
+    expect(boxOf(WORK, [box, "", "  ~/work and \x1b[36m~/work\x1b[39m · notes"].join("\n"))).toBeNull();
     expect(boxOf(join(homedir(), "elsewhere"), screen(box))).toBeNull();
     expect(boxOf(VM, screen(box))).toBeNull();
     expect(boxOf(WORK, screen(composer("\x1b[2mAsk\x1b[0m and more")))).not.toBe("");
@@ -315,6 +317,7 @@ describe("handing a Codex seat to its new thread", () => {
     expect(takeHandoff(folder, late, started(sessions, late, "codex-tui", folder))).toBeNull();
     expect(takeHandoff(folder, exec, started(sessions, exec, "codex_exec", folder))).toBeNull();
     expect(takeHandoff(folder, "thr-old", tui)).toBeNull();
+    mkdirSync(join(dir, "another-folder"));
     started(sessions, v7(at + 2_000, "0000000000f1"), "codex-tui", join(dir, "another-folder"));
     expect(seats(folder).map((b) => b.session)).toEqual(["thr-old", "thr-old"]);
     expect(takeHandoff(folder, mine, tui)).toBe("thr-old");
@@ -354,6 +357,24 @@ describe("handing a Codex seat to its new thread", () => {
     const myFile = started(sessions, mine, "codex-tui", folder);
     writeFileSync(join(sessions, `rollout-2026-10-20T14-17-25-${v7(at + 2_000, "0000000000d1")}.jsonl`), '{"type":"session_meta","payload":{"id":');
     expect(takeHandoff(folder, mine, myFile)).toBeNull();
+    expect(seats(folder).map((b) => b.session)).toEqual(["thr-old", "thr-old"]);
+  });
+
+  test("a thread started in the same folder under another spelling of it counts as another one", () => {
+    const folder = join(dir, "aliased");
+    const sessions = join(dir, "sessions-e");
+    mkdirSync(folder);
+    symlinkSync(folder, join(dir, "alias"));
+    bind(folder);
+    const spellings = [join(dir, "alias"), `${folder}/`];
+    spellings.forEach((other, i) => {
+      const at = 1_800_000_300_000 + i * 100_000;
+      offerHandoff(folder, "thr-old", "codex-tui", at);
+      const mine = v7(at + 1_000, `00000000010${i}`);
+      const myFile = started(sessions, mine, "codex-tui", folder);
+      started(sessions, v7(at + 2_000, `00000000020${i}`), "codex-tui", other);
+      expect(takeHandoff(folder, mine, myFile)).toBeNull();
+    });
     expect(seats(folder).map((b) => b.session)).toEqual(["thr-old", "thr-old"]);
   });
 

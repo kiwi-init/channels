@@ -203,7 +203,8 @@ jobs:
       one with it (src/cli/commands/rotate.ts); and the handoff
       (src/hooks/handoff.ts, handSeats in src/seats.ts): only a thread created within NEW_THREAD_MS
       of the offer, with the old thread's originator, takes the old thread's Codex seats, once, never
-      a Claude one; two such threads in that folder, or one whose rollout can't be read yet, leave
+      a Claude one; two such threads in that folder, under any spelling of it, or one whose rollout
+      or folder can't be read, leave
       the seats where they are and say so in rotate.log; and a Codex SessionStart hook run moves them (src/hooks/run.ts).
       Also one wake outstanding per seat: after a wake lands, no other is sent to the same destination while every
       message it was for is still unread, so a busy session's queue doesn't fill with wakes that find nothing unread;

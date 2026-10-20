@@ -236,12 +236,14 @@ Built for Codex windows in tmux, with the same switch, trigger (`rotationAt`), l
   terminal paints the box's background (`\x1b[48;2;…m`) right after the `›`. The box is the last
   line whose first character is a `›` that is bold, not dim (a submitted prompt) and not reversed (a
   menu row), and every line from there down to the footer: the last block on screen, whose first
-  line shows ` · ` and then the thread's folder, as written or under `~`, in a color of its own.
+  line shows the thread's folder, as written, resolved or under `~`, as a colored span of its own
+  right after a ` · ` and followed by nothing or another ` · `.
   Codex colors parts of a draft too (a pasted-text placeholder is cyan), so color alone can't tell
   the footer from a draft; the folder can. Continuation lines are indented two spaces, like the
   footer, and a draft can hold blank lines, so the footer is what ends it; with no such footer,
   or one that shortens the folder in a narrow pane, the box reads as unknown and the seat stays.
-  A draft whose line ends in ` · ` and that exact folder, colored on its own, would still pass. Empty when everything after the `›` is
+  A draft whose last block starts with a line holding that colored span in that place would
+  still pass. Empty when everything after the `›` is
   dim (the placeholder) or blank, and nothing follows it.
 - **The act.** `/new`, confirmed in the box before Enter. Then, once the title shows a fresh thread
   and the box is empty, a first prompt (`CODEX_FIRST`), confirmed the same way, which starts the
@@ -255,8 +257,9 @@ Built for Codex windows in tmux, with the same switch, trigger (`rotationAt`), l
   within 15 seconds of it, which its UUIDv7 id says, with the same originator in its rollout's
   `session_meta`. The rollout exists from `/new`, and SessionStart comes with the first turn, so
   the first prompt can be hours later and still take it. Before taking it, the hook lists the
-  rollouts in the new thread's day folder: if any other thread with that originator and folder,
-  or one whose first line can't be read yet, was created in those 15 seconds, say a person opened a second Codex there, neither gets the
+  rollouts in the new thread's day folder: if any other thread with that originator and the same
+  folder once symlinks are resolved, or one whose first line or folder can't be read, was created
+  in those 15 seconds, say a person opened a second Codex there, neither gets the
   seats, and `rotate.log` says so. Otherwise the hook moves every Codex seat bound to the old
   thread to the new one (`takeHandoff`, `handSeats`), so re-entry, deliveries and `codex queue`
   wakes go to the new thread. A `codex exec` run or a thread outside the 15 seconds leaves the offer
