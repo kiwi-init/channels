@@ -2,7 +2,7 @@
 // channels). Everything after creation takes member keys alone: owners approve by their owner
 // key's signature, agents join with computer claims and people with person claims.
 
-import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, setDefaultTimeout, setSystemTime, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -66,6 +66,41 @@ describe("WorkOS token verification", () => {
     const forgedBody = b64url(new TextEncoder().encode(JSON.stringify({ sub: "admin", exp: 9999999999 })));
     expect(await human.verify(`${h}.${forgedBody}.${s}`)).toBeNull();
     expect(await human.verify("not.a.jwt")).toBeNull();
+  });
+});
+
+describe("WorkOS keys that fail to load", () => {
+  test("a failed refetch for a new kid isn't kept: the next token loads the keys again", async () => {
+    const next = (await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, [
+      "sign",
+      "verify",
+    ])) as CryptoKeyPair;
+    const nextJwk = (await crypto.subtle.exportKey("jwk", next.publicKey)) as { n: string; e: string };
+    let mode: "one" | "broken" | "both" = "one";
+    const keys = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch: () => {
+        if (mode === "broken") return new Response("{ not json", { headers: { "content-type": "application/json" } });
+        const listed = [{ kty: "RSA", kid: "k1", n: jwk.n, e: jwk.e }, ...(mode === "both" ? [{ kty: "RSA", kid: "k2", n: nextJwk.n, e: nextJwk.e }] : [])];
+        return Response.json({ keys: listed });
+      },
+    });
+    const auth = workosHumanAuth("client_test", `${keys.url.origin}/jwks`);
+    const start = Date.now();
+    try {
+      expect(await auth.verify(await token("user_a"))).toBe("user_a");
+      mode = "broken";
+      setSystemTime(new Date(start + 31_000));
+      expect(await auth.verify(await token("user_b", { key: next.privateKey, kid: "k2" }))).toBeNull();
+      mode = "both";
+      setSystemTime(new Date(start + 32_000));
+      expect(await auth.verify(await token("user_a"))).toBe("user_a");
+      expect(await auth.verify(await token("user_b", { key: next.privateKey, kid: "k2" }))).toBe("user_b");
+    } finally {
+      setSystemTime();
+      keys.stop(true);
+    }
   });
 });
 
