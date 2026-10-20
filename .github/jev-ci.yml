@@ -188,6 +188,30 @@ jobs:
       and nothing into a busy session, a draft, a pane watched by a client that just pressed a key, a
       tmux server started again on the same socket, or a process that doesn't lead the pane's
       foreground (src/rotate/pane.ts).
+      Also test/rotate-codex.test.ts: Codex's input box (src/rotate/codex.ts codexInput, read from SGR
+      styles: the last bold › line that is neither dim nor reversed and every line down to the
+      footer, a last block showing ` · ` and the thread's folder in a color of its own, never a
+      colored draft element or another folder's footer, so a draft below blank lines or
+      of blank lines is never empty, the same in a truecolor terminal that paints the box's
+      background, empty for the dim placeholder, never a dim submitted prompt, a reversed menu row or
+      a screen whose last block isn't that footer; a wrapped first prompt compared by its words,
+      sameWords); the thread a window shows from its title (codexShown: named, fresh or busy), a
+      thread's name from session_index.jsonl (threadName), its creation time from its UUIDv7 id
+      (createdAt, threadOf) and its rollout's session_meta read from the first line alone
+      (sessionMeta); with tmux on its own socket and a fake Codex that reads key by key
+      (test/fixtures/fake-codex.sh), a Codex window found by the folder its leading codex process has
+      open and only when exactly one has it (codexPanes, codexPane), an idle thread (codexTurn in
+      src/harness.ts) whose window's title names it given /new and then, once the title shows a fresh
+      thread, CODEX_FIRST, each confirmed in the box before Enter, with the seat offered for that
+      folder, and a window showing another thread, one that turns to another thread once /new is
+      typed (no erase either, even when rotation is switched off then), or a working thread given
+      nothing more; kiwi rotate send typing nothing for a rollout without session_meta and rotating
+      one with it (src/cli/commands/rotate.ts); and the handoff
+      (src/hooks/handoff.ts, handSeats in src/seats.ts): only a thread created within NEW_THREAD_MS
+      of the offer, with the old thread's originator, takes the old thread's Codex seats, once, never
+      a Claude one; two such threads in that folder, under any spelling of it, or one whose rollout
+      or folder can't be read, leave
+      the seats where they are and say so in rotate.log; and a Codex SessionStart hook run moves them (src/hooks/run.ts).
       Also one wake outstanding per seat: after a wake lands, no other is sent to the same destination while every
       message it was for is still unread, so a busy session's queue doesn't fill with wakes that find nothing unread;
       reading any of them (by cursor, or as a reply marked seen) lets the next through, a replaced session or webhook

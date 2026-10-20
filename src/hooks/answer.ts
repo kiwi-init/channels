@@ -142,11 +142,12 @@ export function cursorFollow(alias: string, mc: string, unread: boolean, reminde
 const contextNudge = Effect.fn("Hooks.contextNudge")(function* (input: HookInput, s: AgentSession, who: Here, mc: string, budget: number) {
   const session = who.session;
   const file = input.transcript_path;
-  if (who.harness !== "claude" || !session || typeof file !== "string" || !file) return null;
-  const { claudeContext } = yield* Effect.promise(() => import("../harness.ts"));
+  if ((who.harness !== "claude" && who.harness !== "codex") || !session || typeof file !== "string" || !file) return null;
+  const { claudeContext, codexContext } = yield* Effect.promise(() => import("../harness.ts"));
+  const read = who.harness === "codex" ? codexContext : claudeContext;
   const context = yield* Effect.sync(() => {
     try {
-      return claudeContext(file);
+      return read(file);
     } catch {
       // A transcript that can't be read says nothing about the context: no nudge, the line's state kept.
       return undefined;

@@ -206,11 +206,70 @@ throwaway tmux sessions on a laptop, reading each TUI's own command list (no mod
 | Kimi Code | K3 | `/new` (`/clear`) | `/compact <instruction>` | only when served (`kimi web`) |
 
 Codex and OpenCode are woken by a command that names the recorded thread or session, so after a
-`/new` typed into the pane the wake would still go to the old one. Rotating them needs the seat's
-record to move to the new thread first; that is the next probe. Until then: re-entry (step 2)
-through its SessionStart hook where it has one, and its own compaction setting as the backstop
-(Codex: `model_auto_compact_token_limit`, and `compact_prompt` telling it to keep the task, branch,
-SHA and round; Grok: `/context-window`).
+`/new` typed into the pane the wake would still go to the old one. Probed 2026-10-20 with Codex
+0.163 against a throwaway `CODEX_HOME`: `codex queue --thread <old>` after a `/new` runs a whole
+turn on the old thread inside Codex's shared app-server, unseen in the window; a thread exists only
+once its first turn starts, and its SessionStart hook then arrives with `"source":"startup"` and the
+new id; Codex runs its hooks in that app-server, so their `TMUX_PANE` is whichever pane started it;
+a Stop hook's `{"decision":"block","reason":…}` continues the turn, as in Claude Code.
+
+### Codex rotation
+
+Built for Codex windows in tmux, with the same switch, trigger (`rotationAt`), lock, guard rounds and
+`rotate.log` as Claude Code:
+
+- **The pane.** The Stop hook can't trust its environment, so it looks for the window: a `codex`
+  process that leads a tmux pane's foreground process group and has the thread's folder open
+  (`/proc/<pid>/cwd`, or `lsof` on macOS), on the app-server's tmux server or the default one. With
+  none or more than one, it stays and says so in `rotate.log` (`src/rotate/codex.ts`).
+- **The thread.** Codex sets the pane title to the thread's name and the folder (`Join review
+  room | inquizit`), with a spinner in front while a turn runs, and only the folder for a fresh
+  thread. The sender sends a key, the erase included, only while the title names the seat's
+  thread, as recorded in `session_index.jsonl`; otherwise the outcome is `not-its-thread`. This
+  keeps it out of a window where someone used `/new` or `/resume`, while the seat's old thread was
+  woken unseen by `codex queue`. A thread Codex has not named yet stays, and so does one whose
+  rollout doesn't start with `session_meta`, or a window whose title says nothing (Codex's title
+  turned off). Two threads with the same name can't be told apart, and a switch between the last
+  check and Enter is not caught, as with the person typing in that gap.
+- **Idle.** The thread's rollout: its newest turn event is `task_complete` or `turn_aborted`.
+- **The input box.** Read from the SGR styles, not fixed escape strings, because a truecolor
+  terminal paints the box's background (`\x1b[48;2;…m`) right after the `›`. The box is the last
+  line whose first character is a `›` that is bold, not dim (a submitted prompt) and not reversed (a
+  menu row), and every line from there down to the footer: the last block on screen, whose first
+  line shows the thread's folder, as written, resolved or under `~`, as a colored span of its own
+  right after a ` · ` and followed by nothing or another ` · `.
+  Codex colors parts of a draft too (a pasted-text placeholder is cyan), so color alone can't tell
+  the footer from a draft; the folder can. Continuation lines are indented two spaces, like the
+  footer, and a draft can hold blank lines, so the footer is what ends it; with no such footer,
+  or one that shortens the folder in a narrow pane, the box reads as unknown and the seat stays.
+  A draft whose last block starts with a line holding that colored span in that place would
+  still pass. Empty when everything after the `›` is
+  dim (the placeholder) or blank, and nothing follows it.
+- **The act.** `/new`, confirmed in the box before Enter. Then, once the title shows a fresh thread
+  and the box is empty, a first prompt (`CODEX_FIRST`), confirmed the same way, which starts the
+  new thread. From `/new` on, the old thread's rollout no longer counts: a wake that runs there
+  can't hold up or erase the first prompt. A first prompt wrapped onto two rows compares by its
+  words. If it can't be sent, the outcome is `new-without-prompt`, and the next prompt anyone
+  types in that fresh thread starts it.
+- **The seat follows.** Right before the Enter on `/new`, the sender offers the seat for that folder
+  (`hook-state/codex-handoff.<folder>`), with the time and the old thread's `originator`. A Codex
+  SessionStart with `"source":"startup"` in that folder can take the offer only for a thread created
+  within 15 seconds of it, which its UUIDv7 id says, with the same originator in its rollout's
+  `session_meta`. The rollout exists from `/new`, and SessionStart comes with the first turn, so
+  the first prompt can be hours later and still take it. Before taking it, the hook lists the
+  rollouts in the new thread's day folder: if any other thread with that originator and the same
+  folder once symlinks are resolved, or one whose first line or folder can't be read, was created
+  in those 15 seconds, say a person opened a second Codex there, neither gets the
+  seats, and `rotate.log` says so. Otherwise the hook moves every Codex seat bound to the old
+  thread to the new one (`takeHandoff`, `handSeats`), so re-entry, deliveries and `codex queue`
+  wakes go to the new thread. A `codex exec` run or a thread outside the 15 seconds leaves the offer
+  alone. Until a thread takes the offer, wakes keep going to the old thread, unseen in the window.
+  Not covered: a 15 seconds that spans midnight lists only the new thread's day, and a clock that
+  jumps between the offer and `/new` leaves the seat on the old thread.
+- **The nudge.** The context line and its nudge read the rollout's `token_count` for Codex too.
+
+OpenCode and Grok are not built. Until then: re-entry through a SessionStart hook where there is one,
+and their own compaction settings as the backstop (Grok: `/context-window`).
 
 ## Risks to check before enabling rotation
 
@@ -248,4 +307,4 @@ One issue and one PR each, with its CI gate:
    `/clear` are committed by the new session.
 4. Rotation for Claude Code seats in tmux, behind the switch from decision 3: the pane, the
    trigger, the guard and the act. Built, except asking a seat to rotate through the channel.
-5. Probe and add Codex, OpenCode and Grok.
+5. Probe and add Codex, OpenCode and Grok. Codex built (see Codex rotation); OpenCode and Grok not yet.

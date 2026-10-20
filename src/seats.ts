@@ -155,6 +155,26 @@ function store(cfg: Config, dir: string, seats: Binding[]): void {
   cfg.bindings = bindings;
 }
 
+export function handSeats(from: string, to: string, harness: Harness, now = Date.now()): number {
+  let moved = 0;
+  updateConfig((c) => {
+    for (const dir of Object.keys(c.bindings ?? {})) {
+      const seats = seatsAt(c, dir);
+      if (!seats.some((b) => b.session === from && b.harness === harness)) continue;
+      store(
+        c,
+        dir,
+        seats.map((b) => {
+          if (b.session !== from || b.harness !== harness) return b;
+          moved++;
+          return { ...omit(b, "pid", "harnessSession"), session: to, at: now, seen: now };
+        }),
+      );
+    }
+  });
+  return moved;
+}
+
 export function pidAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);

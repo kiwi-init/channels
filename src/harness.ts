@@ -321,7 +321,7 @@ function claudeActivity(env: Env): Activity | undefined {
   return { state: "working", ...(tool ? { tool } : {}), ...extra };
 }
 
-function codexContext(file: string): ContextUse | undefined {
+export function codexContext(file: string): ContextUse | undefined {
   for (const line of tailLines(file)) {
     if (!line.includes('"token_count"') && !line.includes("compact")) continue;
     let l: { type?: string; payload?: { type?: string; info?: { last_token_usage?: { input_tokens?: unknown }; model_context_window?: unknown } | null } };
@@ -341,7 +341,28 @@ function codexContext(file: string): ContextUse | undefined {
   return undefined;
 }
 
+export type CodexTurn = { state: "idle" } | { state: "working"; tool?: string };
+
 /** Codex: the thread's rollout, newest event first: a task started and not completed is work. */
+export function codexTurn(file: string): CodexTurn | undefined {
+  for (const line of tailLines(file, 128 * 1024)) {
+    if (!line.trim()) continue;
+    try {
+      const l = JSON.parse(line) as { type?: string; payload?: { type?: string; name?: unknown } };
+      const t = l.payload?.type ?? l.type;
+      if (t === "task_complete" || t === "turn_aborted") return { state: "idle" };
+      if (t === "function_call" || t === "custom_tool_call") {
+        const tool = toolName(l.payload?.name);
+        return { state: "working", ...(tool ? { tool } : {}) };
+      }
+      if (t === "task_started" || t === "agent_reasoning" || t === "reasoning" || t === "message") return { state: "working" };
+    } catch {
+      // A line cut by the tail's start.
+    }
+  }
+  return undefined;
+}
+
 async function codexActivity(env: Env): Promise<Activity | undefined> {
   const thread = env.CODEX_THREAD_ID;
   if (!thread) return undefined;
@@ -355,18 +376,9 @@ async function codexActivity(env: Env): Promise<Activity | undefined> {
   if (typeof row?.rollout_path !== "string" || !existsSync(row.rollout_path)) return undefined;
   const ctx = codexContext(row.rollout_path);
   const context = ctx ? { context: ctx } : {};
-  for (const line of tailLines(row.rollout_path, 128 * 1024)) {
-    if (!line.trim()) continue;
-    try {
-      const l = JSON.parse(line) as { type?: string; payload?: { type?: string; name?: unknown } };
-      const t = l.payload?.type ?? l.type;
-      if (t === "task_complete" || t === "turn_aborted") return { state: "idle", ...context };
-      if (t === "function_call" || t === "custom_tool_call") return { state: "working", ...(toolName(l.payload?.name) ? { tool: toolName(l.payload?.name) } : {}), ...context };
-      if (t === "task_started" || t === "agent_reasoning" || t === "reasoning" || t === "message") return { state: "working", ...context };
-    } catch {
-      // A line cut by the tail's start.
-    }
-  }
+  const turn = codexTurn(row.rollout_path);
+  if (turn?.state === "idle") return { state: "idle", ...context };
+  if (turn?.state === "working") return { state: "working", ...(turn.tool ? { tool: turn.tool } : {}), ...context };
   return undefined;
 }
 
