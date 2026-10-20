@@ -28,7 +28,7 @@ function uid(): number | null {
   return typeof process.getuid === "function" ? process.getuid() : null;
 }
 
-function leadsTerminal(pid: number): Device | null {
+export function leadsTerminal(pid: number): Device | null {
   if (process.platform === "win32" || !Number.isSafeInteger(pid) || pid <= 0) return null;
   const r = spawnSync("ps", ["-o", "tty=,tpgid=,pgid=", "-p", String(pid)], { encoding: "utf8", timeout: 2_000 });
   const [tty, fg, group] = r.status === 0 ? r.stdout.trim().split(/\s+/) : [];

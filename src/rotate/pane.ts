@@ -6,29 +6,46 @@ import { appendRotated } from "../daemon/wake.ts";
 import { codexTurn } from "../harness.ts";
 import { offerHandoff } from "../hooks/handoff.ts";
 import { alive } from "../hooks/listeners.ts";
+import { rexBlockPresent, rexInstance, rexProcess, rexRootState, rexScreen, runRex, type RexPlace } from "../rex.ts";
+import { leadsTerminal } from "../status.ts";
 import { CODEX_FIRST, CODEX_NEW, codexInput, codexShown, sameWords } from "./codex.ts";
 
-interface Seat {
+export interface ClaudeTarget {
+  harness?: "claude";
   pid: number;
   session: string;
-  pane: string;
-  socket: string;
+  claudeDir: string;
+  pane?: string;
+  socket?: string;
+  rex?: RexPlace;
+  bin?: string;
 }
 
 export type Thread = { kind: "old"; rollout: string; name: string; by: string } | { kind: "fresh" };
 
-export type Target = (Seat & { harness: "claude"; claudeDir: string }) | (Seat & { harness: "codex"; cwd: string; thread: Thread });
+export interface CodexTarget {
+  harness: "codex";
+  pid: number;
+  session: string;
+  pane: string;
+  socket: string;
+  cwd: string;
+  thread: Thread;
+}
+
+export type Target = ClaudeTarget | CodexTarget;
 
 export type Outcome =
   | "cleared"
   | "new-without-prompt"
+  | "not-its-thread"
   | "gone"
   | "moved"
   | "not-its-pane"
-  | "not-its-thread"
   | "busy-elsewhere"
   | "timed-out"
   | "no-tmux"
+  | "no-pane"
   | "send-failed"
   | "left-in-input"
   | "switched-off";
@@ -82,7 +99,9 @@ function registry(t: Target): Registry {
   }
 }
 
-function tmux(t: Target, args: string[]): string | null {
+type TmuxTarget = { pid: number; pane: string; socket: string };
+
+function tmux(t: TmuxTarget, args: string[]): string | null {
   const r = spawnSync("tmux", ["-S", t.socket, ...args], { encoding: "utf8", timeout: 5_000 });
   return r.status === 0 ? r.stdout : null;
 }
@@ -93,7 +112,7 @@ interface PaneId {
   tty: string;
 }
 
-function paneId(t: Target): PaneId | null {
+function paneId(t: TmuxTarget): PaneId | null {
   const out = tmux(t, ["display-message", "-p", "-t", t.pane, "#{pid} #{pane_pid} #{pane_tty}"])?.trim().split(" ");
   return out && out.length === 3 ? { server: out[0]!, panePid: out[1]!, tty: out[2]! } : null;
 }
@@ -106,6 +125,113 @@ function holdsInput(pid: number, tty: string): boolean {
 
 type Check = Outcome | "wait" | "ready";
 
+interface RexId {
+  instance: string;
+  block: string;
+  child: number | null;
+}
+
+interface Backend {
+  readonly kind: "tmux" | "rex";
+  identify(): PaneId | RexId | null;
+  same(first: PaneId | RexId): boolean;
+  holds(first: PaneId | RexId): boolean;
+  idle(first: PaneId | RexId): boolean;
+  screen(first: PaneId | RexId): string | null;
+  type(first: PaneId | RexId, text: string): boolean;
+  enter(first: PaneId | RexId): boolean;
+  erase(first: PaneId | RexId, count: number): boolean;
+  calm(first: PaneId | RexId, now: number, quietMs: number): boolean;
+  quiet(now: number, quietMs: number): boolean;
+  forget(): void;
+}
+
+function tmuxBackend(t: TmuxTarget): Backend {
+  const pane = t.pane;
+  const cast = (id: PaneId | RexId): PaneId => id as PaneId;
+  return {
+    kind: "tmux",
+    identify: () => paneId(t),
+    same: (first) => {
+      const now = paneId(t);
+      const was = cast(first);
+      return now !== null && now.server === was.server && now.panePid === was.panePid && now.tty === was.tty;
+    },
+    holds: (first) => holdsInput(t.pid, cast(first).tty),
+    idle: () => true,
+    screen: () => tmux(t, ["capture-pane", "-p", "-e", "-t", pane]),
+    type: (_first, text) => tmux(t, ["send-keys", "-t", pane, "-l", text]) !== null,
+    enter: () => tmux(t, ["send-keys", "-t", pane, "Enter"]) !== null,
+    erase: (_first, count) => tmux(t, ["send-keys", "-t", pane, "-N", String(count), "BSpace"]) !== null,
+    calm: (_first, now, quietMs) => {
+      const clients = tmux(t, ["list-clients", "-t", pane, "-F", "#{client_activity}"]);
+      if (clients === null) return false;
+      const activity = clients
+        .split("\n")
+        .filter((line) => line.trim())
+        .map((line) => Number(line.trim()));
+      return calm(activity, now, quietMs);
+    },
+    quiet: () => true,
+    forget: () => {},
+  };
+}
+
+function rexBackend(t: ClaudeTarget & { rex: RexPlace; bin: string }, quietMs: number): Backend {
+  const place = t.rex;
+  const bin = t.bin;
+  let emptyAt: number | null = null;
+  const cast = (id: PaneId | RexId): RexId => id as RexId;
+  const sendKey = (...keys: string[]): boolean => runRex(bin, ["-S", place.server, "send-key", "-s", place.session, "-b", place.block, ...keys]).status === 0;
+  return {
+    kind: "rex",
+    identify: () => {
+      if (rexBlockPresent(place, bin) === false) return null;
+      const proc = rexProcess(place, bin);
+      if (!proc) return null;
+      return { instance: rexInstance(place, bin) ?? place.server, block: place.block, child: proc.child };
+    },
+    same: (first) => {
+      const was = cast(first);
+      if (rexBlockPresent(place, bin) === false) return false;
+      const proc = rexProcess(place, bin);
+      if (!proc) return false;
+      const instance = rexInstance(place, bin) ?? place.server;
+      return instance === was.instance && place.block === was.block && proc.child === was.child;
+    },
+    holds: () => {
+      const proc = rexProcess(place, bin);
+      return proc?.foreground === t.pid && leadsTerminal(t.pid) !== null;
+    },
+    idle: () => {
+      const state = rexRootState(place, bin);
+      return state === "done" || state === "idle";
+    },
+    screen: () => rexScreen(place, bin),
+    type: (_first, text) => runRex(bin, ["-S", place.server, "send", "-s", place.session, "-b", place.block, text]).status === 0,
+    enter: () => sendKey("enter"),
+    erase: (_first, count) => sendKey(...Array.from({ length: count }, () => "backspace")),
+    calm: () => true,
+    quiet: (now) => {
+      if (emptyAt === null) {
+        emptyAt = now;
+        return false;
+      }
+      return now - emptyAt >= quietMs;
+    },
+    forget: () => {
+      emptyAt = null;
+    },
+  };
+}
+
+function backendFor(t: Target, quietMs: number): Backend | null {
+  if (t.harness === "codex") return tmuxBackend(t);
+  if (t.rex && t.bin) return rexBackend({ ...t, rex: t.rex, bin: t.bin }, quietMs);
+  if (t.pane && t.socket) return tmuxBackend({ ...t, pane: t.pane, socket: t.socket });
+  return null;
+}
+
 function showsThread(t: Target): Check {
   if (t.harness !== "codex") return "ready";
   const title = tmux(t, ["display-message", "-p", "-t", t.pane, "#{pane_title}"]);
@@ -116,28 +242,39 @@ function showsThread(t: Target): Check {
   return shown.kind === "named" && shown.name === t.thread.name ? "ready" : "not-its-thread";
 }
 
-function check(t: Target, first: PaneId, quietMs: number, on: () => boolean, input: (captured: string) => boolean): Check {
+function check(t: Target, backend: Backend, first: PaneId | RexId, quietMs: number, on: () => boolean, input: (captured: string) => boolean, proofMs = 0): Check {
   if (!on()) return "switched-off";
   const r = registry(t);
   if (r.kind === "gone") return "gone";
   if (r.session !== null && r.session !== t.session) return "moved";
-  const now = paneId(t);
-  if (now === null) return "no-tmux";
-  if (now.server !== first.server || now.panePid !== first.panePid || now.tty !== first.tty) return "not-its-pane";
-  if (!holdsInput(t.pid, now.tty)) return "wait";
-  if (r.session === null || !r.idle) return "wait";
+  const now = backend.identify();
+  if (now === null) return backend.kind === "rex" ? "no-pane" : "no-tmux";
+  if (!backend.same(first)) return "not-its-pane";
+  if (!backend.holds(now)) {
+    backend.forget();
+    return "wait";
+  }
+  if (r.session === null || !r.idle || !backend.idle(now)) {
+    backend.forget();
+    return "wait";
+  }
   const thread = showsThread(t);
-  if (thread !== "ready") return thread;
-  const clients = tmux(t, ["list-clients", "-t", t.pane, "-F", "#{client_activity}"]);
-  if (clients === null) return "no-tmux";
-  const activity = clients
-    .split("\n")
-    .filter((l) => l.trim())
-    .map((l) => Number(l.trim()));
-  if (!calm(activity, Date.now(), quietMs)) return "wait";
-  const captured = tmux(t, ["capture-pane", "-p", "-e", "-t", t.pane]);
-  if (captured === null) return "no-tmux";
-  return input(captured) ? "ready" : "wait";
+  if (thread !== "ready") {
+    backend.forget();
+    return thread;
+  }
+  if (!backend.calm(now, Date.now(), quietMs)) {
+    backend.forget();
+    return "wait";
+  }
+  const captured = backend.screen(now);
+  if (captured === null) return backend.kind === "rex" ? "no-pane" : "no-tmux";
+  if (!input(captured)) {
+    backend.forget();
+    return "wait";
+  }
+  if (proofMs > 0 && !backend.quiet(Date.now(), proofMs)) return "wait";
+  return "ready";
 }
 
 const commandOf = (t: Target) => (t.harness === "codex" ? CODEX_NEW : CLEAR);
@@ -152,11 +289,11 @@ const endsWith = (t: Target, text: string) => (captured: string) => {
   return now !== null && (t.harness === "codex" ? now.replace(/\s+/g, " ").endsWith(text.replace(/\s+/g, " ")) : now.endsWith(text));
 };
 
-export type Teller = Pick<Target, "pid" | "session" | "pane">;
+export type Teller = { pid: number; session: string; pane?: string; rex?: RexPlace };
 
 function log(t: Teller, what: string): boolean {
   try {
-    appendRotated(join(home(), "rotate.log"), `${new Date().toISOString()} pid ${t.pid} session ${t.session} pane ${t.pane}: ${what}\n`);
+    appendRotated(join(home(), "rotate.log"), `${new Date().toISOString()} pid ${t.pid} session ${t.session} ${t.rex ? `rex ${t.rex.block}` : `pane ${t.pane}`}: ${what}\n`);
     return true;
   } catch {
     // The log only explains what happened; failing to write it changes nothing.
@@ -231,46 +368,47 @@ export function dropLock(session: string, me = process.pid): void {
   rmSync(join(lockDir(), `${lockPrefix(session)}${me}`), { force: true });
 }
 
-function owns(t: Target, first: PaneId): boolean {
+function owns(t: Target, backend: Backend, first: PaneId | RexId): boolean {
   const r = registry(t);
   if (r.kind === "gone" || r.session !== t.session) return false;
-  const now = paneId(t);
-  return now !== null && now.server === first.server && now.panePid === first.panePid && now.tty === first.tty && holdsInput(t.pid, now.tty) && showsThread(t) === "ready";
+  if (!backend.same(first)) return false;
+  const now = backend.identify();
+  return now !== null && backend.holds(now) && showsThread(t) === "ready";
 }
 
 const RENDER_MS = 1_000;
 const RENDER_EVERY_MS = 50;
 
-async function until(t: Target, first: PaneId, quietMs: number, on: () => boolean, input: (captured: string) => boolean, ms = RENDER_MS): Promise<Check> {
+async function until(t: Target, backend: Backend, first: PaneId | RexId, quietMs: number, on: () => boolean, input: (captured: string) => boolean, ms = RENDER_MS): Promise<Check> {
   const end = Date.now() + ms;
   for (;;) {
-    const seen = check(t, first, quietMs, on, input);
+    const seen = check(t, backend, first, quietMs, on, input);
     if (seen !== "wait" || Date.now() >= end) return seen;
     await Bun.sleep(RENDER_EVERY_MS);
   }
 }
 
-async function send(t: Target, first: PaneId, quietMs: number, on: () => boolean, text: string, beforeEnter: () => void = () => {}): Promise<Check | "sent"> {
-  if (tmux(t, ["send-keys", "-t", t.pane, "-l", text]) === null) return "send-failed";
-  const seen = await until(t, first, quietMs, on, shows(t, text));
+async function send(t: Target, backend: Backend, first: PaneId | RexId, quietMs: number, on: () => boolean, text: string, beforeEnter: () => void = () => {}): Promise<Check | "sent"> {
+  if (!backend.type(first, text)) return "send-failed";
+  const seen = await until(t, backend, first, quietMs, on, shows(t, text));
   if (seen === "ready") {
     beforeEnter();
-    return tmux(t, ["send-keys", "-t", t.pane, "Enter"]) === null ? "send-failed" : "sent";
+    return backend.enter(first) ? "sent" : "send-failed";
   }
   if (seen !== "wait" && seen !== "switched-off") return seen;
-  const captured = tmux(t, ["capture-pane", "-p", "-e", "-t", t.pane]);
-  if (captured === null || !endsWith(t, text)(captured) || !owns(t, first)) return "left-in-input";
-  if (tmux(t, ["send-keys", "-t", t.pane, "-N", String(text.length), "BSpace"]) === null) return "send-failed";
+  const captured = backend.screen(first);
+  if (captured === null || !endsWith(t, text)(captured) || !owns(t, backend, first)) return "left-in-input";
+  if (!backend.erase(first, text.length)) return "send-failed";
   return seen;
 }
 
 const SETTLE_MS = 3_000;
 
-async function firstPrompt(t: Target, first: PaneId, quietMs: number, on: () => boolean): Promise<Outcome> {
+async function firstPrompt(t: Target, backend: Backend, first: PaneId | RexId, quietMs: number, on: () => boolean): Promise<Outcome> {
   if (t.harness !== "codex") return "cleared";
-  const fresh: Target = { ...t, thread: { kind: "fresh" } };
-  if ((await until(fresh, first, quietMs, on, empty(fresh), SETTLE_MS)) !== "ready") return "new-without-prompt";
-  const sent = await send(fresh, first, quietMs, on, CODEX_FIRST);
+  const fresh: CodexTarget = { ...t, thread: { kind: "fresh" } };
+  if ((await until(fresh, backend, first, quietMs, on, empty(fresh), SETTLE_MS)) !== "ready") return "new-without-prompt";
+  const sent = await send(fresh, backend, first, quietMs, on, CODEX_FIRST);
   return sent === "sent" ? "cleared" : "new-without-prompt";
 }
 
@@ -286,20 +424,23 @@ export async function clearWhenIdle(t: Target, o: ClearOptions = {}): Promise<Ou
   const everyMs = o.everyMs ?? 2_000;
   const quietMs = o.quietMs ?? 10_000;
   const on = o.on ?? (() => true);
-  const first = paneId(t);
-  if (first === null) return finish(t, "no-tmux");
-  if (!holdsInput(t.pid, first.tty)) return finish(t, "not-its-pane");
+  const backend = backendFor(t, quietMs);
+  if (!backend) return finish(t, "no-pane");
+  const first = backend.identify();
+  if (first === null) return finish(t, backend.kind === "rex" ? "no-pane" : "no-tmux");
+  if (!backend.holds(first)) return finish(t, "not-its-pane");
   if (!takeLock(t.session)) return finish(t, "busy-elsewhere");
   try {
+    const proofMs = backend.kind === "rex" ? quietMs : 0;
     const end = Date.now() + timeoutMs;
     while (Date.now() < end) {
-      const before = check(t, first, quietMs, on, empty(t));
+      const before = check(t, backend, first, quietMs, on, empty(t), proofMs);
       if (before !== "wait" && before !== "ready") return finish(t, before);
       if (before === "ready") {
-        const sent = await send(t, first, quietMs, on, commandOf(t), () => {
+        const sent = await send(t, backend, first, quietMs, on, commandOf(t), () => {
           if (t.harness === "codex" && t.thread.kind === "old") offerHandoff(t.cwd, t.session, t.thread.by);
         });
-        if (sent === "sent") return finish(t, await firstPrompt(t, first, quietMs, on));
+        if (sent === "sent") return finish(t, await firstPrompt(t, backend, first, quietMs, on));
         if (sent !== "wait") return finish(t, sent === "ready" ? "send-failed" : sent);
       }
       await Bun.sleep(everyMs);
@@ -310,7 +451,7 @@ export async function clearWhenIdle(t: Target, o: ClearOptions = {}): Promise<Ou
   }
 }
 
-function finish(t: Target, outcome: Outcome): Outcome {
+function finish(t: Teller, outcome: Outcome): Outcome {
   log(t, outcome);
   return outcome;
 }

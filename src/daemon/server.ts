@@ -132,13 +132,23 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   const refreshActivity = async (seat: Seat, force = false): Promise<void> => {
     const cfg = loadConfig();
     const record = seatRecordFor(cfg, seat.alias, seat.agent);
+    if (record?.rex?.block !== seat.rexBlock) {
+      seat.rexBlock = record?.rex?.block;
+      seat.rexGone = false;
+    }
     const env = record ? activityEnv(record, process.env) : null;
     const { harnessActivity } = await import("../harness.ts");
-    const now = env ? await harnessActivity(env) : undefined;
+    let now = env ? await harnessActivity(env) : undefined;
+    const fileFirst = record?.harness === "claude" || record?.harness === "codex" || record?.harness === "opencode";
+    if (record?.rex && !fileFirst) {
+      const { rexActivity } = await import("../rex.ts");
+      const fromRex = rexActivity(record.rex);
+      if (fromRex) now = { ...fromRex, ...(now?.model ? { model: now.model } : {}) };
+    }
     const attached = attachedTo(seat);
     const pulled = attached === "listener" && pullsWake(record?.harness);
     const via = wakeOn(cfg, seat.alias, seat.agent) ? (viaOf(await livePath(cfg, seat, attached)) ?? (pulled ? "listener" : null)) : null;
-    const reach = reachOf(attached, record, now);
+    const reach = seat.rexGone ? "unreachable" : reachOf(attached, record, now);
     if (!force && JSON.stringify(now) === JSON.stringify(seat.activity) && via === seat.wakeVia && reach === seat.reach) return;
     seat.activity = now;
     seat.wakeVia = via;
@@ -713,6 +723,21 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     return (await Promise.all(relays.map(answers))).every((up) => !up);
   };
   let statusWatch: { stop(): void } | null = null;
+  let rexWatch: { stop(): void } | null = null;
+  const rexSeat = (server: string, block: string, gone: boolean): void => {
+    let cfg: Config;
+    try {
+      cfg = loadConfig();
+    } catch {
+      return;
+    }
+    for (const seat of seats.values()) {
+      const record = seatRecordFor(cfg, seat.alias, seat.agent);
+      if (!record?.rex || record.rex.server !== server || record.rex.block !== block) continue;
+      seat.rexGone = gone;
+      void refreshActivity(seat, true).catch(() => {});
+    }
+  };
   const watchStatus = async (): Promise<void> => {
     const on = ((): boolean => {
       try {
@@ -735,6 +760,24 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     } else if (!on && statusWatch) {
       statusWatch.stop();
       statusWatch = null;
+    }
+    if (on && !rexWatch) {
+      const { startRexEvents, rexServers } = await import("../rex-events.ts");
+      if (stopped) return;
+      rexWatch = startRexEvents({
+        servers: () => {
+          const cfg = loadConfig();
+          const records = [...seats.values()].flatMap((seat) => {
+            const record = seatRecordFor(cfg, seat.alias, seat.agent);
+            return record?.rex ? [record.rex] : [];
+          });
+          return rexServers(records);
+        },
+        onChange: rexSeat,
+      });
+    } else if (!on && rexWatch) {
+      rexWatch.stop();
+      rexWatch = null;
     }
   };
   let prunedAt = 0;
@@ -761,6 +804,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     clearInterval(tick);
     statusWatch?.stop();
     statusWatch = null;
+    rexWatch?.stop();
+    rexWatch = null;
     resolveStopped();
     for (const conn of [...conns]) {
       try {

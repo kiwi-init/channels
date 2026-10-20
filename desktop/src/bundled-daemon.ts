@@ -36,6 +36,10 @@ async function runnableKiwi(): Promise<string> {
 
 let kiwiBin: { path: string; version: string } | null = null;
 
+export async function kiwiCli(): Promise<string> {
+  return kiwiBin?.path ?? (await runnableKiwi());
+}
+
 async function ensureDaemon(): Promise<HelloResult | null> {
   const home = kiwiHome();
   const running = await daemonHello(home);

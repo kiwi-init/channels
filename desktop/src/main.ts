@@ -12,6 +12,7 @@ import { wireSignInIpc } from "./ipc/signin.ts";
 import { wireStoreIpc } from "./ipc/store.ts";
 import { wireVoiceIpc } from "./ipc/voice.ts";
 import { wirePersonalitiesIpc } from "./ipc/personalities.ts";
+import { wireRexIpc } from "./ipc/rex.ts";
 import { closeKeys, keysOpen, startKeys, tellKeys } from "./keys-process.ts";
 import { setAppMenu } from "./menu.ts";
 import { catchMainErrors } from "./revive.ts";
@@ -29,6 +30,7 @@ function wireIpc(): void {
   wireMiscIpc();
   wireVoiceIpc();
   wirePersonalitiesIpc();
+  wireRexIpc();
 }
 
 catchMainErrors();

@@ -8,6 +8,7 @@ import { HANDOFF_DONE, HANDOFF_FAILED, type Message } from "@kiwi/core/protocol.
 import { TOO_MANY_REQUESTS } from "@kiwi/core/sas.ts"
 import { taskId, type Task } from "@kiwi/core/state.ts"
 import { usePinned } from "@/lib/pinned"
+import { rexNote, showInRex, useRexSeats, type RexSeatView } from "@/lib/rex"
 import { cx } from "@/lib/utils"
 import { askLabel } from "@/lib/asks"
 import { excerpt, formatAgo } from "@/lib/format"
@@ -64,17 +65,20 @@ export function NeedsYou({
   titled?: boolean
 }) {
   const { p } = useControls()
+  const rexSeats = useRexSeats()
+  const seatOf = (agent: string | undefined) => (agent ? rexSeats.find((s) => s.room === roomId && s.agent === agent) : undefined)
+  const reviewSeat = (t: Task) => seatOf(t.owner ?? t.workedBy[t.workedBy.length - 1])
   const requests = p.isOwner ? p.requests : []
   const items: { key: string; node: ReactNode }[] = [
     ...requests.map((r) => ({ key: `r${r.id}`, node: <RequestItem r={r} roomId={roomId} now={now} /> })),
-    ...(decisionCards ? decisions : []).map((m) => ({ key: `a${m.seq}`, node: <DecisionCard m={m} nameOf={nameOf} onReply={onReply} /> })),
+    ...(decisionCards ? decisions : []).map((m) => ({ key: `a${m.seq}`, node: <DecisionCard m={m} nameOf={nameOf} onReply={onReply} seat={seatOf(m.from)} /> })),
     ...[...(decisionCards ? [] : decisions), ...escalations, ...questions].map((m) => ({
       key: `a${m.seq}`,
-      node: <AskItem m={m} me={me} now={now} nameOf={nameOf} agent={agentOf(m.from)} onReply={onReply} onJump={onJump} />,
+      node: <AskItem m={m} me={me} now={now} nameOf={nameOf} agent={agentOf(m.from)} onReply={onReply} onJump={onJump} seat={seatOf(m.from)} />,
     })),
     ...reviews.map((t) => ({
       key: `t${t.id}`,
-      node: <ReviewItem t={t} nameOf={nameOf} onApprove={onApproveTask} onSendBack={onSendBack} onOpen={onOpenTask} />,
+      node: <ReviewItem t={t} nameOf={nameOf} onApprove={onApproveTask} onSendBack={onSendBack} onOpen={onOpenTask} seat={reviewSeat(t)} />,
     })),
   ]
   if (!items.length) return null
@@ -105,6 +109,30 @@ function Row({ icon, lead, title, detail, children }: { icon?: IconSvgElement; l
       </div>
       {children && <div className="flex flex-wrap items-center gap-2 pl-12 md:max-w-[45%] md:shrink-0 md:justify-end md:pl-0">{children}</div>}
     </div>
+  )
+}
+
+function ShowInRex({ seat }: { seat?: RexSeatView }) {
+  const [note, setNote] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  if (!seat) return null
+  const open = () => {
+    setBusy(true)
+    setNote(null)
+    void showInRex(seat)
+      .then(
+        (r) => setNote(rexNote(r)),
+        () => setNote(rexNote({ ok: false, why: "failed" }))
+      )
+      .finally(() => setBusy(false))
+  }
+  return (
+    <>
+      <Button size="sm" variant="ghost" disabled={busy} onClick={open}>
+        Show in Rex
+      </Button>
+      {note && <span className="text-meta text-ink-3">{note}</span>}
+    </>
   )
 }
 
@@ -193,6 +221,7 @@ function AskItem({
   agent,
   onReply,
   onJump,
+  seat,
 }: {
   m: Message
   me: string
@@ -201,6 +230,7 @@ function AskItem({
   agent: boolean
   onReply: (m: Message, text: string) => Promise<void>
   onJump: (seq: number) => void
+  seat?: RexSeatView
 }) {
   const { draft, setDraft, busy, send } = useAnswer(m, nameOf, onReply, null)
   const handoff = handoffOf(m)
@@ -245,6 +275,7 @@ function AskItem({
           <Button size="sm" variant="ghost" onClick={() => onJump(m.seq)}>
             Show
           </Button>
+          <ShowInRex seat={seat} />
         </>
       ) : (
         <AnswerForm draft={draft} setDraft={setDraft} busy={busy} send={send} to={nameOf(m.from)} autoFocus onEscape={() => setDraft(null)} />
@@ -313,7 +344,7 @@ function AnswerForm({
   )
 }
 
-function DecisionCard({ m, nameOf, onReply }: { m: Message; nameOf: (n: string) => string; onReply: (m: Message, text: string) => Promise<void> }) {
+function DecisionCard({ m, nameOf, onReply, seat }: { m: Message; nameOf: (n: string) => string; onReply: (m: Message, text: string) => Promise<void>; seat?: RexSeatView }) {
   const choices = !!m.choices?.length
   const idle = choices ? null : ""
   const { draft, setDraft, busy, send } = useAnswer(m, nameOf, onReply, idle)
@@ -321,6 +352,11 @@ function DecisionCard({ m, nameOf, onReply }: { m: Message; nameOf: (n: string) 
     <div className="flex flex-col py-3">
       <ComposerQuestion m={m} more={0} nameOf={nameOf} disabled={busy} onChoose={(c) => void send(c)} onElse={() => setDraft((d) => d ?? "")} />
       {draft !== null && <AnswerForm draft={draft} setDraft={setDraft} busy={busy} send={send} to={nameOf(m.from)} autoFocus={choices} onEscape={() => setDraft(idle)} />}
+      {seat && (
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <ShowInRex seat={seat} />
+        </div>
+      )}
     </div>
   )
 }
@@ -332,12 +368,14 @@ function ReviewItem({
   onApprove,
   onSendBack,
   onOpen,
+  seat,
 }: {
   t: Task
   nameOf: (n: string) => string
   onApprove: (t: Task) => Promise<void>
   onSendBack: (t: Task, why: string) => Promise<void>
   onOpen: (id: number) => void
+  seat?: RexSeatView
 }) {
   const [why, setWhy] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -366,6 +404,7 @@ function ReviewItem({
           <Button size="sm" variant="ghost" onClick={() => onOpen(t.id)}>
             Open
           </Button>
+          <ShowInRex seat={seat} />
         </>
       ) : (
         <form
