@@ -139,9 +139,10 @@ export class ChannelMembers {
       yield* this.ch.request("/epochs", { method: "POST", body: JSON.stringify({ epoch: next, keys }) }).pipe(Effect.ensuring(Effect.sync(() => this.info.forgetInfo())));
       this.ch.access = { ...this.ch.access, epoch: next, keys: { ...this.ch.access.keys, [String(next)]: key } };
       this.ch.onAccess?.(this.ch.access);
-      yield* Effect.ignoreCause(this.ch.fx.resealTitle());
-      yield* Effect.ignoreCause(this.ch.fx.resealSettings());
-      yield* Effect.ignoreCause(this.ch.fx.resealIcon());
+      this.ch.rotating = true;
+      yield* Effect.all([Effect.ignoreCause(this.ch.fx.resealTitle()), Effect.ignoreCause(this.ch.fx.resealSettings()), Effect.ignoreCause(this.ch.fx.resealIcon())]).pipe(
+        Effect.ensuring(Effect.sync(() => void (this.ch.rotating = false))),
+      );
       return next;
     }),
 
