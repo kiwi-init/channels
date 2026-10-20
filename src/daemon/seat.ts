@@ -36,6 +36,8 @@ export interface Seat {
   heard: Map<string, { presence: Presence & { sigOk: boolean }; at: number }>;
   openedAt: number | null;
   listenerAt: number;
+  rexGone?: boolean;
+  rexBlock?: string;
 }
 
 interface SeatRows {

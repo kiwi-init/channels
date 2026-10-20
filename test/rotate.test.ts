@@ -111,6 +111,15 @@ describe("Claude Code's input box in a captured pane", () => {
     expect(inputText(box("❯ \x1b[2mTry\x1b[0m x"))).toBe("x");
   });
 
+  test("Rex's vt capture, with its CRLF lines, its resets before every style and the cursor cell, reads the same", () => {
+    const rule = "\x1b[0m\x1b[38;2;136;136;136m────────────────\x1b[0m\r";
+    const rex = (line: string) => ["Last login: Tue Oct 20 14:04:58 on ttys002\r", rule, line, rule, "  \x1b[0m\x1b[38;2;153;153;153m? for shortcuts\x1b[0m\x1b[=5;1u"].join("\n");
+    expect(inputText(rex('\x1b[0m\x1b[38;2;153;153;153m❯\u00a0\x1b[0m\x1b[7m \x1b[0m\x1b[2mTry "fix lint errors"\x1b[0m\r'))).toBe("");
+    expect(inputText(rex("\x1b[0m\x1b[38;2;153;153;153m❯\u00a0\x1b[0m\r"))).toBe("");
+    expect(inputText(rex("\x1b[0m\x1b[38;2;153;153;153m❯\u00a0\x1b[0mhalf typed\r"))).toBe("half typed");
+    expect(inputText(rex("\x1b[0m\x1b[38;2;153;153;153m❯\u00a0\x1b[0m/clear\r"), null)).toBe("/clear");
+  });
+
   test("anything else on screen is no box: a dialog, a stale prompt above one, a missing rule", () => {
     expect(inputText(" ❯ No, exit\n   Yes, I trust this folder")).toBeNull();
     expect(inputText([RULE, "❯ ", RULE, "Allow this command?", " ❯ Yes", "   No", "   Always", "Esc to cancel"].join("\n"))).toBeNull();
@@ -135,6 +144,28 @@ describe("Claude Code's input box in a captured pane", () => {
     expect(paneOf({ TMUX_PANE: "%2" })).toBeNull();
     expect(paneOf({ TMUX: "/s,1,0", TMUX_PANE: "2" })).toBeNull();
     expect(rotateArgv(42, "s-1", { pane: "%2", socket: "/s" }).slice(-6)).toEqual(["rotate", "send", "42", "s-1", "%2", "/s"]);
+  });
+
+  test("a Rex pane comes from Rex's variables, and its sender names the server and block", () => {
+    const env = {
+      TERM_PROGRAM: "rex",
+      REX_SERVER: "studio",
+      REX_SESSION: "session:01a15963-bacc-7426-91e9-4d98757dcd0c",
+      REX_BLOCK: "block:11a15963-bacc-7426-91e9-4d98757dcd0c",
+      REX_BIN_DIR: "/opt/rex",
+    };
+    const where = paneOf(env);
+    expect(where).toEqual({
+      kind: "rex",
+      rex: {
+        server: "studio",
+        session: "session:01a15963-bacc-7426-91e9-4d98757dcd0c",
+        block: "block:11a15963-bacc-7426-91e9-4d98757dcd0c",
+      },
+      bin: "/opt/rex/rex",
+    });
+    expect(rotateArgv(42, "s-1", where!).slice(-5)).toEqual(["rex", "studio", "session:01a15963-bacc-7426-91e9-4d98757dcd0c", "block:11a15963-bacc-7426-91e9-4d98757dcd0c", "/opt/rex/rex"]);
+    expect(paneOf({ TERM_PROGRAM: "rex" })).toBeNull();
   });
 });
 

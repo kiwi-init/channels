@@ -108,8 +108,13 @@ jobs:
       recovery commands use the seat's own command.
       Also test/rex.test.ts: where a seat runs from its environment (nothing inside tmux, Rex's
       server, session and block ids, any other terminal's program and version), which terminals
-      take an OSC 7501 status record, the record frames they get, and the blocked question and
-      done review records a channel state yields for one agent.
+      take an OSC 7501 status record, the record frames they get, the blocked question and
+      done review records a channel state yields for one agent, the Rex event stream read in the
+      shape a live Rex server sends (a child exiting or the block closing marks it gone, a status
+      message that only names them does not), the palette action Kiwi writes into Rex's config
+      (the action, its finder script and one marked require line, installed and removed without
+      touching the person's own), and showing a local seat in Rex (focusing its block and
+      switching the app's session, saying when the app is closed or Remote Control is off).
       Also test/daemon-big-lines.test.ts: the daemon's socket writes queue what the socket
       didn't take and flush it on drain (src/daemon/server.ts), so a catch-up of thirty
       messages with 50 KB ones among them, and big live messages back to back, arrive whole
@@ -174,7 +179,8 @@ jobs:
       box read between its two rules (drafts, multi-line text and dialogs are not empty), one sender per
       session (another live sender's file makes it back off, a dead one's is ignored), a seat that stays
       logged to rotate.log once per reason with its seat, again after a rotation (noteStay and forgetStay
-      in src/rotate/pane.ts, keyed by a .rotate-stay file in hook-state), and, with tmux on
+      in src/rotate/pane.ts, keyed by a .rotate-stay file in hook-state), a Rex pane's server,
+      session, block and binary, Rex's vt capture of the input box, and, with tmux on
       its own socket, /clear typed
       only into an idle session's empty box, Enter only once /clear shows there, its six characters
       erased when rotation is switched off before Enter while it still owns the pane, nothing more sent

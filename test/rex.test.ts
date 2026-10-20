@@ -1,8 +1,14 @@
 import { describe, expect, test } from "bun:test";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { fold, type ChannelState, type Roster } from "@kiwi/core/state.ts";
-import { aliasSegment, askId, clearFrame, placeFrom, reviewId, statusFrame, takesStatus } from "../src/rex.ts";
+import { aliasSegment, askId, clearFrame, placeFrom, reviewId, rexActivity, rexInstance, rexProcess, rexScreen, statusFrame, takesStatus } from "../src/rex.ts";
+import { installPalette, paletteInstalled, removePalette, rexConfigPath } from "../src/rex-palette.ts";
+import { localRexSeats, showInRex } from "../src/rex-show.ts";
 import { seatRecords } from "../src/status.ts";
+import { startRexEvents } from "../src/rex-events.ts";
 
 const roster: Roster = [
   { name: "jonatas", pk: "p", owner: true, at: 1, active: true, kind: "human" },
@@ -97,5 +103,170 @@ describe("the record Kiwi writes", () => {
   test("another agent's question, and a task waiting on someone else, say nothing about this seat", () => {
     const state = asked(ask(1, "bo"));
     expect(seatRecords(state, "ch", "ana")).toEqual([]);
+  });
+});
+
+describe("Rex events", () => {
+  test("a block's events refresh it, child_exited and block_closed mark it gone, and a status message naming them does not", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-rex-events-"));
+    const bin = join(dir, "rex");
+    const block = "block:11a15963-bacc-7426-91e9-4d98757dcd0c";
+    const other = "block:21a15963-bacc-7426-91e9-4d98757dcd0c";
+    const session = "session:01a15963-bacc-7426-91e9-4d98757dcd0c";
+    const blockEvent = (id: string, name: string, payload: unknown) => ({
+      type: "session_event",
+      payload: { session_id: session, event: { type: "block_event", payload: { block_id: id, creator_name: "com.superlogical.terminal", name, payload } } },
+    });
+    const lines = [
+      { type: "client_joined", payload: { client: { client_id: "client:01a15a45-4bf6-7d4e-80cb-afc8148f27d6" } } },
+      blockEvent(block, "program_status_changed", { id: "", record: { state: "working", app: "claude-code", msg: "grep child_exited in the log" }, reason: "report" }),
+      blockEvent(block, "child_exited", { exit_code: 0 }),
+      blockEvent(other, "process_changed", { generation: 2, foreground: { pid: 38035, name: "login" } }),
+      { type: "session_event", payload: { session_id: session, event: { type: "block_closed", payload: { block_id: other } } } },
+    ];
+    writeFileSync(bin, `#!/bin/sh\ncat <<'EOF'\n${lines.map((l) => JSON.stringify(l)).join("\n")}\nEOF\nsleep 5\n`);
+    chmodSync(bin, 0o755);
+    const seen: [string, string, boolean][] = [];
+    const watch = startRexEvents({ servers: () => [{ server: "studio", bin }], onChange: (server, id, gone) => seen.push([server, id, gone]), everyMs: 100 });
+    for (const end = Date.now() + 10_000; seen.length < 4 && Date.now() < end;) await Bun.sleep(20);
+    watch.stop();
+    expect(seen).toEqual([
+      ["studio", block, false],
+      ["studio", block, true],
+      ["studio", other, false],
+      ["studio", other, true],
+    ]);
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("Rex as a reader", () => {
+  test("the root record, processes, screen and instance id come back even when wrapped", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-rex-api-"));
+    const bin = join(dir, "rex");
+    writeFileSync(
+      bin,
+      `#!/bin/sh
+case "$*" in
+  *program_status*) echo '{"records":[{"id":"build","state":"done"},{"state":"working","msg":"cargo test"}]}' ;;
+  *terminal.process*) echo '{"child":{"pid":123},"foreground":{"pid":456}}' ;;
+  *terminal.format*) echo '{"content":"the screen"}' ;;
+  *server.status*) echo '{"instance_id":"instance-1"}' ;;
+  *) exit 1 ;;
+esac
+`,
+    );
+    chmodSync(bin, 0o755);
+    const place = { server: "studio", session: "session:01a15963-bacc-7426-91e9-4d98757dcd0c", block: "block:11a15963-bacc-7426-91e9-4d98757dcd0c" };
+    expect(rexActivity(place, bin)).toEqual({ state: "working", tool: "cargo test" });
+    expect(rexProcess(place, bin)).toEqual({ foreground: 456, child: 123 });
+    expect(rexScreen(place, bin)).toBe("the screen");
+    expect(rexInstance(place, bin)).toBe("instance-1");
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("the palette action", () => {
+  test("Rex's config is REX_CONFIG, else XDG, else ~/.config", () => {
+    expect(rexConfigPath({ REX_CONFIG: "/tmp/my.lua", XDG_CONFIG_HOME: "/tmp/xdg" }, "/home/me")).toBe("/tmp/my.lua");
+    expect(rexConfigPath({ XDG_CONFIG_HOME: "/tmp/xdg" }, "/home/me")).toBe("/tmp/xdg/rex/init.lua");
+    expect(rexConfigPath({}, "/home/me")).toBe("/home/me/.config/rex/init.lua");
+  });
+
+  test("on writes the action, its finder and one marked line, twice is one line, and off takes all three back", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-rex-palette-"));
+    const init = join(dir, "rex", "init.lua");
+    const action = join(dir, "rex", "kiwi.lua");
+    const find = join(dir, "rex", "kiwi-find.lua");
+    expect(paletteInstalled(init)).toBe(false);
+    expect(installPalette(init, "/opt/rex bin/rex").changed).toBe(true);
+    expect(paletteInstalled(init)).toBe(true);
+    const lua = readFileSync(action, "utf8");
+    expect(lua).toContain('local rex_bin = "/opt/rex bin/rex"');
+    expect(lua).toContain(`local find = ${JSON.stringify(find)}`);
+    expect(lua).toContain('name = "kiwi_needs_you"');
+    expect(lua).toContain('title = "Kiwi: Go to the seat that needs me"');
+    expect(lua).toContain('keywords = "kiwi channels needs you seat question review"');
+    expect(lua).toContain('rex.exec({ rex_bin, "do", find }, { timeout = 10 })');
+    expect(lua).toContain('rex.client.queue("session.select", { session_id = row.session_id })');
+    const finder = readFileSync(find, "utf8");
+    expect(finder).toContain("rex.session.attach{ session_id = id }");
+    expect(finder).toContain('record.app == "kiwi" and (state == "blocked" or state == "done")');
+    expect(finder).toContain("at < held.at");
+    expect(finder).toContain("found.blocked or found.done");
+    expect(finder).toContain('rex.call("session.focus_block"');
+    const once = readFileSync(init, "utf8");
+    expect(once).toBe('require("kiwi") -- Kiwi: go to the seat that needs me\n');
+    expect(installPalette(init, "/opt/rex bin/rex").changed).toBe(false);
+    expect(readFileSync(init, "utf8")).toBe(once);
+    rmSync(init);
+    installPalette(init, "/opt/rex bin/rex");
+    writeFileSync(action, "old");
+    rmSync(find);
+    expect(paletteInstalled(init)).toBe(false);
+    expect(installPalette(init, "/opt/rex bin/rex").changed).toBe(true);
+    expect(readFileSync(action, "utf8")).toContain("kiwi_needs_you");
+    expect(paletteInstalled(init)).toBe(true);
+    expect(removePalette(init)).toBe(true);
+    expect(existsSync(action)).toBe(false);
+    expect(existsSync(find)).toBe(false);
+    expect(readFileSync(init, "utf8")).not.toContain("kiwi");
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("a person's own init.lua keeps its lines and gets the one at the end", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-rex-palette-"));
+    const init = join(dir, "init.lua");
+    writeFileSync(init, 'rex.bind("cmd+d", "pane.split")\nrequire("kiwi")');
+    installPalette(init);
+    const text = readFileSync(init, "utf8");
+    expect(text.startsWith('rex.bind("cmd+d", "pane.split")\nrequire("kiwi")\n')).toBe(true);
+    expect(text.match(/require\("kiwi"\)/g)?.length).toBe(2);
+    removePalette(init);
+    expect(readFileSync(init, "utf8")).toBe('rex.bind("cmd+d", "pane.split")\nrequire("kiwi")\n');
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("show in Rex", () => {
+  const place = { server: "studio", session: "session:01a15963-bacc-7426-91e9-4d98757dcd0c", block: "block:11a15963-bacc-7426-91e9-4d98757dcd0c" };
+
+  test("only this computer's seats with a Rex pane, matched to their channel", () => {
+    const seats = localRexSeats({
+      channels: { ch: { roomId: "room-1", ownerPk: "o", ownerXpk: "x", epoch: 0, keys: {}, relay: "r", code: "c" } },
+      bindings: {
+        "/work": [
+          { alias: "ch", as: "ana", rex: place },
+          { alias: "ch", as: "bo" },
+        ],
+      },
+    } as never);
+    expect(seats).toEqual([{ alias: "ch", agent: "ana", room: "room-1", ...place }]);
+  });
+
+  test("it focuses the block and switches the app's session; it says when the app is closed or refuses actions", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-rex-show-"));
+    const bin = join(dir, "rex");
+    const app =
+      '{"clients":[{"client_id":"client:01a159a5-6af7-71b5-970b-7c20247caedb","principal":{"kind":"peer"}},{"client_id":"client:01a159a5-6b10-7720-b94c-3cf5bacf0ffc","info":{"kind":"app","platform":"macos","name":"Rex Beta"}}]}';
+    const rex = (select: string) => `#!/bin/sh
+case "$*" in
+  *client.list*) echo '${app}' ;;
+  *session.focus_block*) echo '{"revision":1}' ;;
+  *session.select*) ${select} ;;
+  *) exit 1 ;;
+esac
+`;
+    writeFileSync(bin, rex("exit 0"));
+    chmodSync(bin, 0o755);
+    expect(showInRex(place, bin)).toEqual({ ok: true });
+    writeFileSync(bin, rex(`echo 'Error: Rex.app is not accepting actions. Turn on Remote Control in its Settings under Rex Server.' >&2; exit 1`));
+    expect(showInRex(place, bin)).toEqual({ ok: false, why: "remote-control" });
+    writeFileSync(bin, `#!/bin/sh\necho '{"clients":[{"client_id":"c1","info":{"kind":"cli"}}]}'\n`);
+    expect(showInRex(place, bin)).toEqual({ ok: false, why: "no-app" });
+    writeFileSync(bin, `#!/bin/sh\nexit 4\n`);
+    expect(showInRex(place, bin)).toEqual({ ok: false, why: "no-server" });
+    expect(showInRex(place, null)).toEqual({ ok: false, why: "no-rex" });
+    rmSync(dir, { recursive: true, force: true });
   });
 });
