@@ -180,7 +180,7 @@ describe("Grok Voice: a spoken turn (turn.json)", () => {
     expect(ws.sent.slice(1)).toEqual([
       { type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text: "What's open?" }] } },
       { type: "response.create" },
-      { type: "conversation.item.create", item: { type: "message", role: "system", content: [{ type: "input_text", text: "T7 just finished." }] } },
+      { type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text: "T7 just finished." }] } },
     ])
   })
 })

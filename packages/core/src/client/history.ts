@@ -22,7 +22,7 @@ export interface HistoryFx {
   head(): Effect.Effect<number, MemberRefusal, Relay>;
   markRead(seq: number): Effect.Effect<void, never, Relay>;
   decrypt(env: Envelope): Effect.Effect<Message | null, never, Relay>;
-  history(since: number): Effect.Effect<{ head: number; messages: Message[]; first: number | null }, MemberRefusal, Relay>;
+  history(since: number): Effect.Effect<{ head: number; messages: Message[]; first: number | null; through: number }, MemberRefusal, Relay>;
   page(since: number, limit: number): Effect.Effect<Message[], MemberRefusal, Relay>;
 }
 
@@ -56,6 +56,7 @@ export class ChannelHistory {
     history: Effect.fn("Channel.history")({ self: this }, function* (this: ChannelHistory, since: number) {
       const messages: Message[] = [];
       let head = since;
+      let through = since;
       const take = (envelopes: Envelope[]) =>
         Effect.gen({ self: this }, function* () {
           const decrypted = yield* Effect.forEach(envelopes, (e) => this.ch.fx.decrypt(e), { concurrency: "unbounded" });
@@ -63,6 +64,7 @@ export class ChannelHistory {
             const m = decrypted[i];
             if (m) messages.push(m);
             since = envelopes[i]!.seq;
+            if (since === through + 1) through = since;
           }
         });
       let ask: Record<string, number> = { pages: 1 };
@@ -87,7 +89,7 @@ export class ChannelHistory {
         }
         if (!page.messages.length || since >= head) break;
       }
-      return { head, messages, first };
+      return { head, messages, first, through };
     }),
 
     page: Effect.fn("Channel.page")({ self: this }, function* (this: ChannelHistory, since: number, limit: number) {
