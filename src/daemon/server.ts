@@ -19,6 +19,7 @@ import { readLaunchRequest } from "../launch/wire.ts";
 import { beatLock, dropLock, lockPath, ownsLock, takeLock } from "./lock.ts";
 import { stopDaemon, tryHello } from "./rpc.ts";
 import { readKey, type ConnState, type Seat, type Sub, type Waiting } from "./seat.ts";
+import { throttled } from "./throttle.ts";
 import { pathOf, seatWakes } from "./wake.ts";
 
 export const ACTIVITY_EVERY_MS = 3_000;
@@ -32,6 +33,7 @@ const HOOK_FILES_KEEP_MS = 7 * 24 * 3600_000;
 const ORPHAN_MS = 10 * 60_000;
 const RETRY_FIRST_MS = 5_000;
 const RETRY_MAX_MS = 30 * 60_000;
+const SYNC_ON_REQUEST_MS = 2_000;
 
 class NotAgentSeat extends Error {}
 
@@ -570,6 +572,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
   };
 
+  const seatSync = throttled(syncSeats, SYNC_ON_REQUEST_MS);
+
   const onRequest = async (conn: ConnState, raw: string): Promise<void> => {
     let req: { id?: unknown; verb?: unknown } & Record<string, unknown>;
     try {
@@ -581,7 +585,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     const id = req.id;
     const verb = req.verb;
     const params: Record<string, unknown> = req;
-    void syncSeats();
+    seatSync.soon();
     try {
       switch (verb as DaemonVerb) {
         case "hello": {
@@ -770,7 +774,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       const { startStatusWatch } = await import("../status.ts");
       if (stopped) return;
       statusWatch = startStatusWatch({
-        seats: () => [...seats.values()].map((s) => ({ key: s.key, alias: s.alias, agent: s.agent })),
+        seats: () => [...seats.values()].map((s) => ({ key: s.key, alias: s.alias, agent: s.agent, head: s.head })),
         current: (s) => {
           const seat = seats.get(s.key);
           return !!seat && current(seat) && seat.alias === s.alias && seat.agent === s.agent;
@@ -811,7 +815,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     pruneNow();
     void watchStatus();
     if (!existsSync(dir) || !beatLock(lock)) return void stop();
-    void syncSeats();
+    void seatSync.now();
     void orphaned().then((dead) => {
       deadTicks = dead ? deadTicks + 1 : 0;
       if (deadTicks >= orphanTicks) void stop();
@@ -855,7 +859,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     dropLock(lock);
   };
 
-  await syncSeats();
+  await seatSync.now();
   await watchStatus();
   return { sock, stop, stopped: stoppedP, beacons: () => beacons };
 }

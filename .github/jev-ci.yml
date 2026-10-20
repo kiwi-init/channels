@@ -239,6 +239,16 @@ jobs:
       Code's listening ones from 2.1.296) unless KIWI_NO_HOOKS is set or that harness's hooks are off; the daemon's
       answer reads back as sent; and kiwi join carries KIWI_LAUNCH to the owner in its sealed claims on a live
       relay, dropping one that isn't an id. The inventory says which harnesses kiwi launch starts.
+      Also the daemon's CPU and memory on a small Mac (audit #132, bundle G): a dead Rex server's events stream
+      retried with its backoff, never on every reconcile, and the seen map dropping gone blocks (test/rex.test.ts);
+      the Rex status watch folding a seat's channel again only when its head moved or a minute went by
+      (foldStillFresh, test/rex.test.ts); a Claude Code transcript's path kept per session and its context, running
+      tool and model read again only when its size or mtime changed (test/harness-model.test.ts); a burst of daemon
+      requests running one seat sync, never two at once, the next only after 2 s (test/daemon-throttle.test.ts);
+      wake checks keeping one session per seat; an agent's repo and branch read from git's own files, a worktree's
+      included, with git asked only when the config rewrites urls or includes others (src/git-where.ts, test/where-files.test.ts);
+      and the home walked and tightened once per kiwi version, again once someone loosened it
+      (test/local-perms.test.ts).
       Also test/shell-path.test.ts: the PATH line kiwi setup and the desktop app add to the shell's profile
       (packages/core/src/node/shell-path.ts), once and never when the profile already names the folder, and never
       from a profile outside a temp folder into a temp folder (the system's temp folders, through their links,
