@@ -23,7 +23,19 @@
 
 export { backgroundTasks, cursorStopFollowup, fitting, grokMonitorListens, hookOutput, kimiReason, stopStyle } from "./hooks/answer.ts";
 export { autoInstallHooks, claudeHooksStatus, hooksInstalled, hooksListen, installedListenSeconds, installHooks, migrateListenHooks, rewakeCapable, uninstallHooks } from "./hooks/install/claude.ts";
-export { autoInstallExtraHooks, EXTRA_HARNESSES, extraInstalled, hooksStatus, installDetected, installExtra, uninstallDetected, uninstallExtra, type ExtraHarness } from "./hooks/install/extra.ts";
+export {
+  autoInstallExtraHooks,
+  EXTRA_HARNESSES,
+  extraHooksStatus,
+  extraInstalled,
+  hooksStatus,
+  installDetected,
+  installExtra,
+  migrateExtraHooks,
+  uninstallDetected,
+  uninstallExtra,
+  type ExtraHarness,
+} from "./hooks/install/extra.ts";
 export { withKimiHooks, withoutKimiHooks } from "./hooks/install/kimi-toml.ts";
 export { bindDirectory, bindingFor, isListening, liveListeners, refreshListeners, seatsFor } from "./hooks/listeners.ts";
 export { howMessagesReachYou } from "./hooks/reach.ts";

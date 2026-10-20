@@ -5,7 +5,7 @@ import { Keystore } from "../../config.ts";
 import {
   EXTRA_HARNESSES,
   claudeHooksStatus,
-  extraInstalled,
+  extraHooksStatus,
   hooksStatus,
   installDetected,
   installExtra,
@@ -16,12 +16,12 @@ import {
   uninstallHooks,
   type ExtraHarness,
 } from "../../hooks.ts";
-import { args } from "../args.ts";
+import { args, opt } from "../args.ts";
 import { type Command, die, out } from "../context.ts";
 
 export const hookCommands: Record<string, Command> = {
   hook: () =>
-    runHook(args[1] ?? "").pipe(
+    runHook(args[1] ?? "", opt.harness).pipe(
       Effect.catchCause((cause) =>
         Effect.sync(() => {
           process.stderr.write(`kiwi: hooks are off until this is fixed: ${reason(Cause.squash(cause))}\n`);
@@ -87,7 +87,7 @@ export const hookCommands: Record<string, Command> = {
       if (sub === "status") {
         if (!name) return out(hooksStatus());
         if (name === "claude") return out(`claude: ${claudeHooksStatus()}`);
-        return out(`${name}: ${extraInstalled(name) ? "installed" : "not installed"}`);
+        return out(`${name}: ${extraHooksStatus(name)}`);
       }
       return yield* die(usage);
     }),

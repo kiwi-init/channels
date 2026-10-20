@@ -22,6 +22,7 @@ import {
   installHooks,
   isOurHook,
   kimiReason,
+  migrateExtraHooks,
   migrateListenHooks,
   PROBE_MS,
   PROBE_TTL_MS,
@@ -247,6 +248,7 @@ test("codex, gemini, cursor, and grok install, re-install once, and uninstall ke
   expect(codexStop).toContain("echo mine # kiwi");
   expect(codexStop).toContain("'/old/kiwi' hook stop # channel-one");
   expect(codexStop.filter((c: string) => c.endsWith(" hook stop # kiwi"))).toHaveLength(1);
+  expect(codexStop.filter((c: string) => c.endsWith(" --harness codex hook stop # kiwi"))).toHaveLength(1);
   expect(read(join(codex, "hooks.json")).hooks.UserPromptSubmit).toBeDefined();
   expect(read(join(codex, "hooks.json")).hooks.SessionStart).toBeDefined();
 
@@ -256,6 +258,7 @@ test("codex, gemini, cursor, and grok install, re-install once, and uninstall ke
   expect(before.map((h: { command: string }) => h.command)).toContain("echo gemini-user");
   expect(before.filter((h: { command: string }) => h.command.endsWith(" hook prompt # kiwi"))).toHaveLength(1);
   expect(before.find((h: { command: string }) => h.command.endsWith(" hook prompt # kiwi"))?.timeout).toBe(20_000);
+  expect(before.filter((h: { command: string }) => h.command.endsWith(" --harness gemini hook prompt # kiwi"))).toHaveLength(1);
   expect(gem.hooks.AfterAgent[0]?.matcher).toBe("*");
   expect(gem.hooks.AfterAgent[0]?.hooks[0]?.timeout).toBe(30_000);
   expect(gem.hooks.UserPromptSubmit).toBeUndefined();
@@ -272,7 +275,8 @@ test("codex, gemini, cursor, and grok install, re-install once, and uninstall ke
   const claudeStop = read(join(claude, "settings.json")).hooks.Stop.flatMap((e: { hooks: { command: string }[] }) => e.hooks.map((h) => h.command));
   const grokStop = read(join(grok, "hooks", "kiwi.json")).hooks.Stop.flatMap((e: { hooks: { command: string }[] }) => e.hooks.map((h) => h.command));
   const ours = (list: string[]) => list.find((c) => c.endsWith(" hook stop # kiwi"));
-  expect(ours(grokStop)).toBe(ours(claudeStop));
+  expect(ours(claudeStop)).not.toContain("--harness");
+  expect(ours(grokStop)).toBe(ours(claudeStop)?.replace(" hook stop # kiwi", " --harness grok hook stop # kiwi"));
   expect(read(join(grok, "hooks", "kiwi.json")).hooks.PostToolUse[0]?.hooks[0]?.command).toBe("echo grok-user");
   expect(read(join(grok, "hooks", "kiwi.json")).hooks.UserPromptSubmit).toBeUndefined();
   expect(read(join(grok, "hooks", "kiwi.json")).hooks.SessionStart).toBeUndefined();
@@ -541,6 +545,65 @@ test("kiwi hooks status and the SessionStart check give the same answer for the 
   ]);
 });
 
+function oldCodexHooks(codex: string): string {
+  const file = join(codex, "hooks.json");
+  const entry = (arg: string) => ({ hooks: [{ type: "command", command: `'/old/kiwi' hook ${arg} # kiwi` }] });
+  writeFileSync(
+    file,
+    JSON.stringify({ hooks: { SessionStart: [entry("session-start")], UserPromptSubmit: [entry("prompt")], Stop: [entry("stop"), { hooks: [{ type: "command", command: "echo mine" }] }] } }),
+  );
+  return file;
+}
+
+function codexCommands(file: string): string[] {
+  const { hooks } = read(file);
+  return [...(hooks.SessionStart ?? []), ...(hooks.UserPromptSubmit ?? []), ...hooks.Stop].flatMap((e) => e.hooks.map((h) => h.command));
+}
+
+test("Codex hooks an older kiwi wrote without --harness are stale, and are rewritten flagged without anyone asking", () => {
+  const codex = scratch("hk-old-codex-");
+  const grok = scratch("hk-old-grok-");
+  setEnv({ KIWI_HOME: scratch("hk-old-home-"), KIWI_CODEX_DIR: codex, KIWI_GROK_DIR: grok, KIWI_GEMINI_DIR: scratch("hk-old-gemini-") });
+  hideEnv(["KIWI_NO_HOOKS"]);
+  const file = oldCodexHooks(codex);
+  expect(extraInstalled("codex")).toBe(false);
+  expect(hooksStatus()).toContain("codex: not installed (its hooks are from an older kiwi: kiwi hooks install)");
+  expect(hooksStatus()).toContain("grok: not installed");
+  expect(hooksStatus()).not.toContain("grok: not installed (");
+
+  setEnv({ KIWI_NO_HOOKS: "1" });
+  expect(migrateExtraHooks()).toEqual([]);
+  hideEnv(["KIWI_NO_HOOKS"]);
+  updateConfig((c) => {
+    c.harnessHooks = { codex: "off" };
+  });
+  expect(migrateExtraHooks()).toEqual([]);
+  expect(codexCommands(file).filter((c) => c.startsWith("'/old/kiwi'"))).toHaveLength(3);
+  updateConfig((c) => {
+    c.harnessHooks = {};
+  });
+
+  expect(migrateExtraHooks()).toEqual([file]);
+  const commands = codexCommands(file);
+  expect(commands).toContain("echo mine");
+  expect(commands.filter((c) => c.startsWith("'/old/kiwi'"))).toEqual([]);
+  expect(commands.filter((c) => c.includes(" --harness codex hook "))).toHaveLength(3);
+  expect(extraInstalled("codex")).toBe(true);
+  expect(hooksStatus()).toContain("codex: installed");
+  expect(existsSync(join(grok, "hooks", "kiwi.json"))).toBe(false);
+  expect(migrateExtraHooks()).toEqual([]);
+});
+
+test("an unflagged kiwi hook run rewrites an older kiwi's Codex hooks", () => {
+  const codex = scratch("hk-run-codex-");
+  const env = { KIWI_HOME: scratch("hk-run-home-"), KIWI_CODEX_DIR: codex, KIWI_GROK_DIR: scratch("hk-run-grok-"), KIWI_GEMINI_DIR: scratch("hk-run-gemini-"), KIWI_NO_HOOKS: "", CLAUDECODE: "" };
+  const file = oldCodexHooks(codex);
+  expect(kiwiCli(["hooks", "status", "codex"], env).out.trim()).toBe("codex: not installed (its hooks are from an older kiwi: kiwi hooks install)");
+  expect(kiwiCli(["hook", "stop"], env).code).toBe(0);
+  expect(codexCommands(file).filter((c) => c.includes(" --harness codex hook "))).toHaveLength(3);
+  expect(kiwiCli(["hooks", "status", "codex"], env).out.trim()).toBe("codex: installed");
+});
+
 test("a harness that passes CLAUDECODE through is never taken for Claude Code by its hooks", () => {
   expect(hooksListen({ CLAUDECODE: "1", MIMOCODE: "1" })).toBe(false);
   expect(rewakeCapable({ CLAUDECODE: "1", MIMOCODE: "1", AI_AGENT: "claude-code_9-9-9_agent" })).toBe(false);
@@ -728,7 +791,7 @@ test("a hook through a wrapper in kiwi's install folder counts only when the wra
       }),
     );
     mkdirSync(join(grok, "hooks"), { recursive: true });
-    writeFileSync(join(grok, "hooks", "kiwi.json"), JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: cmd("stop") }] }] } }));
+    writeFileSync(join(grok, "hooks", "kiwi.json"), JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: `${shellQuoted(program)} --harness grok hook stop # kiwi` }] }] } }));
   };
   const status = () => {
     const r = kiwiCli(["hooks", "status"], env);

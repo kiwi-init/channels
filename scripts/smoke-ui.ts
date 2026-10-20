@@ -16,7 +16,7 @@
 // (or set SMOKE_CHROMIUM to a Chrome binary).
 
 import { spawn } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Locator } from "playwright-core";
@@ -35,6 +35,8 @@ async function run(part: Part): Promise<string[]> {
   const cli = join(data, "cli");
   mkdirSync(join(cli, "bin"), { recursive: true });
   mkdirSync(join(data, "relay"));
+  const dictation = process.env.SMOKE_DICTATION;
+  if (dictation) cpSync(dictation, join(data, "relay", "dictation"), { recursive: true });
   for (const opener of ["open", "xdg-open"]) {
     writeFileSync(join(cli, "bin", opener), "#!/bin/sh\nexit 0\n");
     chmodSync(join(cli, "bin", opener), 0o755);
@@ -66,12 +68,17 @@ async function run(part: Part): Promise<string[]> {
   const log = (line: string) => console.log(`[${part}] ${line}`);
   const errors: string[] = [];
   let at = "start";
-  const browser = await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined }).catch((e) => {
+  const fakeMic = dictation
+    ? ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", `--use-file-for-fake-audio-capture=${join(ROOT, "test", "fixtures", "dictation.wav")}%noloop`]
+    : [];
+  const browser = await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined, args: fakeMic }).catch((e) => {
     relay.kill();
     rmSync(data, { recursive: true, force: true });
     throw e;
   });
-  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  const video = process.env.SMOKE_VIDEO && part === "agents" ? { recordVideo: { dir: process.env.SMOKE_VIDEO, size: { width: 1280, height: 800 } } } : {};
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, ...video });
+  const filmed = Date.now();
   page.on("pageerror", (e) => errors.push(`${at}: ${e.message}`));
   page.on("console", (m) => {
     if (m.type() === "error" && !m.text().startsWith("Failed to load resource")) errors.push(`${at}: console: ${m.text()}`);
@@ -393,6 +400,31 @@ async function run(part: Part): Promise<string[]> {
     await joining;
     await addAgent.waitFor({ state: "hidden", timeout: 15000 });
     log(`ok  ${at}`);
+
+    if (dictation) {
+      at = "dictation: the first press asks once, the model comes through the relay, and the words land in the Message box";
+      await toTab("Conversation");
+      const message = page.getByRole("textbox", { name: "Message" });
+      await message.fill("");
+      const shot = async (name: string) => {
+        if (process.env.SMOKE_SHOTS) await page.screenshot({ path: join(process.env.SMOKE_SHOTS, `dictation-${name}.png`) });
+      };
+      if (process.env.SMOKE_VIDEO) log(`video: dictation starts at ${(Date.now() - filmed) / 1000}s`);
+      await page.getByRole("button", { name: "Dictate", exact: true }).click();
+      await page.getByRole("button", { name: "Download and dictate" }).waitFor();
+      await shot("1-notice");
+      await page.getByRole("button", { name: "Download and dictate" }).click();
+      const stop = page.getByRole("button", { name: "Stop dictation" });
+      await stop.waitFor({ timeout: 180000 });
+      await shot("2-listening");
+      await page.waitForTimeout(5000);
+      await stop.click();
+      await page.waitForFunction(() => /tests pass/i.test((document.querySelector("textarea") as HTMLTextAreaElement | null)?.value ?? ""), null, { timeout: 120000 });
+      await shot("3-text");
+      if (process.env.SMOKE_VIDEO) log(`video: dictation ends at ${(Date.now() - filmed) / 1000}s`);
+      log(`ok  ${at}: ${JSON.stringify(await message.inputValue())}`);
+      await message.fill("");
+    } else log("skip dictation (SMOKE_DICTATION isn't set)");
 
     at = "a second agent";
     await page.goto(channel);

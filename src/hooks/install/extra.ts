@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { kimiCodePid, mimoHere, piHere } from "../../ancestry.ts";
 import { loadConfig } from "../../config.ts";
+import type { NamedHookHarness } from "../../seats.ts";
 import { isRecord, readJson, writeJson } from "../files.ts";
 import { EVENTS, hookCommand, isOurHook, isOurHookCommand } from "../self.ts";
 import { claudeHooksStatus, hooksInstalled, installHooks, uninstallHooks, withoutOurs, type Settings } from "./claude.ts";
@@ -67,11 +68,11 @@ function harnessPresent(h: ExtraHarness): boolean {
 
 const GEMINI_EVENTS = { SessionStart: "session-start", BeforeAgent: "prompt", AfterAgent: "stop" } as const;
 
-function installClaudeShaped(path: string, events: Record<string, string>, timeoutFor: (event: string) => number, matcher?: string): void {
+function installClaudeShaped(path: string, harness: NamedHookHarness, events: Record<string, string>, timeoutFor: (event: string) => number, matcher?: string): void {
   const s = readJson(path) as Settings;
   s.hooks ??= {};
   for (const [event, arg] of Object.entries(events)) {
-    s.hooks[event] = [...withoutOurs(s.hooks[event]), { ...(matcher ? { matcher } : {}), hooks: [{ type: "command", command: hookCommand(arg), timeout: timeoutFor(event) }] }];
+    s.hooks[event] = [...withoutOurs(s.hooks[event]), { ...(matcher ? { matcher } : {}), hooks: [{ type: "command", command: hookCommand(arg, harness), timeout: timeoutFor(event) }] }];
   }
   writeJson(path, s);
 }
@@ -92,10 +93,10 @@ function stripClaudeShaped(path: string): void {
   writeJson(path, s);
 }
 
-function claudeShapedInstalled(path: string, events: Record<string, string>): boolean {
+function claudeShapedInstalled(path: string, harness: NamedHookHarness, events: Record<string, string>): boolean {
   if (!existsSync(path)) return false;
   const s = readJson(path) as Settings;
-  return Object.entries(events).every(([event, arg]) => s.hooks?.[event]?.some((x) => x.hooks.some((h) => isOurHook(h.command, arg))));
+  return Object.entries(events).every(([event, arg]) => s.hooks?.[event]?.some((x) => x.hooks.some((h) => isOurHook(h.command, arg, harness))));
 }
 
 type CursorHook = { command?: string; timeout?: number; loop_limit?: number | null };
@@ -139,13 +140,13 @@ function cursorFileInstalled(path: string): boolean {
 
 export function installExtra(h: ExtraHarness): string {
   const path = harnessPath(h);
-  if (h === "codex") installClaudeShaped(path, EVENTS, (event) => (event === "UserPromptSubmit" ? 20 : 30));
-  else if (h === "gemini") installClaudeShaped(path, GEMINI_EVENTS, (event) => (event === "BeforeAgent" ? 20_000 : 30_000), "*");
+  if (h === "codex") installClaudeShaped(path, "codex", EVENTS, (event) => (event === "UserPromptSubmit" ? 20 : 30));
+  else if (h === "gemini") installClaudeShaped(path, "gemini", GEMINI_EVENTS, (event) => (event === "BeforeAgent" ? 20_000 : 30_000), "*");
   else if (h === "cursor") installCursorFile(path);
   else if (h === "kimi") editKimiConfig(path, true);
   else if (h === "pi") installPi();
   else if (h === "mimo") installMimo();
-  else installClaudeShaped(path, { Stop: "stop" }, () => 30);
+  else installClaudeShaped(path, "grok", { Stop: "stop" }, () => 30);
   return path;
 }
 
@@ -162,12 +163,43 @@ export function uninstallExtra(h: ExtraHarness): string {
 
 export function extraInstalled(h: ExtraHarness): boolean {
   if (h === "cursor") return cursorFileInstalled(harnessPath(h));
-  if (h === "gemini") return claudeShapedInstalled(harnessPath(h), GEMINI_EVENTS);
-  if (h === "grok") return claudeShapedInstalled(harnessPath(h), { Stop: "stop" });
+  if (h === "gemini") return claudeShapedInstalled(harnessPath(h), "gemini", GEMINI_EVENTS);
+  if (h === "grok") return claudeShapedInstalled(harnessPath(h), "grok", { Stop: "stop" });
   if (h === "kimi") return kimiConfigInstalled(harnessPath(h));
   if (h === "pi") return piInstalled();
   if (h === "mimo") return mimoInstalled();
-  return claudeShapedInstalled(harnessPath(h), EVENTS);
+  return claudeShapedInstalled(harnessPath(h), "codex", EVENTS);
+}
+
+const NAMED_HOOKS: readonly NamedHookHarness[] = ["codex", "gemini", "grok"];
+
+function ourCommands(path: string): string[] {
+  const hooks = readJson(path).hooks;
+  const entries: unknown[] = isRecord(hooks) ? Object.values(hooks).flatMap((list) => (Array.isArray(list) ? list : [])) : [];
+  return entries
+    .flatMap((e) => (isRecord(e) && Array.isArray(e.hooks) ? e.hooks : []))
+    .flatMap((h) => (isRecord(h) && typeof h.command === "string" && isOurHookCommand(h.command) ? [h.command] : []));
+}
+
+function unflagged(h: NamedHookHarness): boolean {
+  return ourCommands(harnessPath(h)).some((command) => !command.includes(` --harness ${h} hook `));
+}
+
+export function migrateExtraHooks(): string[] {
+  if (process.env.KIWI_NO_HOOKS) return [];
+  try {
+    const choice = loadConfig().harnessHooks ?? {};
+    return NAMED_HOOKS.filter((h) => choice[h] !== "off" && unflagged(h)).map((h) => installExtra(h));
+  } catch {
+    // A hook must not fail over a hooks file it can't read or write.
+    return [];
+  }
+}
+
+export function extraHooksStatus(h: ExtraHarness): string {
+  if (extraInstalled(h)) return "installed";
+  if ((h === "codex" || h === "gemini" || h === "grok") && unflagged(h)) return "not installed (its hooks are from an older kiwi: kiwi hooks install)";
+  return "not installed";
 }
 
 const HARNESS_LABEL: Record<ExtraHarness, string> = { codex: "Codex", gemini: "Gemini", cursor: "Cursor", grok: "Grok", kimi: "Kimi Code", pi: "Pi", mimo: "MiMoCode" };
@@ -209,7 +241,8 @@ export function hooksStatus(): string {
   const claude = loadConfig().claudeHooks === "off" && !hooksInstalled() ? "off" : claudeHooksStatus();
   const lines = [`claude: ${claude}`];
   for (const h of EXTRA_HARNESSES) {
-    if (extraInstalled(h)) lines.push(`${h}: installed`);
+    const status = extraHooksStatus(h);
+    if (status !== "not installed") lines.push(`${h}: ${status}`);
     else if (choice[h] === "off") lines.push(`${h}: off`);
     else if (!harnessPresent(h)) lines.push(`${h}: not detected`);
     else lines.push(`${h}: not installed`);

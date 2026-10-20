@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
+import { loadConfig } from "../../config.ts";
 import { hookCommand, isOurHook, LISTEN } from "../self.ts";
 
 const MARK = "kiwi-mimo-plugin";
@@ -47,6 +48,17 @@ async function rootOf(id: string): Promise<string> {
       const got = await kiwi.client?.session.get({ path: { id: at } });
       kiwi.parents.set(at, got?.data?.parentID ?? null);
     }
+    const up = kiwi.parents.get(at);
+    if (!up) return at;
+    at = up;
+  }
+  return at;
+}
+
+function knownRoot(id: string): string | null {
+  let at = id;
+  for (let i = 0; i < 16; i++) {
+    if (!kiwi.parents.has(at)) return null;
     const up = kiwi.parents.get(at);
     if (!up) return at;
     at = up;
@@ -115,11 +127,13 @@ export const KiwiPlugin = async ({ client }: { client: Client }) => {
       try {
         const id = await rootOf(input.sessionID);
         output.env.MIMOCODE_SESSION_ID = id;
+        if (id !== input.sessionID) stop(input.sessionID);
         void watch(id, input.cwd ?? process.cwd());
       } catch {
-        // MiMoCode couldn't name the session's parent: the session's own id still reaches its listener.
-        output.env.MIMOCODE_SESSION_ID = input.sessionID;
-        void watch(input.sessionID, input.cwd ?? process.cwd());
+        // MiMoCode couldn't name the session's parent: a root another lookup found wins, else the session's own id still reaches its listener.
+        const id = knownRoot(input.sessionID) ?? input.sessionID;
+        output.env.MIMOCODE_SESSION_ID = id;
+        void watch(id, input.cwd ?? process.cwd());
       }
     },
     event: async ({ event }: { event: Event }) => {
@@ -169,5 +183,19 @@ export function mimoInstalled(): boolean {
   } catch {
     // A plugin file we can't read or parse isn't ours: it counts as not installed.
     return false;
+  }
+}
+
+export function migrateMimo(): string | null {
+  if (process.env.KIWI_NO_HOOKS) return null;
+  try {
+    if (loadConfig().harnessHooks?.mimo === "off") return null;
+    const text = readFileSync(mimoPluginPath(), "utf8");
+    const listen = listenIn(text);
+    if (!text.includes(`const MARK = "${MARK}";`) || !listen || !isOurHook(listen, LISTEN) || text === mimoPluginSource(listen)) return null;
+    return installMimo();
+  } catch {
+    // No plugin file, or one we can't read or parse: there is no plugin of ours to bring up to date.
+    return null;
   }
 }

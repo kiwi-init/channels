@@ -153,10 +153,12 @@ describe("seats always on", () => {
     );
   });
 
-  test("a Kimi Code seat is announced as woken by its background listener only while one runs", async () => {
-    saveConfig({ ...loadConfig(), bindings: { "/kimi": { alias: "test", as: "claude", harness: "kimi", session: "kimi-pid-1", pid: process.pid } } });
+  const wakesViaListenerWhileItRuns = async (dir: string, record: SeatRecord): Promise<void> => {
+    saveConfig({ ...loadConfig(), bindings: { [dir]: record } });
     try {
-      const s = await AgentSession.open("test", loadConfig().channels.test!, "claude");
+      const channel = loadConfig().channels.test;
+      if (!channel) throw new Error("the test channel is missing");
+      const s = await AgentSession.open("test", channel, "claude");
       const seen = from(claudePk).length;
       const heardWake = () =>
         from(claudePk)
@@ -176,9 +178,17 @@ describe("seats always on", () => {
           .some((p) => p.wake === undefined),
       );
     } finally {
-      const bindings = omit(loadConfig().bindings ?? {}, "/kimi");
+      const bindings = omit(loadConfig().bindings ?? {}, dir);
       saveConfig({ ...loadConfig(), bindings });
     }
+  };
+
+  test("a Kimi Code seat is announced as woken by its background listener only while one runs", async () => {
+    await wakesViaListenerWhileItRuns("/kimi", { alias: "test", as: "claude", harness: "kimi", session: "kimi-pid-1", pid: process.pid });
+  });
+
+  test("a Grok seat is announced as woken by its kiwi listen only while one runs", async () => {
+    await wakesViaListenerWhileItRuns("/grok", { alias: "test", as: "claude", harness: "grok", session: "grok-1" });
   });
 
   test("the daemon reports a Claude seat's activity from its record, even with no session id", async () => {

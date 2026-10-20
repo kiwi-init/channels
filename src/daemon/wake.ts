@@ -62,13 +62,13 @@ interface WakeContext {
 }
 
 export function seatWakes({ dir, wakeDelayMs, wakeGapMs, stopped, current }: WakeContext): { scheduleWake: (seat: Seat, delay?: number) => void } {
-  const unreadFor = async (seat: Seat): Promise<number> => {
+  const unreadFor = async (seat: Seat): Promise<{ unread: number; cursor: number } | { unread: 0 }> => {
     const c = loadConfig().channels[seat.alias];
-    if (!c) return 0;
+    if (!c) return { unread: 0 };
     const { AgentSession, runAgent } = await import("../agent.ts");
     const s = await AgentSession.open(seat.alias, c, seat.agent);
     const { messages, state } = await runAgent(s.state());
-    return runAgent(s.unreadCount(state, messages));
+    return runAgent(s.unreadAt(state, messages));
   };
 
   const runWake = async (seat: Seat, [cmd, ...rest]: string[]): Promise<string | null> => {
@@ -92,9 +92,9 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, stopped, current }: Wak
     return server ? promptKimi(server, session, prompt, WAKE_RUN_MS) : "Kimi's server for this session is gone";
   };
 
-  const logWake = (seat: Seat, w: DaemonWake, why: string | null): void => {
+  const logWake = (seat: Seat, w: DaemonWake, why: string | null, cursor: number): void => {
     try {
-      appendRotated(join(dir, "wake.log"), `${new Date(w.at).toISOString()}\t${seat.alias}\t${seat.agent}\t${w.via}\t${w.unread}\t${w.ok ? "ok" : "failed"}${why ? `\t${why}` : ""}\n`);
+      appendRotated(join(dir, "wake.log"), `${new Date(w.at).toISOString()}\t${seat.alias}\t${seat.agent}\t${w.via}\t${w.unread}\t${w.ok ? "ok" : "failed"}\t${why ?? ""}\t${cursor}\n`);
     } catch {
       return;
     }
@@ -126,12 +126,13 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, stopped, current }: Wak
     if (since < wakeGapMs) return scheduleWake(seat, wakeGapMs - since);
     seat.waking = true;
     try {
-      const unread = await withDeadline(unreadFor(seat), UNREAD_CHECK_MS).catch(() => null);
-      if (unread === null) {
+      const counted = await withDeadline(unreadFor(seat), UNREAD_CHECK_MS).catch(() => null);
+      if (counted === null) {
         seat.wakeAgain = false;
         return scheduleWake(seat, wakeGapMs);
       }
-      if (!unread || !current(seat)) return;
+      if (!("cursor" in counted) || !counted.unread || !current(seat)) return;
+      const { unread, cursor } = counted;
       const path = await commandPath(seat);
       if (!path || !current(seat)) return;
       const prompt = wakePrompt(seat.alias, seat.agent);
@@ -146,7 +147,7 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, stopped, current }: Wak
             : await runWake(seat, wakeArgv(path.via, path.session, prompt));
       if (!current(seat)) return;
       seat.lastWake = { at: Date.now(), via: path.via, unread, ok: why === null };
-      logWake(seat, seat.lastWake, why);
+      logWake(seat, seat.lastWake, why, cursor);
     } finally {
       seat.waking = false;
       if (seat.wakeAgain && current(seat)) {

@@ -114,6 +114,7 @@ afterAll(async () => {
 
 describe("waking an agent in its own session", () => {
   test("a message for a Codex agent queues one turn in its thread, with a prompt that carries no message text", async () => {
+    const readTo = await ownerCh.head();
     await ownerCh.send("the secret plan is in room 4", { to: ["claude"] });
     await until("a wake", () => calls().length === 1);
     expect(calls()[0]).toEqual(["codex", "queue", "--thread", "thread-1", "--message", wakePrompt("test", "claude")]);
@@ -122,6 +123,7 @@ describe("waking an agent in its own session", () => {
     expect((await seat())?.wake.last).toMatchObject({ via: "codex-queue", unread: 1, ok: true });
     await until("the wake log", () => existsSync(join(home, "wake.log")));
     expect(readFileSync(join(home, "wake.log"), "utf8")).toContain("\ttest\tclaude\tcodex-queue\t1\tok");
+    expect(readFileSync(join(home, "wake.log"), "utf8").trimEnd().split("\t").slice(3)).toEqual(["codex-queue", "1", "ok", "", String(readTo)]);
     await until("presence saying how it wakes", () => heard.some((p) => p.pk === claudePk && p.wake === "codex-queue"));
   });
 
@@ -405,6 +407,7 @@ describe("wake paths, commands and words", () => {
     expect(cursor).toContain("Cursor starts your next turn with its output");
     expect(cursor).not.toContain("listen --now");
     expect(pullsWake("cursor")).toBe(true);
+    expect(pullsWake("grok")).toBe(true);
     expect(pullsWake("gemini")).toBe(false);
     const off = howMessagesReachYou("kiwi", false, { harness: "codex", session: "t" });
     expect(off).toContain("Kiwi won't wake you");
