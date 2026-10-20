@@ -44,7 +44,7 @@ import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
 import { onDictationHttp, type DictationStore } from "./dictation.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
-import { GithubApp, githubAppFrom } from "./github-app.ts";
+import { GithubApp, githubAppFrom, GithubPush, githubPushFrom } from "./github-app.ts";
 import { GITHUB_QUEUE_MAX, GITHUB_QUEUE_TTL_MS, onGithubHttp, type GithubItem, type GithubLink, type GithubRoutes } from "./github.ts";
 
 interface Env {
@@ -127,6 +127,7 @@ export class Channel extends DurableObject<Env> {
         Layer.succeed(Policy, this.policy),
         Layer.succeed(ChannelLists, owned(env)),
         Layer.succeed(GithubApp, githubAppFrom({ appId: env.GITHUB_APP_ID, privateKey: env.GITHUB_APP_PRIVATE_KEY })),
+        Layer.succeed(GithubPush, githubPushFrom()),
       ),
     );
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));

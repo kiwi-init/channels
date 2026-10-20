@@ -19,8 +19,10 @@ for each repo on the list (`GET /repos/<owner>/<name>`, needing push or admin),
 refuses the whole list if any repo fails, and keeps nothing of the token.
 Every change re-checks the whole list, so a repo the owner lost access to
 can't stay connected past the next change. The app sends the token only to a
-relay whose `/v1/config` names a GitHub App, and never to clear the list; a
-relay without the App fetches nothing from GitHub and gets no token.
+relay whose `/v1/config` names a GitHub App, and never to clear the list. The
+check needs only that token, not the App's private key, so a relay with the
+webhook secret and the client id but no key checks the same way. A relay whose
+`/v1/config` names no App gets no token, so it connects no repo.
 
 ## Register the App (once, by whoever runs the relay)
 

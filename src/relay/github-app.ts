@@ -53,6 +53,24 @@ export interface GithubAppApi {
 
 export class GithubApp extends Context.Service<GithubApp, GithubAppApi | null>()("kiwi/relay/GithubApp") {}
 
+export type PushCheck = (repo: string, userToken: string) => Promise<GithubReply<boolean>>;
+
+export class GithubPush extends Context.Service<GithubPush, PushCheck>()("kiwi/relay/GithubPush") {}
+
+const githubHeaders = (auth: string, accept = "application/vnd.github+json") => ({ authorization: `Bearer ${auth}`, accept, "user-agent": "kiwi-channels", "x-github-api-version": "2022-11-28" });
+
+export function githubPushFrom(opts: { api?: string; fetch?: typeof fetch } = {}): PushCheck {
+  const api = (opts.api ?? "https://api.github.com").replace(/\/$/, "");
+  const get = opts.fetch ?? fetch;
+  return async (repo, userToken) => {
+    const res = await get(`${api}/repos/${repo}`, { headers: githubHeaders(userToken) });
+    if (res.status === 404 || res.status === 403) return { ok: true, value: false };
+    if (!res.ok) return { ok: false, status: 502, error: `GitHub refused this repo (${res.status})` };
+    const r = (await res.json()) as { permissions?: { push?: boolean; admin?: boolean } };
+    return { ok: true, value: !!(r.permissions?.push || r.permissions?.admin) };
+  };
+}
+
 const b64url = (bytes: Uint8Array): string =>
   btoa(String.fromCharCode(...bytes))
     .replace(/\+/g, "-")
@@ -92,7 +110,7 @@ export function githubAppFrom(opts: { appId?: string | null; privateKey?: string
   const get = opts.fetch ?? fetch;
   const now = opts.now ?? Date.now;
   const tokens = new Map<string, { token: string; until: number }>();
-  const headers = (auth: string, accept = "application/vnd.github+json") => ({ authorization: `Bearer ${auth}`, accept, "user-agent": "kiwi-channels", "x-github-api-version": "2022-11-28" });
+  const headers = githubHeaders;
   const fail = async <T>(res: Response, what: string): Promise<GithubReply<T>> => ({
     ok: false,
     status: res.status === 404 ? 404 : 502,
@@ -115,13 +133,7 @@ export function githubAppFrom(opts: { appId?: string | null; privateKey?: string
   };
 
   return {
-    canPush: async (repo, userToken) => {
-      const res = await get(`${api}/repos/${repo}`, { headers: headers(userToken) });
-      if (res.status === 404 || res.status === 403) return { ok: true, value: false };
-      if (!res.ok) return fail(res, "this repo");
-      const r = (await res.json()) as { permissions?: { push?: boolean; admin?: boolean } };
-      return { ok: true, value: !!(r.permissions?.push || r.permissions?.admin) };
-    },
+    canPush: githubPushFrom({ api, fetch: get }),
     diff: async (repo, sha) => {
       const t = await token(repo);
       if (!t.ok) return t;

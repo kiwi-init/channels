@@ -221,12 +221,12 @@ describe("diffs and review checks through the relay", () => {
 
   test("a relay without the App answers 404", async () => {
     const dir = mkdtempSync(join(tmpdir(), "kiwi-github-app-off-"));
-    const off = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, human: devHumanAuth(), githubApp: null });
+    const off = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, human: devHumanAuth(), githubApp: null, githubPush: async (_, token) => ({ ok: true, value: token === "ghu_owner" }) });
     try {
       const o = await generateIdentity("bob");
       const made = await Channel.create(off.url.origin, o, { name: "bob", kind: "human" }, [], undefined, "dev:bob");
       const ch = new Channel(made.access, off.url.origin, o);
-      await ch.setGithubRepos(["ojow/channels"]);
+      await ch.setGithubRepos(["ojow/channels"], "ghu_owner");
       const path = `/github/diff?repo=ojow/channels&sha=${sha}`;
       const res = await fetch(`${off.url.origin}/v1/rooms/${made.access.roomId}${path}`, { headers: { authorization: `Bearer ${await signRequest(o, made.access.roomId, "GET", path, "")}` } });
       expect(res.status).toBe(404);
