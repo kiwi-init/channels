@@ -1,7 +1,7 @@
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
-import { open, ownerFingerprint, seal } from "../crypto.ts";
+import { open, ownerFingerprint } from "../crypto.ts";
 import { sign, verify } from "../identity.ts";
 import { readRecord, type Member } from "../membership.ts";
 import { MAX_ICON_BYTES, wellFormedIcon, type ChannelIcon } from "../protocol.ts";
@@ -10,7 +10,7 @@ import type { ChannelCore } from "./core.ts";
 import { gone, type MemberRefusal, type Refusal, type Refused } from "./errors.ts";
 import { titlesSigned } from "./keys.ts";
 import { callUnlessUnchanged, type Relay } from "./relay.ts";
-import { newestEpoch, openSealed, sealFor, type SealedBlob } from "./sealed.ts";
+import { freshInfo, newestEpoch, openSealed, sealFor, type SealedBlob } from "./sealed.ts";
 
 export const INFO_MAX_AGE_MS = 30_000;
 
@@ -97,8 +97,7 @@ export class ChannelInfo {
       yield* this.ch.ownerOnly();
       const title = name.trim().slice(0, 80);
       if (!title) return yield* new Rejected("a channel title can't be empty");
-      this.forgetInfo();
-      const info = yield* this.ch.fx.info();
+      const info = yield* freshInfo(this.ch, () => this.forgetInfo());
       const signed = yield* Effect.promise(() => sign(this.ch.identity, { what: "channel-title", room: this.ch.roomId, name: title }));
       const sealed = yield* sealFor(this.ch, info, signed);
       if (!sealed) return yield* new MissingKey("missing the channel key");
@@ -126,9 +125,10 @@ export class ChannelInfo {
     setIcon: Effect.fn("Channel.setIcon")({ self: this }, function* (this: ChannelInfo, icon: ChannelIcon | null) {
       yield* this.ch.ownerOnly();
       if (icon !== null && !wellFormedIcon(icon)) return yield* new Rejected(`an icon is a robot head, one emoji, or a png, jpg, gif or webp image of at most ${MAX_ICON_BYTES / 1024}KB`);
-      const e = newestEpoch(this.ch.access.keys);
+      const info = yield* freshInfo(this.ch, () => this.forgetInfo());
       const signed = icon ? yield* Effect.promise(() => sign(this.ch.identity, { what: "channel-icon", room: this.ch.roomId, icon })) : null;
-      const sealed = signed ? { e, ...(yield* Effect.promise(() => seal(this.ch.access.keys[String(e)]!, this.ch.roomId, signed))) } : null;
+      const sealed = signed ? yield* sealFor(this.ch, info, signed, true) : null;
+      if (signed && !sealed) return yield* new MissingKey("missing the channel key");
       yield* this.ch.request("/icon", { method: "PUT", body: JSON.stringify({ icon: sealed }) }).pipe(Effect.ensuring(Effect.sync(() => this.forgetInfo())));
     }),
 

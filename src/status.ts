@@ -9,6 +9,7 @@ import { askId, clearFrame, reviewId, rexForeground, rexRootState, statusFrame, 
 
 const STATUS_EVERY_MS = 3_000;
 const RATE_MS = 1_000;
+const REFOLD_MS = 60_000;
 const MAX_BYTES = 4_096;
 
 export function seatRecords(state: ChannelState, alias: string, agent: string): StatusRecord[] {
@@ -112,10 +113,15 @@ export async function clearStatus(): Promise<number> {
   return cleared;
 }
 
+export function foldStillFresh(kept: { head: number; at: number } | null, head: number | undefined, now = Date.now()): boolean {
+  return !!kept && head !== undefined && kept.head === head && now - kept.at < REFOLD_MS;
+}
+
 interface StatusSeat {
   key: string;
   alias: string;
   agent: string;
+  head?: number;
 }
 
 export interface StatusWatchOptions {
@@ -132,6 +138,7 @@ interface Watched {
   at: number;
   retryAt: number;
   session: Session | null;
+  folded: { head: number; at: number; state: ChannelState } | null;
 }
 
 async function openSession(alias: string, agent: string): Promise<Session | null> {
@@ -175,7 +182,7 @@ export function startStatusWatch(opts: StatusWatchOptions): { stop(): void } {
         live.add(seat.key);
         let seen = watched.get(seat.key);
         if (!seen) {
-          seen = { written: new Map(), at: 0, retryAt: 0, session: null };
+          seen = { written: new Map(), at: 0, retryAt: 0, session: null, folded: null };
           watched.set(seat.key, seen);
         }
         const record = seatRecordFor(cfg, seat.alias, seat.agent);
@@ -189,8 +196,11 @@ export function startStatusWatch(opts: StatusWatchOptions): { stop(): void } {
           seen.retryAt = Date.now() + 60_000;
           continue;
         }
-        const state = await channelState(seen.session);
+        const kept = seen.folded;
+        const fresh = foldStillFresh(kept, seat.head);
+        const state = fresh && kept ? kept.state : await channelState(seen.session);
         if (!state) continue;
+        if (!fresh) seen.folded = seat.head === undefined ? null : { head: seat.head, at: Date.now(), state };
         const desired = new Map(seatRecords(state, seat.alias, seat.agent).map((r): [string, string] => [r.id, statusFrame(r)]));
         const frames: string[] = [];
         for (const [id, frame] of desired) if (seen.written.get(id) !== frame) frames.push(frame);

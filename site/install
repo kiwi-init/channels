@@ -40,7 +40,10 @@ case "$os" in
 esac
 case "$arch" in
   arm64 | aarch64) arch=arm64 ;;
-  x86_64 | amd64) arch=x64 ;;
+  x86_64 | amd64)
+    arch=x64
+    if [ "$os" = darwin ] && [ "$(sysctl -n sysctl.proc_translated 2>/dev/null)" = 1 ]; then arch=arm64; fi
+    ;;
   *) echo "kiwi: no build for $arch" >&2; exit 1 ;;
 esac
 asset="kiwi-$os-$arch"

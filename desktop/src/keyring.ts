@@ -225,7 +225,7 @@ export class Keyring implements ChannelOps {
     if (st.status === "denied") return { status: "denied" };
     if (st.status === "pending") return { status: "pending", code: st.code };
     const members: Member[] = await new Channel(st.access, this.host.relay(), id).members().catch(() => []);
-    const record = members.find((x) => x.pk === id.pk);
+    const record = members.find((x) => x.pk === id.pk && !x.unverified);
     const idName = record && record.name !== id.name ? record.name : id.name;
     const entry: ChannelIdentityView = { label: idName, idName, ...keysOf(id), roomId: st.access.roomId, code, access: st.access, at: Date.now() };
     await this.host.save(entry);
