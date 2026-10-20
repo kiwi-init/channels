@@ -71,7 +71,7 @@ jobs:
 
   test-unit:
     name: test / unit
-    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release-build.yml", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "desktop/src/**", "desktop/build/entitlements.mac.plist", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
+    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release-build.yml", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.mac.plist", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs the unit tests with bun test: every test/*.test.ts except the slow suites in
@@ -232,7 +232,10 @@ jobs:
       test/perf-check.test.ts: perf-check compares the median of the runs with each gate, counts the
       soak's limits only in the nightly run and lists what isn't at its 0.20 budget yet;
       test/mac-size.test.ts: desktop/scripts/mac-size.ts (run by release-build on macOS) fails a dmg
-      or zip over 150 MiB or an installed app over 320 MiB, the 0.20 budgets. And
+      or zip over 150 MiB or an installed app over 320 MiB, the 0.20 budgets;
+      test/appimage-squashfs.test.ts: desktop/scripts/appimage-squashfs.ts (run by release-build on
+      Linux) fails an AppImage whose squashfs is not gzip, lz4 or zstd in blocks of at most 128 KiB
+      (xz in 1 MiB blocks made the app take most of a minute to appear). And
       test/retry-after.test.ts: the relay's 429 carries Retry-After (header and body, on the socket
       too), a refused attempt isn't counted, and a rate-limited send waits it out and goes in, over
       the socket without an extra try over HTTP; web lib/github-queue.test.ts: the owner's GitHub
@@ -526,7 +529,7 @@ jobs:
     push: false
     version_bumps: true
     inputs: []
-    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/scripts/fuses.ts", "desktop/scripts/mac-size.ts", "desktop/scripts/pack-cli.ts", "scripts/changelog.ts", "scripts/cli-downloads.ts"]
+    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/scripts/fuses.ts", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/scripts/pack-cli.ts", "scripts/changelog.ts", "scripts/cli-downloads.ts"]
     description: >-
       Runs .github/workflows/release-build.yml, the build a tag's release.yml runs, with
       rehearsal: true and a read-only token, uploading nothing: the version and changelog checks
@@ -536,11 +539,13 @@ jobs:
       package's contents and fuses checked (release/mac*/Channels.app and
       release/*-unpacked/channels-desktop), the kiwi binary bundled zstd-packed by
       desktop/scripts/pack-cli.ts (which checks it unpacks to the same bytes), and on macOS
-      desktop/scripts/mac-size.ts failing a dmg or zip over 150 MiB or an app over 320 MiB. On a pull request the macOS app is unsigned; a
+      desktop/scripts/mac-size.ts failing a dmg or zip over 150 MiB or an app over 320 MiB, and on Linux
+      desktop/scripts/appimage-squashfs.ts failing an AppImage not packed with gzip, lz4 or zstd in
+      blocks of at most 128 KiB. On a pull request the macOS app is unsigned; a
       manual run of ci.yml passes the signing secrets, so the app is signed, notarized and
       checked as on a tag. Fails where the tag would: versions that disagree, no changelog
       section, a test failing on macOS, an electron-builder error, a package missing the web
-      app or the kiwi binary, a Mac package over its size gate, and on a manual run a signing or notarization error. Runs on
+      app or the kiwi binary, a Mac package over its size gate, an AppImage packed slow to page in, and on a manual run a signing or notarization error. Runs on
       release PRs (they change CHANGELOG.md), on any change that only bumps a version number,
       and on manual runs of ci.yml, never on a push to main.
 
