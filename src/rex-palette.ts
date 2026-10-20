@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { rexBinary } from "./rex.ts";
@@ -93,6 +93,15 @@ function put(file: string, text: string): boolean {
   return true;
 }
 
+export function replaceFile(file: string, text: string): void {
+  const target = existsSync(file) ? realpathSync(file) : file;
+  const mode = existsSync(target) ? statSync(target).mode & 0o777 : 0o600;
+  const tmp = `${target}.kiwi-${process.pid}.tmp`;
+  writeFileSync(tmp, text, { mode });
+  chmodSync(tmp, mode);
+  renameSync(tmp, target);
+}
+
 export function installPalette(init = rexConfigPath(), bin = rexBinary() ?? "rex"): { action: string; init: string; changed: boolean } {
   const action = palettePath(init);
   const find = findPath(init);
@@ -101,7 +110,7 @@ export function installPalette(init = rexConfigPath(), bin = rexBinary() ?? "rex
   const before = existsSync(init) ? readFileSync(init, "utf8") : "";
   if (carries(before)) return { action, init, changed: wrote };
   const next = before && !before.endsWith("\n") ? `${before}\n${LINE}\n` : `${before}${LINE}\n`;
-  writeFileSync(init, next, { mode: 0o600 });
+  replaceFile(init, next);
   return { action, init, changed: true };
 }
 
@@ -119,7 +128,7 @@ export function removePalette(init = rexConfigPath()): boolean {
       .filter((line) => line.trim() !== LINE)
       .join("\n");
     if (after !== before) {
-      writeFileSync(init, after, { mode: 0o600 });
+      replaceFile(init, after);
       changed = true;
     }
   }
