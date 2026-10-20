@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CONTEXT_LINE } from "@kiwi/core/protocol.ts";
 import { fold, type ChannelState } from "@kiwi/core/state.ts";
+import { alive } from "../src/hooks/listeners.ts";
 import { paneOf, rotateArgv } from "../src/hooks/rotate.ts";
 import { ROTATE_FLOOR, rotationAt } from "../src/rotate/decide.ts";
 import { calm, clearWhenIdle, dropLock, inputText, rotating, takeLock } from "../src/rotate/pane.ts";
@@ -284,7 +285,10 @@ describe.skipIf(!hasTmux)("typing /clear into the pane", () => {
     registry(p, "s-10", "busy");
     const waiting = clearWhenIdle({ pid: p.pid, session: "s-10", pane: p.pane, socket: sock, claudeDir: p.claudeDir }, { ...fast, timeoutMs: 3_000 });
     await Bun.sleep(300);
+    const server = Number(spawnSync("tmux", ["-S", sock, "display-message", "-p", "#{pid}"], { encoding: "utf8" }).stdout.trim());
     spawnSync("tmux", ["-S", sock, "kill-server"]);
+    const end = Date.now() + 2_000;
+    while (alive(server) && Date.now() < end) Bun.sleepSync(10);
     await pane("again-new", "", { sock });
     registry(p, "s-10", "idle");
     expect(await waiting).toBe("not-its-pane");
