@@ -1,10 +1,17 @@
 import { parseArgs } from "node:util";
 import { IDENTITY_ARG, selfIdentity } from "../hooks.ts";
+import { QUERY_ARG } from "../query-arg.ts";
 
 if (process.argv[2] === IDENTITY_ARG && process.argv.length === 3) {
   const identity = selfIdentity();
   if (identity === null) process.exit(1);
   process.stdout.write(`${identity}\n`);
+  process.exit(0);
+}
+
+if (process.argv[2] === QUERY_ARG && process.argv.length === 3) {
+  const { runQueryWorker } = await import("../sh-query.ts");
+  await runQueryWorker();
   process.exit(0);
 }
 

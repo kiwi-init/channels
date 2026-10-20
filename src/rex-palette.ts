@@ -93,7 +93,7 @@ function put(file: string, text: string): boolean {
   return true;
 }
 
-export function replaceFile(file: string, text: string): void {
+function replaceFile(file: string, text: string): void {
   const target = existsSync(file) ? realpathSync(file) : file;
   const mode = existsSync(target) ? statSync(target).mode & 0o777 : 0o600;
   const tmp = `${target}.kiwi-${process.pid}.tmp`;
