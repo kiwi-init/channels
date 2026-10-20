@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { fold, type ChannelState, type Roster } from "@kiwi/core/state.ts";
-import { aliasSegment, askId, clearFrame, placeFrom, reviewId, statusFrame, takesStatus } from "../src/rex.ts";
+import { aliasSegment, askId, clearFrame, placeFrom, reviewId, rexActivity, rexInstance, rexProcess, rexScreen, statusFrame, takesStatus } from "../src/rex.ts";
 import { seatRecords } from "../src/status.ts";
+import { startRexEvents } from "../src/rex-events.ts";
 
 const roster: Roster = [
   { name: "jonatas", pk: "p", owner: true, at: 1, active: true, kind: "human" },
@@ -97,5 +101,57 @@ describe("the record Kiwi writes", () => {
   test("another agent's question, and a task waiting on someone else, say nothing about this seat", () => {
     const state = asked(ask(1, "bo"));
     expect(seatRecords(state, "ch", "ana")).toEqual([]);
+  });
+});
+
+describe("Rex events", () => {
+  test("a block's events refresh it, and child_exited marks it gone", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-rex-events-"));
+    const bin = join(dir, "rex");
+    const block = "block:11a15963-bacc-7426-91e9-4d98757dcd0c";
+    const session = "session:01a15963-bacc-7426-91e9-4d98757dcd0c";
+    const lines = [
+      { session_id: session, session_event: { event: { kind: "terminal.pwd_changed", payload: { block_id: block } } } },
+      { session_id: session, session_event: { event: { kind: "terminal.child_exited", payload: { block_id: block } } } },
+      { session_id: session, session_event: { event: { kind: "terminal.title_changed", payload: { block_id: "block:21a15963-bacc-7426-91e9-4d98757dcd0c" } } } },
+    ];
+    writeFileSync(bin, `#!/bin/sh\nprintf '%s\\n' '${JSON.stringify(lines[0])}' '${JSON.stringify(lines[1])}' '${JSON.stringify(lines[2])}'\nsleep 5\n`);
+    chmodSync(bin, 0o755);
+    const seen: [string, string, boolean][] = [];
+    const watch = startRexEvents({ servers: () => [{ server: "studio", bin }], onChange: (server, id, gone) => seen.push([server, id, gone]), everyMs: 100 });
+    await Bun.sleep(150);
+    watch.stop();
+    expect(seen).toEqual([
+      ["studio", block, false],
+      ["studio", block, true],
+      ["studio", "block:21a15963-bacc-7426-91e9-4d98757dcd0c", false],
+    ]);
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("Rex as a reader", () => {
+  test("the root record, processes, screen and instance id come back even when wrapped", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-rex-api-"));
+    const bin = join(dir, "rex");
+    writeFileSync(
+      bin,
+      `#!/bin/sh
+case "$*" in
+  *program_status*) echo '{"records":[{"id":"build","state":"done"},{"state":"working","msg":"cargo test"}]}' ;;
+  *terminal.process*) echo '{"child":{"pid":123},"foreground":{"pid":456}}' ;;
+  *terminal.format*) echo '{"content":"the screen"}' ;;
+  *server.status*) echo '{"instance_id":"instance-1"}' ;;
+  *) exit 1 ;;
+esac
+`,
+    );
+    chmodSync(bin, 0o755);
+    const place = { server: "studio", session: "session:01a15963-bacc-7426-91e9-4d98757dcd0c", block: "block:11a15963-bacc-7426-91e9-4d98757dcd0c" };
+    expect(rexActivity(place, bin)).toEqual({ state: "working", tool: "cargo test" });
+    expect(rexProcess(place, bin)).toEqual({ foreground: 456, child: 123 });
+    expect(rexScreen(place, bin)).toBe("the screen");
+    expect(rexInstance(place, bin)).toBe("instance-1");
+    rmSync(dir, { recursive: true, force: true });
   });
 });

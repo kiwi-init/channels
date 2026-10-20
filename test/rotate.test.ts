@@ -102,6 +102,28 @@ describe("Claude Code's input box in a captured pane", () => {
     expect(paneOf({ TMUX: "/s,1,0", TMUX_PANE: "2" })).toBeNull();
     expect(rotateArgv(42, "s-1", { pane: "%2", socket: "/s" }).slice(-6)).toEqual(["rotate", "send", "42", "s-1", "%2", "/s"]);
   });
+
+  test("a Rex pane comes from Rex's variables, and its sender names the server and block", () => {
+    const env = {
+      TERM_PROGRAM: "rex",
+      REX_SERVER: "studio",
+      REX_SESSION: "session:01a15963-bacc-7426-91e9-4d98757dcd0c",
+      REX_BLOCK: "block:11a15963-bacc-7426-91e9-4d98757dcd0c",
+      REX_BIN_DIR: "/opt/rex",
+    };
+    const where = paneOf(env);
+    expect(where).toEqual({
+      kind: "rex",
+      rex: {
+        server: "studio",
+        session: "session:01a15963-bacc-7426-91e9-4d98757dcd0c",
+        block: "block:11a15963-bacc-7426-91e9-4d98757dcd0c",
+      },
+      bin: "/opt/rex/rex",
+    });
+    expect(rotateArgv(42, "s-1", where!).slice(-5)).toEqual(["rex", "studio", "session:01a15963-bacc-7426-91e9-4d98757dcd0c", "block:11a15963-bacc-7426-91e9-4d98757dcd0c", "/opt/rex/rex"]);
+    expect(paneOf({ TERM_PROGRAM: "rex" })).toBeNull();
+  });
 });
 
 describe("one sender per session", () => {

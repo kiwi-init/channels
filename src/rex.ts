@@ -97,13 +97,18 @@ function macBinary(): string | null {
   return null;
 }
 
-function rexBinary(): string | null {
+export function rexBinary(): string | null {
   return Bun.which("rex") ?? macBinary();
 }
 
-function run(bin: string, argv: string[], timeout = 3_000): { status: number | null; stdout: string } {
+export function runRex(bin: string, argv: string[], timeout = 5_000): { status: number | null; stdout: string; stderr: string } {
   const r = spawnSync(bin, argv, { encoding: "utf8", timeout });
-  return { status: r.status, stdout: typeof r.stdout === "string" ? r.stdout : "" };
+  return { status: r.status, stdout: typeof r.stdout === "string" ? r.stdout : "", stderr: typeof r.stderr === "string" ? r.stderr : "" };
+}
+
+function run(bin: string, argv: string[], timeout = 3_000): { status: number | null; stdout: string } {
+  const r = runRex(bin, argv, timeout);
+  return { status: r.status, stdout: r.stdout };
 }
 
 export function rexStatus(): RexStatus {
@@ -114,16 +119,23 @@ export function rexStatus(): RexStatus {
   return { found: true, ...(version ? { version } : {}), server: who.status === 0 ? "running" : "stopped" };
 }
 
-function rexCall(place: RexPlace, method: string, args: Record<string, unknown>, timeout = 3_000): unknown {
-  const bin = rexBinary();
-  if (!bin) return null;
-  const r = run(bin, ["-S", place.server, "api", "call", "-s", place.session, `com.superlogical.terminal.${method}`, JSON.stringify({ block_id: place.block, args })], timeout);
-  if (r.status !== 0 || !r.stdout.trim()) return null;
+function parse(stdout: string): unknown {
+  if (!stdout.trim()) return null;
   try {
-    return JSON.parse(r.stdout) as unknown;
+    return JSON.parse(stdout) as unknown;
   } catch {
     return null;
   }
+}
+
+function api(place: RexPlace, method: string, args: Record<string, unknown>, bin: string | null = rexBinary(), session = true, timeout = 5_000): unknown {
+  if (!bin) return null;
+  const r = run(bin, ["-S", place.server, "api", "call", ...(session ? ["-s", place.session] : []), method, JSON.stringify(args)], timeout);
+  return r.status === 0 ? parse(r.stdout) : null;
+}
+
+function blockCall(place: RexPlace, method: string, args: Record<string, unknown>, bin: string | null = rexBinary(), timeout = 5_000): unknown {
+  return api(place, `com.superlogical.terminal.${method}`, { block_id: place.block, args }, bin, true, timeout);
 }
 
 function object(v: unknown): Record<string, unknown> | null {
@@ -159,15 +171,89 @@ function rootRecord(v: unknown): Record<string, unknown> | null {
   return object(nested(v, "root"));
 }
 
-export function rexRootState(place: RexPlace): string | null {
-  const record = rootRecord(rexCall(place, "program_status", {}));
+export function rexRootState(place: RexPlace, bin: string | null = rexBinary()): string | null {
+  const record = rootRecord(blockCall(place, "program_status", {}, bin));
   const state = record?.state;
   return typeof state === "string" ? state.toLowerCase() : null;
 }
 
-export function rexForeground(place: RexPlace): number | null {
-  const got = rexCall(place, "process", {});
-  const pid = nested(got, "foreground", "pid") ?? nested(got, "process", "foreground", "pid") ?? nested(got, "result", "foreground", "pid");
-  const n = Number(pid);
-  return Number.isInteger(n) && n > 0 ? n : null;
+function rexRoot(place: RexPlace, bin: string | null = rexBinary()): Record<string, unknown> | null {
+  return rootRecord(blockCall(place, "program_status", {}, bin));
+}
+
+export function rexForeground(place: RexPlace, bin: string | null = rexBinary()): number | null {
+  return rexProcess(place, bin)?.foreground ?? null;
+}
+
+export interface RexProcess {
+  foreground: number | null;
+  child: number | null;
+}
+
+export function rexProcess(place: RexPlace, bin: string | null = rexBinary()): RexProcess | null {
+  const got = blockCall(place, "process", {}, bin);
+  const fg = nested(got, "foreground", "pid") ?? nested(got, "process", "foreground", "pid") ?? nested(got, "result", "foreground", "pid");
+  const child = nested(got, "child", "pid") ?? nested(got, "process", "child", "pid") ?? nested(got, "result", "child", "pid");
+  const pid = (v: unknown): number | null => {
+    const n = Number(v);
+    return Number.isInteger(n) && n > 0 ? n : null;
+  };
+  return got === null ? null : { foreground: pid(fg), child: pid(child) };
+}
+
+export interface RexActivity {
+  state: "working" | "waiting" | "idle";
+  tool?: string;
+}
+
+export function rexActivity(place: RexPlace, bin: string | null = rexBinary()): RexActivity | null {
+  const record = rexRoot(place, bin);
+  const state = typeof record?.state === "string" ? record.state.toLowerCase() : null;
+  const msg = typeof record?.msg === "string" && record.msg ? record.msg : undefined;
+  if (state === "working") return { state: "working", ...(msg ? { tool: msg } : {}) };
+  if (state === "blocked") return { state: "waiting" };
+  if (state === "done" || state === "idle") return { state: "idle" };
+  return null;
+}
+
+export function rexInstance(place: RexPlace, bin: string | null = rexBinary()): string | null {
+  const got = api(place, "server.status", {}, bin, false);
+  const id = nested(got, "instance_id") ?? nested(got, "instanceId") ?? nested(got, "server", "instance_id");
+  return typeof id === "string" && id ? id : null;
+}
+
+function listIn(v: unknown): unknown[] | null {
+  if (Array.isArray(v)) return v;
+  const record = object(v);
+  if (!record) return null;
+  for (const key of ["blocks", "list", "ids", "block_ids"]) {
+    const list = record[key];
+    if (Array.isArray(list)) return list;
+    const values = object(list);
+    if (values) return Object.values(values);
+  }
+  const placed = record.placed;
+  const detached = record.detached;
+  if (Array.isArray(placed) || Array.isArray(detached)) return [...(Array.isArray(placed) ? placed : []), ...(Array.isArray(detached) ? detached : [])];
+  return null;
+}
+
+export function rexBlockPresent(place: RexPlace, bin: string | null = rexBinary()): boolean | null {
+  const list = listIn(api(place, "session.list_blocks", {}, bin));
+  if (!list) return null;
+  return list.some((item) => {
+    if (typeof item === "string") return item === place.block;
+    const block = object(item);
+    return block?.block_id === place.block || block?.id === place.block;
+  });
+}
+
+export function rexScreen(place: RexPlace, bin: string | null = rexBinary()): string | null {
+  const got = blockCall(place, "format", { format: "vt" }, bin);
+  if (typeof got === "string") return got;
+  for (const key of ["content", "screen", "text", "vt", "data"]) {
+    const v = nested(got, key);
+    if (typeof v === "string") return v;
+  }
+  return null;
 }

@@ -104,8 +104,9 @@ jobs:
       recovery commands use the seat's own command.
       Also test/rex.test.ts: where a seat runs from its environment (nothing inside tmux, Rex's
       server, session and block ids, any other terminal's program and version), which terminals
-      take an OSC 7501 status record, the record frames they get, and the blocked question and
-      done review records a channel state yields for one agent.
+      take an OSC 7501 status record, the record frames they get, the blocked question and
+      done review records a channel state yields for one agent, and the Rex event stream that
+      names a block (a child exiting marks it gone).
       Also test/daemon-big-lines.test.ts: the daemon's socket writes queue what the socket
       didn't take and flush it on drain (src/daemon/server.ts), so a catch-up of thirty
       messages with 50 KB ones among them, and big live messages back to back, arrive whole
@@ -166,7 +167,8 @@ jobs:
       between tasks past ROTATE_FLOOR, the lead past the line, open tasks only once checkpointed since
       the nudge, never during a review round it judges or an open question of its), Claude Code's input
       box read between its two rules (drafts, multi-line text and dialogs are not empty), one sender per
-      session (another live sender's file makes it back off, a dead one's is ignored), and, with tmux on
+      session (another live sender's file makes it back off, a dead one's is ignored), a Rex pane's
+      server, session, block and binary, and, with tmux on
       its own socket, /clear typed
       only into an idle session's empty box, Enter only once /clear shows there, its six characters
       erased when rotation is switched off before Enter while it still owns the pane, nothing more sent
