@@ -1,4 +1,5 @@
 import { CONTEXT_LINE } from "@kiwi/core/protocol.ts";
+import { leadCheckpoint } from "@kiwi/core/reentry.ts";
 import { openRound, type ChannelState } from "@kiwi/core/state.ts";
 
 export const ROTATE_FLOOR = 100_000;
@@ -17,11 +18,11 @@ export function rotationAt(state: ChannelState, me: string, used: number | undef
   const open = [...state.tasks.values()].filter((t) => t.state !== "done" && !t.archived);
   if (open.some((t) => t.review === me && openRound(t))) return { kind: "stay", why: "a review round it judges is open" };
   const owned = open.filter((t) => t.owner === me);
-  if (owned.length) {
-    if (used < CONTEXT_LINE) return { kind: "stay", why: "its open tasks and a context under the line" };
-    const saved = nudgedAfter !== null && owned.every((t) => (t.notes.findLast((n) => n.checkpoint)?.seq ?? 0) > nudgedAfter);
-    return saved ? { kind: "rotate", why: "past the line, with a checkpoint on each open task since the nudge" } : { kind: "stay", why: "past the line, waiting for a checkpoint on each open task" };
-  }
-  if (state.lead === me) return used >= CONTEXT_LINE ? { kind: "rotate", why: "the lead, past the line" } : { kind: "stay", why: "the lead, under the line" };
-  return used >= ROTATE_FLOOR ? { kind: "rotate", why: "between tasks" } : { kind: "stay", why: "between tasks, with a small context" };
+  const lead = state.lead === me;
+  if (!owned.length && !lead) return used >= ROTATE_FLOOR ? { kind: "rotate", why: "between tasks" } : { kind: "stay", why: "between tasks, with a small context" };
+  if (used < CONTEXT_LINE) return { kind: "stay", why: lead ? "the lead, under the line" : "its open tasks and a context under the line" };
+  const since = (seq: number | undefined) => nudgedAfter !== null && (seq ?? 0) > nudgedAfter;
+  if (!owned.every((t) => since(t.notes.findLast((n) => n.checkpoint)?.seq))) return { kind: "stay", why: "past the line, waiting for a checkpoint on each open task" };
+  if (lead && !since(leadCheckpoint(state, me)?.seq)) return { kind: "stay", why: "the lead, past the line, waiting for its lead checkpoint" };
+  return { kind: "rotate", why: lead ? "the lead, past the line, with its lead checkpoint since the nudge" : "past the line, with a checkpoint on each open task since the nudge" };
 }

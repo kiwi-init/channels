@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { tokensWord } from "@kiwi/core/format.ts";
 import { CONTEXT_LINE, cleanActivity } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
-import { crossing, nudgeText, openTasksOf } from "../src/hooks/context-line.ts";
+import { crossing, nudgeShort, nudgeText, openTasksOf } from "../src/hooks/context-line.ts";
 
 describe("context in tokens, in words", () => {
   test("thousands as k, a million and up as M, rounding never shows 1000k", () => {
@@ -37,6 +37,27 @@ describe("the nudge", () => {
   test("past eight tasks it counts the rest; with no open task there is nothing to ask", () => {
     expect(nudgeText({ used: 300_000 }, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "kiwi")).toContain("T1, T2, T3, T4, T5, T6, T7, T8 and 2 more");
     expect(nudgeText({ used: 300_000 }, [], "kiwi")).toBeNull();
+  });
+
+  test("the lead is asked for its lead checkpoint, alone or after its open tasks", () => {
+    const alone = nudgeText({ used: 300_000 }, [], "kiwi --as ana", true)!;
+    expect(alone).toContain(
+      "Your context is at 300k tokens, past the 250k line. Before you end this turn, write where the channel stands as you lead it with `kiwi --as ana task checkpoint lead --file note.md`",
+    );
+    expect(alone).not.toContain("open tasks");
+    const both = nudgeText({ used: 300_000 }, [7], "kiwi", true)!;
+    expect(both).toContain("(T7) with `kiwi task checkpoint T7 --file note.md`");
+    expect(both).toContain("; and where the channel stands as you lead it with `kiwi task checkpoint lead --file note.md`");
+    expect(both.indexOf("T7")).toBeLessThan(both.indexOf("checkpoint lead"));
+  });
+
+  test("the short nudge, for when the full one doesn't fit, still names every command and is far shorter", () => {
+    expect(nudgeShort([], "kiwi")).toBeNull();
+    expect(nudgeShort([7, 9], "kiwi")).toBe("Past the 250k context line: before you end this turn, run `kiwi task checkpoint T7 --file note.md` for each open task.");
+    expect(nudgeShort([], "kiwi", true)).toBe("Past the 250k context line: before you end this turn, run `kiwi task checkpoint lead --file note.md`.");
+    const short = nudgeShort([7], "kiwi --as ana", true)!;
+    expect(short).toContain("`kiwi --as ana task checkpoint T7 --file note.md` for each open task and `kiwi --as ana task checkpoint lead --file note.md`");
+    expect(short.length * 2).toBeLessThan(nudgeText({ used: 300_000 }, [7], "kiwi --as ana", true)!.length);
   });
 
   test("the open tasks are the seat's own that aren't done or archived", () => {

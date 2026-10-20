@@ -4,7 +4,8 @@ import { Keystore } from "../../config.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { formatTask, formatTasks, looksLikeLine, taskStateWord } from "@kiwi/core/format.ts";
 import type { TaskState } from "@kiwi/core/protocol.ts";
-import { isPerson, openRound, parseTaskId, similarOpenTasks, taskId, type ChannelState } from "@kiwi/core/state.ts";
+import { leadCheckpointRefusal } from "@kiwi/core/reentry.ts";
+import { isPerson, leadCheckpointKey, openRound, parseTaskId, similarOpenTasks, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import { formatCandidates, pickFor, taskCandidates } from "@kiwi/core/routing.ts";
 import { bindingFor } from "../../hooks.ts";
 import { args, opt } from "../args.ts";
@@ -53,6 +54,14 @@ export const taskCommands: Record<string, Command> = {
           return out(lines.join("\n"));
         }
         if (sub === "list") return yield* taskCommands.tasks!();
+        if (sub === "checkpoint" && args[2] === "lead") {
+          const where = (opt.file !== undefined ? yield* readText(opt.file) : args.slice(3).join(" ") || opt.note || "").trim();
+          if (!where) return yield* die("usage: kiwi task checkpoint lead --file note.md (where the channel stands: what you're waiting on, decisions in flight, next, traps)");
+          const refused = leadCheckpointRefusal((yield* s.state()).state, s.me, where);
+          if (refused) return yield* die(refused);
+          yield* s.setFact(leadCheckpointKey(s.me), where);
+          return out("lead checkpoint saved: a new session of yours starts from it");
+        }
         const id = yield* taskArg();
         if (sub === "show") {
           const { state } = yield* s.state();

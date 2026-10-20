@@ -12,7 +12,7 @@ import { here, type Binding, type Here } from "../seats.ts";
 import { REENTRY_MAX, reentryText } from "@kiwi/core/reentry.ts";
 import { humanOf } from "@kiwi/core/state.ts";
 import { asOption, channelOption } from "@kiwi/core/wake.ts";
-import { crossing, noteOverLine, nudgeText, openTasksOf, overLine } from "./context-line.ts";
+import { crossing, noteOverLine, nudgeShort, nudgeText, openTasksOf, overLine } from "./context-line.ts";
 import { commitDelivered, noteHeard } from "./delivered.ts";
 import { isRecord } from "./files.ts";
 import { liveListeners, refreshListeners } from "./listeners.ts";
@@ -157,8 +157,10 @@ const contextNudge = Effect.fn("Hooks.contextNudge")(function* (input: HookInput
   if (!next.over && over) noteOverLine(s.alias, s.me, session, false);
   if (!next.nudge || !context || input.stop_hook_active) return null;
   const { state } = yield* s.state();
-  const text = nudgeText(context, openTasksOf(state, s.me), mc);
-  if (!text || text.length > budget) return null;
+  const tasks = openTasksOf(state, s.me);
+  const lead = state.lead === s.me;
+  const text = [nudgeText(context, tasks, mc, lead), nudgeShort(tasks, mc, lead)].find((t) => t !== null && t.length <= budget);
+  if (!text) return null;
   return { text, shown: Effect.sync(() => noteOverLine(s.alias, s.me, session, true, state.head)) };
 });
 

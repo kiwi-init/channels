@@ -26,6 +26,7 @@ export const COMMANDS = {
   lock: (mc: string) => `${mc} lock NAME`,
   log: (mc: string) => `${mc} log --task T7`,
   checkpoint: (mc: string, task = "T7") => `${mc} task checkpoint ${task} --file note.md`,
+  leadCheckpoint: (mc: string) => `${mc} task checkpoint lead --file note.md`,
   help: (mc: string) => `${mc} help`,
 };
 

@@ -90,7 +90,11 @@ jobs:
       required, at most CHECKPOINT_MAX_LENGTH), folded and labelled in task show, refused before
       sending when empty or too long; and what a fresh session is told (packages/core/src/reentry.ts):
       each open task it owns with the newest checkpoint or else the last note, the review round it
-      judges, the board for the lead, the compact summary, multi-line text marked; past its cap
+      judges, for the lead its own lead checkpoint (the fact "lead checkpoint/<name>", which the fold
+      in packages/core/src/state/fold-events.ts lets only <name> set or clear and never with an expiry,
+      cut with a kiwi note pointer when too long, named even by the shortest pointer) and then the
+      board, the compact summary, multi-line text marked; leadCheckpointRefusal: only the lead, text
+      within the limit, every open task and question named; past its cap
       whole tasks are left out, never cut mid-line, the text stays within the cap at any size, and
       it names exactly the tasks (and board) it left out, a checkpoint too long to show is cut with a
       pointer to all of it. And handOver (src/hooks/answer.ts): the unread messages a hook hands over
@@ -163,8 +167,9 @@ jobs:
       daemon counted them, after the result and the why column (empty when it worked), so older readers of the first
       columns keep working (src/daemon/wake.ts, AgentSession.unreadAt in src/agent/state.ts, test/wake.test.ts).
       Also test/rotate.test.ts: when a Claude Code seat in tmux gets a fresh session (src/rotate/decide.ts:
-      between tasks past ROTATE_FLOOR, the lead past the line, open tasks only once checkpointed since
-      the nudge, never during a review round it judges or an open question of its, unless that question
+      between tasks past ROTATE_FLOOR, the lead past the line only once its own lead checkpoint is
+      later than the nudge, open tasks only once checkpointed since the nudge, a lead with tasks
+      needing both, never during a review round it judges or an open question of its, unless that question
       sits in a done or archived task's thread), Claude Code's input
       box read between its two rules (drafts, multi-line text and dialogs are not empty), one sender per
       session (another live sender's file makes it back off, a dead one's is ignored), a seat that stays
@@ -184,7 +189,9 @@ jobs:
       for wakeOutstandingMs (AgentSession.unreadAt's seqs, src/daemon/wake.ts, test/wake.test.ts).
       Also test/context-line.test.ts: a seat's context in words (tokensWord), the Stop hook's nudge
       once per crossing of CONTEXT_LINE (250k; back under it resets, unknown keeps the state), naming
-      each open task the seat owns and the checkpoint command, and an activity's context token
+      each open task the seat owns and the checkpoint command, and asking the lead for its lead
+      checkpoint (kiwi task checkpoint lead), alone or after its tasks, with nudgeShort naming only the
+      commands for when the full nudge doesn't fit the hook's budget, and an activity's context token
       counts cleaned on the wire (cleanActivity); test/harness-model.test.ts: the context read from
       Claude Code's newest main-thread reply (input, cache read, cache written, never output) and from
       Codex's newest token_count with its window, unknown after a compaction (src/harness.ts); web
@@ -409,7 +416,9 @@ jobs:
       (OfflineReads in packages/core/src/client/relay.ts, src/agent/state.ts, src/cli/context.ts). Then hooks-reentry: a
       SessionStart hook for a session that starts fresh (startup, clear, compact) tells the agent its
       open task and the checkpoint saved with kiwi task checkpoint, and one for a resumed session
-      doesn't (src/hooks/answer.ts, packages/core/src/reentry.ts); with big checkpoints and a
+      doesn't (src/hooks/answer.ts, packages/core/src/reentry.ts); kiwi task checkpoint lead refuses a
+      seat that isn't the lead and an empty note before sending anything (src/cli/commands/tasks.ts);
+      with big checkpoints and a
       backlog of messages the SessionStart context stays within HOOK_CONTEXT_MAX (Claude Code's
       inline limit, shared between the seats a session serves in src/hooks/run.ts), and every
       message it left out comes with a later hook; and past the context line the Stop hook asks once
@@ -418,7 +427,10 @@ jobs:
       line whose Stop hands nothing over starts the pane's /clear sender once it has checkpointed each
       open task, never before and never with rotation off, and before that logs why it stays once to
       rotate.log however many times it stops, while with rotation off nothing reaches rotate.log
-      (src/hooks/rotate.ts). Then mimo-wake-restart:
+      (src/hooks/rotate.ts); and a seat made lead past the line is asked for its lead checkpoint,
+      stays while it is missing, has a checkpoint that leaves out an open task refused, rotates once it
+      saved one, and its fresh session is shown it (src/hooks/answer.ts, src/rotate/decide.ts,
+      src/cli/commands/tasks.ts). Then mimo-wake-restart:
       Kiwi's MiMoCode plugin (src/hooks/install/mimo.ts) loaded against a real listener, whose wake
       MiMoCode keeps refusing until MiMoCode exits mid-retry; the resumed session still gets those
       messages, because the listener writes a pending handoff per token (src/hooks/delivered.ts) that becomes
