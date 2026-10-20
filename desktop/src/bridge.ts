@@ -40,6 +40,7 @@ export interface ChannelIdentityView {
   requestId?: string;
   imported?: boolean;
   creating?: true;
+  relay?: string;
 }
 
 export interface PublicAccess {
@@ -62,6 +63,7 @@ export interface ChannelView {
   access?: PublicAccess;
   at?: number;
   requestId?: string;
+  relay?: string;
 }
 
 export const CHANNEL_CALLS = [
