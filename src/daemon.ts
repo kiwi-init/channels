@@ -30,6 +30,7 @@ export { activityEnv, reachOf, seatRecordFor, wakeHooked, wakeOn, type Attached 
 export {
   adoptDaemon,
   daemonHarnesses,
+  daemonLaunch,
   daemonHello,
   daemonListeners,
   daemonListening,
