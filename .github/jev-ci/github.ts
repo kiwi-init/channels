@@ -15,19 +15,44 @@ async function api(path: string, init: RequestInit = {}): Promise<Response> {
   });
 }
 
-export async function passedJobs(repo: string, jobs: string[]): Promise<Set<string>> {
+export interface PassCache {
+  key: string;
+  ref: string;
+}
+
+export interface PullEvent {
+  repository?: { default_branch?: string };
+  pull_request?: { number: number; base?: { repo?: { full_name?: string } | null }; head?: { repo?: { full_name?: string } | null } };
+}
+
+export function trustedRef(event: PullEvent, ref: string | undefined): (cacheRef: string) => boolean {
+  const main = `refs/heads/${event.repository?.default_branch || "main"}`;
+  const pr = event.pull_request;
+  const head = pr?.head?.repo?.full_name;
+  const own = pr && ref && head && head === pr.base?.repo?.full_name ? ref : null;
+  return (cacheRef) => cacheRef === main || cacheRef === own;
+}
+
+export function passMarkers(caches: readonly PassCache[], jobs: readonly string[], trusted: (ref: string) => boolean): Set<string> {
   const passed = new Set<string>();
+  for (const { key, ref } of caches) {
+    if (!trusted(ref)) continue;
+    const job = jobs.find((j) => key.startsWith(`${PASS_PREFIX}${j}-`));
+    if (job) passed.add(`${job}:${key.slice(PASS_PREFIX.length + job.length + 1)}`);
+  }
+  return passed;
+}
+
+export async function passedJobs(repo: string, jobs: string[], trusted: (ref: string) => boolean): Promise<Set<string>> {
+  const caches: PassCache[] = [];
   for (let page = 1; page <= 10; page++) {
     const res = await api(`/repos/${repo}/actions/caches?key=${PASS_PREFIX}&per_page=100&page=${page}`);
     if (!res.ok) throw new Error(`listing caches: ${res.status}`);
-    const { actions_caches } = (await res.json()) as { actions_caches: { key: string }[] };
-    for (const { key } of actions_caches) {
-      const job = jobs.find((j) => key.startsWith(`${PASS_PREFIX}${j}-`));
-      if (job) passed.add(`${job}:${key.slice(PASS_PREFIX.length + job.length + 1)}`);
-    }
+    const { actions_caches } = (await res.json()) as { actions_caches: PassCache[] };
+    caches.push(...actions_caches);
     if (actions_caches.length < 100) break;
   }
-  return passed;
+  return passMarkers(caches, jobs, trusted);
 }
 
 export function setOutput(name: string, value: string) {
@@ -38,11 +63,13 @@ export function summary(markdown: string) {
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, markdown + "\n");
 }
 
-export async function pullRequest(): Promise<number | undefined> {
+export async function pullEvent(): Promise<PullEvent> {
   const path = process.env.GITHUB_EVENT_PATH;
-  if (!path) return undefined;
-  const event = (await Bun.file(path).json()) as { pull_request?: { number: number } };
-  return event.pull_request?.number;
+  return path ? ((await Bun.file(path).json()) as PullEvent) : {};
+}
+
+export async function pullRequest(): Promise<number | undefined> {
+  return (await pullEvent()).pull_request?.number;
 }
 
 export async function upsertComment(repo: string, pr: number, body: string) {

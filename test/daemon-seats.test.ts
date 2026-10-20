@@ -5,7 +5,7 @@ import { basename, dirname, join } from "node:path";
 import * as Effect from "effect/Effect";
 import { AgentSession, runAgent } from "../src/agent.ts";
 import { Channel } from "@kiwi/core/client.ts";
-import { forgetIdentity, identitiesIn, loadConfig, saveConfig, saveIdentity, type SeatRecord } from "../src/config.ts";
+import { forgetIdentity, identitiesIn, loadConfig, saveConfig, saveIdentity, writeCursor, type SeatRecord } from "../src/config.ts";
 import { activityEnv, reachOf, daemonHello, daemonListening, daemonSock, listenDaemon, reportRead, startDaemon, stopDaemon, type Daemon } from "../src/daemon.ts";
 import { presenceAnswers, presenceWords } from "@kiwi/core/format.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
@@ -260,6 +260,20 @@ describe("seats always on", () => {
     expect(await seatOf("cursor")).toBeNull();
     await ownerCh.approve((await checked(ownerCh, relay, code, [{ id: pending, requestId: ask.requestId }]))[0]!);
     await until("cursor's seat after the approval", async () => (await seatOf("cursor")) !== null, 20_000);
+  });
+
+  test("a key that waited long for approval gets its seat once its join writes its cursor, not at its next backed-off retry", async () => {
+    const pending = await generateIdentity("slowpoke");
+    const ask = await Channel.requestJoin(relay, code, pending, { name: "slowpoke" });
+    saveIdentity(pending, roomId);
+    await daemonListening();
+    await Bun.sleep(16_000);
+    expect(await seatOf("slowpoke")).toBeNull();
+    await ownerCh.approve((await checked(ownerCh, relay, code, [{ id: pending, requestId: ask.requestId }]))[0]!);
+    writeCursor("test", "slowpoke", 0);
+    const approved = Date.now();
+    await until("slowpoke's seat after the approval", async () => (await seatOf("slowpoke")) !== null, 20_000);
+    expect(Date.now() - approved).toBeLessThan(12_000);
   });
 
   test("the daemon holds no seat for a person, even when asked to listen as one", async () => {
