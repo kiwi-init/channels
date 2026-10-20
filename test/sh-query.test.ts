@@ -3,6 +3,7 @@ import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identi
 import type { Event, Kind, Message } from "@kiwi/core/protocol.ts";
 import { channelFiles, channelTables, runSh, type ChannelView } from "../src/sh.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
+import { queryIsolated } from "../src/sh-query.ts";
 
 const T0 = 1_700_000_000_000;
 
@@ -65,10 +66,17 @@ describe("kiwi sh threads and query", () => {
   test("query refuses writes, attach and pragma", async () => {
     const v = await fixture();
     const tables = channelTables([v]);
-    for (const sql of ["delete from messages", "attach database '/tmp/x.db' as x", "pragma query_only = off", "select 1; delete from messages"]) {
+    for (const sql of [
+      "delete from messages",
+      "attach database '/tmp/x.db' as x",
+      "pragma query_only = off",
+      "select 1; delete from messages",
+      "select randomblob(1000000000)",
+      "select length(zeroblob(1000000000))",
+    ]) {
       const r = await runSh(channelFiles([v]), `query "${sql}"`, { tables });
       expect([sql, r.exitCode]).toEqual([sql, 1]);
-      expect([sql, r.stderr]).toEqual([sql, "query: one select, with or values statement only (no attach, detach, pragma, vacuum, recursive or ';' outside a string)\n"]);
+      expect([sql, r.stderr]).toEqual([sql, "query: one select, with or values statement only (no attach, detach, pragma, vacuum, recursive, randomblob, zeroblob or ';' outside a string)\n"]);
     }
     const after = await runSh(channelFiles([v]), `query "select count(*) as n from messages"`, { tables });
     expect(after.stdout.trim()).toBe(`{"n":4}`);
@@ -93,5 +101,23 @@ describe("kiwi sh threads and query", () => {
     const r = await runSh({}, "query --schema");
     expect(r.stdout).toContain("messages(");
     expect(r.stdout).toContain("rounds(");
+  });
+});
+
+describe("a query's bounds", () => {
+  const tables = {
+    messages: { columns: ["seq", "body"], rows: Array.from({ length: 300 }, (_, i) => [i + 1, `m${i}`]) },
+  };
+
+  test("a query runs in its own process and answers as before", async () => {
+    expect(await queryIsolated("select count(*) as n from messages", tables)).toEqual({ stdout: '{"n":300}\n', stderr: "", exitCode: 0 });
+    expect((await queryIsolated("select nope from messages", tables)).stderr).toContain("query: no such column: nope");
+  });
+
+  test("a query that runs too long is stopped, and the process with it", async () => {
+    const started = Date.now();
+    const r = await queryIsolated("select count(*) from messages a, messages b, messages c, messages d", tables, 500);
+    expect(r).toEqual({ stdout: "", stderr: "query: stopped after 0.5 s; narrow it (a join of big tables, or a huge value)\n", exitCode: 1 });
+    expect(Date.now() - started).toBeLessThan(3_000);
   });
 });
