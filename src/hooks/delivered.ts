@@ -9,17 +9,70 @@ function deliveredFile(alias: string, as: string, session: string): string {
   return join(home(), "listen-hooks", `${encodeURIComponent(alias)}.${encodeURIComponent(as)}.${encodeURIComponent(session)}.delivered`);
 }
 
-export function deliveredUpTo(alias: string, as: string, session: string): number {
+interface Delivered {
+  seq: number;
+  pid: number | null;
+  seat: { alias: string; as: string } | null;
+}
+
+function readDelivered(file: string): Delivered | null {
   try {
-    return Number(readFileSync(deliveredFile(alias, as, session), "utf8")) || 0;
+    const fields = readFileSync(file, "utf8").trim().split(/\s+/);
+    if (fields.length === 3 || fields.length > 4) return null;
+    const [seqText, pidText, alias, as] = fields;
+    const seq = Number(seqText);
+    const pid = Number(pidText);
+    if (!Number.isSafeInteger(seq) || seq <= 0) return null;
+    return {
+      seq,
+      pid: Number.isSafeInteger(pid) && pid > 0 ? pid : null,
+      seat: alias !== undefined && as !== undefined ? { alias: decodeURIComponent(alias), as: decodeURIComponent(as) } : null,
+    };
   } catch {
-    return 0;
+    return null;
   }
 }
 
-export function noteDelivered(alias: string, as: string, session: string, seq: number): void {
+function ofSeat(d: Delivered, alias: string, as: string): boolean {
+  return d.seat === null || (d.seat.alias === alias && d.seat.as === as);
+}
+
+export function deliveredUpTo(alias: string, as: string, session: string): number {
+  const d = readDelivered(deliveredFile(alias, as, session));
+  return d && ofSeat(d, alias, as) ? d.seq : 0;
+}
+
+export function noteDelivered(alias: string, as: string, session: string, seq: number, pid?: number): void {
   mkdirSync(join(home(), "listen-hooks"), { recursive: true, mode: 0o700 });
-  writeFileSync(deliveredFile(alias, as, session), String(Math.max(seq, deliveredUpTo(alias, as, session))));
+  const upTo = Math.max(seq, deliveredUpTo(alias, as, session));
+  writeFileSync(deliveredFile(alias, as, session), `${upTo} ${pid ?? 0} ${encodeURIComponent(alias)} ${encodeURIComponent(as)}`);
+}
+
+function deliveredFiles(alias: string, as: string, session: string, pid: number | undefined): { file: string; seq: number }[] {
+  const own = deliveredFile(alias, as, session);
+  if (!pid) {
+    const seq = deliveredUpTo(alias, as, session);
+    return seq ? [{ file: own, seq }] : [];
+  }
+  const dir = join(home(), "listen-hooks");
+  let names: string[];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return [];
+  }
+  return names.flatMap((name) => {
+    const file = join(dir, name);
+    if (!name.endsWith(".delivered")) return [];
+    const d = readDelivered(file);
+    if (!d) return [];
+    if (file === own) return ofSeat(d, alias, as) ? [{ file, seq: d.seq }] : [];
+    return d.pid === pid && d.seat?.alias === alias && d.seat.as === as ? [{ file, seq: d.seq }] : [];
+  });
+}
+
+export function deliveredInProcess(alias: string, as: string, session: string, pid?: number): number {
+  return Math.max(0, ...deliveredFiles(alias, as, session, pid).map((d) => d.seq));
 }
 
 function pendingFile(alias: string, as: string, session: string, token: string): string {
@@ -89,12 +142,13 @@ export function answeringNow(session: string | undefined): boolean {
   return busy;
 }
 
-export const commitDelivered = Effect.fn("Hooks.commitDelivered")(function* (s: AgentSession, session: string) {
-  const upTo = deliveredUpTo(s.alias, s.me, session);
+export const commitDelivered = Effect.fn("Hooks.commitDelivered")(function* (s: AgentSession, session: string, pid?: number) {
+  const files = deliveredFiles(s.alias, s.me, session, pid);
+  const upTo = Math.max(0, ...files.map((d) => d.seq));
   if (!upTo) return;
   const cursor = yield* Cursor;
   if (((yield* cursor.read(s.alias, s.me)) ?? 0) < upTo) yield* cursor.write(s.alias, s.me, upTo);
-  rmSync(deliveredFile(s.alias, s.me, session), { force: true });
+  for (const { file } of files) rmSync(file, { force: true });
   yield* s.markRead(upTo);
 });
 

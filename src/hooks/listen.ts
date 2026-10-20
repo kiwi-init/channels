@@ -11,7 +11,7 @@ import { appendWakeRow } from "../daemon/wake.ts";
 import { formatMessage, messageHead } from "@kiwi/core/format.ts";
 import type { Binding, Here } from "../seats.ts";
 import { handOver, seatBudget } from "./answer.ts";
-import { answeringNow, deliveredUpTo, noteDelivered, noteHeard, notePending, settlePending } from "./delivered.ts";
+import { answeringNow, deliveredInProcess, noteDelivered, noteHeard, notePending, settlePending } from "./delivered.ts";
 import { hooksListen, installedListenSeconds } from "./install/claude.ts";
 import { mimoInstalled } from "./install/mimo.ts";
 import { piInstalled } from "./install/pi.ts";
@@ -43,7 +43,7 @@ const SLOT_RETRY_MAX_MS = 60_000;
 const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, woke: Effect.Effect<void, never, Scope.Scope>) {
   const s = yield* openSession(b.alias, cfg, b.as);
   const real = yield* Cursor;
-  let at = Math.max(yield* s.cursor(), deliveredUpTo(b.alias, b.as, who.session ?? ""));
+  let at = Math.max(yield* s.cursor(), deliveredInProcess(b.alias, b.as, who.session ?? "", who.harness === "claude" ? who.pid : undefined));
   const from = at;
   const peek = Cursor.of({ read: () => Effect.succeed(at), write: (_c, _a, seq) => Effect.sync(() => void (at = Math.max(at, seq))), seen: real.seen, markSeen: () => Effect.void });
   const got: Heard[] = [];
@@ -201,7 +201,7 @@ export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Serv
     return 0;
   }
   for (const { b, upTo, seqs, from } of told) {
-    if (handoff.kind === "at-once") noteDelivered(b.alias, b.as, who.session ?? "", upTo);
+    if (handoff.kind === "at-once") noteDelivered(b.alias, b.as, who.session ?? "", upTo, who.harness === "claude" ? who.pid : undefined);
     noteHeard(who.session, b.alias, b.as, seqs);
     if (via) appendWakeRow(home(), { at: Date.now(), alias: b.alias, agent: b.as, via, unread: seqs.length, result: "handed", why: null, cursor: from });
   }
