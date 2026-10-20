@@ -1,9 +1,18 @@
-import { describe, expect, mock, test } from "bun:test"
+import { describe, expect, test } from "bun:test"
 
-mock.module("./secrets", () => ({ bridge: () => null }))
-const { followLaunch, followedLaunches, sawMembers, sawRequests } = await import("./launches")
+import { canStartAgents, followLaunch, followedLaunches, sawMembers, sawRequests } from "./launches"
 
 describe("following a launch from the app that started it", () => {
+  test("only a window whose kiwi has every launch method can start agents", () => {
+    const w = globalThis as unknown as { window?: { kiwi?: object } }
+    const was = w.window
+    w.window = { kiwi: { harnesses: () => {}, seatFolders: () => {}, chooseFolder: () => {} } }
+    expect(canStartAgents()).toBe(false)
+    w.window = { kiwi: { harnesses: () => {}, seatFolders: () => {}, chooseFolder: () => {}, launchAgent: () => {} } }
+    expect(canStartAgents()).toBe(true)
+    w.window = was
+  })
+
   test("its request, then its member, reach whoever follows that launch in that channel, and nobody else", () => {
     const seen: string[] = []
     const stop = followLaunch("code-a", "launch-1234", (s) => seen.push(`${s.stage} ${s.name}`))

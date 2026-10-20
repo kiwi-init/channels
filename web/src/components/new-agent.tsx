@@ -6,11 +6,10 @@ import type { HarnessRow, KnownHarness } from "@kiwi/core/harnesses.ts"
 import { personaOf, type Persona, type Personality } from "@kiwi/core/personality.ts"
 import type { LaunchedView } from "../../../desktop/src/bridge.ts"
 import { harnessName } from "@/lib/harness"
-import { followLaunch, sawMembers, type LaunchSeen } from "@/lib/launches"
+import { followLaunch, launcher, sawMembers, type LaunchSeen } from "@/lib/launches"
 import { usePersonalities } from "@/lib/personalities"
 import { relayUrl } from "@/lib/relay"
 import { showInRex } from "@/lib/rex"
-import { bridge } from "@/lib/secrets"
 import { cx } from "@/lib/utils"
 import { HarnessFace } from "./harness-face"
 import { Icon } from "./icon"
@@ -65,7 +64,7 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
   const stop = useRef<(() => void) | null>(null)
 
   useEffect(() => {
-    const b = bridge()
+    const b = launcher()
     if (!b) return
     let live = true
     void b.harnesses().then(
@@ -93,7 +92,7 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
   useEffect(() => sawMembers(code, roster), [code, roster])
 
   const choose = async () => {
-    const picked = await bridge()?.chooseFolder()
+    const picked = await launcher()?.chooseFolder()
     if (!picked) return
     setFolders((list) => (list.includes(picked) ? list : [picked, ...list]))
     setFolder(picked)
@@ -103,7 +102,7 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
   const bad = name && !NICK.test(name) ? "A nickname is up to 40 letters, digits, spaces, _ . or -, starting with a letter or digit." : null
 
   const start = async () => {
-    const b = bridge()
+    const b = launcher()
     if (!b || !harness || !folder || bad) return
     setBusy(true)
     setError(null)
@@ -162,7 +161,7 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
               <Icon icon={Folder01Icon} size={16} className="shrink-0 text-ink-3" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-ui font-semibold text-ink">{f.split("/").filter(Boolean).at(-1) ?? f}</span>
-                <span className="block truncate text-meta text-ink-3 [direction:rtl]">{f}</span>
+                <span className="block truncate text-meta text-ink-3">{f.split("/").slice(0, -1).join("/") || "/"}</span>
               </span>
             </Option>
           ))}
@@ -178,7 +177,7 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
       </Field>
 
       <Field label="Nickname">
-        <TextField value={nick} onChange={(e) => setNick(e.target.value)} placeholder={harness ? harnessName(harness) : "Optional"} maxLength={40} aria-label="Nickname" disabled={busy} />
+        <TextField value={nick} onChange={(e) => setNick(e.target.value)} placeholder={harness ?? "Optional"} maxLength={40} aria-label="Nickname" disabled={busy} />
         {bad && <p className="mt-2 text-meta text-alert">{bad}</p>}
       </Field>
 
@@ -249,7 +248,7 @@ function Progress({ started, seen, harness, onClose }: { started: Started; seen:
       ...(started.place === "tmux" ? { detail: <code className="font-mono text-ink-2">tmux attach -t {started.session}</code> } : {}),
     },
     { done: !!seen, text: "Asked to join" },
-    { done: !!joined, text: joined ? `Joined as @${joined}` : "Joins" },
+    { done: !!joined, text: joined ? `Joined as @${joined}` : "Joins the channel" },
   ]
   return (
     <div className="p-5">

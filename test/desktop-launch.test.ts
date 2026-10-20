@@ -3,7 +3,7 @@ import { launchedView, launchRequestOf } from "../desktop/src/launch-view.ts";
 
 const good = {
   launch: "AbCdEfGhIjKlMnOpQrStUv",
-  harness: "claude",
+  harness: "claude" as const,
   folder: "/Users/someone/app",
   code: "mc2-81x_V6V9-0ERFFKx",
   relay: "https://relay.kiwi.example",

@@ -1,8 +1,19 @@
-import { bridge } from "./secrets"
+import type { KiwiBridge } from "./secrets"
+
+type Launcher = Pick<KiwiBridge, "harnesses" | "seatFolders" | "chooseFolder" | "launchAgent">
+
+export function launcher(): Launcher | null {
+  try {
+    const k = (window as unknown as { kiwi?: Partial<Launcher> }).kiwi
+    return k && typeof k.harnesses === "function" && typeof k.seatFolders === "function" && typeof k.chooseFolder === "function" && typeof k.launchAgent === "function" ? (k as Launcher) : null
+  } catch {
+    // No window (a test or a worker): nothing can start an agent.
+    return null
+  }
+}
 
 export function canStartAgents(): boolean {
-  const b = bridge()
-  return !!b?.launchAgent && !!b.harnesses
+  return launcher() !== null
 }
 
 export type LaunchSeen = { stage: "asked"; pk: string; name: string } | { stage: "joined"; pk: string; name: string }
