@@ -92,7 +92,7 @@ beforeAll(async () => {
   bindAs({ harness: "codex", session: "thread-1" });
   await readAll();
   void ownerCh.stream(await ownerCh.head(), () => {}, { signal: watching.signal, onPresence: (p) => heard.push(p) });
-  daemon = await startDaemon(undefined, { beaconMs: 2_000, wakeDelayMs: 800, wakeGapMs: 1_500 });
+  daemon = await startDaemon(undefined, { beaconMs: 2_000, wakeDelayMs: 800, wakeGapMs: 1_500, wakeOutstandingMs: 5_000 });
   await until("claude's seat", async () => (await seat()) !== undefined);
 });
 
@@ -152,17 +152,31 @@ describe("waking an agent in its own session", () => {
     expect(calls().length).toBe(before);
   });
 
-  test("a message that arrives during a slow wake gets a wake of its own once the gap is over", async () => {
+  test("a message that arrives before the agent has read its last wake gets no wake of its own, and one after the agent read does", async () => {
     const before = await quiet();
-    process.env.FAKE_WAKE_SLEEP = "2";
+    process.env.FAKE_WAKE_SLEEP = "1";
     try {
       await ownerCh.send("first", { to: ["claude"] });
       await until("the first wake", () => calls().length === before + 1);
-      await ownerCh.send("second, during the wake", { to: ["claude"] });
-      await until("the second wake", () => calls().length === before + 2, 20_000);
+      await ownerCh.send("second, before the first wake was read", { to: ["claude"] });
+      await Bun.sleep(3_500);
+      expect(calls().length).toBe(before + 1);
     } finally {
       delete process.env.FAKE_WAKE_SLEEP;
     }
+    await readAll();
+    await ownerCh.send("third, after the agent read", { to: ["claude"] });
+    await until("a wake for the third", () => calls().length === before + 2);
+  });
+
+  test("a message held back by a wake the agent never reads gets its wake once that one has been outstanding long enough", async () => {
+    const before = await quiet();
+    await ownerCh.send("never read", { to: ["claude"] });
+    await until("the first wake", () => calls().length === before + 1);
+    const first = Date.now();
+    await ownerCh.send("held back", { to: ["claude"] });
+    await until("the held-back message's wake", () => calls().length === before + 2, 20_000);
+    expect(Date.now() - first).toBeGreaterThanOrEqual(4_000);
   });
 
   test("a binding that changes after the message is the one woken", async () => {

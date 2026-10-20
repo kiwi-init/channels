@@ -149,6 +149,10 @@ jobs:
       Also each wake the daemon fires logged to wake.log with its unread count and the seat's read cursor when the
       daemon counted them, after the result and the why column (empty when it worked), so older readers of the first
       columns keep working (src/daemon/wake.ts, AgentSession.unreadAt in src/agent/state.ts, test/wake.test.ts).
+      Also one wake outstanding per seat: after a wake lands, no other is sent until the seat's read cursor moves
+      (the agent read what that wake was for, along with anything that came after it), so a busy session's queue
+      doesn't fill with wakes that find nothing unread; a message held back that way still gets its wake once the
+      first has been outstanding for wakeOutstandingMs (src/daemon/wake.ts, test/wake.test.ts).
       Also test/context-line.test.ts: a seat's context in words (tokensWord), the Stop hook's nudge
       once per crossing of CONTEXT_LINE (250k; back under it resets, unknown keeps the state), naming
       each open task the seat owns and the checkpoint command, and an activity's context token
