@@ -25,6 +25,26 @@ export interface ChannelAccess {
    * relay can't swap the signed one back for a member-sealed `{ name }`.
    */
   signedTitle?: boolean;
+  seenTitleAt?: number;
+  seenSettingsAt?: number;
+  seenIconAt?: number;
+}
+
+const SEEN_MARKS = ["seenTitleAt", "seenSettingsAt", "seenIconAt"] as const;
+export type SeenMark = (typeof SEEN_MARKS)[number];
+export type Seen = Pick<ChannelAccess, SeenMark>;
+
+export function seenAt(at: unknown): number {
+  return typeof at === "number" && Number.isSafeInteger(at) && at > 0 ? at : 0;
+}
+
+export function keepSeen(held: Seen, fetched: Seen): Seen {
+  const out: Seen = {};
+  for (const mark of SEEN_MARKS) {
+    const at = Math.max(seenAt(held[mark]), seenAt(fetched[mark]));
+    if (at) out[mark] = at;
+  }
+  return out;
 }
 
 // Plain implementations (no Buffer) so this module also runs in the browser.

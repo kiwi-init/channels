@@ -45,7 +45,7 @@ export const joinFx = {
       ...(!isOwner && !canPost(scopesOf(info)) ? { post: false } : {}),
     });
     const members = yield* Effect.promise(async () => [await enroll(owner, ownerInfo, true), ...(await Promise.all(agents.map((a) => enroll(a, a.info, false))))]);
-    const sealedTitle = title ? yield* Effect.promise(async () => seal(key, roomId, await sign(owner, { what: "channel-title", room: roomId, name: title.slice(0, 80) }))) : undefined;
+    const sealedTitle = title ? yield* Effect.promise(async () => seal(key, roomId, await sign(owner, { what: "channel-title", room: roomId, name: title.slice(0, 80), at: Date.now() }))) : undefined;
     yield* callRelay(relay, roomId, "/create", {
       method: "POST",
       identity: owner,
