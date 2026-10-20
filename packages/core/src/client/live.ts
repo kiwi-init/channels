@@ -59,7 +59,7 @@ export type Live =
       readonly kind: OpenKind;
     }
   | { readonly _tag: "Ready"; readonly head: number }
-  | { readonly _tag: "Message"; readonly message: Message }
+  | { readonly _tag: "Message"; readonly message: Message; readonly envelope?: Envelope }
   | { readonly _tag: "Unread"; readonly envelope: Envelope }
   | { readonly _tag: "Head"; readonly seq: number }
   | { readonly _tag: "Presence"; readonly presence: Presence & { sigOk: boolean } }
@@ -419,7 +419,7 @@ export class ChannelLive {
           if (f.seq <= at.seq) return null;
           const m = yield* this.ch.fx.decrypt(f);
           at.seq = f.seq;
-          return m ? ({ _tag: "Message", message: m } satisfies Live) : Number.isSafeInteger(f.seq) && f.seq > 0 ? ({ _tag: "Unread", envelope: f } satisfies Live) : null;
+          return m ? ({ _tag: "Message", message: m, envelope: f } satisfies Live) : Number.isSafeInteger(f.seq) && f.seq > 0 ? ({ _tag: "Unread", envelope: f } satisfies Live) : null;
         }
         case "own": {
           if (f.seq <= at.seq) return null;

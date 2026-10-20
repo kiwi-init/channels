@@ -24,3 +24,32 @@ test("a rate-limited, unreachable or failing relay keeps the item to try again; 
   )
   expect({ all, done }).toEqual({ all: true, done: [1, 2, 3] })
 })
+
+test("a message's items are marked done only once all of them went out, so a failure on the second keeps the whole message for the next try", async () => {
+  const shared = [
+    { seq: 1, n: "a" },
+    { seq: 4, n: "b" },
+    { seq: 4, n: "c" },
+    { seq: 5, n: "d" },
+  ]
+  const posted: string[] = []
+  const done: number[] = []
+  const all = await drain(
+    shared,
+    async (i) => {
+      if (i.n === "c") throw new RelayError(503, "relay is restarting")
+      posted.push(i.n)
+    },
+    (seq) => void done.push(seq)
+  )
+  expect({ all, posted, done }).toEqual({ all: false, posted: ["a", "b"], done: [1] })
+  const again: number[] = []
+  expect(
+    await drain(
+      shared.slice(1),
+      async () => undefined,
+      (seq) => void again.push(seq)
+    )
+  ).toBe(true)
+  expect(again).toEqual([4, 5])
+})

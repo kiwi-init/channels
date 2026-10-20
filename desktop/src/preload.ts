@@ -5,6 +5,7 @@
 // getToken hands out would go to it).
 
 import { contextBridge, ipcRenderer } from "electron";
+import type { HarnessRow } from "@kiwi/core/harnesses.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
 import type { MemberPicture } from "@kiwi/core/protocol.ts";
 
@@ -18,6 +19,8 @@ import type {
   KeysReply,
   KeysRequest,
   KiwiBridge,
+  LaunchAgentRequest,
+  LaunchedView,
   RexSeatView,
   RexShowResult,
   RexStatusView,
@@ -138,6 +141,10 @@ const kiwi: KiwiBridge = {
   rexStatus: () => ipcRenderer.invoke("kiwi:rex-status") as Promise<RexStatusView>,
   rexInstall: () => ipcRenderer.invoke("kiwi:rex-install") as Promise<RexStatusView>,
   rexRemove: () => ipcRenderer.invoke("kiwi:rex-remove") as Promise<RexStatusView>,
+  harnesses: () => ipcRenderer.invoke("kiwi:harnesses") as Promise<HarnessRow[]>,
+  seatFolders: (roomId: string) => ipcRenderer.invoke("kiwi:seat-folders", roomId) as Promise<string[]>,
+  chooseFolder: () => ipcRenderer.invoke("kiwi:choose-folder") as Promise<string | null>,
+  launchAgent: (req: LaunchAgentRequest) => ipcRenderer.invoke("kiwi:launch-agent", req) as Promise<LaunchedView>,
 };
 
 contextBridge.exposeInMainWorld("kiwi", kiwi);

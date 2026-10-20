@@ -152,6 +152,20 @@ describe("harnessModel", () => {
     expect(await detectModel({ KIWI_MODEL: " gemini-2.5-pro ", CODEX_THREAD_ID: "t-1", CODEX_HOME: dir() })).toBe("gemini-2.5-pro");
     expect(await detectModel({})).toBeUndefined();
   });
+
+  test("a session's first command waits a moment for Claude Code to write the line naming its model", async () => {
+    const home = dir();
+    mkdirSync(join(home, "projects", "-work-new"), { recursive: true });
+    const env = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "s-new", CLAUDE_CONFIG_DIR: home };
+    expect(await detectModel(env)).toBeUndefined();
+    setTimeout(() => writeFileSync(join(home, "projects", "-work-new", "s-new.jsonl"), JSON.stringify({ type: "assistant", message: { model: "claude-opus-5-5" } }) + "\n"), 400);
+    const started = Date.now();
+    expect(await detectModel(env, 3_000)).toBe("claude-opus-5-5");
+    expect(Date.now() - started).toBeLessThan(2_000);
+    const gave = Date.now();
+    expect(await detectModel({ CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "s-never", CLAUDE_CONFIG_DIR: home }, 600)).toBeUndefined();
+    expect(Date.now() - gave).toBeGreaterThanOrEqual(600);
+  });
 });
 
 describe("cleanCard", () => {

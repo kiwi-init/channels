@@ -35,4 +35,11 @@ describe("the sidebar is the navigation on a wide screen", () => {
     const html = renderToStaticMarkup(createElement(ChannelSidebar, props(null)))
     expect(html).toMatch(/<section aria-label="Agents"[^>]*><h2[^>]*><button type="button"[^>]*>Agents<\/button>/)
   })
+  test("the owner's desktop app gets New agent on the Agents heading, shown even before any agent joins", () => {
+    const none = { ...props(null), agents: [] }
+    expect(renderToStaticMarkup(createElement(ChannelSidebar, none))).not.toContain('aria-label="Agents"')
+    const html = renderToStaticMarkup(createElement(ChannelSidebar, { ...none, onNewAgent: () => {} }))
+    expect(html).toMatch(/<section aria-label="Agents"[^>]*><h2[^>]*>.*<button type="button" aria-label="New agent"/)
+    expect(renderToStaticMarkup(createElement(ChannelSidebar, props(null)))).not.toContain('aria-label="New agent"')
+  })
 })
