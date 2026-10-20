@@ -39,6 +39,8 @@ export function appendWakeRow(dir: string, w: WakeRow): void {
 
 const WAKE_RUN_MS = 60_000;
 
+type Session = import("../agent.ts").AgentSession;
+
 function findExecutable(cmd: string): string | null {
   const user = process.env.HOME || homedir();
   const dirs = [process.env.PATH ?? "", join(user, ".local", "bin"), join(user, ".bun", "bin"), "/opt/homebrew/bin", "/usr/local/bin"].filter(Boolean).join(":");
@@ -82,13 +84,21 @@ interface WakeContext {
 }
 
 export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stopped, current }: WakeContext): { scheduleWake: (seat: Seat, delay?: number) => void } {
+  const sessions = new Map<string, { fp: string; session: Session }>();
+  const nothingAt = new Map<string, number>();
+
   const unreadFor = async (seat: Seat): Promise<{ unread: number; cursor: number; seqs: number[] } | { unread: 0 }> => {
     const c = loadConfig().channels[seat.alias];
     if (!c) return { unread: 0 };
     const { AgentSession, runAgent } = await import("../agent.ts");
-    const s = await AgentSession.open(seat.alias, c, seat.agent);
-    const { messages, state } = await runAgent(s.state());
-    return runAgent(s.unreadAt(state, messages));
+    const fp = JSON.stringify(c);
+    let kept = sessions.get(seat.key);
+    if (!kept || kept.fp !== fp) {
+      kept = { fp, session: await AgentSession.open(seat.alias, c, seat.agent) };
+      sessions.set(seat.key, kept);
+    }
+    const { messages, state } = await runAgent(kept.session.state());
+    return runAgent(kept.session.unreadAt(state, messages));
   };
 
   const runWake = async (seat: Seat, [cmd, ...rest]: string[]): Promise<string | null> => {
@@ -139,13 +149,17 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
     if (!(await commandPath(seat))) return;
     const since = Date.now() - (seat.lastWake?.at ?? 0);
     if (since < wakeGapMs) return scheduleWake(seat, wakeGapMs - since);
+    if (nothingAt.get(seat.key) === seat.head) return;
     seat.waking = true;
     try {
+      const head = seat.head;
       const counted = await withDeadline(unreadFor(seat), UNREAD_CHECK_MS).catch(() => null);
       if (counted === null) {
         seat.wakeAgain = false;
         return scheduleWake(seat, wakeGapMs);
       }
+      if (!("cursor" in counted) || !counted.unread) nothingAt.set(seat.key, head);
+      else nothingAt.delete(seat.key);
       if (!("cursor" in counted) || !counted.unread || !current(seat)) return;
       const { unread, cursor, seqs } = counted;
       const path = await commandPath(seat);

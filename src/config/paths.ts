@@ -3,6 +3,7 @@ import { chmodSync, closeSync, existsSync, fsyncSync, lstatSync, mkdirSync, open
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Signed, SigningBudget } from "@kiwi/core/sas.ts";
+import { VERSION } from "../version.ts";
 
 export function home(): string {
   if (process.env.KIWI_HOME) {
@@ -32,6 +33,7 @@ const tightened = new Set<string>();
 
 const KIWI_DIRS = ["cache", "cursors", "downloads", "hook-state", "identities", "listeners", "records"] as const;
 const KIWI_FILES = ["config.json", "machine.json"] as const;
+const TIGHTENED = ".tightened";
 
 function isRealDir(p: string): boolean {
   try {
@@ -64,6 +66,8 @@ function tightenHome(dir: string): void {
   if (!st.isDirectory()) return;
   tightened.add(dir);
   if (!hasKiwiState(dir)) return;
+  const marker = join(dir, TIGHTENED);
+  if ((st.mode & 0o777) === 0o700 && tightenedBy(marker) === VERSION) return;
   try {
     chmodSync(dir, 0o700);
     for (const name of KIWI_DIRS) lockKiwiDir(join(dir, name), name === "downloads");
@@ -76,8 +80,18 @@ function tightenHome(dir: string): void {
         // A file this user can't chmod keeps its mode; the rest are still tightened.
       }
     }
+    writePrivate(marker, VERSION);
   } catch {
     // A file this user can't chmod must not stop startup.
+  }
+}
+
+function tightenedBy(marker: string): string | null {
+  try {
+    return readFileSync(marker, "utf8").trim();
+  } catch {
+    // No marker yet: this home hasn't been tightened by any kiwi.
+    return null;
   }
 }
 

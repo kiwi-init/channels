@@ -11,6 +11,7 @@ import { harnessModel } from "./harness.ts";
 import type { Runs } from "@kiwi/core/membership.ts";
 import type { Card } from "@kiwi/core/protocol.ts";
 import { canonicalHarness, onGrokBot } from "./seats.ts";
+import { readGitFiles } from "./git-where.ts";
 
 /** Tools worth showing, as the binary that shows each one is here. */
 const TOOLS: [tag: string, bin: string][] = [
@@ -80,7 +81,16 @@ export function repoName(url: string | null): string | null {
 
 export type Where = Pick<Card, "repo" | "branch">;
 
+export function whereFromFiles(cwd: string): Where | null {
+  const read = readGitFiles(cwd);
+  if (!read) return null;
+  const repo = repoName(read.url);
+  return { ...(repo ? { repo } : {}), ...(read.branch ? { branch: read.branch } : {}) };
+}
+
 export function detectWhere(cwd = process.cwd()): Where {
+  const read = whereFromFiles(cwd);
+  if (read) return read;
   const repo = repoName(git(["remote", "get-url", "origin"], cwd));
   const branch = git(["rev-parse", "--abbrev-ref", "HEAD"], cwd);
   return { ...(repo ? { repo } : {}), ...(branch && branch !== "HEAD" ? { branch } : {}) };

@@ -1,6 +1,6 @@
 import { kiwiCmd } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig } from "../src/config.ts";
@@ -246,6 +246,24 @@ describe("one Claude Code session that holds two seats", () => {
     expect(log).toContain("reviewer");
     expect(log).toContain("from the seat that heard it");
     expect(await ok(ownerA, ["--as", "boss", "log"], PERSON)).not.toContain("from the seat that heard it");
+  });
+
+  test("replying from a folder bound to one seat goes to the channel the session heard the message in", async () => {
+    const ownerA = scratch("own-a-heard");
+    const ownerB = scratch("own-b-heard");
+    const codeA = created(await ok(ownerA, ["create", "alpha", "--as", "boss"], PERSON));
+    const codeB = created(await ok(ownerB, ["create", "beta", "--as", "boss"], PERSON));
+    const h = scratch("agent-heard");
+    const elsewhere = join(h, "elsewhere");
+    mkdirSync(elsewhere, { recursive: true });
+    await joinAs(ownerA, h, codeA, "planner", S, elsewhere);
+    await joinAs(ownerB, h, codeB, "reviewer", S);
+    const sent = await ok(ownerA, ["send", "--to", "planner", "heard in alpha"], PERSON);
+    const seq = /#(\d+)/.exec(sent)![1]!;
+    expect((await run(h, ["hook", "prompt"], S, h, JSON.stringify({ session_id: "M", cwd: h }))).out).toContain("heard in alpha");
+    await ok(h, ["reply", seq, "answered where it was heard"], S);
+    expect(await ok(ownerA, ["--as", "boss", "log"], PERSON)).toContain("answered where it was heard");
+    expect(await ok(ownerB, ["--as", "boss", "log"], PERSON)).not.toContain("answered where it was heard");
   });
 
   test("a seat whose relay hangs doesn't hold back the other seat's answer", async () => {

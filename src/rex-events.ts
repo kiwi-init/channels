@@ -42,12 +42,13 @@ export function startRexEvents(opts: RexEventsOptions): { stop(): void } {
   const running = new Map<string, Running>();
   const seen = new Map<string, number>();
   const backoffs = new Map<string, number>();
+  const notBefore = new Map<string, number>();
   const retries = new Set<ReturnType<typeof setTimeout>>();
   let stopped = false;
   let timer: ReturnType<typeof setInterval> | null = null;
 
   const start = (server: string, bin: string): void => {
-    if (stopped || running.has(server)) return;
+    if (stopped || running.has(server) || Date.now() < (notBefore.get(server) ?? 0)) return;
     const child = spawn(bin, ["-S", server, "events", "--all", "--json"], { stdio: ["ignore", "pipe", "ignore"] });
     const slot: Running = { child, buffer: "", backoff: backoffs.get(server) ?? 0, retry: null };
     running.set(server, slot);
@@ -55,6 +56,7 @@ export function startRexEvents(opts: RexEventsOptions): { stop(): void } {
       if (running.get(server) !== slot) return;
       slot.backoff = 0;
       backoffs.delete(server);
+      notBefore.delete(server);
       slot.buffer += data.toString("utf8");
       for (;;) {
         const cut = slot.buffer.indexOf("\n");
@@ -74,7 +76,8 @@ export function startRexEvents(opts: RexEventsOptions): { stop(): void } {
         const key = `${server}\u0000${block}`;
         const at = Date.now();
         if (!gone && at - (seen.get(key) ?? 0) < 100) continue;
-        seen.set(key, at);
+        if (gone) seen.delete(key);
+        else seen.set(key, at);
         opts.onChange(server, block, gone);
       }
     });
@@ -85,6 +88,7 @@ export function startRexEvents(opts: RexEventsOptions): { stop(): void } {
       if (stopped) return;
       slot.backoff = slot.backoff ? Math.min(slot.backoff * 2, RETRY_MAX_MS) : RETRY_MIN_MS;
       backoffs.set(server, slot.backoff);
+      notBefore.set(server, Date.now() + slot.backoff);
       slot.retry = setTimeout(() => {
         retries.delete(slot.retry!);
         const again = serverList().find((s) => s.server === server);
@@ -101,6 +105,7 @@ export function startRexEvents(opts: RexEventsOptions): { stop(): void } {
       if (wanted.has(server)) continue;
       running.delete(server);
       backoffs.delete(server);
+      notBefore.delete(server);
       if (slot.retry) {
         clearTimeout(slot.retry);
         retries.delete(slot.retry);
@@ -134,6 +139,7 @@ export function startRexEvents(opts: RexEventsOptions): { stop(): void } {
       retries.clear();
       seen.clear();
       backoffs.clear();
+      notBefore.clear();
     },
   };
 }
