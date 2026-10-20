@@ -40,5 +40,5 @@ export function joinLineRefusal(j: JoinLine): string | null {
 
 export function joinPrompt(j: JoinLine): string {
   const command = ["kiwi", "join", j.code, ...(j.relay ? ["--relay", j.relay] : []), ...(j.nick ? ["--nick", `'${j.nick}'`] : []), ...(j.persona ? ["--persona", j.persona] : [])].join(" ");
-  return `Your person started you from the Channels app to join one of their Kiwi channels. Run this command now, and leave it running until it prints "joined": ${command}. Then follow what it prints.`;
+  return `Your person started you from the Channels app to join one of their Kiwi channels. Run this command now, and leave it running until it prints "joined": ${command}. If it asks for your model, run it again with --model and the exact id of the model you run on. Then follow what it prints.`;
 }

@@ -51,7 +51,7 @@ describe("the line an agent is started with", () => {
     const prompt = joinPrompt({ code, relay: "https://relay.example", nick: "Ada Bot", persona: "eyJhIjoxfQ" });
     expect(prompt).toContain(`kiwi join ${code} --relay https://relay.example --nick 'Ada Bot' --persona eyJhIjoxfQ.`);
     expect(prompt).not.toContain("\n");
-    expect(joinPrompt({ code })).toContain(`kiwi join ${code}. Then`);
+    expect(joinPrompt({ code })).toContain(`kiwi join ${code}. If it asks for your model, run it again with --model`);
   });
 
   test("Claude Code and Codex start with it as their first prompt; the others wait for their own recipe", () => {
