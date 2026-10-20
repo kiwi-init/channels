@@ -3,10 +3,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
+import type { ChannelAccess } from "@kiwi/core/crypto.ts";
 import { saveConfig, saveIdentity } from "../src/config.ts";
 import { daemonPresence, startDaemon, type Daemon } from "../src/daemon.ts";
-import { generateIdentity } from "@kiwi/core/identity.ts";
+import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
+import { beaconFrame, ephSocket } from "./beacons.ts";
 import { kiwiCmd } from "./owner.ts";
 import { trafficProxy } from "./traffic.ts";
 
@@ -22,6 +24,9 @@ let server: ReturnType<typeof startRelay> | undefined;
 let daemon: Daemon | undefined;
 let relay = "";
 let proxy: ReturnType<typeof trafficProxy> | undefined;
+let access: ChannelAccess;
+let codex: Identity;
+let rogue: Identity;
 
 beforeAll(async () => {
   server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir });
@@ -29,11 +34,14 @@ beforeAll(async () => {
   relay = proxy.url;
   const owner = await generateIdentity("human");
   const claude = await generateIdentity("claude");
-  const codex = await generateIdentity("codex");
+  codex = await generateIdentity("codex");
+  rogue = await generateIdentity("rogue");
   const made = await Channel.create(relay, owner, { name: "human" }, [
     { ...claude, info: { name: "claude" } },
     { ...codex, info: { name: "codex" } },
+    { ...rogue, info: { name: "rogue" } },
   ]);
+  access = made.access;
   saveConfig({
     channels: {
       test: { ...(await Channel.resume(relay, made.code, claude)), relay, code: made.code, as: "claude" },
@@ -81,4 +89,48 @@ test("once the daemon has heard a beacon round, kiwi who answers from it without
   console.log(`kiwi who from the daemon's presence: ${Math.round(fast.ms)}ms, ${traffic.sockets} sockets, ${traffic.http} http`);
   expect(fast.out).toContain("codex");
   expect(traffic.sockets).toBe(0);
+});
+
+test("a third member's beacon naming codex, and one forged with codex's key, leave codex in the daemon's presence and in kiwi who", async () => {
+  const heard = async () => (await daemonPresence("test", "claude"))?.presence ?? [];
+  const end = Date.now() + 15_000;
+  while (!(await heard()).some((h) => h.presence.pk === codex.pk)) {
+    if (Date.now() > end) throw new Error("timed out waiting for the daemon to hear codex");
+    await Bun.sleep(100);
+  }
+  const socket = await ephSocket(relay, access.roomId, rogue);
+  let last = 0;
+  const pose = async (): Promise<number> => {
+    const ts = (last = Math.max(Date.now(), last + 1));
+    const claim = { from: "codex", client: "daemon", reach: "unreachable", ts } as const;
+    socket.send(await beaconFrame(access, rogue, claim, { pk: codex.pk }));
+    socket.send(await beaconFrame(access, rogue, claim));
+    return ts;
+  };
+  try {
+    for (let round = 0; round < 3; round++) {
+      const ts = await pose();
+      const until = Date.now() + 5_000;
+      let now = await heard();
+      while (!now.some((h) => h.presence.pk === rogue.pk && h.presence.ts === ts)) {
+        if (Date.now() > until) throw new Error("timed out waiting for the daemon to hear the beacon naming codex");
+        now = await heard();
+      }
+      expect(now.some((h) => h.presence.from === "codex" && h.presence.pk === codex.pk)).toBe(true);
+    }
+    const since = (await daemonPresence("test", "claude"))?.since ?? 0;
+    await Bun.sleep(Math.max(0, since + BEACON_MS + 5_200 - Date.now()));
+    let posing = true;
+    const posed = (async () => {
+      while (posing) {
+        await pose();
+        await Bun.sleep(100);
+      }
+    })();
+    const { out } = await who().finally(() => (posing = false));
+    await posed;
+    expect(out).toMatch(/^codex · (?!last seen)/m);
+  } finally {
+    socket.close();
+  }
 });

@@ -2,7 +2,7 @@
 import { parseArgs } from "node:util";
 import { loadConfig } from "./config.ts";
 import { git } from "./git.ts";
-import { headline, LEGEND, notesBlock, passedJobs, planTable, pullRequest, setOutput, summary, upsertComment } from "./github.ts";
+import { headline, LEGEND, notesBlock, passedJobs, planTable, pullEvent, pullRequest, setOutput, summary, trustedRef, upsertComment } from "./github.ts";
 import { allHashes, plan, runAll, type Decision, type Plan } from "./plan.ts";
 
 const { positionals, values } = parseArgs({
@@ -33,7 +33,8 @@ async function planInCI(): Promise<Plan> {
   const head = git(values.repo, ["rev-parse", "HEAD"]).trim();
   const event = process.env.GITHUB_EVENT_NAME;
   if (event !== "pull_request") return runAll(config, `${event} run: everything runs`, allHashes(values.repo, head, config), event);
-  const passed = await passedJobs(slug, Object.keys(config.jobs)).catch((e: unknown) => (note(e), new Set<string>()));
+  const trusted = trustedRef(await pullEvent(), process.env.GITHUB_REF);
+  const passed = await passedJobs(slug, Object.keys(config.jobs), trusted).catch((e: unknown) => (note(e), new Set<string>()));
   const base = git(values.repo, ["rev-parse", "HEAD^1"]).trim();
   return plan({ repo: values.repo, base, head, config, configPath: values.config, passed });
 }
