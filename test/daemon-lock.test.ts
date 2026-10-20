@@ -106,3 +106,17 @@ test("a stale lock whose pid now belongs to something else frees the lock withou
   expect(isKiwiDaemon("/usr/bin/kiwi-daemon-helper")).toBe(false);
   expect(isKiwiDaemon("vim kiwi daemon.md")).toBe(false);
 });
+
+test("while a daemon holds or takes the lock, hooks retrying it spawn one per home every 15 s, not one each", async () => {
+  const { claimSpawn } = await import("../src/daemon/rpc.ts");
+  const dir = mkdtempSync(join(tmpdir(), "kiwi-spawn-gap-"));
+  const t = 1_800_000_000_000;
+  expect(claimSpawn(dir, t)).toBe(true);
+  expect(claimSpawn(dir, t + 1_000)).toBe(true);
+  writeFileSync(join(dir, "daemon.lock"), "12345");
+  expect(claimSpawn(dir, t + 1_500)).toBe(false);
+  expect(claimSpawn(dir, t + 15_999)).toBe(false);
+  expect(claimSpawn(dir, t + 16_000)).toBe(true);
+  expect(statSync(join(dir, "daemon.spawning")).mode & 0o777).toBe(0o600);
+  rmSync(dir, { recursive: true, force: true });
+});
