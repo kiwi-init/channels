@@ -410,6 +410,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       }),
   ]
   const currentConversation = tab !== "conversation" ? null : hereKey !== "main" ? hereKey : rooms.length > 1 ? roomKey(cardRoom) : "main"
+  const leaveInfo = () => setSide((s) => (s?.kind === "info" ? null : s))
   const openConversation = (key: string) => {
     setTab("conversation")
     if (key.startsWith("room:")) {
@@ -470,9 +471,11 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                 search={search}
                 onSearch={(q) => {
                   if (q !== null) setTab("conversation")
+                  if (q !== null) leaveInfo()
                   setSearch(q)
                 }}
                 onAgents={() => {
+                  leaveInfo()
                   setTab("agents")
                   setSearch(null)
                 }}
@@ -480,16 +483,17 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                 view={tab === "tasks" ? view : null}
                 counts={counts}
                 onView={(v) => {
+                  leaveInfo()
                   setView(v)
                   setTab("tasks")
                   setSearch(null)
                 }}
                 agents={agentsNow}
-                onMessage={(name) => go(dmPlace(me, name))}
+                onMessage={(name) => (leaveInfo(), go(dmPlace(me, name)))}
                 onOpenTask={openTask}
                 conversations={conversations}
                 current={currentConversation}
-                onConversation={openConversation}
+                onConversation={(key) => (leaveInfo(), openConversation(key))}
               />
               <div className={cx("relative flex min-w-0 flex-1 md:sheet", info ? "hidden" : (root || side?.kind === "tasks") && "hidden md:flex")}>
                 <div className="relative flex min-w-0 flex-1 flex-col bg-canvas" style={{ "--head": `${headH}px`, "--foot": `${footH}px` } as CSSProperties}>
