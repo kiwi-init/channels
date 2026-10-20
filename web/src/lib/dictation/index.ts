@@ -41,27 +41,70 @@ export function dictationSupported(scope: typeof globalThis = globalThis): boole
   )
 }
 
-let worker: Worker | null = null
-let nextId = 1
-const waiting = new Map<number, { resolve: (text: string) => void; reject: (err: Error) => void }>()
+export interface SpeechWorker {
+  onmessage: ((e: MessageEvent<FromWorker>) => void) | null
+  onerror: ((e: ErrorEvent) => void) | null
+  onmessageerror: ((e: MessageEvent) => void) | null
+  postMessage(message: ToWorker, transfer: Transferable[]): void
+  terminate(): void
+}
 
-function transcribe(audio: Float32Array): Promise<string> {
-  if (!worker) {
-    worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" })
-    worker.onmessage = (e: MessageEvent<FromWorker>) => {
-      const w = waiting.get(e.data.id)
-      waiting.delete(e.data.id)
-      if (!w) return
-      if ("error" in e.data) w.reject(new DictationProblem(`Dictation failed: ${e.data.error}`))
-      else w.resolve(e.data.text)
-    }
+export function transcriber(make: () => SpeechWorker): (audio: Float32Array, language: string | null) => Promise<string> {
+  let worker: SpeechWorker | null = null
+  let nextId = 1
+  const waiting = new Map<number, { resolve: (text: string) => void; reject: (err: Error) => void }>()
+  const crashed = (w: SpeechWorker) => () => {
+    if (worker === w) worker = null
+    w.terminate()
+    for (const one of waiting.values()) one.reject(new DictationProblem("Dictation failed: the speech model stopped. Try again."))
+    waiting.clear()
   }
-  const id = nextId++
-  const message: ToWorker = { id, audio, language: speechLanguage(navigator.language) }
-  return new Promise<string>((resolve, reject) => {
-    waiting.set(id, { resolve, reject })
-    worker!.postMessage(message, [audio.buffer])
-  })
+  return (audio, language) => {
+    if (!worker) {
+      const w = make()
+      worker = w
+      w.onmessage = (e) => {
+        const one = waiting.get(e.data.id)
+        waiting.delete(e.data.id)
+        if (!one) return
+        if ("error" in e.data) one.reject(new DictationProblem(`Dictation failed: ${e.data.error}`))
+        else one.resolve(e.data.text)
+      }
+      w.onerror = crashed(w)
+      w.onmessageerror = crashed(w)
+    }
+    const id = nextId++
+    const message: ToWorker = { id, audio, language }
+    const w = worker
+    return new Promise<string>((resolve, reject) => {
+      waiting.set(id, { resolve, reject })
+      w.postMessage(message, [audio.buffer])
+    })
+  }
+}
+
+const transcribe = transcriber(() => new Worker(new URL("./worker.ts", import.meta.url), { type: "module" }))
+
+export interface MicGate {
+  alive: boolean
+  opening: boolean
+  current: Recording | null
+}
+
+export async function openRecording(gate: MicGate, open: () => Promise<Recording>): Promise<Recording | null> {
+  if (!gate.alive || gate.opening || gate.current) return null
+  gate.opening = true
+  try {
+    const recording = await open()
+    if (!gate.alive || gate.current) {
+      recording.cancel()
+      return null
+    }
+    gate.current = recording
+    return recording
+  } finally {
+    gate.opening = false
+  }
 }
 
 const problemText = (err: unknown) =>
@@ -77,7 +120,7 @@ export function useDictation(onText: (text: string) => void, onProblem: (message
   const [supported] = useState(() => dictationSupported())
   const [phase, setPhase] = useState<DictationPhase>("idle")
   const [progress, setProgress] = useState(0)
-  const recording = useRef<Recording | null>(null)
+  const mic = useRef<MicGate>({ alive: true, opening: false, current: null })
   const text = useRef(onText)
   const problem = useRef(onProblem)
 
@@ -86,36 +129,38 @@ export function useDictation(onText: (text: string) => void, onProblem: (message
     problem.current = onProblem
   })
 
-  useEffect(
-    () => () => {
-      recording.current?.cancel()
-      recording.current = null
-    },
-    []
-  )
+  useEffect(() => {
+    const gate = mic.current
+    gate.alive = true
+    return () => {
+      gate.alive = false
+      gate.current?.cancel()
+      gate.current = null
+    }
+  }, [])
 
   const fail = useCallback((err: unknown) => {
-    recording.current = null
+    mic.current.current = null
+    if (!mic.current.alive) return
     setPhase("idle")
     problem.current(problemText(err))
   }, [])
 
   const listen = useCallback(async () => {
     try {
-      recording.current = await record()
-      setPhase("listening")
+      if (await openRecording(mic.current, record)) setPhase("listening")
     } catch (err) {
       fail(err)
     }
   }, [fail])
 
   const finish = useCallback(async () => {
-    const active = recording.current
-    recording.current = null
+    const active = mic.current.current
+    mic.current.current = null
     if (!active) return
     setPhase("transcribing")
     try {
-      const said = await transcribe(await active.stop())
+      const said = await transcribe(await active.stop(), speechLanguage(navigator.language))
       if (said) text.current(said)
       setPhase("idle")
     } catch (err) {
@@ -142,7 +187,7 @@ export function useDictation(onText: (text: string) => void, onProblem: (message
     } catch (err) {
       return fail(err)
     }
-    return listen()
+    if (mic.current.alive) return listen()
   }, [listen, fail])
 
   const cancel = useCallback(() => setPhase("idle"), [])
