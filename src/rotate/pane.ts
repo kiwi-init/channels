@@ -265,7 +265,7 @@ function check(t: Target, backend: Backend, first: PaneId | RexId, quietMs: numb
   }
   if (!backend.calm(now, Date.now(), quietMs)) {
     backend.forget();
-    return "wait";
+    return t.harness === "codex" && tmux(t, ["list-clients", "-t", t.pane, "-F", "#{client_activity}"]) === null ? "no-tmux" : "wait";
   }
   const captured = backend.screen(now);
   if (captured === null) return backend.kind === "rex" ? "no-pane" : "no-tmux";
