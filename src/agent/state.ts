@@ -9,7 +9,7 @@ import { GENERAL_ROOM, PAGE_LIMIT, type Message } from "@kiwi/core/protocol.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { findRoom, fold, toRoster, type ChannelState, type FoldBase, type GuardFloor, type Roster, type RoomsFloor } from "@kiwi/core/state.ts";
 import { LAST_MARK_MS, lastSeq, Look, orNone, type Agent, type Delivery } from "./shared.ts";
-import { wants } from "./wants.ts";
+import { narrows, wants } from "./wants.ts";
 
 const CACHE_TRIM_AT = 800;
 const CACHE_KEEP = 300;
@@ -223,10 +223,17 @@ export class SessionState {
     const cursor = yield* Cursor;
     const seen = yield* cursor.seen(this.alias, this.me);
     const unread = messages.filter((m) => m.seq > since && !seen.has(m.seq) && this.wants(m, state, d));
+    const held = narrows(d) ? messages.find((m) => m.seq > since && !seen.has(m.seq) && this.wants(m, state) && !this.wants(m, state, d))?.seq : undefined;
     const commit = (shownTo?: number): Effect.Effect<void, never, Relay> => {
-      const last = (shownTo === undefined ? unread : unread.filter((m) => m.seq <= shownTo)).at(-1)?.seq;
-      const upTo = shownTo === undefined ? Math.max(since, state.head) : Math.max(since, shownTo);
-      return Effect.andThen(cursor.write(this.alias, this.me, upTo), last === undefined ? Effect.void : this.markRead(last));
+      const shown = shownTo === undefined ? unread : unread.filter((m) => m.seq <= shownTo);
+      const last = shown.at(-1)?.seq;
+      const reach = shownTo === undefined ? state.head : shownTo;
+      const upTo = Math.max(since, held === undefined ? reach : Math.min(reach, held - 1));
+      const ahead = shown.filter((m) => m.seq > upTo).map((m) => m.seq);
+      return Effect.andThen(
+        Effect.andThen(cursor.write(this.alias, this.me, upTo), ahead.length ? cursor.markSeen(this.alias, this.me, ahead) : Effect.void),
+        last === undefined ? Effect.void : this.markRead(last),
+      );
     };
     return { messages: unread, state, commit };
   });
