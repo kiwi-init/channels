@@ -23,7 +23,7 @@ function folders(stdout: string): string[] {
 }
 
 const ASK_MS = 10_000;
-const LAUNCH_MS = 30_000;
+const LAUNCH_MS = 150_000;
 
 const asker = (): Asker => ({ person: requirePerson(), relay: store.relayUrl });
 
@@ -55,7 +55,9 @@ async function machines(): Promise<MachineView[]> {
 async function launchOn(c: ComputerView, req: LaunchAgentRequest): Promise<LaunchedView> {
   const args = { harness: req.harness, folder: req.folder, code: req.code, relay: req.relay, ...(req.nick ? { nick: req.nick } : {}), ...(req.persona ? { persona: req.persona } : {}) };
   const asked = await askMachine(asker(), { pk: c.machinePk, xpk: c.machineXpk }, "launch", args, { timeoutMs: LAUNCH_MS, id: req.launch });
-  return asked.ok ? launchedView(asked.result) : { ok: false, why: "failed", detail: asked.detail };
+  if (asked.ok) return launchedView(asked.result);
+  if (asked.why === "no-answer") return { ok: false, why: "failed", detail: `No answer yet: it may still be starting on ${c.label}. Check that computer before you try again.` };
+  return { ok: false, why: "failed", detail: asked.detail };
 }
 
 const PICK: OpenDialogOptions = { properties: ["openDirectory", "createDirectory"], buttonLabel: "Choose" };
