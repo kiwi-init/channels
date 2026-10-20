@@ -4,7 +4,7 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 
-import { openRows as openSealedRows, packRow, packUnread, type CachedRow, type Unread } from "@kiwi/core/cache-row.ts";
+import { openRows as openSealedRows, packRow, packEnvelope, type CachedRow, type Unread } from "@kiwi/core/cache-row.ts";
 import { Channel, ChannelGone, RelayError, Relay, Unreachable, eachLive, fetchRelay, type Live, type PresenceFields } from "@kiwi/core/client.ts";
 import { encodeJoinCode, newRoomId, ownerFingerprint, type ChannelAccess } from "@kiwi/core/crypto.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
@@ -289,12 +289,15 @@ export class Keyring implements ChannelOps {
         return { _tag: "Open", kind: ev.kind };
       case "Message": {
         const key = ch.access.keys[String(ch.access.epoch)];
-        const row: CachedRow | null = key && Number.isSafeInteger(ev.message.seq) && ev.message.seq > 0 ? await packRow(key, ch.roomId, ch.access.epoch, ev.message).catch(() => null) : null;
+        const seq = ev.message.seq;
+        const packed =
+          !key || !Number.isSafeInteger(seq) || seq <= 0 ? null : ev.envelope ? packEnvelope(key, ch.roomId, ch.access.epoch, ev.envelope) : packRow(key, ch.roomId, ch.access.epoch, ev.message);
+        const row: CachedRow | null = packed ? await packed.catch(() => null) : null;
         return { _tag: "Message", message: ev.message, row };
       }
       case "Unread": {
         const key = ch.access.keys[String(ch.access.epoch)];
-        const row: CachedRow | null = key ? await packUnread(key, ch.roomId, ch.access.epoch, ev.envelope).catch(() => null) : null;
+        const row: CachedRow | null = key ? await packEnvelope(key, ch.roomId, ch.access.epoch, ev.envelope).catch(() => null) : null;
         return { _tag: "Unread", seq: ev.envelope.seq, row };
       }
       case "Presence":
