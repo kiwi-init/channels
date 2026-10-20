@@ -6,6 +6,7 @@ import { externalUrl, isAppUrl } from "./guard.ts";
 import { openInBrowser } from "./open.ts";
 import { keepRendererAlive } from "./revive.ts";
 import { entryUrl } from "./serve-web.ts";
+import { textStepFor, type TextStep } from "./text-size.ts";
 import { applyUpdate, updateState } from "./updater.ts";
 import { minWindowWidth } from "./window-size.ts";
 
@@ -24,6 +25,10 @@ const preloadPath = () => (app.isPackaged ? path.join(app.getAppPath(), "dist", 
 function openOutside(url: string): void {
   const ext = externalUrl(url);
   if (ext) void openInBrowser(ext, (u) => shell.openExternal(u)).catch(() => {});
+}
+
+export function stepText(step: TextStep): void {
+  win?.webContents.send("kiwi:text-step", step);
 }
 
 export function guardContents(wc: Electron.WebContents): void {
@@ -54,6 +59,14 @@ export function createWindow(): void {
     webPreferences: { preload: preloadPath(), contextIsolation: true, sandbox: true },
   });
   keepRendererAlive(win, () => quitting);
+  const wc = win.webContents;
+  wc.on("before-input-event", (e, input) => {
+    const step = textStepFor(input, process.platform);
+    if (!step) return;
+    e.preventDefault();
+    stepText(step);
+  });
+  wc.on("did-finish-load", () => wc.setZoomLevel(0));
   void win.loadURL(entryUrl());
   win.on("close", (e) => {
     if (quitting) return;
