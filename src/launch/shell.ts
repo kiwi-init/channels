@@ -1,21 +1,32 @@
-import { spawn } from "node:child_process";
-import { homedir, userInfo } from "node:os";
-import { delimiter, join } from "node:path";
+import { execFileSync, spawn } from "node:child_process";
+import { homedir } from "node:os";
+import { delimiter, isAbsolute, join } from "node:path";
 
 const MARK = "__kiwi_login_path__";
 const READ_MS = 5_000;
 
 let reading: Promise<string | null> | null = null;
 
+export function passwdShell(platform: NodeJS.Platform, entry: string): string | null {
+  const shell = platform === "darwin" ? /^UserShell:\s*(\S+)/m.exec(entry)?.[1] : entry.trim().split(":")[6];
+  return shell && isAbsolute(shell) ? shell : null;
+}
+
+function accountShell(env: Record<string, string | undefined>): string | null {
+  const ask = (cmd: string, args: string[]): string => execFileSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 2_000 });
+  try {
+    const user = env.USER || env.LOGNAME || ask("/usr/bin/id", ["-un"]).trim();
+    return passwdShell(process.platform, process.platform === "darwin" ? ask("/usr/bin/dscl", [".", "-read", `/Users/${user}`, "UserShell"]) : ask("/usr/bin/getent", ["passwd", user]));
+  } catch {
+    // No directory service, or no entry for this user: the platform's default shell then.
+    return null;
+  }
+}
+
 export function loginShell(env: Record<string, string | undefined> = process.env): string {
   const said = env.SHELL?.trim();
-  if (said) return said;
-  try {
-    return userInfo().shell || "/bin/sh";
-  } catch {
-    // No passwd entry for this user: every Unix has /bin/sh.
-    return "/bin/sh";
-  }
+  if (said && isAbsolute(said)) return said;
+  return accountShell(env) ?? (process.platform === "darwin" ? "/bin/zsh" : "/bin/sh");
 }
 
 export function pathAfterMark(out: string): string | null {

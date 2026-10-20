@@ -1,11 +1,11 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { KNOWN_HARNESSES, readHarnessRow } from "@kiwi/core/harnesses.ts";
 import { daemonHarnesses, startDaemon, type Daemon } from "../src/daemon.ts";
 import { harnessInventory, inventoryText, versionIn, wakeOf } from "../src/launch/harnesses.ts";
-import { loginShell, pathAfterMark, readLoginPath } from "../src/launch/shell.ts";
+import { loginShell, passwdShell, pathAfterMark, readLoginPath } from "../src/launch/shell.ts";
 
 setDefaultTimeout(30_000);
 
@@ -62,9 +62,21 @@ describe("the login shell's PATH", () => {
     expect(await readLoginPath(join(root, "shells", "missing"))).toBeNull();
   });
 
-  test("the login shell is $SHELL, else the user's own", () => {
+  test("the login shell is $SHELL, else the account's own from the directory, not Bun's echo of $SHELL", () => {
     expect(loginShell({ SHELL: "/opt/fish" })).toBe("/opt/fish");
-    expect(loginShell({})).toMatch(/^\//);
+    for (const env of [{}, { SHELL: "zsh" }, { SHELL: "" }]) {
+      const shell = loginShell(env);
+      expect(isAbsolute(shell)).toBe(true);
+      expect(existsSync(shell)).toBe(true);
+    }
+  });
+
+  test("an account's shell is read from dscl on macOS and from getent elsewhere", () => {
+    expect(passwdShell("darwin", "UserShell: /bin/zsh\n")).toBe("/bin/zsh");
+    expect(passwdShell("darwin", "No such key: UserShell\n")).toBeNull();
+    expect(passwdShell("linux", "runner:x:1001:118::/home/runner:/bin/bash\n")).toBe("/bin/bash");
+    expect(passwdShell("linux", "runner:x:1001:118::/home/runner:bash\n")).toBeNull();
+    expect(passwdShell("linux", "")).toBeNull();
   });
 });
 
@@ -80,6 +92,12 @@ describe("the harness inventory", () => {
     script(bins, "kimi-code", "echo 'kimi, version 1.4.0' >&2");
     writeFileSync(join(bins, "gemini"), "not runnable");
     script(more, "agent", "echo '2026.01.02-abc123'");
+    script(bins, "kimi", "echo 'kimi, version 0.9.0'");
+    script(join(root, "cln"), "pi", "echo 'pi (cln) 1.3.6'");
+    script(join(root, "pi-bare"), "pi", "echo '0.73.1'");
+    script(join(root, "node_modules", "@mariozechner", "pi-coding-agent", "dist"), "cli.js", "echo 'Debugger attached.'; echo 0.73.1");
+    mkdirSync(join(root, "pi-npm"), { recursive: true });
+    symlinkSync(join(root, "node_modules", "@mariozechner", "pi-coding-agent", "dist", "cli.js"), join(root, "pi-npm", "pi"));
   });
 
   test("finds each harness on the PATH it's given, with its version, and lists the missing ones", async () => {
@@ -89,6 +107,7 @@ describe("the harness inventory", () => {
     expect(by.claude).toMatchObject({ path: join(bins, "claude"), version: "2.0.1" });
     expect(by.codex).toMatchObject({ path: join(bins, "codex"), version: "0.163.0", wake: "codex-queue", why: null });
     expect(by.kimi).toMatchObject({ path: join(bins, "kimi-code"), version: "1.4.0" });
+    expect(by.grok).toMatchObject({ path: null });
     expect(by.gemini).toMatchObject({ path: null, version: null });
     expect(by.pi).toMatchObject({ path: null, version: null });
   });
@@ -98,6 +117,15 @@ describe("the harness inventory", () => {
     expect(grokOnly.find((r) => r.harness === "cursor")).toMatchObject({ path: null });
     const both = await harnessInventory(`${bins}:${more}:/usr/bin:/bin`);
     expect(both.find((r) => r.harness === "cursor")).toMatchObject({ path: join(more, "agent"), version: "2026.01.02-abc123" });
+  });
+
+  test("a generic name counts only when it prints a bare version or lives in its harness's package", async () => {
+    const pi = async (dir: string) => (await harnessInventory(`${join(root, dir)}:/usr/bin:/bin`)).find((r) => r.harness === "pi");
+    expect(await pi("cln")).toMatchObject({ path: null });
+    expect(await pi("pi-bare")).toMatchObject({ path: join(root, "pi-bare", "pi"), version: "0.73.1" });
+    expect(await pi("pi-npm")).toMatchObject({ path: join(root, "pi-npm", "pi"), version: "0.73.1" });
+    const both = await harnessInventory(`${join(root, "cln")}:${join(root, "pi-bare")}:/usr/bin:/bin`);
+    expect(both.find((r) => r.harness === "pi")).toMatchObject({ path: join(root, "pi-bare", "pi") });
   });
 
   test("asks a binary its version once, and again once the binary changes", async () => {
