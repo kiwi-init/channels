@@ -337,8 +337,9 @@ jobs:
       Then seats and multi-seat: which agent a command or hook acts for in a folder
       (src/seats.ts, a Grok Bot's seat from its VM's hostname or KIWI_HARNESS, a hook's named harness over the
       markers its parent session left: hereAs, and a named harness with no session never given a folder's only seat
-      when that seat is another harness's or a live session's), one session holding seats in two channels, each
-      Stop header and Cursor follow-up naming its channel (src/hooks/answer.ts, test/wake-yourself.test.ts), a session that holds neither seat told the folder has seats in
+      when that seat is another harness's or a live session's), one session holding seats in two channels, the
+      join of the second from the same folder saying which -c ALIAS --as NAME picks each seat and a rejoin of either
+      saying nothing about it (src/cli/commands/join.ts), each Stop and SessionStart unread header and Cursor follow-up naming its channel (src/hooks/answer.ts, test/wake-yourself.test.ts), a session that holds neither seat told the folder has seats in
       both channels and to pass -c ALIAS --as NAME (src/cli/context.ts), hooks serving the right seat
       from sibling folders, and with a backlog on both seats each hook's whole output (SessionStart,
       prompt, stop) within HOOK_CONTEXT_MAX, the seats sharing it (src/hooks/run.ts). Then handoff: an escalation's live browser link (packages/core/src/protocol.ts),
