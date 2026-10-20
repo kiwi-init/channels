@@ -118,6 +118,18 @@ test("a hand-over cut at its size limit leaves the rest unread, and the next hoo
   expect(second).not.toContain("long 0 ");
 });
 
+test("after a /clear, the earlier session's listener hands a message to the new session once, and its hooks don't hand it over again", async () => {
+  const listener = spawn(agent, ["hook", "listen"], S, INPUT);
+  await until(listening, "the listener's slot");
+  await ok(owner, ["send", "--to", me, "across the clear"]);
+  expect(await listener.exited).toBe(2);
+  expect(await new Response(listener.stderr).text()).toContain("across the clear");
+  const cleared = { ...S, CLAUDE_CODE_SESSION_ID: "once-cleared" };
+  const input = JSON.stringify({ session_id: "once-cleared", cwd: agent });
+  expect(await ok(agent, ["hook", "stop"], cleared, input)).not.toContain("across the clear");
+  expect(await ok(agent, ["hook", "prompt"], cleared, input)).not.toContain("across the clear");
+});
+
 test("a listener that can't reach the daemon keeps trying instead of leaving the session deaf", async () => {
   const sock = daemonSock(agent);
   await stopDaemon(sock).catch(() => {});

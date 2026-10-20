@@ -332,7 +332,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
   if (who.harness === "grok" && (event === "session-start" || event === "prompt")) return null;
   const mc = mcFor(b.alias, b.as, input.cwd ?? process.cwd(), who);
   const s = yield* openSession(b.alias, cfg, b.as);
-  if (who.session) yield* commitDelivered(s, who.session);
+  if (who.session) yield* commitDelivered(s, who.session, who.pid);
   if (event === "prompt" || event === "stop") yield* Effect.ignoreCause(s.refreshWhere(detectWhere(input.cwd ?? process.cwd())));
 
   if (event === "session-start") {
