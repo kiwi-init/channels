@@ -99,6 +99,7 @@ const inProcess = async (label: string, run: (s: AgentSession) => Effect.Effect<
       }),
     append: (roomId: string, messages: Message[]) => Effect.sync(() => appendCache(roomId, messages)),
     base: () => Effect.succeed(null),
+    replace: () => Effect.void,
     keepBase: () => Effect.void,
     dropBase: () => Effect.void,
     trim: () => Effect.void,
@@ -168,6 +169,7 @@ describe("one fetch of the log per agent command", () => {
           appendCache(roomId, messages);
         }),
       base: () => Effect.succeed(null),
+      replace: () => Effect.void,
       keepBase: () => Effect.void,
       dropBase: () => Effect.void,
       trim: () => Effect.void,

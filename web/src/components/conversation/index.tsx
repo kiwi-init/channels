@@ -154,6 +154,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     (seq: number) => {
       setHighlight(seq)
       setTimeout(() => setHighlight((h) => (h === seq ? null : h)), 1600)
+      if (state.compact && seq <= state.compact.through) setEarlier(true)
       const at = placeOf.get(seq)
       const inTask = at?.kind === "task" ? at.task : null
       if (inTask !== null) openTask(inTask)
@@ -169,7 +170,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       }
       requestAnimationFrame(() => requestAnimationFrame(() => find(3)))
     },
-    [placeOf, hereKey, openTask]
+    [placeOf, hereKey, openTask, state.compact]
   )
 
   const onReply = useCallback((m: Message) => setReplyTo(m), [])
@@ -190,12 +191,11 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   }, [messages])
   const chosen = useCallback((m: Message) => (m.choices?.length ? chosenOf(m, repliesTo.get(m.seq) ?? []) : undefined), [repliesTo])
   const answer = useCallback(
-    (m: Message, text: string) => {
+    (m: Message, text: string): Promise<boolean> =>
       send(text, { to: [m.from], re: [m.seq], kind: "msg" }).then(
-        () => toast(`Answered ${nameOf(m.from)}`),
-        (err) => toast(`Not sent: ${errorText(err)}`, "error")
-      )
-    },
+        () => (toast(`Answered ${nameOf(m.from)}`), true),
+        (err) => (toast(`Not sent: ${errorText(err)}`, "error"), false)
+      ),
     [send, nameOf]
   )
   const onAnswer = useLatest(answer)
@@ -602,6 +602,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                           {mayWrite ? (
                             <Composer
                               key={hereKey}
+                              draftKey={`${roomId}:${hereKey}`}
                               me={me}
                               people={people}
                               replyTo={replyTo}

@@ -4,6 +4,8 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type R
 import type { SendOptions } from "@kiwi/core/client.ts"
 import { MAX_IMAGE_BYTES, RASTER_MIMES, type Color, type Message } from "@kiwi/core/protocol.ts"
 import { matchCommands, parseCommand, type Command } from "@/lib/commands"
+import { answered } from "@/lib/asks"
+import { draftOf, keepDraft, type DraftFile } from "@/lib/drafts"
 import { needsCompressing } from "@/lib/needs-compressing"
 import { appendDictation, MODEL_MB, PRESS_LABEL, useDictation } from "@/lib/dictation"
 import { excerpt } from "@/lib/format"
@@ -40,7 +42,7 @@ interface Props {
   /** Typing a slash at the start lists these; one run with its arguments instead of sending a message. */
   commands?: readonly Command[]
   more?: number
-  onAnswer?: (m: Message, text: string) => void
+  onAnswer?: (m: Message, text: string) => Promise<boolean>
   nameOf: (name: string) => string
   onClearReply: () => void
   disabled: boolean
@@ -54,6 +56,7 @@ interface Props {
   /** Under the field, inside the composer: what the agents are doing (agent-strip.tsx). */
   footer?: ReactNode
   talk?: { button: ReactNode; bar: ReactNode }
+  draftKey?: string
 }
 
 /** Who a message is for: the people @mentioned at its start. */
@@ -62,9 +65,10 @@ function recipients(body: string, names: Set<string>): string[] {
   return [...lead.matchAll(/@([\p{L}\p{N}_.-]+)/gu)].map((m) => m[1]!).filter((n) => names.has(n))
 }
 
-export function Composer({ me, people, replyTo, asking, commands = [], more = 0, onAnswer, nameOf, onClearReply, disabled, send, thread, extra, placeholder, footer, talk }: Props) {
-  const [body, setBody] = useState("")
-  const [files, setFiles] = useState<{ name: string; mime: string; data: string }[]>([])
+export function Composer({ me, people, replyTo, asking, commands = [], more = 0, onAnswer, nameOf, onClearReply, disabled, send, thread, extra, placeholder, footer, talk, draftKey }: Props) {
+  const [body, setBody] = useState(() => draftOf(draftKey)?.body ?? "")
+  const [files, setFiles] = useState<DraftFile[]>(() => draftOf(draftKey)?.files ?? [])
+  useEffect(() => keepDraft(draftKey, { body, files }), [draftKey, body, files])
   const [dropping, setDropping] = useState(false)
   const [gifsOpen, setGifsOpen] = useState(false)
   const [sending, setSending] = useState(false)
@@ -197,6 +201,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
   const submit = async () => {
     if (!canSend) return
     if (running) {
+      keepDraft(draftKey, { body: "", files })
       setBody("")
       try {
         await running.command.run(running.args)
@@ -210,7 +215,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
     try {
       const text = withHandles(body.trim(), others) || files.map((f) => f.name).join(", ")
       const named = recipients(text, names)
-      const answering = !replyTo && !thread ? asking : undefined
+      const answering = answered(asking, named, !!replyTo || !!thread)
       const to = named.length ? named : answering ? [answering.from] : replyTo && replyTo.from !== me ? [replyTo.from] : extra?.to
       await send(text, {
         to,
@@ -222,6 +227,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
         ...(extra?.dm ? { to: extra.to, dm: true } : {}),
         imgs: files.length ? files : undefined,
       })
+      if (area.current?.value === body || !area.current) keepDraft(draftKey, { body: "", files: [] })
       setBody((now) => (now === body ? "" : now))
       setFiles([])
       if (!thread) onClearReply()
@@ -258,7 +264,9 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
         </div>
       )}
 
-      {asking && !thread && <ComposerQuestion m={asking} more={more} nameOf={nameOf} disabled={disabled} onChoose={(c) => onAnswer?.(asking, c)} onElse={() => area.current?.focus()} />}
+      {asking && !thread && (
+        <ComposerQuestion m={asking} more={more} nameOf={nameOf} disabled={disabled} onChoose={(c) => onAnswer?.(asking, c) ?? Promise.resolve(false)} onElse={() => area.current?.focus()} />
+      )}
 
       {listed.length > 0 && picked && <CommandList commands={listed} picked={picked} onPick={(c) => setBody(`/${c.name} `)} />}
 
