@@ -37,6 +37,7 @@ export interface ControlsProps {
   onNickname?: (m: RosterMember, nickname: string | null) => Promise<void>
   onCloseChannel: () => Promise<void>
   onLeaveChannel: () => Promise<void>
+  exportLog: () => Promise<string>
   onRename?: (name: string) => Promise<void>
   onIcon?: (icon: ChannelIcon | null) => Promise<void>
   onHold?: (on: boolean, note?: string) => Promise<void>

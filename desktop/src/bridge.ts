@@ -103,6 +103,7 @@ export const CHANNEL_CALLS = [
   "leave",
   "send",
   "image",
+  "history",
 ] as const;
 
 export type ChannelCallName = (typeof CHANNEL_CALLS)[number];
