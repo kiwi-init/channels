@@ -10,6 +10,7 @@ import { activityEnv, reachOf, daemonHello, daemonListening, daemonSock, listenD
 import { presenceAnswers, presenceWords } from "@kiwi/core/format.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import { omit } from "@kiwi/core/omit.ts";
+import { installMimo } from "../src/hooks/install/mimo.ts";
 import type { Presence } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { checked } from "./check.ts";
@@ -47,7 +48,7 @@ beforeAll(async () => {
   saveConfig({ channels: { test: { ...(await Channel.resume(relay, made.code, agent)), relay, code: made.code, as: "claude" } } });
   saveIdentity(agent, made.access.roomId);
   void ownerCh.stream(await ownerCh.head(), () => {}, { signal: watching.signal, onPresence: (p) => heard.push(p) });
-  daemon = await startDaemon(undefined, { beaconMs: 300 });
+  daemon = await startDaemon(undefined, { beaconMs: 300, listenerGraceMs: 0 });
 });
 
 afterAll(async () => {
@@ -189,6 +190,47 @@ describe("seats always on", () => {
 
   test("a Grok seat is announced as woken by its kiwi listen only while one runs", async () => {
     await wakesViaListenerWhileItRuns("/grok", { alias: "test", as: "claude", harness: "grok", session: "grok-1" });
+  });
+
+  test("a MiMoCode seat is announced as woken by Kiwi's plugin only while the plugin's listener runs, and kiwi wake says why not", async () => {
+    const mimoDir = mkdtempSync(join(tmpdir(), "kiwi-daemon-seats-mimo-"));
+    const prevMimo = process.env.KIWI_MIMO_DIR;
+    process.env.KIWI_MIMO_DIR = mimoDir;
+    installMimo();
+    saveConfig({ ...loadConfig(), bindings: { "/mimo": { alias: "test", as: "claude", harness: "mimo", session: "ses_mimo" } } });
+    try {
+      await until("kiwi wake to say the plugin has no listener", async () => {
+        const path = (await seatOf("claude"))?.wake.path;
+        return path?.kind === "none" && path.why.startsWith("Kiwi's MiMoCode plugin has no listener running");
+      });
+      const channel = loadConfig().channels.test;
+      if (!channel) throw new Error("the test channel is missing");
+      const s = await AgentSession.open("test", channel, "claude");
+      const seen = from(claudePk).length;
+      const heardPlugin = () =>
+        from(claudePk)
+          .slice(seen)
+          .some((p) => p.wake === "mimo-plugin");
+      await runAgent(
+        Effect.raceFirst(
+          s.listen(() => Effect.void, {}),
+          Effect.promise(() => until("a presence woken by the plugin", heardPlugin)),
+        ),
+      );
+      expect(heardPlugin()).toBe(true);
+      const after = from(claudePk).length;
+      await until("the wake to go with the listener", () =>
+        from(claudePk)
+          .slice(after)
+          .some((p) => p.wake === undefined),
+      );
+      expect((await seatOf("claude"))?.wake.path.kind).toBe("none");
+    } finally {
+      saveConfig({ ...loadConfig(), bindings: omit(loadConfig().bindings ?? {}, "/mimo") });
+      if (prevMimo === undefined) delete process.env.KIWI_MIMO_DIR;
+      else process.env.KIWI_MIMO_DIR = prevMimo;
+      rmSync(mimoDir, { recursive: true, force: true });
+    }
   });
 
   test("the daemon reports a Claude seat's activity from its record, even with no session id", async () => {

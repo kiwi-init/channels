@@ -56,6 +56,7 @@ export interface HookInput {
   cursor_version?: unknown;
   transcript_path?: unknown;
   landed?: unknown;
+  refused?: unknown;
 }
 
 export function freshAt(input: Pick<HookInput, "source">, now: number): number | null {
