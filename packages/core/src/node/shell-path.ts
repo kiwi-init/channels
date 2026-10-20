@@ -15,6 +15,8 @@ export type ShellPathOptions = {
   env?: Record<string, string | undefined>;
   home?: string;
   platform?: NodeJS.Platform;
+  /** Folders whose contents don't last. Default: the system's temp folders. */
+  temps?: string[];
 };
 
 /** The bin folder the install script uses: KIWI_INSTALL, else ~/.kiwi/bin. */
@@ -46,11 +48,32 @@ export function profileFor(o: ShellPathOptions): { file: string; line: string } 
  * Adds the marked line to the shell's profile unless it already names the folder (as written, or as
  * $HOME/…). Returns the file it changed, or null when there was nothing to do.
  */
+function real(p: string): string {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    // A folder not made yet: its nearest made parent decides where it lives.
+    const up = path.dirname(p);
+    return up === p ? p : path.join(real(up), path.basename(p));
+  }
+}
+
+const TEMPS = [os.tmpdir(), "/tmp", "/var/tmp", "/var/folders"];
+
+export function inTempFolder(p: string, temps: string[] = TEMPS): boolean {
+  const at = real(path.resolve(p));
+  return temps.some((t) => {
+    const root = real(t);
+    return at === root || at.startsWith(root + path.sep);
+  });
+}
+
 export function ensureOnPath(o: ShellPathOptions): string | null {
   if ((o.platform ?? process.platform) === "win32") return null;
   const home = o.home ?? os.homedir();
   const dir = o.dir ?? binDir(o.env ?? process.env, home);
   const { file, line } = profileFor({ ...o, dir });
+  if (inTempFolder(dir, o.temps) && !inTempFolder(file, o.temps)) return null;
   const text = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
   const rest = dir.startsWith(home + path.sep) ? dir.slice(home.length) : null;
   const named = [dir, ...(rest ? [`$HOME${rest}`, `\${HOME}${rest}`, `~${rest}`] : [])];
