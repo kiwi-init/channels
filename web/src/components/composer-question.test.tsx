@@ -3,7 +3,8 @@ import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 
 import { PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts"
-import { choiceGate, ComposerQuestion } from "./composer-question"
+import { choiceGate } from "@/lib/choosing"
+import { ComposerQuestion } from "./composer-question"
 import { answered } from "@/lib/asks"
 
 const decision: Message = {

@@ -1,5 +1,5 @@
 import type { Chosen } from "@/lib/asks"
-import { useChoosing } from "./composer-question"
+import { useChoosing } from "@/lib/choosing"
 import { formatTime } from "@/lib/format"
 import { cx } from "@/lib/utils"
 
