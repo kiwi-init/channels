@@ -250,8 +250,8 @@ export function seatsFor(dir: string, opts: SeatOptions = {}): Binding[] {
       return [seat];
     }
     if (!seats.length) continue;
-    // A plain terminal (or a harness that names no session) in a folder with one agent acts as that agent, as before seats.
-    if (!who.session && seats.length === 1) return [seats[0]!];
+    // A plain terminal in a folder with one agent acts as that agent, as before seats.
+    if (!who.session && !who.harness && seats.length === 1) return [seats[0]!];
     // Seats this agent could be: no other live session holds them, nobody else is listening as them, the harness fits
     // (or one side doesn't say), and a session never takes over a seat joined from a plain terminal.
     const listenedElsewhere = (b: Binding) => live.some((l) => l.alias === b.alias && l.as === b.as && !ours(l));

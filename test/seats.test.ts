@@ -76,6 +76,26 @@ test("a hook that names its harness is that harness's, whatever the session that
   expect(seatsAt(loadConfig(), dir).map((b) => b.session)).toEqual(["s1"]);
 });
 
+test("a named harness with no session never takes a folder's only seat from another harness or a live session", () => {
+  const parent = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "parent", CLAUDE_PID: String(process.pid) };
+  bindDirectory(dir, { alias: "ch", as: "parent-seat", harness: "claude", session: "parent", pid: process.pid });
+  expect(hereAs("codex", parent)).toEqual({ harness: "codex" });
+  expect(seatsFor(dir, { who: hereAs("codex", parent), claim: false })).toEqual([]);
+  expect(seatsFor(dir, { who: hereAs("grok", parent), claim: false })).toEqual([]);
+  expect(seatsFor(dir, { who: hereAs("gemini", parent), claim: false })).toEqual([]);
+  expect(seatsFor(dir, { who: {}, claim: false }).map((b) => b.as)).toEqual(["parent-seat"]);
+
+  const other = join(home, "other");
+  mkdirSync(other);
+  bindDirectory(other, { alias: "ch", as: "live-codex", harness: "codex", session: "t1" });
+  expect(seatsFor(other, { who: hereAs("codex", {}), claim: false })).toEqual([]);
+
+  const gem = join(home, "gem");
+  mkdirSync(gem);
+  bindDirectory(gem, { alias: "ch", as: "gemini", harness: "gemini" });
+  expect(seatsFor(gem, { who: hereAs("gemini", parent), claim: false }).map((b) => b.as)).toEqual(["gemini"]);
+});
+
 test("MiMoCode and Kimi Code: the harness's own process holds the seat, over the CLAUDECODE they pass through", () => {
   const chain = (...names: string[]) => {
     const procs = new Map(names.map((name, i) => [100 - i, { ppid: i === names.length - 1 ? 1 : 99 - i, name }]));

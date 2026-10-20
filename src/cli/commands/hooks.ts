@@ -5,7 +5,7 @@ import { Keystore } from "../../config.ts";
 import {
   EXTRA_HARNESSES,
   claudeHooksStatus,
-  extraInstalled,
+  extraHooksStatus,
   hooksStatus,
   installDetected,
   installExtra,
@@ -87,7 +87,7 @@ export const hookCommands: Record<string, Command> = {
       if (sub === "status") {
         if (!name) return out(hooksStatus());
         if (name === "claude") return out(`claude: ${claudeHooksStatus()}`);
-        return out(`${name}: ${extraInstalled(name) ? "installed" : "not installed"}`);
+        return out(`${name}: ${extraHooksStatus(name)}`);
       }
       return yield* die(usage);
     }),
