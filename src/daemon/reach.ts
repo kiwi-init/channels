@@ -51,6 +51,12 @@ export function activityEnv(record: SeatRecord, base: Env): Env | null {
 
 export type Attached = "listener" | "session" | "none";
 
+const FILE_FIRST: ReadonlySet<string> = new Set(["claude", "codex", "opencode"]);
+
+export function readsRex(cfg: Pick<Config, "rex">, record: SeatRecord | null): record is SeatRecord & { rex: NonNullable<SeatRecord["rex"]> } {
+  return cfg.rex === "on" && !!record?.rex && !FILE_FIRST.has(record.harness ?? "");
+}
+
 export function reachOf(attached: Attached, record: SeatRecord | null, activity: Activity | undefined, alive: (pid: number) => boolean = pidAlive): Reach {
   if (attached === "listener") return "listening";
   if (attached === "session") return "running";
