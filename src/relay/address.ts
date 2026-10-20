@@ -226,3 +226,16 @@ export function clientAddress(peer: string | null | undefined, forwardedFor: str
   const last = usableIp(parts[parts.length - 1] ?? "");
   return last ?? peerIp;
 }
+
+export function untrustedProxy(peer: string | null | undefined, forwardedFor: string | null | undefined, trustProxy: TrustProxy = false): string | null {
+  const peerIp = peer ? usableIp(peer) : null;
+  if (!peerIp || !forwardedFor?.trim() || proxyPeer(peerIp, trustProxy)) return null;
+  return normalizeIp(peerIp);
+}
+
+export function trustProxyHint(peer: string): string {
+  const loopback = peer === "127.0.0.1" || peer === "::1";
+  const flag = loopback ? "--trust-proxy" : `--trust-proxy ${peer}`;
+  const env = loopback ? "KIWI_TRUST_PROXY=1" : `KIWI_TRUST_PROXY=${peer}`;
+  return `relay: requests from ${peer} carry X-Forwarded-For, but ${peer} isn't a trusted proxy, so every client it passes on counts as ${peer} against the rate limits. If ${peer} is your reverse proxy, start the relay with ${flag} (or ${env}).`;
+}
