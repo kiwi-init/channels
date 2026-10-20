@@ -11,6 +11,7 @@ import { ensureMachine, loadPairedMachine, PairError, type PairedMachine, type P
 import { DAEMON_PROTOCOL, daemonSock, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
 import { activityEnv, reachOf, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
 import { pruneHookFiles } from "../hooks/delivered.ts";
+import { harnessInventory } from "../launch/harnesses.ts";
 import { beatLock, dropLock, lockPath, ownsLock, takeLock } from "./lock.ts";
 import { stopDaemon, tryHello } from "./rpc.ts";
 import { readKey, type ConnState, type Seat, type Sub, type Waiting } from "./seat.ts";
@@ -662,12 +663,15 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         case "listeners":
           sendLine(conn, JSON.stringify({ id, ok: true, listeners: [...conns].filter((c) => !c.dead).flatMap((c) => [...c.held]) }));
           break;
+        case "harnesses":
+          sendLine(conn, JSON.stringify({ id, ok: true, harnesses: await harnessInventory() }));
+          break;
         case "stop":
           sendLine(conn, JSON.stringify({ id, ok: true }));
           setTimeout(() => void stop(), 50);
           break;
         default:
-          throw new Error(`unknown verb "${verb}" (hello, adopt, listen, listening, hold, listeners, read, mark, peek, presence, stop)`);
+          throw new Error(`unknown verb "${verb}" (hello, adopt, listen, listening, hold, listeners, read, mark, peek, presence, harnesses, stop)`);
       }
     } catch (err) {
       sendLine(conn, JSON.stringify({ id, ok: false, error: err instanceof Error ? err.message : String(err) }));

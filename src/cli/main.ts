@@ -30,6 +30,7 @@ import { taskCommands } from "./commands/tasks.ts";
 import { toolCommands } from "./commands/tools.ts";
 import { rotateCommands } from "./commands/rotate.ts";
 import { rexCommands } from "./commands/rex.ts";
+import { launchCommands } from "./commands/launch.ts";
 import { fail } from "./fail.ts";
 
 // Early signals for `kiwi daemon` only (the first positional, same as the CLI). Bun plus the
@@ -69,6 +70,7 @@ const commands: Record<string, Command> = {
   ...toolCommands,
   ...rotateCommands,
   ...rexCommands,
+  ...launchCommands,
 };
 
 if (import.meta.main) {
