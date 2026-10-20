@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -16,6 +17,20 @@ function running(pid: number): boolean {
   } catch (err) {
     return (err as NodeJS.ErrnoException).code === "EPERM";
   }
+}
+
+function commandOf(pid: number): string {
+  try {
+    if (process.platform === "linux") return readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\u0000").join(" ").trim();
+    return spawnSync("ps", ["-o", "command=", "-p", String(pid)], { encoding: "utf8", timeout: 2_000 }).stdout.trim();
+  } catch {
+    // A process we can't read the command of is not one we may kill.
+    return "";
+  }
+}
+
+export function isKiwiDaemon(command: string): boolean {
+  return /(^|[\s/\\])(kiwi(\.exe)?|main\.ts)\s+daemon(\s|$)/.test(command);
 }
 
 function holder(path: string): { pid: number | null; age: number } | null {
@@ -64,7 +79,7 @@ export async function takeLock(path: string): Promise<void> {
       await Bun.sleep(100);
       continue;
     }
-    if (h?.pid && running(h.pid)) {
+    if (h?.pid && running(h.pid) && isKiwiDaemon(commandOf(h.pid))) {
       try {
         process.kill(h.pid, "SIGKILL");
       } catch {

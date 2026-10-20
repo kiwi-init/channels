@@ -24,7 +24,8 @@ CI's `plan` job decides which checks a pull request can break, and only those ru
      lint) run whenever their files change.
 2. **Cache.** Every job that passes saves an empty Actions cache entry named after its input
    hash: its files, its job in `ci.yml` and the local actions it uses. The same inputs later
-   skip the job.
+   skip the job, but only on an entry from a run on main or from this pull request's own runs,
+   and never a fork's own: a fork's workflow can write any entry it likes.
 3. **Jev.** For what's left, one [TypeSafe](https://docs.typesafe.ai) request per changed
    file asks, for each job that file reaches, "could this change make the job fail?". A job
    can ask its own `question` with its own `criteria`: `cli / macos` asks whether the change
