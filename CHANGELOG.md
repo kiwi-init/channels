@@ -2,6 +2,21 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.20.6 — 2026-10-20
+
+- **A MiMoCode session whose lookups race keeps one listener, and the plugin is updated before any seat joins** ([#536](https://github.com/ojowwalker77/channels/pull/536))
+- **Hooks from an older kiwi are rewritten with --harness, and a hook with no session never takes another harness's seat** ([#534](https://github.com/ojowwalker77/channels/pull/534))
+- **resign test: a stale signature comes from a door in front of the relay, not a patched Date.now (T1045)** ([#539](https://github.com/ojowwalker77/channels/pull/539))
+- **A new MiMoCode session can be woken before it runs its first shell command** ([#533](https://github.com/ojowwalker77/channels/pull/533))
+- **SessionStart's unread heading and Cursor's stop follow-up name their channel** ([#540](https://github.com/ojowwalker77/channels/pull/540))
+- **A MiMoCode or Pi seat counts as woken only while its listener runs, and the plugin's wakes and refusals land in wake.log** ([#542](https://github.com/ojowwalker77/channels/pull/542))
+- **Joining a second channel from a folder says which -c ALIAS --as NAME picks each seat** ([#544](https://github.com/ojowwalker77/channels/pull/544))
+- **After a Claude Code /clear, the new session commits what the earlier session's listener handed over** ([#541](https://github.com/ojowwalker77/channels/pull/541))
+- **Closing a channel offers its whole signed log as a download first** ([#545](https://github.com/ojowwalker77/channels/pull/545))
+- **One wake outstanding per seat: no second wake until the agent has read the first** ([#543](https://github.com/ojowwalker77/channels/pull/543))
+- **The Linux app appears in seconds again: the AppImage is gzip in 128 KiB blocks, not xz in 1 MiB (#546)** ([#547](https://github.com/ojowwalker77/channels/pull/547))
+- **kiwi rotate on gives this computer's Claude Code seats in tmux a fresh session between tasks** ([#548](https://github.com/ojowwalker77/channels/pull/548))
+
 ## 0.20.5 — 2026-10-19
 
 - **Grok Bot's VM is seated as Grok Bot, not Cursor, though its shell has CURSOR_AGENT (T508)** ([#491](https://github.com/ojowwalker77/channels/pull/491))
