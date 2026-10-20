@@ -1,13 +1,16 @@
-import { statSync } from "node:fs";
+import { existsSync, realpathSync, statSync } from "node:fs";
 import { delimiter } from "node:path";
 import { KNOWN_HARNESSES, type HarnessRow, type KnownHarness } from "@kiwi/core/harnesses.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
 import { viaOf, wakePath, wakeWords } from "@kiwi/core/wake.ts";
 import { REWAKE_SINCE } from "../hooks/install/claude.ts";
+import { kimiHome } from "../kimi-server.ts";
 import { loginPath } from "./shell.ts";
 
 interface Binary {
   bin: string;
+  vouch?: RegExp;
+  home?: () => string;
   not?: RegExp;
 }
 
@@ -15,15 +18,17 @@ const BINARIES: Record<KnownHarness, readonly Binary[]> = {
   claude: [{ bin: "claude" }],
   codex: [{ bin: "codex" }],
   gemini: [{ bin: "gemini" }],
-  cursor: [{ bin: "cursor-agent" }, { bin: "agent", not: /grok/i }],
+  cursor: [{ bin: "cursor-agent" }, { bin: "agent", vouch: /cursor-agent/, not: /grok/i }],
   grok: [{ bin: "grok" }],
   opencode: [{ bin: "opencode" }],
-  kimi: [{ bin: "kimi" }, { bin: "kimi-code" }],
+  kimi: [{ bin: "kimi", vouch: /kimi-code/, home: kimiHome }, { bin: "kimi-code" }],
   mimo: [{ bin: "mimo" }],
-  pi: [{ bin: "pi" }],
+  pi: [{ bin: "pi", vouch: /pi-coding-agent/ }],
 };
 
 const VERSION_MS = 5_000;
+
+const BARE_VERSION = /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/;
 
 const said = new Map<string, Promise<string | null>>();
 
@@ -68,16 +73,27 @@ function everyOnPath(bin: string, PATH: string): string[] {
   return [...new Set(found.filter((p): p is string => !!p))];
 }
 
+function realOf(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    // A link that can't be resolved is judged by the path PATH gave.
+    return path;
+  }
+}
+
+function vouched({ vouch, home, not }: Binary, path: string, text: string | null): boolean {
+  if (!vouch && !not) return true;
+  const real = realOf(path);
+  if (not && (text === null || not.test(`${real}\n${text}`))) return false;
+  return !vouch || vouch.test(real) || BARE_VERSION.test(text?.split("\n")[0]?.trim() ?? "") || (!!home && existsSync(home()));
+}
+
 async function binaryOf(harness: KnownHarness, PATH: string): Promise<{ path: string; text: string | null } | null> {
-  for (const { bin, not } of BINARIES[harness]) {
-    if (!not) {
-      const path = Bun.which(bin, { PATH });
-      if (path) return { path, text: await versionText(path, PATH) };
-      continue;
-    }
-    for (const path of everyOnPath(bin, PATH)) {
+  for (const binary of BINARIES[harness]) {
+    for (const path of everyOnPath(binary.bin, PATH)) {
       const text = await versionText(path, PATH);
-      if (text !== null && !not.test(text)) return { path, text };
+      if (vouched(binary, path, text)) return { path, text };
     }
   }
   return null;

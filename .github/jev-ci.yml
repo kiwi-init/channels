@@ -200,9 +200,14 @@ jobs:
       Also test/harnesses.test.ts: the harness inventory behind kiwi harnesses and the daemon's harnesses verb
       (src/launch/harnesses.ts): each known harness's binary found on the login shell's PATH, read once from an
       interactive login shell past what its profile prints, as soon as it's printed even while something the profile
-      started still holds the output, and null when the shell hangs, fails or is missing (src/launch/shell.ts); its
+      started still holds the output, and null when the shell hangs, fails or is missing (src/launch/shell.ts); the
+      login shell being $SHELL when it's an absolute path, else the account's own read from dscl on macOS or getent
+      elsewhere, never Bun's os.userInfo() echo of $SHELL; its
       version asked with --version once per binary and again once the binary changes; agent taken as Cursor's only
-      when its version doesn't say grok, among every agent on PATH; whether Kiwi can wake a session started now, and
+      when its version doesn't say grok, among every agent on PATH; a generic name (pi, kimi, agent) counted only when
+      it prints a bare version line or resolves into its harness's package (pi-coding-agent, kimi-code, cursor-agent),
+      or, for kimi, once Kimi Code's home (KIMI_CODE_HOME or ~/.kimi-code) is there, so a stranger like CLN's pi
+      stays out; whether Kiwi can wake a session started now, and
       why not (Claude Code older than 2.1.296, Kimi Code in a terminal, Gemini, Cursor, Grok); and a row read back
       from the daemon keeping only what checks out (packages/core/src/harnesses.ts).
       Also test/rotate.test.ts: when a Claude Code seat in tmux gets a fresh session (src/rotate/decide.ts:
