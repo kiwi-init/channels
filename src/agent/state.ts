@@ -14,6 +14,11 @@ import { narrows, wants } from "./wants.ts";
 const CACHE_TRIM_AT = 800;
 const CACHE_KEEP = 300;
 
+function strangers(rejected: Iterable<readonly [number, string]>, after: number): boolean {
+  for (const [seq, why] of rejected) if (seq > after && (why.endsWith(" isn't a member") || why.startsWith("not signed by "))) return true;
+  return false;
+}
+
 export class SessionState {
   readonly ch: Channel;
   private roster: Roster | null = null;
@@ -21,6 +26,7 @@ export class SessionState {
   protected roomsFloor: RoomsFloor | null | undefined;
   protected guardFloor: GuardFloor | null | undefined;
   private roomsCheckedAt = 0;
+  private rosterCheckedAt = 0;
   private log: Message[] | null = null;
   private saved = 0;
   private owed = 0;
@@ -120,10 +126,18 @@ export class SessionState {
     });
   }
 
-  protected foldState(messages: Message[], roster: Roster, info?: Info): Effect.Effect<ChannelState, never, Relay | Cache> {
+  protected foldState(messages: Message[], given: Roster, info?: Info): Effect.Effect<ChannelState, never, Relay | Cache> {
     return Effect.gen({ self: this }, function* () {
       this.roomsFloor ??= yield* orNone(this.ch.fx.rooms(info));
       this.guardFloor ??= yield* orNone(this.ch.fx.guard(info));
+      let roster = given;
+      let fresh = false;
+      const since = this.base?.n ?? 0;
+      const refresh = Effect.gen({ self: this }, function* () {
+        const now = yield* orNone(this.members(true));
+        if (now) [roster, fresh] = [now, true];
+        return !!now;
+      });
       const kept: { base?: FoldBase } = {};
       const keep = this.snapshotDue?.(messages.at(-1)?.seq ?? 0) ? (b: FoldBase) => void (kept.base = b) : undefined;
       let state = fold(messages, roster, Date.now(), this.roomsFloor, this.guardFloor, this.base, keep);
@@ -134,11 +148,23 @@ export class SessionState {
         this.roomsFloor = yield* orNone(this.ch.fx.rooms());
         state = fold(messages, roster, Date.now(), this.roomsFloor, this.guardFloor, this.base, keep);
       }
-      if (kept.base && this.publish) yield* this.publish(kept.base);
+      if (strangers(state.rejected, Math.max(since, this.rosterCheckedAt))) {
+        this.rosterCheckedAt = state.head;
+        if (yield* refresh) {
+          kept.base = undefined;
+          state = fold(messages, roster, Date.now(), this.roomsFloor, this.guardFloor, this.base, keep);
+        }
+      }
+      if (kept.base && this.publish && (!strangers(kept.base.rejected, since) || fresh)) yield* this.publish(kept.base);
       if (messages.length > CACHE_TRIM_AT && !this.partial) {
-        const older: { base?: FoldBase } = {};
-        fold(messages.slice(0, messages.length - CACHE_KEEP), roster, Date.now(), this.roomsFloor, this.guardFloor, this.base, (b) => void (older.base = b));
-        if (older.base) yield* (yield* Cache).trim(this.cfg.roomId, older.base);
+        const trimmed = (): FoldBase | undefined => {
+          const older: { base?: FoldBase } = {};
+          fold(messages.slice(0, messages.length - CACHE_KEEP), roster, Date.now(), this.roomsFloor, this.guardFloor, this.base, (b) => void (older.base = b));
+          return older.base;
+        };
+        let older = trimmed();
+        if (older && strangers(older.rejected, since) && !fresh) older = (yield* refresh) ? trimmed() : undefined;
+        if (older) yield* (yield* Cache).trim(this.cfg.roomId, older);
       }
       return state;
     });
