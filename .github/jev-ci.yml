@@ -204,10 +204,16 @@ jobs:
       Also test/unread-live.test.ts: a stored message this build can't read arrives as Unread with
       its seq, and web lib/history.test.ts: its sealed row keeps the cache whole (no hole, no reload)
       and opens as the message once a newer build can read it.
+      Also web lib/log-export.test.ts: a channel's log kept before it closes, one JSON line per message
+      with its key and signature, under a file name from the channel's title and the day; every seq from the
+      first the relay kept to the head either in the file or named as missing, and those the relay dropped
+      under its storage cap said apart; with test/log-export.test.ts, a stored message this build can't read
+      named as missing instead of the download passing for the whole log.
       Also test/desktop-keys.test.ts: the desktop key process (desktop/src/keyring.ts and keys-server.ts,
       over the wire web/src/lib/channel-remote.ts uses) against a local relay, failing if any member,
       owner, person or channel key reaches the window, plus the seat rules, the wire codec, the
-      allowed calls and a scan of web/src for imports of Channel, seal/open or the keyring
+      allowed calls (history handing the window every message with its key and signature, a malformed
+      since read as 0) and a scan of web/src for imports of Channel, seal/open or the keyring
       or keys server outside web/src/lib/channel-local.ts. And test/desktop-voice.test.ts: the desktop voice
       store's CSP allows api.x.ai only when an xAI key is saved, the project key never reaches
       the snapshot or the token IPC result, consent defaults off, and
@@ -401,7 +407,7 @@ jobs:
       WebAssembly (ort-wasm-*.wasm: dictation gets it through the relay; web/vite.config.ts drops it) or
       any file over 20 MiB, which would weigh on every desktop download. Then ui smoke: starts the relay and the kiwi CLI
       as a test computer and drives the built dashboard in headless Chromium, opening every
-      menu, popover and dialog, setting up a passkey, previewing an invite, Settings → Personalities duplicating a preset into the person's own, the owner allowing voice from Details, the Agents tab showing a lane per agent with what's next on it, Needs you as rows always in view (an agent asking in is let in from its row), an answered ask saying who chose what on the ask itself, replying inline (the reply quotes what it answers, "1 Reply" opens the thread), linking a computer
+      menu, popover and dialog, setting up a passkey, previewing an invite, Settings → Personalities duplicating a preset into the person's own, the owner allowing voice from Details, the Agents tab showing a lane per agent with what's next on it, Needs you as rows always in view (an agent asking in is let in from its row), an answered ask saying who chose what on the ask itself, replying inline (the reply quotes what it answers, "1 Reply" opens the thread), Details → Close channel… downloading the whole log first as JSON Lines with each message's key and signature (the history call through ChannelLink and the desktop keyring) and Cancel keeping the channel, linking a computer
       with `kiwi setup`, approving its agent and opening a task (a board row opens it in the Tasks panel, with no second task list behind it; /tasks switches to the Tasks tab; the details' wants-to-join row closes them and shows Needs you, where the agent is let in, and details offer no Copy invite link or second approve flow), dictating for real (the pinned Whisper files, fetched and SHA-256-checked by scripts/dictation-files.ts into a cache keyed on packages/core/src/dictation.ts, seed the local relay's /v1/dictation; Chromium's fake mic plays test/fixtures/dictation.wav; the first press asks once, then the model downloads through the relay, web/src/lib/dictation's worker transcribes on WebAssembly, and the words land in the Message box), finding controls by visible
       names and roles; fails if a page throws while rendering, a control it looks for is renamed
       or missing, or the relay, pairing or join flow breaks. Then compiles the kiwi CLI into one
