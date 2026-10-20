@@ -49,3 +49,15 @@ test("a seat whose names share dots with another's never takes that seat's recor
   expect(deliveredInProcess("ch", "ana", "new.session", 4242)).toBe(8);
   expect(deliveredInProcess("ch", "ana.b", "new", 4242)).toBe(0);
 });
+
+test("a record with a channel but no agent is no record, even at the seat's own path", () => {
+  mkdirSync(join(dir, "listen-hooks"), { recursive: true });
+  writeFileSync(join(dir, "listen-hooks", "ch.a.b.same.delivered"), "77 4242 ch.a");
+  expect(deliveredUpTo("ch", "a.b", "same")).toBe(0);
+  expect(deliveredInProcess("ch", "a.b", "same", 4242)).toBe(0);
+  writeFileSync(join(dir, "listen-hooks", "ch.a.b.same.delivered"), "77 4242 ch a.b extra");
+  expect(deliveredInProcess("ch", "a.b", "same", 4242)).toBe(0);
+  writeFileSync(join(dir, "listen-hooks", "ch.a.b.same.delivered"), "77 4242");
+  expect(deliveredInProcess("ch", "a.b", "same", 4242)).toBe(77);
+  expect(deliveredInProcess("ch", "a.b", "other", 4242)).toBe(0);
+});

@@ -169,7 +169,8 @@ jobs:
       than a week, at start and daily (src/hooks/delivered.ts, src/daemon/server.ts).
       Also test/delivered-process.test.ts: a delivery a listener recorded under an earlier session of the
       same harness process counts for the session after a /clear, never one of another process or
-      another seat, and a record from before the process was noted still counts for its own session.
+      another seat, a record from before the process was noted still counts for its own session, and a
+      malformed record counts for none.
       Also test/who-cached.test.ts: the daemon keeps each member's latest presence beacon, and once it has
       heard a full beacon round, kiwi who and status answer from it (the daemon's presence verb) without
       opening a socket to the relay for a probe.
@@ -350,7 +351,8 @@ jobs:
       read only after printing it), and a hand-over cut at its size limit commits only the
       messages shown, so the next hook brings the rest; and after a /clear (a new session id in the
       same process) the earlier session's listener hands a message over once and the new session's
-      stop and prompt hooks don't hand it over again; and a listener that can't reach the daemon
+      stop and prompt hooks don't hand it over again, nor does its listener started before any hook;
+      and a listener that can't reach the daemon
       keeps retrying its slot (2s doubling to 60s) while its session lives, instead of exiting and
       leaving the session deaf. Then hooks-hung-relay: with the relay accepting connections
       but never answering, the prompt and stop hooks each return in under 2s (src/hooks/run.ts

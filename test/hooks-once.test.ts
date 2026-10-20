@@ -118,23 +118,34 @@ test("a hand-over cut at its size limit leaves the rest unread, and the next hoo
   expect(second).not.toContain("long 0 ");
 });
 
-test("after a /clear, the earlier session's listener hands a message to the new session once, and its hooks don't hand it over again", async () => {
-  const listener = spawn(agent, ["hook", "listen"], S, INPUT);
+const session = (id: string) => ({ env: { ...S, CLAUDE_CODE_SESSION_ID: id }, input: JSON.stringify({ session_id: id, cwd: agent }) });
+
+async function handedAcross(from: ReturnType<typeof session>, body: string): Promise<void> {
+  const listener = spawn(agent, ["hook", "listen"], from.env, from.input);
   await until(listening, "the listener's slot");
-  await ok(owner, ["send", "--to", me, "across the clear"]);
+  await ok(owner, ["send", "--to", me, body]);
   expect(await listener.exited).toBe(2);
-  expect(await new Response(listener.stderr).text()).toContain("across the clear");
-  const cleared = { ...S, CLAUDE_CODE_SESSION_ID: "once-cleared" };
-  const input = JSON.stringify({ session_id: "once-cleared", cwd: agent });
-  const next = spawn(agent, ["hook", "listen"], cleared, input);
+  expect(await new Response(listener.stderr).text()).toContain(body);
+}
+
+test("after a /clear, the new session's first hooks don't hand over again what the earlier session's listener handed it", async () => {
+  await handedAcross(session("once"), "across the clear");
+  const cleared = session("once-cleared");
+  expect(await ok(agent, ["hook", "stop"], cleared.env, cleared.input)).not.toContain("across the clear");
+  expect(await ok(agent, ["hook", "prompt"], cleared.env, cleared.input)).not.toContain("across the clear");
+});
+
+test("after a /clear, the new session's listener started before any hook hears only what came after", async () => {
+  await handedAcross(session("once-b1"), "before the second clear");
+  const cleared = session("once-b2");
+  const next = spawn(agent, ["hook", "listen"], cleared.env, cleared.input);
   await until(listening, "the new session's listener slot");
-  await ok(owner, ["send", "--to", me, "after the clear"]);
+  await ok(owner, ["send", "--to", me, "after the second clear"]);
   expect(await next.exited).toBe(2);
   const woke = await new Response(next.stderr).text();
-  expect(woke).toContain("after the clear");
-  expect(woke).not.toContain("across the clear");
-  expect(await ok(agent, ["hook", "stop"], cleared, input)).not.toContain("across the clear");
-  expect(await ok(agent, ["hook", "prompt"], cleared, input)).not.toContain("across the clear");
+  expect(woke).toContain("after the second clear");
+  expect(woke).not.toContain("before the second clear");
+  expect(await ok(agent, ["hook", "stop"], cleared.env, cleared.input)).not.toContain("before the second clear");
 });
 
 test("a listener that can't reach the daemon keeps trying instead of leaving the session deaf", async () => {

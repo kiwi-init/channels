@@ -17,7 +17,9 @@ interface Delivered {
 
 function readDelivered(file: string): Delivered | null {
   try {
-    const [seqText, pidText, alias, as] = readFileSync(file, "utf8").trim().split(/\s+/);
+    const fields = readFileSync(file, "utf8").trim().split(/\s+/);
+    if (fields.length === 3 || fields.length > 4) return null;
+    const [seqText, pidText, alias, as] = fields;
     const seq = Number(seqText);
     const pid = Number(pidText);
     if (!Number.isSafeInteger(seq) || seq <= 0) return null;
@@ -48,6 +50,10 @@ export function noteDelivered(alias: string, as: string, session: string, seq: n
 
 function deliveredFiles(alias: string, as: string, session: string, pid: number | undefined): { file: string; seq: number }[] {
   const own = deliveredFile(alias, as, session);
+  if (!pid) {
+    const seq = deliveredUpTo(alias, as, session);
+    return seq ? [{ file: own, seq }] : [];
+  }
   const dir = join(home(), "listen-hooks");
   let names: string[];
   try {
@@ -61,7 +67,7 @@ function deliveredFiles(alias: string, as: string, session: string, pid: number 
     const d = readDelivered(file);
     if (!d) return [];
     if (file === own) return ofSeat(d, alias, as) ? [{ file, seq: d.seq }] : [];
-    return pid && d.pid === pid && d.seat?.alias === alias && d.seat.as === as ? [{ file, seq: d.seq }] : [];
+    return d.pid === pid && d.seat?.alias === alias && d.seat.as === as ? [{ file, seq: d.seq }] : [];
   });
 }
 
