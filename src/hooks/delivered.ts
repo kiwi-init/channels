@@ -84,17 +84,19 @@ export function notePending(alias: string, as: string, session: string, token: s
   writeFileSync(pendingFile(alias, as, session, token), String(seq));
 }
 
-export function settlePending(alias: string, as: string, session: string, landed: string): void {
+export function settlePending(alias: string, as: string, session: string, landed: string): number | null {
   const file = pendingFile(alias, as, session, landed);
   let seq: number;
   try {
     seq = Number(readFileSync(file, "utf8"));
   } catch {
     // No handoff under that token for this seat: nothing landed here to count as delivered.
-    return;
+    return null;
   }
-  if (Number.isInteger(seq) && seq > 0) noteDelivered(alias, as, session, seq);
+  const settled = Number.isInteger(seq) && seq > 0 ? seq : 0;
+  if (settled) noteDelivered(alias, as, session, settled);
   rmSync(file, { force: true });
+  return settled;
 }
 
 const ANSWERING = ".answering";

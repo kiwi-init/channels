@@ -43,6 +43,13 @@ export function pullsWake(harness: WakeHarness | undefined): boolean {
   return harness === "kimi" || harness === "cursor" || harness === "grok";
 }
 
+export function listenedPath(path: WakePath, listening: boolean): WakePath {
+  if (path.kind !== "extension" || listening) return path;
+  return path.via === "mimo-plugin"
+    ? { kind: "none", why: "Kiwi's MiMoCode plugin has no listener running for this session (it starts with the session or its first shell command; restarting MiMoCode starts it again)" }
+    : { kind: "none", why: "Kiwi's Pi extension has no listener running for this session (/reload in Pi starts it again)" };
+}
+
 export function viaOf(path: WakePath): WakeVia | null {
   switch (path.kind) {
     case "hooks":

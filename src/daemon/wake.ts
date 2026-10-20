@@ -6,7 +6,7 @@ import { listenHooksInstalled } from "../hooks/install/claude.ts";
 import { mimoInstalled } from "../hooks/install/mimo.ts";
 import { piInstalled } from "../hooks/install/pi.ts";
 import { kimiServer, promptKimi } from "../kimi-server.ts";
-import { wakeArgv, wakeKey, wakePath, wakePrompt, type WakePath } from "@kiwi/core/wake.ts";
+import { wakeArgv, wakeKey, wakePath, wakePrompt, type WakePath, type WakeVia } from "@kiwi/core/wake.ts";
 import { withDeadline, type DaemonWake } from "./protocol.ts";
 import { seatRecordFor, wakeOn } from "./reach.ts";
 import type { Seat } from "./seat.ts";
@@ -16,6 +16,25 @@ const WAKE_LOG_KEEP_BYTES = 1_000_000;
 export function appendRotated(file: string, line: string, keepBytes = WAKE_LOG_KEEP_BYTES): void {
   if ((statSync(file, { throwIfNoEntry: false })?.size ?? 0) > keepBytes) renameSync(file, `${file}.1`);
   appendFileSync(file, line, { mode: 0o600 });
+}
+
+export interface WakeRow {
+  at: number;
+  alias: string;
+  agent: string;
+  via: WakeVia;
+  unread: number;
+  result: "ok" | "failed" | "handed";
+  why: string | null;
+  cursor: number;
+}
+
+export function appendWakeRow(dir: string, w: WakeRow): void {
+  try {
+    appendRotated(join(dir, "wake.log"), `${new Date(w.at).toISOString()}\t${w.alias}\t${w.agent}\t${w.via}\t${w.unread}\t${w.result}\t${w.why ?? ""}\t${w.cursor}\n`);
+  } catch {
+    return;
+  }
 }
 
 const WAKE_RUN_MS = 60_000;
@@ -92,13 +111,8 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, stopped, current }: Wak
     return server ? promptKimi(server, session, prompt, WAKE_RUN_MS) : "Kimi's server for this session is gone";
   };
 
-  const logWake = (seat: Seat, w: DaemonWake, why: string | null, cursor: number): void => {
-    try {
-      appendRotated(join(dir, "wake.log"), `${new Date(w.at).toISOString()}\t${seat.alias}\t${seat.agent}\t${w.via}\t${w.unread}\t${w.ok ? "ok" : "failed"}\t${why ?? ""}\t${cursor}\n`);
-    } catch {
-      return;
-    }
-  };
+  const logWake = (seat: Seat, w: DaemonWake, why: string | null, cursor: number): void =>
+    appendWakeRow(dir, { at: w.at, alias: seat.alias, agent: seat.agent, via: w.via, unread: w.unread, result: w.ok ? "ok" : "failed", why, cursor });
 
   const scheduleWake = (seat: Seat, delay = wakeDelayMs): void => {
     if (seat.wakeTimer || stopped()) return;

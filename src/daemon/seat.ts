@@ -34,6 +34,7 @@ export interface Seat {
   fetchingRows: boolean;
   heard: Map<string, { presence: Presence & { sigOk: boolean }; at: number }>;
   openedAt: number | null;
+  listenerAt: number;
 }
 
 interface SeatRows {

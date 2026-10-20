@@ -373,7 +373,7 @@ describe("Cursor keeps its own listener running", () => {
 
     await ok(owner, ["send", "--to", me, "unread at stop"]);
     const unread = await stop();
-    expect(unread).toContain("Unread Kiwi messages.");
+    expect(unread).toContain("Unread Kiwi messages (cursor-wake).");
     expect(unread).toContain("no Kiwi listener of yours is running");
   });
 });
@@ -407,7 +407,7 @@ describe("Grok Bot on a VM whose shell has Cursor's variables", () => {
     );
     expect(r.code).toBe(0);
     const follow = (JSON.parse(r.out) as { followup_message: string }).followup_message;
-    expect(follow).toContain("Unread Kiwi messages.");
+    expect(follow).toContain("Unread Kiwi messages (gb-cursor).");
     expect(follow).not.toContain("no Kiwi listener of yours is running");
   });
 });

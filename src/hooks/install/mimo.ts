@@ -32,7 +32,8 @@ interface Kiwi {
   parents: Map<string, string | null>;
   waiting: Map<string, ChildProcess | null>;
 }
-type Event = { type: string; properties?: { sessionID?: string; info?: { id?: string; parentID?: string } } };
+type Event = { type: string; properties?: { sessionID?: string; info?: { id?: string; parentID?: string; directory?: string } } };
+type Refused = { tries: number; error: string };
 
 const MARK = "${MARK}";
 const LISTEN = ${JSON.stringify(listen)};
@@ -66,7 +67,7 @@ function knownRoot(id: string): string | null {
   return at;
 }
 
-function listenOnce(id: string, cwd: string, landed: string | null): Promise<{ code: number | null; out: string; err: string }> {
+function listenOnce(id: string, cwd: string, landed: string | null, refused: Refused | null): Promise<{ code: number | null; out: string; err: string }> {
   return new Promise((resolve) => {
     const child = spawn(LISTEN, { shell: true, detached: true, cwd, env: { ...process.env, MIMOCODE_SESSION_ID: id }, stdio: ["pipe", "pipe", "pipe"] });
     kiwi.waiting.set(id, child);
@@ -77,7 +78,7 @@ function listenOnce(id: string, cwd: string, landed: string | null): Promise<{ c
     child.on("error", () => resolve({ code: null, out, err }));
     child.on("close", (code: number | null) => resolve({ code, out, err }));
     child.stdin?.on("error", () => undefined);
-    child.stdin?.end(JSON.stringify({ session_id: id, cwd, hook_event_name: "listen", landed }));
+    child.stdin?.end(JSON.stringify({ session_id: id, cwd, hook_event_name: "listen", landed, ...(refused ? { refused } : {}) }));
   });
 }
 
@@ -85,28 +86,51 @@ async function watch(id: string, cwd: string): Promise<void> {
   if (kiwi.waiting.has(id)) return;
   kiwi.waiting.set(id, null);
   let landed: string | null = null;
+  let refused: Refused | null = null;
   while (kiwi.waiting.has(id)) {
-    const ran = await listenOnce(id, cwd, landed);
+    const ran = await listenOnce(id, cwd, landed, refused);
     landed = null;
+    refused = null;
     if (!kiwi.waiting.has(id)) return;
     kiwi.waiting.set(id, null);
     const text = ran.code === 2 ? ran.err.trim() : "";
-    if (!text) await new Promise((r) => setTimeout(r, RETRY_MS));
-    else if (await wake(id, text)) landed = ran.out.trim() || null;
+    if (!text) {
+      await new Promise((r) => setTimeout(r, RETRY_MS));
+      continue;
+    }
+    const woke = await wake(id, text);
+    if (!woke) continue;
+    landed = ran.out.trim() || null;
+    refused = woke.refused;
   }
 }
 
-function landed(sent: unknown): boolean {
-  return !(typeof sent === "object" && sent !== null && "error" in sent && sent.error !== undefined);
+function described(why: unknown): string {
+  if (why instanceof Error) return why.message;
+  if (typeof why === "string") return why;
+  try {
+    return JSON.stringify(why) ?? String(why);
+  } catch {
+    return String(why);
+  }
 }
 
-async function wake(id: string, text: string): Promise<boolean> {
+function refusal(sent: unknown): string | null {
+  return typeof sent === "object" && sent !== null && "error" in sent && sent.error !== undefined ? described(sent.error) : null;
+}
+
+async function wake(id: string, text: string): Promise<{ refused: Refused | null } | null> {
+  let tries = 0;
+  let error = "";
   for (let wait = WAKE_RETRY_FIRST_MS; kiwi.waiting.has(id); wait = Math.min(wait * 2, RETRY_MS)) {
     const prompt = kiwi.client?.session.promptAsync({ path: { id }, body: { parts: [{ type: "text", text }] }, throwOnError: true });
-    if (prompt && (await prompt.then(landed, () => false))) return true;
+    const why = prompt ? await prompt.then(refusal, described) : "MiMoCode's client isn't ready";
+    if (why === null) return { refused: tries ? { tries, error } : null };
+    tries += 1;
+    error = why;
     await new Promise((r) => setTimeout(r, wait));
   }
-  return false;
+  return null;
 }
 
 function stop(id: string): void {
@@ -138,7 +162,10 @@ export const KiwiPlugin = async ({ client }: { client: Client }) => {
     },
     event: async ({ event }: { event: Event }) => {
       const info = event.properties?.info;
-      if (event.type === "session.created" && info?.id) kiwi.parents.set(info.id, info.parentID ?? null);
+      if (event.type === "session.created" && info?.id) {
+        kiwi.parents.set(info.id, info.parentID ?? null);
+        if (!info.parentID) void watch(info.id, info.directory ?? process.cwd());
+      }
       if (event.type === "session.deleted" && info?.id) stop(info.id);
     },
   };

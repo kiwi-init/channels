@@ -5,8 +5,9 @@ import type * as Scope from "effect/Scope";
 import { randomUUID } from "node:crypto";
 import { writeSync } from "node:fs";
 import { openSession } from "../agent.ts";
-import { Cursor, loadConfig, type ChannelConfig } from "../config.ts";
+import { Cursor, home, loadConfig, type ChannelConfig } from "../config.ts";
 import { wakeOn } from "../daemon/reach.ts";
+import { appendWakeRow } from "../daemon/wake.ts";
 import { formatMessage, messageHead } from "@kiwi/core/format.ts";
 import type { Binding, Here } from "../seats.ts";
 import { handOver, seatBudget } from "./answer.ts";
@@ -43,6 +44,7 @@ const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, w
   const s = yield* openSession(b.alias, cfg, b.as);
   const real = yield* Cursor;
   let at = Math.max(yield* s.cursor(), deliveredInProcess(b.alias, b.as, who.session ?? "", who.harness === "claude" ? who.pid : undefined));
+  const from = at;
   const peek = Cursor.of({ read: () => Effect.succeed(at), write: (_c, _a, seq) => Effect.sync(() => void (at = Math.max(at, seq))), seen: real.seen, markSeen: () => Effect.void });
   const got: Heard[] = [];
   const hearing = s
@@ -69,7 +71,7 @@ const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, w
     got.splice(0, got.length, ...left);
     at = Math.max(at, shown);
   });
-  return { b, got, hearing, dropShown, reached: () => at };
+  return { b, got, hearing, dropShown, from, reached: () => at };
 });
 
 const arm = Effect.fn("Hooks.arm")(function* (seat: Served, who: Here, woke: Effect.Effect<void, never, Scope.Scope>) {
@@ -99,9 +101,31 @@ export function handoffFrom(landed: unknown): Handoff {
   return { kind: "acked", landed: typeof landed === "string" && TOKEN.test(landed) ? landed : null };
 }
 
-export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Served[], who: Here, handoff: Handoff) {
+export interface Refused {
+  tries: number;
+  error: string;
+}
+
+export function refusedFrom(value: unknown): Refused | null {
+  if (typeof value !== "object" || value === null) return null;
+  const tries = "tries" in value ? value.tries : undefined;
+  const error = "error" in value ? value.error : undefined;
+  if (typeof tries !== "number" || !Number.isInteger(tries) || tries < 1 || typeof error !== "string") return null;
+  return { tries, error: error.replace(/\s+/g, " ").trim().slice(0, 200) };
+}
+
+function refusedWhy({ tries, error }: Refused): string {
+  return `MiMoCode refused the wake ${tries === 1 ? "once" : `${tries} times`} before it landed: ${error || "no reason given"}`;
+}
+
+export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Served[], who: Here, handoff: Handoff, refused: Refused | null = null) {
   const extension = who.harness === "pi" || who.harness === "mimo";
-  if (handoff.kind === "acked" && handoff.landed !== null) for (const { b } of served) settlePending(b.alias, b.as, who.session ?? "", handoff.landed);
+  const via = who.harness === "mimo" ? "mimo-plugin" : who.harness === "pi" ? "pi-extension" : null;
+  if (handoff.kind === "acked" && handoff.landed !== null)
+    for (const { b } of served) {
+      const settled = settlePending(b.alias, b.as, who.session ?? "", handoff.landed);
+      if (settled !== null && refused && via) appendWakeRow(home(), { at: Date.now(), alias: b.alias, agent: b.as, via, unread: 0, result: "failed", why: refusedWhy(refused), cursor: settled });
+    }
   if (who.harness === "pi" ? !piInstalled() : who.harness === "mimo" ? !mimoInstalled() : !hooksListen()) return 0;
   let enough = yield* Deferred.make<void>();
   let heard = 0;
@@ -164,7 +188,7 @@ export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Serv
     const shown = a.got.slice(0, hand.count);
     const rest = a.got.slice(hand.count).filter((g) => g.seq !== null).length;
     const seqs = shown.flatMap((g) => (g.seq === null ? [] : [g.seq]));
-    return { b: a.b, seqs, upTo: rest ? Math.max(0, ...seqs) : a.reached(), text: hand.text, head };
+    return { b: a.b, seqs, from: a.from, upTo: rest ? Math.max(0, ...seqs) : a.reached(), text: hand.text, head };
   });
   if (extension && !told.length) return 0;
   const blocks = told.map(({ head, text }) => `${head}\n${text}\n`);
@@ -176,9 +200,10 @@ export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Serv
   } catch {
     return 0;
   }
-  for (const { b, upTo, seqs } of told) {
+  for (const { b, upTo, seqs, from } of told) {
     if (handoff.kind === "at-once") noteDelivered(b.alias, b.as, who.session ?? "", upTo, who.harness === "claude" ? who.pid : undefined);
     noteHeard(who.session, b.alias, b.as, seqs);
+    if (via) appendWakeRow(home(), { at: Date.now(), alias: b.alias, agent: b.as, via, unread: seqs.length, result: "handed", why: null, cursor: from });
   }
   return 2;
 });
