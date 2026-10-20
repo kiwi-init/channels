@@ -169,8 +169,13 @@ jobs:
       folders a channel's seats work in on this computer (kiwi folders), most recently seen first,
       one per folder, only that channel's and only folders that still exist;
       test/desktop-launch.test.ts: the app's main process refusing a launch the renderer asks for
-      with a bad id, harness, folder, code, relay, nickname or persona, and reading the daemon's
-      answer back to the place it shows (a refusal keeps its reason, anything unknown is a failure);
+      with a bad id, harness, folder, code, relay, nickname, persona or computer key, and reading
+      the daemon's answer back to the place it shows (a refusal keeps its reason, anything unknown
+      is a failure); test/desktop-remote.test.ts: asking a paired computer through the relay
+      (desktop/src/remote.ts) against a fake relay that seals and answers like a real computer:
+      the answer it signed comes back, a launch keeps the app's id, an answer signed by anyone
+      else is refused, no answer in time says why it may be, the relay's 403 and 429 read as not
+      registered and busy, and online is the relay's word with anything else unknown;
       web lib/launches.test.ts: only a window whose kiwi has every launch method can start agents,
       and a followed launch's request then its member reach whoever follows that launch in that
       channel, once each, and a request seen while nobody follows it isn't remembered; web
@@ -714,8 +719,9 @@ jobs:
       window in the dark: the conversation, the reply bar, the composer with words in it, the Tasks tab, a task opened from its board row
       in the Tasks panel, Needs you, the Agents tab, the channel's settings page (Details: members, the channel's settings, notes and closing, side by side), the direct conversation,
       Invite, the account menu, the command palette, Notes, Pause, Settings (its sections and their groups), Personalities (opened from its row), Add
-      an agent, the desktop app's New agent modal and its started screen (with a stand-in for the
-      four launch methods the desktop bridge adds), first run, signed in with nothing open, Join
+      an agent, the desktop app's New agent modal, its computer picker with a paired computer
+      chosen, and its started screen (with a stand-in for the launch methods the desktop bridge
+      adds), first run, signed in with nothing open, Join
       with a code and the invite preview.
       The shots are uploaded as the ui-shots artifact. Fails when the conversation isn't at its newest message (within 80px of the bottom) once the channel opens and again back from the Tasks tab (which it visits itself), at the wide size and, in a second short run of the channel and Tasks screens, at phone size too (web/src/components/conversation/use-scroll.ts), or when the seeding can't drive the
       dashboard or any screen can't be reached (a control renamed, moved or gone), so the shots

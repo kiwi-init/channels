@@ -19,8 +19,10 @@ import type {
   KeysReply,
   KeysRequest,
   KiwiBridge,
+  FromMachine,
   LaunchAgentRequest,
   LaunchedView,
+  MachineView,
   RexSeatView,
   RexShowResult,
   RexStatusView,
@@ -145,6 +147,9 @@ const kiwi: KiwiBridge = {
   seatFolders: (roomId: string) => ipcRenderer.invoke("kiwi:seat-folders", roomId) as Promise<string[]>,
   chooseFolder: () => ipcRenderer.invoke("kiwi:choose-folder") as Promise<string | null>,
   launchAgent: (req: LaunchAgentRequest) => ipcRenderer.invoke("kiwi:launch-agent", req) as Promise<LaunchedView>,
+  machines: () => ipcRenderer.invoke("kiwi:machines") as Promise<MachineView[]>,
+  harnessesOn: (machinePk: string) => ipcRenderer.invoke("kiwi:harnesses-on", machinePk) as Promise<FromMachine<HarnessRow[]>>,
+  foldersOn: (machinePk: string, roomId: string) => ipcRenderer.invoke("kiwi:folders-on", machinePk, roomId) as Promise<FromMachine<string[]>>,
 };
 
 contextBridge.exposeInMainWorld("kiwi", kiwi);

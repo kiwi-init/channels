@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react"
 
 import type { HarnessRow, KnownHarness } from "@kiwi/core/harnesses.ts"
 import { personaOf, type Persona, type Personality } from "@kiwi/core/personality.ts"
-import type { LaunchedView } from "../../../desktop/src/bridge.ts"
+import type { FromMachine, LaunchedView, MachineView } from "../../../desktop/src/bridge.ts"
 import { harnessName } from "@/lib/harness"
 import { followLaunch, launcher, sawMembers, type LaunchSeen } from "@/lib/launches"
 import { usePersonalities } from "@/lib/personalities"
@@ -51,6 +51,9 @@ export function NewAgent(props: Props) {
 
 function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: Props) {
   const all = usePersonalities()
+  const [machines, setMachines] = useState<MachineView[]>([])
+  const [machine, setMachine] = useState<string | null>(null)
+  const [unreachable, setUnreachable] = useState<string | null>(null)
   const [rows, setRows] = useState<HarnessRow[] | null>(null)
   const [harness, setHarness] = useState<KnownHarness | null>(null)
   const [folders, setFolders] = useState<string[]>([])
@@ -64,29 +67,64 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
   const stop = useRef<(() => void) | null>(null)
 
   useEffect(() => {
+    let live = true
+    void launcher()
+      ?.machines?.()
+      .then(
+        (list) => live && setMachines(list),
+        () => {}
+      )
+    return () => {
+      live = false
+    }
+  }, [])
+
+  useEffect(() => {
     const b = launcher()
     if (!b) return
     let live = true
-    void b.harnesses().then(
-      (list) => {
-        if (!live) return
-        setRows(list)
-        setHarness((h) => h ?? list.find((r) => r.path && r.start)?.harness ?? null)
-      },
+    const take = <T,>(got: FromMachine<T>, apply: (v: T) => void) => {
+      if (!live) return
+      if (got.ok) apply(got.value)
+      else setUnreachable(got.detail)
+    }
+    const local = <T,>(p: Promise<T>): Promise<FromMachine<T>> => p.then((value) => ({ ok: true as const, value }))
+    const harnesses = machine && b.harnessesOn ? b.harnessesOn(machine) : local(b.harnesses())
+    const folders = machine && b.foldersOn ? b.foldersOn(machine, roomId) : local(b.seatFolders(roomId))
+    void harnesses.then(
+      (got) =>
+        take(got, (list) => {
+          setRows(list)
+          setHarness((h) => h ?? list.find((r) => r.path && r.start)?.harness ?? null)
+        }),
       () => live && setRows([])
     )
-    void b.seatFolders(roomId).then(
-      (list) => {
-        if (!live) return
-        setFolders(list)
-        setFolder((f) => f ?? list[0] ?? null)
-      },
+    void folders.then(
+      (got) =>
+        take(got, (list) => {
+          setFolders(list)
+          setFolder((f) => f ?? list[0] ?? null)
+        }),
       () => {}
     )
     return () => {
       live = false
     }
-  }, [roomId])
+  }, [roomId, machine])
+
+  const pickMachine = (pk: string | null) => {
+    if (pk === machine) return
+    setMachine(pk)
+    setRows(null)
+    setHarness(null)
+    setFolders([])
+    setFolder(null)
+    setUnreachable(null)
+    setError(null)
+  }
+  const remote = machine ? machines.find((m) => m.machinePk === machine) : undefined
+  const here = machines.find((m) => m.own)
+  const others = machines.filter((m) => !m.own)
 
   useEffect(() => () => stop.current?.(), [])
   useEffect(() => sawMembers(code, roster), [code, roster])
@@ -112,7 +150,7 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
     try {
       const chosen = persona ? all.find((p) => p.name === persona.name) : undefined
       const pin = chosen && onPin ? await onPin(chosen) : undefined
-      const r = await b.launchAgent({ launch, harness, folder, code, relay: relayUrl(), ...(name ? { nick: name } : {}), ...(pin ? { persona: pin } : {}) })
+      const r = await b.launchAgent({ ...(machine ? { machinePk: machine } : {}), launch, harness, folder, code, relay: relayUrl(), ...(name ? { nick: name } : {}), ...(pin ? { persona: pin } : {}) })
       if (r.ok) setStarted(r)
       else {
         stop.current?.()
@@ -126,7 +164,7 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
     }
   }
 
-  if (started) return <Progress started={started} seen={seen} harness={harness} onClose={onClose} />
+  if (started) return <Progress started={started} seen={seen} harness={harness} on={remote?.label} onClose={onClose} />
 
   return (
     <form
@@ -137,7 +175,29 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
       }}
     >
       <Dialog.Title className="text-title font-semibold">New agent</Dialog.Title>
-      <Dialog.Description className="mt-1 text-ui leading-normal text-ink-2">It starts in a terminal on this computer and joins {channel} by itself.</Dialog.Description>
+      <Dialog.Description className="mt-1 text-ui leading-normal text-ink-2">
+        It starts in a terminal on {remote ? remote.label : "this computer"} and joins {channel} by itself.
+      </Dialog.Description>
+
+      {others.length > 0 && (
+        <Field label="Computer">
+          <div role="radiogroup" aria-label="Computer" className="grid grid-cols-2 gap-1.5">
+            <Option on={machine === null} onPick={() => pickMachine(null)} disabled={busy}>
+              <MachineLine label={here?.label ?? "This computer"} detail="This computer" online={here ? here.online : true} />
+            </Option>
+            {others.map((m) => (
+              <Option key={m.machinePk} on={machine === m.machinePk} onPick={() => pickMachine(m.machinePk)} disabled={busy} off={m.online === false}>
+                <MachineLine label={m.label} detail={m.online === false ? "Offline" : m.os} online={m.online} />
+              </Option>
+            ))}
+          </div>
+          {remote && (
+            <p className="mt-2 text-meta leading-normal text-ink-3">Kiwi asks {remote.label} through the relay, signed by you; it starts the agent there and answers once its window is open.</p>
+          )}
+        </Field>
+      )}
+
+      {unreachable && <p className="mt-4 rounded-ctl bg-wash px-3 py-2.5 text-ui leading-normal text-ink-2">{unreachable}</p>}
 
       <Field label="Harness">
         {rows === null ? (
@@ -165,14 +225,18 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
               </span>
             </Option>
           ))}
-          <button
-            type="button"
-            onClick={() => void choose()}
-            disabled={busy}
-            className="flex h-10 items-center gap-2 rounded-ctl px-3 text-left text-ui font-medium text-accent-text edge hover:bg-wash"
-          >
-            Choose a folder…
-          </button>
+          {machine === null ? (
+            <button
+              type="button"
+              onClick={() => void choose()}
+              disabled={busy}
+              className="flex h-10 items-center gap-2 rounded-ctl px-3 text-left text-ui font-medium text-accent-text edge hover:bg-wash"
+            >
+              Choose a folder…
+            </button>
+          ) : (
+            folders.length === 0 && !unreachable && <p className="text-meta leading-normal text-ink-3">No folders yet: an agent has to have joined this channel from that computer once.</p>
+          )}
         </div>
       </Field>
 
@@ -238,8 +302,9 @@ function HarnessOption({ row, on, onPick, disabled }: { row: HarnessRow; on: boo
   )
 }
 
-function Progress({ started, seen, harness, onClose }: { started: Started; seen: LaunchSeen | null; harness: KnownHarness | null; onClose: () => void }) {
-  const where = started.place === "tmux" ? `tmux, window ${started.window} of session ${started.session}` : PLACE[started.place]
+function Progress({ started, seen, harness, on, onClose }: { started: Started; seen: LaunchSeen | null; harness: KnownHarness | null; on?: string | undefined; onClose: () => void }) {
+  const place = started.place === "tmux" ? `tmux, window ${started.window} of session ${started.session}` : PLACE[started.place]
+  const where = on ? `${place} on ${on}` : place
   const joined = seen?.stage === "joined" ? seen.name : null
   const steps: { done: boolean; text: string; detail?: ReactNode }[] = [
     {
@@ -270,7 +335,7 @@ function Progress({ started, seen, harness, onClose }: { started: Started; seen:
         })}
       </ol>
       <div className="mt-5 flex items-center justify-end gap-2">
-        {started.place === "rex" && (
+        {started.place === "rex" && !on && (
           <Button variant="secondary" onClick={() => void showInRex({ alias: "kiwi", agent: joined ?? "agent", ...started.rex })}>
             Show in Rex
           </Button>
@@ -278,5 +343,17 @@ function Progress({ started, seen, harness, onClose }: { started: Started; seen:
         <Button onClick={onClose}>{joined ? "Done" : "Close"}</Button>
       </div>
     </div>
+  )
+}
+
+function MachineLine({ label, detail, online }: { label: string; detail: string; online: boolean | null }) {
+  return (
+    <span className="min-w-0 flex-1">
+      <span className="flex items-center gap-1.5">
+        {online !== null && <span aria-label={online ? "Online" : "Offline"} className={cx("size-2 shrink-0 rounded-full", online ? "bg-live" : "bg-wash-2")} />}
+        <span className="truncate text-ui font-semibold text-ink">{label}</span>
+      </span>
+      <span className="block truncate text-meta text-ink-3">{detail}</span>
+    </span>
   )
 }

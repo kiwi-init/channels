@@ -259,7 +259,18 @@ export interface RexSeatView {
 
 export type RexShowResult = { ok: true } | { ok: false; why: "no-rex" | "no-server" | "no-app" | "remote-control" | "failed" };
 
+export interface MachineView {
+  machinePk: string;
+  label: string;
+  os: string;
+  own: boolean;
+  online: boolean | null;
+}
+
+export type FromMachine<T> = { ok: true; value: T } | { ok: false; detail: string };
+
 export interface LaunchAgentRequest {
+  machinePk?: string;
   launch: string;
   harness: KnownHarness;
   folder: string;
@@ -348,6 +359,9 @@ export interface KiwiBridge {
   seatFolders(roomId: string): Promise<string[]>;
   chooseFolder(): Promise<string | null>;
   launchAgent(req: LaunchAgentRequest): Promise<LaunchedView>;
+  machines(): Promise<MachineView[]>;
+  harnessesOn(machinePk: string): Promise<FromMachine<HarnessRow[]>>;
+  foldersOn(machinePk: string, roomId: string): Promise<FromMachine<string[]>>;
 }
 
 export interface UpdateView {
