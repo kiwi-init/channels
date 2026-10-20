@@ -724,7 +724,12 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   let statusWatch: { stop(): void } | null = null;
   let rexWatch: { stop(): void } | null = null;
   const rexSeat = (server: string, block: string, gone: boolean): void => {
-    const cfg = loadConfig();
+    let cfg: Config;
+    try {
+      cfg = loadConfig();
+    } catch {
+      return;
+    }
     for (const seat of seats.values()) {
       const record = seatRecordFor(cfg, seat.alias, seat.agent);
       if (!record?.rex || record.rex.server !== server || record.rex.block !== block) continue;
