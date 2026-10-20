@@ -28,7 +28,7 @@ export function DecisionMark() {
  */
 export function Notes({ state, now, onClear }: { state: ChannelState; now: number; onClear: (key: string) => Promise<void> }) {
   const facts = [...state.facts.values()].sort((a, b) => a.key.localeCompare(b.key))
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   const [clearing, setClearing] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   if (!facts.length) return null
@@ -45,8 +45,8 @@ export function Notes({ state, now, onClear }: { state: ChannelState; now: numbe
     }
   }
   return (
-    <section aria-label="Notes" className="mt-4 overflow-hidden rounded-card bg-raised">
-      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex w-full items-center gap-2 px-4 py-2 text-left text-ui">
+    <section aria-label="Notes" className="overflow-hidden rounded-card edge">
+      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex w-full items-center gap-2 px-4 py-3.5 text-left text-ui">
         <Icon icon={Note01Icon} size={15} className="shrink-0 text-ink-3" />
         <span className="font-medium">Notes</span>
         <span className="text-meta text-ink-3 tabular-nums">{facts.length}</span>

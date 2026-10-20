@@ -672,8 +672,8 @@ jobs:
       conversation, a review and an escalation under Needs you, a direct conversation, notes, a
       pending join request and a second empty channel) and shoots every screen of the wide
       window in the dark: the conversation, the reply bar, the composer with words in it, the Tasks tab, a task opened from its board row
-      in the Tasks panel, Needs you, the Agents tab, Details, the direct conversation,
-      Invite, the account menu, the command palette, Notes, Pause, Settings, Personalities, Add
+      in the Tasks panel, Needs you, the Agents tab, the channel's settings page (Details: members, the channel's settings, notes and closing, side by side), the direct conversation,
+      Invite, the account menu, the command palette, Notes, Pause, Settings (its sections and their groups), Personalities (opened from its row), Add
       an agent, the desktop app's New agent modal and its started screen (with a stand-in for the
       four launch methods the desktop bridge adds), first run, signed in with nothing open, Join
       with a code and the invite preview.
