@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { FLOWS } from "../scripts/ci-flows.ts";
 import { loadConfig, matches, type Config } from "../.github/jev-ci/config.ts";
 import { markMoves, size, type FileChange } from "../.github/jev-ci/diff.ts";
+import { passMarkers, trustedRef, type PassCache, type PullEvent } from "../.github/jev-ci/github.ts";
 import type { Request } from "../.github/jev-ci/jev.ts";
 import { plan, type Ask, type Decision, type Plan } from "../.github/jev-ci/plan.ts";
 
@@ -343,5 +344,34 @@ describe("jev-ci.yml matches the repo", () => {
   test("every check job in ci.yml has an entry, and the rest are planner jobs", () => {
     const wf = Bun.YAML.parse(CI) as { jobs: Record<string, unknown> };
     for (const id of Object.keys(wf.jobs)) expect(Boolean(config.jobs[id]) || Boolean(config.planner_jobs?.includes(id))).toBe(true);
+  });
+});
+
+describe("pass markers", () => {
+  const repo = { full_name: "ojowwalker77/channels" };
+  const fork = { full_name: "someone/channels" };
+  const pr = (head: { full_name: string } | null): PullEvent => ({ repository: { default_branch: "main" }, pull_request: { number: 7, base: { repo }, head: { repo: head } } });
+  const caches: PassCache[] = [
+    { key: "jev-ci-pass-static-aaa", ref: "refs/heads/main" },
+    { key: "jev-ci-pass-test-unit-bbb", ref: "refs/pull/7/merge" },
+    { key: "jev-ci-pass-test-unit-ccc", ref: "refs/pull/8/merge" },
+    { key: "jev-ci-pass-build-ddd", ref: "refs/heads/someone-else" },
+  ];
+  const jobs = ["static", "test-unit", "build"];
+
+  test("a pull request from this repo trusts main's markers and its own runs', no other pull request's or branch's", () => {
+    expect([...passMarkers(caches, jobs, trustedRef(pr(repo), "refs/pull/7/merge"))].sort()).toEqual(["static:aaa", "test-unit:bbb"]);
+  });
+
+  test("a pull request from a fork trusts only main's: its own runs could have written any marker", () => {
+    expect([...passMarkers(caches, jobs, trustedRef(pr(fork), "refs/pull/7/merge"))]).toEqual(["static:aaa"]);
+    expect([...passMarkers(caches, jobs, trustedRef(pr(null), "refs/pull/7/merge"))]).toEqual(["static:aaa"]);
+  });
+
+  test("no event or no ref trusts main alone, and the default branch comes from the event", () => {
+    expect([...passMarkers(caches, jobs, trustedRef({}, undefined))]).toEqual(["static:aaa"]);
+    expect([...passMarkers(caches, jobs, trustedRef(pr(repo), undefined))]).toEqual(["static:aaa"]);
+    const trunk: PullEvent = { ...pr(repo), repository: { default_branch: "trunk" } };
+    expect([...passMarkers([{ key: "jev-ci-pass-static-eee", ref: "refs/heads/trunk" }, ...caches], jobs, trustedRef(trunk, "refs/pull/7/merge"))].sort()).toEqual(["static:eee", "test-unit:bbb"]);
   });
 });
