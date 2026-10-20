@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Socket } from "bun";
 import type { Info, MemberRow } from "@kiwi/core/client.ts";
+import { readHarnessRow, type HarnessRow } from "@kiwi/core/harnesses.ts";
 import { home } from "../config.ts";
 import type { MachineCert } from "@kiwi/core/person.ts";
 import type { Message, Presence } from "@kiwi/core/protocol.ts";
@@ -236,6 +237,16 @@ export async function daemonListeners(sock = daemonSock()): Promise<DaemonListen
   try {
     const r = await c.call("listeners");
     return (Array.isArray(r.listeners) ? r.listeners : []).map(readListener).filter((l): l is DaemonListener => !!l);
+  } finally {
+    c.close();
+  }
+}
+
+export async function daemonHarnesses(sock = daemonSock()): Promise<HarnessRow[]> {
+  const c = await openConn(sock);
+  try {
+    const r = await c.call("harnesses");
+    return (Array.isArray(r.harnesses) ? r.harnesses : []).map(readHarnessRow).filter((h): h is HarnessRow => !!h);
   } finally {
     c.close();
   }
