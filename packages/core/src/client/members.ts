@@ -11,7 +11,7 @@ import type { MemberRefusal, Refused } from "./errors.ts";
 import type { ChannelInfo } from "./info.ts";
 import { wrapFor } from "./keys.ts";
 import type { Relay } from "./relay.ts";
-import { stale } from "./sealed.ts";
+import { newestEpoch, stale } from "./sealed.ts";
 
 export interface MembersFx {
   leave(): Effect.Effect<void, MemberRefusal, Relay>;
@@ -128,7 +128,8 @@ export class ChannelMembers {
       const members = (yield* this.ch.fx.members()).filter((m) => m.active && !m.unverified);
       this.info.forgetInfo();
       const { epoch } = yield* this.ch.fx.info();
-      const next = epoch + 1;
+      const next = Math.max(epoch, newestEpoch(this.ch.access.keys)) + 1;
+      if (!Number.isSafeInteger(next) || this.ch.access.keys[String(next)]) return yield* new Rejected(`the relay named epoch ${epoch}, which can't be the channel's next key: not rotating`);
       const key = newChannelKey();
       const keys = yield* Effect.promise(async () => {
         const out: Record<string, string> = {};

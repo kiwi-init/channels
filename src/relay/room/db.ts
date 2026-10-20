@@ -163,7 +163,7 @@ export class RoomDb {
   }
 
   etag(what: Revised): string {
-    return `"${what}-${this.get(`${what}_rev`) ?? "0"}"`;
+    return `"${what}-${what === "info" ? "2." : ""}${this.get(`${what}_rev`) ?? "0"}"`;
   }
 
   ownerUser(): string | undefined {

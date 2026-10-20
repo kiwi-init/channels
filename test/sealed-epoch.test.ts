@@ -135,6 +135,38 @@ describe("the title and settings follow the channel's epoch", () => {
   });
 });
 
+describe("a relay that lies", () => {
+  type Fx = { info: Channel["fx"]["info"]; refreshKeys: Channel["fx"]["refreshKeys"] };
+  const fxOf = (ch: Channel) => ch.fx as unknown as Fx;
+
+  test("rotate() never takes a next epoch from the relay that isn't past every key it holds", async () => {
+    const { ownerCh, leaves } = await room("plans");
+    await ownerCh.remove(leaves.id.pk);
+    expect(Object.keys(ownerCh.access.keys).sort()).toEqual(["0", "1"]);
+    const held = { ...ownerCh.access.keys };
+    const real = fxOf(ownerCh).info;
+    fxOf(ownerCh).info = (fp) => real(fp).pipe(Effect.map((i) => ({ ...i, epoch: Number.MAX_SAFE_INTEGER })));
+    await expect(ownerCh.rotate()).rejects.toThrow(/not rotating/);
+    expect(ownerCh.access.keys).toEqual(held);
+    fxOf(ownerCh).info = (fp) => real(fp).pipe(Effect.map((i) => ({ ...i, epoch: 0 })));
+    expect(await ownerCh.rotate()).toBe(2);
+    expect(ownerCh.access.keys["1"]).toBe(held["1"]!);
+    fxOf(ownerCh).info = real;
+    const info = await new Channel(ownerCh.access, relay, ownerCh.identity).info();
+    expect([info.epoch, info.title?.e, info.settings?.e ?? 2]).toEqual([2, 2, 2]);
+  });
+
+  test("a settings change is refused while the current settings can't be opened, so it never drops the rest", async () => {
+    const { ownerCh, leaves } = await room("plans");
+    await ownerCh.setCharter({ text: "keep me", since: 1 });
+    await ownerCh.remove(leaves.id.pk);
+    const lagging = new Channel({ ...ownerCh.access, keys: { "0": ownerCh.access.keys["0"]! } }, relay, ownerCh.identity);
+    fxOf(lagging).refreshKeys = () => Effect.void;
+    await expect(lagging.setHold({ on: true, since: 2 })).rejects.toThrow(/would drop the rest/);
+    expect((await ownerCh.guard())?.charter?.text).toBe("keep me");
+  });
+});
+
 describe("sealing rules", () => {
   const access = (keys: Record<string, string>): ChannelAccess => ({ roomId: "ab".repeat(16), ownerPk: "pk", epoch: 0, keys }) as ChannelAccess;
 
@@ -159,6 +191,18 @@ describe("sealing rules", () => {
     const now = await run(rotated, { epoch: 1, sealedEpoch: true });
     expect(now?.e).toBe(1);
     expect(await opens(k1, rotated.roomId, now)).toEqual({ a: 1 });
+  });
+
+  test("a relay that names an epoch whose key it withholds gets no seal under an older key", async () => {
+    const id = await generateIdentity("human");
+    const core = new ChannelCore(access({ "0": newChannelKey(), "1": newChannelKey() }), relay, id);
+    core.fx = { refreshKeys: () => Effect.void } as unknown as ChannelCore["fx"];
+    const sealing = sealFor(core, { epoch: 2, sealedEpoch: true }, { a: 1 });
+    await expect(Effect.runPromise(Effect.provideService(sealing, Relay, fetchRelay))).rejects.toThrow(/missing the channel's newest key/);
+  });
+
+  test("only canonical epoch names count as keys", () => {
+    expect(newestEpoch({ "0": "a", "01": "b", "1e1": "c", " 2": "d" })).toBe(0);
   });
 
   test("a blob under an older key than the newest is stale, only on a relay that keeps the epoch", () => {

@@ -126,7 +126,9 @@ export class ChannelSettings {
       yield* this.ch.ownerOnly();
       this.info.forgetInfo();
       const info = yield* this.ch.fx.info();
-      const kept = omit((yield* this.settings(info)) ?? {}, "what", "room", "pk", "sig");
+      const current = yield* this.settings(info);
+      if (info.settings && !current) return yield* new MissingKey("can't open the channel's current settings, so changing one would drop the rest: try again in a moment");
+      const kept = omit(current ?? {}, "what", "room", "pk", "sig");
       const next = { ...kept, ...change };
       const signed = yield* Effect.promise(() => sign(this.ch.identity, { ...next, what: "channel-settings", room: this.ch.roomId }));
       const sealed = yield* sealFor(this.ch, info, signed);

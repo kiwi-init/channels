@@ -15,6 +15,7 @@ export function newestEpoch(keys: Readonly<Record<string, string>>): number {
   return Math.max(
     0,
     ...Object.keys(keys)
+      .filter((k) => String(Number(k)) === k)
       .map(Number)
       .filter((e) => Number.isSafeInteger(e) && e >= 0),
   );
@@ -35,6 +36,7 @@ export function sealFor(ch: ChannelCore, info: Pick<Info, "epoch" | "sealedEpoch
     if (info.epoch > newestEpoch(ch.access.keys)) yield* ch.fx.refreshKeys().pipe(Effect.catchCause(() => Effect.void));
     const e = newestEpoch(ch.access.keys);
     if (!info.sealedEpoch && e > 0) return yield* new Rejected("this relay can't keep the channel's name and settings from removed members: update it, or ask whoever runs it to");
+    if (e < info.epoch) return yield* new Rejected("this device is missing the channel's newest key, so it won't seal the name or settings under an older one: try again in a moment");
     const key = ch.access.keys[String(e)];
     if (!key) return null;
     const sealed = yield* Effect.promise(() => seal(key, ch.roomId, payload));
