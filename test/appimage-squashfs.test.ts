@@ -45,6 +45,13 @@ test("a fast compressor in blocks over 128 KiB still fails", () => {
   expect(check(appImage("big-zstd", 6, 1024 * 1024)).code).toBe(1);
 });
 
+test("xz or an unknown compressor fails even in 128 KiB blocks, while lz4 and zstd pass", () => {
+  expect(check(appImage("small-xz", 4, 128 * 1024)).code).toBe(1);
+  expect(check(appImage("unknown", 9, 128 * 1024)).code).toBe(1);
+  expect(check(appImage("lz4", 5, 128 * 1024)).code).toBe(0);
+  expect(check(appImage("zstd", 6, 64 * 1024)).code).toBe(0);
+});
+
 test("a release folder without an AppImage, or a file that is not one, fails instead of passing", () => {
   mkdirSync(join(root, "empty"));
   expect(check(join(root, "empty")).code).toBe(1);
