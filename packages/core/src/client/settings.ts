@@ -1,6 +1,5 @@
 import * as Effect from "effect/Effect";
 import * as Semaphore from "effect/Semaphore";
-import { open, seal } from "../crypto.ts";
 import { omit } from "../omit.ts";
 import { sign, verify } from "../identity.ts";
 import { MAX_CHARTER, MAX_ROOM_NAME, ROOM_ID_RE } from "../protocol.ts";
@@ -10,6 +9,7 @@ import type { ChannelCore } from "./core.ts";
 import type { Refusal, Refused } from "./errors.ts";
 import type { ChannelInfo, Info } from "./info.ts";
 import type { Relay } from "./relay.ts";
+import { newestEpoch, openSealed, sealFor } from "./sealed.ts";
 
 interface RoomEntry {
   id: string;
@@ -32,6 +32,7 @@ export interface SettingsFx {
   setCompress(on: boolean): Effect.Effect<void, Refused, Relay>;
   imageRefs(): Effect.Effect<boolean, Refusal, Relay>;
   setImageRefs(on: boolean): Effect.Effect<void, Refused, Relay>;
+  resealSettings(): Effect.Effect<void, Refused, Relay>;
 }
 
 export class ChannelSettings {
@@ -99,16 +100,21 @@ export class ChannelSettings {
     setImageRefs: Effect.fn("Channel.setImageRefs")({ self: this }, function* (this: ChannelSettings, on: boolean) {
       yield* this.putSettings({ imageRefs: on });
     }),
+
+    resealSettings: Effect.fn("Channel.resealSettings")({ self: this }, function* (this: ChannelSettings) {
+      yield* this.ch.ownerOnly();
+      this.info.forgetInfo();
+      const info = yield* this.ch.fx.info();
+      if (!info.sealedEpoch || !info.settings || (info.settings.e ?? 0) >= newestEpoch(this.ch.access.keys)) return;
+      if (yield* this.settings(info)) yield* this.putSettings({});
+    }),
   };
 
   settings(info?: Info): Effect.Effect<Record<string, unknown> | null, Refusal, Relay> {
     return Effect.gen({ self: this }, function* () {
       const s = (info ?? (yield* this.ch.fx.info())).settings;
-      const key = this.ch.access.keys["0"];
-      if (!s || !key) return null;
-      const o = (yield* Effect.promise(() => open(key, this.ch.roomId, s.iv, s.ct).catch(() => null))) as
-        | ({ what?: unknown; room?: unknown; pk?: string; sig?: string } & Record<string, unknown>)
-        | null;
+      if (!s) return null;
+      const o = (yield* openSealed(this.ch, s)) as ({ what?: unknown; room?: unknown; pk?: string; sig?: string } & Record<string, unknown>) | null;
       if (!o || o.what !== "channel-settings" || o.room !== this.ch.roomId || o.pk !== this.ch.access.ownerPk || !(yield* Effect.promise(() => verify(o as never)))) return null;
       this.packs = o.compress === true;
       return o;
@@ -118,12 +124,13 @@ export class ChannelSettings {
   private putSettings(change: Record<string, unknown>): Effect.Effect<void, Refused, Relay> {
     return Effect.gen({ self: this }, function* () {
       yield* this.ch.ownerOnly();
-      const key = this.ch.access.keys["0"];
-      if (!key) return yield* new MissingKey("missing the channel key");
       this.info.forgetInfo();
-      const kept = omit((yield* this.settings()) ?? {}, "what", "room", "pk", "sig");
+      const info = yield* this.ch.fx.info();
+      const kept = omit((yield* this.settings(info)) ?? {}, "what", "room", "pk", "sig");
       const next = { ...kept, ...change };
-      const sealed = yield* Effect.promise(async () => seal(key, this.ch.roomId, await sign(this.ch.identity, { ...next, what: "channel-settings", room: this.ch.roomId })));
+      const signed = yield* Effect.promise(() => sign(this.ch.identity, { ...next, what: "channel-settings", room: this.ch.roomId }));
+      const sealed = yield* sealFor(this.ch, info, signed);
+      if (!sealed) return yield* new MissingKey("missing the channel key");
       yield* this.ch.request("/settings", { method: "PUT", body: JSON.stringify({ settings: sealed }) }).pipe(Effect.ensuring(Effect.sync(() => this.info.forgetInfo())));
       this.packs = next.compress === true;
     }).pipe(Semaphore.withPermit(this.settingsWrites));

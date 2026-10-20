@@ -25,7 +25,9 @@ agent                          relay                         owner's app
   room id reveals neither the owner key nor the owner's name, and can't be
   used to fill a channel's pending requests. A wrong fingerprint is answered
   like a missing room. Only a client holding the code gets the owner key, the
-  owner's signature, the title, and the owner's name.
+  owner's signature and the owner's name, plus the channel's name and settings
+  sealed under a channel key: ciphertext it can't open without that key, with
+  its size and when it last changed (see Leaving, removal, closing).
 - The joiner's name and role are sealed to the owner's key, so the relay
   never learns them.
 - Both sides see a **6-digit verification code**, and the owner approves only
@@ -257,8 +259,9 @@ list. Non-members can't read ciphertext, post, or see who's online.
 | Member records (names, roles) | the channel key | ciphertext |
 | Join requests (name, role) | sealed to the owner's X25519 key | ciphertext |
 | Channel keys | sealed to each member's X25519 key, signed by the owner | one signed, sealed box per member per epoch |
-| Channel name | signed by the owner, then sealed with the channel key; clients drop one the owner didn't sign | ciphertext. New rooms also store a separate owner signature (`titles: "signed"`), not part of the key statement, so a 0.7 client still joins. A relay can strip that signature: the room then follows the older rule, and an unsigned `{ name }` still shows until this client has seen a signed title |
-| Channel icon (one emoji, or a png/jpg/gif/webp image ≤32KB, never SVG) | signed by the owner, then sealed with the channel key; clients drop one the owner didn't sign | ciphertext, and when it last changed |
+| Channel name | signed by the owner, then sealed with the current epoch's channel key and resealed when the key rotates; clients drop one the owner didn't sign | ciphertext. New rooms also store a separate owner signature (`titles: "signed"`), not part of the key statement, so a 0.7 client still joins. A relay can strip that signature: the room then follows the older rule, and an unsigned `{ name }` still shows until this client has seen a signed title |
+| Channel settings (charter, hold, rooms, repos, compression, images by reference) | signed by the owner, then sealed with the current epoch's channel key and resealed when the key rotates; clients drop settings the owner didn't sign | ciphertext, its size and when it last changed |
+| Channel icon (one emoji, or a png/jpg/gif/webp image ≤32KB, never SVG) | signed by the owner, then sealed with the current epoch's channel key and resealed when the key rotates; clients drop one the owner didn't sign | ciphertext, and when it last changed |
 | Message images sent by reference (only in channels whose owner turned it on) | each image under its own fresh random AES-256-GCM key; that key travels only inside the sealed, signed message. The blob's id is also in the upload and fetch paths, so the relay sees it, but it is a hash of the encrypted bytes and tells nothing about the image | the encrypted bytes under their id (the SHA-256 of those bytes, which the relay checks), their size, and when they were stored |
 
 Channel keys are random (256-bit), not derived from the code.
@@ -307,6 +310,19 @@ forge or swap anything. Writes are rate-limited per client address.
   the relay supplies. After a voluntary leave, the owner's app rotates the
   next time it runs, since only the owner can. Former members' old messages
   still verify.
+- The channel's name, settings (charter, hold, rooms, repos) and icon move with
+  the key. Right after a rotation the owner's app reseals them under the new
+  key, and it seals every later change under the newest key it holds, never
+  under a lower epoch the relay names. A departed key can't open any of them.
+  `GET /info` still serves the sealed name and settings to anyone holding the
+  join code, a departed member included: they get the ciphertext, its size and
+  when it changed, never its contents. A relay that keeps the epoch says
+  `sealedEpoch: true` in `/info` and refuses a name or settings sealed under a
+  key older than the channel's, so an out-of-date owner app can't put them back
+  under the first key. Against an older relay the client seals them under the
+  first key, as before. Kiwi 0.22 and older open only the first key: in a
+  channel that has rotated, they show no name, charter, hold, rooms or repos
+  until they update.
 - **Close** (in the app, owner): the relay deletes the room's storage
   outright. There's no tombstone, and the room's file on a self-hosted relay
   is removed. Connected members are disconnected and wipe their local copy

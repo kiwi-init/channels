@@ -11,6 +11,7 @@ import type { MemberRefusal, Refused } from "./errors.ts";
 import type { ChannelInfo } from "./info.ts";
 import { wrapFor } from "./keys.ts";
 import type { Relay } from "./relay.ts";
+import { stale } from "./sealed.ts";
 
 export interface MembersFx {
   leave(): Effect.Effect<void, MemberRefusal, Relay>;
@@ -137,13 +138,23 @@ export class ChannelMembers {
       yield* this.ch.request("/epochs", { method: "POST", body: JSON.stringify({ epoch: next, keys }) }).pipe(Effect.ensuring(Effect.sync(() => this.info.forgetInfo())));
       this.ch.access = { ...this.ch.access, epoch: next, keys: { ...this.ch.access.keys, [String(next)]: key } };
       this.ch.onAccess?.(this.ch.access);
+      yield* Effect.ignoreCause(this.ch.fx.resealTitle());
+      yield* Effect.ignoreCause(this.ch.fx.resealSettings());
+      yield* Effect.ignoreCause(this.ch.fx.resealIcon());
       return next;
     }),
 
     rotateIfDue: Effect.fn("Channel.rotateIfDue")({ self: this }, function* (this: ChannelMembers) {
       if (!this.ch.isOwner) return false;
       this.info.forgetInfo();
-      if (!(yield* this.ch.fx.info()).rotate) return false;
+      const info = yield* this.ch.fx.info();
+      if (!info.rotate) {
+        if (stale(info, this.ch.access.keys)) {
+          yield* Effect.ignoreCause(this.ch.fx.resealTitle());
+          yield* Effect.ignoreCause(this.ch.fx.resealSettings());
+        }
+        return false;
+      }
       yield* this.ch.fx.rotate();
       return true;
     }),
