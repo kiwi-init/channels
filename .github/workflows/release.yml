@@ -104,6 +104,7 @@ jobs:
     needs: publish
     if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
+    environment: release
     concurrency:
       group: deploy-relay
       cancel-in-progress: false

@@ -1,4 +1,6 @@
 import { Database } from "bun:sqlite";
+import { join } from "node:path";
+import { QUERY_ARG } from "./query-arg.ts";
 import { decodeBytesToUtf8, defineCommand, type Command } from "just-bash";
 import { loadJson, memberLoad } from "@kiwi/core/load.ts";
 import { ignored, type Message } from "@kiwi/core/protocol.ts";
@@ -19,7 +21,10 @@ const SCHEMA: Record<string, string[]> = {
 
 const MAX_ROWS = 5_000;
 const READ_ONLY_SQL = /^\s*(select|with|values)\b/i;
-const FORBIDDEN_SQL = /\b(attach|detach|pragma|vacuum|recursive)\b/i;
+const FORBIDDEN_SQL = /\b(attach|detach|pragma|vacuum|recursive|randomblob|zeroblob)\b/i;
+const QUERY_MS = 10_000;
+
+type Ran = { stdout: string; stderr: string; exitCode: number };
 
 export function reviewTexts(messages: Message[]): Map<string, string> {
   const out = new Map<string, string>();
@@ -148,6 +153,69 @@ function unique(names: string[]): string[] {
   });
 }
 
+function runQuery(sql: string, tables: Tables): Ran {
+  const db = database(tables);
+  try {
+    const stmt = db.query(sql);
+    const names = unique(stmt.columnNames);
+    let out = "";
+    let n = 0;
+    let cut = false;
+    for (const row of stmt.values()) {
+      if (n === MAX_ROWS) {
+        cut = true;
+        break;
+      }
+      out += JSON.stringify(Object.fromEntries(names.map((k, i) => [k, row[i]]))) + "\n";
+      n++;
+    }
+    return { stdout: out, stderr: cut ? `query: output cut at ${MAX_ROWS} rows; narrow the query\n` : "", exitCode: 0 };
+  } catch (err) {
+    return fail(`query: ${err instanceof Error ? err.message : String(err)}\n`);
+  } finally {
+    db.close();
+  }
+}
+
+function workerArgv(): string[] {
+  return /\.(ts|js)$/.test(Bun.main) ? [process.execPath, join(import.meta.dir, "cli", "main.ts"), QUERY_ARG] : [process.execPath, QUERY_ARG];
+}
+
+export async function runQueryWorker(): Promise<void> {
+  const { sql, tables } = JSON.parse(await Bun.stdin.text()) as { sql: string; tables: Tables };
+  process.stdout.write(JSON.stringify(runQuery(sql, tables)));
+}
+
+function readRan(text: string): Ran | null {
+  try {
+    const r = JSON.parse(text) as Partial<Ran>;
+    return typeof r.stdout === "string" && typeof r.stderr === "string" && typeof r.exitCode === "number" ? { stdout: r.stdout, stderr: r.stderr, exitCode: r.exitCode } : null;
+  } catch {
+    // A worker that died mid-answer: reported as a failed query below.
+    return null;
+  }
+}
+
+export async function queryIsolated(sql: string, tables: Tables, ms = QUERY_MS, argv = workerArgv()): Promise<Ran> {
+  const child = Bun.spawn(argv, { stdin: "pipe", stdout: "pipe", stderr: "ignore", env: { ...process.env } });
+  child.stdin.write(JSON.stringify({ sql, tables }));
+  child.stdin.end();
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const late = new Promise<null>((resolve) => {
+    timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      resolve(null);
+    }, ms);
+  });
+  try {
+    const text = await Promise.race([new Response(child.stdout).text(), late]);
+    if (text === null) return fail(`query: stopped after ${ms / 1000} s; narrow it (a join of big tables, or a huge value)\n`);
+    return readRan(text) ?? fail("query: the query process failed\n");
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export function queryCommand(load: () => Tables | undefined): Command {
   return defineCommand("query", async (args, ctx) => {
     if (args[0] === "--schema") return { stdout: schemaText(), stderr: "", exitCode: 0 };
@@ -155,30 +223,10 @@ export function queryCommand(load: () => Tables | undefined): Command {
     if (!sql) return fail("usage: query 'SQL' (or SQL on stdin); query --schema lists the tables\n", 2);
     const code = bare(sql);
     if (code.includes("\u0000") || !READ_ONLY_SQL.test(code) || FORBIDDEN_SQL.test(code) || code.includes(";")) {
-      return fail("query: one select, with or values statement only (no attach, detach, pragma, vacuum, recursive or ';' outside a string)\n");
+      return fail("query: one select, with or values statement only (no attach, detach, pragma, vacuum, recursive, randomblob, zeroblob or ';' outside a string)\n");
     }
     const tables = load();
     if (!tables) return fail("query: no channel data in this run\n");
-    const db = database(tables);
-    try {
-      const stmt = db.query(sql);
-      const names = unique(stmt.columnNames);
-      let out = "";
-      let n = 0;
-      let cut = false;
-      for (const row of stmt.values()) {
-        if (n === MAX_ROWS) {
-          cut = true;
-          break;
-        }
-        out += JSON.stringify(Object.fromEntries(names.map((k, i) => [k, row[i]]))) + "\n";
-        n++;
-      }
-      return { stdout: out, stderr: cut ? `query: output cut at ${MAX_ROWS} rows; narrow the query\n` : "", exitCode: 0 };
-    } catch (err) {
-      return fail(`query: ${err instanceof Error ? err.message : String(err)}\n`);
-    } finally {
-      db.close();
-    }
+    return queryIsolated(sql, tables);
   });
 }

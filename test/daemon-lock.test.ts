@@ -85,3 +85,38 @@ test("a daemon whose lock and socket another daemon took exits by itself and lea
     }
   });
 });
+
+test("a stale lock whose pid now belongs to something else frees the lock without killing it", async () => {
+  const { isKiwiDaemon, lockPath, takeLock } = await import("../src/daemon/lock.ts");
+  const dir = mkdtempSync(join(tmpdir(), "kiwi-lock-reused-"));
+  const stranger = Bun.spawn(["sleep", "30"], { stdin: "ignore", stdout: "ignore", stderr: "ignore" });
+  const lock = lockPath(dir);
+  writeFileSync(lock, String(stranger.pid));
+  const { utimesSync } = await import("node:fs");
+  utimesSync(lock, new Date(Date.now() - 120_000), new Date(Date.now() - 120_000));
+  await takeLock(lock);
+  expect(readFileSync(lock, "utf8")).toBe(String(process.pid));
+  expect(alive(stranger.pid)).toBe(true);
+  stranger.kill();
+  rmSync(dir, { recursive: true, force: true });
+  expect(isKiwiDaemon("/Users/jow/.kiwi/bin/kiwi daemon")).toBe(true);
+  expect(isKiwiDaemon("/opt/homebrew/bin/bun /repo/src/cli/main.ts daemon")).toBe(true);
+  expect(isKiwiDaemon("C:\\kiwi\\kiwi.exe daemon")).toBe(true);
+  expect(isKiwiDaemon("sleep 30")).toBe(false);
+  expect(isKiwiDaemon("/usr/bin/kiwi-daemon-helper")).toBe(false);
+  expect(isKiwiDaemon("vim kiwi daemon.md")).toBe(false);
+});
+
+test("while a daemon holds or takes the lock, hooks retrying it spawn one per home every 15 s, not one each", async () => {
+  const { claimSpawn } = await import("../src/daemon/rpc.ts");
+  const dir = mkdtempSync(join(tmpdir(), "kiwi-spawn-gap-"));
+  const t = 1_800_000_000_000;
+  expect(claimSpawn(dir, t)).toBe(true);
+  expect(claimSpawn(dir, t + 1_000)).toBe(true);
+  writeFileSync(join(dir, "daemon.lock"), "12345");
+  expect(claimSpawn(dir, t + 1_500)).toBe(false);
+  expect(claimSpawn(dir, t + 15_999)).toBe(false);
+  expect(claimSpawn(dir, t + 16_000)).toBe(true);
+  expect(statSync(join(dir, "daemon.spawning")).mode & 0o777).toBe(0o600);
+  rmSync(dir, { recursive: true, force: true });
+});

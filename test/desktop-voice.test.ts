@@ -19,7 +19,7 @@ function httpOk(value: string, expires_at: number): VoiceHttp {
 
 describe("desktop voice (T11)", () => {
   test("the Mac entitlement allows the microphone and not the camera", () => {
-    const plist = readFileSync(join(import.meta.dir, "../desktop/build/entitlements.mac.plist"), "utf8");
+    const plist = readFileSync(join(import.meta.dir, "../desktop/build/entitlements.app.plist"), "utf8");
     expect(plist).toContain("com.apple.security.device.audio-input");
     expect(plist).not.toContain("com.apple.security.device.camera");
   });

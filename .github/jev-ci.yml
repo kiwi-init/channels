@@ -71,7 +71,7 @@ jobs:
 
   test-unit:
     name: test / unit
-    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.mac.plist", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
+    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "desktop/package.json", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs the unit tests with bun test: every test/*.test.ts except the slow suites in
@@ -251,6 +251,14 @@ jobs:
       included, with git asked only when the config rewrites urls or includes others (src/git-where.ts, test/where-files.test.ts);
       and the home walked and tightened once per kiwi version, again once someone loosened it
       (test/local-perms.test.ts).
+      Also the daemon's and hooks' reliability (audit #132, bundle H): a stale daemon.lock whose pid now belongs to
+      another program freed without killing it, only a kiwi daemon's command line being killed (test/daemon-lock.test.ts);
+      hooks retrying an unreachable daemon spawning one per home every 15 s while a lock exists (claimSpawn,
+      test/daemon-lock.test.ts); a key that waited long for approval getting its seat within seconds of the approval
+      (test/daemon-seats.test.ts); a wake command that ignores TERM or leaves a child on its stderr ending at its deadline
+      (runBounded, test/wake-bounded.test.ts); the Rex helpers replacing init.lua in one rename through its dotfiles link,
+      keeping its mode (test/rex.test.ts); and a kiwi sh query run in its own process, stopped after its deadline, with
+      randomblob and zeroblob refused (queryIsolated, test/sh-query.test.ts).
       Also test/shell-path.test.ts: the PATH line kiwi setup and the desktop app add to the shell's profile
       (packages/core/src/node/shell-path.ts), once and never when the profile already names the folder, and never
       from a profile outside a temp folder into a temp folder (the system's temp folders, through their links,
@@ -387,7 +395,13 @@ jobs:
       another relay to this one, so neither a call nor finishCreating's 404 can forget it. And test/desktop-voice.test.ts: the desktop voice
       store's CSP allows api.x.ai only when an xAI key is saved, the project key never reaches
       the snapshot or the token IPC result, consent defaults off, and
-      desktop/build/entitlements.mac.plist has the audio-input entitlement. And
+      desktop/build/entitlements.app.plist has the audio-input entitlement. And
+      test/desktop-entitlements.test.ts: Channels.app and its helpers (desktop/package.json's
+      entitlements and entitlementsInherit, desktop/build/entitlements.app.plist) get JIT, writable
+      executable memory and the microphone, nothing more; only the bundled kiwi
+      (desktop/build/entitlements.cli.plist, release-build.yml's signcli) gets Bun's DYLD and
+      library-validation entitlements. On macOS it also signs a stand-in app and runs
+      release-build.yml's own check, which must refuse an app or helper carrying them. And
       test/desktop-guard.test.ts: on Linux, no encryption or the basic_text backend counts as keys kept
       without a keyring, and such a store is saved again into a keyring once one is there. And
       web lib/channel/trim.test.ts: a long session folds the messages past the 2000-message window
@@ -411,6 +425,9 @@ jobs:
       KIWI_HOME/daemon.log, rotated at 1 MB. And
       test/release-signing.test.ts: release-build.yml's Package step fails a tag release that has no
       Mac signing secrets, while a rehearsal and the Linux build still build unsigned. And
+      test/release-environment.test.ts: every job that reads a signing or deploy secret (MAC_*,
+      APPLE_*, CLOUDFLARE_*) runs in the release environment, a rehearsal off main runs in none, and
+      no caller of release-build.yml passes those secrets by name. And
       test/release-on-main.test.ts: release.yml's on-main job refuses a tag whose commit isn't on
       main, and every other job waits for it, so nothing is built, signed or published from such a
       tag; bump-main pushes a stamp only when it edits scripts/stamp.ts's files and CHANGELOG.md,
@@ -463,7 +480,8 @@ jobs:
       downloads nothing, GitHub failing is a failed check, and two checks at once share one. And
       test/jev-ci.test.ts: the CI planner in .github/jev-ci, which plans synthetic changes
       against the real .github/jev-ci.yml and .github/workflows/ci.yml in a scratch git repo,
-      following imports into workspace packages (@kiwi/core) by name. And
+      following imports into workspace packages (@kiwi/core) by name, and trusts a pass marker only
+      from main or the pull request's own runs, never a fork's. And
       test/core-package.test.ts: packages/core imports nothing outside itself but effect/*,
       node: builtins only under packages/core/src/node, no Node or Bun globals elsewhere in it,
       web/src never imports @kiwi/core/node/, and nothing reaches packages/core by a relative
@@ -691,7 +709,7 @@ jobs:
 
   cli-macos:
     name: cli / macos
-    inputs: ["src/**", "packages/core/**", "test/**", "site/install", "site/install.sh", "desktop/src/**", "package.json", "bun.lock", "bunfig.toml", "web/package.json"]
+    inputs: ["src/**", "packages/core/**", "test/**", "site/install", "site/install.sh", "desktop/src/**", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", ".github/workflows/release-build.yml", "package.json", "bun.lock", "bunfig.toml", "web/package.json"]
     always: ["scripts/build-cli.ts", "scripts/cli-bundle.ts"]
     question: >-
       Could this change to `file` make the job described in `job` fail on macOS, or fail to
@@ -717,7 +735,9 @@ jobs:
       from mkdtemp; home is under /Users; the file system ignores case; a unix socket path is
       capped at 104 bytes), how the CLI names its own command in the text it prints, BSD
       versions of shell tools, process, signal and file-watching differences, and a build
-      target that fails to compile. Fails if any test fails on macOS or a target doesn't build.
+      target that fails to compile. test/desktop-entitlements.test.ts signs stand-in apps with
+      codesign here, so release-build.yml's entitlements check runs for real only on macOS. Fails
+      if any test fails on macOS or a target doesn't build.
 
   release-rehearsal:
     name: release / rehearsal
@@ -725,7 +745,7 @@ jobs:
     push: false
     version_bumps: true
     inputs: []
-    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/actions/stamp/action.yml", "scripts/stamp.ts", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/scripts/fuses.ts", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/scripts/pack-cli.ts", "scripts/changelog.ts", "scripts/cli-downloads.ts"]
+    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/actions/stamp/action.yml", "scripts/stamp.ts", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/scripts/fuses.ts", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/scripts/pack-cli.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "scripts/changelog.ts", "scripts/cli-downloads.ts"]
     description: >-
       Runs .github/workflows/release-build.yml, the build a tag's release.yml runs, with
       rehearsal: true and a read-only token, publishing nothing: scripts/stamp.ts stamping the tag
@@ -741,11 +761,12 @@ jobs:
       desktop/scripts/pack-cli.ts (which checks it unpacks to the same bytes), and on macOS
       desktop/scripts/mac-size.ts failing a dmg or zip over 150 MiB or an app over 320 MiB, and on Linux
       desktop/scripts/appimage-squashfs.ts failing an AppImage not packed with gzip, lz4 or zstd in
-      blocks of at most 128 KiB. On a pull request the macOS app is unsigned; a
-      manual run of ci.yml passes the signing secrets, so the app is signed, notarized and
-      checked as on a tag. Fails where the tag would: a stamped file with no version for the stamp
+      blocks of at most 128 KiB. On a pull request, and on a manual run of ci.yml from any
+      branch but main, the macOS app is unsigned: no caller passes the signing secrets, and only
+      the release environment (main and v* tags) holds them. A manual run on main takes them from
+      that environment, so the app is signed, notarized and checked as on a tag. Fails where the tag would: a stamped file with no version for the stamp
       to find, versions that disagree after it, no changelog section, a test failing on macOS, an electron-builder error, a package missing the web
-      app or the kiwi binary, a Mac package over its size gate, an AppImage packed slow to page in, and on a manual run a signing or notarization error. Runs on
+      app or the kiwi binary, a Mac package over its size gate, an AppImage packed slow to page in, and on a manual run on main a signing or notarization error. Runs on
       a pull request that changes the release workflows, the stamp or CHANGELOG.md, on any change
       that only bumps a version number, and on manual runs of ci.yml, never on a push to main
       (release.yml's "kiwi X.Y.Z" stamp commit included).
