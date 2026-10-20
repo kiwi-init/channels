@@ -491,7 +491,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                 current={currentConversation}
                 onConversation={openConversation}
               />
-              <div className={cx("relative flex min-w-0 flex-1 md:sheet", (root || info || side?.kind === "tasks") && "hidden md:flex")}>
+              <div className={cx("relative flex min-w-0 flex-1 md:sheet", info ? "hidden" : (root || side?.kind === "tasks") && "hidden md:flex")}>
                 <div className="relative flex min-w-0 flex-1 flex-col bg-canvas" style={{ "--head": `${headH}px`, "--foot": `${footH}px` } as CSSProperties}>
                   <Header
                     headRef={headRef}
@@ -672,6 +672,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                     setView("everything")
                     setTab("tasks")
                   }}
+                  onNewAgent={onNewAgent}
                   state={state}
                   now={now}
                   send={send}
