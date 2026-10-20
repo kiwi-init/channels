@@ -87,7 +87,9 @@ describe("the harness inventory", () => {
     expect(rows.map((r) => r.harness)).toEqual([...KNOWN_HARNESSES]);
     const by = Object.fromEntries(rows.map((r) => [r.harness, r]));
     expect(by.claude).toMatchObject({ path: join(bins, "claude"), version: "2.0.1" });
-    expect(by.codex).toMatchObject({ path: join(bins, "codex"), version: "0.163.0", wake: "codex-queue", why: null });
+    expect(by.codex).toMatchObject({ path: join(bins, "codex"), version: "0.163.0", start: true, wake: "codex-queue", why: null });
+    expect(by.kimi).toMatchObject({ start: false });
+    expect(by.gemini).toMatchObject({ start: false });
     expect(by.kimi).toMatchObject({ path: join(bins, "kimi-code"), version: "1.4.0" });
     expect(by.gemini).toMatchObject({ path: null, version: null });
     expect(by.pi).toMatchObject({ path: null, version: null });
@@ -135,21 +137,29 @@ describe("the harness inventory", () => {
 
   test("prints one line per harness", async () => {
     const text = inventoryText(await harnessInventory(`${bins}:/usr/bin:/bin`));
-    expect(text).toContain(`codex: 0.164.0 at ${join(bins, "codex")}; Kiwi wakes it via codex queue`);
+    expect(text).toContain(`codex: 0.164.0 at ${join(bins, "codex")}; kiwi launch starts it; Kiwi wakes it via codex queue`);
     expect(text).toContain("claude: 2.0.1 at");
     expect(text).toContain("Kiwi can't wake it: Claude Code 2.0.1 is older than 2.1.296");
     expect(text).toContain("gemini: not installed");
   });
 
   test("a row from the daemon keeps what checks out and drops what doesn't", () => {
-    expect(readHarnessRow({ harness: "codex", path: "/bin/codex", version: "1.0.0", wake: "codex-queue", why: null })).toEqual({
+    expect(readHarnessRow({ harness: "codex", path: "/bin/codex", version: "1.0.0", start: true, wake: "codex-queue", why: null })).toEqual({
       harness: "codex",
       path: "/bin/codex",
       version: "1.0.0",
+      start: true,
       wake: "codex-queue",
       why: null,
     });
-    expect(readHarnessRow({ harness: "codex", path: 3, version: "", wake: "carrier-pigeon", why: "x" })).toEqual({ harness: "codex", path: null, version: null, wake: null, why: "x" });
+    expect(readHarnessRow({ harness: "codex", path: 3, version: "", start: "yes", wake: "carrier-pigeon", why: "x" })).toEqual({
+      harness: "codex",
+      path: null,
+      version: null,
+      start: false,
+      wake: null,
+      why: "x",
+    });
     expect(readHarnessRow({ harness: "grok-bot" })).toBeNull();
     expect(readHarnessRow("codex")).toBeNull();
   });

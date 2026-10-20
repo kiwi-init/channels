@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import type { Socket } from "bun";
 import type { Info, MemberRow } from "@kiwi/core/client.ts";
 import { readHarnessRow, type HarnessRow } from "@kiwi/core/harnesses.ts";
+import { readLaunched, type Launched, type LaunchRequest } from "../launch/wire.ts";
 import { home } from "../config.ts";
 import type { MachineCert } from "@kiwi/core/person.ts";
 import type { Message, Presence } from "@kiwi/core/protocol.ts";
@@ -247,6 +248,18 @@ export async function daemonHarnesses(sock = daemonSock()): Promise<HarnessRow[]
   try {
     const r = await c.call("harnesses");
     return (Array.isArray(r.harnesses) ? r.harnesses : []).map(readHarnessRow).filter((h): h is HarnessRow => !!h);
+  } finally {
+    c.close();
+  }
+}
+
+export async function daemonLaunch(req: LaunchRequest, sock = daemonSock()): Promise<Launched> {
+  const c = await openConn(sock, 150_000);
+  try {
+    const r = await c.call("launch", { ...req });
+    const launched = readLaunched(r.launched);
+    if (!launched) throw new Error("the daemon answered a launch in a shape this kiwi doesn't know");
+    return launched;
   } finally {
     c.close();
   }

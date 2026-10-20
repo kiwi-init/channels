@@ -205,6 +205,17 @@ jobs:
       when its version doesn't say grok, among every agent on PATH; whether Kiwi can wake a session started now, and
       why not (Claude Code older than 2.1.296, Kimi Code in a terminal, Gemini, Cursor, Grok); and a row read back
       from the daemon keeping only what checks out (packages/core/src/harnesses.ts).
+      Also test/launch.test.ts: kiwi launch and the daemon's launch verb (src/launch/launch.ts, recipes.ts, wire.ts):
+      the line an agent is started with takes only a join code, an http(s) relay with no path, a plain nickname
+      (quoted in the line) and an invite's token, so nothing in it can make the agent run anything else; Claude Code
+      starts with it as its first prompt, kiwi join pre-allowed and the prompt after --, and Codex with it as its
+      first prompt, while the other harnesses have no recipe yet; a launch refuses a relative, missing, home or
+      root folder, a harness without a recipe and one the inventory doesn't find, then opens its place with the
+      binary the inventory found, the folder, the nickname as the window's name, and KIWI_LAUNCH (a fresh id
+      readLaunch accepts) and KIWI_HOME in its environment; the harness's hooks go in before it starts (Claude
+      Code's listening ones from 2.1.296) unless KIWI_NO_HOOKS is set or that harness's hooks are off; the daemon's
+      answer reads back as sent; and kiwi join carries KIWI_LAUNCH to the owner in its sealed claims on a live
+      relay, dropping one that isn't an id. The inventory says which harnesses kiwi launch starts.
       Also test/rotate.test.ts: when a Claude Code seat in tmux gets a fresh session (src/rotate/decide.ts:
       between tasks past ROTATE_FLOOR, the lead past the line only once its own lead checkpoint is
       later than the nudge, open tasks only once checkpointed since the nudge, a lead with tasks

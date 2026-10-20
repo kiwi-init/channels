@@ -4,6 +4,7 @@ import { KNOWN_HARNESSES, type HarnessRow, type KnownHarness } from "@kiwi/core/
 import { compareVersions } from "@kiwi/core/versions.ts";
 import { viaOf, wakePath, wakeWords } from "@kiwi/core/wake.ts";
 import { REWAKE_SINCE } from "../hooks/install/claude.ts";
+import { canStart } from "./recipes.ts";
 import { loginPath } from "./shell.ts";
 
 interface Binary {
@@ -97,7 +98,7 @@ export async function harnessInventory(PATH?: string): Promise<HarnessRow[]> {
     KNOWN_HARNESSES.map(async (harness): Promise<HarnessRow> => {
       const found = await binaryOf(harness, dirs);
       const version = found?.text ? versionIn(found.text) : null;
-      return { harness, path: found?.path ?? null, version, ...wakeOf(harness, version) };
+      return { harness, path: found?.path ?? null, version, start: !!found && canStart(harness), ...wakeOf(harness, version) };
     }),
   );
 }
@@ -107,7 +108,7 @@ export function inventoryText(rows: HarnessRow[]): string {
     .map((r) => {
       if (!r.path) return `${r.harness}: not installed`;
       const wake = r.wake ? `Kiwi wakes it via ${wakeWords(r.wake)}` : `Kiwi can't wake it: ${r.why ?? "no way known"}`;
-      return `${r.harness}: ${r.version ?? "version unknown"} at ${r.path}; ${wake}`;
+      return `${r.harness}: ${r.version ?? "version unknown"} at ${r.path}; ${r.start ? "kiwi launch starts it" : "Kiwi can't start it yet"}; ${wake}`;
     })
     .join("\n");
 }
