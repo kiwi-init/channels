@@ -5,7 +5,7 @@ export const ROTATE_FLOOR = 100_000;
 
 export type Rotation = { kind: "rotate"; why: string } | { kind: "stay"; why: string };
 
-export function rotationAt(state: ChannelState, me: string, used: number | undefined, nudgedAt: number | null): Rotation {
+export function rotationAt(state: ChannelState, me: string, used: number | undefined, nudgedAfter: number | null): Rotation {
   if (used === undefined) return { kind: "stay", why: "its context size is unknown" };
   if (state.openAsks.some((m) => m.from === me)) return { kind: "stay", why: "a question of its to a person is open" };
   const open = [...state.tasks.values()].filter((t) => t.state !== "done" && !t.archived);
@@ -13,7 +13,7 @@ export function rotationAt(state: ChannelState, me: string, used: number | undef
   const owned = open.filter((t) => t.owner === me);
   if (owned.length) {
     if (used < CONTEXT_LINE) return { kind: "stay", why: "its open tasks and a context under the line" };
-    const saved = nudgedAt !== null && owned.every((t) => (t.notes.findLast((n) => n.checkpoint)?.ts ?? 0) >= nudgedAt);
+    const saved = nudgedAfter !== null && owned.every((t) => (t.notes.findLast((n) => n.checkpoint)?.seq ?? 0) > nudgedAfter);
     return saved ? { kind: "rotate", why: "past the line, with a checkpoint on each open task since the nudge" } : { kind: "stay", why: "past the line, waiting for a checkpoint on each open task" };
   }
   if (state.lead === me) return used >= CONTEXT_LINE ? { kind: "rotate", why: "the lead, past the line" } : { kind: "stay", why: "the lead, under the line" };

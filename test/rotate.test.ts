@@ -7,7 +7,7 @@ import { CONTEXT_LINE } from "@kiwi/core/protocol.ts";
 import { fold, type ChannelState } from "@kiwi/core/state.ts";
 import { paneOf, rotateArgv } from "../src/hooks/rotate.ts";
 import { ROTATE_FLOOR, rotationAt } from "../src/rotate/decide.ts";
-import { clearWhenIdle, inputEmpty } from "../src/rotate/pane.ts";
+import { calm, clearWhenIdle, dropLock, inputText, rotating, takeLock } from "../src/rotate/pane.ts";
 
 const board = (tasks: object[], extra: Partial<ChannelState> = {}): ChannelState => {
   const state = fold([], []);
@@ -17,7 +17,7 @@ const board = (tasks: object[], extra: Partial<ChannelState> = {}): ChannelState
   }
   return Object.assign(state, extra);
 };
-const checkpoint = (ts: number) => ({ seq: 1, by: "ana", ts, text: "where it stands", checkpoint: true as const });
+const checkpoint = (seq: number) => ({ seq, by: "ana", ts: 1, text: "where it stands", checkpoint: true as const });
 
 describe("when a seat rotates", () => {
   test("between tasks past the floor, never under it, and never with its context unknown", () => {
@@ -42,17 +42,17 @@ describe("when a seat rotates", () => {
     expect(rotationAt(board([], { lead: "ana" }), "ana", CONTEXT_LINE, null).kind).toBe("rotate");
   });
 
-  test("with open tasks, only past the line and once each has a checkpoint since the nudge", () => {
-    const mine = (ts: number) =>
+  test("with open tasks, only past the line and once each has a checkpoint later in the channel than the nudge", () => {
+    const mine = (seq: number) =>
       board([
-        { id: 1, owner: "ana", notes: [checkpoint(ts)] },
-        { id: 2, owner: "ana", notes: [checkpoint(900)] },
+        { id: 1, owner: "ana", notes: [checkpoint(seq)] },
+        { id: 2, owner: "ana", notes: [checkpoint(90)] },
       ]);
-    expect(rotationAt(mine(900), "ana", CONTEXT_LINE - 1, 500).kind).toBe("stay");
-    expect(rotationAt(mine(900), "ana", CONTEXT_LINE, null).kind).toBe("stay");
-    expect(rotationAt(mine(400), "ana", CONTEXT_LINE, 500).kind).toBe("stay");
-    expect(rotationAt(mine(500), "ana", CONTEXT_LINE, 500).kind).toBe("rotate");
-    expect(rotationAt(board([{ id: 1, owner: "ana" }], { lead: "ana" }), "ana", CONTEXT_LINE, 500).kind).toBe("stay");
+    expect(rotationAt(mine(90), "ana", CONTEXT_LINE - 1, 50).kind).toBe("stay");
+    expect(rotationAt(mine(90), "ana", CONTEXT_LINE, null).kind).toBe("stay");
+    expect(rotationAt(mine(50), "ana", CONTEXT_LINE, 50).kind).toBe("stay");
+    expect(rotationAt(mine(51), "ana", CONTEXT_LINE, 50).kind).toBe("rotate");
+    expect(rotationAt(board([{ id: 1, owner: "ana" }], { lead: "ana" }), "ana", CONTEXT_LINE, 50).kind).toBe("stay");
   });
 
   test("never while a review round it judges is open, or a question of its to a person is", () => {
@@ -64,14 +64,36 @@ describe("when a seat rotates", () => {
   });
 });
 
-describe("Claude Code's input line in a captured pane", () => {
-  test("empty when it shows only the dim placeholder or nothing; typed text, or a menu, isn't", () => {
-    expect(inputEmpty('\x1b[39m❯ \x1b[2mTry\x1b[0m \x1b[2m"write\x1b[0m \x1b[2ma\x1b[0m \x1b[2mtest"\x1b[0m')).toBe(true);
-    expect(inputEmpty("old turn\n❯ earlier prompt\n● ok\n\x1b[39m❯  ")).toBe(true);
-    expect(inputEmpty("\x1b[39m❯ half typed")).toBe(false);
-    expect(inputEmpty("\x1b[39m❯ \x1b[2mTry\x1b[0m x")).toBe(false);
-    expect(inputEmpty(" ❯ No, exit\n   Yes, I trust this folder")).toBe(false);
-    expect(inputEmpty("no prompt here")).toBeNull();
+const RULE = "─".repeat(40);
+const box = (input: string, below: string[] = ["  ⏵⏵ auto mode on"]) => ["● ok", "❯ an earlier prompt", RULE, input, RULE, ...below].join("\n");
+
+describe("Claude Code's input box in a captured pane", () => {
+  test("the text between its two rules, the dim placeholder and the prompt glyph left out", () => {
+    expect(inputText(box('\x1b[39m❯ \x1b[2mTry\x1b[0m \x1b[2m"write\x1b[0m \x1b[2ma test"\x1b[0m'))).toBe("");
+    expect(inputText(box("❯ "))).toBe("");
+    expect(inputText(box("❯ half typed"))).toBe("half typed");
+    expect(inputText(box("❯ my draft ends with ❯"))).toBe("my draft ends with ❯");
+    expect(inputText(box("❯ line one\n  line two"))).toBe("line one\n  line two");
+    expect(inputText(box("❯ \x1b[2mTry\x1b[0m x"))).toBe("x");
+  });
+
+  test("anything else on screen is no box: a dialog, a stale prompt above one, a missing rule", () => {
+    expect(inputText(" ❯ No, exit\n   Yes, I trust this folder")).toBeNull();
+    expect(inputText([RULE, "❯ ", RULE, "Allow this command?", " ❯ Yes", "   No", "   Always", "Esc to cancel"].join("\n"))).toBeNull();
+    expect(inputText([RULE, "  Accessing workspace", RULE, "❯ "].join("\n"))).toBeNull();
+    expect(inputText("❯ \nno rules here")).toBeNull();
+  });
+
+  test("with /clear typed, the command list Claude Code shows under the box is allowed", () => {
+    const listed = ["  ❯ /clear   Start a new session", "    /cleanup", "    /color", "    /compact"];
+    expect(inputText(box("❯ /clear", listed), null)).toBe("/clear");
+    expect(inputText(box("❯ /clear", listed))).toBeNull();
+  });
+
+  test("a client is quiet only when none pressed a key within the window", () => {
+    expect(calm([], 50_000, 10_000)).toBe(true);
+    expect(calm([30], 50_000, 10_000)).toBe(true);
+    expect(calm([30, 45], 50_000, 10_000)).toBe(false);
   });
 
   test("the pane comes from tmux's own variables, and the sender is this kiwi", () => {
@@ -79,6 +101,35 @@ describe("Claude Code's input line in a captured pane", () => {
     expect(paneOf({ TMUX_PANE: "%2" })).toBeNull();
     expect(paneOf({ TMUX: "/s,1,0", TMUX_PANE: "2" })).toBeNull();
     expect(rotateArgv(42, "s-1", { pane: "%2", socket: "/s" }).slice(-6)).toEqual(["rotate", "send", "42", "s-1", "%2", "/s"]);
+  });
+});
+
+describe("one sender per session", () => {
+  let dir = "";
+  let was: string | undefined;
+  beforeAll(() => {
+    was = process.env.KIWI_HOME;
+    dir = mkdtempSync(join(tmpdir(), "kiwi-rotate-lock-"));
+    process.env.KIWI_HOME = dir;
+  });
+  afterAll(() => {
+    if (was === undefined) delete process.env.KIWI_HOME;
+    else process.env.KIWI_HOME = was;
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("the lock is taken once, released only by its holder, and a dead holder's is taken over", () => {
+    expect(takeLock("s-1")).toBe(true);
+    expect(takeLock("s-1")).toBe(false);
+    expect(rotating("s-1")).toBe(true);
+    dropLock("s-1", process.pid + 1);
+    expect(rotating("s-1")).toBe(true);
+    dropLock("s-1");
+    expect(rotating("s-1")).toBe(false);
+    mkdirSync(join(dir, "hook-state"), { recursive: true });
+    writeFileSync(join(dir, "hook-state", "s-2.rotating"), "999999999");
+    expect(takeLock("s-2")).toBe(true);
+    dropLock("s-2");
   });
 });
 
@@ -101,10 +152,10 @@ describe.skipIf(!hasTmux)("typing /clear into the pane", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  async function pane(name: string, shown: string): Promise<{ pane: string; pid: number; typed: string; claudeDir: string }> {
+  async function pane(name: string, input: string, echo = true): Promise<{ pane: string; pid: number; typed: string; claudeDir: string }> {
     const typed = join(dir, `${name}.typed`);
     const script = join(dir, `${name}.sh`);
-    writeFileSync(script, `printf '%s' "${shown}"\nexec cat > ${typed}\n`);
+    writeFileSync(script, `${echo ? "" : "stty -echo\n"}printf '%s\\n❯ %s\\n%s\\n  footer\\n\\033[3A\\033[%sG' '${RULE}' '${input}' '${RULE}' '${3 + input.length}'\nexec cat > ${typed}\n`);
     spawnSync("tmux", ["-S", socket, "new-session", "-d", "-s", name, "-x", "120", "-y", "20", `sh ${script}`]);
     const [id, pid] = spawnSync("tmux", ["-S", socket, "display-message", "-p", "-t", name, "#{pane_id} #{pane_pid}"], { encoding: "utf8" }).stdout.trim().split(" ");
     const claudeDir = join(dir, `${name}-claude`);
@@ -114,34 +165,47 @@ describe.skipIf(!hasTmux)("typing /clear into the pane", () => {
   }
   const registry = (p: { pid: number; claudeDir: string }, session: string, status: string) =>
     writeFileSync(join(p.claudeDir, "sessions", `${p.pid}.json`), JSON.stringify({ pid: p.pid, sessionId: session, status }));
-  const fast = { timeoutMs: 1_500, everyMs: 100, quietMs: 0 };
+  const fast = { timeoutMs: 1_200, everyMs: 100, quietMs: 0 };
+  const typedOf = (p: { typed: string }) => (existsSync(p.typed) ? readFileSync(p.typed, "utf8") : "");
 
-  test("an idle session with an empty input line gets /clear and Enter", async () => {
-    const p = await pane("idle", "❯ ");
+  test("an idle session with an empty input box gets /clear, and Enter only once /clear shows in the box", async () => {
+    const p = await pane("idle", "");
     registry(p, "s-1", "idle");
     expect(await clearWhenIdle({ pid: p.pid, session: "s-1", pane: p.pane, socket, claudeDir: p.claudeDir }, fast)).toBe("cleared");
     await Bun.sleep(300);
-    expect(readFileSync(p.typed, "utf8")).toBe("/clear\n");
+    expect(typedOf(p)).toBe("/clear\n");
   });
 
-  test("a busy session, text being typed, or a session that already moved on gets nothing", async () => {
-    const busy = await pane("busy", "❯ ");
+  test("when /clear doesn't show in the box after typing it, no Enter follows", async () => {
+    const p = await pane("blind", "", false);
+    registry(p, "s-6", "idle");
+    expect(await clearWhenIdle({ pid: p.pid, session: "s-6", pane: p.pane, socket, claudeDir: p.claudeDir }, fast)).toBe("left-in-input");
+    await Bun.sleep(300);
+    expect(typedOf(p)).toBe("");
+  });
+
+  test("a busy session, text being typed, a session already moved on, or a second sender gets nothing", async () => {
+    const busy = await pane("busy", "");
     registry(busy, "s-2", "busy");
-    expect(await clearWhenIdle({ pid: busy.pid, session: "s-2", pane: busy.pane, socket, claudeDir: busy.claudeDir }, fast)).toBe("timed-out");
-    const typing = await pane("typing", "❯ half typed");
+    const first = clearWhenIdle({ pid: busy.pid, session: "s-2", pane: busy.pane, socket, claudeDir: busy.claudeDir }, fast);
+    await Bun.sleep(200);
+    expect(await clearWhenIdle({ pid: busy.pid, session: "s-2", pane: busy.pane, socket, claudeDir: busy.claudeDir }, fast)).toBe("busy-elsewhere");
+    expect(await first).toBe("timed-out");
+    const typing = await pane("typing", "half typed");
     registry(typing, "s-3", "idle");
     expect(await clearWhenIdle({ pid: typing.pid, session: "s-3", pane: typing.pane, socket, claudeDir: typing.claudeDir }, fast)).toBe("timed-out");
-    const moved = await pane("moved", "❯ ");
+    const moved = await pane("moved", "");
     registry(moved, "s-new", "idle");
     expect(await clearWhenIdle({ pid: moved.pid, session: "s-4", pane: moved.pane, socket, claudeDir: moved.claudeDir }, fast)).toBe("moved");
     await Bun.sleep(300);
-    for (const p of [busy, typing, moved]) expect(existsSync(p.typed) ? readFileSync(p.typed, "utf8") : "").toBe("");
+    for (const p of [busy, typing, moved]) expect(typedOf(p)).toBe("");
     expect(readFileSync(join(dir, "kiwi", "rotate.log"), "utf8")).toContain("timed-out");
   });
 
-  test("a process that isn't in the pane is never typed into", async () => {
-    const p = await pane("other", "❯ ");
+  test("a process that doesn't hold the pane's input is never typed into", async () => {
+    const p = await pane("other", "");
     registry({ pid: process.pid, claudeDir: p.claudeDir }, "s-5", "idle");
     expect(await clearWhenIdle({ pid: process.pid, session: "s-5", pane: p.pane, socket, claudeDir: p.claudeDir }, fast)).toBe("not-its-pane");
+    expect(typedOf(p)).toBe("");
   });
 });

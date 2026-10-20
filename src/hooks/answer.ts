@@ -156,7 +156,7 @@ const contextNudge = Effect.fn("Hooks.contextNudge")(function* (input: HookInput
   const { state } = yield* s.state();
   const text = nudgeText(context, openTasksOf(state, s.me), mc);
   if (!text || text.length > budget) return null;
-  return { text, shown: Effect.sync(() => noteOverLine(s.alias, s.me, session, true)) };
+  return { text, shown: Effect.sync(() => noteOverLine(s.alias, s.me, session, true, state.head)) };
 });
 
 export function stopReason(head: string, unread: string, reminder: string | null): string {

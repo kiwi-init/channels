@@ -56,6 +56,7 @@ export const rotateAfterStop = Effect.fn("Hooks.rotateAfterStop")(function* (inp
       stdio: "ignore",
       detached: true,
     });
+    child.on("error", () => {});
     child.unref();
   });
 });
