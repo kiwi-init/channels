@@ -1,3 +1,4 @@
+import type { Subprocess } from "bun";
 import { appendFileSync, renameSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -43,6 +44,24 @@ function findExecutable(cmd: string): string | null {
   const user = process.env.HOME || homedir();
   const dirs = [process.env.PATH ?? "", join(user, ".local", "bin"), join(user, ".bun", "bin"), "/opt/homebrew/bin", "/usr/local/bin"].filter(Boolean).join(":");
   return Bun.which(cmd, { PATH: dirs });
+}
+
+export async function runBounded(argv: string[], ms: number, started: (child: Subprocess) => void = () => {}): Promise<{ code: number; err: string } | null> {
+  const child = Bun.spawn(argv, { env: { ...process.env }, stdin: "ignore", stdout: "ignore", stderr: "pipe" });
+  started(child);
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const late = new Promise<null>((resolve) => {
+    timer = setTimeout(() => {
+      child.kill("SIGKILL");
+      resolve(null);
+    }, ms);
+  });
+  const done = Promise.all([child.exited, new Response(child.stderr).text()]).then(([code, err]) => ({ code, err }));
+  try {
+    return await Promise.race([done, late]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function oneLine(text: string): string {
@@ -94,16 +113,18 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
   const runWake = async (seat: Seat, [cmd, ...rest]: string[]): Promise<string | null> => {
     const exe = cmd ? findExecutable(cmd) : null;
     if (!exe) return `${cmd ?? "command"} not found on PATH`;
+    let mine: Subprocess | null = null;
     try {
-      const child = Bun.spawn([exe, ...rest], { env: { ...process.env }, stdin: "ignore", stdout: "ignore", stderr: "pipe" });
-      seat.wakeChild = child;
-      const timer = setTimeout(() => child.kill(), WAKE_RUN_MS);
-      const [code, err] = await Promise.all([child.exited, new Response(child.stderr).text()]);
-      clearTimeout(timer);
-      if (seat.wakeChild === child) seat.wakeChild = null;
-      return code === 0 ? null : `exit ${code}${oneLine(err) ? `: ${oneLine(err)}` : ""}`;
+      const ran = await runBounded([exe, ...rest], WAKE_RUN_MS, (child) => {
+        mine = child;
+        seat.wakeChild = child;
+      });
+      if (ran === null) return `no answer in ${WAKE_RUN_MS / 1000} s`;
+      return ran.code === 0 ? null : `exit ${ran.code}${oneLine(ran.err) ? `: ${oneLine(ran.err)}` : ""}`;
     } catch (err) {
       return `could not start: ${oneLine(err instanceof Error ? err.message : String(err))}`;
+    } finally {
+      if (mine && seat.wakeChild === mine) seat.wakeChild = null;
     }
   };
 
