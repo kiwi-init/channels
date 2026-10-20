@@ -137,7 +137,7 @@ function real(p: string): string {
  * Directories too broad to bind: the home folder and the filesystem root. A
  * binding there would make every session in every project act as that agent.
  */
-function tooBroad(dir: string): boolean {
+export function tooBroad(dir: string): boolean {
   const d = real(dir);
   return d === real(homedir()) || dirname(d) === d;
 }

@@ -85,7 +85,9 @@ This computer
   kiwi rotate on|off|status                      give this computer's Claude Code seats in tmux or Rex, and Codex seats in tmux, a fresh session between tasks (off by default)
   kiwi rex on|off|status                         mark a seat that needs you in Rex and terminals that take OSC 7501, from this computer (off by default)
   kiwi harnesses [--json]                        the harnesses on this computer, found on your login shell's PATH: each one's path
-                                                 and version, and whether Kiwi can wake it
+                                                 and version, whether kiwi launch starts it, and whether Kiwi can wake it
+  kiwi launch HARNESS --code CODE [--folder DIR] [--nick NAME] [--persona TOKEN]   start an agent in a terminal you
+                                                 can open (Rex, else tmux, else Terminal): it joins with a launch id the app knows
   kiwi demo · doctor · hooks install|uninstall|status · mcp · channels · relay --help
 
 Running a channel (create, approve, remove, personalities, hold, charter, close) is the owner's, in the Channels app.

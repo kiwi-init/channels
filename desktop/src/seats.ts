@@ -23,7 +23,17 @@ export function publicChannel(c: ChannelIdentityView): ChannelView {
     ...(access ? { access } : {}),
     ...(c.at !== undefined ? { at: c.at } : {}),
     ...(c.requestId !== undefined ? { requestId: c.requestId } : {}),
+    ...(c.relay !== undefined ? { relay: c.relay } : {}),
   };
+}
+
+export function movedRelay(stored: ChannelIdentityView[], from: string, to: string): ChannelIdentityView[] {
+  return stored.map((c) => {
+    const home = c.relay ?? from;
+    if (home !== to) return { ...c, relay: home };
+    const { relay, ...here } = c;
+    return relay === undefined ? c : here;
+  });
 }
 
 export function channelAccess(c: ChannelIdentityView): ChannelAccess | null {

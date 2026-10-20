@@ -9,7 +9,7 @@ import { clockNow } from "./clock"
 import { channelTitle, loadRecent, type Recent } from "./recent"
 import { allMembers, CHANGED, loadMember, pendingChannels } from "./store"
 
-type ListState = "member" | "pending" | "agents"
+type ListState = "member" | "pending" | "agents" | "elsewhere"
 
 export interface ChannelRow {
   code: string
@@ -21,6 +21,7 @@ export interface ChannelRow {
   owner: boolean
   agents: number
   head?: number
+  relay?: string
 }
 
 const untitled = (room: string) => `Channel ${room.slice(0, 4).toUpperCase()}`
@@ -48,9 +49,10 @@ export function useChannelList(): ChannelRow[] {
         title: channelTitle({ name: m.name ?? c.name }, recent),
         recent,
         ts: recent?.ts ?? c.at,
-        state: "member",
+        state: m.relay ? "elsewhere" : "member",
         owner: m.identity.pk === m.access.ownerPk,
         agents: 0,
+        ...(m.relay ? { relay: m.relay } : {}),
       })
     }
     for (const p of pending) {
