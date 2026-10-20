@@ -3,6 +3,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSy
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Browser, type Page } from "playwright-core";
+import { startLocalRelay } from "../../scripts/local-relay.ts";
 import { daemonStop } from "../src/daemon-client.ts";
 
 const exe = process.argv[2] ? resolve(process.argv[2]) : "";
@@ -12,13 +13,10 @@ if (!exe || !existsSync(exe) || !files || !existsSync(files)) {
   process.exit(2);
 }
 
-const ROOT = resolve(import.meta.dir, "../..");
 const FIXTURE = join(import.meta.dir, "fixtures", "dictate.wav");
 const HEARD = ["dictation", "test"];
 const MIC = { start: "Dictate", confirm: "Download and dictate", stop: "Stop dictation" };
 const MODEL_MS = 8 * 60_000;
-const PORT = 20000 + Math.floor(Math.random() * 20000);
-const RELAY = `http://127.0.0.1:${PORT}`;
 
 const root = mkdtempSync(join(tmpdir(), "kiwi-dictate-"));
 const config = join(root, ".config");
@@ -28,18 +26,13 @@ mkdirSync(userData, { recursive: true });
 mkdirSync(cache, { recursive: true });
 const relayData = join(root, "relay");
 cpSync(files, join(relayData, "dictation"), { recursive: true });
+let relayTimer: ReturnType<typeof setTimeout> | undefined;
+const { relay, port } = await Promise.race([
+  startLocalRelay(relayData, null),
+  new Promise<never>((_, fail) => (relayTimer = setTimeout(() => fail(new Error("the relay didn't start in 20s")), 20_000))),
+]).finally(() => clearTimeout(relayTimer));
+const RELAY = `http://127.0.0.1:${port}`;
 writeFileSync(join(userData, "kiwi-store.bin"), JSON.stringify({ relayUrl: RELAY, person: null, channels: [], computers: [], pending: [] }));
-
-const relay = spawn(process.execPath, [join(ROOT, "src/relay/bun.ts"), "--port", String(PORT), "--hostname", "127.0.0.1", "--data", relayData, "--no-web", "--dev-sign-in"], {
-  stdio: ["ignore", "pipe", "pipe"],
-});
-await new Promise<void>((ok, fail) => {
-  const timer = setTimeout(() => fail(new Error("the relay didn't start in 20s")), 20_000);
-  const seen = (b: Buffer) => b.toString("utf8").includes("listening") && (clearTimeout(timer), ok());
-  relay.stdout.on("data", seen);
-  relay.stderr.on("data", seen);
-  relay.on("exit", (code) => fail(new Error(`relay exited (${code})`)));
-});
 
 const sizeOf = (dir: string): number => {
   if (!existsSync(dir)) return 0;

@@ -20,16 +20,13 @@ import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeF
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Locator } from "playwright-core";
+import { startLocalRelay } from "./local-relay.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const PARTS = ["menus", "agents"] as const;
 type Part = (typeof PARTS)[number];
 
-const BASE_PORT = 20000 + Math.floor(Math.random() * 19990);
-
 async function run(part: Part): Promise<string[]> {
-  const PORT = BASE_PORT + PARTS.indexOf(part);
-  const BASE = `http://localhost:${PORT}/`;
   const data = mkdtempSync(join(tmpdir(), "kiwi-smoke-"));
 
   const cli = join(data, "cli");
@@ -51,19 +48,8 @@ async function run(part: Part): Promise<string[]> {
     return new Promise((ok, fail) => p.on("exit", (code) => (code === 0 ? ok(out) : fail(new Error(`kiwi ${args[0]} exited ${code}: ${out.trim().split("\n").pop()}`)))));
   };
 
-  const relay = spawn("bun", ["src/relay/bun.ts", "--hostname", "127.0.0.1", "--port", String(PORT), "--data", join(data, "relay"), "--web", "web/dist", "--dev-sign-in"], {
-    cwd: ROOT,
-    stdio: ["ignore", "pipe", "inherit"],
-  });
-  await new Promise<void>((ok, fail) => {
-    let out = "";
-    relay.stdout!.on("data", (d) => {
-      out += d;
-      if (out.includes("site: not served")) fail(new Error("web/dist is missing: run bun run web:build first"));
-      else if (out.includes("site:")) ok();
-    });
-    relay.on("exit", (code) => fail(new Error(`relay exited (${code})`)));
-  });
+  const { relay, port } = await startLocalRelay(join(data, "relay"), "web/dist");
+  const BASE = `http://localhost:${port}/`;
 
   const log = (line: string) => console.log(`[${part}] ${line}`);
   const errors: string[] = [];

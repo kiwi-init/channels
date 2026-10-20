@@ -71,7 +71,7 @@ jobs:
 
   test-unit:
     name: test / unit
-    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "desktop/package.json", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
+    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "desktop/package.json", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs the unit tests with bun test: every test/*.test.ts except the slow suites in
@@ -163,6 +163,9 @@ jobs:
       channel, once each, and a request seen while nobody follows it isn't remembered; web
       channel-sidebar.test.tsx: New agent on the Agents heading for the owner's desktop app, shown
       even before any agent joins, and absent otherwise.
+      Also test/local-relay.test.ts: the local relay the browser and desktop scripts start
+      (scripts/local-relay.ts) binds a port the system picks and reads it back from the relay's
+      listening line, so two started at once never ask for the same port.
       Also test/daemon-big-lines.test.ts: the daemon's socket writes queue what the socket
       didn't take and flush it on drain (src/daemon/server.ts), so a catch-up of thirty
       messages with 50 KB ones among them, and big live messages back to back, arrive whole
@@ -647,8 +650,8 @@ jobs:
 
   build:
     name: build / bundles
-    inputs: ["src/**", "packages/core/**", "web/**", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/smoke-cli.ts", "scripts/smoke-ui.ts", "scripts/dictation-files.ts", "test/fixtures/dictation.wav", "scripts/web-bundle.ts", "test/owner.ts", "test/owner-cli.ts", "test/check.ts"]
-    always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "wrangler.jsonc", "scripts/smoke-ui.ts", "scripts/web-bundle.ts"]
+    inputs: ["src/**", "packages/core/**", "web/**", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/smoke-cli.ts", "scripts/smoke-ui.ts", "scripts/local-relay.ts", "scripts/dictation-files.ts", "test/fixtures/dictation.wav", "scripts/web-bundle.ts", "test/owner.ts", "test/owner-cli.ts", "test/check.ts"]
+    always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "wrangler.jsonc", "scripts/smoke-ui.ts", "scripts/local-relay.ts", "scripts/web-bundle.ts"]
     description: >-
       Builds the web dashboard for production (vite build in web/) and fails when the JS the
       first screen loads (the entry script plus every chunk it modulepreloads) is over
@@ -670,8 +673,8 @@ jobs:
 
   shots:
     name: build / shots
-    inputs: ["src/**", "packages/core/**", "web/**", "scripts/shoot-ui.ts", "assets/**"]
-    always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "scripts/shoot-ui.ts"]
+    inputs: ["src/**", "packages/core/**", "web/**", "scripts/shoot-ui.ts", "scripts/local-relay.ts", "assets/**"]
+    always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "scripts/shoot-ui.ts", "scripts/local-relay.ts"]
     description: >-
       Builds the web dashboard (bun run web:build), then scripts/shoot-ui.ts --wide --theme dark
       starts the relay and the kiwi CLI as two agents' computers, seeds a channel in headless
@@ -691,8 +694,8 @@ jobs:
 
   perf:
     name: perf / scale
-    inputs: ["web/**", "desktop/**", "packages/core/**", "scripts/perf-scale.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
-    always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "scripts/perf-scale.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
+    inputs: ["web/**", "desktop/**", "packages/core/**", "scripts/perf-scale.ts", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
+    always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "scripts/perf-scale.ts", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
     description: >-
       Builds the web dashboard, then runs scripts/perf-scale.ts three times without the soak: a
       local relay and headless Chromium with 10 agents, 100 tasks and 2000 messages, timing the
@@ -707,7 +710,7 @@ jobs:
   desktop:
     name: desktop / package
     inputs: ["desktop/**", "src/**", "packages/core/**", "web/src/**", "web/index.html", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "package.json", "bun.lock", "web/package.json"]
-    always: ["desktop/package.json", "desktop/tsconfig*.json", "desktop/scripts/fuses.ts", "desktop/scripts/pack-cli.ts", "desktop/scripts/size.ts", "desktop/scripts/smoke.ts", "desktop/scripts/dictate.ts", "desktop/scripts/fixtures/dictate.wav", "packages/core/src/dictation.ts", "scripts/dictation-files.ts"]
+    always: ["desktop/package.json", "desktop/tsconfig*.json", "desktop/scripts/fuses.ts", "desktop/scripts/pack-cli.ts", "desktop/scripts/size.ts", "desktop/scripts/smoke.ts", "desktop/scripts/dictate.ts", "scripts/local-relay.ts", "desktop/scripts/fixtures/dictate.wav", "packages/core/src/dictation.ts", "scripts/dictation-files.ts"]
     description: >-
       Bundles the Electron shell's main, preload and channels (key process) scripts with bun
       build, then packages the Linux app with electron-builder --dir from desktop/package.json's
