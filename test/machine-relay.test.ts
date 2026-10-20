@@ -4,10 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { signRequest } from "@kiwi/core/auth.ts";
 import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/identity.ts";
+import { ASK_MAX_BYTES } from "@kiwi/core/machine-ask.ts";
 import { certifyMachine } from "@kiwi/core/person.ts";
 import { WS_PROTOCOL } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { MACHINE_BOX_MAX_BYTES, MACHINE_BOX_TTL_MS, MACHINE_UNSEEN_MS, machineAlarmAt, machineScope } from "../src/relay/machine.ts";
+import { MACHINE_BOX_TTL_MS, MACHINE_UNSEEN_MS, machineAlarmAt, machineScope } from "../src/relay/machine.ts";
 
 setDefaultTimeout(30_000);
 
@@ -119,8 +120,8 @@ describe("a paired computer's inbox", () => {
     const m = await registered("inbox");
     expect((await call(stranger, m, "POST", `${base(m)}/inbox`, { box: "x.y.z" })).status).toBe(403);
     expect((await call(m, m, "POST", `${base(m)}/inbox`, { box: "x.y.z" })).status).toBe(403);
-    expect((await call(person, m, "POST", `${base(m)}/inbox`, { box: "x".repeat(MACHINE_BOX_MAX_BYTES + 1) })).status).toBe(400);
-    expect((await call(person, m, "POST", `${base(m)}/inbox`, { box: "x".repeat(MACHINE_BOX_MAX_BYTES * 2) })).status).toBe(413);
+    expect((await call(person, m, "POST", `${base(m)}/inbox`, { box: "x".repeat(ASK_MAX_BYTES + 1) })).status).toBe(400);
+    expect((await call(person, m, "POST", `${base(m)}/inbox`, { box: "x".repeat(ASK_MAX_BYTES * 2) })).status).toBe(413);
     const first = (await (await call(person, m, "POST", `${base(m)}/inbox`, { box: "sealed.one.box" })).json()) as { id: string };
     await expect(openInbox(stranger, m)).rejects.toThrow();
     await expect(openInbox(person, m)).rejects.toThrow();

@@ -1,5 +1,6 @@
 import { verifyRequest } from "@kiwi/core/auth.ts";
 import { b64url } from "@kiwi/core/crypto.ts";
+import { ASK_MAX_BYTES } from "@kiwi/core/machine-ask.ts";
 import { readMachineCert } from "@kiwi/core/person.ts";
 import { BadRequest, Conflict, Forbidden, NotFound, TooLarge, TooMany, Unauthorized, UpdateRequired } from "./failures.ts";
 import { readCapped } from "./http.ts";
@@ -9,12 +10,11 @@ import { requestToken } from "./room/auth.ts";
 
 export const MACHINE_BOX_TTL_MS = 3 * 60_000;
 export const MACHINE_UNSEEN_MS = 30 * 24 * 3_600_000;
-export const MACHINE_BOX_MAX_BYTES = 4_096;
 export const MACHINE_ASKS_PER_MINUTE = 20;
 export const MACHINE_WRITES_PER_ADDRESS = 60;
 const MACHINE_PENDING_MAX = 20;
 const REGISTER_MAX_BYTES = 8_192;
-const INBOX_MAX_BYTES = MACHINE_BOX_MAX_BYTES + 256;
+const INBOX_MAX_BYTES = ASK_MAX_BYTES + 256;
 
 interface MachineBinding {
   person: string;
@@ -133,7 +133,7 @@ export async function onMachineHttp(
   if (sub === "inbox" && !boxId && req.method === "POST") {
     if (!isPerson) return refuse(new Forbidden({ message: "only the machine's person writes to its inbox" }));
     const box = parse(body)?.box;
-    if (typeof box !== "string" || !box || box.length > MACHINE_BOX_MAX_BYTES) return refuse(new BadRequest({ message: "an inbox takes {box}, at most 4096 bytes" }));
+    if (typeof box !== "string" || !box || box.length > ASK_MAX_BYTES) return refuse(new BadRequest({ message: "an inbox takes {box}, at most 4096 bytes" }));
     if (opts.perMachine && !(await opts.perMachine(machineScope(mpk)))) return refuse(new TooMany({ message: "too many asks for this machine; try again in a minute" }));
     if ((await store.pending(mpk, now - MACHINE_BOX_TTL_MS)) >= MACHINE_PENDING_MAX) return refuse(new TooMany({ message: "this machine already has 20 asks waiting" }));
     const kept: MachineBox = { id: b64url(crypto.getRandomValues(new Uint8Array(16))), box, at: now };
