@@ -1,5 +1,5 @@
 import { Add01Icon, ArrowUp02Icon, Cancel01Icon, Loading03Icon, Mic01Icon, SmileIcon } from "@hugeicons/core-free-icons"
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 import type { SendOptions } from "@kiwi/core/client.ts"
 import { MAX_IMAGE_BYTES, RASTER_MIMES, type Color, type Message } from "@kiwi/core/protocol.ts"
@@ -7,6 +7,7 @@ import { matchCommands, parseCommand, type Command } from "@/lib/commands"
 import { compressImage, needsCompressing, renamed } from "@/lib/compress-image"
 import { appendDictation, MODEL_MB, PRESS_LABEL, useDictation } from "@/lib/dictation"
 import { excerpt } from "@/lib/format"
+import { composerMentions, mentionText, withHandles } from "@/lib/mentions"
 import { gifFile, type Gif } from "@/lib/gifs"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
@@ -74,6 +75,8 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
   const [slash, setSlash] = useState(0)
   const [slashOff, setSlashOff] = useState(false)
   const area = useRef<HTMLTextAreaElement>(null)
+  const backdrop = useRef<HTMLDivElement>(null)
+  const caretTo = useRef<number | null>(null)
   const dictation = useDictation(
     (text) => setBody((current) => appendDictation(current, text)),
     (message) => toast(message, "error")
@@ -87,6 +90,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
     const q = mention.query.toLowerCase()
     return others.filter((p) => p.name.toLowerCase().startsWith(q) || p.label.toLowerCase().startsWith(q)).slice(0, 6)
   }, [mention, others])
+  const spans = useMemo(() => composerMentions(body, others), [body, others])
 
   // Grow with the text, up to a point.
   useLayoutEffect(() => {
@@ -94,6 +98,11 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
     if (!el) return
     el.style.height = "auto"
     el.style.height = `${Math.min(el.scrollHeight, 220)}px`
+    if (caretTo.current !== null) {
+      el.setSelectionRange(caretTo.current, caretTo.current)
+      caretTo.current = null
+    }
+    if (backdrop.current) backdrop.current.scrollTop = el.scrollTop
   }, [body])
 
   useEffect(() => {
@@ -176,13 +185,11 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
   const complete = (p: Person) => {
     const el = area.current
     const caret = el?.selectionStart ?? body.length
-    const before = body.slice(0, caret).replace(MENTION, (_all, pre: string) => `${pre}@${p.name} `)
+    const before = body.slice(0, caret).replace(MENTION, (_all, pre: string) => `${pre}@${mentionText(p, others)} `)
+    caretTo.current = before.length
     setBody(before + body.slice(caret))
     setMention(null)
-    requestAnimationFrame(() => {
-      el?.focus()
-      el?.setSelectionRange(before.length, before.length)
-    })
+    el?.focus()
   }
 
   const submit = async () => {
@@ -199,7 +206,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
     }
     setSending(true)
     try {
-      const text = body.trim() || files.map((f) => f.name).join(", ")
+      const text = withHandles(body.trim(), others) || files.map((f) => f.name).join(", ")
       const named = recipients(text, names)
       const answering = !replyTo && !thread ? asking : undefined
       const to = named.length ? named : answering ? [answering.from] : replyTo && replyTo.from !== me ? [replyTo.from] : extra?.to
@@ -340,78 +347,98 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
             >
               <Icon icon={SmileIcon} size={18} strokeWidth={1.8} />
             </button>
-            <textarea
-              ref={area}
-              rows={1}
-              value={body}
-              disabled={disabled}
-              aria-label="Message"
-              placeholder={hint}
-              onChange={(e) => {
-                setBody(e.target.value)
-                setSlash(0)
-                setSlashOff(false)
-                trackMention(e.target.value, e.target.selectionStart)
-              }}
-              onPaste={(e) => {
-                const fromItems = [...e.clipboardData.items]
-                  .filter((item) => item.kind === "file")
-                  .map((item) => item.getAsFile())
-                  .filter((file): file is File => !!file)
-                const images = (e.clipboardData.files.length ? [...e.clipboardData.files] : fromItems).filter((f) => f.type.startsWith("image/"))
-                if (!images.length) return
-                if (!e.clipboardData.getData("text/plain")) e.preventDefault()
-                pick(images)
-              }}
-              onKeyDown={(e) => {
-                if (matches.length && mention) {
-                  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-                    e.preventDefault()
-                    const d = e.key === "ArrowDown" ? 1 : -1
-                    setMention({
-                      ...mention,
-                      index: (mention.index + d + matches.length) % matches.length,
-                    })
-                    return
+            <div className="relative min-w-0 flex-1">
+              {spans.length > 0 && (
+                <div
+                  ref={backdrop}
+                  aria-hidden
+                  className="bubble-text pointer-events-none absolute inset-0 [scrollbar-color:transparent_transparent] overflow-y-auto py-[13px] pr-1 pl-1 text-body whitespace-pre-wrap text-transparent"
+                >
+                  {spans.map((s, i) => (
+                    <Fragment key={s.at}>
+                      {body.slice(i ? spans[i - 1]!.end : 0, s.at)}
+                      <mark className="rounded-row bg-accent-wash text-transparent outline-2 outline-accent-wash">{body.slice(s.at, s.end)}</mark>
+                    </Fragment>
+                  ))}
+                  {body.slice(spans.at(-1)!.end)}
+                </div>
+              )}
+              <textarea
+                ref={area}
+                rows={1}
+                value={body}
+                disabled={disabled}
+                aria-label="Message"
+                placeholder={hint}
+                onChange={(e) => {
+                  setBody(e.target.value)
+                  setSlash(0)
+                  setSlashOff(false)
+                  trackMention(e.target.value, e.target.selectionStart)
+                }}
+                onScroll={(e) => {
+                  if (backdrop.current) backdrop.current.scrollTop = e.currentTarget.scrollTop
+                }}
+                onPaste={(e) => {
+                  const fromItems = [...e.clipboardData.items]
+                    .filter((item) => item.kind === "file")
+                    .map((item) => item.getAsFile())
+                    .filter((file): file is File => !!file)
+                  const images = (e.clipboardData.files.length ? [...e.clipboardData.files] : fromItems).filter((f) => f.type.startsWith("image/"))
+                  if (!images.length) return
+                  if (!e.clipboardData.getData("text/plain")) e.preventDefault()
+                  pick(images)
+                }}
+                onKeyDown={(e) => {
+                  if (matches.length && mention) {
+                    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                      e.preventDefault()
+                      const d = e.key === "ArrowDown" ? 1 : -1
+                      setMention({
+                        ...mention,
+                        index: (mention.index + d + matches.length) % matches.length,
+                      })
+                      return
+                    }
+                    if (e.key === "Enter" || e.key === "Tab") {
+                      e.preventDefault()
+                      complete(matches[mention.index]!)
+                      return
+                    }
+                    if (e.key === "Escape") {
+                      e.stopPropagation()
+                      return setMention(null)
+                    }
                   }
-                  if (e.key === "Enter" || e.key === "Tab") {
-                    e.preventDefault()
-                    complete(matches[mention.index]!)
-                    return
+                  if (picked) {
+                    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                      e.preventDefault()
+                      setSlash((Math.min(slash, listed.length - 1) + (e.key === "ArrowDown" ? 1 : -1) + listed.length) % listed.length)
+                      return
+                    }
+                    if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && body.trim().slice(1).toLowerCase() !== picked.name)) {
+                      e.preventDefault()
+                      setBody(`/${picked.name} `)
+                      return
+                    }
+                    if (e.key === "Escape") {
+                      e.stopPropagation()
+                      return setSlashOff(true)
+                    }
                   }
-                  if (e.key === "Escape") {
+                  if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                    e.preventDefault()
+                    void submit()
+                  }
+                  // A thread panel listens for Escape. Swallow it only when it clears a reply in the main composer.
+                  if (e.key === "Escape" && replyTo && !thread) {
                     e.stopPropagation()
-                    return setMention(null)
+                    onClearReply()
                   }
-                }
-                if (picked) {
-                  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-                    e.preventDefault()
-                    setSlash((Math.min(slash, listed.length - 1) + (e.key === "ArrowDown" ? 1 : -1) + listed.length) % listed.length)
-                    return
-                  }
-                  if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey && body.trim().slice(1).toLowerCase() !== picked.name)) {
-                    e.preventDefault()
-                    setBody(`/${picked.name} `)
-                    return
-                  }
-                  if (e.key === "Escape") {
-                    e.stopPropagation()
-                    return setSlashOff(true)
-                  }
-                }
-                if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                  e.preventDefault()
-                  void submit()
-                }
-                // A thread panel listens for Escape. Swallow it only when it clears a reply in the main composer.
-                if (e.key === "Escape" && replyTo && !thread) {
-                  e.stopPropagation()
-                  onClearReply()
-                }
-              }}
-              className="bubble-text block max-h-[220px] min-h-[48px] min-w-0 flex-1 resize-none bg-transparent py-[13px] pr-1 pl-1 text-body outline-none placeholder:truncate placeholder:text-ink-3 focus-visible:outline-none"
-            />
+                }}
+                className="bubble-text relative block max-h-[220px] min-h-[48px] w-full resize-none bg-transparent py-[13px] pr-1 pl-1 text-body outline-none placeholder:truncate placeholder:text-ink-3 focus-visible:outline-none"
+              />
+            </div>
             {talk?.button}
             {dictation.supported && (
               <button
