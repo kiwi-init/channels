@@ -44,7 +44,12 @@ export function dictationFile(name: string): DictationFile | null {
   return Object.hasOwn(DICTATION_FILES, name) ? DICTATION_FILES[name]! : null;
 }
 
-function hexOf(digest: ArrayBuffer): string {
+export interface Hasher {
+  update(chunk: Uint8Array): void | Promise<void>;
+  hex(): Promise<string>;
+}
+
+export function hexOf(digest: ArrayBuffer): string {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 

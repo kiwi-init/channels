@@ -4,7 +4,8 @@
 // Usage: bun src/relay/bun.ts --help
 
 import { Database } from "bun:sqlite";
-import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { chmodSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from "node:fs";
 import { basename, join, resolve, sep } from "node:path";
 import type { ServerWebSocket } from "bun";
 import * as Layer from "effect/Layer";
@@ -13,6 +14,7 @@ import { ChannelGone, NotFound, UpdateRequired } from "./failures.ts";
 import { clockLayer, MAX_REQUEST_BYTES } from "./http.ts";
 import { authkitDomains, devHostOk, devHumanAuth, devRequestOk, Human, HUMAN_HEADER, workosFromSettings, type HumanAuth } from "./human.ts";
 import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
+import type { Hasher } from "@kiwi/core/dictation.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
 import { clientAddress, downloadAllowed, parseTrustProxy, trustProxyFromArgs, trustProxyHint, untrustedProxy, writeAllowed, type TrustProxy } from "./address.ts";
 import { onDictationHttp, type DictationStore } from "./dictation.ts";
@@ -61,6 +63,14 @@ interface SocketData {
 export interface WebApp {
   dir: string;
   connect?: string[];
+}
+
+export function bunHasher(): Hasher {
+  const hash = new Bun.CryptoHasher("sha256");
+  return {
+    update: (chunk) => void hash.update(chunk),
+    hex: async () => hash.digest("hex"),
+  };
 }
 
 export function startRelay(
@@ -248,11 +258,18 @@ export function startRelay(
       const f = Bun.file(join(dictationDir, sha256));
       return (await f.exists()) ? f : null;
     },
-    write: async (sha256, bytes) => {
+    write: async (sha256, body) => {
       mkdirSync(dictationDir, { recursive: true, mode: 0o700 });
-      const tmp = join(dictationDir, `${sha256}.${process.pid}.part`);
-      writeFileSync(tmp, bytes, { mode: 0o600 });
-      renameSync(tmp, join(dictationDir, sha256));
+      const tmp = join(dictationDir, `${sha256}.${process.pid}.${randomUUID()}.part`);
+      try {
+        await Bun.write(Bun.file(tmp), new Response(body));
+        chmodSync(tmp, 0o600);
+        renameSync(tmp, join(dictationDir, sha256));
+      } catch (err) {
+        // A broken or refused download leaves no partial file behind; the route still answers the failure.
+        rmSync(tmp, { force: true });
+        throw err;
+      }
     },
   };
   const sweeper = policy.expireAfterDays ? setInterval(sweep, 3_600_000) : undefined;
@@ -284,7 +301,7 @@ export function startRelay(
           proxyHinted = true;
           process.stderr.write(`${trustProxyHint(proxy)}\n`);
         }
-        const spoken = await onDictationHttp(req, { store: dictation, ip, allow: downloadAllowed, ...(opts.dictationUpstream ? { upstream: opts.dictationUpstream } : {}) });
+        const spoken = await onDictationHttp(req, { store: dictation, hasher: bunHasher, ip, allow: downloadAllowed, ...(opts.dictationUpstream ? { upstream: opts.dictationUpstream } : {}) });
         if (spoken) return spoken;
         const mailbox = await onMailboxHttp(req, mailboxes, ip ? { ip, allow: writeAllowed } : {});
         if (mailbox) return mailbox;

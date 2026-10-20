@@ -1,13 +1,14 @@
-import { dictationFile, DICTATION_PATH, sha256Hex, type DictationFile } from "@kiwi/core/dictation.ts";
+import { dictationFile, DICTATION_PATH, type DictationFile, type Hasher } from "@kiwi/core/dictation.ts";
 import { withCors } from "./mailbox.ts";
 
 export interface DictationStore {
   read(sha256: string): Promise<ReadableStream<Uint8Array> | Blob | null>;
-  write(sha256: string, bytes: Uint8Array<ArrayBuffer>): Promise<void>;
+  write(sha256: string, body: ReadableStream<Uint8Array>, size: number): Promise<void>;
 }
 
 export interface DictationDeps {
-  store: DictationStore;
+  store: DictationStore | null;
+  hasher: () => Hasher;
   ip: string | null;
   allow: (ip: string) => boolean | Promise<boolean>;
   upstream?: (url: string) => Promise<Response>;
@@ -22,7 +23,7 @@ function said(status: number, message: string): Response {
   return withCors(new Response(`${message}\n`, { status, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } }));
 }
 
-function served(req: Request, body: ReadableStream<Uint8Array> | Blob | Uint8Array<ArrayBuffer>, size: number): Response {
+function served(req: Request, body: ReadableStream<Uint8Array> | Blob, size: number): Response {
   const headers = { "content-type": "application/octet-stream", "content-length": String(size), "cache-control": "no-store" };
   if (req.method === "HEAD" && body instanceof ReadableStream) void body.cancel();
   return withCors(new Response(req.method === "HEAD" ? null : body, { headers }));
@@ -35,18 +36,59 @@ export async function onDictationHttp(req: Request, deps: DictationDeps): Promis
   const file = url.search ? null : (deps.lookup ?? dictationFile)(url.pathname.slice(DICTATION_PATH.length));
   if (!file) return said(404, "Not found.");
   if (deps.ip && !(await deps.allow(deps.ip))) return said(429, DICTATION_TOO_MANY);
-  const kept = await deps.store.read(file.sha256);
+  const kept = await deps.store?.read(file.sha256);
   if (kept) return served(req, kept, file.size);
-  let bytes: Uint8Array<ArrayBuffer>;
+  const fetched = await fetchChecked(file, deps);
+  if (fetched instanceof Response) return fetched;
+  if (!deps.store) return served(req, fetched.body, file.size);
   try {
-    const res = await (deps.upstream ?? ((u: string) => fetch(u)))(file.url);
-    if (!res.ok) return said(502, DICTATION_UNREACHABLE);
-    bytes = new Uint8Array(await res.arrayBuffer());
+    await deps.store.write(file.sha256, fetched.body, file.size);
+  } catch {
+    // The upstream stream broke off or failed its pinned hash partway: the store kept nothing, and the app says dictation isn't available.
+    return said(502, fetched.tampered() ? DICTATION_TAMPERED : DICTATION_UNREACHABLE);
+  }
+  const stored = await deps.store.read(file.sha256);
+  if (stored) return served(req, stored, file.size);
+  const again = await fetchChecked(file, deps);
+  return again instanceof Response ? again : served(req, again.body, file.size);
+}
+
+async function fetchChecked(file: DictationFile, deps: DictationDeps): Promise<Response | { body: ReadableStream<Uint8Array>; tampered: () => boolean }> {
+  let res: Response;
+  try {
+    res = await (deps.upstream ?? ((u: string) => fetch(u)))(file.url);
   } catch {
     // Upstream unreachable (a self-hosted relay offline, a Hugging Face outage): the app says dictation isn't available.
     return said(502, DICTATION_UNREACHABLE);
   }
-  if (bytes.byteLength !== file.size || (await sha256Hex(bytes)) !== file.sha256) return said(502, DICTATION_TAMPERED);
-  await deps.store.write(file.sha256, bytes);
-  return served(req, bytes, file.size);
+  if (!res.ok || !res.body) return said(502, DICTATION_UNREACHABLE);
+  const length = res.headers.get("content-length");
+  if (length !== null && Number(length) !== file.size) {
+    void res.body.cancel();
+    return said(502, DICTATION_TAMPERED);
+  }
+  let tampered = false;
+  const hasher = deps.hasher();
+  let seen = 0;
+  let held: Uint8Array | null = null;
+  const refuse = () => {
+    tampered = true;
+    return new Error(DICTATION_TAMPERED);
+  };
+  const body = res.body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      async transform(chunk, out) {
+        seen += chunk.byteLength;
+        if (seen > file.size) throw refuse();
+        await hasher.update(chunk);
+        if (held) out.enqueue(held);
+        held = chunk;
+      },
+      async flush(out) {
+        if (seen !== file.size || (await hasher.hex()) !== file.sha256) throw refuse();
+        if (held) out.enqueue(held);
+      },
+    }),
+  );
+  return { body, tampered: () => tampered };
 }

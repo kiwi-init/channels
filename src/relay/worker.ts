@@ -41,6 +41,7 @@ import {
   type SqlParam,
 } from "./room.ts";
 import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
+import { hexOf, type Hasher } from "@kiwi/core/dictation.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
 import { onDictationHttp, type DictationStore } from "./dictation.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
@@ -382,10 +383,26 @@ const edgeDictation: DictationStore = {
     const hit = await caches.default.match(edgeKey(sha256));
     return hit?.body ?? null;
   },
-  write: async (sha256, bytes) => {
-    await caches.default.put(edgeKey(sha256), new Response(bytes, { headers: { "cache-control": "public, max-age=31536000, immutable" } }));
+  write: async (sha256, body, size) => {
+    const { readable, writable } = new FixedLengthStream(size);
+    await Promise.all([
+      caches.default.put(edgeKey(sha256), new Response(readable, { headers: { "cache-control": "public, max-age=31536000, immutable", "content-length": String(size) } })),
+      body.pipeTo(writable),
+    ]);
   },
 };
+
+function edgeHasher(): Hasher {
+  const digest = new crypto.DigestStream("SHA-256");
+  const writer = digest.getWriter();
+  return {
+    update: (chunk) => writer.write(chunk),
+    hex: async () => {
+      await writer.close();
+      return hexOf(await digest.digest);
+    },
+  };
+}
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
@@ -394,7 +411,8 @@ export default {
     // The desktop app's renderer isn't served by the relay: /v1/* answers any origin.
     if (req.method === "OPTIONS" && url.pathname.startsWith("/v1/")) return corsPreflight();
     const spoken = await onDictationHttp(req, {
-      store: edgeDictation,
+      store: url.hostname.endsWith(".workers.dev") ? null : edgeDictation,
+      hasher: edgeHasher,
       ip: req.headers.get("cf-connecting-ip"),
       allow: async (key) => (await env.DICTATION_DOWNLOADS.limit({ key })).success,
     });
