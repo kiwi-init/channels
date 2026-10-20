@@ -423,7 +423,8 @@ jobs:
       downloads nothing, GitHub failing is a failed check, and two checks at once share one. And
       test/jev-ci.test.ts: the CI planner in .github/jev-ci, which plans synthetic changes
       against the real .github/jev-ci.yml and .github/workflows/ci.yml in a scratch git repo,
-      following imports into workspace packages (@kiwi/core) by name. And
+      following imports into workspace packages (@kiwi/core) by name, and trusts a pass marker only
+      from main or the pull request's own runs, never a fork's. And
       test/core-package.test.ts: packages/core imports nothing outside itself but effect/*,
       node: builtins only under packages/core/src/node, no Node or Bun globals elsewhere in it,
       web/src never imports @kiwi/core/node/, and nothing reaches packages/core by a relative
