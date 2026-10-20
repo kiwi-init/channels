@@ -49,6 +49,9 @@ export const Annotator = annotator.View
 export const AgentLanes = agentLanes.View
 export const TalkButton = talkButton.View
 export const TalkBar = talkBar.View
+export function leaveTalk(roomId: string): void {
+  void import("./talk").then((m) => m.leaveTalk(roomId))
+}
 export const ComposerQuestion = composerQuestion.View
 export const CommandList = commandList.View
 export const CommandBar = commandBar.View
