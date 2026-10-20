@@ -111,11 +111,13 @@ const endsWithClear = (captured: string) => inputText(captured, null)?.endsWith(
 
 export type Teller = Pick<Target, "pid" | "session" | "pane">;
 
-function log(t: Teller, what: string): void {
+function log(t: Teller, what: string): boolean {
   try {
     appendRotated(join(home(), "rotate.log"), `${new Date().toISOString()} pid ${t.pid} session ${t.session} pane ${t.pane}: ${what}\n`);
+    return true;
   } catch {
     // The log only explains what happened; failing to write it changes nothing.
+    return false;
   }
 }
 
@@ -152,13 +154,13 @@ export function noteStay(t: Teller, seat: string, why: string): void {
   } catch {
     // No stay noted yet for this session: this one is new.
   }
+  if (!log(t, said)) return;
   try {
     mkdirSync(lockDir(), { recursive: true, mode: 0o700 });
     writeFileSync(stayFile(t.session), said, { mode: 0o600 });
   } catch {
     // Without the marker the same stay is logged again at the next stop: a repeat, never a flood of new reasons.
   }
-  log(t, said);
 }
 
 export function forgetStay(session: string): void {
