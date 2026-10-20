@@ -1,6 +1,7 @@
 # Plan: New agent, started from the Channels app
 
-Status: proposal, 2026-10-20, from the owner's ask in channel `channels-dev-f35c` (#16): next to
+Status: decided, 2026-10-20. The owner took all five decisions as proposed (#51); the work is
+T38 to T44 on `channels-dev-f35c`'s board. From the owner's ask there (#16): next to
 Agents in the sidebar, **New agent** opens a modal (which machine, which detected harness,
 nickname, personality, Start), and the agent starts and joins by itself. Facts below were read
 from `main` at `bbc4198a` (kiwi 0.22.0).
@@ -184,6 +185,9 @@ This is the one change to the relay, and it gets a security review before it mer
   stays for agents started by hand.
 
 ## Decisions for the owner
+
+All taken as proposed, 2026-10-20.
+
 
 1. **Kiwi starts agents.** This reverses the rule in `docs/agents.md:57` for one case: a launch the
    owner asked for. Waking, rotation and restarts still never start a process.
