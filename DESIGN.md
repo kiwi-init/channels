@@ -217,7 +217,8 @@ From `design-tokens.ts`:
   check by name with how it went, and See the diff and GitHub as outlined
   buttons.
 - On a wide window the list is an 80px icon rail, as Grok's
-  collapsed one: the Mac traffic lights on its header row, each channel
+  collapsed one: the Mac traffic lights on its header row (92px wide on a
+  Mac, so the page's sheet starts a 12px gutter after them), each channel
   as its 40px tile in a 56px `card`-round cell (`pick` when open); a
   channel with a lead wears the lead's head there, in its own sidebar and
   in its details, the same face everywhere, a blue

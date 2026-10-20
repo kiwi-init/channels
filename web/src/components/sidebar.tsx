@@ -235,7 +235,7 @@ export function Rail({
   const newsOf = new Map(rows.map((c, i) => [c.room, news[i]]))
   const icons = useIcons()
   return (
-    <aside className="relative hidden h-full w-20 shrink-0 flex-col items-center bg-rail md:flex">
+    <aside className="relative hidden h-full w-20 shrink-0 flex-col items-center bg-rail md:flex shell-mac:w-(--lights-w)">
       <div aria-hidden className="drag h-(--chrome-h) w-full shrink-0" />
       <nav aria-label="Channels" className="flex w-full flex-1 [scrollbar-width:none] flex-col items-center gap-1 overflow-y-auto pt-2 pb-3">
         {rows.map((c) => (
