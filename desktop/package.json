@@ -82,8 +82,8 @@
       "icon": "build/icon.icns",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist",
+      "entitlements": "build/entitlements.app.plist",
+      "entitlementsInherit": "build/entitlements.app.plist",
       "extendInfo": {
         "NSMicrophoneUsageDescription": "Channels uses the microphone to dictate a message and to talk to your channel."
       }
