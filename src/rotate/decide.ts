@@ -5,9 +5,15 @@ export const ROTATE_FLOOR = 100_000;
 
 export type Rotation = { kind: "rotate"; why: string } | { kind: "stay"; why: string };
 
+function onFinishedTask(state: ChannelState, seq: number): boolean {
+  const place = state.placeOf.get(seq);
+  const task = place?.kind === "task" ? state.tasks.get(place.task) : undefined;
+  return !!task && (task.state === "done" || !!task.archived);
+}
+
 export function rotationAt(state: ChannelState, me: string, used: number | undefined, nudgedAfter: number | null): Rotation {
   if (used === undefined) return { kind: "stay", why: "its context size is unknown" };
-  if (state.openAsks.some((m) => m.from === me)) return { kind: "stay", why: "a question of its to a person is open" };
+  if (state.openAsks.some((m) => m.from === me && !onFinishedTask(state, m.seq))) return { kind: "stay", why: "a question of its to a person is open" };
   const open = [...state.tasks.values()].filter((t) => t.state !== "done" && !t.archived);
   if (open.some((t) => t.review === me && openRound(t))) return { kind: "stay", why: "a review round it judges is open" };
   const owned = open.filter((t) => t.owner === me);

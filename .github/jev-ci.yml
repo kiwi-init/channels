@@ -160,9 +160,12 @@ jobs:
       columns keep working (src/daemon/wake.ts, AgentSession.unreadAt in src/agent/state.ts, test/wake.test.ts).
       Also test/rotate.test.ts: when a Claude Code seat in tmux gets a fresh session (src/rotate/decide.ts:
       between tasks past ROTATE_FLOOR, the lead past the line, open tasks only once checkpointed since
-      the nudge, never during a review round it judges or an open question of its), Claude Code's input
+      the nudge, never during a review round it judges or an open question of its, unless that question
+      sits in a done or archived task's thread), Claude Code's input
       box read between its two rules (drafts, multi-line text and dialogs are not empty), one sender per
-      session (another live sender's file makes it back off, a dead one's is ignored), and, with tmux on
+      session (another live sender's file makes it back off, a dead one's is ignored), a seat that stays
+      logged to rotate.log once per reason with its seat, again after a rotation (noteStay and forgetStay
+      in src/rotate/pane.ts, keyed by a .rotate-stay file in hook-state), and, with tmux on
       its own socket, /clear typed
       only into an idle session's empty box, Enter only once /clear shows there, its six characters
       erased when rotation is switched off before Enter while it still owns the pane, nothing more sent
@@ -409,7 +412,9 @@ jobs:
       for a checkpoint of each open task, not while stop_hook_active, and again only after the
       context came back under it (src/hooks/context-line.ts); and with kiwi rotate on, a seat past the
       line whose Stop hands nothing over starts the pane's /clear sender once it has checkpointed each
-      open task, never before and never with rotation off (src/hooks/rotate.ts). Then mimo-wake-restart:
+      open task, never before and never with rotation off, and before that logs why it stays once to
+      rotate.log however many times it stops, while with rotation off nothing reaches rotate.log
+      (src/hooks/rotate.ts). Then mimo-wake-restart:
       Kiwi's MiMoCode plugin (src/hooks/install/mimo.ts) loaded against a real listener, whose wake
       MiMoCode keeps refusing until MiMoCode exits mid-retry; the resumed session still gets those
       messages, because the listener writes a pending handoff per token (src/hooks/delivered.ts) that becomes
