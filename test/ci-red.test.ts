@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import type { Event, GithubNote, Message } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
-import { ciCommitLine, ciPusher, ciRedAfter, ciRedTitle } from "@kiwi/core/ci-red.ts";
+import { ciCommitLine, ciPusher, ciRedAfter, ciRedTitle, onMain } from "@kiwi/core/ci-red.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
@@ -79,8 +79,19 @@ describe("CI red becomes a task", () => {
     expect(ciPusher(s, "main")).toBeUndefined();
     expect(ciPusher(s, "nobody-here")).toBeUndefined();
     expect(ciPusher(s, undefined)).toBeUndefined();
-    const red = await ev("jow", { op: "github", items: [check({ branch: `T${t.seq}-copy-buttons` })] });
-    expect(ciRedAfter(fold([t, ...cards, red], roster), [t, ...cards, red], 0)[0]).toMatchObject({ owner: "wren", branch: `T${t.seq}-copy-buttons` });
+  });
+
+  test("only a red on main opens anything: a PR branch's red is its PR's to fix, already shown on the PR", async () => {
+    const t = await ev("jow", { op: "task.add", title: "Copy buttons", owner: "wren" });
+    const reds = await ev("jow", {
+      op: "github",
+      items: [check({ branch: `T${t.seq}-copy-buttons` }), check({ branch: "master", sha: "e".repeat(40) }), check({ branch: "main", sha: "f".repeat(40) })],
+    });
+    expect(ciRedAfter(fold([t, reds], roster), [t, reds], 0).map((r) => r.branch)).toEqual(["master", "main"]);
+    expect(onMain(undefined)).toBe(true);
+    expect(onMain("main")).toBe(true);
+    expect(onMain("T41-launch")).toBe(false);
+    expect(onMain("mainline")).toBe(false);
   });
 
   test("a red on a commit that already has an open CI task points at that task; a done one doesn't count", async () => {
