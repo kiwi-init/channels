@@ -2,7 +2,7 @@
 // channels). Everything after creation takes member keys alone: owners approve by their owner
 // key's signature, agents join with computer claims and people with person claims.
 
-import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, setDefaultTimeout, setSystemTime, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,6 +13,7 @@ import { startRelay } from "../src/relay/bun.ts";
 import { authkitDomains, workosHumanAuth } from "../src/relay/human.ts";
 import { HOLD_MS, holdEntry, reserveSlot } from "../src/relay/room.ts";
 import { signRequest } from "@kiwi/core/auth.ts";
+import { WS_PROTOCOL } from "@kiwi/core/protocol.ts";
 import { claimComputer, provePerson } from "@kiwi/core/person.ts";
 import { checked, checkedByHand } from "./check.ts";
 import { joinAgent, joinPerson, pairComputer, setupChannel } from "./owner.ts";
@@ -66,6 +67,41 @@ describe("WorkOS token verification", () => {
     const forgedBody = b64url(new TextEncoder().encode(JSON.stringify({ sub: "admin", exp: 9999999999 })));
     expect(await human.verify(`${h}.${forgedBody}.${s}`)).toBeNull();
     expect(await human.verify("not.a.jwt")).toBeNull();
+  });
+});
+
+describe("WorkOS keys that fail to load", () => {
+  test("a failed refetch for a new kid isn't kept: the next token loads the keys again", async () => {
+    const next = (await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, [
+      "sign",
+      "verify",
+    ])) as CryptoKeyPair;
+    const nextJwk = (await crypto.subtle.exportKey("jwk", next.publicKey)) as { n: string; e: string };
+    let mode: "one" | "broken" | "both" = "one";
+    const keys = Bun.serve({
+      port: 0,
+      hostname: "127.0.0.1",
+      fetch: () => {
+        if (mode === "broken") return new Response("{ not json", { headers: { "content-type": "application/json" } });
+        const listed = [{ kty: "RSA", kid: "k1", n: jwk.n, e: jwk.e }, ...(mode === "both" ? [{ kty: "RSA", kid: "k2", n: nextJwk.n, e: nextJwk.e }] : [])];
+        return Response.json({ keys: listed });
+      },
+    });
+    const auth = workosHumanAuth("client_test", `${keys.url.origin}/jwks`);
+    const start = Date.now();
+    try {
+      expect(await auth.verify(await token("user_a"))).toBe("user_a");
+      mode = "broken";
+      setSystemTime(new Date(start + 31_000));
+      expect(await auth.verify(await token("user_b", { key: next.privateKey, kid: "k2" }))).toBeNull();
+      mode = "both";
+      setSystemTime(new Date(start + 32_000));
+      expect(await auth.verify(await token("user_a"))).toBe("user_a");
+      expect(await auth.verify(await token("user_b", { key: next.privateKey, kid: "k2" }))).toBe("user_b");
+    } finally {
+      setSystemTime();
+      keys.stop(true);
+    }
   });
 });
 
@@ -300,6 +336,41 @@ describe("channels per person, at once (T113)", () => {
     }
   });
 
+  test("a create with one bad member writes nothing: the same create, fixed, then goes through", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mc-half-room-"));
+    const r = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir });
+    const at = r.url.origin;
+    const real = globalThis.fetch;
+    const owner = await generateIdentity("half");
+    let sent: { room: string; body: string } | null = null;
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      const room = /\/v1\/rooms\/([^/]+)\/create$/.exec(new URL(url).pathname)?.[1];
+      if (!room || typeof init?.body !== "string") return real(input, init);
+      sent = { room, body: init.body };
+      const b = JSON.parse(init.body) as { members: { keys?: Record<string, string> }[] };
+      b.members[1]!.keys = { "5": "not-yet" };
+      const body = JSON.stringify(b);
+      return real(input, { ...init, body, headers: { ...(init.headers as Record<string, string>), authorization: `Bearer ${await signRequest(owner, room, "POST", "/create", body)}` } });
+    }) as typeof fetch;
+    try {
+      const agent = await generateIdentity("half-agent");
+      const tried = await Channel.create(at, owner, { name: "half", kind: "human" }, [{ ...agent, info: { name: "half-agent" } }]).then(
+        () => 200,
+        (e: { status?: number }) => e.status,
+      );
+      expect(tried).toBe(400);
+      globalThis.fetch = real;
+      const { room, body } = sent!;
+      const again = await fetch(`${at}/v1/rooms/${room}/create`, { method: "POST", headers: { authorization: `Bearer ${await signRequest(owner, room, "POST", "/create", body)}` }, body });
+      expect(again.status).toBe(200);
+    } finally {
+      globalThis.fetch = real;
+      r.stop(true);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("a hold from a create that never finished expires", () => {
     const now = 1_700_000_000_000;
     const real = { room: "r1", code: "mc2-x", owner: true, member: true, agents: 0, at: now - HOLD_MS * 10 };
@@ -328,6 +399,35 @@ describe("expiry", () => {
       expect(r.sweep()).toBe(1);
       await expect(Channel.requestJoin(r.url.origin, code, await generateIdentity("late"), { name: "late" })).rejects.toThrow();
       await expect(ch.send("anyone?")).rejects.toMatchObject({ why: "closed" });
+    } finally {
+      r.stop(true);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a channel stays while someone's connected, and its idle days count from when they leave", async () => {
+    const { OPEN_POLICY } = await import("../src/relay/policy.ts");
+    const dir = mkdtempSync(join(tmpdir(), "mc-expire-open-"));
+    const clock = { now: Date.now() };
+    const r = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, human, policy: { ...OPEN_POLICY, expireAfterDays: 90 }, now: () => clock.now });
+    try {
+      const owner = await generateIdentity("stays");
+      const { access } = await Channel.create(r.url.origin, owner, { name: "stays", kind: "human" }, [], undefined, await token("user_alice"));
+      const u = new URL(`/v1/rooms/${access.roomId}/ws?since=0`, r.url.origin);
+      u.protocol = "ws:";
+      const ws = new WebSocket(u, [WS_PROTOCOL, await signRequest(owner, access.roomId, "GET", "/ws")]);
+      await new Promise<void>((ok, fail) => ((ws.onopen = () => ok()), (ws.onerror = () => fail(new Error("the socket didn't open")))));
+      clock.now += 120 * 86_400_000;
+      expect(r.sweep()).toBe(0);
+      const closed = new Promise<void>((ok) => (ws.onclose = () => ok()));
+      ws.close();
+      await closed;
+      await Bun.sleep(100);
+      expect(r.sweep()).toBe(0);
+      clock.now += 89 * 86_400_000;
+      expect(r.sweep()).toBe(0);
+      clock.now += 2 * 86_400_000;
+      expect(r.sweep()).toBe(1);
     } finally {
       r.stop(true);
       rmSync(dir, { recursive: true, force: true });

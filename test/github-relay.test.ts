@@ -24,7 +24,14 @@ let owner: Identity;
 let member: Identity;
 
 beforeAll(async () => {
-  server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir, human: devHumanAuth(), githubSecret: SECRET });
+  server = startRelay({
+    port: 0,
+    hostname: "127.0.0.1",
+    dataDir,
+    human: devHumanAuth(),
+    githubSecret: SECRET,
+    githubPush: async (repo, token) => ({ ok: true, value: token === "ghu_owner" && repo.startsWith("ojow/") }),
+  });
   relay = server.url.origin;
   owner = await generateIdentity("alice");
   member = await generateIdentity("win");
@@ -73,8 +80,19 @@ const pr = (repo: string) => ({
 type Queue = { repos: string[]; items: ({ id: number } & Record<string, unknown>)[] };
 
 describe("GitHub webhooks into a channel's queue", () => {
+  test("without the App's key, connecting a repo still takes the owner's token and push access to it", async () => {
+    const no = await room("PUT", "/github/repos", owner, { repos: ["victim/private"] });
+    expect(no.status).toBe(403);
+    expect(((await no.json()) as { error: string }).error).toBe("link GitHub in Settings to connect a repo");
+    const denied = await room("PUT", "/github/repos", owner, { repos: ["ojow/site", "victim/private"], token: "ghu_owner" });
+    expect(denied.status).toBe(403);
+    expect(((await denied.json()) as { error: string }).error).toBe("your linked GitHub account can't push to victim/private");
+    expect((await room("PUT", "/github/repos", owner, { repos: ["ojow/site"], token: "ghu_reader" })).status).toBe(403);
+    expect(await (await room("PUT", "/github/repos", owner, { repos: [] })).json()).toEqual({ repos: [] });
+  });
+
   test("the owner connects repos; a signed event for one lands, trimmed, in the queue only the owner reads", async () => {
-    const set = await room("PUT", "/github/repos", owner, { repos: ["Ojow/Channels", "ojow/site"] });
+    const set = await room("PUT", "/github/repos", owner, { repos: ["Ojow/Channels", "ojow/site"], token: "ghu_owner" });
     expect(await set.json()).toEqual({ repos: ["ojow/channels", "ojow/site"] });
     expect(await (await hook("pull_request", pr("ojow/channels"))).json()).toEqual({ queued: 1 });
     const q = (await (await room("GET", "/github/queue", owner)).json()) as Queue;
@@ -113,12 +131,25 @@ describe("GitHub webhooks into a channel's queue", () => {
   });
 
   test("dropping a repo stops its events; closing the channel unlinks the rest", async () => {
-    await room("PUT", "/github/repos", owner, { repos: ["ojow/site"] });
+    await room("PUT", "/github/repos", owner, { repos: ["ojow/site"], token: "ghu_owner" });
     expect(await (await hook("pull_request", pr("ojow/channels"))).json()).toEqual({ queued: 0 });
     expect(await (await hook("push", { ref: "refs/heads/main", after: "b".repeat(40), repository: { full_name: "ojow/site" } })).json()).toEqual({ queued: 1 });
     expect((await room("PUT", "/github/repos", owner, { repos: ["not a repo"] })).status).toBe(400);
     expect((await room("DELETE", "/", owner)).status).toBe(200);
     expect(await (await hook("push", { ref: "refs/heads/main", repository: { full_name: "ojow/site" } })).json()).toEqual({ queued: 0 });
+  });
+
+  test("a relay with neither the App nor a webhook secret takes a repo list as is: no GitHub event ever reaches it", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-github-none-"));
+    const none = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, human: devHumanAuth(), githubSecret: null, githubApp: null });
+    try {
+      const o = await generateIdentity("carol");
+      const made = await Channel.create(none.url.origin, o, { name: "carol", kind: "human" }, [], undefined, "dev:carol");
+      expect(await new Channel(made.access, none.url.origin, o).setGithubRepos(["ojow/site"])).toEqual(["ojow/site"]);
+    } finally {
+      none.stop(true);
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("a relay without the secret has no webhook", async () => {

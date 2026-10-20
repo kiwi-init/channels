@@ -19,7 +19,7 @@ import { MAX_BLOB_BYTES, PAGE_LIMIT, wellFormedFreed, wellFormedSlot } from "@ki
 import { ChannelGone, BadRequest, Forbidden, NotFound, NotOwner, Refused, SignInRequired, TooLarge, TooMany, Unauthorized, UpdateRequired, type Refusal } from "./failures.ts";
 import { answer, buildContext, describeRoutes, dispatch, incoming, json, readCapped, Request_, type Route } from "./http.ts";
 import { githubLinks, githubRepos, type GithubItem } from "./github.ts";
-import { GithubApp, type GithubReply } from "./github-app.ts";
+import { GithubApp, GithubPush, type GithubReply } from "./github-app.ts";
 import { Human, HUMAN_HEADER } from "./human.ts";
 import { betaMessage, inBeta, Policy } from "./policy.ts";
 import { offerPages, PAGE_PATH, servePage } from "./pages.ts";
@@ -75,7 +75,7 @@ import {
 // ---------- the relay's services ----------
 
 /** What a relay runs its rooms with, from its adapter. */
-export type RelayServices = Human | Policy | Directory | GithubApp;
+export type RelayServices = Human | Policy | Directory | GithubApp | GithubPush;
 
 /** The relay's services, built once from the adapter's Layer. */
 export type Relay = Context.Context<RelayServices>;
@@ -415,14 +415,15 @@ const routes: RoomRoute[] = [
         const repos = githubRepos(body.repos);
         if (!repos) return yield* new BadRequest({ message: "repos: up to 20 owner/name" });
         const app = yield* GithubApp;
-        if (app && repos.length) {
+        const canPush = app ? app.canPush : yield* GithubPush;
+        if (canPush && repos.length) {
           if (typeof body.token !== "string" || !body.token || body.token.length > 512) return yield* new Forbidden({ message: "link GitHub in Settings to connect a repo" });
           const userToken = body.token;
           const pushable = yield* Effect.forEach(
             repos,
             (r) =>
               Effect.flatMap(
-                Effect.promise(() => app.canPush(r, userToken)),
+                Effect.promise(() => canPush(r, userToken)),
                 replied,
               ),
             { concurrency: "unbounded" },

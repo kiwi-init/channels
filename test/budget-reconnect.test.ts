@@ -13,7 +13,7 @@ import { generateIdentity } from "@kiwi/core/identity.ts";
 import * as Layer from "effect/Layer";
 import { MORE_REFUSED, WS_PROTOCOL } from "@kiwi/core/protocol.ts";
 import { Human } from "../src/relay/human.ts";
-import { GithubApp } from "../src/relay/github-app.ts";
+import { GithubApp, GithubPush, githubPushFrom } from "../src/relay/github-app.ts";
 import { OPEN_POLICY, Policy } from "../src/relay/policy.ts";
 import { Directory, MORE_PER_MINUTE, onClientFrame, RoomDb, type Sql } from "../src/relay/room.ts";
 import { makeRelay, runRoomSync } from "../src/relay/route.ts";
@@ -216,6 +216,7 @@ test("the relay answers a member's page asks only so often", async () => {
       Layer.mergeAll(
         Layer.succeed(Human, null),
         Layer.succeed(GithubApp, null),
+        Layer.succeed(GithubPush, githubPushFrom()),
         Layer.succeed(Policy, OPEN_POLICY),
         Layer.succeed(Directory, { list: async () => [], reserve: async () => true, release: async () => {} }),
       ),

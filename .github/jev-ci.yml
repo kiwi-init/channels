@@ -85,6 +85,8 @@ jobs:
       test/relay-limits.test.ts: a request body over 1 MiB is refused with 413 before any route reads it, history reads are rate-limited per member, a GitHub check log is excerpted while streaming (the same excerpt as the whole-log one, whatever the chunking, and no further than the first error line), and a diff is read only up to its cap,
       test/claims.test.ts on a local relay: an own computer's agent auto-approved as the personality its invite pinned (a pin the person no longer holds as it was waits for a person), even past a spent daily signing budget, and a launch id read from the sealed join claims only when well-formed,
       test/sealed-epoch.test.ts on a local relay: a removal reseals the channel's name and settings under the new key, so the removed member opens neither while a member who stayed opens both after one key refresh; later changes are sealed under the newest key the client holds; the relay refuses a name or settings under a key the channel lacks or an older one; an owner's app reseals what an earlier rotation left under the first key; a relay without sealedEpoch keeps the epoch-0 seal, a name, settings or icon change made while a removal's rotation is still pending rotates first, and the relay refuses an icon sealed under an older key than the channel's,
+      test/epoch-floor.test.ts on a local relay: a member's epoch never goes back, so a relay naming the epoch from before a removal (or one past every key held) doesn't move it and the next message is still sealed under the newest key; joining back never starts past the newest key held; a relay restored from before the last rotation gets one key refresh, then a refusal that says the relay is behind, and the owner can't rotate past it; saveAccess and the join resume merge keep the higher epoch and the keys this machine holds,
+      test/hardening.test.ts's dishonest relay: a removal never wraps the next key to the removed key while the relay still lists it active, even on a device that remembers no records; a key the owner once saw gone stays gone in members() and later rotations; a relay that keeps a removed key active gets a rotation that fails out loud,
       and test/stamp.test.ts: scripts/stamp.ts takes only vX.Y.Z or vX.Y.Z-rc.N tags, a rehearsal
       stamps the next patch, every stamped file in the repo (src/version.ts, both package.json
       files, site/app.js's four download names, site/README.md) takes the tag's version and nothing
@@ -264,6 +266,14 @@ jobs:
       only within two minutes either way and only once, refused when re-aimed at another computer inside its seal, changed,
       carrying an unknown verb or field, or over 4 KiB; and the computer's answer read only when signed by that computer
       for that ask.
+      Also test/machine-relay.test.ts: a paired computer at the relay (src/relay/machine.ts, on the Bun relay; the Worker's
+      MachineInbox object runs the same handler, and machineAlarmAt times its alarm): it registers itself with its own cert,
+      nobody else can, an older cert can't roll its person back, even after an unpair; every route takes only a signature
+      made for that machine, that method, that path and that body, recently, so a room's, another path's, a swapped body
+      or an old one is refused; only its person writes to its inbox (a box of at most 4 KiB, 20 a minute and 20 waiting,
+      each checked on its own), asks reach its socket on open and as they come and are gone after three minutes, only the
+      machine reads, deletes or opens its socket, only its person sees it online, and unpairing by either drops the inbox
+      and closes the socket. Its refusals are tagged failures, pinned by test/error-texts.test.ts.
       Also test/shell-path.test.ts: the PATH line kiwi setup and the desktop app add to the shell's profile
       (packages/core/src/node/shell-path.ts), once and never when the profile already names the folder, and never
       from a profile outside a temp folder into a temp folder (the system's temp folders, through their links,
@@ -430,9 +440,23 @@ jobs:
       KIWI_HOME/daemon.log, rotated at 1 MB. And
       test/release-signing.test.ts: release-build.yml's Package step fails a tag release that has no
       Mac signing secrets, while a rehearsal and the Linux build still build unsigned. And
+      test/untrusted-messages.test.ts: an owner-only event a member sent is refused by the fold and
+      not handed to agents (src/agent/wants.ts), and kiwi log flags it (packages/core/src/format.ts);
+      a reply naming a later seq answers nothing and roots no thread there
+      (packages/core/src/state/fold.ts). And test/history-progress.test.ts: a relay serving the same
+      page forever can't keep history() looping (packages/core/src/client/history.ts). And web
+      components/mermaid.test.tsx: a diagram's click links open in a new tab with noopener. And
       test/release-environment.test.ts: every job that reads a signing or deploy secret (MAC_*,
       APPLE_*, CLOUDFLARE_*) runs in the release environment, a rehearsal off main runs in none, and
       no caller of release-build.yml passes those secrets by name. And
+      test/bun-relay-store.test.ts: the Bun relay keeps one store per room (src/relay/bun.ts), so a
+      message costs at most 3 SQL statements, a row another connection commits is read rather
+      than a warm copy, and the idle sweep closes the rooms it opened only to check them. And
+      test/human.test.ts's relay cases: a failed WorkOS key refetch is forgotten, so the next token
+      loads the keys again (src/relay/human.ts); a create with one bad member writes nothing
+      (src/relay/room/lifecycle.ts); and a channel's idle days count from when its last socket
+      closes. And test/github-relay.test.ts: on a relay without the App's key, connecting a repo
+      still takes the owner's token and push access to it (src/relay/route.ts, GithubPush). And
       test/release-on-main.test.ts: release.yml's on-main job refuses a tag whose commit isn't on
       main, and every other job waits for it, so nothing is built, signed or published from such a
       tag; bump-main pushes a stamp only when it edits scripts/stamp.ts's files and CHANGELOG.md,
@@ -570,7 +594,8 @@ jobs:
       from sibling folders, and with a backlog on both seats each hook's whole output (SessionStart,
       prompt, stop) within HOOK_CONTEXT_MAX, the seats sharing it (src/hooks/run.ts). Then handoff: an escalation's live browser link (packages/core/src/protocol.ts),
       `kiwi send --escalate --handoff URL --wait` exit codes, and the link kept out of log, show,
-      listen --json except `kiwi show N --reveal`. Then hooks-once: a message the prompt or stop hook
+      listen --json except `kiwi show N --reveal`, and only a person's done or couldn't ends the wait, never
+      an agent's (src/agent/messaging.ts). Then hooks-once: a message the prompt or stop hook
       hands over never wakes the session a second time from the listener started with it
       (src/hooks/listen.ts waits for the session's answering hook, src/hooks/delivered.ts), and the
       listener keeps listening for the next one; and a prompt hook whose output never reaches the
@@ -655,8 +680,8 @@ jobs:
       conversation, a review and an escalation under Needs you, a direct conversation, notes, a
       pending join request and a second empty channel) and shoots every screen of the wide
       window in the dark: the conversation, the reply bar, the composer with words in it, the Tasks tab, a task opened from its board row
-      in the Tasks panel, Needs you, the Agents tab, Details, the direct conversation,
-      Invite, the account menu, the command palette, Notes, Pause, Settings, Personalities, Add
+      in the Tasks panel, Needs you, the Agents tab, the channel's settings page (Details: members, the channel's settings, notes and closing, side by side), the direct conversation,
+      Invite, the account menu, the command palette, Notes, Pause, Settings (its sections and their groups), Personalities (opened from its row), Add
       an agent, the desktop app's New agent modal and its started screen (with a stand-in for the
       four launch methods the desktop bridge adds), first run, signed in with nothing open, Join
       with a code and the invite preview.

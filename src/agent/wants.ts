@@ -17,6 +17,7 @@ export function narrows(d: Delivery): boolean {
 export function wants(me: string, m: Message, state: ChannelState | null, d: Delivery = {}): boolean {
   if (m.from === me) return false;
   if (ignored(state?.trust.get(m.seq))) return false;
+  if (m.kind === "event" && !d.all && state?.rejected.has(m.seq)) return false;
   if (d.room !== undefined && m.kind !== "event" && (state?.roomOf.get(m.seq) ?? m.room ?? GENERAL_ROOM) !== d.room) return false;
   if (d.all) return true;
   if (d.thread !== undefined) return m.kind !== "event" && (state?.threadOf.get(m.seq) ?? m.seq) === (state?.threadOf.get(d.thread) ?? d.thread);

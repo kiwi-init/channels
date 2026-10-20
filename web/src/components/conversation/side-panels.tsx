@@ -102,6 +102,7 @@ export function InfoSide({
   onPause,
   onMessage,
   onJoins,
+  onNewAgent,
   state,
   now,
   send,
@@ -113,6 +114,7 @@ export function InfoSide({
   onPause: (() => void) | undefined
   onMessage: (name: string) => void
   onJoins: () => void
+  onNewAgent: (() => void) | undefined
   state: ChannelState
   now: number
   send: Send
@@ -126,6 +128,8 @@ export function InfoSide({
       onPause={onPause}
       onMessage={onMessage}
       onJoins={onJoins}
+      onNewAgent={onNewAgent}
+      hasNotes={state.facts.size > 0}
       notes={<Notes state={state} now={now} onClear={async (key) => void (await send(`cleared ${key}`, { kind: "event", ev: { op: "fact.del", key } }))} />}
     />
   )

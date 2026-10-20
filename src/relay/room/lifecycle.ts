@@ -9,7 +9,7 @@ import { readMeta } from "./auth.ts";
 import { RoomStore } from "./db.ts";
 import type { DirectoryUpdate } from "./directory.ts";
 import { formatBytes } from "./limits.ts";
-import { putMember, type MemberBody } from "./members.ts";
+import { memberFits, putMember, type MemberBody } from "./members.ts";
 
 export const create = Effect.fn("Room.create")(function* (signer: string | null, body: CreateBody, ownerUser: string | null = null) {
   const db = yield* RoomStore;
@@ -23,6 +23,7 @@ export const create = Effect.fn("Room.create")(function* (signer: string | null,
   if (!members?.some((m) => m.pk === owner.pk)) return yield* new BadRequest({ message: "the owner must be a member" });
   const most = (yield* Policy).membersPerChannel;
   if (most && new Set(members.map((m) => m.pk)).size > most) return yield* new TooMany({ message: `a channel may have at most ${most} members on this relay` });
+  if (!members.every((m) => memberFits(m.pk === owner.pk ? { ...m, post: true } : m, 0))) return yield* new BadRequest({ message: "bad member" });
   db.init();
   db.set("owner_pk", owner.pk);
   db.set("owner_xpk", owner.xpk);
