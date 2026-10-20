@@ -24,7 +24,10 @@ async function tend(code: string, person: string): Promise<void> {
   const m = loadMember(code)
   if (!m || m.identity.pk !== m.access.ownerPk) return
   const ch = linkOf(m)
-  await tendOwned(person, m.name ?? "your channel", ch, notify, told)
+  const [{ PRESETS }, { cleanPersonalities }] = await Promise.all([import("@kiwi/core/presets.ts"), import("@kiwi/core/personalities.ts")])
+  const personalities = [...PRESETS, ...cleanPersonalities(secrets().personalities)]
+  const api = { autoApprove: (p: string) => ch.autoApprove(p, personalities), requests: (o: { person: string }) => ch.requests(o) }
+  await tendOwned(person, m.name ?? "your channel", api, notify, told)
 }
 
 /** Watch every owned channel in `rows` while the app runs (the tray keeps it running when closed). */

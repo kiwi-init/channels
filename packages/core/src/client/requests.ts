@@ -1,4 +1,4 @@
-import { makePin, readPin } from "../pin.ts";
+import { makePin, pinned, readPin } from "../pin.ts";
 import { cleanPersona, personaScopes, type Personality } from "../personality.ts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -10,6 +10,7 @@ import {
   makeRecord,
   NAME_RE,
   nameKey,
+  readLaunch,
   readRuns,
   RESERVED_NAMES,
   sealRecord,
@@ -47,7 +48,7 @@ export interface RequestsFx {
   checkRequest(req: Pick<JoinRequest, "id" | "pk" | "commit">): Effect.Effect<void, Refused, Relay>;
   approve(req: JoinRequest, as?: Partial<MemberInfo>, opts?: { person?: string }): Effect.Effect<Member, Refused, Relay>;
   pinPersona(p: Personality): Effect.Effect<string, Refused, Relay>;
-  autoApprove(person: string): Effect.Effect<Member[], Refused, Relay>;
+  autoApprove(person: string, personalities?: readonly Personality[]): Effect.Effect<Member[], Refused, Relay>;
   deny(requestId: string): Effect.Effect<void, Refused, Relay>;
 }
 
@@ -75,6 +76,7 @@ export class ChannelRequests {
         const person = yield* Effect.promise(() => verifiedPerson(this.ch.roomId, r.pk, info.person));
         const pin = person ? null : yield* Effect.promise(() => readPin(info.pin, this.ch.roomId, this.ch.identity.pk));
         const kind = person ? "human" : "agent";
+        const launch = kind === "agent" ? readLaunch(info.launch) : undefined;
         const asked = inlineText(info.name, 40);
         const allowed = NAME_RE.test(asked) && !RESERVED_NAMES.has(nameKey(asked));
         const holder = allowed ? seats.find((m) => nameKey(m.name) === nameKey(asked)) : undefined;
@@ -104,6 +106,7 @@ export class ChannelRequests {
           ...(cleanCard(info.card) ? { card: cleanCard(info.card)! } : {}),
           ...(kind !== "human" && readRuns(info.runs) ? { runs: readRuns(info.runs)! } : {}),
           ...(pin ? { pin } : {}),
+          ...(launch ? { launch } : {}),
         });
       }
       return out;
@@ -169,7 +172,7 @@ export class ChannelRequests {
       return { pk: req.pk, xpk: req.xpk, ...info, owner: false, at: rec.at, active: true } satisfies Member;
     }),
 
-    autoApprove: Effect.fn("Channel.autoApprove")({ self: this }, function* (this: ChannelRequests, person: string) {
+    autoApprove: Effect.fn("Channel.autoApprove")({ self: this }, function* (this: ChannelRequests, person: string, personalities: readonly Personality[] = []) {
       yield* this.ch.ownerOnly();
       for (const req of yield* this.ch.fx.requests({ person })) {
         if (req.computer?.own && req.check === "unchecked") yield* Effect.ignoreCause(this.ch.fx.checkRequest(req));
@@ -177,7 +180,10 @@ export class ChannelRequests {
       const approved: Member[] = [];
       for (const req of yield* this.ch.fx.requests({ person })) {
         if (!(req.computer?.own && req.check === "ready" && req.code)) continue;
-        const one = yield* Effect.exit(this.ch.fx.approve(req, undefined, { person }));
+        const pin = req.pin;
+        const persona = pin ? yield* Effect.promise(() => pinned(pin, personalities)) : undefined;
+        if (persona === null) continue;
+        const one = yield* Effect.exit(this.ch.fx.approve(req, persona ? { persona } : undefined, { person }));
         if (Exit.isSuccess(one)) approved.push(one.value);
       }
       return approved;

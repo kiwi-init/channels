@@ -11,6 +11,8 @@ import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import { handleFor, type Member, type MemberInfo } from "@kiwi/core/membership.ts";
 import type { PersonClaim } from "@kiwi/core/person.ts";
 import { omit } from "@kiwi/core/omit.ts";
+import { cleanPersonalities } from "@kiwi/core/personalities.ts";
+import { PRESETS } from "@kiwi/core/presets.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import type { SigningBudget } from "@kiwi/core/sas.ts";
 import {
@@ -145,7 +147,7 @@ export class Keyring implements ChannelOps {
         return [{ budget: this.host.budget, ...(field(args[0], "person") !== undefined ? who : {}) }];
       case "autoApprove":
         if (!person) throw new Error("make your person key first");
-        return [person];
+        return [person, [...PRESETS, ...cleanPersonalities(args[1])]];
       case "approve":
       case "checkRequest": {
         const id = field(args[0], "id");

@@ -131,7 +131,7 @@ export function hooksInstalled(): boolean {
   return state === "installed" || state === "installed-without-listen";
 }
 
-const REWAKE_SINCE = [2, 1, 296] as const;
+export const REWAKE_SINCE = [2, 1, 296] as const;
 
 function claudeVersion(env: Record<string, string | undefined> = process.env): number[] | null {
   const m = /^claude-code_(\d+)-(\d+)-(\d+)_/.exec(env.AI_AGENT ?? "") ?? /[\\/](\d+)\.(\d+)\.(\d+)[\\/]claude(?:\.exe)?$/.exec(env.CLAUDE_CODE_EXECPATH ?? "");
