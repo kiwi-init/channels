@@ -1,5 +1,6 @@
 import { parseArgs } from "node:util";
 import { IDENTITY_ARG, selfIdentity } from "../hooks.ts";
+import { QUERY_ARG } from "../query-arg.ts";
 
 if (process.argv[2] === IDENTITY_ARG && process.argv.length === 3) {
   const identity = selfIdentity();
@@ -8,9 +9,24 @@ if (process.argv[2] === IDENTITY_ARG && process.argv.length === 3) {
   process.exit(0);
 }
 
+if (process.argv[2] === QUERY_ARG && process.argv.length === 3) {
+  const { runQueryWorker } = await import("../sh-query.ts");
+  await runQueryWorker();
+  process.exit(0);
+}
+
 const isRelay = process.argv[2] === "relay";
-export const { values: opt, positionals: args } = parseArgs({
-  args: isRelay ? ["relay"] : process.argv.slice(2),
+const OPTION_TOKEN = /^(-[A-Za-z]+|--[A-Za-z][\w-]*(=[\s\S]*)?)$/;
+const texts = new Map<string, string>();
+const shielded = (isRelay ? ["relay"] : process.argv.slice(2)).map((a, i) => {
+  if (a.length < 2 || !a.startsWith("-") || a === "--" || OPTION_TOKEN.test(a)) return a;
+  const stand = `\u0000${i}`;
+  texts.set(stand, a);
+  return stand;
+});
+const back = (v: string): string => texts.get(v) ?? v;
+const parsed = parseArgs({
+  args: shielded,
   allowPositionals: true,
   options: {
     channel: { type: "string", short: "c" },
@@ -69,6 +85,7 @@ export const { values: opt, positionals: args } = parseArgs({
     model: { type: "string" },
     harness: { type: "string" },
     persona: { type: "string" },
+    folder: { type: "string" },
     tools: { type: "string" },
     stay: { type: "boolean" },
     room: { type: "string" },
@@ -80,3 +97,22 @@ export const { values: opt, positionals: args } = parseArgs({
     version: { type: "boolean", short: "v" },
   },
 });
+
+const values = Object.fromEntries(Object.entries(parsed.values).map(([k, v]) => [k, typeof v === "string" ? back(v) : Array.isArray(v) ? v.map(back) : v])) as typeof parsed.values;
+const given: ReadonlySet<string> = new Set(Object.entries(values).flatMap(([k, v]) => (v === undefined ? [] : [k])));
+const read = new Set<string>();
+export const opt = new Proxy(values, {
+  get(target, key, receiver) {
+    if (typeof key === "string") read.add(key);
+    return Reflect.get(target, key, receiver);
+  },
+});
+export const args = parsed.positionals.map(back);
+
+export function ignoredOptions(): string[] {
+  return [...given].filter((k) => !read.has(k));
+}
+
+export function unexpectedOptions(allowed: readonly string[]): string[] {
+  return [...given].filter((k) => !allowed.includes(k));
+}

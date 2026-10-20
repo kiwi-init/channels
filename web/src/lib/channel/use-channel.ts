@@ -5,17 +5,14 @@ import type { CachedRow } from "@kiwi/core/cache-row.ts"
 import { ChannelGone } from "@kiwi/core/client/errors.ts"
 import type { HumanSession, RoomsSetting, SendOptions } from "@kiwi/core/client.ts"
 import type { JoinRequest, Member } from "@kiwi/core/membership.ts"
-import type { Activity, Message, Reach } from "@kiwi/core/protocol.ts"
+import type { Message } from "@kiwi/core/protocol.ts"
 import { fold, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts"
-import { isWakeVia, wakesInSession } from "@kiwi/core/wake.ts"
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "../channel-ops"
 import { readCached, rememberRow, rememberRows } from "../history"
 import { checkedUpTo, checksToPost, issuesToPost, linksToPost, setCheckedUpTo, tasksToClose } from "../review-checks"
 import { drain } from "../github-queue"
 import { closeFromGithub } from "../task-actions"
-import { wholeLog } from "../history-plan"
 import { ICON_LIVE } from "../icon-event"
-import { howHere } from "../presence"
 import { addMarks, type Marks } from "../receipts"
 import { fork } from "../runtime"
 import { noteSignInGone } from "../session"
@@ -24,24 +21,14 @@ import { untilOpen } from "../until-open"
 import { useClock } from "./clock"
 import { noteAgentWorked } from "./recent"
 import { forgetChannel, loadMember, renameChannel, type StoredMember } from "./store"
-import { baseFrom, usableBase } from "./base-plan"
+import { baseFrom, startsWhole, usableBase } from "./base-plan"
+import { hear, onlineByName, type Online } from "./online"
 import { trimmed } from "./trim"
 import { dropWarm, heldWindow, keepWarm, warmOf } from "./warm"
 
 const HISTORY = 2_000
 
-const PRESENCE_TTL = 150_000
-
 type Connection = "connecting" | "live" | "reconnecting"
-
-interface Online {
-  client: string
-  at: number
-  pk?: string
-  activity?: Activity
-  reach?: Reach
-  wakes: boolean
-}
 
 export interface ChannelHandle {
   ch: ChannelLink
@@ -75,7 +62,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
   const [messages, setMessages] = useState<Message[]>(was?.messages ?? [])
   const [unread, setUnread] = useState<number[]>(was?.unread ?? [])
   const [roster, setRoster] = useState<Member[]>(was?.roster ?? [])
-  const [online, setOnline] = useState<Map<string, Online>>(new Map())
+  const [online, setOnline] = useState<ReadonlyMap<string, Online>>(new Map())
   const [marks, setMarks] = useState<Marks>(was?.marks ?? new Map())
   const [requests, setRequests] = useState<JoinRequest[]>(was?.requests ?? [])
   const now = useClock(15_000)
@@ -177,21 +164,9 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
           setUnread((prev) => [...prev, ev.seq].slice(-HISTORY))
           if (ev.row) void rememberRow(ch.roomId, ch.pk, ev.row, HISTORY).catch(() => {})
           return
-        case "Presence": {
-          const p = ev.presence
-          if (p.client === "probe" || !p.sigOk) return
-          setOnline((prev) =>
-            new Map(prev).set(p.from, {
-              client: p.client,
-              at: Date.now(),
-              pk: p.pk,
-              ...(p.activity ? { activity: p.activity } : {}),
-              ...(p.reach ? { reach: p.reach } : {}),
-              wakes: isWakeVia(p.wake) && !wakesInSession(p.wake),
-            })
-          )
+        case "Presence":
+          setOnline((prev) => hear(prev, ev.presence, Date.now()))
           return
-        }
         case "Roster":
           void refreshRequests()
           return void refreshRoster()
@@ -225,8 +200,10 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
           const since = held ? held.since : cached ? cached.since : Math.max(0, head - HISTORY)
           const firstSeq = held ? held.firstSeq : cached?.firstSeq
           const from = baseFrom(since, firstSeq)
-          const snap = from > 0 && !was?.base ? await ch.snapshot().catch(() => null) : null
-          return { head, cached, since, firstSeq, base: usableBase(snap, from) }
+          const warm = usableBase(was?.base ?? null, from)
+          const snap = from > 0 && !warm ? await ch.snapshot().catch(() => null) : null
+          const base = usableBase(snap, from)
+          return { head, cached, since, firstSeq, base, whole: startsWhole(head, HISTORY, since, firstSeq, base ?? warm) }
         },
         catch: (err) => err,
       }),
@@ -247,7 +224,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
               if (cached.some((m) => m.kind === "event" && m.ev?.op === "card")) noteAgentWorked()
             }
             if (opened.base) setBase(opened.base)
-            setStart({ head: opened.head, whole: wholeLog(opened.head, HISTORY, opened.firstSeq) })
+            setStart({ head: opened.head, whole: opened.whole })
             stopLive = ch.follow(opened.since, onEvent)
           })
         ),
@@ -263,10 +240,11 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
     }
   }, [ch, refreshRoster, refreshRequests, onGone, human, member.code, was])
 
-  const keyOf = useMemo(() => new Map(roster.filter((r) => r.active).map((r) => [r.name, r.pk])), [roster])
+  const admitted = useMemo(() => roster.filter((m) => !m.unverified), [roster])
+  const keyOf = useMemo(() => new Map(admitted.filter((r) => r.active).map((r) => [r.name, r.pk])), [admitted])
   const rosterForFold: Roster = useMemo(
     () =>
-      roster.map((m) => ({
+      admitted.map((m) => ({
         name: m.name,
         pk: m.pk,
         role: m.role,
@@ -283,7 +261,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
         ...(m.runs ? { runs: m.runs } : {}),
         ...(m.persona ? { persona: m.persona } : {}),
       })),
-    [roster]
+    [admitted]
   )
   const state = useMemo(() => fold(messages, rosterForFold, now, roomsFloor, guardFloor, base), [messages, rosterForFold, now, roomsFloor, guardFloor, base])
   const trim = useEffectEvent(() => {
@@ -397,7 +375,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
     const every = setInterval(drainGithub, 60_000)
     return () => clearInterval(every)
   }, [])
-  const live = useMemo(() => new Map([...online].filter(([name, o]) => !!o.pk && keyOf.get(name) === o.pk && now - o.at < PRESENCE_TTL && howHere(o) !== null)), [online, keyOf, now])
+  const live = useMemo(() => onlineByName(online, keyOf, now), [online, keyOf, now])
 
   const chRef = useRef(ch)
   useEffect(() => {

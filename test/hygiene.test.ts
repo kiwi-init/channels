@@ -42,6 +42,12 @@ describe("facts are shared and can expire", () => {
     expect(fold([set, branch], T0 + 8 * 86400_000).facts.has("sh.branch")).toBe(false);
     expect(fold([set, branch], T0 + 8 * 86400_000).facts.has("build.cmd")).toBe(true);
     expect(parseDuration("7d")).toBe(7 * 86400);
+    expect(parseDuration("1.5h")).toBe(5400);
+    expect(parseDuration("1h30m")).toBe(5400);
+    expect(parseDuration("2.5m")).toBe(150);
+    expect(() => parseDuration("5x")).toThrow(/bad duration/);
+    expect(() => parseDuration("1.5")).toThrow(/bad duration/);
+    expect(() => parseDuration("10m and then some")).toThrow(/bad duration/);
     expect(wellFormedEvent({ op: "fact.set", key: "k", value: "v", ttl: 3600 })).toBe(true);
   });
 });

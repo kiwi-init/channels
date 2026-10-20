@@ -7,7 +7,7 @@ import type { ChannelIdentityView, ChannelOps, FollowEvent, KeysAsk, KeysPort, K
 import { snapshotOf } from "../desktop/src/guard.ts";
 import { editable, Keyring, type KeyHost } from "../desktop/src/keyring.ts";
 import { serveKeys } from "../desktop/src/keys-server.ts";
-import { acceptSeat, mergePublicChannels, migrateEntries, publicChannel, withAccess } from "../desktop/src/seats.ts";
+import { acceptSeat, mergePublicChannels, migrateEntries, movedRelay, publicChannel, withAccess } from "../desktop/src/seats.ts";
 import { fromWire, toWire } from "../desktop/src/wire.ts";
 import { remoteOps } from "../web/src/lib/channel-remote.ts";
 import { ChannelGone } from "@kiwi/core/client.ts";
@@ -295,6 +295,51 @@ describe("what the window may save", () => {
     expect(first.channels[1]).toMatchObject({ pk: "pk2", code: real(r2), imported: true });
     expect("extra" in first.channels[1]!).toBe(false);
     expect(migrateEntries(first.channels, [old]).added).toBe(0);
+  });
+
+  test("a relay switch marks each seat with the relay it lives on, and switching back clears the mark (T135)", () => {
+    const a = "https://a.example";
+    const b = "https://b.example";
+    const onA = movedRelay([seat()], a, b);
+    expect(onA[0]).toMatchObject({ code: "code1", relay: a, sk: "SECRET-sk" });
+    expect(publicChannel(onA[0]!).relay).toBe(a);
+    expect(mergePublicChannels(onA, [{ ...publicChannel(onA[0]!), label: "renamed" }])[0]).toMatchObject({ label: "renamed", relay: a });
+    const both = movedRelay([...onA, seat({ pk: "pk2", sk: "s2", code: "code2", roomId: "room2" })], b, a);
+    expect(both.map((c) => [c.code, c.relay])).toEqual([
+      ["code1", undefined],
+      ["code2", b],
+    ]);
+    expect("relay" in both[0]!).toBe(false);
+    expect(movedRelay(both, a, a)).toEqual(both);
+  });
+});
+
+describe("a relay switch keeps every saved channel (T135)", () => {
+  test("a seat on another relay is never sent to this one, so a 404 there can't forget it", async () => {
+    const ada = await generateIdentity("Ada");
+    const a = memHost(ada);
+    const k = new Keyring(a.host);
+    const aw = window(k);
+    const made = await aw.ops.create("Moved", null, { name: "Ada" });
+    const code = made.code!;
+    const elsewhere = "https://elsewhere.example";
+    a.store.seats = a.store.seats.map((c) => ({ ...c, relay: elsewhere }));
+    const half: ChannelIdentityView = {
+      label: "half",
+      idName: "human",
+      pk: "half-pk",
+      sk: "half-sk",
+      roomId: newRoomId(),
+      code: encodeJoinCode({ roomId: newRoomId(), ownerFp: "AAAAAAAAAAAAAAAA" }),
+      creating: true,
+      relay: elsewhere,
+    };
+    a.store.seats = [...a.store.seats, half];
+    await expect(aw.ops.call(code, "head")).rejects.toThrow("elsewhere.example");
+    await k.finishCreating();
+    expect(a.store.seats.map((c) => c.code)).toEqual([code, half.code]);
+    a.store.seats = a.store.seats.map((c) => ({ ...c, relay }));
+    expect((await aw.ops.call(code, "head")) ?? 0).toBe(0);
   });
 });
 

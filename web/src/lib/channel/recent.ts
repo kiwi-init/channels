@@ -1,4 +1,5 @@
 import { changed, read, RECENT_KEY } from "./store"
+import { showable } from "@/lib/format"
 import { pendingWrite, writeLater } from "@/lib/write-behind"
 
 const AGENT_WORKED = "mc.agent-worked"
@@ -32,7 +33,8 @@ export interface Recent {
 
 export function loadRecent(code: string): Recent | null {
   const held = pendingWrite(RECENT_KEY(code))
-  return held !== undefined ? (JSON.parse(held) as Recent) : read<Recent>(RECENT_KEY(code))
+  const recent = held !== undefined ? (JSON.parse(held) as Recent) : read<Recent>(RECENT_KEY(code))
+  return recent && typeof recent.ts === "number" && showable(recent.ts) ? recent : null
 }
 
 export function saveRecent(code: string, r: Recent): void {

@@ -59,7 +59,7 @@ export type Live =
       readonly kind: OpenKind;
     }
   | { readonly _tag: "Ready"; readonly head: number }
-  | { readonly _tag: "Message"; readonly message: Message }
+  | { readonly _tag: "Message"; readonly message: Message; readonly envelope?: Envelope }
   | { readonly _tag: "Unread"; readonly envelope: Envelope }
   | { readonly _tag: "Head"; readonly seq: number }
   | { readonly _tag: "Presence"; readonly presence: Presence & { sigOk: boolean } }
@@ -91,6 +91,20 @@ const outlasted = ({ attempt, elapsed, elapsedSincePrevious }: Schedule.InputMet
 interface Resume {
   seq: number;
   next: OpenKind;
+  beacons: Map<string, number>;
+}
+
+const BEACON_SKEW_MS = 5 * 60_000;
+
+function fresh(beacons: Map<string, number>, p: Presence, sigOk: boolean, now: number): boolean {
+  if (typeof p.ts !== "number" || !Number.isFinite(p.ts) || Math.abs(now - p.ts) > BEACON_SKEW_MS) return false;
+  if (!sigOk) return true;
+  const key = `${p.pk}\u0000${p.client}`;
+  const last = beacons.get(key);
+  if (last !== undefined && p.ts <= last) return false;
+  for (const [k, ts] of beacons) if (now - ts > BEACON_SKEW_MS) beacons.delete(k);
+  beacons.set(key, p.ts);
+  return true;
 }
 
 const STILL_IN_EVERY = 5;
@@ -175,6 +189,7 @@ export class ChannelLive {
   private readonly waits = new Set<() => void>();
   private readonly checks = new Set<() => void>();
   private kicked = false;
+  private lastBeacon = 0;
 
   constructor(
     private readonly ch: ChannelCore,
@@ -211,7 +226,7 @@ export class ChannelLive {
   };
 
   private live(since: number, { quietMs = QUIET_DROP_MS, presence = true, reads = true, send = false, watch = false }: LiveOptions): Stream.Stream<Live, ChannelGone, Relay> {
-    const at: Resume = { seq: since, next: "first" };
+    const at: Resume = { seq: since, next: "first", beacons: new Map() };
     return Stream.callback<Live, ChannelGone, Relay>((out) =>
       Stream.suspend(() => this.session(at, quietMs, presence, reads, send, watch)).pipe(
         Stream.retry(this.reconnect(out, quietMs)),
@@ -396,7 +411,9 @@ export class ChannelLive {
     return (p: PresenceFields): Effect.Effect<void> =>
       Effect.gen({ self: this }, function* () {
         if (ws.readyState !== WebSocket.OPEN) return;
-        const full = yield* Effect.promise(() => sign(this.ch.identity, { v: PROTOCOL_VERSION, type: "presence", from: this.ch.name, ts: Date.now(), ...p } as Presence));
+        const ts = Math.max(Date.now(), this.lastBeacon + 1);
+        this.lastBeacon = ts;
+        const full = yield* Effect.promise(() => sign(this.ch.identity, { v: PROTOCOL_VERSION, type: "presence", from: this.ch.name, ts, ...p } as Presence));
         const e = this.ch.access.epoch;
         const sealed = yield* Effect.promise(() => seal(this.ch.access.keys[String(e)]!, this.ch.roomId, { ...full, e }));
         ws.send(JSON.stringify({ t: "eph", ...sealed }));
@@ -419,7 +436,7 @@ export class ChannelLive {
           if (f.seq <= at.seq) return null;
           const m = yield* this.ch.fx.decrypt(f);
           at.seq = f.seq;
-          return m ? ({ _tag: "Message", message: m } satisfies Live) : Number.isSafeInteger(f.seq) && f.seq > 0 ? ({ _tag: "Unread", envelope: f } satisfies Live) : null;
+          return m ? ({ _tag: "Message", message: m, envelope: f } satisfies Live) : Number.isSafeInteger(f.seq) && f.seq > 0 ? ({ _tag: "Unread", envelope: f } satisfies Live) : null;
         }
         case "own": {
           if (f.seq <= at.seq) return null;
@@ -428,7 +445,7 @@ export class ChannelLive {
           return m && ({ _tag: "Message", message: m } satisfies Live);
         }
         case "eph":
-          return presence ? yield* this.presenceIn(f) : null;
+          return presence ? yield* this.presenceIn(f, at.beacons) : null;
         case "epoch":
           this.info.forgetInfo();
           yield* Effect.ignoreCause(this.ch.fx.refreshKeys());
@@ -479,13 +496,14 @@ export class ChannelLive {
     }
   }
 
-  private presenceIn(f: { iv: string; ct: string }): Effect.Effect<Live | null> {
+  private presenceIn(f: { iv: string; ct: string }, beacons: Map<string, number>): Effect.Effect<Live | null> {
     return Effect.gen({ self: this }, function* () {
       for (const k of Object.values(this.ch.access.keys).reverse()) {
         const p = (yield* Effect.promise(() => open(k, this.ch.roomId, f.iv, f.ct))) as (Presence & { e?: number }) | null;
         if (p?.type === "presence" && typeof p.from === "string") {
           const rest = omit(p, "e");
           const sigOk = yield* Effect.promise(() => verify(rest));
+          if (!fresh(beacons, rest, sigOk, yield* Clock.currentTimeMillis)) return null;
           const { activity: said, reach, ...fields } = omit(rest as Presence & { role?: unknown }, "role");
           const activity = cleanActivity(said);
           return {

@@ -213,6 +213,35 @@ describe("the installer's download", () => {
   });
 });
 
+describe("the installer's build", () => {
+  const picked = (os: string, arch: string, translated: string | null) => {
+    const dir = sandbox();
+    try {
+      writeFileSync(join(dir, "uname"), `#!/bin/sh\ncase "$1" in -s) echo ${os};; -m) echo ${arch};; esac\n`);
+      writeFileSync(join(dir, "sysctl"), translated === null ? `#!/bin/sh\necho "sysctl: unknown oid '$2'" >&2\nexit 1\n` : `#!/bin/sh\n[ "$2" = sysctl.proc_translated ] && echo ${translated}\n`);
+      chmodSync(join(dir, "uname"), 0o755);
+      chmodSync(join(dir, "sysctl"), 0o755);
+      expect(install(dir, []).exitCode).toBe(0);
+      const urls = readFileSync(join(dir, "fetched"), "utf8").trim().split("\n");
+      return urls.filter((u) => !u.endsWith("SHA256SUMS")).map((u) => u.slice(u.lastIndexOf("/") + 1));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  test("a Mac shell under Rosetta still gets the Apple Silicon build", () => {
+    expect(picked("Darwin", "x86_64", "1")).toEqual(["kiwi-darwin-arm64"]);
+  });
+
+  test("an Intel Mac, a Mac on arm64 and Linux get their own", () => {
+    expect(picked("Darwin", "x86_64", "0")).toEqual(["kiwi-darwin-x64"]);
+    expect(picked("Darwin", "x86_64", null)).toEqual(["kiwi-darwin-x64"]);
+    expect(picked("Darwin", "arm64", "0")).toEqual(["kiwi-darwin-arm64"]);
+    expect(picked("Linux", "x86_64", "1")).toEqual(["kiwi-linux-x64"]);
+    expect(picked("Linux", "aarch64", null)).toEqual(["kiwi-linux-arm64"]);
+  });
+});
+
 test("site/install is the same script as site/install.sh", () => {
   const sh = readFileSync(SCRIPT, "utf8");
   expect(readFileSync(join(import.meta.dir, "..", "site", "install"), "utf8")).toBe(sh);

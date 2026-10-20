@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { formatAgoShort, shortTitle } from "./format"
+import { formatAgoShort, formatFull, formatShort, formatStamp, formatTime, isoTime, shortTitle } from "./format"
 
 describe("shortTitle", () => {
   test("keeps a title that is already short", () => {
@@ -39,4 +39,16 @@ test("a row's time is short: now, then minutes, hours and days without the ago",
   expect(formatAgoShort(now - 4 * 60_000, now)).toBe("4m")
   expect(formatAgoShort(now - 3 * 3_600_000, now)).toBe("3h")
   expect(formatAgoShort(now - 2 * 86_400_000, now)).toBe("2d")
+})
+
+test("a time no date can hold formats as nothing instead of throwing (T136)", () => {
+  for (const ts of [1e16, -1e16, Number.NaN]) {
+    expect(formatTime(ts)).toBe("")
+    expect(formatFull(ts)).toBe("")
+    expect(formatShort(ts)).toBe("")
+    expect(formatStamp(ts)).toBe("")
+    expect(isoTime(ts)).toBeUndefined()
+  }
+  expect(isoTime(Date.UTC(2026, 9, 20))).toBe("2026-10-20T00:00:00.000Z")
+  expect(formatShort(Date.UTC(2026, 9, 20, 12), Date.UTC(2026, 9, 20, 13))).toBe(formatTime(Date.UTC(2026, 9, 20, 12)))
 })

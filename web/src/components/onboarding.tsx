@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react"
 
 import { handleFor, NAME_RE } from "@kiwi/core/membership.ts"
 import { isJoinBlip } from "@/lib/join-blip"
+import { relayUrl } from "@/lib/relay"
 import { useSecrets } from "@/lib/secrets"
 import { askToJoin, checkJoin, forgetPending, inviteInfo, isJoinCode, loadMember, loadPending, type ChannelRow, type PendingJoin, type StoredMember } from "@/lib/channel"
 import { Conversation } from "./conversation"
@@ -38,6 +39,7 @@ function decide(code: string): Phase {
   if (!isJoinCode(code)) return { kind: "error", message: "That isn’t a join code. Join codes start with mc2-." }
   try {
     const stored = loadMember(code)
+    if (stored?.relay) return { kind: "error", message: `It’s on ${stored.relay}, and this app uses ${relayUrl()} now. Switch back to that relay in Settings to open it: it’s still saved here.` }
     if (stored) return { kind: "member", member: stored }
     const pending = loadPending(code)
     return pending ? { kind: "waiting", pending, code: null } : { kind: "ask" }

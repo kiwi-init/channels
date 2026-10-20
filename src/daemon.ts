@@ -29,6 +29,8 @@ export {
 export { activityEnv, reachOf, seatRecordFor, wakeHooked, wakeOn, type Attached } from "./daemon/reach.ts";
 export {
   adoptDaemon,
+  daemonHarnesses,
+  daemonLaunch,
   daemonHello,
   daemonListeners,
   daemonListening,

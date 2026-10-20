@@ -10,6 +10,10 @@ function mentionsOf(body: string): Set<string> {
   return new Set([...body.matchAll(MENTION_RE)].map((m) => m[1]!.toLowerCase()));
 }
 
+export function narrows(d: Delivery): boolean {
+  return d.thread !== undefined || d.room !== undefined || !!d.forMe;
+}
+
 export function wants(me: string, m: Message, state: ChannelState | null, d: Delivery = {}): boolean {
   if (m.from === me) return false;
   if (ignored(state?.trust.get(m.seq))) return false;

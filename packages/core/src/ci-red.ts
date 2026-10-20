@@ -15,6 +15,10 @@ export interface CiRed {
 }
 
 const CI_RED = new Set(["failure", "timed_out", "startup_failure"]);
+
+const MAIN_BRANCHES = new Set(["main", "master"]);
+
+export const onMain = (branch: string | undefined): boolean => !branch || MAIN_BRANCHES.has(branch);
 const SHA_SHOWN = 12;
 
 export const ciRedTitle = (name: string, branch?: string): string => `CI red: ${name}${branch ? ` on ${branch}` : ""}`;
@@ -43,7 +47,7 @@ export function ciRedAfter(state: ChannelState, messages: Message[], after: numb
   for (const m of messages) {
     if (m.seq <= after || m.ev?.op !== "github" || !visible(state, m) || state.rejected.has(m.seq)) continue;
     for (const i of m.ev.items) {
-      if (i.event !== "check_run" || !i.conclusion || !CI_RED.has(i.conclusion) || !i.sha || !i.name) continue;
+      if (i.event !== "check_run" || !i.conclusion || !CI_RED.has(i.conclusion) || !i.sha || !i.name || !onMain(i.branch)) continue;
       const key = `${i.repo.toLowerCase()}@${i.sha}#${i.name}`;
       if (seen.has(key)) continue;
       seen.add(key);

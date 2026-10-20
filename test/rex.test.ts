@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Message } from "@kiwi/core/protocol.ts";
@@ -7,8 +7,12 @@ import { fold, type ChannelState, type Roster } from "@kiwi/core/state.ts";
 import { aliasSegment, askId, clearFrame, placeFrom, reviewId, rexActivity, rexInstance, rexProcess, rexScreen, statusFrame, takesStatus } from "../src/rex.ts";
 import { installPalette, paletteInstalled, removePalette, rexConfigPath } from "../src/rex-palette.ts";
 import { localRexSeats, showInRex } from "../src/rex-show.ts";
-import { seatRecords } from "../src/status.ts";
+import { foldStillFresh, seatRecords } from "../src/status.ts";
 import { startRexEvents } from "../src/rex-events.ts";
+import { readsRex } from "../src/daemon/reach.ts";
+import { readRexInto, type RexReadSeat } from "../src/daemon/rex-reads.ts";
+import type { RexActivity } from "../src/rex.ts";
+import type { SeatRecord } from "../src/config.ts";
 
 const roster: Roster = [
   { name: "jonatas", pk: "p", owner: true, at: 1, active: true, kind: "human" },
@@ -140,8 +144,35 @@ describe("Rex events", () => {
   });
 });
 
+describe("Rex status watch", () => {
+  test("a seat's channel is folded again only when its head moved, or a minute went by", () => {
+    expect(foldStillFresh({ head: 40, at: 1_000 }, 40, 30_000)).toBe(true);
+    expect(foldStillFresh({ head: 40, at: 1_000 }, 41, 30_000)).toBe(false);
+    expect(foldStillFresh({ head: 40, at: 1_000 }, 40, 61_000)).toBe(false);
+    expect(foldStillFresh({ head: 40, at: 1_000 }, undefined, 2_000)).toBe(false);
+    expect(foldStillFresh(null, 40, 2_000)).toBe(false);
+  });
+});
+
+describe("Rex events from a dead server", () => {
+  test("a server whose events stream keeps exiting is retried with a growing wait, not on every reconcile", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-rex-dead-"));
+    const bin = join(dir, "rex");
+    const starts = join(dir, "starts");
+    writeFileSync(bin, `#!/bin/sh\necho start >> '${starts}'\nexit 1\n`);
+    chmodSync(bin, 0o755);
+    const watch = startRexEvents({ servers: () => [{ server: "dead", bin }], onChange: () => {}, everyMs: 50 });
+    await Bun.sleep(1_600);
+    watch.stop();
+    const count = readFileSync(starts, "utf8").split("\n").filter(Boolean).length;
+    expect(count).toBeGreaterThanOrEqual(2);
+    expect(count).toBeLessThanOrEqual(3);
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
+
 describe("Rex as a reader", () => {
-  test("the root record, processes, screen and instance id come back even when wrapped", () => {
+  test("the root record, processes, screen and instance id come back even when wrapped", async () => {
     const dir = mkdtempSync(join(tmpdir(), "kiwi-rex-api-"));
     const bin = join(dir, "rex");
     writeFileSync(
@@ -158,7 +189,7 @@ esac
     );
     chmodSync(bin, 0o755);
     const place = { server: "studio", session: "session:01a15963-bacc-7426-91e9-4d98757dcd0c", block: "block:11a15963-bacc-7426-91e9-4d98757dcd0c" };
-    expect(rexActivity(place, bin)).toEqual({ state: "working", tool: "cargo test" });
+    expect(await rexActivity(place, bin)).toEqual({ state: "working", tool: "cargo test" });
     expect(rexProcess(place, bin)).toEqual({ foreground: 456, child: 123 });
     expect(rexScreen(place, bin)).toBe("the screen");
     expect(rexInstance(place, bin)).toBe("instance-1");
@@ -166,7 +197,115 @@ esac
   });
 });
 
+describe("the daemon's Rex reads", () => {
+  const place = { server: "studio", session: "session:01a15963-bacc-7426-91e9-4d98757dcd0c", block: "block:11a15963-bacc-7426-91e9-4d98757dcd0c" };
+
+  test("a Rex that doesn't answer gives no activity at its deadline, and the daemon keeps running meanwhile", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-rex-slow-"));
+    const bin = join(dir, "rex");
+    writeFileSync(bin, "#!/bin/sh\nsleep 10\n");
+    chmodSync(bin, 0o755);
+    let ticks = 0;
+    const timer = setInterval(() => ticks++, 20);
+    const started = Date.now();
+    expect(await rexActivity(place, bin, 300)).toBeNull();
+    clearInterval(timer);
+    expect(Date.now() - started).toBeLessThan(3_000);
+    expect(ticks).toBeGreaterThan(5);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("a result that changes on every read doesn't start the next read before the gap, nor while one is in flight", async () => {
+    const seat: RexReadSeat = { rexBlock: place.block };
+    let reads = 0;
+    let changes = 0;
+    const read = async (): Promise<RexActivity> => ({ state: "working", tool: `step ${++reads}` });
+    const t0 = 1_000_000;
+    const again = (at: number) => readRexInto(seat, place, read, changed, at, 1_000);
+    const changed = () => {
+      changes++;
+      expect(again(t0 + 10)).toBe(false);
+    };
+    expect(again(t0)).toBe(true);
+    expect(again(t0 + 1)).toBe(false);
+    await Bun.sleep(10);
+    expect([reads, changes]).toEqual([1, 1]);
+    expect(seat.rexActivity).toEqual({ state: "working", tool: "step 1" });
+    expect(again(t0 + 999)).toBe(false);
+    expect(again(t0 + 1_000)).toBe(true);
+    await Bun.sleep(10);
+    expect([reads, changes]).toEqual([2, 2]);
+  });
+
+  test("an unchanged result, a failed read or a block that moved on doesn't refresh the seat", async () => {
+    const seat: RexReadSeat = { rexBlock: place.block, rexActivity: { state: "idle" } };
+    let changes = 0;
+    readRexInto(
+      seat,
+      place,
+      async () => ({ state: "idle" }),
+      () => changes++,
+      0,
+      0,
+    );
+    await Bun.sleep(5);
+    readRexInto(
+      seat,
+      place,
+      async () => Promise.reject(new Error("rex died")),
+      () => changes++,
+      1,
+      0,
+    );
+    await Bun.sleep(5);
+    expect(seat.rexActivity).toBeNull();
+    expect(changes).toBe(1);
+    seat.rexBlock = "block:22a15963-bacc-7426-91e9-4d98757dcd0c";
+    readRexInto(
+      seat,
+      place,
+      async () => ({ state: "working" }),
+      () => changes++,
+      2,
+      0,
+    );
+    await Bun.sleep(5);
+    expect([changes, seat.rexActivity, seat.rexReading]).toEqual([1, null, false]);
+  });
+
+  test("only with the Rex helpers on, for a seat in Rex whose harness Kiwi can't read from its files", () => {
+    const rex = place;
+    expect(readsRex({ rex: "on" }, { harness: "grok", rex } as SeatRecord)).toBe(true);
+    expect(readsRex({ rex: "on" }, { rex } as SeatRecord)).toBe(true);
+    expect(readsRex({ rex: "off" }, { harness: "grok", rex } as SeatRecord)).toBe(false);
+    expect(readsRex({}, { harness: "grok", rex } as SeatRecord)).toBe(false);
+    expect(readsRex({ rex: "on" }, { harness: "grok" } as SeatRecord)).toBe(false);
+    for (const harness of ["claude", "codex", "opencode"] as const) expect(readsRex({ rex: "on" }, { harness, rex } as SeatRecord)).toBe(false);
+    expect(readsRex({ rex: "on" }, null)).toBe(false);
+  });
+});
+
 describe("the palette action", () => {
+  test("init.lua kept as a link into dotfiles stays a link with its mode, and gets the line through it, on and off", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-rex-link-"));
+    const dotfiles = join(dir, "dotfiles", "init.lua");
+    mkdirSync(join(dir, "dotfiles"));
+    mkdirSync(join(dir, "rex"));
+    writeFileSync(dotfiles, "rex.theme('dark')\n", { mode: 0o644 });
+    chmodSync(dotfiles, 0o644);
+    const init = join(dir, "rex", "init.lua");
+    symlinkSync(dotfiles, init);
+    installPalette(init, "/opt/rex/rex");
+    expect(lstatSync(init).isSymbolicLink()).toBe(true);
+    expect(readFileSync(dotfiles, "utf8")).toBe("rex.theme('dark')\nrequire(\"kiwi\") -- Kiwi: go to the seat that needs me\n");
+    expect(statSync(dotfiles).mode & 0o777).toBe(0o644);
+    removePalette(init);
+    expect(lstatSync(init).isSymbolicLink()).toBe(true);
+    expect(readFileSync(dotfiles, "utf8")).toBe("rex.theme('dark')\n");
+    expect(readdirSync(join(dir, "dotfiles"))).toEqual(["init.lua"]);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
   test("Rex's config is REX_CONFIG, else XDG, else ~/.config", () => {
     expect(rexConfigPath({ REX_CONFIG: "/tmp/my.lua", XDG_CONFIG_HOME: "/tmp/xdg" }, "/home/me")).toBe("/tmp/my.lua");
     expect(rexConfigPath({ XDG_CONFIG_HOME: "/tmp/xdg" }, "/home/me")).toBe("/tmp/xdg/rex/init.lua");

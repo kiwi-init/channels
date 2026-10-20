@@ -8,6 +8,7 @@ import { useEffect } from "react"
 import { TEND_SAFETY_MS, tendOnPush, tendOwned } from "./approval-tend"
 import { loadMember, type ChannelRow } from "./channel"
 import { linkOf, watches } from "./channel-ops"
+import { followedLaunches, sawMembers, sawRequests } from "./launches"
 import { bridge, secrets } from "./secrets"
 
 /** Requests already announced, so each is notified once per run of the app. */
@@ -24,7 +25,18 @@ async function tend(code: string, person: string): Promise<void> {
   const m = loadMember(code)
   if (!m || m.identity.pk !== m.access.ownerPk) return
   const ch = linkOf(m)
-  await tendOwned(person, m.name ?? "your channel", ch, notify, told)
+  const [{ PRESETS }, { cleanPersonalities }] = await Promise.all([import("@kiwi/core/presets.ts"), import("@kiwi/core/personalities.ts")])
+  const personalities = [...PRESETS, ...cleanPersonalities(secrets().personalities)]
+  if (followedLaunches(code).length) sawRequests(code, await ch.requests({ person }).catch(() => []))
+  const api = {
+    autoApprove: async (p: string) => {
+      const members = await ch.autoApprove(p, personalities)
+      sawMembers(code, members)
+      return members
+    },
+    requests: (o: { person: string }) => ch.requests(o),
+  }
+  await tendOwned(person, m.name ?? "your channel", api, notify, told)
 }
 
 /** Watch every owned channel in `rows` while the app runs (the tray keeps it running when closed). */

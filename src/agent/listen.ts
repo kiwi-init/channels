@@ -13,6 +13,7 @@ import type { ChannelState } from "@kiwi/core/state.ts";
 import { isWakeVia, viaOf } from "@kiwi/core/wake.ts";
 import { holding, isAnswer, MARK_EVERY_MS, type Agent, type Delivery, type Hearing } from "./shared.ts";
 import { SessionState } from "./state.ts";
+import { narrows } from "./wants.ts";
 
 const BEACON_SLACK_MS = 5_000;
 
@@ -31,6 +32,8 @@ export class SessionListen extends SessionState {
 
       let readTo = 0;
       let saidTo = 0;
+      let held = false;
+      const narrowed = narrows(opts);
       let mark: ((seq: number) => boolean) | null = null;
       const hear = (m: Message) =>
         Effect.gen({ self: this }, function* () {
@@ -40,8 +43,13 @@ export class SessionListen extends SessionState {
             state = yield* this.foldState(messages, yield* this.members());
             if (state.trust.get(m.seq) === "forged") state = yield* this.foldState(messages, yield* this.members(true));
           }
-          if (!seen.has(m.seq) && this.wants(m, state, opts) && (yield* onMessage(m, state)) !== false) readTo = m.seq;
-          yield* cursor.write(this.alias, this.me, m.seq);
+          const fresh = !seen.has(m.seq);
+          const wanted = fresh && this.wants(m, state, opts);
+          const delivered = wanted && (yield* onMessage(m, state)) !== false;
+          if (delivered) readTo = m.seq;
+          if (fresh && !delivered && (wanted || (narrowed && this.wants(m, state)))) held = true;
+          if (!held) yield* cursor.write(this.alias, this.me, m.seq);
+          else if (delivered) yield* cursor.markSeen(this.alias, this.me, [m.seq]);
         });
 
       const sayRead = Effect.sync(() => {

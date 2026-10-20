@@ -14,7 +14,7 @@ import type { ChannelIdentityView, ComputerView, PendingItem, PersonView, Public
 import { publicChannel } from "./seats.ts";
 import { voiceViewOf, type VoiceStore } from "./voice.ts";
 
-export { acceptSeat, mergeChannels, mergePublicChannels, migrateEntries, withAccess } from "./seats.ts";
+export { acceptSeat, mergeChannels, mergePublicChannels, migrateEntries, movedRelay, withAccess } from "./seats.ts";
 
 export const APP_SCHEME = "kiwi-app";
 export const APP_HOST = "app";

@@ -33,11 +33,15 @@ export const config = Effect.gen(function* () {
 
 const ANSWERING = new Set(["reply", "react", "show"]);
 
-function answered(): { alias: string; as: string } | undefined {
+function heardSeq(): number | undefined {
   const raw = ANSWERING.has(args[0] ?? "") ? args[1] : opt.re;
   const seq = Number(raw?.replace(/^#/, ""));
-  if (!Number.isInteger(seq) || seq < 1) return undefined;
-  const from = heardFrom(here().session, seq);
+  return Number.isInteger(seq) && seq >= 1 ? seq : undefined;
+}
+
+function answered(): { alias: string; as: string } | undefined {
+  const seq = heardSeq();
+  const from = seq === undefined ? [] : heardFrom(here().session, seq);
   return from.length === 1 ? from[0] : undefined;
 }
 
@@ -51,11 +55,14 @@ export const channelAlias = Effect.fn("kiwi.channelAlias")(function* () {
   const [seat, ...others] = fits;
   const heard = explicit ? undefined : answered();
   const told = heard && cfg.channels[heard.alias] ? heard.alias : undefined;
+  const seq = explicit ? undefined : heardSeq();
+  const heardIn = seq === undefined ? [] : [...new Set(heardFrom(here().session, seq).map((h) => h.alias))];
+  if (heardIn.length > 1) return yield* die(`this session saw #${seq} in more than one channel (${heardIn.join(", ")}): pass -c ALIAS to say which`);
   if (others.length || (ours.length > 1 && !seat)) {
     if (told) return (acting.alias = told);
     return yield* die(`this session is several agents here (${ours.map((b) => `${b.as} in ${b.alias}`).join(", ")}); pass -c ALIAS --as NAME to say which`);
   }
-  const alias = explicit ?? seat?.alias ?? (all.length === 1 ? all[0] : undefined) ?? told;
+  const alias = explicit ?? (told && told !== seat?.alias ? told : seat?.alias) ?? (all.length === 1 ? all[0] : undefined) ?? told;
   if (!alias) {
     if (!all.length) return yield* die("no channel: join one first (kiwi join <code>)");
     const near = seatsNear(process.cwd());

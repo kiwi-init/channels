@@ -13,7 +13,7 @@ import { AgentLive } from "../agent.ts";
 import { VERSION } from "../version.ts";
 import { refreshListeners } from "../hooks.ts";
 import { HELP } from "./help.ts";
-import { args, opt } from "./args.ts";
+import { args, ignoredOptions, opt } from "./args.ts";
 import { type Command, die, out } from "./context.ts";
 import { joinCommands } from "./commands/join.ts";
 import { adminCommands } from "./commands/admin.ts";
@@ -30,6 +30,7 @@ import { taskCommands } from "./commands/tasks.ts";
 import { toolCommands } from "./commands/tools.ts";
 import { rotateCommands } from "./commands/rotate.ts";
 import { rexCommands } from "./commands/rex.ts";
+import { launchCommands } from "./commands/launch.ts";
 import { fail } from "./fail.ts";
 
 // Early signals for `kiwi daemon` only (the first positional, same as the CLI). Bun plus the
@@ -69,6 +70,7 @@ const commands: Record<string, Command> = {
   ...toolCommands,
   ...rotateCommands,
   ...rexCommands,
+  ...launchCommands,
 };
 
 if (import.meta.main) {
@@ -88,5 +90,9 @@ if (import.meta.main) {
   const runtime = ManagedRuntime.make(AgentLive);
   const exit = await runtime.runPromiseExit(command ? command() : die(`unknown command "${cmd}" (see: kiwi help)`));
   if (Exit.isFailure(exit)) await runtime.runPromise(fail(exit.cause));
-  else if (cmd !== "mcp" && cmd !== "relay") process.exit(exit.value ?? 0);
+  else if (cmd !== "mcp" && cmd !== "relay") {
+    const ignored = cmd === "daemon" || cmd === "hook" ? [] : ignoredOptions();
+    if (ignored.length) process.stderr.write(`kiwi: ${cmd} doesn't use ${ignored.map((o) => `--${o}`).join(", ")}, so ${ignored.length > 1 ? "they were" : "it was"} ignored\n`);
+    process.exit(exit.value ?? 0);
+  }
 }

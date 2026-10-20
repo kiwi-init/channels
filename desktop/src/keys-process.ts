@@ -80,7 +80,7 @@ function onKeys(child: Electron.UtilityProcess, m: KeysToHost): void {
         mutate((s) => (s.channels = s.channels.filter((c) => c.code !== m.code)));
         return done();
       case "githubToken":
-        return void tokenForRelay(store.relayUrl, store.github?.token ?? null).then((token) => done({ token }), fail);
+        return void tokenForRelay(store.relayUrl, store.github).then((token) => done({ token }), fail);
       case "prove":
         if (!store.person) return done({ claim: null });
         void claimFor(requirePerson(), m.code, m.memberPk).then((claim) => done({ claim }), fail);

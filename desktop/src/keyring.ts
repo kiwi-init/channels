@@ -4,13 +4,15 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
 
-import { openRows as openSealedRows, packRow, packUnread, type CachedRow, type Unread } from "@kiwi/core/cache-row.ts";
+import { openRows as openSealedRows, packRow, packEnvelope, type CachedRow, type Unread } from "@kiwi/core/cache-row.ts";
 import { Channel, ChannelGone, RelayError, Relay, Unreachable, eachLive, fetchRelay, type Live, type PresenceFields } from "@kiwi/core/client.ts";
 import { encodeJoinCode, newRoomId, ownerFingerprint, type ChannelAccess } from "@kiwi/core/crypto.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import { handleFor, type Member, type MemberInfo } from "@kiwi/core/membership.ts";
 import type { PersonClaim } from "@kiwi/core/person.ts";
 import { omit } from "@kiwi/core/omit.ts";
+import { cleanPersonalities } from "@kiwi/core/personalities.ts";
+import { PRESETS } from "@kiwi/core/presets.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import type { SigningBudget } from "@kiwi/core/sas.ts";
 import {
@@ -105,7 +107,12 @@ export class Keyring implements ChannelOps {
   private seat(code: string, member: boolean): ChannelIdentityView {
     const s = this.host.seats().find((c) => c.code === code && (member ? !!c.access : !c.access));
     if (!s) throw new Error(member ? "this app isn't in that channel" : "this app has no join request for that channel");
+    if (!this.here(s)) throw new Error(`this channel is on ${s.relay}, not the relay this app uses now; switch back to it in Settings to open it`);
     return s;
+  }
+
+  private here(seat: ChannelIdentityView): boolean {
+    return seat.relay === undefined || seat.relay === this.host.relay();
   }
 
   private channel(code: string): Channel {
@@ -140,7 +147,7 @@ export class Keyring implements ChannelOps {
         return [{ budget: this.host.budget, ...(field(args[0], "person") !== undefined ? who : {}) }];
       case "autoApprove":
         if (!person) throw new Error("make your person key first");
-        return [person];
+        return [person, [...PRESETS, ...cleanPersonalities(args[1])]];
       case "approve":
       case "checkRequest": {
         const id = field(args[0], "id");
@@ -189,7 +196,7 @@ export class Keyring implements ChannelOps {
   }
 
   async finishCreating(): Promise<void> {
-    for (const seat of this.host.seats().filter((c) => c.creating && c.code && !c.access)) {
+    for (const seat of this.host.seats().filter((c) => c.creating && c.code && !c.access && this.here(c))) {
       const code = seat.code!;
       try {
         const access = await Channel.resume(this.host.relay(), code, identityOf(seat));
@@ -218,7 +225,7 @@ export class Keyring implements ChannelOps {
     if (st.status === "denied") return { status: "denied" };
     if (st.status === "pending") return { status: "pending", code: st.code };
     const members: Member[] = await new Channel(st.access, this.host.relay(), id).members().catch(() => []);
-    const record = members.find((x) => x.pk === id.pk);
+    const record = members.find((x) => x.pk === id.pk && !x.unverified);
     const idName = record && record.name !== id.name ? record.name : id.name;
     const entry: ChannelIdentityView = { label: idName, idName, ...keysOf(id), roomId: st.access.roomId, code, access: st.access, at: Date.now() };
     await this.host.save(entry);
@@ -282,12 +289,15 @@ export class Keyring implements ChannelOps {
         return { _tag: "Open", kind: ev.kind };
       case "Message": {
         const key = ch.access.keys[String(ch.access.epoch)];
-        const row: CachedRow | null = key && Number.isSafeInteger(ev.message.seq) && ev.message.seq > 0 ? await packRow(key, ch.roomId, ch.access.epoch, ev.message).catch(() => null) : null;
+        const seq = ev.message.seq;
+        const packed =
+          !key || !Number.isSafeInteger(seq) || seq <= 0 ? null : ev.envelope ? packEnvelope(key, ch.roomId, ch.access.epoch, ev.envelope) : packRow(key, ch.roomId, ch.access.epoch, ev.message);
+        const row: CachedRow | null = packed ? await packed.catch(() => null) : null;
         return { _tag: "Message", message: ev.message, row };
       }
       case "Unread": {
         const key = ch.access.keys[String(ch.access.epoch)];
-        const row: CachedRow | null = key ? await packUnread(key, ch.roomId, ch.access.epoch, ev.envelope).catch(() => null) : null;
+        const row: CachedRow | null = key ? await packEnvelope(key, ch.roomId, ch.access.epoch, ev.envelope).catch(() => null) : null;
         return { _tag: "Unread", seq: ev.envelope.seq, row };
       }
       case "Presence":

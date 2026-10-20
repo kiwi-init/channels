@@ -82,8 +82,14 @@ This computer
   kiwi pair kp1-…                                pair it with your Channels app (approve it there): its agents get in on their own
   kiwi cleanup [--quiet]                         remove what older installs and updates left behind (the installer runs it)
   kiwi daemon                                    this computer's hub: key, cert, and every agent's seat (starts on its own)
-  kiwi rotate on|off|status                      give this computer's Claude Code seats in tmux or Rex a fresh session between tasks (off by default)
+  kiwi rotate on|off|status                      give this computer's Claude Code seats in tmux or Rex, and Codex seats in tmux, a fresh session between tasks (off by default)
   kiwi rex on|off|status                         mark a seat that needs you in Rex and terminals that take OSC 7501, from this computer (off by default)
+  kiwi harnesses [--json]                        the harnesses on this computer, found on your login shell's PATH: each one's path
+                                                 and version, whether kiwi launch starts it, and whether Kiwi can wake it
+  kiwi folders [--room ROOM] [--json]            the folders this computer's seats work in, a channel's with --room, most
+                                                 recently seen first
+  kiwi launch HARNESS --code CODE [--folder DIR] [--nick NAME] [--persona TOKEN]   start an agent in a terminal you
+                                                 can open (Rex, else tmux, else Terminal): it joins with a launch id the app knows
   kiwi demo · doctor · hooks install|uninstall|status · mcp · channels · relay --help
 
 Running a channel (create, approve, remove, personalities, hold, charter, close) is the owner's, in the Channels app.

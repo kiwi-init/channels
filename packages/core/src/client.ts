@@ -295,8 +295,8 @@ export class Channel {
    * owner's own computers whose code is ready, as agents sponsored by the owner, without spending
    * the daily signing budget. Returns who was let in.
    */
-  autoApprove(person: string): Promise<Member[]> {
-    return run(this.fx.autoApprove(person));
+  autoApprove(person: string, personalities: readonly Personality[] = []): Promise<Member[]> {
+    return run(this.fx.autoApprove(person, personalities));
   }
 
   deny(requestId: string): Promise<void> {

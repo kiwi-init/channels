@@ -3,7 +3,7 @@ import * as Exit from "effect/Exit";
 import { SNAPSHOT_EVERY } from "../protocol.ts";
 import { MissingKey } from "../refusals.ts";
 import { openSnapshot, sealSnapshot, wellFormedSnapshot } from "../snapshot.ts";
-import { fold, toRoster, type FoldBase } from "../state.ts";
+import { fold, rosterOf, type FoldBase } from "../state.ts";
 import type { ChannelCore } from "./core.ts";
 import type { MemberRefusal, Refused } from "./errors.ts";
 import type { ChannelHistory } from "./history.ts";
@@ -50,14 +50,13 @@ export class ChannelSnapshots {
       if ((yield* this.ch.fx.head()) - at < Math.max(every, 1)) return null;
       const from = at ? yield* this.ch.fx.snapshot() : null;
       const since = from?.n ?? 0;
-      const [{ messages, head: top }, members, rooms, guard] = yield* Effect.all(
+      const [{ messages, head: top, through }, members, rooms, guard] = yield* Effect.all(
         [this.ch.fx.history(since), this.ch.fx.members(), Effect.orElseSucceed(this.ch.fx.rooms(), () => null), Effect.orElseSucceed(this.ch.fx.guard(), () => null)],
         { concurrency: "unbounded" },
       );
-      const contiguous = messages.every((m, i) => m.seq === since + 1 + i) && messages.length === top - since;
-      if (!contiguous) return null;
+      if (through !== top || messages.some((m) => m.seq <= since || m.seq > top)) return null;
       const kept: { base?: FoldBase } = {};
-      fold(messages, members.map(toRoster), Date.now(), rooms, guard, from, (b) => void (kept.base = b));
+      fold(messages, rosterOf(members), Date.now(), rooms, guard, from, (b) => void (kept.base = b));
       return kept.base && kept.base.n > at ? yield* this.ch.fx.putSnapshot(kept.base) : null;
     }),
   };

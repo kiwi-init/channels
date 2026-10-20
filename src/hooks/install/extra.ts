@@ -34,7 +34,7 @@ const SESSION_ENV: Record<Exclude<ExtraHarness, "kimi" | "pi" | "mimo">, string>
 function harnessRoot(h: ExtraHarness): string {
   const over = process.env[HARNESS_ENV[h]];
   if (over) return over;
-  if (h === "codex") return join(homedir(), ".codex");
+  if (h === "codex") return process.env.CODEX_HOME || join(homedir(), ".codex");
   if (h === "gemini") return join(homedir(), ".gemini");
   if (h === "cursor") return join(homedir(), ".cursor");
   if (h === "kimi") return process.env.KIMI_CODE_HOME || join(homedir(), ".kimi-code");

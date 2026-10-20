@@ -6,6 +6,7 @@ const markdown = later(
   ({ children }: { children: string; refs?: MessageRefs }) => <div className="[overflow-wrap:anywhere] break-words whitespace-pre-wrap">{children}</div>
 )
 const addAgent = later(() => import("./add-agent").then((m) => m.AddAgent))
+const newAgent = later(() => import("./new-agent").then((m) => m.NewAgent))
 const gifPicker = later(() => import("./gif-picker").then((m) => m.GifPicker))
 const welcome = later(() => import("./welcome").then((m) => m.Welcome))
 const newChannel = later(() => import("./welcome").then((m) => m.NewChannel))
@@ -34,6 +35,7 @@ const renameDialog = later(() => import("./controls/channel-dialogs").then((m) =
 
 export const Markdown = markdown.View
 export const AddAgent = addAgent.View
+export const NewAgent = newAgent.View
 export const GifPicker = gifPicker.View
 export const Welcome = welcome.View
 export const NewChannel = newChannel.View
@@ -49,6 +51,9 @@ export const Annotator = annotator.View
 export const AgentLanes = agentLanes.View
 export const TalkButton = talkButton.View
 export const TalkBar = talkBar.View
+export function leaveTalk(roomId: string): void {
+  void import("./talk").then((m) => m.leaveTalk(roomId))
+}
 export const ComposerQuestion = composerQuestion.View
 export const CommandList = commandList.View
 export const CommandBar = commandBar.View

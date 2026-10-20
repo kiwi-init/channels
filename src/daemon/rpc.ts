@@ -1,14 +1,17 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import type { Socket } from "bun";
 import type { Info, MemberRow } from "@kiwi/core/client.ts";
+import { readHarnessRow, type HarnessRow } from "@kiwi/core/harnesses.ts";
+import { readLaunched, type Launched, type LaunchRequest } from "../launch/wire.ts";
 import { home } from "../config.ts";
 import type { MachineCert } from "@kiwi/core/person.ts";
 import type { Message, Presence } from "@kiwi/core/protocol.ts";
 import { VERSION } from "../version.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
 import type { PairedPerson } from "./pair.ts";
+import { lockPath } from "./lock.ts";
 import { DAEMON_PROTOCOL, daemonSock, isDaemonEvent, readListener, withDeadline, type DaemonEvent, type DaemonHello, type DaemonListener, type DaemonPeek, type DaemonSeat } from "./protocol.ts";
 
 const PEEK_MS = 300;
@@ -175,13 +178,28 @@ export async function tryHello(sock: string): Promise<DaemonHello | null> {
   }
 }
 
+const SPAWN_GAP_MS = 15_000;
+
+export function claimSpawn(dir: string, now = Date.now()): boolean {
+  const mark = join(dir, "daemon.spawning");
+  const st = statSync(mark, { throwIfNoEntry: false });
+  if (st && now - st.mtimeMs < SPAWN_GAP_MS && existsSync(lockPath(dir))) return false;
+  try {
+    writeFileSync(mark, String(process.pid), { mode: 0o600 });
+    utimesSync(mark, new Date(now), new Date(now));
+  } catch {
+    // A home Kiwi can't write to can't hold the stamp: spawning still goes ahead.
+  }
+  return true;
+}
+
 export async function ensureDaemon(dir = home(), argv?: string[]): Promise<DaemonHello> {
   const sock = daemonSock(dir);
   const current = (h: DaemonHello | null): h is DaemonHello => !!h && compareVersions(h.version, VERSION) >= 0 && h.protocol >= DAEMON_PROTOCOL;
   const live = await tryHello(sock);
   if (current(live)) return live;
   if (live) await stopDaemon(sock);
-  spawnDaemon(dir, argv);
+  if (live || claimSpawn(resolve(dir))) spawnDaemon(dir, argv);
   const until = Date.now() + 15_000;
   for (;;) {
     const hello = await tryHello(sock);
@@ -236,6 +254,28 @@ export async function daemonListeners(sock = daemonSock()): Promise<DaemonListen
   try {
     const r = await c.call("listeners");
     return (Array.isArray(r.listeners) ? r.listeners : []).map(readListener).filter((l): l is DaemonListener => !!l);
+  } finally {
+    c.close();
+  }
+}
+
+export async function daemonHarnesses(sock = daemonSock()): Promise<HarnessRow[]> {
+  const c = await openConn(sock);
+  try {
+    const r = await c.call("harnesses");
+    return (Array.isArray(r.harnesses) ? r.harnesses : []).map(readHarnessRow).filter((h): h is HarnessRow => !!h);
+  } finally {
+    c.close();
+  }
+}
+
+export async function daemonLaunch(req: LaunchRequest, sock = daemonSock()): Promise<Launched> {
+  const c = await openConn(sock, 150_000);
+  try {
+    const r = await c.call("launch", { ...req });
+    const launched = readLaunched(r.launched);
+    if (!launched) throw new Error("the daemon answered a launch in a shape this kiwi doesn't know");
+    return launched;
   } finally {
     c.close();
   }

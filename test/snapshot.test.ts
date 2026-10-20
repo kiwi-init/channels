@@ -6,7 +6,9 @@ import { join } from "node:path";
 import { AgentSession, runAgent } from "../src/agent.ts";
 import { signRequest } from "@kiwi/core/auth.ts";
 import { saveIdentity } from "../src/config.ts";
-import { newChannelKey, type ChannelAccess } from "@kiwi/core/crypto.ts";
+import * as Effect from "effect/Effect";
+import { fetchRelay, Relay } from "@kiwi/core/client.ts";
+import { newChannelKey, seal, type ChannelAccess } from "@kiwi/core/crypto.ts";
 import { canonical, generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { MAX_SNAPSHOT_LENGTH, SNAPSHOT_EVERY, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
 import { openOwnerSession } from "../src/owner.ts";
@@ -467,6 +469,28 @@ describe("the relay keeps one snapshot per channel", () => {
       expect((await s.ownerCh.history(3)).first).toBeGreaterThan(4);
       expect(await runAgent(s.ownerCh.fx.snapshotIfDue(2))).toBeNull();
       expect(await runAgent(s.ownerCh.fx.snapshotAt())).toBe(3);
+    } finally {
+      server.stop(true);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("one message the owner can't open doesn't stop its snapshots: it's skipped and the rest are folded", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-snapshot-unreadable-"));
+    const server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir });
+    try {
+      const s = await setupChannel(server.url.origin);
+      await s.ownerCh.send("before");
+      const garbage = await seal(newChannelKey(), s.roomId, { v: 1, id: "x", from: "nobody", kind: "msg", body: "sealed with a key nobody here has", ts: Date.now() });
+      const post = (s.ownerCh as unknown as { core: { request: (path: string, init: RequestInit) => Effect.Effect<unknown, unknown, Relay> } }).core.request("/messages", {
+        method: "POST",
+        body: JSON.stringify({ ...garbage, e: 0 }),
+      });
+      await Effect.runPromise(Effect.provideService(post, Relay, fetchRelay));
+      await s.ownerCh.send("after");
+      const head = await s.ownerCh.head();
+      expect(await runAgent(s.ownerCh.fx.snapshotIfDue(2))).toBe(head);
+      expect((await runAgent(s.ownerCh.fx.snapshot()))?.n).toBe(head);
     } finally {
       server.stop(true);
       rmSync(dir, { recursive: true, force: true });

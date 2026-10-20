@@ -43,6 +43,43 @@ function tailLines(file: string, bytes = 512 * 1024): string[] {
   return buf.toString("utf8").split("\n").reverse();
 }
 
+interface Stamped<T> {
+  size: number;
+  mtime: number;
+  value: T;
+}
+
+const STAMPED_MAX = 64;
+
+function whileUnchanged<T>(cache: Map<string, Stamped<T>>, file: string, read: () => T): T {
+  const st = statSync(file);
+  const hit = cache.get(file);
+  if (hit && hit.size === st.size && hit.mtime === st.mtimeMs) return hit.value;
+  const value = read();
+  if (cache.size >= STAMPED_MAX) cache.clear();
+  cache.set(file, { size: st.size, mtime: st.mtimeMs, value });
+  return value;
+}
+
+const transcripts = new Map<string, string>();
+const claudeModels = new Map<string, Stamped<string | undefined>>();
+const claudeContexts = new Map<string, Stamped<ContextUse | undefined>>();
+const claudeTools = new Map<string, Stamped<string | undefined>>();
+
+function modelIn(file: string): string | undefined {
+  for (const line of tailLines(file)) {
+    // Only assistant lines carry the model; nothing else on the line is read.
+    if (!line.includes('"assistant"') || !line.includes('"model"')) continue;
+    try {
+      const m = slug((JSON.parse(line) as { type?: string; message?: { model?: unknown } }).message?.model);
+      if (m) return m;
+    } catch {
+      // A line cut by the tail's start: older lines may still have it.
+    }
+  }
+  return undefined;
+}
+
 function claudeModel(env: Env): string | undefined {
   const dir = env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
   let session = env.CLAUDE_CODE_SESSION_ID;
@@ -50,23 +87,8 @@ function claudeModel(env: Env): string | undefined {
     const reg = join(dir, "sessions", `${Number(env.CLAUDE_PID)}.json`);
     if (existsSync(reg)) session = (JSON.parse(readFileSync(reg, "utf8")) as { sessionId?: string }).sessionId;
   }
-  if (!session || !/^[\w-]+$/.test(session)) return undefined;
-  const projects = join(dir, "projects");
-  for (const p of readdirSync(projects)) {
-    const file = join(projects, p, `${session}.jsonl`);
-    if (!existsSync(file)) continue;
-    for (const line of tailLines(file)) {
-      // Only assistant lines carry the model; nothing else on the line is read.
-      if (!line.includes('"assistant"') || !line.includes('"model"')) continue;
-      try {
-        const m = slug((JSON.parse(line) as { type?: string; message?: { model?: unknown } }).message?.model);
-        if (m) return m;
-      } catch {
-        // A line cut by the tail's start: older lines may still have it.
-      }
-    }
-  }
-  return undefined;
+  const file = claudeTranscript(dir, session);
+  return file ? whileUnchanged(claudeModels, file, () => modelIn(file)) : undefined;
 }
 
 async function sqliteOne(file: string, sql: string, arg: string): Promise<unknown> {
@@ -282,10 +304,36 @@ export function claudeContext(file: string): ContextUse | undefined {
 
 function claudeTranscript(dir: string, session: string | undefined): string | undefined {
   if (!session || !/^[\w-]+$/.test(session)) return undefined;
+  const key = `${dir}\u0000${session}`;
+  const known = transcripts.get(key);
+  if (known && existsSync(known)) return known;
   const projects = join(dir, "projects");
-  return readdirSync(projects)
+  const found = readdirSync(projects)
     .map((p) => join(projects, p, `${session}.jsonl`))
     .find((f) => existsSync(f));
+  if (transcripts.size >= STAMPED_MAX) transcripts.clear();
+  if (found) transcripts.set(key, found);
+  else transcripts.delete(key);
+  return found;
+}
+
+function runningTool(file: string): string | undefined {
+  for (const line of tailLines(file, 128 * 1024)) {
+    if (!line.trim()) continue;
+    try {
+      const l = JSON.parse(line) as { type?: string; message?: { stop_reason?: string; content?: unknown } };
+      if (l.type === "user") return undefined; // a tool's result (or a prompt): nothing running now
+      if (l.type !== "assistant") continue;
+      if (l.message?.stop_reason === "tool_use" && Array.isArray(l.message.content)) {
+        const use = [...(l.message.content as { type?: string; name?: unknown }[])].reverse().find((c) => c.type === "tool_use");
+        return toolName(use?.name);
+      }
+      return undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }
 
 /** Claude Code: its process's registry says busy or idle; the transcript's newest lines say which tool is running. */
@@ -298,30 +346,15 @@ function claudeActivity(env: Env): Activity | undefined {
   const r = JSON.parse(readFileSync(reg, "utf8")) as { sessionId?: string; status?: string; statusUpdatedAt?: number };
   const since = typeof r.statusUpdatedAt === "number" ? r.statusUpdatedAt : undefined;
   const file = claudeTranscript(dir, env.CLAUDE_CODE_SESSION_ID || r.sessionId);
-  const context = file ? claudeContext(file) : undefined;
+  const context = file ? whileUnchanged(claudeContexts, file, () => claudeContext(file)) : undefined;
   const extra = { ...(since ? { since } : {}), ...(context ? { context } : {}) };
   if (r.status === "idle") return { state: "idle", ...extra };
   if (r.status && /wait|permission|input/i.test(r.status)) return { state: "waiting", ...extra };
-  let tool: string | undefined;
-  for (const line of file ? tailLines(file, 128 * 1024) : []) {
-    if (!line.trim()) continue;
-    try {
-      const l = JSON.parse(line) as { type?: string; message?: { stop_reason?: string; content?: unknown } };
-      if (l.type === "user") break; // a tool's result (or a prompt): nothing running now
-      if (l.type !== "assistant") continue;
-      if (l.message?.stop_reason === "tool_use" && Array.isArray(l.message.content)) {
-        const use = [...(l.message.content as { type?: string; name?: unknown }[])].reverse().find((c) => c.type === "tool_use");
-        tool = toolName(use?.name);
-      }
-      break;
-    } catch {
-      break;
-    }
-  }
+  const tool = file ? whileUnchanged(claudeTools, file, () => runningTool(file)) : undefined;
   return { state: "working", ...(tool ? { tool } : {}), ...extra };
 }
 
-function codexContext(file: string): ContextUse | undefined {
+export function codexContext(file: string): ContextUse | undefined {
   for (const line of tailLines(file)) {
     if (!line.includes('"token_count"') && !line.includes("compact")) continue;
     let l: { type?: string; payload?: { type?: string; info?: { last_token_usage?: { input_tokens?: unknown }; model_context_window?: unknown } | null } };
@@ -341,7 +374,28 @@ function codexContext(file: string): ContextUse | undefined {
   return undefined;
 }
 
+export type CodexTurn = { state: "idle" } | { state: "working"; tool?: string };
+
 /** Codex: the thread's rollout, newest event first: a task started and not completed is work. */
+export function codexTurn(file: string): CodexTurn | undefined {
+  for (const line of tailLines(file, 128 * 1024)) {
+    if (!line.trim()) continue;
+    try {
+      const l = JSON.parse(line) as { type?: string; payload?: { type?: string; name?: unknown } };
+      const t = l.payload?.type ?? l.type;
+      if (t === "task_complete" || t === "turn_aborted") return { state: "idle" };
+      if (t === "function_call" || t === "custom_tool_call") {
+        const tool = toolName(l.payload?.name);
+        return { state: "working", ...(tool ? { tool } : {}) };
+      }
+      if (t === "task_started" || t === "agent_reasoning" || t === "reasoning" || t === "message") return { state: "working" };
+    } catch {
+      // A line cut by the tail's start.
+    }
+  }
+  return undefined;
+}
+
 async function codexActivity(env: Env): Promise<Activity | undefined> {
   const thread = env.CODEX_THREAD_ID;
   if (!thread) return undefined;
@@ -355,18 +409,9 @@ async function codexActivity(env: Env): Promise<Activity | undefined> {
   if (typeof row?.rollout_path !== "string" || !existsSync(row.rollout_path)) return undefined;
   const ctx = codexContext(row.rollout_path);
   const context = ctx ? { context: ctx } : {};
-  for (const line of tailLines(row.rollout_path, 128 * 1024)) {
-    if (!line.trim()) continue;
-    try {
-      const l = JSON.parse(line) as { type?: string; payload?: { type?: string; name?: unknown } };
-      const t = l.payload?.type ?? l.type;
-      if (t === "task_complete" || t === "turn_aborted") return { state: "idle", ...context };
-      if (t === "function_call" || t === "custom_tool_call") return { state: "working", ...(toolName(l.payload?.name) ? { tool: toolName(l.payload?.name) } : {}), ...context };
-      if (t === "task_started" || t === "agent_reasoning" || t === "reasoning" || t === "message") return { state: "working", ...context };
-    } catch {
-      // A line cut by the tail's start.
-    }
-  }
+  const turn = codexTurn(row.rollout_path);
+  if (turn?.state === "idle") return { state: "idle", ...context };
+  if (turn?.state === "working") return { state: "working", ...(turn.tool ? { tool: turn.tool } : {}), ...context };
   return undefined;
 }
 

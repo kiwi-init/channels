@@ -4,6 +4,7 @@ import { ciCommitLine, ciRedAfter, ciRedTitle, type CiRed } from "@kiwi/core/ci-
 import type { Message } from "@kiwi/core/protocol.ts"
 
 import type { ChannelLink } from "./channel-ops"
+import { drain } from "./github-queue"
 import type { TaskSend } from "./task-actions"
 
 const NO_LOG = "No log excerpt came back: open the check for the whole log."
@@ -36,12 +37,15 @@ function ciRedToPost(mark: Mark, state: ChannelState, messages: Message[]): CiRe
 
 export async function postCiReds(ch: Pick<ChannelLink, "githubCheckLog" | "send">, mark: Mark, state: ChannelState, messages: Message[]): Promise<void> {
   const opened = new Map<string, number>()
-  for (const r of ciRedToPost(mark, state, messages)) {
-    const commit = `${r.repo.toLowerCase()}@${r.sha}`
-    const log = await ch.githubCheckLog(r.repo, r.sha, r.name).catch(() => null)
-    const { body, opts } = ciRedSend(r, log, r.task ?? opened.get(commit))
-    const seq = await ch.send(body, opts).catch(() => null)
-    if (seq !== null && opts.ev?.op === "task.add") opened.set(commit, seq)
-    mark.set(r.seq)
-  }
+  await drain(
+    ciRedToPost(mark, state, messages),
+    async (r) => {
+      const commit = `${r.repo.toLowerCase()}@${r.sha}`
+      const log = await ch.githubCheckLog(r.repo, r.sha, r.name).catch(() => null)
+      const { body, opts } = ciRedSend(r, log, r.task ?? opened.get(commit))
+      const seq = await ch.send(body, opts)
+      if (opts.ev?.op === "task.add") opened.set(commit, seq)
+    },
+    (seq) => mark.set(seq)
+  )
 }

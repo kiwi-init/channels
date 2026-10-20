@@ -11,6 +11,9 @@ import type { MemberRefusal, Refused } from "./errors.ts";
 import type { ChannelInfo } from "./info.ts";
 import { wrapFor } from "./keys.ts";
 import type { Relay } from "./relay.ts";
+import { newestEpoch, stale } from "./sealed.ts";
+
+const NO_RECORD = "that key has no record the owner signed: remove it instead";
 
 export interface MembersFx {
   leave(): Effect.Effect<void, MemberRefusal, Relay>;
@@ -44,6 +47,7 @@ export class ChannelMembers {
 
     updateScopes: Effect.fn("Channel.updateScopes")({ self: this }, function* (this: ChannelMembers, m: Member, scopes: readonly Scope[], since: number) {
       yield* this.ch.ownerOnly();
+      if (m.unverified) return yield* new Rejected(NO_RECORD);
       if (m.owner) return yield* new Rejected("the owner may do everything");
       const e = this.ch.access.epoch;
       const key = this.ch.access.keys[String(e)]!;
@@ -54,6 +58,7 @@ export class ChannelMembers {
 
     updatePersona: Effect.fn("Channel.updatePersona")({ self: this }, function* (this: ChannelMembers, m: Member, persona: Persona | null, since: number) {
       yield* this.ch.ownerOnly();
+      if (m.unverified) return yield* new Rejected(NO_RECORD);
       if (m.owner || m.kind === "human") return yield* new Rejected("only an agent's record carries a personality");
       const clean = persona === null ? null : cleanPersona(persona);
       if (clean === null && persona !== null) return yield* new Rejected("that personality isn't one a record can carry: check its name, role, capabilities, areas and instructions");
@@ -67,6 +72,7 @@ export class ChannelMembers {
 
     updateRole: Effect.fn("Channel.updateRole")({ self: this }, function* (this: ChannelMembers, m: Member, role: string | null, about: string | null | undefined, since: number) {
       yield* this.ch.ownerOnly();
+      if (m.unverified) return yield* new Rejected(NO_RECORD);
       if (m.owner) return yield* new Rejected("the owner's record isn't changed this way");
       const e = this.ch.access.epoch;
       const key = this.ch.access.keys[String(e)]!;
@@ -79,6 +85,7 @@ export class ChannelMembers {
 
     updateNickname: Effect.fn("Channel.updateNickname")({ self: this }, function* (this: ChannelMembers, m: Member, nickname: string | null) {
       yield* this.ch.ownerOnly();
+      if (m.unverified) return yield* new Rejected(NO_RECORD);
       if (m.owner || m.kind === "human") return yield* new Rejected("only an agent's nickname is changed this way");
       const e = this.ch.access.epoch;
       const key = this.ch.access.keys[String(e)]!;
@@ -127,7 +134,8 @@ export class ChannelMembers {
       const members = (yield* this.ch.fx.members()).filter((m) => m.active && !m.unverified);
       this.info.forgetInfo();
       const { epoch } = yield* this.ch.fx.info();
-      const next = epoch + 1;
+      const next = Math.max(epoch, newestEpoch(this.ch.access.keys)) + 1;
+      if (!Number.isSafeInteger(next) || this.ch.access.keys[String(next)]) return yield* new Rejected(`the relay named epoch ${epoch}, which can't be the channel's next key: not rotating`);
       const key = newChannelKey();
       const keys = yield* Effect.promise(async () => {
         const out: Record<string, string> = {};
@@ -137,13 +145,24 @@ export class ChannelMembers {
       yield* this.ch.request("/epochs", { method: "POST", body: JSON.stringify({ epoch: next, keys }) }).pipe(Effect.ensuring(Effect.sync(() => this.info.forgetInfo())));
       this.ch.access = { ...this.ch.access, epoch: next, keys: { ...this.ch.access.keys, [String(next)]: key } };
       this.ch.onAccess?.(this.ch.access);
+      this.ch.rotating = true;
+      yield* Effect.all([Effect.ignoreCause(this.ch.fx.resealTitle()), Effect.ignoreCause(this.ch.fx.resealSettings()), Effect.ignoreCause(this.ch.fx.resealIcon())]).pipe(
+        Effect.ensuring(Effect.sync(() => void (this.ch.rotating = false))),
+      );
       return next;
     }),
 
     rotateIfDue: Effect.fn("Channel.rotateIfDue")({ self: this }, function* (this: ChannelMembers) {
       if (!this.ch.isOwner) return false;
       this.info.forgetInfo();
-      if (!(yield* this.ch.fx.info()).rotate) return false;
+      const info = yield* this.ch.fx.info();
+      if (!info.rotate) {
+        if (stale(info, this.ch.access.keys)) {
+          yield* Effect.ignoreCause(this.ch.fx.resealTitle());
+          yield* Effect.ignoreCause(this.ch.fx.resealSettings());
+        }
+        return false;
+      }
       yield* this.ch.fx.rotate();
       return true;
     }),

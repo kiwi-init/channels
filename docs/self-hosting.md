@@ -159,6 +159,9 @@ configuration. It also sets `X-Forwarded-For`. The systemd unit passes
 address in that header) instead of everyone sharing `127.0.0.1`. A peer that is
 not trusted ignores the header. Docker's peer is the bridge gateway, not
 loopback, so name it: `--trust-proxy 172.17.0.1` (or `KIWI_TRUST_PROXY`).
+The image trusts no proxy by default, since it can't know what's in front of it. If
+the relay gets `X-Forwarded-For` from a peer it doesn't trust, it says so once on
+stderr, with the `--trust-proxy` value that would trust that peer.
 
 ```bash
 caddy validate --config deploy/Caddyfile --adapter caddyfile
