@@ -370,6 +370,12 @@ export function startRelay(
       },
       close(ws) {
         sockets.get(ws.data.roomId)?.delete(ws);
+        const db = storeFor(ws.data.roomId, false);
+        try {
+          runRoomSync(relay, db, touch);
+        } finally {
+          doneWith(db);
+        }
       },
     },
   });

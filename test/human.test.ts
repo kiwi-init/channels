@@ -13,6 +13,7 @@ import { startRelay } from "../src/relay/bun.ts";
 import { authkitDomains, workosHumanAuth } from "../src/relay/human.ts";
 import { HOLD_MS, holdEntry, reserveSlot } from "../src/relay/room.ts";
 import { signRequest } from "@kiwi/core/auth.ts";
+import { WS_PROTOCOL } from "@kiwi/core/protocol.ts";
 import { claimComputer, provePerson } from "@kiwi/core/person.ts";
 import { checked, checkedByHand } from "./check.ts";
 import { joinAgent, joinPerson, pairComputer, setupChannel } from "./owner.ts";
@@ -398,6 +399,35 @@ describe("expiry", () => {
       expect(r.sweep()).toBe(1);
       await expect(Channel.requestJoin(r.url.origin, code, await generateIdentity("late"), { name: "late" })).rejects.toThrow();
       await expect(ch.send("anyone?")).rejects.toMatchObject({ why: "closed" });
+    } finally {
+      r.stop(true);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("a channel stays while someone's connected, and its idle days count from when they leave", async () => {
+    const { OPEN_POLICY } = await import("../src/relay/policy.ts");
+    const dir = mkdtempSync(join(tmpdir(), "mc-expire-open-"));
+    const clock = { now: Date.now() };
+    const r = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, human, policy: { ...OPEN_POLICY, expireAfterDays: 90 }, now: () => clock.now });
+    try {
+      const owner = await generateIdentity("stays");
+      const { access } = await Channel.create(r.url.origin, owner, { name: "stays", kind: "human" }, [], undefined, await token("user_alice"));
+      const u = new URL(`/v1/rooms/${access.roomId}/ws?since=0`, r.url.origin);
+      u.protocol = "ws:";
+      const ws = new WebSocket(u, [WS_PROTOCOL, await signRequest(owner, access.roomId, "GET", "/ws")]);
+      await new Promise<void>((ok, fail) => ((ws.onopen = () => ok()), (ws.onerror = () => fail(new Error("the socket didn't open")))));
+      clock.now += 120 * 86_400_000;
+      expect(r.sweep()).toBe(0);
+      const closed = new Promise<void>((ok) => (ws.onclose = () => ok()));
+      ws.close();
+      await closed;
+      await Bun.sleep(100);
+      expect(r.sweep()).toBe(0);
+      clock.now += 89 * 86_400_000;
+      expect(r.sweep()).toBe(0);
+      clock.now += 2 * 86_400_000;
+      expect(r.sweep()).toBe(1);
     } finally {
       r.stop(true);
       rmSync(dir, { recursive: true, force: true });

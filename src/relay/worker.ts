@@ -183,12 +183,14 @@ export class Channel extends DurableObject<Env> {
     await this.apply(fx, ws);
   }
 
-  override webSocketClose(ws: WebSocket, code: number): void {
+  override async webSocketClose(ws: WebSocket, code: number): Promise<void> {
     try {
       ws.close(code === 1005 ? 1000 : code);
     } catch {
       // Already closed: closing back is only a courtesy.
     }
+    const { room } = ws.deserializeAttachment() as { room: string };
+    await this.apply({ expireAt: runRoomSync(this.relay, this.store(room), touch) ?? undefined });
   }
 
   private async apply(fx: Effects, sender?: WebSocket): Promise<void> {
