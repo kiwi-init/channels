@@ -4,16 +4,19 @@ const SETTLE_MS = 400
 const STUCK_MS = 5_000
 
 export function choiceGate(now: () => number = Date.now) {
-  let shownAt = now()
+  let shownAt = -Infinity
+  let picked = false
   let busy = false
   return {
     shown() {
-      shownAt = now()
+      shownAt = picked ? now() : -Infinity
+      picked = false
       busy = false
     },
     take(): boolean {
       if (busy || now() - shownAt < SETTLE_MS) return false
       busy = true
+      picked = true
       return true
     },
     done(sent: boolean) {

@@ -53,11 +53,10 @@ describe("a decision in the composer", () => {
 })
 
 describe("answering a question once", () => {
-  test("a click right after the question shows, or while its answer is on its way, is not another answer", () => {
+  test("the first question takes a click at once; the one that follows an answer waits 400 ms, so a double click can't answer it", () => {
     let now = 1_000
     const gate = choiceGate(() => now)
-    expect(gate.take()).toBe(false)
-    now += 400
+    gate.shown()
     expect(gate.take()).toBe(true)
     expect(gate.take()).toBe(false)
     gate.done(true)
@@ -68,6 +67,10 @@ describe("answering a question once", () => {
     now += 400
     expect(gate.take()).toBe(true)
     gate.done(false)
+    expect(gate.take()).toBe(true)
+    gate.done(true)
+    gate.shown()
+    gate.shown()
     expect(gate.take()).toBe(true)
   })
 
