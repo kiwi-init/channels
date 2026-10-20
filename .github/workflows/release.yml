@@ -1,8 +1,10 @@
-# Builds kiwi and the Channels desktop app for every platform from a tagged commit,
-# on GitHub's machines, and publishes the files with checksums and a signed
-# build-provenance attestation, so anyone can check a binary came from this
-# exact source:
+# A release is a tag on main and nothing else: git tag v0.21.0 && git push origin v0.21.0.
+# Builds kiwi and the Channels desktop app for every platform from the tagged commit stamped
+# with the tag's version (scripts/stamp.ts), on GitHub's machines, publishes the files with
+# checksums and a signed build-provenance attestation, so anyone can check a binary came from
+# this exact source:
 #   gh attestation verify ~/.kiwi/bin/kiwi --repo ojowwalker77/channels
+# then commits the stamp (the version and CHANGELOG.md's section) to main.
 name: release
 
 on:
@@ -30,12 +32,17 @@ jobs:
           fetch-depth: 0
           path: repo
 
+      - uses: ./repo/.github/actions/stamp
+        with:
+          path: repo
+
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.4.2
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
+          pattern: release-*
           path: artifacts
           merge-multiple: true
 
@@ -85,6 +92,8 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
+      - uses: ./.github/actions/stamp
+
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.4.2
@@ -97,3 +106,58 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: bun run relay:deploy
+
+  # main learns the release: the stamp lands as one "kiwi X.Y.Z" commit (scripts/changelog.ts leaves
+  # those out), pushed by the GitHub App that may bypass main's pull request rule. Skipped for a
+  # release candidate, when main already says this version (it was bumped by hand), and when main
+  # is past it (a fix released from an older commit). If main moved and the stamp no longer applies,
+  # this job fails after the release is out: run bun scripts/stamp.ts vX.Y.Z on main in a PR.
+  bump-main:
+    needs: publish
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.BUS_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BUS_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ steps.app.outputs.token }}
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.4.2
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: stamp
+          path: ${{ runner.temp }}/stamp
+
+      - name: Commit the stamp to main
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          APP: ${{ steps.app.outputs.app-slug }}
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          patch="$RUNNER_TEMP/stamp/stamp.patch"
+          [ -s "$patch" ] || { echo "the tagged commit already said $v: nothing to commit"; exit 0; }
+          id=$(gh api "users/$APP%5Bbot%5D" --jq .id)
+          who=$(gh api "users/$GITHUB_ACTOR" --jq '.name // .login')
+          git config user.name "$APP[bot]"
+          git config user.email "$id+$APP[bot]@users.noreply.github.com"
+          for attempt in 1 2 3; do
+            git fetch -q origin main && git reset -q --hard origin/main
+            cmp=$(V="$v" bun -e 'const { compareVersions } = await import("./packages/core/src/versions.ts"); const { VERSION } = await import("./src/version.ts"); console.log(compareVersions(VERSION, process.env.V ?? ""))')
+            [ "$cmp" -lt 0 ] || { echo "main already says $v or later: nothing to commit"; exit 0; }
+            git apply --3way "$patch"
+            git commit -q -a -m "kiwi $v" -m "The release's stamp from $GITHUB_REF_NAME: the version in src/version.ts, package.json, desktop/package.json and the site's download names, and CHANGELOG.md's section." -m "Agent: release.yml on behalf of $who"
+            git push origin HEAD:main && exit 0
+          done
+          exit 1

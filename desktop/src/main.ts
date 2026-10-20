@@ -13,11 +13,12 @@ import { wireStoreIpc } from "./ipc/store.ts";
 import { wireVoiceIpc } from "./ipc/voice.ts";
 import { wirePersonalitiesIpc } from "./ipc/personalities.ts";
 import { closeKeys, keysOpen, startKeys, tellKeys } from "./keys-process.ts";
+import { setAppMenu } from "./menu.ts";
 import { catchMainErrors } from "./revive.ts";
 import { serveWeb } from "./serve-web.ts";
 import { loadStore, warnIfBroken } from "./store.ts";
 import { startUpdates } from "./updater.ts";
-import { createTray, createWindow, currentWindow, guardContents, isQuitting, markQuitting, refreshTray, showWindow } from "./window.ts";
+import { createTray, createWindow, currentWindow, guardContents, isQuitting, markQuitting, refreshTray, showWindow, stepText } from "./window.ts";
 
 function wireIpc(): void {
   wireStoreIpc();
@@ -53,6 +54,7 @@ else {
       callback(permissionAllowed(wc.getURL(), permission));
     });
     wireIpc();
+    setAppMenu(stepText);
     createWindow();
     loadStore();
     warnIfBroken();

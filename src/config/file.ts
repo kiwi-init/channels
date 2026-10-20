@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ChannelAccess } from "@kiwi/core/crypto.ts";
+import type { RexPlace, TerminalPlace } from "../rex.ts";
 import { home, writePrivate } from "./paths.ts";
 
 export interface ChannelConfig extends ChannelAccess {
@@ -24,6 +25,8 @@ export interface SeatRecord {
   seen?: number;
   plain?: true;
   model?: string;
+  term?: TerminalPlace;
+  rex?: RexPlace;
 }
 
 export function dropSeats(cfg: Config, drop: (b: SeatRecord) => boolean): void {
@@ -53,6 +56,7 @@ export interface Config {
   wakeOff?: string[];
   wakeHooks?: Record<string, WakeHook>;
   rotate?: "on" | "off";
+  rex?: "on" | "off";
 }
 
 export interface WakeHook {

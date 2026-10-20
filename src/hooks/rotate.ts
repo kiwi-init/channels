@@ -32,6 +32,7 @@ export const rotateAfterStop = Effect.fn("Hooks.rotateAfterStop")(function* (inp
   const where = paneOf(process.env);
   if (who.harness !== "claude" || input.stop_hook_active || !who.pid || !session || typeof file !== "string" || !where || !served.length) return;
   if (loadConfig().rotate !== "on") return;
+  const teller = { pid: who.pid, session, pane: where.pane };
   const { claudeContext } = yield* Effect.promise(() => import("../harness.ts"));
   const used = yield* Effect.sync(() => {
     try {
@@ -44,9 +45,15 @@ export const rotateAfterStop = Effect.fn("Hooks.rotateAfterStop")(function* (inp
   for (const { b, cfg } of served) {
     const s = yield* openSession(b.alias, cfg, b.as);
     const { state } = yield* s.state();
-    if (rotationAt(state, b.as, used, overLineSince(b.alias, b.as, session)).kind === "stay") return;
+    const decided = rotationAt(state, b.as, used, overLineSince(b.alias, b.as, session));
+    if (decided.kind === "stay") {
+      const { noteStay } = yield* Effect.promise(() => import("../rotate/pane.ts"));
+      yield* Effect.sync(() => noteStay(teller, `${b.alias}/${b.as}`, decided.why));
+      return;
+    }
   }
-  const { rotating } = yield* Effect.promise(() => import("../rotate/pane.ts"));
+  const { forgetStay, rotating } = yield* Effect.promise(() => import("../rotate/pane.ts"));
+  yield* Effect.sync(() => forgetStay(session));
   if (rotating(session)) return;
   const argv = rotateArgv(who.pid, session, where);
   yield* Effect.sync(() => {

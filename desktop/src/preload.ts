@@ -34,7 +34,7 @@ let latest = ipcRenderer.sendSync("kiwi:snapshot-sync") as StoreSnapshot;
 ipcRenderer.on("kiwi:store", (_e, v: StoreSnapshot) => (latest = v));
 const relayUrl = latest.relayUrl;
 
-const on = (channel: "kiwi:store" | "kiwi:deep-link" | "kiwi:update" | "kiwi:github-code", cb: (v: never) => void): (() => void) => {
+const on = (channel: "kiwi:store" | "kiwi:deep-link" | "kiwi:update" | "kiwi:github-code" | "kiwi:text-step", cb: (v: never) => void): (() => void) => {
   const fn = (_e: unknown, v: never) => cb(v);
   ipcRenderer.on(channel, fn as (...args: unknown[]) => void);
   return () => ipcRenderer.removeListener(channel, fn as (...args: unknown[]) => void);
@@ -125,6 +125,7 @@ const kiwi: KiwiBridge = {
   openExternal: (url: string) => ipcRenderer.invoke("kiwi:open-external", url) as Promise<void>,
   getDeepLink: () => ipcRenderer.invoke("kiwi:deep-link") as Promise<string | null>,
   onDeepLink: (cb) => on("kiwi:deep-link", cb),
+  onTextStep: (cb) => on("kiwi:text-step", cb),
   setVoiceKey: (key: string) => ipcRenderer.invoke("kiwi:voice-set-key", key) as Promise<void>,
   setVoiceConsent: (roomId: string, on: boolean) => ipcRenderer.invoke("kiwi:voice-set-consent", roomId, on) as Promise<void>,
   voiceToken: (roomId: string) => ipcRenderer.invoke("kiwi:voice-token", roomId) as Promise<VoiceAuth>,

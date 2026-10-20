@@ -22,8 +22,10 @@ permissions:
   contents: read
 
 jobs:
-  # src/version.ts is the version; the two package.json files must agree so the
-  # binaries and the app carry the same tag.
+  # The tag is the version: scripts/stamp.ts writes it into src/version.ts, both package.json
+  # files and the site's download names, and CHANGELOG.md's section from the commits since the
+  # last release. Every job below builds that stamped tree (the stamp action), so nobody bumps
+  # anything by hand; release.yml commits the stamp to main once the release is out.
   version:
     runs-on: ubuntu-latest
     steps:
@@ -35,34 +37,47 @@ jobs:
         with:
           bun-version: 1.4.2
 
-      - name: Check the version matches the tag
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Stamp the tag's version and changelog
         env:
           REHEARSAL: ${{ inputs.rehearsal }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          if [ "$REHEARSAL" = true ]; then tag=$(bun scripts/stamp.ts --next); echo "rehearsal: stamping $tag"; fi
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+          bun scripts/stamp.ts "$tag"
+          git diff > "$RUNNER_TEMP/stamp.patch"
+          git diff --stat
+
+      - name: Check the version matches the tag
         run: |
           v=$(bun -e 'console.log((await import("./src/version.ts")).VERSION)')
           pkg=$(bun -e 'console.log(JSON.parse(await Bun.file("package.json").text()).version)')
           app=$(bun -e 'console.log(JSON.parse(await Bun.file("desktop/package.json").text()).version)')
-          tag="$GITHUB_REF_NAME"
-          if [ "$REHEARSAL" = true ]; then tag="v$v"; echo "rehearsal: the tag to push is $tag"; fi
-          echo "TAG=$tag" >> "$GITHUB_ENV"
-          test "v$v" = "$tag" || { echo "src/version.ts says $v, tag is $tag"; exit 1; }
+          test "v$v" = "$TAG" || { echo "src/version.ts says $v, tag is $TAG"; exit 1; }
           test "$pkg" = "$v" || { echo "package.json says $pkg, src/version.ts says $v"; exit 1; }
           test "$app" = "$v" || { echo "desktop/package.json says $app, src/version.ts says $v"; exit 1; }
 
-      - name: Install
-        run: bun install --frozen-lockfile
-
-      # Required: a release ships with its changelog. CHANGELOG.md must have this version's section
-      # (`bun run changelog --write` in the release PR); a pre-release without one gets notes made
-      # from its commits. Checked here so nothing builds for a tag that can't be published.
+      # Required: a release ships with its changelog, which the stamp writes (a section already in
+      # CHANGELOG.md is kept as it is); a pre-release gets notes made from its commits. Checked here
+      # so nothing builds for a tag that can't be published.
       - name: Check the changelog has this version
         run: bun scripts/changelog.ts --notes "$TAG" > /dev/null
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: stamp
+          path: ${{ runner.temp }}/stamp.patch
 
   cli:
     needs: version
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: ./.github/actions/stamp
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
@@ -97,7 +112,7 @@ jobs:
         if: ${{ !inputs.rehearsal }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: cli
+          name: release-cli
           path: dist/kiwi-*
 
   # The Electron app builds on each OS for that OS: dmg/zip on macOS, AppImage/deb
@@ -115,6 +130,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: ./.github/actions/stamp
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
@@ -260,6 +277,6 @@ jobs:
         if: ${{ !inputs.rehearsal }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: desktop-${{ matrix.target }}
+          name: release-desktop-${{ matrix.target }}
           path: out/*
           if-no-files-found: error

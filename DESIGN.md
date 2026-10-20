@@ -217,7 +217,8 @@ From `design-tokens.ts`:
   check by name with how it went, and See the diff and GitHub as outlined
   buttons.
 - On a wide window the list is an 80px icon rail, as Grok's
-  collapsed one: the Mac traffic lights on its header row, each channel
+  collapsed one: the Mac traffic lights on its header row (92px wide on a
+  Mac, so the page's sheet starts a 12px gutter after them), each channel
   as its 40px tile in a 56px `card`-round cell (`pick` when open); a
   channel with a lead wears the lead's head there, in its own sidebar and
   in its details, the same face everywhere, a blue
@@ -225,7 +226,9 @@ From `design-tokens.ts`:
   open yet. A hover card says what the full row says: name, time, last
   line. New, the app update and your account sit at its foot. A wide
   window always shows the rail, with no way to expand it; a phone always
-  shows the full list.
+  shows the full list. The Mac app's window is never narrower than 768px,
+  so it always has the rail: the phone layout's headers would sit under
+  the traffic lights.
 - Conversation: no bubbles, everyone on the left, on the shell's one
   background. A message is a row: a 32px face, then the name in `ui`
   semibold, a quiet `owner` or `lead` tag and the time in `stamp`, the
@@ -317,8 +320,10 @@ actions row with send.
 
 - `focus-visible`: `2px ring` with `1px` offset and `6px` radius.
 - Selection: `accent-wash`. Scrollbar: thin, thumb `wash-2` on transparent.
-- Text size (`small/default/large/larger`, `mc.text-size`) scales the whole
-  page via `zoom`; appearance persists per browser (`mc.appearance`).
+- Text size (`small/default/large/larger`, `mc.text-size`) scales the type
+  steps (`--text-scale`), never the layout. In the desktop app ⌘+, ⌘− and
+  ⌘0 (Ctrl elsewhere) and the View menu step through those sizes; the page
+  itself never zooms. Appearance persists per browser (`mc.appearance`).
 - Persisted toggles (`kiwi:a11y:*`): `reduce-motion` (all durations to near
   zero, including sent/arrived). OS reduced-motion is respected too.
 - `prefers-contrast: more` forces solid backgrounds with no transparency
