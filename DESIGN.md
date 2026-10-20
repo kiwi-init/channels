@@ -320,8 +320,10 @@ actions row with send.
 
 - `focus-visible`: `2px ring` with `1px` offset and `6px` radius.
 - Selection: `accent-wash`. Scrollbar: thin, thumb `wash-2` on transparent.
-- Text size (`small/default/large/larger`, `mc.text-size`) scales the whole
-  page via `zoom`; appearance persists per browser (`mc.appearance`).
+- Text size (`small/default/large/larger`, `mc.text-size`) scales the type
+  steps (`--text-scale`), never the layout. In the desktop app ⌘+, ⌘− and
+  ⌘0 (Ctrl elsewhere) and the View menu step through those sizes; the page
+  itself never zooms. Appearance persists per browser (`mc.appearance`).
 - Persisted toggles (`kiwi:a11y:*`): `reduce-motion` (all durations to near
   zero, including sent/arrived). OS reduced-motion is respected too.
 - `prefers-contrast: more` forces solid backgrounds with no transparency

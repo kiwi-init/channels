@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react"
+import type { TextStep } from "../../../desktop/src/text-size.ts"
 
 // Light, dark, or whatever the system says, and how large the text reads.
 // Both are per browser. "system" leaves <html> without data-theme so the CSS
@@ -53,6 +54,18 @@ export function setTextSize(t: TextSize) {
   else localStorage.setItem(SIZE_KEY, t)
   applySize(t)
   for (const l of listeners) l()
+}
+
+const SIZE_ORDER: TextSize[] = ["small", "default", "large", "larger"]
+
+export function nextTextSize(t: TextSize, step: TextStep): TextSize {
+  if (step === "reset") return "default"
+  const i = SIZE_ORDER.indexOf(t) + (step === "bigger" ? 1 : -1)
+  return SIZE_ORDER[Math.min(Math.max(i, 0), SIZE_ORDER.length - 1)] ?? t
+}
+
+export function stepTextSize(step: TextStep) {
+  setTextSize(nextTextSize(readSize(), step))
 }
 
 /** Run once before the first render, so the page never paints in the wrong theme or size. */
