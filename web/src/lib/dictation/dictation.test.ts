@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 
 import { DICTATION_BYTES, DICTATION_FILES, DICTATION_PATH } from "@kiwi/core/dictation.ts"
 import { pickDevice } from "./device"
-import { appendDictation, dictationSupported, MODEL_MB, PRESS_LABEL, speechLanguage } from "./index"
+import { appendDictation, dictationSupported, MODEL_MB, openRecording, PRESS_LABEL, speechLanguage, transcriber, type MicGate, type SpeechWorker } from "./index"
+import type { Recording } from "./recorder"
+import type { ToWorker } from "./worker"
 import { CACHE_NAME, DictationProblem, downloadModel, modelReady } from "./model"
 
 describe("appendDictation", () => {
@@ -104,5 +106,66 @@ describe("downloading the model", () => {
       (e: unknown) => e
     )
     expect((err as Error).message).toBe("Dictation isn't available here. This relay can't fetch the dictation model right now.")
+  })
+})
+
+describe("the microphone and the speech model", () => {
+  const recording = () => {
+    const r = { cancelled: false, cancel: () => void (r.cancelled = true), stop: async () => new Float32Array(0) }
+    return r
+  }
+
+  test("a second press while the first is still opening the mic opens nothing, and the first one keeps it", async () => {
+    const gate: MicGate = { alive: true, opening: false, current: null }
+    let opened = 0
+    let release: (r: Recording) => void = () => {}
+    const first = recording()
+    const open = () => (opened++, new Promise<Recording>((ok) => (release = ok)))
+    const one = openRecording(gate, open)
+    expect(await openRecording(gate, open)).toBeNull()
+    release(first)
+    expect(await one).toBe(first)
+    expect([opened, gate.current === first, first.cancelled]).toEqual([1, true, false])
+  })
+
+  test("a mic that opens after the composer is gone, or after another recording took it, is closed at once", async () => {
+    const gate: MicGate = { alive: true, opening: false, current: null }
+    const late = recording()
+    let release: (r: Recording) => void = () => {}
+    const opening = openRecording(gate, () => new Promise<Recording>((ok) => (release = ok)))
+    gate.alive = false
+    release(late)
+    expect(await opening).toBeNull()
+    expect(late.cancelled).toBe(true)
+    expect(await openRecording(gate, async () => recording())).toBeNull()
+    const taken: MicGate = { alive: true, opening: false, current: recording() }
+    expect(await openRecording(taken, async () => recording())).toBeNull()
+  })
+
+  test("a speech model that crashes ends the transcription with a message, and the next one starts a fresh model", async () => {
+    const workers: (SpeechWorker & { posted: ToWorker[]; terminated: boolean })[] = []
+    const make = () => {
+      const w = {
+        onmessage: null,
+        onerror: null,
+        onmessageerror: null,
+        posted: [] as ToWorker[],
+        terminated: false,
+        postMessage: (m: ToWorker) => void w.posted.push(m),
+        terminate: () => void (w.terminated = true),
+      } as SpeechWorker & { posted: ToWorker[]; terminated: boolean }
+      workers.push(w)
+      return w
+    }
+    const transcribe = transcriber(make)
+    const first = transcribe(new Float32Array(4), "en")
+    workers[0]!.onerror?.({} as ErrorEvent)
+    await expect(first).rejects.toThrow(/speech model stopped/)
+    expect(workers[0]!.terminated).toBe(true)
+    const second = transcribe(new Float32Array(4), "en")
+    expect(workers).toHaveLength(2)
+    const id = workers[1]!.posted[0]!.id
+    workers[1]!.onmessage?.({ data: { id, text: "hello there" } } as MessageEvent)
+    expect(await second).toBe("hello there")
   })
 })
