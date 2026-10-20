@@ -117,7 +117,9 @@ jobs:
       switching the app's session, saying when the app is closed or Remote Control is off), and the
       daemon's Rex activity reads: only with the Rex helpers on, for a seat in Rex whose harness Kiwi
       can't read from its files, never blocking (a Rex that doesn't answer gives no activity at its
-      deadline while the event loop keeps running).
+      deadline while the event loop keeps running), one read in flight per seat and none started
+      within a second of the last (src/daemon/rex-reads.ts: a result that changes on every read doesn't
+      chain reads), an unchanged or failed read or a moved block refreshing nothing.
       Also test/daemon-big-lines.test.ts: the daemon's socket writes queue what the socket
       didn't take and flush it on drain (src/daemon/server.ts), so a catch-up of thirty
       messages with 50 KB ones among them, and big live messages back to back, arrive whole

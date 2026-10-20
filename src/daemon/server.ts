@@ -10,7 +10,8 @@ import { listenedPath, pullsWake, viaOf } from "@kiwi/core/wake.ts";
 import { ensureMachine, loadPairedMachine, PairError, type PairedMachine, type PairedPerson } from "./pair.ts";
 import { DAEMON_PROTOCOL, daemonSock, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
 import { activityEnv, reachOf, readsRex, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
-import type { RexPlace } from "../rex.ts";
+import { readRexInto } from "./rex-reads.ts";
+import type { RexActivity, RexPlace } from "../rex.ts";
 import { pruneHookFiles } from "../hooks/delivered.ts";
 import { beatLock, dropLock, lockPath, ownsLock, takeLock } from "./lock.ts";
 import { stopDaemon, tryHello } from "./rpc.ts";
@@ -130,19 +131,23 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   };
   const livePath = async (cfg: Config, seat: Seat, attached: Attached) => listenedPath(await pathOf(cfg, seat.alias, seat.agent), listenedLately(seat, attached));
 
-  const refreshActivity = async (seat: Seat, force = false): Promise<void> => {
+  const refreshActivity = async (seat: Seat, force = false, read = true): Promise<void> => {
     const cfg = loadConfig();
     const record = seatRecordFor(cfg, seat.alias, seat.agent);
     if (record?.rex?.block !== seat.rexBlock) {
       seat.rexBlock = record?.rex?.block;
       seat.rexGone = false;
       seat.rexActivity = undefined;
+      seat.rexReadAt = undefined;
     }
     const env = record ? activityEnv(record, process.env) : null;
     const { harnessActivity } = await import("../harness.ts");
     let now = env ? await harnessActivity(env) : undefined;
     if (readsRex(cfg, record)) {
-      readRex(seat, record.rex);
+      if (read)
+        readRexInto(seat, record.rex, readRex, () => {
+          if (current(seat)) void refreshActivity(seat, false, false).catch(() => {});
+        });
       const fromRex = seat.rexActivity;
       if (fromRex) now = { ...fromRex, ...(now?.model ? { model: now.model } : {}) };
     }
@@ -159,19 +164,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
 
   const current = (seat: Seat): boolean => !stopped && seats.get(seat.key) === seat;
 
-  const readRex = (seat: Seat, place: RexPlace): void => {
-    if (seat.rexReading) return;
-    seat.rexReading = true;
-    void import("../rex.ts")
-      .then(({ rexActivity }) => rexActivity(place))
-      .catch(() => null)
-      .then((got) => {
-        seat.rexReading = false;
-        if (!current(seat) || seat.rexBlock !== place.block || JSON.stringify(got) === JSON.stringify(seat.rexActivity)) return;
-        seat.rexActivity = got;
-        void refreshActivity(seat).catch(() => {});
-      });
-  };
+  const readRex = async (place: RexPlace): Promise<RexActivity | null> => (await import("../rex.ts")).rexActivity(place);
 
   const { scheduleWake } = seatWakes({
     dir,

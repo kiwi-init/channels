@@ -10,6 +10,8 @@ import { localRexSeats, showInRex } from "../src/rex-show.ts";
 import { seatRecords } from "../src/status.ts";
 import { startRexEvents } from "../src/rex-events.ts";
 import { readsRex } from "../src/daemon/reach.ts";
+import { readRexInto, type RexReadSeat } from "../src/daemon/rex-reads.ts";
+import type { RexActivity } from "../src/rex.ts";
 import type { SeatRecord } from "../src/config.ts";
 
 const roster: Roster = [
@@ -184,6 +186,64 @@ describe("the daemon's Rex reads", () => {
     expect(Date.now() - started).toBeLessThan(3_000);
     expect(ticks).toBeGreaterThan(5);
     rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("a result that changes on every read doesn't start the next read before the gap, nor while one is in flight", async () => {
+    const seat: RexReadSeat = { rexBlock: place.block };
+    let reads = 0;
+    let changes = 0;
+    const read = async (): Promise<RexActivity> => ({ state: "working", tool: `step ${++reads}` });
+    const t0 = 1_000_000;
+    const again = (at: number) => readRexInto(seat, place, read, changed, at, 1_000);
+    const changed = () => {
+      changes++;
+      expect(again(t0 + 10)).toBe(false);
+    };
+    expect(again(t0)).toBe(true);
+    expect(again(t0 + 1)).toBe(false);
+    await Bun.sleep(10);
+    expect([reads, changes]).toEqual([1, 1]);
+    expect(seat.rexActivity).toEqual({ state: "working", tool: "step 1" });
+    expect(again(t0 + 999)).toBe(false);
+    expect(again(t0 + 1_000)).toBe(true);
+    await Bun.sleep(10);
+    expect([reads, changes]).toEqual([2, 2]);
+  });
+
+  test("an unchanged result, a failed read or a block that moved on doesn't refresh the seat", async () => {
+    const seat: RexReadSeat = { rexBlock: place.block, rexActivity: { state: "idle" } };
+    let changes = 0;
+    readRexInto(
+      seat,
+      place,
+      async () => ({ state: "idle" }),
+      () => changes++,
+      0,
+      0,
+    );
+    await Bun.sleep(5);
+    readRexInto(
+      seat,
+      place,
+      async () => Promise.reject(new Error("rex died")),
+      () => changes++,
+      1,
+      0,
+    );
+    await Bun.sleep(5);
+    expect(seat.rexActivity).toBeNull();
+    expect(changes).toBe(1);
+    seat.rexBlock = "block:22a15963-bacc-7426-91e9-4d98757dcd0c";
+    readRexInto(
+      seat,
+      place,
+      async () => ({ state: "working" }),
+      () => changes++,
+      2,
+      0,
+    );
+    await Bun.sleep(5);
+    expect([changes, seat.rexActivity, seat.rexReading]).toEqual([1, null, false]);
   });
 
   test("only with the Rex helpers on, for a seat in Rex whose harness Kiwi can't read from its files", () => {

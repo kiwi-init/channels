@@ -41,6 +41,7 @@ export interface Seat {
   rexBlock?: string;
   rexActivity?: RexActivity | null;
   rexReading?: boolean;
+  rexReadAt?: number;
 }
 
 interface SeatRows {
