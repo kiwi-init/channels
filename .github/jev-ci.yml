@@ -371,6 +371,9 @@ jobs:
       KIWI_HOME/daemon.log, rotated at 1 MB. And
       test/release-signing.test.ts: release-build.yml's Package step fails a tag release that has no
       Mac signing secrets, while a rehearsal and the Linux build still build unsigned. And
+      test/release-environment.test.ts: every job that reads a signing or deploy secret (MAC_*,
+      APPLE_*, CLOUDFLARE_*) runs in the release environment, a rehearsal off main runs in none, and
+      no caller of release-build.yml passes those secrets by name. And
       test/release-on-main.test.ts: release.yml's on-main job refuses a tag whose commit isn't on
       main, and every other job waits for it, so nothing is built, signed or published from such a
       tag; bump-main pushes a stamp only when it edits scripts/stamp.ts's files and CHANGELOG.md,
@@ -685,11 +688,12 @@ jobs:
       desktop/scripts/pack-cli.ts (which checks it unpacks to the same bytes), and on macOS
       desktop/scripts/mac-size.ts failing a dmg or zip over 150 MiB or an app over 320 MiB, and on Linux
       desktop/scripts/appimage-squashfs.ts failing an AppImage not packed with gzip, lz4 or zstd in
-      blocks of at most 128 KiB. On a pull request the macOS app is unsigned; a
-      manual run of ci.yml passes the signing secrets, so the app is signed, notarized and
-      checked as on a tag. Fails where the tag would: a stamped file with no version for the stamp
+      blocks of at most 128 KiB. On a pull request, and on a manual run of ci.yml from any
+      branch but main, the macOS app is unsigned: no caller passes the signing secrets, and only
+      the release environment (main and v* tags) holds them. A manual run on main takes them from
+      that environment, so the app is signed, notarized and checked as on a tag. Fails where the tag would: a stamped file with no version for the stamp
       to find, versions that disagree after it, no changelog section, a test failing on macOS, an electron-builder error, a package missing the web
-      app or the kiwi binary, a Mac package over its size gate, an AppImage packed slow to page in, and on a manual run a signing or notarization error. Runs on
+      app or the kiwi binary, a Mac package over its size gate, an AppImage packed slow to page in, and on a manual run on main a signing or notarization error. Runs on
       a pull request that changes the release workflows, the stamp or CHANGELOG.md, on any change
       that only bumps a version number, and on manual runs of ci.yml, never on a push to main
       (release.yml's "kiwi X.Y.Z" stamp commit included).
