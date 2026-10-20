@@ -100,7 +100,9 @@ The daemon on the seat's machine already knows the seat's process and whether it
 gains:
 
 - **The pane.** At SessionStart the hook records `TMUX` (the server socket) and `TMUX_PANE` on the
-  seat. A seat outside tmux is never rotated; it keeps the backstop.
+  seat. A seat outside tmux is never rotated; it keeps the backstop. Claude Code 2.1.304 also
+  records the pane itself, in `~/.claude/sessions/<pid>.json` (`"tmux": "<session>:@<window>.%<pane>"`),
+  which the daemon already reads for idle.
 - **The trigger.**
   - Reviewer: its verdict (`task approve|reject`) posted.
   - Coder: `task done`, or the task handed to someone else.
@@ -118,8 +120,10 @@ gains:
   re-injects, and the seat moves to the new session id at that hook.
 - **Optional, off by default, and not loaded unless switched on** (owner's requirement,
   2026-10-19). The tmux code lives in its own module that the daemon imports only when rotation is
-  on, so a channel that never uses it carries none of it. Who switches it on, and at what scope,
-  is still open (decision 3).
+  on, so a channel that never uses it carries none of it. Switched on per computer (decision 3):
+  `kiwi rotate on` writes it to that computer's Kiwi config, and the daemon there rotates only the
+  seats it holds that run in tmux. Turning it on for opus-vm turns it on for that machine's seats
+  and nobody else's.
 
 ### 4. The line and the nudge
 
@@ -157,18 +161,34 @@ gains:
 
 ## Other harnesses
 
-The Codex, OpenCode and Grok seats run in tmux too. Each TUI has its own command for a new
-conversation; none was probed. Claude Code ships first. Until another harness is probed:
-re-entry (step 2) through its SessionStart hook where it has one, and its own compaction setting
-as the backstop (Codex: `model_auto_compact_token_limit`, and `compact_prompt` telling it to keep
-the task, branch, SHA and round).
+The Codex, OpenCode and Grok seats run in tmux too. Claude Code ships first. Probed 2026-10-20 in
+throwaway tmux sessions on a laptop, reading each TUI's own command list (no model calls):
+
+| Harness | Version | New conversation | Compact | How Kiwi wakes it |
+| --- | --- | --- | --- | --- |
+| Claude Code | 2.1.304 | `/clear` | `/compact` | its own listener hook |
+| Codex | 0.163.0 | `/new`, `/clear` | `/compact` | `codex queue --thread <recorded thread>` |
+| OpenCode | 2.0.32 | `/new`, `/clear` | none offered on an empty session | `opencode api session.prompt` with the recorded session |
+| Grok Build | 1.0.62 | `/new`, `/clear` | `/compact`; `/context-window` sets the window | its listener (no wake command) |
+| Kimi Code | K3 | `/new` (`/clear`) | `/compact <instruction>` | only when served (`kimi web`) |
+
+Codex and OpenCode are woken by a command that names the recorded thread or session, so after a
+`/new` typed into the pane the wake would still go to the old one. Rotating them needs the seat's
+record to move to the new thread first; that is the next probe. Until then: re-entry (step 2)
+through its SessionStart hook where it has one, and its own compaction setting as the backstop
+(Codex: `model_auto_compact_token_limit`, and `compact_prompt` telling it to keep the task, branch,
+SHA and round; Grok: `/context-window`).
 
 ## Risks to check before enabling rotation
 
-- **A second listener after `/clear`.** The old session's `hook listen` keeps running in the same
-  process until a message, its week or the pid ends, and the daemon's hook slot is keyed per
-  session, so the new session arms a second one. Both could deliver the same message. Probe it,
-  and make a listener exit once its session no longer holds the seat.
+- **A second listener after `/clear`.** Probed 2026-10-20 with Claude Code 2.1.304 in tmux against
+  a local relay: the earlier session's `hook listen` keeps running after `/clear`, but no second
+  one arms, because `arm` (`src/hooks/listen.ts`) refuses while any listener holds the seat. The
+  next message reaches the new session once, as Stop hook feedback, and the new session arms its
+  own listener after that turn. The defect was smaller: the listener recorded the delivery under
+  the earlier session id, which no hook commits again, so a hook of the new session could hand the
+  same message over a second time. Fixed in item 3: a delivery records the harness process too,
+  and a hook commits what any earlier session of its own process was handed.
 - **Typing into a pane.** `send-keys` writes into whatever has focus. The guard checks idle and an
   empty input line right before sending, but a person could start typing in between. Keep the gap
   to milliseconds, and don't rotate a seat whose tmux client sent a key in the last few seconds
@@ -180,8 +200,8 @@ the task, branch, SHA and round).
 
 1. The line and the backstop on 1M models: decided, 250k and 400k (2026-10-19).
 2. Where a checkpoint lives: decided and built as a signed note on the task (item 1).
-3. How rotation is switched on and at what scope. Settled so far: optional, off by default, not
-   loaded unless on. Not per seat. To discuss.
+3. How rotation is switched on: decided, per computer (2026-10-20). `kiwi rotate on` in that
+   machine's Kiwi config, off by default, the tmux code loaded only when on.
 
 ## Order of work
 
@@ -191,7 +211,8 @@ One issue and one PR each, with its CI gate:
    `kiwi task checkpoint` (step 1), and every hook's output kept inside Claude Code's inline limit,
    shared between the seats a session serves, with no message marked read that wasn't shown.
 2. Context in activity and on the Agents lane; the Stop-hook nudge. Built on the item 1 branch.
-3. The duplicate-listener probe and its fix.
+3. The duplicate-listener probe and its fix. Built: no second listener; deliveries across a
+   `/clear` are committed by the new session.
 4. Rotation for Claude Code seats in tmux, behind the switch from decision 3: pane recording, the
    guard, and asking a seat to rotate.
 5. Probe and add Codex, OpenCode and Grok.
