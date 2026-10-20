@@ -42,6 +42,8 @@ import {
 } from "./room.ts";
 import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
+import { MACHINE_ASKS_PER_MINUTE, MACHINE_BOX_TTL_MS, onMachineHttp, type MachineBox, type MachineStore } from "./machine.ts";
+import { allow as allowPerMinute } from "./room/limits.ts";
 import { onDictationHttp, type DictationStore } from "./dictation.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
 import { GithubApp, githubAppFrom } from "./github-app.ts";
@@ -53,6 +55,8 @@ interface Env {
   OWNERS: DurableObjectNamespace<Owners>;
   /** One per pairing mailbox id: two sealed slots, gone ten minutes after the first write. */
   MAILBOX: DurableObjectNamespace<MailboxBox>;
+  /** One per paired computer: who may ask it to act, its sealed asks, and its live socket. */
+  MACHINES: DurableObjectNamespace<MachineInbox>;
   /** When set, channels belong to humans signed in with this WorkOS AuthKit client. */
   WORKOS_CLIENT_ID?: string;
   /** The AuthKit domain (https://….authkit.app or a custom one), whose keys may also sign tokens. Comma-separated while moving domains. */
@@ -309,6 +313,73 @@ export class Owners extends DurableObject<Env> {
   }
 }
 
+/** One paired computer: the person bound to it, its sealed asks for ten minutes, and its daemon's socket. */
+export class MachineInbox extends DurableObject<Env> {
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS binding (k INTEGER PRIMARY KEY CHECK (k = 1), person TEXT NOT NULL, mxpk TEXT NOT NULL, cert_at INTEGER NOT NULL)");
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS boxes (id TEXT PRIMARY KEY, box TEXT NOT NULL, at INTEGER NOT NULL)");
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));
+  }
+
+  private live(): WebSocket[] {
+    return this.ctx.getWebSockets("machine");
+  }
+
+  override async fetch(req: Request): Promise<Response> {
+    const sql = this.ctx.storage.sql;
+    const boxes = (): MachineBox[] => sql.exec("SELECT id, box, at FROM boxes ORDER BY at").toArray() as unknown as MachineBox[];
+    const store: MachineStore = {
+      binding: async () => {
+        const row = sql.exec("SELECT person, mxpk, cert_at FROM binding").toArray()[0] as { person: string; mxpk: string; cert_at: number } | undefined;
+        return row ? { person: row.person, mxpk: row.mxpk, certAt: row.cert_at } : null;
+      },
+      bind: async (_mpk, b) => void sql.exec("INSERT OR REPLACE INTO binding (k, person, mxpk, cert_at) VALUES (1, ?, ?, ?)", b.person, b.mxpk, b.certAt),
+      unbind: async () => {
+        await this.ctx.storage.deleteAlarm();
+        sql.exec("DELETE FROM binding");
+        sql.exec("DELETE FROM boxes");
+      },
+      boxes: async () => boxes(),
+      addBox: async (_mpk, b) => {
+        sql.exec("INSERT INTO boxes (id, box, at) VALUES (?, ?, ?)", b.id, b.box, b.at);
+        await this.ctx.storage.setAlarm(b.at + MACHINE_BOX_TTL_MS);
+      },
+      dropBox: async (_mpk, id) => void sql.exec("DELETE FROM boxes WHERE id = ?", id),
+      online: () => {
+        const since = this.live().map((ws) => (ws.deserializeAttachment() as { since?: number } | null)?.since ?? 0);
+        return since.length ? Math.max(...since) : null;
+      },
+      push: (_mpk, b) => {
+        for (const ws of this.live()) ws.send(JSON.stringify({ box: b }));
+      },
+      close: () => {
+        for (const ws of this.live()) ws.close(4000, "unpaired");
+      },
+    };
+    try {
+      const out = await onMachineHttp(req, store, { allow: (key) => allowPerMinute(key, MACHINE_ASKS_PER_MINUTE) });
+      if (out instanceof Response) return out;
+      if (!out) return withCors(errorResponse(new NotFound({ message: "not found" })));
+      for (const old of this.live()) old.close(4001, "replaced by a newer connection");
+      const { 0: client, 1: server } = new WebSocketPair();
+      this.ctx.acceptWebSocket(server, ["machine"]);
+      server.serializeAttachment({ since: Date.now() });
+      for (const b of boxes()) if (Date.now() - b.at <= MACHINE_BOX_TTL_MS) server.send(JSON.stringify({ box: b }));
+      return new Response(null, { status: 101, webSocket: client, headers: wsHeaders(req) });
+    } catch (err) {
+      return withCors(errorResponse(err));
+    }
+  }
+
+  override async alarm(): Promise<void> {
+    const sql = this.ctx.storage.sql;
+    sql.exec("DELETE FROM boxes WHERE at < ?", Date.now() - MACHINE_BOX_TTL_MS);
+    const next = sql.exec("SELECT MIN(at) AS at FROM boxes").toArray()[0] as { at: number | null } | undefined;
+    if (next?.at) await this.ctx.storage.setAlarm(next.at + MACHINE_BOX_TTL_MS);
+  }
+}
+
 /** One pairing mailbox: two sealed slots, gone ten minutes after the first write. */
 export class MailboxBox extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
@@ -404,6 +475,11 @@ export default {
       const id = /^\/v1\/mailbox\/([A-Za-z0-9_-]{43})(?:\/(?:a|b))?$/.exec(url.pathname)?.[1];
       if (!id) return withCors(errorResponse(new NotFound({ message: "not found" })));
       return env.MAILBOX.get(env.MAILBOX.idFromName(id)).fetch(req);
+    }
+    if (url.pathname.startsWith("/v1/machine/")) {
+      const mpk = /^\/v1\/machine\/([A-Za-z0-9_-]{43})(?:\/.*)?$/.exec(url.pathname)?.[1];
+      if (!mpk) return withCors(errorResponse(new NotFound({ message: "not found" })));
+      return env.MACHINES.get(env.MACHINES.idFromName(mpk)).fetch(req);
     }
     const github = await onGithubHttp(req, env.GITHUB_WEBHOOK_SECRET, githubRoutes(env));
     if (github) return github;
