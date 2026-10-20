@@ -7,6 +7,10 @@ import { excerpt, memberName } from "@/lib/format"
 import { markSeen, setOpenNews } from "@/lib/news"
 import { lastPreview } from "@/lib/preview"
 
+export function unreadOf(hidden: boolean, arrivals: number, mark: number, inOtherRooms: number): number {
+  return hidden ? Math.max(0, arrivals - mark) : inOtherRooms
+}
+
 export function useChannelNews(room: string, top: number, arrivals: number, inOtherRooms: number, needs: number) {
   const [mark, setMark] = useState(arrivals)
   const [hidden, setHidden] = useState(() => document.hidden)
@@ -18,7 +22,7 @@ export function useChannelNews(room: string, top: number, arrivals: number, inOt
     document.addEventListener("visibilitychange", onChange)
     return () => document.removeEventListener("visibilitychange", onChange)
   }, [arrivals])
-  const unread = hidden ? arrivals - mark : inOtherRooms
+  const unread = unreadOf(hidden, arrivals, mark, inOtherRooms)
   useEffect(() => {
     if (!hidden && top > 0) markSeen(room, top, needs)
   }, [room, top, needs, hidden])
