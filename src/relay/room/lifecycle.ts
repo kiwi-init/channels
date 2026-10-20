@@ -57,27 +57,31 @@ const sealedUnder = (x: unknown, max: number): { e?: number; iv: string; ct: str
   return typeof t.e === "number" && Number.isSafeInteger(t.e) && t.e >= 0 ? { e: t.e, iv: t.iv, ct: t.ct } : null;
 };
 
-const sealedNow = Effect.fn("Room.sealedNow")(function* (x: unknown, max: number, what: string) {
+const sealedAt = Effect.fn("Room.sealedAt")(function* (x: unknown, max: number) {
   const t = sealedUnder(x, max);
-  if (!t) return yield* new BadRequest({ message: `bad ${what}` });
+  if (!t) return { why: "shape" as const };
   const { epoch } = yield* readMeta;
   const e = t.e ?? 0;
-  if (e > epoch) return yield* new BadRequest({ message: `bad ${what} (sealed with a channel key this channel doesn't have)` });
-  if (e < epoch) return yield* new BadRequest({ message: `the ${what} was sealed with an older channel key than this channel's: update Channels and try again` });
-  return t;
+  return e > epoch ? { why: "ahead" as const } : e < epoch ? { why: "behind" as const } : { why: null, sealed: t };
 });
 
 export const setTitle = Effect.fn("Room.setTitle")(function* (title: unknown) {
   const db = yield* RoomStore;
-  const t = yield* sealedNow(title, 2048, "title");
-  db.set("title", JSON.stringify(t));
+  const t = yield* sealedAt(title, 2048);
+  if (t.why === "shape") return yield* new BadRequest({ message: "bad title" });
+  if (t.why === "ahead") return yield* new BadRequest({ message: "bad title (sealed with a channel key this channel doesn't have)" });
+  if (t.why === "behind") return yield* new BadRequest({ message: "the title was sealed with an older channel key than this channel's: update Channels and try again" });
+  db.set("title", JSON.stringify(t.sealed));
   db.changed("info");
 });
 
 export const setSettings = Effect.fn("Room.setSettings")(function* (settings: unknown) {
   const db = yield* RoomStore;
-  const t = yield* sealedNow(settings, 16_384, "settings");
-  db.set("settings", JSON.stringify(t));
+  const t = yield* sealedAt(settings, 16_384);
+  if (t.why === "shape") return yield* new BadRequest({ message: "bad settings" });
+  if (t.why === "ahead") return yield* new BadRequest({ message: "bad settings (sealed with a channel key this channel doesn't have)" });
+  if (t.why === "behind") return yield* new BadRequest({ message: "the settings were sealed with an older channel key than this channel's: update Channels and try again" });
+  db.set("settings", JSON.stringify(t.sealed));
   db.changed("info");
 });
 
