@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
-import { open, seal, type ChannelAccess } from "../crypto.ts";
+import { open, seal, seenAt, type ChannelAccess, type SeenMark } from "../crypto.ts";
+import { verify } from "../identity.ts";
 import { Rejected } from "../refusals.ts";
 import type { ChannelCore } from "./core.ts";
 import type { Refused } from "./errors.ts";
@@ -36,6 +37,35 @@ export function openSealed(ch: ChannelCore, blob: SealedBlob): Effect.Effect<unk
     if (!key) return null;
     return yield* Effect.promise(() => open(key, ch.roomId, blob.iv, blob.ct).catch(() => null));
   });
+}
+
+export function ownerSigned(ch: ChannelCore, blob: SealedBlob, what: string): Effect.Effect<Record<string, unknown> | null, never, Relay> {
+  return Effect.gen(function* () {
+    const o = (yield* openSealed(ch, blob)) as Record<string, unknown> | null;
+    if (!o || o.what !== what || o.room !== ch.roomId || o.pk !== ch.access.ownerPk || !(yield* Effect.promise(() => verify(o)))) return null;
+    return o;
+  });
+}
+
+export function signedAt(ch: ChannelCore, mark: SeenMark, current: unknown): number {
+  return Math.max(Date.now(), seenAt(current) + 1, seenAt(ch.access[mark]) + 1);
+}
+
+export function noteSeen(ch: ChannelCore, mark: SeenMark, at: number): void {
+  if (at <= seenAt(ch.access[mark])) return;
+  const access: ChannelAccess = { ...ch.access };
+  access[mark] = at;
+  ch.access = access;
+  ch.onAccess?.(ch.access);
+}
+
+export function notOlder(ch: ChannelCore, mark: SeenMark, at: unknown): boolean {
+  const seen = seenAt(ch.access[mark]);
+  if (at === undefined) return seen === 0;
+  const dated = seenAt(at);
+  if (!dated || dated < seen) return false;
+  noteSeen(ch, mark, dated);
+  return true;
 }
 
 export function freshInfo(ch: ChannelCore, forget: () => void): Effect.Effect<Info, Refused, Relay> {

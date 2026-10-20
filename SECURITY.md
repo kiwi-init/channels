@@ -338,6 +338,16 @@ forge or swap anything. Writes are rate-limited per client address.
   leaving `sealedEpoch` out. Kiwi 0.22 and older open only the first key: in a
   channel that has rotated, they show no name, charter, hold, rooms or repos
   until they update.
+- The owner signs a date into the name, the settings and the icon (clearing
+  the icon too), always past the one it replaces and past any this device has
+  seen. Each client keeps the newest date it has read for each, saved with its
+  keys, and reads an older one as nothing, so a relay can't roll the name,
+  charter, hold, rooms, repos, compression or icon back to an earlier
+  owner-signed state, and the owner's app refuses to change a setting while
+  older settings are served. One with no date, from an owner app older than
+  this, shows only until the client has read a dated one. What this doesn't
+  close: a client that never read the newer one can still be served the older
+  one, and a relay can always serve nothing.
 - **Close** (in the app, owner): the relay deletes the room's storage
   outright. There's no tombstone, and the room's file on a self-hosted relay
   is removed. Connected members are disconnected and wipe their local copy

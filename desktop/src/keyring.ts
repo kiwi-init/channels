@@ -6,7 +6,7 @@ import * as ManagedRuntime from "effect/ManagedRuntime";
 
 import { openRows as openSealedRows, packRow, packEnvelope, type CachedRow, type Unread } from "@kiwi/core/cache-row.ts";
 import { Channel, ChannelGone, RelayError, Relay, Unreachable, eachLive, fetchRelay, type Live, type PresenceFields } from "@kiwi/core/client.ts";
-import { encodeJoinCode, newRoomId, ownerFingerprint, type ChannelAccess } from "@kiwi/core/crypto.ts";
+import { encodeJoinCode, keepSeen, newRoomId, ownerFingerprint, type ChannelAccess } from "@kiwi/core/crypto.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import { handleFor, type Member, type MemberInfo } from "@kiwi/core/membership.ts";
 import type { PersonClaim } from "@kiwi/core/person.ts";
@@ -123,7 +123,8 @@ export class Keyring implements ChannelOps {
     const relay = this.host.relay();
     const had = this.open.get(key);
     if (had && had.relay === relay) {
-      if (access.epoch > had.access.epoch || Object.keys(access.keys).some((e) => !had.access.keys[e])) had.access = { ...had.access, ...access, keys: { ...had.access.keys, ...access.keys } };
+      if (access.epoch > had.access.epoch || Object.keys(access.keys).some((e) => !had.access.keys[e]))
+        had.access = { ...had.access, ...access, keys: { ...had.access.keys, ...access.keys }, ...keepSeen(had.access, access) };
       return had;
     }
     const ch = new Channel(access, relay, identityOf(seat), (a) => void this.host.access(code, seat.pk, a).catch(() => {}));
