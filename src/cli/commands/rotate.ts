@@ -30,16 +30,16 @@ export const rotateCommands: Record<string, Command> = {
       }
       if (sub === "send") {
         const pid = Number(args[2]);
-        const [session, pane, socket, harness, rollout, cwd] = [args[3], args[4], args[5], args[6], args[7], args[8]];
-        const usage = "usage: kiwi rotate send PID SESSION PANE SOCKET [codex ROLLOUT CWD] (the Stop hook runs it)";
+        const [session, pane, socket, harness, rollout, cwd, name] = [args[3], args[4], args[5], args[6], args[7], args[8], args[9]];
+        const usage = "usage: kiwi rotate send PID SESSION PANE SOCKET [codex ROLLOUT CWD NAME] (the Stop hook runs it)";
         if (!Number.isInteger(pid) || pid <= 0 || !session || !pane || !socket) return yield* die(usage);
-        if (harness !== undefined && (harness !== "codex" || !rollout || !cwd)) return yield* die(usage);
+        if (harness !== undefined && (harness !== "codex" || !rollout || !cwd || !name)) return yield* die(usage);
         if (loadConfig().rotate !== "on") return 0;
         const { clearWhenIdle } = yield* Effect.promise(() => import("../../rotate/pane.ts"));
         const seat = { pid, session, pane, socket };
         const target =
-          harness === "codex" && rollout && cwd
-            ? { ...seat, harness: "codex" as const, rollout, cwd }
+          harness === "codex" && rollout && cwd && name
+            ? { ...seat, harness: "codex" as const, cwd, thread: { kind: "old" as const, rollout, name } }
             : { ...seat, harness: "claude" as const, claudeDir: process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude") };
         const outcome = yield* Effect.promise(() => clearWhenIdle(target, { on: () => loadConfig().rotate === "on" }));
         return outcome === "cleared" ? 0 : 1;

@@ -21,7 +21,7 @@ export function paneOf(env: Record<string, string | undefined>): PaneOf | null {
   return pane && /^%\d+$/.test(pane) && socket ? { pane, socket } : null;
 }
 
-export type Codex = { rollout: string; cwd: string };
+export type Codex = { rollout: string; cwd: string; name: string };
 
 export function rotateArgv(pid: number, session: string, where: PaneOf, codex?: Codex): string[] {
   const main = process.argv[1];
@@ -34,7 +34,7 @@ export function rotateArgv(pid: number, session: string, where: PaneOf, codex?: 
     session,
     where.pane,
     where.socket,
-    ...(codex ? ["codex", codex.rollout, codex.cwd] : []),
+    ...(codex ? ["codex", codex.rollout, codex.cwd, codex.name] : []),
   ];
 }
 
@@ -65,13 +65,20 @@ export const rotateAfterStop = Effect.fn("Hooks.rotateAfterStop")(function* (inp
   let spot: Spot;
   if (claude) spot = { ...claude, used: used(read.claudeContext, file) };
   else if (codexIn) {
-    const { codexPane, sockets } = yield* Effect.promise(() => import("../rotate/codex.ts"));
+    const { codexHome, codexPane, sockets, threadName } = yield* Effect.promise(() => import("../rotate/codex.ts"));
     const found = yield* Effect.sync(() => codexPane(codexIn, sockets(process.env)));
     if (!found) {
       yield* Effect.sync(() => noteStay({ pid: 0, session, pane: "none" }, `${first.b.alias}/${first.b.as}`, `no single Codex window in tmux has ${codexIn} open`));
       return;
     }
-    spot = { pid: found.pid, where: { pane: found.pane, socket: found.socket }, codex: { rollout: file, cwd: codexIn }, used: used(read.codexContext, file) };
+    const name = threadName(codexHome(file), session);
+    if (!name) {
+      yield* Effect.sync(() =>
+        noteStay({ pid: found.pid, session, pane: found.pane }, `${first.b.alias}/${first.b.as}`, "Codex has not named this thread yet, so its window's title can't show it is the one open"),
+      );
+      return;
+    }
+    spot = { pid: found.pid, where: { pane: found.pane, socket: found.socket }, codex: { rollout: file, cwd: codexIn, name }, used: used(read.codexContext, file) };
   } else return;
   const teller = { pid: spot.pid, session, pane: spot.where.pane };
   for (const { b, cfg } of served) {

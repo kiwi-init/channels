@@ -77,7 +77,8 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string, harness?
     if (!harness && event !== KIMI_STOP) yield* Effect.sync(migrateExtraHooks);
     const cwd = input.cwd;
     const fresh = who.session;
-    if (event === "session-start" && who.harness === "codex" && input.source === "startup" && cwd && fresh) yield* Effect.sync(() => takeHandoff(cwd, fresh));
+    const rollout = input.transcript_path;
+    if (event === "session-start" && who.harness === "codex" && input.source === "startup" && cwd && fresh && typeof rollout === "string") yield* Effect.sync(() => takeHandoff(cwd, fresh, rollout));
     const served = yield* seatsServed;
     const session = input.session_id;
     if (kimi && session)

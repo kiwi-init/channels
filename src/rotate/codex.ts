@@ -1,29 +1,89 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readlinkSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, readlinkSync, realpathSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 export const CODEX_NEW = "/new";
 export const CODEX_FIRST = "Kiwi started this fresh session; carry on from above.";
 
 const COMPOSER = /^\x1b\[(?:0;)?1m›\x1b\[0m(?: (.*))?$/;
 const PLACEHOLDER = /^\x1b\[2m[^\x1b]*\x1b\[0m$/;
-const CONTINUED = /^ {4}/;
+const FOOTER = / · /;
+const SPINNER = /^(?:[\u2800-\u28ff]\s*)+/;
 
-const plain = (line: string) => line.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").replace(/ /g, " ");
+const plain = (line: string) => line.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "").replace(/\u00a0/g, " ");
 
 export function codexInput(captured: string): string | null {
   const lines = captured.split("\n");
   const at = lines.findLastIndex((l) => COMPOSER.test(l));
   if (at < 0) return null;
+  const below = lines.slice(at + 1).map(plain);
+  let end = below.length;
+  while (end > 0 && !below[end - 1]!.trim()) end--;
+  let footer = end;
+  while (footer > 0 && below[footer - 1]!.trim()) footer--;
+  if (footer === end || !FOOTER.test(below[footer]!)) return null;
+  const draft = below.slice(0, footer);
+  if (draft.at(-1)?.trim() === "") draft.pop();
   const first = COMPOSER.exec(lines[at]!)?.[1] ?? "";
-  const rest: string[] = [];
-  for (let i = at + 1; i < lines.length && plain(lines[i]!).trim(); i++) {
-    if (!CONTINUED.test(plain(lines[i]!))) break;
-    rest.push(plain(lines[i]!).slice(4));
+  return [PLACEHOLDER.test(first) ? "" : plain(first), ...draft.map((l) => l.replace(/^ {2}/, ""))].join("\n");
+}
+
+export const sameWords = (a: string, b: string) => a.replace(/\s+/g, " ") === b.replace(/\s+/g, " ");
+
+export type Shown = { kind: "busy" } | { kind: "unnamed" } | { kind: "named"; name: string };
+
+export function codexShown(title: string): Shown {
+  if (SPINNER.test(title)) return { kind: "busy" };
+  const cut = title.lastIndexOf(" | ");
+  return cut < 0 ? { kind: "unnamed" } : { kind: "named", name: title.slice(0, cut) };
+}
+
+export function codexHome(rollout: string): string {
+  return join(dirname(rollout), "..", "..", "..", "..");
+}
+
+export function threadName(home: string, thread: string): string | null {
+  let index: string;
+  try {
+    index = readFileSync(join(home, "session_index.jsonl"), "utf8");
+  } catch {
+    // No index yet: no thread has a name.
+    return null;
   }
-  if (!rest.length && (first === "" || PLACEHOLDER.test(first))) return "";
-  return [plain(first), ...rest].join("\n").trimEnd();
+  let name: string | null = null;
+  for (const line of index.split("\n")) {
+    if (!line.includes(thread)) continue;
+    try {
+      const row = JSON.parse(line) as { id?: unknown; thread_name?: unknown };
+      if (row.id === thread && typeof row.thread_name === "string" && row.thread_name) name = row.thread_name;
+    } catch {
+      // A row cut mid-write: the rows before it still name the thread.
+    }
+  }
+  return name;
+}
+
+export function originator(rollout: string): string | null {
+  let head: string;
+  try {
+    head = readFileSync(rollout, "utf8").split("\n", 1)[0] ?? "";
+  } catch {
+    // No rollout: its originator is unknown.
+    return null;
+  }
+  try {
+    const meta = JSON.parse(head) as { type?: unknown; payload?: { originator?: unknown } };
+    return meta.type === "session_meta" && typeof meta.payload?.originator === "string" ? meta.payload.originator : null;
+  } catch {
+    // A first line still being written: unknown for now.
+    return null;
+  }
+}
+
+export function createdAt(thread: string): number | null {
+  const m = /^([0-9a-f]{8})-([0-9a-f]{4})-7[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/i.exec(thread);
+  return m ? Number.parseInt(m[1]! + m[2]!, 16) : null;
 }
 
 export interface CodexPane {
