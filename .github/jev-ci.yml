@@ -146,6 +146,10 @@ jobs:
       Also a Kimi Code or Grok seat with a live listener (Grok's persistent kiwi listen monitor) announced as
       woken via its background listener, and as can't be woken again once the listener stops, while Grok's push wake
       stays off (pullsWake in packages/core/src/wake.ts, test/wake.test.ts, test/daemon-seats.test.ts).
+      Also a MiMoCode or Pi seat counted as woken by Kiwi's plugin or extension only while its listener holds
+      the seat (or within the daemon's listener grace), and otherwise as can't be woken, with kiwi wake saying
+      the plugin has no listener running (listenedPath in packages/core/src/wake.ts, src/daemon/server.ts,
+      test/wake.test.ts, test/daemon-seats.test.ts).
       Also each wake the daemon fires logged to wake.log with its unread count and the seat's read cursor when the
       daemon counted them, after the result and the why column (empty when it worked), so older readers of the first
       columns keep working (src/daemon/wake.ts, AgentSession.unreadAt in src/agent/state.ts, test/wake.test.ts).
@@ -369,9 +373,12 @@ jobs:
       MiMoCode keeps refusing until MiMoCode exits mid-retry; the resumed session still gets those
       messages, because the listener writes a pending handoff per token (src/hooks/delivered.ts) that becomes
       the delivered marker only when the plugin's next listen names the token of the wake that landed
-      (src/hooks/listen.ts, src/hooks/run.ts), and the next message isn't repeated with them; and two
-      MiMoCode processes on one session, each landing its wake of the same message, count it delivered
-      once instead of clearing each other's handoff and waking it back and forth. Fails if joining, seats, hooks, pairing, the
+      (src/hooks/listen.ts, src/hooks/run.ts), and the next message isn't repeated with them; a wake the
+      listener hands MiMoCode logged to wake.log as handed, and the refusals before it landed (the plugin's
+      next listen reports their count and last error) logged as failed with that reason (appendWakeRow in
+      src/daemon/wake.ts, src/hooks/listen.ts); and two MiMoCode processes on one session, each landing its
+      wake of the same message, count it delivered once instead of clearing each other's handoff and waking
+      it back and forth. Fails if joining, seats, hooks, pairing, the
       daemon, kiwi sh, handoff or the relay change behavior.
 
   build:
