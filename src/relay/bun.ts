@@ -19,6 +19,7 @@ import { onDictationHttp, type DictationStore } from "./dictation.ts";
 import { Policy, policyFrom, type RelayPolicy } from "./policy.ts";
 import {
   Directory,
+  forgetRoom,
   holdEntry,
   releasable,
   reserveSlot,
@@ -40,6 +41,7 @@ import {
   wsHeaders,
   type DirectoryEntry,
   type Effects,
+  type Sql,
   type SqlParam,
 } from "./room.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync } from "./route.ts";
@@ -88,6 +90,8 @@ export function startRelay(
   // Rooms hold ciphertext, member keys and join codes: only the relay's own user reads them.
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   const dbs = new Map<string, Database>();
+  const sqls = new Map<string, Sql>();
+  const versions = new Map<string, number>();
   const sockets = new Map<string, Set<ServerWebSocket<SocketData>>>();
   const file = (roomId: string) => join(dataDir, `${roomId}.sqlite`);
   // Signed-in people's owned channels (room ids and join codes only): the quota on POST /create.
@@ -138,15 +142,28 @@ export function startRelay(
       }
     }
     const d = db;
-    const store = new RoomDb(
-      {
-        run: (q, ...p) => void d.query(q).run(...p),
-        all: <T>(q: string, ...p: SqlParam[]) => d.query(q).all(...p) as T[],
-      },
-      roomId,
-    );
+    const made: Sql = {
+      run: (q, ...p) => void d.query(q).run(...p),
+      all: <T>(q: string, ...p: SqlParam[]) => d.query(q).all(...p) as T[],
+    };
+    const sql = stub ? made : (sqls.get(roomId) ?? made);
+    if (!stub) {
+      sqls.set(roomId, sql);
+      const version = (d.query("PRAGMA data_version").get() as { data_version: number }).data_version;
+      if (versions.get(roomId) !== version) forgetRoom(sql);
+      versions.set(roomId, version);
+    }
+    const store = new RoomDb(sql, roomId);
     if (stub) stubs.set(store, d);
     return store;
+  };
+  const closeDb = (roomId: string) => {
+    const sql = sqls.get(roomId);
+    if (sql) forgetRoom(sql);
+    sqls.delete(roomId);
+    versions.delete(roomId);
+    dbs.get(roomId)?.close();
+    dbs.delete(roomId);
   };
   /** The caller is done with this store: a stand-in for a missing room is closed, a real room stays open. */
   const doneWith = (store: RoomDb) => {
@@ -219,8 +236,7 @@ export function startRelay(
     }
     if (fx.wipe) {
       pageCache?.forget(roomId);
-      dbs.get(roomId)?.close();
-      dbs.delete(roomId);
+      closeDb(roomId);
       for (const suffix of ["", "-wal", "-shm"]) rmSync(file(roomId) + suffix, { force: true });
       for (const ws of room) ws.close(CLOSE_CLOSED, "channel closed");
       sockets.delete(roomId);
@@ -237,8 +253,12 @@ export function startRelay(
     for (const f of readdirSync(dataDir)) {
       const m = /^([0-9a-f]{32})\.sqlite$/.exec(f);
       if (!m || sockets.get(m[1]!)?.size) continue;
+      const open = dbs.has(m[1]!);
       const db = storeFor(m[1]!, false);
-      if (!runRoomSync(relay, db, idleExpired)) continue;
+      if (!runRoomSync(relay, db, idleExpired)) {
+        if (!open) closeDb(m[1]!);
+        continue;
+      }
       apply(m[1]!, runRoomSync(relay, db, expire));
       expired++;
     }
@@ -330,8 +350,7 @@ export function startRelay(
             else creating.delete(route.roomId);
             // A create that ended without a room (refused before auth, or failed) leaves no file behind.
             if (!left && (empty ?? noRoom())) {
-              dbs.get(route.roomId)?.close();
-              dbs.delete(route.roomId);
+              closeDb(route.roomId);
               for (const suffix of ["", "-wal", "-shm"]) rmSync(file(route.roomId) + suffix, { force: true });
             }
           }
