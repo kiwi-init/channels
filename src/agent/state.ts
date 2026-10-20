@@ -70,10 +70,14 @@ export class SessionState {
     }
     const look = yield* Look;
     const seen = peeked === undefined ? yield* this.peek() : peeked;
-    const current = seen !== null && seen.head <= lastSeq(this.log) && lastSeq(this.log) >= this.owed;
-    if (!current && (!look?.fetched.has(this) || lastSeq(this.log) < this.owed)) {
-      const fetched = !this.log.length && !this.base ? yield* this.ch.fx.snapshot() : null;
-      const from = Math.max(lastSeq(this.log), this.base?.n ?? fetched?.n ?? 0);
+    const first = this.log[0]?.seq;
+    const holed = first !== undefined && first > (this.base?.n ?? 0) + 1;
+    const current = !holed && seen !== null && seen.head <= lastSeq(this.log) && lastSeq(this.log) >= this.owed;
+    if (!current && (holed || !look?.fetched.has(this) || lastSeq(this.log) < this.owed)) {
+      const fetched = !this.base && (first === undefined || first > 1) ? yield* this.ch.fx.snapshot() : null;
+      const floor = this.base?.n ?? fetched?.n ?? 0;
+      const hole = first !== undefined && first > floor + 1;
+      const from = hole ? floor : Math.max(lastSeq(this.log), floor);
       const offline = yield* OfflineReads;
       const cachedOnly = !!offline && !fetched && this.log.length > 0;
       const page = yield* this.ch.fx.history(from).pipe(
@@ -92,8 +96,16 @@ export class SessionState {
           yield* cache.keepBase(this.cfg.roomId, fetched);
           this.base ??= fetched;
         }
-        const fresh = page.messages.filter((m) => m.seq > lastSeq(this.log!));
-        if (fresh.length) this.log = [...this.log!, ...fresh];
+        if (hole) {
+          const bySeq = new Map(this.log!.map((m) => [m.seq, m]));
+          for (const m of page.messages) bySeq.set(m.seq, m);
+          this.log = [...bySeq.values()].sort((a, b) => a.seq - b.seq);
+          yield* cache.replace(this.cfg.roomId, this.log);
+          this.saved = lastSeq(this.log);
+        } else {
+          const fresh = page.messages.filter((m) => m.seq > lastSeq(this.log!));
+          if (fresh.length) this.log = [...this.log!, ...fresh];
+        }
         look?.fetched.add(this);
       }
     }
