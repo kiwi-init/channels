@@ -12,7 +12,7 @@ import type { Binding, Here } from "../seats.ts";
 import { handOver, seatBudget } from "./answer.ts";
 import { answeringNow, deliveredUpTo, noteDelivered, noteHeard, notePending, settlePending } from "./delivered.ts";
 import { hooksListen, installedListenSeconds } from "./install/claude.ts";
-import { migrateMimo, mimoInstalled } from "./install/mimo.ts";
+import { mimoInstalled } from "./install/mimo.ts";
 import { piInstalled } from "./install/pi.ts";
 import { alive, isListening, takeListenSlot } from "./listeners.ts";
 import { LISTEN_SECONDS, mcFor } from "./self.ts";
@@ -102,7 +102,6 @@ export function handoffFrom(landed: unknown): Handoff {
 export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Served[], who: Here, handoff: Handoff) {
   const extension = who.harness === "pi" || who.harness === "mimo";
   if (handoff.kind === "acked" && handoff.landed !== null) for (const { b } of served) settlePending(b.alias, b.as, who.session ?? "", handoff.landed);
-  if (who.harness === "mimo") migrateMimo();
   if (who.harness === "pi" ? !piInstalled() : who.harness === "mimo" ? !mimoInstalled() : !hooksListen()) return 0;
   let enough = yield* Deferred.make<void>();
   let heard = 0;

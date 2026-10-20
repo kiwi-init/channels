@@ -119,9 +119,10 @@ jobs:
       session is deleted; promptAsync asked to throw on an HTTP error, so a client answering with data
       only, which returns nothing for one, still has the wake sent again; and when MiMoCode can't name a
       session's parent, the plugin still listens for that session under its own id, and stops that listener
-      once a later lookup names the root, so one session never has two listeners. A plugin of Kiwi's from
-      an older kiwi is rewritten at the listen hook (migrateMimo), unless KIWI_NO_HOOKS is set or MiMoCode's
-      hooks are off; a kiwi.ts that isn't Kiwi's, and no kiwi.ts, are left alone.
+      once a later lookup names the root, and a lookup that fails after another one named the root starts
+      none, so one session never has two listeners. A plugin of Kiwi's from an older kiwi is rewritten when
+      kiwi hook listen runs from MiMoCode (migrateMimo, called in src/hooks/run.ts), unless KIWI_NO_HOOKS is
+      set or MiMoCode's hooks are off; a kiwi.ts that isn't Kiwi's, and no kiwi.ts, are left alone.
       Every test file runs after test/setup.ts, which points each harness's folder, MiMoCode's (KIWI_MIMO_DIR)
       among them, at a temp directory and drops each harness's session markers (MIMOCODE, MIMOCODE_PID,
       MIMOCODE_SESSION_ID among them), so a run on a machine with ~/.config/mimocode, or from inside MiMoCode,
@@ -141,6 +142,9 @@ jobs:
       Also a Kimi Code or Grok seat with a live listener (Grok's persistent kiwi listen monitor) announced as
       woken via its background listener, and as can't be woken again once the listener stops, while Grok's push wake
       stays off (pullsWake in packages/core/src/wake.ts, test/wake.test.ts, test/daemon-seats.test.ts).
+      Also each wake the daemon fires logged to wake.log with its unread count and the seat's read cursor when the
+      daemon counted them, after the result and the why column (empty when it worked), so older readers of the first
+      columns keep working (src/daemon/wake.ts, AgentSession.unreadAt in src/agent/state.ts, test/wake.test.ts).
       Also test/context-line.test.ts: a seat's context in words (tokensWord), the Stop hook's nudge
       once per crossing of CONTEXT_LINE (250k; back under it resets, unknown keeps the state), naming
       each open task the seat owns and the checkpoint command, and an activity's context token
@@ -374,7 +378,9 @@ jobs:
       Builds the web dashboard for production (vite build in web/) and fails when the JS the
       first screen loads (the entry script plus every chunk it modulepreloads) is over
       BUDGET_BYTES (590,000) in scripts/web-bundle.ts, a budget that doesn't go up for a feature; code reached only through
-      web/src/components/lazy.tsx doesn't count. Then ui smoke: starts the relay and the kiwi CLI
+      web/src/components/lazy.tsx doesn't count. It also fails when web/dist carries onnxruntime's
+      WebAssembly (ort-wasm-*.wasm: dictation gets it through the relay; web/vite.config.ts drops it) or
+      any file over 20 MiB, which would weigh on every desktop download. Then ui smoke: starts the relay and the kiwi CLI
       as a test computer and drives the built dashboard in headless Chromium, opening every
       menu, popover and dialog, setting up a passkey, previewing an invite, Settings → Personalities duplicating a preset into the person's own, the owner allowing voice from Details, the Agents tab showing a lane per agent with what's next on it, Needs you as rows always in view (an agent asking in is let in from its row), an answered ask saying who chose what on the ask itself, replying inline (the reply quotes what it answers, "1 Reply" opens the thread), linking a computer
       with `kiwi setup`, approving its agent and opening a task (a board row opens it in the Tasks panel, with no second task list behind it; /tasks switches to the Tasks tab; the details' wants-to-join row closes them and shows Needs you, where the agent is let in, and details offer no Copy invite link or second approve flow), dictating for real (the pinned Whisper files, fetched and SHA-256-checked by scripts/dictation-files.ts into a cache keyed on packages/core/src/dictation.ts, seed the local relay's /v1/dictation; Chromium's fake mic plays test/fixtures/dictation.wav; the first press asks once, then the model downloads through the relay, web/src/lib/dictation's worker transcribes on WebAssembly, and the words land in the Message box), finding controls by visible
@@ -424,7 +430,7 @@ jobs:
   desktop:
     name: desktop / package
     inputs: ["desktop/**", "src/**", "packages/core/**", "web/src/**", "web/index.html", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "package.json", "bun.lock", "web/package.json"]
-    always: ["desktop/package.json", "desktop/tsconfig*.json", "desktop/scripts/fuses.ts", "desktop/scripts/pack-cli.ts", "desktop/scripts/size.ts", "desktop/scripts/smoke.ts"]
+    always: ["desktop/package.json", "desktop/tsconfig*.json", "desktop/scripts/fuses.ts", "desktop/scripts/pack-cli.ts", "desktop/scripts/size.ts", "desktop/scripts/smoke.ts", "desktop/scripts/dictate.ts", "desktop/scripts/fixtures/dictate.wav", "packages/core/src/dictation.ts", "scripts/dictation-files.ts"]
     description: >-
       Bundles the Electron shell's main, preload and channels (key process) scripts with bun
       build, then packages the Linux app with electron-builder --dir from desktop/package.json's
@@ -442,8 +448,17 @@ jobs:
       codeCache, so a launch after the first skips compiling them), its key process
       (utilityProcess.fork of dist/channels.js from app.asar) stays up and the bundled kiwi
       daemon answers on its socket, and fails if
-      ELECTRON_RUN_AS_NODE=1 runs JavaScript or --inspect opens a debugger. Fails on a bundling
-      or packaging error, a fuse changed or dropped, or an app that no longer starts.
+      ELECTRON_RUN_AS_NODE=1 runs JavaScript or --inspect opens a debugger. Then
+      desktop/scripts/dictate.ts dictates on the packaged Linux app under Xvfb: a local Bun relay
+      with dev sign-in, its dictation files fetched and verified by scripts/dictation-files.ts
+      and cached by actions/cache (keyed to packages/core/src/dictation.ts's pinned revision and
+      hashes), a new channel, the real
+      Dictate button with Chromium's fake mic playing desktop/scripts/fixtures/dictate.wav (the
+      mic allowed by the app's own permission handler, no fake-UI switch), and fails unless the
+      spoken words land in the Message box, the model is kept in the app's data folder
+      ($XDG_CONFIG_HOME/kiwi-desktop) once, and nothing of it lands in $XDG_CACHE_HOME. Fails on a
+      bundling or packaging error, a fuse changed or dropped, an app that no longer starts, or
+      dictation that doesn't work on Linux.
 
   cli-macos:
     name: cli / macos

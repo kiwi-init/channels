@@ -3,24 +3,11 @@ import path from "node:path";
 import { app, protocol } from "electron";
 
 import { APP_HOST, APP_SCHEME, csp, fileFor } from "./guard.ts";
+import { mimeOf } from "./mime.ts";
 import { store } from "./store.ts";
 import { voiceOriginsFor } from "./voice.ts";
 
 const webDist = () => path.join(app.isPackaged ? process.resourcesPath : path.join(__dirname, ".."), app.isPackaged ? "web/dist" : "../web/dist");
-
-const MIME: Record<string, string> = {
-  ".html": "text/html",
-  ".js": "text/javascript",
-  ".css": "text/css",
-  ".json": "application/json",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".ico": "image/x-icon",
-  ".woff2": "font/woff2",
-  ".woff": "font/woff",
-  ".ttf": "font/ttf",
-  ".map": "application/json",
-};
 
 const webHeaders = (type: string): Record<string, string> => ({
   "content-type": type,
@@ -36,7 +23,7 @@ export function serveWeb(): void {
     if (!file) return new Response("not found", { status: 404 });
     try {
       const body = fs.readFileSync(file);
-      return new Response(new Uint8Array(body), { headers: webHeaders(MIME[path.extname(file)] ?? "application/octet-stream") });
+      return new Response(new Uint8Array(body), { headers: webHeaders(mimeOf(file)) });
     } catch {
       if (path.basename(file) !== "index.html") return serveWebFallback();
       return new Response("not found", { status: 404 });

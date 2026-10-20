@@ -25,11 +25,11 @@ through `kiwi://join/<code>`), and the install scripts.
 
 ## Download links
 
-`app.js` lists the desktop app files the v0.20.4 release publishes, under the app's
+`app.js` lists the desktop app files the v0.20.5 release publishes, under the app's
 name, Channels (releases up to v0.16.2 named them `Kiwi-…`):
 
-- `Channels-0.20.4-mac-arm64.dmg` / `Channels-0.20.4-mac-x64.dmg`
-- `Channels-0.20.4-linux-x86_64.AppImage` / `Channels-0.20.4-linux-amd64.deb`
+- `Channels-0.20.5-mac-arm64.dmg` / `Channels-0.20.5-mac-x64.dmg`
+- `Channels-0.20.5-linux-x86_64.AppImage` / `Channels-0.20.5-linux-amd64.deb`
 
 The release PR bumps the version in these names; the site deploys only from a tag,
 after its GitHub release exists. Those are `desktop/package.json`'s `artifactName`
