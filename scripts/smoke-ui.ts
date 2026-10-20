@@ -16,7 +16,7 @@
 // (or set SMOKE_CHROMIUM to a Chrome binary).
 
 import { spawn } from "node:child_process";
-import { chmodSync, cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Locator } from "playwright-core";
@@ -307,6 +307,23 @@ async function run(part: Part): Promise<string[]> {
     await page.getByRole("button", { name: "Close thread" }).waitFor();
     await page.getByRole("button", { name: "Close thread" }).click();
     log("ok  Thread panel");
+    at = "Details → Close channel…: the log downloads first, every message signed, and Cancel keeps the channel";
+    await inDetails(() => panel.getByRole("button", { name: /^Close channel/ }).click());
+    const closing = page.getByRole("dialog", { name: "Close this channel for everyone?" });
+    await closing.waitFor();
+    if (process.env.SMOKE_SHOTS) await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "close-channel.png") });
+    const [saved] = await Promise.all([page.waitForEvent("download"), closing.getByRole("button", { name: "Download log" }).click()]);
+    const kept: unknown[] = readFileSync(await saved.path(), "utf8")
+      .trimEnd()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    if (!saved.suggestedFilename().endsWith(".jsonl")) throw new Error(`the log was saved as ${saved.suggestedFilename()}`);
+    if (!kept.every((m) => typeof m === "object" && m !== null && "sig" in m && "pk" in m)) throw new Error("a line of the log has no signature");
+    if (!kept.some((m) => typeof m === "object" && m !== null && "body" in m && m.body === "smoke, an inline reply")) throw new Error("the log is missing a message just sent");
+    await closing.getByRole("button", { name: "Cancel" }).click();
+    await closing.waitFor({ state: "hidden" });
+    log(`ok  ${at}`);
+    if (await panel.isVisible()) await panel.getByRole("button", { name: "Close details" }).click();
     await opens("Pause agents", () => inDetails(() => panel.getByRole("button", { name: /^Pause (all )?agents$/ }).click()));
 
     at = "history cache";

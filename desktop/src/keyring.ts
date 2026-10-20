@@ -156,6 +156,10 @@ export class Keyring implements ChannelOps {
       }
       case "reconcilePosting":
         return [args[0]];
+      case "history": {
+        const since = args[0];
+        return [typeof since === "number" && Number.isInteger(since) && since >= 0 ? since : 0];
+      }
       case "setGithubRepos":
         return [args[0], Array.isArray(args[0]) && args[0].length ? await this.host.githubToken() : null];
       default:

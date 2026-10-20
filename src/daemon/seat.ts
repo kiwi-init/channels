@@ -29,6 +29,7 @@ export interface Seat {
   wakeAgain: boolean;
   wakeChild: Subprocess | null;
   lastWake: DaemonWake | null;
+  outstanding: { seqs: number[]; to: string; at: number } | null;
   probe: ((ms: number) => Promise<Probe | null>) | null;
   rows: SeatRows | null;
   fetchingRows: boolean;
