@@ -392,6 +392,9 @@ jobs:
       main, and every other job waits for it, so nothing is built, signed or published from such a
       tag; bump-main pushes a stamp only when it edits scripts/stamp.ts's files and CHANGELOG.md,
       and refuses one that edits, adds, deletes, renames or changes the mode of anything else. And
+      test/persona-line.test.ts: the hook's word on a personality change (src/hooks/persona-line.ts)
+      comes only when the personality differs from the one this session was told, says what it
+      became or that it was taken away, and is cut to the hook's room with where to read all of it. And
       test/desktop-update-asset.test.ts: a Mac that can't replace itself (translocated, on its disk
       image, in a folder it can't write, or after this version's swap failed) offers the release before
       downloading, and the swap script leaves the old app and a marker when the move fails;
@@ -494,7 +497,7 @@ jobs:
   test-flows-b:
     name: test / flows-b
     inputs: ["src/**", "packages/core/**", "test/owner-cli.ts"]
-    imports_from: ["test/join-seats.test.ts", "test/read-receipts.test.ts", "test/daemon-pair.test.ts", "test/sh-escape.test.ts", "test/reclaim.test.ts", "test/wake-yourself.test.ts", "test/seats.test.ts", "test/multi-seat.test.ts", "test/handoff.test.ts", "test/hooks-once.test.ts", "test/hooks-hung-relay.test.ts", "test/offline-read.test.ts", "test/hooks-reentry.test.ts", "test/mimo-wake-restart.test.ts"]
+    imports_from: ["test/join-seats.test.ts", "test/read-receipts.test.ts", "test/daemon-pair.test.ts", "test/sh-escape.test.ts", "test/reclaim.test.ts", "test/wake-yourself.test.ts", "test/seats.test.ts", "test/multi-seat.test.ts", "test/handoff.test.ts", "test/hooks-once.test.ts", "test/hooks-hung-relay.test.ts", "test/offline-read.test.ts", "test/hooks-reentry.test.ts", "test/hooks-persona.test.ts", "test/mimo-wake-restart.test.ts"]
     always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs slow agent-flow tests against a real local relay and the kiwi CLI: join-seats
@@ -536,7 +539,11 @@ jobs:
       puts the whole hook under one deadline; packages/core/src/client/relay.ts gives every
       relay request 30s), and what they couldn't show comes with the next prompt. Then offline-read: with the relay down, kiwi log and kiwi tasks
       show the messages and tasks this computer already had and say the relay can't be reached
-      (OfflineReads in packages/core/src/client/relay.ts, src/agent/state.ts, src/cli/context.ts). Then hooks-reentry: a
+      (OfflineReads in packages/core/src/client/relay.ts, src/agent/state.ts, src/cli/context.ts). Then hooks-persona:
+      when the owner gives a seated agent a personality, changes it or takes it away mid-session, its
+      next prompt or Stop hook tells it once, before its messages (src/hooks/persona-line.ts,
+      src/hooks/answer.ts), and a new session reads it in its SessionStart brief and isn't told again.
+      Then hooks-reentry: a
       SessionStart hook for a session that starts fresh (startup, clear, compact) tells the agent its
       open task and the checkpoint saved with kiwi task checkpoint, and one for a resumed session
       doesn't (src/hooks/answer.ts, packages/core/src/reentry.ts); kiwi task checkpoint lead refuses a
