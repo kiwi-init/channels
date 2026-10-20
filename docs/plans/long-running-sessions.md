@@ -82,6 +82,15 @@ rule `kiwi compact` already enforces for the channel summary. It is stored as th
 can erase it or block the lead's rotation, and it can't vanish between rotation and re-entry. If
 the full nudge doesn't fit the hook's budget, a short one names only the commands.
 
+Two limits, both of which keep the lead in its session rather than rotate it wrongly:
+
+- A saved base folded by a client older than this rule may carry another member's overwrite or
+  deletion of the key. A new client resuming from it ignores a value the lead didn't write, so
+  the lead stays until it writes the checkpoint again. Recovering the lost value would need a
+  snapshot version bump that makes every channel refold.
+- A session serving about 55 seats or more leaves each one a hook budget smaller than even the
+  short nudge, so no nudge and no marker: those seats never rotate and keep the backstop.
+
 ### 2. Re-entry: SessionStart puts the agent back on its work
 
 On every SessionStart that isn't `resume` (`startup`, `clear`, `compact`), inject beside the
