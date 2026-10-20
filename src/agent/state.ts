@@ -250,7 +250,8 @@ export class SessionState {
     const cursor = yield* Cursor;
     const since = (yield* cursor.read(this.alias, this.me)) ?? state.head;
     const seen = yield* cursor.seen(this.alias, this.me);
-    return { unread: messages.filter((m) => m.seq > since && !seen.has(m.seq) && this.wants(m, state)).length, cursor: since };
+    const seqs = messages.filter((m) => m.seq > since && !seen.has(m.seq) && this.wants(m, state)).map((m) => m.seq);
+    return { unread: seqs.length, cursor: since, seqs };
   });
 
   readonly unreadCount = Effect.fn("AgentSession.unreadCount")({ self: this }, function* (this: SessionState, state: ChannelState, messages: Message[]) {

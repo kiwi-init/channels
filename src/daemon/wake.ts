@@ -63,7 +63,7 @@ interface WakeContext {
 }
 
 export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stopped, current }: WakeContext): { scheduleWake: (seat: Seat, delay?: number) => void } {
-  const unreadFor = async (seat: Seat): Promise<{ unread: number; cursor: number } | { unread: 0 }> => {
+  const unreadFor = async (seat: Seat): Promise<{ unread: number; cursor: number; seqs: number[] } | { unread: 0 }> => {
     const c = loadConfig().channels[seat.alias];
     if (!c) return { unread: 0 };
     const { AgentSession, runAgent } = await import("../agent.ts");
@@ -133,17 +133,18 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
         return scheduleWake(seat, wakeGapMs);
       }
       if (!("cursor" in counted) || !counted.unread || !current(seat)) return;
-      const { unread, cursor } = counted;
+      const { unread, cursor, seqs } = counted;
+      const path = await commandPath(seat);
+      if (!path || !current(seat)) return;
+      const hook = loadConfig().wakeHooks?.[wakeKey(seat.alias, seat.agent)];
+      const to = path.via === "webhook" ? (hook?.url ?? "") : `${path.via} ${path.session}`;
       const pending = seat.outstanding;
-      if (pending && pending.cursor === cursor && Date.now() - pending.at < wakeOutstandingMs) {
+      if (pending && pending.to === to && Date.now() - pending.at < wakeOutstandingMs && pending.seqs.every((seq) => seqs.includes(seq))) {
         seat.wakeAgain = false;
         return scheduleWake(seat, wakeGapMs);
       }
       seat.outstanding = null;
-      const path = await commandPath(seat);
-      if (!path || !current(seat)) return;
       const prompt = wakePrompt(seat.alias, seat.agent);
-      const hook = loadConfig().wakeHooks?.[wakeKey(seat.alias, seat.agent)];
       const why =
         path.via === "webhook"
           ? hook
@@ -154,7 +155,7 @@ export function seatWakes({ dir, wakeDelayMs, wakeGapMs, wakeOutstandingMs, stop
             : await runWake(seat, wakeArgv(path.via, path.session, prompt));
       if (!current(seat)) return;
       seat.lastWake = { at: Date.now(), via: path.via, unread, ok: why === null };
-      if (why === null) seat.outstanding = { cursor, at: seat.lastWake.at };
+      if (why === null) seat.outstanding = { seqs, to, at: seat.lastWake.at };
       logWake(seat, seat.lastWake, why, cursor);
     } finally {
       seat.waking = false;

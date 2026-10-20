@@ -179,6 +179,37 @@ describe("waking an agent in its own session", () => {
     expect(Date.now() - first).toBeGreaterThanOrEqual(4_000);
   });
 
+  test("a wake still unread in an old session doesn't hold back the wake of the session that replaced it", async () => {
+    const before = await quiet();
+    try {
+      await ownerCh.send("for the old session", { to: ["claude"] });
+      await until("the old session's wake", () => calls().length === before + 1);
+      await until("the wake's record", async () => (await seat())?.wake.last?.ok === true);
+      bindAs({ harness: "codex", session: "thread-replacement" });
+      await ownerCh.send("for the new session", { to: ["claude"] });
+      await until("the new session's wake", () => calls().length === before + 2, 3_500);
+      expect(calls().at(-1)).toContain("thread-replacement");
+    } finally {
+      bindAs({ harness: "codex", session: "thread-1" });
+    }
+  });
+
+  test("an agent that read the woken-for message as a reply, without moving its cursor, is woken for the next one", async () => {
+    const before = await quiet();
+    const cfg = loadConfig().channels.test;
+    if (!cfg) throw new Error("the test channel is missing");
+    const s = await AgentSession.open("test", cfg, "claude");
+    const from = await ownerCh.head();
+    const reply = await ownerCh.send("a reply to the agent", { to: ["claude"], re: [from] });
+    await until("the reply's wake", () => calls().length === before + 1);
+    const replies = await runAgent(s.awaitReplies(from, from, 2));
+    expect(replies.map((r) => r.seq)).toContain(reply);
+    const { messages, state } = await runAgent(s.state());
+    expect(await runAgent(s.unreadCount(state, messages))).toBe(0);
+    await ownerCh.send("after the reply was read", { to: ["claude"] });
+    await until("the next message's wake", () => calls().length === before + 2, 3_500);
+  });
+
   test("a binding that changes after the message is the one woken", async () => {
     const before = await quiet();
     const sent = ownerCh.send("for the new thread", { to: ["claude"] });
