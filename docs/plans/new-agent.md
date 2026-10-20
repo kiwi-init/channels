@@ -1,7 +1,8 @@
 # Plan: New agent, started from the Channels app
 
-Status: decided, 2026-10-20. The owner took all five decisions as proposed (#51); the work is
-T38 to T44 on `channels-dev-f35c`'s board. From the owner's ask there (#16): next to
+Status: built for this computer (T38 to T42) and for paired computers (T44: T786 to T790,
+T1122), 2026-10-20. The owner took all five decisions as proposed (#51), and chose remote launches on
+for every paired computer, with no opt-in (#799). Item 4 below is as built. From the owner's ask there (#16): next to
 Agents in the sidebar, **New agent** opens a modal (which machine, which detected harness,
 nickname, personality, Start), and the agent starts and joins by itself. Facts below were read
 from `main` at `bbc4198a` (kiwi 0.22.0).
@@ -136,27 +137,38 @@ rotation types `/clear`, in tmux and Rex only.
 
 ### 4. Remote machines
 
-The app reaches another computer's daemon through the relay. The relay can't read what it carries
-and can't forge it.
+As built (design #783, security reviews #793, #913, #1120). The app reaches another computer's
+daemon through the relay. The relay can't read, forge or replay what it carries.
 
-- **A per-machine inbox:**
-  - `POST /v1/machine/<machinePk>/inbox` stores one sealed box, at most 4 KiB, for 10 minutes, with
-    at most 20 pending.
-  - The daemon reads it on the connection it keeps to the relay while paired.
-  - The daemon registers its inbox with its machine key and its person's public key. The relay then
-    accepts only boxes signed by that person.
-- **The box:**
-  - sealed to the machine's `mxpk` (stored in every `ComputerView`);
-  - signed by the person key: `{verb, args, launch, at, replyTo}`.
-  - The daemon checks the signature against `machine.json`'s person, and refuses anything older
-    than 2 minutes or already seen.
-- **The answer:** sealed to the person's xpk, into a one-time mailbox the request names (the
-  pairing pattern, `packages/core/src/mailbox.ts`).
-- **Online:** a computer is online while its daemon holds the inbox connection, so the
-  Computers list gets a dot too.
-- `harnesses` and `launch` are the only verbs to start with.
+**The relay** (`src/relay/machine.ts`; a `MachineInbox` Durable Object per machine on Cloudflare, two
+tables on the Bun relay):
+- `PUT /v1/machine/<mpk>`:
+  - Only the machine registers itself, with its `MachineCert`, binding its person.
+  - An older cert than the newest one seen is refused, even after an unpair.
+- `POST /v1/machine/<mpk>/inbox`:
+  - Only that person can write.
+  - A box is at most 4 KiB. At most 20 a minute and 20 waiting; each is kept 3 minutes. Writes are also limited per address.
+- `GET /v1/machine/<mpk>/ws`: only the machine. It gets what's waiting on open, then each new ask.
+- `GET /v1/machine/<mpk>`: only the person; `{online, since}`.
+- `DELETE /v1/machine/<mpk>`: the machine or its person; drops the inbox and closes the socket.
+- Every request is signed (`signRequest`) over the scope `machine:<mpk>`, its method, path and body. A binding nobody connects for 30 days goes.
 
-This is the one change to the relay, and it gets a security review before it merges.
+**The ask** (`packages/core/src/machine-ask.ts`):
+- Signed by the person and sealed to the machine's mxpk: `{kind, v, machine, verb, args, id, at, reply}`.
+- The verbs are `harnesses`, `folders`, `launch` and `unpair`, and `readMachineArgs` accepts only each verb's own arguments.
+- The answer is signed by the machine and goes into the mailbox `reply` names, which only the app can open.
+
+**The daemon** (`src/daemon/inbox.ts`, `src/daemon/remote.ts`):
+- It holds the inbox while paired.
+- Each ask must:
+  - open with the machine's key;
+  - carry the paired person's signature and name this machine;
+  - be at most 2 minutes old either way;
+  - be claimed once, in `machine-asks.json`;
+  - carry arguments that check out.
+- A launch runs only in the realpath of a folder at or under one this computer's agents work in. At most 3 are started every 10 minutes, a limit that survives restarts (`remote-launches.json`). It's answered once the terminal has opened.
+- Every ask is written to `remote.log`.
+- `unpair`, from the app or `kiwi unpair` on the computer, makes the relay forget it, drops the cert and closes the socket.
 
 ### 5. Auto-approval keeps the pin, and the launch is followed
 

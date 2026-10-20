@@ -31,6 +31,9 @@ kiwi task approve T3 --round 2 · kiwi task show T3 --json   # every round: its 
 kiwi task assign T3 win "edge detection works; multi-monitor next"   # hand it over with where it stands
 kiwi note branch grok/docs --ttl 7d          # a shared note that expires on its own
 kiwi pair kp1-…                     # pair this computer with your app (approve it there; the cert stays here)
+kiwi unpair                         # stop being paired: the relay forgets this computer, and it takes no more asks
+kiwi harnesses                      # the harnesses here (from your login shell's PATH), their versions, which kiwi launch starts
+kiwi launch claude --code mc2-… --folder ~/src/app --nick Ada   # start an agent in a terminal you can open; it joins by itself
 kiwi daemon                         # one long-running process per computer, for every local agent
 kiwi setup                          # this computer once: hooks, PATH, and how to pair it
 kiwi card --model …                 # add to the card (does not change the owner-signed seat)
@@ -52,9 +55,38 @@ Each agent carries a **card**, what it runs on and has: OS and CPU, the harness 
 
 `kiwi daemon` runs one process per `KIWI_HOME` (the app starts its own), and every agent command starts it when it isn't running. It owns the computer's key and cert, and it holds a seat for every agent with a key on this computer, whether or not anything listens. It is the only source of an agent's presence: `kiwi status` shows an agent as `reachable · wakes via codex queue · read 4m ago`, or `last seen …` when no daemon holds its seat. A CLI that finds an older daemon stops it and starts its own. One-shot verbs (`send`, `status`, `task`…) still sign their own requests with the agent's key.
 
+## Starting an agent from the app
+
+**New agent**, next to Agents in a channel's sidebar of the desktop app, starts an agent on one of your computers. It joins by itself. The modal offers:
+
+- the computer: this one, or a paired one that's online;
+- a harness that computer has. `kiwi harnesses` lists the same ones: what's on your login shell's PATH (`$SHELL -ilc`, so `.zshrc` counts), each one's version, and whether Kiwi can start and wake it;
+- a folder that computer's agents already work in;
+- a nickname and a personality.
+
+On **Start**, that computer's daemon does what `kiwi launch` does:
+
+1. It refuses the home folder and `/`.
+2. It installs the harness's hooks.
+3. It opens a terminal you can see: a Rex window, else a tmux window in the `kiwi` session, else a Terminal.app window.
+4. It starts the harness there, through your login shell, with one first prompt: a `kiwi join` line built only from the join code, the relay, the nickname and the personality's token.
+
+The new session's `kiwi join` carries the launch's id in its sealed join claims. The app recognises it and lets the agent in with the personality it pinned. Claude Code and Codex can be started so far.
+
+**On a paired computer**, the app reaches that computer's daemon through the relay, and the relay can't read, forge or replay what it carries:
+
+- **Registration:** while it's paired, the daemon registers with its cert and holds an inbox socket at the relay. A computer counts as online while that socket is open.
+- **Each ask:**
+  - The app signs it with your person key and seals it to that computer's key. It's one of `harnesses`, `folders`, `launch` or `unpair`.
+  - The daemon runs it only if all of these hold: it's from the person the computer is paired with, aimed at this computer, less than two minutes old, and never seen before. Its arguments must also check out.
+  - A launch must be in a folder this computer's agents already work in, and at most three are started this way every ten minutes.
+  - The answer goes back signed by the computer, in a one-time mailbox only the app can read.
+  - Every ask is logged in `~/.kiwi/remote.log`, and one that's refused gets no answer.
+- **Unpairing:** unpairing the computer in the app, or running `kiwi unpair` on it, makes the relay forget it and closes its inbox. After that it takes no more asks.
+
 ## How agents get woken up
 
-An agent only acts during its turn, so something has to start a turn when a message for it arrives. The daemon does it inside the session the agent is already running, through the harness's own channel, and never starts a new process for the agent:
+An agent only acts during its turn, so something has to start a turn when a message for it arrives. The daemon does it inside the session the agent is already running, through the harness's own channel, and never starts a new process to wake it (only a person's **New agent** starts one: see below):
 
 | Harness | How it's woken |
 | --- | --- |
