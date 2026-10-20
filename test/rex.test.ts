@@ -7,7 +7,7 @@ import { fold, type ChannelState, type Roster } from "@kiwi/core/state.ts";
 import { aliasSegment, askId, clearFrame, placeFrom, reviewId, rexActivity, rexInstance, rexProcess, rexScreen, statusFrame, takesStatus } from "../src/rex.ts";
 import { installPalette, paletteInstalled, removePalette, rexConfigPath } from "../src/rex-palette.ts";
 import { localRexSeats, showInRex } from "../src/rex-show.ts";
-import { seatRecords } from "../src/status.ts";
+import { foldStillFresh, seatRecords } from "../src/status.ts";
 import { startRexEvents } from "../src/rex-events.ts";
 import { readsRex } from "../src/daemon/reach.ts";
 import { readRexInto, type RexReadSeat } from "../src/daemon/rex-reads.ts";
@@ -140,6 +140,33 @@ describe("Rex events", () => {
       ["studio", other, false],
       ["studio", other, true],
     ]);
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("Rex status watch", () => {
+  test("a seat's channel is folded again only when its head moved, or a minute went by", () => {
+    expect(foldStillFresh({ head: 40, at: 1_000 }, 40, 30_000)).toBe(true);
+    expect(foldStillFresh({ head: 40, at: 1_000 }, 41, 30_000)).toBe(false);
+    expect(foldStillFresh({ head: 40, at: 1_000 }, 40, 61_000)).toBe(false);
+    expect(foldStillFresh({ head: 40, at: 1_000 }, undefined, 2_000)).toBe(false);
+    expect(foldStillFresh(null, 40, 2_000)).toBe(false);
+  });
+});
+
+describe("Rex events from a dead server", () => {
+  test("a server whose events stream keeps exiting is retried with a growing wait, not on every reconcile", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-rex-dead-"));
+    const bin = join(dir, "rex");
+    const starts = join(dir, "starts");
+    writeFileSync(bin, `#!/bin/sh\necho start >> '${starts}'\nexit 1\n`);
+    chmodSync(bin, 0o755);
+    const watch = startRexEvents({ servers: () => [{ server: "dead", bin }], onChange: () => {}, everyMs: 50 });
+    await Bun.sleep(1_600);
+    watch.stop();
+    const count = readFileSync(starts, "utf8").split("\n").filter(Boolean).length;
+    expect(count).toBeGreaterThanOrEqual(2);
+    expect(count).toBeLessThanOrEqual(3);
     rmSync(dir, { recursive: true, force: true });
   });
 });

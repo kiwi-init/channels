@@ -135,6 +135,38 @@ describe("the title and settings follow the channel's epoch", () => {
   });
 });
 
+describe("a rotation still pending, and the icon", () => {
+  function ownerCall(ch: Channel, path: string, init: RequestInit): Promise<unknown> {
+    const request = (ch as unknown as { core: { request: (path: string, init: RequestInit) => Effect.Effect<unknown, unknown, Relay> } }).core.request(path, init);
+    return Effect.runPromise(Effect.provideService(request, Relay, fetchRelay));
+  }
+
+  test("a change made while a removal's rotation is still pending rotates first, so the removed member can't open it", async () => {
+    const { ownerCh, leaves } = await room("plans");
+    const kept = { ...leaves.ch.access.keys };
+    await ownerCall(ownerCh, `/members/${leaves.id.pk}`, { method: "DELETE" });
+    const pending = await new Channel(ownerCh.access, relay, ownerCh.identity).info();
+    expect([pending.rotate, pending.epoch]).toEqual([true, 0]);
+    await ownerCh.setHold({ on: true, note: "after the removal", since: 5 });
+    const info = await new Channel(ownerCh.access, relay, ownerCh.identity).info();
+    expect([info.rotate, info.epoch, info.settings?.e, info.title?.e]).toEqual([false, 1, 1, 1]);
+    expect(await opens(kept["0"]!, ownerCh.roomId, info.settings)).toBeNull();
+    expect((await ownerCh.guard())?.hold?.note).toBe("after the removal");
+  });
+
+  test("an icon is sealed under the newest key, and the relay refuses one under an older key", async () => {
+    const { ownerCh, leaves } = await room("plans");
+    await ownerCh.remove(leaves.id.pk);
+    await ownerCh.setIcon({ kind: "emoji", emoji: "🦊" });
+    const { icon } = (await ownerCall(ownerCh, "/icon", {})) as { icon: { e: number } | null };
+    expect(icon?.e).toBe(1);
+    expect(await ownerCh.icon()).toEqual({ kind: "emoji", emoji: "🦊" });
+    const stale = await seal(ownerCh.access.keys["0"]!, ownerCh.roomId, await sign(ownerCh.identity, { what: "channel-icon", room: ownerCh.roomId, icon: { kind: "emoji", emoji: "🐍" } }));
+    await expect(ownerCall(ownerCh, "/icon", { method: "PUT", body: JSON.stringify({ icon: { e: 0, ...stale } }) })).rejects.toMatchObject({ status: 400 });
+    expect(await ownerCh.icon()).toEqual({ kind: "emoji", emoji: "🦊" });
+  });
+});
+
 describe("a relay that lies", () => {
   type Fx = { info: Channel["fx"]["info"]; refreshKeys: Channel["fx"]["refreshKeys"] };
   const fxOf = (ch: Channel) => ch.fx as unknown as Fx;

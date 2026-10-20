@@ -16,6 +16,7 @@ import { crossing, noteOverLine, nudgeShort, nudgeText, openTasksOf, overLine } 
 import { commitDelivered, noteHeard } from "./delivered.ts";
 import { isRecord } from "./files.ts";
 import { liveListeners, refreshListeners } from "./listeners.ts";
+import { notePersonaTold, personaChange, personaMark, personaTold } from "./persona-line.ts";
 import { howMessagesReachYou, startListener, wakeYourself } from "./reach.ts";
 import { mcBin, mcFor } from "./self.ts";
 
@@ -163,6 +164,17 @@ const contextNudge = Effect.fn("Hooks.contextNudge")(function* (input: HookInput
   const text = [nudgeText(context, tasks, mc, lead), nudgeShort(tasks, mc, lead)].find((t) => t !== null && t.length <= budget);
   if (!text) return null;
   return { text, shown: Effect.sync(() => noteOverLine(s.alias, s.me, session, true, state.head)) };
+});
+
+const personaNews = Effect.fn("Hooks.personaNews")(function* (s: AgentSession, who: Here, mc: string, max: number) {
+  const session = who.session;
+  if (!session) return null;
+  const { state } = yield* s.state();
+  const now = state.members.get(s.me)?.persona;
+  const text = personaChange(personaTold(s.alias, s.me, session), now, mc, max);
+  if (!text) return null;
+  const mark = personaMark(now);
+  return { text, shown: Effect.sync(() => notePersonaTold(s.alias, s.me, session, mark)) };
 });
 
 export function stopReason(head: string, unread: string, reminder: string | null): string {
@@ -367,19 +379,28 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
     const unreadMax = budgets.unread(reentry?.length ?? 0);
     const unread = unreadMax > 0 ? yield* unreadText(s, mc, unreadMax) : { text: "", shown: Effect.void };
     const additionalContext = startContext(b.alias, brief, reentry, unread.text);
+    const session = who.session;
+    const shown = session
+      ? Effect.andThen(
+          Effect.sync(() => notePersonaTold(b.alias, b.as, session, personaMark(seat?.persona))),
+          unread.shown,
+        )
+      : unread.shown;
     if (input.hook_event_name === "sessionStart" || input.composer_mode != null || typeof input.is_background_agent === "boolean") {
-      return answered("cursor-start", additionalContext, unread.shown);
+      return answered("cursor-start", additionalContext, shown);
     }
-    return answered("start", additionalContext, unread.shown);
+    return answered("start", additionalContext, shown);
   }
 
   if (event === "prompt") {
     const head = promptHead(b.alias);
-    const unread = yield* unreadText(s, mc, Math.min(MAX_CONTEXT, budget - head.length - 1));
-    if (!unread.text) return yield* Effect.as(unread.shown, null);
-    const text = [head, unread.text].join("\n");
-    if (input.hook_event_name === "BeforeAgent") return answered("gemini-prompt", text, unread.shown);
-    return answered("prompt", text, unread.shown);
+    const persona = yield* personaNews(s, who, mc, Math.min(MAX_CONTEXT, budget));
+    const unread = yield* unreadText(s, mc, Math.max(0, Math.min(MAX_CONTEXT, budget - head.length - 1 - (persona ? persona.text.length + 2 : 0))));
+    if (!unread.text && !persona) return yield* Effect.as(unread.shown, null);
+    const text = [persona?.text ?? null, unread.text ? [head, unread.text].join("\n") : null].filter((t) => t !== null).join("\n\n");
+    const shown = persona ? Effect.andThen(persona.shown, unread.shown) : unread.shown;
+    if (input.hook_event_name === "BeforeAgent") return answered("gemini-prompt", text, shown);
+    return answered("prompt", text, shown);
   }
 
   if (event === "stop") {
@@ -394,13 +415,15 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
     if (who.harness === "grok" && input.reason !== undefined && input.reason !== "end_turn") return null;
     const stopHead = `Before stopping: unread Kiwi Channels messages for you (${b.alias}). Handle them (answer with \`${mc} reply N "…"\`):`;
     const nudge = yield* contextNudge(input, s, who, mc, budget);
-    const rearm = fitReminder(yield* rearmText(input, b, who, mc), budget - (nudge ? nudge.text.length + 2 : 0));
+    const persona = yield* personaNews(s, who, mc, budget - (nudge ? nudge.text.length + 2 : 0));
+    const rearm = fitReminder(yield* rearmText(input, b, who, mc), budget - (nudge ? nudge.text.length + 2 : 0) - (persona ? persona.text.length + 2 : 0));
     const reminder = [nudge?.text ?? null, rearm].filter((t) => t !== null).join("\n\n") || null;
-    const unreadMax = stopUnreadMax(stopHead, reminder, budget);
+    const unreadMax = stopUnreadMax(stopHead, [persona?.text ?? null, reminder].filter((t) => t !== null).join("\n\n") || null, budget);
     const unread = unreadMax > 0 ? yield* unreadText(s, mc, unreadMax) : { text: "", shown: Effect.void };
     const decision = style === "gemini" ? "deny" : "block";
-    const reason = stopReason(stopHead, unread.text, reminder);
-    const shown = nudge ? Effect.andThen(nudge.shown, unread.shown) : unread.shown;
+    const reason = [persona?.text ?? null, stopReason(stopHead, unread.text, reminder) || null].filter((t) => t !== null).join("\n\n");
+    const told = persona ? Effect.andThen(persona.shown, unread.shown) : unread.shown;
+    const shown = nudge ? Effect.andThen(nudge.shown, told) : told;
     if (reason) return answered(decision, reason, shown);
     yield* unread.shown;
   }

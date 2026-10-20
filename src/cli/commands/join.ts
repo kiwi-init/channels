@@ -16,6 +16,7 @@ import { kimiSessionHere } from "../../kimi-server.ts";
 import { computerClaimFor } from "../../machine.ts";
 import { joinedText } from "../brief.ts";
 import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor } from "../../hooks.ts";
+import { notePersonaTold, personaMark } from "../../hooks/persona-line.ts";
 import { detectCard, detectModel, detectRuns, mergeCard } from "../../card.ts";
 import { args, opt } from "../args.ts";
 import { agentName, type Command, config, die, keepDaemon, NAME_RE, out, relayUrl, seatHere } from "../context.ts";
@@ -159,7 +160,7 @@ export const joinCommands: Record<string, Command> = {
       const settle = (access: ChannelAccess, how: "approved" | "resumed") =>
         Effect.gen(function* () {
           if (auto) yield* doneAsking;
-          const me = (yield* new Channel(access, relay, id).fx.members()).find((m) => m.active && m.pk === id.pk);
+          const me = (yield* new Channel(access, relay, id).fx.members()).find((m) => m.active && !m.unverified && m.pk === id.pk);
           if (me && me.name !== name) yield* renameKey(me.name);
           const title = yield* new Channel(access, relay, id).fx.title().pipe(Effect.catchCause(() => Effect.succeed(null)));
           const existing = Object.entries((yield* keys.config).channels).find(([, c]) => c.roomId === access.roomId)?.[0];
@@ -196,6 +197,7 @@ export const joinCommands: Record<string, Command> = {
               ...(seat?.persona ? { persona: seat.persona } : {}),
             }),
           );
+          if (who.session) notePersonaTold(alias, name, who.session, personaMark(seat?.persona));
           yield* keepDaemon;
         });
 

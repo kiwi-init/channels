@@ -7,7 +7,7 @@ import type { DaemonPeek } from "../daemon/protocol.ts";
 import { daemonMark, daemonPeek } from "../daemon/rpc.ts";
 import { GENERAL_ROOM, PAGE_LIMIT, type Message } from "@kiwi/core/protocol.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
-import { findRoom, fold, toRoster, type ChannelState, type FoldBase, type GuardFloor, type Roster, type RoomsFloor } from "@kiwi/core/state.ts";
+import { findRoom, fold, rosterOf, type ChannelState, type FoldBase, type GuardFloor, type Roster, type RoomsFloor } from "@kiwi/core/state.ts";
 import { LAST_MARK_MS, lastSeq, Look, orNone, type Agent, type Delivery } from "./shared.ts";
 import { narrows, wants } from "./wants.ts";
 
@@ -46,7 +46,7 @@ export class SessionState {
   }
 
   readonly members = Effect.fn("AgentSession.members")({ self: this }, function* (this: SessionState, refresh = false, rows?: readonly MemberRow[]) {
-    if (!this.roster || refresh) this.roster = (yield* this.ch.fx.members(refresh ? undefined : rows)).map(toRoster);
+    if (!this.roster || refresh) this.roster = rosterOf(yield* this.ch.fx.members(refresh ? undefined : rows));
     return this.roster;
   });
 

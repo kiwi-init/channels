@@ -78,7 +78,7 @@ const oneLine = (s: string) =>
     .replace(/[\s\u2028\u2029]+/g, " ")
     .trim();
 
-export function personaLines(p: Persona): string[] {
+export function personaLines(p: Persona, now = false): string[] {
   const may = p.capabilities.map((c) => CAPABILITY_LABEL[c]);
   const told = p.instructions
     .replace(/\r\n?|[\u2028\u2029]/g, "\n")
@@ -88,7 +88,7 @@ export function personaLines(p: Persona): string[] {
     .join("\n  │ ")
     .trim();
   return [
-    `You join as ${oneLine(personaLabel(p) ?? "")}.${may.length ? ` You may ${may.join(", ")}.` : " You may only read."}${p.areas.length ? ` You work in ${p.areas.map(oneLine).join(", ")}.` : ""}`,
+    `You ${now ? "are now" : "join as"} ${oneLine(personaLabel(p) ?? "")}.${may.length ? ` You may ${may.join(", ")}.` : " You may only read."}${p.areas.length ? ` You work in ${p.areas.map(oneLine).join(", ")}.` : ""}`,
     ...(told ? [`Your instructions: ${told}`] : []),
   ];
 }

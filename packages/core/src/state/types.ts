@@ -63,6 +63,8 @@ export const toRoster = (m: MemberRecord): Roster[number] => ({
   ...(m.persona ? { persona: m.persona } : {}),
 });
 
+export const rosterOf = (members: readonly MemberRecord[]): Roster => members.filter((m) => !m.unverified).map(toRoster);
+
 interface TaskNote {
   seq: number;
   by: string;
