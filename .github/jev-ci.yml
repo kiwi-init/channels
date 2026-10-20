@@ -115,6 +115,19 @@ jobs:
       (the action, its finder script and one marked require line, installed and removed without
       touching the person's own), and showing a local seat in Rex (focusing its block and
       switching the app's session, saying when the app is closed or Remote Control is off).
+      Also test/launch-place.test.ts: where a launched agent's terminal opens (src/launch/place.ts):
+      Rex while its server answers, never starting one (an unfocused window in the session Rex.app
+      on this computer is attached to, else the newest session, else a new one; a window Rex
+      refuses is a failure, never a second try in tmux), then a window in the detached tmux
+      session kiwi, then Terminal.app's do script on a Mac (the window id back, Automation
+      refused said as such), and none on Linux without tmux; the requests refused (no program,
+      an option as the program, control characters, a missing folder, a bad name or variable);
+      the program run through the login shell after env drops the session markers a parent
+      harness leaves (CLAUDECODE, CODEX_THREAD_ID, KIWI_HARNESS…), every argument reaching it
+      unchanged in bash and zsh; Terminal's quoted line, in POSIX shells and fish; and a real
+      tmux server on a private socket (skipped without tmux): two launches as two named windows
+      in kiwi, the folder and variable reaching the program, and the pane's pid being the
+      program's own.
       Also test/daemon-big-lines.test.ts: the daemon's socket writes queue what the socket
       didn't take and flush it on drain (src/daemon/server.ts), so a catch-up of thirty
       messages with 50 KB ones among them, and big live messages back to back, arrive whole
