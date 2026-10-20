@@ -35,7 +35,7 @@ export const rotateCommands: Record<string, Command> = {
         if (loadConfig().rotate !== "on") return 0;
         const { clearWhenIdle } = yield* Effect.promise(() => import("../../rotate/pane.ts"));
         const claudeDir = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
-        const outcome = yield* Effect.promise(() => clearWhenIdle({ pid, session, pane, socket, claudeDir }));
+        const outcome = yield* Effect.promise(() => clearWhenIdle({ pid, session, pane, socket, claudeDir }, { on: () => loadConfig().rotate === "on" }));
         return outcome === "cleared" ? 0 : 1;
       }
       return yield* die(USAGE);

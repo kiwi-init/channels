@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, openSync, closeSync, readFileSync, rmSync, writeSync } from "node:fs";
+import { existsSync, linkSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { home } from "../config.ts";
 import { appendRotated } from "../daemon/wake.ts";
@@ -13,7 +13,7 @@ export interface Target {
   claudeDir: string;
 }
 
-export type Outcome = "cleared" | "gone" | "moved" | "not-its-pane" | "busy-elsewhere" | "timed-out" | "no-tmux" | "send-failed" | "left-in-input";
+export type Outcome = "cleared" | "gone" | "moved" | "not-its-pane" | "busy-elsewhere" | "timed-out" | "no-tmux" | "send-failed" | "left-in-input" | "switched-off";
 
 const PROMPT = "❯";
 const CLEAR = "/clear";
@@ -78,12 +78,13 @@ function paneId(t: Target): PaneId | null {
 function holdsInput(pid: number, tty: string): boolean {
   const r = spawnSync("ps", ["-o", "tty=,tpgid=,pgid=", "-p", String(pid)], { encoding: "utf8", timeout: 2_000 });
   const [own, fg, group] = r.status === 0 ? r.stdout.trim().split(/\s+/) : [];
-  return !!own && own !== "?" && tty.endsWith(`/${own.replace(/^\/dev\//, "")}`) && !!fg && fg === group;
+  return !!own && own !== "?" && tty.endsWith(`/${own.replace(/^\/dev\//, "")}`) && fg === String(pid) && group === String(pid);
 }
 
 type Check = Outcome | "wait" | "ready";
 
-function check(t: Target, first: PaneId, quietMs: number, input: (captured: string) => boolean): Check {
+function check(t: Target, first: PaneId, quietMs: number, on: () => boolean, input: (captured: string) => boolean): Check {
+  if (!on()) return "switched-off";
   const r = registry(t);
   if (r.kind === "gone") return "gone";
   if (r.session !== null && r.session !== t.session) return "moved";
@@ -120,9 +121,9 @@ function lockFile(session: string): string {
   return join(home(), "hook-state", `${encodeURIComponent(session)}.rotating`);
 }
 
-function holder(session: string): number | null {
+function holder(file: string): number | null {
   try {
-    const pid = Number(readFileSync(lockFile(session), "utf8"));
+    const pid = Number(readFileSync(file, "utf8"));
     return Number.isSafeInteger(pid) && pid > 0 ? pid : null;
   } catch {
     return null;
@@ -130,41 +131,60 @@ function holder(session: string): number | null {
 }
 
 export function rotating(session: string): boolean {
-  const pid = holder(session);
+  const pid = holder(lockFile(session));
   return pid !== null && alive(pid);
 }
 
-export function takeLock(session: string, me = process.pid): boolean {
-  mkdirSync(join(home(), "hook-state"), { recursive: true, mode: 0o700 });
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const fd = openSync(lockFile(session), "wx", 0o600);
-      try {
-        writeSync(fd, String(me));
-      } finally {
-        closeSync(fd);
-      }
-      return true;
-    } catch {
-      // Held: by a live sender (busy), or left by a dead one, which is cleared once and taken again.
-      if (rotating(session)) return false;
-      rmSync(lockFile(session), { force: true });
-    }
+function link(from: string, to: string): boolean {
+  try {
+    linkSync(from, to);
+    return true;
+  } catch {
+    // Already there: someone else holds it.
+    return false;
   }
-  return false;
+}
+
+export function takeLock(session: string, me = process.pid): boolean {
+  const lock = lockFile(session);
+  mkdirSync(join(home(), "hook-state"), { recursive: true, mode: 0o700 });
+  const mine = `${lock}.${me}.new`;
+  writeFileSync(mine, String(me), { mode: 0o600 });
+  try {
+    if (link(mine, lock)) return true;
+    const held = holder(lock);
+    if (held === null || alive(held)) return false;
+    const stale = `${lock}.${me}.stale`;
+    try {
+      renameSync(lock, stale);
+    } catch {
+      // Another sender moved it first: whoever links next holds it.
+      return link(mine, lock);
+    }
+    const moved = holder(stale);
+    if (moved !== null && moved !== held && alive(moved)) {
+      link(stale, lock);
+      rmSync(stale, { force: true });
+      return false;
+    }
+    rmSync(stale, { force: true });
+    return link(mine, lock);
+  } finally {
+    rmSync(mine, { force: true });
+  }
 }
 
 export function dropLock(session: string, me = process.pid): void {
-  if (holder(session) === me) rmSync(lockFile(session), { force: true });
+  if (holder(lockFile(session)) === me) rmSync(lockFile(session), { force: true });
 }
 
 const RENDER_MS = 1_000;
 const RENDER_EVERY_MS = 50;
 
-async function shown(t: Target, first: PaneId, quietMs: number): Promise<Check> {
+async function shown(t: Target, first: PaneId, quietMs: number, on: () => boolean): Promise<Check> {
   const end = Date.now() + RENDER_MS;
   for (;;) {
-    const typed = check(t, first, quietMs, typedClear);
+    const typed = check(t, first, quietMs, on, typedClear);
     if (typed !== "wait" || Date.now() >= end) return typed;
     await Bun.sleep(RENDER_EVERY_MS);
   }
@@ -174,12 +194,14 @@ export interface ClearOptions {
   timeoutMs?: number;
   everyMs?: number;
   quietMs?: number;
+  on?: () => boolean;
 }
 
 export async function clearWhenIdle(t: Target, o: ClearOptions = {}): Promise<Outcome> {
   const timeoutMs = o.timeoutMs ?? 15 * 60_000;
   const everyMs = o.everyMs ?? 2_000;
   const quietMs = o.quietMs ?? 10_000;
+  const on = o.on ?? (() => true);
   const first = paneId(t);
   if (first === null) return finish(t, "no-tmux");
   if (!holdsInput(t.pid, first.tty)) return finish(t, "not-its-pane");
@@ -187,16 +209,17 @@ export async function clearWhenIdle(t: Target, o: ClearOptions = {}): Promise<Ou
   try {
     const end = Date.now() + timeoutMs;
     while (Date.now() < end) {
-      const before = check(t, first, quietMs, empty);
+      const before = check(t, first, quietMs, on, empty);
       if (before !== "wait" && before !== "ready") return finish(t, before);
       if (before === "ready") {
         if (tmux(t, ["send-keys", "-t", t.pane, "-l", CLEAR]) === null) return finish(t, "send-failed");
-        const typed = await shown(t, first, quietMs);
+        const typed = await shown(t, first, quietMs, on);
         if (typed === "ready") return finish(t, tmux(t, ["send-keys", "-t", t.pane, "Enter"]) === null ? "send-failed" : "cleared");
+        if (typed !== "wait" && typed !== "switched-off") return finish(t, typed);
         const captured = tmux(t, ["capture-pane", "-p", "-e", "-t", t.pane]);
         if (captured === null || !endsWithClear(captured)) return finish(t, "left-in-input");
         if (tmux(t, ["send-keys", "-t", t.pane, "-N", String(CLEAR.length), "BSpace"]) === null) return finish(t, "send-failed");
-        if (typed !== "wait") return finish(t, typed);
+        if (typed === "switched-off") return finish(t, typed);
       }
       await Bun.sleep(everyMs);
     }

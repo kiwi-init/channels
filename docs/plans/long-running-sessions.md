@@ -112,20 +112,26 @@ whether anything is waiting for it, plus one detached process that does the typi
   - any other seat with none (a coder after `task done`, a reviewer after its verdict): past
     100k (`ROTATE_FLOOR`), so a small context isn't cleared for nothing;
   - never while a review round it judges is open, or a question of its to a person is.
-- **The guard.** `kiwi rotate send`, started detached by the hook, sends keys only when all of
-  these hold, checked twice half a second apart, else waits and retries for up to 15 minutes:
-  - the process is still the pane's (it descends from the pane's process);
+- **The guard.** `kiwi rotate send`, started detached by the hook, waits up to 15 minutes, and on
+  every round checks all of these, else waits:
+  - rotation is still on for this computer;
   - the session is idle and still the same session (`~/.claude/sessions/<pid>.json`); a session
     already cleared by hand is left alone;
-  - the input line is empty: only the dimmed placeholder after the prompt in
-    `tmux capture-pane -e`, so a person typing there is never interrupted, and a menu or dialog
-    isn't either;
+  - the pane is the one it was given (same tmux server, pane process and terminal), and the Claude
+    process leads the terminal's foreground process group, so it holds the pane's input;
+  - Claude Code's input box, read between its two rule lines in `tmux capture-pane -e`, holds only
+    the dimmed placeholder; anything else on screen (a draft, a dialog, a menu) means wait;
   - no attached tmux client pressed a key in the last 10 seconds.
-  One sender per session at a time. What each one did goes to `rotate.log` in the Kiwi folder.
-- **The act.** `tmux -S <socket> send-keys -t <pane> -l /clear`, then `Enter`. SessionStart
-  (`clear`) then re-injects, and the seat moves to the new session id at that hook. Probed
-  2026-10-20 against Claude Code 2.1.304: the sender waited while text was typed, and once the
-  input was empty it cleared the session (new session id, same process).
+  One sender per session (an exclusive lock file, released only by its holder). What each one did
+  goes to `rotate.log` in the Kiwi folder.
+- **The act.** It types `/clear` without Enter, then waits up to a second for the box to show
+  exactly `/clear` with every check above still holding, and only then presses Enter. If the box
+  shows something else it erases its six characters when they are the last thing in it; if the
+  session or the pane changed, it sends nothing more. SessionStart (`clear`) then re-injects, and
+  the seat moves to the new session id at that hook. A narrow window remains between that last
+  read and Enter: a key pressed in those milliseconds lands in the same line. Probed 2026-10-20
+  against Claude Code 2.1.304: a draft (one ending in the prompt glyph included) was left alone,
+  and once the input was empty the session was cleared (new session id, same process).
 - **Optional, off by default, and not loaded unless switched on** (owner's requirement,
   2026-10-19). Switched on per computer (decision 3): `kiwi rotate on` writes it to that
   computer's Kiwi config. The tmux code (`src/rotate/pane.ts`) is imported only by

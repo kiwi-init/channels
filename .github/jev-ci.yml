@@ -155,10 +155,14 @@ jobs:
       columns keep working (src/daemon/wake.ts, AgentSession.unreadAt in src/agent/state.ts, test/wake.test.ts).
       Also test/rotate.test.ts: when a Claude Code seat in tmux gets a fresh session (src/rotate/decide.ts:
       between tasks past ROTATE_FLOOR, the lead past the line, open tasks only once checkpointed since
-      the nudge, never during a review round it judges or an open question of its), Claude Code's empty
-      input line told from typed text and menus in capture-pane, and, with tmux on its own socket, the
-      sender typing /clear only into an idle session's empty pane, never a busy one, one with text
-      typed, one already moved on, or a pane that isn't its process's (src/rotate/pane.ts).
+      the nudge, never during a review round it judges or an open question of its), Claude Code's input
+      box read between its two rules (drafts, multi-line text and dialogs are not empty), the sender's
+      lock taken once and released only by its holder, and, with tmux on its own socket, /clear typed
+      only into an idle session's empty box, Enter only once /clear shows there, its six characters
+      erased when rotation is switched off before Enter, nothing more sent once the session moved on,
+      and nothing into a busy session, a draft, a pane watched by a client that just pressed a key, a
+      tmux server started again on the same socket, or a process that doesn't lead the pane's
+      foreground (src/rotate/pane.ts).
       Also test/context-line.test.ts: a seat's context in words (tokensWord), the Stop hook's nudge
       once per crossing of CONTEXT_LINE (250k; back under it resets, unknown keeps the state), naming
       each open task the seat owns and the checkpoint command, and an activity's context token

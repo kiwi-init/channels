@@ -152,12 +152,23 @@ describe.skipIf(!hasTmux)("typing /clear into the pane", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  async function pane(name: string, input: string, echo = true): Promise<{ pane: string; pid: number; typed: string; claudeDir: string }> {
+  interface PaneOpts {
+    echo?: boolean;
+    raw?: boolean;
+    hup?: boolean;
+    sock?: string;
+  }
+  async function pane(name: string, input: string, o: PaneOpts = {}): Promise<{ pane: string; pid: number; typed: string; claudeDir: string }> {
     const typed = join(dir, `${name}.typed`);
     const script = join(dir, `${name}.sh`);
-    writeFileSync(script, `${echo ? "" : "stty -echo\n"}printf '%s\\n❯ %s\\n%s\\n  footer\\n\\033[3A\\033[%sG' '${RULE}' '${input}' '${RULE}' '${3 + input.length}'\nexec cat > ${typed}\n`);
-    spawnSync("tmux", ["-S", socket, "new-session", "-d", "-s", name, "-x", "120", "-y", "20", `sh ${script}`]);
-    const [id, pid] = spawnSync("tmux", ["-S", socket, "display-message", "-p", "-t", name, "#{pane_id} #{pane_pid}"], { encoding: "utf8" }).stdout.trim().split(" ");
+    const setup = [o.echo === false ? "stty -echo" : "", o.raw ? "stty -icanon min 1" : "", o.hup ? "trap '' HUP" : ""].filter(Boolean).join("\n");
+    writeFileSync(
+      script,
+      `${setup}\nprintf '%s\\n❯ %s\\n%s\\n  footer\\n\\033[3A\\033[%sG' '${RULE}' '${input}' '${RULE}' '${3 + input.length}'\n${o.hup ? "exec sleep 60" : `exec cat > ${typed}`}\n`,
+    );
+    const sock = o.sock ?? socket;
+    spawnSync("tmux", ["-S", sock, "new-session", "-d", "-s", name, "-x", "120", "-y", "20", `sh ${script}`]);
+    const [id, pid] = spawnSync("tmux", ["-S", sock, "display-message", "-p", "-t", name, "#{pane_id} #{pane_pid}"], { encoding: "utf8" }).stdout.trim().split(" ");
     const claudeDir = join(dir, `${name}-claude`);
     mkdirSync(join(claudeDir, "sessions"), { recursive: true });
     await Bun.sleep(300);
@@ -177,7 +188,7 @@ describe.skipIf(!hasTmux)("typing /clear into the pane", () => {
   });
 
   test("when /clear doesn't show in the box after typing it, no Enter follows", async () => {
-    const p = await pane("blind", "", false);
+    const p = await pane("blind", "", { echo: false });
     registry(p, "s-6", "idle");
     expect(await clearWhenIdle({ pid: p.pid, session: "s-6", pane: p.pane, socket, claudeDir: p.claudeDir }, fast)).toBe("left-in-input");
     await Bun.sleep(300);
@@ -200,6 +211,58 @@ describe.skipIf(!hasTmux)("typing /clear into the pane", () => {
     await Bun.sleep(300);
     for (const p of [busy, typing, moved]) expect(typedOf(p)).toBe("");
     expect(readFileSync(join(dir, "kiwi", "rotate.log"), "utf8")).toContain("timed-out");
+  });
+
+  test("with /clear typed and the switch turned off before Enter, the sender erases its own six characters", async () => {
+    const p = await pane("off", "", { raw: true });
+    registry(p, "s-7", "idle");
+    let calls = 0;
+    const on = () => ++calls < 2;
+    expect(await clearWhenIdle({ pid: p.pid, session: "s-7", pane: p.pane, socket, claudeDir: p.claudeDir }, { ...fast, on })).toBe("switched-off");
+    await Bun.sleep(300);
+    expect(typedOf(p)).toBe(`/clear${"\x7f".repeat(6)}`);
+  });
+
+  test("with /clear typed and the session moved on before Enter, nothing more is sent to the pane", async () => {
+    const p = await pane("lost", "", { raw: true });
+    registry(p, "s-8", "idle");
+    let calls = 0;
+    const on = () => {
+      if (++calls === 2) registry(p, "s-other", "busy");
+      return true;
+    };
+    expect(await clearWhenIdle({ pid: p.pid, session: "s-8", pane: p.pane, socket, claudeDir: p.claudeDir }, { ...fast, on })).toBe("moved");
+    await Bun.sleep(300);
+    expect(typedOf(p)).toBe("/clear");
+  });
+
+  test("a client that pressed a key within the quiet window holds the sender back", async () => {
+    const p = await pane("watched", "");
+    registry(p, "s-9", "idle");
+    const client = Bun.spawn(["tmux", "-S", socket, "-C", "attach", "-t", "watched"], { stdin: "pipe", stdout: "ignore", stderr: "ignore" });
+    client.stdin.write("refresh-client\n");
+    await client.stdin.flush();
+    await Bun.sleep(300);
+    try {
+      expect(await clearWhenIdle({ pid: p.pid, session: "s-9", pane: p.pane, socket, claudeDir: p.claudeDir }, { ...fast, quietMs: 60_000 })).toBe("timed-out");
+    } finally {
+      client.kill();
+    }
+    expect(typedOf(p)).toBe("");
+  });
+
+  test("a tmux server started again on the same socket is not the pane the sender was given", async () => {
+    const sock = join(dir, "again.sock");
+    const p = await pane("again", "", { hup: true, sock });
+    registry(p, "s-10", "busy");
+    const waiting = clearWhenIdle({ pid: p.pid, session: "s-10", pane: p.pane, socket: sock, claudeDir: p.claudeDir }, { ...fast, timeoutMs: 3_000 });
+    await Bun.sleep(300);
+    spawnSync("tmux", ["-S", sock, "kill-server"]);
+    await pane("again-new", "", { sock });
+    registry(p, "s-10", "idle");
+    expect(await waiting).toBe("not-its-pane");
+    spawnSync("tmux", ["-S", sock, "kill-server"]);
+    spawnSync("kill", [String(p.pid)]);
   });
 
   test("a process that doesn't hold the pane's input is never typed into", async () => {
