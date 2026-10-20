@@ -71,7 +71,7 @@ jobs:
 
   test-unit:
     name: test / unit
-    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.mac.plist", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
+    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "desktop/package.json", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs the unit tests with bun test: every test/*.test.ts except the slow suites in
@@ -347,7 +347,13 @@ jobs:
       another relay to this one, so neither a call nor finishCreating's 404 can forget it. And test/desktop-voice.test.ts: the desktop voice
       store's CSP allows api.x.ai only when an xAI key is saved, the project key never reaches
       the snapshot or the token IPC result, consent defaults off, and
-      desktop/build/entitlements.mac.plist has the audio-input entitlement. And
+      desktop/build/entitlements.app.plist has the audio-input entitlement. And
+      test/desktop-entitlements.test.ts: Channels.app and its helpers (desktop/package.json's
+      entitlements and entitlementsInherit, desktop/build/entitlements.app.plist) get JIT, writable
+      executable memory and the microphone, nothing more; only the bundled kiwi
+      (desktop/build/entitlements.cli.plist, release-build.yml's signcli) gets Bun's DYLD and
+      library-validation entitlements. On macOS it also signs a stand-in app and runs
+      release-build.yml's own check, which must refuse an app or helper carrying them. And
       test/desktop-guard.test.ts: on Linux, no encryption or the basic_text backend counts as keys kept
       without a keyring, and such a store is saved again into a keyring once one is there. And
       web lib/channel/trim.test.ts: a long session folds the messages past the 2000-message window
@@ -638,7 +644,7 @@ jobs:
 
   cli-macos:
     name: cli / macos
-    inputs: ["src/**", "packages/core/**", "test/**", "site/install", "site/install.sh", "desktop/src/**", "package.json", "bun.lock", "bunfig.toml", "web/package.json"]
+    inputs: ["src/**", "packages/core/**", "test/**", "site/install", "site/install.sh", "desktop/src/**", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", ".github/workflows/release-build.yml", "package.json", "bun.lock", "bunfig.toml", "web/package.json"]
     always: ["scripts/build-cli.ts", "scripts/cli-bundle.ts"]
     question: >-
       Could this change to `file` make the job described in `job` fail on macOS, or fail to
@@ -664,7 +670,9 @@ jobs:
       from mkdtemp; home is under /Users; the file system ignores case; a unix socket path is
       capped at 104 bytes), how the CLI names its own command in the text it prints, BSD
       versions of shell tools, process, signal and file-watching differences, and a build
-      target that fails to compile. Fails if any test fails on macOS or a target doesn't build.
+      target that fails to compile. test/desktop-entitlements.test.ts signs stand-in apps with
+      codesign here, so release-build.yml's entitlements check runs for real only on macOS. Fails
+      if any test fails on macOS or a target doesn't build.
 
   release-rehearsal:
     name: release / rehearsal
@@ -672,7 +680,7 @@ jobs:
     push: false
     version_bumps: true
     inputs: []
-    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/actions/stamp/action.yml", "scripts/stamp.ts", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/scripts/fuses.ts", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/scripts/pack-cli.ts", "scripts/changelog.ts", "scripts/cli-downloads.ts"]
+    always: [".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/actions/stamp/action.yml", "scripts/stamp.ts", "CHANGELOG.md", "src/version.ts", "desktop/package.json", "desktop/scripts/fuses.ts", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/scripts/pack-cli.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "scripts/changelog.ts", "scripts/cli-downloads.ts"]
     description: >-
       Runs .github/workflows/release-build.yml, the build a tag's release.yml runs, with
       rehearsal: true and a read-only token, publishing nothing: scripts/stamp.ts stamping the tag
