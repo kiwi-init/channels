@@ -107,6 +107,11 @@ jobs:
       seats, any brief size and any alias length; Cursor's stop follow-up names the channel when it fits
       and falls back to the bare short line, never past the share (cursorFollow); re-entry's
       recovery commands use the seat's own command.
+      Also test/filtered-read.test.ts: a filtered read (listen --now --thread N, listen --once
+      --thread N) shows only that thread and leaves unread every message the plain listen would
+      still hand over, which the next plain listen gets once, and a webhook that answers 500 keeps
+      its message unread (src/agent/state.ts, src/agent/listen.ts: the cursor stops before what a
+      read held back or failed to deliver, and what it showed past that is marked seen).
       Also test/rex.test.ts: where a seat runs from its environment (nothing inside tmux, Rex's
       server, session and block ids, any other terminal's program and version), which terminals
       take an OSC 7501 status record, the record frames they get, the blocked question and
