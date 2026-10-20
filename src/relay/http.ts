@@ -53,11 +53,40 @@ export interface Incoming {
 }
 export class Request_ extends Context.Service<Request_, Incoming>()("kiwi/relay/Request") {}
 
-export async function incoming(req: Request, path: string): Promise<Incoming> {
+export const MAX_REQUEST_BYTES = 1 << 20;
+
+export async function readText(body: ReadableStream<Uint8Array> | null, max: number, declared?: string | null): Promise<string | null> {
+  if (Number(declared ?? 0) > max) return null;
+  if (!body) return "";
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let n = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    n += value.length;
+    if (n > max) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(n);
+  let at = 0;
+  for (const c of chunks) {
+    out.set(c, at);
+    at += c.length;
+  }
+  return new TextDecoder().decode(out);
+}
+
+export async function incoming(req: Request, path: string): Promise<Incoming | null> {
   const method = req.method.toUpperCase();
   if (method === "PUT" && path.startsWith("/blobs/")) return { req, url: new URL(req.url), method, path, body: "" };
+  if (method === "GET" || method === "HEAD") return { req, url: new URL(req.url), method, path, body: "" };
   // Every client signs the exact body it sends (empty when there is none), so reading DELETE's too is safe; the vault needs it.
-  return { req, url: new URL(req.url), method, path, body: method === "GET" || method === "HEAD" ? "" : await req.text() };
+  const body = await readText(req.body, MAX_REQUEST_BYTES, req.headers.get("content-length"));
+  return body === null ? null : { req, url: new URL(req.url), method, path, body };
 }
 
 export async function readCapped(req: Request, max: number): Promise<Uint8Array<ArrayBuffer> | null> {

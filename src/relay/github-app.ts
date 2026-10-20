@@ -6,6 +6,7 @@ const MAX_DIFF = 2 << 20;
 const MAX_ISSUE_BODY = 8000;
 const MAX_EXCERPT = 3000;
 const EXCERPT_LINES = 25;
+const MAX_LOG_SCAN = 32 << 20;
 const MAX_ANNOTATIONS = 10;
 
 interface CheckLog {
@@ -16,6 +17,71 @@ interface CheckLog {
 
 const STAMP = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z ?/;
 const ANSI = /\u001b\[[0-9;]*m/g;
+
+export async function headOf(res: Response, max: number): Promise<{ text: string; truncated: boolean }> {
+  if (!res.body) return { text: "", truncated: false };
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let n = 0;
+  let truncated = false;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (n + value.length > max) {
+      chunks.push(value.subarray(0, max - n));
+      n = max;
+      truncated = true;
+      await reader.cancel().catch(() => {});
+      break;
+    }
+    chunks.push(value);
+    n += value.length;
+  }
+  const out = new Uint8Array(n);
+  let at = 0;
+  for (const c of chunks) {
+    out.set(c, at);
+    at += c.length;
+  }
+  return { text: new TextDecoder().decode(out), truncated };
+}
+
+export async function streamExcerpt(body: ReadableStream<Uint8Array> | null, maxBytes = MAX_LOG_SCAN): Promise<string> {
+  if (!body) return "";
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  const kept: string[] = [];
+  let carry = "";
+  let n = 0;
+  const take = (raw: string): string | null => {
+    const line = raw.replace(STAMP, "").replace(ANSI, "").trimEnd();
+    if (!line || /^##\[(?:group|endgroup)\]/.test(line)) return null;
+    kept.push(line);
+    if (kept.length > EXCERPT_LINES + 1) kept.shift();
+    return line.startsWith("##[error]") ? kept.join("\n").slice(-MAX_EXCERPT) : null;
+  };
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    n += value.length;
+    carry += decoder.decode(value, { stream: true });
+    const lines = carry.split(/\r?\n/);
+    carry = lines.pop() ?? "";
+    for (const raw of lines) {
+      const hit = take(raw);
+      if (hit !== null) {
+        await reader.cancel().catch(() => {});
+        return hit;
+      }
+    }
+    if (n > maxBytes) {
+      await reader.cancel().catch(() => {});
+      return "";
+    }
+  }
+  carry += decoder.decode();
+  return (carry && take(carry)) || "";
+}
 
 export function logExcerpt(log: string): string {
   const lines = log
@@ -130,8 +196,8 @@ export function githubAppFrom(opts: { appId?: string | null; privateKey?: string
       const base = ((await meta.json()) as { default_branch?: string }).default_branch ?? "main";
       const res = await get(`${api}/repos/${repo}/compare/${encodeURIComponent(base)}...${sha}`, { headers: headers(t.value, "application/vnd.github.diff") });
       if (!res.ok) return fail(res, "diff for that commit");
-      const text = await res.text();
-      return { ok: true, value: { diff: text.slice(0, MAX_DIFF), base, truncated: text.length > MAX_DIFF } };
+      const { text, truncated } = await headOf(res, MAX_DIFF);
+      return { ok: true, value: { diff: text, base, truncated } };
     },
     check: async (repo, sha, c) => {
       const t = await token(repo);
@@ -179,7 +245,7 @@ export function githubAppFrom(opts: { appId?: string | null; privateKey?: string
       if (!run) return { ok: false, status: 404, error: `GitHub has no check named ${name} on that commit` };
       const url = run.html_url ?? null;
       const log = await get(`${api}/repos/${repo}/actions/jobs/${run.id}/logs`, { headers: headers(t.value) });
-      const fromLog = log.ok ? logExcerpt(await log.text()) : "";
+      const fromLog = log.ok ? await streamExcerpt(log.body) : "";
       if (fromLog) return { ok: true, value: { excerpt: fromLog, url, from: "log" } };
       const notes = await get(`${api}/repos/${repo}/check-runs/${run.id}/annotations`, { headers: headers(t.value) });
       const said = notes.ok ? ((await notes.json()) as { path?: string; start_line?: number; message?: string; annotation_level?: string }[]) : [];
