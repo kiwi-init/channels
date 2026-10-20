@@ -1,7 +1,7 @@
 import { isKnownHarness, type KnownHarness } from "@kiwi/core/harnesses.ts";
 import { readLaunch } from "@kiwi/core/membership.ts";
 import type { Placed } from "./place.ts";
-import type { JoinLine } from "./recipes.ts";
+import type { JoinLine } from "@kiwi/core/join-line.ts";
 
 export interface LaunchRequest extends JoinLine {
   harness: KnownHarness;
