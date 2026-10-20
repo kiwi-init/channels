@@ -232,7 +232,9 @@ export interface FoldBase {
   reactSeqs: number[];
   trust: [number, Trust][];
   rejected: [number, string][];
-  sent?: [string, number][];
+  sent?: ([string, number] | [string, number, number])[];
+  hw?: number;
+  sentFloor?: number;
   asks: Message[];
   answered: [number, string[]][];
   threadOf: [number, number][];

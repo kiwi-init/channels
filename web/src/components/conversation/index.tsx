@@ -55,6 +55,9 @@ function useNow(intervalMs = 30_000): number {
 export function Conversation({ member, onBack, onGone }: { member: StoredMember; onBack: () => void; onGone: () => void }) {
   const me = member.identity.name
   const live = useChannel(member)
+  useEffect(() => {
+    if (live.snapshotTooBig) toast("This channel's history no longer fits in a snapshot, so it loads the slow way. Tell the Kiwi team.", "error")
+  }, [live.snapshotTooBig])
   const { ch, connection, gone, messages, roster, state, online, isOwner, requests, send, head, marks, pkOf } = live
   const pictures = usePictures(state)
   const harnesses = useHarnesses(state, requests)

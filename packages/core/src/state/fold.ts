@@ -11,6 +11,36 @@ import { carriedPersona } from "../personality.ts";
 import type { ChannelState, Fact, FoldBase, FoldMember, GuardFloor, Lease, Member, Place, Reaction, Room, RoomsFloor, Roster, Task } from "./types.ts";
 
 const STALE_MS = 24 * 3_600_000;
+const SENT_WINDOW_MS = 2 * STALE_MS;
+const KEEP_SEQS = 5_000;
+const SENT_CAP = 3_000;
+const CLOSED_KEEP_MS = 30 * STALE_MS;
+
+const closedLongAgo = (at: number, hw: number) => hw - at > CLOSED_KEEP_MS;
+
+function card(t: Task): Task {
+  return {
+    id: t.id,
+    title: t.title,
+    state: t.state,
+    ...(t.owner !== undefined ? { owner: t.owner } : {}),
+    createdBy: t.createdBy,
+    createdAt: t.createdAt,
+    updatedAt: t.updatedAt,
+    notes: [],
+    workedBy: [],
+    rounds: [],
+    ...(t.approvedBy !== undefined ? { approvedBy: t.approvedBy } : {}),
+    ...(t.cancelled ? { cancelled: true } : {}),
+    ...(t.closedSeq !== undefined ? { closedSeq: t.closedSeq } : {}),
+    ...(t.issue ? { issue: t.issue } : {}),
+    ...(t.archived ? { archived: true } : {}),
+  };
+}
+
+function withoutImageBytes(m: Message): Message {
+  return m.imgs?.length ? { ...m, imgs: m.imgs.map((i) => ({ name: i.name, mime: i.mime, ...(i.ref ? { ref: i.ref } : {}) })) } : m;
+}
 
 function touch(task: Task | undefined, name: string, at: number): void {
   if (task && (task.touched?.[name] ?? 0) < at) task.touched = { ...task.touched, [name]: at };
@@ -156,7 +186,10 @@ export function fold(
   const reactSeqs = new Set<number>(from?.reactSeqs);
   const trust = new Map<number, Trust>(from?.trust);
   const rejected = new Map<number, string>(from?.rejected);
-  const sent = new Map<string, number>(from?.sent);
+  const sent = new Map<string, number>(from?.sent?.map(([id, seq]) => [id, seq]));
+  const sentAt = new Map<string, number>(from?.sent?.flatMap(([id, , ts]): [string, number][] => (ts === undefined ? [] : [[id, ts]])));
+  let hw = from?.hw ?? 0;
+  const sentFloor = from?.sentFloor ?? 0;
   const answered = new Map<number, Set<string>>(from?.answered.map(([seq, by]) => [seq, new Set(by)]));
   const threadOf = new Map<number, number>(from?.threadOf);
   const threadPeople = new Map<number, Set<string>>(from?.threadPeople.map(([seq, people]) => [seq, new Set(people)]));
@@ -227,7 +260,14 @@ export function fold(
         rejected.set(m.seq, `signed more than a day before the relay got it`);
         continue;
       }
+      if (m.ts < Math.max(hw - SENT_WINDOW_MS, sentFloor)) {
+        trust.set(m.seq, "refused");
+        rejected.set(m.seq, `signed too long before the channel's latest messages`);
+        continue;
+      }
       sent.set(m.id, m.seq);
+      sentAt.set(m.id, m.ts);
+      hw = Math.max(hw, Math.min(m.ts, m.rts ?? m.ts));
       const refused = refusal(scopesByKey.get(m.pk!) ?? [], m);
       if (refused) {
         trust.set(m.seq, "refused");
@@ -330,6 +370,15 @@ export function fold(
     return !by || ![...by].some(answers);
   });
 
+  const cut = head - KEEP_SEQS;
+  const recentSent = [...sent].filter(([id, seq]) => (sentAt.has(id) ? sentAt.get(id)! >= Math.max(hw - SENT_WINDOW_MS, sentFloor) : seq > cut));
+  const timed = recentSent.filter(([id]) => sentAt.has(id)).sort((a, b) => sentAt.get(a[0])! - sentAt.get(b[0])!);
+  const over = timed.length - SENT_CAP;
+  const dropped = new Set(over > 0 ? timed.slice(0, over).map(([id]) => id) : []);
+  const nextFloor = over > 0 ? Math.max(sentFloor, sentAt.get(timed[over - 1]![0])! + 1) : sentFloor;
+  const keptSent = recentSent.filter(([id]) => !dropped.has(id));
+  const keptThreads = [...threadOf].filter(([seq]) => seq > cut);
+  const keptRoots = new Set(keptThreads.map(([, root]) => root));
   keep?.(
     structuredClone({
       n: head,
@@ -339,27 +388,33 @@ export function fold(
       compact: ctx.compact,
       compactProposal: ctx.compactProposal,
       repos: ctx.repos,
-      github: { prs: [...ctx.github.prs.values()], checks: [...ctx.github.checks].map(([k, runs]) => [k, [...runs.values()]]), issues: [...ctx.github.issues.values()] },
+      github: {
+        prs: [...ctx.github.prs.values()].filter((p) => p.state === "open" || !closedLongAgo(p.at, hw)),
+        checks: [...ctx.github.checks].map(([k, runs]) => [k, [...runs.values()]]),
+        issues: [...ctx.github.issues.values()].filter((i) => i.state === "open" || !closedLongAgo(i.at, hw)),
+      },
       hold: ctx.hold,
       voice: ctx.voice,
       scopesByKey: [...scopesByKey],
       scopeSets: [...scopeSets],
       roleSets: [...roleSets],
-      tasks: [...tasks.values()],
+      tasks: [...tasks.values()].map((t) => ((t.state === "done" || t.cancelled) && closedLongAgo(t.updatedAt, hw) ? card(t) : t)),
       facts: [...facts.values()],
       leases: [...leases.values()],
-      reactions: [...reactions].map(([seq, by]): [number, [string, Reaction][]] => [seq, [...by]]),
-      reactSeqs: [...reactSeqs],
-      trust: [...trust],
-      rejected: [...rejected],
-      sent: [...sent],
-      asks: openAsks,
+      reactions: [...reactions].filter(([seq]) => seq > cut).map(([seq, by]): [number, [string, Reaction][]] => [seq, [...by]]),
+      reactSeqs: [...reactSeqs].filter((seq) => seq > cut),
+      trust: [...trust].filter(([seq]) => seq > cut),
+      rejected: [...rejected].filter(([seq]) => seq > cut),
+      sent: keptSent.map(([id, seq]): [string, number] | [string, number, number] => (sentAt.has(id) ? [id, seq, sentAt.get(id)!] : [id, seq])),
+      hw,
+      ...(nextFloor ? { sentFloor: nextFloor } : {}),
+      asks: openAsks.map(withoutImageBytes),
       answered: openAsks.flatMap((m): [number, string[]][] => [[m.seq, [...(answered.get(m.seq) ?? [])]]]),
-      threadOf: [...threadOf],
-      threadPeople: [...threadPeople].map(([seq, people]): [number, string[]] => [seq, [...people]]),
+      threadOf: keptThreads,
+      threadPeople: [...threadPeople].filter(([root]) => root > cut || keptRoots.has(root)).map(([seq, people]): [number, string[]] => [seq, [...people]]),
       rooms: [...rooms.values()],
-      roomOf: [...roomOf],
-      placeOf: [...placeOf],
+      roomOf: [...roomOf].filter(([seq]) => seq > cut),
+      placeOf: [...placeOf].filter(([seq]) => seq > cut),
     }),
   );
 

@@ -58,6 +58,7 @@ export interface ChannelHandle {
   head: number
   marks: Marks
   pkOf: (name: string) => string | undefined
+  snapshotTooBig: boolean
 }
 
 const merged = (prev: Message[], more: Message[]) => {
@@ -314,6 +315,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
   useEffect(() => reconcile(), [scopesKey, bitsKey, caughtUp])
   const snapshotNext = useRef(nextSnapshotTry(0, 0))
   const snapshotBusy = useRef(false)
+  const [snapshotTooBig, setSnapshotTooBig] = useState(false)
   const snapshotIfDue = useEffectEvent(() => {
     const head = state.head
     if (!ch.isOwner || snapshotBusy.current || head < snapshotNext.current) return
@@ -322,7 +324,9 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
       .then(async (n) => {
         snapshotNext.current = nextSnapshotTry(head, n ?? (await ch.snapshotAt()) ?? 0)
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        if (err instanceof Error && /too large/.test(err.message)) setSnapshotTooBig(true)
+      })
       .finally(() => {
         snapshotBusy.current = false
       })
@@ -415,5 +419,5 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
 
   const pkOf = useCallback((name: string) => keyOf.get(name), [keyOf])
 
-  return { ch, connection, gone, messages, roster, state, online: live, isOwner, requests, send, refreshRequests, refreshRoster, head: start?.head ?? 0, marks, pkOf }
+  return { ch, connection, gone, messages, roster, state, online: live, isOwner, requests, send, refreshRequests, refreshRoster, head: start?.head ?? 0, marks, pkOf, snapshotTooBig }
 }
