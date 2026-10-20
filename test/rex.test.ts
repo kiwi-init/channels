@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Message } from "@kiwi/core/protocol.ts";
@@ -286,6 +286,26 @@ describe("the daemon's Rex reads", () => {
 });
 
 describe("the palette action", () => {
+  test("init.lua kept as a link into dotfiles stays a link with its mode, and gets the line through it, on and off", () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-rex-link-"));
+    const dotfiles = join(dir, "dotfiles", "init.lua");
+    mkdirSync(join(dir, "dotfiles"));
+    mkdirSync(join(dir, "rex"));
+    writeFileSync(dotfiles, "rex.theme('dark')\n", { mode: 0o644 });
+    chmodSync(dotfiles, 0o644);
+    const init = join(dir, "rex", "init.lua");
+    symlinkSync(dotfiles, init);
+    installPalette(init, "/opt/rex/rex");
+    expect(lstatSync(init).isSymbolicLink()).toBe(true);
+    expect(readFileSync(dotfiles, "utf8")).toBe("rex.theme('dark')\nrequire(\"kiwi\") -- Kiwi: go to the seat that needs me\n");
+    expect(statSync(dotfiles).mode & 0o777).toBe(0o644);
+    removePalette(init);
+    expect(lstatSync(init).isSymbolicLink()).toBe(true);
+    expect(readFileSync(dotfiles, "utf8")).toBe("rex.theme('dark')\n");
+    expect(readdirSync(join(dir, "dotfiles"))).toEqual(["init.lua"]);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
   test("Rex's config is REX_CONFIG, else XDG, else ~/.config", () => {
     expect(rexConfigPath({ REX_CONFIG: "/tmp/my.lua", XDG_CONFIG_HOME: "/tmp/xdg" }, "/home/me")).toBe("/tmp/my.lua");
     expect(rexConfigPath({ XDG_CONFIG_HOME: "/tmp/xdg" }, "/home/me")).toBe("/tmp/xdg/rex/init.lua");
