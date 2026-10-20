@@ -38,9 +38,11 @@ export function useWindow<T extends { seq: number }>(items: T[], hereKey: string
   if (away !== null && away !== from) setFrom(away)
   const keep = useRef<number | null>(null)
   const more = () => {
+    const next = startOf(items.slice(0, hidden), WINDOW_STEP)
+    if (next === from) return
     const el = scroller.current
     if (el) keep.current = el.scrollHeight - el.scrollTop
-    setFrom(startOf(items.slice(0, hidden), WINDOW_STEP))
+    setFrom(next)
   }
   const trim = (el: HTMLDivElement) => {
     const top = el.getBoundingClientRect().top
@@ -48,7 +50,7 @@ export function useWindow<T extends { seq: number }>(items: T[], hereKey: string
       const row = el.querySelector(`[id="m${seq}"]`)
       return row ? row.getBoundingClientRect().top < top : el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM
     })
-    if (trimmed === null) return
+    if (trimmed === null || trimmed === from) return
     keep.current = el.scrollHeight - el.scrollTop
     setFrom(trimmed)
   }
@@ -57,6 +59,9 @@ export function useWindow<T extends { seq: number }>(items: T[], hereKey: string
     if (hidden && el.scrollTop < NEAR_TOP) return more()
     trim(el)
   }
+  useLayoutEffect(() => {
+    keep.current = null
+  }, [hereKey])
   useLayoutEffect(() => {
     const el = scroller.current
     if (el && keep.current === null && !all) trim(el)

@@ -154,6 +154,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     (seq: number) => {
       setHighlight(seq)
       setTimeout(() => setHighlight((h) => (h === seq ? null : h)), 1600)
+      if (state.compact && seq <= state.compact.through) setEarlier(true)
       const at = placeOf.get(seq)
       const inTask = at?.kind === "task" ? at.task : null
       if (inTask !== null) openTask(inTask)
@@ -169,7 +170,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       }
       requestAnimationFrame(() => requestAnimationFrame(() => find(3)))
     },
-    [placeOf, hereKey, openTask]
+    [placeOf, hereKey, openTask, state.compact]
   )
 
   const onReply = useCallback((m: Message) => setReplyTo(m), [])
