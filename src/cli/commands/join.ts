@@ -24,6 +24,8 @@ const JOIN_POLL_MS = /^[1-9]\d*$/.test(process.env.KIWI_JOIN_POLL_MS ?? "") ? Nu
 
 const OWNER_NAME = "human";
 
+const MODEL_WAIT_MS = 5_000;
+
 const joinedAlias = Effect.fn("kiwi.joinedAlias")(function* (roomId: string, alias?: string, title?: string | null) {
   const channels = (yield* config).channels;
   const free = (n: string) => !channels[n] || channels[n]!.roomId === roomId;
@@ -110,7 +112,7 @@ export const joinCommands: Record<string, Command> = {
       const nick = inlineText(opt.nick ?? (auto ? baseName(who) : ""), 40);
       if (opt.role !== undefined || opt.about !== undefined) process.stderr.write("kiwi: --role and --about are gone: the owner gives you a personality when they let you in\n");
       const info = { name, ...(nick ? { display: nick } : {}), ...(auto ? { auto: true } : {}) };
-      const model = opt.model?.trim() || (yield* Effect.promise(() => detectModel()));
+      const model = opt.model?.trim() || (yield* Effect.promise(() => detectModel(process.env, who.harness === "claude" ? MODEL_WAIT_MS : 0)));
       if (!model) {
         yield* doneAsking;
         return yield* die(

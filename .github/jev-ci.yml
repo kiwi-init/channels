@@ -226,6 +226,9 @@ jobs:
       Code's listening ones from 2.1.296) unless KIWI_NO_HOOKS is set or that harness's hooks are off; the daemon's
       answer reads back as sent; and kiwi join carries KIWI_LAUNCH to the owner in its sealed claims on a live
       relay, dropping one that isn't an id. The inventory says which harnesses kiwi launch starts.
+      Also test/harness-model.test.ts: kiwi join inside Claude Code waits up to MODEL_WAIT_MS for the session's
+      transcript to name its model (a launched session's first command can run before that line is written), and
+      gives up when it never does; elsewhere it doesn't wait.
       Also test/rotate.test.ts: when a Claude Code seat in tmux gets a fresh session (src/rotate/decide.ts:
       between tasks past ROTATE_FLOOR, the lead past the line only once its own lead checkpoint is
       later than the nudge, open tasks only once checkpointed since the nudge, a lead with tasks
