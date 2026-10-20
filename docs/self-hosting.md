@@ -130,6 +130,11 @@ bun scripts/backup-relay.ts ./relay-data ./backup
 
 To restore, stop the relay, put the files in an empty data folder, and start the
 relay on it. Channels, members and messages come back as they were at the backup.
+A channel whose key rotated after the backup comes back behind its members: their
+apps refuse to send under the older key ("the relay is behind this channel's key"),
+and the owner's app can't rotate past it, so restore your newest backup. If the key
+rotated after that one too, the channel can still be read but takes no new
+messages, and its owner closes it and creates a new one.
 
 A backup holds everything the relay holds: ciphertext, member public keys, wrapped
 channel keys, join codes and, on sign-in relays, WorkOS user ids. **A channel closed

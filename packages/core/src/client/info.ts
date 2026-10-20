@@ -56,6 +56,10 @@ export class ChannelInfo {
     this.infoExpires = null;
   }
 
+  markGone(pk: string): void {
+    if (this.keepsGone(pk)) rememberGone(this.ch.roomId, pk);
+  }
+
   readonly fx: InfoFx = {
     info: Effect.fn("Channel.info")({ self: this }, function* (this: ChannelInfo, fp?: string) {
       if (fp !== undefined) return yield* this.fetchInfo(fp);
@@ -162,9 +166,9 @@ export class ChannelInfo {
         const key = this.ch.access.keys[String(m.e)];
         const read = key ? yield* Effect.promise(() => readRecord(key, m.rec, this.ch.roomId, m.pk, this.ch.access.ownerPk)) : null;
         const opened = read && read.signer === this.ch.access.ownerPk ? read.member : undefined;
-        const member = opened && newestRecord(this.ch.roomId, opened);
-        if (member) out.push({ ...member, active: !!m.active, ...(m.read_only ? { readOnly: true } : {}) });
-        else if (m.active) out.push({ name: `unverified-${m.pk.slice(0, 6)}`, pk: m.pk, xpk: m.xpk, owner: false, at: 0, active: true, unverified: true });
+        const member = opened && newestRecord(this.ch.roomId, opened, !m.active && this.keepsGone(m.pk));
+        if (member) out.push({ ...member, active: !!m.active && member.active, ...(m.read_only ? { readOnly: true } : {}) });
+        else if (m.active && !isGone(this.ch.roomId, m.pk)) out.push({ name: `unverified-${m.pk.slice(0, 6)}`, pk: m.pk, xpk: m.xpk, owner: false, at: 0, active: true, unverified: true });
       }
       return out;
     }),
@@ -176,6 +180,10 @@ export class ChannelInfo {
       const proof = fp ?? (ownerPk ? yield* Effect.promise(() => ownerFingerprint(ownerPk)) : undefined);
       return yield* callUnlessUnchanged<Info>(this.ch.relay, this.ch.roomId, "info", "/info", {}, proof ? { fp: proof } : {});
     });
+  }
+
+  private keepsGone(pk: string): boolean {
+    return this.ch.isOwner && pk !== this.ch.access.ownerPk;
   }
 
   private noteSignedTitle(): void {
@@ -197,10 +205,20 @@ let recordMemory: RecordMemory = {
 export function keepRecordsIn(memory: RecordMemory): void {
   recordMemory = memory;
 }
-function newestRecord(room: string, served: Member): Member {
+function isGone(room: string, pk: string): boolean {
+  return recordMemory.get(room, pk)?.active === false;
+}
+
+function rememberGone(room: string, pk: string): void {
+  const seen = recordMemory.get(room, pk);
+  if (seen?.active !== false) recordMemory.set(room, pk, { ...(seen ?? { name: "", pk, xpk: "", owner: false, at: 0 }), active: false });
+}
+
+function newestRecord(room: string, served: Member, leaving: boolean): Member {
   const seen = recordMemory.get(room, served.pk);
-  if (served.signedBy && seen && !seen.signedBy) return seen;
-  if (seen && seen.at > served.at) return seen;
-  if (!seen || served.at > seen.at) recordMemory.set(room, served.pk, served);
-  return served;
+  const gone = leaving || seen?.active === false;
+  const newest = seen && ((served.signedBy && !seen.signedBy) || seen.at > served.at) ? seen : served;
+  if (newest === served && (!seen || served.at > seen.at)) recordMemory.set(room, served.pk, { ...served, active: !gone });
+  else if (gone) rememberGone(room, served.pk);
+  return { ...newest, active: !gone };
 }

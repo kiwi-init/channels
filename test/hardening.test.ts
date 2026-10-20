@@ -6,7 +6,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as Effect from "effect/Effect";
 import { signRequest } from "@kiwi/core/auth.ts";
-import { Channel, fetchRelay, Relay } from "@kiwi/core/client.ts";
+import { Channel, fetchRelay, keepRecordsIn, Relay, type MemberRow, type RecordMemory } from "@kiwi/core/client.ts";
+import type { CallInit, RelayApi } from "@kiwi/core/client/relay.ts";
+import type { Member } from "@kiwi/core/membership.ts";
 import { newChannelKey, ownerFingerprint, sealTo } from "@kiwi/core/crypto.ts";
 import { formatMessage } from "@kiwi/core/format.ts";
 import { generateIdentity, signText } from "@kiwi/core/identity.ts";
@@ -41,6 +43,32 @@ async function channelWithMember() {
   return { owner, agent, code, access, ownerCh, memberAccess: st.access };
 }
 
+type Sent = { path: string; method: string; body: string };
+
+function relayThat(lie: (path: string, data: unknown) => unknown, sent: Sent[]): RelayApi {
+  return {
+    ...fetchRelay,
+    call: <T>(relay: string, roomId: string, path: string, init: CallInit = {}, params: Record<string, string | number> = {}) => {
+      sent.push({ path, method: init.method ?? "GET", body: init.body ?? "" });
+      return Effect.map(fetchRelay.call<T>(relay, roomId, path, init, params), (data) => lie(path, data) as T);
+    },
+    conditional: <T>(relay: string, roomId: string, path: string, etag: string | null, init: CallInit = {}, params: Record<string, string | number> = {}) =>
+      Effect.map(fetchRelay.conditional<T>(relay, roomId, path, etag, init, params), (got) => (got.fresh ? { ...got, data: lie(path, got.data) as T } : got)),
+  };
+}
+
+const stillActive = (pk: string) => (path: string, data: unknown) =>
+  path === "/members" ? { members: (data as { members: MemberRow[] }).members.map((m) => (m.pk === pk ? { ...m, active: 1 } : m)) } : data;
+
+const via = <A, E>(fx: Effect.Effect<A, E, Relay>, relay: RelayApi): Promise<A> => Effect.runPromise(Effect.provideService(fx, Relay, relay));
+
+const wrappedTo = (sent: Sent[]) => sent.filter((s) => s.path === "/epochs" && s.method === "POST").map((s) => Object.keys((JSON.parse(s.body) as { keys: Record<string, string> }).keys));
+
+function inMemory(): RecordMemory {
+  const kept = new Map<string, Member>();
+  return { get: (room, pk) => kept.get(`${room}/${pk}`) ?? null, set: (room, pk, m) => void kept.set(`${room}/${pk}`, m) };
+}
+
 describe("a dishonest relay", () => {
   test("can't hand a member a key the owner didn't sign", async () => {
     const { agent, code, access, memberAccess } = await channelWithMember();
@@ -68,6 +96,55 @@ describe("a dishonest relay", () => {
     // The unverifiable key shows up for the owner to remove, and the rotation refuses to wrap for it.
     expect((await ownerCh.members()).some((m) => m.unverified && m.pk === intruder.pk)).toBe(true);
     await expect(ownerCh.rotate()).rejects.toThrow(/missing wrapped key/);
+  });
+
+  test("can't get the next key wrapped to a removed key by still listing it as active", async () => {
+    const { owner, agent, ownerCh } = await channelWithMember();
+    const sent: Sent[] = [];
+    const lying = relayThat(stillActive(agent.pk), sent);
+    await via(ownerCh.fx.remove(agent.pk), lying);
+    expect(wrappedTo(sent)).toEqual([[owner.pk]]);
+    expect((await via(ownerCh.fx.memberRows(), lying)).find((m) => m.pk === agent.pk)?.active).toBe(1);
+    expect((await via(ownerCh.fx.members(), lying)).find((m) => m.pk === agent.pk)?.active).toBe(false);
+    expect(await via(ownerCh.fx.rotate(), lying)).toBe(2);
+    expect(wrappedTo(sent)).toEqual([[owner.pk], [owner.pk]]);
+  });
+
+  test("a removal leaves the removed key out of its rotation even on a device that remembers no records", async () => {
+    const { owner, agent, ownerCh } = await channelWithMember();
+    keepRecordsIn({ get: () => null, set: () => {} });
+    try {
+      const sent: Sent[] = [];
+      await via(ownerCh.fx.remove(agent.pk), relayThat(stillActive(agent.pk), sent));
+      expect(wrappedTo(sent)).toEqual([[owner.pk]]);
+    } finally {
+      keepRecordsIn(inMemory());
+    }
+  });
+
+  test("a key the owner once saw gone stays gone, whatever the relay lists later", async () => {
+    const { owner, agent, ownerCh, memberAccess } = await channelWithMember();
+    await new Channel(memberAccess, relay, agent).leave();
+    expect((await ownerCh.members()).find((m) => m.pk === agent.pk)?.active).toBe(false);
+    const sent: Sent[] = [];
+    const lying = relayThat(stillActive(agent.pk), sent);
+    expect((await via(ownerCh.fx.members(), lying)).find((m) => m.pk === agent.pk)?.active).toBe(false);
+    expect(await via(ownerCh.fx.rotateIfDue(), lying)).toBe(true);
+    expect(wrappedTo(sent)).toEqual([[owner.pk]]);
+  });
+
+  test("a relay that keeps a removed key active gets a rotation that fails out loud, never a key for it", async () => {
+    const { agent, access, ownerCh } = await channelWithMember();
+    await ownerCh.remove(agent.pk);
+    const file = join(dataDir, `${access.roomId}.sqlite`);
+    const db = new Database(file);
+    db.query("UPDATE members SET active = 1 WHERE pk = ?").run(agent.pk);
+    db.close();
+    expect((await ownerCh.members()).find((m) => m.pk === agent.pk)?.active).toBe(false);
+    await expect(ownerCh.rotate()).rejects.toThrow(`missing wrapped key for ${agent.pk.slice(0, 8)}`);
+    const after = new Database(file);
+    expect(after.query("SELECT e FROM keys WHERE pk = ?").all(agent.pk)).toEqual([]);
+    after.close();
   });
 });
 

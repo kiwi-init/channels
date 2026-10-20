@@ -39,6 +39,7 @@ export type { Probe } from "./client/wire.ts";
 export { ownerStatement } from "./client/keys.ts";
 export { INFO_MAX_AGE_MS, keepRecordsIn, type Info, type MemberRow, type RecordMemory } from "./client/info.ts";
 export { keepBlobsIn, type BlobMemory } from "./client/images.ts";
+export { keepHeld } from "./client/sealed.ts";
 export type { RoomsSetting } from "./client/settings.ts";
 export type { JoinStatus } from "./client/join.ts";
 export type { SendOptions } from "./client/send.ts";
