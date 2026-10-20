@@ -249,6 +249,7 @@ try {
   const fresh = owner.url();
 
   // ---------- shoot ----------
+  let launcherStub = false;
   for (const theme of (["dark", "light"] as const).filter((t) => !themeOnly || t === themeOnly)) {
     for (const [vp, size] of (
       [
@@ -457,6 +458,55 @@ try {
         .waitFor({ timeout: 10000 })
         .catch(() => {});
       await shoot(owner, tag, "16-add-agent");
+
+      // The desktop app's New agent, with a stand-in for the four launch methods its bridge adds,
+      // on only while this tab's flag is set so the other screens stay the browser's.
+      if (["24-new-agent", "25-new-agent-started"].some(wanted)) {
+        if (!launcherStub) {
+          launcherStub = true;
+          await owner.addInitScript(() => {
+            if (sessionStorage.getItem("shots.launcher") !== "1") return;
+            const row = (harness: string, path: string | null, version: string | null, start: boolean) => ({ harness, path, version, start, wake: null, why: null });
+            const rows = [
+              row("claude", "/Users/you/.local/bin/claude", "2.1.304", true),
+              row("codex", "/opt/homebrew/bin/codex", "0.98.0", true),
+              row("gemini", "/opt/homebrew/bin/gemini", "0.31.0", false),
+              row("opencode", "/opt/homebrew/bin/opencode", "1.4.2", false),
+              row("cursor", null, null, false),
+              row("grok", null, null, false),
+            ];
+            const block = "block:01a15ad9-310a-703a-ad0b-3cc137458451";
+            const rex = { server: "unix:///Users/you/Library/Application%20Support/rex/server.sock", session: "session:01a15ad9-30f4-7bcb-8455-c3eeb9e1071c", block };
+            (window as unknown as { kiwi: object }).kiwi = {
+              harnesses: async () => rows,
+              seatFolders: async () => ["/Users/you/code/payments", "/Users/you/code/payments-site"],
+              chooseFolder: async () => null,
+              launchAgent: async (req: { launch: string }) => ({ ok: true, launch: req.launch, place: "rex", rex }),
+            };
+          });
+        }
+        await owner.evaluate(() => sessionStorage.setItem("shots.launcher", "1"));
+        await owner.goto(fresh);
+        await owner.reload();
+        await owner.getByRole("region", { name: "Add an agent" }).waitFor({ timeout: 10000 });
+        const dialog = owner.getByRole("dialog");
+        await shoot(
+          owner,
+          tag,
+          "24-new-agent",
+          async () => {
+            await owner.getByRole("region", { name: "Add an agent" }).getByRole("button", { name: "New agent" }).click();
+            await dialog.getByRole("radiogroup", { name: "Harness" }).waitFor();
+          },
+          async () => {},
+        );
+        await shoot(owner, tag, "25-new-agent-started", async () => {
+          await dialog.getByRole("button", { name: "Start" }).click();
+          await dialog.getByText("Started in Rex").waitFor();
+        });
+        await owner.evaluate(() => sessionStorage.removeItem("shots.launcher"));
+        await owner.reload();
+      }
 
       // Signed out, and someone opening the invite link who isn't in yet.
       if (only && !["20-first-run", "21-join-with-code", "22-invite-preview", "23-signed-in-empty"].some(wanted)) continue;

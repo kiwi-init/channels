@@ -17,7 +17,11 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 
+import { readHarnessRow, type HarnessRow } from "@kiwi/core/harnesses.ts";
 import type { MachineCert } from "@kiwi/core/person.ts";
+
+import type { LaunchAgentRequest, LaunchedView } from "./bridge.ts";
+import { launchedView } from "./launch-view.ts";
 
 export interface HelloResult {
   version: string;
@@ -111,6 +115,17 @@ export async function daemonStop(home: string = kiwiHome(), timeoutMs = 5_000): 
 /** Hand the daemon its cert from the person. Throws when it refuses. */
 export async function daemonAdopt(home: string, params: AdoptParams, timeoutMs = 10_000): Promise<void> {
   await call(daemonSocketPath(home), "adopt", params, timeoutMs);
+}
+
+export async function daemonHarnesses(home: string = kiwiHome()): Promise<HarnessRow[]> {
+  const r = await call(daemonSocketPath(home), "harnesses", {}, 30_000);
+  const rows = Array.isArray(r["harnesses"]) ? r["harnesses"] : [];
+  return rows.map(readHarnessRow).filter((row): row is HarnessRow => row !== null);
+}
+
+export async function daemonLaunch(req: LaunchAgentRequest, home: string = kiwiHome()): Promise<LaunchedView> {
+  const r = await call(daemonSocketPath(home), "launch", { ...req }, 150_000);
+  return launchedView(r["launched"]);
 }
 
 /**

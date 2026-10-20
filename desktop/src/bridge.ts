@@ -2,6 +2,7 @@
 // main.ts and preload.ts; renderer-neutral on purpose (no electron/node imports),
 // so web/ can type against it without touching this process.
 
+import type { HarnessRow, KnownHarness } from "@kiwi/core/harnesses.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
 import type { CachedRow, Unread } from "@kiwi/core/cache-row.ts";
 import type { Channel, OpenKind, PresenceFields } from "@kiwi/core/client.ts";
@@ -258,6 +259,22 @@ export interface RexSeatView {
 
 export type RexShowResult = { ok: true } | { ok: false; why: "no-rex" | "no-server" | "no-app" | "remote-control" | "failed" };
 
+export interface LaunchAgentRequest {
+  launch: string;
+  harness: KnownHarness;
+  folder: string;
+  code: string;
+  relay: string;
+  nick?: string;
+  persona?: string;
+}
+
+export type LaunchedView =
+  | { ok: true; launch: string; place: "rex"; rex: { server: string; session: string; block: string } }
+  | { ok: true; launch: string; place: "tmux"; session: string; window: string }
+  | { ok: true; launch: string; place: "terminal" }
+  | { ok: false; why: "bad-request" | "not-installed" | "no-recipe" | "no-place" | "not-allowed" | "failed"; detail: string };
+
 export interface RexStatusView {
   found: boolean;
   version?: string;
@@ -327,6 +344,10 @@ export interface KiwiBridge {
   rexStatus(): Promise<RexStatusView>;
   rexInstall(): Promise<RexStatusView>;
   rexRemove(): Promise<RexStatusView>;
+  harnesses(): Promise<HarnessRow[]>;
+  seatFolders(roomId: string): Promise<string[]>;
+  chooseFolder(): Promise<string | null>;
+  launchAgent(req: LaunchAgentRequest): Promise<LaunchedView>;
 }
 
 export interface UpdateView {
