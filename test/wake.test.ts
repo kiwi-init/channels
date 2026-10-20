@@ -10,7 +10,7 @@ import { howMessagesReachYou } from "../src/hooks.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import type { Presence } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { pullsWake, wakeArgv, wakeKey, wakePath, wakePrompt } from "@kiwi/core/wake.ts";
+import { listenedPath, pullsWake, wakeArgv, wakeKey, wakePath, wakePrompt } from "@kiwi/core/wake.ts";
 
 setDefaultTimeout(60_000);
 
@@ -410,6 +410,18 @@ describe("wake paths, commands and words", () => {
     expect(wakePath({ harness: "pi", session: "pi-s1" }, true, true, { mimo: true })).toEqual({ kind: "none", why: "Kiwi's Pi extension isn't installed (kiwi hooks install pi, then /reload in Pi)" });
     expect(wakePath({}, true).kind).toBe("none");
     expect(wakePath(null, true).kind).toBe("none");
+    const plugin = wakePath({ harness: "mimo", session: "ses_1" }, false, false, { mimo: true });
+    expect(listenedPath(plugin, true)).toEqual(plugin);
+    expect(listenedPath(plugin, false)).toEqual({
+      kind: "none",
+      why: "Kiwi's MiMoCode plugin has no listener running for this session (it starts with the session or its first shell command; restarting MiMoCode starts it again)",
+    });
+    expect(listenedPath({ kind: "extension", via: "pi-extension" }, false)).toEqual({
+      kind: "none",
+      why: "Kiwi's Pi extension has no listener running for this session (/reload in Pi starts it again)",
+    });
+    expect(listenedPath({ kind: "hooks" }, false)).toEqual({ kind: "hooks" });
+    expect(listenedPath({ kind: "command", via: "codex-queue", session: "t" }, false)).toEqual({ kind: "command", via: "codex-queue", session: "t" });
   });
 
   test("the newest binding of an agent decides, even one with no session", () => {

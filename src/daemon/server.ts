@@ -6,7 +6,7 @@ import { saveMachine } from "../machine.ts";
 import { readMachineCert } from "@kiwi/core/person.ts";
 import { VERSION } from "../version.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
-import { pullsWake, viaOf } from "@kiwi/core/wake.ts";
+import { listenedPath, pullsWake, viaOf } from "@kiwi/core/wake.ts";
 import { ensureMachine, loadPairedMachine, PairError, type PairedMachine, type PairedPerson } from "./pair.ts";
 import { DAEMON_PROTOCOL, daemonSock, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
 import { activityEnv, reachOf, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
@@ -44,11 +44,13 @@ export interface DaemonOptions {
   tickMs?: number;
   orphanMs?: number;
   wakeOutstandingMs?: number;
+  listenerGraceMs?: number;
 }
 
 const WAKE_DELAY_MS = 2_000;
 const WAKE_GAP_MS = 60_000;
 const WAKE_OUTSTANDING_MS = 10 * 60_000;
+const LISTENER_GRACE_MS = 60_000;
 
 export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promise<Daemon> {
   const sock = daemonSock(dir);
@@ -118,6 +120,15 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     return held.length ? "session" : "none";
   };
 
+  const listenerGraceMs = opts.listenerGraceMs ?? LISTENER_GRACE_MS;
+  const listenedLately = (seat: Seat, attached: Attached): boolean => {
+    const at = Date.now();
+    if (attached !== "listener") return at - (seat.listenerAt || seat.openedAt || at) < listenerGraceMs;
+    seat.listenerAt = at;
+    return true;
+  };
+  const livePath = async (cfg: Config, seat: Seat, attached: Attached) => listenedPath(await pathOf(cfg, seat.alias, seat.agent), listenedLately(seat, attached));
+
   const refreshActivity = async (seat: Seat, force = false): Promise<void> => {
     const cfg = loadConfig();
     const record = seatRecordFor(cfg, seat.alias, seat.agent);
@@ -126,7 +137,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     const now = env ? await harnessActivity(env) : undefined;
     const attached = attachedTo(seat);
     const pulled = attached === "listener" && pullsWake(record?.harness);
-    const via = wakeOn(cfg, seat.alias, seat.agent) ? (viaOf(await pathOf(cfg, seat.alias, seat.agent)) ?? (pulled ? "listener" : null)) : null;
+    const via = wakeOn(cfg, seat.alias, seat.agent) ? (viaOf(await livePath(cfg, seat, attached)) ?? (pulled ? "listener" : null)) : null;
     const reach = reachOf(attached, record, now);
     if (!force && JSON.stringify(now) === JSON.stringify(seat.activity) && via === seat.wakeVia && reach === seat.reach) return;
     seat.activity = now;
@@ -153,7 +164,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       agent: s.agent,
       subscribers: s.subs.size,
       read: reads.get(readKey(s.alias, s.agent)) ?? null,
-      wake: { on: wakeOn(cfg, s.alias, s.agent), path: await pathOf(cfg, s.alias, s.agent), last: s.lastWake },
+      wake: { on: wakeOn(cfg, s.alias, s.agent), path: await livePath(cfg, s, attachedTo(s)), last: s.lastWake },
       reach: s.reach,
     };
   };
@@ -398,6 +409,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         fetchingRows: false,
         heard: new Map(),
         openedAt: null,
+        listenerAt: 0,
       };
       seats.set(key, seat);
       if (stopped) {

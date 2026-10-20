@@ -6,7 +6,7 @@ import { Cursor, Keystore } from "../../config.ts";
 import { decodeJoinCode, type ChannelAccess } from "@kiwi/core/crypto.ts";
 import { freeAgentName, handleFor, inlineText } from "@kiwi/core/membership.ts";
 import { freeHandle } from "@kiwi/core/handles.ts";
-import { baseName, here } from "../../seats.ts";
+import { baseName, here, seatsNear } from "../../seats.ts";
 import { asOption, channelOption } from "@kiwi/core/wake.ts";
 import { cardLine, charterLines, holdLine, leadLine, parseDuration } from "@kiwi/core/format.ts";
 import { canPost, SCOPES } from "@kiwi/core/scopes.ts";
@@ -37,8 +37,16 @@ const joinedAlias = Effect.fn("kiwi.joinedAlias")(function* (roomId: string, ali
 });
 
 function settleIn(alias: string, name: string, model: string, harnessSession: string | null): void {
+  const hadThisChannel = seatsNear(process.cwd()).some((b) => b.alias === alias);
   if (!bindDirectory(process.cwd(), { ...seatHere(alias, name, true, model), ...(harnessSession ? { harnessSession } : {}) })) {
     process.stderr.write(`kiwi: not binding ${process.cwd()} (too broad); run kiwi from your project folder, or pass ${channelOption(alias)} ${asOption(name)}\n`);
+  } else if (!hadThisChannel) {
+    const elsewhere = seatsNear(process.cwd()).filter((b) => b.alias !== alias);
+    const channels = [...new Set(elsewhere.map((b) => b.alias)), alias];
+    if (elsewhere.length)
+      process.stderr.write(
+        `kiwi: this folder now has seats in ${channels.slice(0, -1).join(", ")} and ${alias}, so commands from it need ${channelOption(alias)} ${asOption(name)} (or ${elsewhere.map((b) => `${channelOption(b.alias)} ${asOption(b.as)}`).join(", ")}) to pick one\n`,
+      );
   }
   const installed = autoInstallHooks();
   if (installed) process.stderr.write(`kiwi: installed Claude Code hooks (${installed}) so this agent keeps listening; \`kiwi hooks uninstall\` removes them\n`);

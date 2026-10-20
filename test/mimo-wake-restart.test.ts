@@ -1,6 +1,6 @@
 import { kiwiCmd } from "./owner.ts";
 import { afterAll, afterEach, expect, setDefaultTimeout, test } from "bun:test";
-import { copyFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deliveredUpTo } from "../src/hooks/delivered.ts";
@@ -145,6 +145,44 @@ test("a wake MiMoCode never took, when MiMoCode exits mid-retry and the session 
   expect(woke[1]).toContain("after the wake landed");
   expect(woke[1]).not.toContain("the message MiMoCode never took");
   await after.event({ event: { type: "session.deleted", properties: { info: { id: session } } } });
+});
+
+test("a wake handed to MiMoCode is logged in wake.log, and the refusals before it landed are logged with their reason", async () => {
+  const session = "ses_logged";
+  const { owner, agent, plugin } = await seatInMimo("logged", session);
+  let tries = 0;
+  const woke: string[] = [];
+  const hooks = await boot(plugin, {
+    session: {
+      get: async () => ({ data: {} }),
+      promptAsync: async (o) => {
+        tries += 1;
+        if (tries <= 2) throw new Error("connection refused");
+        woke.push(textOf(o));
+        return { data: true };
+      },
+    },
+  });
+  const log = join(agent, "wake.log");
+  const rows = () =>
+    existsSync(log)
+      ? readFileSync(log, "utf8")
+          .trim()
+          .split("\n")
+          .map((line) => line.split("\t"))
+      : [];
+  try {
+    await hooks["shell.env"]({ cwd: agent, sessionID: session }, { env: {} });
+    await ok(owner, ["--as", "boss", "send", "--to", "coder", "logged once it lands"], PERSON);
+    await until("the wake that landed", () => woke.length === 1);
+    await until("the refusals logged", () => rows().some((r) => r[5] === "failed"));
+    const [handed, failed] = rows();
+    expect(handed?.slice(1, 6)).toEqual(["logged", "coder", "mimo-plugin", "1", "handed"]);
+    expect(failed?.slice(1, 6)).toEqual(["logged", "coder", "mimo-plugin", "0", "failed"]);
+    expect(failed?.[6]).toBe("MiMoCode refused the wake 2 times before it landed: connection refused");
+  } finally {
+    await hooks.event({ event: { type: "session.deleted", properties: { info: { id: session } } } });
+  }
 });
 
 test("two MiMoCode processes on one session, each landing its wake of the same message, count it delivered once instead of handing it back and forth", async () => {
