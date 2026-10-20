@@ -140,6 +140,17 @@ describe("the fold base stays bounded", () => {
     const replay = { ...messages[999]!, seq: 6_011 };
     const state = fold([replay], roster, T0, null, null, upgraded);
     expect(state.rejected.get(6_011)).toContain("a copy of #1000");
+
+    const backdated = baseOf(
+      Array.from({ length: 500 }, (_, i) => msg(6_001 + i, T0 + (6_000 + i) * 1_000, { rts: T0 + (6_000 + i) * 1_000 - 3 * DAY })),
+      old,
+    );
+    const honest = baseOf(
+      Array.from({ length: 500 }, (_, i) => msg(6_501 + i, T0 + (6_500 + i) * 1_000)),
+      backdated,
+    );
+    const again = { ...messages[5_990]!, seq: 7_001 };
+    for (const base of [backdated, honest]) expect(fold([again], roster, T0, null, null, base).rejected.get(7_001)).toContain("a copy of #5991");
   });
 
   test("a direct thread that's been quiet for thousands of messages keeps its place", () => {

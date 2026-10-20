@@ -266,6 +266,7 @@ export function fold(
         queue.delete(id);
         sent.delete(id);
         sentFloors.set(pk, Math.max(sentFloors.get(pk) ?? 0, sentAt.get(id)! + 1));
+        sentAt.delete(id);
       }
       const refused = refusal(scopesByKey.get(m.pk!) ?? [], m);
       if (refused) {
@@ -372,8 +373,9 @@ export function fold(
 
   const cut = head - KEEP_SEQS;
   const keyIndex = new Map<string, number>();
+  const stamp = queue.size ? Math.max(hw, ...[...queue.keys()].map((id) => sentAt.get(id)!)) : 0;
   const keptSent = [...sent].flatMap(([id, seq]): ([string, number] | [string, number, number, number])[] => {
-    const ts = sentAt.get(id) ?? hw;
+    const ts = sentAt.get(id) ?? stamp;
     const pk = queue.get(id);
     if (pk !== undefined) return [[id, seq, ts, keyIndex.get(pk) ?? keyIndex.set(pk, keyIndex.size).size - 1]];
     return !ts ? [[id, seq]] : ts < hw - SENT_WINDOW_MS ? [] : [[id, seq, ts, -1]];
