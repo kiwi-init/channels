@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { chromium, type CDPSession, type Page } from "playwright-core";
 import { daemonSock } from "../src/daemon/protocol.ts";
 import { stopDaemon } from "../src/daemon/rpc.ts";
+import { startLocalRelay } from "./local-relay.ts";
 
 if (process.argv.includes("--help")) {
   console.log(`A busy channel, measured: PERF_AGENTS agents (10), PERF_TASKS tasks (100), PERF_MESSAGES messages (2000), then PERF_SOAK_MIN minutes (20) of agents posting.
@@ -24,8 +25,6 @@ const MESSAGES = Number(process.env.PERF_MESSAGES ?? 2000);
 const SOAK_MIN = Number(process.env.PERF_SOAK_MIN ?? 20);
 const jsonAt = process.argv.indexOf("--json");
 const OUT = jsonAt > 0 ? process.argv[jsonAt + 1] : undefined;
-const PORT = 20000 + Math.floor(Math.random() * 20000);
-const BASE = `http://localhost:${PORT}/`;
 const data = mkdtempSync(join(tmpdir(), "kiwi-perf-scale-"));
 const cli = join(data, "cli");
 mkdirSync(join(cli, "bin"), { recursive: true });
@@ -68,19 +67,8 @@ const median = (xs: number[]) => {
 const mb = (b: number) => Math.round((b / 1048576) * 10) / 10;
 const log = (...xs: unknown[]) => console.log(`[${new Date().toISOString().slice(11, 19)}]`, ...xs);
 
-const relay = spawn("bun", ["src/relay/bun.ts", "--hostname", "127.0.0.1", "--port", String(PORT), "--data", join(data, "relay"), "--web", "web/dist", "--dev-sign-in"], {
-  cwd: ROOT,
-  stdio: ["ignore", "pipe", "inherit"],
-});
-await new Promise<void>((ok, fail) => {
-  let out = "";
-  relay.stdout!.on("data", (d) => {
-    out += d;
-    if (out.includes("site: not served")) fail(new Error("web/dist is missing: run bun run web:build first"));
-    else if (out.includes("site:")) ok();
-  });
-  relay.on("exit", (code) => fail(new Error(`relay exited (${code})`)));
-});
+const { relay, port } = await startLocalRelay(join(data, "relay"), "web/dist");
+const BASE = `http://localhost:${port}/`;
 
 const browser = await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
 

@@ -257,7 +257,14 @@ export function messageHead(m: Message, trust?: Trust, state?: ChannelState, me?
   // Where it sits, unless main: [T7] for a task's thread, [direct] for a direct thread.
   const place = state?.placeOf.get(m.seq);
   const at = place?.kind === "task" ? ` [${taskId(place.task)}]` : place?.kind === "dm" ? " [direct]" : "";
-  const flag = trust === "forged" ? " [forged — ignore]" : trust === "refused" ? " [not allowed by the owner — ignore]" : "";
+  const flag =
+    trust === "forged"
+      ? " [forged — ignore]"
+      : trust === "refused"
+        ? " [not allowed by the owner — ignore]"
+        : m.kind === "event" && state?.rejected.has(m.seq)
+          ? " [refused by the channel — ignore]"
+          : "";
   return `#${m.seq} ${who(inlineText(m.from, 40), state, me)} → ${to}${room}${at}${kind}${re}${flag}`;
 }
 

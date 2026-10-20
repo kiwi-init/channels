@@ -16,7 +16,7 @@ let server: ReturnType<typeof startRelay>;
 let relay: string;
 
 beforeAll(() => {
-  server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir });
+  server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir, githubPush: async (_, token) => ({ ok: true, value: token === "ghu_plans" }) });
   relay = server.url.origin;
 });
 afterAll(() => {
@@ -86,7 +86,7 @@ test("a create that never reached the relay is forgotten on the next start, once
 test("the owner's GitHub token goes to the relay only to connect repos, never to clear them", async () => {
   const { host } = memHost();
   let asked = 0;
-  const keyring = new Keyring({ ...host, githubToken: async () => (asked++, null) });
+  const keyring = new Keyring({ ...host, githubToken: async () => (asked++, "ghu_plans") });
   const { code } = await keyring.create("plans", null, null);
   if (!code) throw new Error("the channel was made without a join code");
   await keyring.call(code, "setGithubRepos", []);

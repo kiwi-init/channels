@@ -20,16 +20,13 @@ import { chmodSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeF
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type Locator } from "playwright-core";
+import { startLocalRelay } from "./local-relay.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const PARTS = ["menus", "agents"] as const;
 type Part = (typeof PARTS)[number];
 
-const BASE_PORT = 20000 + Math.floor(Math.random() * 19990);
-
 async function run(part: Part): Promise<string[]> {
-  const PORT = BASE_PORT + PARTS.indexOf(part);
-  const BASE = `http://localhost:${PORT}/`;
   const data = mkdtempSync(join(tmpdir(), "kiwi-smoke-"));
 
   const cli = join(data, "cli");
@@ -51,19 +48,8 @@ async function run(part: Part): Promise<string[]> {
     return new Promise((ok, fail) => p.on("exit", (code) => (code === 0 ? ok(out) : fail(new Error(`kiwi ${args[0]} exited ${code}: ${out.trim().split("\n").pop()}`)))));
   };
 
-  const relay = spawn("bun", ["src/relay/bun.ts", "--hostname", "127.0.0.1", "--port", String(PORT), "--data", join(data, "relay"), "--web", "web/dist", "--dev-sign-in"], {
-    cwd: ROOT,
-    stdio: ["ignore", "pipe", "inherit"],
-  });
-  await new Promise<void>((ok, fail) => {
-    let out = "";
-    relay.stdout!.on("data", (d) => {
-      out += d;
-      if (out.includes("site: not served")) fail(new Error("web/dist is missing: run bun run web:build first"));
-      else if (out.includes("site:")) ok();
-    });
-    relay.on("exit", (code) => fail(new Error(`relay exited (${code})`)));
-  });
+  const { relay, port } = await startLocalRelay(join(data, "relay"), "web/dist");
+  const BASE = `http://localhost:${port}/`;
 
   const log = (line: string) => console.log(`[${part}] ${line}`);
   const errors: string[] = [];
@@ -173,7 +159,7 @@ async function run(part: Part): Promise<string[]> {
     await account.click();
     await page.getByRole("menuitem", { name: "Settings" }).click();
     const settings = page.getByRole("region", { name: "Settings" });
-    await settings.getByRole("button", { name: "Open", exact: true }).click();
+    await settings.getByRole("button", { name: /^Personalities/ }).click();
     const editor = page.getByRole("region", { name: "Personalities" });
     await editor.getByRole("button", { name: "Duplicate" }).click();
     await editor.getByRole("list", { name: "Yours" }).getByText("Builder copy").waitFor({ timeout: 10000 });
@@ -302,11 +288,11 @@ async function run(part: Part): Promise<string[]> {
     await details.waitFor();
     await page.setViewportSize({ width: 1280, height: 800 });
     log(`ok  ${at}`);
-    for (const item of ["Charter", "Rename channel"]) await opens(`Details → ${item}`, () => inDetails(() => panel.getByRole("button", { name: new RegExp(`^${item}`) }).click()));
+    for (const item of ["Charter", "Name"]) await opens(`Details → ${item}`, () => inDetails(() => panel.getByRole("button", { name: new RegExp(`^${item}`) }).click()));
     at = "Details → Voice: the owner allows it for the channel";
     await inDetails(async () => {
-      await panel.getByRole("button", { name: /^Voice/ }).click();
-      await panel.getByText(/^Allowed: each person/).waitFor({ timeout: 15000 });
+      await panel.getByRole("radiogroup", { name: "Voice" }).getByRole("radio", { name: "Allowed" }).click();
+      await panel.getByText(/^Each person turns it on/).waitFor({ timeout: 15000 });
     });
     log(`ok  ${at}`);
     if (await panel.isVisible()) await panel.getByRole("button", { name: "Close details" }).click();
@@ -422,7 +408,7 @@ async function run(part: Part): Promise<string[]> {
     }
     log(`ok  ${at} (its model shows)`);
     at = "details: who wants to join is let in from Needs you, the one place";
-    await inDetails(() => panel.getByRole("button", { name: /wants? to join/ }).click());
+    await inDetails(() => panel.getByRole("button", { name: "Review", exact: true }).click());
     await panel.waitFor({ state: "detached" });
     await letIn.waitFor({ timeout: 15000 });
     for (const gone of ["Copy invite link", "Review and approve"]) if (await page.getByRole("button", { name: gone }).count()) throw new Error(`details still offers "${gone}"`);
@@ -689,6 +675,7 @@ async function run(part: Part): Promise<string[]> {
     const token = /--persona (\S+)/.exec((await withPin.textContent()) ?? "")?.[1];
     if (!token) throw new Error("the invite command carries no --persona token");
     await inviting.getByRole("button", { name: "Back to details" }).click();
+    await panel.getByRole("button", { name: "Close details" }).click();
     const hunter = kiwi(["join", code, "smoke", "--relay", BASE, "--as", "hunter", "--persona", token]);
     await needsOpen();
     await needs.getByText(/pinned as Bug hunter/).waitFor({ timeout: 30000 });

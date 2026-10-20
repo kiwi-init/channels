@@ -93,16 +93,9 @@ function AddComputer({ onDone }: { onDone: () => void }) {
 }
 
 /** Your paired computers: add one, or remove one (and its agents from your channels). */
-export function ComputersModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function ComputerRows({ adding, onAdded }: { adding: boolean; onAdded: () => void }) {
   const { computers } = useSecrets()
-  const [adding, setAdding] = useState(false)
   const [removing, setRemoving] = useState<string | null>(null)
-  const [wasOpen, setWasOpen] = useState(open)
-  if (wasOpen !== open) {
-    setWasOpen(open)
-    if (!open) setAdding(false)
-  }
-
   const inApp = !!bridge()
   const [adoptingHere, setAdoptingHere] = useState(false)
   const addHere = async () => {
@@ -129,6 +122,50 @@ export function ComputersModal({ open, onClose }: { open: boolean; onClose: () =
     }
   }
 
+  if (adding) return <AddComputer onDone={onAdded} />
+  return (
+    <>
+      {inApp && !computers.some((c) => c.own) && (
+        <div className="flex items-center gap-3 rounded-ctl py-1.5">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-ui font-medium">This computer</p>
+            <p className="text-meta text-ink-3">Not added yet, so its agents ask to join like anyone else’s.</p>
+          </div>
+          <Button size="sm" variant="secondary" disabled={adoptingHere} onClick={() => void addHere()}>
+            Add this computer
+          </Button>
+        </div>
+      )}
+      {!inApp && computers.length === 0 && <p className="text-ui text-ink-3">None yet.</p>}
+      {computers.map((c) => (
+        <div key={c.machinePk} className="flex items-center gap-3 rounded-ctl py-1.5">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-ui font-medium">
+              {c.label}
+              {c.own && <span className="font-normal text-ink-3"> · this computer</span>}
+            </p>
+            <p className="text-meta text-ink-3">
+              {c.os} · paired {formatAgo(c.at, clockNow())}
+            </p>
+          </div>
+          <Button size="sm" variant="danger" disabled={removing === c.machinePk} onClick={() => void remove(c)}>
+            Remove
+          </Button>
+        </div>
+      ))}
+    </>
+  )
+}
+
+export function ComputersModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [adding, setAdding] = useState(false)
+  const [wasOpen, setWasOpen] = useState(open)
+  if (wasOpen !== open) {
+    setWasOpen(open)
+    if (!open) setAdding(false)
+  }
+  const inApp = !!bridge()
+
   return (
     <Modal open={open} onClose={onClose}>
       <div className="p-5">
@@ -137,41 +174,7 @@ export function ComputersModal({ open, onClose }: { open: boolean; onClose: () =
           Agents on a paired computer join your channels as yours: Channels lets them in on its own while it runs. Removing a computer also takes its agents out of the channels you own.
         </p>
         <div className="mt-4 grid gap-1">
-          {adding ? (
-            <AddComputer onDone={() => setAdding(false)} />
-          ) : (
-            <>
-              {/* In the app, this computer belongs on the list: if adding it at start didn't work, say so and offer it. */}
-              {inApp && !computers.some((c) => c.own) && (
-                <div className="flex items-center gap-3 rounded-ctl py-1.5">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-ui font-medium">This computer</p>
-                    <p className="text-meta text-ink-3">Not added yet, so its agents ask to join like anyone else’s.</p>
-                  </div>
-                  <Button size="sm" variant="secondary" disabled={adoptingHere} onClick={() => void addHere()}>
-                    Add this computer
-                  </Button>
-                </div>
-              )}
-              {!inApp && computers.length === 0 && <p className="text-ui text-ink-3">None yet.</p>}
-              {computers.map((c) => (
-                <div key={c.machinePk} className="flex items-center gap-3 rounded-ctl py-1.5">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-ui font-medium">
-                      {c.label}
-                      {c.own && <span className="font-normal text-ink-3"> · this computer</span>}
-                    </p>
-                    <p className="text-meta text-ink-3">
-                      {c.os} · paired {formatAgo(c.at, clockNow())}
-                    </p>
-                  </div>
-                  <Button size="sm" variant="danger" disabled={removing === c.machinePk} onClick={() => void remove(c)}>
-                    Remove
-                  </Button>
-                </div>
-              ))}
-            </>
-          )}
+          <ComputerRows adding={adding} onAdded={() => setAdding(false)} />
         </div>
         <div className="mt-5 flex justify-end gap-2">
           {!adding && inApp && (

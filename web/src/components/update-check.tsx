@@ -34,12 +34,14 @@ export function UpdateCheck() {
       .finally(() => setBusy(false))
   }
   return (
-    <div>
-      <p className="mb-2 text-ui font-medium text-ink">Updates</p>
+    <div data-item className="px-4 py-3">
       <div className="flex items-center gap-3">
-        <p className="min-w-0 flex-1 text-ui leading-normal text-ink-2" role="status">
-          {busy ? "Checking…" : said(shown)}
-        </p>
+        <div className="min-w-0 flex-1">
+          <p className="text-ui font-medium text-ink">Updates</p>
+          <p className="text-meta leading-snug text-ink-3" role="status">
+            {busy ? "Checking…" : said(shown)}
+          </p>
+        </div>
         {live?.state === "ready" ? (
           <Button variant="secondary" onClick={restartToUpdate}>
             Restart to update
