@@ -277,6 +277,13 @@ export interface JoinClaims {
    */
   card?: Card;
   pin?: string;
+  launch?: string;
+}
+
+const LAUNCH_RE = /^[A-Za-z0-9_-]{8,64}$/;
+
+export function readLaunch(x: unknown): string | undefined {
+  return typeof x === "string" && LAUNCH_RE.test(x) ? x : undefined;
 }
 
 /** A verified computer claim, as the owner shows the computer: whose it is, and what it's called. */
@@ -360,6 +367,7 @@ export interface JoinRequest extends MemberInfo {
   person?: string;
   /** What the agent says it runs on (model, harness, machine), unchecked: its word, shown as such. */
   card?: Card;
+  launch?: string;
 }
 
 /** How a member reads in lists: "win · key QRskRn4Z · agent of @jonatas" / "Jonatas Walker (@jonatas)". */
