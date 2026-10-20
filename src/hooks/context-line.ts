@@ -71,3 +71,10 @@ export function nudgeText(context: ContextUse, tasks: readonly number[], mc: str
   ];
   return `Your context is at ${tokensWord(context.used)} tokens, past the ${tokensWord(CONTEXT_LINE)} line. Before you end this turn, write ${asks.join("; and ")}. A new session of yours starts from it.`;
 }
+
+export function nudgeShort(tasks: readonly number[], mc: string, lead = false): string | null {
+  const [first] = tasks;
+  if (first === undefined && !lead) return null;
+  const runs = [...(first === undefined ? [] : [`\`${COMMANDS.checkpoint(mc, taskId(first))}\` for each open task`]), ...(lead ? [`\`${COMMANDS.leadCheckpoint(mc)}\``] : [])];
+  return `Past the ${tokensWord(CONTEXT_LINE)} context line: before you end this turn, run ${runs.join(" and ")}.`;
+}

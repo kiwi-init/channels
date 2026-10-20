@@ -1,6 +1,7 @@
 import { GENERAL_ROOM, MAX_CHARTER, MAX_ROOMS, MAX_TAGS, PROOF_MAX, TASK_TITLE_MAX_LENGTH, type Event, type Message } from "../protocol.ts";
 import { free, take } from "./leases.ts";
 import { unnamedTasks } from "./compact.ts";
+import { leadCheckpointKeyRefusal } from "./lead.ts";
 import { applyGithub, type GithubState } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { omit } from "../omit.ts";
@@ -310,14 +311,22 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
       break;
 
     case "fact.set": {
+      const refused = leadCheckpointKeyRefusal(ev.key, m.from, ev.ttl);
+      if (refused) {
+        reject(refused);
+        break;
+      }
       const ttl = ev.ttl === undefined ? undefined : Math.min(Math.max(Number(ev.ttl) || 0, 60), 30 * 24 * 3600) * 1000;
       facts.set(ev.key, { key: ev.key, value: ev.value, by: m.from, ts: at, seq: m.seq, ...(ttl ? { expires: at + ttl } : {}) });
       break;
     }
 
-    case "fact.del":
-      facts.delete(ev.key);
+    case "fact.del": {
+      const refused = leadCheckpointKeyRefusal(ev.key, m.from, undefined);
+      if (refused) reject(refused);
+      else facts.delete(ev.key);
       break;
+    }
 
     case "lease.take": {
       let lease = c.leases.get(ev.name);

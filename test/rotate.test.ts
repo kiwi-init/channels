@@ -4,8 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CONTEXT_LINE, PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts";
-import { LEAD_CHECKPOINT } from "@kiwi/core/reentry.ts";
-import { fold, type ChannelState, type Place } from "@kiwi/core/state.ts";
+import { fold, leadCheckpointKey, type ChannelState, type Place } from "@kiwi/core/state.ts";
 import { alive } from "../src/hooks/listeners.ts";
 import { paneOf, rotateArgv } from "../src/hooks/rotate.ts";
 import { ROTATE_FLOOR, rotationAt } from "../src/rotate/decide.ts";
@@ -42,20 +41,26 @@ describe("when a seat rotates", () => {
   });
 
   test("the lead only past the line, and once its own lead checkpoint is later in the channel than the nudge", () => {
-    const led = (seq: number | null, by = "ana") =>
-      board([], { lead: "ana", facts: new Map(seq === null ? [] : [[LEAD_CHECKPOINT, { key: LEAD_CHECKPOINT, value: "waiting on bo for T3", by, ts: 1, seq }]]) });
+    const key = leadCheckpointKey("ana");
+    const led = (seq: number | null, by = "ana", extra: object = {}) =>
+      board([], { lead: "ana", facts: new Map(seq === null ? [] : [[key, { key, value: "waiting on bo for T3", by, ts: 1, seq, ...extra }]]) });
     expect(rotationAt(led(90), "ana", CONTEXT_LINE - 1, 50)).toEqual({ kind: "stay", why: "the lead, under the line" });
     expect(rotationAt(led(null), "ana", CONTEXT_LINE, 50)).toEqual({ kind: "stay", why: "the lead, past the line, waiting for its lead checkpoint" });
     expect(rotationAt(led(90), "ana", CONTEXT_LINE, null).kind).toBe("stay");
     expect(rotationAt(led(50), "ana", CONTEXT_LINE, 50).kind).toBe("stay");
     expect(rotationAt(led(51, "bo"), "ana", CONTEXT_LINE, 50).kind).toBe("stay");
+    expect(rotationAt(led(51, "ana", { expires: Date.now() + 60_000 }), "ana", CONTEXT_LINE, 50).kind).toBe("stay");
+    expect(rotationAt(board([], { lead: "ana", facts: new Map([["lead checkpoint", { key: "lead checkpoint", value: "x", by: "ana", ts: 1, seq: 51 }]]) }), "ana", CONTEXT_LINE, 50).kind).toBe("stay");
     expect(rotationAt(led(51), "ana", CONTEXT_LINE, 50)).toEqual({ kind: "rotate", why: "the lead, past the line, with its lead checkpoint since the nudge" });
     expect(rotationAt({ ...led(51), lead: "bo" }, "ana", ROTATE_FLOOR, 50)).toEqual({ kind: "rotate", why: "between tasks" });
   });
 
   test("a lead with open tasks needs both: a checkpoint on each task and its lead checkpoint since the nudge", () => {
     const both = (task: number, lead: number) =>
-      board([{ id: 1, owner: "ana", notes: [checkpoint(task)] }], { lead: "ana", facts: new Map([[LEAD_CHECKPOINT, { key: LEAD_CHECKPOINT, value: "x", by: "ana", ts: 1, seq: lead }]]) });
+      board([{ id: 1, owner: "ana", notes: [checkpoint(task)] }], {
+        lead: "ana",
+        facts: new Map([[leadCheckpointKey("ana"), { key: leadCheckpointKey("ana"), value: "x", by: "ana", ts: 1, seq: lead }]]),
+      });
     expect(rotationAt(both(60, 40), "ana", CONTEXT_LINE, 50).why).toBe("the lead, past the line, waiting for its lead checkpoint");
     expect(rotationAt(both(40, 60), "ana", CONTEXT_LINE, 50).why).toBe("past the line, waiting for a checkpoint on each open task");
     expect(rotationAt(both(60, 61), "ana", CONTEXT_LINE, 50).kind).toBe("rotate");

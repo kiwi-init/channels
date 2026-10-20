@@ -1,10 +1,9 @@
 import { ago, markedText, taskStateWord } from "./format.ts";
 import { inlineText } from "./membership.ts";
 import { CHECKPOINT_MAX_LENGTH } from "./protocol.ts";
-import { openRound, taskId, unnamedAsks, unnamedTasks, type ChannelState, type Fact, type Task } from "./state.ts";
+import { leadCheckpointKey, openRound, taskId, unnamedAsks, unnamedTasks, type ChannelState, type Fact, type Task } from "./state.ts";
 
 export const REENTRY_MAX = 4_000;
-export const LEAD_CHECKPOINT = "lead checkpoint";
 const CHECKPOINT_SHOWN = 1_500;
 const NOTE_SHOWN = 300;
 const BOARD_SHOWN = 12;
@@ -36,9 +35,11 @@ export function leadCheckpointRefusal(state: ChannelState, me: string, text: str
 }
 
 export function leadCheckpoint(state: ChannelState, me: string): Fact | undefined {
-  const f = state.facts.get(LEAD_CHECKPOINT);
-  return state.lead === me && f?.by === me ? f : undefined;
+  const f = state.facts.get(leadCheckpointKey(me));
+  return state.lead === me && f?.by === me && f.expires === undefined ? f : undefined;
 }
+
+const leadNote = (f: Fact, mc: string) => `${mc} note "${f.key}"`;
 
 function cutText(text: string, whole: string): string {
   return text.length > CHECKPOINT_SHOWN ? `${text.slice(0, CHECKPOINT_SHOWN)} …\n(cut here: ${whole} has all of it)` : text;
@@ -50,8 +51,8 @@ function checkpointText(text: string, task: number, mc: string): string {
 
 function leadBlock(f: Fact, now: number, mc: string): Block {
   return {
-    text: [`Your lead checkpoint, ${ago(f.ts, now)} (#${f.seq}):`, `  │ ${markedText(cutText(f.value, `${mc} note "${LEAD_CHECKPOINT}"`))}`].join("\n"),
-    elsewhere: `your lead checkpoint (${mc} note "${LEAD_CHECKPOINT}")`,
+    text: [`Your lead checkpoint, ${ago(f.ts, now)} (#${f.seq}):`, `  │ ${markedText(cutText(f.value, leadNote(f, mc)))}`].join("\n"),
+    elsewhere: `your lead checkpoint (${leadNote(f, mc)})`,
   };
 }
 
@@ -133,5 +134,6 @@ export function reentryText(state: ChannelState, me: string, now = Date.now(), m
     text = assemble(header, shown, leftOf(), mc);
   }
   if (text.length <= max) return text;
-  return pointer(mc).length <= max ? pointer(mc) : null;
+  const pointers = [...(lead ? [`${pointer(mc)}; your lead checkpoint: ${leadNote(lead, mc)}`] : []), pointer(mc)];
+  return pointers.find((p) => p.length <= max) ?? null;
 }

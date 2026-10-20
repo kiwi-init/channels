@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { tokensWord } from "@kiwi/core/format.ts";
 import { CONTEXT_LINE, cleanActivity } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
-import { crossing, nudgeText, openTasksOf } from "../src/hooks/context-line.ts";
+import { crossing, nudgeShort, nudgeText, openTasksOf } from "../src/hooks/context-line.ts";
 
 describe("context in tokens, in words", () => {
   test("thousands as k, a million and up as M, rounding never shows 1000k", () => {
@@ -49,6 +49,15 @@ describe("the nudge", () => {
     expect(both).toContain("(T7) with `kiwi task checkpoint T7 --file note.md`");
     expect(both).toContain("; and where the channel stands as you lead it with `kiwi task checkpoint lead --file note.md`");
     expect(both.indexOf("T7")).toBeLessThan(both.indexOf("checkpoint lead"));
+  });
+
+  test("the short nudge, for when the full one doesn't fit, still names every command and is far shorter", () => {
+    expect(nudgeShort([], "kiwi")).toBeNull();
+    expect(nudgeShort([7, 9], "kiwi")).toBe("Past the 250k context line: before you end this turn, run `kiwi task checkpoint T7 --file note.md` for each open task.");
+    expect(nudgeShort([], "kiwi", true)).toBe("Past the 250k context line: before you end this turn, run `kiwi task checkpoint lead --file note.md`.");
+    const short = nudgeShort([7], "kiwi --as ana", true)!;
+    expect(short).toContain("`kiwi --as ana task checkpoint T7 --file note.md` for each open task and `kiwi --as ana task checkpoint lead --file note.md`");
+    expect(short.length * 2).toBeLessThan(nudgeText({ used: 300_000 }, [7], "kiwi --as ana", true)!.length);
   });
 
   test("the open tasks are the seat's own that aren't done or archived", () => {

@@ -77,8 +77,10 @@ older clients keep it as a plain note. Built in item 1.
 The lead's own checkpoint, which has no task: `kiwi task checkpoint lead --file note.md`. Only
 the lead may write it, and it must name every open task (T7) and question (#123) by its id, the
 rule `kiwi compact` already enforces for the channel summary. It is stored as the channel fact
-`lead checkpoint` (the way `answering #N` is), so it needs no new event; a value under that key
-written by anyone but the lead is ignored.
+`lead checkpoint/<name>` (the way `answering #N` is), so it needs no new event. The fold rejects a
+`fact.set` or `fact.del` of that key by anyone but `<name>`, and any expiry on it, so no one else
+can erase it or block the lead's rotation, and it can't vanish between rotation and re-entry. If
+the full nudge doesn't fit the hook's budget, a short one names only the commands.
 
 ### 2. Re-entry: SessionStart puts the agent back on its work
 
