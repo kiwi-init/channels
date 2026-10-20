@@ -226,7 +226,9 @@ From `design-tokens.ts`:
   open yet. A hover card says what the full row says: name, time, last
   line. New, the app update and your account sit at its foot. A wide
   window always shows the rail, with no way to expand it; a phone always
-  shows the full list.
+  shows the full list. The Mac app's window is never narrower than 768px,
+  so it always has the rail: the phone layout's headers would sit under
+  the traffic lights.
 - Conversation: no bubbles, everyone on the left, on the shell's one
   background. A message is a row: a 32px face, then the name in `ui`
   semibold, a quiet `owner` or `lead` tag and the time in `stamp`, the
