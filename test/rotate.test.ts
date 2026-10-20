@@ -89,6 +89,15 @@ describe("Claude Code's input box in a captured pane", () => {
     expect(inputText(box("❯ \x1b[2mTry\x1b[0m x"))).toBe("x");
   });
 
+  test("Rex's vt capture, with its CRLF lines, its resets before every style and the cursor cell, reads the same", () => {
+    const rule = "\x1b[0m\x1b[38;2;136;136;136m────────────────\x1b[0m\r";
+    const rex = (line: string) => ["Last login: Tue Oct 20 14:04:58 on ttys002\r", rule, line, rule, "  \x1b[0m\x1b[38;2;153;153;153m? for shortcuts\x1b[0m\x1b[=5;1u"].join("\n");
+    expect(inputText(rex('\x1b[0m\x1b[38;2;153;153;153m❯\u00a0\x1b[0m\x1b[7m \x1b[0m\x1b[2mTry "fix lint errors"\x1b[0m\r'))).toBe("");
+    expect(inputText(rex("\x1b[0m\x1b[38;2;153;153;153m❯\u00a0\x1b[0m\r"))).toBe("");
+    expect(inputText(rex("\x1b[0m\x1b[38;2;153;153;153m❯\u00a0\x1b[0mhalf typed\r"))).toBe("half typed");
+    expect(inputText(rex("\x1b[0m\x1b[38;2;153;153;153m❯\u00a0\x1b[0m/clear\r"), null)).toBe("/clear");
+  });
+
   test("anything else on screen is no box: a dialog, a stale prompt above one, a missing rule", () => {
     expect(inputText(" ❯ No, exit\n   Yes, I trust this folder")).toBeNull();
     expect(inputText([RULE, "❯ ", RULE, "Allow this command?", " ❯ Yes", "   No", "   Always", "Esc to cancel"].join("\n"))).toBeNull();

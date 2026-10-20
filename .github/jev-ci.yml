@@ -175,7 +175,7 @@ jobs:
       session (another live sender's file makes it back off, a dead one's is ignored), a seat that stays
       logged to rotate.log once per reason with its seat, again after a rotation (noteStay and forgetStay
       in src/rotate/pane.ts, keyed by a .rotate-stay file in hook-state), a Rex pane's server,
-      session, block and binary, and, with tmux on
+      session, block and binary, Rex's vt capture of the input box, and, with tmux on
       its own socket, /clear typed
       only into an idle session's empty box, Enter only once /clear shows there, its six characters
       erased when rotation is switched off before Enter while it still owns the pane, nothing more sent

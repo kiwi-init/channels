@@ -146,7 +146,7 @@ function rexBackend(t: Target & { rex: RexPlace; bin: string }, quietMs: number)
   const bin = t.bin;
   let emptyAt: number | null = null;
   const cast = (id: PaneId | RexId): RexId => id as RexId;
-  const sendKey = (keyName: string): boolean => runRex(bin, ["-S", place.server, "send-key", "-s", place.session, "-b", place.block, keyName]).status === 0;
+  const sendKey = (...keys: string[]): boolean => runRex(bin, ["-S", place.server, "send-key", "-s", place.session, "-b", place.block, ...keys]).status === 0;
   return {
     kind: "rex",
     identify: () => {
@@ -174,10 +174,7 @@ function rexBackend(t: Target & { rex: RexPlace; bin: string }, quietMs: number)
     screen: () => rexScreen(place, bin),
     type: (_first, text) => runRex(bin, ["-S", place.server, "send", "-s", place.session, "-b", place.block, text]).status === 0,
     enter: () => sendKey("enter"),
-    erase: (_first, count) => {
-      for (let i = 0; i < count; i += 1) if (!sendKey("backspace")) return false;
-      return true;
-    },
+    erase: (_first, count) => sendKey(...Array.from({ length: count }, () => "backspace")),
     calm: () => true,
     quiet: (now) => {
       if (emptyAt === null) {

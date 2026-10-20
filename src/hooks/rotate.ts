@@ -47,7 +47,8 @@ export const rotateAfterStop = Effect.fn("Hooks.rotateAfterStop")(function* (inp
   const file = input.transcript_path;
   const where = paneOf(process.env);
   if (who.harness !== "claude" || input.stop_hook_active || !who.pid || !session || typeof file !== "string" || !where || !served.length) return;
-  if (loadConfig().rotate !== "on") return;
+  const config = loadConfig();
+  if (config.rotate !== "on" || (!("pane" in where) && config.rex !== "on")) return;
   const teller = "pane" in where ? { pid: who.pid, session, pane: where.pane } : { pid: who.pid, session, rex: where.rex };
   const { claudeContext } = yield* Effect.promise(() => import("../harness.ts"));
   const used = yield* Effect.sync(() => {
