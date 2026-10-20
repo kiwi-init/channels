@@ -52,3 +52,7 @@ export function chosenOf(ask: Message, replies: readonly Message[]): Chosen | un
   }
   return undefined
 }
+
+export function answered(asking: Message | undefined, named: readonly string[], replying: boolean): Message | undefined {
+  return !replying && asking && (!named.length || named.includes(asking.from)) ? asking : undefined
+}

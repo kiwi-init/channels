@@ -144,6 +144,15 @@ export function appendCache(roomId: string, messages: Message[]): void {
   });
 }
 
+export function replaceCache(roomId: string, messages: Message[]): void {
+  const path = cachePath(roomId);
+  mkdirSync(join(path, ".."), { recursive: true, mode: 0o700 });
+  withLock(`${path}.lock`, () => {
+    writePrivate(path, messages.map((m) => JSON.stringify(m)).join("\n") + (messages.length ? "\n" : ""));
+    writePrivate(`${path}.seq`, String(messages.at(-1)?.seq ?? 0));
+  });
+}
+
 export function trimCache(roomId: string, base: FoldBase): number {
   const path = cachePath(roomId);
   if (!existsSync(path)) return 0;

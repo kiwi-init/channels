@@ -14,6 +14,18 @@ import { narrows, wants } from "./wants.ts";
 const CACHE_TRIM_AT = 800;
 const CACHE_KEEP = 300;
 
+const NOT_A_MEMBER = " isn't a member";
+
+function poisoned(base: FoldBase, roster: Roster): boolean {
+  const names = new Set(roster.filter((r) => r.kind !== "computer").map((r) => r.name));
+  return base.rejected.some(([, why]) => why.endsWith(NOT_A_MEMBER) && names.has(why.slice(0, -NOT_A_MEMBER.length)));
+}
+
+function strangers(rejected: Iterable<readonly [number, string]>, after: number): boolean {
+  for (const [seq, why] of rejected) if (seq > after && (why.endsWith(NOT_A_MEMBER) || why.startsWith("not signed by "))) return true;
+  return false;
+}
+
 export class SessionState {
   readonly ch: Channel;
   private roster: Roster | null = null;
@@ -21,6 +33,8 @@ export class SessionState {
   protected roomsFloor: RoomsFloor | null | undefined;
   protected guardFloor: GuardFloor | null | undefined;
   private roomsCheckedAt = 0;
+  private rosterCheckedAt = 0;
+  private healed = false;
   private log: Message[] | null = null;
   private saved = 0;
   private owed = 0;
@@ -64,10 +78,14 @@ export class SessionState {
     }
     const look = yield* Look;
     const seen = peeked === undefined ? yield* this.peek() : peeked;
-    const current = seen !== null && seen.head <= lastSeq(this.log) && lastSeq(this.log) >= this.owed;
-    if (!current && (!look?.fetched.has(this) || lastSeq(this.log) < this.owed)) {
-      const fetched = !this.log.length && !this.base ? yield* this.ch.fx.snapshot() : null;
-      const from = Math.max(lastSeq(this.log), this.base?.n ?? fetched?.n ?? 0);
+    const first = this.log[0]?.seq;
+    const holed = first !== undefined && first > (this.base?.n ?? 0) + 1;
+    const current = !holed && seen !== null && seen.head <= lastSeq(this.log) && lastSeq(this.log) >= this.owed;
+    if (!current && (holed || !look?.fetched.has(this) || lastSeq(this.log) < this.owed)) {
+      const fetched = !this.base && (first === undefined || first > 1) ? yield* this.ch.fx.snapshot() : null;
+      const floor = this.base?.n ?? fetched?.n ?? 0;
+      const hole = first !== undefined && first > floor + 1;
+      const from = hole ? floor : Math.max(lastSeq(this.log), floor);
       const offline = yield* OfflineReads;
       const cachedOnly = !!offline && !fetched && this.log.length > 0;
       const page = yield* this.ch.fx.history(from).pipe(
@@ -86,8 +104,16 @@ export class SessionState {
           yield* cache.keepBase(this.cfg.roomId, fetched);
           this.base ??= fetched;
         }
-        const fresh = page.messages.filter((m) => m.seq > lastSeq(this.log!));
-        if (fresh.length) this.log = [...this.log!, ...fresh];
+        if (hole) {
+          const bySeq = new Map(this.log!.map((m) => [m.seq, m]));
+          for (const m of page.messages) bySeq.set(m.seq, m);
+          this.log = [...bySeq.values()].sort((a, b) => a.seq - b.seq);
+          yield* cache.replace(this.cfg.roomId, this.log);
+          this.saved = lastSeq(this.log);
+        } else {
+          const fresh = page.messages.filter((m) => m.seq > lastSeq(this.log!));
+          if (fresh.length) this.log = [...this.log!, ...fresh];
+        }
         look?.fetched.add(this);
       }
     }
@@ -103,7 +129,14 @@ export class SessionState {
   readonly state = Effect.fn("AgentSession.state")({ self: this }, function* (this: SessionState) {
     yield* this.chores();
     const seen = yield* this.peek();
-    const [messages, roster] = yield* Effect.all([this.sync(seen), this.members(false, seen?.members ?? undefined)], { concurrency: "unbounded" });
+    const [synced, roster] = yield* Effect.all([this.sync(seen), this.members(false, seen?.members ?? undefined)], { concurrency: "unbounded" });
+    let messages = synced;
+    if (this.base && !this.healed && poisoned(this.base, roster)) {
+      this.healed = true;
+      yield* (yield* Cache).dropBase(this.cfg.roomId);
+      this.base = null;
+      messages = yield* this.sync(seen);
+    }
     const look = yield* Look;
     const prior = look?.seen.get(this);
     if (prior && prior.messages === messages && prior.roster === roster && prior.rooms === this.roomsFloor && prior.guard === this.guardFloor) return prior.view;
@@ -120,10 +153,18 @@ export class SessionState {
     });
   }
 
-  protected foldState(messages: Message[], roster: Roster, info?: Info): Effect.Effect<ChannelState, never, Relay | Cache> {
+  protected foldState(messages: Message[], given: Roster, info?: Info): Effect.Effect<ChannelState, never, Relay | Cache> {
     return Effect.gen({ self: this }, function* () {
       this.roomsFloor ??= yield* orNone(this.ch.fx.rooms(info));
       this.guardFloor ??= yield* orNone(this.ch.fx.guard(info));
+      let roster = given;
+      let fresh = false;
+      const since = this.base?.n ?? 0;
+      const refresh = Effect.gen({ self: this }, function* () {
+        const now = yield* orNone(this.members(true));
+        if (now) [roster, fresh] = [now, true];
+        return !!now;
+      });
       const kept: { base?: FoldBase } = {};
       const keep = this.snapshotDue?.(messages.at(-1)?.seq ?? 0) ? (b: FoldBase) => void (kept.base = b) : undefined;
       let state = fold(messages, roster, Date.now(), this.roomsFloor, this.guardFloor, this.base, keep);
@@ -134,11 +175,23 @@ export class SessionState {
         this.roomsFloor = yield* orNone(this.ch.fx.rooms());
         state = fold(messages, roster, Date.now(), this.roomsFloor, this.guardFloor, this.base, keep);
       }
-      if (kept.base && this.publish) yield* this.publish(kept.base);
+      if (strangers(state.rejected, Math.max(since, this.rosterCheckedAt))) {
+        this.rosterCheckedAt = state.head;
+        if (yield* refresh) {
+          kept.base = undefined;
+          state = fold(messages, roster, Date.now(), this.roomsFloor, this.guardFloor, this.base, keep);
+        }
+      }
+      if (kept.base && this.publish && (!strangers(kept.base.rejected, since) || fresh)) yield* this.publish(kept.base);
       if (messages.length > CACHE_TRIM_AT && !this.partial) {
-        const older: { base?: FoldBase } = {};
-        fold(messages.slice(0, messages.length - CACHE_KEEP), roster, Date.now(), this.roomsFloor, this.guardFloor, this.base, (b) => void (older.base = b));
-        if (older.base) yield* (yield* Cache).trim(this.cfg.roomId, older.base);
+        const trimmed = (): FoldBase | undefined => {
+          const older: { base?: FoldBase } = {};
+          fold(messages.slice(0, messages.length - CACHE_KEEP), roster, Date.now(), this.roomsFloor, this.guardFloor, this.base, (b) => void (older.base = b));
+          return older.base;
+        };
+        let older = trimmed();
+        if (older && strangers(older.rejected, since) && !fresh) older = (yield* refresh) ? trimmed() : undefined;
+        if (older) yield* (yield* Cache).trim(this.cfg.roomId, older);
       }
       return state;
     });

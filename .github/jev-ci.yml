@@ -125,6 +125,13 @@ jobs:
       lib/format.test.ts: the time formatters give nothing for such a time instead of throwing, and
       lib/channel/recent.test.ts: a saved channel preview carrying one is dropped, so the channel
       list still renders.
+      Also test/trim-roster.test.ts: an agent whose roster is short a member (as a stale daemon peek
+      leaves it) refolds with the whole roster before it saves a trimmed fold base, so a task that
+      member worked keeps its done state and rounds instead of the cache keeping a wrong base for
+      good (src/agent/state.ts foldState); and a cached log that starts past its base's n+1 (as a
+      live listener leaves it after the cache was removed) refetches the gap from the relay and
+      rewrites the cache (sync, replaceCache) instead of folding without those messages; and a cached
+      base that rejected a current member as a non-member is dropped and rebuilt from the relay.
       Also test/verify-total.test.ts: a signature check never throws (packages/core/src/identity.ts
       verify): a pk or sig that isn't base64url reads as unsigned, and a member's message sealed with
       such a pk loads as forged instead of failing everyone's history.
@@ -172,6 +179,13 @@ jobs:
       Also test/local-relay.test.ts: the local relay the browser and desktop scripts start
       (scripts/local-relay.ts) binds a port the system picks and reads it back from the relay's
       listening line, so two started at once never ask for the same port.
+      Also the composer and conversation (audit M): web composer-question.test.tsx: a question's
+      option answers once (choiceGate in lib/choosing.ts refuses a click within 400 ms of the question showing or
+      while its answer is on its way, and frees it when the send fails), and a message @addressed
+      to others isn't the waiting question's answer (answered in lib/asks.ts); web
+      lib/drafts.test.ts: a draft (text or images) is kept per channel and place until emptied;
+      web conversation/use-scroll.test.ts: only messages newer than the newest seen count as new
+      (arrivedAfter), and a hidden window's unread never goes below zero (unreadOf).
       Also test/daemon-big-lines.test.ts: the daemon's socket writes queue what the socket
       didn't take and flush it on drain (src/daemon/server.ts), so a catch-up of thirty
       messages with 50 KB ones among them, and big live messages back to back, arrive whole

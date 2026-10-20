@@ -193,7 +193,7 @@ export interface MessageProps {
   quoted: (seq: number) => Message | undefined
   nameOf: (name: string) => string
   onReply?: (m: Message) => void
-  onChoose?: (choice: string) => void
+  onChoose?: (choice: string) => Promise<boolean>
   /** This question waits above the composer, where it is answered: here it is only a pointer to it. */
   inBanner?: boolean
   chosen?: Chosen
@@ -522,7 +522,7 @@ export const MessageRow = memo(function MessageRow({
         )}
       </div>
 
-      <div className="absolute -top-3 right-2 hidden items-center gap-0.5 rounded-full bg-canvas px-0.5 shadow-[0_0_0_1px_var(--line)] group-focus-within/b:flex group-hover/b:flex">
+      <div className="pointer-events-none absolute -top-3 right-2 flex items-center gap-0.5 rounded-full bg-canvas px-0.5 opacity-0 shadow-[0_0_0_1px_var(--line)] group-focus-within/b:pointer-events-auto group-focus-within/b:opacity-100 group-hover/b:pointer-events-auto group-hover/b:opacity-100">
         {onReact && (
           <button type="button" aria-label="React with a GIF" title="React with a GIF" onClick={() => onReact(m)} className={action}>
             <Icon icon={SmileIcon} size={15} />
