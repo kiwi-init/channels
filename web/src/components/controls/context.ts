@@ -5,6 +5,7 @@ import type { Persona, Personality } from "@kiwi/core/personality.ts"
 import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 import type { Scope } from "@kiwi/core/scopes.ts"
 import type { ChannelState } from "@kiwi/core/state.ts"
+import type { LogExport } from "@/lib/log-export"
 
 export type Confirm =
   | { kind: "approve"; req: JoinRequest }
@@ -37,7 +38,7 @@ export interface ControlsProps {
   onNickname?: (m: RosterMember, nickname: string | null) => Promise<void>
   onCloseChannel: () => Promise<void>
   onLeaveChannel: () => Promise<void>
-  exportLog: () => Promise<string>
+  exportLog: () => Promise<LogExport>
   onRename?: (name: string) => Promise<void>
   onIcon?: (icon: ChannelIcon | null) => Promise<void>
   onHold?: (on: boolean, note?: string) => Promise<void>

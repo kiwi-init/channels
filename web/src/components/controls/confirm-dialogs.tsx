@@ -5,7 +5,7 @@ import { usePinned } from "@/lib/pinned"
 import { memberName } from "@/lib/format"
 import { AgentFacts } from "../agent-facts"
 import { Alert, Button, errorText, TextField, toast } from "../kit"
-import { logFileName } from "@/lib/log-export"
+import { exportNote, logFileName } from "@/lib/log-export"
 import type { Persona } from "@kiwi/core/personality.ts"
 import { PersonalityPicker } from "../personality-picker"
 import { ScopePicker } from "../scopes"
@@ -43,13 +43,15 @@ export function ConfirmDialogs({
   const download = async () => {
     setSaving(true)
     try {
-      const url = URL.createObjectURL(new Blob([await p.exportLog()], { type: "application/jsonl" }))
+      const log = await p.exportLog()
+      const url = URL.createObjectURL(new Blob([log.text], { type: "application/jsonl" }))
       const a = document.createElement("a")
       a.href = url
       a.download = logFileName(p.title, new Date())
       a.click()
       setTimeout(() => URL.revokeObjectURL(url), 60_000)
-      toast("Log downloaded")
+      const note = exportNote(log)
+      toast(note.text, note.complete ? undefined : "error")
     } catch (err) {
       toast(`Not downloaded: ${errorText(err)}`, "error")
     } finally {
@@ -232,7 +234,7 @@ export function ConfirmDialogs({
         </Button>
         <Button
           className="bg-alert"
-          disabled={busy}
+          disabled={busy || saving}
           onClick={() => run(confirm?.kind === "close" ? p.onCloseChannel : p.onLeaveChannel, confirm?.kind === "close" ? "Channel closed" : "You left the channel")}
         >
           {confirm?.kind === "close" ? "Close channel" : "Leave channel"}

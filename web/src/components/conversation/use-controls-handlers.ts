@@ -1,7 +1,7 @@
 import { personaScopes } from "@kiwi/core/personality.ts"
 import { describeScopes, SCOPES, wireScopes } from "@kiwi/core/scopes.ts"
 import { forgetChannel, loadMember, renameChannel, type ChannelHandle, type StoredMember } from "@/lib/channel"
-import { logLines } from "@/lib/log-export"
+import { logExport } from "@/lib/log-export"
 import { secrets } from "@/lib/secrets"
 import type { ControlsProps } from "../controls"
 
@@ -129,6 +129,6 @@ export function useControlsHandlers({
       forgetChannel(member.code)
       onGone()
     },
-    exportLog: async () => logLines((await ch.history(0)).messages),
+    exportLog: async () => logExport(await ch.history(0)),
   }
 }

@@ -197,7 +197,10 @@ jobs:
       its seq, and web lib/history.test.ts: its sealed row keeps the cache whole (no hole, no reload)
       and opens as the message once a newer build can read it.
       Also web lib/log-export.test.ts: a channel's log kept before it closes, one JSON line per message
-      with its key and signature, under a file name from the channel's title and the day.
+      with its key and signature, under a file name from the channel's title and the day; every seq from the
+      first the relay kept to the head either in the file or named as missing, and those the relay dropped
+      under its storage cap said apart; with test/log-export.test.ts, a stored message this build can't read
+      named as missing instead of the download passing for the whole log.
       Also test/desktop-keys.test.ts: the desktop key process (desktop/src/keyring.ts and keys-server.ts,
       over the wire web/src/lib/channel-remote.ts uses) against a local relay, failing if any member,
       owner, person or channel key reaches the window, plus the seat rules, the wire codec, the
