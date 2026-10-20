@@ -12,6 +12,11 @@ import type { ChannelState, Fact, FoldBase, FoldMember, GuardFloor, Lease, Membe
 
 const STALE_MS = 24 * 3_600_000;
 
+function earlierParent(m: Message): number | undefined {
+  const parent = m.re?.[0];
+  return parent !== undefined && parent < m.seq ? parent : undefined;
+}
+
 function touch(task: Task | undefined, name: string, at: number): void {
   if (task && (task.touched?.[name] ?? 0) < at) task.touched = { ...task.touched, [name]: at };
 }
@@ -255,7 +260,7 @@ export function fold(
         continue;
       }
       if (m.kind !== "event") {
-        const parent = m.re?.[0];
+        const parent = earlierParent(m);
         const room = (parent !== undefined ? roomOf.get(parent) : undefined) ?? m.room ?? GENERAL_ROOM;
         if (!rooms.has(room)) {
           trust.set(m.seq, "refused");
@@ -276,13 +281,14 @@ export function fold(
       if (!isReaction(m)) member.messages++;
 
       for (const r of m.re ?? []) {
+        if (!(r < m.seq)) continue;
         let set = answered.get(r);
         if (!set) answered.set(r, (set = new Set()));
         set.add(m.from);
       }
 
       if (m.kind !== "event") {
-        const parent = m.re?.[0];
+        const parent = earlierParent(m);
         const root = parent === undefined ? m.seq : (threadOf.get(parent) ?? parent);
         threadOf.set(m.seq, root);
         let people = threadPeople.get(root);

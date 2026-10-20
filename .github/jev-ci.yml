@@ -432,6 +432,12 @@ jobs:
       KIWI_HOME/daemon.log, rotated at 1 MB. And
       test/release-signing.test.ts: release-build.yml's Package step fails a tag release that has no
       Mac signing secrets, while a rehearsal and the Linux build still build unsigned. And
+      test/untrusted-messages.test.ts: an owner-only event a member sent is refused by the fold and
+      not handed to agents (src/agent/wants.ts), and kiwi log flags it (packages/core/src/format.ts);
+      a reply naming a later seq answers nothing and roots no thread there
+      (packages/core/src/state/fold.ts). And test/history-progress.test.ts: a relay serving the same
+      page forever can't keep history() looping (packages/core/src/client/history.ts). And web
+      components/mermaid.test.tsx: a diagram's click links open in a new tab with noopener. And
       test/release-environment.test.ts: every job that reads a signing or deploy secret (MAC_*,
       APPLE_*, CLOUDFLARE_*) runs in the release environment, a rehearsal off main runs in none, and
       no caller of release-build.yml passes those secrets by name. And
@@ -580,7 +586,8 @@ jobs:
       from sibling folders, and with a backlog on both seats each hook's whole output (SessionStart,
       prompt, stop) within HOOK_CONTEXT_MAX, the seats sharing it (src/hooks/run.ts). Then handoff: an escalation's live browser link (packages/core/src/protocol.ts),
       `kiwi send --escalate --handoff URL --wait` exit codes, and the link kept out of log, show,
-      listen --json except `kiwi show N --reveal`. Then hooks-once: a message the prompt or stop hook
+      listen --json except `kiwi show N --reveal`, and only a person's done or couldn't ends the wait, never
+      an agent's (src/agent/messaging.ts). Then hooks-once: a message the prompt or stop hook
       hands over never wakes the session a second time from the listener started with it
       (src/hooks/listen.ts waits for the session's answering hook, src/hooks/delivered.ts), and the
       listener keeps listening for the next one; and a prompt hook whose output never reaches the
