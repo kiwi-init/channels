@@ -128,7 +128,8 @@ export class SessionState {
   readonly state = Effect.fn("AgentSession.state")({ self: this }, function* (this: SessionState) {
     yield* this.chores();
     const seen = yield* this.peek();
-    let [messages, roster] = yield* Effect.all([this.sync(seen), this.members(false, seen?.members ?? undefined)], { concurrency: "unbounded" });
+    const [synced, roster] = yield* Effect.all([this.sync(seen), this.members(false, seen?.members ?? undefined)], { concurrency: "unbounded" });
+    let messages = synced;
     if (this.base && poisoned(this.base, roster)) {
       yield* (yield* Cache).dropBase(this.cfg.roomId);
       this.base = null;
