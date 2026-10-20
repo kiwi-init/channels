@@ -13,14 +13,13 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium, type CDPSession, type Page } from "playwright-core";
+import { startLocalRelay } from "./local-relay.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
 const MESSAGES = Number(process.env.PERF_MESSAGES ?? 400);
 const BUDGET = process.env.PERF_BUDGET_MS ? Number(process.env.PERF_BUDGET_MS) : null;
 const jsonAt = process.argv.indexOf("--json");
 const OUT = jsonAt > 0 ? process.argv[jsonAt + 1] : undefined;
-const PORT = 20000 + Math.floor(Math.random() * 20000);
-const BASE = `http://localhost:${PORT}/`;
 const data = mkdtempSync(join(tmpdir(), "kiwi-perf-switch-"));
 const cli = join(data, "cli");
 mkdirSync(join(cli, "bin"), { recursive: true });
@@ -45,19 +44,8 @@ const median = (xs: number[]) => {
   return s.length ? s[Math.floor(s.length / 2)]! : 0;
 };
 
-const relay = spawn("bun", ["src/relay/bun.ts", "--hostname", "127.0.0.1", "--port", String(PORT), "--data", join(data, "relay"), "--web", "web/dist", "--dev-sign-in"], {
-  cwd: ROOT,
-  stdio: ["ignore", "pipe", "inherit"],
-});
-await new Promise<void>((ok, fail) => {
-  let out = "";
-  relay.stdout!.on("data", (d) => {
-    out += d;
-    if (out.includes("site: not served")) fail(new Error("web/dist is missing: run bun run web:build first"));
-    else if (out.includes("site:")) ok();
-  });
-  relay.on("exit", (code) => fail(new Error(`relay exited (${code})`)));
-});
+const { relay, port } = await startLocalRelay(join(data, "relay"), "web/dist");
+const BASE = `http://localhost:${port}/`;
 
 const browser = await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
 

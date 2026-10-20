@@ -1,5 +1,5 @@
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons"
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react"
+import { useCallback, useDeferredValue, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react"
 
 import { droppedCount } from "@kiwi/core/format.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
@@ -77,6 +77,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const openTask = useCallback((task: number) => setSide({ kind: "tasks", task }), [])
   const [pausing, setPausing] = useState(false)
   const [search, setSearch] = useState<string | null>(null)
+  const query = useDeferredValue(search?.trim() ? search : null)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [picture, setPicture] = useState<{ m: Message; img: ImageAttachment; src: string } | null>(null)
   const [highlight, setHighlight] = useState<number | null>(null)
@@ -129,7 +130,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     me,
     sideRoot,
     isOwner,
-    search,
+    search: query,
     hereKey,
     taskKey,
     shownTask,
@@ -259,7 +260,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
 
   const folded = hereKey === "main" && !search && state.compact ? state.compact : null
   const shown = folded && !earlier ? visible.filter((m) => m.seq > folded.through) : visible
-  const { tail, hidden, more, onScrolled } = useWindow(shown, hereKey, scroller, highlight, !!search, tab === "conversation")
+  const { tail, hidden, more, onScrolled } = useWindow(shown, query ? `${hereKey}\u0000${query}` : hereKey, scroller, highlight, tab === "conversation")
 
   if (gone) {
     return (
@@ -290,7 +291,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     hereKey,
     cardRoom,
     cards,
-    search,
+    search: query,
     highlight,
     bySeq,
     quoted,

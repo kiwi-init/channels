@@ -17,7 +17,7 @@ export function awayFrom<T extends { seq: number }>(items: T[], hidden: number):
   return items.length - hidden > MOUNTED_MAX ? startOf(items, WINDOW_STEP) : null
 }
 
-export function useWindow<T extends { seq: number }>(items: T[], hereKey: string, scroller: RefObject<HTMLDivElement | null>, reveal: number | null, all: boolean, showing: boolean) {
+export function useWindow<T extends { seq: number }>(items: T[], hereKey: string, scroller: RefObject<HTMLDivElement | null>, reveal: number | null, showing: boolean) {
   const [shownKey, setShownKey] = useState(hereKey)
   const [from, setFrom] = useState(() => startOf(items, WINDOW_STEP))
   if (shownKey !== hereKey) {
@@ -32,9 +32,9 @@ export function useWindow<T extends { seq: number }>(items: T[], hereKey: string
         WINDOW_STEP / 2
       )
     )
-  const first = all ? -1 : items.findIndex((m) => m.seq >= from)
+  const first = items.findIndex((m) => m.seq >= from)
   const hidden = Math.max(0, first)
-  const away = showing || all ? null : awayFrom(items, hidden)
+  const away = showing ? null : awayFrom(items, hidden)
   if (away !== null && away !== from) setFrom(away)
   const keep = useRef<number | null>(null)
   const more = () => {
@@ -64,7 +64,7 @@ export function useWindow<T extends { seq: number }>(items: T[], hereKey: string
   }, [hereKey])
   useLayoutEffect(() => {
     const el = scroller.current
-    if (el && keep.current === null && !all) trim(el)
+    if (el && keep.current === null) trim(el)
   })
   useLayoutEffect(() => {
     const el = scroller.current

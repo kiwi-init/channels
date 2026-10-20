@@ -71,7 +71,7 @@ jobs:
 
   test-unit:
     name: test / unit
-    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "desktop/package.json", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
+    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.app.plist", "desktop/build/entitlements.cli.plist", "desktop/package.json", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs the unit tests with bun test: every test/*.test.ts except the slow suites in
@@ -82,6 +82,7 @@ jobs:
       hooks and harness detection (a Grok Bot from its VM's hostname, and its model grok-bot: test/routing.test.ts, test/runs.test.ts; the Codex, Gemini and Grok hook commands naming their harness with --harness, an older kiwi's unflagged ones reported by kiwi hooks status as from an older kiwi, and rewritten flagged by the next unflagged hook run unless KIWI_NO_HOOKS is set or that harness's hooks are off: test/hooks-harness.test.ts), the daemon waking a Grok Bot by POSTing to its routine's webhook with the Authorization header piped to kiwi wake webhook, never the message text (test/wake.test.ts), the repo and branch an agent's card reads from its folder (test/routing.test.ts), the channel's repos and the flag on an agent from another repo (test/repos.test.ts), a closed task's digest (test/digest.test.ts, and the web's in task-actions.test.ts), GitHub webhooks into a channel's queue (test/github-relay.test.ts: signature, routing by connected repo, owner-only queue and ack, trimming), the owner's app draining that queue into github events and the PRs and checks they fold into (test/github-drain.test.ts), a PR's card taking GitHub's state, title and checks over the chat's guess (test/github-prs.test.ts, web pr-checks.test.tsx), a PR on a branch named T<n>-… showing on task T<n> (test/github-branch.test.ts), the GitHub App's key, token and API calls against a fake GitHub: diffs for members, the kiwi/review check for the owner only (test/github-app.test.ts), which verdicts the owner's app posts as checks, once and without backfilling (test/github-review.test.ts, web review-checks.test.ts), a PR on a T<n>-… branch linked back to its task by one owner-only comment (github-app.test.ts, github-branch.test.ts), CI red becoming a task (test/ci-red.test.ts, packages/core/src/ci-red.ts: a failed check on main (or master) once per commit and check, none for a PR branch since its red shows on its PR, owned by whoever pushed, a note on the commit's open CI task; ci.yml's concurrency giving each run on main a group of its own, so no push or rehearsal cancels one into a red ci-ok, while a pull request's newest push still cancels its older run; github-app.test.ts: the owner-only check log excerpt from the job's log or its failure annotations; web ci-red.test.ts: the task and note it posts), a GitHub issue imported as a task and the two closing each other: issue refs, issue webhooks, the issues and closes they fold into (test/github-issues.test.ts), kiwi task add --issue and the owner closing the issue on a live relay against a fake GitHub (test/github-issues-live.test.ts), the issue routes, read for members and close for the owner only (github-app.test.ts), an old channel's roles read as personalities: the lead stays the lead, a free-text role becomes a Builder named after it with its rules as instructions, from the whole log or a snapshot, and a signed personality wins (test/roles-carry.test.ts), where a task comes from (task.add's from) and who has its context: agents ranked by lineage, who worked it and their queue, the busy rule, task who's text and --from on a live relay, and warm work: a card's fresh (the hook marks a reset on startup, clear and compact, not resume), when each member last touched a task (its thread, or its events from whoever is on it) and the warm bonus (test/task-who.test.ts), the folders a task changed: read from the agent's branch against main in a throwaway git repo, kept on task done and review, borrowed from the parent or the task's text, and whoever changed them lately ranked for a task in them (test/task-areas.test.ts), which closes the owner's app makes, once and without backfilling (web review-checks.test.ts), a person assigning the suggested agent from the task view (web task-actions.test.ts), a run of GitHub's news folded into one line in the conversation (web github-line.test.ts), a reply's one-line quote (web quote.test.tsx), the history cache, a channel's warm copy for the session (web lib/channel/warm.test.ts: a revisit follows from what it holds with no second cache read or verify, and reads the cache on a gap or a stale copy), the channel clock (web lib/channel/clock.test.ts: it holds still within its interval so a re-render refolds nothing, and every subscriber to one interval shares one timer), the desktop app holding the relay's config and the linked account's repo list for a while and asking again after a failure (test/held.test.ts), the history cache writing a burst of messages as one IndexedDB write that keeps only the newest window (web lib/history.test.ts), and localStorage writes held in memory and written once per burst, flushed when the page hides, a dropped one never landing (web lib/write-behind.test.ts), the desktop app's node-only helpers (test/desktop-window-size.test.ts: a Mac window is never narrower than the dashboard's md breakpoint, where the phone layout's headers would sit under the traffic lights; test/desktop-text-size.test.ts: ⌘ with +, - or 0 on a Mac, Ctrl elsewhere, is a text-size step and no other key is, with web lib/theme.test.ts: the steps walk Settings' four text sizes, stop at either end, and 0 is Default; test/desktop-rex-status.test.ts: Settings reads kiwi rex status --json, and anything it can't read as Rex not found), the
       public site's invite parsing and its Download button's pick by OS and chip (site/app.js, test/site.test.ts), scripts/action-pins.ts,
       test/cli-args.test.ts: a message that starts with a dash is text, not an option; send and reply refuse an option they don't use before sending; an option a command never reads is reported on stderr; with test/hygiene.test.ts: parseDuration takes decimals (1.5h is 90 minutes) and refuses junk,
+      web components/mermaid.test.ts: a Mermaid diagram is drawn once per source and color scheme and reused on remount, never drawn past 20,000 characters, and at most 100 drawings are kept; test/github-branch.test.ts's task PR index: an open PR wins over a newer closed one, the newest among equals, one index per fold,
       test/relay-limits.test.ts: a request body over 1 MiB is refused with 413 before any route reads it, history reads are rate-limited per member, a GitHub check log is excerpted while streaming (the same excerpt as the whole-log one, whatever the chunking, and no further than the first error line), and a diff is read only up to its cap,
       test/claims.test.ts on a local relay: an own computer's agent auto-approved as the personality its invite pinned (a pin the person no longer holds as it was waits for a person), even past a spent daily signing budget, and a launch id read from the sealed join claims only when well-formed,
       test/sealed-epoch.test.ts on a local relay: a removal reseals the channel's name and settings under the new key, so the removed member opens neither while a member who stayed opens both after one key refresh; later changes are sealed under the newest key the client holds; the relay refuses a name or settings under a key the channel lacks or an older one; an owner's app reseals what an earlier rotation left under the first key; a relay without sealedEpoch keeps the epoch-0 seal, a name, settings or icon change made while a removal's rotation is still pending rotates first, and the relay refuses an icon sealed under an older key than the channel's,
@@ -163,8 +164,11 @@ jobs:
       channel, once each, and a request seen while nobody follows it isn't remembered; web
       channel-sidebar.test.tsx: New agent on the Agents heading for the owner's desktop app, shown
       even before any agent joins, and absent otherwise.
+      Also test/local-relay.test.ts: the local relay the browser and desktop scripts start
+      (scripts/local-relay.ts) binds a port the system picks and reads it back from the relay's
+      listening line, so two started at once never ask for the same port.
       Also the composer and conversation (audit M): web composer-question.test.tsx: a question's
-      option answers once (choiceGate refuses a click within 400 ms of the question showing or
+      option answers once (choiceGate in lib/choosing.ts refuses a click within 400 ms of the question showing or
       while its answer is on its way, and frees it when the send fails), and a message @addressed
       to others isn't the waiting question's answer (answered in lib/asks.ts); web
       lib/drafts.test.ts: a draft (text or images) is kept per channel and place until emptied;
@@ -205,7 +209,7 @@ jobs:
       MIMOCODE_SESSION_ID among them), so a run on a machine with ~/.config/mimocode, or from inside MiMoCode,
       writes nothing there; test/hooks-harness.test.ts stamps ~/.config/mimocode and its plugin folder with
       the other real harness paths and fails if an install changed them.
-      Also dictation's relay route and client (test/dictation-relay.test.ts, web lib/dictation): /v1/dictation serves only the allowlisted pinned files (no query, no other path, GET and HEAD), checks size and SHA-256 before keeping or serving, never keeps a tampered or short file, streams a kept one without reading it whole, answers no-store, rate-limits per address, says when upstream is down; the manifest pins every file and its runtime matches the one the app bundles; the client downloads each file from the relay, keeps none that fails its hash, and picks WebGPU only from a real GPU adapter.
+      Also dictation's relay route and client (test/dictation-relay.test.ts, web lib/dictation): /v1/dictation serves only the allowlisted pinned files (no query, no other path, GET and HEAD), checks size and SHA-256 before keeping or serving, never keeps a tampered or short file, streams a download from upstream through the hash into the store a few chunks ahead at most (a swapped file of the same size is refused at its end and the store never gets its last bytes, a wrong content-length is refused before reading, the Bun relay leaves no partial file), streams straight to the app with no store (workers.dev) and fetches again when a store didn't keep, streams a kept one without reading it whole, answers no-store, rate-limits per address, says when upstream is down; the manifest pins every file and its runtime matches the one the app bundles; the client downloads each file from the relay, keeps none that fails its hash, and picks WebGPU only from a real GPU adapter.
       Also Pi as a known harness: test/hooks-pi.test.ts: Kiwi's Pi extension
       (src/hooks/install/pi.ts) written to Pi's extensions folder on join or kiwi hooks install
       pi, counted as installed only while it is current and runs this kiwi's hooks, removed on
@@ -273,6 +277,14 @@ jobs:
       only within two minutes either way and only once, refused when re-aimed at another computer inside its seal, changed,
       carrying an unknown verb or field, or over 4 KiB; and the computer's answer read only when signed by that computer
       for that ask.
+      Also test/machine-relay.test.ts: a paired computer at the relay (src/relay/machine.ts, on the Bun relay; the Worker's
+      MachineInbox object runs the same handler, and machineAlarmAt times its alarm): it registers itself with its own cert,
+      nobody else can, an older cert can't roll its person back, even after an unpair; every route takes only a signature
+      made for that machine, that method, that path and that body, recently, so a room's, another path's, a swapped body
+      or an old one is refused; only its person writes to its inbox (a box of at most 4 KiB, 20 a minute and 20 waiting,
+      each checked on its own), asks reach its socket on open and as they come and are gone after three minutes, only the
+      machine reads, deletes or opens its socket, only its person sees it online, and unpairing by either drops the inbox
+      and closes the socket. Its refusals are tagged failures, pinned by test/error-texts.test.ts.
       Also test/shell-path.test.ts: the PATH line kiwi setup and the desktop app add to the shell's profile
       (packages/core/src/node/shell-path.ts), once and never when the profile already names the folder, and never
       from a profile outside a temp folder into a temp folder (the system's temp folders, through their links,
@@ -646,8 +658,8 @@ jobs:
 
   build:
     name: build / bundles
-    inputs: ["src/**", "packages/core/**", "web/**", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/smoke-cli.ts", "scripts/smoke-ui.ts", "scripts/dictation-files.ts", "test/fixtures/dictation.wav", "scripts/web-bundle.ts", "test/owner.ts", "test/owner-cli.ts", "test/check.ts"]
-    always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "wrangler.jsonc", "scripts/smoke-ui.ts", "scripts/web-bundle.ts"]
+    inputs: ["src/**", "packages/core/**", "web/**", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/smoke-cli.ts", "scripts/smoke-ui.ts", "scripts/local-relay.ts", "scripts/dictation-files.ts", "test/fixtures/dictation.wav", "scripts/web-bundle.ts", "test/owner.ts", "test/owner-cli.ts", "test/check.ts"]
+    always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "wrangler.jsonc", "scripts/smoke-ui.ts", "scripts/local-relay.ts", "scripts/web-bundle.ts"]
     description: >-
       Builds the web dashboard for production (vite build in web/) and fails when the JS the
       first screen loads (the entry script plus every chunk it modulepreloads) is over
@@ -669,8 +681,8 @@ jobs:
 
   shots:
     name: build / shots
-    inputs: ["src/**", "packages/core/**", "web/**", "scripts/shoot-ui.ts", "assets/**"]
-    always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "scripts/shoot-ui.ts"]
+    inputs: ["src/**", "packages/core/**", "web/**", "scripts/shoot-ui.ts", "scripts/local-relay.ts", "assets/**"]
+    always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "scripts/shoot-ui.ts", "scripts/local-relay.ts"]
     description: >-
       Builds the web dashboard (bun run web:build), then scripts/shoot-ui.ts --wide --theme dark
       starts the relay and the kiwi CLI as two agents' computers, seeds a channel in headless
@@ -690,8 +702,8 @@ jobs:
 
   perf:
     name: perf / scale
-    inputs: ["web/**", "desktop/**", "packages/core/**", "scripts/perf-scale.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
-    always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "scripts/perf-scale.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
+    inputs: ["web/**", "desktop/**", "packages/core/**", "scripts/perf-scale.ts", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
+    always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "scripts/perf-scale.ts", "scripts/local-relay.ts", "scripts/perf-check.ts", "scripts/perf-budgets.json"]
     description: >-
       Builds the web dashboard, then runs scripts/perf-scale.ts three times without the soak: a
       local relay and headless Chromium with 10 agents, 100 tasks and 2000 messages, timing the
@@ -706,7 +718,7 @@ jobs:
   desktop:
     name: desktop / package
     inputs: ["desktop/**", "src/**", "packages/core/**", "web/src/**", "web/index.html", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "package.json", "bun.lock", "web/package.json"]
-    always: ["desktop/package.json", "desktop/tsconfig*.json", "desktop/scripts/fuses.ts", "desktop/scripts/pack-cli.ts", "desktop/scripts/size.ts", "desktop/scripts/smoke.ts", "desktop/scripts/dictate.ts", "desktop/scripts/fixtures/dictate.wav", "packages/core/src/dictation.ts", "scripts/dictation-files.ts"]
+    always: ["desktop/package.json", "desktop/tsconfig*.json", "desktop/scripts/fuses.ts", "desktop/scripts/pack-cli.ts", "desktop/scripts/size.ts", "desktop/scripts/smoke.ts", "desktop/scripts/dictate.ts", "scripts/local-relay.ts", "desktop/scripts/fixtures/dictate.wav", "packages/core/src/dictation.ts", "scripts/dictation-files.ts"]
     description: >-
       Bundles the Electron shell's main, preload and channels (key process) scripts with bun
       build, then packages the Linux app with electron-builder --dir from desktop/package.json's
