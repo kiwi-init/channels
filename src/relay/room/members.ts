@@ -6,10 +6,13 @@ import { fits, MAX_RECORD, MAX_WRAPPED, MemberRecord } from "../schema.ts";
 import { readMeta } from "./auth.ts";
 import { RoomStore } from "./db.ts";
 
+export function memberFits(m: MemberBody, epoch: number): boolean {
+  return fits(MemberRecord, m) && !Object.keys(m.keys ?? {}).some((e) => !/^\d{1,9}$/.test(e) || Number(e) > epoch);
+}
+
 export const putMember = Effect.fn("Room.putMember")(function* (m: MemberBody, epoch: number) {
   const db = yield* RoomStore;
-  if (!fits(MemberRecord, m)) return yield* new BadRequest({ message: "bad member" });
-  if (Object.keys(m.keys ?? {}).some((e) => !/^\d{1,9}$/.test(e) || Number(e) > epoch)) return yield* new BadRequest({ message: "bad member" });
+  if (!memberFits(m, epoch)) return yield* new BadRequest({ message: "bad member" });
   db.sql.run(
     "INSERT INTO members (pk, xpk, rec, rec_e, since, active, read_only) VALUES (?, ?, ?, ?, ?, 1, ?) ON CONFLICT (pk) DO UPDATE SET xpk = excluded.xpk, rec = excluded.rec, rec_e = excluded.rec_e, active = 1, read_only = excluded.read_only",
     m.pk,

@@ -335,6 +335,41 @@ describe("channels per person, at once (T113)", () => {
     }
   });
 
+  test("a create with one bad member writes nothing: the same create, fixed, then goes through", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mc-half-room-"));
+    const r = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir });
+    const at = r.url.origin;
+    const real = globalThis.fetch;
+    const owner = await generateIdentity("half");
+    let sent: { room: string; body: string } | null = null;
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      const room = /\/v1\/rooms\/([^/]+)\/create$/.exec(new URL(url).pathname)?.[1];
+      if (!room || typeof init?.body !== "string") return real(input, init);
+      sent = { room, body: init.body };
+      const b = JSON.parse(init.body) as { members: { keys?: Record<string, string> }[] };
+      b.members[1]!.keys = { "5": "not-yet" };
+      const body = JSON.stringify(b);
+      return real(input, { ...init, body, headers: { ...(init.headers as Record<string, string>), authorization: `Bearer ${await signRequest(owner, room, "POST", "/create", body)}` } });
+    }) as typeof fetch;
+    try {
+      const agent = await generateIdentity("half-agent");
+      const tried = await Channel.create(at, owner, { name: "half", kind: "human" }, [{ ...agent, info: { name: "half-agent" } }]).then(
+        () => 200,
+        (e: { status?: number }) => e.status,
+      );
+      expect(tried).toBe(400);
+      globalThis.fetch = real;
+      const { room, body } = sent!;
+      const again = await fetch(`${at}/v1/rooms/${room}/create`, { method: "POST", headers: { authorization: `Bearer ${await signRequest(owner, room, "POST", "/create", body)}` }, body });
+      expect(again.status).toBe(200);
+    } finally {
+      globalThis.fetch = real;
+      r.stop(true);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("a hold from a create that never finished expires", () => {
     const now = 1_700_000_000_000;
     const real = { room: "r1", code: "mc2-x", owner: true, member: true, agents: 0, at: now - HOLD_MS * 10 };
