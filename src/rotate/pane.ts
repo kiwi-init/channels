@@ -6,7 +6,7 @@ import { appendRotated } from "../daemon/wake.ts";
 import { codexTurn } from "../harness.ts";
 import { offerHandoff } from "../hooks/handoff.ts";
 import { alive } from "../hooks/listeners.ts";
-import { CODEX_FIRST, CODEX_NEW, codexInput, codexShown, originator, sameWords } from "./codex.ts";
+import { CODEX_FIRST, CODEX_NEW, codexInput, codexShown, sameWords } from "./codex.ts";
 
 interface Seat {
   pid: number;
@@ -15,7 +15,7 @@ interface Seat {
   socket: string;
 }
 
-export type Thread = { kind: "old"; rollout: string; name: string } | { kind: "fresh" };
+export type Thread = { kind: "old"; rollout: string; name: string; by: string } | { kind: "fresh" };
 
 export type Target = (Seat & { harness: "claude"; claudeDir: string }) | (Seat & { harness: "codex"; cwd: string; thread: Thread });
 
@@ -235,7 +235,7 @@ function owns(t: Target, first: PaneId): boolean {
   const r = registry(t);
   if (r.kind === "gone" || r.session !== t.session) return false;
   const now = paneId(t);
-  return now !== null && now.server === first.server && now.panePid === first.panePid && now.tty === first.tty && holdsInput(t.pid, now.tty);
+  return now !== null && now.server === first.server && now.panePid === first.panePid && now.tty === first.tty && holdsInput(t.pid, now.tty) && showsThread(t) === "ready";
 }
 
 const RENDER_MS = 1_000;
@@ -257,7 +257,7 @@ async function send(t: Target, first: PaneId, quietMs: number, on: () => boolean
     beforeEnter();
     return tmux(t, ["send-keys", "-t", t.pane, "Enter"]) === null ? "send-failed" : "sent";
   }
-  if (seen !== "wait" && seen !== "switched-off" && seen !== "not-its-thread") return seen;
+  if (seen !== "wait" && seen !== "switched-off") return seen;
   const captured = tmux(t, ["capture-pane", "-p", "-e", "-t", t.pane]);
   if (captured === null || !endsWith(t, text)(captured) || !owns(t, first)) return "left-in-input";
   if (tmux(t, ["send-keys", "-t", t.pane, "-N", String(text.length), "BSpace"]) === null) return "send-failed";
@@ -297,7 +297,7 @@ export async function clearWhenIdle(t: Target, o: ClearOptions = {}): Promise<Ou
       if (before !== "wait" && before !== "ready") return finish(t, before);
       if (before === "ready") {
         const sent = await send(t, first, quietMs, on, commandOf(t), () => {
-          if (t.harness === "codex" && t.thread.kind === "old") offerHandoff(t.cwd, t.session, originator(t.thread.rollout));
+          if (t.harness === "codex" && t.thread.kind === "old") offerHandoff(t.cwd, t.session, t.thread.by);
         });
         if (sent === "sent") return finish(t, await firstPrompt(t, first, quietMs, on));
         if (sent !== "wait") return finish(t, sent === "ready" ? "send-failed" : sent);

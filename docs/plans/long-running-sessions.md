@@ -224,17 +224,22 @@ Built for Codex windows in tmux, with the same switch, trigger (`rotationAt`), l
   none or more than one, it stays and says so in `rotate.log` (`src/rotate/codex.ts`).
 - **The thread.** Codex sets the pane title to the thread's name and the folder (`Join review
   room | inquizit`), with a spinner in front while a turn runs, and only the folder for a fresh
-  thread. The sender types only while the title names the seat's thread, as recorded in
-  `session_index.jsonl`; otherwise the outcome is `not-its-thread`. This keeps it out of a window
-  where someone used `/new` or `/resume`, while the seat's old thread was woken unseen by
-  `codex queue`. A thread Codex has not named yet stays, and so does a window whose title says
-  nothing (Codex's title turned off). Two threads with the same name can't be told apart.
+  thread. The sender sends a key, the erase included, only while the title names the seat's
+  thread, as recorded in `session_index.jsonl`; otherwise the outcome is `not-its-thread`. This
+  keeps it out of a window where someone used `/new` or `/resume`, while the seat's old thread was
+  woken unseen by `codex queue`. A thread Codex has not named yet stays, and so does one whose
+  rollout doesn't start with `session_meta`, or a window whose title says nothing (Codex's title
+  turned off). Two threads with the same name can't be told apart, and a switch between the last
+  check and Enter is not caught, as with the person typing in that gap.
 - **Idle.** The thread's rollout: its newest turn event is `task_complete` or `turn_aborted`.
-- **The input box.** The last line starting with a bold `›` (submitted prompts are dim, menu rows
-  reversed) and every line between it and the footer, the last block on screen, whose first line
-  has a ` · `. Continuation lines are indented two spaces, like the footer, and a draft can hold
-  blank lines, so the footer is what ends it; with no footer the box reads as unknown. Empty when
-  the first line shows nothing or only the dim placeholder and nothing follows it.
+- **The input box.** Read from the SGR styles, not fixed escape strings, because a truecolor
+  terminal paints the box's background (`\x1b[48;2;…m`) right after the `›`. The box is the last
+  line whose first character is a `›` that is bold, not dim (a submitted prompt) and not reversed (a
+  menu row), and every line from there down to the footer: the last block on screen, whose first
+  line has a ` · ` and text in a foreground color, which typed text never has. Continuation lines
+  are indented two spaces, like the footer, and a draft can hold blank lines, so the footer is what
+  ends it; with no such footer the box reads as unknown. Empty when everything after the `›` is
+  dim (the placeholder) or blank, and nothing follows it.
 - **The act.** `/new`, confirmed in the box before Enter. Then, once the title shows a fresh thread
   and the box is empty, a first prompt (`CODEX_FIRST`), confirmed the same way, which starts the
   new thread. From `/new` on, the old thread's rollout no longer counts: a wake that runs there
@@ -243,14 +248,18 @@ Built for Codex windows in tmux, with the same switch, trigger (`rotationAt`), l
   types in that fresh thread starts it.
 - **The seat follows.** Right before the Enter on `/new`, the sender offers the seat for that folder
   (`hook-state/codex-handoff.<folder>`), with the time and the old thread's `originator`. A Codex
-  SessionStart with `"source":"startup"` in that folder takes the offer only for a thread created
-  within 15 seconds of it, which its UUIDv7 id says, and with the same originator in its rollout's
+  SessionStart with `"source":"startup"` in that folder can take the offer only for a thread created
+  within 15 seconds of it, which its UUIDv7 id says, with the same originator in its rollout's
   `session_meta`. The rollout exists from `/new`, and SessionStart comes with the first turn, so
-  the first prompt can be hours later and still take it. The hook then moves every Codex seat
-  bound to the old thread to the new one (`takeHandoff`, `handSeats`), so re-entry, deliveries and
-  `codex queue` wakes go to the new thread. Another thread starting in that folder (a person's own
-  Codex, `codex exec`) leaves the offer alone. Until a thread takes the offer, wakes keep going
-  to the old thread, unseen in the window.
+  the first prompt can be hours later and still take it. Before taking it, the hook lists the
+  rollouts in the new thread's day folder: if any other thread with that originator and folder
+  was created in those 15 seconds, say a person opened a second Codex there, neither gets the
+  seats, and `rotate.log` says so. Otherwise the hook moves every Codex seat bound to the old
+  thread to the new one (`takeHandoff`, `handSeats`), so re-entry, deliveries and `codex queue`
+  wakes go to the new thread. A `codex exec` run or a thread outside the 15 seconds leaves the offer
+  alone. Until a thread takes the offer, wakes keep going to the old thread, unseen in the window.
+  Not covered: a 15 seconds that spans midnight lists only the new thread's day, and a clock that
+  jumps between the offer and `/new` leaves the seat on the old thread.
 - **The nudge.** The context line and its nudge read the rollout's `token_count` for Codex too.
 
 OpenCode and Grok are not built. Until then: re-entry through a SessionStart hook where there is one,

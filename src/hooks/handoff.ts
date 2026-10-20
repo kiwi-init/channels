@@ -1,7 +1,8 @@
-import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { home } from "../config.ts";
-import { createdAt, originator } from "../rotate/codex.ts";
+import { appendRotated } from "../daemon/wake.ts";
+import { createdAt, sessionMeta, threadOf, type SessionMeta } from "../rotate/codex.ts";
 import { handSeats } from "../seats.ts";
 
 export const NEW_THREAD_MS = 15_000;
@@ -17,7 +18,7 @@ function where(cwd: string): string {
   return join(home(), "hook-state", `codex-handoff.${encodeURIComponent(dir)}`);
 }
 
-export function offerHandoff(cwd: string, from: string, by: string | null, now = Date.now()): void {
+export function offerHandoff(cwd: string, from: string, by: string, now = Date.now()): void {
   mkdirSync(join(home(), "hook-state"), { recursive: true, mode: 0o700 });
   writeFileSync(where(cwd), JSON.stringify({ from, by, at: now }), { mode: 0o600 });
 }
@@ -34,12 +35,48 @@ function offered(file: string): Offer | null {
   }
 }
 
+const within = (born: number, o: Offer) => born >= o.at - CLOCK_MS && born <= o.at + NEW_THREAD_MS;
+
+function startedWith(rollout: string, o: Offer, mine: SessionMeta): string[] {
+  const dir = dirname(rollout);
+  let names: string[];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    // The new thread's own folder can't be listed: no thread can be shown to be the only one.
+    return [];
+  }
+  return names.flatMap((n) => {
+    const id = threadOf(n);
+    const born = id ? createdAt(id) : null;
+    if (!id || born === null || id === o.from || !within(born, o)) return [];
+    const meta = sessionMeta(join(dir, n));
+    return meta && meta.originator === mine.originator && meta.cwd === mine.cwd ? [id] : [];
+  });
+}
+
+function note(what: string): void {
+  try {
+    appendRotated(join(home(), "rotate.log"), `${new Date().toISOString()} ${what}\n`);
+  } catch {
+    // The log only explains what happened; failing to write it changes nothing.
+  }
+}
+
 export function takeHandoff(cwd: string, to: string, rollout: string, now = Date.now()): string | null {
   const file = where(cwd);
   const o = offered(file);
   const born = createdAt(to);
-  if (!o || born === null || o.from === to) return null;
-  if (born < o.at - CLOCK_MS || born > o.at + NEW_THREAD_MS || originator(rollout) !== o.by) return null;
+  if (!o || born === null || o.from === to || !within(born, o)) return null;
+  const mine = sessionMeta(rollout);
+  if (!mine || mine.originator !== o.by) return null;
   rmSync(file, { force: true });
-  return handSeats(o.from, to, "codex", now) ? o.from : null;
+  const started = startedWith(rollout, o, mine);
+  if (started.length !== 1 || started[0] !== to) {
+    note(`session ${o.from} stays: ${started.length} Codex threads started in ${cwd} right after its /new, so none takes its seats`);
+    return null;
+  }
+  const moved = handSeats(o.from, to, "codex", now);
+  note(`session ${o.from}: ${moved} seat(s) handed to ${to}`);
+  return moved ? o.from : null;
 }

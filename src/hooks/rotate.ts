@@ -65,17 +65,18 @@ export const rotateAfterStop = Effect.fn("Hooks.rotateAfterStop")(function* (inp
   let spot: Spot;
   if (claude) spot = { ...claude, used: used(read.claudeContext, file) };
   else if (codexIn) {
-    const { codexHome, codexPane, sockets, threadName } = yield* Effect.promise(() => import("../rotate/codex.ts"));
+    const { codexHome, codexPane, sessionMeta, sockets, threadName } = yield* Effect.promise(() => import("../rotate/codex.ts"));
     const found = yield* Effect.sync(() => codexPane(codexIn, sockets(process.env)));
     if (!found) {
       yield* Effect.sync(() => noteStay({ pid: 0, session, pane: "none" }, `${first.b.alias}/${first.b.as}`, `no single Codex window in tmux has ${codexIn} open`));
       return;
     }
     const name = threadName(codexHome(file), session);
-    if (!name) {
-      yield* Effect.sync(() =>
-        noteStay({ pid: found.pid, session, pane: found.pane }, `${first.b.alias}/${first.b.as}`, "Codex has not named this thread yet, so its window's title can't show it is the one open"),
-      );
+    if (!name || !sessionMeta(file)) {
+      const why = !name
+        ? "Codex has not named this thread yet, so its window's title can't show it is the one open"
+        : "its rollout doesn't start with the session_meta its new thread is matched against";
+      yield* Effect.sync(() => noteStay({ pid: found.pid, session, pane: found.pane }, `${first.b.alias}/${first.b.as}`, why));
       return;
     }
     spot = { pid: found.pid, where: { pane: found.pane, socket: found.socket }, codex: { rollout: file, cwd: codexIn, name }, used: used(read.codexContext, file) };

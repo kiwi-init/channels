@@ -36,10 +36,13 @@ export const rotateCommands: Record<string, Command> = {
         if (harness !== undefined && (harness !== "codex" || !rollout || !cwd || !name)) return yield* die(usage);
         if (loadConfig().rotate !== "on") return 0;
         const { clearWhenIdle } = yield* Effect.promise(() => import("../../rotate/pane.ts"));
+        const { sessionMeta } = yield* Effect.promise(() => import("../../rotate/codex.ts"));
         const seat = { pid, session, pane, socket };
+        const by = harness === "codex" && rollout ? sessionMeta(rollout)?.originator : undefined;
+        if (harness === "codex" && !by) return 1;
         const target =
-          harness === "codex" && rollout && cwd && name
-            ? { ...seat, harness: "codex" as const, cwd, thread: { kind: "old" as const, rollout, name } }
+          harness === "codex" && rollout && cwd && name && by
+            ? { ...seat, harness: "codex" as const, cwd, thread: { kind: "old" as const, rollout, name, by } }
             : { ...seat, harness: "claude" as const, claudeDir: process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude") };
         const outcome = yield* Effect.promise(() => clearWhenIdle(target, { on: () => loadConfig().rotate === "on" }));
         return outcome === "cleared" ? 0 : 1;

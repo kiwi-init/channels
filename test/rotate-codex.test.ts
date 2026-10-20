@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, updateConfig } from "../src/config.ts";
 import { NEW_THREAD_MS, offerHandoff, takeHandoff } from "../src/hooks/handoff.ts";
-import { CODEX_FIRST, codexInput, codexPane, codexPanes, codexShown, createdAt, sameWords, threadName } from "../src/rotate/codex.ts";
+import { CODEX_FIRST, codexInput, codexPane, codexPanes, codexShown, createdAt, sameWords, sessionMeta, threadName, threadOf } from "../src/rotate/codex.ts";
 import { clearWhenIdle } from "../src/rotate/pane.ts";
 import { kiwiCmd } from "./owner.ts";
 
@@ -13,6 +13,16 @@ const box = "\x1b[1m›\x1b[0m";
 const composer = (rest: string) => `${box} ${rest}`;
 const footer = ["", "  \x1b[38;5;223mGPT-6-Astra low\x1b[39m · \x1b[38;5;151m~/work\x1b[39m", "  \x1b[1m←\x1b[0m for agents · \x1b[1m?\x1b[0m for shortcuts"];
 const screen = (...input: string[]) => ["\x1b[1;2m› \x1b[0man earlier prompt", "• an answer", "", ...input, ...footer].join("\n");
+
+const BG = "\x1b[48;2;61;64;64m";
+const vmFooter = [
+  "",
+  "\x1b[49m  \x1b[38;2;246;226;183mGPT-6-Astra medium\x1b[38;2;165;166;166m · \x1b[38;2;171;223;167m/home/www/inquizit\x1b[38;2;165;166;166m · \x1b[38;2;166;227;161mJoin review room\x1b[39m",
+  "  \x1b[1m\x1b[38;2;252;252;252m←\x1b[0m\x1b[38;2;165;166;166m for agents · \x1b[1m\x1b[38;2;252;252;252m?\x1b[0m\x1b[38;2;165;166;166m for shortcuts\x1b[39m",
+  "",
+];
+const vmScreen = (...input: string[]) =>
+  ["\x1b[1;2m› \x1b[0m\x1b[48;2;70;72;73mNew Kiwi messages for you.", "", "\x1b[49m", "\x1b[2m• \x1b[0mDone.", "", `\x1b[0m${BG}`, ...input, ...vmFooter].join("\n");
 
 describe("Codex's input box", () => {
   test("empty when it shows only the dim placeholder or nothing, the draft otherwise", () => {
@@ -23,16 +33,23 @@ describe("Codex's input box", () => {
     expect(codexInput(screen("\x1b[1;7m› /new  \x1b[0;7mstart a new chat during a conversation\x1b[1m", "\x1b[0m", "\x1b[0;1m›\x1b[0m /new"))).toBe("/new");
   });
 
+  test("read the same in a truecolor terminal, where the box has a background color", () => {
+    expect(codexInput(vmScreen(`${box}${BG} \x1b[2mAsk Codex to do anything\x1b[0m${BG}`))).toBe("");
+    expect(codexInput(vmScreen(`${box}${BG} /new\x1b[0m${BG}`))).toBe("/new");
+    expect(codexInput(vmScreen(`${box}${BG} abc\x1b[0m${BG}`, `${BG}  def\x1b[0m`))).toBe("abc\ndef");
+  });
+
   test("a draft below blank lines is still a draft, and so is a draft of blank lines", () => {
     expect(codexInput(screen(box, "", "  personal draft"))).toBe("\n\npersonal draft");
     expect(codexInput(screen(composer("/new"), "", "  personal draft"))).not.toBe("/new");
     expect(codexInput(screen(box, ""))).toBe("\n");
   });
 
-  test("a submitted prompt, a menu row or a screen without the footer is never read as the input box", () => {
+  test("a submitted prompt, a menu row, or a screen whose last block isn't the colored footer is never read as the input box", () => {
     expect(codexInput(["\x1b[1;2m› \x1b[0man earlier prompt", "", ...footer].join("\n"))).toBeNull();
     expect(codexInput(["\x1b[1;7m› 1. Review hooks\x1b[0m", "  2. Trust all"].join("\n"))).toBeNull();
     expect(codexInput([composer("hello"), "", "  personal draft"].join("\n"))).toBeNull();
+    expect(codexInput([box, "", "  a · personal draft"].join("\n"))).toBeNull();
     expect(codexInput(screen(composer("\x1b[2mAsk\x1b[0m and more")))).not.toBe("");
   });
 
@@ -72,10 +89,25 @@ describe("which thread a Codex window shows", () => {
     }
   });
 
-  test("a thread id tells when the thread was created", () => {
+  test("a thread id tells when the thread was created, and a rollout's name and first line which thread it is", () => {
     expect(createdAt("01a15a51-5d12-7090-b5d6-706401aee9ca")).toBe(0x01a15a515d12);
     expect(createdAt("thr-old")).toBeNull();
     expect(createdAt("01a15a51-5d12-4090-b5d6-706401aee9ca")).toBeNull();
+    expect(threadOf("rollout-2026-10-20T14-17-24-01a15a51-5d12-7090-b5d6-706401aee9ca.jsonl")).toBe("01a15a51-5d12-7090-b5d6-706401aee9ca");
+    expect(threadOf("rollout-2026-10-20T14-17-24-01a15a51-5d12-4090-b5d6-706401aee9ca.jsonl")).toBeNull();
+    const home = mkdtempSync(join(tmpdir(), "kiwi-codex-meta-"));
+    try {
+      const file = join(home, "r.jsonl");
+      writeFileSync(file, JSON.stringify({ type: "session_meta", payload: { originator: "codex-tui", cwd: "/w", base_instructions: "x".repeat(100_000) } }) + "\n{}\n");
+      expect(sessionMeta(file)).toEqual({ originator: "codex-tui", cwd: "/w" });
+      writeFileSync(file, JSON.stringify({ type: "event_msg", payload: {} }) + "\n");
+      expect(sessionMeta(file)).toBeNull();
+      writeFileSync(file, '{"type":"session_meta"');
+      expect(sessionMeta(file)).toBeNull();
+      expect(sessionMeta(join(home, "none.jsonl"))).toBeNull();
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 });
 
@@ -101,30 +133,25 @@ describe.skipIf(!hasTmux || !bash)("a Codex window in tmux", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  async function window(name: string, cwd: string, title: string): Promise<{ pane: string; pid: number; typed: string }> {
+  type Window = { pane: string; pid: number; typed: string; state: string };
+
+  async function window(name: string, cwd: string, title: string, switchAt = ""): Promise<Window> {
     mkdirSync(cwd, { recursive: true });
     const typed = join(dir, `${name}.typed`);
-    const fake = join(dir, `${name}.sh`);
-    writeFileSync(
-      fake,
-      [
-        `title='${title}'`,
-        "draw() { printf '\\033]2;%s\\033\\\\' \"$title\"; printf '\\033[2J\\033[H\\033[1;2m› \\033[0man earlier prompt\\n• an answer\\n\\n\\033[1m›\\033[0m \\n\\n  GPT-6-Astra low · ~/work\\n  \\033[1m←\\033[0m for agents\\033[4;3H'; }",
-        "draw",
-        `while IFS= read -r line; do printf '%s\\n' "$line" >> ${typed}; case "$line" in /new) title=work ;; *) title='Kiwi started | work' ;; esac; draw; done`,
-      ].join("\n"),
-    );
-    spawnSync("tmux", ["-S", socket, "new-session", "-d", "-s", name, "-x", "120", "-y", "20", "-c", cwd, `exec ${join(dir, "bin", "codex")} ${fake}`]);
+    const state = join(dir, `${name}.state`);
+    const fake = join(import.meta.dir, "fixtures", "fake-codex.sh");
+    const command = [join(dir, "bin", "codex"), fake, typed, state, title, switchAt].map((a) => `'${a}'`).join(" ");
+    spawnSync("tmux", ["-S", socket, "new-session", "-d", "-s", name, "-x", "120", "-y", "20", "-c", cwd, `exec ${command}`]);
     const [id, pid] = spawnSync("tmux", ["-S", socket, "display-message", "-p", "-t", name, "#{pane_id} #{pane_pid}"], { encoding: "utf8" }).stdout.trim().split(" ");
     await Bun.sleep(300);
-    return { pane: id!, pid: Number(pid), typed };
+    return { pane: id!, pid: Number(pid), typed, state };
   }
   const rollout = (name: string, last: string) => {
     const file = join(dir, `${name}.jsonl`);
     writeFileSync(
       file,
       [
-        { type: "session_meta", payload: { id: name, originator: "codex-tui" } },
+        { type: "session_meta", payload: { id: name, originator: "codex-tui", cwd: dir } },
         { type: "event_msg", payload: { type: "task_started" } },
         { type: "event_msg", payload: { type: last } },
       ]
@@ -133,7 +160,8 @@ describe.skipIf(!hasTmux || !bash)("a Codex window in tmux", () => {
     );
     return file;
   };
-  const typedOf = (p: { typed: string }) => (existsSync(p.typed) ? readFileSync(p.typed, "utf8") : "");
+  const old = (name: string, last = "task_complete") => ({ kind: "old" as const, rollout: rollout(name, last), name: "Old thread", by: "codex-tui" });
+  const read = (file: string) => (existsSync(file) ? readFileSync(file, "utf8") : "");
   const offerFile = (cwd: string) => join(dir, "kiwi", "hook-state", `codex-handoff.${encodeURIComponent(realpathSync(cwd))}`);
   const fast = { timeoutMs: 1_500, everyMs: 100, quietMs: 0 };
 
@@ -152,11 +180,10 @@ describe.skipIf(!hasTmux || !bash)("a Codex window in tmux", () => {
   test("an idle thread gets /new, then the first prompt that starts its new thread, and the seat is offered to that thread", async () => {
     const cwd = join(dir, "fresh");
     const p = await window("fresh", cwd, "Old thread | work");
-    const thread = { kind: "old" as const, rollout: rollout("fresh", "task_complete"), name: "Old thread" };
-    const outcome = await clearWhenIdle({ harness: "codex", pid: p.pid, session: "thr-old", pane: p.pane, socket, cwd, thread }, fast);
+    const outcome = await clearWhenIdle({ harness: "codex", pid: p.pid, session: "thr-old", pane: p.pane, socket, cwd, thread: old("fresh") }, fast);
     expect(outcome).toBe("cleared");
     await Bun.sleep(300);
-    expect(typedOf(p)).toBe(`/new\n${CODEX_FIRST}\n`);
+    expect(read(p.typed)).toBe(`/new\n${CODEX_FIRST}\n`);
     const offered = JSON.parse(readFileSync(offerFile(cwd), "utf8")) as { from: string; by: string };
     expect(offered).toMatchObject({ from: "thr-old", by: "codex-tui" });
     expect(readFileSync(join(dir, "kiwi", "rotate.log"), "utf8")).toContain(`pid ${p.pid} session thr-old pane ${p.pane}: cleared`);
@@ -165,27 +192,37 @@ describe.skipIf(!hasTmux || !bash)("a Codex window in tmux", () => {
   test("a window showing another thread gets nothing", async () => {
     const cwd = join(dir, "elsewhere");
     const p = await window("elsewhere", cwd, "Something else | work");
-    const thread = { kind: "old" as const, rollout: rollout("elsewhere", "task_complete"), name: "Old thread" };
-    expect(await clearWhenIdle({ harness: "codex", pid: p.pid, session: "thr-away", pane: p.pane, socket, cwd, thread }, fast)).toBe("not-its-thread");
+    expect(await clearWhenIdle({ harness: "codex", pid: p.pid, session: "thr-away", pane: p.pane, socket, cwd, thread: old("elsewhere") }, fast)).toBe("not-its-thread");
     await Bun.sleep(300);
-    expect(typedOf(p)).toBe("");
+    expect(read(p.typed)).toBe("");
+    expect(read(p.state)).toBe("");
+    expect(existsSync(offerFile(cwd))).toBe(false);
+  });
+
+  test("a window that turns to another thread after /new is typed gets no more keys, not even the erase", async () => {
+    const cwd = join(dir, "turned");
+    const p = await window("turned", cwd, "Old thread | work", "/new");
+    expect(await clearWhenIdle({ harness: "codex", pid: p.pid, session: "thr-turned", pane: p.pane, socket, cwd, thread: old("turned") }, fast)).toBe("not-its-thread");
+    await Bun.sleep(300);
+    expect(read(p.state)).toBe("/new");
+    expect(read(p.typed)).toBe("");
     expect(existsSync(offerFile(cwd))).toBe(false);
   });
 
   test("a thread still at work gets nothing", async () => {
     const cwd = join(dir, "busy");
     const p = await window("busy", cwd, "Old thread | work");
-    const thread = { kind: "old" as const, rollout: rollout("busy", "agent_reasoning"), name: "Old thread" };
-    expect(await clearWhenIdle({ harness: "codex", pid: p.pid, session: "thr-busy", pane: p.pane, socket, cwd, thread }, fast)).toBe("timed-out");
+    expect(await clearWhenIdle({ harness: "codex", pid: p.pid, session: "thr-busy", pane: p.pane, socket, cwd, thread: old("busy", "agent_reasoning") }, fast)).toBe("timed-out");
     await Bun.sleep(300);
-    expect(typedOf(p)).toBe("");
+    expect(read(p.typed)).toBe("");
+    expect(read(p.state)).toBe("");
     expect(existsSync(offerFile(cwd))).toBe(false);
   });
 });
 
-const v7 = (ms: number) => {
+const v7 = (ms: number, tail = "0123456789ab") => {
   const hex = ms.toString(16).padStart(12, "0");
-  return `${hex.slice(0, 8)}-${hex.slice(8)}-7abc-8def-0123456789ab`;
+  return `${hex.slice(0, 8)}-${hex.slice(8)}-7abc-8def-${tail}`;
 };
 
 describe("handing a Codex seat to its new thread", () => {
@@ -205,9 +242,10 @@ describe("handing a Codex seat to its new thread", () => {
     const v = loadConfig().bindings?.[folder];
     return Array.isArray(v) ? v : v ? [v] : [];
   };
-  const started = (name: string, originator: string) => {
-    const file = join(dir, `${name}.jsonl`);
-    writeFileSync(file, JSON.stringify({ type: "session_meta", payload: { id: name, originator } }) + "\n");
+  const started = (sessions: string, id: string, originator: string, cwd: string) => {
+    mkdirSync(sessions, { recursive: true });
+    const file = join(sessions, `rollout-2026-10-20T14-17-24-${id}.jsonl`);
+    writeFileSync(file, JSON.stringify({ type: "session_meta", payload: { id, originator, cwd } }) + "\n");
     return file;
   };
   const bind = (folder: string) =>
@@ -222,25 +260,47 @@ describe("handing a Codex seat to its new thread", () => {
 
   test("only a window thread created right after the offer takes the old thread's Codex seats, once", () => {
     const folder = join(dir, "work");
+    const sessions = join(dir, "sessions-a");
     mkdirSync(folder);
     bind(folder);
     const at = 1_800_000_000_000;
-    const tui = started("tui", "codex-tui");
-    expect(takeHandoff(folder, v7(at + 1_000), tui)).toBeNull();
-    offerHandoff(folder, "thr-old", "codex-tui", at);
-    expect(takeHandoff(folder, v7(at - 60_000), tui)).toBeNull();
-    expect(takeHandoff(folder, v7(at + NEW_THREAD_MS + 1), tui)).toBeNull();
-    expect(takeHandoff(folder, v7(at + 1_000), started("exec", "codex_exec"))).toBeNull();
-    expect(takeHandoff(folder, "thr-old", tui)).toBeNull();
-    expect(seats(folder).map((b) => b.session)).toEqual(["thr-old", "thr-old"]);
     const mine = v7(at + 1_000);
+    const tui = started(sessions, mine, "codex-tui", folder);
+    expect(takeHandoff(folder, mine, tui)).toBeNull();
+    offerHandoff(folder, "thr-old", "codex-tui", at);
+    const early = v7(at - 60_000);
+    const late = v7(at + NEW_THREAD_MS + 1);
+    const exec = v7(at + 1_500, "0000000000e1");
+    expect(takeHandoff(folder, early, started(sessions, early, "codex-tui", folder))).toBeNull();
+    expect(takeHandoff(folder, late, started(sessions, late, "codex-tui", folder))).toBeNull();
+    expect(takeHandoff(folder, exec, started(sessions, exec, "codex_exec", folder))).toBeNull();
+    expect(takeHandoff(folder, "thr-old", tui)).toBeNull();
+    started(sessions, v7(at + 2_000, "0000000000f1"), "codex-tui", join(dir, "another-folder"));
+    expect(seats(folder).map((b) => b.session)).toEqual(["thr-old", "thr-old"]);
     expect(takeHandoff(folder, mine, tui)).toBe("thr-old");
     expect(seats(folder).map((b) => [b.as, b.session])).toEqual([
       ["ana", mine],
       ["bo", "thr-old"],
     ]);
-    expect(takeHandoff(folder, v7(at + 2_000), tui)).toBeNull();
+    expect(takeHandoff(folder, mine, tui)).toBeNull();
     expect(seats(folder)[0]?.session).toBe(mine);
+  });
+
+  test("when two window threads start in the folder right after the offer, neither takes the seats", () => {
+    const folder = join(dir, "crowded");
+    const sessions = join(dir, "sessions-b");
+    mkdirSync(folder);
+    bind(folder);
+    const at = 1_800_000_100_000;
+    offerHandoff(folder, "thr-old", "codex-tui", at);
+    const theirs = v7(at + 3_000, "0000000000a1");
+    const mine = v7(at + 1_000, "0000000000b1");
+    const theirFile = started(sessions, theirs, "codex-tui", folder);
+    const myFile = started(sessions, mine, "codex-tui", folder);
+    expect(takeHandoff(folder, theirs, theirFile)).toBeNull();
+    expect(takeHandoff(folder, mine, myFile)).toBeNull();
+    expect(seats(folder).map((b) => b.session)).toEqual(["thr-old", "thr-old"]);
+    expect(readFileSync(join(dir, "rotate.log"), "utf8")).toContain("session thr-old stays: 2 Codex threads started");
   });
 
   test("a Codex SessionStart for the new thread moves the seat", async () => {
@@ -253,7 +313,9 @@ describe("handing a Codex seat to its new thread", () => {
     const p = Bun.spawn(kiwiCmd(["--harness", "codex", "hook", "session-start"]), {
       cwd: folder,
       env: { ...process.env, KIWI_HOME: dir, KIWI_NO_HOOKS: "1", CLAUDE_CONFIG_DIR: join(dir, "claude"), CLAUDE_PROJECT_DIR: "", CODEX_THREAD_ID: fresh },
-      stdin: new TextEncoder().encode(JSON.stringify({ session_id: fresh, transcript_path: started("hooked", "codex-tui"), cwd: folder, hook_event_name: "SessionStart", source: "startup" })),
+      stdin: new TextEncoder().encode(
+        JSON.stringify({ session_id: fresh, transcript_path: started(join(dir, "sessions-c"), fresh, "codex-tui", folder), cwd: folder, hook_event_name: "SessionStart", source: "startup" }),
+      ),
       stdout: "pipe",
       stderr: "pipe",
     });
