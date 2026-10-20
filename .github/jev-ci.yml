@@ -102,6 +102,10 @@ jobs:
       seats, any brief size and any alias length; Cursor's stop follow-up names the channel when it fits
       and falls back to the bare short line, never past the share (cursorFollow); re-entry's
       recovery commands use the seat's own command.
+      Also test/rex.test.ts: where a seat runs from its environment (nothing inside tmux, Rex's
+      server, session and block ids, any other terminal's program and version), which terminals
+      take an OSC 7501 status record, the record frames they get, and the blocked question and
+      done review records a channel state yields for one agent.
       Also test/daemon-big-lines.test.ts: the daemon's socket writes queue what the socket
       didn't take and flush it on drain (src/daemon/server.ts), so a catch-up of thirty
       messages with 50 KB ones among them, and big live messages back to back, arrive whole
