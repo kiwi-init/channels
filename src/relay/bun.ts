@@ -14,7 +14,7 @@ import { clockLayer } from "./http.ts";
 import { authkitDomains, devHostOk, devHumanAuth, devRequestOk, Human, HUMAN_HEADER, workosFromSettings, type HumanAuth } from "./human.ts";
 import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
-import { clientAddress, downloadAllowed, parseTrustProxy, trustProxyFromArgs, writeAllowed, type TrustProxy } from "./address.ts";
+import { clientAddress, downloadAllowed, parseTrustProxy, trustProxyFromArgs, trustProxyHint, untrustedProxy, writeAllowed, type TrustProxy } from "./address.ts";
 import { onDictationHttp, type DictationStore } from "./dictation.ts";
 import { Policy, policyFrom, type RelayPolicy } from "./policy.ts";
 import {
@@ -258,6 +258,7 @@ export function startRelay(
   const sweeper = policy.expireAfterDays ? setInterval(sweep, 3_600_000) : undefined;
   sweeper?.unref?.();
 
+  let proxyHinted = false;
   const server = Bun.serve<SocketData>({
     port: opts.port ?? 8787,
     hostname: opts.hostname ?? "0.0.0.0",
@@ -274,7 +275,14 @@ export function startRelay(
         // The desktop app's renderer isn't served by the relay: /v1/* answers any origin.
         if (req.method === "OPTIONS" && url.pathname.startsWith("/v1/")) return corsPreflight();
         if (url.pathname === "/v1/config") return withCors(await relayConfig(human, process.env.GITHUB_APP_CLIENT_ID));
-        const ip = clientAddress(server.requestIP(req)?.address ?? null, req.headers.get("x-forwarded-for"), trustProxy);
+        const peer = server.requestIP(req)?.address ?? null;
+        const forwarded = req.headers.get("x-forwarded-for");
+        const ip = clientAddress(peer, forwarded, trustProxy);
+        const proxy = proxyHinted ? null : untrustedProxy(peer, forwarded, trustProxy);
+        if (proxy) {
+          proxyHinted = true;
+          process.stderr.write(`${trustProxyHint(proxy)}\n`);
+        }
         const spoken = await onDictationHttp(req, { store: dictation, ip, allow: downloadAllowed, ...(opts.dictationUpstream ? { upstream: opts.dictationUpstream } : {}) });
         if (spoken) return spoken;
         const mailbox = await onMailboxHttp(req, mailboxes, ip ? { ip, allow: writeAllowed } : {});

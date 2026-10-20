@@ -307,8 +307,12 @@ jobs:
       kiwi keeps a newer daemon running, and a newer one replaces an older daemon (src/daemon/rpc.ts).
       Also test/install.test.ts's download cases: site/install.sh takes the release's .xz when
       xz is installed, else its .gz, else the plain binary, and checks what it downloaded against
-      SHA256SUMS; and test/cli-downloads.test.ts: scripts/cli-downloads.ts, the release build's
-      check that every CLI download is 30 MB or less.
+      SHA256SUMS, and takes the Apple Silicon build on a Mac whose shell runs under Rosetta
+      (sysctl.proc_translated) while an Intel Mac and Linux keep theirs; and test/cli-downloads.test.ts:
+      scripts/cli-downloads.ts, the release build's check that every CLI download is 30 MB or less.
+      Also test/relay-proxy-hint.test.ts: a Bun relay that gets X-Forwarded-For from a peer it
+      doesn't trust says so once on stderr, naming the --trust-proxy value to pass
+      (src/relay/address.ts, src/relay/bun.ts), and says nothing when it trusts that peer.
       Also test/hooks-harness.test.ts's broken config case: with a config.json that isn't JSON,
       every hook exits 0 and says once which file to fix (src/config/file.ts, src/cli/commands/hooks.ts).
       Also test/config-lock.test.ts: withLock (src/config/file.ts) takes a lock whose holder is gone at
