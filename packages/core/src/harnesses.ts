@@ -8,17 +8,18 @@ export interface HarnessRow {
   harness: KnownHarness;
   path: string | null;
   version: string | null;
+  start: boolean;
   wake: WakeVia | null;
   why: string | null;
 }
 
-const isKnown = (v: unknown): v is KnownHarness => typeof v === "string" && (KNOWN_HARNESSES as readonly string[]).includes(v);
+export const isKnownHarness = (v: unknown): v is KnownHarness => typeof v === "string" && (KNOWN_HARNESSES as readonly string[]).includes(v);
 
 const text = (v: unknown): string | null => (typeof v === "string" && v ? v : null);
 
 export function readHarnessRow(x: unknown): HarnessRow | null {
   if (!x || typeof x !== "object") return null;
   const r = x as Record<string, unknown>;
-  if (!isKnown(r.harness)) return null;
-  return { harness: r.harness, path: text(r.path), version: text(r.version), wake: isWakeVia(r.wake) ? r.wake : null, why: text(r.why) };
+  if (!isKnownHarness(r.harness)) return null;
+  return { harness: r.harness, path: text(r.path), version: text(r.version), start: r.start === true, wake: isWakeVia(r.wake) ? r.wake : null, why: text(r.why) };
 }

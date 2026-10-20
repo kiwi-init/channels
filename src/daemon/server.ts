@@ -14,6 +14,8 @@ import { readRexInto } from "./rex-reads.ts";
 import type { RexActivity, RexPlace } from "../rex.ts";
 import { pruneHookFiles } from "../hooks/delivered.ts";
 import { harnessInventory } from "../launch/harnesses.ts";
+import { launchAgent } from "../launch/launch.ts";
+import { readLaunchRequest } from "../launch/wire.ts";
 import { beatLock, dropLock, lockPath, ownsLock, takeLock } from "./lock.ts";
 import { stopDaemon, tryHello } from "./rpc.ts";
 import { readKey, type ConnState, type Seat, type Sub, type Waiting } from "./seat.ts";
@@ -674,12 +676,18 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         case "harnesses":
           sendLine(conn, JSON.stringify({ id, ok: true, harnesses: await harnessInventory() }));
           break;
+        case "launch": {
+          const launch = readLaunchRequest(params);
+          if (!launch) throw new Error('launch needs {"harness", "folder", "code", "relay"?, "nick"?, "persona"?, "launch"?: an id of 8 to 64 of A-Z a-z 0-9 _ -}');
+          sendLine(conn, JSON.stringify({ id, ok: true, launched: await launchAgent(launch) }));
+          break;
+        }
         case "stop":
           sendLine(conn, JSON.stringify({ id, ok: true }));
           setTimeout(() => void stop(), 50);
           break;
         default:
-          throw new Error(`unknown verb "${verb}" (hello, adopt, listen, listening, hold, listeners, read, mark, peek, presence, harnesses, stop)`);
+          throw new Error(`unknown verb "${verb}" (hello, adopt, listen, listening, hold, listeners, read, mark, peek, presence, harnesses, launch, stop)`);
       }
     } catch (err) {
       sendLine(conn, JSON.stringify({ id, ok: false, error: err instanceof Error ? err.message : String(err) }));
