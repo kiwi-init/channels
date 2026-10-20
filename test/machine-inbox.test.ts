@@ -145,14 +145,14 @@ describe("a paired computer's daemon", () => {
     expect(log()).toContain(`\tlaunch\tdone\tclaude\t${project}\t${ids[0]}\n`);
   });
 
-  test("a box that breaks the reader, with a key that isn't base64, is logged and taken out, never retried", async () => {
+  test("a box signed with a key that isn't base64 is refused, logged and taken out, never retried", async () => {
     const forged = await sealTo(
       machine.xpk!,
       JSON.stringify({ kind: "kiwi-machine-ask", v: 1, machine: machine.pk, verb: "harnesses", args: {}, id: "brokenKey_0001", at: Date.now(), reply: newSecret(), pk: "%%%", sig: "x" }),
       "kiwi-machine-ask",
     );
     expect(await post(forged)).toBe(202);
-    await until("the broken box logged", () => log().includes("\trefused\tmalformed\t\t\t"));
+    await until("the broken box logged", () => log().includes("\trefused\tunsigned\t\t\t"));
     const path = `/v1/machine/${machine.pk}/inbox`;
     const token = await signRequest(machine, `machine:${machine.pk}`, "GET", path);
     await until("the broken box gone", async () => ((await (await fetch(relay + path, { headers: { authorization: `Bearer ${token}` } })).json()) as { boxes: unknown[] }).boxes.length === 0);
