@@ -109,9 +109,12 @@ WebAssembly it runs on, from jsDelivr at a pinned version), each with its size
 and SHA-256. Nothing else is served, and nothing from the request goes upstream,
 so the route can't be used as a proxy.
 
-The first request for a file fetches it from its pinned URL, checks its size and
-SHA-256, and keeps it in `dictation/` in the data folder; later ones are served
-from there. The app checks the hash again before it uses a file. Downloads are
+The first request for a file streams it from its pinned URL into `dictation/` in
+the data folder, hashing as it goes, and keeps it only if its size and SHA-256
+match; later ones are served from there. The relay never holds a whole file in
+memory. A Worker on a `workers.dev` address, where the Cache API stores nothing,
+streams the checked file straight to the app instead. The app checks the hash
+again before it uses a file. Downloads are
 limited to 32 an hour per client address (a first download is eight). A relay
 that can't reach Hugging Face or jsDelivr answers 502, and the app says
 dictation isn't available there. To run offline, fill `dictation/` ahead of

@@ -81,3 +81,22 @@ describe("a PR finds its task by its branch", () => {
     expect(taskPr(s, add.seq + 100)).toBeUndefined();
   });
 });
+
+describe("a task's PR, looked up from one index per fold", () => {
+  const pr = (number: number, branch: string, state: "open" | "closed" | "merged", at: number) => ({ repo: "o/r", number, branch, state, at, seq: number });
+  const stateWith = (prs: ReturnType<typeof pr>[]) =>
+    ({ github: { prs: new Map(prs.map((p) => [`o/r#${p.number}`, p])), checks: new Map(), issues: new Map() } }) as unknown as Parameters<typeof taskPr>[0];
+
+  test("an open PR wins over a newer closed one, the newest wins among equals, and the first stays on a tie", () => {
+    const s = stateWith([pr(1, "T7-a", "merged", 30), pr(2, "T7-b", "open", 10), pr(3, "T8-a", "closed", 5), pr(4, "T8-b", "closed", 9), pr(5, "T9", "open", 4), pr(6, "T9-x", "open", 4)]);
+    expect(taskPr(s, 7)?.pr.number).toBe(2);
+    expect(taskPr(s, 8)?.pr.number).toBe(4);
+    expect(taskPr(s, 9)?.pr.number).toBe(5);
+    expect(taskPr(s, 10)).toBeUndefined();
+  });
+
+  test("the same fold's lookups share one index", () => {
+    const s = stateWith([pr(1, "T7-a", "open", 1)]);
+    expect(taskPr(s, 7)).toBe(taskPr(s, 7));
+  });
+});
