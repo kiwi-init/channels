@@ -127,7 +127,7 @@ export class Channel extends DurableObject<Env> {
         Layer.succeed(Policy, this.policy),
         Layer.succeed(ChannelLists, owned(env)),
         Layer.succeed(GithubApp, githubAppFrom({ appId: env.GITHUB_APP_ID, privateKey: env.GITHUB_APP_PRIVATE_KEY })),
-        Layer.succeed(GithubPush, githubPushFrom()),
+        Layer.succeed(GithubPush, env.GITHUB_WEBHOOK_SECRET ? githubPushFrom() : null),
       ),
     );
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));

@@ -55,7 +55,7 @@ export class GithubApp extends Context.Service<GithubApp, GithubAppApi | null>()
 
 export type PushCheck = (repo: string, userToken: string) => Promise<GithubReply<boolean>>;
 
-export class GithubPush extends Context.Service<GithubPush, PushCheck>()("kiwi/relay/GithubPush") {}
+export class GithubPush extends Context.Service<GithubPush, PushCheck | null>()("kiwi/relay/GithubPush") {}
 
 const githubHeaders = (auth: string, accept = "application/vnd.github+json") => ({ authorization: `Bearer ${auth}`, accept, "user-agent": "kiwi-channels", "x-github-api-version": "2022-11-28" });
 

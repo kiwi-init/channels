@@ -139,6 +139,19 @@ describe("GitHub webhooks into a channel's queue", () => {
     expect(await (await hook("push", { ref: "refs/heads/main", repository: { full_name: "ojow/site" } })).json()).toEqual({ queued: 0 });
   });
 
+  test("a relay with neither the App nor a webhook secret takes a repo list as is: no GitHub event ever reaches it", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-github-none-"));
+    const none = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, human: devHumanAuth(), githubSecret: null, githubApp: null });
+    try {
+      const o = await generateIdentity("carol");
+      const made = await Channel.create(none.url.origin, o, { name: "carol", kind: "human" }, [], undefined, "dev:carol");
+      expect(await new Channel(made.access, none.url.origin, o).setGithubRepos(["ojow/site"])).toEqual(["ojow/site"]);
+    } finally {
+      none.stop(true);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("a relay without the secret has no webhook", async () => {
     const dir = mkdtempSync(join(tmpdir(), "kiwi-github-off-"));
     const off = startRelay({ port: 0, hostname: "127.0.0.1", dataDir: dir, githubSecret: null });

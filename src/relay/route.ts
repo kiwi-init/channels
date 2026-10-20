@@ -411,7 +411,7 @@ const routes: RoomRoute[] = [
         if (!repos) return yield* new BadRequest({ message: "repos: up to 20 owner/name" });
         const app = yield* GithubApp;
         const canPush = app ? app.canPush : yield* GithubPush;
-        if (repos.length) {
+        if (canPush && repos.length) {
           if (typeof body.token !== "string" || !body.token || body.token.length > 512) return yield* new Forbidden({ message: "link GitHub in Settings to connect a repo" });
           const userToken = body.token;
           const pushable = yield* Effect.forEach(

@@ -77,7 +77,7 @@ export function startRelay(
     trustProxy?: TrustProxy;
     githubSecret?: string | null;
     githubApp?: GithubAppApi | null;
-    githubPush?: PushCheck;
+    githubPush?: PushCheck | null;
     dictationUpstream?: (url: string) => Promise<Response>;
   } = {},
 ) {
@@ -179,7 +179,7 @@ export function startRelay(
     Layer.succeed(Human, human),
     Layer.succeed(Policy, policy),
     Layer.succeed(GithubApp, opts.githubApp === undefined ? githubAppFrom({ appId: process.env.GITHUB_APP_ID, privateKey: process.env.GITHUB_APP_PRIVATE_KEY }) : opts.githubApp),
-    Layer.succeed(GithubPush, opts.githubPush ?? githubPushFrom()),
+    Layer.succeed(GithubPush, opts.githubPush === undefined ? (githubSecret ? githubPushFrom() : null) : opts.githubPush),
     Layer.succeed(Directory, {
       list: async (user: string) => listOf(user),
       // Synchronous SQLite: the count and the hold happen with nothing in between.
