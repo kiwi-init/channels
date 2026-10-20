@@ -234,7 +234,8 @@ export interface FoldBase {
   reactSeqs: number[];
   trust: [number, Trust][];
   rejected: [number, string][];
-  sent?: ([string, number] | [string, number, number] | [string, number, number, number])[];
+  sent?: ([string, number] | [string, number, number, number])[];
+  oldSent?: [number, number][];
   sentKeys?: string[];
   sentFloors?: [string, number][];
   hw?: number;

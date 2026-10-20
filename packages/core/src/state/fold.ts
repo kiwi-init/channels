@@ -19,6 +19,19 @@ const CLOSED_KEEP_MS = 30 * STALE_MS;
 
 const closedLongAgo = (at: number, hw: number) => hw - at > CLOSED_KEEP_MS;
 
+function idHash(id: string): number {
+  let a = 0xdeadbeef;
+  let b = 0x41c6ce57;
+  for (let i = 0; i < id.length; i++) {
+    const c = id.charCodeAt(i);
+    a = Math.imul(a ^ c, 2654435761);
+    b = Math.imul(b ^ c, 1597334677);
+  }
+  a = Math.imul(a ^ (a >>> 16), 2246822507) ^ Math.imul(b ^ (b >>> 13), 3266489909);
+  b = Math.imul(b ^ (b >>> 16), 2246822507) ^ Math.imul(a ^ (a >>> 13), 3266489909);
+  return 4294967296 * (2097151 & b) + (a >>> 0);
+}
+
 const card = (t: Task): Task => ({ ...omit(t, "detail", "proof", "from", "areas", "touched", "source", "posters"), notes: [], rounds: t.rounds.slice(-1) });
 
 function earlierParent(m: Message): number | undefined {
@@ -174,11 +187,16 @@ export function fold(
   const sentAt = new Map<string, number>();
   const queue = new Map<string, string>();
   const sentFloors = new Map<string, number>(from?.sentFloors);
+  const old = new Map<number, number>(from?.oldSent?.map(([seq, hash]) => [hash, seq]));
   for (const [id, seq, ts, k] of from?.sent ?? []) {
-    sent.set(id, seq);
-    if (ts !== undefined) sentAt.set(id, ts);
     const pk = from?.sentKeys?.[k ?? -1];
-    if (pk !== undefined) queue.set(id, pk);
+    if (pk === undefined || ts === undefined) {
+      old.set(idHash(id), seq);
+      continue;
+    }
+    sent.set(id, seq);
+    sentAt.set(id, ts);
+    queue.set(id, pk);
   }
   let hw = from?.hw ?? 0;
   const placesBefore = from?.placesBefore ?? [];
@@ -241,7 +259,7 @@ export function fold(
         rejected.set(m.seq, member ? `not signed by ${m.from}'s key` : `${m.from} isn't a member`);
         continue;
       }
-      const first = sent.get(m.id);
+      const first = sent.get(m.id) ?? (old.size ? old.get(idHash(m.id)) : undefined);
       if (first !== undefined && first !== m.seq) {
         trust.set(m.seq, "refused");
         rejected.set(m.seq, `a copy of #${first}, sent again`);
@@ -373,10 +391,7 @@ export function fold(
 
   const cut = head - KEEP_SEQS;
   const keyIndex = new Map<string, number>();
-  const keptSent = [...sent].map(([id, seq]): [string, number] | [string, number, number, number] => {
-    const pk = queue.get(id);
-    return pk === undefined ? [id, seq] : [id, seq, sentAt.get(id)!, keyIndex.get(pk) ?? keyIndex.set(pk, keyIndex.size).size - 1];
-  });
+  const keptSent = [...queue].map(([id, pk]): [string, number, number, number] => [id, sent.get(id)!, sentAt.get(id)!, keyIndex.get(pk) ?? keyIndex.set(pk, keyIndex.size).size - 1]);
   const carded = (t: Task) => (t.state === "done" || t.cancelled) && closedLongAgo(t.updatedAt, hw);
   const taskIssues = new Set([...tasks.values()].flatMap((t) => (t.issue && !carded(t) ? [prKey(t.issue.repo, t.issue.number)] : [])));
   const recent = <T>(pairs: Iterable<[number, T]>) => [...pairs].filter(([seq]) => seq > cut);
@@ -409,6 +424,7 @@ export function fold(
       trust: recent(trust),
       rejected: recent(rejected),
       sent: keptSent,
+      oldSent: [...old].map(([hash, seq]): [number, number] => [seq, hash]),
       sentKeys: [...keyIndex.keys()],
       sentFloors: [...sentFloors].filter(([, floor]) => floor > hw - SENT_WINDOW_MS),
       hw,

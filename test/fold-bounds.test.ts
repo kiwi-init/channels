@@ -216,4 +216,23 @@ describe("the fold base stays bounded", () => {
     expect(fromBase.tasks.get(1)?.state).toBe("done");
     expect(fromBase.rejected.get(6)).toBeUndefined();
   });
+
+  test("a v5 base with more ids than fit under the cap upgrades to bases that seal, and still refuses replays of its ids", async () => {
+    const messages = Array.from({ length: 20_000 }, (_, i) => msg(i + 1, T0 + i * 1_000, { id: crypto.randomUUID() }));
+    const fresh = baseOf(messages);
+    const v5: FoldBase = { ...fresh, sent: messages.map((m): [string, number] => [m.id, m.seq]), sentKeys: undefined, sentFloors: undefined, hw: undefined, oldSent: undefined };
+    const upgraded = baseOf(
+      Array.from({ length: 2_000 }, (_, i) => msg(20_001 + i, T0 + (20_000 + i) * 1_000, { id: crypto.randomUUID() })),
+      v5,
+    );
+    const later = baseOf([msg(22_001, T0 + 22_000 * 1_000, { id: crypto.randomUUID() })], upgraded);
+    expect(upgraded.oldSent?.length).toBe(20_000);
+    const owner = await generateIdentity("jow");
+    const access = { roomId: "ab".repeat(16), ownerPk: owner.pk, ownerXpk: owner.xpk ?? "", epoch: 0, keys: { "0": newChannelKey() } };
+    for (const base of [upgraded, later]) {
+      const sealed = await sealSnapshot(owner, access, base);
+      expect(sealed).not.toBeNull();
+      expect(fold([{ ...messages[12_345]!, seq: 22_002 }], roster, T0, null, null, base).rejected.get(22_002)).toContain("a copy of #12346");
+    }
+  });
 });
