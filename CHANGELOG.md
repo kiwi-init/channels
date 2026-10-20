@@ -2,6 +2,20 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.22.0 — 2026-10-20
+
+- **A release is a tag on main: the workflow stamps the version and changelog, and commits them to main** ([#550](https://github.com/ojowwalker77/channels/pull/550))
+- **The tmux-restart test waits for the old server to exit before starting a new one (#552)** ([#553](https://github.com/ojowwalker77/channels/pull/553))
+- **On a Mac the traffic lights no longer touch the page: the rail is 92px there, so the sheet starts 12px after them** ([#555](https://github.com/ojowwalker77/channels/pull/555))
+- **A Mac window is never narrower than 768px, so its headers never sit under the traffic lights** ([#556](https://github.com/ojowwalker77/channels/pull/556))
+- **The desktop app never zooms the page: ⌘+, ⌘− and ⌘0 step the text size, the layout stays put** ([#559](https://github.com/ojowwalker77/channels/pull/559))
+- **kiwi rotate logs why a seat stays, and a question on a finished task no longer holds it** ([#561](https://github.com/ojowwalker77/channels/pull/561))
+- **Seats say where they run, and Kiwi marks them in terminals that take OSC 7501** ([#554](https://github.com/ojowwalker77/channels/pull/554))
+- **A lead past the context line writes a lead checkpoint, and rotates only after it** ([#562](https://github.com/ojowwalker77/channels/pull/562))
+- **Seats follow Rex events, rotation clears a Rex pane, and Needs you and Rex's palette open the seat** ([#557](https://github.com/ojowwalker77/channels/pull/557))
+- **The Rex helpers plan, built, with what probes on a live Rex found** ([#551](https://github.com/ojowwalker77/channels/pull/551))
+- **Settings → Rex: Install Rex Helpers, from the app** ([#563](https://github.com/ojowwalker77/channels/pull/563))
+
 ## 0.21.0 — 2026-10-20
 
 - **A MiMoCode session whose lookups race keeps one listener, and the plugin is updated before any seat joins** ([#536](https://github.com/ojowwalker77/channels/pull/536))
