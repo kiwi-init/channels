@@ -1,7 +1,8 @@
 import { execFile } from "node:child_process";
 import { ipcMain } from "electron";
 
-import type { RexSeatView, RexShowResult } from "../bridge.ts";
+import type { RexSeatView, RexShowResult, RexStatusView } from "../bridge.ts";
+import { REX_UNKNOWN, rexStatusOf } from "../rex-status.ts";
 import { kiwiCli } from "../bundled-daemon.ts";
 
 function run(args: string[]): Promise<{ code: number | null; stdout: string; stderr: string }> {
@@ -61,7 +62,21 @@ function result(stdout: string): RexShowResult {
   return { ok: false, why: why === "no-rex" || why === "no-server" || why === "no-app" || why === "remote-control" ? why : "failed" };
 }
 
+async function rexStatus(): Promise<RexStatusView> {
+  const got = await run(["rex", "status", "--json"]);
+  return got.code === 0 ? rexStatusOf(got.stdout) : REX_UNKNOWN;
+}
+
+async function rexSwitch(to: "on" | "off"): Promise<RexStatusView> {
+  const done = await run(["rex", to]);
+  if (done.code !== 0) throw new Error(done.stderr.trim().split("\n").at(-1) || `kiwi rex ${to} didn't finish`);
+  return rexStatus();
+}
+
 export function wireRexIpc(): void {
+  ipcMain.handle("kiwi:rex-status", () => rexStatus());
+  ipcMain.handle("kiwi:rex-install", () => rexSwitch("on"));
+  ipcMain.handle("kiwi:rex-remove", () => rexSwitch("off"));
   ipcMain.handle("kiwi:rex-seats", async (): Promise<RexSeatView[]> => {
     const listed = await run(["rex", "seats", "--json"]);
     return listed.code === 0 ? seats(listed.stdout) : [];

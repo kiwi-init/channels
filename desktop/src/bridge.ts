@@ -256,6 +256,14 @@ export interface RexSeatView {
 
 export type RexShowResult = { ok: true } | { ok: false; why: "no-rex" | "no-server" | "no-app" | "remote-control" | "failed" };
 
+export interface RexStatusView {
+  found: boolean;
+  version?: string;
+  server: "running" | "stopped";
+  helpers: "on" | "off";
+  rotation: "on" | "off";
+}
+
 export interface KiwiBridge {
   /** The relay URL injected at load (query param, else the default). */
   readonly relayUrl: string;
@@ -314,6 +322,9 @@ export interface KiwiBridge {
   setPersonalities(list: Personality[]): Promise<void>;
   rexSeats(): Promise<RexSeatView[]>;
   rexShow(seat: RexSeatView): Promise<RexShowResult>;
+  rexStatus(): Promise<RexStatusView>;
+  rexInstall(): Promise<RexStatusView>;
+  rexRemove(): Promise<RexStatusView>;
 }
 
 export interface UpdateView {
