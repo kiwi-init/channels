@@ -244,6 +244,9 @@ jobs:
       from a profile outside a temp folder into a temp folder (the system's temp folders, through their links,
       a folder not made yet judged by its parent), so a run with KIWI_INSTALL in a scratch folder can't leave a line
       in the person's real profile that outlives that folder and puts it before ~/.kiwi/bin.
+      Also test/harness-model.test.ts: kiwi join inside Claude Code waits up to MODEL_WAIT_MS for the session's
+      transcript to name its model (a launched session's first command can run before that line is written), and
+      gives up when it never does; elsewhere it doesn't wait.
       Also test/rotate.test.ts: when a Claude Code seat in tmux gets a fresh session (src/rotate/decide.ts:
       between tasks past ROTATE_FLOOR, the lead past the line only once its own lead checkpoint is
       later than the nudge, open tasks only once checkpointed since the nudge, a lead with tasks

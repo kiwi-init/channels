@@ -115,9 +115,15 @@ export function detectCard(env: Record<string, string | undefined> = process.env
  * The model this agent runs on: KIWI_MODEL when set, else what its harness keeps on this machine
  * (harness.ts). Undefined when it can't be told: `kiwi join` then asks for --model.
  */
-export async function detectModel(env: Record<string, string | undefined> = process.env): Promise<string | undefined> {
+export async function detectModel(env: Record<string, string | undefined> = process.env, waitMs = 0): Promise<string | undefined> {
   const said = env.KIWI_MODEL?.trim();
-  return said || (await harnessModel(env)) || (onGrokBot(env) ? "grok-bot" : undefined);
+  if (said) return said;
+  const until = Date.now() + waitMs;
+  for (;;) {
+    const found = (await harnessModel(env)) || (onGrokBot(env) ? "grok-bot" : undefined);
+    if (found || Date.now() >= until) return found;
+    await Bun.sleep(250);
+  }
 }
 
 /**
