@@ -227,6 +227,14 @@ jobs:
       Code's listening ones from 2.1.296) unless KIWI_NO_HOOKS is set or that harness's hooks are off; the daemon's
       answer reads back as sent; and kiwi join carries KIWI_LAUNCH to the owner in its sealed claims on a live
       relay, dropping one that isn't an id. The inventory says which harnesses kiwi launch starts.
+      Also the daemon's and hooks' reliability (audit #132, bundle H): a stale daemon.lock whose pid now belongs to
+      another program freed without killing it, only a kiwi daemon's command line being killed (test/daemon-lock.test.ts);
+      hooks retrying an unreachable daemon spawning one per home every 15 s while a lock exists (claimSpawn,
+      test/daemon-lock.test.ts); a key that waited long for approval getting its seat within seconds of the approval
+      (test/daemon-seats.test.ts); a wake command that ignores TERM or leaves a child on its stderr ending at its deadline
+      (runBounded, test/wake-bounded.test.ts); the Rex helpers replacing init.lua in one rename through its dotfiles link,
+      keeping its mode (test/rex.test.ts); and a kiwi sh query run in its own process, stopped after its deadline, with
+      randomblob and zeroblob refused (queryIsolated, test/sh-query.test.ts).
       Also test/shell-path.test.ts: the PATH line kiwi setup and the desktop app add to the shell's profile
       (packages/core/src/node/shell-path.ts), once and never when the profile already names the folder, and never
       from a profile outside a temp folder into a temp folder (the system's temp folders, through their links,
