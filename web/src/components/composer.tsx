@@ -76,6 +76,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
   const [slashOff, setSlashOff] = useState(false)
   const area = useRef<HTMLTextAreaElement>(null)
   const backdrop = useRef<HTMLDivElement>(null)
+  const caretTo = useRef<number | null>(null)
   const dictation = useDictation(
     (text) => setBody((current) => appendDictation(current, text)),
     (message) => toast(message, "error")
@@ -97,6 +98,10 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
     if (!el) return
     el.style.height = "auto"
     el.style.height = `${Math.min(el.scrollHeight, 220)}px`
+    if (caretTo.current !== null) {
+      el.setSelectionRange(caretTo.current, caretTo.current)
+      caretTo.current = null
+    }
     if (backdrop.current) backdrop.current.scrollTop = el.scrollTop
   }, [body])
 
@@ -181,12 +186,10 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
     const el = area.current
     const caret = el?.selectionStart ?? body.length
     const before = body.slice(0, caret).replace(MENTION, (_all, pre: string) => `${pre}@${mentionText(p, others)} `)
+    caretTo.current = before.length
     setBody(before + body.slice(caret))
     setMention(null)
-    requestAnimationFrame(() => {
-      el?.focus()
-      el?.setSelectionRange(before.length, before.length)
-    })
+    el?.focus()
   }
 
   const submit = async () => {
