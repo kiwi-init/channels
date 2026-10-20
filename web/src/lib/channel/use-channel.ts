@@ -13,7 +13,6 @@ import { readCached, rememberRow, rememberRows } from "../history"
 import { checkedUpTo, checksToPost, issuesToPost, linksToPost, setCheckedUpTo, tasksToClose } from "../review-checks"
 import { drain } from "../github-queue"
 import { closeFromGithub } from "../task-actions"
-import { wholeLog } from "../history-plan"
 import { ICON_LIVE } from "../icon-event"
 import { howHere } from "../presence"
 import { addMarks, type Marks } from "../receipts"
@@ -24,7 +23,7 @@ import { untilOpen } from "../until-open"
 import { useClock } from "./clock"
 import { noteAgentWorked } from "./recent"
 import { forgetChannel, loadMember, renameChannel, type StoredMember } from "./store"
-import { baseFrom, usableBase } from "./base-plan"
+import { baseFrom, startsWhole, usableBase } from "./base-plan"
 import { trimmed } from "./trim"
 import { dropWarm, heldWindow, keepWarm, warmOf } from "./warm"
 
@@ -225,8 +224,10 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
           const since = held ? held.since : cached ? cached.since : Math.max(0, head - HISTORY)
           const firstSeq = held ? held.firstSeq : cached?.firstSeq
           const from = baseFrom(since, firstSeq)
-          const snap = from > 0 && !was?.base ? await ch.snapshot().catch(() => null) : null
-          return { head, cached, since, firstSeq, base: usableBase(snap, from) }
+          const warm = usableBase(was?.base ?? null, from)
+          const snap = from > 0 && !warm ? await ch.snapshot().catch(() => null) : null
+          const base = usableBase(snap, from)
+          return { head, cached, since, firstSeq, base, whole: startsWhole(head, HISTORY, since, firstSeq, base ?? warm) }
         },
         catch: (err) => err,
       }),
@@ -247,7 +248,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
               if (cached.some((m) => m.kind === "event" && m.ev?.op === "card")) noteAgentWorked()
             }
             if (opened.base) setBase(opened.base)
-            setStart({ head: opened.head, whole: wholeLog(opened.head, HISTORY, opened.firstSeq) })
+            setStart({ head: opened.head, whole: opened.whole })
             stopLive = ch.follow(opened.since, onEvent)
           })
         ),

@@ -367,7 +367,9 @@ jobs:
       size, so off-screen messages skip layout and paint when the column's width changes. And
       test/snapshot-base.test.ts: a window of recent messages folded on the channel's snapshot keeps
       the tasks and facts from before it, as a whole-history fold does (web base-plan.test.ts: a
-      snapshot older than the window isn't used). And
+      snapshot older than the window isn't used, and one that meets the window makes the view whole
+      past 2,000 messages, so the owner's review checks, link-backs, CI-red tasks and posting
+      reconcile keep running). And
       web use-window.test.ts: the conversation's mounted rows drop back to the newest window once
       they pass twice its size and the cut is above the view. And
       test/history-bytes.test.ts: against a local relay, history pages stop at PAGE_BYTES (with at
