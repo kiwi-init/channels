@@ -16,6 +16,14 @@ export const launchCommands: Record<string, Command> = {
       out(opt.json ? JSON.stringify(rows) : inventoryText(rows));
     }),
 
+  folders: () =>
+    Effect.gen(function* () {
+      const { loadConfig } = yield* Effect.promise(() => import("../../config.ts"));
+      const { seatFolders } = yield* Effect.promise(() => import("../../launch/folders.ts"));
+      const folders = seatFolders(loadConfig(), opt.room);
+      out(opt.json ? JSON.stringify(folders) : folders.join("\n"));
+    }),
+
   launch: () =>
     Effect.gen(function* () {
       const harness = args[1];

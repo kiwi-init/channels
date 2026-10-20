@@ -34,6 +34,7 @@ export interface VoiceCall {
 interface VoiceHandlers {
   status?(status: VoiceStatus, why?: string): void
   heard?(text: string): void
+  spoke?(): void
   saying?(soFar: string): void
   said?(text: string): void
   call?(call: VoiceCall): void
@@ -145,6 +146,7 @@ export function connectGrokVoice(o: VoiceOptions): GrokVoice {
         set("live")
         return
       case "input_audio_buffer.speech_started":
+        on.spoke?.()
         cut()
         return
       case "conversation.item.input_audio_transcription.completed":
@@ -196,7 +198,7 @@ export function connectGrokVoice(o: VoiceOptions): GrokVoice {
       send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text }] } })
       send({ type: "response.create" })
     },
-    note: (text) => send({ type: "conversation.item.create", item: { type: "message", role: "system", content: [{ type: "input_text", text }] } }),
+    note: (text) => send({ type: "conversation.item.create", item: { type: "message", role: "user", content: [{ type: "input_text", text }] } }),
     answer: (callId, output) => {
       const waited = pending.delete(callId)
       if (!waited && !late.delete(callId)) return

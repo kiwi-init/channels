@@ -198,6 +198,17 @@ test("CLAUDECODE plus GROK_SESSION_ID does not write Claude settings", () => {
   expect(existsSync(join(process.env.KIWI_GROK_DIR!, "hooks", "kiwi.json"))).toBe(true);
 });
 
+test("Codex hooks go to CODEX_HOME, and KIWI_CODEX_DIR still wins over it", () => {
+  const home = scratch("hk-codex-home-");
+  const over = scratch("hk-codex-over-");
+  hideEnv(["KIWI_CODEX_DIR"]);
+  setEnv({ KIWI_HOME: scratch("hk-codex-home-kiwi-"), CODEX_HOME: home });
+  expect(installExtra("codex")).toBe(join(home, "hooks.json"));
+  expect(extraInstalled("codex")).toBe(true);
+  setEnv({ KIWI_CODEX_DIR: over });
+  expect(installExtra("codex")).toBe(join(over, "hooks.json"));
+});
+
 test("codex, gemini, cursor, and grok install, re-install once, and uninstall keeps user entries", () => {
   const claude = scratch("hk-claude-");
   const codex = scratch("hk-codex-");

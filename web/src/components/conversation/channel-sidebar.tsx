@@ -1,4 +1,4 @@
-import { Search01Icon } from "@hugeicons/core-free-icons"
+import { Add01Icon, Search01Icon } from "@hugeicons/core-free-icons"
 import type { ReactNode } from "react"
 
 import type { ChannelIcon } from "@kiwi/core/protocol.ts"
@@ -15,10 +15,10 @@ export interface Conversation {
   forMe: boolean
 }
 
-function Section({ title, onTitle, children }: { title: string; onTitle?: () => void; children: ReactNode }) {
+function Section({ title, onTitle, action, children }: { title: string; onTitle?: () => void; action?: ReactNode; children: ReactNode }) {
   return (
     <section aria-label={title} className="mt-6">
-      <h2 className="px-3 pb-1.5 text-meta font-medium text-ink-3">
+      <h2 className="flex items-center justify-between px-3 pb-1.5 text-meta font-medium text-ink-3">
         {onTitle ? (
           <button type="button" onClick={onTitle} className="transition-colors hover:text-ink">
             {title}
@@ -26,6 +26,7 @@ function Section({ title, onTitle, children }: { title: string; onTitle?: () => 
         ) : (
           title
         )}
+        {action}
       </h2>
       {children}
     </section>
@@ -56,6 +57,7 @@ export function ChannelSidebar({
   search,
   onSearch,
   onAgents,
+  onNewAgent,
   view,
   counts,
   onView,
@@ -73,6 +75,7 @@ export function ChannelSidebar({
   search: string | null
   onSearch: (q: string | null) => void
   onAgents: () => void
+  onNewAgent?: (() => void) | undefined
   view: View | null
   counts: Record<View, number>
   onView: (v: View) => void
@@ -113,8 +116,24 @@ export function ChannelSidebar({
         </ul>
       </nav>
 
-      {agents.length > 0 && (
-        <Section title="Agents" onTitle={onAgents}>
+      {(agents.length > 0 || onNewAgent) && (
+        <Section
+          title="Agents"
+          onTitle={onAgents}
+          action={
+            onNewAgent && (
+              <button
+                type="button"
+                onClick={onNewAgent}
+                aria-label="New agent"
+                title="New agent"
+                className="-my-1 -mr-1.5 flex size-6 items-center justify-center rounded-row text-ink-3 transition-colors hover:bg-wash hover:text-ink"
+              >
+                <Icon icon={Add01Icon} size={15} />
+              </button>
+            )
+          }
+        >
           <ul>
             {byBusy(agents).map((a) => (
               <AgentRow key={a.name} a={a} onMessage={onMessage} onOpenTask={onOpenTask} />
