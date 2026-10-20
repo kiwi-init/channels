@@ -144,6 +144,23 @@ describe("Rex events", () => {
   });
 });
 
+describe("Rex events from a dead server", () => {
+  test("a server whose events stream keeps exiting is retried with a growing wait, not on every reconcile", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-rex-dead-"));
+    const bin = join(dir, "rex");
+    const starts = join(dir, "starts");
+    writeFileSync(bin, `#!/bin/sh\necho start >> '${starts}'\nexit 1\n`);
+    chmodSync(bin, 0o755);
+    const watch = startRexEvents({ servers: () => [{ server: "dead", bin }], onChange: () => {}, everyMs: 50 });
+    await Bun.sleep(1_600);
+    watch.stop();
+    const count = readFileSync(starts, "utf8").split("\n").filter(Boolean).length;
+    expect(count).toBeGreaterThanOrEqual(2);
+    expect(count).toBeLessThanOrEqual(3);
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
+
 describe("Rex as a reader", () => {
   test("the root record, processes, screen and instance id come back even when wrapped", async () => {
     const dir = mkdtempSync(join(tmpdir(), "kiwi-rex-api-"));
