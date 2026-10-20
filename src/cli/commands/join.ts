@@ -159,7 +159,7 @@ export const joinCommands: Record<string, Command> = {
       const settle = (access: ChannelAccess, how: "approved" | "resumed") =>
         Effect.gen(function* () {
           if (auto) yield* doneAsking;
-          const me = (yield* new Channel(access, relay, id).fx.members()).find((m) => m.active && m.pk === id.pk);
+          const me = (yield* new Channel(access, relay, id).fx.members()).find((m) => m.active && !m.unverified && m.pk === id.pk);
           if (me && me.name !== name) yield* renameKey(me.name);
           const title = yield* new Channel(access, relay, id).fx.title().pipe(Effect.catchCause(() => Effect.succeed(null)));
           const existing = Object.entries((yield* keys.config).channels).find(([, c]) => c.roomId === access.roomId)?.[0];

@@ -421,6 +421,12 @@ jobs:
       test/replay.test.ts: a signed message counts once and near the time it was signed (fold
       refuses a second copy of a message id, across incremental folds and their snapshot, and one
       signed more than a day before the relay received it). And
+      test/hardening.test.ts's unverified rows (A3): a key the relay lists as a member without a
+      record the owner signed stays out of the roster every fold reads (rosterOf in
+      packages/core/src/state/types.ts for agents and snapshots; the web drops the same rows), so a post under its
+      unverified-<pk6> name folds as forged and reaches no agent, while the owner's members() still
+      lists it to remove and updateScopes, updatePersona, updateRole and updateNickname refuse to sign
+      it a record. And
       test/prism.test.ts: prism means one thing (prism-lit only on the open channel and the
       sidebar's chosen view or conversation, no plain prism or orb anywhere, solid
       prefers-contrast fallbacks, the spectrum and segment tokens written once, the kit the quiet
