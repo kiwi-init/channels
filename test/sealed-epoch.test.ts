@@ -144,17 +144,21 @@ describe("sealing rules", () => {
     expect(newestEpoch({})).toBe(0);
   });
 
-  test("a relay that doesn't keep the epoch gets the epoch-0 seal it always had", async () => {
+  test("a relay that doesn't keep the epoch gets the epoch-0 seal it always had, but only while the channel never rotated", async () => {
     const id = await generateIdentity("human");
     const k0 = newChannelKey();
     const k1 = newChannelKey();
-    const core = new ChannelCore(access({ "0": k0, "1": k1 }), relay, id);
-    const old = await Effect.runPromise(Effect.provideService(sealFor(core, { epoch: 1, sealedEpoch: false }, { a: 1 }), Relay, fetchRelay));
+    const run = (core: ChannelCore, info: { epoch: number; sealedEpoch?: boolean }) => Effect.runPromise(Effect.provideService(sealFor(core, info, { a: 1 }), Relay, fetchRelay));
+    const fresh = new ChannelCore(access({ "0": k0 }), relay, id);
+    const old = await run(fresh, { epoch: 0, sealedEpoch: false });
     expect(old && "e" in old).toBe(false);
-    expect(await opens(k0, core.roomId, old)).toEqual({ a: 1 });
-    const now = await Effect.runPromise(Effect.provideService(sealFor(core, { epoch: 1, sealedEpoch: true }, { a: 1 }), Relay, fetchRelay));
+    expect(await opens(k0, fresh.roomId, old)).toEqual({ a: 1 });
+    const rotated = new ChannelCore(access({ "0": k0, "1": k1 }), relay, id);
+    await expect(run(rotated, { epoch: 0, sealedEpoch: false })).rejects.toThrow(/can't keep the channel's name and settings from removed members/);
+    await expect(run(rotated, { epoch: 1 })).rejects.toThrow(/update it/);
+    const now = await run(rotated, { epoch: 1, sealedEpoch: true });
     expect(now?.e).toBe(1);
-    expect(await opens(k1, core.roomId, now)).toEqual({ a: 1 });
+    expect(await opens(k1, rotated.roomId, now)).toEqual({ a: 1 });
   });
 
   test("a blob under an older key than the newest is stale, only on a relay that keeps the epoch", () => {

@@ -1,5 +1,6 @@
 import * as Effect from "effect/Effect";
 import { open, seal } from "../crypto.ts";
+import { Rejected } from "../refusals.ts";
 import type { ChannelCore } from "./core.ts";
 import type { Info } from "./info.ts";
 import type { Relay } from "./relay.ts";
@@ -29,17 +30,15 @@ export function openSealed(ch: ChannelCore, blob: SealedBlob): Effect.Effect<unk
   });
 }
 
-export function sealFor(ch: ChannelCore, info: Pick<Info, "epoch" | "sealedEpoch">, payload: object): Effect.Effect<SealedBlob | null, never, Relay> {
+export function sealFor(ch: ChannelCore, info: Pick<Info, "epoch" | "sealedEpoch">, payload: object): Effect.Effect<SealedBlob | null, Rejected, Relay> {
   return Effect.gen(function* () {
-    if (!info.sealedEpoch) {
-      const key = ch.access.keys["0"];
-      return key ? yield* Effect.promise(() => seal(key, ch.roomId, payload)) : null;
-    }
     if (info.epoch > newestEpoch(ch.access.keys)) yield* ch.fx.refreshKeys().pipe(Effect.catchCause(() => Effect.void));
     const e = newestEpoch(ch.access.keys);
+    if (!info.sealedEpoch && e > 0) return yield* new Rejected("this relay can't keep the channel's name and settings from removed members: update it, or ask whoever runs it to");
     const key = ch.access.keys[String(e)];
     if (!key) return null;
-    return { e, ...(yield* Effect.promise(() => seal(key, ch.roomId, payload))) };
+    const sealed = yield* Effect.promise(() => seal(key, ch.roomId, payload));
+    return info.sealedEpoch ? { e, ...sealed } : sealed;
   });
 }
 

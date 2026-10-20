@@ -319,8 +319,10 @@ forge or swap anything. Writes are rate-limited per client address.
   when it changed, never its contents. A relay that keeps the epoch says
   `sealedEpoch: true` in `/info` and refuses a name or settings sealed under a
   key older than the channel's, so an out-of-date owner app can't put them back
-  under the first key. Against an older relay the client seals them under the
-  first key, as before. Kiwi 0.22 and older open only the first key: in a
+  under the first key. Against a relay without `sealedEpoch` the client seals
+  them under the first key only while the channel has never rotated; after a
+  rotation it refuses to save them there, so a relay can't downgrade them by
+  leaving `sealedEpoch` out. Kiwi 0.22 and older open only the first key: in a
   channel that has rotated, they show no name, charter, hold, rooms or repos
   until they update.
 - **Close** (in the app, owner): the relay deletes the room's storage
