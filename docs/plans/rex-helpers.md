@@ -1,7 +1,7 @@
 # Plan: Rex helpers (Settings → Install Rex Helpers)
 
 Status: built, 2026-10-20. Items 1 and 2 landed in #554, items 3 to 6 in #557 (with #560), and
-Settings → Install Rex Helpers in its own pull request. Probes 1, 3, 4, 6 and 7 ran against
+Settings → Install Rex Helpers in #563. Probes 1, 3, 4, 6 and 7 ran against
 Rex `0.0.1792433367-g93d474` (API revision 4) and Claude Code 2.1.304 on jow's Mac; the results
 are under "Probes before building", and what they changed in the build under "What the probes
 changed". The plan below is kept as it was decided. Facts below were read from `main` at `9db1595e`
@@ -375,7 +375,7 @@ One issue and one PR each, with its CI gate:
 2. Where a seat runs (item 1), `kiwi rex on|off|status`, and the status records (item 2), in Rex
    and in the terminals on the list: #554.
 3. Settings → Install Rex Helpers, the bridge, and the palette action (item 6): the palette in
-   #557 (#560), Settings in its own pull request.
+   #557 (#560), Settings in #563.
 4. The sender split and the Rex backend for rotation (item 4), reviewed against #548's guard: #557.
 5. Show in Rex from Needs you (item 5): #557 (#560).
 6. Seat state from Rex events (item 3): #557.
