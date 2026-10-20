@@ -11,14 +11,24 @@ export function useRexSeats(): RexSeatView[] {
     const b = bridge()
     if (!b?.rexSeats) return
     let live = true
-    void b.rexSeats().then(
-      (list) => {
-        if (live) setSeats(list)
-      },
-      () => {}
-    )
+    const load = () => {
+      void b.rexSeats().then(
+        (list) => {
+          if (live) setSeats(list)
+        },
+        () => {}
+      )
+    }
+    load()
+    const every = setInterval(load, 15_000)
+    const wake = () => load()
+    window.addEventListener("focus", wake)
+    document.addEventListener("visibilitychange", wake)
     return () => {
       live = false
+      clearInterval(every)
+      window.removeEventListener("focus", wake)
+      document.removeEventListener("visibilitychange", wake)
     }
   }, [])
   return seats
