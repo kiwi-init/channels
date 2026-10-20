@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react"
+import { memo, useCallback, useEffect, useState, type ReactNode } from "react"
 
 import { handleFor, NAME_RE } from "@kiwi/core/membership.ts"
 import { isJoinBlip } from "@/lib/join-blip"
@@ -48,7 +48,7 @@ function decide(code: string): Phase {
   }
 }
 
-export function ChannelGate({ code, listed, onBack, onGone }: { code: string; listed?: ChannelRow; onBack: () => void; onGone: () => void }) {
+export const ChannelGate = memo(function ChannelGate({ code, listedState, onBack, onGone }: { code: string; listedState?: ChannelRow["state"]; onBack: () => void; onGone: () => void }) {
   const [at, setAt] = useState<{ code: string; phase: Phase }>(() => ({ code, phase: decide(code) }))
   if (at.code !== code) setAt({ code, phase: decide(code) })
   const phase = at.code === code ? at.phase : decide(code)
@@ -92,7 +92,7 @@ export function ChannelGate({ code, listed, onBack, onGone }: { code: string; li
   return (
     <div className="flex min-w-0 flex-1 md:sheet">
       <Stage>
-        {phase.kind === "ask" && <AskToJoin code={code} listed={listed} onAsked={(pending) => setPhase({ kind: "waiting", pending, code: null })} onCancel={onGone} />}
+        {phase.kind === "ask" && <AskToJoin code={code} listedState={listedState} onAsked={(pending) => setPhase({ kind: "waiting", pending, code: null })} onCancel={onGone} />}
         {phase.kind === "waiting" && (
           <>
             <Heading title="Waiting for the owner">
@@ -130,9 +130,9 @@ export function ChannelGate({ code, listed, onBack, onGone }: { code: string; li
       </Stage>
     </div>
   )
-}
+})
 
-function AskToJoin({ code, listed, onAsked, onCancel }: { code: string; listed?: ChannelRow; onAsked: (p: PendingJoin) => void; onCancel: () => void }) {
+function AskToJoin({ code, listedState, onAsked, onCancel }: { code: string; listedState?: ChannelRow["state"]; onAsked: (p: PendingJoin) => void; onCancel: () => void }) {
   const person = useSecrets().person
   // People join under their own name, from their person key.
   const suggested = person ? handleFor(person.name) : ""
@@ -166,7 +166,7 @@ function AskToJoin({ code, listed, onAsked, onCancel }: { code: string; listed?:
 
   const owner = invite.ownerName
   const intro =
-    listed?.state === "agents"
+    listedState === "agents"
       ? { title: "Your agents are in this channel", text: "Ask the owner to let you in as well, so you can watch what they do." }
       : { title: owner ? `${owner} invited you to a channel` : "You’re invited to a channel", text: null }
 

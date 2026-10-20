@@ -113,10 +113,10 @@ export default function App() {
     return b.onDeepLink(take)
   }, [open])
 
-  const close = () => {
+  const close = useCallback(() => {
     history.replaceState(null, "", location.pathname)
     setHash({ code: "" })
-  }
+  }, [])
 
   return (
     <>
@@ -150,7 +150,7 @@ export default function App() {
             <div className={cx("min-w-0 flex-1", settings ? "hidden" : "flex")}>
               {code ? (
                 <Boundary resetKey={code}>
-                  <ChannelGate key={code} code={code} listed={rows.find((r) => r.code === code)} onBack={close} onGone={close} />
+                  <ChannelGate key={code} code={code} listedState={rows.find((r) => r.code === code)?.state} onBack={close} onGone={close} />
                 </Boundary>
               ) : (
                 <div className="flex min-w-0 flex-1 md:sheet">
