@@ -4,7 +4,7 @@ import { openSession } from "../../agent.ts";
 import { Channel, RelayError } from "@kiwi/core/client.ts";
 import { Cursor, Keystore } from "../../config.ts";
 import { decodeJoinCode, type ChannelAccess } from "@kiwi/core/crypto.ts";
-import { freeAgentName, handleFor, inlineText } from "@kiwi/core/membership.ts";
+import { freeAgentName, handleFor, inlineText, readLaunch } from "@kiwi/core/membership.ts";
 import { freeHandle } from "@kiwi/core/handles.ts";
 import { baseName, here, seatsNear } from "../../seats.ts";
 import { asOption, channelOption } from "@kiwi/core/wake.ts";
@@ -207,7 +207,8 @@ export const joinCommands: Record<string, Command> = {
         const local = Object.values((yield* keys.config).channels).find((c) => c.roomId === roomId);
         if (access && (access.keys[String(access.epoch)] ?? local?.keys[String(access.epoch)])) return yield* settle(access, "resumed");
       }
-      const claims = () => Effect.promise(async () => ({ ...(await computerClaimFor(roomId, id.pk)), card, ...(opt.persona ? { pin: opt.persona } : {}) }));
+      const launch = readLaunch(process.env.KIWI_LAUNCH);
+      const claims = () => Effect.promise(async () => ({ ...(await computerClaimFor(roomId, id.pk)), card, ...(opt.persona ? { pin: opt.persona } : {}), ...(launch ? { launch } : {}) }));
       const req = yield* Channel.fx.requestJoin(relay, code, id, info, yield* claims()).pipe(
         Effect.catchIf(outForGood, () =>
           Effect.gen(function* () {

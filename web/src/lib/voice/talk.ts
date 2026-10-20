@@ -40,8 +40,9 @@ export interface Talk {
   subscribe(listener: () => void): () => void
   start(c: TalkChannel): Promise<void>
   stop(): void
-  seen(messages: Message[], state: ChannelState): void
-  use(tools: ToolCtx): void
+  leave(roomId: string): void
+  seen(messages: Message[], state: ChannelState, roomId: string): void
+  use(tools: ToolCtx, roomId: string): void
 }
 
 const STOP_AFTER_MS = 2500
@@ -77,6 +78,7 @@ export function createTalk(deps: TalkDeps): Talk {
   const listeners = new Set<() => void>()
   let session: { voice: GrokVoice; mic: Mic | null; speaker: Playback & { close(): void }; news: (m: Message, s: ChannelState) => string | null; after: number } | null = null
   let run = 0
+  let room: string | null = null
   let tools: ToolCtx | null = null
   let verbs: Verbs = { pending: null }
 
@@ -86,6 +88,7 @@ export function createTalk(deps: TalkDeps): Talk {
   }
   const end = (error: string | null) => {
     run++
+    room = null
     const s = session
     session = null
     s?.mic?.stop()
@@ -103,6 +106,7 @@ export function createTalk(deps: TalkDeps): Talk {
     async start(c) {
       if (session || view.status !== "off") return
       const mine = ++run
+      room = c.roomId
       tools = c.tools ?? null
       verbs = { pending: null }
       set({ status: "connecting", heard: "", saying: "", error: null })
@@ -147,12 +151,15 @@ export function createTalk(deps: TalkDeps): Talk {
       }
     },
     stop: () => end(null),
-    use(next) {
-      if (tools) tools = next
+    leave(roomId) {
+      if (room === roomId) end(null)
     },
-    seen(messages, state) {
+    use(next, roomId) {
+      if (tools && roomId === room) tools = next
+    },
+    seen(messages, state, roomId) {
       const s = session
-      if (!s) return
+      if (!s || roomId !== room) return
       for (const m of messages) {
         if (m.seq <= s.after) continue
         s.after = m.seq

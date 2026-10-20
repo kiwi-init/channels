@@ -63,15 +63,19 @@ export function TalkButton({ channel, disabled }: { channel: TalkChannel; disabl
   )
 }
 
-export function TalkBar({ messages, state, nameOf, me, tools }: { messages: Message[]; state: ChannelState; nameOf: (name: string) => string; me: string; tools?: ToolCtx }) {
+export function leaveTalk(roomId: string): void {
+  void loading?.then((t) => t.leave(roomId))
+}
+
+export function TalkBar({ roomId, messages, state, nameOf, me, tools }: { roomId: string; messages: Message[]; state: ChannelState; nameOf: (name: string) => string; me: string; tools?: ToolCtx }) {
   const v = useSyncExternalStore(subscribe, snapshot, snapshot)
   useEffect(() => {
     if (v.status === "off" || !loading) return
     void loading.then((t) => {
-      if (tools) t.use(tools)
-      t.seen(messages, state)
+      if (tools) t.use(tools, roomId)
+      t.seen(messages, state, roomId)
     })
-  }, [messages, state, tools, v.status])
+  }, [roomId, messages, state, tools, v.status])
   if (v.status === "off") return null
   const caption = v.saying ? v.saying : v.heard ? `${nameOf(me)}: ${v.heard}` : v.status === "connecting" ? "Connecting to Grok Voice…" : "Listening"
   return (
