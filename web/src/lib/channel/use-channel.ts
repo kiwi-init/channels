@@ -302,8 +302,9 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
         snapshotNext.current = nextSnapshotTry(head, n ?? (await ch.snapshotAt()) ?? 0)
       })
       .catch((err: unknown) => {
-        snapshotNext.current = nextSnapshotTry(head, head)
-        if (err instanceof Error && err.message.includes(SNAPSHOT_TOO_LARGE)) setSnapshotTooBig(true)
+        if (!(err instanceof Error) || !err.message.includes(SNAPSHOT_TOO_LARGE)) return
+        snapshotNext.current = Infinity
+        setSnapshotTooBig(true)
       })
       .finally(() => {
         snapshotBusy.current = false

@@ -167,4 +167,33 @@ describe("the fold base stays bounded", () => {
     expect(fromBase.tasks.get(1)?.state).toBe(whole.tasks.get(1)?.state);
     expect(fromBase.rejected.get(6)).toBe(whole.rejected.get(6));
   });
+
+  test("one member's future-dated ids can't pin the cap: other keys' out-of-order and same-millisecond sends are still accepted", () => {
+    const spam = Array.from({ length: 3_000 }, (_, i) => msg(i + 1, T0 + 365 * DAY + i, { from: "spam", rts: T0 + i }));
+    const t = T0 + 3_000;
+    const log = [...spam, msg(3_001, t + 5, { from: "jow" }), msg(3_002, t + 4, { from: "jow", rts: t + 6 }), msg(3_003, t + 5), msg(3_004, t + 5, { id: "same-ms" })];
+    const whole = fold(log, roster, T0, null, null);
+    for (const seq of [3_001, 3_002, 3_003, 3_004]) expect(whole.trust.get(seq)).toBe("verified");
+    expect(cutAt(log, 3_001)).toEqual(cutAt(log, 0));
+    expect(cutAt(log, 3_002)).toEqual(cutAt(log, 0));
+  });
+
+  test("a carded task reopened for review continues its round numbers, so a round 2 approval is accepted from a base as from the whole log", () => {
+    const at = (d: number) => T0 + d * DAY;
+    const log = [
+      ev(1, at(0), { op: "task.add", title: "reviewed twice", owner: "win", review: "*" }),
+      ev(2, at(0), { op: "task.update", task: 1, state: "review" }, "win"),
+      ev(3, at(1), { op: "task.update", task: 1, state: "done", verdict: "approved", round: 1 }),
+      msg(4, at(40)),
+      ev(5, at(40), { op: "task.update", task: 1, state: "review" }, "win"),
+      ev(6, at(40), { op: "task.update", task: 1, state: "done", verdict: "approved", round: 2 }),
+    ];
+    const whole = fold(log, roster, T0, null, null);
+    const fromBase = fold(log.slice(4), roster, T0, null, null, baseOf(log.slice(0, 4)));
+    expect(whole.tasks.get(1)?.state).toBe("done");
+    expect(whole.rejected.get(6)).toBeUndefined();
+    expect(fromBase.tasks.get(1)?.rounds.at(-1)?.n).toBe(2);
+    expect(fromBase.tasks.get(1)?.state).toBe("done");
+    expect(fromBase.rejected.get(6)).toBeUndefined();
+  });
 });

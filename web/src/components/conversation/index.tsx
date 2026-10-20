@@ -56,7 +56,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const me = member.identity.name
   const live = useChannel(member)
   useEffect(() => {
-    if (live.snapshotTooBig) toast("This channel's history no longer fits in a snapshot, so it loads the slow way. Tell the Kiwi team.", "error")
+    if (live.snapshotTooBig) toast("Too big to snapshot: this channel loads slowly. Tell the Kiwi team.", "error")
   }, [live.snapshotTooBig])
   const { ch, connection, gone, messages, roster, state, online, isOwner, requests, send, head, marks, pkOf } = live
   const pictures = usePictures(state)
