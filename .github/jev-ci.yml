@@ -153,6 +153,18 @@ jobs:
       Also each wake the daemon fires logged to wake.log with its unread count and the seat's read cursor when the
       daemon counted them, after the result and the why column (empty when it worked), so older readers of the first
       columns keep working (src/daemon/wake.ts, AgentSession.unreadAt in src/agent/state.ts, test/wake.test.ts).
+      Also test/rotate.test.ts: when a Claude Code seat in tmux gets a fresh session (src/rotate/decide.ts:
+      between tasks past ROTATE_FLOOR, the lead past the line, open tasks only once checkpointed since
+      the nudge, never during a review round it judges or an open question of its), Claude Code's input
+      box read between its two rules (drafts, multi-line text and dialogs are not empty), one sender per
+      session (another live sender's file makes it back off, a dead one's is ignored), and, with tmux on
+      its own socket, /clear typed
+      only into an idle session's empty box, Enter only once /clear shows there, its six characters
+      erased when rotation is switched off before Enter while it still owns the pane, nothing more sent
+      once the session moved on,
+      and nothing into a busy session, a draft, a pane watched by a client that just pressed a key, a
+      tmux server started again on the same socket, or a process that doesn't lead the pane's
+      foreground (src/rotate/pane.ts).
       Also one wake outstanding per seat: after a wake lands, no other is sent to the same destination while every
       message it was for is still unread, so a busy session's queue doesn't fill with wakes that find nothing unread;
       reading any of them (by cursor, or as a reply marked seen) lets the next through, a replaced session or webhook
@@ -390,7 +402,9 @@ jobs:
       inline limit, shared between the seats a session serves in src/hooks/run.ts), and every
       message it left out comes with a later hook; and past the context line the Stop hook asks once
       for a checkpoint of each open task, not while stop_hook_active, and again only after the
-      context came back under it (src/hooks/context-line.ts). Then mimo-wake-restart:
+      context came back under it (src/hooks/context-line.ts); and with kiwi rotate on, a seat past the
+      line whose Stop hands nothing over starts the pane's /clear sender once it has checkpointed each
+      open task, never before and never with rotation off (src/hooks/rotate.ts). Then mimo-wake-restart:
       Kiwi's MiMoCode plugin (src/hooks/install/mimo.ts) loaded against a real listener, whose wake
       MiMoCode keeps refusing until MiMoCode exits mid-retry; the resumed session still gets those
       messages, because the listener writes a pending handoff per token (src/hooks/delivered.ts) that becomes

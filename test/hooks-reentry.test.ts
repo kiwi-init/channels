@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { daemonListening, daemonSock, stopDaemon } from "../src/daemon.ts";
@@ -154,4 +154,30 @@ test("past the context line, the Stop hook asks once for a checkpoint of each op
   expect(await stop(300_000)).not.toContain(line);
   expect(await stop(120_000, true)).not.toContain(line);
   expect(await stop(255_000)).toContain("Your context is at 255k tokens");
+});
+
+test("with rotation on, a seat past the line rotates once it has checkpointed each open task, and never while it is off", async () => {
+  const transcript = join(agent, "rotate-transcript.jsonl");
+  writeFileSync(transcript, JSON.stringify({ type: "assistant", message: { model: "test-model", content: [], usage: { input_tokens: 300_000 } } }) + "\n");
+  const log = join(agent, "rotate.log");
+  const env = { ...S, CLAUDE_CODE_SESSION_ID: "rot-1", TMUX: `${join(agent, "no-tmux.sock")},1,0`, TMUX_PANE: "%9" };
+  const stop = () => ok(agent, ["hook", "stop"], env, JSON.stringify({ session_id: "rot-1", cwd: agent, hook_event_name: "Stop", transcript_path: transcript }));
+  const rotated = () => (existsSync(log) ? readFileSync(log, "utf8") : "").includes("session rot-1");
+  const asked = (JSON.parse(await stop()) as { reason: string }).reason;
+  expect(asked).toContain("past the 250k line");
+  expect(await stop()).toBe("");
+  await Bun.sleep(1_500);
+  expect(rotated()).toBe(false);
+  expect(await ok(agent, ["rotate", "on"], S)).toContain("rotation is on");
+  expect(await stop()).toBe("");
+  await Bun.sleep(1_500);
+  expect(rotated()).toBe(false);
+  const note = join(agent, "rotate-note.md");
+  writeFileSync(note, "branch T-x at abc\nnext: rotate\n");
+  const ids = new Set([...asked.matchAll(/T\d+/g)].map((m) => m[0]));
+  await Promise.all([...ids].map((id) => ok(agent, ["task", "checkpoint", id, "--file", note], S)));
+  expect(await stop()).toBe("");
+  await until(async () => rotated(), "the sender's line in rotate.log", 10_000);
+  expect(readFileSync(log, "utf8")).toContain("session rot-1 pane %9: no-tmux");
+  await ok(agent, ["rotate", "off"], S);
 });

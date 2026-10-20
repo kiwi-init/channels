@@ -12,6 +12,7 @@ import { migrateExtraHooks } from "./install/extra.ts";
 import { migrateMimo } from "./install/mimo.ts";
 import { handoffFrom, listen, refusedFrom, type Served } from "./listen.ts";
 import { refreshListeners, seatsFor } from "./listeners.ts";
+import { rotateAfterStop } from "./rotate.ts";
 import { KIMI_STOP, LISTEN } from "./self.ts";
 
 const HOOK_MS = 1_800;
@@ -90,7 +91,10 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string, harness?
       return code;
     }
     const out = hookOutput(got);
-    if (out === null) return 0;
+    if (out === null) {
+      if (event === "stop") yield* rotateAfterStop(input, served, who).pipe(Effect.catchCause(() => Effect.void));
+      return 0;
+    }
     yield* say(out).pipe(
       Effect.andThen(shown(printed(got))),
       Effect.catchCause(() => Effect.void),
