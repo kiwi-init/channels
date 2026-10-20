@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react"
+
 import type { KiwiBridge } from "./secrets"
 
-type Launcher = Pick<KiwiBridge, "harnesses" | "seatFolders" | "chooseFolder" | "launchAgent">
+type Launcher = Pick<KiwiBridge, "harnesses" | "seatFolders" | "chooseFolder" | "launchAgent"> & Partial<Pick<KiwiBridge, "machines" | "harnessesOn" | "foldersOn">>
 
 export function launcher(): Launcher | null {
   try {
@@ -14,6 +16,27 @@ export function launcher(): Launcher | null {
 
 export function canStartAgents(): boolean {
   return launcher() !== null
+}
+
+export function useMachinesOnline(): ReadonlyMap<string, boolean | null> {
+  const [online, setOnline] = useState<ReadonlyMap<string, boolean | null>>(new Map())
+  useEffect(() => {
+    const list = launcher()?.machines
+    if (!list) return
+    let live = true
+    const load = () =>
+      void list().then(
+        (ms) => live && setOnline(new Map(ms.map((m) => [m.machinePk, m.online]))),
+        () => {}
+      )
+    load()
+    window.addEventListener("focus", load)
+    return () => {
+      live = false
+      window.removeEventListener("focus", load)
+    }
+  }, [])
+  return online
 }
 
 export type LaunchSeen = { stage: "asked"; pk: string; name: string } | { stage: "joined"; pk: string; name: string }
