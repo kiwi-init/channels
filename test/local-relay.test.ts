@@ -13,12 +13,10 @@ test("the port comes from the relay's listening line", () => {
 
 test("two relays started at once each get a free port from the system, and answer on it", async () => {
   const data = mkdtempSync(join(tmpdir(), "kiwi-local-relay-"));
-  const settled = await Promise.allSettled([startLocalRelay(join(data, "a"), null), startLocalRelay(join(data, "b"), null)]);
-  const started = settled.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
+  const started = await Promise.all([startLocalRelay(join(data, "a"), null), startLocalRelay(join(data, "b"), null)]);
   try {
-    for (const r of settled) if (r.status === "rejected") throw r.reason;
     const [a, b] = started;
-    expect(a!.port).not.toBe(b!.port);
+    expect(a.port).not.toBe(b.port);
     for (const { port } of started) expect((await fetch(`http://127.0.0.1:${port}/`)).status).toBeLessThan(500);
   } finally {
     for (const { relay } of started) relay.kill();
