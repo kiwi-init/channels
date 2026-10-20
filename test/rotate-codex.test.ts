@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, updateConfig } from "../src/config.ts";
 import { NEW_THREAD_MS, offerHandoff, takeHandoff } from "../src/hooks/handoff.ts";
@@ -9,6 +9,8 @@ import { CODEX_FIRST, codexInput, codexPane, codexPanes, codexShown, createdAt, 
 import { clearWhenIdle } from "../src/rotate/pane.ts";
 import { kiwiCmd } from "./owner.ts";
 
+const WORK = join(homedir(), "work");
+const VM = "/home/www/inquizit";
 const box = "\x1b[1m›\x1b[0m";
 const composer = (rest: string) => `${box} ${rest}`;
 const footer = ["", "  \x1b[38;5;223mGPT-6-Astra low\x1b[39m · \x1b[38;5;151m~/work\x1b[39m", "  \x1b[1m←\x1b[0m for agents · \x1b[1m?\x1b[0m for shortcuts"];
@@ -24,33 +26,38 @@ const vmFooter = [
 const vmScreen = (...input: string[]) =>
   ["\x1b[1;2m› \x1b[0m\x1b[48;2;70;72;73mNew Kiwi messages for you.", "", "\x1b[49m", "\x1b[2m• \x1b[0mDone.", "", `\x1b[0m${BG}`, ...input, ...vmFooter].join("\n");
 
+const boxOf = (cwd: string, captured: string) => codexInput(captured, cwd);
+
 describe("Codex's input box", () => {
   test("empty when it shows only the dim placeholder or nothing, the draft otherwise", () => {
-    expect(codexInput(screen(composer("\x1b[2mAsk Codex to do anything\x1b[0m")))).toBe("");
-    expect(codexInput(screen(box))).toBe("");
-    expect(codexInput(screen(composer("hello draft")))).toBe("hello draft");
-    expect(codexInput(screen(composer("abc"), "  def"))).toBe("abc\ndef");
-    expect(codexInput(screen("\x1b[1;7m› /new  \x1b[0;7mstart a new chat during a conversation\x1b[1m", "\x1b[0m", "\x1b[0;1m›\x1b[0m /new"))).toBe("/new");
+    expect(boxOf(WORK, screen(composer("\x1b[2mAsk Codex to do anything\x1b[0m")))).toBe("");
+    expect(boxOf(WORK, screen(box))).toBe("");
+    expect(boxOf(WORK, screen(composer("hello draft")))).toBe("hello draft");
+    expect(boxOf(WORK, screen(composer("abc"), "  def"))).toBe("abc\ndef");
+    expect(boxOf(WORK, screen("\x1b[1;7m› /new  \x1b[0;7mstart a new chat during a conversation\x1b[1m", "\x1b[0m", "\x1b[0;1m›\x1b[0m /new"))).toBe("/new");
   });
 
   test("read the same in a truecolor terminal, where the box has a background color", () => {
-    expect(codexInput(vmScreen(`${box}${BG} \x1b[2mAsk Codex to do anything\x1b[0m${BG}`))).toBe("");
-    expect(codexInput(vmScreen(`${box}${BG} /new\x1b[0m${BG}`))).toBe("/new");
-    expect(codexInput(vmScreen(`${box}${BG} abc\x1b[0m${BG}`, `${BG}  def\x1b[0m`))).toBe("abc\ndef");
+    expect(boxOf(VM, vmScreen(`${box}${BG} \x1b[2mAsk Codex to do anything\x1b[0m${BG}`))).toBe("");
+    expect(boxOf(VM, vmScreen(`${box}${BG} /new\x1b[0m${BG}`))).toBe("/new");
+    expect(boxOf(VM, vmScreen(`${box}${BG} abc\x1b[0m${BG}`, `${BG}  def\x1b[0m`))).toBe("abc\ndef");
   });
 
   test("a draft below blank lines is still a draft, and so is a draft of blank lines", () => {
-    expect(codexInput(screen(box, "", "  personal draft"))).toBe("\n\npersonal draft");
-    expect(codexInput(screen(composer("/new"), "", "  personal draft"))).not.toBe("/new");
-    expect(codexInput(screen(box, ""))).toBe("\n");
+    expect(boxOf(WORK, screen(box, "", "  personal draft"))).toBe("\n\npersonal draft");
+    expect(boxOf(WORK, screen(composer("/new"), "", "  personal draft"))).not.toBe("/new");
+    expect(boxOf(WORK, screen(box, ""))).toBe("\n");
   });
 
   test("a submitted prompt, a menu row, or a screen whose last block isn't the colored footer is never read as the input box", () => {
-    expect(codexInput(["\x1b[1;2m› \x1b[0man earlier prompt", "", ...footer].join("\n"))).toBeNull();
-    expect(codexInput(["\x1b[1;7m› 1. Review hooks\x1b[0m", "  2. Trust all"].join("\n"))).toBeNull();
-    expect(codexInput([composer("hello"), "", "  personal draft"].join("\n"))).toBeNull();
-    expect(codexInput([box, "", "  a · personal draft"].join("\n"))).toBeNull();
-    expect(codexInput(screen(composer("\x1b[2mAsk\x1b[0m and more")))).not.toBe("");
+    expect(boxOf(WORK, ["\x1b[1;2m› \x1b[0man earlier prompt", "", ...footer].join("\n"))).toBeNull();
+    expect(boxOf(WORK, ["\x1b[1;7m› 1. Review hooks\x1b[0m", "  2. Trust all"].join("\n"))).toBeNull();
+    expect(boxOf(WORK, [composer("hello"), "", "  personal draft"].join("\n"))).toBeNull();
+    expect(boxOf(WORK, [box, "", "  a · personal draft"].join("\n"))).toBeNull();
+    expect(boxOf(WORK, [box, "", "  notes · \x1b[36m[Pasted Content 1234 chars]\x1b[39m"].join("\n"))).toBeNull();
+    expect(boxOf(join(homedir(), "elsewhere"), screen(box))).toBeNull();
+    expect(boxOf(VM, screen(box))).toBeNull();
+    expect(boxOf(WORK, screen(composer("\x1b[2mAsk\x1b[0m and more")))).not.toBe("");
   });
 
   test("a first prompt wrapped across rows still reads as the first prompt", () => {
@@ -209,6 +216,39 @@ describe.skipIf(!hasTmux || !bash)("a Codex window in tmux", () => {
     expect(existsSync(offerFile(cwd))).toBe(false);
   });
 
+  test("rotation switched off after /new is typed, in a window turned to another thread, leaves the box as it is", async () => {
+    const cwd = join(dir, "turned-off");
+    const p = await window("turned-off", cwd, "Old thread | work", "/new");
+    let checks = 0;
+    const on = () => checks++ < 1;
+    expect(await clearWhenIdle({ harness: "codex", pid: p.pid, session: "thr-off", pane: p.pane, socket, cwd, thread: old("turned-off") }, { ...fast, on })).toBe("left-in-input");
+    await Bun.sleep(300);
+    expect(read(p.state)).toBe("/new");
+    expect(read(p.typed)).toBe("");
+  });
+
+  test("kiwi rotate send types nothing for a Codex thread whose rollout has no session_meta, and rotates one that has it", async () => {
+    updateConfig((c) => {
+      c.rotate = "on";
+    });
+    const send = async (name: string, rolloutFile: string) => {
+      const cwd = join(dir, name);
+      const p = await window(name, cwd, "Old thread | work");
+      const run = Bun.spawn(kiwiCmd(["rotate", "send", String(p.pid), `thr-${name}`, p.pane, socket, "codex", rolloutFile, cwd, "Old thread"]), {
+        env: { ...process.env, KIWI_HOME: join(dir, "kiwi") },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const code = await run.exited;
+      await Bun.sleep(300);
+      return { code, typed: read(p.typed), state: read(p.state) };
+    };
+    const bare = join(dir, "bare.jsonl");
+    writeFileSync(bare, JSON.stringify({ type: "event_msg", payload: { type: "task_complete" } }) + "\n");
+    expect(await send("bare", bare)).toEqual({ code: 1, typed: "", state: "" });
+    expect(await send("metered", rollout("metered", "task_complete"))).toEqual({ code: 0, typed: `/new\n${CODEX_FIRST}\n`, state: "" });
+  });
+
   test("a thread still at work gets nothing", async () => {
     const cwd = join(dir, "busy");
     const p = await window("busy", cwd, "Old thread | work");
@@ -301,6 +341,20 @@ describe("handing a Codex seat to its new thread", () => {
     expect(takeHandoff(folder, mine, myFile)).toBeNull();
     expect(seats(folder).map((b) => b.session)).toEqual(["thr-old", "thr-old"]);
     expect(readFileSync(join(dir, "rotate.log"), "utf8")).toContain("session thr-old stays: 2 Codex threads started");
+  });
+
+  test("a thread created in the window whose rollout can't be read yet counts as another one", () => {
+    const folder = join(dir, "unread");
+    const sessions = join(dir, "sessions-d");
+    mkdirSync(folder);
+    bind(folder);
+    const at = 1_800_000_200_000;
+    offerHandoff(folder, "thr-old", "codex-tui", at);
+    const mine = v7(at + 1_000, "0000000000c1");
+    const myFile = started(sessions, mine, "codex-tui", folder);
+    writeFileSync(join(sessions, `rollout-2026-10-20T14-17-25-${v7(at + 2_000, "0000000000d1")}.jsonl`), '{"type":"session_meta","payload":{"id":');
+    expect(takeHandoff(folder, mine, myFile)).toBeNull();
+    expect(seats(folder).map((b) => b.session)).toEqual(["thr-old", "thr-old"]);
   });
 
   test("a Codex SessionStart for the new thread moves the seat", async () => {

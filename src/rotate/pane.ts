@@ -141,7 +141,7 @@ function check(t: Target, first: PaneId, quietMs: number, on: () => boolean, inp
 }
 
 const commandOf = (t: Target) => (t.harness === "codex" ? CODEX_NEW : CLEAR);
-const typed = (t: Target, captured: string, confirming: boolean) => (t.harness === "codex" ? codexInput(captured) : inputText(captured, confirming ? null : FOOTER_LINES));
+const typed = (t: Target, captured: string, confirming: boolean) => (t.harness === "codex" ? codexInput(captured, t.cwd) : inputText(captured, confirming ? null : FOOTER_LINES));
 const empty = (t: Target) => (captured: string) => typed(t, captured, false) === "";
 const shows = (t: Target, text: string) => (captured: string) => {
   const now = typed(t, captured, true);

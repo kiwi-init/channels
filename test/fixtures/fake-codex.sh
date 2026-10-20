@@ -6,7 +6,7 @@ buf=""
 stty -icanon -echo
 draw() {
   printf '\033]2;%s\033\\' "$title"
-  printf '\033[2J\033[H\033[1;2m› \033[0man earlier prompt\n• an answer\n\n\033[1m›\033[0m %s\n\n  \033[38;5;223mGPT-6-Astra low\033[39m · ~/work\n  \033[1m←\033[0m for agents' "$buf"
+  printf '\033[2J\033[H\033[1;2m› \033[0man earlier prompt\n• an answer\n\n\033[1m›\033[0m %s\n\n  \033[38;5;223mGPT-6-Astra low\033[39m · \033[38;5;151m%s\033[39m\n  \033[1m←\033[0m for agents' "$buf" "$PWD"
   printf '%s' "$buf" > "$state"
 }
 draw

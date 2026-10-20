@@ -2,7 +2,7 @@ import { mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { dirname, join } from "node:path";
 import { home } from "../config.ts";
 import { appendRotated } from "../daemon/wake.ts";
-import { createdAt, sessionMeta, threadOf, type SessionMeta } from "../rotate/codex.ts";
+import { createdAt, isRecord, sessionMeta, threadOf, type SessionMeta } from "../rotate/codex.ts";
 import { handSeats } from "../seats.ts";
 
 export const NEW_THREAD_MS = 15_000;
@@ -27,8 +27,10 @@ type Offer = { from: string; by: string; at: number };
 
 function offered(file: string): Offer | null {
   try {
-    const o = JSON.parse(readFileSync(file, "utf8")) as { from?: unknown; by?: unknown; at?: unknown };
-    return typeof o.from === "string" && o.from && typeof o.by === "string" && o.by && typeof o.at === "number" ? { from: o.from, by: o.by, at: o.at } : null;
+    const o: unknown = JSON.parse(readFileSync(file, "utf8"));
+    if (!isRecord(o)) return null;
+    const { from, by, at } = o;
+    return typeof from === "string" && from && typeof by === "string" && by && typeof at === "number" ? { from, by, at } : null;
   } catch {
     // No handoff offered for this folder, or one cut mid-write: nothing to take.
     return null;
@@ -51,7 +53,7 @@ function startedWith(rollout: string, o: Offer, mine: SessionMeta): string[] {
     const born = id ? createdAt(id) : null;
     if (!id || born === null || id === o.from || !within(born, o)) return [];
     const meta = sessionMeta(join(dir, n));
-    return meta && meta.originator === mine.originator && meta.cwd === mine.cwd ? [id] : [];
+    return !meta || (meta.originator === mine.originator && meta.cwd === mine.cwd) ? [id] : [];
   });
 }
 

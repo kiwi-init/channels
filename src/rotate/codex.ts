@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { closeSync, existsSync, openSync, readFileSync, readlinkSync, readSync, realpathSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 export const CODEX_NEW = "/new";
@@ -59,9 +59,21 @@ function boxLine(line: string): Run[] | null {
   return [{ ...head, text: head.text.slice(1) }, ...all.slice(at + 1)];
 }
 
-const isFooter = (line: string) => plain(line).includes(" · ") && runs(line).some((r) => r.color && r.text.trim());
+function shownPaths(cwd: string): string[] {
+  const home = homedir();
+  const paths = [...new Set([cwd, real(cwd) ?? cwd])];
+  return [...new Set(paths.flatMap((p) => (p === home || p.startsWith(`${home}/`) ? [p, `~${p.slice(home.length)}`] : [p])))];
+}
 
-export function codexInput(captured: string): string | null {
+function isFooter(line: string, cwd: string): boolean {
+  const all = runs(line);
+  const text = plain(line);
+  return shownPaths(cwd).some((p) => text.includes(` · ${p}`) && all.some((r) => r.color && r.text.trim() === p));
+}
+
+export const isRecord = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null;
+
+export function codexInput(captured: string, cwd: string): string | null {
   const lines = captured.split("\n");
   const at = lines.findLastIndex((l) => boxLine(l) !== null);
   if (at < 0) return null;
@@ -70,7 +82,7 @@ export function codexInput(captured: string): string | null {
   while (end > 0 && !plain(below[end - 1]!).trim()) end--;
   let footer = end;
   while (footer > 0 && plain(below[footer - 1]!).trim()) footer--;
-  if (footer === end || !isFooter(below[footer]!)) return null;
+  if (footer === end || !isFooter(below[footer]!, cwd)) return null;
   const draft = below.slice(0, footer).map(plain);
   if (draft.at(-1)?.trim() === "") draft.pop();
   const rest = boxLine(lines[at]!) ?? [];
@@ -105,8 +117,8 @@ export function threadName(home: string, thread: string): string | null {
   for (const line of index.split("\n")) {
     if (!line.includes(thread)) continue;
     try {
-      const row = JSON.parse(line) as { id?: unknown; thread_name?: unknown };
-      if (row.id === thread && typeof row.thread_name === "string" && row.thread_name) name = row.thread_name;
+      const row: unknown = JSON.parse(line);
+      if (isRecord(row) && row.id === thread && typeof row.thread_name === "string" && row.thread_name) name = row.thread_name;
     } catch {
       // A row cut mid-write: the rows before it still name the thread.
     }
@@ -146,9 +158,11 @@ export function sessionMeta(rollout: string): SessionMeta | null {
   const head = firstLine(rollout);
   if (!head) return null;
   try {
-    const meta = JSON.parse(head) as { type?: unknown; payload?: { originator?: unknown; cwd?: unknown } };
-    const { originator, cwd } = meta.payload ?? {};
-    return meta.type === "session_meta" && typeof originator === "string" && originator && typeof cwd === "string" && cwd ? { originator, cwd } : null;
+    const meta: unknown = JSON.parse(head);
+    const payload = isRecord(meta) && meta.type === "session_meta" && isRecord(meta.payload) ? meta.payload : null;
+    const originator = payload?.originator;
+    const cwd = payload?.cwd;
+    return typeof originator === "string" && originator && typeof cwd === "string" && cwd ? { originator, cwd } : null;
   } catch {
     // A first line that isn't JSON: no session to read.
     return null;
