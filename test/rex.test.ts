@@ -1,0 +1,101 @@
+import { describe, expect, test } from "bun:test";
+import type { Message } from "@kiwi/core/protocol.ts";
+import { fold, type ChannelState, type Roster } from "@kiwi/core/state.ts";
+import { aliasSegment, askId, clearFrame, placeFrom, reviewId, statusFrame, takesStatus } from "../src/rex.ts";
+import { seatRecords } from "../src/status.ts";
+
+const roster: Roster = [
+  { name: "jonatas", pk: "p", owner: true, at: 1, active: true, kind: "human" },
+  { name: "ana", pk: "q", owner: false, at: 1, active: true },
+];
+
+const ask = (seq: number, from: string): Message => ({ v: 1, id: `m${seq}`, seq, rts: seq, sigOk: true, from, kind: "ask", body: "ship it?", to: ["jonatas"] }) as Message;
+
+const asked = (...asks: Message[]): ChannelState => {
+  const state = fold([], roster);
+  state.openAsks.push(...asks);
+  return state;
+};
+
+describe("where a seat runs", () => {
+  test("outside tmux, a Rex pane records the terminal and the ids", () => {
+    const place = placeFrom({
+      TERM_PROGRAM: "rex",
+      TERM_PROGRAM_VERSION: "0.0.1792158932-g88fd41",
+      REX_SERVER: "unix:///Users/jow/Library/Application%20Support/rex/server.sock",
+      REX_SESSION: "session:01a15963-bacc-7426-91e9-4d98757dcd0c",
+      REX_BLOCK: "block:11a15963-bacc-7426-91e9-4d98757dcd0c",
+    });
+    expect(place.term).toEqual({ program: "rex", version: "0.0.1792158932-g88fd41" });
+    expect(place.rex).toEqual({
+      server: "unix:///Users/jow/Library/Application%20Support/rex/server.sock",
+      session: "session:01a15963-bacc-7426-91e9-4d98757dcd0c",
+      block: "block:11a15963-bacc-7426-91e9-4d98757dcd0c",
+    });
+  });
+
+  test("inside tmux nothing is recorded, and a bad id drops Rex but keeps the terminal", () => {
+    expect(placeFrom({ TMUX: "/tmp/tmux,1,0", TERM_PROGRAM: "rex", REX_SERVER: "unix:///s", REX_SESSION: "session:x", REX_BLOCK: "block:y" })).toEqual({});
+    const place = placeFrom({ TERM_PROGRAM: "rex", REX_SERVER: "unix:///s", REX_SESSION: "session:nope", REX_BLOCK: "block:y" });
+    expect(place.rex).toBeUndefined();
+    expect(place.term).toEqual({ program: "rex" });
+  });
+
+  test("any terminal outside tmux is recorded, Rex or not; no TERM_PROGRAM records nothing", () => {
+    expect(placeFrom({ TERM_PROGRAM: "ghostty", TERM_PROGRAM_VERSION: "1.2.3" })).toEqual({ term: { program: "ghostty", version: "1.2.3" } });
+    expect(placeFrom({ TERM_PROGRAM: "Apple_Terminal" })).toEqual({ term: { program: "Apple_Terminal" } });
+    expect(placeFrom({ TERM_PROGRAM: "rex", REX_SERVER: "unix:///s" })).toEqual({ term: { program: "rex" } });
+    expect(placeFrom({})).toEqual({});
+  });
+});
+
+describe("which terminals take a status record", () => {
+  test("Rex today, anything unknown or absent no", () => {
+    expect(takesStatus({ program: "rex" })).toBe(true);
+    expect(takesStatus({ program: "REX", version: "1" })).toBe(true);
+    expect(takesStatus({ program: "ghostty" })).toBe(false);
+    expect(takesStatus(undefined)).toBe(false);
+  });
+});
+
+describe("the record Kiwi writes", () => {
+  test("the id segment is cut to the protocol's set, with a fallback", () => {
+    expect(aliasSegment("channels-explore")).toBe("channels-explore");
+    expect(aliasSegment("a".repeat(40))).toBe("a".repeat(32));
+    expect(aliasSegment("日本語")).toBe("ch");
+    expect(aliasSegment("a/b c")).toBe("abc");
+    expect(askId("channels-explore")).toBe("kiwi/channels-explore/ask");
+    expect(reviewId("channels-explore", 7)).toBe("kiwi/channels-explore/T7");
+  });
+
+  test("a blocked record carries state, kind, app, id, title and a base64 msg, ended with ST", () => {
+    const frame = statusFrame({ id: "kiwi/ch/ask", state: "blocked", kind: "question", msg: "2 questions for a person in ch" });
+    expect(frame.startsWith("\x1b]7501;")).toBe(true);
+    expect(frame.endsWith("\x1b\\")).toBe(true);
+    expect(frame).toContain("state=blocked:kind=question:app=kiwi:id=kiwi/ch/ask:");
+    expect(frame).toContain(`msg=${Buffer.from("2 questions for a person in ch", "utf8").toString("base64")}`);
+    expect(frame).toContain(`title=${Buffer.from("Kiwi", "utf8").toString("base64")}`);
+  });
+
+  test("a done record has no kind, and a clear names the id it takes back", () => {
+    expect(statusFrame({ id: "kiwi/ch/T7", state: "done", msg: "T7 waits for review" })).toContain("state=done:app=kiwi:id=kiwi/ch/T7:");
+    expect(clearFrame("kiwi/ch")).toBe("\x1b]7501;state=clear:app=kiwi:id=kiwi/ch\x1b\\");
+  });
+
+  test("a question open to a person is blocked, and each task waiting for review is done", () => {
+    const state = asked(ask(1, "ana"));
+    expect(seatRecords(state, "ch", "ana").map((r) => ({ id: r.id, state: r.state, msg: r.msg }))).toEqual([{ id: "kiwi/ch/ask", state: "blocked", msg: "1 question for a person in ch" }]);
+    const two = asked(ask(1, "ana"), ask(2, "ana"));
+    expect(seatRecords(two, "ch", "ana")[0]?.msg).toBe("2 questions for a person in ch");
+    const board = fold([], roster);
+    board.tasks.set(7, { id: 7, title: "t", state: "review", owner: "ana", notes: [], rounds: [], workedBy: [], touched: {} } as never);
+    board.tasks.set(3, { id: 3, title: "t", state: "review", owner: "ana", notes: [], rounds: [], workedBy: [], touched: {} } as never);
+    board.tasks.set(9, { id: 9, title: "t", state: "doing", owner: "ana", notes: [], rounds: [], workedBy: [], touched: {} } as never);
+    expect(seatRecords(board, "ch", "ana").map((r) => r.id)).toEqual(["kiwi/ch/T3", "kiwi/ch/T7"]);
+  });
+
+  test("another agent's question, and a task waiting on someone else, say nothing about this seat", () => {
+    const state = asked(ask(1, "bo"));
+    expect(seatRecords(state, "ch", "ana")).toEqual([]);
+  });
+});

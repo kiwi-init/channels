@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import { ChannelGone } from "@kiwi/core/client.ts";
 import { Keystore } from "../config.ts";
-import { hereAs, kimiHookHere, noteHarnessSession, onGrokBot, sameSeat, seatsHeldAnywhere, type Here } from "../seats.ts";
+import { hereAs, kimiHookHere, noteHarnessSession, notePlace, onGrokBot, sameSeat, seatsHeldAnywhere, type Here } from "../seats.ts";
 import { writeSync } from "node:fs";
 import { answer, hookOutput, kimiReason, printed, seatBudget, tellKimi, type Answer, type HookInput } from "./answer.ts";
 import { holdAnswering } from "./delivered.ts";
@@ -44,6 +44,7 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string, harness?
     const project = seatsFor(process.env.CLAUDE_PROJECT_DIR ?? input.cwd ?? process.cwd(), { who });
     const near = project.length ? project : seatsFor(input.cwd ?? process.cwd(), { who });
     const seats = [...near, ...seatsHeldAnywhere(who)].filter((b, i, all) => all.findIndex((o) => sameSeat(o, b)) === i);
+    yield* Effect.sync(() => notePlace(seats));
     const channels = (yield* keys.config).channels;
     return seats.flatMap((b): Served[] => {
       const cfg = channels[b.alias];

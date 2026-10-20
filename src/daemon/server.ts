@@ -712,6 +712,31 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     if (!relays.length || !relays.every(onLoopback)) return false;
     return (await Promise.all(relays.map(answers))).every((up) => !up);
   };
+  let statusWatch: { stop(): void } | null = null;
+  const watchStatus = async (): Promise<void> => {
+    const on = ((): boolean => {
+      try {
+        return loadConfig().rex === "on";
+      } catch {
+        return false;
+      }
+    })();
+    if (on && !statusWatch) {
+      const { startStatusWatch } = await import("../status.ts");
+      if (stopped) return;
+      statusWatch = startStatusWatch({
+        seats: () => [...seats.values()].map((s) => ({ key: s.key, alias: s.alias, agent: s.agent })),
+        current: (s) => {
+          const seat = seats.get(s.key);
+          return !!seat && current(seat) && seat.alias === s.alias && seat.agent === s.agent;
+        },
+        stopped: () => stopped,
+      });
+    } else if (!on && statusWatch) {
+      statusWatch.stop();
+      statusWatch = null;
+    }
+  };
   let prunedAt = 0;
   const pruneNow = (): void => {
     if (Date.now() - prunedAt < PRUNE_EVERY_MS) return;
@@ -721,6 +746,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   pruneNow();
   const tick = setInterval(() => {
     pruneNow();
+    void watchStatus();
     if (!existsSync(dir) || !beatLock(lock)) return void stop();
     void syncSeats();
     void orphaned().then((dead) => {
@@ -733,6 +759,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     if (stopped) return;
     stopped = true;
     clearInterval(tick);
+    statusWatch?.stop();
+    statusWatch = null;
     resolveStopped();
     for (const conn of [...conns]) {
       try {
@@ -763,6 +791,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   };
 
   await syncSeats();
+  await watchStatus();
   return { sock, stop, stopped: stoppedP, beacons: () => beacons };
 }
 
