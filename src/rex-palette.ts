@@ -1,92 +1,67 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { rexBinary } from "./rex.ts";
 
 const REQUIRE = 'require("kiwi")';
 const MARK = "-- Kiwi: go to the seat that needs me";
 const LINE = `${REQUIRE} ${MARK}`;
 const NAME = "kiwi.lua";
+const FIND_NAME = "kiwi-find.lua";
 
-const ACTION = `local function kiwi_list(value, keys)
-  if type(value) ~= "table" then return {} end
-  local out = {}
-  for _, key in ipairs(keys) do
-    local list = value[key]
-    if type(list) == "table" then
-      for _, item in pairs(list) do table.insert(out, item) end
-    end
-  end
-  if #out == 0 and #value > 0 then return value end
-  return out
-end
-
-local function kiwi_id(item)
-  if type(item) == "string" then return item end
-  if type(item) == "table" then return item.block_id or item.session_id or item.id end
-  return nil
-end
-
-local function kiwi_sessions()
-  local listed = rex.call("session.list") or {}
-  return kiwi_list(listed, { "sessions", "values", "list" })
-end
-
-local function kiwi_blocks(session_id)
-  local got = rex.session.list_blocks{ session_id = session_id } or {}
-  return kiwi_list(got, { "blocks", "placed", "detached", "values", "list" })
-end
-
-local function kiwi_records(block_id)
-  local got = rex.block.call("com.superlogical.terminal", "program_status", { block_id = block_id }) or {}
-  return kiwi_list(got, { "records", "status", "program_status", "values" })
-end
-
-local function kiwi_seats()
-  local rows = {}
-  local seen = {}
-  for _, session in ipairs(kiwi_sessions()) do
-    local session_id = session.session_id or session.id
-    if session_id ~= nil then
-      for _, block in ipairs(kiwi_blocks(session_id)) do
-        local block_id = kiwi_id(block)
-        if block_id ~= nil and not seen[block_id] then
-          seen[block_id] = true
-          table.insert(rows, { session_id = session_id, block_id = block_id })
+const FIND = `local terminal = "com.superlogical.terminal"
+local found = {}
+local listed = rex.call("session.list", {})
+for _, session in ipairs(type(listed) == "table" and listed.sessions or {}) do
+  local id = session.session_id
+  if rex.session.attach{ session_id = id } ~= nil then
+    local blocks = rex.call("session.list_blocks", { session_id = id })
+    for _, block in ipairs(type(blocks) == "table" and blocks.blocks or {}) do
+      if block.placement == "placed" then
+        local status = rex.block.call(terminal, "program_status", { session_id = id, block_id = block.block_id })
+        for _, record in ipairs(type(status) == "table" and status.records or {}) do
+          local state = record.state
+          if record.app == "kiwi" and (state == "blocked" or state == "done") then
+            local at = tostring(record.updated_at or "")
+            local held = found[state]
+            if held == nil or at < held.at then found[state] = { session_id = id, block_id = block.block_id, at = at } end
+          end
         end
       end
     end
+    rex.session.detach{ session_id = id }
   end
-  table.sort(rows, function(a, b) return tostring(a.block_id) < tostring(b.block_id) end)
-  return rows
 end
+local row = found.blocked or found.done
+if row == nil then return { found = false } end
+if rex.session.attach{ session_id = row.session_id } == nil then error("Kiwi couldn't reach that seat's session", 0) end
+local _, err = rex.call("session.focus_block", { session_id = row.session_id, block_id = row.block_id })
+if err ~= nil then error(err, 0) end
+return { found = true, session_id = row.session_id, block_id = row.block_id }
+`;
 
-local function kiwi_needs()
-  local rows = kiwi_seats()
-  for _, state in ipairs({ "blocked", "done" }) do
-    for _, row in ipairs(rows) do
-      for _, record in ipairs(kiwi_records(row.block_id)) do
-        if record.app == "kiwi" and record.state == state then return row end
-      end
-    end
-  end
-  return nil
-end
+function actionLua(find: string, bin: string): string {
+  return `local rex_bin = ${JSON.stringify(bin)}
+local find = ${JSON.stringify(find)}
 
 rex.action{
   name = "kiwi_needs_you",
   title = "Kiwi: Go to the seat that needs me",
-  description = "Focus the Kiwi seat with a question open to a person, or with a task waiting for review.",
+  description = "Focus the seat with a question open to a person, else the one with a task waiting for review.",
   category = "Kiwi",
-  keywords = { "kiwi", "channels", "needs you", "seat", "blocked", "review" },
-  run = function()
-    local row = kiwi_needs()
-    if row == nil then return nil end
-    local _, err = rex.session.focus_block{ session_id = row.session_id, block_id = row.block_id }
-    if err ~= nil then error(err, 0) end
-    return row
+  keywords = "kiwi channels needs you seat question review",
+  run = function(ctx)
+    local ran, err = rex.exec({ rex_bin, "do", find }, { timeout = 10 })
+    if ran == nil then error(err, 0) end
+    if not ran.ok then error(ran.stderr ~= "" and ran.stderr or "Kiwi couldn't look for the seat", 0) end
+    local row = rex.json.decode(ran.stdout)
+    if type(row) ~= "table" or not row.found then return nil end
+    if row.session_id ~= ctx.session_id then rex.client.queue("session.select", { session_id = row.session_id }) end
+    return { session_id = row.session_id, block_id = row.block_id }
   end,
 }
 `;
+}
 
 export function rexConfigPath(env: Record<string, string | undefined> = process.env, home = homedir()): string {
   const explicit = env.REX_CONFIG?.trim();
@@ -99,34 +74,42 @@ function palettePath(init = rexConfigPath()): string {
   return join(dirname(init), NAME);
 }
 
+function findPath(init = rexConfigPath()): string {
+  return join(dirname(init), FIND_NAME);
+}
+
 function carries(action: string): boolean {
   return action.split("\n").some((line) => line.trim() === LINE);
 }
 
 export function paletteInstalled(init = rexConfigPath()): boolean {
-  const action = palettePath(init);
-  if (!existsSync(action)) return false;
-  if (!existsSync(init)) return false;
-  return readFileSync(init, "utf8").includes(LINE);
+  if (!existsSync(palettePath(init)) || !existsSync(findPath(init)) || !existsSync(init)) return false;
+  return carries(readFileSync(init, "utf8"));
 }
 
-export function installPalette(init = rexConfigPath()): { action: string; init: string; changed: boolean } {
+function put(file: string, text: string): boolean {
+  if (existsSync(file) && readFileSync(file, "utf8") === text) return false;
+  writeFileSync(file, text, { mode: 0o600 });
+  return true;
+}
+
+export function installPalette(init = rexConfigPath(), bin = rexBinary() ?? "rex"): { action: string; init: string; changed: boolean } {
   const action = palettePath(init);
+  const find = findPath(init);
   mkdirSync(dirname(init), { recursive: true, mode: 0o700 });
-  const was = existsSync(action) ? readFileSync(action, "utf8") : null;
-  if (was !== ACTION) writeFileSync(action, ACTION, { mode: 0o600 });
+  const wrote = [put(find, FIND), put(action, actionLua(find, bin))].some(Boolean);
   const before = existsSync(init) ? readFileSync(init, "utf8") : "";
-  if (carries(before)) return { action, init, changed: was !== ACTION };
+  if (carries(before)) return { action, init, changed: wrote };
   const next = before && !before.endsWith("\n") ? `${before}\n${LINE}\n` : `${before}${LINE}\n`;
   writeFileSync(init, next, { mode: 0o600 });
   return { action, init, changed: true };
 }
 
 export function removePalette(init = rexConfigPath()): boolean {
-  const action = palettePath(init);
   let changed = false;
-  if (existsSync(action)) {
-    rmSync(action, { force: true });
+  for (const file of [palettePath(init), findPath(init)]) {
+    if (!existsSync(file)) continue;
+    rmSync(file, { force: true });
     changed = true;
   }
   if (existsSync(init)) {
