@@ -42,7 +42,7 @@ const SLOT_RETRY_MAX_MS = 60_000;
 const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, woke: Effect.Effect<void, never, Scope.Scope>) {
   const s = yield* openSession(b.alias, cfg, b.as);
   const real = yield* Cursor;
-  let at = Math.max(yield* s.cursor(), deliveredInProcess(b.alias, b.as, who.session ?? "", who.pid));
+  let at = Math.max(yield* s.cursor(), deliveredInProcess(b.alias, b.as, who.session ?? "", who.harness === "claude" ? who.pid : undefined));
   const peek = Cursor.of({ read: () => Effect.succeed(at), write: (_c, _a, seq) => Effect.sync(() => void (at = Math.max(at, seq))), seen: real.seen, markSeen: () => Effect.void });
   const got: Heard[] = [];
   const hearing = s
@@ -177,7 +177,7 @@ export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Serv
     return 0;
   }
   for (const { b, upTo, seqs } of told) {
-    if (handoff.kind === "at-once") noteDelivered(b.alias, b.as, who.session ?? "", upTo, who.pid);
+    if (handoff.kind === "at-once") noteDelivered(b.alias, b.as, who.session ?? "", upTo, who.harness === "claude" ? who.pid : undefined);
     noteHeard(who.session, b.alias, b.as, seqs);
   }
   return 2;

@@ -126,6 +126,13 @@ test("after a /clear, the earlier session's listener hands a message to the new 
   expect(await new Response(listener.stderr).text()).toContain("across the clear");
   const cleared = { ...S, CLAUDE_CODE_SESSION_ID: "once-cleared" };
   const input = JSON.stringify({ session_id: "once-cleared", cwd: agent });
+  const next = spawn(agent, ["hook", "listen"], cleared, input);
+  await until(listening, "the new session's listener slot");
+  await ok(owner, ["send", "--to", me, "after the clear"]);
+  expect(await next.exited).toBe(2);
+  const woke = await new Response(next.stderr).text();
+  expect(woke).toContain("after the clear");
+  expect(woke).not.toContain("across the clear");
   expect(await ok(agent, ["hook", "stop"], cleared, input)).not.toContain("across the clear");
   expect(await ok(agent, ["hook", "prompt"], cleared, input)).not.toContain("across the clear");
 });

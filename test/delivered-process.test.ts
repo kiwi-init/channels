@@ -39,3 +39,13 @@ test("a record from before the process was noted still counts for its own sessio
   expect(deliveredUpTo("ch", "ana", "old")).toBe(5);
   expect(deliveredInProcess("ch", "ana", "new", 4242)).toBe(5);
 });
+
+test("a seat whose names share dots with another's never takes that seat's record, and a dotted session id still counts", () => {
+  noteDelivered("ch.a", "b", "s1", 77, 4242);
+  expect(deliveredInProcess("ch", "a.b", "s2", 4242)).toBe(0);
+  expect(deliveredInProcess("ch.a", "b", "s2", 4242)).toBe(77);
+  noteDelivered("ch", "ana", "old.session", 7, 4242);
+  noteDelivered("ch", "ana", "b.old", 8, 4242);
+  expect(deliveredInProcess("ch", "ana", "new.session", 4242)).toBe(8);
+  expect(deliveredInProcess("ch", "ana.b", "new", 4242)).toBe(0);
+});

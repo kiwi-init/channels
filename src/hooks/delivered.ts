@@ -12,41 +12,56 @@ function deliveredFile(alias: string, as: string, session: string): string {
 interface Delivered {
   seq: number;
   pid: number | null;
+  seat: { alias: string; as: string } | null;
 }
 
 function readDelivered(file: string): Delivered | null {
   try {
-    const [seq, pid] = readFileSync(file, "utf8").trim().split(/\s+/).map(Number);
-    return seq && seq > 0 ? { seq, pid: pid && Number.isInteger(pid) && pid > 0 ? pid : null } : null;
+    const [seqText, pidText, alias, as] = readFileSync(file, "utf8").trim().split(/\s+/);
+    const seq = Number(seqText);
+    const pid = Number(pidText);
+    if (!Number.isSafeInteger(seq) || seq <= 0) return null;
+    return {
+      seq,
+      pid: Number.isSafeInteger(pid) && pid > 0 ? pid : null,
+      seat: alias !== undefined && as !== undefined ? { alias: decodeURIComponent(alias), as: decodeURIComponent(as) } : null,
+    };
   } catch {
     return null;
   }
 }
 
+function ofSeat(d: Delivered, alias: string, as: string): boolean {
+  return d.seat === null || (d.seat.alias === alias && d.seat.as === as);
+}
+
 export function deliveredUpTo(alias: string, as: string, session: string): number {
-  return readDelivered(deliveredFile(alias, as, session))?.seq ?? 0;
+  const d = readDelivered(deliveredFile(alias, as, session));
+  return d && ofSeat(d, alias, as) ? d.seq : 0;
 }
 
 export function noteDelivered(alias: string, as: string, session: string, seq: number, pid?: number): void {
   mkdirSync(join(home(), "listen-hooks"), { recursive: true, mode: 0o700 });
-  writeFileSync(deliveredFile(alias, as, session), `${Math.max(seq, deliveredUpTo(alias, as, session))}${pid ? ` ${pid}` : ""}`);
+  const upTo = Math.max(seq, deliveredUpTo(alias, as, session));
+  writeFileSync(deliveredFile(alias, as, session), `${upTo} ${pid ?? 0} ${encodeURIComponent(alias)} ${encodeURIComponent(as)}`);
 }
 
 function deliveredFiles(alias: string, as: string, session: string, pid: number | undefined): { file: string; seq: number }[] {
   const own = deliveredFile(alias, as, session);
-  const prefix = `${encodeURIComponent(alias)}.${encodeURIComponent(as)}.`;
+  const dir = join(home(), "listen-hooks");
   let names: string[];
   try {
-    names = readdirSync(join(home(), "listen-hooks"));
+    names = readdirSync(dir);
   } catch {
     return [];
   }
   return names.flatMap((name) => {
-    const file = join(home(), "listen-hooks", name);
-    if (file !== own && (!name.startsWith(prefix) || !name.endsWith(".delivered") || name.slice(prefix.length, -".delivered".length).includes("."))) return [];
+    const file = join(dir, name);
+    if (!name.endsWith(".delivered")) return [];
     const d = readDelivered(file);
-    if (!d || (file !== own && (!pid || d.pid !== pid))) return [];
-    return [{ file, seq: d.seq }];
+    if (!d) return [];
+    if (file === own) return ofSeat(d, alias, as) ? [{ file, seq: d.seq }] : [];
+    return pid && d.pid === pid && d.seat?.alias === alias && d.seat.as === as ? [{ file, seq: d.seq }] : [];
   });
 }
 
