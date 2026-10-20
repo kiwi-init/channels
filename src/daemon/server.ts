@@ -9,8 +9,11 @@ import { compareVersions } from "@kiwi/core/versions.ts";
 import { listenedPath, pullsWake, viaOf } from "@kiwi/core/wake.ts";
 import { ensureMachine, loadPairedMachine, PairError, type PairedMachine, type PairedPerson } from "./pair.ts";
 import { DAEMON_PROTOCOL, daemonSock, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
-import { activityEnv, reachOf, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
+import { activityEnv, reachOf, readsRex, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
+import { readRexInto } from "./rex-reads.ts";
+import type { RexActivity, RexPlace } from "../rex.ts";
 import { pruneHookFiles } from "../hooks/delivered.ts";
+import { harnessInventory } from "../launch/harnesses.ts";
 import { beatLock, dropLock, lockPath, ownsLock, takeLock } from "./lock.ts";
 import { stopDaemon, tryHello } from "./rpc.ts";
 import { readKey, type ConnState, type Seat, type Sub, type Waiting } from "./seat.ts";
@@ -129,20 +132,24 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   };
   const livePath = async (cfg: Config, seat: Seat, attached: Attached) => listenedPath(await pathOf(cfg, seat.alias, seat.agent), listenedLately(seat, attached));
 
-  const refreshActivity = async (seat: Seat, force = false): Promise<void> => {
+  const refreshActivity = async (seat: Seat, force = false, read = true): Promise<void> => {
     const cfg = loadConfig();
     const record = seatRecordFor(cfg, seat.alias, seat.agent);
     if (record?.rex?.block !== seat.rexBlock) {
       seat.rexBlock = record?.rex?.block;
       seat.rexGone = false;
+      seat.rexActivity = undefined;
+      seat.rexReadAt = undefined;
     }
     const env = record ? activityEnv(record, process.env) : null;
     const { harnessActivity } = await import("../harness.ts");
     let now = env ? await harnessActivity(env) : undefined;
-    const fileFirst = record?.harness === "claude" || record?.harness === "codex" || record?.harness === "opencode";
-    if (record?.rex && !fileFirst) {
-      const { rexActivity } = await import("../rex.ts");
-      const fromRex = rexActivity(record.rex);
+    if (readsRex(cfg, record)) {
+      if (read)
+        readRexInto(seat, record.rex, readRex, () => {
+          if (current(seat)) void refreshActivity(seat, false, false).catch(() => {});
+        });
+      const fromRex = seat.rexActivity;
       if (fromRex) now = { ...fromRex, ...(now?.model ? { model: now.model } : {}) };
     }
     const attached = attachedTo(seat);
@@ -157,6 +164,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   };
 
   const current = (seat: Seat): boolean => !stopped && seats.get(seat.key) === seat;
+
+  const readRex = async (place: RexPlace): Promise<RexActivity | null> => (await import("../rex.ts")).rexActivity(place);
 
   const { scheduleWake } = seatWakes({
     dir,
@@ -662,12 +671,15 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         case "listeners":
           sendLine(conn, JSON.stringify({ id, ok: true, listeners: [...conns].filter((c) => !c.dead).flatMap((c) => [...c.held]) }));
           break;
+        case "harnesses":
+          sendLine(conn, JSON.stringify({ id, ok: true, harnesses: await harnessInventory() }));
+          break;
         case "stop":
           sendLine(conn, JSON.stringify({ id, ok: true }));
           setTimeout(() => void stop(), 50);
           break;
         default:
-          throw new Error(`unknown verb "${verb}" (hello, adopt, listen, listening, hold, listeners, read, mark, peek, presence, stop)`);
+          throw new Error(`unknown verb "${verb}" (hello, adopt, listen, listening, hold, listeners, read, mark, peek, presence, harnesses, stop)`);
       }
     } catch (err) {
       sendLine(conn, JSON.stringify({ id, ok: false, error: err instanceof Error ? err.message : String(err) }));
