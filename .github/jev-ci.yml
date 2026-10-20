@@ -178,6 +178,14 @@ jobs:
       and nothing into a busy session, a draft, a pane watched by a client that just pressed a key, a
       tmux server started again on the same socket, or a process that doesn't lead the pane's
       foreground (src/rotate/pane.ts).
+      Also test/rotate-codex.test.ts: Codex's input box (src/rotate/codex.ts codexInput: the last bold ›
+      line and its indented continuation, empty for the dim placeholder, never a dim submitted prompt
+      or a reversed menu row); with tmux on its own socket, a Codex window found by the folder its
+      leading codex process has open and only when exactly one has it (codexPanes, codexPane), an
+      idle thread (codexTurn in src/harness.ts) given /new and then CODEX_FIRST, each confirmed in the
+      box before Enter, with the seat offered for that folder, and a working thread given nothing;
+      and the handoff (src/hooks/handoff.ts, handSeats in src/seats.ts): the next startup thread in
+      that folder within HANDOFF_MS takes the old thread's Codex seats once, never a Claude one.
       Also one wake outstanding per seat: after a wake lands, no other is sent to the same destination while every
       message it was for is still unread, so a busy session's queue doesn't fill with wakes that find nothing unread;
       reading any of them (by cursor, or as a reply marked seen) lets the next through, a replaced session or webhook

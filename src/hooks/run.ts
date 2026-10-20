@@ -10,6 +10,7 @@ import { holdAnswering } from "./delivered.ts";
 import { migrateListenHooks } from "./install/claude.ts";
 import { migrateExtraHooks } from "./install/extra.ts";
 import { migrateMimo } from "./install/mimo.ts";
+import { takeHandoff } from "./handoff.ts";
 import { handoffFrom, listen, refusedFrom, type Served } from "./listen.ts";
 import { refreshListeners, seatsFor } from "./listeners.ts";
 import { rotateAfterStop } from "./rotate.ts";
@@ -73,6 +74,9 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string, harness?
   const work = Effect.gen(function* () {
     if (event === "session-start") yield* Effect.sync(migrateListenHooks);
     if (!harness && event !== KIMI_STOP) yield* Effect.sync(migrateExtraHooks);
+    const cwd = input.cwd;
+    const fresh = who.session;
+    if (event === "session-start" && who.harness === "codex" && input.source === "startup" && cwd && fresh) yield* Effect.sync(() => takeHandoff(cwd, fresh));
     const served = yield* seatsServed;
     const session = input.session_id;
     if (kimi && session)

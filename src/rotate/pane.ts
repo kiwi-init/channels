@@ -3,17 +3,21 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { join } from "node:path";
 import { home } from "../config.ts";
 import { appendRotated } from "../daemon/wake.ts";
+import { codexTurn } from "../harness.ts";
+import { offerHandoff } from "../hooks/handoff.ts";
 import { alive } from "../hooks/listeners.ts";
+import { CODEX_FIRST, CODEX_NEW, codexInput } from "./codex.ts";
 
-export interface Target {
+interface Seat {
   pid: number;
   session: string;
   pane: string;
   socket: string;
-  claudeDir: string;
 }
 
-export type Outcome = "cleared" | "gone" | "moved" | "not-its-pane" | "busy-elsewhere" | "timed-out" | "no-tmux" | "send-failed" | "left-in-input" | "switched-off";
+export type Target = (Seat & { harness: "claude"; claudeDir: string }) | (Seat & { harness: "codex"; rollout: string; cwd: string });
+
+export type Outcome = "cleared" | "new-without-prompt" | "gone" | "moved" | "not-its-pane" | "busy-elsewhere" | "timed-out" | "no-tmux" | "send-failed" | "left-in-input" | "switched-off";
 
 const PROMPT = "❯";
 const CLEAR = "/clear";
@@ -48,6 +52,7 @@ export function calm(activity: readonly number[], now: number, quietMs: number):
 type Registry = { kind: "gone" } | { kind: "seen"; session: string | null; idle: boolean };
 
 function registry(t: Target): Registry {
+  if (t.harness === "codex") return alive(t.pid) && existsSync(t.rollout) ? { kind: "seen", session: t.session, idle: codexTurn(t.rollout)?.state === "idle" } : { kind: "gone" };
   const file = join(t.claudeDir, "sessions", `${t.pid}.json`);
   if (!existsSync(file) || !alive(t.pid)) return { kind: "gone" };
   try {
@@ -105,9 +110,11 @@ function check(t: Target, first: PaneId, quietMs: number, on: () => boolean, inp
   return input(captured) ? "ready" : "wait";
 }
 
-const empty = (captured: string) => inputText(captured) === "";
-const typedClear = (captured: string) => inputText(captured, null) === CLEAR;
-const endsWithClear = (captured: string) => inputText(captured, null)?.endsWith(CLEAR) === true;
+const commandOf = (t: Target) => (t.harness === "codex" ? CODEX_NEW : CLEAR);
+const typed = (t: Target, captured: string, confirming: boolean) => (t.harness === "codex" ? codexInput(captured) : inputText(captured, confirming ? null : FOOTER_LINES));
+const empty = (t: Target) => (captured: string) => typed(t, captured, false) === "";
+const shows = (t: Target, text: string) => (captured: string) => typed(t, captured, true) === text;
+const endsWith = (t: Target, text: string) => (captured: string) => typed(t, captured, true)?.endsWith(text) === true;
 
 export type Teller = Pick<Target, "pid" | "session" | "pane">;
 
@@ -198,13 +205,36 @@ function owns(t: Target, first: PaneId): boolean {
 const RENDER_MS = 1_000;
 const RENDER_EVERY_MS = 50;
 
-async function shown(t: Target, first: PaneId, quietMs: number, on: () => boolean): Promise<Check> {
-  const end = Date.now() + RENDER_MS;
+async function until(t: Target, first: PaneId, quietMs: number, on: () => boolean, input: (captured: string) => boolean, ms = RENDER_MS): Promise<Check> {
+  const end = Date.now() + ms;
   for (;;) {
-    const typed = check(t, first, quietMs, on, typedClear);
-    if (typed !== "wait" || Date.now() >= end) return typed;
+    const seen = check(t, first, quietMs, on, input);
+    if (seen !== "wait" || Date.now() >= end) return seen;
     await Bun.sleep(RENDER_EVERY_MS);
   }
+}
+
+async function send(t: Target, first: PaneId, quietMs: number, on: () => boolean, text: string, beforeEnter: () => void = () => {}): Promise<Check | "sent"> {
+  if (tmux(t, ["send-keys", "-t", t.pane, "-l", text]) === null) return "send-failed";
+  const seen = await until(t, first, quietMs, on, shows(t, text));
+  if (seen === "ready") {
+    beforeEnter();
+    return tmux(t, ["send-keys", "-t", t.pane, "Enter"]) === null ? "send-failed" : "sent";
+  }
+  if (seen !== "wait" && seen !== "switched-off") return seen;
+  const captured = tmux(t, ["capture-pane", "-p", "-e", "-t", t.pane]);
+  if (captured === null || !endsWith(t, text)(captured) || !owns(t, first)) return "left-in-input";
+  if (tmux(t, ["send-keys", "-t", t.pane, "-N", String(text.length), "BSpace"]) === null) return "send-failed";
+  return seen;
+}
+
+const SETTLE_MS = 3_000;
+
+async function firstPrompt(t: Target, first: PaneId, quietMs: number, on: () => boolean): Promise<Outcome> {
+  if (t.harness !== "codex") return "cleared";
+  if ((await until(t, first, quietMs, on, empty(t), SETTLE_MS)) !== "ready") return "new-without-prompt";
+  const sent = await send(t, first, quietMs, on, CODEX_FIRST);
+  return sent === "sent" ? "cleared" : "new-without-prompt";
 }
 
 export interface ClearOptions {
@@ -226,17 +256,14 @@ export async function clearWhenIdle(t: Target, o: ClearOptions = {}): Promise<Ou
   try {
     const end = Date.now() + timeoutMs;
     while (Date.now() < end) {
-      const before = check(t, first, quietMs, on, empty);
+      const before = check(t, first, quietMs, on, empty(t));
       if (before !== "wait" && before !== "ready") return finish(t, before);
       if (before === "ready") {
-        if (tmux(t, ["send-keys", "-t", t.pane, "-l", CLEAR]) === null) return finish(t, "send-failed");
-        const typed = await shown(t, first, quietMs, on);
-        if (typed === "ready") return finish(t, tmux(t, ["send-keys", "-t", t.pane, "Enter"]) === null ? "send-failed" : "cleared");
-        if (typed !== "wait" && typed !== "switched-off") return finish(t, typed);
-        const captured = tmux(t, ["capture-pane", "-p", "-e", "-t", t.pane]);
-        if (captured === null || !endsWithClear(captured) || !owns(t, first)) return finish(t, "left-in-input");
-        if (tmux(t, ["send-keys", "-t", t.pane, "-N", String(CLEAR.length), "BSpace"]) === null) return finish(t, "send-failed");
-        if (typed === "switched-off") return finish(t, typed);
+        const sent = await send(t, first, quietMs, on, commandOf(t), () => {
+          if (t.harness === "codex") offerHandoff(t.cwd, t.session);
+        });
+        if (sent === "sent") return finish(t, await firstPrompt(t, first, quietMs, on));
+        if (sent !== "wait") return finish(t, sent === "ready" ? "send-failed" : sent);
       }
       await Bun.sleep(everyMs);
     }

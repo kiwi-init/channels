@@ -12,7 +12,7 @@ const USAGE = "usage: kiwi rotate on|off|status";
 
 function statusText(on: boolean): string {
   return on
-    ? `rotation is on for this computer: a Claude Code seat running in tmux gets a fresh session (/clear typed into its pane once it is idle and nobody is typing) between tasks past ${tokensWord(ROTATE_FLOOR)}, the lead past ${tokensWord(CONTEXT_LINE)}, and a seat with open tasks past ${tokensWord(CONTEXT_LINE)} once it has checkpointed them. Log: ~/.kiwi/rotate.log`
+    ? `rotation is on for this computer: a Claude Code or Codex seat running in tmux gets a fresh session (/clear, or Codex's /new and a first prompt, typed into its pane once it is idle and nobody is typing) between tasks past ${tokensWord(ROTATE_FLOOR)}, the lead past ${tokensWord(CONTEXT_LINE)} once it has written its lead checkpoint, and a seat with open tasks past ${tokensWord(CONTEXT_LINE)} once it has checkpointed them. Log: ~/.kiwi/rotate.log`
     : "rotation is off for this computer (kiwi rotate on turns it on; nothing of it is loaded while off)";
 }
 
@@ -30,12 +30,18 @@ export const rotateCommands: Record<string, Command> = {
       }
       if (sub === "send") {
         const pid = Number(args[2]);
-        const [session, pane, socket] = [args[3], args[4], args[5]];
-        if (!Number.isInteger(pid) || pid <= 0 || !session || !pane || !socket) return yield* die("usage: kiwi rotate send PID SESSION PANE SOCKET (the Stop hook runs it)");
+        const [session, pane, socket, harness, rollout, cwd] = [args[3], args[4], args[5], args[6], args[7], args[8]];
+        const usage = "usage: kiwi rotate send PID SESSION PANE SOCKET [codex ROLLOUT CWD] (the Stop hook runs it)";
+        if (!Number.isInteger(pid) || pid <= 0 || !session || !pane || !socket) return yield* die(usage);
+        if (harness !== undefined && (harness !== "codex" || !rollout || !cwd)) return yield* die(usage);
         if (loadConfig().rotate !== "on") return 0;
         const { clearWhenIdle } = yield* Effect.promise(() => import("../../rotate/pane.ts"));
-        const claudeDir = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
-        const outcome = yield* Effect.promise(() => clearWhenIdle({ pid, session, pane, socket, claudeDir }, { on: () => loadConfig().rotate === "on" }));
+        const seat = { pid, session, pane, socket };
+        const target =
+          harness === "codex" && rollout && cwd
+            ? { ...seat, harness: "codex" as const, rollout, cwd }
+            : { ...seat, harness: "claude" as const, claudeDir: process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude") };
+        const outcome = yield* Effect.promise(() => clearWhenIdle(target, { on: () => loadConfig().rotate === "on" }));
         return outcome === "cleared" ? 0 : 1;
       }
       return yield* die(USAGE);

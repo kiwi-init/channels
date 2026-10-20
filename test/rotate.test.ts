@@ -261,7 +261,7 @@ describe.skipIf(!hasTmux)("typing /clear into the pane", () => {
   test("an idle session with an empty input box gets /clear, and Enter only once /clear shows in the box", async () => {
     const p = await pane("idle", "");
     registry(p, "s-1", "idle");
-    expect(await clearWhenIdle({ pid: p.pid, session: "s-1", pane: p.pane, socket, claudeDir: p.claudeDir }, fast)).toBe("cleared");
+    expect(await clearWhenIdle({ harness: "claude", pid: p.pid, session: "s-1", pane: p.pane, socket, claudeDir: p.claudeDir }, fast)).toBe("cleared");
     await Bun.sleep(300);
     expect(typedOf(p)).toBe("/clear\n");
   });
@@ -269,7 +269,7 @@ describe.skipIf(!hasTmux)("typing /clear into the pane", () => {
   test("when /clear doesn't show in the box after typing it, no Enter follows", async () => {
     const p = await pane("blind", "", { echo: false });
     registry(p, "s-6", "idle");
-    expect(await clearWhenIdle({ pid: p.pid, session: "s-6", pane: p.pane, socket, claudeDir: p.claudeDir }, fast)).toBe("left-in-input");
+    expect(await clearWhenIdle({ harness: "claude", pid: p.pid, session: "s-6", pane: p.pane, socket, claudeDir: p.claudeDir }, fast)).toBe("left-in-input");
     await Bun.sleep(300);
     expect(typedOf(p)).toBe("");
   });
@@ -280,15 +280,15 @@ describe.skipIf(!hasTmux)("typing /clear into the pane", () => {
     const elsewhere = join(dir, "kiwi", "hook-state", `s-2.rotating.${process.ppid}`);
     mkdirSync(join(dir, "kiwi", "hook-state"), { recursive: true });
     writeFileSync(elsewhere, "");
-    expect(await clearWhenIdle({ pid: busy.pid, session: "s-2", pane: busy.pane, socket, claudeDir: busy.claudeDir }, fast)).toBe("busy-elsewhere");
+    expect(await clearWhenIdle({ harness: "claude", pid: busy.pid, session: "s-2", pane: busy.pane, socket, claudeDir: busy.claudeDir }, fast)).toBe("busy-elsewhere");
     rmSync(elsewhere);
-    expect(await clearWhenIdle({ pid: busy.pid, session: "s-2", pane: busy.pane, socket, claudeDir: busy.claudeDir }, fast)).toBe("timed-out");
+    expect(await clearWhenIdle({ harness: "claude", pid: busy.pid, session: "s-2", pane: busy.pane, socket, claudeDir: busy.claudeDir }, fast)).toBe("timed-out");
     const typing = await pane("typing", "half typed");
     registry(typing, "s-3", "idle");
-    expect(await clearWhenIdle({ pid: typing.pid, session: "s-3", pane: typing.pane, socket, claudeDir: typing.claudeDir }, fast)).toBe("timed-out");
+    expect(await clearWhenIdle({ harness: "claude", pid: typing.pid, session: "s-3", pane: typing.pane, socket, claudeDir: typing.claudeDir }, fast)).toBe("timed-out");
     const moved = await pane("moved", "");
     registry(moved, "s-new", "idle");
-    expect(await clearWhenIdle({ pid: moved.pid, session: "s-4", pane: moved.pane, socket, claudeDir: moved.claudeDir }, fast)).toBe("moved");
+    expect(await clearWhenIdle({ harness: "claude", pid: moved.pid, session: "s-4", pane: moved.pane, socket, claudeDir: moved.claudeDir }, fast)).toBe("moved");
     await Bun.sleep(300);
     for (const p of [busy, typing, moved]) expect(typedOf(p)).toBe("");
     expect(readFileSync(join(dir, "kiwi", "rotate.log"), "utf8")).toContain("timed-out");
@@ -299,7 +299,7 @@ describe.skipIf(!hasTmux)("typing /clear into the pane", () => {
     registry(p, "s-7", "idle");
     let calls = 0;
     const on = () => ++calls < 2;
-    expect(await clearWhenIdle({ pid: p.pid, session: "s-7", pane: p.pane, socket, claudeDir: p.claudeDir }, { ...fast, on })).toBe("switched-off");
+    expect(await clearWhenIdle({ harness: "claude", pid: p.pid, session: "s-7", pane: p.pane, socket, claudeDir: p.claudeDir }, { ...fast, on })).toBe("switched-off");
     await Bun.sleep(300);
     expect(typedOf(p)).toBe(`/clear${"\x7f".repeat(6)}`);
   });
@@ -313,7 +313,7 @@ describe.skipIf(!hasTmux)("typing /clear into the pane", () => {
       registry(p, "s-other", "idle");
       return false;
     };
-    expect(await clearWhenIdle({ pid: p.pid, session: "s-11", pane: p.pane, socket, claudeDir: p.claudeDir }, { ...fast, on })).toBe("left-in-input");
+    expect(await clearWhenIdle({ harness: "claude", pid: p.pid, session: "s-11", pane: p.pane, socket, claudeDir: p.claudeDir }, { ...fast, on })).toBe("left-in-input");
     await Bun.sleep(300);
     expect(typedOf(p)).toBe("/clear");
   });
@@ -326,7 +326,7 @@ describe.skipIf(!hasTmux)("typing /clear into the pane", () => {
       if (++calls === 2) registry(p, "s-other", "busy");
       return true;
     };
-    expect(await clearWhenIdle({ pid: p.pid, session: "s-8", pane: p.pane, socket, claudeDir: p.claudeDir }, { ...fast, on })).toBe("moved");
+    expect(await clearWhenIdle({ harness: "claude", pid: p.pid, session: "s-8", pane: p.pane, socket, claudeDir: p.claudeDir }, { ...fast, on })).toBe("moved");
     await Bun.sleep(300);
     expect(typedOf(p)).toBe("/clear");
   });
@@ -339,7 +339,7 @@ describe.skipIf(!hasTmux)("typing /clear into the pane", () => {
     await client.stdin.flush();
     await Bun.sleep(300);
     try {
-      expect(await clearWhenIdle({ pid: p.pid, session: "s-9", pane: p.pane, socket, claudeDir: p.claudeDir }, { ...fast, quietMs: 60_000 })).toBe("timed-out");
+      expect(await clearWhenIdle({ harness: "claude", pid: p.pid, session: "s-9", pane: p.pane, socket, claudeDir: p.claudeDir }, { ...fast, quietMs: 60_000 })).toBe("timed-out");
     } finally {
       client.kill();
     }
@@ -350,7 +350,7 @@ describe.skipIf(!hasTmux)("typing /clear into the pane", () => {
     const sock = join(dir, "again.sock");
     const p = await pane("again", "", { hup: true, sock });
     registry(p, "s-10", "busy");
-    const waiting = clearWhenIdle({ pid: p.pid, session: "s-10", pane: p.pane, socket: sock, claudeDir: p.claudeDir }, { ...fast, timeoutMs: 3_000 });
+    const waiting = clearWhenIdle({ harness: "claude", pid: p.pid, session: "s-10", pane: p.pane, socket: sock, claudeDir: p.claudeDir }, { ...fast, timeoutMs: 3_000 });
     await Bun.sleep(300);
     const server = Number(spawnSync("tmux", ["-S", sock, "display-message", "-p", "#{pid}"], { encoding: "utf8" }).stdout.trim());
     spawnSync("tmux", ["-S", sock, "kill-server"]);
@@ -366,7 +366,7 @@ describe.skipIf(!hasTmux)("typing /clear into the pane", () => {
   test("a process that doesn't hold the pane's input is never typed into", async () => {
     const p = await pane("other", "");
     registry({ pid: process.pid, claudeDir: p.claudeDir }, "s-5", "idle");
-    expect(await clearWhenIdle({ pid: process.pid, session: "s-5", pane: p.pane, socket, claudeDir: p.claudeDir }, fast)).toBe("not-its-pane");
+    expect(await clearWhenIdle({ harness: "claude", pid: process.pid, session: "s-5", pane: p.pane, socket, claudeDir: p.claudeDir }, fast)).toBe("not-its-pane");
     expect(typedOf(p)).toBe("");
   });
 });

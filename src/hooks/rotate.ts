@@ -21,41 +21,71 @@ export function paneOf(env: Record<string, string | undefined>): PaneOf | null {
   return pane && /^%\d+$/.test(pane) && socket ? { pane, socket } : null;
 }
 
-export function rotateArgv(pid: number, session: string, where: PaneOf): string[] {
+export type Codex = { rollout: string; cwd: string };
+
+export function rotateArgv(pid: number, session: string, where: PaneOf, codex?: Codex): string[] {
   const main = process.argv[1];
-  return [process.execPath, ...(main && (main.endsWith(".ts") || main.endsWith(".js")) ? [main] : []), "rotate", "send", String(pid), session, where.pane, where.socket];
+  return [
+    process.execPath,
+    ...(main && (main.endsWith(".ts") || main.endsWith(".js")) ? [main] : []),
+    "rotate",
+    "send",
+    String(pid),
+    session,
+    where.pane,
+    where.socket,
+    ...(codex ? ["codex", codex.rollout, codex.cwd] : []),
+  ];
 }
+
+type Spot = { pid: number; where: PaneOf; codex?: Codex; used: number | undefined };
+
+const used = (read: (file: string) => { used: number } | undefined, file: string): number | undefined => {
+  try {
+    return read(file)?.used;
+  } catch {
+    // An unreadable transcript says nothing about the context: no rotation.
+    return undefined;
+  }
+};
 
 export const rotateAfterStop = Effect.fn("Hooks.rotateAfterStop")(function* (input: HookInput, served: readonly Served[], who: Here) {
   const session = input.session_id;
   const file = input.transcript_path;
-  const where = paneOf(process.env);
-  if (who.harness !== "claude" || input.stop_hook_active || !who.pid || !session || typeof file !== "string" || !where || !served.length) return;
+  const cwd = input.cwd;
+  const [first] = served;
+  if (input.stop_hook_active || !session || typeof file !== "string" || !file || !first) return;
+  const fromEnv = paneOf(process.env);
+  const claude = who.harness === "claude" && who.pid && fromEnv ? { pid: who.pid, where: fromEnv } : null;
+  const codexIn = who.harness === "codex" && cwd ? cwd : null;
+  if (!claude && !codexIn) return;
   if (loadConfig().rotate !== "on") return;
-  const teller = { pid: who.pid, session, pane: where.pane };
-  const { claudeContext } = yield* Effect.promise(() => import("../harness.ts"));
-  const used = yield* Effect.sync(() => {
-    try {
-      return claudeContext(file)?.used;
-    } catch {
-      // An unreadable transcript says nothing about the context: no rotation.
-      return undefined;
+  const read = yield* Effect.promise(() => import("../harness.ts"));
+  const { forgetStay, noteStay, rotating } = yield* Effect.promise(() => import("../rotate/pane.ts"));
+  let spot: Spot;
+  if (claude) spot = { ...claude, used: used(read.claudeContext, file) };
+  else if (codexIn) {
+    const { codexPane, sockets } = yield* Effect.promise(() => import("../rotate/codex.ts"));
+    const found = yield* Effect.sync(() => codexPane(codexIn, sockets(process.env)));
+    if (!found) {
+      yield* Effect.sync(() => noteStay({ pid: 0, session, pane: "none" }, `${first.b.alias}/${first.b.as}`, `no single Codex window in tmux has ${codexIn} open`));
+      return;
     }
-  });
+    spot = { pid: found.pid, where: { pane: found.pane, socket: found.socket }, codex: { rollout: file, cwd: codexIn }, used: used(read.codexContext, file) };
+  } else return;
+  const teller = { pid: spot.pid, session, pane: spot.where.pane };
   for (const { b, cfg } of served) {
     const s = yield* openSession(b.alias, cfg, b.as);
     const { state } = yield* s.state();
-    const decided = rotationAt(state, b.as, used, overLineSince(b.alias, b.as, session));
+    const decided = rotationAt(state, b.as, spot.used, overLineSince(b.alias, b.as, session));
     if (decided.kind === "stay") {
-      const { noteStay } = yield* Effect.promise(() => import("../rotate/pane.ts"));
       yield* Effect.sync(() => noteStay(teller, `${b.alias}/${b.as}`, decided.why));
       return;
     }
   }
-  const { forgetStay, rotating } = yield* Effect.promise(() => import("../rotate/pane.ts"));
   yield* Effect.sync(() => forgetStay(session));
   if (rotating(session)) return;
-  const argv = rotateArgv(who.pid, session, where);
+  const argv = rotateArgv(spot.pid, session, spot.where, spot.codex);
   yield* Effect.sync(() => {
     const child = spawn(argv[0]!, argv.slice(1), {
       cwd: process.cwd(),

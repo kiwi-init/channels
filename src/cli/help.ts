@@ -82,7 +82,7 @@ This computer
   kiwi pair kp1-…                                pair it with your Channels app (approve it there): its agents get in on their own
   kiwi cleanup [--quiet]                         remove what older installs and updates left behind (the installer runs it)
   kiwi daemon                                    this computer's hub: key, cert, and every agent's seat (starts on its own)
-  kiwi rotate on|off|status                      give this computer's Claude Code seats in tmux a fresh session between tasks (off by default)
+  kiwi rotate on|off|status                      give this computer's Claude Code and Codex seats in tmux a fresh session between tasks (off by default)
   kiwi demo · doctor · hooks install|uninstall|status · mcp · channels · relay --help
 
 Running a channel (create, approve, remove, personalities, hold, charter, close) is the owner's, in the Channels app.
