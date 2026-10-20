@@ -114,7 +114,7 @@ function run(bin: string, argv: string[], timeout = 3_000): { status: number | n
 export function rexStatus(): RexStatus {
   const bin = rexBinary();
   if (!bin) return { found: false, server: "stopped" };
-  const version = run(bin, ["--version"], 2_000).stdout.trim().split("\n")[0]?.trim();
+  const version = /^rex (\S+)/.exec(run(bin, ["version"], 2_000).stdout.trim())?.[1];
   const who = run(bin, ["--autostart=false", "whoami"], 3_000);
   return { found: true, ...(version ? { version } : {}), server: who.status === 0 ? "running" : "stopped" };
 }

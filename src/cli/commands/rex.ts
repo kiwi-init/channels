@@ -65,7 +65,7 @@ export const rexCommands: Record<string, Command> = {
         return out(statusText());
       }
       if (sub === "seats") {
-        const seats = localRexSeats();
+        const seats = loadConfig().rex === "on" ? localRexSeats() : [];
         return out(opt.json ? JSON.stringify(seats) : seats.map((s) => `${s.alias} ${s.agent} ${s.block}`).join("\n"));
       }
       if (sub === "show") {

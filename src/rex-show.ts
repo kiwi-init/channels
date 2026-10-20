@@ -23,7 +23,7 @@ export function localRexSeats(cfg: Config = loadConfig()): RexSeat[] {
   return seats.sort((a, b) => a.alias.localeCompare(b.alias) || a.agent.localeCompare(b.agent) || a.block.localeCompare(b.block));
 }
 
-type RexShowWhy = "no-rex" | "no-server" | "remote-control" | "failed";
+type RexShowWhy = "no-rex" | "no-server" | "no-app" | "remote-control" | "failed";
 export type RexShow = { ok: true } | { ok: false; why: RexShowWhy };
 
 function object(value: unknown): Record<string, unknown> | null {
@@ -70,7 +70,7 @@ export function showInRex(place: RexPlace, bin: string | null = rexBinary()): Re
   const listed = runRex(bin, ["-S", place.server, "api", "call", "client.list", "{}"]);
   if (listed.status === 4) return { ok: false, why: "no-server" };
   if (listed.status !== 0) return { ok: false, why: "failed" };
-  if (!appClient(parse(listed.stdout))) return { ok: false, why: "remote-control" };
+  if (!appClient(parse(listed.stdout))) return { ok: false, why: "no-app" };
   const focused = rexApi(place, "session.focus_block", { block_id: place.block }, bin, true);
   if (focused === null) return { ok: false, why: "failed" };
   const selected = runRex(bin, ["-S", place.server, "do", "session.select", `session_id=${place.session}`], 10_000);

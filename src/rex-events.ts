@@ -22,23 +22,19 @@ interface Running {
 const RETRY_MIN_MS = 1_000;
 const RETRY_MAX_MS = 30_000;
 
-function blockOf(value: unknown): string | null {
-  if (!value || typeof value !== "object") return null;
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const found = blockOf(item);
-      if (found) return found;
-    }
-    return null;
-  }
-  const record = value as Record<string, unknown>;
-  const id = record.block_id;
-  if (typeof id === "string" && id.startsWith("block:")) return id;
-  for (const key of ["payload", "event", "session_event", "block_event"]) {
-    const found = blockOf(record[key]);
-    if (found) return found;
-  }
-  return null;
+const object = (value: unknown): Record<string, unknown> | null => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null);
+
+const GONE = new Set(["child_exited", "block_closed"]);
+
+function blockEvent(line: unknown): { block: string; gone: boolean } | null {
+  const outer = object(line);
+  if (outer?.type !== "session_event") return null;
+  const event = object(object(outer.payload)?.event);
+  const payload = object(event?.payload);
+  const block = payload?.block_id;
+  if (typeof block !== "string" || !block.startsWith("block:")) return null;
+  const name = event?.type === "block_event" ? payload?.name : event?.type;
+  return typeof name === "string" ? { block, gone: GONE.has(name) } : null;
 }
 
 export function startRexEvents(opts: RexEventsOptions): { stop(): void } {
@@ -72,9 +68,9 @@ export function startRexEvents(opts: RexEventsOptions): { stop(): void } {
         } catch {
           continue;
         }
-        const block = blockOf(event);
-        if (!block) continue;
-        const gone = line.includes("child_exited");
+        const named = blockEvent(event);
+        if (!named) continue;
+        const { block, gone } = named;
         const key = `${server}\u0000${block}`;
         const at = Date.now();
         if (!gone && at - (seen.get(key) ?? 0) < 100) continue;

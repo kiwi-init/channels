@@ -58,7 +58,7 @@ function result(stdout: string): RexShowResult {
   const got = parsed as Record<string, unknown>;
   if (got["ok"] === true) return { ok: true };
   const why = got["why"];
-  return { ok: false, why: why === "no-rex" || why === "no-server" || why === "remote-control" ? why : "failed" };
+  return { ok: false, why: why === "no-rex" || why === "no-server" || why === "no-app" || why === "remote-control" ? why : "failed" };
 }
 
 export function wireRexIpc(): void {

@@ -140,9 +140,10 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     const { harnessActivity } = await import("../harness.ts");
     let now = env ? await harnessActivity(env) : undefined;
     const fileFirst = record?.harness === "claude" || record?.harness === "codex" || record?.harness === "opencode";
-    if (!now && record?.rex && !fileFirst) {
+    if (record?.rex && !fileFirst) {
       const { rexActivity } = await import("../rex.ts");
-      now = rexActivity(record.rex) ?? undefined;
+      const fromRex = rexActivity(record.rex);
+      if (fromRex) now = { ...fromRex, ...(now?.model ? { model: now.model } : {}) };
     }
     const attached = attachedTo(seat);
     const pulled = attached === "listener" && pullsWake(record?.harness);

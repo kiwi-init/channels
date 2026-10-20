@@ -46,6 +46,8 @@ export function rexNote(result: RexShowResult): string | null {
       return "Turn on Remote Control in Rex's settings to open it."
     case "no-server":
       return "Rex isn't running on this computer."
+    case "no-app":
+      return "Open the Rex app to show it there."
     case "no-rex":
       return "Rex isn't installed on this computer."
     case "failed":

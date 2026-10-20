@@ -107,26 +107,34 @@ describe("the record Kiwi writes", () => {
 });
 
 describe("Rex events", () => {
-  test("a block's events refresh it, and child_exited marks it gone", async () => {
+  test("a block's events refresh it, child_exited and block_closed mark it gone, and a status message naming them does not", async () => {
     const dir = mkdtempSync(join(tmpdir(), "kiwi-rex-events-"));
     const bin = join(dir, "rex");
     const block = "block:11a15963-bacc-7426-91e9-4d98757dcd0c";
+    const other = "block:21a15963-bacc-7426-91e9-4d98757dcd0c";
     const session = "session:01a15963-bacc-7426-91e9-4d98757dcd0c";
+    const blockEvent = (id: string, name: string, payload: unknown) => ({
+      type: "session_event",
+      payload: { session_id: session, event: { type: "block_event", payload: { block_id: id, creator_name: "com.superlogical.terminal", name, payload } } },
+    });
     const lines = [
-      { session_id: session, session_event: { event: { kind: "terminal.pwd_changed", payload: { block_id: block } } } },
-      { session_id: session, session_event: { event: { kind: "terminal.child_exited", payload: { block_id: block } } } },
-      { session_id: session, session_event: { event: { kind: "terminal.title_changed", payload: { block_id: "block:21a15963-bacc-7426-91e9-4d98757dcd0c" } } } },
+      { type: "client_joined", payload: { client: { client_id: "client:01a15a45-4bf6-7d4e-80cb-afc8148f27d6" } } },
+      blockEvent(block, "program_status_changed", { id: "", record: { state: "working", app: "claude-code", msg: "grep child_exited in the log" }, reason: "report" }),
+      blockEvent(block, "child_exited", { exit_code: 0 }),
+      blockEvent(other, "process_changed", { generation: 2, foreground: { pid: 38035, name: "login" } }),
+      { type: "session_event", payload: { session_id: session, event: { type: "block_closed", payload: { block_id: other } } } },
     ];
-    writeFileSync(bin, `#!/bin/sh\nprintf '%s\\n' '${JSON.stringify(lines[0])}' '${JSON.stringify(lines[1])}' '${JSON.stringify(lines[2])}'\nsleep 5\n`);
+    writeFileSync(bin, `#!/bin/sh\ncat <<'EOF'\n${lines.map((l) => JSON.stringify(l)).join("\n")}\nEOF\nsleep 5\n`);
     chmodSync(bin, 0o755);
     const seen: [string, string, boolean][] = [];
     const watch = startRexEvents({ servers: () => [{ server: "studio", bin }], onChange: (server, id, gone) => seen.push([server, id, gone]), everyMs: 100 });
-    await Bun.sleep(150);
+    for (const end = Date.now() + 10_000; seen.length < 4 && Date.now() < end;) await Bun.sleep(20);
     watch.stop();
     expect(seen).toEqual([
       ["studio", block, false],
       ["studio", block, true],
-      ["studio", "block:21a15963-bacc-7426-91e9-4d98757dcd0c", false],
+      ["studio", other, false],
+      ["studio", other, true],
     ]);
     rmSync(dir, { recursive: true, force: true });
   });
@@ -236,24 +244,26 @@ describe("show in Rex", () => {
     expect(seats).toEqual([{ alias: "ch", agent: "ana", room: "room-1", ...place }]);
   });
 
-  test("it focuses the block and switches the app's session; without an app client it says Remote Control", () => {
+  test("it focuses the block and switches the app's session; it says when the app is closed or refuses actions", () => {
     const dir = mkdtempSync(join(tmpdir(), "kiwi-rex-show-"));
     const bin = join(dir, "rex");
-    writeFileSync(
-      bin,
-      `#!/bin/sh
+    const app =
+      '{"clients":[{"client_id":"client:01a159a5-6af7-71b5-970b-7c20247caedb","principal":{"kind":"peer"}},{"client_id":"client:01a159a5-6b10-7720-b94c-3cf5bacf0ffc","info":{"kind":"app","platform":"macos","name":"Rex Beta"}}]}';
+    const rex = (select: string) => `#!/bin/sh
 case "$*" in
-  *client.list*) echo '{"clients":[{"client_id":"c1","info":{"kind":"app"}}]}' ;;
+  *client.list*) echo '${app}' ;;
   *session.focus_block*) echo '{"revision":1}' ;;
-  *session.select*) exit 0 ;;
+  *session.select*) ${select} ;;
   *) exit 1 ;;
 esac
-`,
-    );
+`;
+    writeFileSync(bin, rex("exit 0"));
     chmodSync(bin, 0o755);
     expect(showInRex(place, bin)).toEqual({ ok: true });
-    writeFileSync(bin, `#!/bin/sh\nexit 0\n`);
+    writeFileSync(bin, rex(`echo 'Error: Rex.app is not accepting actions. Turn on Remote Control in its Settings under Rex Server.' >&2; exit 1`));
     expect(showInRex(place, bin)).toEqual({ ok: false, why: "remote-control" });
+    writeFileSync(bin, `#!/bin/sh\necho '{"clients":[{"client_id":"c1","info":{"kind":"cli"}}]}'\n`);
+    expect(showInRex(place, bin)).toEqual({ ok: false, why: "no-app" });
     writeFileSync(bin, `#!/bin/sh\nexit 4\n`);
     expect(showInRex(place, bin)).toEqual({ ok: false, why: "no-server" });
     expect(showInRex(place, null)).toEqual({ ok: false, why: "no-rex" });

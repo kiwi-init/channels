@@ -254,7 +254,7 @@ export interface RexSeatView {
   block: string;
 }
 
-export type RexShowResult = { ok: true } | { ok: false; why: "no-rex" | "no-server" | "remote-control" | "failed" };
+export type RexShowResult = { ok: true } | { ok: false; why: "no-rex" | "no-server" | "no-app" | "remote-control" | "failed" };
 
 export interface KiwiBridge {
   /** The relay URL injected at load (query param, else the default). */
