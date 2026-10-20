@@ -258,6 +258,11 @@ jobs:
       (runBounded, test/wake-bounded.test.ts); the Rex helpers replacing init.lua in one rename through its dotfiles link,
       keeping its mode (test/rex.test.ts); and a kiwi sh query run in its own process, stopped after its deadline, with
       randomblob and zeroblob refused (queryIsolated, test/sh-query.test.ts).
+      Also test/machine-ask.test.ts: an ask from the person's app to a paired computer (packages/core/src/machine-ask.ts),
+      signed by the person and sealed to that computer's mxpk, read back only by that computer, only from that person,
+      only within two minutes either way and only once, refused when re-aimed at another computer inside its seal, changed,
+      carrying an unknown verb or field, or over 4 KiB; and the computer's answer read only when signed by that computer
+      for that ask.
       Also test/shell-path.test.ts: the PATH line kiwi setup and the desktop app add to the shell's profile
       (packages/core/src/node/shell-path.ts), once and never when the profile already names the folder, and never
       from a profile outside a temp folder into a temp folder (the system's temp folders, through their links,
