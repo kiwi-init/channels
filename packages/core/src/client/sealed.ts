@@ -1,5 +1,5 @@
 import * as Effect from "effect/Effect";
-import { open, seal } from "../crypto.ts";
+import { open, seal, type ChannelAccess } from "../crypto.ts";
 import { Rejected } from "../refusals.ts";
 import type { ChannelCore } from "./core.ts";
 import type { Refused } from "./errors.ts";
@@ -20,6 +20,12 @@ export function newestEpoch(keys: Readonly<Record<string, string>>): number {
       .map(Number)
       .filter((e) => Number.isSafeInteger(e) && e >= 0),
   );
+}
+
+export function keepHeld(held: Pick<ChannelAccess, "epoch" | "keys">, fetched: Pick<ChannelAccess, "epoch" | "keys">): Pick<ChannelAccess, "epoch" | "keys"> {
+  const keys = { ...fetched.keys, ...held.keys };
+  const named = Number.isSafeInteger(fetched.epoch) ? fetched.epoch : held.epoch;
+  return { epoch: Math.max(held.epoch, Math.min(named, newestEpoch(keys))), keys };
 }
 
 export function openSealed(ch: ChannelCore, blob: SealedBlob): Effect.Effect<unknown, never, Relay> {
