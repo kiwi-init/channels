@@ -23,7 +23,7 @@ export interface Unread {
   unread: true;
 }
 
-export async function packUnread(key: string, roomId: string, epoch: number, env: Envelope): Promise<CachedRow> {
+export async function packEnvelope(key: string, roomId: string, epoch: number, env: Envelope): Promise<CachedRow> {
   const sealed = await seal(key, roomId, { seq: env.seq, raw: { ts: env.ts, e: env.e ?? 0, iv: env.iv, ct: env.ct } });
   return { seq: env.seq, rts: env.ts, e: epoch, iv: sealed.iv, ct: sealed.ct };
 }

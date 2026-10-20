@@ -163,7 +163,7 @@ export class RoomDb {
   }
 
   etag(what: Revised): string {
-    return `"${what}-${this.get(`${what}_rev`) ?? "0"}"`;
+    return `"${what}-${what === "info" ? "2." : ""}${this.get(`${what}_rev`) ?? "0"}"`;
   }
 
   ownerUser(): string | undefined {
@@ -390,14 +390,14 @@ export class RoomDb {
     return this.get("titles_sig") || null;
   }
 
-  title(): { iv: string; ct: string } | null {
+  title(): { e?: number; iv: string; ct: string } | null {
     const t = this.get("title");
-    return t ? (JSON.parse(t) as { iv: string; ct: string }) : null;
+    return t ? (JSON.parse(t) as { e?: number; iv: string; ct: string }) : null;
   }
 
-  settings(): { iv: string; ct: string } | null {
+  settings(): { e?: number; iv: string; ct: string } | null {
     const t = this.get("settings");
-    return t ? (JSON.parse(t) as { iv: string; ct: string }) : null;
+    return t ? (JSON.parse(t) as { e?: number; iv: string; ct: string }) : null;
   }
 
   snapshot(): StoredSnapshot | null {

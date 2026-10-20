@@ -5,7 +5,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ensureOnPath, profileFor } from "@kiwi/core/node/shell-path.ts";
+import { ensureOnPath, inTempFolder, profileFor } from "@kiwi/core/node/shell-path.ts";
 
 const MARK = "# Added by a test.";
 
@@ -57,6 +57,28 @@ describe("ensureOnPath", () => {
         writeFileSync(rc, `export PATH=${spelled}:$PATH\n`);
         expect(ensureOnPath({ mark: MARK, home, platform: "linux", env: { SHELL: "/bin/bash" } })).toBeNull();
       }
+    }));
+
+  test("a profile outside a temp folder never gets a line into one: it would outlive the folder and shadow kiwi", () =>
+    inHome((home) =>
+      inHome((temp) => {
+        const rc = join(home, ".zshrc");
+        writeFileSync(rc, "setopt autocd\n");
+        const o = { mark: MARK, home, platform: "darwin" as const, env: { SHELL: "/bin/zsh" }, temps: [temp] };
+        expect(ensureOnPath({ ...o, dir: join(temp, "cold-1", "bin") })).toBeNull();
+        expect(readFileSync(rc, "utf8")).toBe("setopt autocd\n");
+        expect(ensureOnPath({ ...o, dir: join(home, ".kiwi", "bin") })).toBe(rc);
+        expect(ensureOnPath({ ...o, temps: [temp, home], dir: join(temp, "cold-1", "bin") })).toBe(rc);
+      }),
+    ));
+
+  test("temp folders are told apart through their links, and a folder not made yet by its parent", () =>
+    inHome((temp) => {
+      expect(inTempFolder(tmpdir())).toBe(true);
+      expect(inTempFolder("/tmp/x/bin")).toBe(true);
+      expect(inTempFolder(join(temp, "not-made-yet", "bin"), [temp])).toBe(true);
+      expect(inTempFolder(join(temp, "..", "elsewhere"), [temp])).toBe(false);
+      expect(inTempFolder(`${temp}-sibling`, [temp])).toBe(false);
     }));
 
   test("Windows keeps PATH in the registry: nothing is written", () =>
