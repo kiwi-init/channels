@@ -66,7 +66,8 @@
   // namespace_id must be unique in the Cloudflare account.
   "ratelimits": [
     { "name": "MAILBOX_WRITES", "namespace_id": "870202", "simple": { "limit": 20, "period": 60 } },
-    { "name": "DICTATION_DOWNLOADS", "namespace_id": "870203", "simple": { "limit": 16, "period": 60 } }
+    { "name": "DICTATION_DOWNLOADS", "namespace_id": "870203", "simple": { "limit": 16, "period": 60 } },
+    { "name": "MACHINE_WRITES", "namespace_id": "870204", "simple": { "limit": 60, "period": 60 } }
   ],
   // No request logs: room ids and timing are nobody's business, and a closed
   // channel must leave nothing behind.

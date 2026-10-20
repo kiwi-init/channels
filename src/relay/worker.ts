@@ -8,7 +8,7 @@
 import { DurableObject } from "cloudflare:workers";
 import * as Layer from "effect/Layer";
 import { CLOSE_CLOSED, CLOSE_REMOVED, GONE_WORDS, PING, PONG } from "@kiwi/core/protocol.ts";
-import { ChannelGone, NotFound, Refused, UpdateRequired } from "./failures.ts";
+import { ChannelGone, NotFound, Refused, TooMany, UpdateRequired } from "./failures.ts";
 import { Human, workosFromSettings, type HumanAuth } from "./human.ts";
 import { pageSecret, Policy, policyFrom, type RelayPolicy } from "./policy.ts";
 import { edgePage, PAGE_PATH, type PageCache } from "./pages.ts";
@@ -42,7 +42,7 @@ import {
 } from "./room.ts";
 import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
-import { MACHINE_ASKS_PER_MINUTE, MACHINE_BOX_TTL_MS, onMachineHttp, type MachineBox, type MachineStore } from "./machine.ts";
+import { MACHINE_ASKS_PER_MINUTE, MACHINE_BOX_TTL_MS, MACHINE_UNSEEN_MS, machineAlarmAt, onMachineHttp, signedMachineRequest, type MachineBox, type MachineStore } from "./machine.ts";
 import { allow as allowPerMinute } from "./room/limits.ts";
 import { onDictationHttp, type DictationStore } from "./dictation.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
@@ -65,6 +65,8 @@ interface Env {
   WORKOS_API_KEY?: string;
   /** 20 mailbox writes per minute per client address (pairing codes are pasted by hand). */
   MAILBOX_WRITES: RateLimit;
+  /** 60 machine registrations and inbox writes per minute per client address. */
+  MACHINE_WRITES: RateLimit;
   DICTATION_DOWNLOADS: RateLimit;
   /** "off": don't retry a room request the platform refused (to count refusals, e.g. on a canary). */
   KIWI_ROOM_RETRY?: string;
@@ -313,11 +315,12 @@ export class Owners extends DurableObject<Env> {
   }
 }
 
-/** One paired computer: the person bound to it, its sealed asks for ten minutes, and its daemon's socket. */
+/** One paired computer: the person bound to it, its sealed asks for a few minutes, and its daemon's socket. */
 export class MachineInbox extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS binding (k INTEGER PRIMARY KEY CHECK (k = 1), person TEXT NOT NULL, mxpk TEXT NOT NULL, cert_at INTEGER NOT NULL)");
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS binding (k INTEGER PRIMARY KEY CHECK (k = 1), person TEXT NOT NULL, mxpk TEXT NOT NULL, cert_at INTEGER NOT NULL, seen_at INTEGER NOT NULL)");
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS floor (k INTEGER PRIMARY KEY CHECK (k = 1), cert_at INTEGER NOT NULL)");
     ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS boxes (id TEXT PRIMARY KEY, box TEXT NOT NULL, at INTEGER NOT NULL)");
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));
   }
@@ -326,24 +329,43 @@ export class MachineInbox extends DurableObject<Env> {
     return this.ctx.getWebSockets("machine");
   }
 
+  private async schedule(): Promise<void> {
+    const sql = this.ctx.storage.sql;
+    const oldest = (sql.exec("SELECT MIN(at) AS at FROM boxes").toArray()[0] as { at: number | null } | undefined)?.at ?? null;
+    const seen = (sql.exec("SELECT seen_at FROM binding").toArray()[0] as { seen_at: number } | undefined)?.seen_at ?? null;
+    const at = machineAlarmAt(oldest, seen);
+    const set = await this.ctx.storage.getAlarm();
+    if (at === null) await this.ctx.storage.deleteAlarm();
+    else if (set === null || at < set) await this.ctx.storage.setAlarm(at);
+  }
+
   override async fetch(req: Request): Promise<Response> {
     const sql = this.ctx.storage.sql;
-    const boxes = (): MachineBox[] => sql.exec("SELECT id, box, at FROM boxes ORDER BY at").toArray() as unknown as MachineBox[];
     const store: MachineStore = {
       binding: async () => {
-        const row = sql.exec("SELECT person, mxpk, cert_at FROM binding").toArray()[0] as { person: string; mxpk: string; cert_at: number } | undefined;
-        return row ? { person: row.person, mxpk: row.mxpk, certAt: row.cert_at } : null;
+        const row = sql.exec("SELECT person, mxpk, cert_at, seen_at FROM binding").toArray()[0] as { person: string; mxpk: string; cert_at: number; seen_at: number } | undefined;
+        return row ? { person: row.person, mxpk: row.mxpk, certAt: row.cert_at, seenAt: row.seen_at } : null;
       },
-      bind: async (_mpk, b) => void sql.exec("INSERT OR REPLACE INTO binding (k, person, mxpk, cert_at) VALUES (1, ?, ?, ?)", b.person, b.mxpk, b.certAt),
+      floor: async () => (sql.exec("SELECT cert_at FROM floor").toArray()[0] as { cert_at: number } | undefined)?.cert_at ?? 0,
+      bind: async (_mpk, b) => {
+        sql.exec("INSERT OR REPLACE INTO binding (k, person, mxpk, cert_at, seen_at) VALUES (1, ?, ?, ?, ?)", b.person, b.mxpk, b.certAt, b.seenAt);
+        sql.exec("INSERT INTO floor (k, cert_at) VALUES (1, ?) ON CONFLICT (k) DO UPDATE SET cert_at = MAX(cert_at, excluded.cert_at)", b.certAt);
+        await this.schedule();
+      },
+      seen: async (_mpk, at) => {
+        sql.exec("UPDATE binding SET seen_at = ?", at);
+        await this.schedule();
+      },
       unbind: async () => {
-        await this.ctx.storage.deleteAlarm();
         sql.exec("DELETE FROM binding");
         sql.exec("DELETE FROM boxes");
+        await this.schedule();
       },
-      boxes: async () => boxes(),
+      pending: async (_mpk, since) => (sql.exec("SELECT COUNT(*) AS n FROM boxes WHERE at >= ?", since).toArray()[0] as { n: number }).n,
+      boxes: async (_mpk, since) => sql.exec("SELECT id, box, at FROM boxes WHERE at >= ? ORDER BY at", since).toArray() as unknown as MachineBox[],
       addBox: async (_mpk, b) => {
         sql.exec("INSERT INTO boxes (id, box, at) VALUES (?, ?, ?)", b.id, b.box, b.at);
-        await this.ctx.storage.setAlarm(b.at + MACHINE_BOX_TTL_MS);
+        await this.schedule();
       },
       dropBox: async (_mpk, id) => void sql.exec("DELETE FROM boxes WHERE id = ?", id),
       online: () => {
@@ -351,32 +373,37 @@ export class MachineInbox extends DurableObject<Env> {
         return since.length ? Math.max(...since) : null;
       },
       push: (_mpk, b) => {
-        for (const ws of this.live()) ws.send(JSON.stringify({ box: b }));
+        for (const ws of this.live()) send(ws, JSON.stringify({ box: b }));
       },
       close: () => {
-        for (const ws of this.live()) ws.close(4000, "unpaired");
+        for (const ws of this.live()) close(ws, 4000, "unpaired");
       },
     };
     try {
-      const out = await onMachineHttp(req, store, { allow: (key) => allowPerMinute(key, MACHINE_ASKS_PER_MINUTE) });
+      const out = await onMachineHttp(req, store, { perMachine: (key) => allowPerMinute(key, MACHINE_ASKS_PER_MINUTE) });
       if (out instanceof Response) return out;
       if (!out) return withCors(errorResponse(new NotFound({ message: "not found" })));
-      for (const old of this.live()) old.close(4001, "replaced by a newer connection");
+      for (const old of this.live()) close(old, 4001, "replaced by a newer connection");
       const { 0: client, 1: server } = new WebSocketPair();
       this.ctx.acceptWebSocket(server, ["machine"]);
       server.serializeAttachment({ since: Date.now() });
-      for (const b of boxes()) if (Date.now() - b.at <= MACHINE_BOX_TTL_MS) server.send(JSON.stringify({ box: b }));
+      for (const b of await store.boxes(out.upgrade, Date.now() - MACHINE_BOX_TTL_MS)) send(server, JSON.stringify({ box: b }));
       return new Response(null, { status: 101, webSocket: client, headers: wsHeaders(req) });
     } catch (err) {
       return withCors(errorResponse(err));
     }
   }
 
+  override webSocketClose(ws: WebSocket, code: number): void {
+    close(ws, code === 1005 ? 1000 : code, "");
+  }
+
   override async alarm(): Promise<void> {
     const sql = this.ctx.storage.sql;
-    sql.exec("DELETE FROM boxes WHERE at < ?", Date.now() - MACHINE_BOX_TTL_MS);
-    const next = sql.exec("SELECT MIN(at) AS at FROM boxes").toArray()[0] as { at: number | null } | undefined;
-    if (next?.at) await this.ctx.storage.setAlarm(next.at + MACHINE_BOX_TTL_MS);
+    const now = Date.now();
+    sql.exec("DELETE FROM boxes WHERE at < ?", now - MACHINE_BOX_TTL_MS);
+    if (!this.live().length) sql.exec("DELETE FROM binding WHERE seen_at < ?", now - MACHINE_UNSEEN_MS);
+    await this.schedule();
   }
 }
 
@@ -477,9 +504,16 @@ export default {
       return env.MAILBOX.get(env.MAILBOX.idFromName(id)).fetch(req);
     }
     if (url.pathname.startsWith("/v1/machine/")) {
-      const mpk = /^\/v1\/machine\/([A-Za-z0-9_-]{43})(?:\/.*)?$/.exec(url.pathname)?.[1];
-      if (!mpk) return withCors(errorResponse(new NotFound({ message: "not found" })));
-      return env.MACHINES.get(env.MACHINES.idFromName(mpk)).fetch(req);
+      const writing = req.method === "PUT" || req.method === "POST";
+      const ip = req.headers.get("cf-connecting-ip");
+      if (writing && ip && !(await env.MACHINE_WRITES.limit({ key: ip })).success) {
+        return withCors(errorResponse(new TooMany({ message: "too many machine requests from this address; try again in a few minutes" })));
+      }
+      const copy = writing ? req.clone() : req;
+      const signed = await signedMachineRequest(copy, Date.now());
+      if (!signed) return withCors(errorResponse(new NotFound({ message: "not found" })));
+      if (signed instanceof Response) return signed;
+      return env.MACHINES.get(env.MACHINES.idFromName(signed.mpk)).fetch(req);
     }
     const github = await onGithubHttp(req, env.GITHUB_WEBHOOK_SECRET, githubRoutes(env));
     if (github) return github;
