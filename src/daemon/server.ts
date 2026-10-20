@@ -43,11 +43,13 @@ export interface DaemonOptions {
   wakeGapMs?: number;
   tickMs?: number;
   orphanMs?: number;
+  wakeOutstandingMs?: number;
   listenerGraceMs?: number;
 }
 
 const WAKE_DELAY_MS = 2_000;
 const WAKE_GAP_MS = 60_000;
+const WAKE_OUTSTANDING_MS = 10 * 60_000;
 const LISTENER_GRACE_MS = 60_000;
 
 export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promise<Daemon> {
@@ -146,7 +148,14 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
 
   const current = (seat: Seat): boolean => !stopped && seats.get(seat.key) === seat;
 
-  const { scheduleWake } = seatWakes({ dir, wakeDelayMs: opts.wakeDelayMs ?? WAKE_DELAY_MS, wakeGapMs: opts.wakeGapMs ?? WAKE_GAP_MS, stopped: () => stopped, current });
+  const { scheduleWake } = seatWakes({
+    dir,
+    wakeDelayMs: opts.wakeDelayMs ?? WAKE_DELAY_MS,
+    wakeGapMs: opts.wakeGapMs ?? WAKE_GAP_MS,
+    wakeOutstandingMs: opts.wakeOutstandingMs ?? WAKE_OUTSTANDING_MS,
+    stopped: () => stopped,
+    current,
+  });
 
   const seatInfo = async (s: Seat): Promise<DaemonSeat> => {
     const cfg = loadConfig();
@@ -394,6 +403,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
         wakeAgain: false,
         wakeChild: null,
         lastWake: null,
+        outstanding: null,
         probe: null,
         rows: null,
         fetchingRows: false,

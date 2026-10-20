@@ -92,7 +92,7 @@ beforeAll(async () => {
   bindAs({ harness: "codex", session: "thread-1" });
   await readAll();
   void ownerCh.stream(await ownerCh.head(), () => {}, { signal: watching.signal, onPresence: (p) => heard.push(p) });
-  daemon = await startDaemon(undefined, { beaconMs: 2_000, wakeDelayMs: 800, wakeGapMs: 1_500 });
+  daemon = await startDaemon(undefined, { beaconMs: 2_000, wakeDelayMs: 800, wakeGapMs: 1_500, wakeOutstandingMs: 5_000 });
   await until("claude's seat", async () => (await seat()) !== undefined);
 });
 
@@ -152,17 +152,62 @@ describe("waking an agent in its own session", () => {
     expect(calls().length).toBe(before);
   });
 
-  test("a message that arrives during a slow wake gets a wake of its own once the gap is over", async () => {
+  test("a message that arrives before the agent has read its last wake gets no wake of its own, and one after the agent read does", async () => {
     const before = await quiet();
-    process.env.FAKE_WAKE_SLEEP = "2";
+    process.env.FAKE_WAKE_SLEEP = "1";
     try {
       await ownerCh.send("first", { to: ["claude"] });
       await until("the first wake", () => calls().length === before + 1);
-      await ownerCh.send("second, during the wake", { to: ["claude"] });
-      await until("the second wake", () => calls().length === before + 2, 20_000);
+      await ownerCh.send("second, before the first wake was read", { to: ["claude"] });
+      await Bun.sleep(3_500);
+      expect(calls().length).toBe(before + 1);
     } finally {
       delete process.env.FAKE_WAKE_SLEEP;
     }
+    await readAll();
+    await ownerCh.send("third, after the agent read", { to: ["claude"] });
+    await until("a wake for the third", () => calls().length === before + 2);
+  });
+
+  test("a message held back by a wake the agent never reads gets its wake once that one has been outstanding long enough", async () => {
+    const before = await quiet();
+    await ownerCh.send("never read", { to: ["claude"] });
+    await until("the first wake", () => calls().length === before + 1);
+    const first = Date.now();
+    await ownerCh.send("held back", { to: ["claude"] });
+    await until("the held-back message's wake", () => calls().length === before + 2, 20_000);
+    expect(Date.now() - first).toBeGreaterThanOrEqual(4_000);
+  });
+
+  test("a wake still unread in an old session doesn't hold back the wake of the session that replaced it", async () => {
+    const before = await quiet();
+    try {
+      await ownerCh.send("for the old session", { to: ["claude"] });
+      await until("the old session's wake", () => calls().length === before + 1);
+      await until("the wake's record", async () => (await seat())?.wake.last?.ok === true);
+      bindAs({ harness: "codex", session: "thread-replacement" });
+      await ownerCh.send("for the new session", { to: ["claude"] });
+      await until("the new session's wake", () => calls().length === before + 2, 3_500);
+      expect(calls().at(-1)).toContain("thread-replacement");
+    } finally {
+      bindAs({ harness: "codex", session: "thread-1" });
+    }
+  });
+
+  test("an agent that read the woken-for message as a reply, without moving its cursor, is woken for the next one", async () => {
+    const before = await quiet();
+    const cfg = loadConfig().channels.test;
+    if (!cfg) throw new Error("the test channel is missing");
+    const s = await AgentSession.open("test", cfg, "claude");
+    const from = await ownerCh.head();
+    const reply = await ownerCh.send("a reply to the agent", { to: ["claude"], re: [from] });
+    await until("the reply's wake", () => calls().length === before + 1);
+    const replies = await runAgent(s.awaitReplies(from, from, 2));
+    expect(replies.map((r) => r.seq)).toContain(reply);
+    const { messages, state } = await runAgent(s.state());
+    expect(await runAgent(s.unreadCount(state, messages))).toBe(0);
+    await ownerCh.send("after the reply was read", { to: ["claude"] });
+    await until("the next message's wake", () => calls().length === before + 2, 3_500);
   });
 
   test("a binding that changes after the message is the one woken", async () => {
