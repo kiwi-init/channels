@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { CONTEXT_LINE, type ContextUse } from "@kiwi/core/protocol.ts";
 import { taskId, type ChannelState } from "@kiwi/core/state.ts";
@@ -25,6 +25,15 @@ function overFile(alias: string, as: string, session: string): string {
 
 export function overLine(alias: string, as: string, session: string): boolean {
   return existsSync(overFile(alias, as, session));
+}
+
+export function overLineSince(alias: string, as: string, session: string): number | null {
+  try {
+    const at = Number(readFileSync(overFile(alias, as, session), "utf8"));
+    return Number.isSafeInteger(at) && at > 0 ? at : null;
+  } catch {
+    return null;
+  }
 }
 
 export function noteOverLine(alias: string, as: string, session: string, over: boolean): void {

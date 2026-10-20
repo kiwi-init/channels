@@ -1,6 +1,6 @@
 # Plan: long-running agent sessions without unbounded context
 
-Status: items 1 and 2 built, 2026-10-19; the rest is a proposal. Facts below were read from `main` at
+Status: items 1 to 4 built, 2026-10-20 (rotation for Claude Code only); the rest is a proposal. Facts below were read from `main` at
 `fcfaabf5`, from Claude Code 2.1.303 and its docs, from transcripts, and from probes on opus-vm.
 
 ## The problem, measured
@@ -94,36 +94,44 @@ the whole SessionStart text stays under Claude Code's 10,000-character inline li
 auto-compaction and a restarted terminal all land the agent on its work, and it is worth building
 even if nothing below ships.
 
-### 3. Rotation: the daemon clears the seat's pane at a boundary
+### 3. Rotation: a fresh session typed into the seat's pane at a boundary
 
-The daemon on the seat's machine already knows the seat's process and whether it is busy. It
-gains:
+Built in item 4 for Claude Code (`src/hooks/rotate.ts`, `src/rotate/`). The plan first put this in
+the daemon; it ended up in the Stop hook, which already knows the seat, its tasks, its context and
+whether anything is waiting for it, plus one detached process that does the typing.
 
-- **The pane.** At SessionStart the hook records `TMUX` (the server socket) and `TMUX_PANE` on the
-  seat. A seat outside tmux is never rotated; it keeps the backstop. Claude Code 2.1.304 also
-  records the pane itself, in `~/.claude/sessions/<pid>.json` (`"tmux": "<session>:@<window>.%<pane>"`),
-  which the daemon already reads for idle.
-- **The trigger.**
-  - Reviewer: its verdict (`task approve|reject`) posted.
-  - Coder: `task done`, or the task handed to someone else.
-  - Lead: context past the line (below).
-  - Any seat: a checkpoint posted while context is past the line.
-  - A person, or the lead, asking for it, carried as an event and done by the seat's own daemon.
-- **The guard.** Send keys only when all of these hold, else wait and retry:
-  - the session is idle (`~/.claude/sessions/<pid>.json`, which `claudeActivity` already reads);
-  - the pane's input line is empty (`tmux capture-pane`), so a person typing there is never
-    interrupted;
-  - no `ask-human` from this seat is waiting;
-  - the seat has a checkpoint newer than its last commit, or the trigger is a verdict or
-    `task done`.
-- **The act.** `tmux -S <socket> send-keys -t <pane> /clear Enter`. SessionStart (`clear`) then
-  re-injects, and the seat moves to the new session id at that hook.
+- **The pane.** The Stop hook reads `TMUX` (the server socket) and `TMUX_PANE` from its own
+  environment, which Claude Code passes down from the pane it runs in. A seat outside tmux is never
+  rotated; it keeps the backstop. (Claude Code 2.1.304 also records the pane in
+  `~/.claude/sessions/<pid>.json` as `"tmux": "<session>:@<window>.%<pane>"`.)
+- **The trigger.** At a Stop that hands nothing over (no unread messages, no nudge, not
+  `stop_hook_active`), every seat the session serves must be ready (`rotationAt`,
+  `src/rotate/decide.ts`):
+  - a seat with open tasks: past the line, with a checkpoint on each written since its nudge;
+  - the lead with none: past the line;
+  - any other seat with none (a coder after `task done`, a reviewer after its verdict): past
+    100k (`ROTATE_FLOOR`), so a small context isn't cleared for nothing;
+  - never while a review round it judges is open, or a question of its to a person is.
+- **The guard.** `kiwi rotate send`, started detached by the hook, sends keys only when all of
+  these hold, checked twice half a second apart, else waits and retries for up to 15 minutes:
+  - the process is still the pane's (it descends from the pane's process);
+  - the session is idle and still the same session (`~/.claude/sessions/<pid>.json`); a session
+    already cleared by hand is left alone;
+  - the input line is empty: only the dimmed placeholder after the prompt in
+    `tmux capture-pane -e`, so a person typing there is never interrupted, and a menu or dialog
+    isn't either;
+  - no attached tmux client pressed a key in the last 10 seconds.
+  One sender per session at a time. What each one did goes to `rotate.log` in the Kiwi folder.
+- **The act.** `tmux -S <socket> send-keys -t <pane> -l /clear`, then `Enter`. SessionStart
+  (`clear`) then re-injects, and the seat moves to the new session id at that hook. Probed
+  2026-10-20 against Claude Code 2.1.304: the sender waited while text was typed, and once the
+  input was empty it cleared the session (new session id, same process).
 - **Optional, off by default, and not loaded unless switched on** (owner's requirement,
-  2026-10-19). The tmux code lives in its own module that the daemon imports only when rotation is
-  on, so a channel that never uses it carries none of it. Switched on per computer (decision 3):
-  `kiwi rotate on` writes it to that computer's Kiwi config, and the daemon there rotates only the
-  seats it holds that run in tmux. Turning it on for opus-vm turns it on for that machine's seats
-  and nobody else's.
+  2026-10-19). Switched on per computer (decision 3): `kiwi rotate on` writes it to that
+  computer's Kiwi config. The tmux code (`src/rotate/pane.ts`) is imported only by
+  `kiwi rotate send` and only when rotation is on; with it off the hook stops at the config check.
+- **Not built yet:** a person or the lead asking a seat to rotate through the channel. A person at
+  the pane can type `/clear` themselves.
 
 ### 4. The line and the nudge
 
@@ -213,6 +221,6 @@ One issue and one PR each, with its CI gate:
 2. Context in activity and on the Agents lane; the Stop-hook nudge. Built on the item 1 branch.
 3. The duplicate-listener probe and its fix. Built: no second listener; deliveries across a
    `/clear` are committed by the new session.
-4. Rotation for Claude Code seats in tmux, behind the switch from decision 3: pane recording, the
-   guard, and asking a seat to rotate.
+4. Rotation for Claude Code seats in tmux, behind the switch from decision 3: the pane, the
+   trigger, the guard and the act. Built, except asking a seat to rotate through the channel.
 5. Probe and add Codex, OpenCode and Grok.

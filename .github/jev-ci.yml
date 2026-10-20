@@ -145,6 +145,12 @@ jobs:
       Also each wake the daemon fires logged to wake.log with its unread count and the seat's read cursor when the
       daemon counted them, after the result and the why column (empty when it worked), so older readers of the first
       columns keep working (src/daemon/wake.ts, AgentSession.unreadAt in src/agent/state.ts, test/wake.test.ts).
+      Also test/rotate.test.ts: when a Claude Code seat in tmux gets a fresh session (src/rotate/decide.ts:
+      between tasks past ROTATE_FLOOR, the lead past the line, open tasks only once checkpointed since
+      the nudge, never during a review round it judges or an open question of its), Claude Code's empty
+      input line told from typed text and menus in capture-pane, and, with tmux on its own socket, the
+      sender typing /clear only into an idle session's empty pane, never a busy one, one with text
+      typed, one already moved on, or a pane that isn't its process's (src/rotate/pane.ts).
       Also test/context-line.test.ts: a seat's context in words (tokensWord), the Stop hook's nudge
       once per crossing of CONTEXT_LINE (250k; back under it resets, unknown keeps the state), naming
       each open task the seat owns and the checkpoint command, and an activity's context token
@@ -367,7 +373,9 @@ jobs:
       inline limit, shared between the seats a session serves in src/hooks/run.ts), and every
       message it left out comes with a later hook; and past the context line the Stop hook asks once
       for a checkpoint of each open task, not while stop_hook_active, and again only after the
-      context came back under it (src/hooks/context-line.ts). Then mimo-wake-restart:
+      context came back under it (src/hooks/context-line.ts); and with kiwi rotate on, a seat past the
+      line whose Stop hands nothing over starts the pane's /clear sender once it has checkpointed each
+      open task, never before and never with rotation off (src/hooks/rotate.ts). Then mimo-wake-restart:
       Kiwi's MiMoCode plugin (src/hooks/install/mimo.ts) loaded against a real listener, whose wake
       MiMoCode keeps refusing until MiMoCode exits mid-retry; the resumed session still gets those
       messages, because the listener writes a pending handoff per token (src/hooks/delivered.ts) that becomes

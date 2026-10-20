@@ -32,6 +32,18 @@ function procInfo(pid: number): ProcInfo | null {
   return process.platform === "linux" ? fromProc(pid) : fromPs(pid);
 }
 
+export function descendsFrom(pid: number, ancestor: number, tree: ProcessTree = {}, depth = 12): boolean {
+  const lookup = tree.lookup ?? procInfo;
+  let at = pid;
+  for (let i = 0; i <= depth && at > 1; i++) {
+    if (at === ancestor) return true;
+    const info = lookup(at);
+    if (!info) return false;
+    at = info.ppid;
+  }
+  return false;
+}
+
 const HARNESS_PROCESSES: readonly string[] = ["claude", "codex", "opencode", "grok", "gemini", "cursor-agent", "mimo", "kimi-code", "kimi"];
 
 const KIMI_PROCESSES: readonly string[] = ["kimi-code", "kimi"];
