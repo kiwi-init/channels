@@ -129,7 +129,7 @@ describe("the fold base stays bounded", () => {
     expect(cutAt(mixed, 3_100)).toEqual(all);
   });
 
-  test("a base from before this change keeps refusing replays after the upgrade: its ids age out on log time", () => {
+  test("a base from before this change keeps refusing replays of its ids after the upgrade, whatever the relay puts after it", () => {
     const messages = Array.from({ length: 6_000 }, (_, i) => msg(i + 1, T0 + i * 1_000));
     const fresh = baseOf(messages);
     const old: FoldBase = { ...fresh, sent: messages.map((m): [string, number] => [m.id, m.seq]), sentKeys: undefined, sentFloors: undefined, hw: undefined };
@@ -151,6 +151,15 @@ describe("the fold base stays bounded", () => {
     );
     const again = { ...messages[5_990]!, seq: 7_001 };
     for (const base of [backdated, honest]) expect(fold([again], roster, T0, null, null, base).rejected.get(7_001)).toContain("a copy of #5991");
+
+    const held = msg(6_001, T0 - 3 * DAY, { id: "held" });
+    const forged = Array.from({ length: 499 }, (_, i) => msg(6_002 + i, T0 + (6_000 + i) * 1_000, { sigOk: false }));
+    const afterHeld = baseOf([held, ...forged], old);
+    const later = baseOf(
+      Array.from({ length: 500 }, (_, i) => msg(6_501 + i, T0 + (6_500 + i) * 1_000)),
+      afterHeld,
+    );
+    for (const base of [afterHeld, later, baseOf([held], old)]) expect(fold([{ ...again, seq: 7_001 }], roster, T0, null, null, base).rejected.get(7_001)).toContain("a copy of #5991");
   });
 
   test("a direct thread that's been quiet for thousands of messages keeps its place", () => {

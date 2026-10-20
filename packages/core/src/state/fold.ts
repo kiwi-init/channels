@@ -373,12 +373,9 @@ export function fold(
 
   const cut = head - KEEP_SEQS;
   const keyIndex = new Map<string, number>();
-  const stamp = queue.size ? Math.max(hw, ...[...queue.keys()].map((id) => sentAt.get(id)!)) : 0;
-  const keptSent = [...sent].flatMap(([id, seq]): ([string, number] | [string, number, number, number])[] => {
-    const ts = sentAt.get(id) ?? stamp;
+  const keptSent = [...sent].map(([id, seq]): [string, number] | [string, number, number, number] => {
     const pk = queue.get(id);
-    if (pk !== undefined) return [[id, seq, ts, keyIndex.get(pk) ?? keyIndex.set(pk, keyIndex.size).size - 1]];
-    return !ts ? [[id, seq]] : ts < hw - SENT_WINDOW_MS ? [] : [[id, seq, ts, -1]];
+    return pk === undefined ? [id, seq] : [id, seq, sentAt.get(id)!, keyIndex.get(pk) ?? keyIndex.set(pk, keyIndex.size).size - 1];
   });
   const carded = (t: Task) => (t.state === "done" || t.cancelled) && closedLongAgo(t.updatedAt, hw);
   const taskIssues = new Set([...tasks.values()].flatMap((t) => (t.issue && !carded(t) ? [prKey(t.issue.repo, t.issue.number)] : [])));
