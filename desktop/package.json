@@ -104,6 +104,9 @@
         }
       ]
     },
+    "appImage": {
+      "compression": "gzip"
+    },
     "artifactName": "Channels-${version}-${os}-${arch}.${ext}",
     "directories": {
       "output": "release"
