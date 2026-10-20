@@ -199,6 +199,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
   const submit = async () => {
     if (!canSend) return
     if (running) {
+      keepDraft(draftKey, { body: "", files })
       setBody("")
       try {
         await running.command.run(running.args)
@@ -224,6 +225,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
         ...(extra?.dm ? { to: extra.to, dm: true } : {}),
         imgs: files.length ? files : undefined,
       })
+      if (area.current?.value === body || !area.current) keepDraft(draftKey, { body: "", files: [] })
       setBody((now) => (now === body ? "" : now))
       setFiles([])
       if (!thread) onClearReply()
