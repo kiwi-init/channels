@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { KNOWN_HARNESSES, readHarnessRow } from "../packages/core/src/harnesses.ts";
+import { KNOWN_HARNESSES, readHarnessRow } from "@kiwi/core/harnesses.ts";
 import { daemonHarnesses, startDaemon, type Daemon } from "../src/daemon.ts";
 import { harnessInventory, inventoryText, versionIn, wakeOf } from "../src/launch/harnesses.ts";
 import { loginShell, pathAfterMark, readLoginPath } from "../src/launch/shell.ts";
