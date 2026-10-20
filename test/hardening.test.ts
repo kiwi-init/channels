@@ -147,6 +147,29 @@ describe("a dishonest relay", () => {
     after.close();
   });
 
+  test("that failed rotation tells the owner plainly that the relay still lists a removed key, and keeps the relay's words", async () => {
+    const { agent, access, ownerCh } = await channelWithMember();
+    await ownerCh.remove(agent.pk);
+    const db = new Database(join(dataDir, `${access.roomId}.sqlite`));
+    db.query("UPDATE members SET active = 1 WHERE pk = ?").run(agent.pk);
+    db.close();
+    const pk8 = agent.pk.slice(0, 8);
+    await expect(ownerCh.rotate()).rejects.toThrow(
+      `the relay still lists a key this channel removed (${pk8}…), so it won't take the new key: that's the relay's doing; ask whoever runs it (missing wrapped key for ${pk8})`,
+    );
+
+    const other = await channelWithMember();
+    const intruder = await generateIdentity("intruder");
+    const listed = new Database(join(dataDir, `${other.access.roomId}.sqlite`));
+    listed.query("INSERT INTO members (pk, xpk, rec, rec_e, since, active) VALUES (?, ?, 'x', 0, 0, 1)").run(intruder.pk, intruder.xpk!);
+    listed.close();
+    const refused = await other.ownerCh.rotate().then(
+      () => null,
+      (err: unknown) => (err instanceof Error ? err.message : String(err)),
+    );
+    expect(refused).toBe(`missing wrapped key for ${intruder.pk.slice(0, 8)}`);
+  });
+
   test("can't list a key as a member and have it post under a name the owner never signed (A3)", async () => {
     const { agent, access, ownerCh, memberAccess } = await channelWithMember();
     const intruder = await generateIdentity("intruder");

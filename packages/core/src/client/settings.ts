@@ -1,15 +1,15 @@
 import * as Effect from "effect/Effect";
 import * as Semaphore from "effect/Semaphore";
 import { omit } from "../omit.ts";
-import { sign, verify } from "../identity.ts";
+import { sign } from "../identity.ts";
 import { MAX_CHARTER, MAX_ROOM_NAME, ROOM_ID_RE } from "../protocol.ts";
-import { MissingKey } from "../refusals.ts";
+import { MissingKey, Rejected } from "../refusals.ts";
 import { reposOf, type GuardFloor } from "../state.ts";
 import type { ChannelCore } from "./core.ts";
 import type { Refusal, Refused } from "./errors.ts";
 import type { ChannelInfo, Info } from "./info.ts";
 import type { Relay } from "./relay.ts";
-import { freshInfo, newestEpoch, openSealed, sealFor } from "./sealed.ts";
+import { freshInfo, newestEpoch, noteSeen, notOlder, ownerSigned, sealFor, signedAt } from "./sealed.ts";
 
 interface RoomEntry {
   id: string;
@@ -114,8 +114,8 @@ export class ChannelSettings {
     return Effect.gen({ self: this }, function* () {
       const s = (info ?? (yield* this.ch.fx.info())).settings;
       if (!s) return null;
-      const o = (yield* openSealed(this.ch, s)) as ({ what?: unknown; room?: unknown; pk?: string; sig?: string } & Record<string, unknown>) | null;
-      if (!o || o.what !== "channel-settings" || o.room !== this.ch.roomId || o.pk !== this.ch.access.ownerPk || !(yield* Effect.promise(() => verify(o as never)))) return null;
+      const o = yield* ownerSigned(this.ch, s, "channel-settings");
+      if (!o || !notOlder(this.ch, "seenSettingsAt", o.at)) return null;
       this.packs = o.compress === true;
       return o;
     });
@@ -125,14 +125,20 @@ export class ChannelSettings {
     return Effect.gen({ self: this }, function* () {
       yield* this.ch.ownerOnly();
       const info = yield* freshInfo(this.ch, () => this.info.forgetInfo());
-      const current = yield* this.settings(info);
+      const current = info.settings ? yield* ownerSigned(this.ch, info.settings, "channel-settings") : null;
       if (info.settings && !current) return yield* new MissingKey("can't open the channel's current settings, so changing one would drop the rest: try again in a moment");
-      const kept = omit(current ?? {}, "what", "room", "pk", "sig");
+      if (current && !notOlder(this.ch, "seenSettingsAt", current.at))
+        return yield* new Rejected(
+          "the relay is serving older settings than this device has already seen, so changing one now would bring the older ones back: that's the relay's doing; ask whoever runs it",
+        );
+      const kept = omit(current ?? {}, "what", "room", "pk", "sig", "at");
       const next = { ...kept, ...change };
-      const signed = yield* Effect.promise(() => sign(this.ch.identity, { ...next, what: "channel-settings", room: this.ch.roomId }));
+      const at = signedAt(this.ch, "seenSettingsAt", current?.at);
+      const signed = yield* Effect.promise(() => sign(this.ch.identity, { ...next, what: "channel-settings", room: this.ch.roomId, at }));
       const sealed = yield* sealFor(this.ch, info, signed);
       if (!sealed) return yield* new MissingKey("missing the channel key");
       yield* this.ch.request("/settings", { method: "PUT", body: JSON.stringify({ settings: sealed }) }).pipe(Effect.ensuring(Effect.sync(() => this.info.forgetInfo())));
+      noteSeen(this.ch, "seenSettingsAt", at);
       this.packs = next.compress === true;
     }).pipe(Semaphore.withPermit(this.settingsWrites));
   }

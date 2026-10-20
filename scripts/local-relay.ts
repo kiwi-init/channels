@@ -21,13 +21,13 @@ export function startLocalRelay(data: string, web: string | null): Promise<Local
   });
   return new Promise((ok, fail) => {
     let out = "";
-    relay.stdout!.on("data", (d) => {
-      out += d;
+    relay.stdout!.on("data", (d: Buffer) => {
+      out += d.toString("utf8");
       if (!out.includes("site:")) return;
       const port = relayPort(out);
-      if (web && out.includes("site: not served")) fail(new Error(`${web} is missing: run bun run web:build first`));
-      else if (port === null) fail(new Error(`the relay didn't say its port: ${out.trim()}`));
-      else ok({ relay, port });
+      if (port !== null) return ok({ relay, port });
+      relay.kill();
+      fail(new Error(`the relay didn't say its port: ${out.trim()}`));
     });
     relay.on("exit", (code) => fail(new Error(`relay exited (${code})`)));
   });

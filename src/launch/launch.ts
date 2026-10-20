@@ -9,7 +9,8 @@ import { EXTRA_HARNESSES, extraInstalled, installExtra, type ExtraHarness } from
 import { tooBroad } from "../seats.ts";
 import { harnessInventory } from "./harnesses.ts";
 import { openPlace, type PlaceTools } from "./place.ts";
-import { canStart, joinLineRefusal, joinPrompt, recipeArgv } from "./recipes.ts";
+import { joinLineRefusal } from "@kiwi/core/join-line.ts";
+import { canStart, joinPrompt, recipeArgv } from "./recipes.ts";
 import type { Launched, LaunchRequest } from "./wire.ts";
 
 export interface LaunchOptions {

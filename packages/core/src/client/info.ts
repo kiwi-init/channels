@@ -10,7 +10,7 @@ import type { ChannelCore } from "./core.ts";
 import { gone, type MemberRefusal, type Refusal, type Refused } from "./errors.ts";
 import { titlesSigned } from "./keys.ts";
 import { callUnlessUnchanged, type Relay } from "./relay.ts";
-import { freshInfo, newestEpoch, openSealed, sealFor, type SealedBlob } from "./sealed.ts";
+import { freshInfo, newestEpoch, noteSeen, notOlder, openSealed, ownerSigned, sealFor, signedAt, type SealedBlob } from "./sealed.ts";
 
 export const INFO_MAX_AGE_MS = 30_000;
 
@@ -60,6 +60,10 @@ export class ChannelInfo {
     if (this.keepsGone(pk)) rememberGone(this.ch.roomId, pk);
   }
 
+  removed(pk: string): boolean {
+    return isGone(this.ch.roomId, pk);
+  }
+
   readonly fx: InfoFx = {
     info: Effect.fn("Channel.info")({ self: this }, function* (this: ChannelInfo, fp?: string) {
       if (fp !== undefined) return yield* this.fetchInfo(fp);
@@ -83,12 +87,13 @@ export class ChannelInfo {
       const info = yield* this.ch.fx.info();
       const t = info.title;
       if (!t) return null;
-      const opened = (yield* openSealed(this.ch, t)) as { what?: unknown; room?: unknown; name?: unknown; pk?: string; sig?: string } | null;
+      const opened = (yield* openSealed(this.ch, t)) as { what?: unknown; room?: unknown; name?: unknown; at?: unknown; pk?: string; sig?: string } | null;
       if (!opened || typeof opened.name !== "string") return null;
       const name = opened.name.slice(0, 80);
       if (!name) return null;
-      const ownerSigned = opened.what === "channel-title" && opened.room === this.ch.roomId && opened.pk === this.ch.access.ownerPk && (yield* Effect.promise(() => verify(opened)));
-      if (ownerSigned) {
+      const byOwner = opened.what === "channel-title" && opened.room === this.ch.roomId && opened.pk === this.ch.access.ownerPk && (yield* Effect.promise(() => verify(opened)));
+      if (byOwner) {
+        if (!notOlder(this.ch, "seenTitleAt", opened.at)) return null;
         this.noteSignedTitle();
         return name;
       }
@@ -102,10 +107,13 @@ export class ChannelInfo {
       const title = name.trim().slice(0, 80);
       if (!title) return yield* new Rejected("a channel title can't be empty");
       const info = yield* freshInfo(this.ch, () => this.forgetInfo());
-      const signed = yield* Effect.promise(() => sign(this.ch.identity, { what: "channel-title", room: this.ch.roomId, name: title }));
+      const current = info.title ? yield* ownerSigned(this.ch, info.title, "channel-title") : null;
+      const at = signedAt(this.ch, "seenTitleAt", current?.at);
+      const signed = yield* Effect.promise(() => sign(this.ch.identity, { what: "channel-title", room: this.ch.roomId, name: title, at }));
       const sealed = yield* sealFor(this.ch, info, signed);
       if (!sealed) return yield* new MissingKey("missing the channel key");
       yield* this.ch.request("/title", { method: "PUT", body: JSON.stringify({ title: sealed }) }).pipe(Effect.ensuring(Effect.sync(() => this.forgetInfo())));
+      noteSeen(this.ch, "seenTitleAt", at);
       this.noteSignedTitle();
     }),
 
@@ -119,10 +127,12 @@ export class ChannelInfo {
         what?: unknown;
         room?: unknown;
         icon?: unknown;
+        at?: unknown;
         pk?: string;
         sig?: string;
       } | null;
       if (!opened || opened.what !== "channel-icon" || opened.room !== this.ch.roomId || opened.pk !== this.ch.access.ownerPk || !(yield* Effect.promise(() => verify(opened)))) return null;
+      if (!notOlder(this.ch, "seenIconAt", opened.at)) return null;
       return wellFormedIcon(opened.icon) ? opened.icon : null;
     }),
 
@@ -130,10 +140,14 @@ export class ChannelInfo {
       yield* this.ch.ownerOnly();
       if (icon !== null && !wellFormedIcon(icon)) return yield* new Rejected(`an icon is a robot head, one emoji, or a png, jpg, gif or webp image of at most ${MAX_ICON_BYTES / 1024}KB`);
       const info = yield* freshInfo(this.ch, () => this.forgetInfo());
-      const signed = icon ? yield* Effect.promise(() => sign(this.ch.identity, { what: "channel-icon", room: this.ch.roomId, icon })) : null;
-      const sealed = signed ? yield* sealFor(this.ch, info, signed, true) : null;
-      if (signed && !sealed) return yield* new MissingKey("missing the channel key");
+      const { icon: was } = yield* this.ch.request<{ icon: SealedBlob | null }>("/icon");
+      const current = was ? yield* ownerSigned(this.ch, was, "channel-icon") : null;
+      const at = signedAt(this.ch, "seenIconAt", current?.at);
+      const signed = yield* Effect.promise(() => sign(this.ch.identity, { what: "channel-icon", room: this.ch.roomId, icon, at }));
+      const sealed = yield* sealFor(this.ch, info, signed, true);
+      if (!sealed) return yield* new MissingKey("missing the channel key");
       yield* this.ch.request("/icon", { method: "PUT", body: JSON.stringify({ icon: sealed }) }).pipe(Effect.ensuring(Effect.sync(() => this.forgetInfo())));
+      noteSeen(this.ch, "seenIconAt", at);
     }),
 
     resealTitle: Effect.fn("Channel.resealTitle")({ self: this }, function* (this: ChannelInfo) {
