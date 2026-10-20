@@ -94,8 +94,8 @@
   /*
    * The chrome's grid, on 4px: one header row every column shares (52px), every round control on it
    * 36px (8px above and below), 8px between controls, a 12px gutter from every edge (header, rows,
-   * the account pill), and what a Mac window's traffic lights take of the list's header: they end
-   * about 80px in, so 92px leaves the gutter after them.
+   * the account pill), and what a Mac window's traffic lights take of the list's header and of the
+   * rail: they end about 80px in, so 92px leaves the gutter after them before the page's sheet.
    */
   --chrome-h: 52px;
   --lights-w: 92px;

@@ -6,6 +6,7 @@ import type { Personality } from "@kiwi/core/personality.ts";
 import type { CachedRow, Unread } from "@kiwi/core/cache-row.ts";
 import type { Channel, OpenKind, PresenceFields } from "@kiwi/core/client.ts";
 import type { MemberPicture, Message, Presence, ReadMark } from "@kiwi/core/protocol.ts";
+import type { TextStep } from "./text-size.ts";
 import type { Wire } from "./wire.ts";
 
 /** The person's own key. Same JSON shape as Identity in src/identity.ts. */
@@ -306,6 +307,7 @@ export interface KiwiBridge {
   getDeepLink(): Promise<string | null>;
   /** A link came in while the app runs (it waits for getDeepLink too, so it's opened once). */
   onDeepLink(cb: (url: string) => void): () => void;
+  onTextStep(cb: (step: TextStep) => void): () => void;
   setVoiceKey(key: string): Promise<void>;
   setVoiceConsent(roomId: string, on: boolean): Promise<void>;
   voiceToken(roomId: string): Promise<VoiceAuth>;

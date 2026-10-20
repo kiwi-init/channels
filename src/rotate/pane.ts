@@ -232,11 +232,15 @@ const empty = (captured: string) => inputText(captured) === "";
 const typedClear = (captured: string) => inputText(captured, null) === CLEAR;
 const endsWithClear = (captured: string) => inputText(captured, null)?.endsWith(CLEAR) === true;
 
-function log(t: Target, what: string): void {
+export type Teller = Pick<Target, "pid" | "session" | "pane" | "rex">;
+
+function log(t: Teller, what: string): boolean {
   try {
-    appendRotated(join(home(), "rotate.log"), `${new Date().toISOString()} pid ${t.pid} session ${t.session} pane ${t.pane ?? t.rex?.block}: ${what}\n`);
+    appendRotated(join(home(), "rotate.log"), `${new Date().toISOString()} pid ${t.pid} session ${t.session} ${t.rex ? `rex ${t.rex.block}` : `pane ${t.pane}`}: ${what}\n`);
+    return true;
   } catch {
     // The log only explains what happened; failing to write it changes nothing.
+    return false;
   }
 }
 
@@ -260,6 +264,34 @@ function holders(session: string): number[] {
     const pid = Number(n.slice(prefix.length));
     return n.startsWith(prefix) && Number.isSafeInteger(pid) && pid > 0 ? [pid] : [];
   });
+}
+
+function stayFile(session: string): string {
+  return join(lockDir(), `${encodeURIComponent(session)}.rotate-stay`);
+}
+
+export function noteStay(t: Teller, seat: string, why: string): void {
+  const said = `stays (${seat}): ${why}`;
+  try {
+    if (readFileSync(stayFile(t.session), "utf8") === said) return;
+  } catch {
+    // No stay noted yet for this session: this one is new.
+  }
+  if (!log(t, said)) return;
+  try {
+    mkdirSync(lockDir(), { recursive: true, mode: 0o700 });
+    writeFileSync(stayFile(t.session), said, { mode: 0o600 });
+  } catch {
+    // Without the marker the same stay is logged again at the next stop: a repeat, never a flood of new reasons.
+  }
+}
+
+export function forgetStay(session: string): void {
+  try {
+    rmSync(stayFile(session), { force: true });
+  } catch {
+    // A stay left behind only keeps that same reason from being logged once more.
+  }
 }
 
 export function rotating(session: string, me = process.pid): boolean {

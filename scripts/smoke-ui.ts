@@ -152,6 +152,22 @@ async function run(part: Part): Promise<string[]> {
     log(`ok  ${at}`);
   };
 
+  const macLights = async () => {
+    at = "Mac: the page's sheet starts past the traffic lights";
+    await page.evaluate(() => (document.documentElement.dataset.shell = "mac"));
+    await account.click();
+    await page.getByRole("menuitem", { name: "Settings" }).click();
+    const settings = page.getByRole("region", { name: "Settings" });
+    const room = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--lights-w")));
+    const left = await settings.evaluate((el) => el.getBoundingClientRect().left);
+    if (!(room > 0) || left < room) throw new Error(`on a Mac the page starts ${Math.round(left)}px in, under the traffic lights (they need ${room}px)`);
+    if (process.env.SMOKE_SHOTS) await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "mac-lights.png"), clip: { x: 0, y: 0, width: 400, height: 160 } });
+    await settings.getByRole("button", { name: "Close settings" }).click();
+    await settings.waitFor({ state: "detached" });
+    await page.evaluate(() => delete document.documentElement.dataset.shell);
+    log(`ok  ${at}`);
+  };
+
   const personalities = async () => {
     at = "Settings → Personalities: a preset duplicated is yours";
     await account.click();
@@ -215,6 +231,7 @@ async function run(part: Part): Promise<string[]> {
     await opens("Account menu", () => account.click());
     await eachItem("Account menu", account, (label) => label !== "Settings");
     await darkAndLarger();
+    await macLights();
     await personalities();
     await opens("Search palette", () => page.keyboard.press("ControlOrMeta+k"));
     await opens("Join with a code", async () => {
