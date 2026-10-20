@@ -175,7 +175,9 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
       }}
     >
       <Dialog.Title className="text-title font-semibold">New agent</Dialog.Title>
-      <Dialog.Description className="mt-1 text-ui leading-normal text-ink-2">It starts in a terminal on this computer and joins {channel} by itself.</Dialog.Description>
+      <Dialog.Description className="mt-1 text-ui leading-normal text-ink-2">
+        It starts in a terminal on {remote ? remote.label : "this computer"} and joins {channel} by itself.
+      </Dialog.Description>
 
       {others.length > 0 && (
         <Field label="Computer">

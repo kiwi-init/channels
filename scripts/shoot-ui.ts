@@ -449,7 +449,7 @@ try {
 
       // The desktop app's New agent, with a stand-in for the four launch methods its bridge adds,
       // on only while this tab's flag is set so the other screens stay the browser's.
-      if (["24-new-agent", "25-new-agent-started"].some(wanted)) {
+      if (["24-new-agent", "26-new-agent-remote", "25-new-agent-started"].some(wanted)) {
         if (!launcherStub) {
           launcherStub = true;
           await owner.addInitScript(() => {
@@ -470,6 +470,13 @@ try {
               seatFolders: async () => ["/Users/you/code/payments", "/Users/you/code/payments-site"],
               chooseFolder: async () => null,
               launchAgent: async (req: { launch: string }) => ({ ok: true, launch: req.launch, place: "rex", rex }),
+              machines: async () => [
+                { machinePk: "own", label: "jow’s MacBook Air", os: "macOS", own: true, online: true },
+                { machinePk: "build", label: "build-box", os: "Linux", own: false, online: true },
+                { machinePk: "old", label: "old-mini", os: "macOS", own: false, online: false },
+              ],
+              harnessesOn: async () => ({ ok: true, value: rows.slice(0, 2).map((r) => ({ ...r, path: r.path?.replace("/Users/you", "/home/you") ?? null })) }),
+              foldersOn: async () => ({ ok: true, value: ["/home/you/payments"] }),
             };
           });
         }
@@ -485,6 +492,16 @@ try {
           async () => {
             await owner.getByRole("region", { name: "Add an agent" }).getByRole("button", { name: "New agent" }).click();
             await dialog.getByRole("radiogroup", { name: "Harness" }).waitFor();
+          },
+          async () => {},
+        );
+        await shoot(
+          owner,
+          tag,
+          "26-new-agent-remote",
+          async () => {
+            await dialog.getByRole("radiogroup", { name: "Computer" }).getByText("build-box").click();
+            await dialog.getByText("/home/you").first().waitFor();
           },
           async () => {},
         );
