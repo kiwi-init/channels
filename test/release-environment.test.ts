@@ -6,12 +6,11 @@ interface Job {
   secrets?: unknown;
 }
 
-const SIGNING = ["MAC_CERT_P12_BASE64", "MAC_CERT_PASSWORD", "APPLE_API_KEY_P8", "APPLE_API_KEY_ID", "APPLE_API_ISSUER", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"];
 const WORKFLOWS = [".github/workflows/release.yml", ".github/workflows/release-build.yml", ".github/workflows/ci.yml"];
 const REHEARSAL = "${{ (!inputs.rehearsal || github.ref == 'refs/heads/main') && 'release' || '' }}";
 
 const jobsOf = async (file: string) => Object.entries((Bun.YAML.parse(await Bun.file(file).text()) as { jobs: Record<string, Job> }).jobs);
-const named = (job: Job) => SIGNING.filter((s) => new RegExp(`secrets\\.${s}\\b`).test(JSON.stringify(job)));
+const named = (job: Job) => [...new Set([...JSON.stringify(job).matchAll(/secrets\.((?:MAC|APPLE|CLOUDFLARE)_[A-Z0-9_]+)/g)].map((m) => m[1]))];
 
 test("every job that reads a signing or deploy secret runs in the release environment, limited to main and v* tags", async () => {
   const reading: string[] = [];
