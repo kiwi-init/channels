@@ -242,7 +242,11 @@ export class SessionMessaging extends SessionListen {
         if (!replies.length) break;
         heard.push(...replies);
         from = Math.max(from, ...replies.map((r) => r.seq));
-        const final = replies.find((r) => r.body.startsWith(HANDOFF_DONE) || r.body.startsWith(HANDOFF_FAILED));
+        const { state } = yield* this.state();
+        const final = replies.find((r) => {
+          const who = state.members.get(r.from);
+          return !!who && isPerson(who) && (r.body.startsWith(HANDOFF_DONE) || r.body.startsWith(HANDOFF_FAILED));
+        });
         if (final) return { outcome: final.body.startsWith(HANDOFF_DONE) ? ("done" as const) : ("failed" as const), replies: heard };
       }
       return { outcome: Date.now() >= expiresAt ? ("expired" as const) : ("waiting" as const), replies: heard };
