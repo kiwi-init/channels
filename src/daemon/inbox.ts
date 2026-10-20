@@ -28,7 +28,7 @@ interface Delivered {
   box: string;
 }
 
-export function claimer(file: string, now: () => number): (id: string) => boolean {
+function claimer(file: string, now: () => number): (id: string) => boolean {
   return (id) => {
     let seen: Record<string, number> = {};
     try {

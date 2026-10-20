@@ -4,8 +4,8 @@ import type { HarnessRow } from "@kiwi/core/harnesses.ts";
 import type { MachineArgs } from "@kiwi/core/machine-ask.ts";
 import type { Launched, LaunchRequest } from "../launch/wire.ts";
 
-export const REMOTE_LAUNCHES = 3;
-export const REMOTE_WINDOW_MS = 10 * 60_000;
+const REMOTE_LAUNCHES = 3;
+const REMOTE_WINDOW_MS = 10 * 60_000;
 
 export interface RemoteDeps {
   inventory: () => Promise<HarnessRow[]>;
@@ -23,7 +23,7 @@ function real(path: string): string | null {
   }
 }
 
-export function underRoots(folder: string, roots: string[]): boolean {
+function underRoots(folder: string, roots: string[]): boolean {
   const target = real(folder);
   if (!target) return false;
   return roots.some((root) => {
