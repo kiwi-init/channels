@@ -249,6 +249,11 @@ jobs:
       included, with git asked only when the config rewrites urls or includes others (src/git-where.ts, test/where-files.test.ts);
       and the home walked and tightened once per kiwi version, again once someone loosened it
       (test/local-perms.test.ts).
+      Also test/machine-ask.test.ts: an ask from the person's app to a paired computer (packages/core/src/machine-ask.ts),
+      signed by the person and sealed to that computer's mxpk, read back only by that computer, only from that person,
+      only within two minutes either way and only once, refused when re-aimed at another computer inside its seal, changed,
+      carrying an unknown verb or field, or over 4 KiB; and the computer's answer read only when signed by that computer
+      for that ask.
       Also test/shell-path.test.ts: the PATH line kiwi setup and the desktop app add to the shell's profile
       (packages/core/src/node/shell-path.ts), once and never when the profile already names the folder, and never
       from a profile outside a temp folder into a temp folder (the system's temp folders, through their links,
