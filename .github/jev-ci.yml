@@ -93,7 +93,9 @@ jobs:
       the rest only when needed, a too-long first message cut with a kiwi show pointer only when at
       least CLIP_MIN of its body shows, and otherwise nothing handed over (so nothing is marked read);
       a stop reason with the Kimi or Grok re-arm reminder and a SessionStart context (startContext,
-      startBudgets) stay at or under seatBudget for one to fifty seats and any brief size; re-entry's
+      startBudgets, its unread heading naming the channel) stay at or under seatBudget for one to fifty
+      seats, any brief size and any alias length; Cursor's stop follow-up names the channel when it fits
+      and falls back to the bare short line, never past the share (cursorFollow); re-entry's
       recovery commands use the seat's own command.
       Also test/daemon-big-lines.test.ts: the daemon's socket writes queue what the socket
       didn't take and flush it on drain (src/daemon/server.ts), so a catch-up of thirty
@@ -336,7 +338,7 @@ jobs:
       (src/seats.ts, a Grok Bot's seat from its VM's hostname or KIWI_HARNESS, a hook's named harness over the
       markers its parent session left: hereAs, and a named harness with no session never given a folder's only seat
       when that seat is another harness's or a live session's), one session holding seats in two channels, each
-      Stop header naming its channel (src/hooks/answer.ts), a session that holds neither seat told the folder has seats in
+      Stop header and Cursor follow-up naming its channel (src/hooks/answer.ts, test/wake-yourself.test.ts), a session that holds neither seat told the folder has seats in
       both channels and to pass -c ALIAS --as NAME (src/cli/context.ts), hooks serving the right seat
       from sibling folders, and with a backlog on both seats each hook's whole output (SessionStart,
       prompt, stop) within HOOK_CONTEXT_MAX, the seats sharing it (src/hooks/run.ts). Then handoff: an escalation's live browser link (packages/core/src/protocol.ts),

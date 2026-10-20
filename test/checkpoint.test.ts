@@ -236,18 +236,25 @@ describe("what a hook emits stays inside the seat's share", () => {
       full: `Before you end this turn: no Kiwi listener of yours is running for inquizit-workflow, so nothing would wake you when a message for you arrives.\n${wakeYourself(mc, "cursor")!}`,
       short: `Before you end this turn: no Kiwi listener of yours is running for inquizit-workflow. ${start}`,
     };
-    const longMc = `kiwi -c ${"c".repeat(50)} --as ${"a".repeat(55)}`;
-    const hugeMc = `kiwi -c ${"c".repeat(140)} --as ${"a".repeat(145)}`;
-    for (const cmd of [mc, longMc, hugeMc])
+    const longAlias = "c".repeat(50);
+    const longMc = `kiwi -c ${longAlias} --as ${"a".repeat(55)}`;
+    const hugeAlias = "c".repeat(140);
+    const hugeMc = `kiwi -c ${hugeAlias} --as ${"a".repeat(145)}`;
+    for (const [alias, cmd] of [
+      ["inquizit-workflow", mc],
+      [longAlias, longMc],
+      [hugeAlias, hugeMc],
+    ] as const)
       for (let seats = 1; seats <= 50; seats++) {
         const budget = seatBudget(seats);
-        for (const reminder of [r, null]) for (const unread of [true, false]) expect(cursorFollow(cmd, unread, reminder, budget).length).toBeLessThanOrEqual(budget);
+        for (const reminder of [r, null]) for (const unread of [true, false]) expect(cursorFollow(alias, cmd, unread, reminder, budget).length).toBeLessThanOrEqual(budget);
       }
     const tight = seatBudget(50);
-    expect(cursorFollow(longMc, true, null, seatBudget(1))).toContain(`Run \`${longMc} read\`, answer with`);
-    expect(cursorFollow(longMc, true, null, tight)).toBe(`Unread Kiwi messages: \`${longMc} read\`.`);
-    expect(cursorFollow(hugeMc, true, null, tight)).toBe("");
-    expect(cursorFollow(hugeMc, true, r, tight).length).toBeLessThanOrEqual(tight);
+    expect(cursorFollow(longAlias, longMc, true, null, seatBudget(1))).toContain(`Unread Kiwi messages (${longAlias}). Run \`${longMc} read\`, answer with`);
+    expect(cursorFollow("proj", "kiwi", true, null, tight)).toBe('Unread Kiwi messages (proj). Run `kiwi read`, answer with `kiwi reply N "…"`, then continue.');
+    expect(cursorFollow(longAlias, longMc, true, null, tight)).toBe(`Unread Kiwi messages: \`${longMc} read\`.`);
+    expect(cursorFollow(hugeAlias, hugeMc, true, null, tight)).toBe("");
+    expect(cursorFollow(hugeAlias, hugeMc, true, r, tight).length).toBeLessThanOrEqual(tight);
   });
 
   test("a listener's block header fits its seat's share: the full one when it fits, else a short one, else cut", () => {
@@ -280,15 +287,17 @@ describe("what a hook emits stays inside the seat's share", () => {
   });
 
   test("SessionStart lands at or under the share when re-entry and unread messages take all they're given", () => {
-    for (const budget of [seatBudget(1), seatBudget(2), seatBudget(3), seatBudget(6)]) {
-      for (let brief = 0; brief <= budget; brief += 37) {
-        const b = startBudgets(budget, brief);
-        const reentry = b.reentry ? "r".repeat(b.reentry) : null;
-        const unreadMax = b.unread(reentry?.length ?? 0);
-        const text = startContext("x".repeat(brief), reentry, unreadMax > 0 ? "u".repeat(unreadMax) : "");
-        expect(text.length).toBeLessThanOrEqual(budget);
+    for (const alias of ["a", "a-channel-alias-that-is-quite-long-on-purpose-to-stretch-the-header"])
+      for (const budget of [seatBudget(1), seatBudget(2), seatBudget(3), seatBudget(6)]) {
+        for (let brief = 0; brief <= budget; brief += 37) {
+          const b = startBudgets(alias, budget, brief);
+          const reentry = b.reentry ? "r".repeat(b.reentry) : null;
+          const unreadMax = b.unread(reentry?.length ?? 0);
+          const text = startContext(alias, "x".repeat(brief), reentry, unreadMax > 0 ? "u".repeat(unreadMax) : "");
+          expect(text.length).toBeLessThanOrEqual(budget);
+          if (unreadMax > 0) expect(text).toContain(`\nUnread messages for you (${alias}):\n`);
+        }
       }
-    }
   });
 
   test("re-entry's recovery commands are the seat's own", async () => {

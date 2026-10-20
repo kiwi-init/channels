@@ -28,12 +28,14 @@ export function stopStyle(input: { hook_event_name?: string; status?: string; lo
   return "block";
 }
 
-export function cursorStopFollowup(mc: string, unread: boolean, max = Number.POSITIVE_INFINITY): string | null {
+export function cursorStopFollowup(alias: string, mc: string, unread: boolean, max = Number.POSITIVE_INFINITY): string | null {
   if (!unread) return null;
-  const full = `Unread Kiwi messages. Run \`${mc} read\`, answer with \`${mc} reply N "…"\`, then continue.`;
+  const full = `Unread Kiwi messages (${alias}). Run \`${mc} read\`, answer with \`${mc} reply N "…"\`, then continue.`;
   if (full.length <= max) return full;
-  const short = `Unread Kiwi messages: \`${mc} read\`.`;
-  return short.length <= max ? short : null;
+  const short = `Unread Kiwi messages (${alias}): \`${mc} read\`.`;
+  if (short.length <= max) return short;
+  const bare = `Unread Kiwi messages: \`${mc} read\`.`;
+  return bare.length <= max ? bare : null;
 }
 
 export interface HookInput {
@@ -130,8 +132,8 @@ export function stopUnreadMax(head: string, reminder: string | null, budget: num
   return Math.max(0, Math.min(MAX_CONTEXT, budget - head.length - 1 - (reminder ? reminder.length + 2 : 0)));
 }
 
-export function cursorFollow(mc: string, unread: boolean, reminder: Reminder | null, budget: number): string {
-  const nudge = cursorStopFollowup(mc, unread, budget);
+export function cursorFollow(alias: string, mc: string, unread: boolean, reminder: Reminder | null, budget: number): string {
+  const nudge = cursorStopFollowup(alias, mc, unread, budget);
   const rearm = fitReminder(reminder, budget - (nudge ? nudge.length + 2 : 0));
   return [nudge, rearm].filter((t) => t !== null).join("\n\n");
 }
@@ -305,22 +307,24 @@ export function hookOutput(answers: readonly Pick<Answer, "kind" | "text">[]): s
 export const HOOK_CONTEXT_MAX = 9_500;
 const UNREAD_FLOOR = 1_500;
 const REENTRY_MIN = 200;
-const UNREAD_HEAD = "Unread messages for you:";
+function unreadHead(alias: string): string {
+  return `Unread messages for you (${alias}):`;
+}
 
 export function seatBudget(seats: number): number {
   return Math.floor(HOOK_CONTEXT_MAX / Math.max(1, seats)) - 2;
 }
 
-export function startContext(brief: string, reentry: string | null, unread: string): string {
-  return [brief, ...(reentry ? ["", reentry] : []), ...(unread ? ["", UNREAD_HEAD, unread] : [])].join("\n");
+export function startContext(alias: string, brief: string, reentry: string | null, unread: string): string {
+  return [brief, ...(reentry ? ["", reentry] : []), ...(unread ? ["", unreadHead(alias), unread] : [])].join("\n");
 }
 
-export function startBudgets(budget: number, brief: number): { reentry: number; unread: (reentry: number) => number } {
+export function startBudgets(alias: string, budget: number, brief: number): { reentry: number; unread: (reentry: number) => number } {
   const room = budget - brief;
   const reentry = Math.min(REENTRY_MAX, room - UNREAD_FLOOR - 2);
   return {
     reentry: reentry >= REENTRY_MIN ? reentry : 0,
-    unread: (used) => Math.max(0, Math.min(MAX_CONTEXT, room - (used ? used + 2 : 0) - UNREAD_HEAD.length - 3)),
+    unread: (used) => Math.max(0, Math.min(MAX_CONTEXT, room - (used ? used + 2 : 0) - unreadHead(alias).length - 3)),
   };
 }
 
@@ -354,11 +358,11 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
       scopes: seat?.scopes,
       ...(seat?.persona ? { persona: seat.persona } : {}),
     });
-    const budgets = startBudgets(budget, brief.length);
+    const budgets = startBudgets(b.alias, budget, brief.length);
     const reentry = fresh === null || budgets.reentry === 0 ? null : reentryText(state, b.as, Date.now(), budgets.reentry, mc);
     const unreadMax = budgets.unread(reentry?.length ?? 0);
     const unread = unreadMax > 0 ? yield* unreadText(s, mc, unreadMax) : { text: "", shown: Effect.void };
-    const additionalContext = startContext(brief, reentry, unread.text);
+    const additionalContext = startContext(b.alias, brief, reentry, unread.text);
     if (input.hook_event_name === "sessionStart" || input.composer_mode != null || typeof input.is_background_agent === "boolean") {
       return answered("cursor-start", additionalContext, unread.shown);
     }
@@ -380,7 +384,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
       if (input.status && input.status !== "completed") return null;
       const { messages, state } = yield* s.state();
       const unread = (yield* s.unreadCount(state, messages)) > 0;
-      const follow = cursorFollow(mc, unread, yield* rearmText(input, b, who, mc), budget);
+      const follow = cursorFollow(b.alias, mc, unread, yield* rearmText(input, b, who, mc), budget);
       return follow ? answered("followup", follow) : null;
     }
     if (who.harness === "grok" && input.reason !== undefined && input.reason !== "end_turn") return null;
