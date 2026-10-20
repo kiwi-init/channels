@@ -270,6 +270,13 @@ jobs:
       only within two minutes either way and only once, refused when re-aimed at another computer inside its seal, changed,
       carrying an unknown verb or field, or over 4 KiB; and the computer's answer read only when signed by that computer
       for that ask.
+      Also test/machine-inbox.test.ts: a paired computer's daemon taking its person's asks from its relay inbox, end to end on a
+      Bun relay (src/daemon/inbox.ts, src/daemon/remote.ts): it answers in the ask's mailbox, signed by the machine, and logs
+      to remote.log; one box runs once however often it arrives (machine-asks.json claims); an ask older than two minutes gets
+      no answer, only a log line; a launch starts only in a folder under the ones its agents work in (realpath'd, so ../ can't
+      climb out), at most three every ten minutes, with the ask's id as the launch id; and unpair answers, then the relay
+      forgets the computer. With test/machine-ask.test.ts: claim(id) runs last, so a refused box doesn't use up its id, and
+      readMachineArgs takes per verb only what it may (a known harness, a full folder path, a clean join line).
       Also test/machine-relay.test.ts: a paired computer at the relay (src/relay/machine.ts, on the Bun relay; the Worker's
       MachineInbox object runs the same handler, and machineAlarmAt times its alarm): it registers itself with its own cert,
       nobody else can, an older cert can't roll its person back, even after an unpair; every route takes only a signature

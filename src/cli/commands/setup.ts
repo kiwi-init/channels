@@ -55,6 +55,14 @@ export const setupCommands: Record<string, Command> = {
       });
     }),
 
+  unpair: () =>
+    Effect.gen(function* () {
+      const { daemonUnpair, ensureDaemon } = yield* Effect.promise(() => import("../../daemon.ts"));
+      yield* Effect.promise(() => ensureDaemon());
+      yield* Effect.promise(() => daemonUnpair());
+      out("this computer is no longer paired: it takes no more asks from your app (pair it again with kiwi pair)");
+    }),
+
   cleanup: () =>
     Effect.gen(function* () {
       const done = cleanup({ home: home(), bin: binDir() });
