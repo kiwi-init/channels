@@ -8,6 +8,7 @@ import { cx } from "@/lib/utils"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { relayUrl } from "@/lib/relay"
 import { bridge, useSecrets } from "@/lib/secrets"
+import type { RexStatusView } from "../../../desktop/src/bridge.ts"
 import { version } from "../../../package.json"
 import { Icon } from "./icon"
 import { Button, Checkbox, IconButton, SEGMENTED, SEGMENT_OFF, SEGMENT_ON } from "./kit"
@@ -205,6 +206,58 @@ function GithubFields() {
   )
 }
 
+function RexFields() {
+  const b = bridge()
+  const [status, setStatus] = useState<RexStatusView | null>(null)
+  const [busy, setBusy] = useState<"on" | "off" | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!b?.rexStatus) return
+    void b.rexStatus().then(setStatus, () => setStatus(null))
+  }, [b])
+  if (!b?.rexStatus || !status || (!status.found && status.helpers === "off")) return null
+  const run = (to: "on" | "off", go: () => Promise<RexStatusView>) => {
+    setError(null)
+    setBusy(to)
+    go()
+      .then(setStatus, (e: unknown) => setError(e instanceof Error ? e.message.replace(/^.*?Error: /, "") : String(e)))
+      .finally(() => setBusy(null))
+  }
+  const on = status.helpers === "on"
+  return (
+    <div>
+      <p className="mb-2 text-ui font-medium text-ink">Rex</p>
+      <p className="mb-2 text-ui leading-normal text-ink-2">
+        Kiwi marks a seat that needs you, or has work for you to look at, in its Rex tab, opens it from Needs you, and lets rotation work in Rex panes. Stays on this computer.
+      </p>
+      {on ? (
+        <div className="flex items-center gap-2">
+          <p className="min-w-0 flex-1 truncate text-ui text-ink">Rex Helpers are installed</p>
+          <Button variant="secondary" disabled={busy !== null} onClick={() => run("off", b.rexRemove)}>
+            {busy === "off" ? "Removing…" : "Remove"}
+          </Button>
+        </div>
+      ) : (
+        <Button variant="secondary" disabled={busy !== null} onClick={() => run("on", b.rexInstall)}>
+          {busy === "on" ? "Installing…" : "Install Rex Helpers"}
+        </Button>
+      )}
+      {on && !status.found && <p className="mt-1 text-ui text-ink-2">Rex isn't on this computer anymore. Remove takes back what Kiwi wrote.</p>}
+      {on && status.found && status.server === "stopped" && <p className="mt-1 text-ui text-ink-2">Rex isn't running. Kiwi picks it up once it starts.</p>}
+      {on && status.rotation === "off" && (
+        <p className="mt-1 text-ui text-ink-2">
+          Rotation is off on this computer. <span className="font-mono text-ink">kiwi rotate on</span> turns it on.
+        </p>
+      )}
+      {error && (
+        <p className="mt-1 text-ui text-ink-2" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function PersonalitiesField({ onOpen }: { onOpen: () => void }) {
   const count = useOwnPersonalities().length
   return (
@@ -264,6 +317,7 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
           <GithubFields />
           <PersonalitiesField onOpen={onPersonalities} />
           <VoiceFields />
+          <RexFields />
           <UpdateCheck />
         </div>
         <p className="mt-8 text-ui text-ink-3">Channels {version}</p>
