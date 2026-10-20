@@ -454,7 +454,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           signal: seat.ctl.signal,
           onOpen: ({ presence, mark, probe }) => opened(seat, presence, mark, probe),
           onPresence: (p) => {
-            if (!p.query && p.client !== "probe" && p.from !== seat.agent) seat.heard.set(p.from, { presence: p, at: Date.now() });
+            if (p.sigOk && p.pk && !p.query && p.client !== "probe" && p.from !== seat.agent) seat.heard.set(p.pk, { presence: p, at: Date.now() });
             if (!p.query || Date.now() - seat.lastProbe < PROBE_ANSWER_GAP_MS) return;
             seat.lastProbe = Date.now();
             seat.announce?.();
