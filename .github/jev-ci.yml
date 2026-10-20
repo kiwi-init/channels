@@ -88,7 +88,8 @@ jobs:
       test/claims.test.ts on a local relay: an own computer's agent auto-approved as the personality its invite pinned (a pin the person no longer holds as it was waits for a person), even past a spent daily signing budget, and a launch id read from the sealed join claims only when well-formed,
       test/sealed-epoch.test.ts on a local relay: a removal reseals the channel's name and settings under the new key, so the removed member opens neither while a member who stayed opens both after one key refresh; later changes are sealed under the newest key the client holds; the relay refuses a name or settings under a key the channel lacks or an older one; an owner's app reseals what an earlier rotation left under the first key; a relay without sealedEpoch keeps the epoch-0 seal, a name, settings or icon change made while a removal's rotation is still pending rotates first, and the relay refuses an icon sealed under an older key than the channel's,
       test/epoch-floor.test.ts on a local relay: a member's epoch never goes back, so a relay naming the epoch from before a removal (or one past every key held) doesn't move it and the next message is still sealed under the newest key; joining back never starts past the newest key held; a relay restored from before the last rotation gets one key refresh, then a refusal that says the relay is behind, and the owner can't rotate past it; saveAccess and the join resume merge keep the higher epoch and the keys this machine holds,
-      test/hardening.test.ts's dishonest relay: a removal never wraps the next key to the removed key while the relay still lists it active, even on a device that remembers no records; a key the owner once saw gone stays gone in members() and later rotations; a relay that keeps a removed key active gets a rotation that fails out loud,
+      test/sealed-replay.test.ts on a local relay: the channel's name, settings and icon carry an owner-signed date, so a relay that serves an older owner-signed blob than one this device has read gets null (a member's title, guard(), rooms() and icon), not the older name, hold, rooms or icon, a cleared icon can't be brought back, and the owner's settings change is refused with a reason while the older settings are served; a blob with no date (from an older owner app) is read only until a dated one has been seen; an owner whose clock is behind still dates a change past the one it replaces and past what it has seen; the high-water marks reach onAccess, so a Channel built from saved access still refuses the older blobs, and saveAccess and the app's key store (withAccess, channelAccess) keep the higher marks,
+      test/hardening.test.ts's dishonest relay: a removal never wraps the next key to the removed key while the relay still lists it active, even on a device that remembers no records; a key the owner once saw gone stays gone in members() and later rotations; a relay that keeps a removed key active gets a rotation that fails out loud, saying plainly that the relay still lists a key the channel removed (with the relay's own words kept), while a listed key nobody removed keeps the relay's plain text,
       and test/stamp.test.ts: scripts/stamp.ts takes only vX.Y.Z or vX.Y.Z-rc.N tags, a rehearsal
       stamps the next patch, every stamped file in the repo (src/version.ts, both package.json
       files, site/app.js's four download names, site/README.md) takes the tag's version and nothing
@@ -124,6 +125,9 @@ jobs:
       lib/format.test.ts: the time formatters give nothing for such a time instead of throwing, and
       lib/channel/recent.test.ts: a saved channel preview carrying one is dropped, so the channel
       list still renders.
+      Also test/verify-total.test.ts: a signature check never throws (packages/core/src/identity.ts
+      verify): a pk or sig that isn't base64url reads as unsigned, and a member's message sealed with
+      such a pk loads as forged instead of failing everyone's history.
       Also test/rex.test.ts: where a seat runs from its environment (nothing inside tmux, Rex's
       server, session and block ids, any other terminal's program and version), which terminals
       take an OSC 7501 status record, the record frames they get, the blocked question and
@@ -271,6 +275,15 @@ jobs:
       only within two minutes either way and only once, refused when re-aimed at another computer inside its seal, changed,
       carrying an unknown verb or field, or over 4 KiB; and the computer's answer read only when signed by that computer
       for that ask.
+      Also test/machine-inbox.test.ts: a paired computer's daemon taking its person's asks from its relay inbox, end to end on a
+      Bun relay (src/daemon/inbox.ts, src/daemon/remote.ts): it answers in the ask's mailbox, signed by the machine, and logs
+      to remote.log; one box runs once however often it arrives (machine-asks.json claims); an ask older than two minutes gets
+      no answer, only a log line; a launch starts only in a folder under the ones its agents work in (realpath'd, so ../ can't
+      climb out) and launched in that realpath'd folder, at most three every ten minutes even across a restart
+      (remote-launches.json), with the ask's id as the launch id; a box that breaks the reader is logged and taken out, never
+      retried; a frame whose box id isn't the relay's shape is ignored, so the log can't be forged; and unpair answers, then the relay
+      forgets the computer. With test/machine-ask.test.ts: claim(id) runs last, so a refused box doesn't use up its id, and
+      readMachineArgs takes per verb only what it may (a known harness, a full folder path, a clean join line).
       Also test/machine-relay.test.ts: a paired computer at the relay (src/relay/machine.ts, on the Bun relay; the Worker's
       MachineInbox object runs the same handler, and machineAlarmAt times its alarm): it registers itself with its own cert,
       nobody else can, an older cert can't roll its person back, even after an unpair; every route takes only a signature

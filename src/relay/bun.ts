@@ -118,6 +118,7 @@ export function startRelay(
   people.run("CREATE TABLE IF NOT EXISTS machine_floors (mpk TEXT PRIMARY KEY, cert_at INTEGER NOT NULL)");
   people.run("CREATE TABLE IF NOT EXISTS machine_boxes (mpk TEXT NOT NULL, id TEXT NOT NULL, box TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (mpk, id))");
   const machineSockets = new Map<string, { ws: ServerWebSocket<SocketData>; since: number }>();
+  const instance = crypto.randomUUID();
   const machines: MachineStore = {
     binding: async (mpk) => {
       const row = people.query("SELECT person, mxpk, cert_at, seen_at FROM machines WHERE mpk = ?").get(mpk) as { person: string; mxpk: string; cert_at: number; seen_at: number } | null;
@@ -369,7 +370,7 @@ export function startRelay(
         const machine = await onMachineHttp(req, machines, {
           now: clock,
           perMachine: (key) => allowPerMinute(key, MACHINE_ASKS_PER_MINUTE, clock()),
-          ...(ip ? { perAddress: () => allowPerMinute(`machine-ip:${ip}`, MACHINE_WRITES_PER_ADDRESS, clock()) } : {}),
+          ...(ip ? { perAddress: () => allowPerMinute(`machine-ip:${instance}:${ip}`, MACHINE_WRITES_PER_ADDRESS, clock()) } : {}),
         });
         if (machine instanceof Response) return machine;
         if (machine) {

@@ -7,8 +7,8 @@ import { Rejected } from "../refusals.ts";
 import { canPost, SCOPES, scopesOf, type Scope } from "../scopes.ts";
 import type { ChannelState } from "../state.ts";
 import type { ChannelCore } from "./core.ts";
-import type { MemberRefusal, Refused } from "./errors.ts";
-import type { ChannelInfo } from "./info.ts";
+import { RelayError, type MemberRefusal, type Refused } from "./errors.ts";
+import type { ChannelInfo, MemberRow } from "./info.ts";
 import { wrapFor } from "./keys.ts";
 import type { Relay } from "./relay.ts";
 import { newestEpoch, stale } from "./sealed.ts";
@@ -158,7 +158,8 @@ export class ChannelMembers {
   private rotation(without?: string): Effect.Effect<number, Refused, Relay> {
     return Effect.gen({ self: this }, function* () {
       yield* this.ch.ownerOnly();
-      const members = (yield* this.ch.fx.members()).filter((m) => m.active && !m.unverified && m.pk !== without);
+      const rows = yield* this.ch.fx.memberRows();
+      const members = (yield* this.ch.fx.members(rows)).filter((m) => m.active && !m.unverified && m.pk !== without);
       this.info.forgetInfo();
       const { epoch } = yield* this.ch.fx.info();
       const next = Math.max(epoch, newestEpoch(this.ch.access.keys)) + 1;
@@ -169,7 +170,10 @@ export class ChannelMembers {
         for (const m of members) out[m.pk] = await wrapFor(this.ch.identity, this.ch.roomId, next, m.pk, m.xpk, key);
         return out;
       });
-      yield* this.ch.request("/epochs", { method: "POST", body: JSON.stringify({ epoch: next, keys }) }).pipe(Effect.ensuring(Effect.sync(() => this.info.forgetInfo())));
+      yield* this.ch.request("/epochs", { method: "POST", body: JSON.stringify({ epoch: next, keys }) }).pipe(
+        Effect.mapError((err) => this.stillListed(err, rows, without)),
+        Effect.ensuring(Effect.sync(() => this.info.forgetInfo())),
+      );
       this.ch.access = { ...this.ch.access, epoch: next, keys: { ...this.ch.access.keys, [String(next)]: key } };
       this.ch.onAccess?.(this.ch.access);
       this.ch.rotating = true;
@@ -178,5 +182,12 @@ export class ChannelMembers {
       );
       return next;
     });
+  }
+
+  private stillListed(err: MemberRefusal, rows: readonly MemberRow[], without?: string): MemberRefusal | Rejected {
+    const said = err instanceof RelayError ? err.message : "";
+    const pk8 = /missing wrapped key for ([\w-]{8})$/.exec(said)?.[1];
+    if (!pk8 || !rows.some((r) => r.pk.startsWith(pk8) && (r.pk === without || this.info.removed(r.pk)))) return err;
+    return new Rejected(`the relay still lists a key this channel removed (${pk8}…), so it won't take the new key: that's the relay's doing; ask whoever runs it (${said})`);
   }
 }
