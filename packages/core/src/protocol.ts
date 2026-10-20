@@ -542,13 +542,7 @@ export function handoffUrl(x: unknown): x is string {
 export function wellFormedHandoff(x: unknown): x is Handoff {
   if (!x || typeof x !== "object") return false;
   const h = x as Record<string, unknown>;
-  return (
-    handoffUrl(h.url) &&
-    str(h.vendor, HANDOFF_MAX_VENDOR) &&
-    Number.isFinite(h.expiresAt) &&
-    Number.isFinite(new Date(h.expiresAt as number).getTime()) &&
-    (h.mode === undefined || h.mode === "tab" || h.mode === "full")
-  );
+  return handoffUrl(h.url) && str(h.vendor, HANDOFF_MAX_VENDOR) && time(h.expiresAt) && (h.mode === undefined || h.mode === "tab" || h.mode === "full");
 }
 
 export const TASK_TITLE_MAX_LENGTH = 200;
@@ -703,6 +697,7 @@ const str = (x: unknown, max = 10_000): x is string => typeof x === "string" && 
 const strs = (x: unknown, n: number): x is string[] => Array.isArray(x) && x.length <= n && x.every((y) => str(y, 512));
 const nums = (x: unknown, n: number): x is number[] => Array.isArray(x) && x.length <= n && x.every((y) => Number.isSafeInteger(y) && y >= 0);
 const opt = <T>(x: unknown, ok: (v: unknown) => v is T): boolean => x === undefined || ok(x);
+const time = (x: unknown): x is number => typeof x === "number" && Number.isFinite(new Date(x).getTime());
 
 const roomId = (x: unknown): x is string => typeof x === "string" && ROOM_ID_RE.test(x);
 
@@ -828,7 +823,7 @@ export function wellFormed(p: unknown): p is Payload {
     str(m.body, MAX_BODY_LENGTH) &&
     typeof m.kind === "string" &&
     (KINDS as readonly string[]).includes(m.kind) &&
-    Number.isFinite(m.ts) &&
+    time(m.ts) &&
     opt(m.to, (x): x is string[] => strs(x, 50)) &&
     opt(m.re, (x): x is number[] => nums(x, 20)) &&
     opt(m.room, roomId) &&
