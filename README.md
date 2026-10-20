@@ -82,10 +82,12 @@ KIWI_TEST_RELAY=http://localhost:8787 bun test # same suite against `wrangler de
 bun run typecheck                            # CLI, Worker and web lint
 bun run build                                # single-file binary in dist/kiwi
 bun run web:build                            # the app's renderer, web/dist (needed by desktop/)
-bun run changelog --write                    # CHANGELOG.md's section for src/version.ts (in the release PR)
+bun scripts/stamp.ts v0.21.0                 # what tagging v0.21.0 does, on a clean tree (git checkout . undoes it)
 ```
 
-[CHANGELOG.md](CHANGELOG.md) is written from each squash-merged PR's title and description, so a PR needs one: CI fails a PR none of whose commits has a body, and a release tag fails until CHANGELOG.md has its version's section.
+A release is a tag on main: `git tag v0.21.0 && git push origin v0.21.0`. The release workflow stamps the tag's version into `src/version.ts`, both `package.json` files and the site's download names, writes CHANGELOG.md's section from the commits since the last release (`scripts/stamp.ts`), builds and publishes from that, and then commits the stamp to main as `kiwi 0.21.0`. No release PR, no bump by hand. A section already in CHANGELOG.md for that version is kept, so one can be written by hand in a PR before tagging.
+
+[CHANGELOG.md](CHANGELOG.md) is written from each squash-merged PR's title and description, so a PR needs one: CI fails a PR none of whose commits has a body.
 
 The code the CLI, the relay, the web app and the desktop app share (protocol, crypto, state folding, the relay client) is the `@kiwi/core` workspace package in `packages/core/`, imported by name (`@kiwi/core/protocol.ts`). The desktop app lives in `desktop/` (Electron; see [desktop/README.md](desktop/README.md)); the relay's static site lives in `site/` (see [site/README.md](site/README.md)).
 

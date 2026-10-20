@@ -31,8 +31,8 @@ name, Channels (releases up to v0.16.2 named them `Kiwi-…`):
 - `Channels-0.20.5-mac-arm64.dmg` / `Channels-0.20.5-mac-x64.dmg`
 - `Channels-0.20.5-linux-x86_64.AppImage` / `Channels-0.20.5-linux-amd64.deb`
 
-The release PR bumps the version in these names; the site deploys only from a tag,
-after its GitHub release exists. Those are `desktop/package.json`'s `artifactName`
+A tag's release stamps its version into these names (`scripts/stamp.ts`) and commits
+them to main; the site deploys only from a tag, after its GitHub release exists. Those are `desktop/package.json`'s `artifactName`
 (`Channels-${version}-${os}-${arch}.${ext}`)
 with electron-builder's per-target arch strings. There is no Windows app or
 Windows CLI. Links point at

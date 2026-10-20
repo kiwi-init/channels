@@ -2,7 +2,7 @@
 // subject is the PR's title (… (#N)), so a release's entries are the commits since the last release:
 // each one's title and a link to its PR. Version bumps ("kiwi 0.11.0 (#98)") are left out.
 //
-// The release workflow fails a tag whose version has no section in CHANGELOG.md (--notes).
+// A tag's release writes its section (scripts/stamp.ts), and fails when it has none (--notes).
 //
 //   bun scripts/changelog.ts                  print the section for src/version.ts's version, from the last release to HEAD
 //   bun scripts/changelog.ts --write          put that section into CHANGELOG.md (replacing one for the same version)
@@ -77,7 +77,7 @@ function previousTag(version: string, ref: string): string | null {
   return tags.sort(compareVersions).pop() ?? null;
 }
 
-function sectionFor(version: string, ref: string, date: string): string {
+export function sectionFor(version: string, ref: string, date: string): string {
   const prev = previousTag(version, ref);
   const entries = subjects(prev ? `${prev}..${ref}` : ref)
     .filter((s) => !isBump(s))
@@ -101,7 +101,7 @@ if (import.meta.main) {
     if (sec) console.log(sec.replace(/^## .*\n\n/, ""));
     else if (isPre(tag)) console.log(sectionFor(tag, tag, tagDate(tag)).replace(/^## .*\n\n/, ""));
     else {
-      console.error(`CHANGELOG.md has no section for ${tag}. In the release PR, run: bun scripts/changelog.ts --write`);
+      console.error(`CHANGELOG.md has no section for ${tag}: bun scripts/stamp.ts ${tag} writes it`);
       process.exit(1);
     }
   } else if (values.all) {
