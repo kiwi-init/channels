@@ -25,10 +25,6 @@ export function renamed(name: string, mime: string): string {
   return `${dot > 0 ? name.slice(0, dot) : name}.${ext}`
 }
 
-export function needsCompressing(file: { size: number; type: string }, limit: number): boolean {
-  return file.size > limit && file.type !== "image/gif"
-}
-
 function encode(canvas: HTMLCanvasElement, mime: string, quality: number): Promise<Blob | null> {
   return new Promise((resolve) => canvas.toBlob(resolve, mime, quality))
 }

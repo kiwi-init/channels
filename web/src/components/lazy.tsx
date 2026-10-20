@@ -16,6 +16,7 @@ const computers = later(() => import("./computers").then((m) => m.ComputersModal
 const palette = later(() => import("./ui/palette").then((m) => m.Palette))
 const info = later(() => import("./info-panel").then((m) => m.InfoPanel))
 const tasks = later(() => import("./tasks-panel").then((m) => m.TasksPanel))
+const tasksView = later(() => import("./tasks-view").then((m) => m.TasksView))
 const taskDetails = later(() => import("./task-details").then((m) => m.TaskDetails))
 const tasksView = later(() => import("./tasks-view").then((m) => m.TasksView))
 const thread = later(() => import("./thread").then((m) => m.ThreadPanel))
@@ -46,6 +47,7 @@ export const ComputersModal = computers.View
 export const Palette = palette.View
 export const InfoPanel = info.View
 export const TasksPanel = tasks.View
+export const TasksView = tasksView.View
 export const TaskDetails = taskDetails.View
 export const TasksView = tasksView.View
 export const ThreadPanel = thread.View

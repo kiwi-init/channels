@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
-import { MAX_SIDE, attempts, needsCompressing, renamed } from "./compress-image"
+import { MAX_SIDE, attempts, renamed } from "./compress-image"
+import { needsCompressing } from "./needs-compressing"
 
 describe("compress-image", () => {
   test("the first attempt fits the longest side to the cap and never upscales", () => {
