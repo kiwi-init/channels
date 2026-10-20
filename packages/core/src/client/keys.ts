@@ -5,6 +5,7 @@ import { signText, verify, verifyText, type Identity } from "../identity.ts";
 import type { ChannelCore } from "./core.ts";
 import type { MemberRefusal } from "./errors.ts";
 import type { Relay } from "./relay.ts";
+import { keepHeld } from "./sealed.ts";
 
 const keyInfo = (room: string, e: number | string) => `mc/key\n${room}\n${e}`;
 export const requestInfo = (room: string) => `mc/request\n${room}`;
@@ -82,7 +83,7 @@ export class ChannelKeys {
     return Effect.gen({ self: this }, function* () {
       const r = yield* this.ch.request<{ epoch: number; keys: Record<string, string> }>("/keys");
       const keys = yield* Effect.promise(() => unwrapKeys(this.ch.identity, this.ch.roomId, r.keys, this.ch.access.ownerPk, !!this.ch.access.signedKeys));
-      this.ch.access = { ...this.ch.access, epoch: r.epoch, keys: { ...keys, ...this.ch.access.keys } };
+      this.ch.access = { ...this.ch.access, ...keepHeld(this.ch.access, { epoch: r.epoch, keys }) };
       this.ch.onAccess?.(this.ch.access);
     });
   }

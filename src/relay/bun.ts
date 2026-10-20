@@ -8,9 +8,9 @@ import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, write
 import { basename, join, resolve, sep } from "node:path";
 import type { ServerWebSocket } from "bun";
 import * as Layer from "effect/Layer";
-import { CLOSE_CLOSED, CLOSE_REMOVED, GONE_WORDS, PING, PONG } from "@kiwi/core/protocol.ts";
+import { CLOSE_CLOSED, CLOSE_REMOVED, GONE_WORDS, MAX_BLOB_BYTES, PING, PONG } from "@kiwi/core/protocol.ts";
 import { ChannelGone, NotFound, UpdateRequired } from "./failures.ts";
-import { clockLayer } from "./http.ts";
+import { clockLayer, MAX_REQUEST_BYTES } from "./http.ts";
 import { authkitDomains, devHostOk, devHumanAuth, devRequestOk, Human, HUMAN_HEADER, workosFromSettings, type HumanAuth } from "./human.ts";
 import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
@@ -302,6 +302,7 @@ export function startRelay(
     port: opts.port ?? 8787,
     hostname: opts.hostname ?? "0.0.0.0",
     idleTimeout: 0,
+    maxRequestBodySize: Math.max(MAX_REQUEST_BYTES, MAX_BLOB_BYTES) + 64 * 1024,
     async fetch(req, server) {
       try {
         const url = new URL(req.url);

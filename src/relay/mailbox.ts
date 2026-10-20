@@ -18,6 +18,7 @@
 // directly: each adapter implements MailboxStore with its own tables.
 
 import { MAILBOX_ID_RE, MAILBOX_MAX_BYTES, MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
+import { readText } from "./http.ts";
 
 interface MailboxSlots {
   a: string | null;
@@ -103,9 +104,11 @@ export async function onMailboxHttp(
     if (opts.ip && opts.allow && !(await opts.allow(opts.ip))) {
       return json(null, 429, "TooMany", "too many pairing attempts; try again in a few minutes");
     }
+    const text = await readText(req.body, MAILBOX_MAX_BYTES + 1024, req.headers.get("content-length"));
+    if (text === null) return json(null, 413, "TooLarge", "a mailbox slot holds at most 64 KiB");
     let box: unknown;
     try {
-      box = ((await req.json()) as { box?: unknown })?.box;
+      box = (JSON.parse(text) as { box?: unknown })?.box;
     } catch {
       return json(null, 400, "BadRequest", "bad json");
     }

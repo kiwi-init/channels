@@ -55,6 +55,13 @@ const RATE_WAIT_MAX_S = 60;
 
 const rateWait = (err: unknown): number | null => (err instanceof RelayError && err.status === 429 && err.retryAfter !== null && err.retryAfter <= RATE_WAIT_MAX_S ? err.retryAfter : null);
 
+const behind = (err: unknown, held: number): Rejected | null => {
+  const named = err instanceof RelayError && err.status === 409 ? Number(/current is (\d+)$/.exec(err.message)?.[1]) : NaN;
+  return Number.isSafeInteger(named) && named < held
+    ? new Rejected(`the relay is behind this channel's key (it says epoch ${named}, this device holds ${held}): it may have been restored from a backup`)
+    : null;
+};
+
 const patient = <A, E, R>(attempt: Effect.Effect<A, E, R>, left: number): Effect.Effect<A, E, R> =>
   Effect.catchIf(
     attempt,
@@ -122,7 +129,7 @@ export class ChannelSending {
         const stored = yield* post.pipe(
           Effect.catchIf(
             (err) => err instanceof RelayError && err.status === 409,
-            () => Effect.andThen(this.ch.fx.refreshKeys(), post),
+            () => Effect.andThen(this.ch.fx.refreshKeys(), post).pipe(Effect.mapError((err) => behind(err, this.ch.access.epoch) ?? err)),
           ),
         );
         if (this.onSent) {

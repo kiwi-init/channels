@@ -1,4 +1,5 @@
 import { GITHUB_EVENTS, REPO_RE, type GithubNote } from "@kiwi/core/protocol.ts";
+import { readText } from "./http.ts";
 import { withCors } from "./mailbox.ts";
 
 export const GITHUB_WEBHOOK_PATH = "/v1/github/webhook";
@@ -134,8 +135,8 @@ export async function onGithubHttp(req: Request, secret: string | null | undefin
   if (new URL(req.url).pathname !== GITHUB_WEBHOOK_PATH) return null;
   if (!secret) return reply(404, { error: "GitHub isn't set up on this relay", tag: "NotFound" });
   if (req.method !== "POST") return reply(405, { error: "POST only", tag: "BadRequest" });
-  const body = await req.text();
-  if (body.length > MAX_BODY) return reply(413, { error: "payload too large", tag: "TooLarge" });
+  const body = await readText(req.body, MAX_BODY, req.headers.get("content-length"));
+  if (body === null) return reply(413, { error: "payload too large", tag: "TooLarge" });
   if (!(await signatureOk(secret, body, req.headers.get("x-hub-signature-256")))) return reply(401, { error: "bad signature", tag: "Unauthorized" });
   const event = req.headers.get("x-github-event") ?? "";
   if (event === "ping") return reply(200, { ok: true });
