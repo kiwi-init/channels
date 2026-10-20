@@ -1,5 +1,7 @@
 import { b64url, openFrom, sealTo } from "./crypto.ts";
+import { isKnownHarness, type KnownHarness } from "./harnesses.ts";
 import { sign, verify, type Identity } from "./identity.ts";
+import { joinLineRefusal } from "./join-line.ts";
 
 const MACHINE_VERBS = ["harnesses", "folders", "launch", "unpair"] as const;
 export type MachineVerb = (typeof MACHINE_VERBS)[number];
@@ -67,7 +69,7 @@ function readAskBody(x: unknown): (MachineAsk & { pk: string; sig: string }) | n
 export async function readAsk(
   machine: Identity,
   box: string,
-  expect: { person: string; now?: number; seen?: (id: string) => boolean },
+  expect: { person: string; now?: number; claim: (id: string) => boolean },
 ): Promise<{ ok: true; ask: MachineAsk } | { ok: false; why: AskRefusal }> {
   if (box.length > ASK_MAX_BYTES) return { ok: false, why: "too-big" };
   const opened = machine.xsk ? await openFrom(machine.xsk, box, ASK_INFO) : null;
@@ -84,7 +86,7 @@ export async function readAsk(
   if (!(await verify(signed))) return { ok: false, why: "unsigned" };
   if (signed.pk !== expect.person || signed.machine !== machine.pk) return { ok: false, why: "not-yours" };
   if (Math.abs((expect.now ?? Date.now()) - signed.at) > ASK_FRESH_MS) return { ok: false, why: "stale" };
-  if (expect.seen?.(signed.id)) return { ok: false, why: "replayed" };
+  if (!expect.claim(signed.id)) return { ok: false, why: "replayed" };
   return { ok: true, ask: { kind: signed.kind, v: signed.v, machine: signed.machine, verb: signed.verb, args: signed.args, id: signed.id, at: signed.at, reply: signed.reply } };
 }
 
@@ -96,4 +98,33 @@ export async function readAnswer(x: unknown, expect: { machine: string; id: stri
   if (!isRecord(x) || x.kind !== "kiwi-machine-answer" || x.v !== 1 || x.id !== expect.id || x.pk !== expect.machine || !("result" in x)) return null;
   if (Object.keys(x).length !== 6 || !(await verify(x))) return null;
   return { result: x.result };
+}
+
+export type MachineArgs =
+  | { verb: "harnesses" }
+  | { verb: "unpair" }
+  | { verb: "folders"; room?: string }
+  | { verb: "launch"; launch: { harness: KnownHarness; folder: string; code: string; relay?: string; nick?: string; persona?: string } };
+
+const ROOM_RE = /^[0-9a-f]{32}$/;
+const LAUNCH_KEYS = new Set(["harness", "folder", "code", "relay", "nick", "persona"]);
+const FOLDER_RE = /^\/[^\u0000-\u001f\u007f]{0,1023}$/;
+
+const optionalText = (v: unknown): v is string | undefined => v === undefined || typeof v === "string";
+
+export function readMachineArgs(ask: Pick<MachineAsk, "verb" | "args">): MachineArgs | null {
+  const { verb, args } = ask;
+  const keys = Object.keys(args);
+  if (verb === "harnesses" || verb === "unpair") return keys.length ? null : { verb };
+  if (verb === "folders") {
+    if (keys.some((k) => k !== "room")) return null;
+    if (args.room === undefined) return { verb };
+    return typeof args.room === "string" && ROOM_RE.test(args.room) ? { verb, room: args.room } : null;
+  }
+  if (keys.some((k) => !LAUNCH_KEYS.has(k))) return null;
+  const { harness, folder, code, relay, nick, persona } = args;
+  if (!isKnownHarness(harness) || typeof folder !== "string" || !FOLDER_RE.test(folder) || typeof code !== "string") return null;
+  if (!optionalText(relay) || !optionalText(nick) || !optionalText(persona)) return null;
+  const line = { code, ...(relay ? { relay } : {}), ...(nick ? { nick } : {}), ...(persona ? { persona } : {}) };
+  return joinLineRefusal(line) === null ? { verb, launch: { harness, folder, ...line } } : null;
 }

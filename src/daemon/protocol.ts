@@ -17,9 +17,9 @@ export function daemonSock(dir = home()): string {
   return join(dir, "daemon.sock");
 }
 
-export type DaemonVerb = "hello" | "adopt" | "listen" | "listening" | "hold" | "listeners" | "read" | "mark" | "peek" | "presence" | "harnesses" | "launch" | "stop";
+export type DaemonVerb = "hello" | "adopt" | "listen" | "listening" | "hold" | "listeners" | "read" | "mark" | "peek" | "presence" | "harnesses" | "folders" | "launch" | "unpair" | "stop";
 
-export const DAEMON_PROTOCOL = 5;
+export const DAEMON_PROTOCOL = 6;
 
 export type DaemonEvent = "open" | "roster" | "info" | "request";
 

@@ -1,4 +1,4 @@
-import { decodeJoinCode, type ChannelAccess } from "@kiwi/core/crypto.ts";
+import { decodeJoinCode, keepSeen, type ChannelAccess, type Seen } from "@kiwi/core/crypto.ts";
 import type { ChannelIdentityView, ChannelView, PublicAccess } from "./bridge.ts";
 
 const str = (v: unknown): v is string => typeof v === "string";
@@ -40,7 +40,7 @@ export function channelAccess(c: ChannelIdentityView): ChannelAccess | null {
   const pub = publicAccess(c.access);
   const keys = c.access && typeof c.access === "object" ? (c.access as { keys?: unknown }).keys : undefined;
   if (!pub || !keys || typeof keys !== "object") return null;
-  return { ...pub, keys: Object.fromEntries(Object.entries(keys).filter((e): e is [string, string] => str(e[1]))) };
+  return { ...pub, keys: Object.fromEntries(Object.entries(keys).filter((e): e is [string, string] => str(e[1]))), ...keepSeen({}, c.access as Seen) };
 }
 
 function epochKeys(access: unknown): Map<string, string> {
@@ -110,7 +110,7 @@ export function acceptSeat(stored: ChannelIdentityView[], entry: ChannelIdentity
 export function withAccess(stored: ChannelIdentityView[], code: string, pk: string, access: ChannelAccess): ChannelIdentityView[] {
   const seat = stored.find((c) => c.code === code && c.pk === pk && c.access);
   if (!seat) return stored;
-  const next = { ...seat, access: { ...access, keys: { ...access.keys } } };
+  const next = { ...seat, access: { ...access, keys: { ...access.keys }, ...keepSeen(seat.access as Seen, access) } };
   mergeChannels([seat], [next]);
   keepChannel(seat, next);
   return stored.map((c) => (c === seat ? next : c));

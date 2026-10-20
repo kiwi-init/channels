@@ -124,7 +124,7 @@ describe("the title and settings follow the channel's epoch", () => {
       JSON.stringify(await seal(key0, ownerCh.roomId, await sign(ownerCh.identity, { what: "channel-settings", room: ownerCh.roomId, charter: { text: "old rules", since: 1 } }))),
     );
     put(ownerCh.roomId, "info_rev", crypto.randomUUID());
-    const app = new Channel(ownerCh.access, relay, ownerCh.identity);
+    const app = new Channel({ ...ownerCh.access, seenTitleAt: undefined, seenSettingsAt: undefined }, relay, ownerCh.identity);
     expect((await app.info()).title?.e).toBeUndefined();
     expect(await app.rotateIfDue()).toBe(false);
     const info = await new Channel(ownerCh.access, relay, ownerCh.identity).info();
