@@ -3,7 +3,7 @@
 
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, realpathSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -200,6 +200,19 @@ describe("harnessActivity", () => {
 
   test("Claude Code, busy after the tool came back: thinking, no tool", async () => {
     expect(await harnessActivity(claude("busy", [asked, { type: "user", message: { content: [{ type: "tool_result" }] } }]))).toEqual({ state: "working", since: 1000, model: "claude-opus-5-5" });
+  });
+
+  test("Claude Code: an unchanged transcript isn't read again; one that changed is", async () => {
+    const env = claude("busy", [asked]);
+    const file = join(env.CLAUDE_CONFIG_DIR, "projects", "p", "s-a.jsonl");
+    utimesSync(file, 1_000, 1_000);
+    expect((await harnessActivity(env))?.tool).toBe("Bash");
+    const same = readFileSync(file, "utf8").replace('"Bash"', '"Grep"');
+    writeFileSync(file, same);
+    utimesSync(file, 1_000, 1_000);
+    expect((await harnessActivity(env))?.tool).toBe("Bash");
+    writeFileSync(file, same + JSON.stringify({ type: "user", message: { content: [{ type: "tool_result" }] } }) + "\n");
+    expect(await harnessActivity(env)).toEqual({ state: "working", since: 1000, model: "claude-opus-5-5" });
   });
 
   test("Claude Code, idle", async () => {
