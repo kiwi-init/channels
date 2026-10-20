@@ -1,5 +1,5 @@
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons"
-import { useCallback, useMemo, useState, type CSSProperties, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react"
 
 import { droppedCount } from "@kiwi/core/format.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
@@ -25,7 +25,7 @@ import { AgentStrip, agentNow, type AgentNow } from "../agent-strip"
 import { ChannelControls } from "../controls"
 import { Icon } from "../icon"
 import { Button, Harnesses, Pictures, Spinner, errorText, toast } from "../kit"
-import { AddAgent, AgentLanes, CompactBlock, GifPicker, HoldDialog, ProposalCard, TalkBar, TalkButton } from "../lazy"
+import { AddAgent, AgentLanes, CompactBlock, GifPicker, HoldDialog, leaveTalk, ProposalCard, TalkBar, TalkButton } from "../lazy"
 import { bridge } from "@/lib/secrets"
 import type { ToolCtx } from "@/lib/voice/tools"
 import { defaultScopes } from "../scopes"
@@ -223,6 +223,11 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     }),
     [state, me, title, isOwner, online, requests, nameOf, send, handlers, roomId, sendTask, messages]
   )
+  const voiceHere = !!state.voice && typeof bridge()?.voiceToken === "function"
+  useEffect(() => {
+    if (!voiceHere) return
+    return () => leaveTalk(roomId)
+  }, [voiceHere, roomId])
   const hold = handlers.onHold
   const commands = useMemo<Command[]>(
     () => [
@@ -605,10 +610,13 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                                 return send(body, opts)
                               }}
                               talk={
-                                place.kind === "main" && state.voice && typeof bridge()?.voiceToken === "function"
+                                voiceHere
                                   ? {
-                                      button: <TalkButton channel={{ roomId, channel: title, me, nameOf, state, messages, tools: voiceTools }} disabled={connection === "connecting"} />,
-                                      bar: <TalkBar messages={messages} state={state} nameOf={nameOf} me={me} tools={voiceTools} />,
+                                      button:
+                                        place.kind === "main" ? (
+                                          <TalkButton channel={{ roomId, channel: title, me, nameOf, state, messages, tools: voiceTools }} disabled={connection === "connecting"} />
+                                        ) : null,
+                                      bar: <TalkBar roomId={roomId} messages={messages} state={state} nameOf={nameOf} me={me} tools={voiceTools} />,
                                     }
                                   : undefined
                               }
