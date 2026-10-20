@@ -118,18 +118,29 @@ describe("one sender per session", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  test("the lock is taken once, released only by its holder, and a dead holder's is taken over", () => {
+  test("a sender holds the session only while no other live sender does, and a dead sender's file is ignored", () => {
+    const other = process.ppid;
     expect(takeLock("s-1")).toBe(true);
-    expect(takeLock("s-1")).toBe(false);
-    expect(rotating("s-1")).toBe(true);
-    dropLock("s-1", process.pid + 1);
-    expect(rotating("s-1")).toBe(true);
+    expect(rotating("s-1", other)).toBe(true);
+    expect(takeLock("s-1", other)).toBe(false);
+    expect(existsSync(join(dir, "hook-state", `s-1.rotating.${other}`))).toBe(false);
+    dropLock("s-1", other);
+    expect(rotating("s-1", other)).toBe(true);
     dropLock("s-1");
-    expect(rotating("s-1")).toBe(false);
+    expect(rotating("s-1", other)).toBe(false);
     mkdirSync(join(dir, "hook-state"), { recursive: true });
-    writeFileSync(join(dir, "hook-state", "s-2.rotating"), "999999999");
+    writeFileSync(join(dir, "hook-state", "s-2.rotating.999999999"), "");
     expect(takeLock("s-2")).toBe(true);
+    expect(existsSync(join(dir, "hook-state", "s-2.rotating.999999999"))).toBe(false);
     dropLock("s-2");
+  });
+
+  test("two senders that start together both back off rather than both send", () => {
+    const other = process.ppid;
+    writeFileSync(join(dir, "hook-state", `s-3.rotating.${other}`), "");
+    expect(takeLock("s-3")).toBe(false);
+    expect(existsSync(join(dir, "hook-state", `s-3.rotating.${process.pid}`))).toBe(false);
+    dropLock("s-3", other);
   });
 });
 
@@ -198,10 +209,12 @@ describe.skipIf(!hasTmux)("typing /clear into the pane", () => {
   test("a busy session, text being typed, a session already moved on, or a second sender gets nothing", async () => {
     const busy = await pane("busy", "");
     registry(busy, "s-2", "busy");
-    const first = clearWhenIdle({ pid: busy.pid, session: "s-2", pane: busy.pane, socket, claudeDir: busy.claudeDir }, fast);
-    await Bun.sleep(200);
+    const elsewhere = join(dir, "kiwi", "hook-state", `s-2.rotating.${process.ppid}`);
+    mkdirSync(join(dir, "kiwi", "hook-state"), { recursive: true });
+    writeFileSync(elsewhere, "");
     expect(await clearWhenIdle({ pid: busy.pid, session: "s-2", pane: busy.pane, socket, claudeDir: busy.claudeDir }, fast)).toBe("busy-elsewhere");
-    expect(await first).toBe("timed-out");
+    rmSync(elsewhere);
+    expect(await clearWhenIdle({ pid: busy.pid, session: "s-2", pane: busy.pane, socket, claudeDir: busy.claudeDir }, fast)).toBe("timed-out");
     const typing = await pane("typing", "half typed");
     registry(typing, "s-3", "idle");
     expect(await clearWhenIdle({ pid: typing.pid, session: "s-3", pane: typing.pane, socket, claudeDir: typing.claudeDir }, fast)).toBe("timed-out");
@@ -221,6 +234,20 @@ describe.skipIf(!hasTmux)("typing /clear into the pane", () => {
     expect(await clearWhenIdle({ pid: p.pid, session: "s-7", pane: p.pane, socket, claudeDir: p.claudeDir }, { ...fast, on })).toBe("switched-off");
     await Bun.sleep(300);
     expect(typedOf(p)).toBe(`/clear${"\x7f".repeat(6)}`);
+  });
+
+  test("switched off and the session lost at once after typing, it erases nothing", async () => {
+    const p = await pane("off-lost", "", { raw: true });
+    registry(p, "s-11", "idle");
+    let calls = 0;
+    const on = () => {
+      if (++calls < 2) return true;
+      registry(p, "s-other", "idle");
+      return false;
+    };
+    expect(await clearWhenIdle({ pid: p.pid, session: "s-11", pane: p.pane, socket, claudeDir: p.claudeDir }, { ...fast, on })).toBe("left-in-input");
+    await Bun.sleep(300);
+    expect(typedOf(p)).toBe("/clear");
   });
 
   test("with /clear typed and the session moved on before Enter, nothing more is sent to the pane", async () => {

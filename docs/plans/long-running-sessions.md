@@ -122,12 +122,14 @@ whether anything is waiting for it, plus one detached process that does the typi
   - Claude Code's input box, read between its two rule lines in `tmux capture-pane -e`, holds only
     the dimmed placeholder; anything else on screen (a draft, a dialog, a menu) means wait;
   - no attached tmux client pressed a key in the last 10 seconds.
-  One sender per session (an exclusive lock file, released only by its holder). What each one did
-  goes to `rotate.log` in the Kiwi folder.
+  One sender per session: each writes a file named with its pid and goes on only if no other live
+  sender has one; two that start together both back off, and the next Stop tries again. What each
+  one did goes to `rotate.log` in the Kiwi folder.
 - **The act.** It types `/clear` without Enter, then waits up to a second for the box to show
   exactly `/clear` with every check above still holding, and only then presses Enter. If the box
-  shows something else it erases its six characters when they are the last thing in it; if the
-  session or the pane changed, it sends nothing more. SessionStart (`clear`) then re-injects, and
+  shows something else it erases its six characters, but only when they are the last thing in it
+  and the session, the pane and its foreground are still the target's; otherwise it sends nothing
+  more. SessionStart (`clear`) then re-injects, and
   the seat moves to the new session id at that hook. A narrow window remains between that last
   read and Enter: a key pressed in those milliseconds lands in the same line. Probed 2026-10-20
   against Claude Code 2.1.304: a draft (one ending in the prompt glyph included) was left alone,

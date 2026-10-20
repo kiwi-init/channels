@@ -156,10 +156,12 @@ jobs:
       Also test/rotate.test.ts: when a Claude Code seat in tmux gets a fresh session (src/rotate/decide.ts:
       between tasks past ROTATE_FLOOR, the lead past the line, open tasks only once checkpointed since
       the nudge, never during a review round it judges or an open question of its), Claude Code's input
-      box read between its two rules (drafts, multi-line text and dialogs are not empty), the sender's
-      lock taken once and released only by its holder, and, with tmux on its own socket, /clear typed
+      box read between its two rules (drafts, multi-line text and dialogs are not empty), one sender per
+      session (another live sender's file makes it back off, a dead one's is ignored), and, with tmux on
+      its own socket, /clear typed
       only into an idle session's empty box, Enter only once /clear shows there, its six characters
-      erased when rotation is switched off before Enter, nothing more sent once the session moved on,
+      erased when rotation is switched off before Enter while it still owns the pane, nothing more sent
+      once the session moved on,
       and nothing into a busy session, a draft, a pane watched by a client that just pressed a key, a
       tmux server started again on the same socket, or a process that doesn't lead the pane's
       foreground (src/rotate/pane.ts).
