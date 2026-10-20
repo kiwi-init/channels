@@ -287,15 +287,17 @@ function AskItem({
 function useAnswer(m: Message, nameOf: (n: string) => string, onReply: (m: Message, text: string) => Promise<void>, idle: string | null) {
   const [draft, setDraft] = useState<string | null>(idle)
   const [busy, setBusy] = useState(false)
-  const send = async (text = draft?.trim() ?? "") => {
-    if (!text) return
+  const send = async (text = draft?.trim() ?? ""): Promise<boolean> => {
+    if (!text) return false
     setBusy(true)
     try {
       await onReply(m, text)
       setDraft(idle)
       toast(`Answered ${nameOf(m.from)}`)
+      return true
     } catch (err) {
       toast(`Not sent: ${errorText(err)}`, "error")
+      return false
     } finally {
       setBusy(false)
     }
@@ -315,7 +317,7 @@ function AnswerForm({
   draft: string
   setDraft: (draft: string) => void
   busy: boolean
-  send: (text?: string) => Promise<void>
+  send: (text?: string) => Promise<boolean>
   to: string
   autoFocus: boolean
   onEscape: () => void
@@ -350,7 +352,7 @@ function DecisionCard({ m, nameOf, onReply, seat }: { m: Message; nameOf: (n: st
   const { draft, setDraft, busy, send } = useAnswer(m, nameOf, onReply, idle)
   return (
     <div className="flex flex-col py-3">
-      <ComposerQuestion m={m} more={0} nameOf={nameOf} disabled={busy} onChoose={(c) => void send(c)} onElse={() => setDraft((d) => d ?? "")} />
+      <ComposerQuestion m={m} more={0} nameOf={nameOf} disabled={busy} onChoose={(c) => send(c)} onElse={() => setDraft((d) => d ?? "")} />
       {draft !== null && <AnswerForm draft={draft} setDraft={setDraft} busy={busy} send={send} to={nameOf(m.from)} autoFocus={choices} onEscape={() => setDraft(idle)} />}
       {seat && (
         <div className="mt-1 flex flex-wrap items-center gap-2">

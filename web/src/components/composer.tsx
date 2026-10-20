@@ -4,6 +4,7 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type R
 import type { SendOptions } from "@kiwi/core/client.ts"
 import { MAX_IMAGE_BYTES, RASTER_MIMES, type Color, type Message } from "@kiwi/core/protocol.ts"
 import { matchCommands, parseCommand, type Command } from "@/lib/commands"
+import { answered } from "@/lib/asks"
 import { compressImage, needsCompressing, renamed } from "@/lib/compress-image"
 import { appendDictation, MODEL_MB, PRESS_LABEL, useDictation } from "@/lib/dictation"
 import { excerpt } from "@/lib/format"
@@ -40,7 +41,7 @@ interface Props {
   /** Typing a slash at the start lists these; one run with its arguments instead of sending a message. */
   commands?: readonly Command[]
   more?: number
-  onAnswer?: (m: Message, text: string) => void
+  onAnswer?: (m: Message, text: string) => Promise<boolean>
   nameOf: (name: string) => string
   onClearReply: () => void
   disabled: boolean
@@ -208,7 +209,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
     try {
       const text = withHandles(body.trim(), others) || files.map((f) => f.name).join(", ")
       const named = recipients(text, names)
-      const answering = !replyTo && !thread ? asking : undefined
+      const answering = answered(asking, named, !!replyTo || !!thread)
       const to = named.length ? named : answering ? [answering.from] : replyTo && replyTo.from !== me ? [replyTo.from] : extra?.to
       await send(text, {
         to,
@@ -256,7 +257,9 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
         </div>
       )}
 
-      {asking && !thread && <ComposerQuestion m={asking} more={more} nameOf={nameOf} disabled={disabled} onChoose={(c) => onAnswer?.(asking, c)} onElse={() => area.current?.focus()} />}
+      {asking && !thread && (
+        <ComposerQuestion m={asking} more={more} nameOf={nameOf} disabled={disabled} onChoose={(c) => onAnswer?.(asking, c) ?? Promise.resolve(false)} onElse={() => area.current?.focus()} />
+      )}
 
       {listed.length > 0 && picked && <CommandList commands={listed} picked={picked} onPick={(c) => setBody(`/${c.name} `)} />}
 

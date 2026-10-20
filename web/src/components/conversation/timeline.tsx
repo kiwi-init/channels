@@ -43,7 +43,7 @@ export interface RowsContext {
   decisions: ReadonlySet<number>
   /** The question waiting above the composer, which the feed shows only as a pointer to it. */
   banner: number | null
-  onAnswer: (m: Message, text: string) => void
+  onAnswer: (m: Message, text: string) => Promise<boolean>
   onReact: (m: Message) => void
   onJump: (seq: number) => void
   openThread: (root: number) => void

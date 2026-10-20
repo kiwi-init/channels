@@ -193,7 +193,7 @@ export interface MessageProps {
   quoted: (seq: number) => Message | undefined
   nameOf: (name: string) => string
   onReply?: (m: Message) => void
-  onChoose?: (choice: string) => void
+  onChoose?: (choice: string) => Promise<boolean>
   /** This question waits above the composer, where it is answered: here it is only a pointer to it. */
   inBanner?: boolean
   chosen?: Chosen

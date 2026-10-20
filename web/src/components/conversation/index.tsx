@@ -190,12 +190,11 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   }, [messages])
   const chosen = useCallback((m: Message) => (m.choices?.length ? chosenOf(m, repliesTo.get(m.seq) ?? []) : undefined), [repliesTo])
   const answer = useCallback(
-    (m: Message, text: string) => {
+    (m: Message, text: string): Promise<boolean> =>
       send(text, { to: [m.from], re: [m.seq], kind: "msg" }).then(
-        () => toast(`Answered ${nameOf(m.from)}`),
-        (err) => toast(`Not sent: ${errorText(err)}`, "error")
-      )
-    },
+        () => (toast(`Answered ${nameOf(m.from)}`), true),
+        (err) => (toast(`Not sent: ${errorText(err)}`, "error"), false)
+      ),
     [send, nameOf]
   )
   const onAnswer = useLatest(answer)

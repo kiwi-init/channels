@@ -1,4 +1,5 @@
 import type { Chosen } from "@/lib/asks"
+import { useChoosing } from "./composer-question"
 import { formatTime } from "@/lib/format"
 import { cx } from "@/lib/utils"
 
@@ -7,7 +8,8 @@ const split = (c: string): [string | null, string] => {
   return m ? [m[1]!, m[2]!] : [null, c]
 }
 
-export function AskOptions({ choices, chosen, onChoose, nameOf }: { choices: readonly string[]; chosen?: Chosen; onChoose?: (choice: string) => void; nameOf: (name: string) => string }) {
+export function AskOptions({ choices, chosen, onChoose, nameOf }: { choices: readonly string[]; chosen?: Chosen; onChoose?: (choice: string) => Promise<boolean>; nameOf: (name: string) => string }) {
+  const choose = useChoosing(chosen ? 1 : 0, onChoose ?? (() => Promise.resolve(false)))
   return (
     <ul aria-label="Options" className="mt-2 flex flex-col gap-1.5">
       {choices.map((c) => {
@@ -28,7 +30,7 @@ export function AskOptions({ choices, chosen, onChoose, nameOf }: { choices: rea
         return (
           <li key={c}>
             {onChoose && !chosen ? (
-              <button type="button" onClick={() => onChoose(c)} className={cx(look, "transition-colors hover:border-accent")}>
+              <button type="button" disabled={choose.busy} onClick={() => choose.pick(c)} className={cx(look, "transition-colors hover:border-accent disabled:opacity-60")}>
                 {body}
               </button>
             ) : (
