@@ -307,9 +307,22 @@ forge or swap anything. Writes are rate-limited per client address.
   remaining member, and new messages use it, so a departed key can't read
   anything newer even with a copy of the relay's data. A rotation wraps the
   new key only to members whose admission the owner signed, never to a list
-  the relay supplies. After a voluntary leave, the owner's app rotates the
-  next time it runs, since only the owner can. Former members' old messages
-  still verify.
+  the relay supplies. It never wraps it to the key just removed either, or to
+  any key the relay once showed as gone, even if the relay lists it as active
+  again: once a key is gone it stays gone. The owner's app keeps that mark
+  with the member records it remembers, per owner device, so an owner app
+  that starts with no local state trusts the relay's list again. If the relay
+  insists on a wrapped key for a member the owner left out, the rotation fails
+  and says so. After a voluntary leave, the owner's app rotates the next time
+  it runs, since only the owner can. Former members' old messages still
+  verify.
+- The epoch never goes back. The epoch a client seals new messages, presence
+  and records under only moves up, whatever lower epoch the relay names later,
+  and never past a key the client holds, so a relay can't make members seal
+  under the key from before a removal. What this doesn't close: a relay can
+  still withhold the next epoch altogether, serving the old one to a member
+  who hasn't seen the new one yet. Closing that needs an epoch statement the
+  owner signs, which the protocol doesn't have yet.
 - The channel's name, settings (charter, hold, rooms, repos) and icon move with
   the key. Right after a rotation the owner's app reseals them under the new
   key, and it seals every later change under the newest key it holds, never

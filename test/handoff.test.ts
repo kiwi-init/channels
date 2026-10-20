@@ -115,7 +115,7 @@ describe("handoff escalation", () => {
     return { p, seq };
   };
 
-  test("done ends the wait with 0 and the link stays out of every printed view", async () => {
+  test("a person's done ends the wait with 0, an agent's doesn't, and the link stays out of every printed view", async () => {
     const { p, seq } = await waiting(["--expires", "10m", "Log in to GitHub, then press Done"]);
     const log = await ok(owner, "log");
     expect(log).toContain("[browser link]");
@@ -124,6 +124,8 @@ describe("handoff escalation", () => {
     expect(await ok(owner, "--as", "human", "show", seq, "--reveal")).toContain(LINK);
     expect(await ok(owner, "show", seq, "--reveal")).not.toContain(LINK);
     await ok(owner, "reply", seq, "handoff: done");
+    expect(await Promise.race([p.exited, Bun.sleep(1_500).then(() => "still waiting")])).toBe("still waiting");
+    await ok(owner, "--as", "human", "reply", seq, "handoff: done");
     expect(await p.exited).toBe(0);
     const printed = await new Response(p.stdout).text();
     expect(printed).toContain("handoff: done");
@@ -131,9 +133,9 @@ describe("handoff escalation", () => {
     expect(await ok(owner, "listen", "--now", "--all", "--json")).not.toContain("SECRET-TOKEN");
   });
 
-  test("couldn't ends the wait with 4", async () => {
+  test("a person's couldn't ends the wait with 4", async () => {
     const { p, seq } = await waiting(["Solve the CAPTCHA"]);
-    await ok(owner, "reply", seq, "handoff: failed");
+    await ok(owner, "--as", "human", "reply", seq, "handoff: failed");
     expect(await p.exited).toBe(4);
   });
 

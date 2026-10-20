@@ -1,5 +1,5 @@
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons"
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react"
+import { useCallback, useDeferredValue, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react"
 
 import { droppedCount } from "@kiwi/core/format.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
@@ -80,6 +80,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const openTask = useCallback((task: number) => setSide({ kind: "tasks", task }), [])
   const [pausing, setPausing] = useState(false)
   const [search, setSearch] = useState<string | null>(null)
+  const query = useDeferredValue(search?.trim() ? search : null)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [picture, setPicture] = useState<{ m: Message; img: ImageAttachment; src: string } | null>(null)
   const [highlight, setHighlight] = useState<number | null>(null)
@@ -132,7 +133,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     me,
     sideRoot,
     isOwner,
-    search,
+    search: query,
     hereKey,
     taskKey,
     shownTask,
@@ -262,7 +263,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
 
   const folded = hereKey === "main" && !search && state.compact ? state.compact : null
   const shown = folded && !earlier ? visible.filter((m) => m.seq > folded.through) : visible
-  const { tail, hidden, more, onScrolled } = useWindow(shown, hereKey, scroller, highlight, !!search, tab === "conversation")
+  const { tail, hidden, more, onScrolled } = useWindow(shown, query ? `${hereKey}\u0000${query}` : hereKey, scroller, highlight, tab === "conversation")
 
   if (gone) {
     return (
@@ -293,7 +294,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     hereKey,
     cardRoom,
     cards,
-    search,
+    search: query,
     highlight,
     bySeq,
     quoted,
@@ -413,6 +414,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       }),
   ]
   const currentConversation = tab !== "conversation" ? null : hereKey !== "main" ? hereKey : rooms.length > 1 ? roomKey(cardRoom) : "main"
+  const leaveInfo = () => setSide((s) => (s?.kind === "info" ? null : s))
   const openConversation = (key: string) => {
     setTab("conversation")
     if (key.startsWith("room:")) {
@@ -473,9 +475,11 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                 search={search}
                 onSearch={(q) => {
                   if (q !== null) setTab("conversation")
+                  if (q !== null) leaveInfo()
                   setSearch(q)
                 }}
                 onAgents={() => {
+                  leaveInfo()
                   setTab("agents")
                   setSearch(null)
                 }}
@@ -483,18 +487,19 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                 view={tab === "tasks" ? view : null}
                 counts={counts}
                 onView={(v) => {
+                  leaveInfo()
                   setView(v)
                   setTab("tasks")
                   setSearch(null)
                 }}
                 agents={agentsNow}
-                onMessage={(name) => go(dmPlace(me, name))}
+                onMessage={(name) => (leaveInfo(), go(dmPlace(me, name)))}
                 onOpenTask={openTask}
                 conversations={conversations}
                 current={currentConversation}
-                onConversation={openConversation}
+                onConversation={(key) => (leaveInfo(), openConversation(key))}
               />
-              <div className={cx("relative flex min-w-0 flex-1 md:sheet", (root || info || side?.kind === "tasks") && "hidden md:flex")}>
+              <div className={cx("relative flex min-w-0 flex-1 md:sheet", info ? "hidden" : (root || side?.kind === "tasks") && "hidden md:flex")}>
                 <div className="relative flex min-w-0 flex-1 flex-col bg-canvas" style={{ "--head": `${headH}px`, "--foot": `${footH}px` } as CSSProperties}>
                   <Header
                     headRef={headRef}
@@ -675,6 +680,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                     setView("everything")
                     setTab("tasks")
                   }}
+                  onNewAgent={onNewAgent}
                   state={state}
                   now={now}
                   send={send}

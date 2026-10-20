@@ -126,30 +126,12 @@ export class ChannelMembers {
     remove: Effect.fn("Channel.remove")({ self: this }, function* (this: ChannelMembers, pk: string) {
       yield* this.ch.ownerOnly();
       yield* this.ch.request(`/members/${pk}`, { method: "DELETE" });
-      yield* this.ch.fx.rotate();
+      yield* Effect.ignore(Effect.try({ try: () => this.info.markGone(pk), catch: (err) => err }));
+      yield* this.rotation(pk);
     }),
 
     rotate: Effect.fn("Channel.rotate")({ self: this }, function* (this: ChannelMembers) {
-      yield* this.ch.ownerOnly();
-      const members = (yield* this.ch.fx.members()).filter((m) => m.active && !m.unverified);
-      this.info.forgetInfo();
-      const { epoch } = yield* this.ch.fx.info();
-      const next = Math.max(epoch, newestEpoch(this.ch.access.keys)) + 1;
-      if (!Number.isSafeInteger(next) || this.ch.access.keys[String(next)]) return yield* new Rejected(`the relay named epoch ${epoch}, which can't be the channel's next key: not rotating`);
-      const key = newChannelKey();
-      const keys = yield* Effect.promise(async () => {
-        const out: Record<string, string> = {};
-        for (const m of members) out[m.pk] = await wrapFor(this.ch.identity, this.ch.roomId, next, m.pk, m.xpk, key);
-        return out;
-      });
-      yield* this.ch.request("/epochs", { method: "POST", body: JSON.stringify({ epoch: next, keys }) }).pipe(Effect.ensuring(Effect.sync(() => this.info.forgetInfo())));
-      this.ch.access = { ...this.ch.access, epoch: next, keys: { ...this.ch.access.keys, [String(next)]: key } };
-      this.ch.onAccess?.(this.ch.access);
-      this.ch.rotating = true;
-      yield* Effect.all([Effect.ignoreCause(this.ch.fx.resealTitle()), Effect.ignoreCause(this.ch.fx.resealSettings()), Effect.ignoreCause(this.ch.fx.resealIcon())]).pipe(
-        Effect.ensuring(Effect.sync(() => void (this.ch.rotating = false))),
-      );
-      return next;
+      return yield* this.rotation();
     }),
 
     rotateIfDue: Effect.fn("Channel.rotateIfDue")({ self: this }, function* (this: ChannelMembers) {
@@ -172,4 +154,29 @@ export class ChannelMembers {
       yield* this.ch.request("/", { method: "DELETE" });
     }),
   };
+
+  private rotation(without?: string): Effect.Effect<number, Refused, Relay> {
+    return Effect.gen({ self: this }, function* () {
+      yield* this.ch.ownerOnly();
+      const members = (yield* this.ch.fx.members()).filter((m) => m.active && !m.unverified && m.pk !== without);
+      this.info.forgetInfo();
+      const { epoch } = yield* this.ch.fx.info();
+      const next = Math.max(epoch, newestEpoch(this.ch.access.keys)) + 1;
+      if (!Number.isSafeInteger(next) || this.ch.access.keys[String(next)]) return yield* new Rejected(`the relay named epoch ${epoch}, which can't be the channel's next key: not rotating`);
+      const key = newChannelKey();
+      const keys = yield* Effect.promise(async () => {
+        const out: Record<string, string> = {};
+        for (const m of members) out[m.pk] = await wrapFor(this.ch.identity, this.ch.roomId, next, m.pk, m.xpk, key);
+        return out;
+      });
+      yield* this.ch.request("/epochs", { method: "POST", body: JSON.stringify({ epoch: next, keys }) }).pipe(Effect.ensuring(Effect.sync(() => this.info.forgetInfo())));
+      this.ch.access = { ...this.ch.access, epoch: next, keys: { ...this.ch.access.keys, [String(next)]: key } };
+      this.ch.onAccess?.(this.ch.access);
+      this.ch.rotating = true;
+      yield* Effect.all([Effect.ignoreCause(this.ch.fx.resealTitle()), Effect.ignoreCause(this.ch.fx.resealSettings()), Effect.ignoreCause(this.ch.fx.resealIcon())]).pipe(
+        Effect.ensuring(Effect.sync(() => void (this.ch.rotating = false))),
+      );
+      return next;
+    });
+  }
 }

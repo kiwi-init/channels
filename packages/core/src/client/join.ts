@@ -9,6 +9,7 @@ import type { Refusal } from "./errors.ts";
 import type { Info } from "./info.ts";
 import { ownerStatement, requestInfo, unwrapKeys, wrapFor } from "./keys.ts";
 import { callRelay, type Relay } from "./relay.ts";
+import { keepHeld } from "./sealed.ts";
 
 const pinnedInfo = Effect.fn("Channel.pinnedInfo")(function* (relay: string, code: string) {
   const { roomId, ownerFp } = decodeJoinCode(code);
@@ -83,14 +84,14 @@ export const joinFx = {
       return { status: "pending", code: yield* Effect.promise(() => joinCheckCode(roomId, id.pk, ownerNonce, nonce)) };
     }
     const keys = yield* Effect.promise(() => unwrapKeys(id, roomId, r.keys ?? {}, info.ownerPk, signedKeys));
-    return { status: "approved", access: { roomId, ownerPk: info.ownerPk, ownerXpk: info.ownerXpk, epoch: r.epoch ?? 0, keys, signedKeys } };
+    return { status: "approved", access: { roomId, ownerPk: info.ownerPk, ownerXpk: info.ownerXpk, ...keepHeld({ epoch: 0, keys: {} }, { epoch: r.epoch ?? 0, keys }), signedKeys } };
   }),
 
   resume: Effect.fn("Channel.resume")(function* (relay: string, code: string, id: Identity) {
     const { roomId, info, signedKeys } = yield* pinnedInfo(relay, code);
     const r = yield* callRelay<{ epoch: number; keys: Record<string, string> }>(relay, roomId, "/keys", { identity: id });
     const keys = yield* Effect.promise(() => unwrapKeys(id, roomId, r.keys, info.ownerPk, signedKeys));
-    const access: ChannelAccess = { roomId, ownerPk: info.ownerPk, ownerXpk: info.ownerXpk, epoch: r.epoch, keys, signedKeys };
+    const access: ChannelAccess = { roomId, ownerPk: info.ownerPk, ownerXpk: info.ownerXpk, ...keepHeld({ epoch: 0, keys: {} }, { epoch: r.epoch, keys }), signedKeys };
     return access;
   }),
 };

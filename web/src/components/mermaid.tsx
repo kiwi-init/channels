@@ -97,6 +97,13 @@ export function errorLine(e: unknown): string {
   )
 }
 
+export function linksApart(svg: string): string {
+  return svg.replace(
+    /<a\b([^>]*?)(\/?)>/g,
+    (_, attrs: string, close: string) => `<a${attrs.replace(/\s(?:target|rel)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/g, "")} target="_blank" rel="noopener noreferrer"${close}>`
+  )
+}
+
 function draw(source: string): Promise<Drawn> {
   const run = queue.then(async (): Promise<Drawn> => {
     const m = await load()
@@ -133,13 +140,31 @@ function draw(source: string): Promise<Drawn> {
     try {
       await m.parse(source)
       const { svg } = await m.render(`kiwi-mermaid-${next++}`, source)
-      return { kind: "svg", svg }
+      return { kind: "svg", svg: linksApart(svg) }
     } catch (e) {
       return { kind: "error", message: errorLine(e) }
     }
   })
   queue = run.catch(() => undefined)
   return run
+}
+
+const MAX_SOURCE = 20_000
+const MAX_DRAWN = 100
+const drawings = new Map<string, Promise<Drawn>>()
+
+export function drawCached(source: string, scheme: string, render: (source: string) => Promise<Drawn> = draw): Promise<Drawn> {
+  const key = `${scheme}\u0000${source}`
+  const held = drawings.get(key)
+  if (held) {
+    drawings.delete(key)
+    drawings.set(key, held)
+    return held
+  }
+  const fresh = source.length > MAX_SOURCE ? Promise.resolve<Drawn>({ kind: "error", message: `it's too long to draw (over ${MAX_SOURCE.toLocaleString("en")} characters)` }) : render(source)
+  drawings.set(key, fresh)
+  if (drawings.size > MAX_DRAWN) drawings.delete(drawings.keys().next().value!)
+  return fresh
 }
 
 function useScheme(): string {
@@ -167,7 +192,23 @@ export function MermaidBlock({ source, code }: { source: string; code: ReactNode
   const [copied, setCopied] = useState(false)
   const timer = useRef<number | undefined>(undefined)
   const box = useRef<HTMLElement>(null)
+  const near = useRef<HTMLDivElement>(null)
+  const [visible, setVisible] = useState(() => typeof IntersectionObserver === "undefined")
   const [more, setMore] = useState(false)
+  useEffect(() => {
+    const el = near.current
+    if (visible || !el) return
+    const watch = new IntersectionObserver(
+      (seen) => {
+        if (!seen.some((e) => e.isIntersecting)) return
+        setVisible(true)
+        watch.disconnect()
+      },
+      { rootMargin: "600px 0px" }
+    )
+    watch.observe(el)
+    return () => watch.disconnect()
+  }, [visible])
   const measure = () => {
     const el = box.current
     if (el) setMore(el.scrollWidth - el.clientWidth - el.scrollLeft > 2)
@@ -191,13 +232,13 @@ export function MermaidBlock({ source, code }: { source: string; code: ReactNode
     return () => watch.disconnect()
   }, [drawn, showCode])
   useEffect(() => {
-    if (!scheme) return
+    if (!scheme || !visible) return
     let live = true
-    void draw(source).then((d) => live && setDrawn(d))
+    void drawCached(source, scheme).then((d) => live && setDrawn(d))
     return () => {
       live = false
     }
-  }, [source, scheme])
+  }, [source, scheme, visible])
 
   if (drawn?.kind === "error") {
     return (
@@ -212,7 +253,7 @@ export function MermaidBlock({ source, code }: { source: string; code: ReactNode
   }
   if (!drawn || showCode) {
     return (
-      <div className="group/mermaid relative">
+      <div ref={near} className="group/mermaid relative">
         {code}
         {drawn && (
           <button

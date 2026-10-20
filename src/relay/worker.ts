@@ -8,7 +8,7 @@
 import { DurableObject } from "cloudflare:workers";
 import * as Layer from "effect/Layer";
 import { CLOSE_CLOSED, CLOSE_REMOVED, GONE_WORDS, PING, PONG } from "@kiwi/core/protocol.ts";
-import { ChannelGone, NotFound, Refused, UpdateRequired } from "./failures.ts";
+import { ChannelGone, NotFound, Refused, TooMany, UpdateRequired } from "./failures.ts";
 import { Human, workosFromSettings, type HumanAuth } from "./human.ts";
 import { pageSecret, Policy, policyFrom, type RelayPolicy } from "./policy.ts";
 import { edgePage, PAGE_PATH, type PageCache } from "./pages.ts";
@@ -41,10 +41,13 @@ import {
   type SqlParam,
 } from "./room.ts";
 import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
+import { hexOf, type Hasher } from "@kiwi/core/dictation.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
+import { MACHINE_ASKS_PER_MINUTE, MACHINE_BOX_TTL_MS, MACHINE_UNSEEN_MS, machineAlarmAt, onMachineHttp, signedMachineRequest, type MachineBox, type MachineStore } from "./machine.ts";
+import { allow as allowPerMinute } from "./room/limits.ts";
 import { onDictationHttp, type DictationStore } from "./dictation.ts";
 import { makeRelay, onHttp, runRoom, runRoomSync, type Relay } from "./route.ts";
-import { GithubApp, githubAppFrom } from "./github-app.ts";
+import { GithubApp, githubAppFrom, GithubPush, githubPushFrom } from "./github-app.ts";
 import { GITHUB_QUEUE_MAX, GITHUB_QUEUE_TTL_MS, onGithubHttp, type GithubItem, type GithubLink, type GithubRoutes } from "./github.ts";
 
 interface Env {
@@ -53,6 +56,8 @@ interface Env {
   OWNERS: DurableObjectNamespace<Owners>;
   /** One per pairing mailbox id: two sealed slots, gone ten minutes after the first write. */
   MAILBOX: DurableObjectNamespace<MailboxBox>;
+  /** One per paired computer: who may ask it to act, its sealed asks, and its live socket. */
+  MACHINES: DurableObjectNamespace<MachineInbox>;
   /** When set, channels belong to humans signed in with this WorkOS AuthKit client. */
   WORKOS_CLIENT_ID?: string;
   /** The AuthKit domain (https://….authkit.app or a custom one), whose keys may also sign tokens. Comma-separated while moving domains. */
@@ -61,6 +66,8 @@ interface Env {
   WORKOS_API_KEY?: string;
   /** 20 mailbox writes per minute per client address (pairing codes are pasted by hand). */
   MAILBOX_WRITES: RateLimit;
+  /** 60 machine registrations and inbox writes per minute per client address. */
+  MACHINE_WRITES: RateLimit;
   DICTATION_DOWNLOADS: RateLimit;
   /** "off": don't retry a room request the platform refused (to count refusals, e.g. on a canary). */
   KIWI_ROOM_RETRY?: string;
@@ -127,6 +134,7 @@ export class Channel extends DurableObject<Env> {
         Layer.succeed(Policy, this.policy),
         Layer.succeed(ChannelLists, owned(env)),
         Layer.succeed(GithubApp, githubAppFrom({ appId: env.GITHUB_APP_ID, privateKey: env.GITHUB_APP_PRIVATE_KEY })),
+        Layer.succeed(GithubPush, env.GITHUB_WEBHOOK_SECRET ? githubPushFrom() : null),
       ),
     );
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));
@@ -182,12 +190,14 @@ export class Channel extends DurableObject<Env> {
     await this.apply(fx, ws);
   }
 
-  override webSocketClose(ws: WebSocket, code: number): void {
+  override async webSocketClose(ws: WebSocket, code: number): Promise<void> {
     try {
       ws.close(code === 1005 ? 1000 : code);
     } catch {
       // Already closed: closing back is only a courtesy.
     }
+    const { room } = ws.deserializeAttachment() as { room: string };
+    await this.apply({ expireAt: runRoomSync(this.relay, this.store(room), touch) ?? undefined });
   }
 
   private async apply(fx: Effects, sender?: WebSocket): Promise<void> {
@@ -309,6 +319,98 @@ export class Owners extends DurableObject<Env> {
   }
 }
 
+/** One paired computer: the person bound to it, its sealed asks for a few minutes, and its daemon's socket. */
+export class MachineInbox extends DurableObject<Env> {
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS binding (k INTEGER PRIMARY KEY CHECK (k = 1), person TEXT NOT NULL, mxpk TEXT NOT NULL, cert_at INTEGER NOT NULL, seen_at INTEGER NOT NULL)");
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS floor (k INTEGER PRIMARY KEY CHECK (k = 1), cert_at INTEGER NOT NULL)");
+    ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS boxes (id TEXT PRIMARY KEY, box TEXT NOT NULL, at INTEGER NOT NULL)");
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));
+  }
+
+  private live(): WebSocket[] {
+    return this.ctx.getWebSockets("machine");
+  }
+
+  private async schedule(): Promise<void> {
+    const sql = this.ctx.storage.sql;
+    const oldest = (sql.exec("SELECT MIN(at) AS at FROM boxes").toArray()[0] as { at: number | null } | undefined)?.at ?? null;
+    const seen = (sql.exec("SELECT seen_at FROM binding").toArray()[0] as { seen_at: number } | undefined)?.seen_at ?? null;
+    const at = machineAlarmAt(oldest, seen);
+    const set = await this.ctx.storage.getAlarm();
+    if (at === null) await this.ctx.storage.deleteAlarm();
+    else if (set === null || at < set) await this.ctx.storage.setAlarm(at);
+  }
+
+  override async fetch(req: Request): Promise<Response> {
+    const sql = this.ctx.storage.sql;
+    const store: MachineStore = {
+      binding: async () => {
+        const row = sql.exec("SELECT person, mxpk, cert_at, seen_at FROM binding").toArray()[0] as { person: string; mxpk: string; cert_at: number; seen_at: number } | undefined;
+        return row ? { person: row.person, mxpk: row.mxpk, certAt: row.cert_at, seenAt: row.seen_at } : null;
+      },
+      floor: async () => (sql.exec("SELECT cert_at FROM floor").toArray()[0] as { cert_at: number } | undefined)?.cert_at ?? 0,
+      bind: async (_mpk, b) => {
+        sql.exec("INSERT OR REPLACE INTO binding (k, person, mxpk, cert_at, seen_at) VALUES (1, ?, ?, ?, ?)", b.person, b.mxpk, b.certAt, b.seenAt);
+        sql.exec("INSERT INTO floor (k, cert_at) VALUES (1, ?) ON CONFLICT (k) DO UPDATE SET cert_at = MAX(cert_at, excluded.cert_at)", b.certAt);
+        await this.schedule();
+      },
+      seen: async (_mpk, at) => {
+        sql.exec("UPDATE binding SET seen_at = ?", at);
+        await this.schedule();
+      },
+      unbind: async () => {
+        sql.exec("DELETE FROM binding");
+        sql.exec("DELETE FROM boxes");
+        await this.schedule();
+      },
+      pending: async (_mpk, since) => (sql.exec("SELECT COUNT(*) AS n FROM boxes WHERE at >= ?", since).toArray()[0] as { n: number }).n,
+      boxes: async (_mpk, since) => sql.exec("SELECT id, box, at FROM boxes WHERE at >= ? ORDER BY at", since).toArray() as unknown as MachineBox[],
+      addBox: async (_mpk, b) => {
+        sql.exec("INSERT INTO boxes (id, box, at) VALUES (?, ?, ?)", b.id, b.box, b.at);
+        await this.schedule();
+      },
+      dropBox: async (_mpk, id) => void sql.exec("DELETE FROM boxes WHERE id = ?", id),
+      online: () => {
+        const since = this.live().map((ws) => (ws.deserializeAttachment() as { since?: number } | null)?.since ?? 0);
+        return since.length ? Math.max(...since) : null;
+      },
+      push: (_mpk, b) => {
+        for (const ws of this.live()) send(ws, JSON.stringify({ box: b }));
+      },
+      close: () => {
+        for (const ws of this.live()) close(ws, 4000, "unpaired");
+      },
+    };
+    try {
+      const out = await onMachineHttp(req, store, { perMachine: (key) => allowPerMinute(key, MACHINE_ASKS_PER_MINUTE) });
+      if (out instanceof Response) return out;
+      if (!out) return withCors(errorResponse(new NotFound({ message: "not found" })));
+      for (const old of this.live()) close(old, 4001, "replaced by a newer connection");
+      const { 0: client, 1: server } = new WebSocketPair();
+      this.ctx.acceptWebSocket(server, ["machine"]);
+      server.serializeAttachment({ since: Date.now() });
+      for (const b of await store.boxes(out.upgrade, Date.now() - MACHINE_BOX_TTL_MS)) send(server, JSON.stringify({ box: b }));
+      return new Response(null, { status: 101, webSocket: client, headers: wsHeaders(req) });
+    } catch (err) {
+      return withCors(errorResponse(err));
+    }
+  }
+
+  override webSocketClose(ws: WebSocket, code: number): void {
+    close(ws, code === 1005 ? 1000 : code, "");
+  }
+
+  override async alarm(): Promise<void> {
+    const sql = this.ctx.storage.sql;
+    const now = Date.now();
+    sql.exec("DELETE FROM boxes WHERE at < ?", now - MACHINE_BOX_TTL_MS);
+    if (!this.live().length) sql.exec("DELETE FROM binding WHERE seen_at < ?", now - MACHINE_UNSEEN_MS);
+    await this.schedule();
+  }
+}
+
 /** One pairing mailbox: two sealed slots, gone ten minutes after the first write. */
 export class MailboxBox extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
@@ -382,10 +484,26 @@ const edgeDictation: DictationStore = {
     const hit = await caches.default.match(edgeKey(sha256));
     return hit?.body ?? null;
   },
-  write: async (sha256, bytes) => {
-    await caches.default.put(edgeKey(sha256), new Response(bytes, { headers: { "cache-control": "public, max-age=31536000, immutable" } }));
+  write: async (sha256, body, size) => {
+    const { readable, writable } = new FixedLengthStream(size);
+    await Promise.all([
+      caches.default.put(edgeKey(sha256), new Response(readable, { headers: { "cache-control": "public, max-age=31536000, immutable", "content-length": String(size) } })),
+      body.pipeTo(writable),
+    ]);
   },
 };
+
+function edgeHasher(): Hasher {
+  const digest = new crypto.DigestStream("SHA-256");
+  const writer = digest.getWriter();
+  return {
+    update: (chunk) => writer.write(chunk),
+    hex: async () => {
+      await writer.close();
+      return hexOf(await digest.digest);
+    },
+  };
+}
 
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
@@ -394,7 +512,8 @@ export default {
     // The desktop app's renderer isn't served by the relay: /v1/* answers any origin.
     if (req.method === "OPTIONS" && url.pathname.startsWith("/v1/")) return corsPreflight();
     const spoken = await onDictationHttp(req, {
-      store: edgeDictation,
+      store: url.hostname.endsWith(".workers.dev") ? null : edgeDictation,
+      hasher: edgeHasher,
       ip: req.headers.get("cf-connecting-ip"),
       allow: async (key) => (await env.DICTATION_DOWNLOADS.limit({ key })).success,
     });
@@ -404,6 +523,18 @@ export default {
       const id = /^\/v1\/mailbox\/([A-Za-z0-9_-]{43})(?:\/(?:a|b))?$/.exec(url.pathname)?.[1];
       if (!id) return withCors(errorResponse(new NotFound({ message: "not found" })));
       return env.MAILBOX.get(env.MAILBOX.idFromName(id)).fetch(req);
+    }
+    if (url.pathname.startsWith("/v1/machine/")) {
+      const writing = req.method === "PUT" || req.method === "POST";
+      const ip = req.headers.get("cf-connecting-ip");
+      if (writing && ip && !(await env.MACHINE_WRITES.limit({ key: ip })).success) {
+        return withCors(errorResponse(new TooMany({ message: "too many machine requests from this address; try again in a few minutes" })));
+      }
+      const copy = writing ? req.clone() : req;
+      const signed = await signedMachineRequest(copy, Date.now());
+      if (!signed) return withCors(errorResponse(new NotFound({ message: "not found" })));
+      if (signed instanceof Response) return signed;
+      return env.MACHINES.get(env.MACHINES.idFromName(signed.mpk)).fetch(req);
     }
     const github = await onGithubHttp(req, env.GITHUB_WEBHOOK_SECRET, githubRoutes(env));
     if (github) return github;
