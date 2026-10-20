@@ -6,24 +6,40 @@ import { openSession } from "../agent.ts";
 import { loadConfig } from "../config.ts";
 import { rotationAt } from "../rotate/decide.ts";
 import type { Here } from "../seats.ts";
+import { placeFrom, rexBinary, type RexPlace } from "../rex.ts";
 import type { HookInput } from "./answer.ts";
 import { overLineSince } from "./context-line.ts";
 import type { Served } from "./listen.ts";
 
-export interface PaneOf {
+interface TmuxPane {
   pane: string;
   socket: string;
 }
 
+interface RexPane {
+  kind: "rex";
+  rex: RexPlace;
+  bin: string;
+}
+
+export type PaneOf = TmuxPane | RexPane;
+
 export function paneOf(env: Record<string, string | undefined>): PaneOf | null {
   const pane = env.TMUX_PANE;
   const socket = env.TMUX?.split(",")[0];
-  return pane && /^%\d+$/.test(pane) && socket ? { pane, socket } : null;
+  if (pane && /^%\d+$/.test(pane) && socket) return { pane, socket };
+  const rex = placeFrom(env).rex;
+  if (!rex) return null;
+  const dir = env.REX_BIN_DIR?.trim();
+  const bin = dir ? join(dir, "rex") : rexBinary();
+  return bin ? { kind: "rex", rex, bin } : null;
 }
 
 export function rotateArgv(pid: number, session: string, where: PaneOf): string[] {
   const main = process.argv[1];
-  return [process.execPath, ...(main && (main.endsWith(".ts") || main.endsWith(".js")) ? [main] : []), "rotate", "send", String(pid), session, where.pane, where.socket];
+  const head = [process.execPath, ...(main && (main.endsWith(".ts") || main.endsWith(".js")) ? [main] : []), "rotate", "send", String(pid), session];
+  if ("pane" in where) return [...head, where.pane, where.socket];
+  return [...head, "rex", where.rex.server, where.rex.session, where.rex.block, where.bin];
 }
 
 export const rotateAfterStop = Effect.fn("Hooks.rotateAfterStop")(function* (input: HookInput, served: readonly Served[], who: Here) {
@@ -31,8 +47,9 @@ export const rotateAfterStop = Effect.fn("Hooks.rotateAfterStop")(function* (inp
   const file = input.transcript_path;
   const where = paneOf(process.env);
   if (who.harness !== "claude" || input.stop_hook_active || !who.pid || !session || typeof file !== "string" || !where || !served.length) return;
-  if (loadConfig().rotate !== "on") return;
-  const teller = { pid: who.pid, session, pane: where.pane };
+  const config = loadConfig();
+  if (config.rotate !== "on" || (!("pane" in where) && config.rex !== "on")) return;
+  const teller = "pane" in where ? { pid: who.pid, session, pane: where.pane } : { pid: who.pid, session, rex: where.rex };
   const { claudeContext } = yield* Effect.promise(() => import("../harness.ts"));
   const used = yield* Effect.sync(() => {
     try {

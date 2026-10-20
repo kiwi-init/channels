@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CONTEXT_LINE, PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts";
-import { fold, type ChannelState, type Place } from "@kiwi/core/state.ts";
+import { fold, leadCheckpointKey, type ChannelState, type Place } from "@kiwi/core/state.ts";
 import { alive } from "../src/hooks/listeners.ts";
 import { paneOf, rotateArgv } from "../src/hooks/rotate.ts";
 import { ROTATE_FLOOR, rotationAt } from "../src/rotate/decide.ts";
@@ -40,9 +40,31 @@ describe("when a seat rotates", () => {
     ).toBe("rotate");
   });
 
-  test("the lead only past the line", () => {
-    expect(rotationAt(board([], { lead: "ana" }), "ana", CONTEXT_LINE - 1, null).kind).toBe("stay");
-    expect(rotationAt(board([], { lead: "ana" }), "ana", CONTEXT_LINE, null).kind).toBe("rotate");
+  test("the lead only past the line, and once its own lead checkpoint is later in the channel than the nudge", () => {
+    const key = leadCheckpointKey("ana");
+    const led = (seq: number | null, by = "ana", extra: object = {}) =>
+      board([], { lead: "ana", facts: new Map(seq === null ? [] : [[key, { key, value: "waiting on bo for T3", by, ts: 1, seq, ...extra }]]) });
+    expect(rotationAt(led(90), "ana", CONTEXT_LINE - 1, 50)).toEqual({ kind: "stay", why: "the lead, under the line" });
+    expect(rotationAt(led(null), "ana", CONTEXT_LINE, 50)).toEqual({ kind: "stay", why: "the lead, past the line, waiting for its lead checkpoint" });
+    expect(rotationAt(led(90), "ana", CONTEXT_LINE, null).kind).toBe("stay");
+    expect(rotationAt(led(50), "ana", CONTEXT_LINE, 50).kind).toBe("stay");
+    expect(rotationAt(led(51, "bo"), "ana", CONTEXT_LINE, 50).kind).toBe("stay");
+    expect(rotationAt(led(51, "ana", { expires: Date.now() + 60_000 }), "ana", CONTEXT_LINE, 50).kind).toBe("stay");
+    expect(rotationAt(board([], { lead: "ana", facts: new Map([["lead checkpoint", { key: "lead checkpoint", value: "x", by: "ana", ts: 1, seq: 51 }]]) }), "ana", CONTEXT_LINE, 50).kind).toBe("stay");
+    expect(rotationAt(led(51), "ana", CONTEXT_LINE, 50)).toEqual({ kind: "rotate", why: "the lead, past the line, with its lead checkpoint since the nudge" });
+    expect(rotationAt({ ...led(51), lead: "bo" }, "ana", ROTATE_FLOOR, 50)).toEqual({ kind: "rotate", why: "between tasks" });
+  });
+
+  test("a lead with open tasks needs both: a checkpoint on each task and its lead checkpoint since the nudge", () => {
+    const both = (task: number, lead: number) =>
+      board([{ id: 1, owner: "ana", notes: [checkpoint(task)] }], {
+        lead: "ana",
+        facts: new Map([[leadCheckpointKey("ana"), { key: leadCheckpointKey("ana"), value: "x", by: "ana", ts: 1, seq: lead }]]),
+      });
+    expect(rotationAt(both(60, 40), "ana", CONTEXT_LINE, 50).why).toBe("the lead, past the line, waiting for its lead checkpoint");
+    expect(rotationAt(both(40, 60), "ana", CONTEXT_LINE, 50).why).toBe("past the line, waiting for a checkpoint on each open task");
+    expect(rotationAt(both(60, 61), "ana", CONTEXT_LINE, 50).kind).toBe("rotate");
+    expect(rotationAt(both(60, 61), "ana", CONTEXT_LINE - 1, 50).why).toBe("the lead, under the line");
   });
 
   test("with open tasks, only past the line and once each has a checkpoint later in the channel than the nudge", () => {
@@ -89,6 +111,15 @@ describe("Claude Code's input box in a captured pane", () => {
     expect(inputText(box("❯ \x1b[2mTry\x1b[0m x"))).toBe("x");
   });
 
+  test("Rex's vt capture, with its CRLF lines, its resets before every style and the cursor cell, reads the same", () => {
+    const rule = "\x1b[0m\x1b[38;2;136;136;136m────────────────\x1b[0m\r";
+    const rex = (line: string) => ["Last login: Tue Oct 20 14:04:58 on ttys002\r", rule, line, rule, "  \x1b[0m\x1b[38;2;153;153;153m? for shortcuts\x1b[0m\x1b[=5;1u"].join("\n");
+    expect(inputText(rex('\x1b[0m\x1b[38;2;153;153;153m❯\u00a0\x1b[0m\x1b[7m \x1b[0m\x1b[2mTry "fix lint errors"\x1b[0m\r'))).toBe("");
+    expect(inputText(rex("\x1b[0m\x1b[38;2;153;153;153m❯\u00a0\x1b[0m\r"))).toBe("");
+    expect(inputText(rex("\x1b[0m\x1b[38;2;153;153;153m❯\u00a0\x1b[0mhalf typed\r"))).toBe("half typed");
+    expect(inputText(rex("\x1b[0m\x1b[38;2;153;153;153m❯\u00a0\x1b[0m/clear\r"), null)).toBe("/clear");
+  });
+
   test("anything else on screen is no box: a dialog, a stale prompt above one, a missing rule", () => {
     expect(inputText(" ❯ No, exit\n   Yes, I trust this folder")).toBeNull();
     expect(inputText([RULE, "❯ ", RULE, "Allow this command?", " ❯ Yes", "   No", "   Always", "Esc to cancel"].join("\n"))).toBeNull();
@@ -113,6 +144,28 @@ describe("Claude Code's input box in a captured pane", () => {
     expect(paneOf({ TMUX_PANE: "%2" })).toBeNull();
     expect(paneOf({ TMUX: "/s,1,0", TMUX_PANE: "2" })).toBeNull();
     expect(rotateArgv(42, "s-1", { pane: "%2", socket: "/s" }).slice(-6)).toEqual(["rotate", "send", "42", "s-1", "%2", "/s"]);
+  });
+
+  test("a Rex pane comes from Rex's variables, and its sender names the server and block", () => {
+    const env = {
+      TERM_PROGRAM: "rex",
+      REX_SERVER: "studio",
+      REX_SESSION: "session:01a15963-bacc-7426-91e9-4d98757dcd0c",
+      REX_BLOCK: "block:11a15963-bacc-7426-91e9-4d98757dcd0c",
+      REX_BIN_DIR: "/opt/rex",
+    };
+    const where = paneOf(env);
+    expect(where).toEqual({
+      kind: "rex",
+      rex: {
+        server: "studio",
+        session: "session:01a15963-bacc-7426-91e9-4d98757dcd0c",
+        block: "block:11a15963-bacc-7426-91e9-4d98757dcd0c",
+      },
+      bin: "/opt/rex/rex",
+    });
+    expect(rotateArgv(42, "s-1", where!).slice(-5)).toEqual(["rex", "studio", "session:01a15963-bacc-7426-91e9-4d98757dcd0c", "block:11a15963-bacc-7426-91e9-4d98757dcd0c", "/opt/rex/rex"]);
+    expect(paneOf({ TERM_PROGRAM: "rex" })).toBeNull();
   });
 });
 

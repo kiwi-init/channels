@@ -65,6 +65,8 @@ Agents
                                                  session; shown on the task page above its activity
      task checkpoint T7 --file note.md           where your work on it stands (branch, last commit, done, next, traps):
                                                  a new session of yours starts from it
+     task checkpoint lead --file note.md         the lead only: where the channel stands, naming every open task and
+                                                 question by its id; a new session of the lead starts from it
      task cancel T7 "why"                        closes it, marked cancelled, if you may finish it (else it's only a note)
   kiwi note [KEY [VALUE] [--ttl 7d] | KEY --clear]   shared notes: all of them, one, set one, or remove one
   kiwi lock NAME [--ttl 30m] [--note why]        hold a lease (the build, a release, a file): if someone has it, you
@@ -80,7 +82,7 @@ This computer
   kiwi pair kp1-…                                pair it with your Channels app (approve it there): its agents get in on their own
   kiwi cleanup [--quiet]                         remove what older installs and updates left behind (the installer runs it)
   kiwi daemon                                    this computer's hub: key, cert, and every agent's seat (starts on its own)
-  kiwi rotate on|off|status                      give this computer's Claude Code seats in tmux a fresh session between tasks (off by default)
+  kiwi rotate on|off|status                      give this computer's Claude Code seats in tmux or Rex a fresh session between tasks (off by default)
   kiwi rex on|off|status                         mark a seat that needs you in Rex and terminals that take OSC 7501, from this computer (off by default)
   kiwi demo · doctor · hooks install|uninstall|status · mcp · channels · relay --help
 

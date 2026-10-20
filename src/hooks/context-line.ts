@@ -56,10 +56,25 @@ export function openTasksOf(state: ChannelState, me: string): number[] {
     .sort((a, b) => a - b);
 }
 
-export function nudgeText(context: ContextUse, tasks: readonly number[], mc: string): string | null {
+export function nudgeText(context: ContextUse, tasks: readonly number[], mc: string, lead = false): string | null {
   const [first] = tasks;
-  if (first === undefined) return null;
+  if (first === undefined && !lead) return null;
   const named = tasks.slice(0, NUDGE_IDS).map(taskId);
   const which = tasks.length > named.length ? `${named.join(", ")} and ${tasks.length - named.length} more` : named.join(", ");
-  return `Your context is at ${tokensWord(context.used)} tokens, past the ${tokensWord(CONTEXT_LINE)} line. Before you end this turn, write where each of your open tasks stands (${which}) with \`${COMMANDS.checkpoint(mc, taskId(first))}\`: branch, last commit, done, next, traps. A new session of yours starts from it.`;
+  const asks = [
+    ...(first === undefined ? [] : [`where each of your open tasks stands (${which}) with \`${COMMANDS.checkpoint(mc, taskId(first))}\`: branch, last commit, done, next, traps`]),
+    ...(lead
+      ? [
+          `where the channel stands as you lead it with \`${COMMANDS.leadCheckpoint(mc)}\`: every open task (T7) and question (#123) by its id, what you're waiting on and from whom, decisions in flight, what comes next, traps`,
+        ]
+      : []),
+  ];
+  return `Your context is at ${tokensWord(context.used)} tokens, past the ${tokensWord(CONTEXT_LINE)} line. Before you end this turn, write ${asks.join("; and ")}. A new session of yours starts from it.`;
+}
+
+export function nudgeShort(tasks: readonly number[], mc: string, lead = false): string | null {
+  const [first] = tasks;
+  if (first === undefined && !lead) return null;
+  const runs = [...(first === undefined ? [] : [`\`${COMMANDS.checkpoint(mc, taskId(first))}\` for each open task`]), ...(lead ? [`\`${COMMANDS.leadCheckpoint(mc)}\``] : [])];
+  return `Past the ${tokensWord(CONTEXT_LINE)} context line: before you end this turn, run ${runs.join(" and ")}.`;
 }

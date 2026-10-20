@@ -18,6 +18,8 @@ import type {
   KeysReply,
   KeysRequest,
   KiwiBridge,
+  RexSeatView,
+  RexShowResult,
   PairAskView,
   PendingItem,
   PublicPerson,
@@ -130,6 +132,8 @@ const kiwi: KiwiBridge = {
   setVoiceConsent: (roomId: string, on: boolean) => ipcRenderer.invoke("kiwi:voice-set-consent", roomId, on) as Promise<void>,
   voiceToken: (roomId: string) => ipcRenderer.invoke("kiwi:voice-token", roomId) as Promise<VoiceAuth>,
   setPersonalities: (list: Personality[]) => ipcRenderer.invoke("kiwi:personalities-set", list) as Promise<void>,
+  rexSeats: () => ipcRenderer.invoke("kiwi:rex-seats") as Promise<RexSeatView[]>,
+  rexShow: (seat: RexSeatView) => ipcRenderer.invoke("kiwi:rex-show", seat) as Promise<RexShowResult>,
 };
 
 contextBridge.exposeInMainWorld("kiwi", kiwi);
