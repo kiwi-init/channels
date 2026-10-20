@@ -689,6 +689,7 @@ async function run(part: Part): Promise<string[]> {
     const token = /--persona (\S+)/.exec((await withPin.textContent()) ?? "")?.[1];
     if (!token) throw new Error("the invite command carries no --persona token");
     await inviting.getByRole("button", { name: "Back to details" }).click();
+    await panel.getByRole("button", { name: "Close details" }).click();
     const hunter = kiwi(["join", code, "smoke", "--relay", BASE, "--as", "hunter", "--persona", token]);
     await needsOpen();
     await needs.getByText(/pinned as Bug hunter/).waitFor({ timeout: 30000 });
