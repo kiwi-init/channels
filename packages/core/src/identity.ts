@@ -82,7 +82,14 @@ export async function verify(signed: object): Promise<boolean> {
   if (typeof obj.pk !== "string" || typeof obj.sig !== "string") return false;
   let key = verifyKeys.get(obj.pk);
   if (!key) {
-    key = crypto.subtle.importKey("raw", fromB64url(obj.pk), ALG, false, ["verify"]).catch(() => null);
+    let raw: ReturnType<typeof fromB64url>;
+    try {
+      raw = fromB64url(obj.pk);
+    } catch {
+      // A pk that isn't base64url names no key, so nothing it signed can verify.
+      return false;
+    }
+    key = crypto.subtle.importKey("raw", raw, ALG, false, ["verify"]).catch(() => null);
     if (verifyKeys.size >= MAX_VERIFY_KEYS) verifyKeys.delete(verifyKeys.keys().next().value!);
     verifyKeys.set(obj.pk, key);
   }
