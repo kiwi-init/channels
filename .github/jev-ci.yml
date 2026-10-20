@@ -226,6 +226,11 @@ jobs:
       Code's listening ones from 2.1.296) unless KIWI_NO_HOOKS is set or that harness's hooks are off; the daemon's
       answer reads back as sent; and kiwi join carries KIWI_LAUNCH to the owner in its sealed claims on a live
       relay, dropping one that isn't an id. The inventory says which harnesses kiwi launch starts.
+      Also test/shell-path.test.ts: the PATH line kiwi setup and the desktop app add to the shell's profile
+      (packages/core/src/node/shell-path.ts), once and never when the profile already names the folder, and never
+      from a profile outside a temp folder into a temp folder (the system's temp folders, through their links,
+      a folder not made yet judged by its parent), so a run with KIWI_INSTALL in a scratch folder can't leave a line
+      in the person's real profile that outlives that folder and puts it before ~/.kiwi/bin.
       Also test/rotate.test.ts: when a Claude Code seat in tmux gets a fresh session (src/rotate/decide.ts:
       between tasks past ROTATE_FLOOR, the lead past the line only once its own lead checkpoint is
       later than the nudge, open tasks only once checkpointed since the nudge, a lead with tasks
