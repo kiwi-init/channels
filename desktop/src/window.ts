@@ -7,6 +7,7 @@ import { openInBrowser } from "./open.ts";
 import { keepRendererAlive } from "./revive.ts";
 import { entryUrl } from "./serve-web.ts";
 import { applyUpdate, updateState } from "./updater.ts";
+import { minWindowWidth } from "./window-size.ts";
 
 let win: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -44,7 +45,7 @@ export function createWindow(): void {
   win = new BrowserWindow({
     width: 1200,
     height: 800,
-    minWidth: 720,
+    minWidth: minWindowWidth(process.platform),
     minHeight: 480,
     autoHideMenuBar: true,
     ...(process.platform === "linux" ? { icon: path.join(assetsDir(), "icon.png") } : {}),
