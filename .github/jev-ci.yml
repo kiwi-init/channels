@@ -234,7 +234,7 @@ jobs:
       tool and model read again only when its size or mtime changed (test/harness-model.test.ts); a burst of daemon
       requests running one seat sync, never two at once, the next only after 2 s (test/daemon-throttle.test.ts);
       wake checks keeping one session per seat; an agent's repo and branch read from git's own files, a worktree's
-      included, with git asked only when the config rewrites urls or includes others (test/where-files.test.ts);
+      included, with git asked only when the config rewrites urls or includes others (src/git-where.ts, test/where-files.test.ts);
       and the home walked and tightened once per kiwi version, again once someone loosened it
       (test/local-perms.test.ts).
       Also test/shell-path.test.ts: the PATH line kiwi setup and the desktop app add to the shell's profile
