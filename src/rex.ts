@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -106,6 +106,14 @@ export function runRex(bin: string, argv: string[], timeout = 5_000): { status: 
   return { status: r.status, stdout: typeof r.stdout === "string" ? r.stdout : "", stderr: typeof r.stderr === "string" ? r.stderr : "" };
 }
 
+export function runRexLater(bin: string, argv: string[], timeout = 5_000): Promise<{ status: number | null; stdout: string }> {
+  return new Promise((resolve) => {
+    execFile(bin, argv, { encoding: "utf8", timeout, killSignal: "SIGKILL", maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => {
+      resolve({ status: err ? (typeof err.code === "number" ? err.code : null) : 0, stdout: typeof stdout === "string" ? stdout : "" });
+    });
+  });
+}
+
 function run(bin: string, argv: string[], timeout = 3_000): { status: number | null; stdout: string } {
   const r = runRex(bin, argv, timeout);
   return { status: r.status, stdout: r.stdout };
@@ -128,9 +136,13 @@ function parse(stdout: string): unknown {
   }
 }
 
+function apiArgv(place: RexPlace, method: string, args: Record<string, unknown>, session: boolean): string[] {
+  return ["-S", place.server, "api", "call", ...(session ? ["-s", place.session] : []), method, JSON.stringify(args)];
+}
+
 export function rexApi(place: RexPlace, method: string, args: Record<string, unknown>, bin: string | null = rexBinary(), session = true, timeout = 5_000): unknown {
   if (!bin) return null;
-  const r = run(bin, ["-S", place.server, "api", "call", ...(session ? ["-s", place.session] : []), method, JSON.stringify(args)], timeout);
+  const r = run(bin, apiArgv(place, method, args, session), timeout);
   return r.status === 0 ? parse(r.stdout) : null;
 }
 
@@ -177,10 +189,6 @@ export function rexRootState(place: RexPlace, bin: string | null = rexBinary()):
   return typeof state === "string" ? state.toLowerCase() : null;
 }
 
-function rexRoot(place: RexPlace, bin: string | null = rexBinary()): Record<string, unknown> | null {
-  return rootRecord(blockCall(place, "program_status", {}, bin));
-}
-
 export function rexForeground(place: RexPlace, bin: string | null = rexBinary()): number | null {
   return rexProcess(place, bin)?.foreground ?? null;
 }
@@ -206,8 +214,10 @@ export interface RexActivity {
   tool?: string;
 }
 
-export function rexActivity(place: RexPlace, bin: string | null = rexBinary()): RexActivity | null {
-  const record = rexRoot(place, bin);
+export async function rexActivity(place: RexPlace, bin: string | null = rexBinary(), timeout = 5_000): Promise<RexActivity | null> {
+  if (!bin) return null;
+  const r = await runRexLater(bin, apiArgv(place, "com.superlogical.terminal.program_status", { block_id: place.block, args: {} }, true), timeout);
+  const record = rootRecord(r.status === 0 ? parse(r.stdout) : null);
   const state = typeof record?.state === "string" ? record.state.toLowerCase() : null;
   const msg = typeof record?.msg === "string" && record.msg ? record.msg : undefined;
   if (state === "working") return { state: "working", ...(msg ? { tool: msg } : {}) };

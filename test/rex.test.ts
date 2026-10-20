@@ -9,6 +9,8 @@ import { installPalette, paletteInstalled, removePalette, rexConfigPath } from "
 import { localRexSeats, showInRex } from "../src/rex-show.ts";
 import { seatRecords } from "../src/status.ts";
 import { startRexEvents } from "../src/rex-events.ts";
+import { readsRex } from "../src/daemon/reach.ts";
+import type { SeatRecord } from "../src/config.ts";
 
 const roster: Roster = [
   { name: "jonatas", pk: "p", owner: true, at: 1, active: true, kind: "human" },
@@ -141,7 +143,7 @@ describe("Rex events", () => {
 });
 
 describe("Rex as a reader", () => {
-  test("the root record, processes, screen and instance id come back even when wrapped", () => {
+  test("the root record, processes, screen and instance id come back even when wrapped", async () => {
     const dir = mkdtempSync(join(tmpdir(), "kiwi-rex-api-"));
     const bin = join(dir, "rex");
     writeFileSync(
@@ -158,11 +160,41 @@ esac
     );
     chmodSync(bin, 0o755);
     const place = { server: "studio", session: "session:01a15963-bacc-7426-91e9-4d98757dcd0c", block: "block:11a15963-bacc-7426-91e9-4d98757dcd0c" };
-    expect(rexActivity(place, bin)).toEqual({ state: "working", tool: "cargo test" });
+    expect(await rexActivity(place, bin)).toEqual({ state: "working", tool: "cargo test" });
     expect(rexProcess(place, bin)).toEqual({ foreground: 456, child: 123 });
     expect(rexScreen(place, bin)).toBe("the screen");
     expect(rexInstance(place, bin)).toBe("instance-1");
     rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("the daemon's Rex reads", () => {
+  const place = { server: "studio", session: "session:01a15963-bacc-7426-91e9-4d98757dcd0c", block: "block:11a15963-bacc-7426-91e9-4d98757dcd0c" };
+
+  test("a Rex that doesn't answer gives no activity at its deadline, and the daemon keeps running meanwhile", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-rex-slow-"));
+    const bin = join(dir, "rex");
+    writeFileSync(bin, "#!/bin/sh\nsleep 10\n");
+    chmodSync(bin, 0o755);
+    let ticks = 0;
+    const timer = setInterval(() => ticks++, 20);
+    const started = Date.now();
+    expect(await rexActivity(place, bin, 300)).toBeNull();
+    clearInterval(timer);
+    expect(Date.now() - started).toBeLessThan(3_000);
+    expect(ticks).toBeGreaterThan(5);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("only with the Rex helpers on, for a seat in Rex whose harness Kiwi can't read from its files", () => {
+    const rex = place;
+    expect(readsRex({ rex: "on" }, { harness: "grok", rex } as SeatRecord)).toBe(true);
+    expect(readsRex({ rex: "on" }, { rex } as SeatRecord)).toBe(true);
+    expect(readsRex({ rex: "off" }, { harness: "grok", rex } as SeatRecord)).toBe(false);
+    expect(readsRex({}, { harness: "grok", rex } as SeatRecord)).toBe(false);
+    expect(readsRex({ rex: "on" }, { harness: "grok" } as SeatRecord)).toBe(false);
+    for (const harness of ["claude", "codex", "opencode"] as const) expect(readsRex({ rex: "on" }, { harness, rex } as SeatRecord)).toBe(false);
+    expect(readsRex({ rex: "on" }, null)).toBe(false);
   });
 });
 

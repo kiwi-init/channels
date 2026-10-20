@@ -114,7 +114,10 @@ jobs:
       message that only names them does not), the palette action Kiwi writes into Rex's config
       (the action, its finder script and one marked require line, installed and removed without
       touching the person's own), and showing a local seat in Rex (focusing its block and
-      switching the app's session, saying when the app is closed or Remote Control is off).
+      switching the app's session, saying when the app is closed or Remote Control is off), and the
+      daemon's Rex activity reads: only with the Rex helpers on, for a seat in Rex whose harness Kiwi
+      can't read from its files, never blocking (a Rex that doesn't answer gives no activity at its
+      deadline while the event loop keeps running).
       Also test/daemon-big-lines.test.ts: the daemon's socket writes queue what the socket
       didn't take and flush it on drain (src/daemon/server.ts), so a catch-up of thirty
       messages with 50 KB ones among them, and big live messages back to back, arrive whole
