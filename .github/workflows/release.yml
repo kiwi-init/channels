@@ -15,7 +15,25 @@ permissions:
   contents: read
 
 jobs:
+  on-main:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check the tagged commit is on main
+        run: |
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main || {
+            echo "::error::$GITHUB_REF_NAME is on $GITHUB_SHA, which isn't on main: a release is a tag on a commit of main, so nothing is built, signed or published"
+            exit 1
+          }
+          echo "$GITHUB_REF_NAME is on $GITHUB_SHA, on main"
+
   build:
+    needs: on-main
     uses: ./.github/workflows/release-build.yml
     secrets: inherit
 
@@ -139,6 +157,25 @@ jobs:
         with:
           name: stamp
           path: ${{ runner.temp }}/stamp
+
+      - name: Check the stamp only edits the stamped files
+        env:
+          STAMPED: |
+            src/version.ts
+            package.json
+            desktop/package.json
+            site/app.js
+            site/README.md
+            CHANGELOG.md
+        run: |
+          patch="$RUNNER_TEMP/stamp/stamp.patch"
+          [ -s "$patch" ] || exit 0
+          summary=$(git apply --summary "$patch")
+          [ -z "$summary" ] || { echo "::error::the stamp creates, deletes, renames or changes the mode of a file, so it isn't pushed to main: $summary"; exit 1; }
+          stat=$(git apply --numstat "$patch")
+          while IFS=$'\t' read -r _ _ file; do
+            grep -qxF -- "$file" <<<"$STAMPED" || { echo "::error::the stamp edits $file, which scripts/stamp.ts never writes, so it isn't pushed to main"; exit 1; }
+          done <<<"$stat"
 
       - name: Commit the stamp to main
         env:

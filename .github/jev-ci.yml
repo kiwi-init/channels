@@ -71,7 +71,7 @@ jobs:
 
   test-unit:
     name: test / unit
-    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release-build.yml", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.mac.plist", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
+    inputs: ["src/**", ".github/workflows/ci.yml", ".github/workflows/release.yml", ".github/workflows/release-build.yml", "scripts/perf-check.ts", "scripts/perf-budgets.json", "packages/core/**", "test/**", "web/src/**", "web/public/**", "site/app.js", "site/install", "site/install.sh", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/cli-downloads.ts", "scripts/action-pins.ts", "scripts/stamp.ts", "scripts/changelog.ts", "site/README.md", "desktop/src/**", "desktop/scripts/mac-size.ts", "desktop/scripts/appimage-squashfs.ts", "desktop/build/entitlements.mac.plist", ".github/jev-ci/**", ".github/jev-ci.yml", ".github/workflows/ci.yml"]
     always: ["package.json", "bun.lock", "bunfig.toml", "web/package.json", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs the unit tests with bun test: every test/*.test.ts except the slow suites in
@@ -365,6 +365,10 @@ jobs:
       KIWI_HOME/daemon.log, rotated at 1 MB. And
       test/release-signing.test.ts: release-build.yml's Package step fails a tag release that has no
       Mac signing secrets, while a rehearsal and the Linux build still build unsigned. And
+      test/release-on-main.test.ts: release.yml's on-main job refuses a tag whose commit isn't on
+      main, and every other job waits for it, so nothing is built, signed or published from such a
+      tag; bump-main pushes a stamp only when it edits scripts/stamp.ts's files and CHANGELOG.md,
+      and refuses one that edits, adds, deletes, renames or changes the mode of anything else. And
       test/desktop-update-asset.test.ts: a Mac that can't replace itself (translocated, on its disk
       image, in a folder it can't write, or after this version's swap failed) offers the release before
       downloading, and the swap script leaves the old app and a marker when the move fails;
