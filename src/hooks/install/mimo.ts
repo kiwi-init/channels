@@ -55,6 +55,17 @@ async function rootOf(id: string): Promise<string> {
   return at;
 }
 
+function knownRoot(id: string): string | null {
+  let at = id;
+  for (let i = 0; i < 16; i++) {
+    if (!kiwi.parents.has(at)) return null;
+    const up = kiwi.parents.get(at);
+    if (!up) return at;
+    at = up;
+  }
+  return at;
+}
+
 function listenOnce(id: string, cwd: string, landed: string | null): Promise<{ code: number | null; out: string; err: string }> {
   return new Promise((resolve) => {
     const child = spawn(LISTEN, { shell: true, detached: true, cwd, env: { ...process.env, MIMOCODE_SESSION_ID: id }, stdio: ["pipe", "pipe", "pipe"] });
@@ -119,9 +130,10 @@ export const KiwiPlugin = async ({ client }: { client: Client }) => {
         if (id !== input.sessionID) stop(input.sessionID);
         void watch(id, input.cwd ?? process.cwd());
       } catch {
-        // MiMoCode couldn't name the session's parent: the session's own id still reaches its listener.
-        output.env.MIMOCODE_SESSION_ID = input.sessionID;
-        void watch(input.sessionID, input.cwd ?? process.cwd());
+        // MiMoCode couldn't name the session's parent: a root another lookup found wins, else the session's own id still reaches its listener.
+        const id = knownRoot(input.sessionID) ?? input.sessionID;
+        output.env.MIMOCODE_SESSION_ID = id;
+        void watch(id, input.cwd ?? process.cwd());
       }
     },
     event: async ({ event }: { event: Event }) => {

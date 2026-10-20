@@ -7,6 +7,7 @@ import { extraInstalled, hooksStatus, installExtra, uninstallExtra } from "../sr
 import { updateConfig } from "../src/config.ts";
 import { installMimo, migrateMimo, mimoConfigRoot, mimoInstalled, mimoPluginPath, mimoPluginSource, uninstallMimo } from "../src/hooks/install/mimo.ts";
 import { handoffFrom } from "../src/hooks/listen.ts";
+import { kiwiCmd } from "./owner.ts";
 
 const made: string[] = [];
 const prev = new Map<string, string | undefined>();
@@ -371,3 +372,54 @@ test("a plugin of Kiwi's from an older kiwi is rewritten at the listen hook; a k
   expect(migrateMimo()).toBeNull();
   expect(existsSync(path)).toBe(false);
 });
+
+test("a lookup that fails after another one for the same session named its root starts no listener on the session's own id", async () => {
+  const dir = scratch("hk-mimo-race-");
+  const calls = join(dir, "calls.log");
+  const fake = join(dir, "listen.sh");
+  writeFileSync(fake, `#!/bin/sh\necho "$MIMOCODE_SESSION_ID" >> ${JSON.stringify(calls)}\nsleep 30\n`);
+  chmodSync(fake, 0o755);
+  const file = join(dir, "kiwi.ts");
+  writeFileSync(file, mimoPluginSource(fake));
+  let lookups = 0;
+  const client = {
+    session: {
+      get: async ({ path }: { path: { id: string } }): Promise<{ data?: { parentID?: string } }> => {
+        lookups += 1;
+        if (lookups === 1) {
+          await Bun.sleep(300);
+          throw new Error("connection refused");
+        }
+        return { data: path.id === "ses_child" ? { parentID: "ses_root" } : {} };
+      },
+      promptAsync: async () => undefined,
+    },
+  };
+  const mod = (await import(file)) as { KiwiPlugin: (input: { client: typeof client }) => Promise<Hooks> };
+  const hooks = await mod.KiwiPlugin({ client });
+  const slow = { env: {} as Record<string, string> };
+  const fast = { env: {} as Record<string, string> };
+  await Promise.all([hooks["shell.env"]({ cwd: dir, sessionID: "ses_child" }, slow), hooks["shell.env"]({ cwd: dir, sessionID: "ses_child" }, fast)]);
+  expect(fast.env.MIMOCODE_SESSION_ID).toBe("ses_root");
+  expect(slow.env.MIMOCODE_SESSION_ID).toBe("ses_root");
+  await until("the root's listener", () => existsSync(calls));
+  await Bun.sleep(500);
+  expect(readFileSync(calls, "utf8").trim().split("\n")).toEqual(["ses_root"]);
+  await hooks.event({ event: { type: "session.deleted", properties: { info: { id: "ses_root" } } } });
+});
+
+test("kiwi hook listen run from MiMoCode rewrites a plugin of Kiwi's from an older kiwi before it listens", async () => {
+  const dir = scratch("hk-mimo-hook-");
+  const env = { ...process.env, KIWI_MIMO_DIR: dir, KIWI_HOME: scratch("hk-mimo-hook-home-"), MIMOCODE: "1", MIMOCODE_SESSION_ID: "ses_hook" };
+  const kiwi = async (args: string[], stdin?: string) => {
+    const p = Bun.spawn(kiwiCmd(args), { cwd: dir, env, stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin), stdout: "pipe", stderr: "pipe" });
+    const err = await new Response(p.stderr).text();
+    expect(await p.exited, err).toBe(0);
+  };
+  await kiwi(["hooks", "install", "mimo"]);
+  const path = join(dir, "plugin", "kiwi.ts");
+  const current = readFileSync(path, "utf8");
+  writeFileSync(path, current.replace("RETRY_MS = 30_000", "RETRY_MS = 60_000"));
+  await kiwi(["hook", "listen"], JSON.stringify({ session_id: "ses_hook", cwd: dir, hook_event_name: "listen", landed: null }));
+  expect(readFileSync(path, "utf8")).toBe(current);
+}, 20_000);
