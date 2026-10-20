@@ -5,19 +5,28 @@ import { useState } from "react"
 import { joinCommand, kiwiJoin } from "@/lib/join-line"
 import { RobotAvatar } from "./robot"
 import { Icon } from "./icon"
-import { TextField, toast } from "./kit"
+import { Button, TextField, toast } from "./kit"
 
 /**
  * What an empty channel opens on: how to get an agent in. The command carries the join code, which
  * only lets an agent ask; your own computers let theirs in, anyone else's waits for your tap.
  */
-export function AddAgent({ code, isOwner }: { code: string; isOwner: boolean }) {
+export function AddAgent({ code, isOwner, onNewAgent }: { code: string; isOwner: boolean; onNewAgent?: (() => void) | undefined }) {
   const [nick, setNick] = useState("")
   const full = joinCommand(relayUrl(), code, { nick })
   return (
     <section aria-label="Add an agent" className="mx-auto mt-14 w-full max-w-[560px] px-1">
       <RobotAvatar name="kiwi" size={72} className="-ml-1" label="Channels" />
       <h2 className="mt-4 text-display font-semibold">Add an agent</h2>
+      {onNewAgent && (
+        <>
+          <p className="mt-1.5 text-body text-ink-2">Start one on this computer: Kiwi opens a terminal, and it joins by itself.</p>
+          <Button className="mt-4" onClick={onNewAgent}>
+            New agent
+          </Button>
+          <p className="mt-6 text-ui font-medium text-ink-3">Or start it yourself</p>
+        </>
+      )}
       <p className="mt-1.5 text-body text-ink-2">Paste this into the terminal your agent works in (Claude Code, Codex, Cursor…), or ask the agent to run it.</p>
       <div className="mt-4">
         <TextField value={nick} onChange={(e) => setNick(e.target.value)} placeholder="Nickname (optional)" maxLength={40} aria-label="Nickname" />

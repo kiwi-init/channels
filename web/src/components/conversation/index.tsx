@@ -25,7 +25,8 @@ import { AgentStrip, agentNow, type AgentNow } from "../agent-strip"
 import { ChannelControls } from "../controls"
 import { Icon } from "../icon"
 import { Button, Harnesses, Pictures, Spinner, errorText, toast } from "../kit"
-import { AddAgent, AgentLanes, CompactBlock, GifPicker, HoldDialog, ProposalCard, TalkBar, TalkButton } from "../lazy"
+import { AddAgent, AgentLanes, CompactBlock, GifPicker, HoldDialog, NewAgent, ProposalCard, TalkBar, TalkButton } from "../lazy"
+import { canStartAgents } from "@/lib/launches"
 import { bridge } from "@/lib/secrets"
 import type { ToolCtx } from "@/lib/voice/tools"
 import { defaultScopes } from "../scopes"
@@ -201,6 +202,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const onJump = useLatest(jump)
   const onOpenImage = useLatest((pm: Message, img: ImageAttachment, src: string) => setPicture({ m: pm, img, src }))
   const handlers = useControlsHandlers({ live, member, onGone })
+  const [newAgent, setNewAgent] = useState(false)
+  const onNewAgent = isOwner && canStartAgents() ? () => setNewAgent(true) : undefined
   const voiceTools = useMemo<ToolCtx>(
     () => ({
       state,
@@ -452,6 +455,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
             title={title}
             {...handlers}
           >
+            {onNewAgent && <NewAgent open={newAgent} onClose={() => setNewAgent(false)} code={member.code} roomId={roomId} channel={title} lead={state.lead} onPin={handlers.onPin} roster={roster} />}
             <div className="flex h-full min-w-0 flex-1">
               <ChannelSidebar
                 title={title}
@@ -467,6 +471,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                   setTab("agents")
                   setSearch(null)
                 }}
+                onNewAgent={onNewAgent}
                 view={tab === "tasks" ? view : null}
                 counts={counts}
                 onView={(v) => {
@@ -514,14 +519,14 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                             view={view}
                             agents={agentsNow}
                             needs={needsMe ? needsYou(true) : null}
-                            empty={noAgents ? <AddAgent code={member.code} isOwner={isOwner} /> : null}
+                            empty={noAgents ? <AddAgent code={member.code} isOwner={isOwner} onNewAgent={onNewAgent} /> : null}
                             open={shownTask}
                             onOpen={openTask}
                           />
                         ) : agentsNow.length ? (
                           <AgentLanes agents={agentsNow} state={state} messages={messages} now={now} nameOf={nameOf} onOpenTask={openTask} />
                         ) : (
-                          <AddAgent code={member.code} isOwner={isOwner} />
+                          <AddAgent code={member.code} isOwner={isOwner} onNewAgent={onNewAgent} />
                         )}
                       </div>
                     </div>
@@ -544,7 +549,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                             </Centered>
                           ) : hereKey === "main" && noAgents && !search ? (
                             <>
-                              <AddAgent code={member.code} isOwner={isOwner} />
+                              <AddAgent code={member.code} isOwner={isOwner} onNewAgent={onNewAgent} />
                               {!quiet && rows}
                             </>
                           ) : visible.length === 0 ? (
