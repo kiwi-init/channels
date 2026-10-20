@@ -17,7 +17,7 @@ const CACHE_KEEP = 300;
 const NOT_A_MEMBER = " isn't a member";
 
 function poisoned(base: FoldBase, roster: Roster): boolean {
-  const names = new Set(roster.map((r) => r.name));
+  const names = new Set(roster.filter((r) => r.kind !== "computer").map((r) => r.name));
   return base.rejected.some(([, why]) => why.endsWith(NOT_A_MEMBER) && names.has(why.slice(0, -NOT_A_MEMBER.length)));
 }
 
@@ -34,6 +34,7 @@ export class SessionState {
   protected guardFloor: GuardFloor | null | undefined;
   private roomsCheckedAt = 0;
   private rosterCheckedAt = 0;
+  private healed = false;
   private log: Message[] | null = null;
   private saved = 0;
   private owed = 0;
@@ -130,7 +131,8 @@ export class SessionState {
     const seen = yield* this.peek();
     const [synced, roster] = yield* Effect.all([this.sync(seen), this.members(false, seen?.members ?? undefined)], { concurrency: "unbounded" });
     let messages = synced;
-    if (this.base && poisoned(this.base, roster)) {
+    if (this.base && !this.healed && poisoned(this.base, roster)) {
+      this.healed = true;
       yield* (yield* Cache).dropBase(this.cfg.roomId);
       this.base = null;
       messages = yield* this.sync(seen);

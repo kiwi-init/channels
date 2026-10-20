@@ -181,3 +181,32 @@ test("a cached base that called a current member a non-member is dropped and reb
   expect(state.tasks.get(task)?.state).toBe("done");
   expect([...state.trust.values()].includes("forged")).toBe(false);
 });
+
+test("a base that rejected a computer's name isn't treated as poisoned, so nothing refetches (T1004)", async () => {
+  const { messages } = await ownerCh.history(0);
+  const roster = rosterOf(await ownerCh.members());
+  const kept: { base?: FoldBase } = {};
+  fold(messages, roster, Date.now(), undefined, undefined, null, (b) => void (kept.base = b));
+  const base = { ...kept.base!, rejected: [...kept.base!.rejected, [kept.base!.n, "laptop isn't a member"] as [number, string]] };
+  const dropped: string[] = [];
+  const cache = {
+    read: () => Effect.succeed([] as Message[]),
+    append: () => Effect.void,
+    replace: () => Effect.void,
+    base: () => Effect.succeed(base),
+    keepBase: () => Effect.void,
+    dropBase: (room: string) => Effect.sync(() => void dropped.push(room)),
+    trim: () => Effect.void,
+  };
+  const state = await runAgent(
+    Effect.gen(function* () {
+      const cfg = (yield* (yield* Keystore).config).channels["trim"]!;
+      const s = yield* openSession("trim", cfg, "dev");
+      const folds = s as unknown as Folds;
+      folds.roster = [...roster, { name: "laptop", pk: dev.pk, owner: false, at: 0, active: true, kind: "computer" }];
+      return (yield* s.state()).state;
+    }).pipe(Effect.provideService(Cache, cache)),
+  );
+  expect(dropped).toHaveLength(0);
+  expect(state.tasks.get(task)?.state).toBe("done");
+});
