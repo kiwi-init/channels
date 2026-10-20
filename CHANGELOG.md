@@ -2,7 +2,7 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
-## 0.20.6 — 2026-10-20
+## 0.21.0 — 2026-10-20
 
 - **A MiMoCode session whose lookups race keeps one listener, and the plugin is updated before any seat joins** ([#536](https://github.com/ojowwalker77/channels/pull/536))
 - **Hooks from an older kiwi are rewritten with --harness, and a hook with no session never takes another harness's seat** ([#534](https://github.com/ojowwalker77/channels/pull/534))
