@@ -111,7 +111,10 @@ whether anything is waiting for it, plus one detached process that does the typi
   - the lead with none: past the line;
   - any other seat with none (a coder after `task done`, a reviewer after its verdict): past
     100k (`ROTATE_FLOOR`), so a small context isn't cleared for nothing;
-  - never while a review round it judges is open, or a question of its to a person is.
+  - never while a review round it judges is open, or a question of its to a person is, unless
+    that question sits in the thread of a task already done or archived.
+  With rotation on, a Stop that keeps the seat writes why to `rotate.log` (the seat as
+  `alias/as`, then the reason), once per reason for each session.
 - **The guard.** `kiwi rotate send`, started detached by the hook, waits up to 15 minutes, and on
   every round checks all of these, else waits:
   - rotation is still on for this computer;

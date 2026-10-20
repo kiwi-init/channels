@@ -3,12 +3,12 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CONTEXT_LINE } from "@kiwi/core/protocol.ts";
-import { fold, type ChannelState } from "@kiwi/core/state.ts";
+import { CONTEXT_LINE, PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts";
+import { fold, type ChannelState, type Place } from "@kiwi/core/state.ts";
 import { alive } from "../src/hooks/listeners.ts";
 import { paneOf, rotateArgv } from "../src/hooks/rotate.ts";
 import { ROTATE_FLOOR, rotationAt } from "../src/rotate/decide.ts";
-import { calm, clearWhenIdle, dropLock, inputText, rotating, takeLock } from "../src/rotate/pane.ts";
+import { calm, clearWhenIdle, dropLock, forgetStay, inputText, noteStay, rotating, takeLock } from "../src/rotate/pane.ts";
 
 const board = (tasks: object[], extra: Partial<ChannelState> = {}): ChannelState => {
   const state = fold([], []);
@@ -18,6 +18,8 @@ const board = (tasks: object[], extra: Partial<ChannelState> = {}): ChannelState
   }
   return Object.assign(state, extra);
 };
+const askOf = (seq: number, from: string): Message => ({ v: PROTOCOL_VERSION, id: `m-${seq}`, from, kind: "ask", body: "which one?", ts: 1, seq, sigOk: true });
+const inTask = (seq: number, task: number) => new Map<number, Place>([[seq, { kind: "task", task }]]);
 const checkpoint = (seq: number) => ({ seq, by: "ana", ts: 1, text: "where it stands", checkpoint: true as const });
 
 describe("when a seat rotates", () => {
@@ -60,8 +62,17 @@ describe("when a seat rotates", () => {
     const round = { n: 1, result: { kind: "open" } };
     expect(rotationAt(board([{ id: 1, owner: "bo", review: "ana", rounds: [round] }]), "ana", 900_000, null).kind).toBe("stay");
     expect(rotationAt(board([{ id: 1, owner: "bo", review: "ana", rounds: [{ n: 1, result: { kind: "approved" } }] }]), "ana", 900_000, null).kind).toBe("rotate");
-    expect(rotationAt(board([], { openAsks: [{ from: "ana" } as never] }), "ana", 900_000, null).kind).toBe("stay");
-    expect(rotationAt(board([], { openAsks: [{ from: "bo" } as never] }), "ana", 900_000, null).kind).toBe("rotate");
+    expect(rotationAt(board([], { openAsks: [askOf(7, "ana")] }), "ana", 900_000, null).kind).toBe("stay");
+    expect(rotationAt(board([], { openAsks: [askOf(7, "bo")] }), "ana", 900_000, null).kind).toBe("rotate");
+  });
+
+  test("a question of its in a done or archived task's thread no longer holds it, one in an open task's or outside any task does", () => {
+    const asked = (task: object | null) => board(task ? [{ id: 1, owner: "bo", ...task }] : [], { openAsks: [askOf(7, "ana")], placeOf: inTask(7, 1) });
+    expect(rotationAt(asked({ state: "done" }), "ana", 900_000, null).kind).toBe("rotate");
+    expect(rotationAt(asked({ archived: true }), "ana", 900_000, null).kind).toBe("rotate");
+    expect(rotationAt(asked({}), "ana", 900_000, null)).toEqual({ kind: "stay", why: "a question of its to a person is open" });
+    expect(rotationAt(asked(null), "ana", 900_000, null).kind).toBe("stay");
+    expect(rotationAt(board([{ id: 1, owner: "bo", state: "done" }], { openAsks: [askOf(7, "ana")] }), "ana", 900_000, null).kind).toBe("stay");
   });
 });
 
@@ -134,6 +145,40 @@ describe("one sender per session", () => {
     expect(takeLock("s-2")).toBe(true);
     expect(existsSync(join(dir, "hook-state", "s-2.rotating.999999999"))).toBe(false);
     dropLock("s-2");
+  });
+
+  test("a seat that stays is logged once per reason, again after a rotation, and alongside a lock of the same session", () => {
+    const at = { pid: 42, session: "s-4", pane: "%2" };
+    const lines = () => (existsSync(join(dir, "rotate.log")) ? readFileSync(join(dir, "rotate.log"), "utf8") : "").split("\n").filter((l) => l.includes("session s-4"));
+    noteStay(at, "kiwi/ana", "between tasks, with a small context");
+    noteStay(at, "kiwi/ana", "between tasks, with a small context");
+    expect(lines()).toHaveLength(1);
+    expect(lines()[0]).toMatch(/^\d{4}-\d\d-\d\dT\S+ pid 42 session s-4 pane %2: stays \(kiwi\/ana\): between tasks, with a small context$/);
+    noteStay(at, "kiwi/ana", "a question of its to a person is open");
+    noteStay(at, "kiwi/ana", "a question of its to a person is open");
+    expect(lines()).toHaveLength(2);
+    noteStay({ ...at, session: "s-5" }, "kiwi/ana", "a question of its to a person is open");
+    expect(lines()).toHaveLength(2);
+    forgetStay("s-4");
+    noteStay(at, "kiwi/ana", "a question of its to a person is open");
+    expect(lines()).toHaveLength(3);
+    expect(takeLock("s-4")).toBe(true);
+    expect(rotating("s-4", process.ppid)).toBe(true);
+    dropLock("s-4");
+  });
+
+  test("a stay whose line could not be written is tried again at the next stop", () => {
+    const at = { pid: 42, session: "s-6", pane: "%2" };
+    const log = join(dir, "rotate.log");
+    const kept = existsSync(log) ? readFileSync(log, "utf8") : "";
+    rmSync(log, { force: true });
+    mkdirSync(log);
+    noteStay(at, "kiwi/ana", "between tasks, with a small context");
+    expect(existsSync(join(dir, "hook-state", "s-6.rotate-stay"))).toBe(false);
+    rmSync(log, { recursive: true });
+    writeFileSync(log, kept);
+    noteStay(at, "kiwi/ana", "between tasks, with a small context");
+    expect(readFileSync(log, "utf8")).toContain("session s-6 pane %2: stays (kiwi/ana): between tasks, with a small context");
   });
 
   test("two senders that start together both back off rather than both send", () => {
