@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
-import { SNAPSHOT_EVERY } from "../protocol.ts";
+import { SNAPSHOT_EVERY, SNAPSHOT_TOO_LARGE } from "../protocol.ts";
 import { MissingKey } from "../refusals.ts";
 import { openSnapshot, sealSnapshot, wellFormedSnapshot } from "../snapshot.ts";
 import { fold, rosterOf, type FoldBase } from "../state.ts";
@@ -40,7 +40,7 @@ export class ChannelSnapshots {
       yield* this.ch.ownerOnly();
       yield* this.history.keyFor(this.ch.access.epoch);
       const sealed = yield* Effect.promise(() => sealSnapshot(this.ch.identity, this.ch.access, base));
-      if (!sealed) return yield* new MissingKey(this.ch.access.keys[String(this.ch.access.epoch)] ? "the snapshot is too large to store" : "can't seal a snapshot without this epoch's key");
+      if (!sealed) return yield* new MissingKey(this.ch.access.keys[String(this.ch.access.epoch)] ? SNAPSHOT_TOO_LARGE : "can't seal a snapshot without this epoch's key");
       return (yield* this.ch.request<{ n: number }>("/snapshot", { method: "PUT", body: JSON.stringify({ snapshot: sealed }) })).n;
     }),
 

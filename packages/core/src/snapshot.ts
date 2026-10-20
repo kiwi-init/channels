@@ -12,7 +12,7 @@ export interface SealedSnapshot {
   sig: string;
 }
 
-const VERSION = 5;
+const VERSION = 6;
 const MAX_PLAIN = 64 * 1024 * 1024;
 const enc = new TextEncoder();
 
@@ -23,7 +23,13 @@ interface Column<V> {
   v: V[];
 }
 
-type Wire = Omit<FoldBase, "trust" | "threadOf" | "roomOf" | "placeOf"> & { trust: Column<Trust>; threadOf: Column<number>; roomOf: Column<string>; placeOf: Column<Place> };
+type Wire = Omit<FoldBase, "trust" | "threadOf" | "roomOf" | "placeOf" | "oldSent"> & {
+  trust: Column<Trust>;
+  threadOf: Column<number>;
+  roomOf: Column<string>;
+  placeOf: Column<Place>;
+  oldSent?: Column<number>;
+};
 
 function column<V>(pairs: [number, V][]): Column<V> {
   let last = 0;
@@ -46,21 +52,23 @@ function pairs<V>(c: Column<V>): [number, V][] {
   });
 }
 
-const toWire = (b: FoldBase): Wire => ({
+const toWire = ({ oldSent, ...b }: FoldBase): Wire => ({
   ...b,
   trust: column(b.trust),
   threadOf: column(b.threadOf.map(([seq, root]): [number, number] => [seq, seq - root])),
   roomOf: column(b.roomOf),
   placeOf: column(b.placeOf),
+  ...(oldSent ? { oldSent: column(oldSent) } : {}),
 });
 
-function fromWire(w: Wire): FoldBase {
+function fromWire({ oldSent, ...w }: Wire): FoldBase {
   return {
     ...w,
     trust: pairs(w.trust),
     threadOf: pairs(w.threadOf).map(([seq, back]): [number, number] => [seq, seq - back]),
     roomOf: pairs(w.roomOf),
     placeOf: pairs(w.placeOf),
+    ...(oldSent ? { oldSent: pairs(oldSent) } : {}),
   };
 }
 
@@ -154,7 +162,7 @@ export async function openSnapshot(access: ChannelAccess, s: unknown): Promise<F
   if (!plain || (await digest(plain)) !== s.hash) return null;
   try {
     const o = JSON.parse(new TextDecoder().decode(plain)) as { v?: unknown; room?: unknown; base?: unknown };
-    return o.v === VERSION && o.room === access.roomId && wellFormedWire(o.base, s.n) ? fromWire(o.base) : null;
+    return (o.v === 5 || o.v === VERSION) && o.room === access.roomId && wellFormedWire(o.base, s.n) ? fromWire(o.base) : null;
   } catch {
     return null;
   }

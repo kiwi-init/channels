@@ -25,14 +25,13 @@ import { AgentStrip, agentNow, type AgentNow } from "../agent-strip"
 import { ChannelControls } from "../controls"
 import { Icon } from "../icon"
 import { Button, Harnesses, Pictures, Spinner, errorText, toast } from "../kit"
-import { AddAgent, AgentLanes, CompactBlock, GifPicker, HoldDialog, leaveTalk, NewAgent, ProposalCard, TalkBar, TalkButton } from "../lazy"
+import { AddAgent, AgentLanes, CompactBlock, GifPicker, HoldDialog, leaveTalk, NewAgent, ProposalCard, TalkBar, TalkButton, TasksView } from "../lazy"
 import { canStartAgents } from "@/lib/launches"
 import { bridge } from "@/lib/secrets"
 import type { ToolCtx } from "@/lib/voice/tools"
 import { defaultScopes } from "../scopes"
 import { isAgent } from "../message"
 import { NeedsYou } from "../needs-you"
-import { TasksView } from "../tasks-view"
 import { ChannelSidebar, type Conversation as ConversationRow } from "./channel-sidebar"
 import { Header } from "./header"
 import { InfoSide, PictureSide, TasksSide, ThreadSide } from "./side-panels"
@@ -55,6 +54,9 @@ function useNow(intervalMs = 30_000): number {
 export function Conversation({ member, onBack, onGone }: { member: StoredMember; onBack: () => void; onGone: () => void }) {
   const me = member.identity.name
   const live = useChannel(member)
+  useEffect(() => {
+    if (live.snapshotTooBig) toast("Too big to snapshot: this channel loads slowly. Tell the Kiwi team.", "error")
+  }, [live.snapshotTooBig])
   const { ch, connection, gone, messages, roster, state, online, isOwner, requests, send, head, marks, pkOf } = live
   const pictures = usePictures(state)
   const harnesses = useHarnesses(state, requests)
