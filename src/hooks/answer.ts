@@ -157,7 +157,7 @@ const contextNudge = Effect.fn("Hooks.contextNudge")(function* (input: HookInput
   if (!next.over && over) noteOverLine(s.alias, s.me, session, false);
   if (!next.nudge || !context || input.stop_hook_active) return null;
   const { state } = yield* s.state();
-  const text = nudgeText(context, openTasksOf(state, s.me), mc);
+  const text = nudgeText(context, openTasksOf(state, s.me), mc, state.lead === s.me);
   if (!text || text.length > budget) return null;
   return { text, shown: Effect.sync(() => noteOverLine(s.alias, s.me, session, true, state.head)) };
 });

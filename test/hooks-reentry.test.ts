@@ -156,6 +156,21 @@ test("past the context line, the Stop hook asks once for a checkpoint of each op
   expect(await stop(255_000)).toContain("Your context is at 255k tokens");
 });
 
+test("only the lead writes a lead checkpoint, and an empty one is refused before anything is sent", async () => {
+  const note = join(agent, "lead-note.md");
+  writeFileSync(note, "waiting on bo for T1\n");
+  const refused = spawn(agent, ["task", "checkpoint", "lead", "--file", note], S);
+  const [, err] = await Promise.all([new Response(refused.stdout).text(), new Response(refused.stderr).text()]);
+  expect(await refused.exited).not.toBe(0);
+  expect(err).toContain("only the lead writes a lead checkpoint");
+  writeFileSync(note, "  \n");
+  const empty = spawn(agent, ["task", "checkpoint", "lead", "--file", note], S);
+  const [, said] = await Promise.all([new Response(empty.stdout).text(), new Response(empty.stderr).text()]);
+  expect(await empty.exited).not.toBe(0);
+  expect(said).toContain("usage: kiwi task checkpoint lead --file note.md");
+  expect(await ok(agent, ["note"], S)).not.toContain("lead checkpoint");
+});
+
 test("with rotation on, a seat past the line rotates once it has checkpointed each open task, logging why it stays once per reason, and never logs or rotates while it is off", async () => {
   const transcript = join(agent, "rotate-transcript.jsonl");
   writeFileSync(transcript, JSON.stringify({ type: "assistant", message: { model: "test-model", content: [], usage: { input_tokens: 300_000 } } }) + "\n");

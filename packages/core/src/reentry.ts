@@ -1,8 +1,10 @@
 import { ago, markedText, taskStateWord } from "./format.ts";
 import { inlineText } from "./membership.ts";
-import { openRound, taskId, type ChannelState, type Task } from "./state.ts";
+import { CHECKPOINT_MAX_LENGTH } from "./protocol.ts";
+import { openRound, taskId, unnamedAsks, unnamedTasks, type ChannelState, type Fact, type Task } from "./state.ts";
 
 export const REENTRY_MAX = 4_000;
+export const LEAD_CHECKPOINT = "lead checkpoint";
 const CHECKPOINT_SHOWN = 1_500;
 const NOTE_SHOWN = 300;
 const BOARD_SHOWN = 12;
@@ -25,8 +27,32 @@ function partIn(t: Task, me: string): Part | null {
   return null;
 }
 
+export function leadCheckpointRefusal(state: ChannelState, me: string, text: string): string | null {
+  if (!text.trim()) return "a lead checkpoint needs text: where the channel stands";
+  if (text.length > CHECKPOINT_MAX_LENGTH) return `a lead checkpoint holds at most ${CHECKPOINT_MAX_LENGTH} characters; this one has ${text.length}`;
+  if (state.lead !== me) return `only the lead writes a lead checkpoint, and the lead is ${state.lead ?? "nobody"}`;
+  const left = [...unnamedTasks(text, state.tasks.values()).map(taskId), ...unnamedAsks(text, state.openAsks).map((seq) => `#${seq}`)];
+  return left.length ? `a lead checkpoint names everything still open, each task (T7) and question (#123) by its id; this one leaves out ${left.join(", ")}` : null;
+}
+
+export function leadCheckpoint(state: ChannelState, me: string): Fact | undefined {
+  const f = state.facts.get(LEAD_CHECKPOINT);
+  return state.lead === me && f?.by === me ? f : undefined;
+}
+
+function cutText(text: string, whole: string): string {
+  return text.length > CHECKPOINT_SHOWN ? `${text.slice(0, CHECKPOINT_SHOWN)} …\n(cut here: ${whole} has all of it)` : text;
+}
+
 function checkpointText(text: string, task: number, mc: string): string {
-  return text.length > CHECKPOINT_SHOWN ? `${text.slice(0, CHECKPOINT_SHOWN)} …\n(cut here: ${mc} task show ${taskId(task)} has all of it)` : text;
+  return cutText(text, `${mc} task show ${taskId(task)}`);
+}
+
+function leadBlock(f: Fact, now: number, mc: string): Block {
+  return {
+    text: [`Your lead checkpoint, ${ago(f.ts, now)} (#${f.seq}):`, `  │ ${markedText(cutText(f.value, `${mc} note "${LEAD_CHECKPOINT}"`))}`].join("\n"),
+    elsewhere: `your lead checkpoint (${mc} note "${LEAD_CHECKPOINT}")`,
+  };
 }
 
 function roundText(t: Task): string | null {
@@ -80,15 +106,17 @@ export function reentryText(state: ChannelState, me: string, now = Date.now(), m
     .filter((x): x is { t: Task; part: Part } => x.part !== null)
     .sort((a, b) => (a.part === b.part ? a.t.id - b.t.id : a.part === "owner" ? -1 : 1));
   const board = state.lead === me ? boardBlock(state, me, mc) : null;
+  const lead = leadCheckpoint(state, me);
   const blocks: Block[] = [
     ...mine.map(({ t, part }) => taskBlock(t, part, now, mc)),
+    ...(lead ? [leadBlock(lead, now, mc)] : []),
     ...(board ? [board] : []),
     ...(state.compact
       ? [{ text: `The channel's history is compacted through #${state.compact.through}: ${inlineText(state.compact.summary, 400)}`, elsewhere: `the compacted history (${mc} compact)` }]
       : []),
   ];
   if (!blocks.length) return null;
-  const header = mine.length ? HEADER : null;
+  const header = mine.length || lead ? HEADER : null;
   const shown: Block[] = [];
   let used = 0;
   for (const block of blocks) {

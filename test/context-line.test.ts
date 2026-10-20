@@ -39,6 +39,18 @@ describe("the nudge", () => {
     expect(nudgeText({ used: 300_000 }, [], "kiwi")).toBeNull();
   });
 
+  test("the lead is asked for its lead checkpoint, alone or after its open tasks", () => {
+    const alone = nudgeText({ used: 300_000 }, [], "kiwi --as ana", true)!;
+    expect(alone).toContain(
+      "Your context is at 300k tokens, past the 250k line. Before you end this turn, write where the channel stands as you lead it with `kiwi --as ana task checkpoint lead --file note.md`",
+    );
+    expect(alone).not.toContain("open tasks");
+    const both = nudgeText({ used: 300_000 }, [7], "kiwi", true)!;
+    expect(both).toContain("(T7) with `kiwi task checkpoint T7 --file note.md`");
+    expect(both).toContain("; and where the channel stands as you lead it with `kiwi task checkpoint lead --file note.md`");
+    expect(both.indexOf("T7")).toBeLessThan(both.indexOf("checkpoint lead"));
+  });
+
   test("the open tasks are the seat's own that aren't done or archived", () => {
     const roster: Roster = [];
     const state = fold([], roster);
