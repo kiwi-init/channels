@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { signRequest } from "@kiwi/core/auth.ts";
@@ -7,7 +7,8 @@ import { generateIdentity, withExchangeKey, type Identity } from "@kiwi/core/ide
 import { makeAsk, readAnswer, type MachineVerb } from "@kiwi/core/machine-ask.ts";
 import { newSecret, openMailbox } from "@kiwi/core/mailbox.ts";
 import { certifyMachine } from "@kiwi/core/person.ts";
-import { forgetAtRelay, startMachineInbox } from "../src/daemon/inbox.ts";
+import { sealTo } from "@kiwi/core/crypto.ts";
+import { deliveredFrom, forgetAtRelay, startMachineInbox } from "../src/daemon/inbox.ts";
 import type { PairedMachine } from "../src/daemon/pair.ts";
 import { remoteRunner } from "../src/daemon/remote.ts";
 import type { LaunchRequest } from "../src/launch/wire.ts";
@@ -136,11 +137,32 @@ describe("a paired computer's daemon", () => {
       ids.push(a.id);
     }
     expect(launched.map((l) => l.launch)).toEqual(ids);
-    expect(launched[0]).toEqual({ harness: "claude", folder: project, code, nick: "Ada", launch: ids[0] });
+    expect(launched[0]).toEqual({ harness: "claude", folder: realpathSync(project), code, nick: "Ada", launch: ids[0] });
+    expect(launched[1]!.folder).toBe(realpathSync(join(project, "deep")));
     const fourth = await ask("launch", { harness: "claude", folder: project, code });
     expect(await fourth.answer).toMatchObject({ ok: false, why: "failed" });
     expect(launched).toHaveLength(3);
     expect(log()).toContain(`\tlaunch\tdone\tclaude\t${project}\t${ids[0]}\n`);
+  });
+
+  test("a box that breaks the reader, with a key that isn't base64, is logged and taken out, never retried", async () => {
+    const forged = await sealTo(
+      machine.xpk!,
+      JSON.stringify({ kind: "kiwi-machine-ask", v: 1, machine: machine.pk, verb: "harnesses", args: {}, id: "brokenKey_0001", at: Date.now(), reply: newSecret(), pk: "%%%", sig: "x" }),
+      "kiwi-machine-ask",
+    );
+    expect(await post(forged)).toBe(202);
+    await until("the broken box logged", () => log().includes("\trefused\tmalformed\t\t\t"));
+    const path = `/v1/machine/${machine.pk}/inbox`;
+    const token = await signRequest(machine, `machine:${machine.pk}`, "GET", path);
+    await until("the broken box gone", async () => ((await (await fetch(relay + path, { headers: { authorization: `Bearer ${token}` } })).json()) as { boxes: unknown[] }).boxes.length === 0);
+  });
+
+  test("a frame naming an ask by anything but the relay's own id shape is ignored, so the log can't be forged", () => {
+    expect(deliveredFrom(JSON.stringify({ box: { id: "AAAAAAAAAAAAAAAAAAAAAA", box: "a.b.c" } }))).toEqual({ id: "AAAAAAAAAAAAAAAAAAAAAA", box: "a.b.c" });
+    expect(deliveredFrom(JSON.stringify({ box: { id: "x\tdone\tforged", box: "a.b.c" } }))).toBeNull();
+    expect(deliveredFrom(JSON.stringify({ box: { id: "../../inbox", box: "a.b.c" } }))).toBeNull();
+    expect(deliveredFrom("not json")).toBeNull();
   });
 
   test("unpair answers, then the relay forgets this computer and the socket closes", async () => {
@@ -148,5 +170,18 @@ describe("a paired computer's daemon", () => {
     expect(await answer).toEqual({ ok: true });
     await until("unpaired", () => unpaired === 1);
     await until("the relay forgot it", async () => ((await status()) as { status?: number }).status === 403);
+  });
+});
+
+describe("the launch cap", () => {
+  test("is kept on disk, so a restart doesn't reset it", async () => {
+    const starts = join(root, "remote-launches.json");
+    const code = "mc2-AAAAAAAAAAAAAAAAAAAAAA-BBBBBBBBBBBBBBBB";
+    const runner = () =>
+      remoteRunner({ inventory: async () => [], folders: () => [project], starts, launch: async (req) => ({ ok: true, launch: req.launch!, placed: { ok: true, place: "terminal" } }) });
+    const first = runner();
+    for (let i = 0; i < 3; i++) expect(await first({ verb: "launch", launch: { harness: "claude", folder: project, code } }, `restartTest_${i}`)).toMatchObject({ ok: true });
+    const again = runner();
+    expect(await again({ verb: "launch", launch: { harness: "claude", folder: project, code } }, "restartTest_3")).toMatchObject({ ok: false, why: "failed" });
   });
 });
