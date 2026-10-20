@@ -280,7 +280,7 @@ export interface JoinClaims {
   launch?: string;
 }
 
-export const LAUNCH_RE = /^[A-Za-z0-9_-]{8,64}$/;
+const LAUNCH_RE = /^[A-Za-z0-9_-]{8,64}$/;
 
 export function readLaunch(x: unknown): string | undefined {
   return typeof x === "string" && LAUNCH_RE.test(x) ? x : undefined;
