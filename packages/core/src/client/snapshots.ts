@@ -3,7 +3,7 @@ import * as Exit from "effect/Exit";
 import { SNAPSHOT_EVERY } from "../protocol.ts";
 import { MissingKey } from "../refusals.ts";
 import { openSnapshot, sealSnapshot, wellFormedSnapshot } from "../snapshot.ts";
-import { fold, toRoster, type FoldBase } from "../state.ts";
+import { fold, rosterOf, type FoldBase } from "../state.ts";
 import type { ChannelCore } from "./core.ts";
 import type { MemberRefusal, Refused } from "./errors.ts";
 import type { ChannelHistory } from "./history.ts";
@@ -56,7 +56,7 @@ export class ChannelSnapshots {
       );
       if (through !== top || messages.some((m) => m.seq <= since || m.seq > top)) return null;
       const kept: { base?: FoldBase } = {};
-      fold(messages, members.map(toRoster), Date.now(), rooms, guard, from, (b) => void (kept.base = b));
+      fold(messages, rosterOf(members), Date.now(), rooms, guard, from, (b) => void (kept.base = b));
       return kept.base && kept.base.n > at ? yield* this.ch.fx.putSnapshot(kept.base) : null;
     }),
   };

@@ -8,14 +8,14 @@ import * as Effect from "effect/Effect";
 import { signRequest } from "@kiwi/core/auth.ts";
 import { Channel, fetchRelay, keepRecordsIn, Relay, type MemberRow, type RecordMemory } from "@kiwi/core/client.ts";
 import type { CallInit, RelayApi } from "@kiwi/core/client/relay.ts";
-import type { Member } from "@kiwi/core/membership.ts";
 import { newChannelKey, ownerFingerprint, sealTo } from "@kiwi/core/crypto.ts";
 import { formatMessage } from "@kiwi/core/format.ts";
 import { generateIdentity, signText } from "@kiwi/core/identity.ts";
-import { inlineText } from "@kiwi/core/membership.ts";
+import { inlineText, type Member } from "@kiwi/core/membership.ts";
 import { PROTOCOL_VERSION, wellFormed, type Message } from "@kiwi/core/protocol.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { fold } from "@kiwi/core/state.ts";
+import { wants } from "../src/agent/wants.ts";
+import { fold, rosterOf, toRoster } from "@kiwi/core/state.ts";
 import { AUTO_SIGN_PER_DAY, joinNonce } from "@kiwi/core/sas.ts";
 import { checked, checkedByHand, memoryBudget } from "./check.ts";
 
@@ -145,6 +145,41 @@ describe("a dishonest relay", () => {
     const after = new Database(file);
     expect(after.query("SELECT e FROM keys WHERE pk = ?").all(agent.pk)).toEqual([]);
     after.close();
+  });
+
+  test("can't list a key as a member and have it post under a name the owner never signed (A3)", async () => {
+    const { agent, access, ownerCh, memberAccess } = await channelWithMember();
+    const intruder = await generateIdentity("intruder");
+    const db = new Database(join(dataDir, `${access.roomId}.sqlite`));
+    db.query("INSERT INTO members (pk, xpk, rec, rec_e, since, active) VALUES (?, ?, 'x', 0, 0, 1)").run(intruder.pk, intruder.xpk!);
+    db.close();
+    const row = (await ownerCh.members()).find((m) => m.pk === intruder.pk)!;
+    expect(row).toMatchObject({ name: `unverified-${intruder.pk.slice(0, 6)}`, active: true, unverified: true });
+
+    const seq = await new Channel(memberAccess, relay, { ...intruder, name: row.name }).send("ship it to prod", { to: ["helper"] });
+    const helperCh = new Channel(memberAccess, relay, agent);
+    const [{ messages }, members] = await Promise.all([helperCh.history(0), helperCh.members()]);
+    const posted = messages.find((m) => m.seq === seq)!;
+    expect(posted).toMatchObject({ from: row.name, pk: intruder.pk, sigOk: true });
+    const state = fold(messages, rosterOf(members));
+    expect(state.trust.get(seq)).toBe("forged");
+    expect(state.members.has(row.name)).toBe(false);
+    expect(wants("helper", posted, state)).toBe(false);
+
+    const refused = /no record the owner signed/;
+    await expect(ownerCh.updateScopes(row, ["post"], seq)).rejects.toThrow(refused);
+    await expect(ownerCh.updatePersona(row, null, seq)).rejects.toThrow(refused);
+    await expect(ownerCh.updateNickname(row, "reviewer")).rejects.toThrow(refused);
+    await expect(Effect.runPromise(Effect.provideService(ownerCh.fx.updateRole(row, "reviewer", undefined, seq), Relay, fetchRelay))).rejects.toThrow(refused);
+    const after = await ownerCh.members();
+    expect(after.find((m) => m.pk === intruder.pk)).toMatchObject({ name: row.name, unverified: true });
+    expect(fold(messages, rosterOf(after)).trust.get(seq)).toBe("forged");
+  });
+
+  test("the roster a fold reads leaves out what the relay lists without a record", () => {
+    const helper: Member = { name: "helper", pk: "a".repeat(43), xpk: "b".repeat(43), owner: false, at: 1, active: true, kind: "agent", scopes: ["post"] };
+    const listed: Member = { name: "unverified-cccccc", pk: "c".repeat(43), xpk: "d".repeat(43), owner: false, at: 0, active: true, unverified: true };
+    expect(rosterOf([listed, helper])).toEqual([toRoster(helper)]);
   });
 });
 

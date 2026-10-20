@@ -37,6 +37,7 @@ exports[`the relay's error texts are exactly these 1`] = `
   "400 task: the task's number",
   "400 that isn't the owner's signature over this request",
   "400 that nonce doesn't match the request",
+  "400 the icon was sealed with an older channel key than this channel's: update Channels and try again",
   "400 the image's bytes don't match its id",
   "400 the owner can't leave; close the channel instead",
   "400 the owner may always post",

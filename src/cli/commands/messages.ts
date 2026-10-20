@@ -23,15 +23,24 @@ import {
   type Message,
 } from "@kiwi/core/protocol.ts";
 import { chooseThread, parseTaskId, wentTo } from "@kiwi/core/state.ts";
-import { args, opt } from "../args.ts";
+import { args, opt, unexpectedOptions } from "../args.ts";
 import { parseWhere } from "../where.ts";
-import { type Command, die, noteRead, offlineOk, out, session } from "../context.ts";
+import { type Command, die, noteRead, offlineOk, out, type Quit, session } from "../context.ts";
 import { images, list, render, text } from "../input.ts";
+
+const PUBLISHING = ["channel", "as", "quiet", "json", "file", "image"] as const;
+const SEND_OPTIONS = [...PUBLISHING, "to", "kind", "re", "room", "ask", "wait", "escalate", "handoff", "vendor", "expires", "option", "dm", "task", "main"];
+
+function refuseUnused(command: string, allowed: readonly string[]): Effect.Effect<void, Quit> {
+  const extra = unexpectedOptions(allowed);
+  return extra.length ? die(`kiwi ${command} doesn't take ${extra.map((o) => `--${o}`).join(", ")}: nothing was sent (see kiwi help)`) : Effect.void;
+}
 
 export const messageCommands: Record<string, Command> = {
   send: () =>
     oneLook(
       Effect.gen(function* () {
+        yield* refuseUnused(args[0] === "ask" ? "ask" : "send", SEND_OPTIONS);
         if (opt.escalate) {
           const extra = (["to", "image", "kind", "room", "ask", ...(opt.handoff === undefined ? (["wait"] as const) : [])] as const).filter((f) => opt[f] !== undefined);
           if (extra.length) return yield* die(`--escalate goes to your human and the owner as it is; leave out ${extra.map((f) => `--${f}`).join(", ")}`);
@@ -83,12 +92,15 @@ export const messageCommands: Record<string, Command> = {
   reply: () =>
     oneLook(
       Effect.gen(function* () {
+        yield* refuseUnused("reply", [...PUBLISHING, "kind"]);
         const s = yield* session();
         const seq = Number((args[1] ?? "").replace(/^#/, "")) || (yield* die('usage: kiwi reply N "text"'));
         const body = yield* text(2);
         if (!body.trim()) return yield* die("empty reply");
+        const kind = (opt.kind ?? "msg") as Kind;
+        if (!CHAT_KINDS.includes(kind)) return yield* die(`kind must be one of: ${CHAT_KINDS.join(", ")}`);
         const imgs = yield* images;
-        out(`sent #${yield* s.reply(seq, body, (opt.kind ?? "msg") as Kind, imgs)}`);
+        out(`sent #${yield* s.reply(seq, body, kind, imgs)}`);
       }),
     ),
 
@@ -180,8 +192,11 @@ export const messageCommands: Record<string, Command> = {
           !ignored(state.trust.get(m.seq)) &&
           (room === undefined || (m.kind !== "event" && state.roomOf.get(m.seq) === room)) &&
           (task === undefined || inTask(m));
-        const shown = (yield* s.earlier(held, Number(opt.n ?? 30), visible)).filter(visible);
-        for (const m of shown.slice(-Number(opt.n ?? 30))) out(render(m, state));
+        const n = Number(opt.n ?? 30);
+        if (!Number.isInteger(n) || n < 0) return yield* die(`-n takes a number of messages, like -n 30`);
+        if (n === 0) return;
+        const shown = (yield* s.earlier(held, n, visible)).filter(visible);
+        for (const m of shown.slice(-n)) out(render(m, state));
       }),
     ),
 

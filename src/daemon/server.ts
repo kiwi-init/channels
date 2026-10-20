@@ -19,6 +19,7 @@ import { readLaunchRequest } from "../launch/wire.ts";
 import { beatLock, dropLock, lockPath, ownsLock, takeLock } from "./lock.ts";
 import { stopDaemon, tryHello } from "./rpc.ts";
 import { readKey, type ConnState, type Seat, type Sub, type Waiting } from "./seat.ts";
+import { throttled } from "./throttle.ts";
 import { pathOf, seatWakes } from "./wake.ts";
 
 export const ACTIVITY_EVERY_MS = 3_000;
@@ -32,6 +33,7 @@ const HOOK_FILES_KEEP_MS = 7 * 24 * 3600_000;
 const ORPHAN_MS = 10 * 60_000;
 const RETRY_FIRST_MS = 5_000;
 const RETRY_MAX_MS = 30 * 60_000;
+const SYNC_ON_REQUEST_MS = 2_000;
 
 class NotAgentSeat extends Error {}
 
@@ -397,7 +399,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       if (!anyone.alive()) throw new Error("nobody is waiting for this channel any more");
       if (!stillWanted(alias, c.roomId, agent)) throw new Error(`"${agent}" no longer has a key in "${alias}" on this computer`);
       const self = (await ch.members()).find((m) => m.pk === id.pk);
-      if (!self || self.owner || self.kind === "human") throw new NotAgentSeat(`"${agent}" isn't an agent in "${alias}": the daemon holds seats for agents only`);
+      if (!self || self.unverified || self.owner || self.kind === "human") throw new NotAgentSeat(`"${agent}" isn't an agent in "${alias}": the daemon holds seats for agents only`);
       if (stopped) throw new Error("the daemon is stopping");
       const seat: Seat = {
         key,
@@ -452,7 +454,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           signal: seat.ctl.signal,
           onOpen: ({ presence, mark, probe }) => opened(seat, presence, mark, probe),
           onPresence: (p) => {
-            if (!p.query && p.client !== "probe" && p.from !== seat.agent) seat.heard.set(p.from, { presence: p, at: Date.now() });
+            if (p.sigOk && p.pk && !p.query && p.client !== "probe" && p.from !== seat.agent) seat.heard.set(p.pk, { presence: p, at: Date.now() });
             if (!p.query || Date.now() - seat.lastProbe < PROBE_ANSWER_GAP_MS) return;
             seat.lastProbe = Date.now();
             seat.announce?.();
@@ -570,6 +572,8 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
   };
 
+  const seatSync = throttled(syncSeats, SYNC_ON_REQUEST_MS);
+
   const onRequest = async (conn: ConnState, raw: string): Promise<void> => {
     let req: { id?: unknown; verb?: unknown } & Record<string, unknown>;
     try {
@@ -581,7 +585,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     const id = req.id;
     const verb = req.verb;
     const params: Record<string, unknown> = req;
-    void syncSeats();
+    seatSync.soon();
     try {
       switch (verb as DaemonVerb) {
         case "hello": {
@@ -770,7 +774,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       const { startStatusWatch } = await import("../status.ts");
       if (stopped) return;
       statusWatch = startStatusWatch({
-        seats: () => [...seats.values()].map((s) => ({ key: s.key, alias: s.alias, agent: s.agent })),
+        seats: () => [...seats.values()].map((s) => ({ key: s.key, alias: s.alias, agent: s.agent, head: s.head })),
         current: (s) => {
           const seat = seats.get(s.key);
           return !!seat && current(seat) && seat.alias === s.alias && seat.agent === s.agent;
@@ -811,7 +815,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     pruneNow();
     void watchStatus();
     if (!existsSync(dir) || !beatLock(lock)) return void stop();
-    void syncSeats();
+    void seatSync.now();
     void orphaned().then((dead) => {
       deadTicks = dead ? deadTicks + 1 : 0;
       if (deadTicks >= orphanTicks) void stop();
@@ -855,7 +859,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     dropLock(lock);
   };
 
-  await syncSeats();
+  await seatSync.now();
   await watchStatus();
   return { sock, stop, stopped: stoppedP, beacons: () => beacons };
 }

@@ -2,6 +2,7 @@ import * as Effect from "effect/Effect";
 import { open, seal, type ChannelAccess } from "../crypto.ts";
 import { Rejected } from "../refusals.ts";
 import type { ChannelCore } from "./core.ts";
+import type { Refused } from "./errors.ts";
 import type { Info } from "./info.ts";
 import type { Relay } from "./relay.ts";
 
@@ -37,16 +38,27 @@ export function openSealed(ch: ChannelCore, blob: SealedBlob): Effect.Effect<unk
   });
 }
 
-export function sealFor(ch: ChannelCore, info: Pick<Info, "epoch" | "sealedEpoch">, payload: object): Effect.Effect<SealedBlob | null, Rejected, Relay> {
+export function freshInfo(ch: ChannelCore, forget: () => void): Effect.Effect<Info, Refused, Relay> {
+  return Effect.gen(function* () {
+    forget();
+    const info = yield* ch.fx.info();
+    if (!info.rotate || !ch.isOwner || ch.rotating) return info;
+    yield* ch.fx.rotate();
+    forget();
+    return yield* ch.fx.info();
+  });
+}
+
+export function sealFor(ch: ChannelCore, info: Pick<Info, "epoch" | "sealedEpoch">, payload: object, keepsEpoch = !!info.sealedEpoch): Effect.Effect<SealedBlob | null, Rejected, Relay> {
   return Effect.gen(function* () {
     if (info.epoch > newestEpoch(ch.access.keys)) yield* ch.fx.refreshKeys().pipe(Effect.catchCause(() => Effect.void));
     const e = newestEpoch(ch.access.keys);
-    if (!info.sealedEpoch && e > 0) return yield* new Rejected("this relay can't keep the channel's name and settings from removed members: update it, or ask whoever runs it to");
+    if (!keepsEpoch && e > 0) return yield* new Rejected("this relay can't keep the channel's name and settings from removed members: update it, or ask whoever runs it to");
     if (e < info.epoch) return yield* new Rejected("this device is missing the channel's newest key, so it won't seal the name or settings under an older one: try again in a moment");
     const key = ch.access.keys[String(e)];
     if (!key) return null;
     const sealed = yield* Effect.promise(() => seal(key, ch.roomId, payload));
-    return info.sealedEpoch ? { e, ...sealed } : sealed;
+    return keepsEpoch ? { e, ...sealed } : sealed;
   });
 }
 
