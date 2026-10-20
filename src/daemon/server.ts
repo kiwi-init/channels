@@ -678,7 +678,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
           break;
         case "launch": {
           const launch = readLaunchRequest(params);
-          if (!launch) throw new Error('launch needs {"harness", "folder", "code", "relay"?, "nick"?, "persona"?}');
+          if (!launch) throw new Error('launch needs {"harness", "folder", "code", "relay"?, "nick"?, "persona"?, "launch"?: an id of 8 to 64 of A-Z a-z 0-9 _ -}');
           sendLine(conn, JSON.stringify({ id, ok: true, launched: await launchAgent(launch) }));
           break;
         }

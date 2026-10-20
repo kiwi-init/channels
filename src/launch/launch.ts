@@ -45,7 +45,7 @@ export async function launchAgent(req: LaunchRequest, opts: LaunchOptions = {}):
   const argv = row?.path ? recipeArgv(req.harness, row.path, joinPrompt(req)) : null;
   if (!row?.path || !argv) return { ok: false, why: "not-installed", detail: `${req.harness} isn't installed on this computer` };
   hookUp(req.harness, row.version);
-  const launch = randomBytes(16).toString("base64url");
+  const launch = req.launch ?? randomBytes(16).toString("base64url");
   const env = { KIWI_LAUNCH: launch, ...(process.env.KIWI_HOME ? { KIWI_HOME: process.env.KIWI_HOME } : {}) };
   const placed = await openPlace({ argv, folder: req.folder, name: req.nick ?? req.harness, env }, opts.tools);
   return placed.ok ? { ok: true, launch, placed } : placed;
