@@ -5,7 +5,7 @@ import type { CachedRow } from "@kiwi/core/cache-row.ts"
 import { ChannelGone } from "@kiwi/core/client/errors.ts"
 import type { HumanSession, RoomsSetting, SendOptions } from "@kiwi/core/client.ts"
 import type { JoinRequest, Member } from "@kiwi/core/membership.ts"
-import type { Message } from "@kiwi/core/protocol.ts"
+import { SNAPSHOT_TOO_LARGE, type Message } from "@kiwi/core/protocol.ts"
 import { fold, type ChannelState, type FoldBase, type GuardFloor, type Roster } from "@kiwi/core/state.ts"
 import { errorOf, linkOf, watches, type ChannelLink, type FollowEvent } from "../channel-ops"
 import { readCached, rememberRow, rememberRows } from "../history"
@@ -302,7 +302,8 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
         snapshotNext.current = nextSnapshotTry(head, n ?? (await ch.snapshotAt()) ?? 0)
       })
       .catch((err: unknown) => {
-        if (err instanceof Error && /too large/.test(err.message)) setSnapshotTooBig(true)
+        snapshotNext.current = nextSnapshotTry(head, head)
+        if (err instanceof Error && err.message.includes(SNAPSHOT_TOO_LARGE)) setSnapshotTooBig(true)
       })
       .finally(() => {
         snapshotBusy.current = false

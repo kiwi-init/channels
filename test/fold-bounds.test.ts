@@ -10,14 +10,22 @@ const MIN = 60_000;
 const DAY = 24 * 60 * MIN;
 const OWNER = "o".repeat(43);
 const WIN = "w".repeat(43);
+const SPAM = "s".repeat(43);
 const roster: Roster = [
   { name: "jow", pk: OWNER, owner: true, at: 0, active: true, kind: "human" },
   { name: "win", pk: WIN, owner: false, at: 0, active: true, kind: "agent", scopes: ["post", "tasks"] },
+  { name: "spam", pk: SPAM, owner: false, at: 0, active: true, kind: "agent", scopes: ["post"] },
 ];
+const PKS: Record<string, string> = { jow: OWNER, win: WIN, spam: SPAM };
 
 function msg(seq: number, ts: number, over: Partial<Message> = {}): Message {
   const from = over.from ?? "win";
-  return { v: PROTOCOL_VERSION, id: `m${seq}`, from, kind: "msg", body: `message ${seq}`, ts, rts: ts, seq, sigOk: true, pk: from === "jow" ? OWNER : WIN, ...over };
+  return { v: PROTOCOL_VERSION, id: `m${seq}`, from, kind: "msg", body: `message ${seq}`, ts, rts: ts, seq, sigOk: true, pk: PKS[from], ...over };
+}
+
+function cutAt(messages: Message[], n: number) {
+  const state = fold(messages.slice(n), roster, T0, null, null, baseOf(messages.slice(0, n)));
+  return { trust: [...state.trust].filter(([seq]) => seq > messages.length - 5), rejected: [...state.rejected].filter(([seq]) => seq > messages.length - 5) };
 }
 
 const ev = (seq: number, ts: number, e: Event, from = "jow"): Message => msg(seq, ts, { kind: "event", body: "", ev: e, from });
@@ -36,7 +44,7 @@ describe("the fold base stays bounded", () => {
     expect(base.trust.length).toBe(5_000);
     expect(base.trust[0]![0]).toBe(25_001);
     expect(base.sent!.length).toBe(3_000);
-    expect(base.sentFloor).toBe(T0 + 26_999 * 1_000 + 1);
+    expect(base.sentFloors).toEqual([[WIN, T0 + 26_999 * 1_000 + 1]]);
     expect(base.hw).toBe(T0 + 29_999 * 1_000);
     const owner = await generateIdentity("jow");
     const sealed = await sealSnapshot(owner, { roomId: "ab".repeat(16), ownerPk: owner.pk, ownerXpk: owner.xpk ?? "", epoch: 0, keys: { "0": newChannelKey() } }, base);
@@ -47,7 +55,7 @@ describe("the fold base stays bounded", () => {
   test("an id the cap dropped is refused by the floor if it comes back", () => {
     const messages = Array.from({ length: 4_000 }, (_, i) => msg(i + 1, T0 + i * 1_000));
     const base = baseOf(messages);
-    expect(base.sentFloor).toBe(T0 + 999 * 1_000 + 1);
+    expect(base.sentFloors).toEqual([[WIN, T0 + 999 * 1_000 + 1]]);
     const dropped = messages[10]!;
     const state = fold([{ ...dropped, seq: 4_001 }], roster, T0, null, null, base);
     expect(state.rejected.get(4_001)).toContain("too long before");
@@ -100,5 +108,63 @@ describe("the fold base stays bounded", () => {
     const ask = msg(1, T0, { from: "jow", kind: "ask", to: ["win"], body: "which one?", imgs: [{ name: "a.png", mime: "image/png", data: "iVBORw0KGgo=" }] });
     const base = baseOf([ask]);
     expect(base.asks[0]?.imgs).toEqual([{ name: "a.png", mime: "image/png" }]);
+  });
+
+  test("the same log gives the same verdicts folded whole or from any cut, for a late honest message and after a member's future-dated spam", () => {
+    const busy = Array.from({ length: 4_000 }, (_, i) => msg(i + 1, T0 + i * 1_000));
+    const late = msg(4_001, T0 + 4_000 * 1_000 - 58 * MIN, { from: "jow", rts: T0 + 4_001 * 1_000 });
+    const log = [...busy, late, msg(4_002, T0 + 4_002 * 1_000)];
+    const whole = cutAt(log, 0);
+    expect(whole.trust.find(([seq]) => seq === 4_001)?.[1]).toBe("verified");
+    expect(cutAt(log, 3_400)).toEqual(whole);
+    expect(cutAt(log, 4_000)).toEqual(whole);
+
+    const spam = Array.from({ length: 3_000 }, (_, i) => msg(i + 101, T0 + 365 * DAY + i, { from: "spam", rts: T0 + (i + 101) * 1_000 }));
+    const honest = Array.from({ length: 100 }, (_, i) => msg(i + 1, T0 + i * 1_000));
+    const behind = msg(3_101, T0 + 3_099 * 1_000, { from: "jow", rts: T0 + 3_101 * 1_000 });
+    const mixed = [...honest, ...spam, msg(3_100, T0 + 3_100 * 1_000), behind, msg(3_102, T0 + 3_102 * 1_000)];
+    const all = cutAt(mixed, 0);
+    expect(all.trust.find(([seq]) => seq === 3_101)?.[1]).toBe("verified");
+    expect(cutAt(mixed, 3_000)).toEqual(all);
+    expect(cutAt(mixed, 3_100)).toEqual(all);
+  });
+
+  test("a base from before this change keeps refusing replays after the upgrade: its ids age out on log time", () => {
+    const messages = Array.from({ length: 6_000 }, (_, i) => msg(i + 1, T0 + i * 1_000));
+    const fresh = baseOf(messages);
+    const old: FoldBase = { ...fresh, sent: messages.map((m): [string, number] => [m.id, m.seq]), sentKeys: undefined, sentFloors: undefined, hw: undefined };
+    const upgraded = baseOf(
+      Array.from({ length: 10 }, (_, i) => msg(6_001 + i, T0 + (6_000 + i) * 1_000)),
+      old,
+    );
+    const replay = { ...messages[999]!, seq: 6_011 };
+    const state = fold([replay], roster, T0, null, null, upgraded);
+    expect(state.rejected.get(6_011)).toContain("a copy of #1000");
+  });
+
+  test("a direct thread that's been quiet for thousands of messages keeps its place", () => {
+    const dm = msg(1, T0, { from: "jow", to: ["win"], dm: true, body: "just us" });
+    const log = [dm, ...Array.from({ length: 5_500 }, (_, i) => msg(i + 2, T0 + (i + 1) * 1_000))];
+    const whole = fold(log, roster, T0, null, null);
+    const fromBase = fold(log.slice(5_400), roster, T0, null, null, baseOf(log.slice(0, 5_400)));
+    expect([...fromBase.places].map(([k, v]) => [k, v.count, v.last])).toEqual([...whole.places].map(([k, v]) => [k, v.count, v.last]));
+    expect([...whole.places.keys()].some((k) => k.startsWith("dm"))).toBe(true);
+  });
+
+  test("a task carded long after it closed still needs its review when it's reopened and marked done", () => {
+    const at = (d: number) => T0 + d * DAY;
+    const log = [
+      ev(1, at(0), { op: "task.add", title: "needs a review", owner: "win", review: "any" }),
+      ev(2, at(0), { op: "task.update", task: 1, state: "doing" }, "win"),
+      ev(3, at(1), { op: "task.update", task: 1, state: "done" }),
+      msg(4, at(40)),
+      ev(5, at(40), { op: "task.update", task: 1, state: "doing" }, "win"),
+      ev(6, at(40), { op: "task.update", task: 1, state: "done" }, "win"),
+    ];
+    const whole = fold(log, roster, T0, null, null);
+    const fromBase = fold(log.slice(4), roster, T0, null, null, baseOf(log.slice(0, 4)));
+    expect(baseOf(log.slice(0, 4)).tasks[0]).toMatchObject({ review: "any", workedBy: ["win"] });
+    expect(fromBase.tasks.get(1)?.state).toBe(whole.tasks.get(1)?.state);
+    expect(fromBase.rejected.get(6)).toBe(whole.rejected.get(6));
   });
 });

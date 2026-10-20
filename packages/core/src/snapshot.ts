@@ -12,7 +12,8 @@ export interface SealedSnapshot {
   sig: string;
 }
 
-const VERSION = 5;
+const VERSION = 6;
+const READS: ReadonlySet<number> = new Set([5, 6]);
 const MAX_PLAIN = 64 * 1024 * 1024;
 const enc = new TextEncoder();
 
@@ -154,7 +155,7 @@ export async function openSnapshot(access: ChannelAccess, s: unknown): Promise<F
   if (!plain || (await digest(plain)) !== s.hash) return null;
   try {
     const o = JSON.parse(new TextDecoder().decode(plain)) as { v?: unknown; room?: unknown; base?: unknown };
-    return o.v === VERSION && o.room === access.roomId && wellFormedWire(o.base, s.n) ? fromWire(o.base) : null;
+    return typeof o.v === "number" && READS.has(o.v) && o.room === access.roomId && wellFormedWire(o.base, s.n) ? fromWire(o.base) : null;
   } catch {
     return null;
   }

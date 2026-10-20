@@ -2,7 +2,7 @@ import { GENERAL_ROOM, ignored, isReaction, MAX_ROOMS, ROOM_ID_RE, type Message,
 import { refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
 import { allowedOnHold, isLeadRole, isPerson, LEAD, ON_HOLD } from "./people.ts";
-import { dmPlace, MAIN, summarize } from "./places.ts";
+import { dmPlace, MAIN, placeKey, summarize } from "./places.ts";
 import { prKey } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
@@ -18,6 +18,39 @@ const CLOSED_KEEP_MS = 30 * STALE_MS;
 
 const closedLongAgo = (at: number, hw: number) => hw - at > CLOSED_KEEP_MS;
 
+type Sent = [number, string];
+
+const earlier = (a: Sent, b: Sent) => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1]);
+
+function heapPush(heap: Sent[], item: Sent): void {
+  heap.push(item);
+  for (let i = heap.length - 1; i > 0;) {
+    const up = (i - 1) >> 1;
+    if (!earlier(heap[i]!, heap[up]!)) break;
+    [heap[i], heap[up]] = [heap[up]!, heap[i]!];
+    i = up;
+  }
+}
+
+function heapPop(heap: Sent[]): Sent {
+  const top = heap[0]!;
+  const last = heap.pop()!;
+  if (heap.length) {
+    heap[0] = last;
+    for (let i = 0; ;) {
+      const l = 2 * i + 1;
+      const r = l + 1;
+      let min = i;
+      if (l < heap.length && earlier(heap[l]!, heap[min]!)) min = l;
+      if (r < heap.length && earlier(heap[r]!, heap[min]!)) min = r;
+      if (min === i) break;
+      [heap[i], heap[min]] = [heap[min]!, heap[i]!];
+      i = min;
+    }
+  }
+  return top;
+}
+
 function card(t: Task): Task {
   return {
     id: t.id,
@@ -28,9 +61,10 @@ function card(t: Task): Task {
     createdAt: t.createdAt,
     updatedAt: t.updatedAt,
     notes: [],
-    workedBy: [],
     rounds: [],
     ...(t.approvedBy !== undefined ? { approvedBy: t.approvedBy } : {}),
+    ...(t.review !== undefined ? { review: t.review } : {}),
+    workedBy: t.workedBy,
     ...(t.cancelled ? { cancelled: true } : {}),
     ...(t.closedSeq !== undefined ? { closedSeq: t.closedSeq } : {}),
     ...(t.issue ? { issue: t.issue } : {}),
@@ -186,10 +220,32 @@ export function fold(
   const reactSeqs = new Set<number>(from?.reactSeqs);
   const trust = new Map<number, Trust>(from?.trust);
   const rejected = new Map<number, string>(from?.rejected);
-  const sent = new Map<string, number>(from?.sent?.map(([id, seq]) => [id, seq]));
-  const sentAt = new Map<string, number>(from?.sent?.flatMap(([id, , ts]): [string, number][] => (ts === undefined ? [] : [[id, ts]])));
+  const sent = new Map<string, number>();
+  const sentAt = new Map<string, number>();
+  const sentKey = new Map<string, string>();
+  const heap: Sent[] = [];
+  const untimed: string[] = [];
+  const sentFloors = new Map<string, number>(from?.sentFloors);
+  const sentKeys = from?.sentKeys ?? [];
+  for (const [id, seq, ts, k] of from?.sent ?? []) {
+    sent.set(id, seq);
+    if (ts === undefined) {
+      untimed.push(id);
+      continue;
+    }
+    sentAt.set(id, ts);
+    const pk = k !== undefined && k >= 0 ? sentKeys[k] : undefined;
+    if (pk === undefined) continue;
+    sentKey.set(id, pk);
+    heapPush(heap, [ts, id]);
+  }
+  const forget = (id: string) => {
+    sent.delete(id);
+    sentAt.delete(id);
+    sentKey.delete(id);
+  };
   let hw = from?.hw ?? 0;
-  const sentFloor = from?.sentFloor ?? 0;
+  const placesBefore = new Map<string, [Place, number, number]>(from?.placesBefore?.map((p) => [placeKey(p[0]), p]));
   const answered = new Map<number, Set<string>>(from?.answered.map(([seq, by]) => [seq, new Set(by)]));
   const threadOf = new Map<number, number>(from?.threadOf);
   const threadPeople = new Map<number, Set<string>>(from?.threadPeople.map(([seq, people]) => [seq, new Set(people)]));
@@ -260,14 +316,23 @@ export function fold(
         rejected.set(m.seq, `signed more than a day before the relay got it`);
         continue;
       }
-      if (m.ts < Math.max(hw - SENT_WINDOW_MS, sentFloor)) {
+      if (m.ts < Math.max(hw - SENT_WINDOW_MS, sentFloors.get(m.pk!) ?? 0)) {
         trust.set(m.seq, "refused");
         rejected.set(m.seq, `signed too long before the channel's latest messages`);
         continue;
       }
       sent.set(m.id, m.seq);
       sentAt.set(m.id, m.ts);
+      sentKey.set(m.id, m.pk!);
+      heapPush(heap, [m.ts, m.id]);
       hw = Math.max(hw, Math.min(m.ts, m.rts ?? m.ts));
+      while (heap.length && heap[0]![0] < hw - SENT_WINDOW_MS) forget(heapPop(heap)[1]);
+      while (heap.length > SENT_CAP) {
+        const [ts, id] = heapPop(heap);
+        const pk = sentKey.get(id);
+        forget(id);
+        if (pk !== undefined) sentFloors.set(pk, Math.max(sentFloors.get(pk) ?? 0, ts + 1));
+      }
       const refused = refusal(scopesByKey.get(m.pk!) ?? [], m);
       if (refused) {
         trust.set(m.seq, "refused");
@@ -371,12 +436,25 @@ export function fold(
   });
 
   const cut = head - KEEP_SEQS;
-  const recentSent = [...sent].filter(([id, seq]) => (sentAt.has(id) ? sentAt.get(id)! >= Math.max(hw - SENT_WINDOW_MS, sentFloor) : seq > cut));
-  const timed = recentSent.filter(([id]) => sentAt.has(id)).sort((a, b) => sentAt.get(a[0])! - sentAt.get(b[0])!);
-  const over = timed.length - SENT_CAP;
-  const dropped = new Set(over > 0 ? timed.slice(0, over).map(([id]) => id) : []);
-  const nextFloor = over > 0 ? Math.max(sentFloor, sentAt.get(timed[over - 1]![0])! + 1) : sentFloor;
-  const keptSent = recentSent.filter(([id]) => !dropped.has(id));
+  for (const id of untimed) if (sent.has(id) && !sentAt.has(id)) sentAt.set(id, hw);
+  const keyIndex = new Map<string, number>();
+  const keptSent = [...sent].flatMap(([id, seq]): [string, number, number, number][] => {
+    const ts = sentAt.get(id);
+    if (ts === undefined || ts < hw - SENT_WINDOW_MS) return [];
+    const pk = sentKey.get(id);
+    if (pk === undefined) return [[id, seq, ts, -1]];
+    if (!keyIndex.has(pk)) keyIndex.set(pk, keyIndex.size);
+    return [[id, seq, ts, keyIndex.get(pk)!]];
+  });
+  const wholeTasks = [...tasks.values()].filter((t) => !((t.state === "done" || t.cancelled) && closedLongAgo(t.updatedAt, hw)));
+  const taskIssues = new Set(wholeTasks.flatMap((t) => (t.issue ? [prKey(t.issue.repo, t.issue.number)] : [])));
+  const before = new Map(placesBefore);
+  for (const [seq, place] of placeOf) {
+    if (seq > cut || ignored(trust.get(seq))) continue;
+    const key = placeKey(place);
+    const held = before.get(key);
+    before.set(key, held ? [place, held[1] + 1, Math.max(held[2], seq)] : [place, 1, seq]);
+  }
   const keptThreads = [...threadOf].filter(([seq]) => seq > cut);
   const keptRoots = new Set(keptThreads.map(([, root]) => root));
   keep?.(
@@ -391,7 +469,7 @@ export function fold(
       github: {
         prs: [...ctx.github.prs.values()].filter((p) => p.state === "open" || !closedLongAgo(p.at, hw)),
         checks: [...ctx.github.checks].map(([k, runs]) => [k, [...runs.values()]]),
-        issues: [...ctx.github.issues.values()].filter((i) => i.state === "open" || !closedLongAgo(i.at, hw)),
+        issues: [...ctx.github.issues.values()].filter((i) => i.state === "open" || !closedLongAgo(i.at, hw) || taskIssues.has(prKey(i.repo, i.number))),
       },
       hold: ctx.hold,
       voice: ctx.voice,
@@ -405,9 +483,11 @@ export function fold(
       reactSeqs: [...reactSeqs].filter((seq) => seq > cut),
       trust: [...trust].filter(([seq]) => seq > cut),
       rejected: [...rejected].filter(([seq]) => seq > cut),
-      sent: keptSent.map(([id, seq]): [string, number] | [string, number, number] => (sentAt.has(id) ? [id, seq, sentAt.get(id)!] : [id, seq])),
+      sent: keptSent,
+      sentKeys: [...keyIndex.keys()],
+      sentFloors: [...sentFloors].filter(([, floor]) => floor > hw - SENT_WINDOW_MS),
       hw,
-      ...(nextFloor ? { sentFloor: nextFloor } : {}),
+      placesBefore: [...before.values()],
       asks: openAsks.map(withoutImageBytes),
       answered: openAsks.flatMap((m): [number, string[]][] => [[m.seq, [...(answered.get(m.seq) ?? [])]]]),
       threadOf: keptThreads,
@@ -459,7 +539,7 @@ export function fold(
     rooms,
     roomOf,
     placeOf,
-    places: summarize(placeOf, tasks, trust),
+    places: summarize(placeOf, tasks, trust, placesBefore.values()),
     charter: ctx.charter,
     compact: ctx.compact,
     compactProposal: ctx.compactProposal,
