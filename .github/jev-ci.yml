@@ -280,7 +280,10 @@ jobs:
       owner, person or channel key reaches the window, plus the seat rules, the wire codec, the
       allowed calls (history handing the window every message with its key and signature, a malformed
       since read as 0) and a scan of web/src for imports of Channel, seal/open or the keyring
-      or keys server outside web/src/lib/channel-local.ts. And test/desktop-voice.test.ts: the desktop voice
+      or keys server outside web/src/lib/channel-local.ts; and a relay switch keeping every saved channel
+      (T135): each seat marked with the relay it lives on (movedRelay, cleared on switching back, kept
+      through the window's renames, in the snapshot), and the keyring never sending a seat that lives on
+      another relay to this one, so neither a call nor finishCreating's 404 can forget it. And test/desktop-voice.test.ts: the desktop voice
       store's CSP allows api.x.ai only when an xAI key is saved, the project key never reaches
       the snapshot or the token IPC result, consent defaults off, and
       desktop/build/entitlements.mac.plist has the audio-input entitlement. And

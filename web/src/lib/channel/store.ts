@@ -26,6 +26,7 @@ export interface StoredMember {
   access: PublicAccess
   at: number
   name?: string
+  relay?: string
 }
 
 export interface PendingJoin {
@@ -47,7 +48,9 @@ export function read<T>(key: string): T | null {
 }
 
 export const asMember = (e: ChannelView): StoredMember | null =>
-  e.code && e.access ? { code: e.code, identity: { name: e.idName ?? e.label, pk: e.pk }, access: e.access, at: e.at ?? 0, ...(e.name ? { name: e.name } : {}) } : null
+  e.code && e.access
+    ? { code: e.code, identity: { name: e.idName ?? e.label, pk: e.pk }, access: e.access, at: e.at ?? 0, ...(e.name ? { name: e.name } : {}), ...(e.relay ? { relay: e.relay } : {}) }
+    : null
 export const asPending = (e: ChannelView): PendingJoin | null =>
   e.code && !e.access && e.requestId ? { code: e.code, identity: { name: e.idName ?? e.label, pk: e.pk }, requestId: e.requestId } : null
 const entries = (): ChannelView[] => secrets().channels

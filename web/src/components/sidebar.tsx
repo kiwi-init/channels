@@ -18,6 +18,7 @@ import { Menu, MenuItem, MenuNote, MenuSeparator } from "./ui/menu"
 /** What a row says on hover: what was said last, or why this browser can't open it yet. */
 function rowNote(c: ChannelRow): string {
   if (c.state === "pending") return "Waiting for the owner to let you in"
+  if (c.state === "elsewhere") return `On ${c.relay}: switch back to that relay in Settings to open it`
   if (c.state === "agents") return c.agents === 1 ? "One of your agents is here" : `${c.agents} of your agents are here`
   if (c.recent?.text) return c.recent.from ? `${c.recent.from}: ${c.recent.text}` : c.recent.text
   return "No messages yet"

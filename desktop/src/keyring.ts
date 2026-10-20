@@ -105,7 +105,12 @@ export class Keyring implements ChannelOps {
   private seat(code: string, member: boolean): ChannelIdentityView {
     const s = this.host.seats().find((c) => c.code === code && (member ? !!c.access : !c.access));
     if (!s) throw new Error(member ? "this app isn't in that channel" : "this app has no join request for that channel");
+    if (!this.here(s)) throw new Error(`this channel is on ${s.relay}, not the relay this app uses now; switch back to it in Settings to open it`);
     return s;
+  }
+
+  private here(seat: ChannelIdentityView): boolean {
+    return seat.relay === undefined || seat.relay === this.host.relay();
   }
 
   private channel(code: string): Channel {
@@ -189,7 +194,7 @@ export class Keyring implements ChannelOps {
   }
 
   async finishCreating(): Promise<void> {
-    for (const seat of this.host.seats().filter((c) => c.creating && c.code && !c.access)) {
+    for (const seat of this.host.seats().filter((c) => c.creating && c.code && !c.access && this.here(c))) {
       const code = seat.code!;
       try {
         const access = await Channel.resume(this.host.relay(), code, identityOf(seat));
