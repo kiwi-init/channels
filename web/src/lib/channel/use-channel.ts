@@ -264,10 +264,11 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
     }
   }, [ch, refreshRoster, refreshRequests, onGone, human, member.code, was])
 
-  const keyOf = useMemo(() => new Map(roster.filter((r) => r.active).map((r) => [r.name, r.pk])), [roster])
+  const admitted = useMemo(() => roster.filter((m) => !m.unverified), [roster])
+  const keyOf = useMemo(() => new Map(admitted.filter((r) => r.active).map((r) => [r.name, r.pk])), [admitted])
   const rosterForFold: Roster = useMemo(
     () =>
-      roster.map((m) => ({
+      admitted.map((m) => ({
         name: m.name,
         pk: m.pk,
         role: m.role,
@@ -284,7 +285,7 @@ export function useChannel(member: StoredMember, human?: HumanSession | null): C
         ...(m.runs ? { runs: m.runs } : {}),
         ...(m.persona ? { persona: m.persona } : {}),
       })),
-    [roster]
+    [admitted]
   )
   const state = useMemo(() => fold(messages, rosterForFold, now, roomsFloor, guardFloor, base), [messages, rosterForFold, now, roomsFloor, guardFloor, base])
   const trim = useEffectEvent(() => {

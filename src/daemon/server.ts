@@ -397,7 +397,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       if (!anyone.alive()) throw new Error("nobody is waiting for this channel any more");
       if (!stillWanted(alias, c.roomId, agent)) throw new Error(`"${agent}" no longer has a key in "${alias}" on this computer`);
       const self = (await ch.members()).find((m) => m.pk === id.pk);
-      if (!self || self.owner || self.kind === "human") throw new NotAgentSeat(`"${agent}" isn't an agent in "${alias}": the daemon holds seats for agents only`);
+      if (!self || self.unverified || self.owner || self.kind === "human") throw new NotAgentSeat(`"${agent}" isn't an agent in "${alias}": the daemon holds seats for agents only`);
       if (stopped) throw new Error("the daemon is stopping");
       const seat: Seat = {
         key,
