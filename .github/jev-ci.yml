@@ -93,7 +93,9 @@ jobs:
       the rest only when needed, a too-long first message cut with a kiwi show pointer only when at
       least CLIP_MIN of its body shows, and otherwise nothing handed over (so nothing is marked read);
       a stop reason with the Kimi or Grok re-arm reminder and a SessionStart context (startContext,
-      startBudgets) stay at or under seatBudget for one to fifty seats and any brief size; re-entry's
+      startBudgets, its unread heading naming the channel) stay at or under seatBudget for one to fifty
+      seats, any brief size and any alias length; Cursor's stop follow-up names the channel when it fits
+      and falls back to the bare short line, never past the share (cursorFollow); re-entry's
       recovery commands use the seat's own command.
       Also test/daemon-big-lines.test.ts: the daemon's socket writes queue what the socket
       didn't take and flush it on drain (src/daemon/server.ts), so a catch-up of thirty
@@ -110,7 +112,9 @@ jobs:
       written to MiMoCode's plugin folder (KIWI_MIMO_DIR, MIMOCODE_HOME/config, XDG_CONFIG_HOME/mimocode),
       counted as installed only while it is current, removed on uninstall without touching a kiwi.ts that
       isn't Kiwi's, the file passing tsc --strict with one export, and, loaded with a fake MiMoCode client
-      and a fake listener, naming a child session's root on the agent's shell and starting a turn in that
+      and a fake listener, starting a new session's listener when MiMoCode creates it (session.created, in
+      the session's directory), before any shell command, and none for a child session, whose root listens,
+      naming a child session's root on the agent's shell and starting a turn in that
       root session when its listener exits with messages, then listening again with the handoff token the
       listener printed on stdout, so Kiwi counts those messages delivered only once the wake landed, and
       only a UUID-shaped landed token settling a handoff (handoffFrom in src/hooks/listen.ts); a wake MiMoCode refuses
@@ -142,6 +146,10 @@ jobs:
       Also a Kimi Code or Grok seat with a live listener (Grok's persistent kiwi listen monitor) announced as
       woken via its background listener, and as can't be woken again once the listener stops, while Grok's push wake
       stays off (pullsWake in packages/core/src/wake.ts, test/wake.test.ts, test/daemon-seats.test.ts).
+      Also a MiMoCode or Pi seat counted as woken by Kiwi's plugin or extension only while its listener holds
+      the seat (or within the daemon's listener grace), and otherwise as can't be woken, with kiwi wake saying
+      the plugin has no listener running (listenedPath in packages/core/src/wake.ts, src/daemon/server.ts,
+      test/wake.test.ts, test/daemon-seats.test.ts).
       Also each wake the daemon fires logged to wake.log with its unread count and the seat's read cursor when the
       daemon counted them, after the result and the why column (empty when it worked), so older readers of the first
       columns keep working (src/daemon/wake.ts, AgentSession.unreadAt in src/agent/state.ts, test/wake.test.ts).
@@ -337,8 +345,9 @@ jobs:
       Then seats and multi-seat: which agent a command or hook acts for in a folder
       (src/seats.ts, a Grok Bot's seat from its VM's hostname or KIWI_HARNESS, a hook's named harness over the
       markers its parent session left: hereAs, and a named harness with no session never given a folder's only seat
-      when that seat is another harness's or a live session's), one session holding seats in two channels, each
-      Stop header naming its channel (src/hooks/answer.ts), a session that holds neither seat told the folder has seats in
+      when that seat is another harness's or a live session's), one session holding seats in two channels, the
+      join of the second from the same folder saying which -c ALIAS --as NAME picks each seat and a rejoin of either
+      saying nothing about it (src/cli/commands/join.ts), each Stop and SessionStart unread header and Cursor follow-up naming its channel (src/hooks/answer.ts, test/wake-yourself.test.ts), a session that holds neither seat told the folder has seats in
       both channels and to pass -c ALIAS --as NAME (src/cli/context.ts), hooks serving the right seat
       from sibling folders, and with a backlog on both seats each hook's whole output (SessionStart,
       prompt, stop) within HOOK_CONTEXT_MAX, the seats sharing it (src/hooks/run.ts). Then handoff: an escalation's live browser link (packages/core/src/protocol.ts),
@@ -372,9 +381,12 @@ jobs:
       MiMoCode keeps refusing until MiMoCode exits mid-retry; the resumed session still gets those
       messages, because the listener writes a pending handoff per token (src/hooks/delivered.ts) that becomes
       the delivered marker only when the plugin's next listen names the token of the wake that landed
-      (src/hooks/listen.ts, src/hooks/run.ts), and the next message isn't repeated with them; and two
-      MiMoCode processes on one session, each landing its wake of the same message, count it delivered
-      once instead of clearing each other's handoff and waking it back and forth. Fails if joining, seats, hooks, pairing, the
+      (src/hooks/listen.ts, src/hooks/run.ts), and the next message isn't repeated with them; a wake the
+      listener hands MiMoCode logged to wake.log as handed, and the refusals before it landed (the plugin's
+      next listen reports their count and last error) logged as failed with that reason (appendWakeRow in
+      src/daemon/wake.ts, src/hooks/listen.ts); and two MiMoCode processes on one session, each landing its
+      wake of the same message, count it delivered once instead of clearing each other's handoff and waking
+      it back and forth. Fails if joining, seats, hooks, pairing, the
       daemon, kiwi sh, handoff or the relay change behavior.
 
   build:
