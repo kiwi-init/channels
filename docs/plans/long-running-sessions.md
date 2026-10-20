@@ -74,9 +74,22 @@ traps), at most 4,000 characters. Stored as a `task.update` note marked `checkpo
 it is signed, syncs, shows on the task (labelled in `kiwi task show`) and survives the machine;
 older clients keep it as a plain note. Built in item 1.
 
-Not built yet: a checkpoint for a seat with no task, such as the lead's. Until then the lead's
-re-entry carries the board itself. When it lands, the lead's checkpoint must name every open
-task and question, the rule `kiwi compact` already enforces for the channel summary.
+The lead's own checkpoint, which has no task: `kiwi task checkpoint lead --file note.md`. Only
+the lead may write it, and it must name every open task (T7) and question (#123) by its id, the
+rule `kiwi compact` already enforces for the channel summary. It is stored as the channel fact
+`lead checkpoint/<name>` (the way `answering #N` is), so it needs no new event. The fold rejects a
+`fact.set` or `fact.del` of that key by anyone but `<name>`, and any expiry on it, so no one else
+can erase it or block the lead's rotation, and it can't vanish between rotation and re-entry. If
+the full nudge doesn't fit the hook's budget, a short one names only the commands.
+
+Two limits, both of which keep the lead in its session rather than rotate it wrongly:
+
+- A saved base folded by a client older than this rule may carry another member's overwrite or
+  deletion of the key. A new client resuming from it ignores a value the lead didn't write, so
+  the lead stays until it writes the checkpoint again. Recovering the lost value would need a
+  snapshot version bump that makes every channel refold.
+- A session serving about 55 seats or more leaves each one a hook budget smaller than even the
+  short nudge, so no nudge and no marker: those seats never rotate and keep the backstop.
 
 ### 2. Re-entry: SessionStart puts the agent back on its work
 
@@ -86,7 +99,7 @@ brief:
 - each open task the seat owns, with its state and the review round it is in;
 - each open review round the seat judges, with its commit;
 - the newest checkpoint on each task, else its last note;
-- for the lead, the open board;
+- for the lead, its own lead checkpoint, then the open board;
 - the channel's compact summary.
 
 Built in item 1 (`reentryText`, `packages/core/src/reentry.ts`), capped at 4,000 characters so
@@ -108,7 +121,8 @@ whether anything is waiting for it, plus one detached process that does the typi
   `stop_hook_active`), every seat the session serves must be ready (`rotationAt`,
   `src/rotate/decide.ts`):
   - a seat with open tasks: past the line, with a checkpoint on each written since its nudge;
-  - the lead with none: past the line;
+  - the lead: past the line, with its lead checkpoint written since its nudge (and, for tasks
+    it owns, a checkpoint on each); the nudge asks it for the lead checkpoint;
   - any other seat with none (a coder after `task done`, a reviewer after its verdict): past
     100k (`ROTATE_FLOOR`), so a small context isn't cleared for nothing;
   - never while a review round it judges is open, or a question of its to a person is, unless
