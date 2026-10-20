@@ -2,7 +2,7 @@ import { ipcMain } from "electron";
 
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import type { ComputerView, PendingItem, PersonView } from "../bridge.ts";
-import { mergePublicChannels, migrateEntries, normalizeRelay, publicComputer, publicPerson } from "../guard.ts";
+import { mergePublicChannels, migrateEntries, movedRelay, normalizeRelay, publicComputer, publicPerson } from "../guard.ts";
 import { connectKeys, tellKeys } from "../keys-process.ts";
 import { entryUrl } from "../serve-web.ts";
 import { mutate, snapshot, store } from "../store.ts";
@@ -17,6 +17,7 @@ export function wireStoreIpc(): void {
     const norm = normalizeRelay(url);
     if (!norm) throw new Error("that isn't a relay URL (https, or http on localhost)");
     mutate((s) => {
+      s.channels = movedRelay(s.channels, s.relayUrl, norm);
       s.relayUrl = norm;
       s.signin = undefined;
     });

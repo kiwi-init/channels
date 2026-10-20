@@ -135,11 +135,11 @@ describe("Talk to channel", () => {
     await r.talk.start(channel())
     const ws = r.sockets[0]!
     ws.open()
-    r.talk.seen([...log], state())
+    r.talk.seen([...log], state(), "room-1")
     expect(ws.sent.filter((e) => e.type === "conversation.item.create")).toEqual([])
     await post("wren", { op: "task.update", task: task.seq, state: "done" })
-    r.talk.seen([...log], state())
-    r.talk.seen([...log], state())
+    r.talk.seen([...log], state(), "room-1")
+    r.talk.seen([...log], state(), "room-1")
     const notes = ws.sent.filter((e) => e.type === "conversation.item.create") as { item: { role: string; content: { text: string }[] } }[]
     expect(notes).toHaveLength(1)
     expect(notes[0]!.item.role).toBe("system")
@@ -222,12 +222,57 @@ describe("Talk to channel", () => {
     ws.open()
     const update = ws.sent[0] as { session: { tools: { name: string }[] } }
     expect(update.session.tools.map((t) => t.name)).toContain("needs_you")
-    r.talk.use(toolCtx(posted, "later"))
+    r.talk.use(toolCtx(posted, "later"), "room-1")
     ws.say({ type: "response.created", response: { id: "r1" } })
     ws.say({ type: "response.function_call_arguments.done", response_id: "r1", call_id: "c1", name: "post", arguments: '{"text":"on my way"}' })
     ws.say({ type: "response.done", response: { id: "r1", status: "completed" } })
     await new Promise((ok) => setTimeout(ok, 0))
     expect(posted).toEqual(["later: on my way"])
     expect(ws.sent.slice(-2)).toEqual([{ type: "conversation.item.create", item: { type: "function_call_output", call_id: "c1", output: '{"posted":"#77"}' } }, { type: "response.create" }])
+  })
+
+  test("leaving another channel leaves the call alone; leaving its own channel ends it, mic and all", async () => {
+    const r = rig()
+    await r.talk.start(channel())
+    r.sockets[0]!.open()
+    r.talk.leave("room-2")
+    expect(r.talk.view().status).toBe("live")
+    expect(r.mics[0]!.stopped).toBe(false)
+    r.talk.leave("room-1")
+    expect(r.mics[0]!.stopped).toBe(true)
+    expect(r.sockets[0]!.closed).toBe(true)
+    expect(r.speakerClosed()).toBe(true)
+    expect(r.talk.view().status).toBe("off")
+  })
+
+  test("leaving while it's still connecting cancels it before any mic opens", async () => {
+    let release: (t: { token: string; expiresAt: number }) => void = () => {}
+    const r = rig({ token: () => new Promise((ok) => (release = ok)) })
+    const starting = r.talk.start(channel())
+    expect(r.talk.view().status).toBe("connecting")
+    r.talk.leave("room-1")
+    release({ token: "eph_1", expiresAt: Date.now() + 600_000 })
+    await starting
+    expect(r.sockets).toHaveLength(0)
+    expect(r.mics).toHaveLength(0)
+    expect(r.talk.view().status).toBe("off")
+  })
+
+  test("another channel's news and tools never reach the call", async () => {
+    const r = rig()
+    const posted: string[] = []
+    await r.talk.start({ ...channel(), tools: toolCtx(posted) })
+    const ws = r.sockets[0]!
+    ws.open()
+    r.talk.seen([...log], state(), "room-1")
+    await post("wren", { op: "task.add", title: "Somewhere else", owner: "wren" })
+    r.talk.seen([...log], state(), "room-2")
+    expect(ws.sent.filter((e) => e.type === "conversation.item.create")).toEqual([])
+    r.talk.use(toolCtx(posted, "elsewhere"), "room-2")
+    ws.say({ type: "response.created", response: { id: "r1" } })
+    ws.say({ type: "response.function_call_arguments.done", response_id: "r1", call_id: "c1", name: "post", arguments: '{"text":"hi"}' })
+    ws.say({ type: "response.done", response: { id: "r1", status: "completed" } })
+    await new Promise((ok) => setTimeout(ok, 0))
+    expect(posted).toEqual(["first: hi"])
   })
 })

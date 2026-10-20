@@ -8,7 +8,7 @@ interface KimiServer {
   token: string;
 }
 
-function kimiHome(env: Record<string, string | undefined> = process.env): string {
+export function kimiHome(env: Record<string, string | undefined> = process.env): string {
   return env.KIMI_CODE_HOME || join(homedir(), ".kimi-code");
 }
 

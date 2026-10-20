@@ -14,7 +14,7 @@ const good = {
 describe("the launch the renderer asks for", () => {
   test("a well-formed one passes as is, without the fields it left out", () => {
     expect(launchRequestOf(good)).toEqual(good);
-    const { nick: _nick, persona: _persona, ...bare } = good;
+    const bare = { launch: good.launch, harness: good.harness, folder: good.folder, code: good.code, relay: good.relay };
     expect(launchRequestOf(bare)).toEqual(bare);
   });
 

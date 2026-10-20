@@ -2,7 +2,7 @@ import { isKnownHarness } from "@kiwi/core/harnesses.ts";
 import { readLaunch } from "@kiwi/core/membership.ts";
 import type { LaunchAgentRequest, LaunchedView } from "./bridge.ts";
 
-export const NICK = /^[\p{L}\p{N}][\p{L}\p{N} _.-]{0,39}$/u;
+const NICK = /^[\p{L}\p{N}][\p{L}\p{N} _.-]{0,39}$/u;
 const RELAY = /^https?:\/\/[^/?#\s]+$/;
 const TOKEN = /^[A-Za-z0-9_.~=-]{1,4096}$/;
 

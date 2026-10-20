@@ -112,7 +112,10 @@ printf '/tmp/sock\\tkiwi\\t@7\\t%%9\\t4242\\n'`,
     expect(argv.slice(-5, -1)).toEqual(["--allowedTools", "Bash(kiwi join:*)", "--", expect.stringContaining(`kiwi join ${code} --nick 'Ada Bot' --persona eyJhIjoxfQ`)]);
     const again = await launchAgent({ harness: "codex", folder, code }, { PATH: `${bins}:/usr/bin:/bin`, tools });
     expect(again.ok && again.launch !== r.launch).toBe(true);
-    expect(await launchAgent({ harness: "codex", folder, code, launch: "fromTheApp_0123456789" }, { PATH: `${bins}:/usr/bin:/bin`, tools })).toMatchObject({ ok: true, launch: "fromTheApp_0123456789" });
+    expect(await launchAgent({ harness: "codex", folder, code, launch: "fromTheApp_0123456789" }, { PATH: `${bins}:/usr/bin:/bin`, tools })).toMatchObject({
+      ok: true,
+      launch: "fromTheApp_0123456789",
+    });
     expect(launched()).toContain("KIWI_LAUNCH=fromTheApp_0123456789");
     expect(launched()).toContain(join(bins, "codex"));
     expect(launched()).toContain("codex");
