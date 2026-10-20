@@ -14,8 +14,15 @@ import { narrows, wants } from "./wants.ts";
 const CACHE_TRIM_AT = 800;
 const CACHE_KEEP = 300;
 
+const NOT_A_MEMBER = " isn't a member";
+
+function poisoned(base: FoldBase, roster: Roster): boolean {
+  const names = new Set(roster.map((r) => r.name));
+  return base.rejected.some(([, why]) => why.endsWith(NOT_A_MEMBER) && names.has(why.slice(0, -NOT_A_MEMBER.length)));
+}
+
 function strangers(rejected: Iterable<readonly [number, string]>, after: number): boolean {
-  for (const [seq, why] of rejected) if (seq > after && (why.endsWith(" isn't a member") || why.startsWith("not signed by "))) return true;
+  for (const [seq, why] of rejected) if (seq > after && (why.endsWith(NOT_A_MEMBER) || why.startsWith("not signed by "))) return true;
   return false;
 }
 
@@ -121,7 +128,12 @@ export class SessionState {
   readonly state = Effect.fn("AgentSession.state")({ self: this }, function* (this: SessionState) {
     yield* this.chores();
     const seen = yield* this.peek();
-    const [messages, roster] = yield* Effect.all([this.sync(seen), this.members(false, seen?.members ?? undefined)], { concurrency: "unbounded" });
+    let [messages, roster] = yield* Effect.all([this.sync(seen), this.members(false, seen?.members ?? undefined)], { concurrency: "unbounded" });
+    if (this.base && poisoned(this.base, roster)) {
+      yield* (yield* Cache).dropBase(this.cfg.roomId);
+      this.base = null;
+      messages = yield* this.sync(seen);
+    }
     const look = yield* Look;
     const prior = look?.seen.get(this);
     if (prior && prior.messages === messages && prior.roster === roster && prior.rooms === this.roomsFloor && prior.guard === this.guardFloor) return prior.view;

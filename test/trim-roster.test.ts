@@ -143,3 +143,41 @@ test("a cached log that starts past the base refetches the gap instead of foldin
   expect(replaced[0]![0]!.seq).toBe(base.n + 1);
   expect(replaced[0]!.map((m) => m.seq)).toEqual(messages.filter((m) => m.seq > base.n).map((m) => m.seq));
 });
+
+test("a cached base that called a current member a non-member is dropped and rebuilt from the relay (T1004)", async () => {
+  const { messages } = await ownerCh.history(0);
+  const roster = rosterOf(await ownerCh.members());
+  const kept: { base?: FoldBase } = {};
+  const upTo = messages.filter((m) => m.seq <= task + 2);
+  fold(
+    upTo,
+    roster.filter((r) => r.name !== "gentle"),
+    Date.now(),
+    undefined,
+    undefined,
+    null,
+    (b) => void (kept.base = b),
+  );
+  const bad = kept.base!;
+  expect(bad.tasks.find((t) => t.id === task)).toBeUndefined();
+  const dropped: string[] = [];
+  const cache = {
+    read: () => Effect.succeed(messages.filter((m) => m.seq > bad.n)),
+    append: () => Effect.void,
+    replace: () => Effect.void,
+    base: () => Effect.succeed(bad),
+    keepBase: () => Effect.void,
+    dropBase: (room: string) => Effect.sync(() => void dropped.push(room)),
+    trim: () => Effect.void,
+  };
+  const state = await runAgent(
+    Effect.gen(function* () {
+      const cfg = (yield* (yield* Keystore).config).channels["trim"]!;
+      const s = yield* openSession("trim", cfg, "dev");
+      return (yield* s.state()).state;
+    }).pipe(Effect.provideService(Cache, cache)),
+  );
+  expect(dropped).toHaveLength(1);
+  expect(state.tasks.get(task)?.state).toBe("done");
+  expect([...state.trust.values()].includes("forged")).toBe(false);
+});

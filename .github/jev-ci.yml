@@ -129,7 +129,8 @@ jobs:
       member worked keeps its done state and rounds instead of the cache keeping a wrong base for
       good (src/agent/state.ts foldState); and a cached log that starts past its base's n+1 (as a
       live listener leaves it after the cache was removed) refetches the gap from the relay and
-      rewrites the cache (sync, replaceCache) instead of folding without those messages.
+      rewrites the cache (sync, replaceCache) instead of folding without those messages; and a cached
+      base that rejected a current member as a non-member is dropped and rebuilt from the relay.
       Also test/rex.test.ts: where a seat runs from its environment (nothing inside tmux, Rex's
       server, session and block ids, any other terminal's program and version), which terminals
       take an OSC 7501 status record, the record frames they get, the blocked question and
