@@ -266,6 +266,14 @@ jobs:
       only within two minutes either way and only once, refused when re-aimed at another computer inside its seal, changed,
       carrying an unknown verb or field, or over 4 KiB; and the computer's answer read only when signed by that computer
       for that ask.
+      Also test/machine-relay.test.ts: a paired computer at the relay (src/relay/machine.ts, on the Bun relay; the Worker's
+      MachineInbox object runs the same handler, and machineAlarmAt times its alarm): it registers itself with its own cert,
+      nobody else can, an older cert can't roll its person back, even after an unpair; every route takes only a signature
+      made for that machine, that method, that path and that body, recently, so a room's, another path's, a swapped body
+      or an old one is refused; only its person writes to its inbox (a box of at most 4 KiB, 20 a minute and 20 waiting,
+      each checked on its own), asks reach its socket on open and as they come and are gone after three minutes, only the
+      machine reads, deletes or opens its socket, only its person sees it online, and unpairing by either drops the inbox
+      and closes the socket. Its refusals are tagged failures, pinned by test/error-texts.test.ts.
       Also test/shell-path.test.ts: the PATH line kiwi setup and the desktop app add to the shell's profile
       (packages/core/src/node/shell-path.ts), once and never when the profile already names the folder, and never
       from a profile outside a temp folder into a temp folder (the system's temp folders, through their links,

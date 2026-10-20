@@ -14,6 +14,8 @@ import { clockLayer, MAX_REQUEST_BYTES } from "./http.ts";
 import { authkitDomains, devHostOk, devHumanAuth, devRequestOk, Human, HUMAN_HEADER, workosFromSettings, type HumanAuth } from "./human.ts";
 import { MAILBOX_TTL_MS } from "@kiwi/core/mailbox.ts";
 import { corsPreflight, onMailboxHttp, withCors, type MailboxStore } from "./mailbox.ts";
+import { MACHINE_ASKS_PER_MINUTE, MACHINE_BOX_TTL_MS, MACHINE_UNSEEN_MS, MACHINE_WRITES_PER_ADDRESS, onMachineHttp, type MachineBox, type MachineStore } from "./machine.ts";
+import { allow as allowPerMinute } from "./room/limits.ts";
 import { clientAddress, downloadAllowed, parseTrustProxy, trustProxyFromArgs, trustProxyHint, untrustedProxy, writeAllowed, type TrustProxy } from "./address.ts";
 import { onDictationHttp, type DictationStore } from "./dictation.ts";
 import { Policy, policyFrom, type RelayPolicy } from "./policy.ts";
@@ -50,6 +52,7 @@ import { GithubApp, githubAppFrom, GithubPush, githubPushFrom, type GithubAppApi
 import { edgePage, PAGE_CACHE_SECONDS, PAGE_PATH, type PageCache } from "./pages.ts";
 
 interface SocketData {
+  machine?: string;
   roomId: string;
   pk: string;
   since: number;
@@ -101,6 +104,36 @@ export function startRelay(
   // boxes the relay can't read. Expired rows are deleted on read and below.
   people.run("CREATE TABLE IF NOT EXISTS mailboxes (id TEXT PRIMARY KEY, rec TEXT NOT NULL)");
   people.run("CREATE TABLE IF NOT EXISTS github_routes (repo TEXT NOT NULL, room TEXT NOT NULL, PRIMARY KEY (repo, room))");
+  people.run("CREATE TABLE IF NOT EXISTS machines (mpk TEXT PRIMARY KEY, person TEXT NOT NULL, mxpk TEXT NOT NULL, cert_at INTEGER NOT NULL, seen_at INTEGER NOT NULL)");
+  people.run("CREATE TABLE IF NOT EXISTS machine_floors (mpk TEXT PRIMARY KEY, cert_at INTEGER NOT NULL)");
+  people.run("CREATE TABLE IF NOT EXISTS machine_boxes (mpk TEXT NOT NULL, id TEXT NOT NULL, box TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (mpk, id))");
+  const machineSockets = new Map<string, { ws: ServerWebSocket<SocketData>; since: number }>();
+  const machines: MachineStore = {
+    binding: async (mpk) => {
+      const row = people.query("SELECT person, mxpk, cert_at, seen_at FROM machines WHERE mpk = ?").get(mpk) as { person: string; mxpk: string; cert_at: number; seen_at: number } | null;
+      return row ? { person: row.person, mxpk: row.mxpk, certAt: row.cert_at, seenAt: row.seen_at } : null;
+    },
+    floor: async (mpk) => (people.query("SELECT cert_at FROM machine_floors WHERE mpk = ?").get(mpk) as { cert_at: number } | null)?.cert_at ?? 0,
+    bind: async (mpk, b) => {
+      people.query("INSERT OR REPLACE INTO machines (mpk, person, mxpk, cert_at, seen_at) VALUES (?, ?, ?, ?, ?)").run(mpk, b.person, b.mxpk, b.certAt, b.seenAt);
+      people.query("INSERT INTO machine_floors (mpk, cert_at) VALUES (?, ?) ON CONFLICT (mpk) DO UPDATE SET cert_at = MAX(cert_at, excluded.cert_at)").run(mpk, b.certAt);
+    },
+    seen: async (mpk, at) => void people.query("UPDATE machines SET seen_at = ? WHERE mpk = ?").run(at, mpk),
+    unbind: async (mpk) => {
+      people.query("DELETE FROM machines WHERE mpk = ?").run(mpk);
+      people.query("DELETE FROM machine_boxes WHERE mpk = ?").run(mpk);
+    },
+    pending: async (mpk, since) => (people.query("SELECT COUNT(*) AS n FROM machine_boxes WHERE mpk = ? AND at >= ?").get(mpk, since) as { n: number }).n,
+    boxes: async (mpk, since) => people.query("SELECT id, box, at FROM machine_boxes WHERE mpk = ? AND at >= ? ORDER BY at").all(mpk, since) as MachineBox[],
+    addBox: async (mpk, b) => void people.query("INSERT INTO machine_boxes (mpk, id, box, at) VALUES (?, ?, ?, ?)").run(mpk, b.id, b.box, b.at),
+    dropBox: async (mpk, id) => void people.query("DELETE FROM machine_boxes WHERE mpk = ? AND id = ?").run(mpk, id),
+    online: (mpk) => machineSockets.get(mpk)?.since ?? null,
+    push: (mpk, b) => void machineSockets.get(mpk)?.ws.send(JSON.stringify({ box: b })),
+    close: (mpk) => {
+      machineSockets.get(mpk)?.ws.close(4000, "unpaired");
+      machineSockets.delete(mpk);
+    },
+  };
   const githubSecret = opts.githubSecret === undefined ? (process.env.GITHUB_WEBHOOK_SECRET ?? null) : opts.githubSecret;
   const mailboxes: MailboxStore = {
     load: async (id) => {
@@ -113,6 +146,12 @@ export function startRelay(
   // Expired pairing mailboxes go on startup and hourly (reads expire them lazily too).
   const sweepMailboxes = () => {
     const now = Date.now();
+    people.query("DELETE FROM machine_boxes WHERE at < ?").run(now - MACHINE_BOX_TTL_MS);
+    for (const r of people.query("SELECT mpk FROM machines WHERE seen_at < ?").all(now - MACHINE_UNSEEN_MS) as { mpk: string }[]) {
+      if (machineSockets.has(r.mpk)) continue;
+      people.query("DELETE FROM machines WHERE mpk = ?").run(r.mpk);
+      people.query("DELETE FROM machine_boxes WHERE mpk = ?").run(r.mpk);
+    }
     for (const r of people.query("SELECT id, rec FROM mailboxes").all() as { id: string; rec: string }[]) {
       try {
         if (now - (JSON.parse(r.rec) as { firstAt: number }).firstAt > MAILBOX_TTL_MS) people.query("DELETE FROM mailboxes WHERE id = ?").run(r.id);
@@ -310,6 +349,17 @@ export function startRelay(
         if (spoken) return spoken;
         const mailbox = await onMailboxHttp(req, mailboxes, ip ? { ip, allow: writeAllowed } : {});
         if (mailbox) return mailbox;
+        const machine = await onMachineHttp(req, machines, {
+          now: clock,
+          perMachine: (key) => allowPerMinute(key, MACHINE_ASKS_PER_MINUTE, clock()),
+          ...(ip ? { perAddress: () => allowPerMinute(`machine-ip:${ip}`, MACHINE_WRITES_PER_ADDRESS, clock()) } : {}),
+        });
+        if (machine instanceof Response) return machine;
+        if (machine) {
+          const data: SocketData = { machine: machine.upgrade, roomId: "", pk: machine.upgrade, since: 0, presence: false, reads: false, echo: false, watch: false };
+          if (server.upgrade(req, { data, headers: wsHeaders(req) })) return undefined;
+          return withCors(errorResponse(new UpdateRequired({ message: "expected websocket" })));
+        }
         const github = await onGithubHttp(req, githubSecret, githubRoutes, clock);
         if (github) return github;
         const route = parseRoomPath(url.pathname);
@@ -371,6 +421,15 @@ export function startRelay(
     websocket: {
       idleTimeout: 120,
       open(ws) {
+        const mpk = ws.data.machine;
+        if (mpk) {
+          machineSockets.get(mpk)?.ws.close(4001, "replaced by a newer connection");
+          machineSockets.set(mpk, { ws, since: clock() });
+          for (const b of people.query("SELECT id, box, at FROM machine_boxes WHERE mpk = ? AND at >= ? ORDER BY at").all(mpk, clock() - MACHINE_BOX_TTL_MS) as MachineBox[]) {
+            ws.send(JSON.stringify({ box: b }));
+          }
+          return;
+        }
         let set = sockets.get(ws.data.roomId);
         if (!set) sockets.set(ws.data.roomId, (set = new Set()));
         set.add(ws);
@@ -386,6 +445,7 @@ export function startRelay(
       message(ws, data) {
         const raw = typeof data === "string" ? data : new TextDecoder().decode(data);
         if (raw === PING) return void ws.send(PONG);
+        if (ws.data.machine) return;
         const db = storeFor(ws.data.roomId, false);
         let fx: Effects;
         try {
@@ -397,6 +457,11 @@ export function startRelay(
         apply(ws.data.roomId, fx, ws);
       },
       close(ws) {
+        const mpk = ws.data.machine;
+        if (mpk) {
+          if (machineSockets.get(mpk)?.ws === ws) machineSockets.delete(mpk);
+          return;
+        }
         sockets.get(ws.data.roomId)?.delete(ws);
         const db = storeFor(ws.data.roomId, false);
         try {
