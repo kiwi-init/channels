@@ -29,11 +29,15 @@ const fullFmt = new Intl.DateTimeFormat(undefined, { dateStyle: "full", timeStyl
 const weekdayFmt = new Intl.DateTimeFormat(undefined, { weekday: "long" })
 const dateFmt = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "numeric", year: "2-digit" })
 
-export const formatTime = (ts: number) => timeFmt.format(ts)
-export const formatFull = (ts: number) => fullFmt.format(ts)
+export const showable = (ts: number) => Number.isFinite(new Date(ts).getTime())
+
+export const formatTime = (ts: number) => (showable(ts) ? timeFmt.format(ts) : "")
+export const formatFull = (ts: number) => (showable(ts) ? fullFmt.format(ts) : "")
+export const isoTime = (ts: number) => (showable(ts) ? new Date(ts).toISOString() : undefined)
 
 /** Like the Messages list: a time today, "Yesterday", a weekday this week, else a date. */
 export function formatShort(ts: number, now = Date.now()): string {
+  if (!showable(ts)) return ""
   const d = new Date(ts)
   const today = new Date(now)
   if (d.toDateString() === today.toDateString()) return formatTime(ts)
@@ -48,6 +52,7 @@ const stampYear = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "s
 
 /** The stamp between messages, as Messages words it: "Today at 14:08", "Sunday at 16:49", "Sun, 18 Jan at 16:49". */
 export function formatStamp(ts: number, now = Date.now()): string {
+  if (!showable(ts)) return ""
   const d = new Date(ts)
   const today = new Date(now)
   const at = formatTime(ts)
