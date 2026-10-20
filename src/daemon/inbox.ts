@@ -56,6 +56,18 @@ async function machineFetch(m: PairedMachine, method: string, rest = "", body?: 
   return fetch(url, { method, headers: { authorization: `Bearer ${token}`, ...(text ? { "content-type": "application/json" } : {}) }, ...(text ? { body: text } : {}) });
 }
 
+const BOX_ID_RE = /^[A-Za-z0-9_-]{22}$/;
+
+export function deliveredFrom(frame: string): Delivered | null {
+  try {
+    const v = JSON.parse(frame) as { box?: { id?: unknown; box?: unknown } };
+    return typeof v.box?.id === "string" && BOX_ID_RE.test(v.box.id) && typeof v.box.box === "string" ? { id: v.box.id, box: v.box.box } : null;
+  } catch {
+    // A frame that isn't an ask: the relay sends nothing else.
+    return null;
+  }
+}
+
 export async function forgetAtRelay(m: PairedMachine): Promise<void> {
   await machineFetch(m, "DELETE").catch(() => null);
 }
@@ -89,7 +101,7 @@ export function startMachineInbox(deps: InboxDeps): { stop(): void; close(): voi
   };
 
   const handle = async (m: PairedMachine & { cert: NonNullable<PairedMachine["cert"]>; person: NonNullable<PairedMachine["person"]> }, d: Delivered): Promise<void> => {
-    const read = await readAsk(m.identity as Identity, d.box, { person: m.person.pk, now: now(), claim });
+    const read = await readAsk(m.identity as Identity, d.box, { person: m.person.pk, now: now(), claim }).catch(() => ({ ok: false as const, why: "malformed" as const }));
     if (!read.ok) {
       log(["refused", read.why, "", "", d.id]);
       await machineFetch(m, "DELETE", `/inbox/${d.id}`).catch(() => null);
@@ -130,13 +142,7 @@ export function startMachineInbox(deps: InboxDeps): { stop(): void; close(): voi
       wait = RETRY_FIRST_MS;
     };
     socket.onmessage = (e) => {
-      let d: Delivered | null = null;
-      try {
-        const v = JSON.parse(String(e.data)) as { box?: { id?: unknown; box?: unknown } };
-        if (typeof v.box?.id === "string" && typeof v.box.box === "string") d = { id: v.box.id, box: v.box.box };
-      } catch {
-        // A frame that isn't an ask: the relay sends nothing else.
-      }
+      const d = deliveredFrom(String(e.data));
       if (d) void handle(m, d);
     };
     socket.onclose = () => {

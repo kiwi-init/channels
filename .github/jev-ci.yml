@@ -131,6 +131,9 @@ jobs:
       live listener leaves it after the cache was removed) refetches the gap from the relay and
       rewrites the cache (sync, replaceCache) instead of folding without those messages; and a cached
       base that rejected a current member as a non-member is dropped and rebuilt from the relay.
+      Also test/verify-total.test.ts: a signature check never throws (packages/core/src/identity.ts
+      verify): a pk or sig that isn't base64url reads as unsigned, and a member's message sealed with
+      such a pk loads as forged instead of failing everyone's history.
       Also test/rex.test.ts: where a seat runs from its environment (nothing inside tmux, Rex's
       server, session and block ids, any other terminal's program and version), which terminals
       take an OSC 7501 status record, the record frames they get, the blocked question and
@@ -175,6 +178,13 @@ jobs:
       Also test/local-relay.test.ts: the local relay the browser and desktop scripts start
       (scripts/local-relay.ts) binds a port the system picks and reads it back from the relay's
       listening line, so two started at once never ask for the same port.
+      Also the composer and conversation (audit M): web composer-question.test.tsx: a question's
+      option answers once (choiceGate in lib/choosing.ts refuses a click within 400 ms of the question showing or
+      while its answer is on its way, and frees it when the send fails), and a message @addressed
+      to others isn't the waiting question's answer (answered in lib/asks.ts); web
+      lib/drafts.test.ts: a draft (text or images) is kept per channel and place until emptied;
+      web conversation/use-scroll.test.ts: only messages newer than the newest seen count as new
+      (arrivedAfter), and a hidden window's unread never goes below zero (unreadOf).
       Also test/daemon-big-lines.test.ts: the daemon's socket writes queue what the socket
       didn't take and flush it on drain (src/daemon/server.ts), so a catch-up of thirty
       messages with 50 KB ones among them, and big live messages back to back, arrive whole
@@ -282,7 +292,9 @@ jobs:
       Bun relay (src/daemon/inbox.ts, src/daemon/remote.ts): it answers in the ask's mailbox, signed by the machine, and logs
       to remote.log; one box runs once however often it arrives (machine-asks.json claims); an ask older than two minutes gets
       no answer, only a log line; a launch starts only in a folder under the ones its agents work in (realpath'd, so ../ can't
-      climb out), at most three every ten minutes, with the ask's id as the launch id; and unpair answers, then the relay
+      climb out) and launched in that realpath'd folder, at most three every ten minutes even across a restart
+      (remote-launches.json), with the ask's id as the launch id; a box that breaks the reader is logged and taken out, never
+      retried; a frame whose box id isn't the relay's shape is ignored, so the log can't be forged; and unpair answers, then the relay
       forgets the computer. With test/machine-ask.test.ts: claim(id) runs last, so a refused box doesn't use up its id, and
       readMachineArgs takes per verb only what it may (a known harness, a full folder path, a clean join line).
       Also test/machine-relay.test.ts: a paired computer at the relay (src/relay/machine.ts, on the Bun relay; the Worker's

@@ -1,5 +1,6 @@
 import type { Message } from "@kiwi/core/protocol.ts"
 import { taskId } from "@kiwi/core/state.ts"
+import { useChoosing } from "@/lib/choosing"
 import { excerpt } from "@/lib/format"
 
 export function ComposerQuestion({
@@ -14,9 +15,10 @@ export function ComposerQuestion({
   more: number
   nameOf: (name: string) => string
   disabled: boolean
-  onChoose: (choice: string) => void
+  onChoose: (choice: string) => Promise<boolean>
   onElse: () => void
 }) {
+  const choose = useChoosing(m.seq, onChoose)
   return (
     <section aria-label="Question" className="mb-2 flex flex-col gap-2 rounded-card bg-raised px-3.5 py-3 shadow-[0_0_0_1px_var(--decide)]">
       <p className="flex items-start gap-2 text-ui">
@@ -33,8 +35,8 @@ export function ComposerQuestion({
             <li key={c}>
               <button
                 type="button"
-                disabled={disabled}
-                onClick={() => onChoose(c)}
+                disabled={disabled || choose.busy}
+                onClick={() => choose.pick(c)}
                 className="w-full rounded-row px-3 py-1.5 text-left text-ui leading-snug [overflow-wrap:anywhere] edge transition-colors hover:bg-wash-2 disabled:pointer-events-none disabled:opacity-40"
               >
                 {c}

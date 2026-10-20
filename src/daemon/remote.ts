@@ -1,7 +1,8 @@
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { sep } from "node:path";
 import type { HarnessRow } from "@kiwi/core/harnesses.ts";
 import type { MachineArgs } from "@kiwi/core/machine-ask.ts";
+import { writePrivate } from "../config.ts";
 import type { Launched, LaunchRequest } from "../launch/wire.ts";
 
 const REMOTE_LAUNCHES = 3;
@@ -11,6 +12,7 @@ export interface RemoteDeps {
   inventory: () => Promise<HarnessRow[]>;
   folders: (room?: string) => string[];
   launch: (req: LaunchRequest) => Promise<Launched>;
+  starts?: string;
   now?: () => number;
 }
 
@@ -23,20 +25,32 @@ function real(path: string): string | null {
   }
 }
 
-function underRoots(folder: string, roots: string[]): boolean {
+function underRoots(folder: string, roots: string[]): string | null {
   const target = real(folder);
-  if (!target) return false;
-  return roots.some((root) => {
+  if (!target) return null;
+  const inside = roots.some((root) => {
     const r = real(root);
     return !!r && (target === r || target.startsWith(r + sep));
   });
+  return inside ? target : null;
+}
+
+function loadStarts(file: string | undefined): number[] {
+  if (!file) return [];
+  try {
+    const v = JSON.parse(readFileSync(file, "utf8")) as unknown;
+    return Array.isArray(v) ? v.filter((t): t is number => typeof t === "number") : [];
+  } catch {
+    // No launches recorded yet, or a file cut short: count from none.
+    return [];
+  }
 }
 
 export type RemoteResult = { ok: true; harnesses: HarnessRow[] } | { ok: true; folders: string[] } | { ok: true } | Launched;
 
 export function remoteRunner(deps: RemoteDeps): (args: MachineArgs, id: string) => Promise<RemoteResult> {
   const now = deps.now ?? Date.now;
-  const started: number[] = [];
+  const started = loadStarts(deps.starts);
   return async (args, id) => {
     switch (args.verb) {
       case "harnesses":
@@ -50,9 +64,11 @@ export function remoteRunner(deps: RemoteDeps): (args: MachineArgs, id: string) 
         while (started.length && at - started[0]! >= REMOTE_WINDOW_MS) started.shift();
         if (started.length >= REMOTE_LAUNCHES)
           return { ok: false, why: "failed", detail: `at most ${REMOTE_LAUNCHES} agents are started from another computer every ${REMOTE_WINDOW_MS / 60_000} minutes` };
-        if (!underRoots(args.launch.folder, deps.folders())) return { ok: false, why: "bad-request", detail: "that folder isn't one this computer's agents work in" };
+        const folder = underRoots(args.launch.folder, deps.folders());
+        if (!folder) return { ok: false, why: "bad-request", detail: "that folder isn't one this computer's agents work in" };
         started.push(at);
-        return deps.launch({ ...args.launch, launch: id });
+        if (deps.starts) writePrivate(deps.starts, JSON.stringify(started));
+        return deps.launch({ ...args.launch, folder, launch: id });
       }
     }
   };

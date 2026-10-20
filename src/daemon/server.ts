@@ -1,4 +1,5 @@
 import { chmodSync, existsSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
+import { join } from "node:path";
 import type { Socket } from "bun";
 import type { Channel, PresenceFields, Probe } from "@kiwi/core/client.ts";
 import { DEFAULT_RELAY, hasKiwiState, home, identitiesIn, loadConfig, loadIdentity, saveAccess, type Config } from "../config.ts";
@@ -771,7 +772,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     dir,
     machine: loadPairedMachine,
     unpaired: unpairHere,
-    run: remoteRunner({ inventory: () => harnessInventory(), folders: (room) => seatFolders(loadConfig(), room), launch: (req) => launchAgent(req) }),
+    run: remoteRunner({ inventory: () => harnessInventory(), folders: (room) => seatFolders(loadConfig(), room), launch: (req) => launchAgent(req), starts: join(dir, "remote-launches.json") }),
   });
   let rexWatch: { stop(): void } | null = null;
   const rexSeat = (server: string, block: string, gone: boolean): void => {
