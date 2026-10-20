@@ -4,7 +4,7 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type R
 import type { SendOptions } from "@kiwi/core/client.ts"
 import { MAX_IMAGE_BYTES, RASTER_MIMES, type Color, type Message } from "@kiwi/core/protocol.ts"
 import { matchCommands, parseCommand, type Command } from "@/lib/commands"
-import { compressImage, needsCompressing, renamed } from "@/lib/compress-image"
+import { needsCompressing } from "@/lib/needs-compressing"
 import { appendDictation, MODEL_MB, PRESS_LABEL, useDictation } from "@/lib/dictation"
 import { excerpt } from "@/lib/format"
 import { composerMentions, mentionText, withHandles } from "@/lib/mentions"
@@ -138,10 +138,12 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
         continue
       }
       if (needsCompressing(f, MAX_IMAGE_BYTES)) {
-        void compressImage(f, MAX_IMAGE_BYTES).then((done) => {
-          if (!done) return toast(`${name} couldn’t be shrunk under ${Math.round(MAX_IMAGE_BYTES / 1024)} KB.`, "error")
-          setFiles((prev) => (prev.length < 8 ? [...prev, { ...done, name: renamed(name, done.mime) }] : prev))
-        })
+        void import("@/lib/compress-image").then(({ compressImage, renamed }) =>
+          compressImage(f, MAX_IMAGE_BYTES).then((done) => {
+            if (!done) return toast(`${name} couldn’t be shrunk under ${Math.round(MAX_IMAGE_BYTES / 1024)} KB.`, "error")
+            setFiles((prev) => (prev.length < 8 ? [...prev, { ...done, name: renamed(name, done.mime) }] : prev))
+          })
+        )
         continue
       }
       if (f.size > MAX_IMAGE_BYTES) {
