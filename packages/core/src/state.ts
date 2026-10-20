@@ -16,6 +16,7 @@ export { leadCheckpointKey } from "./state/lead.ts";
 export { findRoom, newRoomId } from "./state/rooms.ts";
 export { currentState, openRound, parseTaskId, revisedOut, similarOpenTasks, taskId, titlesLookAlike } from "./state/tasks.ts";
 export {
+  rosterOf,
   toRoster,
   type ChannelState,
   type Compact,

@@ -21,6 +21,7 @@ export interface ChannelFx extends KeysFx, InfoFx, SettingsFx, RequestsFx, Membe
 export class ChannelCore {
   readonly name: string;
   fx!: ChannelFx;
+  rotating = false;
 
   constructor(
     public access: ChannelAccess,

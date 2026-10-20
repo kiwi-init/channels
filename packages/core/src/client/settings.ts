@@ -9,7 +9,7 @@ import type { ChannelCore } from "./core.ts";
 import type { Refusal, Refused } from "./errors.ts";
 import type { ChannelInfo, Info } from "./info.ts";
 import type { Relay } from "./relay.ts";
-import { newestEpoch, openSealed, sealFor } from "./sealed.ts";
+import { freshInfo, newestEpoch, openSealed, sealFor } from "./sealed.ts";
 
 interface RoomEntry {
   id: string;
@@ -124,8 +124,7 @@ export class ChannelSettings {
   private putSettings(change: Record<string, unknown>): Effect.Effect<void, Refused, Relay> {
     return Effect.gen({ self: this }, function* () {
       yield* this.ch.ownerOnly();
-      this.info.forgetInfo();
-      const info = yield* this.ch.fx.info();
+      const info = yield* freshInfo(this.ch, () => this.info.forgetInfo());
       const current = yield* this.settings(info);
       if (info.settings && !current) return yield* new MissingKey("can't open the channel's current settings, so changing one would drop the rest: try again in a moment");
       const kept = omit(current ?? {}, "what", "room", "pk", "sig");
