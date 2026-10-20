@@ -102,6 +102,7 @@ const SESSION_MARKERS = [
   "GEMINI_CLI",
   "CURSOR_AGENT",
   "CURSOR_CONVERSATION_ID",
+  "CURSOR_TRACE_ID",
   "OPENCODE",
   "OPENCODE_SESSION_ID",
   "PI_CODING_AGENT",
@@ -220,7 +221,7 @@ const TMUX_FORMAT = "#{socket_path}\t#{session_name}\t#{window_id}\t#{pane_id}\t
 const NO_SESSION = /error connecting to|no server running|can't find session/;
 
 async function openTmux(t: PlaceTools & { tmux: string }, req: PlaceRequest): Promise<Placed> {
-  const tmux = (...args: string[]) => run([t.tmux, ...(t.socket ? ["-S", t.socket] : []), ...args]);
+  const tmux = (...args: string[]) => run([t.tmux, "-u", ...(t.socket ? ["-S", t.socket] : []), ...args]);
   const tail = ["-c", req.folder, "-n", req.name, "-P", "-F", TMUX_FORMAT, "--", ...loginArgv(t.shell, req.argv, req.env)];
   const window = () => tmux("new-window", "-d", "-t", `=${TMUX_SESSION}:`, ...tail);
   let r = await window();

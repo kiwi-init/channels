@@ -123,6 +123,15 @@ describe("the login shell runs the program", () => {
     expect(realpathSync(r.stdout.split("|")[2]!.trim())).toBe(realpathSync(folder));
   });
 
+  test("every variable harness detection reads is dropped, except the terminal's own TERM and NO_COLOR", () => {
+    const dropped = new Set(loginArgv("/bin/zsh", ["x"]).flatMap((arg, i, all) => (all[i - 1] === "-u" ? [arg] : [])));
+    const read = ["src/seats.ts", "src/card.ts", "src/ancestry.ts"].flatMap((file) =>
+      [...readFileSync(join(import.meta.dir, "..", file), "utf8").matchAll(/env\.([A-Z][A-Z0-9_]*)/g)].map((m) => m[1]!),
+    );
+    expect(read.length).toBeGreaterThan(10);
+    expect(read.filter((key) => !dropped.has(key) && key !== "TERM" && key !== "NO_COLOR")).toEqual([]);
+  });
+
   test("fish's quotes escape backslashes and quotes inside them", () => {
     expect(terminalLine("/usr/bin/fish", request({ folder: "/a'b", argv: ["x\\y"], env: {} }))).toBe("cd '/a\\'b' && exec 'x\\\\y'");
   });
@@ -220,7 +229,8 @@ esac`,
     );
     rmSync(join(dir, "made"), { force: true });
     expect(await openPlace(request(), tools({ tmux: racing.bin }))).toMatchObject({ ok: true, place: "tmux", window: "@2" });
-    expect(racing.calls().map((c) => c[0])).toEqual(["new-window", "new-session", "new-window"]);
+    expect(racing.calls().every((c) => c[0] === "-u")).toBe(true);
+    expect(racing.calls().map((c) => c[1])).toEqual(["new-window", "new-session", "new-window"]);
     const refusing = fake("tmux", "echo 'create window failed: index 3 in use' >&2; exit 1");
     expect(await openPlace(request(), tools({ tmux: refusing.bin }))).toEqual({ ok: false, why: "failed", detail: "tmux: create window failed: index 3 in use" });
     expect(refusing.calls()).toHaveLength(1);
@@ -268,5 +278,24 @@ describe.skipIf(!hasTmux || !bash)("tmux", () => {
     expect(names).toEqual(["claude-two", "claude-three"]);
     for (let i = 0; i < 100 && spawnSync("ps", ["-o", "comm=", "-p", String(two.pid)], { encoding: "utf8" }).stdout.trim() !== "sleep"; i++) await Bun.sleep(50);
     expect(spawnSync("ps", ["-o", "comm=", "-p", String(two.pid)], { encoding: "utf8" }).stdout.trim()).toBe("sleep");
+  });
+
+  test("with no UTF-8 locale, as the app's daemon runs, the window still says which it is", () => {
+    const bare = join(dir, "u");
+    const script = join(dir, "bare.ts");
+    const t = tools({ shell: bash!, tmux: Bun.which("tmux")!, socket: bare });
+    const place = join(import.meta.dir, "..", "src", "launch", "place.ts");
+    writeFileSync(
+      script,
+      `import { openPlace } from ${JSON.stringify(place)};\nconsole.log(JSON.stringify(await openPlace(${JSON.stringify(request({ argv: ["sleep", "30"] }))}, ${JSON.stringify(t)})));\n`,
+    );
+    const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== "LANG" && !key.startsWith("LC_")));
+    try {
+      const r = spawnSync(process.execPath, [script], { env, encoding: "utf8" });
+      const placed = JSON.parse(r.stdout.trim().split("\n").at(-1) ?? "null") as unknown;
+      expect(placed).toMatchObject({ ok: true, place: "tmux", session: "kiwi", window: expect.stringMatching(/^@\d+$/), pane: expect.stringMatching(/^%\d+$/) });
+    } finally {
+      spawnSync("tmux", ["-S", bare, "kill-server"]);
+    }
   });
 });
