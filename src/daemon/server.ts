@@ -770,7 +770,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       const { startStatusWatch } = await import("../status.ts");
       if (stopped) return;
       statusWatch = startStatusWatch({
-        seats: () => [...seats.values()].map((s) => ({ key: s.key, alias: s.alias, agent: s.agent })),
+        seats: () => [...seats.values()].map((s) => ({ key: s.key, alias: s.alias, agent: s.agent, head: s.head })),
         current: (s) => {
           const seat = seats.get(s.key);
           return !!seat && current(seat) && seat.alias === s.alias && seat.agent === s.agent;
