@@ -16,6 +16,7 @@ import { kimiSessionHere } from "../../kimi-server.ts";
 import { computerClaimFor } from "../../machine.ts";
 import { joinedText } from "../brief.ts";
 import { autoInstallExtraHooks, autoInstallHooks, bindDirectory, bindingFor } from "../../hooks.ts";
+import { notePersonaTold, personaMark } from "../../hooks/persona-line.ts";
 import { detectCard, detectModel, detectRuns, mergeCard } from "../../card.ts";
 import { args, opt } from "../args.ts";
 import { agentName, type Command, config, die, keepDaemon, NAME_RE, out, relayUrl, seatHere } from "../context.ts";
@@ -23,6 +24,8 @@ import { agentName, type Command, config, die, keepDaemon, NAME_RE, out, relayUr
 const JOIN_POLL_MS = /^[1-9]\d*$/.test(process.env.KIWI_JOIN_POLL_MS ?? "") ? Number(process.env.KIWI_JOIN_POLL_MS) : 1500;
 
 const OWNER_NAME = "human";
+
+const MODEL_WAIT_MS = 5_000;
 
 const joinedAlias = Effect.fn("kiwi.joinedAlias")(function* (roomId: string, alias?: string, title?: string | null) {
   const channels = (yield* config).channels;
@@ -110,7 +113,7 @@ export const joinCommands: Record<string, Command> = {
       const nick = inlineText(opt.nick ?? (auto ? baseName(who) : ""), 40);
       if (opt.role !== undefined || opt.about !== undefined) process.stderr.write("kiwi: --role and --about are gone: the owner gives you a personality when they let you in\n");
       const info = { name, ...(nick ? { display: nick } : {}), ...(auto ? { auto: true } : {}) };
-      const model = opt.model?.trim() || (yield* Effect.promise(() => detectModel()));
+      const model = opt.model?.trim() || (yield* Effect.promise(() => detectModel(process.env, who.harness === "claude" ? MODEL_WAIT_MS : 0)));
       if (!model) {
         yield* doneAsking;
         return yield* die(
@@ -157,7 +160,7 @@ export const joinCommands: Record<string, Command> = {
       const settle = (access: ChannelAccess, how: "approved" | "resumed") =>
         Effect.gen(function* () {
           if (auto) yield* doneAsking;
-          const me = (yield* new Channel(access, relay, id).fx.members()).find((m) => m.active && m.pk === id.pk);
+          const me = (yield* new Channel(access, relay, id).fx.members()).find((m) => m.active && !m.unverified && m.pk === id.pk);
           if (me && me.name !== name) yield* renameKey(me.name);
           const title = yield* new Channel(access, relay, id).fx.title().pipe(Effect.catchCause(() => Effect.succeed(null)));
           const existing = Object.entries((yield* keys.config).channels).find(([, c]) => c.roomId === access.roomId)?.[0];
@@ -194,6 +197,7 @@ export const joinCommands: Record<string, Command> = {
               ...(seat?.persona ? { persona: seat.persona } : {}),
             }),
           );
+          if (who.session) notePersonaTold(alias, name, who.session, personaMark(seat?.persona));
           yield* keepDaemon;
         });
 

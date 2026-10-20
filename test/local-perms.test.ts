@@ -7,6 +7,7 @@ import { saveImages } from "../src/attach.ts";
 import { home, writeCursor, writePrivate } from "../src/config.ts";
 import { installHooks, uninstallHooks } from "../src/hooks.ts";
 import type { InlineImage } from "@kiwi/core/protocol.ts";
+import { VERSION } from "../src/version.ts";
 
 const prev = { KIWI_HOME: process.env.KIWI_HOME, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR };
 const trash: string[] = [];
@@ -202,4 +203,26 @@ test("installers document the checksum and create a private home", () => {
   expect(sh).toContain('mkdir -m 700 "$HOME/.kiwi"');
   expect(sh).toContain('chmod 700 "$HOME/.kiwi"');
   expect(sh).toContain("this script does not run it");
+});
+
+test("home() walks and tightens the home once per kiwi version, and again once the home is loosened", () => {
+  const dir = scratch("kiwi-once-");
+  chmodSync(dir, 0o755);
+  writeFileSync(join(dir, "config.json"), "{}\n", { mode: 0o644 });
+  const room = join(dir, "downloads", "room");
+  mkdirSync(room, { recursive: true });
+  const img = join(room, "pic");
+  writeFileSync(img, "png", { mode: 0o644 });
+  const run = () => Bun.spawnSync([process.execPath, "-e", `import { home } from ${JSON.stringify(join(import.meta.dir, "../src/config.ts"))}; home();`], { env: { ...process.env, KIWI_HOME: dir } });
+  run();
+  expect(mode(dir)).toBe(0o700);
+  expect(mode(img)).toBe(0o600);
+  expect(readFileSync(join(dir, ".tightened"), "utf8")).toBe(VERSION);
+  chmodSync(img, 0o644);
+  run();
+  expect(mode(img)).toBe(0o644);
+  chmodSync(dir, 0o755);
+  run();
+  expect(mode(dir)).toBe(0o700);
+  expect(mode(img)).toBe(0o600);
 });

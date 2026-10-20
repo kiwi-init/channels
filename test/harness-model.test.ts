@@ -3,7 +3,7 @@
 
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, realpathSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -152,6 +152,20 @@ describe("harnessModel", () => {
     expect(await detectModel({ KIWI_MODEL: " gemini-2.5-pro ", CODEX_THREAD_ID: "t-1", CODEX_HOME: dir() })).toBe("gemini-2.5-pro");
     expect(await detectModel({})).toBeUndefined();
   });
+
+  test("a session's first command waits a moment for Claude Code to write the line naming its model", async () => {
+    const home = dir();
+    mkdirSync(join(home, "projects", "-work-new"), { recursive: true });
+    const env = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "s-new", CLAUDE_CONFIG_DIR: home };
+    expect(await detectModel(env)).toBeUndefined();
+    setTimeout(() => writeFileSync(join(home, "projects", "-work-new", "s-new.jsonl"), JSON.stringify({ type: "assistant", message: { model: "claude-opus-5-5" } }) + "\n"), 400);
+    const started = Date.now();
+    expect(await detectModel(env, 3_000)).toBe("claude-opus-5-5");
+    expect(Date.now() - started).toBeLessThan(2_000);
+    const gave = Date.now();
+    expect(await detectModel({ CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "s-never", CLAUDE_CONFIG_DIR: home }, 600)).toBeUndefined();
+    expect(Date.now() - gave).toBeGreaterThanOrEqual(600);
+  });
 });
 
 describe("cleanCard", () => {
@@ -200,6 +214,19 @@ describe("harnessActivity", () => {
 
   test("Claude Code, busy after the tool came back: thinking, no tool", async () => {
     expect(await harnessActivity(claude("busy", [asked, { type: "user", message: { content: [{ type: "tool_result" }] } }]))).toEqual({ state: "working", since: 1000, model: "claude-opus-5-5" });
+  });
+
+  test("Claude Code: an unchanged transcript isn't read again; one that changed is", async () => {
+    const env = claude("busy", [asked]);
+    const file = join(env.CLAUDE_CONFIG_DIR, "projects", "p", "s-a.jsonl");
+    utimesSync(file, 1_000, 1_000);
+    expect((await harnessActivity(env))?.tool).toBe("Bash");
+    const same = readFileSync(file, "utf8").replace('"Bash"', '"Grep"');
+    writeFileSync(file, same);
+    utimesSync(file, 1_000, 1_000);
+    expect((await harnessActivity(env))?.tool).toBe("Bash");
+    writeFileSync(file, same + JSON.stringify({ type: "user", message: { content: [{ type: "tool_result" }] } }) + "\n");
+    expect(await harnessActivity(env)).toEqual({ state: "working", since: 1000, model: "claude-opus-5-5" });
   });
 
   test("Claude Code, idle", async () => {

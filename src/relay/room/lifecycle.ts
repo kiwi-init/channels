@@ -43,7 +43,9 @@ export const setIcon = Effect.fn("Room.setIcon")(function* (icon: unknown) {
   const at = Date.now();
   if (icon === null) db.set("icon", "");
   else {
-    if (!fits(SealedIcon, icon) || icon.e > (yield* readMeta).epoch) return yield* new BadRequest({ message: "bad icon (at most 32KB, sealed with a channel key)" });
+    const { epoch } = yield* readMeta;
+    if (!fits(SealedIcon, icon) || icon.e > epoch) return yield* new BadRequest({ message: "bad icon (at most 32KB, sealed with a channel key)" });
+    if (icon.e < epoch) return yield* new BadRequest({ message: "the icon was sealed with an older channel key than this channel's: update Channels and try again" });
     db.set("icon", JSON.stringify({ e: icon.e, iv: icon.iv, ct: icon.ct }));
   }
   db.set("icon_at", at);
