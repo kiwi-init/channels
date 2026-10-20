@@ -24,7 +24,7 @@ interface RexPane {
 
 export type PaneOf = TmuxPane | RexPane;
 
-export type Codex = { rollout: string; cwd: string; name: string };
+type Codex = { rollout: string; cwd: string; name: string };
 
 export type CodexPane = TmuxPane & { codex: Codex };
 
