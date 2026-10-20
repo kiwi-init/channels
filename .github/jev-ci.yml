@@ -105,8 +105,11 @@ jobs:
       Also test/rex.test.ts: where a seat runs from its environment (nothing inside tmux, Rex's
       server, session and block ids, any other terminal's program and version), which terminals
       take an OSC 7501 status record, the record frames they get, the blocked question and
-      done review records a channel state yields for one agent, and the Rex event stream that
-      names a block (a child exiting marks it gone).
+      done review records a channel state yields for one agent, the Rex event stream that
+      names a block (a child exiting marks it gone), the palette action Kiwi writes into Rex's
+      config (one marked require line, installed and removed without touching the person's own),
+      and showing a local seat in Rex (focusing its block and switching the app's session, and
+      saying Remote Control when the app client is missing).
       Also test/daemon-big-lines.test.ts: the daemon's socket writes queue what the socket
       didn't take and flush it on drain (src/daemon/server.ts), so a catch-up of thirty
       messages with 50 KB ones among them, and big live messages back to back, arrive whole
