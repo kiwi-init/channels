@@ -7,7 +7,7 @@ import { isLeadRole, type ChannelState, type Member } from "@kiwi/core/state.ts"
 import type { PrRef } from "@kiwi/core/work.ts"
 import type { Chosen } from "@/lib/asks"
 import { useClock } from "@/lib/channel"
-import { formatAgo, formatFull, formatStamp, formatTime, memberName } from "@/lib/format"
+import { formatAgo, formatFull, formatStamp, formatTime, isoTime, memberName } from "@/lib/format"
 import { AskedBelow } from "./asked-below"
 import { githubSummary } from "@/lib/github-line"
 import { sameRow } from "./message-memo"
@@ -33,7 +33,7 @@ export function DayMark({ ts }: { ts: number }) {
   const [day] = splitStamp(formatStamp(ts))
   return (
     <div className="mt-5 mb-1 flex items-center gap-3 text-meta text-ink-3 select-none before:h-px before:flex-1 before:bg-line after:h-px after:flex-1 after:bg-line">
-      <time dateTime={new Date(ts).toISOString()} title={formatFull(ts)}>
+      <time dateTime={isoTime(ts)} title={formatFull(ts)}>
         {day}
       </time>
     </div>
@@ -421,7 +421,7 @@ export const MessageRow = memo(function MessageRow({
             {said && !(said.decide && onChoose && !chosen) && (
               <span className={cx("min-w-0 truncate text-meta", said.alert ? "font-semibold text-alert" : said.decide ? "font-medium text-decide" : "text-ink-3")}>{said.text}</span>
             )}
-            <time dateTime={new Date(m.ts).toISOString()} title={formatFull(m.ts)} className="shrink-0 text-stamp text-ink-3 tabular-nums">
+            <time dateTime={isoTime(m.ts)} title={formatFull(m.ts)} className="shrink-0 text-stamp text-ink-3 tabular-nums">
               {formatTime(m.ts)}
             </time>
           </p>
