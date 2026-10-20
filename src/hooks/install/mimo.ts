@@ -32,7 +32,7 @@ interface Kiwi {
   parents: Map<string, string | null>;
   waiting: Map<string, ChildProcess | null>;
 }
-type Event = { type: string; properties?: { sessionID?: string; info?: { id?: string; parentID?: string } } };
+type Event = { type: string; properties?: { sessionID?: string; info?: { id?: string; parentID?: string; directory?: string } } };
 
 const MARK = "${MARK}";
 const LISTEN = ${JSON.stringify(listen)};
@@ -138,7 +138,10 @@ export const KiwiPlugin = async ({ client }: { client: Client }) => {
     },
     event: async ({ event }: { event: Event }) => {
       const info = event.properties?.info;
-      if (event.type === "session.created" && info?.id) kiwi.parents.set(info.id, info.parentID ?? null);
+      if (event.type === "session.created" && info?.id) {
+        kiwi.parents.set(info.id, info.parentID ?? null);
+        if (!info.parentID) void watch(info.id, info.directory ?? process.cwd());
+      }
       if (event.type === "session.deleted" && info?.id) stop(info.id);
     },
   };

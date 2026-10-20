@@ -41,7 +41,7 @@ afterAll(() => {
 type Prompted = { path: { id: string }; body: { parts: { type: string; text: string }[] }; throwOnError?: boolean };
 type Hooks = {
   "shell.env": (input: { cwd?: string; sessionID?: string }, output: { env: Record<string, string> }) => Promise<void>;
-  event: (input: { event: { type: string; properties?: { info?: { id?: string; parentID?: string } } } }) => Promise<void>;
+  event: (input: { event: { type: string; properties?: { info?: { id?: string; parentID?: string; directory?: string } } } }) => Promise<void>;
 };
 
 async function until(what: string, ok: () => boolean, ms = 10_000): Promise<void> {
@@ -289,6 +289,40 @@ test("a session whose lookup fails still gets a listener, on its own id, and a m
   expect(prompted[0]?.path).toEqual({ id: "ses_lost" });
   expect(readFileSync(calls, "utf8").trim().split("\n")[0]).toBe("ses_lost");
   await hooks.event({ event: { type: "session.deleted", properties: { info: { id: "ses_lost" } } } });
+});
+
+test("a new session gets its listener when MiMoCode creates it, before any shell command; a child session's root listens for it", async () => {
+  const dir = scratch("hk-mimo-created-");
+  const calls = join(dir, "calls.log");
+  const fake = join(dir, "listen.sh");
+  writeFileSync(fake, `#!/bin/sh\necho "$MIMOCODE_SESSION_ID $(cat)" >> ${JSON.stringify(calls)}\nsleep 30\n`);
+  chmodSync(fake, 0o755);
+  const file = join(dir, "kiwi.ts");
+  writeFileSync(file, mimoPluginSource(fake));
+  let lookups = 0;
+  const client = {
+    session: {
+      get: async () => {
+        lookups += 1;
+        return { data: {} };
+      },
+      promptAsync: async () => undefined,
+    },
+  };
+  const mod = (await import(file)) as { KiwiPlugin: (input: { client: typeof client }) => Promise<Hooks> };
+  const hooks = await mod.KiwiPlugin({ client });
+  const started = () => (existsSync(calls) ? readFileSync(calls, "utf8").trim().split("\n") : []);
+  await hooks.event({ event: { type: "session.created", properties: { info: { id: "ses_new", directory: dir } } } });
+  await until("the new session's listener", () => started().length === 1);
+  expect(started()[0]).toBe(`ses_new ${JSON.stringify({ session_id: "ses_new", cwd: dir, hook_event_name: "listen", landed: null })}`);
+  await hooks.event({ event: { type: "session.created", properties: { info: { id: "ses_sub", parentID: "ses_new", directory: dir } } } });
+  const out = { env: {} as Record<string, string> };
+  await hooks["shell.env"]({ cwd: dir, sessionID: "ses_sub" }, out);
+  expect(out.env.MIMOCODE_SESSION_ID).toBe("ses_new");
+  await Bun.sleep(300);
+  expect(started()).toHaveLength(1);
+  expect(lookups).toBe(0);
+  await hooks.event({ event: { type: "session.deleted", properties: { info: { id: "ses_new" } } } });
 });
 
 test("a session whose lookup failed once and then works keeps one listener, its root's: the one on its own id stops", async () => {
