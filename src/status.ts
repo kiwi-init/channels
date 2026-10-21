@@ -1,11 +1,11 @@
-import { spawnSync } from "node:child_process";
-import { closeSync, openSync, statSync, writeSync } from "node:fs";
+import { closeSync, openSync, writeSync } from "node:fs";
 import { needsPerson } from "@kiwi/core/work.ts";
 import type { ChannelState } from "@kiwi/core/state.ts";
 import { loadConfig, type SeatRecord } from "./config.ts";
 import { activityEnv, seatRecordFor } from "./daemon/reach.ts";
 import { harnessActivity } from "./harness.ts";
 import { askId, clearFrame, reviewId, rexForeground, rexRootState, statusFrame, takesStatus, type StatusRecord } from "./rex.ts";
+import { leadsTerminal } from "./terminals/shared/foreground.ts";
 
 const STATUS_EVERY_MS = 3_000;
 const RATE_MS = 1_000;
@@ -18,32 +18,6 @@ export function seatRecords(state: ChannelState, alias: string, agent: string): 
   const review = [...state.tasks.values()].filter((t) => t.owner === agent && t.state === "review" && !t.archived).sort((a, b) => a.id - b.id);
   for (const task of review) records.push({ id: reviewId(alias, task.id), state: "done", msg: `T${task.id} waits for review` });
   return records;
-}
-
-interface Device {
-  tty: string;
-  path: string;
-}
-
-function uid(): number | null {
-  return typeof process.getuid === "function" ? process.getuid() : null;
-}
-
-export function leadsTerminal(pid: number): Device | null {
-  if (process.platform === "win32" || !Number.isSafeInteger(pid) || pid <= 0) return null;
-  const r = spawnSync("ps", ["-o", "tty=,tpgid=,pgid=", "-p", String(pid)], { encoding: "utf8", timeout: 2_000 });
-  const [tty, fg, group] = r.status === 0 ? r.stdout.trim().split(/\s+/) : [];
-  if (!tty || tty === "?" || fg !== String(pid) || group !== String(pid)) return null;
-  const path = `/dev/${tty}`;
-  try {
-    const stat = statSync(path);
-    if (!stat.isCharacterDevice()) return null;
-    const owner = uid();
-    if (owner !== null && stat.uid !== owner) return null;
-  } catch {
-    return null;
-  }
-  return { tty, path };
 }
 
 function writeStatus(device: string, frames: string): boolean {

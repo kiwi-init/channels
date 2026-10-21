@@ -1,6 +1,8 @@
 import { statSync } from "node:fs";
 import { basename, isAbsolute } from "node:path";
-import { rexBinary, type RexPlace } from "../rex.ts";
+import { REX_BLOCK, REX_SESSION, REX_TERMINAL, rexApiArgv, rexBinary, rexServer, type RexPlace } from "../rex.ts";
+import { object, objectsIn, parseJson } from "../terminals/shared/json.ts";
+import { run, type Ran } from "../terminals/shared/run.ts";
 import { loginPath, loginShell } from "./shell.ts";
 
 export type PlaceKind = "rex" | "tmux" | "terminal";
@@ -35,24 +37,6 @@ async function placeTools(): Promise<PlaceTools> {
     tmux: Bun.which("tmux", { PATH: await loginPath() }),
     osascript: process.platform === "darwin" ? (Bun.which("osascript") ?? "/usr/bin/osascript") : null,
   };
-}
-
-interface Ran {
-  status: number | null;
-  stdout: string;
-  stderr: string;
-}
-
-async function run(argv: string[], ms = 10_000): Promise<Ran> {
-  try {
-    const child = Bun.spawn(argv, { stdin: "ignore", stdout: "pipe", stderr: "pipe" });
-    const timer = setTimeout(() => child.kill(), ms);
-    const [status, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
-    clearTimeout(timer);
-    return { status, stdout, stderr };
-  } catch (err) {
-    return { status: null, stdout: "", stderr: err instanceof Error ? err.message : String(err) };
-  }
 }
 
 const said = (r: Ran): string => (r.stderr.trim() || r.stdout.trim() || `exit ${r.status}`).split("\n")[0]!.slice(0, 200);
@@ -134,32 +118,6 @@ export function terminalLine(shell: string, req: PlaceRequest): string {
   return `cd ${quote(req.folder, fish)} && exec ${[...(env.length ? ["env", ...env] : []), ...req.argv].map((word) => quote(word, fish)).join(" ")}`;
 }
 
-function object(v: unknown): Record<string, unknown> | null {
-  return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
-}
-
-function list(v: unknown, key: string): Record<string, unknown>[] {
-  const items = object(v)?.[key];
-  return Array.isArray(items)
-    ? items.flatMap((item: unknown) => {
-        const o = object(item);
-        return o ? [o] : [];
-      })
-    : [];
-}
-
-function parse(stdout: string): unknown {
-  try {
-    return JSON.parse(stdout) as unknown;
-  } catch {
-    return null;
-  }
-}
-
-const SESSION = /^session:[0-9a-f-]{36}$/;
-const BLOCK = /^block:[0-9a-f-]{36}$/;
-const TERMINAL = "com.superlogical.terminal";
-
 async function rex(
   t: PlaceTools & { rex: string },
   server: string | null,
@@ -167,15 +125,8 @@ async function rex(
   args: Record<string, unknown>,
   session?: string,
 ): Promise<{ ok: true; value: unknown } | { ok: false; detail: string }> {
-  const r = await run([t.rex, ...(server ? ["-S", server] : []), "--autostart=false", "api", "call", ...(session ? ["-s", session] : []), method, JSON.stringify(args)]);
-  return r.status === 0 ? { ok: true, value: parse(r.stdout) } : { ok: false, detail: `Rex ${method}: ${said(r)}` };
-}
-
-async function rexServer(t: PlaceTools): Promise<string | null> {
-  if (!t.rex) return null;
-  const r = await run([t.rex, "--autostart=false", "whoami", "--json"], 5_000);
-  const endpoint = r.status === 0 ? object(parse(r.stdout))?.endpoint : null;
-  return typeof endpoint === "string" && endpoint ? endpoint : null;
+  const r = await run([t.rex, ...rexApiArgv(server, method, args, session)]);
+  return r.status === 0 ? { ok: true, value: parseJson(r.stdout) } : { ok: false, detail: `Rex ${method}: ${said(r)}` };
 }
 
 const REX_PLATFORM: Partial<Record<NodeJS.Platform, string>> = { darwin: "macos", linux: "linux", win32: "windows" };
@@ -183,7 +134,7 @@ const REX_PLATFORM: Partial<Record<NodeJS.Platform, string>> = { darwin: "macos"
 async function rexSession(t: PlaceTools & { rex: string }, server: string): Promise<string | null> {
   const clients = await rex(t, server, "client.list", { kinds: ["app"] });
   const here = REX_PLATFORM[t.platform];
-  const apps = (clients.ok ? list(clients.value, "clients") : [])
+  const apps = (clients.ok ? objectsIn(clients.value, "clients") : [])
     .filter((c) => object(c.info)?.kind === "app" && c.connection_state !== "lost")
     .map((c) => ({
       here: object(c.info)?.platform === here,
@@ -191,27 +142,27 @@ async function rexSession(t: PlaceTools & { rex: string }, server: string): Prom
       sessions: Array.isArray(c.session_ids) ? c.session_ids : [],
     }))
     .sort((a, b) => Number(b.here) - Number(a.here) || b.at - a.at);
-  const attached = apps.flatMap((app) => app.sessions).find((id): id is string => typeof id === "string" && SESSION.test(id));
+  const attached = apps.flatMap((app) => app.sessions).find((id): id is string => typeof id === "string" && REX_SESSION.test(id));
   if (attached) return attached;
   const sessions = await rex(t, server, "session.list", {});
-  const last = (sessions.ok ? list(sessions.value, "sessions") : []).map((s) => s.session_id).findLast((id): id is string => typeof id === "string" && SESSION.test(id));
+  const last = (sessions.ok ? objectsIn(sessions.value, "sessions") : []).map((s) => s.session_id).findLast((id): id is string => typeof id === "string" && REX_SESSION.test(id));
   if (last) return last;
   const made = await rex(t, server, "session.create", { label: "kiwi" });
   const id = made.ok ? object(made.value)?.session_id : null;
-  return typeof id === "string" && SESSION.test(id) ? id : null;
+  return typeof id === "string" && REX_SESSION.test(id) ? id : null;
 }
 
 async function openRex(t: PlaceTools & { rex: string }, server: string, req: PlaceRequest): Promise<Placed> {
   const session = await rexSession(t, server);
   if (!session) return { ok: false, why: "failed", detail: "Rex has no session to open a window in" };
   const command = loginArgv(t.shell, req.argv, req.env);
-  const block = { flavor: `${TERMINAL}.shell`, label: req.name, options: { shell: "none", login: false, command, cwd: req.folder } };
+  const block = { flavor: `${REX_TERMINAL}.shell`, label: req.name, options: { shell: "none", login: false, command, cwd: req.folder } };
   const made = await rex(t, server, "session.new_window", { session_id: session, focus: false, window_label: req.name, layout: { block } });
   if (!made.ok) return { ok: false, why: "failed", detail: made.detail };
   const window = object(made.value)?.window_id;
   const id = (object(made.value)?.block_ids as unknown[] | undefined)?.[0];
-  if (typeof window !== "string" || typeof id !== "string" || !BLOCK.test(id)) return { ok: false, why: "failed", detail: "Rex opened a window but didn't say which" };
-  const proc = await rex(t, server, `${TERMINAL}.process`, { block_id: id, args: {} }, session);
+  if (typeof window !== "string" || typeof id !== "string" || !REX_BLOCK.test(id)) return { ok: false, why: "failed", detail: "Rex opened a window but didn't say which" };
+  const proc = await rex(t, server, `${REX_TERMINAL}.process`, { block_id: id, args: {} }, session);
   const pid = Number(object(object(proc.ok ? proc.value : null)?.child)?.pid);
   return { ok: true, place: "rex", rex: { server, session, block: id }, window, ...(Number.isInteger(pid) && pid > 0 ? { pid } : {}) };
 }
@@ -261,7 +212,7 @@ async function openTerminal(t: PlaceTools & { osascript: string }, req: PlaceReq
 
 export async function placeKind(tools?: PlaceTools): Promise<PlaceKind | null> {
   const t = tools ?? (await placeTools());
-  if (await rexServer(t)) return "rex";
+  if (t.rex && (await rexServer(t.rex))) return "rex";
   if (t.tmux) return "tmux";
   return t.platform === "darwin" && t.osascript ? "terminal" : null;
 }
@@ -270,7 +221,7 @@ export async function openPlace(req: PlaceRequest, tools?: PlaceTools): Promise<
   const bad = badRequest(req);
   if (bad) return { ok: false, why: "bad-request", detail: bad };
   const t = tools ?? (await placeTools());
-  const server = await rexServer(t);
+  const server = t.rex ? await rexServer(t.rex) : null;
   if (server && t.rex) return openRex({ ...t, rex: t.rex }, server, req);
   if (t.tmux) return openTmux({ ...t, tmux: t.tmux }, req);
   if (t.platform === "darwin" && t.osascript) return openTerminal({ ...t, osascript: t.osascript }, req);

@@ -1,7 +1,8 @@
-import { spawnSync } from "node:child_process";
 import { closeSync, existsSync, openSync, readFileSync, readlinkSync, readSync, realpathSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { runNow } from "../terminals/shared/run.ts";
+import { tmuxNow, tmuxSocket } from "../terminals/shared/tmux.ts";
 
 export const CODEX_NEW = "/new";
 export const CODEX_FIRST = "Kiwi started this fresh session; carry on from above.";
@@ -215,13 +216,13 @@ function cwdOf(pid: number): string | null {
   } catch {
     // No /proc (macOS): ask lsof instead.
   }
-  const r = spawnSync("lsof", ["-a", "-p", String(pid), "-d", "cwd", "-Fn"], { encoding: "utf8", timeout: 2_000 });
+  const r = runNow(["lsof", "-a", "-p", String(pid), "-d", "cwd", "-Fn"], 2_000);
   const line = r.status === 0 ? r.stdout.split("\n").find((l) => l.startsWith("n")) : undefined;
   return line ? real(line.slice(1)) : null;
 }
 
 function leader(tty: string): number | null {
-  const r = spawnSync("ps", ["-t", tty.replace(/^\/dev\//, ""), "-o", "pid=,pgid=,tpgid=,comm="], { encoding: "utf8", timeout: 2_000 });
+  const r = runNow(["ps", "-t", tty.replace(/^\/dev\//, ""), "-o", "pid=,pgid=,tpgid=,comm="], 2_000);
   if (r.status !== 0) return null;
   for (const row of r.stdout.split("\n")) {
     const [pid, pgid, tpgid, comm] = row.trim().split(/\s+/);
@@ -231,7 +232,7 @@ function leader(tty: string): number | null {
 }
 
 export function sockets(env: Record<string, string | undefined>, uid = process.getuid?.() ?? 0): string[] {
-  const own = env.TMUX?.split(",")[0];
+  const own = tmuxSocket(env);
   const fallback = join(env.TMUX_TMPDIR || (process.platform === "darwin" ? tmpdir() : "/tmp"), `tmux-${uid}`, "default");
   return [...new Set([own, fallback].filter((s): s is string => !!s && existsSync(s)))];
 }
@@ -240,9 +241,9 @@ export function codexPanes(cwd: string, where: readonly string[]): CodexPane[] {
   const want = real(cwd);
   if (!want) return [];
   return where.flatMap((socket) => {
-    const r = spawnSync("tmux", ["-S", socket, "list-panes", "-a", "-F", "#{pane_id} #{pane_tty}"], { encoding: "utf8", timeout: 5_000 });
-    if (r.status !== 0) return [];
-    return r.stdout.split("\n").flatMap((row): CodexPane[] => {
+    const panes = tmuxNow(socket, ["list-panes", "-a", "-F", "#{pane_id} #{pane_tty}"]);
+    if (panes === null) return [];
+    return panes.split("\n").flatMap((row): CodexPane[] => {
       const [pane, tty] = row.trim().split(" ");
       if (!pane || !tty || !/^%\d+$/.test(pane)) return [];
       const pid = leader(tty);
