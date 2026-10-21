@@ -1,8 +1,9 @@
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
 import * as Queue from "effect/Queue";
-import { PING, rasterAttachment, wellFormed, type Message, type ServerFrame } from "../protocol.ts";
+import { PING, wellFormed, type Message, type ServerFrame } from "../protocol.ts";
 import { RelayError, Unreachable, type ChannelGone, type Dropped } from "./errors.ts";
+import { received } from "./history.ts";
 import type { OpenKind, PresenceFields } from "./live.ts";
 
 export type Incoming =
@@ -70,9 +71,7 @@ export function wireOn(ws: WebSocket, q: Inbox): Wire {
 }
 
 export function ownMessage(p: unknown, seq: number, rts: number): Message | null {
-  if (!wellFormed(p)) return null;
-  const imgs = Array.isArray(p.imgs) ? p.imgs.filter(rasterAttachment) : undefined;
-  return { ...p, ...(imgs?.length ? { imgs } : { imgs: undefined }), seq, rts, sigOk: true };
+  return wellFormed(p) ? received(p, seq, rts, true) : null;
 }
 
 const PING_EVERY = "25 seconds";

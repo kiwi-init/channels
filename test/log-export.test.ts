@@ -10,7 +10,7 @@ test("a stored message this build can't read is named as missing from the export
   const room = "c".repeat(32);
   const id = await generateIdentity("mac");
   const known = await seal(key, room, await sign(id, { v: PROTOCOL_VERSION, id: "a", from: "mac", kind: "msg", body: "known", ts: 1 }));
-  const future = await seal(key, room, await sign(id, { v: PROTOCOL_VERSION, id: "b", from: "mac", kind: "event", body: "", ts: 2, ev: { op: "future.op" } }));
+  const malformed = await seal(key, room, await sign(id, { v: PROTOCOL_VERSION, id: "b", from: "mac", kind: "event", body: "", ts: 2, ev: { op: "task.add" } }));
   const server = Bun.serve({
     port: 0,
     hostname: "127.0.0.1",
@@ -19,7 +19,7 @@ test("a stored message this build can't read is named as missing from the export
         head: 2,
         messages: [
           { seq: 1, ts: 10, e: 0, ...known },
-          { seq: 2, ts: 20, e: 0, ...future },
+          { seq: 2, ts: 20, e: 0, ...malformed },
         ],
       }),
   });

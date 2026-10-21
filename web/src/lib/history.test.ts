@@ -208,8 +208,8 @@ async function sealedPayload(k: string, payload: object): Promise<{ iv: string; 
 test("a message this build can't read is kept as an unread row: no hole, so the cache survives", async () => {
   const keys = { "1": key }
   await rememberMessage(ROOM, PK_A, 1, key, msg(1, "one"), 10)
-  const future = await sealedPayload(key, { ...msg(2, ""), kind: "event", ev: { op: "future.op" } })
-  await rememberRow(ROOM, PK_A, await packEnvelope(key, ROOM, 1, { seq: 2, ts: 30, e: 1, ...future }), 10)
+  const malformed = await sealedPayload(key, { ...msg(2, ""), kind: "event", ev: { op: "task.add" } })
+  await rememberRow(ROOM, PK_A, await packEnvelope(key, ROOM, 1, { seq: 2, ts: 30, e: 1, ...malformed }), 10)
   await rememberMessage(ROOM, PK_A, 1, key, msg(3, "three"), 10)
 
   const out = await readCached(ROOM, PK_A, (rows) => openRows(rows, ROOM, keys), 3, 10)
@@ -226,7 +226,7 @@ test("an unread row opens as the message once the build can read it, and a moved
   expect(JSON.stringify(row).includes(SENTINEL)).toBe(false)
   expect(await openRow(row, ROOM, { "1": key })).toMatchObject({ body: SENTINEL, seq: 7, rts: 70 })
 
-  const unreadable = await sealedPayload(key, { v: PROTOCOL_VERSION, id: "id-8", from: "Ada", kind: "event", body: "", ts: 8, ev: { op: "future.op" } })
+  const unreadable = await sealedPayload(key, { v: PROTOCOL_VERSION, id: "id-8", from: "Ada", kind: "event", body: "", ts: 8, ev: { op: "task.add" } })
   const later = await packEnvelope(key, ROOM, 1, { seq: 8, ts: 80, e: 1, ...unreadable })
   expect(await openRow(later, ROOM, { "1": key })).toEqual({ seq: 8, unread: true })
   expect(await openRow({ ...later, seq: 9 }, ROOM, { "1": key })).toBeNull()

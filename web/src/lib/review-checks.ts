@@ -1,6 +1,6 @@
 import type { ChannelState } from "@kiwi/core/state.ts"
 import type { Message } from "@kiwi/core/protocol.ts"
-import { issuesToClose, prsToLinkBack, tasksClosedOnGithub, verdictsAfter } from "@kiwi/core/work.ts"
+import { issuesToClose, issuesToLink, prsToLinkBack, tasksClosedOnGithub, verdictsAfter } from "@kiwi/core/work.ts"
 import type { ReviewCheck } from "@kiwi/core/client.ts"
 
 const memory = new Map<string, number>()
@@ -35,7 +35,8 @@ function dueAfter<T>(roomId: string, state: ChannelState, mark: Mark, pick: (sta
   return pick(state, after)
 }
 
-export const linksToPost = (roomId: string, state: ChannelState) => dueAfter(roomId, state, "prLinks", prsToLinkBack)
+export const linksToPost = (roomId: string, state: ChannelState) =>
+  dueAfter(roomId, state, "prLinks", (s, after) => [...prsToLinkBack(s, after), ...issuesToLink(s, after)].sort((a, b) => a.seq - b.seq))
 
 export const issuesToPost = (roomId: string, state: ChannelState) => dueAfter(roomId, state, "issueCloses", issuesToClose)
 

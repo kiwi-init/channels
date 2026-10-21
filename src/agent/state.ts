@@ -7,7 +7,7 @@ import type { Identity } from "@kiwi/core/identity.ts";
 import type { DaemonPeek } from "../daemon/protocol.ts";
 import { seatHolds, seatRefusal } from "../hold.ts";
 import { daemonMark, daemonPeek } from "../daemon/rpc.ts";
-import { GENERAL_ROOM, PAGE_LIMIT, type Message } from "@kiwi/core/protocol.ts";
+import { GENERAL_ROOM, knownOp, outgrown, PAGE_LIMIT, type Message } from "@kiwi/core/protocol.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
 import { findRoom, fold, rosterOf, type ChannelState, type FoldBase, type GuardFloor, type Roster, type RoomsFloor } from "@kiwi/core/state.ts";
 import { LAST_MARK_MS, lastSeq, Look, orNone, type Agent, type Delivery } from "./shared.ts";
@@ -22,6 +22,8 @@ function poisoned(base: FoldBase, roster: Roster): boolean {
   const names = new Set(roster.filter((r) => r.kind !== "computer").map((r) => r.name));
   return base.rejected.some(([, why]) => why.endsWith(NOT_A_MEMBER) && names.has(why.slice(0, -NOT_A_MEMBER.length)));
 }
+
+export const outgrownCache = (cached: readonly Message[], base: FoldBase | null): boolean => cached.some((m) => m.newer !== undefined && knownOp(m.newer.op)) || (!!base && outgrown(base));
 
 function strangers(rejected: Iterable<readonly [number, string]>, after: number): boolean {
   for (const [seq, why] of rejected) if (seq > after && (why.endsWith(NOT_A_MEMBER) || why.startsWith("not signed by "))) return true;
@@ -89,9 +91,16 @@ export class SessionState {
     const cache = yield* Cache;
     if (!this.log) {
       const cached = yield* cache.read(this.cfg.roomId);
-      this.saved = Math.max(this.saved, lastSeq(cached));
-      this.log ??= cached;
-      this.base ??= yield* cache.base(this.cfg.roomId);
+      const base = yield* cache.base(this.cfg.roomId);
+      if (outgrownCache(cached, base)) {
+        yield* cache.replace(this.cfg.roomId, []);
+        yield* cache.dropBase(this.cfg.roomId);
+        this.log ??= [];
+      } else {
+        this.saved = Math.max(this.saved, lastSeq(cached));
+        this.log ??= cached;
+        this.base ??= base;
+      }
     }
     const look = yield* Look;
     const seen = peeked === undefined ? yield* this.peek() : peeked;

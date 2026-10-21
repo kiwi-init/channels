@@ -1,0 +1,198 @@
+{
+  "members": {
+    "jow": "UcdFa0mNf9zBFx6SrTMuKvOU2_Lo9rJa_CLMgxx8yh4",
+    "ann": "clrffc2DXF-qMZsIylZG9ZBrzGS6-m9ykyIi3lq7U_U"
+  },
+  "log": [
+    {
+      "seq": 1,
+      "rts": 1760000000050,
+      "payload": {
+        "v": 1,
+        "id": "fx-1",
+        "from": "jow",
+        "kind": "msg",
+        "body": "ship the docs today",
+        "ts": 1760000000000,
+        "pk": "UcdFa0mNf9zBFx6SrTMuKvOU2_Lo9rJa_CLMgxx8yh4",
+        "sig": "wGZ-m5bLM7Qr_UFleR1ptSuwc2fYlPbDyWcFVkPxCDAJhpXXx0qwKfrAna3JecD4eaWn0P-ynA8IBlDvl5HCBA"
+      }
+    },
+    {
+      "seq": 2,
+      "rts": 1760000060050,
+      "payload": {
+        "v": 1,
+        "id": "fx-2",
+        "from": "ann",
+        "kind": "event",
+        "body": "added task T2 “Write the docs”",
+        "re": [1],
+        "ev": {
+          "op": "task.add",
+          "title": "Write the docs",
+          "owner": "ann",
+          "review": "jow"
+        },
+        "ts": 1760000060000,
+        "pk": "clrffc2DXF-qMZsIylZG9ZBrzGS6-m9ykyIi3lq7U_U",
+        "sig": "YSIehnbtgeGZJWG8BpdoPoHWzAVySW5r8oTMoZOJSWhv5-9XtfFEu3fEgTrBA6yDXC_NsJ1FfBXagEUmp5WgDg"
+      }
+    },
+    {
+      "seq": 3,
+      "rts": 1760000120050,
+      "payload": {
+        "v": 1,
+        "id": "fx-3",
+        "from": "ann",
+        "kind": "event",
+        "body": "started T2",
+        "ev": {
+          "op": "task.claim",
+          "task": 2
+        },
+        "ts": 1760000120000,
+        "pk": "clrffc2DXF-qMZsIylZG9ZBrzGS6-m9ykyIi3lq7U_U",
+        "sig": "xLKOx5xJmHwFU_T--o8OWZj4EgHW3yo-IuP48CDR8p6jwgxhXZ6_E9JkfiszTaJFdusq3o1ii9V2fxl6BJlWAQ"
+      }
+    },
+    {
+      "seq": 4,
+      "rts": 1760000180050,
+      "payload": {
+        "v": 1,
+        "id": "fx-4",
+        "from": "ann",
+        "kind": "event",
+        "body": "set docs/branch = T2-docs",
+        "ev": {
+          "op": "fact.set",
+          "key": "docs/branch",
+          "value": "T2-docs"
+        },
+        "ts": 1760000180000,
+        "pk": "clrffc2DXF-qMZsIylZG9ZBrzGS6-m9ykyIi3lq7U_U",
+        "sig": "HjiyQw3iPMJDwhnUYE83jL2TfM2CXHuNBTQSs5dZUg_OgSlk4TtGc5s0VHnhUW9Lgw857QTc3z5X8wm8IObECw"
+      }
+    },
+    {
+      "seq": 5,
+      "rts": 1760000240050,
+      "payload": {
+        "v": 1,
+        "id": "fx-5",
+        "from": "ann",
+        "kind": "event",
+        "body": "evidence on W2: sha 1a2b3c",
+        "ev": {
+          "op": "evidence",
+          "work": 2,
+          "ref": {
+            "kind": "sha",
+            "repo": "o/r",
+            "sha": "1a2b3c"
+          },
+          "ok": true
+        },
+        "ts": 1760000240000,
+        "pk": "clrffc2DXF-qMZsIylZG9ZBrzGS6-m9ykyIi3lq7U_U",
+        "sig": "RX0CzJcCsxzH5Qsy-ViuDFVVPA6Loy7uTNp0tfjY153EijEeL26iSj2E7x-l70BIU482rchh8D41bQFbpVBTCQ"
+      }
+    },
+    {
+      "seq": 6,
+      "rts": 1760000300050,
+      "payload": {
+        "v": 1,
+        "id": "fx-6",
+        "from": "ann",
+        "kind": "event",
+        "body": "sent T2 for review at 1a2b3c",
+        "ev": {
+          "op": "task.update",
+          "task": 2,
+          "state": "review",
+          "at": "1a2b3c"
+        },
+        "ts": 1760000300000,
+        "pk": "clrffc2DXF-qMZsIylZG9ZBrzGS6-m9ykyIi3lq7U_U",
+        "sig": "ZVF4yPbG-Kzl4DhItJm40r4El9jqaA1a2T8N7ULEYijaserzljeNBkan0nBc4PzqZ74ThSad4Dy_iojNM7JkBQ"
+      }
+    },
+    {
+      "seq": 7,
+      "rts": 1760000360050,
+      "payload": {
+        "v": 1,
+        "id": "fx-7",
+        "from": "jow",
+        "kind": "event",
+        "body": "approved T2, round 1",
+        "ev": {
+          "op": "task.update",
+          "task": 2,
+          "state": "done",
+          "verdict": "approved",
+          "round": 1
+        },
+        "ts": 1760000360000,
+        "pk": "UcdFa0mNf9zBFx6SrTMuKvOU2_Lo9rJa_CLMgxx8yh4",
+        "sig": "8bmAWToOBlKJ0MBJrWQ05e3Y1vcty-9JBHr_2jrqMbOQpJO9zg5JGJPfUuJDYhUsMizkaFHflX6KJ6Se0D2MAA"
+      }
+    },
+    {
+      "seq": 8,
+      "rts": 1760000420050,
+      "payload": {
+        "v": 1,
+        "id": "fx-8",
+        "from": "jow",
+        "kind": "event",
+        "body": "reacted 👍 to #1",
+        "ev": {
+          "op": "react",
+          "seq": 1,
+          "emoji": "👍"
+        },
+        "ts": 1760000420000,
+        "pk": "UcdFa0mNf9zBFx6SrTMuKvOU2_Lo9rJa_CLMgxx8yh4",
+        "sig": "7bMYWjlaxSJjpdUfvRe7NugBGBrN_tf4sRygDKloDT098FQ_CPdu3-WE8-CI_kF5xi7BCE1NKWnQpgYnKbpGDA"
+      }
+    },
+    {
+      "seq": 9,
+      "rts": 1760000480050,
+      "payload": {
+        "v": 1,
+        "id": "fx-9",
+        "from": "ann",
+        "kind": "event",
+        "body": "passed W2 to the rack",
+        "ev": {
+          "op": "work.pass",
+          "work": 2,
+          "to": "rack"
+        },
+        "ts": 1760000480000,
+        "pk": "clrffc2DXF-qMZsIylZG9ZBrzGS6-m9ykyIi3lq7U_U",
+        "sig": "t22Jg53XecTsj0bXnZwq3nMkfi7z52A1nlSe2ekNGLsngihdwdDZXA4SMFUm0I_M3ycPqrbxMi5pnWMX5mAlCw"
+      }
+    },
+    {
+      "seq": 10,
+      "rts": 1760000540050,
+      "payload": {
+        "v": 1,
+        "id": "fx-10",
+        "from": "ann",
+        "kind": "msg",
+        "body": "docs are merged",
+        "re": [1],
+        "ts": 1760000540000,
+        "pk": "clrffc2DXF-qMZsIylZG9ZBrzGS6-m9ykyIi3lq7U_U",
+        "sig": "j6vPlDQRCbi_p7_S2VnsdnZ54yHP0aw_XEOBAE0-KhV89pfll1W15N76vmW6E_EE-WwAboRCpZBap3KH58YSCg"
+      }
+    }
+  ]
+}

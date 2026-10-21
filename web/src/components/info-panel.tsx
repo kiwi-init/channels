@@ -254,7 +254,9 @@ export function InfoPanel({
                     <Setting
                       icon={GitPullRequestIcon}
                       label="Write to GitHub"
-                      hint={p.state.githubWrite !== null ? "Kiwi comments on a new PR whose branch names a task" : "Kiwi doesn’t comment on your PRs"}
+                      hint={
+                        p.state.githubWrite !== null ? "Kiwi links new PRs and issues to their tasks, and a task closing closes its issue" : "Kiwi doesn’t comment on or close anything in your repos"
+                      }
                     >
                       <Segmented
                         label="Write to GitHub"
@@ -267,7 +269,7 @@ export function InfoPanel({
                       />
                     </Setting>
                   ) : (
-                    <Setting icon={GitPullRequestIcon} label="Write to GitHub" hint="On: Kiwi comments on a new PR whose branch names a task" />
+                    <Setting icon={GitPullRequestIcon} label="Write to GitHub" hint="On: Kiwi links new PRs and issues to their tasks, and a task closing closes its issue" />
                   ))}
                 {(p.isOwner || p.state.voice) &&
                   (p.isOwner && p.onVoice ? (

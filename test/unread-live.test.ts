@@ -15,10 +15,10 @@ const ROOM = "c".repeat(32);
 test("a stored message this build can't read arrives as Unread with its seq, and its cache row says so", async () => {
   const id = await generateIdentity("mac");
   const known = await seal(KEY, ROOM, await sign(id, { v: PROTOCOL_VERSION, id: "a", from: "mac", kind: "msg", body: "known", ts: 1 }));
-  const future = await seal(KEY, ROOM, await sign(id, { v: PROTOCOL_VERSION, id: "b", from: "mac", kind: "event", body: "", ts: 2, ev: { op: "future.op" } }));
+  const malformed = await seal(KEY, ROOM, await sign(id, { v: PROTOCOL_VERSION, id: "b", from: "mac", kind: "event", body: "", ts: 2, ev: { op: "task.add" } }));
   const frames = [
     { t: "msg", seq: 1, ts: 10, e: 0, ...known },
-    { t: "msg", seq: 2, ts: 20, e: 0, ...future },
+    { t: "msg", seq: 2, ts: 20, e: 0, ...malformed },
     { t: "ready", head: 2, more: false },
   ];
   const relay = Bun.serve({
