@@ -35,6 +35,13 @@ describe("the launch the renderer asks for", () => {
     }
     expect(launchRequestOf(null)).toBeNull();
   });
+
+  test("a launch on another computer names it by its key, and nothing that isn't one", () => {
+    const there = { ...good, machinePk: "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-abcde" };
+    expect(launchRequestOf(there)).toEqual(there);
+    expect(launchRequestOf({ ...good, machinePk: "short" })).toBeNull();
+    expect(launchRequestOf({ ...good, machinePk: "has space in it and is long enough" })).toBeNull();
+  });
 });
 
 describe("the daemon's answer", () => {

@@ -29,18 +29,19 @@ export function threadMembers(state: Pick<ChannelState, "members" | "tasks" | "l
   return [...new Set([t.owner, ...t.workedBy, t.review !== "*" ? t.review : undefined, state.lead ?? undefined, ...(t.posters ?? [])].filter(active))];
 }
 
-export function summarize(placeOf: Map<number, Place>, tasks: Map<number, Task>, trust: Map<number, Trust>): Map<string, PlaceSummary> {
+export function summarize(placeOf: Map<number, Place>, tasks: Map<number, Task>, trust: Map<number, Trust>, before: Iterable<[Place, number, number]> = []): Map<string, PlaceSummary> {
   const out = new Map<string, PlaceSummary>();
-  for (const [seq, place] of placeOf) {
-    if (ignored(trust.get(seq))) continue;
+  const add = (place: Place, count: number, last: number) => {
     const real = place.kind === "task" && !tasks.has(place.task) ? MAIN : place;
     const key = placeKey(real);
     const s = out.get(key);
     if (s) {
-      s.count++;
-      s.last = Math.max(s.last, seq);
-    } else out.set(key, { place: real, last: seq, count: 1, ...(real.kind === "task" && tasks.get(real.task)?.state === "done" ? { done: true } : {}) });
-  }
+      s.count += count;
+      s.last = Math.max(s.last, last);
+    } else out.set(key, { place: real, last, count, ...(real.kind === "task" && tasks.get(real.task)?.state === "done" ? { done: true } : {}) });
+  };
+  for (const [place, count, last] of before) add(place, count, last);
+  for (const [seq, place] of placeOf) if (!ignored(trust.get(seq))) add(place, 1, seq);
   return out;
 }
 

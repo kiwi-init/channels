@@ -234,7 +234,12 @@ export interface FoldBase {
   reactSeqs: number[];
   trust: [number, Trust][];
   rejected: [number, string][];
-  sent?: [string, number][];
+  sent?: ([string, number] | [string, number, number, number])[];
+  oldSent?: [number, number][];
+  sentKeys?: string[];
+  sentFloors?: [string, number][];
+  hw?: number;
+  placesBefore?: [Place, number, number][];
   asks: Message[];
   answered: [number, string[]][];
   threadOf: [number, number][];

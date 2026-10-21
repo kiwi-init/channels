@@ -13,6 +13,7 @@ export const MAX_BODY_LENGTH = 100_000;
 export const PAGE_BYTES = 4 * 1024 * 1024;
 
 export const MAX_SNAPSHOT_LENGTH = 512 * 1024;
+export const SNAPSHOT_TOO_LARGE = "the snapshot is too large to store";
 
 export const SNAPSHOT_EVERY = 500;
 

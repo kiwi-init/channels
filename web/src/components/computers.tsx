@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react"
 
 import { clockNow } from "@/lib/channel"
+import { cx } from "@/lib/utils"
+import { useMachinesOnline } from "@/lib/launches"
 import { adoptThisComputer, beginPairing, pairCommands, removeComputer, type ComputerView, type PairAskView, type Pairing } from "@/lib/computers"
 import { formatAgo } from "@/lib/format"
 import { bridge, useSecrets } from "@/lib/secrets"
@@ -95,6 +97,7 @@ function AddComputer({ onDone }: { onDone: () => void }) {
 /** Your paired computers: add one, or remove one (and its agents from your channels). */
 export function ComputerRows({ adding, onAdded }: { adding: boolean; onAdded: () => void }) {
   const { computers } = useSecrets()
+  const online = useMachinesOnline()
   const [removing, setRemoving] = useState<string | null>(null)
   const inApp = !!bridge()
   const [adoptingHere, setAdoptingHere] = useState(false)
@@ -140,7 +143,10 @@ export function ComputerRows({ adding, onAdded }: { adding: boolean; onAdded: ()
       {computers.map((c) => (
         <div key={c.machinePk} className="flex items-center gap-3 rounded-ctl py-1.5">
           <div className="min-w-0 flex-1">
-            <p className="truncate text-ui font-medium">
+            <p className="flex items-center gap-1.5 truncate text-ui font-medium">
+              {online.has(c.machinePk) && online.get(c.machinePk) !== null && (
+                <span aria-label={online.get(c.machinePk) ? "Online" : "Offline"} className={cx("size-2 shrink-0 rounded-full", online.get(c.machinePk) ? "bg-live" : "bg-wash-2")} />
+              )}
               {c.label}
               {c.own && <span className="font-normal text-ink-3"> · this computer</span>}
             </p>

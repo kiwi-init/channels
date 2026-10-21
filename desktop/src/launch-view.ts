@@ -5,6 +5,7 @@ import type { LaunchAgentRequest, LaunchedView } from "./bridge.ts";
 const NICK = /^[\p{L}\p{N}][\p{L}\p{N} _.-]{0,39}$/u;
 const RELAY = /^https?:\/\/[^/?#\s]+$/;
 const TOKEN = /^[A-Za-z0-9_.~=-]{1,4096}$/;
+export const MACHINE_PK = /^[A-Za-z0-9_-]{20,128}$/;
 
 const text = (v: unknown, max: number): string | undefined => (typeof v === "string" && v.length > 0 && v.length <= max ? v : undefined);
 
@@ -19,7 +20,9 @@ export function launchRequestOf(v: unknown): LaunchAgentRequest | null {
   const persona = x["persona"] === undefined ? undefined : text(x["persona"], 4096);
   if (!launch || !isKnownHarness(x["harness"]) || !folder?.startsWith("/") || !code || !TOKEN.test(code) || !relay || !RELAY.test(relay)) return null;
   if ((x["nick"] !== undefined && (!nick || !NICK.test(nick))) || (x["persona"] !== undefined && (!persona || !TOKEN.test(persona)))) return null;
-  return { launch, harness: x["harness"], folder, code, relay, ...(nick ? { nick } : {}), ...(persona ? { persona } : {}) };
+  const machinePk = x["machinePk"];
+  if (machinePk !== undefined && (typeof machinePk !== "string" || !MACHINE_PK.test(machinePk))) return null;
+  return { ...(machinePk ? { machinePk } : {}), launch, harness: x["harness"], folder, code, relay, ...(nick ? { nick } : {}), ...(persona ? { persona } : {}) };
 }
 
 const WHYS = ["bad-request", "not-installed", "no-recipe", "no-place", "not-allowed", "failed"] as const;
