@@ -477,7 +477,10 @@ async function run(part: Part): Promise<string[]> {
     await page.getByText(/^Read( by|\s\d|$)/).waitFor({ timeout: 15000 });
     log(`ok  ${at}`);
 
-    const smokeTask = /T\d+/.exec(await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke task", "--owner", "bot"]))?.[0] ?? "T0";
+    const said = (await kiwi(["-c", "smoke", "--as", "bot", "log", "-n", "20", "--json"])).split("\n").flatMap((line) => (line.trim() ? [JSON.parse(line) as { seq: number; body?: string }] : []));
+    const ask = said.find((m) => m.body === "smoke, read my reply")?.seq;
+    if (ask === undefined) throw new Error("the person's message isn't in kiwi log");
+    const smokeTask = /T\d+/.exec(await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke task", "--owner", "bot", "--ask", String(ask)]))?.[0] ?? "T0";
     at = "Agents: a lane per agent, with what's next on it";
     await toTab("Agents");
     await page.getByRole("region", { name: "Agent lanes" }).getByText("Smoke task").first().waitFor({ timeout: 15000 });
@@ -571,7 +574,7 @@ async function run(part: Part): Promise<string[]> {
     log(`ok  ${at}`);
 
     at = "Take over, then cancel, a task waiting on an agent's review";
-    const added = /added (T\d+)/.exec(await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke review", "--owner", "bot", "--review", "helper"]))?.[1];
+    const added = /added (T\d+)/.exec(await kiwi(["-c", "smoke", "--as", "bot", "task", "add", "Smoke review", "--owner", "bot", "--review", "helper", "--from", smokeTask]))?.[1];
     if (!added) throw new Error("kiwi task add printed no task id");
     await kiwi(["-c", "smoke", "--as", "bot", "task", "review", added]);
     await openFromBoard(/Smoke review/);

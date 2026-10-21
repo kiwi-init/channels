@@ -69,10 +69,11 @@ describe("agents in threads", () => {
     await join_(owner, dev2, code, "dev2");
     await ok(owner, "--as", "human", "role", "lead", "lead", "--yes");
     // Everyone catches up first, so what follows is all that's new.
+    const want = /#(\d+)/.exec(await ok(owner, "--as", "human", "send", "the build is red"))![1]!;
     for (const h of [owner, dev, dev2]) await ok(h, "listen", "--now");
     await ok(owner, "--as", "lead", "listen", "--now");
 
-    const added = await ok(owner, "--as", "lead", "task", "add", "fix the build", "--owner", "dev");
+    const added = await ok(owner, "--as", "lead", "task", "add", "fix the build", "--owner", "dev", "--ask", want);
     const task = /T(\d+)/.exec(added)![0];
     await ok(dev, "task", "start", task);
     // Doing one task: what dev says goes to its thread.
@@ -106,7 +107,7 @@ describe("agents in threads", () => {
 
     // Asking defaults to the task too; doing two tasks, nothing is guessed.
     expect(await ok(dev, "ask", "--to", "dev2", "can you review?")).toContain(`in ${task}'s thread`);
-    const second = /T(\d+)/.exec(await ok(owner, "--as", "lead", "task", "add", "and the tests", "--owner", "dev"))![0];
+    const second = /T(\d+)/.exec(await ok(owner, "--as", "lead", "task", "add", "and the tests", "--owner", "dev", "--ask", want))![0];
     await ok(dev, "task", "start", second);
     expect(await ok(dev, "send", "both under way")).toContain(`you're doing ${task} and ${second}, so say which with --to T7`);
   });

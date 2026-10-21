@@ -4,13 +4,14 @@ import { applyEvent, type FoldCtx } from "./fold-events.ts";
 import { allowedOnHold, isLeadRole, isPerson, LEAD, ON_HOLD } from "./people.ts";
 import { omit } from "../omit.ts";
 import { dmPlace, MAIN, summarize } from "./places.ts";
+import { askHeadOf, fileTask } from "./asks.ts";
 import { prKey } from "./github.ts";
 import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
 import { settle } from "./leases.ts";
 import { carriedPersona } from "../personality.ts";
 import { permissionAnswer } from "../permission.ts";
-import type { ChannelState, Fact, FoldBase, FoldMember, GuardFloor, Lease, Member, Place, Reaction, Room, RoomsFloor, Roster, Task } from "./types.ts";
+import type { AskHead, ChannelState, Fact, FoldBase, FoldMember, GuardFloor, Lease, Member, Place, Reaction, Room, RoomsFloor, Roster, Task } from "./types.ts";
 
 const STALE_MS = 24 * 3_600_000;
 const SENT_WINDOW_MS = 2 * STALE_MS;
@@ -207,6 +208,7 @@ export function fold(
   const permBySeq = new Map<number, Message>();
   const threadOf = new Map<number, number>(from?.threadOf);
   const threadPeople = new Map<number, Set<string>>(from?.threadPeople.map(([seq, people]) => [seq, new Set(people)]));
+  const askHeads = new Map<number, AskHead>(from?.askHeads?.map((h) => [h.id, h]));
   let head = from?.n ?? 0;
 
   const known = new Map<string, Room>(from?.rooms.map((r) => [r.id, r]));
@@ -368,6 +370,7 @@ export function fold(
         const parent = earlierParent(m);
         const root = parent === undefined ? m.seq : (threadOf.get(parent) ?? parent);
         threadOf.set(m.seq, root);
+        if (isPerson(member)) askHeads.set(m.seq, askHeadOf(m, at));
         let people = threadPeople.get(root);
         if (!people) threadPeople.set(root, (people = new Set()));
         people.add(m.from);
@@ -396,6 +399,12 @@ export function fold(
       placeOf.set(m.seq, ev.op === "task.add" ? { kind: "task", task: m.seq } : (ev.op === "task.update" || ev.op === "task.claim") && tasks.has(ev.task) ? { kind: "task", task: ev.task } : MAIN);
 
       applyEvent(ctx, m, ev, member, at, reject);
+      const added = ev.op === "task.add" && !rejected.has(m.seq) ? tasks.get(m.seq) : undefined;
+      if (added) {
+        const re = earlierParent(m);
+        const ask = fileTask({ askHeads, threadOf, placeOf, tasks }, added, re, isPerson(member), at);
+        if (ask !== undefined) added.ask = ask;
+      }
       const evPlace = placeOf.get(m.seq);
       const evTask = evPlace?.kind === "task" && !rejected.has(m.seq) ? tasks.get(evPlace.task) : undefined;
       if (evTask && (evTask.owner === m.from || evTask.workedBy.includes(m.from))) touch(evTask, m.from, at);
@@ -423,6 +432,7 @@ export function fold(
   const recent = <T>(pairs: Iterable<[number, T]>) => [...pairs].filter(([seq]) => seq > cut);
   const keptThreads = recent(threadOf);
   const keptRoots = new Set(keptThreads.map(([, root]) => root));
+  const filedUnder = new Set([...tasks.values()].flatMap((t) => (t.ask !== undefined ? [t.ask] : [])));
   keep?.(
     structuredClone({
       n: head,
@@ -457,6 +467,7 @@ export function fold(
       hw,
       placesBefore: [...summarize(new Map([...placeOf].filter(([seq]) => seq <= cut)), tasks, trust, placesBefore).values()].map((p): [Place, number, number] => [p.place, p.count, p.last]),
       asks: openAsks.map((m) => (m.imgs?.length ? { ...m, imgs: m.imgs.map((i) => omit(i, "data")) } : m)),
+      askHeads: [...askHeads.values()].filter((h) => h.id > cut || filedUnder.has(h.id)),
       answered: openAsks.flatMap((m): [number, string[]][] => [[m.seq, [...(answered.get(m.seq) ?? [])]]]),
       threadOf: keptThreads,
       threadPeople: [...threadPeople].filter(([root]) => root > cut || keptRoots.has(root)).map(([seq, people]): [number, string[]] => [seq, [...people]]),
@@ -501,6 +512,7 @@ export function fold(
     roleSets,
     rejected,
     openAsks,
+    askHeads,
     threadOf,
     threadPeople,
     lead: theLead ?? null,

@@ -6,7 +6,7 @@ import { inlineText, runsLine, type Runs } from "./membership.ts";
 import { GENERAL_ROOM, ignored, imageMarker } from "./protocol.ts";
 import type { Card, GithubNote, Message, OldTaskState, Reach, TaskState, Trust } from "./protocol.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
-import { colorOf, humanOf, isPerson, issueOf, outsideRepos, taskId, type ChannelState, type Fact, type Lease, type ReviewRound, type Task } from "./state.ts";
+import { askGroups, colorOf, humanOf, isPerson, issueOf, outsideRepos, taskId, type AskHead, type ChannelState, type Fact, type Lease, type ReviewRound, type Task } from "./state.ts";
 import { isWakeVia, wakesInSession, wakeWords, type WakeVia } from "./wake.ts";
 
 export function tokensWord(n: number): string {
@@ -285,6 +285,16 @@ function taskLine(t: Task): string {
   return `  ${taskId(t.id).padEnd(5)} ${(t.state === "done" && t.cancelled ? "cancelled" : stateWord(t.state)).padEnd(9)}${owner} ${inlineText(t.title, 200)}${review}`;
 }
 
+export function askLine(head: AskHead | null): string {
+  if (!head) return "unfiled (no person's message holds these)";
+  const words = inlineText(head.words, 120);
+  return `#${head.id} ${inlineText(head.by, 40)}: ${words ? `“${words}”` : "(no text)"}`;
+}
+
+function groupedLines(state: ChannelState, tasks: Task[], indent: string): string[] {
+  return askGroups(state, tasks).flatMap((g) => [`${indent}${askLine(g.head)}`, ...g.tasks.map((t) => `${indent}${taskLine(t)}`)]);
+}
+
 /** `build.cmd = cargo test  (win, 2h ago, 5h left)`. A value with several lines keeps its tail marked. */
 export function leaseLine(l: Lease, me: string, now = Date.now()): string {
   const who = (n: string) => (n === me ? "you" : inlineText(n, 40));
@@ -474,11 +484,11 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
   const done = tasks.filter((t) => t.state === "done" && !t.archived).length;
   const cancelled = tasks.filter((t) => t.state === "done" && !t.archived && t.cancelled).length;
   const archived = tasks.filter((t) => t.archived).length;
-  out.push("", `tasks (${active.length} open${done ? `, ${done} done${cancelled ? ` (${cancelled} cancelled)` : ""}` : ""}${archived ? `, ${archived} archived` : ""}):`);
-  if (!active.length) out.push('  none — add one with: kiwi task add "…"');
+  out.push("", `tasks (${active.length} open${done ? `, ${done} done${cancelled ? ` (${cancelled} cancelled)` : ""}` : ""}${archived ? `, ${archived} archived` : ""}), by the ask each serves:`);
+  if (!active.length) out.push('  none — add one with: kiwi task add "…" --ask N');
   const order = ["doing", "review", "todo"];
   active.sort((a, b) => order.indexOf(a.state) - order.indexOf(b.state) || a.id - b.id);
-  for (const t of active) out.push(taskLine(t));
+  out.push(...groupedLines(state, active, "  "));
   if (state.leases.size) {
     out.push("", "leases:");
     for (const l of [...state.leases.values()].sort((a, b) => a.name.localeCompare(b.name))) out.push(`  ${leaseLine(l, me, now)}`);
@@ -499,7 +509,7 @@ export function formatTasks(state: ChannelState, opts: { all?: boolean; owner?: 
   if (!opts.all) tasks = tasks.filter((t) => t.state !== "done" && !t.archived);
   if (opts.owner) tasks = tasks.filter((t) => t.owner === opts.owner);
   if (!tasks.length) return "no tasks";
-  return tasks.map((t) => taskLine(t).trimStart()).join("\n");
+  return groupedLines(state, tasks, "").join("\n");
 }
 
 export function roundTag(t: Task | undefined, seq: number, named: number | undefined): string {
@@ -534,6 +544,7 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now()): stri
     `${taskId(t.id)} ${inlineText(t.title, 200)}`,
     `  state: ${taskStateWord(t)}${t.owner ? ` · owner: ${inlineText(t.owner, 40)}` : " · unassigned"} · created by ${inlineText(t.createdBy, 40)} ${ago(t.createdAt, now)}`,
   ];
+  out.push(`  ask: ${askLine(t.ask !== undefined ? (state.askHeads.get(t.ask) ?? null) : null)}`);
   if (t.from !== undefined) out.push(`  from ${taskId(t.from)}${state.tasks.get(t.from) ? `: ${inlineText(state.tasks.get(t.from)!.title, 120)}` : ""}`);
   const followUps = [...state.tasks.values()].filter((x) => x.from === t.id).map((x) => taskId(x.id));
   if (followUps.length) out.push(`  follow-ups: ${followUps.join(", ")}`);

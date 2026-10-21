@@ -146,10 +146,11 @@ describe("one fetch of the log per agent command", () => {
   });
 
   test("kiwi task claim", async () => {
-    const first = taskOf(await ok(owner, "--as", "lead", "task", "add", "first job"));
+    const want = String(sentSeq(await ok(owner, "--as", "human", "send", "two jobs, please")));
+    const first = taskOf(await ok(owner, "--as", "lead", "task", "add", "first job", "--ask", want));
     const t = await measure("task claim", () => ok(agent, "task", "claim", first));
     expect(gets(t)).toBeLessThanOrEqual(BUDGET.messagesPerCommand);
-    const second = Number(taskOf(await ok(owner, "--as", "lead", "task", "add", "second job")).slice(1));
+    const second = Number(taskOf(await ok(owner, "--as", "lead", "task", "add", "second job", "--ask", want)).slice(1));
     const s = await inProcess("task claim", (s) => s.taskClaim(second));
     expect(s.gets).toBeLessThanOrEqual(BUDGET.messagesPerCommand);
     expect(s.reads).toBeLessThanOrEqual(BUDGET.cacheReadsPerCommand);
