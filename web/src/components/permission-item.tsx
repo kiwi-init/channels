@@ -54,9 +54,8 @@ export function PermissionItem({
         <>
           {p.description && <p className="text-ui text-ink-2">“{p.description}”</p>}
           <pre className="mt-1.5 rounded-ctl bg-wash px-3 py-2 font-mono text-ui [overflow-wrap:anywhere] whitespace-pre-wrap text-ink">{permissionCode(p)}</pre>
-          {p.content !== undefined && (
-            <pre className="mt-1.5 max-h-48 overflow-auto rounded-ctl bg-wash px-3 py-2 font-mono text-meta [overflow-wrap:anywhere] whitespace-pre-wrap text-ink-2">{visibleText(p.content)}</pre>
-          )}
+          {p.replaced !== undefined && <Written label="Replaces" text={p.replaced} tone="text-alert" />}
+          {p.content !== undefined && <Written label={p.replaced !== undefined ? "With" : undefined} text={p.content} tone="text-ink-2" />}
           {permissionNotes(p).map((note) => (
             <p key={note} className="mt-1.5 font-medium text-alert">
               {note}
@@ -81,5 +80,14 @@ export function PermissionItem({
         why && <span className="text-meta text-ink-3">{why}</span>
       )}
     </Row>
+  )
+}
+
+function Written({ label, text, tone }: { label?: string; text: string; tone: string }) {
+  return (
+    <>
+      {label && <p className="mt-1.5 text-meta font-medium text-ink-3">{label}</p>}
+      <pre className={`mt-1 max-h-48 overflow-auto rounded-ctl bg-wash px-3 py-2 font-mono text-meta [overflow-wrap:anywhere] whitespace-pre-wrap ${tone}`}>{visibleText(text)}</pre>
+    </>
   )
 }

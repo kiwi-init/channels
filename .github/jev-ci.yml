@@ -743,8 +743,8 @@ jobs:
       Chromium (the owner signs in with a passkey, lets atlas in and gives it the Lead
       personality, lets win in, a conversation with an ask, a reply, two tasks and a task's
       conversation, a review and an escalation under Needs you, two Claude Code permission prompts from
-      win (scripts/seed-permission.ts, built by core's permissionShown: an edit the owner denies from
-      Needs you, a command left waiting), a direct conversation, notes, a
+      win (scripts/seed-permission.ts, built by core's permissionShown: a command the owner denies from
+      Needs you, an edit of every occurrence left waiting, showing what it replaces and with what), a direct conversation, notes, a
       pending join request and a second empty channel) and shoots every screen of the wide
       window in the dark: the conversation, the reply bar, the composer with words in it, the Tasks tab, a task opened from its board row
       in the Tasks panel, Needs you, the permission prompts in the conversation (one denied, one waiting), the Agents tab, the channel's settings page (Details: members, the channel's settings, notes and closing, side by side), the direct conversation,

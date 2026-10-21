@@ -217,16 +217,16 @@ try {
       .getByRole("complementary", { name: "Channel" })
       .getByRole("navigation", { name: "Views" })
       .getByRole("button", { name: /^Needs you/ });
-  await askPermission("Edit", { file_path: "/Users/jonatas/www/channels/web/src/lib/format.ts", old_string: "const MINUTE = 60_000", new_string: "const MINUTE = 60 * 1000" });
+  await askPermission("Bash", { command: "rm -rf web/dist && bun run web:build", description: "Rebuild the web bundle from scratch to check the size budget" });
   await needsView().click();
-  await needs.getByText("format.ts").first().waitFor({ timeout: 15000 });
+  await needs.getByText("rm -rf web/dist", { exact: false }).first().waitFor({ timeout: 15000 });
   await needs.getByRole("button", { name: "Deny" }).first().click();
   await owner
     .getByText(/^Deny sent to/)
     .first()
     .waitFor({ timeout: 15000 });
   await toTab("Conversation");
-  await askPermission("Bash", { command: "rm -rf web/dist && bun run web:build", description: "Rebuild the web bundle from scratch to check the size budget" });
+  await askPermission("Edit", { file_path: "/Users/jonatas/www/channels/web/src/lib/format.ts", old_string: "60_000", new_string: "60 * 1000", replace_all: true });
   // A direct conversation: the person and the lead, privately.
   await details().click();
   await owner.getByRole("button", { name: "More for atlas" }).click();
