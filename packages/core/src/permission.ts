@@ -50,9 +50,9 @@ const EDIT_TOOLS: ReadonlySet<string> = new Set(["Edit", "Write", "MultiEdit", "
 const PATH_FIELDS = ["file_path", "notebook_path"] as const;
 const ENV_FILE = /(?:^|[/\\])\.env(?:\.[^/\\]*)?$/;
 
-const UNSAFE_LINE = /[\u0000-\u001f\u007f-\u009f​-‏ -‮⁠-⁩﻿]/;
-const UNSAFE_TEXT = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f​-‏ -‮⁠-⁩﻿]/;
-const UNSAFE_CONTENT = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f​-‏ -‮⁠-⁩﻿]/;
+const UNSAFE_LINE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/;
+const UNSAFE_TEXT = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/;
+const UNSAFE_CONTENT = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/;
 
 const isRecord = (x: unknown): x is Record<string, unknown> => !!x && typeof x === "object" && !Array.isArray(x);
 const line = (x: unknown, max: number): x is string => typeof x === "string" && x.length > 0 && x.length <= max && !UNSAFE_LINE.test(x);
