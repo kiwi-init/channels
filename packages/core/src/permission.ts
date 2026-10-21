@@ -96,7 +96,8 @@ const SHELL_END = String.raw`(?=[\s;&|)]|$)`;
 const TEXT_END = String.raw`[^\S\n]*(?:[,;)}\]](?![^\s,;)}\]"':.[])|(?<=\s)#|(?=\n|$))`;
 const SWITCHES = ["true", "false", "yes", "no", "on", "off", "none", "null", "nil", "0", "1"].flatMap((w) => [w, w.charAt(0).toUpperCase() + w.slice(1), w.toUpperCase()]);
 const SWITCH = String.raw`(?:"(?:${SWITCHES.join("|")})"|'(?:${SWITCHES.join("|")})'|(?:${SWITCHES.join("|")}))`;
-const PLAIN_KEYS = "sort|primary|partition|cache|foreign|range|row|unique|composite|public|routing|idempotency";
+const PLAIN_KEYS = "sort|primary|partition|cache|foreign|range|row|unique|composite|public|routing|idempotency|s3|object";
+const TYPE_VALUE = String.raw`(?:string|number|boolean|str|bytes|int|bool)[^\S\n]*(?:[,;)}\]|]|$)`;
 const SUDO_STDIN = String.raw`sudo(?:\s+(?:-[A-Za-z]*[CDghpRrTtUu]\s+[^\s-]\S*|--?[A-Za-z][\w-]*(?:=\S*)?))*?\s+(?:-[A-Za-z]*S|--stdin(?![\w-]))`;
 const SECRET_NAME = String.raw`[\w-]*(?:token(?!s|iz)|secret|password|passwd|passphrase|(?<![a-z0-9])pass(?![a-z])|api[_-]?key|private[_-]?key|database[_-]?url)[\w-]*`;
 
@@ -133,7 +134,7 @@ const FLAGGED: readonly RegExp[] = [
   /(?<![\w-])openssl(?![\w-])[^\n|;&]*\s(?:-k\s+\S|-(?:pass|passin|passout)\s+pass:)/,
   new RegExp(String.raw`(?<![\w-])(?:echo|printf)\s[^\n|;&]*\|\s*${SUDO_STDIN}`),
   new RegExp(String.raw`(?<![\w-])${SUDO_STDIN}[^\n|;&]*<<<\s*["']?[^\s"']`),
-  new RegExp(String.raw`(?:["']${SECRET_NAME}["']|^[ \t]*${SECRET_NAME})\s*:\s*(?!${SWITCH}${TEXT_END})["']?[^\s"']`, "im"),
+  new RegExp(String.raw`(?:["']${SECRET_NAME}["']|^[ \t]*(?:-[ \t]+)?${SECRET_NAME}|[{,][ \t]*${SECRET_NAME})\s*:\s*(?!${SWITCH}${TEXT_END})(?!${TYPE_VALUE})["']?[^\s"']`, "im"),
   new RegExp(String.raw`["']${SECRET_NAME}\s*:\s*(?!${SWITCH}["'])["']?[^\s"']`, "i"),
 ];
 
