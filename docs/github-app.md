@@ -87,6 +87,11 @@ only when the relay has a `GITHUB_APP_CLIENT_ID`.
 2. In the channel, the owner lists the repos under **Repos**. The app sends
    the same list to the relay (`PUT /github/repos`), which is what routes a
    repo's webhooks to this channel.
+3. **Write to GitHub**, under Repos, is off by default. While the owner has it
+   on, their app comments once on a new PR whose branch names a task
+   (`T7-…`): `Linked to Kiwi task T7`. The comment never carries the task's
+   title, which stays in the encrypted channel, and a PR GitHub reported before
+   the switch went on gets none.
 
 GitHub's **Recent Deliveries** on the App's page shows each webhook and the
 relay's answer: `{"queued": 1}` when a channel took it, `{"queued": 0}` when

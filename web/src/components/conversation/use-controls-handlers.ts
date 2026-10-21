@@ -18,6 +18,7 @@ type Handlers = Pick<
   | "onCharter"
   | "onRepos"
   | "onVoice"
+  | "onGithubWrite"
   | "onRename"
   | "onIcon"
   | "onCloseChannel"
@@ -104,6 +105,11 @@ export function useControlsHandlers({
     onVoice: isOwner
       ? async (on) => {
           await send(on ? "allowed voice in the channel" : "turned voice off for the channel", { kind: "event", ev: { op: "voice.set", on } })
+        }
+      : undefined,
+    onGithubWrite: isOwner
+      ? async (on) => {
+          await send(on ? "turned on Write to GitHub" : "turned off Write to GitHub", { kind: "event", ev: { op: "github.write.set", on } })
         }
       : undefined,
     onRename: isOwner

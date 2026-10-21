@@ -60,6 +60,8 @@ export function shortEvent(m: Message, state: ChannelState): string {
       return ev.on ? `${who} paused every agent${ev.note ? `: ${ev.note}` : ""}` : `${who} let the agents carry on`
     case "voice.set":
       return ev.on ? `${who} allowed voice here` : `${who} turned voice off here`
+    case "github.write.set":
+      return ev.on ? `${who} turned on Write to GitHub` : `${who} turned off Write to GitHub`
     case "charter.set":
       return ev.text ? `${who} updated the charter` : `${who} cleared the charter`
     case "fact.set":

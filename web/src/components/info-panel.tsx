@@ -5,6 +5,7 @@ import {
   BookOpen01Icon,
   Delete02Icon,
   GithubIcon,
+  GitPullRequestIcon,
   Mic01Icon,
   Note01Icon,
   PauseIcon,
@@ -248,6 +249,26 @@ export function InfoPanel({
                     Repos
                   </Row>
                 )}
+                {(p.isOwner ? p.state.repos.length > 0 : p.state.githubWrite !== null) &&
+                  (p.isOwner && p.onGithubWrite ? (
+                    <Setting
+                      icon={GitPullRequestIcon}
+                      label="Write to GitHub"
+                      hint={p.state.githubWrite !== null ? "Kiwi comments on a new PR whose branch names a task" : "Kiwi doesn’t comment on your PRs"}
+                    >
+                      <Segmented
+                        label="Write to GitHub"
+                        value={p.state.githubWrite !== null ? "on" : "off"}
+                        options={[
+                          { value: "off", label: "Off" },
+                          { value: "on", label: "On" },
+                        ]}
+                        onChange={(v) => void p.onGithubWrite!(v === "on").catch((err: unknown) => toast(errorText(err), "error"))}
+                      />
+                    </Setting>
+                  ) : (
+                    <Setting icon={GitPullRequestIcon} label="Write to GitHub" hint="On: Kiwi comments on a new PR whose branch names a task" />
+                  ))}
                 {(p.isOwner || p.state.voice) &&
                   (p.isOwner && p.onVoice ? (
                     <Setting icon={Mic01Icon} label="Voice" hint={p.state.voice ? "Each person turns it on for themselves in Settings" : "Nobody here can talk to the channel with Grok Voice"}>
