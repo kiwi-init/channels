@@ -29,6 +29,7 @@ export interface FoldCtx {
   github: GithubState;
   hold: Hold | null;
   voice: boolean;
+  githubWrite: number | null;
   compact: Compact | null;
   compactProposal: Compact | null;
 }
@@ -140,6 +141,15 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         break;
       }
       c.voice = ev.on;
+      break;
+    }
+
+    case "github.write.set": {
+      if (!member.owner) {
+        reject("only the owner lets Kiwi write to GitHub");
+        break;
+      }
+      c.githubWrite = ev.on ? (c.githubWrite ?? m.seq) : null;
       break;
     }
 

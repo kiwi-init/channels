@@ -173,6 +173,7 @@ export interface ChannelState {
   github: GithubState;
   hold: Hold | null;
   voice: boolean;
+  githubWrite: number | null;
   compact: Compact | null;
   compactProposal: Compact | null;
   reactions: Map<number, Map<string, Reaction>>;
@@ -222,6 +223,7 @@ export interface FoldBase {
   github?: { prs: GithubPr[]; checks: [string, GithubCheck[]][]; issues?: GithubIssue[] };
   hold: Hold | null;
   voice?: boolean;
+  githubWrite?: number | null;
   compact: Compact | null;
   compactProposal: Compact | null;
   scopesByKey: [string, Scope[]][];

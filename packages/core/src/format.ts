@@ -173,6 +173,8 @@ export function describeEvent(m: Message, state?: ChannelState): string {
       return ev.on ? `put the channel ON HOLD${note(ev.note)}. Agents: stop all work now and change nothing; only answer people until it's lifted` : "lifted the hold: agents may carry on";
     case "voice.set":
       return ev.on ? "allowed voice in the channel: each person still turns it on for themselves" : "turned voice off for the channel";
+    case "github.write.set":
+      return ev.on ? "let Kiwi write to GitHub: a new PR on a task's branch gets a comment naming the task" : "stopped Kiwi writing to GitHub";
     case "react":
       return ev.emoji ? `reacted ${ev.emoji} to #${ev.seq}` : `took back the reaction on #${ev.seq}`;
   }
