@@ -2,6 +2,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import { Bash, InMemoryFs, type CommandName, type IFileSystem } from "just-bash";
 import { Cursor, Keystore } from "./config.ts";
+import { seatHeldAway } from "./hold.ts";
 import { openSession, runAgent, wants, type AgentSession } from "./agent.ts";
 import { describeEvent, formatMessage, formatStatus, formatTask, markedText, memberJson, reviewBody, statusJson } from "@kiwi/core/format.ts";
 import { ignored, type Message } from "@kiwi/core/protocol.ts";
@@ -225,7 +226,9 @@ export function channelFiles(views: ChannelView[], now = Date.now()): Record<str
 
 /** What one session contributes: its log, its folded state and its cursor. Reads only; marks nothing. */
 const viewOf = Effect.fn("sh.viewOf")(function* (s: AgentSession) {
+  yield* s.unheld;
   const { messages, state } = yield* s.state();
+  yield* s.unheld;
   const cursor = (yield* (yield* Cursor).read(s.alias, s.me)) ?? state.head;
   const view: ChannelView = { alias: s.alias, me: s.me, messages, state, cursor };
   return view;
@@ -253,7 +256,9 @@ export const sessionViews = Effect.fn("sh.sessionViews")(function* (s: AgentSess
     const other = yield* Effect.exit(Effect.flatMap(openSession(alias, c, s.me), viewOf));
     if (Exit.isSuccess(other)) views.push(other.value);
   }
-  return views;
+  yield* s.unheld;
+  const now = yield* keys.config;
+  return views.filter((v) => !seatHeldAway(now, v.alias, v.me));
 });
 
 /** Run `script` against `files` (paths ending in "/" are empty directories). Never throws: every failure is a nonzero exit with a reason on stderr. */

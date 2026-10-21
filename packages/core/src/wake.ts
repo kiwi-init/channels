@@ -64,12 +64,13 @@ export function viaOf(path: WakePath): WakeVia | null {
 }
 
 export function wakePath(
-  record: { harness?: WakeHarness; session?: string; harnessSession?: string; served?: boolean } | null,
+  record: { harness?: WakeHarness; session?: string; harnessSession?: string; served?: boolean; held?: boolean } | null,
   claudeHooks: boolean,
   webhook = false,
   extensions: { pi?: boolean; mimo?: boolean } = {},
 ): WakePath {
   if (!record) return { kind: "none", why: "no session of a harness Kiwi knows has used this seat yet" };
+  if (record.held) return { kind: "none", why: "its loop holds it between sessions, and wakes nothing until it hands the seat to a new session" };
   switch (record.harness) {
     case "claude":
       return claudeHooks ? { kind: "hooks" } : { kind: "none", why: "Claude Code's listening hooks aren't installed, or this Claude Code is older than 2.1.296 (kiwi hooks install)" };

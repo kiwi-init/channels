@@ -8,6 +8,7 @@ import { isWakeVia, wakeKey, wakeWords } from "@kiwi/core/wake.ts";
 import { ago, holdLine, formatRooms, formatStatus, presenceWords, statusJson } from "@kiwi/core/format.ts";
 import { describeScopes, presetOf } from "@kiwi/core/scopes.ts";
 import { bindDirectory, seatsFor } from "../../hooks.ts";
+import { heldText, seatHeldAway } from "../../hold.ts";
 import { args, opt } from "../args.ts";
 import { agentName, type Command, die, noteRead, out, seatHere, session } from "../context.ts";
 import { ADMIN_GONE } from "./admin.ts";
@@ -63,6 +64,7 @@ export const channelCommands: Record<string, Command> = {
       const c = cfg.channels[alias] ?? (yield* die(`unknown channel "${alias}"`));
       const name = yield* agentName(c);
       if (!(yield* keys.identitiesIn(c.roomId)).includes(name)) return yield* die(`${name} has no key in "${alias}" on this machine`);
+      if (seatHeldAway(cfg, alias, name)) return yield* die(heldText(alias, name));
       if (!bindDirectory(process.cwd(), seatHere(alias, name, false))) return yield* die("won't bind your home folder or the filesystem root; cd into a project first");
       out(`kiwi in ${process.cwd()} now acts as ${name} in "${alias}"`);
     }),

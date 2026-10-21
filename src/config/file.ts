@@ -15,6 +15,11 @@ export interface ChannelConfig extends ChannelAccess {
   title?: string;
 }
 
+interface SeatHold {
+  key: string;
+  at: number;
+}
+
 export interface SeatRecord {
   alias: string;
   as: string;
@@ -29,6 +34,8 @@ export interface SeatRecord {
   term?: TerminalPlace;
   rex?: RexPlace;
   tmux?: TmuxPlace;
+  hold?: SeatHold;
+  holds?: number;
 }
 
 export function allSeats(cfg: Pick<Config, "bindings">): SeatRecord[] {

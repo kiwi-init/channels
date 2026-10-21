@@ -92,6 +92,8 @@ This computer
   kiwi terminal show --needs-you                 go to the seat with the oldest question for a person, else the oldest task
                                                  waiting for review, in Rex or tmux (tmux's prefix K runs it)
   kiwi launches on|off|status                    whether new agents can be started on this computer, from here or a paired one (on)
+  kiwi seat hold · bind --harness H --session ID [--pid PID] · release   a loop holds a seat between sessions with
+                                                 KIWI_SEAT_TOKEN (hold prints a new one): nothing else reads for it until bind
   kiwi rex on|off|status                         the old name of kiwi terminal download|remove rex and status, for this release
   kiwi harnesses [--json]                        the harnesses on this computer, found on your login shell's PATH: each one's path
                                                  and version, whether kiwi launch starts it, and whether Kiwi can wake it
