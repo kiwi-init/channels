@@ -1,4 +1,4 @@
-import { ignored, type Trust } from "../protocol.ts";
+import { GENERAL_ROOM, ignored, type Trust } from "../protocol.ts";
 import { taskId } from "./tasks.ts";
 import type { ChannelState, Place, PlaceSummary, Task } from "./types.ts";
 
@@ -75,6 +75,22 @@ export function wentTo(c: ThreadChoice): string {
   if (c.task !== undefined) return ` in ${taskId(c.task)}'s thread${c.doing !== undefined ? " (the task you're doing; --to #general for the main conversation)" : ""}`;
   if (c.several) return ` in the main conversation: you're doing ${c.several.map(taskId).join(" and ")}, so say which with --to T7`;
   return "";
+}
+
+const GENERAL_LINES = 6;
+const GENERAL_CHARS = 600;
+
+export function inGeneral(state: Pick<ChannelState, "placeOf" | "roomOf">, seq: number): boolean {
+  return placeKey(state.placeOf.get(seq) ?? MAIN) === placeKey(MAIN) && (state.roomOf.get(seq) ?? GENERAL_ROOM) === GENERAL_ROOM;
+}
+
+export function longForGeneral(state: Pick<ChannelState, "tasks" | "members">, me: string, body: string): string | null {
+  if (state.members.get(me)?.kind === "human") return null;
+  const said = body.trim();
+  if (said.split("\n").length <= GENERAL_LINES && said.length <= GENERAL_CHARS) return null;
+  const doing = [...state.tasks.values()].filter((t) => t.owner === me && t.state === "doing");
+  const thread = doing.length === 1 ? taskId(doing[0]!.id) : "T7";
+  return `That ran long for #general: people read it like a group chat and see ${GENERAL_LINES} lines before Show more. Next time, a line or two there and the detail in the task's thread (kiwi send --to ${thread} "…").`;
 }
 
 export function tasksAwaitingPeople(state: Pick<ChannelState, "openAsks" | "placeOf">): Set<number> {

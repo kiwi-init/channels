@@ -1,8 +1,15 @@
-import { beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import * as Effect from "effect/Effect";
+import { AgentLive, AgentSession } from "../src/agent.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import type { Event, Kind, Message } from "@kiwi/core/protocol.ts";
-import { fold, type Roster } from "@kiwi/core/state.ts";
+import { fold, placeKey, type Roster } from "@kiwi/core/state.ts";
 import { taskDigest } from "@kiwi/core/work.ts";
+import { startRelay } from "../src/relay/bun.ts";
+import { joinAgent, pairComputer, setupChannel } from "./owner.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
@@ -46,4 +53,50 @@ describe("a closed task's digest", () => {
     const s = fold(log, roster);
     expect(taskDigest(s, log, s.tasks.get(add.seq)!)).toBe(`T${add.seq} cancelled: Old idea · superseded by T9 · by mac`);
   });
+
+  test("a checkpoint is the agent's own notes, so the digest says the last note before it", async () => {
+    const add = await ev("jon", { op: "task.add", title: "Fix the bar", owner: "mac" });
+    const t = add.seq;
+    const log = [
+      add,
+      await ev("mac", { op: "task.update", task: t, note: "the bar clicks again" }),
+      await ev("mac", { op: "task.update", task: t, note: "# T1 checkpoint\n- Worktree: /tmp/x, branch T1-bar", checkpoint: true }),
+      await ev("jon", { op: "task.update", task: t, state: "done" }),
+    ];
+    const s = fold(log, roster);
+    expect(taskDigest(s, log, s.tasks.get(t)!)).toBe(`T${t} done: Fix the bar · the bar clicks again · by mac`);
+  });
+});
+
+describe("where a closed task's digest is posted", () => {
+  const dataDir = mkdtempSync(join(tmpdir(), "kiwi-digest-relay-"));
+  const home = mkdtempSync(join(tmpdir(), "kiwi-digest-home-"));
+  const was = process.env.KIWI_HOME;
+  let server: ReturnType<typeof startRelay>;
+  const run = <A, E>(e: Effect.Effect<A, E, unknown>) => Effect.runPromise(e.pipe(Effect.provide(AgentLive)) as Effect.Effect<A, E, never>);
+  let dev: AgentSession;
+
+  beforeAll(async () => {
+    process.env.KIWI_HOME = home;
+    server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir });
+    const owner = await setupChannel(server.url.origin, { ownerName: "jon" });
+    const computer = await pairComputer(owner.person);
+    const { id, ch } = await joinAgent(owner, "dev", computer);
+    dev = new AgentSession("digest", { ...ch.access, relay: owner.relay, code: owner.code }, id, () => {});
+  }, 60_000);
+  afterAll(() => {
+    server.stop(true);
+    if (was === undefined) delete process.env.KIWI_HOME;
+    else process.env.KIWI_HOME = was;
+    for (const d of [dataDir, home]) rmSync(d, { recursive: true, force: true });
+  });
+
+  test("in the task's own thread, not in #general", async () => {
+    const id = await run(dev.taskAdd("ship the login page"));
+    await run(dev.taskUpdate(id, { state: "done" }));
+    const { state, messages } = await run(dev.state());
+    const digest = messages.find((m) => m.kind === "done");
+    expect(digest?.body).toStartWith(`T${id} done: ship the login page`);
+    expect(placeKey(state.placeOf.get(digest!.seq)!)).toBe(`task:${id}`);
+  }, 60_000);
 });

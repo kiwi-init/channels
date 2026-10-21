@@ -22,7 +22,7 @@ import {
   type Kind,
   type Message,
 } from "@kiwi/core/protocol.ts";
-import { chooseThread, parseTaskId, wentTo } from "@kiwi/core/state.ts";
+import { chooseThread, inGeneral, longForGeneral, parseTaskId, wentTo } from "@kiwi/core/state.ts";
 import { args, opt, unexpectedOptions } from "../args.ts";
 import { parseWhere } from "../where.ts";
 import { type Command, die, noteRead, offlineOk, out, type Quit, session } from "../context.ts";
@@ -76,7 +76,15 @@ export const messageCommands: Record<string, Command> = {
           ...(chosen.task !== undefined ? { task: chosen.task } : {}),
           ...(chosen.dm ? { dm: true } : {}),
         });
-        if (!asking || !opt.wait) return out(`${asking ? "asked" : "sent"} #${seq}${wentTo(chosen)}`);
+        const room = opt.room ?? where.room;
+        const general = chosen.task === undefined && !chosen.dm && (!room || room.toLowerCase() === "general") && (re.length === 0 || inGeneral(state, re[0]!));
+        const long = general ? longForGeneral(state, s.me, body) : null;
+        if (!asking || !opt.wait) {
+          out(`${asking ? "asked" : "sent"} #${seq}${wentTo(chosen)}`);
+          if (long) out(long);
+          return;
+        }
+        if (long) out(long);
         const replies = yield* s.awaitReplies(seq, head, parseDuration(opt.wait));
         if (!replies.length) return yield* die(`no answer to #${seq} within ${opt.wait}; replies will still arrive when you listen`, 2);
         for (const r of replies) out(render(r));
@@ -100,7 +108,10 @@ export const messageCommands: Record<string, Command> = {
         const kind = (opt.kind ?? "msg") as Kind;
         if (!CHAT_KINDS.includes(kind)) return yield* die(`kind must be one of: ${CHAT_KINDS.join(", ")}`);
         const imgs = yield* images;
+        const { state } = yield* s.state();
         out(`sent #${yield* s.reply(seq, body, kind, imgs)}`);
+        const long = inGeneral(state, seq) ? longForGeneral(state, s.me, body) : null;
+        if (long) out(long);
       }),
     ),
 
