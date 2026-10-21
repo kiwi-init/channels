@@ -616,7 +616,12 @@ jobs:
       (test/permission-hook.test.ts), and the hook's own wait reads it that way
       (test/permission-ask.test.ts, askPermission on a fake session whose fold lags the frame);
       a newer prompt that starts while the wait winds down gets nothing printed for the old one,
-      since the last check runs after the wait has closed. Fails if any of that breaks.
+      and neither does an answer in the terminal then, since the last check runs after the wait has
+      closed; a signal after the wait has closed closes the ask instead of killing the hook.
+      test/permission-lock.test.ts (node:fs wrapped to act at the exact moment): a stale lock swapped
+      for a live or still-written one just before the takeover stays with that hook, a newer hook
+      that takes the session while the lock is set aside keeps it, and letting go removes the
+      newer-prompt mark before the lock. Fails if any of that breaks.
 
   test-flows-a:
     name: test / flows-a
