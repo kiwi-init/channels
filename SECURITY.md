@@ -567,9 +567,11 @@ be only another way to answer the same prompt, never a way around it:
   A value read from a variable or a command (`$TOKEN`, `${TOKEN}`, `$(…)`)
   still counts, so `curl -H "Authorization: Bearer $TOKEN"` is answered in the
   terminal. Switches such as `DISABLE_AUTH=true` or `group_key=None` pass when
-  they are the whole value, and so do field-name keys such as `SORT_KEY` or
-  `PRIMARY_KEY`, unless the value has a digit and is 20 or more characters
-  long.
+  they are the whole value, and so do field-name keys such as `SORT_KEY`,
+  `PRIMARY_KEY` or `S3_KEY`, unless the value has a digit and is 20 or more
+  characters long. A type annotation such as `password: string` isn't a
+  value, while YAML list items (`- password: …`) and flow maps
+  (`{password: …}`) count like any other key.
 
   A command run with the sandbox off, or anything over its cap, offers only
   Deny.

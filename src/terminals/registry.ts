@@ -1,7 +1,8 @@
-import { rexBinary } from "../rex.ts";
+import type { Config } from "../config.ts";
 import { loginPath, loginShell } from "../launch/shell.ts";
 import { appManifest } from "./app/manifest.ts";
-import type { PlaceTools, TerminalId, TerminalManifest, TerminalPlugin } from "./plugin.ts";
+import type { PlaceTools, SeatPlace, TerminalId, TerminalManifest, TerminalPlugin } from "./plugin.ts";
+import { placeFrom, rexBinary } from "./rex/locate.ts";
 import { rexManifest } from "./rex/manifest.ts";
 import { tmuxManifest } from "./tmux/manifest.ts";
 
@@ -25,4 +26,26 @@ export async function placeTools(): Promise<PlaceTools> {
 
 export async function terminalPlugins(tools: PlaceTools): Promise<TerminalPlugin[]> {
   return Promise.all(MANIFESTS.filter((m) => m.platforms.includes(tools.platform)).map(async (m) => (await LOAD[m.id]())(tools)));
+}
+
+function hereTools(): PlaceTools {
+  return {
+    platform: process.platform,
+    shell: loginShell(),
+    rex: rexBinary(),
+    tmux: Bun.which("tmux"),
+    osascript: process.platform === "darwin" ? (Bun.which("osascript") ?? "/usr/bin/osascript") : null,
+  };
+}
+
+export async function terminalPlugin(id: TerminalId, tools: PlaceTools = hereTools()): Promise<TerminalPlugin> {
+  return (await LOAD[id]())(tools);
+}
+
+export function locate(env: Record<string, string | undefined>): SeatPlace {
+  return placeFrom(env);
+}
+
+export function helpersOn(id: TerminalId, cfg: Pick<Config, "rex">): boolean {
+  return id === "rex" && cfg.rex === "on";
 }

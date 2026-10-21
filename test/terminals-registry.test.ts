@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { PlaceTools } from "../src/terminals/plugin.ts";
+import type { Capability, PlaceTools, TerminalPlugin } from "../src/terminals/plugin.ts";
 import { MANIFESTS, terminalPlugins } from "../src/terminals/registry.ts";
 
 const tools = (over: Partial<PlaceTools> = {}): PlaceTools => ({ platform: "darwin", shell: "/bin/zsh", rex: null, tmux: null, osascript: null, ...over });
@@ -14,7 +14,19 @@ describe("the terminal plugins", () => {
       expect(m.platforms.length).toBeGreaterThan(0);
       expect(new Set(m.can).size).toBe(m.can.length);
     }
-    for (const plugin of await terminalPlugins(tools())) expect(typeof plugin.open === "function").toBe(plugin.manifest.can.includes("open"));
+    const implemented = (p: TerminalPlugin): Record<Capability, boolean> => ({
+      open: !!p.open,
+      locate: !!p.locate,
+      mark: !!p.mark,
+      show: !!p.show,
+      watch: !!p.watch && !!p.activity,
+      type: !!p.type,
+    });
+    for (const plugin of await terminalPlugins(tools())) {
+      const has = implemented(plugin);
+      for (const can of Object.keys(has) as Capability[]) expect([plugin.manifest.id, can, has[can]]).toEqual([plugin.manifest.id, can, plugin.manifest.can.includes(can)]);
+      expect(!!plugin.helpers).toBe(plugin.manifest.helpers !== null);
+    }
   });
 
   test("a new agent's window is tried in Rex, then tmux, then the terminal app, and the app only on a Mac", async () => {

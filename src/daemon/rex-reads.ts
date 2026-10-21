@@ -1,4 +1,4 @@
-import type { RexActivity, RexPlace } from "../rex.ts";
+import type { RexActivity, RexPlace } from "../terminals/plugin.ts";
 
 const REX_READ_GAP_MS = 1_000;
 
