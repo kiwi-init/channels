@@ -8,6 +8,7 @@ import type { PrRef } from "@kiwi/core/work.ts"
 import type { Chosen } from "@/lib/asks"
 import { useClock } from "@/lib/channel"
 import { formatAgo, formatFull, formatStamp, formatTime, isoTime, memberName } from "@/lib/format"
+import { permissionOf, type Settled } from "@/lib/permission-view"
 import { AskedBelow } from "./asked-below"
 import { githubSummary } from "@/lib/github-line"
 import { sameRow } from "./message-memo"
@@ -20,6 +21,7 @@ import { Icon } from "./icon"
 import { Monogram, toast } from "./kit"
 import { Markdown } from "./lazy"
 import { AskOptions } from "./ask-options"
+import { PermissionInThread } from "./permission-thread"
 import { ChecksWord } from "./pr-checks"
 import { Quote } from "./quote"
 
@@ -197,6 +199,7 @@ export interface MessageProps {
   /** This question waits above the composer, where it is answered: here it is only a pointer to it. */
   inBanner?: boolean
   chosen?: Chosen
+  settled?: Settled | null
   prs?: PrRef[]
   onReact?: (m: Message) => void
   onJump: (seq: number) => void
@@ -376,6 +379,7 @@ export const MessageRow = memo(function MessageRow({
   onChoose,
   inBanner,
   chosen,
+  settled,
   prs,
   onReact,
   onJump,
@@ -398,6 +402,7 @@ export const MessageRow = memo(function MessageRow({
   const who = memberName(author, m.from)
   const imageOnly = !!m.imgs?.length && m.body === m.imgs.map((i) => i.name).join(", ")
   const decide = !!m.esc
+  const permission = permissionOf(m)
   const handoff = handoffOf(m)
   const quotes = adjacentReply ? [] : (m.re ?? []).map((seq) => ({ seq, q: quoted(seq) })).filter(({ q }) => !q || q.kind !== "event")
   const action = "flex size-7 items-center justify-center rounded-full text-ink-3 transition-colors hover:text-ink"
@@ -453,7 +458,11 @@ export const MessageRow = memo(function MessageRow({
             Waiting on you
           </p>
         )}
-        {m.choices?.length && !inBanner ? <AskOptions choices={m.choices} chosen={chosen} onChoose={onChoose} nameOf={nameOf} /> : null}
+        {permission ? (
+          <PermissionInThread p={permission} settled={settled} nameOf={nameOf} />
+        ) : m.choices?.length && !inBanner ? (
+          <AskOptions choices={m.choices} chosen={chosen} onChoose={onChoose} nameOf={nameOf} />
+        ) : null}
 
         {m.imgs?.length ? (
           <div className="mt-1.5 flex flex-wrap gap-1">

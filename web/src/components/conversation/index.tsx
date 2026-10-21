@@ -27,6 +27,7 @@ import { Icon } from "../icon"
 import { Button, Harnesses, Pictures, Spinner, errorText, toast } from "../kit"
 import { AddAgent, AgentLanes, CompactBlock, GifPicker, HoldDialog, leaveTalk, NewAgent, ProposalCard, TalkBar, TalkButton, TasksView } from "../lazy"
 import { canStartAgents } from "@/lib/launches"
+import { permissionOf, settledOf } from "@/lib/permission-view"
 import { bridge } from "@/lib/secrets"
 import type { ToolCtx } from "@/lib/voice/tools"
 import { defaultScopes } from "../scopes"
@@ -193,6 +194,19 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     return out
   }, [messages])
   const chosen = useCallback((m: Message) => (m.choices?.length ? chosenOf(m, repliesTo.get(m.seq) ?? []) : undefined), [repliesTo])
+  const permissionSettled = useCallback(
+    (m: Message) => {
+      if (!permissionOf(m)) return undefined
+      const owner = roster.find((r) => r.owner)?.name
+      const human = roster.find((r) => r.name === m.from)?.sponsor?.handle
+      const replies = (repliesTo.get(m.seq) ?? []).map((r) => {
+        const settled = (r as { settled?: unknown }).settled
+        return { seq: r.seq, from: r.from, body: r.body, ts: r.ts, ...(typeof settled === "string" ? { settled } : {}) }
+      })
+      return settledOf(m, replies, (name) => name === owner || name === human)
+    },
+    [repliesTo, roster]
+  )
   const answer = useCallback(
     (m: Message, text: string): Promise<boolean> =>
       send(text, { to: [m.from], re: [m.seq], kind: "msg" }).then(
@@ -306,6 +320,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     decisions: decided,
     banner: place.kind === "main" ? (decisions[0]?.seq ?? null) : null,
     onAnswer,
+    settledOf: permissionSettled,
     onReact: setReacting,
     onJump,
     openThread,
