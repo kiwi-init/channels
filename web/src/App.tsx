@@ -5,13 +5,14 @@ import { ChannelGate } from "@/components/onboarding"
 import { FirstRun } from "@/components/first-run"
 import { JoinWithCode, NewChannel, Welcome } from "@/components/lazy"
 import { ChannelIconTile } from "@/components/channel-icon"
-import { Rail, Sidebar } from "@/components/sidebar"
+import { Sidebar } from "@/components/sidebar"
+import { ChannelTabs } from "@/components/channel-tabs"
 import { useMemberIcons } from "@/lib/icons"
 import { useIcons } from "@/lib/icons"
 import type { Command } from "@/components/ui/palette"
 import { usePaletteShortcut } from "@/components/ui/palette-shortcut"
 import { ComputersModal, Palette, SettingsPage } from "@/components/lazy"
-import { Add01Icon, ComputerIcon, Login01Icon, Moon02Icon, Settings01Icon, Sun03Icon } from "@hugeicons/core-free-icons"
+import { Add01Icon, ComputerIcon, Login01Icon, Moon02Icon, Settings01Icon, SidebarLeftIcon, Sun03Icon } from "@hugeicons/core-free-icons"
 import { Icon, type IconSvgElement } from "@/components/icon"
 import { useAutoApproval } from "@/lib/approval"
 import { adoptThisComputer } from "@/lib/computers"
@@ -20,6 +21,7 @@ import { joinCodeFromLink } from "@/lib/deep-link"
 import { newsTotal, rowNews, startMarks, useMarks, useNewsKeys, useOpenNews, useTabNews } from "@/lib/news"
 import { formatShort } from "@/lib/format"
 import { setAppearance } from "@/lib/theme"
+import { SIDEBAR_KEYS, toggleSidebar, useSidebarShortcut } from "@/lib/sidebar-hidden"
 import { bridge, useSecrets } from "@/lib/secrets"
 import { cx } from "@/lib/utils"
 
@@ -37,6 +39,7 @@ export default function App() {
   const icons = useIcons()
   const [palette, setPalette] = useState(false)
   usePaletteShortcut(useCallback(() => setPalette(true), []))
+  useSidebarShortcut()
   const open = useCallback((c: string) => {
     setSettings(false)
     go(c)
@@ -80,6 +83,7 @@ export default function App() {
     act("join", "Join with a code", Login01Icon, () => setSheet("join"))
     act("computers", "Your computers", ComputerIcon, () => setSheet("computers"))
     act("settings", "Settings", Settings01Icon, () => setSettings(true))
+    list.push({ id: "sidebar", group: "Actions", label: "Show or hide the sidebar", hint: SIDEBAR_KEYS, run: toggleSidebar, leading: lead(SidebarLeftIcon) })
     list.push(
       { id: "light", group: "Appearance", label: "Light", run: () => setAppearance("light"), leading: lead(Sun03Icon) },
       { id: "dark", group: "Appearance", label: "Dark", run: () => setAppearance("dark"), leading: lead(Moon02Icon) },
@@ -126,41 +130,50 @@ export default function App() {
           <FirstRun />
         </>
       ) : (
-        <div className="flex h-svh overflow-clip">
-          <Sidebar
+        <div className="flex h-svh flex-col overflow-clip md:bg-rail">
+          <ChannelTabs
             rows={rows}
             news={news}
             active={settings ? "" : code}
+            inChannel={!!code && !settings}
             onSelect={open}
             onNew={() => setSheet("new")}
+            onFind={() => setPalette(true)}
             onComputers={() => setSheet("computers")}
             onSettings={() => setSettings(true)}
-            className={cx(code || settings ? "hidden" : "flex", "md:hidden")}
           />
-          <Rail rows={rows} news={news} active={settings ? "" : code} onSelect={open} onNew={() => setSheet("new")} onComputers={() => setSheet("computers")} onSettings={() => setSettings(true)} />
-          {/* The app: the rails on the darker tone, the page beside them one round sheet of canvas. */}
-          <main className={cx("relative min-w-0 flex-1 overflow-clip bg-canvas md:bg-rail", code || settings ? "flex" : "hidden md:flex")}>
-            {/* No conversation, no header: the top row still moves the window. */}
-            {!code && !settings && <div aria-hidden className="drag absolute inset-x-0 top-0 h-(--chrome-h)" />}
-            {settings && (
-              <div className="flex min-w-0 flex-1 md:sheet">
-                <SettingsPage backTo={rows.find((r) => r.code === code)?.title ?? "Channels"} onClose={() => setSettings(false)} />
-              </div>
-            )}
-            <div className={cx("min-w-0 flex-1", settings ? "hidden" : "flex")}>
-              {code ? (
-                <Boundary resetKey={code}>
-                  <ChannelGate key={code} code={code} listedState={rows.find((r) => r.code === code)?.state} onBack={close} onGone={close} />
-                </Boundary>
-              ) : (
-                <div className="flex min-w-0 flex-1 md:sheet">
-                  <Welcome onNew={() => setSheet("new")} onJoin={() => setSheet("join")} />
+          <div className="flex min-h-0 flex-1 overflow-clip">
+            <Sidebar
+              rows={rows}
+              news={news}
+              active={settings ? "" : code}
+              onSelect={open}
+              onNew={() => setSheet("new")}
+              onComputers={() => setSheet("computers")}
+              onSettings={() => setSettings(true)}
+              className={cx(code || settings ? "hidden" : "flex", "md:hidden")}
+            />
+            <main className={cx("relative min-w-0 flex-1 overflow-clip bg-canvas md:bg-rail", code || settings ? "flex" : "hidden md:flex")}>
+              {settings && (
+                <div className="flex min-w-0 flex-1 md:sheet md:ml-2!">
+                  <SettingsPage backTo={rows.find((r) => r.code === code)?.title ?? "Channels"} onClose={() => setSettings(false)} />
                 </div>
               )}
-            </div>
-            {/* Last in the document, not just on top: the desktop app works out what drags the window
+              <div className={cx("min-w-0 flex-1", settings ? "hidden" : "flex")}>
+                {code ? (
+                  <Boundary resetKey={code}>
+                    <ChannelGate key={code} code={code} listedState={rows.find((r) => r.code === code)?.state} onBack={close} onGone={close} />
+                  </Boundary>
+                ) : (
+                  <div className="flex min-w-0 flex-1 md:sheet md:ml-2!">
+                    <Welcome onNew={() => setSheet("new")} onJoin={() => setSheet("join")} />
+                  </div>
+                )}
+              </div>
+              {/* Last in the document, not just on top: the desktop app works out what drags the window
                 in document order, whatever the z-index, so a header after these would swallow their clicks. */}
-          </main>
+            </main>
+          </div>
         </div>
       )}
       <NewChannel

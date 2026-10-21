@@ -34,6 +34,7 @@ const invite = later(() => import("./controls/invite").then((m) => m.Invite))
 const holdDialog = later(() => import("./controls/hold-dialog").then((m) => m.HoldDialog))
 const charterDialog = later(() => import("./controls/channel-dialogs").then((m) => m.CharterDialog))
 const renameDialog = later(() => import("./controls/channel-dialogs").then((m) => m.RenameDialog))
+const branchPrefixDialog = later(() => import("./controls/channel-dialogs").then((m) => m.BranchPrefixDialog))
 const activityRun = later(
   () => import("./activity").then((m) => m.ActivityRun),
   () => (
@@ -77,6 +78,7 @@ export const Invite = invite.View
 export const HoldDialog = holdDialog.View
 export const CharterDialog = charterDialog.View
 export const RenameDialog = renameDialog.View
+export const BranchPrefixDialog = branchPrefixDialog.View
 
 export const loadMarkdown = markdown.load
 

@@ -30,6 +30,7 @@ export interface FoldCtx {
   hold: Hold | null;
   voice: boolean;
   githubWrite: number | null;
+  branchPrefix: string | null;
   compact: Compact | null;
   compactProposal: Compact | null;
 }
@@ -150,6 +151,15 @@ export function applyEvent(c: FoldCtx, m: Message, ev: Event, member: FoldMember
         break;
       }
       c.githubWrite = ev.on ? (c.githubWrite ?? m.seq) : null;
+      break;
+    }
+
+    case "branch.prefix.set": {
+      if (!member.owner) {
+        reject("only the owner sets the branch prefix");
+        break;
+      }
+      c.branchPrefix = ev.prefix;
       break;
     }
 

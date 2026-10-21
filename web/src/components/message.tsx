@@ -62,6 +62,8 @@ export function shortEvent(m: Message, state: ChannelState): string {
       return ev.on ? `${who} allowed voice here` : `${who} turned voice off here`
     case "github.write.set":
       return ev.on ? `${who} turned on Write to GitHub` : `${who} turned off Write to GitHub`
+    case "branch.prefix.set":
+      return ev.prefix ? `${who} set the branch prefix to ${ev.prefix}` : `${who} cleared the branch prefix`
     case "charter.set":
       return ev.text ? `${who} updated the charter` : `${who} cleared the charter`
     case "fact.set":

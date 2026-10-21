@@ -32,8 +32,8 @@ test("the kit is the quiet look: an accent primary, an outlined secondary, a was
   expect(kit).toContain('type="checkbox" className={cx("size-4 shrink-0 accent-[var(--accent)]"');
 });
 
-test("the prism means one thing: the open channel and the sidebar's chosen view or conversation wear prism-lit, nothing else does", () => {
-  const sidebar = ["components/sidebar.tsx", "components/conversation/channel-sidebar.tsx"].map((f) => resolve(web, f));
+test("the prism means one thing: the open channel's tab or row and the sidebar's chosen view or conversation wear prism-lit, nothing else does", () => {
+  const sidebar = ["components/channel-tabs.tsx", "components/sidebar.tsx", "components/conversation/channel-sidebar.tsx"].map((f) => resolve(web, f));
   const lit = files(web).filter((f) => readFileSync(f, "utf8").includes("prism-lit"));
   expect(lit.sort()).toEqual(sidebar.sort());
   const plain = files(web).filter((f) => /\b(prism|orb|orb-pill)\b(?!-)/.test(readFileSync(f, "utf8").replace(/--prism-[a-z-]+/g, "")));

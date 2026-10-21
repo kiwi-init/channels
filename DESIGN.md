@@ -45,7 +45,7 @@ Light / dark are the two sides of each `light-dark()` in `index.css`:
 | Token | Light | Dark |
 |---|---|---|
 | `canvas` (conversation) | `#ffffff` | `#0d0d0e` |
-| `rail` (the channel list and a channel's sidebar, a step darker) | `#f2f2f5` | `#000000` |
+| `rail` (the tab bar, the channel list and a channel's sidebar, a step darker) | `#f2f2f5` | `#000000` |
 | `raised` (cards, popovers) | the canvas | the canvas |
 | `field` (inputs) | the canvas | the canvas |
 | `ink` | `#0f0f11` | `#f3f3f5` |
@@ -105,10 +105,11 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   `ui-tokens.ts`.
 - One shadow: `pop` (`0 0 0 1px pop-edge, 0 16px 40px -12px pop-shade`).
   No other shadows, and no coloured ones.
-- Two tones: the rails (the channel list and a channel's sidebar) sit on
-  `rail`, a step darker, and the page beside them is a sheet of `canvas`
-  (the `sheet` utility: 8px in from the window's edges, `card` radius, a
-  1px `line` ring), holding the header, the
+- Two tones: the rails (the tab bar, the channel list and a channel's
+  sidebar) sit on `rail`, a step darker, and the page beside them is a
+  sheet of `canvas` (the `sheet` utility: right under the tab bar, 8px in
+  from the window's other edges, `card` radius, a 1px `line` ring), holding
+  the header, the
   conversation and the tasks. A side panel (details, a thread, the tasks
   panel) is a sheet of its own beside it, 8px apart. `raised` and `field`
   are the canvas. Inside a sheet,
@@ -121,12 +122,12 @@ error toast) uses `alert-fill`, the light red in both themes (~5:1).
   header's round controls, the place pills, the composer): a translucent
   `glass-fill` over a blur, a bright `glass-rim` on top, a hairline round it.
 - Prism glass (`index.css`, `@layer components`): one class, `prism-lit`, on
-  what's chosen in the sidebar and nothing else: the open channel (its tile
-  in the rail, its row in the list) and the channel sidebar's chosen view or
+  what's chosen in the sidebar and nothing else: the open channel (its tab
+  in the tab bar, its row in the list) and the channel sidebar's chosen view or
   conversation. A brighter fill, a lit edge bright at one corner
   (`prism-glint-lit`), and a thin spectrum band (`spectrum-1..7`) inside it
   at `--band` (70% by default), the way light splits in the heads. Search,
-  the rail's buttons, idle tiles and counts are plain, so the one lit thing
+  the tab bar's buttons, idle tabs and counts are plain, so the one lit thing
   reads as meant. `test/prism.test.ts` keeps it that way. Under
   `prefers-contrast: more` it falls back to a solid fill with a 2px `ink`
   ring: no band, no glint.
@@ -190,8 +191,11 @@ From `design-tokens.ts`:
 
 ## 9. App patterns
 
-- Shell: the channel rail, then inside a channel its own sidebar (280px,
-  from 768px wide), both on `rail`; the page is the round `sheet` beside
+- Shell: the tab bar on top, then inside a channel its own sidebar (280px,
+  from 768px wide), both on `rail`; ⌘\ or the toggle at the start of the
+  tab bar hides the sidebar, and the page's header then takes its views (a
+  conversation menu, Search, and the Tasks / Agents / Conversation tabs).
+  Hidden stays hidden across reloads. The page is the round `sheet` beside
   them: the channel's name and who is here, a Search row (a tap turns it
   into the field; Escape, or leaving it empty, turns it back), one Tasks
   row (it opens Everything, with Done this week at its foot) and beside it a
@@ -226,19 +230,20 @@ From `design-tokens.ts`:
   files with their additions and deletions (four, then "+n more"), each
   check by name with how it went, and See the diff and GitHub as outlined
   buttons.
-- On a wide window the list is an 80px icon rail, as Grok's
-  collapsed one: the Mac traffic lights on its header row (92px wide on a
-  Mac, so the page's sheet starts a 12px gutter after them), each channel
-  as its 40px tile in a 56px `card`-round cell (`pick` when open); a
-  channel with a lead wears the lead's head there, in its own sidebar and
-  in its details, the same face everywhere, a blue
-  dot or a count for news and questions, a lock on a channel you can't
-  open yet. A hover card says what the full row says: name, time, last
-  line. New, the app update and your account sit at its foot. A wide
-  window always shows the rail, with no way to expand it; a phone always
-  shows the full list. The Mac app's window is never narrower than 768px,
-  so it always has the rail: the phone layout's headers would sit under
-  the traffic lights.
+- On a wide window the channels are tabs in a 52px bar across the top, as
+  a browser's: the Mac traffic lights at its start (its controls start
+  92px in on a Mac), the sidebar toggle, then each channel as a `ctl`-round
+  tab in the order you joined them: its 20px face, its name, a blue dot or
+  a count for news and questions, a lock on a channel you can't open yet,
+  and `prism-lit` when open. A channel with a lead wears the lead's head
+  there, in its own sidebar and in its details, the same face everywhere.
+  A hover card says what the full row says: name, time, last line. Tabs
+  that don't fit go under "N more" (a blue dot when one of them has news):
+  Find a channel (⌘K), then those channels, news first. The open channel
+  always keeps its tab. New follows the tabs; the app update and your
+  account sit at the bar's end. A phone always shows the full list. The
+  Mac app's window is never narrower than 768px, so it always has the tab
+  bar: the phone layout's headers would sit under the traffic lights.
 - Conversation: no bubbles, everyone on the left, on the shell's one
   background. A message is a row: a 32px face, then the name in `ui`
   semibold, a quiet `owner` or `lead` tag and the time in `stamp`, the

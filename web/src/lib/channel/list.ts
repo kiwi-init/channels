@@ -17,6 +17,7 @@ export interface ChannelRow {
   title: string
   recent: Recent | null
   ts: number
+  at: number
   state: ListState
   owner: boolean
   agents: number
@@ -49,6 +50,7 @@ export function useChannelList(): ChannelRow[] {
         title: channelTitle({ name: m.name ?? c.name }, recent),
         recent,
         ts: recent?.ts ?? c.at,
+        at: c.at,
         state: m.relay ? "elsewhere" : "member",
         owner: m.identity.pk === m.access.ownerPk,
         agents: 0,
@@ -63,7 +65,7 @@ export function useChannelList(): ChannelRow[] {
         continue
       }
       if (rows.has(room)) continue
-      rows.set(room, { code: p.code, room, title: untitled(room), recent: null, ts: clockNow(), state: "pending", owner: false, agents: 0 })
+      rows.set(room, { code: p.code, room, title: untitled(room), recent: null, ts: clockNow(), at: Number.POSITIVE_INFINITY, state: "pending", owner: false, agents: 0 })
     }
     return [...rows.values()].sort((a, b) => b.ts - a.ts)
   }, [local, pending])

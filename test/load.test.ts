@@ -40,6 +40,7 @@ const board = (tasks: Task[]): ChannelState =>
     hold: null,
     voice: false,
     githubWrite: null,
+    branchPrefix: null,
     reactions: new Map(),
     head: 0,
   }) as ChannelState;

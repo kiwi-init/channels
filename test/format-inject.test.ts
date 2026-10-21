@@ -35,6 +35,7 @@ function blank(): ChannelState {
     hold: null,
     voice: false,
     githubWrite: null,
+    branchPrefix: null,
     reactions: new Map(),
     roleSets: new Map(),
     head: 1,
