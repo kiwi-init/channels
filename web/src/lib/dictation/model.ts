@@ -1,10 +1,9 @@
 import { DICTATION_BYTES, DICTATION_FILES, DICTATION_PATH, sha256Hex } from "@kiwi/core/dictation.ts"
+import { DictationProblem } from "./problem"
 
 export const CACHE_NAME = "kiwi-dictation-1"
 
 const OLD_CACHES = /^kiwi-dictation-\d+$/
-
-export class DictationProblem extends Error {}
 
 const keyOf = (name: string) => `https://dictation.kiwi.invalid/${DICTATION_FILES[name]!.sha256}/${name}`
 

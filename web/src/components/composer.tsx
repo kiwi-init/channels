@@ -7,7 +7,7 @@ import { matchCommands, parseCommand, type Command } from "@/lib/commands"
 import { answered } from "@/lib/asks"
 import { draftOf, keepDraft, type DraftFile } from "@/lib/drafts"
 import { needsCompressing } from "@/lib/needs-compressing"
-import { appendDictation, MODEL_MB, PRESS_LABEL, useDictation } from "@/lib/dictation"
+import { appendDictation, PRESS_LABEL, useDictation } from "@/lib/dictation"
 import { excerpt } from "@/lib/format"
 import { composerMentions, mentionText, withHandles } from "@/lib/mentions"
 import { gifFile, type Gif } from "@/lib/gifs"
@@ -476,7 +476,7 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
                 open
                 onClose={dictation.cancel}
                 title="Dictate on this computer?"
-                message={`Dictation turns your voice into text right here, on this computer. The first time, it downloads a ${MODEL_MB} MB speech model through your relay. After that, your audio never leaves this computer.`}
+                message={`Dictation turns your voice into text right here, on this computer. The first time, it downloads a ${dictation.modelMb} MB speech model through your relay. After that, your audio never leaves this computer.`}
               >
                 <Button variant="secondary" onClick={dictation.cancel}>
                   Not now
