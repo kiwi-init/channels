@@ -7,7 +7,7 @@ import { hereAs, kimiHookHere, noteHarnessSession, notePlace, onGrokBot, sameSea
 import { writeSync } from "node:fs";
 import { answer, hookOutput, kimiReason, printed, seatBudget, tellKimi, type Answer, type HookInput } from "./answer.ts";
 import { holdAnswering } from "./delivered.ts";
-import { migrateListenHooks } from "./install/claude.ts";
+import { migrateClaudeHooks } from "./install/claude.ts";
 import { migrateExtraHooks } from "./install/extra.ts";
 import { migrateMimo } from "./install/mimo.ts";
 import { takeHandoff } from "./handoff.ts";
@@ -73,7 +73,7 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string, harness?
     );
   const shown = (answers: readonly Answer[]) => Effect.forEach(answers, (a) => a.shown, { discard: true, concurrency: "unbounded" });
   const work = Effect.gen(function* () {
-    if (event === "session-start") yield* Effect.sync(migrateListenHooks);
+    if (event === "session-start") yield* Effect.sync(migrateClaudeHooks);
     if (!harness && event !== KIMI_STOP) yield* Effect.sync(migrateExtraHooks);
     const cwd = input.cwd;
     const fresh = who.session;

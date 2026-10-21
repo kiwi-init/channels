@@ -23,11 +23,12 @@ import {
   isOurHook,
   kimiReason,
   migrateExtraHooks,
-  migrateListenHooks,
+  migrateClaudeHooks,
   PROBE_MS,
   PROBE_TTL_MS,
   rewakeCapable,
   selfIdentity,
+  uninstallHooks,
   stopStyle,
   uninstallDetected,
   uninstallExtra,
@@ -487,15 +488,15 @@ test("a listen hook written by 0.19 (one-day timeout) is migrated on its own and
   writeFileSync(file, readFileSync(file, "utf8").replaceAll(`"timeout": ${7 * 24 * 3600 + 60}`, '"timeout": 86460'));
   setEnv({ CLAUDECODE: "1", AI_AGENT: "claude-code_2-1-296_agent" });
   expect(hooksListen()).toBe(false);
-  expect(migrateListenHooks()).toBe(file);
+  expect(migrateClaudeHooks()).toBe(file);
   expect(installedListenSeconds()).toBe(7 * 24 * 3600 + 60);
   expect(hooksInstalled()).toBe(true);
   expect(hooksListen()).toBe(true);
-  expect(migrateListenHooks()).toBeNull();
+  expect(migrateClaudeHooks()).toBeNull();
 
   const mine = JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: "command", command: "echo mine" }] }] } }, null, 2) + "\n";
   writeFileSync(file, mine);
-  expect(migrateListenHooks()).toBeNull();
+  expect(migrateClaudeHooks()).toBeNull();
   expect(readFileSync(file, "utf8")).toBe(mine);
 });
 
@@ -518,11 +519,11 @@ test("a migration repairs every listen entry kiwi has: stale on two events and m
   const s = JSON.parse(readFileSync(file, "utf8").replaceAll(`"timeout": ${7 * 24 * 3600 + 60}`, '"timeout": 86460')) as HookFile;
   s.hooks.Stop = (s.hooks.Stop ?? []).filter((e) => !e.hooks.some((h) => h.command.endsWith(" hook listen # kiwi")));
   writeFileSync(file, JSON.stringify(s, null, 2) + "\n");
-  expect(listenTimeouts(file)).toEqual({ SessionStart: [86460], UserPromptSubmit: [86460], Stop: [] });
+  expect(listenTimeouts(file)).toEqual({ SessionStart: [86460], UserPromptSubmit: [86460], Stop: [], PermissionRequest: [] });
   hideEnv(["AI_AGENT"]);
-  expect(migrateListenHooks()).toBe(file);
+  expect(migrateClaudeHooks()).toBe(file);
   const week = 7 * 24 * 3600 + 60;
-  expect(listenTimeouts(file)).toEqual({ SessionStart: [week], UserPromptSubmit: [week], Stop: [week] });
+  expect(listenTimeouts(file)).toEqual({ SessionStart: [week], UserPromptSubmit: [week], Stop: [week], PermissionRequest: [] });
   expect(hooksStatus()).toContain("claude: installed");
   expect(hooksListen()).toBe(true);
 });
@@ -798,6 +799,7 @@ test("a hook through a wrapper in kiwi's install folder counts only when the wra
           SessionStart: [{ hooks: [{ type: "command", command: cmd("session-start") }] }, listen],
           UserPromptSubmit: [{ hooks: [{ type: "command", command: cmd("prompt") }] }, listen],
           Stop: [{ hooks: [{ type: "command", command: cmd("stop") }] }, listen],
+          PermissionRequest: [{ hooks: [{ type: "command", command: cmd("permission"), timeout: 1800 }] }],
         },
       }),
     );
@@ -924,4 +926,40 @@ test("a config.json that isn't JSON leaves every hook exiting 0, with one line n
     expect(r.stdout.toString()).toBe("");
     expect(r.stderr.toString()).toContain(`${join(home, "config.json")} isn't valid JSON`);
   }
+});
+
+test("kiwi hooks install adds a PermissionRequest hook that waits up to 30 minutes, and never a listen hook on it", () => {
+  hideEnv(["AI_AGENT", "CLAUDE_CODE_EXECPATH", "CLAUDECODE"]);
+  const dir = scratch("kiwi-permission-install-");
+  setEnv({ KIWI_HOME: scratch("kiwi-permission-install-home-"), CLAUDE_CONFIG_DIR: dir });
+  const file = join(dir, "settings.json");
+  setEnv({ CLAUDECODE: "1", AI_AGENT: "claude-code_2-1-296_agent" });
+  installHooks();
+  const s = JSON.parse(readFileSync(file, "utf8")) as HookFile;
+  const permission = s.hooks.PermissionRequest!.flatMap((e) => e.hooks);
+  expect(permission).toHaveLength(1);
+  expect(permission[0]!.command.endsWith(" hook permission # kiwi")).toBe(true);
+  expect(permission[0]!.timeout).toBe(1800);
+  expect(hooksStatus()).toContain("claude: installed");
+  uninstallHooks();
+  expect((JSON.parse(readFileSync(file, "utf8")) as Partial<HookFile>).hooks?.PermissionRequest).toBeUndefined();
+});
+
+test("a SessionStart migration adds the PermissionRequest hook to hooks from an older kiwi, and leaves a person's own permission hooks alone", () => {
+  hideEnv(["AI_AGENT", "CLAUDE_CODE_EXECPATH", "CLAUDECODE"]);
+  const dir = scratch("kiwi-permission-migrate-");
+  setEnv({ KIWI_HOME: scratch("kiwi-permission-migrate-home-"), CLAUDE_CONFIG_DIR: dir });
+  const file = join(dir, "settings.json");
+  setEnv({ CLAUDECODE: "1", AI_AGENT: "claude-code_2-1-296_agent" });
+  installHooks();
+  const s = JSON.parse(readFileSync(file, "utf8")) as HookFile;
+  s.hooks.PermissionRequest = [{ hooks: [{ command: "echo mine" }] }];
+  writeFileSync(file, JSON.stringify(s, null, 2) + "\n");
+  expect(hooksStatus()).toContain("claude: not installed");
+  expect(migrateClaudeHooks()).toBe(file);
+  const after = (JSON.parse(readFileSync(file, "utf8")) as HookFile).hooks.PermissionRequest!.flatMap((e) => e.hooks.map((h) => h.command));
+  expect(after[0]).toBe("echo mine");
+  expect(after).toHaveLength(2);
+  expect(hooksStatus()).toContain("claude: installed");
+  expect(migrateClaudeHooks()).toBeNull();
 });
