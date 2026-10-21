@@ -8,7 +8,8 @@ const kit = readFileSync(resolve(web, "components/kit.tsx"), "utf8");
 
 const contrast = css.slice(css.indexOf("@media (prefers-contrast: more)"));
 
-const files = (d: string): string[] => readdirSync(d).flatMap((n) => (statSync(resolve(d, n)).isDirectory() ? files(resolve(d, n)) : n.endsWith(".tsx") ? [resolve(d, n)] : []));
+const files = (d: string): string[] =>
+  readdirSync(d).flatMap((n) => (statSync(resolve(d, n)).isDirectory() ? files(resolve(d, n)) : n.endsWith(".tsx") && !n.endsWith(".test.tsx") ? [resolve(d, n)] : []));
 
 test("the lit prism and glass fall back to a solid fill under prefers-contrast: more", () => {
   expect(contrast.length).toBeLessThan(css.length);

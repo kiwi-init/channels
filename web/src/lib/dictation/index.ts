@@ -39,15 +39,18 @@ export function dictationSupported(scope: typeof globalThis = globalThis): boole
 
 type Engine = typeof import("./engine")
 
-let loading: Promise<Engine> | null = null
-
-function engine(): Promise<Engine> {
-  loading ??= import("./engine").catch((err: unknown) => {
-    loading = null
-    throw err
-  })
-  return loading
+export function engineLoader(load: () => Promise<Engine>): () => Promise<Engine> {
+  let loading: Promise<Engine> | null = null
+  return () => {
+    loading ??= load().catch(() => {
+      loading = null
+      throw new DictationProblem("Dictation couldn't load. Reload to try again.")
+    })
+    return loading
+  }
 }
+
+const engine = engineLoader(() => import("./engine"))
 
 export interface MicGate {
   alive: boolean
@@ -162,5 +165,11 @@ export function useDictation(onText: (text: string) => void, onProblem: (message
 
   const cancel = useCallback(() => setPhase("idle"), [])
 
-  return { supported, phase, progress, modelMb, press, confirm, cancel }
+  const warm = useCallback(() => {
+    engine().catch(() => {
+      // A warm-up that fails says so on the press that needs it.
+    })
+  }, [])
+
+  return { supported, phase, progress, modelMb, press, confirm, cancel, warm }
 }
