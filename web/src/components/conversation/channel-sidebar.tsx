@@ -1,4 +1,4 @@
-import { Add01Icon, ArrowRight01Icon, ArrowUp01Icon, Search01Icon, TaskDone01Icon } from "@hugeicons/core-free-icons"
+import { Add01Icon, ArrowDown01Icon, Search01Icon, TaskDone01Icon } from "@hugeicons/core-free-icons"
 import { useState, type ReactNode } from "react"
 
 import type { ChannelIcon } from "@kiwi/core/protocol.ts"
@@ -34,15 +34,13 @@ function Section({ title, onTitle, action, children }: { title: string; onTitle?
   )
 }
 
+const ROW = "flex h-9 w-full items-center rounded-ctl px-3 text-left text-ui transition-colors"
+const IDLE = "text-ink-2 hover:bg-wash hover:text-ink"
+
 function Item({ on, label, count, alert, onClick }: { on: boolean; label: string; count?: number; alert?: boolean; onClick: () => void }) {
   return (
     <li>
-      <button
-        type="button"
-        onClick={onClick}
-        aria-current={on ? "page" : undefined}
-        className={cx("flex h-9 w-full items-center gap-2 rounded-ctl px-3 text-left text-ui transition-colors", on ? "prism-lit font-semibold text-ink" : "text-ink-2 hover:bg-wash hover:text-ink")}
-      >
+      <button type="button" onClick={onClick} aria-current={on ? "page" : undefined} className={cx(ROW, "gap-2", on ? "prism-lit font-semibold text-ink" : IDLE)}>
         <span className="min-w-0 flex-1 truncate">{label}</span>
         {!!count && <span className={cx("shrink-0 text-meta tabular-nums", alert ? "font-semibold text-decide" : "text-ink-3")}>{count}</span>}
       </button>
@@ -54,11 +52,7 @@ function SearchRow({ search, onSearch }: { search: string | null; onSearch: (q: 
   if (search === null)
     return (
       <li>
-        <button
-          type="button"
-          onClick={() => onSearch("")}
-          className="flex h-9 w-full items-center gap-2.5 rounded-ctl px-3 text-left text-ui text-ink-2 transition-colors hover:bg-wash hover:text-ink"
-        >
+        <button type="button" onClick={() => onSearch("")} className={cx(ROW, "gap-2.5", IDLE)}>
           <Icon icon={Search01Icon} size={16} className="shrink-0 text-ink-3" />
           Search
         </button>
@@ -110,7 +104,7 @@ function TasksRow({ view, counts, onView }: { view: View | null; counts: Record<
                   aria-current={view === v ? "page" : undefined}
                   title={label}
                   className={cx(
-                    "flex h-6 items-center gap-1 rounded-row px-1 text-[11px] font-semibold tabular-nums transition-colors hover:bg-wash hover:text-ink",
+                    "flex h-6 items-center gap-1 rounded-row px-1 text-stamp font-semibold tabular-nums transition-colors hover:bg-wash hover:text-ink",
                     view === v ? "text-ink" : "text-ink-2"
                   )}
                 >
@@ -148,9 +142,9 @@ function Conversations({ conversations, current, onConversation }: { conversatio
               onClick={() => setOpen((o) => !o)}
               aria-expanded={open}
               aria-label={open ? undefined : `${hidden.length} more ${hidden.length === 1 ? "conversation" : "conversations"}${unread ? `, ${unread} unread` : ""}`}
-              className="flex h-9 w-full items-center gap-2 rounded-ctl px-3 text-left text-ui text-ink-3 transition-colors hover:bg-wash hover:text-ink"
+              className={cx(ROW, "gap-2 text-ink-3 hover:bg-wash hover:text-ink")}
             >
-              <Icon icon={open ? ArrowUp01Icon : ArrowRight01Icon} size={14} className="shrink-0" />
+              <Icon icon={ArrowDown01Icon} size={14} className={cx("shrink-0", open ? "rotate-180" : "-rotate-90")} />
               <span className="min-w-0 flex-1 truncate">{open ? "Show less" : `${hidden.length} more`}</span>
               {!open && unread > 0 && <span className="shrink-0 text-meta text-ink-3 tabular-nums">{unread}</span>}
             </button>
