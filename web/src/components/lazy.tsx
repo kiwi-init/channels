@@ -73,6 +73,11 @@ export const RenameDialog = renameDialog.View
 
 export const loadMarkdown = markdown.load
 
+export function loadPermission(): void {
+  permissionItem.load()
+  permissionInThread.load()
+}
+
 export function loadSurfaces(): void {
   for (const surface of [settings, computers, palette, info, tasks, tasksView, taskDetails, thread, confirmDialogs, holdDialog, charterDialog, renameDialog]) surface.load()
 }

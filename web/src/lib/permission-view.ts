@@ -32,6 +32,7 @@ export function permissionNotes(p: PermissionShown): string[] {
   return [
     ...(p.sandbox === "off" ? ["It asks to run outside the sandbox: allow that in the terminal."] : []),
     ...(p.background ? ["It runs in the background."] : []),
+    ...(p.replaceAll ? ["It replaces every occurrence in the file."] : []),
     ...(!p.canAllow && p.sandbox !== "off" ? ["Too long to show all of it here: to allow it, answer in the terminal."] : []),
   ]
 }

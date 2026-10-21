@@ -11,7 +11,7 @@ import { migrateChannelsToStore } from "@/lib/channel"
 import { initAccessibility } from "@/lib/accessibility"
 import { hasBridge } from "@/lib/relay"
 import { whenIdle } from "@/lib/later"
-import { loadMarkdown, loadSurfaces } from "@/components/lazy"
+import { loadMarkdown, loadPermission, loadSurfaces } from "@/components/lazy"
 import { ops } from "@/lib/channel-ops"
 import { nudgeOnWake } from "@/lib/wake"
 
@@ -40,6 +40,7 @@ createRoot(document.getElementById("root")!).render(
 requestAnimationFrame(() =>
   setTimeout(() => {
     loadMarkdown()
+    loadPermission()
     whenIdle(loadSurfaces)
   }, 0)
 )

@@ -31,6 +31,7 @@ describe("what a permission row says", () => {
     expect(permissionNotes(shown({ command: "ls" }))).toEqual([])
     expect(permissionNotes(shown({ command: "ls", sandbox: "off", canAllow: false }))).toEqual(["It asks to run outside the sandbox: allow that in the terminal."])
     expect(permissionNotes(shown({ command: "ls", background: true }))).toEqual(["It runs in the background."])
+    expect(permissionNotes(shown({ tool: "Edit", paths: ["a.ts"], replaced: "a", content: "b", replaceAll: true }))).toEqual(["It replaces every occurrence in the file."])
     expect(permissionNotes(shown({ tool: "Write", paths: ["a.ts"], canAllow: false }))).toEqual(["Too long to show all of it here: to allow it, answer in the terminal."])
   })
 })
