@@ -36,8 +36,10 @@ const KIND_LABEL: Record<DecisionKind, string> = {
   choice: "Decision for you",
 }
 
+export const decisionLabel = (m: Pick<Message, "decision">): string => (m.decision ? KIND_LABEL[m.decision] : "Decision for you")
+
 export function askLabel(m: Message, me: string): string {
-  if (isEscalationTo(m, me)) return m.decision ? KIND_LABEL[m.decision] : "Decision for you"
+  if (isEscalationTo(m, me)) return decisionLabel(m)
   return m.to?.includes(me) ? "Question for you" : "Question for everyone"
 }
 

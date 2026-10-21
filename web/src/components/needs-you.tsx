@@ -98,7 +98,7 @@ export function NeedsYou({
       }
     }),
     ...requests.map((r) => ({ key: `r${r.id}`, node: <RequestItem r={r} roomId={roomId} now={now} /> })),
-    ...(decisionCards ? asked(decisions) : []).map((m) => ({ key: `a${m.seq}`, node: <DecisionCard m={m} nameOf={nameOf} onReply={onReply} seat={seatOf(m.from)} /> })),
+    ...(decisionCards ? asked(decisions) : []).map((m) => ({ key: `a${m.seq}`, node: <DecisionCard m={m} held={heldOf(m)} nameOf={nameOf} onReply={onReply} seat={seatOf(m.from)} /> })),
     ...[...(decisionCards ? [] : asked(decisions)), ...asked(escalations), ...questions].map((m) => ({
       key: `a${m.seq}`,
       node: <AskItem m={m} me={me} now={now} nameOf={nameOf} agent={agentOf(m.from)} held={heldOf(m)} onReply={onReply} onJump={onJump} seat={seatOf(m.from)} />,
@@ -374,13 +374,13 @@ function AnswerForm({
   )
 }
 
-function DecisionCard({ m, nameOf, onReply, seat }: { m: Message; nameOf: (n: string) => string; onReply: (m: Message, text: string) => Promise<void>; seat?: PlacedSeat }) {
+function DecisionCard({ m, held, nameOf, onReply, seat }: { m: Message; held: string[]; nameOf: (n: string) => string; onReply: (m: Message, text: string) => Promise<void>; seat?: PlacedSeat }) {
   const choices = !!m.choices?.length
   const idle = choices ? null : ""
   const { draft, setDraft, busy, send } = useAnswer(m, nameOf, onReply, idle)
   return (
     <div className="flex flex-col py-3">
-      <ComposerQuestion m={m} more={0} nameOf={nameOf} disabled={busy} onChoose={(c) => send(c)} onElse={() => setDraft((d) => d ?? "")} />
+      <ComposerQuestion m={m} more={0} held={held} nameOf={nameOf} disabled={busy} onChoose={(c) => send(c)} onElse={() => setDraft((d) => d ?? "")} />
       {draft !== null && <AnswerForm draft={draft} setDraft={setDraft} busy={busy} send={send} to={nameOf(m.from)} autoFocus={choices} onEscape={() => setDraft(idle)} />}
       {seat && (
         <div className="mt-1 flex flex-wrap items-center gap-2">

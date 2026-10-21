@@ -1,11 +1,13 @@
 import type { Message } from "@kiwi/core/protocol.ts"
 import { taskId } from "@kiwi/core/state.ts"
+import { decisionLabel } from "@/lib/asks"
 import { useChoosing } from "@/lib/choosing"
 import { excerpt } from "@/lib/format"
 
 export function ComposerQuestion({
   m,
   more,
+  held,
   nameOf,
   disabled,
   onChoose,
@@ -13,6 +15,7 @@ export function ComposerQuestion({
 }: {
   m: Message
   more: number
+  held?: string[]
   nameOf: (name: string) => string
   disabled: boolean
   onChoose: (choice: string) => Promise<boolean>
@@ -22,8 +25,12 @@ export function ComposerQuestion({
   return (
     <section aria-label="Question" className="mb-2 flex flex-col gap-2 rounded-card bg-raised px-3.5 py-3 shadow-[0_0_0_1px_var(--decide)]">
       <p className="flex items-start gap-2 text-ui">
-        <span className="shrink-0 rounded-full bg-decide-wash px-1.5 text-meta font-semibold text-decide">{m.esc ? "Decision for you" : "Question for you"}</span>
-        {!!m.task && <span className="shrink-0 text-meta text-ink-3 tabular-nums">{taskId(m.task)}</span>}
+        <span className="shrink-0 rounded-full bg-decide-wash px-1.5 text-meta font-semibold text-decide">{m.esc ? decisionLabel(m) : "Question for you"}</span>
+        {held?.length ? (
+          <span className="shrink-0 text-meta text-ink-3 tabular-nums">holds {held.join(", ")}</span>
+        ) : (
+          !!m.task && <span className="shrink-0 text-meta text-ink-3 tabular-nums">{taskId(m.task)}</span>
+        )}
         <span className="min-w-0 [overflow-wrap:anywhere]">
           <span className="font-medium">{nameOf(m.from)}</span>: {excerpt(m.body, 400)}
         </span>
