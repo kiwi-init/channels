@@ -37,6 +37,14 @@ function answer(stdout: string): unknown {
   }
 }
 
+async function contextLine(args: string[]): Promise<"on" | "off" | null> {
+  const got = await runKiwi(args);
+  if (got.code !== 0) return null;
+  const parsed = answer(got.stdout);
+  const on = parsed && typeof parsed === "object" ? (parsed as { contextLine?: unknown }).contextLine : undefined;
+  return isSwitch(on) ? on : null;
+}
+
 function seats(stdout: string): PlacedSeat[] {
   const parsed = answer(stdout);
   return Array.isArray(parsed) ? parsed.map(readPlacedSeat).filter((s): s is PlacedSeat => s !== null) : [];
@@ -55,6 +63,11 @@ export function wireTerminalsIpc(): void {
   ipcMain.handle("kiwi:launches", (_e, to: unknown) => {
     if (!isSwitch(to)) throw new Error("kiwi:launches takes on or off");
     return change(["launches", to]);
+  });
+  ipcMain.handle("kiwi:context-line", () => contextLine(["context-line", "status", "--json"]));
+  ipcMain.handle("kiwi:set-context-line", (_e, to: unknown) => {
+    if (!isSwitch(to)) throw new Error("kiwi:set-context-line takes on or off");
+    return contextLine(["context-line", to, "--json"]);
   });
   ipcMain.handle("kiwi:seat-places", async (): Promise<PlacedSeat[]> => {
     const listed = await runKiwi(["terminal", "seats", "--json"]);

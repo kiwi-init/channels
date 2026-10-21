@@ -638,7 +638,7 @@ try {
         if (narrow) await toChannel();
       });
       await shoot(owner, tag, "18-settings", openSettings, closeSettings);
-      if (["27-new-agents", "28-new-agents-ready"].some(wanted)) {
+      if (["27-new-agents", "28-new-agents-ready", "29-context-line"].some(wanted)) {
         if (!terminalsStub) {
           terminalsStub = true;
           await owner.addInitScript(() => {
@@ -647,6 +647,7 @@ try {
             type Status = { prefer: string; launch: "on" | "off"; terminals: Row[] };
             const row = (id: string, name: string, helpers: Row["helpers"]): Row => ({ id, name, found: true, running: true, helpers });
             let status: Status = { prefer: "app", launch: "on", terminals: [row("rex", "Rex", "off"), row("tmux", "tmux", "off"), row("app", "Terminal", null)] };
+            let contextLine: "on" | "off" = "off";
             const set = async (change: (s: Status) => Status) => (status = change(status));
             const w = window as unknown as { kiwi?: object };
             w.kiwi = Object.assign(w.kiwi ?? {}, {
@@ -655,6 +656,8 @@ try {
                 set((s) => ({ ...s, prefer: to === "off" && s.prefer === id ? "app" : s.prefer, terminals: s.terminals.map((t) => (t.id === id ? { ...t, helpers: to } : t)) })),
               terminalPrefer: (id: string) => set((s) => ({ ...s, prefer: id })),
               setLaunches: (to: "on" | "off") => set((s) => ({ ...s, launch: to })),
+              contextLine: async () => contextLine,
+              setContextLine: async (to: "on" | "off") => (contextLine = to),
             });
           });
         }
@@ -682,6 +685,18 @@ try {
             await newAgents().getByRole("radio", { name: "Rex" }).click();
             await newAgents().getByRole("radio", { name: "Rex", checked: true }).waitFor();
             await newAgents().scrollIntoViewIfNeeded();
+          },
+          closeSettings,
+        );
+        const agents = () => owner.locator("#settings-agents");
+        await shoot(
+          owner,
+          tag,
+          "29-context-line",
+          async () => {
+            await openSettings();
+            await agents().getByRole("radiogroup", { name: "Ask agents for a checkpoint past 250k context" }).waitFor();
+            await agents().scrollIntoViewIfNeeded();
           },
           closeSettings,
         );
