@@ -3,7 +3,7 @@ import { CheckmarkCircle02Icon, Folder01Icon, Tick02Icon } from "@hugeicons/core
 import { useEffect, useRef, useState, type ReactNode } from "react"
 
 import type { HarnessRow, KnownHarness } from "@kiwi/core/harnesses.ts"
-import { personaOf, type Persona, type Personality } from "@kiwi/core/personality.ts"
+import type { Persona, Personality } from "@kiwi/core/personality.ts"
 import { PLACE_NAMES, type LaunchedView } from "@kiwi/core/terminals.ts"
 import type { FromMachine, MachineView } from "../../../desktop/src/bridge.ts"
 import { harnessName } from "@/lib/harness"
@@ -61,7 +61,7 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
   const [folders, setFolders] = useState<string[]>([])
   const [folder, setFolder] = useState<string | null>(null)
   const [nick, setNick] = useState("")
-  const [persona, setPersona] = useState<Persona | null>(() => (all[0] ? personaOf(all[0]) : null))
+  const [persona, setPersona] = useState<Persona | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [started, setStarted] = useState<Started | null>(null)

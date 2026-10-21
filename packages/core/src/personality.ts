@@ -19,7 +19,7 @@ const CAPABILITY_LABEL: Record<Capability, string> = {
   write: "write and ask",
   tasks: "work tasks",
   prs: "open pull requests",
-  merge: "merge on green",
+  merge: "merge pull requests when the project's checks allow",
   review: "review others' rounds",
   release: "release",
   assign: "assign work",
