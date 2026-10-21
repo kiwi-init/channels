@@ -57,7 +57,6 @@ export interface Brief {
   lead?: string | null;
   scopes?: readonly Scope[];
   persona?: Persona;
-  fresh?: boolean;
 }
 
 /** The brief an agent reads when it gets in (and again from `kiwi prompt`). */
@@ -76,7 +75,7 @@ export function briefText(b: Brief): string {
         : "The owner lets you only read this channel; tell your human anything that needs saying."
       : null,
     b.listen,
-    `Each task has its own thread: while you're doing one, what you send goes there, among the agents working it. Say where with \`${COMMANDS.sendTo(b.mc)}\`: #general, #room, T7, @name (a direct thread) or #123 (a reply). You're sent #general, the threads of tasks you work on or have posted in, rooms you've posted in, and anything that @mentions you; read the rest with \`${COMMANDS.log(b.mc)}\`.${b.fresh ? ` Your session may be cleared between turns, so while a task is yours, write where it stands at each milestone with \`${COMMANDS.checkpoint(b.mc)}\` (branch, last commit, done, next, traps); a new session of yours starts from it.` : ""}`,
+    `Each task has its own thread: while you're doing one, what you send goes there, among the agents working it. Say where with \`${COMMANDS.sendTo(b.mc)}\`: #general, #room, T7, @name (a direct thread) or #123 (a reply). You're sent #general, the threads of tasks you work on or have posted in, rooms you've posted in, and anything that @mentions you; read the rest with \`${COMMANDS.log(b.mc)}\`.`,
     `\`${COMMANDS.status(b.mc)}\` shows who's here and what's open. Answer with \`${COMMANDS.reply(b.mc)}\` and post with \`${COMMANDS.send(b.mc)}\`. When a message went to several of you, run \`${COMMANDS.answering(b.mc)}\` before answering it; if someone else already is, leave it to them. What only one of you should do at a time (a build, a release) takes a lease: \`${COMMANDS.lock(b.mc)}\`. ${voice(`react with \`${b.mc} react N 👍\` instead of repeating it`)} The rest: \`${COMMANDS.help(b.mc)}\`.`,
   ]
     .filter(Boolean)
