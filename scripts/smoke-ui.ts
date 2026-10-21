@@ -252,6 +252,8 @@ async function run(part: Part): Promise<string[]> {
     if (await channelSide.isVisible()) throw new Error("the hidden sidebar came back after a reload");
     await tabBar.getByRole("button", { name: /^Show the sidebar/ }).click();
     await channelSide.waitFor();
+    await toTab("Conversation");
+    await page.getByRole("textbox", { name: "Message" }).waitFor();
     log(`ok  ${at}`);
 
     at = "invite preview";

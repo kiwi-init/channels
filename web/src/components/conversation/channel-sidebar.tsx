@@ -1,4 +1,4 @@
-import { Add01Icon, ArrowDown01Icon, BubbleChatIcon, Search01Icon, TaskDone01Icon } from "@hugeicons/core-free-icons"
+import { Add01Icon, ArrowDown01Icon, Search01Icon, TaskDone01Icon } from "@hugeicons/core-free-icons"
 import { useState, type ReactNode } from "react"
 
 import type { ChannelIcon } from "@kiwi/core/protocol.ts"
@@ -256,9 +256,8 @@ export function ConversationMenu({ conversations, current, onConversation }: { c
         <button
           type="button"
           aria-label={`Conversations${unread ? ", with unread messages" : ""}`}
-          className="no-drag relative hidden h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-ui text-ink-2 edge transition-colors hover:bg-wash hover:text-ink md:flex"
+          className="no-drag relative hidden h-9 shrink-0 items-center gap-1 rounded-full pr-2.5 pl-3.5 text-ui text-ink-2 edge transition-colors hover:bg-wash hover:text-ink md:flex"
         >
-          <Icon icon={BubbleChatIcon} size={16} />
           <span className="max-w-40 truncate">{label}</span>
           <Icon icon={ArrowDown01Icon} size={14} />
           {unread && <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-accent shadow-[0_0_0_2px_var(--canvas)]" />}

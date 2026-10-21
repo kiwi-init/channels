@@ -129,6 +129,10 @@ async function shoot(page: Page, tag: string, name: string, open?: () => Promise
   if (!wanted(name)) return;
   try {
     if (open) await open();
+    await page
+      .getByPlaceholder("Connecting…")
+      .waitFor({ state: "hidden", timeout: 15000 })
+      .catch(() => {});
     await page.waitForTimeout(350);
     const file = join(OUT, `${tag}-${name}.png`);
     await page.screenshot({ path: file });
@@ -457,6 +461,13 @@ try {
           "01d-sidebar-hidden",
           () => owner.keyboard.press("ControlOrMeta+Backslash"),
           () => owner.keyboard.press("ControlOrMeta+Backslash"),
+        );
+        await shoot(
+          owner,
+          tag,
+          "01f-mac-tab-bar",
+          () => owner.evaluate(macWindow, true),
+          () => owner.evaluate(macWindow, false),
         );
         if (moreChannels > 0)
           await shoot(owner, tag, "01e-more-channels", () =>
