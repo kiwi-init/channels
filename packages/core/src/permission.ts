@@ -32,7 +32,11 @@ export type PermissionSettled = "terminal" | "timeout" | "ended";
 
 export const PERMISSION_CHOICES = ["A: Allow once", "B: Deny"] as const;
 
-export const permissionChoices = (x: unknown): boolean => JSON.stringify(x) === JSON.stringify(PERMISSION_CHOICES);
+export function permissionChoices(x: unknown): boolean {
+  if (!Array.isArray(x)) return false;
+  const given: readonly unknown[] = x;
+  return given.length === PERMISSION_CHOICES.length && PERMISSION_CHOICES.every((c, i) => given[i] === c);
+}
 
 const COMMAND_MAX = 2_000;
 const DESCRIPTION_MAX = 500;
@@ -129,6 +133,7 @@ const KEYED = new RegExp(String.raw`(?:["']${SECRET_NAME}["']?|^[ \t]*${SECRET_N
 
 const RUN = /[A-Za-z0-9+/_-]{40,}/g;
 const RUN_SEPARATORS = /[+/_-]/;
+const FOLDER = /^[A-Za-z][a-z]+$/;
 const HEX = /^(?:0x)?[0-9a-fA-F]+$/;
 const DIGEST_LABEL = /(?:sha(?:1|224|256|384|512)|sha3-(?:224|256|384|512)|blake2[bs]?|md5|digest|integrity)\s*[:=-]\s*["']?$/i;
 const SRI = /^(?:sha(?:256|384|512)|sha3-(?:256|384|512)|blake2[bs]?)-/i;
@@ -164,7 +169,9 @@ function longRun(said: string): boolean {
   const summed = CHECKSUM_TOOL.test(said);
   for (const m of said.matchAll(RUN)) {
     if (DIGEST_LABEL.test(said.slice(Math.max(0, m.index - 24), m.index))) continue;
-    const runs = m[0].startsWith("/") ? m[0].split("/").filter((part) => part.length >= 40) : [m[0]];
+    const parts = m[0].split("/");
+    const path = m[0].startsWith("/") && parts.filter((part) => FOLDER.test(part)).length >= 2;
+    const runs = path ? parts.filter((part) => part.length >= 40) : [m[0]];
     for (const run of runs) {
       if (SRI.test(run)) continue;
       const pieces = run.split(RUN_SEPARATORS);

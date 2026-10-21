@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join as joinPath } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import { looksSecret, PERMISSION_CHOICES, permissionAnswer, permissionReply, permissionShown, wellFormedPermission, type PermissionShown } from "@kiwi/core/permission.ts";
+import { looksSecret, PERMISSION_CHOICES, permissionAnswer, permissionChoices, permissionReply, permissionShown, wellFormedPermission, type PermissionShown } from "@kiwi/core/permission.ts";
 import { wellFormed, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -577,5 +577,18 @@ describe("permission follow-ups (T1588)", () => {
 
   test("a secret in what an edit replaces keeps the prompt in the terminal", () => {
     expect(shown("Edit", { file_path: "/x/a.ts", old_string: 'const k = "' + ghp + '";', new_string: "const k = env();" })).toBeNull();
+  });
+
+  test("a base64 secret that starts with a slash is still a random run; a real path is judged by its folders", () => {
+    const secret = join("/Zx8Q", LETTERS.slice(0, 26), "/HfJ1", LETTERS.slice(10, 36), "=");
+    expect(looksSecret(`echo ${secret.slice(1)} | base64 -d`)).toBe(true);
+    expect(looksSecret(`echo ${secret} | base64 -d`)).toBe(true);
+    expect(looksSecret("cd /var/folders/2r/3954x2p578v2jdp4vkj8yytc0000gn/T/kiwi-permission-relay-Xq3Zr9 && ls")).toBe(false);
+  });
+
+  test("choices that aren't plain JSON are just not the permission choices", () => {
+    expect(permissionChoices([...PERMISSION_CHOICES])).toBe(true);
+    expect(permissionChoices([1n])).toBe(false);
+    expect(permissionChoices([PERMISSION_CHOICES[0]])).toBe(false);
   });
 });
