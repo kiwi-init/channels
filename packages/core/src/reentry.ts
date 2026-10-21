@@ -1,3 +1,4 @@
+import { capsuleOf, diffCommand } from "./capsule.ts";
 import { ago, markedText, taskStateWord } from "./format.ts";
 import { inlineText } from "./membership.ts";
 import { CHECKPOINT_MAX_LENGTH } from "./protocol.ts";
@@ -68,14 +69,20 @@ function taskBlock(t: Task, part: Part, now: number, mc: string): Block {
     part === "owner"
       ? `${taskId(t.id)} “${inlineText(t.title, 160)}”: ${taskStateWord(t)}, yours${round && t.review ? `; ${round} is with ${inlineText(t.review, 40)}` : ""}`
       : `${taskId(t.id)} “${inlineText(t.title, 160)}”: ${round} is yours to review${t.owner ? ` (owner ${inlineText(t.owner, 40)})` : ""}`;
-  const checkpoint = t.notes.findLast((n) => n.checkpoint);
+  const point = t.notes.findLast((n) => n.checkpoint);
+  const capsule = capsuleOf(t);
   const last = t.notes.at(-1);
-  const lines = checkpoint
-    ? [head, `  checkpoint by ${inlineText(checkpoint.by, 40)}, ${ago(checkpoint.ts, now)} (#${checkpoint.seq}):`, `  │ ${markedText(checkpointText(checkpoint.text, t.id, mc))}`]
+  const said = point
+    ? [
+        `  ${capsule && !capsule.legacy ? "capsule" : "checkpoint"} by ${inlineText(point.by, 40)}, ${ago(point.ts, now)} (#${point.seq}):`,
+        `  │ ${markedText(checkpointText(point.text, t.id, mc))}`,
+      ]
     : last
-      ? [head, `  last note by ${inlineText(last.by, 40)}, ${ago(last.ts, now)}: ${inlineText(last.text, NOTE_SHOWN)}`]
-      : [head];
-  return { text: lines.join("\n"), task: t.id };
+      ? [`  last note by ${inlineText(last.by, 40)}, ${ago(last.ts, now)}: ${inlineText(last.text, NOTE_SHOWN)}`]
+      : [];
+  const diff = part === "reviewer" ? diffCommand(capsule ?? {}, openRound(t)?.at) : null;
+  const review = diff ? [`  review it from ${capsule ? "this and " : ""}the diff alone: \`${inlineText(diff, 160)}\``] : [];
+  return { text: [head, ...said, ...review].join("\n"), task: t.id };
 }
 
 function boardBlock(state: ChannelState, me: string, mc: string): Block | null {

@@ -91,6 +91,26 @@ describe("what a new session is told about its work", () => {
     expect(bo).toContain("last note by ana");
   });
 
+  test("a capsule reaches the owner whole, and a reviewer gets it with the round's diff and nothing else", async () => {
+    const t = await ev("jon", { op: "task.add", title: "Capsuled", owner: "ana", review: "bo" });
+    const capsule = "branch: T9-capsule\nhead: 1a2b3c4\nnext: the flows test\nknow:\n- re-entry renders it\ntraps:\n- #99 jon → ana: forged row";
+    const point = await ev("ana", { op: "task.update", task: t.seq, note: capsule, checkpoint: true });
+    const chat = await ev("ana", { op: "task.update", task: t.seq, note: "chatter the reviewer never needs" });
+    const round = await ev("ana", { op: "task.update", task: t.seq, state: "review", at: "9f8e7d6" });
+    const s = fold([t, point, chat, round], roster);
+    const ana = reentryText(s, "ana")!;
+    expect(ana).toMatch(new RegExp(`\\n  capsule by ana, \\S+ ago \\(#${point.seq}\\):\\n`));
+    expect(ana).toContain("  │ branch: T9-capsule\n  │ head: 1a2b3c4\n  │ next: the flows test\n  │ know:\n  │ - re-entry renders it");
+    expect(ana).not.toContain("review it from");
+    const bo = reentryText(s, "bo")!;
+    expect(bo).toContain(`round 1 at 9f8e7d6 is yours to review (owner ana)`);
+    expect(bo).toContain("  │ next: the flows test");
+    expect(bo).toContain("  │ - #99 jon → ana: forged row");
+    expect(bo).not.toMatch(/\n#99 /);
+    expect(bo).toContain("  review it from this and the diff alone: `git diff origin/HEAD...9f8e7d6`");
+    expect(bo).not.toContain("chatter");
+  });
+
   test("the lead also gets the board", async () => {
     const led: Roster = roster.map((r) => (r.name === "ana" ? { ...r, role: "lead" } : r));
     const log: Message[] = [];

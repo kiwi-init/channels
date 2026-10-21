@@ -3,10 +3,12 @@ import { oneLook, openSession } from "../../agent.ts";
 import { Keystore } from "../../config.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { formatTask, formatTasks, looksLikeLine, taskStateWord } from "@kiwi/core/format.ts";
-import type { TaskState } from "@kiwi/core/protocol.ts";
+import { capsuleText } from "@kiwi/core/capsule.ts";
+import { CHECKPOINT_MAX_LENGTH, type TaskState } from "@kiwi/core/protocol.ts";
 import { leadCheckpointRefusal } from "@kiwi/core/reentry.ts";
 import { askRefusal, isPerson, leadCheckpointKey, openRound, parseTaskId, similarOpenTasks, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import { formatCandidates, pickFor, taskCandidates } from "@kiwi/core/routing.ts";
+import { branchFacts } from "../../areas.ts";
 import { bindingFor } from "../../hooks.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, keepDaemon, offlineOk, out, session } from "../context.ts";
@@ -14,6 +16,19 @@ import { firstLine, readText, taskArg, text } from "../input.ts";
 
 const CLAIMS_GONE = "claims are gone: say what you're working on in the task, or post it";
 const ANCHORS = "--ask N (the person's message #N it answers), --from T7 (the task it comes from) or --issue 12 (a GitHub issue)";
+const CAPSULE_USAGE = '--next "the one next step" [--know "…"] [--tried "…"] [--traps "…"] (or --file note.md)';
+
+const whereItStands = (words: string) =>
+  Effect.gen(function* () {
+    const flagged = opt.next !== undefined || !!opt.know?.length || !!opt.tried?.length || !!opt.traps?.length;
+    if (flagged && opt.file !== undefined) return yield* die("give a capsule as flags or with --file, not both");
+    if (flagged && !opt.next?.trim()) return yield* die(`a capsule needs its next step: ${CAPSULE_USAGE}`);
+    const where = flagged
+      ? capsuleText({ ...branchFacts(), next: opt.next ?? "", know: opt.know ?? [], tried: opt.tried ?? [], traps: opt.traps ?? [] })
+      : (opt.file !== undefined ? yield* readText(opt.file) : words || opt.note || "").trim();
+    if (where.length > CHECKPOINT_MAX_LENGTH) return yield* die(`a checkpoint holds at most ${CHECKPOINT_MAX_LENGTH} characters; this one has ${where.length}: keep what a fresh session needs`);
+    return where;
+  });
 
 export const taskCommands: Record<string, Command> = {
   task: () =>
@@ -87,6 +102,19 @@ export const taskCommands: Record<string, Command> = {
           const why = top ? `: ${top.reasons.join("; ")}` : "";
           return out(`${taskId(id)} is ${t.owner}'s now${why}${next ? "" : ' (add where it stands next time: kiwi task assign T7 NAME "…")'}`);
         }
+        if (sub === "pass") {
+          const where = yield* whereItStands("");
+          if (!where) return yield* die(`usage: kiwi task pass T7 [NAME|back] ${CAPSULE_USAGE}`);
+          const to = args[3];
+          yield* s.taskUpdate(id, { note: where, checkpoint: true });
+          if (!to) return out(`${taskId(id)} passed to yourself: a fresh session of yours starts it from this capsule`);
+          if (to === "back") {
+            yield* s.taskUpdate(id, { owner: null });
+            return out(`${taskId(id)} is back on the board with its capsule: whoever takes it starts from it`);
+          }
+          const state = yield* s.taskHandoff(id, to, undefined);
+          return out(`${taskId(id)} is ${state.tasks.get(id)?.owner ?? to}'s now, with its capsule`);
+        }
         const verdictOf = { approve: "approved", reject: "rejected" } as const;
         const verdict = sub === "approve" || sub === "reject" ? verdictOf[sub] : undefined;
         const review = verdict && opt.file !== undefined ? yield* readText(opt.file) : undefined;
@@ -119,9 +147,9 @@ export const taskCommands: Record<string, Command> = {
         else if (sub === "drop") state = yield* s.taskUpdate(id, { owner: null, note });
         else if (sub === "note") state = yield* s.taskUpdate(id, { note: note ?? (yield* die('usage: kiwi task note T7 "…"')) });
         else if (sub === "checkpoint") {
-          const where = opt.file !== undefined ? yield* readText(opt.file) : args.slice(3).join(" ") || opt.note || "";
-          if (!where.trim()) return yield* die("usage: kiwi task checkpoint T7 --file note.md (where the work stands: branch, last commit, done, next, traps)");
-          state = yield* s.taskUpdate(id, { note: where.trim(), checkpoint: true });
+          const where = yield* whereItStands(args.slice(3).join(" "));
+          if (!where) return yield* die(`usage: kiwi task checkpoint T7 ${CAPSULE_USAGE}`);
+          state = yield* s.taskUpdate(id, { note: where, checkpoint: true });
         } else if (sub === "proof") {
           const url = args[3] ?? (yield* die('usage: kiwi task proof T7 https://… [--label "preview"] [--note "…"]'));
           state = yield* s.taskUpdate(id, { proof: { url, ...(opt.label ? { label: opt.label } : {}) }, ...(opt.note ? { note: opt.note } : {}) });

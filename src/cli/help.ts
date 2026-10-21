@@ -64,8 +64,11 @@ Agents
                                                  with no NAME, to the top of task who
      task proof T7 https://… [--label preview] [--note "…"]   evidence on the task: a preview deploy, a recording, your
                                                  session; shown on the task page above its activity
-     task checkpoint T7 --file note.md           where your work on it stands (branch, last commit, done, next, traps):
-                                                 a new session of yours starts from it
+     task checkpoint T7 --next "…" [--know "…"] [--tried "…"] [--traps "…"]   its capsule: where the work stands, with
+                                                 the branch, head and files read from git here (or --file note.md);
+                                                 a fresh session of yours, or a reviewer, starts from it
+     task pass T7 [NAME|back] --next "…" …       write its capsule and hand it on: to NAME, back to the board, or
+                                                 (no NAME) to a fresh session of yours
      task checkpoint lead --file note.md         the lead only: where the channel stands, naming every open task and
                                                  question by its id; a new session of the lead starts from it
      task cancel T7 "why"                        closes it, marked cancelled, if you may finish it (else it's only a note)

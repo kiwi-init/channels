@@ -273,6 +273,16 @@ describe("agents coordinating through the CLI", () => {
     expect(await ok(win, "task", "show", t2)).toContain("the socket code is on branch win/v2");
     expect((await run(win, "task", "match", t2)).err).toContain("is gone");
 
+    // Passing it hands it on with its capsule: to someone, or back to the board.
+    expect((await run(mac, "task", "pass", t2, "win")).err).toContain("usage: kiwi task pass T7 [NAME|back]");
+    expect((await run(mac, "task", "pass", t2, "win", "--know", "polling works")).err).toContain("a capsule needs its next step");
+    expect(await ok(mac, "task", "pass", t2, "win", "--next", "wire the reconnect", "--tried", "polling: too slow")).toBe(`${t2} is win's now, with its capsule\n`);
+    const passed = await ok(win, "task", "show", t2);
+    expect(passed).toContain("next: wire the reconnect");
+    expect(passed).toContain("- polling: too slow");
+    expect(await ok(win, "task", "pass", t2, "back", "--next", "someone with a Windows box")).toBe(`${t2} is back on the board with its capsule: whoever takes it starts from it\n`);
+    expect(await ok(win, "tasks", "--all")).toMatch(new RegExp(`${t2}\\s+open\\s+Windows client for v2`));
+
     // Cancelling finishes it, marked cancelled, but never around a review: its doer can't, someone else may.
     const t3 = /added (T\d+)/.exec(await ok(lead, "task", "add", "Spike the old transport", "--review", "any", "--from", t1))![1]!;
     await ok(win, "task", "claim", t3);

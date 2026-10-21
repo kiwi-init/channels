@@ -104,11 +104,16 @@ jobs:
       with none unfiled), the same asks and board from any kept base as from one fold, kiwi task and
       kiwi status grouped by ask with unfiled work last, the refusal an agent's task add gets without
       one, and a person's old message kept past the cut only while a task is filed under it.
+      Also test/capsule.test.ts: a capsule (packages/core/src/capsule.ts, the structured checkpoint:
+      branch, head, next, know, tried, traps, files) reads back as itself from its text, is one only
+      with a next step, takes loose lines as known, an old free-text checkpoint reads as a legacy
+      capsule, and a reviewer is pointed at the round's diff against origin/HEAD.
       Also test/checkpoint.test.ts: a checkpoint is a task.update note marked checkpoint (text
       required, at most CHECKPOINT_MAX_LENGTH), folded and labelled in task show, refused before
       sending when empty or too long; and what a fresh session is told (packages/core/src/reentry.ts):
-      each open task it owns with the newest checkpoint or else the last note, the review round it
-      judges, for the lead its own lead checkpoint (the fact "lead checkpoint/<name>", which the fold
+      each open task it owns with the newest checkpoint or else the last note, labelled a capsule when
+      it is one, the review round it judges with the capsule and the round's diff and no other notes,
+      for the lead its own lead checkpoint (the fact "lead checkpoint/<name>", which the fold
       in packages/core/src/state/fold-events.ts lets only <name> set or clear and never with an expiry,
       cut with a kiwi note pointer when too long, named even by the shortest pointer) and then the
       board, the compact summary, multi-line text marked; leadCheckpointRefusal: only the lead, text
@@ -649,7 +654,9 @@ jobs:
     always: ["package.json", "bun.lock", "bunfig.toml", "scripts/ci-tests.ts", "scripts/ci-flows.ts"]
     description: >-
       Runs slow end-to-end tests that start a real local relay (src/relay/bun.ts) and drive the
-      kiwi CLI and client: e2e (create a channel, join, send and listen through the relay),
+      kiwi CLI and client: e2e (create a channel, join, send and listen through the relay; kiwi task
+      pass T7 NAME|back writing the capsule from --next, --know, --tried and --traps, refused without
+      a next step, then handing it on or putting it back on the board),
       verbs (the agent CLI verbs and their aliases; an agent's task add without --ask, --from or --issue refused with the fix named, and kiwi task listing the board under the person's message each task serves; review rounds: an agent's task review on a task
       with no reviewer is refused with how to name one, and its reviewer handing the review on with
       task review --review NAME keeps the open round and its commit and tells the new reviewer which
