@@ -570,7 +570,15 @@ be only another way to answer the same prompt, never a way around it:
   prompt while it waits goes to the terminal. The ask closes when the agent
   marks it settled (answered in the terminal, timed out, or the session
   ended) or when it expires, and the hook checks once more for a terminal
-  answer before it replies.
+  answer before it replies. Once a newer prompt has started in that session,
+  the waiting hook doesn't answer at all.
+- **Whose session it is.** The hook speaks only for a Claude Code session the
+  agent's seat records, never for one it guesses from the folder. But a seat
+  records whichever session uses it: a person's own Claude Code session
+  started in an agent's folder, while that agent's seat is free, takes the
+  seat like a restarted agent would, and its prompts then go to the agent's
+  human as the agent's. Run your own Claude Code sessions outside agents'
+  folders.
 
 What this doesn't change: a person who allows a harmful command has allowed
 it, exactly as in the terminal. Read the command, not the description, which

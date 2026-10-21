@@ -43,8 +43,8 @@ for (const opener of ["open", "xdg-open"]) {
 }
 const cliEnv = { KIWI_MODEL: "claude-sonnet-5-5", ...process.env, KIWI_HOME: join(cli, "home"), CLAUDE_CONFIG_DIR: join(cli, "no-claude"), PATH: `${join(cli, "bin")}:${process.env.PATH}` };
 const running: ChildProcess[] = [];
-function kiwi(args: string[], watch?: (out: string) => void): Promise<string> {
-  const p = spawn("bun", ["src/cli/main.ts", ...args], { cwd: ROOT, env: cliEnv });
+function kiwi(args: string[], watch?: (out: string) => void, script = "src/cli/main.ts"): Promise<string> {
+  const p = spawn("bun", [script, ...args], { cwd: ROOT, env: cliEnv });
   running.push(p);
   let out = "";
   const on = (d: Buffer) => ((out += d), watch?.(out));
@@ -211,6 +211,22 @@ try {
   const reviewed = /T\d+/.exec(await win("task", "add", "Cache sealed history in the browser", "--owner", "win", "--review", "any"))?.[0] ?? "T0";
   await win("task", "review", reviewed, "reload fetches only what is new");
   await win("escalate", "Should I delete the 800 test rooms on the old relay? It frees space, and it can't be undone.");
+  const askPermission = (tool: string, given: object) => kiwi(["-c", "kiwi-w", "--as", "win", tool, JSON.stringify(given), "/Users/jonatas/www/channels"], undefined, "scripts/seed-permission.ts");
+  const needsView = () =>
+    owner
+      .getByRole("complementary", { name: "Channel" })
+      .getByRole("navigation", { name: "Views" })
+      .getByRole("button", { name: /^Needs you/ });
+  await askPermission("Edit", { file_path: "/Users/jonatas/www/channels/web/src/lib/format.ts", old_string: "const MINUTE = 60_000", new_string: "const MINUTE = 60 * 1000" });
+  await needsView().click();
+  await needs.getByText("format.ts").first().waitFor({ timeout: 15000 });
+  await needs.getByRole("button", { name: "Deny" }).first().click();
+  await owner
+    .getByText(/^Deny sent to/)
+    .first()
+    .waitFor({ timeout: 15000 });
+  await toTab("Conversation");
+  await askPermission("Bash", { command: "rm -rf web/dist && bun run web:build", description: "Rebuild the web bundle from scratch to check the size budget" });
   // A direct conversation: the person and the lead, privately.
   await details().click();
   await owner.getByRole("button", { name: "More for atlas" }).click();
@@ -351,6 +367,17 @@ try {
           await owner.getByRole("region", { name: "Needs you" }).waitFor();
         },
         toChannel,
+      );
+      await shoot(
+        owner,
+        tag,
+        "27-permission-thread",
+        () =>
+          owner
+            .getByText(/Deny sent by/)
+            .first()
+            .scrollIntoViewIfNeeded(),
+        () => owner.mouse.wheel(0, 8000),
       );
       await shoot(
         owner,

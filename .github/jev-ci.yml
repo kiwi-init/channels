@@ -134,6 +134,11 @@ jobs:
       permission, perm and settled fields (wellFormed, send, history through a local relay); permissionAnswer counting only a
       verified signed perm naming the ask's id, sender and signature, Allow from the agent's own human and Deny from them or
       the owner; and the fold closing the ask only on an answer that counts, its asker's settled reply or at expiresAt.
+      Also web lib/permission-view.test.ts: the app's permission row (web/src/components/permission-item.tsx,
+      permission-thread.tsx, lib/permission-settled.ts): its title by tool, the command, paths, URL or MCP call with values shown verbatim with
+      control and bidi characters made visible, notes for the sandbox off, the background and what's too long to allow
+      here, and how an ask was settled: only a signed answer counts (a typed "Allow once" doesn't), read as sent until the
+      asker closes it, and an answer before the terminal's said to have come too late.
       Also test/trim-roster.test.ts: an agent whose roster is short a member (as a stale daemon peek
       leaves it) refolds with the whole roster before it saves a trimmed fold base, so a task that
       member worked keeps its done state and rounds instead of the cache keeping a wrong base for
@@ -596,7 +601,9 @@ jobs:
       ignored), prints Claude Code's allow or deny, and says nothing but closes the ask when the
       call settles in the transcript first; no seat for the session or a subagent's call asks
       nobody. The transcript watcher finds the newest unanswered matching tool_use and sees its
-      tool_result, a new prompt or a new assistant turn. Fails if any of that breaks.
+      tool_result, a new prompt or a new assistant turn. test/permission-session.test.ts: one
+      hook waits per session and a later prompt marks it as overtaken; the folder shown starts
+      with ~. Fails if any of that breaks.
 
   test-flows-a:
     name: test / flows-a
@@ -726,17 +733,19 @@ jobs:
 
   shots:
     name: build / shots
-    inputs: ["src/**", "packages/core/**", "web/**", "scripts/shoot-ui.ts", "scripts/local-relay.ts", "assets/**"]
-    always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "scripts/shoot-ui.ts", "scripts/local-relay.ts"]
+    inputs: ["src/**", "packages/core/**", "web/**", "scripts/shoot-ui.ts", "scripts/local-relay.ts", "scripts/seed-permission.ts", "assets/**"]
+    always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "scripts/shoot-ui.ts", "scripts/local-relay.ts", "scripts/seed-permission.ts"]
     description: >-
       Builds the web dashboard (bun run web:build), then scripts/shoot-ui.ts --wide --theme dark
       starts the relay and the kiwi CLI as two agents' computers, seeds a channel in headless
       Chromium (the owner signs in with a passkey, lets atlas in and gives it the Lead
       personality, lets win in, a conversation with an ask, a reply, two tasks and a task's
-      conversation, a review and an escalation under Needs you, a direct conversation, notes, a
+      conversation, a review and an escalation under Needs you, two Claude Code permission prompts from
+      win (scripts/seed-permission.ts, built by core's permissionShown: an edit the owner denies from
+      Needs you, a command left waiting), a direct conversation, notes, a
       pending join request and a second empty channel) and shoots every screen of the wide
       window in the dark: the conversation, the reply bar, the composer with words in it, the Tasks tab, a task opened from its board row
-      in the Tasks panel, Needs you, the Agents tab, the channel's settings page (Details: members, the channel's settings, notes and closing, side by side), the direct conversation,
+      in the Tasks panel, Needs you, the permission prompts in the conversation (one denied, one waiting), the Agents tab, the channel's settings page (Details: members, the channel's settings, notes and closing, side by side), the direct conversation,
       Invite, the account menu, the command palette, Notes, Pause, Settings (its sections and their groups), Personalities (opened from its row), Add
       an agent, the desktop app's New agent modal, its computer picker with a paired computer
       chosen, and its started screen (with a stand-in for the launch methods the desktop bridge

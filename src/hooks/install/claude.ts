@@ -31,10 +31,10 @@ export function withoutOurs(entries: HookEntry[] | undefined): HookEntry[] {
   return (entries ?? []).map((e) => ({ ...e, hooks: e.hooks.filter((h) => !isOurHookCommand(h.command)) })).filter((e) => e.hooks.length > 0);
 }
 
-export function installHooks(keepListen = false): string {
+export function installHooks(keepListen = false, addListen = true): string {
   const s = readSettings();
   s.hooks ??= {};
-  const listen = keepListen || (claudeVersion() ? rewakeCapable() : listenHooksOf(s) !== "absent");
+  const listen = keepListen || (addListen && (claudeVersion() ? rewakeCapable() : listenHooksOf(s) !== "absent"));
   for (const [event, arg] of Object.entries(EVENTS)) {
     s.hooks[event] = [
       ...withoutOurs(s.hooks[event]),
@@ -59,8 +59,14 @@ export function uninstallHooks(): string {
   return settingsPath();
 }
 
+function current(entry: HookEntry, h: HookEntry["hooks"][number], arg: string): boolean {
+  if (arg === LISTEN) return h.asyncRewake === true && (h.timeout ?? 0) > LISTEN_SECONDS;
+  if (arg === PERMISSION) return entry.matcher === PERMISSION_TOOLS && h.timeout === PERMISSION_SECONDS && !h.async;
+  return true;
+}
+
 function hasHook(s: Settings, event: string, arg: string): boolean {
-  return !!s.hooks?.[event]?.some((x) => x.hooks.some((h) => isOurHook(h.command, arg) && (arg !== LISTEN || (h.asyncRewake === true && (h.timeout ?? 0) > LISTEN_SECONDS))));
+  return !!s.hooks?.[event]?.some((x) => x.hooks.some((h) => isOurHook(h.command, arg) && current(x, h, arg)));
 }
 
 function hasListenEntry(s: Settings, event: string): boolean {
@@ -83,11 +89,12 @@ function listenWanted(): boolean {
   return !claudeVersion() || rewakeCapable();
 }
 
-type ClaudeHooksState = "installed" | "installed-without-listen" | "missing" | "listen-missing" | "listen-stale";
+type ClaudeHooksState = "installed" | "installed-without-listen" | "missing" | "permission-missing" | "listen-missing" | "listen-stale";
 
 function claudeHooksState(): ClaudeHooksState {
   const { events, permission, listen } = claudeHooks();
-  if (!events || !permission) return "missing";
+  if (!events) return "missing";
+  if (!permission) return "permission-missing";
   switch (listen) {
     case "current":
       return "installed";
@@ -107,6 +114,8 @@ export function claudeHooksStatus(): string {
       return "installed, without the listening hooks (kiwi hooks install run inside Claude Code 2.1.296 or later adds them)";
     case "missing":
       return "not installed";
+    case "permission-missing":
+      return "not installed (the permission prompt hook is missing or from an older kiwi: kiwi hooks install)";
     case "listen-missing":
       return "not installed (the listening hooks are missing: kiwi hooks install)";
     case "listen-stale":
@@ -120,7 +129,7 @@ export function migrateClaudeHooks(): string | null {
     if (loadConfig().claudeHooks === "off") return null;
     const { events, permission, listen } = claudeHooks();
     if (listen === "stale") return installHooks(true);
-    return events && !permission ? installHooks(listen === "current") : null;
+    return events && !permission ? installHooks(listen === "current", false) : null;
   } catch {
     return null;
   }
