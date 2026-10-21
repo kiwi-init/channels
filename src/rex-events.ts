@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { rexBinary } from "./rex.ts";
+import { object } from "./terminals/shared/json.ts";
 
 export interface RexServer {
   server: string;
@@ -21,8 +22,6 @@ interface Running {
 
 const RETRY_MIN_MS = 1_000;
 const RETRY_MAX_MS = 30_000;
-
-const object = (value: unknown): Record<string, unknown> | null => (value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null);
 
 const GONE = new Set(["child_exited", "block_closed"]);
 
