@@ -6,7 +6,7 @@ import * as Effect from "effect/Effect";
 import { eachLive } from "@kiwi/core/client.ts";
 import { PERMISSION_CHOICES, permissionAnswer, permissionShown, type PermissionSettled } from "@kiwi/core/permission.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
-import { humanOf } from "@kiwi/core/state.ts";
+import { humanOf, type ChannelState } from "@kiwi/core/state.ts";
 import { openSession, type AgentSession } from "../agent.ts";
 import { home, Keystore } from "../config.ts";
 import { sameSeat, seatsHeldAnywhere, type Binding } from "../seats.ts";
@@ -39,6 +39,13 @@ const CLOSING: Record<PermissionSettled, string> = {
 export function decisionJson(d: Decided): string {
   const decision = d.decision === "allow" ? { behavior: "allow" } : { behavior: "deny", message: `Denied from the Kiwi app by ${d.by}` };
   return JSON.stringify({ hookSpecificOutput: { hookEventName: "PermissionRequest", decision } });
+}
+
+export function judged(messages: readonly Message[], state: ChannelState, ask: { id: string; from: string }, seq: number): Decided | null {
+  const asked = messages.find((x) => x.id === ask.id && x.from === ask.from);
+  const reply = messages.find((x) => x.seq === seq);
+  const said = asked && reply ? permissionAnswer(asked, reply, state) : null;
+  return said && reply ? { decision: said, by: reply.from } : null;
 }
 
 function permissionSeat(session: string): Binding | null {
@@ -110,11 +117,10 @@ const askAndWait = Effect.fn("Hooks.permission.ask")(function* (s: AgentSession,
   const outcome = yield* Deferred.make<Outcome>();
   const decide = (m: Message) =>
     Effect.gen(function* () {
-      if (!m.re?.includes(seq) || !m.perm) return;
+      if (!m.re?.includes(seq)) return;
       const { messages, state: now } = yield* s.state();
-      const ask = messages.find((x) => x.id === id && x.from === s.me);
-      const said = ask ? permissionAnswer(ask, m, now) : null;
-      if (said) yield* Deferred.succeed(outcome, { decision: said, by: m.from });
+      const said = judged(messages, now, { id, from: s.me }, m.seq);
+      if (said) yield* Deferred.succeed(outcome, said);
     });
   const watching = Effect.gen(function* () {
     for (;;) {
