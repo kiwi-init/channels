@@ -20,5 +20,6 @@ export const FLOWS: Record<string, string[]> = {
     "hooks-reentry",
     "hooks-persona",
     "mimo-wake-restart",
+    "held-seat",
   ],
 };

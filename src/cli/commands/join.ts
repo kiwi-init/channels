@@ -1,12 +1,14 @@
 import { MAX_PIN } from "@kiwi/core/pin.ts";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import { openSession } from "../../agent.ts";
 import { Channel, keepHeld, RelayError } from "@kiwi/core/client.ts";
-import { Cursor, Keystore } from "../../config.ts";
+import { Cursor, Keystore, loadConfig } from "../../config.ts";
+import { heldText, seatHeldAway } from "../../hold.ts";
 import { decodeJoinCode, type ChannelAccess } from "@kiwi/core/crypto.ts";
 import { freeAgentName, handleFor, inlineText, readLaunch } from "@kiwi/core/membership.ts";
 import { freeHandle } from "@kiwi/core/handles.ts";
-import { baseName, here, seatsNear } from "../../seats.ts";
+import { baseName, here, seatsNear, tooBroad } from "../../seats.ts";
 import { asOption, channelOption } from "@kiwi/core/wake.ts";
 import { cardLine, charterLines, holdLine, leadLine, parseDuration } from "@kiwi/core/format.ts";
 import { canPost, SCOPES } from "@kiwi/core/scopes.ts";
@@ -39,10 +41,16 @@ const joinedAlias = Effect.fn("kiwi.joinedAlias")(function* (roomId: string, ali
   return candidates.find(free) ?? `ch-${roomId.slice(0, 8)}`;
 });
 
-function settleIn(alias: string, name: string, model: string, harnessSession: string | null): void {
+function settleIn(alias: string, name: string, model: string, harnessSession: string | null, opened: number): void {
   const hadThisChannel = seatsNear(process.cwd()).some((b) => b.alias === alias);
-  if (!bindDirectory(process.cwd(), { ...seatHere(alias, name, true, model), ...(harnessSession ? { harnessSession } : {}) })) {
-    process.stderr.write(`kiwi: not binding ${process.cwd()} (too broad); run kiwi from your project folder, or pass ${channelOption(alias)} ${asOption(name)}\n`);
+  if (seatHeldAway(loadConfig(), alias, name)) {
+    process.stderr.write(`kiwi: not binding ${process.cwd()}: ${heldText(alias, name)}\n`);
+  } else if (!bindDirectory(process.cwd(), { ...seatHere(alias, name, true, model), ...(harnessSession ? { harnessSession } : {}) }, opened)) {
+    process.stderr.write(
+      tooBroad(process.cwd())
+        ? `kiwi: not binding ${process.cwd()} (too broad); run kiwi from your project folder, or pass ${channelOption(alias)} ${asOption(name)}\n`
+        : `kiwi: not binding ${process.cwd()}: ${name} in ${alias} was held by its loop during this join\n`,
+    );
   } else if (!hadThisChannel) {
     const elsewhere = seatsNear(process.cwd()).filter((b) => b.alias !== alias);
     const channels = [...new Set(elsewhere.map((b) => b.alias)), alias];
@@ -175,13 +183,14 @@ export const joinCommands: Record<string, Command> = {
           const s = yield* openSession(alias, cfg.channels[alias]!, name);
           const scopes = (yield* s.state()).state.members.get(name)?.scopes ?? [...SCOPES];
           if (how === "resumed") {
-            if ((yield* cursor.read(alias, name)) === null) yield* cursor.write(alias, name, yield* s.ch.fx.head());
+            if ((yield* cursor.read(alias, name)) === null) yield* s.whileOurs(cursor.write(alias, name, yield* s.ch.fx.head()));
           } else {
-            yield* cursor.write(alias, name, yield* s.ch.fx.head());
+            yield* s.whileOurs(cursor.write(alias, name, yield* s.ch.fx.head()));
             if (canPost(scopes)) yield* s.hello();
           }
           const kimiSession = who.harness === "kimi" ? yield* Effect.promise(() => kimiSessionHere(who.pid, process.cwd())) : null;
-          settleIn(alias, name, model, kimiSession);
+          if (Exit.isSuccess(yield* Effect.exit(s.unheld))) settleIn(alias, name, model, kimiSession, s.opened);
+          else process.stderr.write(`kiwi: not binding ${process.cwd()}: ${name} in ${alias} was held by its loop during this join\n`);
           if (canPost(scopes)) yield* Effect.ignoreCause(s.refreshCard(detectCard(), { model }));
           process.stderr.write(`${how === "resumed" ? "back in" : "joined"} "${alias}" as ${name} (key ${fingerprint(id.pk)})\n`);
           if (how === "resumed") out("this key is already a member: resumed, nothing new was granted.");

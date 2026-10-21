@@ -1,8 +1,8 @@
 # Plan: terminal plugins (Rex, tmux and the terminal app)
 
-Status: approved by the owner (#2004), 2026-10-21, from the owner's ask (#1927). Rows 1 to 5 and 8
-are built (#648, #649, #650, #651, #655, #658), and rows 6 and 7 are in review (#659, #656); what
-changed while building is under "As built". The audit and the plan below are kept as they were decided: their facts were read from
+Status: approved by the owner (#2004), 2026-10-21, from the owner's ask (#1927). Rows 1 to 9 are
+built (#648, #649, #650, #651, #655, #659, #656, #658, #660) and shipped in v0.24.0; Show in tmux
+from Needs you follows. What changed while building is under "As built". The audit and the plan below are kept as they were decided: their facts were read from
 `main` at `00217d35` (kiwi 0.23.1), before the code moved.
 
 ## The ask
@@ -304,7 +304,18 @@ One task and one PR each, in this order. Each one's tests run in `test / unit`.
      preferred terminal's helpers sets Prefer back to Terminal.
    - `kiwi rex on|off|status` stays this release, through the new code; `kiwi rex seats|show` are
      unchanged.
-7. **Show from Needs you (#656, T2015, in review).** A plugin can list its seats (`seats(cfg)`), and the
+6. **The tmux helpers (#659, T2014).** Probed first on throwaway servers (tmux 3.8).
+   - Download writes `kiwi.tmux.conf` next to the tmux config and one marked `source-file` line;
+     `%if` guards keep a reload from adding the mark twice, and `prefix K` is bound only where the
+     person hasn't bound `K`. Remove takes back the line, the file, every window's mark and the
+     formats as they were.
+   - A window holding a seat that needs you shows its counts and task numbers (`2? T3 T7`) through
+     `@kiwi`, and `prefix K` runs `kiwi terminal show --needs-you`.
+   - Where a seat runs in tmux is read once from `TMUX` and `TMUX_PANE` and stored on the seat, and
+     the rotate hook's `paneOf` reads it (duplicate 7).
+   - Show in tmux selects the pane and switches the attached client to it. Its button in Needs you,
+     the Settings row for tmux and the desktop's login-shell PATH for Download come after v0.24.0.
+7. **Show from Needs you (#656, T2015).** A plugin can list its seats (`seats(cfg)`), and the
    registry's `seatPlaces` and `showSeat` replace the bridge's `rexSeats` and `rexShow`: Show goes to
    the plugin holding the seat's place, and only for a seat that plugin lists. Core reads a placed
    seat and a show result (`readPlacedSeat`, `readShowResult`). Needs you's button is `ShowSeat`,

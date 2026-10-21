@@ -3,6 +3,7 @@ import { appendFileSync, renameSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, type Config, type WakeHook } from "../config.ts";
+import { seatHeldAway } from "../hold.ts";
 import { listenHooksInstalled } from "../hooks/install/claude.ts";
 import { mimoInstalled } from "../hooks/install/mimo.ts";
 import { piInstalled } from "../hooks/install/pi.ts";
@@ -73,7 +74,8 @@ const UNREAD_CHECK_MS = 30_000;
 
 export const pathOf = async (cfg: Config, alias: string, agent: string): Promise<WakePath> => {
   const record = seatRecordFor(cfg, alias, agent);
-  return wakePath(record?.harness === "kimi" ? { ...record, served: !!kimiServer(record.pid) } : record, listenHooksInstalled(), !!cfg.wakeHooks?.[wakeKey(alias, agent)], {
+  const seen = record && { ...record, held: seatHeldAway(cfg, alias, agent, {}), ...(record.harness === "kimi" ? { served: !!kimiServer(record.pid) } : {}) };
+  return wakePath(seen, listenHooksInstalled(), !!cfg.wakeHooks?.[wakeKey(alias, agent)], {
     pi: piInstalled(),
     mimo: mimoInstalled(),
   });

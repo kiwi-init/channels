@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentSession } from "../agent.ts";
@@ -146,6 +147,7 @@ export const commitDelivered = Effect.fn("Hooks.commitDelivered")(function* (s: 
   const files = deliveredFiles(s.alias, s.me, session, pid);
   const upTo = Math.max(0, ...files.map((d) => d.seq));
   if (!upTo) return;
+  if (Exit.isFailure(yield* Effect.exit(s.unheld))) return;
   const cursor = yield* Cursor;
   if (((yield* cursor.read(s.alias, s.me)) ?? 0) < upTo) yield* cursor.write(s.alias, s.me, upTo);
   for (const { file } of files) rmSync(file, { force: true });

@@ -124,10 +124,13 @@ export class SessionMessaging extends SessionListen {
       });
     const listening = eachLive(this.ch.fx.live(since, { presence: false, reads: false }), handle, () => Effect.void);
     yield* Effect.raceFirst(listening, Effect.raceFirst(Deferred.await(answered), Effect.sleep(waitSec * 1000))).pipe(Effect.scoped);
-    yield* (yield* Cursor).markSeen(
-      this.alias,
-      this.me,
-      replies.map((r) => r.seq),
+    const cursor = yield* Cursor;
+    yield* this.whileOurs(
+      cursor.markSeen(
+        this.alias,
+        this.me,
+        replies.map((r) => r.seq),
+      ),
     );
     return replies;
   });
