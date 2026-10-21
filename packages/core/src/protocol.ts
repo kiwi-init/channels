@@ -286,7 +286,11 @@ export type Event =
    * takes it back. Not news: it's no unread, no notification, no line in a feed. Its body is throwaway
    * (an older client drops the whole message, body and all, as malformed).
    */
-  | { op: "react"; seq: number; emoji: string | null };
+  | { op: "react"; seq: number; emoji: string | null }
+  | { op: "evidence"; task: number; ref: EvidenceRef; ok?: boolean; label?: string }
+  | { op: "verdict"; task: number; on: EvidenceRef; ok: boolean; note?: string };
+
+export type EvidenceRef = { kind: "pr"; repo: string; number: number } | { kind: "sha"; repo: string; sha: string } | { kind: "file"; hash: string; name?: string } | { kind: "link"; url: string };
 
 /** The longest reaction, in UTF-16 units: one emoji, family sequences and flags included. */
 const MAX_REACTION = 16;
@@ -640,7 +644,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 2;
+export const EVENT_OPS_VERSION = 3;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 
 export const knownOp = (op: string): boolean => eventCheck({ op }) !== null;
@@ -658,7 +662,17 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
   return { ...rest, ...(newer ? { ev: newer } : ev ? { ev } : {}) };
 }
 
-export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
+export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.folded === undefined || (base.skipped === true && base.folded < EVENT_OPS_VERSION);
+
+export function wellFormedRef(x: unknown): x is EvidenceRef {
+  if (!x || typeof x !== "object") return false;
+  const r = x as Record<string, unknown>;
+  if (r.kind === "pr") return typeof r.repo === "string" && REPO_RE.test(r.repo) && Number.isSafeInteger(r.number) && (r.number as number) > 0;
+  if (r.kind === "sha") return typeof r.repo === "string" && REPO_RE.test(r.repo) && typeof r.sha === "string" && /^[0-9a-f]{7,64}$/.test(r.sha);
+  if (r.kind === "file")
+    return typeof r.hash === "string" && BLOB_ID_RE.test(r.hash) && (r.name === undefined || (typeof r.name === "string" && r.name.length <= 200 && !/[\u0000-\u001f\u007f]/.test(r.name)));
+  return r.kind === "link" && typeof r.url === "string" && r.url.length <= PROOF_URL_MAX_LENGTH && /^https:\/\/[^\s]+$/.test(r.url);
+}
 
 export interface Message extends Payload {
   newer?: NewerEvent;
@@ -864,6 +878,10 @@ function eventCheck(ev: unknown): boolean | null {
       return e.prefix === null || (typeof e.prefix === "string" && BRANCH_PREFIX_RE.test(e.prefix));
     case "react":
       return n(e.seq) && (e.seq as number) > 0 && (e.emoji === null || wellFormedReaction(e.emoji));
+    case "evidence":
+      return n(e.task) && wellFormedRef(e.ref) && (e.ok === undefined || typeof e.ok === "boolean") && opt(e.label, (l): l is string => str(l, PROOF_LABEL_MAX_LENGTH) && !/[\r\n]/.test(l));
+    case "verdict":
+      return n(e.task) && wellFormedRef(e.on) && typeof e.ok === "boolean" && opt(e.note, (x): x is string => str(x));
     default:
       return null;
   }
