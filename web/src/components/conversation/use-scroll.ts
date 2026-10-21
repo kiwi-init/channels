@@ -8,6 +8,31 @@ export function arrivedAfter(visible: readonly Pick<Message, "seq">[], seen: num
   return seen ? visible.filter((m) => m.seq > seen).length : visible.length
 }
 
+export interface Scrolled {
+  scrollTop: number
+  readonly scrollHeight: number
+  readonly clientHeight: number
+}
+
+export interface Follow {
+  atBottom: boolean
+  lastTop: number
+}
+
+export function resized(el: Scrolled, f: Follow, smoothing: boolean): void {
+  if (!f.atBottom) return
+  if (!smoothing) el.scrollTop = el.scrollHeight
+  f.lastTop = el.scrollTop
+}
+
+export function scrolled(el: Scrolled, f: Follow): void {
+  const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+  const up = el.scrollTop < f.lastTop - 2
+  f.lastTop = el.scrollTop
+  if (near) f.atBottom = true
+  else if (up) f.atBottom = false
+}
+
 export function useScroll({ messages, visible, hereKey }: { messages: Message[]; visible: Message[]; hereKey: string }) {
   const [behind, setBehind] = useState(0)
 
@@ -17,9 +42,8 @@ export function useScroll({ messages, visible, hereKey }: { messages: Message[];
   const isFresh = (seq: number) => baseline !== null && baseline.key === hereKey && seq > baseline.seq
 
   const scroller = useRef<HTMLDivElement>(null)
-  const atBottom = useRef(true)
+  const follow = useRef<Follow>({ atBottom: true, lastTop: 0 })
   const lastSeq = useRef(0)
-  const lastTop = useRef(0)
   const smoothUntil = useRef(0)
   const followed = useRef<{ el: HTMLDivElement; stop: () => void } | null>(null)
 
@@ -29,22 +53,23 @@ export function useScroll({ messages, visible, hereKey }: { messages: Message[];
     followed.current?.stop()
     followed.current = null
     if (!el) return
-    atBottom.current = true
+    follow.current.atBottom = true
     el.scrollTop = el.scrollHeight
     const content = el.firstElementChild
-    const follow =
-      content && typeof ResizeObserver !== "undefined"
-        ? new ResizeObserver(() => {
-            if (atBottom.current && Date.now() > smoothUntil.current) el.scrollTop = el.scrollHeight
-          })
-        : null
-    if (content) follow?.observe(content, { box: "border-box" })
-    followed.current = { el, stop: () => follow?.disconnect() }
+    const observer = content && typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => resized(el, follow.current, Date.now() <= smoothUntil.current)) : null
+    if (content) observer?.observe(content, { box: "border-box" })
+    followed.current = { el, stop: () => observer?.disconnect() }
   })
-  useEffect(() => () => followed.current?.stop(), [])
+  useEffect(
+    () => () => {
+      followed.current?.stop()
+      followed.current = null
+    },
+    []
+  )
 
   useLayoutEffect(() => {
-    atBottom.current = true
+    follow.current.atBottom = true
     lastSeq.current = -1
     const el = scroller.current
     if (el) el.scrollTop = el.scrollHeight
@@ -55,12 +80,12 @@ export function useScroll({ messages, visible, hereKey }: { messages: Message[];
     const added = lastSeq.current < 0 ? 0 : arrivedAfter(visible, lastSeq.current)
     lastSeq.current = Math.max(lastSeq.current, visible.at(-1)?.seq ?? 0)
     const smooth = added > 0 && added < 4
-    if (atBottom.current) {
+    if (follow.current.atBottom) {
       el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "instant" })
       if (!smooth) return
       smoothUntil.current = Date.now() + SMOOTH_MS
       const settle = setTimeout(() => {
-        if (atBottom.current) el.scrollTop = el.scrollHeight
+        if (follow.current.atBottom) el.scrollTop = el.scrollHeight
       }, SMOOTH_MS)
       return () => clearTimeout(settle)
     } else if (added > 0) setBehind((b) => b + added)
@@ -73,17 +98,12 @@ export function useScroll({ messages, visible, hereKey }: { messages: Message[];
   }
 
   const onScroll = (e: UIEvent<HTMLDivElement>) => {
-    const el = e.currentTarget
-    const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80
-    const up = el.scrollTop < lastTop.current - 2
-    lastTop.current = el.scrollTop
-    if (near) atBottom.current = true
-    else if (up) atBottom.current = false
-    if (atBottom.current && behind) setBehind(0)
+    scrolled(e.currentTarget, follow.current)
+    if (follow.current.atBottom && behind) setBehind(0)
   }
 
   const stick = () => {
-    atBottom.current = true
+    follow.current.atBottom = true
   }
 
   return { behind, setBehind, isFresh, scroller, stick, toBottom, onScroll }

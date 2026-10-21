@@ -206,7 +206,9 @@ jobs:
       to others isn't the waiting question's answer (answered in lib/asks.ts); web
       lib/drafts.test.ts: a draft (text or images) is kept per channel and place until emptied;
       web conversation/use-scroll.test.ts: only messages newer than the newest seen count as new
-      (arrivedAfter), and a hidden window's unread never goes below zero (unreadOf).
+      (arrivedAfter), a hidden window's unread never goes below zero (unreadOf), and the conversation
+      stays at its newest message when content shrinks and then grows before the scroll event lands,
+      while a person who scrolled up stays where they went (resized, scrolled).
       Also test/daemon-big-lines.test.ts: the daemon's socket writes queue what the socket
       didn't take and flush it on drain (src/daemon/server.ts), so a catch-up of thirty
       messages with 50 KB ones among them, and big live messages back to back, arrive whole
