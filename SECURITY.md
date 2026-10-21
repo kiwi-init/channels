@@ -517,45 +517,60 @@ A Claude Code agent's permission prompt can also be answered from the app's
 Needs you (`kiwi hook permission`, a `PermissionRequest` hook). It's built to
 be only another way to answer the same prompt, never a way around it:
 
-- **Advisory, never in charge.** The terminal prompt stays up and usable the
-  whole time, and whichever is answered first wins. The hook never approves
-  anything on its own and never changes Claude Code's permission rules or
-  mode. An Allow covers that one call: no `updatedInput`, no "always allow".
-  A deny rule in the settings still wins over it. When the hook times out,
-  can't reach the relay, fails, or the session ends, it says nothing, and
-  Claude Code falls back to its own prompt: a timeout never allows or denies.
-  It writes nothing into the terminal. The answer goes back only as the
-  hook's JSON.
-- **Only the agent's human or the owner answers.** The request is an
-  escalation from the agent's seat, and the hook takes an answer only if all
-  of these hold:
-  - it's a signed reply to that exact ask, posted after it;
-  - it's from the channel's owner or the agent's own human;
-  - it's a person's reply, not an agent's;
-  - it picks one of the two options.
+- **Advisory, never in charge.**
+  - The terminal prompt stays up and usable the whole time, and whichever is
+    answered first wins.
+  - The hook never approves anything on its own and never changes Claude
+    Code's permission rules or mode.
+  - An Allow covers that one call: no `updatedInput`, no "always allow". A
+    deny rule in the settings still wins over it.
+  - When the hook times out, fails, or the session ends, it says nothing, and
+    Claude Code falls back to its own prompt: a timeout never allows or
+    denies.
+  - It writes nothing into the terminal. The answer goes back only as the
+    hook's JSON.
+- **Only the agent's human allows; the owner can also deny.** The request is
+  an escalation from the agent's seat. An answer counts only if all of these
+  hold:
+  - it's a signed `perm` answer naming the ask by its payload id (not the seq
+    the relay assigned), so an answer can't be replayed onto another ask;
+  - it's posted after the ask and before the ask expires;
+  - it's from a person the ask was sent to, never an agent;
+  - an Allow comes from the asking agent's own human, and only when the row
+    offered Allow. A Deny comes from that human or the owner.
 
-  Anything else is ignored. A relay can't forge such a reply. It can only
+  Plain text never counts. A relay can't forge an answer. It can only
   withhold the request or the answer, which leaves the terminal prompt.
 - **Only what's needed to decide leaves the machine:**
-  - the tool's name and the folder;
-  - for Bash, the command and its description;
-  - for edits, the file paths;
-  - for WebFetch, the URL without its query;
-  - for MCP tools, the server, the tool and the argument names.
+  - Bash's command (up to 2,000 characters) and description;
+  - an edit's paths and new content (up to 4,000 characters);
+  - WebFetch's URL;
+  - an MCP tool's arguments and values (up to 2,000 characters);
+  - the folder.
 
-  Never file contents, diffs, tool output, the environment or the transcript.
-  Channel messages are sealed to every member, agents included, so anyone in
-  the channel can read what's shown. Anything that looks like a secret
-  (tokens and keys by shape, `Authorization`/`Bearer`, `--password`/`--token`
-  flags, `…_TOKEN=`/`…_KEY=` assignments, private-key blocks), or anything
-  over 2,000 characters, isn't sent: that prompt is answered in the terminal.
-- **What's shown is what runs.** The app shows the command verbatim in a code
-  block, with control and bidi characters escaped, so a crafted command can't
-  pass for another.
+  Other tools stay in the terminal, and so do `.env` edits. Never other
+  files, tool output, the environment or the transcript.
+- **Every member can read it, so secrets never go.** Channel messages are
+  sealed to every member, agents included. If anything shown looks like a
+  secret, the request isn't sent and the prompt is answered in the terminal:
+  - known token shapes, private keys and JWTs;
+  - `Authorization`, `Bearer`, API-key and cookie headers;
+  - password flags;
+  - secret-named assignments;
+  - credentials in a URL, and webhook URLs;
+  - long random-looking strings. A plain 40-character git SHA and labelled
+    digests pass.
+
+  A command run with the sandbox off, or anything over its cap, offers only
+  Deny.
+- **What's shown is what runs.** A command, path or folder with control,
+  bidi or zero-width characters isn't sent. The app shows the command
+  verbatim in a code block.
 - **One at a time.** One request per session waits in Needs you. A second
-  prompt while it waits goes to the terminal. A request settled in the
-  terminal is cleared from Needs you, and the hook checks once more for that
-  before it answers.
+  prompt while it waits goes to the terminal. The ask closes when the agent
+  marks it settled (answered in the terminal, timed out, or the session
+  ended) or when it expires, and the hook checks once more for a terminal
+  answer before it replies.
 
 What this doesn't change: a person who allows a harmful command has allowed
 it, exactly as in the terminal. Read the command, not the description, which
