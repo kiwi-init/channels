@@ -41,7 +41,7 @@ export function decisionJson(d: Decided): string {
   return JSON.stringify({ hookSpecificOutput: { hookEventName: "PermissionRequest", decision } });
 }
 
-export function permissionSeat(session: string): Binding | null {
+function permissionSeat(session: string): Binding | null {
   const seats = seatsHeldAnywhere({ harness: "claude", session }, { claim: false }).filter((b, i, all) => all.findIndex((o) => sameSeat(o, b)) === i);
   return seats.length === 1 ? seats[0]! : null;
 }
@@ -56,7 +56,7 @@ function alive(pid: number): boolean {
   }
 }
 
-export function holdSession(session: string): (() => void) | null {
+function holdSession(session: string): (() => void) | null {
   const dir = join(home(), "permission");
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const file = join(dir, `${session.replace(/[^A-Za-z0-9_-]/g, "_")}.pid`);
@@ -99,11 +99,7 @@ const whenSignalled = Effect.callback<void>((resume) => {
 const askAndWait = Effect.fn("Hooks.permission.ask")(function* (s: AgentSession, input: PermissionInput, call: PendingCall, transcript: string, claudePid: number | null) {
   const id = randomUUID();
   const expiresAt = Date.now() + WAIT_MS;
-  const shown = permissionShown(
-    { tool_name: input.tool_name, tool_input: input.tool_input, cwd: input.cwd, mcp_server: input.mcp_server },
-    randomBytes(18).toString("base64url"),
-    expiresAt,
-  );
+  const shown = permissionShown({ tool_name: input.tool_name, tool_input: input.tool_input, cwd: input.cwd, mcp_server: input.mcp_server }, randomBytes(18).toString("base64url"), expiresAt);
   if (!shown) return null;
   const { state } = yield* s.state();
   if (state.hold || !humanOf(state, s.me)) return null;

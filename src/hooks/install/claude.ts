@@ -5,9 +5,9 @@ import { loadConfig } from "../../config.ts";
 import { here } from "../../seats.ts";
 import { EVENTS, hookCommand, isOurHook, isOurHookCommand, LISTEN, LISTEN_SECONDS, PERMISSION } from "../self.ts";
 
-export const PERMISSION_EVENT = "PermissionRequest";
+const PERMISSION_EVENT = "PermissionRequest";
 export const PERMISSION_SECONDS = 1_800;
-export const PERMISSION_TOOLS = "Bash|Edit|Write|MultiEdit|NotebookEdit|WebFetch|mcp__.*";
+const PERMISSION_TOOLS = "Bash|Edit|Write|MultiEdit|NotebookEdit|WebFetch|mcp__.*";
 
 function settingsPath(): string {
   return join(process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude"), "settings.json");

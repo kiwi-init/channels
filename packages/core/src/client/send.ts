@@ -1,7 +1,6 @@
 import * as Effect from "effect/Effect";
 import { seal, slotId } from "../crypto.ts";
 import { sign, verify } from "../identity.ts";
-import type { PermissionReply, PermissionSettled, PermissionShown } from "../permission.ts";
 import {
   CHOICE_MAX_LENGTH,
   CHOICES_MAX,
@@ -50,10 +49,6 @@ export interface SendOptions {
   dm?: boolean;
   slot?: { name: string; ttl: number };
   free?: string[];
-  id?: string;
-  permission?: PermissionShown;
-  perm?: PermissionReply;
-  settled?: PermissionSettled;
 }
 
 export interface SendFx {

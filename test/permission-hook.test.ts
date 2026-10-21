@@ -1,30 +1,24 @@
-import { kiwiCmd } from "./owner.ts";
+import { joinAgent, joinPerson, kiwiCmd, pairComputer, setupChannel } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Channel } from "@kiwi/core/client.ts";
+import type { Channel } from "@kiwi/core/client.ts";
+import { generateIdentity } from "@kiwi/core/identity.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
-import { loadConfig, loadIdentity } from "../src/config.ts";
+import { saveIdentity, updateConfig } from "../src/config.ts";
 import { startRelay } from "../src/relay/bun.ts";
 
 setDefaultTimeout(90_000);
 
 const dataDir = mkdtempSync(join(tmpdir(), "kiwi-permission-relay-"));
-const made: string[] = [dataDir];
+const agent = mkdtempSync(join(tmpdir(), "kiwi-permission-agent-"));
 let server: ReturnType<typeof startRelay> | undefined;
 let relay = "";
-
-const scratch = (tag: string) => {
-  const d = mkdtempSync(join(tmpdir(), `kiwi-permission-${tag}-`));
-  made.push(d);
-  return d;
-};
-
-const owner = scratch("owner");
-const agent = scratch("agent");
 const SESSION = "4b1f8c1e-0000-4000-8000-00000000a11e";
+const CWD = "/Users/ada/src/app";
 let human: Channel;
+let owner: Channel;
 
 function spawn(home: string, args: string[], env: Record<string, string> = {}, stdin?: string) {
   return Bun.spawn(kiwiCmd(args), {
@@ -36,53 +30,41 @@ function spawn(home: string, args: string[], env: Record<string, string> = {}, s
   });
 }
 
-async function ok(home: string, ...args: string[]): Promise<string> {
-  const p = spawn(home, args);
-  const [out, err] = await Promise.all([new Response(p.stdout).text(), new Response(p.stderr).text()]);
-  if ((await p.exited) !== 0) throw new Error(`kiwi ${args.join(" ")}: ${err}`);
-  return out;
-}
-
 async function until<T>(get: () => Promise<T | undefined>, label: string, ms = 20_000): Promise<T> {
   const end = Date.now() + ms;
   for (;;) {
     const got = await get();
     if (got !== undefined) return got;
     if (Date.now() > end) throw new Error(`timed out waiting for ${label}`);
-    await Bun.sleep(100);
-  }
-}
-
-function asOwner<T>(f: () => T): T {
-  const was = process.env.KIWI_HOME;
-  process.env.KIWI_HOME = owner;
-  try {
-    return f();
-  } finally {
-    if (was === undefined) delete process.env.KIWI_HOME;
-    else process.env.KIWI_HOME = was;
+    await Bun.sleep(700);
   }
 }
 
 beforeAll(async () => {
   server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir });
   relay = server.url.origin;
-  const code = /join code: (\S+)/.exec(await ok(owner, "create", "perm", "--as", "lead", "--open"))![1]!;
-  const joining = spawn(agent, ["join", code, "--as", "dev", "--model", "claude-opus-5-5"], { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: SESSION });
-  const listed = await until(async () => {
-    const out = await ok(owner, "--as", "human", "requests");
-    return /\d{3}-\d{3}/.test(out) ? out : undefined;
-  }, "the join request");
-  await ok(owner, "--as", "human", "approve", /(\d{3}-\d{3})/.exec(listed)![1]!, "--yes");
-  expect(await joining.exited).toBe(0);
-  const cfg = asOwner(() => Object.values(loadConfig().channels)[0]!);
-  const id = await asOwner(() => loadIdentity("human", cfg.roomId));
-  human = new Channel(cfg, relay, id);
+  const s = await setupChannel(relay, { ownerName: "ada" });
+  const bea = await generateIdentity("bea-person");
+  human = (await joinPerson(s, "bea", bea)).ch;
+  owner = s.ownerCh;
+  const dev = await joinAgent(s, "dev", await pairComputer(bea));
+  const was = process.env.KIWI_HOME;
+  process.env.KIWI_HOME = agent;
+  try {
+    saveIdentity(dev.id, s.roomId);
+    updateConfig((c) => {
+      c.channels.perm = { ...dev.ch.access, relay, code: s.code, as: "dev" };
+      c.bindings = { ...c.bindings, [agent]: { alias: "perm", as: "dev", harness: "claude", session: SESSION, at: Date.now() } };
+    });
+  } finally {
+    if (was === undefined) delete process.env.KIWI_HOME;
+    else process.env.KIWI_HOME = was;
+  }
 });
 
 afterAll(() => {
   server?.stop(true);
-  for (const d of made) rmSync(d, { recursive: true, force: true });
+  for (const d of [dataDir, agent]) rmSync(d, { recursive: true, force: true });
 });
 
 let calls = 0;
@@ -95,10 +77,12 @@ function promptFor(command: string, extra: Record<string, unknown> = {}) {
     agent,
     ["hook", "permission"],
     { CLAUDE_PID: String(process.pid) },
-    JSON.stringify({ session_id: SESSION, transcript_path: transcript, cwd: agent, hook_event_name: "PermissionRequest", tool_name: "Bash", tool_input: input, ...extra }),
+    JSON.stringify({ session_id: SESSION, transcript_path: transcript, cwd: CWD, hook_event_name: "PermissionRequest", tool_name: "Bash", tool_input: input, ...extra }),
   );
   const out = new Response(hook.stdout).text();
+  const err = new Response(hook.stderr).text();
   return {
+    err,
     id,
     transcript,
     hook,
@@ -106,8 +90,11 @@ function promptFor(command: string, extra: Record<string, unknown> = {}) {
   };
 }
 
-const theAsk = (command: string) =>
-  until(async () => (await human.history(0)).messages.find((m: Message) => m.from === "dev" && m.permission?.command === command), `the ask for ${command}`);
+const theAsk = (p: { hook: { exitCode: number | null }; err: Promise<string> }, command: string) =>
+  until(async () => {
+    if (p.hook.exitCode !== null) throw new Error(`the hook exited ${p.hook.exitCode} before asking: ${await p.err}`);
+    return (await human.history(0)).messages.find((m: Message) => m.from === "dev" && m.permission?.command === command);
+  }, `the ask for ${command}`);
 
 const answer = (ask: Message, allow: boolean, by: Channel = human, perm = true) =>
   by.send(allow ? "A: Allow once" : "B: Deny", { to: [ask.from], re: [ask.seq], ...(perm ? { perm: { ask: ask.id, allow } } : {}) });
@@ -115,25 +102,35 @@ const answer = (ask: Message, allow: boolean, by: Channel = human, perm = true) 
 describe("kiwi hook permission", () => {
   test("asks the agent's human with the call's id, and their signed Allow comes back as Claude Code's allow", async () => {
     const p = promptFor("touch allowed.txt");
-    const ask = await theAsk("touch allowed.txt");
+    const ask = await theAsk(p, "touch allowed.txt");
     expect(ask.esc).toBe(true);
-    expect(ask.to).toEqual(["human"]);
+    expect(ask.to).toEqual(["bea", "ada"]);
     expect(ask.choices).toEqual(["A: Allow once", "B: Deny"]);
-    expect(ask.permission).toMatchObject({ tool: "Bash", cwd: agent, call: p.id, canAllow: true });
+    expect(ask.permission).toMatchObject({ tool: "Bash", cwd: CWD, call: p.id, canAllow: true });
     await answer(ask, true);
     expect(await p.result()).toEqual({ code: 0, out: JSON.stringify({ hookSpecificOutput: { hookEventName: "PermissionRequest", decision: { behavior: "allow" } } }) });
   });
 
   test("a Deny tells Claude who denied it", async () => {
     const p = promptFor("touch denied.txt");
-    await answer(await theAsk("touch denied.txt"), false);
+    await answer(await theAsk(p, "touch denied.txt"), false);
     const { out } = await p.result();
-    expect(JSON.parse(out)).toEqual({ hookSpecificOutput: { hookEventName: "PermissionRequest", decision: { behavior: "deny", message: "Denied from the Kiwi app by human" } } });
+    expect(JSON.parse(out)).toEqual({ hookSpecificOutput: { hookEventName: "PermissionRequest", decision: { behavior: "deny", message: "Denied from the Kiwi app by bea" } } });
+  });
+
+  test("the owner can Deny but not Allow a call on someone else's computer", async () => {
+    const p = promptFor("touch owners.txt");
+    const ask = await theAsk(p, "touch owners.txt");
+    await answer(ask, true, owner);
+    await Bun.sleep(1_500);
+    expect(p.hook.exitCode).toBeNull();
+    await answer(ask, false, owner);
+    expect(JSON.parse((await p.result()).out).hookSpecificOutput.decision).toEqual({ behavior: "deny", message: "Denied from the Kiwi app by ada" });
   });
 
   test("a plain-text 'A: Allow once' without the signed answer field is ignored; answered in the terminal, the hook says nothing and closes the ask", async () => {
     const p = promptFor("touch typed.txt");
-    const ask = await theAsk("touch typed.txt");
+    const ask = await theAsk(p, "touch typed.txt");
     await answer(ask, true, human, false);
     await Bun.sleep(1_500);
     appendFileSync(p.transcript, JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: p.id, content: "(Bash completed with no output)" }] } }) + "\n");

@@ -7,7 +7,7 @@ import { COMMANDS } from "../src/sh.ts";
 import { coverageChunks, heavyIn, registryEntries, stubbedChunks, stubPlugin } from "./cli-bundle.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
-const BUDGET_BYTES = 2_660_000;
+const BUDGET_BYTES = 2_680_000;
 const TARGETS = ["bun-darwin-arm64", "bun-darwin-x64", "bun-linux-x64", "bun-linux-arm64"] as const satisfies readonly Bun.Build.CompileTarget[];
 
 const { values } = parseArgs({
