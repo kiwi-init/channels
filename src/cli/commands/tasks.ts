@@ -5,7 +5,7 @@ import { inlineText } from "@kiwi/core/membership.ts";
 import { formatTask, formatTasks, looksLikeLine, taskStateWord } from "@kiwi/core/format.ts";
 import type { TaskState } from "@kiwi/core/protocol.ts";
 import { leadCheckpointRefusal } from "@kiwi/core/reentry.ts";
-import { isPerson, leadCheckpointKey, openRound, parseTaskId, similarOpenTasks, taskId, type ChannelState } from "@kiwi/core/state.ts";
+import { askRefusal, isPerson, leadCheckpointKey, openRound, parseTaskId, similarOpenTasks, taskId, type ChannelState } from "@kiwi/core/state.ts";
 import { formatCandidates, pickFor, taskCandidates } from "@kiwi/core/routing.ts";
 import { bindingFor } from "../../hooks.ts";
 import { args, opt } from "../args.ts";
@@ -13,6 +13,7 @@ import { type Command, die, keepDaemon, offlineOk, out, session } from "../conte
 import { firstLine, readText, taskArg, text } from "../input.ts";
 
 const CLAIMS_GONE = "claims are gone: say what you're working on in the task, or post it";
+const ANCHORS = "--ask N (the person's message #N it answers), --from T7 (the task it comes from) or --issue 12 (a GitHub issue)";
 
 export const taskCommands: Record<string, Command> = {
   task: () =>
@@ -23,8 +24,10 @@ export const taskCommands: Record<string, Command> = {
         const sub = args[1];
         const STATE_FOR: Record<string, TaskState> = { start: "doing", review: "review", done: "done" };
         if (sub === "add") {
-          const re = opt.re === undefined ? undefined : Number(opt.re.replace(/^#/, "")) || (yield* die("--re takes a message number"));
+          const re = opt.re === undefined ? undefined : Number(opt.re.replace(/^#/, "")) || (yield* die("--ask takes a message number: --ask 18"));
           const from = opt.from === undefined ? undefined : (parseTaskId(opt.from) ?? (yield* die("--from takes a task: --from T72")));
+          const unfiled = askRefusal((yield* s.state()).state, s.me, { re, from, issue: opt.issue !== undefined }, ANCHORS);
+          if (unfiled) return yield* die(unfiled);
           if (opt.issue !== undefined) {
             const made = yield* s.taskFromIssue(opt.issue, {
               title: args.slice(2).join(" ") || undefined,
@@ -37,7 +40,7 @@ export const taskCommands: Record<string, Command> = {
             return out(`added ${taskId(made.id)} from ${made.issue}: ${made.title}\nclosing either one closes the other`);
           }
           const title = yield* text(2);
-          if (!title.trim()) return yield* die('usage: kiwi task add "title" [--owner NAME] [--review NAME|any] [--re N] [--issue 12|owner/repo#12]');
+          if (!title.trim()) return yield* die('usage: kiwi task add "title" --ask N|--from T7|--issue 12 [--owner NAME] [--review NAME|any]');
           for (const gone of ["after", "needs"] as const)
             if (opt[gone] !== undefined) process.stderr.write(`kiwi: --${gone} is gone (tasks don't wait on or match anything now); put it in the title or --detail\n`);
           const { state: before } = yield* s.state();

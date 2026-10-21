@@ -218,8 +218,11 @@ try {
   );
   await bot("ask", "--to", "jonatas", "Ship it as 0.8.12, or wait for the web?");
   // Work: each task has its own conversation, where the agents working it talk.
-  const firstTask = /T(\d+)/.exec(await bot("task", "add", "Write fewer rows per message", "--owner", "win"));
-  await bot("task", "add", "Polish the conversation feed");
+  const said = (await bot("log", "-n", "20", "--json")).split("\n").flatMap((line) => (line.trim() ? [JSON.parse(line) as { seq: number; body?: string }] : []));
+  const ask = String(said.find((m) => m.body?.startsWith("Morning. The relay deploy is done"))?.seq ?? "");
+  if (!ask) throw new Error("the person's message isn't in kiwi log");
+  const firstTask = /T(\d+)/.exec(await bot("task", "add", "Write fewer rows per message", "--owner", "win", "--ask", ask));
+  await bot("task", "add", "Polish the conversation feed", "--ask", ask);
   if (firstTask) {
     await win("send", "--re", firstTask[1]!, "Starting. Rows per message are 6 today; aiming for 4.");
     await bot("send", "--re", firstTask[1]!, "Keep the event rows; fold only the duplicates.");
@@ -238,7 +241,7 @@ try {
   await owner.keyboard.press("Enter");
   await owner.waitForTimeout(400);
   // Work waiting on a person's review, and a decision an agent hands to its person: both under Needs you.
-  const reviewed = /T\d+/.exec(await win("task", "add", "Cache sealed history in the browser", "--owner", "win", "--review", "any"))?.[0] ?? "T0";
+  const reviewed = /T\d+/.exec(await win("task", "add", "Cache sealed history in the browser", "--owner", "win", "--review", "any", "--ask", ask))?.[0] ?? "T0";
   await win("task", "review", reviewed, "reload fetches only what is new");
   await win("escalate", "Should I delete the 800 test rooms on the old relay? It frees space, and it can't be undone.");
   const askPermission = (tool: string, given: object) => kiwi(["-c", "kiwi-w", "--as", "win", tool, JSON.stringify(given), "/Users/jonatas/www/channels"], undefined, "scripts/seed-permission.ts");
