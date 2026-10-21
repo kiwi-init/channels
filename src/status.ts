@@ -100,7 +100,7 @@ export type ShowWhy = Extract<ShowResult, { ok: false }>["why"];
 export type NeedsYou = { shown: Waiting } | { shown: null; seats: number; failed: { waiting: Waiting; why: ShowWhy } | null };
 
 async function showWith(by: TerminalId, record: SeatRecord): Promise<ShowResult> {
-  return (await (await terminalPlugin(by)).show?.(record)) ?? { ok: false, why: "failed" };
+  return (await (await terminalPlugin(by, await placeTools())).show?.(record)) ?? { ok: false, why: "failed" };
 }
 
 export async function showNeedsYou(

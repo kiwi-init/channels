@@ -270,10 +270,16 @@ describe("Terminal.app", () => {
 
 describe.skipIf(!hasTmux || !bash)("tmux", () => {
   const socket = () => join(dir, "t");
+  const bareTmux = (): string => {
+    const wrapper = join(dir, "tmux-bare");
+    writeFileSync(wrapper, `#!/bin/sh\nexec '${Bun.which("tmux")}' -f /dev/null "$@"\n`);
+    chmodSync(wrapper, 0o755);
+    return wrapper;
+  };
   afterAll(() => spawnSync("tmux", ["-S", socket(), "kill-server"]));
 
   test("each launch is a window in the detached session kiwi, in its folder, and the pane's pid is the program's", async () => {
-    const t = tools({ shell: bash!, tmux: Bun.which("tmux")!, socket: socket() });
+    const t = tools({ shell: bash!, tmux: bareTmux(), socket: socket() });
     const script = 'printf "%s\\n%s\\n" "$KIWI_LAUNCH" "$(pwd)" > "out-$KIWI_LAUNCH"; exec sleep 30';
     const one = await openPlace(request({ argv: ["sh", "-c", script], env: { KIWI_LAUNCH: "one" } }), t, {});
     const two = await openPlace(request({ argv: ["sh", "-c", script], env: { KIWI_LAUNCH: "two" }, name: "claude-three" }), t, {});
@@ -295,7 +301,7 @@ describe.skipIf(!hasTmux || !bash)("tmux", () => {
   test("with no UTF-8 locale, as the app's daemon runs, the window still says which it is", () => {
     const bare = join(dir, "u");
     const script = join(dir, "bare.ts");
-    const t = tools({ shell: bash!, tmux: Bun.which("tmux")!, socket: bare });
+    const t = tools({ shell: bash!, tmux: bareTmux(), socket: bare });
     const place = join(import.meta.dir, "..", "src", "launch", "place.ts");
     writeFileSync(
       script,

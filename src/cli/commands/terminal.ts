@@ -55,7 +55,7 @@ function launchesText(launch: "on" | "off"): string {
 
 export function setHelpers(id: HelperId, on: boolean) {
   return Effect.gen(function* () {
-    const plugin = yield* Effect.promise(() => terminalPlugin(id));
+    const plugin = yield* Effect.promise(async () => terminalPlugin(id, await placeTools()));
     if (!plugin.helpers) return yield* die(`${plugin.manifest.name} has no helpers to download yet`);
     const helpers = plugin.helpers;
     if (on) yield* Effect.promise(() => helpers.download());

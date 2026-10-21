@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { launchAgent } from "../src/launch/launch.ts";
@@ -16,10 +16,26 @@ function kiwiHome(config?: object): string {
   return dir;
 }
 
-function kiwi(dir: string, ...argv: string[]): { code: number; stdout: string; stderr: string } {
-  const env = { ...process.env, KIWI_HOME: join(dir, "kiwi"), HOME: dir, XDG_CONFIG_HOME: join(dir, "config"), KIWI_TMUX_CONF: join(dir, "tmux", "tmux.conf"), TMUX_TMPDIR: join(dir, "tmux") };
+function kiwiWith(dir: string, over: Record<string, string>, ...argv: string[]): { code: number; stdout: string; stderr: string } {
+  const env = {
+    ...process.env,
+    KIWI_HOME: join(dir, "kiwi"),
+    HOME: dir,
+    XDG_CONFIG_HOME: join(dir, "config"),
+    KIWI_TMUX_CONF: join(dir, "tmux", "tmux.conf"),
+    TMUX_TMPDIR: join(dir, "tmux"),
+    ...over,
+  };
   const p = Bun.spawnSync([process.execPath, join(import.meta.dir, "../src/cli/main.ts"), ...argv], { env });
   return { code: p.exitCode, stdout: p.stdout.toString().trim(), stderr: p.stderr.toString().trim() };
+}
+
+const kiwi = (dir: string, ...argv: string[]) => kiwiWith(dir, {}, ...argv);
+
+function script(file: string, body: string): string {
+  writeFileSync(file, `#!/bin/sh\n${body}\n`);
+  chmodSync(file, 0o755);
+  return file;
 }
 
 const saved = (dir: string): Record<string, unknown> => JSON.parse(readFileSync(join(dir, "kiwi", "config.json"), "utf8")) as Record<string, unknown>;
@@ -87,6 +103,23 @@ describe("kiwi terminal and kiwi launches", () => {
     expect(saved(dir)).toMatchObject({ terminals: { helpers: { tmux: "off" } } });
     expect(saved(dir)).not.toHaveProperty("terminals.prefer");
     expect([existsSync(conf), existsSync(join(dir, "tmux", "kiwi.tmux.conf"))]).toEqual([false, false]);
+  });
+
+  test("download and remove find tmux on the login shell's PATH, as from the app, and load and take back the helpers in a seat's running server", () => {
+    const dir = kiwiHome();
+    const bin = join(dir, "login-bin");
+    mkdirSync(bin);
+    const calls = join(dir, "tmux-calls");
+    script(join(bin, "tmux"), `echo "$@" >> '${calls}'`);
+    const shell = script(join(dir, "login-shell"), `echo __kiwi_login_path__\necho '${bin}:/usr/bin:/bin'`);
+    const socket = join(dir, "server.sock");
+    writeFileSync(socket, "");
+    writeFileSync(join(dir, "kiwi", "config.json"), JSON.stringify({ channels: {}, bindings: { [join(dir, "work")]: { alias: "ch", as: "ana", tmux: { socket, pane: "%1" } } } }));
+    const app = { SHELL: shell, PATH: "/usr/bin:/bin" };
+    expect(kiwiWith(dir, app, "terminal", "download", "tmux").code).toBe(0);
+    expect(readFileSync(calls, "utf8").split("\n")).toContain(`-S ${realpathSync(socket)} source-file -q ${join(dir, "tmux", "kiwi.tmux.conf")}`);
+    expect(kiwiWith(dir, app, "terminal", "remove", "tmux").code).toBe(0);
+    expect(readFileSync(calls, "utf8").split("\n")).toContain(`-S ${realpathSync(socket)} list-windows -a -F #{window_id}`);
   });
 
   test("kiwi terminal show --needs-you says in one line, and succeeds, when there's no seat to show", () => {
