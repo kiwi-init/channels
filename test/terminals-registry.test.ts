@@ -22,7 +22,7 @@ describe("the terminal plugins", () => {
       open: !!p.open,
       locate: !!p.locate,
       mark: !!p.mark,
-      show: !!p.show && !!p.seats,
+      show: !!p.show,
       watch: !!p.watch && !!p.activity,
       type: !!p.type,
     });

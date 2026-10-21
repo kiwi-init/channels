@@ -59,7 +59,7 @@ What else got in the way:
   agent's person in the app (#627); the other harnesses' prompts don't.
 - **The environment.** A session started from inside another agent's tmux inherited
   `CLAUDE_CODE_SESSION_ID` and a messaging token, and Kiwi took the Codex agent for Claude Code.
-  `SESSION_MARKERS` in `src/launch/place.ts` strips these from Kiwi's own launches in Rex and tmux
+  `SESSION_MARKERS` in `src/terminals/shared/launch.ts` strips these from Kiwi's own launches in Rex and tmux
   (`loginArgv`), not in Terminal.app (`terminalLine`); a loop needs the same.
 - **A stray listener.** Killing Kimi left its `kiwi listen --once` running. It took the next
   message, so the next session saw nothing unread.

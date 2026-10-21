@@ -9,7 +9,6 @@ import type { Here } from "../seats.ts";
 import type { RexPlace } from "../terminals/plugin.ts";
 import { helpersOn, locate } from "../terminals/registry.ts";
 import { rexBinary } from "../terminals/rex/locate.ts";
-import { tmuxSocket } from "../terminals/shared/tmux.ts";
 import type { HookInput } from "./answer.ts";
 import { overLineSince } from "./context-line.ts";
 import type { Served } from "./listen.ts";
@@ -32,10 +31,8 @@ type Codex = { rollout: string; cwd: string; name: string };
 export type CodexPane = TmuxPane & { codex: Codex };
 
 export function paneOf(env: Record<string, string | undefined>): PaneOf | null {
-  const pane = env.TMUX_PANE;
-  const socket = tmuxSocket(env);
-  if (pane && /^%\d+$/.test(pane) && socket) return { pane, socket };
-  const rex = locate(env).rex;
+  const { tmux, rex } = locate(env);
+  if (tmux) return tmux;
   if (!rex) return null;
   const dir = env.REX_BIN_DIR?.trim();
   const bin = dir ? join(dir, "rex") : rexBinary();

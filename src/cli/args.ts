@@ -74,6 +74,7 @@ const parsed = parseArgs({
     clear: { type: "boolean" },
     force: { type: "boolean" },
     needs: { type: "string" },
+    "needs-you": { type: "boolean" },
     review: { type: "string" },
     once: { type: "boolean" },
     now: { type: "boolean" },
