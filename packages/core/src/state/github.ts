@@ -5,6 +5,8 @@ export interface GithubCheck {
   status?: string;
   conclusion?: string;
   url?: string;
+  run?: number;
+  attempt?: number;
   at: number;
 }
 
@@ -47,6 +49,11 @@ const MAX_SHAS = 300;
 export const prKey = (repo: string, number: number): string => `${repo.toLowerCase()}#${number}`;
 const shaKey = (repo: string, sha: string): string => `${repo.toLowerCase()}@${sha}`;
 
+function behind(i: GithubNote, was: GithubCheck): boolean {
+  const order = i.run && was.run ? i.run - was.run || (i.attempt ?? 1) - (was.attempt ?? 1) : 0;
+  return order < 0 || (order === 0 && !!was.conclusion && !i.conclusion);
+}
+
 export function applyGithub(g: GithubState, items: readonly GithubNote[], seq: number): void {
   for (const i of items) {
     if (i.event === "pull_request" && i.number) {
@@ -73,7 +80,17 @@ export function applyGithub(g: GithubState, items: readonly GithubNote[], seq: n
       const key = shaKey(i.repo, i.sha);
       const runs = g.checks.get(key) ?? new Map<string, GithubCheck>();
       g.checks.delete(key);
-      runs.set(i.name, { name: i.name, at: i.at, ...(i.status ? { status: i.status } : {}), ...(i.conclusion ? { conclusion: i.conclusion } : {}), ...(i.url ? { url: i.url } : {}) });
+      const was = runs.get(i.name);
+      if (!was || !behind(i, was))
+        runs.set(i.name, {
+          name: i.name,
+          at: i.at,
+          ...(i.status ? { status: i.status } : {}),
+          ...(i.conclusion ? { conclusion: i.conclusion } : {}),
+          ...(i.url ? { url: i.url } : {}),
+          ...(i.run ? { run: i.run } : {}),
+          ...(i.attempt ? { attempt: i.attempt } : {}),
+        });
       g.checks.set(key, runs);
       while (g.checks.size > MAX_SHAS) g.checks.delete(g.checks.keys().next().value!);
     } else if (i.event === "issues" && i.number) {

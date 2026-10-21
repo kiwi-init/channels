@@ -309,8 +309,12 @@ export function isReaction(m: Pick<Message, "kind" | "ev">): boolean {
 
 const QUIET_OPS: ReadonlySet<string> = new Set(["hello", "card", "picture.set", "react", "fact.set", "fact.del", "lease.take", "lease.free", "task.claim", "claim", "release"]);
 
+export const isRunning = (i: GithubNote): boolean => (i.event === "check_run" || i.event === "workflow_run") && i.conclusion === undefined;
+
+export const onlyRunning = (items: readonly GithubNote[]): boolean => items.length > 0 && items.every(isRunning);
+
 export function isQuiet(m: Pick<Message, "kind" | "ev" | "newer">): boolean {
-  return m.kind === "event" && (m.newer !== undefined || (!!m.ev && QUIET_OPS.has(m.ev.op)));
+  return m.kind === "event" && (m.newer !== undefined || (!!m.ev && (QUIET_OPS.has(m.ev.op) || (m.ev.op === "github" && onlyRunning(m.ev.items)))));
 }
 
 /** What a member says about itself (see the card event). Every field is optional and short. */
@@ -390,6 +394,8 @@ export interface GithubNote {
   additions?: number;
   deletions?: number;
   files?: number;
+  run?: number;
+  attempt?: number;
   branch?: string;
   sha?: string;
   name?: string;
@@ -437,7 +443,7 @@ export function cleanGithubNote(x: unknown): GithubNote | null {
     if (typeof r.merged !== "boolean") return null;
     out.merged = r.merged;
   }
-  for (const k of ["additions", "deletions", "files"] as const) {
+  for (const k of ["additions", "deletions", "files", "run", "attempt"] as const) {
     const v = r[k];
     if (v === undefined) continue;
     if (typeof v !== "number" || !Number.isSafeInteger(v) || v < 0) return null;

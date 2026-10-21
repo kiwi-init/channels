@@ -39,11 +39,12 @@ export interface GithubFx {
 
 const PR_ACTIONS = new Set(["opened", "reopened", "closed", "ready_for_review", "synchronize", "edited", "converted_to_draft"]);
 const ISSUE_ACTIONS = new Set(["opened", "reopened", "closed", "edited"]);
+const RUN_ACTIONS = new Set(["created", "requested", "in_progress", "completed"]);
 
 function worthSaying(i: GithubNote): boolean {
   if (i.event === "pull_request") return !i.action || PR_ACTIONS.has(i.action);
   if (i.event === "issues") return !i.action || ISSUE_ACTIONS.has(i.action);
-  if (i.event === "check_run" || i.event === "workflow_run") return i.action === "completed";
+  if (i.event === "check_run" || i.event === "workflow_run") return !!i.action && RUN_ACTIONS.has(i.action);
   return true;
 }
 

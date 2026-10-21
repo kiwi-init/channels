@@ -3,7 +3,7 @@
 import { ROLE_LABEL } from "./personality.ts";
 import { loadJson, loadSummary, memberLoad, showsLoad } from "./load.ts";
 import { inlineText, runsLine, type Runs } from "./membership.ts";
-import { GENERAL_ROOM, ignored, imageMarker } from "./protocol.ts";
+import { GENERAL_ROOM, ignored, imageMarker, isRunning } from "./protocol.ts";
 import type { Card, GithubNote, Message, OldTaskState, Reach, TaskState, Trust } from "./protocol.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
 import { askGroups, colorOf, humanOf, isPerson, issueOf, outsideRepos, taskId, type AskHead, type ChannelState, type Fact, type Lease, type ReviewRound, type Task } from "./state.ts";
@@ -406,7 +406,8 @@ export function holdLine(state: ChannelState, now = Date.now()): string | null {
 }
 
 export function githubLine(items: readonly GithubNote[]): string {
-  const said = items.map((i) => {
+  const news = items.filter((i) => !isRunning(i));
+  const said = (news.length ? news : items).map((i) => {
     if (i.event === "pull_request") return `PR ${i.repo}#${i.number ?? "?"}${i.title ? ` “${inlineText(i.title, 80)}”` : ""} ${i.merged ? "merged" : (i.action ?? "updated")}`;
     if (i.event === "push") return `push to ${i.branch ?? "a branch"} in ${i.repo}`;
     if (i.event === "issues") return `issue ${i.repo}#${i.number ?? "?"}${i.title ? ` “${inlineText(i.title, 80)}”` : ""} ${i.action ?? "updated"}`;

@@ -70,6 +70,12 @@ describe("what #general folds", () => {
     ])
   })
 
+  test("a GitHub event that only says checks are running is no entry", () => {
+    const running = ev(30, { op: "github", items: [{ event: "check_run", repo: "o/r", action: "created", name: "ci-ok", status: "queued", at: 1 }] })
+    const done = ev(31, { op: "github", items: [{ event: "check_run", repo: "o/r", action: "completed", name: "ci-ok", conclusion: "success", at: 2 }] })
+    expect(activityOf([running, done], tasks([]))).toEqual([{ kind: "github", messages: [done] }])
+  })
+
   test("GitHub's news in a run is one entry, and an event about an unknown task stays an event", () => {
     const gh = (seq: number) => ev(seq, { op: "github", items: [] })
     const lost = ev(22, { op: "task.update", task: 77, state: "doing" })
