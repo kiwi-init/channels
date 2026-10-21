@@ -103,7 +103,7 @@ describe("tasks are filed under the ask they serve", () => {
       "  T11   open      fix task who",
       "#13 jow: “jow's own task”",
       "  T13   open      jow's own task",
-      "unfiled (no ask yet: the lead files these)",
+      "unfiled (no person's message holds these)",
       "  T12   open      an agent's own finding",
       "  T14   open      from an older client",
     ]);

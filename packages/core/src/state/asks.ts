@@ -2,7 +2,7 @@ import type { Message } from "../protocol.ts";
 import { isPerson } from "./people.ts";
 import type { AskHead, ChannelState, Task } from "./types.ts";
 
-export const ASK_WORDS_MAX = 200;
+const ASK_WORDS_MAX = 200;
 
 type Lookup = Pick<ChannelState, "askHeads" | "threadOf" | "placeOf" | "tasks">;
 
@@ -17,10 +17,10 @@ export function askHeadOf(m: Pick<Message, "seq" | "from" | "body">, at: number)
   };
 }
 
-export function askOfMessage(look: Lookup, seq: number): number | undefined {
+function askOfMessage(look: Lookup, seq: number): number | undefined {
   const root = look.threadOf.get(seq) ?? seq;
-  for (const at of root === seq ? [seq] : [seq, root]) {
-    const place = look.placeOf.get(at);
+  for (const said of root === seq ? [seq] : [seq, root]) {
+    const place = look.placeOf.get(said);
     const held = place?.kind === "task" ? look.tasks.get(place.task)?.ask : undefined;
     if (held !== undefined) return held;
   }

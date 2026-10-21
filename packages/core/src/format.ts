@@ -284,7 +284,7 @@ function taskLine(t: Task): string {
 }
 
 export function askLine(head: AskHead | null): string {
-  if (!head) return "unfiled (no ask yet: the lead files these)";
+  if (!head) return "unfiled (no person's message holds these)";
   const words = inlineText(head.words, 120);
   return `#${head.id} ${inlineText(head.by, 40)}: ${words ? `“${words}”` : "(no text)"}`;
 }
