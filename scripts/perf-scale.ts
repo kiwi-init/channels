@@ -290,6 +290,16 @@ try {
       }),
     );
   await post(0, early);
+  const asked = "Scale it: ten agents and a hundred tasks";
+  await tab(page, "Conversation", "");
+  await page.getByRole("textbox", { name: "Message" }).fill(asked);
+  await page.keyboard.press("Enter");
+  let ask = "";
+  while (!ask) {
+    const said = (await as(agents[0]!, ["log", "-n", "50", "--json"])).split("\n").flatMap((line) => (line.trim() ? [JSON.parse(line) as { seq: number; body?: string }] : []));
+    ask = String(said.find((m) => m.body === asked)?.seq ?? "");
+    if (!ask) await page.waitForTimeout(300);
+  }
   const perAgent = Math.ceil(TASKS / AGENTS);
   await Promise.all(
     agents.map(async (agent, a) => {
@@ -301,6 +311,8 @@ try {
           `Task ${n}: ${["speed up the switch", "fix the relay retry", "polish the sidebar", "write the stable criteria"][n % 4]} (${agent})`,
           "--owner",
           agent,
+          "--ask",
+          ask,
         ]);
         const id = out.match(/\bT\d+\b/)?.[0];
         if (!id) continue;

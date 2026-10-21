@@ -114,8 +114,16 @@ export interface Task {
   workedBy: string[];
   rounds: ReviewRound[];
   source?: number;
+  ask?: number;
   posters?: string[];
   archived?: boolean;
+}
+
+export interface AskHead {
+  id: number;
+  by: string;
+  words: string;
+  at: number;
 }
 
 export interface Reaction {
@@ -161,6 +169,7 @@ export interface ChannelState {
   scopeSets: Map<string, { seq: number; scopes: Scope[] }>;
   roleSets: Map<string, { seq: number; role: string | null; about?: string | null }>;
   openAsks: Message[];
+  askHeads: Map<number, AskHead>;
   threadOf: Map<number, number>;
   threadPeople: Map<number, Set<string>>;
   lead: string | null;
@@ -241,6 +250,7 @@ export interface FoldBase {
   hw?: number;
   placesBefore?: [Place, number, number][];
   asks: Message[];
+  askHeads?: AskHead[];
   answered: [number, string[]][];
   threadOf: [number, number][];
   threadPeople: [number, string[]][];

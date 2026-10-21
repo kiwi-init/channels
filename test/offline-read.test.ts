@@ -87,7 +87,7 @@ afterAll(async () => {
 
 test("with the relay down, kiwi log and kiwi tasks show what this computer already had and say so", async () => {
   await ok(owner, ["send", "--to", me, "said before the outage"]);
-  await ok(owner, ["task", "add", "a task from before the outage"]);
+  await ok(owner, ["--as", "human", "task", "add", "a task from before the outage"]);
   expect(await ok(agent, ["log"], SESSION)).toContain("said before the outage");
   expect(await ok(agent, ["tasks"], SESSION)).toContain("a task from before the outage");
   proxy!.stop();

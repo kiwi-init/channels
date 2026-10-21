@@ -45,7 +45,7 @@ export function noteOverLine(alias: string, as: string, session: string, over: b
     mkdirSync(join(home(), "hook-state"), { recursive: true, mode: 0o700 });
     writeFileSync(overFile(alias, as, session), `seq ${head}`);
   } catch {
-    // Without the marker the nudge may come once more at the next stop: a repeat, never a loop.
+    // Without the marker the reminder may come once more at the next prompt: a repeat, never a loop.
   }
 }
 
@@ -62,19 +62,15 @@ export function nudgeText(context: ContextUse, tasks: readonly number[], mc: str
   const named = tasks.slice(0, NUDGE_IDS).map(taskId);
   const which = tasks.length > named.length ? `${named.join(", ")} and ${tasks.length - named.length} more` : named.join(", ");
   const asks = [
-    ...(first === undefined ? [] : [`where each of your open tasks stands (${which}) with \`${COMMANDS.checkpoint(mc, taskId(first))}\`: branch, last commit, done, next, traps`]),
-    ...(lead
-      ? [
-          `where the channel stands as you lead it with \`${COMMANDS.leadCheckpoint(mc)}\`: every open task (T7) and question (#123) by its id, what you're waiting on and from whom, decisions in flight, what comes next, traps`,
-        ]
-      : []),
+    ...(first === undefined ? [] : [`where each of your open tasks stands (${which}) with \`${COMMANDS.checkpoint(mc, taskId(first))}\``]),
+    ...(lead ? [`where the channel stands as you lead it, every open task and question by its id, with \`${COMMANDS.leadCheckpoint(mc)}\``] : []),
   ];
-  return `Your context is at ${tokensWord(context.used)} tokens, past the ${tokensWord(CONTEXT_LINE)} line. Before you end this turn, write ${asks.join("; and ")}. A new session of yours starts from it.`;
+  return `Your context is at ${tokensWord(context.used)} tokens, past the ${tokensWord(CONTEXT_LINE)} line. A fresh session of yours starts from your checkpoints, so now is a good time to write ${asks.join("; and ")}.`;
 }
 
 export function nudgeShort(tasks: readonly number[], mc: string, lead = false): string | null {
   const [first] = tasks;
   if (first === undefined && !lead) return null;
   const runs = [...(first === undefined ? [] : [`\`${COMMANDS.checkpoint(mc, taskId(first))}\` for each open task`]), ...(lead ? [`\`${COMMANDS.leadCheckpoint(mc)}\``] : [])];
-  return `Past the ${tokensWord(CONTEXT_LINE)} context line: before you end this turn, run ${runs.join(" and ")}.`;
+  return `Past the ${tokensWord(CONTEXT_LINE)} context line: a fresh session starts from ${runs.join(" and ")}.`;
 }

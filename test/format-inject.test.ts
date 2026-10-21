@@ -18,6 +18,7 @@ function blank(): ChannelState {
     trust: new Map(),
     rejected: new Map(),
     openAsks: [],
+    askHeads: new Map(),
     threadOf: new Map(),
     threadPeople: new Map(),
     scopeSets: new Map(),

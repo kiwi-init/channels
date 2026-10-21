@@ -16,9 +16,12 @@ if (process.argv[2] === QUERY_ARG && process.argv.length === 3) {
 }
 
 const isRelay = process.argv[2] === "relay";
+const raw = process.argv.slice(2);
+const isTaskAdd = raw.some((a, i) => a === "task" && raw[i + 1] === "add");
+const argv = isTaskAdd ? raw.map((a) => (a === "--ask" ? "--re" : a.startsWith("--ask=") ? `--re=${a.slice(6)}` : a)) : raw;
 const OPTION_TOKEN = /^(-[A-Za-z]+|--[A-Za-z][\w-]*(=[\s\S]*)?)$/;
 const texts = new Map<string, string>();
-const shielded = (isRelay ? ["relay"] : process.argv.slice(2)).map((a, i) => {
+const shielded = (isRelay ? ["relay"] : argv).map((a, i) => {
   if (a.length < 2 || !a.startsWith("-") || a === "--" || OPTION_TOKEN.test(a)) return a;
   const stand = `\u0000${i}`;
   texts.set(stand, a);

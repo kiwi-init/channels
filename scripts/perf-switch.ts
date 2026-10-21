@@ -84,6 +84,8 @@ async function channel(page: Page, title: string): Promise<string> {
     await saving.waitFor({ state: "hidden" });
   }
   await page.getByRole("complementary", { name: "Channel" }).getByRole("region", { name: "Conversations" }).getByRole("button").first().click();
+  await page.getByRole("textbox", { name: "Message" }).fill(`Plan the ${title} board`);
+  await page.keyboard.press("Enter");
   return code;
 }
 
@@ -104,7 +106,15 @@ async function seed(alias: string, prefix: string): Promise<void> {
       }
     }
   };
-  await kiwi(alias, ["-c", alias, "--as", "atlas", "task", "add", `${prefix} board: the first screen of ${alias}`]);
+  let ask = "";
+  while (!ask) {
+    const said = (await kiwi(alias, ["-c", alias, "--as", "atlas", "log", "-n", "20", "--json"]))
+      .split("\n")
+      .flatMap((line) => (line.trim() ? [JSON.parse(line) as { seq: number; body?: string }] : []));
+    ask = String(said.find((m) => m.body?.startsWith("Plan the "))?.seq ?? "");
+    if (!ask) await new Promise((r) => setTimeout(r, 300));
+  }
+  await kiwi(alias, ["-c", alias, "--as", "atlas", "task", "add", `${prefix} board: the first screen of ${alias}`, "--ask", ask]);
   for (let i = 0; i < MESSAGES; i += 10) await Promise.all(Array.from({ length: Math.min(10, MESSAGES - i) }, (_, j) => send(`${prefix}${i + j}: ${texts[(i + j) % texts.length]}`)));
 }
 

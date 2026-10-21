@@ -98,6 +98,12 @@ jobs:
       files, site/app.js's four download names, site/README.md) takes the tag's version and nothing
       else, a file with no version left to find fails the stamp, and a release gets its CHANGELOG.md
       section once while a hand-written one is kept and a pre-release gets none.
+      Also test/asks.test.ts: on a folded signed log, a task filed under the ask it serves (the
+      person's message it names, a reply under one, a message in a task's thread taking that task's
+      ask, else the task it comes from; a person's own task is its own ask; an older client's task
+      with none unfiled), the same asks and board from any kept base as from one fold, kiwi task and
+      kiwi status grouped by ask with unfiled work last, the refusal an agent's task add gets without
+      one, and a person's old message kept past the cut only while a task is filed under it.
       Also test/checkpoint.test.ts: a checkpoint is a task.update note marked checkpoint (text
       required, at most CHECKPOINT_MAX_LENGTH), folded and labelled in task show, refused before
       sending when empty or too long; and what a fresh session is told (packages/core/src/reentry.ts):
@@ -644,7 +650,7 @@ jobs:
     description: >-
       Runs slow end-to-end tests that start a real local relay (src/relay/bun.ts) and drive the
       kiwi CLI and client: e2e (create a channel, join, send and listen through the relay),
-      verbs (the agent CLI verbs and their aliases; review rounds: an agent's task review on a task
+      verbs (the agent CLI verbs and their aliases; an agent's task add without --ask, --from or --issue refused with the fix named, and kiwi task listing the board under the person's message each task serves; review rounds: an agent's task review on a task
       with no reviewer is refused with how to name one, and its reviewer handing the review on with
       task review --review NAME keeps the open round and its commit and tells the new reviewer which
       round; an agent's reply that runs past six lines in #general is told to keep #general to a line or two and put the detail in the task's thread), threads (task threads and direct threads),
