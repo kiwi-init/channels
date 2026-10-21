@@ -141,6 +141,7 @@ export function cursorFollow(alias: string, mc: string, unread: boolean, reminde
 }
 
 const contextNudge = Effect.fn("Hooks.contextNudge")(function* (input: HookInput, s: AgentSession, who: Here, mc: string, budget: number) {
+  if (loadConfig().rotate !== "on") return null;
   const session = who.session;
   const file = input.transcript_path;
   if ((who.harness !== "claude" && who.harness !== "codex") || !session || typeof file !== "string" || !file) return null;
@@ -373,6 +374,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
       lead: leadLine(state, b.as),
       scopes: seat?.scopes,
       ...(seat?.persona ? { persona: seat.persona } : {}),
+      fresh: local.rotate === "on",
     });
     const budgets = startBudgets(b.alias, budget, brief.length);
     const reentry = fresh === null || budgets.reentry === 0 ? null : reentryText(state, b.as, Date.now(), budgets.reentry, mc);

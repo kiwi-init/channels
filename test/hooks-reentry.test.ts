@@ -97,7 +97,8 @@ test("a session that starts fresh is told its open task and checkpoint; a resume
   }
   const resumed = await context("resume");
   expect(resumed).not.toContain("rotate the seats");
-  expect(resumed).toContain("task checkpoint T7 --file note.md");
+  expect(resumed).toContain(`You're "${me}" in channel "reentry"`);
+  expect(resumed).not.toContain("Your session may be cleared");
   expect(await ok(agent, ["task", "show", id], S)).toContain("(checkpoint): branch T-rotate at 1a2b3c");
 });
 
@@ -131,12 +132,12 @@ test("big checkpoints and a backlog of messages stay inside Claude Code's inline
   for (const body of [...first, ...cut]) expect(later).not.toContain(body.slice(0, CLIP_MIN));
 });
 
-test("past the context line, the Stop hook asks once for a checkpoint of each open task, and again only after the context came back under it", async () => {
+test("past the context line, the Stop hook asks once for a checkpoint of each open task while rotation is on, and again only after the context came back under it; with rotation off it never asks", async () => {
   const transcript = join(agent, "transcript.jsonl");
   const stop = async (used: number, active = false): Promise<string> => {
     const usage = { input_tokens: 1, cache_read_input_tokens: used - 101, cache_creation_input_tokens: 100, output_tokens: 5_000 };
     writeFileSync(transcript, JSON.stringify({ type: "assistant", message: { model: "test-model", content: [], usage } }) + "\n");
-    const out = await ok(agent, ["hook", "stop"], S, JSON.stringify({ session_id: "reentry", cwd: agent, hook_event_name: "Stop", transcript_path: transcript, stop_hook_active: active }));
+    const out = await ok(agent, ["hook", "stop"], { ...S, TMUX: "", TMUX_PANE: "", TERM_PROGRAM: "" }, JSON.stringify({ session_id: "reentry", cwd: agent, hook_event_name: "Stop", transcript_path: transcript, stop_hook_active: active }));
     if (!out) return "";
     const said = JSON.parse(out) as { decision: string; reason: string };
     expect(said.decision).toBe("block");
@@ -144,6 +145,9 @@ test("past the context line, the Stop hook asks once for a checkpoint of each op
     return said.reason;
   };
   const line = "past the 250k line";
+  expect(await stop(262_000)).not.toContain(line);
+  expect(await ok(agent, ["rotate", "on"], S)).toContain("rotation is on");
+  expect(await context("startup")).toContain("Your session may be cleared");
   expect(await stop(240_000)).not.toContain(line);
   expect(await stop(262_000, true)).not.toContain(line);
   const asked = await stop(262_000);
@@ -154,6 +158,7 @@ test("past the context line, the Stop hook asks once for a checkpoint of each op
   expect(await stop(300_000)).not.toContain(line);
   expect(await stop(120_000, true)).not.toContain(line);
   expect(await stop(255_000)).toContain("Your context is at 255k tokens");
+  await ok(agent, ["rotate", "off"], S);
 });
 
 test("only the lead writes a lead checkpoint, and an empty one is refused before anything is sent", async () => {
@@ -183,13 +188,12 @@ test("with rotation on, a seat past the line rotates once it has checkpointed ea
     logged()
       .split("\n")
       .filter((l) => l.includes("session rot-1 pane %9: stays ("));
-  const asked = (JSON.parse(await stop()) as { reason: string }).reason;
-  expect(asked).toContain("past the 250k line");
   expect(await stop()).toBe("");
   await Bun.sleep(1_500);
   expect(logged()).toBe("");
   expect(await ok(agent, ["rotate", "on"], S)).toContain("rotation is on");
-  expect(await stop()).toBe("");
+  const asked = (JSON.parse(await stop()) as { reason: string }).reason;
+  expect(asked).toContain("past the 250k line");
   expect(await stop()).toBe("");
   await Bun.sleep(1_500);
   expect(rotated()).toBe(false);
@@ -214,17 +218,17 @@ test("the lead past the line is asked for its lead checkpoint, rotates only once
   const env = { ...S, CLAUDE_CODE_SESSION_ID: "lead-1", TMUX: `${join(agent, "no-tmux.sock")},1,0`, TMUX_PANE: "%8" };
   const stop = () => ok(agent, ["hook", "stop"], env, JSON.stringify({ session_id: "lead-1", cwd: agent, hook_event_name: "Stop", transcript_path: transcript }));
   const mine = (line: string) => (existsSync(log) ? readFileSync(log, "utf8") : "").split("\n").filter((l) => l.includes("session lead-1 pane %8: ") && l.includes(line));
+  expect(await ok(agent, ["rotate", "on"], S)).toContain("rotation is on");
   const asked = (JSON.parse(await stop()) as { reason: string }).reason;
   expect(asked).toMatch(/ task checkpoint lead --file note\.md`: every open task \(T7\) and question \(#123\) by its id/);
-  expect(await ok(agent, ["rotate", "on"], S)).toContain("rotation is on");
   const note = join(agent, "lead-tasks.md");
   writeFileSync(note, "branch T-x at abc\nnext: rotate\n");
   const owned = [...asked.split("; and where the channel stands")[0]!.matchAll(/T\d+/g)].map((m) => m[0]);
   expect(owned.length).toBeGreaterThan(0);
   await Promise.all(owned.map((id) => ok(agent, ["task", "checkpoint", id, "--file", note], S)));
   expect(await stop()).toBe("");
-  await until(async () => mine("stays (").length > 0, "the stay line");
-  expect(mine("stays (")[0]).toEndWith(`/${me}): the lead, past the line, waiting for its lead checkpoint`);
+  await until(async () => mine("waiting for its lead checkpoint").length > 0, "the stay line");
+  expect(mine("stays (").at(-1)).toEndWith(`/${me}): the lead, past the line, waiting for its lead checkpoint`);
   expect(mine("no-tmux")).toHaveLength(0);
   const lead = join(agent, "lead-note.md");
   writeFileSync(lead, "waiting on review\n");
