@@ -735,7 +735,14 @@ describe("secret filter tuning (T1621)", () => {
     ["a $ password in a backslash here-doc", 'cat > settings.py <<\\EOF\nDB_PASSWORD = "$ecretPw"\nEOF'],
     ["a ref and a literal before two @s", "git clone https://bot:$USER@hunter2@github.com/a/b.git"],
   ];
-  const flaggedCommands: [string, string][] = [["a switch word, a comma and a literal", "PASSWORD=yes,hunter2"]];
+  const flaggedCommands: [string, string][] = [
+    ["a switch word, a comma and a literal", "PASSWORD=yes,hunter2"],
+    ["a docker -e password starting with 1;", 'docker run -e "MYSQL_ROOT_PASSWORD=1;Qx8#vLm2" mysql:8'],
+    ["an echoed password starting with 0)", "echo 'password=0)Rt7!pLq2' >> /etc/app.conf"],
+    ["a here-doc password starting with 1#", "cat > app.yml <<EOF\ndb:\n  password: 1#kX9vQ2mZ\nEOF"],
+    ["an ssh password starting with 1)", 'ssh prod "DB_PASSWORD=1)Rt7pLq2 ./migrate"'],
+    ["an sh -c token starting with 1;", "sh -c 'API_TOKEN=1;Zx8vQ2mLp4 ./sync'"],
+  ];
   const flaggedText: [string, string][] = [
     ["a Python or TOML $ password", 'password = "$Summer2024"'],
     ["a Python call with a $ password", 'conn = psycopg2.connect(host="db", password="$ecretPw")'],
@@ -756,6 +763,15 @@ describe("secret filter tuning (T1621)", () => {
     ["a YAML ref, a comma, a space and a literal", "password: ${A}, hunter2"],
     ["a ref, a parenthesis and a literal", "DB_PASSWORD=${PREFIX})hunter2"],
     ["a URL ref and a literal before two @s", 'url = "postgres://app:${A}@hunter2@db/app"'],
+    ["a properties password starting with 1#", "spring.datasource.password=1#kX9vQ2mZ"],
+    ["a YAML password starting with 0)", "production:\n  password: 0)Rt7!pLq2"],
+    ["an INI password starting with 1;", "[client]\npassword=1;Hx72kq!"],
+    ["a YAML password starting with 1]", "db:\n  password: 1]vN4@xQ8"],
+    ["an INI password starting with 1,", "[db]\npassword = 1,Tz9#mQw2"],
+    ["a compose password starting with 1}", "      MYSQL_ROOT_PASSWORD: 1}aP3!zR8"],
+    ["a conf key starting with 0;", "api_key=0;f9Kq2Lm7Xa"],
+    ["a YAML token starting with 1#", "token: 1#Zx8vQ2mLp4"],
+    ["a YAML password starting with no#", "password: no#kX9vQ2"],
   ];
   const clean: [string, string][] = [
     ["a sort key", "SORT_KEY=name bun run export"],

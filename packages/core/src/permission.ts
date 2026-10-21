@@ -93,7 +93,7 @@ const flag = (x: unknown): x is boolean | undefined => x === undefined || typeof
 const total = (xs: readonly string[]) => xs.reduce((n, x) => n + x.length, 0);
 
 const SHELL_END = String.raw`(?=[\s;&|)]|$)`;
-const TEXT_END = String.raw`[^\S\n]*(?=[,;)}\]#\n]|$)`;
+const TEXT_END = String.raw`[^\S\n]*(?:[,;)}\]](?![^\s,;)}\]"':.[])|(?<=\s)#|(?=\n|$))`;
 const SWITCHES = ["true", "false", "yes", "no", "on", "off", "none", "null", "nil", "0", "1"].flatMap((w) => [w, w.charAt(0).toUpperCase() + w.slice(1), w.toUpperCase()]);
 const SWITCH = String.raw`(?:"(?:${SWITCHES.join("|")})"|'(?:${SWITCHES.join("|")})'|(?:${SWITCHES.join("|")}))`;
 const PLAIN_KEYS = "sort|primary|partition|cache|foreign|range|row|unique|composite|public|routing|idempotency";
