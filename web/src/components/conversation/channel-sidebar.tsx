@@ -87,7 +87,7 @@ const DOT: Partial<Record<View, string>> = { needs: "bg-alert", doing: "bg-doing
 
 function TasksRow({ view, counts, onView }: { view: View | null; counts: Record<View, number>; onView: (v: View) => void }) {
   return (
-    <li className={cx("flex h-9 items-center rounded-ctl transition-colors", view ? "prism-lit" : "hover:bg-wash")}>
+    <li className={cx("flex h-9 items-center rounded-ctl transition-colors [--band:46%]", view ? "prism-lit" : "hover:bg-wash")}>
       <button
         type="button"
         onClick={() => onView("everything")}
@@ -132,7 +132,8 @@ export function hiddenConversations(conversations: Conversation[], current: stri
 function Conversations({ conversations, current, onConversation }: { conversations: Conversation[]; current: string | null; onConversation: (key: string) => void }) {
   const [open, setOpen] = useState(false)
   const hidden = hiddenConversations(conversations, current)
-  const shown = open ? conversations : conversations.filter((c) => !hidden.includes(c))
+  const kept = conversations.filter((c) => !hidden.includes(c))
+  const shown = open ? [...kept, ...hidden] : kept
   const unread = hidden.reduce((n, c) => n + c.unread, 0)
   return (
     <Section title="Conversations">
