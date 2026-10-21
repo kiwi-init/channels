@@ -7,6 +7,7 @@ import { loadConfig } from "../config.ts";
 import { rotationAt } from "../rotate/decide.ts";
 import type { Here } from "../seats.ts";
 import { placeFrom, rexBinary, type RexPlace } from "../rex.ts";
+import { tmuxSocket } from "../terminals/shared/tmux.ts";
 import type { HookInput } from "./answer.ts";
 import { overLineSince } from "./context-line.ts";
 import type { Served } from "./listen.ts";
@@ -30,7 +31,7 @@ export type CodexPane = TmuxPane & { codex: Codex };
 
 export function paneOf(env: Record<string, string | undefined>): PaneOf | null {
   const pane = env.TMUX_PANE;
-  const socket = env.TMUX?.split(",")[0];
+  const socket = tmuxSocket(env);
   if (pane && /^%\d+$/.test(pane) && socket) return { pane, socket };
   const rex = placeFrom(env).rex;
   if (!rex) return null;
