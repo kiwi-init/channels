@@ -2,10 +2,11 @@ import { useCallback, useMemo, useState } from "react"
 
 import { ignored, isQuiet, type Color, type Message } from "@kiwi/core/protocol.ts"
 import { colorOf, type ChannelState } from "@kiwi/core/state.ts"
+import { digestTask } from "@/lib/activity"
 import { MAIN, placeKey } from "@/lib/threads"
 import { isAgent, type ThreadSummary } from "../message"
 
-const summarised = (m: Message) => m.ev?.op === "task.add" || (m.ev?.op === "task.update" && !!m.ev.state)
+const summarised = (m: Message) => digestTask(m) !== null || m.ev?.op === "task.add" || (m.ev?.op === "task.update" && !!m.ev.state)
 
 export function useThreads({
   messages,

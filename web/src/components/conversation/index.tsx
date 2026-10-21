@@ -282,7 +282,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     )
   }
 
-  const lastMine = visible.findLast((m) => m.from === me && m.kind !== "event")?.seq
+  const lastMine = visible.findLast((m) => m.from === me && m.kind !== "event" && m.kind !== "done")?.seq
   const lastMineReply = threadRoot === null ? undefined : (threads.get(threadRoot) ?? []).findLast((m) => m.from === me && m.kind !== "event")?.seq
   const showsReceipt = (m: Message, anchor: string | undefined): boolean => (anchor === undefined && m.seq === lastMine) || (anchor === "t" && m.seq === lastMineReply)
   const { bubble, timeline } = rowMakers({
