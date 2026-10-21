@@ -64,3 +64,15 @@ export function askGroups(state: Pick<ChannelState, "askHeads">, tasks: Task[]):
   }
   return [...groups].sort(([a], [b]) => (a === null ? 1 : b === null ? -1 : a - b)).map(([key, list]) => ({ head: key === null ? null : state.askHeads.get(key)!, tasks: list }));
 }
+
+export function heldBy(state: Pick<ChannelState, "tasks" | "askHeads">, m: Pick<Message, "task" | "holds">): number[] {
+  return [...new Set([...(m.task !== undefined ? [m.task] : []), ...(m.holds ?? [])])].filter((id) => {
+    const t = state.tasks.get(id);
+    return t ? t.state !== "done" : state.askHeads.has(id);
+  });
+}
+
+export function holdsWork(state: Pick<ChannelState, "tasks" | "askHeads" | "members">, m: Pick<Message, "from" | "task" | "holds" | "permission" | "handoff">): boolean {
+  const from = state.members.get(m.from);
+  return (!!from && isPerson(from)) || !!m.permission || !!m.handoff || heldBy(state, m).length > 0;
+}

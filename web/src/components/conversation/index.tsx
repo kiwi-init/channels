@@ -6,10 +6,10 @@ import { droppedCount } from "@kiwi/core/format.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
 import { GENERAL_ROOM, isReaction, type ImageAttachment, type Message } from "@kiwi/core/protocol.ts"
 import { taskCards } from "@kiwi/core/standup.ts"
-import { colorOf, outsideRepos, tasksAwaitingPeople, type Task, humanOf, ownerOf } from "@kiwi/core/state.ts"
+import { colorOf, heldBy, outsideRepos, taskId, tasksAwaitingPeople, type Task, humanOf, ownerOf } from "@kiwi/core/state.ts"
 import { channelTitle, loadRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { howHere } from "@/lib/presence"
-import { asksFor, chosenOf } from "@/lib/asks"
+import { asksFor, chosenOf, heldAsks } from "@/lib/asks"
 import type { Command } from "@/lib/commands"
 import { approveTask, closedDigest, reviewsFor, sendBackTask, type TaskSend } from "@/lib/task-actions"
 import { useIcons, useLiveIcon } from "@/lib/icons"
@@ -109,7 +109,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
 
   const arrivals = useMemo(() => messages.filter((m) => m.from !== me && !isReaction(m)).length, [messages, me])
   const cards = useMemo(() => taskCards(state, messages), [state, messages])
-  const { decisions, escalations, questions } = useMemo(() => asksFor(state.openAsks, me), [state.openAsks, me])
+  const { decisions, escalations, questions } = useMemo(() => asksFor(heldAsks(state), me), [state, me])
   const reviews = useMemo(() => reviewsFor(state.tasks.values(), me, iAmPerson), [state.tasks, me, iAmPerson])
   const needsMe = decisions.length + escalations.length + questions.length + reviews.length + (isOwner ? requests.length : 0)
   useChannelNews(roomId, Math.max(head, messages.at(-1)?.seq ?? 0), arrivals, 0, needsMe)
@@ -430,6 +430,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       reviews={reviews}
       nameOf={nameOf}
       agentOf={(name) => isAgent(state.members.get(name))}
+      heldOf={(m) => heldBy(state, m).map((id) => (state.tasks.has(id) ? taskId(id) : `#${id}`))}
       onReply={async (m, text) => void (await send(text, { to: [m.from], re: [m.seq], kind: "msg" }))}
       permissionOf={(m) => ({ human: humanOf(state, m.from), owner: ownerOf(state) })}
       onPermission={async (m, allow) => {

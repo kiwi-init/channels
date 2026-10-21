@@ -47,6 +47,7 @@ const parsed = parseArgs({
     secret: { type: "string" },
     image: { type: "string", multiple: true },
     option: { type: "string", multiple: true },
+    holds: { type: "string" },
     wait: { type: "string" },
     handoff: { type: "string" },
     vendor: { type: "string" },

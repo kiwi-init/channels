@@ -17,7 +17,7 @@ async function join(name: string, kind: "human" | "agent"): Promise<void> {
   roster.push({ name, pk: id.pk, owner: kind === "human", at: 0, active: true, kind })
 }
 
-async function post(from: string, body: string, more: { kind?: Kind; ev?: Event; to?: string[]; choices?: string[] } = {}): Promise<Message> {
+async function post(from: string, body: string, more: { kind?: Kind; ev?: Event; to?: string[]; choices?: string[]; esc?: true; holds?: number[] } = {}): Promise<Message> {
   const id = ids.get(from)
   if (!id) throw new Error(`no identity for ${from}`)
   seq++
@@ -31,6 +31,8 @@ async function post(from: string, body: string, more: { kind?: Kind; ev?: Event;
     ...(more.ev ? { ev: more.ev } : {}),
     ...(more.to ? { to: more.to } : {}),
     ...(more.choices ? { choices: more.choices } : {}),
+    ...(more.esc ? { esc: more.esc } : {}),
+    ...(more.holds ? { holds: more.holds } : {}),
   })
   const m = { ...signed, seq, rts: seq * 1000, sigOk: await verify(signed) }
   log.push(m)
@@ -62,9 +64,12 @@ describe("what the voice is told as the channel moves", () => {
     expect(feed(digest, state())).toBe("Done: T900 done: Issues become tasks Merged as #380, 3 files")
   })
 
-  test("a new question for the person is said with its options; one for someone else isn't", async () => {
+  test("a new question for the person that holds work is said with its options; one for someone else, or holding nothing, isn't", async () => {
     const feed = voiceNewsFeed("jow", nameOf)
-    const ask = await post("wren", "Merge the avatars now or after the release?", { kind: "ask", to: ["jow"], choices: ["A: now", "B: after"] })
+    const said = await post("jow", "Make the avatars glass")
+    const idle = await post("wren", "Coffee or tea?", { kind: "ask", to: ["jow"], esc: true })
+    expect(feed(idle, state())).toBeNull()
+    const ask = await post("wren", "Merge the avatars now or after the release?", { kind: "ask", to: ["jow"], choices: ["A: now", "B: after"], esc: true, holds: [said.seq] })
     expect(feed(ask, state())).toBe("Wren asks Jow: Merge the avatars now or after the release? Options: A: now; B: after.")
     expect(feed(ask, state())).toBeNull()
     const other = await post("wren", "Can you review #371?", { kind: "ask", to: ["marten"] })

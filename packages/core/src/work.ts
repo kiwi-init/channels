@@ -8,7 +8,7 @@ import type { ReviewCheck } from "./client/github.ts";
 import { inlineText } from "./membership.ts";
 import { ignored, type IssueRef, type Message } from "./protocol.ts";
 import type { OldTaskState, TaskState } from "./protocol.ts";
-import { currentState, isPerson, issueOf, prChecks, prKey, taskId, type ChannelState, type GithubPr, type Task } from "./state.ts";
+import { currentState, holdsWork, isPerson, issueOf, prChecks, prKey, taskId, type ChannelState, type GithubPr, type Task } from "./state.ts";
 
 /** Quiet this long, with nothing in progress, and an agent reads as idle. */
 const IDLE_AFTER_MS = 15 * 60_000;
@@ -192,7 +192,7 @@ export interface Need {
 export function needsPerson(state: ChannelState): Need[] {
   const people = new Set([...state.members.values()].filter((m) => m.active && isPerson(m)).map((m) => m.name));
   return state.openAsks
-    .filter((m) => visible(state, m) && !people.has(m.from))
+    .filter((m) => visible(state, m) && !people.has(m.from) && holdsWork(state, m))
     .filter((m) => !m.to?.length || m.to.some((t) => people.has(t) || t === "*"))
     .map((m) => ({ seq: m.seq, at: at(m), from: m.from, text: inlineText(m.body, 140), kind: m.kind === "blocking" ? ("blocking" as const) : ("ask" as const) }))
     .reverse();

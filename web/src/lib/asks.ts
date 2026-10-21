@@ -1,5 +1,6 @@
 import type { PermissionShown } from "@kiwi/core/permission.ts"
-import type { Message } from "@kiwi/core/protocol.ts"
+import type { DecisionKind, Message } from "@kiwi/core/protocol.ts"
+import { holdsWork, type ChannelState } from "@kiwi/core/state.ts"
 import { handoffOf } from "./handoff"
 
 export interface AsksForMe {
@@ -9,6 +10,8 @@ export interface AsksForMe {
 }
 
 const isEscalationTo = (m: Message, me: string) => !!m.esc && !!m.to?.includes(me)
+
+export const heldAsks = (state: Pick<ChannelState, "openAsks" | "tasks" | "askHeads" | "members">): Message[] => state.openAsks.filter((m) => holdsWork(state, m))
 
 export function asksFor(openAsks: Message[], me: string): AsksForMe {
   const mine = openAsks.filter((m) => m.from !== me && (m.to?.includes(me) || m.to?.includes("*")))
@@ -25,8 +28,16 @@ export function permissionAsks({ decisions, escalations }: Pick<AsksForMe, "deci
   return [...decisions, ...escalations].flatMap((m) => (m.permission && now <= m.permission.expiresAt ? [{ m, p: m.permission }] : []))
 }
 
+const KIND_LABEL: Record<DecisionKind, string> = {
+  intent: "Intent check for you",
+  taste: "Taste call for you",
+  irreversible: "Irreversible step for you",
+  scope: "Scope call for you",
+  choice: "Decision for you",
+}
+
 export function askLabel(m: Message, me: string): string {
-  if (isEscalationTo(m, me)) return "Decision for you"
+  if (isEscalationTo(m, me)) return m.decision ? KIND_LABEL[m.decision] : "Decision for you"
   return m.to?.includes(me) ? "Question for you" : "Question for everyone"
 }
 

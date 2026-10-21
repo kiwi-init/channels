@@ -28,7 +28,7 @@ async function join(name: string, kind: "human" | "agent", owner = false) {
   ids.set(name, id)
   roster.push({ name, pk: id.pk, owner, at: 0, active: true, kind })
 }
-async function post(from: string, ev: Event | null, body = "", more: { kind?: Kind; to?: string[]; choices?: string[]; esc?: true } = {}): Promise<Message> {
+async function post(from: string, ev: Event | null, body = "", more: { kind?: Kind; to?: string[]; choices?: string[]; esc?: true; holds?: number[]; task?: number } = {}): Promise<Message> {
   seq++
   const kind = more.kind ?? (ev ? "event" : "msg")
   const signed = await sign(ids.get(from)!, {
@@ -42,6 +42,8 @@ async function post(from: string, ev: Event | null, body = "", more: { kind?: Ki
     ...(more.to ? { to: more.to } : {}),
     ...(more.choices ? { choices: more.choices } : {}),
     ...(more.esc ? { esc: more.esc } : {}),
+    ...(more.holds ? { holds: more.holds } : {}),
+    ...(more.task ? { task: more.task } : {}),
   })
   const m = { ...signed, seq, rts: seq * 1000, sigOk: await verify(signed) }
   log.push(m)
@@ -58,8 +60,8 @@ await post("wren", { op: "task.update", task: smoke.seq, state: "doing" })
 const avatars = await post("puma", { op: "task.add", title: "Glass avatars", owner: "puma", review: "jow" })
 await post("puma", { op: "task.update", task: avatars.seq, state: "doing" })
 await post("puma", { op: "task.update", task: avatars.seq, state: "review" })
-const ask = await post("wren", null, "Merge now or after the release?", { kind: "ask", to: ["jow"], choices: ["A: now", "B: after"], esc: true })
-await post("wren", null, "Anyone seen the relay logs?", { kind: "ask", to: ["ana"] })
+const ask = await post("wren", null, "Merge now or after the release?", { kind: "ask", to: ["jow"], choices: ["A: now", "B: after"], esc: true, holds: [smoke.seq] })
+await post("wren", null, "Anyone seen the relay logs?", { kind: "ask", to: ["ana"], task: smoke.seq })
 
 const state = (): ChannelState => fold(log, roster)
 const names: Record<string, string> = { jow: "Jow", wren: "Wren", puma: "Puma", ana: "Ana" }

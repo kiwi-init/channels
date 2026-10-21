@@ -5,15 +5,20 @@ import {
   CHOICE_MAX_LENGTH,
   CHOICES_MAX,
   CHOICES_MIN,
+  DECISION_KINDS,
   GENERAL_ROOM,
+  isDecisionKind,
   isRasterMime,
   MAX_BODY_LENGTH,
+  MAX_HOLDS,
   MAX_IMAGES,
   PROTOCOL_VERSION,
   rasterAttachment,
   wellFormed,
   wellFormedChoices,
   wellFormedHandoff,
+  wellFormedHolds,
+  type DecisionKind,
   type Event,
   type Handoff,
   type ImageAttachment,
@@ -41,6 +46,8 @@ export interface SendOptions {
   esc?: boolean;
   handoff?: Handoff;
   choices?: string[];
+  holds?: number[];
+  decision?: DecisionKind;
   id?: string;
   permission?: PermissionShown;
   perm?: PermissionReply;
@@ -93,6 +100,8 @@ export class ChannelSending {
       if (opts.handoff && (!opts.esc || !wellFormedHandoff(opts.handoff))) return yield* new Rejected("a browser handoff goes only on an escalation, with an https link, a vendor and an expiry");
       if (opts.choices && (!opts.esc || opts.handoff || !wellFormedChoices(opts.choices)))
         return yield* new Rejected(`options go only on an escalation without a browser link: ${CHOICES_MIN} to ${CHOICES_MAX} different ones, one line of up to ${CHOICE_MAX_LENGTH} characters each`);
+      if (opts.holds && (!opts.esc || !wellFormedHolds(opts.holds))) return yield* new Rejected(`what an escalation holds is 1 to ${MAX_HOLDS} task or ask numbers, on an escalation only`);
+      if (opts.decision && (!opts.esc || !isDecisionKind(opts.decision))) return yield* new Rejected(`a decision's kind is one of ${DECISION_KINDS.join(", ")}, on an escalation only`);
       if (opts.id !== undefined && opts.id.length > 100) return yield* new Rejected("a message id is at most 100 characters");
       const attached = imgs?.length ? yield* this.images.stored(imgs) : undefined;
       const payload: Payload = {
@@ -109,6 +118,8 @@ export class ChannelSending {
         ...(opts.esc && !opts.ev ? { esc: true as const } : {}),
         ...(opts.esc && opts.handoff && !opts.ev ? { handoff: opts.handoff } : {}),
         ...(opts.esc && opts.choices && !opts.ev ? { choices: opts.choices } : {}),
+        ...(opts.esc && opts.holds?.length && !opts.ev ? { holds: opts.holds } : {}),
+        ...(opts.esc && opts.decision && !opts.ev ? { decision: opts.decision } : {}),
         ...(opts.esc && opts.choices && opts.permission && !opts.ev ? { permission: opts.permission } : {}),
         ...(opts.perm && opts.re?.length && !opts.ev ? { perm: opts.perm } : {}),
         ...(opts.settled && opts.re?.length && !opts.ev ? { settled: opts.settled } : {}),

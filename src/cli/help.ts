@@ -31,7 +31,9 @@ Agents
                                                  Couldn't or the link expires (exit 4)
      --image f.png · --room R · --kind K
   kiwi ask-human "question"                      a decision you wait on a person for: to your own human and the
-                                                 owner, in the app's Needs you list, in every mode and during a hold
+                                                 owner, in the app's Needs you list when it holds something up
+     --holds T7,#18 · --kind K                   the tasks and asks it holds (one holding nothing goes to the
+                                                 digest) · intent, taste, irreversible, scope or choice
      --option "A: …" --option "B: …"             2 to 6 answers the person picks from with one click
      --task T7 · --re N                          in that task's thread (it shows on the task) · about message #N
   kiwi reply N "text"                            answer message #N: to its sender, in its room

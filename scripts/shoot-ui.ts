@@ -243,7 +243,7 @@ try {
   // Work waiting on a person's review, and a decision an agent hands to its person: both under Needs you.
   const reviewed = /T\d+/.exec(await win("task", "add", "Cache sealed history in the browser", "--owner", "win", "--review", "any", "--ask", ask))?.[0] ?? "T0";
   await win("task", "review", reviewed, "reload fetches only what is new");
-  await win("escalate", "Should I delete the 800 test rooms on the old relay? It frees space, and it can't be undone.");
+  await win("escalate", "--holds", reviewed, "--kind", "irreversible", "Should I delete the 800 test rooms on the old relay? It frees space, and it can't be undone.");
   const askPermission = (tool: string, given: object) => kiwi(["-c", "kiwi-w", "--as", "win", tool, JSON.stringify(given), "/Users/jonatas/www/channels"], undefined, "scripts/seed-permission.ts");
   const needsView = () =>
     owner
