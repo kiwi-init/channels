@@ -193,7 +193,11 @@ describe("what's kept of an event", () => {
       sha: "c".repeat(40),
       branch: "T37",
     });
-    const wf = { action: "completed", repository: { full_name: "o/r" }, workflow_run: { id: 77, run_attempt: 2, name: "CI", status: "completed", conclusion: "success", head_sha: "d".repeat(40), head_branch: "main" } };
+    const wf = {
+      action: "completed",
+      repository: { full_name: "o/r" },
+      workflow_run: { id: 77, run_attempt: 2, name: "CI", status: "completed", conclusion: "success", head_sha: "d".repeat(40), head_branch: "main" },
+    };
     const item = githubItem("workflow_run", wf, 6);
     expect(item).toMatchObject({ event: "workflow_run", name: "CI", conclusion: "success", branch: "main", run: 77, attempt: 2 });
     expect(cleanGithubNote(item)).toMatchObject({ run: 77, attempt: 2 });
