@@ -33,6 +33,10 @@ describe("Show on a Needs you row", () => {
     expect(showNote("rex", { ok: false, why: "no-app" })).toBe("Open the Rex app to show it there.")
     expect(showNote("rex", { ok: false, why: "no-rex" })).toBe("Rex isn't installed on this computer.")
     expect(showNote("rex", { ok: false, why: "failed" })).toBe("Rex didn't open that seat.")
+    expect(showNote("tmux", { ok: true })).toBeNull()
+    expect(showNote("tmux", { ok: false, why: "no-app" })).toBe("No tmux client is attached: the pane is selected for when you attach.")
+    expect(showNote("tmux", { ok: false, why: "no-server" })).toBe("That seat's tmux server isn't running anymore.")
+    expect(showNote("tmux", { ok: false, why: "failed" })).toBe("tmux didn't show that seat.")
   })
 
   test("outside the desktop app there's nothing to show it with", async () => {

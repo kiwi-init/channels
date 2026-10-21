@@ -147,6 +147,19 @@ describe("a seat in a terminal that can show it", () => {
     expect(readPlacedSeat({ ...seat, extra: "dropped" })).toEqual(seat);
   });
 
+  test("a tmux seat reads back with its socket and pane, and a pane or socket tmux wouldn't give is refused", () => {
+    const pane: PlacedSeat = { place: "tmux", alias: seat.alias, agent: seat.agent, room: "abc", socket: "/private/tmp/tmux-501/default", pane: "%12" };
+    expect(readPlacedSeat(JSON.parse(JSON.stringify(pane)))).toEqual(pane);
+    for (const bad of [
+      { ...pane, pane: "12" },
+      { ...pane, pane: "%1;rm" },
+      { ...pane, socket: "tmp/default" },
+      { ...pane, socket: "/tmp/a\nb" },
+      { ...pane, place: "rex" },
+    ])
+      expect(readPlacedSeat(bad)).toBeNull();
+  });
+
   test("a seat without its terminal, in a terminal that can't show it, or missing a field is refused whole", () => {
     const unplaced = { alias: seat.alias, agent: seat.agent, room: seat.room, ...rex };
     expect(readRexSeat(unplaced)).not.toBeNull();

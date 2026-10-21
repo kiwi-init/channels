@@ -13,7 +13,7 @@ import { locate, markerOf, marking, showsIn, terminalPlugin } from "../src/termi
 import { downloadTmuxHelpers, kiwiConf, kiwiConfPath, MARK_FORMAT, removeTmuxHelpers, sourceLine, tmuxConfigPath, tmuxConfigs } from "../src/terminals/tmux/helpers.ts";
 import { tmuxPlaceFrom } from "../src/terminals/tmux/locate.ts";
 import { markText, tmuxMarker } from "../src/terminals/tmux/mark.ts";
-import { showPane } from "../src/terminals/tmux/show.ts";
+import { localTmuxSeats, showPane } from "../src/terminals/tmux/show.ts";
 
 setDefaultTimeout(20_000);
 
@@ -482,4 +482,20 @@ describe.skipIf(!TMUX)("on a throwaway tmux server", () => {
     expect(server.tm("show-options", "-gv", "window-status-current-format").out).toBe(before.current);
     expect(keyK(server)).not.toContain(SHOW);
   });
+});
+
+test("Show in tmux lists this computer's seats with a tmux pane, once each, matched to their channel, as the tmux plugin's seats", async () => {
+  const pane = { socket: "/private/tmp/tmux-501/default", pane: "%3" };
+  const cfg = {
+    channels: { ch: { roomId: "room-1", ownerPk: "o", ownerXpk: "x", epoch: 0, keys: {}, relay: "r", code: "c" } },
+    bindings: {
+      "/work": [
+        { alias: "ch", as: "ana", tmux: pane },
+        { alias: "ch", as: "bo" },
+      ],
+      "/other": [{ alias: "ch", as: "ana", tmux: pane }],
+    },
+  } as never;
+  expect(localTmuxSeats(cfg)).toEqual([{ alias: "ch", agent: "ana", room: "room-1", ...pane }]);
+  expect((await terminalPlugin("tmux")).seats?.(cfg)).toEqual([{ place: "tmux", alias: "ch", agent: "ana", room: "room-1", ...pane }]);
 });

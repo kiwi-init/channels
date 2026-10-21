@@ -42,7 +42,15 @@ export interface RexSeat extends RexPlace {
   room?: string;
 }
 
-export type PlacedSeat = { place: "rex" } & RexSeat;
+export interface TmuxSeat {
+  alias: string;
+  agent: string;
+  room?: string;
+  socket: string;
+  pane: string;
+}
+
+export type PlacedSeat = ({ place: "rex" } & RexSeat) | ({ place: "tmux" } & TmuxSeat);
 
 const SHOW_REFUSALS = ["no-rex", "no-server", "no-app", "remote-control", "failed"] as const;
 
@@ -132,9 +140,31 @@ export function readRexSeat(x: unknown): RexSeat | null {
   return { alias, agent, ...(room ? { room } : {}), ...place };
 }
 
+const PANE = /^%\d{1,10}$/;
+const CONTROL = /[\x00-\x1f\x7f]/;
+
+function readTmuxSeat(x: unknown): TmuxSeat | null {
+  const s = record(x);
+  const alias = text(s?.alias, 200);
+  const agent = text(s?.agent, 64);
+  const socket = text(s?.socket, 4096);
+  const pane = typeof s?.pane === "string" && PANE.test(s.pane) ? s.pane : undefined;
+  if (!alias || !agent || !socket?.startsWith("/") || CONTROL.test(socket) || !pane) return null;
+  const room = text(s?.room, 128);
+  return { alias, agent, ...(room ? { room } : {}), socket, pane };
+}
+
 export function readPlacedSeat(x: unknown): PlacedSeat | null {
-  const seat = record(x)?.place === "rex" ? readRexSeat(x) : null;
-  return seat ? { place: "rex", ...seat } : null;
+  const place = record(x)?.place;
+  if (place === "rex") {
+    const seat = readRexSeat(x);
+    return seat ? { place, ...seat } : null;
+  }
+  if (place === "tmux") {
+    const seat = readTmuxSeat(x);
+    return seat ? { place, ...seat } : null;
+  }
+  return null;
 }
 
 export function readShowResult(x: unknown): ShowResult {
