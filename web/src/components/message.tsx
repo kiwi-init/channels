@@ -1,4 +1,4 @@
-import { ArrowTurnBackwardIcon, Copy01Icon, GitPullRequestIcon } from "@hugeicons/core-free-icons"
+import { GitPullRequestIcon } from "@hugeicons/core-free-icons"
 import { memo, useEffect, useMemo, useState, type ReactNode } from "react"
 
 import { describeEvent, githubLine } from "@kiwi/core/format.ts"
@@ -18,7 +18,7 @@ import { chipLabel, type Chip } from "@/lib/reactions"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 import { Monogram, toast } from "./kit"
-import { Markdown, PermissionInThread } from "./lazy"
+import { CopyGlyph, Markdown, PermissionInThread, ReplyGlyph } from "./lazy"
 import { AskOptions } from "./ask-options"
 import { ChecksWord } from "./pr-checks"
 import { Quote } from "./quote"
@@ -555,11 +555,11 @@ export const MessageRow = memo(function MessageRow({
       <div className="pointer-events-none absolute -top-3 right-2 flex items-center gap-0.5 rounded-full bg-canvas px-0.5 opacity-0 shadow-[0_0_0_1px_var(--line)] group-focus-within/b:pointer-events-auto group-focus-within/b:opacity-100 group-hover/b:pointer-events-auto group-hover/b:opacity-100">
         {onReply && (
           <button type="button" aria-label="Reply" title="Reply" onClick={() => onReply(m)} className={action}>
-            <Icon icon={ArrowTurnBackwardIcon} size={15} />
+            <ReplyGlyph />
           </button>
         )}
         <button type="button" aria-label="Copy text" title="Copy text" onClick={() => navigator.clipboard.writeText(m.body).then(() => toast("Copied"))} className={action}>
-          <Icon icon={Copy01Icon} size={14} />
+          <CopyGlyph />
         </button>
       </div>
     </div>
