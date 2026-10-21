@@ -549,6 +549,20 @@ try {
         () => toTab("Conversation"),
       );
       await shoot(owner, tag, "07-details", () => detailsBtn().click(), closeDetails);
+      if (!narrow)
+        await shoot(
+          owner,
+          tag,
+          "07b-details-sidebar-hidden",
+          async () => {
+            await owner.keyboard.press("ControlOrMeta+Backslash");
+            await detailsBtn().click();
+          },
+          async () => {
+            await closeDetails();
+            await owner.keyboard.press("ControlOrMeta+Backslash");
+          },
+        );
       await shoot(
         owner,
         tag,

@@ -34,7 +34,6 @@ import { defaultScopes } from "../scopes"
 import { isAgent } from "../message"
 import { NeedsYou } from "../needs-you"
 import { ChannelSidebar, ConversationMenu, type Conversation as ConversationRow } from "./channel-sidebar"
-import { useSidebarHidden } from "@/lib/sidebar-hidden"
 import { Header } from "./header"
 import { InfoSide, PictureSide, TasksSide, ThreadSide } from "./side-panels"
 import { Centered, rowMakers, threadRowsOf } from "./timeline"
@@ -54,7 +53,6 @@ function useNow(intervalMs = 30_000): number {
 }
 
 export function Conversation({ member, onBack, onGone }: { member: StoredMember; onBack: () => void; onGone: () => void }) {
-  const sidebarHidden = useSidebarHidden()
   const me = member.identity.name
   const live = useChannel(member)
   useEffect(() => {
@@ -501,7 +499,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                 current={currentConversation}
                 onConversation={(key) => (leaveInfo(), openConversation(key))}
               />
-              <div className={cx("relative flex min-w-0 flex-1 md:sheet", sidebarHidden && "md:ml-2!", info ? "hidden" : (root || side?.kind === "tasks") && "hidden md:flex")}>
+              <div className={cx("relative flex min-w-0 flex-1 md:sheet", info ? "hidden" : (root || side?.kind === "tasks") && "hidden md:flex")}>
                 <div className="relative flex min-w-0 flex-1 flex-col bg-canvas" style={{ "--head": `${headH}px`, "--foot": `${footH}px` } as CSSProperties}>
                   <Header
                     headRef={headRef}
