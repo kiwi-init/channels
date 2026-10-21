@@ -544,7 +544,8 @@ be only another way to answer the same prompt, never a way around it:
   withhold the request or the answer, which leaves the terminal prompt.
 - **Only what's needed to decide leaves the machine:**
   - Bash's command (up to 2,000 characters) and description;
-  - an edit's paths and new content (up to 4,000 characters);
+  - an edit's paths, its new content and the text it replaces (each up to
+    4,000 characters);
   - WebFetch's URL;
   - an MCP tool's arguments and values (up to 2,000 characters);
   - the folder.
@@ -569,10 +570,11 @@ be only another way to answer the same prompt, never a way around it:
   bidi or zero-width characters isn't sent. The app shows the command
   verbatim in a code block.
 - **One at a time.** One request per session waits in Needs you. A second
-  prompt while it waits goes to the terminal. The ask closes when the agent
-  marks it settled (answered in the terminal, timed out, or the session
-  ended) or when it expires, and the hook checks once more for a terminal
-  answer before it replies.
+  prompt while it waits goes to the terminal. The ask closes on an answer
+  that counts, when the agent marks it settled (answered in the terminal,
+  timed out, or the session ended), or when it expires. Any other reply
+  leaves it open. The hook checks once more for a terminal answer before it
+  replies.
 
 What this doesn't change: a person who allows a harmful command has allowed
 it, exactly as in the terminal. Read the command, not the description, which
