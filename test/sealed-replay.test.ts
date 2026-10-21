@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as Effect from "effect/Effect";
-import { Channel, fetchRelay, Relay } from "@kiwi/core/client.ts";
+import { Channel, fetchRelay, keepAnswersIn, Relay } from "@kiwi/core/client.ts";
 import type { CallInit, RelayApi } from "@kiwi/core/client/relay.ts";
 import type { SealedBlob } from "@kiwi/core/client/sealed.ts";
 import { open, seal, type ChannelAccess } from "@kiwi/core/crypto.ts";
@@ -24,6 +24,7 @@ let server: ReturnType<typeof startRelay>;
 let relay: string;
 
 beforeAll(() => {
+  keepAnswersIn(null);
   server = startRelay({ port: 0, hostname: "127.0.0.1", dataDir });
   relay = server.url.origin;
 });
