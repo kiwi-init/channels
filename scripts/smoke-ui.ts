@@ -102,8 +102,9 @@ async function run(part: Part): Promise<string[]> {
       });
   }
 
-  const account = page.getByRole("complementary").locator('button[aria-haspopup="menu"]', { hasText: "smoke" });
-  const newChannel = page.getByRole("complementary").getByRole("button", { name: "New channel", exact: true });
+  const tabBar = page.getByRole("banner", { name: "Channels" });
+  const account = tabBar.locator('button[aria-haspopup="menu"]', { hasText: "smoke" });
+  const newChannel = tabBar.getByRole("button", { name: "New channel", exact: true });
   const details = page.getByRole("button", { name: /^Details:/ });
   const panel = page.getByRole("complementary", { name: "Details" });
   const inDetails = async (fn: () => Promise<void>) => {
@@ -139,14 +140,19 @@ async function run(part: Part): Promise<string[]> {
   };
 
   const macLights = async () => {
-    at = "Mac: the page's sheet starts past the traffic lights";
+    at = "Mac: the traffic lights sit on the tab bar, clear of its controls and of the page";
     await page.evaluate(() => (document.documentElement.dataset.shell = "mac"));
     await account.click();
     await page.getByRole("menuitem", { name: "Settings" }).click();
     const settings = page.getByRole("region", { name: "Settings" });
-    const room = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--lights-w")));
-    const left = await settings.evaluate((el) => el.getBoundingClientRect().left);
-    if (!(room > 0) || left < room) throw new Error(`on a Mac the page starts ${Math.round(left)}px in, under the traffic lights (they need ${room}px)`);
+    const [room, bar] = await page.evaluate(() => ["--lights-w", "--chrome-h"].map((v) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(v))));
+    const first = await tabBar
+      .getByRole("button")
+      .first()
+      .evaluate((el) => el.getBoundingClientRect().left);
+    const top = await settings.evaluate((el) => el.getBoundingClientRect().top);
+    if (!(room! > 0) || first < room!) throw new Error(`on a Mac the tab bar's first control starts ${Math.round(first)}px in, under the traffic lights (they need ${room}px)`);
+    if (!(bar! > 0) || top < bar!) throw new Error(`on a Mac the page starts ${Math.round(top)}px down, under the tab bar (it takes ${bar}px)`);
     if (process.env.SMOKE_SHOTS) await page.screenshot({ path: join(process.env.SMOKE_SHOTS, "mac-lights.png"), clip: { x: 0, y: 0, width: 400, height: 160 } });
     await settings.getByRole("button", { name: "Close settings" }).click();
     await settings.waitFor({ state: "detached" });
@@ -232,6 +238,20 @@ async function run(part: Part): Promise<string[]> {
     const card = await addAgent.innerText();
     if (!/sh -s -- join mc2-/.test(card)) throw new Error("the Add an agent card has no join command");
     if (!card.includes(`--relay ${new URL(BASE).origin}`)) throw new Error("the Add an agent command doesn't name this relay");
+    log(`ok  ${at}`);
+
+    at = "tab bar: the open channel's tab is current, and ⌘\\ hides the channel's sidebar and gives its views to the header";
+    await tabBar.getByRole("navigation", { name: "Channel tabs" }).locator('button[aria-current="page"]', { hasText: "smoke" }).waitFor();
+    const channelSide = page.getByRole("complementary", { name: "Channel" });
+    await channelSide.waitFor();
+    await page.keyboard.press("ControlOrMeta+Backslash");
+    await channelSide.waitFor({ state: "detached" });
+    await page.getByRole("navigation", { name: "Views of the channel" }).waitFor();
+    await page.reload();
+    await page.getByRole("navigation", { name: "Views of the channel" }).waitFor();
+    if (await channelSide.isVisible()) throw new Error("the hidden sidebar came back after a reload");
+    await tabBar.getByRole("button", { name: /^Show the sidebar/ }).click();
+    await channelSide.waitFor();
     log(`ok  ${at}`);
 
     at = "invite preview";

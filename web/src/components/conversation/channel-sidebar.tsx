@@ -1,12 +1,14 @@
-import { Add01Icon, ArrowDown01Icon, Search01Icon, TaskDone01Icon } from "@hugeicons/core-free-icons"
+import { Add01Icon, ArrowDown01Icon, BubbleChatIcon, Search01Icon, TaskDone01Icon } from "@hugeicons/core-free-icons"
 import { useState, type ReactNode } from "react"
 
 import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 import { VIEWS, type View } from "@/lib/views"
+import { useSidebarHidden } from "@/lib/sidebar-hidden"
 import { cx } from "@/lib/utils"
 import { AgentRow, byBusy, type AgentNow } from "../agent-strip"
 import { ChannelIconTile } from "../channel-icon"
 import { Icon } from "../icon"
+import { Menu, MenuItem } from "../ui/menu"
 
 export interface Conversation {
   key: string
@@ -192,8 +194,10 @@ export function ChannelSidebar({
   current: string | null
   onConversation: (key: string) => void
 }) {
+  const hidden = useSidebarHidden()
+  if (hidden) return null
   return (
-    <aside aria-label="Channel" className="hidden h-full w-[280px] shrink-0 flex-col overflow-y-auto bg-rail px-3 pt-(--chrome-h) pb-4 md:flex">
+    <aside aria-label="Channel" className="hidden h-full w-[280px] shrink-0 flex-col overflow-y-auto bg-rail px-3 pt-2 pb-4 md:flex">
       <button type="button" onClick={onTitle} className="flex items-center gap-3 rounded-row px-2 py-1.5 text-left transition-colors hover:bg-wash">
         <ChannelIconTile icon={icon} title={title} size={36} />
         <span className="min-w-0 flex-1">
@@ -237,5 +241,36 @@ export function ChannelSidebar({
 
       <Conversations conversations={conversations} current={current} onConversation={onConversation} />
     </aside>
+  )
+}
+
+export function ConversationMenu({ conversations, current, onConversation }: { conversations: Conversation[]; current: string | null; onConversation: (key: string) => void }) {
+  const unread = conversations.some((c) => c.key !== current && c.unread > 0)
+  const label = conversations.find((c) => c.key === current)?.label ?? "Conversations"
+  return (
+    <Menu
+      side="bottom"
+      align="start"
+      className="w-64"
+      trigger={
+        <button
+          type="button"
+          aria-label={`Conversations${unread ? ", with unread messages" : ""}`}
+          className="no-drag relative hidden h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-ui text-ink-2 edge transition-colors hover:bg-wash hover:text-ink md:flex"
+        >
+          <Icon icon={BubbleChatIcon} size={16} />
+          <span className="max-w-40 truncate">{label}</span>
+          <Icon icon={ArrowDown01Icon} size={14} />
+          {unread && <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-accent shadow-[0_0_0_2px_var(--canvas)]" />}
+        </button>
+      }
+    >
+      {conversations.map((c) => (
+        <MenuItem key={c.key} onClick={() => onConversation(c.key)} className={cx(current === c.key && "font-semibold text-ink")}>
+          <span className="min-w-0 flex-1 truncate">{c.label}</span>
+          {c.unread > 0 && <span className={cx("shrink-0 text-meta tabular-nums", c.forMe ? "font-semibold text-decide" : "text-ink-3")}>{c.unread}</span>}
+        </MenuItem>
+      ))}
+    </Menu>
   )
 }

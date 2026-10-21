@@ -1,5 +1,5 @@
 // How long switching channels takes: two channels with PERF_MESSAGES messages each (400 by default),
-// a click on the other channel's rail tile, timed until its first screen, the task board, is painted.
+// a click on the other channel's tab, timed until its first screen, the task board, is painted.
 // At 1x and with the CPU throttled 4x, a channel's first visit and its later ones, plus a profile of
 // the slowest. With PERF_BUDGET_MS set it fails when the median revisit at 4x is over it.
 //
@@ -50,7 +50,7 @@ const BASE = `http://localhost:${port}/`;
 const browser = await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
 
 async function channel(page: Page, title: string): Promise<string> {
-  await page.getByRole("complementary").getByRole("button", { name: "New channel", exact: true }).first().click();
+  await page.getByRole("banner", { name: "Channels" }).getByRole("button", { name: "New channel", exact: true }).click();
   await page.getByRole("dialog").getByRole("textbox").fill(title);
   const before = page.url();
   await page.getByRole("button", { name: "Create channel" }).click();
@@ -108,11 +108,11 @@ async function seed(alias: string, prefix: string): Promise<void> {
   for (let i = 0; i < MESSAGES; i += 10) await Promise.all(Array.from({ length: Math.min(10, MESSAGES - i) }, (_, j) => send(`${prefix}${i + j}: ${texts[(i + j) % texts.length]}`)));
 }
 
-// A click on the rail tile, timed in the page until the target's first screen (its task board) is painted.
+// A click on the channel's tab, timed in the page until the target's first screen (its task board) is painted.
 async function switchTo(page: Page, title: string, last: string): Promise<number> {
   return page.evaluate(
     async ([name, text]) => {
-      const tile = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Channels"] button')].find((b) => (b.getAttribute("aria-label") ?? "").startsWith(`${name},`));
+      const tile = [...document.querySelectorAll<HTMLElement>('nav[aria-label="Channel tabs"] button')].find((b) => (b.getAttribute("aria-label") ?? "").startsWith(`${name},`));
       if (!tile) return -1;
       const t0 = performance.now();
       tile.click();
@@ -158,7 +158,7 @@ try {
   await page.getByRole("textbox", { name: "Your name" }).fill("Jonatas");
   await page.getByRole("button", { name: "Continue" }).click();
   await page
-    .getByRole("complementary")
+    .getByRole("banner", { name: "Channels" })
     .getByRole("button", { name: /Jonatas/i })
     .first()
     .waitFor();
