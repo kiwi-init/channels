@@ -208,7 +208,7 @@ describe("the digest a person posts when they close a task", () => {
     const before = task(id)
     const digest = closedDigest(state(), log, before, { by: "jon" })
     await sendAs("jon", approveTask(before))
-    expect(digest.opts).toEqual({ kind: "done" })
+    expect(digest.opts).toEqual({ kind: "done", task: id })
     expect(digest.body).toBe(taskDigest(state(), log, task(id)))
     expect(digest.body).toContain("done: checked by jon")
     expect(digest.body).toContain("approved by jon")
