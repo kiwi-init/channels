@@ -12,7 +12,7 @@ import { chipsFor } from "@/lib/reactions"
 import { receipt } from "@/lib/receipts"
 import { isActivity } from "@/lib/activity"
 import { foldTaskEvents, isTaskCard } from "@/lib/task-cards"
-import { ActivityRun } from "../activity"
+import { ActivityRun } from "../lazy"
 import { DayMark, EventGroup, EventRow, GithubRow, isAgent, MessageRow, standsAlone, type ThreadSummary } from "../message"
 
 const RUN_GAP = 5 * 60_000

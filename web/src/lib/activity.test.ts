@@ -3,7 +3,8 @@ import { describe, expect, test } from "bun:test"
 import { PROTOCOL_VERSION, type Event, type Message } from "@kiwi/core/protocol.ts"
 import type { TaskState } from "@kiwi/core/state.ts"
 
-import { activityOf, digestPrs, digestTask, isActivity } from "./activity"
+import { digestTask, isActivity } from "./activity"
+import { activityOf, digestPrs } from "./activity-entries"
 
 const msg = (seq: number, extra: Partial<Message> = {}): Message => ({
   v: PROTOCOL_VERSION,

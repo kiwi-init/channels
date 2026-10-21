@@ -35,8 +35,17 @@ const invite = later(() => import("./controls/invite").then((m) => m.Invite))
 const holdDialog = later(() => import("./controls/hold-dialog").then((m) => m.HoldDialog))
 const charterDialog = later(() => import("./controls/channel-dialogs").then((m) => m.CharterDialog))
 const renameDialog = later(() => import("./controls/channel-dialogs").then((m) => m.RenameDialog))
+const activityRun = later(
+  () => import("./activity").then((m) => m.ActivityRun),
+  () => (
+    <p aria-hidden className="my-1 py-[3px] text-meta">
+      {"\u00a0"}
+    </p>
+  )
+)
 
 export const Markdown = markdown.View
+export const ActivityRun = activityRun.View
 export const AddAgent = addAgent.View
 export const NewAgent = newAgent.View
 export const GifPicker = gifPicker.View
