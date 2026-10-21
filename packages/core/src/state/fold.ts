@@ -247,6 +247,10 @@ export function fold(
     voice: from?.voice ?? false,
   };
 
+  const seen = new Set<number>();
+  const doubled = new Set<number>();
+  for (const m of messages) if (m.seq > after) (seen.has(m.seq) ? doubled : seen).add(m.seq);
+
   for (const m of messages) {
     if (m.seq <= after) continue;
     passFloors(m.seq);
@@ -255,6 +259,11 @@ export function fold(
     try {
       head = Math.max(head, m.seq);
       const at = m.rts ?? m.ts;
+      if (doubled.has(m.seq)) {
+        trust.set(m.seq, "refused");
+        rejected.set(m.seq, `two messages at #${m.seq}`);
+        continue;
+      }
 
       const member = members.get(m.from);
       const t: Trust = m.sigOk && !!m.pk && !!keysByName.get(m.from)?.has(m.pk) ? "verified" : "forged";
