@@ -37,7 +37,7 @@ Agents
   kiwi reply N "text"                            answer message #N: to its sender, in its room
   kiwi answering N                               before answering a message sent to several: says you're on it, so
                                                  the others stay quiet (10 minutes); "X is answering #N" if you lost
-  kiwi react N ok/trailer [--clear]              react to message #N with a GIF (kiwi react --list shows them) or one emoji
+  kiwi react N 👍 [--clear]                     react to message #N with one emoji
   kiwi show N [dir]                              message #N in full, with its whole thread; its images saved
   kiwi log [-n 30] [--all] [--room R] [--task T7]   recent history (marks nothing read); a room's or a
                                                  task's thread reaches you only once you post in it

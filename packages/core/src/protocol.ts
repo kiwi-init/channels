@@ -288,17 +288,17 @@ export type Event =
 
 /** The longest reaction, in UTF-16 units: one emoji, family sequences and flags included. */
 const MAX_REACTION = 16;
-const GIF_REACTION_RE = /^[a-z0-9][a-z0-9-]{0,23}\/[a-z0-9][a-z0-9-]{0,47}$/;
+const OLD_GIF_KEY = /^[a-z0-9][a-z0-9-]{0,23}\/[a-z0-9][a-z0-9-]{0,47}$/;
 
 /** Whether `x` can be a reaction: a short single line with something to see (no letters spelling words, no markup). */
 export function wellFormedReaction(x: unknown): x is string {
   if (typeof x !== "string") return false;
-  if (GIF_REACTION_RE.test(x)) return true;
+  if (OLD_GIF_KEY.test(x)) return true;
   return x.length > 0 && x.length <= MAX_REACTION && x.trim() === x && !/[\u0000-\u001f\u007f<>&"'`\\]/.test(x) && !/[\p{L}\p{N}]/u.test(x);
 }
 
-export function isGifReaction(x: string): boolean {
-  return GIF_REACTION_RE.test(x);
+export function isOldGifKey(x: string): boolean {
+  return OLD_GIF_KEY.test(x);
 }
 
 /** A reaction event, which feeds, unread counts and notifications leave out. */
@@ -624,50 +624,17 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-const OPS: Record<Event["op"], true> = {
-  hello: true,
-  "task.add": true,
-  "task.claim": true,
-  "task.update": true,
-  card: true,
-  claim: true,
-  release: true,
-  "fact.set": true,
-  "fact.del": true,
-  "lease.take": true,
-  "lease.free": true,
-  "role.set": true,
-  "role.refuse": true,
-  "seat.reclaim": true,
-  "color.set": true,
-  "picture.set": true,
-  "scope.set": true,
-  "mode.set": true,
-  "room.create": true,
-  "room.rename": true,
-  "charter.set": true,
-  "compact.propose": true,
-  compact: true,
-  "repos.set": true,
-  github: true,
-  "hold.set": true,
-  "voice.set": true,
-  react: true,
-};
-
-export const EVENT_OPS: readonly string[] = Object.keys(OPS);
-const KNOWN_OPS: ReadonlySet<string> = new Set(EVENT_OPS);
+export const EVENT_OPS_VERSION = 1;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
-const NEWER_OP_MAX = 40;
 
-export const knownOp = (op: string): boolean => KNOWN_OPS.has(op);
+export const knownOp = (op: string): boolean => eventCheck({ op }) !== null;
 
-export const isEvent = (ev: Event | NewerEvent): ev is Event => KNOWN_OPS.has(ev.op);
+export const isEvent = (ev: Event | NewerEvent): ev is Event => eventCheck(ev) !== null;
 
 function wellFormedNewer(ev: unknown): ev is NewerEvent {
   if (!ev || typeof ev !== "object") return false;
   const op = (ev as Record<string, unknown>).op;
-  return typeof op === "string" && op.length <= NEWER_OP_MAX && NEWER_OP_RE.test(op) && !KNOWN_OPS.has(op);
+  return typeof op === "string" && op.length <= 40 && NEWER_OP_RE.test(op) && eventCheck(ev) === null;
 }
 
 export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event | NewerEvent } {
@@ -675,7 +642,7 @@ export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event
   return { ...rest, ...(newer ? { ev: newer } : ev ? { ev } : {}) };
 }
 
-export const outgrown = (base: { folded?: readonly string[]; skipped?: true }): boolean => base.skipped === true && EVENT_OPS.some((op) => !base.folded?.includes(op));
+export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
 
 export interface Message extends Payload {
   newer?: NewerEvent;
@@ -772,6 +739,10 @@ const tags = (x: unknown): x is string[] => Array.isArray(x) && x.length <= MAX_
 
 /** Whether an event has the shape its op promises (anything else is dropped, not folded). */
 export function wellFormedEvent(ev: unknown): ev is Event {
+  return eventCheck(ev) === true;
+}
+
+function eventCheck(ev: unknown): boolean | null {
   if (!ev || typeof ev !== "object") return false;
   const e = ev as Record<string, unknown>;
   const n = (x: unknown): x is number => Number.isSafeInteger(x) && (x as number) >= 0;
@@ -875,7 +846,7 @@ export function wellFormedEvent(ev: unknown): ev is Event {
     case "react":
       return n(e.seq) && (e.seq as number) > 0 && (e.emoji === null || wellFormedReaction(e.emoji));
     default:
-      return false;
+      return null;
   }
 }
 

@@ -1,8 +1,8 @@
-import { ArrowTurnBackwardIcon, Copy01Icon, GitPullRequestIcon, SmileIcon } from "@hugeicons/core-free-icons"
+import { ArrowTurnBackwardIcon, Copy01Icon, GitPullRequestIcon } from "@hugeicons/core-free-icons"
 import { memo, useEffect, useMemo, useState, type ReactNode } from "react"
 
 import { describeEvent, githubLine } from "@kiwi/core/format.ts"
-import { ignored, isGifReaction, type Color, type Handoff, type ImageAttachment, type Message, type Trust } from "@kiwi/core/protocol.ts"
+import { ignored, type Color, type Handoff, type ImageAttachment, type Message, type Trust } from "@kiwi/core/protocol.ts"
 import { isLeadRole, type ChannelState, type Member } from "@kiwi/core/state.ts"
 import type { PrRef } from "@kiwi/core/work.ts"
 import type { Chosen } from "@/lib/asks"
@@ -14,7 +14,6 @@ import { githubSummary } from "@/lib/github-line"
 import { sameRow } from "./message-memo"
 import { openHandoff } from "@/lib/handoff-open"
 import { handoffLabel, handoffLeft, handoffOf, handoffOpen } from "@/lib/handoff"
-import { gifByKey } from "@/lib/gifs"
 import { chipLabel, type Chip } from "@/lib/reactions"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
@@ -200,7 +199,6 @@ export interface MessageProps {
   chosen?: Chosen
   settled?: Settled | null
   prs?: PrRef[]
-  onReact?: (m: Message) => void
   onJump: (seq: number) => void
   thread?: ThreadSummary
   onOpenThread?: (root: number) => void
@@ -409,7 +407,6 @@ export const MessageRow = memo(function MessageRow({
   chosen,
   settled,
   prs,
-  onReact,
   onJump,
   thread,
   onOpenThread,
@@ -515,31 +512,20 @@ export const MessageRow = memo(function MessageRow({
         )}
         {!!reactions?.length && !forged && (
           <p className="mt-1 flex flex-wrap gap-1">
-            {reactions.map((c) => {
-              const gif = isGifReaction(c.emoji) ? gifByKey(c.emoji) : undefined
-              const who = c.who.join(", ")
-              return gif ? (
-                <span key={c.emoji} title={`${gif.feeling} · ${who}`} aria-label={`${gif.feeling}, from ${who}`} className="group/gif relative inline-flex">
-                  <img src={gif.url} alt="" className={cx("h-32 w-auto max-w-full rounded-card", c.mine && "ring-2 ring-accent")} />
-                  <span className="pointer-events-none absolute bottom-1.5 left-1.5 hidden max-w-[calc(100%-12px)] truncate rounded-full bg-black/65 px-2 py-0.5 text-stamp text-white group-hover/gif:block">
-                    {who}
-                  </span>
-                </span>
-              ) : (
-                <span
-                  key={c.emoji}
-                  title={chipLabel(c)}
-                  aria-label={chipLabel(c)}
-                  className={cx(
-                    "inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-stamp tabular-nums",
-                    c.mine ? "text-accent-text shadow-[inset_0_0_0_1px_var(--accent)]" : "text-ink-2 shadow-[inset_0_0_0_1px_var(--line)]"
-                  )}
-                >
-                  <span aria-hidden>{c.emoji}</span>
-                  {c.who.length > 1 && <span aria-hidden>{c.who.length}</span>}
-                </span>
-              )
-            })}
+            {reactions.map((c) => (
+              <span
+                key={c.emoji}
+                title={chipLabel(c)}
+                aria-label={chipLabel(c)}
+                className={cx(
+                  "inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-stamp tabular-nums",
+                  c.mine ? "text-accent-text shadow-[inset_0_0_0_1px_var(--accent)]" : "text-ink-2 shadow-[inset_0_0_0_1px_var(--line)]"
+                )}
+              >
+                <span aria-hidden>{c.emoji}</span>
+                {c.who.length > 1 && <span aria-hidden>{c.who.length}</span>}
+              </span>
+            ))}
           </p>
         )}
         {receipt && mine && !forged && (
@@ -563,11 +549,6 @@ export const MessageRow = memo(function MessageRow({
       </div>
 
       <div className="pointer-events-none absolute -top-3 right-2 flex items-center gap-0.5 rounded-full bg-canvas px-0.5 opacity-0 shadow-[0_0_0_1px_var(--line)] group-focus-within/b:pointer-events-auto group-focus-within/b:opacity-100 group-hover/b:pointer-events-auto group-hover/b:opacity-100">
-        {onReact && (
-          <button type="button" aria-label="React with a GIF" title="React with a GIF" onClick={() => onReact(m)} className={action}>
-            <Icon icon={SmileIcon} size={15} />
-          </button>
-        )}
         {onReply && (
           <button type="button" aria-label="Reply" title="Reply" onClick={() => onReply(m)} className={action}>
             <Icon icon={ArrowTurnBackwardIcon} size={15} />

@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { received } from "@kiwi/core/client/history.ts";
 import { newChannelKey } from "@kiwi/core/crypto.ts";
 import { generateIdentity, verify } from "@kiwi/core/identity.ts";
-import { EVENT_OPS, isQuiet, outgrown, PROTOCOL_VERSION, wellFormed, type Message } from "@kiwi/core/protocol.ts";
+import { EVENT_OPS_VERSION, isQuiet, knownOp, outgrown, PROTOCOL_VERSION, wellFormed, type Event, type Message } from "@kiwi/core/protocol.ts";
 import { openSnapshot, sealSnapshot } from "@kiwi/core/snapshot.ts";
 import { fold, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 import { outgrownCache } from "../src/agent/state.ts";
@@ -55,7 +55,45 @@ const board = (messages: Message[]) => {
   };
 };
 
+const OPS: Record<Event["op"], true> = {
+  hello: true,
+  "task.add": true,
+  "task.claim": true,
+  "task.update": true,
+  card: true,
+  claim: true,
+  release: true,
+  "fact.set": true,
+  "fact.del": true,
+  "lease.take": true,
+  "lease.free": true,
+  "role.set": true,
+  "role.refuse": true,
+  "seat.reclaim": true,
+  "color.set": true,
+  "picture.set": true,
+  "scope.set": true,
+  "mode.set": true,
+  "room.create": true,
+  "room.rename": true,
+  "charter.set": true,
+  "compact.propose": true,
+  compact: true,
+  "repos.set": true,
+  github: true,
+  "hold.set": true,
+  "voice.set": true,
+  react: true,
+};
+const OPS_AT: Record<number, readonly string[]> = { 1: Object.keys(OPS) };
+
 describe("events from a newer client", () => {
+  test("every op the Event type has is known, and a new op needs EVENT_OPS_VERSION raised with it", () => {
+    for (const op of Object.keys(OPS)) expect(knownOp(op)).toBe(true);
+    expect(knownOp("evidence")).toBe(false);
+    expect([...(OPS_AT[EVENT_OPS_VERSION] ?? [])].sort()).toEqual(Object.keys(OPS).sort());
+  });
+
   test("a signed log with two ops this client doesn't know decodes whole: every signature checks out, and those two keep their op as newer", async () => {
     const messages = await decoded();
     expect(messages.map((m) => m.sigOk)).toEqual(messages.map(() => true));
@@ -107,11 +145,11 @@ describe("events from a newer client", () => {
   test("a base folded past an op records what it skipped, and a client that knows more ops than its folder doesn't build on it", async () => {
     const messages = await decoded();
     const base = baseOf(messages);
-    expect(base.folded).toEqual([...EVENT_OPS]);
+    expect(base.folded).toBe(EVENT_OPS_VERSION);
     expect(base.skipped).toBe(true);
     expect(outgrown(base)).toBe(false);
     expect(baseOf(messages.filter((m) => m.newer === undefined)).skipped).toBeUndefined();
-    const older = { ...base, folded: EVENT_OPS.filter((op) => op !== "react") };
+    const older = { ...base, folded: EVENT_OPS_VERSION - 1 };
     expect(outgrown(older)).toBe(true);
     expect(outgrown({ ...older, skipped: undefined })).toBe(false);
   });
@@ -121,7 +159,7 @@ describe("events from a newer client", () => {
     const base = baseOf(messages);
     expect(outgrownCache(messages, base)).toBe(false);
     expect(outgrownCache([...messages, { ...messages[0]!, seq: 11, kind: "event", newer: { op: "react" } }], base)).toBe(true);
-    expect(outgrownCache(messages, { ...base, folded: EVENT_OPS.filter((op) => op !== "card") })).toBe(true);
+    expect(outgrownCache(messages, { ...base, folded: undefined })).toBe(true);
     expect(outgrownCache(messages, null)).toBe(false);
   });
 
@@ -133,7 +171,7 @@ describe("events from a newer client", () => {
     const kept = await openSnapshot(access, await sealSnapshot(owner, access, base));
     expect(kept?.n).toBe(10);
     expect(kept?.skipped).toBe(true);
-    const older = await sealSnapshot(owner, access, { ...base, folded: EVENT_OPS.filter((op) => op !== "github") });
+    const older = await sealSnapshot(owner, access, { ...base, folded: EVENT_OPS_VERSION - 1 });
     expect(older).not.toBeNull();
     expect(await openSnapshot(access, older)).toBeNull();
   });

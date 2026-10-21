@@ -66,7 +66,7 @@ need no second path.
      with "not installed".
    - **Folder:** see decision 2.
    - **Nickname:** optional; defaults to the harness's name.
-   - **Personality:** Builder by default, from the presets and the owner's own.
+   - **Personality:** none by default; the presets and the owner's own to pick from.
    - **Start.**
 3. **Start:**
    - The app pins the personality (`makePin`, `packages/core/src/pin.ts:21-24`) and sends a launch
