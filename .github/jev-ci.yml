@@ -125,6 +125,15 @@ jobs:
       lib/format.test.ts: the time formatters give nothing for such a time instead of throwing, and
       lib/channel/recent.test.ts: a saved channel preview carrying one is dropped, so the channel
       list still renders.
+      Also test/newer-ops.test.ts: an event whose op this client doesn't know (from a newer client)
+      is kept, not dropped: a signed fixture log decodes whole with every signature checking out,
+      such an event carries its op as newer and no ev, is quiet, and folds to nothing (the board is
+      the one the log folds to without it), and a log export writes it back whole as it was signed
+      (asSent, web lib/log-export.ts), while a known op with a bad shape or an op that isn't a
+      plain short name is still malformed; a fold base records the ops it knew and whether it
+      skipped any, and a client that knows more refuses that base as a snapshot and drops its CLI
+      cache and base (protocol.ts wellFormed and outgrown, client/history.ts received,
+      state/fold.ts, snapshot.ts, src/agent/state.ts).
       Also test/permission.test.ts: a Claude Code permission prompt as Needs you shows it (packages/core/src/permission.ts):
       Bash's command, edits' paths, content and the text they replace (and replace_all), WebFetch's whole URL, an MCP tool's
       argument names and values, and no other tool; nothing when looksSecret flags anything shown (a corpus of token shapes,

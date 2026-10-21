@@ -308,8 +308,8 @@ export function isReaction(m: Pick<Message, "kind" | "ev">): boolean {
 
 const QUIET_OPS: ReadonlySet<string> = new Set(["hello", "card", "picture.set", "react", "fact.set", "fact.del", "lease.take", "lease.free", "task.claim", "claim", "release"]);
 
-export function isQuiet(m: Pick<Message, "kind" | "ev">): boolean {
-  return m.kind === "event" && !!m.ev && QUIET_OPS.has(m.ev.op);
+export function isQuiet(m: Pick<Message, "kind" | "ev" | "newer">): boolean {
+  return m.kind === "event" && (m.newer !== undefined || (!!m.ev && QUIET_OPS.has(m.ev.op)));
 }
 
 /** What a member says about itself (see the card event). Every field is optional and short. */
@@ -617,7 +617,68 @@ export function ignored(trust: Trust | undefined): boolean {
   return trust === "forged" || trust === "refused";
 }
 
+export interface NewerEvent {
+  readonly op: string;
+  readonly [field: string]: unknown;
+}
+
+export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
+
+const OPS: Record<Event["op"], true> = {
+  hello: true,
+  "task.add": true,
+  "task.claim": true,
+  "task.update": true,
+  card: true,
+  claim: true,
+  release: true,
+  "fact.set": true,
+  "fact.del": true,
+  "lease.take": true,
+  "lease.free": true,
+  "role.set": true,
+  "role.refuse": true,
+  "seat.reclaim": true,
+  "color.set": true,
+  "picture.set": true,
+  "scope.set": true,
+  "mode.set": true,
+  "room.create": true,
+  "room.rename": true,
+  "charter.set": true,
+  "compact.propose": true,
+  compact: true,
+  "repos.set": true,
+  github: true,
+  "hold.set": true,
+  "voice.set": true,
+  react: true,
+};
+
+export const EVENT_OPS: readonly string[] = Object.keys(OPS);
+const KNOWN_OPS: ReadonlySet<string> = new Set(EVENT_OPS);
+const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
+const NEWER_OP_MAX = 40;
+
+export const knownOp = (op: string): boolean => KNOWN_OPS.has(op);
+
+export const isEvent = (ev: Event | NewerEvent): ev is Event => KNOWN_OPS.has(ev.op);
+
+function wellFormedNewer(ev: unknown): ev is NewerEvent {
+  if (!ev || typeof ev !== "object") return false;
+  const op = (ev as Record<string, unknown>).op;
+  return typeof op === "string" && op.length <= NEWER_OP_MAX && NEWER_OP_RE.test(op) && !KNOWN_OPS.has(op);
+}
+
+export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event | NewerEvent } {
+  const { newer, ev, ...rest } = m;
+  return { ...rest, ...(newer ? { ev: newer } : ev ? { ev } : {}) };
+}
+
+export const outgrown = (base: { folded?: readonly string[]; skipped?: true }): boolean => base.skipped === true && EVENT_OPS.some((op) => !base.folded?.includes(op));
+
 export interface Message extends Payload {
+  newer?: NewerEvent;
   seq: number;
   /** When the relay stored it (one clock for everyone, unlike `ts`). */
   rts?: number;
@@ -819,7 +880,7 @@ export function wellFormedEvent(ev: unknown): ev is Event {
 }
 
 /** Whether a decrypted payload has the shape every client relies on. Malformed ones are dropped. */
-export function wellFormed(p: unknown): p is Payload {
+export function wellFormed(p: unknown): p is WirePayload {
   if (!p || typeof p !== "object") return false;
   const m = p as Record<string, unknown>;
   return (
@@ -841,7 +902,7 @@ export function wellFormed(p: unknown): p is Payload {
     (m.permission === undefined || (m.esc === true && permissionChoices(m.choices) && wellFormedPermission(m.permission))) &&
     (m.perm === undefined || (m.kind !== "event" && Array.isArray(m.re) && m.re.length > 0 && wellFormedPermReply(m.perm))) &&
     (m.settled === undefined || (m.kind !== "event" && Array.isArray(m.re) && m.re.length > 0 && wellFormedSettled(m.settled))) &&
-    (m.ev === undefined || wellFormedEvent(m.ev)) &&
+    (m.ev === undefined || wellFormedEvent(m.ev) || wellFormedNewer(m.ev)) &&
     (m.kind !== "event" || m.ev !== undefined)
   );
 }

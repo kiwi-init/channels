@@ -247,6 +247,8 @@ export interface FoldBase {
   rooms: Room[];
   roomOf: [number, string][];
   placeOf: [number, Place][];
+  folded?: string[];
+  skipped?: true;
 }
 
 export interface RoomsFloor {
