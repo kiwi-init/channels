@@ -2,7 +2,8 @@ import { describe, expect, mock, test } from "bun:test"
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 
-import { showLabel, showNote, showSeat, type PlacedSeat } from "./show-seat"
+import { showNote } from "./show-notes"
+import { noteFor, showLabel, showSeat, type PlacedSeat } from "./show-seat"
 
 mock.module("@/lib/avatars", () => ({ avatarUrl: () => "robot.svg", robotUrl: () => "robot.svg", robotFor: () => "blue", harnessUrl: (h: string) => `/harness/${h}.svg` }))
 const { ShowSeat } = await import("@/components/needs-you")
@@ -42,4 +43,10 @@ describe("Show on a Needs you row", () => {
   test("outside the desktop app there's nothing to show it with", async () => {
     expect(await showSeat(seat)).toEqual({ ok: false, why: "failed" })
   })
+})
+
+test("a Show that worked has no note, and one that didn't loads its terminal's note only then", async () => {
+  expect(await noteFor("tmux", { ok: true })).toBeNull()
+  expect(await noteFor("tmux", { ok: false, why: "no-app" })).toBe("No tmux client is attached: the pane is selected for when you attach.")
+  expect(await noteFor("rex", { ok: false, why: "no-server" })).toBe("Rex isn't running on this computer.")
 })
