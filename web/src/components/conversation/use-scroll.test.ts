@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { arrivedAfter, resized, scrolled, type Follow } from "./use-scroll"
+import { arrivedAfter, pin, resized, scrolled, type Follow } from "./use-scroll"
 import { unreadOf } from "./use-news"
 
 describe("what counts as new", () => {
@@ -83,5 +83,34 @@ describe("staying at the newest message", () => {
     resized(el, f, true)
     expect(el.scrollTop).toBe(600)
     expect(f.lastTop).toBe(600)
+  })
+
+  test("content that shrinks and then grows during a smooth scroll leaves it at the bottom once the scroll settles", () => {
+    const el = scroller(1596)
+    const f: Follow = { atBottom: true, lastTop: 0 }
+    pin(el, f)
+    el.scrollHeight = 1700
+    el.scrollTop = 750
+    scrolled(el, f)
+    el.scrollHeight = 1535
+    resized(el, f, true)
+    el.scrollHeight = 1785
+    scrolled(el, f)
+    resized(el, f, true)
+    expect(f.atBottom).toBe(true)
+    pin(el, f)
+    expect(gap(el)).toBe(0)
+  })
+
+  test("after a switch from a longer place, content that grows before the first scroll event leaves it at the bottom", () => {
+    const el = scroller(1596)
+    const f: Follow = { atBottom: true, lastTop: 3000 }
+    pin(el, f)
+    expect(f.lastTop).toBe(712)
+    el.scrollHeight = 1846
+    scrolled(el, f)
+    resized(el, f, false)
+    expect(f.atBottom).toBe(true)
+    expect(gap(el)).toBe(0)
   })
 })
