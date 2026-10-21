@@ -1,9 +1,10 @@
 import * as Effect from "effect/Effect";
 import { Channel, downWhy, OfflineReads, relayDown, type Info, type MemberRow, type Refused, type Relay } from "@kiwi/core/client.ts";
-import { Cache, Cursor, type ChannelConfig } from "../config.ts";
+import { Cache, Cursor, loadConfig, type ChannelConfig } from "../config.ts";
 import type { ChannelAccess } from "@kiwi/core/crypto.ts";
 import type { Identity } from "@kiwi/core/identity.ts";
 import type { DaemonPeek } from "../daemon/protocol.ts";
+import { heldText, seatHeldAway } from "../hold.ts";
 import { daemonMark, daemonPeek } from "../daemon/rpc.ts";
 import { GENERAL_ROOM, PAGE_LIMIT, type Message } from "@kiwi/core/protocol.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
@@ -58,6 +59,8 @@ export class SessionState {
   get me(): string {
     return this.identity.name;
   }
+
+  protected readonly unheld = Effect.suspend(() => (seatHeldAway(loadConfig(), this.alias, this.me) ? Effect.fail(new Rejected(heldText(this.alias, this.me))) : Effect.void));
 
   owe(seq: number): void {
     this.owed = Math.max(this.owed, seq);
@@ -275,6 +278,7 @@ export class SessionState {
   }
 
   readonly unread = Effect.fn("AgentSession.unread")({ self: this }, function* (this: SessionState, d: Delivery = {}) {
+    yield* this.unheld;
     const since = yield* this.cursor();
     const { messages, state } = yield* this.state();
     const cursor = yield* Cursor;

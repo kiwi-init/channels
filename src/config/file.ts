@@ -15,6 +15,11 @@ export interface ChannelConfig extends ChannelAccess {
   title?: string;
 }
 
+interface SeatHold {
+  key: string;
+  at: number;
+}
+
 export interface SeatRecord {
   alias: string;
   as: string;
@@ -28,6 +33,7 @@ export interface SeatRecord {
   model?: string;
   term?: TerminalPlace;
   rex?: RexPlace;
+  hold?: SeatHold;
 }
 
 export function dropSeats(cfg: Config, drop: (b: SeatRecord) => boolean): void {

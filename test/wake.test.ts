@@ -9,6 +9,7 @@ import { daemonListening, seatRecordFor, startDaemon, type Daemon } from "../src
 import { howMessagesReachYou } from "../src/hooks.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
 import type { Presence } from "@kiwi/core/protocol.ts";
+import { bindHeldSeat, holdSeat } from "../src/hold.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { listenedPath, pullsWake, wakeArgv, wakeKey, wakePath, wakePrompt } from "@kiwi/core/wake.ts";
 
@@ -318,6 +319,21 @@ describe("waking an agent in its own session", () => {
     await Bun.sleep(2_000);
     expect(calls().length).toBe(before);
     expect((await seat())?.wake.path).toMatchObject({ kind: "none" });
+  });
+
+  test("a Codex seat its loop holds is never woken, and the thread the loop binds it to is woken for what waited", async () => {
+    bindAs({ harness: "codex", session: "thread-old" });
+    const before = await quiet();
+    expect(holdSeat("test", "claude", "loop-token")).toEqual({ kind: "changed", seats: 1 });
+    await ownerCh.send("while held", { to: ["claude"] });
+    await Bun.sleep(2_500);
+    expect(calls().length).toBe(before);
+    expect((await seat())?.wake.path).toEqual({ kind: "none", why: "its loop holds it between sessions, and wakes nothing until it hands the seat to a new session" });
+    expect(bindHeldSeat("test", "claude", "loop-token", { harness: "codex", session: "thread-new" })).toEqual({ kind: "changed", seats: 1 });
+    await ownerCh.send("after the hand-over", { to: ["claude"] });
+    await until("a wake of the new thread", () => calls().length === before + 1);
+    expect(calls().at(-1)).toEqual(["codex", "queue", "--thread", "thread-new", "--message", wakePrompt("test", "claude")]);
+    expect(calls().flat()).not.toContain("thread-old");
   });
 
   test("a Grok Bot is woken by POSTing to its routine's webhook, with the Authorization header piped to kiwi wake webhook", async () => {

@@ -18,6 +18,7 @@ import { homedir, hostname } from "node:os";
 import { dirname, resolve } from "node:path";
 import { kimiAncestor, kimiCodePid, mimoHere, piHere, type ProcessTree } from "./ancestry.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord } from "./config.ts";
+import { holdsSeat } from "./hold.ts";
 import { omit } from "@kiwi/core/omit.ts";
 import { placeFrom, type SeatPlace } from "./rex.ts";
 
@@ -246,7 +247,10 @@ export function seatsFor(dir: string, opts: SeatOptions = {}): Binding[] {
     !above.some((b) => b.alias === l.alias && b.as === l.as && (b.plain || !b.session || heldElsewhere(b, who, listening))) &&
     !live.some((o) => o.alias === l.alias && o.as === l.as && !ours(o));
   for (let d = resolve(dir); !tooBroad(d); d = dirname(d)) {
-    const seats = seatsAt(cfg, d).filter((b) => cfg.channels[b.alias] && (!opts.alias || b.alias === opts.alias));
+    const atDir = seatsAt(cfg, d).filter((b) => cfg.channels[b.alias] && (!opts.alias || b.alias === opts.alias));
+    const loop = atDir.filter((b) => holdsSeat(b));
+    if (loop.length) return loop;
+    const seats = atDir.filter((b) => !b.hold);
     const mine = who.session ? seats.filter((b) => b.session === who.session) : [];
     if (mine.length) {
       // Note that this session still uses it, so nobody takes it for stale (seats with no process to check).

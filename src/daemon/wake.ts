@@ -73,7 +73,8 @@ const UNREAD_CHECK_MS = 30_000;
 
 export const pathOf = async (cfg: Config, alias: string, agent: string): Promise<WakePath> => {
   const record = seatRecordFor(cfg, alias, agent);
-  return wakePath(record?.harness === "kimi" ? { ...record, served: !!kimiServer(record.pid) } : record, listenHooksInstalled(), !!cfg.wakeHooks?.[wakeKey(alias, agent)], {
+  const seen = record && { ...record, held: !!record.hold, ...(record.harness === "kimi" ? { served: !!kimiServer(record.pid) } : {}) };
+  return wakePath(seen, listenHooksInstalled(), !!cfg.wakeHooks?.[wakeKey(alias, agent)], {
     pi: piInstalled(),
     mimo: mimoInstalled(),
   });

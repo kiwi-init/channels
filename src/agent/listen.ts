@@ -8,6 +8,7 @@ import { Channel, eachLive, QUIET_DROP_MS, reason, type ChannelGone, type Live, 
 import { Cache, Cursor, Keystore } from "../config.ts";
 import { daemonPresence, daemonSeat } from "../daemon/rpc.ts";
 import { isReach, PROTOCOL_VERSION, type Message, type Presence } from "@kiwi/core/protocol.ts";
+import { Rejected } from "@kiwi/core/refusals.ts";
 import { TOO_MANY_REQUESTS } from "@kiwi/core/sas.ts";
 import type { ChannelState } from "@kiwi/core/state.ts";
 import { isWakeVia, viaOf } from "@kiwi/core/wake.ts";
@@ -20,6 +21,7 @@ const BEACON_SLACK_MS = 5_000;
 export class SessionListen extends SessionState {
   listen<R = never>(onMessage: (m: Message, state: ChannelState) => Effect.Effect<void | boolean, unknown, R>, opts: Delivery & Hearing<R>): Effect.Effect<void, Refused | ChannelGone, Agent | R> {
     return Effect.gen({ self: this }, function* () {
+      yield* this.unheld;
       if (opts.hold !== false) yield* holding(this.alias, this.me);
       const status = (line: string) => opts.onStatus?.(line) ?? Effect.void;
       const reached = yield* this.reach(status);
@@ -35,6 +37,9 @@ export class SessionListen extends SessionState {
       let held = false;
       const narrowed = narrows(opts);
       let mark: ((seq: number) => boolean) | null = null;
+      const away = yield* Deferred.make<void, Rejected>();
+      const stillOurs = <A, E, R2>(e: Effect.Effect<A, E, R2>) =>
+        Effect.flatMap(Effect.exit(this.unheld), (exit) => (Exit.isSuccess(exit) ? Effect.asVoid(e) : Effect.asVoid(Deferred.failCause(away, exit.cause))));
       const hear = (m: Message) =>
         Effect.gen({ self: this }, function* () {
           if (m.seq > (messages.at(-1)?.seq ?? 0)) {
@@ -72,18 +77,18 @@ export class SessionListen extends SessionState {
           case "Open":
             return opened(ev);
           case "Message":
-            return hear(ev.message);
+            return stillOurs(hear(ev.message));
           case "Roster":
             this.postingChecked = false;
             return aside(Effect.andThen(this.members(true), this.chores()));
           case "Request":
-            return opts.onNotice ? aside(this.notices(opts.onNotice)) : Effect.void;
+            return opts.onNotice ? stillOurs(aside(this.notices(opts.onNotice))) : Effect.void;
           default:
             return Effect.void;
         }
       };
       if (opts.onNotice) yield* aside(this.notices(opts.onNotice));
-      yield* eachLive(this.ch.fx.live(since, { presence: false, reads: false }), handle, status);
+      yield* Effect.raceFirst(eachLive(this.ch.fx.live(since, { presence: false, reads: false }), handle, status), Deferred.await(away));
     }).pipe(Effect.scoped);
   }
 

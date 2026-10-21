@@ -8,6 +8,7 @@ import { placeFrom } from "../rex.ts";
 import { ensureDaemon, reportRead } from "../daemon.ts";
 import { seatsFor } from "../hooks.ts";
 import { heardFrom } from "../hooks/delivered.ts";
+import { heldAway, heldText, seatHeldAway } from "../hold.ts";
 import { BadName } from "@kiwi/core/refusals.ts";
 import { args, opt } from "./args.ts";
 
@@ -94,6 +95,7 @@ export const agentName = Effect.fn("kiwi.agentName")(function* (ch?: ChannelConf
     if (several) raw = told;
     else if (bound) raw = bound.as;
     else if (held.length && here().session) {
+      if (held.every((b) => heldAway(b))) return yield* die(held.map((b) => heldText(b.alias, b.as)).join("\n"));
       return yield* die(
         `${held.map((b) => b.as).join(", ")} ${held.length > 1 ? "work" : "works"} from this folder in another session; to take part yourself, run kiwi join with the channel's code (or pass --as NAME)`,
       );
@@ -111,8 +113,10 @@ export const agentName = Effect.fn("kiwi.agentName")(function* (ch?: ChannelConf
 
 export const session = Effect.fn("kiwi.session")(function* () {
   const alias = yield* channelAlias();
-  const cfg = (yield* config).channels[alias]!;
+  const all = yield* config;
+  const cfg = all.channels[alias]!;
   acting.name = yield* agentName(cfg);
+  if (seatHeldAway(all, alias, acting.name)) return yield* die(heldText(alias, acting.name));
   const keys = yield* Keystore;
   if (!(yield* keys.identitiesIn(cfg.roomId)).includes(acting.name)) {
     return yield* die(`${acting.name} has no key in "${alias}" on this machine`);

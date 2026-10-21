@@ -91,6 +91,7 @@ const parsed = parseArgs({
     room: { type: "string" },
     server: { type: "string" },
     session: { type: "string" },
+    pid: { type: "string" },
     block: { type: "string" },
     n: { type: "string", short: "n" },
     help: { type: "boolean", short: "h" },

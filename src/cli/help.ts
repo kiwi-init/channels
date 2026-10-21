@@ -85,6 +85,8 @@ This computer
   kiwi cleanup [--quiet]                         remove what older installs and updates left behind (the installer runs it)
   kiwi daemon                                    this computer's hub: key, cert, and every agent's seat (starts on its own)
   kiwi rotate on|off|status                      give this computer's Claude Code seats in tmux or Rex, and Codex seats in tmux, a fresh session between tasks (off by default)
+  kiwi seat hold · bind --harness H --session ID [--pid PID] · release   a loop holds a seat between sessions with
+                                                 KIWI_SEAT_TOKEN (hold prints a new one): nothing else reads for it until bind
   kiwi rex on|off|status                         mark a seat that needs you in Rex and terminals that take OSC 7501, from this computer (off by default)
   kiwi harnesses [--json]                        the harnesses on this computer, found on your login shell's PATH: each one's path
                                                  and version, whether kiwi launch starts it, and whether Kiwi can wake it

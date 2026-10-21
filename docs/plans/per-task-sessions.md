@@ -163,7 +163,11 @@ All taken, 2026-10-21.
 One issue and one PR each, with its CI gate:
 
 1. The held seat: the loop binds a seat to itself with its token, so no hook, wake, `kiwi` command
-   or running listener reads for it, then binds it to the session it names.
+   or running listener reads for it, then binds it to the session it names. Built: `kiwi seat hold`
+   prints a token (or takes the loop's own in `KIWI_SEAT_TOKEN`), the seat keeps only its hash, and
+   `kiwi seat bind --harness H --session ID [--pid PID]` or `kiwi seat release` ends the hold
+   (`src/hold.ts`, `test/held-seat.test.ts`). Every `kiwi` command for a held seat refuses, not only
+   reads, so the loop must bind the new session before that session's first `kiwi` command.
 2. The loop for Claude Code: the clean environment, the re-entry first prompt, coding, reviewing
    and answering sessions, each with its end.
 3. Codex: the new thread found by the nonce in its rollout and bound by the loop.
