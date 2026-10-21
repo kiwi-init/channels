@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { home } from "../config.ts";
@@ -6,8 +5,10 @@ import { appendRotated } from "../daemon/wake.ts";
 import { codexTurn } from "../harness.ts";
 import { offerHandoff } from "../hooks/handoff.ts";
 import { alive } from "../hooks/listeners.ts";
-import { rexBlockPresent, rexInstance, rexProcess, rexRootState, rexScreen, runRex, type RexPlace } from "../rex.ts";
-import { leadsTerminal } from "../status.ts";
+import { rexBlockPresent, rexInstance, rexProcess, rexRootState, rexScreen, type RexPlace } from "../rex.ts";
+import { holdsInput, leadsTerminal } from "../terminals/shared/foreground.ts";
+import { runNow } from "../terminals/shared/run.ts";
+import { tmuxNow } from "../terminals/shared/tmux.ts";
 import { CODEX_FIRST, CODEX_NEW, codexInput, codexShown, sameWords } from "./codex.ts";
 
 export interface ClaudeTarget {
@@ -102,8 +103,7 @@ function registry(t: Target): Registry {
 type TmuxTarget = { pid: number; pane: string; socket: string };
 
 function tmux(t: TmuxTarget, args: string[]): string | null {
-  const r = spawnSync("tmux", ["-S", t.socket, ...args], { encoding: "utf8", timeout: 5_000 });
-  return r.status === 0 ? r.stdout : null;
+  return tmuxNow(t.socket, args);
 }
 
 interface PaneId {
@@ -115,12 +115,6 @@ interface PaneId {
 function paneId(t: TmuxTarget): PaneId | null {
   const out = tmux(t, ["display-message", "-p", "-t", t.pane, "#{pid} #{pane_pid} #{pane_tty}"])?.trim().split(" ");
   return out && out.length === 3 ? { server: out[0]!, panePid: out[1]!, tty: out[2]! } : null;
-}
-
-function holdsInput(pid: number, tty: string): boolean {
-  const r = spawnSync("ps", ["-o", "tty=,tpgid=,pgid=", "-p", String(pid)], { encoding: "utf8", timeout: 2_000 });
-  const [own, fg, group] = r.status === 0 ? r.stdout.trim().split(/\s+/) : [];
-  return !!own && own !== "?" && tty.endsWith(`/${own.replace(/^\/dev\//, "")}`) && fg === String(pid) && group === String(pid);
 }
 
 type Check = Outcome | "wait" | "ready";
@@ -182,7 +176,7 @@ function rexBackend(t: ClaudeTarget & { rex: RexPlace; bin: string }, quietMs: n
   const bin = t.bin;
   let emptyAt: number | null = null;
   const cast = (id: PaneId | RexId): RexId => id as RexId;
-  const sendKey = (...keys: string[]): boolean => runRex(bin, ["-S", place.server, "send-key", "-s", place.session, "-b", place.block, ...keys]).status === 0;
+  const sendKey = (...keys: string[]): boolean => runNow([bin, "-S", place.server, "send-key", "-s", place.session, "-b", place.block, ...keys]).status === 0;
   return {
     kind: "rex",
     identify: () => {
@@ -208,7 +202,7 @@ function rexBackend(t: ClaudeTarget & { rex: RexPlace; bin: string }, quietMs: n
       return state === "done" || state === "idle";
     },
     screen: () => rexScreen(place, bin),
-    type: (_first, text) => runRex(bin, ["-S", place.server, "send", "-s", place.session, "-b", place.block, text]).status === 0,
+    type: (_first, text) => runNow([bin, "-S", place.server, "send", "-s", place.session, "-b", place.block, text]).status === 0,
     enter: () => sendKey("enter"),
     erase: (_first, count) => sendKey(...Array.from({ length: count }, () => "backspace")),
     calm: () => true,
