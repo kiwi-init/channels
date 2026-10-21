@@ -201,6 +201,15 @@ shots, dark and light: channel messages #1995 and #1996.
 | tmux | Download Tmux Helpers, then Remove | shown when tmux is found |
 
 - Removing the preferred plugin's helpers sets Prefer back to Terminal.
+- **Logos** (owner, #2002), each recorded with its source and terms in `web/public/terminals/NOTICE.md`:
+  - tmux: the logomark (the panes square, viewBox `0 0 160 160`) from
+    [Tmux_logo.svg](https://commons.wikimedia.org/wiki/File:Tmux_logo.svg), by Jason Long, under the
+    ISC license, which requires the credit.
+  - Rex: Superlogical's press kit, as the owner sent it. It holds the company wordmark only
+    (`logo-vector.svg`, with `logo-bw.png` and `logo-wb.png` for light and dark), no Rex mark and no
+    written terms. The wordmark has one colour, so one SVG drawn in `currentColor` serves both
+    themes. It is too wide for the square tile, so the Rex row gets a wide logo slot; that PR's
+    shots settle it with the owner.
 - In this plan, Download writes files that ship inside kiwi, and nothing is fetched. The word is the
   owner's, and it fits a store later.
 
