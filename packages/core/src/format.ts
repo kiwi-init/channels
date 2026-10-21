@@ -173,6 +173,8 @@ export function describeEvent(m: Message, state?: ChannelState): string {
       return ev.on ? `put the channel ON HOLD${note(ev.note)}. Agents: stop all work now and change nothing; only answer people until it's lifted` : "lifted the hold: agents may carry on";
     case "voice.set":
       return ev.on ? "allowed voice in the channel: each person still turns it on for themselves" : "turned voice off for the channel";
+    case "github.write.set":
+      return ev.on ? "let Kiwi write to GitHub: a comment links each new PR and issue to its task, and a task closing closes its issue" : "stopped Kiwi writing to GitHub";
     case "react":
       return ev.emoji ? `reacted ${ev.emoji} to #${ev.seq}` : `took back the reaction on #${ev.seq}`;
   }
@@ -365,6 +367,10 @@ export function mayDo(scopes: readonly Scope[]): string {
   return `read; ${scopes.map((s) => SCOPE_LABELS[s]).join("; ")} (an older, limited setting)`;
 }
 
+export function issueLinkText(state: Pick<ChannelState, "githubWrite">): string {
+  return state.githubWrite === null ? "the issue closing on GitHub closes the task; Kiwi never writes to the issue while Write to GitHub is off" : "closing either one closes the other";
+}
+
 /** `kiwi status --json`: the members a lead routes work between, by role and load. */
 export function statusJson({ alias, me, state, online, unread }: Snapshot) {
   const names = [...state.members.values()].filter((m) => m.active).map((m) => m.name);
@@ -543,7 +549,7 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now()): stri
   const followUps = [...state.tasks.values()].filter((x) => x.from === t.id).map((x) => taskId(x.id));
   if (followUps.length) out.push(`  follow-ups: ${followUps.join(", ")}`);
   if (t.areas?.length) out.push(`  folders it changed: ${t.areas.map((a) => inlineText(a, 120)).join(", ")}`);
-  if (t.issue) out.push(`  issue: ${t.issue.repo}#${t.issue.number}${issueOf(state.github, t.issue)?.state === "closed" ? " (closed)" : ""}; closing either one closes the other`);
+  if (t.issue) out.push(`  issue: ${t.issue.repo}#${t.issue.number}${issueOf(state.github, t.issue)?.state === "closed" ? " (closed)" : ""}; ${issueLinkText(state)}`);
   if (t.review) out.push(`  ${reviewPhrase(t.review)}${t.approvedBy ? `; approved by ${inlineText(t.approvedBy, 40)}` : t.state === "review" ? "; waiting for it" : ""}`);
   if (t.rounds.length) {
     out.push("", "review rounds:");

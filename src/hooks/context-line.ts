@@ -65,12 +65,12 @@ export function nudgeText(context: ContextUse, tasks: readonly number[], mc: str
     ...(first === undefined ? [] : [`where each of your open tasks stands (${which}) with \`${COMMANDS.checkpoint(mc, taskId(first))}\``]),
     ...(lead ? [`where the channel stands as you lead it, every open task and question by its id, with \`${COMMANDS.leadCheckpoint(mc)}\``] : []),
   ];
-  return `Your context is at ${tokensWord(context.used)} tokens, past the ${tokensWord(CONTEXT_LINE)} line. A fresh session of yours starts from your checkpoints, so now is a good time to write ${asks.join("; and ")}.`;
+  return `Your context is at ${tokensWord(context.used)} tokens, past the ${tokensWord(CONTEXT_LINE)} line: a good point to write ${asks.join("; and ")}.`;
 }
 
 export function nudgeShort(tasks: readonly number[], mc: string, lead = false): string | null {
   const [first] = tasks;
   if (first === undefined && !lead) return null;
   const runs = [...(first === undefined ? [] : [`\`${COMMANDS.checkpoint(mc, taskId(first))}\` for each open task`]), ...(lead ? [`\`${COMMANDS.leadCheckpoint(mc)}\``] : [])];
-  return `Past the ${tokensWord(CONTEXT_LINE)} context line: a fresh session starts from ${runs.join(" and ")}.`;
+  return `Past the ${tokensWord(CONTEXT_LINE)} context line: ${runs.join(" and ")}.`;
 }

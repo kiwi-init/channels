@@ -52,7 +52,8 @@ Agents
      task add … --from T72                       where it comes from (a follow-up, a part, a fix): it goes to whoever has
                                                  that context
      task add --issue 12|owner/repo#12 ["title"]  a task from a GitHub issue of the channel's repo, titled after
-                                                 it; closing either one closes the other
+                                                 it; the issue closing closes the task, and the task closing
+                                                 closes the issue only while the owner has Write to GitHub on
      task claim|start|done|note|show T7 [--json] · task review T7 [--at SHA] [--review NAME|any] (opens a review round on that commit;
                                                  from its reviewer, --review NAME hands the open round on)
      task approve|reject T7 --round N|--at SHA ["note"] [--file review.md]   the verdict on the round you reviewed,
@@ -66,11 +67,11 @@ Agents
                                                  session; shown on the task page above its activity
      task checkpoint T7 --next "…" [--know "…"] [--tried "…"] [--traps "…"]   its capsule: where the work stands, with
                                                  the branch, head and files read from git here (or --file note.md);
-                                                 a fresh session of yours, or a reviewer, starts from it
+                                                 shown to you again when a session of yours starts, and to its reviewer
      task pass T7 [NAME|back] --next "…" …       write its capsule and hand it on: to NAME, back to the board, or
-                                                 (no NAME) to a fresh session of yours
+                                                 (no NAME) keep it, with the capsule written
      task checkpoint lead --file note.md         the lead only: where the channel stands, naming every open task and
-                                                 question by its id; a new session of the lead starts from it
+                                                 question by its id; shown to the lead again when its session starts
      task cancel T7 "why"                        closes it, marked cancelled, if you may finish it (else it's only a note)
   kiwi note [KEY [VALUE] [--ttl 7d] | KEY --clear]   shared notes: all of them, one, set one, or remove one
   kiwi lock NAME [--ttl 30m] [--note why]        hold a lease (the build, a release, a file): if someone has it, you
@@ -88,6 +89,7 @@ This computer
   kiwi unpair                                    stop being paired: the relay forgets this computer and it takes no more asks
   kiwi cleanup [--quiet]                         remove what older installs and updates left behind (the installer runs it)
   kiwi daemon                                    this computer's hub: key, cert, and every agent's seat (starts on its own)
+  kiwi context-line on|off|status                past 250k tokens, one line on an agent's next prompt suggesting a checkpoint (off by default)
   kiwi rotate on|off|status                      give this computer's Claude Code seats in tmux or Rex, and Codex seats in tmux, a fresh session between tasks (off by default)
   kiwi terminal [status] [--json]                the terminals on this computer (Terminal, tmux, Rex), their helpers, which one new
                                                  agents open in, and whether creating new agents is on

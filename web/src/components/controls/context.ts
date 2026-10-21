@@ -45,6 +45,7 @@ export interface ControlsProps {
   onCharter?: (text: string | null) => Promise<void>
   onRepos?: (repos: string[]) => Promise<void>
   onVoice?: (on: boolean) => Promise<void>
+  onGithubWrite?: (on: boolean) => Promise<void>
   title?: string
   roomId?: string
 }

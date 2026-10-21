@@ -1,4 +1,4 @@
-import { GENERAL_ROOM, ignored, isOldGifKey, isReaction, MAX_ROOMS, ROOM_ID_RE, type Message, type Trust } from "../protocol.ts";
+import { EVENT_OPS_VERSION, GENERAL_ROOM, ignored, isOldGifKey, isReaction, MAX_ROOMS, ROOM_ID_RE, type Message, type Trust } from "../protocol.ts";
 import { refusal, scopesOf, type Scope } from "../scopes.ts";
 import { applyEvent, type FoldCtx } from "./fold-events.ts";
 import { allowedOnHold, isLeadRole, isPerson, LEAD, ON_HOLD } from "./people.ts";
@@ -183,6 +183,7 @@ export function fold(
   const leases = new Map<string, Lease>(from?.leases.map((l) => [l.name, l]));
   const reactions = new Map<number, Map<string, Reaction>>(from?.reactions.map(([seq, by]) => [seq, new Map(by)]));
   const reactSeqs = new Set<number>(from?.reactSeqs);
+  let skipped = from?.skipped === true;
   const trust = new Map<number, Trust>(from?.trust);
   const rejected = new Map<number, string>(from?.rejected);
   const sent = new Map<string, number>();
@@ -247,6 +248,7 @@ export function fold(
     },
     hold: from?.hold ?? null,
     voice: from?.voice ?? false,
+    githubWrite: from?.githubWrite ?? null,
   };
 
   const seen = new Set<number>();
@@ -376,6 +378,11 @@ export function fold(
         for (const t of m.to ?? []) if (!t.startsWith("role:")) people.add(t);
       }
 
+      if (m.kind === "event" && m.newer !== undefined) {
+        skipped = true;
+        placeOf.set(m.seq, MAIN);
+        continue;
+      }
       const ev = m.ev;
       if (m.kind !== "event" || !ev) continue;
       const reject = (why: string) => rejected.set(m.seq, why);
@@ -448,6 +455,7 @@ export function fold(
       },
       hold: ctx.hold,
       voice: ctx.voice,
+      githubWrite: ctx.githubWrite,
       scopesByKey: [...scopesByKey],
       scopeSets: [...scopeSets],
       roleSets: [...roleSets],
@@ -472,6 +480,8 @@ export function fold(
       rooms: [...rooms.values()],
       roomOf: recent(roomOf),
       placeOf: recent(placeOf),
+      folded: EVENT_OPS_VERSION,
+      ...(skipped ? { skipped: true as const } : {}),
     }),
   );
 
@@ -525,6 +535,7 @@ export function fold(
     github: ctx.github,
     hold: ctx.hold,
     voice: ctx.voice,
+    githubWrite: ctx.githubWrite,
     reactions,
     head,
   };

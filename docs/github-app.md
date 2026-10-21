@@ -87,6 +87,15 @@ only when the relay has a `GITHUB_APP_CLIENT_ID`.
 2. In the channel, the owner lists the repos under **Repos**. The app sends
    the same list to the relay (`PUT /github/repos`), which is what routes a
    repo's webhooks to this channel.
+3. **Write to GitHub**, under Repos, is off by default. While it's off, Kiwi
+   writes nothing to your repos: a task added with `--issue` only links the
+   issue, and closing the task leaves the issue as it is (the issue closing on
+   GitHub still closes its task). While the owner has it on, their app comments
+   `Linked to Kiwi task T7` once on a new PR whose branch names a task (`T7-…`)
+   and on the issue of a task added with `--issue`, and closes that issue when
+   the task is done (completed) or cancelled (not planned). No comment carries
+   the task's title or notes, which stay in the encrypted channel, and nothing
+   from before the switch went on is commented or closed.
 
 GitHub's **Recent Deliveries** on the App's page shows each webhook and the
 relay's answer: `{"queued": 1}` when a channel took it, `{"queued": 0}` when

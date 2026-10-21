@@ -279,6 +279,7 @@ export type Event =
    */
   | { op: "hold.set"; on: boolean; note?: string }
   | { op: "voice.set"; on: boolean }
+  | { op: "github.write.set"; on: boolean }
   /**
    * A member's reaction to message #seq: one short emoji per member per message, the latest wins, null
    * takes it back. Not news: it's no unread, no notification, no line in a feed. Its body is throwaway
@@ -308,8 +309,8 @@ export function isReaction(m: Pick<Message, "kind" | "ev">): boolean {
 
 const QUIET_OPS: ReadonlySet<string> = new Set(["hello", "card", "picture.set", "react", "fact.set", "fact.del", "lease.take", "lease.free", "task.claim", "claim", "release"]);
 
-export function isQuiet(m: Pick<Message, "kind" | "ev">): boolean {
-  return m.kind === "event" && !!m.ev && QUIET_OPS.has(m.ev.op);
+export function isQuiet(m: Pick<Message, "kind" | "ev" | "newer">): boolean {
+  return m.kind === "event" && (m.newer !== undefined || (!!m.ev && QUIET_OPS.has(m.ev.op)));
 }
 
 /** What a member says about itself (see the card event). Every field is optional and short. */
@@ -617,7 +618,35 @@ export function ignored(trust: Trust | undefined): boolean {
   return trust === "forged" || trust === "refused";
 }
 
+export interface NewerEvent {
+  readonly op: string;
+  readonly [field: string]: unknown;
+}
+
+export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
+
+export const EVENT_OPS_VERSION = 1;
+const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
+
+export const knownOp = (op: string): boolean => eventCheck({ op }) !== null;
+
+export const isEvent = (ev: Event | NewerEvent): ev is Event => eventCheck(ev) !== null;
+
+function wellFormedNewer(ev: unknown): ev is NewerEvent {
+  if (!ev || typeof ev !== "object") return false;
+  const op = (ev as Record<string, unknown>).op;
+  return typeof op === "string" && op.length <= 40 && NEWER_OP_RE.test(op) && eventCheck(ev) === null;
+}
+
+export function asSent(m: Message): Omit<Message, "newer" | "ev"> & { ev?: Event | NewerEvent } {
+  const { newer, ev, ...rest } = m;
+  return { ...rest, ...(newer ? { ev: newer } : ev ? { ev } : {}) };
+}
+
+export const outgrown = (base: { folded?: number; skipped?: true }): boolean => base.skipped === true && (base.folded ?? 0) < EVENT_OPS_VERSION;
+
 export interface Message extends Payload {
+  newer?: NewerEvent;
   seq: number;
   /** When the relay stored it (one clock for everyone, unlike `ts`). */
   rts?: number;
@@ -711,6 +740,10 @@ const tags = (x: unknown): x is string[] => Array.isArray(x) && x.length <= MAX_
 
 /** Whether an event has the shape its op promises (anything else is dropped, not folded). */
 export function wellFormedEvent(ev: unknown): ev is Event {
+  return eventCheck(ev) === true;
+}
+
+function eventCheck(ev: unknown): boolean | null {
   if (!ev || typeof ev !== "object") return false;
   const e = ev as Record<string, unknown>;
   const n = (x: unknown): x is number => Number.isSafeInteger(x) && (x as number) >= 0;
@@ -810,16 +843,17 @@ export function wellFormedEvent(ev: unknown): ev is Event {
     case "hold.set":
       return typeof e.on === "boolean" && opt(e.note, (x): x is string => str(x, 500));
     case "voice.set":
+    case "github.write.set":
       return typeof e.on === "boolean";
     case "react":
       return n(e.seq) && (e.seq as number) > 0 && (e.emoji === null || wellFormedReaction(e.emoji));
     default:
-      return false;
+      return null;
   }
 }
 
 /** Whether a decrypted payload has the shape every client relies on. Malformed ones are dropped. */
-export function wellFormed(p: unknown): p is Payload {
+export function wellFormed(p: unknown): p is WirePayload {
   if (!p || typeof p !== "object") return false;
   const m = p as Record<string, unknown>;
   return (
@@ -841,7 +875,7 @@ export function wellFormed(p: unknown): p is Payload {
     (m.permission === undefined || (m.esc === true && permissionChoices(m.choices) && wellFormedPermission(m.permission))) &&
     (m.perm === undefined || (m.kind !== "event" && Array.isArray(m.re) && m.re.length > 0 && wellFormedPermReply(m.perm))) &&
     (m.settled === undefined || (m.kind !== "event" && Array.isArray(m.re) && m.re.length > 0 && wellFormedSettled(m.settled))) &&
-    (m.ev === undefined || wellFormedEvent(m.ev)) &&
+    (m.ev === undefined || wellFormedEvent(m.ev) || wellFormedNewer(m.ev)) &&
     (m.kind !== "event" || m.ev !== undefined)
   );
 }
