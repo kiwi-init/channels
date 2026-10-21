@@ -101,6 +101,10 @@ describe("ten verbs", () => {
     // send --re N goes in its thread, to the same recipients as ever (here: everyone).
     await ok(agent, "send", "--to", "all", "--re", seqOf(asked), "or 9090");
     expect(await ok(owner, "log")).toMatch(new RegExp(`dev → everyone re #${seqOf(asked)}: or 9090`));
+    expect(await ok(agent, "send", "--to", "all", "--re", seqOf(asked), "8080 it is")).not.toContain("ran long for #general");
+    const long = Array.from({ length: 8 }, (_, i) => `- port note ${i + 1}`).join("\n");
+    const told = await ok(agent, "reply", seqOf(asked), long);
+    expect(told).toMatch(/^sent #\d+\nThat ran long for #general: .*kiwi send --to T7/);
 
     // A question that waits for its answer.
     const q = spawn(agent, ["send", "--ask", "--to", "lead", "--wait", "20s", "ship it?"]);

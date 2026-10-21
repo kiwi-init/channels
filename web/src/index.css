@@ -239,6 +239,10 @@ time,
   mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
 }
 
+.clamp-more {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 2lh), transparent);
+}
+
 /* What's said in a bubble wraps like prose, not like a log line. */
 .bubble-text {
   text-wrap: pretty;

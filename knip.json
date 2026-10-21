@@ -10,7 +10,8 @@
         "scripts/*.ts",
         "scripts/bench-sh/run.ts",
         "test/**/*.test.ts",
-        "test/owner-cli.ts"
+        "test/owner-cli.ts",
+        "test/fixtures/home-probe.ts"
       ],
       "project": [
         "src/**/*.ts",

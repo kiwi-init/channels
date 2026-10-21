@@ -51,7 +51,7 @@ describe("the terminal plugins", () => {
 describe("seats a terminal can show", () => {
   const place = { server: "studio", session: "session:01a15963-bacc-7426-91e9-4d98757dcd0c", block: "block:11a15963-bacc-7426-91e9-4d98757dcd0c" };
   const seat: PlacedSeat = { place: "rex", alias: "ch", agent: "ana", room: "room-1", ...place };
-  const helpers = (rex: "on" | "off"): Config => ({ channels: {}, rex });
+  const helpers = (rex: "on" | "off"): Config => ({ channels: {}, terminals: { helpers: { rex } } });
   const everywhere = (m: TerminalManifest, can: TerminalManifest["can"]): TerminalManifest => ({ ...m, platforms: ["darwin", "linux", "win32"], can });
 
   function terminals(...plugins: { manifest: TerminalManifest; seats: PlacedSeat[]; answer?: ShowResult }[]) {

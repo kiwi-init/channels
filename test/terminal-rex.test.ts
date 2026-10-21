@@ -278,13 +278,15 @@ describe("the daemon's Rex reads", () => {
 
   test("only with the Rex helpers on, for a seat in Rex whose harness Kiwi can't read from its files", () => {
     const rex = place;
-    expect(readsRex({ rex: "on" }, { harness: "grok", rex } as SeatRecord)).toBe(true);
-    expect(readsRex({ rex: "on" }, { rex } as SeatRecord)).toBe(true);
-    expect(readsRex({ rex: "off" }, { harness: "grok", rex } as SeatRecord)).toBe(false);
+    const ON = { terminals: { helpers: { rex: "on" as const } } };
+    const OFF = { terminals: { helpers: { rex: "off" as const } } };
+    expect(readsRex(ON, { harness: "grok", rex } as SeatRecord)).toBe(true);
+    expect(readsRex(ON, { rex } as SeatRecord)).toBe(true);
+    expect(readsRex(OFF, { harness: "grok", rex } as SeatRecord)).toBe(false);
     expect(readsRex({}, { harness: "grok", rex } as SeatRecord)).toBe(false);
-    expect(readsRex({ rex: "on" }, { harness: "grok" } as SeatRecord)).toBe(false);
-    for (const harness of ["claude", "codex", "opencode"] as const) expect(readsRex({ rex: "on" }, { harness, rex } as SeatRecord)).toBe(false);
-    expect(readsRex({ rex: "on" }, null)).toBe(false);
+    expect(readsRex(ON, { harness: "grok" } as SeatRecord)).toBe(false);
+    for (const harness of ["claude", "codex", "opencode"] as const) expect(readsRex(ON, { harness, rex } as SeatRecord)).toBe(false);
+    expect(readsRex(ON, null)).toBe(false);
   });
 });
 
