@@ -22,6 +22,7 @@ import {
   type Message,
   type Payload,
 } from "../protocol.ts";
+import type { PermissionReply, PermissionSettled, PermissionShown } from "../permission.ts";
 import { MissingKey, Rejected } from "../refusals.ts";
 import type { ChannelCore } from "./core.ts";
 import { RelayError, type Refused } from "./errors.ts";
@@ -41,6 +42,10 @@ export interface SendOptions {
   esc?: boolean;
   handoff?: Handoff;
   choices?: string[];
+  id?: string;
+  permission?: PermissionShown;
+  perm?: PermissionReply;
+  settled?: PermissionSettled;
   task?: number;
   dm?: boolean;
   slot?: { name: string; ttl: number };
@@ -93,6 +98,7 @@ export class ChannelSending {
       if (opts.handoff && (!opts.esc || !wellFormedHandoff(opts.handoff))) return yield* new Rejected("a browser handoff goes only on an escalation, with an https link, a vendor and an expiry");
       if (opts.choices && (!opts.esc || opts.handoff || !wellFormedChoices(opts.choices)))
         return yield* new Rejected(`options go only on an escalation without a browser link: ${CHOICES_MIN} to ${CHOICES_MAX} different ones, one line of up to ${CHOICE_MAX_LENGTH} characters each`);
+      if (opts.id !== undefined && opts.id.length > 100) return yield* new Rejected("a message id is at most 100 characters");
       const attached = imgs?.length ? yield* this.images.stored(imgs) : undefined;
       const payload: Payload = {
         v: PROTOCOL_VERSION,
@@ -115,6 +121,7 @@ export class ChannelSending {
         ...(opts.dm && !opts.ev && opts.to?.length === 1 ? { dm: true as const } : {}),
         ts: Date.now(),
       };
+      if ((payload.permission || payload.perm || payload.settled) && !wellFormed(payload)) return yield* new Rejected("a permission prompt, its answer or its close is malformed");
       const signed = yield* Effect.promise(() => sign(this.ch.identity, payload));
       const sealNow = Effect.gen({ self: this }, function* () {
         if (!this.ch.access.keys[String(this.ch.access.epoch)]) yield* this.ch.fx.refreshKeys();
