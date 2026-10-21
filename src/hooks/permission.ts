@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import { closeSync, mkdirSync, openSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
+import { closeSync, linkSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statSync, writeFileSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import * as Deferred from "effect/Deferred";
@@ -98,12 +98,27 @@ export interface Held {
 
 export type Asking = Pick<AgentSession, "me" | "state" | "escalate" | "owe" | "reply"> & { readonly ch: { readonly fx: Pick<AgentSession["ch"]["fx"], "head" | "live"> } };
 
+function lockHeld(path: string): boolean | null {
+  try {
+    const pid = Number(readFileSync(path, "utf8"));
+    const fresh = Date.now() - statSync(path).mtimeMs < WRITING_MS;
+    return (pid === 0 && fresh) || (Number.isInteger(pid) && pid > 0 && alive(pid));
+  } catch {
+    // Gone: the caller tries again.
+    return null;
+  }
+}
+
 export function holdSession(session: string): Held | null {
   const dir = join(home(), "permission");
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const file = join(dir, `${session.replace(/[^A-Za-z0-9_-]/g, "_")}.pid`);
   const marker = `${file}.newer`;
   const since = Date.now();
+  const overtaken = (): null => {
+    writeFileSync(marker, String(Date.now()), { mode: 0o600 });
+    return null;
+  };
   for (let tries = 0; tries < 2; tries++) {
     try {
       const fd = openSync(file, "wx", 0o600);
@@ -129,38 +144,69 @@ export function holdSession(session: string): Held | null {
         },
       };
     } catch {
-      // Another hook holds this session, or held it and died: a live one keeps it, and learns a newer prompt started.
-      let held: number | null = null;
-      let fresh = false;
-      try {
-        const pid = Number(readFileSync(file, "utf8"));
-        fresh = Date.now() - statSync(file).mtimeMs < WRITING_MS;
-        held = pid;
-      } catch {
-        // Gone between the two reads: try again.
-      }
+      // Another hook holds this session, or held it and died: a live one keeps it and learns a newer prompt started; a dead one's file is moved aside and judged again there, where no hook can swap it.
+      const held = lockHeld(file);
       if (held === null) continue;
-      if ((held === 0 && fresh) || (Number.isInteger(held) && held > 0 && alive(held))) {
-        writeFileSync(marker, String(Date.now()), { mode: 0o600 });
-        return null;
+      if (held) return overtaken();
+      const aside = `${file}.${randomUUID()}`;
+      try {
+        renameSync(file, aside);
+      } catch {
+        // Gone before the move: try again.
+        continue;
       }
-      rmSync(file, { force: true });
+      if (lockHeld(aside)) {
+        try {
+          linkSync(aside, file);
+        } catch {
+          // A newer hook took the session meanwhile, and keeps it.
+        }
+        rmSync(aside, { force: true });
+        return overtaken();
+      }
+      rmSync(aside, { force: true });
     }
   }
   return null;
 }
 
-const whenSignalled = Effect.callback<void>((resume) => {
-  const done = () => resume(Effect.void);
-  for (const s of SIGNALS) process.once(s, done);
-  return Effect.sync(() => {
-    for (const s of SIGNALS) process.off(s, done);
-  });
-});
+interface Signals {
+  heard: () => boolean;
+  when: Effect.Effect<void>;
+}
 
 const quit = () => process.exit(0);
 
-const waitForAnswer = Effect.fn("Hooks.permission.wait")(function* (s: Asking, input: PermissionInput, call: PendingCall, transcript: string, claudePid: number | null, held: Held) {
+const listenForSignals = Effect.acquireRelease(
+  Effect.sync(() => {
+    let heard = false;
+    const waiting = new Set<() => void>();
+    const note = () => {
+      heard = true;
+      for (const w of [...waiting]) w();
+      waiting.clear();
+    };
+    for (const sig of SIGNALS) {
+      process.on(sig, note);
+      process.off(sig, quit);
+    }
+    const when = Effect.callback<void>((resume) => {
+      const done = () => resume(Effect.void);
+      if (heard) return done();
+      waiting.add(done);
+      return Effect.sync(() => {
+        waiting.delete(done);
+      });
+    });
+    return { signals: { heard: () => heard, when } satisfies Signals, note };
+  }),
+  ({ note }) =>
+    Effect.sync(() => {
+      for (const sig of SIGNALS) process.off(sig, note);
+    }),
+);
+
+const waitForAnswer = Effect.fn("Hooks.permission.wait")(function* (s: Asking, input: PermissionInput, call: PendingCall, transcript: string, claudePid: number | null, held: Held, signals: Signals) {
   const id = randomUUID();
   const expiresAt = Date.now() + WAIT_MS;
   const shown = permissionShown({ tool_name: input.tool_name, tool_input: input.tool_input, cwd: shownCwd(input.cwd), mcp_server: input.mcp_server }, randomBytes(18).toString("base64url"), expiresAt);
@@ -196,18 +242,20 @@ const waitForAnswer = Effect.fn("Hooks.permission.wait")(function* (s: Asking, i
   );
   yield* Effect.forkScoped(watching);
   yield* Effect.forkScoped(listening.pipe(Effect.catchCause(() => Effect.void)));
-  for (const sig of SIGNALS) process.off(sig, quit);
   yield* Effect.forkScoped(
     Effect.andThen(
-      whenSignalled,
-      Effect.suspend(() => Deferred.succeed(outcome, { settled: claudePid !== null && alive(claudePid) ? "terminal" : "ended" })),
+      signals.when,
+      Effect.suspend(() => Deferred.succeed(outcome, { settled: signalledAs(claudePid) })),
     ),
   );
   return { got: yield* Deferred.await(outcome), seq, settledNow };
 }, Effect.scoped);
 
+const signalledAs = (claudePid: number | null): PermissionSettled => (claudePid !== null && alive(claudePid) ? "terminal" : "ended");
+
 export const askPermission = Effect.fn("Hooks.permission.ask")(function* (s: Asking, input: PermissionInput, call: PendingCall, transcript: string, claudePid: number | null, held: Held) {
-  const asked = yield* waitForAnswer(s, input, call, transcript, claudePid, held);
+  const { signals } = yield* listenForSignals;
+  const asked = yield* waitForAnswer(s, input, call, transcript, claudePid, held, signals);
   if (!asked) return null;
   const { got, seq, settledNow } = asked;
   const close = (settled: PermissionSettled) => s.reply(seq, CLOSING[settled], "msg", undefined, { settled }).pipe(Effect.timeoutOption(CLOSE_MS), Effect.ignore);
@@ -216,12 +264,12 @@ export const askPermission = Effect.fn("Hooks.permission.ask")(function* (s: Ask
     return null;
   }
   if (got.decision === "allow" && (yield* s.state()).state.hold) return null;
-  if (settledNow() || held.newer()) {
-    yield* close("terminal");
+  if (signals.heard() || settledNow() || held.newer()) {
+    yield* close(signals.heard() ? signalledAs(claudePid) : "terminal");
     return null;
   }
   return got;
-});
+}, Effect.scoped);
 
 export const runPermission = Effect.fn("Hooks.permission")(function* (input: PermissionInput, claudePid: number | null) {
   if (input.agent_id !== undefined) return null;
