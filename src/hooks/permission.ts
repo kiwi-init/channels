@@ -91,10 +91,12 @@ export function shownCwd(cwd: unknown, mine: string = homedir()): unknown {
   return cwd === mine ? "~" : cwd.startsWith(`${mine}/`) ? `~${cwd.slice(mine.length)}` : cwd;
 }
 
-interface Held {
+export interface Held {
   release: () => void;
   newer: () => boolean;
 }
+
+export type Asking = Pick<AgentSession, "me" | "state" | "escalate" | "owe" | "reply"> & { readonly ch: { readonly fx: Pick<AgentSession["ch"]["fx"], "head" | "live"> } };
 
 export function holdSession(session: string): Held | null {
   const dir = join(home(), "permission");
@@ -110,8 +112,9 @@ export function holdSession(session: string): Held | null {
       return {
         release: () => {
           try {
-            if (readFileSync(file, "utf8") === String(process.pid)) rmSync(file);
+            if (readFileSync(file, "utf8") !== String(process.pid)) return;
             rmSync(marker, { force: true });
+            rmSync(file);
           } catch {
             // Already gone: nothing to release.
           }
@@ -130,8 +133,9 @@ export function holdSession(session: string): Held | null {
       let held: number | null = null;
       let fresh = false;
       try {
+        const pid = Number(readFileSync(file, "utf8"));
         fresh = Date.now() - statSync(file).mtimeMs < WRITING_MS;
-        held = Number(readFileSync(file, "utf8"));
+        held = pid;
       } catch {
         // Gone between the two reads: try again.
       }
@@ -156,7 +160,7 @@ const whenSignalled = Effect.callback<void>((resume) => {
 
 const quit = () => process.exit(0);
 
-const askAndWait = Effect.fn("Hooks.permission.ask")(function* (s: AgentSession, input: PermissionInput, call: PendingCall, transcript: string, claudePid: number | null, held: Held) {
+const waitForAnswer = Effect.fn("Hooks.permission.wait")(function* (s: Asking, input: PermissionInput, call: PendingCall, transcript: string, claudePid: number | null, held: Held) {
   const id = randomUUID();
   const expiresAt = Date.now() + WAIT_MS;
   const shown = permissionShown({ tool_name: input.tool_name, tool_input: input.tool_input, cwd: shownCwd(input.cwd), mcp_server: input.mcp_server }, randomBytes(18).toString("base64url"), expiresAt);
@@ -199,7 +203,13 @@ const askAndWait = Effect.fn("Hooks.permission.ask")(function* (s: AgentSession,
       Effect.suspend(() => Deferred.succeed(outcome, { settled: claudePid !== null && alive(claudePid) ? "terminal" : "ended" })),
     ),
   );
-  const got = yield* Deferred.await(outcome);
+  return { got: yield* Deferred.await(outcome), seq, settledNow };
+}, Effect.scoped);
+
+export const askPermission = Effect.fn("Hooks.permission.ask")(function* (s: Asking, input: PermissionInput, call: PendingCall, transcript: string, claudePid: number | null, held: Held) {
+  const asked = yield* waitForAnswer(s, input, call, transcript, claudePid, held);
+  if (!asked) return null;
+  const { got, seq, settledNow } = asked;
   const close = (settled: PermissionSettled) => s.reply(seq, CLOSING[settled], "msg", undefined, { settled }).pipe(Effect.timeoutOption(CLOSE_MS), Effect.ignore);
   if ("settled" in got) {
     yield* close(got.settled);
@@ -211,7 +221,7 @@ const askAndWait = Effect.fn("Hooks.permission.ask")(function* (s: AgentSession,
     return null;
   }
   return got;
-}, Effect.scoped);
+});
 
 export const runPermission = Effect.fn("Hooks.permission")(function* (input: PermissionInput, claudePid: number | null) {
   if (input.agent_id !== undefined) return null;
@@ -227,7 +237,7 @@ export const runPermission = Effect.fn("Hooks.permission")(function* (input: Per
   if (!held) return null;
   for (const sig of SIGNALS) process.once(sig, quit);
   const s = yield* openSession(seat.alias, cfg, seat.as);
-  return yield* askAndWait(s, input, call, transcript, claudePid, held).pipe(
+  return yield* askPermission(s, input, call, transcript, claudePid, held).pipe(
     Effect.ensuring(
       Effect.sync(() => {
         for (const sig of SIGNALS) process.off(sig, quit);
