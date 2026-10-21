@@ -156,8 +156,10 @@ jobs:
       Also test/verify-total.test.ts: a signature check never throws (packages/core/src/identity.ts
       verify): a pk or sig that isn't base64url reads as unsigned, and a member's message sealed with
       such a pk loads as forged instead of failing everyone's history.
-      The preload (test/setup.ts) points KIWI_HOME at a temp directory for the whole run, so no
-      local bun test writes into the real ~/.kiwi.
+      The preload (test/setup.ts) points KIWI_HOME and every harness directory at a temp directory
+      for the whole run, replacing any the shell exports (an agent's shell exports the real
+      ~/.kiwi), so no local bun test reads or writes the real ~/.kiwi or Claude's settings
+      (test/test-home.test.ts runs bun test on test/fixtures/home-probe.ts with both exported).
       Also test/terminal-rex.test.ts: where a seat runs from its environment (nothing inside tmux, Rex's
       server, session and block ids, any other terminal's program and version), which terminals
       take an OSC 7501 status record, the record frames they get, the blocked question and
