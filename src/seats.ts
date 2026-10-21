@@ -343,7 +343,8 @@ export function notePlace(seats: readonly Binding[], env: Record<string, string 
   if (!seats.length) return;
   const keys = new Set(seats.map((b) => `${b.alias}\u0000${b.as}`));
   const same = (b: Binding) => keys.has(`${b.alias}\u0000${b.as}`);
-  const held = (b: Binding): boolean => JSON.stringify(b.term ?? null) === JSON.stringify(place.term ?? null) && JSON.stringify(b.rex ?? null) === JSON.stringify(place.rex ?? null);
+  const alike = (a: unknown, b: unknown): boolean => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  const held = (b: Binding): boolean => alike(b.term, place.term) && alike(b.rex, place.rex) && alike(b.tmux, place.tmux);
   if (seats.every(held)) return;
   updateConfig((c) => {
     for (const dir of Object.keys(c.bindings ?? {})) {
@@ -357,7 +358,8 @@ export function notePlace(seats: readonly Binding[], env: Record<string, string 
           const rest = { ...b };
           delete rest.term;
           delete rest.rex;
-          return { ...rest, ...(place.term ? { term: place.term } : {}), ...(place.rex ? { rex: place.rex } : {}) };
+          delete rest.tmux;
+          return { ...rest, ...(place.term ? { term: place.term } : {}), ...(place.rex ? { rex: place.rex } : {}), ...(place.tmux ? { tmux: place.tmux } : {}) };
         }),
       );
     }

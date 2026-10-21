@@ -1,11 +1,12 @@
 import * as Effect from "effect/Effect";
 import { loadConfig, updateConfig, type HelperId } from "../../config.ts";
+import { showNeedsYou, type NeedsYou, type ShowWhy } from "../../status.ts";
 import type { TerminalId, TerminalRow, TerminalsStatus } from "@kiwi/core/terminals.ts";
 import { helpersOn, launchesOn, MANIFESTS, placeTools, preferred, switchHelpers, terminalPlugin, terminalPlugins } from "../../terminals/registry.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, out } from "../context.ts";
 
-const USAGE = "usage: kiwi terminal [status] [--json] | kiwi terminal download|remove rex|tmux | kiwi terminal prefer app|rex|tmux";
+const USAGE = "usage: kiwi terminal [status] [--json] | kiwi terminal download|remove rex|tmux | kiwi terminal prefer app|rex|tmux | kiwi terminal show --needs-you";
 const LAUNCHES_USAGE = "usage: kiwi launches on|off|status [--json]";
 
 const isHelperId = (id: string | undefined): id is HelperId => id === "rex" || id === "tmux";
@@ -40,7 +41,7 @@ function launchesText(launch: "on" | "off"): string {
 
 export function setHelpers(id: HelperId, on: boolean) {
   return Effect.gen(function* () {
-    const plugin = yield* Effect.promise(() => terminalPlugin(id));
+    const plugin = yield* Effect.promise(async () => terminalPlugin(id, await placeTools()));
     if (!plugin.helpers) return yield* die(`${plugin.manifest.name} has no helpers to download yet`);
     const helpers = plugin.helpers;
     if (on) yield* Effect.promise(() => helpers.download());
@@ -49,6 +50,19 @@ export function setHelpers(id: HelperId, on: boolean) {
     });
     if (!on) yield* Effect.promise(() => helpers.remove());
   });
+}
+
+const SHOW_WHY: Record<ShowWhy, string> = {
+  "no-rex": "Rex isn't installed",
+  "no-server": "its terminal's server isn't running",
+  "no-app": "nothing is open to show it in",
+  "remote-control": "Rex's remote control is off",
+  failed: "its window is gone",
+};
+
+function needsYouText(got: Extract<NeedsYou, { shown: null }>): string {
+  if (got.failed) return `Couldn't show ${got.failed.waiting.agent} in ${got.failed.waiting.alias}: ${SHOW_WHY[got.failed.why]}`;
+  return got.seats ? "Nothing needs you right now" : "No seat here runs where Kiwi can show it (Rex or tmux, with its helpers on)";
 }
 
 export const terminalCommands: Record<string, Command> = {
@@ -64,6 +78,13 @@ export const terminalCommands: Record<string, Command> = {
         if (!isHelperId(id)) return yield* die(USAGE);
         yield* setHelpers(id, sub === "download");
         return out(statusText(yield* Effect.promise(() => terminalsStatus())));
+      }
+      if (sub === "show") {
+        if (!opt["needs-you"]) return yield* die(USAGE);
+        const got = yield* Effect.promise(() => showNeedsYou(loadConfig()));
+        if (got.shown) return;
+        out(needsYouText(got));
+        return got.failed ? 1 : 0;
       }
       if (sub === "prefer") {
         if (!isTerminalId(id)) return yield* die(USAGE);

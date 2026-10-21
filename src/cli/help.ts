@@ -87,8 +87,10 @@ This computer
   kiwi rotate on|off|status                      give this computer's Claude Code seats in tmux or Rex, and Codex seats in tmux, a fresh session between tasks (off by default)
   kiwi terminal [status] [--json]                the terminals on this computer (Terminal, tmux, Rex), their helpers, which one new
                                                  agents open in, and whether creating new agents is on
-  kiwi terminal download|remove rex|tmux         a terminal's helpers: Rex marks a seat that needs you (off by default)
+  kiwi terminal download|remove rex|tmux         a terminal's helpers: Rex and tmux mark a seat that needs you (off by default)
   kiwi terminal prefer app|rex|tmux              where new agents open: its helpers must be on; else Terminal, else tmux
+  kiwi terminal show --needs-you                 go to the seat with the oldest question for a person, else the oldest task
+                                                 waiting for review, in Rex or tmux (tmux's prefix K runs it)
   kiwi launches on|off|status                    whether new agents can be started on this computer, from here or a paired one (on)
   kiwi seat hold · bind --harness H --session ID [--pid PID] · release   a loop holds a seat between sessions with
                                                  KIWI_SEAT_TOKEN (hold prints a new one): nothing else reads for it until bind

@@ -1,7 +1,9 @@
 # Plan: terminal plugins (Rex, tmux and the terminal app)
 
-Status: proposed, 2026-10-21, from the owner's ask (#1927). Facts below were read from `main` at
-`00217d35` (kiwi 0.23.1).
+Status: approved by the owner (#2004), 2026-10-21, from the owner's ask (#1927). Rows 1 to 5 and 8
+are built (#648, #649, #650, #651, #655, #658), and rows 6 and 7 are in review (#659, #656); what
+changed while building is under "As built". The audit and the plan below are kept as they were decided: their facts were read from
+`main` at `00217d35` (kiwi 0.23.1), before the code moved.
 
 ## The ask
 
@@ -267,3 +269,52 @@ One task and one PR each, in this order. Each one's tests run in `test / unit`.
 | 7 | Show from Needs you, for every plugin | Show in Rex becomes Show in Rex or Show in tmux; `seatPlaces`, `showSeat` | yes: shots, then the owner's OK |
 | 8 | Settings → New agents | the four rows above and their bridge methods; New agent follows the switch and Prefer | yes: shots, then the owner's OK |
 | 9 | Docs | `docs/agents.md`, `kiwi help`, rex-helpers.md's status line, and this plan as built | no |
+
+## As built
+
+1. **Shared terminal plumbing (#648, T2009).** `src/terminals/shared/` holds `run.ts` (`runNow`,
+   `run` and `said`), `json.ts`, `foreground.ts` (`leadsTerminal`, `holdsInput`) and `tmux.ts`.
+   `run` gives up at its deadline even when the program's child keeps its output open. Every Rex API
+   call passes `--autostart=false`, as launches already did.
+2. **The interface and the registry (#649, T2010).** Each plugin is made for a set of `PlaceTools`
+   (`terminalPlugin(id, tools)`), so `detect` and `open` take no tools of their own; the Rex plugin
+   asks `whoami` once and keeps the answer for its `open`. A launch's answer keeps `place:
+   "terminal"` for the app, so a paired computer on another version reads it as before.
+3. **Rex as a plugin (#650, T2011).** `src/rex.ts`, `rex-show.ts`, `rex-events.ts` and
+   `rex-palette.ts` became `src/terminals/rex/` (`api`, `show`, `watch`, `helpers`), with `locate.ts`,
+   `mark.ts` and `type.ts`; the OSC 7501 frames and the device write are `shared/osc7501.ts`.
+   - `locate` is also the registry's own synchronous `locate(env)`, since every hook reads it.
+   - `watch` hands the daemon a match for the changed pane, and `activity` sits beside it.
+   - `helpersOn(id, cfg)` in the registry is the one read of the Rex switch.
+   - `allSeats(cfg)` in the config is the one walk over every seat record.
+   - Rotation still imports `rex/` directly, until it is removed.
+4. **One reader per shape (#651, T2012).** `packages/core/src/terminals.ts` holds the place names
+   (`PLACE_NAMES`), a launch's result (`readLaunched`, `Opened`, `LaunchRefusal`), Rex's status and a
+   Rex seat, read the same way by the daemon, the CLI and the desktop app. `RexPlace` lives there
+   too, and `src/terminals/plugin.ts` re-exports it.
+5. **Config and CLI (#655, T2013).** The config has `launch` (on unless turned off) and
+   `terminals: { prefer, helpers: { rex, tmux } }`.
+   - An old `rex: "on"` reads as the Rex helpers on and also as Prefer Rex, so a computer that used
+     Rex keeps opening new agents there; the next save writes the new shape.
+   - A new agent opens in the preferred terminal if it can open now, else Terminal, else tmux's
+     detached session `kiwi`. A fallback says why on the result (`instead`), which `kiwi launch`
+     prints and the New agent modal shows. With nothing to open, the refusal keeps "install tmux, or
+     run kiwi join yourself", since tmux isn't found by then.
+   - `kiwi terminal prefer` is refused until that terminal's helpers are on, and removing the
+     preferred terminal's helpers sets Prefer back to Terminal.
+   - `kiwi rex on|off|status` stays this release, through the new code; `kiwi rex seats|show` are
+     unchanged.
+7. **Show from Needs you (#656, T2015, in review).** A plugin can list its seats (`seats(cfg)`), and the
+   registry's `seatPlaces` and `showSeat` replace the bridge's `rexSeats` and `rexShow`: Show goes to
+   the plugin holding the seat's place, and only for a seat that plugin lists. Core reads a placed
+   seat and a show result (`readPlacedSeat`, `readShowResult`). Needs you's button is `ShowSeat`,
+   labelled from the plugin's name ("Show in Rex", and "Show in tmux" with row 6), and
+   `kiwi terminal seats` and `kiwi terminal show --seat` sit beside `kiwi rex seats|show`.
+8. **Settings → New agents (#658, T2016).** The owner OK'd the look from shots first (#2286). The group
+   sits after Agents in the desktop app: Allow creating new agents, Prefer (greyed until a
+   terminal's helpers are downloaded), and a row per terminal with helpers; Rex left Services.
+   - The bridge's `terminals`, `terminalHelpers`, `terminalPrefer` and `setLaunches` run `kiwi
+     terminal` and `kiwi launches`, and replace `rexStatus`, `rexInstall` and `rexRemove`.
+   - With creating new agents off on this computer, the New agent modal doesn't offer it: it picks
+     the first paired computer online, or says Settings → New agents turns it back on.
+   - The tiles stay text (`rex`, `tmux`); the logos wait until the Rex mark is settled.

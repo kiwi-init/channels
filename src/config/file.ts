@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } 
 import { join } from "node:path";
 import { keepHeld } from "@kiwi/core/client.ts";
 import { keepSeen, type ChannelAccess } from "@kiwi/core/crypto.ts";
-import type { RexPlace, TerminalId, TerminalPlace } from "../terminals/plugin.ts";
+import type { RexPlace, TerminalId, TerminalPlace, TmuxPlace } from "../terminals/plugin.ts";
 import { home, writePrivate } from "./paths.ts";
 
 export interface ChannelConfig extends ChannelAccess {
@@ -33,6 +33,7 @@ export interface SeatRecord {
   model?: string;
   term?: TerminalPlace;
   rex?: RexPlace;
+  tmux?: TmuxPlace;
   hold?: SeatHold;
   holds?: number;
 }

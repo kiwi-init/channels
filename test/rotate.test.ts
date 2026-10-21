@@ -277,7 +277,7 @@ describe.skipIf(!hasTmux)("typing /clear into the pane", () => {
       `${setup}\nprintf '%s\\n❯ %s\\n%s\\n  footer\\n\\033[3A\\033[%sG' '${RULE}' '${input}' '${RULE}' '${3 + input.length}'\n${o.hup ? "exec sleep 60" : `exec cat > ${typed}`}\n`,
     );
     const sock = o.sock ?? socket;
-    spawnSync("tmux", ["-S", sock, "new-session", "-d", "-s", name, "-x", "120", "-y", "20", `sh ${script}`]);
+    spawnSync("tmux", ["-f", "/dev/null", "-S", sock, "new-session", "-d", "-s", name, "-x", "120", "-y", "20", `sh ${script}`]);
     const [id, pid] = spawnSync("tmux", ["-S", sock, "display-message", "-p", "-t", name, "#{pane_id} #{pane_pid}"], { encoding: "utf8" }).stdout.trim().split(" ");
     const claudeDir = join(dir, `${name}-claude`);
     mkdirSync(join(claudeDir, "sessions"), { recursive: true });
