@@ -1,7 +1,7 @@
 import { received } from "./client/history.ts";
 import { open, seal } from "./crypto.ts";
 import { verify } from "./identity.ts";
-import { wellFormed, type Envelope, type Message } from "./protocol.ts";
+import { asSent, wellFormed, type Envelope, type Message } from "./protocol.ts";
 
 export interface CachedRow {
   seq: number;
@@ -12,7 +12,7 @@ export interface CachedRow {
 }
 
 export async function packRow(key: string, roomId: string, epoch: number, message: Message): Promise<CachedRow> {
-  const { seq, rts, sigOk, ...payload } = message;
+  const { seq, rts, sigOk, ...payload } = asSent(message);
   void sigOk;
   const sealed = await seal(key, roomId, { seq, msg: payload });
   return { seq, ...(rts !== undefined ? { rts } : {}), e: epoch, iv: sealed.iv, ct: sealed.ct };
@@ -49,7 +49,7 @@ export async function openRow(row: CachedRow, roomId: string, keys: Record<strin
     if (!opened || opened.seq !== row.seq) continue;
     if (wellFormedRaw(opened.raw)) return reopen(row.seq, opened.raw, roomId, keys);
     if (!wellFormed(opened.msg)) continue;
-    return { ...opened.msg, seq: row.seq, ...(row.rts !== undefined ? { rts: row.rts } : {}), sigOk: await verify(opened.msg) };
+    return received(opened.msg, row.seq, row.rts, await verify(opened.msg));
   }
   return null;
 }

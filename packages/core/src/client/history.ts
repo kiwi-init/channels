@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import { open } from "../crypto.ts";
 import { verify } from "../identity.ts";
-import { PAGE_LIMIT, rasterAttachment, wellFormed, type Envelope, type Message, type Payload } from "../protocol.ts";
+import { isEvent, PAGE_LIMIT, rasterAttachment, wellFormed, type Envelope, type Message, type WirePayload } from "../protocol.ts";
 import type { ChannelCore } from "./core.ts";
 import type { MemberRefusal } from "./errors.ts";
 import type { Relay } from "./relay.ts";
@@ -13,9 +13,10 @@ interface PageOffer {
   next: number;
 }
 
-export function received(p: Payload, seq: number, rts: number, sigOk: boolean): Message {
+export function received(p: WirePayload, seq: number, rts: number | undefined, sigOk: boolean): Message {
+  const { ev, ...rest } = p;
   const imgs = Array.isArray(p.imgs) ? p.imgs.filter(rasterAttachment) : undefined;
-  return { ...p, ...(imgs?.length ? { imgs } : { imgs: undefined }), seq, rts, sigOk };
+  return { ...rest, ...(ev === undefined ? {} : isEvent(ev) ? { ev } : { newer: ev }), ...(imgs?.length ? { imgs } : { imgs: undefined }), seq, ...(rts !== undefined ? { rts } : {}), sigOk };
 }
 
 export interface HistoryFx {

@@ -1,4 +1,4 @@
-import type { Message } from "@kiwi/core/protocol.ts"
+import { asSent, type Message } from "@kiwi/core/protocol.ts"
 
 export interface LogExport {
   text: string
@@ -7,7 +7,7 @@ export interface LogExport {
 }
 
 export function logLines(messages: readonly Message[]): string {
-  return messages.map((m) => `${JSON.stringify(m)}\n`).join("")
+  return messages.map((m) => `${JSON.stringify(asSent(m))}\n`).join("")
 }
 
 export function logExport({ head, messages, first }: { head: number; messages: readonly Message[]; first: number | null }): LogExport {
