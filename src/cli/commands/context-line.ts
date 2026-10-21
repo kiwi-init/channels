@@ -7,7 +7,7 @@ import { type Command, die, out } from "../context.ts";
 
 function statusText(on: boolean): string {
   return on
-    ? `the context line is on for this computer: past ${tokensWord(CONTEXT_LINE)} tokens, a Claude Code or Codex seat with open tasks, or the lead, gets one line on its next prompt suggesting it write where its work stands with kiwi task checkpoint`
+    ? `the context line is on for this computer: past ${tokensWord(CONTEXT_LINE)} tokens, the Stop hook asks a Claude Code or Codex seat to write where each of its open tasks stands (and the lead where the channel stands) with kiwi task checkpoint before it ends its turn, once per crossing`
     : `the context line is off for this computer: nothing is said at ${tokensWord(CONTEXT_LINE)} tokens (kiwi context-line on turns it on)`;
 }
 

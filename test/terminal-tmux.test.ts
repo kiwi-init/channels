@@ -195,7 +195,7 @@ const roster: Roster = ["jonatas", "ana", "bo", "cy", "dan", "zed"].map((name) =
   ...(name === "jonatas" ? { kind: "human" as const } : {}),
 }));
 const asking = (seq: number, from: string, at: number, to = "jonatas"): Message =>
-  ({ v: 1, id: `m${seq}`, seq, ts: at, rts: at, sigOk: true, from, kind: "ask", body: "ship the secret plan?", to: [to] }) as Message;
+  ({ v: 1, id: `m${seq}`, seq, ts: at, rts: at, sigOk: true, from, kind: "ask", body: "ship the secret plan?", to: [to], holds: [1000] }) as Message;
 const waitingReview = (id: number, owner: string, at: number): Task => ({
   id,
   title: `task ${id}`,
@@ -211,6 +211,7 @@ const waitingReview = (id: number, owner: string, at: number): Task => ({
 
 function board(asks: Message[], tasks: Task[] = []): ChannelState {
   const state = fold([], roster);
+  state.askHeads.set(1000, { id: 1000, by: "jonatas", words: "ship the plan", at: 1 });
   state.openAsks.push(...asks);
   for (const task of tasks) state.tasks.set(task.id, task);
   return state;

@@ -5,7 +5,7 @@ import type { SendOptions } from "@kiwi/core/client.ts"
 
 import type { JoinRequest } from "@kiwi/core/membership.ts"
 
-import { asksFor } from "../asks"
+import { asksFor, heldAsks } from "../asks"
 import type { VoiceTool } from "./events"
 
 export interface ToolCtx {
@@ -129,7 +129,7 @@ function taskLine(t: Task, nameOf: (n: string) => string) {
 }
 
 function waiting(ctx: ToolCtx): Message[] {
-  const { decisions, escalations, questions } = asksFor(ctx.state.openAsks, ctx.me)
+  const { decisions, escalations, questions } = asksFor(heldAsks(ctx.state), ctx.me)
   return [...decisions, ...escalations, ...questions].filter((m) => !m.permission).sort((a, b) => a.seq - b.seq)
 }
 

@@ -3,9 +3,9 @@ import { describe, expect, test } from "bun:test"
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts"
 import { PERMISSION_CHOICES, type PermissionShown } from "@kiwi/core/permission.ts"
 import { PROTOCOL_VERSION, type Message } from "@kiwi/core/protocol.ts"
-import { fold, type Roster } from "@kiwi/core/state.ts"
+import { fold, type ChannelState, type Roster, type Task } from "@kiwi/core/state.ts"
 
-import { askLabel, asksFor, choiceIn, chosenOf, permissionAsks } from "./asks"
+import { askLabel, asksFor, choiceIn, chosenOf, heldAsks, permissionAsks } from "./asks"
 
 const ask = (seq: number, from: string, extra: Partial<Message> = {}): Message => ({
   v: PROTOCOL_VERSION,
@@ -46,9 +46,32 @@ describe("asksFor", () => {
   })
 })
 
+describe("heldAsks", () => {
+  test("Needs you keeps a person's question and an agent's decision that holds an open task or ask; one holding nothing goes to the digest", () => {
+    const state = {
+      openAsks: [
+        ask(1, "bot", { to: ["jon"], esc: true, holds: [10] }),
+        ask(2, "bot", { to: ["jon"], esc: true }),
+        ask(3, "ana", { to: ["jon"] }),
+        ask(4, "bot", { to: ["jon"], esc: true, holds: [20] }),
+        ask(5, "bot", { to: ["jon"], task: 11 }),
+      ],
+      tasks: new Map([
+        [10, { state: "doing" } as Task],
+        [11, { state: "done" } as Task],
+      ]),
+      askHeads: new Map([[20, { id: 20, by: "jon", words: "make it glass", at: 1 }]]),
+      members: new Map([["ana", { kind: "human" }]]) as unknown as ChannelState["members"],
+    }
+    expect(heldAsks(state).map((m) => m.seq)).toEqual([1, 3, 4])
+  })
+})
+
 describe("askLabel", () => {
   test("names a decision, a question to you, and a question to everyone", () => {
     expect(askLabel(ask(1, "bot", { to: ["jon"], esc: true }), "jon")).toBe("Decision for you")
+    expect(askLabel(ask(5, "bot", { to: ["jon"], esc: true, decision: "irreversible" }), "jon")).toBe("Irreversible step for you")
+    expect(askLabel(ask(6, "bot", { to: ["jon"], esc: true, decision: "taste" }), "jon")).toBe("Taste call for you")
     expect(askLabel(ask(2, "bot", { to: ["jon"] }), "jon")).toBe("Question for you")
     expect(askLabel(ask(3, "bot", { to: ["*"] }), "jon")).toBe("Question for everyone")
     expect(askLabel(ask(4, "bot", { to: ["*"], esc: true }), "jon")).toBe("Question for everyone")
