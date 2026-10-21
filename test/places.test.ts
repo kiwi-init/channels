@@ -4,7 +4,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import { wellFormed, type Event, type Kind, type Message } from "@kiwi/core/protocol.ts";
-import { dmPlace, fold, placeFromKey, placeKey, threadMembers, type Roster } from "@kiwi/core/state.ts";
+import { dmPlace, fold, inGeneral, longForGeneral, placeFromKey, placeKey, threadMembers, type Roster } from "@kiwi/core/state.ts";
 
 const ids: Record<string, Identity> = {};
 let seq = 0;
@@ -80,5 +80,32 @@ describe("places", () => {
     expect(wellFormed({ ...base, task: 12, dm: true })).toBe(true);
     expect(wellFormed({ ...base, task: -1 })).toBe(false);
     expect(wellFormed({ ...base, dm: "yes" })).toBe(false);
+  });
+});
+
+describe("an agent's long message in #general", () => {
+  const long = Array.from({ length: 8 }, (_, i) => `- point ${i + 1}`).join("\n");
+
+  test("past six lines or 600 characters, an agent hears where the detail goes; a person never does", async () => {
+    const add = await ev("coord", { op: "task.add", title: "ship it", owner: "dev" });
+    const log = [add, await ev("dev", { op: "task.update", task: add.seq, state: "doing" })];
+    const s = fold(log, roster);
+    expect(longForGeneral(s, "dev", long)).toContain(`kiwi send --to T${add.seq}`);
+    expect(longForGeneral(s, "coord", long)).toContain("kiwi send --to T7");
+    expect(longForGeneral(s, "dev", "x".repeat(601))).not.toBeNull();
+    expect(longForGeneral(s, "dev", "On it as T12.\n\n- one\n- two\n\nShots next.")).toBeNull();
+    expect(longForGeneral(s, "dev", `${"x".repeat(600)}\n\n`)).toBeNull();
+    expect(longForGeneral(s, "jon", long)).toBeNull();
+  });
+
+  test("#general is the main conversation in the general room, not a task's thread, a direct thread or another room", async () => {
+    const add = await ev("coord", { op: "task.add", title: "ship it", owner: "dev" });
+    const plain = await msg("ana", "msg", "hi all");
+    const inTask = await msg("dev", "msg", "on it", { task: add.seq });
+    const dm = await msg("coord", "msg", "how's it going?", { to: ["dev"], dm: true });
+    const s = fold([add, plain, inTask, dm], roster);
+    expect(inGeneral(s, plain.seq)).toBe(true);
+    expect(inGeneral(s, inTask.seq)).toBe(false);
+    expect(inGeneral(s, dm.seq)).toBe(false);
   });
 });

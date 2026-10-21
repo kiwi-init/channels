@@ -92,5 +92,5 @@ export function closedDigest(state: ChannelState, messages: Message[], t: Task, 
   const closed: Task = how.cancelled
     ? { ...t, state: "done", cancelled: true, notes: [...t.notes, { seq: 0, by: how.by, ts: 0, text: how.cancelled }] }
     : { ...t, state: "done", ...(t.review ? { approvedBy: how.by } : {}) }
-  return { body: taskDigest(state, messages, closed), opts: { kind: "done" } }
+  return { body: taskDigest(state, messages, closed), opts: { kind: "done", task: t.id } }
 }

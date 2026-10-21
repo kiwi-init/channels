@@ -1,8 +1,9 @@
 import { statSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import type { PlaceKind } from "@kiwi/core/terminals.ts";
-import type { PlaceRequest, Placed, PlaceTools, TerminalId } from "../terminals/plugin.ts";
-import { placeTools, terminalPlugins } from "../terminals/registry.ts";
+import { loadConfig, type Config } from "../config.ts";
+import type { PlaceRequest, Placed, PlaceTools, TerminalId, TerminalPlugin } from "../terminals/plugin.ts";
+import { placeTools, preferred, terminalPlugins } from "../terminals/registry.ts";
 
 const KIND: Record<TerminalId, PlaceKind> = { rex: "rex", tmux: "tmux", app: "terminal" };
 
@@ -28,14 +29,34 @@ function badRequest(req: PlaceRequest): string | null {
   return null;
 }
 
-export async function placeKind(tools?: PlaceTools): Promise<PlaceKind | null> {
-  for (const plugin of await terminalPlugins(tools ?? (await placeTools()))) if (plugin.open && (await plugin.detect()).running) return KIND[plugin.manifest.id];
+export async function placeKind(tools?: PlaceTools, cfg: Pick<Config, "terminals"> = loadConfig()): Promise<PlaceKind | null> {
+  const picked = await pick(await terminalPlugins(tools ?? (await placeTools())), cfg);
+  return picked ? KIND[picked.plugin.manifest.id] : null;
+}
+
+export async function openPlace(req: PlaceRequest, tools?: PlaceTools, cfg: Pick<Config, "terminals"> = loadConfig()): Promise<Placed> {
+  const bad = badRequest(req);
+  if (bad) return { ok: false, why: "bad-request", detail: bad };
+  const picked = await pick(await terminalPlugins(tools ?? (await placeTools())), cfg);
+  if (!picked) return { ok: false, why: "no-place", detail: "No terminal to open: install tmux, or run kiwi join yourself" };
+  const placed = await picked.plugin.open!(req);
+  return placed.ok && picked.instead ? { ...placed, instead: picked.instead } : placed;
+}
+
+async function pick(plugins: TerminalPlugin[], cfg: Pick<Config, "terminals">): Promise<{ plugin: TerminalPlugin; instead?: string } | null> {
+  const want = plugins.find((p) => p.manifest.id === preferred(cfg));
+  const why = want ? await missing(want) : null;
+  if (want && !why) return { plugin: want };
+  for (const id of ["app", "tmux"] as const) {
+    const plugin = plugins.find((p) => p.manifest.id === id);
+    if (!plugin || plugin === want || (await missing(plugin))) continue;
+    return why && want?.manifest.id !== "app" ? { plugin, instead: `${why}, so it opened in ${plugin.manifest.name}` } : { plugin };
+  }
   return null;
 }
 
-export async function openPlace(req: PlaceRequest, tools?: PlaceTools): Promise<Placed> {
-  const bad = badRequest(req);
-  if (bad) return { ok: false, why: "bad-request", detail: bad };
-  for (const plugin of await terminalPlugins(tools ?? (await placeTools()))) if (plugin.open && (await plugin.detect()).running) return plugin.open(req);
-  return { ok: false, why: "no-place", detail: "No terminal to open: install tmux, or run kiwi join yourself" };
+async function missing(plugin: TerminalPlugin): Promise<string | null> {
+  if (!plugin.open) return `${plugin.manifest.name} can't open windows`;
+  const found = await plugin.detect();
+  return !found.found ? `${plugin.manifest.name} isn't installed` : !found.running ? `${plugin.manifest.name} isn't running` : null;
 }

@@ -31,6 +31,7 @@ import { toolCommands } from "./commands/tools.ts";
 import { rotateCommands } from "./commands/rotate.ts";
 import { seatCommands } from "./commands/seat.ts";
 import { rexCommands } from "./commands/rex.ts";
+import { terminalCommands } from "./commands/terminal.ts";
 import { launchCommands } from "./commands/launch.ts";
 import { fail } from "./fail.ts";
 
@@ -72,6 +73,7 @@ const commands: Record<string, Command> = {
   ...rotateCommands,
   ...seatCommands,
   ...rexCommands,
+  ...terminalCommands,
   ...launchCommands,
 };
 

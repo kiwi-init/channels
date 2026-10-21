@@ -14,10 +14,11 @@ export interface RexPlace {
   block: string;
 }
 
-export type Opened =
+export type Opened = (
   | { ok: true; place: "rex"; rex: RexPlace; window: string; pid?: number }
   | { ok: true; place: "tmux"; socket: string; session: string; window: string; pane: string; pid?: number }
-  | { ok: true; place: "terminal"; window?: number };
+  | { ok: true; place: "terminal"; window?: number }
+) & { instead?: string };
 
 export type Launched = { ok: true; launch: string; placed: Opened } | { ok: false; why: LaunchRefusal; detail: string };
 
@@ -58,6 +59,12 @@ function readRexPlace(x: unknown): RexPlace | null {
 }
 
 function readOpened(x: unknown): Opened | null {
+  const opened = readPlace(x);
+  const instead = text(record(x)?.instead, 200);
+  return opened && instead ? { ...opened, instead } : opened;
+}
+
+function readPlace(x: unknown): Opened | null {
   const p = record(x);
   if (p?.ok !== true) return null;
   const pid = positive(p.pid);
