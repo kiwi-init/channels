@@ -1,21 +1,15 @@
-export interface PermissionLike {
-  tool: string
-  command?: string
-  description?: string
-  paths?: string[]
-  url?: string
-  mcp?: { server: string; tool: string; args: string[] }
-  cwd: string
-}
+import { PERMISSION_CHOICES, permissionAnswer, type PermissionSettled, type PermissionShown } from "@kiwi/core/permission.ts"
+import type { Message } from "@kiwi/core/protocol.ts"
+import type { ChannelState } from "@kiwi/core/state.ts"
 
-export const ALLOW_ONCE = "A: Allow once"
-export const DENY = "B: Deny"
+export const [ALLOW_ONCE, DENY] = PERMISSION_CHOICES
 
 const EDITS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"])
 
-export function permissionTitle(p: PermissionLike): string {
+export function permissionTitle(p: PermissionShown): string {
   if (p.mcp) return `wants to use ${p.mcp.server} · ${p.mcp.tool}`
   if (p.tool === "Bash") return "wants to run a command"
+  if (p.tool === "Write") return "wants to write a file"
   if (EDITS.has(p.tool)) return (p.paths?.length ?? 0) > 1 ? "wants to edit files" : "wants to edit a file"
   if (p.tool === "WebFetch") return "wants to fetch a page"
   return `wants to use ${p.tool}`
@@ -27,51 +21,37 @@ export function visibleText(text: string): string {
   return text.replace(HIDDEN, (c) => `\\u{${c.codePointAt(0)!.toString(16).padStart(4, "0")}}`)
 }
 
-export function permissionShown(p: PermissionLike): string {
-  if (p.mcp) return visibleText(`${p.mcp.server}.${p.mcp.tool}(${p.mcp.args.join(", ")})`)
+export function permissionCode(p: PermissionShown): string {
+  if (p.mcp) {
+    const { server, tool, args, values } = p.mcp
+    return visibleText(`${server}.${tool}(${args.map((a, i) => (values?.[i] !== undefined ? `${a}: ${values[i]}` : a)).join(", ")})`)
+  }
   if (p.command !== undefined) return visibleText(p.command)
   if (p.paths?.length) return p.paths.map(visibleText).join("\n")
   if (p.url) return visibleText(p.url)
   return visibleText(p.tool)
 }
 
-export type Settled = { kind: "allowed" | "denied"; by: string; at: number } | { kind: "terminal" | "timeout" | "ended"; at: number }
-
-export interface ReplyLike {
-  seq: number
-  from: string
-  body: string
-  ts: number
-  settled?: string
+export function permissionNotes(p: PermissionShown): string[] {
+  return [
+    ...(p.sandbox === "off" ? ["It asks to run outside the sandbox: allow that in the terminal."] : []),
+    ...(p.background ? ["It runs in the background."] : []),
+    ...(!p.canAllow && p.sandbox !== "off" ? ["Too long to show all of it here: to allow it, answer in the terminal."] : []),
+  ]
 }
 
-const HOOK_SETTLED = new Set(["terminal", "timeout", "ended"])
+export interface Settled {
+  answer?: { allow: boolean; by: string; at: number }
+  closed?: { kind: PermissionSettled; at: number }
+}
 
-export function settledOf(ask: { from: string }, replies: readonly ReplyLike[], mayAnswer: (name: string) => boolean): Settled | null {
+export function settledOf(ask: Message, replies: readonly Message[], state: ChannelState): Settled | null {
+  let answer: Settled["answer"]
   for (const r of [...replies].sort((a, b) => a.seq - b.seq)) {
-    if (r.from === ask.from && r.settled && HOOK_SETTLED.has(r.settled)) return { kind: r.settled as "terminal" | "timeout" | "ended", at: r.ts }
-    if (r.from !== ask.from && mayAnswer(r.from) && (r.body === ALLOW_ONCE || r.body === DENY)) return { kind: r.body === ALLOW_ONCE ? "allowed" : "denied", by: r.from, at: r.ts }
+    if (r.from === ask.from && r.settled && state.trust.get(r.seq) === "verified") return { ...(answer ? { answer } : {}), closed: { kind: r.settled, at: r.ts } }
+    if (answer) continue
+    const said = permissionAnswer(ask, r, state)
+    if (said) answer = { allow: said === "allow", by: r.from, at: r.ts }
   }
-  return null
-}
-
-const text = (v: unknown, max: number): string | undefined => (typeof v === "string" && v.length <= max ? v : undefined)
-
-export function permissionOf(m: object): PermissionLike | null {
-  const raw = (m as { permission?: unknown }).permission
-  if (!raw || typeof raw !== "object") return null
-  const x = raw as Record<string, unknown>
-  const tool = text(x["tool"], 200)
-  const cwd = text(x["cwd"], 4096)
-  if (!tool || cwd === undefined) return null
-  const paths = Array.isArray(x["paths"]) ? x["paths"].filter((p): p is string => typeof p === "string").slice(0, 50) : undefined
-  const mcpRaw = x["mcp"] && typeof x["mcp"] === "object" ? (x["mcp"] as Record<string, unknown>) : null
-  const mcp =
-    mcpRaw && typeof mcpRaw["server"] === "string" && typeof mcpRaw["tool"] === "string" && Array.isArray(mcpRaw["args"])
-      ? { server: mcpRaw["server"], tool: mcpRaw["tool"], args: mcpRaw["args"].filter((a): a is string => typeof a === "string") }
-      : undefined
-  const command = text(x["command"], 4000)
-  const description = text(x["description"], 1000)
-  const url = text(x["url"], 4000)
-  return { tool, cwd, ...(command !== undefined ? { command } : {}), ...(description ? { description } : {}), ...(paths?.length ? { paths } : {}), ...(url ? { url } : {}), ...(mcp ? { mcp } : {}) }
+  return answer ? { answer } : null
 }

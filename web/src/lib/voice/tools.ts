@@ -6,7 +6,6 @@ import type { SendOptions } from "@kiwi/core/client.ts"
 import type { JoinRequest } from "@kiwi/core/membership.ts"
 
 import { asksFor } from "../asks"
-import { permissionOf } from "@/lib/permission-view"
 import type { VoiceTool } from "./events"
 
 export interface ToolCtx {
@@ -131,7 +130,7 @@ function taskLine(t: Task, nameOf: (n: string) => string) {
 
 function waiting(ctx: ToolCtx): Message[] {
   const { decisions, escalations, questions } = asksFor(ctx.state.openAsks, ctx.me)
-  return [...decisions, ...escalations, ...questions].filter((m) => !permissionOf(m)).sort((a, b) => a.seq - b.seq)
+  return [...decisions, ...escalations, ...questions].filter((m) => !m.permission).sort((a, b) => a.seq - b.seq)
 }
 
 function reviewsOf(ctx: ToolCtx): Task[] {

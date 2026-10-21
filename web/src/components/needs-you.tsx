@@ -11,8 +11,9 @@ import { usePinned } from "@/lib/pinned"
 import { rexNote, showInRex, useRexSeats, type RexSeatView } from "@/lib/rex"
 import { cx } from "@/lib/utils"
 import { askLabel } from "@/lib/asks"
-import { excerpt, formatAgo } from "@/lib/format"
-import { ALLOW_ONCE, DENY, permissionOf, permissionShown, permissionTitle, type PermissionLike } from "@/lib/permission-view"
+import { excerpt, formatAgo, formatTime } from "@/lib/format"
+import { permissionCode, permissionNotes, permissionTitle, visibleText } from "@/lib/permission-view"
+import type { PermissionShown } from "@kiwi/core/permission.ts"
 import { openHandoff } from "@/lib/handoff-open"
 import { handoffLabel, handoffLeft, handoffOf, handoffOpen } from "@/lib/handoff"
 import { useControls } from "./controls"
@@ -38,6 +39,8 @@ export function NeedsYou({
   nameOf,
   agentOf,
   onReply,
+  permissionOf,
+  onPermission,
   onApproveTask,
   onSendBack,
   onOpenTask,
@@ -58,6 +61,8 @@ export function NeedsYou({
   nameOf: (name: string) => string
   agentOf: (name: string) => boolean
   onReply: (m: Message, text: string) => Promise<void>
+  permissionOf: (m: Message) => { human: string | null; owner: string | null }
+  onPermission: (m: Message, allow: boolean) => Promise<void>
   onApproveTask: (t: Task) => Promise<void>
   onSendBack: (t: Task, why: string) => Promise<void>
   onOpenTask: (id: number) => void
@@ -70,18 +75,26 @@ export function NeedsYou({
   const seatOf = (agent: string | undefined) => (agent ? rexSeats.find((s) => s.room === roomId && s.agent === agent) : undefined)
   const reviewSeat = (t: Task) => seatOf(t.owner ?? t.workedBy[t.workedBy.length - 1])
   const requests = p.isOwner ? p.requests : []
-  const asked = (ms: Message[]) => ms.filter((m) => !permissionOf(m))
-  const permissions = [...decisions, ...escalations].flatMap((m) => {
-    const p = permissionOf(m)
-    return p ? [{ m, p }] : []
-  })
+  const asked = (ms: Message[]) => ms.filter((m) => !m.permission)
+  const permissions = [...decisions, ...escalations].flatMap((m) => (m.permission && now <= m.permission.expiresAt ? [{ m, p: m.permission }] : []))
   const items: { key: string; node: ReactNode }[] = [
     ...permissions.map(({ m, p: perm }) => {
-      const human = p.roster.find((r) => r.name === m.from)?.sponsor?.handle
-      const mine = human === me
+      const { human, owner } = permissionOf(m)
       return {
         key: `a${m.seq}`,
-        node: <PermissionItem m={m} p={perm} now={now} nameOf={nameOf} onReply={onReply} seat={seatOf(m.from)} canAllow={mine} canDeny={mine || p.isOwner} />,
+        node: (
+          <PermissionItem
+            m={m}
+            p={perm}
+            now={now}
+            nameOf={nameOf}
+            onAnswer={onPermission}
+            seat={seatOf(m.from)}
+            canAllow={human === me && perm.canAllow}
+            canDeny={human === me || owner === me}
+            human={human}
+          />
+        ),
       }
     }),
     ...requests.map((r) => ({ key: `r${r.id}`, node: <RequestItem r={r} roomId={roomId} now={now} /> })),
@@ -365,30 +378,33 @@ function PermissionItem({
   p,
   now,
   nameOf,
-  onReply,
+  onAnswer,
   seat,
   canAllow,
   canDeny,
+  human,
 }: {
   m: Message
-  p: PermissionLike
+  p: PermissionShown
   now: number
   nameOf: (n: string) => string
-  onReply: (m: Message, text: string) => Promise<void>
+  onAnswer: (m: Message, allow: boolean) => Promise<void>
   seat?: RexSeatView
   canAllow: boolean
   canDeny: boolean
+  human: string | null
 }) {
   const [busy, setBusy] = useState(false)
-  const answer = (choice: string) => {
+  const answer = (allow: boolean) => {
     setBusy(true)
-    void onReply(m, choice)
+    void onAnswer(m, allow)
       .then(
-        () => toast(choice === ALLOW_ONCE ? `Allowed ${nameOf(m.from)} once` : `Denied ${nameOf(m.from)}`),
+        () => toast(allow ? `Allow once sent to ${nameOf(m.from)}` : `Deny sent to ${nameOf(m.from)}`),
         (err) => toast(`Not sent: ${errorText(err)}`, "error")
       )
       .finally(() => setBusy(false))
   }
+  const why = !p.canAllow ? null : human ? `Only ${nameOf(human)} can allow it: it runs on their computer` : null
   return (
     <Row
       lead={<Monogram name={nameOf(m.from)} hue={m.from} agent size={28} />}
@@ -401,24 +417,32 @@ function PermissionItem({
       detail={
         <>
           {p.description && <p className="text-ui text-ink-2">“{p.description}”</p>}
-          <pre className="mt-1.5 rounded-ctl bg-wash px-3 py-2 font-mono text-ui [overflow-wrap:anywhere] whitespace-pre-wrap text-ink">{permissionShown(p)}</pre>
+          <pre className="mt-1.5 rounded-ctl bg-wash px-3 py-2 font-mono text-ui [overflow-wrap:anywhere] whitespace-pre-wrap text-ink">{permissionCode(p)}</pre>
+          {p.content !== undefined && (
+            <pre className="mt-1.5 max-h-48 overflow-auto rounded-ctl bg-wash px-3 py-2 font-mono text-meta [overflow-wrap:anywhere] whitespace-pre-wrap text-ink-2">{visibleText(p.content)}</pre>
+          )}
+          {permissionNotes(p).map((note) => (
+            <p key={note} className="mt-1.5 font-medium text-alert">
+              {note}
+            </p>
+          ))}
           <p className="mt-1.5">{[p.tool, `in ${p.cwd}`, m.task ? taskId(m.task) : null, formatAgo(m.ts, now)].filter(Boolean).join(" · ")}</p>
-          <p className="mt-1">Claude Code asks in its terminal too, and whichever answers first wins.</p>
+          <p className="mt-1">Claude Code asks in its terminal too, and whichever answers first wins. This waits until {formatTime(p.expiresAt)}.</p>
         </>
       }
     >
       <ShowInRex seat={seat} />
       {canDeny && (
-        <Button size="sm" variant="secondary" className="text-alert" disabled={busy} onClick={() => answer(DENY)}>
+        <Button size="sm" variant="secondary" className="text-alert" disabled={busy} onClick={() => answer(false)}>
           Deny
         </Button>
       )}
       {canAllow ? (
-        <Button size="sm" disabled={busy} onClick={() => answer(ALLOW_ONCE)}>
+        <Button size="sm" disabled={busy} onClick={() => answer(true)}>
           Allow once
         </Button>
       ) : (
-        <span className="text-meta text-ink-3">Only its computer’s person can allow it</span>
+        why && <span className="text-meta text-ink-3">{why}</span>
       )}
     </Row>
   )

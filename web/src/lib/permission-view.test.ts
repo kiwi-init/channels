@@ -1,63 +1,78 @@
+import type { PermissionShown } from "@kiwi/core/permission.ts"
+import type { Message } from "@kiwi/core/protocol.ts"
+import type { ChannelState, Member } from "@kiwi/core/state.ts"
 import { describe, expect, test } from "bun:test"
 
-import { ALLOW_ONCE, DENY, permissionOf, permissionShown, permissionTitle, settledOf, visibleText } from "./permission-view"
+import { ALLOW_ONCE, DENY, permissionCode, permissionNotes, permissionTitle, settledOf, visibleText } from "./permission-view"
+
+const shown = (over: Partial<PermissionShown>): PermissionShown => ({ tool: "Bash", cwd: "/a", nonce: "nonce-123", expiresAt: 10_000, canAllow: true, ...over })
 
 describe("what a permission row says", () => {
   test("its title follows the tool", () => {
-    expect(permissionTitle({ tool: "Bash", command: "ls", cwd: "/a" })).toBe("wants to run a command")
-    expect(permissionTitle({ tool: "Edit", paths: ["a.ts"], cwd: "/a" })).toBe("wants to edit a file")
-    expect(permissionTitle({ tool: "MultiEdit", paths: ["a.ts", "b.ts"], cwd: "/a" })).toBe("wants to edit files")
-    expect(permissionTitle({ tool: "WebFetch", url: "https://x.dev/p", cwd: "/a" })).toBe("wants to fetch a page")
-    expect(permissionTitle({ tool: "mcp__gh__merge", mcp: { server: "gh", tool: "merge", args: ["pr"] }, cwd: "/a" })).toBe("wants to use gh · merge")
-    expect(permissionTitle({ tool: "Task", cwd: "/a" })).toBe("wants to use Task")
+    expect(permissionTitle(shown({ command: "ls" }))).toBe("wants to run a command")
+    expect(permissionTitle(shown({ tool: "Edit", paths: ["a.ts"] }))).toBe("wants to edit a file")
+    expect(permissionTitle(shown({ tool: "Write", paths: ["a.ts"] }))).toBe("wants to write a file")
+    expect(permissionTitle(shown({ tool: "WebFetch", url: "https://x.dev/p" }))).toBe("wants to fetch a page")
+    expect(permissionTitle(shown({ tool: "mcp__gh__merge", mcp: { server: "gh", tool: "merge", args: ["pr"] } }))).toBe("wants to use gh · merge")
   })
 
   test("it shows exactly what will run, with hidden and direction-changing characters made visible", () => {
-    expect(permissionShown({ tool: "Bash", command: "rm -rf dist && bun run build", cwd: "/a" })).toBe("rm -rf dist && bun run build")
-    expect(permissionShown({ tool: "MultiEdit", paths: ["a.ts", "b.ts"], cwd: "/a" })).toBe("a.ts\nb.ts")
-    expect(permissionShown({ tool: "mcp__gh__merge", mcp: { server: "gh", tool: "merge", args: ["pr", "method"] }, cwd: "/a" })).toBe("gh.merge(pr, method)")
+    expect(permissionCode(shown({ command: "rm -rf dist && bun run build" }))).toBe("rm -rf dist && bun run build")
+    expect(permissionCode(shown({ tool: "MultiEdit", paths: ["a.ts", "b.ts"] }))).toBe("a.ts\nb.ts")
+    expect(permissionCode(shown({ tool: "mcp__gh__merge", mcp: { server: "gh", tool: "merge", args: ["pr", "method"], values: ["12", '"squash"'] } }))).toBe('gh.merge(pr: 12, method: "squash")')
+    expect(permissionCode(shown({ tool: "mcp__gh__merge", mcp: { server: "gh", tool: "merge", args: ["pr"] } }))).toBe("gh.merge(pr)")
     expect(visibleText("echo safe‮;hs.lave‬")).toBe("echo safe\\u{202e};hs.lave\\u{202c}")
     expect(visibleText("a\u0007b​c")).toBe("a\\u{0007}b\\u{200b}c")
     expect(visibleText("line one\nline\ttwo")).toBe("line one\nline\ttwo")
   })
+
+  test("it says when the sandbox is off, when it runs in the background, and when the app can't allow it", () => {
+    expect(permissionNotes(shown({ command: "ls" }))).toEqual([])
+    expect(permissionNotes(shown({ command: "ls", sandbox: "off", canAllow: false }))).toEqual(["It asks to run outside the sandbox: allow that in the terminal."])
+    expect(permissionNotes(shown({ command: "ls", background: true }))).toEqual(["It runs in the background."])
+    expect(permissionNotes(shown({ tool: "Write", paths: ["a.ts"], canAllow: false }))).toEqual(["Too long to show all of it here: to allow it, answer in the terminal."])
+  })
 })
 
 describe("how a permission was settled", () => {
-  const ask = { from: "atlas" }
-  const may = (name: string) => name === "jonatas" || name === "ana"
+  const member = (name: string, over: Partial<Member>): Member => ({ name, pk: name, scopes: [], owner: false, joined: 0, active: true, lastSeen: 0, messages: 0, ...over })
+  const members = new Map<string, Member>([
+    ["atlas", member("atlas", { kind: "agent", sponsor: { user: "u-ana", name: "Ana" } })],
+    ["ana", member("ana", { kind: "human", sponsor: { user: "u-ana", name: "Ana" } })],
+    ["jonatas", member("jonatas", { kind: "human", owner: true, sponsor: { user: "u-jo", name: "Jonatas" } })],
+    ["win", member("win", { kind: "agent", sponsor: { user: "u-jo", name: "Jonatas" } })],
+  ])
+  const ask: Message = {
+    seq: 5,
+    id: "ask-5",
+    from: "atlas",
+    to: ["ana", "jonatas"],
+    kind: "msg",
+    body: "Permission",
+    ts: 1,
+    esc: true,
+    choices: [ALLOW_ONCE, DENY],
+    permission: shown({ command: "ls" }),
+  } as Message
+  const reply = (seq: number, from: string, over: Partial<Message>): Message => ({ seq, id: `r-${seq}`, from, to: ["atlas"], kind: "msg", body: "", ts: seq, re: [5], ...over }) as Message
+  const state = (replies: Message[]) => ({ members, trust: new Map([[5, "verified"], ...replies.map((r) => [r.seq, "verified"] as const)]) }) as unknown as ChannelState
+  const settled = (replies: Message[]) => settledOf(ask, replies, state(replies))
 
-  test("a person allowed to answer settles it with a choice; anyone else's reply or another text doesn't", () => {
-    expect(settledOf(ask, [], may)).toBeNull()
-    expect(settledOf(ask, [{ seq: 5, from: "win", body: ALLOW_ONCE, ts: 1 }], may)).toBeNull()
-    expect(settledOf(ask, [{ seq: 5, from: "jonatas", body: "sure", ts: 1 }], may)).toBeNull()
-    expect(settledOf(ask, [{ seq: 5, from: "jonatas", body: ALLOW_ONCE, ts: 9 }], may)).toEqual({ kind: "allowed", by: "jonatas", at: 9 })
-    expect(settledOf(ask, [{ seq: 5, from: "ana", body: DENY, ts: 9 }], may)).toEqual({ kind: "denied", by: "ana", at: 9 })
+  test("only the signed answer counts: Allow from the agent's own person, Deny from them or the owner", () => {
+    expect(settled([])).toBeNull()
+    expect(settled([reply(6, "ana", { body: ALLOW_ONCE })])).toBeNull()
+    expect(settled([reply(6, "ana", { body: ALLOW_ONCE, perm: { ask: "ask-5", allow: true } })])).toEqual({ answer: { allow: true, by: "ana", at: 6 } })
+    expect(settled([reply(6, "ana", { perm: { ask: "another", allow: true } })])).toBeNull()
+    expect(settled([reply(6, "jonatas", { perm: { ask: "ask-5", allow: true } })])).toBeNull()
+    expect(settled([reply(6, "jonatas", { perm: { ask: "ask-5", allow: false } })])).toEqual({ answer: { allow: false, by: "jonatas", at: 6 } })
   })
 
-  test("the asker's own closing reply settles it as the terminal, a timeout or the session ending; the first settlement wins", () => {
-    expect(settledOf(ask, [{ seq: 6, from: "atlas", body: "answered in the terminal", ts: 4, settled: "terminal" }], may)).toEqual({ kind: "terminal", at: 4 })
-    expect(settledOf(ask, [{ seq: 6, from: "atlas", body: "x", ts: 4, settled: "made-up" }], may)).toBeNull()
-    expect(
-      settledOf(
-        ask,
-        [
-          { seq: 8, from: "jonatas", body: ALLOW_ONCE, ts: 8 },
-          { seq: 7, from: "atlas", body: "no answer from the app", ts: 7, settled: "timeout" },
-        ],
-        may
-      )
-    ).toEqual({ kind: "timeout", at: 7 })
-  })
-})
-
-describe("reading a message's permission", () => {
-  test("a well-formed one comes through with only its known fields; anything else is not a permission", () => {
-    expect(permissionOf({ permission: { tool: "Bash", command: "ls", description: "List", cwd: "/a", nonce: "n", extra: 1 } })).toEqual({ tool: "Bash", command: "ls", description: "List", cwd: "/a" })
-    expect(permissionOf({ permission: { tool: "MultiEdit", paths: ["a.ts", 3, "b.ts"], cwd: "/a" } })).toEqual({ tool: "MultiEdit", paths: ["a.ts", "b.ts"], cwd: "/a" })
-    expect(permissionOf({ permission: { tool: "mcp__gh__merge", mcp: { server: "gh", tool: "merge", args: ["pr", 1] }, cwd: "/a" } })?.mcp).toEqual({ server: "gh", tool: "merge", args: ["pr"] })
-    expect(permissionOf({})).toBeNull()
-    expect(permissionOf({ permission: "Bash" })).toBeNull()
-    expect(permissionOf({ permission: { command: "ls", cwd: "/a" } })).toBeNull()
-    expect(permissionOf({ permission: { tool: "Bash", command: "x".repeat(4001), cwd: "/a" } })?.command).toBeUndefined()
+  test("the asker's own closing reply settles it, and says an earlier answer came too late", () => {
+    expect(settled([reply(7, "atlas", { settled: "terminal" })])).toEqual({ closed: { kind: "terminal", at: 7 } })
+    expect(settled([reply(6, "ana", { perm: { ask: "ask-5", allow: false } }), reply(8, "atlas", { settled: "terminal" })])).toEqual({
+      answer: { allow: false, by: "ana", at: 6 },
+      closed: { kind: "terminal", at: 8 },
+    })
+    expect(settled([reply(7, "win", { settled: "ended" })])).toBeNull()
   })
 })

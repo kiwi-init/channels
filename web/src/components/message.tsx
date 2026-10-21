@@ -8,7 +8,7 @@ import type { PrRef } from "@kiwi/core/work.ts"
 import type { Chosen } from "@/lib/asks"
 import { useClock } from "@/lib/channel"
 import { formatAgo, formatFull, formatStamp, formatTime, isoTime, memberName } from "@/lib/format"
-import { permissionOf, type Settled } from "@/lib/permission-view"
+import type { Settled } from "@/lib/permission-view"
 import { AskedBelow } from "./asked-below"
 import { githubSummary } from "@/lib/github-line"
 import { sameRow } from "./message-memo"
@@ -402,7 +402,7 @@ export const MessageRow = memo(function MessageRow({
   const who = memberName(author, m.from)
   const imageOnly = !!m.imgs?.length && m.body === m.imgs.map((i) => i.name).join(", ")
   const decide = !!m.esc
-  const permission = permissionOf(m)
+  const permission = m.permission
   const handoff = handoffOf(m)
   const quotes = adjacentReply ? [] : (m.re ?? []).map((seq) => ({ seq, q: quoted(seq) })).filter(({ q }) => !q || q.kind !== "event")
   const action = "flex size-7 items-center justify-center rounded-full text-ink-3 transition-colors hover:text-ink"
