@@ -706,3 +706,32 @@ describe("secret filter tuning (T1621)", () => {
   for (const [name, said] of flagged) test(`flagged: ${name}`, () => expect(looksSecret(said)).toBe(true));
   for (const [name, said] of clean) test(`not flagged: ${name}`, () => expect(looksSecret(said)).toBe(false));
 });
+
+describe("one message per seq (T1725)", () => {
+  test("two messages at one seq are both refused, in either order, so no row or Allow is built on either", async () => {
+    const real = await askFrom("win", ["ana", "jon"], view({ command: "rm -rf ~" }));
+    const lookAlike: Message = { ...real, permission: view({ command: "ls" }), sigOk: false };
+    for (const order of [
+      [lookAlike, real],
+      [real, lookAlike],
+    ]) {
+      const s = fold(order, roster);
+      expect(s.trust.get(real.seq)).toBe("refused");
+      expect(s.rejected.get(real.seq)).toBe(`two messages at #${real.seq}`);
+      expect(s.openAsks).toEqual([]);
+      for (const m of order) expect(permissionReply(m, true, s)).toBeNull();
+    }
+  });
+
+  test("an answer doubled at its seq counts for nothing, whichever copy a caller holds, and the next message folds as usual", async () => {
+    const ask = await askFrom("win", ["ana", "jon"]);
+    const real = await answer("ana", ask, true);
+    const plain = await msg("ana", "msg", "looks fine to me", { to: ["win"], re: [ask.seq] });
+    const doubled: Message = { ...plain, seq: real.seq, rts: real.rts };
+    const ms = [ask, real, doubled, plain];
+    const s = fold(ms, roster);
+    for (const m of [real, doubled]) expect(permissionAnswer(ask, m, { ...s, bySeq: new Map([[m.seq, m]]) })).toBeNull();
+    expect(s.openAsks.map((m) => m.seq)).toEqual([ask.seq]);
+    expect(s.trust.get(plain.seq)).toBe("verified");
+  });
+});

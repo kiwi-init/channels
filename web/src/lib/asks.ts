@@ -1,3 +1,4 @@
+import type { PermissionShown } from "@kiwi/core/permission.ts"
 import type { Message } from "@kiwi/core/protocol.ts"
 import { handoffOf } from "./handoff"
 
@@ -18,6 +19,10 @@ export function asksFor(openAsks: Message[], me: string): AsksForMe {
     escalations: rest.filter((m) => isEscalationTo(m, me)),
     questions: rest.filter((m) => !isEscalationTo(m, me)),
   }
+}
+
+export function permissionAsks({ decisions, escalations }: Pick<AsksForMe, "decisions" | "escalations">, now: number): { m: Message; p: PermissionShown }[] {
+  return [...decisions, ...escalations].flatMap((m) => (m.permission && now <= m.permission.expiresAt ? [{ m, p: m.permission }] : []))
 }
 
 export function askLabel(m: Message, me: string): string {
