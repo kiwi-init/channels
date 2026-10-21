@@ -92,9 +92,15 @@ const time = (x: unknown): x is number => typeof x === "number" && Number.isFini
 const flag = (x: unknown): x is boolean | undefined => x === undefined || typeof x === "boolean";
 const total = (xs: readonly string[]) => xs.reduce((n, x) => n + x.length, 0);
 
-const SHELL_REF = String.raw`(?:\$(?:[A-Za-z_]|\{[A-Za-z_]\w*\}|\{\{|\()|\x60)`;
-const LITERAL = String.raw`(?!["']?${SHELL_REF})`;
-const SECRET_VALUE = String.raw`${LITERAL}(?!["']?(?:true|false|yes|no|on|off|[01])["']?(?![^\s;&|)]))`;
+const REF_END = String.raw`(?![^\s"';&|)@/:,])`;
+const BRACED_REF = String.raw`\$(?:\{[A-Za-z_]\w*\}${REF_END}|\{\{)`;
+const SHELL_REF = String.raw`(?:${BRACED_REF}|\$(?:[A-Za-z_]\w*${REF_END}|\((?![^)]*(?:\b(?:echo|printf)\b|<<)))|\x60(?=[^\x60\s]+\s[^\x60]*\x60)(?![^\x60]*\b(?:echo|printf)\b))`;
+const LITERAL = String.raw`(?!"?${SHELL_REF})`;
+const SWITCHES = ["true", "false", "yes", "no", "on", "off", "none", "null", "nil", "0", "1"].flatMap((w) => [w, w.charAt(0).toUpperCase() + w.slice(1), w.toUpperCase()]);
+const NOT_SWITCH = String.raw`(?!["']?(?:${SWITCHES.join("|")})["']?(?![^\s;&|),]))`;
+const SECRET_VALUE = LITERAL + NOT_SWITCH;
+const KEYED_VALUE = String.raw`(?!"?${BRACED_REF})${NOT_SWITCH}`;
+const NAME_START = String.raw`(?<![\w-])(?<!(?:\[|\btest)\s+\$)`;
 const PLAIN_KEYS = "sort|primary|partition|cache|foreign|range|row|unique|composite|public|routing|idempotency";
 const SUDO_STDIN = String.raw`sudo(?:\s+(?:-[A-Za-z]*[CDghpRrTtUu]\s+[^\s-]\S*|--?[A-Za-z][\w-]*(?:=\S*)?))*?\s+(?:-[A-Za-z]*S|--stdin(?![\w-]))`;
 
@@ -111,12 +117,12 @@ const FLAGGED: readonly RegExp[] = [
   /hooks\.slack\.com\/(?:services|workflows|triggers)\/|discord(?:app)?\.com\/api\/webhooks\//i,
   /(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{2,}\.[A-Za-z0-9_-]*/,
   /-----BEGIN [A-Z0-9 ]*PRIVATE KEY/,
-  new RegExp(String.raw`\bauthorization\s*[:=](?!\s*(?:(?:bearer|basic|token)\s+)?["']?${SHELL_REF})`, "i"),
+  new RegExp(String.raw`\bauthorization\s*[:=](?!\s*(?:(?:bearer|basic|token)\s+)?"?${SHELL_REF})`, "i"),
   new RegExp(String.raw`(?<![\w-])(?:[\w-]*-api-key|api-key|apikey|private-token|x-auth-token|x-access-token|cookie|set-cookie)\s*:\s*${LITERAL}\S`, "i"),
   /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/,
   /\bbearer\s+(?=[A-Za-z0-9._~+/=-]*\d)[A-Za-z0-9._~+/=-]{8,}/i,
   new RegExp(String.raw`(?<![\w-])--(?:password|passwd|pass|token|secret|api-?key|api_key|access-token|auth-token|client-secret)(?:=${LITERAL}\S|\s+${LITERAL}[^\s-])`, "i"),
-  new RegExp(String.raw`(?<![\w-])kubectl(?![\w-])[^\n|;&]*\bsecret\b[^\n|;&]*--from-literal[=\s]\s*["']?[^\s="']+=${LITERAL}`),
+  new RegExp(String.raw`(?<![\w-])kubectl(?![\w-])(?=[^\n|;&]*\bsecret\b)[^\n|;&]*?--from-literal[=\s]\s*["']?[^\s="']+=${LITERAL}`),
   new RegExp(String.raw`(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*:\/\/[^\s/?#@:]*:${LITERAL}[^\s/?#@]+@`, "i"),
   new RegExp(String.raw`(?<![a-z0-9+.-])https?:\/\/${LITERAL}[^\s/?#@:]+@`, "i"),
   new RegExp(String.raw`(?<![\w-])(?:mysql[a-z]*|mariadb(?:-[a-z]+)?)(?![\w-])[^\n|;&]*\s-p${LITERAL}[^\s]`),
@@ -125,8 +131,9 @@ const FLAGGED: readonly RegExp[] = [
   new RegExp(String.raw`(?<![\w-])redis-cli(?![\w-])[^\n|;&]*\s-a\s*${LITERAL}[^\s-]`),
   new RegExp(String.raw`(?<![\w-])(?:-u|--user)(?:\s+|=)?["']?(?!\d+:\d+(?:["'\s]|$))[^\s"':]+:${LITERAL}[^\s"']`),
   /(?:>>?|(?<![\w-])tee(?:\s+-a)?)\s*["']?(?:[^\s"'|;&<>]*\/)?(?:[\w-][\w.-]*)?\.env(?:\.[\w-]+)*["']?(?![^\s;|&)])/,
-  new RegExp(String.raw`(?<![\w$-])(?:[A-Z0-9_]*_)?(?:(?<!(?:^|[^A-Z0-9])(?:${PLAIN_KEYS.toUpperCase()})_)KEY|AUTH|CREDENTIALS?)\s*=(?!=)\s*${SECRET_VALUE}["']?[^\s"']`),
-  new RegExp(String.raw`(?<![\w$-])[a-z0-9_]*_(?:(?<!(?:^|[^a-z0-9])(?:${PLAIN_KEYS})_)key|auth|credentials?)\s*=(?!=)\s*${SECRET_VALUE}["']?[^\s"']`),
+  new RegExp(String.raw`${NAME_START}(?:[A-Z0-9_]*_)?(?:(?<!(?:^|[^A-Z0-9])(?:${PLAIN_KEYS.toUpperCase()})_)KEY|AUTH|CREDENTIALS?)\s*=(?!=)\s*${SECRET_VALUE}["']?[^\s"']`),
+  new RegExp(String.raw`${NAME_START}[a-z0-9_]*_(?:(?<!(?:^|[^a-z0-9])(?:${PLAIN_KEYS})_)key|auth|credentials?)\s*=(?!=)\s*${SECRET_VALUE}["']?[^\s"']`),
+  new RegExp(String.raw`${NAME_START}(?:[A-Za-z0-9_]*_)?(?:${PLAIN_KEYS})_key\s*=(?!=)\s*${SECRET_VALUE}["']?(?=[^\s"';&|]*\d)[^\s"';&|]{20}`, "i"),
   new RegExp(String.raw`[?&](?:(?:auth|sig|signature|x-amz-signature|x-amz-security-token|x-goog-signature)=|(?:key|access_?key|code)=(?=[^&\s#"']*\d|[^&\s#"']{20}))${LITERAL}[^&\s#"']`, "i"),
   /\bBasic\s+(?=[A-Za-z0-9+/]*[a-z])(?=[A-Za-z0-9+/]+[A-Z0-9+/])(?:[A-Za-z0-9+/]{4}){3,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?(?![\w+/=])/,
   new RegExp(String.raw`(?<![\w-])gh\s+secret\s+set(?![\w-])[^\n|;&]*\s(?:--body|-b)(?:=|\s+)${LITERAL}\S`),
@@ -136,8 +143,8 @@ const FLAGGED: readonly RegExp[] = [
 ];
 
 const SECRET_NAME = String.raw`[\w-]*(?:token(?!s|iz)|secret|password|passwd|passphrase|(?<![a-z0-9])pass(?![a-z])|api[_-]?key|private[_-]?key|database[_-]?url)[\w-]*`;
-const ASSIGNED = new RegExp(String.raw`(?<![\w$-])${SECRET_NAME}\s*=(?!=)\s*${SECRET_VALUE}["']?[^\s"']`, "i");
-const KEYED = new RegExp(String.raw`(?:["']${SECRET_NAME}["']?|^[ \t]*${SECRET_NAME})\s*:\s*${SECRET_VALUE}["']?[^\s"']`, "im");
+const ASSIGNED = new RegExp(String.raw`${NAME_START}${SECRET_NAME}\s*=(?!=)\s*${SECRET_VALUE}["']?[^\s"']`, "i");
+const KEYED = new RegExp(String.raw`(?:["']${SECRET_NAME}["']|^[ \t]*${SECRET_NAME})\s*:\s*${KEYED_VALUE}["']?[^\s"']|["']${SECRET_NAME}\s*:\s*${SECRET_VALUE}["']?[^\s"']`, "im");
 
 const RUN = /[A-Za-z0-9+/_-]{40,}/g;
 const RUN_SEPARATORS = /[+/_-]/;

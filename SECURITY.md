@@ -564,11 +564,15 @@ be only another way to answer the same prompt, never a way around it:
     digests pass, and folder and file paths are checked only for the known
     shapes above, so a random folder name doesn't count.
 
-  A value the shell fills in (`$TOKEN`, `${TOKEN}`, `$(…)`) isn't the secret
-  itself, so `curl -H "Authorization: Bearer $TOKEN"` is sent; a default
-  written out, as in `${TOKEN:-…}`, still counts. True/false switches such as
-  `DISABLE_AUTH=true` and field-name keys such as `SORT_KEY` or `PRIMARY_KEY`
-  pass too, unless the value itself looks random.
+  A value the shell fills in (`$TOKEN`, `${TOKEN}`, `$(op read …)`) isn't the
+  secret itself, so `curl -H "Authorization: Bearer $TOKEN"` is sent. What
+  writes the secret out still counts: single quotes (`'$ecret'`), a default
+  (`${TOKEN:-…}`), text after the variable (`$USER-hunter2`), and `$(echo …)`,
+  `$(printf …)` or a here-doc. In JSON and YAML only `${TOKEN}` and
+  `${{ … }}` count as filled in. Switches such as `DISABLE_AUTH=true` or
+  `group_key=None` pass, and so do field-name keys such as `SORT_KEY` or
+  `PRIMARY_KEY`, unless the value has a digit and is 20 or more characters
+  long.
 
   A command run with the sandbox off, or anything over its cap, offers only
   Deny.
