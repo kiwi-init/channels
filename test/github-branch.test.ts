@@ -1,7 +1,8 @@
 import { beforeAll, describe, expect, test } from "bun:test";
+import { describeEvent } from "@kiwi/core/format.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import type { Event, Message } from "@kiwi/core/protocol.ts";
-import { fold, type Roster } from "@kiwi/core/state.ts";
+import { wellFormed, type Event, type Message } from "@kiwi/core/protocol.ts";
+import { fold, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 import { prsToLinkBack, taskFeed, taskOfBranch, taskPr, taskPrs } from "@kiwi/core/work.ts";
 
 const ids: Record<string, Identity> = {};
@@ -60,8 +61,7 @@ describe("a PR finds its task by its branch", () => {
       { url: "https://github.com/ojow/channels/pull/360", repo: "ojow/channels", number: 360, state: "open", seq: news.seq, title: "Branch PRs", branch: `T${add.seq}-branch-prs` },
     ]);
     expect(taskPrs(taskFeed(s, log, other.seq))).toEqual([]);
-    expect(prsToLinkBack(s, 0)).toEqual([{ repo: "ojow/channels", number: 360, task: add.seq, seq: news.seq, body: `Kiwi task T${add.seq}: Branch PRs` }]);
-    expect(prsToLinkBack(s, news.seq)).toEqual([]);
+    expect(prsToLinkBack(s, 0)).toEqual([]);
   });
 
   test("a task's row picks its open PR over an older merged one, with its size and checks", async () => {
@@ -98,5 +98,64 @@ describe("a task's PR, looked up from one index per fold", () => {
   test("the same fold's lookups share one index", () => {
     const s = stateWith([pr(1, "T7-a", "open", 1)]);
     expect(taskPr(s, 7)).toBe(taskPr(s, 7));
+  });
+});
+
+describe("Write to GitHub: the owner's switch for the PR comment", () => {
+  const opened = (number: number, branch: string, at: number): Event => ({
+    op: "github",
+    items: [{ event: "pull_request", repo: "ojow/channels", action: "opened", number, state: "open", branch, at }],
+  });
+
+  test("off by default: a PR on a task's branch gets no comment", async () => {
+    const add = await ev("jon", { op: "task.add", title: "Secret plan for the acquisition" });
+    const log = [add, await ev("jon", opened(400, `T${add.seq}-plan`, 1))];
+    const s = fold(log, roster);
+    expect(s.githubWrite).toBeNull();
+    expect(prsToLinkBack(s, 0)).toEqual([]);
+  });
+
+  test("only the owner turns it on; the comment names the task by its id, never its title", async () => {
+    const add = await ev("jon", { op: "task.add", title: "Secret plan for the acquisition" });
+    const forged = await ev("mac", { op: "github.write.set", on: true });
+    const on = await ev("jon", { op: "github.write.set", on: true });
+    const news = await ev("jon", opened(401, `T${add.seq}-plan`, 2));
+    expect(fold([add, forged, news], roster).rejected.get(forged.seq)).toBe("only the owner lets Kiwi write to GitHub");
+    expect(prsToLinkBack(fold([add, forged, news], roster), 0)).toEqual([]);
+    const s = fold([add, forged, on, news], roster);
+    expect(s.githubWrite).toBe(on.seq);
+    const due = prsToLinkBack(s, 0);
+    expect(due).toEqual([{ repo: "ojow/channels", number: 401, task: add.seq, seq: news.seq, body: `Linked to Kiwi task T${add.seq}` }]);
+    expect(due[0]!.body).not.toContain("Secret");
+    expect(prsToLinkBack(s, news.seq)).toEqual([]);
+  });
+
+  test("a PR GitHub reported before it was on is never commented; turning it off stops the next one", async () => {
+    const add = await ev("jon", { op: "task.add", title: "Old PRs" });
+    const before = await ev("jon", opened(402, `T${add.seq}-old`, 3));
+    const on = await ev("jon", { op: "github.write.set", on: true });
+    const again = await ev("jon", { op: "github.write.set", on: true });
+    const after = await ev("jon", opened(403, `T${add.seq}-new`, 4));
+    const s = fold([add, before, on, again, after], roster);
+    expect(s.githubWrite).toBe(on.seq);
+    expect(prsToLinkBack(s, 0).map((p) => p.number)).toEqual([403]);
+    const off = await ev("jon", { op: "github.write.set", on: false });
+    const later = await ev("jon", opened(404, `T${add.seq}-later`, 5));
+    expect(prsToLinkBack(fold([add, before, on, after, off, later], roster), 0)).toEqual([]);
+  });
+
+  test("a snapshot carries it, one from before the switch folds to off, and agents read the event", async () => {
+    const on = await ev("jon", { op: "github.write.set", on: true });
+    const kept: { base?: FoldBase } = {};
+    fold([on], roster, Date.now(), null, null, null, (b) => void (kept.base = b));
+    expect(kept.base!.githubWrite).toBe(on.seq);
+    expect(fold([], roster, Date.now(), null, null, kept.base).githubWrite).toBe(on.seq);
+    const older = { ...kept.base! };
+    delete older.githubWrite;
+    expect(fold([], roster, Date.now(), null, null, older).githubWrite).toBeNull();
+    expect(describeEvent(on)).toBe("let Kiwi write to GitHub: a new PR on a task's branch gets a comment naming the task");
+    const p = { v: 1, id: "x", from: "jon", kind: "event", body: "", ts: 1 };
+    expect(wellFormed({ ...p, ev: { op: "github.write.set", on: false } })).toBe(true);
+    expect(wellFormed({ ...p, ev: { op: "github.write.set", on: "yes" } })).toBe(false);
   });
 });

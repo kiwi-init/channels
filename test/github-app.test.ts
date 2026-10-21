@@ -147,11 +147,11 @@ describe("diffs and review checks through the relay", () => {
   });
 
   test("only the owner comments on a PR of a connected repo (the link back to its task)", async () => {
-    const body = { repo: "ojow/channels", number: 7, body: "Kiwi task T72: Branch PRs" };
+    const body = { repo: "ojow/channels", number: 7, body: "Linked to Kiwi task T72" };
     expect((await room("POST", "/github/comment", member, body)).status).toBe(403);
     expect((await room("POST", "/github/comment", owner, { ...body, repo: "someone/else" })).status).toBe(400);
     expect(await (await room("POST", "/github/comment", owner, body)).json()).toEqual({ url: "https://github.com/ojow/channels/pull/7#issuecomment-1" });
-    expect(JSON.parse(calls.filter((c) => c.path === "/repos/ojow/channels/issues/7/comments").at(-1)!.body)).toEqual({ body: "Kiwi task T72: Branch PRs" });
+    expect(JSON.parse(calls.filter((c) => c.path === "/repos/ojow/channels/issues/7/comments").at(-1)!.body)).toEqual({ body: "Linked to Kiwi task T72" });
   });
 
   test("a member reads an issue of a connected repo, to import it as a task; a PR's number isn't an issue", async () => {
