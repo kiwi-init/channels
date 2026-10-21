@@ -53,7 +53,7 @@ export type Attached = "listener" | "session" | "none";
 
 const FILE_FIRST: ReadonlySet<string> = new Set(["claude", "codex", "opencode"]);
 
-export function readsRex(cfg: Pick<Config, "rex">, record: SeatRecord | null): record is SeatRecord & { rex: NonNullable<SeatRecord["rex"]> } {
+export function readsRex(cfg: Pick<Config, "terminals">, record: SeatRecord | null): record is SeatRecord & { rex: NonNullable<SeatRecord["rex"]> } {
   return helpersOn("rex", cfg) && !!record?.rex && !FILE_FIRST.has(record.harness ?? "");
 }
 

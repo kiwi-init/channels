@@ -1,14 +1,16 @@
 import * as Effect from "effect/Effect";
 import type { RexStatus } from "@kiwi/core/terminals.ts";
-import { loadConfig, updateConfig } from "../../config.ts";
+import { loadConfig } from "../../config.ts";
 import { helpersOn } from "../../terminals/registry.ts";
 import { rexStatus } from "../../terminals/rex/api.ts";
-import { downloadHelpers, removeHelpers, rexConfigPath } from "../../terminals/rex/helpers.ts";
+import { rexConfigPath } from "../../terminals/rex/helpers.ts";
 import { localRexSeats, showInRex } from "../../terminals/rex/show.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, out } from "../context.ts";
+import { setHelpers } from "./terminal.ts";
 
-const USAGE = "usage: kiwi rex on|off|status [--json]";
+const USAGE = "usage: kiwi rex on|off|status [--json] (now kiwi terminal download|remove rex and kiwi terminal status)";
+const MOVED = "kiwi rex on|off|status is now kiwi terminal download|remove rex and kiwi terminal status; kiwi rex stays for this release";
 
 function statusJson(): RexStatus {
   const cfg = loadConfig();
@@ -28,7 +30,7 @@ function statusText(): string {
   const on =
     s.helpers === "on"
       ? "the Rex helpers are on for this computer: a seat in a terminal that takes OSC 7501 shows when a person is needed or work waits for review. Stays on this computer"
-      : "the Rex helpers are off for this computer (kiwi rex on turns them on; nothing of them is loaded while off)";
+      : "the Rex helpers are off for this computer (kiwi terminal download rex turns them on; nothing of them is loaded while off)";
   return `${where}; ${on} Rotation for this computer is ${s.rotation}.`;
 }
 
@@ -36,13 +38,10 @@ export const rexCommands: Record<string, Command> = {
   rex: () =>
     Effect.gen(function* () {
       const sub = args[1] ?? "status";
-      if (sub === "status") return out(opt.json ? JSON.stringify(statusJson()) : statusText());
+      if (sub === "status") return out(opt.json ? JSON.stringify(statusJson()) : `${statusText()}\n${MOVED}`);
       if (sub === "on" || sub === "off") {
-        updateConfig((c) => {
-          c.rex = sub;
-        });
-        yield* Effect.promise(() => (sub === "off" ? removeHelpers() : downloadHelpers()));
-        return out(statusText());
+        yield* setHelpers("rex", sub === "on");
+        return out(`${statusText()}\n${MOVED}`);
       }
       if (sub === "seats") {
         const seats = helpersOn("rex", loadConfig()) ? localRexSeats() : [];

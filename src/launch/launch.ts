@@ -3,12 +3,13 @@ import { statSync } from "node:fs";
 import { isAbsolute } from "node:path";
 import type { KnownHarness } from "@kiwi/core/harnesses.ts";
 import { compareVersions } from "@kiwi/core/versions.ts";
-import { loadConfig } from "../config.ts";
+import { loadConfig, type Config } from "../config.ts";
 import { installHooks, listenHooksInstalled, REWAKE_SINCE } from "../hooks/install/claude.ts";
 import { EXTRA_HARNESSES, extraInstalled, installExtra, type ExtraHarness } from "../hooks/install/extra.ts";
 import { tooBroad } from "../seats.ts";
 import { harnessInventory } from "./harnesses.ts";
 import type { PlaceTools } from "../terminals/plugin.ts";
+import { launchesOn } from "../terminals/registry.ts";
 import { openPlace } from "./place.ts";
 import { joinLineRefusal } from "@kiwi/core/join-line.ts";
 import { canStart, joinPrompt, recipeArgv } from "./recipes.ts";
@@ -18,6 +19,7 @@ import type { LaunchRequest } from "./wire.ts";
 export interface LaunchOptions {
   PATH?: string;
   tools?: PlaceTools;
+  config?: Pick<Config, "launch" | "terminals">;
 }
 
 const isExtra = (h: KnownHarness): h is KnownHarness & ExtraHarness => (EXTRA_HARNESSES as readonly string[]).includes(h);
@@ -41,6 +43,8 @@ function hookUp(harness: KnownHarness, version: string | null): void {
 }
 
 export async function launchAgent(req: LaunchRequest, opts: LaunchOptions = {}): Promise<Launched> {
+  const cfg = opts.config ?? loadConfig();
+  if (!launchesOn(cfg)) return { ok: false, why: "not-allowed", detail: "Creating new agents is off on this computer (kiwi launches on turns it back on)" };
   const refused = joinLineRefusal(req) ?? folderRefusal(req.folder);
   if (refused) return { ok: false, why: "bad-request", detail: refused };
   if (!canStart(req.harness)) return { ok: false, why: "no-recipe", detail: `Kiwi can't start ${req.harness} yet` };
@@ -50,6 +54,6 @@ export async function launchAgent(req: LaunchRequest, opts: LaunchOptions = {}):
   hookUp(req.harness, row.version);
   const launch = req.launch ?? randomBytes(16).toString("base64url");
   const env = { KIWI_LAUNCH: launch, ...(process.env.KIWI_HOME ? { KIWI_HOME: process.env.KIWI_HOME } : {}) };
-  const placed = await openPlace({ argv, folder: req.folder, name: req.nick ?? req.harness, env }, opts.tools);
+  const placed = await openPlace({ argv, folder: req.folder, name: req.nick ?? req.harness, env }, opts.tools, cfg);
   return placed.ok ? { ok: true, launch, placed } : placed;
 }
