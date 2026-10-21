@@ -407,14 +407,15 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const roomKey = (id: string) => `room:${id}`
   const conversations: ConversationRow[] = [
     ...(rooms.length > 1
-      ? rooms.map((r) => ({ key: roomKey(r.id), label: `# ${r.name}`, unread: r.id === GENERAL_ROOM ? unreadIn("main").n : 0, forMe: r.id === GENERAL_ROOM && unreadIn("main").forMe }))
-      : [{ key: "main", label: `# ${GENERAL_ROOM}`, unread: unreadIn("main").n, forMe: unreadIn("main").forMe }]),
+      ? rooms.map((r) => ({ key: roomKey(r.id), label: `# ${r.name}`, unread: r.id === GENERAL_ROOM ? unreadIn("main").n : 0, forMe: r.id === GENERAL_ROOM && unreadIn("main").forMe, withMe: true }))
+      : [{ key: "main", label: `# ${GENERAL_ROOM}`, unread: unreadIn("main").n, forMe: unreadIn("main").forMe, withMe: true }]),
     ...[...places]
       .filter(([, p]) => p.place.kind === "dm")
       .map(([key, p]) => {
         const w = p.place.kind === "dm" ? p.place.with : ["", ""]
         const u = unreadIn(key)
-        return { key, label: w.includes(me) ? nameOf(w.find((n) => n !== me) ?? me) : w.map(nameOf).join(" & "), unread: u.n, forMe: u.forMe }
+        const withMe = w.includes(me)
+        return { key, label: withMe ? nameOf(w.find((n) => n !== me) ?? me) : w.map(nameOf).join(" & "), unread: u.n, forMe: u.forMe, withMe }
       }),
   ]
   const currentConversation = tab !== "conversation" ? null : hereKey !== "main" ? hereKey : rooms.length > 1 ? roomKey(cardRoom) : "main"

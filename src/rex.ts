@@ -1,7 +1,8 @@
-import { execFile, spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { listIn, nested, object, parseJson } from "./terminals/shared/json.ts";
+import { run, runNow } from "./terminals/shared/run.ts";
 
 type Env = Record<string, string | undefined>;
 
@@ -24,8 +25,8 @@ export interface SeatPlace {
 const PROGRAM = /^[A-Za-z][A-Za-z0-9+._-]{0,31}$/;
 const VERSION = /^[\x21-\x7e]{1,64}$/;
 const SERVER = /^[\x21-\x7e]{1,512}$/;
-const SESSION = /^session:[0-9a-f-]{36}$/;
-const BLOCK = /^block:[0-9a-f-]{36}$/;
+export const REX_SESSION = /^session:[0-9a-f-]{36}$/;
+export const REX_BLOCK = /^block:[0-9a-f-]{36}$/;
 
 export function placeFrom(env: Env): SeatPlace {
   if (env.TMUX) return {};
@@ -35,7 +36,7 @@ export function placeFrom(env: Env): SeatPlace {
   const server = env.REX_SERVER?.trim();
   const session = env.REX_SESSION?.trim();
   const block = env.REX_BLOCK?.trim();
-  const rex = program === "rex" && server && SERVER.test(server) && session && SESSION.test(session) && block && BLOCK.test(block) ? { server, session, block } : undefined;
+  const rex = program === "rex" && server && SERVER.test(server) && session && REX_SESSION.test(session) && block && REX_BLOCK.test(block) ? { server, session, block } : undefined;
   return { ...(term ? { term } : {}), ...(rex ? { rex } : {}) };
 }
 
@@ -101,80 +102,40 @@ export function rexBinary(): string | null {
   return Bun.which("rex") ?? macBinary();
 }
 
-export function runRex(bin: string, argv: string[], timeout = 5_000): { status: number | null; stdout: string; stderr: string } {
-  const r = spawnSync(bin, argv, { encoding: "utf8", timeout });
-  return { status: r.status, stdout: typeof r.stdout === "string" ? r.stdout : "", stderr: typeof r.stderr === "string" ? r.stderr : "" };
-}
-
-export function runRexLater(bin: string, argv: string[], timeout = 5_000): Promise<{ status: number | null; stdout: string }> {
-  return new Promise((resolve) => {
-    execFile(bin, argv, { encoding: "utf8", timeout, killSignal: "SIGKILL", maxBuffer: 4 * 1024 * 1024 }, (err, stdout) => {
-      resolve({ status: err ? (typeof err.code === "number" ? err.code : null) : 0, stdout: typeof stdout === "string" ? stdout : "" });
-    });
-  });
-}
-
-function run(bin: string, argv: string[], timeout = 3_000): { status: number | null; stdout: string } {
-  const r = runRex(bin, argv, timeout);
-  return { status: r.status, stdout: r.stdout };
-}
+const WHOAMI = ["--autostart=false", "whoami", "--json"];
 
 export function rexStatus(): RexStatus {
   const bin = rexBinary();
   if (!bin) return { found: false, server: "stopped" };
-  const version = /^rex (\S+)/.exec(run(bin, ["version"], 2_000).stdout.trim())?.[1];
-  const who = run(bin, ["--autostart=false", "whoami"], 3_000);
+  const version = /^rex (\S+)/.exec(runNow([bin, "version"], 2_000).stdout.trim())?.[1];
+  const who = runNow([bin, ...WHOAMI], 3_000);
   return { found: true, ...(version ? { version } : {}), server: who.status === 0 ? "running" : "stopped" };
 }
 
-function parse(stdout: string): unknown {
-  if (!stdout.trim()) return null;
-  try {
-    return JSON.parse(stdout) as unknown;
-  } catch {
-    return null;
-  }
+export async function rexServer(bin: string): Promise<string | null> {
+  const r = await run([bin, ...WHOAMI], 5_000);
+  const endpoint = r.status === 0 ? nested(parseJson(r.stdout), "endpoint") : null;
+  return typeof endpoint === "string" && endpoint ? endpoint : null;
 }
 
-function apiArgv(place: RexPlace, method: string, args: Record<string, unknown>, session: boolean): string[] {
-  return ["-S", place.server, "api", "call", ...(session ? ["-s", place.session] : []), method, JSON.stringify(args)];
+export function rexApiArgv(server: string | null, method: string, args: Record<string, unknown>, session?: string): string[] {
+  return [...(server ? ["-S", server] : []), "--autostart=false", "api", "call", ...(session ? ["-s", session] : []), method, JSON.stringify(args)];
 }
 
 export function rexApi(place: RexPlace, method: string, args: Record<string, unknown>, bin: string | null = rexBinary(), session = true, timeout = 5_000): unknown {
   if (!bin) return null;
-  const r = run(bin, apiArgv(place, method, args, session), timeout);
-  return r.status === 0 ? parse(r.stdout) : null;
+  const r = runNow([bin, ...rexApiArgv(place.server, method, args, session ? place.session : undefined)], timeout);
+  return r.status === 0 ? parseJson(r.stdout) : null;
 }
+
+export const REX_TERMINAL = "com.superlogical.terminal";
 
 function blockCall(place: RexPlace, method: string, args: Record<string, unknown>, bin: string | null = rexBinary(), timeout = 5_000): unknown {
-  return rexApi(place, `com.superlogical.terminal.${method}`, { block_id: place.block, args }, bin, true, timeout);
-}
-
-function object(v: unknown): Record<string, unknown> | null {
-  return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
-}
-
-function nested(v: unknown, ...path: string[]): unknown {
-  let at: unknown = v;
-  for (const key of path) {
-    const o = object(at);
-    if (!o) return undefined;
-    at = o[key];
-  }
-  return at;
-}
-
-function recordsIn(v: unknown): unknown[] {
-  if (Array.isArray(v)) return v;
-  for (const key of ["records", "status", "program_status", "values"]) {
-    const list = nested(v, key);
-    if (Array.isArray(list)) return list;
-  }
-  return [];
+  return rexApi(place, `${REX_TERMINAL}.${method}`, { block_id: place.block, args }, bin, true, timeout);
 }
 
 function rootRecord(v: unknown): Record<string, unknown> | null {
-  for (const item of recordsIn(v)) {
+  for (const item of listIn(v, ["records", "status", "program_status", "values"]) ?? []) {
     const record = object(item);
     if (!record) continue;
     const id = record.id;
@@ -216,8 +177,8 @@ export interface RexActivity {
 
 export async function rexActivity(place: RexPlace, bin: string | null = rexBinary(), timeout = 5_000): Promise<RexActivity | null> {
   if (!bin) return null;
-  const r = await runRexLater(bin, apiArgv(place, "com.superlogical.terminal.program_status", { block_id: place.block, args: {} }, true), timeout);
-  const record = rootRecord(r.status === 0 ? parse(r.stdout) : null);
+  const r = await run([bin, ...rexApiArgv(place.server, `${REX_TERMINAL}.program_status`, { block_id: place.block, args: {} }, place.session)], timeout);
+  const record = rootRecord(r.status === 0 ? parseJson(r.stdout) : null);
   const state = typeof record?.state === "string" ? record.state.toLowerCase() : null;
   const msg = typeof record?.msg === "string" && record.msg ? record.msg : undefined;
   if (state === "working") return { state: "working", ...(msg ? { tool: msg } : {}) };
@@ -232,24 +193,18 @@ export function rexInstance(place: RexPlace, bin: string | null = rexBinary()): 
   return typeof id === "string" && id ? id : null;
 }
 
-function listIn(v: unknown): unknown[] | null {
-  if (Array.isArray(v)) return v;
+function blocksIn(v: unknown): unknown[] | null {
+  const list = listIn(v, ["blocks", "list", "ids", "block_ids"], true);
+  if (list) return list;
   const record = object(v);
-  if (!record) return null;
-  for (const key of ["blocks", "list", "ids", "block_ids"]) {
-    const list = record[key];
-    if (Array.isArray(list)) return list;
-    const values = object(list);
-    if (values) return Object.values(values);
-  }
-  const placed = record.placed;
-  const detached = record.detached;
+  const placed = record?.placed;
+  const detached = record?.detached;
   if (Array.isArray(placed) || Array.isArray(detached)) return [...(Array.isArray(placed) ? placed : []), ...(Array.isArray(detached) ? detached : [])];
   return null;
 }
 
 export function rexBlockPresent(place: RexPlace, bin: string | null = rexBinary()): boolean | null {
-  const list = listIn(rexApi(place, "session.list_blocks", {}, bin));
+  const list = blocksIn(rexApi(place, "session.list_blocks", {}, bin));
   if (!list) return null;
   return list.some((item) => {
     if (typeof item === "string") return item === place.block;

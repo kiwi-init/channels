@@ -1,7 +1,8 @@
 import * as Effect from "effect/Effect";
 import { loadConfig, updateConfig } from "../../config.ts";
 import { installPalette, removePalette, rexConfigPath } from "../../rex-palette.ts";
-import { rexBinary, rexStatus, runRex } from "../../rex.ts";
+import { rexBinary, rexStatus } from "../../rex.ts";
+import { runNow } from "../../terminals/shared/run.ts";
 import { localRexSeats, showInRex } from "../../rex-show.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, out } from "../context.ts";
@@ -41,7 +42,7 @@ function statusText(): string {
 function reloadPalette(): void {
   const bin = rexBinary();
   if (!bin || rexStatus().server !== "running") return;
-  runRex(bin, ["config", "reload"], 5_000);
+  runNow([bin, "config", "reload"], 5_000);
 }
 
 export const rexCommands: Record<string, Command> = {
