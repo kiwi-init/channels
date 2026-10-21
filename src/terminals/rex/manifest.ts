@@ -5,5 +5,5 @@ export const rexManifest: TerminalManifest = {
   name: "Rex",
   platforms: ["darwin", "linux", "win32"],
   helpers: { version: 1, files: ["kiwi.lua", "kiwi-find.lua"] },
-  can: ["open"],
+  can: ["open", "locate", "mark", "show", "watch", "type"],
 };

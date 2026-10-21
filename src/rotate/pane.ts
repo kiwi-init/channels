@@ -5,9 +5,10 @@ import { appendRotated } from "../daemon/wake.ts";
 import { codexTurn } from "../harness.ts";
 import { offerHandoff } from "../hooks/handoff.ts";
 import { alive } from "../hooks/listeners.ts";
-import { rexBlockPresent, rexInstance, rexProcess, rexRootState, rexScreen, type RexPlace } from "../rex.ts";
+import type { RexPlace } from "../terminals/plugin.ts";
+import { rexBlockPresent, rexInstance, rexProcess, rexRootState } from "../terminals/rex/api.ts";
+import { rexPane } from "../terminals/rex/type.ts";
 import { holdsInput, leadsTerminal } from "../terminals/shared/foreground.ts";
-import { runNow } from "../terminals/shared/run.ts";
 import { tmuxNow } from "../terminals/shared/tmux.ts";
 import { CODEX_FIRST, CODEX_NEW, codexInput, codexShown, sameWords } from "./codex.ts";
 
@@ -176,7 +177,7 @@ function rexBackend(t: ClaudeTarget & { rex: RexPlace; bin: string }, quietMs: n
   const bin = t.bin;
   let emptyAt: number | null = null;
   const cast = (id: PaneId | RexId): RexId => id as RexId;
-  const sendKey = (...keys: string[]): boolean => runNow([bin, "-S", place.server, "send-key", "-s", place.session, "-b", place.block, ...keys]).status === 0;
+  const pane = rexPane(place, bin);
   return {
     kind: "rex",
     identify: () => {
@@ -201,10 +202,10 @@ function rexBackend(t: ClaudeTarget & { rex: RexPlace; bin: string }, quietMs: n
       const state = rexRootState(place, bin);
       return state === "done" || state === "idle";
     },
-    screen: () => rexScreen(place, bin),
-    type: (_first, text) => runNow([bin, "-S", place.server, "send", "-s", place.session, "-b", place.block, text]).status === 0,
-    enter: () => sendKey("enter"),
-    erase: (_first, count) => sendKey(...Array.from({ length: count }, () => "backspace")),
+    screen: () => pane.screen(),
+    type: (_first, text) => pane.type(text),
+    enter: () => pane.enter(),
+    erase: (_first, count) => pane.erase(count),
     calm: () => true,
     quiet: (now) => {
       if (emptyAt === null) {

@@ -1,10 +1,10 @@
 import * as Effect from "effect/Effect";
 import type { RexStatus } from "@kiwi/core/terminals.ts";
 import { loadConfig, updateConfig } from "../../config.ts";
-import { installPalette, removePalette, rexConfigPath } from "../../rex-palette.ts";
-import { rexBinary, rexStatus } from "../../rex.ts";
-import { runNow } from "../../terminals/shared/run.ts";
-import { localRexSeats, showInRex } from "../../rex-show.ts";
+import { helpersOn } from "../../terminals/registry.ts";
+import { rexStatus } from "../../terminals/rex/api.ts";
+import { downloadHelpers, removeHelpers, rexConfigPath } from "../../terminals/rex/helpers.ts";
+import { localRexSeats, showInRex } from "../../terminals/rex/show.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, out } from "../context.ts";
 
@@ -17,7 +17,7 @@ function statusJson(): RexStatus {
     found: rex.found,
     ...(rex.version ? { version: rex.version } : {}),
     server: rex.server,
-    helpers: cfg.rex === "on" ? "on" : "off",
+    helpers: helpersOn("rex", cfg) ? "on" : "off",
     rotation: cfg.rotate === "on" ? "on" : "off",
   };
 }
@@ -32,12 +32,6 @@ function statusText(): string {
   return `${where}; ${on} Rotation for this computer is ${s.rotation}.`;
 }
 
-function reloadPalette(): void {
-  const bin = rexBinary();
-  if (!bin || rexStatus().server !== "running") return;
-  runNow([bin, "config", "reload"], 5_000);
-}
-
 export const rexCommands: Record<string, Command> = {
   rex: () =>
     Effect.gen(function* () {
@@ -47,19 +41,11 @@ export const rexCommands: Record<string, Command> = {
         updateConfig((c) => {
           c.rex = sub;
         });
-        if (sub === "off") {
-          const { clearStatus } = yield* Effect.promise(() => import("../../status.ts"));
-          removePalette();
-          yield* Effect.promise(() => clearStatus());
-          reloadPalette();
-        } else {
-          installPalette();
-          reloadPalette();
-        }
+        yield* Effect.promise(() => (sub === "off" ? removeHelpers() : downloadHelpers()));
         return out(statusText());
       }
       if (sub === "seats") {
-        const seats = loadConfig().rex === "on" ? localRexSeats() : [];
+        const seats = helpersOn("rex", loadConfig()) ? localRexSeats() : [];
         return out(opt.json ? JSON.stringify(seats) : seats.map((s) => `${s.alias} ${s.agent} ${s.block}`).join("\n"));
       }
       if (sub === "show") {

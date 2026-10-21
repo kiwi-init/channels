@@ -19,7 +19,8 @@ import { dirname, resolve } from "node:path";
 import { kimiAncestor, kimiCodePid, mimoHere, piHere, type ProcessTree } from "./ancestry.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord } from "./config.ts";
 import { omit } from "@kiwi/core/omit.ts";
-import { placeFrom, type SeatPlace } from "./rex.ts";
+import type { SeatPlace } from "./terminals/plugin.ts";
+import { locate } from "./terminals/registry.ts";
 
 type Harness = NonNullable<SeatRecord["harness"]>;
 
@@ -316,7 +317,7 @@ export function seatsFor(dir: string, opts: SeatOptions = {}): Binding[] {
 }
 
 export function notePlace(seats: readonly Binding[], env: Record<string, string | undefined> = process.env): void {
-  const place: SeatPlace = placeFrom(env);
+  const place: SeatPlace = locate(env);
   if (!seats.length) return;
   const keys = new Set(seats.map((b) => `${b.alias}\u0000${b.as}`));
   const same = (b: Binding) => keys.has(`${b.alias}\u0000${b.as}`);
