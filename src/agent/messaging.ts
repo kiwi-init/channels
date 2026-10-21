@@ -134,14 +134,14 @@ export class SessionMessaging extends SessionListen {
 
   readonly reply = Effect.fn("AgentSession.reply")(
     { self: this },
-    function* (this: SessionMessaging, seq: number, body: string, kind: Kind = "msg", imgs?: ImageAttachment[]) {
+    function* (this: SessionMessaging, seq: number, body: string, kind: Kind = "msg", imgs?: ImageAttachment[], extra: Pick<SendOptions, "settled"> = {}) {
       const { messages, state } = yield* this.state();
       const orig = yield* this.message(seq, messages);
       if (!orig) return yield* new Rejected(`no message #${seq}`);
       yield* this.notAnsweredByOthers(state, seq);
       const to = orig.from === this.me ? orig.to : [orig.from];
       yield* this.mayI({ kind, to });
-      const sent = yield* this.ch.fx.send(body, { to, kind, re: [seq], imgs, room: state.roomOf.get(seq) ?? orig.room });
+      const sent = yield* this.ch.fx.send(body, { to, kind, re: [seq], imgs, room: state.roomOf.get(seq) ?? orig.room, ...extra });
       return sent;
     },
     oneLook,
@@ -200,7 +200,7 @@ export class SessionMessaging extends SessionListen {
 
   readonly escalate = Effect.fn("AgentSession.escalate")(
     { self: this },
-    function* (this: SessionMessaging, body: string, re?: number, handoff?: Handoff, ask: { choices?: string[]; task?: number } = {}) {
+    function* (this: SessionMessaging, body: string, re?: number, handoff?: Handoff, ask: { choices?: string[]; task?: number } & Pick<SendOptions, "id" | "permission"> = {}) {
       if (!body.trim()) return yield* new Rejected("say what needs deciding: the text is empty");
       const { messages, state } = yield* this.state();
       const me = state.members.get(this.me);
@@ -224,6 +224,8 @@ export class SessionMessaging extends SessionListen {
         ...(handoff ? { handoff } : {}),
         ...(ask.choices ? { choices: ask.choices } : {}),
         ...(ask.task !== undefined ? { task: ask.task } : {}),
+        ...(ask.id ? { id: ask.id } : {}),
+        ...(ask.permission ? { permission: ask.permission } : {}),
         ...(re !== undefined ? { re: [re] } : {}),
       });
       return { seq, to };

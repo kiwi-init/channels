@@ -1,6 +1,7 @@
 import * as Effect from "effect/Effect";
 import { seal, slotId } from "../crypto.ts";
 import { sign, verify } from "../identity.ts";
+import type { PermissionReply, PermissionSettled, PermissionShown } from "../permission.ts";
 import {
   CHOICE_MAX_LENGTH,
   CHOICES_MAX,
@@ -44,6 +45,10 @@ export interface SendOptions {
   dm?: boolean;
   slot?: { name: string; ttl: number };
   free?: string[];
+  id?: string;
+  permission?: PermissionShown;
+  perm?: PermissionReply;
+  settled?: PermissionSettled;
 }
 
 export interface SendFx {
@@ -91,7 +96,7 @@ export class ChannelSending {
       const attached = imgs?.length ? yield* this.images.stored(imgs) : undefined;
       const payload: Payload = {
         v: PROTOCOL_VERSION,
-        id: crypto.randomUUID(),
+        id: opts.id ?? crypto.randomUUID(),
         from: this.ch.name,
         ...(opts.to?.length ? { to: opts.to } : {}),
         kind: opts.kind ?? (opts.ev ? "event" : "msg"),
@@ -103,6 +108,9 @@ export class ChannelSending {
         ...(opts.esc && !opts.ev ? { esc: true as const } : {}),
         ...(opts.esc && opts.handoff && !opts.ev ? { handoff: opts.handoff } : {}),
         ...(opts.esc && opts.choices && !opts.ev ? { choices: opts.choices } : {}),
+        ...(opts.esc && opts.choices && opts.permission && !opts.ev ? { permission: opts.permission } : {}),
+        ...(opts.perm && opts.re?.length && !opts.ev ? { perm: opts.perm } : {}),
+        ...(opts.settled && opts.re?.length && !opts.ev ? { settled: opts.settled } : {}),
         ...(opts.task && !opts.ev ? { task: opts.task } : {}),
         ...(opts.dm && !opts.ev && opts.to?.length === 1 ? { dm: true as const } : {}),
         ts: Date.now(),
