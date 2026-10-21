@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Channel } from "@kiwi/core/client.ts";
 import { generateIdentity } from "@kiwi/core/identity.ts";
+import { permissionReply } from "@kiwi/core/permission.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { saveIdentity, updateConfig } from "../src/config.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -97,7 +98,7 @@ const theAsk = (p: { hook: { exitCode: number | null }; err: Promise<string> }, 
   }, `the ask for ${command}`);
 
 const answer = (ask: Message, allow: boolean, by: Channel = human, perm = true) =>
-  by.send(allow ? "A: Allow once" : "B: Deny", { to: [ask.from], re: [ask.seq], ...(perm ? { perm: { ask: ask.id, allow } } : {}) });
+  by.send(allow ? "A: Allow once" : "B: Deny", { to: [ask.from], re: [ask.seq], ...(perm ? { perm: permissionReply(ask, allow)! } : {}) });
 
 describe("kiwi hook permission", () => {
   test("asks the agent's human with the call's id, and their signed Allow comes back as Claude Code's allow", async () => {
