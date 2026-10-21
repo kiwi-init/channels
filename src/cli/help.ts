@@ -85,13 +85,20 @@ This computer
   kiwi cleanup [--quiet]                         remove what older installs and updates left behind (the installer runs it)
   kiwi daemon                                    this computer's hub: key, cert, and every agent's seat (starts on its own)
   kiwi rotate on|off|status                      give this computer's Claude Code seats in tmux or Rex, and Codex seats in tmux, a fresh session between tasks (off by default)
-  kiwi rex on|off|status                         mark a seat that needs you in Rex and terminals that take OSC 7501, from this computer (off by default)
+  kiwi terminal [status] [--json]                the terminals on this computer (Terminal, tmux, Rex), their helpers, which one new
+                                                 agents open in, and whether creating new agents is on
+  kiwi terminal download|remove rex|tmux         a terminal's helpers: Rex and tmux mark a seat that needs you (off by default)
+  kiwi terminal prefer app|rex|tmux              where new agents open: its helpers must be on; else Terminal, else tmux
+  kiwi terminal show --needs-you                 go to the seat with the oldest question for a person, else the oldest task
+                                                 waiting for review, in Rex or tmux (tmux's prefix K runs it)
+  kiwi launches on|off|status                    whether new agents can be started on this computer, from here or a paired one (on)
+  kiwi rex on|off|status                         the old name of kiwi terminal download|remove rex and status, for this release
   kiwi harnesses [--json]                        the harnesses on this computer, found on your login shell's PATH: each one's path
                                                  and version, whether kiwi launch starts it, and whether Kiwi can wake it
   kiwi folders [--room ROOM] [--json]            the folders this computer's seats work in, a channel's with --room, most
                                                  recently seen first
   kiwi launch HARNESS --code CODE [--folder DIR] [--nick NAME] [--persona TOKEN]   start an agent in a terminal you
-                                                 can open (Rex, else tmux, else Terminal): it joins with a launch id the app knows
+                                                 can open (the one kiwi terminal prefer names, else Terminal, else tmux): it joins with a launch id the app knows
   kiwi demo · doctor · hooks install|uninstall|status · mcp · channels · relay --help
 
 Running a channel (create, approve, remove, personalities, hold, charter, close) is the owner's, in the Channels app.

@@ -2,12 +2,15 @@ import { afterAll, afterEach, beforeEach, describe, expect, setDefaultTimeout, t
 import { chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync, writeSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadConfig, updateConfig, type SeatRecord } from "../src/config.ts";
+import type { Message } from "@kiwi/core/protocol.ts";
+import { fold, type ChannelState, type Roster, type Task } from "@kiwi/core/state.ts";
+import { loadConfig, updateConfig, type Config, type SeatRecord } from "../src/config.ts";
 import { paneOf } from "../src/hooks/rotate.ts";
 import { notePlace } from "../src/seats.ts";
-import type { StatusRecord } from "../src/terminals/plugin.ts";
-import { helpersOn, locate, markerOf, marking } from "../src/terminals/registry.ts";
-import { downloadTmuxHelpers, kiwiConf, kiwiConfPath, MARK_FORMAT, removeTmuxHelpers, sourceLine, tmuxConfigPath, tmuxConfigs, tmuxHelpersStatus } from "../src/terminals/tmux/helpers.ts";
+import { showNeedsYou } from "../src/status.ts";
+import type { ShowResult, StatusRecord, TerminalId } from "../src/terminals/plugin.ts";
+import { locate, markerOf, marking, showsIn, terminalPlugin } from "../src/terminals/registry.ts";
+import { downloadTmuxHelpers, kiwiConf, kiwiConfPath, MARK_FORMAT, removeTmuxHelpers, sourceLine, tmuxConfigPath, tmuxConfigs } from "../src/terminals/tmux/helpers.ts";
 import { tmuxPlaceFrom } from "../src/terminals/tmux/locate.ts";
 import { markText, tmuxMarker } from "../src/terminals/tmux/mark.ts";
 import { showPane } from "../src/terminals/tmux/show.ts";
@@ -132,7 +135,6 @@ describe("the tmux helpers' files", () => {
     expect(tmuxConfigPath({}, home)).toBe(config);
     writeFileSync(dot, `set -g mouse on\n${sourceLine(dot)}\n`);
     expect(tmuxConfigPath({}, home)).toBe(dot);
-    expect(tmuxHelpersStatus({}, home)).toBe("on");
   });
 
   test("kiwi.tmux.conf appends the mark to both formats once, and binds prefix K only when it's free", () => {
@@ -156,11 +158,10 @@ describe("the tmux helpers' files", () => {
     expect(readFileSync(conf, "utf8")).toBe(`${own}\nsource-file -q "${join(dir, "kiwi.tmux.conf")}" # Kiwi\n`);
     expect((await downloadTmuxHelpers("'/opt/kiwi'", live, conf)).changed).toBe(false);
     expect(occurrences(readFileSync(conf, "utf8"), "# Kiwi")).toBe(1);
-    expect(tmuxHelpersStatus({ KIWI_TMUX_CONF: conf })).toBe("on");
+    expect(tmuxConfigPath({ KIWI_TMUX_CONF: conf })).toBe(conf);
     await removeTmuxHelpers(live, [conf]);
     expect(readFileSync(conf, "utf8")).toBe(`${own}\n`);
     expect(existsSync(kiwiConfPath(conf))).toBe(false);
-    expect(tmuxHelpersStatus({ KIWI_TMUX_CONF: conf })).toBe("off");
   });
 
   test("a config Kiwi made holds nothing after Remove, so Remove deletes it", async () => {
@@ -172,27 +173,122 @@ describe("the tmux helpers' files", () => {
     expect(existsSync(conf)).toBe(false);
   });
 
-  test("tmux's helpers are on for the status watch exactly while the marked line is there", async () => {
-    const prev = process.env.KIWI_TMUX_CONF;
-    const conf = join(temp("kiwi-tmux-conf-"), "tmux.conf");
-    process.env.KIWI_TMUX_CONF = conf;
-    try {
-      const live = { tmux: "/nonexistent/tmux", sockets: [] };
-      expect(helpersOn("tmux", {})).toBe(false);
-      expect(marking({ rex: "on" })).toEqual(["rex"]);
-      await downloadTmuxHelpers("'/opt/kiwi'", live, conf);
-      expect(helpersOn("tmux", {})).toBe(true);
-      expect(marking({})).toEqual(["tmux"]);
-      await removeTmuxHelpers(live, [conf]);
-      expect(marking({})).toEqual([]);
-    } finally {
-      if (prev === undefined) delete process.env.KIWI_TMUX_CONF;
-      else process.env.KIWI_TMUX_CONF = prev;
-    }
+  test("the config's switch says whether tmux marks and shows, as it does for Rex", () => {
+    const both: Config = { channels: {}, terminals: { helpers: { rex: "on", tmux: "on" } } };
+    const inTmux: SeatRecord = { alias: "ch", as: "ana", tmux: { socket: SOCKET, pane: "%1" } };
+    const inRex: SeatRecord = { alias: "ch", as: "bo", term: { program: "rex" }, rex: { server: "studio", session: "s", block: "b" } };
+    expect(marking({})).toEqual([]);
+    expect(marking({ terminals: { helpers: { rex: "on" } } })).toEqual(["rex"]);
+    expect(marking({ terminals: { helpers: { tmux: "on", rex: "off" } } })).toEqual(["tmux"]);
+    expect(marking(both)).toEqual(["rex", "tmux"]);
+    expect([showsIn(inTmux, both), showsIn(inRex, both), showsIn({ term: { program: "ghostty" } }, both)]).toEqual(["tmux", "rex", null]);
+    expect([showsIn(inTmux, { terminals: { helpers: { rex: "on" } } }), showsIn(inRex, { terminals: { helpers: { tmux: "on" } } })]).toEqual([null, null]);
   });
 });
 
-const CLEAN: Record<string, string> = Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined && e[0] !== "TMUX" && e[0] !== "TMUX_PANE"));
+const roster: Roster = ["jonatas", "ana", "bo", "cy", "dan", "zed"].map((name) => ({
+  name,
+  pk: name,
+  owner: name === "jonatas",
+  at: 1,
+  active: true,
+  ...(name === "jonatas" ? { kind: "human" as const } : {}),
+}));
+const asking = (seq: number, from: string, at: number, to = "jonatas"): Message =>
+  ({ v: 1, id: `m${seq}`, seq, ts: at, rts: at, sigOk: true, from, kind: "ask", body: "ship the secret plan?", to: [to] }) as Message;
+const waitingReview = (id: number, owner: string, at: number): Task => ({
+  id,
+  title: `task ${id}`,
+  state: "review",
+  owner,
+  createdBy: owner,
+  createdAt: 1,
+  updatedAt: at,
+  notes: [],
+  workedBy: [owner],
+  rounds: [{ n: 1, by: owner, seq: id, ts: at, result: { kind: "open" } }],
+});
+
+function board(asks: Message[], tasks: Task[] = []): ChannelState {
+  const state = fold([], roster);
+  state.openAsks.push(...asks);
+  for (const task of tasks) state.tasks.set(task.id, task);
+  return state;
+}
+
+const REX_PLACE = { server: "studio", session: "session:01a15963-bacc-7426-91e9-4d98757dcd0c", block: "block:11a15963-bacc-7426-91e9-4d98757dcd0c" };
+
+function seated(helpers: Partial<Record<"rex" | "tmux", "on" | "off">>): Config {
+  return {
+    channels: {},
+    terminals: { helpers },
+    bindings: {
+      "/w/ana": { alias: "ch", as: "ana", tmux: { socket: SOCKET, pane: "%1" } },
+      "/w/bo": { alias: "ch", as: "bo", term: { program: "rex" }, rex: REX_PLACE },
+      "/w/cy": { alias: "ch", as: "cy", term: { program: "ghostty" } },
+      "/w/dan": { alias: "other", as: "dan", tmux: { socket: SOCKET, pane: "%2" } },
+    },
+  };
+}
+
+function needsYou(states: Record<string, ChannelState>, fails: Record<string, Extract<ShowResult, { ok: false }>["why"]> = {}) {
+  const read: string[] = [];
+  const shown: [TerminalId, string][] = [];
+  return {
+    read,
+    shown,
+    run: (cfg: Config) =>
+      showNeedsYou(
+        cfg,
+        async (alias, agent) => {
+          read.push(`${alias}/${agent}`);
+          return states[alias] ?? null;
+        },
+        async (by, record) => {
+          shown.push([by, record.as]);
+          const why = fails[record.as];
+          return why ? { ok: false, why } : { ok: true };
+        },
+      ),
+  };
+}
+
+describe("kiwi terminal show --needs-you", () => {
+  test("the oldest question for a person wins over any task waiting for review, among the seats a plugin can show", async () => {
+    const states = { ch: board([asking(1, "ana", 50), asking(2, "bo", 20), asking(3, "cy", 10)], [waitingReview(7, "ana", 5)]), other: board([asking(1, "dan", 30)]) };
+    const both = needsYou(states);
+    expect(await both.run(seated({ rex: "on", tmux: "on" }))).toEqual({ shown: { alias: "ch", agent: "bo", question: true, at: 20 } });
+    expect(both.shown).toEqual([["rex", "bo"]]);
+    expect(both.read).toEqual(["ch/ana", "other/dan"]);
+    const tmuxOnly = needsYou(states);
+    expect(await tmuxOnly.run(seated({ tmux: "on" }))).toEqual({ shown: { alias: "other", agent: "dan", question: true, at: 30 } });
+    expect(tmuxOnly.shown).toEqual([["tmux", "dan"]]);
+  });
+
+  test("with no question, the task waiting longest for review; a seat that can't be shown gives way to the next", async () => {
+    const states = { ch: board([], [waitingReview(7, "ana", 40), waitingReview(3, "ana", 60)]), other: board([], [waitingReview(9, "dan", 20)]) };
+    const gone = needsYou(states, { dan: "failed" });
+    expect(await gone.run(seated({ tmux: "on" }))).toEqual({ shown: { alias: "ch", agent: "ana", question: false, at: 40 } });
+    expect(gone.shown).toEqual([
+      ["tmux", "dan"],
+      ["tmux", "ana"],
+    ]);
+    const detached = needsYou(states, { dan: "no-app", ana: "no-app" });
+    expect(await detached.run(seated({ tmux: "on" }))).toEqual({ shown: null, seats: 2, failed: { waiting: { alias: "other", agent: "dan", question: false, at: 20 }, why: "no-app" } });
+  });
+
+  test("a question to another agent, someone else's, or work not in review shows nothing, and with no helpers on no channel is read", async () => {
+    const doing: Task = { ...waitingReview(4, "ana", 1), state: "doing" };
+    const quiet = needsYou({ ch: board([asking(1, "ana", 5, "bo"), asking(2, "zed", 1)], [doing]) });
+    expect(await quiet.run(seated({ rex: "on", tmux: "on" }))).toEqual({ shown: null, seats: 3, failed: null });
+    expect(quiet.shown).toEqual([]);
+    const off = needsYou({ ch: board([asking(1, "ana", 5)]) });
+    expect(await off.run(seated({}))).toEqual({ shown: null, seats: 0, failed: null });
+    expect(off.read).toEqual([]);
+  });
+});
+
+const CLEAN: Record<string, string> = Object.fromEntries(Object.entries(process.env).filter((e): e is [string, string] => e[1] !== undefined && !["TMUX", "TMUX_PANE", "TMUX_TMPDIR"].includes(e[0])));
 
 interface Server {
   name: string;
@@ -343,6 +439,24 @@ describe.skipIf(!TMUX)("on a throwaway tmux server", () => {
     client.keys("\x02K");
     expect(await until(() => existsSync(join(dir, "ran")))).toBe(true);
     expect(readFileSync(join(dir, "ran"), "utf8")).toBe(`${SHOW}\n`);
+  });
+
+  test.skipIf(!SCRIPT)("Needs you through the tmux plugin switches the attached client to the seat's pane", async () => {
+    const dir = temp("kiwi-tmux-live-");
+    const server = startServer(personConf(dir, []));
+    server.tm("new-session", "-d", "-s", "elsewhere", "sleep 86400");
+    const pane = server.tm("display-message", "-p", "-t", "elsewhere:", "#{pane_id}").out;
+    attach(server, "kiwi", dir);
+    expect(await until(() => server.tm("list-clients", "-F", "#{session_name}").out === "kiwi")).toBe(true);
+    const cfg: Config = { channels: {}, terminals: { helpers: { tmux: "on" } }, bindings: { "/w/ana": { alias: "ch", as: "ana", tmux: { socket: server.socket, pane } } } };
+    const tools = { platform: process.platform, shell: "/bin/sh", rex: null, tmux: TMUX!, osascript: null };
+    const got = await showNeedsYou(
+      cfg,
+      async () => board([asking(1, "ana", 5)]),
+      async (by, record) => (await (await terminalPlugin(by, tools)).show?.(record)) ?? { ok: false, why: "failed" },
+    );
+    expect(got).toEqual({ shown: { alias: "ch", agent: "ana", question: true, at: 5 } });
+    expect(server.tm("list-clients", "-F", "#{session_name} #{pane_id}").out).toBe(`elsewhere ${pane}`);
   });
 
   test("Download on a running server marks it at once, and Remove leaves no line, no file, no @kiwi and the person's formats and keys as they were", async () => {

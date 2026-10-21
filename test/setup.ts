@@ -23,6 +23,7 @@ const DIRS: Record<string, string> = {
   CLAUDE_CONFIG_DIR: join(root, "claude"),
   KIWI_HOME: join(root, "kiwi"),
   KIWI_TMUX_CONF: join(root, "tmux", "tmux.conf"),
+  TMUX_TMPDIR: join(root, "tmux"),
 };
 
 // The session's id, process and version too: they decide which seat a command acts for, and whether hooks listen.
@@ -44,6 +45,8 @@ const SESSION = [
   "MIMOCODE",
   "MIMOCODE_PID",
   "MIMOCODE_SESSION_ID",
+  "TMUX",
+  "TMUX_PANE",
 ];
 
 function isolate(): void {
@@ -56,5 +59,6 @@ function isolate(): void {
   }
 }
 
+for (const [key, dir] of Object.entries(DIRS)) process.env[key] = dir;
 isolate();
 beforeEach(isolate);

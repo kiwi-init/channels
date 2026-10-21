@@ -1,11 +1,10 @@
-import type { Config, SeatRecord } from "../config.ts";
+import type { Config, HelperId, SeatRecord } from "../config.ts";
 import { loginPath, loginShell } from "../launch/shell.ts";
 import { appManifest } from "./app/manifest.ts";
 import type { PlaceTools, SeatPlace, TerminalId, TerminalManifest, TerminalPlugin } from "./plugin.ts";
 import { placeFrom, rexBinary } from "./rex/locate.ts";
 import { rexManifest } from "./rex/manifest.ts";
 import { takesStatus } from "./shared/osc7501.ts";
-import { tmuxHelpersStatus } from "./tmux/helpers.ts";
 import { tmuxPlaceFrom } from "./tmux/locate.ts";
 import { tmuxManifest } from "./tmux/manifest.ts";
 
@@ -49,16 +48,34 @@ export function locate(env: Record<string, string | undefined>): SeatPlace {
   return { ...placeFrom(env), ...tmuxPlaceFrom(env) };
 }
 
-export function helpersOn(id: TerminalId, cfg: Pick<Config, "rex">): boolean {
-  if (id === "tmux") return tmuxHelpersStatus() === "on";
-  return id === "rex" && cfg.rex === "on";
+export function helpersOn(id: TerminalId, cfg: Pick<Config, "terminals">): boolean {
+  return id !== "app" && cfg.terminals?.helpers?.[id] === "on";
 }
 
-export function marking(cfg: Pick<Config, "rex">): TerminalId[] {
+export function preferred(cfg: Pick<Config, "terminals">): TerminalId {
+  const prefer = cfg.terminals?.prefer;
+  return prefer && helpersOn(prefer, cfg) ? prefer : "app";
+}
+
+export function switchHelpers(terminals: NonNullable<Config["terminals"]>, id: HelperId, on: boolean): NonNullable<Config["terminals"]> {
+  const { prefer, ...rest } = terminals;
+  return { ...rest, ...(prefer && (on || prefer !== id) ? { prefer } : {}), helpers: { ...terminals.helpers, [id]: on ? "on" : "off" } };
+}
+
+export function launchesOn(cfg: Pick<Config, "launch">): boolean {
+  return cfg.launch !== "off";
+}
+
+export function marking(cfg: Pick<Config, "terminals">): TerminalId[] {
   return MANIFESTS.filter((m) => m.can.includes("mark") && helpersOn(m.id, cfg)).map((m) => m.id);
 }
 
 export function markerOf(record: SeatRecord, on: readonly TerminalId[]): TerminalId | null {
   if (record.tmux) return on.includes("tmux") ? "tmux" : null;
   return takesStatus(record.term) && on.includes("rex") ? "rex" : null;
+}
+
+export function showsIn(record: SeatPlace, cfg: Pick<Config, "terminals">): TerminalId | null {
+  if (record.tmux) return helpersOn("tmux", cfg) ? "tmux" : null;
+  return record.rex && helpersOn("rex", cfg) ? "rex" : null;
 }

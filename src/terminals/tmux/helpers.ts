@@ -38,10 +38,6 @@ export function tmuxConfigPath(env: Env = process.env, home = homedir()): string
   return confs.find(carries) ?? confs.findLast((c) => existsSync(c)) ?? confs[0]!;
 }
 
-export function tmuxHelpersStatus(env: Env = process.env, home = homedir()): "on" | "off" {
-  return tmuxConfigs(env, home).some(carries) ? "on" : "off";
-}
-
 export function kiwiConf(kiwi: string): string {
   const formats = FORMATS.map((f) => `%if "#{==:#{m:*@kiwi*,#{${f}}},0}"\nset -ga ${f} ${quoted(MARK_FORMAT)}\n%endif`);
   const show = quoted(`${kiwi} ${SHOW}`.replaceAll("#", "##"));

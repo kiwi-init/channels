@@ -3,10 +3,11 @@ import { join } from "node:path";
 import { allSeats, loadConfig } from "../../config.ts";
 import { selfCommand } from "../../hooks/self.ts";
 import type { PlaceRequest, Placed, PlaceTools, TerminalPlugin } from "../plugin.ts";
+import { helpersOn } from "../registry.ts";
 import { loginArgv } from "../shared/launch.ts";
 import { run, said } from "../shared/run.ts";
 import { tmuxSocket } from "../shared/tmux.ts";
-import { downloadTmuxHelpers, removeTmuxHelpers, tmuxHelpersStatus } from "./helpers.ts";
+import { downloadTmuxHelpers, removeTmuxHelpers } from "./helpers.ts";
 import { tmuxPlaceFrom } from "./locate.ts";
 import { tmuxManifest } from "./manifest.ts";
 import { tmuxMarker } from "./mark.ts";
@@ -49,7 +50,7 @@ export function tmuxTerminal(t: PlaceTools): TerminalPlugin {
     manifest: tmuxManifest,
     detect: async () => ({ found: !!t.tmux, running: !!t.tmux }),
     helpers: {
-      status: () => tmuxHelpersStatus(),
+      status: () => (helpersOn("tmux", loadConfig()) ? "on" : "off"),
       download: async () => void (await downloadTmuxHelpers(selfCommand(), { tmux, sockets: liveSockets() })),
       remove: () => removeTmuxHelpers({ tmux, sockets: liveSockets() }),
     },

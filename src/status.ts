@@ -1,21 +1,43 @@
-import { needsPerson } from "@kiwi/core/work.ts";
-import type { ChannelState } from "@kiwi/core/state.ts";
-import { loadConfig } from "./config.ts";
+import { needsPerson, type Need } from "@kiwi/core/work.ts";
+import { openRound, type ChannelState, type Task } from "@kiwi/core/state.ts";
+import { allSeats, loadConfig, type Config, type SeatRecord } from "./config.ts";
 import { seatRecordFor } from "./daemon/reach.ts";
-import type { StatusRecord, TerminalId, TerminalPlugin } from "./terminals/plugin.ts";
-import { markerOf, marking, placeTools, terminalPlugin } from "./terminals/registry.ts";
+import type { ShowResult, StatusRecord, TerminalId, TerminalPlugin } from "./terminals/plugin.ts";
+import { markerOf, marking, placeTools, showsIn, terminalPlugin } from "./terminals/registry.ts";
 import { askId, reviewId, statusFrame } from "./terminals/shared/osc7501.ts";
 
 const STATUS_EVERY_MS = 3_000;
 const RATE_MS = 1_000;
 const REFOLD_MS = 60_000;
 
+const asksFrom = (state: ChannelState, agent: string): Need[] => needsPerson(state).filter((n) => n.from === agent);
+
+const inReview = (state: ChannelState, agent: string): Task[] => [...state.tasks.values()].filter((t) => t.owner === agent && t.state === "review" && !t.archived);
+
 export function seatRecords(state: ChannelState, alias: string, agent: string): StatusRecord[] {
-  const asks = needsPerson(state).filter((n) => n.from === agent).length;
+  const asks = asksFrom(state, agent).length;
   const records: StatusRecord[] = asks ? [{ id: askId(alias), state: "blocked", kind: "question", count: asks, msg: `${asks} question${asks === 1 ? "" : "s"} for a person in ${alias}` }] : [];
-  const review = [...state.tasks.values()].filter((t) => t.owner === agent && t.state === "review" && !t.archived).sort((a, b) => a.id - b.id);
+  const review = inReview(state, agent).sort((a, b) => a.id - b.id);
   for (const task of review) records.push({ id: reviewId(alias, task.id), state: "done", task: task.id, msg: `T${task.id} waits for review` });
   return records;
+}
+
+interface Waiting {
+  alias: string;
+  agent: string;
+  question: boolean;
+  at: number;
+}
+
+function seatWaiting(state: ChannelState, alias: string, agent: string): Waiting[] {
+  return [
+    ...asksFrom(state, agent).map((n): Waiting => ({ alias, agent, question: true, at: n.at })),
+    ...inReview(state, agent).map((t): Waiting => ({ alias, agent, question: false, at: openRound(t)?.ts ?? t.updatedAt })),
+  ];
+}
+
+function oldestFirst(all: readonly Waiting[]): Waiting[] {
+  return [...all].sort((a, b) => Number(b.question) - Number(a.question) || a.at - b.at || a.alias.localeCompare(b.alias) || a.agent.localeCompare(b.agent));
 }
 
 export function foldStillFresh(kept: { head: number; at: number } | null, head: number | undefined, now = Date.now()): boolean {
@@ -66,6 +88,48 @@ async function channelState(session: Session): Promise<ChannelState | null> {
   } catch {
     return null;
   }
+}
+
+async function seatState(alias: string, agent: string): Promise<ChannelState | null> {
+  const session = await openSession(alias, agent);
+  return session ? channelState(session) : null;
+}
+
+export type ShowWhy = Extract<ShowResult, { ok: false }>["why"];
+
+export type NeedsYou = { shown: Waiting } | { shown: null; seats: number; failed: { waiting: Waiting; why: ShowWhy } | null };
+
+async function showWith(by: TerminalId, record: SeatRecord): Promise<ShowResult> {
+  return (await (await terminalPlugin(by)).show?.(record)) ?? { ok: false, why: "failed" };
+}
+
+export async function showNeedsYou(
+  cfg: Config,
+  read: (alias: string, agent: string) => Promise<ChannelState | null> = seatState,
+  show: (by: TerminalId, record: SeatRecord) => Promise<ShowResult> = showWith,
+): Promise<NeedsYou> {
+  const seats = new Map<string, { record: SeatRecord; by: TerminalId }>();
+  for (const { alias, as } of allSeats(cfg)) {
+    const record = seatRecordFor(cfg, alias, as);
+    const by = record ? showsIn(record, cfg) : null;
+    if (record && by) seats.set(`${alias}\u0000${as}`, { record, by });
+  }
+  const aliases = [...new Set([...seats.values()].map((s) => s.record.alias))];
+  const waiting: Waiting[] = [];
+  for (const alias of aliases) {
+    const agents = [...seats.values()].filter((s) => s.record.alias === alias).map((s) => s.record.as);
+    const state = await read(alias, agents[0]!);
+    if (state) waiting.push(...agents.flatMap((agent) => seatWaiting(state, alias, agent)));
+  }
+  let failed: { waiting: Waiting; why: ShowWhy } | null = null;
+  for (const w of oldestFirst(waiting)) {
+    const seat = seats.get(`${w.alias}\u0000${w.agent}`);
+    if (!seat) continue;
+    const shown = await show(seat.by, seat.record);
+    if (shown.ok) return { shown: w };
+    failed ??= { waiting: w, why: shown.why };
+  }
+  return { shown: null, seats: seats.size, failed };
 }
 
 export function startStatusWatch(opts: StatusWatchOptions): { stop(): void } {

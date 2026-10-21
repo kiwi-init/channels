@@ -256,6 +256,17 @@ From `design-tokens.ts`:
 - Events are quiet `meta` lines under the text column. A run of GitHub's
   news folds into one: "GitHub · #371 opened, 3 pushes, ci-ok passed ·
   4 updates", each PR or issue a link.
+- #general reads like a group chat: people's messages and short ones at
+  full size, the bookkeeping out of the way. Between two messages, every
+  task event, done digest and task card folds into one `meta` line:
+  "T12 done, T18 in progress, T20 cancelled and 1 more · 6 updates", each
+  id opening its task and its state word in the state's colour. A click
+  opens the run, one line per task (its state mark, id, title, owner,
+  state and PRs). One update is just its line. A task waiting on the
+  reader stays its own line, in `decide`. A done digest lives in its
+  task's thread; #general only shows it in the fold. An agent's message
+  past six lines is cut with a fade and Show more; a person's never is,
+  nor a question.
 - Needs-you: approvals, escalations and review-waiting work in one place at
   the top, as rows on the canvas, never folded behind a button: a 36px
   `row`-round outlined square with the kind's glyph in `decide` (a question,
