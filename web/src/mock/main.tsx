@@ -16,7 +16,7 @@ import { cx } from "@/lib/utils"
 import { viewCounts, type Tab } from "@/lib/views"
 import { agents, channel, MESSAGES, NOW } from "./fixture"
 
-type Direction = "list" | "request" | "tree" | "stuck" | "agents"
+type Direction = "list" | "request" | "tree" | "stuck" | "both" | "agents"
 
 const params = new URLSearchParams(location.search)
 const direction = (params.get("d") ?? "tree") as Direction
@@ -103,6 +103,16 @@ function Body() {
       )
     case "stuck":
       return board(<StuckChains chains={stuck} state={state} asks={asks} />)
+    case "both":
+      return (
+        <>
+          <div className="px-3">
+            <StuckChains chains={stuck} state={state} asks={asks} />
+          </div>
+          <Toolbar value="request" />
+          <TreeOutline roots={roots} state={state} />
+        </>
+      )
     case "agents":
       return <AgentLanes agents={team} state={state} messages={MESSAGES} now={NOW} nameOf={(n) => state.members.get(n)?.display ?? n} onOpenTask={() => {}} />
     case "list":

@@ -16,6 +16,8 @@ const SHOTS: { d: string; size: keyof typeof SIZES; height?: number }[] = [
   { d: "request", size: "narrow", height: 1300 },
   { d: "stuck", size: "wide" },
   { d: "stuck", size: "narrow", height: 1300 },
+  { d: "both", size: "wide", height: 1400 },
+  { d: "both", size: "narrow", height: 1900 },
 ];
 
 const browser = await chromium.launch({ executablePath: process.env.SMOKE_CHROMIUM || undefined });
