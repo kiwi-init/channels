@@ -207,7 +207,7 @@ jobs:
       option answers once (choiceGate in lib/choosing.ts refuses a click within 400 ms of the question showing or
       while its answer is on its way, and frees it when the send fails), and a message @addressed
       to others isn't the waiting question's answer (answered in lib/asks.ts); web
-      lib/drafts.test.ts: a draft (text or images) is kept per channel and place until emptied;
+      lib/drafts.test.ts: a draft (text or images) is kept per channel and place until emptied; web lib/later.test.ts: a lazy view that fails to load tells its listeners (the Toaster then says to reload, once) and loads again on the next try;
       web conversation/use-scroll.test.ts: only messages newer than the newest seen count as new
       (arrivedAfter), a hidden window's unread never goes below zero (unreadOf), and the conversation
       stays at its newest message when content shrinks and then grows before the scroll event lands,
