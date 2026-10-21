@@ -2,6 +2,39 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.24.0 — 2026-10-21
+
+- **The permission hook asks the relay for an answer the daemon hasn't caught up to, checks for a newer prompt last, and closes two lock races (T1651)** ([#631](https://github.com/ojowwalker77/channels/pull/631))
+- **Permission prompts: the row clears only on an answer that counts, more secret shapes, and edits show what they replace (T1588)** ([#628](https://github.com/ojowwalker77/channels/pull/628))
+- **The permission row shows what an edit replaces and with what, and says when it replaces every occurrence (T1615)** ([#632](https://github.com/ojowwalker77/channels/pull/632))
+- **The permission prompt docs say folder and file paths count as secret only for known shapes, and that an answer names the ask's id, agent and signature (T1608)** ([#629](https://github.com/ojowwalker77/channels/pull/629))
+- **A permission answer is built only on a verified ask and counted only as the fold's own message at its seq (T1594)** ([#634](https://github.com/ojowwalker77/channels/pull/634))
+- **Plan: one fresh agent session per task** ([#635](https://github.com/ojowwalker77/channels/pull/635))
+- **The conversation stays at its newest message when content above it grows after it opens (T1679)** ([#633](https://github.com/ojowwalker77/channels/pull/633))
+- **The fold refuses every message at a seq it was handed twice, so neither copy opens an ask or counts as an answer (T1725)** ([#636](https://github.com/ojowwalker77/channels/pull/636))
+- **The conversation's own scrolls to the bottom record where they left it, so content growing before the first scroll event after a channel switch keeps it at the newest message (T1720)** ([#637](https://github.com/ojowwalker77/channels/pull/637))
+- **The permission hook's last check runs after its wait has closed, and letting go of a session leaves another hook's lock and newer-prompt mark alone (T1661)** ([#640](https://github.com/ojowwalker77/channels/pull/640))
+- **Dictation's model, recorder and transcriber load on the first mic press, out of the first-load JS (T1859)** ([#641](https://github.com/ojowwalker77/channels/pull/641))
+- **The bundle check fails when dictation's model code is in the first load, a failed engine load says to reload, and the engine warms on mic hover or focus (T1887)** ([#642](https://github.com/ojowwalker77/channels/pull/642))
+- **Plan: terminal plugins, from an audit of the Rex and tmux code (T1928)** ([#645](https://github.com/ojowwalker77/channels/pull/645))
+- **Channel sidebar: a Search row, one Tasks row with quiet dots, threads between agents folded (T1763)** ([#638](https://github.com/ojowwalker77/channels/pull/638))
+- **Kiwi's terminal code runs programs, reads JSON and checks the foreground one way each, in src/terminals/shared (T2009)** ([#648](https://github.com/ojowwalker77/channels/pull/648))
+- **New agent's windows open through terminal plugins: a manifest and interface, a registry, and Rex, tmux and the terminal app each in src/terminals (T2010)** ([#649](https://github.com/ojowwalker77/channels/pull/649))
+- **A stale permission lock is taken over by moving it aside first, and a signal after the wait has closed closes the ask instead of killing the hook (T1894)** ([#646](https://github.com/ojowwalker77/channels/pull/646))
+- **A lazy view that fails to load says "Part of Channels couldn't load. Reload to try again." instead of failing in silence (T1960)** ([#644](https://github.com/ojowwalker77/channels/pull/644))
+- **The picture viewer's top row is the window's title row: its buttons click, and it clears the Mac traffic lights (T1841)** ([#643](https://github.com/ojowwalker77/channels/pull/643))
+- **One reader per terminal shape in packages/core/src/terminals.ts: place names, a launch's result, Rex's status and a Rex seat (T2012)** ([#651](https://github.com/ojowwalker77/channels/pull/651))
+- **The secret filter lets field-name keys and whole-value switches through, and catches lowercase _key/_auth, ?code=, ?access_key= and sudo -S passwords (T1621)** ([#639](https://github.com/ojowwalker77/channels/pull/639))
+- **The secret filter checks YAML list items and flow maps, and lets type annotations and S3/object keys through (T1923)** ([#652](https://github.com/ojowwalker77/channels/pull/652))
+- **Rex is a terminal plugin: where a seat runs, its marks, Show in Rex, its events, typing into its pane and its palette helpers, in src/terminals/rex (T2011)** ([#650](https://github.com/ojowwalker77/channels/pull/650))
+- **#general reads like a group chat: task bookkeeping folds into one line, digests go to the task's thread (T1939)** ([#647](https://github.com/ojowwalker77/channels/pull/647))
+- **kiwi send and reply tell an agent when its #general message ran long** ([#653](https://github.com/ojowwalker77/channels/pull/653))
+- **Terminal plugins 5/9: the terminals and launch config, kiwi terminal, kiwi launches, new agents open where Prefer says (T2013)** ([#655](https://github.com/ojowwalker77/channels/pull/655))
+- **Terminal plugins 8/9: Settings → New agents, and New agent follows the switch (T2016)** ([#658](https://github.com/ojowwalker77/channels/pull/658))
+- **Terminal plugins 9/9: docs, the plan as built, and how a new agent's terminal is picked (T2017)** ([#660](https://github.com/ojowwalker77/channels/pull/660))
+- **tmux gets helpers: Download and Remove, the @kiwi window marks, prefix K to the seat that needs you, and Show in tmux (T2014)** ([#659](https://github.com/ojowwalker77/channels/pull/659))
+- **Show from Needs you and New agent goes through the terminal plugins: Show in Rex now, Show in tmux next (T2015)** ([#656](https://github.com/ojowwalker77/channels/pull/656))
+
 ## 0.23.1 — 2026-10-21
 
 - **The relay streams a dictation download through its hash into the store instead of holding the whole model in memory (T908)** ([#608](https://github.com/ojowwalker77/channels/pull/608))
