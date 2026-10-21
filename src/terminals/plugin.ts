@@ -1,14 +1,12 @@
-import type { LaunchRefusal, Opened, PlacedSeat, RexPlace, ShowResult } from "@kiwi/core/terminals.ts";
+import type { LaunchRefusal, Opened, PlacedSeat, RexPlace, ShowResult, TerminalId } from "@kiwi/core/terminals.ts";
 import type { Config, SeatRecord } from "../config.ts";
-
-export type TerminalId = "app" | "tmux" | "rex";
 
 export interface TerminalPlace {
   program: string;
   version?: string;
 }
 
-export type { RexPlace, ShowResult };
+export type { RexPlace, ShowResult, TerminalId };
 
 export interface SeatPlace {
   term?: TerminalPlace;

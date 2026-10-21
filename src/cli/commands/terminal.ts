@@ -1,7 +1,6 @@
 import * as Effect from "effect/Effect";
-import { PLACE_NAMES, readPlacedSeat } from "@kiwi/core/terminals.ts";
+import { PLACE_NAMES, readPlacedSeat, type TerminalId, type TerminalRow, type TerminalsStatus } from "@kiwi/core/terminals.ts";
 import { loadConfig, updateConfig, type HelperId } from "../../config.ts";
-import type { TerminalId } from "../../terminals/plugin.ts";
 import { helpersOn, launchesOn, MANIFESTS, placeTools, preferred, seatPlaces, showSeat, switchHelpers, terminalPlugin, terminalPlugins } from "../../terminals/registry.ts";
 import { parseJson } from "../../terminals/shared/json.ts";
 import { args, opt } from "../args.ts";
@@ -9,20 +8,6 @@ import { type Command, die, out } from "../context.ts";
 
 const USAGE = "usage: kiwi terminal [status] [--json] | kiwi terminal download|remove rex|tmux | kiwi terminal prefer app|rex|tmux | kiwi terminal seats [--json] | kiwi terminal show --seat SEAT";
 const LAUNCHES_USAGE = "usage: kiwi launches on|off|status [--json]";
-
-interface TerminalRow {
-  id: TerminalId;
-  name: string;
-  found: boolean;
-  running: boolean;
-  helpers: "on" | "off" | null;
-}
-
-interface TerminalsStatus {
-  prefer: TerminalId;
-  launch: "on" | "off";
-  terminals: TerminalRow[];
-}
 
 const isHelperId = (id: string | undefined): id is HelperId => id === "rex" || id === "tmux";
 const isTerminalId = (id: string | undefined): id is TerminalId => MANIFESTS.some((m) => m.id === id);

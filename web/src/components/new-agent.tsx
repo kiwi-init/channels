@@ -10,7 +10,7 @@ import { harnessName } from "@/lib/harness"
 import { followLaunch, launcher, sawMembers, type LaunchSeen } from "@/lib/launches"
 import { usePersonalities } from "@/lib/personalities"
 import { relayUrl } from "@/lib/relay"
-import { showLabel, showSeat } from "@/lib/terminals"
+import { showLabel, showSeat, useLaunchesHere } from "@/lib/terminals"
 import { cx } from "@/lib/utils"
 import { HarnessFace } from "./harness-face"
 import { Icon } from "./icon"
@@ -50,8 +50,10 @@ export function NewAgent(props: Props) {
 
 function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: Props) {
   const all = usePersonalities()
+  const launchesHere = useLaunchesHere()
   const [machines, setMachines] = useState<MachineView[]>([])
-  const [machine, setMachine] = useState<string | null>(null)
+  const [picked, setPicked] = useState<string | null>(null)
+  const machine = picked ?? (launchesHere ? null : (machines.find((m) => !m.own && m.online !== false)?.machinePk ?? null))
   const [unreachable, setUnreachable] = useState<string | null>(null)
   const [rows, setRows] = useState<HarnessRow[] | null>(null)
   const [harness, setHarness] = useState<KnownHarness | null>(null)
@@ -113,7 +115,7 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
 
   const pickMachine = (pk: string | null) => {
     if (pk === machine) return
-    setMachine(pk)
+    setPicked(pk)
     setRows(null)
     setHarness(null)
     setFolders([])
@@ -165,6 +167,19 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
 
   if (started) return <Progress started={started} seen={seen} harness={harness} on={remote?.label} onClose={onClose} />
 
+  if (!launchesHere && others.length === 0)
+    return (
+      <div className="p-5">
+        <Dialog.Title className="text-title font-semibold">New agent</Dialog.Title>
+        <Dialog.Description className="mt-1 text-ui leading-normal text-ink-2">Creating new agents is off on this computer. Settings → New agents turns it back on.</Dialog.Description>
+        <div className="mt-5 flex justify-end">
+          <Button variant="secondary" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      </div>
+    )
+
   return (
     <form
       className="p-5"
@@ -181,9 +196,11 @@ function NewAgentBody({ onClose, code, roomId, channel, lead, onPin, roster }: P
       {others.length > 0 && (
         <Field label="Computer">
           <div role="radiogroup" aria-label="Computer" className="grid grid-cols-2 gap-1.5">
-            <Option on={machine === null} onPick={() => pickMachine(null)} disabled={busy}>
-              <MachineLine label={here?.label ?? "This computer"} detail="This computer" online={here ? here.online : true} />
-            </Option>
+            {launchesHere && (
+              <Option on={machine === null} onPick={() => pickMachine(null)} disabled={busy}>
+                <MachineLine label={here?.label ?? "This computer"} detail="This computer" online={here ? here.online : true} />
+              </Option>
+            )}
             {others.map((m) => (
               <Option key={m.machinePk} on={machine === m.machinePk} onPick={() => pickMachine(m.machinePk)} disabled={busy} off={m.online === false}>
                 <MachineLine label={m.label} detail={m.online === false ? "Offline" : m.os} online={m.online} />

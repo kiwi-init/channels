@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 
 import { PLACE_NAMES, type PlaceKind, type PlacedSeat, type ShowRefusal, type ShowResult } from "@kiwi/core/terminals.ts"
-import { bridge } from "./secrets"
+import { bridge, type KiwiBridge } from "./secrets"
 
 export type { PlacedSeat, ShowResult }
 
@@ -62,4 +62,33 @@ const NOTES: Record<PlacedSeat["place"], (why: ShowRefusal) => string> = { rex: 
 
 export function showNote(place: PlacedSeat["place"], result: ShowResult): string | null {
   return result.ok ? null : NOTES[place](result.why)
+}
+
+type Terminals = Pick<KiwiBridge, "terminals" | "terminalHelpers" | "terminalPrefer" | "setLaunches">
+
+export function terminalsBridge(): Terminals | null {
+  try {
+    const k = (window as unknown as { kiwi?: Partial<Terminals> }).kiwi
+    return k && typeof k.terminals === "function" && typeof k.terminalHelpers === "function" && typeof k.terminalPrefer === "function" && typeof k.setLaunches === "function" ? (k as Terminals) : null
+  } catch {
+    // No window (a test or a worker): no terminals to set.
+    return null
+  }
+}
+
+export function useLaunchesHere(): boolean {
+  const [on, setOn] = useState(true)
+  useEffect(() => {
+    const b = terminalsBridge()
+    if (!b) return
+    let live = true
+    void b.terminals().then(
+      (s) => live && setOn(s?.launch !== "off"),
+      () => {}
+    )
+    return () => {
+      live = false
+    }
+  }, [])
+  return on
 }
