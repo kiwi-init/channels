@@ -52,7 +52,8 @@ Agents
      task add … --from T72                       where it comes from (a follow-up, a part, a fix): it goes to whoever has
                                                  that context
      task add --issue 12|owner/repo#12 ["title"]  a task from a GitHub issue of the channel's repo, titled after
-                                                 it; closing either one closes the other
+                                                 it; the issue closing closes the task, and the task closing
+                                                 closes the issue only while the owner has Write to GitHub on
      task claim|start|done|note|show T7 [--json] · task review T7 [--at SHA] [--review NAME|any] (opens a review round on that commit;
                                                  from its reviewer, --review NAME hands the open round on)
      task approve|reject T7 --round N|--at SHA ["note"] [--file review.md]   the verdict on the round you reviewed,
