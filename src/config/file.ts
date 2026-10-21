@@ -69,6 +69,7 @@ export interface Config {
   wakeOff?: string[];
   wakeHooks?: Record<string, WakeHook>;
   rotate?: "on" | "off";
+  contextLine?: "on" | "off";
   rex?: "on" | "off";
   launch?: "on" | "off";
   terminals?: Terminals;

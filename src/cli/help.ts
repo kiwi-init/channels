@@ -65,10 +65,10 @@ Agents
                                                  with no NAME, to the top of task who
      task proof T7 https://… [--label preview] [--note "…"]   evidence on the task: a preview deploy, a recording, your
                                                  session; shown on the task page above its activity
-     task checkpoint T7 --file note.md           where your work on it stands (branch, last commit, done, next, traps):
-                                                 a new session of yours starts from it
+     task checkpoint T7 --file note.md           where your work on it stands (branch, last commit, done, next, traps),
+                                                 shown to you again when a session of yours starts
      task checkpoint lead --file note.md         the lead only: where the channel stands, naming every open task and
-                                                 question by its id; a new session of the lead starts from it
+                                                 question by its id; shown to the lead again when its session starts
      task cancel T7 "why"                        closes it, marked cancelled, if you may finish it (else it's only a note)
   kiwi note [KEY [VALUE] [--ttl 7d] | KEY --clear]   shared notes: all of them, one, set one, or remove one
   kiwi lock NAME [--ttl 30m] [--note why]        hold a lease (the build, a release, a file): if someone has it, you
@@ -86,6 +86,7 @@ This computer
   kiwi unpair                                    stop being paired: the relay forgets this computer and it takes no more asks
   kiwi cleanup [--quiet]                         remove what older installs and updates left behind (the installer runs it)
   kiwi daemon                                    this computer's hub: key, cert, and every agent's seat (starts on its own)
+  kiwi context-line on|off|status                past 250k tokens, one line on an agent's next prompt suggesting a checkpoint (off by default)
   kiwi rotate on|off|status                      give this computer's Claude Code seats in tmux or Rex, and Codex seats in tmux, a fresh session between tasks (off by default)
   kiwi terminal [status] [--json]                the terminals on this computer (Terminal, tmux, Rex), their helpers, which one new
                                                  agents open in, and whether creating new agents is on

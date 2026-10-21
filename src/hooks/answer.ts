@@ -141,6 +141,7 @@ export function cursorFollow(alias: string, mc: string, unread: boolean, reminde
 }
 
 const contextNudge = Effect.fn("Hooks.contextNudge")(function* (input: HookInput, s: AgentSession, who: Here, mc: string, budget: number) {
+  if (loadConfig().contextLine !== "on") return null;
   const session = who.session;
   const file = input.transcript_path;
   if ((who.harness !== "claude" && who.harness !== "codex") || !session || typeof file !== "string" || !file) return null;

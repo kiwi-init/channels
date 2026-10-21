@@ -91,7 +91,7 @@ test("a session that starts fresh is told its open task and checkpoint; a resume
   expect(await context("startup")).toContain(`${id} “rotate the seats”: doing, yours`);
   const note = join(agent, "checkpoint.md");
   writeFileSync(note, "branch T-rotate at 1a2b3c\nnext: the flows test\n");
-  expect(await ok(agent, ["task", "checkpoint", id, "--file", note], S)).toContain(`checkpoint saved: a new session of yours starts ${id} from it`);
+  expect(await ok(agent, ["task", "checkpoint", id, "--file", note], S)).toBe(`${id} doing @${me}: rotate the seats\ncheckpoint saved on ${id}\n`);
   for (const source of ["startup", "clear", "compact"]) {
     const told = await context(source);
     expect(told).toContain(`${id} “rotate the seats”: doing, yours`);
@@ -134,7 +134,7 @@ test("big checkpoints and a backlog of messages stay inside Claude Code's inline
   for (const body of [...first, ...cut]) expect(later).not.toContain(body.slice(0, CLIP_MIN));
 });
 
-test("past the context line, the next prompt carries one line asking for a checkpoint of each open task, once per crossing; Stop never blocks for it, with rotation on or off", async () => {
+test("the context line says nothing unless kiwi context-line is on; then the next prompt carries one line suggesting a checkpoint of each open task, once per crossing, and Stop never blocks for it", async () => {
   const transcript = join(agent, "transcript.jsonl");
   const env = { ...S, TMUX: "", TMUX_PANE: "", TERM_PROGRAM: "" };
   const at = (used: number) => {
@@ -151,11 +151,15 @@ test("past the context line, the next prompt carries one line asking for a check
     return out ? (JSON.parse(out) as { reason: string }).reason : "";
   };
   const line = "past the 250k line";
+  expect(await prompt(262_000)).not.toContain(line);
   expect(await stop(262_000)).not.toContain(line);
+  expect(await ok(agent, ["context-line", "status"], S)).toContain("the context line is off");
+  expect(await ok(agent, ["context-line", "on"], S)).toContain("the context line is on");
   expect(await prompt(240_000)).not.toContain(line);
   const asked = await prompt(262_000);
-  expect(asked).toContain(`Your context is at 262k tokens, ${line}.`);
+  expect(asked).toContain(`Your context is at 262k tokens, ${line}: a good point to write`);
   expect(asked).not.toContain("Before you end this turn");
+  expect(asked).not.toMatch(/fresh session|new session|clear/i);
   const mine = [...asked.matchAll(/T\d+/g)].map((m) => m[0]);
   expect(mine.length).toBeGreaterThanOrEqual(5);
   expect(asked).toContain(`task checkpoint ${mine[0]} --file note.md`);
@@ -166,6 +170,7 @@ test("past the context line, the next prompt carries one line asking for a check
   await ok(agent, ["rotate", "off"], S);
   expect(await prompt(120_000)).not.toContain(line);
   expect(await prompt(255_000)).toContain("Your context is at 255k tokens");
+  await ok(agent, ["context-line", "off"], S);
 });
 
 test("only the lead writes a lead checkpoint, and an empty one is refused before anything is sent", async () => {
@@ -200,6 +205,7 @@ test("with rotation on, a seat past the line rotates once it has checkpointed ea
   await Bun.sleep(1_500);
   expect(logged()).toBe("");
   expect(await ok(agent, ["rotate", "on"], S)).toContain("rotation is on");
+  await ok(agent, ["context-line", "on"], S);
   expect(await stop()).toBe("");
   const asked = await prompt();
   expect(asked).toContain("past the 250k line");
@@ -216,6 +222,7 @@ test("with rotation on, a seat past the line rotates once it has checkpointed ea
   await until(async () => rotated(), "the sender's line in rotate.log", 10_000);
   expect(readFileSync(log, "utf8")).toContain("session rot-1 pane %9: no-tmux");
   await ok(agent, ["rotate", "off"], S);
+  await ok(agent, ["context-line", "off"], S);
 });
 
 test("the lead past the line is asked for its lead checkpoint, rotates only once it saved one naming everything open, and a fresh session of it starts from it", async () => {
@@ -229,6 +236,7 @@ test("the lead past the line is asked for its lead checkpoint, rotates only once
   const prompt = () => ok(agent, ["hook", "prompt"], env, JSON.stringify({ session_id: "lead-1", cwd: agent, hook_event_name: "UserPromptSubmit", transcript_path: transcript }));
   const mine = (line: string) => (existsSync(log) ? readFileSync(log, "utf8") : "").split("\n").filter((l) => l.includes("session lead-1 pane %8: ") && l.includes(line));
   expect(await ok(agent, ["rotate", "on"], S)).toContain("rotation is on");
+  await ok(agent, ["context-line", "on"], S);
   const asked = await prompt();
   expect(asked).toMatch(/where the channel stands as you lead it, every open task and question by its id, with `[^`]* task checkpoint lead --file note\.md`/);
   const note = join(agent, "lead-tasks.md");
@@ -255,4 +263,5 @@ test("the lead past the line is asked for its lead checkpoint, rotates only once
   expect(told).toMatch(/Your lead checkpoint, \S+ ago \(#\d+\):\n {2}│ LEAD-NOTE waiting on review of /);
   expect(told).toContain("next: merge order");
   await ok(agent, ["rotate", "off"], S);
+  await ok(agent, ["context-line", "off"], S);
 });
