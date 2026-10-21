@@ -542,7 +542,7 @@ try {
             type Row = { id: string; name: string; found: boolean; running: boolean; helpers: "on" | "off" | null };
             type Status = { prefer: string; launch: "on" | "off"; terminals: Row[] };
             const row = (id: string, name: string, helpers: Row["helpers"]): Row => ({ id, name, found: true, running: true, helpers });
-            let status: Status = { prefer: "app", launch: "on", terminals: [row("rex", "Rex", "off"), row("tmux", "tmux", null), row("app", "Terminal", null)] };
+            let status: Status = { prefer: "app", launch: "on", terminals: [row("rex", "Rex", "off"), row("tmux", "tmux", "off"), row("app", "Terminal", null)] };
             const set = async (change: (s: Status) => Status) => (status = change(status));
             const w = window as unknown as { kiwi?: object };
             w.kiwi = Object.assign(w.kiwi ?? {}, {
@@ -574,6 +574,7 @@ try {
           async () => {
             await openSettings();
             await newAgents().getByRole("button", { name: "Download Rex Helpers" }).click();
+            await newAgents().getByRole("button", { name: "Download Tmux Helpers" }).click();
             await newAgents().getByRole("radio", { name: "Rex" }).click();
             await newAgents().getByRole("radio", { name: "Rex", checked: true }).waitFor();
             await newAgents().scrollIntoViewIfNeeded();
