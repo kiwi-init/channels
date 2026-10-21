@@ -404,7 +404,7 @@ function PermissionItem({
       )
       .finally(() => setBusy(false))
   }
-  const why = !p.canAllow ? null : human ? `Only ${nameOf(human)} can allow it: it runs on their computer` : null
+  const why = !p.canAllow ? null : `Only ${human ? nameOf(human) : "its own person"} can allow it: it runs on their computer`
   return (
     <Row
       lead={<Monogram name={nameOf(m.from)} hue={m.from} agent size={28} />}
