@@ -84,6 +84,18 @@ describe("the react event", () => {
     expect(wellFormedEvent({ op: "react", emoji: "👀" })).toBe(false);
   });
 
+  test("GIF reactions are gone: one already in a log still folds, shows nothing, and takes back that member's earlier one", async () => {
+    const hi = await msg("jon", "msg", "shipped");
+    const ms = [hi, await react("dev", hi.seq, "👍"), await react("dev2", hi.seq, "🎉"), await react("dev", hi.seq, "celebrate/confetti")];
+    expect(wellFormedEvent(ms[3]!.ev)).toBe(true);
+    const s = fold(ms, roster);
+    expect(s.rejected.has(ms[3]!.seq)).toBe(false);
+    expect(s.trust.get(ms[3]!.seq)).toBe("verified");
+    expect([...s.reactions.get(hi.seq)!].map(([n, r]) => [n, r.emoji])).toEqual([["dev2", "🎉"]]);
+    const alone = fold([hi, await react("dev", hi.seq, "ok/trailer")], roster);
+    expect(alone.reactions.has(hi.seq)).toBe(false);
+  });
+
   test("a task made from a message (--re) remembers it", async () => {
     const ask = await msg("jon", "msg", "make an icon");
     const add = await msg("coord", "event", "task: icon", { ev: { op: "task.add", title: "icon", owner: "dev" }, re: [ask.seq] });
@@ -132,6 +144,12 @@ describe("over a relay", () => {
     const id = await run(coord.taskAdd("fix the build", { re: ask }));
     await run(dev.taskClaim(id));
     expect((await reactionsOn(dev, ask)).emoji).toEqual([]);
+  });
+
+  test("an agent's GIF key is refused: a reaction is one emoji", async () => {
+    const hi = await owner.ownerCh.send("done for today");
+    await expect(run(dev.react(hi, "ok/trailer"))).rejects.toThrow("a reaction is one emoji");
+    expect((await reactionsOn(dev, hi)).sent).toBe(0);
   });
 
   test("by hand, anyone may react, and take it back", async () => {

@@ -11,6 +11,7 @@ import {
   HANDOFF_FAILED,
   HANDOFF_MAX_SECONDS,
   ignored,
+  isOldGifKey,
   LEASE_NAME_RE,
   MAX_LEASE_SECONDS,
   MAX_SUMMARY,
@@ -189,7 +190,7 @@ export class SessionMessaging extends SessionListen {
   readonly react = Effect.fn("AgentSession.react")(
     { self: this },
     function* (this: SessionMessaging, seq: number, emoji: string | null) {
-      if (emoji !== null && !wellFormedReaction(emoji)) return yield* new Rejected("a reaction is one emoji, or a GIF key like ok/trailer (kiwi react --list)");
+      if (emoji !== null && (!wellFormedReaction(emoji) || isOldGifKey(emoji))) return yield* new Rejected("a reaction is one emoji, like 👍");
       const { state } = yield* this.state();
       if (!state.placeOf.has(seq) || ignored(state.trust.get(seq))) return yield* new Rejected(`no message #${seq} to react to`);
       return yield* this.confirm(yield* this.event({ op: "react", seq, emoji }, "reaction"));
