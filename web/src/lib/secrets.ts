@@ -6,7 +6,7 @@
 import { useSyncExternalStore } from "react"
 
 import type { ChannelIdentityView, ChannelView, ComputerView, GithubRepoView, KiwiBridge, PairAskView, PublicPerson, StoreSnapshot, UpdateCheckView, UpdateView } from "../../../desktop/src/bridge.ts"
-import { mergePublicChannels, migrateEntries, publicChannel } from "../../../desktop/src/seats.ts"
+import { publicChannel } from "../../../desktop/src/public-channel.ts"
 import { onLocalChange, readLocal, writeLocal, type Local } from "./local-store"
 import { persistQueue } from "./persist-queue"
 
@@ -80,12 +80,16 @@ export async function saveChannels(channels: ChannelView[]): Promise<void> {
   if (b) {
     publish({ ...snapshot, channels })
     await persistChannels(() => b.saveChannels(channels))
-  } else writeLocal({ channels: mergePublicChannels(readLocal().channels, channels) })
+  } else {
+    const { mergePublicChannels } = await import("../../../desktop/src/seats.ts")
+    writeLocal({ channels: mergePublicChannels(readLocal().channels, channels) })
+  }
 }
 
 export async function migrateChannels(entries: ChannelIdentityView[]): Promise<number> {
   const b = bridge()
   if (b) return b.migrateChannels(entries)
+  const { migrateEntries } = await import("../../../desktop/src/seats.ts")
   const { channels, added } = migrateEntries(readLocal().channels, entries)
   if (added) writeLocal({ channels })
   return added

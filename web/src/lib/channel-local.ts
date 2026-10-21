@@ -5,7 +5,6 @@ import type { Signed, SigningBudget } from "@kiwi/core/sas.ts"
 
 import type { ChannelOps, PersonView } from "../../../desktop/src/bridge.ts"
 import { Keyring } from "../../../desktop/src/keyring.ts"
-import { acceptSeat, withAccess } from "../../../desktop/src/seats.ts"
 import { read, readLocal, writeLocal } from "./local-store"
 import { personClaimFor } from "./person-claim"
 import { relayUrl } from "./relay"
@@ -41,8 +40,14 @@ export function localOps(): ChannelOps {
   const keyring = new Keyring({
     relay: relayUrl,
     seats,
-    save: async (entry) => void writeLocal({ channels: acceptSeat(seats(), entry) }),
-    access: async (code, pk, access) => void writeLocal({ channels: withAccess(seats(), code, pk, access) }),
+    save: async (entry) => {
+      const { acceptSeat } = await import("../../../desktop/src/seats.ts")
+      writeLocal({ channels: acceptSeat(seats(), entry) })
+    },
+    access: async (code, pk, access) => {
+      const { withAccess } = await import("../../../desktop/src/seats.ts")
+      writeLocal({ channels: withAccess(seats(), code, pk, access) })
+    },
     forget: async (code) => void writeLocal({ channels: seats().filter((c) => c.code !== code) }),
     prove: async (code, memberPk) => {
       const p = readLocal().person

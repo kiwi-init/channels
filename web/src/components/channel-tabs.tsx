@@ -1,4 +1,4 @@
-import { Add01Icon, ArrowDown01Icon, ComputerIcon, Download04Icon, LockIcon, Search01Icon, Settings01Icon, SidebarLeftIcon } from "@hugeicons/core-free-icons"
+import { Add01Icon, ArrowDown01Icon, LockIcon, Search01Icon, SidebarLeftIcon } from "@hugeicons/core-free-icons"
 import { useEffect, useRef, useState, type RefObject } from "react"
 
 import type { ChannelIcon } from "@kiwi/core/protocol.ts"
@@ -10,13 +10,14 @@ import { formatShort } from "@/lib/format"
 import { useSecrets } from "@/lib/secrets"
 import { SIDEBAR_KEYS, toggleSidebar, useSidebarHidden } from "@/lib/sidebar-hidden"
 import { fitTabs, type TabRoom } from "@/lib/tab-fit"
-import { openRelease, restartToUpdate, useUpdate } from "@/lib/update"
+import { useUpdate } from "@/lib/update"
 import { cx } from "@/lib/utils"
 import { ChannelIconTile } from "./channel-icon"
 import { Icon } from "./icon"
 import { IconButton, Monogram } from "./kit"
 import { rowNote } from "./sidebar"
-import { Menu, MenuItem, MenuNote, MenuSeparator } from "./ui/menu"
+import { AccountItems, UpdateButton } from "./lazy"
+import { Menu, MenuItem, MenuSeparator } from "./ui/menu"
 import { Tooltip } from "./ui/tooltip"
 
 type Entry = { c: ChannelRow; n: RowNews | undefined }
@@ -215,28 +216,7 @@ export function ChannelTabs({
         </span>
         <span className="size-9" />
       </div>
-      {update && (
-        <Tooltip
-          label={
-            update.state === "downloading"
-              ? `Downloading Channels ${update.version}…`
-              : update.state === "ready"
-                ? `Restart to update to ${update.version}`
-                : `Channels ${update.version} is out · Get it`
-          }
-        >
-          <button
-            type="button"
-            aria-label={update.state === "ready" ? `Restart to update to ${update.version}` : `Channels ${update.version} is out`}
-            disabled={update.state === "downloading"}
-            onClick={() => (update.state === "ready" ? restartToUpdate() : openRelease(update))}
-            className={cx(BAR_BUTTON, "relative", update.state === "ready" && "text-accent-text")}
-          >
-            <Icon icon={Download04Icon} size={18} />
-            <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-accent" />
-          </button>
-        </Tooltip>
-      )}
+      {update && <UpdateButton update={update} className={BAR_BUTTON} />}
       {person && (
         <Menu
           side="bottom"
@@ -249,16 +229,7 @@ export function ChannelTabs({
             </button>
           }
         >
-          <MenuNote>
-            {person.name} · key {person.pk.slice(0, 12)}
-          </MenuNote>
-          <MenuItem icon={ComputerIcon} onClick={onComputers}>
-            Your computers
-          </MenuItem>
-          <MenuSeparator />
-          <MenuItem icon={Settings01Icon} onClick={onSettings}>
-            Settings
-          </MenuItem>
+          <AccountItems note={`${person.name} · key ${person.pk.slice(0, 12)}`} onComputers={onComputers} onSettings={onSettings} />
         </Menu>
       )}
     </header>
