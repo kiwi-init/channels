@@ -117,15 +117,19 @@ describe("agent rows", () => {
 });
 
 describe("needs a person", () => {
-  test("asks to people or to everyone count; asks between agents don't", async () => {
-    const toOwner = await msg(ann, { kind: "ask", body: "ship it?", to: ["jonatas"] });
-    const toAgent = await msg(ann, { kind: "ask", body: "which port?", to: ["bob"] });
-    const ms = [toOwner, toAgent];
+  test("asks to people or to everyone that hold work count; asks between agents, and asks that hold nothing, don't", async () => {
+    const add = await msg(owner, { ev: { op: "task.add", title: "Ship" } });
+    const toOwner = await msg(ann, { kind: "ask", body: "ship it?", to: ["jonatas"], task: add.seq });
+    const toAgent = await msg(ann, { kind: "ask", body: "which port?", to: ["bob"], task: add.seq });
+    const idle = await msg(ann, { kind: "ask", body: "lunch?", to: ["jonatas"] });
+    const ms = [add, toOwner, toAgent, idle];
     expect(needsPerson(fold(ms, roster)).map((n) => n.text)).toEqual(["ship it?"]);
 
-    const viaCoord = await msg(coord, { kind: "blocking", body: "need your OK on the deploy" });
-    const ms2 = [viaCoord];
+    const viaCoord = await msg(coord, { kind: "blocking", body: "need your OK on the deploy", task: add.seq });
+    const ms2 = [add, viaCoord];
     expect(needsPerson(fold(ms2, roster))).toMatchObject([{ from: "coord", kind: "blocking", text: "need your OK on the deploy" }]);
+    const done = await msg(owner, { ev: { op: "task.update", task: add.seq, state: "done" } });
+    expect(needsPerson(fold([...ms2, done], roster))).toEqual([]);
   });
 });
 

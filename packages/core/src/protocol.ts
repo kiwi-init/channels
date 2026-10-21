@@ -562,6 +562,11 @@ export const PROOF_URL_MAX_LENGTH = 2000;
 export const PROOF_LABEL_MAX_LENGTH = 80;
 export const PROOF_MAX = 50;
 export const CHECKPOINT_MAX_LENGTH = 4000;
+export const DECISION_KINDS = ["intent", "taste", "irreversible", "scope", "choice"] as const;
+export type DecisionKind = (typeof DECISION_KINDS)[number];
+export const MAX_HOLDS = 20;
+export const wellFormedHolds = (x: unknown): x is number[] => Array.isArray(x) && x.length > 0 && x.length <= MAX_HOLDS && x.every((y) => Number.isSafeInteger(y) && y > 0);
+export const isDecisionKind = (x: unknown): x is DecisionKind => DECISION_KINDS.some((k) => k === x);
 export const CHOICES_MIN = 2;
 export const CHOICES_MAX = 6;
 export const CHOICE_MAX_LENGTH = 200;
@@ -603,6 +608,8 @@ export interface Payload {
   esc?: true;
   handoff?: Handoff;
   choices?: string[];
+  holds?: number[];
+  decision?: DecisionKind;
   permission?: PermissionShown;
   perm?: PermissionReply;
   settled?: PermissionSettled;
@@ -882,6 +889,8 @@ export function wellFormed(p: unknown): p is WirePayload {
     (m.esc === undefined || m.esc === true) &&
     (m.handoff === undefined || (m.esc === true && wellFormedHandoff(m.handoff))) &&
     (m.choices === undefined || (m.esc === true && m.handoff === undefined && wellFormedChoices(m.choices))) &&
+    (m.holds === undefined || (m.esc === true && wellFormedHolds(m.holds))) &&
+    (m.decision === undefined || (m.esc === true && isDecisionKind(m.decision))) &&
     (m.permission === undefined || (m.esc === true && permissionChoices(m.choices) && wellFormedPermission(m.permission))) &&
     (m.perm === undefined || (m.kind !== "event" && Array.isArray(m.re) && m.re.length > 0 && wellFormedPermReply(m.perm))) &&
     (m.settled === undefined || (m.kind !== "event" && Array.isArray(m.re) && m.re.length > 0 && wellFormedSettled(m.settled))) &&

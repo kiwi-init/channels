@@ -1,11 +1,11 @@
 import { CancelCircleIcon, CheckmarkCircle02Icon, Loading03Icon } from "@hugeicons/core-free-icons"
 import type { ReactNode } from "react"
 
-import { colorOf, taskId, tasksAwaitingPeople, type ChannelState, type Task } from "@kiwi/core/state.ts"
+import { colorOf, taskId, tasksAwaitingPeople, type AskHead, type ChannelState, type Task } from "@kiwi/core/state.ts"
 import { taskPr, type PrChecks } from "@kiwi/core/work.ts"
 import { formatAgoShort, memberName } from "@/lib/format"
 import { labelOf } from "@/lib/task-labels"
-import { taskGroups, VIEWS, type View } from "@/lib/views"
+import { taskGroups, type View } from "@/lib/views"
 import { cx } from "@/lib/utils"
 import { doingNow, type AgentNow } from "./agent-strip"
 import { Icon } from "./icon"
@@ -111,12 +111,17 @@ function TaskRow({
   )
 }
 
-function Group({ label, count, titled, children }: { label: string; count: number; titled: boolean; children: ReactNode }) {
+function AskGroup({ ask, count, state, children }: { ask: AskHead | null; count: number; state: ChannelState; children: ReactNode }) {
+  const words = ask?.words.trim() ?? ""
+  const label = ask ? (words ? `“${words}”` : `#${ask.id}`) : "Unfiled"
+  const meta = ask ? `${memberName(state.members.get(ask.by), ask.by)} · #${ask.id}` : "No person's message holds these"
   return (
     <section aria-label={label} className="pt-4">
-      <h2 className={cx("flex items-baseline gap-2 px-3 pb-1.5 text-ui font-semibold", titled && "max-md:hidden")}>
-        {label} <span className="font-normal text-ink-3 tabular-nums">{count}</span>
+      <h2 title={words || undefined} className="flex min-w-0 items-baseline gap-2 px-3 text-ui font-semibold">
+        <span className="truncate">{label}</span>
+        <span className="shrink-0 font-normal text-ink-3 tabular-nums">{count}</span>
       </h2>
+      <p className="truncate px-3 pb-1.5 text-meta text-ink-3">{meta}</p>
       {children}
     </section>
   )
@@ -165,21 +170,16 @@ export function TasksView({
     <div className="pb-8">
       {showNeeds && <div className="px-3">{needs}</div>}
       {view === "needs" && !needs && <p className="px-3 pt-6 text-ui text-ink-3">Nothing needs you right now.</p>}
-      {groups.map((g) =>
-        g.tasks.length || view !== "everything" ? (
-          <Group key={g.key} label={g.label} count={g.tasks.length} titled={g.label === VIEWS.find(([v]) => v === view)?.[1]}>
-            {g.tasks.length ? (
-              <ul className="divide-y divide-line">
-                {g.tasks.map((t) => (
-                  <TaskRow key={t.id} task={t} state={state} now={now} agent={t.owner ? byName.get(t.owner) : undefined} waiting={waiting.has(t.id)} open={open === t.id} onOpen={onOpen} />
-                ))}
-              </ul>
-            ) : (
-              <p className="px-3 py-2 text-ui text-ink-3">Nothing here right now.</p>
-            )}
-          </Group>
-        ) : null
-      )}
+      {groups.map((g) => (
+        <AskGroup key={g.key} ask={g.ask} count={g.tasks.length} state={state}>
+          <ul className="divide-y divide-line">
+            {g.tasks.map((t) => (
+              <TaskRow key={t.id} task={t} state={state} now={now} agent={t.owner ? byName.get(t.owner) : undefined} waiting={waiting.has(t.id)} open={open === t.id} onOpen={onOpen} />
+            ))}
+          </ul>
+        </AskGroup>
+      ))}
+      {!groups.length && view !== "everything" && view !== "needs" && <p className="px-3 pt-6 text-ui text-ink-3">Nothing here right now.</p>}
     </div>
   )
 }

@@ -123,7 +123,7 @@ export default function App() {
             rows={rows}
             news={news}
             active={settings ? "" : code}
-            inChannel={!!code && !settings}
+            inChannel={!settings && rows.some((r) => r.code === code && r.state === "member")}
             onSelect={open}
             onNew={() => setSheet("new")}
             onFind={() => setPalette(true)}
@@ -141,9 +141,9 @@ export default function App() {
               onSettings={() => setSettings(true)}
               className={cx(code || settings ? "hidden" : "flex", "md:hidden")}
             />
-            <main className={cx("relative min-w-0 flex-1 overflow-clip bg-canvas md:bg-rail", code || settings ? "flex" : "hidden md:flex")}>
+            <main className={cx("relative min-w-0 flex-1 overflow-clip bg-canvas md:bg-rail md:pl-2", code || settings ? "flex" : "hidden md:flex")}>
               {settings && (
-                <div className="flex min-w-0 flex-1 md:sheet md:ml-2!">
+                <div className="flex min-w-0 flex-1 md:sheet">
                   <SettingsPage backTo={rows.find((r) => r.code === code)?.title ?? "Channels"} onClose={() => setSettings(false)} />
                 </div>
               )}
@@ -153,7 +153,7 @@ export default function App() {
                     <ChannelGate key={code} code={code} listedState={rows.find((r) => r.code === code)?.state} onBack={close} onGone={close} />
                   </Boundary>
                 ) : (
-                  <div className="flex min-w-0 flex-1 md:sheet md:ml-2!">
+                  <div className="flex min-w-0 flex-1 md:sheet">
                     <Welcome onNew={() => setSheet("new")} onJoin={() => setSheet("join")} />
                   </div>
                 )}

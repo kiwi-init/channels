@@ -6,7 +6,23 @@ import { inlineText, runsLine, type Runs } from "./membership.ts";
 import { GENERAL_ROOM, ignored, imageMarker, isRunning } from "./protocol.ts";
 import type { Card, GithubNote, Message, OldTaskState, Reach, TaskState, Trust } from "./protocol.ts";
 import { describeScopes, presetOf, readScopes, SCOPE_LABELS, type Scope } from "./scopes.ts";
-import { askGroups, colorOf, humanOf, isPerson, issueOf, outsideRepos, taskId, type AskHead, type ChannelState, type Fact, type Lease, type ReviewRound, type Task } from "./state.ts";
+import {
+  askGroups,
+  colorOf,
+  heldBy,
+  holdsWork,
+  humanOf,
+  isPerson,
+  issueOf,
+  outsideRepos,
+  taskId,
+  type AskHead,
+  type ChannelState,
+  type Fact,
+  type Lease,
+  type ReviewRound,
+  type Task,
+} from "./state.ts";
 import { isWakeVia, wakesInSession, wakeWords, type WakeVia } from "./wake.ts";
 
 export function tokensWord(n: number): string {
@@ -427,6 +443,11 @@ export function charterLines(state: ChannelState): string | null {
   return `charter (the owner's scope for this channel; escalate what falls outside it): ${markedText(state.charter.text)}`;
 }
 
+function heldLine(state: ChannelState, a: Message): string {
+  const held = heldBy(state, a).map((id) => (state.tasks.has(id) ? taskId(id) : `#${id}`));
+  return `${a.decision ? ` [${a.decision}]` : ""}${held.length ? ` · holds ${held.join(", ")}` : ""}`;
+}
+
 export function formatStatus({ alias, me, state, online, unread, now = Date.now() }: Snapshot): string {
   const out: string[] = [];
   const meM = state.members.get(me);
@@ -473,11 +494,15 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
   }
   if (left.length) out.push(`  left or removed: ${left.sort().join(", ")}`);
 
-  const asks = state.openAsks.filter((a) => a.from !== me && (!a.to || a.to.includes(me)));
+  const toMe = state.openAsks.filter((a) => a.from !== me && (!a.to || a.to.includes(me)));
+  const self = state.members.get(me);
+  const asks = self && isPerson(self) ? toMe.filter((a) => holdsWork(state, a)) : toMe;
+  const digest = toMe.filter((a) => !asks.includes(a));
   if (asks.length) {
     out.push("", `waiting on you (${asks.length}) — answer with: kiwi reply <#> "…"`);
-    for (const a of asks) out.push(`  #${a.seq} ${a.from}${a.kind === "blocking" ? " [blocking]" : ""}: ${inlineText(a.body, 140)}`);
+    for (const a of asks) out.push(`  #${a.seq} ${a.from}${a.kind === "blocking" ? " [blocking]" : ""}${heldLine(state, a)}: ${inlineText(a.body, 140)}`);
   }
+  if (digest.length) out.push("", `also asked, holding nothing up (${digest.length}): ${digest.map((a) => `#${a.seq}`).join(", ")}`);
   const mine = state.openAsks.filter((a) => a.from === me);
   if (mine.length) {
     out.push("", `your unanswered questions (${mine.length}):`);

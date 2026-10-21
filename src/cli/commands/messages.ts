@@ -9,11 +9,13 @@ import {
   CHOICE_MAX_LENGTH,
   CHOICES_MAX,
   CHOICES_MIN,
+  DECISION_KINDS,
   HANDOFF_DEFAULT_SECONDS,
   HANDOFF_MAX_SECONDS,
   HANDOFF_MAX_VENDOR,
   handoffUrl,
   ignored,
+  isDecisionKind,
   wellFormedChoices,
   isQuiet,
   type InlineImage,
@@ -232,15 +234,27 @@ export const messageCommands: Record<string, Command> = {
     Effect.gen(function* () {
       const s = yield* session();
       const body = yield* text(1);
-      if (!body.trim()) return yield* die('usage: kiwi ask-human [--option "A: …" --option "B: …"] [--task T7] [--re N] "the decision you need"');
+      if (!body.trim()) return yield* die('usage: kiwi ask-human [--holds T7,#18] [--kind taste] [--option "A: …" --option "B: …"] [--task T7] [--re N] "the decision you need"');
       const re = opt.re === undefined ? undefined : Number(opt.re.replace(/^#/, "")) || (yield* die("--re takes a message number"));
       const task = opt.task === undefined ? undefined : (parseTaskId(opt.task) ?? (yield* die(`"${opt.task}" isn't a task id (like T12)`)));
+      const held = list(opt.holds)?.map((h) => [h, parseTaskId(h)] as const);
+      const bad = held?.find(([, id]) => id === null);
+      if (bad) return yield* die(`--holds takes tasks and asks, like T7,#18: "${bad[0]}" isn't one`);
+      const holds = held?.flatMap(([, id]) => (id === null ? [] : [id]));
+      const decision = opt.kind === undefined ? undefined : isDecisionKind(opt.kind) ? opt.kind : yield* die(`--kind is one of ${DECISION_KINDS.join(", ")}`);
+      const hold = { ...(holds?.length ? { holds } : {}), ...(decision ? { decision } : {}) };
+      const named = [...new Set([...(task !== undefined ? [`T${task}`] : []), ...(held?.map(([raw]) => raw) ?? [])])];
+      const heldText = named.length ? `, holding ${named.join(", ")}` : "";
+      const digestNote = () => {
+        if (!named.length) process.stderr.write("kiwi: this holds nothing up, so it goes to the person's digest, not Needs you; name the task or message it holds with --holds T7,#18\n");
+      };
       if (opt.handoff === undefined) {
         for (const f of ["vendor", "expires", "wait"] as const) if (opt[f] !== undefined) return yield* die(`--${f} goes with --handoff URL`);
         const choices = opt.option?.map((o) => o.trim());
         if (choices && !wellFormedChoices(choices)) return yield* die(`--option takes ${CHOICES_MIN} to ${CHOICES_MAX} different answers, one line of up to ${CHOICE_MAX_LENGTH} characters each`);
-        const { seq, to } = yield* s.escalate(body, re, undefined, { ...(choices ? { choices } : {}), ...(task !== undefined ? { task } : {}) });
-        return out(`escalated #${seq} to ${to.join(" and ")}${choices ? ` with ${choices.length} options` : ""}; wait for their answer before acting on it`);
+        const { seq, to } = yield* s.escalate(body, re, undefined, { ...(choices ? { choices } : {}), ...(task !== undefined ? { task } : {}), ...hold });
+        digestNote();
+        return out(`escalated #${seq} to ${to.join(" and ")}${choices ? ` with ${choices.length} options` : ""}${heldText}; wait for their answer before acting on it`);
       }
       if (opt.option !== undefined) return yield* die("--handoff has its own Done and Couldn't answers; leave out --option");
       if (!handoffUrl(opt.handoff)) return yield* die("--handoff takes an https link without a user name or password, up to 2048 characters");
@@ -251,7 +265,7 @@ export const messageCommands: Record<string, Command> = {
       if (seconds < 1 || seconds > HANDOFF_MAX_SECONDS) return yield* die(`--expires must be between 1s and ${HANDOFF_MAX_SECONDS / 60}m`);
       const expiresAt = Date.now() + seconds * 1000;
       const head = opt.wait === undefined ? 0 : yield* s.ch.fx.head();
-      const { seq, to } = yield* s.escalate(body, re, { url: opt.handoff, vendor: vendor.slice(0, HANDOFF_MAX_VENDOR), expiresAt }, task !== undefined ? { task } : {});
+      const { seq, to } = yield* s.escalate(body, re, { url: opt.handoff, vendor: vendor.slice(0, HANDOFF_MAX_VENDOR), expiresAt }, { ...(task !== undefined ? { task } : {}), ...hold });
       out(`escalated #${seq} to ${to.join(" and ")} with a browser link that opens for ${opt.expires ?? "10m"}; wait for their answer before acting on it`);
       if (opt.wait === undefined) return;
       const { outcome, replies } = yield* s.awaitHandoff(seq, head, expiresAt, parseDuration(opt.wait));

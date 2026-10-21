@@ -36,6 +36,7 @@ export function NeedsYou({
   reviews,
   nameOf,
   agentOf,
+  heldOf,
   onReply,
   permissionOf,
   onPermission,
@@ -58,6 +59,7 @@ export function NeedsYou({
   reviews: Task[]
   nameOf: (name: string) => string
   agentOf: (name: string) => boolean
+  heldOf: (m: Message) => string[]
   onReply: (m: Message, text: string) => Promise<void>
   permissionOf: (m: Message) => { human: string | null; owner: string | null }
   onPermission: (m: Message, allow: boolean) => Promise<void>
@@ -96,10 +98,10 @@ export function NeedsYou({
       }
     }),
     ...requests.map((r) => ({ key: `r${r.id}`, node: <RequestItem r={r} roomId={roomId} now={now} /> })),
-    ...(decisionCards ? asked(decisions) : []).map((m) => ({ key: `a${m.seq}`, node: <DecisionCard m={m} nameOf={nameOf} onReply={onReply} seat={seatOf(m.from)} /> })),
+    ...(decisionCards ? asked(decisions) : []).map((m) => ({ key: `a${m.seq}`, node: <DecisionCard m={m} held={heldOf(m)} nameOf={nameOf} onReply={onReply} seat={seatOf(m.from)} /> })),
     ...[...(decisionCards ? [] : asked(decisions)), ...asked(escalations), ...questions].map((m) => ({
       key: `a${m.seq}`,
-      node: <AskItem m={m} me={me} now={now} nameOf={nameOf} agent={agentOf(m.from)} onReply={onReply} onJump={onJump} seat={seatOf(m.from)} />,
+      node: <AskItem m={m} me={me} now={now} nameOf={nameOf} agent={agentOf(m.from)} held={heldOf(m)} onReply={onReply} onJump={onJump} seat={seatOf(m.from)} />,
     })),
     ...reviews.map((t) => ({
       key: `t${t.id}`,
@@ -243,6 +245,7 @@ function AskItem({
   now,
   nameOf,
   agent,
+  held,
   onReply,
   onJump,
   seat,
@@ -252,6 +255,7 @@ function AskItem({
   now: number
   nameOf: (n: string) => string
   agent: boolean
+  held: string[]
   onReply: (m: Message, text: string) => Promise<void>
   onJump: (seq: number) => void
   seat?: PlacedSeat
@@ -264,7 +268,7 @@ function AskItem({
       icon={handoff ? Globe02Icon : m.esc ? Key01Icon : HelpCircleIcon}
       title={excerpt(m.body, 220)}
       detail={[
-        m.task ? taskId(m.task) : null,
+        held.length ? `holds ${held.join(", ")}` : null,
         `${handoff ? "Browser for you" : askLabel(m, me)} from ${nameOf(m.from)}${agent ? "" : " (a person)"}`,
         formatAgo(m.ts, now),
         handoff ? `${handoffLabel(handoff)} · ${live ? handoffLeft(handoff, now) : "link expired"}` : null,
@@ -370,13 +374,13 @@ function AnswerForm({
   )
 }
 
-function DecisionCard({ m, nameOf, onReply, seat }: { m: Message; nameOf: (n: string) => string; onReply: (m: Message, text: string) => Promise<void>; seat?: PlacedSeat }) {
+function DecisionCard({ m, held, nameOf, onReply, seat }: { m: Message; held: string[]; nameOf: (n: string) => string; onReply: (m: Message, text: string) => Promise<void>; seat?: PlacedSeat }) {
   const choices = !!m.choices?.length
   const idle = choices ? null : ""
   const { draft, setDraft, busy, send } = useAnswer(m, nameOf, onReply, idle)
   return (
     <div className="flex flex-col py-3">
-      <ComposerQuestion m={m} more={0} nameOf={nameOf} disabled={busy} onChoose={(c) => send(c)} onElse={() => setDraft((d) => d ?? "")} />
+      <ComposerQuestion m={m} more={0} held={held} nameOf={nameOf} disabled={busy} onChoose={(c) => send(c)} onElse={() => setDraft((d) => d ?? "")} />
       {draft !== null && <AnswerForm draft={draft} setDraft={setDraft} busy={busy} send={send} to={nameOf(m.from)} autoFocus={choices} onEscape={() => setDraft(idle)} />}
       {seat && (
         <div className="mt-1 flex flex-wrap items-center gap-2">

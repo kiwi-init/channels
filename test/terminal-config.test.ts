@@ -137,6 +137,18 @@ describe("kiwi terminal and kiwi launches", () => {
     expect(kiwi(dir, "launches", "maybe").code).toBe(1);
   });
 
+  test("kiwi context-line is off on a fresh computer, and on and off write the one setting Settings reads, as JSON with --json", () => {
+    const dir = kiwiHome();
+    expect(JSON.parse(kiwi(dir, "context-line", "status", "--json").stdout)).toEqual({ contextLine: "off" });
+    expect(kiwi(dir, "context-line", "status").stdout).toStartWith("the context line is off for this computer");
+    expect(JSON.parse(kiwi(dir, "context-line", "on", "--json").stdout)).toEqual({ contextLine: "on" });
+    expect(saved(dir)).toMatchObject({ contextLine: "on" });
+    expect(JSON.parse(kiwi(dir, "context-line", "status", "--json").stdout)).toEqual({ contextLine: "on" });
+    expect(kiwi(dir, "context-line", "off").stdout).toStartWith("the context line is off for this computer");
+    expect(saved(dir)).toMatchObject({ contextLine: "off" });
+    expect(kiwi(dir, "context-line", "maybe").code).toBe(1);
+  });
+
   test("an old rex: on becomes the Rex helpers on and Rex preferred, written in the new shape on the next save", () => {
     const dir = kiwiHome({ channels: {}, rex: "on" });
     expect(JSON.parse(kiwi(dir, "terminal", "status", "--json").stdout)).toMatchObject({ prefer: "rex" });

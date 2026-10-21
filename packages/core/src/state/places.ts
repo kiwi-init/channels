@@ -93,13 +93,13 @@ export function longForGeneral(state: Pick<ChannelState, "tasks" | "members">, m
   return `That ran long for #general: people read it like a group chat and see ${GENERAL_LINES} lines before Show more. Next time, a line or two there and the detail in the task's thread (kiwi send --to ${thread} "…").`;
 }
 
-export function tasksAwaitingPeople(state: Pick<ChannelState, "openAsks" | "placeOf">): Set<number> {
+export function tasksAwaitingPeople(state: Pick<ChannelState, "openAsks" | "placeOf" | "tasks">): Set<number> {
   return new Set(
     state.openAsks
       .filter((m) => m.esc)
       .flatMap((m) => {
         const place = state.placeOf.get(m.seq);
-        return place?.kind === "task" ? [place.task] : [];
+        return [...(place?.kind === "task" ? [place.task] : []), ...(m.holds ?? []).filter((id) => state.tasks.has(id))];
       }),
   );
 }

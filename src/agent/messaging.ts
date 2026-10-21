@@ -18,6 +18,7 @@ import {
   wellFormedReaction,
   type Card,
   type Color,
+  type DecisionKind,
   type Event,
   type Handoff,
   type ImageAttachment,
@@ -204,7 +205,13 @@ export class SessionMessaging extends SessionListen {
 
   readonly escalate = Effect.fn("AgentSession.escalate")(
     { self: this },
-    function* (this: SessionMessaging, body: string, re?: number, handoff?: Handoff, ask: { choices?: string[]; task?: number } & Pick<SendOptions, "id" | "permission"> = {}) {
+    function* (
+      this: SessionMessaging,
+      body: string,
+      re?: number,
+      handoff?: Handoff,
+      ask: { choices?: string[]; task?: number; holds?: number[]; decision?: DecisionKind } & Pick<SendOptions, "id" | "permission"> = {},
+    ) {
       if (!body.trim()) return yield* new Rejected("say what needs deciding: the text is empty");
       const { messages, state } = yield* this.state();
       const me = state.members.get(this.me);
@@ -214,6 +221,8 @@ export class SessionMessaging extends SessionListen {
       const to = [...new Set([humanOf(state, this.me), ownerOf(state)].filter((n): n is string => !!n))];
       if (!to.length) return yield* new Rejected("there's no person in this channel to escalate to");
       if (ask.choices && handoff) return yield* new Rejected("a browser handoff has its own Done and Couldn't answers; leave out the options");
+      const unknown = ask.holds?.find((id) => !state.tasks.has(id) && !state.askHeads.has(id));
+      if (unknown !== undefined) return yield* new Rejected(`${unknown} is neither a task nor a person's message here: --holds names tasks like T7 and asks like #18`);
       if (ask.task !== undefined && re !== undefined) {
         const place = state.placeOf.get(re);
         if (place?.kind !== "task" || place.task !== ask.task) {
@@ -228,6 +237,8 @@ export class SessionMessaging extends SessionListen {
         ...(handoff ? { handoff } : {}),
         ...(ask.choices ? { choices: ask.choices } : {}),
         ...(ask.task !== undefined ? { task: ask.task } : {}),
+        ...(ask.holds?.length ? { holds: ask.holds } : {}),
+        ...(ask.decision ? { decision: ask.decision } : {}),
         ...(ask.id ? { id: ask.id } : {}),
         ...(ask.permission ? { permission: ask.permission } : {}),
         ...(re !== undefined ? { re: [re] } : {}),

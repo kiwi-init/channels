@@ -160,7 +160,7 @@ describe("handoff escalation", () => {
   });
 });
 
-import { tasksAwaitingPeople } from "@kiwi/core/state.ts";
+import { tasksAwaitingPeople, type Task } from "@kiwi/core/state.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 
 describe("ask-human options payload", () => {
@@ -176,15 +176,28 @@ describe("ask-human options payload", () => {
     expect(wellFormed(payload({ esc: true, choices: ["A", "b".repeat(201)] }))).toBe(false);
   });
 
-  test("a task waits on people while an escalation in its thread is open", () => {
+  test("what an escalation holds and its decision kind ride only on an escalation", () => {
+    expect(wellFormed(payload({ esc: true, holds: [7, 18], decision: "taste" }))).toBe(true);
+    expect(wellFormed(payload({ holds: [7] }))).toBe(false);
+    expect(wellFormed(payload({ esc: true, holds: [] }))).toBe(false);
+    expect(wellFormed(payload({ esc: true, holds: [0] }))).toBe(false);
+    expect(wellFormed(payload({ esc: true, holds: Array.from({ length: 21 }, (_, i) => i + 1) }))).toBe(false);
+    expect(wellFormed(payload({ decision: "taste" }))).toBe(false);
+    expect(wellFormed(payload({ esc: true, decision: "vibes" }))).toBe(false);
+  });
+
+  test("a task waits on people while an escalation in its thread, or one holding it, is open", () => {
+    const held = { seq: 9, esc: true, kind: "blocking", holds: [5, 40] } as Message;
+    expect([...tasksAwaitingPeople({ openAsks: [held], placeOf: new Map(), tasks: new Map([[5, {} as Task]]) })]).toEqual([5]);
+
     const esc = { seq: 7, esc: true, kind: "blocking" } as Message;
     const ask = { seq: 8, kind: "ask" } as Message;
     const placeOf = new Map([
       [7, { kind: "task" as const, task: 3 }],
       [8, { kind: "task" as const, task: 4 }],
     ]);
-    expect([...tasksAwaitingPeople({ openAsks: [esc, ask], placeOf })]).toEqual([3]);
-    expect(tasksAwaitingPeople({ openAsks: [], placeOf }).size).toBe(0);
+    expect([...tasksAwaitingPeople({ openAsks: [esc, ask], placeOf, tasks: new Map() })]).toEqual([3]);
+    expect(tasksAwaitingPeople({ openAsks: [], placeOf, tasks: new Map() }).size).toBe(0);
   });
 });
 
@@ -192,6 +205,7 @@ describe("kiwi ask-human", () => {
   const owner = scratch("ask-owner");
   const agent = scratch("ask-agent");
   let task = "";
+  let want = "";
 
   beforeAll(async () => {
     const code = /join code: (\S+)/.exec(await ok(owner, "create", "ask-human", "--as", "lead", "--open"))![1]!;
@@ -204,7 +218,7 @@ describe("kiwi ask-human", () => {
     await ok(owner, "--as", "human", "approve", /(\d{3}-\d{3})/.exec(listed)![1]!, "--yes");
     expect(await p.exited).toBe(0);
     await ok(agent, "listen", "--now");
-    const want = /#(\d+)/.exec(await ok(owner, "--as", "human", "send", "the audit needs edits"))![1]!;
+    want = /#(\d+)/.exec(await ok(owner, "--as", "human", "send", "the audit needs edits"))![1]!;
     task = `T${/T(\d+)/.exec(await ok(agent, "task", "add", "edit the audit", "--ask", want))![1]!}`;
   });
 
@@ -229,6 +243,23 @@ describe("kiwi ask-human", () => {
     const asked = seqOf(await ok(agent, "ask-human", "--task", task, "--re", inTask, "--option", "A: refuse", "--option", "B: rebuild", "Which way?"));
     expect(await ok(owner, "log")).toContain(`#${asked} dev → `);
     expect((await ok(owner, "log")).split("\n").find((l) => l.startsWith(`#${asked} `))).toContain(`[${task}] [escalation]`);
+  });
+
+  test("--holds names the tasks and asks it holds and --kind its kind; one holding nothing is told it goes to the digest", async () => {
+    const held = await run(agent, "ask-human", "--holds", `${task},#${want}`, "--kind", "taste", "--option", "A: glass", "--option", "B: flat", "Which look?");
+    expect(held.code).toBe(0);
+    expect(held.out).toContain(`holding ${task}, #${want}`);
+    expect(held.err).not.toContain("digest");
+    const waiting = await ok(owner, "--as", "human", "status");
+    expect(waiting).toContain(`#${seqOf(held.out)} dev [blocking] [taste] · holds ${task}, #${want}: Which look?`);
+    const idle = await run(agent, "ask-human", "Coffee or tea?");
+    expect(idle.code).toBe(0);
+    expect(idle.err).toContain("holds nothing up, so it goes to the person's digest, not Needs you");
+    const digest = (await ok(owner, "--as", "human", "status")).split("\n").find((l) => l.startsWith("also asked, holding nothing up"));
+    expect(digest).toContain(`#${seqOf(idle.out)}`);
+    expect((await run(agent, "ask-human", "--holds", "T99999", "Which?")).err).toContain("99999 is neither a task nor a person's message here");
+    expect((await run(agent, "ask-human", "--holds", "soon", "Which?")).code).toBe(1);
+    expect((await run(agent, "ask-human", "--holds", task, "--kind", "vibes", "Which?")).code).toBe(1);
   });
 
   test("the flags are refused where they don't fit", async () => {
