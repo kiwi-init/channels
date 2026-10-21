@@ -12,6 +12,7 @@ import { rexNote, showInRex, useRexSeats, type RexSeatView } from "@/lib/rex"
 import { cx } from "@/lib/utils"
 import { askLabel } from "@/lib/asks"
 import { excerpt, formatAgo } from "@/lib/format"
+import { ALLOW_ONCE, DENY, permissionOf, permissionShown, permissionTitle, type PermissionLike } from "@/lib/permission-view"
 import { openHandoff } from "@/lib/handoff-open"
 import { handoffLabel, handoffLeft, handoffOf, handoffOpen } from "@/lib/handoff"
 import { useControls } from "./controls"
@@ -69,10 +70,16 @@ export function NeedsYou({
   const seatOf = (agent: string | undefined) => (agent ? rexSeats.find((s) => s.room === roomId && s.agent === agent) : undefined)
   const reviewSeat = (t: Task) => seatOf(t.owner ?? t.workedBy[t.workedBy.length - 1])
   const requests = p.isOwner ? p.requests : []
+  const asked = (ms: Message[]) => ms.filter((m) => !permissionOf(m))
+  const permissions = [...decisions, ...escalations].flatMap((m) => {
+    const p = permissionOf(m)
+    return p ? [{ m, p }] : []
+  })
   const items: { key: string; node: ReactNode }[] = [
+    ...permissions.map(({ m, p }) => ({ key: `a${m.seq}`, node: <PermissionItem m={m} p={p} now={now} nameOf={nameOf} onReply={onReply} seat={seatOf(m.from)} /> })),
     ...requests.map((r) => ({ key: `r${r.id}`, node: <RequestItem r={r} roomId={roomId} now={now} /> })),
-    ...(decisionCards ? decisions : []).map((m) => ({ key: `a${m.seq}`, node: <DecisionCard m={m} nameOf={nameOf} onReply={onReply} seat={seatOf(m.from)} /> })),
-    ...[...(decisionCards ? [] : decisions), ...escalations, ...questions].map((m) => ({
+    ...(decisionCards ? asked(decisions) : []).map((m) => ({ key: `a${m.seq}`, node: <DecisionCard m={m} nameOf={nameOf} onReply={onReply} seat={seatOf(m.from)} /> })),
+    ...[...(decisionCards ? [] : asked(decisions)), ...asked(escalations), ...questions].map((m) => ({
       key: `a${m.seq}`,
       node: <AskItem m={m} me={me} now={now} nameOf={nameOf} agent={agentOf(m.from)} onReply={onReply} onJump={onJump} seat={seatOf(m.from)} />,
     })),
@@ -343,6 +350,60 @@ function AnswerForm({
         Send
       </Button>
     </form>
+  )
+}
+
+function PermissionItem({
+  m,
+  p,
+  now,
+  nameOf,
+  onReply,
+  seat,
+}: {
+  m: Message
+  p: PermissionLike
+  now: number
+  nameOf: (n: string) => string
+  onReply: (m: Message, text: string) => Promise<void>
+  seat?: RexSeatView
+}) {
+  const [busy, setBusy] = useState(false)
+  const answer = (choice: string) => {
+    setBusy(true)
+    void onReply(m, choice)
+      .then(
+        () => toast(choice === ALLOW_ONCE ? `Allowed ${nameOf(m.from)} once` : `Denied ${nameOf(m.from)}`),
+        (err) => toast(`Not sent: ${errorText(err)}`, "error")
+      )
+      .finally(() => setBusy(false))
+  }
+  return (
+    <Row
+      lead={<Monogram name={nameOf(m.from)} hue={m.from} agent size={28} />}
+      title={
+        <>
+          <span className="font-semibold">{nameOf(m.from)}</span> {permissionTitle(p)}{" "}
+          <span className="ml-1 rounded-full bg-decide-wash px-1.5 align-middle text-meta font-semibold text-decide">Permission</span>
+        </>
+      }
+      detail={
+        <>
+          {p.description && <p className="text-ui text-ink-2">“{p.description}”</p>}
+          <pre className="mt-1.5 rounded-ctl bg-wash px-3 py-2 font-mono text-ui [overflow-wrap:anywhere] whitespace-pre-wrap text-ink">{permissionShown(p)}</pre>
+          <p className="mt-1.5">{[p.tool, `in ${p.cwd}`, m.task ? taskId(m.task) : null, formatAgo(m.ts, now)].filter(Boolean).join(" · ")}</p>
+          <p className="mt-1">Claude Code asks in its terminal too, and whichever answers first wins.</p>
+        </>
+      }
+    >
+      <ShowInRex seat={seat} />
+      <Button size="sm" variant="secondary" className="text-alert" disabled={busy} onClick={() => answer(DENY)}>
+        Deny
+      </Button>
+      <Button size="sm" disabled={busy} onClick={() => answer(ALLOW_ONCE)}>
+        Allow once
+      </Button>
+    </Row>
   )
 }
 

@@ -54,3 +54,24 @@ export function settledOf(ask: { from: string }, replies: readonly ReplyLike[], 
   }
   return null
 }
+
+const text = (v: unknown, max: number): string | undefined => (typeof v === "string" && v.length <= max ? v : undefined)
+
+export function permissionOf(m: object): PermissionLike | null {
+  const raw = (m as { permission?: unknown }).permission
+  if (!raw || typeof raw !== "object") return null
+  const x = raw as Record<string, unknown>
+  const tool = text(x["tool"], 200)
+  const cwd = text(x["cwd"], 4096)
+  if (!tool || cwd === undefined) return null
+  const paths = Array.isArray(x["paths"]) ? x["paths"].filter((p): p is string => typeof p === "string").slice(0, 50) : undefined
+  const mcpRaw = x["mcp"] && typeof x["mcp"] === "object" ? (x["mcp"] as Record<string, unknown>) : null
+  const mcp =
+    mcpRaw && typeof mcpRaw["server"] === "string" && typeof mcpRaw["tool"] === "string" && Array.isArray(mcpRaw["args"])
+      ? { server: mcpRaw["server"], tool: mcpRaw["tool"], args: mcpRaw["args"].filter((a): a is string => typeof a === "string") }
+      : undefined
+  const command = text(x["command"], 4000)
+  const description = text(x["description"], 1000)
+  const url = text(x["url"], 4000)
+  return { tool, cwd, ...(command !== undefined ? { command } : {}), ...(description ? { description } : {}), ...(paths?.length ? { paths } : {}), ...(url ? { url } : {}), ...(mcp ? { mcp } : {}) }
+}

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { ALLOW_ONCE, DENY, permissionShown, permissionTitle, settledOf, visibleText } from "./permission-view"
+import { ALLOW_ONCE, DENY, permissionOf, permissionShown, permissionTitle, settledOf, visibleText } from "./permission-view"
 
 describe("what a permission row says", () => {
   test("its title follows the tool", () => {
@@ -47,5 +47,17 @@ describe("how a permission was settled", () => {
         may
       )
     ).toEqual({ kind: "timeout", at: 7 })
+  })
+})
+
+describe("reading a message's permission", () => {
+  test("a well-formed one comes through with only its known fields; anything else is not a permission", () => {
+    expect(permissionOf({ permission: { tool: "Bash", command: "ls", description: "List", cwd: "/a", nonce: "n", extra: 1 } })).toEqual({ tool: "Bash", command: "ls", description: "List", cwd: "/a" })
+    expect(permissionOf({ permission: { tool: "MultiEdit", paths: ["a.ts", 3, "b.ts"], cwd: "/a" } })).toEqual({ tool: "MultiEdit", paths: ["a.ts", "b.ts"], cwd: "/a" })
+    expect(permissionOf({ permission: { tool: "mcp__gh__merge", mcp: { server: "gh", tool: "merge", args: ["pr", 1] }, cwd: "/a" } })?.mcp).toEqual({ server: "gh", tool: "merge", args: ["pr"] })
+    expect(permissionOf({})).toBeNull()
+    expect(permissionOf({ permission: "Bash" })).toBeNull()
+    expect(permissionOf({ permission: { command: "ls", cwd: "/a" } })).toBeNull()
+    expect(permissionOf({ permission: { tool: "Bash", command: "x".repeat(4001), cwd: "/a" } })?.command).toBeUndefined()
   })
 })
