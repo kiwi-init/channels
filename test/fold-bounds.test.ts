@@ -121,10 +121,10 @@ describe("the fold base stays bounded", () => {
 
     const spam = Array.from({ length: 3_000 }, (_, i) => msg(i + 101, T0 + 365 * DAY + i, { from: "spam", rts: T0 + (i + 101) * 1_000 }));
     const honest = Array.from({ length: 100 }, (_, i) => msg(i + 1, T0 + i * 1_000));
-    const behind = msg(3_101, T0 + 3_099 * 1_000, { from: "jow", rts: T0 + 3_101 * 1_000 });
-    const mixed = [...honest, ...spam, msg(3_100, T0 + 3_100 * 1_000), behind, msg(3_102, T0 + 3_102 * 1_000)];
+    const behind = msg(3_102, T0 + 3_100 * 1_000, { from: "jow", rts: T0 + 3_102 * 1_000 });
+    const mixed = [...honest, ...spam, msg(3_101, T0 + 3_101 * 1_000), behind, msg(3_103, T0 + 3_103 * 1_000)];
     const all = cutAt(mixed, 0);
-    expect(all.trust.find(([seq]) => seq === 3_101)?.[1]).toBe("verified");
+    expect(all.trust.find(([seq]) => seq === 3_102)?.[1]).toBe("verified");
     expect(cutAt(mixed, 3_000)).toEqual(all);
     expect(cutAt(mixed, 3_100)).toEqual(all);
   });

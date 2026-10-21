@@ -10,7 +10,7 @@ import { taskId, type Task } from "@kiwi/core/state.ts"
 import { usePinned } from "@/lib/pinned"
 import { rexNote, showInRex, useRexSeats, type RexSeatView } from "@/lib/rex"
 import { cx } from "@/lib/utils"
-import { askLabel } from "@/lib/asks"
+import { askLabel, permissionAsks } from "@/lib/asks"
 import { excerpt, formatAgo } from "@/lib/format"
 import { openHandoff } from "@/lib/handoff-open"
 import { handoffLabel, handoffLeft, handoffOf, handoffOpen } from "@/lib/handoff"
@@ -74,7 +74,7 @@ export function NeedsYou({
   const reviewSeat = (t: Task) => seatOf(t.owner ?? t.workedBy[t.workedBy.length - 1])
   const requests = p.isOwner ? p.requests : []
   const asked = (ms: Message[]) => ms.filter((m) => !m.permission)
-  const permissions = [...decisions, ...escalations].flatMap((m) => (m.permission && now <= m.permission.expiresAt ? [{ m, p: m.permission }] : []))
+  const permissions = permissionAsks({ decisions, escalations }, now)
   const items: { key: string; node: ReactNode }[] = [
     ...permissions.map(({ m, p: perm }) => {
       const { human, owner } = permissionOf(m)

@@ -16,21 +16,21 @@ import { findRoom, fold, newRoomId, type Roster } from "@kiwi/core/state.ts";
 
 let seq = 0;
 async function msg(id: Identity, init: { kind?: Kind; ev?: Event; room?: string; re?: number[]; to?: string[]; body?: string } = {}): Promise<Message> {
-  seq++;
+  const n = ++seq;
   const base = {
     v: 1 as const,
     id: crypto.randomUUID(),
     from: id.name,
     kind: init.kind ?? (init.ev ? "event" : "msg"),
     body: init.body ?? "",
-    ts: 1_700_000_000_000 + seq,
+    ts: 1_700_000_000_000 + n,
     ...(init.to ? { to: init.to } : {}),
     ...(init.re ? { re: init.re } : {}),
     ...(init.ev ? { ev: init.ev } : {}),
     ...(init.room ? { room: init.room } : {}),
   };
   const p = await sign(id, base);
-  return { ...p, seq, rts: base.ts, sigOk: await verify(p) };
+  return { ...p, seq: n, rts: base.ts, sigOk: await verify(p) };
 }
 
 let owner: Identity, ann: Identity, bob: Identity;
