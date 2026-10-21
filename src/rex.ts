@@ -1,6 +1,7 @@
 import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { RexPlace, RexStatus } from "@kiwi/core/terminals.ts";
 import { listIn, nested, object, parseJson } from "./terminals/shared/json.ts";
 import { run, runNow } from "./terminals/shared/run.ts";
 
@@ -11,11 +12,7 @@ export interface TerminalPlace {
   version?: string;
 }
 
-export interface RexPlace {
-  server: string;
-  session: string;
-  block: string;
-}
+export type { RexPlace };
 
 export interface SeatPlace {
   term?: TerminalPlace;
@@ -80,12 +77,6 @@ export function clearFrame(id: string): string {
   return `${OSC}state=clear:app=kiwi:id=${id}${ST}`;
 }
 
-export interface RexStatus {
-  found: boolean;
-  version?: string;
-  server: "running" | "stopped";
-}
-
 const MAC_REX = join(homedir(), "Library", "Application Support", "com.superlogical.rex", "RexServer", "Versions");
 
 function macBinary(): string | null {
@@ -104,7 +95,7 @@ export function rexBinary(): string | null {
 
 const WHOAMI = ["--autostart=false", "whoami", "--json"];
 
-export function rexStatus(): RexStatus {
+export function rexStatus(): Omit<RexStatus, "helpers" | "rotation"> {
   const bin = rexBinary();
   if (!bin) return { found: false, server: "stopped" };
   const version = /^rex (\S+)/.exec(runNow([bin, "version"], 2_000).stdout.trim())?.[1];

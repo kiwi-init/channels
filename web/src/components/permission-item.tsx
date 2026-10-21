@@ -5,7 +5,7 @@ import { useState } from "react"
 
 import { formatAgo, formatTime } from "@/lib/format"
 import { permissionCode, permissionNotes, permissionTitle, visibleText } from "@/lib/permission-view"
-import type { RexSeatView } from "@/lib/rex"
+import type { RexSeat } from "@/lib/rex"
 import { Button, Monogram, errorText, toast } from "./kit"
 import { Row, ShowInRex } from "./needs-you"
 
@@ -25,7 +25,7 @@ export function PermissionItem({
   now: number
   nameOf: (n: string) => string
   onAnswer: (m: Message, allow: boolean) => Promise<void>
-  seat?: RexSeatView
+  seat?: RexSeat
   canAllow: boolean
   canDeny: boolean
   human: string | null

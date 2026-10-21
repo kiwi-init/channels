@@ -1,12 +1,13 @@
 import { BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from "electron";
 
 import { readHarnessRow, type HarnessRow } from "@kiwi/core/harnesses.ts";
-import type { ComputerView, FromMachine, LaunchAgentRequest, LaunchedView, MachineView } from "../bridge.ts";
+import type { LaunchedView } from "@kiwi/core/terminals.ts";
+import type { ComputerView, FromMachine, LaunchAgentRequest, MachineView } from "../bridge.ts";
 import { daemonHarnesses, daemonHello, daemonLaunch } from "../daemon-client.ts";
 import { launchedView, launchRequestOf, MACHINE_PK } from "../launch-view.ts";
 import { askMachine, machineOnline, type Asked, type Asker } from "../remote.ts";
 import { requirePerson, store } from "../store.ts";
-import { runKiwi } from "./rex.ts";
+import { runKiwi } from "./kiwi.ts";
 
 const ROOM = /^[A-Za-z0-9_-]{1,128}$/;
 const ROOM_ID = /^[0-9a-f]{32}$/;

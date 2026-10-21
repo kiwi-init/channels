@@ -8,7 +8,7 @@ import { cx } from "@/lib/utils"
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { relayUrl } from "@/lib/relay"
 import { bridge, useSecrets } from "@/lib/secrets"
-import type { RexStatusView } from "../../../desktop/src/bridge.ts"
+import type { RexStatus } from "@kiwi/core/terminals.ts"
 import { version } from "../../../package.json"
 import { ComputerRows } from "./computers"
 import { HarnessFace } from "./harness-face"
@@ -237,7 +237,7 @@ function GithubFields() {
 
 function RexFields() {
   const b = bridge()
-  const [status, setStatus] = useState<RexStatusView | null>(null)
+  const [status, setStatus] = useState<RexStatus | null>(null)
   const [busy, setBusy] = useState<"on" | "off" | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
@@ -245,7 +245,7 @@ function RexFields() {
     void b.rexStatus().then(setStatus, () => setStatus(null))
   }, [b])
   if (!b?.rexStatus || !status || (!status.found && status.helpers === "off")) return null
-  const run = (to: "on" | "off", go: () => Promise<RexStatusView>) => {
+  const run = (to: "on" | "off", go: () => Promise<RexStatus>) => {
     setError(null)
     setBusy(to)
     go()
