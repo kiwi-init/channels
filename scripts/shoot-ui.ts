@@ -3,11 +3,12 @@
 // first (a lead and an agent working a task, messages, a thread, a task's conversation, a
 // direct one, notes, a pending join request), the same way scripts/smoke-ui.ts walks the flows.
 //
-//   bun run web:build && bun scripts/shoot-ui.ts [outdir] [--only channel,task-thread,…] [--wide] [--theme dark|light]
+//   bun run web:build && bun scripts/shoot-ui.ts [outdir] [--only channel,task-thread,…] [--wide] [--theme dark|light] [--channels 20]
 //
 // Shots are taken at 2x (Retina), as most people see the dashboard. --only keeps the screens whose
 // name contains one of the words (and skips the signed-out ones unless named), --wide skips the phone
-// size, --theme keeps one theme: for a quick look at a few screens while working on them.
+// size, --theme keeps one theme: for a quick look at a few screens while working on them. --channels
+// adds that many more channels (one with news), to see a crowded tab bar and its More menu.
 // A screen that can't be reached is saved as skipped-<name>.png and fails the run. CI's
 // `build / shots` runs it --wide --theme dark and uploads the shots as the ui-shots artifact.
 //
@@ -29,6 +30,7 @@ const flag = (name: string) => {
 };
 const only = flag("--only")?.split(",").filter(Boolean);
 const themeOnly = flag("--theme");
+const moreChannels = Number(flag("--channels") ?? 0);
 const wideOnly = args.includes("--wide") ? (args.splice(args.indexOf("--wide"), 1), true) : false;
 const OUT = resolve(args[0] ?? join(tmpdir(), "kiwi-shots"));
 mkdirSync(OUT, { recursive: true });
@@ -68,12 +70,14 @@ const skipped: string[] = [];
 const page = (viewport: { width: number; height: number }) => browser.newPage({ viewport, deviceScaleFactor: 2 });
 const wanted = (name: string) => !only || only.some((w) => name.includes(w));
 
+const chrome = (page: Page) => page.getByRole("banner", { name: "Channels" }).or(page.getByRole("complementary"));
+
 async function firstRunAs(page: Page, name: string) {
   await page.getByRole("textbox", { name: "Your name" }).fill(name);
   await page.getByRole("button", { name: "Continue" }).click();
-  await page
-    .getByRole("complementary")
+  await chrome(page)
     .getByRole("button", { name: new RegExp(name, "i") })
+    .filter({ visible: true })
     .first()
     .waitFor();
 }
@@ -125,6 +129,10 @@ async function shoot(page: Page, tag: string, name: string, open?: () => Promise
   if (!wanted(name)) return;
   try {
     if (open) await open();
+    await page
+      .getByPlaceholder("Connecting…")
+      .waitFor({ state: "hidden", timeout: 15000 })
+      .catch(() => {});
     await page.waitForTimeout(350);
     const file = join(OUT, `${tag}-${name}.png`);
     await page.screenshot({ path: file });
@@ -149,7 +157,7 @@ try {
   await passkey(owner);
 
   // New is the list's first row.
-  const newChannel = owner.getByRole("complementary").getByRole("button", { name: "New channel", exact: true });
+  const newChannel = chrome(owner).getByRole("button", { name: "New channel", exact: true }).filter({ visible: true }).first();
   await newChannel.click();
   await owner.getByRole("dialog").getByRole("textbox").fill("kiwi");
   await owner.getByRole("button", { name: "Create channel" }).click();
@@ -298,6 +306,62 @@ try {
   await owner.waitForURL((u) => u.toString() !== channel && /#mc2-/.test(u.toString()));
   const fresh = owner.url();
 
+  if (moreChannels > 0) {
+    const names = [
+      "relay",
+      "desktop",
+      "site",
+      "docs",
+      "mobile",
+      "billing",
+      "infra",
+      "design-system",
+      "growth",
+      "support",
+      "ios",
+      "android",
+      "data",
+      "search",
+      "auth",
+      "payments",
+      "onboarding",
+      "release",
+      "security",
+      "research",
+    ];
+    const faces = ["blue", "purple", "red", "lime", "orange", "sky", "mint", "pink", "lilac", "teal", "gold", "coral"];
+    for (let i = 0; i < moreChannels; i++) {
+      const before = owner.url();
+      await newChannel.click();
+      await owner
+        .getByRole("dialog")
+        .getByRole("textbox")
+        .fill(names[i % names.length]! + (i < names.length ? "" : `-${i}`));
+      await owner
+        .getByRole("dialog")
+        .getByRole("radio", { name: `${faces[i % faces.length]} robot` })
+        .click();
+      await owner.getByRole("button", { name: "Create channel" }).click();
+      await owner.waitForURL((u) => u.toString() !== before && /#mc2-/.test(u.toString()));
+      if (i > 0) continue;
+      const relayCode = decodeURIComponent(new URL(owner.url()).hash.slice(1));
+      const joining = kiwi(["join", relayCode, "kiwi-r", "--as", "atlas", "--model", "claude-opus-5-5", "--relay", BASE]);
+      const letIn = needs.getByRole("button", { name: "It matches: let in" });
+      const showCode = needs.getByRole("button", { name: "Show code" });
+      await letIn.or(showCode).first().waitFor({ timeout: 30000 });
+      if (await showCode.count()) await showCode.click();
+      const seat = needs.getByRole("checkbox", { name: /Let agents from .* in from now on/ });
+      if (await seat.count()) await seat.uncheck();
+      await letIn.click();
+      await joining;
+    }
+    await owner.goto(channel);
+    await owner.reload();
+    await kiwi(["-c", "kiwi-r", "--as", "atlas", "send", "Relay 0.8.12 is live in all regions. p95 stayed at 1ms."]);
+    await kiwi(["-c", "kiwi-r", "--as", "atlas", "ask", "--to", "jonatas", "Turn the old relay off tonight, or keep it a week?"]);
+    await owner.waitForTimeout(1500);
+  }
+
   // ---------- shoot ----------
   let launcherStub = false;
   let terminalsStub = false;
@@ -317,7 +381,11 @@ try {
       const details = () => owner.getByRole("complementary", { name: "Details" });
       const closeDetails = () => owner.getByRole("button", { name: "Close details" }).click();
       const tasksPanel = () => owner.getByRole("complementary", { name: "Tasks" });
-      const account = () => owner.getByRole("complementary").getByRole("button", { name: /Jonatas/ });
+      const account = () =>
+        chrome(owner)
+          .getByRole("button", { name: /Jonatas/ })
+          .filter({ visible: true })
+          .first();
       /** The channel as it opens on the conversation, scrolled to the latest. Reloaded: the hash alone keeps a panel open. */
       const toChannel = async () => {
         await owner.goto(channel);
@@ -399,6 +467,29 @@ try {
           await owner.getByRole("complementary", { name: "Channel" }).getByRole("button", { name: "Show less" }).click();
         },
       );
+      if (!narrow) {
+        await shoot(
+          owner,
+          tag,
+          "01d-sidebar-hidden",
+          () => owner.keyboard.press("ControlOrMeta+Backslash"),
+          () => owner.keyboard.press("ControlOrMeta+Backslash"),
+        );
+        await shoot(
+          owner,
+          tag,
+          "01f-mac-tab-bar",
+          () => owner.evaluate(macWindow, true),
+          () => owner.evaluate(macWindow, false),
+        );
+        if (moreChannels > 0)
+          await shoot(owner, tag, "01e-more-channels", () =>
+            owner
+              .getByRole("banner", { name: "Channels" })
+              .getByRole("button", { name: /^\d+ more channels?\b/ })
+              .click(),
+          );
+      }
       await owner.mouse.wheel(0, -4000);
       await shoot(owner, tag, "02-channel-top");
       await shoot(owner, tag, "03-reply", async () => {
@@ -690,7 +781,7 @@ try {
       await firstRunAs(out, "Pat").catch(() => {});
       await shoot(out, tag, "23-signed-in-empty");
       await shoot(out, tag, "21-join-with-code", async () => {
-        await out.getByRole("complementary").getByRole("button", { name: "New channel", exact: true }).click();
+        await chrome(out).getByRole("button", { name: "New channel", exact: true }).filter({ visible: true }).first().click();
         await out.getByRole("dialog").getByRole("button", { name: "Have a code? Join" }).click();
       });
       await out.goto(`${BASE}#${encodeURIComponent(code)}`);
