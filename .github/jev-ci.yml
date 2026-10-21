@@ -137,6 +137,14 @@ jobs:
       lib/format.test.ts: the time formatters give nothing for such a time instead of throwing, and
       lib/channel/recent.test.ts: a saved channel preview carrying one is dropped, so the channel
       list still renders.
+      Also test/stage.test.ts: a task's stage read off a signed log, never typed (packages/core/src/stage.ts
+      stageOf, PR helpers in packages/core/src/prs.ts): open, building, proving (no checks yet, checks
+      running, green but not merged), red on a failed check at the PR's head, proving again after a
+      push, review owed while a round is open, done declared when only typed, and done once GitHub's
+      merge lands with no failed check at the merged head, even before anyone marks it; a merge over a
+      failed check stays declared, a cancelled task is dropped, a PR links by branch prefix or by the
+      task's proof link; kiwi task show always says the stage, and the board says it when it adds
+      evidence (a linked PR, or done that's only declared).
       Also test/newer-ops.test.ts: an event whose op this client doesn't know (from a newer client)
       is kept, not dropped: a signed fixture log decodes whole with every signature checking out,
       such an event carries its op as newer and no ev, is quiet, and folds to nothing (the board is
