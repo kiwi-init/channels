@@ -310,3 +310,11 @@ One task and one PR each, in this order. Each one's tests run in `test / unit`.
    seat and a show result (`readPlacedSeat`, `readShowResult`). Needs you's button is `ShowSeat`,
    labelled from the plugin's name ("Show in Rex", and "Show in tmux" with row 6), and
    `kiwi terminal seats` and `kiwi terminal show --seat` sit beside `kiwi rex seats|show`.
+8. **Settings → New agents (#658, T2016).** The owner OK'd the look from shots first (#2286). The group
+   sits after Agents in the desktop app: Allow creating new agents, Prefer (greyed until a
+   terminal's helpers are downloaded), and a row per terminal with helpers; Rex left Services.
+   - The bridge's `terminals`, `terminalHelpers`, `terminalPrefer` and `setLaunches` run `kiwi
+     terminal` and `kiwi launches`, and replace `rexStatus`, `rexInstall` and `rexRemove`.
+   - With creating new agents off on this computer, the New agent modal doesn't offer it: it picks
+     the first paired computer online, or says Settings → New agents turns it back on.
+   - The tiles stay text (`rex`, `tmux`); the logos wait until the Rex mark is settled.
