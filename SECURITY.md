@@ -564,6 +564,12 @@ be only another way to answer the same prompt, never a way around it:
     digests pass, and folder and file paths are checked only for the known
     shapes above, so a random folder name doesn't count.
 
+  A value the shell fills in (`$TOKEN`, `${TOKEN}`, `$(…)`) isn't the secret
+  itself, so `curl -H "Authorization: Bearer $TOKEN"` is sent; a default
+  written out, as in `${TOKEN:-…}`, still counts. True/false switches such as
+  `DISABLE_AUTH=true` and field-name keys such as `SORT_KEY` or `PRIMARY_KEY`
+  pass too, unless the value itself looks random.
+
   A command run with the sandbox off, or anything over its cap, offers only
   Deny.
 - **What's shown is what runs.** A command, path or folder with control,
