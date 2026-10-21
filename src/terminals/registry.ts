@@ -75,7 +75,7 @@ interface Plugins {
 const BUILT_IN: Plugins = { manifests: MANIFESTS, load: (id) => terminalPlugin(id) };
 
 function placeOf(seat: PlacedSeat): SeatPlace {
-  return { rex: { server: seat.server, session: seat.session, block: seat.block } };
+  return seat.place === "tmux" ? { tmux: { socket: seat.socket, pane: seat.pane } } : { rex: { server: seat.server, session: seat.session, block: seat.block } };
 }
 
 const samePlace = (a: PlacedSeat, b: PlacedSeat): boolean => JSON.stringify(placeOf(a)) === JSON.stringify(placeOf(b));

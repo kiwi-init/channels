@@ -101,4 +101,17 @@ describe("seats a terminal can show", () => {
     expect(await showSeat({ ...seat, block: "block:21a15963-bacc-7426-91e9-4d98757dcd0c" }, helpers("on"), t.from)).toEqual({ ok: false, why: "failed" });
     expect(t.shown).toEqual({ rex: [{ rex: place }] });
   });
+
+  test("a tmux seat is listed once tmux's helpers are on, and Show sends tmux its socket and pane and says tmux's answer", async () => {
+    const pane: PlacedSeat = { place: "tmux", alias: seat.alias, agent: seat.agent, socket: "/private/tmp/tmux-501/default", pane: "%3" };
+    const t = terminals(
+      { manifest: everywhere(rexManifest, ["locate", "show"]), seats: [seat] },
+      { manifest: everywhere(tmuxManifest, ["locate", "show"]), seats: [pane], answer: { ok: false, why: "no-app" } },
+    );
+    const both: Config = { channels: {}, terminals: { helpers: { rex: "on", tmux: "on" } } };
+    expect(await seatPlaces(both, t.from)).toEqual([seat, pane]);
+    expect(await seatPlaces(helpers("on"), t.from)).toEqual([seat]);
+    expect(await showSeat({ ...pane, alias: "kiwi", agent: "agent" }, both, t.from)).toEqual({ ok: false, why: "no-app" });
+    expect(t.shown).toEqual({ tmux: [{ tmux: { socket: pane.socket, pane: pane.pane } }] });
+  });
 });
