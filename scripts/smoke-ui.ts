@@ -499,18 +499,12 @@ async function run(part: Part): Promise<string[]> {
     await tasksPanel.waitFor({ state: "detached" });
     await toTab("Conversation");
     await page
-      .waitForFunction(
-        (text) => {
-          const said = [...document.querySelectorAll("body *")].filter((e) => e.textContent?.trim() === text && ![...e.children].some((c) => c.textContent?.trim() === text));
-          return said.length > 0 && said.every((e) => /^Open T\d+, Smoke task/.test(e.closest("button")?.getAttribute("aria-label") ?? ""));
-        },
-        "smoke in the task",
-        { timeout: 15000 },
-      )
-      .catch(() => {
-        throw new Error("a message in a task's conversation showed in main outside its task card");
-      });
-    log(`ok  ${at}`);
+      .getByRole("main")
+      .getByRole("button", { name: /^Open T\d+, Smoke task/ })
+      .first()
+      .waitFor({ timeout: 15000 });
+    if (await page.getByText("smoke in the task", { exact: true }).count()) throw new Error("a message in a task's conversation showed in main, outside its task");
+    log(`ok  ${at}: main shows the task as one line, and what was said in it stays in the task`);
 
     at = "a slash in the composer lists the commands, and one runs instead of being sent";
     const typed = page.getByRole("textbox", { name: "Message" });
@@ -531,11 +525,10 @@ async function run(part: Part): Promise<string[]> {
     if (await page.getByText("/tasks", { exact: true }).count()) throw new Error("a command was sent as a message");
     log(`ok  ${at}`);
 
-    at = "the task's card in the conversation shows its last line, and a click opens the Tasks panel";
+    at = "the task's line in the conversation opens the Tasks panel";
     const taskCard = page.getByRole("main").getByRole("button", { name: new RegExp(`^Open ${smokeTask}, Smoke task`) });
     await taskCard.waitFor({ timeout: 15000 });
-    if ((await taskCard.count()) !== 1) throw new Error(`${smokeTask} has more than one card in the main column`);
-    await taskCard.getByText("smoke in the task", { exact: true }).waitFor();
+    if ((await taskCard.count()) !== 1) throw new Error(`${smokeTask} has more than one line in the main column`);
     await taskCard.click();
     await tasksPanel.getByRole("region", { name: new RegExp(`^Task ${smokeTask}`) }).waitFor({ timeout: 15000 });
     await tasksPanel.getByRole("button", { name: "Close tasks" }).click();

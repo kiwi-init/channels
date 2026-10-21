@@ -32,7 +32,13 @@ function TaskLine({ entry, task, state, urgent, onOpen, anchor }: { entry: TaskE
       ) : (
         <StateMark state={task.state} />
       )}
-      <button type="button" onClick={() => onOpen?.(entry.id)} title={`Open ${taskId(entry.id)}`} className="flex min-w-0 items-baseline gap-1.5 text-left hover:text-ink-2">
+      <button
+        type="button"
+        onClick={() => onOpen?.(entry.id)}
+        aria-label={`Open ${taskId(entry.id)}, ${task.title}`}
+        title={`Open ${taskId(entry.id)}`}
+        className="flex min-w-0 items-baseline gap-1.5 text-left hover:text-ink-2"
+      >
         <span className="shrink-0 font-medium text-ink-2 tabular-nums">{taskId(entry.id)}</span>
         <span className="min-w-0 truncate">{task.title}</span>
       </button>
@@ -58,7 +64,13 @@ function Label({ entry, state, onOpen }: { entry: Activity; state: ChannelState;
     const task = state.tasks.get(entry.id)
     return (
       <>
-        <button type="button" onClick={() => onOpen?.(entry.id)} title={task?.title} className="font-medium text-ink-2 tabular-nums hover:text-ink hover:underline">
+        <button
+          type="button"
+          onClick={() => onOpen?.(entry.id)}
+          aria-label={`Open ${taskId(entry.id)}${task ? `, ${task.title}` : ""}`}
+          title={task?.title}
+          className="font-medium text-ink-2 tabular-nums hover:text-ink hover:underline"
+        >
           {taskId(entry.id)}
         </button>{" "}
         {task && <span className={toneOf(task)}>{stateWord(task)}</span>}
