@@ -1,9 +1,17 @@
-import { REX_BLOCK, REX_SESSION, REX_TERMINAL, rexApiArgv, rexServer } from "../../rex.ts";
+import { loadConfig } from "../../config.ts";
 import type { PlaceRequest, Placed, PlaceTools, TerminalPlugin } from "../plugin.ts";
+import { helpersOn } from "../registry.ts";
 import { object, objectsIn, parseJson } from "../shared/json.ts";
 import { loginArgv } from "../shared/launch.ts";
 import { run, said } from "../shared/run.ts";
+import { REX_TERMINAL, rexActivity, rexApiArgv, rexServer, rexStatus } from "./api.ts";
+import { downloadHelpers, removeHelpers } from "./helpers.ts";
+import { placeFrom, REX_BLOCK, REX_SESSION } from "./locate.ts";
 import { rexManifest } from "./manifest.ts";
+import { markSeat } from "./mark.ts";
+import { showInRex } from "./show.ts";
+import { rexPane } from "./type.ts";
+import { rexServers, startRexEvents } from "./watch.ts";
 
 async function rex(
   t: PlaceTools & { rex: string },
@@ -59,7 +67,21 @@ export function rexTerminal(t: PlaceTools): TerminalPlugin {
   const endpoint = (): Promise<string | null> => (server ??= t.rex ? rexServer(t.rex) : Promise.resolve(null));
   return {
     manifest: rexManifest,
-    detect: async () => ({ found: !!t.rex, running: !!(await endpoint()) }),
+    detect: async (opts) => {
+      const version = opts?.version ? rexStatus().version : undefined;
+      return { found: !!t.rex, running: !!(await endpoint()), ...(version ? { version } : {}) };
+    },
+    helpers: { status: () => (helpersOn("rex", loadConfig()) ? "on" : "off"), download: downloadHelpers, remove: removeHelpers },
+    locate: placeFrom,
+    mark: markSeat,
+    show: async (place) => (place.rex ? showInRex(place.rex, t.rex) : { ok: false, why: "failed" }),
+    watch: (places, changed) =>
+      startRexEvents({
+        servers: () => rexServers(places().flatMap((p) => (p.rex ? [p.rex] : []))),
+        onChange: (server, block, gone) => changed((p) => p.rex?.server === server && p.rex.block === block, gone),
+      }),
+    activity: async (place) => (place.rex ? rexActivity(place.rex, t.rex) : null),
+    type: (place) => (place.rex && t.rex ? rexPane(place.rex, t.rex) : null),
     open: async (req) => {
       const at = await endpoint();
       if (!at || !t.rex) return { ok: false, why: "no-place", detail: "Rex isn't running on this computer" };

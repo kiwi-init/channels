@@ -6,7 +6,9 @@ import { openSession } from "../agent.ts";
 import { loadConfig } from "../config.ts";
 import { rotationAt } from "../rotate/decide.ts";
 import type { Here } from "../seats.ts";
-import { placeFrom, rexBinary, type RexPlace } from "../rex.ts";
+import type { RexPlace } from "../terminals/plugin.ts";
+import { helpersOn, locate } from "../terminals/registry.ts";
+import { rexBinary } from "../terminals/rex/locate.ts";
 import { tmuxSocket } from "../terminals/shared/tmux.ts";
 import type { HookInput } from "./answer.ts";
 import { overLineSince } from "./context-line.ts";
@@ -33,7 +35,7 @@ export function paneOf(env: Record<string, string | undefined>): PaneOf | null {
   const pane = env.TMUX_PANE;
   const socket = tmuxSocket(env);
   if (pane && /^%\d+$/.test(pane) && socket) return { pane, socket };
-  const rex = placeFrom(env).rex;
+  const rex = locate(env).rex;
   if (!rex) return null;
   const dir = env.REX_BIN_DIR?.trim();
   const bin = dir ? join(dir, "rex") : rexBinary();
@@ -71,7 +73,7 @@ export const rotateAfterStop = Effect.fn("Hooks.rotateAfterStop")(function* (inp
   let spot: Spot;
   if (who.harness === "claude") {
     const where = paneOf(process.env);
-    if (!who.pid || !where || (!("pane" in where) && config.rex !== "on")) return;
+    if (!who.pid || !where || (!("pane" in where) && !helpersOn("rex", config))) return;
     const { claudeContext } = yield* Effect.promise(() => import("../harness.ts"));
     spot = { pid: who.pid, where, used: used(claudeContext, file) };
   } else {
