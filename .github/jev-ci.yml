@@ -769,7 +769,7 @@ jobs:
 
   build:
     name: build / bundles
-    inputs: ["src/**", "packages/core/**", "web/**", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/smoke-cli.ts", "scripts/smoke-ui.ts", "scripts/local-relay.ts", "scripts/dictation-files.ts", "test/fixtures/dictation.wav", "scripts/web-bundle.ts", "test/owner.ts", "test/owner-cli.ts", "test/check.ts"]
+    inputs: ["src/**", "packages/core/**", "web/**", "desktop/src/seats.ts", "desktop/src/public-channel.ts", "scripts/build-cli.ts", "scripts/cli-bundle.ts", "scripts/smoke-cli.ts", "scripts/smoke-ui.ts", "scripts/local-relay.ts", "scripts/dictation-files.ts", "test/fixtures/dictation.wav", "scripts/web-bundle.ts", "test/owner.ts", "test/owner-cli.ts", "test/check.ts"]
     always: ["package.json", "bun.lock", "web/package.json", "web/vite.config.ts", "wrangler.jsonc", "scripts/smoke-ui.ts", "scripts/local-relay.ts", "scripts/web-bundle.ts"]
     description: >-
       Builds the web dashboard for production (vite build in web/) and fails when the JS the
