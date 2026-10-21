@@ -12,7 +12,7 @@ import { Monogram } from "./kit"
 
 const MAX_TICKS = 8
 
-function Ticks({ checks }: { checks: PrChecks }) {
+export function Ticks({ checks }: { checks: PrChecks }) {
   const ticks = [...checks.failed.map(() => "bg-alert"), ...Array.from({ length: checks.running }, () => "bg-doing"), ...Array.from({ length: checks.passed }, () => "bg-live")].slice(0, MAX_TICKS)
   const label = [checks.passed ? `${checks.passed} passed` : null, checks.failed.length ? `${checks.failed.length} failed` : null, checks.running ? `${checks.running} running` : null]
     .filter(Boolean)

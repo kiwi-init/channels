@@ -21,7 +21,7 @@ function checksWords(checks: PrChecks): { icon: typeof CheckmarkCircle02Icon; to
   return { icon: CheckmarkCircle02Icon, tone: "text-live", text: "checks passed" }
 }
 
-function ChecksCell({ pr }: { pr: Pr | undefined }) {
+export function ChecksCell({ pr }: { pr: Pr | undefined }) {
   if (pr?.pr.state === "merged")
     return (
       <span className="flex items-center gap-1.5 text-meta text-ink-2">
