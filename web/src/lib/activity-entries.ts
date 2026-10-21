@@ -1,4 +1,4 @@
-import type { Message } from "@kiwi/core/protocol.ts"
+import { onlyRunning, type Message } from "@kiwi/core/protocol.ts"
 import { digestTask, type Tasks } from "./activity"
 import { taskOfEvent } from "./task-cards"
 
@@ -33,6 +33,7 @@ export function activityOf(run: readonly Message[], tasks: Tasks): Activity[] {
       entry.seqs.push(m.seq)
       if (m.kind === "done") for (const pr of digestPrs(m.body)) if (!entry.prs.some((p) => p.repo === pr.repo && p.number === pr.number)) entry.prs.push(pr)
     } else if (m.ev?.op === "github") {
+      if (onlyRunning(m.ev.items)) continue
       if (github) github.messages.push(m)
       else out.push((github = { kind: "github", messages: [m] }))
     } else out.push({ kind: "event", m })

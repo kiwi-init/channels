@@ -165,11 +165,12 @@ describe("GitHub webhooks into a channel's queue", () => {
 });
 
 describe("what's kept of an event", () => {
-  test("checks and workflow runs: name, status, conclusion, commit, branch", () => {
+  test("checks and workflow runs: name, status, conclusion, commit, branch, and which run (its id, and a workflow's attempt)", () => {
     const run = {
       action: "completed",
       repository: { full_name: "o/r" },
       check_run: {
+        id: 41,
         name: "ci-ok",
         status: "completed",
         conclusion: "failure",
@@ -184,6 +185,7 @@ describe("what's kept of an event", () => {
       repo: "o/r",
       at: 5,
       action: "completed",
+      run: 41,
       name: "ci-ok",
       url: "https://github.com/o/r/runs/1",
       status: "completed",
@@ -191,8 +193,15 @@ describe("what's kept of an event", () => {
       sha: "c".repeat(40),
       branch: "T37",
     });
-    const wf = { action: "completed", repository: { full_name: "o/r" }, workflow_run: { name: "CI", status: "completed", conclusion: "success", head_sha: "d".repeat(40), head_branch: "main" } };
-    expect(githubItem("workflow_run", wf, 6)).toMatchObject({ event: "workflow_run", name: "CI", conclusion: "success", branch: "main" });
+    const wf = {
+      action: "completed",
+      repository: { full_name: "o/r" },
+      workflow_run: { id: 77, run_attempt: 2, name: "CI", status: "completed", conclusion: "success", head_sha: "d".repeat(40), head_branch: "main" },
+    };
+    const item = githubItem("workflow_run", wf, 6);
+    expect(item).toMatchObject({ event: "workflow_run", name: "CI", conclusion: "success", branch: "main", run: 77, attempt: 2 });
+    expect(cleanGithubNote(item)).toMatchObject({ run: 77, attempt: 2 });
+    expect(cleanGithubNote({ ...item, run: -1 })).toBeNull();
     expect(githubItem("pull_request", { repository: { full_name: "not-a-repo" } }, 1)).toBeNull();
   });
 
