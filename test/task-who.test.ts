@@ -84,6 +84,28 @@ describe("who has a task's context", () => {
     expect(shown).toContain("bo · no context · 0 tasks ahead");
     expect(shown).toContain(`nobody free has its context: name someone, kiwi task assign T${next.seq} NAME`);
   });
+
+  test("a review round someone owes is a task ahead of them: with no context in play, a free agent ranks above one reviewing", async () => {
+    const work = await ev("jon", { op: "task.add", title: "Ana's change", owner: "ana", review: "bo" });
+    const started = await ev("ana", { op: "task.update", task: work.seq, state: "doing" });
+    const asked = await ev("ana", { op: "task.update", task: work.seq, state: "review", at: "abc123" });
+    const next = await ev("jon", { op: "task.add", title: "Nobody's been near this" });
+    const reviewing = fold([work, started, asked, next], roster);
+    expect(reviewing.tasks.get(work.seq)?.rounds.at(-1)?.result.kind).toBe("open");
+    const ranked = taskCandidates(reviewing, next.seq);
+    expect(ranked.map((c) => [c.name, c.queue])).toEqual([
+      ["cy", 0],
+      ["ana", 1],
+      ["bo", 1],
+    ]);
+    const approved = await ev("bo", { op: "task.update", task: work.seq, state: "done", verdict: "approved", round: 1 });
+    const done = fold([work, started, asked, next, approved], roster);
+    expect(taskCandidates(done, next.seq).map((c) => [c.name, c.queue])).toEqual([
+      ["ana", 0],
+      ["bo", 0],
+      ["cy", 0],
+    ]);
+  });
 });
 
 describe("--from on a live channel", () => {

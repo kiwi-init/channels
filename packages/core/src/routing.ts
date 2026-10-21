@@ -1,6 +1,6 @@
 import { MAX_AREAS, type TaskState } from "./protocol.ts";
 import { inlineText } from "./membership.ts";
-import { isPerson, taskId, type ChannelState, type Task } from "./state.ts";
+import { isPerson, openRound, taskId, type ChannelState, type Task } from "./state.ts";
 
 export interface Candidate {
   name: string;
@@ -30,6 +30,8 @@ function kin(state: ChannelState, t: Task): { task: Task; how: string; weight: n
 }
 
 const touched = (t: Task, name: string) => t.owner === name || t.workedBy.includes(name) || t.touched?.[name] !== undefined;
+
+const owesReview = (t: Task, name: string) => t.state === "review" && t.review === name && t.owner !== name && openRound(t) !== undefined;
 
 const AREA_DEPTH = 3;
 const RECENT_WORK = 10;
@@ -88,7 +90,7 @@ export function taskCandidates(state: ChannelState, id: number): Candidate[] {
       const warmHit = hits.some((h) => isWarm(h.task));
       const score = hits.reduce((n, h) => n + h.weight, 0) + (warmHit ? WARM : 0);
       const reasons = hits.map((h) => (isWarm(h.task) ? `${h.text} (this session)` : h.text));
-      const queue = [...state.tasks.values()].filter((x) => x.id !== t.id && x.owner === m.name && OPEN_STATES.has(x.state)).length;
+      const queue = [...state.tasks.values()].filter((x) => x.id !== t.id && ((x.owner === m.name && OPEN_STATES.has(x.state)) || owesReview(x, m.name))).length;
       return { name: m.name, score, queue, reasons, warm: warmHit };
     })
     .sort((a, b) => b.score - a.score || a.queue - b.queue || a.name.localeCompare(b.name));
