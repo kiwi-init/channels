@@ -10,6 +10,8 @@ export interface PermissionShown {
   background?: true;
   paths?: string[];
   content?: string;
+  replaced?: string;
+  replaceAll?: true;
   url?: string;
   mcp?: { server: string; tool: string; args: string[]; values?: string[] };
   cwd: string;
@@ -30,7 +32,11 @@ export type PermissionSettled = "terminal" | "timeout" | "ended";
 
 export const PERMISSION_CHOICES = ["A: Allow once", "B: Deny"] as const;
 
-export const permissionChoices = (x: unknown): boolean => JSON.stringify(x) === JSON.stringify(PERMISSION_CHOICES);
+export function permissionChoices(x: unknown): boolean {
+  if (!Array.isArray(x)) return false;
+  const given: readonly unknown[] = x;
+  return given.length === PERMISSION_CHOICES.length && PERMISSION_CHOICES.every((c, i) => given[i] === c);
+}
 
 const COMMAND_MAX = 2_000;
 const DESCRIPTION_MAX = 500;
@@ -46,14 +52,32 @@ const ASK_ID_MAX = 100;
 const NONCE_RE = /^[A-Za-z0-9_-]{8,64}$/;
 const CALL_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const SHOWN_URL = /^https?:\/\/\S+$/;
-const SHOWN_KEYS: ReadonlySet<string> = new Set(["tool", "command", "description", "sandbox", "background", "paths", "content", "url", "mcp", "cwd", "nonce", "expiresAt", "canAllow", "call"]);
+const SHOWN_KEYS: ReadonlySet<string> = new Set([
+  "tool",
+  "command",
+  "description",
+  "sandbox",
+  "background",
+  "paths",
+  "content",
+  "replaced",
+  "replaceAll",
+  "url",
+  "mcp",
+  "cwd",
+  "nonce",
+  "expiresAt",
+  "canAllow",
+  "call",
+]);
 const MCP_KEYS: ReadonlySet<string> = new Set(["server", "tool", "args", "values"]);
 const REPLY_KEYS: ReadonlySet<string> = new Set(["ask", "by", "of", "allow"]);
 const SIG_MAX = 200;
 const SETTLED: ReadonlySet<unknown> = new Set(["terminal", "timeout", "ended"]);
 const EDIT_TOOLS: ReadonlySet<string> = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 const PATH_FIELDS = ["file_path", "notebook_path"] as const;
-const ENV_FILE = /(?:^|[/\\])\.env(?:\.[^/\\]*)?$/;
+const ENV_FILE = /(?:^|[/\\])[^/\\]*\.env(?:\.[^/\\]*)?$/;
+const REPLACING: ReadonlySet<string> = new Set(["Edit", "MultiEdit"]);
 
 const UNSAFE_LINE = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/;
 const UNSAFE_TEXT = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/;
@@ -82,7 +106,7 @@ const FLAGGED: readonly RegExp[] = [
   /(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{2,}\.[A-Za-z0-9_-]*/,
   /-----BEGIN [A-Z0-9 ]*PRIVATE KEY/,
   /\bauthorization\s*[:=]/i,
-  /(?<![\w-])(?:x-api-key|api-key|apikey|private-token|x-auth-token|x-access-token|cookie|set-cookie)\s*:\s*\S/i,
+  /(?<![\w-])(?:[\w-]*-api-key|api-key|apikey|private-token|x-auth-token|x-access-token|cookie|set-cookie)\s*:\s*\S/i,
   /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/,
   /\bbearer\s+(?=[A-Za-z0-9._~+/=-]*\d)[A-Za-z0-9._~+/=-]{8,}/i,
   /(?<![\w-])--(?:password|passwd|pass|token|secret|api-?key|api_key|access-token|auth-token|client-secret)(?:=\S|\s+[^\s-])/i,
@@ -94,7 +118,13 @@ const FLAGGED: readonly RegExp[] = [
   /(?<![\w-])(?:docker|podman)\s+login(?![\w-])[^\n|;&]*\s-p\s*[^\s-]/,
   /(?<![\w-])redis-cli(?![\w-])[^\n|;&]*\s-a\s*[^\s-]/,
   /(?<![\w-])(?:-u|--user)(?:\s+|=)?["']?(?!\d+:\d+(?:["'\s]|$))[^\s"':]+:[^\s"']/,
-  /(?:>>?|(?<![\w-])tee(?:\s+-a)?)\s*["']?(?:[^\s"'|;&<>]*\/)?\.env(?:\.[\w-]+)*["']?(?![^\s;|&)])/,
+  /(?:>>?|(?<![\w-])tee(?:\s+-a)?)\s*["']?(?:[^\s"'|;&<>]*\/)?(?:[\w-][\w.-]*)?\.env(?:\.[\w-]+)*["']?(?![^\s;|&)])/,
+  /(?<![\w-])(?:[A-Z0-9_]*_)?(?:KEY|AUTH|CREDENTIALS?)\s*=(?!=)\s*["']?[^\s"']/,
+  /[?&](?:key|auth|sig|signature|x-amz-signature|x-amz-security-token|x-goog-signature)=[^&\s#"']/i,
+  /\bBasic\s+(?=[A-Za-z0-9+/]*[a-z])(?=[A-Za-z0-9+/]+[A-Z0-9+/])(?:[A-Za-z0-9+/]{4}){3,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?(?![\w+/=])/,
+  /(?<![\w-])gh\s+secret\s+set(?![\w-])[^\n|;&]*\s(?:--body|-b)(?:=|\s+)\S/,
+  /(?<![\w-])openssl(?![\w-])[^\n|;&]*\s(?:-k\s+\S|-(?:pass|passin|passout)\s+pass:)/,
+  /(?<![\w-])(?:echo|printf)\s[^\n|;&]*\|\s*sudo\s+(?:-[A-Za-z]+\s+)*-[A-Za-z]*S/,
 ];
 
 const SECRET_NAME = String.raw`[\w-]*(?:token(?!s|iz)|secret|password|passwd|passphrase|(?<![a-z0-9])pass(?![a-z])|api[_-]?key|private[_-]?key|database[_-]?url)[\w-]*`;
@@ -103,6 +133,7 @@ const KEYED = new RegExp(String.raw`(?:["']${SECRET_NAME}["']?|^[ \t]*${SECRET_N
 
 const RUN = /[A-Za-z0-9+/_-]{40,}/g;
 const RUN_SEPARATORS = /[+/_-]/;
+const FOLDER = /^[A-Za-z][a-z]+$/;
 const HEX = /^(?:0x)?[0-9a-fA-F]+$/;
 const DIGEST_LABEL = /(?:sha(?:1|224|256|384|512)|sha3-(?:224|256|384|512)|blake2[bs]?|md5|digest|integrity)\s*[:=-]\s*["']?$/i;
 const SRI = /^(?:sha(?:256|384|512)|sha3-(?:256|384|512)|blake2[bs]?)-/i;
@@ -138,7 +169,9 @@ function longRun(said: string): boolean {
   const summed = CHECKSUM_TOOL.test(said);
   for (const m of said.matchAll(RUN)) {
     if (DIGEST_LABEL.test(said.slice(Math.max(0, m.index - 24), m.index))) continue;
-    const runs = m[0].startsWith("/") ? m[0].split("/").filter((part) => part.length >= 40) : [m[0]];
+    const parts = m[0].split("/");
+    const path = m[0].startsWith("/") && parts.filter((part) => FOLDER.test(part)).length >= 2;
+    const runs = path ? parts.filter((part) => part.length >= 40) : [m[0]];
     for (const run of runs) {
       if (SRI.test(run)) continue;
       const pieces = run.split(RUN_SEPARATORS);
@@ -178,10 +211,16 @@ export function wellFormedPermission(x: unknown): x is PermissionShown {
     (x.background === undefined || x.background === true) &&
     (x.paths === undefined || (lines(x.paths, PATHS_MAX, PATH_MAX) && x.paths.length > 0)) &&
     (x.content === undefined || content(x.content)) &&
+    (x.replaced === undefined || content(x.replaced)) &&
+    (x.replaceAll === undefined || x.replaceAll === true) &&
     (x.url === undefined || (line(x.url, URL_MAX) && SHOWN_URL.test(x.url))) &&
     (x.mcp === undefined || wellFormedMcp(x.mcp)) &&
     (x.call === undefined || (typeof x.call === "string" && CALL_RE.test(x.call)));
-  const allSeen = x.sandbox === undefined && (x.paths === undefined || x.content !== undefined) && (x.mcp === undefined || (isRecord(x.mcp) && x.mcp.values !== undefined));
+  const allSeen =
+    x.sandbox === undefined &&
+    (x.paths === undefined || x.content !== undefined) &&
+    (typeof x.tool !== "string" || !REPLACING.has(x.tool) || x.replaced !== undefined) &&
+    (x.mcp === undefined || (isRecord(x.mcp) && x.mcp.values !== undefined));
   return shaped && (x.canAllow === false || allSeen);
 }
 
@@ -219,6 +258,21 @@ function writtenBy(tool: string, given: Record<string, unknown>): string | undef
   return written === undefined || typeof written === "string" ? written : null;
 }
 
+function replacedBy(tool: string, given: Record<string, unknown>): { replaced?: string; all: boolean } | null {
+  const edits = tool === "MultiEdit" ? given.edits : [given];
+  if (!REPLACING.has(tool) || edits === undefined) return { all: false };
+  if (!Array.isArray(edits)) return null;
+  const olds: string[] = [];
+  let all = false;
+  for (const e of edits) {
+    if (!isRecord(e) || (e.replace_all !== undefined && typeof e.replace_all !== "boolean")) return null;
+    if (e.old_string !== undefined && typeof e.old_string !== "string") return null;
+    if (typeof e.old_string === "string") olds.push(e.old_string);
+    all ||= e.replace_all === true;
+  }
+  return olds.length === edits.length ? { replaced: olds.join("\n\n"), all } : { all };
+}
+
 function editView(tool: string, given: Record<string, unknown>): View | null {
   const paths: string[] = [];
   for (const field of PATH_FIELDS) {
@@ -229,8 +283,17 @@ function editView(tool: string, given: Record<string, unknown>): View | null {
   }
   if (!paths.length || paths.some((p) => ENV_FILE.test(p))) return null;
   const written = writtenBy(tool, given);
-  if (written === null) return null;
-  return content(written) ? { paths, content: written, canAllow: true } : { paths, canAllow: false };
+  const swap = replacedBy(tool, given);
+  if (written === null || swap === null) return null;
+  const shownWritten = content(written);
+  const shownReplaced = content(swap.replaced);
+  return {
+    paths,
+    ...(shownWritten ? { content: written } : {}),
+    ...(shownReplaced ? { replaced: swap.replaced } : {}),
+    ...(swap.all ? { replaceAll: true as const } : {}),
+    canAllow: shownWritten && (shownReplaced || !REPLACING.has(tool)),
+  };
 }
 
 function fetchView(given: Record<string, unknown>): View | null {
@@ -287,7 +350,7 @@ function viewOf(tool: string, given: unknown, server: unknown): View | null {
 
 function shownTexts(p: PermissionShown): string[] {
   const mcp = p.mcp ? [p.mcp.server, p.mcp.tool, ...p.mcp.args, ...(p.mcp.values ?? [])] : [];
-  return [p.tool, p.command, p.description, p.content, p.url, ...mcp].filter((t): t is string => t !== undefined);
+  return [p.tool, p.command, p.description, p.content, p.replaced, p.url, ...mcp].filter((t): t is string => t !== undefined);
 }
 
 function revealsSecret(p: PermissionShown): boolean {
@@ -308,7 +371,7 @@ export function permissionReply(ask: Message, allow: boolean): PermissionReply |
   return ask.permission && ask.sig ? { ask: ask.id, by: ask.from, of: ask.sig, allow } : null;
 }
 
-export function permissionAnswer(ask: Message, reply: Message, state: ChannelState): "allow" | "deny" | null {
+export function permissionAnswer(ask: Message, reply: Message, state: Pick<ChannelState, "trust" | "members">): "allow" | "deny" | null {
   const shown = ask.permission;
   if (!shown || ask.esc !== true || state.trust.get(ask.seq) !== "verified") return null;
   const perm = reply.perm;
