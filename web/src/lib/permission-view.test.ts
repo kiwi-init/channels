@@ -59,7 +59,7 @@ describe("how a permission was settled", () => {
   } as Message
   const reply = (seq: number, from: string, over: Partial<Message>): Message => ({ seq, id: `r-${seq}`, from, to: ["atlas"], kind: "msg", body: "", ts: seq, re: [5], ...over }) as Message
   const state = (replies: Message[]) => ({ members, trust: new Map([[5, "verified"], ...replies.map((r) => [r.seq, "verified"] as const)]) }) as unknown as ChannelState
-  const settled = (replies: Message[]) => settledOf(ask, replies, state(replies))
+  const settled = (replies: Message[]) => settledOf(ask, replies, state(replies), new Map([ask, ...replies].map((m) => [m.seq, m])))
 
   test("only the signed answer counts: Allow from the agent's own person, Deny from them or the owner", () => {
     expect(settled([])).toBeNull()

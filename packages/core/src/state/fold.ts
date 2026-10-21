@@ -204,6 +204,7 @@ export function fold(
   const answered = new Map<number, Set<string>>(from?.answered.map(([seq, by]) => [seq, new Set(by)]));
   const settledBy = new Map<number, Set<string>>();
   const permReplies = new Map<number, Message[]>();
+  const permBySeq = new Map<number, Message>();
   const threadOf = new Map<number, number>(from?.threadOf);
   const threadPeople = new Map<number, Set<string>>(from?.threadPeople.map(([seq, people]) => [seq, new Set(people)]));
   let head = from?.n ?? 0;
@@ -345,6 +346,7 @@ export function fold(
           let replies = permReplies.get(r);
           if (!replies) permReplies.set(r, (replies = []));
           replies.push(m);
+          permBySeq.set(m.seq, m);
         }
         if (!m.settled) continue;
         let settlers = settledBy.get(r);
@@ -396,7 +398,8 @@ export function fold(
   const openAsks = [...(from?.asks ?? []), ...messages.filter((m) => m.seq > after)].filter((m) => {
     if (m.kind !== "ask" && m.kind !== "blocking") return false;
     if (ignored(trust.get(m.seq))) return false;
-    if (m.permission) return !(settledBy.get(m.seq)?.has(m.from) || now > m.permission.expiresAt || (permReplies.get(m.seq) ?? []).some((r) => permissionAnswer(m, r, { trust, members }) !== null));
+    if (m.permission)
+      return !(settledBy.get(m.seq)?.has(m.from) || now > m.permission.expiresAt || (permReplies.get(m.seq) ?? []).some((r) => permissionAnswer(m, r, { trust, members, bySeq: permBySeq }) !== null));
     const by = answered.get(m.seq);
     const answers = (n: string) => (m.esc ? !!m.to?.includes(n) : n !== m.from);
     return !by || ![...by].some(answers);

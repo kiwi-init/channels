@@ -196,7 +196,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   }, [messages])
   const chosen = useCallback((m: Message) => (m.choices?.length ? chosenOf(m, repliesTo.get(m.seq) ?? []) : undefined), [repliesTo])
   const composerAsks = useMemo(() => decisions.filter((m) => !m.permission), [decisions])
-  const permissionSettled = useCallback((m: Message) => (m.permission ? settledOf(m, repliesTo.get(m.seq) ?? [], state) : undefined), [repliesTo, state])
+  const permissionSettled = useCallback((m: Message) => (m.permission ? settledOf(m, repliesTo.get(m.seq) ?? [], state, bySeq) : undefined), [repliesTo, state, bySeq])
   const answer = useCallback(
     (m: Message, text: string): Promise<boolean> =>
       send(text, { to: [m.from], re: [m.seq], kind: "msg" }).then(
@@ -444,7 +444,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       onReply={async (m, text) => void (await send(text, { to: [m.from], re: [m.seq], kind: "msg" }))}
       permissionOf={(m) => ({ human: humanOf(state, m.from), owner: ownerOf(state) })}
       onPermission={async (m, allow) => {
-        const perm = permissionReply(m, allow)
+        const perm = permissionReply(m, allow, state)
         if (!perm) throw new Error("this one can only be answered in the terminal")
         await send(allow ? ALLOW_ONCE : DENY, { to: [m.from], re: [m.seq], kind: "msg", perm })
       }}
