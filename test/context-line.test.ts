@@ -27,8 +27,10 @@ describe("crossing the line", () => {
 });
 
 describe("the nudge", () => {
-  test("names the context, the line, each open task and the command for the first", () => {
-    const text = nudgeText({ used: 262_000 }, [7, 9], "kiwi --as ana");
+  test("names the context, the line, each open task and the command for the first, in one line that asks nothing of the turn", () => {
+    const text = nudgeText({ used: 262_000 }, [7, 9], "kiwi --as ana")!;
+    expect(text).not.toContain("\n");
+    expect(text).not.toContain("Before you end this turn");
     expect(text).toContain("Your context is at 262k tokens, past the 250k line.");
     expect(text).toContain("(T7, T9)");
     expect(text).toContain("`kiwi --as ana task checkpoint T7 --file note.md`");
@@ -41,20 +43,20 @@ describe("the nudge", () => {
 
   test("the lead is asked for its lead checkpoint, alone or after its open tasks", () => {
     const alone = nudgeText({ used: 300_000 }, [], "kiwi --as ana", true)!;
-    expect(alone).toContain(
-      "Your context is at 300k tokens, past the 250k line. Before you end this turn, write where the channel stands as you lead it with `kiwi --as ana task checkpoint lead --file note.md`",
+    expect(alone).toBe(
+      "Your context is at 300k tokens, past the 250k line. A fresh session of yours starts from your checkpoints, so now is a good time to write where the channel stands as you lead it, every open task and question by its id, with `kiwi --as ana task checkpoint lead --file note.md`.",
     );
     expect(alone).not.toContain("open tasks");
     const both = nudgeText({ used: 300_000 }, [7], "kiwi", true)!;
     expect(both).toContain("(T7) with `kiwi task checkpoint T7 --file note.md`");
-    expect(both).toContain("; and where the channel stands as you lead it with `kiwi task checkpoint lead --file note.md`");
+    expect(both).toContain("; and where the channel stands as you lead it, every open task and question by its id, with `kiwi task checkpoint lead --file note.md`");
     expect(both.indexOf("T7")).toBeLessThan(both.indexOf("checkpoint lead"));
   });
 
   test("the short nudge, for when the full one doesn't fit, still names every command and is far shorter", () => {
     expect(nudgeShort([], "kiwi")).toBeNull();
-    expect(nudgeShort([7, 9], "kiwi")).toBe("Past the 250k context line: before you end this turn, run `kiwi task checkpoint T7 --file note.md` for each open task.");
-    expect(nudgeShort([], "kiwi", true)).toBe("Past the 250k context line: before you end this turn, run `kiwi task checkpoint lead --file note.md`.");
+    expect(nudgeShort([7, 9], "kiwi")).toBe("Past the 250k context line: a fresh session starts from `kiwi task checkpoint T7 --file note.md` for each open task.");
+    expect(nudgeShort([], "kiwi", true)).toBe("Past the 250k context line: a fresh session starts from `kiwi task checkpoint lead --file note.md`.");
     const short = nudgeShort([7], "kiwi --as ana", true)!;
     expect(short).toContain("`kiwi --as ana task checkpoint T7 --file note.md` for each open task and `kiwi --as ana task checkpoint lead --file note.md`");
     expect(short.length * 2).toBeLessThan(nudgeText({ used: 300_000 }, [7], "kiwi --as ana", true)!.length);
