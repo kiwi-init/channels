@@ -936,6 +936,7 @@ test("kiwi hooks install adds a PermissionRequest hook that waits up to 30 minut
   setEnv({ CLAUDECODE: "1", AI_AGENT: "claude-code_2-1-296_agent" });
   installHooks();
   const s = JSON.parse(readFileSync(file, "utf8")) as HookFile;
+  expect((s.hooks.PermissionRequest as { matcher?: string }[]).map((e) => e.matcher)).toEqual(["Bash|Edit|Write|MultiEdit|NotebookEdit|WebFetch|mcp__.*"]);
   const permission = s.hooks.PermissionRequest!.flatMap((e) => e.hooks);
   expect(permission).toHaveLength(1);
   expect(permission[0]!.command.endsWith(" hook permission # kiwi")).toBe(true);

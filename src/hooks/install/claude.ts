@@ -7,6 +7,7 @@ import { EVENTS, hookCommand, isOurHook, isOurHookCommand, LISTEN, LISTEN_SECOND
 
 export const PERMISSION_EVENT = "PermissionRequest";
 export const PERMISSION_SECONDS = 1_800;
+export const PERMISSION_TOOLS = "Bash|Edit|Write|MultiEdit|NotebookEdit|WebFetch|mcp__.*";
 
 function settingsPath(): string {
   return join(process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude"), "settings.json");
@@ -41,7 +42,7 @@ export function installHooks(keepListen = false): string {
       ...(listen ? [{ hooks: [{ type: "command" as const, command: hookCommand(LISTEN), async: true, asyncRewake: true, timeout: LISTEN_SECONDS + 60 }] }] : []),
     ];
   }
-  s.hooks[PERMISSION_EVENT] = [...withoutOurs(s.hooks[PERMISSION_EVENT]), { hooks: [{ type: "command", command: hookCommand(PERMISSION), timeout: PERMISSION_SECONDS }] }];
+  s.hooks[PERMISSION_EVENT] = [...withoutOurs(s.hooks[PERMISSION_EVENT]), { matcher: PERMISSION_TOOLS, hooks: [{ type: "command", command: hookCommand(PERMISSION), timeout: PERMISSION_SECONDS }] }];
   writeSettings(s);
   return settingsPath();
 }
