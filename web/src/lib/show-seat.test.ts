@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from "bun:test"
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 
-import { showLabel, showNote, showSeat, type PlacedSeat } from "./terminals"
+import { showLabel, showNote, showSeat, type PlacedSeat } from "./show-seat"
 
 mock.module("@/lib/avatars", () => ({ avatarUrl: () => "robot.svg", robotUrl: () => "robot.svg", robotFor: () => "blue", harnessUrl: (h: string) => `/harness/${h}.svg` }))
 const { ShowSeat } = await import("@/components/needs-you")

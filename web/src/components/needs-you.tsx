@@ -8,7 +8,7 @@ import { HANDOFF_DONE, HANDOFF_FAILED, type Message } from "@kiwi/core/protocol.
 import { TOO_MANY_REQUESTS } from "@kiwi/core/sas.ts"
 import { taskId, type Task } from "@kiwi/core/state.ts"
 import { usePinned } from "@/lib/pinned"
-import { showLabel, showNote, showSeat, useSeatPlaces, type PlacedSeat } from "@/lib/terminals"
+import { showLabel, showNote, showSeat, useSeatPlaces, type PlacedSeat } from "@/lib/show-seat"
 import { cx } from "@/lib/utils"
 import { askLabel, permissionAsks } from "@/lib/asks"
 import { excerpt, formatAgo } from "@/lib/format"

@@ -5,7 +5,7 @@ import { useState } from "react"
 
 import { formatAgo, formatTime } from "@/lib/format"
 import { permissionCode, permissionNotes, permissionTitle, visibleText } from "@/lib/permission-view"
-import type { PlacedSeat } from "@/lib/terminals"
+import type { PlacedSeat } from "@/lib/show-seat"
 import { Button, Monogram, errorText, toast } from "./kit"
 import { Row, ShowSeat } from "./needs-you"
 
