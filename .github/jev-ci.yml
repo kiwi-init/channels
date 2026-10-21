@@ -614,9 +614,13 @@ jobs:
       nobody. The transcript watcher finds the newest unanswered matching tool_use and sees its
       tool_result, a new prompt or a new assistant turn. test/permission-session.test.ts: one
       hook waits per session and a later prompt marks it as overtaken; a lock file still being
-      written counts as held, a stale one doesn't; the folder shown starts with ~. An answer the
-      fold doesn't have yet is read again a bounded number of times and decided only on the fold's
-      copy (test/permission-hook.test.ts). Fails if any of that breaks.
+      written counts as held, a stale one doesn't; letting go leaves another hook's lock and its
+      newer-prompt mark alone; the folder shown starts with ~. An answer the fold doesn't have yet
+      is read again a bounded number of times and decided only on the fold's copy
+      (test/permission-hook.test.ts), and the hook's own wait reads it that way
+      (test/permission-ask.test.ts, askPermission on a fake session whose fold lags the frame);
+      a newer prompt that starts while the wait winds down gets nothing printed for the old one,
+      since the last check runs after the wait has closed. Fails if any of that breaks.
 
   test-flows-a:
     name: test / flows-a
