@@ -127,7 +127,10 @@ verb `launch`:
 | Claude Code | `claude "PROMPT"` | v1 |
 | Codex | `codex "PROMPT"` | v1 |
 | Gemini | `gemini -i "PROMPT"` | probe |
-| OpenCode, Grok, Kimi Code, Cursor, Pi, MiMoCode | each harness's own flag, if any | probe, one row each |
+| Grok | `grok "PROMPT"` | probed ([per-task-sessions.md](per-task-sessions.md)) |
+| MiMoCode | `mimo --prompt "PROMPT"` | probed |
+| Kimi Code | none: typed into its box, or a prompt sent to `kimi web` | probed |
+| OpenCode, Cursor, Pi | each harness's own flag, if any | probe, one row each |
 
 A harness with no way to take a first prompt gets one typed into its box once it's idle, the way
 rotation types `/clear`, in tmux and Rex only.
@@ -202,7 +205,8 @@ All taken as proposed, 2026-10-20.
 
 
 1. **Kiwi starts agents.** This reverses the rule in `docs/agents.md:57` for one case: a launch the
-   owner asked for. Waking, rotation and restarts still never start a process.
+   owner asked for. Waking, rotation and restarts still never start a process. Changed 2026-10-21:
+   a seat's loop starts a fresh session per task ([per-task-sessions.md](per-task-sessions.md)).
 2. **Folder.** The modal needs one, and it wasn't in the ask. Proposed: a list of the folders this
    channel's agents already work in on that machine, read from the seats in its config, plus
    "Choose…" (this computer) or a typed path (others). The default is the folder used most
