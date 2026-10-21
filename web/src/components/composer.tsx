@@ -457,6 +457,8 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
                 aria-pressed={dictation.phase === "listening"}
                 title={dictation.phase === "downloading" ? `${PRESS_LABEL.downloading}, ${Math.round(dictation.progress * 100)}%` : PRESS_LABEL[dictation.phase]}
                 onClick={() => void dictation.press()}
+                onPointerEnter={dictation.warm}
+                onFocus={dictation.warm}
                 disabled={disabled || dictation.phase === "downloading" || dictation.phase === "transcribing"}
                 className={cx(
                   "my-1.5 ml-1.5 flex size-9 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-40",
