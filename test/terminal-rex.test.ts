@@ -4,14 +4,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { fold, type ChannelState, type Roster } from "@kiwi/core/state.ts";
-import { aliasSegment, askId, clearFrame, placeFrom, reviewId, rexActivity, rexInstance, rexProcess, rexScreen, statusFrame, takesStatus } from "../src/rex.ts";
-import { installPalette, paletteInstalled, removePalette, rexConfigPath } from "../src/rex-palette.ts";
-import { localRexSeats, showInRex } from "../src/rex-show.ts";
+import { rexActivity, rexInstance, rexProcess, rexScreen } from "../src/terminals/rex/api.ts";
+import { installPalette, paletteInstalled, removePalette, rexConfigPath } from "../src/terminals/rex/helpers.ts";
+import { placeFrom } from "../src/terminals/rex/locate.ts";
+import { localRexSeats, showInRex } from "../src/terminals/rex/show.ts";
+import { aliasSegment, askId, clearFrame, reviewId, statusFrame, takesStatus } from "../src/terminals/shared/osc7501.ts";
 import { foldStillFresh, seatRecords } from "../src/status.ts";
-import { startRexEvents } from "../src/rex-events.ts";
+import { startRexEvents } from "../src/terminals/rex/watch.ts";
 import { readsRex } from "../src/daemon/reach.ts";
 import { readRexInto, type RexReadSeat } from "../src/daemon/rex-reads.ts";
-import type { RexActivity } from "../src/rex.ts";
+import type { RexActivity } from "../src/terminals/plugin.ts";
+import { terminalPlugin } from "../src/terminals/registry.ts";
 import type { SeatRecord } from "../src/config.ts";
 
 const roster: Roster = [
@@ -407,5 +410,37 @@ esac
     expect(showInRex(place, bin)).toEqual({ ok: false, why: "no-server" });
     expect(showInRex(place, null)).toEqual({ ok: false, why: "no-rex" });
     rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("Rex as a terminal plugin", () => {
+  const place = { server: "studio", session: "session:01a15963-bacc-7426-91e9-4d98757dcd0c", block: "block:11a15963-bacc-7426-91e9-4d98757dcd0c" };
+
+  test("its pane types into the block, presses Enter and erases there, and reads the screen", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-rex-pane-"));
+    const bin = join(dir, "rex");
+    const log = join(dir, "calls");
+    writeFileSync(bin, `#!/bin/sh\nprintf '%s\\n' "$*" >> '${log}'\ncase "$*" in\n  *terminal.format*) echo '{"content":"the screen"}' ;;\nesac\n`);
+    chmodSync(bin, 0o755);
+    const rex = await terminalPlugin("rex", { platform: "darwin", shell: "/bin/zsh", rex: bin, tmux: null, osascript: null });
+    const pane = rex.type?.({ rex: place });
+    expect(pane?.type("/clear")).toBe(true);
+    expect(pane?.enter()).toBe(true);
+    expect(pane?.erase(2)).toBe(true);
+    expect(pane?.screen()).toBe("the screen");
+    const target = `-s ${place.session} -b ${place.block}`;
+    expect(readFileSync(log, "utf8").trim().split("\n").slice(0, 3)).toEqual([
+      `-S studio send ${target} /clear`,
+      `-S studio send-key ${target} enter`,
+      `-S studio send-key ${target} backspace backspace`,
+    ]);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("a seat outside Rex gets no pane, no activity, and nothing to show", async () => {
+    const rex = await terminalPlugin("rex", { platform: "darwin", shell: "/bin/zsh", rex: "/nonexistent/rex", tmux: null, osascript: null });
+    expect(rex.type?.({ term: { program: "ghostty" } })).toBeNull();
+    expect(await rex.activity?.({})).toBeNull();
+    expect(await rex.show?.({})).toEqual({ ok: false, why: "failed" });
   });
 });

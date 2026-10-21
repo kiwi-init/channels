@@ -1,105 +1,12 @@
-import { existsSync, readdirSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
-import { listIn, nested, object, parseJson } from "./terminals/shared/json.ts";
-import { run, runNow } from "./terminals/shared/run.ts";
-
-type Env = Record<string, string | undefined>;
-
-export interface TerminalPlace {
-  program: string;
-  version?: string;
-}
-
-export interface RexPlace {
-  server: string;
-  session: string;
-  block: string;
-}
-
-export interface SeatPlace {
-  term?: TerminalPlace;
-  rex?: RexPlace;
-}
-
-const PROGRAM = /^[A-Za-z][A-Za-z0-9+._-]{0,31}$/;
-const VERSION = /^[\x21-\x7e]{1,64}$/;
-const SERVER = /^[\x21-\x7e]{1,512}$/;
-export const REX_SESSION = /^session:[0-9a-f-]{36}$/;
-export const REX_BLOCK = /^block:[0-9a-f-]{36}$/;
-
-export function placeFrom(env: Env): SeatPlace {
-  if (env.TMUX) return {};
-  const program = env.TERM_PROGRAM?.trim();
-  const version = env.TERM_PROGRAM_VERSION?.trim();
-  const term = program && PROGRAM.test(program) ? { program, ...(version && VERSION.test(version) ? { version } : {}) } : undefined;
-  const server = env.REX_SERVER?.trim();
-  const session = env.REX_SESSION?.trim();
-  const block = env.REX_BLOCK?.trim();
-  const rex = program === "rex" && server && SERVER.test(server) && session && REX_SESSION.test(session) && block && REX_BLOCK.test(block) ? { server, session, block } : undefined;
-  return { ...(term ? { term } : {}), ...(rex ? { rex } : {}) };
-}
-
-const STATUS_PROGRAMS = new Set(["rex"]);
-
-export function takesStatus(term: TerminalPlace | undefined): boolean {
-  return !!term && STATUS_PROGRAMS.has(term.program.toLowerCase());
-}
-
-export function aliasSegment(alias: string): string {
-  return alias.replace(/[^A-Za-z0-9_.+-]/g, "").slice(0, 32) || "ch";
-}
-
-export function askId(alias: string): string {
-  return `kiwi/${aliasSegment(alias)}/ask`;
-}
-
-export function reviewId(alias: string, task: number): string {
-  return `kiwi/${aliasSegment(alias)}/T${task}`;
-}
-
-type StatusState = "blocked" | "done";
-
-export interface StatusRecord {
-  id: string;
-  state: StatusState;
-  kind?: "question";
-  msg: string;
-}
-
-const b64 = (text: string): string => Buffer.from(text, "utf8").toString("base64");
-const OSC = "\x1b]7501;";
-const ST = "\x1b\\";
-
-export function statusFrame(record: StatusRecord): string {
-  const fields = [`state=${record.state}`, ...(record.kind ? [`kind=${record.kind}`] : []), "app=kiwi", `id=${record.id}`, `title=${b64("Kiwi")}`, `msg=${b64(record.msg)}`];
-  return `${OSC}${fields.join(":")}${ST}`;
-}
-
-export function clearFrame(id: string): string {
-  return `${OSC}state=clear:app=kiwi:id=${id}${ST}`;
-}
+import type { RexActivity, RexPlace } from "../plugin.ts";
+import { listIn, nested, object, parseJson } from "../shared/json.ts";
+import { run, runNow } from "../shared/run.ts";
+import { rexBinary } from "./locate.ts";
 
 export interface RexStatus {
   found: boolean;
   version?: string;
   server: "running" | "stopped";
-}
-
-const MAC_REX = join(homedir(), "Library", "Application Support", "com.superlogical.rex", "RexServer", "Versions");
-
-function macBinary(): string | null {
-  if (process.platform !== "darwin" || !existsSync(MAC_REX)) return null;
-  const versions = readdirSync(MAC_REX).sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
-  for (const v of versions) {
-    const bin = join(MAC_REX, v, "Rex Server.app", "Contents", "MacOS", "rex");
-    if (existsSync(bin)) return bin;
-  }
-  return null;
-}
-
-export function rexBinary(): string | null {
-  return Bun.which("rex") ?? macBinary();
 }
 
 const WHOAMI = ["--autostart=false", "whoami", "--json"];
@@ -168,11 +75,6 @@ export function rexProcess(place: RexPlace, bin: string | null = rexBinary()): R
     return Number.isInteger(n) && n > 0 ? n : null;
   };
   return got === null ? null : { foreground: pid(fg), child: pid(child) };
-}
-
-export interface RexActivity {
-  state: "working" | "waiting" | "idle";
-  tool?: string;
 }
 
 export async function rexActivity(place: RexPlace, bin: string | null = rexBinary(), timeout = 5_000): Promise<RexActivity | null> {

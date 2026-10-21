@@ -1,4 +1,5 @@
-import type { Config, SeatRecord } from "../config.ts";
+import { allSeats, type Config, type SeatRecord } from "../config.ts";
+import { helpersOn } from "../terminals/registry.ts";
 import type { Activity, Reach } from "@kiwi/core/protocol.ts";
 import { pidAlive } from "../seats.ts";
 import { wakeKey } from "@kiwi/core/wake.ts";
@@ -19,8 +20,7 @@ const HARNESS_ENV = [
 ] as const;
 
 export function seatRecordFor(cfg: Config, alias: string, agent: string): SeatRecord | null {
-  const records = Object.values(cfg.bindings ?? {}).flatMap((v) => (Array.isArray(v) ? v : [v]));
-  const mine = records.filter((r) => r.alias === alias && r.as === agent);
+  const mine = allSeats(cfg).filter((r) => r.alias === alias && r.as === agent);
   const when = (r: SeatRecord): number => r.seen ?? r.at ?? 0;
   return mine.reduce<SeatRecord | null>((best, r) => (!best || when(r) > when(best) ? r : best), null);
 }
@@ -54,7 +54,7 @@ export type Attached = "listener" | "session" | "none";
 const FILE_FIRST: ReadonlySet<string> = new Set(["claude", "codex", "opencode"]);
 
 export function readsRex(cfg: Pick<Config, "rex">, record: SeatRecord | null): record is SeatRecord & { rex: NonNullable<SeatRecord["rex"]> } {
-  return cfg.rex === "on" && !!record?.rex && !FILE_FIRST.has(record.harness ?? "");
+  return helpersOn("rex", cfg) && !!record?.rex && !FILE_FIRST.has(record.harness ?? "");
 }
 
 export function reachOf(attached: Attached, record: SeatRecord | null, activity: Activity | undefined, alive: (pid: number) => boolean = pidAlive): Reach {

@@ -1,7 +1,10 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { rexBinary } from "./rex.ts";
+import { runNow } from "../shared/run.ts";
+import { rexStatus } from "./api.ts";
+import { rexBinary } from "./locate.ts";
+import { clearMarks } from "./mark.ts";
 
 const REQUIRE = 'require("kiwi")';
 const MARK = "-- Kiwi: go to the seat that needs me";
@@ -133,4 +136,21 @@ export function removePalette(init = rexConfigPath()): boolean {
     }
   }
   return changed;
+}
+
+function reload(): void {
+  const bin = rexBinary();
+  if (!bin || rexStatus().server !== "running") return;
+  runNow([bin, "config", "reload"], 5_000);
+}
+
+export async function downloadHelpers(): Promise<void> {
+  installPalette();
+  reload();
+}
+
+export async function removeHelpers(): Promise<void> {
+  removePalette();
+  await clearMarks();
+  reload();
 }

@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { rexBinary } from "./rex.ts";
-import { object } from "./terminals/shared/json.ts";
+import { object } from "../shared/json.ts";
+import { rexBinary } from "./locate.ts";
 
 export interface RexServer {
   server: string;

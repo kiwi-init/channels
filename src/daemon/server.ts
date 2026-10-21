@@ -12,7 +12,8 @@ import { ensureMachine, loadPairedMachine, PairError, type PairedMachine, type P
 import { DAEMON_PROTOCOL, daemonSock, readListener, type DaemonEvent, type DaemonRead, type DaemonSeat, type DaemonVerb } from "./protocol.ts";
 import { activityEnv, reachOf, readsRex, seatRecordFor, wakeOn, type Attached } from "./reach.ts";
 import { readRexInto } from "./rex-reads.ts";
-import type { RexActivity, RexPlace } from "../rex.ts";
+import type { RexActivity, RexPlace, SeatPlace, TerminalPlugin } from "../terminals/plugin.ts";
+import { helpersOn, terminalPlugin } from "../terminals/registry.ts";
 import { pruneHookFiles } from "../hooks/delivered.ts";
 import { seatFolders } from "../launch/folders.ts";
 import { harnessInventory } from "../launch/harnesses.ts";
@@ -173,7 +174,9 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
 
   const current = (seat: Seat): boolean => !stopped && seats.get(seat.key) === seat;
 
-  const readRex = async (place: RexPlace): Promise<RexActivity | null> => (await import("../rex.ts")).rexActivity(place);
+  let rexPlugin: Promise<TerminalPlugin> | null = null;
+  const rex = (): Promise<TerminalPlugin> => (rexPlugin ??= terminalPlugin("rex"));
+  const readRex = async (place: RexPlace): Promise<RexActivity | null> => (await rex()).activity?.({ rex: place }) ?? null;
 
   const { scheduleWake } = seatWakes({
     dir,
@@ -775,7 +778,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     run: remoteRunner({ inventory: () => harnessInventory(), folders: (room) => seatFolders(loadConfig(), room), launch: (req) => launchAgent(req), starts: join(dir, "remote-launches.json") }),
   });
   let rexWatch: { stop(): void } | null = null;
-  const rexSeat = (server: string, block: string, gone: boolean): void => {
+  const rexSeat = (match: (place: SeatPlace) => boolean, gone: boolean): void => {
     let cfg: Config;
     try {
       cfg = loadConfig();
@@ -784,7 +787,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
     }
     for (const seat of seats.values()) {
       const record = seatRecordFor(cfg, seat.alias, seat.agent);
-      if (!record?.rex || record.rex.server !== server || record.rex.block !== block) continue;
+      if (!record?.rex || !match(record)) continue;
       seat.rexGone = gone;
       void refreshActivity(seat, true).catch(() => {});
     }
@@ -792,7 +795,7 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
   const watchStatus = async (): Promise<void> => {
     const on = ((): boolean => {
       try {
-        return loadConfig().rex === "on";
+        return helpersOn("rex", loadConfig());
       } catch {
         return false;
       }
@@ -813,19 +816,16 @@ export async function startDaemon(dir = home(), opts: DaemonOptions = {}): Promi
       statusWatch = null;
     }
     if (on && !rexWatch) {
-      const { startRexEvents, rexServers } = await import("../rex-events.ts");
+      const plugin = await rex();
       if (stopped) return;
-      rexWatch = startRexEvents({
-        servers: () => {
+      rexWatch =
+        plugin.watch?.(() => {
           const cfg = loadConfig();
-          const records = [...seats.values()].flatMap((seat) => {
+          return [...seats.values()].flatMap((seat) => {
             const record = seatRecordFor(cfg, seat.alias, seat.agent);
-            return record?.rex ? [record.rex] : [];
+            return record?.rex ? [record] : [];
           });
-          return rexServers(records);
-        },
-        onChange: rexSeat,
-      });
+        }, rexSeat) ?? null;
     } else if (!on && rexWatch) {
       rexWatch.stop();
       rexWatch = null;
