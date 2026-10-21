@@ -842,3 +842,25 @@ describe("one message per seq (T1725)", () => {
     expect(s.trust.get(plain.seq)).toBe("verified");
   });
 });
+
+describe("secret filter follow-ups (T1923)", () => {
+  const flagged: [string, string][] = [
+    ["a YAML list item", "users:\n  - password: hunter2"],
+    ["a YAML flow map", "db: {user: ana, password: hunter2}"],
+    ["a flow map's first key", "{token: abc123def456}"],
+    ["a typed field with a default", 'password: str = "hunter2"'],
+    ["a short redis key", "REDIS_KEY=hunter2 ./cache.sh"],
+    ["a short hash key", "HASH_KEY=mysecret ./sign.sh"],
+    ["a long random S3 key", `S3_KEY=${RANDOM} ./upload.sh`],
+  ];
+  const clean: [string, string][] = [
+    ["an S3 object path", 's3_key = "uploads/avatar.png"'],
+    ["an object key from an f-string", 'object_key = f"users/{uid}/avatar.png"'],
+    ["a TS type", "type Login = { user: string; password: string }"],
+    ["a TS interface line", "  password: string;"],
+    ["a Python signature", "def login(user: str, password: str) -> bool:"],
+    ["a TS arrow signature", "const login = (user: string, password: string | null) => user"],
+  ];
+  for (const [name, said] of flagged) test(`flagged: ${name}`, () => expect([looksSecret(said, true), looksSecret(said)]).toEqual([true, true]));
+  for (const [name, said] of clean) test(`not flagged as content: ${name}`, () => expect(looksSecret(said)).toBe(false));
+});
