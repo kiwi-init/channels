@@ -94,52 +94,54 @@ const total = (xs: readonly string[]) => xs.reduce((n, x) => n + x.length, 0);
 
 const SHELL_END = String.raw`(?=[\s;&|)]|$)`;
 const TEXT_END = String.raw`[^\S\n]*(?:[,;)}\]](?![^\s,;)}\]"':.[])|(?<=\s)#|(?=\n|$))`;
-const SWITCHES = ["true", "false", "yes", "no", "on", "off", "none", "null", "nil", "0", "1"].flatMap((w) => [w, w.charAt(0).toUpperCase() + w.slice(1), w.toUpperCase()]);
-const SWITCH = String.raw`(?:"(?:${SWITCHES.join("|")})"|'(?:${SWITCHES.join("|")})'|(?:${SWITCHES.join("|")}))`;
+const SWITCH_WORDS = ["true", "false", "yes", "no", "on", "off", "none", "null", "nil", "0", "1"];
+const switchOf = (words: string): string => String.raw`(?:"(?:${words})"|'(?:${words})'|(?:${words}))`;
 const PLAIN_KEYS = "sort|primary|partition|cache|foreign|range|row|unique|composite|public|routing|idempotency|s3|object";
 const TYPE_VALUE = String.raw`(?:string|number|boolean|str|bytes|int|bool)[^\S\n]*(?:[,;)}\]|]|$)`;
 const SUDO_STDIN = String.raw`sudo(?:\s+(?:-[A-Za-z]*[CDghpRrTtUu]\s+[^\s-]\S*|--?[A-Za-z][\w-]*(?:=\S*)?))*?\s+(?:-[A-Za-z]*S|--stdin(?![\w-]))`;
 const SECRET_NAME = String.raw`[\w-]*(?:token(?!s|iz)|secret|password|passwd|passphrase|(?<![a-z0-9])pass(?![a-z])|api[_-]?key|private[_-]?key|database[_-]?url)[\w-]*`;
 
-const FLAGGED: readonly RegExp[] = [
-  /(?<![A-Za-z0-9])(?:gh[oprsu]_[A-Za-z0-9]{16,}|github_pat_[A-Za-z0-9_]{16,})/,
-  /(?<![A-Za-z0-9_-])sk-[A-Za-z0-9_-]{20,}/,
-  /(?<![A-Za-z0-9])(?:[sr]k_(?:live|test)_[A-Za-z0-9]{10,}|whsec_[A-Za-z0-9]{20,})/,
-  /(?<![A-Za-z0-9])xox[abprs]-[A-Za-z0-9-]{8,}/,
-  /(?<![A-Za-z0-9])(?:AKIA|ASIA)[0-9A-Z]{16}(?![A-Za-z0-9])/,
-  /(?<![A-Za-z0-9])AIza[0-9A-Za-z_-]{35}/,
-  /(?<![A-Za-z0-9])glpat-[0-9A-Za-z_-]{16,}/,
-  /(?<![A-Za-z0-9])(?:npm_[A-Za-z0-9]{30,}|hf_[A-Za-z0-9]{30,}|pypi-AgE[A-Za-z0-9_-]{20,}|ya29\.[A-Za-z0-9_-]{20,})/,
-  /(?<!\d)\d{6,12}:[A-Za-z0-9_-]{30,}/,
-  /hooks\.slack\.com\/(?:services|workflows|triggers)\/|discord(?:app)?\.com\/api\/webhooks\//i,
-  /(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{2,}\.[A-Za-z0-9_-]*/,
-  /-----BEGIN [A-Z0-9 ]*PRIVATE KEY/,
-  /\bauthorization\s*[:=]/i,
-  /(?<![\w-])(?:[\w-]*-api-key|api-key|apikey|private-token|x-auth-token|x-access-token|cookie|set-cookie)\s*:\s*\S/i,
-  /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/,
-  /\bbearer\s+(?=[A-Za-z0-9._~+/=-]*\d)[A-Za-z0-9._~+/=-]{8,}/i,
-  /(?<![\w-])--(?:password|passwd|pass|token|secret|api-?key|api_key|access-token|auth-token|client-secret)(?:=\S|\s+[^\s-])/i,
-  /(?<![\w-])kubectl(?![\w-])(?=[^\n|;&]*\bsecret\b)[^\n|;&]*?--from-literal[=\s]/,
-  /(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*:\/\/[^\s/?#@:]*:[^\s/?#@]+@/i,
-  /(?<![a-z0-9+.-])https?:\/\/[^\s/?#@]+@/i,
-  /(?<![\w-])(?:mysql[a-z]*|mariadb(?:-[a-z]+)?)(?![\w-])[^\n|;&]*\s-p[^\s]/,
-  /(?<![\w-])sshpass(?:\s+-[^p\s]\S*)*\s+-p\s*[^\s-]/,
-  /(?<![\w-])(?:docker|podman)\s+login(?![\w-])[^\n|;&]*\s-p\s*[^\s-]/,
-  /(?<![\w-])redis-cli(?![\w-])[^\n|;&]*\s-a\s*[^\s-]/,
-  /(?<![\w-])(?:-u|--user)(?:\s+|=)?["']?(?!\d+:\d+(?:["'\s]|$))[^\s"':]+:[^\s"']/,
-  /(?:>>?|(?<![\w-])tee(?:\s+-a)?)\s*["']?(?:[^\s"'|;&<>]*\/)?(?:[\w-][\w.-]*)?\.env(?:\.[\w-]+)*["']?(?![^\s;|&)])/,
-  /[?&](?:(?:key|auth|sig|signature|x-amz-signature|x-amz-security-token|x-goog-signature)=|(?:access_?key|code)=(?=[^&\s#"']*\d|[^&\s#"']{20}))[^&\s#"']/i,
-  /\bBasic\s+(?=[A-Za-z0-9+/]*[a-z])(?=[A-Za-z0-9+/]+[A-Z0-9+/])(?:[A-Za-z0-9+/]{4}){3,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?(?![\w+/=])/,
-  /(?<![\w-])gh\s+secret\s+set(?![\w-])[^\n|;&]*\s(?:--body|-b)(?:=|\s+)\S/,
-  /(?<![\w-])openssl(?![\w-])[^\n|;&]*\s(?:-k\s+\S|-(?:pass|passin|passout)\s+pass:)/,
-  new RegExp(String.raw`(?<![\w-])(?:echo|printf)\s[^\n|;&]*\|\s*${SUDO_STDIN}`),
-  new RegExp(String.raw`(?<![\w-])${SUDO_STDIN}[^\n|;&]*<<<\s*["']?[^\s"']`),
-  new RegExp(String.raw`(?:["']${SECRET_NAME}["']|^[ \t]*(?:-[ \t]+)?${SECRET_NAME}|[{,][ \t]*${SECRET_NAME})\s*:\s*(?!${SWITCH}${TEXT_END})(?!${TYPE_VALUE})["']?[^\s"']`, "im"),
-  new RegExp(String.raw`["']${SECRET_NAME}\s*:\s*(?!${SWITCH}["'])["']?[^\s"']`, "i"),
-];
+function flagged(switched: string): readonly RegExp[] {
+  return [
+    /(?<![A-Za-z0-9])(?:gh[oprsu]_[A-Za-z0-9]{16,}|github_pat_[A-Za-z0-9_]{16,})/,
+    /(?<![A-Za-z0-9_-])sk-[A-Za-z0-9_-]{20,}/,
+    /(?<![A-Za-z0-9])(?:[sr]k_(?:live|test)_[A-Za-z0-9]{10,}|whsec_[A-Za-z0-9]{20,})/,
+    /(?<![A-Za-z0-9])xox[abprs]-[A-Za-z0-9-]{8,}/,
+    /(?<![A-Za-z0-9])(?:AKIA|ASIA)[0-9A-Z]{16}(?![A-Za-z0-9])/,
+    /(?<![A-Za-z0-9])AIza[0-9A-Za-z_-]{35}/,
+    /(?<![A-Za-z0-9])glpat-[0-9A-Za-z_-]{16,}/,
+    /(?<![A-Za-z0-9])(?:npm_[A-Za-z0-9]{30,}|hf_[A-Za-z0-9]{30,}|pypi-AgE[A-Za-z0-9_-]{20,}|ya29\.[A-Za-z0-9_-]{20,})/,
+    /(?<!\d)\d{6,12}:[A-Za-z0-9_-]{30,}/,
+    /hooks\.slack\.com\/(?:services|workflows|triggers)\/|discord(?:app)?\.com\/api\/webhooks\//i,
+    /(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{2,}\.[A-Za-z0-9_-]*/,
+    /-----BEGIN [A-Z0-9 ]*PRIVATE KEY/,
+    /\bauthorization\s*[:=]/i,
+    /(?<![\w-])(?:[\w-]*-api-key|api-key|apikey|private-token|x-auth-token|x-access-token|cookie|set-cookie)\s*:\s*\S/i,
+    /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/,
+    /\bbearer\s+(?=[A-Za-z0-9._~+/=-]*\d)[A-Za-z0-9._~+/=-]{8,}/i,
+    /(?<![\w-])--(?:password|passwd|pass|token|secret|api-?key|api_key|access-token|auth-token|client-secret)(?:=\S|\s+[^\s-])/i,
+    /(?<![\w-])kubectl(?![\w-])(?=[^\n|;&]*\bsecret\b)[^\n|;&]*?--from-literal[=\s]/,
+    /(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*:\/\/[^\s/?#@:]*:[^\s/?#@]+@/i,
+    /(?<![a-z0-9+.-])https?:\/\/[^\s/?#@]+@/i,
+    /(?<![\w-])(?:mysql[a-z]*|mariadb(?:-[a-z]+)?)(?![\w-])[^\n|;&]*\s-p[^\s]/,
+    /(?<![\w-])sshpass(?:\s+-[^p\s]\S*)*\s+-p\s*[^\s-]/,
+    /(?<![\w-])(?:docker|podman)\s+login(?![\w-])[^\n|;&]*\s-p\s*[^\s-]/,
+    /(?<![\w-])redis-cli(?![\w-])[^\n|;&]*\s-a\s*[^\s-]/,
+    /(?<![\w-])(?:-u|--user)(?:\s+|=)?["']?(?!\d+:\d+(?:["'\s]|$))[^\s"':]+:[^\s"']/,
+    /(?:>>?|(?<![\w-])tee(?:\s+-a)?)\s*["']?(?:[^\s"'|;&<>]*\/)?(?:[\w-][\w.-]*)?\.env(?:\.[\w-]+)*["']?(?![^\s;|&)])/,
+    /[?&](?:(?:key|auth|sig|signature|x-amz-signature|x-amz-security-token|x-goog-signature)=|(?:access_?key|code)=(?=[^&\s#"']*\d|[^&\s#"']{20}))[^&\s#"']/i,
+    /\bBasic\s+(?=[A-Za-z0-9+/]*[a-z])(?=[A-Za-z0-9+/]+[A-Z0-9+/])(?:[A-Za-z0-9+/]{4}){3,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?(?![\w+/=])/,
+    /(?<![\w-])gh\s+secret\s+set(?![\w-])[^\n|;&]*\s(?:--body|-b)(?:=|\s+)\S/,
+    /(?<![\w-])openssl(?![\w-])[^\n|;&]*\s(?:-k\s+\S|-(?:pass|passin|passout)\s+pass:)/,
+    new RegExp(String.raw`(?<![\w-])(?:echo|printf)\s[^\n|;&]*\|\s*${SUDO_STDIN}`),
+    new RegExp(String.raw`(?<![\w-])${SUDO_STDIN}[^\n|;&]*<<<\s*["']?[^\s"']`),
+    new RegExp(String.raw`(?:["']${SECRET_NAME}["']|^[ \t]*(?:-[ \t]+)?${SECRET_NAME}|[{,][ \t]*${SECRET_NAME})\s*:\s*(?!${switched}${TEXT_END})(?!${TYPE_VALUE})["']?[^\s"']`, "im"),
+    new RegExp(String.raw`["']${SECRET_NAME}\s*:\s*(?!${switched}["'])["']?[^\s"']`, "i"),
+  ];
+}
 
-function shapes(shell: boolean): readonly RegExp[] {
-  const value = String.raw`(?!${SWITCH}["']?${shell ? SHELL_END : TEXT_END})`;
+function shapes(shell: boolean, switched: string): readonly RegExp[] {
+  const value = String.raw`(?!${switched}["']?${shell ? SHELL_END : TEXT_END})`;
   return [
     new RegExp(String.raw`(?<![\w-])(?:[A-Z0-9_]*_)?(?:(?<!(?:^|[^A-Z0-9])(?:${PLAIN_KEYS.toUpperCase()})_)KEY|AUTH|CREDENTIALS?)\s*=(?!=)\s*${value}["']?[^\s"']`),
     new RegExp(String.raw`(?<![\w-])[a-z0-9_]*_(?:(?<!(?:^|[^a-z0-9])(?:${PLAIN_KEYS})_)key|auth|credentials?)\s*=(?!=)\s*${value}["']?[^\s"']`),
@@ -148,8 +150,16 @@ function shapes(shell: boolean): readonly RegExp[] {
   ];
 }
 
-const SHELL_SHAPES: readonly RegExp[] = [...FLAGGED, ...shapes(true)];
-const TEXT_SHAPES: readonly RegExp[] = [...FLAGGED, ...shapes(false)];
+let built: { shell: readonly RegExp[]; text: readonly RegExp[] } | undefined;
+
+function rules(): { shell: readonly RegExp[]; text: readonly RegExp[] } {
+  if (built) return built;
+  const words = SWITCH_WORDS.flatMap((w) => [w, w.charAt(0).toUpperCase() + w.slice(1), w.toUpperCase()]).join("|");
+  const switched = switchOf(words);
+  const all = flagged(switched);
+  built = { shell: [...all, ...shapes(true, switched)], text: [...all, ...shapes(false, switched)] };
+  return built;
+}
 const QUOTED_TEXT = /<<-?\s*(?:\\|(['"]))?([A-Za-z_]\w*)\1[^\n]*\n([\s\S]*?)(?:\n[ \t]*\2(?=\n|$)|$)|'([^']*)'|"([^"]*)"/g;
 
 const RUN = /[A-Za-z0-9+/_-]{40,}/g;
@@ -204,12 +214,12 @@ function longRun(said: string): boolean {
 }
 
 function shapedSecret(said: string): boolean {
-  return TEXT_SHAPES.some((re) => re.test(said));
+  return rules().text.some((re) => re.test(said));
 }
 
 function shellSecret(command: string): boolean {
   const quoted = [...command.matchAll(QUOTED_TEXT)].map((m) => m[3] ?? m[4] ?? m[5] ?? "").join("\n");
-  return SHELL_SHAPES.some((re) => re.test(command)) || shapedSecret(quoted);
+  return rules().shell.some((re) => re.test(command)) || shapedSecret(quoted);
 }
 
 export function looksSecret(said: string, shell = false): boolean {
