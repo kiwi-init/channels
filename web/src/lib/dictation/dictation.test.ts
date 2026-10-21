@@ -5,7 +5,7 @@ import { dirname, join, relative, resolve } from "node:path"
 import { DICTATION_BYTES, DICTATION_FILES, DICTATION_PATH } from "@kiwi/core/dictation.ts"
 import { pickDevice } from "./device"
 import { MODEL_MB, transcriber, type SpeechWorker } from "./engine"
-import { appendDictation, dictationSupported, openRecording, PRESS_LABEL, speechLanguage, type MicGate } from "./index"
+import { appendDictation, dictationSupported, engineLoader, openRecording, PRESS_LABEL, speechLanguage, type MicGate } from "./index"
 import type { Recording } from "./recorder"
 import type { ToWorker } from "./worker"
 import { CACHE_NAME, downloadModel, modelReady } from "./model"
@@ -171,6 +171,20 @@ describe("the microphone and the speech model", () => {
     const id = workers[1]!.posted[0]!.id
     workers[1]!.onmessage?.({ data: { id, text: "hello there" } } as MessageEvent)
     expect(await second).toBe("hello there")
+  })
+})
+
+describe("loading the engine", () => {
+  test("a load that fails says to reload, since Electron's Chromium keeps a failed import until then, and the next press loads again where it can", async () => {
+    const real = await import("./engine")
+    let tries = 0
+    const engine = engineLoader(() => (++tries === 1 ? Promise.reject(new TypeError("Failed to fetch dynamically imported module")) : Promise.resolve(real)))
+    const failed = await engine().catch((err: unknown) => err)
+    expect(failed).toBeInstanceOf(DictationProblem)
+    expect((failed as DictationProblem).message).toBe("Dictation couldn't load. Reload to try again.")
+    expect(await engine()).toBe(real)
+    expect(await engine()).toBe(real)
+    expect(tries).toBe(2)
   })
 })
 
