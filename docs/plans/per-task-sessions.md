@@ -1,7 +1,6 @@
 # Plan: one fresh agent session per task
 
-Status: proposal, 2026-10-21. Decided by the owner: a task's session ends when the task is done.
-Open: whether to adopt it (decision 1) and what happens to rotation (decision 2). Facts below come
+Status: adopted by the owner, 2026-10-21, with rotation to be removed; not built yet. Facts below come
 from spikes on a laptop against a local relay, at `main` `b3985031` (kiwi 0.22.0), with each
 harness in its own tmux window and a throwaway `HOME`.
 
@@ -147,15 +146,17 @@ otherwise still clear a loop's session past the context line (`src/hooks/rotate.
 
 ## Decisions for the owner
 
-1. **Adopt per-task sessions for coders and reviewers**, with the lead long-running.
-   Proposed: yes. Every task then starts with tens of thousands of tokens, not hundreds of
-   thousands, and all five harnesses worked this way. The cost is the loop with a recipe per
-   harness, and the change to new-agent decision 1.
-2. **Rotation.** Proposed: remove it (`src/rotate/`, `src/hooks/rotate.ts`, `src/hooks/handoff.ts`,
-   `kiwi rotate`) in the same release that ships the loop. Keep checkpoints, re-entry and the
-   context line.
-3. **When a session ends:** decided, when its task is done (owner, 2026-10-21); a reviewer's, at
-   its verdict.
+All taken, 2026-10-21.
+
+1. **Adopt per-task sessions for coders and reviewers**, with the lead long-running: decided, yes.
+   Every task then starts with tens of thousands of tokens, not hundreds of thousands, and all five
+   harnesses worked this way. The cost is the loop with a recipe per harness, and the change to
+   new-agent decision 1.
+2. **Rotation:** decided, remove it (`src/rotate/`, `src/hooks/rotate.ts`, `src/hooks/handoff.ts`,
+   `kiwi rotate`) in the same release that ships the loop. Checkpoints, re-entry and the context
+   line stay.
+3. **When a session ends:** decided, when its task is done. A reviewer's ending, when its round
+   closes, is this plan's design (see Reviewing above), not part of that decision.
 
 ## Order of work
 
@@ -168,5 +169,5 @@ One issue and one PR each, with its CI gate:
 3. Codex: the new thread found by the nonce in its rollout and bound by the loop.
 4. Grok, MiMoCode and Kimi Code recipes, one PR each, with their end signals, Kimi's typed first
    prompt and listener cleanup.
-5. Remove rotation, if decision 2 is yes.
+5. Remove rotation (decision 2), in the release that ships the loop.
 6. `docs/agents.md` says how a seat runs one session per task.

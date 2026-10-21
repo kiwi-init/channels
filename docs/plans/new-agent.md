@@ -205,8 +205,8 @@ All taken as proposed, 2026-10-20.
 
 
 1. **Kiwi starts agents.** This reverses the rule in `docs/agents.md:57` for one case: a launch the
-   owner asked for. Waking, rotation and restarts still never start a process. A fresh session per
-   task would change this; see [per-task-sessions.md](per-task-sessions.md), still a proposal.
+   owner asked for. Waking, rotation and restarts still never start a process. Changed 2026-10-21:
+   a seat's loop starts a fresh session per task ([per-task-sessions.md](per-task-sessions.md)).
 2. **Folder.** The modal needs one, and it wasn't in the ask. Proposed: a list of the folders this
    channel's agents already work in on that machine, read from the seats in its config, plus
    "Choose…" (this computer) or a typed path (others). The default is the folder used most
