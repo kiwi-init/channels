@@ -589,6 +589,14 @@ jobs:
       and a word-overlap match needs two shared words. Fails if a tested module's behavior,
       output text or exported names change. TMPDIR points through a symlink, as macOS's does,
       so a test that compares a tmp path with its realpath or process.cwd() fails here too.
+      The Claude Code permission hook (test/permission-hook.test.ts, test/permission-call.test.ts):
+      kiwi hook permission, run with a PermissionRequest on stdin against a local relay, asks the
+      agent's human from the seat recorded for that exact session, takes only their signed answer
+      bound to the ask's payload id (the owner may Deny, never Allow; a typed "Allow once" is
+      ignored), prints Claude Code's allow or deny, and says nothing but closes the ask when the
+      call settles in the transcript first; no seat for the session or a subagent's call asks
+      nobody. The transcript watcher finds the newest unanswered matching tool_use and sees its
+      tool_result, a new prompt or a new assistant turn. Fails if any of that breaks.
 
   test-flows-a:
     name: test / flows-a
