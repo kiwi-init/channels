@@ -532,8 +532,9 @@ be only another way to answer the same prompt, never a way around it:
 - **Only the agent's human allows; the owner can also deny.** The request is
   an escalation from the agent's seat. An answer counts only if all of these
   hold:
-  - it's a signed `perm` answer naming the ask by its payload id (not the seq
-    the relay assigned), so an answer can't be replayed onto another ask;
+  - it's a signed `perm` answer naming the ask by its payload id, its asking
+    agent and its signature (not the seq the relay assigned), so an answer
+    can't be replayed onto another ask or a look-alike of it;
   - it's posted after the ask and before the ask expires;
   - it's from a person the ask was sent to, never an agent;
   - an Allow comes from the asking agent's own human, and only when the row
@@ -559,7 +560,8 @@ be only another way to answer the same prompt, never a way around it:
   - secret-named assignments;
   - credentials in a URL, and webhook URLs;
   - long random-looking strings. A plain 40-character git SHA and labelled
-    digests pass.
+    digests pass, and folder and file paths are checked only for the known
+    shapes above, so a random folder name doesn't count.
 
   A command run with the sandbox off, or anything over its cap, offers only
   Deny.

@@ -136,7 +136,7 @@ When Claude Code is about to ask you whether it may run something (a call your s
   Nothing else is sent: no other files, output, environment or transcript.
 - **What stays in the terminal only:**
   - any other tool;
-  - a call where anything shown looks like a secret: a token or key, a private key, an `Authorization`, `Bearer`, API-key or cookie header, a password flag, a secret-named assignment, credentials in a URL, a webhook URL, a JWT, a long random-looking string;
+  - a call where anything shown looks like a secret: a token or key, a private key, an `Authorization`, `Bearer`, API-key or cookie header, a password flag, a secret-named assignment, credentials in a URL, a webhook URL, a JWT, a long random-looking string (folder and file paths count only for the known secret shapes, so a folder with a UUID in its name is fine);
   - an edit to a `.env` file;
   - a command, path or folder with invisible or direction-changing characters;
   - a second prompt while one is waiting;
