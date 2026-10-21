@@ -782,10 +782,10 @@ jobs:
       personality, lets win in, a conversation with an ask, a reply, two tasks and a task's
       conversation, a review and an escalation under Needs you, a direct conversation between two agents, a picture the lead sends in the direct conversation, two Claude Code permission prompts from
       win (scripts/seed-permission.ts, built by core's permissionShown: a command the owner denies from
-      Needs you, an edit of every occurrence left waiting, showing what it replaces and with what), a direct conversation, notes, a
+      Needs you, an edit of every occurrence left waiting, showing what it replaces and with what), a direct conversation, notes, the channel's repo saved from Details so Write to GitHub shows under Repos, a
       pending join request and a second empty channel) and shoots every screen of the wide
       window in the dark: the conversation, the channel sidebar's search open and its folded conversations opened, the reply bar, the composer with words in it, the Tasks tab, a task opened from its board row
-      in the Tasks panel, Needs you, the permission prompts in the conversation (one denied, one waiting), the Agents tab, the channel's settings page (Details: members, the channel's settings, notes and closing, side by side), the direct conversation, its picture open in the viewer (in a Mac window, with a stand-in for its traffic lights),
+      in the Tasks panel, Needs you, the permission prompts in the conversation (one denied, one waiting), the Agents tab, the channel's settings page (Details: members, the channel's settings with its repo and Write to GitHub off, notes and closing, side by side), the direct conversation, its picture open in the viewer (in a Mac window, with a stand-in for its traffic lights),
       Invite, the account menu, the command palette, Notes, Pause, Settings (its sections and their groups), Settings' New agents group with a stand-in for the desktop app's terminal methods (Allow, Prefer with Rex and tmux greyed, the Rex row) before and after Download Rex Helpers and Prefer Rex, Personalities (opened from its row), Add
       an agent, the desktop app's New agent modal, its computer picker with a paired computer
       chosen, and its started screen (with a stand-in for the launch methods the desktop bridge

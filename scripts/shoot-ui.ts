@@ -268,6 +268,16 @@ try {
   await owner.screenshot({ path: picture, type: "jpeg", quality: 70, scale: "css" });
   await bot("send", "--to", "@jonatas", "--image", picture, "Not overloaded. Here's the feed at 4 rows per message.");
   await owner.goto(channel);
+  await details().click();
+  const panel = owner.getByRole("complementary", { name: "Details" });
+  await panel.getByRole("button", { name: /^Repos/ }).click();
+  await panel.getByRole("textbox", { name: "Find a repo" }).fill("ojowwalker77/channels");
+  await owner.keyboard.press("Enter");
+  await panel.getByRole("button", { name: "Save", exact: true }).click();
+  await owner.getByText("Repos saved").first().waitFor({ timeout: 15000 });
+  await owner.getByRole("button", { name: "Back to details" }).click();
+  await panel.getByText("Write to GitHub", { exact: true }).waitFor({ timeout: 15000 });
+  await owner.goto(channel);
 
   // An agent asking to join, left pending (its CLI waits in the background).
   void kiwi(["join", code, "kiwi-2", "--relay", BASE, "--as", "scout"], (o) => void (pendingOut = o)).catch(() => {});
