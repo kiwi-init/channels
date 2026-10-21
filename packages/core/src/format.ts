@@ -490,7 +490,8 @@ export function formatStatus({ alias, me, state, online, unread, now = Date.now(
   if (left.length) out.push(`  left or removed: ${left.sort().join(", ")}`);
 
   const toMe = state.openAsks.filter((a) => a.from !== me && (!a.to || a.to.includes(me)));
-  const asks = toMe.filter((a) => holdsWork(state, a));
+  const self = state.members.get(me);
+  const asks = self && isPerson(self) ? toMe.filter((a) => holdsWork(state, a)) : toMe;
   const digest = toMe.filter((a) => !asks.includes(a));
   if (asks.length) {
     out.push("", `waiting on you (${asks.length}) — answer with: kiwi reply <#> "…"`);
