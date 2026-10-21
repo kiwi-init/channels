@@ -1,19 +1,18 @@
 import { useEffect, useState } from "react"
 
-import type { RexSeat } from "@kiwi/core/terminals.ts"
-import type { RexShowResult } from "../../../desktop/src/bridge.ts"
+import { PLACE_NAMES, type PlaceKind, type PlacedSeat, type ShowRefusal, type ShowResult } from "@kiwi/core/terminals.ts"
 import { bridge } from "./secrets"
 
-export type { RexSeat, RexShowResult }
+export type { PlacedSeat, ShowResult }
 
-export function useRexSeats(): RexSeat[] {
-  const [seats, setSeats] = useState<RexSeat[]>([])
+export function useSeatPlaces(): PlacedSeat[] {
+  const [seats, setSeats] = useState<PlacedSeat[]>([])
   useEffect(() => {
     const b = bridge()
-    if (!b?.rexSeats) return
+    if (!b?.seatPlaces) return
     let live = true
     const load = () => {
-      void b.rexSeats().then(
+      void b.seatPlaces().then(
         (list) => {
           if (live) setSeats(list)
         },
@@ -35,14 +34,17 @@ export function useRexSeats(): RexSeat[] {
   return seats
 }
 
-export function showInRex(seat: RexSeat): Promise<RexShowResult> {
+export function showSeat(seat: PlacedSeat): Promise<ShowResult> {
   const b = bridge()
-  return b?.rexShow ? b.rexShow(seat) : Promise.resolve({ ok: false, why: "failed" })
+  return b?.showSeat ? b.showSeat(seat) : Promise.resolve({ ok: false, why: "failed" })
 }
 
-export function rexNote(result: RexShowResult): string | null {
-  if (result.ok) return null
-  switch (result.why) {
+export function showLabel(place: PlaceKind): string {
+  return `Show in ${PLACE_NAMES[place]}`
+}
+
+function rexNote(why: ShowRefusal): string {
+  switch (why) {
     case "remote-control":
       return "Turn on Remote Control in Rex's settings to open it."
     case "no-server":
@@ -54,4 +56,10 @@ export function rexNote(result: RexShowResult): string | null {
     case "failed":
       return "Rex didn't open that seat."
   }
+}
+
+const NOTES: Record<PlacedSeat["place"], (why: ShowRefusal) => string> = { rex: rexNote }
+
+export function showNote(place: PlacedSeat["place"], result: ShowResult): string | null {
+  return result.ok ? null : NOTES[place](result.why)
 }

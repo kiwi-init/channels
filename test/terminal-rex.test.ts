@@ -413,6 +413,70 @@ esac
     expect(showInRex(place, null)).toEqual({ ok: false, why: "no-rex" });
     rmSync(dir, { recursive: true, force: true });
   });
+
+  test("the Rex plugin lists the same seats, each marked as Rex's", async () => {
+    const cfg = {
+      channels: { ch: { roomId: "room-1", ownerPk: "o", ownerXpk: "x", epoch: 0, keys: {}, relay: "r", code: "c" } },
+      bindings: {
+        "/work": [
+          { alias: "ch", as: "ana", rex: place },
+          { alias: "ch", as: "bo" },
+        ],
+        "/other": { alias: "ch", as: "ana", rex: place },
+      },
+    } as never;
+    const rex = await terminalPlugin("rex", { platform: "darwin", shell: "/bin/zsh", rex: null, tmux: null, osascript: null });
+    expect(rex.seats?.(cfg)).toEqual(localRexSeats(cfg).map((seat) => ({ place: "rex", ...seat })));
+    expect(rex.seats?.(cfg)).toEqual([{ place: "rex", alias: "ch", agent: "ana", room: "room-1", ...place }]);
+  });
+
+  test("kiwi terminal seats lists a Rex seat with the helpers on, and kiwi terminal show answers as kiwi rex show does", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "kiwi-terminal-show-"));
+    const home = join(dir, "kiwi");
+    const bin = join(dir, "bin");
+    mkdirSync(home);
+    mkdirSync(bin);
+    const app = '{"clients":[{"client_id":"client:01a159a5-6b10-7720-b94c-3cf5bacf0ffc","info":{"kind":"app","platform":"macos","name":"Rex Beta"}}]}';
+    const rex = (select: string) =>
+      `#!/bin/sh\ncase "$*" in\n  *client.list*) echo '${app}' ;;\n  *session.focus_block*) echo '{"revision":1}' ;;\n  *session.select*) ${select} ;;\n  *) exit 1 ;;\nesac\n`;
+    writeFileSync(join(bin, "rex"), rex("exit 0"));
+    chmodSync(join(bin, "rex"), 0o755);
+    const config = (helpers: "on" | "off") =>
+      writeFileSync(
+        join(home, "config.json"),
+        JSON.stringify({
+          channels: { ch: { roomId: "room-1", ownerPk: "o", ownerXpk: "x", epoch: 0, keys: {}, relay: "r", code: "c" } },
+          bindings: { "/work": { alias: "ch", as: "ana", rex: place } },
+          rex: helpers,
+        }),
+      );
+    const kiwi = async (...args: string[]): Promise<{ code: number; out: string }> => {
+      const p = Bun.spawn(["bun", join(import.meta.dir, "../src/cli/main.ts"), ...args], {
+        cwd: dir,
+        env: { ...process.env, KIWI_HOME: home, KIWI_NO_HOOKS: "1", PATH: `${bin}:${process.env.PATH ?? ""}` },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const out = await new Response(p.stdout).text();
+      return { code: await p.exited, out };
+    };
+    const seat = { place: "rex", alias: "ch", agent: "ana", room: "room-1", ...place };
+    const byPlace = ["rex", "show", "--server", place.server, "--session", place.session, "--block", place.block];
+    config("off");
+    expect(await kiwi("terminal", "seats", "--json")).toEqual({ code: 0, out: "[]\n" });
+    expect(await kiwi("terminal", "show", "--seat", JSON.stringify(seat))).toEqual({ code: 0, out: '{"ok":true}\n' });
+    config("on");
+    expect(await kiwi("terminal", "seats", "--json")).toEqual({ code: 0, out: `${JSON.stringify([seat])}\n` });
+    const shown = await kiwi("terminal", "show", "--seat", JSON.stringify({ ...seat, alias: "kiwi", agent: "agent" }));
+    expect(shown).toEqual({ code: 0, out: '{"ok":true}\n' });
+    expect(await kiwi(...byPlace)).toEqual(shown);
+    writeFileSync(join(bin, "rex"), rex(`echo 'Error: Rex.app is not accepting actions. Turn on Remote Control in its Settings under Rex Server.' >&2; exit 1`));
+    expect(await kiwi("terminal", "show", "--seat", JSON.stringify(seat))).toEqual({ code: 0, out: '{"ok":false,"why":"remote-control"}\n' });
+    expect(await kiwi(...byPlace)).toEqual({ code: 0, out: '{"ok":false,"why":"remote-control"}\n' });
+    expect(await kiwi("terminal", "show", "--seat", JSON.stringify({ ...seat, block: "block:21a15963-bacc-7426-91e9-4d98757dcd0c" }))).toEqual({ code: 0, out: '{"ok":false,"why":"failed"}\n' });
+    expect((await kiwi("terminal", "show", "--seat", "ch ana")).code).toBe(1);
+    rmSync(dir, { recursive: true, force: true });
+  }, 30_000);
 });
 
 describe("Rex as a terminal plugin", () => {

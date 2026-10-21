@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import type { Capability, PlaceTools, TerminalPlugin } from "../src/terminals/plugin.ts";
-import { MANIFESTS, terminalPlugins } from "../src/terminals/registry.ts";
+import type { PlacedSeat, ShowResult } from "@kiwi/core/terminals.ts";
+import type { Config } from "../src/config.ts";
+import type { Capability, PlaceTools, SeatPlace, TerminalId, TerminalManifest, TerminalPlugin } from "../src/terminals/plugin.ts";
+import { MANIFESTS, seatPlaces, showSeat, terminalPlugins } from "../src/terminals/registry.ts";
+import { rexManifest } from "../src/terminals/rex/manifest.ts";
+import { tmuxManifest } from "../src/terminals/tmux/manifest.ts";
 
 const tools = (over: Partial<PlaceTools> = {}): PlaceTools => ({ platform: "darwin", shell: "/bin/zsh", rex: null, tmux: null, osascript: null, ...over });
 
@@ -41,5 +45,60 @@ describe("the terminal plugins", () => {
       expect(await plugin.detect()).toEqual({ found: false, running: false });
       expect(await plugin.open?.(request)).toMatchObject({ ok: false, why: "no-place" });
     }
+  });
+});
+
+describe("seats a terminal can show", () => {
+  const place = { server: "studio", session: "session:01a15963-bacc-7426-91e9-4d98757dcd0c", block: "block:11a15963-bacc-7426-91e9-4d98757dcd0c" };
+  const seat: PlacedSeat = { place: "rex", alias: "ch", agent: "ana", room: "room-1", ...place };
+  const helpers = (rex: "on" | "off"): Config => ({ channels: {}, terminals: { helpers: { rex } } });
+  const everywhere = (m: TerminalManifest, can: TerminalManifest["can"]): TerminalManifest => ({ ...m, platforms: ["darwin", "linux", "win32"], can });
+
+  function terminals(...plugins: { manifest: TerminalManifest; seats: PlacedSeat[]; answer?: ShowResult }[]) {
+    const loaded: TerminalId[] = [];
+    const shown: Record<string, SeatPlace[]> = {};
+    const made = plugins.map(({ manifest, seats, answer }): TerminalPlugin => ({
+      manifest,
+      detect: async () => ({ found: true, running: true }),
+      seats: () => seats,
+      show: async (at) => {
+        (shown[manifest.id] ??= []).push(at);
+        return answer ?? { ok: true };
+      },
+    }));
+    const load = async (id: TerminalId): Promise<TerminalPlugin> => {
+      loaded.push(id);
+      const plugin = made.find((p) => p.manifest.id === id);
+      if (!plugin) throw new Error(`no plugin ${id}`);
+      return plugin;
+    };
+    return { from: { manifests: made.map((p) => p.manifest), load }, loaded, shown };
+  }
+
+  test("a seat is listed by the terminal it runs in, once that terminal's helpers are on", async () => {
+    const on = terminals({ manifest: everywhere(rexManifest, ["locate", "show"]), seats: [seat] });
+    expect(await seatPlaces(helpers("on"), on.from)).toEqual([seat]);
+    const off = terminals({ manifest: everywhere(rexManifest, ["locate", "show"]), seats: [seat] });
+    expect(await seatPlaces(helpers("off"), off.from)).toEqual([]);
+    expect(off.loaded).toEqual([]);
+  });
+
+  test("a terminal that can't show isn't loaded: its seats aren't listed and showing one shows nothing", async () => {
+    const t = terminals({ manifest: everywhere(rexManifest, ["open", "locate"]), seats: [seat] });
+    expect(await seatPlaces(helpers("on"), t.from)).toEqual([]);
+    expect(await showSeat(seat, helpers("on"), t.from)).toEqual({ ok: false, why: "failed" });
+    expect(t.loaded).toEqual([]);
+    expect(t.shown).toEqual({});
+  });
+
+  test("Show goes to the terminal the seat runs in, found by its place and not its name, and says that terminal's answer", async () => {
+    const t = terminals(
+      { manifest: everywhere(tmuxManifest, ["open", "show"]), seats: [] },
+      { manifest: everywhere(rexManifest, ["locate", "show"]), seats: [seat], answer: { ok: false, why: "no-app" } },
+    );
+    expect(await showSeat({ ...seat, alias: "kiwi", agent: "agent" }, helpers("off"), t.from)).toEqual({ ok: false, why: "no-app" });
+    expect(t.shown).toEqual({ rex: [{ rex: place }] });
+    expect(await showSeat({ ...seat, block: "block:21a15963-bacc-7426-91e9-4d98757dcd0c" }, helpers("on"), t.from)).toEqual({ ok: false, why: "failed" });
+    expect(t.shown).toEqual({ rex: [{ rex: place }] });
   });
 });

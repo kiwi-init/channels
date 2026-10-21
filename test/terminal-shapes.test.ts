@@ -1,5 +1,18 @@
 import { describe, expect, test } from "bun:test";
-import { PLACE_NAMES, readLaunched, readRexSeat, readRexStatus, REX_UNKNOWN, type Launched, type Opened, type RexStatus } from "@kiwi/core/terminals.ts";
+import {
+  PLACE_NAMES,
+  readLaunched,
+  readPlacedSeat,
+  readRexSeat,
+  readRexStatus,
+  readShowResult,
+  REX_UNKNOWN,
+  type Launched,
+  type Opened,
+  type PlacedSeat,
+  type RexStatus,
+  type ShowResult,
+} from "@kiwi/core/terminals.ts";
 import { launchedView } from "../desktop/src/launch-view.ts";
 import { launchedText } from "../src/launch/wire.ts";
 
@@ -121,5 +134,46 @@ describe("a Rex seat", () => {
       expect(readRexSeat({ ...seat, ...over })).toBeNull();
     }
     for (const bad of [undefined, null, "kiwi claude block:1", [seat]]) expect(readRexSeat(bad)).toBeNull();
+  });
+});
+
+describe("a seat in a terminal that can show it", () => {
+  const seat: PlacedSeat = { place: "rex", alias: "kiwi", agent: "claude", room: "0123456789abcdef0123456789abcdef", ...rex };
+
+  test("a seat reads back as kiwi terminal seats --json wrote it, its terminal kept and its room optional", () => {
+    expect(readPlacedSeat(JSON.parse(JSON.stringify(seat)))).toEqual(seat);
+    const roomless: PlacedSeat = { place: "rex", alias: seat.alias, agent: seat.agent, ...rex };
+    expect(readPlacedSeat(roomless)).toEqual(roomless);
+    expect(readPlacedSeat({ ...seat, extra: "dropped" })).toEqual(seat);
+  });
+
+  test("a seat without its terminal, in a terminal that can't show it, or missing a field is refused whole", () => {
+    const unplaced = { alias: seat.alias, agent: seat.agent, room: seat.room, ...rex };
+    expect(readRexSeat(unplaced)).not.toBeNull();
+    for (const bad of [
+      unplaced,
+      { ...seat, place: "tmux" },
+      { ...seat, place: "terminal" },
+      { ...seat, place: "Rex" },
+      { ...seat, block: undefined },
+      { ...seat, agent: "a".repeat(65) },
+      null,
+      [seat],
+    ]) {
+      expect(readPlacedSeat(bad)).toBeNull();
+    }
+  });
+});
+
+describe("a show's answer", () => {
+  test("Shown, or not with its reason, reads back as kiwi terminal show printed it", () => {
+    const answers: ShowResult[] = [{ ok: true }, ...(["no-rex", "no-server", "no-app", "remote-control", "failed"] as const).map((why): ShowResult => ({ ok: false, why }))];
+    for (const said of answers) expect(readShowResult(JSON.parse(JSON.stringify(said)))).toEqual(said);
+  });
+
+  test("a reason it doesn't know, or an answer that isn't one, is a failure", () => {
+    for (const bad of [{ ok: false, why: "exploded" }, { ok: false }, { ok: "yes" }, [{ ok: true }], "ok", null, undefined]) {
+      expect(readShowResult(bad)).toEqual({ ok: false, why: "failed" });
+    }
   });
 });

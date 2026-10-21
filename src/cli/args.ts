@@ -94,6 +94,7 @@ const parsed = parseArgs({
     session: { type: "string" },
     pid: { type: "string" },
     block: { type: "string" },
+    seat: { type: "string" },
     n: { type: "string", short: "n" },
     help: { type: "boolean", short: "h" },
     version: { type: "boolean", short: "v" },

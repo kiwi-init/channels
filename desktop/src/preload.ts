@@ -8,7 +8,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { HarnessRow } from "@kiwi/core/harnesses.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
 import type { MemberPicture } from "@kiwi/core/protocol.ts";
-import type { LaunchedView, RexSeat, TerminalId, TerminalsStatus } from "@kiwi/core/terminals.ts";
+import type { LaunchedView, PlacedSeat, ShowResult, TerminalId, TerminalsStatus } from "@kiwi/core/terminals.ts";
 
 import type {
   ChannelIdentityView,
@@ -23,7 +23,6 @@ import type {
   FromMachine,
   LaunchAgentRequest,
   MachineView,
-  RexShowResult,
   PairAskView,
   PendingItem,
   PublicPerson,
@@ -136,8 +135,8 @@ const kiwi: KiwiBridge = {
   setVoiceConsent: (roomId: string, on: boolean) => ipcRenderer.invoke("kiwi:voice-set-consent", roomId, on) as Promise<void>,
   voiceToken: (roomId: string) => ipcRenderer.invoke("kiwi:voice-token", roomId) as Promise<VoiceAuth>,
   setPersonalities: (list: Personality[]) => ipcRenderer.invoke("kiwi:personalities-set", list) as Promise<void>,
-  rexSeats: () => ipcRenderer.invoke("kiwi:rex-seats") as Promise<RexSeat[]>,
-  rexShow: (seat: RexSeat) => ipcRenderer.invoke("kiwi:rex-show", seat) as Promise<RexShowResult>,
+  seatPlaces: () => ipcRenderer.invoke("kiwi:seat-places") as Promise<PlacedSeat[]>,
+  showSeat: (seat: PlacedSeat) => ipcRenderer.invoke("kiwi:show-seat", seat) as Promise<ShowResult>,
   terminals: () => ipcRenderer.invoke("kiwi:terminals") as Promise<TerminalsStatus | null>,
   terminalHelpers: (id: "rex" | "tmux", to: "on" | "off") => ipcRenderer.invoke("kiwi:terminal-helpers", id, to) as Promise<TerminalsStatus | null>,
   terminalPrefer: (id: TerminalId) => ipcRenderer.invoke("kiwi:terminal-prefer", id) as Promise<TerminalsStatus | null>,
