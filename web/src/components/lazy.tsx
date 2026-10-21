@@ -7,7 +7,6 @@ const markdown = later(
 )
 const addAgent = later(() => import("./add-agent").then((m) => m.AddAgent))
 const newAgent = later(() => import("./new-agent").then((m) => m.NewAgent))
-const gifPicker = later(() => import("./gif-picker").then((m) => m.GifPicker))
 const welcome = later(() => import("./welcome").then((m) => m.Welcome))
 const newChannel = later(() => import("./welcome").then((m) => m.NewChannel))
 const joinWithCode = later(() => import("./welcome").then((m) => m.JoinWithCode))
@@ -48,7 +47,6 @@ export const Markdown = markdown.View
 export const ActivityRun = activityRun.View
 export const AddAgent = addAgent.View
 export const NewAgent = newAgent.View
-export const GifPicker = gifPicker.View
 export const Welcome = welcome.View
 export const NewChannel = newChannel.View
 export const JoinWithCode = joinWithCode.View

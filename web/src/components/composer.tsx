@@ -1,4 +1,4 @@
-import { Add01Icon, ArrowUp02Icon, Cancel01Icon, Loading03Icon, Mic01Icon, SmileIcon } from "@hugeicons/core-free-icons"
+import { Add01Icon, ArrowUp02Icon, Cancel01Icon, Loading03Icon, Mic01Icon } from "@hugeicons/core-free-icons"
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 import type { SendOptions } from "@kiwi/core/client.ts"
@@ -10,10 +10,9 @@ import { needsCompressing } from "@/lib/needs-compressing"
 import { appendDictation, PRESS_LABEL, useDictation } from "@/lib/dictation"
 import { excerpt } from "@/lib/format"
 import { composerMentions, mentionText, withHandles } from "@/lib/mentions"
-import { gifFile, type Gif } from "@/lib/gifs"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
-import { CommandBar, CommandList, ComposerQuestion, GifPicker } from "./lazy"
+import { CommandBar, CommandList, ComposerQuestion } from "./lazy"
 import { Alert, Button, Monogram, errorText, toast } from "./kit"
 
 const MENTION = /(^|\s)@([\p{L}\p{N}_.-]*)$/u
@@ -70,7 +69,6 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
   const [files, setFiles] = useState<DraftFile[]>(() => draftOf(draftKey)?.files ?? [])
   useEffect(() => keepDraft(draftKey, { body, files }), [draftKey, body, files])
   const [dropping, setDropping] = useState(false)
-  const [gifsOpen, setGifsOpen] = useState(false)
   const [sending, setSending] = useState(false)
   const [mention, setMention] = useState<{
     query: string
@@ -174,15 +172,6 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
     }
   }
 
-  const addGif = (g: Gif) => {
-    setGifsOpen(false)
-    if (files.length >= 8) return
-    void gifFile(g).then(
-      (file) => setFiles((prev) => (prev.length < 8 ? [...prev, file] : prev)),
-      () => toast("That GIF couldn’t be loaded.", "error")
-    )
-  }
-
   const trackMention = (value: string, caret: number) => {
     const m = MENTION.exec(value.slice(0, caret))
     setMention(m ? { query: m[2]!, index: 0 } : null)
@@ -244,7 +233,6 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
 
   return (
     <div className={cx("relative mx-auto w-full shrink-0", thread ? "px-3 pt-2 pb-3" : "max-w-[792px] px-3 pt-2 pb-4 md:px-4")}>
-      {gifsOpen && <GifPicker onPick={addGif} onClose={() => setGifsOpen(false)} />}
       <input ref={picker} type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple className="hidden" onChange={(e) => (pick(e.target.files), (e.target.value = ""))} />
 
       {matches.length > 0 && (
@@ -345,17 +333,6 @@ export function Composer({ me, people, replyTo, asking, commands = [], more = 0,
               className="m-1.5 flex size-9 shrink-0 items-center justify-center rounded-full text-ink-2 transition-colors hover:bg-wash hover:text-ink disabled:opacity-40"
             >
               <Icon icon={Add01Icon} size={17} strokeWidth={2} />
-            </button>
-            <button
-              type="button"
-              aria-label="GIFs"
-              title="GIFs"
-              aria-expanded={gifsOpen}
-              onClick={() => setGifsOpen((v) => !v)}
-              disabled={disabled || files.length >= 8}
-              className="my-1.5 mr-0.5 flex size-9 shrink-0 items-center justify-center rounded-full text-ink-2 transition-colors hover:bg-pick hover:text-ink disabled:opacity-40"
-            >
-              <Icon icon={SmileIcon} size={18} strokeWidth={1.8} />
             </button>
             <div className="relative min-w-0 flex-1">
               {spans.length > 0 && (
