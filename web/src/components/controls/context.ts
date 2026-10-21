@@ -46,6 +46,7 @@ export interface ControlsProps {
   onRepos?: (repos: string[]) => Promise<void>
   onVoice?: (on: boolean) => Promise<void>
   onGithubWrite?: (on: boolean) => Promise<void>
+  onBranchPrefix?: (prefix: string | null) => Promise<void>
   title?: string
   roomId?: string
 }
@@ -60,7 +61,7 @@ export interface Api {
   editNickname: (m: RosterMember) => void
   lastSeenOf: (name: string) => number | null
   onlineNow: (name: string) => boolean
-  openDialog: (d: "rename" | "charter") => void
+  openDialog: (d: "rename" | "charter" | "branch") => void
 }
 
 export const Ctx = createContext<Api | null>(null)

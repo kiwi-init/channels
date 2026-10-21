@@ -94,15 +94,17 @@ describe("reading the folders from the agent's checkout", () => {
     g("commit", "-qm", "relay");
     put("web/src/lib/x.ts");
     g("add", ".");
-    expect(branchAreas(42, false, dir)).toEqual(["src/relay", "web/src/lib"]);
+    expect(branchAreas(42, false, "T", dir)).toEqual(["src/relay", "web/src/lib"]);
   });
 
   test("another task's branch only counts for the task's owner; main and a folder that isn't a checkout say nothing", () => {
-    expect(branchAreas(7, false, dir)).toBeNull();
-    expect(branchAreas(7, true, dir)).toEqual(["src/relay", "web/src/lib"]);
+    expect(branchAreas(7, false, "T", dir)).toBeNull();
+    expect(branchAreas(42, false, null, dir)).toBeNull();
+    expect(branchAreas(42, true, null, dir)).toEqual(["src/relay", "web/src/lib"]);
+    expect(branchAreas(7, true, "T", dir)).toEqual(["src/relay", "web/src/lib"]);
     g("stash", "-q");
     g("checkout", "-q", "main");
-    expect(branchAreas(42, true, dir)).toBeNull();
-    expect(branchAreas(42, true, tmpdir())).toBeNull();
+    expect(branchAreas(42, true, "T", dir)).toBeNull();
+    expect(branchAreas(42, true, "T", tmpdir())).toBeNull();
   });
 });

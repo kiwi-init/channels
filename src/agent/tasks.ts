@@ -24,7 +24,7 @@ function judgedRound(t: Task, open: ReviewRound | undefined, round: number | und
 }
 
 export class SessionTasks extends SessionMessaging {
-  areasHere: (task: number, owner: boolean) => string[] | null = branchAreas;
+  areasHere: (task: number, owner: boolean, prefix: string | null) => string[] | null = branchAreas;
 
   readonly taskAdd = Effect.fn("AgentSession.taskAdd")(
     { self: this },
@@ -154,7 +154,7 @@ export class SessionTasks extends SessionMessaging {
       const rest = omit(change, "round", "at");
       const opening = change.state === "review" && change.at?.trim() ? { at: change.at.trim() } : {};
       const worker = t.owner === this.me || t.workedBy.includes(this.me);
-      const found = (change.state === "done" || change.state === "review") && worker && me && !isPerson(me) ? this.areasHere(id, t.owner === this.me) : null;
+      const found = (change.state === "done" || change.state === "review") && worker && me && !isPerson(me) ? this.areasHere(id, t.owner === this.me, state.branchPrefix) : null;
       const areas = found && found.join("\n") !== (t.areas ?? []).join("\n") ? { areas: found } : {};
       const notify: string[] = [];
       if (owner) notify.push(owner);

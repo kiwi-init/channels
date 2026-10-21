@@ -183,6 +183,7 @@ export interface ChannelState {
   hold: Hold | null;
   voice: boolean;
   githubWrite: number | null;
+  branchPrefix: string | null;
   compact: Compact | null;
   compactProposal: Compact | null;
   reactions: Map<number, Map<string, Reaction>>;
@@ -233,6 +234,7 @@ export interface FoldBase {
   hold: Hold | null;
   voice?: boolean;
   githubWrite?: number | null;
+  branchPrefix?: string | null;
   compact: Compact | null;
   compactProposal: Compact | null;
   scopesByKey: [string, Scope[]][];
