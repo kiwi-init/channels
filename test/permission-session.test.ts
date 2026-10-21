@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { holdSession, shownCwd } from "../src/hooks/permission.ts";
@@ -35,4 +35,27 @@ test("one hook waits per session; a later prompt in it goes to the terminal and 
   const again = holdSession("sess-a")!;
   expect(again.newer()).toBe(false);
   again.release();
+});
+
+test("a lock file still being written counts as held for a few seconds, then as left behind", () => {
+  mkdirSync(join(home, "permission"), { recursive: true });
+  const file = join(home, "permission", "sess-c.pid");
+  writeFileSync(file, "");
+  expect(holdSession("sess-c")).toBeNull();
+  const old = new Date(Date.now() - 60_000);
+  utimesSync(file, old, old);
+  const taken = holdSession("sess-c")!;
+  expect(taken).not.toBeNull();
+  taken.release();
+});
+
+test("a newer-prompt mark from before this hook took the session doesn't count", () => {
+  mkdirSync(join(home, "permission"), { recursive: true });
+  const marker = join(home, "permission", "sess-d.pid.newer");
+  writeFileSync(marker, "x");
+  const old = new Date(Date.now() - 60_000);
+  utimesSync(marker, old, old);
+  const held = holdSession("sess-d")!;
+  expect(held.newer()).toBe(false);
+  held.release();
 });

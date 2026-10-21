@@ -59,6 +59,10 @@ export class SessionState {
     return this.identity.name;
   }
 
+  owe(seq: number): void {
+    this.owed = Math.max(this.owed, seq);
+  }
+
   readonly members = Effect.fn("AgentSession.members")({ self: this }, function* (this: SessionState, refresh = false, rows?: readonly MemberRow[]) {
     if (!this.roster || refresh) this.roster = rosterOf(yield* this.ch.fx.members(refresh ? undefined : rows));
     return this.roster;
