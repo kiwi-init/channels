@@ -17,7 +17,7 @@ import { handoffLabel, handoffLeft, handoffOf, handoffOpen } from "@/lib/handoff
 import { useControls } from "./controls"
 import { Icon } from "./icon"
 import { Button, Monogram, TextField, errorText, toast } from "./kit"
-import { ComposerQuestion } from "./lazy"
+import { ComposerQuestion, PermissionItem } from "./lazy"
 import { defaultScopes } from "./scopes"
 import { AgentFacts } from "./agent-facts"
 
@@ -37,6 +37,8 @@ export function NeedsYou({
   nameOf,
   agentOf,
   onReply,
+  permissionOf,
+  onPermission,
   onApproveTask,
   onSendBack,
   onOpenTask,
@@ -57,6 +59,8 @@ export function NeedsYou({
   nameOf: (name: string) => string
   agentOf: (name: string) => boolean
   onReply: (m: Message, text: string) => Promise<void>
+  permissionOf: (m: Message) => { human: string | null; owner: string | null }
+  onPermission: (m: Message, allow: boolean) => Promise<void>
   onApproveTask: (t: Task) => Promise<void>
   onSendBack: (t: Task, why: string) => Promise<void>
   onOpenTask: (id: number) => void
@@ -69,10 +73,31 @@ export function NeedsYou({
   const seatOf = (agent: string | undefined) => (agent ? rexSeats.find((s) => s.room === roomId && s.agent === agent) : undefined)
   const reviewSeat = (t: Task) => seatOf(t.owner ?? t.workedBy[t.workedBy.length - 1])
   const requests = p.isOwner ? p.requests : []
+  const asked = (ms: Message[]) => ms.filter((m) => !m.permission)
+  const permissions = [...decisions, ...escalations].flatMap((m) => (m.permission && now <= m.permission.expiresAt ? [{ m, p: m.permission }] : []))
   const items: { key: string; node: ReactNode }[] = [
+    ...permissions.map(({ m, p: perm }) => {
+      const { human, owner } = permissionOf(m)
+      return {
+        key: `a${m.seq}`,
+        node: (
+          <PermissionItem
+            m={m}
+            p={perm}
+            now={now}
+            nameOf={nameOf}
+            onAnswer={onPermission}
+            seat={seatOf(m.from)}
+            canAllow={human === me && perm.canAllow}
+            canDeny={human === me || owner === me}
+            human={human}
+          />
+        ),
+      }
+    }),
     ...requests.map((r) => ({ key: `r${r.id}`, node: <RequestItem r={r} roomId={roomId} now={now} /> })),
-    ...(decisionCards ? decisions : []).map((m) => ({ key: `a${m.seq}`, node: <DecisionCard m={m} nameOf={nameOf} onReply={onReply} seat={seatOf(m.from)} /> })),
-    ...[...(decisionCards ? [] : decisions), ...escalations, ...questions].map((m) => ({
+    ...(decisionCards ? asked(decisions) : []).map((m) => ({ key: `a${m.seq}`, node: <DecisionCard m={m} nameOf={nameOf} onReply={onReply} seat={seatOf(m.from)} /> })),
+    ...[...(decisionCards ? [] : asked(decisions)), ...asked(escalations), ...questions].map((m) => ({
       key: `a${m.seq}`,
       node: <AskItem m={m} me={me} now={now} nameOf={nameOf} agent={agentOf(m.from)} onReply={onReply} onJump={onJump} seat={seatOf(m.from)} />,
     })),
@@ -97,7 +122,7 @@ export function NeedsYou({
   )
 }
 
-function Row({ icon, lead, title, detail, children }: { icon?: IconSvgElement; lead?: ReactNode; title: ReactNode; detail?: ReactNode; children?: ReactNode }) {
+export function Row({ icon, lead, title, detail, children }: { icon?: IconSvgElement; lead?: ReactNode; title: ReactNode; detail?: ReactNode; children?: ReactNode }) {
   return (
     <div className="flex flex-col gap-2 py-3 md:flex-row md:items-center md:gap-4">
       <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -112,7 +137,7 @@ function Row({ icon, lead, title, detail, children }: { icon?: IconSvgElement; l
   )
 }
 
-function ShowInRex({ seat }: { seat?: RexSeatView }) {
+export function ShowInRex({ seat }: { seat?: RexSeatView }) {
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   if (!seat) return null

@@ -130,7 +130,7 @@ function taskLine(t: Task, nameOf: (n: string) => string) {
 
 function waiting(ctx: ToolCtx): Message[] {
   const { decisions, escalations, questions } = asksFor(ctx.state.openAsks, ctx.me)
-  return [...decisions, ...escalations, ...questions].sort((a, b) => a.seq - b.seq)
+  return [...decisions, ...escalations, ...questions].filter((m) => !m.permission).sort((a, b) => a.seq - b.seq)
 }
 
 function reviewsOf(ctx: ToolCtx): Task[] {
