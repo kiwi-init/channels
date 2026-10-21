@@ -10,6 +10,7 @@ import { bindingFor } from "./listeners.ts";
 const MARK = "# kiwi";
 export const EVENTS = { SessionStart: "session-start", UserPromptSubmit: "prompt", Stop: "stop" } as const;
 export const LISTEN = "listen";
+export const PERMISSION = "permission";
 export const KIMI_STOP = "kimi-stop";
 export const LISTEN_SECONDS = 7 * 24 * 3600;
 
@@ -102,7 +103,7 @@ function identityOf(program: string): string | null {
 }
 
 export function isOurHookCommand(command: string): boolean {
-  for (const event of [...Object.values(EVENTS), LISTEN, KIMI_STOP]) {
+  for (const event of [...Object.values(EVENTS), LISTEN, PERMISSION, KIMI_STOP]) {
     const tail = ` hook ${event} ${MARK}`;
     if (command.endsWith(tail) && command.length > tail.length) return true;
   }

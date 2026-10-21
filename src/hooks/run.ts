@@ -7,14 +7,15 @@ import { hereAs, kimiHookHere, noteHarnessSession, notePlace, onGrokBot, sameSea
 import { writeSync } from "node:fs";
 import { answer, hookOutput, kimiReason, printed, seatBudget, tellKimi, type Answer, type HookInput } from "./answer.ts";
 import { holdAnswering } from "./delivered.ts";
-import { migrateListenHooks } from "./install/claude.ts";
+import { migrateClaudeHooks } from "./install/claude.ts";
 import { migrateExtraHooks } from "./install/extra.ts";
 import { migrateMimo } from "./install/mimo.ts";
 import { takeHandoff } from "./handoff.ts";
 import { handoffFrom, listen, refusedFrom, type Served } from "./listen.ts";
 import { refreshListeners, seatsFor } from "./listeners.ts";
 import { rotateAfterStop } from "./rotate.ts";
-import { KIMI_STOP, LISTEN } from "./self.ts";
+import { decisionJson, runPermission, type PermissionInput } from "./permission.ts";
+import { KIMI_STOP, LISTEN, PERMISSION } from "./self.ts";
 
 const HOOK_MS = 1_800;
 const START_MS = 5_000;
@@ -28,6 +29,12 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string, harness?
     input = JSON.parse(raw) as HookInput;
   } catch {
     // Empty or not JSON on stdin: the hook goes by its environment alone.
+  }
+  if (event === PERMISSION) {
+    const pid = Number(process.env.CLAUDE_PID);
+    const decided = yield* runPermission(input as PermissionInput, Number.isInteger(pid) && pid > 0 ? pid : null).pipe(Effect.catchCause(() => Effect.succeed(null)));
+    if (decided) yield* say(decisionJson(decided));
+    return 0;
   }
   const kimi = event === KIMI_STOP;
   const model = typeof input.model === "string" && input.model.trim() ? input.model.trim() : undefined;
@@ -73,7 +80,7 @@ export const runHook = Effect.fn("Hooks.run")(function* (event: string, harness?
     );
   const shown = (answers: readonly Answer[]) => Effect.forEach(answers, (a) => a.shown, { discard: true, concurrency: "unbounded" });
   const work = Effect.gen(function* () {
-    if (event === "session-start") yield* Effect.sync(migrateListenHooks);
+    if (event === "session-start") yield* Effect.sync(migrateClaudeHooks);
     if (!harness && event !== KIMI_STOP) yield* Effect.sync(migrateExtraHooks);
     const cwd = input.cwd;
     const fresh = who.session;
