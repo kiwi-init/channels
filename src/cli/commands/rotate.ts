@@ -6,6 +6,7 @@ import { tokensWord } from "@kiwi/core/format.ts";
 import { Keystore, loadConfig } from "../../config.ts";
 import { ROTATE_FLOOR } from "../../rotate/decide.ts";
 import type { Target } from "../../rotate/pane.ts";
+import { helpersOn } from "../../terminals/registry.ts";
 import { args } from "../args.ts";
 import { type Command, die, out } from "../context.ts";
 
@@ -43,7 +44,7 @@ export const rotateCommands: Record<string, Command> = {
           return yield* die("usage: kiwi rotate send PID SESSION (PANE SOCKET [codex ROLLOUT CWD NAME] | rex SERVER SESSION BLOCK BIN) (the Stop hook runs it)");
         const on = () => {
           const cfg = loadConfig();
-          return cfg.rotate === "on" && (!rex || cfg.rex === "on");
+          return cfg.rotate === "on" && (!rex || helpersOn("rex", cfg));
         };
         if (!on()) return 0;
         const { clearWhenIdle } = yield* Effect.promise(() => import("../../rotate/pane.ts"));

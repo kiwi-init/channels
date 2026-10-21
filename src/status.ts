@@ -1,16 +1,14 @@
-import { closeSync, openSync, writeSync } from "node:fs";
 import { needsPerson } from "@kiwi/core/work.ts";
 import type { ChannelState } from "@kiwi/core/state.ts";
-import { loadConfig, type SeatRecord } from "./config.ts";
-import { activityEnv, seatRecordFor } from "./daemon/reach.ts";
-import { harnessActivity } from "./harness.ts";
-import { askId, clearFrame, reviewId, rexForeground, rexRootState, statusFrame, takesStatus, type StatusRecord } from "./rex.ts";
-import { leadsTerminal } from "./terminals/shared/foreground.ts";
+import { loadConfig } from "./config.ts";
+import { seatRecordFor } from "./daemon/reach.ts";
+import type { StatusRecord, TerminalPlugin } from "./terminals/plugin.ts";
+import { helpersOn, terminalPlugin } from "./terminals/registry.ts";
+import { askId, reviewId, statusFrame, takesStatus } from "./terminals/shared/osc7501.ts";
 
 const STATUS_EVERY_MS = 3_000;
 const RATE_MS = 1_000;
 const REFOLD_MS = 60_000;
-const MAX_BYTES = 4_096;
 
 export function seatRecords(state: ChannelState, alias: string, agent: string): StatusRecord[] {
   const asks = needsPerson(state).filter((n) => n.from === agent).length;
@@ -18,73 +16,6 @@ export function seatRecords(state: ChannelState, alias: string, agent: string): 
   const review = [...state.tasks.values()].filter((t) => t.owner === agent && t.state === "review" && !t.archived).sort((a, b) => a.id - b.id);
   for (const task of review) records.push({ id: reviewId(alias, task.id), state: "done", msg: `T${task.id} waits for review` });
   return records;
-}
-
-function writeStatus(device: string, frames: string): boolean {
-  if (!frames || Buffer.byteLength(frames) > MAX_BYTES) return false;
-  let fd: number | null = null;
-  try {
-    fd = openSync(device, "w");
-    writeSync(fd, frames);
-    return true;
-  } catch {
-    return false;
-  } finally {
-    if (fd !== null) {
-      try {
-        closeSync(fd);
-      } catch {
-        // Closing a device that just went away changes nothing: the write already failed or landed.
-      }
-    }
-  }
-}
-
-interface ReadyOptions {
-  idle?: boolean;
-  rexCheck?: boolean;
-}
-
-async function readyDevice(record: SeatRecord, opts: ReadyOptions = {}): Promise<string | null> {
-  if (!takesStatus(record.term) || !record.pid) return null;
-  const device = leadsTerminal(record.pid);
-  if (!device) return null;
-  if (record.rex) {
-    if (opts.rexCheck !== false && rexForeground(record.rex) !== record.pid) return null;
-    if (opts.idle !== false) {
-      const state = rexRootState(record.rex);
-      if (state !== "done" && state !== "idle") return null;
-    }
-  } else if (opts.idle !== false) {
-    const env = activityEnv(record, process.env);
-    const activity = env ? await harnessActivity(env) : undefined;
-    if (activity?.state !== "idle") return null;
-  }
-  return device.path;
-}
-
-function uniqueRecords(): SeatRecord[] {
-  const seen = new Set<string>();
-  const out: SeatRecord[] = [];
-  for (const records of Object.values(loadConfig().bindings ?? {})) {
-    for (const record of Array.isArray(records) ? records : [records]) {
-      const key = `${record.alias}\u0000${record.as}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push(record);
-    }
-  }
-  return out;
-}
-
-export async function clearStatus(): Promise<number> {
-  let cleared = 0;
-  for (const record of uniqueRecords()) {
-    if (!takesStatus(record.term)) continue;
-    const device = await readyDevice(record, { idle: false, rexCheck: false });
-    if (device && writeStatus(device, clearFrame("kiwi"))) cleared++;
-  }
-  return cleared;
 }
 
 export function foldStillFresh(kept: { head: number; at: number } | null, head: number | undefined, now = Date.now()): boolean {
@@ -141,12 +72,13 @@ export function startStatusWatch(opts: StatusWatchOptions): { stop(): void } {
   const watched = new Map<string, Watched>();
   let timer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
+  let marker: TerminalPlugin | null = null;
 
   const round = async (): Promise<void> => {
     if (stopped) return;
     try {
       const cfg = loadConfig();
-      if (cfg.rex !== "on") {
+      if (!helpersOn("rex", cfg)) {
         watched.clear();
         return;
       }
@@ -175,13 +107,13 @@ export function startStatusWatch(opts: StatusWatchOptions): { stop(): void } {
         const state = fresh && kept ? kept.state : await channelState(seen.session);
         if (!state) continue;
         if (!fresh) seen.folded = seat.head === undefined ? null : { head: seat.head, at: Date.now(), state };
-        const desired = new Map(seatRecords(state, seat.alias, seat.agent).map((r): [string, string] => [r.id, statusFrame(r)]));
-        const frames: string[] = [];
-        for (const [id, frame] of desired) if (seen.written.get(id) !== frame) frames.push(frame);
-        for (const id of seen.written.keys()) if (!desired.has(id)) frames.push(clearFrame(id));
-        if (!frames.length || Date.now() - seen.at < RATE_MS) continue;
-        const device = await readyDevice(record);
-        if (!device || !writeStatus(device, frames.join(""))) continue;
+        const wanted = seatRecords(state, seat.alias, seat.agent);
+        const desired = new Map(wanted.map((r): [string, string] => [r.id, statusFrame(r)]));
+        const changed = wanted.filter((r) => seen.written.get(r.id) !== desired.get(r.id));
+        const cleared = [...seen.written.keys()].filter((id) => !desired.has(id));
+        if ((!changed.length && !cleared.length) || Date.now() - seen.at < RATE_MS) continue;
+        marker ??= await terminalPlugin("rex");
+        if (!(await marker.mark?.(record, changed, cleared))) continue;
         seen.written = desired;
         seen.at = Date.now();
       }

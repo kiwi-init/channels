@@ -6,7 +6,7 @@
 
 export { appendCache, fileBlobs, readCache } from "./config/cache.ts";
 export { writeCursor } from "./config/cursors.ts";
-export { loadConfig, saveAccess, saveConfig, updateConfig, type ChannelConfig, type Config, type SeatRecord, type WakeHook } from "./config/file.ts";
+export { allSeats, loadConfig, saveAccess, saveConfig, updateConfig, type ChannelConfig, type Config, type SeatRecord, type WakeHook } from "./config/file.ts";
 export { forgetIdentity, identitiesIn, loadIdentity, saveIdentity } from "./config/identities.ts";
 export { hasKiwiState, home, writePrivate } from "./config/paths.ts";
 export { Cache, Cursor, Keystore, LocalFiles } from "./config/services.ts";
