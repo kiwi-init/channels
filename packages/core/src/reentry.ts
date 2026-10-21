@@ -73,10 +73,7 @@ function taskBlock(t: Task, part: Part, now: number, mc: string): Block {
   const capsule = capsuleOf(t);
   const last = t.notes.at(-1);
   const said = point
-    ? [
-        `  ${capsule && !capsule.legacy ? "capsule" : "checkpoint"} by ${inlineText(point.by, 40)}, ${ago(point.ts, now)} (#${point.seq}):`,
-        `  │ ${markedText(checkpointText(point.text, t.id, mc))}`,
-      ]
+    ? [`  ${capsule && !capsule.legacy ? "capsule" : "checkpoint"} by ${inlineText(point.by, 40)}, ${ago(point.ts, now)} (#${point.seq}):`, `  │ ${markedText(checkpointText(point.text, t.id, mc))}`]
     : last
       ? [`  last note by ${inlineText(last.by, 40)}, ${ago(last.ts, now)}: ${inlineText(last.text, NOTE_SHOWN)}`]
       : [];
