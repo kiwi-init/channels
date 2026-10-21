@@ -1,3 +1,4 @@
+import type { LaunchRefusal, Opened, RexPlace } from "@kiwi/core/terminals.ts";
 import type { SeatRecord } from "../config.ts";
 
 export type TerminalId = "app" | "tmux" | "rex";
@@ -7,11 +8,7 @@ export interface TerminalPlace {
   version?: string;
 }
 
-export interface RexPlace {
-  server: string;
-  session: string;
-  block: string;
-}
+export type { RexPlace };
 
 export interface SeatPlace {
   term?: TerminalPlace;
@@ -68,11 +65,7 @@ export interface PlaceRequest {
   env?: Record<string, string>;
 }
 
-export type Placed =
-  | { ok: true; place: "rex"; rex: RexPlace; window: string; pid?: number }
-  | { ok: true; place: "tmux"; socket: string; session: string; window: string; pane: string; pid?: number }
-  | { ok: true; place: "terminal"; window?: number }
-  | { ok: false; why: "bad-request" | "no-place" | "not-allowed" | "failed"; detail: string };
+export type Placed = Opened | { ok: false; why: Exclude<LaunchRefusal, "not-installed" | "no-recipe">; detail: string };
 
 export interface PlaceTools {
   platform: NodeJS.Platform;

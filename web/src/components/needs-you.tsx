@@ -8,7 +8,7 @@ import { HANDOFF_DONE, HANDOFF_FAILED, type Message } from "@kiwi/core/protocol.
 import { TOO_MANY_REQUESTS } from "@kiwi/core/sas.ts"
 import { taskId, type Task } from "@kiwi/core/state.ts"
 import { usePinned } from "@/lib/pinned"
-import { rexNote, showInRex, useRexSeats, type RexSeatView } from "@/lib/rex"
+import { rexNote, showInRex, useRexSeats, type RexSeat } from "@/lib/rex"
 import { cx } from "@/lib/utils"
 import { askLabel, permissionAsks } from "@/lib/asks"
 import { excerpt, formatAgo } from "@/lib/format"
@@ -137,7 +137,7 @@ export function Row({ icon, lead, title, detail, children }: { icon?: IconSvgEle
   )
 }
 
-export function ShowInRex({ seat }: { seat?: RexSeatView }) {
+export function ShowInRex({ seat }: { seat?: RexSeat }) {
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   if (!seat) return null
@@ -255,7 +255,7 @@ function AskItem({
   agent: boolean
   onReply: (m: Message, text: string) => Promise<void>
   onJump: (seq: number) => void
-  seat?: RexSeatView
+  seat?: RexSeat
 }) {
   const { draft, setDraft, busy, send } = useAnswer(m, nameOf, onReply, null)
   const handoff = handoffOf(m)
@@ -371,7 +371,7 @@ function AnswerForm({
   )
 }
 
-function DecisionCard({ m, nameOf, onReply, seat }: { m: Message; nameOf: (n: string) => string; onReply: (m: Message, text: string) => Promise<void>; seat?: RexSeatView }) {
+function DecisionCard({ m, nameOf, onReply, seat }: { m: Message; nameOf: (n: string) => string; onReply: (m: Message, text: string) => Promise<void>; seat?: RexSeat }) {
   const choices = !!m.choices?.length
   const idle = choices ? null : ""
   const { draft, setDraft, busy, send } = useAnswer(m, nameOf, onReply, idle)
@@ -402,7 +402,7 @@ function ReviewItem({
   onApprove: (t: Task) => Promise<void>
   onSendBack: (t: Task, why: string) => Promise<void>
   onOpen: (id: number) => void
-  seat?: RexSeatView
+  seat?: RexSeat
 }) {
   const [why, setWhy] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)

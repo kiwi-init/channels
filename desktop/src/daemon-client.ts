@@ -19,8 +19,9 @@ import path from "node:path";
 
 import { readHarnessRow, type HarnessRow } from "@kiwi/core/harnesses.ts";
 import type { MachineCert } from "@kiwi/core/person.ts";
+import type { LaunchedView } from "@kiwi/core/terminals.ts";
 
-import type { LaunchAgentRequest, LaunchedView } from "./bridge.ts";
+import type { LaunchAgentRequest } from "./bridge.ts";
 import { launchedView } from "./launch-view.ts";
 
 export interface HelloResult {

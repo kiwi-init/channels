@@ -8,6 +8,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { HarnessRow } from "@kiwi/core/harnesses.ts";
 import type { Personality } from "@kiwi/core/personality.ts";
 import type { MemberPicture } from "@kiwi/core/protocol.ts";
+import type { LaunchedView, RexSeat, RexStatus } from "@kiwi/core/terminals.ts";
 
 import type {
   ChannelIdentityView,
@@ -21,11 +22,8 @@ import type {
   KiwiBridge,
   FromMachine,
   LaunchAgentRequest,
-  LaunchedView,
   MachineView,
-  RexSeatView,
   RexShowResult,
-  RexStatusView,
   PairAskView,
   PendingItem,
   PublicPerson,
@@ -138,11 +136,11 @@ const kiwi: KiwiBridge = {
   setVoiceConsent: (roomId: string, on: boolean) => ipcRenderer.invoke("kiwi:voice-set-consent", roomId, on) as Promise<void>,
   voiceToken: (roomId: string) => ipcRenderer.invoke("kiwi:voice-token", roomId) as Promise<VoiceAuth>,
   setPersonalities: (list: Personality[]) => ipcRenderer.invoke("kiwi:personalities-set", list) as Promise<void>,
-  rexSeats: () => ipcRenderer.invoke("kiwi:rex-seats") as Promise<RexSeatView[]>,
-  rexShow: (seat: RexSeatView) => ipcRenderer.invoke("kiwi:rex-show", seat) as Promise<RexShowResult>,
-  rexStatus: () => ipcRenderer.invoke("kiwi:rex-status") as Promise<RexStatusView>,
-  rexInstall: () => ipcRenderer.invoke("kiwi:rex-install") as Promise<RexStatusView>,
-  rexRemove: () => ipcRenderer.invoke("kiwi:rex-remove") as Promise<RexStatusView>,
+  rexSeats: () => ipcRenderer.invoke("kiwi:rex-seats") as Promise<RexSeat[]>,
+  rexShow: (seat: RexSeat) => ipcRenderer.invoke("kiwi:rex-show", seat) as Promise<RexShowResult>,
+  rexStatus: () => ipcRenderer.invoke("kiwi:rex-status") as Promise<RexStatus>,
+  rexInstall: () => ipcRenderer.invoke("kiwi:rex-install") as Promise<RexStatus>,
+  rexRemove: () => ipcRenderer.invoke("kiwi:rex-remove") as Promise<RexStatus>,
   harnesses: () => ipcRenderer.invoke("kiwi:harnesses") as Promise<HarnessRow[]>,
   seatFolders: (roomId: string) => ipcRenderer.invoke("kiwi:seat-folders", roomId) as Promise<string[]>,
   chooseFolder: () => ipcRenderer.invoke("kiwi:choose-folder") as Promise<string | null>,

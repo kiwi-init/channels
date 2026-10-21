@@ -1,15 +1,10 @@
+import type { RexSeat } from "@kiwi/core/terminals.ts";
 import { allSeats, loadConfig, type Config } from "../../config.ts";
 import type { RexPlace, ShowResult } from "../plugin.ts";
 import { listIn, object, parseJson } from "../shared/json.ts";
 import { runNow } from "../shared/run.ts";
 import { rexApi, rexApiArgv } from "./api.ts";
 import { rexBinary } from "./locate.ts";
-
-export interface RexSeat extends RexPlace {
-  alias: string;
-  agent: string;
-  room?: string;
-}
 
 export function localRexSeats(cfg: Config = loadConfig()): RexSeat[] {
   const seats: RexSeat[] = [];

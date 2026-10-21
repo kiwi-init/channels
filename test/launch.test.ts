@@ -8,7 +8,8 @@ import { launchAgent } from "../src/launch/launch.ts";
 import type { PlaceTools } from "../src/terminals/plugin.ts";
 import { joinLineRefusal } from "@kiwi/core/join-line.ts";
 import { canStart, joinPrompt, recipeArgv } from "../src/launch/recipes.ts";
-import { launchedText, readLaunched, readLaunchRequest } from "../src/launch/wire.ts";
+import { readLaunched } from "@kiwi/core/terminals.ts";
+import { launchedText, readLaunchRequest } from "../src/launch/wire.ts";
 import { startRelay } from "../src/relay/bun.ts";
 import { setupChannel } from "./owner.ts";
 
@@ -145,7 +146,7 @@ printf '/tmp/sock\\tkiwi\\t@7\\t%%9\\t4242\\n'`,
     expect(readLaunched(JSON.parse(JSON.stringify(r)))).toEqual(r);
     expect(launchedText(r)).toMatch(/^started in tmux window @7 of session kiwi \(tmux attach -t kiwi\); it joins with launch [A-Za-z0-9_-]{22}$/);
     expect(readLaunched({ ok: false, why: "no-place", detail: "install tmux" })).toEqual({ ok: false, why: "no-place", detail: "install tmux" });
-    expect(readLaunched({ ok: false, why: "exploded" })).toBeNull();
+    expect(readLaunched({ ok: false, why: "exploded" })).toEqual({ ok: false, why: "failed", detail: "" });
     expect(readLaunched({ ok: true, launch: "x", placed: { ok: true, place: "moon" } })).toBeNull();
     expect(readLaunchRequest({ harness: "claude", folder, code, nick: "Ada", relay: 3 })).toEqual({ harness: "claude", folder, code, nick: "Ada" });
     expect(readLaunchRequest({ harness: "grok-bot", folder, code })).toBeNull();

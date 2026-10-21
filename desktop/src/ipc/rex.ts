@@ -1,41 +1,11 @@
-import { execFile } from "node:child_process";
 import { ipcMain } from "electron";
 
-import type { RexSeatView, RexShowResult, RexStatusView } from "../bridge.ts";
-import { REX_UNKNOWN, rexStatusOf } from "../rex-status.ts";
-import { kiwiCli } from "../bundled-daemon.ts";
+import { readRexSeat, REX_UNKNOWN, type RexSeat, type RexStatus } from "@kiwi/core/terminals.ts";
+import type { RexShowResult } from "../bridge.ts";
+import { rexStatusOf } from "../rex-status.ts";
+import { runKiwi } from "./kiwi.ts";
 
-export function runKiwi(args: string[]): Promise<{ code: number | null; stdout: string; stderr: string }> {
-  return kiwiCli().then(
-    (bin) =>
-      new Promise((resolve) => {
-        execFile(bin, args, { timeout: 15_000, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
-          const code = err && typeof (err as { code?: unknown }).code === "number" ? (err as { code: number }).code : err ? 1 : 0;
-          resolve({ code, stdout: typeof stdout === "string" ? stdout : "", stderr: typeof stderr === "string" ? stderr : "" });
-        });
-      }),
-    () => ({ code: 1, stdout: "", stderr: "" }),
-  );
-}
-
-function text(value: unknown, max: number): string | null {
-  return typeof value === "string" && value.length > 0 && value.length <= max ? value : null;
-}
-
-function seat(value: unknown): RexSeatView | null {
-  if (!value || typeof value !== "object") return null;
-  const s = value as Record<string, unknown>;
-  const alias = text(s["alias"], 200);
-  const agent = text(s["agent"], 64);
-  const server = text(s["server"], 512);
-  const session = text(s["session"], 128);
-  const block = text(s["block"], 128);
-  if (!alias || !agent || !server || !session || !block) return null;
-  const room = text(s["room"], 128);
-  return { alias, agent, ...(room ? { room } : {}), server, session, block };
-}
-
-function seats(stdout: string): RexSeatView[] {
+function seats(stdout: string): RexSeat[] {
   let parsed: unknown;
   try {
     parsed = JSON.parse(stdout) as unknown;
@@ -44,7 +14,7 @@ function seats(stdout: string): RexSeatView[] {
     return [];
   }
   if (!Array.isArray(parsed)) return [];
-  return parsed.map(seat).filter((s): s is RexSeatView => s !== null);
+  return parsed.map(readRexSeat).filter((s): s is RexSeat => s !== null);
 }
 
 function result(stdout: string): RexShowResult {
@@ -62,12 +32,12 @@ function result(stdout: string): RexShowResult {
   return { ok: false, why: why === "no-rex" || why === "no-server" || why === "no-app" || why === "remote-control" ? why : "failed" };
 }
 
-async function rexStatus(): Promise<RexStatusView> {
+async function rexStatus(): Promise<RexStatus> {
   const got = await runKiwi(["rex", "status", "--json"]);
   return got.code === 0 ? rexStatusOf(got.stdout) : REX_UNKNOWN;
 }
 
-async function rexSwitch(to: "on" | "off"): Promise<RexStatusView> {
+async function rexSwitch(to: "on" | "off"): Promise<RexStatus> {
   const done = await runKiwi(["rex", to]);
   if (done.code !== 0) throw new Error(done.stderr.trim().split("\n").at(-1) || `kiwi rex ${to} didn't finish`);
   return rexStatus();
@@ -77,12 +47,12 @@ export function wireRexIpc(): void {
   ipcMain.handle("kiwi:rex-status", () => rexStatus());
   ipcMain.handle("kiwi:rex-install", () => rexSwitch("on"));
   ipcMain.handle("kiwi:rex-remove", () => rexSwitch("off"));
-  ipcMain.handle("kiwi:rex-seats", async (): Promise<RexSeatView[]> => {
+  ipcMain.handle("kiwi:rex-seats", async (): Promise<RexSeat[]> => {
     const listed = await runKiwi(["rex", "seats", "--json"]);
     return listed.code === 0 ? seats(listed.stdout) : [];
   });
   ipcMain.handle("kiwi:rex-show", async (_e, value: unknown): Promise<RexShowResult> => {
-    const s = seat(value);
+    const s = readRexSeat(value);
     if (!s) return { ok: false, why: "failed" };
     const done = await runKiwi(["rex", "show", "--server", s.server, "--session", s.session, "--block", s.block]);
     return done.code === 0 ? result(done.stdout) : { ok: false, why: "failed" };

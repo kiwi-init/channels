@@ -1,4 +1,5 @@
 import * as Effect from "effect/Effect";
+import type { RexStatus } from "@kiwi/core/terminals.ts";
 import { loadConfig, updateConfig } from "../../config.ts";
 import { helpersOn } from "../../terminals/registry.ts";
 import { rexStatus } from "../../terminals/rex/api.ts";
@@ -9,15 +10,7 @@ import { type Command, die, out } from "../context.ts";
 
 const USAGE = "usage: kiwi rex on|off|status [--json]";
 
-interface RexStatusJson {
-  found: boolean;
-  version?: string;
-  server: "running" | "stopped";
-  helpers: "on" | "off";
-  rotation: "on" | "off";
-}
-
-function statusJson(): RexStatusJson {
+function statusJson(): RexStatus {
   const cfg = loadConfig();
   const rex = rexStatus();
   return {

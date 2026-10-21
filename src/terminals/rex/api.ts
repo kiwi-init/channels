@@ -1,17 +1,12 @@
-import type { RexActivity, RexPlace } from "../plugin.ts";
+import type { RexPlace, RexStatus } from "@kiwi/core/terminals.ts";
+import type { RexActivity } from "../plugin.ts";
 import { listIn, nested, object, parseJson } from "../shared/json.ts";
 import { run, runNow } from "../shared/run.ts";
 import { rexBinary } from "./locate.ts";
 
-export interface RexStatus {
-  found: boolean;
-  version?: string;
-  server: "running" | "stopped";
-}
-
 const WHOAMI = ["--autostart=false", "whoami", "--json"];
 
-export function rexStatus(): RexStatus {
+export function rexStatus(): Omit<RexStatus, "helpers" | "rotation"> {
   const bin = rexBinary();
   if (!bin) return { found: false, server: "stopped" };
   const version = /^rex (\S+)/.exec(runNow([bin, "version"], 2_000).stdout.trim())?.[1];
