@@ -3,7 +3,8 @@ import type { Message } from "@kiwi/core/protocol.ts"
 import type { ChannelState, Member } from "@kiwi/core/state.ts"
 import { describe, expect, test } from "bun:test"
 
-import { ALLOW_ONCE, DENY, permissionCode, permissionNotes, permissionTitle, settledOf, visibleText } from "./permission-view"
+import { ALLOW_ONCE, DENY, settledOf } from "./permission-settled"
+import { permissionCode, permissionNotes, permissionTitle, visibleText } from "./permission-view"
 
 const shown = (over: Partial<PermissionShown>): PermissionShown => ({ tool: "Bash", cwd: "/a", nonce: "nonce-123", expiresAt: 10_000, canAllow: true, ...over })
 

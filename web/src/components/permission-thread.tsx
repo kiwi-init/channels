@@ -3,7 +3,8 @@ import { Cancel01Icon, CheckmarkCircle02Icon, CommandLineIcon } from "@hugeicons
 import { useEffect, useState } from "react"
 
 import { formatTime } from "@/lib/format"
-import { permissionCode, type Settled } from "@/lib/permission-view"
+import type { Settled } from "@/lib/permission-settled"
+import { permissionCode } from "@/lib/permission-view"
 import { cx } from "@/lib/utils"
 import { Icon } from "./icon"
 

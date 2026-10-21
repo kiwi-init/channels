@@ -11,15 +11,13 @@ import { usePinned } from "@/lib/pinned"
 import { rexNote, showInRex, useRexSeats, type RexSeatView } from "@/lib/rex"
 import { cx } from "@/lib/utils"
 import { askLabel } from "@/lib/asks"
-import { excerpt, formatAgo, formatTime } from "@/lib/format"
-import { permissionCode, permissionNotes, permissionTitle, visibleText } from "@/lib/permission-view"
-import type { PermissionShown } from "@kiwi/core/permission.ts"
+import { excerpt, formatAgo } from "@/lib/format"
 import { openHandoff } from "@/lib/handoff-open"
 import { handoffLabel, handoffLeft, handoffOf, handoffOpen } from "@/lib/handoff"
 import { useControls } from "./controls"
 import { Icon } from "./icon"
 import { Button, Monogram, TextField, errorText, toast } from "./kit"
-import { ComposerQuestion } from "./lazy"
+import { ComposerQuestion, PermissionItem } from "./lazy"
 import { defaultScopes } from "./scopes"
 import { AgentFacts } from "./agent-facts"
 
@@ -124,7 +122,7 @@ export function NeedsYou({
   )
 }
 
-function Row({ icon, lead, title, detail, children }: { icon?: IconSvgElement; lead?: ReactNode; title: ReactNode; detail?: ReactNode; children?: ReactNode }) {
+export function Row({ icon, lead, title, detail, children }: { icon?: IconSvgElement; lead?: ReactNode; title: ReactNode; detail?: ReactNode; children?: ReactNode }) {
   return (
     <div className="flex flex-col gap-2 py-3 md:flex-row md:items-center md:gap-4">
       <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -139,7 +137,7 @@ function Row({ icon, lead, title, detail, children }: { icon?: IconSvgElement; l
   )
 }
 
-function ShowInRex({ seat }: { seat?: RexSeatView }) {
+export function ShowInRex({ seat }: { seat?: RexSeatView }) {
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   if (!seat) return null
@@ -370,81 +368,6 @@ function AnswerForm({
         Send
       </Button>
     </form>
-  )
-}
-
-function PermissionItem({
-  m,
-  p,
-  now,
-  nameOf,
-  onAnswer,
-  seat,
-  canAllow,
-  canDeny,
-  human,
-}: {
-  m: Message
-  p: PermissionShown
-  now: number
-  nameOf: (n: string) => string
-  onAnswer: (m: Message, allow: boolean) => Promise<void>
-  seat?: RexSeatView
-  canAllow: boolean
-  canDeny: boolean
-  human: string | null
-}) {
-  const [busy, setBusy] = useState(false)
-  const answer = (allow: boolean) => {
-    setBusy(true)
-    void onAnswer(m, allow)
-      .then(
-        () => toast(allow ? `Allow once sent to ${nameOf(m.from)}` : `Deny sent to ${nameOf(m.from)}`),
-        (err) => toast(`Not sent: ${errorText(err)}`, "error")
-      )
-      .finally(() => setBusy(false))
-  }
-  const why = !p.canAllow ? null : `Only ${human ? nameOf(human) : "its own person"} can allow it: it runs on their computer`
-  return (
-    <Row
-      lead={<Monogram name={nameOf(m.from)} hue={m.from} agent size={28} />}
-      title={
-        <>
-          <span className="font-semibold">{nameOf(m.from)}</span> {permissionTitle(p)}{" "}
-          <span className="ml-1 rounded-full bg-decide-wash px-1.5 align-middle text-meta font-semibold text-decide">Permission</span>
-        </>
-      }
-      detail={
-        <>
-          {p.description && <p className="text-ui text-ink-2">“{p.description}”</p>}
-          <pre className="mt-1.5 rounded-ctl bg-wash px-3 py-2 font-mono text-ui [overflow-wrap:anywhere] whitespace-pre-wrap text-ink">{permissionCode(p)}</pre>
-          {p.content !== undefined && (
-            <pre className="mt-1.5 max-h-48 overflow-auto rounded-ctl bg-wash px-3 py-2 font-mono text-meta [overflow-wrap:anywhere] whitespace-pre-wrap text-ink-2">{visibleText(p.content)}</pre>
-          )}
-          {permissionNotes(p).map((note) => (
-            <p key={note} className="mt-1.5 font-medium text-alert">
-              {note}
-            </p>
-          ))}
-          <p className="mt-1.5">{[p.tool, `in ${p.cwd}`, m.task ? taskId(m.task) : null, formatAgo(m.ts, now)].filter(Boolean).join(" · ")}</p>
-          <p className="mt-1">Claude Code asks in its terminal too, and whichever answers first wins. This waits until {formatTime(p.expiresAt)}.</p>
-        </>
-      }
-    >
-      <ShowInRex seat={seat} />
-      {canDeny && (
-        <Button size="sm" variant="secondary" className="text-alert" disabled={busy} onClick={() => answer(false)}>
-          Deny
-        </Button>
-      )}
-      {canAllow ? (
-        <Button size="sm" disabled={busy} onClick={() => answer(true)}>
-          Allow once
-        </Button>
-      ) : (
-        why && <span className="text-meta text-ink-3">{why}</span>
-      )}
-    </Row>
   )
 }
 
