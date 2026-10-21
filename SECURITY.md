@@ -532,8 +532,9 @@ be only another way to answer the same prompt, never a way around it:
 - **Only the agent's human allows; the owner can also deny.** The request is
   an escalation from the agent's seat. An answer counts only if all of these
   hold:
-  - it's a signed `perm` answer naming the ask by its payload id (not the seq
-    the relay assigned), so an answer can't be replayed onto another ask;
+  - it's a signed `perm` answer naming the ask by its payload id, its asking
+    agent and its signature (not the seq the relay assigned), so an answer
+    can't be replayed onto another ask or a look-alike of it;
   - it's posted after the ask and before the ask expires;
   - it's from a person the ask was sent to, never an agent;
   - an Allow comes from the asking agent's own human, and only when the row
@@ -543,7 +544,8 @@ be only another way to answer the same prompt, never a way around it:
   withhold the request or the answer, which leaves the terminal prompt.
 - **Only what's needed to decide leaves the machine:**
   - Bash's command (up to 2,000 characters) and description;
-  - an edit's paths and new content (up to 4,000 characters);
+  - an edit's paths, its new content and the text it replaces (each up to
+    4,000 characters);
   - WebFetch's URL;
   - an MCP tool's arguments and values (up to 2,000 characters);
   - the folder.
@@ -559,7 +561,8 @@ be only another way to answer the same prompt, never a way around it:
   - secret-named assignments;
   - credentials in a URL, and webhook URLs;
   - long random-looking strings. A plain 40-character git SHA and labelled
-    digests pass.
+    digests pass, and folder and file paths are checked only for the known
+    shapes above, so a random folder name doesn't count.
 
   A command run with the sandbox off, or anything over its cap, offers only
   Deny.
@@ -567,11 +570,12 @@ be only another way to answer the same prompt, never a way around it:
   bidi or zero-width characters isn't sent. The app shows the command
   verbatim in a code block.
 - **One at a time.** One request per session waits in Needs you. A second
-  prompt while it waits goes to the terminal. The ask closes when the agent
-  marks it settled (answered in the terminal, timed out, or the session
-  ended) or when it expires, and the hook checks once more for a terminal
-  answer before it replies. Once a newer prompt has started in that session,
-  the waiting hook doesn't answer at all.
+  prompt while it waits goes to the terminal. The ask closes on an answer
+  that counts, when the agent marks it settled (answered in the terminal,
+  timed out, or the session ended), or when it expires. Any other reply
+  leaves it open. The hook checks once more for a terminal answer before it
+  replies. Once a newer prompt has started in that session, the waiting hook
+  doesn't answer at all.
 - **Whose session it is.** The hook speaks only for a Claude Code session the
   agent's seat records, never for one it guesses from the folder. But a seat
   records whichever session uses it: a person's own Claude Code session
