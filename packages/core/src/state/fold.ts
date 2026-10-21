@@ -9,6 +9,7 @@ import { reposOf } from "./repos.ts";
 import { roomName } from "./rooms.ts";
 import { settle } from "./leases.ts";
 import { carriedPersona } from "../personality.ts";
+import { permissionAnswer } from "../permission.ts";
 import type { ChannelState, Fact, FoldBase, FoldMember, GuardFloor, Lease, Member, Place, Reaction, Room, RoomsFloor, Roster, Task } from "./types.ts";
 
 const STALE_MS = 24 * 3_600_000;
@@ -202,6 +203,7 @@ export function fold(
   const placesBefore = from?.placesBefore ?? [];
   const answered = new Map<number, Set<string>>(from?.answered.map(([seq, by]) => [seq, new Set(by)]));
   const settledBy = new Map<number, Set<string>>();
+  const permReplies = new Map<number, Message[]>();
   const threadOf = new Map<number, number>(from?.threadOf);
   const threadPeople = new Map<number, Set<string>>(from?.threadPeople.map(([seq, people]) => [seq, new Set(people)]));
   let head = from?.n ?? 0;
@@ -339,6 +341,11 @@ export function fold(
         let set = answered.get(r);
         if (!set) answered.set(r, (set = new Set()));
         set.add(m.from);
+        if (m.perm) {
+          let replies = permReplies.get(r);
+          if (!replies) permReplies.set(r, (replies = []));
+          replies.push(m);
+        }
         if (!m.settled) continue;
         let settlers = settledBy.get(r);
         if (!settlers) settledBy.set(r, (settlers = new Set()));
@@ -389,7 +396,7 @@ export function fold(
   const openAsks = [...(from?.asks ?? []), ...messages.filter((m) => m.seq > after)].filter((m) => {
     if (m.kind !== "ask" && m.kind !== "blocking") return false;
     if (ignored(trust.get(m.seq))) return false;
-    if (m.permission && (settledBy.get(m.seq)?.has(m.from) || now > m.permission.expiresAt)) return false;
+    if (m.permission) return !(settledBy.get(m.seq)?.has(m.from) || now > m.permission.expiresAt || (permReplies.get(m.seq) ?? []).some((r) => permissionAnswer(m, r, { trust, members }) !== null));
     const by = answered.get(m.seq);
     const answers = (n: string) => (m.esc ? !!m.to?.includes(n) : n !== m.from);
     return !by || ![...by].some(answers);
