@@ -7,7 +7,7 @@ import type { Personality } from "@kiwi/core/personality.ts";
 import type { CachedRow, Unread } from "@kiwi/core/cache-row.ts";
 import type { Channel, OpenKind, PresenceFields } from "@kiwi/core/client.ts";
 import type { MemberPicture, Message, Presence, ReadMark } from "@kiwi/core/protocol.ts";
-import type { LaunchedView, RexSeat, RexStatus } from "@kiwi/core/terminals.ts";
+import type { LaunchedView, RexSeat, TerminalId, TerminalsStatus } from "@kiwi/core/terminals.ts";
 import type { TextStep } from "./text-size.ts";
 import type { Wire } from "./wire.ts";
 
@@ -329,9 +329,10 @@ export interface KiwiBridge {
   setPersonalities(list: Personality[]): Promise<void>;
   rexSeats(): Promise<RexSeat[]>;
   rexShow(seat: RexSeat): Promise<RexShowResult>;
-  rexStatus(): Promise<RexStatus>;
-  rexInstall(): Promise<RexStatus>;
-  rexRemove(): Promise<RexStatus>;
+  terminals(): Promise<TerminalsStatus | null>;
+  terminalHelpers(id: "rex" | "tmux", to: "on" | "off"): Promise<TerminalsStatus | null>;
+  terminalPrefer(id: TerminalId): Promise<TerminalsStatus | null>;
+  setLaunches(to: "on" | "off"): Promise<TerminalsStatus | null>;
   harnesses(): Promise<HarnessRow[]>;
   seatFolders(roomId: string): Promise<string[]>;
   chooseFolder(): Promise<string | null>;

@@ -121,3 +121,37 @@ export function readRexSeat(x: unknown): RexSeat | null {
   const room = text(s?.room, 128);
   return { alias, agent, ...(room ? { room } : {}), ...place };
 }
+
+const TERMINAL_IDS = ["app", "tmux", "rex"] as const;
+
+export type TerminalId = (typeof TERMINAL_IDS)[number];
+
+const isTerminalId = (v: unknown): v is TerminalId => typeof v === "string" && (TERMINAL_IDS as readonly string[]).includes(v);
+
+export interface TerminalRow {
+  id: TerminalId;
+  name: string;
+  found: boolean;
+  running: boolean;
+  helpers: "on" | "off" | null;
+}
+
+export interface TerminalsStatus {
+  prefer: TerminalId;
+  launch: "on" | "off";
+  terminals: TerminalRow[];
+}
+
+function readTerminalRow(x: unknown): TerminalRow | null {
+  const r = record(x);
+  const name = text(r?.name, 64);
+  if (!r || !isTerminalId(r.id) || !name) return null;
+  return { id: r.id, name, found: r.found === true, running: r.running === true, helpers: r.helpers === "on" || r.helpers === "off" ? r.helpers : null };
+}
+
+export function readTerminalsStatus(x: unknown): TerminalsStatus | null {
+  const s = record(x);
+  if (!s || !isTerminalId(s.prefer) || (s.launch !== "on" && s.launch !== "off") || !Array.isArray(s.terminals)) return null;
+  const terminals = s.terminals.map(readTerminalRow).filter((t): t is TerminalRow => t !== null);
+  return { prefer: s.prefer, launch: s.launch, terminals };
+}
