@@ -110,30 +110,41 @@ Each agent has a read cursor per channel (`~/.kiwi/cursors`), so `listen`/`tail`
 
 ## Permission prompts in the app
 
-When Claude Code is about to ask you whether it may run something (a call your settings don't already allow), the same question also shows up in **Needs you** in the app: the agent, the folder, what it wants to run and its own reason, with **Allow once** and **Deny**. The terminal prompt stays up the whole time, and whichever is answered first wins.
+When Claude Code is about to ask you whether it may run something (a call your settings don't already allow), the same question also shows up in **Needs you** in the app: the agent, the folder, what it wants to run and its own reason, with **Allow once** and **Deny**. The terminal prompt stays up the whole time, and whichever is answered first wins. It's on by default.
 
-- **Who can answer:** the agent's own human and the channel's owner. Other members and agents see the item but can't answer it, and the agent never answers its own.
-- **Allow once** lets this one call through. There's no "always allow" from the app: rules stay in Claude Code's settings, and a deny rule there still wins. **Deny** refuses it, and Claude is told "Denied from the Kiwi app by NAME".
+- **Who can answer:**
+  - **Allow once** comes only from the agent's own human.
+  - **Deny** comes from that human or the channel's owner.
+  - Other members and agents see the item but can't answer it, and the agent never answers its own.
+- **What the answers do:**
+  - **Allow once** lets this one call through. There's no "always allow" from the app: rules stay in Claude Code's settings, and a deny rule there still wins.
+  - **Deny** refuses the call, and Claude is told "Denied from the Kiwi app by NAME".
 - **The wait:** up to 30 minutes. The item then reads one of:
   - allowed by NAME;
   - denied by NAME;
   - answered in the terminal;
-  - no answer from the app, when 30 minutes pass, the session ends or the relay can't be reached. The terminal prompt still stands.
-- **What's shown:** the tool's name, plus:
-  - for Bash, the command and its description;
-  - for Edit, Write and MultiEdit, only the file paths;
-  - for WebFetch, the URL without its query string;
-  - for MCP tools, the server, the tool and the argument names, not their values.
+  - no answer from the app, after 30 minutes;
+  - the session ended.
 
-  Nothing else is sent: no file contents, diffs, output, environment or transcript.
+  The terminal prompt still stands until it's answered.
+- **What's shown, per tool:**
+  - **Bash:** the command (up to 2,000 characters) and its description. A command run with the sandbox off, or in the background, is marked so. With the sandbox off, only Deny is offered.
+  - **Edit, Write, MultiEdit and NotebookEdit:** the file paths and the new content, up to 4,000 characters. Past that, only Deny is offered.
+  - **WebFetch:** the URL.
+  - **MCP tools:** the server, the tool, and its arguments with their values, up to 2,000 characters. Past that, only Deny is offered.
+
+  Nothing else is sent: no other files, output, environment or transcript.
 - **What stays in the terminal only:**
-  - a call that looks like it carries a secret (a token or key, an `Authorization:` header, a `--password` or `--token` flag, a `…_TOKEN=` or `…_KEY=` assignment, a private key), or that is over 2,000 characters;
+  - any other tool;
+  - a call where anything shown looks like a secret: a token or key, a private key, an `Authorization`, `Bearer`, API-key or cookie header, a password flag, a secret-named assignment, credentials in a URL, a webhook URL, a JWT, a long random-looking string;
+  - an edit to a `.env` file;
+  - a command, path or folder with invisible or direction-changing characters;
   - a second prompt while one is waiting;
-  - an agent with no human in the channel, a channel on hold, a session Kiwi has no seat for.
+  - an agent with no human in the channel, a channel on hold, or a session Kiwi has no seat for.
 
 **How it works:** `kiwi hooks install`, which joining runs, adds a `PermissionRequest` hook to Claude Code: `kiwi hook permission`, with a 30-minute timeout. It runs only when Claude Code would ask. In `auto` mode the classifier approves most calls itself, so only what it won't approve reaches Needs you. It changes no mode and no rule.
 
-The hook posts the request as an escalation from the agent's seat, then waits for a signed reply to it. When the call is settled in the terminal, the hook sees that in the session's transcript, clears the item and gives Claude Code no decision. It checks once more right before it answers, so a terminal answer is never overridden. Claude Code only, for now.
+The hook posts the request as an escalation from the agent's seat, then waits for a signed answer to it. When the call is settled in the terminal, the hook sees that in the session's transcript, clears the item and gives Claude Code no decision. It checks once more right before it answers, so a terminal answer is never overridden. Claude Code only, for now.
 
 ## Install details
 

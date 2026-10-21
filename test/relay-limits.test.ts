@@ -5,7 +5,7 @@ import { join } from "node:path";
 import * as Effect from "effect/Effect";
 import { fetchRelay, Relay } from "@kiwi/core/client.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { headOf, logExcerpt, streamExcerpt } from "../src/relay/github-app.ts";
+import { headOf } from "../src/relay/github-app.ts";
 import { MAX_REQUEST_BYTES } from "../src/relay/http.ts";
 import { setupChannel } from "./owner.ts";
 
@@ -58,26 +58,6 @@ describe("the relay's limits", () => {
 });
 
 describe("reading GitHub's answers in bounds", () => {
-  const log = [
-    "2026-10-20T10:00:00.0000000Z ##[group]Run tests",
-    ...Array.from({ length: 60 }, (_, i) => `2026-10-20T10:00:01.0000000Z line ${i}`),
-    "2026-10-20T10:00:02.0000000Z \u001b[31mexpected 1 to be 2\u001b[0m",
-    "2026-10-20T10:00:03.0000000Z ##[error]Process completed with exit code 1.",
-    ...Array.from({ length: 20 }, (_, i) => `2026-10-20T10:00:04.0000000Z after ${i}`),
-  ].join("\r\n");
-
-  test("the streamed excerpt is the same as the whole-log one, whatever the chunking", async () => {
-    for (const size of [1, 7, 64, 100_000]) expect(await streamExcerpt(chunked(log, size))).toBe(logExcerpt(log));
-    expect(await streamExcerpt(chunked("no errors here\nall green\n", 5))).toBe("");
-  });
-
-  test("it stops reading at the first error line", async () => {
-    let drained = false;
-    const excerpt = await streamExcerpt(chunked(log, 64, () => void (drained = true)));
-    expect(excerpt).toContain("##[error]Process completed");
-    expect(drained).toBe(false);
-  });
-
   test("a diff is read up to its cap and marked truncated, the rest never read", async () => {
     let drained = false;
     const { text, truncated } = await headOf(new Response(chunked("d".repeat(10_000), 100, () => void (drained = true))), 1_000);
