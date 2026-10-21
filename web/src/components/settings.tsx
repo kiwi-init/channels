@@ -8,7 +8,7 @@ import { cx } from "@/lib/utils"
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react"
 import { relayUrl } from "@/lib/relay"
 import { bridge, useSecrets } from "@/lib/secrets"
-import { terminalsBridge } from "@/lib/terminals"
+import { contextLineBridge, terminalsBridge } from "@/lib/terminals"
 import type { TerminalId, TerminalRow, TerminalsStatus } from "@kiwi/core/terminals.ts"
 import { version } from "../../../package.json"
 import { ComputerRows } from "./computers"
@@ -377,6 +377,55 @@ function KiwiHere() {
   return <Item tile={<Icon icon={TerminalIcon} size={16} />} title="kiwi on this computer" desc={line} />
 }
 
+function ContextLineField() {
+  const b = contextLineBridge()
+  const [on, setOn] = useState<"on" | "off" | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => {
+    if (!b) return
+    let live = true
+    void b.contextLine().then(
+      (got) => live && setOn(got),
+      () => {}
+    )
+    return () => {
+      live = false
+    }
+  }, [b])
+  if (!b || on === null) return null
+  const change = (to: "on" | "off") => {
+    if (busy || to === on) return
+    setError(null)
+    setBusy(true)
+    b.setContextLine(to)
+      .then(
+        (got) => (got ? setOn(got) : setError("kiwi didn't change it")),
+        (e: unknown) => setError(e instanceof Error ? e.message.replace(/^.*?Error: /, "") : String(e))
+      )
+      .finally(() => setBusy(false))
+  }
+  return (
+    <>
+      <Choice
+        label="Ask agents for a checkpoint past 250k context"
+        desc="Off by default. On, an agent on this computer past 250k tokens is asked to write where its work stands before it ends its turn."
+        value={on}
+        options={[
+          { value: "on", label: "On" },
+          { value: "off", label: "Off" },
+        ]}
+        onChange={change}
+      />
+      {error && (
+        <p className="px-4 pb-3 text-ui text-ink-2" role="alert">
+          {error}
+        </p>
+      )}
+    </>
+  )
+}
+
 const SECTIONS: { id: string; label: string; icon: IconSvgElement }[] = [
   { id: "appearance", label: "Appearance", icon: PaintBoardIcon },
   { id: "agents", label: "Agents", icon: Robot01Icon },
@@ -466,6 +515,7 @@ function General({ onPersonalities }: { onPersonalities: () => void }) {
             <Group id="agents" title="Agents">
               <PersonalitiesField onOpen={onPersonalities} />
               <KiwiHere />
+              <ContextLineField />
             </Group>
             <Group id="new-agents" title="New agents">
               <NewAgentsFields />

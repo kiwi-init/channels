@@ -14,6 +14,18 @@ export function terminalsBridge(): Terminals | null {
   }
 }
 
+type ContextLine = Pick<KiwiBridge, "contextLine" | "setContextLine">
+
+export function contextLineBridge(): ContextLine | null {
+  try {
+    const k = (window as unknown as { kiwi?: Partial<ContextLine> }).kiwi
+    return k && typeof k.contextLine === "function" && typeof k.setContextLine === "function" ? (k as ContextLine) : null
+  } catch {
+    // No window (a test or a worker): no context line to set.
+    return null
+  }
+}
+
 export function useLaunchesHere(): boolean {
   const [on, setOn] = useState(true)
   useEffect(() => {

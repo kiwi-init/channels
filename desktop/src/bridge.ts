@@ -331,6 +331,8 @@ export interface KiwiBridge {
   terminalHelpers(id: "rex" | "tmux", to: "on" | "off"): Promise<TerminalsStatus | null>;
   terminalPrefer(id: TerminalId): Promise<TerminalsStatus | null>;
   setLaunches(to: "on" | "off"): Promise<TerminalsStatus | null>;
+  contextLine(): Promise<"on" | "off" | null>;
+  setContextLine(to: "on" | "off"): Promise<"on" | "off" | null>;
   harnesses(): Promise<HarnessRow[]>;
   seatFolders(roomId: string): Promise<string[]>;
   chooseFolder(): Promise<string | null>;
