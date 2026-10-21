@@ -19,6 +19,7 @@ const WAIT_MS = (PERMISSION_SECONDS - 60) * 1000;
 const CLOSE_MS = 3_000;
 const FOLD_TRIES = 10;
 const FOLD_WAIT_MS = 500;
+const WRITING_MS = 5_000;
 const SIGNALS = ["SIGTERM", "SIGHUP", "SIGINT"] as const;
 
 export interface PermissionInput {
@@ -50,6 +51,23 @@ export function judged(messages: readonly Message[], state: ChannelState, ask: {
   const reply = messages.find((x) => x.seq === seq);
   const said = asked && reply ? permissionAnswer(asked, reply, state) : null;
   return said && reply ? { decision: said, by: reply.from } : null;
+}
+
+export function whenFolded<E, R>(
+  read: Effect.Effect<{ messages: readonly Message[]; state: ChannelState }, E, R>,
+  ask: { id: string; from: string },
+  seq: number,
+  tries = FOLD_TRIES,
+  waitMs = FOLD_WAIT_MS,
+): Effect.Effect<Decided | null, E, R> {
+  return Effect.gen(function* () {
+    for (let n = 0; n < tries; n++) {
+      const { messages, state } = yield* read;
+      if (messages.some((x) => x.seq === seq)) return judged(messages, state, ask, seq);
+      yield* Effect.sleep(waitMs);
+    }
+    return null;
+  });
 }
 
 function permissionSeat(session: string): Binding | null {
@@ -88,7 +106,6 @@ export function holdSession(session: string): Held | null {
       const fd = openSync(file, "wx", 0o600);
       writeSync(fd, String(process.pid));
       closeSync(fd);
-      rmSync(marker, { force: true });
       return {
         release: () => {
           try {
@@ -109,13 +126,16 @@ export function holdSession(session: string): Held | null {
       };
     } catch {
       // Another hook holds this session, or held it and died: a live one keeps it, and learns a newer prompt started.
-      let held = 0;
+      let held: number | null = null;
+      let fresh = false;
       try {
+        fresh = Date.now() - statSync(file).mtimeMs < WRITING_MS;
         held = Number(readFileSync(file, "utf8"));
       } catch {
         // Gone between the two reads: try again.
       }
-      if (Number.isInteger(held) && held > 0 && alive(held)) {
+      if (held === null) continue;
+      if ((held === 0 && fresh) || (Number.isInteger(held) && held > 0 && alive(held))) {
         writeFileSync(marker, String(Date.now()), { mode: 0o600 });
         return null;
       }
@@ -150,21 +170,16 @@ const askAndWait = Effect.fn("Hooks.permission.ask")(function* (s: AgentSession,
   const decide = (m: Message) =>
     Effect.gen(function* () {
       if (!m.re?.includes(seq)) return;
-      for (let tries = 0; tries < FOLD_TRIES; tries++) {
-        const { messages, state: now } = yield* s.state();
-        if (messages.some((x) => x.seq === m.seq)) {
-          const said = judged(messages, now, { id, from: s.me }, m.seq);
-          if (said) yield* Deferred.succeed(outcome, said);
-          return;
-        }
-        yield* Effect.sleep(FOLD_WAIT_MS);
-      }
+      s.owe(m.seq);
+      const said = yield* whenFolded(s.state(), { id, from: s.me }, m.seq);
+      if (said) yield* Deferred.succeed(outcome, said);
     });
   const watching = Effect.gen(function* () {
     for (;;) {
       const done: Settled | null = settledNow();
       if (done) return yield* Deferred.succeed(outcome, { settled: "terminal" });
       if (claudePid !== null && !alive(claudePid)) return yield* Deferred.succeed(outcome, { settled: "ended" });
+      if (held.newer()) return yield* Deferred.succeed(outcome, { settled: "terminal" });
       if (Date.now() >= expiresAt) return yield* Deferred.succeed(outcome, { settled: "timeout" });
       yield* Effect.sleep(POLL_MS);
     }
@@ -189,11 +204,11 @@ const askAndWait = Effect.fn("Hooks.permission.ask")(function* (s: AgentSession,
     yield* close(got.settled);
     return null;
   }
+  if (got.decision === "allow" && (yield* s.state()).state.hold) return null;
   if (settledNow() || held.newer()) {
     yield* close("terminal");
     return null;
   }
-  if (got.decision === "allow" && (yield* s.state()).state.hold) return null;
   return got;
 }, Effect.scoped);
 

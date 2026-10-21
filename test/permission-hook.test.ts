@@ -1,5 +1,6 @@
 import { joinAgent, joinPerson, kiwiCmd, pairComputer, setupChannel } from "./owner.ts";
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
+import * as Effect from "effect/Effect";
 import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,7 +10,7 @@ import { permissionReply } from "@kiwi/core/permission.ts";
 import { fold } from "@kiwi/core/state.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
 import { saveIdentity, updateConfig } from "../src/config.ts";
-import { judged } from "../src/hooks/permission.ts";
+import { judged, whenFolded } from "../src/hooks/permission.ts";
 import { startRelay } from "../src/relay/bun.ts";
 
 setDefaultTimeout(90_000);
@@ -133,6 +134,26 @@ describe("kiwi hook permission", () => {
     expect(judged(messages, state, { id: ask.id, from: ask.from }, forged.seq)).toBeNull();
     expect(judged(messages, state, { id: ask.id, from: ask.from }, deny)).toEqual({ decision: "deny", by: "bea" });
     expect(JSON.parse((await p.result()).out).hookSpecificOutput.decision.behavior).toBe("deny");
+  });
+
+  test("an answer the fold doesn't have yet is read again until it does, a bounded number of times, and decided only on the fold's copy", async () => {
+    const p = promptFor("touch lagging.txt");
+    const ask = await theAsk(p, "touch lagging.txt");
+    const deny = await answer(ask, false);
+    await p.result();
+    const messages = (await human.history(0)).messages;
+    const roster = await human.members();
+    const full = { messages, state: fold(messages, roster) };
+    const behind = messages.filter((m: Message) => m.seq < deny);
+    const lagging = { messages: behind, state: fold(behind, roster) };
+    let reads = 0;
+    const catchingUp = Effect.sync(() => (++reads <= 2 ? lagging : full));
+    expect(await Effect.runPromise(whenFolded(catchingUp, { id: ask.id, from: ask.from }, deny, 10, 5))).toEqual({ decision: "deny", by: "bea" });
+    expect(reads).toBe(3);
+    reads = 0;
+    const neverThere = Effect.sync(() => (++reads, lagging));
+    expect(await Effect.runPromise(whenFolded(neverThere, { id: ask.id, from: ask.from }, deny, 10, 5))).toBeNull();
+    expect(reads).toBe(10);
   });
 
   test("the owner can Deny but not Allow a call on someone else's computer", async () => {

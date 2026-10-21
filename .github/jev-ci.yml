@@ -600,8 +600,10 @@ jobs:
       call settles in the transcript first; no seat for the session or a subagent's call asks
       nobody. The transcript watcher finds the newest unanswered matching tool_use and sees its
       tool_result, a new prompt or a new assistant turn. test/permission-session.test.ts: one
-      hook waits per session and a later prompt marks it as overtaken; the folder shown starts
-      with ~. Fails if any of that breaks.
+      hook waits per session and a later prompt marks it as overtaken; a lock file still being
+      written counts as held, a stale one doesn't; the folder shown starts with ~. An answer the
+      fold doesn't have yet is read again a bounded number of times and decided only on the fold's
+      copy (test/permission-hook.test.ts). Fails if any of that breaks.
 
   test-flows-a:
     name: test / flows-a
