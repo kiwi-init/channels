@@ -1,4 +1,4 @@
-import type { ChannelState, Task } from "@kiwi/core/state.ts"
+import { askGroups, type AskGroup, type AskHead, type ChannelState, type Task } from "@kiwi/core/state.ts"
 import { DONE_RECENTLY, STATE_LABEL } from "./task-labels"
 
 export type Tab = "tasks" | "agents" | "conversation"
@@ -38,34 +38,22 @@ export function inView(t: Task, view: View, now: number, waiting: ReadonlySet<nu
   }
 }
 
-type GroupKey = "doing" | "review" | "next" | "done"
-
 export interface TaskGroup {
-  key: GroupKey
-  label: string
+  key: string
+  ask: AskHead | null
   tasks: Task[]
 }
 
-export function taskGroups(state: Pick<ChannelState, "tasks">, view: View, now: number): TaskGroup[] {
-  const live = [...state.tasks.values()].filter((t) => !t.archived).sort((a, b) => b.updatedAt - a.updatedAt)
-  const of = (key: GroupKey, label: string, keep: (t: Task) => boolean): TaskGroup => ({ key, label, tasks: live.filter(keep) })
-  switch (view) {
-    case "everything":
-      return [
-        of("doing", STATE_LABEL.doing, (t) => t.state === "doing"),
-        of("review", STATE_LABEL.review, (t) => t.state === "review"),
-        of("next", STATE_LABEL.todo, (t) => t.state === "todo"),
-        of("done", DONE_RECENTLY, (t) => t.state === "done" && now - t.updatedAt < WEEK),
-      ]
-    case "needs":
-      return []
-    case "doing":
-      return [of("doing", STATE_LABEL.doing, (t) => t.state === "doing")]
-    case "review":
-      return [of("review", STATE_LABEL.review, (t) => t.state === "review")]
-    case "done":
-      return [of("done", DONE_RECENTLY, (t) => t.state === "done" && now - t.updatedAt < WEEK)]
-  }
+const ORDER: Record<Task["state"], number> = { doing: 0, review: 1, todo: 2, done: 3 }
+const NOBODY: ReadonlySet<number> = new Set()
+
+export function taskGroups(state: Pick<ChannelState, "tasks" | "askHeads">, view: View, now: number): TaskGroup[] {
+  if (view === "needs") return []
+  const shown = [...state.tasks.values()].filter((t) => inView(t, view, now, NOBODY)).sort((a, b) => ORDER[a.state] - ORDER[b.state] || b.updatedAt - a.updatedAt)
+  const latest = (g: AskGroup) => Math.max(...g.tasks.map((t) => t.updatedAt))
+  return askGroups(state, shown)
+    .sort((a, b) => (a.head === null ? 1 : b.head === null ? -1 : latest(b) - latest(a)))
+    .map((g) => ({ key: g.head ? `ask:${g.head.id}` : "unfiled", ask: g.head, tasks: g.tasks }))
 }
 
 export function viewCounts(state: Pick<ChannelState, "tasks">, now: number, needs: number, waiting: ReadonlySet<number>): Record<View, number> {

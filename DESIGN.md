@@ -207,8 +207,12 @@ From `design-tokens.ts`:
   Tasks / Agents / Conversation tabs. A view opens Tasks; a conversation
   opens Conversation. The approved mockups are in `docs/ui/`.
 - Tasks, the tab a channel opens on: Needs you's rows first, then the
-  board in groups (In progress with what is in review, Up next, Done
-  today; a view shows only its own). A row is two lines on the canvas,
+  board grouped by the person's message each task serves: the group's
+  heading is their own words in quotes, under it who said it and #N, the
+  ask that moved last first and Unfiled (no person's message holds these)
+  at the foot; inside a group, in progress, in review, up next, then done
+  this week. A view (In progress, In review, Done) keeps the same groups
+  with only its own tasks. A row is two lines on the canvas,
   split from the next by `line`: the owner's face, the title in `body`, and
   under it the task id, the owner and what the agent is doing now (in
   `doing` with a steady dot while it works) or the task's state; then its PR

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import type { ChannelState, GithubPr, Task, TaskState } from "@kiwi/core/state.ts"
+import type { AskHead, ChannelState, GithubPr, Task, TaskState } from "@kiwi/core/state.ts"
 import { inView, mergedSince, startOfDay, taskGroups, viewCounts } from "./views"
 
 const DAY = 24 * 60 * 60 * 1000
@@ -48,17 +48,35 @@ describe("the sidebar's views", () => {
     expect(mergedSince({ github }, startOfDay(NOW))).toBe(1)
   })
 
-  test("Everything groups the board by state, review apart from in progress, done this week; a view shows only its own", () => {
-    const tasks = new Map([task(1, "doing", NOW - 5), task(2, "review", NOW - 1), task(3, "todo"), task(4, "done", NOW - 60_000), task(5, "done", NOW - 2 * DAY)].map((t) => [t.id, t]))
-    const ids = (view: Parameters<typeof taskGroups>[1]) => taskGroups({ tasks }, view, NOW).map((g) => [g.label, g.tasks.map((t) => t.id)])
+  test("the board groups by the person's message each task serves: latest-moving ask first, unfiled last, in progress first within each", () => {
+    const tasks = new Map(
+      [
+        task(1, "doing", NOW - 5, { ask: 10 }),
+        task(2, "review", NOW - 1, { ask: 20 }),
+        task(3, "todo", NOW - 9, { ask: 10 }),
+        task(4, "done", NOW - 60_000, { ask: 10 }),
+        task(5, "done", NOW - 2 * DAY, { ask: 20 }),
+        task(6, "todo", NOW),
+        task(7, "review", NOW - 7, { ask: 10 }),
+        task(8, "done", NOW - 9 * DAY, { ask: 30 }),
+      ].map((t) => [t.id, t])
+    )
+    const head = (id: number, words: string): AskHead => ({ id, by: "jon", words, at: 0 })
+    const askHeads = new Map([head(10, "ship v2"), head(20, "fix the board"), head(30, "old")].map((h) => [h.id, h]))
+    const ids = (view: Parameters<typeof taskGroups>[1]) => taskGroups({ tasks, askHeads }, view, NOW).map((g) => [g.ask?.id ?? null, g.tasks.map((t) => t.id)])
     expect(ids("everything")).toEqual([
-      ["In progress", [1]],
-      ["In review", [2]],
-      ["Up next", [3]],
-      ["Done this week", [4, 5]],
+      [20, [2, 5]],
+      [10, [1, 7, 3, 4]],
+      [null, [6]],
     ])
-    expect(ids("review")).toEqual([["In review", [2]]])
-    expect(ids("done")).toEqual([["Done this week", [4, 5]]])
+    expect(ids("review")).toEqual([
+      [20, [2]],
+      [10, [7]],
+    ])
+    expect(ids("done")).toEqual([
+      [10, [4]],
+      [20, [5]],
+    ])
     expect(ids("needs")).toEqual([])
   })
 })
