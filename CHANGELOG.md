@@ -2,6 +2,34 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.25.0 — 2026-10-21
+
+- **A loop holds a seat between sessions with its own token, then binds it to the session it names** ([#654](https://github.com/ojowwalker77/channels/pull/654))
+- **Docs: terminal plugins rows 6 and 7 as built, and tmux's marks and prefix K in agents.md (T2017)** ([#661](https://github.com/ojowwalker77/channels/pull/661))
+- **Show in tmux from Needs you: a seat running in tmux is listed while tmux's helpers are on, and Show brings its pane to the front (T2378)** ([#662](https://github.com/ojowwalker77/channels/pull/662))
+- **Neutral presets: New agent starts with no personality, and no preset carries this repo's rules (T263)** ([#667](https://github.com/ojowwalker77/channels/pull/667))
+- **GIF reactions are gone: no picker, no GIF rendering, no kiwi react --list (T280)** ([#668](https://github.com/ojowwalker77/channels/pull/668))
+- **Tasks v2 step 1: tasks are filed under the ask they serve (T223)** ([#665](https://github.com/ojowwalker77/channels/pull/665))
+- **The 250k checkpoint never blocks Stop: one line on the next prompt, in any mode (T266)** ([#670](https://github.com/ojowwalker77/channels/pull/670))
+- **Kiwi's PR comment waits for a per-channel Write to GitHub switch, off by default, and no longer carries the task's title (T264)** ([#669](https://github.com/ojowwalker77/channels/pull/669))
+- **Docs: the Tasks v2 plan, asks, work and decisions (T212)** ([#664](https://github.com/ojowwalker77/channels/pull/664))
+- **Clients keep events with an op they don't know instead of dropping the message (T224)** ([#666](https://github.com/ojowwalker77/channels/pull/666))
+- **main typechecks again: newer-ops lists github.write.set, and version 1's ops are a literal list** ([#674](https://github.com/ojowwalker77/channels/pull/674))
+- **A task's GitHub issue is only linked by default: Kiwi comments on it and closes it only while Write to GitHub is on (T267)** ([#672](https://github.com/ojowwalker77/channels/pull/672))
+- **The context line is opt-in: nothing at 250k unless kiwi context-line is on (T430)** ([#675](https://github.com/ojowwalker77/channels/pull/675))
+- **The owner picks the branch prefix that links PRs to tasks; with none, no branch name links one (T265)** ([#676](https://github.com/ojowwalker77/channels/pull/676))
+- **Channels are tabs in a bar across the top, and ⌘\ hides the channel's sidebar (T285)** ([#671](https://github.com/ojowwalker77/channels/pull/671))
+- **Room in the web first load: 591,122 → 582,464 bytes, with no visible change (T482)** ([#681](https://github.com/ojowwalker77/channels/pull/681))
+- **The 250k context line is back exactly as it was before #670, only behind kiwi context-line on (T469)** ([#678](https://github.com/ojowwalker77/channels/pull/678))
+- **Tasks v2 step 2: a decision names the work it holds, and Needs you lists only decisions that hold something (T226)** ([#680](https://github.com/ojowwalker77/channels/pull/680))
+- **Every sheet keeps 8px from the window's left edge, and the sidebar toggle shows only where there's a sidebar (T513)** ([#682](https://github.com/ojowwalker77/channels/pull/682))
+- **The Tasks board groups work under the person's message it serves (T256)** ([#677](https://github.com/ojowwalker77/channels/pull/677))
+- **Settings: "Ask agents for a checkpoint past 250k context", the kiwi context-line switch in the app (T552)** ([#683](https://github.com/ojowwalker77/channels/pull/683))
+- **The CLI bundle leaves out the MCP SDK's JSON Schema validator: 2,699,958 → 2,566,380 bytes, with no behaviour change (T598)** ([#684](https://github.com/ojowwalker77/channels/pull/684))
+- **Running checks reach the channel as state: queued and in progress on a PR, quiet in the conversation (T225)** ([#679](https://github.com/ojowwalker77/channels/pull/679))
+- **A task's stage is read off the log, never typed: kiwi task show says it, and the board when there's evidence (T227)** ([#685](https://github.com/ojowwalker77/channels/pull/685))
+- **A verdict counts only at the head it judged, and kiwi task show lists a task's evidence as refs (T609)** ([#686](https://github.com/ojowwalker77/channels/pull/686))
+
 ## 0.24.0 — 2026-10-21
 
 - **The permission hook asks the relay for an answer the daemon hasn't caught up to, checks for a newer prompt last, and closes two lock races (T1651)** ([#631](https://github.com/ojowwalker77/channels/pull/631))
