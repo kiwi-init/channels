@@ -1,27 +1,13 @@
 import * as Effect from "effect/Effect";
 import { loadConfig, updateConfig, type HelperId } from "../../config.ts";
 import { showNeedsYou, type NeedsYou, type ShowWhy } from "../../status.ts";
-import type { TerminalId } from "../../terminals/plugin.ts";
+import type { TerminalId, TerminalRow, TerminalsStatus } from "@kiwi/core/terminals.ts";
 import { helpersOn, launchesOn, MANIFESTS, placeTools, preferred, switchHelpers, terminalPlugin, terminalPlugins } from "../../terminals/registry.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, out } from "../context.ts";
 
 const USAGE = "usage: kiwi terminal [status] [--json] | kiwi terminal download|remove rex|tmux | kiwi terminal prefer app|rex|tmux | kiwi terminal show --needs-you";
 const LAUNCHES_USAGE = "usage: kiwi launches on|off|status [--json]";
-
-interface TerminalRow {
-  id: TerminalId;
-  name: string;
-  found: boolean;
-  running: boolean;
-  helpers: "on" | "off" | null;
-}
-
-interface TerminalsStatus {
-  prefer: TerminalId;
-  launch: "on" | "off";
-  terminals: TerminalRow[];
-}
 
 const isHelperId = (id: string | undefined): id is HelperId => id === "rex" || id === "tmux";
 const isTerminalId = (id: string | undefined): id is TerminalId => MANIFESTS.some((m) => m.id === id);
