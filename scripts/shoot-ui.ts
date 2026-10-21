@@ -161,9 +161,9 @@ try {
     const tabs = owner.getByRole("navigation", { name: "Views of the channel" });
     if (await tabs.isVisible()) return tabs.getByRole("button", { name, exact: true }).click();
     const side = owner.getByRole("complementary", { name: "Channel" });
-    if (name === "Tasks") return side.getByRole("navigation", { name: "Views" }).getByRole("button", { name: "Everything" }).click();
+    if (name === "Tasks") return side.getByRole("navigation", { name: "Views" }).getByRole("button", { name: "Tasks", exact: true }).click();
     if (name === "Agents") return side.getByRole("region", { name: "Agents" }).getByRole("button", { name: "Agents", exact: true }).click();
-    return side.getByRole("region", { name: "Conversations" }).getByRole("button").first().click();
+    return side.getByRole("region", { name: "Conversations" }).getByRole("button", { name: /^# / }).first().click();
   };
 
   const needs = owner.getByRole("region", { name: "Needs you" });
@@ -228,6 +228,8 @@ try {
   }
   await bot("set", "relay.version", "667ce081");
   await bot("set", "canary", "off");
+  await bot("send", "--to", "@win", "Can you take the cold runs after lunch?");
+  await win("send", "--to", "@atlas", "Yes, after the steady load.");
   await owner.reload();
   await toTab("Conversation");
   await owner.getByText("Ship it as 0.8.12").first().waitFor({ timeout: 15000 });
@@ -359,6 +361,30 @@ try {
       await atNewest("opening the channel");
 
       await shoot(owner, tag, "01-channel");
+      await shoot(
+        owner,
+        tag,
+        "01b-search",
+        async () => {
+          await owner.getByRole("complementary", { name: "Channel" }).getByRole("button", { name: "Search", exact: true }).click();
+          await owner.getByRole("textbox", { name: "Search this channel" }).first().fill("rows");
+        },
+        async () => void (await owner.keyboard.press("Escape")),
+      );
+      await shoot(
+        owner,
+        tag,
+        "01c-conversations-open",
+        async () => {
+          await owner
+            .getByRole("complementary", { name: "Channel" })
+            .getByRole("button", { name: /^\d+ more conversations?\b/ })
+            .click();
+        },
+        async () => {
+          await owner.getByRole("complementary", { name: "Channel" }).getByRole("button", { name: "Show less" }).click();
+        },
+      );
       await owner.mouse.wheel(0, -4000);
       await shoot(owner, tag, "02-channel-top");
       await shoot(owner, tag, "03-reply", async () => {

@@ -1,11 +1,15 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { readdirSync, readFileSync, statSync } from "node:fs"
+import { dirname, join, relative, resolve } from "node:path"
 
 import { DICTATION_BYTES, DICTATION_FILES, DICTATION_PATH } from "@kiwi/core/dictation.ts"
 import { pickDevice } from "./device"
-import { appendDictation, dictationSupported, MODEL_MB, openRecording, PRESS_LABEL, speechLanguage, transcriber, type MicGate, type SpeechWorker } from "./index"
+import { MODEL_MB, transcriber, type SpeechWorker } from "./engine"
+import { appendDictation, dictationSupported, engineLoader, openRecording, PRESS_LABEL, speechLanguage, type MicGate } from "./index"
 import type { Recording } from "./recorder"
 import type { ToWorker } from "./worker"
-import { CACHE_NAME, DictationProblem, downloadModel, modelReady } from "./model"
+import { CACHE_NAME, downloadModel, modelReady } from "./model"
+import { DictationProblem } from "./problem"
 
 describe("appendDictation", () => {
   test("starts an empty message with the transcript", () => {
@@ -167,5 +171,37 @@ describe("the microphone and the speech model", () => {
     const id = workers[1]!.posted[0]!.id
     workers[1]!.onmessage?.({ data: { id, text: "hello there" } } as MessageEvent)
     expect(await second).toBe("hello there")
+  })
+})
+
+describe("loading the engine", () => {
+  test("a load that fails says to reload, since Electron's Chromium keeps a failed import until then, and the next press loads again where it can", async () => {
+    const real = await import("./engine")
+    let tries = 0
+    const engine = engineLoader(() => (++tries === 1 ? Promise.reject(new TypeError("Failed to fetch dynamically imported module")) : Promise.resolve(real)))
+    const failed = await engine().catch((err: unknown) => err)
+    expect(failed).toBeInstanceOf(DictationProblem)
+    expect((failed as DictationProblem).message).toBe("Dictation couldn't load. Reload to try again.")
+    expect(await engine()).toBe(real)
+    expect(await engine()).toBe(real)
+    expect(tries).toBe(2)
+  })
+})
+
+describe("lazy", () => {
+  test("the first load carries only the hook: the model, the recorder, the transcriber and core's file table load on the first mic press", () => {
+    const src = resolve(import.meta.dir, "../..")
+    const here = resolve(import.meta.dir)
+    const lazy = new Set(["engine", "model", "recorder", "worker"].map((n) => join(here, n)))
+    const files = (dir: string): string[] =>
+      readdirSync(dir).flatMap((n) => (statSync(join(dir, n)).isDirectory() ? files(join(dir, n)) : /\.tsx?$/.test(n) && !/\.test\.tsx?$/.test(n) ? [join(dir, n)] : []))
+    const static_ = /^\s*import\s(?!type\b)(?:(?!\bimport\b)[^;])*?from\s+["']([^"']+)["']/gm
+    const target = (file: string, spec: string) => (spec.startsWith("@/") ? join(src, spec.slice(2)) : spec.startsWith(".") ? resolve(dirname(file), spec) : spec).replace(/\.tsx?$/, "")
+    const bad = files(src)
+      .filter((f) => !lazy.has(f.replace(/\.tsx?$/, "")))
+      .flatMap((f) => [...readFileSync(f, "utf8").matchAll(static_)].map((m) => [f, m[1]!] as const))
+      .filter(([f, spec]) => spec === "@kiwi/core/dictation.ts" || lazy.has(target(f, spec)))
+      .map(([f, spec]) => `${relative(src, f)}: ${spec}`)
+    expect(bad).toEqual([])
   })
 })
