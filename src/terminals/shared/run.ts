@@ -36,3 +36,7 @@ export function run(argv: readonly string[], timeoutMs = 10_000): Promise<Ran> {
   });
   return Promise.race([done, late]).finally(() => clearTimeout(timer));
 }
+
+export function said(r: Ran): string {
+  return (r.stderr.trim() || r.stdout.trim() || `exit ${r.status}`).split("\n")[0]!.slice(0, 200);
+}
