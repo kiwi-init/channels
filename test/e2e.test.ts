@@ -727,7 +727,9 @@ describe("MCP server", () => {
         "who",
       ]);
 
-      expect(await call("task_add", { title: "write docs" })).toMatch(/^added T\d+$/);
+      expect(await call("task_add", { title: "write docs" })).toContain("a task is filed under the ask it serves: give ask");
+      const want = Number(/#(\d+)/.exec(await ok(h, "--as", "human", "send", "docs, please"))![1]);
+      expect(await call("task_add", { title: "write docs", ask: want })).toMatch(/^added T\d+$/);
       expect(await call("ask_human", { text: "  ", options: ["A: yes", "B: no"] })).toContain("the text is empty");
       expect(await call("status")).toContain("agent-a (you) — builder");
       expect(await call("facts", { set: "docs.url", value: "https://example.com" })).toContain("docs.url = https://example.com");
