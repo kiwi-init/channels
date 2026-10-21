@@ -1,5 +1,5 @@
 import { ignored, type Message } from "@kiwi/core/protocol.ts"
-import type { ChannelState } from "@kiwi/core/state.ts"
+import { holdsWork, type ChannelState } from "@kiwi/core/state.ts"
 
 const OPEN_TASKS = 8
 const RED = new Set(["failure", "timed_out", "startup_failure"])
@@ -23,7 +23,7 @@ export function voiceSnapshot(state: ChannelState, me: string, nameOf: (name: st
     for (const t of open.slice(0, OPEN_TASKS)) lines.push(`- T${t.id} ${clip(t.title, 100)} (${t.state === "todo" ? "open" : t.state}${t.owner ? `, ${nameOf(t.owner)}` : ""})`)
     if (open.length > OPEN_TASKS) lines.push(`- and ${open.length - OPEN_TASKS} more`)
   } else lines.push("No open tasks.")
-  const asks = state.openAsks.filter((m) => forMe(m, me))
+  const asks = state.openAsks.filter((m) => forMe(m, me) && holdsWork(state, m))
   if (asks.length) {
     lines.push(`Waiting on ${nameOf(me)} (${asks.length}):`)
     for (const m of asks.slice(0, 3)) lines.push(`- ${nameOf(m.from)} asks: ${clip(m.body, 160)}`)
@@ -57,7 +57,7 @@ export function voiceNewsFeed(me: string, nameOf: (name: string) => string): (m:
         .filter((s): s is string => s !== null)
       return said.length ? said.join(" ") : null
     }
-    if (m.kind !== "event" && forMe(m, me) && state.openAsks.some((a) => a.seq === m.seq)) {
+    if (m.kind !== "event" && forMe(m, me) && state.openAsks.some((a) => a.seq === m.seq) && holdsWork(state, m)) {
       const options = m.choices?.length ? ` Options: ${m.choices.map((c) => clip(c, 80)).join("; ")}.` : ""
       return once(`ask:${m.seq}`, `${nameOf(m.from)} asks ${nameOf(me)}: ${clip(m.body, 240)}${options}`)
     }

@@ -48,6 +48,7 @@ import {
   CHOICE_MAX_LENGTH,
   CHOICES_MAX,
   CHOICES_MIN,
+  DECISION_KINDS,
   HANDOFF_DEFAULT_SECONDS,
   HANDOFF_MAX_SECONDS,
   HANDOFF_MAX_VENDOR,
@@ -522,8 +523,8 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     "ask_human",
     {
       description:
-        'Ask your own human and the channel owner for a decision you are waiting on: it shows in their app\'s Needs you list, with your options as buttons, in every mode and during a hold. Use it whenever you stop until a person decides, instead of ending a message with "reply A, B or C"; then wait for their answer. ' +
-        'Example: ask_human {"task":251,"text":"Edits clear the old evidence. Which way?","options":["A: keep clearing, refuse until a forced audit","B: keep clearing, the audit rebuilds dedup","C: a stale flag the audit clears"]}.',
+        "Ask your own human and the channel owner for a decision you are waiting on, with your options as buttons, in every mode and during a hold. It shows in their app's Needs you list when it holds something up: name the tasks or the person's messages it holds with `holds` (or `task`). One that holds nothing goes to their digest instead. Use it whenever you stop until a person decides, instead of ending a message with \"reply A, B or C\"; then wait for their answer. " +
+        'Example: ask_human {"task":251,"kind":"choice","text":"Edits clear the old evidence. Which way?","options":["A: keep clearing, refuse until a forced audit","B: keep clearing, the audit rebuilds dedup","C: a stale flag the audit clears"]}.',
       inputSchema: {
         text: z.string().describe("the decision, with what each choice costs; the person reads it outside the thread"),
         options: z
@@ -531,16 +532,24 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
           .optional()
           .describe(`${CHOICES_MIN} to ${CHOICES_MAX} answers to pick from, one line of up to ${CHOICE_MAX_LENGTH} characters each; picking one replies with its text`),
         task: z.number().int().positive().optional().describe("the task this blocks: the question goes in its thread and the task shows it waits on a person"),
+        holds: z.array(z.number().int().positive()).optional().describe("the tasks (251 for T251) and the person's messages (18 for #18) this decision holds up"),
+        kind: z.enum(DECISION_KINDS).optional().describe("intent, taste (looks), irreversible, scope (outside the charter) or choice"),
         re: z.number().int().optional().describe("the message this is about"),
       },
     },
-    tool(({ text, options, task, re }) =>
+    tool(({ text, options, task, holds, kind, re }) =>
       Effect.gen(function* () {
         const choices = options?.map((o) => o.trim());
         if (choices && !wellFormedChoices(choices))
           return yield* new Rejected(`options takes ${CHOICES_MIN} to ${CHOICES_MAX} different answers, one line of up to ${CHOICE_MAX_LENGTH} characters each`);
-        const { seq, to } = yield* s.escalate(text, re, undefined, { ...(choices ? { choices } : {}), ...(task !== undefined ? { task } : {}) });
-        return `escalated #${seq} to ${to.join(" and ")}${choices ? ` with ${choices.length} options` : ""}; wait for their answer before acting on it`;
+        const { seq, to } = yield* s.escalate(text, re, undefined, {
+          ...(choices ? { choices } : {}),
+          ...(task !== undefined ? { task } : {}),
+          ...(holds?.length ? { holds } : {}),
+          ...(kind ? { decision: kind } : {}),
+        });
+        const none = task === undefined && !holds?.length ? "; it holds nothing up, so it goes to their digest, not Needs you" : "";
+        return `escalated #${seq} to ${to.join(" and ")}${choices ? ` with ${choices.length} options` : ""}${none}; wait for their answer before acting on it`;
       }),
     ),
   );

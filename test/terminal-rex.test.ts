@@ -22,10 +22,11 @@ const roster: Roster = [
   { name: "ana", pk: "q", owner: false, at: 1, active: true },
 ];
 
-const ask = (seq: number, from: string): Message => ({ v: 1, id: `m${seq}`, seq, rts: seq, sigOk: true, from, kind: "ask", body: "ship it?", to: ["jonatas"] }) as Message;
+const ask = (seq: number, from: string): Message => ({ v: 1, id: `m${seq}`, seq, rts: seq, sigOk: true, from, kind: "ask", body: "ship it?", to: ["jonatas"], holds: [1000] }) as Message;
 
 const asked = (...asks: Message[]): ChannelState => {
   const state = fold([], roster);
+  state.askHeads.set(1000, { id: 1000, by: "jonatas", words: "ship it", at: 1 });
   state.openAsks.push(...asks);
   return state;
 };

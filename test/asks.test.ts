@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
 import type { Event, Message } from "@kiwi/core/protocol.ts";
-import { askGroups, askRefusal, fold, type ChannelState, type FoldBase, type Roster } from "@kiwi/core/state.ts";
+import { askGroups, askRefusal, fold, heldBy, holdsWork, tasksAwaitingPeople, type ChannelState, type FoldBase, type Roster } from "@kiwi/core/state.ts";
 import { formatStatus, formatTasks } from "@kiwi/core/format.ts";
 
 const T0 = 1_700_000_000_000;
@@ -136,5 +136,47 @@ describe("the kept base stays bounded", () => {
     const resumed = fold([], roster, T0, null, null, base);
     expect(resumed.tasks.get(3)?.ask).toBe(1);
     expect(resumed.askHeads.get(1)?.words).toBe("ship it");
+  });
+});
+
+describe("decisions name the work they hold", () => {
+  const esc = (body: string, more: Partial<Draft> = {}): Draft => ({ from: "dev", kind: "blocking", body, to: ["jow"], esc: true, ...more });
+
+  test("an escalation holds the open tasks and asks it names, and its task; one naming nothing holds nothing", async () => {
+    const log = await signedLog([
+      say("jow", "Make the avatars glass"),
+      add("Glass avatars", {}, 1),
+      esc("Glass or frosted?", { holds: [2], decision: "taste" }),
+      esc("Ship before the release?", { holds: [1] }),
+      esc("Coffee or tea?"),
+      esc("Which blur radius?", { task: 2 }),
+    ]);
+    const s = fold(log, roster, T0);
+    const [taste, ask, idle, inThread] = [log[2]!, log[3]!, log[4]!, log[5]!];
+    expect([taste, ask, idle, inThread].map((m) => heldBy(s, m))).toEqual([[2], [1], [], [2]]);
+    expect([taste, ask, idle, inThread].map((m) => holdsWork(s, m))).toEqual([true, true, false, true]);
+    expect(holdsWork(s, { from: "dev", handoff: { url: "https://example.com", vendor: "example", expiresAt: T0 } })).toBe(true);
+    expect(holdsWork(s, { from: "jow" })).toBe(true);
+    expect([...tasksAwaitingPeople(s)]).toEqual([2]);
+
+    const status = formatStatus({ alias: "c", me: "jow", state: s, online: new Map(), unread: 0 });
+    expect(status).toContain("waiting on you (3)");
+    expect(status).toContain("#3 dev [blocking] [taste] · holds T2: Glass or frosted?");
+    expect(status).toContain("#4 dev [blocking] · holds #1: Ship before the release?");
+    expect(status).toContain("also asked, holding nothing up (1): #5");
+    expect(status).not.toContain("Coffee or tea?");
+  });
+
+  test("a done task holds nothing, so the decision on it leaves Needs you while one on its ask stays", async () => {
+    const log = await signedLog([
+      say("jow", "Make the avatars glass"),
+      add("Glass avatars", {}, 1),
+      esc("Glass or frosted?", { holds: [2] }),
+      esc("Ship it?", { holds: [1] }),
+      ev("lead", { op: "task.update", task: 2, state: "done" }),
+    ]);
+    const s = fold(log, roster, T0);
+    expect(holdsWork(s, log[2]!)).toBe(false);
+    expect(holdsWork(s, log[3]!)).toBe(true);
   });
 });

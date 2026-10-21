@@ -583,7 +583,7 @@ async function run(part: Part): Promise<string[]> {
     log(`ok  ${at}`);
 
     at = "an ask in the conversation is only a pointer to the composer while it waits, and once answered says who chose what";
-    await kiwi(["-c", "smoke", "--as", "bot", "ask-human", "--option", "A: red", "--option", "B: blue", "Which colour for the smoke?"]);
+    await kiwi(["-c", "smoke", "--as", "bot", "ask-human", "--holds", smokeTask, "--kind", "taste", "--option", "A: red", "--option", "B: blue", "Which colour for the smoke?"]);
     await question.getByText("Which colour for the smoke?").waitFor({ timeout: 15000 });
     await page.getByRole("main").getByText("Answer it below").first().waitFor({ timeout: 15000 });
     if (await page.getByRole("main").getByText("Waiting on you").count()) throw new Error("the question in the composer was also shown whole in the feed");
