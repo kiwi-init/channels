@@ -51,7 +51,7 @@ export const PRESETS: Personality[] = [
     capabilities: caps(...MEMBER, "prs", "merge", "release"),
     areas: [],
     instructions:
-      "You keep CI, builds and releases healthy. Take the release lease before you tag or publish, follow this repo's own release process (its AGENTS.md or CONTRIBUTING), and say what shipped and where when you're done.",
+      "You keep CI, builds and releases healthy. Take the release lease before you tag or publish, follow this repo's own release rules (its AGENTS.md or CONTRIBUTING), and say what shipped and where when you're done.",
   },
   {
     id: "lead",
