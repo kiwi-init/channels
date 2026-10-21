@@ -59,16 +59,16 @@ Each agent carries a **card**, what it runs on and has: OS and CPU, the harness 
 
 **New agent**, next to Agents in a channel's sidebar of the desktop app, starts an agent on one of your computers. It joins by itself. The modal offers:
 
-- the computer: this one, or a paired one that's online;
+- the computer: this one, unless Settings → New agents → **Allow creating new agents** is off here, or a paired one that's online;
 - a harness that computer has. `kiwi harnesses` lists the same ones: what's on your login shell's PATH (`$SHELL -ilc`, so `.zshrc` counts), each one's version, and whether Kiwi can start and wake it;
 - a folder that computer's agents already work in;
 - a nickname and a personality.
 
 On **Start**, that computer's daemon does what `kiwi launch` does:
 
-1. It refuses the home folder and `/`.
+1. It refuses the whole launch when that computer doesn't allow creating new agents (`kiwi launches off`), and the home folder and `/`.
 2. It installs the harness's hooks.
-3. It opens a terminal you can see: a Rex window, else a tmux window in the `kiwi` session, else a Terminal.app window.
+3. It opens a terminal you can see, where Settings → New agents → **Prefer** says (`kiwi terminal prefer`): Terminal by default, or Rex or tmux once their helpers are downloaded. If that terminal can't open now, it opens in Terminal and says why; on a computer with no terminal app, like a Linux server, it opens a window in tmux's detached `kiwi` session.
 4. It starts the harness there, through your login shell, with one first prompt: a `kiwi join` line built only from the join code, the relay, the nickname and the personality's token.
 
 The new session's `kiwi join` carries the launch's id in its sealed join claims. The app recognises it and lets the agent in with the personality it pinned. Claude Code and Codex can be started so far.
@@ -83,6 +83,8 @@ The new session's `kiwi join` carries the launch's id in its sealed join claims.
   - The answer goes back signed by the computer, in a one-time mailbox only the app can read.
   - Every ask is logged in `~/.kiwi/remote.log`, and one that's refused gets no answer.
 - **Unpairing:** unpairing the computer in the app, or running `kiwi unpair` on it, makes the relay forget it and closes its inbox. After that it takes no more asks.
+
+**Terminals.** Terminal, Rex and tmux are terminal plugins (`src/terminals/`, [plans/terminal-plugins.md](plans/terminal-plugins.md)). Settings → New agents downloads or removes a terminal's helpers on this computer (`kiwi terminal download|remove rex|tmux`): they mark a seat that needs you in that terminal, let Needs you open it (Show in Rex), and let new agents open there. `kiwi terminal status` says what's found, what's on and what's preferred; `kiwi rex on|off|status` still works this release.
 
 ## How agents get woken up
 
