@@ -81,11 +81,44 @@ const OPS: Record<Event["op"], true> = {
   compact: true,
   "repos.set": true,
   github: true,
+  "github.write.set": true,
   "hold.set": true,
   "voice.set": true,
   react: true,
 };
-const OPS_AT: Record<number, readonly string[]> = { 1: Object.keys(OPS) };
+const OPS_AT: Record<number, readonly string[]> = {
+  1: [
+    "hello",
+    "task.add",
+    "task.claim",
+    "task.update",
+    "card",
+    "claim",
+    "release",
+    "fact.set",
+    "fact.del",
+    "lease.take",
+    "lease.free",
+    "role.set",
+    "role.refuse",
+    "seat.reclaim",
+    "color.set",
+    "picture.set",
+    "scope.set",
+    "mode.set",
+    "room.create",
+    "room.rename",
+    "charter.set",
+    "compact.propose",
+    "compact",
+    "repos.set",
+    "github",
+    "github.write.set",
+    "hold.set",
+    "voice.set",
+    "react",
+  ],
+};
 
 describe("events from a newer client", () => {
   test("every op the Event type has is known, and a new op needs EVENT_OPS_VERSION raised with it", () => {
