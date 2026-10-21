@@ -8,10 +8,10 @@ export function Modal({ open, onClose, children, wide, roomy }: { open: boolean;
   return (
     <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
-        <Dialog.Backdrop className="fixed inset-0 z-50 bg-overlay transition-opacity duration-120 data-starting-style:opacity-0" />
+        <Dialog.Backdrop className="no-drag fixed inset-0 z-50 bg-overlay transition-opacity duration-120 data-starting-style:opacity-0" />
         <Dialog.Popup
           className={cx(
-            "fixed top-1/2 left-1/2 z-50 max-h-[88svh] w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-card bg-raised shadow-pop outline-none",
+            "no-drag fixed top-1/2 left-1/2 z-50 max-h-[88svh] w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-card bg-raised shadow-pop outline-none",
             "transition-[opacity,scale] duration-120 ease-out data-starting-style:scale-[0.98] data-starting-style:opacity-0",
             roomy ? "max-w-[960px]" : wide ? "max-w-[520px]" : "max-w-[340px]"
           )}

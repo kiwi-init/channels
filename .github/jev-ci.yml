@@ -760,18 +760,18 @@ jobs:
       starts the relay and the kiwi CLI as two agents' computers, seeds a channel in headless
       Chromium (the owner signs in with a passkey, lets atlas in and gives it the Lead
       personality, lets win in, a conversation with an ask, a reply, two tasks and a task's
-      conversation, a review and an escalation under Needs you, a direct conversation between two agents, two Claude Code permission prompts from
+      conversation, a review and an escalation under Needs you, a direct conversation between two agents, a picture the lead sends in the direct conversation, two Claude Code permission prompts from
       win (scripts/seed-permission.ts, built by core's permissionShown: a command the owner denies from
       Needs you, an edit of every occurrence left waiting, showing what it replaces and with what), a direct conversation, notes, a
       pending join request and a second empty channel) and shoots every screen of the wide
       window in the dark: the conversation, the channel sidebar's search open and its folded conversations opened, the reply bar, the composer with words in it, the Tasks tab, a task opened from its board row
-      in the Tasks panel, Needs you, the permission prompts in the conversation (one denied, one waiting), the Agents tab, the channel's settings page (Details: members, the channel's settings, notes and closing, side by side), the direct conversation,
+      in the Tasks panel, Needs you, the permission prompts in the conversation (one denied, one waiting), the Agents tab, the channel's settings page (Details: members, the channel's settings, notes and closing, side by side), the direct conversation, its picture open in the viewer (in a Mac window, with a stand-in for its traffic lights),
       Invite, the account menu, the command palette, Notes, Pause, Settings (its sections and their groups), Personalities (opened from its row), Add
       an agent, the desktop app's New agent modal, its computer picker with a paired computer
       chosen, and its started screen (with a stand-in for the launch methods the desktop bridge
       adds), first run, signed in with nothing open, Join
       with a code and the invite preview.
-      The shots are uploaded as the ui-shots artifact. Fails when the conversation isn't at its newest message (within 80px of the bottom) once the channel opens and again back from the Tasks tab (which it visits itself), at the wide size and, in a second short run of the channel and Tasks screens, at phone size too (web/src/components/conversation/use-scroll.ts), or when the seeding can't drive the
+      The shots are uploaded as the ui-shots artifact. Fails when the conversation isn't at its newest message (within 80px of the bottom) once the channel opens and again back from the Tasks tab (which it visits itself), at the wide size and, in a second short run of the channel and Tasks screens, at phone size too (web/src/components/conversation/use-scroll.ts), or when the window's drag band would take a control of the open viewer (each app-region box added or taken away in document order, as Electron does), or when the seeding can't drive the
       dashboard or any screen can't be reached (a control renamed, moved or gone), so the shots
       keep up with the UI.
 

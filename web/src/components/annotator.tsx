@@ -391,7 +391,7 @@ export function Annotator({ picture, sender, agent, when, replyTo, onSend, onClo
 
   return (
     <div ref={root} role="dialog" aria-modal="true" aria-label={`Mark up ${picture.name}`} className="animate-rise dark-stage fixed inset-0 z-50 flex flex-col bg-canvas text-ink">
-      <header className="flex shrink-0 items-center justify-between gap-3 px-4 py-3 md:px-5">
+      <header className="drag flex h-(--chrome-h) shrink-0 items-center justify-between gap-3 px-4 md:px-5 shell-mac:pl-(--lights-w)">
         <div className="flex min-w-0 items-center gap-2.5">
           <Monogram name={sender} agent={agent} size={28} />
           <div className="min-w-0">
