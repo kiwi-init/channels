@@ -137,7 +137,12 @@ test("past the context line, the Stop hook asks once for a checkpoint of each op
   const stop = async (used: number, active = false): Promise<string> => {
     const usage = { input_tokens: 1, cache_read_input_tokens: used - 101, cache_creation_input_tokens: 100, output_tokens: 5_000 };
     writeFileSync(transcript, JSON.stringify({ type: "assistant", message: { model: "test-model", content: [], usage } }) + "\n");
-    const out = await ok(agent, ["hook", "stop"], { ...S, TMUX: "", TMUX_PANE: "", TERM_PROGRAM: "" }, JSON.stringify({ session_id: "reentry", cwd: agent, hook_event_name: "Stop", transcript_path: transcript, stop_hook_active: active }));
+    const out = await ok(
+      agent,
+      ["hook", "stop"],
+      { ...S, TMUX: "", TMUX_PANE: "", TERM_PROGRAM: "" },
+      JSON.stringify({ session_id: "reentry", cwd: agent, hook_event_name: "Stop", transcript_path: transcript, stop_hook_active: active }),
+    );
     if (!out) return "";
     const said = JSON.parse(out) as { decision: string; reason: string };
     expect(said.decision).toBe("block");
