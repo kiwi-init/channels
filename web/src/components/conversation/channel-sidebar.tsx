@@ -1,5 +1,5 @@
-import { Add01Icon, Search01Icon } from "@hugeicons/core-free-icons"
-import type { ReactNode } from "react"
+import { Add01Icon, ArrowRight01Icon, ArrowUp01Icon, Search01Icon, TaskDone01Icon } from "@hugeicons/core-free-icons"
+import { useState, type ReactNode } from "react"
 
 import type { ChannelIcon } from "@kiwi/core/protocol.ts"
 import { VIEWS, type View } from "@/lib/views"
@@ -13,6 +13,7 @@ export interface Conversation {
   label: string
   unread: number
   forMe: boolean
+  withMe: boolean
 }
 
 function Section({ title, onTitle, action, children }: { title: string; onTitle?: () => void; action?: ReactNode; children: ReactNode }) {
@@ -46,6 +47,116 @@ function Item({ on, label, count, alert, onClick }: { on: boolean; label: string
         {!!count && <span className={cx("shrink-0 text-meta tabular-nums", alert ? "font-semibold text-decide" : "text-ink-3")}>{count}</span>}
       </button>
     </li>
+  )
+}
+
+function SearchRow({ search, onSearch }: { search: string | null; onSearch: (q: string | null) => void }) {
+  if (search === null)
+    return (
+      <li>
+        <button
+          type="button"
+          onClick={() => onSearch("")}
+          className="flex h-9 w-full items-center gap-2.5 rounded-ctl px-3 text-left text-ui text-ink-2 transition-colors hover:bg-wash hover:text-ink"
+        >
+          <Icon icon={Search01Icon} size={16} className="shrink-0 text-ink-3" />
+          Search
+        </button>
+      </li>
+    )
+  return (
+    <li>
+      <label className="flex h-9 items-center gap-2.5 rounded-ctl px-3 text-ui text-ink-3 edge transition-colors focus-within:text-ink-2">
+        <Icon icon={Search01Icon} size={16} className="shrink-0" />
+        <input
+          autoFocus
+          value={search}
+          aria-label="Search this channel"
+          placeholder="Search this channel"
+          onChange={(e) => onSearch(e.target.value)}
+          onBlur={(e) => !e.target.value && onSearch(null)}
+          onKeyDown={(e) => e.key === "Escape" && onSearch(null)}
+          className="min-w-0 flex-1 bg-transparent text-ui text-ink outline-none placeholder:text-ink-3 focus-visible:outline-none"
+        />
+      </label>
+    </li>
+  )
+}
+
+const DOT: Partial<Record<View, string>> = { needs: "bg-alert", doing: "bg-doing", review: "bg-decide" }
+
+function TasksRow({ view, counts, onView }: { view: View | null; counts: Record<View, number>; onView: (v: View) => void }) {
+  return (
+    <li className={cx("flex h-9 items-center rounded-ctl transition-colors", view ? "prism-lit" : "hover:bg-wash")}>
+      <button
+        type="button"
+        onClick={() => onView("everything")}
+        aria-current={view === "everything" ? "page" : undefined}
+        className={cx("flex h-full min-w-0 flex-1 items-center gap-2.5 px-3 text-left text-ui", view ? "font-semibold text-ink" : "text-ink-2 hover:text-ink")}
+      >
+        <Icon icon={TaskDone01Icon} size={16} className="shrink-0 text-ink-3" />
+        <span className="truncate">Tasks</span>
+      </button>
+      <span className="flex shrink-0 items-center gap-0.5 pr-1.5">
+        {VIEWS.flatMap(([v, label]) => {
+          const dot = DOT[v]
+          return dot && counts[v] > 0
+            ? [
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => onView(v)}
+                  aria-label={`${label}, ${counts[v]}`}
+                  aria-current={view === v ? "page" : undefined}
+                  title={label}
+                  className={cx(
+                    "flex h-6 items-center gap-1 rounded-row px-1 text-[11px] font-semibold tabular-nums transition-colors hover:bg-wash hover:text-ink",
+                    view === v ? "text-ink" : "text-ink-2"
+                  )}
+                >
+                  <span className={cx("size-2 rounded-full", dot)} />
+                  {counts[v]}
+                </button>,
+              ]
+            : []
+        })}
+      </span>
+    </li>
+  )
+}
+
+export function hiddenConversations(conversations: Conversation[], current: string | null): Conversation[] {
+  return conversations.filter((c) => !c.withMe && !c.forMe && c.key !== current)
+}
+
+function Conversations({ conversations, current, onConversation }: { conversations: Conversation[]; current: string | null; onConversation: (key: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const hidden = hiddenConversations(conversations, current)
+  const shown = open ? conversations : conversations.filter((c) => !hidden.includes(c))
+  const unread = hidden.reduce((n, c) => n + c.unread, 0)
+  return (
+    <Section title="Conversations">
+      <ul>
+        {shown.map((c) => (
+          <Item key={c.key} on={current === c.key} label={c.label} count={c.unread} alert={c.forMe} onClick={() => onConversation(c.key)} />
+        ))}
+        {hidden.length > 0 && (
+          <li>
+            <button
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              aria-expanded={open}
+              aria-label={open ? undefined : `${hidden.length} more ${hidden.length === 1 ? "conversation" : "conversations"}${unread ? `, ${unread} unread` : ""}`}
+              className="flex h-9 w-full items-center gap-2 rounded-ctl px-3 text-left text-ui text-ink-3 transition-colors hover:bg-wash hover:text-ink"
+            >
+              <Icon icon={open ? ArrowUp01Icon : ArrowRight01Icon} size={14} className="shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{open ? "Show less" : `${hidden.length} more`}</span>
+              {!open && unread > 0 && <span className="shrink-0 text-meta text-ink-3 tabular-nums">{unread}</span>}
+            </button>
+          </li>
+        )}
+      </ul>
+    </Section>
   )
 }
 
@@ -96,23 +207,10 @@ export function ChannelSidebar({
         </span>
       </button>
 
-      <label className="mt-3 flex h-9 items-center gap-2 rounded-ctl px-3 text-ui text-ink-3 edge transition-colors focus-within:text-ink-2 hover:text-ink-2">
-        <Icon icon={Search01Icon} size={16} className="shrink-0" />
-        <input
-          value={search ?? ""}
-          aria-label="Search this channel"
-          placeholder="Search this channel"
-          onChange={(e) => onSearch(e.target.value)}
-          onKeyDown={(e) => e.key === "Escape" && (onSearch(null), e.currentTarget.blur())}
-          className="min-w-0 flex-1 bg-transparent text-ui text-ink outline-none placeholder:text-ink-3 focus-visible:outline-none"
-        />
-      </label>
-
       <nav aria-label="Views" className="mt-4">
         <ul className="space-y-0.5">
-          {VIEWS.map(([v, label]) => (
-            <Item key={v} on={view === v} label={label} count={counts[v]} alert={v === "needs"} onClick={() => onView(v)} />
-          ))}
+          <SearchRow search={search} onSearch={onSearch} />
+          <TasksRow view={view} counts={counts} onView={onView} />
         </ul>
       </nav>
 
@@ -142,13 +240,7 @@ export function ChannelSidebar({
         </Section>
       )}
 
-      <Section title="Conversations">
-        <ul>
-          {conversations.map((c) => (
-            <Item key={c.key} on={current === c.key} label={c.label} count={c.unread} alert={c.forMe} onClick={() => onConversation(c.key)} />
-          ))}
-        </ul>
-      </Section>
+      <Conversations conversations={conversations} current={current} onConversation={onConversation} />
     </aside>
   )
 }
