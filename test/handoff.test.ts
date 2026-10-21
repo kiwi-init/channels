@@ -204,7 +204,8 @@ describe("kiwi ask-human", () => {
     await ok(owner, "--as", "human", "approve", /(\d{3}-\d{3})/.exec(listed)![1]!, "--yes");
     expect(await p.exited).toBe(0);
     await ok(agent, "listen", "--now");
-    task = `T${/T(\d+)/.exec(await ok(agent, "task", "add", "edit the audit"))![1]!}`;
+    const want = /#(\d+)/.exec(await ok(owner, "--as", "human", "send", "the audit needs edits"))![1]!;
+    task = `T${/T(\d+)/.exec(await ok(agent, "task", "add", "edit the audit", "--ask", want))![1]!}`;
   });
 
   test("the options and the task ride on the escalation, and picking one answers it", async () => {

@@ -23,6 +23,7 @@ const owner = scratch("owner");
 const agent = scratch("agent");
 let server: ReturnType<typeof startRelay> | undefined;
 let me = "";
+let want = "";
 
 const S: Env = { CLAUDECODE: "1", CLAUDE_CODE_SESSION_ID: "reentry", CLAUDE_PID: String(process.pid), AI_AGENT: "claude-code_2-1-296_agent" };
 const start = (source: string) => JSON.stringify({ session_id: "reentry", cwd: agent, source, hook_event_name: "SessionStart" });
@@ -73,6 +74,7 @@ beforeAll(async () => {
   expect(await joining.exited).toBe(0);
   await reading;
   me = /You're "([^"]+)"/.exec(out)![1]!;
+  want = /#(\d+)/.exec(await ok(owner, ["--as", "human", "send", "rotate the seats"], { CLAUDECODE: "" }))![1]!;
   await until(async () => (await daemonListening(daemonSock(agent)).catch(() => [])).some((s) => s.agent === me), "the daemon holding the seat");
 });
 
@@ -83,7 +85,7 @@ afterAll(async () => {
 });
 
 test("a session that starts fresh is told its open task and checkpoint; a resumed one, which still holds them, is not", async () => {
-  const added = await ok(agent, ["task", "add", "rotate the seats", "--owner", me], S);
+  const added = await ok(agent, ["task", "add", "rotate the seats", "--owner", me, "--ask", want], S);
   const id = /added (T\d+)/.exec(added)![1]!;
   await ok(agent, ["task", "start", id], S);
   expect(await context("startup")).toContain(`${id} “rotate the seats”: doing, yours`);
@@ -104,7 +106,7 @@ test("a session that starts fresh is told its open task and checkpoint; a resume
 test("big checkpoints and a backlog of messages stay inside Claude Code's inline limit, and every message left out comes with a later hook", async () => {
   const note = join(agent, "big.md");
   for (let i = 0; i < 4; i++) {
-    const tid = /added (T\d+)/.exec(await ok(agent, ["task", "add", `big ${i}`, "--owner", me], S))![1]!;
+    const tid = /added (T\d+)/.exec(await ok(agent, ["task", "add", `big ${i}`, "--owner", me, "--ask", want], S))![1]!;
     writeFileSync(note, `big ${i} where it stands\n${"w".repeat(3_500)}\n`);
     await ok(agent, ["task", "checkpoint", tid, "--file", note], S);
   }

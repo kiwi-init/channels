@@ -198,9 +198,13 @@ describe("ten verbs", () => {
     expect((await run(agent, "note", "branch", "--ttl", "7d")).code).toBe(1);
   });
 
-  test("status is one screen; task alone is the board; the old names still answer", async () => {
-    await ok(agent, "task", "add", "write the docs");
-    expect(await ok(agent, "task")).toContain("write the docs");
+  test("status is one screen; task alone is the board, by ask; the old names still answer", async () => {
+    const unfiled = await run(agent, "task", "add", "write the docs");
+    expect(unfiled.code).toBe(1);
+    expect(unfiled.err).toContain("a task is filed under the ask it serves: --ask N");
+    const want = /#(\d+)/.exec(await ok(owner, "--as", "human", "send", "docs for the ten verbs"))![1]!;
+    await ok(agent, "task", "add", "write the docs", "--ask", want);
+    expect(await ok(agent, "task")).toContain(`#${want} human: “docs for the ten verbs”\n  T`);
     const status = await ok(agent, "status");
     expect(status).toContain("dev (you)");
     expect(status).toContain("write the docs");
@@ -215,6 +219,7 @@ describe("ten verbs", () => {
 describe("review rounds through the CLI", () => {
   const owner = scratch("rounds-owner");
   const dev = scratch("rounds-dev");
+  let want = "";
   const rev = scratch("rounds-rev");
   const other = scratch("rounds-other");
 
@@ -234,10 +239,11 @@ describe("review rounds through the CLI", () => {
     await joinAs(dev, code, "dev");
     await joinAs(rev, code, "rev");
     await joinAs(other, code, "other");
+    want = /#(\d+)/.exec(await ok(owner, "--as", "human", "send", "review rounds that hold up"))![1]!;
   });
 
   test("task proof puts a link on the task, and refuses one that isn't https", async () => {
-    const t = /T(\d+)/.exec(await ok(dev, "task", "add", "show the preview"))![1]!;
+    const t = /T(\d+)/.exec(await ok(dev, "task", "add", "show the preview", "--ask", want))![1]!;
     await ok(dev, "task", "proof", `T${t}`, "https://preview.example.com/pr-1", "--label", "preview");
     const shown = await ok(dev, "task", "show", `T${t}`, "--json");
     expect(JSON.parse(shown).proof).toEqual([expect.objectContaining({ url: "https://preview.example.com/pr-1", label: "preview" })]);
@@ -249,7 +255,7 @@ describe("review rounds through the CLI", () => {
 
   test("review --review NAME from the reviewer hands the open round on: same round, same commit, and the new reviewer is told", async () => {
     const at = "3333333333333333333333333333333333333333";
-    const t = taskNo(await ok(dev, "task", "add", "hand the review on", "--review", "rev"));
+    const t = taskNo(await ok(dev, "task", "add", "hand the review on", "--review", "rev", "--ask", want));
     await ok(dev, "task", "claim", `T${t}`);
     await ok(dev, "task", "review", `T${t}`, "--at", at);
     expect(await ok(rev, "task", "review", `T${t}`, "--review", "other")).toContain(`T${t}'s review moved to other: round 1 stays open at ${at}`);
@@ -267,7 +273,7 @@ describe("review rounds through the CLI", () => {
   });
 
   test("review on a task with no reviewer is refused with how to name one, and opens no round", async () => {
-    const t = taskNo(await ok(dev, "task", "add", "nobody reviews this yet"));
+    const t = taskNo(await ok(dev, "task", "add", "nobody reviews this yet", "--ask", want));
     await ok(dev, "task", "claim", `T${t}`);
     const unnamed = await run(dev, "task", "review", `T${t}`);
     expect(unnamed.code).toBe(1);
@@ -278,7 +284,7 @@ describe("review rounds through the CLI", () => {
   });
 
   test("review --at opens a round, a verdict with --file carries the review, a stale one is refused, and REVISE can leave the board", async () => {
-    const t = /T(\d+)/.exec(await ok(dev, "task", "add", "stage 6 for QE-1", "--review", "rev"))![1]!;
+    const t = /T(\d+)/.exec(await ok(dev, "task", "add", "stage 6 for QE-1", "--review", "rev", "--ask", want))![1]!;
     await ok(dev, "task", "claim", `T${t}`);
     await ok(dev, "task", "review", `T${t}`, "--at", "1111111111111111111111111111111111111111");
     const review = join(rev, "review.md");

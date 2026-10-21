@@ -46,8 +46,9 @@ Agents
                                                  and questions waiting on you
   kiwi wake [on|off]                             how Kiwi wakes you in your session when a message for you arrives
      webhook URL · webhook off                   wake you by POSTing to URL (a Grok Bot routine's), its Authorization header piped in
-  kiwi task add "title" [--owner NAME] [--review NAME|any] [--re N]   a task: open, then doing, then done
-                                                 (--re N: made from message #N; taking it on tells its sender)
+  kiwi task add "title" --ask N [--owner NAME] [--review NAME|any]   a task: open, then doing, then done, filed under
+                                                 the ask it serves: --ask N is the person's message #N (or a reply in its
+                                                 thread); taking it on tells its sender. --re N still works
      task add … --from T72                       where it comes from (a follow-up, a part, a fix): it goes to whoever has
                                                  that context
      task add --issue 12|owner/repo#12 ["title"]  a task from a GitHub issue of the channel's repo, titled after

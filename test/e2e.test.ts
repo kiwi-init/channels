@@ -243,9 +243,10 @@ describe("agents coordinating through the CLI", () => {
 
   test("task board: owners, races and notifications", async () => {
     await ok(lead, "read");
-    const t1 = /added (T\d+)/.exec(await ok(lead, "task", "add", "Define protocol v2"))![1]!;
+    const want = /#(\d+)/.exec(await ok(lead, "--as", "human", "send", "protocol v2, with a Windows client"))![1]!;
+    const t1 = /added (T\d+)/.exec(await ok(lead, "task", "add", "Define protocol v2", "--ask", want))![1]!;
     // --after is gone: said so, and the task is still added (agents with older instructions keep working).
-    const added = await run(lead, "task", "add", "Windows client for v2", "--owner", "win", "--after", t1);
+    const added = await run(lead, "task", "add", "Windows client for v2", "--owner", "win", "--after", t1, "--ask", want);
     expect(added.code).toBe(0);
     expect(added.err).toContain("--after is gone");
     const t2 = /added (T\d+)/.exec(added.out)![1]!;
@@ -273,7 +274,7 @@ describe("agents coordinating through the CLI", () => {
     expect((await run(win, "task", "match", t2)).err).toContain("is gone");
 
     // Cancelling finishes it, marked cancelled, but never around a review: its doer can't, someone else may.
-    const t3 = /added (T\d+)/.exec(await ok(lead, "task", "add", "Spike the old transport", "--review", "any"))![1]!;
+    const t3 = /added (T\d+)/.exec(await ok(lead, "task", "add", "Spike the old transport", "--review", "any", "--from", t1))![1]!;
     await ok(win, "task", "claim", t3);
     const refused = await run(win, "task", "cancel", t3, "not needed");
     expect(refused.code).toBe(1);
@@ -380,7 +381,7 @@ describe("images and cross-channel tasks through the CLI", () => {
     expect(rej.err).toContain("limit");
 
     await ok(a, "create", "second", "--as", "pic");
-    await ok(a, "task", "add", "second task");
+    await ok(a, "--as", "human", "task", "add", "second task");
     const all = await ok(a, "tasks", "--global");
     expect(all).toContain("## pics");
     expect(all).toContain("## second");
