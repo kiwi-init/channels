@@ -304,3 +304,9 @@ One task and one PR each, in this order. Each one's tests run in `test / unit`.
      preferred terminal's helpers sets Prefer back to Terminal.
    - `kiwi rex on|off|status` stays this release, through the new code; `kiwi rex seats|show` are
      unchanged.
+7. **Show from Needs you (#656, T2015).** A plugin can list its seats (`seats(cfg)`), and the
+   registry's `seatPlaces` and `showSeat` replace the bridge's `rexSeats` and `rexShow`: Show goes to
+   the plugin holding the seat's place, and only for a seat that plugin lists. Core reads a placed
+   seat and a show result (`readPlacedSeat`, `readShowResult`). Needs you's button is `ShowSeat`,
+   labelled from the plugin's name ("Show in Rex", and "Show in tmux" with row 6), and
+   `kiwi terminal seats` and `kiwi terminal show --seat` sit beside `kiwi rex seats|show`.
