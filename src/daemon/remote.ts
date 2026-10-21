@@ -3,7 +3,8 @@ import { sep } from "node:path";
 import type { HarnessRow } from "@kiwi/core/harnesses.ts";
 import type { MachineArgs } from "@kiwi/core/machine-ask.ts";
 import { writePrivate } from "../config.ts";
-import type { Launched, LaunchRequest } from "../launch/wire.ts";
+import type { Launched } from "@kiwi/core/terminals.ts";
+import type { LaunchRequest } from "../launch/wire.ts";
 
 const REMOTE_LAUNCHES = 3;
 const REMOTE_WINDOW_MS = 10 * 60_000;

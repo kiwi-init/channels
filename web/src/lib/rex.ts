@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react"
 
-import type { RexSeatView, RexShowResult } from "../../../desktop/src/bridge.ts"
+import type { RexSeat } from "@kiwi/core/terminals.ts"
+import type { RexShowResult } from "../../../desktop/src/bridge.ts"
 import { bridge } from "./secrets"
 
-export type { RexSeatView, RexShowResult }
+export type { RexSeat, RexShowResult }
 
-export function useRexSeats(): RexSeatView[] {
-  const [seats, setSeats] = useState<RexSeatView[]>([])
+export function useRexSeats(): RexSeat[] {
+  const [seats, setSeats] = useState<RexSeat[]>([])
   useEffect(() => {
     const b = bridge()
     if (!b?.rexSeats) return
@@ -34,7 +35,7 @@ export function useRexSeats(): RexSeatView[] {
   return seats
 }
 
-export function showInRex(seat: RexSeatView): Promise<RexShowResult> {
+export function showInRex(seat: RexSeat): Promise<RexShowResult> {
   const b = bridge()
   return b?.rexShow ? b.rexShow(seat) : Promise.resolve({ ok: false, why: "failed" })
 }

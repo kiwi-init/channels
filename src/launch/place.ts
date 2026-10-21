@@ -1,11 +1,10 @@
 import { statSync } from "node:fs";
 import { basename, isAbsolute } from "node:path";
-import { REX_BLOCK, REX_SESSION, REX_TERMINAL, rexApiArgv, rexBinary, rexServer, type RexPlace } from "../rex.ts";
+import type { LaunchRefusal, Opened, PlaceKind } from "@kiwi/core/terminals.ts";
+import { REX_BLOCK, REX_SESSION, REX_TERMINAL, rexApiArgv, rexBinary, rexServer } from "../rex.ts";
 import { object, objectsIn, parseJson } from "../terminals/shared/json.ts";
 import { run, type Ran } from "../terminals/shared/run.ts";
 import { loginPath, loginShell } from "./shell.ts";
-
-export type PlaceKind = "rex" | "tmux" | "terminal";
 
 export interface PlaceRequest {
   argv: string[];
@@ -14,11 +13,7 @@ export interface PlaceRequest {
   env?: Record<string, string>;
 }
 
-export type Placed =
-  | { ok: true; place: "rex"; rex: RexPlace; window: string; pid?: number }
-  | { ok: true; place: "tmux"; socket: string; session: string; window: string; pane: string; pid?: number }
-  | { ok: true; place: "terminal"; window?: number }
-  | { ok: false; why: "bad-request" | "no-place" | "not-allowed" | "failed"; detail: string };
+export type Placed = Opened | { ok: false; why: Exclude<LaunchRefusal, "not-installed" | "no-recipe">; detail: string };
 
 export interface PlaceTools {
   platform: NodeJS.Platform;
