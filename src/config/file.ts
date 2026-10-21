@@ -34,6 +34,7 @@ export interface SeatRecord {
   term?: TerminalPlace;
   rex?: RexPlace;
   hold?: SeatHold;
+  holds?: number;
 }
 
 export function dropSeats(cfg: Config, drop: (b: SeatRecord) => boolean): void {

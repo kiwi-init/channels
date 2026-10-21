@@ -38,8 +38,8 @@ export class SessionListen extends SessionState {
       const narrowed = narrows(opts);
       let mark: ((seq: number) => boolean) | null = null;
       const away = yield* Deferred.make<void, Rejected>();
-      const stillOurs = <A, E, R2>(e: Effect.Effect<A, E, R2>) =>
-        Effect.flatMap(Effect.exit(this.unheld), (exit) => (Exit.isSuccess(exit) ? Effect.asVoid(e) : Effect.asVoid(Deferred.failCause(away, exit.cause))));
+      const lost = Effect.flatMap(Effect.exit(this.unheld), (exit) => (Exit.isSuccess(exit) ? Effect.succeed(false) : Effect.as(Deferred.failCause(away, exit.cause), true)));
+      const stillOurs = <A, E, R2>(e: Effect.Effect<A, E, R2>) => Effect.flatMap(lost, (gone) => (gone ? Effect.void : Effect.asVoid(e)));
       const hear = (m: Message) =>
         Effect.gen({ self: this }, function* () {
           if (m.seq > (messages.at(-1)?.seq ?? 0)) {
@@ -50,9 +50,11 @@ export class SessionListen extends SessionState {
           }
           const fresh = !seen.has(m.seq);
           const wanted = fresh && this.wants(m, state, opts);
+          if (wanted && (yield* lost)) return;
           const delivered = wanted && (yield* onMessage(m, state)) !== false;
           if (delivered) readTo = m.seq;
           if (fresh && !delivered && (wanted || (narrowed && this.wants(m, state)))) held = true;
+          if (yield* lost) return;
           if (!held) yield* cursor.write(this.alias, this.me, m.seq);
           else if (delivered) yield* cursor.markSeen(this.alias, this.me, [m.seq]);
         });

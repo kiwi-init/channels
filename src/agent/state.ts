@@ -1,10 +1,11 @@
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import { Channel, downWhy, OfflineReads, relayDown, type Info, type MemberRow, type Refused, type Relay } from "@kiwi/core/client.ts";
 import { Cache, Cursor, loadConfig, type ChannelConfig } from "../config.ts";
 import type { ChannelAccess } from "@kiwi/core/crypto.ts";
 import type { Identity } from "@kiwi/core/identity.ts";
 import type { DaemonPeek } from "../daemon/protocol.ts";
-import { heldText, seatHeldAway } from "../hold.ts";
+import { seatHolds, seatRefusal } from "../hold.ts";
 import { daemonMark, daemonPeek } from "../daemon/rpc.ts";
 import { GENERAL_ROOM, PAGE_LIMIT, type Message } from "@kiwi/core/protocol.ts";
 import { Rejected } from "@kiwi/core/refusals.ts";
@@ -42,6 +43,7 @@ export class SessionState {
   private daemonLive = false;
   protected base: FoldBase | null = null;
   protected partial = false;
+  readonly opened: number;
 
   constructor(
     readonly alias: string,
@@ -50,6 +52,7 @@ export class SessionState {
     persist: (a: ChannelAccess) => void,
   ) {
     this.ch = new Channel(cfg, cfg.relay, identity, persist, { keepInfo: true });
+    this.opened = seatHolds(loadConfig(), alias, identity.name);
     this.ch.onSent = (seq, m) => {
       if (m && this.log && seq === lastSeq(this.log) + 1) this.log = [...this.log, m];
       else this.owed = Math.max(this.owed, seq);
@@ -60,7 +63,14 @@ export class SessionState {
     return this.identity.name;
   }
 
-  protected readonly unheld = Effect.suspend(() => (seatHeldAway(loadConfig(), this.alias, this.me) ? Effect.fail(new Rejected(heldText(this.alias, this.me))) : Effect.void));
+  readonly unheld = Effect.suspend(() => {
+    const why = seatRefusal(loadConfig(), this.alias, this.me, this.opened);
+    return why ? Effect.fail(new Rejected(why)) : Effect.void;
+  });
+
+  whileOurs<R>(effect: Effect.Effect<void, never, R>): Effect.Effect<void, never, R> {
+    return Effect.flatMap(Effect.exit(this.unheld), (still) => (Exit.isSuccess(still) ? effect : Effect.void));
+  }
 
   owe(seq: number): void {
     this.owed = Math.max(this.owed, seq);
@@ -269,7 +279,7 @@ export class SessionState {
     const c = yield* cursor.read(this.alias, this.me);
     if (c !== null) return c;
     const head = yield* this.ch.fx.head();
-    yield* cursor.write(this.alias, this.me, head);
+    yield* this.whileOurs(cursor.write(this.alias, this.me, head));
     return head;
   });
 
@@ -291,11 +301,13 @@ export class SessionState {
       const reach = shownTo === undefined ? state.head : shownTo;
       const upTo = Math.max(since, held === undefined ? reach : Math.min(reach, held - 1));
       const ahead = shown.filter((m) => m.seq > upTo).map((m) => m.seq);
-      return Effect.andThen(
+      const moves = Effect.andThen(
         Effect.andThen(cursor.write(this.alias, this.me, upTo), ahead.length ? cursor.markSeen(this.alias, this.me, ahead) : Effect.void),
         last === undefined ? Effect.void : this.markRead(last),
       );
+      return this.whileOurs(moves);
     };
+    yield* this.unheld;
     return { messages: unread, state, commit };
   });
 

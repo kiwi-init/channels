@@ -166,8 +166,21 @@ One issue and one PR each, with its CI gate:
    or running listener reads for it, then binds it to the session it names. Built: `kiwi seat hold`
    prints a token (or takes the loop's own in `KIWI_SEAT_TOKEN`), the seat keeps only its hash, and
    `kiwi seat bind --harness H --session ID [--pid PID]` or `kiwi seat release` ends the hold
-   (`src/hold.ts`, `test/held-seat.test.ts`). Every `kiwi` command for a held seat refuses, not only
-   reads, so the loop must bind the new session before that session's first `kiwi` command.
+   (`src/hold.ts`, `test/held-seat.test.ts`, `test/hold.test.ts`). Every `kiwi` command and MCP tool
+   for a held seat refuses, not only reads, so the loop must bind the new session before that
+   session's first `kiwi` command. A request that starts while the seat is held is refused. One
+   already running when the hold lands may finish, but cannot move the cursor forward after it: a
+   delivery the hold refuses leaves the cursor where it was, and one that moved it before the hold
+   is delivered, so a message is never both refused and counted read. A read that commits nothing
+   (`log`, `show`, `sh`) and was already running may still answer; its messages stay unread. Each
+   hold adds one to the seat's `holds`, which bind keeps: a connection to the seat opened before a
+   hold reads nothing more for it afterwards, and moves neither its cursor nor its seen messages,
+   even once the seat is bound again, so a listener, `ask` or webhook the old session left running
+   can't take the new session's messages; nor can an old listener give its session the seat back.
+   The daemon wakes nothing while any record of the seat is held, whoever's token it inherited.
+   Known gap: a hook or `kiwi use` of the old session that is already waiting for the config lock
+   when hold and bind both land can still write a stale binding or deliver one message; it needs
+   the old session alive at the bind, which step 2 rules out by ending it first.
 2. The loop for Claude Code: the clean environment, the re-entry first prompt, coding, reviewing
    and answering sessions, each with its end.
 3. Codex: the new thread found by the nonce in its rollout and bound by the loop.

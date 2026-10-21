@@ -115,15 +115,17 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
   const answer = <A>(effect: Effect.Effect<A, unknown, Agent>, done: (a: A) => Result, failed: (cause: Cause.Cause<unknown>) => Result) =>
     runExit(effect).then((exit) => (Exit.isSuccess(exit) ? done(exit.value) : failed(exit.cause)));
 
+  const ours = <A>(effect: Effect.Effect<A, unknown, Agent>, commits: boolean) => Effect.andThen(s.unheld, commits ? effect : Effect.tap(effect, () => s.unheld));
+
   /**
    * A tool whose text is the answer. Gone (closed or removed): forget what this agent held here,
    * answer once, then stop serving. Anything else is the tool's error, in words.
    * Tools with an input schema are called as (args, extra); tools with none as (extra) only.
    */
-  function tool<A>(fn: (a: A, extra: Extra) => Effect.Effect<string, unknown, Agent>) {
+  function tool<A>(fn: (a: A, extra: Extra) => Effect.Effect<string, unknown, Agent>, commits = false) {
     return (a: A, extra?: Extra) => {
       const ctx = extra?.signal ? extra : (a as unknown as Extra);
-      return answer(fn(extra?.signal ? a : (undefined as A), ctx), ok, (cause) => {
+      return answer(ours(fn(extra?.signal ? a : (undefined as A), ctx), commits), ok, (cause) => {
         const err = Cause.squash(cause);
         if (!(err instanceof ChannelGone)) return fail(reason(err));
         Effect.runSync(err.why === "closed" ? keys.wipeChannel(s.alias) : keys.forgetMember(s.alias, s.me));
@@ -133,15 +135,19 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
     };
   }
 
+  const committing = <A>(fn: (a: A, extra: Extra) => Effect.Effect<string, unknown, Agent>) => tool(fn, true);
+
   /** A tool that builds its own result (images, a script's exit): any failure is its error, in words. */
   const shaped =
-    <A>(fn: (a: A) => Effect.Effect<Result, unknown, Agent>) =>
+    <A>(fn: (a: A) => Effect.Effect<Result, unknown, Agent>, commits = false) =>
     (a: A) =>
       answer(
-        fn(a),
+        ours(fn(a), commits),
         (r) => r,
         (cause) => fail(reason(Cause.squash(cause))),
       );
+
+  const committingShaped = <A>(fn: (a: A) => Effect.Effect<Result, unknown, Agent>) => shaped(fn, true);
 
   const pending: { seq: number | null; line: string }[] = [];
   let fedTo = 0;
@@ -172,7 +178,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
           Effect.suspend(() => {
             at = Math.max(at, seq);
             heardTo = at;
-            return waiting ? real.write(channel, agent, seq) : Effect.void;
+            return waiting ? s.whileOurs(real.write(channel, agent, seq)) : Effect.void;
           }),
         seen: real.seen,
         markSeen: () => Effect.void,
@@ -256,7 +262,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         'Block until a message for you arrives, then return it. If none arrives, return and call this again. A short wait is normal. Default 50 seconds, maximum 3600. Example: wait_for_messages {"timeout_seconds":50}.',
       inputSchema: { timeout_seconds: z.number().int().min(1).max(3600).optional().describe("seconds to wait. Default 50. A short wait is normal; call this again. Maximum 3600.") },
     },
-    tool(({ timeout_seconds }, extra) =>
+    committing(({ timeout_seconds }, extra) =>
       Effect.gen(function* () {
         const seconds = timeout_seconds ?? 50;
         // Remember where we started. listen marks each message read as it arrives, which is too early
@@ -270,7 +276,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
           pending.unshift(...taken);
           taken = [];
           lines = [];
-          return cursor.write(s.alias, s.me, since);
+          return Effect.flatMap(cursor.read(s.alias, s.me), (now) => (now !== null && since < now ? cursor.write(s.alias, s.me, since) : Effect.void));
         };
         yield* Effect.gen(function* () {
           yield* holding(s.alias, s.me);
@@ -281,7 +287,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
             const seq = pending[i]!.seq;
             if (seq === null || seq <= since || seen.has(seq)) pending.splice(i, 1);
           }
-          if (!opts.push && heardTo > since) yield* cursor.write(s.alias, s.me, heardTo);
+          if (!opts.push && heardTo > since) yield* s.whileOurs(cursor.write(s.alias, s.me, heardTo));
           if (pending.length) yield* Deferred.succeed(arrived, undefined);
           const fresh = !opts.push && (following === null || Deferred.isDoneUnsafe(following));
           if (fresh) yield* follow(since);
@@ -298,14 +304,19 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
           });
         }).pipe(
           Effect.ensuring(
-            Effect.suspend(() => {
+            Effect.flatMap(Effect.exit(s.unheld), (still) => {
               waiting = null;
-              return extra.signal.aborted ? giveBack() : Effect.void;
+              return extra.signal.aborted || Exit.isFailure(still) ? giveBack() : Effect.void;
             }),
           ),
           Effect.scoped,
         );
         if (extra.signal.aborted) yield* giveBack();
+        const still = yield* Effect.exit(s.unheld);
+        if (Exit.isFailure(still)) {
+          yield* giveBack();
+          return yield* Effect.failCause(still.cause);
+        }
         if (!lines.length) return "no messages yet, call wait_for_messages again.\nNext: call wait_for_messages.";
         // Handed back to the session: read now.
         yield* s.markRead((yield* cursor.read(s.alias, s.me)) ?? 0);
@@ -325,7 +336,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         thread: z.number().int().optional().describe("only the thread this message is in"),
       },
     },
-    shaped(({ chat, all, thread }) =>
+    committingShaped(({ chat, all, thread }) =>
       Effect.flatMap(s.read({ chat, all, ...(thread !== undefined ? { thread } : {}) }), ({ messages, state }) =>
         messages.length
           ? withImages(s.ch, messages.map((m) => formatMessage(m, state.trust.get(m.seq), state, s.me)).join("\n"), messages)

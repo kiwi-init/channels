@@ -13,6 +13,7 @@ import { loadConfig, saveAccess, updateConfig, type Config } from "./file.ts";
 import { forgetIdentities, forgetIdentity, identitiesIn, loadIdentity, saveIdentity } from "./identities.ts";
 import { signingBudget } from "./paths.ts";
 import { forgetMember, wipeChannel } from "./wipe.ts";
+import { seatHeldAway } from "../hold.ts";
 
 export interface KeystoreApi {
   readonly config: Effect.Effect<Config>;
@@ -86,8 +87,14 @@ export const LocalFiles: Layer.Layer<Keystore | Cache | Cursor> = Layer.mergeAll
   }),
   Layer.succeed(Cursor, {
     read: (channel, agent) => Effect.sync(() => readCursor(channel, agent)),
-    write: (channel, agent, seq) => Effect.sync(() => writeCursor(channel, agent, seq)),
+    write: (channel, agent, seq) =>
+      Effect.sync(() => {
+        if (!seatHeldAway(loadConfig(), channel, agent) || seq <= (readCursor(channel, agent) ?? 0)) writeCursor(channel, agent, seq);
+      }),
     seen: (channel, agent) => Effect.sync(() => readSeen(channel, agent)),
-    markSeen: (channel, agent, seqs) => Effect.sync(() => markSeen(channel, agent, seqs)),
+    markSeen: (channel, agent, seqs) =>
+      Effect.sync(() => {
+        if (!seatHeldAway(loadConfig(), channel, agent)) markSeen(channel, agent, seqs);
+      }),
   }),
 );

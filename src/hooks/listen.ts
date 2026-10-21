@@ -1,5 +1,6 @@
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Schedule from "effect/Schedule";
 import type * as Scope from "effect/Scope";
 import { randomUUID } from "node:crypto";
@@ -71,7 +72,7 @@ const tune = Effect.fn("Hooks.tune")(function* ({ b, cfg }: Served, who: Here, w
     got.splice(0, got.length, ...left);
     at = Math.max(at, shown);
   });
-  return { b, got, hearing, dropShown, from, reached: () => at };
+  return { b, got, hearing, dropShown, from, reached: () => at, still: s.unheld };
 });
 
 const arm = Effect.fn("Hooks.arm")(function* (seat: Served, who: Here, woke: Effect.Effect<void, never, Scope.Scope>) {
@@ -175,7 +176,9 @@ export const listen = Effect.fn("Hooks.listen")(function* (served: readonly Serv
     heard = 0;
     enough = yield* Deferred.make<void>();
   }
-  const withNews = armed.filter((a) => a.got.length);
+  const ours = yield* Effect.forEach(armed, (a) => Effect.map(Effect.exit(a.still), Exit.isSuccess));
+  const withNews = armed.filter((a, i) => a.got.length && ours[i]);
+  if (!withNews.length && armed.some((a) => a.got.length)) return 0;
   const share = seatBudget(withNews.length);
   const told = withNews.map((a) => {
     const mc = mcFor(a.b.alias, a.b.as, process.cwd(), who);

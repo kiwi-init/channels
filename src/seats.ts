@@ -18,7 +18,7 @@ import { homedir, hostname } from "node:os";
 import { dirname, resolve } from "node:path";
 import { kimiAncestor, kimiCodePid, mimoHere, piHere, type ProcessTree } from "./ancestry.ts";
 import { loadConfig, updateConfig, type Config, type SeatRecord } from "./config.ts";
-import { holdsSeat } from "./hold.ts";
+import { holdsSeat, seatHeldAway, seatHolds, seatRefusal } from "./hold.ts";
 import { omit } from "@kiwi/core/omit.ts";
 import { placeFrom, type SeatPlace } from "./rex.ts";
 
@@ -206,16 +206,22 @@ function heldElsewhere(b: Binding, who: Here, listening: (alias: string, as: str
  * Remember that an agent working in `dir` is `b.as` on channel `b.alias`, alongside any other
  * agents working there. Returns false for home/root.
  */
-export function bindDirectory(dir: string, b: Binding, listening: (alias: string, as: string) => boolean = () => false): boolean {
+export function bindDirectory(dir: string, b: Binding, listening: (alias: string, as: string) => boolean = () => false, opened?: number): boolean {
   if (tooBroad(dir)) return false;
   const at = resolve(dir);
+  let bound = true;
   updateConfig((cfg) => {
+    bound = !seatHeldAway(cfg, b.alias, b.as) && (opened === undefined || seatRefusal(cfg, b.alias, b.as, opened) === null);
+    if (!bound) return;
     // Without a session nothing could tell two seats apart later, so a sessionless seat replaces the others like it (the last join wins, as before seats),
     // except one whose agent is listening right now: that's another agent at work here, not an older seat of this one.
-    const others = seatsAt(cfg, at).filter((s) => !(s.alias === b.alias && s.as === b.as) && !(b.harness && !b.session && !s.session && s.harness === b.harness && !listening(s.alias, s.as)));
-    store(cfg, at, [...others, { ...b, at: Date.now() }]);
+    const others = seatsAt(cfg, at).filter(
+      (s) => !(s.alias === b.alias && s.as === b.as) && (!!s.hold || !(b.harness && !b.session && !s.session && s.harness === b.harness && !listening(s.alias, s.as))),
+    );
+    const holds = seatHolds(cfg, b.alias, b.as);
+    store(cfg, at, [...others, { ...b, ...(holds ? { holds } : {}), at: Date.now() }]);
   });
-  return true;
+  return bound;
 }
 
 export interface SeatOptions {
@@ -238,19 +244,22 @@ export function seatsFor(dir: string, opts: SeatOptions = {}): Binding[] {
   // Every seat from here up, whoever holds it.
   const above: Binding[] = [];
   for (let d = resolve(dir); !tooBroad(d); d = dirname(d)) above.push(...seatsAt(cfg, d).filter((b) => cfg.channels[b.alias]));
+  const everywhere = Object.keys(cfg.bindings ?? {}).flatMap((d) => seatsAt(cfg, d));
   // A listener says who this session is only when it has no seat of its own anywhere up the tree (in any
   // channel), and that agent's seat is missing or was a session's: listening as someone never makes you them.
   const heardOk = (l: Listener) =>
     !above.some((b) => !!who.session && b.session === who.session) &&
     // That agent's seat, if it has one here, must be one a session could hold: not joined from a plain terminal,
     // not without a session (whose agent may just not be listening right now), not held by another live session.
+    !seatHeldAway(cfg, l.alias, l.as) &&
+    !everywhere.some((b) => b.alias === l.alias && b.as === l.as && !!b.session && heldElsewhere(b, who, listening)) &&
     !above.some((b) => b.alias === l.alias && b.as === l.as && (b.plain || !b.session || heldElsewhere(b, who, listening))) &&
     !live.some((o) => o.alias === l.alias && o.as === l.as && !ours(o));
   for (let d = resolve(dir); !tooBroad(d); d = dirname(d)) {
     const atDir = seatsAt(cfg, d).filter((b) => cfg.channels[b.alias] && (!opts.alias || b.alias === opts.alias));
     const loop = atDir.filter((b) => holdsSeat(b));
     if (loop.length) return loop;
-    const seats = atDir.filter((b) => !b.hold);
+    const seats = atDir.filter((b) => !seatHeldAway(cfg, b.alias, b.as));
     const mine = who.session ? seats.filter((b) => b.session === who.session) : [];
     if (mine.length) {
       // Note that this session still uses it, so nobody takes it for stale (seats with no process to check).
@@ -271,8 +280,14 @@ export function seatsFor(dir: string, opts: SeatOptions = {}): Binding[] {
         at: Date.now(),
         seen: Date.now(),
       };
-      if (opts.claim !== false) updateConfig((c) => store(c, d, [...seatsAt(c, d).filter((b) => !(b.alias === seat.alias && b.as === seat.as)), seat]));
-      return [seat];
+      let held = false;
+      if (opts.claim !== false)
+        updateConfig((c) => {
+          held = seatHeldAway(c, seat.alias, seat.as);
+          const holds = seatHolds(c, seat.alias, seat.as);
+          if (!held) store(c, d, [...seatsAt(c, d).filter((b) => !(b.alias === seat.alias && b.as === seat.as)), { ...seat, ...(holds ? { holds } : {}) }]);
+        });
+      return held ? [] : [seat];
     }
     if (!seats.length) continue;
     // A plain terminal in a folder with one agent acts as that agent, as before seats.
@@ -305,14 +320,17 @@ export function seatsFor(dir: string, opts: SeatOptions = {}): Binding[] {
         at: Date.now(),
         seen: Date.now(),
       };
-      updateConfig((c) =>
-        store(
-          c,
-          d,
-          seatsAt(c, d).map((b) => (b.alias === pick.alias && b.as === pick.as ? taken : b)),
-        ),
-      );
-      return [taken];
+      let held = false;
+      updateConfig((c) => {
+        held = seatHeldAway(c, pick.alias, pick.as);
+        if (!held)
+          store(
+            c,
+            d,
+            seatsAt(c, d).map((b) => (b.alias === pick.alias && b.as === pick.as ? taken : b)),
+          );
+      });
+      return held ? [] : [taken];
     }
     return [pick];
   }
@@ -383,7 +401,7 @@ export function seatsHeldAnywhere(who: Here = here(), opts: Pick<SeatOptions, "c
   if (!who.session) return [];
   const cfg = loadConfig();
   return Object.keys(cfg.bindings ?? {}).flatMap((d) => {
-    const mine = seatsAt(cfg, d).filter((b) => b.session === who.session && cfg.channels[b.alias]);
+    const mine = seatsAt(cfg, d).filter((b) => b.session === who.session && cfg.channels[b.alias] && !seatHeldAway(cfg, b.alias, b.as));
     if (opts.claim !== false) keepSeen(d, mine);
     return mine;
   });

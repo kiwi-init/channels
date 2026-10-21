@@ -321,7 +321,7 @@ describe("waking an agent in its own session", () => {
     expect((await seat())?.wake.path).toMatchObject({ kind: "none" });
   });
 
-  test("a Codex seat its loop holds is never woken, and the thread the loop binds it to is woken for what waited", async () => {
+  test("a Codex seat its loop holds is never woken, and the next message wakes the thread the loop binds it to, never the old one", async () => {
     bindAs({ harness: "codex", session: "thread-old" });
     const before = await quiet();
     expect(holdSeat("test", "claude", "loop-token")).toEqual({ kind: "changed", seats: 1 });

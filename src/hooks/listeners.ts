@@ -13,8 +13,8 @@ export function seatsFor(dir: string, opts: Omit<SeatOptions, "listeners"> = {})
   return heldSeats(dir, { ...opts, listeners: liveListeners });
 }
 
-export function bindDirectory(dir: string, b: Binding): boolean {
-  return bindSeat(dir, b, isListening);
+export function bindDirectory(dir: string, b: Binding, opened?: number): boolean {
+  return bindSeat(dir, b, isListening, opened);
 }
 
 function listenerDir(): string {
