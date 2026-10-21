@@ -1,4 +1,4 @@
-import { Add01Icon, ComputerIcon, Download04Icon, LockIcon, Settings01Icon } from "@hugeicons/core-free-icons"
+import { Add01Icon, LockIcon } from "@hugeicons/core-free-icons"
 
 import type { ChannelRow } from "@/lib/channel"
 import type { RowNews } from "@/lib/news"
@@ -6,12 +6,13 @@ import { useIcons } from "@/lib/icons"
 import { useOwnPicture } from "@/lib/own-picture"
 import { formatShort } from "@/lib/format"
 import { useSecrets } from "@/lib/secrets"
-import { openRelease, restartToUpdate, useUpdate } from "@/lib/update"
+import { useUpdate } from "@/lib/update"
 import { cx } from "@/lib/utils"
 import { ChannelIconTile } from "./channel-icon"
 import { Icon } from "./icon"
 import { Monogram, Wordmark } from "./kit"
-import { Menu, MenuItem, MenuNote, MenuSeparator } from "./ui/menu"
+import { AccountItems, UpdatePill } from "./lazy"
+import { Menu } from "./ui/menu"
 
 /** What a row says on hover: what was said last, or why this browser can't open it yet. */
 export function rowNote(c: ChannelRow): string {
@@ -122,21 +123,7 @@ export function Sidebar({
           floats over the list, the menu above it; an update of the app, when there is one, above that. */}
       {person && (
         <div className="scrim-bottom absolute inset-x-0 bottom-0 flex flex-col items-start gap-2 px-3 pt-6 pb-3 [&>*]:pointer-events-auto">
-          {update && (
-            <button
-              type="button"
-              disabled={update.state === "downloading"}
-              onClick={() => (update.state === "ready" ? restartToUpdate() : openRelease(update))}
-              className={cx("glass flex h-9 items-center gap-2 rounded-full pr-4 pl-3 text-ui font-medium", update.state === "ready" ? "text-accent-text" : "text-ink-2")}
-            >
-              <Icon icon={Download04Icon} size={16} className="shrink-0" />
-              {update.state === "downloading"
-                ? `Downloading Channels ${update.version}…`
-                : update.state === "ready"
-                  ? `Restart to update to ${update.version}`
-                  : `Channels ${update.version} is out · Get it`}
-            </button>
-          )}
+          {update && <UpdatePill update={update} />}
           <Menu
             side="top"
             className="w-60"
@@ -147,14 +134,7 @@ export function Sidebar({
               </button>
             }
           >
-            <MenuNote>Key {person.pk.slice(0, 12)}</MenuNote>
-            <MenuItem icon={ComputerIcon} onClick={onComputers}>
-              Your computers
-            </MenuItem>
-            <MenuSeparator />
-            <MenuItem icon={Settings01Icon} onClick={onSettings}>
-              Settings
-            </MenuItem>
+            <AccountItems note={`Key ${person.pk.slice(0, 12)}`} onComputers={onComputers} onSettings={onSettings} />
           </Menu>
         </div>
       )}

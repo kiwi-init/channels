@@ -13,6 +13,19 @@ const joinWithCode = later(() => import("./welcome").then((m) => m.JoinWithCode)
 const settings = later(() => import("./settings").then((m) => m.SettingsPage))
 const computers = later(() => import("./computers").then((m) => m.ComputersModal))
 const palette = later(() => import("./ui/palette").then((m) => m.Palette))
+const accountItems = later(() => import("./account-menu").then((m) => m.AccountItems))
+const updateParts = () => import("./update-button")
+const glyphs = () => import("./message-actions")
+const replyGlyph = later(
+  () => glyphs().then((m) => m.ReplyGlyph),
+  () => <span className="block size-[15px]" />
+)
+const copyGlyph = later(
+  () => glyphs().then((m) => m.CopyGlyph),
+  () => <span className="block size-3.5" />
+)
+const updatePill = later(() => updateParts().then((m) => m.UpdatePill))
+const updateButton = later(() => updateParts().then((m) => m.UpdateButton))
 const info = later(() => import("./info-panel").then((m) => m.InfoPanel))
 const tasks = later(() => import("./tasks-panel").then((m) => m.TasksPanel))
 const taskDetails = later(() => import("./task-details").then((m) => m.TaskDetails))
@@ -54,6 +67,12 @@ export const JoinWithCode = joinWithCode.View
 export const SettingsPage = settings.View
 export const ComputersModal = computers.View
 export const Palette = palette.View
+export const AccountItems = accountItems.View
+export const preloadAccountItems = accountItems.load
+export const UpdatePill = updatePill.View
+export const UpdateButton = updateButton.View
+export const ReplyGlyph = replyGlyph.View
+export const CopyGlyph = copyGlyph.View
 export const InfoPanel = info.View
 export const TasksPanel = tasks.View
 export const TaskDetails = taskDetails.View
