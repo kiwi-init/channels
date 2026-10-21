@@ -12,7 +12,7 @@
  * under AA 4.5 for small text; the owner asked to mirror Apple, so it stays. Red is for alerts, amber for
  * a decision someone is waiting on; neither decorates.
  *
- * Two tones: the rails (the channel list and a channel's sidebar) sit on the darker rail, and the
+ * Two tones: the rails (the tab bar, the channel list and a channel's sidebar) sit on the darker rail, and the
  * page beside them is one sheet of canvas with round corners, holding the conversation, its header
  * and the panels beside it. Raised is for cards, popovers and grouped lists. What
  * floats over the conversation (its header, the composer) is liquid glass: the canvas blurred and
@@ -95,7 +95,7 @@
    * The chrome's grid, on 4px: one header row every column shares (52px), every round control on it
    * 36px (8px above and below), 8px between controls, a 12px gutter from every edge (header, rows,
    * the account pill), and what a Mac window's traffic lights take of the list's header and of the
-   * rail: they end about 80px in, so 92px leaves the gutter after them before the page's sheet.
+   * tab bar: they end about 80px in, so 92px leaves the gutter after them before the bar's controls.
    */
   --chrome-h: 52px;
   --lights-w: 92px;
@@ -470,7 +470,7 @@ html.reduce-motion ::after {
 }
 
 @utility sheet {
-  margin: 8px 8px 8px 0;
+  margin: 0 8px 8px 0;
   border-radius: var(--radius-card);
   background: var(--canvas);
   box-shadow: 0 0 0 1px var(--line);

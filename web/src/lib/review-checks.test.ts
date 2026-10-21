@@ -40,11 +40,11 @@ describe("posting review checks from the owner's app", () => {
       return { ...p, seq, rts: seq, sigOk: await verify(p) }
     }
     const room = `room-${crypto.randomUUID()}`
-    const log = [await ev({ op: "task.add", title: "Link back" }), await ev({ op: "github.write.set", on: true })]
+    const log = [await ev({ op: "task.add", title: "Link back" }), await ev({ op: "github.write.set", on: true }), await ev({ op: "branch.prefix.set", prefix: "T" })]
     expect(linksToPost(room, fold(log, roster))).toEqual([])
     log.push(await ev({ op: "github", items: [{ event: "pull_request", repo: "o/r", action: "opened", number: 5, state: "open", branch: "T1-link", at: 1 }] }))
-    expect(linksToPost(room, fold(log, roster))).toEqual([{ repo: "o/r", number: 5, task: 1, seq: 3, body: "Linked to Kiwi task T1" }])
-    expect(checkedUpTo(room, "prLinks")).toBe(2)
+    expect(linksToPost(room, fold(log, roster))).toEqual([{ repo: "o/r", number: 5, task: 1, seq: 4, body: "Linked to Kiwi task T1" }])
+    expect(checkedUpTo(room, "prLinks")).toBe(3)
   })
 
   test("an issue's task and the issue close each other, once, and nothing from before the first look", async () => {

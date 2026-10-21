@@ -4,6 +4,7 @@ import {
   ArrowRight01Icon,
   BookOpen01Icon,
   Delete02Icon,
+  GitBranchIcon,
   GithubIcon,
   GitPullRequestIcon,
   Mic01Icon,
@@ -271,6 +272,11 @@ export function InfoPanel({
                   ) : (
                     <Setting icon={GitPullRequestIcon} label="Write to GitHub" hint="On: Kiwi links new PRs and issues to their tasks, and a task closing closes its issue" />
                   ))}
+                {(p.isOwner ? p.state.repos.length > 0 : p.state.branchPrefix !== null) && (
+                  <Row icon={GitBranchIcon} onClick={() => openDialog("branch")} detail={p.state.branchPrefix ? `${p.state.branchPrefix}7-… shows on T7` : "None: a PR shows on a task by its link"}>
+                    Branch prefix
+                  </Row>
+                )}
                 {(p.isOwner || p.state.voice) &&
                   (p.isOwner && p.onVoice ? (
                     <Setting icon={Mic01Icon} label="Voice" hint={p.state.voice ? "Each person turns it on for themselves in Settings" : "Nobody here can talk to the channel with Grok Voice"}>

@@ -191,6 +191,10 @@ export function describeEvent(m: Message, state?: ChannelState): string {
       return ev.on ? "allowed voice in the channel: each person still turns it on for themselves" : "turned voice off for the channel";
     case "github.write.set":
       return ev.on ? "let Kiwi write to GitHub: a comment links each new PR and issue to its task, and a task closing closes its issue" : "stopped Kiwi writing to GitHub";
+    case "branch.prefix.set":
+      return ev.prefix
+        ? `set the branch prefix to ${ev.prefix}: a PR from a branch like ${ev.prefix}7-… shows on task T7`
+        : "cleared the branch prefix: a PR shows on a task only when someone posts its link";
     case "react":
       return ev.emoji ? `reacted ${ev.emoji} to #${ev.seq}` : `took back the reaction on #${ev.seq}`;
   }

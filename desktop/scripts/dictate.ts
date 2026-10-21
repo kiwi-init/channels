@@ -110,7 +110,7 @@ try {
   await page.getByRole("textbox").first().fill("dictate");
   await page.getByRole("button", { name: "Continue" }).click();
   at = "create a channel";
-  await page.getByRole("complementary").getByRole("button", { name: "New channel", exact: true }).click();
+  await page.getByRole("banner", { name: "Channels" }).or(page.getByRole("complementary")).getByRole("button", { name: "New channel", exact: true }).filter({ visible: true }).first().click();
   await page.getByRole("dialog").getByRole("textbox").fill("dictate");
   await page.getByRole("button", { name: "Create channel" }).click();
   await page.getByRole("complementary", { name: "Channel" }).getByRole("region", { name: "Conversations" }).getByRole("button").first().click();

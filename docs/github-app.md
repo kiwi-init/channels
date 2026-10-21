@@ -91,11 +91,17 @@ only when the relay has a `GITHUB_APP_CLIENT_ID`.
    writes nothing to your repos: a task added with `--issue` only links the
    issue, and closing the task leaves the issue as it is (the issue closing on
    GitHub still closes its task). While the owner has it on, their app comments
-   `Linked to Kiwi task T7` once on a new PR whose branch names a task (`T7-…`)
+   `Linked to Kiwi task T7` once on a new PR whose branch names a task (step 4)
    and on the issue of a task added with `--issue`, and closes that issue when
    the task is done (completed) or cancelled (not planned). No comment carries
    the task's title or notes, which stay in the encrypted channel, and nothing
    from before the switch went on is commented or closed.
+4. **Branch prefix**, under Repos, is empty by default. With a prefix, a PR
+   from a branch named with it and a task's number shows on that task: with
+   `T`, a PR from `T7-fix-login` (or `you/T7-fix-login`) shows on T7, and
+   `kiwi task done` reads the folders it changed from that branch. Empty, no
+   branch name links a PR to a task: a PR shows on a task only when someone
+   posts its link in the task's thread.
 
 GitHub's **Recent Deliveries** on the App's page shows each webhook and the
 relay's answer: `{"queued": 1}` when a channel took it, `{"queued": 0}` when

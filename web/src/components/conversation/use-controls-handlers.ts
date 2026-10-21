@@ -19,6 +19,7 @@ type Handlers = Pick<
   | "onRepos"
   | "onVoice"
   | "onGithubWrite"
+  | "onBranchPrefix"
   | "onRename"
   | "onIcon"
   | "onCloseChannel"
@@ -110,6 +111,11 @@ export function useControlsHandlers({
     onGithubWrite: isOwner
       ? async (on) => {
           await send(on ? "turned on Write to GitHub" : "turned off Write to GitHub", { kind: "event", ev: { op: "github.write.set", on } })
+        }
+      : undefined,
+    onBranchPrefix: isOwner
+      ? async (prefix) => {
+          await send(prefix ? `branch prefix: ${prefix}` : "cleared the branch prefix", { kind: "event", ev: { op: "branch.prefix.set", prefix } })
         }
       : undefined,
     onRename: isOwner
