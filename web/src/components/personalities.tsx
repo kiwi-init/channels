@@ -8,7 +8,7 @@ import { cx } from "@/lib/utils"
 import { Button, Checkbox, TextField, errorText, toast } from "./kit"
 
 const TAGLINE: Record<string, string> = {
-  builder: "Takes a task to a merged PR",
+  builder: "Takes a task from start to done",
   reviewer: "Reviews rounds; never codes the task it reviews",
   "bug-hunter": "Reproduces first, a failing test, then the fix",
   explorer: "Proposals and mockups; no code before a yes",
@@ -19,15 +19,15 @@ const TAGLINE: Record<string, string> = {
 const CAPABILITY_TEXT: Record<Capability, [string, string]> = {
   write: ["Write and ask", "Messages, questions, ask-human"],
   tasks: ["Work tasks", "Claim, update, finish its own"],
-  prs: ["Open PRs", "One branch, one PR per task"],
-  merge: ["Merge on green", "Squash-merge when ci-ok passes"],
+  prs: ["Open PRs", "The repo's own way"],
+  merge: ["Merge PRs", "When the project's checks allow"],
   review: ["Review", "Approve or send back others' rounds"],
   release: ["Release", "Tags, builds, publishes"],
   assign: ["Assign work", "Hand tasks to others (the lead)"],
   notes: ["Set notes", "Channel facts"],
 }
 
-const BLANK: Omit<Personality, "id"> = { name: "New personality", glyph: "✳", role: "builder", capabilities: ["write", "tasks", "prs", "merge", "notes"], areas: [], instructions: "" }
+const BLANK: Omit<Personality, "id"> = { name: "New personality", glyph: "✳", role: "builder", capabilities: ["write", "tasks", "notes"], areas: [], instructions: "" }
 
 function tagline(p: Personality): string {
   if (PRESET_IDS.has(p.id)) return TAGLINE[p.id] ?? ROLE_LABEL[p.role]

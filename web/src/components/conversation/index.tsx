@@ -9,7 +9,6 @@ import { taskCards } from "@kiwi/core/standup.ts"
 import { colorOf, outsideRepos, tasksAwaitingPeople, type Task, humanOf, ownerOf } from "@kiwi/core/state.ts"
 import { channelTitle, loadRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { howHere } from "@/lib/presence"
-import type { Gif } from "@/lib/gifs"
 import { asksFor, chosenOf } from "@/lib/asks"
 import type { Command } from "@/lib/commands"
 import { approveTask, closedDigest, reviewsFor, sendBackTask, type TaskSend } from "@/lib/task-actions"
@@ -26,7 +25,7 @@ import { AgentStrip, agentNow, type AgentNow } from "../agent-strip"
 import { ChannelControls } from "../controls"
 import { Icon } from "../icon"
 import { Button, Harnesses, Pictures, Spinner, errorText, toast } from "../kit"
-import { AddAgent, AgentLanes, CompactBlock, GifPicker, HoldDialog, leaveTalk, NewAgent, ProposalCard, TalkBar, TalkButton, TasksView } from "../lazy"
+import { AddAgent, AgentLanes, CompactBlock, HoldDialog, leaveTalk, NewAgent, ProposalCard, TalkBar, TalkButton, TasksView } from "../lazy"
 import { canStartAgents } from "@/lib/launches"
 import { ALLOW_ONCE, DENY, settledOf } from "@/lib/permission-settled"
 import { bridge } from "@/lib/secrets"
@@ -67,7 +66,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   const roomId = member.access.roomId
   const icon = useIcons().get(roomId) ?? null
   const now = useNow()
-  const [reacting, setReacting] = useState<Message | null>(null)
   const [here, setHere] = useState<string>("main")
   const [cardRoom, setCardRoom] = useState<string>(GENERAL_ROOM)
   const [side, setSide] = useState<Side>(null)
@@ -179,15 +177,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
   )
 
   const onReply = useCallback((m: Message) => setReplyTo(m), [])
-  const react = useCallback(
-    (g: Gif) => {
-      const on = reacting
-      setReacting(null)
-      if (!on) return
-      void send("reaction", { kind: "event", ev: { op: "react", seq: on.seq, emoji: `${g.reaction}/${g.name}` } }).catch((err) => toast(`Not sent: ${errorText(err)}`, "error"))
-    },
-    [reacting, send]
-  )
   const decided = useMemo(() => new Set(decisions.map((m) => m.seq)), [decisions])
   const repliesTo = useMemo(() => {
     const out = new Map<number, Message[]>()
@@ -311,7 +300,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     banner: place.kind === "main" ? (composerAsks[0]?.seq ?? null) : null,
     onAnswer,
     settledOf: permissionSettled,
-    onReact: setReacting,
     onJump,
     openThread,
     openTask,
@@ -606,13 +594,6 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
 
                       <div ref={footRef} className="absolute inset-x-0 bottom-0 z-20">
                         <div aria-hidden className="scrim-bottom absolute inset-x-0 -top-6 bottom-0" />
-                        {reacting && (
-                          <GifPicker
-                            onPick={react}
-                            onClose={() => setReacting(null)}
-                            className="absolute right-3 bottom-[calc(100%+4px)] left-3 md:right-auto md:left-1/2 md:w-[420px] md:-translate-x-1/2"
-                          />
-                        )}
                         <div className="relative">
                           {mayWrite ? (
                             <Composer
