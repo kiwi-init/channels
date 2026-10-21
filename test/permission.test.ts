@@ -617,3 +617,67 @@ describe("review follow-ups (T1594)", () => {
     expect(permissionAnswer(ask, real, s)).toBe("allow");
   });
 });
+
+describe("secret filter tuning (T1621)", () => {
+  const flagged: [string, string][] = [
+    ["a lowercase service_key", "service_key=abc123 ./sync.sh"],
+    ["a lowercase api_auth", "api_auth=hunter2 make deploy"],
+    ["an access_key query parameter", "curl 'https://s3.example.com/b?access_key=AB12cd34'"],
+    ["an OAuth code query parameter", "curl 'https://example.com/callback?code=4/0AX4XfWhq'"],
+    ["sudo -S after a flag with an argument", "echo hunter2 | sudo -u root -S rm -rf /opt/x"],
+    ["a KEY with a literal value", "ENCRYPTION_KEY=hunter2hunter2 bun run seed"],
+    ["a camelCase accessKey query parameter", "curl 'https://example.com/upload?accessKey=AB12cd34'"],
+    ["a variable's written-out default", "API_KEY=${API_KEY:-hunter2} bun run sync"],
+    ["a long random key under a plain name", `COSMOS_PRIMARY_KEY=${RANDOM}${RANDOM}== bun run sync`],
+    ["a short key under a name that only ends in a plain one", "MYSORT_KEY=hunter2 ./sync.sh"],
+    ["echo into sudo --stdin", "echo hunter2 | sudo --stdin rm -rf /opt/x"],
+    ["echo into sudo -S after a long flag", "echo hunter2 | sudo --preserve-env -S rm -rf /opt/x"],
+    ["a here-string into sudo -S", "sudo -S apt-get install -y jq <<< 'hunter2'"],
+    ["a literal password after a $VAR user", 'curl -u "$CI_USER:hunter2" https://ci.example.com/api/json'],
+  ];
+  const clean: [string, string][] = [
+    ["a sort key", "SORT_KEY=name bun run export"],
+    ["a primary key", "PRIMARY_KEY=id bun run migrate"],
+    ["a partition key", "PARTITION_KEY=pk aws dynamodb scan"],
+    ["a cache key", "CACHE_KEY=v2 bun run build"],
+    ["a lowercase sort_key", "sort_key=name ./export.sh"],
+    ["a test of $KEY", "[ $KEY = foo ] && echo same"],
+    ["a key passed on from the environment", "ENCRYPTION_KEY=$ENCRYPTION_KEY bun run seed"],
+    ["a token passed on from the environment", 'GITHUB_TOKEN="$GITHUB_TOKEN" gh pr list'],
+    ["a key from a command", "API_KEY=$(op read op://dev/api/key) bun run sync"],
+    ["a placeholder key in a query", "curl 'https://example.com/api?key=value'"],
+    ["a status code in a query", "curl 'https://example.com/errors?code=E_BAD'"],
+    ["sudo -S with ls -S later", "sudo -u root ls -S /opt"],
+    ["a dynamo sort key", "DYNAMO_SORT_KEY=createdAt bun run export"],
+    ["a public key", "STRIPE_PUBLIC_KEY=pk_test_abc123 bun run dev"],
+    ["a routing key", "ROUTING_KEY=logs.info ./consume.sh"],
+    ["a lowercase idempotency key", "idempotency_key=order-42 ./retry.sh"],
+    ["a test of $PASSWORD", "[ $DB_PASSWORD = changeme ] && exit 1"],
+    ["a key from a backtick command", "API_KEY=`op read op://dev/api/key` bun run sync"],
+    ["a key from a braced variable", "API_KEY=${API_KEY} bun run sync"],
+    ["an auth switch", "DISABLE_AUTH=true bun run dev"],
+    ["a lowercase auth switch", "require_auth=false ./serve.sh"],
+    ["a token switch", "SKIP_TOKEN_CHECK=1 bun test"],
+    ["an Authorization header from the environment", 'curl -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/user'],
+    ["an Authorization header from a command", 'curl -H "Authorization: token $(gh auth token)" https://api.github.com/user'],
+    ["an API-key header from the environment", 'curl -H "X-Api-Key: $API_KEY" https://api.example.com'],
+    ["a token flag from the environment", 'vault login --token "$VAULT_TOKEN"'],
+    ["a password flag from a command", "pg_dump --password=$(cat /run/secrets/db) shop"],
+    ["URL credentials from the environment", "git clone https://x-access-token:$GH_TOKEN@github.com/ana/repo.git"],
+    ["a URL user from the environment", "git clone https://${GH_TOKEN}@github.com/ana/repo.git"],
+    ["curl -u with a password from the environment", 'curl -u "admin:$CI_PASSWORD" https://ci.example.com/api/json'],
+    ["mysql -p from the environment", 'mysql -u root -p"$MYSQL_PWD" shop'],
+    ["sshpass -p from the environment", 'sshpass -p "$SSH_PASS" ssh deploy@10.0.0.5'],
+    ["docker login -p from the environment", "docker login -u bot -p $REGISTRY_TOKEN registry.example.com"],
+    ["redis-cli -a from the environment", 'redis-cli -h cache -a "$REDIS_PASSWORD" ping'],
+    ["kubectl --from-literal from the environment", 'kubectl create secret generic db --from-literal=password="$DB_PASSWORD"'],
+    ["gh secret set from the environment", 'gh secret set DEPLOY_TOKEN --body "$DEPLOY_TOKEN"'],
+    ["openssl -pass from the environment", 'openssl enc -aes-256-cbc -pass pass:"$PASSPHRASE" -in a.txt -out a.enc'],
+    ["openssl -k from the environment", "openssl enc -aes-256-cbc -k $PASSPHRASE -in a.txt -out a.enc"],
+    ["a key in a query from the environment", 'curl "https://maps.example.com/api/geocode?key=$MAPS_KEY"'],
+    ["a here-string into sudo -S from the environment", 'sudo -S apt-get update <<< "$SUDO_PASS"'],
+    ["a workflow's token from secrets", "cat > .github/workflows/ci.yml <<'EOF'\n      token: ${{ secrets.GITHUB_TOKEN }}\nEOF"],
+  ];
+  for (const [name, said] of flagged) test(`flagged: ${name}`, () => expect(looksSecret(said)).toBe(true));
+  for (const [name, said] of clean) test(`not flagged: ${name}`, () => expect(looksSecret(said)).toBe(false));
+});

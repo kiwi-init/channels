@@ -92,6 +92,12 @@ const time = (x: unknown): x is number => typeof x === "number" && Number.isFini
 const flag = (x: unknown): x is boolean | undefined => x === undefined || typeof x === "boolean";
 const total = (xs: readonly string[]) => xs.reduce((n, x) => n + x.length, 0);
 
+const SHELL_REF = String.raw`(?:\$(?:[A-Za-z_]|\{[A-Za-z_]\w*\}|\{\{|\()|\x60)`;
+const LITERAL = String.raw`(?!["']?${SHELL_REF})`;
+const SECRET_VALUE = String.raw`${LITERAL}(?!["']?(?:true|false|yes|no|on|off|[01])["']?(?![^\s;&|)]))`;
+const PLAIN_KEYS = "sort|primary|partition|cache|foreign|range|row|unique|composite|public|routing|idempotency";
+const SUDO_STDIN = String.raw`sudo(?:\s+(?:-[A-Za-z]*[CDghpRrTtUu]\s+[^\s-]\S*|--?[A-Za-z][\w-]*(?:=\S*)?))*?\s+(?:-[A-Za-z]*S|--stdin(?![\w-]))`;
+
 const FLAGGED: readonly RegExp[] = [
   /(?<![A-Za-z0-9])(?:gh[oprsu]_[A-Za-z0-9]{16,}|github_pat_[A-Za-z0-9_]{16,})/,
   /(?<![A-Za-z0-9_-])sk-[A-Za-z0-9_-]{20,}/,
@@ -105,31 +111,33 @@ const FLAGGED: readonly RegExp[] = [
   /hooks\.slack\.com\/(?:services|workflows|triggers)\/|discord(?:app)?\.com\/api\/webhooks\//i,
   /(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{2,}\.[A-Za-z0-9_-]*/,
   /-----BEGIN [A-Z0-9 ]*PRIVATE KEY/,
-  /\bauthorization\s*[:=]/i,
-  /(?<![\w-])(?:[\w-]*-api-key|api-key|apikey|private-token|x-auth-token|x-access-token|cookie|set-cookie)\s*:\s*\S/i,
+  new RegExp(String.raw`\bauthorization\s*[:=](?!\s*(?:(?:bearer|basic|token)\s+)?["']?${SHELL_REF})`, "i"),
+  new RegExp(String.raw`(?<![\w-])(?:[\w-]*-api-key|api-key|apikey|private-token|x-auth-token|x-access-token|cookie|set-cookie)\s*:\s*${LITERAL}\S`, "i"),
   /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/,
   /\bbearer\s+(?=[A-Za-z0-9._~+/=-]*\d)[A-Za-z0-9._~+/=-]{8,}/i,
-  /(?<![\w-])--(?:password|passwd|pass|token|secret|api-?key|api_key|access-token|auth-token|client-secret)(?:=\S|\s+[^\s-])/i,
-  /(?<![\w-])kubectl(?![\w-])[^\n|;&]*\bsecret\b[^\n|;&]*--from-literal[=\s]/,
-  /(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*:\/\/[^\s/?#@:]*:[^\s/?#@]+@/i,
-  /(?<![a-z0-9+.-])https?:\/\/[^\s/?#@]+@/i,
-  /(?<![\w-])(?:mysql[a-z]*|mariadb(?:-[a-z]+)?)(?![\w-])[^\n|;&]*\s-p[^\s]/,
-  /(?<![\w-])sshpass(?:\s+-[^p\s]\S*)*\s+-p\s*[^\s-]/,
-  /(?<![\w-])(?:docker|podman)\s+login(?![\w-])[^\n|;&]*\s-p\s*[^\s-]/,
-  /(?<![\w-])redis-cli(?![\w-])[^\n|;&]*\s-a\s*[^\s-]/,
-  /(?<![\w-])(?:-u|--user)(?:\s+|=)?["']?(?!\d+:\d+(?:["'\s]|$))[^\s"':]+:[^\s"']/,
+  new RegExp(String.raw`(?<![\w-])--(?:password|passwd|pass|token|secret|api-?key|api_key|access-token|auth-token|client-secret)(?:=${LITERAL}\S|\s+${LITERAL}[^\s-])`, "i"),
+  new RegExp(String.raw`(?<![\w-])kubectl(?![\w-])[^\n|;&]*\bsecret\b[^\n|;&]*--from-literal[=\s]\s*["']?[^\s="']+=${LITERAL}`),
+  new RegExp(String.raw`(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*:\/\/[^\s/?#@:]*:${LITERAL}[^\s/?#@]+@`, "i"),
+  new RegExp(String.raw`(?<![a-z0-9+.-])https?:\/\/${LITERAL}[^\s/?#@:]+@`, "i"),
+  new RegExp(String.raw`(?<![\w-])(?:mysql[a-z]*|mariadb(?:-[a-z]+)?)(?![\w-])[^\n|;&]*\s-p${LITERAL}[^\s]`),
+  new RegExp(String.raw`(?<![\w-])sshpass(?:\s+-[^p\s]\S*)*\s+-p\s*${LITERAL}[^\s-]`),
+  new RegExp(String.raw`(?<![\w-])(?:docker|podman)\s+login(?![\w-])[^\n|;&]*\s-p\s*${LITERAL}[^\s-]`),
+  new RegExp(String.raw`(?<![\w-])redis-cli(?![\w-])[^\n|;&]*\s-a\s*${LITERAL}[^\s-]`),
+  new RegExp(String.raw`(?<![\w-])(?:-u|--user)(?:\s+|=)?["']?(?!\d+:\d+(?:["'\s]|$))[^\s"':]+:${LITERAL}[^\s"']`),
   /(?:>>?|(?<![\w-])tee(?:\s+-a)?)\s*["']?(?:[^\s"'|;&<>]*\/)?(?:[\w-][\w.-]*)?\.env(?:\.[\w-]+)*["']?(?![^\s;|&)])/,
-  /(?<![\w-])(?:[A-Z0-9_]*_)?(?:KEY|AUTH|CREDENTIALS?)\s*=(?!=)\s*["']?[^\s"']/,
-  /[?&](?:key|auth|sig|signature|x-amz-signature|x-amz-security-token|x-goog-signature)=[^&\s#"']/i,
+  new RegExp(String.raw`(?<![\w$-])(?:[A-Z0-9_]*_)?(?:(?<!(?:^|[^A-Z0-9])(?:${PLAIN_KEYS.toUpperCase()})_)KEY|AUTH|CREDENTIALS?)\s*=(?!=)\s*${SECRET_VALUE}["']?[^\s"']`),
+  new RegExp(String.raw`(?<![\w$-])[a-z0-9_]*_(?:(?<!(?:^|[^a-z0-9])(?:${PLAIN_KEYS})_)key|auth|credentials?)\s*=(?!=)\s*${SECRET_VALUE}["']?[^\s"']`),
+  new RegExp(String.raw`[?&](?:(?:auth|sig|signature|x-amz-signature|x-amz-security-token|x-goog-signature)=|(?:key|access_?key|code)=(?=[^&\s#"']*\d|[^&\s#"']{20}))${LITERAL}[^&\s#"']`, "i"),
   /\bBasic\s+(?=[A-Za-z0-9+/]*[a-z])(?=[A-Za-z0-9+/]+[A-Z0-9+/])(?:[A-Za-z0-9+/]{4}){3,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?(?![\w+/=])/,
-  /(?<![\w-])gh\s+secret\s+set(?![\w-])[^\n|;&]*\s(?:--body|-b)(?:=|\s+)\S/,
-  /(?<![\w-])openssl(?![\w-])[^\n|;&]*\s(?:-k\s+\S|-(?:pass|passin|passout)\s+pass:)/,
-  /(?<![\w-])(?:echo|printf)\s[^\n|;&]*\|\s*sudo\s+(?:-[A-Za-z]+\s+)*-[A-Za-z]*S/,
+  new RegExp(String.raw`(?<![\w-])gh\s+secret\s+set(?![\w-])[^\n|;&]*\s(?:--body|-b)(?:=|\s+)${LITERAL}\S`),
+  new RegExp(String.raw`(?<![\w-])openssl(?![\w-])[^\n|;&]*\s(?:-k\s+${LITERAL}\S|-(?:pass|passin|passout)\s+pass:${LITERAL}\S)`),
+  new RegExp(String.raw`(?<![\w-])(?:echo|printf)\s[^\n|;&]*\|\s*${SUDO_STDIN}`),
+  new RegExp(String.raw`(?<![\w-])${SUDO_STDIN}[^\n|;&]*<<<\s*${LITERAL}["']?[^\s"']`),
 ];
 
 const SECRET_NAME = String.raw`[\w-]*(?:token(?!s|iz)|secret|password|passwd|passphrase|(?<![a-z0-9])pass(?![a-z])|api[_-]?key|private[_-]?key|database[_-]?url)[\w-]*`;
-const ASSIGNED = new RegExp(String.raw`(?<![\w-])${SECRET_NAME}\s*=(?!=)\s*["']?[^\s"']`, "i");
-const KEYED = new RegExp(String.raw`(?:["']${SECRET_NAME}["']?|^[ \t]*${SECRET_NAME})\s*:\s*["']?[^\s"']`, "im");
+const ASSIGNED = new RegExp(String.raw`(?<![\w$-])${SECRET_NAME}\s*=(?!=)\s*${SECRET_VALUE}["']?[^\s"']`, "i");
+const KEYED = new RegExp(String.raw`(?:["']${SECRET_NAME}["']?|^[ \t]*${SECRET_NAME})\s*:\s*${SECRET_VALUE}["']?[^\s"']`, "im");
 
 const RUN = /[A-Za-z0-9+/_-]{40,}/g;
 const RUN_SEPARATORS = /[+/_-]/;
