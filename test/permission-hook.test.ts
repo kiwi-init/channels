@@ -100,8 +100,10 @@ const theAsk = (p: { hook: { exitCode: number | null }; err: Promise<string> }, 
     return (await human.history(0)).messages.find((m: Message) => m.from === "dev" && m.permission?.command === command);
   }, `the ask for ${command}`);
 
-const answer = (ask: Message, allow: boolean, by: Channel = human, perm = true) =>
-  by.send(allow ? "A: Allow once" : "B: Deny", { to: [ask.from], re: [ask.seq], ...(perm ? { perm: permissionReply(ask, allow)! } : {}) });
+const answer = async (ask: Message, allow: boolean, by: Channel = human, perm = true) => {
+  const state = fold((await by.history(0)).messages, await by.members());
+  return by.send(allow ? "A: Allow once" : "B: Deny", { to: [ask.from], re: [ask.seq], ...(perm ? { perm: permissionReply(ask, allow, state)! } : {}) });
+};
 
 describe("kiwi hook permission", () => {
   test("asks the agent's human with the call's id, and their signed Allow comes back as Claude Code's allow", async () => {
@@ -129,7 +131,7 @@ describe("kiwi hook permission", () => {
     const deny = await answer(ask, false);
     const messages = (await human.history(0)).messages;
     const state = fold(messages, await human.members());
-    const forged: Message = { ...messages.find((m: Message) => m.seq === plain)!, from: "bea", perm: permissionReply(ask, true)! };
+    const forged: Message = { ...messages.find((m: Message) => m.seq === plain)!, from: "bea", perm: permissionReply(ask, true, state)! };
     expect(forged.seq).toBe(plain);
     expect(judged(messages, state, { id: ask.id, from: ask.from }, forged.seq)).toBeNull();
     expect(judged(messages, state, { id: ask.id, from: ask.from }, deny)).toEqual({ decision: "deny", by: "bea" });

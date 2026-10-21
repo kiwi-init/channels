@@ -9,12 +9,13 @@ export interface Settled {
   closed?: { kind: PermissionSettled; at: number }
 }
 
-export function settledOf(ask: Message, replies: readonly Message[], state: ChannelState): Settled | null {
+export function settledOf(ask: Message, replies: readonly Message[], state: ChannelState, bySeq: ReadonlyMap<number, Message>): Settled | null {
+  const folded = { trust: state.trust, members: state.members, bySeq }
   let answer: Settled["answer"]
   for (const r of [...replies].sort((a, b) => a.seq - b.seq)) {
     if (r.from === ask.from && r.settled && state.trust.get(r.seq) === "verified") return { ...(answer ? { answer } : {}), closed: { kind: r.settled, at: r.ts } }
     if (answer) continue
-    const said = permissionAnswer(ask, r, state)
+    const said = permissionAnswer(ask, r, folded)
     if (said) answer = { allow: said === "allow", by: r.from, at: r.ts }
   }
   return answer ? { answer } : null
