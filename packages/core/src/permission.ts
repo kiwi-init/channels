@@ -21,12 +21,16 @@ export interface PermissionShown {
 
 export interface PermissionReply {
   ask: string;
+  by: string;
+  of: string;
   allow: boolean;
 }
 
 export type PermissionSettled = "terminal" | "timeout" | "ended";
 
 export const PERMISSION_CHOICES = ["A: Allow once", "B: Deny"] as const;
+
+export const permissionChoices = (x: unknown): boolean => JSON.stringify(x) === JSON.stringify(PERMISSION_CHOICES);
 
 const COMMAND_MAX = 2_000;
 const DESCRIPTION_MAX = 500;
@@ -44,7 +48,8 @@ const CALL_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const SHOWN_URL = /^https?:\/\/\S+$/;
 const SHOWN_KEYS: ReadonlySet<string> = new Set(["tool", "command", "description", "sandbox", "background", "paths", "content", "url", "mcp", "cwd", "nonce", "expiresAt", "canAllow", "call"]);
 const MCP_KEYS: ReadonlySet<string> = new Set(["server", "tool", "args", "values"]);
-const REPLY_KEYS: ReadonlySet<string> = new Set(["ask", "allow"]);
+const REPLY_KEYS: ReadonlySet<string> = new Set(["ask", "by", "of", "allow"]);
+const SIG_MAX = 200;
 const SETTLED: ReadonlySet<unknown> = new Set(["terminal", "timeout", "ended"]);
 const EDIT_TOOLS: ReadonlySet<string> = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 const PATH_FIELDS = ["file_path", "notebook_path"] as const;
@@ -132,17 +137,24 @@ function readsRandom(pieces: readonly string[]): boolean {
 function longRun(said: string): boolean {
   const summed = CHECKSUM_TOOL.test(said);
   for (const m of said.matchAll(RUN)) {
-    const run = m[0];
-    if (SRI.test(run) || DIGEST_LABEL.test(said.slice(Math.max(0, m.index - 24), m.index))) continue;
-    const pieces = run.split(RUN_SEPARATORS);
-    if (!summed && pieces.some((p) => hexLength(p) > 40)) return true;
-    if (readsRandom(pieces)) return true;
+    if (DIGEST_LABEL.test(said.slice(Math.max(0, m.index - 24), m.index))) continue;
+    const runs = m[0].startsWith("/") ? m[0].split("/").filter((part) => part.length >= 40) : [m[0]];
+    for (const run of runs) {
+      if (SRI.test(run)) continue;
+      const pieces = run.split(RUN_SEPARATORS);
+      if (!summed && pieces.some((p) => hexLength(p) > 40)) return true;
+      if (readsRandom(pieces)) return true;
+    }
   }
   return false;
 }
 
+function shapedSecret(said: string): boolean {
+  return FLAGGED.some((re) => re.test(said)) || ASSIGNED.test(said) || KEYED.test(said);
+}
+
 export function looksSecret(said: string): boolean {
-  return FLAGGED.some((re) => re.test(said)) || ASSIGNED.test(said) || KEYED.test(said) || longRun(said);
+  return shapedSecret(said) || longRun(said);
 }
 
 function wellFormedMcp(x: unknown): x is NonNullable<PermissionShown["mcp"]> {
@@ -174,7 +186,7 @@ export function wellFormedPermission(x: unknown): x is PermissionShown {
 }
 
 export function wellFormedPermReply(x: unknown): x is PermissionReply {
-  return isRecord(x) && Object.keys(x).every((k) => REPLY_KEYS.has(k)) && line(x.ask, ASK_ID_MAX) && typeof x.allow === "boolean";
+  return isRecord(x) && Object.keys(x).every((k) => REPLY_KEYS.has(k)) && line(x.ask, ASK_ID_MAX) && line(x.by, NAME_MAX) && line(x.of, SIG_MAX) && typeof x.allow === "boolean";
 }
 
 export function wellFormedSettled(x: unknown): x is PermissionSettled {
@@ -275,24 +287,44 @@ function viewOf(tool: string, given: unknown, server: unknown): View | null {
 
 function shownTexts(p: PermissionShown): string[] {
   const mcp = p.mcp ? [p.mcp.server, p.mcp.tool, ...p.mcp.args, ...(p.mcp.values ?? [])] : [];
-  return [p.tool, p.cwd, p.command, p.description, p.content, p.url, ...(p.paths ?? []), ...mcp].filter((t): t is string => t !== undefined);
+  return [p.tool, p.command, p.description, p.content, p.url, ...mcp].filter((t): t is string => t !== undefined);
 }
 
-export function permissionShown(input: { tool_name: unknown; tool_input: unknown; cwd: unknown; mcp_server?: unknown }, nonce: string, expiresAt: number): PermissionShown | null {
+function revealsSecret(p: PermissionShown): boolean {
+  return shownTexts(p).some(looksSecret) || [p.cwd, ...(p.paths ?? [])].some(shapedSecret);
+}
+
+export function permissionShown(input: unknown, nonce: string, expiresAt: number): PermissionShown | null {
+  if (!isRecord(input)) return null;
   const { tool_name: tool, cwd } = input;
   if (typeof tool !== "string" || typeof cwd !== "string") return null;
   const view = viewOf(tool, input.tool_input, input.mcp_server);
   if (!view) return null;
   const shown: PermissionShown = { tool, ...view, cwd, nonce, expiresAt };
-  return wellFormedPermission(shown) && !shownTexts(shown).some(looksSecret) ? shown : null;
+  return wellFormedPermission(shown) && !revealsSecret(shown) ? shown : null;
+}
+
+export function permissionReply(ask: Message, allow: boolean): PermissionReply | null {
+  return ask.permission && ask.sig ? { ask: ask.id, by: ask.from, of: ask.sig, allow } : null;
 }
 
 export function permissionAnswer(ask: Message, reply: Message, state: ChannelState): "allow" | "deny" | null {
   const shown = ask.permission;
   if (!shown || ask.esc !== true || state.trust.get(ask.seq) !== "verified") return null;
   const perm = reply.perm;
-  if (!perm || perm.ask !== ask.id || !reply.re?.includes(ask.seq) || reply.seq <= ask.seq || reply.from === ask.from || reply.kind === "event") return null;
-  if (state.trust.get(reply.seq) !== "verified" || !ask.to?.includes(reply.from) || (reply.rts ?? reply.ts) > shown.expiresAt) return null;
+  if (
+    !perm ||
+    !ask.sig ||
+    perm.ask !== ask.id ||
+    perm.by !== ask.from ||
+    perm.of !== ask.sig ||
+    !reply.re?.includes(ask.seq) ||
+    reply.seq <= ask.seq ||
+    reply.from === ask.from ||
+    reply.kind === "event"
+  )
+    return null;
+  if (state.trust.get(reply.seq) !== "verified" || !ask.to?.includes(reply.from) || Math.max(reply.ts, reply.rts ?? reply.ts) > shown.expiresAt) return null;
   const replier = state.members.get(reply.from);
   if (!replier || !isPerson(replier)) return null;
   const human = humanOf(state, ask.from);
