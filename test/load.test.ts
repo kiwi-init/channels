@@ -24,6 +24,7 @@ const board = (tasks: Task[]): ChannelState =>
     roleSets: new Map(),
     rejected: new Map(),
     openAsks: [],
+    askHeads: new Map(),
     threadOf: new Map(),
     threadPeople: new Map(),
     lead: null,
