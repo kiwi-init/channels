@@ -215,7 +215,9 @@ jobs:
       web conversation/use-scroll.test.ts: only messages newer than the newest seen count as new
       (arrivedAfter), a hidden window's unread never goes below zero (unreadOf), and the conversation
       stays at its newest message when content shrinks and then grows before the scroll event lands,
-      while a person who scrolled up stays where they went (resized, scrolled).
+      also during a smooth scroll, and when content grows before the first scroll event after a switch
+      from a longer place (its own scrolls to the bottom record where they left it: pin), while a
+      person who scrolled up stays where they went (resized, scrolled).
       Also test/daemon-big-lines.test.ts: the daemon's socket writes queue what the socket
       didn't take and flush it on drain (src/daemon/server.ts), so a catch-up of thirty
       messages with 50 KB ones among them, and big live messages back to back, arrive whole
