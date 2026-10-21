@@ -133,7 +133,9 @@ jobs:
       commands and temp folders that must pass) or a cap is passed; Allow only where all of it is shown; the payload's
       permission, perm and settled fields (wellFormed, send, history through a local relay); permissionAnswer counting only a
       verified signed perm naming the ask's id, sender and signature, Allow from the agent's own human and Deny from them or
-      the owner; and the fold closing the ask only on an answer that counts, its asker's settled reply or at expiresAt.
+      the owner, and only the fold's own message at the reply's seq; permissionReply building no answer on an ask the fold
+      doesn't hold as verified, such as a relay-forged copy, which never reaches openAsks; and the fold closing the ask only
+      on an answer that counts, its asker's settled reply or at expiresAt.
       Also web lib/permission-view.test.ts: the app's permission row (web/src/components/permission-item.tsx,
       permission-thread.tsx, lib/permission-settled.ts): its title by tool, the command, paths, URL or MCP call with values shown verbatim with
       control and bidi characters made visible, notes for the sandbox off, the background and what's too long to allow

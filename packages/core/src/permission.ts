@@ -367,16 +367,17 @@ export function permissionShown(input: unknown, nonce: string, expiresAt: number
   return wellFormedPermission(shown) && !revealsSecret(shown) ? shown : null;
 }
 
-export function permissionReply(ask: Message, allow: boolean): PermissionReply | null {
-  return ask.permission && ask.sig ? { ask: ask.id, by: ask.from, of: ask.sig, allow } : null;
+export function permissionReply(ask: Message, allow: boolean, state: Pick<ChannelState, "trust">): PermissionReply | null {
+  return ask.permission && ask.sig && state.trust.get(ask.seq) === "verified" ? { ask: ask.id, by: ask.from, of: ask.sig, allow } : null;
 }
 
-export function permissionAnswer(ask: Message, reply: Message, state: Pick<ChannelState, "trust" | "members">): "allow" | "deny" | null {
+export function permissionAnswer(ask: Message, reply: Message, state: Pick<ChannelState, "trust" | "members"> & { bySeq: ReadonlyMap<number, Message> }): "allow" | "deny" | null {
   const shown = ask.permission;
   if (!shown || ask.esc !== true || state.trust.get(ask.seq) !== "verified") return null;
   const perm = reply.perm;
   if (
     !perm ||
+    state.bySeq.get(reply.seq) !== reply ||
     !ask.sig ||
     perm.ask !== ask.id ||
     perm.by !== ask.from ||

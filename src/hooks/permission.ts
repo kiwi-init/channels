@@ -47,9 +47,10 @@ export function decisionJson(d: Decided): string {
 }
 
 export function judged(messages: readonly Message[], state: ChannelState, ask: { id: string; from: string }, seq: number): Decided | null {
+  const bySeq = new Map(messages.map((x) => [x.seq, x]));
   const asked = messages.find((x) => x.id === ask.id && x.from === ask.from);
-  const reply = messages.find((x) => x.seq === seq);
-  const said = asked && reply ? permissionAnswer(asked, reply, state) : null;
+  const reply = bySeq.get(seq);
+  const said = asked && reply ? permissionAnswer(asked, reply, { ...state, bySeq }) : null;
   return said && reply ? { decision: said, by: reply.from } : null;
 }
 

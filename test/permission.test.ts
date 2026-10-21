@@ -369,7 +369,8 @@ const state = (ms: Message[], now?: number) =>
     roster,
     now,
   );
-const decide = (ask: Message, reply: Message) => permissionAnswer(ask, reply, state([ask, reply]));
+const folded = (ms: Message[]) => ({ ...state(ms), bySeq: new Map(ms.map((m) => [m.seq, m])) });
+const decide = (ask: Message, reply: Message) => permissionAnswer(ask, reply, folded([ask, reply]));
 
 let roster: Roster;
 beforeAll(async () => {
@@ -411,7 +412,7 @@ describe("who answers a permission", () => {
     const gap = seq;
     const later = await askFrom("win", ["ana", "jon"]);
     const early = { ...(await answer("ana", later, true)), seq: gap, rts: gap };
-    expect(permissionAnswer(later, early, state([early, later]))).toBeNull();
+    expect(permissionAnswer(later, early, folded([early, later]))).toBeNull();
     expect(decide(ask, await answer("mac", ask, true))).toBeNull();
     expect(decide(ask, await answer("eve", ask, true))).toBeNull();
     expect(decide(ask, await answer("win", ask, true))).toBeNull();
@@ -466,9 +467,10 @@ describe("through a relay", () => {
       const ch = new Channel(made.access, relay, owner);
       const permission = view({ call: "toolu_01ABC" });
       const askSeq = await ch.send("Allow Bash: rm -rf dist?", { kind: "blocking", to: ["human"], esc: true, choices: [...PERMISSION_CHOICES], permission, id: "hook-ask-0001" });
-      const sent = (await ch.history(0)).messages.find((m) => m.seq === askSeq)!;
-      const perm = permissionReply(sent, true)!;
-      expect(perm).toEqual({ ask: "hook-ask-0001", by: "human", of: sent.sig!, allow: true });
+      const history = (await ch.history(0)).messages;
+      const sent = history.find((m) => m.seq === askSeq)!;
+      expect(permissionReply(sent, true, fold(history, await ch.members()))).toBeNull();
+      const perm = { ask: "hook-ask-0001", by: "human", of: sent.sig!, allow: true };
       const answerSeq = await ch.send(PERMISSION_CHOICES[0], { re: [askSeq], perm });
       const settleSeq = await ch.send("answered in the terminal", { re: [askSeq], settled: "terminal" });
       await expect(ch.send("x", { kind: "blocking", to: ["human"], esc: true, choices: [...PERMISSION_CHOICES], permission: { ...permission, nonce: "bad" } })).rejects.toThrow("malformed");
@@ -590,5 +592,28 @@ describe("permission follow-ups (T1588)", () => {
     expect(permissionChoices([...PERMISSION_CHOICES])).toBe(true);
     expect(permissionChoices([1n])).toBe(false);
     expect(permissionChoices([PERMISSION_CHOICES[0]])).toBe(false);
+  });
+});
+
+describe("review follow-ups (T1594)", () => {
+  test("no Allow is built on a relay-forged copy of a real ask, and the copy never reaches Needs you", async () => {
+    const real = await askFrom("win", ["ana", "jon"], view({ command: "rm -rf ~" }));
+    seq++;
+    const copy: Message = { ...real, seq, rts: seq, permission: view({ command: "ls" }), sigOk: false };
+    const s = state([real, copy]);
+    expect(s.openAsks.map((m) => m.seq)).toEqual([real.seq]);
+    expect(permissionReply(copy, true, s)).toBeNull();
+    expect(permissionReply(real, true, s)).toEqual({ ask: real.id, by: "win", of: real.sig!, allow: true });
+  });
+
+  test("an answer counts only as the fold's own message at its seq, never a look-alike handed in for that seq", async () => {
+    const ask = await askFrom("win", ["ana", "jon"]);
+    const plain = await msg("ana", "msg", "looks fine to me", { to: ["win"], re: [ask.seq] });
+    const real = await answer("ana", ask, true);
+    const s = folded([ask, plain, real]);
+    const forged: Message = { ...plain, perm: permissionReply(ask, true, s)! };
+    expect(permissionAnswer(ask, forged, s)).toBeNull();
+    expect(permissionAnswer(ask, { ...real }, s)).toBeNull();
+    expect(permissionAnswer(ask, real, s)).toBe("allow");
   });
 });
