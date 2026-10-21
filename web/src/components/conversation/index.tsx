@@ -1,11 +1,12 @@
 import { ArrowDown01Icon } from "@hugeicons/core-free-icons"
 import { useCallback, useDeferredValue, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react"
 
+import { permissionReply } from "@kiwi/core/permission.ts"
 import { droppedCount } from "@kiwi/core/format.ts"
 import { memberLoad } from "@kiwi/core/load.ts"
 import { GENERAL_ROOM, isReaction, type ImageAttachment, type Message } from "@kiwi/core/protocol.ts"
 import { taskCards } from "@kiwi/core/standup.ts"
-import { colorOf, outsideRepos, tasksAwaitingPeople, type Task } from "@kiwi/core/state.ts"
+import { colorOf, outsideRepos, tasksAwaitingPeople, type Task, humanOf, ownerOf } from "@kiwi/core/state.ts"
 import { channelTitle, loadRecent, useChannel, useClock, useKnownChannels, type StoredMember } from "@/lib/channel"
 import { howHere } from "@/lib/presence"
 import type { Gif } from "@/lib/gifs"
@@ -27,6 +28,7 @@ import { Icon } from "../icon"
 import { Button, Harnesses, Pictures, Spinner, errorText, toast } from "../kit"
 import { AddAgent, AgentLanes, CompactBlock, GifPicker, HoldDialog, leaveTalk, NewAgent, ProposalCard, TalkBar, TalkButton, TasksView } from "../lazy"
 import { canStartAgents } from "@/lib/launches"
+import { ALLOW_ONCE, DENY, settledOf } from "@/lib/permission-settled"
 import { bridge } from "@/lib/secrets"
 import type { ToolCtx } from "@/lib/voice/tools"
 import { defaultScopes } from "../scopes"
@@ -193,6 +195,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     return out
   }, [messages])
   const chosen = useCallback((m: Message) => (m.choices?.length ? chosenOf(m, repliesTo.get(m.seq) ?? []) : undefined), [repliesTo])
+  const composerAsks = useMemo(() => decisions.filter((m) => !m.permission), [decisions])
+  const permissionSettled = useCallback((m: Message) => (m.permission ? settledOf(m, repliesTo.get(m.seq) ?? [], state) : undefined), [repliesTo, state])
   const answer = useCallback(
     (m: Message, text: string): Promise<boolean> =>
       send(text, { to: [m.from], re: [m.seq], kind: "msg" }).then(
@@ -304,8 +308,9 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     showsReceipt,
     onReply,
     decisions: decided,
-    banner: place.kind === "main" ? (decisions[0]?.seq ?? null) : null,
+    banner: place.kind === "main" ? (composerAsks[0]?.seq ?? null) : null,
     onAnswer,
+    settledOf: permissionSettled,
     onReact: setReacting,
     onJump,
     openThread,
@@ -437,6 +442,12 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
       nameOf={nameOf}
       agentOf={(name) => isAgent(state.members.get(name))}
       onReply={async (m, text) => void (await send(text, { to: [m.from], re: [m.seq], kind: "msg" }))}
+      permissionOf={(m) => ({ human: humanOf(state, m.from), owner: ownerOf(state) })}
+      onPermission={async (m, allow) => {
+        const perm = permissionReply(m, allow)
+        if (!perm) throw new Error("this one can only be answered in the terminal")
+        await send(allow ? ALLOW_ONCE : DENY, { to: [m.from], re: [m.seq], kind: "msg", perm })
+      }}
       onApproveTask={(t: Task) => sendTask(approveTask(t), closedDigest(state, messages, t, { by: me }))}
       onSendBack={(t: Task, why: string) => sendTask(sendBackTask(t, why))}
       onOpenTask={openTask}
@@ -610,8 +621,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                               people={people}
                               replyTo={replyTo}
                               commands={commands}
-                              asking={place.kind === "main" ? decisions[0] : undefined}
-                              more={Math.max(decisions.length - 1, 0)}
+                              asking={place.kind === "main" ? composerAsks[0] : undefined}
+                              more={Math.max(composerAsks.length - 1, 0)}
                               onAnswer={answer}
                               nameOf={nameOf}
                               onClearReply={() => setReplyTo(null)}

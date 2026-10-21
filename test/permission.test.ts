@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join as joinPath } from "node:path";
 import { Channel } from "@kiwi/core/client.ts";
 import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identity.ts";
-import { looksSecret, PERMISSION_CHOICES, permissionAnswer, permissionReply, permissionShown, wellFormedPermission, type PermissionShown } from "@kiwi/core/permission.ts";
+import { looksSecret, PERMISSION_CHOICES, permissionAnswer, permissionChoices, permissionReply, permissionShown, wellFormedPermission, type PermissionShown } from "@kiwi/core/permission.ts";
 import { wellFormed, type Kind, type Message, type Payload } from "@kiwi/core/protocol.ts";
 import { fold, type Roster } from "@kiwi/core/state.ts";
 import { startRelay } from "../src/relay/bun.ts";
@@ -73,6 +73,20 @@ const SECRET: [string, string][] = [
   ["a long random base64 run", "echo wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"],
   ["a long random base64url run", `export SEED=${RANDOM}`],
   ["a long random lowercase-and-digits run", "echo k3j9x2m7q8w1e4r6t5y0u2i9o8p7a6s5d4f3g2h1"],
+  ["a _KEY assignment", "SERVICE_KEY=abc123def456 bun run sync"],
+  ["an ENCRYPTION_KEY export", "export ENCRYPTION_KEY=hunter2hunter2"],
+  ["an AUTH= assignment", "AUTH=ana:hunter2 ./sync.sh"],
+  ["a CREDENTIALS= assignment", "CREDENTIALS=hunter2 make deploy"],
+  ["an unquoted X-Goog-Api-Key header", "curl -H X-Goog-Api-Key:abc123 https://example.com/v1"],
+  ["a key in a query string", "curl https://maps.example.com/api/geocode?key=abc123def"],
+  ["an auth in a query string", "curl 'https://example.com/feed?user=ana&auth=abc123'"],
+  ["a sig in a query string", "curl 'https://x.blob.core.windows.net/c/b?sv=2020-08-04&sig=abc123%3D'"],
+  ["a presigned S3 URL", "curl 'https://b.s3.amazonaws.com/k?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=abc123'"],
+  ["a bare Basic credential", 'curl -H "Basic dXNlcjpwYXNz" https://example.com'],
+  ["gh secret set --body", "gh secret set DEPLOY_TOKEN --body hunter2"],
+  ["openssl -k", "openssl enc -aes-256-cbc -k hunter2 -in a.txt -out a.enc"],
+  ["echo into sudo -S", "echo hunter2 | sudo -S rm -rf /opt/x"],
+  ["writing prod.env", "cat > config/prod.env <<EOF"],
 ];
 
 const NOT_SECRET: [string, string][] = [
@@ -108,6 +122,13 @@ const NOT_SECRET: [string, string][] = [
   ["a separator line", "echo ----------------------------------------------"],
   ["bearer as a word", 'echo "uses bearer authentication"'],
   ["PATH", "export PATH=$HOME/.bun/bin:$PATH"],
+  ["a name ending in KEY", "MONKEY=1 KEYBOARD=us bun test"],
+  ["Basic as a word", 'echo "Basic Instructions"'],
+  ["a query string with a page", "curl 'https://example.com/list?page=2&sort=name'"],
+  ["openssl without a key", "openssl rand -hex 16"],
+  ["listing gh secrets", "gh secret list"],
+  ["sudo -S without a pipe", "sudo -S true < /dev/null"],
+  ["a file named environment", "cat environment.txt > out.txt"],
 ];
 
 describe("what a permission prompt shows", () => {
@@ -132,10 +153,9 @@ describe("what a permission prompt shows", () => {
     expect(sandboxed).not.toHaveProperty("background");
   });
 
-  test("edits: the paths and what is written, never what is replaced", () => {
+  test("edits: the paths, what is written and what it replaces", () => {
     const edit = shown("Edit", { file_path: "/Users/ana/code/kiwi/src/a.ts", old_string: "const a = 1;", new_string: "const a = 2;" });
-    expect(edit).toEqual({ tool: "Edit", paths: ["/Users/ana/code/kiwi/src/a.ts"], content: "const a = 2;", cwd: CWD, nonce: NONCE, expiresAt: LATER, canAllow: true });
-    expect(JSON.stringify(edit)).not.toContain("const a = 1");
+    expect(edit).toEqual({ tool: "Edit", paths: ["/Users/ana/code/kiwi/src/a.ts"], content: "const a = 2;", replaced: "const a = 1;", cwd: CWD, nonce: NONCE, expiresAt: LATER, canAllow: true });
     expect(shown("Write", { file_path: "/x/b.ts", content: "export {};\n" })).toMatchObject({ paths: ["/x/b.ts"], content: "export {};\n", canAllow: true });
     expect(
       shown("MultiEdit", {
@@ -145,7 +165,7 @@ describe("what a permission prompt shows", () => {
           { old_string: "c", new_string: "d" },
         ],
       }),
-    ).toMatchObject({ content: "b\n\nd", canAllow: true });
+    ).toMatchObject({ content: "b\n\nd", replaced: "a\n\nc", canAllow: true });
     expect(shown("NotebookEdit", { notebook_path: "/x/n.ipynb", new_source: "print(1)" })).toMatchObject({ paths: ["/x/n.ipynb"], content: "print(1)", canAllow: true });
   });
 
@@ -503,5 +523,72 @@ describe("review round 2 (T1454)", () => {
     const ask = await askFrom("win", ["ana", "jon"]);
     expect(wellFormed(ask)).toBe(true);
     expect(wellFormed({ ...ask, choices: ["A: Yes", "B: No"] })).toBe(false);
+  });
+});
+
+describe("permission follow-ups (T1588)", () => {
+  const open = (s: ReturnType<typeof state>, ask: Message) => s.openAsks.some((m) => m.seq === ask.seq);
+
+  test("only an answer that counts takes the row out of Needs you", async () => {
+    const ask = await askFrom("win", ["ana", "jon"]);
+    const typed = await msg("ana", "msg", PERMISSION_CHOICES[0], { re: [ask.seq] });
+    const ownerAllow = await answer("jon", ask, true);
+    const outsider = await answer("eve", ask, false);
+    expect(open(state([ask, typed, ownerAllow, outsider]), ask)).toBe(true);
+    expect(open(state([ask, typed, await answer("ana", ask, true)]), ask)).toBe(false);
+    expect(open(state([ask, await answer("jon", ask, false)]), ask)).toBe(false);
+  });
+
+  test("an ordinary escalation still closes on any reply from someone it was sent to", async () => {
+    const plain = await askFrom("win", ["ana", "jon"], null);
+    expect(open(state([plain, await msg("ana", "msg", "sure", { re: [plain.seq] })]), plain)).toBe(false);
+  });
+
+  test("an edit says when it replaces every match, and shows a deletion as what it removes", () => {
+    expect(shown("Edit", { file_path: "/x/a.ts", old_string: "if (!ok) throw err;", new_string: "" })).toMatchObject({ content: "", replaced: "if (!ok) throw err;", canAllow: true });
+    expect(shown("Edit", { file_path: "/x/a.ts", old_string: "foo", new_string: "bar", replace_all: true })).toMatchObject({ replaced: "foo", replaceAll: true, canAllow: true });
+    expect(
+      shown("MultiEdit", {
+        file_path: "/x/a.ts",
+        edits: [
+          { old_string: "a", new_string: "b" },
+          { old_string: "c", new_string: "d", replace_all: true },
+        ],
+      }),
+    ).toMatchObject({ replaceAll: true });
+    expect(shown("Edit", { file_path: "/x/a.ts", old_string: "x", new_string: "y", replace_all: "yes" })).toBeNull();
+  });
+
+  test("an edit whose replaced text can't be shown in full can only be denied, and a prod.env is never shown", () => {
+    const big = shown("Edit", { file_path: "/x/a.ts", old_string: "a".repeat(4_001), new_string: "b" });
+    expect(big).toMatchObject({ paths: ["/x/a.ts"], content: "b", canAllow: false });
+    expect(big).not.toHaveProperty("replaced");
+    expect(shown("Write", { file_path: "/srv/app/config/prod.env", content: "A=1" })).toBeNull();
+  });
+
+  test("an edit that would be allowed must show what it replaces", () => {
+    const edit = shown("Edit", { file_path: "/x/a.ts", old_string: "a", new_string: "b" })!;
+    const unseen: PermissionShown = { ...edit };
+    delete unseen.replaced;
+    expect(wellFormedPermission(unseen)).toBe(false);
+    expect(wellFormedPermission({ ...unseen, canAllow: false })).toBe(true);
+    expect(wellFormedPermission({ ...edit, replaceAll: false })).toBe(false);
+  });
+
+  test("a secret in what an edit replaces keeps the prompt in the terminal", () => {
+    expect(shown("Edit", { file_path: "/x/a.ts", old_string: 'const k = "' + ghp + '";', new_string: "const k = env();" })).toBeNull();
+  });
+
+  test("a base64 secret that starts with a slash is still a random run; a real path is judged by its folders", () => {
+    const secret = join("/Zx8Q", LETTERS.slice(0, 26), "/HfJ1", LETTERS.slice(10, 36), "=");
+    expect(looksSecret(`echo ${secret.slice(1)} | base64 -d`)).toBe(true);
+    expect(looksSecret(`echo ${secret} | base64 -d`)).toBe(true);
+    expect(looksSecret("cd /var/folders/2r/3954x2p578v2jdp4vkj8yytc0000gn/T/kiwi-permission-relay-Xq3Zr9 && ls")).toBe(false);
+  });
+
+  test("choices that aren't plain JSON are just not the permission choices", () => {
+    expect(permissionChoices([...PERMISSION_CHOICES])).toBe(true);
+    expect(permissionChoices([1n])).toBe(false);
+    expect(permissionChoices([PERMISSION_CHOICES[0]])).toBe(false);
   });
 });

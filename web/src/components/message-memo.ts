@@ -3,7 +3,7 @@ import type { Message } from "@kiwi/core/protocol.ts"
 import { knownRefs } from "@/lib/markdown"
 import type { MessageProps } from "./message"
 
-const BY_VALUE = new Set<keyof MessageProps>(["reactions", "prs", "thread", "chosen", "trust"])
+const BY_VALUE = new Set<keyof MessageProps>(["reactions", "prs", "thread", "chosen", "trust", "settled"])
 
 export function sameValue(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return true

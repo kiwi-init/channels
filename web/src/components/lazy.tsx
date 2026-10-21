@@ -24,6 +24,8 @@ const agentLanes = later(() => import("./agent-lanes").then((m) => m.AgentLanes)
 const talkButton = later(() => import("./talk").then((m) => m.TalkButton))
 const talkBar = later(() => import("./talk").then((m) => m.TalkBar))
 const composerQuestion = later(() => import("./composer-question").then((m) => m.ComposerQuestion))
+const permissionItem = later(() => import("./permission-item").then((m) => m.PermissionItem))
+const permissionInThread = later(() => import("./permission-thread").then((m) => m.PermissionInThread))
 const commandList = later(() => import("./composer-commands").then((m) => m.CommandList))
 const commandBar = later(() => import("./composer-commands").then((m) => m.CommandBar))
 const compactBlock = later(() => import("./compact").then((m) => m.CompactBlock))
@@ -57,6 +59,8 @@ export function leaveTalk(roomId: string): void {
   void import("./talk").then((m) => m.leaveTalk(roomId))
 }
 export const ComposerQuestion = composerQuestion.View
+export const PermissionItem = permissionItem.View
+export const PermissionInThread = permissionInThread.View
 export const CommandList = commandList.View
 export const CommandBar = commandBar.View
 export const CompactBlock = compactBlock.View

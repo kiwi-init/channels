@@ -22,7 +22,7 @@
 // plain file work.
 
 export { backgroundTasks, cursorStopFollowup, fitting, grokMonitorListens, hookOutput, kimiReason, stopStyle } from "./hooks/answer.ts";
-export { autoInstallHooks, claudeHooksStatus, hooksInstalled, hooksListen, installedListenSeconds, installHooks, migrateListenHooks, rewakeCapable, uninstallHooks } from "./hooks/install/claude.ts";
+export { autoInstallHooks, claudeHooksStatus, hooksInstalled, hooksListen, installedListenSeconds, installHooks, migrateClaudeHooks, rewakeCapable, uninstallHooks } from "./hooks/install/claude.ts";
 export {
   autoInstallExtraHooks,
   EXTRA_HARNESSES,

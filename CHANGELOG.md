@@ -2,6 +2,32 @@
 
 Written by `bun scripts/changelog.ts` from each squash-merged pull request's title.
 
+## 0.23.1 — 2026-10-21
+
+- **The relay streams a dictation download through its hash into the store instead of holding the whole model in memory (T908)** ([#608](https://github.com/ojowwalker77/channels/pull/608))
+- **The open conversation no longer re-renders for other channels' news, search is deferred and windowed, Mermaid drawings are cached and capped, and task rows share one PR index (T154)** ([#607](https://github.com/ojowwalker77/channels/pull/607))
+- **A paired computer's daemon takes its person's asks from the relay inbox: claimed, checked, run within limits, answered and logged (T788)** ([#611](https://github.com/ojowwalker77/channels/pull/611))
+- **local-relay: no relay left running when its port can't be read, plus the #565 review nits (T997)** ([#610](https://github.com/ojowwalker77/channels/pull/610))
+- **A replayed older title, settings or icon is ignored (T722, A5)** ([#613](https://github.com/ojowwalker77/channels/pull/613))
+- **The paired computer's inbox survives a box that breaks its reader, trusts only the relay's id shape, launches in the realpath'd folder and keeps its launch cap across restarts (T1122)** ([#615](https://github.com/ojowwalker77/channels/pull/615))
+- **A signature check never throws, so one crafted message can't stop a channel loading (T1123)** ([#614](https://github.com/ojowwalker77/channels/pull/614))
+- **Composer and conversation: options answer once, drafts survive switches, honest counts, working jumps, keyboard actions (T155)** ([#609](https://github.com/ojowwalker77/channels/pull/609))
+- **main's unit tests pass again: a box signed with a key that isn't base64 is refused as unsigned, now that verify() can't throw (T1211)** ([#619](https://github.com/ojowwalker77/channels/pull/619))
+- **The board keeps finished tasks: no fold base from a short roster, a gap between base and log refetched, a poisoned base rebuilt (T1004)** ([#612](https://github.com/ojowwalker77/channels/pull/612))
+- **The owner's fold base stays bounded and a replay is still refused after it's pruned, so snapshots seal again past 512 KB (T586, T1089, T1219, T1272)** ([#602](https://github.com/ojowwalker77/channels/pull/602))
+- **New agent on another computer: pick a paired one, see who's online, launch through the relay (T789)** ([#617](https://github.com/ojowwalker77/channels/pull/617))
+- **The docs say how an agent is started from the app, here or on a paired computer, and the New agent plan's item 4 is as built (T790)** ([#616](https://github.com/ojowwalker77/channels/pull/616))
+- **The dashboard's first load drops about 9 KB: the Tasks view, image compression and log export load when used (T1224)** ([#618](https://github.com/ojowwalker77/channels/pull/618))
+- **main builds again: lazy.tsx declares TasksView once, not twice (#618 and #602 both added it)** ([#620](https://github.com/ojowwalker77/channels/pull/620))
+- **Tests stop leaking the answer cache, and a local run never writes into the real ~/.kiwi (T1249)** ([#621](https://github.com/ojowwalker77/channels/pull/621))
+- **docs/agents.md and SECURITY.md say how a permission prompt is answered from the app: who can answer, what's shown and what never is (T1457)** ([#622](https://github.com/ojowwalker77/channels/pull/622))
+- **The permission prompt docs match the core as built: Allow only from the agent's human, what's shown per tool and its caps, Deny-only rows, what stays in the terminal (T1457)** ([#626](https://github.com/ojowwalker77/channels/pull/626))
+- **A red CI check no longer opens a task: the owner's app's CI-red automation is gone, main included (T1515)** ([#625](https://github.com/ojowwalker77/channels/pull/625))
+- **Permission prompts core: the permission field and its check, the secret filter, and the answer check, bound to the ask's id, sender and signature (T1454)** ([#623](https://github.com/ojowwalker77/channels/pull/623))
+- **Claude Code's permission prompts reach the agent's human in Kiwi, and their signed Allow or Deny answers Claude Code (T1455)** ([#627](https://github.com/ojowwalker77/channels/pull/627))
+- **The permission hook retries an answer the fold doesn't have yet, stays quiet once a newer prompt started, and the installer refreshes a stale entry (T1605)** ([#630](https://github.com/ojowwalker77/channels/pull/630))
+- **Permission prompts in the app: the Needs you row with the signed answer, who can allow, settled states (T1456)** ([#624](https://github.com/ojowwalker77/channels/pull/624))
+
 ## 0.23.0 — 2026-10-20
 
 - **kiwi rotate on gives Codex seats in tmux a fresh thread, and the seat follows it** ([#564](https://github.com/ojowwalker77/channels/pull/564))

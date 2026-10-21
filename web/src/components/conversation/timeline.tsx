@@ -5,6 +5,7 @@ import type { TaskCards } from "@kiwi/core/standup.ts"
 import { colorOf, type ChannelState } from "@kiwi/core/state.ts"
 import { prsIn } from "@kiwi/core/work.ts"
 import type { Chosen } from "@/lib/asks"
+import type { Settled } from "@/lib/permission-settled"
 import type { ChannelHandle } from "@/lib/channel"
 import { formatTime } from "@/lib/format"
 import { chipsFor } from "@/lib/reactions"
@@ -35,6 +36,7 @@ export interface RowsContext {
   bySeq: Map<number, Message>
   quoted: (seq: number) => Message | undefined
   chosen: (m: Message) => Chosen | undefined
+  settledOf: (m: Message) => Settled | null | undefined
   nameOf: (name: string) => string
   isFresh: (seq: number) => boolean
   summaryOf: (seq: number) => ThreadSummary | undefined
@@ -69,6 +71,7 @@ export function rowMakers(c: RowsContext) {
     bySeq,
     quoted,
     chosen,
+    settledOf,
     nameOf,
     isFresh,
     summaryOf,
@@ -117,6 +120,7 @@ export function rowMakers(c: RowsContext) {
       onChoose={!anchor && decisions.has(m.seq) ? (choice) => onAnswer(m, choice) : undefined}
       inBanner={!anchor && banner === m.seq}
       chosen={chosen(m)}
+      settled={settledOf(m)}
       prs={prsOf(m)}
       onReact={anchor ? undefined : onReact}
       onJump={onJump}

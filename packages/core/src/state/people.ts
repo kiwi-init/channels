@@ -3,13 +3,13 @@ import type { ChannelState } from "./types.ts";
 
 export const isPerson = (m: { kind?: string; owner?: boolean }) => m.kind === "human" || !!m.owner;
 
-export function humanOf(state: ChannelState, name: string): string | null {
+export function humanOf(state: Pick<ChannelState, "members">, name: string): string | null {
   const m = state.members.get(name);
   if (!m || isPerson(m) || !m.sponsor) return null;
   return [...state.members.values()].find((x) => x.active && isPerson(x) && x.sponsor?.user === m.sponsor!.user)?.name ?? null;
 }
 
-export function ownerOf(state: ChannelState): string | null {
+export function ownerOf(state: Pick<ChannelState, "members">): string | null {
   return [...state.members.values()].find((x) => x.owner && x.active)?.name ?? null;
 }
 
