@@ -567,8 +567,9 @@ be only another way to answer the same prompt, never a way around it:
   A value the shell fills in (`$TOKEN`, `${TOKEN}`, `$(op read …)`) isn't the
   secret itself, so `curl -H "Authorization: Bearer $TOKEN"` is sent. What
   writes the secret out still counts: single quotes (`'$ecret'`), a default
-  (`${TOKEN:-…}`), text after the variable (`$USER-hunter2`), and `$(echo …)`,
-  `$(printf …)` or a here-doc. In JSON and YAML only `${TOKEN}` and
+  (`${TOKEN:-…}`), text after the variable (`$USER-hunter2`, `$USER:hunter2`),
+  backticks, and `$(echo …)`, `$(printf …)`, `$(htpasswd …)`, `$(openssl
+  passwd …)` or a here-doc. In JSON and YAML only `${TOKEN}` and
   `${{ … }}` count as filled in. Switches such as `DISABLE_AUTH=true` or
   `group_key=None` pass, and so do field-name keys such as `SORT_KEY` or
   `PRIMARY_KEY`, unless the value has a digit and is 20 or more characters

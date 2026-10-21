@@ -131,9 +131,10 @@ jobs:
       headers, flags, assignments including bare and lowercase _KEY/AUTH/CREDENTIALS, URL userinfo and key/sig/code/access_key
       query parameters, Basic credentials, gh secret, openssl -k, sudo -S and --stdin through a pipe or a here-string, webhooks,
       .env and prod.env writes, and long random runs, against ordinary commands and temp folders that must pass, and against
-      values the shell fills in ($VAR, ${VAR}, $(…), `…`), true/false/None switches and field-name keys such as SORT_KEY or
-      PRIMARY_KEY, which must pass too, while single quotes, $(echo …), text after a ref, PHP/Perl $name assignments, JSON
-      and YAML $-values and a 20+ character value with a digit under a field-name key still flag) or a cap is passed; Allow only where all of it is shown; the payload's
+      values the shell fills in ($VAR, ${VAR}, $(…), ${{ … }}), true/false/None switches and field-name keys such as SORT_KEY or
+      PRIMARY_KEY, which must pass too, while single quotes, backticks, $(echo|printf|htpasswd|passwd …), text after a ref,
+      a value that only starts with a switch word, PHP/Perl $name assignments, JSON and YAML $-values and a 20+ character
+      value with a digit under a field-name key still flag) or a cap is passed; Allow only where all of it is shown; the payload's
       permission, perm and settled fields (wellFormed, send, history through a local relay); permissionAnswer counting only a
       verified signed perm naming the ask's id, sender and signature, Allow from the agent's own human and Deny from them or
       the owner, and only the fold's own message at the reply's seq; permissionReply building no answer on an ask the fold

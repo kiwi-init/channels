@@ -92,14 +92,15 @@ const time = (x: unknown): x is number => typeof x === "number" && Number.isFini
 const flag = (x: unknown): x is boolean | undefined => x === undefined || typeof x === "boolean";
 const total = (xs: readonly string[]) => xs.reduce((n, x) => n + x.length, 0);
 
-const REF_END = String.raw`(?![^\s"';&|)@/:,])`;
-const BRACED_REF = String.raw`\$(?:\{[A-Za-z_]\w*\}${REF_END}|\{\{)`;
-const SHELL_REF = String.raw`(?:${BRACED_REF}|\$(?:[A-Za-z_]\w*${REF_END}|\((?![^)]*(?:\b(?:echo|printf)\b|<<)))|\x60(?=[^\x60\s]+\s[^\x60]*\x60)(?![^\x60]*\b(?:echo|printf)\b))`;
+const REF_END = String.raw`(?![^\s"';&|)@/:,]|[:,][^\s"';&|)$])`;
+const BRACED_REF = String.raw`\$(?:\{[A-Za-z_]\w*\}|\{\{[^}"']*\}\})${REF_END}`;
+const SHELL_REF = String.raw`(?:${BRACED_REF}|\$(?:[A-Za-z_]\w*${REF_END}|\((?![^)]*(?:\b(?:echo|printf|htpasswd|mkpasswd|passwd|hash-password)\b|<<))))`;
 const LITERAL = String.raw`(?!"?${SHELL_REF})`;
 const SWITCHES = ["true", "false", "yes", "no", "on", "off", "none", "null", "nil", "0", "1"].flatMap((w) => [w, w.charAt(0).toUpperCase() + w.slice(1), w.toUpperCase()]);
-const NOT_SWITCH = String.raw`(?!["']?(?:${SWITCHES.join("|")})["']?(?![^\s;&|),]))`;
+const SWITCH = String.raw`(?:"(?:${SWITCHES.join("|")})"|'(?:${SWITCHES.join("|")})'|(?:${SWITCHES.join("|")}))`;
+const NOT_SWITCH = String.raw`(?!${SWITCH}(?![^\s;&|),]))`;
 const SECRET_VALUE = LITERAL + NOT_SWITCH;
-const KEYED_VALUE = String.raw`(?!"?${BRACED_REF})${NOT_SWITCH}`;
+const KEYED_VALUE = String.raw`(?!"?${BRACED_REF})(?!${SWITCH}[^\S\n]*(?:[,}\]#]|$))`;
 const NAME_START = String.raw`(?<![\w-])(?<!(?:\[|\btest)\s+\$)`;
 const PLAIN_KEYS = "sort|primary|partition|cache|foreign|range|row|unique|composite|public|routing|idempotency";
 const SUDO_STDIN = String.raw`sudo(?:\s+(?:-[A-Za-z]*[CDghpRrTtUu]\s+[^\s-]\S*|--?[A-Za-z][\w-]*(?:=\S*)?))*?\s+(?:-[A-Za-z]*S|--stdin(?![\w-]))`;
