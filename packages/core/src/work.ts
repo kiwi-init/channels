@@ -219,7 +219,7 @@ function taskPrIndex(state: ChannelState): Map<number, TaskPr> {
   const rank = (p: GithubPr) => (p.state === "open" ? 1 : 0);
   const best = new Map<number, GithubPr>();
   for (const p of state.github.prs.values()) {
-    const id = taskOfBranch(p.branch);
+    const id = taskOfBranch(p.branch, state.branchPrefix);
     if (id === null) continue;
     const held = best.get(id);
     if (!held || rank(p) > rank(held) || (rank(p) === rank(held) && p.at > held.at)) best.set(id, p);
@@ -237,8 +237,13 @@ export function taskPr(state: ChannelState, id: number): TaskPr | undefined {
   return taskPrIndex(state).get(id);
 }
 
-export function taskOfBranch(branch: string | undefined): number | null {
-  const m = branch && /^(?:[\w.-]+\/)?T(\d{1,9})(?:$|[-_/.])/i.exec(branch);
+const branchRes = new Map<string, RegExp>();
+
+export function taskOfBranch(branch: string | undefined, prefix: string | null): number | null {
+  if (!branch || !prefix) return null;
+  let re = branchRes.get(prefix);
+  if (!re) branchRes.set(prefix, (re = new RegExp(`^(?:[\\w.-]+\\/)?${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\d{1,9})(?:$|[-_/.])`, "i")));
+  const m = re.exec(branch);
   return m ? Number(m[1]) : null;
 }
 
@@ -283,7 +288,7 @@ export function taskFeed(state: ChannelState, messages: Message[], id: number): 
     items.push({ type: "pr", seq: pr.seq, at: at(m), actor: m.from, pr });
   }
   for (const [key, gh] of state.github.prs) {
-    if (shown.has(key) || taskOfBranch(gh.branch) !== id) continue;
+    if (shown.has(key) || taskOfBranch(gh.branch, state.branchPrefix) !== id) continue;
     const m = messages.find((x) => x.seq === gh.seq);
     if (!m) continue;
     const pr = fromGithub(state, { url: gh.url ?? `https://github.com/${gh.repo}/pull/${gh.number}`, repo: gh.repo, number: gh.number, state: gh.state, seq: gh.seq });
@@ -385,7 +390,7 @@ export function prsByTask(state: ChannelState, messages: Message[], ids: Iterabl
     }
   const byBranch = new Map<number, [string, GithubPr][]>();
   for (const [key, gh] of state.github.prs) {
-    const id = taskOfBranch(gh.branch);
+    const id = taskOfBranch(gh.branch, state.branchPrefix);
     if (id === null) continue;
     let list = byBranch.get(id);
     if (!list) byBranch.set(id, (list = []));
@@ -457,7 +462,7 @@ export function prsToLinkBack(state: ChannelState, after: number): { repo: strin
   if (state.githubWrite === null) return out;
   const since = Math.max(after, state.githubWrite);
   for (const pr of state.github.prs.values()) {
-    const id = taskOfBranch(pr.branch);
+    const id = taskOfBranch(pr.branch, state.branchPrefix);
     const t = id === null ? undefined : state.tasks.get(id);
     if (!t || pr.seq <= since || pr.state !== "open") continue;
     out.push({ repo: pr.repo, number: pr.number, task: t.id, seq: pr.seq, body: `Linked to Kiwi task ${taskId(t.id)}` });

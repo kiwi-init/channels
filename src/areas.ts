@@ -13,10 +13,10 @@ function git(args: string[], cwd: string): string | null {
   }
 }
 
-export function branchAreas(task: number, owner: boolean, cwd = process.cwd()): string[] | null {
+export function branchAreas(task: number, owner: boolean, prefix: string | null, cwd = process.cwd()): string[] | null {
   const branch = git(["rev-parse", "--abbrev-ref", "HEAD"], cwd);
   if (!branch || DEFAULT_BRANCHES.has(branch)) return null;
-  if (taskOfBranch(branch) !== task && !owner) return null;
+  if (taskOfBranch(branch, prefix) !== task && !owner) return null;
   const head = git(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"], cwd) || "origin/main";
   const base = git(["merge-base", "HEAD", head], cwd);
   if (!base) return null;

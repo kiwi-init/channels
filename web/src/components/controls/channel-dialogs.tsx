@@ -1,7 +1,7 @@
 import { Dialog } from "@base-ui/react/dialog"
 import { useState } from "react"
 
-import { MAX_CHARTER } from "@kiwi/core/protocol.ts"
+import { BRANCH_PREFIX_RE, MAX_CHARTER } from "@kiwi/core/protocol.ts"
 import { Button, Modal, TextField, errorText, toast } from "../kit"
 
 export function CharterDialog({ text, onClose, onSave }: { text: string; onClose: () => void; onSave?: (text: string | null) => Promise<void> }) {
@@ -54,6 +54,78 @@ export function CharterDialog({ text, onClose, onSave }: { text: string; onClose
           {onSave && (
             <Button type="submit" disabled={busy || next === text.trim()}>
               {next || !text ? "Save" : "Clear"}
+            </Button>
+          )}
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+export function BranchPrefixDialog({ prefix, onClose, onSave }: { prefix: string | null; onClose: () => void; onSave?: (prefix: string | null) => Promise<void> }) {
+  const [draft, setDraft] = useState(prefix ?? "")
+  const [busy, setBusy] = useState(false)
+  const next = draft.trim()
+  const valid = !next || BRANCH_PREFIX_RE.test(next)
+  const save = async () => {
+    setBusy(true)
+    try {
+      await onSave!(next || null)
+      toast(next ? "Branch prefix saved" : "Branch prefix cleared")
+      onClose()
+    } catch (err) {
+      toast(errorText(err), "error")
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Modal open onClose={onClose}>
+      <form
+        className="p-5"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (onSave && valid && next !== (prefix ?? "")) void save()
+        }}
+      >
+        <Dialog.Title className="text-title font-semibold tracking-[-0.01em]">Branch prefix</Dialog.Title>
+        <Dialog.Description className="mt-1 text-ui leading-normal text-ink-2">
+          A pull request from a branch named with this prefix and a task’s number shows on that task. Leave it empty and a pull request shows on a task only when someone posts its link.
+        </Dialog.Description>
+        {onSave ? (
+          <TextField
+            className="mt-4 font-mono"
+            autoFocus
+            value={draft}
+            maxLength={32}
+            spellCheck={false}
+            placeholder="T"
+            onChange={(e) => setDraft(e.target.value)}
+            aria-label="Branch prefix"
+            aria-invalid={!valid}
+            aria-describedby="branch-prefix-example"
+          />
+        ) : (
+          <p className="mt-4 font-mono text-body text-ink">{prefix}</p>
+        )}
+        <p id="branch-prefix-example" role={valid ? undefined : "alert"} className={valid ? "mt-2 text-meta text-ink-3" : "mt-2 text-meta text-alert"}>
+          {!valid ? (
+            "Letters, numbers, and . _ / - only"
+          ) : next ? (
+            <>
+              A pull request from <span className="font-mono">{next}7-fix-login</span> shows on task T7.
+            </>
+          ) : (
+            "No branch links a pull request to a task."
+          )}
+        </p>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>
+            {onSave ? "Cancel" : "Close"}
+          </Button>
+          {onSave && (
+            <Button type="submit" disabled={busy || !valid || next === (prefix ?? "")}>
+              {next || !prefix ? "Save" : "Clear"}
             </Button>
           )}
         </div>
