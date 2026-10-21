@@ -76,7 +76,14 @@ export function NeedsYou({
     return p ? [{ m, p }] : []
   })
   const items: { key: string; node: ReactNode }[] = [
-    ...permissions.map(({ m, p }) => ({ key: `a${m.seq}`, node: <PermissionItem m={m} p={p} now={now} nameOf={nameOf} onReply={onReply} seat={seatOf(m.from)} /> })),
+    ...permissions.map(({ m, p: perm }) => {
+      const human = p.roster.find((r) => r.name === m.from)?.sponsor?.handle
+      const mine = human === me
+      return {
+        key: `a${m.seq}`,
+        node: <PermissionItem m={m} p={perm} now={now} nameOf={nameOf} onReply={onReply} seat={seatOf(m.from)} canAllow={mine} canDeny={mine || p.isOwner} />,
+      }
+    }),
     ...requests.map((r) => ({ key: `r${r.id}`, node: <RequestItem r={r} roomId={roomId} now={now} /> })),
     ...(decisionCards ? asked(decisions) : []).map((m) => ({ key: `a${m.seq}`, node: <DecisionCard m={m} nameOf={nameOf} onReply={onReply} seat={seatOf(m.from)} /> })),
     ...[...(decisionCards ? [] : asked(decisions)), ...asked(escalations), ...questions].map((m) => ({
@@ -360,6 +367,8 @@ function PermissionItem({
   nameOf,
   onReply,
   seat,
+  canAllow,
+  canDeny,
 }: {
   m: Message
   p: PermissionLike
@@ -367,6 +376,8 @@ function PermissionItem({
   nameOf: (n: string) => string
   onReply: (m: Message, text: string) => Promise<void>
   seat?: RexSeatView
+  canAllow: boolean
+  canDeny: boolean
 }) {
   const [busy, setBusy] = useState(false)
   const answer = (choice: string) => {
@@ -397,12 +408,18 @@ function PermissionItem({
       }
     >
       <ShowInRex seat={seat} />
-      <Button size="sm" variant="secondary" className="text-alert" disabled={busy} onClick={() => answer(DENY)}>
-        Deny
-      </Button>
-      <Button size="sm" disabled={busy} onClick={() => answer(ALLOW_ONCE)}>
-        Allow once
-      </Button>
+      {canDeny && (
+        <Button size="sm" variant="secondary" className="text-alert" disabled={busy} onClick={() => answer(DENY)}>
+          Deny
+        </Button>
+      )}
+      {canAllow ? (
+        <Button size="sm" disabled={busy} onClick={() => answer(ALLOW_ONCE)}>
+          Allow once
+        </Button>
+      ) : (
+        <span className="text-meta text-ink-3">Only its computer’s person can allow it</span>
+      )}
     </Row>
   )
 }

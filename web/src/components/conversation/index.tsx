@@ -194,6 +194,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     return out
   }, [messages])
   const chosen = useCallback((m: Message) => (m.choices?.length ? chosenOf(m, repliesTo.get(m.seq) ?? []) : undefined), [repliesTo])
+  const composerAsks = useMemo(() => decisions.filter((m) => !permissionOf(m)), [decisions])
   const permissionSettled = useCallback(
     (m: Message) => {
       if (!permissionOf(m)) return undefined
@@ -318,7 +319,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
     showsReceipt,
     onReply,
     decisions: decided,
-    banner: place.kind === "main" ? (decisions[0]?.seq ?? null) : null,
+    banner: place.kind === "main" ? (composerAsks[0]?.seq ?? null) : null,
     onAnswer,
     settledOf: permissionSettled,
     onReact: setReacting,
@@ -625,8 +626,8 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                               people={people}
                               replyTo={replyTo}
                               commands={commands}
-                              asking={place.kind === "main" ? decisions[0] : undefined}
-                              more={Math.max(decisions.length - 1, 0)}
+                              asking={place.kind === "main" ? composerAsks[0] : undefined}
+                              more={Math.max(composerAsks.length - 1, 0)}
                               onAnswer={answer}
                               nameOf={nameOf}
                               onClearReply={() => setReplyTo(null)}
