@@ -8,7 +8,8 @@ import { installHooks, listenHooksInstalled, REWAKE_SINCE } from "../hooks/insta
 import { EXTRA_HARNESSES, extraInstalled, installExtra, type ExtraHarness } from "../hooks/install/extra.ts";
 import { tooBroad } from "../seats.ts";
 import { harnessInventory } from "./harnesses.ts";
-import { openPlace, type PlaceTools } from "./place.ts";
+import type { PlaceTools } from "../terminals/plugin.ts";
+import { openPlace } from "./place.ts";
 import { joinLineRefusal } from "@kiwi/core/join-line.ts";
 import { canStart, joinPrompt, recipeArgv } from "./recipes.ts";
 import type { Launched } from "@kiwi/core/terminals.ts";

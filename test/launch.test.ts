@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { readLaunch } from "@kiwi/core/membership.ts";
 import { daemonSock, stopDaemon } from "../src/daemon.ts";
 import { launchAgent } from "../src/launch/launch.ts";
-import type { PlaceTools } from "../src/launch/place.ts";
+import type { PlaceTools } from "../src/terminals/plugin.ts";
 import { joinLineRefusal } from "@kiwi/core/join-line.ts";
 import { canStart, joinPrompt, recipeArgv } from "../src/launch/recipes.ts";
 import { readLaunched } from "@kiwi/core/terminals.ts";

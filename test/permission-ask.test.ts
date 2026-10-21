@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as Effect from "effect/Effect";
@@ -37,13 +37,18 @@ afterAll(() => {
 
 type Extra = Partial<Pick<Payload, "id" | "to" | "re" | "esc" | "choices" | "permission" | "perm">>;
 
-function relay(onClose: Effect.Effect<void> = Effect.void) {
+const within = <T>(p: Promise<T>, ms = 3000): Promise<T | "still waiting"> => Promise.race([p, Bun.sleep(ms).then(() => "still waiting" as const)]);
+
+function relay(onClose: Effect.Effect<void> = Effect.void, onRead: (readsSinceAnswer: number) => void = () => {}) {
   const log: Message[] = [];
   const missing = new Map<number, number>();
   const replies: { re: number; settled: PermissionSettled | undefined }[] = [];
   const frames = Effect.runSync(Queue.unbounded<Live>());
   let withheld = 0;
+  let answered = false;
+  let reads = 0;
   const view = () => {
+    if (answered) onRead(++reads);
     const messages = log.filter((m) => {
       const left = missing.get(m.seq) ?? 0;
       if (!left) return true;
@@ -85,6 +90,7 @@ function relay(onClose: Effect.Effect<void> = Effect.void) {
     const ask = log.find((m) => m.permission)!;
     const perm = permissionReply(ask, allow, fold(log, roster))!;
     const m = await post("bea", "msg", allow ? PERMISSION_CHOICES[0] : PERMISSION_CHOICES[1], { to: ["dev"], re: [ask.seq], perm }, readsMissing);
+    answered = true;
     Effect.runSync(Queue.offer(frames, { _tag: "Message", message: m }));
     return m;
   };
@@ -100,6 +106,7 @@ function prompt(session: string) {
   const held = holdSession(session)!;
   return {
     held,
+    answeredInTerminal: () => appendFileSync(transcript, JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: id, content: "done" }] } }) + "\n"),
     run: (s: Asking) =>
       runAgent(
         askPermission(s, { tool_name: "Bash", tool_input: input, cwd: "/srv/app" }, pendingCall(transcript, "Bash", input)!, transcript, null, held).pipe(Effect.ensuring(Effect.sync(held.release))),
@@ -113,7 +120,7 @@ describe("the permission hook's wait for an answer", () => {
     const p = prompt("sess-lag");
     const decided = p.run(r.session);
     await r.answer(true, 2);
-    expect(await decided).toEqual({ decision: "allow", by: "bea" });
+    expect(await within(decided)).toEqual({ decision: "allow", by: "bea" });
     expect(r.withheld()).toBe(2);
   });
 
@@ -122,7 +129,30 @@ describe("the permission hook's wait for an answer", () => {
     const p = prompt("sess-late");
     const decided = p.run(r.session);
     await r.answer(false);
-    expect(await decided).toBeNull();
+    expect(await within(decided)).toBeNull();
     expect(r.replies.map((x) => x.settled)).toEqual(["terminal"]);
+  });
+
+  test("an answer in the terminal while the wait winds down gets nothing printed for the app's answer: the last check reads the transcript after the wait has closed", async () => {
+    let answeredInTerminal = () => {};
+    const r = relay(Effect.sync(() => answeredInTerminal()));
+    const p = prompt("sess-answered");
+    answeredInTerminal = p.answeredInTerminal;
+    const decided = p.run(r.session);
+    await r.answer(false);
+    expect(await within(decided)).toBeNull();
+    expect(r.replies.map((x) => x.settled)).toEqual(["terminal"]);
+  });
+
+  test("a signal after the wait has closed doesn't kill the hook mid-reply: it closes the ask, prints nothing and lets go of its listeners", async () => {
+    const r = relay(Effect.void, (reads) => {
+      if (reads === 2) process.emit("SIGTERM");
+    });
+    const p = prompt("sess-signal");
+    const decided = p.run(r.session);
+    await r.answer(true);
+    expect(await within(decided)).toBeNull();
+    expect(r.replies.map((x) => x.settled)).toEqual(["ended"]);
+    expect(process.listenerCount("SIGTERM")).toBe(0);
   });
 });
