@@ -3,10 +3,7 @@ import { closeSync, openSync, readSync, statSync } from "node:fs";
 const LOOK_BACK_BYTES = 1024 * 1024;
 const READ_MAX_BYTES = 4 * 1024 * 1024;
 
-export interface Settled {
-  error: boolean;
-  text: string;
-}
+export type Settled = { kind: "result"; error: boolean; text: string } | { kind: "moved-on" };
 
 interface Block {
   type?: unknown;
@@ -18,15 +15,29 @@ interface Block {
   content?: unknown;
 }
 
-function blocksOf(line: string): Block[] {
-  if (!line.includes('"tool_use') && !line.includes('"tool_result')) return [];
+interface Entry {
+  type: string;
+  message: string | undefined;
+  said: boolean;
+  blocks: Block[];
+}
+
+function entryOf(line: string): Entry | null {
+  if (!line.trim()) return null;
   try {
-    const v = JSON.parse(line) as { message?: { content?: unknown } };
+    const v = JSON.parse(line) as { type?: unknown; isMeta?: unknown; message?: { id?: unknown; content?: unknown } };
+    if ((v.type !== "user" && v.type !== "assistant") || v.isMeta === true) return null;
     const content = v.message?.content;
-    return Array.isArray(content) ? content.filter((b): b is Block => !!b && typeof b === "object") : [];
+    const blocks = Array.isArray(content) ? content.filter((b): b is Block => !!b && typeof b === "object") : [];
+    return {
+      type: v.type,
+      message: typeof v.message?.id === "string" ? v.message.id : undefined,
+      said: typeof content === "string" || blocks.some((b) => b.type === "text"),
+      blocks,
+    };
   } catch {
     // A line cut where the read began, or still being written: a later read has it whole.
-    return [];
+    return null;
   }
 }
 
@@ -63,6 +74,7 @@ function wholeLines(file: string, from: number, to: number): { lines: string[]; 
 
 export interface PendingCall {
   id: string;
+  message: string | undefined;
   offset: number;
 }
 
@@ -76,17 +88,21 @@ export function pendingCall(file: string, tool: string, input: unknown): Pending
   }
   const { lines, next } = wholeLines(file, Math.max(0, size - LOOK_BACK_BYTES), size);
   const want = canonical(input);
-  const open: string[] = [];
-  for (const line of lines)
-    for (const b of blocksOf(line)) {
-      if (b.type === "tool_use" && typeof b.id === "string" && b.name === tool && canonical(b.input) === want) open.push(b.id);
+  const open: { id: string; message: string | undefined }[] = [];
+  for (const line of lines) {
+    const e = entryOf(line);
+    if (!e) continue;
+    if (e.type === "user" && e.said) open.length = 0;
+    for (const b of e.blocks) {
+      if (b.type === "tool_use" && typeof b.id === "string" && b.name === tool && canonical(b.input) === want) open.push({ id: b.id, message: e.message });
       if (b.type === "tool_result" && typeof b.tool_use_id === "string") {
-        const at = open.indexOf(b.tool_use_id);
+        const at = open.findIndex((o) => o.id === b.tool_use_id);
         if (at >= 0) open.splice(at, 1);
       }
     }
-  const id = open.at(-1);
-  return id ? { id, offset: next } : null;
+  }
+  const last = open.at(-1);
+  return last ? { ...last, offset: next } : null;
 }
 
 export function watchCall(file: string, call: PendingCall): () => Settled | null {
@@ -104,12 +120,14 @@ export function watchCall(file: string, call: PendingCall): () => Settled | null
     if (size <= offset) return null;
     const { lines, next } = wholeLines(file, offset, size);
     offset = next;
-    for (const line of lines)
-      for (const b of blocksOf(line))
-        if (b.type === "tool_result" && b.tool_use_id === call.id) {
-          found = { error: b.is_error === true, text: textOf(b.content) };
-          return found;
-        }
+    for (const line of lines) {
+      const e = entryOf(line);
+      if (!e) continue;
+      const result = e.blocks.find((b) => b.type === "tool_result" && b.tool_use_id === call.id);
+      if (result) found = { kind: "result", error: result.is_error === true, text: textOf(result.content) };
+      else if ((e.type === "user" && e.said) || (e.type === "assistant" && e.message !== call.message)) found = { kind: "moved-on" };
+      if (found) return found;
+    }
     return null;
   };
 }
