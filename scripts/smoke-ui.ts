@@ -175,7 +175,7 @@ async function run(part: Part): Promise<string[]> {
     const tabs = page.getByRole("navigation", { name: "Views of the channel" });
     if (await tabs.isVisible()) return tabs.getByRole("button", { name, exact: true }).click();
     const side = page.getByRole("complementary", { name: "Channel" });
-    if (name === "Tasks") return side.getByRole("navigation", { name: "Views" }).getByRole("button", { name: "Everything" }).click();
+    if (name === "Tasks") return side.getByRole("navigation", { name: "Views" }).getByRole("button", { name: "Tasks", exact: true }).click();
     if (name === "Agents") return side.getByRole("region", { name: "Agents" }).getByRole("button", { name: "Agents", exact: true }).click();
     return side.getByRole("region", { name: "Conversations" }).getByRole("button").first().click();
   };
@@ -655,10 +655,7 @@ async function run(part: Part): Promise<string[]> {
 
     at = "Tasks panel";
     await sidebar.getByRole("region", { name: "Agents" }).waitFor();
-    await sidebar
-      .getByRole("navigation", { name: "Views" })
-      .getByRole("button", { name: /^Everything/ })
-      .click();
+    await sidebar.getByRole("navigation", { name: "Views" }).getByRole("button", { name: "Tasks", exact: true }).click();
     await openFromBoard(/Smoke task/);
     await page.keyboard.press("Escape");
     await tasksPanel.waitFor({ state: "detached" });

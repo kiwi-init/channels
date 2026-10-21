@@ -19,10 +19,15 @@ export interface Follow {
   lastTop: number
 }
 
+export function pin(el: Scrolled, f: Follow): void {
+  el.scrollTop = el.scrollHeight
+  f.lastTop = el.scrollTop
+}
+
 export function resized(el: Scrolled, f: Follow, smoothing: boolean): void {
   if (!f.atBottom) return
-  if (!smoothing) el.scrollTop = el.scrollHeight
-  f.lastTop = el.scrollTop
+  if (smoothing) f.lastTop = el.scrollTop
+  else pin(el, f)
 }
 
 export function scrolled(el: Scrolled, f: Follow): void {
@@ -54,7 +59,7 @@ export function useScroll({ messages, visible, hereKey }: { messages: Message[];
     followed.current = null
     if (!el) return
     follow.current.atBottom = true
-    el.scrollTop = el.scrollHeight
+    pin(el, follow.current)
     const content = el.firstElementChild
     const observer = content && typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => resized(el, follow.current, Date.now() <= smoothUntil.current)) : null
     if (content) observer?.observe(content, { box: "border-box" })
@@ -72,7 +77,7 @@ export function useScroll({ messages, visible, hereKey }: { messages: Message[];
     follow.current.atBottom = true
     lastSeq.current = -1
     const el = scroller.current
-    if (el) el.scrollTop = el.scrollHeight
+    if (el) pin(el, follow.current)
   }, [hereKey])
   useLayoutEffect(() => {
     const el = scroller.current
@@ -82,10 +87,11 @@ export function useScroll({ messages, visible, hereKey }: { messages: Message[];
     const smooth = added > 0 && added < 4
     if (follow.current.atBottom) {
       el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "instant" })
+      follow.current.lastTop = el.scrollTop
       if (!smooth) return
       smoothUntil.current = Date.now() + SMOOTH_MS
       const settle = setTimeout(() => {
-        if (follow.current.atBottom) el.scrollTop = el.scrollHeight
+        if (follow.current.atBottom) pin(el, follow.current)
       }, SMOOTH_MS)
       return () => clearTimeout(settle)
     } else if (added > 0) setBehind((b) => b + added)

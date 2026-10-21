@@ -2,6 +2,15 @@ import { createElement, useEffect, useSyncExternalStore, type ComponentType, typ
 
 type Loaded<P> = { kind: "idle" } | { kind: "loading" } | { kind: "ready"; view: ComponentType<P> | NamedExoticComponent<P> }
 
+const failed = new Set<() => void>()
+
+export function onLoadFailed(listener: () => void): () => void {
+  failed.add(listener)
+  return () => {
+    failed.delete(listener)
+  }
+}
+
 export interface Later<P extends object> {
   View: (props: P) => ReactNode
   load: () => void
@@ -26,7 +35,10 @@ export function later<P extends object>(get: () => Promise<ComponentType<P> | Na
     set({ kind: "loading" })
     get().then(
       (view) => set({ kind: "ready", view }),
-      () => set({ kind: "idle" })
+      () => {
+        set({ kind: "idle" })
+        for (const listener of failed) listener()
+      }
     )
   }
   function View(props: P): ReactNode {

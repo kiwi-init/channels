@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
-import { REX_UNKNOWN, rexStatusOf } from "../desktop/src/rex-status.ts";
+import { REX_UNKNOWN } from "@kiwi/core/terminals.ts";
+import { rexStatusOf } from "../desktop/src/rex-status.ts";
 
 test("Settings reads kiwi rex status --json, and anything else as Rex not found", () => {
   expect(rexStatusOf('{"found":true,"version":"0.0.1792433367-g93d474","server":"running","helpers":"on","rotation":"off"}')).toEqual({

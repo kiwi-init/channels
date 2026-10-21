@@ -4,7 +4,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react"
 
 import type { HarnessRow, KnownHarness } from "@kiwi/core/harnesses.ts"
 import { personaOf, type Persona, type Personality } from "@kiwi/core/personality.ts"
-import type { FromMachine, LaunchedView, MachineView } from "../../../desktop/src/bridge.ts"
+import { PLACE_NAMES, type LaunchedView } from "@kiwi/core/terminals.ts"
+import type { FromMachine, MachineView } from "../../../desktop/src/bridge.ts"
 import { harnessName } from "@/lib/harness"
 import { followLaunch, launcher, sawMembers, type LaunchSeen } from "@/lib/launches"
 import { usePersonalities } from "@/lib/personalities"
@@ -25,8 +26,6 @@ function launchId(): string {
     .replace(/\//g, "_")
     .replace(/=+$/, "")
 }
-
-const PLACE: Record<"rex" | "tmux" | "terminal", string> = { rex: "Rex", tmux: "tmux", terminal: "Terminal" }
 
 type Started = Extract<LaunchedView, { ok: true }>
 
@@ -303,7 +302,7 @@ function HarnessOption({ row, on, onPick, disabled }: { row: HarnessRow; on: boo
 }
 
 function Progress({ started, seen, harness, on, onClose }: { started: Started; seen: LaunchSeen | null; harness: KnownHarness | null; on?: string | undefined; onClose: () => void }) {
-  const place = started.place === "tmux" ? `tmux, window ${started.window} of session ${started.session}` : PLACE[started.place]
+  const place = started.place === "tmux" ? `${PLACE_NAMES.tmux}, window ${started.window} of session ${started.session}` : PLACE_NAMES[started.place]
   const where = on ? `${place} on ${on}` : place
   const joined = seen?.stage === "joined" ? seen.name : null
   const steps: { done: boolean; text: string; detail?: ReactNode }[] = [

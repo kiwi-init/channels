@@ -192,12 +192,18 @@ From `design-tokens.ts`:
 
 - Shell: the channel rail, then inside a channel its own sidebar (280px,
   from 768px wide), both on `rail`; the page is the round `sheet` beside
-  them: the channel's name and who is here, Search, the views
-  with counts (Everything, Needs you, In progress, In review, Done this
-  week), the agents with what each is doing now (a click opens your direct
-  conversation with it; the task id beside it opens its task), and the conversations
-  (rooms and direct ones). The page beside it has one header row: what is
-  shown, the channel's status (working, merged today, needs you), and the
+  them: the channel's name and who is here, a Search row (a tap turns it
+  into the field; Escape, or leaving it empty, turns it back), one Tasks
+  row (it opens Everything, with Done this week at its foot) and beside it a
+  quiet dot and number for each state that waits (`alert` Needs you, `doing`
+  In progress, `decide` In review, only when above zero, each opening its
+  view), the agents with what each is doing now (a click opens your direct
+  conversation with it; the task id beside it opens its task), and the
+  conversations: the rooms, your own direct ones, one that asks for you and
+  the open one stay; threads between agents fold behind an "N more" row
+  carrying their unread total, which opens to "Show less". The page
+  beside it has one header row: what is shown, the channel's status
+  (working, merged today, needs you), and the
   Tasks / Agents / Conversation tabs. A view opens Tasks; a conversation
   opens Conversation. The approved mockups are in `docs/ui/`.
 - Tasks, the tab a channel opens on: Needs you's rows first, then the
@@ -277,10 +283,15 @@ From `design-tokens.ts`:
   text size live in Settings and apply at once.
 - A picture in the chat opens in the annotator: a full-window dark stage
   (`.dark-stage` puts every token on its dark side, whatever the theme),
-  sender and time on top, one floating tool pill (Move, Pen, Arrow, Box,
+  sender and time on its top row, which in the desktop app is the window's
+  own 52px `drag` row (the Mac traffic lights before the sender, its
+  buttons still click), one floating tool pill (Move, Pen, Arrow, Box,
   Text, Hide; the alert, decide, accent and ink colours; undo, redo), and
   a reply bar that sends the marked-up picture back in its thread. Hide
   is an opaque block, burned into the pixels that are sent.
+- In the desktop app the top 52px of every page moves the window. What
+  floats over it takes it back: a dialog, its backdrop and a menu are
+  `no-drag`, and a full-window stage brings its own `drag` row.
 
 - Settings → Personalities: a roomy modal, the list on the left (presets
   for code work, then Yours, each a 36px outlined glyph tile, the name in

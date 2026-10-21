@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { holdSession, shownCwd } from "../src/hooks/permission.ts";
@@ -58,4 +58,21 @@ test("a newer-prompt mark from before this hook took the session doesn't count",
   const held = holdSession("sess-d")!;
   expect(held.newer()).toBe(false);
   held.release();
+});
+
+test("letting go of a session leaves alone a lock another hook holds now, and the newer-prompt mark meant for it", () => {
+  const first = holdSession("sess-e")!;
+  const file = join(home, "permission", "sess-e.pid");
+  writeFileSync(file, "424242");
+  writeFileSync(`${file}.newer`, String(Date.now()));
+  first.release();
+  expect(readFileSync(file, "utf8")).toBe("424242");
+  expect(existsSync(`${file}.newer`)).toBe(true);
+  rmSync(file);
+  rmSync(`${file}.newer`);
+  const mine = holdSession("sess-e")!;
+  writeFileSync(`${file}.newer`, String(Date.now()));
+  mine.release();
+  expect(existsSync(file)).toBe(false);
+  expect(existsSync(`${file}.newer`)).toBe(false);
 });

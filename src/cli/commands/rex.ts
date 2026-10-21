@@ -1,22 +1,16 @@
 import * as Effect from "effect/Effect";
+import type { RexStatus } from "@kiwi/core/terminals.ts";
 import { loadConfig, updateConfig } from "../../config.ts";
 import { installPalette, removePalette, rexConfigPath } from "../../rex-palette.ts";
-import { rexBinary, rexStatus, runRex } from "../../rex.ts";
+import { rexBinary, rexStatus } from "../../rex.ts";
+import { runNow } from "../../terminals/shared/run.ts";
 import { localRexSeats, showInRex } from "../../rex-show.ts";
 import { args, opt } from "../args.ts";
 import { type Command, die, out } from "../context.ts";
 
 const USAGE = "usage: kiwi rex on|off|status [--json]";
 
-interface RexStatusJson {
-  found: boolean;
-  version?: string;
-  server: "running" | "stopped";
-  helpers: "on" | "off";
-  rotation: "on" | "off";
-}
-
-function statusJson(): RexStatusJson {
+function statusJson(): RexStatus {
   const cfg = loadConfig();
   const rex = rexStatus();
   return {
@@ -41,7 +35,7 @@ function statusText(): string {
 function reloadPalette(): void {
   const bin = rexBinary();
   if (!bin || rexStatus().server !== "running") return;
-  runRex(bin, ["config", "reload"], 5_000);
+  runNow([bin, "config", "reload"], 5_000);
 }
 
 export const rexCommands: Record<string, Command> = {

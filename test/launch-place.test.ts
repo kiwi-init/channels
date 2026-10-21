@@ -3,7 +3,10 @@ import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import { loginArgv, openPlace, placeKind, terminalLine, type PlaceRequest, type PlaceTools } from "../src/launch/place.ts";
+import { openPlace, placeKind } from "../src/launch/place.ts";
+import { terminalLine } from "../src/terminals/app/index.ts";
+import type { PlaceRequest, PlaceTools } from "../src/terminals/plugin.ts";
+import { loginArgv } from "../src/terminals/shared/launch.ts";
 
 const SESSION = "session:01a15acd-04bb-7b4e-9c8a-feb34c17dd89";
 const OTHER = "session:01a15acd-04bb-7b4e-9c8a-feb34c17dd8a";

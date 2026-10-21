@@ -92,6 +92,34 @@ async function setTheme(page: Page, theme: "dark" | "light") {
   await page.waitForLoadState("networkidle");
 }
 
+function macWindow(on: boolean): void {
+  document.querySelector("[data-shots-lights]")?.remove();
+  if (!on) return void delete document.documentElement.dataset.shell;
+  document.documentElement.dataset.shell = "mac";
+  const lights = document.createElement("div");
+  lights.dataset.shotsLights = "";
+  lights.style.cssText = "position:fixed;left:20px;top:20px;z-index:100;display:flex;gap:8px;pointer-events:none";
+  for (const color of ["#ff5f57", "#febc2e", "#28c840"]) {
+    const light = document.createElement("span");
+    light.style.cssText = `width:12px;height:12px;border-radius:50%;background:${color}`;
+    lights.append(light);
+  }
+  document.body.append(lights);
+}
+
+function dragCaught(): string[] {
+  const boxes = [...document.querySelectorAll("*")].flatMap((el) => {
+    const region = getComputedStyle(el).getPropertyValue("app-region");
+    const r = el.getBoundingClientRect();
+    return (region === "drag" || region === "no-drag") && r.width && r.height ? [{ r, drag: region === "drag" }] : [];
+  });
+  const dragged = (x: number, y: number) => boxes.reduce((on, { r, drag }) => (x >= r.left && x < r.right && y >= r.top && y < r.bottom ? drag : on), false);
+  return [...document.querySelectorAll('[role="dialog"] :is(button, input, [role="menuitem"])')].flatMap((el) => {
+    const r = el.getBoundingClientRect();
+    return r.width && dragged(r.left + r.width / 2, r.top + r.height / 2) ? [el.getAttribute("aria-label") ?? el.textContent ?? el.tagName] : [];
+  });
+}
+
 /** One named screen: get there, wait for it to settle, shoot it, put things back. */
 async function shoot(page: Page, tag: string, name: string, open?: () => Promise<void>, close: () => Promise<void> = async () => void (await page.keyboard.press("Escape"))) {
   if (!wanted(name)) return;
@@ -133,9 +161,9 @@ try {
     const tabs = owner.getByRole("navigation", { name: "Views of the channel" });
     if (await tabs.isVisible()) return tabs.getByRole("button", { name, exact: true }).click();
     const side = owner.getByRole("complementary", { name: "Channel" });
-    if (name === "Tasks") return side.getByRole("navigation", { name: "Views" }).getByRole("button", { name: "Everything" }).click();
+    if (name === "Tasks") return side.getByRole("navigation", { name: "Views" }).getByRole("button", { name: "Tasks", exact: true }).click();
     if (name === "Agents") return side.getByRole("region", { name: "Agents" }).getByRole("button", { name: "Agents", exact: true }).click();
-    return side.getByRole("region", { name: "Conversations" }).getByRole("button").first().click();
+    return side.getByRole("region", { name: "Conversations" }).getByRole("button", { name: /^# / }).first().click();
   };
 
   const needs = owner.getByRole("region", { name: "Needs you" });
@@ -200,6 +228,8 @@ try {
   }
   await bot("set", "relay.version", "667ce081");
   await bot("set", "canary", "off");
+  await bot("send", "--to", "@win", "Can you take the cold runs after lunch?");
+  await win("send", "--to", "@atlas", "Yes, after the steady load.");
   await owner.reload();
   await toTab("Conversation");
   await owner.getByText("Ship it as 0.8.12").first().waitFor({ timeout: 15000 });
@@ -234,6 +264,9 @@ try {
   await composer().fill("Between us: is win overloaded? Tell me before you hand it more.");
   await owner.keyboard.press("Enter");
   await owner.waitForTimeout(400);
+  const picture = join(data, "feed-rows.jpg");
+  await owner.screenshot({ path: picture, type: "jpeg", quality: 70, scale: "css" });
+  await bot("send", "--to", "@jonatas", "--image", picture, "Not overloaded. Here's the feed at 4 rows per message.");
   await owner.goto(channel);
 
   // An agent asking to join, left pending (its CLI waits in the background).
@@ -328,6 +361,30 @@ try {
       await atNewest("opening the channel");
 
       await shoot(owner, tag, "01-channel");
+      await shoot(
+        owner,
+        tag,
+        "01b-search",
+        async () => {
+          await owner.getByRole("complementary", { name: "Channel" }).getByRole("button", { name: "Search", exact: true }).click();
+          await owner.getByRole("textbox", { name: "Search this channel" }).first().fill("rows");
+        },
+        async () => void (await owner.keyboard.press("Escape")),
+      );
+      await shoot(
+        owner,
+        tag,
+        "01c-conversations-open",
+        async () => {
+          await owner
+            .getByRole("complementary", { name: "Channel" })
+            .getByRole("button", { name: /^\d+ more conversations?\b/ })
+            .click();
+        },
+        async () => {
+          await owner.getByRole("complementary", { name: "Channel" }).getByRole("button", { name: "Show less" }).click();
+        },
+      );
       await owner.mouse.wheel(0, -4000);
       await shoot(owner, tag, "02-channel-top");
       await shoot(owner, tag, "03-reply", async () => {
@@ -398,6 +455,26 @@ try {
           await owner.getByPlaceholder(/privately$/).waitFor({ timeout: 15000 });
         },
         toChannel,
+      );
+      await shoot(
+        owner,
+        tag,
+        "08b-picture",
+        async () => {
+          await detailsBtn().click();
+          await owner.getByRole("button", { name: "More for atlas" }).click();
+          await owner.getByRole("menuitem", { name: "Message privately" }).click();
+          await owner.getByRole("button", { name: "Open feed-rows.jpg" }).last().click();
+          await owner.getByRole("dialog", { name: /^Mark up / }).waitFor();
+          if (vp === "wide") await owner.evaluate(macWindow, true);
+          const caught = await owner.evaluate(dragCaught);
+          if (caught.length) throw new Error(`the window's drag band takes the viewer's ${caught.join(", ")}`);
+        },
+        async () => {
+          await owner.evaluate(macWindow, false);
+          await owner.keyboard.press("Escape");
+          await toChannel();
+        },
       );
       await shoot(
         owner,
