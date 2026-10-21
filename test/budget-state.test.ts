@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as Effect from "effect/Effect";
+import { keepAnswersIn } from "@kiwi/core/client.ts";
 import { oneLook, openSession, runAgent, type Agent, type AgentSession } from "../src/agent.ts";
 import { appendCache, Cache, Keystore, readCache } from "../src/config.ts";
 import type { Message } from "@kiwi/core/protocol.ts";
@@ -72,6 +73,7 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
+  keepAnswersIn(null);
   proxy?.stop();
   server?.stop(true);
   for (const d of made) rmSync(d, { recursive: true, force: true });
