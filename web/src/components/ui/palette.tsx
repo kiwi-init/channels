@@ -1,9 +1,11 @@
 import { Dialog } from "@base-ui/react/dialog"
-import { Search01Icon } from "@hugeicons/core-free-icons"
+import { Add01Icon, ComputerIcon, Login01Icon, Moon02Icon, Search01Icon, Settings01Icon, SidebarLeftIcon, Sun03Icon } from "@hugeicons/core-free-icons"
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
+import { SIDEBAR_KEYS, toggleSidebar } from "@/lib/sidebar-hidden"
+import { setAppearance } from "@/lib/theme"
 import { cx } from "@/lib/utils"
-import { Icon } from "../icon"
+import { Icon, type IconSvgElement } from "../icon"
 import { takePaletteReturn } from "./palette-shortcut"
 
 // ⌘K: jump to a channel or do something, by typing a few letters of it.
@@ -33,7 +35,31 @@ function rank(c: Command, q: string): number {
 
 const GROUPS: Command["group"][] = ["Channels", "Actions", "Appearance"]
 
-export function Palette({ open, onClose, commands }: { open: boolean; onClose: () => void; commands: Command[] }) {
+export interface PaletteActions {
+  onNew: () => void
+  onJoin: () => void
+  onComputers: () => void
+  onSettings: () => void
+}
+
+const lead = (icon: IconSvgElement) => <Icon icon={icon} size={16} strokeWidth={1.5} className="text-ink-3" />
+
+function actionCommands(a: PaletteActions): Command[] {
+  const act = (id: string, label: string, icon: IconSvgElement, run: () => void): Command => ({ id, group: "Actions", label, run, leading: lead(icon) })
+  return [
+    act("new", "New channel", Add01Icon, a.onNew),
+    act("join", "Join with a code", Login01Icon, a.onJoin),
+    act("computers", "Your computers", ComputerIcon, a.onComputers),
+    act("settings", "Settings", Settings01Icon, a.onSettings),
+    { ...act("sidebar", "Show or hide the sidebar", SidebarLeftIcon, toggleSidebar), hint: SIDEBAR_KEYS },
+    { id: "light", group: "Appearance", label: "Light", run: () => setAppearance("light"), leading: lead(Sun03Icon) },
+    { id: "dark", group: "Appearance", label: "Dark", run: () => setAppearance("dark"), leading: lead(Moon02Icon) },
+    { id: "system", group: "Appearance", label: "System", run: () => setAppearance("system"), leading: lead(ComputerIcon) },
+  ]
+}
+
+export function Palette({ open, onClose, commands: channels, actions }: { open: boolean; onClose: () => void; commands: Command[]; actions: PaletteActions }) {
+  const commands = useMemo(() => [...channels, ...actionCommands(actions)], [channels, actions])
   const [query, setQuery] = useState("")
   const [index, setIndex] = useState(0)
   const list = useRef<HTMLDivElement>(null)

@@ -9,19 +9,17 @@ import { Sidebar } from "@/components/sidebar"
 import { ChannelTabs } from "@/components/channel-tabs"
 import { useMemberIcons } from "@/lib/icons"
 import { useIcons } from "@/lib/icons"
-import type { Command } from "@/components/ui/palette"
+import type { Command, PaletteActions } from "@/components/ui/palette"
 import { usePaletteShortcut } from "@/components/ui/palette-shortcut"
-import { ComputersModal, Palette, SettingsPage } from "@/components/lazy"
-import { Add01Icon, ComputerIcon, Login01Icon, Moon02Icon, Settings01Icon, SidebarLeftIcon, Sun03Icon } from "@hugeicons/core-free-icons"
-import { Icon, type IconSvgElement } from "@/components/icon"
+import { ComputersModal, Palette, preloadAccountItems, SettingsPage } from "@/components/lazy"
+import { whenIdle } from "@/lib/later"
 import { useAutoApproval } from "@/lib/approval"
 import { adoptThisComputer } from "@/lib/computers"
 import { parseHash, useChannelList } from "@/lib/channel"
 import { joinCodeFromLink } from "@/lib/deep-link"
 import { newsTotal, rowNews, startMarks, useMarks, useNewsKeys, useOpenNews, useTabNews } from "@/lib/news"
 import { formatShort } from "@/lib/format"
-import { setAppearance } from "@/lib/theme"
-import { SIDEBAR_KEYS, toggleSidebar, useSidebarShortcut } from "@/lib/sidebar-hidden"
+import { useSidebarShortcut } from "@/lib/sidebar-hidden"
 import { bridge, useSecrets } from "@/lib/secrets"
 import { cx } from "@/lib/utils"
 
@@ -39,6 +37,7 @@ export default function App() {
   const icons = useIcons()
   const [palette, setPalette] = useState(false)
   usePaletteShortcut(useCallback(() => setPalette(true), []))
+  useEffect(() => whenIdle(preloadAccountItems), [])
   useSidebarShortcut()
   const open = useCallback((c: string) => {
     setSettings(false)
@@ -66,31 +65,20 @@ export default function App() {
     (r) => open(r.code)
   )
 
-  const commands = useMemo(() => {
-    const list: Command[] = rows.map((r) => ({
-      id: `c-${r.room}`,
-      group: "Channels",
-      label: r.title,
-      hint: r.state === "member" ? formatShort(r.ts) : undefined,
-      keywords: r.recent?.text,
-      leading: <ChannelIconTile icon={icons.get(r.room) ?? null} title={r.title} size={20} />,
-      run: () => open(r.code),
-    }))
-    // Every action wears the icon it has in the menus, so the palette and the menus read alike.
-    const lead = (icon: IconSvgElement) => <Icon icon={icon} size={16} strokeWidth={1.5} className="text-ink-3" />
-    const act = (id: string, label: string, icon: IconSvgElement, run: () => void) => list.push({ id, group: "Actions", label, run, leading: lead(icon) })
-    act("new", "New channel", Add01Icon, () => setSheet("new"))
-    act("join", "Join with a code", Login01Icon, () => setSheet("join"))
-    act("computers", "Your computers", ComputerIcon, () => setSheet("computers"))
-    act("settings", "Settings", Settings01Icon, () => setSettings(true))
-    list.push({ id: "sidebar", group: "Actions", label: "Show or hide the sidebar", hint: SIDEBAR_KEYS, run: toggleSidebar, leading: lead(SidebarLeftIcon) })
-    list.push(
-      { id: "light", group: "Appearance", label: "Light", run: () => setAppearance("light"), leading: lead(Sun03Icon) },
-      { id: "dark", group: "Appearance", label: "Dark", run: () => setAppearance("dark"), leading: lead(Moon02Icon) },
-      { id: "system", group: "Appearance", label: "System", run: () => setAppearance("system"), leading: lead(ComputerIcon) }
-    )
-    return list
-  }, [rows, icons, open])
+  const commands = useMemo(
+    (): Command[] =>
+      rows.map((r) => ({
+        id: `c-${r.room}`,
+        group: "Channels",
+        label: r.title,
+        hint: r.state === "member" ? formatShort(r.ts) : undefined,
+        keywords: r.recent?.text,
+        leading: <ChannelIconTile icon={icons.get(r.room) ?? null} title={r.title} size={20} />,
+        run: () => open(r.code),
+      })),
+    [rows, icons, open]
+  )
+  const actions = useMemo<PaletteActions>(() => ({ onNew: () => setSheet("new"), onJoin: () => setSheet("join"), onComputers: () => setSheet("computers"), onSettings: () => setSettings(true) }), [])
 
   useEffect(() => {
     const onHash = () => {
@@ -194,7 +182,7 @@ export default function App() {
         }}
       />
       <ComputersModal open={sheet === "computers"} onClose={() => setSheet(null)} />
-      <Palette open={palette} onClose={() => setPalette(false)} commands={commands} />
+      <Palette open={palette} onClose={() => setPalette(false)} commands={commands} actions={actions} />
       <Toaster />
     </>
   )
