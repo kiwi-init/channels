@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { coverageChunks, heavyIn, registryEntries, shProbe, stubbedChunks, stubPlugin } from "../scripts/cli-bundle.ts";
+import { coverageChunks, heavyIn, mcpValidatorStub, NO_SCHEMA_VALIDATOR, registryEntries, shProbe, stubbedChunks, stubPlugin, validatorsIn } from "../scripts/cli-bundle.ts";
 import { COMMANDS, runSh } from "../src/sh.ts";
 
 const ROOT = resolve(import.meta.dir, "..");
@@ -59,4 +59,33 @@ describe("the CLI bundle's kiwi sh", () => {
     expect(bundled).toEqual(fromSource);
     expect(fromSource.filter((r) => r.exitCode === 127).map((_, i) => scripts[i])).toEqual([]);
   }, 60_000);
+});
+
+describe("the CLI bundle's MCP server", () => {
+  test("bundles no JSON Schema validator: the server still starts and answers, and asking it to validate says why it can't", async () => {
+    const entry = join(work, "mcp-entry.ts");
+    writeFileSync(
+      entry,
+      `import { McpServer } from ${JSON.stringify(join(ROOT, "node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js"))}\n` +
+        `const server = new McpServer({ name: "kiwi", version: "1" })\n` +
+        `server.registerTool("ping", { description: "ping" }, async () => ({ content: [{ type: "text", text: "pong" }] }))\n` +
+        `let said = ""\n` +
+        `try { server.server._jsonSchemaValidator.getValidator({ type: "object" }) } catch (err) { said = err.message }\n` +
+        `console.log(JSON.stringify({ said }))\n`,
+    );
+    const built = await Bun.build({ entrypoints: [entry], target: "bun", outdir: join(work, "mcp-out"), sourcemap: "external", plugins: [mcpValidatorStub()] });
+    expect(built.success).toBe(true);
+    const map: unknown = await Bun.file(join(work, "mcp-out", "mcp-entry.js.map")).json();
+    const sources = typeof map === "object" && map !== null && "sources" in map && Array.isArray(map.sources) ? map.sources.filter((s): s is string => typeof s === "string") : [];
+    expect(sources.some((s) => s.includes("@modelcontextprotocol/sdk/"))).toBe(true);
+    expect(validatorsIn(sources)).toEqual([]);
+    const proc = Bun.spawn(["bun", join(work, "mcp-out", "mcp-entry.js")], { stdout: "pipe", stderr: "pipe" });
+    const [stdout, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    expect(code).toBe(0);
+    expect(JSON.parse(stdout)).toEqual({ said: NO_SCHEMA_VALIDATOR });
+  }, 60_000);
+
+  test("without the stub the SDK pulls in ajv, so the check has something to catch", () => {
+    expect(validatorsIn(["../node_modules/ajv/dist/core.js", "../node_modules/ajv-formats/dist/index.js", "../node_modules/zod/v4/core/api.js"])).toEqual(["ajv", "ajv-formats"]);
+  });
 });
