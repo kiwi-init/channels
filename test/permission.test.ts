@@ -670,6 +670,42 @@ describe("secret filter tuning (T1621)", () => {
     ["a password hashed by htpasswd", "export TRAEFIK_AUTH=$(htpasswd -nb admin hunter2)"],
     ["a workflow expression with a fallback", "token: ${{ secrets.X || 'hunter2' }}"],
     ["a workflow expression followed by a literal", "PASSWORD=${{ secrets.X }}hunter2"],
+    ["a test of $KEY", "[ $KEY = foo ] && echo same"],
+    ["a test of $PASSWORD", "[ $DB_PASSWORD = changeme ] && exit 1"],
+    ["a [[ test of $API_KEY", "[[ $API_KEY = foo ]] && echo same"],
+    ["a test command on $KEY", "test $KEY = foo && echo same"],
+    ["an SSH key path from the environment", "SSH_KEY=$HOME/.ssh/id_ed25519 ./deploy.sh"],
+    ["a password from python3 -c", `PASSWORD_HASH=$(python3 -c 'import crypt; print(crypt.crypt("hunter2"))')`],
+    ["a password from node -e", `ADMIN_PASSWORD_HASH=$(node -e 'console.log(require("bcryptjs").hashSync("hunter2", 10))')`],
+    ["a password hashed by slappasswd", "PASSWORD_HASH=$(slappasswd -s hunter2)"],
+    ["a token from a login with a literal password", "TOKEN=$(curl -s https://x/login --data pw=hunter2)"],
+    ["a token from a script given a literal", "export TOKEN=$(./get-token.sh hunter2)"],
+    ["a $ password in a quoted here-doc", "cat > settings.py <<'EOF'\nDB_PASSWORD = \"$ecretPw\"\nEOF"],
+    ["a $ password echoed in single quotes", "echo 'DB_PASSWORD=$ecretPw' >> config.ini"],
+    ["a $ password inside python3 -c", `python3 -c 'import psycopg2; psycopg2.connect(password="$ecretPw")'`],
+    ["a ref, an @ and a literal", "PASSWORD=$USER@hunter2"],
+    ["a ref, a slash and a literal", "PASSWORD=$PREFIX/hunter2"],
+    ["a quoted ref followed by a literal", 'PASSWORD="$USER"hunter2'],
+    ["a ref, a colon and a quoted literal", 'PASSWORD=$A:"hunter2"'],
+    ["two refs and a literal", "PASSWORD=$A:$B:hunter2"],
+    ["a ref and a literal inside quotes", 'ENCRYPTION_KEY="$A abc123"'],
+    ["a test against a literal password", "[ $DB_PASSWORD = S3cr3tPw ]"],
+    ["an if test against a literal password", "if [ $PASSWORD = hunter2 ]; then echo ok; fi"],
+    ["a test command against a literal key", "test $API_KEY = abc123def456"],
+    ["a test against a literal hex key", "[ $ENCRYPTION_KEY = 0123456789abcdef ]"],
+  ];
+  const flaggedCommands: [string, string][] = [["a switch word, a comma and a literal", "PASSWORD=yes,hunter2"]];
+  const flaggedText: [string, string][] = [
+    ["a Python or TOML $ password", 'password = "$Summer2024"'],
+    ["a Python call with a $ password", 'conn = psycopg2.connect(host="db", password="$ecretPw")'],
+    ["a connection string with a $ password", "Server=db;User Id=sa;Password=$ecretPw;"],
+    ["a JS URL with a $ password", 'const url = "postgres://app:$ecretPw@db/app";'],
+    ["a properties $ password", "spring.datasource.password=$ecretP4ss"],
+    ["a YAML braced ref, an @ and a literal", "password: ${A}@hunter2"],
+    ["a JSON braced ref, a slash and a literal", '"password": "${A}/hunter2"'],
+    ["an INI passphrase starting with a switch word", "passphrase = no one will guess this"],
+    ["an INI password starting with a switch word", "[client]\npassword=on the road again"],
+    ["a Python password after a None switch", 'password = None if DEBUG else "S3cr3tPw"'],
   ];
   const clean: [string, string][] = [
     ["a sort key", "SORT_KEY=name bun run export"],
@@ -677,7 +713,6 @@ describe("secret filter tuning (T1621)", () => {
     ["a partition key", "PARTITION_KEY=pk aws dynamodb scan"],
     ["a cache key", "CACHE_KEY=v2 bun run build"],
     ["a lowercase sort_key", "sort_key=name ./export.sh"],
-    ["a test of $KEY", "[ $KEY = foo ] && echo same"],
     ["a key passed on from the environment", "ENCRYPTION_KEY=$ENCRYPTION_KEY bun run seed"],
     ["a token passed on from the environment", 'GITHUB_TOKEN="$GITHUB_TOKEN" gh pr list'],
     ["a key from a command", "API_KEY=$(op read op://dev/api/key) bun run sync"],
@@ -688,7 +723,6 @@ describe("secret filter tuning (T1621)", () => {
     ["a public key", "STRIPE_PUBLIC_KEY=pk_test_abc123 bun run dev"],
     ["a routing key", "ROUTING_KEY=logs.info ./consume.sh"],
     ["a lowercase idempotency key", "idempotency_key=order-42 ./retry.sh"],
-    ["a test of $PASSWORD", "[ $DB_PASSWORD = changeme ] && exit 1"],
     ["a key from a braced variable", "API_KEY=${API_KEY} bun run sync"],
     ["an auth switch", "DISABLE_AUTH=true bun run dev"],
     ["a lowercase auth switch", "require_auth=false ./serve.sh"],
@@ -711,23 +745,29 @@ describe("secret filter tuning (T1621)", () => {
     ["openssl -k from the environment", "openssl enc -aes-256-cbc -k $PASSPHRASE -in a.txt -out a.enc"],
     ["a key in a query from the environment", 'curl "https://maps.example.com/api/geocode?key=$MAPS_KEY"'],
     ["a here-string into sudo -S from the environment", 'sudo -S apt-get update <<< "$SUDO_PASS"'],
-    ["a [[ test of $API_KEY", "[[ $API_KEY = foo ]] && echo same"],
-    ["a test command on $KEY", "test $KEY = foo && echo same"],
     ["a long partition key name", "PARTITION_KEY=tenant_id_and_created_at bun run migrate"],
+    ["a user and password from the environment", "AUTH=$USER:$PASS ./sync.sh"],
+    ["a key from openssl rand", "SECRET_KEY=$(openssl rand -hex 32)"],
+    ["a quoted switch", 'DISABLE_AUTH="true" bun run dev'],
+    ["a workflow's token from secrets", "cat > .github/workflows/ci.yml <<'EOF'\n      token: ${{ secrets.GITHUB_TOKEN }}\nEOF"],
+  ];
+  const cleanText: [string, string][] = [
     ["a Python auth switch", "requires_auth = True"],
     ["a Python default of None", "def lookup(items, group_key=None):"],
     ["a keyword switch", "client = Client(use_auth=False, retries=3)"],
     ["a JSON token from a template", '{"token": "${API_TOKEN}"}'],
-    ["a user and password from the environment", "AUTH=$USER:$PASS ./sync.sh"],
-    ["an SSH key path from the environment", "SSH_KEY=$HOME/.ssh/id_ed25519 ./deploy.sh"],
-    ["a key from openssl rand", "SECRET_KEY=$(openssl rand -hex 32)"],
     ["a YAML switch with a comment", "password: No  # disabled"],
     ["a JSON null", '{"password": null, "user": "ana"}'],
-    ["a quoted switch", 'DISABLE_AUTH="true" bun run dev'],
-    ["a workflow's token from secrets", "cat > .github/workflows/ci.yml <<'EOF'\n      token: ${{ secrets.GITHUB_TOKEN }}\nEOF"],
   ];
-  for (const [name, said] of flagged) test(`flagged: ${name}`, () => expect(looksSecret(said)).toBe(true));
-  for (const [name, said] of clean) test(`not flagged: ${name}`, () => expect(looksSecret(said)).toBe(false));
+  for (const [name, said] of flagged) test(`flagged: ${name}`, () => expect([looksSecret(said, true), looksSecret(said)]).toEqual([true, true]));
+  for (const [name, said] of flaggedCommands) test(`flagged as a command: ${name}`, () => expect(looksSecret(said, true)).toBe(true));
+  for (const [name, said] of flaggedText) test(`flagged as content: ${name}`, () => expect(looksSecret(said)).toBe(true));
+  for (const [name, said] of clean) test(`not flagged as a command: ${name}`, () => expect(looksSecret(said, true)).toBe(false));
+  for (const [name, said] of cleanText) test(`not flagged as content: ${name}`, () => expect(looksSecret(said)).toBe(false));
+  test("a Bash command's $TOKEN is sent, while a written file's $-password is not", () => {
+    expect(shown("Bash", { command: 'curl -H "Authorization: Bearer $TOKEN" https://api.example.com/user' })).not.toBeNull();
+    expect(shown("Write", { file_path: "/x/settings.py", content: 'password = "$Summer2024"\n' })).toBeNull();
+  });
 });
 
 describe("one message per seq (T1725)", () => {
