@@ -23,6 +23,7 @@ import {
   type ReviewRound,
   type Task,
 } from "./state.ts";
+import { stageOf, stageText } from "./stage.ts";
 import { isWakeVia, wakesInSession, wakeWords, type WakeVia } from "./wake.ts";
 
 export function tokensWord(n: number): string {
@@ -299,10 +300,12 @@ export function formatMessage(m: Message, trust?: Trust, state?: ChannelState, m
   return `${messageHead(m, trust, state, me)}: ${body}${imgs}${link}${options}`;
 }
 
-function taskLine(t: Task): string {
+function taskLine(state: ChannelState, t: Task): string {
   const owner = t.owner ? ` @${inlineText(t.owner, 40)}` : "";
   const review = t.review && t.state !== "done" ? ` [${reviewPhrase(t.review)}]` : "";
-  return `  ${taskId(t.id).padEnd(5)} ${(t.state === "done" && t.cancelled ? "cancelled" : stateWord(t.state)).padEnd(9)}${owner} ${inlineText(t.title, 200)}${review}`;
+  const stage = stageOf(state, t);
+  const evidence = stage.pr || stage.declared ? ` · ${stageText(state, stage)}` : "";
+  return `  ${taskId(t.id).padEnd(5)} ${(t.state === "done" && t.cancelled ? "cancelled" : stateWord(t.state)).padEnd(9)}${owner} ${inlineText(t.title, 200)}${review}${evidence}`;
 }
 
 export function askLine(head: AskHead | null): string {
@@ -312,7 +315,7 @@ export function askLine(head: AskHead | null): string {
 }
 
 function groupedLines(state: ChannelState, tasks: Task[], indent: string): string[] {
-  return askGroups(state, tasks).flatMap((g) => [`${indent}${askLine(g.head)}`, ...g.tasks.map((t) => `${indent}${taskLine(t)}`)]);
+  return askGroups(state, tasks).flatMap((g) => [`${indent}${askLine(g.head)}`, ...g.tasks.map((t) => `${indent}${taskLine(state, t)}`)]);
 }
 
 /** `build.cmd = cargo test  (win, 2h ago, 5h left)`. A value with several lines keeps its tail marked. */
@@ -573,6 +576,7 @@ export function formatTask(state: ChannelState, t: Task, now = Date.now()): stri
     `${taskId(t.id)} ${inlineText(t.title, 200)}`,
     `  state: ${taskStateWord(t)}${t.owner ? ` · owner: ${inlineText(t.owner, 40)}` : " · unassigned"} · created by ${inlineText(t.createdBy, 40)} ${ago(t.createdAt, now)}`,
   ];
+  out.push(`  stage: ${stageText(state, stageOf(state, t))}`);
   out.push(`  ask: ${askLine(t.ask !== undefined ? (state.askHeads.get(t.ask) ?? null) : null)}`);
   if (t.from !== undefined) out.push(`  from ${taskId(t.from)}${state.tasks.get(t.from) ? `: ${inlineText(state.tasks.get(t.from)!.title, 120)}` : ""}`);
   const followUps = [...state.tasks.values()].filter((x) => x.from === t.id).map((x) => taskId(x.id));
