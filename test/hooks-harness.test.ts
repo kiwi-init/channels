@@ -799,7 +799,7 @@ test("a hook through a wrapper in kiwi's install folder counts only when the wra
           SessionStart: [{ hooks: [{ type: "command", command: cmd("session-start") }] }, listen],
           UserPromptSubmit: [{ hooks: [{ type: "command", command: cmd("prompt") }] }, listen],
           Stop: [{ hooks: [{ type: "command", command: cmd("stop") }] }, listen],
-          PermissionRequest: [{ hooks: [{ type: "command", command: cmd("permission"), timeout: 1800 }] }],
+          PermissionRequest: [{ matcher: "Bash|Edit|Write|MultiEdit|NotebookEdit|WebFetch|mcp__.*", hooks: [{ type: "command", command: cmd("permission"), timeout: 1800 }] }],
         },
       }),
     );
@@ -963,4 +963,22 @@ test("a SessionStart migration adds the PermissionRequest hook to hooks from an 
   expect(after).toHaveLength(2);
   expect(hooksStatus()).toContain("claude: installed");
   expect(migrateClaudeHooks()).toBeNull();
+});
+
+test("a PermissionRequest entry with another matcher or timeout is stale: status names it and the migration replaces it, without adding listen hooks that weren't there", () => {
+  hideEnv(["AI_AGENT", "CLAUDE_CODE_EXECPATH", "CLAUDECODE"]);
+  const dir = scratch("kiwi-permission-stale-");
+  setEnv({ KIWI_HOME: scratch("kiwi-permission-stale-home-"), CLAUDE_CONFIG_DIR: dir });
+  const file = join(dir, "settings.json");
+  installHooks();
+  setEnv({ CLAUDECODE: "1", AI_AGENT: "claude-code_2-1-296_agent" });
+  const s = JSON.parse(readFileSync(file, "utf8")) as HookFile;
+  expect(listenTimeouts(file)).toEqual({ SessionStart: [], UserPromptSubmit: [], Stop: [], PermissionRequest: [] });
+  (s.hooks.PermissionRequest as { matcher?: string; hooks: { timeout?: number }[] }[])[0]!.hooks[0]!.timeout = 600;
+  writeFileSync(file, JSON.stringify(s, null, 2) + "\n");
+  expect(hooksStatus()).toContain("claude: not installed (the permission prompt hook is missing or from an older kiwi");
+  expect(migrateClaudeHooks()).toBe(file);
+  const after = JSON.parse(readFileSync(file, "utf8")) as HookFile;
+  expect(after.hooks.PermissionRequest!.flatMap((e) => e.hooks.map((h) => h.timeout))).toEqual([1800]);
+  expect(listenTimeouts(file)).toEqual({ SessionStart: [], UserPromptSubmit: [], Stop: [], PermissionRequest: [] });
 });

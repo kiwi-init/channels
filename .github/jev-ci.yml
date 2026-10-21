@@ -599,7 +599,9 @@ jobs:
       ignored), prints Claude Code's allow or deny, and says nothing but closes the ask when the
       call settles in the transcript first; no seat for the session or a subagent's call asks
       nobody. The transcript watcher finds the newest unanswered matching tool_use and sees its
-      tool_result, a new prompt or a new assistant turn. Fails if any of that breaks.
+      tool_result, a new prompt or a new assistant turn. test/permission-session.test.ts: one
+      hook waits per session and a later prompt marks it as overtaken; the folder shown starts
+      with ~. Fails if any of that breaks.
 
   test-flows-a:
     name: test / flows-a
