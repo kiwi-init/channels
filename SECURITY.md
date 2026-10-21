@@ -564,18 +564,10 @@ be only another way to answer the same prompt, never a way around it:
     digests pass, and folder and file paths are checked only for the known
     shapes above, so a random folder name doesn't count.
 
-  In a Bash command, a value the shell fills in isn't the secret itself, so
-  `curl -H "Authorization: Bearer $TOKEN"` is sent. That's a variable that
-  makes up the whole value (`$TOKEN`, `${TOKEN}`, `$USER:$PASS`), or `$(…)`
-  around a command that reads a secret from a store (`op read`,
-  `gh auth token`, `vault kv get`, `aws secretsmanager get-secret-value`,
-  `security find-generic-password`, `openssl rand`, `cat` and a few more).
-  Everything else still counts: text next to the variable (`$USER-hunter2`),
-  a default (`${TOKEN:-…}`), single quotes and quoted here-docs, backticks,
-  any other `$(…)`, and a test such as `[ $PASSWORD = … ]`. In files, edits,
-  URLs and MCP values only `${TOKEN}` and `${{ … }}` count as filled in.
-  Switches such as `DISABLE_AUTH=true` or `group_key=None` pass when they are
-  the whole value, and so do field-name keys such as `SORT_KEY` or
+  A value read from a variable or a command (`$TOKEN`, `${TOKEN}`, `$(…)`)
+  still counts, so `curl -H "Authorization: Bearer $TOKEN"` is answered in the
+  terminal. Switches such as `DISABLE_AUTH=true` or `group_key=None` pass when
+  they are the whole value, and so do field-name keys such as `SORT_KEY` or
   `PRIMARY_KEY`, unless the value has a digit and is 20 or more characters
   long.
 
