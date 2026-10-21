@@ -16,7 +16,7 @@ export function joinedText(
   as: { scopes?: readonly Scope[]; hold?: string | null; charter?: string | null; lead?: string | null; human?: string | null; persona?: Persona } = {},
 ): string {
   const mc = mcFor(alias, agent);
-  return briefText({ alias, agent, mc, listen: listenLine(mc, alias, agent), ...as });
+  return briefText({ alias, agent, mc, listen: listenLine(mc, alias, agent), contextLine: loadConfig().contextLine === "on", ...as });
 }
 
 export function agentPrompt(

@@ -374,6 +374,7 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
       lead: leadLine(state, b.as),
       scopes: seat?.scopes,
       ...(seat?.persona ? { persona: seat.persona } : {}),
+      contextLine: local.contextLine === "on",
     });
     const budgets = startBudgets(b.alias, budget, brief.length);
     const reentry = fresh === null || budgets.reentry === 0 ? null : reentryText(state, b.as, Date.now(), budgets.reentry, mc);
@@ -395,14 +396,11 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
 
   if (event === "prompt") {
     const head = promptHead(b.alias);
-    const nudge = yield* contextNudge(input, s, who, mc, Math.min(MAX_CONTEXT, budget));
-    const room = Math.min(MAX_CONTEXT, budget) - (nudge ? nudge.text.length + 2 : 0);
-    const persona = yield* personaNews(s, who, mc, room);
-    const unread = yield* unreadText(s, mc, Math.max(0, room - head.length - 1 - (persona ? persona.text.length + 2 : 0)));
-    if (!unread.text && !persona && !nudge) return yield* Effect.as(unread.shown, null);
-    const text = [nudge?.text ?? null, persona?.text ?? null, unread.text ? [head, unread.text].join("\n") : null].filter((t) => t !== null).join("\n\n");
-    const told = persona ? Effect.andThen(persona.shown, unread.shown) : unread.shown;
-    const shown = nudge ? Effect.andThen(nudge.shown, told) : told;
+    const persona = yield* personaNews(s, who, mc, Math.min(MAX_CONTEXT, budget));
+    const unread = yield* unreadText(s, mc, Math.max(0, Math.min(MAX_CONTEXT, budget - head.length - 1 - (persona ? persona.text.length + 2 : 0))));
+    if (!unread.text && !persona) return yield* Effect.as(unread.shown, null);
+    const text = [persona?.text ?? null, unread.text ? [head, unread.text].join("\n") : null].filter((t) => t !== null).join("\n\n");
+    const shown = persona ? Effect.andThen(persona.shown, unread.shown) : unread.shown;
     if (input.hook_event_name === "BeforeAgent") return answered("gemini-prompt", text, shown);
     return answered("prompt", text, shown);
   }
@@ -418,13 +416,16 @@ export const answer = Effect.fn("Hooks.answer")(function* (event: string, input:
     }
     if (who.harness === "grok" && input.reason !== undefined && input.reason !== "end_turn") return null;
     const stopHead = `Before stopping: unread Kiwi Channels messages for you (${b.alias}). Handle them (answer with \`${mc} reply N "…"\`):`;
-    const persona = yield* personaNews(s, who, mc, budget);
-    const reminder = fitReminder(yield* rearmText(input, b, who, mc), budget - (persona ? persona.text.length + 2 : 0));
+    const nudge = yield* contextNudge(input, s, who, mc, budget);
+    const persona = yield* personaNews(s, who, mc, budget - (nudge ? nudge.text.length + 2 : 0));
+    const rearm = fitReminder(yield* rearmText(input, b, who, mc), budget - (nudge ? nudge.text.length + 2 : 0) - (persona ? persona.text.length + 2 : 0));
+    const reminder = [nudge?.text ?? null, rearm].filter((t) => t !== null).join("\n\n") || null;
     const unreadMax = stopUnreadMax(stopHead, [persona?.text ?? null, reminder].filter((t) => t !== null).join("\n\n") || null, budget);
     const unread = unreadMax > 0 ? yield* unreadText(s, mc, unreadMax) : { text: "", shown: Effect.void };
     const decision = style === "gemini" ? "deny" : "block";
     const reason = [persona?.text ?? null, stopReason(stopHead, unread.text, reminder) || null].filter((t) => t !== null).join("\n\n");
-    const shown = persona ? Effect.andThen(persona.shown, unread.shown) : unread.shown;
+    const told = persona ? Effect.andThen(persona.shown, unread.shown) : unread.shown;
+    const shown = nudge ? Effect.andThen(nudge.shown, told) : told;
     if (reason) return answered(decision, reason, shown);
     yield* unread.shown;
   }

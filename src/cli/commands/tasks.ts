@@ -1,6 +1,6 @@
 import * as Effect from "effect/Effect";
 import { oneLook, openSession } from "../../agent.ts";
-import { Keystore } from "../../config.ts";
+import { Keystore, loadConfig } from "../../config.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
 import { formatTask, formatTasks, issueLinkText, looksLikeLine, taskStateWord } from "@kiwi/core/format.ts";
 import type { TaskState } from "@kiwi/core/protocol.ts";
@@ -64,7 +64,7 @@ export const taskCommands: Record<string, Command> = {
           const refused = leadCheckpointRefusal((yield* s.state()).state, s.me, where);
           if (refused) return yield* die(refused);
           yield* s.setFact(leadCheckpointKey(s.me), where);
-          return out("lead checkpoint saved");
+          return out(loadConfig().contextLine === "on" ? "lead checkpoint saved: a new session of yours starts from it" : "lead checkpoint saved");
         }
         const id = yield* taskArg();
         if (sub === "show") {
@@ -131,7 +131,7 @@ export const taskCommands: Record<string, Command> = {
         if (kept) return out(`${taskId(id)}'s review moved to ${t.review === "*" ? "anyone who hasn't worked on it" : t.review}: ${keptAt}`);
         out(`${taskId(id)} ${taskStateWord(t)}${t.owner ? ` @${t.owner}` : ""}: ${inlineText(t.title, 200)}`);
         if ((sub === "done" || sub === "review") && t.areas?.length) out(`folders it changed (for kiwi task who): ${t.areas.join(", ")}`);
-        if (sub === "checkpoint") out(`checkpoint saved on ${taskId(id)}`);
+        if (sub === "checkpoint") out(loadConfig().contextLine === "on" ? `checkpoint saved: a new session of yours starts ${taskId(id)} from it` : `checkpoint saved on ${taskId(id)}`);
       }),
     ),
 

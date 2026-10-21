@@ -417,9 +417,8 @@ jobs:
       reading any of them (by cursor, or as a reply marked seen) lets the next through, a replaced session or webhook
       is woken at once, and a message held back by a wake never read gets its wake once that one has been outstanding
       for wakeOutstandingMs (AgentSession.unreadAt's seqs, src/daemon/wake.ts, test/wake.test.ts).
-      Also test/context-line.test.ts: a seat's context in words (tokensWord), the context line's one
-      line (on only with kiwi context-line on, and never about clearing or fresh sessions) once per
-      crossing of CONTEXT_LINE (250k; back under it resets, unknown keeps the state), naming
+      Also test/context-line.test.ts: a seat's context in words (tokensWord), the Stop hook's nudge
+      once per crossing of CONTEXT_LINE (250k; back under it resets, unknown keeps the state), naming
       each open task the seat owns and the checkpoint command, and asking the lead for its lead
       checkpoint (kiwi task checkpoint lead), alone or after its tasks, with nudgeShort naming only the
       commands for when the full nudge doesn't fit the hook's budget, and an activity's context token
@@ -734,10 +733,11 @@ jobs:
       with big checkpoints and a
       backlog of messages the SessionStart context stays within HOOK_CONTEXT_MAX (Claude Code's
       inline limit, shared between the seats a session serves in src/hooks/run.ts), and every
-      message it left out comes with a later hook; and past the context line nothing is said while
-      kiwi context-line is off (its default), and with it on the next prompt carries one line, once
-      per crossing, Stop never blocking for it, again only after the context came back under it
-      (src/hooks/context-line.ts, src/cli/commands/context-line.ts); and with kiwi rotate on, a seat past the
+      message it left out comes with a later hook; and with kiwi context-line off (src/cli/commands/context-line.ts, the
+      default) the context line says nothing: no checkpoint line in the brief, a checkpoint only saved, no Stop ask;
+      with it on, everything as it was before #670: past the context line the Stop hook asks once
+      for a checkpoint of each open task, not while stop_hook_active, and again only after the
+      context came back under it (src/hooks/context-line.ts); and with kiwi rotate on, a seat past the
       line whose Stop hands nothing over starts the pane's /clear sender once it has checkpointed each
       open task, never before and never with rotation off, and before that logs why it stays once to
       rotate.log however many times it stops, while with rotation off nothing reaches rotate.log
