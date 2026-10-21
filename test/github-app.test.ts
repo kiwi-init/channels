@@ -6,7 +6,7 @@ import { signRequest } from "@kiwi/core/auth.ts";
 import { Channel } from "@kiwi/core/client.ts";
 import { generateIdentity, type Identity } from "@kiwi/core/identity.ts";
 import { startRelay } from "../src/relay/bun.ts";
-import { appJwt, githubAppFrom, logExcerpt, pkcs8Of, REVIEW_CHECK } from "../src/relay/github-app.ts";
+import { appJwt, githubAppFrom, pkcs8Of, REVIEW_CHECK } from "../src/relay/github-app.ts";
 import { devHumanAuth } from "../src/relay/human.ts";
 import { checked } from "./check.ts";
 
@@ -50,16 +50,6 @@ let owner: Identity;
 let member: Identity;
 const dataDir = mkdtempSync(join(tmpdir(), "kiwi-github-app-"));
 const sha = "c".repeat(40);
-const JOB_LOG = [
-  "2026-10-18T16:11:00.0000000Z ##[group]Run bun test",
-  "2026-10-18T16:11:01.0000000Z bun test v1.4.2",
-  "2026-10-18T16:11:02.0000000Z \u001b[31m(fail)\u001b[0m quote > names the sender",
-  "2026-10-18T16:11:02.1000000Z error: expect(received).toContain(expected)",
-  "2026-10-18T16:11:03.0000000Z ##[endgroup]",
-  "2026-10-18T16:11:03.5000000Z ##[error]Process completed with exit code 1.",
-  "2026-10-18T16:11:04.0000000Z Post job cleanup.",
-].join("\n");
-
 beforeAll(async () => {
   keys = (await crypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256" }, true, ["sign", "verify"])) as CryptoKeyPair;
   pkcs8 = new Uint8Array(await crypto.subtle.exportKey("pkcs8", keys.privateKey));
@@ -83,18 +73,6 @@ beforeAll(async () => {
       if (path === "/repos/ojow/channels/issues/12" && req.method === "PATCH") return Response.json({ html_url: "https://github.com/ojow/channels/issues/12", state: "closed" });
       if (path === "/repos/ojow/channels/issues/12/comments") return Response.json({ html_url: "https://github.com/ojow/channels/issues/12#issuecomment-2" }, { status: 201 });
       if (path === "/repos/ojow/channels/issues/7") return Response.json({ title: "A PR", html_url: "https://github.com/ojow/channels/pull/7", state: "open", pull_request: {} });
-      if (path === `/repos/ojow/channels/commits/${sha}/check-runs`) {
-        const id = { "test / unit": 77, "repo / static": 78 }[new URL(req.url).searchParams.get("check_name") ?? ""];
-        return Response.json({ check_runs: id ? [{ id, html_url: `https://github.com/ojow/channels/actions/runs/9/job/${id}`, output: { title: null, summary: null } }] : [] });
-      }
-      if (path === "/repos/ojow/channels/actions/jobs/77/logs") return new Response(JOB_LOG);
-      if (path === "/repos/ojow/channels/actions/jobs/78/logs") return new Response("forbidden", { status: 403 });
-      if (path === "/repos/ojow/channels/check-runs/78/annotations")
-        return Response.json([
-          { path: "web/src/x.ts", start_line: 3, message: "'cx' is declared but never used", annotation_level: "failure" },
-          { path: ".github", message: "Process completed with exit code 1.", annotation_level: "failure" },
-          { path: "web/src/y.ts", message: "just a warning", annotation_level: "warning" },
-        ]);
       return new Response("nope", { status: 404 });
     },
   });
@@ -234,30 +212,5 @@ describe("diffs and review checks through the relay", () => {
       off.stop(true);
       rmSync(dir, { recursive: true, force: true });
     }
-  });
-});
-
-describe("a red check's log, for the task CI red becomes", () => {
-  test("the excerpt is the lines before the first error, without timestamps, colours or group markers", () => {
-    expect(logExcerpt(JOB_LOG)).toBe("bun test v1.4.2\n(fail) quote > names the sender\nerror: expect(received).toContain(expected)\n##[error]Process completed with exit code 1.");
-    expect(logExcerpt("all good\nnothing failed")).toBe("");
-  });
-
-  test("only the owner reads it; from the job's log, else from the check's failure annotations", async () => {
-    const q = (name: string) => `/github/check-log?repo=ojow/channels&sha=${sha}&name=${encodeURIComponent(name)}`;
-    expect((await room("GET", q("test / unit"), member)).status).toBe(403);
-    expect(await (await room("GET", q("test / unit"), owner)).json()).toEqual({
-      excerpt: "bun test v1.4.2\n(fail) quote > names the sender\nerror: expect(received).toContain(expected)\n##[error]Process completed with exit code 1.",
-      url: "https://github.com/ojow/channels/actions/runs/9/job/77",
-      from: "log",
-    });
-    expect(await (await room("GET", q("repo / static"), owner)).json()).toEqual({
-      excerpt: "web/src/x.ts:3: 'cx' is declared but never used\nProcess completed with exit code 1.",
-      url: "https://github.com/ojow/channels/actions/runs/9/job/78",
-      from: "annotations",
-    });
-    expect((await room("GET", q("no such check"), owner)).status).toBe(404);
-    expect((await room("GET", `/github/check-log?repo=someone/else&sha=${sha}&name=x`, owner)).status).toBe(400);
-    expect((await room("GET", `/github/check-log?repo=ojow/channels&sha=${sha}`, owner)).status).toBe(400);
   });
 });
