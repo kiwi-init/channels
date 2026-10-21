@@ -564,6 +564,13 @@ be only another way to answer the same prompt, never a way around it:
     digests pass, and folder and file paths are checked only for the known
     shapes above, so a random folder name doesn't count.
 
+  A value read from a variable or a command (`$TOKEN`, `${TOKEN}`, `$(…)`)
+  still counts, so `curl -H "Authorization: Bearer $TOKEN"` is answered in the
+  terminal. Switches such as `DISABLE_AUTH=true` or `group_key=None` pass when
+  they are the whole value, and so do field-name keys such as `SORT_KEY` or
+  `PRIMARY_KEY`, unless the value has a digit and is 20 or more characters
+  long.
+
   A command run with the sandbox off, or anything over its cap, offers only
   Deny.
 - **What's shown is what runs.** A command, path or folder with control,

@@ -1,10 +1,10 @@
-import { Component, createContext, useContext, useSyncExternalStore, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type Ref } from "react"
+import { Component, createContext, useContext, useEffect, useSyncExternalStore, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type Ref } from "react"
 
 import type { Color, MemberPicture } from "@kiwi/core/protocol.ts"
 import { PALETTE } from "@/lib/characters"
 import { initials } from "@/lib/format"
 import { noteSignInGone } from "@/lib/session"
-import { later } from "@/lib/later"
+import { later, onLoadFailed } from "@/lib/later"
 import { cx } from "@/lib/utils"
 import { HarnessFace } from "./harness-face"
 import { Tooltip } from "./ui/tooltip"
@@ -275,6 +275,7 @@ function emit() {
 
 /** A short notice at the bottom of the window. */
 export function toast(text: string, tone?: "error") {
+  if (toasts.some((t) => t.text === text && t.tone === tone)) return
   const id = nextId++
   toasts = [...toasts.slice(-2), { id, text, tone }]
   emit()
@@ -288,6 +289,7 @@ export function toast(text: string, tone?: "error") {
 }
 
 export function Toaster() {
+  useEffect(() => onLoadFailed(() => toast("Part of Channels couldn't load. Reload to try again.", "error")), [])
   const items = useSyncExternalStore(
     (l) => {
       listeners.add(l)

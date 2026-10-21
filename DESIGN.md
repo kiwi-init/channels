@@ -294,10 +294,15 @@ From `design-tokens.ts`:
   text size live in Settings and apply at once.
 - A picture in the chat opens in the annotator: a full-window dark stage
   (`.dark-stage` puts every token on its dark side, whatever the theme),
-  sender and time on top, one floating tool pill (Move, Pen, Arrow, Box,
+  sender and time on its top row, which in the desktop app is the window's
+  own 52px `drag` row (the Mac traffic lights before the sender, its
+  buttons still click), one floating tool pill (Move, Pen, Arrow, Box,
   Text, Hide; the alert, decide, accent and ink colours; undo, redo), and
   a reply bar that sends the marked-up picture back in its thread. Hide
   is an opaque block, burned into the pixels that are sent.
+- In the desktop app the top 52px of every page moves the window. What
+  floats over it takes it back: a dialog, its backdrop and a menu are
+  `no-drag`, and a full-window stage brings its own `drag` row.
 
 - Settings → Personalities: a roomy modal, the list on the left (presets
   for code work, then Yours, each a 36px outlined glyph tile, the name in

@@ -92,6 +92,14 @@ const time = (x: unknown): x is number => typeof x === "number" && Number.isFini
 const flag = (x: unknown): x is boolean | undefined => x === undefined || typeof x === "boolean";
 const total = (xs: readonly string[]) => xs.reduce((n, x) => n + x.length, 0);
 
+const SHELL_END = String.raw`(?=[\s;&|)]|$)`;
+const TEXT_END = String.raw`[^\S\n]*(?:[,;)}\]](?![^\s,;)}\]"':.[])|(?<=\s)#|(?=\n|$))`;
+const SWITCHES = ["true", "false", "yes", "no", "on", "off", "none", "null", "nil", "0", "1"].flatMap((w) => [w, w.charAt(0).toUpperCase() + w.slice(1), w.toUpperCase()]);
+const SWITCH = String.raw`(?:"(?:${SWITCHES.join("|")})"|'(?:${SWITCHES.join("|")})'|(?:${SWITCHES.join("|")}))`;
+const PLAIN_KEYS = "sort|primary|partition|cache|foreign|range|row|unique|composite|public|routing|idempotency";
+const SUDO_STDIN = String.raw`sudo(?:\s+(?:-[A-Za-z]*[CDghpRrTtUu]\s+[^\s-]\S*|--?[A-Za-z][\w-]*(?:=\S*)?))*?\s+(?:-[A-Za-z]*S|--stdin(?![\w-]))`;
+const SECRET_NAME = String.raw`[\w-]*(?:token(?!s|iz)|secret|password|passwd|passphrase|(?<![a-z0-9])pass(?![a-z])|api[_-]?key|private[_-]?key|database[_-]?url)[\w-]*`;
+
 const FLAGGED: readonly RegExp[] = [
   /(?<![A-Za-z0-9])(?:gh[oprsu]_[A-Za-z0-9]{16,}|github_pat_[A-Za-z0-9_]{16,})/,
   /(?<![A-Za-z0-9_-])sk-[A-Za-z0-9_-]{20,}/,
@@ -110,7 +118,7 @@ const FLAGGED: readonly RegExp[] = [
   /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/,
   /\bbearer\s+(?=[A-Za-z0-9._~+/=-]*\d)[A-Za-z0-9._~+/=-]{8,}/i,
   /(?<![\w-])--(?:password|passwd|pass|token|secret|api-?key|api_key|access-token|auth-token|client-secret)(?:=\S|\s+[^\s-])/i,
-  /(?<![\w-])kubectl(?![\w-])[^\n|;&]*\bsecret\b[^\n|;&]*--from-literal[=\s]/,
+  /(?<![\w-])kubectl(?![\w-])(?=[^\n|;&]*\bsecret\b)[^\n|;&]*?--from-literal[=\s]/,
   /(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*:\/\/[^\s/?#@:]*:[^\s/?#@]+@/i,
   /(?<![a-z0-9+.-])https?:\/\/[^\s/?#@]+@/i,
   /(?<![\w-])(?:mysql[a-z]*|mariadb(?:-[a-z]+)?)(?![\w-])[^\n|;&]*\s-p[^\s]/,
@@ -119,17 +127,29 @@ const FLAGGED: readonly RegExp[] = [
   /(?<![\w-])redis-cli(?![\w-])[^\n|;&]*\s-a\s*[^\s-]/,
   /(?<![\w-])(?:-u|--user)(?:\s+|=)?["']?(?!\d+:\d+(?:["'\s]|$))[^\s"':]+:[^\s"']/,
   /(?:>>?|(?<![\w-])tee(?:\s+-a)?)\s*["']?(?:[^\s"'|;&<>]*\/)?(?:[\w-][\w.-]*)?\.env(?:\.[\w-]+)*["']?(?![^\s;|&)])/,
-  /(?<![\w-])(?:[A-Z0-9_]*_)?(?:KEY|AUTH|CREDENTIALS?)\s*=(?!=)\s*["']?[^\s"']/,
-  /[?&](?:key|auth|sig|signature|x-amz-signature|x-amz-security-token|x-goog-signature)=[^&\s#"']/i,
+  /[?&](?:(?:key|auth|sig|signature|x-amz-signature|x-amz-security-token|x-goog-signature)=|(?:access_?key|code)=(?=[^&\s#"']*\d|[^&\s#"']{20}))[^&\s#"']/i,
   /\bBasic\s+(?=[A-Za-z0-9+/]*[a-z])(?=[A-Za-z0-9+/]+[A-Z0-9+/])(?:[A-Za-z0-9+/]{4}){3,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?(?![\w+/=])/,
   /(?<![\w-])gh\s+secret\s+set(?![\w-])[^\n|;&]*\s(?:--body|-b)(?:=|\s+)\S/,
   /(?<![\w-])openssl(?![\w-])[^\n|;&]*\s(?:-k\s+\S|-(?:pass|passin|passout)\s+pass:)/,
-  /(?<![\w-])(?:echo|printf)\s[^\n|;&]*\|\s*sudo\s+(?:-[A-Za-z]+\s+)*-[A-Za-z]*S/,
+  new RegExp(String.raw`(?<![\w-])(?:echo|printf)\s[^\n|;&]*\|\s*${SUDO_STDIN}`),
+  new RegExp(String.raw`(?<![\w-])${SUDO_STDIN}[^\n|;&]*<<<\s*["']?[^\s"']`),
+  new RegExp(String.raw`(?:["']${SECRET_NAME}["']|^[ \t]*${SECRET_NAME})\s*:\s*(?!${SWITCH}${TEXT_END})["']?[^\s"']`, "im"),
+  new RegExp(String.raw`["']${SECRET_NAME}\s*:\s*(?!${SWITCH}["'])["']?[^\s"']`, "i"),
 ];
 
-const SECRET_NAME = String.raw`[\w-]*(?:token(?!s|iz)|secret|password|passwd|passphrase|(?<![a-z0-9])pass(?![a-z])|api[_-]?key|private[_-]?key|database[_-]?url)[\w-]*`;
-const ASSIGNED = new RegExp(String.raw`(?<![\w-])${SECRET_NAME}\s*=(?!=)\s*["']?[^\s"']`, "i");
-const KEYED = new RegExp(String.raw`(?:["']${SECRET_NAME}["']?|^[ \t]*${SECRET_NAME})\s*:\s*["']?[^\s"']`, "im");
+function shapes(shell: boolean): readonly RegExp[] {
+  const value = String.raw`(?!${SWITCH}["']?${shell ? SHELL_END : TEXT_END})`;
+  return [
+    new RegExp(String.raw`(?<![\w-])(?:[A-Z0-9_]*_)?(?:(?<!(?:^|[^A-Z0-9])(?:${PLAIN_KEYS.toUpperCase()})_)KEY|AUTH|CREDENTIALS?)\s*=(?!=)\s*${value}["']?[^\s"']`),
+    new RegExp(String.raw`(?<![\w-])[a-z0-9_]*_(?:(?<!(?:^|[^a-z0-9])(?:${PLAIN_KEYS})_)key|auth|credentials?)\s*=(?!=)\s*${value}["']?[^\s"']`),
+    new RegExp(String.raw`(?<![\w-])(?:[A-Za-z0-9_]*_)?(?:${PLAIN_KEYS})_key\s*=(?!=)\s*${value}["']?(?=[^\s"';&|]*\d)[^\s"';&|]{20}`, "i"),
+    new RegExp(String.raw`(?<![\w-])${SECRET_NAME}\s*=(?!=)\s*${value}["']?[^\s"']`, "i"),
+  ];
+}
+
+const SHELL_SHAPES: readonly RegExp[] = [...FLAGGED, ...shapes(true)];
+const TEXT_SHAPES: readonly RegExp[] = [...FLAGGED, ...shapes(false)];
+const QUOTED_TEXT = /<<-?\s*(?:\\|(['"]))?([A-Za-z_]\w*)\1[^\n]*\n([\s\S]*?)(?:\n[ \t]*\2(?=\n|$)|$)|'([^']*)'|"([^"]*)"/g;
 
 const RUN = /[A-Za-z0-9+/_-]{40,}/g;
 const RUN_SEPARATORS = /[+/_-]/;
@@ -183,11 +203,16 @@ function longRun(said: string): boolean {
 }
 
 function shapedSecret(said: string): boolean {
-  return FLAGGED.some((re) => re.test(said)) || ASSIGNED.test(said) || KEYED.test(said);
+  return TEXT_SHAPES.some((re) => re.test(said));
 }
 
-export function looksSecret(said: string): boolean {
-  return shapedSecret(said) || longRun(said);
+function shellSecret(command: string): boolean {
+  const quoted = [...command.matchAll(QUOTED_TEXT)].map((m) => m[3] ?? m[4] ?? m[5] ?? "").join("\n");
+  return SHELL_SHAPES.some((re) => re.test(command)) || shapedSecret(quoted);
+}
+
+export function looksSecret(said: string, shell = false): boolean {
+  return (shell ? shellSecret(said) : shapedSecret(said)) || longRun(said);
 }
 
 function wellFormedMcp(x: unknown): x is NonNullable<PermissionShown["mcp"]> {
@@ -350,11 +375,11 @@ function viewOf(tool: string, given: unknown, server: unknown): View | null {
 
 function shownTexts(p: PermissionShown): string[] {
   const mcp = p.mcp ? [p.mcp.server, p.mcp.tool, ...p.mcp.args, ...(p.mcp.values ?? [])] : [];
-  return [p.tool, p.command, p.description, p.content, p.replaced, p.url, ...mcp].filter((t): t is string => t !== undefined);
+  return [p.tool, p.description, p.content, p.replaced, p.url, ...mcp].filter((t): t is string => t !== undefined);
 }
 
 function revealsSecret(p: PermissionShown): boolean {
-  return shownTexts(p).some(looksSecret) || [p.cwd, ...(p.paths ?? [])].some(shapedSecret);
+  return (p.command !== undefined && looksSecret(p.command, true)) || shownTexts(p).some((t) => looksSecret(t)) || [p.cwd, ...(p.paths ?? [])].some(shapedSecret);
 }
 
 export function permissionShown(input: unknown, nonce: string, expiresAt: number): PermissionShown | null {

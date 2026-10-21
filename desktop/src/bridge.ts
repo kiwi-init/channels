@@ -7,6 +7,7 @@ import type { Personality } from "@kiwi/core/personality.ts";
 import type { CachedRow, Unread } from "@kiwi/core/cache-row.ts";
 import type { Channel, OpenKind, PresenceFields } from "@kiwi/core/client.ts";
 import type { MemberPicture, Message, Presence, ReadMark } from "@kiwi/core/protocol.ts";
+import type { LaunchedView, RexSeat, RexStatus } from "@kiwi/core/terminals.ts";
 import type { TextStep } from "./text-size.ts";
 import type { Wire } from "./wire.ts";
 
@@ -247,15 +248,6 @@ export interface GithubStatus {
   account: { login: string; id: number; at: number } | null;
 }
 
-export interface RexSeatView {
-  alias: string;
-  agent: string;
-  room?: string;
-  server: string;
-  session: string;
-  block: string;
-}
-
 export type RexShowResult = { ok: true } | { ok: false; why: "no-rex" | "no-server" | "no-app" | "remote-control" | "failed" };
 
 export interface MachineView {
@@ -277,20 +269,6 @@ export interface LaunchAgentRequest {
   relay: string;
   nick?: string;
   persona?: string;
-}
-
-export type LaunchedView =
-  | { ok: true; launch: string; place: "rex"; rex: { server: string; session: string; block: string } }
-  | { ok: true; launch: string; place: "tmux"; session: string; window: string }
-  | { ok: true; launch: string; place: "terminal" }
-  | { ok: false; why: "bad-request" | "not-installed" | "no-recipe" | "no-place" | "not-allowed" | "failed"; detail: string };
-
-export interface RexStatusView {
-  found: boolean;
-  version?: string;
-  server: "running" | "stopped";
-  helpers: "on" | "off";
-  rotation: "on" | "off";
 }
 
 export interface KiwiBridge {
@@ -349,11 +327,11 @@ export interface KiwiBridge {
   setVoiceConsent(roomId: string, on: boolean): Promise<void>;
   voiceToken(roomId: string): Promise<VoiceAuth>;
   setPersonalities(list: Personality[]): Promise<void>;
-  rexSeats(): Promise<RexSeatView[]>;
-  rexShow(seat: RexSeatView): Promise<RexShowResult>;
-  rexStatus(): Promise<RexStatusView>;
-  rexInstall(): Promise<RexStatusView>;
-  rexRemove(): Promise<RexStatusView>;
+  rexSeats(): Promise<RexSeat[]>;
+  rexShow(seat: RexSeat): Promise<RexShowResult>;
+  rexStatus(): Promise<RexStatus>;
+  rexInstall(): Promise<RexStatus>;
+  rexRemove(): Promise<RexStatus>;
   harnesses(): Promise<HarnessRow[]>;
   seatFolders(roomId: string): Promise<string[]>;
   chooseFolder(): Promise<string | null>;

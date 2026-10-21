@@ -32,7 +32,7 @@ export function Menu({
     <Base.Root defaultOpen={defaultOpen}>
       <Base.Trigger render={trigger} />
       <Base.Portal>
-        <Base.Positioner side={side} align={align} sideOffset={6} className="z-50 outline-none">
+        <Base.Positioner side={side} align={align} sideOffset={6} className="no-drag z-50 outline-none">
           <Base.Popup className={cx(POP, POP_IN, "min-w-44", className)}>{children}</Base.Popup>
         </Base.Positioner>
       </Base.Portal>

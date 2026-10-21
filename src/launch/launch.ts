@@ -12,7 +12,8 @@ import type { PlaceTools } from "../terminals/plugin.ts";
 import { openPlace } from "./place.ts";
 import { joinLineRefusal } from "@kiwi/core/join-line.ts";
 import { canStart, joinPrompt, recipeArgv } from "./recipes.ts";
-import type { Launched, LaunchRequest } from "./wire.ts";
+import type { Launched } from "@kiwi/core/terminals.ts";
+import type { LaunchRequest } from "./wire.ts";
 
 export interface LaunchOptions {
   PATH?: string;

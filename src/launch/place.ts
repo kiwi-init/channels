@@ -1,9 +1,8 @@
 import { statSync } from "node:fs";
 import { isAbsolute } from "node:path";
+import type { PlaceKind } from "@kiwi/core/terminals.ts";
 import type { PlaceRequest, Placed, PlaceTools, TerminalId } from "../terminals/plugin.ts";
 import { placeTools, terminalPlugins } from "../terminals/registry.ts";
-
-export type PlaceKind = Extract<Placed, { ok: true }>["place"];
 
 const KIND: Record<TerminalId, PlaceKind> = { rex: "rex", tmux: "tmux", app: "terminal" };
 
