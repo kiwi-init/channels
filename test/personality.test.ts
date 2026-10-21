@@ -3,7 +3,7 @@ import { newChannelKey } from "@kiwi/core/crypto.ts";
 import { formatStatus } from "@kiwi/core/format.ts";
 import { generateIdentity, sign } from "@kiwi/core/identity.ts";
 import { makeRecord, openRecord, readRecord, sealRecord } from "@kiwi/core/membership.ts";
-import { cleanPersona, MAX_AREAS, MAX_INSTRUCTIONS, MAX_NAME, personaOf, personaScopes } from "@kiwi/core/personality.ts";
+import { CAPABILITIES, cleanPersona, MAX_AREAS, MAX_INSTRUCTIONS, MAX_NAME, personaLines, personaOf, personaScopes } from "@kiwi/core/personality.ts";
 import { PRESETS } from "@kiwi/core/presets.ts";
 import { presetOf } from "@kiwi/core/scopes.ts";
 import { fold, toRoster } from "@kiwi/core/state.ts";
@@ -22,6 +22,12 @@ describe("a personality", () => {
     expect(cleanPersona({ ...builder, areas: Array.from({ length: MAX_AREAS + 1 }, (_, i) => `a${i}/`) })).toBeNull();
     expect(cleanPersona({ ...builder, instructions: "line\u0000" })).toBeNull();
     expect(cleanPersona("builder")).toBeNull();
+  });
+
+  test("no preset or capability carries one repo's own rules: it defers to the repo the agent works in", () => {
+    const told = PRESETS.flatMap((p) => personaLines({ ...personaOf(p), capabilities: [...CAPABILITIES] })).join("\n");
+    for (const rule of [/T<n>/, /ci-ok/i, /squash/i, /merge on green/i, /one (branch|pr|pull request) per task/i, /release notes/i]) expect(told).not.toMatch(rule);
+    for (const id of ["builder", "bug-hunter", "lead"]) expect(PRESETS.find((p) => p.id === id)?.instructions).toContain("this repo's own rules");
   });
 
   test("capabilities are held like scopes: a builder is a full member, none is read only", () => {
@@ -60,7 +66,7 @@ describe("the personality on the member record", () => {
 
   test("the agent's brief says who it joins as, what it may do, where it works, and its instructions, instead of a role", () => {
     const brief = briefText({ alias: "c", agent: "claude", mc: "kiwi", listen: "", persona: { ...builder, areas: ["web/"] } });
-    expect(brief).toContain("You join as Builder. You may write and ask, work tasks, open pull requests, merge on green, set notes. You work in web/.");
+    expect(brief).toContain("You join as Builder. You may write and ask, work tasks, open pull requests, merge pull requests when the project's checks allow, set notes. You work in web/.");
     expect(brief).toContain(builder.instructions);
     expect(brief).not.toContain("Your role");
     const reader = briefText({ alias: "c", agent: "claude", mc: "kiwi", listen: "", persona: { ...builder, capabilities: [] } });
