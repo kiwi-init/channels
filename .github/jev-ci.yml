@@ -125,6 +125,13 @@ jobs:
       lib/format.test.ts: the time formatters give nothing for such a time instead of throwing, and
       lib/channel/recent.test.ts: a saved channel preview carrying one is dropped, so the channel
       list still renders.
+      Also test/permission.test.ts: a Claude Code permission prompt as Needs you shows it (packages/core/src/permission.ts):
+      Bash's command, edits' paths and content, WebFetch's whole URL, an MCP tool's argument names and values, and no other
+      tool; nothing when looksSecret flags anything shown (a corpus of token shapes, headers, flags, assignments, URL
+      userinfo, webhooks, .env writes and long random runs, against ordinary commands that must pass) or a cap is passed;
+      Allow only where all of it is shown; the payload's permission, perm and settled fields (wellFormed, send, history through a
+      local relay); permissionAnswer counting only a verified signed perm naming the ask's id, Allow from the agent's own
+      human and Deny from them or the owner; and the fold closing the ask on its asker's settled reply or at expiresAt.
       Also test/trim-roster.test.ts: an agent whose roster is short a member (as a stale daemon peek
       leaves it) refolds with the whole roster before it saves a trimmed fold base, so a task that
       member worked keeps its done state and rounds instead of the cache keeping a wrong base for

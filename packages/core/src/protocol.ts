@@ -4,6 +4,8 @@
 // and AES-GCM ciphertext. Everything meaningful (sender, recipients, body,
 // coordination events, signatures) lives inside the encrypted payload.
 
+import { permissionChoices, wellFormedPermission, wellFormedPermReply, wellFormedSettled, type PermissionReply, type PermissionSettled, type PermissionShown } from "./permission.ts";
+
 export const PROTOCOL_VERSION = 1;
 
 /** Largest ciphertext (base64) the relay accepts for a single message. */
@@ -592,6 +594,9 @@ export interface Payload {
   esc?: true;
   handoff?: Handoff;
   choices?: string[];
+  permission?: PermissionShown;
+  perm?: PermissionReply;
+  settled?: PermissionSettled;
   ts: number;
   /** Sender's Ed25519 public key (raw, base64url) and signature over the rest. */
   pk?: string;
@@ -833,6 +838,9 @@ export function wellFormed(p: unknown): p is Payload {
     (m.esc === undefined || m.esc === true) &&
     (m.handoff === undefined || (m.esc === true && wellFormedHandoff(m.handoff))) &&
     (m.choices === undefined || (m.esc === true && m.handoff === undefined && wellFormedChoices(m.choices))) &&
+    (m.permission === undefined || (m.esc === true && permissionChoices(m.choices) && wellFormedPermission(m.permission))) &&
+    (m.perm === undefined || (m.kind !== "event" && Array.isArray(m.re) && m.re.length > 0 && wellFormedPermReply(m.perm))) &&
+    (m.settled === undefined || (m.kind !== "event" && Array.isArray(m.re) && m.re.length > 0 && wellFormedSettled(m.settled))) &&
     (m.ev === undefined || wellFormedEvent(m.ev)) &&
     (m.kind !== "event" || m.ev !== undefined)
   );

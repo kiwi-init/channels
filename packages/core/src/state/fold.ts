@@ -201,6 +201,7 @@ export function fold(
   let hw = from?.hw ?? 0;
   const placesBefore = from?.placesBefore ?? [];
   const answered = new Map<number, Set<string>>(from?.answered.map(([seq, by]) => [seq, new Set(by)]));
+  const settledBy = new Map<number, Set<string>>();
   const threadOf = new Map<number, number>(from?.threadOf);
   const threadPeople = new Map<number, Set<string>>(from?.threadPeople.map(([seq, people]) => [seq, new Set(people)]));
   let head = from?.n ?? 0;
@@ -338,6 +339,10 @@ export function fold(
         let set = answered.get(r);
         if (!set) answered.set(r, (set = new Set()));
         set.add(m.from);
+        if (!m.settled) continue;
+        let settlers = settledBy.get(r);
+        if (!settlers) settledBy.set(r, (settlers = new Set()));
+        settlers.add(m.from);
       }
 
       if (m.kind !== "event") {
@@ -384,6 +389,7 @@ export function fold(
   const openAsks = [...(from?.asks ?? []), ...messages.filter((m) => m.seq > after)].filter((m) => {
     if (m.kind !== "ask" && m.kind !== "blocking") return false;
     if (ignored(trust.get(m.seq))) return false;
+    if (m.permission && (settledBy.get(m.seq)?.has(m.from) || now > m.permission.expiresAt)) return false;
     const by = answered.get(m.seq);
     const answers = (n: string) => (m.esc ? !!m.to?.includes(n) : n !== m.from);
     return !by || ![...by].some(answers);
