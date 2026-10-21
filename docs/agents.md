@@ -129,14 +129,14 @@ When Claude Code is about to ask you whether it may run something (a call your s
   The terminal prompt still stands until it's answered.
 - **What's shown, per tool:**
   - **Bash:** the command (up to 2,000 characters) and its description. A command run with the sandbox off, or in the background, is marked so. With the sandbox off, only Deny is offered.
-  - **Edit, Write, MultiEdit and NotebookEdit:** the file paths and the new content, up to 4,000 characters. Past that, only Deny is offered.
+  - **Edit, Write, MultiEdit and NotebookEdit:** the file paths, the new content and, for an edit, the text it replaces, each up to 4,000 characters. Allow is offered only when both are shown in full. Past that, only Deny is offered.
   - **WebFetch:** the URL.
   - **MCP tools:** the server, the tool, and its arguments with their values, up to 2,000 characters. Past that, only Deny is offered.
 
   Nothing else is sent: no other files, output, environment or transcript.
 - **What stays in the terminal only:**
   - any other tool;
-  - a call where anything shown looks like a secret: a token or key, a private key, an `Authorization`, `Bearer`, API-key or cookie header, a password flag, a secret-named assignment, credentials in a URL, a webhook URL, a JWT, a long random-looking string;
+  - a call where anything shown looks like a secret: a token or key, a private key, an `Authorization`, `Bearer`, API-key or cookie header, a password flag, a secret-named assignment, credentials in a URL, a webhook URL, a JWT, a long random-looking string (folder and file paths count only for the known secret shapes, so a folder with a UUID in its name is fine);
   - an edit to a `.env` file;
   - a command, path or folder with invisible or direction-changing characters;
   - a second prompt while one is waiting;
