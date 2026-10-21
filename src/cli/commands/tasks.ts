@@ -68,9 +68,9 @@ export const taskCommands: Record<string, Command> = {
         }
         const id = yield* taskArg();
         if (sub === "show") {
-          const { state } = yield* s.state();
+          const { state, messages } = yield* s.state();
           const shown = state.tasks.get(id) ?? (yield* die(`no task ${taskId(id)}`));
-          return out(opt.json ? JSON.stringify(shown) : formatTask(state, shown));
+          return out(opt.json ? JSON.stringify(shown) : formatTask(state, shown, Date.now(), messages));
         }
         if (sub === "match" || sub === "after") return yield* die(`kiwi task ${sub} is gone: tasks don't wait on or match anything now. Pick what you can do from the board (kiwi task)`);
         if (sub === "who") {

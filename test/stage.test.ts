@@ -28,7 +28,14 @@ async function setup() {
     const s = state();
     return stageText(s, stageOf(s, s.tasks.get(id)!));
   };
-  return { log, say, github, state, stage };
+  const chat = async (from: string, task: number, body: string, imgs: Message["imgs"]): Promise<number> => {
+    const seq = log.length + 1;
+    const payload: Payload = { v: PROTOCOL_VERSION, id: `s${seq}`, from, kind: "msg", body, ts: T0 + seq * 1_000, task, ...(imgs ? { imgs } : {}) };
+    const p = await sign(ids[from]!, payload);
+    log.push({ ...p, seq, rts: T0 + seq * 1_000, sigOk: await verify(p) });
+    return seq;
+  };
+  return { log, say, github, state, stage, chat };
 }
 
 describe("a task's stage is read off the signed log, never typed", () => {
@@ -101,5 +108,55 @@ describe("a task's stage is read off the signed log, never typed", () => {
     const s = state();
     expect(formatTask(s, s.tasks.get(t)!, T0 + 3_600_000)).toContain("  stage: proving: #5 no checks yet");
     expect(formatTasks(s)).toContain("Shown · proving: #5 no checks yet");
+  });
+});
+
+describe("a verdict counts only at the head it judged, and a task's evidence is refs", () => {
+  const A = "a".repeat(40);
+  const B = "b".repeat(40);
+  const C = "c".repeat(40);
+  const D = "d".repeat(40);
+
+  test("a push after the round was asked, or after the yes, leaves the review owed at the new head", async () => {
+    const { say, github, stage } = await setup();
+    await say("jow", "event", "set the branch prefix", { op: "branch.prefix.set", prefix: "T" });
+    const t = await say("ann", "event", "added", { op: "task.add", title: "Judged", owner: "ann", review: "jow" });
+    await github([{ event: "pull_request", action: "opened", number: 9, state: "open", branch: `T${t}-j`, sha: A }]);
+    await say("ann", "event", "review", { op: "task.update", task: t, state: "review", at: A });
+    expect(stage(t)).toBe("review owed by jow (#9)");
+    await github([{ event: "push", branch: `T${t}-j`, sha: B }]);
+    expect(stage(t)).toBe("review owed by jow (#9; judged at aaaaaaa, head now bbbbbbb)");
+    await say("jow", "event", "approved", { op: "task.update", task: t, state: "done", verdict: "approved", round: 1 });
+    expect(stage(t)).toBe("review owed by jow (#9; judged at aaaaaaa, head now bbbbbbb)");
+    await github([{ event: "pull_request", action: "closed", number: 9, state: "closed", merged: true }]);
+    expect(stage(t)).toBe("done: #9 merged");
+  });
+
+  test("a no at the head asks for changes; a push after it is proving again; a yes at the head stays done", async () => {
+    const { say, github, stage } = await setup();
+    await say("jow", "event", "set the branch prefix", { op: "branch.prefix.set", prefix: "T" });
+    const t = await say("ann", "event", "added", { op: "task.add", title: "Refused", owner: "ann", review: "jow" });
+    await github([{ event: "pull_request", action: "opened", number: 10, state: "open", branch: `T${t}-r`, sha: C }]);
+    await say("ann", "event", "review", { op: "task.update", task: t, state: "review", at: C.slice(0, 12) });
+    await say("jow", "event", "rejected", { op: "task.update", task: t, state: "doing", verdict: "rejected", round: 1 });
+    expect(stage(t)).toBe("building: changes asked at ccccccc (#10)");
+    await github([{ event: "push", branch: `T${t}-r`, sha: D }]);
+    expect(stage(t)).toBe("proving: #10 no checks yet");
+    await say("ann", "event", "review", { op: "task.update", task: t, state: "review", at: D });
+    await say("jow", "event", "approved", { op: "task.update", task: t, state: "done", verdict: "approved", round: 2 });
+    expect(stage(t)).toBe("done, declared (#10 not merged)");
+  });
+
+  test("task show lists the evidence as refs: the PR and its head, proof links, and files posted in the task's thread", async () => {
+    const { say, github, state, chat, log } = await setup();
+    await say("jow", "event", "set the branch prefix", { op: "branch.prefix.set", prefix: "T" });
+    const t = await say("ann", "event", "added", { op: "task.add", title: "With evidence", owner: "ann" });
+    await github([{ event: "pull_request", action: "opened", number: 11, state: "open", branch: `T${t}-e`, sha: D }]);
+    await say("ann", "event", "proof", { op: "task.update", task: t, proof: { url: "https://preview.example/11", label: "preview" } });
+    await say("ann", "event", "proof", { op: "task.update", task: t, proof: { url: `https://github.com/${R}/pull/11` } });
+    await chat("ann", t, "the screen", [{ name: "shot.png", mime: "image/png", ref: { id: "e".repeat(43), key: "k", size: 10 } }]);
+    const s = state();
+    expect(formatTask(s, s.tasks.get(t)!, T0 + 3_600_000, log)).toContain(`  evidence: PR ${R}#11 · head ddddddd · https://preview.example/11 (preview) · shot.png (file eeeeeee)`);
+    expect(formatTask(s, s.tasks.get(t)!, T0 + 3_600_000)).toContain(`  evidence: PR ${R}#11 · head ddddddd · https://preview.example/11 (preview)\n`);
   });
 });

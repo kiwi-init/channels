@@ -23,7 +23,7 @@ import {
   type ReviewRound,
   type Task,
 } from "./state.ts";
-import { stageOf, stageText } from "./stage.ts";
+import { evidenceOf, refText, stageOf, stageText } from "./stage.ts";
 import { isWakeVia, wakesInSession, wakeWords, type WakeVia } from "./wake.ts";
 
 export function tokensWord(n: number): string {
@@ -572,12 +572,14 @@ export function reviewBody(m: Message): string | null {
 }
 
 /** One task in full. `_state` is kept so callers needn't change (it used to resolve dependencies). */
-export function formatTask(state: ChannelState, t: Task, now = Date.now()): string {
+export function formatTask(state: ChannelState, t: Task, now = Date.now(), messages: readonly Message[] = []): string {
   const out = [
     `${taskId(t.id)} ${inlineText(t.title, 200)}`,
     `  state: ${taskStateWord(t)}${t.owner ? ` · owner: ${inlineText(t.owner, 40)}` : " · unassigned"} · created by ${inlineText(t.createdBy, 40)} ${ago(t.createdAt, now)}`,
   ];
   out.push(`  stage: ${stageText(state, stageOf(state, t))}`);
+  const evidence = evidenceOf(state, t, messages);
+  if (evidence.length) out.push(`  evidence: ${evidence.map((r) => refText(state, r)).join(" · ")}`);
   out.push(`  ask: ${askLine(t.ask !== undefined ? (state.askHeads.get(t.ask) ?? null) : null)}`);
   if (t.from !== undefined) out.push(`  from ${taskId(t.from)}${state.tasks.get(t.from) ? `: ${inlineText(state.tasks.get(t.from)!.title, 120)}` : ""}`);
   const followUps = [...state.tasks.values()].filter((x) => x.from === t.id).map((x) => taskId(x.id));
