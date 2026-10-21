@@ -33,6 +33,7 @@ import {
   missingImages,
   formatTask,
   formatTasks,
+  issueLinkText,
   looksLikeLine,
   mayDo,
   parseDuration,
@@ -646,7 +647,7 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
         "Add a task to the shared board: it's open until someone takes it, then doing, then done. Returns its id (like T12), and warns when an open task has a near-identical title. " +
         "`review` is who must approve it before it's done (a member, or any). " +
         "`from` names the task this one comes from (a follow-up, a part, a fix), so it goes to whoever has that context. " +
-        "`issue` imports a GitHub issue of the channel's repo (12, owner/repo#12 or its link): the title defaults to the issue's, and closing either one closes the other. " +
+        "`issue` imports a GitHub issue of the channel's repo (12, owner/repo#12 or its link): the title defaults to the issue's. The issue closing on GitHub closes the task; the task closing closes the issue only while the owner has Write to GitHub on. " +
         'Example: task_add {"title":"test the driver on Windows","review":"any"}.',
       inputSchema: {
         title: z.string().optional(),
@@ -661,7 +662,8 @@ export const runMcp = Effect.fn("Mcp.run")(function* (s: AgentSession, opts: { p
       Effect.gen(function* () {
         if (issue !== undefined) {
           const made = yield* s.taskFromIssue(issue, { title, detail, owner, review, ...(from !== undefined ? { from } : {}) });
-          return `added ${taskId(made.id)} from ${made.issue}: ${made.title}\nclosing either one closes the other`;
+          const { state: after } = yield* s.state();
+          return `added ${taskId(made.id)} from ${made.issue}: ${made.title}\n${issueLinkText(after)}`;
         }
         if (!title?.trim()) return yield* new Rejected("a task needs a title (or an issue to import)");
         const { state } = yield* s.state();

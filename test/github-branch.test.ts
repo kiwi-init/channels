@@ -153,7 +153,7 @@ describe("Write to GitHub: the owner's switch for the PR comment", () => {
     const older = { ...kept.base! };
     delete older.githubWrite;
     expect(fold([], roster, Date.now(), null, null, older).githubWrite).toBeNull();
-    expect(describeEvent(on)).toBe("let Kiwi write to GitHub: a new PR on a task's branch gets a comment naming the task");
+    expect(describeEvent(on)).toBe("let Kiwi write to GitHub: a comment links each new PR and issue to its task, and a task closing closes its issue");
     const p = { v: 1, id: "x", from: "jon", kind: "event", body: "", ts: 1 };
     expect(wellFormed({ ...p, ev: { op: "github.write.set", on: false } })).toBe(true);
     expect(wellFormed({ ...p, ev: { op: "github.write.set", on: "yes" } })).toBe(false);

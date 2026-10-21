@@ -172,7 +172,7 @@ describe("diffs and review checks through the relay", () => {
   });
 
   test("only the owner closes an issue: a comment saying why, then closed with GitHub's reason", async () => {
-    const body = { repo: "ojow/channels", number: 12, reason: "not_planned", body: "Kiwi task T9 cancelled: duplicate" };
+    const body = { repo: "ojow/channels", number: 12, reason: "not_planned", body: "Kiwi task T9 cancelled" };
     expect((await room("POST", "/github/issue/close", member, body)).status).toBe(403);
     expect((await room("POST", "/github/issue/close", owner, { ...body, reason: "done" })).status).toBe(400);
     expect((await room("POST", "/github/issue/close", owner, { ...body, repo: "someone/else" })).status).toBe(400);
@@ -180,7 +180,7 @@ describe("diffs and review checks through the relay", () => {
     expect(await (await room("POST", "/github/issue/close", owner, body)).json()).toEqual({ url: "https://github.com/ojow/channels/issues/12" });
     const made = calls.slice(before).filter((c) => c.path.startsWith("/repos/ojow/channels/issues/12"));
     expect(made.map((c) => [c.method, c.path, JSON.parse(c.body)])).toEqual([
-      ["POST", "/repos/ojow/channels/issues/12/comments", { body: "Kiwi task T9 cancelled: duplicate" }],
+      ["POST", "/repos/ojow/channels/issues/12/comments", { body: "Kiwi task T9 cancelled" }],
       ["PATCH", "/repos/ojow/channels/issues/12", { state: "closed", state_reason: "not_planned" }],
     ]);
   });

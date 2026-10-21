@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect";
 import { oneLook, openSession } from "../../agent.ts";
 import { Keystore } from "../../config.ts";
 import { inlineText } from "@kiwi/core/membership.ts";
-import { formatTask, formatTasks, looksLikeLine, taskStateWord } from "@kiwi/core/format.ts";
+import { formatTask, formatTasks, issueLinkText, looksLikeLine, taskStateWord } from "@kiwi/core/format.ts";
 import type { TaskState } from "@kiwi/core/protocol.ts";
 import { leadCheckpointRefusal } from "@kiwi/core/reentry.ts";
 import { isPerson, leadCheckpointKey, openRound, parseTaskId, similarOpenTasks, taskId, type ChannelState } from "@kiwi/core/state.ts";
@@ -34,7 +34,8 @@ export const taskCommands: Record<string, Command> = {
               ...(re !== undefined ? { re } : {}),
               ...(from !== undefined ? { from } : {}),
             });
-            return out(`added ${taskId(made.id)} from ${made.issue}: ${made.title}\nclosing either one closes the other`);
+            const { state: after } = yield* s.state();
+            return out(`added ${taskId(made.id)} from ${made.issue}: ${made.title}\n${issueLinkText(after)}`);
           }
           const title = yield* text(2);
           if (!title.trim()) return yield* die('usage: kiwi task add "title" [--owner NAME] [--review NAME|any] [--re N] [--issue 12|owner/repo#12]');

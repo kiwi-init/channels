@@ -84,13 +84,14 @@ describe("kiwi task add --issue on a live channel", () => {
     expect(await refusal(dev.taskFromIssue("someone/else#1"))).toBe("someone/else isn't one of the channel's repos (ojow/channels)");
   });
 
-  test("the owner's app closes the issue when the task is done", async () => {
+  test("the owner's app closes the issue when the task is done, only with Write to GitHub on", async () => {
     const { state } = await run(dev.state());
     const t = [...state.tasks.values()].find((x) => x.issue?.number === 12)!;
+    await owner.ownerCh.send("turned on Write to GitHub", { kind: "event", ev: { op: "github.write.set", on: true } });
     await owner.ownerCh.send(`T${t.id} done`, { kind: "event", ev: { op: "task.update", task: t.id, state: "done", note: "fixed in #370" } });
     const { state: after } = await run(dev.state());
     const due = issuesToClose(after, 0);
-    expect(due).toMatchObject([{ repo: "ojow/channels", number: 12, reason: "completed", body: `Kiwi task T${t.id} done: fixed in #370` }]);
+    expect(due).toMatchObject([{ repo: "ojow/channels", number: 12, reason: "completed", body: `Kiwi task T${t.id} done` }]);
     expect(await owner.ownerCh.closeIssue(due[0]!)).toEqual({ url: "https://github.com/ojow/channels/issues/12" });
     expect(calls.filter((c) => c.method === "PATCH").map((c) => JSON.parse(c.body))).toEqual([{ state: "closed", state_reason: "completed" }]);
   });

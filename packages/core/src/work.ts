@@ -465,6 +465,17 @@ export function prsToLinkBack(state: ChannelState, after: number): { repo: strin
   return out.sort((a, b) => a.seq - b.seq);
 }
 
+export function issuesToLink(state: ChannelState, after: number): { repo: string; number: number; task: number; seq: number; body: string }[] {
+  const out: { repo: string; number: number; task: number; seq: number; body: string }[] = [];
+  if (state.githubWrite === null) return out;
+  const since = Math.max(after, state.githubWrite);
+  for (const t of state.tasks.values()) {
+    if (!t.issue || t.id <= since) continue;
+    out.push({ repo: t.issue.repo, number: t.issue.number, task: t.id, seq: t.id, body: `Linked to Kiwi task ${taskId(t.id)}` });
+  }
+  return out.sort((a, b) => a.seq - b.seq);
+}
+
 export interface IssueClose {
   repo: string;
   number: number;
@@ -476,17 +487,17 @@ export interface IssueClose {
 
 export function issuesToClose(state: ChannelState, after: number): IssueClose[] {
   const out: IssueClose[] = [];
+  if (state.githubWrite === null) return out;
+  const since = Math.max(after, state.githubWrite);
   for (const t of state.tasks.values()) {
-    if (!t.issue || t.state !== "done" || !t.closedSeq || t.closedSeq <= after || issueOf(state.github, t.issue)?.state === "closed") continue;
-    const note = t.notes.find((n) => n.seq === t.closedSeq)?.text;
-    const said = note && note !== "cancelled" ? `: ${inlineText(note, 500)}` : "";
+    if (!t.issue || t.state !== "done" || !t.closedSeq || t.closedSeq <= since || issueOf(state.github, t.issue)?.state === "closed") continue;
     out.push({
       repo: t.issue.repo,
       number: t.issue.number,
       task: t.id,
       seq: t.closedSeq,
       reason: t.cancelled ? "not_planned" : "completed",
-      body: `Kiwi task ${taskId(t.id)} ${t.cancelled ? "cancelled" : "done"}${said}`,
+      body: `Kiwi task ${taskId(t.id)} ${t.cancelled ? "cancelled" : "done"}`,
     });
   }
   return out.sort((a, b) => a.seq - b.seq);

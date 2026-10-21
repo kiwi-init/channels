@@ -3,7 +3,7 @@ import { generateIdentity, sign, verify, type Identity } from "@kiwi/core/identi
 import { formatTask } from "@kiwi/core/format.ts";
 import { wellFormedEvent, type Event, type GithubNote, type Message } from "@kiwi/core/protocol.ts";
 import { fold, type FoldBase, type Roster } from "@kiwi/core/state.ts";
-import { issuesToClose, parseIssueRef, taskOfIssue, tasksClosedOnGithub } from "@kiwi/core/work.ts";
+import { issuesToClose, issuesToLink, parseIssueRef, taskOfIssue, tasksClosedOnGithub } from "@kiwi/core/work.ts";
 import { githubItem } from "../src/relay/github.ts";
 
 const ids: Record<string, Identity> = {};
@@ -77,8 +77,30 @@ describe("GitHub's issue events", () => {
 });
 
 describe("a task imported from an issue", () => {
-  test("closing the task closes the issue once, completed or not planned", async () => {
+  test("with Write to GitHub off, the task only links the issue: no comment, and closing the task leaves the issue open", async () => {
     const log = [await ev("jon", { op: "repos.set", repos: ["ojow/channels"] })];
+    const add = await ev("mac", { op: "task.add", title: "Copy icons", issue: { repo: "ojow/channels", number: 10 } });
+    log.push(add, await ev("jon", { op: "task.update", task: add.seq, state: "done", note: "fixed in #370" }));
+    const s = fold(log, roster);
+    expect(s.tasks.get(add.seq)?.issue).toEqual({ repo: "ojow/channels", number: 10 });
+    expect(issuesToLink(s, 0)).toEqual([]);
+    expect(issuesToClose(s, 0)).toEqual([]);
+    expect(formatTask(s, s.tasks.get(add.seq)!)).toContain("issue: ojow/channels#10; the issue closing on GitHub closes the task; Kiwi never writes to the issue while Write to GitHub is off");
+  });
+
+  test("turning Write to GitHub on links and closes only what comes after it", async () => {
+    const log = [await ev("jon", { op: "repos.set", repos: ["ojow/channels"] })];
+    const old = await ev("mac", { op: "task.add", title: "Before", issue: { repo: "ojow/channels", number: 11 } });
+    log.push(old, await ev("jon", { op: "task.update", task: old.seq, state: "done" }), await ev("jon", { op: "github.write.set", on: true }));
+    const later = await ev("mac", { op: "task.add", title: "After", issue: { repo: "ojow/channels", number: 15 } });
+    log.push(later);
+    const s = fold(log, roster);
+    expect(issuesToClose(s, 0)).toEqual([]);
+    expect(issuesToLink(s, 0)).toEqual([{ repo: "ojow/channels", number: 15, task: later.seq, seq: later.seq, body: `Linked to Kiwi task T${later.seq}` }]);
+  });
+
+  test("with Write to GitHub on, the issue gets one link comment, and closing the task closes it once, completed or not planned, never with the title or note", async () => {
+    const log = [await ev("jon", { op: "repos.set", repos: ["ojow/channels"] }), await ev("jon", { op: "github.write.set", on: true })];
     const add = await ev("mac", { op: "task.add", title: "Copy icons", issue: { repo: "ojow/channels", number: 12 } });
     const other = await ev("mac", { op: "task.add", title: "Dropped", issue: { repo: "ojow/channels", number: 13 } });
     log.push(add, other);
@@ -86,13 +108,18 @@ describe("a task imported from an issue", () => {
     expect(s.tasks.get(add.seq)?.issue).toEqual({ repo: "ojow/channels", number: 12 });
     expect(taskOfIssue(s, { repo: "OJOW/channels", number: 12 })?.id).toBe(add.seq);
     expect(formatTask(s, s.tasks.get(add.seq)!)).toContain("issue: ojow/channels#12; closing either one closes the other");
+    expect(issuesToLink(s, 0)).toEqual([
+      { repo: "ojow/channels", number: 12, task: add.seq, seq: add.seq, body: `Linked to Kiwi task T${add.seq}` },
+      { repo: "ojow/channels", number: 13, task: other.seq, seq: other.seq, body: `Linked to Kiwi task T${other.seq}` },
+    ]);
+    expect(issuesToLink(s, other.seq)).toEqual([]);
     const done = await ev("jon", { op: "task.update", task: add.seq, state: "done", note: "fixed in #371" });
     const cancel = await ev("jon", { op: "task.update", task: other.seq, state: "cancelled", note: "duplicate" });
     log.push(done, cancel);
     s = fold(log, roster);
     expect(issuesToClose(s, other.seq)).toEqual([
-      { repo: "ojow/channels", number: 12, task: add.seq, seq: done.seq, reason: "completed", body: `Kiwi task T${add.seq} done: fixed in #371` },
-      { repo: "ojow/channels", number: 13, task: other.seq, seq: cancel.seq, reason: "not_planned", body: `Kiwi task T${other.seq} cancelled: duplicate` },
+      { repo: "ojow/channels", number: 12, task: add.seq, seq: done.seq, reason: "completed", body: `Kiwi task T${add.seq} done` },
+      { repo: "ojow/channels", number: 13, task: other.seq, seq: cancel.seq, reason: "not_planned", body: `Kiwi task T${other.seq} cancelled` },
     ]);
     expect(issuesToClose(s, done.seq).map((i) => i.number)).toEqual([13]);
     expect(taskOfIssue(s, { repo: "ojow/channels", number: 12 })).toBeUndefined();
@@ -130,7 +157,7 @@ describe("a task imported from an issue", () => {
   });
 
   test("a reopened issue isn't closed again by an old close, and a task reopened clears its close", async () => {
-    const log = [await ev("jon", { op: "repos.set", repos: ["ojow/channels"] })];
+    const log = [await ev("jon", { op: "repos.set", repos: ["ojow/channels"] }), await ev("jon", { op: "github.write.set", on: true })];
     const a = await ev("mac", { op: "task.add", title: "Flaky", issue: { repo: "ojow/channels", number: 30 } });
     log.push(a, await ev("jon", issueNews(30, "closed", { by: "jow" })), await ev("jon", issueNews(30, "open", { by: "jow" })));
     let s = fold(log, roster);
