@@ -41,6 +41,14 @@ export interface RexSeat extends RexPlace {
   room?: string;
 }
 
+export type PlacedSeat = { place: "rex" } & RexSeat;
+
+const SHOW_REFUSALS = ["no-rex", "no-server", "no-app", "remote-control", "failed"] as const;
+
+export type ShowRefusal = (typeof SHOW_REFUSALS)[number];
+
+export type ShowResult = { ok: true } | { ok: false; why: ShowRefusal };
+
 const record = (v: unknown): Record<string, unknown> | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
 
 const text = (v: unknown, max: number): string | undefined => (typeof v === "string" && v.length > 0 && v.length <= max ? v : undefined);
@@ -48,6 +56,8 @@ const text = (v: unknown, max: number): string | undefined => (typeof v === "str
 const positive = (v: unknown): number | undefined => (typeof v === "number" && Number.isInteger(v) && v > 0 ? v : undefined);
 
 const isLaunchRefusal = (v: unknown): v is LaunchRefusal => typeof v === "string" && (LAUNCH_REFUSALS as readonly string[]).includes(v);
+
+const isShowRefusal = (v: unknown): v is ShowRefusal => typeof v === "string" && (SHOW_REFUSALS as readonly string[]).includes(v);
 
 function readRexPlace(x: unknown): RexPlace | null {
   const r = record(x);
@@ -113,4 +123,15 @@ export function readRexSeat(x: unknown): RexSeat | null {
   if (!alias || !agent || !place) return null;
   const room = text(s?.room, 128);
   return { alias, agent, ...(room ? { room } : {}), ...place };
+}
+
+export function readPlacedSeat(x: unknown): PlacedSeat | null {
+  const seat = record(x)?.place === "rex" ? readRexSeat(x) : null;
+  return seat ? { place: "rex", ...seat } : null;
+}
+
+export function readShowResult(x: unknown): ShowResult {
+  const r = record(x);
+  if (r?.ok === true) return { ok: true };
+  return { ok: false, why: isShowRefusal(r?.why) ? r.why : "failed" };
 }

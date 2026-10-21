@@ -10,7 +10,7 @@ import { harnessName } from "@/lib/harness"
 import { followLaunch, launcher, sawMembers, type LaunchSeen } from "@/lib/launches"
 import { usePersonalities } from "@/lib/personalities"
 import { relayUrl } from "@/lib/relay"
-import { showInRex } from "@/lib/rex"
+import { showLabel, showSeat } from "@/lib/terminals"
 import { cx } from "@/lib/utils"
 import { HarnessFace } from "./harness-face"
 import { Icon } from "./icon"
@@ -335,8 +335,8 @@ function Progress({ started, seen, harness, on, onClose }: { started: Started; s
       </ol>
       <div className="mt-5 flex items-center justify-end gap-2">
         {started.place === "rex" && !on && (
-          <Button variant="secondary" onClick={() => void showInRex({ alias: "kiwi", agent: joined ?? "agent", ...started.rex })}>
-            Show in Rex
+          <Button variant="secondary" onClick={() => void showSeat({ place: "rex", alias: "kiwi", agent: joined ?? "agent", ...started.rex })}>
+            {showLabel(started.place)}
           </Button>
         )}
         <Button onClick={onClose}>{joined ? "Done" : "Close"}</Button>

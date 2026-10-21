@@ -1,4 +1,5 @@
-import type { Config } from "../config.ts";
+import type { PlacedSeat, ShowResult } from "@kiwi/core/terminals.ts";
+import { loadConfig, type Config } from "../config.ts";
 import { loginPath, loginShell } from "../launch/shell.ts";
 import { appManifest } from "./app/manifest.ts";
 import type { PlaceTools, SeatPlace, TerminalId, TerminalManifest, TerminalPlugin } from "./plugin.ts";
@@ -48,4 +49,34 @@ export function locate(env: Record<string, string | undefined>): SeatPlace {
 
 export function helpersOn(id: TerminalId, cfg: Pick<Config, "rex">): boolean {
   return id === "rex" && cfg.rex === "on";
+}
+
+interface Plugins {
+  manifests: readonly TerminalManifest[];
+  load(id: TerminalId): Promise<TerminalPlugin>;
+}
+
+const BUILT_IN: Plugins = { manifests: MANIFESTS, load: (id) => terminalPlugin(id) };
+
+function placeOf(seat: PlacedSeat): SeatPlace {
+  return { rex: { server: seat.server, session: seat.session, block: seat.block } };
+}
+
+const samePlace = (a: PlacedSeat, b: PlacedSeat): boolean => JSON.stringify(placeOf(a)) === JSON.stringify(placeOf(b));
+
+function showing(from: Plugins, on: (id: TerminalId) => boolean): Promise<TerminalPlugin[]> {
+  const ids = from.manifests.filter((m) => m.platforms.includes(process.platform) && m.can.includes("show") && on(m.id)).map((m) => m.id);
+  return Promise.all(ids.map((id) => from.load(id)));
+}
+
+export async function seatPlaces(cfg: Config = loadConfig(), from: Plugins = BUILT_IN): Promise<PlacedSeat[]> {
+  return (await showing(from, (id) => helpersOn(id, cfg))).flatMap((plugin) => plugin.seats?.(cfg) ?? []);
+}
+
+export async function showSeat(seat: PlacedSeat, cfg: Config = loadConfig(), from: Plugins = BUILT_IN): Promise<ShowResult> {
+  for (const plugin of await showing(from, () => true)) {
+    const mine = plugin.seats?.(cfg).find((s) => samePlace(s, seat));
+    if (mine && plugin.show) return plugin.show(placeOf(mine));
+  }
+  return { ok: false, why: "failed" };
 }

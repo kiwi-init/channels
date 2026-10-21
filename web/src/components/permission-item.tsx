@@ -5,9 +5,9 @@ import { useState } from "react"
 
 import { formatAgo, formatTime } from "@/lib/format"
 import { permissionCode, permissionNotes, permissionTitle, visibleText } from "@/lib/permission-view"
-import type { RexSeat } from "@/lib/rex"
+import type { PlacedSeat } from "@/lib/terminals"
 import { Button, Monogram, errorText, toast } from "./kit"
-import { Row, ShowInRex } from "./needs-you"
+import { Row, ShowSeat } from "./needs-you"
 
 export function PermissionItem({
   m,
@@ -25,7 +25,7 @@ export function PermissionItem({
   now: number
   nameOf: (n: string) => string
   onAnswer: (m: Message, allow: boolean) => Promise<void>
-  seat?: RexSeat
+  seat?: PlacedSeat
   canAllow: boolean
   canDeny: boolean
   human: string | null
@@ -66,7 +66,7 @@ export function PermissionItem({
         </>
       }
     >
-      <ShowInRex seat={seat} />
+      <ShowSeat seat={seat} />
       {canDeny && (
         <Button size="sm" variant="secondary" className="text-alert" disabled={busy} onClick={() => answer(false)}>
           Deny

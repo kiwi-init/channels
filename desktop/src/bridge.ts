@@ -7,7 +7,7 @@ import type { Personality } from "@kiwi/core/personality.ts";
 import type { CachedRow, Unread } from "@kiwi/core/cache-row.ts";
 import type { Channel, OpenKind, PresenceFields } from "@kiwi/core/client.ts";
 import type { MemberPicture, Message, Presence, ReadMark } from "@kiwi/core/protocol.ts";
-import type { LaunchedView, RexSeat, RexStatus } from "@kiwi/core/terminals.ts";
+import type { LaunchedView, PlacedSeat, RexStatus, ShowResult } from "@kiwi/core/terminals.ts";
 import type { TextStep } from "./text-size.ts";
 import type { Wire } from "./wire.ts";
 
@@ -248,8 +248,6 @@ export interface GithubStatus {
   account: { login: string; id: number; at: number } | null;
 }
 
-export type RexShowResult = { ok: true } | { ok: false; why: "no-rex" | "no-server" | "no-app" | "remote-control" | "failed" };
-
 export interface MachineView {
   machinePk: string;
   label: string;
@@ -327,8 +325,8 @@ export interface KiwiBridge {
   setVoiceConsent(roomId: string, on: boolean): Promise<void>;
   voiceToken(roomId: string): Promise<VoiceAuth>;
   setPersonalities(list: Personality[]): Promise<void>;
-  rexSeats(): Promise<RexSeat[]>;
-  rexShow(seat: RexSeat): Promise<RexShowResult>;
+  seatPlaces(): Promise<PlacedSeat[]>;
+  showSeat(seat: PlacedSeat): Promise<ShowResult>;
   rexStatus(): Promise<RexStatus>;
   rexInstall(): Promise<RexStatus>;
   rexRemove(): Promise<RexStatus>;

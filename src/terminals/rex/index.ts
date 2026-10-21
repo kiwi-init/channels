@@ -9,7 +9,7 @@ import { downloadHelpers, removeHelpers } from "./helpers.ts";
 import { placeFrom, REX_BLOCK, REX_SESSION } from "./locate.ts";
 import { rexManifest } from "./manifest.ts";
 import { markSeat } from "./mark.ts";
-import { showInRex } from "./show.ts";
+import { localRexSeats, showInRex } from "./show.ts";
 import { rexPane } from "./type.ts";
 import { rexServers, startRexEvents } from "./watch.ts";
 
@@ -74,6 +74,7 @@ export function rexTerminal(t: PlaceTools): TerminalPlugin {
     helpers: { status: () => (helpersOn("rex", loadConfig()) ? "on" : "off"), download: downloadHelpers, remove: removeHelpers },
     locate: placeFrom,
     mark: markSeat,
+    seats: (cfg) => localRexSeats(cfg).map((seat) => ({ place: "rex", ...seat })),
     show: async (place) => (place.rex ? showInRex(place.rex, t.rex) : { ok: false, why: "failed" }),
     watch: (places, changed) =>
       startRexEvents({

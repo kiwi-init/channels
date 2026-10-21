@@ -8,7 +8,7 @@ import { HANDOFF_DONE, HANDOFF_FAILED, type Message } from "@kiwi/core/protocol.
 import { TOO_MANY_REQUESTS } from "@kiwi/core/sas.ts"
 import { taskId, type Task } from "@kiwi/core/state.ts"
 import { usePinned } from "@/lib/pinned"
-import { rexNote, showInRex, useRexSeats, type RexSeat } from "@/lib/rex"
+import { showLabel, showNote, showSeat, useSeatPlaces, type PlacedSeat } from "@/lib/terminals"
 import { cx } from "@/lib/utils"
 import { askLabel, permissionAsks } from "@/lib/asks"
 import { excerpt, formatAgo } from "@/lib/format"
@@ -69,8 +69,8 @@ export function NeedsYou({
   titled?: boolean
 }) {
   const { p } = useControls()
-  const rexSeats = useRexSeats()
-  const seatOf = (agent: string | undefined) => (agent ? rexSeats.find((s) => s.room === roomId && s.agent === agent) : undefined)
+  const seats = useSeatPlaces()
+  const seatOf = (agent: string | undefined) => (agent ? seats.find((s) => s.room === roomId && s.agent === agent) : undefined)
   const reviewSeat = (t: Task) => seatOf(t.owner ?? t.workedBy[t.workedBy.length - 1])
   const requests = p.isOwner ? p.requests : []
   const asked = (ms: Message[]) => ms.filter((m) => !m.permission)
@@ -137,24 +137,24 @@ export function Row({ icon, lead, title, detail, children }: { icon?: IconSvgEle
   )
 }
 
-export function ShowInRex({ seat }: { seat?: RexSeat }) {
+export function ShowSeat({ seat }: { seat?: PlacedSeat }) {
   const [note, setNote] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   if (!seat) return null
   const open = () => {
     setBusy(true)
     setNote(null)
-    void showInRex(seat)
+    void showSeat(seat)
       .then(
-        (r) => setNote(rexNote(r)),
-        () => setNote(rexNote({ ok: false, why: "failed" }))
+        (r) => setNote(showNote(seat.place, r)),
+        () => setNote(showNote(seat.place, { ok: false, why: "failed" }))
       )
       .finally(() => setBusy(false))
   }
   return (
     <>
       <Button size="sm" variant="ghost" disabled={busy} onClick={open}>
-        Show in Rex
+        {showLabel(seat.place)}
       </Button>
       {note && <span className="text-meta text-ink-3">{note}</span>}
     </>
@@ -255,7 +255,7 @@ function AskItem({
   agent: boolean
   onReply: (m: Message, text: string) => Promise<void>
   onJump: (seq: number) => void
-  seat?: RexSeat
+  seat?: PlacedSeat
 }) {
   const { draft, setDraft, busy, send } = useAnswer(m, nameOf, onReply, null)
   const handoff = handoffOf(m)
@@ -300,7 +300,7 @@ function AskItem({
           <Button size="sm" variant="ghost" onClick={() => onJump(m.seq)}>
             Show
           </Button>
-          <ShowInRex seat={seat} />
+          <ShowSeat seat={seat} />
         </>
       ) : (
         <AnswerForm draft={draft} setDraft={setDraft} busy={busy} send={send} to={nameOf(m.from)} autoFocus onEscape={() => setDraft(null)} />
@@ -371,7 +371,7 @@ function AnswerForm({
   )
 }
 
-function DecisionCard({ m, nameOf, onReply, seat }: { m: Message; nameOf: (n: string) => string; onReply: (m: Message, text: string) => Promise<void>; seat?: RexSeat }) {
+function DecisionCard({ m, nameOf, onReply, seat }: { m: Message; nameOf: (n: string) => string; onReply: (m: Message, text: string) => Promise<void>; seat?: PlacedSeat }) {
   const choices = !!m.choices?.length
   const idle = choices ? null : ""
   const { draft, setDraft, busy, send } = useAnswer(m, nameOf, onReply, idle)
@@ -381,7 +381,7 @@ function DecisionCard({ m, nameOf, onReply, seat }: { m: Message; nameOf: (n: st
       {draft !== null && <AnswerForm draft={draft} setDraft={setDraft} busy={busy} send={send} to={nameOf(m.from)} autoFocus={choices} onEscape={() => setDraft(idle)} />}
       {seat && (
         <div className="mt-1 flex flex-wrap items-center gap-2">
-          <ShowInRex seat={seat} />
+          <ShowSeat seat={seat} />
         </div>
       )}
     </div>
@@ -402,7 +402,7 @@ function ReviewItem({
   onApprove: (t: Task) => Promise<void>
   onSendBack: (t: Task, why: string) => Promise<void>
   onOpen: (id: number) => void
-  seat?: RexSeat
+  seat?: PlacedSeat
 }) {
   const [why, setWhy] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -431,7 +431,7 @@ function ReviewItem({
           <Button size="sm" variant="ghost" onClick={() => onOpen(t.id)}>
             Open
           </Button>
-          <ShowInRex seat={seat} />
+          <ShowSeat seat={seat} />
         </>
       ) : (
         <form
