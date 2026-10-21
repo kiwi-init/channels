@@ -1,6 +1,7 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { hasLine, put, replaceFile, withLine, withoutLine } from "../shared/files.ts";
 import { runNow } from "../shared/run.ts";
 import { rexStatus } from "./api.ts";
 import { rexBinary } from "./locate.ts";
@@ -81,28 +82,9 @@ function findPath(init = rexConfigPath()): string {
   return join(dirname(init), FIND_NAME);
 }
 
-function carries(action: string): boolean {
-  return action.split("\n").some((line) => line.trim() === LINE);
-}
-
 export function paletteInstalled(init = rexConfigPath()): boolean {
   if (!existsSync(palettePath(init)) || !existsSync(findPath(init)) || !existsSync(init)) return false;
-  return carries(readFileSync(init, "utf8"));
-}
-
-function put(file: string, text: string): boolean {
-  if (existsSync(file) && readFileSync(file, "utf8") === text) return false;
-  writeFileSync(file, text, { mode: 0o600 });
-  return true;
-}
-
-function replaceFile(file: string, text: string): void {
-  const target = existsSync(file) ? realpathSync(file) : file;
-  const mode = existsSync(target) ? statSync(target).mode & 0o777 : 0o600;
-  const tmp = `${target}.kiwi-${process.pid}.tmp`;
-  writeFileSync(tmp, text, { mode });
-  chmodSync(tmp, mode);
-  renameSync(tmp, target);
+  return hasLine(readFileSync(init, "utf8"), LINE);
 }
 
 export function installPalette(init = rexConfigPath(), bin = rexBinary() ?? "rex"): { action: string; init: string; changed: boolean } {
@@ -111,9 +93,8 @@ export function installPalette(init = rexConfigPath(), bin = rexBinary() ?? "rex
   mkdirSync(dirname(init), { recursive: true, mode: 0o700 });
   const wrote = [put(find, FIND), put(action, actionLua(find, bin))].some(Boolean);
   const before = existsSync(init) ? readFileSync(init, "utf8") : "";
-  if (carries(before)) return { action, init, changed: wrote };
-  const next = before && !before.endsWith("\n") ? `${before}\n${LINE}\n` : `${before}${LINE}\n`;
-  replaceFile(init, next);
+  if (hasLine(before, LINE)) return { action, init, changed: wrote };
+  replaceFile(init, withLine(before, LINE));
   return { action, init, changed: true };
 }
 
@@ -126,10 +107,7 @@ export function removePalette(init = rexConfigPath()): boolean {
   }
   if (existsSync(init)) {
     const before = readFileSync(init, "utf8");
-    const after = before
-      .split("\n")
-      .filter((line) => line.trim() !== LINE)
-      .join("\n");
+    const after = withoutLine(before, LINE);
     if (after !== before) {
       replaceFile(init, after);
       changed = true;

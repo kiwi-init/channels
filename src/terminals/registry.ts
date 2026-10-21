@@ -1,9 +1,12 @@
-import type { Config } from "../config.ts";
+import type { Config, SeatRecord } from "../config.ts";
 import { loginPath, loginShell } from "../launch/shell.ts";
 import { appManifest } from "./app/manifest.ts";
 import type { PlaceTools, SeatPlace, TerminalId, TerminalManifest, TerminalPlugin } from "./plugin.ts";
 import { placeFrom, rexBinary } from "./rex/locate.ts";
 import { rexManifest } from "./rex/manifest.ts";
+import { takesStatus } from "./shared/osc7501.ts";
+import { tmuxHelpersStatus } from "./tmux/helpers.ts";
+import { tmuxPlaceFrom } from "./tmux/locate.ts";
 import { tmuxManifest } from "./tmux/manifest.ts";
 
 export const MANIFESTS: readonly TerminalManifest[] = [rexManifest, tmuxManifest, appManifest];
@@ -43,9 +46,19 @@ export async function terminalPlugin(id: TerminalId, tools: PlaceTools = hereToo
 }
 
 export function locate(env: Record<string, string | undefined>): SeatPlace {
-  return placeFrom(env);
+  return { ...placeFrom(env), ...tmuxPlaceFrom(env) };
 }
 
 export function helpersOn(id: TerminalId, cfg: Pick<Config, "rex">): boolean {
+  if (id === "tmux") return tmuxHelpersStatus() === "on";
   return id === "rex" && cfg.rex === "on";
+}
+
+export function marking(cfg: Pick<Config, "rex">): TerminalId[] {
+  return MANIFESTS.filter((m) => m.can.includes("mark") && helpersOn(m.id, cfg)).map((m) => m.id);
+}
+
+export function markerOf(record: SeatRecord, on: readonly TerminalId[]): TerminalId | null {
+  if (record.tmux) return on.includes("tmux") ? "tmux" : null;
+  return takesStatus(record.term) && on.includes("rex") ? "rex" : null;
 }

@@ -10,9 +10,15 @@ export interface TerminalPlace {
 
 export type { RexPlace };
 
+export interface TmuxPlace {
+  socket: string;
+  pane: string;
+}
+
 export interface SeatPlace {
   term?: TerminalPlace;
   rex?: RexPlace;
+  tmux?: TmuxPlace;
 }
 
 export interface StatusRecord {
@@ -20,6 +26,8 @@ export interface StatusRecord {
   state: "blocked" | "done";
   kind?: "question";
   msg: string;
+  count?: number;
+  task?: number;
 }
 
 export interface RexActivity {
@@ -82,7 +90,7 @@ export interface TerminalPlugin {
   helpers?: Helpers;
   locate?(env: Record<string, string | undefined>): SeatPlace;
   open?(req: PlaceRequest): Promise<Placed>;
-  mark?(seat: SeatRecord, records: readonly StatusRecord[], cleared: readonly string[]): Promise<boolean>;
+  mark?(seat: SeatRecord, changed: readonly StatusRecord[], cleared: readonly string[], all: readonly StatusRecord[]): Promise<boolean>;
   show?(place: SeatPlace): Promise<ShowResult>;
   watch?(places: () => SeatPlace[], changed: (match: (place: SeatPlace) => boolean, gone: boolean) => void): { stop(): void };
   activity?(place: SeatPlace): Promise<RexActivity | null>;

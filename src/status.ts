@@ -2,9 +2,9 @@ import { needsPerson } from "@kiwi/core/work.ts";
 import type { ChannelState } from "@kiwi/core/state.ts";
 import { loadConfig } from "./config.ts";
 import { seatRecordFor } from "./daemon/reach.ts";
-import type { StatusRecord, TerminalPlugin } from "./terminals/plugin.ts";
-import { helpersOn, terminalPlugin } from "./terminals/registry.ts";
-import { askId, reviewId, statusFrame, takesStatus } from "./terminals/shared/osc7501.ts";
+import type { StatusRecord, TerminalId, TerminalPlugin } from "./terminals/plugin.ts";
+import { markerOf, marking, placeTools, terminalPlugin } from "./terminals/registry.ts";
+import { askId, reviewId, statusFrame } from "./terminals/shared/osc7501.ts";
 
 const STATUS_EVERY_MS = 3_000;
 const RATE_MS = 1_000;
@@ -12,9 +12,9 @@ const REFOLD_MS = 60_000;
 
 export function seatRecords(state: ChannelState, alias: string, agent: string): StatusRecord[] {
   const asks = needsPerson(state).filter((n) => n.from === agent).length;
-  const records: StatusRecord[] = asks ? [{ id: askId(alias), state: "blocked", kind: "question", msg: `${asks} question${asks === 1 ? "" : "s"} for a person in ${alias}` }] : [];
+  const records: StatusRecord[] = asks ? [{ id: askId(alias), state: "blocked", kind: "question", count: asks, msg: `${asks} question${asks === 1 ? "" : "s"} for a person in ${alias}` }] : [];
   const review = [...state.tasks.values()].filter((t) => t.owner === agent && t.state === "review" && !t.archived).sort((a, b) => a.id - b.id);
-  for (const task of review) records.push({ id: reviewId(alias, task.id), state: "done", msg: `T${task.id} waits for review` });
+  for (const task of review) records.push({ id: reviewId(alias, task.id), state: "done", task: task.id, msg: `T${task.id} waits for review` });
   return records;
 }
 
@@ -40,6 +40,7 @@ type Session = import("./agent.ts").AgentSession;
 
 interface Watched {
   written: Map<string, string>;
+  where: string;
   at: number;
   retryAt: number;
   session: Session | null;
@@ -72,13 +73,19 @@ export function startStatusWatch(opts: StatusWatchOptions): { stop(): void } {
   const watched = new Map<string, Watched>();
   let timer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
-  let marker: TerminalPlugin | null = null;
+  const plugins = new Map<TerminalId, Promise<TerminalPlugin>>();
+  const plugin = (id: TerminalId): Promise<TerminalPlugin> => {
+    const loaded = plugins.get(id) ?? placeTools().then((tools) => terminalPlugin(id, tools));
+    plugins.set(id, loaded);
+    return loaded;
+  };
 
   const round = async (): Promise<void> => {
     if (stopped) return;
     try {
       const cfg = loadConfig();
-      if (!helpersOn("rex", cfg)) {
+      const on = marking(cfg);
+      if (!on.length) {
         watched.clear();
         return;
       }
@@ -88,14 +95,17 @@ export function startStatusWatch(opts: StatusWatchOptions): { stop(): void } {
         live.add(seat.key);
         let seen = watched.get(seat.key);
         if (!seen) {
-          seen = { written: new Map(), at: 0, retryAt: 0, session: null, folded: null };
+          seen = { written: new Map(), where: "", at: 0, retryAt: 0, session: null, folded: null };
           watched.set(seat.key, seen);
         }
         const record = seatRecordFor(cfg, seat.alias, seat.agent);
-        if (!record || !record.term || !takesStatus(record.term)) {
+        const by = record ? markerOf(record, on) : null;
+        if (!record || !by) {
           seen.written.clear();
           continue;
         }
+        const where = JSON.stringify([by, record.tmux ?? null, record.rex ?? null]);
+        const moved = seen.where !== where;
         if (!seen.session && Date.now() < seen.retryAt) continue;
         seen.session ??= await openSession(seat.alias, seat.agent);
         if (!seen.session) {
@@ -109,12 +119,12 @@ export function startStatusWatch(opts: StatusWatchOptions): { stop(): void } {
         if (!fresh) seen.folded = seat.head === undefined ? null : { head: seat.head, at: Date.now(), state };
         const wanted = seatRecords(state, seat.alias, seat.agent);
         const desired = new Map(wanted.map((r): [string, string] => [r.id, statusFrame(r)]));
-        const changed = wanted.filter((r) => seen.written.get(r.id) !== desired.get(r.id));
+        const changed = wanted.filter((r) => moved || seen.written.get(r.id) !== desired.get(r.id));
         const cleared = [...seen.written.keys()].filter((id) => !desired.has(id));
         if ((!changed.length && !cleared.length) || Date.now() - seen.at < RATE_MS) continue;
-        marker ??= await terminalPlugin("rex");
-        if (!(await marker.mark?.(record, changed, cleared))) continue;
+        if (!(await (await plugin(by)).mark?.(record, changed, cleared, wanted))) continue;
         seen.written = desired;
+        seen.where = where;
         seen.at = Date.now();
       }
       for (const key of watched.keys()) if (!live.has(key)) watched.delete(key);
