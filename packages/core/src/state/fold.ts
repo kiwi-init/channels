@@ -249,6 +249,7 @@ export function fold(
     hold: from?.hold ?? null,
     voice: from?.voice ?? false,
     githubWrite: from?.githubWrite ?? null,
+    branchPrefix: from?.branchPrefix ?? null,
   };
 
   const seen = new Set<number>();
@@ -456,6 +457,7 @@ export function fold(
       hold: ctx.hold,
       voice: ctx.voice,
       githubWrite: ctx.githubWrite,
+      branchPrefix: ctx.branchPrefix,
       scopesByKey: [...scopesByKey],
       scopeSets: [...scopeSets],
       roleSets: [...roleSets],
@@ -536,6 +538,7 @@ export function fold(
     hold: ctx.hold,
     voice: ctx.voice,
     githubWrite: ctx.githubWrite,
+    branchPrefix: ctx.branchPrefix,
     reactions,
     head,
   };

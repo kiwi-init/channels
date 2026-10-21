@@ -7,13 +7,13 @@ import { noteAgentWorked } from "@/lib/channel"
 import { errorText, toast } from "../kit"
 import type { Persona } from "@kiwi/core/personality.ts"
 import { defaultScopes } from "../scopes"
-import { CharterDialog, ConfirmDialogs, RenameDialog } from "../lazy"
+import { BranchPrefixDialog, CharterDialog, ConfirmDialogs, RenameDialog } from "../lazy"
 import { Ctx, type Api, type Confirm, type ControlsProps } from "./context"
 
 export function ChannelControls({ children, ...p }: ControlsProps & { children: ReactNode }) {
   const [confirm, setConfirm] = useState<Confirm>(null)
   const [busy, setBusy] = useState(false)
-  const [dialog, setDialog] = useState<"rename" | "charter" | null>(null)
+  const [dialog, setDialog] = useState<"rename" | "charter" | "branch" | null>(null)
   const [scopeDraft, setScopeDraft] = useState<Scope[]>([...SCOPES])
   const [nickDraft, setNickDraft] = useState("")
   const [personaDraft, setPersonaDraft] = useState<Persona | null>(null)
@@ -76,6 +76,7 @@ export function ChannelControls({ children, ...p }: ControlsProps & { children: 
 
       {p.onRename && dialog === "rename" && <RenameDialog title={p.title ?? ""} onClose={() => setDialog(null)} onSave={p.onRename} />}
       {dialog === "charter" && <CharterDialog text={p.state.charter?.text ?? ""} onClose={() => setDialog(null)} onSave={p.isOwner ? p.onCharter : undefined} />}
+      {dialog === "branch" && <BranchPrefixDialog prefix={p.state.branchPrefix} onClose={() => setDialog(null)} onSave={p.isOwner ? p.onBranchPrefix : undefined} />}
 
       {confirm !== null && (
         <ConfirmDialogs

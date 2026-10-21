@@ -280,6 +280,7 @@ export type Event =
   | { op: "hold.set"; on: boolean; note?: string }
   | { op: "voice.set"; on: boolean }
   | { op: "github.write.set"; on: boolean }
+  | { op: "branch.prefix.set"; prefix: string | null }
   /**
    * A member's reaction to message #seq: one short emoji per member per message, the latest wins, null
    * takes it back. Not news: it's no unread, no notification, no line in a feed. Its body is throwaway
@@ -454,6 +455,7 @@ export function cleanGithubNote(x: unknown): GithubNote | null {
 
 export const MAX_REPOS = 20;
 export const REPO_RE = /^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/;
+export const BRANCH_PREFIX_RE = /^[A-Za-z0-9_./-]{1,32}$/;
 
 /** The room every channel has, and where a message that names none belongs (every message from before rooms). */
 export const LEASE_NAME_RE = /^[a-z0-9][a-z0-9._/-]{0,63}$/;
@@ -631,7 +633,7 @@ export interface NewerEvent {
 
 export type WirePayload = Omit<Payload, "ev"> & { ev?: Event | NewerEvent };
 
-export const EVENT_OPS_VERSION = 1;
+export const EVENT_OPS_VERSION = 2;
 const NEWER_OP_RE = /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/;
 
 export const knownOp = (op: string): boolean => eventCheck({ op }) !== null;
@@ -851,6 +853,8 @@ function eventCheck(ev: unknown): boolean | null {
     case "voice.set":
     case "github.write.set":
       return typeof e.on === "boolean";
+    case "branch.prefix.set":
+      return e.prefix === null || (typeof e.prefix === "string" && BRANCH_PREFIX_RE.test(e.prefix));
     case "react":
       return n(e.seq) && (e.seq as number) > 0 && (e.emoji === null || wellFormedReaction(e.emoji));
     default:
