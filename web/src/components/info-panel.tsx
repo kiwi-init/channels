@@ -254,7 +254,9 @@ export function InfoPanel({
                     <Setting
                       icon={GitPullRequestIcon}
                       label="Write to GitHub"
-                      hint={p.state.githubWrite !== null ? "Kiwi links new PRs and issues to their tasks, and a task closing closes its issue" : "Kiwi doesn’t comment on or close anything in your repos"}
+                      hint={
+                        p.state.githubWrite !== null ? "Kiwi links new PRs and issues to their tasks, and a task closing closes its issue" : "Kiwi doesn’t comment on or close anything in your repos"
+                      }
                     >
                       <Segmented
                         label="Write to GitHub"
