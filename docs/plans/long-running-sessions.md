@@ -1,6 +1,8 @@
 # Plan: long-running agent sessions without unbounded context
 
-Status: items 1 to 4 built, 2026-10-20 (rotation for Claude Code only); the rest is a proposal. Facts below were read from `main` at
+Status: items 1 to 4 built, 2026-10-20 (rotation for Claude Code only); the rest is a proposal.
+[per-task-sessions.md](per-task-sessions.md) proposes one fresh session per task in place of
+rotation, 2026-10-21. Facts below were read from `main` at
 `fcfaabf5`, from Claude Code 2.1.303 and its docs, from transcripts, and from probes on opus-vm.
 
 ## The problem, measured
