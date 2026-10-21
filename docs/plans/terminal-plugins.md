@@ -1,8 +1,8 @@
 # Plan: terminal plugins (Rex, tmux and the terminal app)
 
-Status: approved by the owner (#2004), 2026-10-21, from the owner's ask (#1927). Rows 1 to 4 are
-built (#648, #649, #650, #651), rows 5 to 8 are in progress; what changed while building is under
-"As built". The audit and the plan below are kept as they were decided: their facts were read from
+Status: approved by the owner (#2004), 2026-10-21, from the owner's ask (#1927). Rows 1 to 5 and 8
+are built (#648, #649, #650, #651, #655, #658), and rows 6 and 7 are in review (#659, #656); what
+changed while building is under "As built". The audit and the plan below are kept as they were decided: their facts were read from
 `main` at `00217d35` (kiwi 0.23.1), before the code moved.
 
 ## The ask
@@ -304,7 +304,7 @@ One task and one PR each, in this order. Each one's tests run in `test / unit`.
      preferred terminal's helpers sets Prefer back to Terminal.
    - `kiwi rex on|off|status` stays this release, through the new code; `kiwi rex seats|show` are
      unchanged.
-7. **Show from Needs you (#656, T2015).** A plugin can list its seats (`seats(cfg)`), and the
+7. **Show from Needs you (#656, T2015, in review).** A plugin can list its seats (`seats(cfg)`), and the
    registry's `seatPlaces` and `showSeat` replace the bridge's `rexSeats` and `rexShow`: Show goes to
    the plugin holding the seat's place, and only for a seat that plugin lists. Core reads a placed
    seat and a show result (`readPlacedSeat`, `readShowResult`). Needs you's button is `ShowSeat`,
