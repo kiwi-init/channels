@@ -504,6 +504,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                   setSearch(null)
                 }}
                 agents={agentsNow}
+                pulseOf={{ state, messages, me, now }}
                 onMessage={(name) => (leaveInfo(), go(dmPlace(me, name)))}
                 onOpenTask={openTask}
                 conversations={conversations}
@@ -548,7 +549,7 @@ export function Conversation({ member, onBack, onGone }: { member: StoredMember;
                             onOpen={openTask}
                           />
                         ) : agentsNow.length ? (
-                          <AgentLanes agents={agentsNow} state={state} messages={messages} now={now} nameOf={nameOf} onOpenTask={openTask} />
+                          <AgentLanes agents={agentsNow} state={state} messages={messages} now={now} me={me} nameOf={nameOf} onOpenTask={openTask} />
                         ) : (
                           <AddAgent code={member.code} isOwner={isOwner} onNewAgent={onNewAgent} />
                         )}

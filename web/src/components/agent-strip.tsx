@@ -14,6 +14,7 @@ import { formatAgo, shortTitle } from "@/lib/format"
 import { howWords, type How } from "@/lib/presence"
 import { cx } from "@/lib/utils"
 import { RepoLine } from "./agent-facts"
+import { PulseLine, type Pulse } from "./agent-pulse"
 import { Icon } from "./icon"
 import { Monogram } from "./kit"
 
@@ -65,7 +66,7 @@ export const byBusy = (agents: AgentNow[]) => [...agents].sort((a, b) => Number(
 
 const face = (a: AgentNow, size: number) => <Monogram name={a.label} hue={a.name} agent color={a.color} size={size} online={size > 20 && !!a.here} />
 
-export function AgentRow({ a, onMessage, onOpenTask }: { a: AgentNow; onMessage: (name: string) => void; onOpenTask: (id: number) => void }) {
+export function AgentRow({ a, pulse, onMessage, onOpenTask }: { a: AgentNow; pulse?: Pulse; onMessage: (name: string) => void; onOpenTask: (id: number) => void }) {
   const doing = doingNow(a)
   const task = a.load.current[0]
   return (
@@ -81,6 +82,7 @@ export function AgentRow({ a, onMessage, onOpenTask }: { a: AgentNow; onMessage:
             {doing?.busy && <span className="size-1.5 shrink-0 rounded-full bg-doing" />}
             <span className="truncate">{agentNow(a).text}</span>
           </span>
+          {pulse && <PulseLine pulse={pulse} />}
         </span>
       </button>
       {task && (

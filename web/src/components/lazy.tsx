@@ -20,7 +20,7 @@ const taskDetails = later(() => import("./task-details").then((m) => m.TaskDetai
 const tasksView = later(() => import("./tasks-view").then((m) => m.TasksView))
 const thread = later(() => import("./thread").then((m) => m.ThreadPanel))
 const annotator = later(() => import("./annotator").then((m) => m.Annotator))
-const agentLanes = later(() => import("./agent-lanes").then((m) => m.AgentLanes))
+const agentLanes = later(() => import("./agent-timeline").then((m) => m.AgentsView))
 const talkButton = later(() => import("./talk").then((m) => m.TalkButton))
 const talkBar = later(() => import("./talk").then((m) => m.TalkBar))
 const composerQuestion = later(() => import("./composer-question").then((m) => m.ComposerQuestion))

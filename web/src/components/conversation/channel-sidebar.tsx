@@ -1,9 +1,12 @@
 import { Add01Icon, ArrowDown01Icon, Search01Icon, TaskDone01Icon } from "@hugeicons/core-free-icons"
-import { useState, type ReactNode } from "react"
+import { useMemo, useState, type ReactNode } from "react"
 
-import type { ChannelIcon } from "@kiwi/core/protocol.ts"
+import type { ChannelIcon, Message } from "@kiwi/core/protocol.ts"
+import type { ChannelState } from "@kiwi/core/state.ts"
+import { timeline } from "@/lib/timeline"
 import { VIEWS, type View } from "@/lib/views"
 import { cx } from "@/lib/utils"
+import type { Pulse } from "../agent-pulse"
 import { AgentRow, byBusy, type AgentNow } from "../agent-strip"
 import { ChannelIconTile } from "../channel-icon"
 import { Icon } from "../icon"
@@ -168,6 +171,7 @@ export function ChannelSidebar({
   counts,
   onView,
   agents,
+  pulseOf,
   onMessage,
   onOpenTask,
   conversations,
@@ -186,12 +190,20 @@ export function ChannelSidebar({
   counts: Record<View, number>
   onView: (v: View) => void
   agents: AgentNow[]
+  pulseOf?: { state: ChannelState; messages: Message[]; me: string; now: number }
   onMessage: (name: string) => void
   onOpenTask: (id: number) => void
   conversations: Conversation[]
   current: string | null
   onConversation: (key: string) => void
 }) {
+  const { state: pulseState, messages: pulseMessages, me: pulseMe, now: pulseNow } = pulseOf ?? {}
+  const names = agents.map((a) => a.name).join(" ")
+  const pulses = useMemo(() => {
+    if (!pulseState || !pulseMessages || !pulseMe || !pulseNow) return new Map<string, Pulse>()
+    const t = timeline(pulseState, pulseMessages, pulseMe, pulseNow, 60 * 60_000)
+    return new Map(names.split(" ").map((name) => [name, { from: t.from, to: t.to, spans: t.spans.filter((s) => s.lane === name), flags: t.flags.filter((f) => f.lane === name) }]))
+  }, [pulseState, pulseMessages, pulseMe, pulseNow, names])
   return (
     <aside aria-label="Channel" className="hidden h-full w-[280px] shrink-0 flex-col overflow-y-auto bg-rail px-3 pt-(--chrome-h) pb-4 md:flex">
       <button type="button" onClick={onTitle} className="flex items-center gap-3 rounded-row px-2 py-1.5 text-left transition-colors hover:bg-wash">
@@ -229,7 +241,7 @@ export function ChannelSidebar({
         >
           <ul>
             {byBusy(agents).map((a) => (
-              <AgentRow key={a.name} a={a} onMessage={onMessage} onOpenTask={onOpenTask} />
+              <AgentRow key={a.name} a={a} pulse={pulses.get(a.name)} onMessage={onMessage} onOpenTask={onOpenTask} />
             ))}
           </ul>
         </Section>
